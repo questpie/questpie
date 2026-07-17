@@ -1,3 +1,8 @@
+import type {
+	RealtimeTopicRejectedPayload,
+	RealtimeTopicRejectionReason,
+} from "#questpie/shared/realtime-error.js";
+
 export type RealtimeAdmissionConfig = {
 	maxTopicsPerConnection: number;
 	maxConnectionsPerPrincipal: number;
@@ -67,7 +72,44 @@ type AdmissionTopic = {
 
 export type TopicAdmissionResult<TTopic extends AdmissionTopic> =
 	| { accepted: true; topic: TTopic & { limit?: number } }
-	| { accepted: false; message: string };
+	| {
+			accepted: false;
+			message: string;
+			reason: RealtimeTopicRejectionReason;
+			requestedLimit?: number;
+			configuredLimit?: number;
+	  };
+
+export class RealtimeTopicAdmissionError extends Error {
+	constructor(readonly payload: RealtimeTopicRejectedPayload) {
+		super(payload.message);
+		this.name = "RealtimeTopicAdmissionError";
+	}
+}
+
+export function realtimeTopicRejectedPayload(
+	topic: AdmissionTopic,
+	rejection: Extract<TopicAdmissionResult<AdmissionTopic>, { accepted: false }>,
+): RealtimeTopicRejectedPayload {
+	return {
+		code: "REALTIME_TOPIC_REJECTED",
+		message: rejection.message,
+		topicId: topic.id,
+		resource: topic.resource,
+		operation:
+			topic.resourceType === "global" ? "get" : (topic.operation ?? "find"),
+		retryable: false,
+		details: {
+			reason: rejection.reason,
+			...(rejection.requestedLimit !== undefined
+				? { requestedLimit: rejection.requestedLimit }
+				: {}),
+			...(rejection.configuredLimit !== undefined
+				? { configuredLimit: rejection.configuredLimit }
+				: {}),
+		},
+	};
+}
 
 function withDepth(withConfig: Record<string, unknown> | undefined): number {
 	if (!withConfig) return 0;
@@ -92,6 +134,8 @@ export function admitRealtimeTopic<TTopic extends AdmissionTopic>(
 		return {
 			accepted: false,
 			message: `Topic exceeds maximum relation depth of ${config.maxWithDepth}`,
+			reason: "relation_depth",
+			configuredLimit: config.maxWithDepth,
 		};
 	}
 	if ((topic.operation ?? "find") !== "find") {
@@ -103,6 +147,9 @@ export function admitRealtimeTopic<TTopic extends AdmissionTopic>(
 		return {
 			accepted: false,
 			message: `Topic limit must be between 1 and ${config.maxFindLimit}`,
+			reason: "query_limit",
+			requestedLimit: limit,
+			configuredLimit: config.maxFindLimit,
 		};
 	}
 

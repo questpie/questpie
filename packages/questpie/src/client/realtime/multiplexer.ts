@@ -5,6 +5,10 @@
  * Solves the HTTP/1.1 connection limit problem (6 connections per domain).
  */
 
+import {
+	isRealtimeTopicRejectedPayload,
+	type RealtimeTopicRejectedPayload,
+} from "../../shared/realtime-error.js";
 import type { GetAuthHeaders } from "../auth.js";
 import type { RealtimeClientTransport } from "./transport.js";
 
@@ -62,6 +66,30 @@ type SSEEvent = {
 	data: string;
 };
 
+export class RealtimeTopicRejectedError extends Error {
+	readonly code = "REALTIME_TOPIC_REJECTED";
+	readonly retryable = false;
+	readonly topicId: string;
+	readonly resource: string;
+	readonly operation: RealtimeTopicRejectedPayload["operation"];
+	readonly details: RealtimeTopicRejectedPayload["details"];
+
+	constructor(payload: RealtimeTopicRejectedPayload) {
+		super(payload.message);
+		this.name = "RealtimeTopicRejectedError";
+		this.topicId = payload.topicId;
+		this.resource = payload.resource;
+		this.operation = payload.operation;
+		this.details = payload.details;
+	}
+}
+
+function toRealtimeError(payload: unknown): Error | null {
+	return isRealtimeTopicRejectedPayload(payload)
+		? new RealtimeTopicRejectedError(payload)
+		: null;
+}
+
 type ControlFrame =
 	| {
 			type: "add_topic";
@@ -70,6 +98,15 @@ type ControlFrame =
 			sinceSeq?: number;
 	  }
 	| { type: "remove_topic"; topicId: string };
+
+type ControlSession = {
+	sessionId: string;
+	token: string;
+	control?: {
+		protocol: "questpie-realtime-topology";
+		versions: number[];
+	};
+};
 
 export type RealtimeMultiplexerRuntime = {
 	retryBaseMs?: number;
@@ -135,9 +172,11 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 	private destroyed = false;
 	private reconnectPending = false;
 	private watchdogTriggered = false;
-	private controlSession: { sessionId: string; token: string } | null = null;
+	private controlSession: ControlSession | null = null;
 	private pendingControlFrames: ControlFrame[] = [];
 	private controlOperation: Promise<void> = Promise.resolve();
+	private controlFlushScheduled = false;
+	private desiredRevision = 0;
 	private readonly retryBaseMs: number;
 	private readonly maxRetryMs: number;
 	private readonly pingWatchdogMs: number;
@@ -246,7 +285,12 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		if (this.destroyed) return;
 		if (this.controlSession) {
 			this.pendingControlFrames.push(frame);
-			this.flushControlFrames();
+			if (this.supportsDesiredTopology() && this.topics.size === 0) {
+				this.pendingControlFrames = [];
+				this.abortController?.abort();
+				return;
+			}
+			this.scheduleControlFlush();
 			return;
 		}
 		if (this.connecting) {
@@ -256,10 +300,41 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		this.scheduleReconnect();
 	}
 
+	private supportsDesiredTopology(): boolean {
+		return Boolean(
+			this.controlSession?.control?.protocol === "questpie-realtime-topology" &&
+			this.controlSession.control.versions.includes(1),
+		);
+	}
+
+	private scheduleControlFlush(): void {
+		if (this.controlFlushScheduled) return;
+		this.controlFlushScheduled = true;
+		queueMicrotask(() => {
+			this.controlFlushScheduled = false;
+			this.flushControlFrames();
+		});
+	}
+
 	private flushControlFrames(): void {
 		if (!this.controlSession || this.pendingControlFrames.length === 0) return;
 		const session = this.controlSession;
 		const frames = this.pendingControlFrames.splice(0);
+		const useDesiredTopology = this.supportsDesiredTopology();
+		const revision = useDesiredTopology ? ++this.desiredRevision : 0;
+		const topology = useDesiredTopology
+			? {
+					protocol: "questpie-realtime-topology" as const,
+					version: 1 as const,
+					revision,
+					topics: [...this.topics.entries()].map(([id, topic]) => ({
+						id,
+						topic,
+						...(this.lastSeq.has(id) ? { sinceSeq: this.lastSeq.get(id) } : {}),
+					})),
+					channels: [],
+				}
+			: undefined;
 		this.controlOperation = this.controlOperation
 			.then(async () => {
 				const authHeaders = await this.getAuthHeaders?.();
@@ -269,21 +344,28 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 					body: JSON.stringify({
 						sessionId: session.sessionId,
 						token: session.token,
-						frames,
+						...(topology ? { topology } : { frames }),
 					}),
 					credentials: this.withCredentials ? "include" : "omit",
 				});
 				if (!response.ok) {
-					throw new Error(`Realtime control failed: ${response.status}`);
+					const payload = await response.json().catch(() => null);
+					throw (
+						toRealtimeError((payload as { error?: unknown } | null)?.error) ??
+						new Error(`Realtime control failed: ${response.status}`)
+					);
 				}
 			})
 			.catch((error) => {
 				if (this.destroyed || this.controlSession !== session) return;
 				const normalized =
 					error instanceof Error ? error : new Error(String(error));
-				for (const frame of frames) {
-					this.notifyTopicError(frame.topicId, normalized);
+				if (normalized instanceof RealtimeTopicRejectedError) {
+					this.rejectTopic(normalized);
+					return;
 				}
+				for (const frame of frames)
+					this.notifyTopicError(frame.topicId, normalized);
 				this.reconnectPending = true;
 				this.abortController?.abort();
 			});
@@ -295,6 +377,17 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 				? Array.from(this.errorCallbacks.values()).flatMap((set) => [...set])
 				: [...(this.errorCallbacks.get(topicId) ?? [])];
 		for (const callback of new Set(callbacks)) callback(error);
+	}
+
+	private rejectTopic(error: RealtimeTopicRejectedError): void {
+		this.notifyTopicError(error.topicId, error);
+		this.subscribers.delete(error.topicId);
+		this.errorCallbacks.delete(error.topicId);
+		this.topics.delete(error.topicId);
+		this.lastSeq.delete(error.topicId);
+		for (const [topicHash, customId] of this.customIds) {
+			if (customId === error.topicId) this.customIds.delete(topicHash);
+		}
 	}
 
 	/**
@@ -363,6 +456,8 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		this.controlSession = null;
 		this.pendingControlFrames = [];
 		this.controlOperation = Promise.resolve();
+		this.controlFlushScheduled = false;
+		this.desiredRevision = 0;
 		this.watchdogTriggered = false;
 
 		const getTopicsPayload = () =>
@@ -388,6 +483,19 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 			});
 
 			if (!response.ok) {
+				const payload = (await response.json().catch(() => null)) as {
+					errors?: unknown[];
+				} | null;
+				const admissionErrors =
+					payload?.errors
+						?.map(toRealtimeError)
+						.filter((error) => error !== null) ?? [];
+				if (admissionErrors.length > 0) {
+					for (const error of admissionErrors) {
+						this.rejectTopic(error as RealtimeTopicRejectedError);
+					}
+					return;
+				}
 				throw new Error(`Realtime connection failed: ${response.status}`);
 			}
 
@@ -485,13 +593,10 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 			}
 		} else if (event.type === "session") {
 			try {
-				const session = JSON.parse(event.data) as {
-					sessionId: string;
-					token: string;
-				};
+				const session = JSON.parse(event.data) as ControlSession;
 				if (session.sessionId && session.token) {
 					this.controlSession = session;
-					this.flushControlFrames();
+					this.scheduleControlFlush();
 				}
 			} catch {
 				// Ignore malformed control metadata.
@@ -500,11 +605,16 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 			this.reconnectAttempts = 0;
 		} else if (event.type === "error") {
 			try {
-				const { topicId, message } = JSON.parse(event.data) as {
+				const payload = JSON.parse(event.data) as {
 					topicId: string;
 					message: string;
 				};
-				this.notifyTopicError(topicId, new Error(message));
+				const error = toRealtimeError(payload);
+				if (error instanceof RealtimeTopicRejectedError) {
+					this.rejectTopic(error);
+				} else {
+					this.notifyTopicError(payload.topicId, new Error(payload.message));
+				}
 			} catch {
 				// Ignore parse errors
 			}
@@ -563,6 +673,7 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		this.lastSeq.clear();
 		this.customIds.clear();
 		this.pendingControlFrames = [];
+		this.controlFlushScheduled = false;
 		this.controlSession = null;
 	}
 

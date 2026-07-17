@@ -2,9 +2,10 @@ import { asc, desc, gt, lt } from "drizzle-orm";
 
 import type { DrizzleClientFromQuestpieConfig } from "#questpie/server/config/types.js";
 import type { LoggerAdapter } from "#questpie/server/modules/core/integrated/logger/types.js";
+import { getNodeEnv } from "#questpie/server/utils/env.js";
 
 import type { RealtimeAdapter } from "./adapter.js";
-import { PgNotifyAdapter } from "./adapters/pg-notify.js";
+import { PgNotifyAdapter, PgNotifyChangeBroker } from "./adapters/pg-notify.js";
 import {
 	type AppendChannelEventInput,
 	type AppendChannelEventOptions,
@@ -22,6 +23,12 @@ import {
 	type RegisterChannelPresenceInput,
 	SseChannelPresenceRegistry,
 } from "./sse-channel-presence.js";
+import {
+	createPostgresRealtimeTopologyCoordinator,
+	type RealtimeDesiredTopology,
+	RealtimeTopologyCoordinator,
+	type RealtimeTopologyResult,
+} from "./topology-coordinator.js";
 import type {
 	ChangeBroker,
 	ClientAuthInput,
@@ -56,6 +63,28 @@ type AppendChangeOptions = {
 
 const DEFAULT_RETENTION_DAYS = 3;
 const DEFAULT_ADAPTER_RECONCILIATION_INTERVAL_MS = 15_000;
+let warnedLegacyRealtimeRuntime = false;
+
+function warnLegacyRealtimeRuntime(
+	config: RealtimeConfig,
+	logger?: Pick<LoggerAdapter, "warn">,
+): void {
+	if (
+		warnedLegacyRealtimeRuntime ||
+		getNodeEnv() === "test" ||
+		(!config.adapter &&
+			config.rollout?.mode !== "legacy" &&
+			config.rollout?.mode !== "dual" &&
+			!config.rollout?.onComparison)
+	) {
+		return;
+	}
+	warnedLegacyRealtimeRuntime = true;
+	const message =
+		"[Realtime] Legacy adapter/rollout configuration is deprecated in QuestPie 3.x and will be removed in QuestPie 4. Use realtime.changeBroker or the automatic Postgres v2 default.";
+	if (logger) logger.warn(message);
+	else console.warn(message);
+}
 
 type ListenerEntry = {
 	listener: RealtimeListener;
@@ -177,6 +206,7 @@ export class RealtimeService {
 	private retentionCleanupInProgress = false;
 	private readonly channelEventLedger: ChannelEventLedger;
 	private readonly channelPresenceRegistry: SseChannelPresenceRegistry;
+	private readonly topologyCoordinator: RealtimeTopologyCoordinator;
 	private channelPollTimer: ReturnType<typeof setInterval> | null = null;
 	private nextChannelCleanupAt = 0;
 	private readonly observability: RealtimeObservability;
@@ -188,6 +218,7 @@ export class RealtimeService {
 		private pgConnectionString?: string,
 		private logger?: Pick<LoggerAdapter, "error" | "warn">,
 	) {
+		warnLegacyRealtimeRuntime(config, this.logger);
 		this.transportMode = config.rollout?.mode ?? "v2";
 		this.onDualRunComparison = config.rollout?.onComparison;
 		if (
@@ -203,13 +234,20 @@ export class RealtimeService {
 		if (
 			!compatibleAdapter &&
 			this.pgConnectionString &&
-			(this.transportMode === "legacy" || !config.changeBroker)
+			this.transportMode === "legacy"
 		) {
 			compatibleAdapter = new PgNotifyAdapter({
 				connectionString: this.pgConnectionString,
 				channel: "questpie_realtime",
 			});
 		}
+		const compatibleBroker =
+			config.changeBroker ??
+			(!config.adapter && this.pgConnectionString && this.transportMode === "v2"
+				? new PgNotifyChangeBroker({
+						connectionString: this.pgConnectionString,
+					})
+				: undefined);
 
 		if (this.transportMode === "legacy") {
 			this.adapter = compatibleAdapter;
@@ -218,7 +256,7 @@ export class RealtimeService {
 			this.changeBroker = config.changeBroker;
 			this.clientTransport = config.clientTransport;
 		} else {
-			this.changeBroker = config.changeBroker;
+			this.changeBroker = compatibleBroker;
 			this.adapter = this.changeBroker ? undefined : compatibleAdapter;
 			this.clientTransport = config.clientTransport;
 		}
@@ -237,6 +275,18 @@ export class RealtimeService {
 					? this.configuredPollIntervalMs
 					: Number.POSITIVE_INFINITY,
 		});
+		this.topologyCoordinator = createPostgresRealtimeTopologyCoordinator(
+			this.db,
+			{
+				broker: this.changeBroker,
+				observer: this.observability,
+				onError: (error) =>
+					this.reportTransportFailure(
+						"[Realtime] Topology coordinator failed",
+						error,
+					),
+			},
+		);
 		this.channelEventLedger = new ChannelEventLedger(
 			this.db,
 			this.changeBroker,
@@ -491,6 +541,10 @@ export class RealtimeService {
 			await this.adapter?.startPublisher?.();
 			await this.changeBroker?.start({
 				onWake: (wake) => {
+					if (wake.kind === "topology-maybe-advanced") {
+						this.topologyCoordinator.onWake(wake);
+						return;
+					}
 					if (wake.kind === "channel-events-maybe-advanced") {
 						void this.channelEventLedger
 							.drain(wake.channelHash)
@@ -530,6 +584,7 @@ export class RealtimeService {
 					}
 				},
 			});
+			await this.topologyCoordinator.start();
 			await this.clientTransport?.start({
 				onError: (error) =>
 					this.reportTransportFailure(
@@ -544,6 +599,41 @@ export class RealtimeService {
 			this.publisherStartPromise = null;
 		});
 		await this.publisherStartPromise;
+	}
+
+	/** @internal Register the local owner before exposing session capability data. */
+	async openTopologySession(input: {
+		sessionId: string;
+		token: string;
+		identity: string;
+		topology: RealtimeDesiredTopology;
+		apply: (topology: RealtimeDesiredTopology) => Promise<void>;
+		onClose: () => Promise<void> | void;
+	}): Promise<{ generation: number; close(): Promise<void> }> {
+		await this.initialize();
+		return this.topologyCoordinator.open(input);
+	}
+
+	/** @internal Translate a 3.x delta request through durable topology state. */
+	async submitLegacyTopology(input: {
+		sessionId: string;
+		token: string;
+		identity: string;
+		frames: import("./sse-control.js").RealtimeControlFrame[];
+	}): Promise<RealtimeTopologyResult> {
+		await this.initialize();
+		return this.topologyCoordinator.submitLegacy(input);
+	}
+
+	/** @internal Commit one complete versioned desired topology. */
+	async submitTopology(input: {
+		sessionId: string;
+		token: string;
+		identity: string;
+		topology: RealtimeDesiredTopology;
+	}): Promise<RealtimeTopologyResult> {
+		await this.initialize();
+		return this.topologyCoordinator.submit(input);
 	}
 
 	async getClientTransportConfig(
@@ -894,8 +984,8 @@ export class RealtimeService {
 		}
 
 		this.startPromise = (async () => {
-			await this.initialize();
 			const latestSeq = await this.getLatestSeq();
+			await this.initialize();
 
 			if (this.adapter) {
 				await this.adapter.start();
@@ -956,6 +1046,7 @@ export class RealtimeService {
 	}
 
 	async destroy(): Promise<void> {
+		await this.topologyCoordinator.stop();
 		await this.channelPresenceRegistry.destroy();
 		await this.stop();
 	}

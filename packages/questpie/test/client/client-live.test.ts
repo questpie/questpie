@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { createClient } from "../../src/client/index.js";
 import {
 	RealtimeMultiplexer,
+	RealtimeTopicRejectedError,
 	realtimeReconnectDelay,
 } from "../../src/client/realtime/multiplexer.js";
 import { sseSnapshotStream } from "../../src/client/realtime/stream.js";
@@ -31,7 +32,11 @@ type SSEConnection = {
 		sinceSeq?: number;
 	}>;
 	sendSnapshot: (topicId: string, seq: number, data: unknown) => void;
-	sendError: (topicId: string, message: string) => void;
+	sendError: (
+		topicId: string,
+		message: string,
+		payload?: Record<string, unknown>,
+	) => void;
 	close: () => void;
 	aborted: boolean;
 };
@@ -94,10 +99,10 @@ describe("client live queries", () => {
 						// Stream already closed
 					}
 				},
-				sendError(topicId, message) {
+				sendError(topicId, message, payload = {}) {
 					controller.enqueue(
 						encoder.encode(
-							`event: error\ndata: ${JSON.stringify({ topicId, message })}\n\n`,
+							`event: error\ndata: ${JSON.stringify({ topicId, message, ...payload })}\n\n`,
 						),
 					);
 				},
@@ -245,7 +250,90 @@ describe("client live queries", () => {
 		stopPosts();
 	});
 
-	it("reconnects a clean close with sinceSeq and skips duplicate delivery", async () => {
+	it("coalesces advertised v1 desired topology and closes the last topic locally", async () => {
+		const controls: Array<Record<string, any>> = [];
+		let streamController!: ReadableStreamDefaultController<Uint8Array>;
+		let aborted = false;
+		const fetcher: typeof fetch = async (_input, init) => {
+			const payload = JSON.parse(String(init?.body));
+			if (payload.sessionId) {
+				controls.push(payload);
+				return Response.json(
+					{
+						protocol: "questpie-realtime-topology",
+						version: 1,
+						status: "accepted",
+						revision: payload.topology.revision,
+						desiredRevision: payload.topology.revision,
+						appliedRevision: payload.topology.revision - 1,
+					},
+					{ status: 202 },
+				);
+			}
+			const stream = new ReadableStream<Uint8Array>({
+				start(controller) {
+					streamController = controller;
+					controller.enqueue(
+						encoder.encode(
+							`event: session\ndata: ${JSON.stringify({
+								sessionId: "session-v1",
+								token: "token-v1",
+								control: {
+									protocol: "questpie-realtime-topology",
+									versions: [1],
+								},
+							})}\n\n`,
+						),
+					);
+				},
+			});
+			init?.signal?.addEventListener("abort", () => {
+				aborted = true;
+				streamController.close();
+			});
+			return new Response(stream, {
+				headers: { "Content-Type": "text/event-stream" },
+			});
+		};
+		const multiplexer = new RealtimeMultiplexer(
+			"http://localhost:3000",
+			true,
+			0,
+			{},
+			undefined,
+			fetcher,
+		);
+		const stopPosts = multiplexer.subscribe(
+			{ resourceType: "collection", resource: "posts" },
+			() => {},
+		);
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		const stopPages = multiplexer.subscribe(
+			{ resourceType: "collection", resource: "pages" },
+			() => {},
+		);
+		const stopUsers = multiplexer.subscribe(
+			{ resourceType: "collection", resource: "users" },
+			() => {},
+		);
+
+		await waitFor(() => controls.length === 1);
+		expect(controls[0].topology.revision).toBe(1);
+		expect(controls[0].topology.topics).toHaveLength(3);
+		expect(controls[0].frames).toBeUndefined();
+
+		stopPages();
+		stopUsers();
+		await waitFor(() => controls.length === 2);
+		expect(controls[1].topology.revision).toBe(2);
+		expect(controls[1].topology.topics).toHaveLength(1);
+		stopPosts();
+		await waitFor(() => aborted);
+		expect(controls).toHaveLength(2);
+		multiplexer.destroy();
+	});
+
+	it("reconnects with the exact active topic set and per-topic sinceSeq", async () => {
 		const multiplexer = new RealtimeMultiplexer(
 			"http://localhost:3000",
 			true,
@@ -264,17 +352,31 @@ describe("client live queries", () => {
 			undefined,
 			"resume-posts",
 		);
+		multiplexer.subscribe(
+			{ resourceType: "collection", resource: "pages" },
+			(snapshot) => snapshots.push(snapshot),
+			undefined,
+			"resume-pages",
+		);
 		await waitFor(() => connections.length === 1);
 		connections[0].sendSnapshot("resume-posts", 7, { docs: [{ id: "7" }] });
-		await waitFor(() => snapshots.length === 1);
+		connections[0].sendSnapshot("resume-pages", 11, { docs: [{ id: "11" }] });
+		await waitFor(() => snapshots.length === 2);
 
 		connections[0].close();
 		await new Promise((resolve) => setTimeout(resolve, 1));
 		expect(connections).toHaveLength(1);
 		await waitFor(() => connections.length === 2);
-		expect(connections[1].topics[0].sinceSeq).toBe(7);
+		expect(
+			connections[1].topics
+				.map(({ id, resource, sinceSeq }) => ({ id, resource, sinceSeq }))
+				.sort((left, right) => left.id.localeCompare(right.id)),
+		).toEqual([
+			{ id: "resume-pages", resource: "pages", sinceSeq: 11 },
+			{ id: "resume-posts", resource: "posts", sinceSeq: 7 },
+		]);
 		await new Promise((resolve) => setTimeout(resolve, 20));
-		expect(snapshots).toHaveLength(1);
+		expect(snapshots).toHaveLength(2);
 		multiplexer.destroy();
 	});
 
@@ -341,13 +443,89 @@ describe("client live queries", () => {
 		);
 		await waitFor(() => connections.length === 1);
 
-		connections[0].sendError("posts-topic", "posts denied");
+		connections[0].sendError(
+			"posts-topic",
+			"Topic limit must be between 1 and 100",
+			{
+				code: "REALTIME_TOPIC_REJECTED",
+				resource: "posts",
+				operation: "find",
+				retryable: false,
+				details: {
+					reason: "query_limit",
+					requestedLimit: 240,
+					configuredLimit: 100,
+				},
+			},
+		);
 		await waitFor(() => postErrors.length === 1);
-		expect(postErrors[0].message).toBe("posts denied");
+		expect(postErrors[0]).toBeInstanceOf(RealtimeTopicRejectedError);
+		expect(postErrors[0]).toMatchObject({
+			code: "REALTIME_TOPIC_REJECTED",
+			topicId: "posts-topic",
+			resource: "posts",
+			operation: "find",
+			retryable: false,
+			details: {
+				reason: "query_limit",
+				requestedLimit: 240,
+				configuredLimit: 100,
+			},
+		});
 		expect(pageErrors).toHaveLength(0);
+		expect(client.realtime.topicCount).toBe(1);
 
 		stopPosts();
 		stopPages();
+	});
+
+	it("delivers an initial admission response once and removes the rejected topic", async () => {
+		let calls = 0;
+		const fetcher = (async () => {
+			calls += 1;
+			return Response.json(
+				{
+					errors: [
+						{
+							code: "REALTIME_TOPIC_REJECTED",
+							message: "Topic limit must be between 1 and 100",
+							topicId: "media-topic",
+							resource: "media",
+							operation: "find",
+							retryable: false,
+							details: {
+								reason: "query_limit",
+								requestedLimit: 240,
+								configuredLimit: 100,
+							},
+						},
+					],
+				},
+				{ status: 400 },
+			);
+		}) as typeof fetch;
+		const multiplexer = new RealtimeMultiplexer(
+			"http://localhost",
+			true,
+			0,
+			{ retryBaseMs: 1, maxRetryMs: 1 },
+			undefined,
+			fetcher,
+		);
+		const errors: Error[] = [];
+		multiplexer.subscribe(
+			{ resourceType: "collection", resource: "media", limit: 240 },
+			() => {},
+			undefined,
+			"media-topic",
+			(error) => errors.push(error),
+		);
+
+		await waitFor(() => errors.length === 1);
+		expect(errors[0]).toBeInstanceOf(RealtimeTopicRejectedError);
+		expect(calls).toBe(1);
+		expect(multiplexer.topicCount).toBe(0);
+		multiplexer.destroy();
 	});
 
 	it("liveIter() yields snapshots and terminates on abort", async () => {

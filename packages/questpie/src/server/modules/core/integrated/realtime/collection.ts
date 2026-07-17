@@ -99,3 +99,38 @@ export const questpieChannelPresenceTable = pgTable(
 		index("idx_channel_presence_expiry").on(table.expiresAt),
 	],
 );
+
+/** Durable ownership and desired state for HA realtime control sessions. */
+export const questpieRealtimeTopologyTable = pgTable(
+	"questpie_realtime_topology",
+	{
+		sessionKey: text("session_key").primaryKey(),
+		ownerId: text("owner_id").notNull(),
+		ownerGeneration: bigserial("owner_generation", {
+			mode: "number",
+		}).notNull(),
+		protocolVersion: integer("protocol_version").notNull(),
+		tokenHash: text("token_hash").notNull(),
+		identityHash: text("identity_hash").notNull(),
+		leaseExpiresAt: timestamp("lease_expires_at", {
+			withTimezone: true,
+			mode: "date",
+		}).notNull(),
+		desiredRevision: bigint("desired_revision", { mode: "number" })
+			.default(0)
+			.notNull(),
+		appliedRevision: bigint("applied_revision", { mode: "number" })
+			.default(0)
+			.notNull(),
+		desiredTopology: jsonb("desired_topology").notNull(),
+		createdAt: systemTimestamp("created_at").defaultNow().notNull(),
+		updatedAt: systemTimestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("idx_realtime_topology_owner_lease").on(
+			table.ownerId,
+			table.leaseExpiresAt,
+		),
+		index("idx_realtime_topology_lease").on(table.leaseExpiresAt),
+	],
+);

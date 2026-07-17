@@ -33,6 +33,15 @@ type ControlFrame =
 
 type SseEvent = { type: string; data: string };
 
+type ControlSession = {
+	sessionId: string;
+	token: string;
+	control?: {
+		protocol: "questpie-realtime-topology";
+		versions: number[];
+	};
+};
+
 function channelId(input: ChannelConnectionInput): string {
 	return `channel:${input.resolvedName}`;
 }
@@ -46,8 +55,12 @@ export class SseChannelTransport implements ChannelClientTransport {
 	private destroyed = false;
 	private reconnectPending = false;
 	private retryAttempt = 0;
-	private controlSession: { sessionId: string; token: string } | null = null;
+	private controlSession: ControlSession | null = null;
 	private controlOperation: Promise<void> = Promise.resolve();
+	private desiredRevision = 0;
+	private desiredFlushPromise: Promise<void> | null = null;
+	private desiredTopologyGeneration = 0;
+	private desiredFlushedGeneration = 0;
 
 	constructor(
 		private readonly options: {
@@ -198,11 +211,14 @@ export class SseChannelTransport implements ChannelClientTransport {
 
 	private removeEntry(name: string, entry: Entry): void {
 		this.entries.delete(name);
+		if (this.entries.size === 0) {
+			this.abortController?.abort();
+			return;
+		}
 		this.applyTopology({
 			type: "unsubscribe_channel",
 			subscriptionId: entry.id,
 		});
-		if (this.entries.size === 0) this.abortController?.abort();
 	}
 
 	private scheduleConnect(delayMs: number): void {
@@ -216,6 +232,9 @@ export class SseChannelTransport implements ChannelClientTransport {
 		this.reconnectTimer = null;
 		this.connecting = true;
 		this.controlSession = null;
+		this.desiredRevision = 0;
+		this.desiredTopologyGeneration = 0;
+		this.desiredFlushedGeneration = 0;
 		this.abortController = new AbortController();
 		try {
 			const authHeaders = await this.options.getAuthHeaders?.();
@@ -265,6 +284,14 @@ export class SseChannelTransport implements ChannelClientTransport {
 	private async sendControl(frames: ControlFrame[]): Promise<void> {
 		const session = this.controlSession;
 		if (!session || frames.length === 0) return;
+		if (this.supportsDesiredTopology()) {
+			try {
+				await this.sendDesiredTopology();
+			} catch (error) {
+				this.handleControlError(error);
+			}
+			return;
+		}
 		this.controlOperation = this.controlOperation
 			.catch(() => {})
 			.then(async () => {
@@ -289,10 +316,77 @@ export class SseChannelTransport implements ChannelClientTransport {
 		try {
 			await this.controlOperation;
 		} catch (error) {
-			this.notifyAll(error instanceof Error ? error : new Error(String(error)));
-			this.reconnectPending = true;
-			this.abortController?.abort();
+			this.handleControlError(error);
 		}
+	}
+
+	private supportsDesiredTopology(): boolean {
+		return Boolean(
+			this.controlSession?.control?.protocol === "questpie-realtime-topology" &&
+			this.controlSession.control.versions.includes(1),
+		);
+	}
+
+	private sendDesiredTopology(): Promise<void> {
+		this.desiredTopologyGeneration += 1;
+		if (this.desiredFlushPromise) return this.desiredFlushPromise;
+		this.desiredFlushPromise = (async () => {
+			await Promise.resolve();
+			while (this.desiredFlushedGeneration < this.desiredTopologyGeneration) {
+				const generation = this.desiredTopologyGeneration;
+				const session = this.controlSession;
+				if (!session) return;
+				const topology = {
+					protocol: "questpie-realtime-topology",
+					version: 1,
+					revision: ++this.desiredRevision,
+					topics: [],
+					channels: [...this.entries.values()].map((entry) => ({
+						id: entry.id,
+						channel: entry.input.registryKey,
+						params: entry.input.params,
+						...(entry.lastEventId ? { lastEventId: entry.lastEventId } : {}),
+					})),
+				};
+				const operation = this.controlOperation
+					.catch(() => {})
+					.then(async () => {
+						const authHeaders = await this.options.getAuthHeaders?.();
+						const response = await this.options.fetcher(
+							`${this.options.baseUrl}/realtime`,
+							{
+								method: "POST",
+								headers: {
+									"Content-Type": "application/json",
+									...authHeaders,
+								},
+								body: JSON.stringify({
+									sessionId: session.sessionId,
+									token: session.token,
+									topology,
+								}),
+								credentials: this.options.withCredentials ? "include" : "omit",
+							},
+						);
+						if (!response.ok) {
+							throw new Error(`Channel SSE control failed: ${response.status}`);
+						}
+					});
+				this.controlOperation = operation;
+				await operation;
+				if (this.controlSession !== session) return;
+				this.desiredFlushedGeneration = generation;
+			}
+		})().finally(() => {
+			this.desiredFlushPromise = null;
+		});
+		return this.desiredFlushPromise;
+	}
+
+	private handleControlError(error: unknown): void {
+		this.notifyAll(error instanceof Error ? error : new Error(String(error)));
+		this.reconnectPending = true;
+		this.abortController?.abort();
 	}
 
 	private async readStream(body: ReadableStream<Uint8Array>): Promise<void> {
@@ -333,6 +427,7 @@ export class SseChannelTransport implements ChannelClientTransport {
 				const session = JSON.parse(event.data) as {
 					sessionId?: unknown;
 					token?: unknown;
+					control?: ControlSession["control"];
 				};
 				if (
 					typeof session.sessionId === "string" &&
@@ -341,6 +436,7 @@ export class SseChannelTransport implements ChannelClientTransport {
 					this.controlSession = {
 						sessionId: session.sessionId,
 						token: session.token,
+						...(session.control ? { control: session.control } : {}),
 					};
 				}
 			} catch {}

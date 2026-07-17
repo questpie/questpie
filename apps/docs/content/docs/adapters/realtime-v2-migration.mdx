@@ -1,13 +1,27 @@
 ---
-title: Realtime v2 migration and rollback
-description: Canary Realtime v2 beside an existing adapter, understand the bulk-event change, and roll back without changing schema or losing outbox data.
+title: Realtime v2 HA migration
+description: Apply the topology migration, roll QuestPie 3.x safely across replicas, move legacy adapters to ChangeBroker, and understand the QuestPie 4 removal window.
 ---
 
-Realtime v2 keeps the existing `client.collections.*.live()`, `client.globals.*.live()`, raw `client.realtime`, TanStack `{ realtime: true }`, and `RealtimeConfig.adapter` APIs. The SSE wire remains protocol `1`; responses advertise it as `X-Questpie-Realtime-Protocol: 1`, which existing clients safely ignore.
+Realtime v2 keeps the existing `client.collections.*.live()`, `client.globals.*.live()`, raw `client.realtime`, and TanStack `{ realtime: true }` APIs. In QuestPie 3.x, it also keeps legacy control frames and `RealtimeConfig.adapter` as deprecated compatibility paths.
 
-The rollout flag changes server transport selection only. It does not create, delete, or rewrite a table.
+The HA control path stores complete revisioned desired topology in Postgres. A companion `POST /realtime` may land on any replica: it commits the new desired revision, publishes a metadata-only `ChangeBroker` wake, and the process that owns the live SSE or provider sink applies the local diff. A one-second reconciliation loop heals lost wakes. No callback, request context, raw session id, token, identity, query, or channel body is sent through the broker.
 
-Realtime v2 channels add framework-owned ledger tables, and SSE presence adds `questpie_channel_presence`. Generate and apply the normal QUESTPIE database migration before enabling channel traffic. Do not hand-edit these tables. The presence table contains expiring connection leases; multiple app instances sharing the application database reconcile the same roster.
+This makes sticky routing unnecessary once every request-handling replica supports desired-topology v1 and the migration is applied. The owner lease is not transferable: if the owner dies, the client reconnects and establishes a new session.
+
+## Required database migration
+
+The framework schema adds `questpie_realtime_topology` beside the existing realtime outbox, channel ledger, and presence tables. It stores hashed session/token/identity keys, owner and fencing data, lease expiry, desired/applied revisions, and a bounded desired topology document.
+
+Generate, review, and commit the application migration before enabling the HA path:
+
+```sh
+bunx questpie migrate:create
+# review and commit the generated migration
+bunx questpie migrate
+```
+
+Never use `questpie push` or `db:push` for this production rollout. QUESTPIE owns the framework table definition; each application owns and deploys its generated migration.
 
 ## The breaking behavior to audit
 
@@ -25,94 +39,122 @@ Bulk update and bulk delete emit **one durable event per logical operation**, no
 
 Do not count adapter notifications to count changed records. Use `payload.count`. Do not expect N per-record events from one bulk mutation.
 
-## Rollout modes
+## Recommended 3.x rollout
 
-`realtime.rollout.mode` accepts three values:
+### 1. Apply the migration before the mixed-version deploy
 
-| Mode       | Cross-instance invalidation                                                                           | Edge delivery                               | Use it for                                                |
-| ---------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------------------- |
-| `"legacy"` | Existing `adapter` or the poll/implicit-pg fallback                                                   | Existing SSE protocol                       | Baseline and immediate rollback                           |
-| `"v2"`     | `changeBroker`; an existing `adapter` remains the compatibility fallback when no broker is configured | Configured `clientTransport`, otherwise SSE | Normal operation; this is the default                     |
-| `"dual"`   | Existing `adapter` and `changeBroker` both publish the same durable outbox sequence                   | One v2 edge path only                       | Canary comparison without double-delivering client frames |
+Deploy the generated migration while the old application version is still serving. The additional framework table does not change old-client behavior.
 
-Dual mode requires both `adapter` and `changeBroker`. It compares whether both invalidation publishes accepted the same durable sequence. A one-sided failure is reported through `onComparison` and logs a warning, while the healthy path continues. If both fail, normal reconciliation polling still provides the durable recovery path and the publish reports failure.
+### 2. Roll every request-handling replica to the new 3.x version
 
-## Recommended migration
+New clients send complete desired topology only after the opening server advertises:
 
-### 1. Deploy the new code on the legacy path
+```ts
+control: {
+  protocol: "questpie-realtime-topology",
+  versions: [1],
+}
+```
 
-Keep the current adapter and pin the baseline explicitly:
+Desired revisions start at `1`; the opening topology is revision `0`. A `202 accepted` means the authoritative row committed, not necessarily that the owner already applied the diff. Equal retries receive `200 duplicate`; stale or conflicting revisions receive `409`; missing/expired sessions and token or identity mismatches receive the same `404 REALTIME_CONTROL_UNAVAILABLE`; storage failures receive `503`.
+
+Old clients continue sending legacy add/remove frames. An upgraded server translates those frames into the same durable desired state. During a mixed rolling deploy, a request that reaches an old replica may force a reconnect, but it cannot falsely acknowledge or apply another principal's topology. The no-reconnect cross-replica guarantee begins when every request-handling replica is upgraded.
+
+### 3. Use the v2 broker configuration
+
+For a normal Postgres application, no realtime transport object is required:
 
 ```ts
 export default runtimeConfig({
+	db: { url: env.DATABASE_URL },
+	realtime: true,
+});
+```
+
+QUESTPIE automatically constructs the Postgres `PgNotifyChangeBroker`. To use a different connection or channel, configure the v2 seam explicitly:
+
+```ts
+import { pgNotifyChangeBroker } from "questpie/adapters/pg-notify";
+
+export default runtimeConfig({
+	db: { url: env.DATABASE_URL },
 	realtime: {
-		adapter: existingAdapter,
-		rollout: { mode: "legacy" },
+		changeBroker: pgNotifyChangeBroker({
+			connectionString: env.DATABASE_URL,
+		}),
 	},
 });
 ```
 
-Verify existing admin, Autopilot, `live()`, `liveIter()`, and TanStack realtime consumers. No client release is required.
-
-### 2. Canary both invalidation paths
-
-Add the v2 broker and compare outcomes. Client snapshots are still emitted once:
+Redis is an explicit v2 broker override:
 
 ```ts
-export default runtimeConfig({
-	realtime: {
-		adapter: existingAdapter,
-		changeBroker: nextBroker,
-		rollout: {
-			mode: "dual",
-			onComparison(result) {
-				if (!result.equivalent) {
-					metrics.increment("realtime.dual_run_mismatch", {
-						legacy: result.legacy,
-						v2: result.v2,
-					});
-				}
-			},
-		},
-	},
-});
+import { redisStreamsChangeBroker } from "questpie/adapters/redis-streams";
+
+realtime: {
+  changeBroker: redisStreamsChangeBroker({ client: redis }),
+}
 ```
 
-Run dual mode long enough to cover deploys, reconnects, bulk mutations, and a broker interruption. The durable outbox remains the source of truth; dual mode compares invalidation acceptance, not application row payloads.
+Pusher/Soketi also supplies a v2 broker and client transport. Generic KV is not a topology coordinator: it does not supply live-callback ownership, leases, fencing, revision acknowledgements, or reconciliation.
 
-### 3. Select v2
+### 4. Retire legacy configuration
 
-After the canary is clean:
+Replace `realtime.adapter` with `realtime.changeBroker`, and remove `rollout.mode: "legacy" | "dual"` after your compatibility drill. `RealtimeAdapter`, `realtime.adapter`, `pgNotifyAdapter`, and the `legacy`/`dual` modes remain functional but deprecated for the rest of QuestPie 3.x. They are removed in QuestPie 4.
 
 ```ts
-export default runtimeConfig({
-	realtime: {
-		changeBroker: nextBroker,
-		clientTransport: nextClientTransport,
-		rollout: { mode: "v2" },
-	},
-});
+// QuestPie 3.x legacy compatibility - migrate away from this
+realtime: {
+	adapter: pgNotifyAdapter({ connectionString: env.DATABASE_URL });
+}
+
+// Realtime v2
+realtime: {
+	changeBroker: pgNotifyChangeBroker({ connectionString: env.DATABASE_URL });
+}
 ```
 
-An app that only has `adapter` can also use the default `v2` mode. QUESTPIE maps that adapter onto the new invalidation/compute/delivery pipeline as a compatibility fallback, so existing configuration does not need a flag-day rewrite.
+`legacy` and `dual` remain available only for a short rollback/canary window. They are not the target architecture and a clean v2 deployment does not configure both seams.
 
 ## Rollback drill
 
-Rollback is a config change:
+If an incident happens before the fleet is fully upgraded, the 3.x compatibility rollback is a config change:
 
 1. Set `realtime.rollout.mode` to `"legacy"`.
 2. Keep the existing `adapter` configured.
 3. Redeploy or restart every instance.
-4. Confirm `POST /realtime` returns protocol header `1` and a known `live()` consumer receives a fresh snapshot.
+4. Confirm a known `live()` consumer receives a fresh snapshot.
 5. Confirm outbox lag returns to normal through the adapter or reconciliation poll.
 
-Do **not** roll back migrations or delete `questpie_realtime_log`, channel-ledger rows, or `questpie_channel_presence`. Both modes consume the same durable data, so changing the flag loses neither schema nor committed events. Presence lease rows expire or are removed by the runtime. If the adapter itself is unavailable, leave reconciliation polling enabled while restoring it.
+Do **not** roll back migrations or delete `questpie_realtime_log`, `questpie_realtime_topology`, channel-ledger rows, or `questpie_channel_presence`. Both modes consume the same durable data. If the adapter itself is unavailable, leave reconciliation polling enabled while restoring it.
+
+Sticky sessions may temporarily reduce reconnects while old replicas remain in service, but they are emergency mitigation only. They do not replace the migration, fencing, durable desired state, or a complete fleet rollout.
+
+After the migration is applied, every request-handling replica advertises
+desired-topology v1, and cross-replica add/remove/reconnect verification passes,
+remove the sticky-session manifest or ingress affinity configuration. Leaving
+affinity enabled after that verification hides routing regressions and is not a
+supported steady-state HA design.
+
+## Measured topology baseline
+
+The committed benchmark compares one cached-topic replacement with full reconnect at 1, 5, and 15 topics for 1, 100, and 500 clients. On Bun 1.3.14, Apple M2 Pro, and an in-process PGLite fixture:
+
+- With globally advanced cursors at 500 clients and 5 topics, incremental topology executed 500 snapshot queries and recomputed no stable topics; reconnect executed 2,500 queries and recomputed 2,000 stable topics. Response bytes were 2,384,890 versus 11,984,950.
+- At 500 clients and 15 topics, incremental topology executed 500 queries and no stable recomputations; reconnect executed 7,500 queries and 7,000 stable recomputations. Response bytes were 145,390 versus 25,518,350; the incremental replacement page was empty in this fixture.
+- With current cursors, both strategies executed zero snapshot queries. Complete desired-state input was not always smaller: at 500 clients and 15 topics it encoded 1,992,350 bytes versus 1,882,350 reconnect-input bytes.
+- The one-topic case did not establish a latency win.
+
+These are reproducible workload counts and fixture-specific bytes, not a universal speedup percentage. The recorded wall time used the pre-implementation legacy-frame bridge, so it is not published as desired-v1/Postgres coordinator performance.
 
 ## Compatibility checklist
 
 - Existing `realtime: true` works.
 - Existing `realtime: { adapter }` works without adding a broker.
-- Existing SSE clients remain on protocol `1`.
+- Desired topology is sent only when the opening server advertises protocol version `1`.
 - Dual mode never sends two snapshot streams to one client.
 - Custom adapter consumers accept consolidated bulk events.
+- Every request-handling replica is upgraded before claiming no-reconnect HA behavior.
+- Cross-replica add/remove and reconnect/resume pass before removing temporary affinity.
+- The sticky-session manifest or ingress affinity is removed after that verification.
 - The rollback drill succeeds without a down migration or data deletion.

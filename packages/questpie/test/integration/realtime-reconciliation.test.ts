@@ -6,7 +6,7 @@ import {
 	type RealtimeChangeEvent,
 	type RealtimeNotice,
 } from "../../src/exports/index.js";
-import { PgNotifyAdapter } from "../../src/server/modules/core/integrated/realtime/adapters/pg-notify.js";
+import { PgNotifyChangeBroker } from "../../src/server/modules/core/integrated/realtime/adapters/pg-notify.js";
 import { RealtimeService } from "../../src/server/modules/core/integrated/realtime/service.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -202,14 +202,14 @@ describe("realtime matrix reconciliation", () => {
 		await cleanup?.();
 	});
 
-	it("G1: implicit pg publisher notifies with zero local subscribers", async () => {
-		const startPublisherSpy = spyOn(
-			PgNotifyAdapter.prototype,
-			"startPublisher",
+	it("G1: implicit pg broker publishes with zero local subscribers", async () => {
+		const startSpy = spyOn(
+			PgNotifyChangeBroker.prototype,
+			"start",
 		).mockResolvedValue();
-		const notifySpy = spyOn(
-			PgNotifyAdapter.prototype,
-			"notify",
+		const publishSpy = spyOn(
+			PgNotifyChangeBroker.prototype,
+			"publish",
 		).mockResolvedValue();
 		const realtime = new RealtimeService(
 			new ControlledRealtimeReadDb() as never,
@@ -230,11 +230,15 @@ describe("realtime matrix reconciliation", () => {
 
 		try {
 			await realtime.notify(change);
-			expect(notifySpy).toHaveBeenCalledTimes(1);
-			expect(notifySpy).toHaveBeenCalledWith(change);
+			expect(publishSpy).toHaveBeenCalledTimes(1);
+			expect(publishSpy).toHaveBeenCalledWith({
+				kind: "outbox-maybe-advanced",
+				highWaterSeq: 1,
+				reason: "publish",
+			});
 		} finally {
-			notifySpy.mockRestore();
-			startPublisherSpy.mockRestore();
+			publishSpy.mockRestore();
+			startSpy.mockRestore();
 		}
 	});
 

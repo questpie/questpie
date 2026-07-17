@@ -13,6 +13,70 @@ import type { RealtimeChangeEvent } from "../../src/server/modules/core/integrat
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe("realtime matrix observability", () => {
+	test("records bounded rejected-topic dimensions without query payloads", () => {
+		const events: RealtimeObservation[] = [];
+		const warnings: unknown[] = [];
+		const observability = new RealtimeObservability({
+			observer: { record: (event) => events.push(event) },
+			logger: {
+				warn: (_message, fields) => warnings.push(fields),
+				error: () => {},
+			},
+		});
+
+		observability.record({
+			type: "admission.rejected",
+			reason: "query_limit",
+			resource: "media",
+			operation: "find",
+			requestedLimit: 240,
+			configuredLimit: 100,
+			rolloutMode: "v2",
+		});
+
+		expect(events).toEqual([
+			{
+				type: "admission.rejected",
+				reason: "query_limit",
+				resource: "media",
+				operation: "find",
+				requestedLimit: 240,
+				configuredLimit: 100,
+				rolloutMode: "v2",
+			},
+		]);
+		expect(observability.snapshot().counters).toMatchObject({
+			"admission.rejected|reason=query_limit|resource=media|rollout_mode=v2": 1,
+		});
+		expect(JSON.stringify(warnings)).not.toContain("where");
+	});
+
+	test("records bounded topology lifecycle metrics and warnings", () => {
+		const warnings: unknown[] = [];
+		const observability = new RealtimeObservability({
+			logger: {
+				warn: (_message, fields) => warnings.push(fields),
+				error: () => {},
+			},
+		});
+
+		observability.record({
+			type: "topology.lifecycle",
+			phase: "submit",
+			outcome: "conflict",
+			desiredRevision: 4,
+			appliedRevision: 3,
+		});
+
+		expect(observability.snapshot().counters).toMatchObject({
+			"topology.lifecycle|outcome=conflict|phase=submit": 1,
+		});
+		expect(warnings).toHaveLength(1);
+		expect(JSON.stringify(warnings)).not.toContain("sessionId");
+		expect(JSON.stringify(warnings)).not.toContain("token");
+		expect(JSON.stringify(warnings)).not.toContain("identity");
+	});
+
 	test("isolates observer and logger failures while exposing bounded metrics", () => {
 		const events: RealtimeObservation[] = [];
 		const observability = new RealtimeObservability({

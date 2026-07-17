@@ -1,6 +1,12 @@
 import type { Client, ClientConfig, Notification } from "pg";
 
 import type { RealtimeAdapter, RealtimeAdapterState } from "../adapter.js";
+import type {
+	ChangeBroker,
+	ChangeBrokerState,
+	ChangeWake,
+} from "../transport.js";
+import { normalizeChangeWake } from "../transport.js";
 import type { RealtimeChangeEvent, RealtimeNotice } from "../types.js";
 
 export type PgNotifyAdapterOptions = {
@@ -16,6 +22,13 @@ export type PgNotifyAdapterOptions = {
 	reconnectInitialDelayMs?: number;
 	reconnectMaxDelayMs?: number;
 };
+
+export type PgNotifyChangeBrokerOptions = Omit<
+	PgNotifyAdapterOptions,
+	"onError"
+>;
+
+type ChangeBrokerStartInput = Parameters<ChangeBroker["start"]>[0];
 
 const PG_NOTIFY_MAX_PAYLOAD_BYTES = 8_000;
 
@@ -182,16 +195,20 @@ export class PgNotifyAdapter implements RealtimeAdapter {
 	}
 
 	async notify(event: RealtimeChangeEvent): Promise<void> {
-		const payload = JSON.stringify({
+		await this.publishPayload({
 			seq: event.seq,
 			resourceType: event.resourceType,
 			resource: event.resource,
 			operation: event.operation,
 		});
+	}
+
+	protected async publishPayload(value: unknown): Promise<void> {
+		const payload = JSON.stringify(value);
 		const payloadBytes = new TextEncoder().encode(payload).byteLength;
 		if (payloadBytes >= PG_NOTIFY_MAX_PAYLOAD_BYTES) {
 			const error = new Error(
-				`PgNotifyAdapter payload must be smaller than ${PG_NOTIFY_MAX_PAYLOAD_BYTES} bytes (received ${payloadBytes}).`,
+				`${this.constructor.name} payload must be smaller than ${PG_NOTIFY_MAX_PAYLOAD_BYTES} bytes (received ${payloadBytes}).`,
 			);
 			this.reportError("payload", error);
 			throw error;
@@ -392,5 +409,97 @@ export class PgNotifyAdapter implements RealtimeAdapter {
 	}
 }
 
+/**
+ * @deprecated Use `pgNotifyChangeBroker`, or omit `realtime.changeBroker` on a
+ * Postgres app to use the automatic v2 default. Removed in QuestPie 4.
+ */
 export const pgNotifyAdapter = (options: PgNotifyAdapterOptions = {}) =>
 	new PgNotifyAdapter(options);
+
+/** Postgres LISTEN/NOTIFY implementation of the Realtime v2 notice-only seam. */
+export class PgNotifyChangeBroker
+	extends PgNotifyAdapter
+	implements ChangeBroker
+{
+	private brokerActive = false;
+	private brokerOnStateChange?: (state: ChangeBrokerState) => void;
+	private unsubscribeWake?: () => void;
+	private unsubscribeState?: () => void;
+	private readonly setDriverErrorHandler: (
+		handler: (error: unknown) => void,
+	) => void;
+
+	constructor(options: PgNotifyChangeBrokerOptions = {}) {
+		let driverErrorHandler = (_error: unknown) => {};
+		super({
+			...options,
+			channel: options.channel ?? "questpie_realtime_v2",
+			onError: (error) => driverErrorHandler(error),
+		});
+		this.setDriverErrorHandler = (handler) => {
+			driverErrorHandler = handler;
+		};
+	}
+
+	override async start(input?: ChangeBrokerStartInput): Promise<void> {
+		if (this.brokerActive) return;
+		if (!input) {
+			throw new Error("PgNotifyChangeBroker.start requires broker callbacks");
+		}
+
+		this.brokerActive = true;
+		this.brokerOnStateChange = input.onStateChange;
+		this.setDriverErrorHandler(input.onError);
+		this.unsubscribeWake = super.subscribe((notice) => {
+			const wake = normalizeChangeWake(notice);
+			if (wake) input.onWake(wake);
+			else input.onError(new Error("Invalid pg-notify ChangeWake payload"));
+		});
+		this.unsubscribeState = super.onStateChange((state) => {
+			input.onStateChange?.(
+				state === "connected" ? "connected" : "unavailable",
+			);
+		});
+		input.onStateChange?.("connecting");
+
+		try {
+			await super.start();
+		} catch (error) {
+			input.onError(error);
+			input.onStateChange?.("failed");
+			this.resetBrokerCallbacks();
+			await super.stop();
+			throw error;
+		}
+	}
+
+	async publish(wake: ChangeWake): Promise<void> {
+		if (!this.brokerActive) {
+			throw new Error("PgNotifyChangeBroker is not started");
+		}
+		const normalized = normalizeChangeWake(wake);
+		if (!normalized) throw new Error("Invalid ChangeWake payload");
+		await this.publishPayload(normalized);
+	}
+
+	override async stop(): Promise<void> {
+		const onStateChange = this.brokerOnStateChange;
+		await super.stop();
+		this.resetBrokerCallbacks();
+		if (onStateChange) onStateChange("disconnected");
+	}
+
+	private resetBrokerCallbacks(): void {
+		this.unsubscribeWake?.();
+		this.unsubscribeState?.();
+		this.unsubscribeWake = undefined;
+		this.unsubscribeState = undefined;
+		this.brokerOnStateChange = undefined;
+		this.brokerActive = false;
+		this.setDriverErrorHandler(() => {});
+	}
+}
+
+export const pgNotifyChangeBroker = (
+	options: PgNotifyChangeBrokerOptions = {},
+) => new PgNotifyChangeBroker(options);

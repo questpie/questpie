@@ -1,7 +1,11 @@
 import { describe, expect, it } from "bun:test";
 
 import { QueryClient } from "@tanstack/react-query";
-import type { QuestpieApp, QuestpieClient } from "questpie/client";
+import {
+	RealtimeTopicRejectedError,
+	type QuestpieApp,
+	type QuestpieClient,
+} from "questpie/client";
 
 import {
 	createQuestpieQueryOptions,
@@ -138,5 +142,57 @@ describe("realtime query options", () => {
 			operation: "count",
 		});
 		expect(value).toBe(10_000);
+	});
+
+	it("surfaces non-retryable admission failures as query errors after one attempt", async () => {
+		let streamCalls = 0;
+		const client = {
+			collections: {
+				posts: { find: async () => ({ docs: [], totalDocs: 0 }) },
+			},
+			globals: {},
+			routes: {},
+			realtime: {
+				subscribe: () => () => {},
+				stream: async function* () {
+					streamCalls += 1;
+					yield await Promise.reject(
+						new RealtimeTopicRejectedError({
+							code: "REALTIME_TOPIC_REJECTED",
+							message: "Topic limit must be between 1 and 100",
+							topicId: "posts-topic",
+							resource: "posts",
+							operation: "find",
+							retryable: false,
+							details: {
+								reason: "query_limit",
+								requestedLimit: 240,
+								configuredLimit: 100,
+							},
+						}),
+					);
+				},
+				destroy: () => {},
+				topicCount: 0,
+				subscriberCount: 0,
+			},
+		} as unknown as QuestpieClient<QuestpieApp>;
+		const queryClient = new QueryClient({
+			defaultOptions: { queries: { retry: 3, retryDelay: 0 } },
+		});
+		const options = createQuestpieQueryOptions(client).collections.posts.find(
+			{ limit: 240 },
+			{ realtime: true },
+		);
+
+		await expect(queryClient.fetchQuery(options as any)).rejects.toMatchObject({
+			code: "REALTIME_TOPIC_REJECTED",
+			retryable: false,
+		});
+		expect(streamCalls).toBe(1);
+		expect(queryClient.getQueryState(options.queryKey)).toMatchObject({
+			status: "error",
+			fetchStatus: "idle",
+		});
 	});
 });

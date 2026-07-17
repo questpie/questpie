@@ -484,6 +484,41 @@ const defaultErrorMap: QuestpieQueryErrorMap = (error) =>
 		? error
 		: new Error(typeof error === "string" ? error : "Unknown error");
 
+const isNonRetryableError = (error: unknown): boolean =>
+	Boolean(
+		error &&
+		typeof error === "object" &&
+		"retryable" in error &&
+		error.retryable === false,
+	);
+
+const mapRealtimeError = (
+	error: unknown,
+	errorMap: QuestpieQueryErrorMap,
+): unknown => {
+	const mapped = errorMap(error);
+	if (
+		isNonRetryableError(error) &&
+		(!mapped || typeof mapped !== "object" || !("retryable" in mapped))
+	) {
+		if (mapped && typeof mapped === "object" && Object.isExtensible(mapped)) {
+			Object.defineProperty(mapped, "retryable", {
+				value: false,
+				enumerable: true,
+			});
+			return mapped;
+		}
+		return Object.assign(new Error("Non-retryable realtime query failed"), {
+			cause: mapped,
+			retryable: false as const,
+		});
+	}
+	return mapped;
+};
+
+const realtimeRetry = (failureCount: number, error: unknown): boolean =>
+	!isNonRetryableError(error) && failureCount < 3;
+
 const buildKey = (prefix: QueryKey, parts: QueryKey): QueryKey =>
 	prefix.length ? [...prefix, ...parts] : parts;
 
@@ -548,7 +583,7 @@ async function* streamRealtimeQuery<TInitialData>(options: {
 			yield snapshot;
 		}
 	} catch (error) {
-		throw errorMap(error);
+		throw mapRealtimeError(error, errorMap);
 	}
 }
 
@@ -613,6 +648,7 @@ export function createQuestpieQueryOptions<
 							const topic = buildCollectionTopic(collectionName, options);
 							return queryOptions({
 								queryKey: qKey,
+								retry: realtimeRetry,
 								queryFn: streamedQuery({
 									streamFn: ({ signal }) =>
 										streamRealtimeQuery<any>({
@@ -650,6 +686,7 @@ export function createQuestpieQueryOptions<
 							);
 							return queryOptions({
 								queryKey: qKey,
+								retry: realtimeRetry,
 								queryFn: streamedQuery({
 									streamFn: ({ signal }) =>
 										streamRealtimeQuery<number>({
@@ -913,6 +950,7 @@ export function createQuestpieQueryOptions<
 						const topic = buildGlobalTopic(globalName as string, options);
 						return queryOptions({
 							queryKey: qKey,
+							retry: realtimeRetry,
 							queryFn: streamedQuery({
 								streamFn: ({ signal }) =>
 									streamRealtimeQuery({

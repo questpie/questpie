@@ -9,6 +9,7 @@ import {
 
 describe("realtime admission", () => {
 	it("applies the finite default limit and rejects query caps", () => {
+		expect(DEFAULT_REALTIME_ADMISSION.maxFindLimit).toBe(100);
 		expect(
 			admitRealtimeTopic(
 				{ id: "posts", resourceType: "collection", resource: "posts" },
@@ -25,7 +26,13 @@ describe("realtime admission", () => {
 				},
 				DEFAULT_REALTIME_ADMISSION,
 			),
-		).toMatchObject({ accepted: false });
+		).toEqual({
+			accepted: false,
+			message: "Topic limit must be between 1 and 100",
+			reason: "query_limit",
+			requestedLimit: 101,
+			configuredLimit: 100,
+		});
 		expect(
 			admitRealtimeTopic(
 				{
@@ -40,7 +47,12 @@ describe("realtime admission", () => {
 				},
 				DEFAULT_REALTIME_ADMISSION,
 			),
-		).toMatchObject({ accepted: false });
+		).toEqual({
+			accepted: false,
+			message: "Topic exceeds maximum relation depth of 3",
+			reason: "relation_depth",
+			configuredLimit: 3,
+		});
 		expect(
 			admitRealtimeTopic(
 				{

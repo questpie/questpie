@@ -376,6 +376,19 @@ bounded concurrency pool. Per-principal counters are released by every teardown
 path. A batch with some rejected topics keeps admitted topics alive and emits
 per-topic errors; a request with no admitted topics fails before opening a sink.
 
+`maxFindLimit` is a per-snapshot limit: it applies to the initial `find` and to
+every later refresh. The default remains `100`. Rejection is explicit; the
+runtime must not clamp or split a query because either changes ordering,
+pagination, completeness, and topic-budget semantics. Configuration changes
+require measurements of query cost, serialized size, fan-out, and slow-client
+behavior. Large or paginated read models are not one realtime snapshot.
+
+Topic admission failures use the safe `REALTIME_TOPIC_REJECTED` payload with
+`topicId`, `resource`, `operation`, `retryable: false`, and bounded details.
+Never attach `where`, session data, tokens, or arbitrary input. The edge sends
+the error only to the rejected subscriber; adapters must expose a visible error
+state and must not retry a non-retryable rejection.
+
 The initial defaults are normative and may be changed only with benchmark and
 compatibility evidence:
 
@@ -389,6 +402,18 @@ compatibility evidence:
 | queued latest-snapshot bytes per edge session       |   1 MiB |
 | queued ordered channel events per edge session      |     100 |
 | queued ordered channel-event bytes per edge session |   1 MiB |
+
+## Future deep module: invalidation mode (not implemented)
+
+A future, separately specified `realtime: { mode: "invalidate" }` module may
+publish a bounded invalidation signal and let a read adapter refetch its own
+page instead of streaming complete snapshots. That is a different delivery
+contract: it needs explicit ownership of cache keys, pagination semantics,
+dedupe, authorization revalidation, retry policy, and stale-data behavior.
+
+It must not be added as a flag inside the snapshot pipeline or used to delay HA
+topology work. No invalidate mode is implemented by this design; it requires a
+separate spec and acceptance suite.
 
 The connection count is explicitly per app instance; exact distributed rate
 limiting is outside this program. Provider account/channel limits and RT2.0
@@ -733,6 +758,42 @@ write failures, or an increasing admission-rejection rate are warning signals;
 single access denials and rate-limit rejections are structured audit warnings,
 not paging conditions by themselves.
 
+## Distributed desired-topology control
+
+Realtime topology control follows the same durable-state/wake/reconcile rule as
+the outbox. `questpie_realtime_topology` is authoritative for the complete
+desired topology, its monotonic revision, the applied revision, owner lease,
+and fencing generation. The live sink and its apply/close callbacks remain in
+the owner process and are never serialized.
+
+An opening SSE or shared-provider session advertises
+`questpie-realtime-topology` version `1`. New clients then submit a complete
+bounded topology with one positive revision; unchanged topics/channels stay
+mounted while the owner applies only additions and removals. The accepting
+replica commits the desired revision before acknowledging it, then publishes a
+metadata-only `topology-maybe-advanced` wake. The owner re-reads the durable
+row and a one-second reconciliation loop heals a lost wake. The default lease
+is 30 seconds with a 10-second heartbeat, both using database time and fenced
+updates.
+
+Session ids, control tokens, and identities are stored as SHA-256 hashes. Wakes
+contain only the session hash, owner id/generation, desired revision, and a
+bounded reason. A missing/expired row or token/identity mismatch has the same
+unavailable response. Owner death never transfers a live stream; the client
+reconnects and opens a new fenced session after transport/watchdog failure.
+
+Postgres apps construct `PgNotifyChangeBroker` automatically. Redis deployments
+can select `redisStreamsChangeBroker`; neither broker is the durable topology
+store. Generic KV is not a coordinator and load-balancer affinity is not part
+of the correctness contract.
+
+QuestPie 3.x continues accepting legacy delta frames and maps them into durable
+desired state. `RealtimeAdapter`, `realtime.adapter`, `pgNotifyAdapter`,
+`redisStreamsAdapter`, and `legacy`/`dual` rollout modes are deprecated through
+3.x and removed in QuestPie 4. Mixed-version fleets may reconnect; the
+cross-replica no-reconnect guarantee begins only after the topology migration
+and every request-handling replica supports desired-topology v1.
+
 ## Defect mapping
 
 | Defect | Design element that removes it                                                                                                                                  |
@@ -751,23 +812,23 @@ not paging conditions by themselves.
 
 ## Fifteen-invariant gate
 
-| Invariant | Concrete mechanism                                                                                                         | Required proof                                                                         |
-| --------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| H1        | Both seams start/stop with app lifecycle; no subscriber-gated broker start.                                                | Write-only instance wakes a separate subscriber instance.                              |
-| H2        | Lossy wake contract plus unconditional poll, reconnect drain, lag-window rescan, and seq dedupe.                           | Drop/reorder wakes and expose an out-of-order commit; state still converges.           |
-| H3        | Logical-operation batch guard; one in-tx append; caught post-commit publish.                                               | Exact event/insert/notify counts and response-path latency assertion.                  |
-| H4        | Scheduler keyed by topic and access equivalence; immutable byte fan-out; hash suppression; pre/post match.                 | N equivalent sinks cause one query and unchanged results emit no frame.                |
-| H5        | Admission config, pre-registration access execution, bounded concurrency, finite limits.                                   | Cap matrix and denied-topic teardown tests.                                            |
-| H6        | `ClientSink.write()` busy/throw contract, latest-wins replacement, bounded ordered queue, shared ticker, terminal cleanup. | Slow and failed sink tests prove bounded memory and zero listeners/timers after close. |
-| H7        | `sinceSeq`, add/remove control frames, jittered reconnect, ping watchdog, forced reset outside retention.                  | Resume inside/outside retention and incremental mount tests with no reconnect storm.   |
-| H8        | Discriminated `find`/`count`/`get` topic union.                                                                            | Live count runs count and transfers O(1) data.                                         |
-| H9        | Notice-only broker and per-session private WS live-query channel with authorized refetch.                                  | Cross-session WS test proves no ACL snapshot reaches a shared channel.                 |
-| H10       | Default time retention, no local watermark deletion, bounded replay infrastructure.                                        | Cleanup with zero subscribers and multiple instances.                                  |
-| H11       | Caught async, isolated listeners, 42P01-only silence, client error/close, coarse session refresh.                          | Failure-injection matrix produces no unhandled rejection or hanging client.            |
-| H12       | Non-throwing observer events for broker, drain, refresh, buffers, admission, resume, and failures.                         | Observer contract tests plus sensitive-label audit.                                    |
-| H13       | Mutation and outbox append share the transaction; wake is post-commit.                                                     | Crash-window rollback/commit/reconcile tests.                                          |
-| H14       | Separate `ChangeBroker` and `ClientTransport`; latest-snapshot and ordered-event QoS have different queue/replay rules.    | Interface compile test and cross-driver QoS matrix.                                    |
-| H15       | Session-scoped default access key; cross-principal sharing only by explicit deterministic resolver.                        | Adversarial row, field, and `afterRead` isolation tests.                               |
+| Invariant | Concrete mechanism                                                                                                                              | Required proof                                                                         |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| H1        | Both seams start/stop with app lifecycle; no subscriber-gated broker start.                                                                     | Write-only instance wakes a separate subscriber instance.                              |
+| H2        | Lossy wake contract plus unconditional poll, reconnect drain, lag-window rescan, and seq dedupe.                                                | Drop/reorder wakes and expose an out-of-order commit; state still converges.           |
+| H3        | Logical-operation batch guard; one in-tx append; caught post-commit publish.                                                                    | Exact event/insert/notify counts and response-path latency assertion.                  |
+| H4        | Scheduler keyed by topic and access equivalence; immutable byte fan-out; hash suppression; pre/post match.                                      | N equivalent sinks cause one query and unchanged results emit no frame.                |
+| H5        | Admission config, pre-registration access execution, bounded concurrency, finite limits.                                                        | Cap matrix and denied-topic teardown tests.                                            |
+| H6        | `ClientSink.write()` busy/throw contract, latest-wins replacement, bounded ordered queue, shared ticker, terminal cleanup.                      | Slow and failed sink tests prove bounded memory and zero listeners/timers after close. |
+| H7        | `sinceSeq`, revisioned complete desired topology, durable ownership/fencing, jittered reconnect, ping watchdog, forced reset outside retention. | Cross-replica topology, resume, reconciliation, and incremental mount tests.           |
+| H8        | Discriminated `find`/`count`/`get` topic union.                                                                                                 | Live count runs count and transfers O(1) data.                                         |
+| H9        | Notice-only broker and per-session private WS live-query channel with authorized refetch.                                                       | Cross-session WS test proves no ACL snapshot reaches a shared channel.                 |
+| H10       | Default time retention, no local watermark deletion, bounded replay infrastructure.                                                             | Cleanup with zero subscribers and multiple instances.                                  |
+| H11       | Caught async, isolated listeners, 42P01-only silence, client error/close, coarse session refresh.                                               | Failure-injection matrix produces no unhandled rejection or hanging client.            |
+| H12       | Non-throwing observer events for broker, drain, refresh, buffers, admission, resume, and failures.                                              | Observer contract tests plus sensitive-label audit.                                    |
+| H13       | Mutation and outbox append share the transaction; wake is post-commit.                                                                          | Crash-window rollback/commit/reconcile tests.                                          |
+| H14       | Separate `ChangeBroker` and `ClientTransport`; latest-snapshot and ordered-event QoS have different queue/replay rules.                         | Interface compile test and cross-driver QoS matrix.                                    |
+| H15       | Session-scoped default access key; cross-principal sharing only by explicit deterministic resolver.                                             | Adversarial row, field, and `afterRead` isolation tests.                               |
 
 Dependent implementation tasks may start only after this table is reviewed
 15/15 and any blocker found by the grill is represented on the board.

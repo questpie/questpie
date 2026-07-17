@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import { sseHeaders } from "../../src/server/adapters/utils/response.js";
 import type { RealtimeAdapter } from "../../src/server/modules/core/integrated/realtime/adapter.js";
+import { PgNotifyChangeBroker } from "../../src/server/modules/core/integrated/realtime/adapters/pg-notify.js";
 import { RealtimeService } from "../../src/server/modules/core/integrated/realtime/service.js";
 import type {
 	ChangeBroker,
@@ -122,6 +123,59 @@ function createService(
 }
 
 describe("realtime compatibility rollout", () => {
+	it("warns once outside tests without removing the 3.x runtime", async () => {
+		const previous = process.env.NODE_ENV;
+		process.env.NODE_ENV = "production";
+		const warnings: unknown[][] = [];
+		const logger = {
+			warn: (...args: unknown[]) => warnings.push(args),
+			error: () => {},
+		};
+		const first = new RealtimeService(
+			new EmptyRealtimeDb() as never,
+			{ adapter: new RecordingAdapter(), pollIntervalMs: 0, retentionDays: 0 },
+			undefined,
+			logger,
+		);
+		const second = new RealtimeService(
+			new EmptyRealtimeDb() as never,
+			{
+				adapter: new RecordingAdapter(),
+				rollout: { mode: "legacy" },
+				pollIntervalMs: 0,
+				retentionDays: 0,
+			},
+			undefined,
+			logger,
+		);
+		try {
+			expect(warnings).toHaveLength(1);
+			expect(String(warnings[0]?.[0])).toContain("QuestPie 4");
+			await expect(first.notify(change)).resolves.toBeUndefined();
+			await expect(second.notify(change)).resolves.toBeUndefined();
+		} finally {
+			await Promise.all([first.destroy(), second.destroy()]);
+			if (previous === undefined) delete process.env.NODE_ENV;
+			else process.env.NODE_ENV = previous;
+		}
+	});
+
+	it("auto-selects the v2 Postgres broker for clean Postgres config", async () => {
+		const realtime = new RealtimeService(
+			new EmptyRealtimeDb() as never,
+			{ pollIntervalMs: 0, retentionDays: 0 },
+			"postgres://questpie.test/realtime",
+		);
+		try {
+			expect((realtime as any).changeBroker).toBeInstanceOf(
+				PgNotifyChangeBroker,
+			);
+			expect((realtime as any).adapter).toBeUndefined();
+		} finally {
+			await realtime.destroy();
+		}
+	});
+
 	it("keeps adapter-only config working as the v2 compatibility fallback", async () => {
 		const adapter = new RecordingAdapter();
 		const realtime = createService({ adapter });
@@ -132,6 +186,22 @@ describe("realtime compatibility rollout", () => {
 			expect(await realtime.getClientTransportConfig({})).toEqual({
 				transport: "sse",
 			});
+		} finally {
+			await realtime.destroy();
+		}
+	});
+
+	it("does not replace an explicit compatibility adapter with the Postgres default", async () => {
+		const adapter = new RecordingAdapter();
+		const realtime = new RealtimeService(
+			new EmptyRealtimeDb() as never,
+			{ adapter, pollIntervalMs: 0, retentionDays: 0 },
+			"postgres://questpie.test/realtime",
+		);
+		try {
+			await realtime.notify(change);
+			expect(adapter.notifications).toEqual([change]);
+			expect((realtime as any).changeBroker).toBeUndefined();
 		} finally {
 			await realtime.destroy();
 		}

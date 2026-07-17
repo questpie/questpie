@@ -12,7 +12,100 @@ export type ChangeWake =
 			channelHash?: string;
 			highWaterEventId?: string;
 			reason: "publish" | "reconnect" | "reconcile";
+	  }
+	| {
+			kind: "topology-maybe-advanced";
+			sessionKey: string;
+			ownerId: string;
+			ownerGeneration: number;
+			desiredRevision: number;
+			reason: "submit" | "reconnect" | "reconcile";
 	  };
+
+function isNonNegativeSafeInteger(value: unknown): value is number {
+	return Number.isSafeInteger(value) && Number(value) >= 0;
+}
+
+/** Validate and strip a broker wake down to its bounded metadata contract. */
+export function normalizeChangeWake(value: unknown): ChangeWake | null {
+	if (!value || typeof value !== "object") return null;
+	const wake = value as Record<string, unknown>;
+
+	if (wake.kind === "outbox-maybe-advanced") {
+		if (
+			wake.reason !== "publish" &&
+			wake.reason !== "reconnect" &&
+			wake.reason !== "reconcile"
+		) {
+			return null;
+		}
+		if (
+			wake.highWaterSeq !== undefined &&
+			!isNonNegativeSafeInteger(wake.highWaterSeq)
+		) {
+			return null;
+		}
+		return {
+			kind: wake.kind,
+			reason: wake.reason,
+			...(wake.highWaterSeq === undefined
+				? {}
+				: { highWaterSeq: wake.highWaterSeq }),
+		};
+	}
+
+	if (wake.kind === "channel-events-maybe-advanced") {
+		if (
+			wake.reason !== "publish" &&
+			wake.reason !== "reconnect" &&
+			wake.reason !== "reconcile"
+		) {
+			return null;
+		}
+		if (
+			(wake.channelHash !== undefined &&
+				typeof wake.channelHash !== "string") ||
+			(wake.highWaterEventId !== undefined &&
+				typeof wake.highWaterEventId !== "string")
+		) {
+			return null;
+		}
+		return {
+			kind: wake.kind,
+			reason: wake.reason,
+			...(wake.channelHash === undefined
+				? {}
+				: { channelHash: wake.channelHash }),
+			...(wake.highWaterEventId === undefined
+				? {}
+				: { highWaterEventId: wake.highWaterEventId }),
+		};
+	}
+
+	if (
+		wake.kind !== "topology-maybe-advanced" ||
+		typeof wake.sessionKey !== "string" ||
+		wake.sessionKey.length === 0 ||
+		typeof wake.ownerId !== "string" ||
+		wake.ownerId.length === 0 ||
+		!isNonNegativeSafeInteger(wake.ownerGeneration) ||
+		!isNonNegativeSafeInteger(wake.desiredRevision) ||
+		(wake.reason !== "submit" &&
+			wake.reason !== "reconnect" &&
+			wake.reason !== "reconcile")
+	) {
+		return null;
+	}
+
+	return {
+		kind: wake.kind,
+		sessionKey: wake.sessionKey,
+		ownerId: wake.ownerId,
+		ownerGeneration: wake.ownerGeneration,
+		desiredRevision: wake.desiredRevision,
+		reason: wake.reason,
+	};
+}
 
 /** Cross-instance invalidation seam. It never carries snapshots or records. */
 export interface ChangeBroker {

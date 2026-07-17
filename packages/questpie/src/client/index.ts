@@ -1946,8 +1946,18 @@ export type {
 } from "#questpie/shared/collection-meta.js";
 export type { GlobalMeta } from "#questpie/shared/global-meta.js";
 // Re-export realtime types and helpers
-export type { RealtimeAPI, TopicConfig, TopicInput } from "./realtime/index.js";
-export { buildCollectionTopic, buildGlobalTopic } from "./realtime/index.js";
+export type {
+	RealtimeAPI,
+	RealtimeTopicRejectedDetails,
+	RealtimeTopicRejectedPayload,
+	TopicConfig,
+	TopicInput,
+} from "./realtime/index.js";
+export {
+	buildCollectionTopic,
+	buildGlobalTopic,
+	RealtimeTopicRejectedError,
+} from "./realtime/index.js";
 export type {
 	ChannelClient,
 	ChannelMessage,

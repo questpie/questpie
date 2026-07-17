@@ -32,6 +32,10 @@ type SessionResponse = {
 	sessionId: string;
 	token: string;
 	channel: string;
+	control?: {
+		protocol: "questpie-realtime-topology";
+		versions: number[];
+	};
 	errors?: Array<{ id: string; message: string }>;
 };
 
@@ -64,6 +68,10 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 	> | null = null;
 	private sessionPromise: Promise<void> | null = null;
 	private controlOperation: Promise<void> = Promise.resolve();
+	private desiredRevision = 0;
+	private desiredFlushPromise: Promise<void> | null = null;
+	private desiredTopologyGeneration = 0;
+	private desiredFlushedGeneration = 0;
 	private refreshPromise: Promise<void> | null = null;
 	private refreshPending = false;
 	private destroyed = false;
@@ -116,6 +124,15 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 			if (onError) current.errorCallbacks.delete(onError);
 			if (current.subscribers.size > 0) return;
 			this.topics.delete(topicId);
+			if (this.supportsDesiredTopology()) {
+				const closeAfterFlush = this.topics.size === 0;
+				void this.sendControl([{ type: "remove_topic", topicId }]).finally(
+					() => {
+						if (closeAfterFlush && this.topics.size === 0) this.disconnect();
+					},
+				);
+				return;
+			}
 			if (current.registered) {
 				void this.sendControl([{ type: "remove_topic", topicId }]).finally(
 					() => {
@@ -138,6 +155,7 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 				await this.sendControl([
 					{ type: "add_topic", topicId, topic: entry.topic },
 				]);
+				if (this.destroyed || this.topics.get(topicId) !== entry) return;
 				entry.registered = true;
 			}
 			await this.refetchEntry(entry);
@@ -243,6 +261,10 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 			}));
 		if (removed.length || added.length)
 			await this.sendControl([...removed, ...added]);
+		if (this.topics.size === 0) {
+			this.disconnect();
+			return;
+		}
 		for (const frame of added) {
 			const entry = this.topics.get(frame.topicId);
 			if (entry) entry.registered = true;
@@ -295,6 +317,7 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 	private sendControl(frames: Array<Record<string, unknown>>): Promise<void> {
 		const session = this.session;
 		if (!session || frames.length === 0) return Promise.resolve();
+		if (this.supportsDesiredTopology()) return this.sendDesiredTopology();
 		this.controlOperation = this.controlOperation
 			.catch(() => {})
 			.then(async () => {
@@ -317,6 +340,67 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 				}
 			});
 		return this.controlOperation;
+	}
+
+	private supportsDesiredTopology(): boolean {
+		return Boolean(
+			this.session?.control?.protocol === "questpie-realtime-topology" &&
+			this.session.control.versions.includes(1),
+		);
+	}
+
+	private sendDesiredTopology(): Promise<void> {
+		this.desiredTopologyGeneration += 1;
+		if (this.desiredFlushPromise) return this.desiredFlushPromise;
+		this.desiredFlushPromise = (async () => {
+			await Promise.resolve();
+			while (this.desiredFlushedGeneration < this.desiredTopologyGeneration) {
+				const generation = this.desiredTopologyGeneration;
+				const session = this.session;
+				if (!session) return;
+				const topology = {
+					protocol: "questpie-realtime-topology",
+					version: 1,
+					revision: ++this.desiredRevision,
+					topics: [...this.topics.entries()].map(([id, entry]) => ({
+						id,
+						topic: entry.topic,
+					})),
+					channels: [],
+				};
+				const operation = this.controlOperation
+					.catch(() => {})
+					.then(async () => {
+						const authHeaders = await this.options.getAuthHeaders?.();
+						const response = await this.options.fetcher(
+							`${this.options.baseUrl}/realtime`,
+							{
+								method: "POST",
+								headers: {
+									"Content-Type": "application/json",
+									...authHeaders,
+								},
+								body: JSON.stringify({
+									sessionId: session.sessionId,
+									token: session.token,
+									topology,
+								}),
+								credentials: "include",
+							},
+						);
+						if (!response.ok) {
+							throw new Error(`Realtime control failed: ${response.status}`);
+						}
+					});
+				this.controlOperation = operation;
+				await operation;
+				if (this.session !== session) return;
+				this.desiredFlushedGeneration = generation;
+			}
+		})().finally(() => {
+			this.desiredFlushPromise = null;
+		});
+		return this.desiredFlushPromise;
 	}
 
 	private scheduleRefresh(): void {
@@ -364,6 +448,9 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 		this.pusher = null;
 		this.channel = null;
 		this.session = null;
+		this.desiredRevision = 0;
+		this.desiredTopologyGeneration = 0;
+		this.desiredFlushedGeneration = 0;
 	}
 
 	destroy(): void {
@@ -372,9 +459,14 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 		const frames = [...this.topics.entries()]
 			.filter(([, entry]) => entry.registered)
 			.map(([topicId]) => ({ type: "remove_topic", topicId }));
-		if (frames.length) void this.sendControl(frames).catch(() => {});
 		this.topics.clear();
-		this.disconnect();
+		if (frames.length) {
+			void this.sendControl(frames)
+				.catch(() => {})
+				.finally(() => this.disconnect());
+		} else {
+			this.disconnect();
+		}
 	}
 
 	get topicCount(): number {
