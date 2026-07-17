@@ -297,7 +297,7 @@ export default runtimeConfig({
 });
 ```
 
-The adapter duplicates the client for its blocking reader when supported; otherwise provide a dedicated `reader`. The `group` and `consumer` options are accepted only as compatibility inputs and do not restore consumer-group behavior.
+The broker duplicates the client for its blocking reader when supported; otherwise provide a dedicated `reader`.
 
 ### Pusher/Soketi managed WebSockets
 
@@ -319,10 +319,6 @@ export default runtimeConfig({ realtime: { ...managed } });
 
 The preset supplies a notice-only Pusher `ChangeBroker` and a Pusher `ClientTransport`. Direct provider client events are off by default; they bypass QUESTPIE channel schemas, publish authorization, rate limits, ordered ledger, and replay.
 
-### Cloudflare Durable Objects
-
-Cloudflare Workers use a Durable Object fan-out path because they do not keep a long-lived process-local poller. Consult the Realtime v2 HA migration guide before selecting the QuestPie 3.x deployment path.
-
 ### When to Use Which
 
 | Selection                        | Use case                                                                  |
@@ -333,7 +329,7 @@ Cloudflare Workers use a Durable Object fan-out path because they do not keep a 
 | `redisStreamsChangeBroker` + SSE | Cross-instance Redis notice fan-out                                       |
 | `pusherRealtime`                 | Managed WebSockets, provider-native presence, and shared channel delivery |
 
-Apply the generated `questpie_realtime_topology` migration before claiming cross-replica no-reconnect control. Use the Realtime v2 HA migration guide for version-transition details.
+Apply the generated `questpie_realtime_topology` migration before claiming cross-replica no-reconnect control.
 
 ## Search
 

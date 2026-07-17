@@ -8,7 +8,6 @@
 export { createAuthRoute } from "./auth.js";
 export { createCollectionRoutes } from "./collections.js";
 export { createGlobalRoutes, type GlobalRoutes } from "./globals.js";
-export { createRealtimeRoutes } from "./realtime.js";
 export { createSearchRoutes } from "./search.js";
 
 // Standalone handlers

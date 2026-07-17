@@ -6,8 +6,8 @@ import {
 	createAuthRoute,
 	createCollectionRoutes,
 	createGlobalRoutes,
-	createRealtimeRoutes,
 	createSearchRoutes,
+	realtimeSubscribe,
 	storageCollectionServe,
 	storageCollectionUpload,
 } from "./routes/index.js";
@@ -24,7 +24,6 @@ export const createAdapterRoutes = (
 	const authRoute = createAuthRoute(app);
 	const collectionRoutes = createCollectionRoutes(app, config);
 	const globalRoutes = createGlobalRoutes(app, config);
-	const realtimeRoutes = createRealtimeRoutes(app, config);
 	const searchRoutes = createSearchRoutes(app, config);
 
 	return {
@@ -33,7 +32,10 @@ export const createAdapterRoutes = (
 			storageCollectionUpload(app, request, params, context, config, file),
 		collectionServe: (request, params, context) =>
 			storageCollectionServe(app, request, params, context, config),
-		realtime: realtimeRoutes,
+		realtime: {
+			subscribe: (request, params, context) =>
+				realtimeSubscribe(app, request, params, context, config),
+		},
 		collections: collectionRoutes,
 		globals: globalRoutes,
 		search: searchRoutes,

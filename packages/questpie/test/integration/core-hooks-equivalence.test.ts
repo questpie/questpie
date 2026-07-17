@@ -21,8 +21,8 @@ import { eq } from "drizzle-orm";
 import {
 	collection,
 	questpieRealtimeLogTable,
-	type RealtimeAdapter,
-	type RealtimeChangeEvent,
+	type ChangeBroker,
+	type ChangeWake,
 } from "../../src/exports/index.js";
 import { scheduledTransitionJob } from "../../src/server/modules/core/workflow/scheduled-transition.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
@@ -30,31 +30,17 @@ import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
 
 // ============================================================================
-// Mock Realtime Adapter — captures notify calls
+// Mock ChangeBroker — captures durable outbox wakes
 // ============================================================================
 
-class MockRealtimeAdapter implements RealtimeAdapter {
-	public notices: Array<{
-		seq: number;
-		resource: string;
-		operation: string;
-		recordId?: string | null;
-	}> = [];
+class MockChangeBroker implements ChangeBroker {
+	public wakes: ChangeWake[] = [];
 
-	async start(): Promise<void> {}
+	async start(_input: Parameters<ChangeBroker["start"]>[0]): Promise<void> {}
 	async stop(): Promise<void> {}
 
-	subscribe(handler: (notice: any) => void): () => void {
-		return () => {};
-	}
-
-	async notify(event: RealtimeChangeEvent): Promise<void> {
-		this.notices.push({
-			seq: event.seq,
-			resource: event.resource,
-			operation: event.operation,
-			recordId: event.recordId,
-		});
+	async publish(wake: ChangeWake): Promise<void> {
+		this.wakes.push(wake);
 	}
 }
 
@@ -78,12 +64,12 @@ const createTestModule = () => ({
 describe("Core hooks behavioral equivalence (QUE-250)", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 	let ctx: ReturnType<typeof createTestContext>;
-	let realtimeAdapter: MockRealtimeAdapter;
+	let changeBroker: MockChangeBroker;
 
 	beforeEach(async () => {
-		realtimeAdapter = new MockRealtimeAdapter();
+		changeBroker = new MockChangeBroker();
 		setup = await buildMockApp(createTestModule(), {
-			realtime: { adapter: realtimeAdapter },
+			realtime: { changeBroker },
 		});
 		await runTestDbMigrations(setup.app);
 		ctx = createTestContext(setup.app);
@@ -209,15 +195,14 @@ describe("Core hooks behavioral equivalence (QUE-250)", () => {
 			expect((event.payload as any)?.count).toBe(2);
 		});
 
-		it("notify fires after commit (adapter receives notices)", async () => {
+		it("notify fires after commit (broker receives an outbox wake)", async () => {
 			await setup.app.collections.posts.create({ title: "Notify Test" }, ctx);
 
-			// Adapter should have received at least one notice
-			const postNotices = realtimeAdapter.notices.filter(
-				(n) => n.resource === "posts",
+			const outboxWakes = changeBroker.wakes.filter(
+				(wake) => wake.kind === "outbox-maybe-advanced",
 			);
-			expect(postNotices.length).toBeGreaterThanOrEqual(1);
-			expect(postNotices[0].operation).toBe("create");
+			expect(outboxWakes.length).toBeGreaterThanOrEqual(1);
+			expect(outboxWakes[0]).toMatchObject({ reason: "publish" });
 		});
 	});
 

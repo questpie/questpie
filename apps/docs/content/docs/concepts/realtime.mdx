@@ -71,9 +71,9 @@ Clients multiplex subscriptions over a shared connection. A broker distributes i
 
 Desired topic/channel topology is stored durably with revisions, owner leases,
 and fencing. After the generated topology migration is applied and every
-request-handling replica supports the advertised protocol, `add_topic`,
-`remove_topic`, reconnect, and resume may hit any replica. Sticky affinity is a
-temporary rolling-upgrade mitigation, not a steady-state HA requirement.
+request-handling replica supports desired topology protocol v1, topology
+updates, reconnect, and resume may hit any replica. Sticky affinity is not a
+steady-state HA requirement and should be removed after rollout verification.
 
 ## Consistency and delivery
 
@@ -83,7 +83,7 @@ Design handlers to tolerate duplicate wake-ups. Persist business facts before pu
 
 ## Choose a transport
 
-The realtime configuration selects polling, Postgres notifications, Redis Streams, Pusher/Soketi, or Cloudflare delivery without changing application subscriptions.
+The realtime configuration selects polling, Postgres notifications, Redis Streams, or Pusher/Soketi without changing application subscriptions.
 
 See [Realtime adapters](/docs/adapters/realtime) for topology, admission, outbox settings, transport configuration, and custom contracts.
 
@@ -93,4 +93,3 @@ See [Realtime adapters](/docs/adapters/realtime) for topology, admission, outbox
 - [Channels](/docs/client/channels), typed application events and presence.
 - [Reactive apps](/docs/client/reactive-apps), subscription sizing and React performance.
 - [Realtime adapters](/docs/adapters/realtime), server transport and broker selection.
-- [Realtime v2 HA migration](/docs/adapters/realtime-v2-migration), schema rollout, mixed versions, and 3.x deprecations.

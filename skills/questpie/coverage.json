@@ -3,16 +3,38 @@
 	"skillRoot": "skills/questpie",
 	"surfaces": [
 		{ "package": "questpie", "entries": ["packages/questpie/src/exports"] },
-		{ "package": "@questpie/tanstack-query", "entries": ["packages/tanstack-query/src/index.ts"] },
-		{ "package": "@questpie/workflows", "entries": ["packages/workflows/src/exports"] },
+		{
+			"package": "@questpie/tanstack-query",
+			"entries": ["packages/tanstack-query/src/index.ts"]
+		},
+		{
+			"package": "@questpie/workflows",
+			"entries": ["packages/workflows/src/exports"]
+		},
 		{ "package": "@questpie/mcp", "entries": ["packages/mcp/src/exports"] },
-		{ "package": "@questpie/sandbox", "entries": ["packages/sandbox/src/exports"] },
-		{ "package": "@questpie/hono", "entries": ["packages/hono/src/server.ts", "packages/hono/src/client.ts"] },
-		{ "package": "@questpie/elysia", "entries": ["packages/elysia/src/server.ts", "packages/elysia/src/client.ts"] },
+		{
+			"package": "@questpie/sandbox",
+			"entries": ["packages/sandbox/src/exports"]
+		},
+		{
+			"package": "@questpie/hono",
+			"entries": ["packages/hono/src/server.ts", "packages/hono/src/client.ts"]
+		},
+		{
+			"package": "@questpie/elysia",
+			"entries": [
+				"packages/elysia/src/server.ts",
+				"packages/elysia/src/client.ts"
+			]
+		},
 		{ "package": "@questpie/next", "entries": ["packages/next/src/server.ts"] },
 		{
 			"package": "@questpie/openapi",
-			"entries": ["packages/openapi/src/index.ts", "packages/openapi/src/server.ts", "packages/openapi/src/plugin.ts"]
+			"entries": [
+				"packages/openapi/src/index.ts",
+				"packages/openapi/src/server.ts",
+				"packages/openapi/src/plugin.ts"
+			]
 		}
 	],
 	"skippedPackages": {
@@ -69,6 +91,9 @@
 		"hashResolvedChannel": "ordered channel ledger key internal",
 		"PusherChangeBroker": "class form; pusherRealtime() is the taught factory surface",
 		"PusherClientTransport": "class form; pusherRealtime() is the taught factory surface",
+		"RedisStreamsChangeBroker": "class form; redisStreamsChangeBroker() is the taught factory surface",
+		"normalizeChangeWake": "broker payload validation internal",
+		"questpieRealtimeTopologyTable": "durable realtime infrastructure table managed by realtime migrations",
 		"questpieChannelDispatchTable": "ordered channel infrastructure table managed by realtime migrations",
 		"questpieChannelEventTable": "ordered channel infrastructure table managed by realtime migrations",
 		"questpieChannelHeadTable": "ordered channel infrastructure table managed by realtime migrations",
@@ -108,10 +133,7 @@
 		"BullMQAdapter": "class form; bullMQAdapter() factory is the taught surface",
 		"CloudflareKVAdapter": "class form; cloudflareKVAdapter() factory is the taught surface",
 		"CloudflareQueuesAdapter": "class form; cloudflareQueuesAdapter() factory is the taught surface",
-		"CloudflareRealtimeAdapter": "class form; cloudflareRealtimeAdapter() factory is the taught surface",
 		"PgBossAdapter": "class form; pgBossAdapter() factory is the taught surface",
-		"PgNotifyAdapter": "class form; pgNotifyAdapter() factory is the taught surface",
-		"RedisStreamsAdapter": "class form; redisStreamsAdapter() factory is the taught surface",
 		"RedisKVAdapter": "class form; redisKVAdapter() factory is the taught surface",
 		"MemoryKVAdapter": "default in-memory KV; applied automatically when no kv adapter is configured",
 		"PostgresSearchAdapter": "class form; createPostgresSearchAdapter() factory is the taught surface",
@@ -129,7 +151,6 @@
 		"CustomEmbeddingProvider": "class form; createCustomEmbeddingProvider() factory is the taught surface",
 		"createCloudflareFetchHandler": "granular handler; createCloudflareWorkerHandlers umbrella is taught",
 		"createCloudflareQueueHandler": "granular handler; createCloudflareWorkerHandlers umbrella is taught",
-		"createCloudflareRealtimeDurableObjectHandler": "granular handler; createCloudflareWorkerHandlers umbrella is taught",
 		"createCloudflareScheduledHandler": "granular handler; createCloudflareWorkerHandlers umbrella is taught",
 		"publishScheduledJobs": "Cloudflare scheduled-handler internal",
 		"toCloudflareQueuePushBatch": "Cloudflare queue-handler internal",
@@ -261,14 +282,38 @@
 		"WorkflowDetailPage": "registered via workflowsClientModule"
 	},
 	"concepts": [
-		{ "name": "auth-callback context (getContext in Better Auth callbacks)", "patterns": ["onLinkAccount"] },
-		{ "name": "partial context overrides ({ accessMode } inherits session/db/locale)", "patterns": ["partial context override"] },
-		{ "name": "job-level cron (options.cron)", "patterns": ["options:\\s*\\{\\s*cron"] },
+		{
+			"name": "auth-callback context (getContext in Better Auth callbacks)",
+			"patterns": ["onLinkAccount"]
+		},
+		{
+			"name": "partial context overrides ({ accessMode } inherits session/db/locale)",
+			"patterns": ["partial context override"]
+		},
+		{
+			"name": "job-level cron (options.cron)",
+			"patterns": ["options:\\s*\\{\\s*cron"]
+		},
 		{ "name": "raw routes (.raw())", "patterns": ["\\.raw\\(\\)"] },
-		{ "name": "signed URLs for private files", "patterns": ["generateSignedUrlToken"] },
-		{ "name": "sandboxed code execution (ctx.executor)", "patterns": ["ctx\\.executor\\.run"] },
-		{ "name": "client-side auth (authClient)", "patterns": ["createAdminAuthClient", "authClient"] },
-		{ "name": "infer-first map (type-inference reference)", "patterns": ["CollectionDoc<"] },
-		{ "name": "realtime invalidation topics", "patterns": ["buildCollectionTopic"] }
+		{
+			"name": "signed URLs for private files",
+			"patterns": ["generateSignedUrlToken"]
+		},
+		{
+			"name": "sandboxed code execution (ctx.executor)",
+			"patterns": ["ctx\\.executor\\.run"]
+		},
+		{
+			"name": "client-side auth (authClient)",
+			"patterns": ["createAdminAuthClient", "authClient"]
+		},
+		{
+			"name": "infer-first map (type-inference reference)",
+			"patterns": ["CollectionDoc<"]
+		},
+		{
+			"name": "realtime invalidation topics",
+			"patterns": ["buildCollectionTopic"]
+		}
 	]
 }

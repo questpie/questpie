@@ -102,11 +102,11 @@ const features: Record<string, Record<string, FeatureDescriptor>> = {
 		none: {},
 		"pg-notify": {
 			configImports: [
-				`import { pgNotifyAdapter } from "questpie/adapters/pg-notify";`,
+				`import { pgNotifyChangeBroker } from "questpie/adapters/pg-notify";`,
 			],
 			configEntry: () => [
 				`\trealtime: {`,
-				`\t\tadapter: pgNotifyAdapter({ connectionString: env.DATABASE_URL }),`,
+				`\t\tchangeBroker: pgNotifyChangeBroker({ connectionString: env.DATABASE_URL }),`,
 				`\t},`,
 			],
 		},
@@ -114,11 +114,17 @@ const features: Record<string, Record<string, FeatureDescriptor>> = {
 			deps: { redis: depVersion("redis") },
 			envVars: [REDIS_URL_ENV],
 			configImports: [
-				`import { redisStreamsAdapter } from "questpie/adapters/redis-streams";`,
+				`import { redisStreamsChangeBroker } from "questpie/adapters/redis-streams";`,
+				`import { createClient } from "redis";`,
+			],
+			configHelper: [
+				`const realtimeRedis = createClient({ url: env.REDIS_URL });`,
+				`await realtimeRedis.connect();`,
+				``,
 			],
 			configEntry: () => [
 				`\trealtime: {`,
-				`\t\tadapter: redisStreamsAdapter({ url: env.REDIS_URL }),`,
+				`\t\tchangeBroker: redisStreamsChangeBroker({ client: realtimeRedis }),`,
 				`\t},`,
 			],
 		},
@@ -155,7 +161,7 @@ function selectedFeatureOptions(
 ): { axis: string; option: string }[] {
 	return [
 		{ axis: "queue", option: options.queueAdapter ?? "pg-boss" },
-		{ axis: "realtime", option: options.realtimeAdapter ?? "none" },
+		{ axis: "realtime", option: options.realtimeBroker ?? "none" },
 		{ axis: "kv", option: options.kvAdapter ?? "memory" },
 	];
 }
@@ -425,7 +431,7 @@ function buildRuntimeConfig(options: ProjectOptions): string {
 	const queueImports =
 		features.queue?.[options.queueAdapter ?? "pg-boss"]?.configImports ?? [];
 	const realtimeImports =
-		features.realtime?.[options.realtimeAdapter ?? "none"]?.configImports ?? [];
+		features.realtime?.[options.realtimeBroker ?? "none"]?.configImports ?? [];
 	const kvImports =
 		features.kv?.[options.kvAdapter ?? "memory"]?.configImports ?? [];
 
@@ -441,10 +447,13 @@ function buildRuntimeConfig(options: ProjectOptions): string {
 	];
 	imports.push(``, `import { env } from "@/lib/env.js";`, ``);
 
-	// Helper order: email (requiredEnv) then kv (getRedis).
+	// Helper order: email, realtime, then KV.
+	const realtimeHelper =
+		features.realtime?.[options.realtimeBroker ?? "none"]?.configHelper;
 	const kvHelper = features.kv?.[options.kvAdapter ?? "memory"]?.configHelper;
 	const helpers: string[] = [
 		...buildEmailConfigHelper(options),
+		...(realtimeHelper ?? []),
 		...(kvHelper ?? []),
 	];
 
@@ -612,7 +621,7 @@ export async function scaffold(options: ProjectOptions): Promise<void> {
 		...options,
 		queueAdapter: options.queueAdapter ?? "pg-boss",
 		emailAdapter: options.emailAdapter ?? "console",
-		realtimeAdapter: options.realtimeAdapter ?? "none",
+		realtimeBroker: options.realtimeBroker ?? "none",
 		kvAdapter: options.kvAdapter ?? "memory",
 	};
 	const spinner = p.spinner();

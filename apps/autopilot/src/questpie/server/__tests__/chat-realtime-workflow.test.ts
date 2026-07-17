@@ -1,5 +1,5 @@
 import { createFetchHandler } from "questpie";
-import type { RealtimeAdapter, RealtimeChangeEvent } from "questpie/realtime";
+import type { ChangeBroker, ChangeWake } from "questpie/realtime";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { aiModule } from "@questpie/ai/modules/ai";
@@ -36,59 +36,28 @@ type SSEEvent = {
 	data: any;
 };
 
-class MockRealtimeAdapter implements RealtimeAdapter {
-	public notices: RealtimeChangeEvent[] = [];
-	private listeners = new Set<(notice: unknown) => void>();
-	private subscriberWaiters = new Set<() => void>();
+class MockChangeBroker implements ChangeBroker {
+	readonly started: Promise<void>;
+	private markStarted: () => void = () => {};
+	private onWake?: Parameters<ChangeBroker["start"]>[0]["onWake"];
 
-	async start(): Promise<void> {}
-	async stop(): Promise<void> {}
-
-	subscribe(handler: (notice: unknown) => void): () => void {
-		this.listeners.add(handler);
-		for (const waiter of this.subscriberWaiters) waiter();
-		return () => {
-			this.listeners.delete(handler);
-		};
-	}
-
-	async notify(event: RealtimeChangeEvent): Promise<void> {
-		this.notices.push(event);
-		for (const listener of this.listeners) {
-			listener({
-				seq: event.seq,
-				resourceType: event.resourceType,
-				resource: event.resource,
-				operation: event.operation,
-			});
-		}
-	}
-
-	async waitForSubscribers(count = 1, timeoutMs = 1000) {
-		if (this.listeners.size >= count) return;
-		await new Promise<void>((resolve, reject) => {
-			const timeout = setTimeout(() => {
-				this.subscriberWaiters.delete(check);
-				reject(new Error("Timed out waiting for realtime subscriber"));
-			}, timeoutMs);
-			const check = () => {
-				if (this.listeners.size < count) return;
-				clearTimeout(timeout);
-				this.subscriberWaiters.delete(check);
-				resolve();
-			};
-			this.subscriberWaiters.add(check);
+	constructor() {
+		this.started = new Promise((resolve) => {
+			this.markStarted = resolve;
 		});
 	}
-}
 
-function relationId(value: unknown): string | null {
-	if (typeof value === "string") return value;
-	if (typeof value === "object" && value && "id" in value) {
-		const id = (value as { id?: unknown }).id;
-		return typeof id === "string" ? id : null;
+	async start(input: Parameters<ChangeBroker["start"]>[0]): Promise<void> {
+		this.onWake = input.onWake;
+		this.markStarted();
 	}
-	return null;
+	async stop(): Promise<void> {
+		this.onWake = undefined;
+	}
+
+	async publish(wake: ChangeWake): Promise<void> {
+		this.onWake?.(wake);
+	}
 }
 
 function createSSEReader(response: Response) {
@@ -129,7 +98,8 @@ function createSSEReader(response: Response) {
 	};
 
 	const readEvent = async (timeoutMs = 2000): Promise<SSEEvent> => {
-		while (!closed) {
+		while (true) {
+			if (closed) throw new Error("SSE reader is closed");
 			const buffered = parseBufferedEvent();
 			if (buffered) return buffered;
 
@@ -153,8 +123,6 @@ function createSSEReader(response: Response) {
 				throw error;
 			}
 		}
-
-		throw new Error("SSE reader is closed");
 	};
 
 	const readUntil = async (
@@ -183,10 +151,10 @@ describe("chat realtime workflow contract", () => {
 		  }
 		| undefined;
 	let handler: ReturnType<typeof createFetchHandler>;
-	let realtimeAdapter: MockRealtimeAdapter;
+	let changeBroker: MockChangeBroker;
 
 	beforeEach(async () => {
-		realtimeAdapter = new MockRealtimeAdapter();
+		changeBroker = new MockChangeBroker();
 		const workflows = {
 			async trigger(_name: string, _input: unknown) {
 				return { instanceId: "wf-mock", existing: false };
@@ -233,7 +201,7 @@ describe("chat realtime workflow contract", () => {
 					"runs/[runId]": runStatusRoute,
 				},
 			},
-			{ realtime: { adapter: realtimeAdapter } },
+			{ realtime: { changeBroker } },
 		);
 		await runTestDbMigrations(setup.app);
 
@@ -365,7 +333,7 @@ describe("chat realtime workflow contract", () => {
 		});
 		const stream = createSSEReader(response);
 		try {
-			await realtimeAdapter.waitForSubscribers();
+			await changeBroker.started;
 			const initial = await stream.readUntil((events) =>
 				events.some(
 					(event) =>

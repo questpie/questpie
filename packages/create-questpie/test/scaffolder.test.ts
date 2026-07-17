@@ -124,7 +124,7 @@ describe("scaffold", () => {
 			runCodegen: false,
 			queueAdapter: "bullmq",
 			emailAdapter: "resend",
-			realtimeAdapter: "redis-streams",
+			realtimeBroker: "redis-streams",
 			kvAdapter: "redis",
 		});
 
@@ -157,7 +157,8 @@ describe("scaffold", () => {
 		expect(env).toContain("REDIS_URL");
 		expect(runtimeConfig).toContain("bullMQAdapter");
 		expect(runtimeConfig).toContain("ResendAdapter");
-		expect(runtimeConfig).toContain("redisStreamsAdapter");
+		expect(runtimeConfig).toContain("redisStreamsChangeBroker");
+		expect(runtimeConfig).toContain("changeBroker:");
 		expect(runtimeConfig).toContain("redisKVAdapter");
 		expect(serverModules).toContain("workflowsModule");
 		expect(adminModules).toContain("workflowsClientModule");

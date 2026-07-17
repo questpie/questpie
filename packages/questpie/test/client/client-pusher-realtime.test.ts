@@ -125,9 +125,13 @@ describe("Pusher realtime client transport", () => {
 						sessionId: "session-1",
 						token: "control-1",
 						channel: "private-questpie-rt-session-1",
+						control: {
+							protocol: "questpie-realtime-topology",
+							versions: [1],
+						},
 					});
 				}
-				return new Response(null, { status: 204 });
+				return Response.json({ status: "accepted" }, { status: 202 });
 			}
 			if (url.startsWith("http://localhost:3000/posts")) {
 				snapshotVersion += 1;
@@ -177,9 +181,7 @@ describe("Pusher realtime client transport", () => {
 			requests.some(({ url, init }) => {
 				if (!url.endsWith("/realtime") || init?.method !== "POST") return false;
 				const body = JSON.parse(String(init.body));
-				return body.frames?.some(
-					(frame: { type: string }) => frame.type === "remove_topic",
-				);
+				return body.topology?.topics?.length === 0;
 			}),
 		);
 		client.realtime.destroy();

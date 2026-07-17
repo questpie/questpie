@@ -7,7 +7,6 @@ import {
 	type CloudflareKVNamespace,
 } from "../../src/exports/adapters/cloudflare-kv.js";
 import { cloudflareQueuesAdapter } from "../../src/exports/adapters/cloudflare-queues.js";
-import { cloudflareRealtimeAdapter } from "../../src/exports/adapters/cloudflare-realtime.js";
 import {
 	CLOUD_ENV,
 	resolveStorageConfig,
@@ -29,13 +28,6 @@ const cloudflareNamespace: CloudflareKVNamespace = {
 	},
 };
 
-const durableObjectNamespace = {
-	idFromName: (name: string) => ({ name }),
-	get: () => ({
-		fetch: async () => new Response(null, { status: 204 }),
-	}),
-};
-
 function createCompatibleConfig() {
 	return {
 		app: { url: "https://example.com" },
@@ -55,11 +47,6 @@ function createCompatibleConfig() {
 		},
 		kv: {
 			adapter: cloudflareKVAdapter({ namespace: cloudflareNamespace }),
-		},
-		realtime: {
-			adapter: cloudflareRealtimeAdapter({
-				namespace: durableObjectNamespace,
-			}),
 		},
 	} as any;
 }
@@ -100,7 +87,6 @@ describe("Cloudflare compatibility", () => {
 			"storage",
 			"queue.adapter",
 			"kv.adapter",
-			"realtime.adapter",
 		]);
 	});
 

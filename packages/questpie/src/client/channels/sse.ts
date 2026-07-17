@@ -21,22 +21,12 @@ type Entry = {
 	}>;
 };
 
-type ControlFrame =
-	| {
-			type: "subscribe_channel";
-			subscriptionId: string;
-			channel: string;
-			params: Record<string, string>;
-			lastEventId?: string;
-	  }
-	| { type: "unsubscribe_channel"; subscriptionId: string };
-
 type SseEvent = { type: string; data: string };
 
 type ControlSession = {
 	sessionId: string;
 	token: string;
-	control?: {
+	control: {
 		protocol: "questpie-realtime-topology";
 		versions: number[];
 	};
@@ -95,7 +85,7 @@ export class SseChannelTransport implements ChannelClientTransport {
 				current.presenceWaiters.size > 0
 			)
 				return;
-			this.removeEntry(input.resolvedName, current);
+			this.removeEntry(input.resolvedName);
 		};
 		options.signal?.addEventListener("abort", stop, { once: true });
 		if (options.signal?.aborted) stop();
@@ -130,7 +120,7 @@ export class SseChannelTransport implements ChannelClientTransport {
 				current.presenceWaiters.size > 0
 			)
 				return;
-			this.removeEntry(input.resolvedName, current);
+			this.removeEntry(input.resolvedName);
 		};
 		options.signal?.addEventListener("abort", stop, { once: true });
 		if (options.signal?.aborted) stop();
@@ -173,10 +163,12 @@ export class SseChannelTransport implements ChannelClientTransport {
 		});
 	}
 
-	private applyTopology(frame: ControlFrame): void {
+	private applyTopology(): void {
 		if (this.destroyed) return;
 		if (this.controlSession) {
-			void this.sendControl([frame]);
+			void this.sendDesiredTopology().catch((error) =>
+				this.handleControlError(error),
+			);
 			return;
 		}
 		if (this.connecting) {
@@ -200,25 +192,17 @@ export class SseChannelTransport implements ChannelClientTransport {
 			presenceWaiters: new Set(),
 		};
 		this.entries.set(input.resolvedName, entry);
-		this.applyTopology({
-			type: "subscribe_channel",
-			subscriptionId: id,
-			channel: input.registryKey,
-			params: input.params,
-		});
+		this.applyTopology();
 		return entry;
 	}
 
-	private removeEntry(name: string, entry: Entry): void {
+	private removeEntry(name: string): void {
 		this.entries.delete(name);
 		if (this.entries.size === 0) {
 			this.abortController?.abort();
 			return;
 		}
-		this.applyTopology({
-			type: "unsubscribe_channel",
-			subscriptionId: entry.id,
-		});
+		this.applyTopology();
 	}
 
 	private scheduleConnect(delayMs: number): void {
@@ -279,52 +263,6 @@ export class SseChannelTransport implements ChannelClientTransport {
 				this.scheduleConnect(0);
 			}
 		}
-	}
-
-	private async sendControl(frames: ControlFrame[]): Promise<void> {
-		const session = this.controlSession;
-		if (!session || frames.length === 0) return;
-		if (this.supportsDesiredTopology()) {
-			try {
-				await this.sendDesiredTopology();
-			} catch (error) {
-				this.handleControlError(error);
-			}
-			return;
-		}
-		this.controlOperation = this.controlOperation
-			.catch(() => {})
-			.then(async () => {
-				const authHeaders = await this.options.getAuthHeaders?.();
-				const response = await this.options.fetcher(
-					`${this.options.baseUrl}/realtime`,
-					{
-						method: "POST",
-						headers: { "Content-Type": "application/json", ...authHeaders },
-						body: JSON.stringify({
-							sessionId: session.sessionId,
-							token: session.token,
-							frames,
-						}),
-						credentials: this.options.withCredentials ? "include" : "omit",
-					},
-				);
-				if (!response.ok) {
-					throw new Error(`Channel SSE control failed: ${response.status}`);
-				}
-			});
-		try {
-			await this.controlOperation;
-		} catch (error) {
-			this.handleControlError(error);
-		}
-	}
-
-	private supportsDesiredTopology(): boolean {
-		return Boolean(
-			this.controlSession?.control?.protocol === "questpie-realtime-topology" &&
-			this.controlSession.control.versions.includes(1),
-		);
 	}
 
 	private sendDesiredTopology(): Promise<void> {
@@ -431,13 +369,19 @@ export class SseChannelTransport implements ChannelClientTransport {
 				};
 				if (
 					typeof session.sessionId === "string" &&
-					typeof session.token === "string"
+					typeof session.token === "string" &&
+					session.control?.protocol === "questpie-realtime-topology" &&
+					session.control.versions.includes(1)
 				) {
 					this.controlSession = {
 						sessionId: session.sessionId,
 						token: session.token,
-						...(session.control ? { control: session.control } : {}),
+						control: session.control,
 					};
+				} else {
+					this.handleControlError(
+						new Error("Realtime server does not support desired topology v1"),
+					);
 				}
 			} catch {}
 			return;

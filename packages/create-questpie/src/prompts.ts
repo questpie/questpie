@@ -12,12 +12,12 @@ import { isValidPackageName, toDbName } from "./utils.js";
 
 export const queueAdapters = ["pg-boss", "bullmq", "none"] as const;
 export const emailAdapters = ["console", "smtp", "resend", "plunk"] as const;
-export const realtimeAdapters = ["none", "pg-notify", "redis-streams"] as const;
+export const realtimeBrokers = ["none", "pg-notify", "redis-streams"] as const;
 export const kvAdapters = ["memory", "redis"] as const;
 
 export type QueueAdapterOption = (typeof queueAdapters)[number];
 export type EmailAdapterOption = (typeof emailAdapters)[number];
-export type RealtimeAdapterOption = (typeof realtimeAdapters)[number];
+export type RealtimeBrokerOption = (typeof realtimeBrokers)[number];
 export type KVAdapterOption = (typeof kvAdapters)[number];
 
 export type ProjectOptions = {
@@ -32,7 +32,7 @@ export type ProjectOptions = {
 	continueOnError?: boolean;
 	queueAdapter?: QueueAdapterOption;
 	emailAdapter?: EmailAdapterOption;
-	realtimeAdapter?: RealtimeAdapterOption;
+	realtimeBroker?: RealtimeBrokerOption;
 	kvAdapter?: KVAdapterOption;
 };
 
@@ -53,7 +53,7 @@ function withOptionDefaults(options: ProjectOptions): ProjectOptions {
 		...options,
 		queueAdapter: options.queueAdapter ?? "pg-boss",
 		emailAdapter: options.emailAdapter ?? "console",
-		realtimeAdapter: options.realtimeAdapter ?? "none",
+		realtimeBroker: options.realtimeBroker ?? "none",
 		kvAdapter: options.kvAdapter ?? "memory",
 	};
 }
@@ -68,9 +68,7 @@ function resolveModuleIds(
 	runtime: string,
 	requested: string[] | undefined,
 ): string[] {
-	const allowed = moduleRegistry.filter((m) =>
-		isModuleAllowed(m.id, runtime),
-	);
+	const allowed = moduleRegistry.filter((m) => isModuleAllowed(m.id, runtime));
 	const allowedIds = new Set(allowed.map((m) => m.id));
 	if (requested && requested.length > 0) {
 		for (const id of requested) {
@@ -115,10 +113,10 @@ export async function runPrompts(
 		args.emailAdapter,
 		emailAdapters,
 	);
-	const realtimeAdapter = assertChoice(
-		"realtime adapter",
-		args.realtimeAdapter,
-		realtimeAdapters,
+	const realtimeBroker = assertChoice(
+		"realtime broker",
+		args.realtimeBroker,
+		realtimeBrokers,
 	);
 	const kvAdapter = assertChoice("KV adapter", args.kvAdapter, kvAdapters);
 
@@ -146,7 +144,7 @@ export async function runPrompts(
 			continueOnError: args.continueOnError ?? false,
 			queueAdapter,
 			emailAdapter,
-			realtimeAdapter,
+			realtimeBroker,
 			kvAdapter,
 		});
 	}
@@ -275,7 +273,7 @@ export async function runPrompts(
 		continueOnError: args.continueOnError ?? false,
 		queueAdapter,
 		emailAdapter,
-		realtimeAdapter,
+		realtimeBroker,
 		kvAdapter,
 	});
 }

@@ -6,7 +6,6 @@ import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
 
 import { questpieRealtimeTopologyTable } from "./collection.js";
 import type { RealtimeObservation, RealtimeObserver } from "./observer.js";
-import type { RealtimeControlFrame } from "./sse-control.js";
 import type { ChangeBroker, ChangeWake } from "./transport.js";
 
 export const REALTIME_TOPOLOGY_PROTOCOL = "questpie-realtime-topology" as const;
@@ -188,73 +187,6 @@ function normalizeTopologyRow(row: TopologyRow): TopologyRow {
 		...row,
 		desiredTopology: canonicalizeTopology(row.desiredTopology),
 	};
-}
-
-function applyLegacyFrames(
-	current: RealtimeDesiredTopology,
-	frames: RealtimeControlFrame[],
-): TopologyMutation {
-	const topics = new Map(current.topics.map((entry) => [entry.id, entry]));
-	const channels = new Map(current.channels.map((entry) => [entry.id, entry]));
-	for (const frame of frames) {
-		if (frame.type === "remove_topic") {
-			topics.delete(frame.topicId);
-			continue;
-		}
-		if (frame.type === "unsubscribe_channel") {
-			channels.delete(frame.subscriptionId);
-			continue;
-		}
-		if (frame.type === "add_topic") {
-			const next = canonicalizeTopology({
-				...current,
-				topics: [
-					{
-						id: frame.topicId,
-						topic: frame.topic,
-						...(frame.sinceSeq === undefined
-							? {}
-							: { sinceSeq: frame.sinceSeq }),
-					},
-				],
-				channels: [],
-			}).topics[0]!;
-			const existing = topics.get(frame.topicId);
-			if (existing && JSON.stringify(existing) !== JSON.stringify(next)) {
-				return { status: "conflict" };
-			}
-			topics.set(frame.topicId, next);
-			continue;
-		}
-		const next = canonicalizeTopology({
-			...current,
-			topics: [],
-			channels: [
-				{
-					id: frame.subscriptionId,
-					channel: frame.channel,
-					params: frame.params,
-					...(frame.lastEventId === undefined
-						? {}
-						: { lastEventId: frame.lastEventId }),
-				},
-			],
-		}).channels[0]!;
-		const existing = channels.get(frame.subscriptionId);
-		if (existing && JSON.stringify(existing) !== JSON.stringify(next)) {
-			return { status: "conflict" };
-		}
-		channels.set(frame.subscriptionId, next);
-	}
-	const topology = canonicalizeTopology({
-		...current,
-		revision: current.revision + 1,
-		topics: [...topics.values()],
-		channels: [...channels.values()],
-	});
-	const withoutRevision = { ...topology, revision: current.revision };
-	if (topologyEquals(current, withoutRevision)) return { status: "duplicate" };
-	return { status: "accepted", topology };
 }
 
 export class MemoryRealtimeTopologyStore implements RealtimeTopologyStore {
@@ -702,17 +634,6 @@ export class RealtimeTopologyCoordinator {
 			}
 			return { status: "accepted", topology };
 		});
-	}
-
-	async submitLegacy(input: {
-		sessionId: string;
-		token: string;
-		identity: string;
-		frames: RealtimeControlFrame[];
-	}): Promise<RealtimeTopologyResult> {
-		return this.commit(input, (row) =>
-			applyLegacyFrames(row.desiredTopology, input.frames),
-		);
 	}
 
 	private async commit(

@@ -8,7 +8,8 @@ import {
 	collection,
 	global,
 	questpieRealtimeLogTable,
-	type RealtimeAdapter,
+	type ChangeBroker,
+	type ChangeWake,
 	type RealtimeChangeEvent,
 } from "../../src/exports/index.js";
 import { sharedSseKeepAliveTicker } from "../../src/server/modules/core/integrated/realtime/sse-keep-alive.js";
@@ -20,35 +21,22 @@ import { runTestDbMigrations } from "../utils/test-db";
 // Test Utilities
 // ============================================================================
 
-class MockRealtimeAdapter implements RealtimeAdapter {
-	public notices: Array<{ seq: number; resource: string; operation: string }> =
-		[];
-	private listeners = new Set<(notice: any) => void>();
+class MockChangeBroker implements ChangeBroker {
+	public notices: ChangeWake[] = [];
+	private onWake: ((wake: ChangeWake) => void) | undefined;
 
-	async start(): Promise<void> {}
+	async start(input: Parameters<ChangeBroker["start"]>[0]): Promise<void> {
+		this.onWake = input.onWake;
+	}
 	async stop(): Promise<void> {}
 
-	subscribe(handler: (notice: any) => void): () => void {
-		this.listeners.add(handler);
-		return () => {
-			this.listeners.delete(handler);
-		};
-	}
-
-	async notify(event: RealtimeChangeEvent): Promise<void> {
-		const notice = {
-			seq: event.seq,
-			resource: event.resource,
-			operation: event.operation,
-		};
-		this.notices.push(notice);
-		for (const listener of this.listeners) {
-			listener(notice);
-		}
+	async publish(wake: ChangeWake): Promise<void> {
+		this.notices.push(wake);
+		this.onWake?.(wake);
 	}
 }
 
-class LifecycleTrackingRealtimeAdapter extends MockRealtimeAdapter {
+class LifecycleTrackingChangeBroker extends MockChangeBroker {
 	public readonly started: Promise<void>;
 	public startCalls = 0;
 	public stopCalls = 0;
@@ -61,9 +49,10 @@ class LifecycleTrackingRealtimeAdapter extends MockRealtimeAdapter {
 		});
 	}
 
-	async start(): Promise<void> {
+	async start(input: Parameters<ChangeBroker["start"]>[0]): Promise<void> {
 		this.startCalls += 1;
 		this.markStarted();
+		await super.start(input);
 	}
 
 	async stop(): Promise<void> {
@@ -71,9 +60,9 @@ class LifecycleTrackingRealtimeAdapter extends MockRealtimeAdapter {
 	}
 }
 
-class FailingStartRealtimeAdapter extends MockRealtimeAdapter {
-	async start(): Promise<void> {
-		throw new Error("adapter start failed");
+class FailingStartChangeBroker extends MockChangeBroker {
+	async start(_input: Parameters<ChangeBroker["start"]>[0]): Promise<void> {
+		throw new Error("broker start failed");
 	}
 }
 
@@ -227,7 +216,7 @@ describe("realtime matrix", () => {
 
 	describe("operation-aware topics", () => {
 		it("streams live count as an O(1) scalar without running find", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const posts = collection("posts")
 				.fields(({ f }) => ({
 					title: f.textarea().required(),
@@ -235,7 +224,7 @@ describe("realtime matrix", () => {
 				.access({ read: true });
 			setup = await buildMockApp(
 				{ collections: { posts } },
-				{ realtime: { adapter } },
+				{ realtime: { changeBroker: adapter } },
 			);
 			await runTestDbMigrations(setup.app);
 			const context = createTestContext();
@@ -305,7 +294,7 @@ describe("realtime matrix", () => {
 
 	describe("change logging", () => {
 		it("logs realtime changes for create/update/delete", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const posts = collection("posts").fields(({ f }) => ({
 				title: f.textarea().required().localized(),
 				slug: f.textarea().required(),
@@ -319,7 +308,9 @@ describe("realtime matrix", () => {
 				},
 			};
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const ctxEn = createTestContext({ locale: "en", defaultLocale: "en" });
@@ -347,15 +338,17 @@ describe("realtime matrix", () => {
 			expect(logs[2].operation).toBe("delete");
 
 			expect(adapter.notices.length).toBe(3);
-			expect(adapter.notices.map((n) => n.operation)).toEqual([
-				"create",
-				"update",
-				"delete",
-			]);
+			expect(
+				adapter.notices.map((notice) =>
+					notice.kind === "outbox-maybe-advanced"
+						? notice.highWaterSeq
+						: undefined,
+				),
+			).toEqual(logs.map((log) => Number(log.seq)));
 		});
 
 		it("logs bulk update/delete operations", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const posts = collection("posts").fields(({ f }) => ({
 				title: f.textarea().required(),
 				slug: f.textarea().required(),
@@ -367,7 +360,9 @@ describe("realtime matrix", () => {
 				},
 			};
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 			const ctx = createTestContext();
 
@@ -400,7 +395,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("includes payload in realtime events", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const posts = collection("posts").fields(({ f }) => ({
 				title: f.textarea().required(),
 				status: f.textarea().required(),
@@ -413,7 +408,9 @@ describe("realtime matrix", () => {
 				},
 			};
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const ctx = createTestContext();
@@ -453,7 +450,7 @@ describe("realtime matrix", () => {
 
 	describe("WHERE filtering", () => {
 		it("only notifies subscribers with matching WHERE filter", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const messages = collection("messages").fields(({ f }) => ({
 				chatId: f.textarea().required(),
 				content: f.textarea().required(),
@@ -465,7 +462,9 @@ describe("realtime matrix", () => {
 				},
 			};
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const ctx = createTestContext();
@@ -522,7 +521,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("handles complex WHERE filters with multiple fields", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const posts = collection("posts").fields(({ f }) => ({
 				status: f.textarea().required(),
 				authorId: f.textarea().required(),
@@ -535,7 +534,9 @@ describe("realtime matrix", () => {
 				},
 			};
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const ctx = createTestContext();
@@ -585,7 +586,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("refreshes create events for complex OR filters", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const posts = collection("posts").fields(({ f }) => ({
 				title: f.textarea().required(),
 				status: f.textarea().required(),
@@ -594,7 +595,9 @@ describe("realtime matrix", () => {
 
 			const testModule = { collections: { posts } };
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const ctx = createTestContext();
@@ -624,7 +627,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("conservatively refreshes create for complex filters", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const posts = collection("posts").fields(({ f }) => ({
 				title: f.textarea().required(),
 				status: f.textarea().required(),
@@ -632,7 +635,9 @@ describe("realtime matrix", () => {
 
 			const testModule = { collections: { posts } };
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const ctx = createTestContext();
@@ -662,7 +667,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("filters by boolean fields", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const tasks = collection("tasks").fields(({ f }) => ({
 				title: f.textarea().required(),
 				completed: f.boolean().required().default(false),
@@ -674,7 +679,9 @@ describe("realtime matrix", () => {
 				},
 			};
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const ctx = createTestContext();
@@ -709,7 +716,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("filters by numeric fields", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const products = collection("products").fields(({ f }) => ({
 				name: f.textarea().required(),
 				categoryId: f.number().required(),
@@ -721,7 +728,9 @@ describe("realtime matrix", () => {
 				},
 			};
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const ctx = createTestContext();
@@ -754,7 +763,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("supports wildcard collection subscriptions", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const posts = collection("posts").fields(({ f }) => ({
 				title: f.textarea().required(),
 			}));
@@ -769,7 +778,9 @@ describe("realtime matrix", () => {
 				},
 			};
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const ctx = createTestContext();
@@ -797,7 +808,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("re-sends snapshot when record leaves filter on update", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const posts = collection("posts").fields(({ f }) => ({
 				title: f.textarea().required(),
 				status: f.textarea().required(),
@@ -805,7 +816,9 @@ describe("realtime matrix", () => {
 
 			const testModule = { collections: { posts } };
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const ctx = createTestContext();
@@ -850,7 +863,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("re-sends snapshot for filtered subscriber on delete", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const posts = collection("posts").fields(({ f }) => ({
 				title: f.textarea().required(),
 				status: f.textarea().required(),
@@ -858,7 +871,9 @@ describe("realtime matrix", () => {
 
 			const testModule = { collections: { posts } };
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const ctx = createTestContext();
@@ -898,7 +913,7 @@ describe("realtime matrix", () => {
 
 	describe("WITH dependency tracking", () => {
 		it("notifies subscribers when related resource changes", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const users = collection("users")
 				.fields(({ f }) => ({ name: f.textarea().required() }))
 				.access({ read: true, create: true, update: true, delete: true });
@@ -918,7 +933,9 @@ describe("realtime matrix", () => {
 				},
 			};
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
@@ -966,7 +983,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("handles nested WITH relations (comments -> posts -> users)", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const users = collection("users").fields(({ f }) => ({
 				name: f.textarea().required(),
 			}));
@@ -989,7 +1006,9 @@ describe("realtime matrix", () => {
 				},
 			};
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const ctx = createTestContext();
@@ -1054,7 +1073,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("service-level WITH dependency tracking", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const categories = collection("categories").fields(({ f }) => ({
 				name: f.textarea().required(),
 			}));
@@ -1071,7 +1090,9 @@ describe("realtime matrix", () => {
 				},
 			};
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const ctx = createTestContext();
@@ -1118,14 +1139,14 @@ describe("realtime matrix", () => {
 
 	describe("global subscriptions", () => {
 		it("reuses one resolved global CRUD across topics", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const settings = global("settings")
 				.fields(({ f }) => ({ title: f.textarea() }))
 				.access({ read: true, update: true });
 
 			setup = await buildMockApp(
 				{ globals: { settings } },
-				{ realtime: { adapter } },
+				{ realtime: { changeBroker: adapter } },
 			);
 			await runTestDbMigrations(setup.app);
 			const generateCrud = spyOn(
@@ -1156,7 +1177,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("re-sends snapshots when global changes", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const settings = global("settings")
 				.fields(({ f }) => ({ title: f.textarea() }))
 				.access({ read: true, update: true });
@@ -1167,7 +1188,9 @@ describe("realtime matrix", () => {
 				},
 			};
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
@@ -1197,7 +1220,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("global subscriptions with WITH referencing collections", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const categories = collection("categories")
 				.fields(({ f }) => ({ name: f.textarea().required() }))
 				.access({ read: true, create: true, update: true, delete: true });
@@ -1216,7 +1239,9 @@ describe("realtime matrix", () => {
 				globals: { settings },
 			};
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
@@ -1272,14 +1297,14 @@ describe("realtime matrix", () => {
 
 	describe("edge cases", () => {
 		it("isolates a throwing listener so later listeners still receive the event", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const items = collection("items").fields(({ f }) => ({
 				name: f.textarea().required(),
 			}));
 
 			setup = await buildMockApp(
 				{ collections: { items } },
-				{ realtime: { adapter } },
+				{ realtime: { changeBroker: adapter } },
 			);
 			await runTestDbMigrations(setup.app);
 
@@ -1313,15 +1338,17 @@ describe("realtime matrix", () => {
 			).toHaveLength(1);
 		});
 
-		it("keeps adapter running until app teardown", async () => {
-			const adapter = new LifecycleTrackingRealtimeAdapter();
+		it("keeps the broker running until app teardown", async () => {
+			const adapter = new LifecycleTrackingChangeBroker();
 			const items = collection("items").fields(({ f }) => ({
 				name: f.textarea().required(),
 			}));
 
 			const testModule = { collections: { items } };
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const firstUnsub = setup.app.realtime?.subscribe(() => {}, {
@@ -1349,7 +1376,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("handles multiple subscribers with different filters", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const orders = collection("orders").fields(({ f }) => ({
 				status: f.textarea().required(),
 				customerId: f.textarea().required(),
@@ -1362,7 +1389,9 @@ describe("realtime matrix", () => {
 				},
 			};
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const ctx = createTestContext();
@@ -1421,7 +1450,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("properly cleans up subscriptions", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const items = collection("items").fields(({ f }) => ({
 				name: f.textarea().required(),
 			}));
@@ -1432,7 +1461,9 @@ describe("realtime matrix", () => {
 				},
 			};
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const ctx = createTestContext();
@@ -1457,7 +1488,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("handles empty WHERE filter (matches all)", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const logs = collection("logs").fields(({ f }) => ({
 				message: f.textarea().required(),
 			}));
@@ -1468,7 +1499,9 @@ describe("realtime matrix", () => {
 				},
 			};
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const ctx = createTestContext();
@@ -1490,7 +1523,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("scales filtered routing across many subscribers", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const messages = collection("messages").fields(({ f }) => ({
 				roomId: f.textarea().required(),
 				content: f.textarea().required(),
@@ -1498,7 +1531,9 @@ describe("realtime matrix", () => {
 
 			const testModule = { collections: { messages } };
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const ctx = createTestContext();
@@ -1546,7 +1581,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("cleans up old realtime log rows with retentionDays", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const items = collection("items").fields(({ f }) => ({
 				name: f.textarea().required(),
 			}));
@@ -1554,7 +1589,7 @@ describe("realtime matrix", () => {
 			const testModule = { collections: { items } };
 
 			setup = await buildMockApp(testModule, {
-				realtime: { adapter, retentionDays: 1 },
+				realtime: { changeBroker: adapter, retentionDays: 1 },
 			});
 			await runTestDbMigrations(setup.app);
 
@@ -1586,14 +1621,14 @@ describe("realtime matrix", () => {
 		});
 
 		it("cleans up old rows by default with no subscribers", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const items = collection("items").fields(({ f }) => ({
 				name: f.textarea().required(),
 			}));
 
 			setup = await buildMockApp(
 				{ collections: { items } },
-				{ realtime: { adapter } },
+				{ realtime: { changeBroker: adapter } },
 			);
 			await runTestDbMigrations(setup.app);
 
@@ -1612,14 +1647,16 @@ describe("realtime matrix", () => {
 		});
 
 		it("does not delete rows from a local subscriber watermark", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const items = collection("items").fields(({ f }) => ({
 				name: f.textarea().required(),
 			}));
 
 			const testModule = { collections: { items } };
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			await setup.app.db.insert(questpieRealtimeLogTable).values({
@@ -1671,7 +1708,7 @@ describe("realtime matrix", () => {
 
 	describe("access control", () => {
 		it("rejects an anonymous denial before hooks, listeners, or a sink", async () => {
-			const adapter = new LifecycleTrackingRealtimeAdapter();
+			const adapter = new LifecycleTrackingChangeBroker();
 			let beforeOperationRuns = 0;
 			let beforeReadRuns = 0;
 			const secrets = collection("secrets")
@@ -1694,7 +1731,9 @@ describe("realtime matrix", () => {
 				},
 			};
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
@@ -1719,7 +1758,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("should allow access for authorized users", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const secrets = collection("secrets")
 				.fields(({ f }) => ({
 					content: f.textarea().required(),
@@ -1736,7 +1775,9 @@ describe("realtime matrix", () => {
 				},
 			};
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
@@ -1768,7 +1809,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("removes a denied topic while keeping authorized topics alive", async () => {
-			const adapter = new LifecycleTrackingRealtimeAdapter();
+			const adapter = new LifecycleTrackingChangeBroker();
 			const secrets = collection("secrets")
 				.fields(({ f }) => ({ content: f.textarea().required() }))
 				.access({
@@ -1779,7 +1820,7 @@ describe("realtime matrix", () => {
 				.access({ read: true });
 			setup = await buildMockApp(
 				{ collections: { secrets, posts } },
-				{ realtime: { adapter } },
+				{ realtime: { changeBroker: adapter } },
 			);
 			await runTestDbMigrations(setup.app);
 
@@ -1819,7 +1860,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("should filter payload fields based on field-level access", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const documents = collection("documents")
 				.fields(({ f }) => ({
 					title: f.textarea().required(),
@@ -1842,7 +1883,9 @@ describe("realtime matrix", () => {
 				},
 			};
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const ctx = createTestContext({ accessMode: "user", role: "user" });
@@ -1880,7 +1923,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("rejects a denied global before opening an SSE stream", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const config = global("config")
 				.fields(({ f }) => ({
 					apiKey: f.textarea().required(),
@@ -1897,7 +1940,9 @@ describe("realtime matrix", () => {
 				},
 			};
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
@@ -1922,7 +1967,7 @@ describe("realtime matrix", () => {
 
 	describe("admission control", () => {
 		it("enforces topic, query, and initial-concurrency caps for a mixed batch", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const observations: unknown[] = [];
 			let activeReads = 0;
 			let maximumActiveReads = 0;
@@ -1943,7 +1988,7 @@ describe("realtime matrix", () => {
 				{ collections: { items } },
 				{
 					realtime: {
-						adapter,
+						changeBroker: adapter,
 						observer: { record: (event) => observations.push(event) },
 					},
 				},
@@ -2019,13 +2064,13 @@ describe("realtime matrix", () => {
 		});
 
 		it("returns a structured non-retryable error when every initial topic is rejected", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const items = collection("items")
 				.fields(({ f }) => ({ name: f.textarea().required() }))
 				.access({ read: true });
 			setup = await buildMockApp(
 				{ collections: { items } },
-				{ realtime: { adapter } },
+				{ realtime: { changeBroker: adapter } },
 			);
 			await runTestDbMigrations(setup.app);
 
@@ -2066,7 +2111,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("preserves the access where constraint alongside the requested filter", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const documents = collection("documents")
 				.fields(({ f }) => ({
 					ownerId: f.textarea().required(),
@@ -2082,7 +2127,7 @@ describe("realtime matrix", () => {
 				});
 			setup = await buildMockApp(
 				{ collections: { documents } },
-				{ realtime: { adapter } },
+				{ realtime: { changeBroker: adapter } },
 			);
 			await runTestDbMigrations(setup.app);
 			const system = createTestContext();
@@ -2122,7 +2167,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("removes an oversized snapshot and releases its principal slot", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const largeItems = collection("largeItems")
 				.fields(({ f }) => ({ content: f.textarea().required() }))
 				.access({ read: true, create: true });
@@ -2133,7 +2178,7 @@ describe("realtime matrix", () => {
 				{ collections: { largeItems, smallItems } },
 				{
 					realtime: {
-						adapter,
+						changeBroker: adapter,
 						admission: { maxBufferedSnapshotBytes: 512 },
 					},
 				},
@@ -2191,14 +2236,14 @@ describe("realtime matrix", () => {
 	// ==========================================================================
 
 	describe("shared refresh scheduler", () => {
-		it("adds and removes one topic through control frames without reconnecting", async () => {
-			const adapter = new MockRealtimeAdapter();
+		it("adds and removes one topic through desired topology without reconnecting", async () => {
+			const adapter = new MockChangeBroker();
 			const items = collection("items")
 				.fields(({ f }) => ({ name: f.textarea().required() }))
 				.access({ read: true });
 			setup = await buildMockApp(
 				{ collections: { items } },
-				{ realtime: { adapter } },
+				{ realtime: { changeBroker: adapter } },
 			);
 			await runTestDbMigrations(setup.app);
 			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
@@ -2329,7 +2374,29 @@ describe("realtime matrix", () => {
 				},
 			});
 
-			const control = (frames: unknown[]) =>
+			const removedDeltaProtocol = await routes.realtime.subscribe(
+				new Request("http://localhost/realtime", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						sessionId: session.data.sessionId,
+						token: session.data.token,
+						frames: [{ type: "remove_topic", topicId: "items-base" }],
+					}),
+				}),
+				{},
+				undefined,
+			);
+			expect(removedDeltaProtocol.status).toBe(400);
+			expect(await removedDeltaProtocol.json()).toEqual({
+				error: {
+					code: "REALTIME_TOPOLOGY_INVALID",
+					message: "Realtime control requires desired topology protocol v1",
+				},
+			});
+
+			let revision = 0;
+			const control = (desiredTopics: unknown[]) =>
 				routes.realtime.subscribe(
 					new Request("http://localhost/realtime", {
 						method: "POST",
@@ -2337,7 +2404,13 @@ describe("realtime matrix", () => {
 						body: JSON.stringify({
 							sessionId: session.data.sessionId,
 							token: session.data.token,
-							frames,
+							topology: {
+								protocol: "questpie-realtime-topology",
+								version: 1,
+								revision: ++revision,
+								topics: desiredTopics,
+								channels: [],
+							},
 						}),
 					}),
 					{},
@@ -2345,8 +2418,14 @@ describe("realtime matrix", () => {
 				);
 			const added = await control([
 				{
-					type: "add_topic",
-					topicId: "items-added",
+					id: "items-base",
+					topic: {
+						resourceType: "collection",
+						resource: "items",
+					},
+				},
+				{
+					id: "items-added",
 					topic: {
 						resourceType: "collection",
 						resource: "items",
@@ -2354,7 +2433,7 @@ describe("realtime matrix", () => {
 					},
 				},
 			]);
-			expect(added.status).toBe(204);
+			expect(added.status).toBe(202);
 			expect((await reader.readSnapshot(2000, "items-added")).event).toBe(
 				"snapshot",
 			);
@@ -2362,8 +2441,7 @@ describe("realtime matrix", () => {
 
 			const rejected = await control([
 				{
-					type: "add_topic",
-					topicId: "items-rejected",
+					id: "items-rejected",
 					topic: {
 						resourceType: "collection",
 						resource: "items",
@@ -2393,15 +2471,21 @@ describe("realtime matrix", () => {
 			expect(setup.app.realtime.listeners.size).toBe(2);
 
 			const removed = await control([
-				{ type: "remove_topic", topicId: "items-added" },
+				{
+					id: "items-base",
+					topic: {
+						resourceType: "collection",
+						resource: "items",
+					},
+				},
 			]);
-			expect(removed.status).toBe(204);
+			expect(removed.status).toBe(202);
 			expect(setup.app.realtime.listeners.size).toBe(1);
 			await reader.close();
 		});
 
 		it("resumes an unchanged topic without another initial snapshot", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			let reads = 0;
 			const items = collection("items")
 				.fields(({ f }) => ({ name: f.textarea().required() }))
@@ -2409,7 +2493,7 @@ describe("realtime matrix", () => {
 				.access({ read: true, create: true });
 			setup = await buildMockApp(
 				{ collections: { items } },
-				{ realtime: { adapter } },
+				{ realtime: { changeBroker: adapter } },
 			);
 			await runTestDbMigrations(setup.app);
 			const context = createTestContext();
@@ -2435,13 +2519,13 @@ describe("realtime matrix", () => {
 		});
 
 		it("forces a reset when sinceSeq is older than the retained horizon", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const items = collection("items")
 				.fields(({ f }) => ({ name: f.textarea().required() }))
 				.access({ read: true, create: true });
 			setup = await buildMockApp(
 				{ collections: { items } },
-				{ realtime: { adapter } },
+				{ realtime: { changeBroker: adapter } },
 			);
 			await runTestDbMigrations(setup.app);
 			const context = createTestContext();
@@ -2467,7 +2551,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("runs one pipeline for the five admitted same-principal connections", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			let pipelineRuns = 0;
 			const items = collection("items")
 				.fields(({ f }) => ({ name: f.textarea().required() }))
@@ -2475,7 +2559,7 @@ describe("realtime matrix", () => {
 				.access({ read: true });
 			setup = await buildMockApp(
 				{ collections: { items } },
-				{ realtime: { adapter } },
+				{ realtime: { changeBroker: adapter } },
 			);
 			await runTestDbMigrations(setup.app);
 
@@ -2529,7 +2613,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("separates different sessions unless the entity explicitly shares", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			let privateRuns = 0;
 			let publicRuns = 0;
 			const privateItems = collection("privateItems")
@@ -2543,7 +2627,7 @@ describe("realtime matrix", () => {
 				.access({ read: true });
 			setup = await buildMockApp(
 				{ collections: { privateItems, publicItems } },
-				{ realtime: { adapter } },
+				{ realtime: { changeBroker: adapter } },
 			);
 			await runTestDbMigrations(setup.app);
 
@@ -2580,7 +2664,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("isolates row, field, and afterRead output between principals", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const documents = collection("documents")
 				.fields(({ f }) => ({
 					ownerId: f.textarea().required(),
@@ -2603,7 +2687,7 @@ describe("realtime matrix", () => {
 				});
 			setup = await buildMockApp(
 				{ collections: { documents } },
-				{ realtime: { adapter } },
+				{ realtime: { changeBroker: adapter } },
 			);
 			await runTestDbMigrations(setup.app);
 			const system = createTestContext();
@@ -2657,7 +2741,7 @@ describe("realtime matrix", () => {
 
 	describe("keepalive", () => {
 		it("honors realtime.keepAliveIntervalMs with SSE comment pings", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const items = collection("items")
 				.fields(({ f }) => ({
 					name: f.textarea().required(),
@@ -2666,7 +2750,7 @@ describe("realtime matrix", () => {
 
 			setup = await buildMockApp(
 				{ collections: { items } },
-				{ realtime: { adapter, keepAliveIntervalMs: 50 } },
+				{ realtime: { changeBroker: adapter, keepAliveIntervalMs: 50 } },
 			);
 			await runTestDbMigrations(setup.app);
 
@@ -2703,13 +2787,13 @@ describe("realtime matrix", () => {
 
 	describe("E2E SSE streaming", () => {
 		it("tears down the connection when controller.enqueue fails", async () => {
-			const adapter = new LifecycleTrackingRealtimeAdapter();
+			const adapter = new LifecycleTrackingChangeBroker();
 			const items = collection("items")
 				.fields(({ f }) => ({ name: f.textarea().required() }))
 				.access({ read: true });
 			setup = await buildMockApp(
 				{ collections: { items } },
-				{ realtime: { adapter } },
+				{ realtime: { changeBroker: adapter } },
 			);
 			await runTestDbMigrations(setup.app);
 
@@ -2738,56 +2822,29 @@ describe("realtime matrix", () => {
 			}
 		});
 
-		it("sends an error event and closes when the transport cannot start", async () => {
-			const adapter = new FailingStartRealtimeAdapter();
+		it("fails app initialization when the broker cannot start", async () => {
+			const adapter = new FailingStartChangeBroker();
 			const items = collection("items")
 				.fields(({ f }) => ({ name: f.textarea().required() }))
 				.access({ read: true });
 
-			setup = await buildMockApp(
-				{ collections: { items } },
-				{ realtime: { adapter } },
-			);
-			await runTestDbMigrations(setup.app);
-
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const response = await routes.realtime.subscribe(
-				createRealtimeRequest([collectionTopic("items")]),
-				{},
-				undefined,
-			);
-			const reader = createSSEReader(response.body!);
-
-			let transportError: SSEEvent | undefined;
-			for (let attempt = 0; attempt < 3; attempt += 1) {
-				const event = await reader.readEvent();
-				if (event.event === "error") {
-					transportError = event;
-					break;
-				}
-			}
-
-			expect(transportError?.data).toMatchObject({
-				topicId: "*",
-				message: "adapter start failed",
-			});
-			expect(
-				setup.app.mocks.logger.getLogsContaining("Transport startup failed"),
-			).toHaveLength(1);
-			await expect(reader.readEvent()).rejects.toThrow(
-				"SSE stream closed before event",
-			);
+			await expect(
+				buildMockApp(
+					{ collections: { items } },
+					{ realtime: { changeBroker: adapter } },
+				),
+			).rejects.toThrow("broker start failed");
 		});
 
 		it("sends an error event and closes when an outbox drain fails", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const items = collection("items")
 				.fields(({ f }) => ({ name: f.textarea().required() }))
 				.access({ read: true });
 
 			setup = await buildMockApp(
 				{ collections: { items } },
-				{ realtime: { adapter } },
+				{ realtime: { changeBroker: adapter } },
 			);
 			await runTestDbMigrations(setup.app);
 
@@ -2805,12 +2862,10 @@ describe("realtime matrix", () => {
 				new Error("drain failed"),
 			);
 			try {
-				await adapter.notify({
-					seq: 999,
-					resourceType: "collection",
-					resource: "items",
-					operation: "create",
-					createdAt: new Date(),
+				await adapter.publish({
+					kind: "outbox-maybe-advanced",
+					highWaterSeq: 999,
+					reason: "publish",
 				});
 
 				const transportError = await reader.readEvent();
@@ -2827,7 +2882,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("coalesces rapid updates into a latest snapshot", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const counters = collection("counters")
 				.fields(({ f }) => ({
 					name: f.textarea().required(),
@@ -2841,7 +2896,9 @@ describe("realtime matrix", () => {
 				},
 			};
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
@@ -2882,7 +2939,7 @@ describe("realtime matrix", () => {
 		});
 
 		it("should handle client disconnection gracefully", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new MockChangeBroker();
 			const items = collection("items")
 				.fields(({ f }) => ({
 					name: f.textarea().required(),
@@ -2895,7 +2952,9 @@ describe("realtime matrix", () => {
 				},
 			};
 
-			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			setup = await buildMockApp(testModule, {
+				realtime: { changeBroker: adapter },
+			});
 			await runTestDbMigrations(setup.app);
 
 			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });

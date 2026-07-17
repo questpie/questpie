@@ -15,9 +15,9 @@ This page covers server configuration, the outbox and broker topology, and each 
 ## What it does
 
 - **Records every logical change transactionally.** Each create/update/delete (and bulk variant) appends one row to `questpie_realtime_log` using the mutation's database transaction.
-- **Fans out across instances.** The adapter broadcasts a tiny _notice_ ("seq N on collection posts changed") to every process, which then drains the outbox and pushes snapshots to its own SSE subscribers.
+- **Fans out across instances.** The broker broadcasts a bounded _wake_ to every process, which then drains the outbox and pushes snapshots to its own SSE subscribers.
 - **Zero-infrastructure edge default.** `realtime: true` serves multiplexed SSE. It polls on a non-Postgres setup or auto-wires pg_notify when a normal Postgres connection string is available.
-- **Push transports for scale.** `pgNotifyChangeBroker` rides the database you already run; Redis Streams and Pusher/Soketi provide explicit v2 broker overrides. Cloudflare's existing adapter remains on the 3.x compatibility path.
+- **Push transports for scale.** `pgNotifyChangeBroker` rides the database you already run; Redis Streams and Pusher/Soketi provide explicit broker overrides.
 - **Two explicit seams.** `ChangeBroker` carries lossy notice-only wakes between instances. `ClientTransport` carries already-authorized frames to edge sessions. Live snapshots and channel events have different QoS and are not conflated in a driver.
 - **Privacy-safe by design.** Brokers never carry rows or snapshots. Snapshot sharing is per-principal by default; managed WS delivers access-filtered live-query frames on private per-session channels. Shared multicast is reserved for schema-validated, channel-authorized events.
 - **Switch without changing consumers.** Choose SSE or the Pusher/Soketi preset under `realtime`; `live()`, `{ realtime: true }`, and `client.channels.*` remain unchanged.
@@ -50,14 +50,16 @@ The flow, from a write to a pushed snapshot:
 | Step                           | What happens                                                                                                                                                        |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1. Transaction captures change | A create/update/delete appends one row to `questpie_realtime_log` using the mutation-bound `db`; the business row and outbox row commit or roll back together.      |
-| 2. Signal                      | The adapter `notify(event)` broadcasts a minimal `RealtimeNotice` (`{ seq, resourceType, resource, operation }`) to every instance.                                 |
+| 2. Signal                      | `ChangeBroker.publish()` broadcasts a bounded `ChangeWake` saying durable state may have advanced.                                                                  |
 | 3. Drain                       | Each instance reacts to the notice (or a poll tick) by `drain()`ing new outbox rows past its watermark.                                                             |
 | 4. Re-run + push               | For each affected subscription, the server re-runs the query **under the subscriber's session** and pushes the fresh snapshot over its `POST /realtime` SSE stream. |
 
 The broker is only a _latency hint_ (steps 2-3). The outbox (step 1), unconditional reconciliation, and access-controlled re-run (step 4) provide correctness regardless of which driver you pick. Wakes are intentionally unordered, at-most-once, and coalescable.
 
-<Callout type="info" title="The notice is a cue, not the data">
-A `RealtimeNotice` is `Pick<RealtimeChangeEvent, "seq" | "resourceType" | "resource" | "operation">`, just enough to say *something matching changed*. The full event (with `payload`) lives in the outbox; subscribers never receive another user's rows over the transport.
+<Callout type="info" title="The wake is a cue, not the data">
+	A `ChangeWake` contains only bounded routing metadata such as an optional
+	high-water sequence. The full event (with `payload`) lives in the outbox;
+	subscribers never receive another user's rows over the broker.
 </Callout>
 
 ## `RealtimeConfig`, the options
@@ -69,7 +71,7 @@ interface RealtimeConfig {
 	observer?: RealtimeObserver;
 	admission?: Partial<RealtimeAdmissionConfig>;
 	connectionAcceptPacingMs?: number;
-	changeBroker?: ChangeBroker; // v2 cross-instance notice seam
+	changeBroker?: ChangeBroker; // cross-instance notice seam
 	clientTransport?: ClientTransport; // managed edge transport; omit → SSE
 	channelEvents?: Partial<ChannelEventLedgerConfig>;
 	channelPresence?: Partial<ChannelPresenceConfig>;
@@ -86,7 +88,7 @@ interface RealtimeConfig {
 | `observer`                 | _(none)_                                       | Structured lifecycle/admission/transport diagnostics. Observer failures are isolated from delivery.                                                                                                                      |
 | `admission`                | limits below                                   | Edge-session topic, connection, query-shape, concurrency, and buffer caps.                                                                                                                                               |
 | `connectionAcceptPacingMs` | `0`                                            | Optional maximum random delay before accepting a new edge session.                                                                                                                                                       |
-| `changeBroker`             | Postgres `PgNotifyChangeBroker` when available | Realtime v2 notice-only broker. Set it explicitly for Redis, Pusher, Cloudflare, or a custom broker.                                                                                                                     |
+| `changeBroker`             | Postgres `PgNotifyChangeBroker` when available | Notice-only broker. Set it explicitly for Redis, Pusher, or a custom broker.                                                                                                                                             |
 | `clientTransport`          | SSE                                            | Optional managed edge transport. The Pusher preset supplies both `changeBroker` and `clientTransport`.                                                                                                                   |
 | `channelEvents`            | bounded defaults                               | Ordered-channel replay retention, lease, and slow-consumer buffer tuning.                                                                                                                                                |
 | `channelPresence`          | 30s lease / 10s heartbeat / 1s reconciliation  | SSE Postgres presence leases, cross-instance convergence, and provider-parity member limits. Pusher/Soketi presence remains provider-managed.                                                                            |
@@ -140,7 +142,7 @@ purpose-built projection/event flow for the rest of the model.
 
 A possible future `realtime: { mode: "invalidate" }` design would send a bounded
 invalidation signal and let another read layer refetch its own page. That mode
-is not implemented in QuestPie 3.16 and requires a separate deep-module spec; do
+is not implemented and requires a separate deep-module spec; do
 not configure or depend on it today.
 
 Rejected topics return `REALTIME_TOPIC_REJECTED` with the topic id, resource,
@@ -210,7 +212,7 @@ export default runtimeConfig({
 Behavior:
 
 - **Needs the `pg` package.** It's an optional peer dependency (`pg ^8.13.1`), not bundled, the adapter `await import("pg")`s it lazily. Install `pg` if it isn't already in your app.
-- **One connection source required.** Pass exactly one of `client` / `connection` / `connectionString`, or the adapter throws `"PgNotifyAdapter requires a pg Client or connection config"` on start.
+- **One connection source required.** Pass exactly one of `client` / `connection` / `connectionString`, or the broker throws `"PgNotifyChangeBroker requires a pg Client or connection config"` on start.
 - **Owned vs borrowed client.** A `connection`/`connectionString` client is owned and closed on `stop()`; a `client` you pass is left open (`ownsClient = false`).
 - **Uses `LISTEN`/`UNLISTEN` + `pg_notify($1, $2)`.** The notice JSON (`{ seq, resourceType, resource, operation }`) is the channel payload.
 
@@ -286,7 +288,7 @@ export default runtimeConfig({
 });
 ```
 
-`RedisStreamsAdapterOptions` is `{ client (required), reader?, stream?, blockMs?, batchSize?, maxLen?, retryDelayMs?, onError? }`.
+`RedisStreamsChangeBrokerOptions` is `{ client (required), reader?, stream?, blockMs?, batchSize?, maxLen?, retryDelayMs?, onError? }`.
 
 | Option         | Type                 | Default                  | Notes                                                                                                                        |
 | -------------- | -------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -324,10 +326,6 @@ type RedisStreamsClient = {
 Only `xAdd` and `xRead` are mandatory. Pass `reader` when a custom client cannot duplicate itself; blocking reads should not share the publishing connection.
 </Callout>
 
-## Cloudflare deployments
-
-Cloudflare Workers need a Durable Object fan-out path because they do not keep a long-lived process-local poller. Use the [Realtime v2 HA migration guide](/docs/adapters/realtime-v2-migration) for the supported QuestPie 3.x deployment path and its v2 migration status.
-
 ## The outbox table
 
 The change log lives in one Drizzle table, `questpie_realtime_log`, created by codegen alongside your schema (it's part of the core module). You rarely touch it directly, but it's worth knowing it exists:
@@ -353,13 +351,12 @@ import type {
 	RealtimeChangeEvent, // a full outbox event
 	RealtimeChangePayload, // { before, after } or { count, recordIds }
 	RealtimeEqualityProjection, // shallow scalar fields used for equality routing
-	RealtimeNotice, // the minimal broadcast notice
 	RealtimeOperation, // "create" | "update" | "delete" | "bulk_update" | "bulk_delete"
 	RealtimeResourceType, // "collection" | "global"
 } from "questpie/realtime";
 ```
 
-Each broker's option type ships from its own entry, `PgNotifyChangeBrokerOptions` from `questpie/adapters/pg-notify` and `RedisStreamsAdapterOptions` plus `RedisStreamsClient` from `questpie/adapters/redis-streams`.
+Each broker's option type ships from its own entry, `PgNotifyChangeBrokerOptions` from `questpie/adapters/pg-notify` and `RedisStreamsChangeBrokerOptions` plus `RedisStreamsClient` from `questpie/adapters/redis-streams`.
 
 ## Build your own transport
 
@@ -381,13 +378,10 @@ interface ChangeBroker {
 
 Wakes may be lost, duplicated, delayed, reordered, or coalesced. They never carry rows, snapshots, credentials, or topology bodies. Wire the broker as `realtime.changeBroker`; reconciliation against durable state supplies correctness.
 
-See the migration guide for the QuestPie 3.x transition and QuestPie 4 removal window.
-
 ## Related
 
 - [Realtime](/docs/client/realtime), the client API this transport powers: `live()`, `liveIter()`, and the TanStack Query `{ realtime: true }` flag.
 - [Channels](/docs/client/channels), typed ordered application events over SSE or Pusher/Soketi.
-- [Realtime v2 HA migration](/docs/adapters/realtime-v2-migration), schema rollout, mixed versions, and 3.x deprecations.
 - [Configuration](/docs/concepts/configuration), where `realtime` lives in `QuestpieConfig`, alongside the other adapters.
 - [Adapters](/docs/adapters), the hub listing every adapter kind and the swap-the-backend model.
 - [Building a plugin](/docs/extend/build-a-plugin), implement a `ChangeBroker` (or another adapter contract) yourself.

@@ -119,7 +119,7 @@ describe("channels client", () => {
 						streamController = controller;
 						controller.enqueue(
 							encoder.encode(
-								`event: session\ndata: ${JSON.stringify({ sessionId: "s1", token: "t1" })}\n\n`,
+								`event: session\ndata: ${JSON.stringify({ sessionId: "s1", token: "t1", control: { protocol: "questpie-realtime-topology", versions: [1] } })}\n\n`,
 							),
 						);
 					},
@@ -202,8 +202,9 @@ describe("channels client", () => {
 			requests.some(({ url, init }) => {
 				if (!url.endsWith("/realtime")) return false;
 				const payload = JSON.parse(String(init?.body));
-				return payload.frames?.some(
-					(frame: { type: string }) => frame.type === "unsubscribe_channel",
+				return (
+					payload.topology?.channels?.length === 1 &&
+					payload.topology.channels[0].channel === "news"
 				);
 			}),
 		);

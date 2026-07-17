@@ -7,8 +7,8 @@ import {
 	collection,
 	createAdapterRoutes,
 	questpieRealtimeLogTable,
-	type RealtimeAdapter,
-	type RealtimeChangeEvent,
+	type ChangeBroker,
+	type ChangeWake,
 } from "../src/exports/index.js";
 import type {
 	RealtimeObservation,
@@ -45,20 +45,17 @@ class BenchmarkObserver implements RealtimeObserver {
 	}
 }
 
-class LocalRealtimeAdapter implements RealtimeAdapter {
-	private listeners = new Set<(event: RealtimeChangeEvent) => void>();
+class LocalChangeBroker implements ChangeBroker {
+	private onWake: ((wake: ChangeWake) => void) | undefined;
 
-	async start() {}
+	async start(input: Parameters<ChangeBroker["start"]>[0]) {
+		this.onWake = input.onWake;
+	}
 
 	async stop() {}
 
-	subscribe(listener: (event: RealtimeChangeEvent) => void) {
-		this.listeners.add(listener);
-		return () => this.listeners.delete(listener);
-	}
-
-	async notify(event: RealtimeChangeEvent) {
-		for (const listener of this.listeners) listener(event);
+	async publish(wake: ChangeWake) {
+		this.onWake?.(wake);
 	}
 }
 
@@ -290,7 +287,7 @@ async function main() {
 		}),
 	);
 
-	const adapter = new LocalRealtimeAdapter();
+	const changeBroker = new LocalChangeBroker();
 	const observer = new BenchmarkObserver();
 	const setup = await buildMockApp(
 		{
@@ -302,7 +299,7 @@ async function main() {
 		},
 		{
 			realtime: {
-				adapter,
+				changeBroker,
 				observer,
 				keepAliveIntervalMs: 60_000,
 			},
@@ -505,12 +502,17 @@ async function main() {
 					const body = JSON.stringify({
 						sessionId: connection.reader.session.sessionId,
 						token: connection.reader.session.token,
-						frames: [
-							{
-								type: "remove_topic",
-								topicId: `${connection.connectionId}:${replacement.id}`,
-							},
-						],
+						topology: {
+							protocol: "questpie-realtime-topology",
+							version: 1,
+							revision: 1,
+							topics: baseTopics.map((topic) => ({
+								id: `${connection.connectionId}:${topic.id}`,
+								topic: topicConfig(topic),
+								sinceSeq: cursorFor(connection, topic.id),
+							})),
+							channels: [],
+						},
 					});
 					const response = await routes.realtime.subscribe(
 						new Request("http://localhost/realtime", {
@@ -551,7 +553,7 @@ async function main() {
 							topology: {
 								protocol: "questpie-realtime-topology",
 								version: 1,
-								revision: 1,
+								revision: 2,
 								topics: [
 									...baseTopics.slice(0, -1).map((stable) => ({
 										id: `${connection.connectionId}:${stable.id}`,
@@ -567,22 +569,6 @@ async function main() {
 								channels: [],
 							},
 						});
-						const bridgeBody = JSON.stringify({
-							sessionId: connection.reader.session.sessionId,
-							token: connection.reader.session.token,
-							frames: [
-								{
-									type: "add_topic",
-									topicId: `${connection.connectionId}:${replacement.id}`,
-									topic,
-									sinceSeq: replacementCursor,
-								},
-								{
-									type: "remove_topic",
-									topicId: `${connection.connectionId}:${baseTopics.at(-1)!.id}`,
-								},
-							],
-						});
 						requestBytes += Buffer.byteLength(desiredBody);
 						controlRequests += 1;
 						const bytesBefore = connection.reader.bytesRead;
@@ -595,7 +581,7 @@ async function main() {
 							new Request("http://localhost/realtime", {
 								method: "POST",
 								headers: { "Content-Type": "application/json" },
-								body: bridgeBody,
+								body: desiredBody,
 							}),
 							{},
 							{ appContext: connection.appContext },
@@ -689,7 +675,7 @@ async function main() {
 							strategy,
 							executionProtocol:
 								strategy === "incremental"
-									? "desired-v1 logical / legacy bridge"
+									? "desired-topology-v1"
 									: "full reconnect",
 							cursorState,
 							clients,
@@ -734,7 +720,7 @@ async function main() {
 			topologyRows,
 		);
 		console.log(
-			"Inference (not a measured percentage): fewer stable-topic recomputations and response bytes indicate the work avoided by incremental topology. The incremental wall-time path currently executes through the legacy-frame bridge until desired-v1 server control lands; do not publish bridge timing as final desired-v1 performance.",
+			"Inference (not a measured percentage): fewer stable-topic recomputations and response bytes indicate the work avoided by desired-topology updates.",
 		);
 
 		const relationSize = async () => {

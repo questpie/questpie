@@ -4,7 +4,7 @@
  * POST /realtime
  */
 
-import { createRealtimeRoutes } from "#questpie/server/adapters/routes/realtime.js";
+import { realtimeSubscribe } from "#questpie/server/adapters/routes/realtime.js";
 import { route } from "#questpie/server/routes/define-route.js";
 import { routeApp } from "#questpie/server/routes/route-app.js";
 
@@ -14,6 +14,5 @@ export default route()
 	.handler(async (ctx) => {
 		const { request } = ctx;
 		const app = routeApp(ctx);
-		const routes = createRealtimeRoutes(app);
-		return routes.subscribe(request, {});
+		return realtimeSubscribe(app, request, {});
 	});

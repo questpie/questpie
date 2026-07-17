@@ -2,16 +2,15 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { createClient, type RedisClientType } from "redis";
 
-import type { RealtimeAdapter } from "../../src/server/modules/core/integrated/realtime/adapter.js";
-import { PgNotifyAdapter } from "../../src/server/modules/core/integrated/realtime/adapters/pg-notify.js";
+import { PgNotifyChangeBroker } from "../../src/server/modules/core/integrated/realtime/adapters/pg-notify.js";
 import {
-	RedisStreamsAdapter,
+	RedisStreamsChangeBroker,
 	type RedisStreamsClient,
 } from "../../src/server/modules/core/integrated/realtime/adapters/redis-streams.js";
 import type {
-	RealtimeChangeEvent,
-	RealtimeNotice,
-} from "../../src/server/modules/core/integrated/realtime/types.js";
+	ChangeBroker,
+	ChangeWake,
+} from "../../src/server/modules/core/integrated/realtime/transport.js";
 
 const runDrivers = process.env.QUESTPIE_REALTIME_DRIVER_INTEGRATION === "1";
 const postgresUrl =
@@ -20,30 +19,18 @@ const postgresUrl =
 const redisUrl =
 	process.env.QUESTPIE_REALTIME_REDIS_URL ?? "redis://127.0.0.1:6379";
 
-const changes: RealtimeChangeEvent[] = [
+const wakes: ChangeWake[] = [
 	{
-		seq: 41,
-		resourceType: "collection",
-		resource: "posts",
-		operation: "update",
-		createdAt: new Date(),
+		kind: "outbox-maybe-advanced",
+		highWaterSeq: 41,
+		reason: "publish",
 	},
 	{
-		seq: 42,
-		resourceType: "global",
-		resource: "siteSettings",
-		operation: "update",
-		createdAt: new Date(),
+		kind: "outbox-maybe-advanced",
+		highWaterSeq: 42,
+		reason: "publish",
 	},
 ];
-const expectedNotices = changes.map(
-	({ seq, resourceType, resource, operation }) => ({
-		seq,
-		resourceType,
-		resource,
-		operation,
-	}),
-);
 
 function timeout<T>(promise: Promise<T>, message: string): Promise<T> {
 	return Promise.race([
@@ -54,29 +41,33 @@ function timeout<T>(promise: Promise<T>, message: string): Promise<T> {
 	]);
 }
 
-function receive(
-	adapter: RealtimeAdapter,
+async function startAndReceive(
+	broker: ChangeBroker,
 	count: number,
-): Promise<RealtimeNotice[]> {
-	return new Promise((resolve) => {
-		const notices: RealtimeNotice[] = [];
-		const unsubscribe = adapter.subscribe((notice) => {
-			notices.push(notice);
-			if (notices.length !== count) return;
-			unsubscribe();
-			resolve(notices);
-		});
+): Promise<{ result: Promise<ChangeWake[]> }> {
+	let resolve!: (wakes: ChangeWake[]) => void;
+	let reject!: (error: unknown) => void;
+	const result = new Promise<ChangeWake[]>((res, rej) => {
+		resolve = res;
+		reject = rej;
 	});
+	const received: ChangeWake[] = [];
+	await broker.start({
+		onWake: (wake) => {
+			received.push(wake);
+			if (received.length === count) resolve(received);
+		},
+		onError: reject,
+	});
+	return { result };
 }
 
-describe.skipIf(!runDrivers)("realtime driver matrix services", () => {
-	const adapters: RealtimeAdapter[] = [];
+describe.skipIf(!runDrivers)("realtime ChangeBroker driver matrix", () => {
+	const brokers: ChangeBroker[] = [];
 	const redisClients: RedisClientType[] = [];
 
 	afterEach(async () => {
-		await Promise.allSettled(
-			adapters.splice(0).map((adapter) => adapter.stop()),
-		);
+		await Promise.allSettled(brokers.splice(0).map((broker) => broker.stop()));
 		await Promise.allSettled(
 			redisClients.splice(0).map(async (client) => {
 				if (client.isOpen) await client.quit();
@@ -84,34 +75,32 @@ describe.skipIf(!runDrivers)("realtime driver matrix services", () => {
 		);
 	});
 
-	test("SSE/pg-notify broadcasts collection and global wakes to every instance", async () => {
+	test("Postgres broadcasts every wake to every broker instance", async () => {
 		const channel = `questpie_rt_${crypto.randomUUID().replaceAll("-", "")}`;
-		const first = new PgNotifyAdapter({
+		const first = new PgNotifyChangeBroker({
 			connectionString: postgresUrl,
 			channel,
 		});
-		const second = new PgNotifyAdapter({
+		const second = new PgNotifyChangeBroker({
 			connectionString: postgresUrl,
 			channel,
 		});
-		adapters.push(first, second);
-		const received = [
-			receive(first, changes.length),
-			receive(second, changes.length),
-		];
+		brokers.push(first, second);
+		const receivers = await Promise.all([
+			startAndReceive(first, wakes.length),
+			startAndReceive(second, wakes.length),
+		]);
+		for (const wake of wakes) await first.publish(wake);
 
-		await Promise.all([first.start(), second.start()]);
-		await Promise.all([first.startPublisher(), second.startPublisher()]);
-		for (const change of changes) await first.notify(change);
-
-		const notices = await timeout(
-			Promise.all(received),
-			"pg-notify matrix delivery timed out",
-		);
-		expect(notices).toEqual([expectedNotices, expectedNotices]);
+		expect(
+			await timeout(
+				Promise.all(receivers.map(({ result }) => result)),
+				"pg-notify matrix delivery timed out",
+			),
+		).toEqual([wakes, wakes]);
 	});
 
-	test("SSE/redis streams broadcasts collection and global wakes to every instance", async () => {
+	test("Redis Streams broadcasts every wake to every broker instance", async () => {
 		const stream = `questpie:realtime:${crypto.randomUUID()}`;
 		const clients = [
 			createClient({ url: redisUrl }),
@@ -122,30 +111,28 @@ describe.skipIf(!runDrivers)("realtime driver matrix services", () => {
 			client.on("error", () => {});
 			await client.connect();
 		}
-		const first = new RedisStreamsAdapter({
+		const first = new RedisStreamsChangeBroker({
 			client: clients[0] as unknown as RedisStreamsClient,
 			stream,
 			blockMs: 100,
 		});
-		const second = new RedisStreamsAdapter({
+		const second = new RedisStreamsChangeBroker({
 			client: clients[1] as unknown as RedisStreamsClient,
 			stream,
 			blockMs: 100,
 		});
-		adapters.push(first, second);
-		const received = [
-			receive(first, changes.length),
-			receive(second, changes.length),
-		];
+		brokers.push(first, second);
+		const receivers = await Promise.all([
+			startAndReceive(first, wakes.length),
+			startAndReceive(second, wakes.length),
+		]);
+		for (const wake of wakes) await first.publish(wake);
 
-		await Promise.all([first.start(), second.start()]);
-		await new Promise((resolve) => setTimeout(resolve, 150));
-		for (const change of changes) await first.notify(change);
-
-		const notices = await timeout(
-			Promise.all(received),
-			"Redis matrix delivery timed out",
-		);
-		expect(notices).toEqual([expectedNotices, expectedNotices]);
+		expect(
+			await timeout(
+				Promise.all(receivers.map(({ result }) => result)),
+				"redis streams matrix delivery timed out",
+			),
+		).toEqual([wakes, wakes]);
 	});
 });

@@ -2,24 +2,23 @@ import { afterEach, describe, expect, it, spyOn } from "bun:test";
 
 import {
 	collection,
-	type RealtimeAdapter,
+	type ChangeBroker,
+	type ChangeBrokerState,
+	type ChangeWake,
 	type RealtimeChangeEvent,
-	type RealtimeNotice,
 } from "../../src/exports/index.js";
 import { PgNotifyChangeBroker } from "../../src/server/modules/core/integrated/realtime/adapters/pg-notify.js";
 import { RealtimeService } from "../../src/server/modules/core/integrated/realtime/service.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { runTestDbMigrations } from "../utils/test-db";
 
-class DroppingRealtimeAdapter implements RealtimeAdapter {
+class DroppingChangeBroker implements ChangeBroker {
 	readonly started: Promise<void>;
-	publisherStarts = 0;
+	startCalls = 0;
 	stops = 0;
 	private markStarted: () => void = () => {};
-	private noticeHandler: ((notice: RealtimeNotice) => void) | undefined;
-	private stateHandler:
-		| ((state: "connected" | "disconnected") => void)
-		| undefined;
+	private wakeHandler: ((wake: ChangeWake) => void) | undefined;
+	private stateHandler: ((state: ChangeBrokerState) => void) | undefined;
 
 	constructor() {
 		this.started = new Promise((resolve) => {
@@ -27,68 +26,49 @@ class DroppingRealtimeAdapter implements RealtimeAdapter {
 		});
 	}
 
-	async start(): Promise<void> {
+	async start(input: Parameters<ChangeBroker["start"]>[0]): Promise<void> {
+		this.startCalls += 1;
+		this.wakeHandler = input.onWake;
+		this.stateHandler = input.onStateChange;
 		this.markStarted();
-	}
-
-	async startPublisher(): Promise<void> {
-		this.publisherStarts += 1;
 	}
 
 	async stop(): Promise<void> {
 		this.stops += 1;
 	}
 
-	subscribe(handler: (notice: RealtimeNotice) => void): () => void {
-		this.noticeHandler = handler;
-		return () => {
-			this.noticeHandler = undefined;
-		};
-	}
-
-	async notify(_event: RealtimeChangeEvent): Promise<void> {
+	async publish(_wake: ChangeWake): Promise<void> {
 		// Simulate a broker that accepted but dropped the wake-up notice.
 	}
 
-	emit(notice: RealtimeNotice): void {
-		this.noticeHandler?.(notice);
+	emit(wake: ChangeWake): void {
+		this.wakeHandler?.(wake);
 	}
 
-	onStateChange(
-		handler: (state: "connected" | "disconnected") => void,
-	): () => void {
-		this.stateHandler = handler;
-		return () => {
-			this.stateHandler = undefined;
-		};
-	}
-
-	emitState(state: "connected" | "disconnected"): void {
+	emitState(state: ChangeBrokerState): void {
 		this.stateHandler?.(state);
 	}
 }
 
 class SharedWakeBroker {
-	private handlers = new Set<(notice: RealtimeNotice) => void>();
+	private handlers = new Set<(wake: ChangeWake) => void>();
 
-	subscribe(handler: (notice: RealtimeNotice) => void): () => void {
+	subscribe(handler: (wake: ChangeWake) => void): () => void {
 		this.handlers.add(handler);
 		return () => this.handlers.delete(handler);
 	}
 
-	publish(notice: RealtimeNotice): void {
-		for (const handler of this.handlers) handler(notice);
+	publish(wake: ChangeWake): void {
+		for (const handler of this.handlers) handler(wake);
 	}
 }
 
-class BrokerRealtimeAdapter implements RealtimeAdapter {
+class SharedChangeBroker implements ChangeBroker {
 	readonly listening: Promise<void>;
-	publisherStarts = 0;
-	localSubscriptions = 0;
+	startCalls = 0;
 	private markListening: () => void = () => {};
-	private publisherStarted = false;
 	private brokerUnsubscribe: (() => void) | undefined;
-	private handlers = new Set<(notice: RealtimeNotice) => void>();
+	private wakeHandler: ((wake: ChangeWake) => void) | undefined;
 
 	constructor(private broker: SharedWakeBroker) {
 		this.listening = new Promise((resolve) => {
@@ -96,15 +76,13 @@ class BrokerRealtimeAdapter implements RealtimeAdapter {
 		});
 	}
 
-	async startPublisher(): Promise<void> {
-		this.publisherStarts += 1;
-		this.publisherStarted = true;
-	}
-
-	async start(): Promise<void> {
-		this.brokerUnsubscribe ??= this.broker.subscribe((notice) => {
-			for (const handler of this.handlers) handler(notice);
-		});
+	async start(input: Parameters<ChangeBroker["start"]>[0]): Promise<void> {
+		this.startCalls += 1;
+		this.wakeHandler = input.onWake;
+		this.brokerUnsubscribe ??= this.broker.subscribe((wake) =>
+			this.wakeHandler?.(wake),
+		);
+		this.markListening();
 	}
 
 	async stop(): Promise<void> {
@@ -112,18 +90,8 @@ class BrokerRealtimeAdapter implements RealtimeAdapter {
 		this.brokerUnsubscribe = undefined;
 	}
 
-	async notify(event: RealtimeChangeEvent): Promise<void> {
-		if (!this.publisherStarted) {
-			throw new Error("publisher not started");
-		}
-		this.broker.publish(RealtimeService.noticeFromEvent(event));
-	}
-
-	subscribe(handler: (notice: RealtimeNotice) => void): () => void {
-		this.localSubscriptions += 1;
-		this.handlers.add(handler);
-		this.markListening();
-		return () => this.handlers.delete(handler);
+	async publish(wake: ChangeWake): Promise<void> {
+		this.broker.publish(wake);
 	}
 }
 
@@ -242,17 +210,23 @@ describe("realtime matrix reconciliation", () => {
 		}
 	});
 
-	it("G1: app boot starts the adapter publisher without a subscription", async () => {
-		const adapter = new DroppingRealtimeAdapter();
-		const setup = await buildMockApp({}, { realtime: { adapter } });
+	it("G1: app boot starts the broker without a subscription", async () => {
+		const adapter = new DroppingChangeBroker();
+		const setup = await buildMockApp(
+			{},
+			{ realtime: { changeBroker: adapter } },
+		);
 		cleanup = setup.cleanup;
 
-		expect(adapter.publisherStarts).toBe(1);
+		expect(adapter.startCalls).toBe(1);
 	});
 
 	it("G1: zero listeners keep the app-lifecycle publisher running", async () => {
-		const adapter = new DroppingRealtimeAdapter();
-		const setup = await buildMockApp({}, { realtime: { adapter } });
+		const adapter = new DroppingChangeBroker();
+		const setup = await buildMockApp(
+			{},
+			{ realtime: { changeBroker: adapter } },
+		);
 		cleanup = setup.cleanup;
 		await runTestDbMigrations(setup.app);
 		const unsubscribe = setup.app.realtime.subscribe(() => {}, {
@@ -265,20 +239,20 @@ describe("realtime matrix reconciliation", () => {
 		await flushMicrotasks();
 
 		expect(adapter.stops).toBe(0);
-		expect(adapter.publisherStarts).toBe(1);
+		expect(adapter.startCalls).toBe(1);
 	});
 
 	it("G1: a zero-subscriber instance wakes a second service instance", async () => {
 		const broker = new SharedWakeBroker();
-		const publisherAdapter = new BrokerRealtimeAdapter(broker);
-		const receiverAdapter = new BrokerRealtimeAdapter(broker);
+		const publisherAdapter = new SharedChangeBroker(broker);
+		const receiverAdapter = new SharedChangeBroker(broker);
 		const publisher = new RealtimeService(
 			new ControlledRealtimeReadDb() as never,
-			{ adapter: publisherAdapter, pollIntervalMs: 0 },
+			{ changeBroker: publisherAdapter, pollIntervalMs: 0 },
 		);
 		const receiverDb = new ControlledRealtimeReadDb();
 		const receiver = new RealtimeService(receiverDb as never, {
-			adapter: receiverAdapter,
+			changeBroker: receiverAdapter,
 			pollIntervalMs: 0,
 		});
 		cleanup = async () => {
@@ -307,12 +281,11 @@ describe("realtime matrix reconciliation", () => {
 		await flushMicrotasks();
 
 		expect(delivered).toEqual([change]);
-		expect(publisherAdapter.localSubscriptions).toBe(0);
-		expect(publisherAdapter.publisherStarts).toBe(1);
+		expect(publisherAdapter.startCalls).toBe(1);
 	});
 
-	it("G2: adapter mode defaults to a slow reconciliation poll", async () => {
-		const adapter = new DroppingRealtimeAdapter();
+	it("G2: broker mode defaults to a slow reconciliation poll", async () => {
+		const adapter = new DroppingChangeBroker();
 		const db = new ControlledRealtimeReadDb();
 		let scheduledDelay: number | undefined;
 		const intervalSpy = spyOn(globalThis, "setInterval").mockImplementation(
@@ -323,7 +296,9 @@ describe("realtime matrix reconciliation", () => {
 		);
 
 		try {
-			const realtime = new RealtimeService(db as never, { adapter });
+			const realtime = new RealtimeService(db as never, {
+				changeBroker: adapter,
+			});
 			cleanup = () => realtime.destroy();
 			realtime.subscribe(() => {}, {
 				resourceType: "collection",
@@ -338,21 +313,8 @@ describe("realtime matrix reconciliation", () => {
 		}
 	});
 
-	it("G2: adapter mode heals a dropped notice on the reconciliation poll", async () => {
-		const adapter = new DroppingRealtimeAdapter();
-		const setup = await buildMockApp(
-			{
-				collections: {
-					posts: collection("posts").fields(({ f }) => ({
-						title: f.text().required(),
-					})),
-				},
-			},
-			{ realtime: { adapter, pollIntervalMs: 25_000 } },
-		);
-		cleanup = setup.cleanup;
-		await runTestDbMigrations(setup.app);
-
+	it("G2: broker mode heals a dropped notice on the reconciliation poll", async () => {
+		const adapter = new DroppingChangeBroker();
 		let triggerPoll: (() => void) | undefined;
 		const intervalSpy = spyOn(globalThis, "setInterval").mockImplementation(
 			(handler, delay) => {
@@ -366,6 +328,18 @@ describe("realtime matrix reconciliation", () => {
 		);
 
 		try {
+			const setup = await buildMockApp(
+				{
+					collections: {
+						posts: collection("posts").fields(({ f }) => ({
+							title: f.text().required(),
+						})),
+					},
+				},
+				{ realtime: { changeBroker: adapter, pollIntervalMs: 25_000 } },
+			);
+			cleanup = setup.cleanup;
+			await runTestDbMigrations(setup.app);
 			const delivered = new Promise<RealtimeChangeEvent>((resolve) => {
 				setup.app.realtime.subscribe(resolve, {
 					resourceType: "collection",
@@ -373,7 +347,10 @@ describe("realtime matrix reconciliation", () => {
 				});
 			});
 			await adapter.started;
-			await Promise.resolve();
+			for (let attempt = 0; attempt < 100; attempt++) {
+				if (triggerPoll) break;
+				await new Promise((resolve) => setTimeout(resolve, 1));
+			}
 
 			expect(triggerPoll).toBeDefined();
 
@@ -395,10 +372,10 @@ describe("realtime matrix reconciliation", () => {
 	});
 
 	it("G2: a notice during the final drain read triggers another drain", async () => {
-		const adapter = new DroppingRealtimeAdapter();
+		const adapter = new DroppingChangeBroker();
 		const db = new ControlledRealtimeReadDb();
 		const realtime = new RealtimeService(db as never, {
-			adapter,
+			changeBroker: adapter,
 			pollIntervalMs: 0,
 		});
 		cleanup = () => realtime.destroy();
@@ -412,10 +389,9 @@ describe("realtime matrix reconciliation", () => {
 
 		const finalRead = db.pauseNextRead();
 		adapter.emit({
-			seq: 1,
-			resourceType: "collection",
-			resource: "posts",
-			operation: "create",
+			kind: "outbox-maybe-advanced",
+			highWaterSeq: 1,
+			reason: "publish",
 		});
 		await finalRead.reached;
 
@@ -430,7 +406,11 @@ describe("realtime matrix reconciliation", () => {
 			createdAt: new Date("2026-07-13T20:00:00.000Z"),
 		};
 		db.rows = [change];
-		adapter.emit(RealtimeService.noticeFromEvent(change));
+		adapter.emit({
+			kind: "outbox-maybe-advanced",
+			highWaterSeq: change.seq,
+			reason: "publish",
+		});
 		finalRead.release();
 		await flushMicrotasks();
 
@@ -438,10 +418,10 @@ describe("realtime matrix reconciliation", () => {
 	});
 
 	it("G2: reconnect triggers an immediate reconciliation drain", async () => {
-		const adapter = new DroppingRealtimeAdapter();
+		const adapter = new DroppingChangeBroker();
 		const db = new ControlledRealtimeReadDb();
 		const realtime = new RealtimeService(db as never, {
-			adapter,
+			changeBroker: adapter,
 			pollIntervalMs: 0,
 		});
 		cleanup = () => realtime.destroy();

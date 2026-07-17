@@ -2,10 +2,8 @@ import { asc, desc, gt, lt } from "drizzle-orm";
 
 import type { DrizzleClientFromQuestpieConfig } from "#questpie/server/config/types.js";
 import type { LoggerAdapter } from "#questpie/server/modules/core/integrated/logger/types.js";
-import { getNodeEnv } from "#questpie/server/utils/env.js";
 
-import type { RealtimeAdapter } from "./adapter.js";
-import { PgNotifyAdapter, PgNotifyChangeBroker } from "./adapters/pg-notify.js";
+import { PgNotifyChangeBroker } from "./adapters/pg-notify.js";
 import {
 	type AppendChannelEventInput,
 	type AppendChannelEventOptions,
@@ -45,9 +43,7 @@ import type {
 	RealtimeChangeEvent,
 	RealtimeChangePayload,
 	RealtimeConfig,
-	RealtimeDualRunComparison,
 	RealtimeErrorListener,
-	RealtimeNotice,
 	RealtimeOperation,
 	RealtimeResourceType,
 	RealtimeSubscriptionContext,
@@ -63,28 +59,6 @@ type AppendChangeOptions = {
 
 const DEFAULT_RETENTION_DAYS = 3;
 const DEFAULT_ADAPTER_RECONCILIATION_INTERVAL_MS = 15_000;
-let warnedLegacyRealtimeRuntime = false;
-
-function warnLegacyRealtimeRuntime(
-	config: RealtimeConfig,
-	logger?: Pick<LoggerAdapter, "warn">,
-): void {
-	if (
-		warnedLegacyRealtimeRuntime ||
-		getNodeEnv() === "test" ||
-		(!config.adapter &&
-			config.rollout?.mode !== "legacy" &&
-			config.rollout?.mode !== "dual" &&
-			!config.rollout?.onComparison)
-	) {
-		return;
-	}
-	warnedLegacyRealtimeRuntime = true;
-	const message =
-		"[Realtime] Legacy adapter/rollout configuration is deprecated in QuestPie 3.x and will be removed in QuestPie 4. Use realtime.changeBroker or the automatic Postgres v2 default.";
-	if (logger) logger.warn(message);
-	else console.warn(message);
-}
 
 type ListenerEntry = {
 	listener: RealtimeListener;
@@ -174,13 +148,8 @@ function analyzeWhere(where: any): {
 }
 
 export class RealtimeService {
-	private adapter?: RealtimeAdapter;
 	private changeBroker?: ChangeBroker;
 	private clientTransport?: ClientTransport;
-	private readonly transportMode: "legacy" | "v2" | "dual";
-	private readonly onDualRunComparison?: (
-		comparison: RealtimeDualRunComparison,
-	) => void;
 	private listeners = new Set<ListenerEntry>();
 	private directCollectionListeners = new Map<string, Set<ListenerEntry>>();
 	private directGlobalListeners = new Map<string, Set<ListenerEntry>>();
@@ -197,8 +166,6 @@ export class RealtimeService {
 	private publisherStarted = false;
 	private lastSeq = 0;
 	private pollTimer: ReturnType<typeof setInterval> | null = null;
-	private unsubscribeAdapter: (() => void) | null = null;
-	private unsubscribeAdapterState: (() => void) | null = null;
 	private subscriptionContext?: RealtimeSubscriptionContext;
 	private retentionDays?: number;
 	private retentionCleanupIntervalMs: number;
@@ -218,52 +185,19 @@ export class RealtimeService {
 		private pgConnectionString?: string,
 		private logger?: Pick<LoggerAdapter, "error" | "warn">,
 	) {
-		warnLegacyRealtimeRuntime(config, this.logger);
-		this.transportMode = config.rollout?.mode ?? "v2";
-		this.onDualRunComparison = config.rollout?.onComparison;
-		if (
-			this.transportMode === "dual" &&
-			(!config.adapter || !config.changeBroker)
-		) {
-			throw new Error(
-				'Realtime rollout mode "dual" requires both adapter and changeBroker',
-			);
-		}
-
-		let compatibleAdapter = config.adapter;
-		if (
-			!compatibleAdapter &&
-			this.pgConnectionString &&
-			this.transportMode === "legacy"
-		) {
-			compatibleAdapter = new PgNotifyAdapter({
-				connectionString: this.pgConnectionString,
-				channel: "questpie_realtime",
-			});
-		}
-		const compatibleBroker =
+		const broker =
 			config.changeBroker ??
-			(!config.adapter && this.pgConnectionString && this.transportMode === "v2"
+			(this.pgConnectionString
 				? new PgNotifyChangeBroker({
 						connectionString: this.pgConnectionString,
 					})
 				: undefined);
-
-		if (this.transportMode === "legacy") {
-			this.adapter = compatibleAdapter;
-		} else if (this.transportMode === "dual") {
-			this.adapter = config.adapter;
-			this.changeBroker = config.changeBroker;
-			this.clientTransport = config.clientTransport;
-		} else {
-			this.changeBroker = compatibleBroker;
-			this.adapter = this.changeBroker ? undefined : compatibleAdapter;
-			this.clientTransport = config.clientTransport;
-		}
+		this.changeBroker = broker;
+		this.clientTransport = config.clientTransport;
 		this.batchSize = config.batchSize ?? 500;
 		this.pollIntervalMs =
 			config.pollIntervalMs ??
-			(this.adapter || this.changeBroker || this.pgConnectionString
+			(this.changeBroker || this.pgConnectionString
 				? DEFAULT_ADAPTER_RECONCILIATION_INTERVAL_MS
 				: 2000);
 		this.configuredPollIntervalMs = this.pollIntervalMs;
@@ -454,78 +388,23 @@ export class RealtimeService {
 	}
 
 	async notify(event: RealtimeChangeEvent): Promise<void> {
-		if (!this.adapter && !this.changeBroker) return;
+		if (!this.changeBroker) return;
 		await this.initialize();
-		if (this.transportMode === "dual") {
-			const wake = {
-				kind: "outbox-maybe-advanced" as const,
+		await this.publishObserved(() =>
+			this.changeBroker!.publish({
+				kind: "outbox-maybe-advanced",
 				highWaterSeq: event.seq,
-				reason: "publish" as const,
-			};
-			const [legacyResult, v2Result] = await Promise.allSettled([
-				this.publishObserved("legacy", () => this.adapter!.notify(event)),
-				this.publishObserved("v2", () => this.changeBroker!.publish(wake)),
-			]);
-			const comparison: RealtimeDualRunComparison = {
-				seq: event.seq,
-				legacy: legacyResult.status === "fulfilled" ? "accepted" : "rejected",
-				v2: v2Result.status === "fulfilled" ? "accepted" : "rejected",
-				equivalent: legacyResult.status === v2Result.status,
-				...(legacyResult.status === "rejected"
-					? { legacyError: legacyResult.reason }
-					: {}),
-				...(v2Result.status === "rejected" ? { v2Error: v2Result.reason } : {}),
-			};
-			if (!comparison.equivalent) {
-				this.logger?.warn(
-					"[Realtime] Dual-run invalidation transports diverged",
-					comparison,
-				);
-			}
-			try {
-				this.onDualRunComparison?.(comparison);
-			} catch (error) {
-				this.logger?.warn(
-					"[Realtime] Dual-run comparison observer failed",
-					error,
-				);
-			}
-			if (
-				legacyResult.status === "rejected" &&
-				v2Result.status === "rejected"
-			) {
-				throw new AggregateError(
-					[legacyResult.reason, v2Result.reason],
-					"Both realtime dual-run invalidation transports failed",
-				);
-			}
-			return;
-		}
-		await Promise.all([
-			this.adapter
-				? this.publishObserved("legacy", () => this.adapter!.notify(event))
-				: undefined,
-			this.changeBroker
-				? this.publishObserved("v2", () =>
-						this.changeBroker!.publish({
-							kind: "outbox-maybe-advanced",
-							highWaterSeq: event.seq,
-							reason: "publish",
-						}),
-					)
-				: undefined,
-		]);
+				reason: "publish",
+			}),
+		);
 	}
 
-	private async publishObserved(
-		seam: "legacy" | "v2",
-		publish: () => Promise<void>,
-	): Promise<void> {
+	private async publishObserved(publish: () => Promise<void>): Promise<void> {
 		try {
 			await publish();
-			this.observe({ type: "broker.publish", seam, outcome: "accepted" });
+			this.observe({ type: "broker.publish", seam: "v2", outcome: "accepted" });
 		} catch (error) {
-			this.observe({ type: "broker.publish", seam, outcome: "failed" });
+			this.observe({ type: "broker.publish", seam: "v2", outcome: "failed" });
 			throw error;
 		}
 	}
@@ -538,7 +417,6 @@ export class RealtimeService {
 		}
 
 		this.publisherStartPromise = (async () => {
-			await this.adapter?.startPublisher?.();
 			await this.changeBroker?.start({
 				onWake: (wake) => {
 					if (wake.kind === "topology-maybe-advanced") {
@@ -612,17 +490,6 @@ export class RealtimeService {
 	}): Promise<{ generation: number; close(): Promise<void> }> {
 		await this.initialize();
 		return this.topologyCoordinator.open(input);
-	}
-
-	/** @internal Translate a 3.x delta request through durable topology state. */
-	async submitLegacyTopology(input: {
-		sessionId: string;
-		token: string;
-		identity: string;
-		frames: import("./sse-control.js").RealtimeControlFrame[];
-	}): Promise<RealtimeTopologyResult> {
-		await this.initialize();
-		return this.topologyCoordinator.submitLegacy(input);
 	}
 
 	/** @internal Commit one complete versioned desired topology. */
@@ -987,19 +854,6 @@ export class RealtimeService {
 			const latestSeq = await this.getLatestSeq();
 			await this.initialize();
 
-			if (this.adapter) {
-				await this.adapter.start();
-				this.unsubscribeAdapter = this.adapter.subscribe(() => {
-					this.drainSafely("broker");
-				});
-				this.unsubscribeAdapterState =
-					this.adapter.onStateChange?.((state) => {
-						if (state === "connected") {
-							this.drainSafely("reconnect");
-						}
-					}) ?? null;
-			}
-
 			this.startPollTimer();
 
 			this.lastSeq = latestSeq;
@@ -1013,27 +867,6 @@ export class RealtimeService {
 				if (this.pollTimer) {
 					clearInterval(this.pollTimer);
 					this.pollTimer = null;
-				}
-
-				if (this.unsubscribeAdapter) {
-					this.unsubscribeAdapter();
-					this.unsubscribeAdapter = null;
-				}
-
-				if (this.unsubscribeAdapterState) {
-					this.unsubscribeAdapterState();
-					this.unsubscribeAdapterState = null;
-				}
-
-				if (this.adapter) {
-					try {
-						await this.adapter.stop();
-					} catch (stopError) {
-						this.logger?.warn(
-							"[Realtime] Transport cleanup after failed startup failed",
-							stopError,
-						);
-					}
 				}
 
 				throw error;
@@ -1091,19 +924,6 @@ export class RealtimeService {
 			this.channelPollTimer = null;
 		}
 
-		if (this.unsubscribeAdapter) {
-			this.unsubscribeAdapter();
-			this.unsubscribeAdapter = null;
-		}
-
-		if (this.unsubscribeAdapterState) {
-			this.unsubscribeAdapterState();
-			this.unsubscribeAdapterState = null;
-		}
-
-		if (this.adapter) {
-			await this.adapter.stop();
-		}
 		this.channelEventLedger.destroy();
 		await this.changeBroker?.stop();
 		await this.clientTransport?.stop();
@@ -1263,14 +1083,5 @@ export class RealtimeService {
 		} finally {
 			this.retentionCleanupInProgress = false;
 		}
-	}
-
-	static noticeFromEvent(event: RealtimeChangeEvent): RealtimeNotice {
-		return {
-			seq: event.seq,
-			resourceType: event.resourceType,
-			resource: event.resource,
-			operation: event.operation,
-		};
 	}
 }

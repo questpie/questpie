@@ -106,21 +106,6 @@ async function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
 	}
 }
 
-function controlRequest(
-	session: { sessionId: unknown; token: unknown },
-	frames: Array<Record<string, unknown>>,
-) {
-	return new Request("http://localhost/realtime", {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
-			sessionId: session.sessionId,
-			token: session.token,
-			frames,
-		}),
-	});
-}
-
 function desiredRequest(
 	session: { sessionId: unknown; token: unknown },
 	revision: number,
@@ -273,8 +258,15 @@ test("applies topic additions and removals through a different app instance", as
 		await waitFor(() => first.app.realtime.listeners.size === 2);
 
 		const remove = await secondRoutes.realtime.subscribe(
-			controlRequest(session, [
-				{ type: "remove_topic", topicId: "items-added" },
+			desiredRequest(session, 2, [
+				{
+					id: "items-base",
+					topic: {
+						resourceType: "collection",
+						resource: "items",
+						where: { name: "base" },
+					},
+				},
 			]),
 			{},
 			undefined,
@@ -287,11 +279,9 @@ test("applies topic additions and removals through a different app instance", as
 		await waitFor(() => first.app.realtime.listeners.size === 1);
 
 		const swap = await secondRoutes.realtime.subscribe(
-			controlRequest(session, [
-				{ type: "remove_topic", topicId: "items-base" },
+			desiredRequest(session, 3, [
 				{
-					type: "add_topic",
-					topicId: "items-replacement",
+					id: "items-replacement",
 					topic: {
 						resourceType: "collection",
 						resource: "items",
@@ -302,7 +292,7 @@ test("applies topic additions and removals through a different app instance", as
 			{},
 			undefined,
 		);
-		expect(swap.status).toBe(204);
+		expect(swap.status).toBe(202);
 		await withTimeout(
 			reader.read("snapshot", "items-replacement"),
 			"cross-instance replacement snapshot",

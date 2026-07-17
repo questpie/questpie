@@ -1,15 +1,13 @@
 import type { Client, ClientConfig, Notification } from "pg";
 
-import type { RealtimeAdapter, RealtimeAdapterState } from "../adapter.js";
 import type {
 	ChangeBroker,
 	ChangeBrokerState,
 	ChangeWake,
 } from "../transport.js";
 import { normalizeChangeWake } from "../transport.js";
-import type { RealtimeChangeEvent, RealtimeNotice } from "../types.js";
 
-export type PgNotifyAdapterOptions = {
+export type PgNotifyChangeBrokerOptions = {
 	channel?: string;
 	/** Dedicated LISTEN connection. */
 	client?: Client;
@@ -17,28 +15,27 @@ export type PgNotifyAdapterOptions = {
 	publisherClient?: Client;
 	connection?: ClientConfig;
 	connectionString?: string;
-	onError?: (error: unknown) => void;
 	errorLogIntervalMs?: number;
 	reconnectInitialDelayMs?: number;
 	reconnectMaxDelayMs?: number;
 };
 
-export type PgNotifyChangeBrokerOptions = Omit<
-	PgNotifyAdapterOptions,
-	"onError"
->;
+type PgNotifyDriverOptions = PgNotifyChangeBrokerOptions & {
+	onError?: (error: unknown) => void;
+};
+type PgNotifyDriverState = "connected" | "disconnected";
 
 type ChangeBrokerStartInput = Parameters<ChangeBroker["start"]>[0];
 
 const PG_NOTIFY_MAX_PAYLOAD_BYTES = 8_000;
 
-export class PgNotifyAdapter implements RealtimeAdapter {
+class PgNotifyDriver {
 	private listenerClient: Client | null = null;
 	private publisherClient: Client | null = null;
 	private clientConfig?: ClientConfig;
 	private connectionString?: string;
 	private channel: string;
-	private listeners = new Set<(notice: RealtimeNotice) => void>();
+	private listeners = new Set<(payload: unknown) => void>();
 	private started = false;
 	private listenerConnected = false;
 	private publisherConnected = false;
@@ -49,7 +46,7 @@ export class PgNotifyAdapter implements RealtimeAdapter {
 	private readonly errorLogIntervalMs: number;
 	private readonly lastErrorLogAt = new Map<string, number>();
 	private readonly stateHandlers = new Set<
-		(state: RealtimeAdapterState) => void
+		(state: PgNotifyDriverState) => void
 	>();
 	private readonly reconnectInitialDelayMs: number;
 	private readonly reconnectMaxDelayMs: number;
@@ -61,7 +58,7 @@ export class PgNotifyAdapter implements RealtimeAdapter {
 	private publisherErrorHandler?: (error: Error) => void;
 	private publisherEndHandler?: () => void;
 
-	constructor(options: PgNotifyAdapterOptions = {}) {
+	constructor(options: PgNotifyDriverOptions = {}) {
 		this.channel = options.channel ?? "questpie_realtime";
 		this.onError =
 			options.onError ??
@@ -112,9 +109,9 @@ export class PgNotifyAdapter implements RealtimeAdapter {
 		await client.query(`LISTEN ${this.channel}`);
 		this.notificationHandler = (msg) => {
 			if (!msg.payload) return;
-			let notice: RealtimeNotice | null = null;
+			let notice: unknown;
 			try {
-				notice = JSON.parse(msg.payload) as RealtimeNotice;
+				notice = JSON.parse(msg.payload);
 			} catch {
 				return;
 			}
@@ -182,25 +179,16 @@ export class PgNotifyAdapter implements RealtimeAdapter {
 		if (publisherClient) this.detachPublisherLifecycle(publisherClient);
 	}
 
-	subscribe(handler: (notice: RealtimeNotice) => void): () => void {
+	subscribe(handler: (payload: unknown) => void): () => void {
 		this.listeners.add(handler);
 		return () => {
 			this.listeners.delete(handler);
 		};
 	}
 
-	onStateChange(handler: (state: RealtimeAdapterState) => void): () => void {
+	onStateChange(handler: (state: PgNotifyDriverState) => void): () => void {
 		this.stateHandlers.add(handler);
 		return () => this.stateHandlers.delete(handler);
-	}
-
-	async notify(event: RealtimeChangeEvent): Promise<void> {
-		await this.publishPayload({
-			seq: event.seq,
-			resourceType: event.resourceType,
-			resource: event.resource,
-			operation: event.operation,
-		});
 	}
 
 	protected async publishPayload(value: unknown): Promise<void> {
@@ -236,7 +224,7 @@ export class PgNotifyAdapter implements RealtimeAdapter {
 		this.onError(error);
 	}
 
-	private emitState(state: RealtimeAdapterState): void {
+	private emitState(state: PgNotifyDriverState): void {
 		for (const handler of this.stateHandlers) handler(state);
 	}
 
@@ -361,7 +349,7 @@ export class PgNotifyAdapter implements RealtimeAdapter {
 		}
 
 		throw new Error(
-			"PgNotifyAdapter requires a pg Client or connection config",
+			"PgNotifyChangeBroker requires a pg Client or connection config",
 		);
 	}
 
@@ -409,16 +397,9 @@ export class PgNotifyAdapter implements RealtimeAdapter {
 	}
 }
 
-/**
- * @deprecated Use `pgNotifyChangeBroker`, or omit `realtime.changeBroker` on a
- * Postgres app to use the automatic v2 default. Removed in QuestPie 4.
- */
-export const pgNotifyAdapter = (options: PgNotifyAdapterOptions = {}) =>
-	new PgNotifyAdapter(options);
-
 /** Postgres LISTEN/NOTIFY implementation of the Realtime v2 notice-only seam. */
 export class PgNotifyChangeBroker
-	extends PgNotifyAdapter
+	extends PgNotifyDriver
 	implements ChangeBroker
 {
 	private brokerActive = false;
