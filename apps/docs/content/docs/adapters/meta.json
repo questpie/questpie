@@ -5,7 +5,6 @@
 		"queue",
 		"search",
 		"realtime",
-		"realtime-v2-migration",
 		"storage",
 		"email",
 		"kv",

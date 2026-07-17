@@ -41,8 +41,6 @@ type SSEConnection = {
 	aborted: boolean;
 };
 
-type ControlFrame = { type: string; topicId: string; topic?: unknown };
-
 async function waitFor(assertion: () => boolean, timeoutMs = 3000) {
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
@@ -55,13 +53,13 @@ async function waitFor(assertion: () => boolean, timeoutMs = 3000) {
 describe("client live queries", () => {
 	let originalFetch: typeof globalThis.fetch;
 	let connections: SSEConnection[];
-	let controlFrames: ControlFrame[];
+	let controlTopologies: Array<Record<string, any>>;
 	let client: ReturnType<typeof createClient<any>>;
 
 	beforeEach(() => {
 		originalFetch = globalThis.fetch;
 		connections = [];
-		controlFrames = [];
+		controlTopologies = [];
 
 		globalThis.fetch = (async (
 			input: RequestInfo | URL,
@@ -74,8 +72,8 @@ describe("client live queries", () => {
 
 			const payload = JSON.parse(String(init?.body));
 			if (payload.sessionId) {
-				controlFrames.push(...payload.frames);
-				return new Response(null, { status: 204 });
+				controlTopologies.push(payload.topology);
+				return Response.json({ status: "accepted" }, { status: 202 });
 			}
 			const { topics } = payload;
 			let controller!: ReadableStreamDefaultController<Uint8Array>;
@@ -124,7 +122,7 @@ describe("client live queries", () => {
 			connections.push(connection);
 			controller.enqueue(
 				encoder.encode(
-					`event: session\ndata: ${JSON.stringify({ sessionId: `session-${connections.length}`, token: `token-${connections.length}` })}\n\n`,
+					`event: session\ndata: ${JSON.stringify({ sessionId: `session-${connections.length}`, token: `token-${connections.length}`, control: { protocol: "questpie-realtime-topology", versions: [1] } })}\n\n`,
 				),
 			);
 			return new Response(body, {
@@ -184,14 +182,10 @@ describe("client live queries", () => {
 		await waitFor(() => snapshots.length === 2);
 		expect(snapshots[1]).toEqual(second);
 
-		// Unsubscribe stops delivery through one incremental remove frame.
+		// Removing the last topic closes locally without a control request.
 		stop();
-		await waitFor(() =>
-			controlFrames.some(
-				(frame) => frame.type === "remove_topic" && frame.topicId === topicId,
-			),
-		);
-		expect(connection.aborted).toBe(false);
+		await waitFor(() => connection.aborted);
+		expect(controlTopologies).toHaveLength(0);
 		connection.sendSnapshot(topicId, 3, { docs: [], totalDocs: 0 });
 		await new Promise((resolve) => setTimeout(resolve, 50));
 		expect(snapshots).toHaveLength(2);
@@ -226,25 +220,23 @@ describe("client live queries", () => {
 		multiplexer.destroy();
 	});
 
-	it("adds one mounted topic with one control frame and no reconnect", async () => {
+	it("adds one mounted topic with desired topology and no reconnect", async () => {
 		const stopPosts = client.collections.posts.live({}, () => {});
 		await waitFor(() => connections.length === 1);
 		await new Promise((resolve) => setTimeout(resolve, 20));
 
 		const stopPages = client.collections.pages.live({}, () => {});
 		await waitFor(() =>
-			controlFrames.some(
-				(frame) =>
-					frame.type === "add_topic" &&
-					(frame.topic as any)?.resource === "pages",
+			controlTopologies.some((topology) =>
+				topology.topics.some((entry: any) => entry.topic.resource === "pages"),
 			),
 		);
 
 		expect(connections).toHaveLength(1);
 		expect(connections[0].aborted).toBe(false);
-		expect(
-			controlFrames.filter((frame) => frame.type === "add_topic"),
-		).toHaveLength(1);
+		expect(controlTopologies).toHaveLength(1);
+		expect(controlTopologies[0].protocol).toBe("questpie-realtime-topology");
+		expect(controlTopologies[0].topics).toHaveLength(2);
 
 		stopPages();
 		stopPosts();

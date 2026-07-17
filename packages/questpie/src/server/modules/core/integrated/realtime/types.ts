@@ -1,4 +1,3 @@
-import type { RealtimeAdapter } from "./adapter.js";
 import type { ChangeBroker, ClientTransport } from "./transport.js";
 
 export type RealtimeResourceType = "collection" | "global";
@@ -44,38 +43,6 @@ export type RealtimeChangeEvent = {
 /** Called when realtime delivery fails and the subscriber should reconnect. */
 export type RealtimeErrorListener = (error: unknown) => void;
 
-export type RealtimeNotice = Pick<
-	RealtimeChangeEvent,
-	"seq" | "resourceType" | "resource" | "operation"
->;
-
-/** @deprecated `legacy` and `dual` are 3.x rollback aids removed in QuestPie 4. */
-export type LegacyRealtimeTransportMode = "legacy" | "dual";
-export type RealtimeTransportMode = "v2" | LegacyRealtimeTransportMode;
-
-/** @deprecated Dual-run comparison is a 3.x migration aid removed in QuestPie 4. */
-export type RealtimeDualRunComparison = {
-	/** Durable outbox sequence published through both invalidation paths. */
-	seq: number;
-	legacy: "accepted" | "rejected";
-	v2: "accepted" | "rejected";
-	/** Whether both transports returned the same acceptance result. */
-	equivalent: boolean;
-	legacyError?: unknown;
-	v2Error?: unknown;
-};
-
-export type RealtimeRolloutConfig = {
-	/**
-	 * `legacy` is the rollback path, `v2` selects the new seams, and `dual`
-	 * shadows invalidation through both paths without duplicating client frames.
-	 * @default "v2"
-	 */
-	mode?: RealtimeTransportMode;
-	/** @deprecated Dual-run comparison hooks are removed in QuestPie 4. */
-	onComparison?: (comparison: RealtimeDualRunComparison) => void;
-};
-
 /**
  * Topics for realtime subscriptions.
  * Supports hierarchical filtering via WHERE clause and automatic dependency tracking.
@@ -119,18 +86,10 @@ export type RealtimeSubscriptionContext = {
 export interface RealtimeConfig {
 	/** Diagnostic event sink. Observer failures are isolated from delivery. */
 	observer?: import("./observer.js").RealtimeObserver;
-	/** Compatibility, canary, and rollback selection. */
-	rollout?: RealtimeRolloutConfig;
 	/** Realtime edge-session admission limits. */
 	admission?: Partial<import("./admission.js").RealtimeAdmissionConfig>;
 	/** Optional maximum random delay before accepting a new edge session. */
 	connectionAcceptPacingMs?: number;
-	/**
-	 * Optional transport adapter (pg_notify, redis streams, etc.).
-	 * @deprecated Use `changeBroker`. This compatibility path remains in 3.x and
-	 * is removed in QuestPie 4.
-	 */
-	adapter?: RealtimeAdapter;
 	/** Cross-instance notice seam used by Realtime v2 transports. */
 	changeBroker?: ChangeBroker;
 	/** Edge delivery seam shared by live queries and typed channels. */
@@ -147,10 +106,10 @@ export interface RealtimeConfig {
 	channelSecurity?: import("#questpie/server/channels/security.js").ChannelSecurityConfig;
 
 	/**
-	 * Reconciliation poll interval in ms. Polling runs alongside adapters so a
+	 * Reconciliation poll interval in ms. Polling runs alongside brokers so a
 	 * dropped wake-up notice cannot stall delivery indefinitely.
 	 *
-	 * @default 15000 with an adapter; 2000 without one
+	 * @default 15000 with a broker or Postgres connection; 2000 without one
 	 */
 	pollIntervalMs?: number;
 

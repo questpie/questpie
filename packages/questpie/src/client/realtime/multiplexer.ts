@@ -26,7 +26,7 @@ type TopicCommon = {
 export type TopicConfig =
 	| (TopicCommon & {
 			resourceType: "collection";
-			/** Omitted by legacy callers and normalized to `find` by the server. */
+			/** Omitted values default to `find` on the server. */
 			operation?: "find";
 			where?: Record<string, unknown>;
 			with?: Record<string, unknown>;
@@ -47,7 +47,7 @@ export type TopicConfig =
 	  })
 	| (TopicCommon & {
 			resourceType: "global";
-			/** Omitted by legacy callers and normalized to `get` by the server. */
+			/** Omitted values default to `get` on the server. */
 			operation?: "get";
 			where?: Record<string, unknown>;
 			with?: Record<string, unknown>;
@@ -90,19 +90,10 @@ function toRealtimeError(payload: unknown): Error | null {
 		: null;
 }
 
-type ControlFrame =
-	| {
-			type: "add_topic";
-			topicId: string;
-			topic: TopicConfig;
-			sinceSeq?: number;
-	  }
-	| { type: "remove_topic"; topicId: string };
-
 type ControlSession = {
 	sessionId: string;
 	token: string;
-	control?: {
+	control: {
 		protocol: "questpie-realtime-topology";
 		versions: number[];
 	};
@@ -173,7 +164,7 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 	private reconnectPending = false;
 	private watchdogTriggered = false;
 	private controlSession: ControlSession | null = null;
-	private pendingControlFrames: ControlFrame[] = [];
+	private pendingControlTopicIds = new Set<string>();
 	private controlOperation: Promise<void> = Promise.resolve();
 	private controlFlushScheduled = false;
 	private desiredRevision = 0;
@@ -216,14 +207,7 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		if (!this.subscribers.has(topicId)) {
 			this.subscribers.set(topicId, new Set());
 			this.topics.set(topicId, topic);
-			this.applyTopologyChange({
-				type: "add_topic",
-				topicId,
-				topic,
-				...(this.lastSeq.has(topicId)
-					? { sinceSeq: this.lastSeq.get(topicId) }
-					: {}),
-			});
+			this.applyTopologyChange(topicId);
 		}
 
 		this.subscribers.get(topicId)!.add(callback);
@@ -254,7 +238,7 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 				this.topics.delete(topicId);
 				this.customIds.delete(topicHash);
 				this.lastSeq.delete(topicId);
-				this.applyTopologyChange({ type: "remove_topic", topicId });
+				this.applyTopologyChange(topicId);
 			}
 		};
 
@@ -281,12 +265,12 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		return realtimeTopicId(topic);
 	}
 
-	private applyTopologyChange(frame: ControlFrame): void {
+	private applyTopologyChange(topicId: string): void {
 		if (this.destroyed) return;
+		this.pendingControlTopicIds.add(topicId);
 		if (this.controlSession) {
-			this.pendingControlFrames.push(frame);
-			if (this.supportsDesiredTopology() && this.topics.size === 0) {
-				this.pendingControlFrames = [];
+			if (this.topics.size === 0) {
+				this.pendingControlTopicIds.clear();
 				this.abortController?.abort();
 				return;
 			}
@@ -294,17 +278,9 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 			return;
 		}
 		if (this.connecting) {
-			this.pendingControlFrames.push(frame);
 			return;
 		}
 		this.scheduleReconnect();
-	}
-
-	private supportsDesiredTopology(): boolean {
-		return Boolean(
-			this.controlSession?.control?.protocol === "questpie-realtime-topology" &&
-			this.controlSession.control.versions.includes(1),
-		);
 	}
 
 	private scheduleControlFlush(): void {
@@ -312,29 +288,26 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		this.controlFlushScheduled = true;
 		queueMicrotask(() => {
 			this.controlFlushScheduled = false;
-			this.flushControlFrames();
+			this.flushDesiredTopology();
 		});
 	}
 
-	private flushControlFrames(): void {
-		if (!this.controlSession || this.pendingControlFrames.length === 0) return;
+	private flushDesiredTopology(): void {
+		if (!this.controlSession || this.pendingControlTopicIds.size === 0) return;
 		const session = this.controlSession;
-		const frames = this.pendingControlFrames.splice(0);
-		const useDesiredTopology = this.supportsDesiredTopology();
-		const revision = useDesiredTopology ? ++this.desiredRevision : 0;
-		const topology = useDesiredTopology
-			? {
-					protocol: "questpie-realtime-topology" as const,
-					version: 1 as const,
-					revision,
-					topics: [...this.topics.entries()].map(([id, topic]) => ({
-						id,
-						topic,
-						...(this.lastSeq.has(id) ? { sinceSeq: this.lastSeq.get(id) } : {}),
-					})),
-					channels: [],
-				}
-			: undefined;
+		const affectedTopicIds = [...this.pendingControlTopicIds];
+		this.pendingControlTopicIds.clear();
+		const topology = {
+			protocol: "questpie-realtime-topology" as const,
+			version: 1 as const,
+			revision: ++this.desiredRevision,
+			topics: [...this.topics.entries()].map(([id, topic]) => ({
+				id,
+				topic,
+				...(this.lastSeq.has(id) ? { sinceSeq: this.lastSeq.get(id) } : {}),
+			})),
+			channels: [],
+		};
 		this.controlOperation = this.controlOperation
 			.then(async () => {
 				const authHeaders = await this.getAuthHeaders?.();
@@ -344,7 +317,7 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 					body: JSON.stringify({
 						sessionId: session.sessionId,
 						token: session.token,
-						...(topology ? { topology } : { frames }),
+						topology,
 					}),
 					credentials: this.withCredentials ? "include" : "omit",
 				});
@@ -364,8 +337,8 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 					this.rejectTopic(normalized);
 					return;
 				}
-				for (const frame of frames)
-					this.notifyTopicError(frame.topicId, normalized);
+				for (const topicId of affectedTopicIds)
+					this.notifyTopicError(topicId, normalized);
 				this.reconnectPending = true;
 				this.abortController?.abort();
 			});
@@ -454,7 +427,7 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		this.connecting = true;
 		this.abortController = new AbortController();
 		this.controlSession = null;
-		this.pendingControlFrames = [];
+		this.pendingControlTopicIds.clear();
 		this.controlOperation = Promise.resolve();
 		this.controlFlushScheduled = false;
 		this.desiredRevision = 0;
@@ -594,9 +567,21 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		} else if (event.type === "session") {
 			try {
 				const session = JSON.parse(event.data) as ControlSession;
-				if (session.sessionId && session.token) {
+				if (
+					session.sessionId &&
+					session.token &&
+					session.control?.protocol === "questpie-realtime-topology" &&
+					session.control.versions.includes(1)
+				) {
 					this.controlSession = session;
 					this.scheduleControlFlush();
+				} else {
+					this.notifyTopicError(
+						"*",
+						new Error("Realtime server does not support desired topology v1"),
+					);
+					this.reconnectPending = true;
+					this.abortController?.abort();
 				}
 			} catch {
 				// Ignore malformed control metadata.
@@ -672,7 +657,7 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		this.topics.clear();
 		this.lastSeq.clear();
 		this.customIds.clear();
-		this.pendingControlFrames = [];
+		this.pendingControlTopicIds.clear();
 		this.controlFlushScheduled = false;
 		this.controlSession = null;
 	}

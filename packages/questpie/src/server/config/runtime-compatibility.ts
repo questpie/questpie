@@ -47,11 +47,6 @@ function isCloudflareRuntimeAdapter(adapter: unknown): boolean {
 	return (adapter as { runtime?: unknown }).runtime === "cloudflare";
 }
 
-const TCP_REALTIME_ADAPTERS = new Set([
-	"PgNotifyAdapter",
-	"RedisStreamsAdapter",
-]);
-
 export function getCloudflareCompatibilityIssues(
 	config: QuestpieConfig,
 ): CloudflareCompatibilityIssue[] {
@@ -113,24 +108,6 @@ export function getCloudflareCompatibilityIssues(
 			path: "kv.adapter",
 			message:
 				'Cloudflare Workers require a Cloudflare KV adapter. Use cloudflareKVAdapter or a custom adapter with runtime: "cloudflare".',
-		});
-	}
-
-	const realtimeAdapterName = getAdapterName(config.realtime?.adapter);
-	if (!config.realtime?.adapter) {
-		issues.push({
-			path: "realtime.adapter",
-			message:
-				"Cloudflare Workers require an explicit realtime adapter. Use cloudflareRealtimeAdapter with a Durable Object namespace binding.",
-		});
-	} else if (
-		TCP_REALTIME_ADAPTERS.has(realtimeAdapterName) ||
-		!isCloudflareRuntimeAdapter(config.realtime.adapter)
-	) {
-		issues.push({
-			path: "realtime.adapter",
-			message:
-				"Cloudflare Workers require a Cloudflare realtime adapter. pg_notify, Redis Streams, and polling fallbacks are not supported.",
 		});
 	}
 

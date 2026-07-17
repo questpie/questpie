@@ -41,6 +41,11 @@ const unsubscribe = client.collections.posts.live(
 
 The first callback receives the current snapshot. Later invalidations refresh only subscriptions affected by the changed collection, global, locale, stage, and query scope.
 
+Every refresh is a complete snapshot rather than a delta. The default
+`maxFindLimit` is `100` per snapshot; oversized topics are rejected instead of
+silently clamped or split. Keep large or paginated read models on bounded normal
+reads, or use a purpose-built channel/projection flow for their update signal.
+
 See [Client realtime](/docs/client/realtime) for `live()`, `liveIter()`, lifecycle options, and TanStack Query integration.
 
 ## Channels
@@ -62,9 +67,13 @@ See [Channels](/docs/client/channels) for authorization, publishing, subscriptio
 
 ## Connections and scaling
 
-Clients multiplex subscriptions over a shared connection. A broker distributes invalidations across app instances; a transport carries updates to browsers.
+Clients multiplex subscriptions over a shared connection. A broker distributes invalidations across app instances; a transport carries updates to browsers. The default Postgres path works across replicas without requiring Redis.
 
-Single-instance development can use the built-in path. Multi-instance deployments choose a shared broker or managed transport that matches their topology.
+Desired topic/channel topology is stored durably with revisions, owner leases,
+and fencing. After the generated topology migration is applied and every
+request-handling replica supports desired topology protocol v1, topology
+updates, reconnect, and resume may hit any replica. Sticky affinity is not a
+steady-state HA requirement and should be removed after rollout verification.
 
 ## Consistency and delivery
 
@@ -74,7 +83,7 @@ Design handlers to tolerate duplicate wake-ups. Persist business facts before pu
 
 ## Choose a transport
 
-The realtime configuration selects polling, Postgres notifications, Redis Streams, Pusher/Soketi, or Cloudflare delivery without changing application subscriptions.
+The realtime configuration selects polling, Postgres notifications, Redis Streams, or Pusher/Soketi without changing application subscriptions.
 
 See [Realtime adapters](/docs/adapters/realtime) for topology, admission, outbox settings, transport configuration, and custom contracts.
 
@@ -84,4 +93,3 @@ See [Realtime adapters](/docs/adapters/realtime) for topology, admission, outbox
 - [Channels](/docs/client/channels), typed application events and presence.
 - [Reactive apps](/docs/client/reactive-apps), subscription sizing and React performance.
 - [Realtime adapters](/docs/adapters/realtime), server transport and broker selection.
-- [Realtime v2 HA migration](/docs/adapters/realtime-v2-migration), schema rollout, mixed versions, and 3.x deprecations.

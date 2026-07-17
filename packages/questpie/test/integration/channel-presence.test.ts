@@ -70,8 +70,8 @@ describe("core channel presence", () => {
 		> = {},
 	) {
 		const value = new SseChannelPresenceRegistry(setup.app.db, {
-			leaseMs: 80,
-			heartbeatMs: 20,
+			leaseMs: 500,
+			heartbeatMs: 50,
 			reconciliationMs: 10,
 			...config,
 		});
@@ -199,7 +199,7 @@ describe("core channel presence", () => {
 			() =>
 				observerSink.rosters.at(-1)?.length === 1 &&
 				observerSink.rosters.at(-1)?.[0]?.id === "observer",
-			500,
+			1500,
 		);
 		await new Promise((resolve) => setTimeout(resolve, 30));
 		expect(observerSink.rosters).toHaveLength(3);

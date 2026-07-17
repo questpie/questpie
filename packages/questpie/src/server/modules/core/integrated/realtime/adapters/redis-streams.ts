@@ -1,11 +1,16 @@
-import type { RealtimeAdapter } from "../adapter.js";
 import {
 	type ChangeBroker,
 	type ChangeBrokerState,
 	type ChangeWake,
 	normalizeChangeWake,
 } from "../transport.js";
-import type { RealtimeChangeEvent, RealtimeNotice } from "../types.js";
+
+type RedisStreamsPayload = {
+	seq: number;
+	resourceType: "collection" | "global";
+	resource: string;
+	operation: "create" | "update" | "delete" | "bulk_update" | "bulk_delete";
+};
 
 export type RedisStreamsClient = {
 	xAdd: (
@@ -34,15 +39,11 @@ export type RedisStreamsClient = {
 	off?: (event: "error", handler: (error: unknown) => void) => unknown;
 };
 
-export type RedisStreamsAdapterOptions = {
+export type RedisStreamsChangeBrokerOptions = {
 	client: RedisStreamsClient;
 	/** Dedicated blocking-read connection. Node-redis clients are duplicated automatically. */
 	reader?: RedisStreamsClient;
 	stream?: string;
-	/** @deprecated Consumer groups are no longer used because they load-balance wakes. */
-	group?: string;
-	/** @deprecated Each adapter instance now owns an independent XREAD cursor. */
-	consumer?: string;
 	blockMs?: number;
 	batchSize?: number;
 	maxLen?: number;
@@ -50,8 +51,7 @@ export type RedisStreamsAdapterOptions = {
 	onError?: (error: unknown) => void;
 };
 
-/** @deprecated Use `RedisStreamsChangeBroker`. Removed in QuestPie 4. */
-export class RedisStreamsAdapter implements RealtimeAdapter {
+class RedisStreamsDriver {
 	private client: RedisStreamsClient;
 	private providedReader?: RedisStreamsClient;
 	private reader: RedisStreamsClient | null = null;
@@ -63,12 +63,12 @@ export class RedisStreamsAdapter implements RealtimeAdapter {
 	private maxLen: number;
 	private retryDelayMs: number;
 	private onError?: (error: unknown) => void;
-	private listeners = new Set<(notice: RealtimeNotice) => void>();
+	private listeners = new Set<(notice: RedisStreamsPayload) => void>();
 	private running = false;
 	private readLoopPromise: Promise<void> | null = null;
 	private stopPromise: Promise<void> | null = null;
 
-	constructor(options: RedisStreamsAdapterOptions) {
+	constructor(options: RedisStreamsChangeBrokerOptions) {
 		this.client = options.client;
 		this.providedReader = options.reader;
 		this.stream = options.stream ?? "questpie:realtime";
@@ -130,14 +130,14 @@ export class RedisStreamsAdapter implements RealtimeAdapter {
 		return this.stopPromise;
 	}
 
-	subscribe(handler: (notice: RealtimeNotice) => void): () => void {
+	subscribe(handler: (notice: RedisStreamsPayload) => void): () => void {
 		this.listeners.add(handler);
 		return () => {
 			this.listeners.delete(handler);
 		};
 	}
 
-	async notify(event: RealtimeChangeEvent): Promise<void> {
+	async publishNotice(event: RedisStreamsPayload): Promise<void> {
 		await this.client.xAdd(
 			this.stream,
 			"*",
@@ -313,7 +313,7 @@ export class RedisStreamsAdapter implements RealtimeAdapter {
 		return result;
 	}
 
-	private noticeFromFields(fields: any): RealtimeNotice | null {
+	private noticeFromFields(fields: any): RedisStreamsPayload | null {
 		const normalized = this.normalizeFields(fields);
 		const seq = Number(normalized.seq);
 		if (!Number.isFinite(seq)) return null;
@@ -327,20 +327,16 @@ export class RedisStreamsAdapter implements RealtimeAdapter {
 	}
 }
 
-/** @deprecated Use `redisStreamsChangeBroker`. Removed in QuestPie 4. */
-export const redisStreamsAdapter = (options: RedisStreamsAdapterOptions) =>
-	new RedisStreamsAdapter(options);
-
 /** Redis Streams implementation of the Realtime v2 notice-only seam. */
 export class RedisStreamsChangeBroker implements ChangeBroker {
-	private readonly adapter: RedisStreamsAdapter;
+	private readonly driver: RedisStreamsDriver;
 	private setErrorHandler: (handler: (error: unknown) => void) => void;
 	private unsubscribe?: () => void;
 	private active = false;
 
-	constructor(options: RedisStreamsAdapterOptions) {
+	constructor(options: RedisStreamsChangeBrokerOptions) {
 		let errorHandler = (_error: unknown) => {};
-		this.adapter = new RedisStreamsAdapter({
+		this.driver = new RedisStreamsDriver({
 			...options,
 			stream: options.stream ?? "questpie:realtime:v2",
 			onError: (error) => errorHandler(error),
@@ -358,7 +354,7 @@ export class RedisStreamsChangeBroker implements ChangeBroker {
 		if (this.active) return;
 		this.active = true;
 		this.setErrorHandler(input.onError);
-		this.unsubscribe = this.adapter.subscribe((notice) => {
+		this.unsubscribe = this.driver.subscribe((notice) => {
 			let wake: ChangeWake | null = null;
 			try {
 				wake = normalizeChangeWake(JSON.parse(notice.resource));
@@ -371,7 +367,7 @@ export class RedisStreamsChangeBroker implements ChangeBroker {
 		input.onStateChange?.("connecting");
 
 		try {
-			await this.adapter.start();
+			await this.driver.start();
 			input.onStateChange?.("connected");
 		} catch (error) {
 			input.onError(error);
@@ -387,7 +383,7 @@ export class RedisStreamsChangeBroker implements ChangeBroker {
 		}
 		const normalized = normalizeChangeWake(wake);
 		if (!normalized) throw new Error("Invalid ChangeWake payload");
-		await this.adapter.notify({
+		await this.driver.publishNotice({
 			seq:
 				normalized.kind === "outbox-maybe-advanced"
 					? (normalized.highWaterSeq ?? 0)
@@ -397,13 +393,12 @@ export class RedisStreamsChangeBroker implements ChangeBroker {
 			resourceType: "global",
 			resource: JSON.stringify(normalized),
 			operation: "update",
-			createdAt: new Date(),
 		});
 	}
 
 	async stop(): Promise<void> {
 		if (!this.active) return;
-		await this.adapter.stop();
+		await this.driver.stop();
 		this.reset();
 	}
 
@@ -415,5 +410,6 @@ export class RedisStreamsChangeBroker implements ChangeBroker {
 	}
 }
 
-export const redisStreamsChangeBroker = (options: RedisStreamsAdapterOptions) =>
-	new RedisStreamsChangeBroker(options);
+export const redisStreamsChangeBroker = (
+	options: RedisStreamsChangeBrokerOptions,
+) => new RedisStreamsChangeBroker(options);

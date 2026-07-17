@@ -46,7 +46,7 @@ that need history persist messages in a collection.
 
 ## Seam 1: `ChangeBroker`
 
-The interface is deliberately smaller than today's `RealtimeAdapter`:
+The broker interface is notice-only and carries no snapshots or query payloads:
 
 ```ts
 export type ChangeWake =
@@ -270,24 +270,25 @@ export type RealtimeTopic =
 			locale?: string;
 	  };
 
-export type AddTopicFrame = {
-	type: "add_topic";
-	topicId: string;
+export type RealtimeDesiredTopicV1 = {
+	id: string;
 	topic: RealtimeTopic;
 	sinceSeq?: number;
 };
 
-export type RemoveTopicFrame = {
-	type: "remove_topic";
-	topicId: string;
+export type RealtimeTopologyControlV1 = {
+	protocol: "questpie-realtime-topology";
+	version: 1;
+	revision: number;
+	topics: RealtimeDesiredTopicV1[];
+	channels: RealtimeDesiredChannelV1[];
 };
 ```
 
-`topicId` is unique within an edge session. Normalized topic content, not a
-truncated hash, forms the scheduler topic key. An add is admitted and authorized
-before registration. A remove immediately cancels queued work and releases its
-reference to the scheduler entry. Re-adding the same id replaces nothing: the
-client must remove first or receives a conflict error.
+Each desired topic `id` is unique within an edge session. Normalized topic content, not a
+truncated hash, forms the scheduler topic key. Every control request submits the
+complete desired topology. The owner admits and authorizes additions before
+applying one diff, cancels removals, and keeps unchanged subscriptions mounted.
 
 Snapshots use `{ type: "snapshot", topicId, seq, data, reset }`. `count` returns
 a number and never fetches documents. `get` returns one access-filtered record or
@@ -430,9 +431,9 @@ close the edge session.
 
 ## Protocol and privacy
 
-Logical client control frames are `add_topic`, `remove_topic`, channel
-subscribe/unsubscribe, and channel resume. Physical encoding may be SSE control
-HTTP or managed-WS APIs, but authorization and state transitions are identical.
+Client control submits complete desired topology protocol v1 over SSE control
+HTTP or managed-provider control. Authorization and state transitions are
+identical across both delivery transports.
 Server frames are versioned and include `snapshot`, `channel_event`,
 `channel_gap`, `topic_error`, `ping`, and terminal `close`.
 
@@ -787,12 +788,10 @@ can select `redisStreamsChangeBroker`; neither broker is the durable topology
 store. Generic KV is not a coordinator and load-balancer affinity is not part
 of the correctness contract.
 
-QuestPie 3.x continues accepting legacy delta frames and maps them into durable
-desired state. `RealtimeAdapter`, `realtime.adapter`, `pgNotifyAdapter`,
-`redisStreamsAdapter`, and `legacy`/`dual` rollout modes are deprecated through
-3.x and removed in QuestPie 4. Mixed-version fleets may reconnect; the
-cross-replica no-reconnect guarantee begins only after the topology migration
-and every request-handling replica supports desired-topology v1.
+QuestPie 4 accepts only desired topology protocol v1 and uses `ChangeBroker` as
+the only cross-instance wake seam. All request-handling replicas and clients are
+upgraded together across this major-version boundary. After the topology
+migration and multi-pod verification, load-balancer affinity is removed.
 
 ## Defect mapping
 

@@ -14,7 +14,7 @@ export type RealtimeObservation =
 	  }
 	| {
 			type: "broker.publish";
-			seam: "legacy" | "v2";
+			seam: "v2";
 			outcome: "accepted" | "failed";
 	  }
 	| { type: "outbox.capture"; outcome: "accepted" | "failed" }
@@ -78,7 +78,7 @@ export type RealtimeObservation =
 			operation?: "find" | "count" | "get";
 			requestedLimit?: number;
 			configuredLimit?: number;
-			rolloutMode?: "legacy" | "dual" | "v2";
+			rolloutMode?: "v2";
 	  }
 	| {
 			type: "topology.lifecycle";

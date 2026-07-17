@@ -65,7 +65,7 @@ const program = new Command()
 	)
 	.option(
 		"--realtime <adapter>",
-		"Realtime adapter: none, pg-notify, redis-streams (default: none)",
+		"Realtime broker: none, pg-notify, redis-streams (default: none)",
 	)
 	.option("--kv <adapter>", "KV adapter: memory, redis (default: memory)")
 	.option(
@@ -79,14 +79,19 @@ const program = new Command()
 
 			// Validate template/runtime if provided.
 			if (templateId && !getTemplate(templateId)) {
-				throw new Error(`Unknown ${opts.runtime ? "runtime" : "template"}: ${templateId}`);
+				throw new Error(
+					`Unknown ${opts.runtime ? "runtime" : "template"}: ${templateId}`,
+				);
 			}
 
 			// Merge `--module` (repeatable) + `--modules <a,b,c>` into one list.
 			const requestedModules = [
 				...((opts.module as string[]) ?? []),
 				...(typeof opts.modules === "string"
-					? opts.modules.split(",").map((m: string) => m.trim()).filter(Boolean)
+					? opts.modules
+							.split(",")
+							.map((m: string) => m.trim())
+							.filter(Boolean)
 					: []),
 			];
 
@@ -123,7 +128,7 @@ const program = new Command()
 				continueOnError: opts.continueOnError === true,
 				queueAdapter: opts.queue,
 				emailAdapter: opts.email,
-				realtimeAdapter: opts.realtime,
+				realtimeBroker: opts.realtime,
 				kvAdapter: opts.kv,
 			});
 

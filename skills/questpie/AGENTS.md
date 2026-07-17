@@ -5598,7 +5598,7 @@ SSE is the default `ClientTransport`; no browser transport config is required. W
 
 Realtime topology is durable in `questpie_realtime_topology`. Complete desired topology uses monotonic revisions; a metadata-only broker wake lowers latency and one-second reconciliation heals dropped wakes. This makes companion control HA-safe without sticky routing after the migration is applied and every request-handling replica supports the advertised `questpie-realtime-topology` v1 capability.
 
-Before a production upgrade, run `bunx questpie migrate:create`, review and commit the generated migration, then run `bunx questpie migrate`. Never use `push` for this production schema change. Use the Realtime v2 HA migration guide for the QuestPie 3.x transition and QuestPie 4 removal window.
+Before a production upgrade, run `bunx questpie migrate:create`, review and commit the generated migration, then run `bunx questpie migrate`. Never use `push` for this production schema change.
 
 For managed WebSockets and native presence, select the isolated Pusher/Soketi preset:
 
@@ -5622,7 +5622,25 @@ export default runtimeConfig({ realtime: { ...managed } });
 
 Default SSE limits are 20 topics per connection, 5 connections per authenticated principal, `find` limit 100, nested `with` depth 3, 4 concurrent initial snapshots, and 1 MiB buffered snapshot bytes per edge session. Slow consumers are bounded and disconnected rather than allowed unbounded memory growth.
 
+`maxFindLimit` applies to each initial and refreshed snapshot. QUESTPIE rejects
+an oversized topic rather than clamping or splitting it, because either changes
+ordering, pagination, completeness, and topic-budget semantics. Change the
+default `100` only after measuring query cost, serialized bytes, fan-out, and
+slow-client behavior. Large or paginated read models are not one realtime
+snapshot.
+
+Initial topics and topics added through companion control use the same
+`REALTIME_TOPIC_REJECTED` payload: `topicId`, `resource`, `operation`,
+`retryable: false`, and bounded details. It never includes `where`, session,
+token, identity, or results. The multiplexer delivers it only to the rejected
+subscriber; `live()` calls that subscriber's `onError`, `liveIter()` throws, and
+TanStack enters an error state without retrying. Client callbacks receive a
+`RealtimeTopicRejectedError`, which exposes the safe structured fields.
+
 Keep `keepAliveIntervalMs` (default 8s) below the server/proxy idle timeout. `live()` without server `realtime` errors explicitly; it does not silently fall back to a normal query.
+
+A future `realtime: { mode: "invalidate" }` is separate-spec work and is not
+implemented.
 
 Full adapter options and deployment guidance: `references/infrastructure-adapters.md`.
 
@@ -5951,11 +5969,13 @@ CMD ["bun", "run", ".output/server/index.mjs"]
 - Set strong `APP_SECRET` (min 32 characters)
 - Use production `DATABASE_URL` with SSL
 - Run `bunx questpie migrate` before deploying
+- Commit and apply the generated `questpie_realtime_topology` migration before enabling HA control
 - Configure SMTP for transactional email
 - Set `APP_URL` to your public domain
 - Enable HTTPS
 - Configure S3 or persistent storage for uploads
 - Use `redisStreamsChangeBroker` when Redis is the shared notice infrastructure
+- Verify realtime add/remove/reconnect across arbitrary replicas, then remove temporary sticky affinity
 - Set up health checks
 
 ### Health Check
@@ -6832,7 +6852,7 @@ export default runtimeConfig({
 });
 ```
 
-The adapter duplicates the client for its blocking reader when supported; otherwise provide a dedicated `reader`. The `group` and `consumer` options are accepted only as compatibility inputs and do not restore consumer-group behavior.
+The broker duplicates the client for its blocking reader when supported; otherwise provide a dedicated `reader`.
 
 ### Pusher/Soketi managed WebSockets
 
@@ -6854,10 +6874,6 @@ export default runtimeConfig({ realtime: { ...managed } });
 
 The preset supplies a notice-only Pusher `ChangeBroker` and a Pusher `ClientTransport`. Direct provider client events are off by default; they bypass QUESTPIE channel schemas, publish authorization, rate limits, ordered ledger, and replay.
 
-### Cloudflare Durable Objects
-
-Cloudflare Workers use a Durable Object fan-out path because they do not keep a long-lived process-local poller. Consult the Realtime v2 HA migration guide before selecting the QuestPie 3.x deployment path.
-
 ### When to Use Which
 
 | Selection                        | Use case                                                                  |
@@ -6868,7 +6884,7 @@ Cloudflare Workers use a Durable Object fan-out path because they do not keep a 
 | `redisStreamsChangeBroker` + SSE | Cross-instance Redis notice fan-out                                       |
 | `pusherRealtime`                 | Managed WebSockets, provider-native presence, and shared channel delivery |
 
-Apply the generated `questpie_realtime_topology` migration before claiming cross-replica no-reconnect control. Use the Realtime v2 HA migration guide for version-transition details.
+Apply the generated `questpie_realtime_topology` migration before claiming cross-replica no-reconnect control.
 
 ## Search
 
@@ -8993,6 +9009,12 @@ const { data } = useQuery(
 	),
 );
 ```
+
+Admission failures such as a `find` limit above `maxFindLimit` surface as the
+query's normal error state with `code: "REALTIME_TOPIC_REJECTED"` and
+`retryable: false`. The adapter does not retry that unchanged topic and does not
+leave a successful placeholder behind. The same rejection reaches only the
+matching subscriber; sibling topics on the multiplexed connection stay live.
 
 Server realtime must be enabled. SSE is the default client transport; a normal Postgres URL auto-wires `PgNotifyChangeBroker`, while setups without a push broker reconcile by polling every 2s. No explicit transport is needed for the Postgres default:
 

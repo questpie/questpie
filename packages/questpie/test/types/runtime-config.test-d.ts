@@ -15,24 +15,15 @@ type _realtimeTrueResolvesToConfig = Expect<
 runtimeConfig({
 	db: { url: "postgres://localhost/test" },
 	realtime: {
-		rollout: {
-			mode: "dual",
-			onComparison(result) {
-				const seq: number = result.seq;
-				const legacy: "accepted" | "rejected" = result.legacy;
-				const equivalent: boolean = result.equivalent;
-				void [seq, legacy, equivalent];
-			},
-		},
+		// @ts-expect-error realtime rollout modes were removed in QuestPie 4
+		rollout: { mode: "dual" },
 	},
 });
 
 runtimeConfig({
 	db: { url: "postgres://localhost/test" },
 	realtime: {
-		rollout: {
-			// @ts-expect-error rollout mode is a closed compatibility contract
-			mode: "canary",
-		},
+		// @ts-expect-error realtime.adapter was removed in QuestPie 4
+		adapter: {},
 	},
 });

@@ -215,7 +215,7 @@ export default runtimeConfig({
 });
 ```
 
-The adapter interfaces and their config types (`ChangeBroker` / `RealtimeConfig`, `SearchAdapter` / `SearchOptions` / `SearchResponse`, `KVAdapter` / `KVConfig`, `ExecutorAdapter` / `ExecutorConfig`) are all exported from the matching subpath, `questpie/realtime`, `questpie/search`, `questpie/kv`, `questpie/executor`. Each subsystem's current contract and built-in adapters are documented under Infrastructure; the Realtime migration guide owns version-transition details.
+The adapter interfaces and their config types (`ChangeBroker` / `RealtimeConfig`, `SearchAdapter` / `SearchOptions` / `SearchResponse`, `KVAdapter` / `KVConfig`, `ExecutorAdapter` / `ExecutorConfig`) are all exported from the matching subpath, `questpie/realtime`, `questpie/search`, `questpie/kv`, `questpie/executor`. Each subsystem's current contract and built-in adapters are documented under Infrastructure.
 
 <Callout type="info" title="Adapters that need a runtime discriminator">
 	A few adapters carry a `readonly runtime` field (e.g. the Cloudflare adapters

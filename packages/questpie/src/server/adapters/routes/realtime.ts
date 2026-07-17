@@ -14,7 +14,6 @@ import {
 import { executeAccessRule } from "../../collection/crud/shared/access-control.js";
 import type { RequestContext } from "../../config/context.js";
 import type { Questpie } from "../../config/questpie.js";
-import type { QuestpieConfig } from "../../config/types.js";
 import { ApiError } from "../../errors/index.js";
 import {
 	admitRealtimeTopic,
@@ -36,7 +35,6 @@ import {
 	SseClientTransport,
 	SseLatestSnapshotWriter,
 } from "../../modules/core/integrated/realtime/sse-client-transport.js";
-import type { RealtimeControlFrame } from "../../modules/core/integrated/realtime/sse-control.js";
 import { sharedSseKeepAliveTicker } from "../../modules/core/integrated/realtime/sse-keep-alive.js";
 import type { RealtimeDesiredTopology } from "../../modules/core/integrated/realtime/topology-coordinator.js";
 import type { ClientSink } from "../../modules/core/integrated/realtime/transport.js";
@@ -55,7 +53,7 @@ type TopicInput = {
 	resourceType: "collection" | "global";
 	/** Resource name */
 	resource: string;
-	/** Query operation; omitted legacy topics are normalized by resource type. */
+	/** Query operation; omitted values are normalized by resource type. */
 	operation?: "find" | "count" | "get";
 	/** Record id for a collection `get` topic. */
 	recordId?: string;
@@ -436,7 +434,7 @@ async function resolveChannelSubscription(
  *
  * POST /realtime
  * Initial body: { topics: [{ id, resourceType, resource, where?, with?, limit?, offset?, orderBy?, sinceSeq? }] }
- * Control body: { sessionId, token, frames: [{ type: "add_topic" | "remove_topic", ... }] }
+ * Control body: { sessionId, token, topology: { protocol, version, revision, topics, channels } }
  *
  * Response: SSE stream with events:
  * - session: { sessionId, token }
@@ -495,7 +493,7 @@ export async function realtimeSubscribe(
 			type: "admission.rejected",
 			reason,
 			...details,
-			rolloutMode: app.config?.realtime?.rollout?.mode ?? "v2",
+			rolloutMode: "v2",
 		});
 	const observeTopicRejection = (error: RealtimeTopicAdmissionError) =>
 		observeAdmission(error.payload.details.reason, {
@@ -515,7 +513,6 @@ export async function realtimeSubscribe(
 		transport?: "shared-provider";
 		sessionId?: string;
 		token?: string;
-		frames?: RealtimeControlFrame[];
 		topology?: RealtimeDesiredTopology;
 	};
 	try {
@@ -656,76 +653,16 @@ export async function realtimeSubscribe(
 			);
 		}
 	}
-	if (body.sessionId || body.frames) {
-		if (
-			!body.sessionId ||
-			!body.token ||
-			!Array.isArray(body.frames) ||
-			body.frames.length === 0 ||
-			body.frames.length > admission.maxTopicsPerConnection
-		) {
-			return errorResponse(
-				ApiError.badRequest("Invalid realtime control request"),
-				request,
-				resolved.appContext.locale,
-			);
-		}
-		try {
-			for (const frame of body.frames) {
-				if (frame.type === "add_topic") {
-					await resolveIncrementalTopic(
-						app,
-						{
-							...frame.topic,
-							id: frame.topicId,
-							sinceSeq: frame.sinceSeq,
-						} as TopicInput,
-						resolved.appContext,
-						admission,
-					);
-				} else if (frame.type === "subscribe_channel") {
-					await resolveChannelSubscription(
-						app,
-						{
-							id: frame.subscriptionId,
-							channel: frame.channel,
-							params: frame.params,
-							lastEventId: frame.lastEventId,
-						},
-						resolved.appContext,
-					);
-				}
-			}
-			const result = await app.realtime.submitLegacyTopology({
-				sessionId: body.sessionId,
-				token: body.token,
-				identity: realtimeControlIdentity(resolved.appContext),
-				frames: body.frames,
-			});
-			if (result.status === "unavailable") {
-				return errorResponse(
-					ApiError.badRequest("Realtime control session is unavailable"),
-					request,
-					resolved.appContext.locale,
-				);
-			}
-			if (result.status === "conflict") {
-				return errorResponse(
-					ApiError.badRequest(
-						"Realtime control id conflicts with its current value",
-					),
-					request,
-					resolved.appContext.locale,
-				);
-			}
-			return new Response(null, { status: 204 });
-		} catch (error) {
-			if (error instanceof RealtimeTopicAdmissionError) {
-				observeTopicRejection(error);
-				return Response.json({ error: error.payload }, { status: 400 });
-			}
-			return errorResponse(error, request, resolved.appContext.locale);
-		}
+	if (body.sessionId || body.token) {
+		return Response.json(
+			{
+				error: {
+					code: "REALTIME_TOPOLOGY_INVALID",
+					message: "Realtime control requires desired topology protocol v1",
+				},
+			},
+			{ status: 400 },
+		);
 	}
 
 	// Initial sessions may carry live-query topics, framework channels, or both.
@@ -1673,27 +1610,3 @@ export async function realtimeSubscribe(
 		headers: sseHeaders,
 	});
 }
-
-// ============================================================================
-// Legacy closure factory (deprecated)
-// ============================================================================
-
-/**
- * @deprecated Use standalone `realtimeSubscribe` instead.
- */
-export const createRealtimeRoutes = <
-	TConfig extends QuestpieConfig = QuestpieConfig,
->(
-	app: Questpie<TConfig>,
-	config: AdapterConfig<TConfig> = {},
-) => {
-	return {
-		subscribe: async (
-			request: Request,
-			_params: Record<string, string>,
-			context?: AdapterContext,
-		): Promise<Response> => {
-			return realtimeSubscribe(app, request, _params, context, config);
-		},
-	};
-};

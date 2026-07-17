@@ -65,7 +65,7 @@ SSE is the default `ClientTransport`; no browser transport config is required. W
 
 Realtime topology is durable in `questpie_realtime_topology`. Complete desired topology uses monotonic revisions; a metadata-only broker wake lowers latency and one-second reconciliation heals dropped wakes. This makes companion control HA-safe without sticky routing after the migration is applied and every request-handling replica supports the advertised `questpie-realtime-topology` v1 capability.
 
-Before a production upgrade, run `bunx questpie migrate:create`, review and commit the generated migration, then run `bunx questpie migrate`. Never use `push` for this production schema change. Use the Realtime v2 HA migration guide for the QuestPie 3.x transition and QuestPie 4 removal window.
+Before a production upgrade, run `bunx questpie migrate:create`, review and commit the generated migration, then run `bunx questpie migrate`. Never use `push` for this production schema change.
 
 For managed WebSockets and native presence, select the isolated Pusher/Soketi preset:
 
@@ -89,6 +89,24 @@ export default runtimeConfig({ realtime: { ...managed } });
 
 Default SSE limits are 20 topics per connection, 5 connections per authenticated principal, `find` limit 100, nested `with` depth 3, 4 concurrent initial snapshots, and 1 MiB buffered snapshot bytes per edge session. Slow consumers are bounded and disconnected rather than allowed unbounded memory growth.
 
+`maxFindLimit` applies to each initial and refreshed snapshot. QUESTPIE rejects
+an oversized topic rather than clamping or splitting it, because either changes
+ordering, pagination, completeness, and topic-budget semantics. Change the
+default `100` only after measuring query cost, serialized bytes, fan-out, and
+slow-client behavior. Large or paginated read models are not one realtime
+snapshot.
+
+Initial topics and topics added through companion control use the same
+`REALTIME_TOPIC_REJECTED` payload: `topicId`, `resource`, `operation`,
+`retryable: false`, and bounded details. It never includes `where`, session,
+token, identity, or results. The multiplexer delivers it only to the rejected
+subscriber; `live()` calls that subscriber's `onError`, `liveIter()` throws, and
+TanStack enters an error state without retrying. Client callbacks receive a
+`RealtimeTopicRejectedError`, which exposes the safe structured fields.
+
 Keep `keepAliveIntervalMs` (default 8s) below the server/proxy idle timeout. `live()` without server `realtime` errors explicitly; it does not silently fall back to a normal query.
+
+A future `realtime: { mode: "invalidate" }` is separate-spec work and is not
+implemented.
 
 Full adapter options and deployment guidance: `references/infrastructure-adapters.md`.

@@ -226,7 +226,6 @@ const DRIFT_RULES: Array<{
 		message:
 			"Do not document old API names or compatibility paths. Show the current API only.",
 		scope: "docs-and-skills",
-		allowedPaths: /(?:^|\/)realtime-v2-migration\.mdx$/,
 	},
 ];
 

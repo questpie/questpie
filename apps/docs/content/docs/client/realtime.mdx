@@ -107,7 +107,7 @@ type LiveQueryOptions<TSelect, TRelations> = {
 ```ts
 type LiveSubscribeOptions = {
 	signal?: AbortSignal; // abort → auto-unsubscribe
-	onError?: (error: Error) => void; // SSE connection failed
+	onError?: (error: Error) => void; // topic rejection or connection failure
 };
 ```
 
@@ -124,7 +124,43 @@ client.collections.posts.live(
 // ac.abort() unsubscribes, equivalent to calling the returned function.
 ```
 
-`signal` unsubscribes on abort (so you can wire it to a component's lifetime). `onError` fires when the underlying SSE connection fails, wire it so a dropped connection surfaces instead of leaving your UI stuck on stale data.
+`signal` unsubscribes on abort (so you can wire it to a component's lifetime). `onError` fires when this topic is rejected or the underlying connection fails, wire it so a rejected or dropped subscription surfaces instead of leaving your UI stuck on stale data.
+
+### Admission rejection is a topic error
+
+The server validates every initial topic and every topic added later through the
+multiplexed control path. A rejected topic reaches only that topic's subscriber
+as `RealtimeTopicRejectedError`; healthy sibling topics remain subscribed.
+
+```ts
+import { RealtimeTopicRejectedError } from "questpie/client";
+
+client.collections.posts.live(
+	{ where: { published: true }, limit: 500 },
+	(snapshot) => render(snapshot),
+	{
+		onError: (error) => {
+			if (error instanceof RealtimeTopicRejectedError) {
+				console.error(error.code, error.details.reason);
+				return;
+			}
+			console.error("realtime transport failed", error);
+		},
+	},
+);
+```
+
+The error has `code: "REALTIME_TOPIC_REJECTED"`, `retryable: false`, and the
+safe fields `topicId`, `resource`, `operation`, and `details`. Details may carry
+the bounded reason plus requested/configured limits; they never include the
+topic's `where`, session, token, identity, or query result.
+
+The default `maxFindLimit` is `100` per snapshot, including the first result and
+every later refresh. QUESTPIE rejects an oversized topic instead of clamping or
+splitting it, because either would change ordering, pagination, completeness,
+and topic-budget semantics. Raise the server limit only after measuring the real
+query's compute cost, serialized bytes, fan-out, and slow-client behavior. A
+large or paginated read model should not be one realtime snapshot.
 
 ## `liveIter()`, the async-iterable form
 
@@ -142,7 +178,7 @@ for await (const snapshot of client.collections.posts.liveIter(
 }
 ```
 
-It takes only `{ signal? }`, **no `onError`** (unlike `live()`). A connection failure makes the generator **throw**, so wrap the loop in `try/catch` if you need to handle drops. Terminate by aborting the signal.
+It takes only `{ signal? }`, **no `onError`** (unlike `live()`). A topic rejection or connection failure makes the generator **throw**, so wrap the loop in `try/catch` if you need to handle either. Terminate by aborting the signal.
 
 ## Globals
 
@@ -265,7 +301,7 @@ client.collections.posts.live(
 
 - **Always unsubscribe.** `live()` returns an unsubscribe function and accepts a `signal`; `liveIter()` ends on `signal` abort. Leaking subscriptions keeps the multiplexer's SSE connection alive and the server pushing snapshots. In React, call the returned function in your effect cleanup (or pass an `AbortController` signal).
 - **No realtime config = no live mode.** `live()`/`liveIter()`/`{ realtime: true }` need `realtime` set in the **server** config. Without it the SSE endpoint isn't served and subscriptions error (via `onError` / a thrown generator).
-- **Snapshots are full re-runs, not deltas.** Every push is the complete `find()` result for your query (re-evaluated under access rules), not a patch. For very large result sets, narrow with `where`/`limit` rather than streaming thousands of rows on every change.
+- **Snapshots are full re-runs, not deltas.** Every push is the complete `find()` result for your query (re-evaluated under access rules), not a patch. Keep each topic within the server's measured `maxFindLimit`; use ordinary pagination or a purpose-built event/projection flow instead of streaming thousands of rows on every change.
 - **`liveIter()` throws on disconnect; `live()` calls `onError`.** Pick the form that matches your error handling, wrap `for await` in `try/catch`, or pass `onError` to `live()`.
 
 ## TypeScript
@@ -275,11 +311,14 @@ The realtime option and result types come from `questpie/client`:
 ```ts
 import type {
 	RealtimeAPI,
+	RealtimeTopicRejectedPayload,
 	TopicConfig,
 	TopicInput,
 	FindResult,
 	PaginatedResult,
 } from "questpie/client";
+
+import { RealtimeTopicRejectedError } from "questpie/client";
 ```
 
 `LiveQueryOptions`, `GlobalLiveQueryOptions`, and `LiveSubscribeOptions` are structural option types on the client method signatures (inferred at the call site, you rarely import them by name). The snapshot type is `FindResult<Row, Relations, TQuery>` for collections and `ApplyQuery<GlobalSelect, Relations, TQuery>` for globals, identical to `find()` / `get()`.
