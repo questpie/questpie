@@ -138,6 +138,11 @@ Large or paginated read models should not be represented by one giant realtime
 snapshot. Keep the paginated reads bounded and use ordinary pagination or a
 purpose-built projection/event flow for the rest of the model.
 
+A possible future `realtime: { mode: "invalidate" }` design would send a bounded
+invalidation signal and let another read layer refetch its own page. That mode
+is not implemented in QuestPie 3.16 and requires a separate deep-module spec; do
+not configure or depend on it today.
+
 Rejected topics return `REALTIME_TOPIC_REJECTED` with the topic id, resource,
 operation, `retryable: false`, and bounded details such as the requested and
 configured limits. Query filters are not included. The client delivers the

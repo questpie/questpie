@@ -39,6 +39,43 @@ Bulk update and bulk delete emit **one durable event per logical operation**, no
 
 Do not count adapter notifications to count changed records. Use `payload.count`. Do not expect N per-record events from one bulk mutation.
 
+## Topic rejection is not an HA control failure
+
+A production capture that motivated this clarification showed healthy session
+establishment and snapshots while `find` topics requested limits of `240`,
+`500`, and `2,000`. Realtime v2 correctly rejected them against the default
+`realtime.admission.maxFindLimit = 100`. That is admission working as designed,
+not evidence of a broken coordinator, broker, KV store, or pod routing.
+
+Initial topics and topics added later use the same safe error contract:
+
+```ts
+{
+  code: "REALTIME_TOPIC_REJECTED",
+  topicId: string,
+  resource: string,
+  operation: "find" | "count" | "get",
+  retryable: false,
+  details: {
+    reason: "query_limit" | "relation_depth",
+    requestedLimit?: number,
+    configuredLimit?: number,
+  },
+}
+```
+
+The payload never includes `where`, session/token/identity data, or query
+results. The client multiplexer delivers it only to the rejected subscriber;
+TanStack Query enters its normal error state and does not retry it. In contrast,
+`REALTIME_CONTROL_UNAVAILABLE` indicates that the companion control session
+cannot be used and belongs to the HA/control path.
+
+`maxFindLimit` applies to each initial and refreshed snapshot. QUESTPIE does not
+clamp or split oversized queries because that would change ordering, pagination,
+completeness, and topic-budget semantics. Change the configured limit only after
+measuring compute cost, serialized bytes, fan-out, and slow-client behavior; do
+not model a large paginated read as one realtime snapshot.
+
 ## Recommended 3.x rollout
 
 ### 1. Apply the migration before the mixed-version deploy

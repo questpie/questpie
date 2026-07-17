@@ -89,6 +89,23 @@ export default runtimeConfig({ realtime: { ...managed } });
 
 Default SSE limits are 20 topics per connection, 5 connections per authenticated principal, `find` limit 100, nested `with` depth 3, 4 concurrent initial snapshots, and 1 MiB buffered snapshot bytes per edge session. Slow consumers are bounded and disconnected rather than allowed unbounded memory growth.
 
+`maxFindLimit` applies to each initial and refreshed snapshot. QUESTPIE rejects
+an oversized topic rather than clamping or splitting it, because either changes
+ordering, pagination, completeness, and topic-budget semantics. Change the
+default `100` only after measuring query cost, serialized bytes, fan-out, and
+slow-client behavior. Large or paginated read models are not one realtime
+snapshot.
+
+Initial topics and topics added through companion control use the same
+`REALTIME_TOPIC_REJECTED` payload: `topicId`, `resource`, `operation`,
+`retryable: false`, and bounded details. It never includes `where`, session,
+token, identity, or results. The multiplexer delivers it only to the rejected
+subscriber; `live()` calls that subscriber's `onError`, `liveIter()` throws, and
+TanStack enters an error state without retrying.
+
 Keep `keepAliveIntervalMs` (default 8s) below the server/proxy idle timeout. `live()` without server `realtime` errors explicitly; it does not silently fall back to a normal query.
+
+A future `realtime: { mode: "invalidate" }` is separate-spec work and is not
+implemented in QuestPie 3.16.
 
 Full adapter options and deployment guidance: `references/infrastructure-adapters.md`.

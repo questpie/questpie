@@ -422,6 +422,12 @@ const { data } = useQuery(
 );
 ```
 
+Admission failures such as a `find` limit above `maxFindLimit` surface as the
+query's normal error state with `code: "REALTIME_TOPIC_REJECTED"` and
+`retryable: false`. The adapter does not retry that unchanged topic and does not
+leave a successful placeholder behind. The same rejection reaches only the
+matching subscriber; sibling topics on the multiplexed connection stay live.
+
 Server realtime must be enabled. SSE is the default client transport; a normal Postgres URL auto-wires `PgNotifyChangeBroker`, while setups without a push broker reconcile by polling every 2s. No explicit transport is needed for the Postgres default:
 
 ```ts

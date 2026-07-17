@@ -221,11 +221,13 @@ CMD ["bun", "run", ".output/server/index.mjs"]
 - Set strong `APP_SECRET` (min 32 characters)
 - Use production `DATABASE_URL` with SSL
 - Run `bunx questpie migrate` before deploying
+- Commit and apply the generated `questpie_realtime_topology` migration before enabling HA control
 - Configure SMTP for transactional email
 - Set `APP_URL` to your public domain
 - Enable HTTPS
 - Configure S3 or persistent storage for uploads
 - Use `redisStreamsChangeBroker` when Redis is the shared notice infrastructure
+- Verify realtime add/remove/reconnect across arbitrary replicas, then remove temporary sticky affinity
 - Set up health checks
 
 ### Health Check
