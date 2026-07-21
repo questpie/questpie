@@ -355,6 +355,149 @@ describe("realtime scheduler", () => {
 		stopSecond();
 	});
 
+	it("collapses a delta queue overflow to one authoritative reset", async () => {
+		const realtime = new FakeRealtimeSource();
+		const observations: RealtimeObservation[] = [];
+		const scheduler = new RealtimeRefreshScheduler(realtime, 10, {
+			record: (event) => observations.push(event),
+		});
+		const frames: Uint8Array[] = [];
+		let releaseHydration: () => void = () => {};
+		const hydrationBlocked = new Promise<void>((resolve) => {
+			releaseHydration = resolve;
+		});
+		const stop = scheduler.subscribe({
+			key: "posts:overflow-delta",
+			topicId: "posts",
+			topics: { resourceType: "collection", resource: "posts" },
+			mode: "delta",
+			maxDeltaQueueEvents: 1,
+			maxDeltaQueueBytes: 1024 * 1024,
+			compute: async () => ({ docs: [{ id: "1" }], totalDocs: 1 }),
+			hydrateRows: async () => {
+				await hydrationBlocked;
+				return { docs: [{ id: "1" }] };
+			},
+			onFrame: (frame) => frames.push(frame),
+			onError: () => {},
+		});
+		await tick();
+		await tick();
+
+		realtime.emit(5, { recordId: "1" });
+		await tick();
+		realtime.emit(6, { recordId: "2" });
+		realtime.emit(7, { recordId: "3" });
+		releaseHydration();
+		await tick();
+		await tick();
+		stop();
+
+		expect(observations).toContainEqual({
+			type: "delta.fallback_snapshot",
+			reason: "queue_overflow",
+		});
+		expect(frames.map(decodeFrame).some((frame) => frame.reset === true)).toBe(
+			true,
+		);
+	});
+
+	it("never grows retained delta row state past its admission cap", async () => {
+		const realtime = new FakeRealtimeSource();
+		const observations: RealtimeObservation[] = [];
+		const scheduler = new RealtimeRefreshScheduler(realtime, 10, {
+			record: (event) => observations.push(event),
+		});
+		const frames: Uint8Array[] = [];
+		const stop = scheduler.subscribe({
+			key: "posts:row-cap",
+			topicId: "posts",
+			topics: { resourceType: "collection", resource: "posts" },
+			mode: "delta",
+			maxDeltaRows: 1,
+			compute: async () => ({ docs: [{ id: "1" }], totalDocs: 1 }),
+			hydrateRows: async () => ({ docs: [{ id: "2" }] }),
+			onFrame: (frame) => frames.push(frame),
+			onError: () => {},
+		});
+		await tick();
+		await tick();
+		realtime.emit(5, { operation: "create", recordId: "2" });
+		await tick();
+		await tick();
+		stop();
+
+		expect(observations).toContainEqual({
+			type: "delta.fallback_snapshot",
+			reason: "row_cap",
+		});
+		expect(frames.map(decodeFrame).at(-1)?.reset).toBe(true);
+	});
+
+	it("re-bootstraps when a watched access dependency changes", async () => {
+		const realtime = new FakeRealtimeSource();
+		const frames: Uint8Array[] = [];
+		const scheduler = new RealtimeRefreshScheduler(realtime);
+		const stop = scheduler.subscribe({
+			key: "posts:access-dependency",
+			topicId: "posts",
+			topics: { resourceType: "collection", resource: "posts" },
+			mode: "delta",
+			compute: async () => ({ docs: [], totalDocs: 0 }),
+			hydrateRows: async () => ({ docs: [] }),
+			onFrame: (frame) => frames.push(frame),
+			onError: () => {},
+		});
+		await tick();
+		await tick();
+		realtime.emit(5, { resource: "memberships", recordId: "membership-1" });
+		await tick();
+		await tick();
+		stop();
+
+		expect(frames.map(decodeFrame).at(-1)?.reset).toBe(true);
+	});
+
+	it("isolates delta hydration by locale and principal access key", async () => {
+		for (const variants of [
+			["en", "de"],
+			["alice", "bob"],
+		] as const) {
+			const realtime = new FakeRealtimeSource();
+			const scheduler = new RealtimeRefreshScheduler(realtime);
+			const received = new Map<string, Uint8Array[]>();
+			const stops = variants.map((variant) => {
+				const frames: Uint8Array[] = [];
+				received.set(variant, frames);
+				const row = { id: "1", value: variant };
+				const updatedRow = { id: "1", value: `${variant}-updated` };
+				return scheduler.subscribe({
+					key: `posts:${variant}`,
+					topicId: `posts-${variant}`,
+					topics: { resourceType: "collection", resource: "posts" },
+					mode: "delta",
+					compute: async () => ({ docs: [row], totalDocs: 1 }),
+					hydrateRows: async () => ({ docs: [updatedRow] }),
+					onFrame: (frame) => frames.push(frame),
+					onError: () => {},
+				});
+			});
+			await tick();
+			await tick();
+			realtime.emit(5, { recordId: "1" });
+			await tick();
+			await tick();
+
+			for (const variant of variants) {
+				const ownFrames = received.get(variant)!.map(decodeFrame);
+				expect(
+					ownFrames.find((frame) => frame.type === "update")?.row.value,
+				).toBe(`${variant}-updated`);
+			}
+			for (const stop of stops) stop();
+		}
+	});
+
 	it("periodically re-bootstraps delta groups through an ordered reset", async () => {
 		const realtime = new FakeRealtimeSource();
 		const observations: RealtimeObservation[] = [];

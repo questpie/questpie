@@ -127,6 +127,7 @@ export type RefreshSubscriptionInput = {
 	hydrateRows?: (recordIds: string[]) => Promise<unknown>;
 	maxDeltaQueueEvents?: number;
 	maxDeltaQueueBytes?: number;
+	maxDeltaRows?: number;
 	deltaRebootstrapIntervalMs?: number;
 	heartbeatIntervalMs?: number;
 };
@@ -162,6 +163,7 @@ type DeltaGroup = {
 	queueBytes: number;
 	maxQueueEvents: number;
 	maxQueueBytes: number;
+	maxRows: number;
 	latestSeq: number;
 	lastDeliveredSeq: number;
 	rowHashes: Map<string, string>;
@@ -300,6 +302,7 @@ export class RealtimeRefreshScheduler {
 				queueBytes: 0,
 				maxQueueEvents: input.maxDeltaQueueEvents ?? 512,
 				maxQueueBytes: input.maxDeltaQueueBytes ?? 1024 * 1024,
+				maxRows: input.maxDeltaRows ?? 384,
 				latestSeq: 0,
 				lastDeliveredSeq: 0,
 				rowHashes: new Map(),
@@ -534,6 +537,18 @@ export class RealtimeRefreshScheduler {
 					const key = rowKey(row);
 					if (key !== null) rowsById.set(key, row);
 				}
+				const projectedRows =
+					group.rowHashes.size +
+					[...rowsById.keys()].filter((key) => !group.rowHashes.has(key))
+						.length;
+				if (projectedRows > group.maxRows) {
+					this.observe({
+						type: "delta.fallback_snapshot",
+						reason: "row_cap",
+					});
+					group.resetQueued = true;
+					continue;
+				}
 
 				for (const event of events) {
 					for (const key of eventRecordIds(event)!) {
@@ -639,8 +654,17 @@ export class RealtimeRefreshScheduler {
 		group.rowHashes.clear();
 		for (const row of rows) {
 			const key = rowKey(row);
-			if (key !== null)
+			if (key !== null) {
+				if (
+					!group.rowHashes.has(key) &&
+					group.rowHashes.size >= group.maxRows
+				) {
+					throw new Error(
+						`Realtime delta bootstrap exceeds ${group.maxRows} rows`,
+					);
+				}
 				group.rowHashes.set(key, await sha256(JSON.stringify(row)));
+			}
 		}
 	}
 

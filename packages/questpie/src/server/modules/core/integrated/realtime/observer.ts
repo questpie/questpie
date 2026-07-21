@@ -65,7 +65,7 @@ export type RealtimeObservation =
 	  }
 	| {
 			type: "delta.fallback_snapshot";
-			reason: "queue_overflow" | "dependency_change" | "periodic";
+			reason: "queue_overflow" | "row_cap" | "dependency_change" | "periodic";
 	  }
 	| {
 			type: "delta.buffer";

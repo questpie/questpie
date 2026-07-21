@@ -1492,6 +1492,7 @@ export async function realtimeSubscribe(
 								: undefined,
 						maxDeltaQueueEvents: admission.maxBufferedDeltaEvents,
 						maxDeltaQueueBytes: admission.maxBufferedDeltaBytes,
+						maxDeltaRows: admission.maxDeltaFindLimit,
 						deltaRebootstrapIntervalMs:
 							deliveryMode === "delta"
 								? admission.deltaRebootstrapIntervalMs
