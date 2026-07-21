@@ -15,7 +15,6 @@ import {
 	questpieChannelHeadTable,
 } from "./collection.js";
 import type { RealtimeObservation, RealtimeObserver } from "./observer.js";
-import { BoundedOrderedFifoWriter } from "./ordered-fifo-writer.js";
 import type {
 	ChannelGapFrame,
 	ChangeBroker,
@@ -79,13 +78,18 @@ type ChannelEventRow = typeof questpieChannelEventTable.$inferSelect;
 
 type LocalSubscription = {
 	id: string;
+	channel: string;
 	channelHash: string;
 	sink: ClientSink;
+	cursor: number;
 	readSeq: number;
-	writer: BoundedOrderedFifoWriter<ChannelEventRow>;
+	pending: ChannelEventRow[];
+	pendingBytes: number;
 	drainPromise: Promise<void> | null;
 	drainPending: boolean;
 	closed: boolean;
+	retryTimer: ReturnType<typeof setTimeout> | null;
+	encodeFrame?: LocalChannelSubscriptionInput["encodeFrame"];
 };
 
 export function hashResolvedChannel(channel: string): string {
@@ -292,39 +296,20 @@ export class ChannelEventLedger {
 			});
 		}
 
-		let subscription!: LocalSubscription;
-		const writer = new BoundedOrderedFifoWriter<ChannelEventRow>({
-			maximumItems: this.config.maxBufferedEvents,
-			maximumBytes: this.config.maxBufferedBytes,
-			busyRetryMs: this.config.busyRetryMs,
-			byteLength: (row) =>
-				this.encodeLocalFrame(this.toLocalFrame(row), input.encodeFrame)
-					.byteLength,
-			write: (row) =>
-				input.sink.write(
-					this.encodeLocalFrame(this.toLocalFrame(row), input.encodeFrame),
-					"ordered-channel-event",
-				),
-			onOverflow: () => {
-				void this.closeLocalSubscription(subscription, "slow_consumer");
-			},
-			onError: (error) => {
-				this.logger?.error("[Realtime] Ordered channel delivery failed", error);
-				void this.closeLocalSubscription(subscription, "write_failed");
-			},
-			onRetryDrained: () => {
-				void this.drainLocalSubscription(subscription);
-			},
-		});
-		subscription = {
+		const subscription: LocalSubscription = {
 			id: input.subscriptionId,
+			channel: input.channel,
 			channelHash,
 			sink: input.sink,
+			cursor,
 			readSeq: cursor,
-			writer,
+			pending: [],
+			pendingBytes: 0,
 			drainPromise: null,
 			drainPending: false,
 			closed: false,
+			retryTimer: null,
+			encodeFrame: input.encodeFrame,
 		};
 		this.localSubscriptions.set(subscription.id, subscription);
 		const channelSubscriptions =
@@ -514,13 +499,51 @@ export class ChannelEventLedger {
 		subscription: LocalSubscription,
 		row: ChannelEventRow,
 	): boolean {
-		return subscription.writer.enqueue(row);
+		const frameBytes = this.encodeLocalFrame(
+			this.toLocalFrame(row),
+			subscription.encodeFrame,
+		).byteLength;
+		if (
+			subscription.pending.length + 1 > this.config.maxBufferedEvents ||
+			subscription.pendingBytes + frameBytes > this.config.maxBufferedBytes
+		) {
+			void this.closeLocalSubscription(subscription, "slow_consumer");
+			return false;
+		}
+		subscription.pending.push(row);
+		subscription.pendingBytes += frameBytes;
+		return true;
 	}
 
 	private async flushLocalPending(
 		subscription: LocalSubscription,
 	): Promise<boolean> {
-		return (await subscription.writer.flush()) === "drained";
+		while (!subscription.closed && subscription.pending.length > 0) {
+			const row = subscription.pending[0];
+			const encodedFrame = this.encodeLocalFrame(
+				this.toLocalFrame(row),
+				subscription.encodeFrame,
+			);
+			const result = await subscription.sink.write(
+				encodedFrame,
+				"ordered-channel-event",
+			);
+			if (result.status === "busy") {
+				if (
+					result.bufferedBytes + subscription.pendingBytes >
+					this.config.maxBufferedBytes
+				) {
+					await this.closeLocalSubscription(subscription, "slow_consumer");
+					return false;
+				}
+				this.scheduleLocalRetry(subscription);
+				return false;
+			}
+			subscription.pending.shift();
+			subscription.pendingBytes -= encodedFrame.byteLength;
+			subscription.cursor = Number(row.seq);
+		}
+		return true;
 	}
 
 	private toLocalFrame(row: ChannelEventRow): OrderedChannelEventFrame {
@@ -531,6 +554,14 @@ export class ChannelEventLedger {
 			eventId: row.eventId,
 			data: row.payload,
 		};
+	}
+
+	private scheduleLocalRetry(subscription: LocalSubscription): void {
+		if (subscription.retryTimer || subscription.closed) return;
+		subscription.retryTimer = setTimeout(() => {
+			subscription.retryTimer = null;
+			void this.drainLocalSubscription(subscription);
+		}, this.config.busyRetryMs);
 	}
 
 	private encodeLocalFrame(
@@ -548,7 +579,7 @@ export class ChannelEventLedger {
 	private removeLocalSubscription(subscription: LocalSubscription): void {
 		if (subscription.closed) return;
 		subscription.closed = true;
-		subscription.writer.clear();
+		if (subscription.retryTimer) clearTimeout(subscription.retryTimer);
 		this.localSubscriptions.delete(subscription.id);
 		const channelSubscriptions = this.subscriptionsByChannel.get(
 			subscription.channelHash,
