@@ -41,10 +41,13 @@ const unsubscribe = client.collections.posts.live(
 
 The first callback receives the current snapshot. Later invalidations refresh only subscriptions affected by the changed collection, global, locale, stage, and query scope.
 
-Every refresh is a complete snapshot rather than a delta. The default
-`maxFindLimit` is `100` per snapshot; oversized topics are rejected instead of
-silently clamped or split. Keep large or paginated read models on bounded normal
-reads, or use a purpose-built channel/projection flow for their update signal.
+Snapshot delivery remains the default. Its `maxFindLimit` is `100`; oversized
+topics are rejected instead of silently clamped or split. The raw realtime API
+can explicitly request native keyed deltas for an unwindowed collection `find`
+with only own-column filters. Windowing, ordering, relations, counts, and globals
+remain snapshots, so correctness never depends on a partial delta. Delta groups
+periodically re-bootstrap and reset immediately when a configured watched access
+resource changes.
 
 See [Client realtime](/docs/client/realtime) for `live()`, `liveIter()`, lifecycle options, and TanStack Query integration.
 

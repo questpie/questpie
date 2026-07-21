@@ -401,6 +401,11 @@ compatibility evidence:
 | `with` relation depth                               |       3 |
 | concurrent initial computations per edge session    |       4 |
 | queued latest-snapshot bytes per edge session       |   1 MiB |
+| maximum native-delta bootstrap rows                 |     384 |
+| queued native-delta events per group/session        |     512 |
+| queued native-delta bytes per group/session         |   1 MiB |
+| concurrent native-delta hydration batches           |       4 |
+| periodic native-delta re-bootstrap                  |     60s |
 | queued ordered channel events per edge session      |     100 |
 | queued ordered channel-event bytes per edge session |   1 MiB |
 
