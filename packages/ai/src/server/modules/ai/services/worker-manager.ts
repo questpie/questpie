@@ -237,10 +237,6 @@ export default service()
 					await setWorkerStatus(input.workerId, "busy");
 
 					const metadata = isRecord(run.metadata) ? run.metadata : undefined;
-					const cwd =
-						typeof metadata?.cwd === "string"
-							? metadata.cwd.trim() || undefined
-							: undefined;
 
 					return {
 						lease: {
@@ -252,7 +248,6 @@ export default service()
 							prompt: (run.instructions as string) ?? "",
 							runtime: runRuntime,
 							runtimeSessionRef: run.runtimeSessionRef as string | undefined,
-							cwd,
 							metadata,
 						},
 						run,

@@ -126,7 +126,9 @@ type WorkerManager = Awaited<ReturnType<typeof createWorkerManager>>;
 function buildWorkerManager(
 	collections: ReturnType<typeof createMockCollections>,
 ): WorkerManager {
-	return createWorkerManager({ app: { collections } } as never) as WorkerManager;
+	return createWorkerManager({
+		app: { collections },
+	} as never) as WorkerManager;
 }
 
 // ===========================================================================
@@ -257,7 +259,7 @@ describe("Worker manager — claim (run_links CAS)", () => {
 		expect(claimed!.spawn.prompt).toBe("do something");
 		expect(claimed!.spawn.runtime).toBe("claude-code");
 		expect(claimed!.spawn.runtimeSessionRef).toBe("sess_123");
-		expect(claimed!.spawn.cwd).toBe("/tmp/project-a");
+		expect("cwd" in claimed!.spawn).toBe(false);
 		expect(claimed!.spawn.metadata).toEqual({
 			cwd: "/tmp/project-a",
 			source: "test",
@@ -664,11 +666,8 @@ describe("Embedded worker execution", () => {
 			const deadline = Date.now() + 500;
 			while (
 				Date.now() < deadline &&
-				!(
-					claims.some(
-						(runtimes) =>
-							runtimes.length === 1 && runtimes[0] === "claude-code",
-					)
+				!claims.some(
+					(runtimes) => runtimes.length === 1 && runtimes[0] === "claude-code",
 				)
 			) {
 				await new Promise((resolve) => setTimeout(resolve, 5));

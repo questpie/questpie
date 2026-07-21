@@ -179,7 +179,10 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		private debounceMs = 50,
 		runtime: RealtimeMultiplexerRuntime = {},
 		private getAuthHeaders?: GetAuthHeaders,
-		private fetcher: typeof fetch = globalThis.fetch,
+		// Bound: this default is stored on the instance and called as
+		// `this.fetcher(...)` — an unbound native fetch throws
+		// "Illegal invocation" in browsers when invoked with a foreign `this`.
+		private fetcher: typeof fetch = globalThis.fetch.bind(globalThis),
 	) {
 		this.retryBaseMs = runtime.retryBaseMs ?? 1000;
 		this.maxRetryMs = runtime.maxRetryMs ?? 30_000;

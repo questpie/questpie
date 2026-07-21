@@ -5,6 +5,12 @@ import type {
 import type { AppContext, RequestContext } from "questpie";
 import type { z } from "zod";
 
+import type {
+	AgentWorkloadPrincipalResolver,
+	AgentWorkloadPrincipal,
+	AuthenticatedAgentWorkloadEnvelope,
+} from "@questpie/ai";
+
 export type McpTransportKind = "http" | "stdio";
 
 export type McpAccessMode = "user" | "system";
@@ -35,6 +41,15 @@ export type McpAccessRule =
  */
 export type McpRequiredScopes = string | string[] | false;
 
+export interface McpAgentWorkloadRequirement {
+	/** Exact role-derived grant scope. Company authority never implies Space access. */
+	scope: "company" | "anchor_space";
+	/** Exact grant required in the validated persisted authority snapshot. */
+	grant: string;
+	/** `false` for reads; mutations name the exact effect capability required. */
+	effect: string | false;
+}
+
 export type McpEntityPolicy =
 	| boolean
 	| {
@@ -60,6 +75,8 @@ export type McpEntityPolicy =
 			 * named operation.
 			 */
 			operationScopes?: Record<string, McpRequiredScopes>;
+			workload?: McpAgentWorkloadRequirement;
+			operationWorkloads?: Record<string, McpAgentWorkloadRequirement>;
 			fields?: { include?: string[]; exclude?: string[] };
 			description?: string;
 	  };
@@ -123,6 +140,50 @@ export interface McpExecutionOptions {
 	config?: McpConfig;
 }
 
+/**
+ * Agent execution is intentionally not an {@link McpExecutionOptions} variant.
+ * It cannot inherit HTTP request identity, cookies, OAuth, requester sessions,
+ * access-mode overrides, or the stdio system default.
+ */
+export interface AgentWorkloadMcpServerOptions {
+	envelope: AuthenticatedAgentWorkloadEnvelope;
+	resolver: Pick<AgentWorkloadPrincipalResolver, "validate">;
+	config?: McpConfig;
+	audit?: (event: AgentWorkloadMcpAuditEvent) => void | Promise<void>;
+	effectHandoff?: AgentWorkloadMcpEffectHandoff;
+}
+
+export interface AgentWorkloadMcpCommand {
+	commandId: string;
+	idempotencyKey: string;
+	effectRequestId: string;
+}
+
+export interface AgentWorkloadMcpEffectHandoffInput {
+	principal: AgentWorkloadPrincipal;
+	toolName: string;
+	effect: string;
+	command: AgentWorkloadMcpCommand;
+	invoke: () => CallToolResult | Promise<CallToolResult>;
+}
+
+export interface AgentWorkloadMcpEffectHandoff {
+	execute(
+		input: AgentWorkloadMcpEffectHandoffInput,
+	): CallToolResult | Promise<CallToolResult>;
+}
+
+export interface AgentWorkloadMcpAuditEvent {
+	phase: "discovery" | "call";
+	decision: "allowed" | "denied";
+	principalId: string;
+	runId: string;
+	attemptId: string;
+	agentActorId: string;
+	toolName?: string;
+	reason?: "authority_not_current" | "capability_denied";
+}
+
 export interface McpToolHandlerArgs<TInput = unknown> {
 	input: TInput;
 	ctx: AppContext & Partial<RequestContext>;
@@ -149,6 +210,8 @@ export interface McpToolConfig<
 	 * `tools/call` (denied); `system`/`user` callers carry no scopes and skip it.
 	 */
 	scopes?: McpRequiredScopes;
+	/** Explicit, fail-closed authority contract for Agent workload execution. */
+	workload?: McpAgentWorkloadRequirement;
 	_meta?: Record<string, unknown>;
 }
 

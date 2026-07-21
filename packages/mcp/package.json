@@ -68,6 +68,7 @@
 	},
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "^1.29.0",
+		"@questpie/ai": "workspace:*",
 		"questpie": "workspace:*",
 		"zod": "^4.2.1"
 	},

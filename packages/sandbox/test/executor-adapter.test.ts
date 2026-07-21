@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+
 import { ExecutorService } from "questpie/executor";
 
 import { httpSandboxAdapter } from "../src/adapter-http.js";
@@ -20,9 +21,9 @@ describe("ExecutorService — configuration gating", () => {
 	it("throws when the executor is not configured at all", async () => {
 		const svc = new ExecutorService(undefined);
 		expect(svc.isEnabled).toBe(false);
-		await expect(svc.run({ source: "export default async()=>1" })).rejects.toThrow(
-			/not configured/,
-		);
+		await expect(
+			svc.run({ source: "export default async()=>1" }),
+		).rejects.toThrow(/not configured/);
 	});
 
 	it("throws on sandboxed run when no sandboxed adapter is configured", async () => {
@@ -49,7 +50,8 @@ describe("ExecutorService — trusted (in-process)", () => {
 
 	it("captures console logs", async () => {
 		const r = await svc.run({
-			source: "export default async () => { console.log('hi', { a: 1 }); return 1; }",
+			source:
+				"export default async () => { console.log('hi', { a: 1 }); return 1; }",
 			isolation: "trusted",
 		});
 		expect(r.ok).toBe(true);
@@ -76,7 +78,8 @@ describe("ExecutorService — trusted (in-process)", () => {
 
 	it("enforces a soft timeout on async work", async () => {
 		const r = await svc.run({
-			source: "export default async () => { await new Promise(r => setTimeout(r, 5000)); return 1; }",
+			source:
+				"export default async () => { await new Promise(r => setTimeout(r, 5000)); return 1; }",
 			isolation: "trusted",
 			capabilities: { timeoutMs: 200 },
 		});
@@ -95,58 +98,65 @@ describe("ExecutorService — trusted (in-process)", () => {
 	});
 });
 
-describe.if(!!SANDBOX_URL)("ExecutorService — sandboxed (HTTP → Deno service)", () => {
-	const svc = new ExecutorService({
-		sandboxed: httpSandboxAdapter({ url: SANDBOX_URL }),
-	});
-	const baseCaps = { net: [], import: [], timeoutMs: 5000, memoryMb: 128 };
+describe.if(!!SANDBOX_URL)(
+	"ExecutorService — sandboxed (HTTP → Deno service)",
+	() => {
+		const svc = new ExecutorService({
+			sandboxed: httpSandboxAdapter({
+				url: SANDBOX_URL,
+				nonAgentAdmissionSecret: process.env.SANDBOX_NON_AGENT_ADMISSION_SECRET,
+			}),
+		});
+		const baseCaps = { net: [], import: [], timeoutMs: 5000, memoryMb: 128 };
 
-	it("round-trips input → output via the sandbox", async () => {
-		const r = await svc.run({
-			source: "export default async (input) => ({ tripled: input.n * 3 })",
-			input: { n: 7 },
-			isolation: "sandboxed",
-			capabilities: baseCaps,
+		it("round-trips input → output via the sandbox", async () => {
+			const r = await svc.run({
+				source: "export default async (input) => ({ tripled: input.n * 3 })",
+				input: { n: 7 },
+				isolation: "sandboxed",
+				capabilities: baseCaps,
+			});
+			expect(r.ok).toBe(true);
+			expect(r.output).toEqual({ tripled: 21 });
 		});
-		expect(r.ok).toBe(true);
-		expect(r.output).toEqual({ tripled: 21 });
-	});
 
-	it("defaults isolation to sandboxed", async () => {
-		const r = await svc.run({
-			source: "export default async () => ({ defaultIso: true })",
-			capabilities: baseCaps,
+		it("defaults isolation to sandboxed", async () => {
+			const r = await svc.run({
+				source: "export default async () => ({ defaultIso: true })",
+				capabilities: baseCaps,
+			});
+			expect(r.ok).toBe(true);
+			expect(r.output).toEqual({ defaultIso: true });
 		});
-		expect(r.ok).toBe(true);
-		expect(r.output).toEqual({ defaultIso: true });
-	});
 
-	it("blocks a private-IP egress host before spawn", async () => {
-		const r = await svc.run({
-			source: "export default async () => 1",
-			isolation: "sandboxed",
-			capabilities: { ...baseCaps, net: ["169.254.169.254:80"] },
+		it("blocks a private-IP egress host before spawn", async () => {
+			const r = await svc.run({
+				source: "export default async () => 1",
+				isolation: "sandboxed",
+				capabilities: { ...baseCaps, net: ["169.254.169.254:80"] },
+			});
+			expect(r.ok).toBe(false);
+			expect(r.error).toContain("egress blocked");
 		});
-		expect(r.ok).toBe(false);
-		expect(r.error).toContain("egress blocked");
-	});
 
-	it("bounds a memory bomb to its own subprocess (service survives)", async () => {
-		const bomb = svc.run({
-			source: "export default async () => { const a = []; while (true) { a.push(new Array(1e6).fill(1)); } }",
-			isolation: "sandboxed",
-			capabilities: { net: [], import: [], timeoutMs: 30000, memoryMb: 64 },
+		it("bounds a memory bomb to its own subprocess (service survives)", async () => {
+			const bomb = svc.run({
+				source:
+					"export default async () => { const a = []; while (true) { a.push(new Array(1e6).fill(1)); } }",
+				isolation: "sandboxed",
+				capabilities: { net: [], import: [], timeoutMs: 30000, memoryMb: 64 },
+			});
+			const benign = svc.run({
+				source: "export default async () => ({ benign: true })",
+				isolation: "sandboxed",
+				capabilities: baseCaps,
+			});
+			const [bombResult, benignResult] = await Promise.all([bomb, benign]);
+			// The bomb dies in its own process (structured failure, not a service crash).
+			expect(bombResult.ok).toBe(false);
+			// A concurrent benign request is unaffected.
+			expect(benignResult.ok).toBe(true);
+			expect(benignResult.output).toEqual({ benign: true });
 		});
-		const benign = svc.run({
-			source: "export default async () => ({ benign: true })",
-			isolation: "sandboxed",
-			capabilities: baseCaps,
-		});
-		const [bombResult, benignResult] = await Promise.all([bomb, benign]);
-		// The bomb dies in its own process (structured failure, not a service crash).
-		expect(bombResult.ok).toBe(false);
-		// A concurrent benign request is unaffected.
-		expect(benignResult.ok).toBe(true);
-		expect(benignResult.output).toEqual({ benign: true });
-	});
-});
+	},
+);

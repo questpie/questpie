@@ -43,6 +43,57 @@ export function isPlainObject(
 }
 
 /**
+ * Deep copy that preserves functions by reference where `structuredClone` can't.
+ *
+ * `deepMerge` must accept config objects that legitimately carry function
+ * values — most importantly Better Auth hooks such as `sendVerificationEmail`
+ * and `sendResetPassword` in `config/auth.ts`. A raw `structuredClone` throws
+ * `DataCloneError` on any function, which previously made it impossible to
+ * configure ANY auth hook (the merge runs at app construction).
+ *
+ * We walk plain objects and arrays ourselves — passing functions through by
+ * reference — and defer to `structuredClone` only for exotic leaves it can copy
+ * (Date, RegExp, Map, typed arrays, …). A `seen` WeakMap mirrors
+ * `structuredClone`'s reference semantics: circular graphs terminate instead of
+ * overflowing the stack, and a value shared at two positions is cloned once and
+ * shared in the result. Primitives (incl. `bigint`/`symbol`) return as-is.
+ */
+function safeClone(
+	value: unknown,
+	seen: WeakMap<object, unknown> = new WeakMap(),
+): unknown {
+	if (typeof value === "function") {
+		return value;
+	}
+	if (value === null || typeof value !== "object") {
+		return value;
+	}
+	const cached = seen.get(value);
+	if (cached !== undefined) {
+		return cached;
+	}
+	if (Array.isArray(value)) {
+		const out: unknown[] = [];
+		seen.set(value, out);
+		for (let index = 0; index < value.length; index += 1) {
+			out[index] = safeClone(value[index], seen);
+		}
+		return out;
+	}
+	if (isPlainObject(value)) {
+		const out: Record<string, unknown> = {};
+		seen.set(value, out);
+		for (const key in value) {
+			if (Object.prototype.hasOwnProperty.call(value, key)) {
+				out[key] = safeClone(value[key], seen);
+			}
+		}
+		return out;
+	}
+	return structuredClone(value);
+}
+
+/**
  * Deep merge utility that recursively merges objects.
  *
  * Behavior:
@@ -70,11 +121,11 @@ export function deepMerge<T extends Record<string, any> = Record<string, any>>(
 ): any {
 	// Return a copy of target if no sources provided
 	if (sources.length === 0) {
-		return structuredClone(target);
+		return safeClone(target);
 	}
 
 	// Start with a clone of the target
-	const result: any = structuredClone(target);
+	const result: any = safeClone(target);
 
 	for (const source of sources) {
 		// Skip nullish sources
@@ -104,7 +155,7 @@ export function deepMerge<T extends Record<string, any> = Record<string, any>>(
 				);
 			} else {
 				// Otherwise, source value replaces target value (including arrays)
-				result[key] = structuredClone(sourceValue);
+				result[key] = safeClone(sourceValue);
 			}
 		}
 	}

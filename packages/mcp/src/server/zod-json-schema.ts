@@ -1,3 +1,5 @@
+/* eslint-disable no-underscore-dangle -- Zod exposes _def for the compatibility fallback below. */
+import { ToolSchema, type Tool } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 export function jsonSchemaCompatibleSchema(
@@ -73,6 +75,25 @@ export function toJsonSchema(schema: z.ZodTypeAny | undefined) {
 	} catch {
 		return undefined;
 	}
+}
+
+export function toToolInputJsonSchema(
+	schema: z.ZodTypeAny | undefined,
+): Tool["inputSchema"] {
+	const parsed = ToolSchema.shape.inputSchema.safeParse(toJsonSchema(schema));
+	return parsed.success
+		? parsed.data
+		: {
+				type: "object",
+				properties: {},
+			};
+}
+
+export function toToolOutputJsonSchema(
+	schema: z.ZodTypeAny | undefined,
+): Tool["outputSchema"] {
+	const parsed = ToolSchema.shape.outputSchema.safeParse(toJsonSchema(schema));
+	return parsed.success ? parsed.data : undefined;
 }
 
 function canConvertToJsonSchema(schema: z.ZodTypeAny): boolean {
