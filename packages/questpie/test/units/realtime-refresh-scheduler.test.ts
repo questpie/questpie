@@ -24,19 +24,28 @@ class FakeRealtimeSource {
 		return () => this.listeners.delete(listener);
 	}
 
-	emit(seq: number) {
+	emit(seq: number, change: Partial<RealtimeChangeEvent> = {}) {
 		const event: RealtimeChangeEvent = {
 			seq,
 			resourceType: "collection",
 			resource: "posts",
 			operation: "update",
 			createdAt: new Date(),
+			...change,
 		};
 		for (const listener of this.listeners) listener(event);
 	}
 }
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+function decodeFrame(frame: Uint8Array): Record<string, any> {
+	const data = new TextDecoder()
+		.decode(frame)
+		.split("\n")
+		.find((line) => line.startsWith("data: "))!;
+	return JSON.parse(data.slice(6));
+}
 
 describe("realtime scheduler", () => {
 	it("computes once for 100 equivalent subscribers and fans out one frame", async () => {
@@ -217,6 +226,76 @@ describe("realtime scheduler", () => {
 
 		await new Promise((resolve) => setTimeout(resolve, 30));
 		expect(maximum).toBe(2);
+	});
+
+	it("bootstraps each late delta subscriber before forwarding newer rows", async () => {
+		const realtime = new FakeRealtimeSource();
+		const scheduler = new RealtimeRefreshScheduler(realtime);
+		let rows = [{ id: "1", title: "One" }];
+		let computes = 0;
+		const first: Uint8Array[] = [];
+		const second: Uint8Array[] = [];
+		const input = {
+			key: "posts:shared-delta",
+			topicId: "posts",
+			topics: { resourceType: "collection" as const, resource: "posts" },
+			mode: "delta" as const,
+			compute: async () => {
+				computes += 1;
+				return { docs: rows, totalDocs: rows.length };
+			},
+			hydrateRows: async (ids: string[]) => ({
+				docs: rows.filter((row) => ids.includes(row.id)),
+			}),
+			onError: () => {},
+		};
+
+		const stopFirst = scheduler.subscribe({
+			...input,
+			onFrame: (frame: Uint8Array) => first.push(frame),
+		});
+		await tick();
+		await tick();
+		expect(
+			first.map(decodeFrame).map((frame) => frame.type ?? "snapshot"),
+		).toEqual(["snapshot"]);
+
+		rows = [...rows, { id: "2", title: "Two" }];
+		realtime.emit(5, { operation: "create", recordId: "2" });
+		await tick();
+		await tick();
+		expect(
+			first.map(decodeFrame).map((frame) => frame.type ?? "snapshot"),
+		).toEqual(["snapshot", "insert", "up-to-date"]);
+
+		const stopSecond = scheduler.subscribe({
+			...input,
+			topicId: "posts-second",
+			onFrame: (frame: Uint8Array) => second.push(frame),
+		});
+		await tick();
+		await tick();
+		expect(computes).toBe(2);
+		expect(second.map(decodeFrame)).toEqual([
+				expect.objectContaining({
+					topicId: "posts-second",
+					seq: 5,
+				data: { docs: rows, totalDocs: 2 },
+			}),
+		]);
+
+		rows = rows.map((row) =>
+			row.id === "2" ? { ...row, title: "Two updated" } : row,
+		);
+		realtime.emit(6, { operation: "update", recordId: "2" });
+		await tick();
+		await tick();
+		expect(first.map(decodeFrame).at(-2)?.type).toBe("update");
+		expect(second.map(decodeFrame).at(-2)?.type).toBe("update");
+		expect(second.map(decodeFrame).at(-2)?.topicId).toBe("posts-second");
+
+		stopFirst();
+		stopSecond();
 	});
 });
 

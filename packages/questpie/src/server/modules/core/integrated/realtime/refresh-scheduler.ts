@@ -1,3 +1,4 @@
+import { deriveDeltaOp, type RealtimeDeliveryMode } from "./delta.js";
 import {
 	realtimeOperation,
 	type RealtimeObservation,
@@ -80,7 +81,11 @@ export async function resolveRealtimeAccessKey<TContext extends AccessContext>(
 }
 
 type Subscriber = {
-	onFrame: (frame: Uint8Array) => Promise<void> | void;
+	topicId: string;
+	onFrame: (
+		frame: Uint8Array,
+		delivery?: RealtimeDeliveryMode,
+	) => Promise<void> | void;
 	onError: RealtimeErrorListener;
 	onTransportError?: RealtimeErrorListener;
 };
@@ -108,9 +113,16 @@ export type RefreshSubscriptionInput = {
 	topics: RealtimeTopics;
 	sinceSeq?: number;
 	compute: () => Promise<unknown>;
-	onFrame: (frame: Uint8Array) => Promise<void> | void;
+	onFrame: (
+		frame: Uint8Array,
+		delivery?: RealtimeDeliveryMode,
+	) => Promise<void> | void;
 	onError: RealtimeErrorListener;
 	onTransportError?: RealtimeErrorListener;
+	mode?: RealtimeDeliveryMode;
+	hydrateRows?: (recordIds: string[]) => Promise<unknown>;
+	maxDeltaQueueEvents?: number;
+	maxDeltaQueueBytes?: number;
 };
 
 const sha256 = async (value: string): Promise<string> => {
@@ -123,9 +135,63 @@ const sha256 = async (value: string): Promise<string> => {
 	).join("");
 };
 
+type DeltaSubscriber = Subscriber & {
+	ready: boolean;
+	pending: Array<{ frame: Uint8Array; delivery: RealtimeDeliveryMode }>;
+	pendingBytes: number;
+	rebootstrap: boolean;
+};
+
+type DeltaGroup = {
+	key: string;
+	topics: RealtimeTopics;
+	compute: () => Promise<unknown>;
+	hydrateRows: (recordIds: string[]) => Promise<unknown>;
+	subscribers: Set<DeltaSubscriber>;
+	unsubscribe: () => void;
+	queue: RealtimeChangeEvent[];
+	queueBytes: number;
+	maxQueueEvents: number;
+	maxQueueBytes: number;
+	latestSeq: number;
+	lastDeliveredSeq: number;
+	rowHashes: Map<string, string>;
+	ready: boolean;
+	processing: boolean;
+	resetQueued: boolean;
+	disposed: boolean;
+};
+
+function snapshotRows(data: unknown): unknown[] {
+	if (Array.isArray(data)) return data;
+	if (data && typeof data === "object") {
+		const docs = (data as { docs?: unknown }).docs;
+		if (Array.isArray(docs)) return docs;
+	}
+	return [];
+}
+
+function rowKey(row: unknown): string | null {
+	if (!row || typeof row !== "object") return null;
+	const id = (row as { id?: unknown }).id;
+	return typeof id === "string" || typeof id === "number" ? String(id) : null;
+}
+
+function eventRecordIds(event: RealtimeChangeEvent): string[] | null {
+	if (event.operation === "bulk_update" || event.operation === "bulk_delete") {
+		const ids = event.payload?.recordIds;
+		if (!ids || ids.length === 0) return null;
+		return ids.map(String);
+	}
+	return event.recordId === null || event.recordId === undefined
+		? null
+		: [String(event.recordId)];
+}
+
 /** App-scoped compute-once/deliver-many scheduler for live-query snapshots. */
 export class RealtimeRefreshScheduler {
 	private readonly groups = new Map<string, SchedulerGroup>();
+	private readonly deltaGroups = new Map<string, DeltaGroup>();
 	private readonly pendingComputations: Array<() => void> = [];
 	private activeComputations = 0;
 
@@ -144,6 +210,8 @@ export class RealtimeRefreshScheduler {
 	}
 
 	subscribe(input: RefreshSubscriptionInput): () => void {
+		if (input.mode === "delta") return this.subscribeDelta(input);
+
 		let group = this.groups.get(input.key);
 		let created = false;
 		if (!group) {
@@ -171,6 +239,7 @@ export class RealtimeRefreshScheduler {
 		}
 
 		const subscriber: Subscriber = {
+			topicId: input.topicId,
 			onFrame: input.onFrame,
 			onError: input.onError,
 			onTransportError: input.onTransportError,
@@ -190,6 +259,294 @@ export class RealtimeRefreshScheduler {
 			group!.unsubscribe();
 			this.groups.delete(group!.key);
 		};
+	}
+
+	private subscribeDelta(input: RefreshSubscriptionInput): () => void {
+		if (!input.hydrateRows) {
+			throw new Error("Delta subscriptions require hydrateRows");
+		}
+		let group = this.deltaGroups.get(input.key);
+		if (!group) {
+			group = {
+				key: input.key,
+				topics: input.topics,
+				compute: input.compute,
+				hydrateRows: input.hydrateRows,
+				subscribers: new Set(),
+				unsubscribe: () => {},
+				queue: [],
+				queueBytes: 0,
+				maxQueueEvents: input.maxDeltaQueueEvents ?? 512,
+				maxQueueBytes: input.maxDeltaQueueBytes ?? 1024 * 1024,
+				latestSeq: 0,
+				lastDeliveredSeq: 0,
+				rowHashes: new Map(),
+				ready: false,
+				processing: false,
+				resetQueued: false,
+				disposed: false,
+			};
+			this.deltaGroups.set(input.key, group);
+			group.unsubscribe = this.realtime.subscribe(
+				(event) => this.onDeltaChange(group!, event),
+				input.topics,
+				(error) => this.reportDeltaTransportError(group!, error),
+			);
+		}
+
+		const subscriber: DeltaSubscriber = {
+			topicId: input.topicId,
+			onFrame: input.onFrame,
+			onError: input.onError,
+			onTransportError: input.onTransportError,
+			ready: false,
+			pending: [],
+			pendingBytes: 0,
+			rebootstrap: false,
+		};
+		group.subscribers.add(subscriber);
+		void this.bootstrapDeltaSubscriber(group, subscriber);
+
+		return () => {
+			if (!group!.subscribers.delete(subscriber)) return;
+			if (group!.subscribers.size > 0) return;
+			group!.disposed = true;
+			group!.unsubscribe();
+			this.deltaGroups.delete(group!.key);
+		};
+	}
+
+	private async bootstrapDeltaSubscriber(
+		group: DeltaGroup,
+		subscriber: DeltaSubscriber,
+	): Promise<void> {
+		try {
+			do {
+				subscriber.rebootstrap = false;
+				subscriber.pending = [];
+				subscriber.pendingBytes = 0;
+				const bootstrapSeq = group.ready
+					? group.lastDeliveredSeq
+					: await this.realtime.getLatestSeq();
+				group.latestSeq = Math.max(group.latestSeq, bootstrapSeq);
+				group.lastDeliveredSeq = Math.max(group.lastDeliveredSeq, bootstrapSeq);
+				const data = await this.runBounded(group.compute);
+				if (group.disposed || !group.subscribers.has(subscriber)) return;
+				if (!group.ready) {
+					await this.replaceDeltaHashes(group, snapshotRows(data));
+					group.ready = true;
+					void this.processDeltaQueue(group);
+				}
+				await subscriber.onFrame(
+					encodeSseEvent("snapshot", {
+						topicId: subscriber.topicId,
+						seq: bootstrapSeq,
+						data,
+						reset: false,
+					}),
+					"snapshot",
+				);
+				while (!subscriber.rebootstrap && subscriber.pending.length > 0) {
+					const { frame, delivery } = subscriber.pending.shift()!;
+					subscriber.pendingBytes -= frame.byteLength;
+					await subscriber.onFrame(frame, delivery);
+				}
+			} while (subscriber.rebootstrap && !group.disposed);
+			subscriber.ready = true;
+		} catch (error) {
+			subscriber.onError(error);
+		}
+	}
+
+	private onDeltaChange(group: DeltaGroup, event: RealtimeChangeEvent): void {
+		if (group.disposed) return;
+		group.latestSeq = Math.max(group.latestSeq, event.seq);
+		const bytes = new TextEncoder().encode(JSON.stringify(event)).byteLength;
+		if (
+			group.queue.length + 1 > group.maxQueueEvents ||
+			group.queueBytes + bytes > group.maxQueueBytes
+		) {
+			group.queue = [];
+			group.queueBytes = 0;
+			group.resetQueued = true;
+		} else {
+			group.queue.push(event);
+			group.queueBytes += bytes;
+		}
+		if (group.ready) void this.processDeltaQueue(group);
+	}
+
+	private async processDeltaQueue(group: DeltaGroup): Promise<void> {
+		if (group.processing || group.disposed || !group.ready) return;
+		group.processing = true;
+		try {
+			while (!group.disposed && (group.resetQueued || group.queue.length > 0)) {
+				if (group.resetQueued) {
+					group.resetQueued = false;
+					group.queue = [];
+					group.queueBytes = 0;
+					await this.resetDeltaGroup(group);
+					continue;
+				}
+
+				const events = group.queue.splice(0);
+				group.queueBytes = 0;
+				if (
+					events.some(
+						(event) =>
+							event.resourceType !== group.topics.resourceType ||
+							event.resource !== group.topics.resource ||
+							eventRecordIds(event) === null,
+					)
+				) {
+					group.resetQueued = true;
+					continue;
+				}
+
+				const ids = [
+					...new Set(events.flatMap((event) => eventRecordIds(event)!)),
+				];
+				const hydrated = snapshotRows(await group.hydrateRows(ids));
+				const rowsById = new Map<string, unknown>();
+				for (const row of hydrated) {
+					const key = rowKey(row);
+					if (key !== null) rowsById.set(key, row);
+				}
+
+				for (const event of events) {
+					for (const key of eventRecordIds(event)!) {
+						const row = rowsById.get(key);
+						const previousHash = group.rowHashes.get(key);
+						const operation = deriveDeltaOp({
+							present: row !== undefined,
+							operation: event.operation,
+							beforeMatch: previousHash !== undefined,
+						});
+						if (row !== undefined) {
+							const hash = await sha256(JSON.stringify(row));
+							group.rowHashes.set(key, hash);
+							if (operation !== "noop" && hash !== previousHash) {
+								this.deliverDeltaEvent(
+									group,
+									operation,
+									{
+										type: operation,
+										seq: event.seq,
+										...(event.txid ? { txid: event.txid } : {}),
+										key,
+										row,
+									},
+									"delta",
+								);
+							}
+						} else if (operation === "delete") {
+							group.rowHashes.delete(key);
+							this.deliverDeltaEvent(
+								group,
+								"delete",
+								{
+									type: "delete",
+									seq: event.seq,
+									...(event.txid ? { txid: event.txid } : {}),
+									key,
+								},
+								"delta",
+							);
+						}
+					}
+					group.lastDeliveredSeq = Math.max(group.lastDeliveredSeq, event.seq);
+					this.deliverDeltaEvent(
+						group,
+						"up-to-date",
+						{
+							type: "up-to-date",
+							seq: event.seq,
+							...(event.txid ? { txid: event.txid } : {}),
+							meta: { totalDocs: group.rowHashes.size },
+						},
+						"delta",
+					);
+				}
+			}
+		} catch (error) {
+			this.reportDeltaError(group, error);
+		} finally {
+			group.processing = false;
+			if (group.resetQueued || group.queue.length > 0) {
+				void this.processDeltaQueue(group);
+			}
+		}
+	}
+
+	private async resetDeltaGroup(group: DeltaGroup): Promise<void> {
+		const seq = await this.realtime.getLatestSeq();
+		const data = await this.runBounded(group.compute);
+		await this.replaceDeltaHashes(group, snapshotRows(data));
+		group.latestSeq = Math.max(group.latestSeq, seq);
+		group.lastDeliveredSeq = Math.max(group.lastDeliveredSeq, seq);
+		this.deliverDeltaEvent(
+			group,
+			"snapshot",
+			{
+				seq,
+				data,
+				reset: true,
+			},
+			"snapshot",
+		);
+	}
+
+	private async replaceDeltaHashes(
+		group: DeltaGroup,
+		rows: unknown[],
+	): Promise<void> {
+		group.rowHashes.clear();
+		for (const row of rows) {
+			const key = rowKey(row);
+			if (key !== null)
+				group.rowHashes.set(key, await sha256(JSON.stringify(row)));
+		}
+	}
+
+	private deliverDeltaEvent(
+		group: DeltaGroup,
+		event: string,
+		data: Record<string, unknown>,
+		delivery: RealtimeDeliveryMode,
+	): void {
+		for (const subscriber of group.subscribers) {
+			const frame = encodeSseEvent(event, {
+				...data,
+				topicId: subscriber.topicId,
+			});
+			if (subscriber.ready) {
+				void Promise.resolve(subscriber.onFrame(frame, delivery)).catch(
+					subscriber.onError,
+				);
+				continue;
+			}
+			if (
+				subscriber.pending.length + 1 > group.maxQueueEvents ||
+				subscriber.pendingBytes + frame.byteLength > group.maxQueueBytes
+			) {
+				subscriber.pending = [];
+				subscriber.pendingBytes = 0;
+				subscriber.rebootstrap = true;
+				continue;
+			}
+			subscriber.pending.push({ frame, delivery });
+			subscriber.pendingBytes += frame.byteLength;
+		}
+	}
+
+	private reportDeltaError(group: DeltaGroup, error: unknown): void {
+		for (const subscriber of group.subscribers) subscriber.onError(error);
+	}
+
+	private reportDeltaTransportError(group: DeltaGroup, error: unknown): void {
+		for (const subscriber of group.subscribers) {
+			(subscriber.onTransportError ?? subscriber.onError)(error);
+		}
 	}
 
 	private async initialize(group: SchedulerGroup): Promise<void> {
