@@ -1,16 +1,17 @@
-import type { Experimental_SandboxSession } from "@ai-sdk/provider-utils";
-import {
-	HarnessAgent,
-	type HarnessAgentPermissionMode,
-	type HarnessAgentResumeSessionState,
-	type HarnessAgentSession,
-	type HarnessAgentSettings,
-	type HarnessAgentSkill,
-} from "@ai-sdk/harness/agent";
 import {
 	createClaudeCode,
 	type ClaudeCodeHarnessSettings,
 } from "@ai-sdk/harness-claude-code";
+import {
+	HarnessAgent,
+	type HarnessAgentPermissionMode,
+	type HarnessAgentResumeSessionState,
+	type HarnessAgentSandboxConfig,
+	type HarnessAgentSession,
+	type HarnessAgentSettings,
+	type HarnessAgentSkill,
+} from "@ai-sdk/harness/agent";
+import type { Experimental_SandboxSession } from "@ai-sdk/provider-utils";
 import {
 	toUIMessageStream,
 	type InferUIMessageChunk,
@@ -34,6 +35,13 @@ export interface HarnessSandboxSessionOptions {
 	mcpServers?: unknown[];
 }
 
+export type CreateHarnessAgentSandboxConfig = Omit<
+	HarnessAgentSandboxConfig,
+	"onSession"
+> & {
+	onSession?: (options: HarnessSandboxSessionOptions) => Promise<void>;
+};
+
 export interface CreateHarnessAgentOptions<TTools extends ToolSet = {}> {
 	runtime?: HarnessCoreRuntime;
 	key?: string;
@@ -45,7 +53,7 @@ export interface CreateHarnessAgentOptions<TTools extends ToolSet = {}> {
 	claudeCode?: ClaudeCodeHarnessSettings;
 	mcpServers?: unknown[];
 	sandbox?: Omit<LocalHostSandboxSettings, "workRoot">;
-	onSandboxSession?: (options: HarnessSandboxSessionOptions) => Promise<void>;
+	sandboxConfig?: CreateHarnessAgentSandboxConfig;
 }
 
 export interface HarnessSessionStore {
@@ -91,17 +99,11 @@ export function createHarnessAgent<TTools extends ToolSet = {}>(
 	if (runtime !== "claude-code") {
 		throw new Error(`Unsupported harness runtime "${runtime}"`);
 	}
-	const onSandboxSession = options.onSandboxSession;
+	const { onSession, ...sandboxConfig } = options.sandboxConfig ?? {};
 
 	return new HarnessAgent({
 		id: options.key,
-		// @ai-sdk/harness canary resolves harness + harness-claude-code against two
-		// peer copies, so createClaudeCode()'s HarnessV1 is nominally — not
-		// structurally — distinct from the HarnessAgentAdapter HarnessAgent expects.
-		// Assert the adapter type at this single boundary until the peer dedupes.
-		harness: createClaudeCode(
-			options.claudeCode,
-		) as unknown as ConstructorParameters<typeof HarnessAgent>[0]["harness"],
+		harness: createClaudeCode(options.claudeCode),
 		sandbox: createLocalHostSandbox({
 			...options.sandbox,
 			workRoot: options.workRoot,
@@ -110,13 +112,16 @@ export function createHarnessAgent<TTools extends ToolSet = {}>(
 		skills: options.skills,
 		tools: options.tools,
 		permissionMode: options.permissionMode,
-		onSandboxSession: onSandboxSession
-			? (sessionOptions) =>
-					onSandboxSession({
-						...sessionOptions,
-						mcpServers: options.mcpServers,
-					})
-			: undefined,
+		sandboxConfig: {
+			...sandboxConfig,
+			onSession: onSession
+				? (sessionOptions) =>
+						onSession({
+							...sessionOptions,
+							mcpServers: options.mcpServers,
+						})
+				: undefined,
+		},
 	} satisfies HarnessAgentSettings<
 		ConstructorParameters<typeof HarnessAgent>[0]["harness"],
 		TTools
@@ -135,14 +140,12 @@ export function createInMemoryHarnessSessionStore(): HarnessSessionStore {
 	};
 }
 
-export const inMemoryHarnessSessionStore =
-	createInMemoryHarnessSessionStore();
+export const inMemoryHarnessSessionStore = createInMemoryHarnessSessionStore();
 
 export async function resumeOrCreateSession(
 	options: ResumeOrCreateSessionOptions,
 ): Promise<ResumedHarnessSession> {
-	const resumeFrom =
-		(await options.loadResumeState?.(options.id)) ?? undefined;
+	const resumeFrom = (await options.loadResumeState?.(options.id)) ?? undefined;
 	const session = await options.agent.createSession({
 		sessionId: options.id,
 		resumeFrom,

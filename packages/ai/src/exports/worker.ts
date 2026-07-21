@@ -1,5 +1,9 @@
 import * as os from "node:os";
 
+import type {
+	AgentWorkloadClaimAuthority,
+	ClaimedRun,
+} from "../server/modules/ai/lib/execution-contract.js";
 import type { HarnessCoreRuntime } from "../server/modules/ai/lib/harness-core.js";
 import { generateSecret } from "../server/modules/ai/services/worker-manager.js";
 import {
@@ -11,6 +15,12 @@ import { prepareWorkerVolume } from "../server/worker/worker-volume.js";
 // Public worker-entry alias for the harness-core runtime union (the legacy
 // harness-agent-runner that used to own this name is deleted).
 export type HarnessRuntime = HarnessCoreRuntime;
+export type { AgentWorkloadClaimAuthority, ClaimedRun };
+
+export interface WorkerWorkRootAuthority {
+	managedRoot: string;
+	currentVolumeId: string;
+}
 
 export interface EmbeddedWorkerConfig {
 	runtimes: { runtime: HarnessRuntime; binaryPath?: string }[];
@@ -25,6 +35,24 @@ export interface EmbeddedWorkerConfig {
 	resolveSkills?: (
 		run: Record<string, unknown>,
 	) => Promise<unknown[]> | unknown[];
+	/**
+	 * App-owned claim-time authority resolver. Return undefined only for generic
+	 * non-project runs that should use the worker-owned default directory.
+	 */
+	resolveWorkRoot?: (
+		run: Record<string, unknown>,
+		authority: WorkerWorkRootAuthority,
+	) => Promise<string | undefined> | string | undefined;
+	/** Executor-audience authority gate for Agent claims. Configuring it makes
+	 * missing workload authority fail closed; generic legacy claims stay on the
+	 * separate unconfigured path. */
+	workloadBoundary?: ExecuteRunDeps["workloadBoundary"];
+	/** Mint/obtain the signed opaque authority only after this exact Worker has
+	 * received its lease. Worker identity is transport provenance, not authority. */
+	resolveWorkloadAuthority?: (
+		claimed: ClaimedRun,
+		transport: { readonly workerId: string },
+	) => Promise<AgentWorkloadClaimAuthority> | AgentWorkloadClaimAuthority;
 }
 
 export async function startAIWorker(
@@ -53,6 +81,9 @@ export async function startAIWorker(
 		mcpServers: config.mcpServers,
 		sandbox: config.sandbox,
 		resolveSkills: config.resolveSkills,
+		resolveWorkRoot: config.resolveWorkRoot,
+		volumeId: volume.volumeId,
+		workloadBoundary: config.workloadBoundary,
 	};
 
 	let workerId = "embedded";
@@ -86,11 +117,19 @@ export async function startAIWorker(
 		}
 		return count;
 	};
-	const startExecution = (claimed: any) => {
+	const startExecution = (claimed: ClaimedRun | null) => {
 		if (!claimed || !workerManager) return;
 		const runtime = claimed.spawn?.runtime as HarnessRuntime | undefined;
 		if (!runtime) return;
-		const execution = executeRun(executeDeps, claimed).finally(() => {
+		const execution = (async () => {
+			const workloadAuthority = config.resolveWorkloadAuthority
+				? await config.resolveWorkloadAuthority(claimed, { workerId })
+				: claimed.workloadAuthority;
+			await executeRun(executeDeps, {
+				...claimed,
+				workloadAuthority,
+			});
+		})().finally(() => {
 			activeRuns.delete(execution);
 		});
 		activeRuns.set(execution, runtime);

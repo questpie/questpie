@@ -81,17 +81,20 @@
 	"scripts": {
 		"build": "tsdown",
 		"check-types": "tsc --noEmit",
+		"test": "bun test src",
+		"test:codex-compatibility": "bun test src/__tests__/codex-compatibility.test.ts --timeout 30000",
 		"questpie:generate": "bun questpie generate --verbose"
 	},
 	"dependencies": {
-		"@ai-sdk/harness": "1.0.0-canary.9",
-		"@ai-sdk/harness-claude-code": "1.0.0-canary.5",
-		"@ai-sdk/provider-utils": "5.0.0-canary.48",
+		"@ai-sdk/harness": "1.0.27",
+		"@ai-sdk/harness-claude-code": "1.0.27",
+		"@ai-sdk/harness-codex": "1.0.29",
+		"@ai-sdk/provider-utils": "5.0.7",
 		"@iconify/react": "^6.0.2",
 		"@questpie/admin": "workspace:*",
-		"ai": "7.0.0-canary.173",
+		"ai": "7.0.22",
 		"questpie": "workspace:*",
-		"ws": "^8.20.1"
+		"ws": "8.21.0"
 	},
 	"devDependencies": {
 		"@tanstack/react-query": "^5.x",

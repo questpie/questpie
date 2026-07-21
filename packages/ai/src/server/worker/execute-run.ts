@@ -1,3 +1,5 @@
+import { AgentWorkloadAuthorityError } from "../authority/agent-workload-error.js";
+import type { AgentWorkloadPrincipal } from "../authority/agent-workload-types.js";
 import type { ClaimedRun } from "../modules/ai/lib/execution-contract.js";
 import {
 	createQuestpieResumableStreamStore,
@@ -33,6 +35,7 @@ export interface ExecuteRunDeps {
 	workflows?: FinalizeRunDeps["workflows"];
 	knowledgeResource?: FinalizeRunDeps["knowledgeResource"];
 	workerDir: string;
+	volumeId: string;
 	mcpServers?: unknown[];
 	/** Local-host sandbox settings forwarded to runHarnessRun (auth passthrough etc). */
 	sandbox?: Parameters<typeof runHarnessRun>[0]["sandbox"];
@@ -40,6 +43,47 @@ export interface ExecuteRunDeps {
 	resolveSkills?: (
 		run: Record<string, unknown>,
 	) => Promise<unknown[]> | unknown[];
+	resolveWorkRoot?: (
+		run: Record<string, unknown>,
+		authority: { managedRoot: string; currentVolumeId: string },
+	) => Promise<string | undefined> | string | undefined;
+	/** Explicit Agent-authority gate. When configured, every claim must carry a
+	 * sealed workloadAuthority; there is no legacy/system/requester fallback. */
+	workloadBoundary?: AgentWorkloadExecutionBoundary;
+	/** Narrow test/runtime adapter seam; defaults to the package Harness runner. */
+	runHarness?: typeof runHarnessRun;
+}
+
+interface AgentWorkloadExecutionRequest {
+	readonly authority: string;
+	readonly fence: {
+		readonly runId: string;
+		readonly attemptId: string;
+		readonly workerId: string;
+		readonly leaseId: string;
+		readonly leaseEpoch: number;
+	};
+}
+
+export interface AgentWorkloadExecutionBoundary {
+	start<TResult>(
+		request: AgentWorkloadExecutionRequest,
+		operation: (
+			principal: AgentWorkloadPrincipal,
+		) => Promise<TResult> | TResult,
+	): Promise<TResult>;
+	resume<TResult>(
+		request: AgentWorkloadExecutionRequest,
+		operation: (
+			principal: AgentWorkloadPrincipal,
+		) => Promise<TResult> | TResult,
+	): Promise<TResult>;
+	handoffResult<TResult>(
+		request: AgentWorkloadExecutionRequest,
+		operation: (
+			principal: AgentWorkloadPrincipal,
+		) => Promise<TResult> | TResult,
+	): Promise<TResult>;
 }
 
 function buildRunHarnessRow(row: Record<string, unknown>): RunHarnessRow {
@@ -60,6 +104,41 @@ function buildRunHarnessRow(row: Record<string, unknown>): RunHarnessRow {
 	};
 }
 
+function buildWorkloadRequest(
+	claimed: ClaimedRun,
+	row: Record<string, unknown>,
+): AgentWorkloadExecutionRequest | null {
+	const workload = claimed.workloadAuthority;
+	if (!workload) return null;
+	const producerLease = isRecord(row.producerLease) ? row.producerLease : null;
+	if (
+		typeof workload.authority !== "string" ||
+		workload.authority.length === 0 ||
+		typeof workload.attemptId !== "string" ||
+		workload.attemptId.length === 0 ||
+		!producerLease ||
+		typeof producerLease.workerId !== "string" ||
+		typeof producerLease.leaseId !== "string" ||
+		typeof producerLease.epoch !== "number" ||
+		!Number.isSafeInteger(producerLease.epoch) ||
+		claimed.lease.id !== producerLease.leaseId ||
+		claimed.lease.runId !== String(row.id) ||
+		claimed.epoch !== producerLease.epoch
+	) {
+		throw new AgentWorkloadAuthorityError("invalid_principal");
+	}
+	return {
+		authority: workload.authority,
+		fence: {
+			runId: String(row.id),
+			attemptId: workload.attemptId,
+			workerId: producerLease.workerId,
+			leaseId: producerLease.leaseId,
+			leaseEpoch: producerLease.epoch,
+		},
+	};
+}
+
 /**
  * Run one claimed run_links turn: runHarnessRun (the streaming core) → the ONE
  * finalizeRun. On a harness throw, finalize as failed. The terminal status /
@@ -71,7 +150,12 @@ export async function executeRun(
 	claimed: ClaimedRun,
 ): Promise<void> {
 	const row = claimed.run;
-	if (!row) return; // legacy claim without a run_links row — nothing to run
+	if (!row) {
+		if (deps.workloadBoundary || claimed.workloadAuthority) {
+			throw new AgentWorkloadAuthorityError("invalid_principal");
+		}
+		return; // explicit generic legacy claim — no Agent-authority path configured
+	}
 
 	const runId = String(row.id);
 	const epoch =
@@ -88,21 +172,68 @@ export async function executeRun(
 		workflows: deps.workflows,
 		knowledgeResource: deps.knowledgeResource,
 	};
-
-	try {
+	const workloadRequest = buildWorkloadRequest(claimed, row);
+	if (Boolean(workloadRequest) !== Boolean(deps.workloadBoundary)) {
+		throw new AgentWorkloadAuthorityError(
+			workloadRequest ? "invalid_resolver_configuration" : "invalid_principal",
+		);
+	}
+	const runHarness = deps.runHarness ?? runHarnessRun;
+	let executionAuthorized = false;
+	const handoff = async <TResult>(operation: () => Promise<TResult>) => {
+		if (workloadRequest && deps.workloadBoundary) {
+			return deps.workloadBoundary.handoffResult(workloadRequest, operation);
+		}
+		return operation();
+	};
+	const run = async () => {
+		executionAuthorized = true;
+		const managedWorkRoot = deps.resolveWorkRoot
+			? await deps.resolveWorkRoot(row, {
+					managedRoot: deps.workerDir,
+					currentVolumeId: deps.volumeId,
+				})
+			: undefined;
 		const skills = deps.resolveSkills
 			? await deps.resolveSkills(row)
 			: undefined;
-		const result = await runHarnessRun({
+		return runHarness({
 			run: buildRunHarnessRow(row),
 			collections: { run_links: deps.collections.run_links },
 			kv: deps.kv,
-			workerDir: deps.workerDir,
+			workerDir: managedWorkRoot ?? deps.workerDir,
 			skills,
 			mcpServers: deps.mcpServers,
 			sandbox: deps.sandbox,
 		});
-		await finalizeRun(finalizeDeps, {
+	};
+	let result: Awaited<ReturnType<typeof runHarness>>;
+	try {
+		const isResume = row.harnessResumeState != null;
+		result =
+			workloadRequest && deps.workloadBoundary
+				? await (
+						isResume
+							? deps.workloadBoundary.resume
+							: deps.workloadBoundary.start
+					)(workloadRequest, async () => run())
+				: await run();
+	} catch (error) {
+		if (workloadRequest && !executionAuthorized) throw error;
+		await handoff(() =>
+			finalizeRun(finalizeDeps, {
+				runId,
+				kind,
+				terminal: "failed",
+				epoch,
+				error: error instanceof Error ? error.message : String(error),
+			}),
+		);
+		return;
+	}
+
+	await handoff(() =>
+		finalizeRun(finalizeDeps, {
 			runId,
 			kind,
 			terminal: "completed",
@@ -114,14 +245,6 @@ export async function executeRun(
 			resumeState: result.resumeState,
 			uiMessages: result.uiMessages,
 			chatSessionId: relationId(row.chatSession),
-		});
-	} catch (error) {
-		await finalizeRun(finalizeDeps, {
-			runId,
-			kind,
-			terminal: "failed",
-			epoch,
-			error: error instanceof Error ? error.message : String(error),
-		});
-	}
+		}),
+	);
 }

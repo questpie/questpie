@@ -35,13 +35,23 @@ export interface ClaimedRun {
 	 */
 	run?: Record<string, unknown>;
 	epoch?: number;
+	/**
+	 * Authenticated executor-audience authority issued after this exact Worker
+	 * lease was claimed. The sealed envelope carries no ambient credentials or
+	 * filesystem authority; the executor boundary must revalidate it.
+	 */
+	workloadAuthority?: AgentWorkloadClaimAuthority;
+}
+
+export interface AgentWorkloadClaimAuthority {
+	readonly authority: string;
+	readonly attemptId: string;
 }
 
 export interface AgentRuntimeRunRequest {
 	runtime: string;
 	prompt: string;
 	runtimeSessionRef?: string;
-	cwd?: string;
 	systemPrompt?: string;
 	mcpServers?: unknown[];
 	metadata?: Record<string, unknown>;

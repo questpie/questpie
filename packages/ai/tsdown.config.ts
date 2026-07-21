@@ -9,6 +9,12 @@ export default defineConfig({
 	outDir: "dist",
 	format: ["esm"],
 	clean: true,
+	copy: [
+		{
+			from: "src/server/modules/ai/lib/codex-bridge/*",
+			to: "dist/codex-bridge",
+		},
+	],
 	dts: {
 		sourcemap: false,
 	},
