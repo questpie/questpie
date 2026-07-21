@@ -1,3 +1,0 @@
-{"type":"stream-start","modelId":"claude-opus-4-7[1m]","seq":1}
-{"type":"finish-step","finishReason":{"unified":"stop","raw":"stop"},"usage":{"inputTokens":{"total":0,"noCache":0,"cacheRead":0,"cacheWrite":0},"outputTokens":{"total":0,"text":0}},"harnessMetadata":{"claude-code":{"costUsd":0}},"seq":2}
-{"type":"finish","finishReason":{"unified":"stop","raw":"stop"},"totalUsage":{"inputTokens":{"total":0,"noCache":0,"cacheRead":0,"cacheWrite":0},"outputTokens":{"total":0,"text":0}},"harnessMetadata":{"claude-code":{"costUsd":0}},"seq":3}
