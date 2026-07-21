@@ -44,6 +44,6 @@ export default runtimeConfig({
 	},
 
 	cli: {
-		migrations: { directory: "./src/migrations" },
+		migrations: { directory: "./src/questpie/server/migrations" },
 	},
 });

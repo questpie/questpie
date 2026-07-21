@@ -21,6 +21,10 @@ import _coll_submissions from "../collections/submissions";
 // ── Globals ────────────────────────────────────────────────
 import _glob_site_settings from "../globals/site-settings";
 
+// ── Migrations ─────────────────────────────────────────────
+import _mig_20260211T164057_bright_yellow_tiger from "../migrations/20260211T164057_bright_yellow_tiger";
+import _mig_20260721T210525_kind_pink_dolphin from "../migrations/20260721T210525_kind_pink_dolphin";
+
 // ── Blocks ─────────────────────────────────────────────────
 import { accordionBlock as _bloc_accordion } from "../blocks/accordion";
 import { announcementBannerBlock as _bloc_announcementBanner } from "../blocks/announcement-banner";
@@ -47,8 +51,9 @@ import _authConfig from "../config/auth";
 import _adminConfig from "../config/admin";
 import _openapi from "../config/openapi";
 
-import type { AppCollections, AppGlobals, AppJobs, _ModuleCollections, _AppDefaultServices, _AppServicesSeam, _AppTopLevelServices, _AppCustomServiceNamespaces, _Registry_Collections, _Registry_Globals, _Registry_Jobs, _Registry_Routes, _Registry_Services, _Registry_Emails, _Registry_FieldTypes, _Registry_Views, _Registry_Components, _Registry_Blocks, _AllModuleFields } from "./entities.gen";
+import type { AppCollections, AppChannels, AppGlobals, AppJobs, _ModuleCollections, _AppDefaultServices, _AppServicesSeam, _AppTopLevelServices, _AppCustomServiceNamespaces, _Registry_Collections, _Registry_Channels, _Registry_Globals, _Registry_Jobs, _Registry_Routes, _Registry_Services, _Registry_Emails, _Registry_FieldTypes, _Registry_Views, _Registry_Components, _Registry_Blocks, _AllModuleFields } from "./entities.gen";
 import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";
+import type { ChannelsService } from "questpie/channels";
 
 type _MPSubModules<M> = M extends { modules: infer S extends readonly any[] } ? S : readonly [];
 type _MPConfigValue<M, K extends string> = M extends { config: infer C } ? (C extends Record<K, infer V> ? V : {}) : {};
@@ -70,26 +75,18 @@ type _JobHandlerCollections = _ModuleCollections & {
 	pages: typeof _coll_pages;
 	submissions: typeof _coll_submissions;
 };
-type _JobHandlerCollectionsAPI = {
-	announcements: CollectionAPI<typeof _coll_announcements, _JobHandlerCollections>;
-	cities: CollectionAPI<typeof _coll_cities, _JobHandlerCollections>;
-	cityMembers: CollectionAPI<typeof _coll_cityMembers, _JobHandlerCollections>;
-	contacts: CollectionAPI<typeof _coll_contacts, _JobHandlerCollections>;
-	documents: CollectionAPI<typeof _coll_documents, _JobHandlerCollections>;
-	news: CollectionAPI<typeof _coll_news, _JobHandlerCollections>;
-	pages: CollectionAPI<typeof _coll_pages, _JobHandlerCollections>;
-	submissions: CollectionAPI<typeof _coll_submissions, _JobHandlerCollections>;
-};
+type _JobHandlerCollectionsAPI = { [K in keyof _JobHandlerCollections]: CollectionAPI<_JobHandlerCollections[K], _JobHandlerCollections> };
 type _ExecutionContextJob<T> = T extends { name: infer TName extends string; schema: z.ZodSchema<infer TPayload> } ? QueueJobType<TPayload, TName> : never;
 type _ExecutionContextJobs = {};
 type _ExecutionContextServiceDefinitions = {};
 type _ExecutionContextDefaultServices = ServiceInstancesInNamespace<_ExecutionContextServiceDefinitions, "services">;
 type _AppCollectionDefinitions = AppCollections & Record<string, AnyCollectionOrBuilder>;
 type _AppGlobalDefinitions = AppGlobals & Record<string, AnyGlobalOrBuilder>;
-type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "globals" | "auth" | "~contextExtensions"> & {
+type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "channels" | "globals" | "auth" | "~contextExtensions"> & {
 	app: (typeof _runtime)["app"];
 	db: (typeof _runtime)["db"];
 	collections: _AppCollectionDefinitions;
+	channels: AppChannels;
 	globals: _AppGlobalDefinitions;
 	auth: _AppAuthConfig;
 	storage: (typeof _runtime)["storage"];
@@ -117,6 +114,7 @@ type _AppInfraRecord = {
 	logger: _AppQuestpie["logger"];
 	search: _AppQuestpie["search"];
 	realtime: _AppQuestpie["realtime"];
+	channels: ChannelsService<AppChannels>;
 
 	// Entity APIs
 	collections: _CollectionsAPI;
@@ -148,6 +146,7 @@ declare global {
 			logger: _AppQuestpie["logger"];
 			search: _AppQuestpie["search"];
 			realtime: _AppQuestpie["realtime"];
+			channels: ChannelsService<AppChannels>;
 
 			// Entity APIs
 			collections: _JobHandlerCollectionsAPI;
@@ -175,6 +174,7 @@ declare global {
 			logger: _AppQuestpie["logger"];
 			search: _AppQuestpie["search"];
 			realtime: _AppQuestpie["realtime"];
+			channels: ChannelsService<AppChannels>;
 
 			// Entity APIs
 			collections: _JobHandlerCollectionsAPI;
@@ -226,6 +226,7 @@ declare global {
 
 		interface Registry {
 			collections: _Registry_Collections;
+			channels: _Registry_Channels;
 			globals: _Registry_Globals;
 			jobs: _Registry_Jobs;
 			routes: _Registry_Routes;

@@ -5,7 +5,7 @@
 import { createApp, createContextFactory } from "questpie/app";
 import "./names.gen";
 import type { AccessContext, AppDefinition, CollectionSelect, GlobalSelect, HookContext, Where } from "questpie/types";
-import type { AppCollections, AppGlobals, AppRoutes } from "./entities.gen";
+import type { AppCollections, AppChannels, AppGlobals, AppRoutes } from "./entities.gen";
 import type { _AppQuestpie, AppAuthConfig, AppSession, AppSessionUser } from "./context.gen";
 
 // ── Runtime ────────────────────────────────────────────────
@@ -26,6 +26,10 @@ import _coll_submissions from "../collections/submissions";
 
 // ── Globals ────────────────────────────────────────────────
 import _glob_site_settings from "../globals/site-settings";
+
+// ── Migrations ─────────────────────────────────────────────
+import _mig_20260211T164057_bright_yellow_tiger from "../migrations/20260211T164057_bright_yellow_tiger";
+import _mig_20260721T210525_kind_pink_dolphin from "../migrations/20260721T210525_kind_pink_dolphin";
 
 // ── Blocks ─────────────────────────────────────────────────
 import { accordionBlock as _bloc_accordion } from "../blocks/accordion";
@@ -104,6 +108,7 @@ export type HookRuleContext<K extends keyof AppCollections | unknown = unknown> 
  */
 export type AppConfig = {
 	collections: AppCollections;
+	channels: AppChannels;
 	globals: AppGlobals;
 	routes: AppRoutes;
 	storage: (typeof _runtime)["storage"];
@@ -132,6 +137,7 @@ _appPromise = createApp(
 		globals: {
 			site_settings: _glob_site_settings,
 		},
+		migrations: [_mig_20260211T164057_bright_yellow_tiger, _mig_20260721T210525_kind_pink_dolphin],
 		blocks: {
 			[_bloc_accordion.state.name]: _bloc_accordion,
 			[_bloc_announcementBanner.state.name]: _bloc_announcementBanner,

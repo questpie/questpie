@@ -1,0 +1,3918 @@
+{
+  "operations": [
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__announcements__DOT__attachments",
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__questpie_realtime_log__DOT__idx_realtime_log_seq",
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__questpie_realtime_log__DOT__idx_realtime_log_resource",
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__jwks",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "jwks",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__oauthAccessToken",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "oauthAccessToken",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__oauthClient",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "oauthClient",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__oauthConsent",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "oauthConsent",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__oauthRefreshToken",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "oauthRefreshToken",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__admin_audit_log",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "admin_audit_log",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__questpie_channel_head",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "questpie_channel_head",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__questpie_channel_event",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "questpie_channel_event",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__questpie_channel_dispatch",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "questpie_channel_dispatch",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__questpie_channel_presence",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "questpie_channel_presence",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__questpie_realtime_topology",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "questpie_realtime_topology",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__jwks__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "jwks"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__jwks__DOT__publicKey",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "publicKey",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "jwks"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__jwks__DOT__privateKey",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "privateKey",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "jwks"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__jwks__DOT__createdAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "createdAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "jwks"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__jwks__DOT__expiresAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "expiresAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "jwks"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__token",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "token",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__clientId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "clientId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__sessionId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "sessionId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__userId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "userId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__referenceId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "referenceId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__refreshId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "refreshId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__expiresAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "expiresAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__createdAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "createdAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__scopes",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "scopes",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__clientId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "clientId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__clientSecret",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "clientSecret",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__disabled",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "name": "disabled",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__skipConsent",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "skipConsent",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__enableEndSession",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "enableEndSession",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__subjectType",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "subjectType",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__scopes",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "scopes",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__userId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "userId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__createdAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "createdAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__updatedAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "updatedAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__name",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "name",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__uri",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "uri",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__icon",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "icon",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__contacts",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "contacts",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__tos",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "tos",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__policy",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "policy",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__softwareId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "softwareId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__softwareVersion",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "softwareVersion",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__softwareStatement",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "softwareStatement",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__redirectUris",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "redirectUris",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__postLogoutRedirectUris",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "postLogoutRedirectUris",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__tokenEndpointAuthMethod",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "tokenEndpointAuthMethod",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__grantTypes",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "grantTypes",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__responseTypes",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "responseTypes",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__public",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "public",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__type",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "type",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__requirePKCE",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "requirePKCE",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__referenceId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "referenceId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__metadata",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "metadata",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthConsent__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthConsent"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthConsent__DOT__clientId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "clientId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthConsent"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthConsent__DOT__userId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "userId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthConsent"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthConsent__DOT__referenceId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "referenceId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthConsent"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthConsent__DOT__scopes",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "scopes",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthConsent"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthConsent__DOT__createdAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "createdAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthConsent"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthConsent__DOT__updatedAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "updatedAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthConsent"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__token",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "token",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__clientId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "clientId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__sessionId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "sessionId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__userId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "userId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__referenceId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "referenceId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__expiresAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "expiresAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__createdAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "createdAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__revoked",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "revoked",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__authTime",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "authTime",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__scopes",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "scopes",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__configId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'default'",
+        "generated": null,
+        "identity": null,
+        "name": "configId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__key",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "key",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__filename",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "filename",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__mime_type",
+      "value": {
+        "type": "varchar(100)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "mime_type",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__size",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "size",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__avatar",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "avatar",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__verification__DOT__value",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "value",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "verification"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__verification__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "verification"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__verification__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "verification"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_preferences__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_preferences"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_preferences__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_preferences"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_saved_views__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_saved_views"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_saved_views__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_saved_views"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_audit_log__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_audit_log__DOT__action",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "action",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_audit_log__DOT__resourceType",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "resourceType",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_audit_log__DOT__resource",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "resource",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_audit_log__DOT__resourceId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "resourceId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_audit_log__DOT__resourceLabel",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "resourceLabel",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_audit_log__DOT__userId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "userId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_audit_log__DOT__userName",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "userName",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_audit_log__DOT__locale",
+      "value": {
+        "type": "varchar(10)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "locale",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_audit_log__DOT__changes",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "changes",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_audit_log__DOT__metadata",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "metadata",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_audit_log__DOT__title",
+      "value": {
+        "type": "varchar(1000)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "title",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_audit_log__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_audit_log__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__announcements__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "announcements"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__announcements__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "announcements"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__cities__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "cities"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__cities__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "cities"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__cityMembers__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "cityMembers"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__cityMembers__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "cityMembers"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__contacts__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "contacts"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__contacts__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "contacts"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__documents__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "documents"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__documents__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "documents"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__news__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "news"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__news__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "news"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__submissions__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "submissions"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__submissions__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "submissions"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__navigation",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[{\"label\":\"Home\",\"href\":\"/\",\"isExternal\":false},{\"label\":\"News\",\"href\":\"/news\",\"isExternal\":false},{\"label\":\"Services\",\"href\":\"/services\",\"isExternal\":false},{\"label\":\"Contact\",\"href\":\"/contact\",\"isExternal\":false}]'",
+        "generated": null,
+        "identity": null,
+        "name": "navigation",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__footerLinks",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[{\"label\":\"Privacy Policy\",\"href\":\"/privacy\",\"isExternal\":false},{\"label\":\"Accessibility\",\"href\":\"/accessibility\",\"isExternal\":false},{\"label\":\"Contact Us\",\"href\":\"/contact\",\"isExternal\":false}]'",
+        "generated": null,
+        "identity": null,
+        "name": "footerLinks",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__version_stage",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "version_stage",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__version_from_stage",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "version_from_stage",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__version_created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "version_created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__navigation",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[{\"label\":\"Home\",\"href\":\"/\",\"isExternal\":false},{\"label\":\"News\",\"href\":\"/news\",\"isExternal\":false},{\"label\":\"Services\",\"href\":\"/services\",\"isExternal\":false},{\"label\":\"Contact\",\"href\":\"/contact\",\"isExternal\":false}]'",
+        "generated": null,
+        "identity": null,
+        "name": "navigation",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__footerLinks",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[{\"label\":\"Privacy Policy\",\"href\":\"/privacy\",\"isExternal\":false},{\"label\":\"Accessibility\",\"href\":\"/accessibility\",\"isExternal\":false},{\"label\":\"Contact Us\",\"href\":\"/contact\",\"isExternal\":false}]'",
+        "generated": null,
+        "identity": null,
+        "name": "footerLinks",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_log__DOT__txid",
+      "value": {
+        "type": "xid8",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "pg_current_xact_id()",
+        "generated": null,
+        "identity": null,
+        "name": "txid",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_log__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_head__DOT__channel_hash",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "channel_hash",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_head"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_head__DOT__channel",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "channel",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_head"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_head__DOT__last_seq",
+      "value": {
+        "type": "bigint",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "name": "last_seq",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_head"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_head__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_head"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_event__DOT__channel_hash",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "channel_hash",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_event"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_event__DOT__seq",
+      "value": {
+        "type": "bigint",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "seq",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_event"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_event__DOT__event_id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "event_id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_event"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_event__DOT__channel",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "channel",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_event"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_event__DOT__event",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "event",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_event"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_event__DOT__schema_identity",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "schema_identity",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_event"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_event__DOT__payload",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "payload",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_event"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_event__DOT__size_bytes",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "size_bytes",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_event"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_event__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_event"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_dispatch__DOT__channel_hash",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "channel_hash",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_dispatch"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_dispatch__DOT__published_seq",
+      "value": {
+        "type": "bigint",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "name": "published_seq",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_dispatch"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_dispatch__DOT__lease_owner",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "lease_owner",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_dispatch"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_dispatch__DOT__lease_expires_at",
+      "value": {
+        "type": "timestamp with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "lease_expires_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_dispatch"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_dispatch__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_dispatch"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_presence__DOT__channel_hash",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "channel_hash",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_presence"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_presence__DOT__connection_id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "connection_id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_presence"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_presence__DOT__principal_id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "principal_id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_presence"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_presence__DOT__channel",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "channel",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_presence"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_presence__DOT__data",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "data",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_presence"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_presence__DOT__expires_at",
+      "value": {
+        "type": "timestamp with time zone",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "expires_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_presence"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_channel_presence__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_channel_presence"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_topology__DOT__session_key",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "session_key",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_topology"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_topology__DOT__owner_id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "owner_id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_topology"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_topology__DOT__owner_generation",
+      "value": {
+        "type": "bigserial",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "owner_generation",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_topology"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_topology__DOT__protocol_version",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "protocol_version",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_topology"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_topology__DOT__token_hash",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "token_hash",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_topology"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_topology__DOT__identity_hash",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "identity_hash",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_topology"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_topology__DOT__lease_expires_at",
+      "value": {
+        "type": "timestamp with time zone",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "lease_expires_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_topology"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_topology__DOT__desired_revision",
+      "value": {
+        "type": "bigint",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "name": "desired_revision",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_topology"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_topology__DOT__applied_revision",
+      "value": {
+        "type": "bigint",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "name": "applied_revision",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_topology"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_topology__DOT__desired_topology",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "desired_topology",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_topology"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_topology__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_topology"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_topology__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_topology"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search_facets__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__admin_audit_log__DOT__audit_log_resource_type_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "resource",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "resourceType",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "audit_log_resource_type_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__admin_audit_log__DOT__audit_log_user_id_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "userId",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "audit_log_user_id_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__admin_audit_log__DOT__audit_log_created_at_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "created_at",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "audit_log_created_at_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__admin_audit_log__DOT__audit_log_resource_id_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "resource",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "resourceId",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "audit_log_resource_id_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__site_settings_versions__DOT__site_settings_versions_id_version_stage_version_number_index",
+      "value": {
+        "nameExplicit": false,
+        "columns": [
+          {
+            "value": "id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "version_stage",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "version_number",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "site_settings_versions_id_version_stage_version_number_index",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_channel_event__DOT__uq_channel_event_event_id",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "event_id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "uq_channel_event_event_id",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_channel_event"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_channel_event__DOT__idx_channel_event_created_at",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "created_at",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_channel_event_created_at",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_channel_event"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_channel_presence__DOT__idx_channel_presence_channel",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "channel_hash",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_channel_presence_channel",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_channel_presence"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_channel_presence__DOT__idx_channel_presence_expiry",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "expires_at",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_channel_presence_expiry",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_channel_presence"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_realtime_topology__DOT__idx_realtime_topology_owner_lease",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "owner_id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "lease_expires_at",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_realtime_topology_owner_lease",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_realtime_topology"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_realtime_topology__DOT__idx_realtime_topology_lease",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "lease_expires_at",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_realtime_topology_lease",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_realtime_topology"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__questpie_channel_event__DOT__questpie_channel_event_pkey",
+      "value": {
+        "columns": [
+          "channel_hash",
+          "seq"
+        ],
+        "nameExplicit": false,
+        "name": "questpie_channel_event_pkey",
+        "entityType": "pks",
+        "schema": "public",
+        "table": "questpie_channel_event"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__questpie_channel_presence__DOT__questpie_channel_presence_pkey",
+      "value": {
+        "columns": [
+          "channel_hash",
+          "connection_id"
+        ],
+        "nameExplicit": false,
+        "name": "questpie_channel_presence_pkey",
+        "entityType": "pks",
+        "schema": "public",
+        "table": "questpie_channel_presence"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__jwks__DOT__jwks_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "jwks_pkey",
+        "schema": "public",
+        "table": "jwks",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__oauthAccessToken__DOT__oauthAccessToken_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "oauthAccessToken_pkey",
+        "schema": "public",
+        "table": "oauthAccessToken",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__oauthClient__DOT__oauthClient_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "oauthClient_pkey",
+        "schema": "public",
+        "table": "oauthClient",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__oauthConsent__DOT__oauthConsent_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "oauthConsent_pkey",
+        "schema": "public",
+        "table": "oauthConsent",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__oauthRefreshToken__DOT__oauthRefreshToken_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "oauthRefreshToken_pkey",
+        "schema": "public",
+        "table": "oauthRefreshToken",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__admin_audit_log__DOT__admin_audit_log_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "admin_audit_log_pkey",
+        "schema": "public",
+        "table": "admin_audit_log",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__questpie_channel_head__DOT__questpie_channel_head_pkey",
+      "value": {
+        "columns": [
+          "channel_hash"
+        ],
+        "nameExplicit": false,
+        "name": "questpie_channel_head_pkey",
+        "schema": "public",
+        "table": "questpie_channel_head",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__questpie_channel_dispatch__DOT__questpie_channel_dispatch_pkey",
+      "value": {
+        "columns": [
+          "channel_hash"
+        ],
+        "nameExplicit": false,
+        "name": "questpie_channel_dispatch_pkey",
+        "schema": "public",
+        "table": "questpie_channel_dispatch",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__questpie_realtime_topology__DOT__questpie_realtime_topology_pkey",
+      "value": {
+        "columns": [
+          "session_key"
+        ],
+        "nameExplicit": false,
+        "name": "questpie_realtime_topology_pkey",
+        "schema": "public",
+        "table": "questpie_realtime_topology",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-07-21T21:05:26.094Z",
+      "migrationId": "kindPinkDolphin20260721T210525"
+    }
+  ],
+  "metadata": {
+    "migrationId": "kindPinkDolphin20260721T210525",
+    "timestamp": "2026-07-21T21:05:26.296Z",
+    "prevId": "00000000-0000-0000-0000-000000000000"
+  }
+}

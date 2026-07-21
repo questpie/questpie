@@ -22,6 +22,10 @@ import _coll_submissions from "../collections/submissions";
 // ── Globals ────────────────────────────────────────────────
 import _glob_site_settings from "../globals/site-settings";
 
+// ── Migrations ─────────────────────────────────────────────
+import _mig_20260211T164057_bright_yellow_tiger from "../migrations/20260211T164057_bright_yellow_tiger";
+import _mig_20260721T210525_kind_pink_dolphin from "../migrations/20260721T210525_kind_pink_dolphin";
+
 // ── Blocks ─────────────────────────────────────────────────
 import { accordionBlock as _bloc_accordion } from "../blocks/accordion";
 import { announcementBannerBlock as _bloc_announcementBanner } from "../blocks/announcement-banner";
@@ -57,6 +61,7 @@ import type { RouteParamsFromKey, RouteWithParams } from "questpie/types";
 import type { ExtractModulePropArr, ExtractModulePropArrOverride, Override, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";
 type _RouteDefinitionWithoutHandler<T> = T extends { mode: "raw" } ? Omit<T, "handler"> & { handler: (args: unknown) => Response | Promise<Response> } : Omit<T, "handler"> & { handler: (args: unknown) => unknown | Promise<unknown> };
 export type _ModuleCollections = ExtractModulePropArrOverride<typeof _modules, "collections">;
+export type _ModuleChannels = ExtractModulePropArr<typeof _modules, "channels">;
 export type _ModuleGlobals = ExtractModulePropArr<typeof _modules, "globals">;
 export type _ModuleJobs = ExtractModulePropArr<typeof _modules, "jobs">;
 export type _ModuleRoutes = ExtractModulePropArr<typeof _modules, "routes">;
@@ -67,6 +72,7 @@ export type _ModuleComponents = ExtractModulePropArr<typeof _modules, "component
 export type _ModuleBlocks = ExtractModulePropArr<typeof _modules, "blocks">;
 // Registry category extraction from modules
 export type _Registry_Collections = ExtractModulePropArrOverride<typeof _modules, "collections">;
+export type _Registry_Channels = ExtractModulePropArr<typeof _modules, "channels">;
 export type _Registry_Globals = ExtractModulePropArr<typeof _modules, "globals">;
 export type _Registry_Jobs = ExtractModulePropArr<typeof _modules, "jobs">;
 export type _Registry_Routes = ExtractModulePropArr<typeof _modules, "routes">;
@@ -93,6 +99,9 @@ export type AppCollections = Override<_ModuleCollections, {
 	pages: typeof _coll_pages;
 	submissions: typeof _coll_submissions;
 }>;
+
+/** All channels in the app (modules + user, user overrides) */
+export type AppChannels = _ModuleChannels;
 
 /** All globals in the app (modules + user, user overrides) */
 export type AppGlobals = _ModuleGlobals & {
