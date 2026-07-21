@@ -25,6 +25,7 @@ import _glob_site_settings from "../globals/site-settings";
 // ── Migrations ─────────────────────────────────────────────
 import _mig_20260211T164057_bright_yellow_tiger from "../migrations/20260211T164057_bright_yellow_tiger";
 import _mig_20260721T210525_kind_pink_dolphin from "../migrations/20260721T210525_kind_pink_dolphin";
+import _mig_20260721T220739_calm_purple_griffin from "../migrations/20260721T220739_calm_purple_griffin";
 
 // ── Blocks ─────────────────────────────────────────────────
 import { accordionBlock as _bloc_accordion } from "../blocks/accordion";
