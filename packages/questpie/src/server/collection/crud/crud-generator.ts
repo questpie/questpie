@@ -68,6 +68,7 @@ import {
 	createHookContext,
 	executeHooks,
 	getCurrentTransaction,
+	getTransactionTxid,
 	getDb,
 	guardCrudMethods,
 	isInTransaction,
@@ -120,6 +121,7 @@ import {
 	type ResolvedWorkflowConfig,
 	resolveWorkflowConfig,
 } from "#questpie/server/modules/core/workflow/config.js";
+import { attachTxid, getTxid } from "#questpie/shared/txid.js";
 
 /**
  * True when a where clause constrains nothing but `id`.
@@ -130,6 +132,14 @@ function isIdOnlyWhere(where: Where | undefined): boolean {
 	if (!where || typeof where !== "object") return false;
 	const keys = Object.keys(where);
 	return keys.length === 1 && keys[0] === "id";
+}
+
+function attachCurrentTransactionTxid<T>(value: T): T {
+	const txid = getTransactionTxid();
+	if (Array.isArray(value)) {
+		for (const item of value) attachTxid(item, txid);
+	}
+	return attachTxid(value, txid);
 }
 
 export class CRUDGenerator<TState extends CollectionBuilderState> {
@@ -1744,7 +1754,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 							// Queue search indexing to run after transaction commits (fire-and-forget)
 
-							return createdRecord;
+							return attachCurrentTransactionTxid(createdRecord);
 						});
 					} catch (error: unknown) {
 						// Check if it's a database constraint violation
@@ -2176,7 +2186,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// Execute all afterChange hooks in parallel (non-fatal)
 				await Promise.allSettled(afterChangePromises);
 
-				return refetchedRecords;
+				return attachCurrentTransactionTxid(refetchedRecords);
 			});
 		} catch (error: unknown) {
 			const dbError = parseDatabaseError(error);
@@ -2348,9 +2358,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						err,
 					);
 				}
+				attachCurrentTransactionTxid(existing);
 			});
 
-			const result = { success: true, data: existing };
+			const result = attachTxid(
+				{ success: true, data: existing },
+				getTxid(existing),
+			);
 
 			// Execute afterRead hook (transform output)
 			await this.executeHooks(
@@ -2486,7 +2500,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					);
 				}
 
-				return updatedRecords;
+				return attachCurrentTransactionTxid(updatedRecords);
 			});
 		};
 	}
@@ -2636,10 +2650,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					}
 				}
 
-				return claimedRecords;
+				return attachCurrentTransactionTxid(claimedRecords);
 			});
 
-			return { success: true, count: winners.length };
+			return attachTxid(
+				{ success: true, count: winners.length },
+				getTxid(winners),
+			);
 		};
 	}
 
@@ -2991,7 +3008,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				if (result) {
 				}
 
-				return result;
+				return attachCurrentTransactionTxid(result);
 			});
 
 			await this.filterFieldsForRead(updated, normalized);

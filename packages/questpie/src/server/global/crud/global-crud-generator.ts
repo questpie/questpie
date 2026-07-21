@@ -15,6 +15,7 @@ import {
 	executeAccessRule,
 	extractNestedLocalizationSchemas,
 	getDb,
+	getTransactionTxid,
 	getRestrictedReadFields,
 	mergeFieldAccessRules,
 	mergeI18nRows,
@@ -54,6 +55,7 @@ import {
 	resolveWorkflowConfig,
 } from "#questpie/server/modules/core/workflow/config.js";
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
+import { attachTxid } from "#questpie/shared/txid.js";
 
 import type {
 	GlobalCRUD,
@@ -852,7 +854,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					}),
 				);
 
-				return updatedRecord;
+				return attachTxid(updatedRecord, getTransactionTxid());
 			};
 
 			const updatedRecord = await withTransaction(db, async (tx: any) => {
@@ -1209,7 +1211,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					);
 				}
 
-				return updatedRecord;
+				return attachTxid(updatedRecord, getTransactionTxid());
 			});
 		};
 	}

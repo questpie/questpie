@@ -16,6 +16,12 @@ export * from "#questpie/server/adapters/http.js";
 // Re-export standalone factory functions
 export { collection } from "#questpie/server/collection/builder/collection-builder.js";
 export * from "#questpie/server/collection/builder/index.js";
+export {
+	attachTxid,
+	getTxid,
+	QUESTPIE_TXID,
+	QUESTPIE_TXID_HEADER,
+} from "#questpie/shared/txid.js";
 // Access control utilities
 export {
 	type AccessRuleEvaluationContext,

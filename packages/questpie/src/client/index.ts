@@ -8,8 +8,8 @@ import type {
 	InferRouteOutput,
 	JsonRouteDefinition,
 	RawRouteDefinition,
-	RouteDefinition,
 } from "#questpie/server/routes/types.js";
+import { attachTxid, QUESTPIE_TXID_HEADER } from "#questpie/shared/txid.js";
 import type {
 	AnyCollection,
 	AnyCollectionOrBuilder,
@@ -1033,10 +1033,10 @@ export function createClient<TApp extends QuestpieApp>(
 	/**
 	 * Make a request to the app API
 	 */
-	async function request(
+	async function requestWithMeta(
 		path: string,
 		options: RequestInit = {},
-	): Promise<any> {
+	): Promise<{ data: any; headers: Headers }> {
 		const url = `${config.baseURL}${path}`;
 		const useSuperJSON = config.useSuperJSON !== false; // default true
 
@@ -1119,11 +1119,29 @@ export function createClient<TApp extends QuestpieApp>(
 		// Parse successful response (could be SuperJSON or regular JSON)
 		const responseContentType = response.headers.get("Content-Type");
 		const text = await response.text();
-		if (!text) return undefined;
+		if (!text) return { data: undefined, headers: response.headers };
 
-		return responseContentType?.includes("superjson")
-			? superjson.parse(text)
-			: JSON.parse(text);
+		return {
+			data: responseContentType?.includes("superjson")
+				? superjson.parse(text)
+				: JSON.parse(text),
+			headers: response.headers,
+		};
+	}
+
+	async function request(
+		path: string,
+		options: RequestInit = {},
+	): Promise<any> {
+		return (await requestWithMeta(path, options)).data;
+	}
+
+	async function mutationRequest(
+		path: string,
+		options: RequestInit,
+	): Promise<any> {
+		const { data, headers } = await requestWithMeta(path, options);
+		return attachTxid(data, headers.get(QUESTPIE_TXID_HEADER));
 	}
 
 	const realtimeApi = createRealtimeAPI({
@@ -1278,7 +1296,7 @@ export function createClient<TApp extends QuestpieApp>(
 						arrayFormat: "brackets",
 					});
 					const path = `${apiBasePath}/${collectionName}${queryString ? `?${queryString}` : ""}`;
-					return request(path, {
+					return mutationRequest(path, {
 						method: "POST",
 						body: JSON.stringify(data),
 					});
@@ -1293,7 +1311,7 @@ export function createClient<TApp extends QuestpieApp>(
 						arrayFormat: "brackets",
 					});
 					const path = `${apiBasePath}/${collectionName}/${id}${queryString ? `?${queryString}` : ""}`;
-					return request(path, {
+					return mutationRequest(path, {
 						method: "PATCH",
 						body: JSON.stringify(data),
 					});
@@ -1305,7 +1323,7 @@ export function createClient<TApp extends QuestpieApp>(
 						arrayFormat: "brackets",
 					});
 					const path = `${apiBasePath}/${collectionName}/${id}${queryString ? `?${queryString}` : ""}`;
-					return request(path, {
+					return mutationRequest(path, {
 						method: "DELETE",
 					});
 				},
@@ -1319,7 +1337,7 @@ export function createClient<TApp extends QuestpieApp>(
 						arrayFormat: "brackets",
 					});
 					const path = `${apiBasePath}/${collectionName}/${id}/restore${queryString ? `?${queryString}` : ""}`;
-					return request(path, {
+					return mutationRequest(path, {
 						method: "POST",
 					});
 				},
@@ -1360,7 +1378,7 @@ export function createClient<TApp extends QuestpieApp>(
 						arrayFormat: "brackets",
 					});
 					const path = `${apiBasePath}/${collectionName}/${id}/revert${queryString ? `?${queryString}` : ""}`;
-					return request(path, {
+					return mutationRequest(path, {
 						method: "POST",
 						body: JSON.stringify({ version, versionId }),
 					});
@@ -1401,7 +1419,7 @@ export function createClient<TApp extends QuestpieApp>(
 						arrayFormat: "brackets",
 					});
 					const path = `${apiBasePath}/${collectionName}${queryString ? `?${queryString}` : ""}`;
-					return request(path, {
+					return mutationRequest(path, {
 						method: "PATCH",
 						body: JSON.stringify({ where, data }),
 					});
@@ -1416,7 +1434,7 @@ export function createClient<TApp extends QuestpieApp>(
 						arrayFormat: "brackets",
 					});
 					const path = `${apiBasePath}/${collectionName}/update-batch${queryString ? `?${queryString}` : ""}`;
-					return request(path, {
+					return mutationRequest(path, {
 						method: "POST",
 						body: JSON.stringify({ updates }),
 					});
@@ -1431,7 +1449,7 @@ export function createClient<TApp extends QuestpieApp>(
 						arrayFormat: "brackets",
 					});
 					const path = `${apiBasePath}/${collectionName}/delete-many${queryString ? `?${queryString}` : ""}`;
-					return request(path, {
+					return mutationRequest(path, {
 						method: "POST",
 						body: JSON.stringify({ where }),
 					});
@@ -1689,7 +1707,7 @@ export function createClient<TApp extends QuestpieApp>(
 						},
 						{ skipNulls: true, arrayFormat: "brackets" },
 					);
-					return request(
+					return mutationRequest(
 						`${apiBasePath}/globals/${globalName}${queryString ? `?${queryString}` : ""}`,
 						{
 							method: "PATCH",
@@ -1747,7 +1765,7 @@ export function createClient<TApp extends QuestpieApp>(
 						},
 						{ skipNulls: true, arrayFormat: "brackets" },
 					);
-					return request(
+					return mutationRequest(
 						`${apiBasePath}/globals/${globalName}/revert${queryString ? `?${queryString}` : ""}`,
 						{
 							method: "POST",
@@ -2002,3 +2020,9 @@ export type {
 	GlobalSelect,
 	ResolveRelationsDeep,
 } from "#questpie/shared/type-utils.js";
+export {
+	attachTxid,
+	getTxid,
+	QUESTPIE_TXID,
+	QUESTPIE_TXID_HEADER,
+} from "#questpie/shared/txid.js";

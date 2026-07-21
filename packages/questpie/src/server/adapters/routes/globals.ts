@@ -4,6 +4,8 @@
  * Global settings route handlers.
  */
 
+import { getTxid, QUESTPIE_TXID_HEADER } from "#questpie/shared/txid.js";
+
 import type { Questpie } from "../../config/questpie.js";
 import type { QuestpieConfig } from "../../config/types.js";
 import { ApiError } from "../../errors/index.js";
@@ -35,6 +37,11 @@ function errorResponse(
 	locale?: string,
 ): Response {
 	return handleError(error, { request, app, locale });
+}
+
+function txidHeaders(result: unknown): HeadersInit | undefined {
+	const txid = getTxid(result);
+	return txid ? { [QUESTPIE_TXID_HEADER]: txid } : undefined;
 }
 
 // ============================================================================
@@ -144,7 +151,7 @@ export async function globalRevert(
 			},
 			resolved.appContext,
 		);
-		return smartResponse(result, request);
+		return smartResponse(result, request, 200, txidHeaders(result));
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -293,7 +300,7 @@ export async function globalUpdate(
 		const globalInstance = app.getGlobalConfig(params.global as any);
 		const crud = globalInstance.generateCRUD(resolved.appContext.db, app);
 		const result = await crud.update(body, resolved.appContext, options);
-		return smartResponse(result, request);
+		return smartResponse(result, request, 200, txidHeaders(result));
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}

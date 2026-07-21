@@ -49,11 +49,17 @@ export const smartResponse = (
 	data: unknown,
 	request: Request,
 	status = 200,
+	extraHeaders?: HeadersInit,
 ) => {
 	const useSuperJSON = supportsSuperJSON(request);
 
 	const body = useSuperJSON ? superjson.stringify(data) : JSON.stringify(data);
-	const headers = useSuperJSON ? superjsonHeaders : jsonHeaders;
+	const headers = new Headers(useSuperJSON ? superjsonHeaders : jsonHeaders);
+	if (extraHeaders) {
+		for (const [name, value] of new Headers(extraHeaders)) {
+			headers.set(name, value);
+		}
+	}
 
 	return new Response(body, { status, headers });
 };

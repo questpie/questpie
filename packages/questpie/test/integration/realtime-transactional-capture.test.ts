@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 
 import {
 	collection,
+	getTxid,
 	global,
 	questpieRealtimeLogTable,
 	type RealtimeChangeEvent,
@@ -103,6 +104,18 @@ describe("realtime matrix transactional change capture", () => {
 		await setup.app.collections.posts.create({ title: "Captured" }, ctx);
 
 		expect(rowsVisibleInsideTransaction).toBe(1);
+	});
+
+	it("returns the same transaction id as the committed outbox row", async () => {
+		const result = await setup.app.collections.posts.create(
+			{ title: "Correlated" },
+			ctx,
+		);
+		const rows = await setup.app.db.select().from(questpieRealtimeLogTable);
+
+		expect(rows).toHaveLength(1);
+		expect(rows[0]?.txid).toBeString();
+		expect(getTxid(result)).toBe(rows[0]?.txid);
 	});
 
 	it("G11: writes global changes inside the mutation transaction", async () => {
