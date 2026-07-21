@@ -93,8 +93,12 @@ const FETCH_STATUS_TEXT = "Created";
 let origin: Server;
 let originPort = 0;
 /** Records what the local origin saw — to assert the pin connected to the literal. */
-const originSeen: Array<{ url: string; host: string | undefined; method: string; body: string }> =
-	[];
+const originSeen: Array<{
+	url: string;
+	host: string | undefined;
+	method: string;
+	body: string;
+}> = [];
 
 /** TEST-ONLY validator: allow the loopback origin, real policy for everything else. */
 const allowLoopback: IpValidator = (ip) =>
@@ -121,7 +125,9 @@ function mintHttp(opts: {
 }) {
 	const capabilities: ExecutorCapabilities = { net: opts.net };
 	const targetHttp: BindingTarget = {
-		http: { fetchOptions: { resolve: opts.resolve, validateIp: opts.validateIp } },
+		http: {
+			fetchOptions: { resolve: opts.resolve, validateIp: opts.validateIp },
+		},
 	};
 	return broker.mint({ capabilities, target: targetHttp });
 }
@@ -130,6 +136,8 @@ let brokerServer: ReturnType<typeof Bun.serve> | undefined;
 let brokerUrl = "";
 let denoProc: ReturnType<typeof Bun.spawn> | undefined;
 let sandboxUrl = "";
+const NON_AGENT_SECRET =
+	"hreben-sandbox-non-agent-service-key-32-bytes-minimum";
 
 async function waitForListen(
 	proc: ReturnType<typeof Bun.spawn>,
@@ -208,9 +216,18 @@ beforeAll(async () => {
 			"--allow-env",
 			"--allow-run",
 			"--allow-read",
+			"--allow-write",
 			SERVER_ENTRY,
 		],
-		{ env: { ...process.env, PORT: "0" }, stdout: "pipe", stderr: "pipe" },
+		{
+			env: {
+				...process.env,
+				PORT: "0",
+				SANDBOX_NON_AGENT_ADMISSION_SECRET: NON_AGENT_SECRET,
+			},
+			stdout: "pipe",
+			stderr: "pipe",
+		},
 	);
 	const port = await waitForListen(denoProc);
 	sandboxUrl = `http://127.0.0.1:${port}`;
@@ -224,7 +241,10 @@ afterAll(async () => {
 });
 
 function adapter() {
-	return httpSandboxAdapter({ url: sandboxUrl });
+	return httpSandboxAdapter({
+		url: sandboxUrl,
+		nonAgentAdmissionSecret: NON_AGENT_SECRET,
+	});
 }
 
 /** Mint a fresh per-run token bound to SCOPE + the fake target. */
@@ -406,6 +426,7 @@ describe.if(!!denoPath)(
 					"--allow-env",
 					"--allow-run",
 					"--allow-read",
+					"--allow-write",
 					SERVER_ENTRY,
 				],
 				{
@@ -413,6 +434,7 @@ describe.if(!!denoPath)(
 						...process.env,
 						PORT: "0",
 						SANDBOX_BROKER_URL: brokerUrl, // the ONLY broker URL it will relay to
+						SANDBOX_NON_AGENT_ADMISSION_SECRET: NON_AGENT_SECRET,
 					},
 					stdout: "pipe",
 					stderr: "pipe",
@@ -420,7 +442,10 @@ describe.if(!!denoPath)(
 			);
 			try {
 				const port = await waitForListen(pinnedProc);
-				const pinned = httpSandboxAdapter({ url: `http://127.0.0.1:${port}` });
+				const pinned = httpSandboxAdapter({
+					url: `http://127.0.0.1:${port}`,
+					nonAgentAdmissionSecret: NON_AGENT_SECRET,
+				});
 
 				// (a) a MATCHING bindings.url is relayed normally.
 				const okRun = mint();
@@ -431,7 +456,12 @@ describe.if(!!denoPath)(
 							return res.docs.map((d) => d.id);
 						}`,
 						isolation: "sandboxed",
-						capabilities: { net: [], import: [], timeoutMs: 8000, memoryMb: 128 },
+						capabilities: {
+							net: [],
+							import: [],
+							timeoutMs: 8000,
+							memoryMb: 128,
+						},
 						sandboxBindings: { url: brokerUrl, token: okRun.token },
 					} as never);
 					expect(r.ok).toBe(true);
@@ -446,7 +476,12 @@ describe.if(!!denoPath)(
 					const r = await pinned.run({
 						source: `export default async () => "should-not-run"`,
 						isolation: "sandboxed",
-						capabilities: { net: [], import: [], timeoutMs: 8000, memoryMb: 128 },
+						capabilities: {
+							net: [],
+							import: [],
+							timeoutMs: 8000,
+							memoryMb: 128,
+						},
 						sandboxBindings: {
 							url: "http://evil.example/rpc",
 							token: evilRun.token,
@@ -624,7 +659,10 @@ describe.if(!!denoPath)(
 		// ── The SSRF bypass matrix, end-to-end (allowlisted host, resolution varies). ──
 		it("DENIES an allowlisted host resolving to RFC-1918 (10/8) end-to-end", async () => {
 			const out = await runGuestFetch(
-				{ net: [ALLOWED_HOST], resolve: resolverFrom({ [ALLOWED_HOST]: ["10.1.2.3"] }) },
+				{
+					net: [ALLOWED_HOST],
+					resolve: resolverFrom({ [ALLOWED_HOST]: ["10.1.2.3"] }),
+				},
 				`https://${ALLOWED_HOST}/`,
 			);
 			expect(out.fetched).toBe(false);
@@ -633,7 +671,10 @@ describe.if(!!denoPath)(
 
 		it("DENIES IPv6 metadata (fd00:ec2::254) end-to-end", async () => {
 			const out = await runGuestFetch(
-				{ net: [ALLOWED_HOST], resolve: resolverFrom({ [ALLOWED_HOST]: ["fd00:ec2::254"] }) },
+				{
+					net: [ALLOWED_HOST],
+					resolve: resolverFrom({ [ALLOWED_HOST]: ["fd00:ec2::254"] }),
+				},
 				`https://${ALLOWED_HOST}/`,
 			);
 			expect(out.fetched).toBe(false);
@@ -654,7 +695,10 @@ describe.if(!!denoPath)(
 
 		it("DENIES 0.0.0.0 (this-host) end-to-end", async () => {
 			const out = await runGuestFetch(
-				{ net: [ALLOWED_HOST], resolve: resolverFrom({ [ALLOWED_HOST]: ["0.0.0.0"] }) },
+				{
+					net: [ALLOWED_HOST],
+					resolve: resolverFrom({ [ALLOWED_HOST]: ["0.0.0.0"] }),
+				},
 				`https://${ALLOWED_HOST}/`,
 			);
 			expect(out.fetched).toBe(false);
@@ -667,7 +711,10 @@ describe.if(!!denoPath)(
 			// this hardens the path that a literal ever reaches the validator.)
 			for (const encoded of ["2130706433", "0177.0.0.1", "0x7f000001"]) {
 				const out = await runGuestFetch(
-					{ net: [ALLOWED_HOST], resolve: resolverFrom({ [ALLOWED_HOST]: [encoded] }) },
+					{
+						net: [ALLOWED_HOST],
+						resolve: resolverFrom({ [ALLOWED_HOST]: [encoded] }),
+					},
 					`https://${ALLOWED_HOST}/`,
 				);
 				expect(out.fetched).toBe(false);
@@ -681,7 +728,9 @@ describe.if(!!denoPath)(
 			const out = await runGuestFetch(
 				{
 					net: [ALLOWED_HOST],
-					resolve: resolverFrom({ [ALLOWED_HOST]: ["93.184.216.34", "192.168.0.10"] }),
+					resolve: resolverFrom({
+						[ALLOWED_HOST]: ["93.184.216.34", "192.168.0.10"],
+					}),
 				},
 				`https://${ALLOWED_HOST}/`,
 			);

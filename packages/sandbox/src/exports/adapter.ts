@@ -5,5 +5,10 @@
 export {
 	HttpSandboxAdapter,
 	httpSandboxAdapter,
+	type AgentWorkloadHttpRunOptions,
+	type AgentWorkloadHttpSandboxOptions,
+	type AgentWorkloadInputProjectionReference,
+	type AgentWorkloadInputProjectionRegistry,
+	type AgentWorkloadInputProjector,
 	type HttpSandboxAdapterOptions,
 } from "../adapter-http.js";

@@ -8,17 +8,28 @@ import {
 import { z } from "zod";
 
 import {
+	authorizeAgentWorkloadCall,
+	executeAgentWorkloadTool,
+	permitsAgentWorkloadDiscovery,
+	registerAgentWorkloadDiscoveryTool,
+} from "./agent-workload-boundary.js";
+import {
 	evaluateMcpRule,
 	operationRule,
 	requiredScopesForOperation,
 	resolveEntityPolicy,
 	scopeGateAllows,
 	scopesFromContext,
+	workloadRequirementForOperation,
 } from "./policy.js";
 import type { RuntimeScope } from "./runtime.js";
-import { toToolError, toToolResult } from "./runtime.js";
+import { toRequestContext, toToolError, toToolResult } from "./runtime.js";
 import type { McpConfig } from "./types.js";
-import { jsonSchemaCompatibleSchema } from "./zod-json-schema.js";
+import {
+	jsonSchemaCompatibleSchema,
+	toToolInputJsonSchema,
+	toToolOutputJsonSchema,
+} from "./zod-json-schema.js";
 
 function sanitizeRouteKey(key: string): string {
 	return key
@@ -76,14 +87,36 @@ export async function registerRouteTools(
 		if (
 			!scopeGateAllows(
 				scopesFromContext(ctx),
-				requiredScopesForOperation(policy, "route", route.key, "execute", "invoke"),
+				requiredScopesForOperation(
+					policy,
+					"route",
+					route.key,
+					"execute",
+					"invoke",
+				),
 			)
 		) {
 			continue;
 		}
 
 		const name = route.meta.mcp.name ?? `routes.${sanitizeRouteKey(route.key)}`;
+		const workloadRequirement = workloadRequirementForOperation(
+			policy,
+			"execute",
+		);
+		if (
+			scope.agentWorkload &&
+			!(await permitsAgentWorkloadDiscovery(
+				scope.agentWorkload,
+				name,
+				workloadRequirement,
+			))
+		) {
+			continue;
+		}
 		const inputSchema = routeInputSchema(route);
+		const outputSchema = jsonSchemaCompatibleSchema(definition.outputSchema);
+		const annotations = route.meta.mcp.annotations;
 
 		server.registerTool(
 			name,
@@ -91,11 +124,21 @@ export async function registerRouteTools(
 				title: route.meta.mcp.title ?? route.meta.title,
 				description: route.meta.mcp.description ?? route.meta.description,
 				inputSchema,
-				outputSchema: jsonSchemaCompatibleSchema(definition.outputSchema),
-				annotations: route.meta.mcp.annotations,
+				outputSchema,
+				annotations,
 			},
-			async (input) => {
+			async (input, extra) => {
 				try {
+					const workloadPrincipal = scope.agentWorkload
+						? await authorizeAgentWorkloadCall(
+								scope.agentWorkload,
+								name,
+								workloadRequirement,
+							)
+						: undefined;
+					if (scope.agentWorkload && !workloadPrincipal) {
+						throw new Error("MCP access denied");
+					}
 					const routeCtx = await scope.getContext();
 					const stillAllowed = await evaluateMcpRule(
 						operationRule(policy, "execute") ?? operationRule(policy, "read"),
@@ -122,22 +165,55 @@ export async function registerRouteTools(
 						throw new Error("MCP access denied");
 					}
 
-					const routeInput =
-						route.params.length > 0 ? (input as any).input : input;
-					const params = route.params.length > 0 ? (input as any).params : {};
-					const result = await executeJsonRoute(
-						scope.app,
-						definition,
-						routeInput,
-						routeCtx as any,
-						scope.request ?? new Request("http://questpie.local/mcp"),
-						params,
-					);
-					return toToolResult(result);
+					const invocation =
+						route.params.length > 0
+							? z
+									.object({
+										input: z.unknown(),
+										params: z.record(z.string(), z.string()),
+									})
+									.parse(input)
+							: { input, params: {} };
+					const requestContext = toRequestContext(routeCtx, scope.accessMode);
+					const invoke = async () =>
+						toToolResult(
+							await executeJsonRoute(
+								scope.app,
+								definition,
+								invocation.input,
+								requestContext,
+								scope.request ?? new Request("http://questpie.local/mcp"),
+								invocation.params,
+							),
+						);
+					if (scope.agentWorkload && workloadPrincipal && workloadRequirement) {
+						return executeAgentWorkloadTool(
+							scope.agentWorkload,
+							workloadPrincipal,
+							name,
+							workloadRequirement,
+							extra["_meta"],
+							invoke,
+						);
+					}
+					return invoke();
 				} catch (error) {
 					return toToolError(error);
 				}
 			},
 		);
+		if (scope.agentWorkload) {
+			const discoveryOutputSchema = toToolOutputJsonSchema(outputSchema);
+			registerAgentWorkloadDiscoveryTool(scope.agentWorkload, {
+				name,
+				title: route.meta.mcp.title ?? route.meta.title,
+				description: route.meta.mcp.description ?? route.meta.description,
+				inputSchema: toToolInputJsonSchema(inputSchema),
+				...(discoveryOutputSchema
+					? { outputSchema: discoveryOutputSchema }
+					: {}),
+				annotations,
+			});
+		}
 	}
 }

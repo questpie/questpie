@@ -8,6 +8,12 @@ import {
 import { z } from "zod";
 
 import {
+	authorizeAgentWorkloadCall,
+	executeAgentWorkloadTool,
+	permitsAgentWorkloadDiscovery,
+	registerAgentWorkloadDiscoveryTool,
+} from "./agent-workload-boundary.js";
+import {
 	createCollectionDataSchema,
 	createGlobalDataSchema,
 	filterCrudResultFields,
@@ -24,10 +30,12 @@ import {
 	type EntityKind,
 	type ResolvedMcpPolicy,
 	type ScopeOperationKind,
+	workloadRequirementForOperation,
 } from "./policy.js";
 import type { RuntimeScope } from "./runtime.js";
 import { toToolError, toToolResult } from "./runtime.js";
 import type { McpConfig } from "./types.js";
+import { toToolInputJsonSchema } from "./zod-json-schema.js";
 
 const whereSchema = z.record(z.string(), z.unknown());
 const relationLoadSchema = z.record(z.string(), z.unknown());
@@ -304,6 +312,17 @@ async function shouldRegister(
 	operationKind: OperationKind,
 ): Promise<boolean> {
 	if (!policy.expose) return false;
+	const toolName = `${kind === "collection" ? "collections" : "globals"}.${entityName}.${operationName}`;
+	if (
+		scope.agentWorkload &&
+		!(await permitsAgentWorkloadDiscovery(
+			scope.agentWorkload,
+			toolName,
+			workloadRequirementForOperation(policy, operationName),
+		))
+	) {
+		return false;
+	}
 	const ctx = await scope.getContext();
 	const mcpAllowed = await evaluateMcpRule(
 		operationRule(policy, operationName) ??
@@ -355,6 +374,22 @@ export async function registerCrudTools(
 		const crud = (scope.app.collections as Record<string, any>)[name];
 
 		for (const operation of COLLECTION_OPERATIONS) {
+			const toolName = `collections.${name}.${operation.name}`;
+			const inputSchema = collectionOperationSchema(
+				operation.name,
+				collection,
+				policy,
+			);
+			const annotations = {
+				readOnlyHint: operation.kind === "read",
+				destructiveHint: operation.kind === "delete",
+				idempotentHint:
+					operation.name === "update" || operation.name === "delete",
+			};
+			const workloadRequirement = workloadRequirementForOperation(
+				policy,
+				operation.name,
+			);
 			if (
 				!(await shouldRegister(
 					scope,
@@ -369,23 +404,24 @@ export async function registerCrudTools(
 			}
 
 			server.registerTool(
-				`collections.${name}.${operation.name}`,
+				toolName,
 				{
 					description: policy.description ?? operation.description(name),
-					inputSchema: collectionOperationSchema(
-						operation.name,
-						collection,
-						policy,
-					),
-					annotations: {
-						readOnlyHint: operation.kind === "read",
-						destructiveHint: operation.kind === "delete",
-						idempotentHint:
-							operation.name === "update" || operation.name === "delete",
-					},
+					inputSchema,
+					annotations,
 				},
-				async (input) => {
+				async (input, extra) => {
 					try {
+						const workloadPrincipal = scope.agentWorkload
+							? await authorizeAgentWorkloadCall(
+									scope.agentWorkload,
+									toolName,
+									workloadRequirement,
+								)
+							: undefined;
+						if (scope.agentWorkload && !workloadPrincipal) {
+							throw new Error("MCP access denied");
+						}
 						const ctx = await scope.getContext();
 						const allowed = await evaluateMcpRule(
 							operationRule(policy, operation.name) ??
@@ -417,18 +453,43 @@ export async function registerCrudTools(
 							input,
 							policy,
 						);
-						const value = await operation.execute(
-							crud,
-							nextInput,
-							ctx,
-							maxLimit,
-						);
-						return toToolResult(filterCrudResultFields(value, policy));
+						const invoke = async () => {
+							const value = await operation.execute(
+								crud,
+								nextInput,
+								ctx,
+								maxLimit,
+							);
+							return toToolResult(filterCrudResultFields(value, policy));
+						};
+						if (
+							scope.agentWorkload &&
+							workloadPrincipal &&
+							workloadRequirement
+						) {
+							return executeAgentWorkloadTool(
+								scope.agentWorkload,
+								workloadPrincipal,
+								toolName,
+								workloadRequirement,
+								extra["_meta"],
+								invoke,
+							);
+						}
+						return invoke();
 					} catch (error) {
 						return toToolError(error);
 					}
 				},
 			);
+			if (scope.agentWorkload) {
+				registerAgentWorkloadDiscoveryTool(scope.agentWorkload, {
+					name: toolName,
+					description: policy.description ?? operation.description(name),
+					inputSchema: toToolInputJsonSchema(inputSchema),
+					annotations,
+				});
+			}
 		}
 	}
 
@@ -438,6 +499,16 @@ export async function registerCrudTools(
 		const crud = (scope.app.globals as Record<string, any>)[name];
 
 		for (const operation of GLOBAL_OPERATIONS) {
+			const toolName = `globals.${name}.${operation.name}`;
+			const inputSchema = globalOperationSchema(operation.name, global, policy);
+			const annotations = {
+				readOnlyHint: operation.kind === "read",
+				idempotentHint: operation.name === "update",
+			};
+			const workloadRequirement = workloadRequirementForOperation(
+				policy,
+				operation.name,
+			);
 			if (
 				!(await shouldRegister(
 					scope,
@@ -452,17 +523,24 @@ export async function registerCrudTools(
 			}
 
 			server.registerTool(
-				`globals.${name}.${operation.name}`,
+				toolName,
 				{
 					description: policy.description ?? operation.description(name),
-					inputSchema: globalOperationSchema(operation.name, global, policy),
-					annotations: {
-						readOnlyHint: operation.kind === "read",
-						idempotentHint: operation.name === "update",
-					},
+					inputSchema,
+					annotations,
 				},
-				async (input) => {
+				async (input, extra) => {
 					try {
+						const workloadPrincipal = scope.agentWorkload
+							? await authorizeAgentWorkloadCall(
+									scope.agentWorkload,
+									toolName,
+									workloadRequirement,
+								)
+							: undefined;
+						if (scope.agentWorkload && !workloadPrincipal) {
+							throw new Error("MCP access denied");
+						}
 						const ctx = await scope.getContext();
 						const allowed = await evaluateMcpRule(
 							operationRule(policy, operation.name) ??
@@ -494,13 +572,38 @@ export async function registerCrudTools(
 							input,
 							policy,
 						);
-						const value = await operation.execute(crud, nextInput, ctx);
-						return toToolResult(filterCrudResultFields(value, policy));
+						const invoke = async () => {
+							const value = await operation.execute(crud, nextInput, ctx);
+							return toToolResult(filterCrudResultFields(value, policy));
+						};
+						if (
+							scope.agentWorkload &&
+							workloadPrincipal &&
+							workloadRequirement
+						) {
+							return executeAgentWorkloadTool(
+								scope.agentWorkload,
+								workloadPrincipal,
+								toolName,
+								workloadRequirement,
+								extra["_meta"],
+								invoke,
+							);
+						}
+						return invoke();
 					} catch (error) {
 						return toToolError(error);
 					}
 				},
 			);
+			if (scope.agentWorkload) {
+				registerAgentWorkloadDiscoveryTool(scope.agentWorkload, {
+					name: toolName,
+					description: policy.description ?? operation.description(name),
+					inputSchema: toToolInputJsonSchema(inputSchema),
+					annotations,
+				});
+			}
 		}
 	}
 }

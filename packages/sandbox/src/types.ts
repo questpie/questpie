@@ -46,6 +46,8 @@ export interface SandboxBindings {
 
 /** POST /run request body. */
 export interface SandboxRunRequest {
+	/** Authenticated provenance. The supervisor rejects omitted/unknown modes. */
+	mode: "agent_workload" | "non_agent";
 	/** Guest TypeScript source. Must `export default` a `function(input)`. */
 	source: string;
 	/** Payload passed to the guest entry function. */
@@ -95,6 +97,13 @@ export const FRAME_MARKER = "__QP_SANDBOX_MSG__";
  * exposed to guest code.
  */
 export const BINDINGS_TOKEN_HEADER = "x-questpie-sandbox-token";
+
+/** Host-issued admission proving an Agent request crossed the workload boundary. */
+export const AGENT_WORKLOAD_ADMISSION_HEADER =
+	"x-questpie-agent-workload-admission";
+
+/** Trusted host service identity for the structurally separate non-Agent path. */
+export const NON_AGENT_ADMISSION_HEADER = "x-questpie-non-agent-admission";
 
 /** Structured error returned by the broker (mirrors `questpie` `BindingError`). */
 export interface SandboxBindingError {

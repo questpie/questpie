@@ -11,6 +11,7 @@ import type {
 	McpConfig,
 	McpEntityPolicy,
 	McpExecutionOptions,
+	McpAgentWorkloadRequirement,
 	McpRequiredScopes,
 	McpTransportKind,
 } from "./types.js";
@@ -58,6 +59,8 @@ export interface ResolvedMcpPolicy {
 	operations: Record<string, boolean | McpAccessRule>;
 	requiredScopes?: McpRequiredScopes;
 	operationScopes: Record<string, McpRequiredScopes>;
+	workload?: McpAgentWorkloadRequirement;
+	operationWorkloads: Record<string, McpAgentWorkloadRequirement>;
 	fields?: { include?: string[]; exclude?: string[] };
 	description?: string;
 }
@@ -145,7 +148,12 @@ function normalizePolicy(
 	override?: McpEntityPolicy,
 ): ResolvedMcpPolicy {
 	if (override === false) {
-		return { expose: false, operations: {}, operationScopes: {} };
+		return {
+			expose: false,
+			operations: {},
+			operationScopes: {},
+			operationWorkloads: {},
+		};
 	}
 
 	const base: ResolvedMcpPolicy = {
@@ -156,6 +164,8 @@ function normalizePolicy(
 		operations: { ...(defaults.operations ?? {}) },
 		requiredScopes: defaults.requiredScopes,
 		operationScopes: { ...(defaults.operationScopes ?? {}) },
+		workload: defaults.workload,
+		operationWorkloads: { ...(defaults.operationWorkloads ?? {}) },
 		fields: defaults.fields,
 		description: defaults.description,
 	};
@@ -175,7 +185,19 @@ function normalizePolicy(
 			...base.operationScopes,
 			...(override.operationScopes ?? {}),
 		},
+		workload: override.workload ?? base.workload,
+		operationWorkloads: {
+			...base.operationWorkloads,
+			...(override.operationWorkloads ?? {}),
+		},
 	};
+}
+
+export function workloadRequirementForOperation(
+	policy: ResolvedMcpPolicy,
+	operation: string,
+): McpAgentWorkloadRequirement | undefined {
+	return policy.operationWorkloads[operation] ?? policy.workload;
 }
 
 export function operationRule(

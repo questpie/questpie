@@ -8,3 +8,14 @@
 
 export { executorModule } from "../server/modules/executor/index.js";
 export { sandboxRpcRoute } from "../server/modules/executor/routes/sandbox/rpc.js";
+export { createAgentWorkloadExecutorBoundary } from "../server/workload/boundary.js";
+export { ExecutorWorkloadAuthorityError } from "../server/workload/error.js";
+export type {
+	AgentWorkloadExecutionFence,
+	AgentWorkloadExecutionOperation,
+	AgentWorkloadExecutionRequest,
+	AgentWorkloadExecutorBoundary,
+	AgentWorkloadExecutorBoundaryOptions,
+	ExecutorAgentWorkloadPrincipal,
+} from "../server/workload/types.js";
+export type { ExecutorWorkloadAuthorityErrorCode } from "../server/workload/error.js";
