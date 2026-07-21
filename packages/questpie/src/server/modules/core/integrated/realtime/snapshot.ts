@@ -16,10 +16,11 @@ type GlobalSnapshotCrud = {
 	get(options: Record<string, unknown>, context: unknown): Promise<unknown>;
 };
 
-type SnapshotQuery = {
+export type SnapshotQuery = {
 	accessWhere?: true | Record<string, unknown>;
 	where?: Record<string, unknown>;
 	with?: Record<string, unknown>;
+	columns?: Record<string, boolean>;
 	limit?: number;
 	offset?: number;
 	orderBy?: Record<string, "asc" | "desc">;
@@ -37,7 +38,7 @@ export type RealtimeSnapshotTopic =
 			operation: "count";
 			crud: CollectionCountSnapshotCrud;
 	  })
-	| (Pick<SnapshotQuery, "accessWhere" | "with" | "locale"> & {
+	| (Pick<SnapshotQuery, "accessWhere" | "with" | "columns" | "locale"> & {
 			type: "collection";
 			operation: "get";
 			recordId: string;
@@ -72,6 +73,7 @@ export function computeRealtimeSnapshot(
 					[PRECHECKED_READ_ACCESS]: topic.accessWhere,
 					where: { id: topic.recordId },
 					with: topic.with,
+					columns: topic.columns,
 					locale: topic.locale,
 				},
 				context,
@@ -83,6 +85,7 @@ export function computeRealtimeSnapshot(
 				[PRECHECKED_READ_ACCESS]: topic.accessWhere,
 				where: topic.where,
 				with: topic.with,
+				columns: topic.columns,
 				limit: topic.limit,
 				offset: topic.offset,
 				orderBy: topic.orderBy,
@@ -97,6 +100,39 @@ export function computeRealtimeSnapshot(
 			[PRECHECKED_READ_ACCESS]: topic.accessWhere,
 			where: topic.where,
 			with: topic.with,
+			columns: topic.columns,
+			locale: topic.locale,
+		},
+		context,
+	);
+}
+
+type RealtimeHydrateTopic = Omit<
+	Extract<RealtimeSnapshotTopic, { type: "collection"; operation: "find" }>,
+	"crud"
+> & {
+	crud: CollectionFindSnapshotCrud & CollectionGetSnapshotCrud;
+};
+
+export function mergeRealtimeWhere(
+	left: Record<string, unknown> | undefined,
+	right: Record<string, unknown>,
+): Record<string, unknown> {
+	return left ? { AND: [left, right] } : right;
+}
+
+/** Hydrate one authoritative row in the topic's projection and locale. */
+export function hydrateRealtimeRow(
+	topic: RealtimeHydrateTopic,
+	recordId: string,
+	context: unknown,
+): Promise<unknown> {
+	return topic.crud.findOne(
+		{
+			[PRECHECKED_READ_ACCESS]: topic.accessWhere,
+			where: mergeRealtimeWhere(topic.where, { id: recordId }),
+			columns: topic.columns,
+			...(topic.with === undefined ? {} : { with: topic.with }),
 			locale: topic.locale,
 		},
 		context,

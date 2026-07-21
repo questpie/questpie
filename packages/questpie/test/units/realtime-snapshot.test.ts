@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test";
 
-import { computeRealtimeSnapshot } from "../../src/server/modules/core/integrated/realtime/snapshot.js";
+import { PRECHECKED_READ_ACCESS } from "../../src/server/collection/crud/shared/access-control.js";
+import {
+	computeRealtimeSnapshot,
+	hydrateRealtimeRow,
+} from "../../src/server/modules/core/integrated/realtime/snapshot.js";
 
 describe("computeRealtimeSnapshot", () => {
 	it("runs collection finds with the resolved topic query", async () => {
@@ -151,5 +155,45 @@ describe("computeRealtimeSnapshot", () => {
 			),
 		).resolves.toBe(result);
 		expect(getCalls).toBe(1);
+	});
+
+	it("hydrates one row with topic membership, projection, and locale", async () => {
+		const calls: unknown[] = [];
+		const context = { locale: "request-locale" };
+		const row = { id: "post-1", title: "English" };
+
+		await expect(
+			hydrateRealtimeRow(
+				{
+					type: "collection",
+					operation: "find",
+					crud: {
+						find: async () => ({ docs: [] }),
+						findOne: async (...args: unknown[]) => {
+							calls.push(args);
+							return row;
+						},
+					},
+					accessWhere: { tenantId: "tenant-1" },
+					where: { published: true },
+					columns: { id: true, title: true },
+					locale: "en",
+				},
+				"post-1",
+				context,
+			),
+		).resolves.toBe(row);
+		expect(calls).toHaveLength(1);
+		const [options, actualContext] = calls[0] as [
+			Record<PropertyKey, unknown>,
+			unknown,
+		];
+		expect(options).toMatchObject({
+			where: { AND: [{ published: true }, { id: "post-1" }] },
+			columns: { id: true, title: true },
+			locale: "en",
+		});
+		expect(options[PRECHECKED_READ_ACCESS]).toEqual({ tenantId: "tenant-1" });
+		expect(actualContext).toBe(context);
 	});
 });
