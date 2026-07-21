@@ -1,4 +1,4 @@
-import { asc, desc, gt, lt } from "drizzle-orm";
+import { asc, desc, eq, gt, lt, sql } from "drizzle-orm";
 
 import type { DrizzleClientFromQuestpieConfig } from "#questpie/server/config/types.js";
 import type { LoggerAdapter } from "#questpie/server/modules/core/integrated/logger/types.js";
@@ -11,7 +11,10 @@ import {
 	type ChannelEventReceipt,
 	type LocalChannelSubscriptionInput,
 } from "./channel-event-ledger.js";
-import { questpieRealtimeLogTable } from "./collection.js";
+import {
+	questpieRealtimeHeadTable,
+	questpieRealtimeLogTable,
+} from "./collection.js";
 import { visitRealtimeWhereFields } from "./delta.js";
 import {
 	RealtimeObservability,
@@ -359,6 +362,20 @@ export class RealtimeService {
 		const db = options.db ?? this.db;
 		let row: typeof questpieRealtimeLogTable.$inferSelect;
 		try {
+			await db
+				.insert(questpieRealtimeHeadTable)
+				.values({
+					id: "global",
+					lastSeq: sql<number>`coalesce((select max(${questpieRealtimeLogTable.seq}) from ${questpieRealtimeLogTable}), 0)`,
+				})
+				.onConflictDoNothing();
+			const [head] = await db
+				.update(questpieRealtimeHeadTable)
+				.set({ updatedAt: new Date() })
+				.where(eq(questpieRealtimeHeadTable.id, "global"))
+				.returning({ id: questpieRealtimeHeadTable.id });
+			if (!head)
+				throw new Error("Realtime outbox sequence head is unavailable");
 			[row] = await db
 				.insert(questpieRealtimeLogTable)
 				.values({
@@ -370,6 +387,10 @@ export class RealtimeService {
 					payload: input.payload ?? {},
 				})
 				.returning();
+			await db
+				.update(questpieRealtimeHeadTable)
+				.set({ lastSeq: Number(row.seq), updatedAt: new Date() })
+				.where(eq(questpieRealtimeHeadTable.id, "global"));
 			this.observe({ type: "outbox.capture", outcome: "accepted" });
 		} catch (error) {
 			this.observe({ type: "outbox.capture", outcome: "failed" });

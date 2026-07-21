@@ -88,11 +88,11 @@ describe("realtime matrix transactional change capture", () => {
 		);
 		await runTestDbMigrations(setup.app);
 		ctx = createTestContext(setup.app);
-	});
+	}, 30_000);
 
 	afterEach(async () => {
 		await setup.cleanup();
-	});
+	}, 30_000);
 
 	it("G11: writes the outbox row inside the mutation transaction", async () => {
 		let rowsVisibleInsideTransaction = 0;
@@ -116,6 +116,56 @@ describe("realtime matrix transactional change capture", () => {
 		expect(rows).toHaveLength(1);
 		expect(rows[0]?.txid).toBeString();
 		expect(getTxid(result)).toBe(rows[0]?.txid);
+	});
+
+	it("assigns outbox cursors in commit order without dropping a late commit", async () => {
+		let firstAppended = () => {};
+		const appended = new Promise<void>((resolve) => {
+			firstAppended = resolve;
+		});
+		let releaseFirst = () => {};
+		const holdFirst = new Promise<void>((resolve) => {
+			releaseFirst = resolve;
+		});
+
+		const first = withTransaction(setup.app.db, async (tx) => {
+			const event = await setup.app.realtime.appendChange(
+				{
+					resourceType: "collection",
+					resource: "posts",
+					operation: "update",
+					recordId: "first",
+				},
+				{ db: tx },
+			);
+			firstAppended();
+			await holdFirst;
+			return event;
+		});
+
+		await appended;
+		const second = withTransaction(setup.app.db, (tx) =>
+			setup.app.realtime.appendChange(
+				{
+					resourceType: "collection",
+					resource: "posts",
+					operation: "update",
+					recordId: "second",
+				},
+				{ db: tx },
+			),
+		);
+
+		expect(await settleWithinEventLoopTurns(second)).toBe(false);
+		releaseFirst();
+		const [firstEvent, secondEvent] = await Promise.all([first, second]);
+
+		expect([firstEvent.seq, secondEvent.seq]).toEqual([1, 2]);
+		const rows = await setup.app.db
+			.select()
+			.from(questpieRealtimeLogTable)
+			.orderBy(questpieRealtimeLogTable.seq);
+		expect(rows.map((row) => row.recordId)).toEqual(["first", "second"]);
 	});
 
 	it("G11: writes global changes inside the mutation transaction", async () => {

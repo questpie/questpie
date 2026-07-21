@@ -44,6 +44,13 @@ export const questpieRealtimeLogTable = pgTable(
 	(t) => [index("idx_realtime_log_created_at").on(t.createdAt)],
 );
 
+/** Global outbox sequence head. Updating this row serializes commit cursors. */
+export const questpieRealtimeHeadTable = pgTable("questpie_realtime_head", {
+	id: text("id").primaryKey(),
+	lastSeq: bigint("last_seq", { mode: "number" }).default(0).notNull(),
+	updatedAt: systemTimestamp("updated_at").defaultNow().notNull(),
+});
+
 /** Per-resolved-channel sequence head. Updating this row serializes publishers. */
 export const questpieChannelHeadTable = pgTable("questpie_channel_head", {
 	channelHash: text("channel_hash").primaryKey(),
