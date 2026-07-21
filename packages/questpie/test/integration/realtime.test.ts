@@ -84,6 +84,7 @@ type TopicInput = {
 	offset?: number;
 	orderBy?: Record<string, "asc" | "desc">;
 	sinceSeq?: number;
+	mode?: "snapshot" | "delta";
 };
 
 /**
@@ -208,6 +209,151 @@ describe("realtime matrix", () => {
 			await setup.cleanup();
 			// setup = null;
 		}
+	});
+
+	// ==========================================================================
+	// Native delta delivery
+	// ==========================================================================
+
+	describe("native delta delivery", () => {
+		it("streams an ordered bootstrap, insert, update, and delete", async () => {
+			const adapter = new MockChangeBroker();
+			const posts = collection("posts")
+				.fields(({ f }) => ({ title: f.textarea().required() }))
+				.access({ read: true, create: true, update: true, delete: true });
+			setup = await buildMockApp(
+				{ collections: { posts } },
+				{ realtime: { changeBroker: adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("posts", { mode: "delta" })]),
+				{},
+				undefined,
+			);
+			const reader = createSSEReader(response.body!);
+			const bootstrap = await reader.readSnapshot();
+			expect(bootstrap).toMatchObject({
+				event: "snapshot",
+				data: {
+					topicId: "col-posts",
+					data: { docs: [] },
+					reset: false,
+				},
+			});
+			expect(bootstrap.data.upToDate).toBeString();
+
+			const context = createTestContext();
+			const created = await setup.app.collections.posts.create(
+				{ title: "One" },
+				context,
+			);
+			const inserted = await reader.readSnapshot();
+			expect(inserted).toMatchObject({
+				event: "insert",
+				data: {
+					type: "insert",
+					key: created.id,
+					row: { id: created.id, title: "One" },
+				},
+			});
+			const createCurrent = await reader.readSnapshot();
+			expect(createCurrent.event).toBe("up-to-date");
+			expect(createCurrent.data.upToDate).toBeString();
+
+			await setup.app.collections.posts.update(
+				{ id: created.id, data: { title: "Updated" } },
+				context,
+			);
+			const updated = await reader.readSnapshot();
+			expect(updated).toMatchObject({
+				event: "update",
+				data: {
+					type: "update",
+					key: created.id,
+					row: { id: created.id, title: "Updated" },
+				},
+			});
+			await reader.readSnapshot();
+
+			await setup.app.collections.posts.delete({ id: created.id }, context);
+			const deleted = await reader.readSnapshot();
+			expect(deleted).toMatchObject({
+				event: "delete",
+				data: { type: "delete", key: created.id },
+			});
+			await reader.close();
+		});
+
+		it("falls back to snapshots for a windowed explicit delta topic", async () => {
+			const adapter = new MockChangeBroker();
+			const posts = collection("posts")
+				.fields(({ f }) => ({ title: f.textarea().required() }))
+				.access({ read: true, create: true });
+			setup = await buildMockApp(
+				{ collections: { posts } },
+				{ realtime: { changeBroker: adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([
+					collectionTopic("posts", { mode: "delta", limit: 10 }),
+				]),
+				{},
+				undefined,
+			);
+			const reader = createSSEReader(response.body!);
+			expect((await reader.readSnapshot()).event).toBe("snapshot");
+			await setup.app.collections.posts.create(
+				{ title: "One" },
+				createTestContext(),
+			);
+			expect((await reader.readSnapshot()).event).toBe("snapshot");
+			await reader.close();
+		});
+
+		it("emits delete when an update moves a row outside topic membership", async () => {
+			const adapter = new MockChangeBroker();
+			const posts = collection("posts")
+				.fields(({ f }) => ({
+					title: f.textarea().required(),
+					archived: f.boolean().default(false),
+				}))
+				.access({ read: true, create: true, update: true });
+			setup = await buildMockApp(
+				{ collections: { posts } },
+				{ realtime: { changeBroker: adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+			const created = await setup.app.collections.posts.create(
+				{ title: "One", archived: false },
+				createTestContext(),
+			);
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([
+					collectionTopic("posts", {
+						mode: "delta",
+						where: { archived: false },
+					}),
+				]),
+				{},
+				undefined,
+			);
+			const reader = createSSEReader(response.body!);
+			expect((await reader.readSnapshot()).data.data.docs).toHaveLength(1);
+			await setup.app.collections.posts.update(
+				{ id: created.id, data: { archived: true } },
+				createTestContext(),
+			);
+			expect(await reader.readSnapshot()).toMatchObject({
+				event: "delete",
+				data: { key: created.id },
+			});
+			await reader.close();
+		});
 	});
 
 	// ==========================================================================
