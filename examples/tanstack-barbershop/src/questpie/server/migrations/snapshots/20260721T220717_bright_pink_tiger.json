@@ -1,0 +1,94 @@
+{
+  "operations": [
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__questpie_realtime_head",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "questpie_realtime_head",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-07-21T22:07:17.529Z",
+      "migrationId": "brightPinkTiger20260721T220717"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_head__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_head"
+      },
+      "timestamp": "2026-07-21T22:07:17.529Z",
+      "migrationId": "brightPinkTiger20260721T220717"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_head__DOT__last_seq",
+      "value": {
+        "type": "bigint",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "name": "last_seq",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_head"
+      },
+      "timestamp": "2026-07-21T22:07:17.529Z",
+      "migrationId": "brightPinkTiger20260721T220717"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_head__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_head"
+      },
+      "timestamp": "2026-07-21T22:07:17.529Z",
+      "migrationId": "brightPinkTiger20260721T220717"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__questpie_realtime_head__DOT__questpie_realtime_head_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "questpie_realtime_head_pkey",
+        "schema": "public",
+        "table": "questpie_realtime_head",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-07-21T22:07:17.529Z",
+      "migrationId": "brightPinkTiger20260721T220717"
+    }
+  ],
+  "metadata": {
+    "migrationId": "brightPinkTiger20260721T220717",
+    "timestamp": "2026-07-21T22:07:17.680Z",
+    "prevId": "00000000-0000-0000-0000-000000000000"
+  }
+}
