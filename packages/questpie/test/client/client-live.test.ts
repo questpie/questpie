@@ -31,6 +31,7 @@ type SSEConnection = {
 		orderBy?: Record<string, string>;
 		sinceSeq?: number;
 	}>;
+	sendEvent: (type: string, payload: Record<string, unknown>) => void;
 	sendSnapshot: (topicId: string, seq: number, data: unknown) => void;
 	sendError: (
 		topicId: string,
@@ -86,16 +87,19 @@ describe("client live queries", () => {
 			const connection: SSEConnection = {
 				topics,
 				aborted: false,
-				sendSnapshot(topicId, seq, data) {
+				sendEvent(type, payload) {
 					try {
 						controller.enqueue(
 							encoder.encode(
-								`event: snapshot\ndata: ${JSON.stringify({ topicId, seq, data })}\n\n`,
+								`event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`,
 							),
 						);
 					} catch {
 						// Stream already closed
 					}
+				},
+				sendSnapshot(topicId, seq, data) {
+					this.sendEvent("snapshot", { topicId, seq, data });
 				},
 				sendError(topicId, message, payload = {}) {
 					controller.enqueue(
@@ -189,6 +193,97 @@ describe("client live queries", () => {
 		connection.sendSnapshot(topicId, 3, { docs: [], totalDocs: 0 });
 		await new Promise((resolve) => setTimeout(resolve, 50));
 		expect(snapshots).toHaveLength(2);
+	});
+
+	it("streamEvents preserves reset and forwards every same-seq delta", async () => {
+		const abortController = new AbortController();
+		const stream = client.realtime.streamEvents(
+			{ resourceType: "collection", resource: "posts" },
+			abortController.signal,
+			"delta-posts",
+		);
+
+		const bootstrap = stream.next();
+		await waitFor(() => connections.length === 1);
+		const connection = connections[0];
+		connection.sendEvent("snapshot", {
+			topicId: "delta-posts",
+			seq: 1,
+			reset: true,
+			data: { docs: [], totalDocs: 0 },
+		});
+		expect((await bootstrap).value).toEqual({
+			type: "snapshot",
+			topicId: "delta-posts",
+			seq: 1,
+			reset: true,
+			data: { docs: [], totalDocs: 0 },
+		});
+
+		connection.sendEvent("insert", {
+			topicId: "delta-posts",
+			seq: 2,
+			key: "first",
+			row: { id: "first" },
+		});
+		connection.sendEvent("insert", {
+			topicId: "delta-posts",
+			seq: 2,
+			key: "second",
+			row: { id: "second" },
+		});
+		expect((await stream.next()).value).toMatchObject({
+			type: "insert",
+			key: "first",
+			seq: 2,
+		});
+		expect((await stream.next()).value).toMatchObject({
+			type: "insert",
+			key: "second",
+			seq: 2,
+		});
+
+		abortController.abort();
+		await stream.next();
+	});
+
+	it("live materializes a same-seq delta batch only when it is up to date", async () => {
+		const snapshots: any[] = [];
+		const stop = client.collections.posts.live({}, (snapshot) =>
+			snapshots.push(snapshot),
+		);
+		await waitFor(() => connections.length === 1);
+		const connection = connections[0];
+		const topicId = connection.topics[0].id;
+		connection.sendSnapshot(topicId, 1, { docs: [], totalDocs: 0 });
+		await waitFor(() => snapshots.length === 1);
+
+		connection.sendEvent("insert", {
+			topicId,
+			seq: 2,
+			key: "first",
+			row: { id: "first" },
+		});
+		connection.sendEvent("insert", {
+			topicId,
+			seq: 2,
+			key: "second",
+			row: { id: "second" },
+		});
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		expect(snapshots).toHaveLength(1);
+
+		connection.sendEvent("up-to-date", {
+			topicId,
+			seq: 2,
+			meta: { totalDocs: 2 },
+		});
+		await waitFor(() => snapshots.length === 2);
+		expect(snapshots[1]).toMatchObject({
+			docs: [{ id: "first" }, { id: "second" }],
+			totalDocs: 2,
+		});
+		stop();
 	});
 
 	it("keeps collection get record ids separate from subscription ids", async () => {
@@ -562,16 +657,30 @@ describe("client live queries", () => {
 		} as unknown as RealtimeMultiplexer;
 		const stream = sseSnapshotStream<number>({
 			multiplexer,
-			topic: { resourceType: "collection", resource: "posts" },
+			topic: {
+				resourceType: "collection",
+				resource: "posts",
+				operation: "count",
+			},
 			signal: abortController.signal,
 		});
 
 		const first = stream.next();
 		await waitFor(() => typeof deliver === "function");
-		deliver!(1);
+		deliver!({
+			type: "snapshot",
+			topicId: "posts",
+			seq: 1,
+			data: 1,
+		});
 		expect((await first).value).toBe(1);
 		const second = stream.next();
-		deliver!(2);
+		deliver!({
+			type: "snapshot",
+			topicId: "posts",
+			seq: 2,
+			data: 2,
+		});
 		expect((await second).value).toBe(2);
 		expect(addSpy).toHaveBeenCalledTimes(1);
 

@@ -15,9 +15,11 @@ export {
 	buildCollectionTopic,
 	buildGlobalTopic,
 	createRealtimeAPI,
+	deriveFindDeltas,
 	envelopeMeta,
 	type RealtimeAPI,
 	type RealtimeStreamEvent,
+	sseEventStream,
 	sseSnapshotStream,
 } from "./stream.js";
 export {

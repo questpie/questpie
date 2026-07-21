@@ -1963,6 +1963,7 @@ export {
 	applyRealtimeSingleEvent,
 	buildCollectionTopic,
 	buildGlobalTopic,
+	deriveFindDeltas,
 	envelopeMeta,
 	RealtimeTopicRejectedError,
 } from "./realtime/index.js";

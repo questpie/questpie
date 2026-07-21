@@ -10,6 +10,7 @@ import {
 	type RealtimeTopicRejectedPayload,
 } from "../../shared/realtime-error.js";
 import type { GetAuthHeaders } from "../auth.js";
+import type { RealtimeStreamEvent } from "./stream.js";
 import type { RealtimeClientTransport } from "./transport.js";
 
 // ============================================================================
@@ -58,7 +59,7 @@ export type TopicInput = TopicConfig & {
 	id?: string;
 };
 
-type Subscriber = (data: unknown) => void;
+type Subscriber = (event: RealtimeStreamEvent) => void;
 type ErrorCallback = (error: Error) => void;
 
 type SSEEvent = {
@@ -547,21 +548,26 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 	 * Handle a parsed SSE event.
 	 */
 	private handleEvent(event: SSEEvent): void {
-		if (event.type === "snapshot") {
+		if (
+			event.type === "snapshot" ||
+			event.type === "insert" ||
+			event.type === "update" ||
+			event.type === "delete" ||
+			event.type === "up-to-date"
+		) {
 			try {
-				const { topicId, seq, data } = JSON.parse(event.data) as {
-					topicId: string;
-					seq: number;
-					data: unknown;
-				};
-				if (Number.isSafeInteger(seq) && seq >= 0) {
-					this.lastSeq.set(topicId, seq);
+				const payload = {
+					...JSON.parse(event.data),
+					type: event.type,
+				} as RealtimeStreamEvent;
+				if (Number.isSafeInteger(payload.seq) && payload.seq >= 0) {
+					this.lastSeq.set(payload.topicId, payload.seq);
 				}
 				this.reconnectAttempts = 0;
-				const subs = this.subscribers.get(topicId);
+				const subs = this.subscribers.get(payload.topicId);
 				if (subs) {
 					for (const callback of subs) {
-						callback(data);
+						callback(payload);
 					}
 				}
 			} catch {

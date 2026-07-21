@@ -1,5 +1,6 @@
 import type { GetAuthHeaders } from "../auth.js";
 import { realtimeTopicId, type TopicConfig } from "./multiplexer.js";
+import type { RealtimeStreamEvent } from "./stream.js";
 import type {
 	RealtimeClientTransport,
 	RealtimeErrorCallback,
@@ -24,7 +25,8 @@ type TopicEntry = {
 	subscribers: Set<RealtimeSubscriber>;
 	errorCallbacks: Set<RealtimeErrorCallback>;
 	registered: boolean;
-	lastSnapshot?: unknown;
+	lastSnapshot?: RealtimeStreamEvent;
+	seq: number;
 };
 
 type SessionResponse = {
@@ -102,10 +104,12 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 				subscribers: new Set(),
 				errorCallbacks: new Set(),
 				registered: false,
+				seq: 0,
 			};
 			this.topics.set(topicId, entry);
 		} else if (entry.lastSnapshot !== undefined) {
-			queueMicrotask(() => callback(entry!.lastSnapshot));
+			const replay = entry.lastSnapshot;
+			queueMicrotask(() => callback(replay));
 		}
 		entry.subscribers.add(callback);
 		if (onError) entry.errorCallbacks.add(onError);
@@ -146,7 +150,7 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 				if (this.destroyed || this.topics.get(topicId) !== entry) return;
 				entry.registered = true;
 			}
-			await this.refetchEntry(entry);
+			await this.refetchEntry(topicId, entry);
 		} catch (error) {
 			this.notifyError(entry, errorFrom(error));
 		}
@@ -360,7 +364,9 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 			do {
 				this.refreshPending = false;
 				await Promise.all(
-					[...this.topics.values()].map((entry) => this.refetchEntry(entry)),
+					[...this.topics.entries()].map(([topicId, entry]) =>
+						this.refetchEntry(topicId, entry),
+					),
 				);
 			} while (this.refreshPending && !this.destroyed);
 		})().finally(() => {
@@ -368,12 +374,22 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 		});
 	}
 
-	private async refetchEntry(entry: TopicEntry): Promise<void> {
+	private async refetchEntry(
+		topicId: string,
+		entry: TopicEntry,
+	): Promise<void> {
 		try {
 			const snapshot = await this.options.refetchTopic(entry.topic);
 			if (this.destroyed) return;
-			entry.lastSnapshot = snapshot;
-			for (const subscriber of entry.subscribers) subscriber(snapshot);
+			entry.lastSnapshot = {
+				type: "snapshot",
+				topicId,
+				seq: ++entry.seq,
+				data: snapshot,
+			};
+			for (const subscriber of entry.subscribers) {
+				subscriber(entry.lastSnapshot);
+			}
 		} catch (error) {
 			this.notifyError(entry, errorFrom(error));
 		}

@@ -51,11 +51,93 @@ export type RealtimeStreamEvent<TData = unknown> =
 			meta?: { totalDocs?: number };
 	  };
 
-type RealtimeFindEnvelope<TRow> = {
+type RealtimeFindData<TRow> = {
 	docs: TRow[];
 	totalDocs?: number;
 	[key: string]: unknown;
 };
+
+/** Convert full find snapshots into the same keyed event union as native deltas. */
+export async function* deriveFindDeltas<
+	TRow,
+	TData extends RealtimeFindData<TRow>,
+>(
+	source: AsyncIterable<RealtimeStreamEvent<TData>>,
+	keyOf: (row: TRow) => string = (row) => String((row as { id?: unknown }).id),
+): AsyncGenerator<RealtimeStreamEvent<TData>, void, unknown> {
+	let previous: TData | undefined;
+
+	for await (const event of source) {
+		if (event.type !== "snapshot") {
+			yield event;
+			continue;
+		}
+		if (!previous || event.reset) {
+			previous = event.data;
+			yield event;
+			continue;
+		}
+
+		const previousByKey = new Map(
+			previous.docs.map((row, index) => [
+				keyOf(row),
+				{ row, index, serialized: JSON.stringify(row) },
+			]),
+		);
+		const nextKeys = new Set(event.data.docs.map(keyOf));
+		for (const row of previous.docs) {
+			const key = keyOf(row);
+			if (!nextKeys.has(key)) {
+				yield {
+					type: "delete",
+					topicId: event.topicId,
+					seq: event.seq,
+					key,
+				};
+			}
+		}
+
+		const materializedDocs: TRow[] = [];
+		for (const [index, row] of event.data.docs.entries()) {
+			const key = keyOf(row);
+			const old = previousByKey.get(key);
+			if (!old) {
+				materializedDocs.push(row);
+				yield {
+					type: "insert",
+					topicId: event.topicId,
+					seq: event.seq,
+					key,
+					row,
+					index,
+				};
+				continue;
+			}
+			const unchanged = old.serialized === JSON.stringify(row);
+			materializedDocs.push(unchanged ? old.row : row);
+			if (unchanged && old.index === index) continue;
+			yield {
+				type: "update",
+				topicId: event.topicId,
+				seq: event.seq,
+				key,
+				row: unchanged ? old.row : row,
+				index,
+			};
+		}
+
+		previous = { ...event.data, docs: materializedDocs };
+		yield {
+			type: "up-to-date",
+			topicId: event.topicId,
+			seq: event.seq,
+			...(event.upToDate === undefined ? {} : { upToDate: event.upToDate }),
+			meta: { totalDocs: event.data.totalDocs ?? event.data.docs.length },
+		};
+	}
+}
+
+type RealtimeFindEnvelope<TRow> = RealtimeFindData<TRow>;
 
 /** Metadata for an unwindowed realtime find result. */
 export function envelopeMeta<TRow>(
@@ -80,8 +162,7 @@ export function applyRealtimeFindEvent<
 >(
 	current: TData | undefined,
 	event: RealtimeStreamEvent<TData>,
-	keyOf: (row: TRow) => string = (row) =>
-		String((row as { id?: unknown }).id),
+	keyOf: (row: TRow) => string = (row) => String((row as { id?: unknown }).id),
 ): TData {
 	if (event.type === "snapshot") return event.data;
 	if (!current) {
@@ -102,15 +183,17 @@ export function applyRealtimeFindEvent<
 	let docs: TRow[];
 	if (event.type === "delete") {
 		if (index < 0) return current;
-		docs = [
-			...current.docs.slice(0, index),
-			...current.docs.slice(index + 1),
-		];
+		docs = [...current.docs.slice(0, index), ...current.docs.slice(index + 1)];
 	} else {
 		const row = event.row as TRow;
 		if (index >= 0) {
+			const targetIndex =
+				event.index === undefined
+					? index
+					: Math.max(0, Math.min(event.index, current.docs.length - 1));
 			docs = current.docs.slice();
-			docs[index] = row;
+			docs.splice(index, 1);
+			docs.splice(targetIndex, 0, row);
 		} else {
 			const insertionIndex =
 				event.index === undefined
@@ -152,6 +235,34 @@ export function applyRealtimeSingleEvent<TData>(
 	return current;
 }
 
+function isFindTopic(topic: TopicConfig): boolean {
+	return (
+		topic.resourceType === "collection" &&
+		(topic.operation ?? "find") === "find"
+	);
+}
+
+function applyRealtimeTopicEvent<TData>(
+	topic: TopicConfig,
+	current: TData | null | undefined,
+	event: RealtimeStreamEvent<TData>,
+): TData | null | undefined {
+	if (isFindTopic(topic)) {
+		return applyRealtimeFindEvent(current as any, event as any) as TData;
+	}
+	if (topic.resourceType === "collection" && topic.operation === "count") {
+		return applyRealtimeScalarEvent(current as TData | undefined, event);
+	}
+	return applyRealtimeSingleEvent(
+		current,
+		event as RealtimeStreamEvent<TData | null>,
+	);
+}
+
+function emitsMaterializedValue(event: RealtimeStreamEvent): boolean {
+	return event.type === "snapshot" || event.type === "up-to-date";
+}
+
 export type RealtimeAPI = {
 	/**
 	 * Subscribe to a topic. Returns unsubscribe function.
@@ -174,6 +285,13 @@ export type RealtimeAPI = {
 		signal?: AbortSignal,
 		customId?: string,
 	) => AsyncGenerator<TData, void, unknown>;
+
+	/** Create an AsyncGenerator over the shared snapshot/delta wire union. */
+	streamEvents: <TData>(
+		topic: TopicConfig,
+		signal?: AbortSignal,
+		customId?: string,
+	) => AsyncGenerator<RealtimeStreamEvent<TData>, void, unknown>;
 
 	/** Destroy the multiplexer and clean up all resources */
 	destroy: () => void;
@@ -204,16 +322,15 @@ export type RealtimeAPI = {
  * }
  * ```
  */
-export async function* sseSnapshotStream<TData>(options: {
+export async function* sseEventStream<TData>(options: {
 	multiplexer: RealtimeClientTransport;
 	topic: TopicConfig;
 	signal?: AbortSignal;
 	customId?: string;
-}): AsyncGenerator<TData, void, unknown> {
+}): AsyncGenerator<RealtimeStreamEvent<TData>, void, unknown> {
 	const { multiplexer, topic, signal, customId } = options;
 
-	// Queue for data waiting to be consumed
-	const queue: TData[] = [];
+	const queue: RealtimeStreamEvent<TData>[] = [];
 
 	// Promise resolver/rejecter for when new data arrives or connection fails
 	let resolveNext: (() => void) | null = null;
@@ -237,9 +354,9 @@ export async function* sseSnapshotStream<TData>(options: {
 	// Subscribe to the topic via multiplexer
 	const unsubscribe = multiplexer.subscribe(
 		topic,
-		(data) => {
+		(event) => {
 			if (!closed) {
-				queue.push(data as TData);
+				queue.push(event as RealtimeStreamEvent<TData>);
 				resolveNext?.();
 			}
 		},
@@ -272,6 +389,36 @@ export async function* sseSnapshotStream<TData>(options: {
 		signal?.removeEventListener("abort", handleAbort);
 		unsubscribe();
 	}
+}
+
+async function* materializeRealtimeStream<TData>(
+	topic: TopicConfig,
+	source: AsyncIterable<RealtimeStreamEvent<TData>>,
+): AsyncGenerator<TData, void, unknown> {
+	let current: TData | null | undefined;
+	for await (const event of source) {
+		current = applyRealtimeTopicEvent(topic, current, event);
+		if (emitsMaterializedValue(event) && current !== undefined) {
+			yield current as TData;
+		}
+	}
+}
+
+export function sseSnapshotStream<TData>(options: {
+	multiplexer: RealtimeClientTransport;
+	topic: TopicConfig;
+	signal?: AbortSignal;
+	customId?: string;
+}): AsyncGenerator<TData, void, unknown> {
+	const raw = sseEventStream<TData>(options);
+	const events = isFindTopic(options.topic)
+		? (deriveFindDeltas(raw as any) as AsyncGenerator<
+				RealtimeStreamEvent<TData>,
+				void,
+				unknown
+			>)
+		: raw;
+	return materializeRealtimeStream(options.topic, events);
 }
 
 // ============================================================================
@@ -456,6 +603,78 @@ export function createRealtimeAPI(opts: {
 		return transportPromise;
 	};
 
+	const subscribeEvents = (
+		topic: TopicConfig,
+		callback: (event: RealtimeStreamEvent) => void,
+		signal?: AbortSignal,
+		customId?: string,
+		onError?: (error: Error) => void,
+	) => {
+		const subscriptionGeneration = generation;
+		const marker = {};
+		pending.add(marker);
+		let stopped = false;
+		let stopInner: (() => void) | undefined;
+		void getOrCreate()
+			.then((selected) => {
+				pending.delete(marker);
+				if (stopped || subscriptionGeneration !== generation) return;
+				stopInner = selected.subscribe(
+					topic,
+					callback,
+					signal,
+					customId,
+					onError,
+				);
+			})
+			.catch((error) => {
+				pending.delete(marker);
+				onError?.(error instanceof Error ? error : new Error(String(error)));
+			});
+		return () => {
+			stopped = true;
+			pending.delete(marker);
+			stopInner?.();
+		};
+	};
+
+	const eventFacade: RealtimeClientTransport = {
+		subscribe: subscribeEvents,
+		destroy: () => {
+			generation += 1;
+			pending.clear();
+			transport?.destroy();
+			transport = null;
+			transportPromise = null;
+		},
+		get topicCount() {
+			return transport?.topicCount ?? pending.size;
+		},
+		get subscriberCount() {
+			return transport?.subscriberCount ?? pending.size;
+		},
+	};
+
+	const streamEvents = <TData>(
+		topic: TopicConfig,
+		signal?: AbortSignal,
+		customId?: string,
+	): AsyncGenerator<RealtimeStreamEvent<TData>, void, unknown> => {
+		const raw = sseEventStream<TData>({
+			multiplexer: eventFacade,
+			topic,
+			signal,
+			customId,
+		});
+		return isFindTopic(topic)
+			? (deriveFindDeltas(raw as any) as AsyncGenerator<
+					RealtimeStreamEvent<TData>,
+					void,
+					unknown
+				>)
+			: raw;
+	};
+
 	return {
 		subscribe<TData = unknown>(
 			topic: TopicConfig,
@@ -464,58 +683,32 @@ export function createRealtimeAPI(opts: {
 			customId?: string,
 			onError?: (error: Error) => void,
 		) {
-			const subscriptionGeneration = generation;
-			const marker = {};
-			pending.add(marker);
-			let stopped = false;
-			let stopInner: (() => void) | undefined;
-			void getOrCreate()
-				.then((selected) => {
-					pending.delete(marker);
-					if (stopped || subscriptionGeneration !== generation) return;
-					stopInner = selected.subscribe(
-						topic,
-						callback as (data: unknown) => void,
-						signal,
-						customId,
-						onError,
-					);
-				})
-				.catch((error) => {
-					pending.delete(marker);
-					onError?.(error instanceof Error ? error : new Error(String(error)));
-				});
-			return () => {
-				stopped = true;
-				pending.delete(marker);
-				stopInner?.();
-			};
-		},
-		stream<TData>(topic: TopicConfig, signal?: AbortSignal, customId?: string) {
-			const facade: RealtimeClientTransport = {
-				subscribe: (...args) => this.subscribe(...args),
-				destroy: () => this.destroy(),
-				get topicCount() {
-					return transport?.topicCount ?? pending.size;
-				},
-				get subscriberCount() {
-					return transport?.subscriberCount ?? pending.size;
-				},
-			};
-			return sseSnapshotStream<TData>({
-				multiplexer: facade,
+			let current: TData | null | undefined;
+			return subscribeEvents(
 				topic,
+				(event) => {
+					current = applyRealtimeTopicEvent(
+						topic,
+						current,
+						event as RealtimeStreamEvent<TData>,
+					);
+					if (emitsMaterializedValue(event) && current !== undefined) {
+						callback(current as TData);
+					}
+				},
 				signal,
 				customId,
-			});
+				onError,
+			);
 		},
-		destroy() {
-			generation += 1;
-			pending.clear();
-			transport?.destroy();
-			transport = null;
-			transportPromise = null;
+		stream<TData>(topic: TopicConfig, signal?: AbortSignal, customId?: string) {
+			return materializeRealtimeStream(
+				topic,
+				streamEvents<TData>(topic, signal, customId),
+			);
 		},
+		streamEvents,
+		destroy: eventFacade.destroy,
 		get topicCount() {
 			return transport?.topicCount ?? pending.size;
 		},
