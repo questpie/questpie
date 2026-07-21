@@ -542,11 +542,12 @@ type V2RelationWhereResolved<
 	relationTo: infer TTo extends string;
 }
 	? TState extends { relationKind: "many" }
-		? // to-many: ONLY quantifiers (some/none/every). No bare FK value and no
-			// bare target-where shorthand — those are single-row concepts. Both
-			// the resolved FieldWhere (toManyOps) and the typed quantifier arm
-			// expose the same quantifier keys, so the where is cardinality-uniform.
-			| ResolveWherePlaceholdersV2<
+		?
+				// to-many: ONLY quantifiers (some/none/every). No bare FK value and no
+				// bare target-where shorthand — those are single-row concepts. Both
+				// the resolved FieldWhere (toManyOps) and the typed quantifier arm
+				// expose the same quantifier keys, so the where is cardinality-uniform.
+				| ResolveWherePlaceholdersV2<
 						FieldWhere<TFieldDef, TApp>,
 						TTo,
 						TApp,
@@ -554,7 +555,7 @@ type V2RelationWhereResolved<
 				  >
 				| RelationQuantifierWhere<TTo, TApp, Depth>
 		: // to-one: `is`/`isNot` (belongsToOps) + FK value + target-where shorthand.
-			| FieldSelect<TFieldDef, TApp>
+				| FieldSelect<TFieldDef, TApp>
 				| ResolveWherePlaceholdersV2<
 						FieldWhere<TFieldDef, TApp>,
 						TTo,
@@ -584,14 +585,16 @@ type FieldWhereInputFromDefinition<
 > = TFieldDef extends { readonly _: infer TState extends { type: string } } // V2: Field<TState> dispatch via phantom _
 	? TState extends { type: "relation" | "upload" }
 		? V2RelationWhereResolved<TFieldDef, TState, TApp, Depth>
-		: // The bare-value shorthand (`{ status: "x" }`) keeps only the NON-object
-			// members of the select type, so the operator object (FieldWhere) is the
-			// SOLE `object` member of this union. An object-typed direct value
-			// (`number[]`/`Date`/typed-json) would otherwise be indistinguishable from
-			// the operator object under `Extract<…, object>`, polluting operator key
-			// probes (WO-3). The operator object always carries `eq`, so dropping the
-			// object shorthand loses no real filtering capability.
-			Exclude<FieldSelect<TFieldDef, TApp>, object> | FieldWhere<TFieldDef, TApp>
+		:
+				// The bare-value shorthand (`{ status: "x" }`) keeps only the NON-object
+				// members of the select type, so the operator object (FieldWhere) is the
+				// SOLE `object` member of this union. An object-typed direct value
+				// (`number[]`/`Date`/typed-json) would otherwise be indistinguishable from
+				// the operator object under `Extract<…, object>`, polluting operator key
+				// probes (WO-3). The operator object always carries `eq`, so dropping the
+				// object shorthand loses no real filtering capability.
+				| Exclude<FieldSelect<TFieldDef, TApp>, object>
+				| FieldWhere<TFieldDef, TApp>
 	: never;
 
 type WhereFieldsFromDefinitions<
@@ -1239,10 +1242,9 @@ type ForbidExcessNestedCreate<TInput, TRelations> = [TRelations] extends [never]
 		: string extends keyof TRelations
 			? {}
 			: {
-					[K in Extract<
-						keyof TInput,
-						keyof TRelations
-					>]?: TInput[K] extends { create: infer C }
+					[K in Extract<keyof TInput, keyof TRelations>]?: TInput[K] extends {
+						create: infer C;
+					}
 						? C extends readonly any[]
 							? TInput[K] // array arm — known gap, pass through
 							: {
@@ -1259,7 +1261,7 @@ type ForbidExcessNestedCreate<TInput, TRelations> = [TRelations] extends [never]
 								}
 						: TInput[K] extends {
 									connectOrCreate: { create: infer CC };
-								}
+							  }
 							? CC extends readonly any[]
 								? TInput[K]
 								: {
@@ -1376,6 +1378,18 @@ export interface DeleteManyParams<
 	in out TRelations = any,
 > {
 	where: Where<TFields, TRelations>;
+}
+
+/**
+ * Bounded server-side row lock request.
+ *
+ * Locks are only meaningful inside an active QUESTPIE transaction and are
+ * acquired in deterministic id order. The operation returns ids rather than
+ * raw rows so callers perform subsequent reads through the normal collection
+ * access and hook pipeline.
+ */
+export interface LockManyParams<TId = string> {
+	ids: readonly TId[];
 }
 
 /**
@@ -1646,6 +1660,12 @@ export interface CRUD<
 		>,
 		context?: CRUDContext,
 	): Promise<number>;
+
+	/**
+	 * Lock a bounded set of accessible rows for the active transaction.
+	 * Server-only: callers must wrap the aggregate command in `withTransaction`.
+	 */
+	lockMany(params: LockManyParams<TId>, context?: CRUDContext): Promise<TId[]>;
 
 	/**
 	 * Create a new record
