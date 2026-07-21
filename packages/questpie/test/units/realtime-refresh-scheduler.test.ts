@@ -202,6 +202,62 @@ describe("realtime scheduler", () => {
 		expect(frames[0]).toContain('"reset":false');
 	});
 
+	it("captures and emits the watermark before snapshot computation", async () => {
+		const realtime = new FakeRealtimeSource();
+		const scheduler = new RealtimeRefreshScheduler(realtime);
+		const order: string[] = [];
+		const frames: Uint8Array[] = [];
+		const stop = scheduler.subscribe({
+			key: "posts:watermarked-snapshot",
+			topicId: "posts",
+			topics: { resourceType: "collection", resource: "posts" },
+			captureWatermark: async () => {
+				order.push("watermark");
+				return "41";
+			},
+			compute: async () => {
+				order.push("compute");
+				return { docs: [] };
+			},
+			onFrame: (frame) => frames.push(frame),
+			onError: () => {},
+		});
+		await tick();
+		await tick();
+		stop();
+
+		expect(order).toEqual(["watermark", "compute"]);
+		expect(decodeFrame(frames[0]!).upToDate).toBe("41");
+	});
+
+	it("emits an idle watermark heartbeat without recomputing", async () => {
+		const realtime = new FakeRealtimeSource();
+		const scheduler = new RealtimeRefreshScheduler(realtime);
+		const frames: Uint8Array[] = [];
+		let computes = 0;
+		const stop = scheduler.subscribe({
+			key: "posts:watermark-heartbeat",
+			topicId: "posts",
+			topics: { resourceType: "collection", resource: "posts" },
+			captureWatermark: async () => "43",
+			heartbeatIntervalMs: 10,
+			compute: async () => ({ docs: [], compute: ++computes }),
+			onFrame: (frame) => frames.push(frame),
+			onError: () => {},
+		});
+		await new Promise((resolve) => setTimeout(resolve, 25));
+		stop();
+
+		expect(computes).toBe(1);
+		expect(
+			frames
+				.map(decodeFrame)
+				.some(
+					(frame) => frame.type === "up-to-date" && frame.upToDate === "43",
+				),
+		).toBe(true);
+	});
+
 	it("bounds refresh computation concurrency", async () => {
 		const realtime = new FakeRealtimeSource();
 		const scheduler = new RealtimeRefreshScheduler(realtime, 2);
@@ -343,14 +399,16 @@ describe("realtime scheduler", () => {
 			record: (event) => observations.push(event),
 		});
 		const row = { id: "1", title: "Unchanged" };
+		const frames: Uint8Array[] = [];
 		const stop = scheduler.subscribe({
 			key: "posts:observed-delta",
 			topicId: "posts",
 			topics: { resourceType: "collection", resource: "posts" },
 			mode: "delta",
+			captureWatermark: async () => "50",
 			compute: async () => ({ docs: [row], totalDocs: 1 }),
 			hydrateRows: async () => ({ docs: [row] }),
-			onFrame: () => {},
+			onFrame: (frame) => frames.push(frame),
 			onError: () => {},
 		});
 		await tick();
@@ -375,6 +433,10 @@ describe("realtime scheduler", () => {
 					event.type === "delta.emitted" && event.operation === "up-to-date",
 			),
 		).toBe(true);
+		expect(
+			frames.map(decodeFrame).find((frame) => frame.type === "up-to-date")
+				?.upToDate,
+		).toBe("50");
 	});
 });
 

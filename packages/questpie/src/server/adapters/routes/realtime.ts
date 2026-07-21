@@ -33,6 +33,7 @@ import {
 	resolveRealtimeAccessKey,
 } from "../../modules/core/integrated/realtime/refresh-scheduler.js";
 import {
+	captureRealtimeWatermark,
 	computeRealtimeSnapshot,
 	hydrateRealtimeRows,
 } from "../../modules/core/integrated/realtime/snapshot.js";
@@ -1052,6 +1053,8 @@ export async function realtimeSubscribe(
 			const limitSnapshotConcurrency = createConcurrencyLimiter(
 				admission.initialSnapshotConcurrency,
 			);
+			const heartbeatIntervalMs =
+				app.config?.realtime?.keepAliveIntervalMs ?? 8000;
 			const close = () => {
 				if (closed) return;
 				closed = true;
@@ -1102,6 +1105,8 @@ export async function realtimeSubscribe(
 					},
 					sinceSeq: topic.sinceSeq,
 					mode: "snapshot",
+					captureWatermark: () => captureRealtimeWatermark(topicContext),
+					heartbeatIntervalMs,
 					compute: () =>
 						limitSnapshotConcurrency(async () => {
 							const admitted = await evaluateTopicAccess(
@@ -1270,6 +1275,8 @@ export async function realtimeSubscribe(
 				const limitDeltaHydration = createConcurrencyLimiter(
 					admission.deltaHydrationConcurrency,
 				);
+				const heartbeatIntervalMs =
+					app.config?.realtime?.keepAliveIntervalMs ?? 8000;
 				let removeKeepAlive = () => {};
 				let unregisterControl = () => {};
 				flushPending = () => {
@@ -1431,6 +1438,8 @@ export async function realtimeSubscribe(
 						},
 						sinceSeq: topic.sinceSeq,
 						mode: deliveryMode,
+						captureWatermark: () => captureRealtimeWatermark(topicContext),
+						heartbeatIntervalMs,
 						compute: () =>
 							limitSnapshotConcurrency(async () => {
 								const admittedTopic = await evaluateTopicAccess(
@@ -1441,9 +1450,9 @@ export async function realtimeSubscribe(
 								const data = await computeRealtimeSnapshot(
 									deliveryMode === "delta"
 										? {
-											...admittedTopic,
-											limit: admission.maxDeltaFindLimit + 1,
-										}
+												...admittedTopic,
+												limit: admission.maxDeltaFindLimit + 1,
+											}
 										: admittedTopic,
 									topicContext,
 								);
@@ -1724,10 +1733,8 @@ export async function realtimeSubscribe(
 
 				// Shared ping ticker keeps the connection alive. Default 8s — strictly under
 				// Bun's default 10s idleTimeout and typical proxy timeouts of 30-60s.
-				const keepAliveIntervalMs =
-					app.config?.realtime?.keepAliveIntervalMs ?? 8000;
 				removeKeepAlive = sharedSseKeepAliveTicker.register(
-					keepAliveIntervalMs,
+					heartbeatIntervalMs,
 					(frame) => {
 						void sink.write(frame, "latest-snapshot").catch(requestClose);
 					},

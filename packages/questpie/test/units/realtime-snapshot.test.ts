@@ -2,12 +2,30 @@ import { describe, expect, it } from "bun:test";
 
 import { PRECHECKED_READ_ACCESS } from "../../src/server/collection/crud/shared/access-control.js";
 import {
+	captureRealtimeWatermark,
 	computeRealtimeSnapshot,
 	hydrateRealtimeRow,
 	hydrateRealtimeRows,
 } from "../../src/server/modules/core/integrated/realtime/snapshot.js";
 
 describe("computeRealtimeSnapshot", () => {
+	it("captures the xid8 visibility watermark before snapshot computation", async () => {
+		const order: string[] = [];
+		const context = {
+			db: {
+				execute: async () => {
+					order.push("watermark");
+					return [{ upToDate: 42n }];
+				},
+			},
+		};
+		const upToDate = await captureRealtimeWatermark(context);
+		order.push("compute");
+
+		expect(upToDate).toBe("42");
+		expect(order).toEqual(["watermark", "compute"]);
+	});
+
 	it("runs collection finds with the resolved topic query", async () => {
 		const calls: unknown[] = [];
 		const result = { docs: [{ id: "post-1" }], totalDocs: 1 };
@@ -231,10 +249,7 @@ describe("computeRealtimeSnapshot", () => {
 		];
 		expect(options).toMatchObject({
 			where: {
-				AND: [
-					{ published: true },
-					{ id: { in: ["post-1", "post-2"] } },
-				],
+				AND: [{ published: true }, { id: { in: ["post-1", "post-2"] } }],
 			},
 			columns: { id: true, title: true },
 			locale: "en",

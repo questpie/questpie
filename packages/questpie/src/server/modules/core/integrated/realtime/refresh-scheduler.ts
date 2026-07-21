@@ -96,6 +96,7 @@ type SchedulerGroup = {
 	topics: RealtimeTopics;
 	sinceSeq?: number;
 	compute: () => Promise<unknown>;
+	captureWatermark?: () => Promise<string>;
 	subscribers: Set<Subscriber>;
 	unsubscribe: () => void;
 	lastSeq: number;
@@ -104,6 +105,8 @@ type SchedulerGroup = {
 	refreshInFlight: boolean;
 	refreshQueued: boolean;
 	nextReset: boolean;
+	heartbeatTimer?: ReturnType<typeof setInterval>;
+	heartbeatInFlight: boolean;
 	disposed: boolean;
 };
 
@@ -113,6 +116,7 @@ export type RefreshSubscriptionInput = {
 	topics: RealtimeTopics;
 	sinceSeq?: number;
 	compute: () => Promise<unknown>;
+	captureWatermark?: () => Promise<string>;
 	onFrame: (
 		frame: Uint8Array,
 		delivery?: RealtimeDeliveryMode,
@@ -124,6 +128,7 @@ export type RefreshSubscriptionInput = {
 	maxDeltaQueueEvents?: number;
 	maxDeltaQueueBytes?: number;
 	deltaRebootstrapIntervalMs?: number;
+	heartbeatIntervalMs?: number;
 };
 
 const sha256 = async (value: string): Promise<string> => {
@@ -149,6 +154,7 @@ type DeltaGroup = {
 	observationKey: string;
 	topics: RealtimeTopics;
 	compute: () => Promise<unknown>;
+	captureWatermark?: () => Promise<string>;
 	hydrateRows: (recordIds: string[]) => Promise<unknown>;
 	subscribers: Set<DeltaSubscriber>;
 	unsubscribe: () => void;
@@ -162,7 +168,9 @@ type DeltaGroup = {
 	ready: boolean;
 	processing: boolean;
 	resetQueued: boolean;
+	heartbeatQueued: boolean;
 	rebootstrapTimer?: ReturnType<typeof setInterval>;
+	heartbeatTimer?: ReturnType<typeof setInterval>;
 	disposed: boolean;
 };
 
@@ -226,12 +234,14 @@ export class RealtimeRefreshScheduler {
 				topics: input.topics,
 				sinceSeq: input.sinceSeq,
 				compute: input.compute,
+				captureWatermark: input.captureWatermark,
 				subscribers: new Set(),
 				unsubscribe: () => {},
 				lastSeq: 0,
 				refreshInFlight: false,
 				refreshQueued: false,
 				nextReset: false,
+				heartbeatInFlight: false,
 				disposed: false,
 			};
 			this.groups.set(input.key, group);
@@ -240,6 +250,11 @@ export class RealtimeRefreshScheduler {
 				input.topics,
 				(error) => this.reportTransportError(group!, error),
 			);
+			if (input.captureWatermark && input.heartbeatIntervalMs !== undefined) {
+				group.heartbeatTimer = setInterval(() => {
+					void this.sendSnapshotHeartbeat(group!);
+				}, input.heartbeatIntervalMs);
+			}
 		}
 
 		const subscriber: Subscriber = {
@@ -260,6 +275,7 @@ export class RealtimeRefreshScheduler {
 			if (!group!.subscribers.delete(subscriber)) return;
 			if (group!.subscribers.size > 0) return;
 			group!.disposed = true;
+			if (group!.heartbeatTimer) clearInterval(group!.heartbeatTimer);
 			group!.unsubscribe();
 			this.groups.delete(group!.key);
 		};
@@ -276,6 +292,7 @@ export class RealtimeRefreshScheduler {
 				observationKey: globalThis.crypto.randomUUID(),
 				topics: input.topics,
 				compute: input.compute,
+				captureWatermark: input.captureWatermark,
 				hydrateRows: input.hydrateRows,
 				subscribers: new Set(),
 				unsubscribe: () => {},
@@ -289,6 +306,7 @@ export class RealtimeRefreshScheduler {
 				ready: false,
 				processing: false,
 				resetQueued: false,
+				heartbeatQueued: false,
 				disposed: false,
 			};
 			this.deltaGroups.set(input.key, group);
@@ -307,6 +325,13 @@ export class RealtimeRefreshScheduler {
 					group!.resetQueued = true;
 					if (group!.ready) void this.processDeltaQueue(group!);
 				}, input.deltaRebootstrapIntervalMs);
+			}
+			if (input.captureWatermark && input.heartbeatIntervalMs !== undefined) {
+				group.heartbeatTimer = setInterval(() => {
+					if (group!.disposed) return;
+					group!.heartbeatQueued = true;
+					if (group!.ready) void this.processDeltaQueue(group!);
+				}, input.heartbeatIntervalMs);
 			}
 		}
 
@@ -343,6 +368,7 @@ export class RealtimeRefreshScheduler {
 				bytes: 0,
 			});
 			if (group!.rebootstrapTimer) clearInterval(group!.rebootstrapTimer);
+			if (group!.heartbeatTimer) clearInterval(group!.heartbeatTimer);
 			group!.unsubscribe();
 			this.deltaGroups.delete(group!.key);
 		};
@@ -362,6 +388,7 @@ export class RealtimeRefreshScheduler {
 					: await this.realtime.getLatestSeq();
 				group.latestSeq = Math.max(group.latestSeq, bootstrapSeq);
 				group.lastDeliveredSeq = Math.max(group.lastDeliveredSeq, bootstrapSeq);
+				const upToDate = await group.captureWatermark?.();
 				const data = await this.runBounded(group.compute);
 				if (group.disposed || !group.subscribers.has(subscriber)) return;
 				if (!group.ready) {
@@ -374,6 +401,7 @@ export class RealtimeRefreshScheduler {
 					seq: bootstrapSeq,
 					data,
 					reset: false,
+					...(upToDate === undefined ? {} : { upToDate }),
 				});
 				this.observe({
 					type: "delta.emitted",
@@ -434,7 +462,10 @@ export class RealtimeRefreshScheduler {
 		if (group.processing || group.disposed || !group.ready) return;
 		group.processing = true;
 		try {
-			while (!group.disposed && (group.resetQueued || group.queue.length > 0)) {
+			while (
+				!group.disposed &&
+				(group.resetQueued || group.queue.length > 0 || group.heartbeatQueued)
+			) {
 				if (group.resetQueued) {
 					group.resetQueued = false;
 					group.queue = [];
@@ -447,6 +478,24 @@ export class RealtimeRefreshScheduler {
 						bytes: 0,
 					});
 					await this.resetDeltaGroup(group);
+					continue;
+				}
+				if (group.queue.length === 0 && group.heartbeatQueued) {
+					group.heartbeatQueued = false;
+					const upToDate = await group.captureWatermark?.();
+					const seq = await this.realtime.getLatestSeq();
+					group.lastDeliveredSeq = Math.max(group.lastDeliveredSeq, seq);
+					this.deliverDeltaEvent(
+						group,
+						"up-to-date",
+						{
+							type: "up-to-date",
+							seq,
+							...(upToDate === undefined ? {} : { upToDate }),
+							meta: { totalDocs: group.rowHashes.size },
+						},
+						"delta",
+					);
 					continue;
 				}
 
@@ -478,6 +527,7 @@ export class RealtimeRefreshScheduler {
 				const ids = [
 					...new Set(events.flatMap((event) => eventRecordIds(event)!)),
 				];
+				const upToDate = await group.captureWatermark?.();
 				const hydrated = snapshotRows(await group.hydrateRows(ids));
 				const rowsById = new Map<string, unknown>();
 				for (const row of hydrated) {
@@ -541,6 +591,7 @@ export class RealtimeRefreshScheduler {
 							type: "up-to-date",
 							seq: event.seq,
 							...(event.txid ? { txid: event.txid } : {}),
+							...(upToDate === undefined ? {} : { upToDate }),
 							meta: { totalDocs: group.rowHashes.size },
 						},
 						"delta",
@@ -551,7 +602,11 @@ export class RealtimeRefreshScheduler {
 			this.reportDeltaError(group, error);
 		} finally {
 			group.processing = false;
-			if (group.resetQueued || group.queue.length > 0) {
+			if (
+				group.resetQueued ||
+				group.queue.length > 0 ||
+				group.heartbeatQueued
+			) {
 				void this.processDeltaQueue(group);
 			}
 		}
@@ -559,6 +614,7 @@ export class RealtimeRefreshScheduler {
 
 	private async resetDeltaGroup(group: DeltaGroup): Promise<void> {
 		const seq = await this.realtime.getLatestSeq();
+		const upToDate = await group.captureWatermark?.();
 		const data = await this.runBounded(group.compute);
 		await this.replaceDeltaHashes(group, snapshotRows(data));
 		group.latestSeq = Math.max(group.latestSeq, seq);
@@ -570,6 +626,7 @@ export class RealtimeRefreshScheduler {
 				seq,
 				data,
 				reset: true,
+				...(upToDate === undefined ? {} : { upToDate }),
 			},
 			"snapshot",
 		);
@@ -686,6 +743,33 @@ export class RealtimeRefreshScheduler {
 		}
 	}
 
+	private async sendSnapshotHeartbeat(group: SchedulerGroup): Promise<void> {
+		if (group.disposed || group.heartbeatInFlight || !group.captureWatermark) {
+			return;
+		}
+		group.heartbeatInFlight = true;
+		try {
+			const upToDate = await group.captureWatermark();
+			const seq = await this.realtime.getLatestSeq();
+			if (group.disposed) return;
+			const frame = encodeSseEvent("up-to-date", {
+				type: "up-to-date",
+				topicId: group.topicId,
+				seq,
+				upToDate,
+			});
+			for (const subscriber of group.subscribers) {
+				void Promise.resolve(subscriber.onFrame(frame)).catch(
+					subscriber.onError,
+				);
+			}
+		} catch (error) {
+			this.reportError(group, error);
+		} finally {
+			group.heartbeatInFlight = false;
+		}
+	}
+
 	private requestRefresh(group: SchedulerGroup, seq: number): void {
 		if (group.disposed) return;
 		group.lastSeq = Math.max(group.lastSeq, seq);
@@ -708,6 +792,7 @@ export class RealtimeRefreshScheduler {
 					operation,
 					subscribers: group.subscribers.size,
 				});
+				const upToDate = await group.captureWatermark?.();
 				const data = await this.runBounded(group.compute);
 				if (group.disposed) return;
 				const serialized = JSON.stringify(data);
@@ -718,6 +803,19 @@ export class RealtimeRefreshScheduler {
 						operation,
 						subscribers: group.subscribers.size,
 					});
+					if (upToDate !== undefined) {
+						const frame = encodeSseEvent("up-to-date", {
+							type: "up-to-date",
+							topicId: group.topicId,
+							seq: group.lastSeq,
+							upToDate,
+						});
+						for (const subscriber of group.subscribers) {
+							void Promise.resolve(subscriber.onFrame(frame)).catch(
+								subscriber.onError,
+							);
+						}
+					}
 					continue;
 				}
 
@@ -727,6 +825,7 @@ export class RealtimeRefreshScheduler {
 					seq: group.lastSeq,
 					data,
 					reset: group.nextReset,
+					...(upToDate === undefined ? {} : { upToDate }),
 				});
 				group.nextReset = false;
 				const frame = group.lastFrame;

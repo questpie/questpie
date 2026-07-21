@@ -1,4 +1,7 @@
+import { sql } from "drizzle-orm";
+
 import { PRECHECKED_READ_ACCESS } from "#questpie/server/collection/crud/shared/access-control.js";
+import { rowsOf } from "#questpie/server/db/driver-result.js";
 
 type CollectionFindSnapshotCrud = {
 	find(options: Record<string, unknown>, context: unknown): Promise<unknown>;
@@ -49,6 +52,39 @@ export type RealtimeSnapshotTopic =
 			operation: "get";
 			crud: GlobalSnapshotCrud;
 	  });
+
+type WatermarkContext = {
+	db?: {
+		execute(query: any): Promise<any>;
+	};
+};
+
+/** Capture PostgreSQL's visibility watermark before the associated read starts. */
+export async function captureRealtimeWatermark(
+	context: WatermarkContext,
+): Promise<string> {
+	if (!context.db) {
+		throw new Error(
+			"Realtime transaction watermarks require a database context",
+		);
+	}
+	const rows = rowsOf<{ upToDate: unknown }>(
+		await context.db.execute(
+			sql`select pg_snapshot_xmin(pg_current_snapshot())::text as "upToDate"`,
+		),
+	);
+	const value = rows[0]?.upToDate;
+	if (
+		typeof value !== "string" &&
+		typeof value !== "number" &&
+		typeof value !== "bigint"
+	) {
+		throw new Error(
+			"PostgreSQL did not return a realtime transaction watermark",
+		);
+	}
+	return String(value);
+}
 
 /** Compute one authorized snapshot without knowing how its bytes are delivered. */
 export function computeRealtimeSnapshot(
