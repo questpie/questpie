@@ -11,6 +11,7 @@
  * Phase 3: Direct CRUD calls will be removed, these hooks become sole source.
  */
 
+import { recordTransactionTxid } from "#questpie/server/collection/crud/shared/transaction.js";
 import type {
 	GlobalCollectionHookContext,
 	GlobalCollectionTransitionHookContext,
@@ -177,6 +178,7 @@ const realtimeHook = {
 				},
 				{ db: asRealtimeMutationDb(ctx.db) },
 			);
+			recordTransactionTxid(change.txid);
 
 			publishRealtimeAfterCommit(ctx, realtime, change);
 		} catch (error) {
@@ -203,6 +205,7 @@ const realtimeHook = {
 				},
 				{ db: asRealtimeMutationDb(ctx.db) },
 			);
+			recordTransactionTxid(change.txid);
 
 			publishRealtimeAfterCommit(ctx, realtime, change);
 		} catch (error) {
@@ -379,6 +382,7 @@ const globalRealtimeHook = {
 				},
 				{ db: asRealtimeMutationDb(ctx.db) },
 			);
+			recordTransactionTxid(change.txid);
 
 			publishRealtimeAfterCommit(ctx, realtime, change);
 		} catch (error) {

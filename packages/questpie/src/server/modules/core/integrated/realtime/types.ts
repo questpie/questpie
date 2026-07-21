@@ -31,6 +31,7 @@ export type RealtimeChangePayload = {
 
 export type RealtimeChangeEvent = {
 	seq: number;
+	txid?: string;
 	resourceType: RealtimeResourceType;
 	resource: string;
 	operation: RealtimeOperation;

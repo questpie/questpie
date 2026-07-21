@@ -130,6 +130,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 export interface TransactionContext {
 	/** The active database transaction */
 	tx: any;
+	/** PostgreSQL xid8 captured by the realtime outbox write. */
+	txid?: string;
 	/** Callbacks to run after the outermost transaction commits */
 	afterCommit: Array<() => Promise<void>>;
 }
@@ -158,6 +160,19 @@ export function getTransactionContext(): TransactionContext | undefined {
  */
 export function getCurrentTransaction(): any | undefined {
 	return transactionStorage.getStore()?.tx;
+}
+
+/** Record the xid8 returned by an outbox write in the current transaction. */
+export function recordTransactionTxid(txid: string | null | undefined): void {
+	if (!txid) return;
+	const ctx = transactionStorage.getStore();
+	if (!ctx) return;
+	ctx.txid = txid;
+}
+
+/** Read the xid8 captured for the current managed transaction. */
+export function getTransactionTxid(): string | undefined {
+	return transactionStorage.getStore()?.txid;
 }
 
 /**

@@ -52,7 +52,10 @@ import type {
 
 export type RealtimeListener = (event: RealtimeChangeEvent) => void;
 
-type AppendChangeInput = Omit<RealtimeChangeEvent, "seq" | "createdAt">;
+type AppendChangeInput = Omit<
+	RealtimeChangeEvent,
+	"seq" | "txid" | "createdAt"
+>;
 
 type AppendChangeOptions = {
 	db?: DrizzleClientFromQuestpieConfig<any>;
@@ -373,8 +376,9 @@ export class RealtimeService {
 			throw error;
 		}
 
-		const event = {
+		const event: RealtimeChangeEvent = {
 			seq: Number(row.seq),
+			...(row.txid === null ? {} : { txid: row.txid }),
 			resourceType: row.resourceType as RealtimeResourceType,
 			resource: row.resource,
 			operation: row.operation as RealtimeOperation,
@@ -819,6 +823,7 @@ export class RealtimeService {
 		const rows = await this.db
 			.select({
 				seq: questpieRealtimeLogTable.seq,
+				txid: questpieRealtimeLogTable.txid,
 				resourceType: questpieRealtimeLogTable.resourceType,
 				resource: questpieRealtimeLogTable.resource,
 				operation: questpieRealtimeLogTable.operation,
@@ -834,6 +839,7 @@ export class RealtimeService {
 
 		return rows.map((row: any) => ({
 			seq: Number(row.seq),
+			...(row.txid == null ? {} : { txid: String(row.txid) }),
 			resourceType: row.resourceType as RealtimeResourceType,
 			resource: row.resource,
 			operation: row.operation as RealtimeOperation,
