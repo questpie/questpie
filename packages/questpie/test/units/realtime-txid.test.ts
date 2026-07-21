@@ -1,7 +1,10 @@
 import { describe, expect, it } from "bun:test";
 
 import { smartResponse } from "../../src/server/adapters/utils/response.js";
-import { assertPostgres13ForRealtimeTxid } from "../../src/server/db/postgres-version.js";
+import {
+	assertPostgres13ForRealtimeTxid,
+	QUESTPIE_SCHEMA_INTROSPECTION_ENV,
+} from "../../src/server/db/postgres-version.js";
 import { questpieRealtimeLogTable } from "../../src/server/modules/core/integrated/realtime/collection.js";
 import {
 	attachTxid,
@@ -27,6 +30,29 @@ describe("realtime txid PostgreSQL contract", () => {
 
 		await expect(assertPostgres13ForRealtimeTxid(db)).resolves.toBeUndefined();
 		expect(questpieRealtimeLogTable.txid.mapFromDriverValue(42n)).toBe("42");
+	});
+
+	it("keeps schema introspection database-free", async () => {
+		let executed = false;
+		const previous = process.env[QUESTPIE_SCHEMA_INTROSPECTION_ENV];
+		process.env[QUESTPIE_SCHEMA_INTROSPECTION_ENV] = "1";
+
+		try {
+			await assertPostgres13ForRealtimeTxid({
+				execute: async () => {
+					executed = true;
+					throw new Error("database should not be queried");
+				},
+			});
+		} finally {
+			if (previous === undefined) {
+				delete process.env[QUESTPIE_SCHEMA_INTROSPECTION_ENV];
+			} else {
+				process.env[QUESTPIE_SCHEMA_INTROSPECTION_ENV] = previous;
+			}
+		}
+
+		expect(executed).toBe(false);
 	});
 
 	it("attaches transaction metadata without changing JSON output", () => {

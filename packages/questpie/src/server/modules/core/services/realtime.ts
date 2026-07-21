@@ -1,6 +1,10 @@
-import { assertPostgres13ForRealtimeTxid } from "#questpie/server/db/postgres-version.js";
+import {
+	assertPostgres13ForRealtimeTxid,
+	QUESTPIE_SCHEMA_INTROSPECTION_ENV,
+} from "#questpie/server/db/postgres-version.js";
 import { RealtimeService } from "#questpie/server/modules/core/integrated/realtime/service.js";
 import { service } from "#questpie/server/services/define-service.js";
+import { getEnv } from "#questpie/server/utils/env.js";
 
 /**
  * Realtime service — creates the RealtimeService from app config.
@@ -31,7 +35,9 @@ export default service({
 				return app._resolveGlobalDependencies(globalName, withConfig);
 			},
 		});
-		await realtime.initialize();
+		if (getEnv(QUESTPIE_SCHEMA_INTROSPECTION_ENV) !== "1") {
+			await realtime.initialize();
+		}
 
 		return realtime;
 	},

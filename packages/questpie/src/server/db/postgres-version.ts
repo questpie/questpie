@@ -1,8 +1,11 @@
 import { sql } from "drizzle-orm";
 
+import { getEnv } from "../utils/env.js";
 import { rowsOf } from "./driver-result.js";
 
 const POSTGRES_13_VERSION_NUM = 130_000;
+export const QUESTPIE_SCHEMA_INTROSPECTION_ENV =
+	"QUESTPIE_SCHEMA_INTROSPECTION";
 
 type VersionDb = {
 	execute(query: unknown): Promise<unknown>;
@@ -12,6 +15,8 @@ type VersionDb = {
 export async function assertPostgres13ForRealtimeTxid(
 	db: VersionDb,
 ): Promise<void> {
+	if (getEnv(QUESTPIE_SCHEMA_INTROSPECTION_ENV) === "1") return;
+
 	const result = await db.execute(
 		sql`SELECT current_setting('server_version_num')::integer AS "serverVersionNum"`,
 	);
