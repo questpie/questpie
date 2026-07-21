@@ -2,7 +2,7 @@ import type { Collection } from "@tanstack/db";
 import type {
 	ApplyQuery,
 	CollectionRelations,
-	CollectionSelect,
+	CollectionSelectFromApp,
 	FindManyOptions,
 	GetCollection,
 	QuestpieApp,
@@ -18,7 +18,10 @@ export type CollectionKeys<TApp extends QuestpieApp> = Extract<
 export type CollectionSelectOf<
 	TApp extends QuestpieApp,
 	K extends CollectionKeys<TApp>,
-> = CollectionSelect<GetCollection<TApp["collections"], K>>;
+> = CollectionSelectFromApp<
+	GetCollection<TApp["collections"], K>,
+	{ collections: TApp["collections"] }
+>;
 
 export type CollectionRelationsOf<
 	TApp extends QuestpieApp,
@@ -31,7 +34,10 @@ export type CollectionRelationsOf<
 export type FindOptionsOf<
 	TApp extends QuestpieApp,
 	K extends CollectionKeys<TApp>,
-> = FindManyOptions<CollectionSelectOf<TApp, K>, CollectionRelationsOf<TApp, K>>;
+> = FindManyOptions<
+	CollectionSelectOf<TApp, K>,
+	CollectionRelationsOf<TApp, K>
+>;
 
 export type CollectionRowOf<
 	TApp extends QuestpieApp,
@@ -43,7 +49,7 @@ export type CollectionRowOf<
 >;
 
 export type IdOf<TRow> = TRow extends { id: infer TId }
-	? Extract<TId, string | number>
+	? Extract<TId, string>
 	: never;
 
 export type QuestpieCollections<TApp extends QuestpieApp> = {
@@ -55,4 +61,5 @@ export type QuestpieCollections<TApp extends QuestpieApp> = {
 
 export type QuestpieDb<TApp extends QuestpieApp> = {
 	collections: QuestpieCollections<TApp>;
+	destroy: () => void;
 };

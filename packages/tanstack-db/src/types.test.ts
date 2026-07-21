@@ -2,7 +2,9 @@ import { describe, expect, it } from "bun:test";
 
 import type { Collection } from "@tanstack/db";
 import { collection } from "questpie";
+import type { QuestpieClient } from "questpie/client";
 
+import { eq, useLiveQuery } from "./exports/index.js";
 import type {
 	CollectionRowOf,
 	FindOptionsOf,
@@ -32,6 +34,10 @@ type App = {
 describe("tanstack-db types", () => {
 	it("maps each QUESTPIE collection to one base-select row collection", () => {
 		type Post = CollectionRowOf<App, "posts">;
+		const directFind = (client: QuestpieClient<App>) =>
+			client.collections.posts.find();
+		type DirectPost = Awaited<ReturnType<typeof directFind>>["docs"][number];
+		type _sameAsClientFind = Expect<Equal<Post, DirectPost>>;
 		type _title = Expect<Equal<Post["title"], string>>;
 		type _foreignKey = Expect<Equal<Post["author"], string>>;
 		type _id = Expect<Equal<IdOf<Post>, string>>;
@@ -54,5 +60,23 @@ describe("tanstack-db types", () => {
 		};
 
 		expect(checkTypes).toBeInstanceOf(Function);
+	});
+
+	it("keeps live-query where and join fields typed", () => {
+		const buildTypedQuery = (db: QuestpieDb<App>) =>
+			useLiveQuery((q) =>
+				q
+					.from({ post: db.collections.posts })
+					.join({ author: db.collections.authors }, ({ post, author }) =>
+						eq(post.author, author.id),
+					)
+					.where(({ post }) => eq(post.title, "Published"))
+					.select(({ post, author }) => ({
+						postTitle: post.title,
+						authorName: author?.name,
+					})),
+			);
+
+		expect(buildTypedQuery).toBeInstanceOf(Function);
 	});
 });

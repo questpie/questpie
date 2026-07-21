@@ -14,6 +14,16 @@
 	"main": "./dist/index.mjs",
 	"module": "./dist/index.mjs",
 	"types": "./dist/index.d.mts",
+	"exports": {
+		".": "./src/exports/index.ts",
+		"./*": "./*"
+	},
+	"publishConfig": {
+		"exports": {
+			".": "./dist/index.mjs",
+			"./*": "./*"
+		}
+	},
 	"scripts": {
 		"build": "tsdown",
 		"check-types": "tsc --noEmit"
@@ -32,15 +42,5 @@
 		"@tanstack/react-db": "^0.1.94",
 		"@tanstack/react-query": "^5.0.0",
 		"questpie": "^3.0.0"
-	},
-	"exports": {
-		".": "./src/exports/index.ts",
-		"./*": "./*"
-	},
-	"publishConfig": {
-		"exports": {
-			".": "./dist/index.mjs",
-			"./*": "./*"
-		}
 	}
 }

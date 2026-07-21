@@ -1980,6 +1980,7 @@ export type {
 // per-call generics without reaching into server internals.
 export type {
 	ApplyQuery,
+	CollectionSelect as CollectionSelectFromApp,
 	FindManyOptions,
 	FindOneOptionsBase,
 	FindResult,
