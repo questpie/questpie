@@ -17,6 +17,141 @@ import type { RealtimeClientTransport } from "./transport.js";
 // Types
 // ============================================================================
 
+export type RealtimeStreamEvent<TData = unknown> =
+	| {
+			type: "snapshot";
+			topicId: string;
+			seq: number;
+			data: TData;
+			reset?: boolean;
+			upToDate?: string;
+	  }
+	| {
+			type: "insert" | "update";
+			topicId: string;
+			seq: number;
+			txid?: string;
+			key: string;
+			row: unknown;
+			index?: number;
+	  }
+	| {
+			type: "delete";
+			topicId: string;
+			seq: number;
+			txid?: string;
+			key: string;
+	  }
+	| {
+			type: "up-to-date";
+			topicId: string;
+			seq: number;
+			txid?: string;
+			upToDate?: string;
+			meta?: { totalDocs?: number };
+	  };
+
+type RealtimeFindEnvelope<TRow> = {
+	docs: TRow[];
+	totalDocs?: number;
+	[key: string]: unknown;
+};
+
+/** Metadata for an unwindowed realtime find result. */
+export function envelopeMeta<TRow>(
+	docs: readonly TRow[],
+	totalDocs = docs.length,
+) {
+	return {
+		totalDocs,
+		totalPages: 1,
+		page: 1,
+		hasNextPage: false,
+		hasPrevPage: false,
+		nextPage: null,
+		prevPage: null,
+	};
+}
+
+/** Apply one snapshot or keyed row event to an unwindowed find result. */
+export function applyRealtimeFindEvent<
+	TRow,
+	TData extends RealtimeFindEnvelope<TRow>,
+>(
+	current: TData | undefined,
+	event: RealtimeStreamEvent<TData>,
+	keyOf: (row: TRow) => string = (row) =>
+		String((row as { id?: unknown }).id),
+): TData {
+	if (event.type === "snapshot") return event.data;
+	if (!current) {
+		throw new Error("Realtime find deltas require an initial snapshot");
+	}
+
+	if (event.type === "up-to-date") {
+		return {
+			...current,
+			...envelopeMeta(
+				current.docs,
+				event.meta?.totalDocs ?? current.docs.length,
+			),
+		} as TData;
+	}
+
+	const index = current.docs.findIndex((row) => keyOf(row) === event.key);
+	let docs: TRow[];
+	if (event.type === "delete") {
+		if (index < 0) return current;
+		docs = [
+			...current.docs.slice(0, index),
+			...current.docs.slice(index + 1),
+		];
+	} else {
+		const row = event.row as TRow;
+		if (index >= 0) {
+			docs = current.docs.slice();
+			docs[index] = row;
+		} else {
+			const insertionIndex =
+				event.index === undefined
+					? current.docs.length
+					: Math.max(0, Math.min(event.index, current.docs.length));
+			docs = [
+				...current.docs.slice(0, insertionIndex),
+				row,
+				...current.docs.slice(insertionIndex),
+			];
+		}
+	}
+
+	return { ...current, docs, ...envelopeMeta(docs) } as TData;
+}
+
+/** Apply snapshot/count metadata frames to a scalar realtime result. */
+export function applyRealtimeScalarEvent<TData>(
+	current: TData | undefined,
+	event: RealtimeStreamEvent<TData>,
+): TData | undefined {
+	if (event.type === "snapshot") return event.data;
+	if (event.type === "up-to-date" && event.meta?.totalDocs !== undefined) {
+		return event.meta.totalDocs as TData;
+	}
+	return current;
+}
+
+/** Apply snapshot or keyed row frames to a single-row realtime result. */
+export function applyRealtimeSingleEvent<TData>(
+	current: TData | null | undefined,
+	event: RealtimeStreamEvent<TData | null>,
+): TData | null | undefined {
+	if (event.type === "snapshot") return event.data;
+	if (event.type === "delete") return null;
+	if (event.type === "insert" || event.type === "update") {
+		return event.row as TData;
+	}
+	return current;
+}
+
 export type RealtimeAPI = {
 	/**
 	 * Subscribe to a topic. Returns unsubscribe function.

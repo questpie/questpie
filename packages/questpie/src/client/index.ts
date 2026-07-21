@@ -1951,14 +1951,19 @@ export type { GlobalMeta } from "#questpie/shared/global-meta.js";
 // Re-export realtime types and helpers
 export type {
 	RealtimeAPI,
+	RealtimeStreamEvent,
 	RealtimeTopicRejectedDetails,
 	RealtimeTopicRejectedPayload,
 	TopicConfig,
 	TopicInput,
 } from "./realtime/index.js";
 export {
+	applyRealtimeFindEvent,
+	applyRealtimeScalarEvent,
+	applyRealtimeSingleEvent,
 	buildCollectionTopic,
 	buildGlobalTopic,
+	envelopeMeta,
 	RealtimeTopicRejectedError,
 } from "./realtime/index.js";
 export type {

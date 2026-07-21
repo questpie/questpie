@@ -9,10 +9,15 @@ export type {
 	RealtimeTopicRejectedPayload,
 } from "../../shared/realtime-error.js";
 export {
+	applyRealtimeFindEvent,
+	applyRealtimeScalarEvent,
+	applyRealtimeSingleEvent,
 	buildCollectionTopic,
 	buildGlobalTopic,
 	createRealtimeAPI,
+	envelopeMeta,
 	type RealtimeAPI,
+	type RealtimeStreamEvent,
 	sseSnapshotStream,
 } from "./stream.js";
 export {
