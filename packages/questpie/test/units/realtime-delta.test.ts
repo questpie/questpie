@@ -29,6 +29,7 @@ describe("realtime delta delivery", () => {
 			{ ...eligible, mode: "delta" as const, offset: 1 },
 			{ ...eligible, mode: "delta" as const, orderBy: { id: "asc" } },
 			{ ...eligible, mode: "delta" as const, with: { author: true } },
+			{ ...eligible, mode: "delta" as const, columns: { id: false } },
 			{
 				...eligible,
 				mode: "delta" as const,

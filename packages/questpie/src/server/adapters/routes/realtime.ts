@@ -25,15 +25,24 @@ import {
 	resolveRealtimeAdmissionConfig,
 } from "../../modules/core/integrated/realtime/admission.js";
 import {
+	classifyRealtimeDelivery,
+	type RealtimeDeliveryMode,
+} from "../../modules/core/integrated/realtime/delta.js";
+import {
 	getRealtimeRefreshScheduler,
 	resolveRealtimeAccessKey,
 } from "../../modules/core/integrated/realtime/refresh-scheduler.js";
-import { computeRealtimeSnapshot } from "../../modules/core/integrated/realtime/snapshot.js";
+import {
+	computeRealtimeSnapshot,
+	hydrateRealtimeRows,
+} from "../../modules/core/integrated/realtime/snapshot.js";
 import {
 	encodeSseEvent,
+	RealtimeDeltaBufferOverflowError,
 	RealtimeSnapshotBufferOverflowError,
 	SseClientTransport,
 	SseLatestSnapshotWriter,
+	SseOrderedDeltaWriter,
 } from "../../modules/core/integrated/realtime/sse-client-transport.js";
 import { sharedSseKeepAliveTicker } from "../../modules/core/integrated/realtime/sse-keep-alive.js";
 import type { RealtimeDesiredTopology } from "../../modules/core/integrated/realtime/topology-coordinator.js";
@@ -61,6 +70,8 @@ type TopicInput = {
 	where?: Record<string, unknown>;
 	/** Relations to include */
 	with?: Record<string, unknown>;
+	/** Projected columns */
+	columns?: Record<string, boolean>;
 	/** Pagination limit */
 	limit?: number;
 	/** Pagination offset */
@@ -71,6 +82,8 @@ type TopicInput = {
 	locale?: string;
 	/** Last snapshot sequence applied by the reconnecting client. */
 	sinceSeq?: number;
+	/** Native row deltas are explicit and still shape-gated by the server. */
+	mode?: "snapshot" | "delta";
 };
 
 type NormalizedTopicInput =
@@ -280,6 +293,61 @@ function schedulerKey(topic: ValidatedTopic, accessKey: string): string {
 		...input
 	} = topic;
 	return `${JSON.stringify(stableValue(input))}:${accessKey}`;
+}
+
+function classifyValidatedTopic(topic: ValidatedTopic): RealtimeDeliveryMode {
+	const relationNames = new Set(
+		Object.keys(topic.definition.state.relations ?? {}),
+	);
+	return classifyRealtimeDelivery(
+		{ ...topic, where: topic.requestedWhere },
+		relationNames,
+	);
+}
+
+function stampValidatedTopicMode(
+	topic: ValidatedTopic,
+	mode: RealtimeDeliveryMode,
+	snapshotDefaultLimit: number,
+): ValidatedTopic {
+	if (
+		mode === "snapshot" &&
+		topic.resourceType === "collection" &&
+		topic.operation === "find" &&
+		topic.limit === undefined
+	) {
+		return { ...topic, mode, limit: snapshotDefaultLimit };
+	}
+	return { ...topic, mode };
+}
+
+function deltaBootstrapSize(data: unknown): number {
+	if (Array.isArray(data)) return data.length;
+	if (data && typeof data === "object") {
+		const docs = (data as { docs?: unknown }).docs;
+		if (Array.isArray(docs)) return docs.length;
+	}
+	return 0;
+}
+
+function deltaBootstrapLimitError(
+	topic: ValidatedTopic,
+	configuredLimit: number,
+	requestedLimit: number,
+): RealtimeTopicAdmissionError {
+	return new RealtimeTopicAdmissionError({
+		code: "REALTIME_TOPIC_REJECTED",
+		message: `Delta bootstrap exceeds ${configuredLimit} rows`,
+		topicId: topic.id,
+		resource: topic.resource,
+		operation: topic.operation,
+		retryable: false,
+		details: {
+			reason: "query_limit",
+			requestedLimit,
+			configuredLimit,
+		},
+	});
 }
 
 function isPermanentAccessError(error: unknown): boolean {
@@ -1017,8 +1085,13 @@ export async function realtimeSubscribe(
 					topicContext,
 					topic.accessCacheKey,
 				);
+				const snapshotTopic = stampValidatedTopicMode(
+					topic,
+					"snapshot",
+					admission.maxFindLimit,
+				);
 				const unsubscribe = refreshScheduler.subscribe({
-					key: schedulerKey(topic, accessKey),
+					key: schedulerKey(snapshotTopic, accessKey),
 					topicId: topic.id,
 					topics: {
 						resourceType: topic.resourceType,
@@ -1028,11 +1101,12 @@ export async function realtimeSubscribe(
 						with: topic.with,
 					},
 					sinceSeq: topic.sinceSeq,
+					mode: "snapshot",
 					compute: () =>
 						limitSnapshotConcurrency(async () => {
 							const admitted = await evaluateTopicAccess(
 								app,
-								topic,
+								snapshotTopic,
 								topicContext,
 							);
 							return computeRealtimeSnapshot(admitted, topicContext);
@@ -1182,12 +1256,19 @@ export async function realtimeSubscribe(
 					sink,
 					admission.maxBufferedSnapshotBytes,
 				);
+				const deltaWriter = new SseOrderedDeltaWriter(sink, {
+					maximumBufferedEvents: admission.maxBufferedDeltaEvents,
+					maximumBufferedBytes: admission.maxBufferedDeltaBytes,
+				});
 				const refreshScheduler = getRealtimeRefreshScheduler(
 					app,
 					app.realtime!,
 				);
 				const limitSnapshotConcurrency = createConcurrencyLimiter(
 					admission.initialSnapshotConcurrency,
+				);
+				const limitDeltaHydration = createConcurrencyLimiter(
+					admission.deltaHydrationConcurrency,
 				);
 				let removeKeepAlive = () => {};
 				let unregisterControl = () => {};
@@ -1202,6 +1283,7 @@ export async function realtimeSubscribe(
 					unregisterControl();
 					flushPending = null;
 					snapshotWriter.clear();
+					deltaWriter.clear();
 					request.signal.removeEventListener("abort", close);
 					for (const unsub of topicUnsubscribers.values()) {
 						unsub();
@@ -1331,8 +1413,14 @@ export async function realtimeSubscribe(
 						topicContext,
 						topic.accessCacheKey,
 					);
+					const deliveryMode = classifyValidatedTopic(topic);
+					const deliveryTopic = stampValidatedTopicMode(
+						topic,
+						deliveryMode,
+						admission.maxFindLimit,
+					);
 					const unsub = refreshScheduler.subscribe({
-						key: schedulerKey(topic, accessKey),
+						key: schedulerKey(deliveryTopic, accessKey),
 						topicId: topic.id,
 						topics: {
 							resourceType: topic.resourceType,
@@ -1342,16 +1430,76 @@ export async function realtimeSubscribe(
 							with: topic.with,
 						},
 						sinceSeq: topic.sinceSeq,
+						mode: deliveryMode,
 						compute: () =>
 							limitSnapshotConcurrency(async () => {
 								const admittedTopic = await evaluateTopicAccess(
 									app,
-									topic,
+									deliveryTopic,
 									topicContext,
 								);
-								return computeRealtimeSnapshot(admittedTopic, topicContext);
+								const data = await computeRealtimeSnapshot(
+									deliveryMode === "delta"
+										? {
+											...admittedTopic,
+											limit: admission.maxDeltaFindLimit + 1,
+										}
+										: admittedTopic,
+									topicContext,
+								);
+								if (deliveryMode === "delta") {
+									const rowCount = deltaBootstrapSize(data);
+									if (rowCount > admission.maxDeltaFindLimit) {
+										throw deltaBootstrapLimitError(
+											deliveryTopic,
+											admission.maxDeltaFindLimit,
+											rowCount,
+										);
+									}
+								}
+								return data;
 							}),
-						onFrame: async (frame) => {
+						hydrateRows:
+							deliveryMode === "delta"
+								? (recordIds) =>
+										limitDeltaHydration(async () => {
+											const admittedTopic = await evaluateTopicAccess(
+												app,
+												deliveryTopic,
+												topicContext,
+											);
+											return hydrateRealtimeRows(
+												admittedTopic as Extract<
+													ValidatedTopic,
+													{
+														type: "collection";
+														operation: "find";
+													}
+												>,
+												recordIds,
+												topicContext,
+											);
+										})
+								: undefined,
+						maxDeltaQueueEvents: admission.maxBufferedDeltaEvents,
+						maxDeltaQueueBytes: admission.maxBufferedDeltaBytes,
+						deltaRebootstrapIntervalMs:
+							deliveryMode === "delta"
+								? admission.deltaRebootstrapIntervalMs
+								: undefined,
+						onFrame: async (frame, frameKind) => {
+							if (deliveryMode === "delta") {
+								if (
+									frameKind === "snapshot" &&
+									frame.byteLength > admission.maxBufferedSnapshotBytes
+								) {
+									throw new RealtimeSnapshotBufferOverflowError(
+										admission.maxBufferedSnapshotBytes,
+									);
+								}
+								await deltaWriter.write(frame);
+								return;
+							}
 							if (frame.byteLength > admission.maxBufferedSnapshotBytes) {
 								observeAdmission("snapshot_bytes");
 								await sendTopicError(
@@ -1367,12 +1515,17 @@ export async function realtimeSubscribe(
 							void sendTopicError(
 								topic.id,
 								error instanceof Error ? error.message : "Refresh failed",
+								error instanceof RealtimeTopicAdmissionError
+									? error.payload
+									: undefined,
 							)
 								.catch(requestClose)
 								.finally(() => {
 									if (
 										isPermanentAccessError(error) ||
-										error instanceof RealtimeSnapshotBufferOverflowError
+										error instanceof RealtimeSnapshotBufferOverflowError ||
+										error instanceof RealtimeDeltaBufferOverflowError ||
+										error instanceof RealtimeTopicAdmissionError
 									) {
 										teardownTopic(topic.id);
 									}

@@ -138,3 +138,21 @@ export function hydrateRealtimeRow(
 		context,
 	);
 }
+
+/** Hydrate authoritative rows for one delta drain without dropping topic membership. */
+export function hydrateRealtimeRows(
+	topic: RealtimeHydrateTopic,
+	recordIds: string[],
+	context: unknown,
+): Promise<unknown> {
+	return topic.crud.find(
+		{
+			[PRECHECKED_READ_ACCESS]: topic.accessWhere,
+			where: mergeRealtimeWhere(topic.where, { id: { in: recordIds } }),
+			columns: topic.columns,
+			...(topic.with === undefined ? {} : { with: topic.with }),
+			locale: topic.locale,
+		},
+		context,
+	);
+}

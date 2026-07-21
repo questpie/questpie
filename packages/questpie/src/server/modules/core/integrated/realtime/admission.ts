@@ -15,6 +15,7 @@ export type RealtimeAdmissionConfig = {
 	maxBufferedDeltaEvents: number;
 	maxBufferedDeltaBytes: number;
 	deltaHydrationConcurrency: number;
+	deltaRebootstrapIntervalMs: number;
 };
 
 export const DEFAULT_REALTIME_ADMISSION: RealtimeAdmissionConfig = {
@@ -29,6 +30,7 @@ export const DEFAULT_REALTIME_ADMISSION: RealtimeAdmissionConfig = {
 	maxBufferedDeltaEvents: 512,
 	maxBufferedDeltaBytes: 1024 * 1024,
 	deltaHydrationConcurrency: 4,
+	deltaRebootstrapIntervalMs: 60_000,
 };
 
 export function resolveRealtimeAdmissionConfig(
@@ -97,6 +99,10 @@ export function resolveRealtimeAdmissionConfig(
 		deltaHydrationConcurrency: positiveInteger(
 			config?.deltaHydrationConcurrency,
 			DEFAULT_REALTIME_ADMISSION.deltaHydrationConcurrency,
+		),
+		deltaRebootstrapIntervalMs: positiveInteger(
+			config?.deltaRebootstrapIntervalMs,
+			DEFAULT_REALTIME_ADMISSION.deltaRebootstrapIntervalMs,
 		),
 	};
 }
@@ -180,6 +186,9 @@ export function admitRealtimeTopic<TTopic extends AdmissionTopic>(
 		};
 	}
 	if ((topic.operation ?? "find") !== "find") {
+		return { accepted: true, topic: { ...topic } };
+	}
+	if (topic.mode === "delta" && topic.limit === undefined) {
 		return { accepted: true, topic: { ...topic } };
 	}
 

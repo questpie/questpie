@@ -297,6 +297,30 @@ describe("realtime scheduler", () => {
 		stopFirst();
 		stopSecond();
 	});
+
+	it("periodically re-bootstraps delta groups through an ordered reset", async () => {
+		const realtime = new FakeRealtimeSource();
+		const scheduler = new RealtimeRefreshScheduler(realtime);
+		const frames: Uint8Array[] = [];
+		const stop = scheduler.subscribe({
+			key: "posts:periodic-delta",
+			topicId: "posts",
+			topics: { resourceType: "collection", resource: "posts" },
+			mode: "delta",
+			compute: async () => ({ docs: [{ id: "1" }], totalDocs: 1 }),
+			hydrateRows: async () => ({ docs: [] }),
+			deltaRebootstrapIntervalMs: 10,
+			onFrame: (frame) => frames.push(frame),
+			onError: () => {},
+		});
+
+		await new Promise((resolve) => setTimeout(resolve, 25));
+		stop();
+		const decoded = frames.map(decodeFrame);
+		expect(decoded.length).toBeGreaterThanOrEqual(2);
+		expect(decoded[0]).toEqual(expect.objectContaining({ reset: false }));
+		expect(decoded.slice(1).every((frame) => frame.reset === true)).toBe(true);
+	});
 });
 
 describe("realtime scheduler access keys", () => {

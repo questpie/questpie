@@ -114,11 +114,34 @@ describe("realtime admission", () => {
 			maxBufferedDeltaEvents: 512,
 			maxBufferedDeltaBytes: 1024 * 1024,
 			deltaHydrationConcurrency: 4,
+			deltaRebootstrapIntervalMs: 60_000,
 		});
 		expect(
 			DEFAULT_REALTIME_ADMISSION.maxDeltaFindLimit *
 				DEFAULT_REALTIME_ADMISSION.estimatedDeltaRowBytes,
 		).toBeLessThanOrEqual(DEFAULT_REALTIME_ADMISSION.maxBufferedSnapshotBytes);
+	});
+
+	it("preserves an unwindowed explicit delta find for route classification", () => {
+		expect(
+			admitRealtimeTopic(
+				{
+					id: "posts-delta",
+					resourceType: "collection",
+					resource: "posts",
+					mode: "delta",
+				},
+				DEFAULT_REALTIME_ADMISSION,
+			),
+		).toEqual({
+			accepted: true,
+			topic: {
+				id: "posts-delta",
+				resourceType: "collection",
+				resource: "posts",
+				mode: "delta",
+			},
+		});
 	});
 
 	it("DoS matrix bounds connection, limit, and relation-depth floods", () => {

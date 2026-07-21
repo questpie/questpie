@@ -123,6 +123,7 @@ export type RefreshSubscriptionInput = {
 	hydrateRows?: (recordIds: string[]) => Promise<unknown>;
 	maxDeltaQueueEvents?: number;
 	maxDeltaQueueBytes?: number;
+	deltaRebootstrapIntervalMs?: number;
 };
 
 const sha256 = async (value: string): Promise<string> => {
@@ -159,6 +160,7 @@ type DeltaGroup = {
 	ready: boolean;
 	processing: boolean;
 	resetQueued: boolean;
+	rebootstrapTimer?: ReturnType<typeof setInterval>;
 	disposed: boolean;
 };
 
@@ -292,6 +294,13 @@ export class RealtimeRefreshScheduler {
 				input.topics,
 				(error) => this.reportDeltaTransportError(group!, error),
 			);
+			if (input.deltaRebootstrapIntervalMs !== undefined) {
+				group.rebootstrapTimer = setInterval(() => {
+					if (group!.disposed) return;
+					group!.resetQueued = true;
+					if (group!.ready) void this.processDeltaQueue(group!);
+				}, input.deltaRebootstrapIntervalMs);
+			}
 		}
 
 		const subscriber: DeltaSubscriber = {
@@ -311,6 +320,7 @@ export class RealtimeRefreshScheduler {
 			if (!group!.subscribers.delete(subscriber)) return;
 			if (group!.subscribers.size > 0) return;
 			group!.disposed = true;
+			if (group!.rebootstrapTimer) clearInterval(group!.rebootstrapTimer);
 			group!.unsubscribe();
 			this.deltaGroups.delete(group!.key);
 		};

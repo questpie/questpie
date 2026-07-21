@@ -31,9 +31,12 @@ export type TopicConfig =
 			operation?: "find";
 			where?: Record<string, unknown>;
 			with?: Record<string, unknown>;
+			columns?: Record<string, boolean>;
 			limit?: number;
 			offset?: number;
 			orderBy?: Record<string, "asc" | "desc">;
+			/** Native server deltas are opt-in and shape-gated. */
+			mode?: "snapshot" | "delta";
 	  })
 	| (TopicCommon & {
 			resourceType: "collection";

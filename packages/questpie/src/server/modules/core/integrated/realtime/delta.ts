@@ -12,6 +12,7 @@ type DeliveryTopic = {
 	operation?: "find" | "count" | "get";
 	where?: Record<string, unknown>;
 	with?: Record<string, unknown>;
+	columns?: Record<string, boolean>;
 	limit?: number;
 	offset?: number;
 	orderBy?: Record<string, "asc" | "desc">;
@@ -79,6 +80,7 @@ const DELTA_SHAPE_RULES: ReadonlyArray<
 	(topic) => topic.offset === undefined,
 	(topic) => topic.orderBy === undefined,
 	(topic) => topic.with === undefined,
+	(topic) => topic.columns?.id !== false,
 	(topic) => !visitRealtimeWhereFields(topic.where, () => {}).hasRaw,
 	(topic, relationNames) =>
 		!whereReferencesRelations(topic.where, relationNames),
