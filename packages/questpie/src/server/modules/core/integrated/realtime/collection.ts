@@ -1,6 +1,8 @@
+import { sql } from "drizzle-orm";
 import {
 	bigint,
 	bigserial,
+	customType,
 	index,
 	integer,
 	jsonb,
@@ -13,6 +15,15 @@ import {
 
 import { systemTimestamp } from "#questpie/server/db/system-columns.js";
 
+const xid8 = customType<{ data: string; driverData: string | bigint }>({
+	dataType() {
+		return "xid8";
+	},
+	fromDriver(value) {
+		return String(value);
+	},
+});
+
 /**
  * Realtime outbox log table
  * Stores changes for subscriptions and backfill.
@@ -21,6 +32,7 @@ export const questpieRealtimeLogTable = pgTable(
 	"questpie_realtime_log",
 	{
 		seq: bigserial("seq", { mode: "number" }).primaryKey(),
+		txid: xid8("txid").default(sql`pg_current_xact_id()`),
 		resourceType: text("resource_type").notNull(),
 		resource: text("resource").notNull(),
 		operation: text("operation").notNull(),

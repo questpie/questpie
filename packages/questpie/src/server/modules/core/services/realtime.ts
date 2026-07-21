@@ -1,3 +1,4 @@
+import { assertPostgres13ForRealtimeTxid } from "#questpie/server/db/postgres-version.js";
 import { RealtimeService } from "#questpie/server/modules/core/integrated/realtime/service.js";
 import { service } from "#questpie/server/services/define-service.js";
 
@@ -11,6 +12,7 @@ export default service({
 	namespace: null,
 	lifecycle: "singleton",
 	create: async ({ app }) => {
+		await assertPostgres13ForRealtimeTxid(app.db);
 		const realtime = new RealtimeService(
 			// Widen — RealtimeService takes the general client type; the generated
 			// `app.db` is narrowed to the app's concrete drizzle schema.
