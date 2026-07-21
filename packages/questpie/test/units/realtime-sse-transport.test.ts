@@ -3,7 +3,9 @@ import { describe, expect, it } from "bun:test";
 import {
 	encodeSseComment,
 	encodeSseEvent,
+	RealtimeDeltaBufferOverflowError,
 	RealtimeSnapshotBufferOverflowError,
+	SseOrderedDeltaWriter,
 	SseLatestSnapshotWriter,
 	SseClientTransport,
 } from "../../src/server/modules/core/integrated/realtime/sse-client-transport.js";
@@ -143,6 +145,31 @@ describe("realtime matrix SseClientTransport", () => {
 		await expect(
 			writer.write("posts", new Uint8Array(9)),
 		).rejects.toBeInstanceOf(RealtimeSnapshotBufferOverflowError);
+		expect(writer.bufferedBytes).toBe(0);
+	});
+
+	it("queues row deltas in order and tears down on overflow", async () => {
+		const closed: string[] = [];
+		const sink = {
+			sessionId: "session-1",
+			write: async () => ({ status: "busy" as const, bufferedBytes: 0 }),
+			close: async (reason: string) => {
+				closed.push(reason);
+			},
+		};
+		const writer = new SseOrderedDeltaWriter(sink, {
+			maximumBufferedEvents: 2,
+			maximumBufferedBytes: 8,
+			busyRetryMs: 60_000,
+		});
+
+		await expect(writer.write(new Uint8Array(5))).resolves.toMatchObject({
+			status: "busy",
+		});
+		await expect(writer.write(new Uint8Array(4))).rejects.toBeInstanceOf(
+			RealtimeDeltaBufferOverflowError,
+		);
+		expect(closed).toEqual(["slow_consumer"]);
 		expect(writer.bufferedBytes).toBe(0);
 	});
 });

@@ -125,7 +125,10 @@ export type ChangeBrokerState =
 	| "failed"
 	| "disconnected";
 
-export type DeliveryClass = "latest-snapshot" | "ordered-channel-event";
+export type DeliveryClass =
+	| "latest-snapshot"
+	| "ordered-channel-event"
+	| "row-delta";
 
 export type SinkWriteResult =
 	| { status: "accepted"; bufferedBytes: number | null }

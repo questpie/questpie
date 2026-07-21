@@ -1,4 +1,5 @@
 import type { RealtimeObservation, RealtimeObserver } from "./observer.js";
+import { BoundedOrderedFifoWriter } from "./ordered-fifo-writer.js";
 import type {
 	ClientCloseReason,
 	ClientConfigInput,
@@ -122,6 +123,87 @@ export class RealtimeSnapshotBufferOverflowError extends Error {
 	constructor(readonly maximumBytes: number) {
 		super(`Realtime snapshot buffer exceeds ${maximumBytes} bytes`);
 		this.name = "RealtimeSnapshotBufferOverflowError";
+	}
+}
+
+export class RealtimeDeltaBufferOverflowError extends Error {
+	constructor(
+		readonly maximumEvents: number,
+		readonly maximumBytes: number,
+	) {
+		super(
+			`Realtime delta buffer exceeds ${maximumEvents} events or ${maximumBytes} bytes`,
+		);
+		this.name = "RealtimeDeltaBufferOverflowError";
+	}
+}
+
+export type SseOrderedDeltaWriterOptions = {
+	maximumBufferedEvents?: number;
+	maximumBufferedBytes?: number;
+	busyRetryMs?: number;
+};
+
+/** Per-session append-only writer for row deltas. Overflow closes the session. */
+export class SseOrderedDeltaWriter {
+	private readonly queue: BoundedOrderedFifoWriter<Uint8Array>;
+	private readonly maximumEvents: number;
+	private readonly maximumBytes: number;
+	private overflowClose: Promise<void> = Promise.resolve();
+
+	constructor(
+		private readonly sink: ClientSink,
+		options: SseOrderedDeltaWriterOptions = {},
+	) {
+		this.maximumEvents = options.maximumBufferedEvents ?? 512;
+		this.maximumBytes = options.maximumBufferedBytes ?? 1024 * 1024;
+		this.queue = new BoundedOrderedFifoWriter({
+			maximumItems: this.maximumEvents,
+			maximumBytes: this.maximumBytes,
+			busyRetryMs: options.busyRetryMs ?? 25,
+			byteLength: (frame) => frame.byteLength,
+			write: (frame) => this.sink.write(frame, "row-delta"),
+			onOverflow: () => {
+				this.overflowClose = this.sink.close("slow_consumer");
+			},
+			onError: () => {
+				this.queue.clear();
+				this.overflowClose = this.sink.close("write_failed");
+			},
+		});
+	}
+
+	get bufferedBytes(): number {
+		return this.queue.bufferedBytes;
+	}
+
+	async write(frame: Uint8Array): Promise<SinkWriteResult> {
+		if (!this.queue.enqueue(frame)) {
+			await this.overflowClose;
+			throw this.overflowError();
+		}
+		const result = await this.queue.flush();
+		if (result === "overflow") {
+			await this.overflowClose;
+			throw this.overflowError();
+		}
+		return result === "busy"
+			? { status: "busy", bufferedBytes: this.queue.totalBufferedBytes }
+			: {
+					status: "accepted",
+					bufferedBytes: this.queue.totalBufferedBytes,
+				};
+	}
+
+	clear(): void {
+		this.queue.clear();
+	}
+
+	private overflowError(): RealtimeDeltaBufferOverflowError {
+		return new RealtimeDeltaBufferOverflowError(
+			this.maximumEvents,
+			this.maximumBytes,
+		);
 	}
 }
 
