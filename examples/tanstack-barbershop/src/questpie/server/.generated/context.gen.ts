@@ -57,6 +57,7 @@ import _mig_20260429T170546_kind_yellow_eagle from "../migrations/20260429T17054
 import _mig_20260615T084209_swift_orange_eagle from "../migrations/20260615T084209_swift_orange_eagle";
 import _mig_20260712T094709_bold_red_griffin from "../migrations/20260712T094709_bold_red_griffin";
 import _mig_20260712T195414_eager_red_tiger from "../migrations/20260712T195414_eager_red_tiger";
+import _mig_20260721T210432_swift_blue_zebra from "../migrations/20260721T210432_swift_blue_zebra";
 
 // ── Seeds ──────────────────────────────────────────────────
 import _seed_blogPosts from "../seeds/blog-posts";
