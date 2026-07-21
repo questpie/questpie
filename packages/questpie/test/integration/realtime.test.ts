@@ -2915,11 +2915,18 @@ describe("realtime matrix", () => {
 
 			// With a 50ms keepalive, two pings must arrive well within the
 			// 2s default timeout (default cadence of 8s would time out here).
-			const firstPing = await reader.readEvent();
+			// Transaction watermark heartbeats may be interleaved with transport pings.
+			const readPing = async () => {
+				while (true) {
+					const event = await reader.readEvent();
+					if (event.comment !== undefined) return event;
+				}
+			};
+			const firstPing = await readPing();
 			expect(firstPing.comment).toMatch(/^ping \d+$/);
 			expect(firstPing.data).toBeNull();
 
-			const secondPing = await reader.readEvent();
+			const secondPing = await readPing();
 			expect(secondPing.comment).toMatch(/^ping \d+$/);
 
 			controller.abort();

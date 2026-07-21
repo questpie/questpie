@@ -1105,7 +1105,9 @@ export async function realtimeSubscribe(
 					},
 					sinceSeq: topic.sinceSeq,
 					mode: "snapshot",
-					captureWatermark: () => captureRealtimeWatermark(topicContext),
+					captureWatermark: topicContext.db
+						? () => captureRealtimeWatermark(topicContext)
+						: undefined,
 					heartbeatIntervalMs,
 					compute: () =>
 						limitSnapshotConcurrency(async () => {
@@ -1438,7 +1440,10 @@ export async function realtimeSubscribe(
 						},
 						sinceSeq: topic.sinceSeq,
 						mode: deliveryMode,
-						captureWatermark: () => captureRealtimeWatermark(topicContext),
+						captureWatermark:
+							deliveryMode === "delta" || topicContext.db
+								? () => captureRealtimeWatermark(topicContext)
+								: undefined,
 						heartbeatIntervalMs,
 						compute: () =>
 							limitSnapshotConcurrency(async () => {
