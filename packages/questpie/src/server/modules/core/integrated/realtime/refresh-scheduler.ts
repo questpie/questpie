@@ -137,6 +137,7 @@ const sha256 = async (value: string): Promise<string> => {
 };
 
 type DeltaSubscriber = Subscriber & {
+	observationKey: string;
 	ready: boolean;
 	pending: Array<{ frame: Uint8Array; delivery: RealtimeDeliveryMode }>;
 	pendingBytes: number;
@@ -145,6 +146,7 @@ type DeltaSubscriber = Subscriber & {
 
 type DeltaGroup = {
 	key: string;
+	observationKey: string;
 	topics: RealtimeTopics;
 	compute: () => Promise<unknown>;
 	hydrateRows: (recordIds: string[]) => Promise<unknown>;
@@ -271,6 +273,7 @@ export class RealtimeRefreshScheduler {
 		if (!group) {
 			group = {
 				key: input.key,
+				observationKey: globalThis.crypto.randomUUID(),
 				topics: input.topics,
 				compute: input.compute,
 				hydrateRows: input.hydrateRows,
@@ -297,6 +300,10 @@ export class RealtimeRefreshScheduler {
 			if (input.deltaRebootstrapIntervalMs !== undefined) {
 				group.rebootstrapTimer = setInterval(() => {
 					if (group!.disposed) return;
+					this.observe({
+						type: "delta.fallback_snapshot",
+						reason: "periodic",
+					});
 					group!.resetQueued = true;
 					if (group!.ready) void this.processDeltaQueue(group!);
 				}, input.deltaRebootstrapIntervalMs);
@@ -305,6 +312,7 @@ export class RealtimeRefreshScheduler {
 
 		const subscriber: DeltaSubscriber = {
 			topicId: input.topicId,
+			observationKey: globalThis.crypto.randomUUID(),
 			onFrame: input.onFrame,
 			onError: input.onError,
 			onTransportError: input.onTransportError,
@@ -318,8 +326,22 @@ export class RealtimeRefreshScheduler {
 
 		return () => {
 			if (!group!.subscribers.delete(subscriber)) return;
+			this.observe({
+				type: "delta.buffer",
+				scope: "subscriber",
+				key: subscriber.observationKey,
+				events: 0,
+				bytes: 0,
+			});
 			if (group!.subscribers.size > 0) return;
 			group!.disposed = true;
+			this.observe({
+				type: "delta.buffer",
+				scope: "group",
+				key: group!.observationKey,
+				events: 0,
+				bytes: 0,
+			});
 			if (group!.rebootstrapTimer) clearInterval(group!.rebootstrapTimer);
 			group!.unsubscribe();
 			this.deltaGroups.delete(group!.key);
@@ -347,18 +369,29 @@ export class RealtimeRefreshScheduler {
 					group.ready = true;
 					void this.processDeltaQueue(group);
 				}
-				await subscriber.onFrame(
-					encodeSseEvent("snapshot", {
-						topicId: subscriber.topicId,
-						seq: bootstrapSeq,
-						data,
-						reset: false,
-					}),
-					"snapshot",
-				);
+				const bootstrapFrame = encodeSseEvent("snapshot", {
+					topicId: subscriber.topicId,
+					seq: bootstrapSeq,
+					data,
+					reset: false,
+				});
+				this.observe({
+					type: "delta.emitted",
+					operation: "snapshot",
+					subscribers: 1,
+					frameBytes: bootstrapFrame.byteLength,
+				});
+				await subscriber.onFrame(bootstrapFrame, "snapshot");
 				while (!subscriber.rebootstrap && subscriber.pending.length > 0) {
 					const { frame, delivery } = subscriber.pending.shift()!;
 					subscriber.pendingBytes -= frame.byteLength;
+					this.observe({
+						type: "delta.buffer",
+						scope: "subscriber",
+						key: subscriber.observationKey,
+						events: subscriber.pending.length,
+						bytes: subscriber.pendingBytes,
+					});
 					await subscriber.onFrame(frame, delivery);
 				}
 			} while (subscriber.rebootstrap && !group.disposed);
@@ -376,6 +409,10 @@ export class RealtimeRefreshScheduler {
 			group.queue.length + 1 > group.maxQueueEvents ||
 			group.queueBytes + bytes > group.maxQueueBytes
 		) {
+			this.observe({
+				type: "delta.fallback_snapshot",
+				reason: "queue_overflow",
+			});
 			group.queue = [];
 			group.queueBytes = 0;
 			group.resetQueued = true;
@@ -383,6 +420,13 @@ export class RealtimeRefreshScheduler {
 			group.queue.push(event);
 			group.queueBytes += bytes;
 		}
+		this.observe({
+			type: "delta.buffer",
+			scope: "group",
+			key: group.observationKey,
+			events: group.queue.length,
+			bytes: group.queueBytes,
+		});
 		if (group.ready) void this.processDeltaQueue(group);
 	}
 
@@ -395,12 +439,26 @@ export class RealtimeRefreshScheduler {
 					group.resetQueued = false;
 					group.queue = [];
 					group.queueBytes = 0;
+					this.observe({
+						type: "delta.buffer",
+						scope: "group",
+						key: group.observationKey,
+						events: 0,
+						bytes: 0,
+					});
 					await this.resetDeltaGroup(group);
 					continue;
 				}
 
 				const events = group.queue.splice(0);
 				group.queueBytes = 0;
+				this.observe({
+					type: "delta.buffer",
+					scope: "group",
+					key: group.observationKey,
+					events: 0,
+					bytes: 0,
+				});
 				if (
 					events.some(
 						(event) =>
@@ -409,6 +467,10 @@ export class RealtimeRefreshScheduler {
 							eventRecordIds(event) === null,
 					)
 				) {
+					this.observe({
+						type: "delta.fallback_snapshot",
+						reason: "dependency_change",
+					});
 					group.resetQueued = true;
 					continue;
 				}
@@ -448,6 +510,11 @@ export class RealtimeRefreshScheduler {
 									},
 									"delta",
 								);
+							} else {
+								this.observe({
+									type: "delta.suppressed",
+									reason: operation === "noop" ? "noop" : "unchanged",
+								});
 							}
 						} else if (operation === "delete") {
 							group.rowHashes.delete(key);
@@ -462,6 +529,8 @@ export class RealtimeRefreshScheduler {
 								},
 								"delta",
 							);
+						} else {
+							this.observe({ type: "delta.suppressed", reason: "noop" });
 						}
 					}
 					group.lastDeliveredSeq = Math.max(group.lastDeliveredSeq, event.seq);
@@ -520,15 +589,25 @@ export class RealtimeRefreshScheduler {
 
 	private deliverDeltaEvent(
 		group: DeltaGroup,
-		event: string,
+		event: "insert" | "update" | "delete" | "up-to-date" | "snapshot",
 		data: Record<string, unknown>,
 		delivery: RealtimeDeliveryMode,
 	): void {
+		let observed = false;
 		for (const subscriber of group.subscribers) {
 			const frame = encodeSseEvent(event, {
 				...data,
 				topicId: subscriber.topicId,
 			});
+			if (!observed) {
+				observed = true;
+				this.observe({
+					type: "delta.emitted",
+					operation: event,
+					subscribers: group.subscribers.size,
+					frameBytes: frame.byteLength,
+				});
+			}
 			if (subscriber.ready) {
 				void Promise.resolve(subscriber.onFrame(frame, delivery)).catch(
 					subscriber.onError,
@@ -542,10 +621,24 @@ export class RealtimeRefreshScheduler {
 				subscriber.pending = [];
 				subscriber.pendingBytes = 0;
 				subscriber.rebootstrap = true;
+				this.observe({
+					type: "delta.buffer",
+					scope: "subscriber",
+					key: subscriber.observationKey,
+					events: 0,
+					bytes: 0,
+				});
 				continue;
 			}
 			subscriber.pending.push({ frame, delivery });
 			subscriber.pendingBytes += frame.byteLength;
+			this.observe({
+				type: "delta.buffer",
+				scope: "subscriber",
+				key: subscriber.observationKey,
+				events: subscriber.pending.length,
+				bytes: subscriber.pendingBytes,
+			});
 		}
 	}
 

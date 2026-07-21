@@ -108,7 +108,45 @@ describe("realtime matrix observability", () => {
 			counters: {
 				"broker.publish|outcome=failed|seam=v2": 1,
 			},
-			gauges: { activeSessions: 0, bufferedBytes: 0 },
+			gauges: {
+				activeSessions: 0,
+				bufferedBytes: 0,
+				deltaBufferedEvents: 0,
+				deltaBufferedBytes: 0,
+			},
+		});
+	});
+
+	test("aggregates bounded delta memory gauges by internal buffer key", () => {
+		const observability = new RealtimeObservability();
+		observability.record({
+			type: "delta.buffer",
+			scope: "group",
+			key: "group-a",
+			events: 2,
+			bytes: 64,
+		});
+		observability.record({
+			type: "delta.buffer",
+			scope: "subscriber",
+			key: "subscriber-b",
+			events: 1,
+			bytes: 32,
+		});
+		expect(observability.snapshot().gauges).toMatchObject({
+			deltaBufferedEvents: 3,
+			deltaBufferedBytes: 96,
+		});
+		observability.record({
+			type: "delta.buffer",
+			scope: "group",
+			key: "group-a",
+			events: 0,
+			bytes: 0,
+		});
+		expect(observability.snapshot().gauges).toMatchObject({
+			deltaBufferedEvents: 1,
+			deltaBufferedBytes: 32,
 		});
 	});
 

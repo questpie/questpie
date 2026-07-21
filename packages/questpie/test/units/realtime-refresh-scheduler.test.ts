@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
+import type { RealtimeObservation } from "../../src/server/modules/core/integrated/realtime/observer.js";
 import {
 	RealtimeRefreshScheduler,
 	resolveRealtimeAccessKey,
@@ -277,9 +278,9 @@ describe("realtime scheduler", () => {
 		await tick();
 		expect(computes).toBe(2);
 		expect(second.map(decodeFrame)).toEqual([
-				expect.objectContaining({
-					topicId: "posts-second",
-					seq: 5,
+			expect.objectContaining({
+				topicId: "posts-second",
+				seq: 5,
 				data: { docs: rows, totalDocs: 2 },
 			}),
 		]);
@@ -300,7 +301,10 @@ describe("realtime scheduler", () => {
 
 	it("periodically re-bootstraps delta groups through an ordered reset", async () => {
 		const realtime = new FakeRealtimeSource();
-		const scheduler = new RealtimeRefreshScheduler(realtime);
+		const observations: RealtimeObservation[] = [];
+		const scheduler = new RealtimeRefreshScheduler(realtime, 10, {
+			record: (event) => observations.push(event),
+		});
 		const frames: Uint8Array[] = [];
 		const stop = scheduler.subscribe({
 			key: "posts:periodic-delta",
@@ -320,6 +324,57 @@ describe("realtime scheduler", () => {
 		expect(decoded.length).toBeGreaterThanOrEqual(2);
 		expect(decoded[0]).toEqual(expect.objectContaining({ reset: false }));
 		expect(decoded.slice(1).every((frame) => frame.reset === true)).toBe(true);
+		expect(observations).toContainEqual({
+			type: "delta.fallback_snapshot",
+			reason: "periodic",
+		});
+		expect(
+			observations.some(
+				(event) =>
+					event.type === "delta.emitted" && event.operation === "snapshot",
+			),
+		).toBe(true);
+	});
+
+	it("observes delta buffers, suppression, and emitted frames", async () => {
+		const realtime = new FakeRealtimeSource();
+		const observations: RealtimeObservation[] = [];
+		const scheduler = new RealtimeRefreshScheduler(realtime, 10, {
+			record: (event) => observations.push(event),
+		});
+		const row = { id: "1", title: "Unchanged" };
+		const stop = scheduler.subscribe({
+			key: "posts:observed-delta",
+			topicId: "posts",
+			topics: { resourceType: "collection", resource: "posts" },
+			mode: "delta",
+			compute: async () => ({ docs: [row], totalDocs: 1 }),
+			hydrateRows: async () => ({ docs: [row] }),
+			onFrame: () => {},
+			onError: () => {},
+		});
+		await tick();
+		await tick();
+		realtime.emit(5, { operation: "update", recordId: "1" });
+		await tick();
+		await tick();
+		stop();
+
+		expect(observations).toContainEqual({
+			type: "delta.suppressed",
+			reason: "unchanged",
+		});
+		expect(
+			observations.some(
+				(event) => event.type === "delta.buffer" && event.scope === "group",
+			),
+		).toBe(true);
+		expect(
+			observations.some(
+				(event) =>
+					event.type === "delta.emitted" && event.operation === "up-to-date",
+			),
+		).toBe(true);
 	});
 });
 

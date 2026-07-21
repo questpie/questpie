@@ -54,6 +54,27 @@ export type RealtimeObservation =
 			subscribers: number;
 	  }
 	| {
+			type: "delta.emitted";
+			operation: "insert" | "update" | "delete" | "up-to-date" | "snapshot";
+			subscribers: number;
+			frameBytes: number;
+	  }
+	| {
+			type: "delta.suppressed";
+			reason: "unchanged" | "noop";
+	  }
+	| {
+			type: "delta.fallback_snapshot";
+			reason: "queue_overflow" | "dependency_change" | "periodic";
+	  }
+	| {
+			type: "delta.buffer";
+			scope: "group" | "subscriber";
+			key: string;
+			events: number;
+			bytes: number;
+	  }
+	| {
 			type: "sink.write";
 			delivery: DeliveryClass;
 			outcome: "accepted" | "busy" | "failed";
@@ -139,6 +160,8 @@ export type RealtimeMetricsSnapshot = Readonly<{
 	gauges: Readonly<{
 		activeSessions: number;
 		bufferedBytes: number;
+		deltaBufferedEvents: number;
+		deltaBufferedBytes: number;
 	}>;
 }>;
 
@@ -167,6 +190,14 @@ function metricKey(event: RealtimeObservation): string {
 		case "refresh.suppressed":
 		case "refresh.failed":
 			return `${event.type}|operation=${event.operation}`;
+		case "delta.emitted":
+			return `${event.type}|operation=${event.operation}`;
+		case "delta.suppressed":
+			return `${event.type}|reason=${event.reason}`;
+		case "delta.fallback_snapshot":
+			return `${event.type}|reason=${event.reason}`;
+		case "delta.buffer":
+			return `${event.type}|scope=${event.scope}`;
 		case "sink.write":
 			return `${event.type}|delivery=${event.delivery}|outcome=${event.outcome}`;
 		case "session.opened":
@@ -221,6 +252,10 @@ export class RealtimeObservability implements RealtimeObserver {
 	private readonly counters = new Map<string, number>();
 	private activeSessions = 0;
 	private bufferedBytes = 0;
+	private readonly deltaBuffers = new Map<
+		string,
+		{ events: number; bytes: number }
+	>();
 
 	constructor(private readonly options: RealtimeObservabilityOptions = {}) {}
 
@@ -249,6 +284,16 @@ export class RealtimeObservability implements RealtimeObserver {
 		if (event.type === "sink.write") {
 			this.bufferedBytes = Math.max(0, event.bufferedBytes);
 		}
+		if (event.type === "delta.buffer") {
+			if (event.events === 0 && event.bytes === 0) {
+				this.deltaBuffers.delete(event.key);
+			} else {
+				this.deltaBuffers.set(event.key, {
+					events: Math.max(0, event.events),
+					bytes: Math.max(0, event.bytes),
+				});
+			}
+		}
 
 		try {
 			this.options.observer?.record(event);
@@ -271,11 +316,19 @@ export class RealtimeObservability implements RealtimeObserver {
 	}
 
 	snapshot(): RealtimeMetricsSnapshot {
+		let deltaBufferedEvents = 0;
+		let deltaBufferedBytes = 0;
+		for (const buffer of this.deltaBuffers.values()) {
+			deltaBufferedEvents += buffer.events;
+			deltaBufferedBytes += buffer.bytes;
+		}
 		return {
 			counters: Object.fromEntries(this.counters),
 			gauges: {
 				activeSessions: this.activeSessions,
 				bufferedBytes: this.bufferedBytes,
+				deltaBufferedEvents,
+				deltaBufferedBytes,
 			},
 		};
 	}
