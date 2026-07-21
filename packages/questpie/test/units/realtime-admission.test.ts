@@ -88,17 +88,37 @@ describe("realtime admission", () => {
 	});
 
 	it("keeps configured admission limits finite", () => {
-		expect(
-			resolveRealtimeAdmissionConfig({
-				maxTopicsPerConnection: Number.POSITIVE_INFINITY,
-				maxWithDepth: -1,
-				initialSnapshotConcurrency: 0,
-			}),
-		).toMatchObject({
+		const config = resolveRealtimeAdmissionConfig({
+			maxTopicsPerConnection: Number.POSITIVE_INFINITY,
+			maxWithDepth: -1,
+			initialSnapshotConcurrency: 0,
+			maxDeltaFindLimit: 1_000,
+			estimatedDeltaRowBytes: 4096,
+			maxBufferedSnapshotBytes: 1024 * 1024,
+		});
+		expect(config).toMatchObject({
 			maxTopicsPerConnection: 20,
 			maxWithDepth: 3,
 			initialSnapshotConcurrency: 4,
+			maxDeltaFindLimit: 256,
 		});
+		expect(
+			config.maxDeltaFindLimit * config.estimatedDeltaRowBytes,
+		).toBeLessThanOrEqual(config.maxBufferedSnapshotBytes);
+	});
+
+	it("uses coherent finite defaults for delta bootstrap and queue caps", () => {
+		expect(DEFAULT_REALTIME_ADMISSION).toMatchObject({
+			maxDeltaFindLimit: 384,
+			estimatedDeltaRowBytes: 2048,
+			maxBufferedDeltaEvents: 512,
+			maxBufferedDeltaBytes: 1024 * 1024,
+			deltaHydrationConcurrency: 4,
+		});
+		expect(
+			DEFAULT_REALTIME_ADMISSION.maxDeltaFindLimit *
+				DEFAULT_REALTIME_ADMISSION.estimatedDeltaRowBytes,
+		).toBeLessThanOrEqual(DEFAULT_REALTIME_ADMISSION.maxBufferedSnapshotBytes);
 	});
 
 	it("DoS matrix bounds connection, limit, and relation-depth floods", () => {

@@ -10,6 +10,11 @@ export type RealtimeAdmissionConfig = {
 	maxWithDepth: number;
 	initialSnapshotConcurrency: number;
 	maxBufferedSnapshotBytes: number;
+	maxDeltaFindLimit: number;
+	estimatedDeltaRowBytes: number;
+	maxBufferedDeltaEvents: number;
+	maxBufferedDeltaBytes: number;
+	deltaHydrationConcurrency: number;
 };
 
 export const DEFAULT_REALTIME_ADMISSION: RealtimeAdmissionConfig = {
@@ -19,6 +24,11 @@ export const DEFAULT_REALTIME_ADMISSION: RealtimeAdmissionConfig = {
 	maxWithDepth: 3,
 	initialSnapshotConcurrency: 4,
 	maxBufferedSnapshotBytes: 1024 * 1024,
+	maxDeltaFindLimit: 384,
+	estimatedDeltaRowBytes: 2048,
+	maxBufferedDeltaEvents: 512,
+	maxBufferedDeltaBytes: 1024 * 1024,
+	deltaHydrationConcurrency: 4,
 };
 
 export function resolveRealtimeAdmissionConfig(
@@ -32,6 +42,19 @@ export function resolveRealtimeAdmissionConfig(
 		Number.isFinite(value) && Number.isInteger(value) && (value as number) >= 0
 			? (value as number)
 			: fallback;
+
+	const maxBufferedSnapshotBytes = positiveInteger(
+		config?.maxBufferedSnapshotBytes,
+		DEFAULT_REALTIME_ADMISSION.maxBufferedSnapshotBytes,
+	);
+	const estimatedDeltaRowBytes = positiveInteger(
+		config?.estimatedDeltaRowBytes,
+		DEFAULT_REALTIME_ADMISSION.estimatedDeltaRowBytes,
+	);
+	const deltaBootstrapCapacity = Math.max(
+		1,
+		Math.floor(maxBufferedSnapshotBytes / estimatedDeltaRowBytes),
+	);
 
 	return {
 		maxTopicsPerConnection: positiveInteger(
@@ -54,9 +77,26 @@ export function resolveRealtimeAdmissionConfig(
 			config?.initialSnapshotConcurrency,
 			DEFAULT_REALTIME_ADMISSION.initialSnapshotConcurrency,
 		),
-		maxBufferedSnapshotBytes: positiveInteger(
-			config?.maxBufferedSnapshotBytes,
-			DEFAULT_REALTIME_ADMISSION.maxBufferedSnapshotBytes,
+		maxBufferedSnapshotBytes,
+		maxDeltaFindLimit: Math.min(
+			positiveInteger(
+				config?.maxDeltaFindLimit,
+				DEFAULT_REALTIME_ADMISSION.maxDeltaFindLimit,
+			),
+			deltaBootstrapCapacity,
+		),
+		estimatedDeltaRowBytes,
+		maxBufferedDeltaEvents: positiveInteger(
+			config?.maxBufferedDeltaEvents,
+			DEFAULT_REALTIME_ADMISSION.maxBufferedDeltaEvents,
+		),
+		maxBufferedDeltaBytes: positiveInteger(
+			config?.maxBufferedDeltaBytes,
+			DEFAULT_REALTIME_ADMISSION.maxBufferedDeltaBytes,
+		),
+		deltaHydrationConcurrency: positiveInteger(
+			config?.deltaHydrationConcurrency,
+			DEFAULT_REALTIME_ADMISSION.deltaHydrationConcurrency,
 		),
 	};
 }
@@ -66,6 +106,7 @@ type AdmissionTopic = {
 	resourceType: "collection" | "global";
 	resource: string;
 	operation?: "find" | "count" | "get";
+	mode?: "snapshot" | "delta";
 	limit?: number;
 	with?: Record<string, unknown>;
 } & Record<string, unknown>;
