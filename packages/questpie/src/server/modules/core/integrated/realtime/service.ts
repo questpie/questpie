@@ -12,6 +12,7 @@ import {
 	type LocalChannelSubscriptionInput,
 } from "./channel-event-ledger.js";
 import { questpieRealtimeLogTable } from "./collection.js";
+import { visitRealtimeWhereFields } from "./delta.js";
 import {
 	RealtimeObservability,
 	type RealtimeMetricsSnapshot,
@@ -103,46 +104,46 @@ function analyzeWhere(where: any): {
 	filters: Record<string, unknown>;
 	hasComplex: boolean;
 } {
-	if (!where || typeof where !== "object") {
-		return { filters: {}, hasComplex: false };
-	}
-
 	const filters: Record<string, unknown> = {};
 	let hasComplex = false;
+	const analysis = visitRealtimeWhereFields(
+		where,
+		(key, value, { underLogical }) => {
+			if (underLogical) {
+				hasComplex = true;
+				return;
+			}
+			if (
+				typeof value === "string" ||
+				typeof value === "number" ||
+				typeof value === "boolean"
+			) {
+				filters[key] = value;
+				return;
+			}
 
-	for (const [key, value] of Object.entries(where)) {
-		if (["AND", "OR", "NOT", "RAW"].includes(key)) {
-			hasComplex = true;
-			continue;
-		}
+			if (value && typeof value === "object") {
+				const valueObject = value as Record<string, unknown>;
+				if ("eq" in valueObject) {
+					filters[key] = valueObject.eq;
 
-		if (
-			typeof value === "string" ||
-			typeof value === "number" ||
-			typeof value === "boolean"
-		) {
-			filters[key] = value;
-			continue;
-		}
-
-		if (value && typeof value === "object") {
-			const valueObject = value as Record<string, unknown>;
-			if ("eq" in valueObject) {
-				filters[key] = valueObject.eq;
-
-				const operatorKeys = Object.keys(valueObject).filter((k) => k !== "eq");
-				if (operatorKeys.length > 0) {
-					hasComplex = true;
+					const operatorKeys = Object.keys(valueObject).filter(
+						(k) => k !== "eq",
+					);
+					if (operatorKeys.length > 0) {
+						hasComplex = true;
+					}
+					return;
 				}
-				continue;
+
+				hasComplex = true;
+				return;
 			}
 
 			hasComplex = true;
-			continue;
-		}
-
-		hasComplex = true;
-	}
+		},
+	);
+	hasComplex ||= analysis.hasRaw || analysis.hasLogical;
 
 	return { filters, hasComplex };
 }
