@@ -27,3 +27,4 @@ export {
 	type PusherRealtimeConfig,
 } from "./pusher.js";
 export type { RealtimeClientTransport } from "./transport.js";
+export { realtimeEventResolvesTxid, RealtimeTxidTracker } from "./txid.js";

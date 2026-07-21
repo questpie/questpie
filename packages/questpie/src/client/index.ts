@@ -1983,6 +1983,8 @@ export {
 	buildGlobalTopic,
 	deriveFindDeltas,
 	envelopeMeta,
+	realtimeEventResolvesTxid,
+	RealtimeTxidTracker,
 	RealtimeTopicRejectedError,
 } from "./realtime/index.js";
 export type {

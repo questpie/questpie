@@ -12,6 +12,7 @@ import {
 	type PusherRealtimeConfig,
 } from "./pusher.js";
 import type { RealtimeClientTransport } from "./transport.js";
+import { RealtimeTxidTracker } from "./txid.js";
 
 // ============================================================================
 // Types
@@ -293,6 +294,11 @@ export type RealtimeAPI = {
 		customId?: string,
 	) => AsyncGenerator<RealtimeStreamEvent<TData>, void, unknown>;
 
+	/** Resolve when an exact delta txid or a strictly newer visibility watermark arrives. */
+	awaitTxId: (txid: string, signal?: AbortSignal) => Promise<void>;
+	/** Extract a mutation result's txid and await its realtime reconciliation. */
+	awaitMutation: (result: unknown, signal?: AbortSignal) => Promise<void>;
+
 	/** Destroy the multiplexer and clean up all resources */
 	destroy: () => void;
 
@@ -545,6 +551,7 @@ export function createRealtimeAPI(opts: {
 	let transportPromise: Promise<RealtimeClientTransport> | null = null;
 	let generation = 0;
 	const pending = new Set<object>();
+	const txids = new RealtimeTxidTracker();
 	const fetcher = opts.fetcher ?? globalThis.fetch;
 
 	const createSse = () =>
@@ -621,7 +628,10 @@ export function createRealtimeAPI(opts: {
 				if (stopped || subscriptionGeneration !== generation) return;
 				stopInner = selected.subscribe(
 					topic,
-					callback,
+					(event) => {
+						txids.observe(event);
+						callback(event);
+					},
 					signal,
 					customId,
 					onError,
@@ -646,6 +656,7 @@ export function createRealtimeAPI(opts: {
 			transport?.destroy();
 			transport = null;
 			transportPromise = null;
+			txids.clear();
 		},
 		get topicCount() {
 			return transport?.topicCount ?? pending.size;
@@ -708,6 +719,8 @@ export function createRealtimeAPI(opts: {
 			);
 		},
 		streamEvents,
+		awaitTxId: (txid, signal) => txids.awaitTxId(txid, signal),
+		awaitMutation: (result, signal) => txids.awaitMutation(result, signal),
 		destroy: eventFacade.destroy,
 		get topicCount() {
 			return transport?.topicCount ?? pending.size;
