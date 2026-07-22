@@ -19,7 +19,13 @@ type PendingItem<T> = {
 	bytes: number;
 };
 
-/** Shared bounded, non-coalescing FIFO for ordered realtime delivery. */
+/**
+ * Delta-delivery bounded, non-coalescing FIFO.
+ *
+ * Channel delivery deliberately retains its frozen equivalent in
+ * `channel-event-ledger.ts`; keep count/byte caps, busy retries, and overflow
+ * teardown semantics aligned when either implementation changes.
+ */
 export class BoundedOrderedFifoWriter<T> {
 	private readonly pending: PendingItem<T>[] = [];
 	private operation: Promise<void> = Promise.resolve();

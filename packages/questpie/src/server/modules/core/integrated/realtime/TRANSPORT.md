@@ -304,6 +304,22 @@ On resume, the runtime compares `sinceSeq` with the retained outbox horizon:
 No code path treats an unavailable cursor as caught up. Resume never produces a
 silent gap.
 
+## Native-delta identity and queue ownership
+
+QUESTPIE collections always expose a canonical `id` field: the collection
+builder installs it unless the collection defines its own `id`. Native delta
+frames and TanStack DB therefore use `String(row.id)` as their stable key. A
+separate configurable primary-key field is not supported by the collection
+contract and is not threaded through the realtime wire format.
+
+Native delta SSE delivery and ordered channel delivery both use bounded,
+non-coalescing FIFO behavior, but their implementations are deliberately kept
+separate. Channel ledger topology is frozen and remains owned by
+`channel-event-ledger.ts`; the delta implementation lives in
+`ordered-fifo-writer.ts`. Their count/byte caps, busy-retry behavior, and
+overflow teardown semantics must remain aligned. This duplication is an
+explicit topology-preserving exception, not permission to weaken either queue.
+
 ## Refresh scheduler and access equivalence
 
 The scheduler key is `(normalizedTopic, accessEquivalenceKey)`. It computes and

@@ -298,7 +298,9 @@ for await (const event of client.realtime.streamEvents<MySnapshot>({
 
 The server accepts native deltas only for an unwindowed collection `find` with own-column filters: no `limit`, `offset`, `orderBy`, `with`, raw SQL, or relation filter. An unsupported shape stays on the correct snapshot path. Managed shared-provider delivery is snapshot-only. The first delta frame and every reset are authoritative snapshots.
 
-Delta reads reuse the normal row/field/`afterRead` access path. Changes to configured `watchedResources` trigger an immediate reset, and every delta group re-bootstraps at least once per minute. That one-minute interval is the maximum access-staleness window for claim or relational-access changes that do not emit a watched-resource change; use snapshot mode when that window is unacceptable.
+Delta reads reuse the normal row/field/`afterRead` access path. The server derives `watchedResources` from both requested relations and the access-merged relational `where`, so a change to an access relation triggers an immediate reset. Every delta group also re-bootstraps at least once per minute; that interval is the maximum access-staleness window for claim changes that do not emit a watched-resource change. Use snapshot mode when that window is unacceptable.
+
+Every QUESTPIE collection has a canonical `id` field. Native delta keys and TanStack DB collection keys are `String(row.id)`; custom non-`id` primary-key names are not part of the collection or realtime contract.
 
 `questpie/client` exports `buildCollectionTopic`, `buildGlobalTopic`, and the `RealtimeAPI`, `TopicConfig`, and `TopicInput` types. Application subscriptions use the generated wrappers or `client.realtime`.
 
