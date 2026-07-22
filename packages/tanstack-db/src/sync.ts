@@ -20,19 +20,29 @@ export function resolveSync<TRow>(options: {
 	queryClient: QueryClient;
 	queryKey: QueryKey;
 	onDispose: (dispose: () => void) => void;
-}): { queryFn: () => Promise<TRow[]> } {
+}): {
+	queryFn: () => Promise<TRow[]>;
+	updateSnapshot: (update: (rows: TRow[]) => TRow[]) => void;
+} {
 	const { client, findOptions, mode, queryClient, queryKey, onDispose } =
 		options;
 
 	if (mode === "refetch") {
 		return {
 			queryFn: async () => (await client.find(findOptions)).docs,
+			updateSnapshot: () => {},
 		};
 	}
 
 	let latest: TRow[] | undefined;
 	let initial: Promise<TRow[]> | undefined;
 	return {
+		updateSnapshot: (update) => {
+			latest = update(
+				latest ?? queryClient.getQueryData<TRow[]>(queryKey) ?? [],
+			);
+			queryClient.setQueryData(queryKey, latest);
+		},
 		queryFn: () => {
 			if (latest) return Promise.resolve(latest);
 			if (initial) return initial;

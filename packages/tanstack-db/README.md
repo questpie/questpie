@@ -28,7 +28,13 @@ one request's optimistic overlay into another request.
 
 Use `syncMode: "snapshot"` to keep the store replaced from QUESTPIE `.live()`
 snapshots. The default is `"refetch"` and uses TanStack Query's authoritative
-refetch after a successful mutation.
+refetch after a successful mutation. Successful optimistic mutations are folded
+into the current authoritative snapshot until the next live snapshot arrives.
+
+The `find` registry option accepts only row-shape-preserving filters, ordering,
+pagination, locale, stage, and soft-delete controls. Projections (`columns`),
+relation expansion (`with`), extras, and grouping are rejected because every
+TanStack DB row must retain the base collection shape and its canonical `id`.
 
 The package currently supports refetch and full-snapshot synchronization. Native
 row-delta synchronization is added independently without changing the collection

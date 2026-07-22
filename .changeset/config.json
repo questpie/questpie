@@ -16,6 +16,7 @@
 			"@questpie/next",
 			"@questpie/openapi",
 			"@questpie/sandbox",
+			"@questpie/tanstack-db",
 			"@questpie/tanstack-query",
 			"@questpie/workflows"
 		]

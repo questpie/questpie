@@ -55,7 +55,7 @@ export function createQuestpieCollection<TRow extends MutableRow>(options: {
 		syncMode,
 		onDispose,
 	} = options;
-	const { queryFn } = resolveSync({
+	const { queryFn, updateSnapshot } = resolveSync({
 		client,
 		findOptions,
 		mode: syncMode,
@@ -73,15 +73,30 @@ export function createQuestpieCollection<TRow extends MutableRow>(options: {
 			queryFn,
 			getKey: rowId,
 			onInsert: async ({ transaction }) => {
-				await Promise.all(
+				const persisted = await Promise.all(
 					transaction.mutations.map((mutation) =>
 						client.create(mutation.modified),
 					),
 				);
+				updateSnapshot((rows) => {
+					const next = [...rows];
+					for (let index = 0; index < transaction.mutations.length; index++) {
+						const optimistic = transaction.mutations[index]!.modified;
+						const result = persisted[index];
+						const row =
+							result && typeof result === "object" && "id" in result
+								? (result as TRow)
+								: optimistic;
+						const existing = next.findIndex((item) => item.id === row.id);
+						if (existing === -1) next.push(row);
+						else next[existing] = row;
+					}
+					return next;
+				});
 				return skipRefetch;
 			},
 			onUpdate: async ({ transaction }) => {
-				await Promise.all(
+				const persisted = await Promise.all(
 					transaction.mutations.map((mutation) =>
 						client.update({
 							id: String(mutation.key),
@@ -89,6 +104,22 @@ export function createQuestpieCollection<TRow extends MutableRow>(options: {
 						}),
 					),
 				);
+				updateSnapshot((rows) => {
+					const byId = new Map(rows.map((row) => [row.id, row]));
+					for (let index = 0; index < transaction.mutations.length; index++) {
+						const mutation = transaction.mutations[index]!;
+						const result = persisted[index];
+						const current = byId.get(String(mutation.key));
+						if (!current) continue;
+						byId.set(
+							String(mutation.key),
+							result && typeof result === "object" && "id" in result
+								? (result as TRow)
+								: ({ ...current, ...mutation.changes } as TRow),
+						);
+					}
+					return rows.map((row) => byId.get(row.id) ?? row);
+				});
 				return skipRefetch;
 			},
 			onDelete: async ({ transaction }) => {
@@ -97,6 +128,10 @@ export function createQuestpieCollection<TRow extends MutableRow>(options: {
 						client.delete({ id: String(mutation.key) }),
 					),
 				);
+				const deleted = new Set(
+					transaction.mutations.map((mutation) => String(mutation.key)),
+				);
+				updateSnapshot((rows) => rows.filter((row) => !deleted.has(row.id)));
 				return skipRefetch;
 			},
 		}),

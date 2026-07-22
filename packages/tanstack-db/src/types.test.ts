@@ -58,6 +58,11 @@ describe("tanstack-db types", () => {
 			const unknown = db.collections.comments;
 			return [typed, unknown];
 		};
+		const checkFindOptions = (options: FindOptionsOf<App, "posts">) => options;
+		// @ts-expect-error projections can remove the required id
+		checkFindOptions({ columns: { title: true } });
+		// @ts-expect-error relation expansion changes the base-row shape
+		checkFindOptions({ with: { author: true } });
 
 		expect(checkTypes).toBeInstanceOf(Function);
 	});

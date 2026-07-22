@@ -21,6 +21,24 @@ type RuntimeCollectionClient = Parameters<
 	typeof createQuestpieCollection<{ id: string }>
 >[0]["client"];
 
+const SHAPE_CHANGING_FIND_OPTIONS = [
+	"columns",
+	"with",
+	"extras",
+	"groupBy",
+] as const;
+
+function assertBaseRowFindOptions(options: unknown): void {
+	if (!options || typeof options !== "object" || Array.isArray(options)) return;
+	for (const key of SHAPE_CHANGING_FIND_OPTIONS) {
+		if (key in options) {
+			throw new Error(
+				`QUESTPIE TanStack DB find.${key} is not supported because collections require base rows with an id`,
+			);
+		}
+	}
+}
+
 export function createQuestpieCollections<TApp extends QuestpieApp>(
 	client: QuestpieClient<TApp>,
 	options: CreateQuestpieCollectionsOptions<TApp>,
@@ -43,6 +61,8 @@ export function createQuestpieCollections<TApp extends QuestpieApp>(
 
 				const collectionClient = client.collections[property];
 				if (!collectionClient) return undefined;
+				const findOptions = options.find?.[property as CollectionKeys<TApp>];
+				assertBaseRowFindOptions(findOptions);
 				const created = createQuestpieCollection({
 					client: collectionClient as unknown as RuntimeCollectionClient,
 					name: property,
@@ -50,9 +70,9 @@ export function createQuestpieCollections<TApp extends QuestpieApp>(
 					queryKey: [
 						...(options.keyPrefix ?? ["questpie", "tanstack-db"]),
 						property,
-						options.find?.[property as CollectionKeys<TApp>],
+						findOptions,
 					],
-					findOptions: options.find?.[property as CollectionKeys<TApp>],
+					findOptions,
 					syncMode,
 					onDispose: (dispose) => disposers.add(dispose),
 				});

@@ -34,9 +34,17 @@ export type CollectionRelationsOf<
 export type FindOptionsOf<
 	TApp extends QuestpieApp,
 	K extends CollectionKeys<TApp>,
-> = FindManyOptions<
-	CollectionSelectOf<TApp, K>,
-	CollectionRelationsOf<TApp, K>
+> = Pick<
+	FindManyOptions<CollectionSelectOf<TApp, K>, CollectionRelationsOf<TApp, K>>,
+	| "where"
+	| "orderBy"
+	| "limit"
+	| "offset"
+	| "search"
+	| "locale"
+	| "localeFallback"
+	| "includeDeleted"
+	| "stage"
 >;
 
 export type CollectionRowOf<
