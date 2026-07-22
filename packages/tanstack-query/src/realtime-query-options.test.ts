@@ -276,6 +276,57 @@ describe("realtime query options", () => {
 		expect(value).toBe(10_000);
 	});
 
+	it("uses the realtime global snapshot instead of the REST get result", async () => {
+		let subscribedTopic: unknown;
+		let getCalls = 0;
+		const client = {
+			collections: {},
+			globals: {
+				settings: {
+					get: async () => {
+						getCalls += 1;
+						return { theme: "rest" };
+					},
+				},
+			},
+			routes: {},
+			realtime: {
+				subscribe: () => () => {},
+				streamEvents: async function* (topic: unknown) {
+					subscribedTopic = topic;
+					yield {
+						type: "snapshot",
+						topicId: "settings",
+						seq: 1,
+						data: { theme: "realtime" },
+					};
+				},
+				destroy: () => {},
+				topicCount: 0,
+				subscriberCount: 0,
+			},
+		} as unknown as QuestpieClient<QuestpieApp>;
+		const queryClient = new QueryClient();
+		const options = createQuestpieQueryOptions(client).globals.settings.get(
+			{},
+			{ realtime: true },
+		);
+
+		const value = await (options.queryFn as any)({
+			client: queryClient,
+			queryKey: options.queryKey,
+			signal: new AbortController().signal,
+		});
+
+		expect(subscribedTopic).toEqual({
+			resourceType: "global",
+			resource: "settings",
+			operation: "get",
+		});
+		expect(value).toEqual({ theme: "realtime" });
+		expect(getCalls).toBe(0);
+	});
+
 	it("surfaces non-retryable admission failures as query errors after one attempt", async () => {
 		let streamCalls = 0;
 		const client = {
