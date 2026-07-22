@@ -351,6 +351,26 @@ function deltaBootstrapLimitError(
 	});
 }
 
+function deltaBootstrapBytesError(
+	topic: ValidatedTopic,
+	configuredLimit: number,
+	requestedLimit: number,
+): RealtimeTopicAdmissionError {
+	return new RealtimeTopicAdmissionError({
+		code: "REALTIME_TOPIC_REJECTED",
+		message: `Delta bootstrap exceeds ${configuredLimit} serialized bytes`,
+		topicId: topic.id,
+		resource: topic.resource,
+		operation: topic.operation,
+		retryable: false,
+		details: {
+			reason: "snapshot_bytes",
+			requestedLimit,
+			configuredLimit,
+		},
+	});
+}
+
 function isPermanentAccessError(error: unknown): boolean {
 	return (
 		error instanceof ApiError &&
@@ -1266,6 +1286,14 @@ export async function realtimeSubscribe(
 				const deltaWriter = new SseOrderedDeltaWriter(sink, {
 					maximumBufferedEvents: admission.maxBufferedDeltaEvents,
 					maximumBufferedBytes: admission.maxBufferedDeltaBytes,
+					onBuffer: (events, bytes) =>
+						app.realtime!.record({
+							type: "delta.buffer",
+							scope: "writer",
+							key: edgeSessionId,
+							events,
+							bytes,
+						}),
 				});
 				const refreshScheduler = getRealtimeRefreshScheduler(
 					app,
@@ -1422,7 +1450,12 @@ export async function realtimeSubscribe(
 						topicContext,
 						topic.accessCacheKey,
 					);
-					const deliveryMode = classifyValidatedTopic(topic);
+					const requestedDeliveryMode = classifyValidatedTopic(topic);
+					const deliveryMode =
+						requestedDeliveryMode === "delta" &&
+						app.config.realtime?.nativeDeltas !== true
+							? "snapshot"
+							: requestedDeliveryMode;
 					const deliveryTopic = stampValidatedTopicMode(
 						topic,
 						deliveryMode,
@@ -1504,12 +1537,18 @@ export async function realtimeSubscribe(
 								: undefined,
 						onFrame: async (frame, frameKind) => {
 							if (deliveryMode === "delta") {
+								const maximumBootstrapBytes = Math.min(
+									admission.maxBufferedSnapshotBytes,
+									admission.maxBufferedDeltaBytes,
+								);
 								if (
 									frameKind === "snapshot" &&
-									frame.byteLength > admission.maxBufferedSnapshotBytes
+									frame.byteLength > maximumBootstrapBytes
 								) {
-									throw new RealtimeSnapshotBufferOverflowError(
-										admission.maxBufferedSnapshotBytes,
+									throw deltaBootstrapBytesError(
+										deliveryTopic,
+										maximumBootstrapBytes,
+										frame.byteLength,
 									);
 								}
 								await deltaWriter.write(frame);
@@ -1527,6 +1566,9 @@ export async function realtimeSubscribe(
 							await snapshotWriter.write(topic.id, frame);
 						},
 						onError: (error) => {
+							if (error instanceof RealtimeTopicAdmissionError) {
+								observeTopicRejection(error);
+							}
 							void sendTopicError(
 								topic.id,
 								error instanceof Error ? error.message : "Refresh failed",
@@ -1537,6 +1579,7 @@ export async function realtimeSubscribe(
 								.catch(requestClose)
 								.finally(() => {
 									if (
+										deliveryMode === "delta" ||
 										isPermanentAccessError(error) ||
 										error instanceof RealtimeSnapshotBufferOverflowError ||
 										error instanceof RealtimeDeltaBufferOverflowError ||

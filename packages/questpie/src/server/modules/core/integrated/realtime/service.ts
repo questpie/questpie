@@ -1,5 +1,6 @@
 import { asc, desc, eq, gt, lt, sql } from "drizzle-orm";
 
+import { withTransaction } from "#questpie/server/collection/crud/shared/transaction.js";
 import type { DrizzleClientFromQuestpieConfig } from "#questpie/server/config/types.js";
 import type { LoggerAdapter } from "#questpie/server/modules/core/integrated/logger/types.js";
 
@@ -359,6 +360,13 @@ export class RealtimeService {
 		input: AppendChangeInput,
 		options: AppendChangeOptions = {},
 	): Promise<RealtimeChangeEvent> {
+		if (!options.db) {
+			return withTransaction(this.db, (tx) =>
+				this.appendChange(input, { db: tx }),
+			);
+		}
+		// The head-row lock must remain held until the outbox insert commits. This
+		// makes sequence order commit order for native delta cursors.
 		const db = options.db ?? this.db;
 		let row: typeof questpieRealtimeLogTable.$inferSelect;
 		try {

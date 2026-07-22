@@ -393,10 +393,17 @@ export class RealtimeRefreshScheduler {
 				group.lastDeliveredSeq = Math.max(group.lastDeliveredSeq, bootstrapSeq);
 				const upToDate = await group.captureWatermark?.();
 				const data = await this.runBounded(group.compute);
+				const postComputeSeq = group.ready
+					? bootstrapSeq
+					: await this.realtime.getLatestSeq();
 				if (group.disposed || !group.subscribers.has(subscriber)) return;
 				if (!group.ready) {
 					await this.replaceDeltaHashes(group, snapshotRows(data));
 					group.ready = true;
+					if (postComputeSeq > bootstrapSeq) {
+						group.latestSeq = Math.max(group.latestSeq, postComputeSeq);
+						group.resetQueued = true;
+					}
 					void this.processDeltaQueue(group);
 				}
 				const bootstrapFrame = encodeSseEvent("snapshot", {
@@ -464,12 +471,14 @@ export class RealtimeRefreshScheduler {
 	private async processDeltaQueue(group: DeltaGroup): Promise<void> {
 		if (group.processing || group.disposed || !group.ready) return;
 		group.processing = true;
+		let resetting = false;
 		try {
 			while (
 				!group.disposed &&
 				(group.resetQueued || group.queue.length > 0 || group.heartbeatQueued)
 			) {
 				if (group.resetQueued) {
+					resetting = true;
 					group.resetQueued = false;
 					group.queue = [];
 					group.queueBytes = 0;
@@ -481,6 +490,7 @@ export class RealtimeRefreshScheduler {
 						bytes: 0,
 					});
 					await this.resetDeltaGroup(group);
+					resetting = false;
 					continue;
 				}
 				if (group.queue.length === 0 && group.heartbeatQueued) {
@@ -530,6 +540,14 @@ export class RealtimeRefreshScheduler {
 				const ids = [
 					...new Set(events.flatMap((event) => eventRecordIds(event)!)),
 				];
+				if (ids.length > group.maxRows) {
+					this.observe({
+						type: "delta.fallback_snapshot",
+						reason: "bulk_budget",
+					});
+					group.resetQueued = true;
+					continue;
+				}
 				const upToDate = await group.captureWatermark?.();
 				const hydrated = snapshotRows(await group.hydrateRows(ids));
 				const rowsById = new Map<string, unknown>();
@@ -614,7 +632,15 @@ export class RealtimeRefreshScheduler {
 				}
 			}
 		} catch (error) {
-			this.reportDeltaError(group, error);
+			if (resetting) {
+				this.reportDeltaError(group, error);
+			} else {
+				this.observe({
+					type: "delta.fallback_snapshot",
+					reason: "processing_error",
+				});
+				group.resetQueued = true;
+			}
 		} finally {
 			group.processing = false;
 			if (

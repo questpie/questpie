@@ -82,13 +82,16 @@ decisions. Correctness therefore never depends on a wake being delivered.
 Every app instance starts its broker during app startup, including workers and
 instances with no local subscribers. Startup is idempotent. `stop()` is awaited
 during app shutdown. A broker reconnect emits one `reason: "reconnect"` wake;
-the runtime immediately drains from its lag-window cursor.
+the runtime immediately drains from its durable sequence cursor.
 
 The runtime also schedules unconditional slow reconciliation while a broker is
 active. It drains both durable sources: the live-query outbox and the channel
-delivery ledger. An outbox drain reads rows, rescans a configurable lag window
-behind the last observed sequence, deduplicates by `seq`, and advances a cursor
-only after local dispatch. A channel drain follows the ordered-ledger rules
+delivery ledger. Every new writer locks the singleton outbox head inside the
+business transaction before inserting, so sequence order is commit order. An
+outbox drain reads strictly after its cursor and advances only after local
+dispatch. Native deltas have a two-phase rollout gate: deploy every writer with
+`nativeDeltas` disabled first, then enable it only after no legacy writer can
+append without the head lock. A channel drain follows the ordered-ledger rules
 below. These drains are the guarantee; broker delivery is only the latency
 optimization.
 
@@ -819,7 +822,7 @@ migration and multi-pod verification, load-balancer affinity is removed.
 | Defect | Design element that removes it                                                                                                                                  |
 | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | G1     | App-lifecycle `ChangeBroker.start()` on every instance, independent of subscribers.                                                                             |
-| G2     | Unconditional reconciliation, reconnect drain, lag-window rescan, and lossy wake contract.                                                                      |
+| G2     | Unconditional reconciliation, reconnect drain, commit-ordered outbox cursor, and lossy wake contract.                                                           |
 | G3     | Explicit broker error callback, idempotent reconnect lifecycle, crash-safe callbacks, and immediate reconnect drain.                                            |
 | G4     | Broadcast conformance tests for every broker; durable ordered state is drained independently by each instance rather than shared consumer-group load balancing. |
 | G5     | Broker messages are notice-only; Cloudflare fan-out is sharded and query execution remains in the requesting worker.                                            |
@@ -835,7 +838,7 @@ migration and multi-pod verification, load-balancer affinity is removed.
 | Invariant | Concrete mechanism                                                                                                                              | Required proof                                                                         |
 | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | H1        | Both seams start/stop with app lifecycle; no subscriber-gated broker start.                                                                     | Write-only instance wakes a separate subscriber instance.                              |
-| H2        | Lossy wake contract plus unconditional poll, reconnect drain, lag-window rescan, and seq dedupe.                                                | Drop/reorder wakes and expose an out-of-order commit; state still converges.           |
+| H2        | Lossy wake contract plus unconditional poll, reconnect drain, head-locked commit order, and the two-phase native-delta rollout gate.            | Drop/reorder wakes; prove commit-order capture and snapshot fallback during rollout.   |
 | H3        | Logical-operation batch guard; one in-tx append; caught post-commit publish.                                                                    | Exact event/insert/notify counts and response-path latency assertion.                  |
 | H4        | Scheduler keyed by topic and access equivalence; immutable byte fan-out; hash suppression; pre/post match.                                      | N equivalent sinks cause one query and unchanged results emit no frame.                |
 | H5        | Admission config, pre-registration access execution, bounded concurrency, finite limits.                                                        | Cap matrix and denied-topic teardown tests.                                            |

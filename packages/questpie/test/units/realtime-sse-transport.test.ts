@@ -150,6 +150,7 @@ describe("realtime matrix SseClientTransport", () => {
 
 	it("queues row deltas in order and tears down on overflow", async () => {
 		const closed: string[] = [];
+		const buffers: Array<{ events: number; bytes: number }> = [];
 		const sink = {
 			sessionId: "session-1",
 			write: async () => ({ status: "busy" as const, bufferedBytes: 0 }),
@@ -161,6 +162,7 @@ describe("realtime matrix SseClientTransport", () => {
 			maximumBufferedEvents: 2,
 			maximumBufferedBytes: 8,
 			busyRetryMs: 60_000,
+			onBuffer: (events, bytes) => buffers.push({ events, bytes }),
 		});
 
 		await expect(writer.write(new Uint8Array(5))).resolves.toMatchObject({
@@ -171,6 +173,8 @@ describe("realtime matrix SseClientTransport", () => {
 		);
 		expect(closed).toEqual(["slow_consumer"]);
 		expect(writer.bufferedBytes).toBe(0);
+		expect(buffers).toContainEqual({ events: 1, bytes: 5 });
+		expect(buffers.at(-1)).toEqual({ events: 0, bytes: 0 });
 	});
 });
 

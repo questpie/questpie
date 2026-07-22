@@ -53,9 +53,16 @@ export function resolveRealtimeAdmissionConfig(
 		config?.estimatedDeltaRowBytes,
 		DEFAULT_REALTIME_ADMISSION.estimatedDeltaRowBytes,
 	);
+	const maxBufferedDeltaBytes = positiveInteger(
+		config?.maxBufferedDeltaBytes,
+		DEFAULT_REALTIME_ADMISSION.maxBufferedDeltaBytes,
+	);
 	const deltaBootstrapCapacity = Math.max(
 		1,
-		Math.floor(maxBufferedSnapshotBytes / estimatedDeltaRowBytes),
+		Math.floor(
+			Math.min(maxBufferedSnapshotBytes, maxBufferedDeltaBytes) /
+				estimatedDeltaRowBytes,
+		),
 	);
 
 	return {
@@ -92,10 +99,7 @@ export function resolveRealtimeAdmissionConfig(
 			config?.maxBufferedDeltaEvents,
 			DEFAULT_REALTIME_ADMISSION.maxBufferedDeltaEvents,
 		),
-		maxBufferedDeltaBytes: positiveInteger(
-			config?.maxBufferedDeltaBytes,
-			DEFAULT_REALTIME_ADMISSION.maxBufferedDeltaBytes,
-		),
+		maxBufferedDeltaBytes,
 		deltaHydrationConcurrency: positiveInteger(
 			config?.deltaHydrationConcurrency,
 			DEFAULT_REALTIME_ADMISSION.deltaHydrationConcurrency,

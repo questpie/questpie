@@ -437,6 +437,127 @@ describe("realtime scheduler", () => {
 		);
 	});
 
+	it("resets an over-budget keyed bulk change before hydration", async () => {
+		const realtime = new FakeRealtimeSource();
+		const frames: Uint8Array[] = [];
+		let hydrations = 0;
+		const scheduler = new RealtimeRefreshScheduler(realtime);
+		const stop = scheduler.subscribe({
+			key: "posts:bulk-budget",
+			topicId: "posts",
+			topics: { resourceType: "collection", resource: "posts" },
+			mode: "delta",
+			maxDeltaRows: 1,
+			compute: async () => ({ docs: [{ id: "1" }] }),
+			hydrateRows: async () => {
+				hydrations += 1;
+				return { docs: [] };
+			},
+			onFrame: (frame) => frames.push(frame),
+			onError: () => {},
+		});
+		await tick();
+		await tick();
+
+		realtime.emit(5, {
+			operation: "bulk_update",
+			recordId: null,
+			payload: { count: 2, recordIds: ["1", "2"] },
+		});
+		await tick();
+		await tick();
+		stop();
+
+		expect(hydrations).toBe(0);
+		expect(frames.map(decodeFrame).at(-1)).toEqual(
+			expect.objectContaining({ reset: true, seq: 5 }),
+		);
+	});
+
+	it("recovers a consumed delta from a transient hydration failure", async () => {
+		const realtime = new FakeRealtimeSource();
+		const observations: RealtimeObservation[] = [];
+		const frames: Uint8Array[] = [];
+		let failHydration = true;
+		let current = { id: "1", title: "Before" };
+		const scheduler = new RealtimeRefreshScheduler(realtime, 10, {
+			record: (event) => observations.push(event),
+		});
+		const stop = scheduler.subscribe({
+			key: "posts:transient-hydration",
+			topicId: "posts",
+			topics: { resourceType: "collection", resource: "posts" },
+			mode: "delta",
+			compute: async () => ({ docs: [current] }),
+			hydrateRows: async () => {
+				if (failHydration) {
+					failHydration = false;
+					throw new Error("temporary database failure");
+				}
+				return { docs: [current] };
+			},
+			onFrame: (frame) => frames.push(frame),
+			onError: () => {},
+		});
+		await tick();
+		await tick();
+
+		current = { id: "1", title: "After" };
+		realtime.emit(5, { operation: "update", recordId: "1" });
+		await tick();
+		await tick();
+		await tick();
+		stop();
+
+		expect(observations).toContainEqual({
+			type: "delta.fallback_snapshot",
+			reason: "processing_error",
+		});
+		expect(frames.map(decodeFrame).at(-1)).toEqual(
+			expect.objectContaining({
+				reset: true,
+				data: { docs: [{ id: "1", title: "After" }] },
+			}),
+		);
+	});
+
+	it("resets when the outbox advances across the initial bootstrap compute", async () => {
+		const realtime = new FakeRealtimeSource();
+		const frames: Uint8Array[] = [];
+		let computes = 0;
+		const scheduler = new RealtimeRefreshScheduler(realtime);
+		const stop = scheduler.subscribe({
+			key: "posts:bootstrap-race",
+			topicId: "posts",
+			topics: { resourceType: "collection", resource: "posts" },
+			mode: "delta",
+			compute: async () => {
+				computes += 1;
+				if (computes === 1) {
+					realtime.latestSeq = 5;
+					return { docs: [] };
+				}
+				return { docs: [{ id: "1", title: "Committed" }] };
+			},
+			hydrateRows: async () => ({ docs: [] }),
+			onFrame: (frame) => frames.push(frame),
+			onError: () => {},
+		});
+		await tick();
+		await tick();
+		await tick();
+		stop();
+
+		expect(computes).toBe(2);
+		expect(frames.map(decodeFrame).at(-1)).toEqual(
+			expect.objectContaining({
+				reset: true,
+				seq: 5,
+				data: { docs: [{ id: "1", title: "Committed" }] },
+			}),
+		);
+	});
+
 	it("never grows retained delta row state past its admission cap", async () => {
 		const realtime = new FakeRealtimeSource();
 		const observations: RealtimeObservation[] = [];

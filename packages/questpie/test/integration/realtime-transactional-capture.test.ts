@@ -168,6 +168,31 @@ describe("realtime matrix transactional change capture", () => {
 		expect(rows.map((row) => row.recordId)).toEqual(["first", "second"]);
 	});
 
+	it("wraps public appendChange calls in the commit-order transaction", async () => {
+		const originalTransaction = setup.app.db.transaction.bind(setup.app.db);
+		const transactionSpy = spyOn(
+			setup.app.db,
+			"transaction",
+		).mockImplementation((callback: any) => originalTransaction(callback));
+
+		try {
+			const events = await Promise.all(
+				["first", "second"].map((recordId) =>
+					setup.app.realtime.appendChange({
+						resourceType: "collection",
+						resource: "posts",
+						operation: "update",
+						recordId,
+					}),
+				),
+			);
+			expect(events.map((event) => event.seq)).toEqual([1, 2]);
+			expect(transactionSpy).toHaveBeenCalledTimes(2);
+		} finally {
+			transactionSpy.mockRestore();
+		}
+	});
+
 	it("G11: writes global changes inside the mutation transaction", async () => {
 		let rowsVisibleInsideTransaction = 0;
 		observeGlobalHook = async (hookContext) => {

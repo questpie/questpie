@@ -85,6 +85,14 @@ export type RealtimeSubscriptionContext = {
 };
 
 export interface RealtimeConfig {
+	/**
+	 * Enables native row-delta emission after every writer replica has been
+	 * upgraded to the commit-order outbox protocol. Keep disabled during the
+	 * first phase of a rolling deployment; snapshot realtime remains available.
+	 *
+	 * @default false
+	 */
+	nativeDeltas?: boolean;
 	/** Diagnostic event sink. Observer failures are isolated from delivery. */
 	observer?: import("./observer.js").RealtimeObserver;
 	/** Realtime edge-session admission limits. */

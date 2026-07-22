@@ -218,6 +218,33 @@ describe("realtime matrix", () => {
 	// ==========================================================================
 
 	describe("native delta delivery", () => {
+		it("keeps raw delta requests on snapshots until the rollout gate is enabled", async () => {
+			const adapter = new MockChangeBroker();
+			const posts = collection("posts")
+				.fields(({ f }) => ({ title: f.textarea().required() }))
+				.access({ read: true, create: true });
+			setup = await buildMockApp(
+				{ collections: { posts } },
+				{ realtime: { changeBroker: adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("posts", { mode: "delta" })]),
+				{},
+				undefined,
+			);
+			const reader = createSSEReader(response.body!);
+			expect((await reader.readSnapshot()).event).toBe("snapshot");
+
+			await setup.app.collections.posts.create(
+				{ title: "Snapshot during rollout" },
+				createTestContext(),
+			);
+			expect((await reader.readSnapshot()).event).toBe("snapshot");
+			await reader.close();
+		});
+
 		it("streams an ordered bootstrap, insert, update, and delete", async () => {
 			const adapter = new MockChangeBroker();
 			const posts = collection("posts")
@@ -225,7 +252,7 @@ describe("realtime matrix", () => {
 				.access({ read: true, create: true, update: true, delete: true });
 			setup = await buildMockApp(
 				{ collections: { posts } },
-				{ realtime: { changeBroker: adapter } },
+				{ realtime: { changeBroker: adapter, nativeDeltas: true } },
 			);
 			await runTestDbMigrations(setup.app);
 			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
@@ -295,7 +322,7 @@ describe("realtime matrix", () => {
 				.access({ read: true, create: true });
 			setup = await buildMockApp(
 				{ collections: { posts } },
-				{ realtime: { changeBroker: adapter } },
+				{ realtime: { changeBroker: adapter, nativeDeltas: true } },
 			);
 			await runTestDbMigrations(setup.app);
 			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
@@ -326,7 +353,7 @@ describe("realtime matrix", () => {
 				.access({ read: true, create: true, update: true });
 			setup = await buildMockApp(
 				{ collections: { posts } },
-				{ realtime: { changeBroker: adapter } },
+				{ realtime: { changeBroker: adapter, nativeDeltas: true } },
 			);
 			await runTestDbMigrations(setup.app);
 			const created = await setup.app.collections.posts.create(
@@ -381,7 +408,7 @@ describe("realtime matrix", () => {
 				.access({ read: true, create: true, delete: true });
 			setup = await buildMockApp(
 				{ collections: { documents, documentMemberships } },
-				{ realtime: { changeBroker: adapter } },
+				{ realtime: { changeBroker: adapter, nativeDeltas: true } },
 			);
 			await runTestDbMigrations(setup.app);
 			const system = createTestContext();
@@ -439,7 +466,7 @@ describe("realtime matrix", () => {
 				.access({ read: true, create: true, delete: true });
 			setup = await buildMockApp(
 				{ collections: { posts } },
-				{ realtime: { changeBroker: adapter } },
+				{ realtime: { changeBroker: adapter, nativeDeltas: true } },
 			);
 			await runTestDbMigrations(setup.app);
 			const context = createTestContext();
@@ -475,7 +502,7 @@ describe("realtime matrix", () => {
 				.access({ read: true, create: true, update: true });
 			setup = await buildMockApp(
 				{ collections: { posts } },
-				{ realtime: { changeBroker: adapter } },
+				{ realtime: { changeBroker: adapter, nativeDeltas: true } },
 			);
 			await runTestDbMigrations(setup.app);
 			const context = createTestContext();
@@ -518,7 +545,7 @@ describe("realtime matrix", () => {
 						defaultLocale: "en",
 					},
 				},
-				{ realtime: { changeBroker: adapter } },
+				{ realtime: { changeBroker: adapter, nativeDeltas: true } },
 			);
 			await runTestDbMigrations(setup.app);
 			const created = await setup.app.collections.posts.create(
@@ -580,7 +607,7 @@ describe("realtime matrix", () => {
 				});
 			setup = await buildMockApp(
 				{ collections: { documents } },
-				{ realtime: { changeBroker: adapter } },
+				{ realtime: { changeBroker: adapter, nativeDeltas: true } },
 			);
 			await runTestDbMigrations(setup.app);
 			const system = createTestContext();
@@ -664,6 +691,111 @@ describe("realtime matrix", () => {
 				},
 			});
 			await Promise.all([alice.reader.close(), bob.reader.close()]);
+		});
+
+		it("rejects an oversized delta bootstrap without retrying", async () => {
+			const adapter = new MockChangeBroker();
+			const posts = collection("posts")
+				.fields(({ f }) => ({ content: f.textarea().required() }))
+				.access({ read: true, create: true });
+			setup = await buildMockApp(
+				{ collections: { posts } },
+				{
+					realtime: {
+						changeBroker: adapter,
+						nativeDeltas: true,
+						admission: {
+							maxBufferedSnapshotBytes: 4096,
+							maxBufferedDeltaBytes: 512,
+							estimatedDeltaRowBytes: 128,
+						},
+					},
+				},
+			);
+			await runTestDbMigrations(setup.app);
+			await setup.app.collections.posts.create(
+				{ content: "x".repeat(2000) },
+				createTestContext(),
+			);
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("posts", { mode: "delta" })]),
+				{},
+				undefined,
+			);
+			const reader = createSSEReader(response.body!);
+			const error = await reader.readSnapshot();
+			expect(error).toMatchObject({
+				event: "error",
+				data: {
+					code: "REALTIME_TOPIC_REJECTED",
+					topicId: "col-posts",
+					resource: "posts",
+					operation: "find",
+					retryable: false,
+					details: {
+						reason: "snapshot_bytes",
+						configuredLimit: 512,
+					},
+				},
+			});
+			await new Promise((resolve) => setTimeout(resolve, 20));
+			expect(setup.app.realtime.listeners.size).toBe(0);
+			await reader.close();
+		});
+
+		it("fails closed when both delta hydration and its authoritative reset fail", async () => {
+			const adapter = new MockChangeBroker();
+			let rejectReads = false;
+			const posts = collection("posts")
+				.fields(({ f }) => ({ title: f.textarea().required() }))
+				.hooks({
+					afterRead: ({ data }) => {
+						if (rejectReads) throw new Error("read projection failed");
+						return data;
+					},
+				})
+				.access({ read: true, create: true });
+			setup = await buildMockApp(
+				{ collections: { posts } },
+				{
+					realtime: {
+						changeBroker: adapter,
+						nativeDeltas: true,
+					},
+				},
+			);
+			await runTestDbMigrations(setup.app);
+			const created = await setup.app.collections.posts.create(
+				{ title: "Readable" },
+				createTestContext(),
+			);
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("posts", { mode: "delta" })]),
+				{},
+				undefined,
+			);
+			const reader = createSSEReader(response.body!);
+			await reader.readSnapshot();
+
+			rejectReads = true;
+			const event = await setup.app.realtime.appendChange({
+				resourceType: "collection",
+				resource: "posts",
+				operation: "update",
+				recordId: created.id,
+			});
+			await setup.app.realtime.notify(event);
+
+			expect(await reader.readSnapshot()).toMatchObject({
+				event: "error",
+				data: { topicId: "col-posts", message: "read projection failed" },
+			});
+			await new Promise((resolve) => setTimeout(resolve, 20));
+			expect(setup.app.realtime.listeners.size).toBe(0);
+			await reader.close();
 		});
 	});
 

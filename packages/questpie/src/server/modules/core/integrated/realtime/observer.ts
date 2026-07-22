@@ -65,11 +65,17 @@ export type RealtimeObservation =
 	  }
 	| {
 			type: "delta.fallback_snapshot";
-			reason: "queue_overflow" | "row_cap" | "dependency_change" | "periodic";
+			reason:
+				| "queue_overflow"
+				| "row_cap"
+				| "bulk_budget"
+				| "dependency_change"
+				| "processing_error"
+				| "periodic";
 	  }
 	| {
 			type: "delta.buffer";
-			scope: "group" | "subscriber";
+			scope: "group" | "subscriber" | "writer";
 			key: string;
 			events: number;
 			bytes: number;

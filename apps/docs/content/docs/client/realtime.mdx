@@ -282,7 +282,16 @@ const stopRaw = client.realtime.subscribe<MySnapshot>(
 
 `RealtimeAPI` also exposes `streamEvents<TData>()`, which yields the shared `snapshot | insert | update | delete | up-to-date` event union, plus `awaitTxId()` / `awaitMutation()` for optimistic reconciliation. `subscribe` and `stream` continue to materialize complete values. `destroy()` tears the multiplexer down entirely (it re-creates on the next subscribe).
 
-Native server deltas are an explicit raw-topic opt-in:
+Native server deltas require both a server rollout gate and an explicit raw-topic opt-in. Keep the gate off during the first deployment phase; after every writer replica runs the head-locking outbox implementation, enable it in a second config rollout:
+
+```ts title="src/questpie/server/questpie.config.ts"
+export default runtimeConfig({
+	db: { url: env.DATABASE_URL },
+	realtime: { nativeDeltas: true },
+});
+```
+
+Until `nativeDeltas` is enabled, even a raw delta request safely receives the existing full-snapshot stream. Once the fleet is upgraded and the gate is enabled, opt a raw topic into deltas:
 
 ```ts
 for await (const event of client.realtime.streamEvents<MySnapshot>({

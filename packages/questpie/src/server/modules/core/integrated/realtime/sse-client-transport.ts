@@ -142,6 +142,7 @@ export type SseOrderedDeltaWriterOptions = {
 	maximumBufferedEvents?: number;
 	maximumBufferedBytes?: number;
 	busyRetryMs?: number;
+	onBuffer?: (events: number, bytes: number) => void;
 };
 
 /** Per-session append-only writer for row deltas. Overflow closes the session. */
@@ -153,7 +154,7 @@ export class SseOrderedDeltaWriter {
 
 	constructor(
 		private readonly sink: ClientSink,
-		options: SseOrderedDeltaWriterOptions = {},
+		private readonly options: SseOrderedDeltaWriterOptions = {},
 	) {
 		this.maximumEvents = options.maximumBufferedEvents ?? 512;
 		this.maximumBytes = options.maximumBufferedBytes ?? 1024 * 1024;
@@ -163,13 +164,17 @@ export class SseOrderedDeltaWriter {
 			busyRetryMs: options.busyRetryMs ?? 25,
 			byteLength: (frame) => frame.byteLength,
 			write: (frame) => this.sink.write(frame, "row-delta"),
+			onAccepted: () => this.observeBuffer(),
 			onOverflow: () => {
+				this.observeBuffer();
 				this.overflowClose = this.sink.close("slow_consumer");
 			},
 			onError: () => {
 				this.queue.clear();
+				this.observeBuffer();
 				this.overflowClose = this.sink.close("write_failed");
 			},
+			onRetryDrained: () => this.observeBuffer(),
 		});
 	}
 
@@ -182,7 +187,9 @@ export class SseOrderedDeltaWriter {
 			await this.overflowClose;
 			throw this.overflowError();
 		}
+		this.observeBuffer();
 		const result = await this.queue.flush();
+		this.observeBuffer();
 		if (result === "overflow") {
 			await this.overflowClose;
 			throw this.overflowError();
@@ -197,6 +204,15 @@ export class SseOrderedDeltaWriter {
 
 	clear(): void {
 		this.queue.clear();
+		this.observeBuffer();
+	}
+
+	private observeBuffer(): void {
+		try {
+			this.options.onBuffer?.(this.queue.length, this.queue.totalBufferedBytes);
+		} catch {
+			// Observability cannot break ordered delivery.
+		}
 	}
 
 	private overflowError(): RealtimeDeltaBufferOverflowError {

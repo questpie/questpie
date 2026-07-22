@@ -107,6 +107,20 @@ describe("realtime admission", () => {
 		).toBeLessThanOrEqual(config.maxBufferedSnapshotBytes);
 	});
 
+	it("uses the smaller snapshot or ordered-delta byte budget", () => {
+		const config = resolveRealtimeAdmissionConfig({
+			maxBufferedSnapshotBytes: 1024 * 1024,
+			maxBufferedDeltaBytes: 16 * 1024,
+			estimatedDeltaRowBytes: 2048,
+			maxDeltaFindLimit: 384,
+		});
+
+		expect(config.maxDeltaFindLimit).toBe(8);
+		expect(
+			config.maxDeltaFindLimit * config.estimatedDeltaRowBytes,
+		).toBeLessThanOrEqual(config.maxBufferedDeltaBytes);
+	});
+
 	it("uses coherent finite defaults for delta bootstrap and queue caps", () => {
 		expect(DEFAULT_REALTIME_ADMISSION).toMatchObject({
 			maxDeltaFindLimit: 384,
