@@ -336,7 +336,15 @@ export async function* sseEventStream<TData>(options: {
 }): AsyncGenerator<RealtimeStreamEvent<TData>, void, unknown> {
 	const { multiplexer, topic, signal, customId } = options;
 
-	const queue: RealtimeStreamEvent<TData>[] = [];
+	const maximumQueuedEvents = 512;
+	const maximumQueuedBytes = 1024 * 1024;
+	const encoder = new TextEncoder();
+	const queue: Array<{
+		event: RealtimeStreamEvent<TData>;
+		bytes: number;
+	}> = [];
+	let queueHead = 0;
+	let queuedBytes = 0;
 
 	// Promise resolver/rejecter for when new data arrives or connection fails
 	let resolveNext: (() => void) | null = null;
@@ -345,6 +353,13 @@ export async function* sseEventStream<TData>(options: {
 
 	// Track if the stream is closed
 	let closed = false;
+	let rawUnsubscribe: (() => void) | undefined;
+	let unsubscribeRequested = false;
+	const unsubscribe = () => {
+		if (unsubscribeRequested) return;
+		unsubscribeRequested = true;
+		rawUnsubscribe?.();
+	};
 
 	// Error callback - rejects the waiting promise so the generator throws
 	// instead of waiting forever (prevents infinite loading on server errors)
@@ -358,27 +373,49 @@ export async function* sseEventStream<TData>(options: {
 	};
 
 	// Subscribe to the topic via multiplexer
-	const unsubscribe = multiplexer.subscribe(
+	rawUnsubscribe = multiplexer.subscribe(
 		topic,
 		(event) => {
-			if (!closed) {
-				queue.push(event as RealtimeStreamEvent<TData>);
-				resolveNext?.();
+			if (closed) return;
+			const typedEvent = event as RealtimeStreamEvent<TData>;
+			const bytes = encoder.encode(JSON.stringify(typedEvent)).byteLength;
+			if (
+				queue.length - queueHead >= maximumQueuedEvents ||
+				queuedBytes + bytes > maximumQueuedBytes
+			) {
+				pendingError = new Error(
+					`Realtime client event buffer exceeds ${maximumQueuedEvents} events or ${maximumQueuedBytes} bytes`,
+				);
+				closed = true;
+				unsubscribe();
+				rejectNext?.(pendingError);
+				return;
 			}
+			queue.push({ event: typedEvent, bytes });
+			queuedBytes += bytes;
+			resolveNext?.();
 		},
 		signal,
 		customId,
 		onError,
 	);
+	if (unsubscribeRequested) rawUnsubscribe();
 	signal?.addEventListener("abort", handleAbort, { once: true });
 
 	try {
-		while (!closed && !signal?.aborted) {
+		for (;;) {
+			if (signal?.aborted) break;
 			if (pendingError) throw pendingError;
 			// Yield all queued items
-			while (queue.length > 0) {
-				yield queue.shift()!;
+			while (queueHead < queue.length) {
+				if (pendingError) throw pendingError;
+				const queued = queue[queueHead++]!;
+				queuedBytes -= queued.bytes;
+				yield queued.event;
 			}
+			queue.length = 0;
+			queueHead = 0;
+			if (closed) break;
 
 			// Wait for more data or connection error
 			if (!closed && !signal?.aborted) {

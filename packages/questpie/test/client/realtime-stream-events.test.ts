@@ -6,11 +6,48 @@ import {
 	applyRealtimeSingleEvent,
 	deriveFindDeltas,
 	type RealtimeStreamEvent,
+	sseEventStream,
 } from "../../src/client/realtime/stream.js";
+import type { RealtimeClientTransport } from "../../src/client/realtime/transport.js";
 
 type Row = { id: string; title: string };
 
 describe("realtime stream events", () => {
+	it("fails and tears down a subscriber whose consumer queue overflows", async () => {
+		let deliver: ((event: RealtimeStreamEvent) => void) | undefined;
+		let unsubscribeCalls = 0;
+		const transport = {
+			subscribe: (
+				_topic: unknown,
+				onEvent: (event: RealtimeStreamEvent) => void,
+			) => {
+				deliver = onEvent;
+				return () => {
+					unsubscribeCalls += 1;
+				};
+			},
+		} as unknown as RealtimeClientTransport;
+		const stream = sseEventStream({
+			multiplexer: transport,
+			topic: {
+				resourceType: "collection",
+				resource: "posts",
+				operation: "find",
+			},
+		});
+		const first = stream.next();
+		await Promise.resolve();
+
+		for (let seq = 1; seq <= 513; seq++) {
+			deliver!({ type: "delete", topicId: "posts", seq, key: String(seq) });
+		}
+
+		await expect(first).rejects.toThrow(
+			"client event buffer exceeds 512 events",
+		);
+		expect(unsubscribeCalls).toBe(1);
+	});
+
 	it("derives keyed deltas from consecutive server snapshots", async () => {
 		const unchanged = { id: "unchanged", title: "Same" };
 		async function* snapshots(): AsyncGenerator<
