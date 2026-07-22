@@ -11,6 +11,27 @@ function isWrappedDbCreateResult(
 	return Boolean(value && typeof value === "object" && "drizzle" in value);
 }
 
+type VersionQueryableDb = {
+	execute(query: unknown): Promise<unknown>;
+};
+
+function isVersionQueryableDb(value: unknown): value is VersionQueryableDb {
+	return Boolean(
+		value &&
+		typeof value === "object" &&
+		"execute" in value &&
+		typeof value.execute === "function",
+	);
+}
+
+async function acceptCustomDb<T>(db: T): Promise<T> {
+	// Real Drizzle PostgreSQL clients expose execute(), so enforce the baseline
+	// when the custom client is queryable. Opaque adapters keep their existing
+	// initialization contract; migration execution performs the same preflight.
+	if (isVersionQueryableDb(db)) await assertSupportedPostgresVersion(db);
+	return db;
+}
+
 /**
  * Database service — creates the Drizzle client from app config.
  *
@@ -26,19 +47,10 @@ export default service({
 		// narrowed to the app's concrete shape (breaking the `in` guards below).
 		const config = app.config as QuestpieConfig;
 		const schema = app.getSchema();
-		const accept = async <
-			T extends { execute(query: unknown): Promise<unknown> },
-		>(
-			db: T,
-		): Promise<T> => {
-			await assertSupportedPostgresVersion(db);
-			return db;
-		};
-
 		if ("drizzle" in config.db) {
 			app._pgConnectionString = config.db.connectionString;
 			app._dbCleanup = config.db.close;
-			return accept(config.db.drizzle);
+			return acceptCustomDb(config.db.drizzle);
 		}
 
 		if ("create" in config.db) {
@@ -52,11 +64,20 @@ export default service({
 			if (isWrappedDbCreateResult(created)) {
 				app._pgConnectionString = created.connectionString;
 				app._dbCleanup = created.close;
-				return accept(created.drizzle);
+				return acceptCustomDb(created.drizzle);
 			}
 
-			return accept(created);
+			return acceptCustomDb(created);
 		}
+
+		const accept = async <
+			T extends { execute(query: unknown): Promise<unknown> },
+		>(
+			db: T,
+		): Promise<T> => {
+			await assertSupportedPostgresVersion(db);
+			return db;
+		};
 
 		if ("url" in config.db) {
 			app._pgConnectionString = config.db.url;
