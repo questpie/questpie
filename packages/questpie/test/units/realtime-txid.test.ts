@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test";
 import { smartResponse } from "../../src/server/adapters/utils/response.js";
 import {
 	assertPostgres13ForRealtimeTxid,
+	assertSupportedPostgresVersion,
 	QUESTPIE_SCHEMA_INTROSPECTION_ENV,
 } from "../../src/server/db/postgres-version.js";
 import { questpieRealtimeLogTable } from "../../src/server/modules/core/integrated/realtime/collection.js";
@@ -13,6 +14,16 @@ import {
 } from "../../src/shared/txid.js";
 
 describe("realtime txid PostgreSQL contract", () => {
+	it("enforces PostgreSQL 15 as the framework-wide minimum", async () => {
+		const db = {
+			execute: async () => ({ rows: [{ serverVersionNum: "140012" }] }),
+		};
+
+		await expect(assertSupportedPostgresVersion(db)).rejects.toThrow(
+			"QUESTPIE requires PostgreSQL 15 or newer",
+		);
+	});
+
 	it("fails fast below PostgreSQL 13 with a clear requirement", async () => {
 		const db = {
 			execute: async () => ({ rows: [{ serverVersionNum: "120019" }] }),
