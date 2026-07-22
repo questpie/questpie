@@ -12,9 +12,10 @@ import type {
 
 class FakeRealtimeSource {
 	listeners = new Set<(event: RealtimeChangeEvent) => void>();
+	latestSeq = 4;
 
 	async getLatestSeq() {
-		return 4;
+		return this.latestSeq;
 	}
 
 	subscribe(
@@ -26,6 +27,7 @@ class FakeRealtimeSource {
 	}
 
 	emit(seq: number, change: Partial<RealtimeChangeEvent> = {}) {
+		this.latestSeq = Math.max(this.latestSeq, seq);
 		const event: RealtimeChangeEvent = {
 			seq,
 			resourceType: "collection",
@@ -399,6 +401,39 @@ describe("realtime scheduler", () => {
 		});
 		expect(frames.map(decodeFrame).some((frame) => frame.reset === true)).toBe(
 			true,
+		);
+	});
+
+	it("falls back to an authoritative reset for an unkeyed bulk change", async () => {
+		const realtime = new FakeRealtimeSource();
+		const frames: Uint8Array[] = [];
+		const scheduler = new RealtimeRefreshScheduler(realtime);
+		const stop = scheduler.subscribe({
+			key: "posts:bulk-reset",
+			topicId: "posts",
+			topics: { resourceType: "collection", resource: "posts" },
+			mode: "delta",
+			compute: async () => ({ docs: [{ id: "1", title: "Current" }] }),
+			hydrateRows: async () => {
+				throw new Error("unkeyed bulk changes must not hydrate partial rows");
+			},
+			onFrame: (frame) => frames.push(frame),
+			onError: () => {},
+		});
+		await tick();
+		await tick();
+
+		realtime.emit(5, {
+			operation: "bulk_update",
+			recordId: null,
+			payload: { count: 500 },
+		});
+		await tick();
+		await tick();
+		stop();
+
+		expect(frames.map(decodeFrame).at(-1)).toEqual(
+			expect.objectContaining({ reset: true, seq: 5 }),
 		);
 	});
 

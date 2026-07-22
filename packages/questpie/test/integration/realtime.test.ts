@@ -80,9 +80,11 @@ type TopicInput = {
 	recordId?: string;
 	where?: Record<string, unknown>;
 	with?: Record<string, unknown>;
+	columns?: Record<string, boolean>;
 	limit?: number;
 	offset?: number;
 	orderBy?: Record<string, "asc" | "desc">;
+	locale?: string;
 	sinceSeq?: number;
 	mode?: "snapshot" | "delta";
 };
@@ -353,6 +355,315 @@ describe("realtime matrix", () => {
 				data: { key: created.id },
 			});
 			await reader.close();
+		});
+
+		it("rebootstraps when a relational access dependency changes", async () => {
+			const adapter = new MockChangeBroker();
+			const documents = collection("documents")
+				.fields(({ f }) => ({
+					title: f.textarea().required(),
+					memberships: f.relation("documentMemberships").hasMany({
+						foreignKey: "document",
+						relationName: "document",
+					}),
+				}))
+				.access({
+					read: ({ session }) => ({
+						memberships: { some: { userId: session?.user.id } },
+					}),
+					create: true,
+				});
+			const documentMemberships = collection("documentMemberships")
+				.fields(({ f }) => ({
+					userId: f.textarea().required(),
+					document: f.relation("documents").required().relationName("document"),
+				}))
+				.access({ read: true, create: true, delete: true });
+			setup = await buildMockApp(
+				{ collections: { documents, documentMemberships } },
+				{ realtime: { changeBroker: adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+			const system = createTestContext();
+			const document = await setup.app.collections.documents.create(
+				{ title: "Private" },
+				system,
+			);
+			const membership = await setup.app.collections.documentMemberships.create(
+				{ userId: "alice", document: document.id },
+				system,
+			);
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([
+					collectionTopic("documents", { mode: "delta" }),
+				]),
+				{},
+				{
+					appContext: createTestContext({
+						db: setup.app.db,
+						session: createMockSession({ id: "alice" }) as any,
+						accessMode: "user",
+					}),
+				},
+			);
+			const reader = createSSEReader(response.body!);
+			const initial = await reader.readSnapshot();
+			expect(initial).toMatchObject({
+				event: "snapshot",
+				data: {
+					data: {
+						docs: [expect.objectContaining({ id: document.id })],
+					},
+				},
+			});
+
+			await setup.app.collections.documentMemberships.deleteById(
+				{ id: membership.id },
+				system,
+			);
+			const reset = await reader.readSnapshot();
+			expect(reset).toMatchObject({
+				event: "snapshot",
+				data: { reset: true, data: { docs: [] } },
+			});
+			await reader.close();
+		});
+
+		it("emits delete when a soft-deleted row disappears", async () => {
+			const adapter = new MockChangeBroker();
+			const posts = collection("posts")
+				.fields(({ f }) => ({ title: f.textarea().required() }))
+				.options({ softDelete: true })
+				.access({ read: true, create: true, delete: true });
+			setup = await buildMockApp(
+				{ collections: { posts } },
+				{ realtime: { changeBroker: adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+			const context = createTestContext();
+			const created = await setup.app.collections.posts.create(
+				{ title: "One" },
+				context,
+			);
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("posts", { mode: "delta" })]),
+				{},
+				undefined,
+			);
+			const reader = createSSEReader(response.body!);
+			await reader.readSnapshot();
+
+			await setup.app.collections.posts.deleteById({ id: created.id }, context);
+			expect(await reader.readSnapshot()).toMatchObject({
+				event: "delete",
+				data: { key: created.id },
+			});
+			await reader.close();
+		});
+
+		it("suppresses a delta when the projected row is unchanged", async () => {
+			const adapter = new MockChangeBroker();
+			const posts = collection("posts")
+				.fields(({ f }) => ({
+					title: f.textarea().required(),
+					internal: f.textarea().required().outputFalse(),
+				}))
+				.options({ timestamps: false })
+				.access({ read: true, create: true, update: true });
+			setup = await buildMockApp(
+				{ collections: { posts } },
+				{ realtime: { changeBroker: adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+			const context = createTestContext();
+			const created = await setup.app.collections.posts.create(
+				{ title: "One", internal: "first" },
+				context,
+			);
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("posts", { mode: "delta" })]),
+				{},
+				undefined,
+			);
+			const reader = createSSEReader(response.body!);
+			await reader.readSnapshot();
+
+			await setup.app.collections.posts.updateById(
+				{ id: created.id, data: { internal: "second" } },
+				context,
+			);
+			const current = await reader.readSnapshot();
+			expect(current.event).toBe("up-to-date");
+			await reader.close();
+		});
+
+		it("hydrates localized deltas independently per topic locale", async () => {
+			const adapter = new MockChangeBroker();
+			const posts = collection("posts")
+				.fields(({ f }) => ({
+					title: f.textarea().required().localized(),
+					slug: f.textarea().required(),
+				}))
+				.options({ timestamps: false })
+				.access({ read: true, create: true, update: true });
+			setup = await buildMockApp(
+				{
+					collections: { posts },
+					locale: {
+						locales: [{ code: "en" }, { code: "sk" }],
+						defaultLocale: "en",
+					},
+				},
+				{ realtime: { changeBroker: adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+			const created = await setup.app.collections.posts.create(
+				{ title: "Hello", slug: "hello" },
+				createTestContext({ locale: "en", defaultLocale: "en" }),
+			);
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const open = async (locale: string) => {
+				const response = await routes.realtime.subscribe(
+					createRealtimeRequest([
+						collectionTopic("posts", { mode: "delta", locale }),
+					]),
+					{},
+					undefined,
+				);
+				const reader = createSSEReader(response.body!);
+				return { reader, bootstrap: await reader.readSnapshot() };
+			};
+			const [english, slovak] = await Promise.all([open("en"), open("sk")]);
+			expect(english.bootstrap.data.data.docs[0].title).toBe("Hello");
+			expect(slovak.bootstrap.data.data.docs[0].title).toBe("Hello");
+
+			await setup.app.collections.posts.updateById(
+				{ id: created.id, data: { title: "Ahoj" } },
+				createTestContext({ locale: "sk", defaultLocale: "en" }),
+			);
+			expect((await english.reader.readSnapshot()).event).toBe("up-to-date");
+			expect(await slovak.reader.readSnapshot()).toMatchObject({
+				event: "update",
+				data: { row: { id: created.id, title: "Ahoj", slug: "hello" } },
+			});
+			await Promise.all([english.reader.close(), slovak.reader.close()]);
+		});
+
+		it("isolates live row, field, and afterRead deltas by principal", async () => {
+			const adapter = new MockChangeBroker();
+			const documents = collection("documents")
+				.fields(({ f }) => ({
+					ownerId: f.textarea().required(),
+					title: f.textarea().required(),
+					secret: f.textarea().required(),
+				}))
+				.options({ timestamps: false })
+				.hooks({
+					afterRead: ({ data, session }) => {
+						data.title = `${data.title}:${session?.user.id}`;
+					},
+				})
+				.access({
+					read: ({ session }) => ({ ownerId: session?.user.id }),
+					create: true,
+					update: true,
+					fields: {
+						secret: {
+							read: ({ user }) => user?.id === "bob",
+						},
+					},
+				});
+			setup = await buildMockApp(
+				{ collections: { documents } },
+				{ realtime: { changeBroker: adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+			const system = createTestContext();
+			const aliceDocument = await setup.app.collections.documents.create(
+				{ ownerId: "alice", title: "Alice", secret: "alice-secret" },
+				system,
+			);
+			const bobDocument = await setup.app.collections.documents.create(
+				{ ownerId: "bob", title: "Bob", secret: "bob-secret" },
+				system,
+			);
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const open = async (id: string, role: string) => {
+				const response = await routes.realtime.subscribe(
+					createRealtimeRequest([
+						collectionTopic("documents", { mode: "delta" }),
+					]),
+					{},
+					{
+						appContext: createTestContext({
+							db: setup.app.db,
+							session: createMockSession({ id, role }) as any,
+							accessMode: "user",
+						}),
+					},
+				);
+				const reader = createSSEReader(response.body!);
+				return { reader, bootstrap: await reader.readSnapshot() };
+			};
+			const [alice, bob] = await Promise.all([
+				open("alice", "user"),
+				open("bob", "admin"),
+			]);
+			expect(alice.bootstrap.data.data.docs).toEqual([
+				expect.objectContaining({
+					id: aliceDocument.id,
+					title: "Alice:alice",
+				}),
+			]);
+			expect(alice.bootstrap.data.data.docs[0]).not.toHaveProperty("secret");
+			expect(bob.bootstrap.data.data.docs).toEqual([
+				expect.objectContaining({
+					id: bobDocument.id,
+					title: "Bob:bob",
+					secret: "bob-secret",
+				}),
+			]);
+
+			await setup.app.collections.documents.updateById(
+				{
+					id: aliceDocument.id,
+					data: { title: "Alice 2", secret: "alice-secret-2" },
+				},
+				system,
+			);
+			const aliceUpdate = await alice.reader.readSnapshot();
+			expect(aliceUpdate).toMatchObject({
+				event: "update",
+				data: {
+					row: { id: aliceDocument.id, title: "Alice 2:alice" },
+				},
+			});
+			expect(aliceUpdate.data.row).not.toHaveProperty("secret");
+
+			await setup.app.collections.documents.updateById(
+				{
+					id: bobDocument.id,
+					data: { title: "Bob 2", secret: "bob-secret-2" },
+				},
+				system,
+			);
+			expect(await bob.reader.readSnapshot()).toMatchObject({
+				event: "update",
+				data: {
+					row: {
+						id: bobDocument.id,
+						title: "Bob 2:bob",
+						secret: "bob-secret-2",
+					},
+				},
+			});
+			await Promise.all([alice.reader.close(), bob.reader.close()]);
 		});
 	});
 
