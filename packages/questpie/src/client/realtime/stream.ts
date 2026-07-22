@@ -655,6 +655,7 @@ export function createRealtimeAPI(opts: {
 		onError?: (error: Error) => void,
 	) => {
 		const subscriptionGeneration = generation;
+		const txidTopic = txids.registerTopic();
 		const marker = {};
 		pending.add(marker);
 		let stopped = false;
@@ -666,7 +667,7 @@ export function createRealtimeAPI(opts: {
 				stopInner = selected.subscribe(
 					topic,
 					(event) => {
-						txids.observe(event);
+						txids.observe(event, txidTopic);
 						callback(event);
 					},
 					signal,
@@ -676,11 +677,13 @@ export function createRealtimeAPI(opts: {
 			})
 			.catch((error) => {
 				pending.delete(marker);
+				txids.unregisterTopic(txidTopic);
 				onError?.(error instanceof Error ? error : new Error(String(error)));
 			});
 		return () => {
 			stopped = true;
 			pending.delete(marker);
+			txids.unregisterTopic(txidTopic);
 			stopInner?.();
 		};
 	};

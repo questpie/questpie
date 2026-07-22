@@ -59,6 +59,40 @@ describe("realtime txid reconciliation", () => {
 		expect(settled).toBe(true);
 	});
 
+	it("waits for every active topic instead of resolving from an unrelated one", async () => {
+		const tracker = new RealtimeTxidTracker();
+		const posts = tracker.registerTopic();
+		const unrelated = tracker.registerTopic();
+		let settled = false;
+		const pending = tracker.awaitTxId("42").then(() => {
+			settled = true;
+		});
+
+		tracker.observe(
+			{
+				type: "up-to-date",
+				topicId: "unrelated",
+				seq: 1,
+				upToDate: "43",
+			},
+			unrelated,
+		);
+		await tick();
+		expect(settled).toBe(false);
+
+		tracker.observe(
+			{
+				type: "up-to-date",
+				topicId: "posts",
+				seq: 2,
+				upToDate: "43",
+			},
+			posts,
+		);
+		await pending;
+		expect(settled).toBe(true);
+	});
+
 	it("extracts mutation txids and remembers an early exact frame", async () => {
 		const tracker = new RealtimeTxidTracker();
 		tracker.observe({

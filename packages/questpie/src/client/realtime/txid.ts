@@ -27,17 +27,33 @@ type PendingWaiter = {
 	resolve: () => void;
 	reject: (error: Error) => void;
 	dispose: () => void;
+	requiredTopics?: Set<object>;
 };
 
 /** Connection-local reconciliation state for optimistic mutation txids. */
 export class RealtimeTxidTracker {
-	private watermark: bigint | undefined;
+	private legacyWatermark: bigint | undefined;
+	private readonly topicWatermarks = new Map<object, bigint | undefined>();
 	private readonly exactTxids = new Set<string>();
 	private readonly pending = new Map<string, Set<PendingWaiter>>();
 
 	constructor(private readonly maximumExactTxids = 1024) {}
 
-	observe(event: RealtimeStreamEvent): void {
+	registerTopic(): object {
+		const token = {};
+		this.topicWatermarks.set(token, undefined);
+		return token;
+	}
+
+	unregisterTopic(token: object): void {
+		if (!this.topicWatermarks.delete(token)) return;
+		for (const waiters of this.pending.values()) {
+			for (const waiter of waiters) waiter.requiredTopics?.delete(token);
+		}
+		this.settleResolved();
+	}
+
+	observe(event: RealtimeStreamEvent, topicToken?: object): void {
 		const eventTxid = "txid" in event ? event.txid : undefined;
 		if (eventTxid) {
 			this.exactTxids.delete(eventTxid);
@@ -49,25 +65,40 @@ export class RealtimeTxidTracker {
 			}
 		}
 		const watermark = asTxid("upToDate" in event ? event.upToDate : undefined);
-		if (
-			watermark !== undefined &&
-			(this.watermark === undefined || watermark > this.watermark)
-		) {
-			this.watermark = watermark;
+		if (watermark !== undefined) {
+			if (topicToken && this.topicWatermarks.has(topicToken)) {
+				const current = this.topicWatermarks.get(topicToken);
+				if (current === undefined || watermark > current) {
+					this.topicWatermarks.set(topicToken, watermark);
+				}
+			} else if (
+				this.legacyWatermark === undefined ||
+				watermark > this.legacyWatermark
+			) {
+				this.legacyWatermark = watermark;
+			}
 		}
+		this.settleResolved();
+	}
 
+	private settleResolved(): void {
 		for (const [txid, waiters] of this.pending) {
-			if (!this.isResolved(txid)) continue;
-			this.pending.delete(txid);
 			for (const waiter of waiters) {
+				if (!this.isResolved(txid, waiter.requiredTopics)) continue;
+				waiters.delete(waiter);
 				waiter.dispose();
 				waiter.resolve();
 			}
+			if (waiters.size === 0) this.pending.delete(txid);
 		}
 	}
 
 	awaitTxId(txid: string, signal?: AbortSignal): Promise<void> {
-		if (this.isResolved(txid)) return Promise.resolve();
+		const requiredTopics =
+			this.topicWatermarks.size > 0
+				? new Set(this.topicWatermarks.keys())
+				: undefined;
+		if (this.isResolved(txid, requiredTopics)) return Promise.resolve();
 		if (signal?.aborted) return Promise.reject(signal.reason);
 
 		return new Promise<void>((resolve, reject) => {
@@ -85,6 +116,7 @@ export class RealtimeTxidTracker {
 				resolve,
 				reject,
 				dispose: () => signal?.removeEventListener("abort", onAbort),
+				requiredTopics,
 			};
 			waiters.add(waiter);
 			this.pending.set(txid, waiters);
@@ -106,16 +138,20 @@ export class RealtimeTxidTracker {
 		}
 		this.pending.clear();
 		this.exactTxids.clear();
-		this.watermark = undefined;
+		this.topicWatermarks.clear();
+		this.legacyWatermark = undefined;
 	}
 
-	private isResolved(txid: string): boolean {
+	private isResolved(txid: string, requiredTopics?: Set<object>): boolean {
 		if (this.exactTxids.has(txid)) return true;
 		const pending = asTxid(txid);
-		return (
-			pending !== undefined &&
-			this.watermark !== undefined &&
-			this.watermark > pending
-		);
+		if (pending === undefined) return false;
+		if (requiredTopics) {
+			return [...requiredTopics].every((topic) => {
+				const watermark = this.topicWatermarks.get(topic);
+				return watermark !== undefined && watermark > pending;
+			});
+		}
+		return this.legacyWatermark !== undefined && this.legacyWatermark > pending;
 	}
 }
