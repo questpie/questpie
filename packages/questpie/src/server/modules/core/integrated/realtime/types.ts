@@ -68,7 +68,7 @@ export type RealtimeTopics = {
 
 export type RealtimeSubscriptionContext = {
 	/**
-	 * Function to resolve collection dependencies from WITH config.
+	 * Function to resolve collection dependencies from a WITH or WHERE fragment.
 	 * Returns all collections that should trigger refresh (main + relations).
 	 */
 	resolveCollectionDependencies?: (

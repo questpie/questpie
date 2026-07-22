@@ -1249,8 +1249,9 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	}
 
 	/**
-	 * Resolve collection dependencies from WITH config for realtime subscriptions.
-	 * Returns all collections that should trigger a refresh (main + relations).
+	 * Resolve collection dependencies from a WITH or WHERE query fragment for
+	 * realtime subscriptions. Returns every collection that should trigger a
+	 * refresh (main + relations).
 	 * @internal Exposed for service definitions (realtime).
 	 */
 	_resolveCollectionDependencies(
@@ -1357,6 +1358,29 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 		for (const [relationName, relationOptions] of Object.entries(withConfig)) {
 			if (!relationOptions) continue;
+			if (relationName === "AND" || relationName === "OR") {
+				const branches = Array.isArray(relationOptions)
+					? relationOptions
+					: [relationOptions];
+				for (const branch of branches) {
+					this.visitCollectionRelations(
+						collectionMap,
+						dependencies,
+						collectionName,
+						branch as Record<string, any>,
+					);
+				}
+				continue;
+			}
+			if (relationName === "NOT") {
+				this.visitCollectionRelations(
+					collectionMap,
+					dependencies,
+					collectionName,
+					relationOptions as Record<string, any>,
+				);
+				continue;
+			}
 			const relation = collection.state.relations?.[relationName];
 			if (!relation) continue;
 
@@ -1366,10 +1390,10 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 				dependencies.add(relation.through);
 			}
 
-			// Support both formats:
+			// Support WITH and relation-WHERE formats:
 			// 1. { post: { with: { user: true } } } - explicit .with
 			// 2. { post: { user: true } } - direct nesting (user is itself a relation)
-			// In format 2, the object keys are relation names, not .with property
+			// 3. { posts: { some: { author: { is: { ... } } } } } - relation filter
 			let nestedWith: Record<string, any> | undefined;
 
 			if (
@@ -1379,9 +1403,19 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 				// Check if it has explicit .with property
 				if ("with" in relationOptions) {
 					nestedWith = (relationOptions as any).with;
-				} else if (relationOptions !== true) {
-					// The object itself contains nested relations (direct nesting format)
-					nestedWith = relationOptions as Record<string, any>;
+				} else {
+					const relationFilter = ["some", "none", "every", "is", "isNot"]
+						.map((operator) => (relationOptions as any)[operator])
+						.find(
+							(value) =>
+								value && typeof value === "object" && !Array.isArray(value),
+						);
+					if (relationFilter) {
+						nestedWith = relationFilter as Record<string, any>;
+					} else if (relationOptions !== true) {
+						// The object itself contains nested relations (direct nesting format)
+						nestedWith = relationOptions as Record<string, any>;
+					}
 				}
 			}
 

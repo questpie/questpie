@@ -719,15 +719,23 @@ export class RealtimeService {
 		};
 		const whereAnalysis = analyzeWhere(resolvedTopics.where);
 
-		// Resolve dependencies from WITH config
+		// Resolve dependencies from both the requested relation graph and the
+		// access-merged WHERE. A change to an access relation must rebootstrap a
+		// delta topic even when that relation was not requested in the output.
 		let watchedResources: { collections: Set<string>; globals: Set<string> };
 
-		if (resolvedTopics.resourceType === "collection" && resolvedTopics.with) {
-			const collections =
+		if (resolvedTopics.resourceType === "collection") {
+			const withCollections =
 				this.subscriptionContext?.resolveCollectionDependencies?.(
 					resolvedTopics.resource,
 					resolvedTopics.with,
 				) ?? new Set([resolvedTopics.resource]);
+			const whereCollections =
+				this.subscriptionContext?.resolveCollectionDependencies?.(
+					resolvedTopics.resource,
+					resolvedTopics.where,
+				) ?? new Set([resolvedTopics.resource]);
+			const collections = new Set([...withCollections, ...whereCollections]);
 			watchedResources = { collections, globals: new Set() };
 		} else if (
 			resolvedTopics.resourceType === "global" &&
@@ -741,17 +749,10 @@ export class RealtimeService {
 				globals: new Set([resolvedTopics.resource]),
 			};
 		} else {
-			// No WITH config - only watch main resource
-			watchedResources =
-				resolvedTopics.resourceType === "collection"
-					? {
-							collections: new Set([resolvedTopics.resource]),
-							globals: new Set(),
-						}
-					: {
-							collections: new Set(),
-							globals: new Set([resolvedTopics.resource]),
-						};
+			watchedResources = {
+				collections: new Set(),
+				globals: new Set([resolvedTopics.resource]),
+			};
 		}
 
 		const entry: ListenerEntry = {
