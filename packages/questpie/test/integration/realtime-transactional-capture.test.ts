@@ -523,4 +523,52 @@ describe("realtime matrix transactional change capture", () => {
 			),
 		).toHaveLength(1);
 	});
+
+	it("rolls back mutations when native delta capture fails", async () => {
+		const first = await setup.app.collections.posts.create(
+			{ title: "First" },
+			ctx,
+		);
+		const second = await setup.app.collections.posts.create(
+			{ title: "Second" },
+			ctx,
+		);
+		const appendSpy = spyOn(
+			setup.app.realtime,
+			"appendChange",
+		).mockImplementation(async () => {
+			throw Object.assign(new Error("database unavailable"), { code: "08006" });
+		});
+		Object.assign(setup.app.realtime, { nativeDeltasEnabled: true });
+
+		try {
+			await expect(
+				setup.app.collections.posts.create({ title: "Must roll back" }, ctx),
+			).rejects.toThrow("database unavailable");
+			await expect(
+				setup.app.collections.posts.update(
+					{
+						where: { id: { in: [first.id, second.id] } },
+						data: { title: "Must roll back" },
+					},
+					ctx,
+				),
+			).rejects.toThrow("database unavailable");
+			await expect(
+				setup.app.collections.posts.delete(
+					{ where: { id: { in: [first.id, second.id] } } },
+					ctx,
+				),
+			).rejects.toThrow("database unavailable");
+		} finally {
+			Object.assign(setup.app.realtime, { nativeDeltasEnabled: false });
+			appendSpy.mockRestore();
+		}
+
+		expect(
+			(await setup.app.collections.posts.find({}, ctx)).docs
+				.map((post: { title: string }) => post.title)
+				.sort(),
+		).toEqual(["First", "Second"]);
+	});
 });

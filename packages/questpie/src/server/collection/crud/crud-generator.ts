@@ -63,6 +63,7 @@ import { getColumn } from "#questpie/server/collection/crud/shared/field-resolve
 import {
 	executeGlobalCollectionHooks,
 	executeGlobalCollectionTransitionHooks,
+	rethrowFatalGlobalHookError,
 } from "#questpie/server/collection/crud/shared/global-hooks.js";
 import {
 	createHookContext,
@@ -2176,6 +2177,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 								bulk: afterBulkMeta,
 							}),
 						).catch((err) => {
+							rethrowFatalGlobalHookError(err);
 							console.error(
 								`[QUESTPIE] afterChange hook error in bulk update:`,
 								err,
@@ -2183,8 +2185,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						}),
 					);
 				}
-				// Execute all afterChange hooks in parallel (non-fatal)
-				await Promise.allSettled(afterChangePromises);
+				// Execute all afterChange hooks in parallel. Ordinary hook errors were
+				// handled above; fatal infrastructure errors still abort the transaction.
+				await Promise.all(afterChangePromises);
 
 				return attachCurrentTransactionTxid(refetchedRecords);
 			});
@@ -2352,6 +2355,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						}),
 					);
 				} catch (err) {
+					rethrowFatalGlobalHookError(err);
 					// afterDelete hook errors are non-fatal — log and continue
 					console.error(
 						`[QUESTPIE] afterDelete hook error for "${this.state.name}":`,
@@ -2642,6 +2646,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							}),
 						);
 					} catch (err) {
+						rethrowFatalGlobalHookError(err);
 						// afterDelete hook errors are non-fatal — log and continue
 						console.error(
 							`[QUESTPIE] afterDelete hook error for "${this.state.name}":`,

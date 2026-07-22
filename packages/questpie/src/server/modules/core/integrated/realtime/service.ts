@@ -155,6 +155,7 @@ function analyzeWhere(where: any): {
 }
 
 export class RealtimeService {
+	readonly nativeDeltasEnabled: boolean;
 	private changeBroker?: ChangeBroker;
 	private clientTransport?: ClientTransport;
 	private listeners = new Set<ListenerEntry>();
@@ -192,6 +193,7 @@ export class RealtimeService {
 		private pgConnectionString?: string,
 		private logger?: Pick<LoggerAdapter, "error" | "warn">,
 	) {
+		this.nativeDeltasEnabled = config.nativeDeltas === true;
 		const broker =
 			config.changeBroker ??
 			(this.pgConnectionString

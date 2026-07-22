@@ -11,6 +11,7 @@
  * Phase 3: Direct CRUD calls will be removed, these hooks become sole source.
  */
 
+import { FatalGlobalHookError } from "#questpie/server/collection/crud/shared/global-hooks.js";
 import { recordTransactionTxid } from "#questpie/server/collection/crud/shared/transaction.js";
 import type {
 	GlobalCollectionHookContext,
@@ -166,6 +167,9 @@ const realtimeHook = {
 			publishRealtimeAfterCommit(ctx, realtime, change);
 		} catch (error) {
 			handleRealtimeCaptureError(ctx.logger, error);
+			if (realtime.nativeDeltasEnabled) {
+				throw new FatalGlobalHookError(error);
+			}
 		}
 	},
 	afterDelete: async (ctx: GlobalCollectionHookContext) => {
@@ -190,6 +194,9 @@ const realtimeHook = {
 			publishRealtimeAfterCommit(ctx, realtime, change);
 		} catch (error) {
 			handleRealtimeCaptureError(ctx.logger, error);
+			if (realtime.nativeDeltasEnabled) {
+				throw new FatalGlobalHookError(error);
+			}
 		}
 	},
 };
@@ -367,6 +374,9 @@ const globalRealtimeHook = {
 			publishRealtimeAfterCommit(ctx, realtime, change);
 		} catch (error) {
 			handleRealtimeCaptureError(ctx.logger, error);
+			if (realtime.nativeDeltasEnabled) {
+				throw new FatalGlobalHookError(error);
+			}
 		}
 	},
 };

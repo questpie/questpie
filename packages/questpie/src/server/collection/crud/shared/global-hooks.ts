@@ -15,6 +15,23 @@ type ContextLogger = {
 	error: (message: string, ...args: unknown[]) => void;
 };
 
+/** Marks an after-hook failure that must abort its surrounding transaction. */
+export class FatalGlobalHookError extends Error {
+	constructor(readonly original: unknown) {
+		super(
+			original instanceof Error
+				? original.message
+				: "Fatal global hook failure",
+			{ cause: original },
+		);
+		this.name = "FatalGlobalHookError";
+	}
+}
+
+export function rethrowFatalGlobalHookError(error: unknown): void {
+	if (error instanceof FatalGlobalHookError) throw error;
+}
+
 function getContextLogger(ctx: object): ContextLogger | undefined {
 	if (
 		"logger" in ctx &&
@@ -82,6 +99,7 @@ export async function executeGlobalCollectionHooks(
 			try {
 				await hookFn(enrichedCtx);
 			} catch (err) {
+				rethrowFatalGlobalHookError(err);
 				getContextLogger(enrichedCtx)?.error(
 					`[QUESTPIE] Global collection hook "${hookName}" error for "${collectionName}":`,
 					err,
@@ -123,6 +141,7 @@ export async function executeGlobalCollectionTransitionHooks(
 			try {
 				await hookFn(enrichedCtx);
 			} catch (err) {
+				rethrowFatalGlobalHookError(err);
 				getContextLogger(enrichedCtx)?.error(
 					`[QUESTPIE] Global collection hook "${hookName}" error for "${collectionName}":`,
 					err,
@@ -165,6 +184,7 @@ export async function executeGlobalGlobalHooks(
 			try {
 				await hookFn(enrichedCtx);
 			} catch (err) {
+				rethrowFatalGlobalHookError(err);
 				getContextLogger(enrichedCtx)?.error(
 					`[QUESTPIE] Global global hook "${hookName}" error for "${globalName}":`,
 					err,
@@ -206,6 +226,7 @@ export async function executeGlobalGlobalTransitionHooks(
 			try {
 				await hookFn(enrichedCtx);
 			} catch (err) {
+				rethrowFatalGlobalHookError(err);
 				getContextLogger(enrichedCtx)?.error(
 					`[QUESTPIE] Global global hook "${hookName}" error for "${globalName}":`,
 					err,
