@@ -84,11 +84,13 @@ describe("createQuestpieCollections", () => {
 	it("retries snapshot subscription after a transient initial error", async () => {
 		const queryClient = new QueryClient();
 		let liveCalls = 0;
+		let activeSubscriptions = 0;
 		const sync = resolveSync<Row>({
 			client: {
 				find: async () => envelope([]),
 				live: (_options, onSnapshot, options) => {
 					liveCalls += 1;
+					activeSubscriptions += 1;
 					if (liveCalls === 1) {
 						queueMicrotask(() => options?.onError?.(new Error("temporary")));
 					} else {
@@ -96,7 +98,12 @@ describe("createQuestpieCollections", () => {
 							onSnapshot(envelope([{ id: "one", title: "Recovered" }])),
 						);
 					}
-					return () => {};
+					let disposed = false;
+					return () => {
+						if (disposed) return;
+						disposed = true;
+						activeSubscriptions -= 1;
+					};
 				},
 			},
 			mode: "snapshot",
@@ -106,10 +113,12 @@ describe("createQuestpieCollections", () => {
 		});
 
 		await expect(sync.queryFn()).rejects.toThrow("temporary");
+		expect(activeSubscriptions).toBe(0);
 		await expect(sync.queryFn()).resolves.toEqual([
 			{ id: "one", title: "Recovered" },
 		]);
 		expect(liveCalls).toBe(2);
+		expect(activeSubscriptions).toBe(1);
 	});
 
 	it("pins the tested TanStack DB package tuple exactly", async () => {
@@ -117,6 +126,8 @@ describe("createQuestpieCollections", () => {
 			new URL("../package.json", import.meta.url),
 		).json()) as {
 			peerDependencies: Record<string, string>;
+			exports: Record<string, unknown>;
+			publishConfig: { exports: Record<string, unknown> };
 		};
 
 		expect(manifest.peerDependencies).toMatchObject({
@@ -124,6 +135,9 @@ describe("createQuestpieCollections", () => {
 			"@tanstack/query-db-collection": "1.1.0",
 			"@tanstack/react-db": "0.1.94",
 		});
+		expect(manifest.exports).not.toHaveProperty("./*");
+		expect(manifest.publishConfig.exports).not.toHaveProperty("./*");
+		expect(manifest.publishConfig.exports["."]).toBeDefined();
 	});
 
 	it("caches one collection per name and persists through refetch mode", async () => {

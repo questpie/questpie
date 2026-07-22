@@ -74,7 +74,10 @@ export function createQuestpieCollections<TApp extends QuestpieApp>(
 					],
 					findOptions,
 					syncMode,
-					onDispose: (dispose) => disposers.add(dispose),
+					onDispose: (dispose) => {
+						disposers.add(dispose);
+						return () => disposers.delete(dispose);
+					},
 				});
 				cache.set(property, created);
 				return created;

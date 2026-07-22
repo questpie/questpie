@@ -19,7 +19,7 @@ export function resolveSync<TRow>(options: {
 	mode: QuestpieDbSyncMode;
 	queryClient: QueryClient;
 	queryKey: QueryKey;
-	onDispose: (dispose: () => void) => void;
+	onDispose: (dispose: () => void) => void | (() => void);
 }): {
 	queryFn: () => Promise<TRow[]>;
 	updateSnapshot: (update: (rows: TRow[]) => TRow[]) => void;
@@ -49,7 +49,10 @@ export function resolveSync<TRow>(options: {
 
 			initial = new Promise<TRow[]>((resolve, reject) => {
 				let settled = false;
-				const dispose = client.live(
+				let dispose = () => {};
+				let unregisterDispose = () => {};
+				let failedSynchronously = false;
+				const liveDispose = client.live(
 					findOptions,
 					(snapshot) => {
 						latest = snapshot.docs;
@@ -63,12 +66,20 @@ export function resolveSync<TRow>(options: {
 						onError: (error) => {
 							if (!settled) {
 								settled = true;
+								failedSynchronously = true;
+								dispose();
+								unregisterDispose();
 								reject(error);
 							}
 						},
 					},
 				);
-				onDispose(dispose);
+				dispose = liveDispose;
+				if (failedSynchronously) {
+					dispose();
+				} else {
+					unregisterDispose = onDispose(dispose) ?? (() => {});
+				}
 			}).catch((error) => {
 				initial = undefined;
 				throw error;

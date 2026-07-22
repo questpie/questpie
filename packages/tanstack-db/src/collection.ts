@@ -44,7 +44,7 @@ export function createQuestpieCollection<TRow extends MutableRow>(options: {
 	queryKey: QueryKey;
 	findOptions?: unknown;
 	syncMode: QuestpieDbSyncMode;
-	onDispose: (dispose: () => void) => void;
+	onDispose: (dispose: () => void) => void | (() => void);
 }): Collection<TRow, string> {
 	const {
 		client,
