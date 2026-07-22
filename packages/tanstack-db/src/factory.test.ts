@@ -5,6 +5,7 @@ import { collection } from "questpie";
 import type { QuestpieClient } from "questpie/client";
 
 import { createQuestpieCollections } from "./factory.js";
+import { resolveSync } from "./sync.js";
 
 type Row = { id: string; title: string };
 
@@ -80,6 +81,37 @@ function createFakeClient(initial: Row[]) {
 }
 
 describe("createQuestpieCollections", () => {
+	it("retries snapshot subscription after a transient initial error", async () => {
+		const queryClient = new QueryClient();
+		let liveCalls = 0;
+		const sync = resolveSync<Row>({
+			client: {
+				find: async () => envelope([]),
+				live: (_options, onSnapshot, options) => {
+					liveCalls += 1;
+					if (liveCalls === 1) {
+						queueMicrotask(() => options?.onError?.(new Error("temporary")));
+					} else {
+						queueMicrotask(() =>
+							onSnapshot(envelope([{ id: "one", title: "Recovered" }])),
+						);
+					}
+					return () => {};
+				},
+			},
+			mode: "snapshot",
+			queryClient,
+			queryKey: ["posts"],
+			onDispose: () => {},
+		});
+
+		await expect(sync.queryFn()).rejects.toThrow("temporary");
+		await expect(sync.queryFn()).resolves.toEqual([
+			{ id: "one", title: "Recovered" },
+		]);
+		expect(liveCalls).toBe(2);
+	});
+
 	it("pins the tested TanStack DB package tuple exactly", async () => {
 		const manifest = (await Bun.file(
 			new URL("../package.json", import.meta.url),

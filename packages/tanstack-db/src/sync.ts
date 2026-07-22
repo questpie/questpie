@@ -69,6 +69,9 @@ export function resolveSync<TRow>(options: {
 					},
 				);
 				onDispose(dispose);
+			}).catch((error) => {
+				initial = undefined;
+				throw error;
 			});
 
 			return initial;
