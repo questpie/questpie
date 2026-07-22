@@ -794,7 +794,12 @@ export class RealtimeRefreshScheduler {
 	}
 
 	private async sendSnapshotHeartbeat(group: SchedulerGroup): Promise<void> {
-		if (group.disposed || group.heartbeatInFlight || !group.captureWatermark) {
+		if (
+			group.disposed ||
+			group.refreshInFlight ||
+			group.heartbeatInFlight ||
+			!group.captureWatermark
+		) {
 			return;
 		}
 		group.heartbeatInFlight = true;

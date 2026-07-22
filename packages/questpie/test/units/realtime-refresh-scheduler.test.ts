@@ -260,6 +260,37 @@ describe("realtime scheduler", () => {
 		).toBe(true);
 	});
 
+	it("does not emit a watermark heartbeat across an in-flight refresh", async () => {
+		const realtime = new FakeRealtimeSource();
+		const scheduler = new RealtimeRefreshScheduler(realtime);
+		const frames: Uint8Array[] = [];
+		let releaseCompute = () => {};
+		const computeGate = new Promise<void>((resolve) => {
+			releaseCompute = resolve;
+		});
+		const stop = scheduler.subscribe({
+			key: "posts:watermark-refresh-gate",
+			topicId: "posts",
+			topics: { resourceType: "collection", resource: "posts" },
+			captureWatermark: async () => "43",
+			heartbeatIntervalMs: 5,
+			compute: async () => {
+				await computeGate;
+				return { docs: [] };
+			},
+			onFrame: (frame) => frames.push(frame),
+			onError: () => {},
+		});
+
+		await new Promise((resolve) => setTimeout(resolve, 15));
+		expect(frames).toHaveLength(0);
+		releaseCompute();
+		await tick();
+		await tick();
+		expect(decodeFrame(frames[0]!).data).toEqual({ docs: [] });
+		stop();
+	});
+
 	it("bounds refresh computation concurrency", async () => {
 		const realtime = new FakeRealtimeSource();
 		const scheduler = new RealtimeRefreshScheduler(realtime, 2);

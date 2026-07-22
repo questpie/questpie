@@ -1,6 +1,9 @@
 import { asc, desc, eq, gt, lt, sql } from "drizzle-orm";
 
-import { withTransaction } from "#questpie/server/collection/crud/shared/transaction.js";
+import {
+	getCurrentTransaction,
+	withTransaction,
+} from "#questpie/server/collection/crud/shared/transaction.js";
 import type { DrizzleClientFromQuestpieConfig } from "#questpie/server/config/types.js";
 import type { LoggerAdapter } from "#questpie/server/modules/core/integrated/logger/types.js";
 
@@ -60,10 +63,6 @@ type AppendChangeInput = Omit<
 	RealtimeChangeEvent,
 	"seq" | "txid" | "createdAt"
 >;
-
-type AppendChangeOptions = {
-	db?: DrizzleClientFromQuestpieConfig<any>;
-};
 
 const DEFAULT_RETENTION_DAYS = 3;
 const DEFAULT_ADAPTER_RECONCILIATION_INTERVAL_MS = 15_000;
@@ -356,18 +355,22 @@ export class RealtimeService {
 		}
 	}
 
-	async appendChange(
-		input: AppendChangeInput,
-		options: AppendChangeOptions = {},
-	): Promise<RealtimeChangeEvent> {
-		if (!options.db) {
-			return withTransaction(this.db, (tx) =>
-				this.appendChange(input, { db: tx }),
-			);
+	async appendChange(input: AppendChangeInput): Promise<RealtimeChangeEvent> {
+		const currentTransaction = getCurrentTransaction();
+		if (currentTransaction) {
+			return this.appendChangeInTransaction(input, currentTransaction);
 		}
+		return withTransaction(this.db, (tx) =>
+			this.appendChangeInTransaction(input, tx),
+		);
+	}
+
+	private async appendChangeInTransaction(
+		input: AppendChangeInput,
+		db: DrizzleClientFromQuestpieConfig<any>,
+	): Promise<RealtimeChangeEvent> {
 		// The head-row lock must remain held until the outbox insert commits. This
 		// makes sequence order commit order for native delta cursors.
-		const db = options.db ?? this.db;
 		let row: typeof questpieRealtimeLogTable.$inferSelect;
 		try {
 			await db

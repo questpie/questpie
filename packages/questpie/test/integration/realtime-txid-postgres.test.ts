@@ -3,6 +3,10 @@ import { describe, expect, it } from "bun:test";
 import pg from "pg";
 
 import { RealtimeTxidTracker } from "../../src/client/realtime/txid.js";
+import { withTransaction } from "../../src/exports/index.js";
+import type { ChangeBroker } from "../../src/server/modules/core/integrated/realtime/transport.js";
+import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
+import { runTestDbMigrations } from "../utils/test-db.js";
 
 const databaseUrl =
 	process.env.QUESTPIE_REALTIME_TXID_DATABASE_URL ??
@@ -11,6 +15,72 @@ const databaseUrl =
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe.skipIf(!databaseUrl)("realtime txid PostgreSQL ordering", () => {
+	it("serializes outbox sequence allocation across real connections", async () => {
+		const broker: ChangeBroker = {
+			start: async () => {},
+			stop: async () => {},
+			publish: async () => {},
+		};
+		const setup = await buildMockApp(
+			{},
+			{
+				db: { url: databaseUrl!, pool: { max: 4 } },
+				realtime: { changeBroker: broker },
+			},
+		);
+		await runTestDbMigrations(setup.app);
+		const baseSeq = await setup.app.realtime.getLatestSeq();
+		let markFirstAppended = () => {};
+		const firstAppended = new Promise<void>((resolve) => {
+			markFirstAppended = resolve;
+		});
+		let releaseFirst = () => {};
+		const holdFirst = new Promise<void>((resolve) => {
+			releaseFirst = resolve;
+		});
+
+		try {
+			const first = withTransaction(setup.app.db, async () => {
+				const event = await setup.app.realtime.appendChange({
+					resourceType: "collection",
+					resource: "posts",
+					operation: "update",
+					recordId: "first",
+				});
+				markFirstAppended();
+				await holdFirst;
+				return event;
+			});
+			await firstAppended;
+
+			let secondSettled = false;
+			const second = withTransaction(setup.app.db, () =>
+				setup.app.realtime.appendChange({
+					resourceType: "collection",
+					resource: "posts",
+					operation: "update",
+					recordId: "second",
+				}),
+			).then((event) => {
+				secondSettled = true;
+				return event;
+			});
+			await new Promise((resolve) => setTimeout(resolve, 100));
+			expect(secondSettled).toBe(false);
+
+			releaseFirst();
+			const [firstEvent, secondEvent] = await Promise.all([first, second]);
+			expect([firstEvent.seq, secondEvent.seq]).toEqual([
+				baseSeq + 1,
+				baseSeq + 2,
+			]);
+		} finally {
+			releaseFirst();
+			await setup.app.migrations.down();
+			await setup.cleanup();
+		}
+	});
+
 	it("keeps a lower active xid pending until xmin moves strictly past it", async () => {
 		const pool = new pg.Pool({ connectionString: databaseUrl, max: 2 });
 		const mutation = await pool.connect();

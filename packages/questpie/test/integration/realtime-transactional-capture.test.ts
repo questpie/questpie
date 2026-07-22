@@ -128,32 +128,26 @@ describe("realtime matrix transactional change capture", () => {
 			releaseFirst = resolve;
 		});
 
-		const first = withTransaction(setup.app.db, async (tx) => {
-			const event = await setup.app.realtime.appendChange(
-				{
-					resourceType: "collection",
-					resource: "posts",
-					operation: "update",
-					recordId: "first",
-				},
-				{ db: tx },
-			);
+		const first = withTransaction(setup.app.db, async () => {
+			const event = await setup.app.realtime.appendChange({
+				resourceType: "collection",
+				resource: "posts",
+				operation: "update",
+				recordId: "first",
+			});
 			firstAppended();
 			await holdFirst;
 			return event;
 		});
 
 		await appended;
-		const second = withTransaction(setup.app.db, (tx) =>
-			setup.app.realtime.appendChange(
-				{
-					resourceType: "collection",
-					resource: "posts",
-					operation: "update",
-					recordId: "second",
-				},
-				{ db: tx },
-			),
+		const second = withTransaction(setup.app.db, () =>
+			setup.app.realtime.appendChange({
+				resourceType: "collection",
+				resource: "posts",
+				operation: "update",
+				recordId: "second",
+			}),
 		);
 
 		expect(await settleWithinEventLoopTurns(second)).toBe(false);
@@ -176,14 +170,23 @@ describe("realtime matrix transactional change capture", () => {
 		).mockImplementation((callback: any) => originalTransaction(callback));
 
 		try {
+			const appendWithHostileOverride = setup.app.realtime.appendChange.bind(
+				setup.app.realtime,
+			) as (
+				input: Parameters<typeof setup.app.realtime.appendChange>[0],
+				options?: { db: typeof setup.app.db },
+			) => ReturnType<typeof setup.app.realtime.appendChange>;
 			const events = await Promise.all(
 				["first", "second"].map((recordId) =>
-					setup.app.realtime.appendChange({
-						resourceType: "collection",
-						resource: "posts",
-						operation: "update",
-						recordId,
-					}),
+					appendWithHostileOverride(
+						{
+							resourceType: "collection",
+							resource: "posts",
+							operation: "update",
+							recordId,
+						},
+						{ db: setup.app.db },
+					),
 				),
 			);
 			expect(events.map((event) => event.seq)).toEqual([1, 2]);

@@ -17,10 +17,7 @@ import type {
 	GlobalCollectionTransitionHookContext,
 	GlobalGlobalHookContext,
 } from "#questpie/server/config/global-hooks-types.js";
-import type {
-	DrizzleClientFromQuestpieConfig,
-	Locale,
-} from "#questpie/server/config/types.js";
+import type { Locale } from "#questpie/server/config/types.js";
 import type {
 	RealtimeChangeEvent,
 	RealtimeChangePayload,
@@ -37,17 +34,6 @@ import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 // ============================================================================
 // Realtime helpers
 // ============================================================================
-
-/**
- * The pre-codegen hook context deliberately keeps infrastructure members
- * unknown. Runtime hook execution always supplies the mutation-bound client;
- * keep that assertion local so generated app hooks retain their precise schema.
- */
-function asRealtimeMutationDb(
-	db: unknown,
-): DrizzleClientFromQuestpieConfig<any> {
-	return db as DrizzleClientFromQuestpieConfig<any>;
-}
 
 function resolveRealtimeOperation(
 	ctx: GlobalCollectionHookContext,
@@ -167,17 +153,14 @@ const realtimeHook = {
 		const payload = resolveRealtimePayload(ctx, "change");
 
 		try {
-			const change = await realtime.appendChange(
-				{
-					resourceType: "collection",
-					resource: ctx.collection,
-					operation,
-					recordId: ctx.isBatch ? null : (ctx.data?.id ?? null),
-					locale: ctx.locale ?? null,
-					payload,
-				},
-				{ db: asRealtimeMutationDb(ctx.db) },
-			);
+			const change = await realtime.appendChange({
+				resourceType: "collection",
+				resource: ctx.collection,
+				operation,
+				recordId: ctx.isBatch ? null : (ctx.data?.id ?? null),
+				locale: ctx.locale ?? null,
+				payload,
+			});
 			recordTransactionTxid(change.txid);
 
 			publishRealtimeAfterCommit(ctx, realtime, change);
@@ -194,17 +177,14 @@ const realtimeHook = {
 		const payload = resolveRealtimePayload(ctx, "delete");
 
 		try {
-			const change = await realtime.appendChange(
-				{
-					resourceType: "collection",
-					resource: ctx.collection,
-					operation,
-					recordId: ctx.isBatch ? null : (ctx.data?.id ?? null),
-					locale: ctx.locale ?? null,
-					payload,
-				},
-				{ db: asRealtimeMutationDb(ctx.db) },
-			);
+			const change = await realtime.appendChange({
+				resourceType: "collection",
+				resource: ctx.collection,
+				operation,
+				recordId: ctx.isBatch ? null : (ctx.data?.id ?? null),
+				locale: ctx.locale ?? null,
+				payload,
+			});
 			recordTransactionTxid(change.txid);
 
 			publishRealtimeAfterCommit(ctx, realtime, change);
@@ -275,7 +255,10 @@ const searchHook = {
 		ctx.onAfterCommit(async () => {
 			try {
 				// Try per-instance debounced scheduling first
-				const scheduled = search.scheduleIndex(ctx.collection, String(recordId));
+				const scheduled = search.scheduleIndex(
+					ctx.collection,
+					String(recordId),
+				);
 				if (!scheduled) {
 					// No queue — index synchronously for current locale.
 					// Resolve the collection's declarative `searchable` config so
@@ -368,20 +351,17 @@ const globalRealtimeHook = {
 		if (!realtime) return;
 
 		try {
-			const change = await realtime.appendChange(
-				{
-					resourceType: "global",
-					resource: ctx.global,
-					operation: "update",
-					recordId: ctx.data?.id ?? null,
-					locale: ctx.locale ?? null,
-					payload: {
-						before: null,
-						after: projectRealtimeEqualityFields(ctx.data),
-					},
+			const change = await realtime.appendChange({
+				resourceType: "global",
+				resource: ctx.global,
+				operation: "update",
+				recordId: ctx.data?.id ?? null,
+				locale: ctx.locale ?? null,
+				payload: {
+					before: null,
+					after: projectRealtimeEqualityFields(ctx.data),
 				},
-				{ db: asRealtimeMutationDb(ctx.db) },
-			);
+			});
 			recordTransactionTxid(change.txid);
 
 			publishRealtimeAfterCommit(ctx, realtime, change);
