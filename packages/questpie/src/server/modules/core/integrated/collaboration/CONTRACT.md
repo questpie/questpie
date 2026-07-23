@@ -1,7 +1,7 @@
 # Collaborative-document capability contract
 
-Status: design grill in progress. Decision CD-01 was ratified on 2026-07-23.
-No implementation or public API is approved by this document yet.
+Status: design grill in progress. Decisions CD-01 and CD-02 were ratified on
+2026-07-23. No implementation or public API is approved by this document yet.
 
 This is the canonical QUESTPIE framework contract for the collaborative-document
 capability. Agent Board records execution evidence and links back here; they do
@@ -69,6 +69,47 @@ Consequences:
   client surface. Yjs/Tiptap integration is supplied by a qualified adapter
   package behind that surface.
 
+### CD-02 — Separate document and transport adapters on current runtime majors
+
+The CRDT/document adapter and synchronization transport adapter are independent
+seams. Yjs is the first document adapter. Hocuspocus 4.x is a candidate for the
+first WebSocket transport adapter, not part of the kernel contract and not the
+owner of authorization or persistence.
+
+The collaboration release targets current supported dependency majors rather
+than preserving the old Node 18 or Tiptap 2 baselines:
+
+- QUESTPIE's advertised Node-compatible runtime floor rises to Node 22.
+- Bun remains the package manager and primary runtime. Hocuspocus must pass real
+  qualification under the exact supported Bun release; its Node engine range is
+  not evidence of Bun compatibility.
+- The first editor adapter targets Tiptap 3.x. Migrating the existing admin
+  editor from Tiptap 2 is an explicit prerequisite with its own regression
+  proof, not a hidden collaboration change.
+- The first qualified dependency set starts from Yjs 13.x and Hocuspocus 4.x.
+  Exact versions are rechecked and pinned after compatibility, security, and
+  scenario qualification. Runtime dependencies never use a floating `latest`.
+- The currently prerelease `@y/protocols` line for Yjs 14 is not selected merely
+  because its package metadata is newer. A future Yjs 14 adapter revision
+  requires its own compatibility evidence.
+
+Consequences:
+
+- **Public API:** `DocumentAdapter` and `TransportAdapter` capabilities remain
+  independently selectable; exact TypeScript names are still provisional.
+- **Authorization:** the kernel performs fresh read/edit decisions and fencing.
+  A Hocuspocus token, socket, room, or read-only flag only carries the resulting
+  bounded grant and cannot become the policy source.
+- **Persistence:** QUESTPIE owns the durable collaboration store and compaction
+  rules. Hocuspocus database extensions cannot create a parallel document
+  authority.
+- **Transport:** Hocuspocus must satisfy binary framing, bounded admission and
+  queues, reconnect, revocation, HA, and shutdown qualification. Failure permits
+  a different transport adapter without changing document state or app APIs.
+- **Client:** the generic lifecycle does not expose
+  `HocuspocusProvider`, `Y.Doc`, or Tiptap editor objects. The optional Yjs and
+  Tiptap bindings consume the two qualified seams behind that lifecycle.
+
 ## Current enterprise trace
 
 | UI intent                                                                                                                                       | Framework seam                                                                              | Authorization                                                                                | State ownership                                                                                                                                                 | Client projection                                                                                                        |
@@ -99,15 +140,15 @@ consumer change.
 
 ## Open decision queue
 
-The grill resolves one item at a time. The next unresolved item is CD-02: the
-first qualified CRDT adapter and whether synchronization-provider behavior is
-part of that adapter or a separate transport adapter.
+The grill resolves one item at a time. The next unresolved item is CD-03:
+resource identity and the authorization model used to resolve one collaboration
+room.
 
-Later decisions cover resource identity, read-only/editor modes, awareness,
-binary limits, persistence, state-vector reconnect, snapshots, compaction,
-multi-device identity, offline merge, revocation/fencing, validation and
-migrations, canonical serialization, relative anchors, client integration,
-SSR, failure states, observability, packages, tests, and release consumption.
+Later decisions cover read-only/editor modes, awareness, binary limits,
+persistence, state-vector reconnect, snapshots, compaction, multi-device
+identity, offline merge, revocation/fencing, validation and migrations,
+canonical serialization, relative anchors, client integration, SSR, failure
+states, observability, packages, tests, and release consumption.
 
 ## Evidence
 
