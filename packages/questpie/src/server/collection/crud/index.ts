@@ -20,6 +20,7 @@ export type {
 	FindOptions,
 	FindResult,
 	GroupedPaginatedResult,
+	LockManyParams,
 	OrderBy,
 	OrderByDirection,
 	PaginatedResult,

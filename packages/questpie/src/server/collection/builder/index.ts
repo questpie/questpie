@@ -12,6 +12,7 @@ export type {
 	Extras,
 	FindManyOptions,
 	FindOneOptions,
+	LockManyParams,
 	OrderBy,
 	OrderByDirection,
 	RestoreParams,

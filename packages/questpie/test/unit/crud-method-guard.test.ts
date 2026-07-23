@@ -47,7 +47,7 @@ describe("CRUD method guard", () => {
 			message = error.message;
 		}
 		expect(message).toContain(
-			"Available: find, findOne, count, create, updateById, updateMany, updateBatch, deleteById, deleteMany, restoreById, findVersions, revertToVersion, transitionStage",
+			"Available: find, findOne, count, lockMany, create, updateById, updateMany, updateBatch, deleteById, deleteMany, restoreById, findVersions, revertToVersion, transitionStage",
 		);
 		expect(message).toContain("(deprecated: update, delete)");
 		// internals are not advertised

@@ -29,6 +29,8 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 const denoPath = Bun.which("deno");
 const SERVER_ENTRY = new URL("../src/sandbox-server.ts", import.meta.url)
 	.pathname;
+const NON_AGENT_SECRET =
+	"hreben-sandbox-non-agent-service-key-32-bytes-minimum";
 
 let denoProc: ReturnType<typeof Bun.spawn> | undefined;
 let sandboxUrl = "";
@@ -65,9 +67,18 @@ beforeAll(async () => {
 			"--allow-env",
 			"--allow-run",
 			"--allow-read",
+			"--allow-write",
 			SERVER_ENTRY,
 		],
-		{ env: { ...process.env, PORT: "0" }, stdout: "pipe", stderr: "pipe" },
+		{
+			env: {
+				...process.env,
+				PORT: "0",
+				SANDBOX_NON_AGENT_ADMISSION_SECRET: NON_AGENT_SECRET,
+			},
+			stdout: "pipe",
+			stderr: "pipe",
+		},
 	);
 	const port = await waitForListen(denoProc);
 	sandboxUrl = `http://127.0.0.1:${port}`;
@@ -89,7 +100,14 @@ function postRaw(body: string) {
 
 /** POST a JSON object to /run. */
 function postRun(body: unknown) {
-	return postRaw(JSON.stringify(body));
+	return fetch(`${sandboxUrl}/run`, {
+		method: "POST",
+		headers: {
+			"content-type": "application/json",
+			"x-questpie-non-agent-admission": NON_AGENT_SECRET,
+		},
+		body: JSON.stringify({ mode: "non_agent", ...(body as object) }),
+	});
 }
 
 describe.if(!!denoPath)("sandbox-server — HTTP API surface", () => {
@@ -147,27 +165,46 @@ describe.if(!!denoPath)("sandbox-server — HTTP API surface", () => {
 	});
 });
 
-describe.if(!!denoPath)("sandbox-server — legacy compute path (no bindings)", () => {
-	it("runs source, returns the computed output and captures console.log", async () => {
-		const res = await postRun({
-			source:
-				"export default async (input) => { console.log('hi', { a: 1 }); return { doubled: input.n * 2 }; }",
-			input: { n: 21 },
-			capabilities: { net: [], import: [], timeoutMs: 8000, memoryMb: 128 },
-			// NO `bindings` key → the legacy compute-only path (one envelope in,
-			// one result line out).
-		});
-		expect(res.status).toBe(200);
-		const body = (await res.json()) as {
-			ok: boolean;
-			output?: unknown;
-			logs: string[];
-		};
-		expect(body.ok).toBe(true);
-		expect(body.output).toEqual({ doubled: 42 });
-		expect(body.logs).toContain('log: hi {"a":1}');
-	}, 20_000);
-});
+describe.if(!!denoPath)(
+	"sandbox-server — legacy compute path (no bindings)",
+	() => {
+		it("runs source, returns the computed output and captures console.log", async () => {
+			const res = await postRun({
+				source:
+					"export default async (input) => { console.log('hi', { a: 1 }); return { doubled: input.n * 2 }; }",
+				input: { n: 21 },
+				capabilities: { net: [], import: [], timeoutMs: 8000, memoryMb: 128 },
+				// NO `bindings` key → the legacy compute-only path (one envelope in,
+				// one result line out).
+			});
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as {
+				ok: boolean;
+				output?: unknown;
+				logs: string[];
+			};
+			expect(body.ok).toBe(true);
+			expect(body.output).toEqual({ doubled: 42 });
+			expect(body.logs).toContain('log: hi {"a":1}');
+		}, 20_000);
+
+		it("uses a virtual /work cwd with no HOME or ambient environment", async () => {
+			const res = await postRun({
+				source: `export default async () => {
+				let home = "ambient";
+				try { home = Deno.env.get("HOME") ?? "missing"; } catch { home = "denied"; }
+				return { cwd: Deno.cwd(), home };
+			}`,
+				input: null,
+				capabilities: { net: [], import: [], timeoutMs: 8000, memoryMb: 128 },
+			});
+			const body = (await res.json()) as { ok: boolean; output?: unknown };
+
+			expect(body.ok).toBe(true);
+			expect(body.output).toEqual({ cwd: "/work", home: "denied" });
+		}, 20_000);
+	},
+);
 
 describe.if(!!denoPath)("sandbox-server — resource bounds", () => {
 	it("enforces the wall-timeout: a tiny timeoutMs kills an infinite loop", async () => {

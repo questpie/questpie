@@ -23,14 +23,14 @@ import { collection } from "#questpie/factories";
 
 // The string you pass to collection("posts") is the key on app.collections, // keep the file name matching it by convention.
 export const posts = collection("posts")
-  .fields(({ f }) => ({
-    title: f.text().label("Title").required(),
-    slug: f.text().label("Slug").required(),
-    content: f.richText().label("Content"),
-    published: f.boolean().label("Published").default(false).required(),
-  }))
-  .title(({ f }) => f.title) // which field labels a row in the admin
-  .options({ timestamps: true }); // createdAt + updatedAt (on by default)
+	.fields(({ f }) => ({
+		title: f.text().label("Title").required(),
+		slug: f.text().label("Slug").required(),
+		content: f.richText().label("Content"),
+		published: f.boolean().label("Published").default(false).required(),
+	}))
+	.title(({ f }) => f.title) // which field labels a row in the admin
+	.options({ timestamps: true }); // createdAt + updatedAt (on by default)
 ```
 
 Then regenerate the typed surface and create the table:
@@ -41,8 +41,11 @@ questpie push       # creates the table in your dev database
 ```
 
 <Callout type="info" title="Import from `#questpie/factories`, not `questpie`">
-  The bare `collection()` exported from `questpie` only sees **builtin** field types. The generated `#questpie/factories` factory calls `CollectionBuilder.create(name, fieldDefs)` under the hood with your merged builtins + module fields, so module types (`richText`, `blocks`, …) show up on `f`. Always import
-  `collection` from `#questpie/factories` in app code.
+	The bare `collection()` exported from `questpie` only sees **builtin** field
+	types. The generated `#questpie/factories` factory calls
+	`CollectionBuilder.create(name, fieldDefs)` under the hood with your merged
+	builtins + module fields, so module types (`richText`, `blocks`, …) show up on
+	`f`. Always import `collection` from `#questpie/factories` in app code.
 </Callout>
 
 That one file now gives you:
@@ -50,12 +53,12 @@ That one file now gives you:
 ```ts
 // Typed CRUD, server-side:
 const { docs } = await app.collections.posts.find({
-  where: { published: true },
+	where: { published: true },
 });
 const post = await app.collections.posts.create({
-  title: "Hello",
-  slug: "hello",
-  published: true,
+	title: "Hello",
+	slug: "hello",
+	published: true,
 });
 
 // REST, out of the box (mounted under /api):
@@ -93,15 +96,15 @@ Every selected row carries a computed **`_title: string`**, the value of the fie
 
 ```ts
 collection("articles").fields(({ f }) => ({
-  title: f.text().required(),
-  views: f.number().default(0),
-  publishedAt: f.datetime(),
-  status: f.select([
-    { value: "draft", label: "Draft" },
-    { value: "live", label: "Live" },
-  ]),
-  author: f.relation("users"), // typed FK + admin picker + with: { author: true }
-  coverImage: f.upload({ to: "assets" }), // a RELATION to the "assets" upload collection
+	title: f.text().required(),
+	views: f.number().default(0),
+	publishedAt: f.datetime(),
+	status: f.select([
+		{ value: "draft", label: "Draft" },
+		{ value: "live", label: "Live" },
+	]),
+	author: f.relation("users"), // typed FK + admin picker + with: { author: true }
+	coverImage: f.upload({ to: "assets" }), // a RELATION to the "assets" upload collection
 }));
 ```
 
@@ -124,10 +127,10 @@ Declare collection fields with `({ f }) => …`. That keeps admin metadata, vali
 
 ```ts
 collection("posts").options({
-  timestamps: true, // createdAt + updatedAt, default ON
-  softDelete: true, // deletedAt column; deletes become soft
-  versioning: true, // <name>_versions table, keep history
-  schema: "content", // Postgres schema (default: public)
+	timestamps: true, // createdAt + updatedAt, default ON
+	softDelete: true, // deletedAt column; deletes become soft
+	versioning: true, // <name>_versions table, keep history
+	schema: "content", // Postgres schema (default: public)
 });
 ```
 
@@ -153,7 +156,7 @@ For uniqueness that should free up again after a soft-delete (e.g. a unique emai
 
 ```ts
 collection("pages").options({
-  versioning: { maxVersions: 100 },
+	versioning: { maxVersions: 100 },
 });
 ```
 
@@ -163,16 +166,16 @@ Nest a `workflow` under `versioning` to add staged content. `workflow: true` giv
 
 ```ts
 collection("pages").options({
-  versioning: {
-    workflow: {
-      stages: {
-        draft: { transitions: ["review"] },
-        review: { transitions: ["published", "draft"] },
-        published: {},
-      },
-      initialStage: "draft",
-    },
-  },
+	versioning: {
+		workflow: {
+			stages: {
+				draft: { transitions: ["review"] },
+				review: { transitions: ["published", "draft"] },
+				published: {},
+			},
+			initialStage: "draft",
+		},
+	},
 });
 ```
 
@@ -192,11 +195,11 @@ Workflow stages create version snapshots, so workflow lives **under** `versionin
 
 ```ts
 collection("posts").access({
-  read: true, // public read
-  create: ({ session }) => Boolean(session), // any signed-in user
-  // Row-level: authors only see and edit their own rows.
-  update: ({ session }) => ({ authorId: session?.user.id }),
-  delete: ({ session }) => session?.user.role === "admin",
+	read: true, // public read
+	create: ({ session }) => Boolean(session), // any signed-in user
+	// Row-level: authors only see and edit their own rows.
+	update: ({ session }) => ({ authorId: session?.user.id }),
+	delete: ({ session }) => session?.user.role === "admin",
 });
 ```
 
@@ -212,11 +215,15 @@ The rule context spreads the full `AppContext` (`db`, `session`, `kv`, `queue`, 
 A rule that returns an `AccessWhere` object grants _filtered_ access, rows are narrowed by that condition. A rule function that **throws** denies with a reason. Beyond CRUD, two extra rules exist: `serve` (upload-byte access, resolves `serve` → `read` → `defaultAccess.serve` → allow) and `introspect` (admin schema visibility, visible iff any CRUD op is allowed). Field-level rules go under `access.fields` and can only allow/deny (no filtering); their context is slim (`{ req?, user?, doc?, operation }`), not the full `AppContext`.
 
 <Callout type="warn" title="Secure by default">
-  An **undefined** access rule is not "open", it requires a session. Leave `read` unset and anonymous reads are rejected. Set `read: true` to make a collection public on purpose.
+	An **undefined** access rule is not "open", it requires a session. Leave
+	`read` unset and anonymous reads are rejected. Set `read: true` to make a
+	collection public on purpose.
 </Callout>
 
 <Callout type="info" title="`.access()` replaces; `.merge()` shallow-merges">
-  On a single builder, each `.access()` call **replaces** the previous one (last call wins), unlike `.hooks()`, which merges. When you `.merge()` two builders, access objects are shallow-merged with the *other* builder winning per key.
+	On a single builder, each `.access()` call **replaces** the previous one (last
+	call wins), unlike `.hooks()`, which merges. When you `.merge()` two builders,
+	access objects are shallow-merged with the *other* builder winning per key.
 </Callout>
 
 Access is enforced only when you ask for it. CRUD calls default to `accessMode: "system"` (backend; rules bypassed). Pass `{ accessMode: "user", session }` as the **second argument** to run the rules. The full model, `AccessWhere` shape, the `serve`/`introspect` chains, field-level rules, is in [Access control](/docs/concepts/access-control).
@@ -227,17 +234,17 @@ Access is enforced only when you ask for it. CRUD calls default to `accessMode: 
 
 ```ts
 collection("posts").hooks({
-  beforeChange: ({ data, operation }) => {
-    if (operation === "create" && data.title && !data.slug) {
-      data.slug = slugify(data.title); // mutate the incoming payload in place
-    }
-  },
-  afterChange: ({ data, onAfterCommit, queue }) => {
-    // Defer side effects until the transaction commits.
-    onAfterCommit(async () => {
-      await queue.notify.publish({ postId: data.id });
-    });
-  },
+	beforeChange: ({ data, operation }) => {
+		if (operation === "create" && data.title && !data.slug) {
+			data.slug = slugify(data.title); // mutate the incoming payload in place
+		}
+	},
+	afterChange: ({ data, onAfterCommit, queue }) => {
+		// Defer side effects until the transaction commits.
+		onAfterCommit(async () => {
+			await queue.notify.publish({ postId: data.id });
+		});
+	},
 });
 ```
 
@@ -249,8 +256,15 @@ The fire order per operation:
 
 `beforeValidate` / `beforeChange` receive the mutable input (`TInsert` on create, `TUpdate` on update); `afterChange` / `afterRead` receive the full selected row plus `original` (only on update). Workflow adds `beforeTransition` / `afterTransition`, which use a `TransitionHookContext` (`{ data, recordId, fromStage, toStage, scheduledAt? }`), throw in `beforeTransition` to abort. Every hook context spreads the full `AppContext`.
 
-<Callout type="warn" title="Fire jobs and emails from `onAfterCommit`, never inline">
-  If a hook runs inside an open transaction, doing extra reads (blocks, upload `afterRead`) or queuing work from the hook body can deadlock or fire on data that later rolls back. Use `onAfterCommit(cb)`, it runs after the tx commits (or immediately if there is no tx), so jobs/emails/search only fire on durable data.
+<Callout
+	type="warn"
+	title="Fire jobs and emails from `onAfterCommit`, never inline"
+>
+	If a hook runs inside an open transaction, doing extra reads (blocks, upload
+	`afterRead`) or queuing work from the hook body can deadlock or fire on data
+	that later rolls back. Use `onAfterCommit(cb)`, it runs after the tx commits
+	(or immediately if there is no tx), so jobs/emails/search only fire on durable
+	data.
 </Callout>
 
 Hooks **merge** (collections accumulate; globals replace, a deliberate asymmetry). See [Hooks](/docs/concepts/hooks) for each stage's exact signature and the transaction lifecycle.
@@ -263,14 +277,14 @@ Call `.upload()` to make a collection store file bytes. It adds the storage colu
 import { collection } from "#questpie/factories";
 
 export const media = collection("media")
-  .fields(({ f }) => ({
-    alt: f.text().label("Alt text"),
-  }))
-  .upload({
-    visibility: "private", // default "public"
-    maxSize: 10 * 1024 * 1024, // 10 MB
-    allowedTypes: ["image/*", "application/pdf"],
-  });
+	.fields(({ f }) => ({
+		alt: f.text().label("Alt text"),
+	}))
+	.upload({
+		visibility: "private", // default "public"
+		maxSize: 10 * 1024 * 1024, // 10 MB
+		allowedTypes: ["image/*", "application/pdf"],
+	});
 
 // New routes:
 //   POST /api/media/upload
@@ -286,7 +300,9 @@ export const media = collection("media")
 The `key`/`filename`/`mimeType`/`size` columns are nullable (a row can exist before its blob); `visibility` is `notNull` default `"public"`.
 
 <Callout type="info" title="`visibility` gates bytes, not rows">
-  `visibility` only controls who can fetch the **file bytes**. Reading and listing the upload **rows** still goes through the normal `.access()` chain. To override just the byte-serving rule, set `access.serve`.
+	`visibility` only controls who can fetch the **file bytes**. Reading and
+	listing the upload **rows** still goes through the normal `.access()` chain.
+	To override just the byte-serving rule, set `access.serve`.
 </Callout>
 
 Store files at runtime with the CRUD methods (only present on `.upload()` collections):
@@ -304,12 +320,12 @@ console.log(asset.url);
 
 ```ts
 collection("posts").searchable({
-  content: (record) => `${record.title}\n${record.excerpt}`,
-  metadata: (record) => ({ author: record.authorId, tags: record.tags }),
-  facets: {
-    tags: { type: "array" },
-    price: { type: "range", buckets: [{ label: "Cheap", max: 10 }] },
-  },
+	content: (record) => `${record.title}\n${record.excerpt}`,
+	metadata: (record) => ({ author: record.authorId, tags: record.tags }),
+	facets: {
+		tags: { type: "array" },
+		price: { type: "range", buckets: [{ label: "Cheap", max: 10 }] },
+	},
 });
 
 collection("logs").searchable(false); // never indexed
@@ -345,7 +361,9 @@ The **admin** methods, `.admin()`, `.list()`, `.form()`, `.actions()`, `.preview
 ```ts
 import { uniqueIndex } from "questpie/drizzle-pg-core";
 
-collection("posts").indexes(({ table }) => [uniqueIndex("posts_slug_idx").on(table.slug)]);
+collection("posts").indexes(({ table }) => [
+	uniqueIndex("posts_slug_idx").on(table.slug),
+]);
 ```
 
 ### Merging builders
@@ -353,8 +371,11 @@ collection("posts").indexes(({ table }) => [uniqueIndex("posts_slug_idx").on(tab
 `.merge(other)` combines two builders of the **same name**, fields, virtuals, relations, indexes, hooks, access, options, and output. The other builder's `title` / `searchable` / `upload` / `validation` win; hooks combine into arrays; access is shallow-merged (other wins). This is the mechanism behind extending a module-provided collection.
 
 <Callout type="info" title="`.merge()` preserves admin config">
-  `.merge()` spreads the full state first so the admin extension keys (`admin`, `adminList`, `adminForm`, `adminActions`, `adminPreview`) survive before explicit keys are overridden, this is a framework invariant. Pending (unresolved) relations are merged by field name; a field the other side redefines drops this
-  side's pending entry.
+	`.merge()` spreads the full state first so the admin extension keys (`admin`,
+	`adminList`, `adminForm`, `adminActions`, `adminPreview`) survive before
+	explicit keys are overridden, this is a framework invariant. Pending
+	(unresolved) relations are merged by field name; a field the other side
+	redefines drops this side's pending entry.
 </Callout>
 
 ## CRUD reference
@@ -382,6 +403,27 @@ Every method takes a `CRUDContext` as its **second** argument, pass `{ accessMod
 <Callout type="warn" title="`updateMany` / `deleteMany` are claim-checked">
 Bulk operations lock the matching rows and re-evaluate the `where` inside the transaction, returning only the rows that won the race. `updateMany` returns the written rows (an empty array means you lost a concurrent claim); `deleteMany` returns `{ success, count }`.
 </Callout>
+
+### Server-only aggregate locks
+
+For a business invariant that spans several collections, use `lockMany({ ids })` on the aggregate-root collection inside `withTransaction`. This keeps row locking inside QUESTPIE instead of leaking Drizzle or raw `SELECT ... FOR UPDATE` into application services:
+
+```ts
+await withTransaction(db, async (tx) => {
+	const context = { accessMode: "system" as const, db: tx };
+	const locked = await collections.companies.lockMany(
+		{ ids: [companyId] },
+		context,
+	);
+	if (locked.length !== 1) throw ApiError.conflict("Company is unavailable");
+
+	// Re-read and update every participant using the same transaction context.
+});
+```
+
+The call accepts at most 100 ids, deduplicates and locks them in database id order, applies collection read access in the locking query, and returns only accessible ids. Missing and row-inaccessible ids are intentionally indistinguishable. The context must carry the exact active `withTransaction` connection.
+
+`lockMany` is a server-only coordination primitive. It does not run hooks, return rows, mutate data, or emit realtime events, and it is not exposed through REST, the client SDK, TanStack Query, MCP CRUD, OpenAPI, or introspection. Prefer claim-checked `updateMany` for a conditional write on one collection; reach for `lockMany` only when the invariant spans records or collections.
 
 `find()` options include `where`, `with` (relation hydration), `columns`, `orderBy`, `limit`, `offset`, `extras`, `search` (case-insensitive ILIKE against `_title`), `locale`, `localeFallback`, `includeDeleted` (soft-delete only), `stage`, and `groupBy`. The full query language, `where` operators, relation filters (`some`/`none`/`every`, `is`/`isNot`), `with` aggregations, is covered under [Relations](/docs/concepts/relations) and the query reference.
 
@@ -420,7 +462,9 @@ Codegen discovers collections by scanning the `collections/` directory. Two rule
 After adding or renaming a file, run `questpie generate` (or `questpie dev`, which watches) to regenerate `.generated/`, that's what wires the new collection into `app.collections.*`, the admin, REST, OpenAPI, and the client. Then `questpie push` (dev) or `questpie migrate:create` (production) to materialize the table.
 
 <Callout type="idea" title="Scaffold it">
-  `questpie add collection my-thing` creates the file with the right boilerplate and runs codegen for you. Run `questpie add --list` to see every scaffold type.
+	`questpie add collection my-thing` creates the file with the right boilerplate
+	and runs codegen for you. Run `questpie add --list` to see every scaffold
+	type.
 </Callout>
 
 ## Extending: custom field types

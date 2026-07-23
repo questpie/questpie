@@ -49,7 +49,7 @@ export interface RunHarnessRow {
 	harnessSessionId?: string | null;
 	harnessResumeState?: unknown;
 	producerLease?: ProducerLease | null;
-	metadata?: { cwd?: string | null } | null;
+	metadata?: Record<string, unknown> | null;
 }
 
 interface RunLinksUpdateCollection {
@@ -66,7 +66,7 @@ export interface RunHarnessOptions {
 	run: RunHarnessRow;
 	collections: { run_links: RunLinksUpdateCollection };
 	kv: QuestpieKVLike;
-	/** cwd fallback when run.metadata.cwd is unset. */
+	/** Worker-owned default or an app-validated managed work root. */
 	workerDir: string;
 	skills?: unknown[];
 	mcpServers?: unknown[];
@@ -135,7 +135,6 @@ export async function runHarnessRun(
 		typeof run.harnessSessionId === "string" && run.harnessSessionId
 			? run.harnessSessionId
 			: runId;
-	const cwd = run.metadata?.cwd || workerDir;
 	const messageId = randomUUID();
 
 	const abort = new AbortController();
@@ -205,7 +204,7 @@ export async function runHarnessRun(
 	try {
 		const agent = createAgent({
 			runtime: run.runtime as "claude-code",
-			workRoot: cwd,
+			workRoot: workerDir,
 			instructions: run.instructions,
 			skills: skills as never,
 			mcpServers,
@@ -241,7 +240,8 @@ export async function runHarnessRun(
 		// onBeforeFirstAppend = the epoch-guarded lease-touch fence (§3.6): if the
 		// epoch changed (re-claimed), the sink aborts with zero appends and no seal.
 		const sink = store.createSink(run.activeStreamId, {
-			onBeforeFirstAppend: async () => casUpdate({ producerLease: bumpedLease() }),
+			onBeforeFirstAppend: async () =>
+				casUpdate({ producerLease: bumpedLease() }),
 		});
 
 		let firstErrorText: string | null = null;
@@ -264,7 +264,11 @@ export async function runHarnessRun(
 					// streamText, which honors generateMessageId) — the FE then keeps
 					// its client-generated id, the persisted row gets the worker id,
 					// and hydration renders the turn TWICE (live-found duplication).
-					if (chunk && chunk.type === "start" && chunk.messageId !== messageId) {
+					if (
+						chunk &&
+						chunk.type === "start" &&
+						chunk.messageId !== messageId
+					) {
 						controller.enqueue({ ...chunk, messageId });
 						return;
 					}

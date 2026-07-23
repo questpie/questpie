@@ -38,6 +38,8 @@
 
 // @ts-nocheck — Deno runtime file; not part of the Bun/tsc typecheck graph.
 
+import nodeProcess from "node:process";
+
 import { buildGuestBindings } from "./guest-bindings.ts";
 
 /** Marker so the supervisor can pick the result line out of guest stdout noise. */
@@ -70,6 +72,39 @@ for (const name of ["SharedArrayBuffer", "Atomics"]) {
 	}
 }
 
+// The supervisor starts from the stable OS cwd `/` and loads this entry through
+// an internal loopback module URL. Normalize every Deno/Node compatibility path
+// surface before guest import. If the qualified Deno runtime cannot lock one of
+// these surfaces, fail startup instead of leaking a host or principal path.
+Object.defineProperty(Deno, "cwd", {
+	value: () => "/work",
+	configurable: false,
+	writable: false,
+});
+Object.defineProperty(Deno, "mainModule", {
+	value: "questpie://sandbox/guest-entry.ts",
+	configurable: false,
+	writable: false,
+});
+Object.defineProperty(Deno, "execPath", {
+	value: () => "/runtime/deno",
+	configurable: false,
+	writable: false,
+});
+Object.defineProperty(nodeProcess, "cwd", {
+	value: () => "/work",
+	configurable: false,
+	writable: false,
+});
+Object.defineProperty(nodeProcess, "argv", {
+	value: Object.freeze(["deno", "questpie://sandbox/guest-entry.ts"]),
+	configurable: false,
+	writable: false,
+});
+nodeProcess.execPath = "/runtime/deno";
+// `argv0` is a non-configurable Deno Node-compat accessor. The supervisor sets
+// the real child argv[0] to the stable runtime name before this module loads.
+
 // ── 2. CAPTURE CONSOLE ──
 
 const logs: string[] = [];
@@ -97,7 +132,9 @@ for (const level of ["log", "error", "warn", "info"] as const) {
 						}
 					})
 					.join(" ");
-			logs.push(line.length > MAX_LOG_LEN ? line.slice(0, MAX_LOG_LEN) + "…" : line);
+			logs.push(
+				line.length > MAX_LOG_LEN ? line.slice(0, MAX_LOG_LEN) + "…" : line,
+			);
 		}
 	};
 }
@@ -171,14 +208,24 @@ function writeFrame(msg: unknown) {
 	try {
 		payload = JSON.stringify(msg);
 	} catch {
-		payload = JSON.stringify({ type: "result", ok: false, error: "frame not serializable", logs });
+		payload = JSON.stringify({
+			type: "result",
+			ok: false,
+			error: "frame not serializable",
+			logs,
+		});
 	}
 	// deno-lint-ignore no-explicit-any
 	(Deno as any).stdout.writeSync(encoder.encode(FRAME_MARKER + payload + "\n"));
 }
 
 /** Emit the LEGACY single-line result (no bindings). */
-function emitLegacy(result: { ok: boolean; output?: unknown; logs: string[]; error?: string }) {
+function emitLegacy(result: {
+	ok: boolean;
+	output?: unknown;
+	logs: string[];
+	error?: string;
+}) {
 	let payload: string;
 	try {
 		payload = JSON.stringify(result);
@@ -195,7 +242,9 @@ function emitLegacy(result: { ok: boolean; output?: unknown; logs: string[]; err
 // ── 4. IMPORT + INVOKE THE GUEST ──
 
 /** Dynamic-import the guest source as a blob module and return its default fn. */
-async function loadGuestEntry(source: string): Promise<(input: unknown) => unknown> {
+async function loadGuestEntry(
+	source: string,
+): Promise<(input: unknown) => unknown> {
 	const guestUrl = URL.createObjectURL(
 		new Blob([source], { type: "application/typescript" }),
 	);
@@ -251,7 +300,9 @@ function base64ToBytes(b64: string): Uint8Array {
  * fetch (any body shape → bytes), then frames the {@link HttpFetchRequest} and
  * rebuilds a `Response` from the {@link HttpFetchResponse}.
  */
-function installFetchShim(hostCall: (method: string, args: unknown) => Promise<unknown>) {
+function installFetchShim(
+	hostCall: (method: string, args: unknown) => Promise<unknown>,
+) {
 	const brokeredFetch = async (
 		input: unknown,
 		init?: unknown,
@@ -296,10 +347,13 @@ function installFetchShim(hostCall: (method: string, args: unknown) => Promise<u
 		}
 
 		const status = typeof value?.status === "number" ? value.status : 0;
-		const body = value?.bodyBase64 ? base64ToBytes(value.bodyBase64) : undefined;
+		const body = value?.bodyBase64
+			? base64ToBytes(value.bodyBase64)
+			: undefined;
 		// `Response` forbids a body for 101/204/205/304 and for null-body statuses;
 		// guard so reconstruction never throws on those.
-		const nullBody = status === 204 || status === 205 || status === 304 || status < 200;
+		const nullBody =
+			status === 204 || status === 205 || status === 304 || status < 200;
 		return new Response(nullBody ? null : (body ?? null), {
 			status,
 			statusText: typeof value?.statusText === "string" ? value.statusText : "",
@@ -327,9 +381,15 @@ interface HttpFetchResponse {
 }
 
 /** BINDINGS run — framed channel + `globalThis.questpie` proxy. */
-async function runWithBindings(envelope: Envelope, reader: { next(): Promise<string | null> }) {
+async function runWithBindings(
+	envelope: Envelope,
+	reader: { next(): Promise<string | null> },
+) {
 	// Pending host calls keyed by correlation id.
-	const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: unknown) => void }>();
+	const pending = new Map<
+		number,
+		{ resolve: (v: unknown) => void; reject: (e: unknown) => void }
+	>();
 	let nextId = 1;
 
 	// The injected transport: write an `rpc` frame, await its `rpc-result`.
@@ -348,8 +408,16 @@ async function runWithBindings(envelope: Envelope, reader: { next(): Promise<str
 			const line = await reader.next();
 			if (line === null) break;
 			if (line.length === 0) continue;
-			const json = line.startsWith(FRAME_MARKER) ? line.slice(FRAME_MARKER.length) : line;
-			let msg: { type?: string; id?: number; ok?: boolean; value?: unknown; error?: { message?: string } };
+			const json = line.startsWith(FRAME_MARKER)
+				? line.slice(FRAME_MARKER.length)
+				: line;
+			let msg: {
+				type?: string;
+				id?: number;
+				ok?: boolean;
+				value?: unknown;
+				error?: { message?: string };
+			};
 			try {
 				msg = JSON.parse(json);
 			} catch {
@@ -416,7 +484,11 @@ async function main() {
 			: firstLine;
 		envelope = JSON.parse(json);
 	} catch {
-		emitLegacy({ ok: false, error: "failed to read/parse request envelope", logs });
+		emitLegacy({
+			ok: false,
+			error: "failed to read/parse request envelope",
+			logs,
+		});
 		return;
 	}
 
@@ -435,7 +507,11 @@ async function main() {
 			const output = await entry(envelope.input);
 			emitLegacy({ ok: true, output, logs });
 		} catch (err) {
-			emitLegacy({ ok: false, error: err instanceof Error ? err.message : String(err), logs });
+			emitLegacy({
+				ok: false,
+				error: err instanceof Error ? err.message : String(err),
+				logs,
+			});
 		}
 	}
 }

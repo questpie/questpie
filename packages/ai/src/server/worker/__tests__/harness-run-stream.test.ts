@@ -15,6 +15,7 @@
  */
 
 import { describe, expect, it } from "bun:test";
+
 import { streamText } from "ai";
 import { MockLanguageModelV3, simulateReadableStream } from "ai/test";
 
@@ -116,7 +117,12 @@ describe("runHarnessRun (T4)", () => {
 		let leaseUpdates = 0;
 		const collections = {
 			run_links: {
-				async update({ data }: { where: unknown; data: Record<string, unknown> }) {
+				async update({
+					data,
+				}: {
+					where: unknown;
+					data: Record<string, unknown>;
+				}) {
 					if (data.producerLease) leaseUpdates++;
 					Object.assign(row, data);
 					return [row];
@@ -135,7 +141,12 @@ describe("runHarnessRun (T4)", () => {
 			heartbeatMs: 5,
 			leaseMs: 30,
 			cancelPollMs: 1000,
-			createAgent: (() => buildMockAgent(detachValue)) as never,
+			createAgent: ((options: { workRoot: string }) => {
+				// Persisted legacy cwd is never execution authority. The caller must
+				// inject an already-validated worker-owned or managed root.
+				expect(options.workRoot).toBe("/tmp/wd");
+				return buildMockAgent(detachValue);
+			}) as never,
 		});
 
 		// 1. chunk-JSON in KV under activeStreamId; start carries the minted id.
@@ -151,7 +162,9 @@ describe("runHarnessRun (T4)", () => {
 		// 2. heartbeat advanced the lease, independent of stream activity: the
 		// producerLease was bumped more than once (onBeforeFirstAppend + ≥1 tick).
 		expect(leaseUpdates).toBeGreaterThanOrEqual(2);
-		expect((row.producerLease as { expiresAt?: string }).expiresAt).toBeTruthy();
+		expect(
+			(row.producerLease as { expiresAt?: string }).expiresAt,
+		).toBeTruthy();
 		expect(
 			(row.producerLease as { heartbeatAt?: string }).heartbeatAt,
 		).toBeTruthy();

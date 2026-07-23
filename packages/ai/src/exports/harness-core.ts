@@ -16,10 +16,17 @@ export type {
 	ResumedHarnessSession,
 } from "../server/modules/ai/lib/harness-core.js";
 
+export {
+	CODEX_ADAPTER_VERSION,
+	CODEX_CLI_VERSION,
+	CODEX_SDK_VERSION,
+	DEPRECATED_CODEX_MODEL,
+	createQuestpieCodex,
+} from "../server/modules/ai/lib/codex-compatibility.js";
+export type { QuestpieCodexSettings } from "../server/modules/ai/lib/codex-compatibility.js";
+
 export { ResumableUIMessageStore } from "../server/modules/ai/lib/resumable-uimessage-store.js";
-export type {
-	ResumableStreamStore,
-} from "../server/modules/ai/lib/resumable-uimessage-store.js";
+export type { ResumableStreamStore } from "../server/modules/ai/lib/resumable-uimessage-store.js";
 
 export {
 	QuestpieResumableStreamStore,

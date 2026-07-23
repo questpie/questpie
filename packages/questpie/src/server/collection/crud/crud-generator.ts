@@ -67,8 +67,10 @@ import {
 import {
 	createHookContext,
 	executeHooks,
+	getCurrentTransaction,
 	getDb,
 	guardCrudMethods,
+	isInTransaction,
 	mergeI18nRows,
 	normalizeContext,
 	normalizeJsonbInput,
@@ -87,6 +89,7 @@ import type {
 	FindOneOptionsBase,
 	GroupedPaginatedResult,
 	GroupByOptions,
+	LockManyParams,
 	FindVersionsOptions,
 	OrderBy,
 	PaginatedResult,
@@ -312,6 +315,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			find: find as CRUD["find"],
 			findOne,
 			count: this.wrapWithAppContext(this.createCount()),
+			lockMany: this.wrapWithAppContext(this.createLockMany()),
 			create: this.wrapWithAppContext(this.createCreate()),
 			updateById: this.wrapWithAppContext(this.createUpdate()),
 			updateMany,
@@ -344,6 +348,71 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 	private getDb(context?: CRUDContext) {
 		return getDb(this.db, context);
+	}
+
+	private createLockMany() {
+		return async (
+			params: LockManyParams,
+			context: CRUDContext = {},
+		): Promise<Array<string | number>> => {
+			const normalized = this.normalizeContext(context);
+			const db = this.getDb(normalized);
+			const currentTransaction = getCurrentTransaction();
+			if (
+				!isInTransaction() ||
+				!currentTransaction ||
+				db !== currentTransaction
+			) {
+				throw ApiError.badRequest(
+					"lockMany requires the active QUESTPIE transaction in the CRUD context",
+				);
+			}
+
+			const ids = [...new Set(params.ids)];
+			if (ids.length > 100) {
+				throw ApiError.badRequest("lockMany accepts at most 100 ids");
+			}
+			if (ids.length === 0) return [];
+
+			const requestedWhere = { id: { in: ids } } as Where;
+			const accessWhere = await this.enforceAccessControl(
+				"read",
+				normalized,
+				null,
+				{ where: requestedWhere },
+			);
+			if (accessWhere === false) {
+				throw ApiError.forbidden({
+					operation: "read",
+					resource: this.state.name,
+					reason: "User does not have permission to lock records",
+				});
+			}
+
+			const whereClauses: SQL[] = [];
+			const whereClause = this.buildWhereClause(
+				this.mergeWhere(requestedWhere, accessWhere)!,
+				false,
+				this.table,
+				normalized,
+			);
+			if (whereClause) whereClauses.push(whereClause);
+			if (this.state.options.softDelete) {
+				const deletedAtColumn = getColumn(this.table, "deletedAt");
+				if (deletedAtColumn) whereClauses.push(sql`${deletedAtColumn} IS NULL`);
+			}
+
+			const idColumn = getColumn(this.table, "id")!;
+			const lockedRows: Array<{ id: string | number }> =
+				await currentTransaction
+					.select({ id: idColumn })
+					.from(this.table)
+					.where(and(...whereClauses))
+					.orderBy(asc(idColumn))
+					.for("update");
+
+			return lockedRows.map(({ id }) => id);
+		};
 	}
 
 	/**

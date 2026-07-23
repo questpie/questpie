@@ -15,7 +15,11 @@
 		"src/server-internals.ts",
 		"src/egress-firewall.ts",
 		"src/types.ts",
-		"src/guest-bindings.ts"
+		"src/guest-bindings.ts",
+		"src/guest-runtime-source.ts",
+		"src/agent-workload-admission.ts",
+		"src/agent-workload-denial.ts",
+		"src/agent-workload-runtime-audit.ts"
 	],
 	"type": "module",
 	"sideEffects": false,
@@ -59,6 +63,7 @@
 		"test": "bun test"
 	},
 	"dependencies": {
+		"@questpie/ai": "workspace:*",
 		"questpie": "workspace:*"
 	},
 	"devDependencies": {

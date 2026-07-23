@@ -1016,7 +1016,10 @@ export type QuestpieClient<in out TApp extends QuestpieApp> = {
 export function createClient<TApp extends QuestpieApp>(
 	config: QuestpieClientConfig,
 ): QuestpieClient<TApp> {
-	const fetcher = config.fetch || globalThis.fetch;
+	// Bind the default fetch: realtime/channels store this and invoke it as a
+	// method (`this.fetcher(...)`), and browsers throw "Illegal invocation"
+	// when native fetch runs with a foreign `this`.
+	const fetcher = config.fetch || globalThis.fetch.bind(globalThis);
 	const basePath = config.basePath ?? "/";
 	const normalizedBasePath = basePath.startsWith("/")
 		? basePath

@@ -1,6 +1,7 @@
 ---
 name: questpie-core/crud-api
-description: QUESTPIE CRUD API find findOne create updateById updateMany updateBatch deleteById deleteMany restoreById count atomic conditional update claim optimistic locking query operators where filter sort orderBy pagination limit offset with columns relations depth context accessMode collections globals client server typesafe
+description:
+  QUESTPIE CRUD API find findOne create updateById updateMany updateBatch deleteById deleteMany restoreById count atomic conditional update claim optimistic locking query operators where filter sort orderBy pagination limit offset with columns relations depth context accessMode collections globals client server typesafe
   - questpie-core
 ---
 
@@ -25,30 +26,36 @@ The same CRUD vocabulary runs on two surfaces. Inside any handler (routes, hooks
 
 ```ts
 // In a handler, context is implicit
-const { docs } = await collections.posts.find({ where: { status: "published" }, limit: 10 });
+const { docs } = await collections.posts.find({
+	where: { status: "published" },
+	limit: 10,
+});
 
 // In a script, explicit context required
 import { app } from "#questpie";
 const ctx = await app.createContext({ accessMode: "system", locale: "en" });
-const { docs } = await app.collections.posts.find({ where: { status: "published" } }, ctx);
+const { docs } = await app.collections.posts.find(
+	{ where: { status: "published" } },
+	ctx,
+);
 ```
 
 ## Collection Operations
 
 One vocabulary on both surfaces (server CRUD and client SDK):
 
-| Concept | Method | Returns |
-| --- | --- | --- |
-| list (paginated) | `find(options)` | `{ docs: T[], totalDocs: number }` |
-| single by query | `findOne(options)` | `T \| null` |
-| count | `count(options)` | `number` |
-| create | `create(data)` | `T` |
-| update by id | `updateById({ id, data })` | `T` (throws notFound) |
-| bulk update by where | `updateMany({ where, data })` | `T[]` (winners) |
-| per-record batch | `updateBatch({ updates })` | `T[]` |
-| delete by id | `deleteById({ id })` | `{ success }` (throws notFound) |
-| bulk delete by where | `deleteMany({ where })` | `{ success, count }` |
-| restore by id | `restoreById({ id })` | `T` (softDelete only) |
+| Concept              | Method                        | Returns                            |
+| -------------------- | ----------------------------- | ---------------------------------- |
+| list (paginated)     | `find(options)`               | `{ docs: T[], totalDocs: number }` |
+| single by query      | `findOne(options)`            | `T \| null`                        |
+| count                | `count(options)`              | `number`                           |
+| create               | `create(data)`                | `T`                                |
+| update by id         | `updateById({ id, data })`    | `T` (throws notFound)              |
+| bulk update by where | `updateMany({ where, data })` | `T[]` (winners)                    |
+| per-record batch     | `updateBatch({ updates })`    | `T[]`                              |
+| delete by id         | `deleteById({ id })`          | `{ success }` (throws notFound)    |
+| bulk delete by where | `deleteMany({ where })`       | `{ success, count }`               |
+| restore by id        | `restoreById({ id })`         | `T` (softDelete only)              |
 
 Use the explicit method names: `updateById` / `deleteById` / `restoreById` for single records, `updateMany` / `deleteMany` for bulk operations, and `updateBatch` for per-record batches.
 
@@ -143,7 +150,10 @@ if (claimed.length === 0) {
 
 // Optimistic concurrency: write only if the revision is unchanged
 const bumped = await collections.documents.updateMany(
-	{ where: { id, revision: doc.revision }, data: { body, revision: doc.revision + 1 } },
+	{
+		where: { id, revision: doc.revision },
+		data: { body, revision: doc.revision + 1 },
+	},
 	ctx,
 );
 if (bumped.length === 0) throw new Error("Conflict, reload and retry");
@@ -223,10 +233,7 @@ Via app instance:
 
 ```ts
 const settings = await app.globals.siteSettings.get({}, ctx);
-await app.globals.siteSettings.update(
-	{ siteName: "New Name" },
-	ctx,
-);
+await app.globals.siteSettings.update({ siteName: "New Name" }, ctx);
 ```
 
 When the global has versioning enabled, it also exposes `findVersions(options?) → VersionRecord[]`, `revertToVersion({ version }) → T`, and `transitionStage({ stage }) → T` (the global counterparts of the collection versioning methods).
@@ -412,6 +419,27 @@ await withTransaction(db, async () => {
 ```
 
 Do not run output-hook-heavy reads (blocks/upload `afterRead`) inside an open transaction unless necessary, they inherit the tx connection too.
+
+#### Aggregate row mutexes with `lockMany`
+
+When a command must protect an invariant spanning several collections, lock the aggregate-root rows through the server-only `lockMany({ ids })` primitive instead of importing Drizzle or writing `SELECT ... FOR UPDATE` in the application:
+
+```ts
+await withTransaction(db, async (tx) => {
+	const access = { ...systemContext, db: tx };
+	const lockedIds = await collections.companies.lockMany(
+		{ ids: [companyId] },
+		access,
+	);
+	if (lockedIds.length !== 1) throw ApiError.conflict("Company is unavailable");
+
+	// Re-read and update participating collections with the same tx context.
+});
+```
+
+`lockMany` accepts at most 100 ids, deduplicates them, acquires blocking PostgreSQL row locks in database id order, applies collection read access in the locking query, and returns accessible ids only. Missing and row-inaccessible ids are both omitted. It requires an active canonical `withTransaction` and a context carrying that exact transaction; calls outside it or with another `db` are rejected.
+
+The primitive does not read output fields, run lifecycle hooks, mutate rows, publish realtime events, or accept raw SQL/`where`/lock modes. It is deliberately absent from REST, the client SDK, TanStack Query, MCP CRUD, OpenAPI, and introspection. Use `updateMany({ where, data })` for normal conditional/CAS writes; `lockMany` is only the aggregate mutex that cannot be expressed by one collection write.
 
 ### In Scripts / Seeds
 

@@ -61,12 +61,32 @@
 
 // @ts-nocheck — Deno runtime file; not part of the Bun/tsc typecheck graph.
 
+import { spawn } from "node:child_process";
+import { Readable, Writable } from "node:stream";
+
+import {
+	hashAgentWorkloadSandboxSource,
+	verifyAgentWorkloadSandboxAdmission,
+	type AgentWorkloadSandboxAdmissionClaims,
+} from "./agent-workload-admission.ts";
+import { AGENT_WORKLOAD_SANDBOX_DENIAL_MESSAGE } from "./agent-workload-denial.ts";
+import {
+	createAgentWorkloadRuntimeAdmissionAuditEvent,
+	type AgentWorkloadRuntimeAdmissionReason,
+} from "./agent-workload-runtime-audit.ts";
 import {
 	type EgressFirewallPlan,
 	planEgressFirewall,
 	wrapWithNetns,
 } from "./egress-firewall.ts";
-import { resolveAllowedEndpoints, validateEgressHosts } from "./net-validation.ts";
+import {
+	bundleGuestRuntimeSource,
+	guestRuntimeDataUrl,
+} from "./guest-runtime-source.ts";
+import {
+	resolveAllowedEndpoints,
+	validateEgressHosts,
+} from "./net-validation.ts";
 import {
 	RESULT_MARKER,
 	brokerUrlRejection,
@@ -76,7 +96,12 @@ import {
 	netFlag,
 	type RunOutcome,
 } from "./server-internals.ts";
-import { BINDINGS_TOKEN_HEADER, FRAME_MARKER } from "./types.ts";
+import {
+	AGENT_WORKLOAD_ADMISSION_HEADER,
+	BINDINGS_TOKEN_HEADER,
+	FRAME_MARKER,
+	NON_AGENT_ADMISSION_HEADER,
+} from "./types.ts";
 import type {
 	SandboxCapabilities,
 	SandboxRunRequest,
@@ -96,6 +121,13 @@ const KILL_GRACE_MS = 250;
 
 const GUEST_ENTRY_URL = new URL("./guest-entry.ts", import.meta.url);
 const GUEST_ENTRY_PATH = GUEST_ENTRY_URL.pathname;
+const GUEST_BINDINGS_PATH = new URL("./guest-bindings.ts", import.meta.url)
+	.pathname;
+const GUEST_ENTRY_SOURCE = await Deno.readTextFile(GUEST_ENTRY_PATH);
+const GUEST_BINDINGS_SOURCE = await Deno.readTextFile(GUEST_BINDINGS_PATH);
+const GUEST_RUNTIME_MODULE = guestRuntimeDataUrl(
+	bundleGuestRuntimeSource(GUEST_ENTRY_SOURCE, GUEST_BINDINGS_SOURCE),
+);
 const DENO_BIN = Deno.env.get("DENO_BIN") ?? Deno.execPath();
 
 /**
@@ -108,6 +140,120 @@ const DENO_BIN = Deno.env.get("DENO_BIN") ?? Deno.execPath();
  * relay. When UNSET, this check is skipped (back-compat) — set it in production.
  */
 const EXPECTED_BROKER_URL = Deno.env.get("SANDBOX_BROKER_URL")?.trim();
+const AGENT_ADMISSION_SECRET = Deno.env
+	.get("SANDBOX_AGENT_ADMISSION_SECRET")
+	?.trim();
+const AGENT_ADMISSION_KEY_ID =
+	Deno.env.get("SANDBOX_AGENT_ADMISSION_KEY_ID")?.trim() ?? "sandbox-agent-v1";
+const SANDBOX_INSTANCE_ID = Deno.env.get("SANDBOX_INSTANCE_ID")?.trim() ?? "";
+const AGENT_WORK_ROOT_BASE = Deno.env
+	.get("SANDBOX_AGENT_WORK_ROOT")
+	?.replace(/\/+$/, "");
+const NON_AGENT_ADMISSION_SECRET = Deno.env
+	.get("SANDBOX_NON_AGENT_ADMISSION_SECRET")
+	?.trim();
+const consumedAgentAdmissions = new Map<string, number>();
+
+interface SandboxChildProcess {
+	readonly stdin: WritableStream<Uint8Array>;
+	readonly stdout: ReadableStream<Uint8Array>;
+	readonly stderr: Promise<Uint8Array>;
+	readonly exited: Promise<void>;
+	kill(signal: "SIGKILL" | "SIGTERM"): void;
+}
+
+async function readStream(
+	stream: ReadableStream<Uint8Array>,
+): Promise<Uint8Array> {
+	return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+function spawnSandboxChild(
+	command: string,
+	args: string[],
+	argv0: string,
+): SandboxChildProcess {
+	const child = spawn(command, args, {
+		argv0,
+		cwd: "/",
+		env: {},
+		stdio: ["pipe", "pipe", "pipe"],
+	});
+	const exited = new Promise<void>((resolve, reject) => {
+		child.once("error", reject);
+		child.once("close", () => resolve());
+	});
+	void exited.catch(() => {});
+	return {
+		stdin: Writable.toWeb(child.stdin),
+		stdout: Readable.toWeb(child.stdout),
+		stderr: readStream(Readable.toWeb(child.stderr)),
+		exited,
+		kill: (signal) => {
+			child.kill(signal);
+		},
+	};
+}
+
+function consumeAgentAdmission(
+	admission: AgentWorkloadSandboxAdmissionClaims,
+): boolean {
+	const now = Date.now();
+	for (const [admissionId, expiresAt] of consumedAgentAdmissions) {
+		if (expiresAt <= now) consumedAgentAdmissions.delete(admissionId);
+	}
+	if (consumedAgentAdmissions.has(admission.admissionId)) return false;
+	consumedAgentAdmissions.set(
+		admission.admissionId,
+		Date.parse(admission.expiresAt),
+	);
+	return true;
+}
+
+function authenticatesNonAgentHost(value: string | null): boolean {
+	if (
+		!value ||
+		!NON_AGENT_ADMISSION_SECRET ||
+		new TextEncoder().encode(NON_AGENT_ADMISSION_SECRET).byteLength < 32
+	) {
+		return false;
+	}
+	const expected = new TextEncoder().encode(NON_AGENT_ADMISSION_SECRET);
+	const actual = new TextEncoder().encode(value);
+	if (actual.byteLength !== expected.byteLength) return false;
+	let difference = 0;
+	for (let index = 0; index < expected.byteLength; index += 1) {
+		difference |= expected[index] ^ actual[index];
+	}
+	return difference === 0;
+}
+
+function auditAgentAdmission(
+	decision: "allowed" | "denied",
+	reason: AgentWorkloadRuntimeAdmissionReason,
+	claims?: AgentWorkloadSandboxAdmissionClaims,
+): void {
+	console.log(
+		JSON.stringify(
+			createAgentWorkloadRuntimeAdmissionAuditEvent(decision, reason, claims),
+		),
+	);
+}
+
+function deriveAgentWorkRoot(
+	admission: AgentWorkloadSandboxAdmissionClaims,
+): string | null {
+	if (
+		!AGENT_WORK_ROOT_BASE ||
+		!AGENT_WORK_ROOT_BASE.startsWith("/") ||
+		AGENT_WORK_ROOT_BASE === "/" ||
+		AGENT_WORK_ROOT_BASE === Deno.cwd() ||
+		AGENT_WORK_ROOT_BASE === Deno.env.get("HOME")
+	) {
+		return null;
+	}
+	return `${AGENT_WORK_ROOT_BASE}/${admission.companyId}/${admission.workRequestId}/${admission.attemptId}/${admission.admissionId}`;
+}
 
 // ──────────────────────────────────────────────────────────────────────────
 // DEFENSE-IN-DEPTH: kernel egress firewall (LINUX-ONLY, cloud workers). S6 of
@@ -125,10 +271,14 @@ const EXPECTED_BROKER_URL = Deno.env.get("SANDBOX_BROKER_URL")?.trim();
 // on a capable Linux host (e.g. when the orchestrator already provides netns).
 // ──────────────────────────────────────────────────────────────────────────
 
-const NETNS_FIREWALL_DISABLED = Deno.env.get("SANDBOX_DISABLE_NETNS_FIREWALL") === "1";
+const NETNS_FIREWALL_DISABLED =
+	Deno.env.get("SANDBOX_DISABLE_NETNS_FIREWALL") === "1";
 
 /** Probe PATH for a tool by exec'ing `<tool> --version` (no shell). Never throws. */
-async function hasTool(tool: string, versionArg = "--version"): Promise<boolean> {
+async function hasTool(
+	tool: string,
+	versionArg = "--version",
+): Promise<boolean> {
 	try {
 		const out = await new Deno.Command(tool, {
 			args: [versionArg],
@@ -164,6 +314,21 @@ async function canCreateNetns(): Promise<boolean> {
 	}
 }
 
+/** GNU env can set argv[0] for the Deno process inside the netns wrapper. */
+async function supportsVirtualArgv0Env(): Promise<boolean> {
+	try {
+		const output = await new Deno.Command("env", {
+			args: ["--argv0=/runtime/deno", "true"],
+			stdin: "null",
+			stdout: "null",
+			stderr: "null",
+		}).output();
+		return output.success;
+	} catch {
+		return false;
+	}
+}
+
 /**
  * Build the per-run egress-firewall plan: probe the platform/tools/caps and
  * resolve the guest's allowlist (net+import hosts) to the PUBLIC IPs that become
@@ -175,12 +340,20 @@ async function buildEgressFirewallPlan(
 	importHosts: string[],
 ): Promise<EgressFirewallPlan> {
 	if (NETNS_FIREWALL_DISABLED) {
-		return { applied: false, reason: "disabled via SANDBOX_DISABLE_NETNS_FIREWALL=1" };
+		return {
+			applied: false,
+			reason: "disabled via SANDBOX_DISABLE_NETNS_FIREWALL=1",
+		};
 	}
 	const os = Deno.build.os; // "linux" | "darwin" | "windows" — Deno's vocabulary
 	// Cheap OS gate FIRST: skip the (slowish) tool/cap probes entirely off Linux.
 	if (os !== "linux") {
-		return planEgressFirewall({ os, allow: [], tools: { unshare: false, nft: false, ip: false }, hasCaps: false });
+		return planEgressFirewall({
+			os,
+			allow: [],
+			tools: { unshare: false, nft: false, ip: false },
+			hasCaps: false,
+		});
 	}
 	const [unshare, nft, ip] = await Promise.all([
 		hasTool("unshare"),
@@ -191,7 +364,12 @@ async function buildEgressFirewallPlan(
 	// Resolve the allowlist to public IPs (best-effort; never throws). For the
 	// brokered path netHosts is [] → pure default-deny netns.
 	const allow = await resolveAllowedEndpoints([...netHosts, ...importHosts]);
-	return planEgressFirewall({ os, allow, tools: { unshare, nft, ip }, hasCaps });
+	return planEgressFirewall({
+		os,
+		allow,
+		tools: { unshare, nft, ip },
+		hasCaps,
+	});
 }
 
 /**
@@ -203,10 +381,17 @@ async function buildEgressFirewallPlan(
 async function applyEgressFirewall(
 	guestArgv: string[],
 	ruleset: string,
-): Promise<{ cmd: string; args: string[]; cleanup: () => Promise<void> } | null> {
+): Promise<{
+	cmd: string;
+	args: string[];
+	cleanup: () => Promise<void>;
+} | null> {
 	let rulesetPath: string;
 	try {
-		rulesetPath = await Deno.makeTempFile({ prefix: "qp-sandbox-egress-", suffix: ".nft" });
+		rulesetPath = await Deno.makeTempFile({
+			prefix: "qp-sandbox-egress-",
+			suffix: ".nft",
+		});
 		await Deno.writeTextFile(rulesetPath, ruleset);
 	} catch (err) {
 		console.warn(
@@ -243,7 +428,11 @@ async function brokerCall(
 	bindings: { url: string; token: string },
 	method: string,
 	args: unknown,
-): Promise<{ ok: boolean; value?: unknown; error?: { code: string; message: string } }> {
+): Promise<{
+	ok: boolean;
+	value?: unknown;
+	error?: { code: string; message: string };
+}> {
 	const controller = new AbortController();
 	const t = setTimeout(() => controller.abort(), BROKER_FETCH_TIMEOUT_MS);
 	try {
@@ -293,7 +482,7 @@ async function brokerCall(
  * Non-framed stdout lines (stray guest prints) are ignored.
  */
 async function relayBindingsRun(
-	child: Deno.ChildProcess,
+	child: SandboxChildProcess,
 	req: SandboxRunRequest,
 	timedOut: () => boolean,
 ): Promise<RunOutcome> {
@@ -315,7 +504,9 @@ async function relayBindingsRun(
 	const writeLine = async (obj: unknown) => {
 		if (!stdinOpen) return;
 		try {
-			await stdinWriter.write(encoder.encode(FRAME_MARKER + JSON.stringify(obj) + "\n"));
+			await stdinWriter.write(
+				encoder.encode(FRAME_MARKER + JSON.stringify(obj) + "\n"),
+			);
 		} catch {
 			/* guest gone */
 		}
@@ -353,7 +544,11 @@ async function relayBindingsRun(
 		} catch {
 			return;
 		}
-		if (msg.type === "rpc" && typeof msg.id === "number" && typeof msg.method === "string") {
+		if (
+			msg.type === "rpc" &&
+			typeof msg.id === "number" &&
+			typeof msg.method === "string"
+		) {
 			const id = msg.id;
 			const p = (async () => {
 				const r = await brokerCall(bindings, msg.method as string, msg.args);
@@ -408,7 +603,8 @@ async function relayBindingsRun(
 	// Drain remaining stdout + collect stderr for diagnostics, then reap.
 	let stderrText = "";
 	try {
-		const { stderr } = await child.output();
+		const stderr = await child.stderr;
+		await child.exited;
 		stderrText = decoder.decode(stderr).trim();
 	} catch {
 		/* already consumed/killed */
@@ -429,19 +625,20 @@ async function relayBindingsRun(
  * Execute one untrusted request in a fresh, hardened Deno subprocess.
  * Never throws — spawn/IO failures are caught and returned as structured errors.
  */
-async function runInSubprocess(req: SandboxRunRequest): Promise<SandboxRunResult> {
+async function runInSubprocess(
+	req: SandboxRunRequest,
+	workloadAdmission: AgentWorkloadSandboxAdmissionClaims | null = null,
+): Promise<SandboxRunResult> {
 	const started = performance.now();
-	// Best-effort teardown for any per-run resource (e.g. the egress-firewall
-	// ruleset temp file). Set when the firewall is applied; fired on every return.
-	let onFinish: (() => void) | undefined;
+	// Best-effort teardown for per-run resources (work root, firewall ruleset).
+	const cleanup: Array<() => void> = [];
 	const finish = (r: RunOutcome): SandboxRunResult => {
-		if (onFinish) {
+		for (const dispose of cleanup.splice(0)) {
 			try {
-				onFinish();
+				dispose();
 			} catch {
 				/* best-effort cleanup */
 			}
-			onFinish = undefined;
 		}
 		return { ...r, ms: Math.round(performance.now() - started) };
 	};
@@ -452,15 +649,29 @@ async function runInSubprocess(req: SandboxRunRequest): Promise<SandboxRunResult
 		timeoutMs: DEFAULT_TIMEOUT_MS,
 		memoryMb: DEFAULT_MEMORY_MB,
 	};
-	const timeoutMs = clampInt(caps.timeoutMs, DEFAULT_TIMEOUT_MS, 1, MAX_TIMEOUT_MS);
-	const memoryMb = clampInt(caps.memoryMb, DEFAULT_MEMORY_MB, MIN_MEMORY_MB, MAX_MEMORY_MB);
+	const timeoutMs = clampInt(
+		caps.timeoutMs,
+		DEFAULT_TIMEOUT_MS,
+		1,
+		MAX_TIMEOUT_MS,
+	);
+	const memoryMb = clampInt(
+		caps.memoryMb,
+		DEFAULT_MEMORY_MB,
+		MIN_MEMORY_MB,
+		MAX_MEMORY_MB,
+	);
 	const netHosts = Array.isArray(caps.net) ? caps.net : [];
 	const importHosts = Array.isArray(caps.import) ? caps.import : [];
 
 	// ── EGRESS VALIDATION (SSRF / private-IP rejection) — before spawn. ──
 	const egress = await validateEgressHosts([...netHosts, ...importHosts]);
 	if (!egress.ok) {
-		return finish({ ok: false, error: `egress blocked: ${egress.reason}`, logs: [] });
+		return finish({
+			ok: false,
+			error: `egress blocked: ${egress.reason}`,
+			logs: [],
+		});
 	}
 
 	// BINDINGS URL VALIDATION (token-exfiltration defense) — before spawn.
@@ -480,6 +691,26 @@ async function runInSubprocess(req: SandboxRunRequest): Promise<SandboxRunResult
 		}
 	}
 
+	// Every subprocess receives a fresh host-private cwd. The guest has no file
+	// permissions for it and guest-entry exposes only the virtual `/work` name.
+	let guestWorkRoot: string;
+	try {
+		if (workloadAdmission) {
+			const derived = deriveAgentWorkRoot(workloadAdmission);
+			if (!derived) throw new Error("invalid Agent work root configuration");
+			guestWorkRoot = derived;
+			await Deno.mkdir(guestWorkRoot, { recursive: true });
+		} else {
+			guestWorkRoot = await Deno.makeTempDir({ prefix: "qp-sandbox-work-" });
+		}
+		cleanup.push(() => Deno.removeSync(guestWorkRoot, { recursive: true }));
+	} catch {
+		return finish({
+			ok: false,
+			error: "failed to create sandbox work root",
+			logs: [],
+		});
+	}
 	// ── BUILD THE HARDENED SUBPROCESS COMMAND. ──
 	const args = [
 		"run",
@@ -488,11 +719,9 @@ async function runInSubprocess(req: SandboxRunRequest): Promise<SandboxRunResult
 		// net + import are INDEPENDENT axes from the manifest (do NOT alias import=net).
 		...netFlag(netHosts),
 		...importFlags(importHosts),
-		// Guest-entry needs to read ITS OWN file. We grant read scoped to that one
-		// path; the guest source runs as a blob module (no fs), and fs ops inside the
-		// guest still fail because the guest cannot widen this scope.
-		`--allow-read=${GUEST_ENTRY_PATH}`,
-		GUEST_ENTRY_PATH,
+		// A self-contained data module needs neither a host path nor a socket, so it
+		// remains loadable after the Linux network namespace is created.
+		GUEST_RUNTIME_MODULE,
 	];
 
 	// ── DEFENSE-IN-DEPTH: wrap the spawn in a filtered netns on capable Linux. ──
@@ -505,13 +734,23 @@ async function runInSubprocess(req: SandboxRunRequest): Promise<SandboxRunResult
 	try {
 		const plan = await buildEgressFirewallPlan(netHosts, importHosts);
 		if (plan.applied) {
-			const wrapped = await applyEgressFirewall([DENO_BIN, ...args], plan.nftRuleset);
+			const canVirtualizeArgv0 = await supportsVirtualArgv0Env();
+			const wrapped = canVirtualizeArgv0
+				? await applyEgressFirewall(
+						["env", "--argv0=/runtime/deno", DENO_BIN, ...args],
+						plan.nftRuleset,
+					)
+				: null;
 			if (wrapped) {
 				spawnCmd = wrapped.cmd;
 				spawnArgs = wrapped.args;
-				onFinish = () => void wrapped.cleanup();
+				cleanup.push(() => void wrapped.cleanup());
 				console.log(
 					`[sandbox] egress firewall: ACTIVE (netns + nftables, ${plan.allowCount} allow rule(s))`,
+				);
+			} else if (!canVirtualizeArgv0) {
+				console.log(
+					"[sandbox] egress firewall: skipped — env lacks argv0 virtualization; baseline isolation remains active",
 				);
 			}
 			// wrapped === null → staging failed; fall through to the un-wrapped spawn.
@@ -527,18 +766,9 @@ async function runInSubprocess(req: SandboxRunRequest): Promise<SandboxRunResult
 		);
 	}
 
-	let child: Deno.ChildProcess;
+	let child: SandboxChildProcess;
 	try {
-		const command = new Deno.Command(spawnCmd, {
-			args: spawnArgs,
-			stdin: "piped",
-			stdout: "piped",
-			stderr: "piped",
-			// Do NOT leak the supervisor's env into the guest process.
-			clearEnv: true,
-			env: {},
-		});
-		child = command.spawn();
+		child = spawnSandboxChild(spawnCmd, spawnArgs, "/runtime/deno");
 	} catch (err) {
 		// Spawn-throw → structured error, never a bare 500.
 		return finish({
@@ -597,7 +827,11 @@ async function runInSubprocess(req: SandboxRunRequest): Promise<SandboxRunResult
 		await writer.write(new TextEncoder().encode(envelope));
 		await writer.close();
 
-		const { stdout, stderr } = await child.output();
+		const [stdout, stderr] = await Promise.all([
+			readStream(child.stdout),
+			child.stderr,
+			child.exited,
+		]);
 		clearTimeout(killTimer);
 		if (graceTimer !== undefined) clearTimeout(graceTimer);
 
@@ -651,20 +885,118 @@ function jsonResponse(body: unknown, status = 200): Response {
 const port = Number(Deno.env.get("PORT") ?? 8787);
 
 Deno.serve(
-	{ port, onListen: ({ port }) => console.log(`sandbox-server listening on :${port}`) },
+	{
+		port,
+		onListen: ({ port }) => {
+			console.log(`sandbox-server listening on :${port}`);
+		},
+	},
 	async (request) => {
 		const url = new URL(request.url);
-
 		if (request.method === "GET" && url.pathname === "/health") {
-			return jsonResponse({ ok: true, runtime: "deno", version: Deno.version.deno });
+			return jsonResponse({
+				ok: true,
+				runtime: "deno",
+				version: Deno.version.deno,
+			});
 		}
 
 		if (request.method === "POST" && url.pathname === "/run") {
 			let req: SandboxRunRequest;
+			let requestBody: string;
 			try {
-				req = (await request.json()) as SandboxRunRequest;
+				requestBody = await request.text();
+				req = JSON.parse(requestBody) as SandboxRunRequest;
 			} catch {
-				return jsonResponse({ ok: false, error: "invalid JSON body", logs: [] }, 400);
+				return jsonResponse(
+					{ ok: false, error: "invalid JSON body", logs: [] },
+					400,
+				);
+			}
+			let workloadAdmission: AgentWorkloadSandboxAdmissionClaims | null = null;
+			let workloadDenialReason: AgentWorkloadRuntimeAdmissionReason = "missing";
+			let workloadDenialClaims: AgentWorkloadSandboxAdmissionClaims | undefined;
+			if (
+				req?.mode === "non_agent" &&
+				!authenticatesNonAgentHost(
+					request.headers.get(NON_AGENT_ADMISSION_HEADER),
+				)
+			) {
+				auditAgentAdmission("denied", "non_agent_unauthorized");
+				return jsonResponse(
+					{
+						ok: false,
+						error: AGENT_WORKLOAD_SANDBOX_DENIAL_MESSAGE,
+						logs: [],
+					},
+					403,
+				);
+			}
+			if (req?.mode === "agent_workload") {
+				const envelope = request.headers.get(AGENT_WORKLOAD_ADMISSION_HEADER);
+				if (envelope && AGENT_ADMISSION_SECRET) {
+					try {
+						const verification = await verifyAgentWorkloadSandboxAdmission(
+							{
+								keyId: AGENT_ADMISSION_KEY_ID,
+								secret: new TextEncoder().encode(AGENT_ADMISSION_SECRET),
+								instanceId: SANDBOX_INSTANCE_ID,
+							},
+							envelope,
+							requestBody,
+						);
+						if (verification.ok) {
+							workloadAdmission = verification.claims;
+						} else {
+							workloadDenialReason = verification.reason;
+							workloadDenialClaims = verification.claims;
+						}
+					} catch {
+						workloadAdmission = null;
+						workloadDenialReason = "invalid";
+					}
+				}
+				if (
+					workloadAdmission &&
+					(typeof req.source !== "string" ||
+						(await hashAgentWorkloadSandboxSource(req.source)) !==
+							workloadAdmission.sourceSha256)
+				) {
+					workloadDenialReason = "source_mismatch";
+					workloadDenialClaims = workloadAdmission;
+					workloadAdmission = null;
+				}
+				if (workloadAdmission && !consumeAgentAdmission(workloadAdmission)) {
+					workloadDenialReason = "replay";
+					workloadDenialClaims = workloadAdmission;
+					workloadAdmission = null;
+				}
+			}
+			if (req?.mode === "agent_workload" && !workloadAdmission) {
+				auditAgentAdmission(
+					"denied",
+					workloadDenialReason,
+					workloadDenialClaims,
+				);
+				return jsonResponse(
+					{
+						ok: false,
+						error: AGENT_WORKLOAD_SANDBOX_DENIAL_MESSAGE,
+						logs: [],
+					},
+					403,
+				);
+			}
+			if (req?.mode !== "agent_workload" && req?.mode !== "non_agent") {
+				auditAgentAdmission("denied", "unknown_mode");
+				return jsonResponse(
+					{
+						ok: false,
+						error: AGENT_WORKLOAD_SANDBOX_DENIAL_MESSAGE,
+						logs: [],
+					},
+					403,
+				);
 			}
 			if (typeof req?.source !== "string" || !req?.capabilities) {
 				return jsonResponse(
@@ -672,8 +1004,15 @@ Deno.serve(
 					400,
 				);
 			}
+			if (workloadAdmission) {
+				auditAgentAdmission(
+					"allowed",
+					"admission_authorized",
+					workloadAdmission,
+				);
+			}
 			// runInSubprocess never throws — always a structured result.
-			const result = await runInSubprocess(req);
+			const result = await runInSubprocess(req, workloadAdmission);
 			return jsonResponse(result);
 		}
 
