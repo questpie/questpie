@@ -315,6 +315,72 @@ describe("realtime matrix", () => {
 			await reader.close();
 		});
 
+		it("bootstraps a late SSE subscriber before forwarding newer deltas", async () => {
+			const adapter = new MockChangeBroker();
+			const posts = collection("posts")
+				.fields(({ f }) => ({ title: f.textarea().required() }))
+				.access({ read: true, create: true });
+			setup = await buildMockApp(
+				{ collections: { posts } },
+				{ realtime: { changeBroker: adapter, nativeDeltas: true } },
+			);
+			await runTestDbMigrations(setup.app);
+			const context = createTestContext();
+			const firstPost = await setup.app.collections.posts.create(
+				{ title: "One" },
+				context,
+			);
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const topic = collectionTopic("posts", { mode: "delta" });
+			const firstResponse = await routes.realtime.subscribe(
+				createRealtimeRequest([topic]),
+				{},
+				undefined,
+			);
+			const firstReader = createSSEReader(firstResponse.body!);
+			expect((await firstReader.readSnapshot()).data.data.docs).toEqual([
+				expect.objectContaining({ id: firstPost.id, title: "One" }),
+			]);
+
+			const secondPost = await setup.app.collections.posts.create(
+				{ title: "Two" },
+				context,
+			);
+			expect(await firstReader.readSnapshot()).toMatchObject({
+				event: "insert",
+				data: { key: secondPost.id },
+			});
+			expect((await firstReader.readSnapshot()).event).toBe("up-to-date");
+
+			const secondResponse = await routes.realtime.subscribe(
+				createRealtimeRequest([topic]),
+				{},
+				undefined,
+			);
+			const secondReader = createSSEReader(secondResponse.body!);
+			const lateBootstrap = await secondReader.readSnapshot();
+			expect(lateBootstrap.event).toBe("snapshot");
+			expect(
+				lateBootstrap.data.data.docs
+					.map((post: { id: string }) => post.id)
+					.sort(),
+			).toEqual([firstPost.id, secondPost.id].sort());
+
+			const thirdPost = await setup.app.collections.posts.create(
+				{ title: "Three" },
+				context,
+			);
+			for (const reader of [firstReader, secondReader]) {
+				expect(await reader.readSnapshot()).toMatchObject({
+					event: "insert",
+					data: { key: thirdPost.id },
+				});
+				expect((await reader.readSnapshot()).event).toBe("up-to-date");
+			}
+
+			await Promise.all([firstReader.close(), secondReader.close()]);
+		}, 30_000);
+
 		it("falls back to snapshots for a windowed explicit delta topic", async () => {
 			const adapter = new MockChangeBroker();
 			const posts = collection("posts")

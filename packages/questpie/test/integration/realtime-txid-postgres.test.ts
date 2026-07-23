@@ -85,6 +85,16 @@ describe.skipIf(!databaseUrl)("realtime txid PostgreSQL ordering", () => {
 				baseSeq + 1,
 				baseSeq + 2,
 			]);
+			const delivered = await setup.app.realtime.readSince(baseSeq);
+			expect(
+				delivered.map((event) => ({
+					seq: event.seq,
+					recordId: event.recordId,
+				})),
+			).toEqual([
+				{ seq: baseSeq + 1, recordId: "first" },
+				{ seq: baseSeq + 2, recordId: "second" },
+			]);
 		} finally {
 			releaseFirst();
 			await setup.app.migrations.down();
