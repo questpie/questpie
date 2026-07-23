@@ -1,7 +1,8 @@
 # Collaborative-document capability contract
 
-Status: design grill in progress. Decisions CD-01 and CD-02 were ratified on
-2026-07-23. No implementation or public API is approved by this document yet.
+Status: design grill in progress. Decisions CD-01 through CD-03 were ratified
+on 2026-07-23. No implementation or public API is approved by this document
+yet.
 
 This is the canonical QUESTPIE framework contract for the collaborative-document
 capability. Agent Board records execution evidence and links back here; they do
@@ -110,6 +111,43 @@ Consequences:
   `HocuspocusProvider`, `Y.Doc`, or Tiptap editor objects. The optional Yjs and
   Tiptap bindings consume the two qualified seams behind that lifecycle.
 
+### CD-03 — Server-resolved resource identity and independent authority
+
+The application exposes a typed, schema-validated resource locator. QUESTPIE
+resolves that locator under the current participant's request-bound context and
+derives the canonical tenant/resource key on the server. The client never
+supplies a provider room name, tenant key, internal document id, authorization
+epoch, or fence.
+
+The kernel turns the definition key and resolved canonical resource key into an
+opaque, versioned `DocumentRef`. Its exact encoding remains internal and cannot
+be used as proof of access. A provider-specific room identifier is derived from
+that internal reference and is never application identity or authorization.
+
+Read and edit authority are evaluated independently under the participant's own
+Human or Agent principal. A Human request cannot lend authority to an Agent, and
+browser collaboration routes cannot use ambient system access. Transport
+admission uses a short-lived, purpose-bound, single-use ticket derived from the
+server decision. Room membership, a socket, a client-generated id, or a
+previously accepted update is not a durable grant.
+
+Consequences:
+
+- **Public API:** a collaborative-document definition declares a locator schema,
+  a server resolver, and independent read/edit authorization. Client code passes
+  only the typed locator and requested mode. Exact builder names remain open.
+- **Authorization:** the resolver and access rules run with fresh
+  request-bound context on open and reconnect. Later decisions define
+  revalidation cadence and transactional update fencing.
+- **Persistence:** framework rows use the internal document reference,
+  definition/version metadata, and document epoch. Provider room names and
+  application concepts are not persistence identity.
+- **Transport:** the adapter redeems an opaque one-use ticket bound to the
+  resolved document, participant, requested mode, protocol, epoch/fence, and
+  expiry. It cannot resolve arbitrary client room names.
+- **Client:** generated APIs expose typed resource locators without internal
+  room ids, tenant ids, provider tokens, or authorization metadata.
+
 ## Current enterprise trace
 
 | UI intent                                                                                                                                       | Framework seam                                                                              | Authorization                                                                                | State ownership                                                                                                                                                 | Client projection                                                                                                        |
@@ -140,15 +178,15 @@ consumer change.
 
 ## Open decision queue
 
-The grill resolves one item at a time. The next unresolved item is CD-03:
-resource identity and the authorization model used to resolve one collaboration
-room.
+The grill resolves one item at a time. The next unresolved item is CD-04:
+the exact contract for requested viewer/editor modes, denial, and mid-session
+mode changes.
 
-Later decisions cover read-only/editor modes, awareness, binary limits,
-persistence, state-vector reconnect, snapshots, compaction, multi-device
-identity, offline merge, revocation/fencing, validation and migrations,
-canonical serialization, relative anchors, client integration, SSR, failure
-states, observability, packages, tests, and release consumption.
+Later decisions cover awareness, binary limits, persistence, state-vector
+reconnect, snapshots, compaction, multi-device identity, offline merge,
+revocation/fencing, validation and migrations, canonical serialization,
+relative anchors, client integration, SSR, failure states, observability,
+packages, tests, and release consumption.
 
 ## Evidence
 
