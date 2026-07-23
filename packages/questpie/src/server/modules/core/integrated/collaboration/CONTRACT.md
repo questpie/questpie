@@ -184,6 +184,52 @@ Consequences:
   exposed. Pending local work survives only through an explicit recovery
   state; automatic elevation and silent fallback are prohibited.
 
+### CD-05 — Lease-backed roster and bounded ephemeral awareness
+
+The participant roster and high-frequency awareness are separate framework
+concepts. The roster is derived from active, lease-backed collaboration
+sessions and exposes only server-derived participant identity, granted mode,
+and a disclosure-safe profile. Awareness is session-scoped, ephemeral,
+lossy, latest-wins state such as cursor, selection, focus, or viewport. It is
+not a document update, durable history, checkpoint, or audit event.
+
+Current read authority is required to send or receive roster and awareness
+state. The client cannot claim participant identity, granted mode, tenant,
+role, or other server-owned fields. Each collaborative-document definition may
+declare a bounded awareness schema. Adapter capabilities may carry opaque
+relative anchors inside that schema without exposing provider formats to the
+application.
+
+The initial defaults are:
+
+- at most 1,024 serialized bytes of client awareness per session;
+- at most 20 accepted awareness updates per second per session, with outbound
+  latest-state coalescing;
+- at most 100 active sessions per document;
+- a 10-second heartbeat and 30-second lease expiry.
+
+Disconnect and revocation remove local awareness immediately; expiry heals
+owner crashes and missed teardown. Multiple tabs or devices remain distinct
+session entries, while the client projection may group them under one
+server-derived participant. Awareness payloads are never written to the
+document update log, checkpoints, immutable audit history, or diagnostic logs.
+
+Consequences:
+
+- **Public API:** definitions expose a typed awareness schema and a
+  server-side participant profile resolver. Session projections distinguish
+  grouped participants from individual session awareness.
+- **Authorization:** read authority gates both directions. Edit authority is
+  not required merely to appear in the roster or publish schema-valid viewer
+  awareness.
+- **Persistence:** QUESTPIE may keep current lease rows for HA recovery, but
+  they are expiring operational state with no historical meaning.
+- **Transport:** awareness uses a separately limited latest-wins delivery
+  class. Document updates remain ordered, non-coalescing, and durable.
+- **Client:** cursors and selections disappear on close, revoke, or expiry and
+  are never replayed as offline document work. Profile fields are trusted only
+  when supplied by the server.
+
 ## Current enterprise trace
 
 | UI intent                                                                                                                                       | Framework seam                                                                              | Authorization                                                                                | State ownership                                                                                                                                                 | Client projection                                                                                                        |
@@ -197,6 +243,209 @@ This trace currently maps to Autopilot
 `EA-ASSET-USAGE-SEPARATION`. Autopilot's existing trace remains the consumer
 source for product intent and will be updated only from a clean, isolated
 consumer change.
+
+## Mapping to existing QUESTPIE primitives
+
+The collaboration kernel is a sibling deep module, not a second infrastructure
+stack. Every implementation task must classify its relationship to existing
+framework code as direct reuse, extracted pattern, or deliberately separate.
+
+| Collaboration concern                            | Existing primitive                                                                                              | Mapping decision                                                                                                                                                                                                                       |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Typed definition and generated registry          | `server/channels/channel-builder.ts` and the plugin-driven category/codegen system                              | **Extract pattern.** Add a collaboration definition/category; do not encode documents as `channel()` definitions.                                                                                                                      |
+| Request-bound Human/Agent authority              | `resolveContext`, `AppContext`/`Principal`, and `executeAccessRule` used by realtime routes and collection CRUD | **Direct reuse.** Collaboration adds independent read/edit operations and forbids browser/system authority.                                                                                                                            |
+| Canonical resource resolution                    | `resolveChannelName` and registry-first entity resolution                                                       | **Extract pattern.** Use schema-canonical server resolution in a separate document identity namespace; never accept provider room names.                                                                                               |
+| Opaque tickets, generations, leases, and fencing | `RealtimeTopologyCoordinator`, its token/identity hashing, owner generation, and lease checks                   | **Extract pattern.** Collaboration owns document/session fences and one-use grants; realtime topology sessions are not authorization records.                                                                                          |
+| Cross-instance wake-up                           | `ChangeBroker` and metadata-only `ChangeWake` normalization                                                     | **Direct reuse of the notice seam.** Add only bounded collaboration-advanced/revoked metadata in core; do not change broker adapters or send CRDT bytes through them. Missing wakes remain legal because the durable store reconciles. |
+| Commit-ordered durable append                    | `ChannelEventLedger`, `questpieChannelHeadTable`, and realtime outbox head locking                              | **Extract pattern.** Collaboration gets its own `bytea` update/snapshot tables, per-document head, retention, and compaction. Channel replay and JSON events are not reused.                                                           |
+| Session admission and bounded work               | `RealtimeAdmissionRegistry`, `createConcurrencyLimiter`, and realtime admission config validation               | **Direct reuse or neutral extraction.** Limits are keyed by server-resolved principal/session, never client ids.                                                                                                                       |
+| HA roster leases                                 | `SseChannelPresenceRegistry` and `questpieChannelPresenceTable`                                                 | **Extract pattern.** Collaboration keeps session-granular roster/awareness leases with different schemas, rates, privacy, and expiry semantics.                                                                                        |
+| Ordered/backpressured delivery                   | `ClientSink`, `SseOrderedDeltaWriter`, overflow errors, and idempotent shutdown patterns                        | **Extract pattern.** Document frames use a bounded non-coalescing binary FIFO; only awareness may use latest-wins coalescing.                                                                                                          |
+| Reconnect and fresh principal resolution         | `EdgeSessionInput.resolvePrincipal`, `RealtimeMultiplexer`, and `realtimeReconnectDelay`                        | **Extract pattern.** Collaboration has its own binary sync proof, offline queue, acknowledgements, epochs, and recovery state machine.                                                                                                 |
+| Observability                                    | `RealtimeObserver`/`RealtimeObservability` bounded-reason conventions                                           | **Extract convention.** Collaboration observations use separate event types and disclosure-safe labels; document ids, keys, payloads, participants, and awareness never become labels.                                                 |
+| TanStack integration                             | TanStack Query realtime reducers and the new TanStack DB package                                                | **Deliberately separate for mutable CRDT state.** Query/DB may consume canonical checkpoint metadata, but they do not own the live replica, awareness, or offline update queue.                                                        |
+
+The following existing surfaces are explicit non-reuse boundaries:
+`ChannelEventLedger`, `/channels/publish`, JSON channel schemas, channel replay
+retention, `RealtimeStreamEvent`, latest-snapshot coalescing, provider presence
+identity, ordinary collection CRUD, and provider-side persistence extensions.
+
+## Provisional API sketch
+
+These examples make the ratified seams concrete. Names remain provisional until
+the complete capability contract is ratified; later decisions may narrow them
+but must not expose provider, room, CRDT, or transport internals to application
+code.
+
+### Application definition
+
+```ts
+// questpie/server/collaboration/article-body.ts
+import { collaborativeDocument } from "questpie/collaboration";
+import { z } from "zod";
+
+export default collaborativeDocument("article-body")
+	.locator(z.object({ articleId: z.string().uuid() }))
+	.resolve(async ({ locator, ctx }) => {
+		const article = await ctx.collections.articles.findById(locator.articleId);
+		if (!article) return null;
+
+		// tenantKey/resourceKey are derived from trusted server state.
+		return {
+			tenantKey: article.workspaceId,
+			resourceKey: article.id,
+		};
+	})
+	.authorize({
+		read: async ({ resource, ctx }) =>
+			ctx.services.permissions.canReadArticle(resource.resourceKey),
+		edit: async ({ resource, ctx }) =>
+			ctx.services.permissions.canEditArticle(resource.resourceKey),
+	})
+	.participant(async ({ principal, ctx }) => ({
+		// The kernel owns the opaque participant id and granted mode.
+		displayName: await ctx.services.profiles.displayName(principal),
+	}))
+	.awareness(
+		z.object({
+			focused: z.boolean().optional(),
+			viewport: z.enum(["editor", "preview"]).optional(),
+		}),
+	);
+```
+
+The definition does not return a provider room, token, `Y.Doc`, socket, or
+tenant supplied by the client. A cursor/selection binding is added through a
+qualified adapter capability rather than serializing provider positions in this
+generic schema.
+
+### Runtime adapter selection
+
+```ts
+// questpie.config.ts
+import { runtimeConfig } from "questpie/app";
+import {
+	hocuspocusTransportAdapter,
+	yjsDocumentAdapter,
+} from "@questpie/collaboration-yjs/server";
+
+export default runtimeConfig({
+	db: { url: process.env.DATABASE_URL! },
+	collaboration: {
+		document: yjsDocumentAdapter(),
+		transport: hocuspocusTransportAdapter(),
+	},
+});
+```
+
+The configuration values are opaque qualified adapters. Feature code cannot
+call them or depend on their provider types.
+
+### Generated client
+
+```ts
+const document = await client.collaboration.articleBody.open(
+	{ articleId },
+	{ mode: "edit", fallback: "view" },
+);
+
+const unsubscribe = document.subscribe((state) => {
+	if (state.status === "ready") {
+		console.log(state.mode); // "view" | "edit"
+	}
+	if (state.status === "recovery-required") {
+		showRecoveryAction(state.exportPendingChanges);
+	}
+});
+
+document.setAwareness({
+	focused: true,
+	viewport: "editor",
+});
+
+await document.close();
+unsubscribe();
+```
+
+The candidate lifecycle projection is:
+
+```ts
+type CollaborationSessionState =
+	| { status: "authorizing" }
+	| { status: "connecting" }
+	| { status: "synchronizing"; mode: "view" | "edit" }
+	| { status: "ready"; mode: "view" | "edit" }
+	| { status: "offline"; mode: "view" | "edit"; pendingChanges: number }
+	| { status: "degraded"; reason: string }
+	| { status: "recovery-required"; reason: string }
+	| { status: "fenced"; reason: string }
+	| { status: "failed"; error: CollaborationError }
+	| { status: "closed" };
+```
+
+### Qualified editor binding
+
+```ts
+import { RichTextEditor } from "@questpie/ui/rich-text";
+import { createTiptapCollaborationBinding } from
+	"@questpie/collaboration-yjs/tiptap";
+
+const binding = createTiptapCollaborationBinding(document);
+
+<RichTextEditor
+	document={binding}
+	readOnly={document.state.status !== "ready" ||
+		document.state.mode !== "edit"}
+/>;
+```
+
+The binding consumes a private document port. Application code still does not
+receive `Y.Doc`, `HocuspocusProvider`, state vectors, relative-position bytes,
+or transport handles. The exact package split and Tiptap migration remain open
+release decisions.
+
+### Internal document and transport seams
+
+```ts
+interface CollaborationDocumentAdapter {
+	readonly id: string;
+	readonly version: number;
+	readonly capabilities: ReadonlySet<
+		"offline-merge" | "relative-anchors" | "differential-sync"
+	>;
+
+	stageInbound(input: {
+		snapshot: Uint8Array;
+		update: Uint8Array;
+		limits: CollaborationUpdateLimits;
+	}): Promise<StagedDocumentUpdate>;
+
+	applyCommitted(input: {
+		snapshot: Uint8Array;
+		update: PersistedDocumentUpdate;
+	}): Promise<Uint8Array>;
+
+	createSync(input: {
+		snapshot: Uint8Array;
+		peerProof?: Uint8Array;
+	}): Promise<ReadonlyArray<Uint8Array>>;
+}
+
+interface CollaborationTransportAdapter {
+	start(handler: {
+		open(ticket: string, connection: CollaborationConnection): Promise<void>;
+		receive(connectionId: string, frame: Uint8Array): Promise<void>;
+		close(connectionId: string): Promise<void>;
+	}): Promise<void>;
+
+	stop(): Promise<void>;
+}
+```
+
+`stageInbound` must not mutate a broadcast-visible replica. The kernel owns the
+sequence `authorize/fence -> stage/validate -> durable append -> apply ->
+acknowledge/broadcast`. CD-06 and later decisions freeze exact frame, limit,
+sync, snapshot, and acknowledgement contracts.
 
 ## Frozen non-goals
 
@@ -214,15 +463,15 @@ consumer change.
 
 ## Open decision queue
 
-The grill resolves one item at a time. The next unresolved item is CD-05:
-participant roster versus high-frequency awareness, including identity,
-payload, privacy, rate, and lease boundaries.
+The grill resolves one item at a time. The next unresolved item is CD-06:
+binary update framing, decompressed-size and structural limits, admission,
+backpressure, and slow/malicious client behavior.
 
-Later decisions cover binary limits, persistence, state-vector reconnect,
-snapshots, compaction, multi-device identity, offline merge,
-revocation/fencing, validation and migrations, canonical serialization,
-relative anchors, client integration, SSR, failure states, observability,
-packages, tests, and release consumption.
+Later decisions cover persistence, state-vector reconnect, snapshots,
+compaction, multi-device identity, offline merge, revocation/fencing,
+validation and migrations, canonical serialization, relative anchors, client
+integration, SSR, failure states, observability, packages, tests, and release
+consumption.
 
 ## Evidence
 
