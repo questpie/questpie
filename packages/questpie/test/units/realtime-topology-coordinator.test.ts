@@ -24,6 +24,33 @@ class RecordingBroker implements ChangeBroker {
 	async stop(): Promise<void> {}
 }
 
+class BlockingTopologyStore extends MemoryRealtimeTopologyStore {
+	getOwnedCalls = 0;
+	private releaseFirstRead!: () => void;
+	private firstReadStartedResolve!: () => void;
+	readonly firstReadStarted = new Promise<void>((resolve) => {
+		this.firstReadStartedResolve = resolve;
+	});
+	private readonly firstReadRelease = new Promise<void>((resolve) => {
+		this.releaseFirstRead = resolve;
+	});
+
+	override async getOwned(
+		input: Parameters<MemoryRealtimeTopologyStore["getOwned"]>[0],
+	) {
+		this.getOwnedCalls += 1;
+		if (this.getOwnedCalls === 1) {
+			this.firstReadStartedResolve();
+			await this.firstReadRelease;
+		}
+		return super.getOwned(input);
+	}
+
+	release(): void {
+		this.releaseFirstRead();
+	}
+}
+
 const emptyTopology = (revision = 0): RealtimeDesiredTopology => ({
 	protocol: "questpie-realtime-topology",
 	version: 1,
@@ -33,6 +60,72 @@ const emptyTopology = (revision = 0): RealtimeDesiredTopology => ({
 });
 
 describe("realtime topology coordinator", () => {
+	test("uses a bounded idle reconciliation cadence by default", async () => {
+		const observations: RealtimeObservation[] = [];
+		const coordinator = new RealtimeTopologyCoordinator(
+			new MemoryRealtimeTopologyStore(),
+			{
+				heartbeatMs: 0,
+				observer: { record: (event) => observations.push(event) },
+			},
+		);
+		await coordinator.open({
+			sessionId: "session-a",
+			token: "token-a",
+			identity: "anonymous",
+			topology: emptyTopology(),
+			apply: async () => {},
+			onClose: async () => {},
+		});
+
+		await Bun.sleep(1_100);
+
+		expect(
+			observations.filter(
+				(event) =>
+					event.type === "topology.lifecycle" &&
+					event.phase === "reconcile" &&
+					event.outcome === "started",
+			),
+		).toHaveLength(0);
+		await coordinator.stop();
+	});
+
+	test("coalesces reconcile requests while a session read is in flight", async () => {
+		const store = new BlockingTopologyStore();
+		const coordinator = new RealtimeTopologyCoordinator(store, {
+			ownerId: "owner-a",
+			heartbeatMs: 0,
+			reconcileMs: 0,
+		});
+		const session = await coordinator.open({
+			sessionId: "session-a",
+			token: "token-a",
+			identity: "anonymous",
+			topology: emptyTopology(),
+			apply: async () => {},
+			onClose: async () => {},
+		});
+		const wake: ChangeWake = {
+			kind: "topology-maybe-advanced",
+			sessionKey:
+				"fa57a52dbf08190218529730a3e99db6946c6c29220fb6e0551e21598b0b05db",
+			ownerId: "owner-a",
+			ownerGeneration: session.generation,
+			desiredRevision: 1,
+			reason: "submit",
+		};
+
+		coordinator.onWake(wake);
+		await store.firstReadStarted;
+		for (let index = 0; index < 20; index += 1) coordinator.onWake(wake);
+		store.release();
+		await coordinator.reconcile();
+
+		expect(store.getOwnedCalls).toBeLessThanOrEqual(2);
+		await coordinator.stop();
+	});
+
 	test("applies, deduplicates, rejects stale revisions, and detects conflicts", async () => {
 		let now = new Date("2026-07-15T20:00:00.000Z");
 		const broker = new RecordingBroker();
@@ -92,6 +185,13 @@ describe("realtime topology coordinator", () => {
 		expect(JSON.stringify(broker.wakes)).not.toContain("topics");
 		await coordinator.reconcile();
 		expect(applied).toEqual([revisionOne]);
+		expect(observations).toContainEqual({
+			type: "topology.lifecycle",
+			phase: "reconcile",
+			outcome: "current",
+			desiredRevision: 1,
+			appliedRevision: 1,
+		});
 		expect(observations).toContainEqual({
 			type: "topology.lifecycle",
 			phase: "apply",

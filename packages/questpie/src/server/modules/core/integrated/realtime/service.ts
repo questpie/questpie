@@ -222,6 +222,7 @@ export class RealtimeService {
 			this.db,
 			{
 				broker: this.changeBroker,
+				reconcileMs: this.configuredPollIntervalMs,
 				observer: this.observability,
 				onError: (error) =>
 					this.reportTransportFailure(
@@ -664,6 +665,7 @@ export class RealtimeService {
 	private setReconciliationPollInterval(intervalMs: number): void {
 		if (this.pollIntervalMs === intervalMs) return;
 		this.pollIntervalMs = intervalMs;
+		this.topologyCoordinator.setReconciliationPollInterval(intervalMs);
 		if (this.channelPollTimer) {
 			clearInterval(this.channelPollTimer);
 			this.channelPollTimer = null;

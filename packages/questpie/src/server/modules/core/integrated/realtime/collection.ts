@@ -5,7 +5,6 @@ import {
 	customType,
 	index,
 	integer,
-	jsonb,
 	pgTable,
 	primaryKey,
 	text,
@@ -24,6 +23,29 @@ const xid8 = customType<{ data: string; driverData: string | bigint }>({
 	},
 });
 
+class JsonDriverValue {
+	constructor(private readonly value: unknown) {}
+
+	toJSON(): unknown {
+		return this.value;
+	}
+
+	toPostgres(): string {
+		return JSON.stringify(this.value);
+	}
+}
+
+const jsonbSafe = customType<{ data: unknown; driverData: unknown }>({
+	dataType: () => "jsonb",
+	// Keep Bun SQL from inferring primitive/array PostgreSQL parameter types while
+	// still allowing each driver to serialize the JSON value exactly once.
+	toDriver: (value) => new JsonDriverValue(value),
+	// Bun SQL, PGlite, and node-postgres already decode native jsonb values.
+	// Parsing strings again corrupts legitimate JSON-looking string payloads
+	// ("123" -> 123, "true" -> true, and so on).
+	fromDriver: (value) => value,
+});
+
 /**
  * Realtime outbox log table
  * Stores changes for subscriptions and backfill.
@@ -38,7 +60,7 @@ export const questpieRealtimeLogTable = pgTable(
 		operation: text("operation").notNull(),
 		recordId: text("record_id"),
 		locale: text("locale"),
-		payload: jsonb("payload").default({}),
+		payload: jsonbSafe("payload").default({}),
 		createdAt: systemTimestamp("created_at").defaultNow().notNull(),
 	},
 	(t) => [index("idx_realtime_log_created_at").on(t.createdAt)],
@@ -69,7 +91,7 @@ export const questpieChannelEventTable = pgTable(
 		channel: text("channel").notNull(),
 		event: text("event").notNull(),
 		schemaIdentity: text("schema_identity").notNull(),
-		payload: jsonb("payload").notNull(),
+		payload: jsonbSafe("payload").notNull(),
 		sizeBytes: integer("size_bytes").notNull(),
 		createdAt: systemTimestamp("created_at").defaultNow().notNull(),
 	},
@@ -105,7 +127,7 @@ export const questpieChannelPresenceTable = pgTable(
 		connectionId: text("connection_id").notNull(),
 		principalId: text("principal_id").notNull(),
 		channel: text("channel").notNull(),
-		data: jsonb("data").notNull(),
+		data: jsonbSafe("data").notNull(),
 		expiresAt: timestamp("expires_at", {
 			withTimezone: true,
 			mode: "date",
@@ -141,7 +163,7 @@ export const questpieRealtimeTopologyTable = pgTable(
 		appliedRevision: bigint("applied_revision", { mode: "number" })
 			.default(0)
 			.notNull(),
-		desiredTopology: jsonb("desired_topology").notNull(),
+		desiredTopology: jsonbSafe("desired_topology").notNull(),
 		createdAt: systemTimestamp("created_at").defaultNow().notNull(),
 		updatedAt: systemTimestamp("updated_at").defaultNow().notNull(),
 	},

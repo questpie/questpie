@@ -210,24 +210,84 @@ export function admitRealtimeTopic<TTopic extends AdmissionTopic>(
 	return { accepted: true, topic: { ...topic, limit } };
 }
 
+type AdmissionSlot = {
+	released: boolean;
+	superseded: boolean;
+	close?: () => void;
+};
+
+export type RealtimeAdmissionRelease = (() => void) & {
+	setClose: (close: () => void) => void;
+};
+
+function noopAdmissionRelease(): RealtimeAdmissionRelease {
+	const release = (() => {}) as RealtimeAdmissionRelease;
+	release.setClose = () => {};
+	return release;
+}
+
 export class RealtimeAdmissionRegistry {
-	private readonly counts = new Map<string, number>();
+	// principalKey -> (slotKey -> slot). One live connection per slot. A slot keyed
+	// by the client's connectionId is REPLACED when that same connection reconnects
+	// (ping watchdog, hot-reload, refresh), so a reconnecting tab reoccupies its
+	// single slot instead of leaking a fresh one on every reconnect and eventually
+	// exhausting the per-principal cap while old, already-dead streams still hold it.
+	private readonly principals = new Map<string, Map<string, AdmissionSlot>>();
+	// Connections that supply no id each occupy their own slot (the pre-reclaim
+	// behavior); a monotonic counter keeps those keys distinct.
+	private anonymousSeq = 0;
 
 	constructor(private readonly maximum: number) {}
 
-	acquire(principalKey: string | null): (() => void) | null {
-		if (principalKey === null) return () => {};
-		const count = this.counts.get(principalKey) ?? 0;
-		if (count >= this.maximum) return null;
-		this.counts.set(principalKey, count + 1);
-		let released = false;
-		return () => {
-			if (released) return;
-			released = true;
-			const next = (this.counts.get(principalKey) ?? 1) - 1;
-			if (next === 0) this.counts.delete(principalKey);
-			else this.counts.set(principalKey, next);
+	acquire(
+		principalKey: string | null,
+		connectionId?: string | null,
+	): RealtimeAdmissionRelease | null {
+		if (principalKey === null) return noopAdmissionRelease();
+		let slots = this.principals.get(principalKey);
+		if (!slots) {
+			slots = new Map<string, AdmissionSlot>();
+			this.principals.set(principalKey, slots);
+		}
+
+		const validConnectionId =
+			typeof connectionId === "string" &&
+			/^[A-Za-z0-9_-]{1,128}$/.test(connectionId);
+		const slotKey = validConnectionId
+			? `id:${connectionId}`
+			: `anon:${(this.anonymousSeq += 1)}`;
+
+		// Fence and actively close the prior stream before its slot is reused.
+		// Replacing only the counter would allow arbitrarily many live streams to
+		// share one client-controlled id while counting as one.
+		const prior = slots.get(slotKey);
+		if (prior) {
+			prior.superseded = true;
+			prior.released = true;
+			slots.delete(slotKey);
+			prior.close?.();
+		}
+
+		if (slots.size >= this.maximum) return null;
+
+		const slot: AdmissionSlot = { released: false, superseded: false };
+		slots.set(slotKey, slot);
+		const release = (() => {
+			if (slot.released) return;
+			slot.released = true;
+			// Only vacate the cell if THIS slot still occupies it: a reconnect may
+			// have already replaced it, and this release must not evict the new slot.
+			const current = this.principals.get(principalKey);
+			if (current?.get(slotKey) === slot) {
+				current.delete(slotKey);
+					if (current.size === 0) this.principals.delete(principalKey);
+				}
+		}) as RealtimeAdmissionRelease;
+		release.setClose = (close) => {
+			slot.close = close;
+			if (slot.superseded) close();
 		};
+		return release;
 	}
 }
 

@@ -119,6 +119,7 @@ export type RealtimeObservation =
 				| "invalid"
 				| "unavailable"
 				| "started"
+				| "current"
 				| "applied"
 				| "failed"
 				| "expired"
