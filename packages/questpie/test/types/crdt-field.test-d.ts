@@ -1,19 +1,22 @@
-import { z } from "zod";
-
 import type {
-	CrdtAwarenessOf,
+	CrdtFormatOf,
+	IsEligibleCrdtSetField,
 	IsEligibleCrdtTextField,
 } from "#questpie/server/fields/field-class-types.js";
+import { text } from "#questpie/server/modules/core/fields/text.js";
 import { textarea } from "#questpie/server/modules/core/fields/textarea.js";
 
 import type { Equal, Expect } from "./type-test-utils.js";
 
-const awarenessSchema = z.object({ cursor: z.number().optional() });
-
-const cursorAwareness = textarea().default("").required().crdt({
-	format: "text",
-	awareness: awarenessSchema,
-});
+const collaborativeText = textarea()
+	.default("")
+	.required()
+	.crdt({ format: "text" });
+const collaborativeSet = text({ mode: "text" })
+	.array()
+	.default([])
+	.required()
+	.crdt({ format: "set", conflict: "add-wins" });
 
 const markerBeforeRefinements = textarea()
 	.crdt({ format: "text" })
@@ -38,9 +41,20 @@ const invalidHooks = textarea()
 	.required()
 	.hooks({ beforeChange: (value) => value })
 	.crdt({ format: "text" });
+const invalidBoundedText = text()
+	.default("")
+	.required()
+	.crdt({ format: "text" });
+const invalidScalarSet = text({ mode: "text" })
+	.default("")
+	.required()
+	.crdt({ format: "set", conflict: "add-wins" });
 
 type _eligibleAfter = Expect<
-	Equal<IsEligibleCrdtTextField<typeof cursorAwareness>, true>
+	Equal<IsEligibleCrdtTextField<typeof collaborativeText>, true>
+>;
+type _eligibleSet = Expect<
+	Equal<IsEligibleCrdtSetField<typeof collaborativeSet>, true>
 >;
 type _eligibleBefore = Expect<
 	Equal<IsEligibleCrdtTextField<typeof markerBeforeRefinements>, true>
@@ -57,7 +71,13 @@ type _arrayRejected = Expect<
 type _hooksRejected = Expect<
 	Equal<IsEligibleCrdtTextField<typeof invalidHooks>, false>
 >;
-type _awarenessOutput = CrdtAwarenessOf<typeof cursorAwareness>;
-type _awareness = Expect<
-	Equal<_awarenessOutput, z.output<typeof awarenessSchema>>
+type _boundedTextRejected = Expect<
+	Equal<IsEligibleCrdtTextField<typeof invalidBoundedText>, false>
 >;
+type _scalarSetRejected = Expect<
+	Equal<IsEligibleCrdtSetField<typeof invalidScalarSet>, false>
+>;
+type _textFormat = Expect<
+	Equal<CrdtFormatOf<typeof collaborativeText>, "text">
+>;
+type _setFormat = Expect<Equal<CrdtFormatOf<typeof collaborativeSet>, "set">>;

@@ -185,6 +185,7 @@ export type {
 	FieldWithMethods,
 } from "#questpie/server/fields/field-with-methods.js";
 export type * from "#questpie/server/fields/reactive-types.js";
+export type * from "#questpie/server/modules/core/integrated/crdt/types.js";
 export { global } from "#questpie/server/global/builder/global-builder.js";
 // Global builder (expanded from global/builder/index.ts barrel)
 export {

@@ -33,6 +33,10 @@ import type {
 } from "#questpie/server/config/types.js";
 import { GlobalBuilder } from "#questpie/server/global/builder/global-builder.js";
 import type { Global } from "#questpie/server/global/builder/global.js";
+import {
+	createCrdtRegistry,
+	type CrdtRegistry,
+} from "#questpie/server/modules/core/integrated/crdt/registry.js";
 import type { ExecutorService } from "#questpie/server/modules/core/integrated/executor/service.js";
 import type { KVService } from "#questpie/server/modules/core/integrated/kv/service.js";
 import type { LoggerService } from "#questpie/server/modules/core/integrated/logger/service.js";
@@ -136,6 +140,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	private _customServiceNamespaces = new Set<string>();
 	private _warnedContextExtensionKeys = new Set<string>();
 	public readonly config: TConfig;
+	public readonly crdtRegistry: CrdtRegistry;
 	private resolvedLocales: Locale[] | null = null;
 
 	/**
@@ -271,6 +276,11 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		if (config.globals) {
 			this.registerGlobals(config.globals);
 		}
+
+		this.crdtRegistry = createCrdtRegistry({
+			collections: this._collections,
+			globals: this._globals,
+		});
 
 		// Inject global hooks into individual collection/global hooks
 		this.injectGlobalHooks();

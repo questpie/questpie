@@ -16,6 +16,7 @@ import type {
 import type { AppContext } from "#questpie/server/config/app-context.js";
 import type { BaseRequestContext } from "#questpie/server/config/context.js";
 import type { AccessMode } from "#questpie/server/config/types.js";
+import type { CrdtOwnerCapability } from "#questpie/server/modules/core/integrated/crdt/capability.js";
 
 /**
  * Scope resolver function type for globals.
@@ -299,6 +300,8 @@ export interface GlobalBuilderState {
 	 * undefined when using raw Drizzle columns.
 	 */
 	fieldDefinitions: Record<string, any> | undefined;
+	/** Explicit owner-level collaborative aggregate capability. */
+	collaborative: CrdtOwnerCapability<any> | undefined;
 	/**
 	 * Phantom type for field types available in .fields(({ f }) => ...).
 	 * Set directly via EmptyGlobalState generic parameter.
@@ -330,6 +333,7 @@ export type EmptyGlobalState<
 	hooks: {};
 	access: {};
 	fieldDefinitions: undefined;
+	collaborative: undefined;
 	"~fieldTypes": TFieldTypes;
 };
 

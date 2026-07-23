@@ -50,6 +50,10 @@ import type {
 	GlobalTransitionHookContext,
 } from "#questpie/server/global/builder/types.js";
 import {
+	assertNoCrdtFieldsInOrdinaryMutation,
+	assertNoCrdtFieldsInVersionRestore,
+} from "#questpie/server/modules/core/integrated/crdt/crud-guard.js";
+import {
 	extractWorkflowFromVersioning,
 	type ResolvedWorkflowConfig,
 	resolveWorkflowConfig,
@@ -634,6 +638,12 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			context: CRUDContext = {},
 			options: GlobalUpdateOptions = {},
 		) => {
+			assertNoCrdtFieldsInOrdinaryMutation({
+				ownerName: this.state.name,
+				fieldDefinitions: this.state.fieldDefinitions,
+				data,
+			});
+
 			const db = this.getDb(context);
 			const normalized = this.normalizeContext({
 				...context,
@@ -950,6 +960,11 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			options: GlobalRevertVersionOptions,
 			context: CRUDContext = {},
 		) => {
+			assertNoCrdtFieldsInVersionRestore({
+				ownerName: this.state.name,
+				fieldDefinitions: this.state.fieldDefinitions,
+			});
+
 			const db = this.getDb(context);
 			const normalized = this.normalizeContext(context);
 			if (!this.versionsTable) throw ApiError.notImplemented("Versioning");

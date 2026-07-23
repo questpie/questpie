@@ -20,8 +20,7 @@ import type { I18nText } from "#questpie/shared/i18n/types.js";
 
 import type {
 	ArrayFieldState,
-	CrdtTextCapability,
-	CrdtTextConfig,
+	CrdtFieldConfig,
 	FieldState,
 } from "./field-class-types.js";
 import type { Field } from "./field-class.js";
@@ -142,14 +141,9 @@ type FieldTypeMethodsWrapped<
 };
 
 type CrdtFieldMethodWrapped<TState extends FieldState, TMethods> = {
-	crdt<TAwarenessSchema extends ZodType | undefined = undefined>(
-		config: CrdtTextConfig<TAwarenessSchema>,
-	): FieldWithMethods<
-		TState & {
-			crdt: CrdtTextCapability<TAwarenessSchema>;
-		},
-		TMethods
-	>;
+	crdt<const TConfig extends CrdtFieldConfig>(
+		config: TConfig,
+	): FieldWithMethods<TState & { crdt: TConfig }, TMethods>;
 };
 
 export type FieldWithMethods<TState extends FieldState, TMethods> =

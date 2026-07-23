@@ -3,12 +3,13 @@ import type { Field } from "./field-class.js";
 
 export type CrdtFieldEligibilityIssue =
 	| "missing-capability"
-	| "invalid-awareness-schema"
+	| "unsupported-format"
 	| "unsupported-field-type"
 	| "nullable"
 	| "missing-empty-default"
 	| "localized"
 	| "array"
+	| "scalar"
 	| "virtual"
 	| "input-mode"
 	| "output-mode"
@@ -18,30 +19,74 @@ export type CrdtFieldEligibilityIssue =
 	| "from-db-transform"
 	| "to-db-transform"
 	| "text-refinement"
+	| "array-refinement"
 	| "custom-type"
 	| "missing-column";
+
+function hasTextRefinement(state: Field<FieldState>["_state"]): boolean {
+	return (
+		state.minLength !== undefined ||
+		state.maxLength !== undefined ||
+		state.pattern !== undefined ||
+		state.trim === true ||
+		state.lowercase === true ||
+		state.uppercase === true
+	);
+}
+
+function hasEmptyDefault(
+	state: Field<FieldState>["_state"],
+	format: "text" | "set",
+): boolean {
+	if (!state.hasDefault) return false;
+	if (format === "text") return state.defaultValue === "";
+	return Array.isArray(state.defaultValue) && state.defaultValue.length === 0;
+}
 
 export function getCrdtFieldEligibilityIssues(
 	field: Field<FieldState>,
 ): CrdtFieldEligibilityIssue[] {
 	const state = field._state;
+	const capability = state.crdt;
+	const format = capability?.format;
 	const issues: CrdtFieldEligibilityIssue[] = [];
 
-	if (state.crdt?.format !== "text") issues.push("missing-capability");
+	if (format === undefined) {
+		issues.push("missing-capability");
+		return issues;
+	}
+	if (format !== "text" && format !== "set") {
+		issues.push("unsupported-format");
+		return issues;
+	}
+
 	if (
-		state.crdt?.awarenessSchema !== undefined &&
-		typeof (state.crdt.awarenessSchema as { safeParse?: unknown }).safeParse !==
-			"function"
+		format === "text" &&
+		!(
+			(state.type === "textarea" && state.isArray === false) ||
+			(state.type === "text" &&
+				state.textStorage === "text" &&
+				state.isArray === false)
+		)
 	) {
-		issues.push("invalid-awareness-schema");
+		issues.push(state.isArray ? "array" : "unsupported-field-type");
 	}
-	if (state.type !== "textarea") issues.push("unsupported-field-type");
+	if (
+		format === "set" &&
+		!(
+			state.type === "text" &&
+			state.textStorage === "text" &&
+			state.isArray === true &&
+			capability?.format === "set" &&
+			capability.conflict === "add-wins"
+		)
+	) {
+		issues.push(state.isArray ? "unsupported-field-type" : "scalar");
+	}
+
 	if (!state.notNull) issues.push("nullable");
-	if (!state.hasDefault || state.defaultValue !== "") {
-		issues.push("missing-empty-default");
-	}
+	if (!hasEmptyDefault(state, format)) issues.push("missing-empty-default");
 	if (state.localized) issues.push("localized");
-	if (state.isArray) issues.push("array");
 	if (state.virtual !== false) issues.push("virtual");
 	if (state.input !== true) issues.push("input-mode");
 	if (state.output !== true) issues.push("output-mode");
@@ -50,15 +95,9 @@ export function getCrdtFieldEligibilityIssues(
 	if (state.zodTransform) issues.push("zod-transform");
 	if (state.fromDbFn) issues.push("from-db-transform");
 	if (state.toDbFn) issues.push("to-db-transform");
-	if (
-		state.minLength !== undefined ||
-		state.maxLength !== undefined ||
-		state.pattern !== undefined ||
-		state.trim ||
-		state.lowercase ||
-		state.uppercase
-	) {
-		issues.push("text-refinement");
+	if (hasTextRefinement(state)) issues.push("text-refinement");
+	if (state.minItems !== undefined || state.maxItems !== undefined) {
+		issues.push("array-refinement");
 	}
 	if (state.customType) issues.push("custom-type");
 	if (!state.columnFactory) issues.push("missing-column");
@@ -70,5 +109,5 @@ export function assertCrdtFieldEligibility(field: Field<FieldState>): void {
 	const issues = getCrdtFieldEligibilityIssues(field);
 	if (issues.length === 0) return;
 
-	throw new Error(`Invalid QUESTPIE CRDT text field: ${issues.join(", ")}`);
+	throw new Error(`Invalid QUESTPIE CRDT field: ${issues.join(", ")}`);
 }

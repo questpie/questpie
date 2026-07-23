@@ -118,6 +118,10 @@ import {
 } from "#questpie/server/fields/runtime.js";
 import type { FieldAccess } from "#questpie/server/fields/types.js";
 import {
+	assertNoCrdtFieldsInOrdinaryMutation,
+	assertNoCrdtFieldsInVersionRestore,
+} from "#questpie/server/modules/core/integrated/crdt/crud-guard.js";
+import {
 	extractWorkflowFromVersioning,
 	type ResolvedWorkflowConfig,
 	resolveWorkflowConfig,
@@ -1868,6 +1872,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			| { where: Where; data: Record<string, any> },
 		context: CRUDContext = {},
 	) {
+		assertNoCrdtFieldsInOrdinaryMutation({
+			ownerName: this.state.name,
+			fieldDefinitions: this.state.fieldDefinitions,
+			data: params.data,
+		});
+
 		const normalized = this.normalizeContext(context);
 
 		const db = this.getDb(normalized);
@@ -2797,6 +2807,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	 */
 	private createRevertToVersion() {
 		return async (options: RevertVersionOptions, context: CRUDContext = {}) => {
+			assertNoCrdtFieldsInVersionRestore({
+				ownerName: this.state.name,
+				fieldDefinitions: this.state.fieldDefinitions,
+			});
+
 			const db = this.getDb(context);
 			const normalized = this.normalizeContext(context);
 			if (!this.versionsTable) throw ApiError.notImplemented("Versioning");

@@ -297,7 +297,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		`import type { ${l1ToL2.join(", ")} } from "${layerImport(L1_FILE)}";`,
 	);
 	l2.push(
-		'import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";',
+		'import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, CollectionAPI, CrdtClientAPI, CrdtRegistryFromApp, CrdtServerAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";',
 	);
 	l2.push('import type { ChannelsService } from "questpie/channels";');
 	if (extraImports && extraImports.length > 0) {
@@ -1350,9 +1350,16 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	// (`createClient<AppConfig>().collections.nope`). Module category maps are
 	// emitted as type aliases (implicit index signatures), so the plain
 	// aggregates already satisfy the SDK's `QuestpieApp` constraint.
+	lines.push(
+		"export type AppCrdt = CrdtRegistryFromApp<{ collections: AppCollections; globals: AppGlobals }>;",
+	);
+	lines.push("export type AppCrdtClient = CrdtClientAPI<AppCrdt>;");
+	lines.push("export type AppCrdtServer = CrdtServerAPI<AppCrdt>;");
+	lines.push("");
 	lines.push("export type AppConfig = {");
 	lines.push("\tcollections: AppCollections;");
 	lines.push("\tchannels: AppChannels;");
+	lines.push("\tcrdt: AppCrdt;");
 	lines.push("\tglobals: AppGlobals;");
 	lines.push("\troutes: AppRoutes;");
 	lines.push('\tstorage: (typeof _runtime)["storage"];');

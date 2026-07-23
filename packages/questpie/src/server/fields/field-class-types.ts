@@ -11,7 +11,7 @@
 
 import type { SQL } from "drizzle-orm";
 import type { PgJsonbBuilder } from "drizzle-orm/pg-core";
-import type { output as ZodOutput, ZodType } from "zod";
+import type { ZodType } from "zod";
 
 import type { I18nText } from "#questpie/shared/i18n/types.js";
 
@@ -82,26 +82,32 @@ export interface FieldState {
 	crdt?: unknown;
 }
 
-export type CrdtTextConfig<
-	TAwarenessSchema extends ZodType | undefined = undefined,
-> = {
+export type CrdtTextConfig = {
 	format: "text";
-	awareness?: TAwarenessSchema;
 };
 
-export type CrdtTextCapability<
-	TAwarenessSchema extends ZodType | undefined = undefined,
-> = {
-	format: "text";
-	awareness: TAwarenessSchema extends ZodType
-		? ZodOutput<TAwarenessSchema>
-		: never;
+export type CrdtSetConfig = {
+	format: "set";
+	conflict: "add-wins";
 };
 
-export type CrdtAwarenessOf<TField> = TField extends {
-	readonly _: { crdt: { awareness: infer TAwareness } };
+export type CrdtFieldConfig = CrdtTextConfig | CrdtSetConfig;
+
+export type CrdtTextCapability = {
+	format: "text";
+};
+
+export type CrdtSetCapability = {
+	format: "set";
+	conflict: "add-wins";
+};
+
+export type CrdtFieldCapability = CrdtTextCapability | CrdtSetCapability;
+
+export type CrdtFormatOf<TField> = TField extends {
+	readonly _: { crdt: { format: infer TFormat extends "text" | "set" } };
 }
-	? TAwareness
+	? TFormat
 	: never;
 
 export type IsEligibleCrdtTextField<TField> = TField extends {
@@ -110,7 +116,7 @@ export type IsEligibleCrdtTextField<TField> = TField extends {
 	? TState extends { hooks: unknown }
 		? false
 		: TState extends {
-					type: "textarea";
+					type: "textarea" | "text";
 					data: string;
 					notNull: true;
 					hasDefault: true;
@@ -120,6 +126,37 @@ export type IsEligibleCrdtTextField<TField> = TField extends {
 					output: true;
 					isArray: false;
 					crdt: { format: "text" };
+			  }
+			? TState["type"] extends "text"
+				? TState extends { textStorage: "text" }
+					? true
+					: false
+				: true
+			: false
+	: false;
+
+export type IsEligibleCrdtSetField<TField> = TField extends {
+	readonly _: infer TState;
+}
+	? TState extends { hooks: unknown }
+		? false
+		: TState extends {
+					type: "text";
+					textStorage: "text";
+					data: string[];
+					notNull: true;
+					hasDefault: true;
+					localized: false;
+					virtual: false;
+					input: true;
+					output: true;
+					isArray: true;
+					crdt: { format: "set"; conflict: "add-wins" };
+					innerState: {
+						type: "text";
+						textStorage: "text";
+						data: string;
+					};
 			  }
 			? true
 			: false
@@ -223,10 +260,9 @@ export interface FieldRuntimeState {
 	/** toDb transform */
 	toDbFn?: (value: unknown) => unknown;
 	/** Normalized CRDT field capability. */
-	crdt?: {
-		format: "text";
-		awarenessSchema?: ZodType;
-	};
+	crdt?: CrdtFieldCapability;
+	/** Physical text storage selected by the text field factory. */
+	textStorage?: "text" | "varchar";
 
 	// ---- Field-specific refinements (accumulated by chain methods) ----
 	/** Max length (text/email/url) */

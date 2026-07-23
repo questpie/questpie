@@ -14,6 +14,7 @@ import type { AppContext } from "#questpie/server/config/app-context.js";
 import type { AccessMode } from "#questpie/server/config/types.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { FieldLocation } from "#questpie/server/fields/types.js";
+import type { CrdtOwnerCapability } from "#questpie/server/modules/core/integrated/crdt/capability.js";
 import type { SearchableConfig } from "#questpie/server/modules/core/integrated/search/types.js";
 
 /**
@@ -1185,6 +1186,8 @@ export interface CollectionBuilderState {
 	 * for this collection including CRUD methods and HTTP routes.
 	 */
 	upload: UploadOptions | undefined;
+	/** Explicit owner-level collaborative aggregate capability. */
+	collaborative: CrdtOwnerCapability<any> | undefined;
 	/**
 	 * Field definitions from Field Builder.
 	 * Stores the Field objects for validation, introspection, and localization.
@@ -1254,6 +1257,7 @@ export type EmptyCollectionState<
 	validation: undefined;
 	output: undefined;
 	upload: undefined;
+	collaborative: undefined;
 	fieldDefinitions: {};
 	"~fieldTypes": TFieldTypes;
 };

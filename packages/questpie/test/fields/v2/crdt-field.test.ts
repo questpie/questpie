@@ -1,7 +1,5 @@
 import { describe, expect, it } from "bun:test";
 
-import { z } from "zod";
-
 import {
 	assertCrdtFieldEligibility,
 	getCrdtFieldEligibilityIssues,
@@ -9,22 +7,24 @@ import {
 import { text } from "#questpie/server/modules/core/fields/text.js";
 import { textarea } from "#questpie/server/modules/core/fields/textarea.js";
 
-describe("CRDT text field capability", () => {
-	it("stores an immutable text marker and typed awareness schema", () => {
-		const awareness = z
-			.object({
-				cursor: z.number().int().nonnegative().optional(),
-			})
-			.strict();
-		const base = textarea().default("").required();
-		const collaborative = base.crdt({ format: "text", awareness });
-
-		expect(base._state.crdt).toBeUndefined();
-		expect(collaborative._state.crdt).toEqual({
-			format: "text",
-			awarenessSchema: awareness,
+describe("CRDT field strategies", () => {
+	it("stores immutable text and add-wins string-set markers", () => {
+		const textBase = textarea().default("").required();
+		const collaborativeText = textBase.crdt({ format: "text" });
+		const setBase = text({ mode: "text" }).array().default([]).required();
+		const collaborativeSet = setBase.crdt({
+			format: "set",
+			conflict: "add-wins",
 		});
-		expect(collaborative).not.toBe(base);
+
+		expect(textBase._state.crdt).toBeUndefined();
+		expect(collaborativeText._state.crdt).toEqual({ format: "text" });
+		expect(collaborativeSet._state.crdt).toEqual({
+			format: "set",
+			conflict: "add-wins",
+		});
+		expect(collaborativeText).not.toBe(textBase);
+		expect(collaborativeSet).not.toBe(setBase);
 	});
 
 	it("preserves the marker through legal builder call orders", () => {
@@ -40,11 +40,21 @@ describe("CRDT text field capability", () => {
 			.label("Content")
 			.access({ read: true, update: true })
 			.crdt({ format: "text" });
+		const setBefore = text({ mode: "text" })
+			.crdt({ format: "set", conflict: "add-wins" })
+			.array()
+			.default([])
+			.required();
 
 		expect(before._state.crdt).toEqual({ format: "text" });
 		expect(after._state.crdt).toEqual({ format: "text" });
+		expect(setBefore._state.crdt).toEqual({
+			format: "set",
+			conflict: "add-wins",
+		});
 		expect(() => assertCrdtFieldEligibility(before)).not.toThrow();
 		expect(() => assertCrdtFieldEligibility(after)).not.toThrow();
+		expect(() => assertCrdtFieldEligibility(setBefore)).not.toThrow();
 	});
 
 	it("reports every unsupported v1 field shape fail-closed", () => {
@@ -82,18 +92,44 @@ describe("CRDT text field capability", () => {
 				.required()
 				.drizzle((column) => column)
 				.crdt({ format: "text" }),
-			textarea()
+			text().default("").required().crdt({ format: "text" }),
+			text({ mode: "text" })
+				.array()
+				.default([])
+				.required()
+				.crdt({ format: "text" }),
+			text({ mode: "text" })
 				.default("")
 				.required()
-				.crdt({ format: "text", awareness: {} as never }),
-			text({ mode: "text" }).default("").required().crdt({ format: "text" }),
+				.crdt({ format: "set", conflict: "add-wins" }),
+			text()
+				.array()
+				.default([])
+				.required()
+				.crdt({ format: "set", conflict: "add-wins" }),
 		];
 
 		for (const field of cases) {
 			expect(getCrdtFieldEligibilityIssues(field).length).toBeGreaterThan(0);
 			expect(() => assertCrdtFieldEligibility(field)).toThrow(
-				"Invalid QUESTPIE CRDT text field",
+				"Invalid QUESTPIE CRDT field",
 			);
+		}
+	});
+
+	it("accepts exactly unbounded text and unrefined string sets", () => {
+		const fields = [
+			textarea().default("").required().crdt({ format: "text" }),
+			text({ mode: "text" }).default("").required().crdt({ format: "text" }),
+			text({ mode: "text" })
+				.array()
+				.default([])
+				.required()
+				.crdt({ format: "set", conflict: "add-wins" }),
+		];
+
+		for (const field of fields) {
+			expect(getCrdtFieldEligibilityIssues(field)).toEqual([]);
 		}
 	});
 });

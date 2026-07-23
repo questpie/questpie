@@ -179,3 +179,4 @@ export {
 export * from "#questpie/server/i18n/types.js";
 export * from "#questpie/server/config/global-hooks-types.js";
 export type { LoggerConfig } from "#questpie/server/modules/core/integrated/logger/types.js";
+export type * from "#questpie/server/modules/core/integrated/crdt/types.js";

@@ -144,6 +144,14 @@ type ExtractInputObject<TFieldDefs extends Record<string, any>> = Prettify<
 	}
 >;
 
+type CrdtManagedFieldKeys<TFieldDefs extends Record<string, any>> = {
+	[K in keyof TFieldDefs]: TFieldDefs[K] extends {
+		readonly _: { crdt: { format: "text" | "set" } };
+	}
+		? K
+		: never;
+}[keyof TFieldDefs];
+
 /**
  * Extract output types from field definitions.
  * Maps each field to its output type from $types.output.
@@ -200,7 +208,14 @@ type InferCollectionInsert<
 type InferCollectionUpdate<
 	TMainTable extends PgTable,
 	TFieldDefs extends Record<string, any>,
-> = Prettify<Partial<InferCollectionInsert<TMainTable, TFieldDefs>>>;
+> = Prettify<
+	Partial<
+		Omit<
+			InferCollectionInsert<TMainTable, TFieldDefs>,
+			CrdtManagedFieldKeys<TFieldDefs>
+		>
+	>
+>;
 
 /**
  * Legacy select type for raw Drizzle columns (fieldDefinitions is undefined).

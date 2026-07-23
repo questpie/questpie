@@ -1,7 +1,7 @@
 import type { Prettify } from "better-auth";
 import type { SQL } from "drizzle-orm";
 import type { AnyPgColumn, PgTableExtraConfigValue } from "drizzle-orm/pg-core";
-import type { z } from "zod";
+import type { ZodType, z } from "zod";
 
 import type {
 	CollectionInsert,
@@ -38,6 +38,10 @@ import {
 	type BuiltinFields,
 	builtinFields,
 } from "#questpie/server/modules/core/fields/index.js";
+import type {
+	CrdtOwnerCapability,
+	CrdtOwnerConfig,
+} from "#questpie/server/modules/core/integrated/crdt/capability.js";
 import type { SearchableConfig } from "#questpie/server/modules/core/integrated/search/types.js";
 import {
 	buildStorageFileUrl,
@@ -154,6 +158,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			validation: undefined,
 			output: undefined,
 			upload: undefined,
+			collaborative: undefined,
 			fieldDefinitions: {},
 		});
 		if (fieldDefs) {
@@ -517,6 +522,23 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		// Copy existing callback functions and set new indexesFn
 		newBuilder._indexesFn = fn;
 
+		return newBuilder;
+	}
+
+	/** Enable one collaborative aggregate per collection record. */
+	collaborative<TAwarenessSchema extends ZodType | undefined = undefined>(
+		config?: CrdtOwnerConfig<TAwarenessSchema>,
+	): CollectionBuilder<
+		Override<TState, { collaborative: CrdtOwnerCapability<TAwarenessSchema> }>
+	> {
+		const newState = {
+			...this.state,
+			collaborative: {
+				awarenessSchema: config?.awareness,
+			},
+		} as any;
+		const newBuilder = new CollectionBuilder(newState);
+		newBuilder._indexesFn = this._indexesFn;
 		return newBuilder;
 	}
 
@@ -1106,6 +1128,9 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				upload: TOtherState["upload"] extends UploadOptions
 					? TOtherState["upload"]
 					: TState["upload"];
+				collaborative: TOtherState["collaborative"] extends CrdtOwnerCapability
+					? TOtherState["collaborative"]
+					: TState["collaborative"];
 				output: (TState["output"] extends Record<string, any>
 					? TState["output"]
 					: {}) &
@@ -1179,6 +1204,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				...(other.state.fieldDefinitions || {}),
 			},
 			upload: other.state.upload ?? this.state.upload,
+			collaborative: other.state.collaborative ?? this.state.collaborative,
 			output: {
 				...(this.state.output || {}),
 				...(other.state.output || {}),
@@ -1265,6 +1291,7 @@ export function collection<TName extends string>(
 		validation: undefined,
 		output: undefined,
 		upload: undefined,
+		collaborative: undefined,
 		fieldDefinitions: {},
 	}) as any;
 }
