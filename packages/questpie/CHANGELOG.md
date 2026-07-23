@@ -1,5 +1,25 @@
 # questpie
 
+## 4.0.0
+
+### Major Changes
+
+- [#183](https://github.com/questpie/questpie/pull/183) [`4be1529`](https://github.com/questpie/questpie/commit/4be15299ffafa8a4808474823815a3dc6d49689d) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Remove the deprecated realtime compatibility layer and make Realtime v2 the only supported contract.
+
+  - Remove `RealtimeAdapter`, `realtime.adapter`, `realtime.rollout`, the `legacy` and `dual` modes, and the old Postgres, Redis Streams, and Cloudflare realtime adapter entrypoints.
+  - Remove delta control frames and client downgrade behavior. Companion control now requires complete desired topology protocol v1.
+  - Keep `ChangeBroker`, the distributed topology coordinator, structured non-retryable admission errors, and the default `maxFindLimit` of 100 as the supported framework path.
+
+  Upgrade all QuestPie realtime clients and servers together across this major boundary. Postgres apps continue to receive the automatic `PgNotifyChangeBroker`; Redis deployments should configure `redisStreamsChangeBroker`.
+
+### Patch Changes
+
+- [#186](https://github.com/questpie/questpie/pull/186) [`b5c2b78`](https://github.com/questpie/questpie/commit/b5c2b78f274d444a0b63867d262025d2ebd592a9) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Collection engine hardening: transaction-scoped row locks, CRUD refactor, and a function-preserving deep-merge.
+
+  - Add typed transaction-scoped collection row locks for cross-collection invariants.
+  - Refactor the CRUD builder/generator with grouped-find result typing.
+  - Replace `structuredClone` in `deepMerge` with a function-preserving `safeClone`, so app configs that hold callbacks (e.g. Better Auth `sendVerificationEmail`) merge without a `DataCloneError`.
+
 ## 3.16.0
 
 ### Minor Changes

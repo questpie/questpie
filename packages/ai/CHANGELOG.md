@@ -1,5 +1,15 @@
 # @questpie/ai
 
+## 4.0.0
+
+### Patch Changes
+
+- [#186](https://github.com/questpie/questpie/pull/186) [`6e81ff2`](https://github.com/questpie/questpie/commit/6e81ff2cffd83af0f98b2fd1abdf4ca0c5069216) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add a reproducible Codex Harness compatibility gate with an exact SDK/CLI bridge, mandatory explicit model selection, and protected smoke coverage.
+
+- Updated dependencies [[`4be1529`](https://github.com/questpie/questpie/commit/4be15299ffafa8a4808474823815a3dc6d49689d), [`b5c2b78`](https://github.com/questpie/questpie/commit/b5c2b78f274d444a0b63867d262025d2ebd592a9)]:
+  - questpie@4.0.0
+  - @questpie/admin@4.0.0
+
 ## 3.16.0
 
 ### Patch Changes

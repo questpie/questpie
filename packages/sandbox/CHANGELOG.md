@@ -1,5 +1,21 @@
 # @questpie/sandbox
 
+## 4.0.0
+
+### Minor Changes
+
+- [#186](https://github.com/questpie/questpie/pull/186) [`d6931de`](https://github.com/questpie/questpie/commit/d6931defd2705525091dd0cace56c516a8f9d5c3) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Authenticated Agent-workload authority across sandbox, mcp, and executor.
+
+  - **sandbox**: an authenticated Agent workload adapter path with principal-derived sandbox policy and work roots.
+  - **mcp**: a fail-closed Agent-workload boundary that gates CRUD, route, and custom tools with explicit named policy.
+  - **executor**: the workload boundary seam that carries principal authority into execution.
+
+### Patch Changes
+
+- Updated dependencies [[`6e81ff2`](https://github.com/questpie/questpie/commit/6e81ff2cffd83af0f98b2fd1abdf4ca0c5069216), [`4be1529`](https://github.com/questpie/questpie/commit/4be15299ffafa8a4808474823815a3dc6d49689d), [`b5c2b78`](https://github.com/questpie/questpie/commit/b5c2b78f274d444a0b63867d262025d2ebd592a9)]:
+  - @questpie/ai@4.0.0
+  - questpie@4.0.0
+
 ## 3.16.0
 
 ### Patch Changes

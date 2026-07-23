@@ -1,6 +1,6 @@
 {
 	"name": "@questpie/ai",
-	"version": "3.16.0",
+	"version": "4.0.0",
 	"description": "AI module for QuestPie run and worker execution",
 	"repository": {
 		"type": "git",
@@ -107,10 +107,10 @@
 		"tsdown": "^0.18.3"
 	},
 	"peerDependencies": {
-		"@questpie/admin": "^3.0.0",
+		"@questpie/admin": "^4.0.0",
 		"@tanstack/react-query": "^5.x",
 		"drizzle-orm": "1.0.0-beta.6-4414a19",
-		"questpie": "^3.0.0",
+		"questpie": "^4.0.0",
 		"react": "^19.2.0",
 		"react-dom": "^19.2.0",
 		"zod": "^4.2.1"
