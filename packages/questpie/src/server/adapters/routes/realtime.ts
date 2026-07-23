@@ -514,6 +514,9 @@ export async function realtimeSubscribe(
 		sessionId?: string;
 		token?: string;
 		topology?: RealtimeDesiredTopology;
+		// Stable per-tab id the multiplexer reuses across reconnects/hot-reloads so
+		// admission can reclaim this connection's prior slot instead of leaking it.
+		connectionId?: string;
 	};
 	try {
 		body = await request.json();
@@ -918,6 +921,7 @@ export async function realtimeSubscribe(
 	);
 	const releaseConnection = admissionRegistry.acquire(
 		realtimePrincipalKey(resolved.appContext),
+		typeof body.connectionId === "string" ? body.connectionId : null,
 	);
 	if (!releaseConnection) {
 		observeAdmission("connection_limit");
@@ -993,6 +997,7 @@ export async function realtimeSubscribe(
 				topicUnsubscribers.clear();
 				void activeSink.close("normal").catch(() => {});
 			};
+			releaseConnection.setClose(close);
 			const teardownTopic = (topicId: string) => {
 				const unsubscribe = topicUnsubscribers.get(topicId);
 				if (!unsubscribe) return;
@@ -1213,6 +1218,7 @@ export async function realtimeSubscribe(
 					channelUnsubscribers.clear();
 					void transport?.stop().catch(() => {});
 				};
+				releaseConnection.setClose(close);
 				closeStream = close;
 				if (closeRequested || streamCancelled || request.signal.aborted) {
 					close();

@@ -146,6 +146,39 @@ export function realtimeTopicId(topic: TopicConfig): string {
 }
 
 // ============================================================================
+// Connection identity
+// ============================================================================
+
+const CONNECTION_ID_STORAGE_KEY = "questpie-realtime-connection-id";
+
+/**
+ * A per-tab-stable connection id. The server's admission registry reclaims the
+ * prior slot for the same id, so a tab that reconnects (ping watchdog), hot-
+ * reloads, or refreshes reoccupies its ONE connection slot instead of leaking a
+ * fresh one each time and eventually tripping the per-principal cap while dead
+ * streams still hold it. Persisted in sessionStorage so a reload/HMR reuses the
+ * same id; falls back to a per-instance token when storage or crypto is
+ * unavailable (SSR / privacy mode / non-browser tests).
+ */
+export function resolveRealtimeConnectionId(random: () => number = Math.random): string {
+	const generate = () =>
+		typeof globalThis.crypto?.randomUUID === "function"
+			? globalThis.crypto.randomUUID()
+			: `c-${Math.floor(random() * 1e9).toString(36)}-${Math.floor(random() * 1e9).toString(36)}`;
+	try {
+		const storage = globalThis.sessionStorage;
+		if (!storage) return generate();
+		const stored = storage.getItem(CONNECTION_ID_STORAGE_KEY);
+		if (stored) return stored;
+		const id = generate();
+		storage.setItem(CONNECTION_ID_STORAGE_KEY, id);
+		return id;
+	} catch {
+		return generate();
+	}
+}
+
+// ============================================================================
 // Multiplexer
 // ============================================================================
 
@@ -172,6 +205,7 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 	private readonly maxRetryMs: number;
 	private readonly pingWatchdogMs: number;
 	private readonly random: () => number;
+	private readonly connectionId: string;
 
 	constructor(
 		private baseUrl: string,
@@ -188,6 +222,7 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		this.maxRetryMs = runtime.maxRetryMs ?? 30_000;
 		this.pingWatchdogMs = runtime.pingWatchdogMs ?? 25_000;
 		this.random = runtime.random ?? Math.random;
+		this.connectionId = resolveRealtimeConnectionId(this.random);
 	}
 
 	/**
@@ -453,7 +488,10 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 			const response = await this.fetcher(`${this.baseUrl}/realtime`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json", ...authHeaders },
-				body: JSON.stringify({ topics: getTopicsPayload() }),
+				body: JSON.stringify({
+					topics: getTopicsPayload(),
+					connectionId: this.connectionId,
+				}),
 				credentials: this.withCredentials ? "include" : "omit",
 				signal: this.abortController.signal,
 			});
