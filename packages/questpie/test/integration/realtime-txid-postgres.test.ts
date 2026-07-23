@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { beforeAll, describe, expect, it } from "bun:test";
 
 import pg from "pg";
 
@@ -15,6 +15,17 @@ const databaseUrl =
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe.skipIf(!databaseUrl)("realtime txid PostgreSQL ordering", () => {
+	beforeAll(async () => {
+		const pool = new pg.Pool({ connectionString: databaseUrl, max: 1 });
+		try {
+			// QUESTPIE's trigram indexes require pg_trgm to be provisioned
+			// out-of-band before schema migrations run.
+			await pool.query("create extension if not exists pg_trgm");
+		} finally {
+			await pool.end();
+		}
+	});
+
 	it("serializes outbox sequence allocation across real connections", async () => {
 		const broker: ChangeBroker = {
 			start: async () => {},
@@ -79,7 +90,7 @@ describe.skipIf(!databaseUrl)("realtime txid PostgreSQL ordering", () => {
 			await setup.app.migrations.down();
 			await setup.cleanup();
 		}
-	});
+	}, 30_000);
 
 	it("keeps a lower active xid pending until xmin moves strictly past it", async () => {
 		const pool = new pg.Pool({ connectionString: databaseUrl, max: 2 });
