@@ -55,7 +55,7 @@ export function createQuestpieCollection<TRow extends MutableRow>(options: {
 		syncMode,
 		onDispose,
 	} = options;
-	const { queryFn, updateSnapshot } = resolveSync({
+	const { getSnapshotRevision, queryFn, updateSnapshot } = resolveSync({
 		client,
 		findOptions,
 		mode: syncMode,
@@ -73,12 +73,13 @@ export function createQuestpieCollection<TRow extends MutableRow>(options: {
 			queryFn,
 			getKey: rowId,
 			onInsert: async ({ transaction }) => {
+				const snapshotRevision = getSnapshotRevision();
 				const persisted = await Promise.all(
 					transaction.mutations.map((mutation) =>
 						client.create(mutation.modified),
 					),
 				);
-				updateSnapshot((rows) => {
+				updateSnapshot(snapshotRevision, (rows) => {
 					const next = [...rows];
 					for (let index = 0; index < transaction.mutations.length; index++) {
 						const optimistic = transaction.mutations[index]!.modified;
@@ -96,6 +97,7 @@ export function createQuestpieCollection<TRow extends MutableRow>(options: {
 				return skipRefetch;
 			},
 			onUpdate: async ({ transaction }) => {
+				const snapshotRevision = getSnapshotRevision();
 				const persisted = await Promise.all(
 					transaction.mutations.map((mutation) =>
 						client.update({
@@ -104,7 +106,7 @@ export function createQuestpieCollection<TRow extends MutableRow>(options: {
 						}),
 					),
 				);
-				updateSnapshot((rows) => {
+				updateSnapshot(snapshotRevision, (rows) => {
 					const byId = new Map(rows.map((row) => [row.id, row]));
 					for (let index = 0; index < transaction.mutations.length; index++) {
 						const mutation = transaction.mutations[index]!;
@@ -123,6 +125,7 @@ export function createQuestpieCollection<TRow extends MutableRow>(options: {
 				return skipRefetch;
 			},
 			onDelete: async ({ transaction }) => {
+				const snapshotRevision = getSnapshotRevision();
 				await Promise.all(
 					transaction.mutations.map((mutation) =>
 						client.delete({ id: String(mutation.key) }),
@@ -131,7 +134,9 @@ export function createQuestpieCollection<TRow extends MutableRow>(options: {
 				const deleted = new Set(
 					transaction.mutations.map((mutation) => String(mutation.key)),
 				);
-				updateSnapshot((rows) => rows.filter((row) => !deleted.has(row.id)));
+				updateSnapshot(snapshotRevision, (rows) =>
+					rows.filter((row) => !deleted.has(row.id)),
+				);
 				return skipRefetch;
 			},
 		}),

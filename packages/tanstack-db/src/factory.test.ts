@@ -31,6 +31,12 @@ function envelope(docs: Row[]) {
 function createFakeClient(initial: Row[]) {
 	let rows = initial;
 	let failUpdate = false;
+	let heldUpdate:
+		| {
+				started: () => void;
+				wait: Promise<void>;
+		  }
+		| undefined;
 	let liveListener: ((value: ReturnType<typeof envelope>) => void) | undefined;
 	const calls = { find: 0, create: 0, update: 0, delete: 0 };
 
@@ -48,7 +54,12 @@ function createFakeClient(initial: Row[]) {
 			calls.update += 1;
 			if (failUpdate) throw new Error("update rejected");
 			rows = rows.map((row) => (row.id === id ? { ...row, ...data } : row));
-			return rows.find((row) => row.id === id)!;
+			const result = rows.find((row) => row.id === id)!;
+			const held = heldUpdate;
+			heldUpdate = undefined;
+			held?.started();
+			await held?.wait;
+			return result;
 		},
 		delete: async ({ id }: { id: string }) => {
 			calls.delete += 1;
@@ -72,6 +83,18 @@ function createFakeClient(initial: Row[]) {
 		calls,
 		failNextUpdate() {
 			failUpdate = true;
+		},
+		holdNextUpdate() {
+			let markStarted = () => {};
+			const started = new Promise<void>((resolve) => {
+				markStarted = resolve;
+			});
+			let release = () => {};
+			const wait = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			heldUpdate = { started: markStarted, wait };
+			return { started, release };
 		},
 		emit(next: Row[]) {
 			rows = next;
@@ -211,6 +234,27 @@ describe("createQuestpieCollections", () => {
 		expect(db.collections.posts.get("one")?.title).toBe("Persisted");
 		await transaction.isPersisted.promise;
 		expect(db.collections.posts.get("one")?.title).toBe("Persisted");
+		db.destroy();
+	});
+
+	it("does not overwrite a newer snapshot with a delayed mutation response", async () => {
+		const fake = createFakeClient([{ id: "one", title: "Before" }]);
+		const db = createQuestpieCollections(fake.client, {
+			queryClient: new QueryClient(),
+			syncMode: "snapshot",
+		});
+		await db.collections.posts.preload();
+		const held = fake.holdNextUpdate();
+
+		const transaction = db.collections.posts.update("one", (draft) => {
+			draft.title = "Delayed response";
+		});
+		await held.started;
+		fake.emit([{ id: "one", title: "Newer snapshot" }]);
+		held.release();
+		await transaction.isPersisted.promise;
+
+		expect(db.collections.posts.get("one")?.title).toBe("Newer snapshot");
 		db.destroy();
 	});
 

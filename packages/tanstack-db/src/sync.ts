@@ -22,7 +22,11 @@ export function resolveSync<TRow>(options: {
 	onDispose: (dispose: () => void) => void | (() => void);
 }): {
 	queryFn: () => Promise<TRow[]>;
-	updateSnapshot: (update: (rows: TRow[]) => TRow[]) => void;
+	getSnapshotRevision: () => number;
+	updateSnapshot: (
+		revision: number,
+		update: (rows: TRow[]) => TRow[],
+	) => boolean;
 } {
 	const { client, findOptions, mode, queryClient, queryKey, onDispose } =
 		options;
@@ -30,18 +34,23 @@ export function resolveSync<TRow>(options: {
 	if (mode === "refetch") {
 		return {
 			queryFn: async () => (await client.find(findOptions)).docs,
-			updateSnapshot: () => {},
+			getSnapshotRevision: () => 0,
+			updateSnapshot: () => false,
 		};
 	}
 
 	let latest: TRow[] | undefined;
 	let initial: Promise<TRow[]> | undefined;
+	let snapshotRevision = 0;
 	return {
-		updateSnapshot: (update) => {
+		getSnapshotRevision: () => snapshotRevision,
+		updateSnapshot: (revision, update) => {
+			if (revision !== snapshotRevision) return false;
 			latest = update(
 				latest ?? queryClient.getQueryData<TRow[]>(queryKey) ?? [],
 			);
 			queryClient.setQueryData(queryKey, latest);
+			return true;
 		},
 		queryFn: () => {
 			if (latest) return Promise.resolve(latest);
@@ -55,6 +64,7 @@ export function resolveSync<TRow>(options: {
 				const liveDispose = client.live(
 					findOptions,
 					(snapshot) => {
+						snapshotRevision += 1;
 						latest = snapshot.docs;
 						queryClient.setQueryData(queryKey, latest);
 						if (!settled) {
