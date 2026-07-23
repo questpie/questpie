@@ -10,6 +10,7 @@ import type { ChangeBroker, ChangeWake } from "./transport.js";
 
 export const REALTIME_TOPOLOGY_PROTOCOL = "questpie-realtime-topology" as const;
 export const MAX_REALTIME_TOPOLOGY_BYTES = 262_144;
+const DEFAULT_RECONCILIATION_INTERVAL_MS = 15_000;
 
 export type RealtimeTopologyTopic = {
 	id: string;
@@ -501,6 +502,8 @@ type LocalHandler = {
 	apply: (topology: RealtimeDesiredTopology) => Promise<void>;
 	onClose: () => Promise<void> | void;
 	operation: Promise<void>;
+	reconciling: boolean;
+	reconcilePending: boolean;
 };
 
 export class RealtimeTopologyCoordinator {
@@ -508,12 +511,13 @@ export class RealtimeTopologyCoordinator {
 	private readonly broker?: ChangeBroker;
 	private readonly leaseMs: number;
 	private readonly heartbeatMs: number;
-	private readonly reconcileMs: number;
+	private reconcileMs: number;
 	private readonly onError: (error: unknown) => void;
 	private readonly observer?: RealtimeObserver;
 	private readonly handlers = new Map<string, LocalHandler>();
 	private heartbeatTimer?: ReturnType<typeof setInterval>;
 	private reconcileTimer?: ReturnType<typeof setInterval>;
+	private reconcileOperation: Promise<void> | null = null;
 	private started = false;
 
 	constructor(
@@ -533,7 +537,8 @@ export class RealtimeTopologyCoordinator {
 		this.broker = options.broker;
 		this.leaseMs = options.leaseMs ?? 30_000;
 		this.heartbeatMs = options.heartbeatMs ?? 10_000;
-		this.reconcileMs = options.reconcileMs ?? 1_000;
+		this.reconcileMs =
+			options.reconcileMs ?? DEFAULT_RECONCILIATION_INTERVAL_MS;
 		this.onError = options.onError ?? (() => {});
 		this.observer = options.observer;
 	}
@@ -555,12 +560,23 @@ export class RealtimeTopologyCoordinator {
 				this.heartbeatMs,
 			);
 		}
-		if (this.reconcileMs > 0) {
-			this.reconcileTimer = setInterval(
-				() => void this.reconcile().catch(this.onError),
-				this.reconcileMs,
-			);
-		}
+		this.startReconcileTimer();
+	}
+
+	setReconciliationPollInterval(intervalMs: number): void {
+		if (this.reconcileMs === intervalMs) return;
+		this.reconcileMs = intervalMs;
+		if (this.reconcileTimer) clearInterval(this.reconcileTimer);
+		this.reconcileTimer = undefined;
+		this.startReconcileTimer();
+	}
+
+	private startReconcileTimer(): void {
+		if (!this.started || this.reconcileMs <= 0 || this.reconcileTimer) return;
+		this.reconcileTimer = setInterval(
+			() => void this.reconcile().catch(this.onError),
+			this.reconcileMs,
+		);
 	}
 
 	async open(input: {
@@ -588,6 +604,8 @@ export class RealtimeTopologyCoordinator {
 			apply: input.apply,
 			onClose: input.onClose,
 			operation: Promise.resolve(),
+			reconciling: false,
+			reconcilePending: false,
 		});
 		this.observe({
 			type: "topology.lifecycle",
@@ -698,77 +716,160 @@ export class RealtimeTopologyCoordinator {
 	}
 
 	async reconcile(): Promise<void> {
-		await Promise.all(
-			[...this.handlers.keys()].map((key) => this.reconcileSession(key)),
-		);
-		await this.store.cleanupExpired();
+		if (this.reconcileOperation) return this.reconcileOperation;
+		this.reconcileOperation = (async () => {
+			await Promise.all(
+				[...this.handlers.keys()].map((key) => this.reconcileSession(key)),
+			);
+			await this.store.cleanupExpired();
+		})().finally(() => {
+			this.reconcileOperation = null;
+		});
+		return this.reconcileOperation;
 	}
 
 	private async reconcileSession(sessionKey: string): Promise<void> {
 		const handler = this.handlers.get(sessionKey);
 		if (!handler) return;
+		if (handler.reconciling) {
+			handler.reconcilePending = true;
+			await handler.operation;
+			return;
+		}
+		handler.reconciling = true;
 		handler.operation = handler.operation
 			.catch(() => {})
 			.then(async () => {
-				this.observe({
-					type: "topology.lifecycle",
-					phase: "reconcile",
-					outcome: "started",
-				});
-				const row = await this.store.getOwned({
-					sessionKey,
-					ownerId: this.ownerId,
-					ownerGeneration: handler.generation,
-				});
-				if (!row) {
-					this.observe({
-						type: "topology.lifecycle",
-						phase: "lease",
-						outcome: "expired",
-					});
-					await this.closeLocal(sessionKey, false, true);
-					return;
-				}
-				if (row.desiredRevision <= handler.appliedRevision) return;
-				try {
-					await handler.apply(row.desiredTopology);
-				} catch (error) {
-					this.observe({
-						type: "topology.lifecycle",
-						phase: "apply",
-						outcome: "failed",
-						desiredRevision: row.desiredRevision,
-						appliedRevision: handler.appliedRevision,
-					});
-					this.onError(error);
-					await this.closeLocal(sessionKey, true, true);
-					return;
-				}
-				const marked = await this.store.markApplied({
-					sessionKey,
-					ownerId: this.ownerId,
-					ownerGeneration: handler.generation,
-					revision: row.desiredRevision,
-				});
-				if (!marked) {
-					this.observe({
-						type: "topology.lifecycle",
-						phase: "apply",
-						outcome: "fenced",
-					});
-					await this.closeLocal(sessionKey, false, true);
-					return;
-				}
-				handler.appliedRevision = row.desiredRevision;
-				this.observe({
-					type: "topology.lifecycle",
-					phase: "apply",
-					outcome: "applied",
-					desiredRevision: row.desiredRevision,
-					appliedRevision: row.desiredRevision,
-				});
+				do {
+					handler.reconcilePending = false;
+					await this.runReconcileSession(sessionKey, handler);
+				} while (
+					handler.reconcilePending &&
+					this.handlers.get(sessionKey) === handler
+				);
+			})
+			.finally(() => {
+				handler.reconciling = false;
 			});
 		await handler.operation;
+	}
+
+	private async runReconcileSession(
+		sessionKey: string,
+		handler: LocalHandler,
+	): Promise<void> {
+		this.observe({
+			type: "topology.lifecycle",
+			phase: "reconcile",
+			outcome: "started",
+		});
+		let row: TopologyRow | null;
+		try {
+			row = await this.store.getOwned({
+				sessionKey,
+				ownerId: this.ownerId,
+				ownerGeneration: handler.generation,
+			});
+		} catch (error) {
+			this.observe({
+				type: "topology.lifecycle",
+				phase: "reconcile",
+				outcome: "failed",
+			});
+			throw error;
+		}
+		if (!row) {
+			this.observe({
+				type: "topology.lifecycle",
+				phase: "reconcile",
+				outcome: "expired",
+			});
+			this.observe({
+				type: "topology.lifecycle",
+				phase: "lease",
+				outcome: "expired",
+			});
+			await this.closeLocal(sessionKey, false, true);
+			return;
+		}
+		if (row.desiredRevision <= handler.appliedRevision) {
+			this.observe({
+				type: "topology.lifecycle",
+				phase: "reconcile",
+				outcome: "current",
+				desiredRevision: row.desiredRevision,
+				appliedRevision: handler.appliedRevision,
+			});
+			return;
+		}
+		try {
+			await handler.apply(row.desiredTopology);
+		} catch (error) {
+			this.observe({
+				type: "topology.lifecycle",
+				phase: "apply",
+				outcome: "failed",
+				desiredRevision: row.desiredRevision,
+				appliedRevision: handler.appliedRevision,
+			});
+			this.observe({
+				type: "topology.lifecycle",
+				phase: "reconcile",
+				outcome: "failed",
+				desiredRevision: row.desiredRevision,
+				appliedRevision: handler.appliedRevision,
+			});
+			this.onError(error);
+			await this.closeLocal(sessionKey, true, true);
+			return;
+		}
+		let marked: boolean;
+		try {
+			marked = await this.store.markApplied({
+				sessionKey,
+				ownerId: this.ownerId,
+				ownerGeneration: handler.generation,
+				revision: row.desiredRevision,
+			});
+		} catch (error) {
+			this.observe({
+				type: "topology.lifecycle",
+				phase: "reconcile",
+				outcome: "failed",
+				desiredRevision: row.desiredRevision,
+				appliedRevision: handler.appliedRevision,
+			});
+			throw error;
+		}
+		if (!marked) {
+			this.observe({
+				type: "topology.lifecycle",
+				phase: "apply",
+				outcome: "fenced",
+			});
+			this.observe({
+				type: "topology.lifecycle",
+				phase: "reconcile",
+				outcome: "fenced",
+			});
+			await this.closeLocal(sessionKey, false, true);
+			return;
+		}
+		handler.appliedRevision = row.desiredRevision;
+		this.observe({
+			type: "topology.lifecycle",
+			phase: "apply",
+			outcome: "applied",
+			desiredRevision: row.desiredRevision,
+			appliedRevision: row.desiredRevision,
+		});
+		this.observe({
+			type: "topology.lifecycle",
+			phase: "reconcile",
+			outcome: "applied",
+			desiredRevision: row.desiredRevision,
+			appliedRevision: row.desiredRevision,
+		});
 	}
 
 	private async heartbeat(): Promise<void> {

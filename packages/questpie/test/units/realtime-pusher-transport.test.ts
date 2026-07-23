@@ -284,7 +284,7 @@ describe("pusher channel matrix change broker", () => {
 		}
 	});
 
-	test("pusher unavailable state escalates reconciliation cadence", async () => {
+	test("pusher unavailable state escalates outbox and topology reconciliation cadence", async () => {
 		const broker = new DroppingChangeBroker();
 		const delays: number[] = [];
 		const intervalSpy = spyOn(globalThis, "setInterval").mockImplementation(
@@ -305,9 +305,9 @@ describe("pusher channel matrix change broker", () => {
 			});
 			await tick();
 			broker.emitState("unavailable");
-			expect(delays.slice(-2)).toEqual([15_000, 2000]);
+			expect(delays.slice(-2)).toEqual([2000, 2000]);
 			broker.emitState("connected");
-			expect(delays.slice(-3)).toEqual([15_000, 2000, 15_000]);
+			expect(delays.slice(-2)).toEqual([15_000, 15_000]);
 		} finally {
 			intervalSpy.mockRestore();
 			await realtime.destroy();
