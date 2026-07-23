@@ -58,6 +58,7 @@ class PgNotifyDriver {
 	private listenerEndHandler?: () => void;
 	private publisherErrorHandler?: (error: Error) => void;
 	private publisherEndHandler?: () => void;
+	private listenerConnectOperation: Promise<void> | null = null;
 	private publishChain: Promise<void> = Promise.resolve();
 	private pendingPublishes = 0;
 
@@ -102,14 +103,24 @@ class PgNotifyDriver {
 	async start(): Promise<void> {
 		if (this.started) return;
 		this.stopping = false;
-		await this.connectListener();
+		await this.runListenerConnect();
 	}
 
 	private async connectListener(): Promise<void> {
 		const client = await this.ensureListenerClient();
+		this.assertRunning();
 		this.attachListenerLifecycle(client);
 		await this.ensureListenerConnected(client);
+		this.assertRunning();
 		await client.query(`LISTEN ${this.channel}`);
+		if (this.stopping) {
+			try {
+				await client.query(`UNLISTEN ${this.channel}`);
+			} catch {
+				// The central stop path still closes owned clients.
+			}
+			this.assertRunning();
+		}
 		this.notificationHandler = (msg) => {
 			if (!msg.payload) return;
 			let notice: unknown;
@@ -139,6 +150,7 @@ class PgNotifyDriver {
 			clearTimeout(this.reconnectTimer);
 			this.reconnectTimer = null;
 		}
+		await this.listenerConnectOperation?.catch(() => {});
 		// Let the currently executing publish finish and cancel queued publishes
 		// before capturing/closing clients. No queued task may create a new client
 		// after shutdown has started.
@@ -366,11 +378,28 @@ class PgNotifyDriver {
 	private async reconnect(): Promise<void> {
 		if (this.stopping) return;
 		try {
-			await this.connectListener();
+			await this.runListenerConnect();
 		} catch (error) {
+			if (this.stopping) return;
 			this.reportError("reconnect", error);
 			this.scheduleReconnect();
 		}
+	}
+
+	private runListenerConnect(): Promise<void> {
+		if (this.listenerConnectOperation) return this.listenerConnectOperation;
+		let operation: Promise<void>;
+		operation = this.connectListener().finally(() => {
+			if (this.listenerConnectOperation === operation) {
+				this.listenerConnectOperation = null;
+			}
+		});
+		this.listenerConnectOperation = operation;
+		return operation;
+	}
+
+	private assertRunning(): void {
+		if (this.stopping) throw new Error("pg-notify driver is stopping");
 	}
 
 	private async createClient(): Promise<Client> {
