@@ -115,6 +115,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Verify realtime migration generation is idempotent
+        run: bun run verify:realtime-migrations
+
       - name: Start Postgres, Redis, and Soketi
         run: docker compose -f packages/questpie/test/fixtures/soketi/compose.yml up -d --wait
 
