@@ -24,6 +24,8 @@ import type { I18nText } from "#questpie/shared/i18n/types.js";
 import { buildZodFromState } from "./derive-schema.js";
 import type {
 	ArrayFieldState,
+	CrdtTextCapability,
+	CrdtTextConfig,
 	FieldRuntimeState,
 	FieldState,
 } from "./field-class-types.js";
@@ -178,6 +180,24 @@ export class Field<TState extends FieldState = FieldState> {
 	/** Set field-level access control. */
 	access(a: FieldAccess): Field<TState & { access: FieldAccess }> {
 		return this._clone<{ access: FieldAccess }>({ access: a });
+	}
+
+	/** Mark this field as a framework-owned CRDT text field. */
+	crdt<TAwarenessSchema extends ZodType | undefined = undefined>(
+		config: CrdtTextConfig<TAwarenessSchema>,
+	): Field<
+		TState & {
+			crdt: CrdtTextCapability<TAwarenessSchema>;
+		}
+	> {
+		return this._clone<{
+			crdt: CrdtTextCapability<TAwarenessSchema>;
+		}>({
+			crdt: {
+				format: config.format,
+				...(config.awareness ? { awarenessSchema: config.awareness } : {}),
+			},
+		});
 	}
 
 	/**

@@ -11,7 +11,7 @@
 
 import type { SQL } from "drizzle-orm";
 import type { PgJsonbBuilder } from "drizzle-orm/pg-core";
-import type { ZodType } from "zod";
+import type { output as ZodOutput, ZodType } from "zod";
 
 import type { I18nText } from "#questpie/shared/i18n/types.js";
 
@@ -78,7 +78,52 @@ export interface FieldState {
 	relationTo?: string | Record<string, string>;
 	/** Relation kind: "one" (belongsTo/upload), "many" (hasMany/manyToMany) */
 	relationKind?: "one" | "many";
+	/** CRDT capability marker contributed by the core `.crdt()` method. */
+	crdt?: unknown;
 }
+
+export type CrdtTextConfig<
+	TAwarenessSchema extends ZodType | undefined = undefined,
+> = {
+	format: "text";
+	awareness?: TAwarenessSchema;
+};
+
+export type CrdtTextCapability<
+	TAwarenessSchema extends ZodType | undefined = undefined,
+> = {
+	format: "text";
+	awareness: TAwarenessSchema extends ZodType
+		? ZodOutput<TAwarenessSchema>
+		: never;
+};
+
+export type CrdtAwarenessOf<TField> = TField extends {
+	readonly _: { crdt: { awareness: infer TAwareness } };
+}
+	? TAwareness
+	: never;
+
+export type IsEligibleCrdtTextField<TField> = TField extends {
+	readonly _: infer TState;
+}
+	? TState extends { hooks: unknown }
+		? false
+		: TState extends {
+					type: "textarea";
+					data: string;
+					notNull: true;
+					hasDefault: true;
+					localized: false;
+					virtual: false;
+					input: true;
+					output: true;
+					isArray: false;
+					crdt: { format: "text" };
+			  }
+			? true
+			: false
+	: false;
 
 /**
  * Default field state — starting point for all field builders.
@@ -177,6 +222,11 @@ export interface FieldRuntimeState {
 	fromDbFn?: (value: unknown) => unknown;
 	/** toDb transform */
 	toDbFn?: (value: unknown) => unknown;
+	/** Normalized CRDT field capability. */
+	crdt?: {
+		format: "text";
+		awarenessSchema?: ZodType;
+	};
 
 	// ---- Field-specific refinements (accumulated by chain methods) ----
 	/** Max length (text/email/url) */
