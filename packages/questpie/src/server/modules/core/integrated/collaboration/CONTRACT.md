@@ -1,6 +1,6 @@
 # Collaborative-document capability contract
 
-Status: design grill in progress. Decisions CD-01 through CD-03 were ratified
+Status: design grill in progress. Decisions CD-01 through CD-04 were ratified
 on 2026-07-23. No implementation or public API is approved by this document
 yet.
 
@@ -148,6 +148,42 @@ Consequences:
 - **Client:** generated APIs expose typed resource locators without internal
   room ids, tenant ids, provider tokens, or authorization metadata.
 
+### CD-04 — Explicit viewer/editor grants and downgrade behavior
+
+Opening a collaboration session requests an explicit `view` or `edit` mode.
+`view` requires current read authority. `edit` requires both current read and
+edit authority. An edit request is not silently downgraded: the consumer must
+explicitly opt into a viewer fallback, and the session always reports the mode
+that the server actually granted.
+
+Losing edit authority immediately fences the old edit grant and rejects queued
+or racing writes before durable append. A session that explicitly allowed
+viewer fallback may continue as a viewer only when it has no unconfirmed local
+changes. If unconfirmed changes exist, it enters a recovery-required state and
+preserves them for an explicit export/recovery flow; it never discards or
+uploads them under revoked authority.
+
+Losing read authority terminates document synchronization and awareness
+delivery. A viewer is never elevated automatically when edit authority later
+appears; elevation requires an explicit reauthorization/open operation.
+
+Consequences:
+
+- **Public API:** session open declares the requested mode and an optional,
+  explicit viewer fallback. The resulting lifecycle exposes the granted mode
+  and typed denied, revoked, and recovery-required outcomes.
+- **Authorization:** read and edit decisions remain independent. Transactional
+  update fencing, grant expiry, and revalidation cadence are specified by later
+  decisions.
+- **Persistence:** every durable update is attributed to an active editor grant
+  and document epoch/fence. Viewer sessions cannot append update rows.
+- **Transport:** granted mode is a bounded kernel decision carried by the
+  transport, not a provider-owned read-only policy. Revocation closes or
+  downgrades the relevant transport session after the durable fence advances.
+- **Client:** editor bindings stop accepting mutations before a downgrade is
+  exposed. Pending local work survives only through an explicit recovery
+  state; automatic elevation and silent fallback are prohibited.
+
 ## Current enterprise trace
 
 | UI intent                                                                                                                                       | Framework seam                                                                              | Authorization                                                                                | State ownership                                                                                                                                                 | Client projection                                                                                                        |
@@ -178,12 +214,12 @@ consumer change.
 
 ## Open decision queue
 
-The grill resolves one item at a time. The next unresolved item is CD-04:
-the exact contract for requested viewer/editor modes, denial, and mid-session
-mode changes.
+The grill resolves one item at a time. The next unresolved item is CD-05:
+participant roster versus high-frequency awareness, including identity,
+payload, privacy, rate, and lease boundaries.
 
-Later decisions cover awareness, binary limits, persistence, state-vector
-reconnect, snapshots, compaction, multi-device identity, offline merge,
+Later decisions cover binary limits, persistence, state-vector reconnect,
+snapshots, compaction, multi-device identity, offline merge,
 revocation/fencing, validation and migrations, canonical serialization,
 relative anchors, client integration, SSR, failure states, observability,
 packages, tests, and release consumption.
