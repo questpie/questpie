@@ -10,6 +10,7 @@
 export * from "#questpie/shared/collection-meta.js";
 export * from "#questpie/shared/component-ref.js";
 export * from "#questpie/shared/constants.js";
+export * from "#questpie/shared/crdt-protocol.js";
 export * from "#questpie/shared/global-meta.js";
 export * from "#questpie/shared/i18n/index.js";
 export * from "#questpie/shared/txid.js";

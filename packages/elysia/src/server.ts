@@ -24,6 +24,16 @@ export type ElysiaAdapterConfig = Pick<AdapterConfig, "requestLogging"> & {
 	 * @default '/'
 	 */
 	basePath?: string;
+	/**
+	 * CRDT endpoints relative to `basePath`.
+	 *
+	 * The Elysia host implementation is added separately; declaring this
+	 * namespace does not replace the existing HTTP realtime transport.
+	 */
+	crdt?: {
+		/** @default "/crdt" */
+		path?: `/${string}`;
+	};
 };
 
 /**
