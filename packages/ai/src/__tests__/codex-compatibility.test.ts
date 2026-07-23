@@ -357,7 +357,17 @@ describe("Codex compatibility gate", () => {
 			},
 		);
 		expect(cli).toMatchObject({ exitCode: 0, signal: null, timedOut: false });
-		expect(cli.stderr).toBe("");
+		const stderr = cli.stderr.trim();
+		expect(
+			stderr === "" ||
+				(stderr.startsWith(
+					"WARNING: proceeding, even though we could not create PATH aliases:",
+				) &&
+					stderr.includes(
+						"Refusing to create helper binaries under temporary dir",
+					) &&
+					!stderr.includes("\n")),
+		).toBe(true);
 		expect(cli.stdout).toContain(CODEX_CLI_VERSION);
 	});
 
