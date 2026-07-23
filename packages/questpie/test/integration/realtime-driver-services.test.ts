@@ -170,6 +170,7 @@ describe.skipIf(!runDrivers)("realtime ChangeBroker driver matrix", () => {
 	test("Bun SQL create reaches a service subscriber through pg-notify", async () => {
 		const schemaName = `questpie_rt_${crypto.randomUUID().replaceAll("-", "")}`;
 		const admin = new SQL(postgresUrl);
+		await admin.unsafe("create extension if not exists pg_trgm");
 		await admin.unsafe(`create schema "${schemaName}"`);
 		const scopedUrl = new URL(postgresUrl);
 		scopedUrl.searchParams.set("options", `-csearch_path=${schemaName},public`);
@@ -242,40 +243,40 @@ describe.skipIf(!runDrivers)("realtime ChangeBroker driver matrix", () => {
 				sql`select jsonb_typeof(payload) as payload_type, payload from questpie_channel_event limit 1`,
 			);
 			const channelRow = (channelRaw.rows ?? channelRaw)[0];
-				expect(channelRow).toMatchObject({
-					payload_type: "string",
-					payload: "hello",
-				});
-				const scalarPayloads: unknown[] = [
-					"123",
-					"true",
-					"null",
-					'{"x":1}',
-					123,
-					true,
-					{ x: 1 },
-					[1, "two"],
-				];
-				await setup.app.db.insert(questpieChannelEventTable).values(
-					scalarPayloads.map((payload, index) => ({
-						channelHash: "scalar-matrix",
-						seq: index + 2,
-						eventId: `scalar-${index}`,
-						channel: "room-1",
-						event: "message",
-						schemaIdentity: "message-v1",
-						payload,
-						sizeBytes: 16,
-					})),
-				);
-				const scalarRows = await setup.app.db
-					.select({ payload: questpieChannelEventTable.payload })
-					.from(questpieChannelEventTable)
-					.orderBy(questpieChannelEventTable.seq);
-				expect(
-					scalarRows.slice(1).map(({ payload }) => payload),
-				).toEqual(scalarPayloads);
-			} finally {
+			expect(channelRow).toMatchObject({
+				payload_type: "string",
+				payload: "hello",
+			});
+			const scalarPayloads: unknown[] = [
+				"123",
+				"true",
+				"null",
+				'{"x":1}',
+				123,
+				true,
+				{ x: 1 },
+				[1, "two"],
+			];
+			await setup.app.db.insert(questpieChannelEventTable).values(
+				scalarPayloads.map((payload, index) => ({
+					channelHash: "scalar-matrix",
+					seq: index + 2,
+					eventId: `scalar-${index}`,
+					channel: "room-1",
+					event: "message",
+					schemaIdentity: "message-v1",
+					payload,
+					sizeBytes: 16,
+				})),
+			);
+			const scalarRows = await setup.app.db
+				.select({ payload: questpieChannelEventTable.payload })
+				.from(questpieChannelEventTable)
+				.orderBy(questpieChannelEventTable.seq);
+			expect(scalarRows.slice(1).map(({ payload }) => payload)).toEqual(
+				scalarPayloads,
+			);
+		} finally {
 			await setup?.cleanup();
 			await admin.unsafe(`drop schema if exists "${schemaName}" cascade`);
 			await admin.close({ timeout: 5 });
