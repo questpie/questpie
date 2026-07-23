@@ -17,7 +17,7 @@ import {
 import type { RealtimeObservation, RealtimeObserver } from "./observer.js";
 import type {
 	ChannelGapFrame,
-	ChangeBroker,
+	ChangePublisher,
 	ClientSink,
 	ClientTransport,
 	OrderedChannelDelivery,
@@ -146,7 +146,7 @@ export class ChannelEventLedger {
 
 	constructor(
 		private readonly db: AnyDrizzleClient<any>,
-		private readonly changeBroker: ChangeBroker | undefined,
+		private readonly changeBroker: ChangePublisher | undefined,
 		private readonly clientTransport: ClientTransport | undefined,
 		config: Partial<ChannelEventLedgerConfig> = {},
 		private readonly logger?: Pick<LoggerAdapter, "error" | "warn">,

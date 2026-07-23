@@ -20,6 +20,14 @@ export type ChangeWake =
 			ownerGeneration: number;
 			desiredRevision: number;
 			reason: "submit" | "reconnect" | "reconcile";
+	  }
+	| {
+			kind: "crdt";
+			aggregateHash: string;
+			aggregateEpoch: number;
+			head: number;
+			fenceGeneration: number;
+			reason: "publish" | "reconnect" | "reconcile";
 	  };
 
 function isNonNegativeSafeInteger(value: unknown): value is number {
@@ -82,6 +90,29 @@ export function normalizeChangeWake(value: unknown): ChangeWake | null {
 		};
 	}
 
+	if (wake.kind === "crdt") {
+		if (
+			typeof wake.aggregateHash !== "string" ||
+			!/^[a-f0-9]{64}$/.test(wake.aggregateHash) ||
+			!isNonNegativeSafeInteger(wake.aggregateEpoch) ||
+			!isNonNegativeSafeInteger(wake.head) ||
+			!isNonNegativeSafeInteger(wake.fenceGeneration) ||
+			(wake.reason !== "publish" &&
+				wake.reason !== "reconnect" &&
+				wake.reason !== "reconcile")
+		) {
+			return null;
+		}
+		return {
+			kind: wake.kind,
+			aggregateHash: wake.aggregateHash,
+			aggregateEpoch: wake.aggregateEpoch,
+			head: wake.head,
+			fenceGeneration: wake.fenceGeneration,
+			reason: wake.reason,
+		};
+	}
+
 	if (
 		wake.kind !== "topology-maybe-advanced" ||
 		typeof wake.sessionKey !== "string" ||
@@ -116,6 +147,10 @@ export interface ChangeBroker {
 	}): Promise<void>;
 	publish(wake: ChangeWake): Promise<void>;
 	stop(): Promise<void>;
+}
+
+export interface ChangePublisher {
+	publish(wake: ChangeWake): Promise<void>;
 }
 
 export type ChangeBrokerState =

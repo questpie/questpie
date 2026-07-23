@@ -6,7 +6,7 @@ import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
 
 import { questpieRealtimeTopologyTable } from "./collection.js";
 import type { RealtimeObservation, RealtimeObserver } from "./observer.js";
-import type { ChangeBroker, ChangeWake } from "./transport.js";
+import type { ChangePublisher, ChangeWake } from "./transport.js";
 
 export const REALTIME_TOPOLOGY_PROTOCOL = "questpie-realtime-topology" as const;
 export const MAX_REALTIME_TOPOLOGY_BYTES = 262_144;
@@ -508,7 +508,7 @@ type LocalHandler = {
 
 export class RealtimeTopologyCoordinator {
 	private readonly ownerId: string;
-	private readonly broker?: ChangeBroker;
+	private readonly broker?: ChangePublisher;
 	private readonly leaseMs: number;
 	private readonly heartbeatMs: number;
 	private reconcileMs: number;
@@ -523,7 +523,7 @@ export class RealtimeTopologyCoordinator {
 	constructor(
 		private readonly store: RealtimeTopologyStore,
 		options: {
-			broker?: ChangeBroker;
+			broker?: ChangePublisher;
 			ownerId?: string;
 			now?: () => Date;
 			leaseMs?: number;

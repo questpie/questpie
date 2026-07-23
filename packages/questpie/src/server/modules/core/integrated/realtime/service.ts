@@ -7,6 +7,7 @@ import {
 import type { DrizzleClientFromQuestpieConfig } from "#questpie/server/config/types.js";
 import type { LoggerAdapter } from "#questpie/server/modules/core/integrated/logger/types.js";
 
+import { CoreNoticeRouter } from "../collaboration/notice-router.js";
 import { PgNotifyChangeBroker } from "./adapters/pg-notify.js";
 import {
 	type AppendChannelEventInput,
@@ -36,7 +37,6 @@ import {
 	type RealtimeTopologyResult,
 } from "./topology-coordinator.js";
 import type {
-	ChangeBroker,
 	ClientAuthInput,
 	ClientAuthResponse,
 	ClientConfigInput,
@@ -156,7 +156,10 @@ function analyzeWhere(where: any): {
 
 export class RealtimeService {
 	readonly nativeDeltasEnabled: boolean;
-	private changeBroker?: ChangeBroker;
+	/** @internal Shared physical notice lifecycle for realtime and CRDT. */
+	readonly noticeRouter: CoreNoticeRouter;
+	private readonly hasPhysicalBroker: boolean;
+	private unsubscribeNotices?: () => Promise<void>;
 	private clientTransport?: ClientTransport;
 	private listeners = new Set<ListenerEntry>();
 	private directCollectionListeners = new Map<string, Set<ListenerEntry>>();
@@ -168,6 +171,7 @@ export class RealtimeService {
 	private batchSize: number;
 	private draining = false;
 	private drainPending = false;
+	private drainSignalGeneration = 0;
 	private started = false;
 	private startPromise: Promise<void> | null = null;
 	private publisherStartPromise: Promise<void> | null = null;
@@ -192,6 +196,7 @@ export class RealtimeService {
 		config: RealtimeConfig = {},
 		private pgConnectionString?: string,
 		private logger?: Pick<LoggerAdapter, "error" | "warn">,
+		noticeRouter?: CoreNoticeRouter,
 	) {
 		this.nativeDeltasEnabled = config.nativeDeltas === true;
 		const broker =
@@ -201,12 +206,13 @@ export class RealtimeService {
 						connectionString: this.pgConnectionString,
 					})
 				: undefined);
-		this.changeBroker = broker;
+		this.noticeRouter = noticeRouter ?? new CoreNoticeRouter(broker);
+		this.hasPhysicalBroker = Boolean(broker || noticeRouter);
 		this.clientTransport = config.clientTransport;
 		this.batchSize = config.batchSize ?? 500;
 		this.pollIntervalMs =
 			config.pollIntervalMs ??
-			(this.changeBroker || this.pgConnectionString
+			(this.hasPhysicalBroker || this.pgConnectionString
 				? DEFAULT_ADAPTER_RECONCILIATION_INTERVAL_MS
 				: 2000);
 		this.configuredPollIntervalMs = this.pollIntervalMs;
@@ -221,7 +227,7 @@ export class RealtimeService {
 		this.topologyCoordinator = createPostgresRealtimeTopologyCoordinator(
 			this.db,
 			{
-				broker: this.changeBroker,
+				broker: this.noticeRouter,
 				reconcileMs: this.configuredPollIntervalMs,
 				observer: this.observability,
 				onError: (error) =>
@@ -233,7 +239,7 @@ export class RealtimeService {
 		);
 		this.channelEventLedger = new ChannelEventLedger(
 			this.db,
-			this.changeBroker,
+			this.noticeRouter,
 			this.clientTransport,
 			config.channelEvents,
 			this.logger,
@@ -302,6 +308,12 @@ export class RealtimeService {
 		void this.drain(reason).catch((error) => {
 			this.reportTransportFailure("[Realtime] Outbox drain failed", error);
 		});
+	}
+
+	private drainOrDeferUntilStarted(reason: "broker" | "reconnect"): void {
+		this.drainSignalGeneration += 1;
+		if (this.startPromise && !this.started) return;
+		this.drainSafely(reason);
 	}
 
 	private cleanupSafely(force = false): void {
@@ -428,10 +440,10 @@ export class RealtimeService {
 	}
 
 	async notify(event: RealtimeChangeEvent): Promise<void> {
-		if (!this.changeBroker) return;
+		if (!this.hasPhysicalBroker) return;
 		await this.initialize();
 		await this.publishObserved(() =>
-			this.changeBroker!.publish({
+			this.noticeRouter.publish({
 				kind: "outbox-maybe-advanced",
 				highWaterSeq: event.seq,
 				reason: "publish",
@@ -457,8 +469,9 @@ export class RealtimeService {
 		}
 
 		this.publisherStartPromise = (async () => {
-			await this.changeBroker?.start({
-				onWake: (wake) => {
+			this.unsubscribeNotices = await this.noticeRouter.subscribe({
+				kind: "realtime",
+				onNotice: ({ wake }) => {
 					if (wake.kind === "topology-maybe-advanced") {
 						this.topologyCoordinator.onWake(wake);
 						return;
@@ -474,7 +487,7 @@ export class RealtimeService {
 							);
 						return;
 					}
-					this.drainSafely(
+					this.drainOrDeferUntilStarted(
 						wake.reason === "reconnect" ? "reconnect" : "broker",
 					);
 				},
@@ -484,7 +497,7 @@ export class RealtimeService {
 					this.observe({ type: "broker.lifecycle", state });
 					if (state === "connected") {
 						this.setReconciliationPollInterval(this.configuredPollIntervalMs);
-						this.drainSafely("reconnect");
+						this.drainOrDeferUntilStarted("reconnect");
 						void this.channelEventLedger
 							.drain()
 							.catch((error) =>
@@ -500,6 +513,25 @@ export class RealtimeService {
 								: 0,
 						);
 					}
+				},
+				onOverflow: () => {
+					this.drainOrDeferUntilStarted("reconnect");
+					void this.channelEventLedger
+						.drain()
+						.catch((error) =>
+							this.reportTransportFailure(
+								"[Realtime] Channel overflow reconciliation failed",
+								error,
+							),
+						);
+					void this.topologyCoordinator
+						.reconcile()
+						.catch((error) =>
+							this.reportTransportFailure(
+								"[Realtime] Topology overflow reconciliation failed",
+								error,
+							),
+						);
 				},
 			});
 			await this.topologyCoordinator.start();
@@ -895,14 +927,16 @@ export class RealtimeService {
 		}
 
 		this.startPromise = (async () => {
+			const signalGeneration = this.drainSignalGeneration;
 			const latestSeq = await this.getLatestSeq();
+			this.lastSeq = latestSeq;
+			this.started = true;
 			await this.initialize();
 
 			this.startPollTimer();
-
-			this.lastSeq = latestSeq;
-			this.started = true;
-			this.drainSafely("startup");
+			if (this.drainSignalGeneration === signalGeneration) {
+				this.drainSafely("startup");
+			}
 			this.cleanupSafely(true);
 		})()
 			.catch(async (error) => {
@@ -933,7 +967,8 @@ export class RealtimeService {
 			!this.started &&
 			!this.startPromise &&
 			!this.publisherStarted &&
-			!this.publisherStartPromise
+			!this.publisherStartPromise &&
+			!this.unsubscribeNotices
 		) {
 			return;
 		}
@@ -969,7 +1004,8 @@ export class RealtimeService {
 		}
 
 		this.channelEventLedger.destroy();
-		await this.changeBroker?.stop();
+		await this.unsubscribeNotices?.();
+		this.unsubscribeNotices = undefined;
 		await this.clientTransport?.stop();
 		this.publisherStarted = false;
 	}

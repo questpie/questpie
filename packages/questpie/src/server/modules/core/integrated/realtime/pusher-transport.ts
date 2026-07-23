@@ -128,6 +128,9 @@ function wakeKey(wake: ChangeWake): string {
 	if (wake.kind === "channel-events-maybe-advanced") {
 		return `${wake.kind}:${wake.channelHash ?? "*"}`;
 	}
+	if (wake.kind === "crdt") {
+		return `${wake.kind}:${wake.aggregateHash}`;
+	}
 	return `${wake.kind}:${wake.sessionKey}`;
 }
 
