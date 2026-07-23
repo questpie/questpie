@@ -472,6 +472,8 @@ async function evaluateGlobalAccess(
 	const services = extractAppServices(app, {
 		db: context.db,
 		session: context.session,
+		principal: context.principal,
+		actor: context.actor,
 	});
 	const accessContext: GlobalAccessContext = {
 		...services,

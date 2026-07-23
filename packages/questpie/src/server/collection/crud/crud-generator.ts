@@ -539,6 +539,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			{
 				app: this.app,
 				session: normalized.session,
+				principal: normalized.principal,
+				actor: normalized.actor,
 				db,
 				locale: normalized.locale,
 				accessMode: normalized.accessMode,
@@ -1532,6 +1534,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				{
 					app: this.app,
 					session: normalized.session,
+					principal: normalized.principal,
+					actor: normalized.actor,
 					db,
 					locale: normalized.locale,
 					accessMode: normalized.accessMode,
@@ -3086,6 +3090,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					app: this.app,
 					db,
 					session: normalized.session,
+					principal: normalized.principal,
+					actor: normalized.actor,
 					locale: normalized.locale,
 					row: existing,
 					request:
@@ -3123,6 +3129,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const transitionServices = extractAppServices(this.app, {
 				db,
 				session: normalized.session,
+				principal: normalized.principal,
+				actor: normalized.actor,
 			});
 			const transitionCtx: TransitionHookContext = {
 				...transitionServices,
@@ -3406,6 +3414,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			app: this.app,
 			db,
 			session: normalized.session,
+			principal: normalized.principal,
+			actor: normalized.actor,
 			locale: normalized.locale,
 			row,
 			input,

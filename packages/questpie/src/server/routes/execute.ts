@@ -70,6 +70,8 @@ function createRouteStoreContext(
 		{
 			app,
 			session: resolvedContext.session,
+			principal: resolvedContext.principal,
+			actor: resolvedContext.actor,
 			db: resolvedContext.db ?? app.db,
 			locale: resolvedContext.locale,
 			accessMode: resolvedContext.accessMode ?? "system",

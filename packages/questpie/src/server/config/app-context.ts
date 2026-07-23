@@ -191,9 +191,9 @@ export interface AppCtxInfraDefault {
  * (non-`any`) {@link AppCtxInfraDefault}. This is the precise replacement for
  * the all-`any` `AppContextBase` the hook/access surfaces used as a cycle-break.
  */
-export type ResolvedAppHookContext = [
-	keyof Questpie.AppHookContext,
-] extends [never]
+export type ResolvedAppHookContext = [keyof Questpie.AppHookContext] extends [
+	never,
+]
 	? AppCtxInfraDefault
 	: Questpie.AppHookContext;
 
@@ -307,7 +307,9 @@ export type KnownCollectionKey = [keyof Questpie.CollectionKeys] extends [never]
  * interface references nothing — see relation.ts). Use this for relation
  * VALIDATION surfaces; keep {@link KnownCollectionKey} for cosmetic autocomplete.
  */
-export type StrictCollectionKey = [keyof Questpie.CollectionKeys] extends [never]
+export type StrictCollectionKey = [keyof Questpie.CollectionKeys] extends [
+	never,
+]
 	? string
 	: keyof Questpie.CollectionKeys & string;
 
@@ -326,6 +328,8 @@ type ExtractAppServicesBase = {
 	app: unknown;
 	db: unknown;
 	session: unknown;
+	principal?: import("#questpie/server/config/context.js").Principal;
+	actor?: import("#questpie/server/modules/core/integrated/crdt/authority.js").AuthorityActor;
 	services: Record<string, unknown>;
 	queue: unknown;
 	email: unknown;
@@ -362,14 +366,24 @@ export function extractAppServices(
 		locale?: string;
 		accessMode?: string;
 		principal?: import("#questpie/server/config/context.js").Principal;
+		actor?: import("#questpie/server/modules/core/integrated/crdt/authority.js").AuthorityActor;
 		scope?: import("#questpie/server/config/request-scope.js").RequestScope;
 	},
 ): AppContext {
-	if (!app) return { db: overrides?.db } as AppContext;
+	if (!app) {
+		return {
+			db: overrides?.db,
+			session: overrides?.session ?? null,
+			...(overrides?.principal ? { principal: overrides.principal } : {}),
+			...(overrides?.actor ? { actor: overrides.actor } : {}),
+		} as AppContext;
+	}
 	const result: ExtractAppServicesBase & Record<string, unknown> = {
 		app,
 		db: overrides?.db ?? app.db,
 		session: overrides?.session ?? null,
+		...(overrides?.principal ? { principal: overrides.principal } : {}),
+		...(overrides?.actor ? { actor: overrides.actor } : {}),
 		services: {},
 		queue: app.queue,
 		email: app.email,
@@ -399,6 +413,7 @@ export function extractAppServices(
 					locale: overrides?.locale,
 					accessMode: overrides?.accessMode,
 					principal: overrides?.principal,
+					actor: overrides?.actor,
 				},
 				overrides?.scope,
 			);

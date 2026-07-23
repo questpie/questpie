@@ -82,6 +82,8 @@ export function createHookContext(
 	const services = extractAppServices(params.app, {
 		db: params.db,
 		session: normalized.session,
+		principal: normalized.principal,
+		actor: normalized.actor,
 		accessMode: normalized.accessMode,
 	});
 

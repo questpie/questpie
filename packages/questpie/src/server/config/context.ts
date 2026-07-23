@@ -3,6 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { Auth, BetterAuthOptions } from "better-auth";
 import type { Session, User } from "better-auth/types";
 
+import type { AuthorityActor } from "../modules/core/integrated/crdt/authority.js";
 import type { InternalContextStore } from "./internal-context.js";
 import type { AccessMode } from "./types.js";
 
@@ -130,6 +131,7 @@ const appContextStorage = new AsyncLocalStorage<
 		app: unknown;
 		session?: unknown | null;
 		principal?: Principal;
+		actor?: AuthorityActor;
 		db?: unknown;
 		locale?: string;
 		accessMode?: string;
@@ -151,6 +153,7 @@ export interface StoredContext {
 	app: unknown;
 	session?: unknown | null;
 	principal?: Principal;
+	actor?: AuthorityActor;
 	db?: unknown;
 	locale?: string;
 	accessMode?: string;
@@ -229,6 +232,7 @@ export function runWithContext<T>(
 		app: unknown;
 		session?: unknown | null;
 		principal?: Principal;
+		actor?: AuthorityActor;
 		db?: unknown;
 		locale?: string;
 		accessMode?: string;
@@ -399,6 +403,12 @@ export interface BaseRequestContext {
 	 * without a request).
 	 */
 	principal?: Principal;
+
+	/**
+	 * Stable Human/Agent authority actor for collaboration-aware access rules.
+	 * Legacy request authentication remains available separately as `principal`.
+	 */
+	actor?: AuthorityActor;
 
 	/**
 	 * Current locale for this request

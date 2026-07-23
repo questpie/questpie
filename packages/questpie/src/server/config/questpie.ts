@@ -88,6 +88,7 @@ interface ResolvedServiceDefinition {
 const RESERVED_CONTEXT_KEYS = new Set([
 	"session",
 	"principal",
+	"actor",
 	"db",
 	"locale",
 	"defaultLocale",
@@ -1018,6 +1019,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			 * a principal is derived from `session`/`accessMode` for back-compat.
 			 */
 			principal?: Principal;
+			actor?: import("#questpie/server/modules/core/integrated/crdt/authority.js").AuthorityActor;
 			locale?: string;
 			accessMode?: AccessMode;
 			db?: any;
@@ -1089,6 +1091,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			...(extensions ?? {}),
 			session: userCtx.session,
 			...(principal ? { principal } : {}),
+			...(userCtx.actor ? { actor: userCtx.actor } : {}),
 			locale,
 			defaultLocale,
 			accessMode,

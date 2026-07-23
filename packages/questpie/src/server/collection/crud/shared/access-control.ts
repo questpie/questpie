@@ -39,6 +39,8 @@ export interface AccessRuleEvaluationContext {
 	app?: Questpie<any>;
 	db: any;
 	session?: CRUDContext["session"];
+	principal?: CRUDContext["principal"];
+	actor?: CRUDContext["actor"];
 	locale?: string;
 	row?: any;
 	input?: any;
@@ -97,6 +99,8 @@ export async function executeAccessRule(
 		const services = extractAppServices(context.app, {
 			db: context.db,
 			session: context.session,
+			principal: context.principal,
+			actor: context.actor,
 		});
 		// data is non-optional for RowAccessRule callers (they always pass the
 		// loaded row); plain rules tolerate undefined — widen via the cast.
@@ -275,6 +279,8 @@ export function createFieldAccessContext(params: {
 		...(req ? { req } : {}),
 		// session is typed as { user: User; session: Session } | null | undefined
 		user: params.context.session?.user,
+		principal: params.context.principal,
+		actor: params.context.actor,
 		doc: params.doc,
 		operation: params.operation,
 	};

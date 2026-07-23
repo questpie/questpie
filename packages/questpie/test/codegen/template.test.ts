@@ -926,7 +926,7 @@ describe("generateTemplate — emails", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		expect(code).toContain("MailerService, Questpie");
+		expect(code).toContain("MailerService, Principal, Questpie");
 		expect(code.match(/\bMailerService\b/g)?.length).toBe(4);
 	});
 

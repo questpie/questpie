@@ -297,7 +297,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		`import type { ${l1ToL2.join(", ")} } from "${layerImport(L1_FILE)}";`,
 	);
 	l2.push(
-		'import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, CollectionAPI, CrdtClientAPI, CrdtRegistryFromApp, CrdtServerAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";',
+		'import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AuthorityActor, CollectionAPI, CrdtClientAPI, CrdtRegistryFromApp, CrdtServerAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Principal, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";',
 	);
 	l2.push('import type { ChannelsService } from "questpie/channels";');
 	if (extraImports && extraImports.length > 0) {
@@ -923,6 +923,8 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		lines.push("");
 		lines.push("\t// Request-scoped");
 		lines.push("\tsession: _AppSession;");
+		lines.push("\tprincipal?: Principal;");
+		lines.push("\tactor?: AuthorityActor;");
 		if (hasMessages) {
 			lines.push(
 				"\tt: (key: AppMessageKeys | (string & {}), params?: Record<string, unknown>, locale?: string) => string;",

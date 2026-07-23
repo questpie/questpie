@@ -1277,6 +1277,8 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					app: this.app,
 					db,
 					session: normalized.session,
+					principal: normalized.principal,
+					actor: normalized.actor,
 					locale: normalized.locale,
 					row: existing,
 					request:
@@ -1315,6 +1317,8 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			const transitionServices = extractAppServices(this.app, {
 				db,
 				session: normalized.session,
+				principal: normalized.principal,
+				actor: normalized.actor,
 			});
 			const transitionCtx: GlobalTransitionHookContext = {
 				...transitionServices,
@@ -1576,6 +1580,8 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 		const services = extractAppServices(this.app, {
 			db: params.db,
 			session: normalized.session,
+			principal: normalized.principal,
+			actor: normalized.actor,
 		});
 		return {
 			...services,
@@ -1717,6 +1723,8 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			app: this.app,
 			db,
 			session: normalized.session,
+			principal: normalized.principal,
+			actor: normalized.actor,
 			locale: normalized.locale,
 			row,
 			input,
