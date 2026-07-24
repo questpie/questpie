@@ -39,7 +39,6 @@
 	],
 	"skippedPackages": {
 		"@questpie/admin": "covered by the separate questpie-admin skill (audit hook: map it there)",
-		"@questpie/executor-engine (packages/executor)": "engine side of the sandbox primitive; apps target ctx.sandbox",
 		"@questpie/ai": "product layer, not framework surface",
 		"create-questpie": "scaffolder CLI, not a library surface",
 		"@questpie/vite-plugin-iconify": "admin build tooling; covered by the questpie-admin skill"

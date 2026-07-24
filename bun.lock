@@ -378,20 +378,6 @@
         "questpie": "^3.0.0",
       },
     },
-    "packages/executor": {
-      "name": "@questpie/executor",
-      "version": "3.0.18",
-      "dependencies": {
-        "questpie": "workspace:*",
-      },
-      "devDependencies": {
-        "bun-types": "latest",
-        "tsdown": "^0.18.3",
-      },
-      "peerDependencies": {
-        "questpie": "^3.0.0",
-      },
-    },
     "packages/hono": {
       "name": "@questpie/hono",
       "version": "3.16.0",
@@ -1188,8 +1174,6 @@
     "@questpie/docs": ["@questpie/docs@workspace:apps/docs"],
 
     "@questpie/elysia": ["@questpie/elysia@workspace:packages/elysia"],
-
-    "@questpie/executor": ["@questpie/executor@workspace:packages/executor"],
 
     "@questpie/hono": ["@questpie/hono@workspace:packages/hono"],
 
