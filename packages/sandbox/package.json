@@ -35,6 +35,10 @@
 			"types": "./src/exports/adapter.ts",
 			"default": "./src/exports/adapter.ts"
 		},
+		"./modules/sandbox": {
+			"types": "./src/exports/modules/sandbox.ts",
+			"default": "./src/exports/modules/sandbox.ts"
+		},
 		"./package.json": {
 			"types": "./package.json",
 			"default": "./package.json"
@@ -51,6 +55,10 @@
 				"types": "./dist/adapter.d.mts",
 				"default": "./dist/adapter.mjs"
 			},
+			"./modules/sandbox": {
+				"types": "./dist/modules/sandbox.d.mts",
+				"default": "./dist/modules/sandbox.mjs"
+			},
 			"./package.json": {
 				"types": "./package.json",
 				"default": "./package.json"
@@ -60,6 +68,7 @@
 	"scripts": {
 		"build": "tsdown",
 		"check-types": "tsc --noEmit",
+		"questpie:generate": "bun questpie generate --verbose",
 		"test": "bun test"
 	},
 	"dependencies": {
