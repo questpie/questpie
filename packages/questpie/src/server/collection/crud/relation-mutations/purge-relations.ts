@@ -573,7 +573,9 @@ export async function lockRelationTargetsForWrite(options: {
 	if (targets.length === 0) return;
 
 	const resolvedTargets = targets.map((target) => {
-		const targetCrud = app.collections[target.collection] as CRUD | undefined;
+		const targetCrud =
+			(app.collections[target.collection] as RelationSourceCrud | undefined) ??
+			(app.globals[target.collection] as RelationSourceCrud | undefined);
 		const targetTable = targetCrud?.["~internalRelatedTable"] as
 			| PgTable
 			| undefined;
