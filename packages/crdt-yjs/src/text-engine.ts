@@ -17,7 +17,7 @@ const FORMAT_VERSION = 1;
 const CODEC_FINGERPRINT =
 	"fd9143e742c66683554636070a6ca3fc182e159511921b4dc91a4d49361f5c45";
 
-export function createYjsTextEngine(): CrdtFieldEngine<"text", string> {
+export function createYjsTextEngineCore(): CrdtFieldEngine<"text", string> {
 	const engine: CrdtFieldEngine<"text", string> = {
 		engineId: ENGINE_ID,
 		engineVersion: 1,

@@ -27,16 +27,15 @@
 	"peerDependencies": {
 		"questpie": "^3.16.0"
 	},
-	"main": "./dist/index.mjs",
-	"module": "./dist/index.mjs",
-	"types": "./dist/index.d.mts",
 	"exports": {
-		".": "./src/exports/index.ts",
+		"./client": "./src/exports/client.ts",
+		"./server": "./src/exports/server.ts",
 		"./package.json": "./package.json"
 	},
 	"publishConfig": {
 		"exports": {
-			".": "./dist/index.mjs",
+			"./client": "./dist/client.mjs",
+			"./server": "./dist/server.mjs",
 			"./package.json": "./package.json"
 		}
 	}
