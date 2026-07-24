@@ -58,6 +58,8 @@ export function createCrdtProjectionCoordinator(
 			}
 			if (
 				result.projectedCommitSeq < 0n ||
+				(result.status !== "noop" &&
+					result.projectedCommitSeq > claim.targetCommitSeq) ||
 				(result.status === "applied" &&
 					result.projectedCommitSeq !== claim.targetCommitSeq) ||
 				(result.status === "noop" &&

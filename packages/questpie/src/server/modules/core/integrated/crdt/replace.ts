@@ -54,6 +54,7 @@ export function createCrdtReplaceCoordinator<TStaged>(
 		): Promise<CrdtReplaceResult> {
 			const candidate = snapshotFieldInput(input);
 			const staged = await stage(adapter.stageField(candidate), candidate);
+			verifyStaged(staged, candidate);
 			return verifyResult(
 				candidate.resourceId,
 				await adapter.commitField(candidate, staged),
@@ -80,12 +81,19 @@ export function createCrdtReplaceCoordinator<TStaged>(
 				);
 			}
 			const staged = await stage(adapter.stageAggregate(candidate), candidate);
+			verifyStaged(staged, candidate);
 			return verifyResult(
 				candidate.resourceId,
 				await adapter.commitAggregate(candidate, staged),
 			);
 		},
 	});
+}
+
+function verifyStaged<TStaged>(staged: TStaged, input: object): void {
+	if (stagedReplaceProofs.get(staged as object) !== input) {
+		throw new TypeError("replace staging capability is invalid");
+	}
 }
 
 async function stage<TStaged>(
