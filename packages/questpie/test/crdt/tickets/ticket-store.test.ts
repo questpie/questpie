@@ -145,8 +145,22 @@ describe("CRDT durable ticket admission", () => {
 			authorization: authorization(),
 		});
 
+		const [admissionBeforeRejection] = await db
+			.select()
+			.from(questpieCrdtSubjectAdmissionTable)
+			.where(eq(questpieCrdtSubjectAdmissionTable.subjectId, ID.subject));
 		await expect(store.issue(authorization())).rejects.toBeInstanceOf(
 			CrdtTicketRejectedError,
+		);
+		const [admissionAfterRejection] = await db
+			.select()
+			.from(questpieCrdtSubjectAdmissionTable)
+			.where(eq(questpieCrdtSubjectAdmissionTable.subjectId, ID.subject));
+		expect(admissionAfterRejection?.ticketTokens).toBe(
+			admissionBeforeRejection?.ticketTokens,
+		);
+		expect(admissionAfterRejection?.ticketRefilledAt).toEqual(
+			admissionBeforeRejection?.ticketRefilledAt,
 		);
 		const secondTicketId = issued[1]!.ticket.slice(
 			0,
@@ -260,6 +274,84 @@ describe("CRDT durable ticket admission", () => {
 		expect(issued.ticket).toBeString();
 	});
 
+	it("caps ticket and session lifetimes at the DB-checked authority expiry", async () => {
+		const authorityExpiresAt = new Date(Date.now() + 10_000);
+		const store = createCrdtTicketAdmissionStore(db, {
+			secretKey: SECRET_KEY,
+		});
+		const candidate = authorization({ authorityExpiresAt });
+		const issued = await store.issue(candidate);
+		expect(issued.expiresAt.getTime()).toBeLessThanOrEqual(
+			authorityExpiresAt.getTime(),
+		);
+		const session = await store.redeem({
+			ticket: issued.ticket,
+			authorization: candidate,
+		});
+		expect(session.leaseExpiresAt.getTime()).toBeLessThanOrEqual(
+			authorityExpiresAt.getTime(),
+		);
+
+		await expect(
+			store.issue(
+				authorization({
+					credentialFingerprint: Buffer.alloc(32, 0x72),
+					authorityExpiresAt: new Date(Date.now() - 1_000),
+				}),
+			),
+		).rejects.toBeInstanceOf(CrdtTicketRejectedError);
+	});
+
+	it("rolls redemption back when session creation fails after ticket consumption", async () => {
+		const store = createCrdtTicketAdmissionStore(db, {
+			secretKey: SECRET_KEY,
+		});
+		const issued = await store.issue(authorization());
+		const ticketId = issued.ticket.slice(0, issued.ticket.indexOf("."));
+		await db.execute(
+			sql.raw(`
+			CREATE FUNCTION reject_crdt_session_insert() RETURNS trigger
+			LANGUAGE plpgsql AS $$
+			BEGIN
+				RAISE EXCEPTION 'injected session failure';
+			END;
+			$$
+		`),
+		);
+		await db.execute(
+			sql.raw(`
+			CREATE TRIGGER reject_crdt_session_insert
+			BEFORE INSERT ON questpie_crdt_session
+			FOR EACH ROW EXECUTE FUNCTION reject_crdt_session_insert()
+		`),
+		);
+
+		await expect(
+			store.redeem({
+				ticket: issued.ticket,
+				authorization: authorization(),
+			}),
+		).rejects.toBeInstanceOf(CrdtTicketRejectedError);
+		const [rolledBackTicket] = await db
+			.select()
+			.from(questpieCrdtTicketTable)
+			.where(eq(questpieCrdtTicketTable.id, ticketId));
+		expect(rolledBackTicket?.redeemedAt).toBeNull();
+		expect(await db.select().from(questpieCrdtSessionTable)).toHaveLength(0);
+
+		await db.execute(
+			sql.raw(
+				"DROP TRIGGER reject_crdt_session_insert ON questpie_crdt_session",
+			),
+		);
+		await db.execute(sql.raw("DROP FUNCTION reject_crdt_session_insert()"));
+		const redeemed = await store.redeem({
+			ticket: issued.ticket,
+			authorization: authorization(),
+		});
+		expect(redeemed.sessionId).toBeString();
+	});
+
 	it("requires effective mode to agree with the persisted field grants", async () => {
 		const base = authorization();
 		await expect(
@@ -313,6 +405,85 @@ describe("CRDT durable ticket admission", () => {
 			.from(questpieCrdtTicketGrantTable)
 			.where(eq(questpieCrdtTicketGrantTable.ticketId, ticketId));
 		expect(grantCount?.value).toBe(1);
+	});
+
+	it("rejects every stale authority-cut dimension independently", async () => {
+		const store = createCrdtTicketAdmissionStore(db, {
+			secretKey: SECRET_KEY,
+		});
+		const staleCandidates: ReadonlyArray<
+			[
+				string,
+				(
+					snapshot: CrdtAuthorizedTicketSnapshot,
+				) => CrdtAuthorizedTicketSnapshot,
+			]
+		> = [
+			[
+				"resource read fence",
+				(snapshot) => ({ ...snapshot, resourceReadFence: 1n }),
+			],
+			[
+				"resource edit fence",
+				(snapshot) => ({ ...snapshot, resourceEditFence: 1n }),
+			],
+			[
+				"owner policy",
+				(snapshot) => ({ ...snapshot, ownerPolicyRevision: 1n }),
+			],
+			[
+				"subject read fence",
+				(snapshot) => ({ ...snapshot, subjectReadFence: 1n }),
+			],
+			[
+				"subject edit fence",
+				(snapshot) => ({ ...snapshot, subjectEditFence: 1n }),
+			],
+			[
+				"session generation",
+				(snapshot) => ({ ...snapshot, sessionGeneration: 1n }),
+			],
+			["aggregate head", (snapshot) => ({ ...snapshot, headCommitSeq: 1n })],
+			[
+				"field epoch",
+				(snapshot) => withBindingCut(snapshot, { fieldEpoch: 1n }),
+			],
+			[
+				"field cursor",
+				(snapshot) => withBindingCut(snapshot, { headFieldCursor: 1n }),
+			],
+			[
+				"field read fence",
+				(snapshot) => withBindingCut(snapshot, { fieldReadFence: 1n }),
+			],
+			[
+				"field edit fence",
+				(snapshot) => withBindingCut(snapshot, { fieldEditFence: 1n }),
+			],
+			[
+				"subject field read fence",
+				(snapshot) => withGrant(snapshot, { subjectFieldReadFence: 1n }),
+			],
+			[
+				"subject field edit fence",
+				(snapshot) => withGrant(snapshot, { subjectFieldEditFence: 1n }),
+			],
+		];
+
+		for (const [index, [label, makeStale]] of staleCandidates.entries()) {
+			const current = authorization({
+				credentialFingerprint: Buffer.alloc(32, index + 1),
+			});
+			const issued = await store.issue(current);
+			await expect(
+				store.redeem({
+					ticket: issued.ticket,
+					authorization: makeStale(current),
+				}),
+				label,
+			).rejects.toBeInstanceOf(CrdtTicketRejectedError);
+			await expireTicket(db, issued);
+		}
 	});
 
 	it("makes stale fences, used tickets, bad secrets, principals, and origins indistinguishable", async () => {
@@ -423,6 +594,33 @@ function authorization(
 			},
 		],
 		...overrides,
+	};
+}
+
+function withBindingCut(
+	snapshot: CrdtAuthorizedTicketSnapshot,
+	overrides: Partial<CrdtAuthorizedTicketSnapshot["bindings"][number]>,
+): CrdtAuthorizedTicketSnapshot {
+	return {
+		...snapshot,
+		bindings: snapshot.bindings.map((binding) => ({
+			...binding,
+			...overrides,
+		})),
+		grants: snapshot.grants.map((grant) => ({
+			...grant,
+			...overrides,
+		})),
+	};
+}
+
+function withGrant(
+	snapshot: CrdtAuthorizedTicketSnapshot,
+	overrides: Partial<CrdtAuthorizedTicketSnapshot["grants"][number]>,
+): CrdtAuthorizedTicketSnapshot {
+	return {
+		...snapshot,
+		grants: snapshot.grants.map((grant) => ({ ...grant, ...overrides })),
 	};
 }
 
