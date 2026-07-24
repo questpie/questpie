@@ -3,6 +3,11 @@ import { Buffer } from "node:buffer";
 import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
 import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
+import {
+	type CrdtEngineFormat,
+	type CrdtFieldEngine,
+	hashCrdtCanonicalValue,
+} from "#questpie/shared/crdt-engine.js";
 
 import {
 	createCrdtProjectionCoordinator,
@@ -17,8 +22,10 @@ import {
 	questpieCrdtResourceEpochTable,
 	questpieCrdtResourceTable,
 } from "./schema.js";
+import { materializeCrdtAggregateAtCut } from "./sync-store.js";
 
 type CrdtDatabase = AnyDrizzleClient<any>;
+type AnyEngine = CrdtFieldEngine<CrdtEngineFormat, any>;
 
 type ScheduledField = Readonly<{
 	bindingId: string;
@@ -67,6 +74,108 @@ export type CrdtProjectionOwnerPort<TOwner> = Readonly<{
 		},
 	): Promise<1>;
 }>;
+
+export function createCrdtExactCutProjectionMaterializer(input: {
+	resolveEngine(binding: { format: number; formatVersion: number }): AnyEngine;
+}) {
+	return async (
+		db: CrdtDatabase,
+		claim: CrdtProjectionClaim,
+		scheduledFields: readonly ScheduledField[],
+		basisProjectedCommitSeq: bigint,
+	): Promise<readonly CrdtProjectionField[]> => {
+		const [epoch] = await db
+			.select()
+			.from(questpieCrdtResourceEpochTable)
+			.where(
+				and(
+					eq(questpieCrdtResourceEpochTable.id, claim.resourceEpochId),
+					eq(questpieCrdtResourceEpochTable.resourceId, claim.resourceId),
+					eq(
+						questpieCrdtResourceEpochTable.aggregateEpoch,
+						claim.aggregateEpoch,
+					),
+					eq(questpieCrdtResourceEpochTable.schemaId, claim.schemaId),
+				),
+			);
+		if (
+			!epoch ||
+			epoch.projectedCommitSeq !== basisProjectedCommitSeq ||
+			claim.targetCommitSeq > epoch.headCommitSeq
+		) {
+			throw new Error("CRDT projection basis changed");
+		}
+		const bindings = await db
+			.select()
+			.from(questpieCrdtBindingTable)
+			.where(
+				and(
+					eq(questpieCrdtBindingTable.resourceId, claim.resourceId),
+					inArray(questpieCrdtBindingTable.status, [1, 3]),
+					isNull(questpieCrdtBindingTable.retiredAt),
+				),
+			)
+			.orderBy(asc(questpieCrdtBindingTable.id));
+		const scheduled = new Map(
+			scheduledFields.map((field) => [field.bindingId, field]),
+		);
+		if (
+			bindings.length !== scheduled.size ||
+			bindings.some((binding) => !scheduled.has(binding.id))
+		) {
+			throw new Error("CRDT projection manifest changed");
+		}
+		const engines = new Map<number, AnyEngine>();
+		for (const binding of bindings) {
+			const engine = input.resolveEngine(binding);
+			if (
+				engine.formatVersion !== binding.formatVersion ||
+				(engine.format === "text" ? 1 : 2) !== binding.format
+			) {
+				throw new Error("CRDT projection engine is incompatible");
+			}
+			engines.set(binding.fieldSlot, engine);
+		}
+		const replicas = await materializeCrdtAggregateAtCut(db, {
+			resourceId: claim.resourceId,
+			resourceEpochId: claim.resourceEpochId,
+			schemaId: claim.schemaId,
+			targetCommitSeq: claim.targetCommitSeq,
+			currentManifestId: epoch.currentSnapshotManifestId,
+			previousManifestId: epoch.previousSnapshotManifestId,
+			bindings,
+			engines,
+			targetFieldCursors: new Map(
+				scheduledFields.map((field) => [
+					field.bindingId,
+					field.targetFieldCursor,
+				]),
+			),
+		});
+		if (!replicas) throw new Error("CRDT projection recovery basis is corrupt");
+		return Promise.all(
+			bindings.map(async (binding) => {
+				const engine = engines.get(binding.fieldSlot)!;
+				const replica = replicas.get(binding.fieldSlot);
+				const scheduledField = scheduled.get(binding.id)!;
+				if (!replica) throw new Error("CRDT projection field is incomplete");
+				const value = engine.project(replica);
+				return Object.freeze({
+					bindingId: binding.id,
+					stableFieldId: binding.stableFieldId,
+					fieldEpoch: binding.fieldEpoch,
+					targetFieldCursor: scheduledField.targetFieldCursor,
+					canonicalHash: await hashCrdtCanonicalValue(engine.format, value),
+					canonicalRevision:
+						binding.projectedCanonicalRevision +
+						(scheduledField.targetFieldCursor - binding.projectedFieldCursor),
+					value,
+					shouldWrite: scheduledField.shouldWrite,
+				});
+			}),
+		);
+	};
+}
 
 export function createCrdtProjectionStore<TOwner>(
 	db: CrdtDatabase,
@@ -339,9 +448,13 @@ async function commitProjection<TOwner>(
 					)) ||
 				field.targetFieldCursor !== scheduledField.targetFieldCursor ||
 				field.shouldWrite !== scheduledField.shouldWrite ||
+				field.targetFieldCursor < binding.projectedFieldCursor ||
 				field.targetFieldCursor > binding.headFieldCursor ||
-				field.canonicalRevision !== binding.canonicalRevision ||
-				!equalBytes(field.canonicalHash, binding.canonicalHash)
+				field.canonicalRevision !==
+					binding.projectedCanonicalRevision +
+						(field.targetFieldCursor - binding.projectedFieldCursor) ||
+				(field.targetFieldCursor === binding.headFieldCursor &&
+					!equalBytes(field.canonicalHash, binding.canonicalHash))
 			);
 		})
 	) {

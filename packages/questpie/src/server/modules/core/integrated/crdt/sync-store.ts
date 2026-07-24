@@ -155,14 +155,18 @@ export function createCrdtDatabaseSyncSource(
 						}
 						engines.set(binding.fieldSlot, engine);
 					}
-					const selected = await materializeAggregateBasis(tx, {
+					const selected = await materializeCrdtAggregateAtCut(tx, {
 						resourceId: session.resourceId,
 						resourceEpochId: session.resourceEpochId,
 						schemaId: session.schemaId,
+						targetCommitSeq: epoch.headCommitSeq,
 						currentManifestId: epoch.currentSnapshotManifestId,
 						previousManifestId: epoch.previousSnapshotManifestId,
 						bindings,
 						engines,
+						targetFieldCursors: new Map(
+							bindings.map((binding) => [binding.id, binding.headFieldCursor]),
+						),
 					});
 					if (!selected) throw rejected();
 					let totalBytes = 0;
@@ -401,16 +405,18 @@ export function createCrdtBasisProofVerifier(basis: CrdtSyncBasis) {
 	};
 }
 
-async function materializeAggregateBasis(
+export async function materializeCrdtAggregateAtCut(
 	db: CrdtDatabase,
 	input: {
 		resourceId: string;
 		resourceEpochId: string;
 		schemaId: string;
+		targetCommitSeq: bigint;
 		currentManifestId: string | null;
 		previousManifestId: string | null;
 		bindings: readonly (typeof questpieCrdtBindingTable.$inferSelect)[];
 		engines: ReadonlyMap<number, AnyEngine>;
+		targetFieldCursors: ReadonlyMap<string, bigint>;
 	},
 ): Promise<Map<number, CrdtEngineReplica<CrdtEngineFormat, any>> | null> {
 	for (const manifestId of [
@@ -432,6 +438,10 @@ async function materializeAggregateBasis(
 						),
 						eq(questpieCrdtSnapshotManifestTable.schemaId, input.schemaId),
 						eq(questpieCrdtSnapshotManifestTable.status, 2),
+						lte(
+							questpieCrdtSnapshotManifestTable.coversCommitSeq,
+							input.targetCommitSeq,
+						),
 					),
 				)
 				.limit(1);
@@ -462,9 +472,12 @@ async function materializeAggregateBasis(
 			for (const binding of input.bindings) {
 				const engine = input.engines.get(binding.fieldSlot);
 				const snapshot = snapshotsByBinding.get(binding.id);
+				const targetFieldCursor = input.targetFieldCursors.get(binding.id);
 				if (
 					!engine ||
 					!snapshot ||
+					targetFieldCursor === undefined ||
+					snapshot.fieldCursor > targetFieldCursor ||
 					snapshot.schemaId !== input.schemaId ||
 					snapshot.fieldEpoch !== binding.fieldEpoch ||
 					snapshot.fieldSlot !== binding.fieldSlot ||
@@ -509,7 +522,7 @@ async function materializeAggregateBasis(
 							),
 							eq(questpieCrdtUpdateTable.bindingId, binding.id),
 							gt(questpieCrdtUpdateTable.fieldCursor, snapshot.fieldCursor),
-							lte(questpieCrdtUpdateTable.fieldCursor, binding.headFieldCursor),
+							lte(questpieCrdtUpdateTable.fieldCursor, targetFieldCursor),
 						),
 					)
 					.orderBy(asc(questpieCrdtUpdateTable.fieldCursor));
@@ -539,7 +552,7 @@ async function materializeAggregateBasis(
 						assignedFieldCursor: update.fieldCursor,
 					});
 				}
-				if (replica.basis.fieldCursor !== binding.headFieldCursor) {
+				if (replica.basis.fieldCursor !== targetFieldCursor) {
 					throw rejected();
 				}
 				result.set(binding.fieldSlot, replica);
