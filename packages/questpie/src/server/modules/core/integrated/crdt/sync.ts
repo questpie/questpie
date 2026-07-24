@@ -13,12 +13,16 @@ export type CrdtSyncField = Readonly<{
 	bindingId: string;
 	fieldSlot: number;
 	fieldEpoch: bigint;
+	grant: 0 | 1;
+	formatVersion: number;
+	readFence: bigint;
+	editFence: bigint;
 	fieldCursor: bigint;
 	bytes: Uint8Array;
 }>;
 
 export type CrdtSyncBasis = Readonly<{
-	sessionId?: string;
+	sessionId: string;
 	resourceId: string;
 	resourceEpochId: string;
 	schemaId: string;
@@ -30,8 +34,12 @@ export type CrdtSyncBasis = Readonly<{
 
 export type CrdtSyncCommit = Readonly<{
 	commitSeq: bigint;
-	kind?: 1;
-	fields: readonly Omit<CrdtSyncField, "bindingId">[];
+	kind: 1;
+	commitId: Uint8Array;
+	fields: readonly Pick<
+		CrdtSyncField,
+		"fieldSlot" | "fieldEpoch" | "formatVersion" | "fieldCursor" | "bytes"
+	>[];
 }>;
 
 export type CrdtSyncFrame = Readonly<{
@@ -49,6 +57,7 @@ export interface CrdtSyncSource {
 		basis: CrdtSyncBasis,
 		input: { field: CrdtSyncField; proof: Uint8Array },
 	): Promise<Uint8Array | null>;
+	validateBasis?(basis: CrdtSyncBasis): Promise<void>;
 	registerCursor(sessionId: string, cursor: bigint): Promise<void>;
 	readHead(basis: CrdtSyncBasis): Promise<bigint>;
 	readCommits(
@@ -67,6 +76,15 @@ export class CrdtSyncRejectedError extends Error {
 	}
 }
 
+export class CrdtSyncRecoveryRequiredError extends Error {
+	readonly code = "CRDT_SYNC_RECOVERY_REQUIRED";
+
+	constructor() {
+		super("CRDT synchronization requires recovery");
+		this.name = "CrdtSyncRecoveryRequiredError";
+	}
+}
+
 type SyncBoundary =
 	| "basis-captured"
 	| "cursor-registered"
@@ -79,10 +97,6 @@ export type CreateCrdtSyncSessionInput = Readonly<{
 	source: CrdtSyncSource;
 	send(frame: CrdtSyncFrame): void | Promise<void>;
 	sendUpdate?(commit: CrdtSyncCommit): void | Promise<void>;
-	verifyProof?(input: {
-		field: CrdtSyncField;
-		proof: Uint8Array;
-	}): Promise<Uint8Array | null>;
 	onBoundary?(boundary: SyncBoundary): void | Promise<void>;
 	onReady?(cut: bigint): void | Promise<void>;
 }>;
@@ -91,6 +105,17 @@ type QueuedFrame = CrdtSyncFrame & {
 	readonly byteLength: number;
 	readonly phase: "basis" | "drain";
 	readonly cut: bigint;
+};
+
+type ChunkPlan = {
+	readonly field: Pick<
+		CrdtSyncField,
+		"fieldSlot" | "fieldEpoch" | "formatVersion" | "fieldCursor"
+	>;
+	readonly bytes: Uint8Array;
+	readonly phase: "basis" | "drain";
+	readonly cut: bigint;
+	offset: number;
 };
 
 export function createCrdtSyncSession(input: CreateCrdtSyncSessionInput) {
@@ -104,7 +129,7 @@ class CrdtSyncSession {
 	readonly pendingFrames: QueuedFrame[] = [];
 
 	private basis?: CrdtSyncBasis;
-	private readonly waiting: QueuedFrame[] = [];
+	private readonly plans: ChunkPlan[] = [];
 	private nextChunkIndex = 0;
 	private cursorRegistered = false;
 	private advancing = false;
@@ -113,15 +138,28 @@ class CrdtSyncSession {
 
 	constructor(private readonly input: CreateCrdtSyncSessionInput) {}
 
+	async prepare(): Promise<CrdtSyncBasis> {
+		if (this.state !== "idle") throw rejected();
+		if (!this.basis) {
+			const basis = await this.input.source.captureBasis(this.input.sessionId);
+			this.assertBasis(basis);
+			this.basis = basis;
+		}
+		return this.basis;
+	}
+
 	async start(proofs: readonly CrdtSyncProof[]): Promise<void> {
 		if (this.state !== "idle") throw rejected();
 		this.state = "syncing";
-		const basis = await this.input.source.captureBasis(this.input.sessionId);
+		const basis =
+			this.basis ??
+			(await this.input.source.captureBasis(this.input.sessionId));
 		this.assertBasis(basis);
 		this.basis = basis;
 		this.cursor = basis.commitHead;
 		await this.boundary("basis-captured");
 
+		this.assertProofs(proofs, basis);
 		const proofsBySlot = new Map(
 			proofs.map((proof) => [proof.fieldSlot, proof]),
 		);
@@ -132,16 +170,14 @@ class CrdtSyncSession {
 			if (
 				proof &&
 				proof.fieldEpoch === field.fieldEpoch &&
-				(this.input.verifyProof || this.input.source.verifyProof)
+				this.input.source.verifyProof
 			) {
 				try {
 					bytes =
-						(await (this.input.verifyProof
-							? this.input.verifyProof({ field, proof: proof.proof })
-							: this.input.source.verifyProof!(basis, {
-									field,
-									proof: proof.proof,
-								}))) ?? field.bytes;
+						(await this.input.source.verifyProof(basis, {
+							field,
+							proof: proof.proof,
+						})) ?? field.bytes;
 				} catch {
 					bytes = field.bytes;
 				}
@@ -150,7 +186,7 @@ class CrdtSyncSession {
 			if (totalBytes > MAX_SYNC_BYTES) throw rejected();
 			this.queueBytes(field, bytes, "basis", basis.commitHead);
 		}
-		if (this.waiting.length === 0) {
+		if (this.plans.length === 0) {
 			await this.registerCursor();
 			await this.finishBasis();
 			return;
@@ -197,7 +233,7 @@ class CrdtSyncSession {
 	async stop(): Promise<void> {
 		if (this.state === "stopped") return;
 		this.state = "stopped";
-		this.waiting.length = 0;
+		this.plans.length = 0;
 		this.pendingFrames.length = 0;
 		this.unacknowledgedBytes = 0;
 	}
@@ -224,55 +260,80 @@ class CrdtSyncSession {
 		}
 	}
 
+	private assertProofs(
+		proofs: readonly CrdtSyncProof[],
+		basis: CrdtSyncBasis,
+	): void {
+		if (proofs.length > 32) throw rejected();
+		const known = new Set(basis.fields.map((field) => field.fieldSlot));
+		let previous = -1;
+		for (const proof of proofs) {
+			if (
+				!known.has(proof.fieldSlot) ||
+				proof.fieldSlot <= previous ||
+				proof.fieldEpoch < 0n ||
+				!(proof.proof instanceof Uint8Array) ||
+				proof.proof.byteLength > 64 * 1024
+			) {
+				throw rejected();
+			}
+			previous = proof.fieldSlot;
+		}
+	}
+
 	private queueBytes(
-		field: Omit<CrdtSyncField, "bindingId">,
+		field: Pick<
+			CrdtSyncField,
+			"fieldSlot" | "fieldEpoch" | "formatVersion" | "fieldCursor"
+		>,
 		bytes: Uint8Array,
 		phase: "basis" | "drain",
 		cut: bigint,
 	): void {
-		const chunks = Math.max(1, Math.ceil(bytes.byteLength / MAX_CHUNK_BYTES));
-		for (let index = 0; index < chunks; index++) {
-			const start = index * MAX_CHUNK_BYTES;
-			const chunk = bytes.slice(
-				start,
-				Math.min(bytes.byteLength, start + MAX_CHUNK_BYTES),
-			);
-			this.waiting.push({
-				chunkIndex: this.nextChunkIndex++,
-				fieldSlot: field.fieldSlot,
-				fieldEpoch: field.fieldEpoch,
-				throughFieldCursor: field.fieldCursor,
-				final: index === chunks - 1,
-				bytes: chunk,
-				byteLength: chunk.byteLength + ENCODED_SYNC_CHUNK_OVERHEAD,
-				phase,
-				cut,
-			});
-		}
+		this.plans.push({ field, bytes, phase, cut, offset: 0 });
 	}
 
 	private async pump(): Promise<void> {
-		while (this.waiting.length > 0) {
-			const frame = this.waiting[0]!;
+		while (this.plans.length > 0) {
+			const plan = this.plans[0]!;
+			const end = Math.min(
+				plan.bytes.byteLength,
+				plan.offset + MAX_CHUNK_BYTES,
+			);
+			const chunk = plan.bytes.subarray(plan.offset, end);
+			const final = end === plan.bytes.byteLength;
+			const frame: QueuedFrame = {
+				chunkIndex: this.nextChunkIndex,
+				fieldSlot: plan.field.fieldSlot,
+				fieldEpoch: plan.field.fieldEpoch,
+				throughFieldCursor: plan.field.fieldCursor,
+				final,
+				bytes: chunk,
+				byteLength: chunk.byteLength + ENCODED_SYNC_CHUNK_OVERHEAD,
+				phase: plan.phase,
+				cut: plan.cut,
+			};
 			if (
 				this.unacknowledgedBytes > 0 &&
 				this.unacknowledgedBytes + frame.byteLength > MAX_UNACKNOWLEDGED_BYTES
 			) {
 				return;
 			}
-			if (
-				frame.phase === "basis" &&
-				this.waiting.every((candidate) => candidate.phase !== "basis")
-			) {
-				throw rejected();
-			}
-			const isFinalBasis = this.waiting.every(
-				(candidate, index) => index === 0 || candidate.phase !== "basis",
-			);
+			const isFinalBasis =
+				final &&
+				this.plans.every(
+					(candidate, index) => index === 0 || candidate.phase !== "basis",
+				);
 			if (frame.phase === "basis" && isFinalBasis) {
 				await this.registerCursor();
 			}
-			this.waiting.shift();
+			await this.input.source.validateBasis?.(this.basis!);
+			this.nextChunkIndex++;
+			if (final) {
+				this.plans.shift();
+			} else {
+				plan.offset = end;
+			}
 			this.pendingFrames.push(frame);
 			this.unacknowledgedBytes += frame.byteLength;
 			await this.input.send(frame);
@@ -291,7 +352,7 @@ class CrdtSyncSession {
 			this.advancing ||
 			this.state !== "syncing" ||
 			this.pendingFrames.length > 0 ||
-			this.waiting.length > 0
+			this.plans.length > 0
 		) {
 			return;
 		}
@@ -320,8 +381,9 @@ class CrdtSyncSession {
 			if (head < this.cursor) throw rejected();
 			await this.boundary("drain-read");
 			if (head === this.cursor) {
-				this.state = "ready";
 				await this.input.onReady?.(this.cursor);
+				if (this.state !== "syncing") throw rejected();
+				this.state = "ready";
 				return;
 			}
 			const commits = await this.input.source.readCommits(
@@ -335,7 +397,7 @@ class CrdtSyncSession {
 					this.queueBytes(field, field.bytes, "drain", head);
 				}
 			}
-			if (this.waiting.length > 0) {
+			if (this.plans.length > 0) {
 				this.drainCutPending = head;
 				await this.pump();
 				return;

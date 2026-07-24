@@ -12,7 +12,10 @@ export interface CrdtDrainNoticeRouter {
 export type CrdtDrainSession = Readonly<{
 	id: string;
 	aggregateHash: string;
-	reconcile(reason: "wake" | "reconnect" | "poll"): Promise<{
+	reconcile(
+		reason: "wake" | "reconnect" | "poll",
+		signal: AbortSignal,
+	): Promise<{
 		behind: boolean;
 	}>;
 }>;
@@ -45,6 +48,9 @@ export function createCrdtDrainCoordinator(
 	let behindTimer: ReturnType<typeof setInterval> | undefined;
 	let started = false;
 	let stopping = false;
+	let startPromise: Promise<void> | undefined;
+	let stopPromise: Promise<void> | undefined;
+	const abort = new AbortController();
 
 	const report = (error: unknown) => {
 		try {
@@ -65,7 +71,10 @@ export function createCrdtDrainCoordinator(
 					if (!entry.active || stopping) break;
 					entry.dirty = false;
 					try {
-						const result = await entry.session.reconcile(entry.reason);
+						const result = await entry.session.reconcile(
+							entry.reason,
+							abort.signal,
+						);
 						if (entry.active && !stopping) entry.behind = result.behind;
 					} catch (error) {
 						entry.behind = true;
@@ -99,29 +108,32 @@ export function createCrdtDrainCoordinator(
 		async start(): Promise<void> {
 			if (started) return;
 			if (stopping) throw new Error("CRDT drain coordinator is stopped");
-			releaseRouter = await input.router.subscribe({
-				kind: "crdt",
-				onNotice,
-				onError: report,
-				onOverflow: () => scheduleAll("poll"),
-				onStateChange: (state) => {
-					if (state === "connected") scheduleAll("reconnect");
-				},
-			});
-			if (stopping) {
-				await releaseRouter();
-				releaseRouter = undefined;
-				return;
+			if (!startPromise) {
+				startPromise = (async () => {
+					releaseRouter = await input.router.subscribe({
+						kind: "crdt",
+						onNotice,
+						onError: report,
+						onOverflow: () => scheduleAll("poll"),
+						onStateChange: (state) => {
+							if (state === "connected") scheduleAll("reconnect");
+						},
+					});
+					if (stopping) return;
+					started = true;
+					healthyTimer = setInterval(
+						() => scheduleAll("poll"),
+						Math.max(1, healthyPollMs),
+					);
+					behindTimer = setInterval(
+						() => scheduleAll("poll", true),
+						Math.max(1, behindPollMs),
+					);
+				})().finally(() => {
+					startPromise = undefined;
+				});
 			}
-			started = true;
-			healthyTimer = setInterval(
-				() => scheduleAll("poll"),
-				Math.max(1, healthyPollMs),
-			);
-			behindTimer = setInterval(
-				() => scheduleAll("poll", true),
-				Math.max(1, behindPollMs),
-			);
+			await startPromise;
 		},
 		register(session: CrdtDrainSession): () => void {
 			if (!started || stopping || entries.has(session.id)) {
@@ -158,31 +170,50 @@ export function createCrdtDrainCoordinator(
 			);
 		},
 		async stop(): Promise<void> {
-			if (stopping) return;
+			if (stopPromise) return stopPromise;
 			stopping = true;
-			if (healthyTimer) clearInterval(healthyTimer);
-			if (behindTimer) clearInterval(behindTimer);
-			healthyTimer = undefined;
-			behindTimer = undefined;
-			const pending = [...entries.values()]
-				.map((entry) => {
-					entry.active = false;
-					entry.dirty = false;
-					return entry.pending;
-				})
-				.filter((operation): operation is Promise<void> => Boolean(operation));
-			entries.clear();
-			if (pending.length > 0) {
-				await Promise.race([
-					Promise.allSettled(pending),
-					new Promise<void>((resolve) =>
-						setTimeout(resolve, Math.max(0, stopTimeoutMs)),
-					),
-				]);
-			}
-			await releaseRouter?.();
-			releaseRouter = undefined;
-			started = false;
+			abort.abort();
+			stopPromise = (async () => {
+				await startPromise?.catch(() => {});
+				if (healthyTimer) clearInterval(healthyTimer);
+				if (behindTimer) clearInterval(behindTimer);
+				healthyTimer = undefined;
+				behindTimer = undefined;
+				const pending = [...entries.values()]
+					.map((entry) => {
+						entry.active = false;
+						entry.dirty = false;
+						return entry.pending;
+					})
+					.filter((operation): operation is Promise<void> =>
+						Boolean(operation),
+					);
+				entries.clear();
+				await boundedWait(Promise.allSettled(pending), stopTimeoutMs);
+				if (releaseRouter) {
+					await boundedWait(releaseRouter(), stopTimeoutMs);
+				}
+				releaseRouter = undefined;
+				started = false;
+			})();
+			return stopPromise;
 		},
 	});
+}
+
+async function boundedWait(
+	operation: Promise<unknown>,
+	timeoutMs: number,
+): Promise<void> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		await Promise.race([
+			operation,
+			new Promise<void>((resolve) => {
+				timer = setTimeout(resolve, Math.max(0, timeoutMs));
+			}),
+		]);
+	} finally {
+		if (timer) clearTimeout(timer);
+	}
 }

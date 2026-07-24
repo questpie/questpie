@@ -180,4 +180,53 @@ describe("CRDT HA drain coordinator", () => {
 		await settle();
 		expect(calls).toBe(1);
 	});
+
+	it("converges two nodes from shared durable bigint state without affinity or reliable wakes", async () => {
+		const firstRouter = new FakeRouter();
+		const secondRouter = new FakeRouter();
+		let durableHead = 2n ** 60n;
+		const cursors = { first: durableHead, second: durableHead };
+		const first = createCrdtDrainCoordinator({
+			router: firstRouter,
+			healthyPollMs: 60_000,
+			behindPollMs: 60_000,
+		});
+		const second = createCrdtDrainCoordinator({
+			router: secondRouter,
+			healthyPollMs: 60_000,
+			behindPollMs: 60_000,
+		});
+		await Promise.all([first.start(), second.start()]);
+		first.register({
+			id: "first",
+			aggregateHash: "e".repeat(64),
+			reconcile: async () => {
+				cursors.first = durableHead;
+				return { behind: false };
+			},
+		});
+		second.register({
+			id: "second",
+			aggregateHash: "e".repeat(64),
+			reconcile: async () => {
+				cursors.second = durableHead;
+				return { behind: false };
+			},
+		});
+
+		durableHead++;
+		firstRouter.wake("e".repeat(64));
+		firstRouter.wake("e".repeat(64));
+		await settle();
+		expect(cursors).toEqual({ first: durableHead, second: durableHead - 1n });
+
+		await second.poll();
+		expect(cursors.second).toBe(durableHead);
+		durableHead++;
+		secondRouter.reconnect();
+		await settle();
+		await first.poll();
+		expect(cursors).toEqual({ first: durableHead, second: durableHead });
+		await Promise.all([first.stop(), second.stop()]);
+	});
 });

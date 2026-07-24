@@ -22,6 +22,10 @@ function basis(bytes = 16): CrdtSyncBasis {
 				bindingId: "title",
 				fieldSlot: 1,
 				fieldEpoch: 1n,
+				grant: 1,
+				formatVersion: 1,
+				readFence: 0n,
+				editFence: 0n,
 				fieldCursor: 4n,
 				bytes: new Uint8Array(bytes),
 			},
@@ -61,7 +65,13 @@ function source(initial = basis()) {
 			bytes = new Uint8Array([Number(commitSeq)]),
 		) {
 			this.appendFields(commitSeq, [
-				{ fieldSlot: 1, fieldEpoch: 1n, fieldCursor, bytes },
+				{
+					fieldSlot: 1,
+					fieldEpoch: 1n,
+					formatVersion: 1,
+					fieldCursor,
+					bytes,
+				},
 			]);
 		},
 		appendFields(
@@ -69,6 +79,7 @@ function source(initial = basis()) {
 			fields: Array<{
 				fieldSlot: number;
 				fieldEpoch: bigint;
+				formatVersion: number;
 				fieldCursor: bigint;
 				bytes: Uint8Array;
 			}>,
@@ -76,6 +87,8 @@ function source(initial = basis()) {
 			head = commitSeq;
 			commits.push({
 				commitSeq,
+				kind: 1,
+				commitId: new Uint8Array(16).fill(Number(commitSeq)),
 				fields,
 			});
 		},
@@ -83,43 +96,42 @@ function source(initial = basis()) {
 }
 
 describe("CRDT flow-controlled synchronization", () => {
-	it("never has more than 4 MiB unacknowledged and registers before the final basis chunk", async () => {
-		const durable = source(basis(16 * MiB));
-		const sent: Array<{ chunkIndex: number; bytes: Uint8Array }> = [];
-		const sync = createCrdtSyncSession({
-			sessionId: "session",
-			source: durable.api,
-			send: async (frame) => sent.push(frame),
-		});
+	it("streams 4/16/32 MiB through one bounded pull/ACK window", async () => {
+		for (const size of [4, 16, 32]) {
+			const durable = source(basis(size * MiB));
+			const sent: Array<{ chunkIndex: number; bytes: Uint8Array }> = [];
+			const sync = createCrdtSyncSession({
+				sessionId: "session",
+				source: durable.api,
+				send: async (frame) => sent.push(frame),
+			});
 
-		await sync.start([]);
-		expect(sync.unacknowledgedBytes).toBeLessThanOrEqual(4 * MiB);
-		expect(sent.length).toBeGreaterThan(0);
-		expect(durable.registrations).toEqual([]);
-
-		let index = 0;
-		while (durable.registrations.length === 0) {
-			await sync.ack(sent[index]!.chunkIndex, 1, 4n);
-			index++;
+			await sync.start([]);
+			let maximumFrames = sync.pendingFrames.length;
+			let index = 0;
+			while (sync.state !== "ready") {
+				const frame = sent[index]!;
+				await sync.ack(frame.chunkIndex, 1, 4n);
+				index++;
+				maximumFrames = Math.max(maximumFrames, sync.pendingFrames.length);
+				expect(sync.unacknowledgedBytes).toBeLessThanOrEqual(4 * MiB);
+				expect(sync.pendingFrames.length).toBeLessThanOrEqual(256);
+			}
+			expect(sent).toHaveLength(size * 4);
+			expect(maximumFrames).toBeLessThan(16);
+			expect(durable.registrations[0]).toBe(4n);
 		}
-		expect(sync.unacknowledgedBytes).toBeLessThanOrEqual(4 * MiB);
-		expect(durable.registrations).toEqual([4n]);
-
-		for (const frame of sent.slice(index)) {
-			await sync.ack(frame.chunkIndex, 1, 4n);
-		}
-		expect(sync.state).toBe("ready");
 	});
 
 	it("falls back to verified full state when a peer proof is forged", async () => {
 		const durable = source(basis(8));
+		durable.api.verifyProof = async () => {
+			throw new Error("forged");
+		};
 		const sent: Array<{ bytes: Uint8Array }> = [];
 		const sync = createCrdtSyncSession({
 			sessionId: "session",
 			source: durable.api,
-			verifyProof: async () => {
-				throw new Error("forged");
-			},
 			send: async (frame) => sent.push(frame),
 		});
 
@@ -185,6 +197,32 @@ describe("CRDT flow-controlled synchronization", () => {
 		await expect(sync.poll()).rejects.toBeInstanceOf(CrdtSyncRejectedError);
 	});
 
+	it("rejects duplicate, unsorted, unknown and oversized proof parts", async () => {
+		for (const proofs of [
+			[
+				{ fieldSlot: 1, fieldEpoch: 1n, proof: new Uint8Array() },
+				{ fieldSlot: 1, fieldEpoch: 1n, proof: new Uint8Array() },
+			],
+			[{ fieldSlot: 2, fieldEpoch: 1n, proof: new Uint8Array() }],
+			[
+				{
+					fieldSlot: 1,
+					fieldEpoch: 1n,
+					proof: new Uint8Array(64 * 1024 + 1),
+				},
+			],
+		]) {
+			const sync = createCrdtSyncSession({
+				sessionId: "session",
+				source: source().api,
+				send: async () => {},
+			});
+			await expect(sync.start(proofs)).rejects.toBeInstanceOf(
+				CrdtSyncRejectedError,
+			);
+		}
+	});
+
 	it("delivers each ready commit atomically and advances across hidden-only commits", async () => {
 		const durable = source(basis(1));
 		const updates: Array<{ commitSeq: bigint; fieldSlots: number[] }> = [];
@@ -212,12 +250,14 @@ describe("CRDT flow-controlled synchronization", () => {
 			{
 				fieldSlot: 1,
 				fieldEpoch: 1n,
+				formatVersion: 1,
 				fieldCursor: 5n,
 				bytes: new Uint8Array([1]),
 			},
 			{
 				fieldSlot: 2,
 				fieldEpoch: 1n,
+				formatVersion: 1,
 				fieldCursor: 1n,
 				bytes: new Uint8Array([2]),
 			},
@@ -227,5 +267,43 @@ describe("CRDT flow-controlled synchronization", () => {
 
 		expect(updates).toEqual([{ commitSeq: 5n, fieldSlots: [1, 2] }]);
 		expect(sync.cursor).toBe(6n);
+	});
+
+	it("never lets a ready UPDATE overtake an asynchronous READY write", async () => {
+		const durable = source(basis(1));
+		const events: string[] = [];
+		let releaseReady!: () => void;
+		const readyGate = new Promise<void>((resolve) => {
+			releaseReady = resolve;
+		});
+		const sync = createCrdtSyncSession({
+			sessionId: "session",
+			source: durable.api,
+			send: async () => {},
+			onReady: async () => {
+				events.push("ready-start");
+				await readyGate;
+				events.push("ready-end");
+			},
+			sendUpdate: async () => {
+				events.push("update");
+			},
+		});
+		await sync.start([]);
+		const frame = sync.pendingFrames[0]!;
+		const acknowledgement = sync.ack(
+			frame.chunkIndex,
+			frame.fieldSlot,
+			frame.throughFieldCursor,
+		);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		durable.append(5n, 5n);
+		await sync.poll();
+		expect(events).toEqual(["ready-start"]);
+
+		releaseReady();
+		await acknowledgement;
+		await sync.poll();
+		expect(events).toEqual(["ready-start", "ready-end", "update"]);
 	});
 });
