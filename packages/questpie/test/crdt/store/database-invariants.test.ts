@@ -374,8 +374,14 @@ describe("CRDT cross-identity database invariants", () => {
 		`);
 		await db.execute(sql`
 			UPDATE questpie_crdt_binding
-			SET status = 3
+			SET status = 3,
+				head_field_cursor = 1
 			WHERE id = ${ID.bindingA}
+		`);
+		await db.execute(sql`
+			UPDATE questpie_crdt_resource_epoch
+			SET head_commit_seq = 1
+			WHERE id = ${ID.epochA}
 		`);
 		await expect(
 			store.transaction((tx) => tx.publishVerifiedSnapshot(publication)),
@@ -390,7 +396,7 @@ describe("CRDT cross-identity database invariants", () => {
 					expectedHeadCommitSeq: 1n,
 				}),
 			),
-		).rejects.toThrow("stale");
+		).rejects.toThrow("verified publication candidate");
 		await db.execute(sql`
 			UPDATE questpie_crdt_lease
 			SET expires_at = clock_timestamp() + interval '50 milliseconds'

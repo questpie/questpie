@@ -226,10 +226,7 @@ export class CrdtDurableTransactionStore {
 					eq(questpieCrdtResourceEpochTable.resourceId, candidate.resourceId),
 					eq(questpieCrdtResourceEpochTable.id, candidate.resourceEpochId),
 					eq(questpieCrdtResourceEpochTable.schemaId, candidate.schemaId),
-					eq(
-						questpieCrdtResourceEpochTable.headCommitSeq,
-						candidate.expectedHeadCommitSeq,
-					),
+					sql`${questpieCrdtResourceEpochTable.headCommitSeq} >= ${candidate.expectedHeadCommitSeq}`,
 					eq(questpieCrdtResourceEpochTable.status, 1),
 				),
 			)
@@ -304,7 +301,7 @@ export class CrdtDurableTransactionStore {
 		if (
 			!manifest ||
 			!equalBytes(manifest.checksum, candidate.manifestChecksum) ||
-			candidate.coversCommitSeq > candidate.expectedHeadCommitSeq
+			candidate.coversCommitSeq !== candidate.expectedHeadCommitSeq
 		) {
 			throw conflict(
 				"snapshot manifest is not the verified publication candidate",
@@ -376,6 +373,33 @@ export class CrdtDurableTransactionStore {
 				previousManifestId: epoch.previousManifestId,
 			});
 		}
+		if (epoch.currentManifestId) {
+			const [currentManifest] = await this.db
+				.select({
+					coversCommitSeq: questpieCrdtSnapshotManifestTable.coversCommitSeq,
+				})
+				.from(questpieCrdtSnapshotManifestTable)
+				.where(
+					and(
+						eq(questpieCrdtSnapshotManifestTable.id, epoch.currentManifestId),
+						eq(
+							questpieCrdtSnapshotManifestTable.resourceId,
+							candidate.resourceId,
+						),
+						eq(
+							questpieCrdtSnapshotManifestTable.resourceEpochId,
+							candidate.resourceEpochId,
+						),
+						eq(questpieCrdtSnapshotManifestTable.status, 2),
+					),
+				);
+			if (
+				!currentManifest ||
+				currentManifest.coversCommitSeq >= candidate.coversCommitSeq
+			) {
+				throw conflict("snapshot publication would regress the verified cut");
+			}
+		}
 
 		const [published] = await this.db
 			.update(questpieCrdtResourceEpochTable)
@@ -392,10 +416,8 @@ export class CrdtDurableTransactionStore {
 				and(
 					eq(questpieCrdtResourceEpochTable.resourceId, candidate.resourceId),
 					eq(questpieCrdtResourceEpochTable.id, candidate.resourceEpochId),
-					eq(
-						questpieCrdtResourceEpochTable.headCommitSeq,
-						candidate.expectedHeadCommitSeq,
-					),
+					sql`${questpieCrdtResourceEpochTable.headCommitSeq} >= ${candidate.expectedHeadCommitSeq}`,
+					sql`${questpieCrdtResourceEpochTable.currentSnapshotManifestId} IS NOT DISTINCT FROM ${epoch.currentManifestId}`,
 				),
 			)
 			.returning({
@@ -602,7 +624,7 @@ function equalBindingCut(
 		stored.fieldEpoch === captured.fieldEpoch &&
 		stored.fieldSlot === captured.fieldSlot &&
 		stored.formatVersion === captured.formatVersion &&
-		stored.fieldCursor === captured.fieldCursor
+		stored.fieldCursor >= captured.fieldCursor
 	);
 }
 
