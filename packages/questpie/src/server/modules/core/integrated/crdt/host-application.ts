@@ -57,6 +57,7 @@ export type CrdtHostAuthorizationInputV1 =
 			authentication: CrdtAuthentication;
 			resourceId: string;
 			requestedMode: CrdtMode;
+			effectiveMode: CrdtMode;
 			origin: string | null;
 			audience: string;
 	  }>;
@@ -244,6 +245,7 @@ class ManagedSocket implements CrdtHostSocketSessionV1 {
 				authentication,
 				resourceId: claim.resourceId,
 				requestedMode: claim.requestedMode,
+				effectiveMode: claim.effectiveMode,
 				origin: claim.origin,
 				audience: claim.audience,
 			});
@@ -251,6 +253,7 @@ class ManagedSocket implements CrdtHostSocketSessionV1 {
 				origin: claim.origin,
 				audience: claim.audience,
 				requestedMode: claim.requestedMode,
+				effectiveMode: claim.effectiveMode,
 			});
 			this.redemption = await this.config.admission.redeem({
 				ticket: frame.payload.ticket,
@@ -503,6 +506,7 @@ function assertAuthorizationBinding(
 		origin: string | null;
 		audience: string;
 		requestedMode: CrdtMode;
+		effectiveMode?: CrdtMode;
 		fallback?: "view";
 	}>,
 ): void {
@@ -510,6 +514,8 @@ function assertAuthorizationBinding(
 		authorization.origin !== expected.origin ||
 		authorization.audience !== expected.audience ||
 		authorization.requestedMode !== expected.requestedMode ||
+		(expected.effectiveMode !== undefined &&
+			authorization.effectiveMode !== expected.effectiveMode) ||
 		(expected.requestedMode === "view" &&
 			authorization.effectiveMode !== "view") ||
 		(expected.requestedMode === "edit" &&

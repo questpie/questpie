@@ -339,6 +339,7 @@ function claim(): CrdtTicketRedemptionClaim {
 	return {
 		resourceId: "00000000-0000-4000-8000-000000000701",
 		requestedMode: "edit",
+		effectiveMode: "edit",
 		origin: "https://admin.example.com",
 		audience: "https://api.example.com/api/crdt/socket",
 	};

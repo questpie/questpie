@@ -101,6 +101,7 @@ export type CrdtRedeemedTicket = Readonly<{
 export type CrdtTicketRedemptionClaim = Readonly<{
 	resourceId: string;
 	requestedMode: CrdtMode;
+	effectiveMode: CrdtMode;
 	audience: string;
 	origin: string | null;
 }>;
@@ -133,6 +134,7 @@ export function createCrdtTicketAdmissionStore(
 					.select({
 						resourceId: questpieCrdtTicketTable.resourceId,
 						requestedMode: questpieCrdtTicketTable.requestedMode,
+						effectiveMode: questpieCrdtTicketTable.effectiveMode,
 						audience: questpieCrdtTicketTable.audience,
 						origin: questpieCrdtTicketTable.origin,
 					})
@@ -157,6 +159,7 @@ export function createCrdtTicketAdmissionStore(
 				return Object.freeze({
 					resourceId: claim.resourceId,
 					requestedMode: modeName(claim.requestedMode),
+					effectiveMode: modeName(claim.effectiveMode),
 					audience: claim.audience,
 					origin: claim.origin,
 				});

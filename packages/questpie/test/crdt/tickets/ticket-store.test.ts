@@ -143,6 +143,7 @@ describe("CRDT durable ticket admission", () => {
 		expect(await store.inspect(issued[0]!.ticket)).toEqual({
 			resourceId: ID.resource,
 			requestedMode: "edit",
+			effectiveMode: "edit",
 			audience: "questpie-test",
 			origin: "https://app.example",
 		});
