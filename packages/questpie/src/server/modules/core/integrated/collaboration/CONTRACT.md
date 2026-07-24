@@ -1020,13 +1020,17 @@ Collaboration uses bounded `tryAcquire` semaphores and a separate cap on
 unauthenticated sockets; it never uses an unbounded pending array.
 
 Untrusted engine work runs in a bounded, terminable worker pool with one
-process-local optimization lane per aggregate, 2×CPU active workers, at most 64
-pending jobs and 128 active materialized field replicas, a 100 ms field-part
-budget, a 250 ms aggregate-bundle budget, and
-two-second initial materialization budget. Qualification must demonstrate a
-hard 64 MiB per-job RSS/ArrayBuffer ceiling or terminate the isolated worker at
-the first enforceable host limit with bounded measured overshoot. `Promise.race`
-is not a CPU or memory limit.
+process-local optimization lane per aggregate, at most `min(2×CPU, 4)` active
+workers, at most 64 pending jobs and 128 active materialized field replicas, a
+100 ms field-part budget, a 250 ms aggregate-bundle budget, and two-second
+initial materialization budget. The four-worker host cap is a measured Bun
+runtime safety amendment: eagerly starting 2×CPU Yjs threads exhausted the API
+process on a 10-core qualification host. Callers may lower, never raise, either
+pool cap. Qualification must demonstrate a hard 64 MiB per-job ArrayBuffer
+ceiling and terminate the isolated worker at the first enforceable host
+CPU/runtime limit with bounded measured RSS overshoot. A same-process Worker is
+not described as a hard RSS sandbox. `Promise.race` is not a CPU or memory
+limit.
 
 ### CD-09 — Durable namespace
 
