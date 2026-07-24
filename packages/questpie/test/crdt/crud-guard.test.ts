@@ -5,7 +5,10 @@ import { createDeterministicTextEngine } from "../../src/server/modules/core/int
 import { createCrdtManifestDeclarations } from "../../src/server/modules/core/integrated/crdt/manifest-runtime.js";
 import { updateCrdtManifestArtifact } from "../../src/server/modules/core/integrated/crdt/manifest.js";
 import { createCrdtRegistry } from "../../src/server/modules/core/integrated/crdt/registry.js";
-import { questpieCrdtResourceTable } from "../../src/server/modules/core/integrated/crdt/schema.js";
+import {
+	questpieCrdtBindingTable,
+	questpieCrdtResourceTable,
+} from "../../src/server/modules/core/integrated/crdt/schema.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 import { createTestContext } from "../utils/test-context.js";
 import { runTestDbMigrations } from "../utils/test-db.js";
@@ -140,6 +143,26 @@ describe("CRDT ordinary CRUD guard", () => {
 		expect((await setup.app.globals.siteSettings.get({}, ctx))?.title).toBe(
 			"New title",
 		);
+		expect(
+			await setup.app.db.select().from(questpieCrdtResourceTable),
+		).toHaveLength(1);
+	});
+
+	it("lazy-activates one global incarnation under concurrent reads", async () => {
+		const ctx = createTestContext({ accessMode: "system" });
+		const rows = await Promise.all(
+			Array.from({ length: 4 }, () =>
+				setup.app.globals.siteSettings.get({}, ctx),
+			),
+		);
+
+		expect(rows.every((row) => row?.content === "")).toBe(true);
+		expect(
+			await setup.app.db.select().from(questpieCrdtResourceTable),
+		).toHaveLength(1);
+		expect(
+			await setup.app.db.select().from(questpieCrdtBindingTable),
+		).toHaveLength(1);
 	});
 
 	it("rejects version restore for owners with CRDT fields", async () => {
