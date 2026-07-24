@@ -6,12 +6,12 @@ import {
 	type RequestContext,
 } from "questpie";
 
-import type { AgentWorkloadMcpBoundary } from "./agent-workload-boundary.js";
 import type {
 	McpAccessMode,
 	McpExecutionOptions,
 	McpTransportKind,
 } from "./types.js";
+import type { WorkloadMcpBoundary } from "./workload-boundary.js";
 
 export type QuestpieApp = Parameters<typeof createContextFactory>[0];
 
@@ -20,14 +20,14 @@ export interface RuntimeScope {
 	transport: McpTransportKind;
 	accessMode: McpAccessMode;
 	request?: Request;
-	agentWorkload?: AgentWorkloadMcpBoundary;
+	workload?: WorkloadMcpBoundary;
 	getContext(): Promise<AppContext & Partial<RequestContext>>;
 }
 
 export function createRuntimeScope(
 	app: QuestpieApp,
 	options: McpExecutionOptions,
-	agentWorkload?: AgentWorkloadMcpBoundary,
+	workload?: WorkloadMcpBoundary,
 ): RuntimeScope {
 	const transport = options.transport ?? "http";
 	const accessMode =
@@ -42,7 +42,7 @@ export function createRuntimeScope(
 		transport,
 		accessMode,
 		request: options.request,
-		agentWorkload,
+		workload,
 		async getContext() {
 			if (options.ctx) return options.ctx;
 			if (options.request) {

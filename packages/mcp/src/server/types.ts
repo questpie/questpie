@@ -5,13 +5,7 @@ import type {
 import type { AppContext, RequestContext } from "questpie";
 import type { z } from "zod";
 
-import type {
-	AgentWorkloadPrincipalResolver,
-	AgentWorkloadPrincipal,
-	AuthenticatedAgentWorkloadEnvelope,
-} from "@questpie/ai";
-
-export type McpTransportKind = "http" | "stdio";
+export type McpTransportKind = "http" | "stdio" | "workload";
 
 export type McpAccessMode = "user" | "system";
 
@@ -41,13 +35,11 @@ export type McpAccessRule =
  */
 export type McpRequiredScopes = string | string[] | false;
 
-export interface McpAgentWorkloadRequirement {
-	/** Exact role-derived grant scope. Company authority never implies Space access. */
-	scope: "company" | "anchor_space";
-	/** Exact grant required in the validated persisted authority snapshot. */
-	grant: string;
-	/** `false` for reads; mutations name the exact effect capability required. */
-	effect: string | false;
+export interface McpWorkloadRequirement {
+	/** Named facts interpreted exclusively by the consumer-supplied authorizer. */
+	capabilities: readonly string[];
+	/** Optional named capability delegated to the opaque execution handoff. */
+	handoff?: string;
 }
 
 export type McpEntityPolicy =
@@ -75,8 +67,8 @@ export type McpEntityPolicy =
 			 * named operation.
 			 */
 			operationScopes?: Record<string, McpRequiredScopes>;
-			workload?: McpAgentWorkloadRequirement;
-			operationWorkloads?: Record<string, McpAgentWorkloadRequirement>;
+			workload?: McpWorkloadRequirement;
+			operationWorkloads?: Record<string, McpWorkloadRequirement>;
 			fields?: { include?: string[]; exclude?: string[] };
 			description?: string;
 	  };
@@ -140,48 +132,89 @@ export interface McpExecutionOptions {
 	config?: McpConfig;
 }
 
+export interface McpWorkloadAuthorizationRequest {
+	phase: "discovery" | "call";
+	envelope: unknown;
+	tool: McpWorkloadToolFacts;
+}
+
+export type McpWorkloadToolKind = "custom" | "collection" | "global" | "route";
+
+export interface McpWorkloadToolFacts {
+	kind: McpWorkloadToolKind;
+	name: string;
+	operation: string;
+	intent: "read" | "effect";
+	transport: "workload";
+	capabilities: readonly string[];
+	handoff?: string;
+}
+
+export interface McpWorkloadAuthorization {
+	context: unknown;
+	attribution?: unknown;
+}
+
+export interface McpWorkloadAuthorizer {
+	authorize(
+		request: McpWorkloadAuthorizationRequest,
+	): McpWorkloadAuthorization | null | Promise<McpWorkloadAuthorization | null>;
+}
+
+export interface McpWorkloadContextBindingInput {
+	authorizationContext: unknown;
+	attribution?: unknown;
+	tool: McpWorkloadToolFacts;
+}
+
+export interface McpWorkloadContextBinder {
+	/**
+	 * Bind opaque authorization to the exact user-mode QUESTPIE context used for
+	 * access rechecks and execution. System-mode contexts fail closed.
+	 */
+	bind(
+		input: McpWorkloadContextBindingInput,
+	):
+		| (AppContext & Partial<RequestContext>)
+		| Promise<AppContext & Partial<RequestContext>>;
+}
+
 /**
- * Agent execution is intentionally not an {@link McpExecutionOptions} variant.
- * It cannot inherit HTTP request identity, cookies, OAuth, requester sessions,
- * access-mode overrides, or the stdio system default.
+ * Remote workload execution is intentionally not an {@link McpExecutionOptions}
+ * variant. It cannot inherit HTTP request identity, cookies, OAuth, requester
+ * sessions, access-mode overrides, or the stdio system default.
  */
-export interface AgentWorkloadMcpServerOptions {
-	envelope: AuthenticatedAgentWorkloadEnvelope;
-	resolver: Pick<AgentWorkloadPrincipalResolver, "validate">;
+export interface WorkloadMcpServerOptions {
+	envelope: unknown;
+	authorizer: McpWorkloadAuthorizer;
+	contextBinder: McpWorkloadContextBinder;
 	config?: McpConfig;
-	audit?: (event: AgentWorkloadMcpAuditEvent) => void | Promise<void>;
-	effectHandoff?: AgentWorkloadMcpEffectHandoff;
+	audit?: (event: McpWorkloadAuditEvent) => void | Promise<void>;
+	handoff?: McpWorkloadHandoff;
 }
 
-export interface AgentWorkloadMcpCommand {
-	commandId: string;
-	idempotencyKey: string;
-	effectRequestId: string;
-}
-
-export interface AgentWorkloadMcpEffectHandoffInput {
-	principal: AgentWorkloadPrincipal;
+export interface McpWorkloadHandoffInput {
+	authorizationContext: unknown;
+	attribution?: unknown;
 	toolName: string;
-	effect: string;
-	command: AgentWorkloadMcpCommand;
+	capability: string;
+	tool: McpWorkloadToolFacts;
+	metadata: unknown;
 	invoke: () => CallToolResult | Promise<CallToolResult>;
 }
 
-export interface AgentWorkloadMcpEffectHandoff {
+export interface McpWorkloadHandoff {
 	execute(
-		input: AgentWorkloadMcpEffectHandoffInput,
+		input: McpWorkloadHandoffInput,
 	): CallToolResult | Promise<CallToolResult>;
 }
 
-export interface AgentWorkloadMcpAuditEvent {
+export interface McpWorkloadAuditEvent {
 	phase: "discovery" | "call";
 	decision: "allowed" | "denied";
-	principalId: string;
-	runId: string;
-	attemptId: string;
-	agentActorId: string;
 	toolName?: string;
-	reason?: "authority_not_current" | "capability_denied";
+	reason?: "authorization_denied" | "authorization_invalid" | "context_invalid";
+	attribution?: unknown;
 }
 
 export interface McpToolHandlerArgs<TInput = unknown> {
@@ -210,8 +243,8 @@ export interface McpToolConfig<
 	 * `tools/call` (denied); `system`/`user` callers carry no scopes and skip it.
 	 */
 	scopes?: McpRequiredScopes;
-	/** Explicit, fail-closed authority contract for Agent workload execution. */
-	workload?: McpAgentWorkloadRequirement;
+	/** Explicit, fail-closed authority contract for remote workload execution. */
+	workload?: McpWorkloadRequirement;
 	_meta?: Record<string, unknown>;
 }
 

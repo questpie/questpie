@@ -10,7 +10,7 @@ Model Context Protocol integration for QUESTPIE apps. The package exposes select
 - **Route tools** - opt annotated JSON routes into MCP with path-param support.
 - **Schema resources** - let agents inspect allowed collections, globals, routes, and fields.
 - **Request context preservation** - HTTP tools run under the connecting request/session.
-- **Agent workload boundary** - independent Agent Actors use a validated, Run-bound `@questpie/ai` workload envelope instead of Human OAuth, cookies, requester identity, or stdio system authority.
+- **Workload boundary** - remote workloads use a consumer-supplied, fail-closed authorizer instead of OAuth, cookies, requester identity, or stdio system authority.
 
 ## Installation
 
@@ -56,11 +56,19 @@ export default mcpTool("publish-summary", {
 });
 ```
 
-## Agent Workloads
+## Remote Workloads
 
-Agent execution is a separate public factory. `createAgentWorkloadMcpServer` accepts only an opaque authenticated workload envelope, its audience-bound resolver, optional redacted audit sink, and the typed command/effect handoff. It deliberately has no request, cookie, requester context, or access-mode option.
+Remote workload execution uses a separate public factory.
+`createWorkloadMcpServer` accepts only an opaque envelope, a consumer-supplied
+authorizer, a required consumer-supplied context binder, an optional audit sink,
+and an optional opaque execution handoff. The binder turns the opaque authorized
+context into the exact QUESTPIE request context used for discovery access checks,
+call-time access checks, and handler execution. The bound context must use
+`accessMode: "user"`; remote workloads cannot acquire the system bypass. The
+factory deliberately has no request, cookie, requester context, OAuth, or
+access-mode option.
 
-Every Agent-visible tool opts into a fail-closed workload requirement:
+Every workload-visible tool opts into named capability facts:
 
 ```ts
 import { mcpTool } from "@questpie/mcp";
@@ -69,16 +77,22 @@ import { z } from "zod";
 export default mcpTool("messages.reply", {
 	inputSchema: z.object({ body: z.string() }),
 	workload: {
-		scope: "anchor_space",
-		grant: "messages.create",
-		effect: "message.create",
+		capabilities: ["messages.write"],
+		handoff: "messages.commit",
 	},
 }).handler(async ({ input }) => ({
 	content: [{ type: "text", text: input.body }],
 }));
 ```
 
-Discovery and every call revalidate persisted Run/attempt, audience, epochs, lease, Skill/tool/effect capabilities, and exact Company or anchor-Space grants through `@questpie/ai`. Mutating calls also require the `AGENT_WORKLOAD_MCP_META` command fields and execute through `effectHandoff`; MCP does not implement a competing effect or idempotency store. Tools without an explicit workload requirement are hidden. Human OAuth and explicitly trusted maintenance-system servers continue to use `createMcpServer`/`startStdioServer` and never become Agent authority.
+MCP passes only the opaque envelope, phase, and bounded tool facts (`kind`,
+`name`, `operation`, `intent`, `transport`, `capabilities`, and optional
+`handoff`) to the authorizer. Discovery and every call are authorized and bound
+independently. MCP does not interpret the returned opaque context or attribution.
+Calls with a `handoff` capability execute through the consumer's handoff; MCP
+does not add a durable effect or idempotency store. Missing or malformed
+authorization or context binding fails closed, and tools without an explicit
+workload requirement stay hidden.
 
 ## Exports
 

@@ -400,7 +400,6 @@
       "version": "3.16.0",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.29.0",
-        "@questpie/ai": "workspace:*",
         "questpie": "workspace:*",
         "zod": "^4.2.1",
       },
@@ -411,7 +410,7 @@
         "tsdown": "^0.18.3",
       },
       "peerDependencies": {
-        "questpie": "^3.0.0",
+        "questpie": "^3.16.0",
       },
     },
     "packages/next": {

@@ -1,26 +1,23 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
-import {
-	createAgentWorkloadMcpBoundary,
-	listAgentWorkloadTools,
-	type AgentWorkloadMcpBoundary,
-} from "./agent-workload-boundary.js";
 import { registerCrudTools } from "./crud-tools.js";
 import { registerCustomTools } from "./custom-tools.js";
 import { defaultAccessModeForTransport, resolveMcpConfig } from "./policy.js";
 import { registerSchemaResources } from "./resources.js";
 import { registerRouteTools } from "./route-tools.js";
 import { createRuntimeScope, type QuestpieApp } from "./runtime.js";
-import type {
-	AgentWorkloadMcpServerOptions,
-	McpExecutionOptions,
-} from "./types.js";
+import type { McpExecutionOptions, WorkloadMcpServerOptions } from "./types.js";
+import {
+	createWorkloadMcpBoundary,
+	listWorkloadTools,
+	type WorkloadMcpBoundary,
+} from "./workload-boundary.js";
 
 async function createServer(
 	app: QuestpieApp,
 	options: McpExecutionOptions,
-	agentWorkload?: AgentWorkloadMcpBoundary,
+	workload?: WorkloadMcpBoundary,
 ): Promise<McpServer> {
 	const config = resolveMcpConfig(app, options.config);
 	const transport = options.transport ?? "http";
@@ -37,7 +34,7 @@ async function createServer(
 			accessMode,
 			config,
 		},
-		agentWorkload,
+		workload,
 	);
 
 	const server = new McpServer(
@@ -56,9 +53,9 @@ async function createServer(
 	await registerRouteTools(server, scope, config);
 	registerSchemaResources(server, scope, config);
 	await registerCustomTools(server, scope);
-	if (agentWorkload) {
+	if (workload) {
 		server.server.setRequestHandler(ListToolsRequestSchema, () =>
-			listAgentWorkloadTools(agentWorkload),
+			listWorkloadTools(workload),
 		);
 	}
 
@@ -72,15 +69,15 @@ export async function createMcpServer(
 	return createServer(app, options);
 }
 
-export async function createAgentWorkloadMcpServer(
+export async function createWorkloadMcpServer(
 	app: QuestpieApp,
-	options: AgentWorkloadMcpServerOptions,
+	options: WorkloadMcpServerOptions,
 ): Promise<McpServer> {
-	const boundary = await createAgentWorkloadMcpBoundary(options);
+	const boundary = createWorkloadMcpBoundary(options);
 	return createServer(
 		app,
 		{
-			transport: "stdio",
+			transport: "workload",
 			accessMode: "user",
 			config: {
 				...options.config,

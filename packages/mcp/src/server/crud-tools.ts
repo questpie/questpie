@@ -8,12 +8,6 @@ import {
 import { z } from "zod";
 
 import {
-	authorizeAgentWorkloadCall,
-	executeAgentWorkloadTool,
-	permitsAgentWorkloadDiscovery,
-	registerAgentWorkloadDiscoveryTool,
-} from "./agent-workload-boundary.js";
-import {
 	createCollectionDataSchema,
 	createGlobalDataSchema,
 	filterCrudResultFields,
@@ -35,6 +29,11 @@ import {
 import type { RuntimeScope } from "./runtime.js";
 import { toToolError, toToolResult } from "./runtime.js";
 import type { McpConfig } from "./types.js";
+import {
+	authorizeWorkload,
+	executeWorkloadTool,
+	registerWorkloadDiscoveryTool,
+} from "./workload-boundary.js";
 import { toToolInputJsonSchema } from "./zod-json-schema.js";
 
 const whereSchema = z.record(z.string(), z.unknown());
@@ -261,13 +260,13 @@ function filterOperationInput(
 
 async function questpieAllows(
 	scope: RuntimeScope,
+	ctx: Awaited<ReturnType<RuntimeScope["getContext"]>>,
 	kind: Exclude<EntityKind, "route">,
 	name: string,
 	operation: OperationKind,
 ): Promise<boolean> {
 	if (scope.accessMode === "system") return true;
 
-	const ctx = await scope.getContext();
 	const crudContext = {
 		db: ctx.db ?? scope.app.db,
 		session: ctx.session,
@@ -303,27 +302,15 @@ async function questpieAllows(
 	return !!result && result.allowed !== false;
 }
 
-async function shouldRegister(
+async function allowsOperation(
 	scope: RuntimeScope,
+	ctx: Awaited<ReturnType<RuntimeScope["getContext"]>>,
 	policy: ResolvedMcpPolicy,
 	kind: Exclude<EntityKind, "route">,
 	entityName: string,
 	operationName: string,
 	operationKind: OperationKind,
 ): Promise<boolean> {
-	if (!policy.expose) return false;
-	const toolName = `${kind === "collection" ? "collections" : "globals"}.${entityName}.${operationName}`;
-	if (
-		scope.agentWorkload &&
-		!(await permitsAgentWorkloadDiscovery(
-			scope.agentWorkload,
-			toolName,
-			workloadRequirementForOperation(policy, operationName),
-		))
-	) {
-		return false;
-	}
-	const ctx = await scope.getContext();
 	const mcpAllowed = await evaluateMcpRule(
 		operationRule(policy, operationName) ??
 			operationRule(
@@ -333,10 +320,6 @@ async function shouldRegister(
 		{ transport: scope.transport, accessMode: scope.accessMode, ctx },
 	);
 	if (!mcpAllowed) return false;
-	// Scope gate (MO8): for an `oauth` caller, additionally require the operation's
-	// scopes. `scopesFromContext` is `undefined` for `user`/`system`, so the gate
-	// passes untouched for them — this only narrows `oauth`. ANDed with the RBAC
-	// check below, so the effective `oauth` permission is `scopes ∩ RBAC`.
 	if (
 		!scopeGateAllows(
 			scopesFromContext(ctx),
@@ -351,7 +334,35 @@ async function shouldRegister(
 	) {
 		return false;
 	}
-	return questpieAllows(scope, kind, entityName, operationKind);
+	return questpieAllows(scope, ctx, kind, entityName, operationKind);
+}
+
+async function shouldRegister(
+	scope: RuntimeScope,
+	policy: ResolvedMcpPolicy,
+	kind: Exclude<EntityKind, "route">,
+	entityName: string,
+	operationName: string,
+	operationKind: OperationKind,
+): Promise<boolean> {
+	if (!policy.expose) return false;
+	if (
+		scope.workload &&
+		!workloadRequirementForOperation(policy, operationName)
+	) {
+		return false;
+	}
+	if (scope.workload) return true;
+	const ctx = await scope.getContext();
+	return allowsOperation(
+		scope,
+		ctx,
+		policy,
+		kind,
+		entityName,
+		operationName,
+		operationKind,
+	);
 }
 
 export async function registerCrudTools(
@@ -390,6 +401,25 @@ export async function registerCrudTools(
 				policy,
 				operation.name,
 			);
+			const workloadIdentity = {
+				kind: "collection" as const,
+				name: toolName,
+				operation: operation.name,
+				intent:
+					operation.kind === "read" && !workloadRequirement?.handoff
+						? ("read" as const)
+						: ("effect" as const),
+			};
+			const allows = (ctx: Awaited<ReturnType<RuntimeScope["getContext"]>>) =>
+				allowsOperation(
+					scope,
+					ctx,
+					policy,
+					"collection",
+					name,
+					operation.name,
+					operation.kind,
+				);
 			if (
 				!(await shouldRegister(
 					scope,
@@ -412,42 +442,20 @@ export async function registerCrudTools(
 				},
 				async (input, extra) => {
 					try {
-						const workloadPrincipal = scope.agentWorkload
-							? await authorizeAgentWorkloadCall(
-									scope.agentWorkload,
-									toolName,
+						const workloadAuthorization = scope.workload
+							? await authorizeWorkload(
+									scope.workload,
+									"call",
+									workloadIdentity,
 									workloadRequirement,
 								)
 							: undefined;
-						if (scope.agentWorkload && !workloadPrincipal) {
+						if (scope.workload && !workloadAuthorization) {
 							throw new Error("MCP access denied");
 						}
-						const ctx = await scope.getContext();
-						const allowed = await evaluateMcpRule(
-							operationRule(policy, operation.name) ??
-								operationRule(
-									policy,
-									operation.kind === "write" ? "update" : operation.kind,
-								),
-							{ transport: scope.transport, accessMode: scope.accessMode, ctx },
-						);
-						if (!allowed) throw new Error("MCP access denied");
-						// Scope gate at call time (defense in depth): a tool hidden from
-						// listing for a missing scope must also be denied if called directly.
-						if (
-							!scopeGateAllows(
-								scopesFromContext(ctx),
-								requiredScopesForOperation(
-									policy,
-									"collection",
-									name,
-									operation.name,
-									operation.kind as ScopeOperationKind,
-								),
-							)
-						) {
-							throw new Error("MCP access denied");
-						}
+						const ctx =
+							workloadAuthorization?.context ?? (await scope.getContext());
+						if (!(await allows(ctx))) throw new Error("MCP access denied");
 						const nextInput = filterOperationInput(
 							operation.name,
 							input,
@@ -463,16 +471,14 @@ export async function registerCrudTools(
 							return toToolResult(filterCrudResultFields(value, policy));
 						};
 						if (
-							scope.agentWorkload &&
-							workloadPrincipal &&
+							scope.workload &&
+							workloadAuthorization &&
 							workloadRequirement
 						) {
-							return executeAgentWorkloadTool(
-								scope.agentWorkload,
-								workloadPrincipal,
-								toolName,
-								workloadRequirement,
-								extra["_meta"],
+							return executeWorkloadTool(
+								scope.workload,
+								workloadAuthorization,
+								extra?.["_meta"],
 								invoke,
 							);
 						}
@@ -482,13 +488,19 @@ export async function registerCrudTools(
 					}
 				},
 			);
-			if (scope.agentWorkload) {
-				registerAgentWorkloadDiscoveryTool(scope.agentWorkload, {
-					name: toolName,
-					description: policy.description ?? operation.description(name),
-					inputSchema: toToolInputJsonSchema(inputSchema),
-					annotations,
-				});
+			if (scope.workload) {
+				registerWorkloadDiscoveryTool(
+					scope.workload,
+					{
+						name: toolName,
+						description: policy.description ?? operation.description(name),
+						inputSchema: toToolInputJsonSchema(inputSchema),
+						annotations,
+					},
+					workloadIdentity,
+					workloadRequirement,
+					allows,
+				);
 			}
 		}
 	}
@@ -509,6 +521,25 @@ export async function registerCrudTools(
 				policy,
 				operation.name,
 			);
+			const workloadIdentity = {
+				kind: "global" as const,
+				name: toolName,
+				operation: operation.name,
+				intent:
+					operation.kind === "read" && !workloadRequirement?.handoff
+						? ("read" as const)
+						: ("effect" as const),
+			};
+			const allows = (ctx: Awaited<ReturnType<RuntimeScope["getContext"]>>) =>
+				allowsOperation(
+					scope,
+					ctx,
+					policy,
+					"global",
+					name,
+					operation.name,
+					operation.kind,
+				);
 			if (
 				!(await shouldRegister(
 					scope,
@@ -531,42 +562,20 @@ export async function registerCrudTools(
 				},
 				async (input, extra) => {
 					try {
-						const workloadPrincipal = scope.agentWorkload
-							? await authorizeAgentWorkloadCall(
-									scope.agentWorkload,
-									toolName,
+						const workloadAuthorization = scope.workload
+							? await authorizeWorkload(
+									scope.workload,
+									"call",
+									workloadIdentity,
 									workloadRequirement,
 								)
 							: undefined;
-						if (scope.agentWorkload && !workloadPrincipal) {
+						if (scope.workload && !workloadAuthorization) {
 							throw new Error("MCP access denied");
 						}
-						const ctx = await scope.getContext();
-						const allowed = await evaluateMcpRule(
-							operationRule(policy, operation.name) ??
-								operationRule(
-									policy,
-									operation.kind === "write" ? "update" : operation.kind,
-								),
-							{ transport: scope.transport, accessMode: scope.accessMode, ctx },
-						);
-						if (!allowed) throw new Error("MCP access denied");
-						// Scope gate at call time (defense in depth): a tool hidden from
-						// listing for a missing scope must also be denied if called directly.
-						if (
-							!scopeGateAllows(
-								scopesFromContext(ctx),
-								requiredScopesForOperation(
-									policy,
-									"global",
-									name,
-									operation.name,
-									operation.kind as ScopeOperationKind,
-								),
-							)
-						) {
-							throw new Error("MCP access denied");
-						}
+						const ctx =
+							workloadAuthorization?.context ?? (await scope.getContext());
+						if (!(await allows(ctx))) throw new Error("MCP access denied");
 						const nextInput = filterOperationInput(
 							operation.name,
 							input,
@@ -577,16 +586,14 @@ export async function registerCrudTools(
 							return toToolResult(filterCrudResultFields(value, policy));
 						};
 						if (
-							scope.agentWorkload &&
-							workloadPrincipal &&
+							scope.workload &&
+							workloadAuthorization &&
 							workloadRequirement
 						) {
-							return executeAgentWorkloadTool(
-								scope.agentWorkload,
-								workloadPrincipal,
-								toolName,
-								workloadRequirement,
-								extra["_meta"],
+							return executeWorkloadTool(
+								scope.workload,
+								workloadAuthorization,
+								extra?.["_meta"],
 								invoke,
 							);
 						}
@@ -596,13 +603,19 @@ export async function registerCrudTools(
 					}
 				},
 			);
-			if (scope.agentWorkload) {
-				registerAgentWorkloadDiscoveryTool(scope.agentWorkload, {
-					name: toolName,
-					description: policy.description ?? operation.description(name),
-					inputSchema: toToolInputJsonSchema(inputSchema),
-					annotations,
-				});
+			if (scope.workload) {
+				registerWorkloadDiscoveryTool(
+					scope.workload,
+					{
+						name: toolName,
+						description: policy.description ?? operation.description(name),
+						inputSchema: toToolInputJsonSchema(inputSchema),
+						annotations,
+					},
+					workloadIdentity,
+					workloadRequirement,
+					allows,
+				);
 			}
 		}
 	}

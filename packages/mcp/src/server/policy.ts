@@ -11,7 +11,7 @@ import type {
 	McpConfig,
 	McpEntityPolicy,
 	McpExecutionOptions,
-	McpAgentWorkloadRequirement,
+	McpWorkloadRequirement,
 	McpRequiredScopes,
 	McpTransportKind,
 } from "./types.js";
@@ -59,8 +59,8 @@ export interface ResolvedMcpPolicy {
 	operations: Record<string, boolean | McpAccessRule>;
 	requiredScopes?: McpRequiredScopes;
 	operationScopes: Record<string, McpRequiredScopes>;
-	workload?: McpAgentWorkloadRequirement;
-	operationWorkloads: Record<string, McpAgentWorkloadRequirement>;
+	workload?: McpWorkloadRequirement;
+	operationWorkloads: Record<string, McpWorkloadRequirement>;
 	fields?: { include?: string[]; exclude?: string[] };
 	description?: string;
 }
@@ -103,8 +103,9 @@ export function defaultAccessModeForTransport(
 	config: McpConfig,
 	transport: McpTransportKind,
 ): McpAccessMode {
-	if (transport === "http") return "user";
-	return config.stdio?.accessMode ?? "system";
+	return transport === "stdio"
+		? (config.stdio?.accessMode ?? "system")
+		: "user";
 }
 
 export function resolveEntityPolicy(
@@ -196,7 +197,7 @@ function normalizePolicy(
 export function workloadRequirementForOperation(
 	policy: ResolvedMcpPolicy,
 	operation: string,
-): McpAgentWorkloadRequirement | undefined {
+): McpWorkloadRequirement | undefined {
 	return policy.operationWorkloads[operation] ?? policy.workload;
 }
 

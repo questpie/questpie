@@ -8,12 +8,6 @@ import {
 import { z } from "zod";
 
 import {
-	authorizeAgentWorkloadCall,
-	executeAgentWorkloadTool,
-	permitsAgentWorkloadDiscovery,
-	registerAgentWorkloadDiscoveryTool,
-} from "./agent-workload-boundary.js";
-import {
 	evaluateMcpRule,
 	operationRule,
 	requiredScopesForOperation,
@@ -25,6 +19,11 @@ import {
 import type { RuntimeScope } from "./runtime.js";
 import { toRequestContext, toToolError, toToolResult } from "./runtime.js";
 import type { McpConfig } from "./types.js";
+import {
+	authorizeWorkload,
+	executeWorkloadTool,
+	registerWorkloadDiscoveryTool,
+} from "./workload-boundary.js";
 import {
 	jsonSchemaCompatibleSchema,
 	toToolInputJsonSchema,
@@ -75,17 +74,34 @@ export async function registerRouteTools(
 		);
 		if (!policy.expose) continue;
 
-		const ctx = await scope.getContext();
-		const allowed = await evaluateMcpRule(
-			operationRule(policy, "execute") ?? operationRule(policy, "read"),
-			{ transport: scope.transport, accessMode: scope.accessMode, ctx },
+		const name = route.meta.mcp.name ?? `routes.${sanitizeRouteKey(route.key)}`;
+		const workloadRequirement = workloadRequirementForOperation(
+			policy,
+			"execute",
 		);
-		if (!allowed) continue;
-		// Scope gate (MO8): a route invocation requires `routes:<key>:invoke` (or a
-		// declared override). `undefined` scopes (user/system) bypass; ANDed with
-		// the MCP rule above so an `oauth` caller is `scopes ∩ RBAC`.
-		if (
-			!scopeGateAllows(
+		if (scope.workload && !workloadRequirement) {
+			continue;
+		}
+		const inputSchema = routeInputSchema(route);
+		const outputSchema = jsonSchemaCompatibleSchema(definition.outputSchema);
+		const annotations = route.meta.mcp.annotations;
+		const workloadIdentity = {
+			kind: "route" as const,
+			name,
+			operation: "execute",
+			intent:
+				workloadRequirement?.handoff || annotations?.readOnlyHint !== true
+					? ("effect" as const)
+					: ("read" as const),
+		};
+		const allows = async (
+			ctx: Awaited<ReturnType<RuntimeScope["getContext"]>>,
+		) =>
+			(await evaluateMcpRule(
+				operationRule(policy, "execute") ?? operationRule(policy, "read"),
+				{ transport: scope.transport, accessMode: scope.accessMode, ctx },
+			)) &&
+			scopeGateAllows(
 				scopesFromContext(ctx),
 				requiredScopesForOperation(
 					policy,
@@ -94,29 +110,11 @@ export async function registerRouteTools(
 					"execute",
 					"invoke",
 				),
-			)
-		) {
-			continue;
+			);
+		if (!scope.workload) {
+			const ctx = await scope.getContext();
+			if (!(await allows(ctx))) continue;
 		}
-
-		const name = route.meta.mcp.name ?? `routes.${sanitizeRouteKey(route.key)}`;
-		const workloadRequirement = workloadRequirementForOperation(
-			policy,
-			"execute",
-		);
-		if (
-			scope.agentWorkload &&
-			!(await permitsAgentWorkloadDiscovery(
-				scope.agentWorkload,
-				name,
-				workloadRequirement,
-			))
-		) {
-			continue;
-		}
-		const inputSchema = routeInputSchema(route);
-		const outputSchema = jsonSchemaCompatibleSchema(definition.outputSchema);
-		const annotations = route.meta.mcp.annotations;
 
 		server.registerTool(
 			name,
@@ -129,41 +127,20 @@ export async function registerRouteTools(
 			},
 			async (input, extra) => {
 				try {
-					const workloadPrincipal = scope.agentWorkload
-						? await authorizeAgentWorkloadCall(
-								scope.agentWorkload,
-								name,
+					const workloadAuthorization = scope.workload
+						? await authorizeWorkload(
+								scope.workload,
+								"call",
+								workloadIdentity,
 								workloadRequirement,
 							)
 						: undefined;
-					if (scope.agentWorkload && !workloadPrincipal) {
+					if (scope.workload && !workloadAuthorization) {
 						throw new Error("MCP access denied");
 					}
-					const routeCtx = await scope.getContext();
-					const stillAllowed = await evaluateMcpRule(
-						operationRule(policy, "execute") ?? operationRule(policy, "read"),
-						{
-							transport: scope.transport,
-							accessMode: scope.accessMode,
-							ctx: routeCtx,
-						},
-					);
-					if (!stillAllowed) throw new Error("MCP access denied");
-					// Scope gate at call time (defense in depth).
-					if (
-						!scopeGateAllows(
-							scopesFromContext(routeCtx),
-							requiredScopesForOperation(
-								policy,
-								"route",
-								route.key,
-								"execute",
-								"invoke",
-							),
-						)
-					) {
-						throw new Error("MCP access denied");
-					}
+					const routeCtx =
+						workloadAuthorization?.context ?? (await scope.getContext());
+					if (!(await allows(routeCtx))) throw new Error("MCP access denied");
 
 					const invocation =
 						route.params.length > 0
@@ -186,13 +163,11 @@ export async function registerRouteTools(
 								invocation.params,
 							),
 						);
-					if (scope.agentWorkload && workloadPrincipal && workloadRequirement) {
-						return executeAgentWorkloadTool(
-							scope.agentWorkload,
-							workloadPrincipal,
-							name,
-							workloadRequirement,
-							extra["_meta"],
+					if (scope.workload && workloadAuthorization && workloadRequirement) {
+						return executeWorkloadTool(
+							scope.workload,
+							workloadAuthorization,
+							extra?.["_meta"],
 							invoke,
 						);
 					}
@@ -202,18 +177,24 @@ export async function registerRouteTools(
 				}
 			},
 		);
-		if (scope.agentWorkload) {
+		if (scope.workload) {
 			const discoveryOutputSchema = toToolOutputJsonSchema(outputSchema);
-			registerAgentWorkloadDiscoveryTool(scope.agentWorkload, {
-				name,
-				title: route.meta.mcp.title ?? route.meta.title,
-				description: route.meta.mcp.description ?? route.meta.description,
-				inputSchema: toToolInputJsonSchema(inputSchema),
-				...(discoveryOutputSchema
-					? { outputSchema: discoveryOutputSchema }
-					: {}),
-				annotations,
-			});
+			registerWorkloadDiscoveryTool(
+				scope.workload,
+				{
+					name,
+					title: route.meta.mcp.title ?? route.meta.title,
+					description: route.meta.mcp.description ?? route.meta.description,
+					inputSchema: toToolInputJsonSchema(inputSchema),
+					...(discoveryOutputSchema
+						? { outputSchema: discoveryOutputSchema }
+						: {}),
+					annotations,
+				},
+				workloadIdentity,
+				workloadRequirement,
+				allows,
+			);
 		}
 	}
 }
