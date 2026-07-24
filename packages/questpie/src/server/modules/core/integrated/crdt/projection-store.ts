@@ -329,6 +329,14 @@ async function commitProjection<TOwner>(
 				scheduledField.fieldEpoch !== binding.fieldEpoch ||
 				scheduledField.fieldSlot !== binding.fieldSlot ||
 				scheduledField.formatVersion !== binding.formatVersion ||
+				scheduledField.expectedCanonicalRevision >
+					binding.projectedCanonicalRevision ||
+				(scheduledField.expectedCanonicalRevision ===
+					binding.projectedCanonicalRevision &&
+					!equalBytes(
+						scheduledField.expectedCanonicalHash,
+						binding.projectedCanonicalHash,
+					)) ||
 				field.targetFieldCursor !== scheduledField.targetFieldCursor ||
 				field.shouldWrite !== scheduledField.shouldWrite ||
 				field.targetFieldCursor > binding.headFieldCursor ||
@@ -337,6 +345,7 @@ async function commitProjection<TOwner>(
 			);
 		})
 	) {
+		await suspendAggregate(db, claim.resourceId);
 		await finishJob(db, claim, 5);
 		return {
 			status: "suspended" as const,
@@ -361,19 +370,7 @@ async function commitProjection<TOwner>(
 		);
 	});
 	if (rawConflict) {
-		await db
-			.update(questpieCrdtResourceTable)
-			.set({ status: 3, updatedAt: sql`now()` })
-			.where(eq(questpieCrdtResourceTable.id, claim.resourceId));
-		await db
-			.update(questpieCrdtBindingTable)
-			.set({ status: 3, updatedAt: sql`now()` })
-			.where(
-				and(
-					eq(questpieCrdtBindingTable.resourceId, claim.resourceId),
-					isNull(questpieCrdtBindingTable.retiredAt),
-				),
-			);
+		await suspendAggregate(db, claim.resourceId);
 		await finishJob(db, claim, 5);
 		return {
 			status: "suspended" as const,
@@ -442,6 +439,25 @@ async function commitProjection<TOwner>(
 		status: "applied" as const,
 		projectedCommitSeq: claim.targetCommitSeq,
 	});
+}
+
+async function suspendAggregate(
+	db: CrdtDatabase,
+	resourceId: string,
+): Promise<void> {
+	await db
+		.update(questpieCrdtResourceTable)
+		.set({ status: 3, updatedAt: sql`now()` })
+		.where(eq(questpieCrdtResourceTable.id, resourceId));
+	await db
+		.update(questpieCrdtBindingTable)
+		.set({ status: 3, updatedAt: sql`now()` })
+		.where(
+			and(
+				eq(questpieCrdtBindingTable.resourceId, resourceId),
+				isNull(questpieCrdtBindingTable.retiredAt),
+			),
+		);
 }
 
 async function loadScheduledFields(
