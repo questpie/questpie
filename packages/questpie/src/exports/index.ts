@@ -89,11 +89,6 @@ export type {
 	CrdtAuthoritySubject,
 	VerifiedAgentCredential,
 } from "#questpie/server/modules/core/integrated/crdt/authority.js";
-export type {
-	CrdtHostApplicationV1,
-	CrdtHostAttachInputV1,
-	CrdtHostTransportV1,
-} from "#questpie/server/modules/core/integrated/crdt/host.js";
 export * from "#questpie/server/config/create-app.js";
 export {
 	createApp,
