@@ -4,6 +4,7 @@ export * from "#questpie/server/modules/core/integrated/crdt/append-store.js";
 export * from "#questpie/server/modules/core/integrated/crdt/authorization-resolver.js";
 export * from "#questpie/server/modules/core/integrated/crdt/host-application.js";
 export * from "#questpie/server/modules/core/integrated/crdt/notice.js";
+export * from "#questpie/server/modules/core/integrated/crdt/projection.js";
 export * from "#questpie/server/modules/core/integrated/crdt/questpie-host-application.js";
 export * from "#questpie/server/modules/core/integrated/crdt/sync-coordinator.js";
 export * from "#questpie/server/modules/core/integrated/crdt/sync-socket.js";
