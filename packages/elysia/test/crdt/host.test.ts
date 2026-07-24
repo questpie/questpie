@@ -5,7 +5,7 @@ import type {
 	CrdtHostSocketSessionV1,
 } from "questpie/crdt";
 
-import { createElysiaCrdtHost } from "../../src/server.js";
+import { createElysiaCrdtHost, questpieElysia } from "../../src/server.js";
 
 describe("Elysia CRDT host", () => {
 	const running: Array<ReturnType<typeof createElysiaCrdtHost>> = [];
@@ -56,6 +56,34 @@ describe("Elysia CRDT host", () => {
 			'browser:{"namespace":"acme"}',
 			'agent:{"namespace":"acme"}',
 		]);
+	});
+
+	it("mounts the installed kernel under the QUESTPIE base path", async () => {
+		const seen: string[] = [];
+		const core = application({
+			handleTicket: async () => {
+				seen.push("ticket");
+				return new Response(null, { status: 204 });
+			},
+		});
+		const app = questpieElysia(
+			{
+				config: { routes: undefined, logger: undefined },
+				crdtHostApplication: core,
+			} as never,
+			{
+				basePath: "/api",
+				crdt: { path: "/collaboration" },
+			},
+		);
+
+		const response = await app.handle(
+			new Request("http://localhost/api/collaboration/ticket", {
+				method: "POST",
+			}),
+		);
+		expect(response.status).toBe(204);
+		expect(seen).toEqual(["ticket"]);
 	});
 
 	it("accepts binary QPCR frames without negotiating compression", async () => {

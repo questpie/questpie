@@ -5,6 +5,11 @@ import {
 	type Questpie,
 } from "questpie";
 
+import {
+	createElysiaCrdtHost,
+	type ElysiaCrdtTrustedProxyResolver,
+} from "./crdt-host.js";
+
 export {
 	createElysiaCrdtHost,
 	type ElysiaCrdtHostConfig,
@@ -39,6 +44,7 @@ export type ElysiaAdapterConfig = Pick<AdapterConfig, "requestLogging"> & {
 	crdt?: {
 		/** @default "/crdt" */
 		path?: `/${string}`;
+		resolveTrustedProxyClientIp?: ElysiaCrdtTrustedProxyResolver;
 	};
 };
 
@@ -96,19 +102,32 @@ export function questpieElysia(
 		requestLogging: config.requestLogging,
 	});
 
-	const server = new Elysia({ prefix: basePath, name: "questpie" }).all(
-		"/*",
-		async ({ request }) => {
-			const response = await handler(request);
-			return (
-				response ??
-				new Response(JSON.stringify({ error: "Not found" }), {
-					status: 404,
-					headers: { "Content-Type": "application/json" },
-				})
+	const server = new Elysia({ prefix: basePath, name: "questpie" });
+	if (config.crdt) {
+		const application = app.crdtHostApplication;
+		if (!application) {
+			throw new TypeError(
+				"QUESTPIE Elysia CRDT host requires the CRDT session kernel",
 			);
-		},
-	);
+		}
+		server.use(
+			createElysiaCrdtHost({
+				path: config.crdt.path,
+				application,
+				resolveTrustedProxyClientIp: config.crdt.resolveTrustedProxyClientIp,
+			}),
+		);
+	}
+	server.all("/*", async ({ request }) => {
+		const response = await handler(request);
+		return (
+			response ??
+			new Response(JSON.stringify({ error: "Not found" }), {
+				status: 404,
+				headers: { "Content-Type": "application/json" },
+			})
+		);
+	});
 
 	return server;
 }

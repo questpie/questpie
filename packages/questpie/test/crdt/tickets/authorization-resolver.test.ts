@@ -9,8 +9,11 @@ import {
 
 import { PGlite } from "@electric-sql/pglite";
 import { sql } from "drizzle-orm";
+import { pgTable, text } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
+import type { Principal } from "../../../src/server/config/context.js";
+import type { Questpie } from "../../../src/server/config/questpie.js";
 import { createHumanCrdtAuthentication } from "../../../src/server/modules/core/integrated/crdt/authority.js";
 import { createCrdtTicketAuthorizationResolverV1 } from "../../../src/server/modules/core/integrated/crdt/authorization-resolver.js";
 import { createDeterministicTextEngine } from "../../../src/server/modules/core/integrated/crdt/deterministic-engine.js";
@@ -23,12 +26,18 @@ import {
 	CrdtOwnerLifecycleTransaction,
 	stageCrdtOwnerActivation,
 } from "../../../src/server/modules/core/integrated/crdt/owner-lifecycle.js";
+import { createQuestpieCrdtHostApplicationV1 } from "../../../src/server/modules/core/integrated/crdt/questpie-host-application.js";
 import {
 	questpieCrdtSubjectTable,
 	questpieCrdtTables,
 } from "../../../src/server/modules/core/integrated/crdt/schema.js";
 
 const RESOURCE_ID = "00000000-0000-4000-8000-000000000801";
+const articlesTable = pgTable("articles", {
+	id: text("id").primaryKey(),
+	title: text("title").notNull(),
+	content: text("content").notNull(),
+});
 const textEngine = createDeterministicTextEngine();
 const declaration = {
 	owner: { kind: 1 as const, key: "articles", identityVersion: 1 },
@@ -93,6 +102,18 @@ describe("CRDT ticket authorization resolver", () => {
 				mode: "create",
 			}),
 		);
+		await db.execute(sql`
+			CREATE TABLE articles (
+				id text PRIMARY KEY,
+				title text NOT NULL,
+				content text NOT NULL
+			)
+		`);
+		await db.insert(articlesTable).values({
+			id: "article-1",
+			title: "projection-lagged title",
+			content: "projection-lagged secret",
+		});
 	});
 
 	afterEach(async () => {
@@ -186,17 +207,110 @@ describe("CRDT ticket authorization resolver", () => {
 			snapshot.credentialFingerprint,
 		);
 	});
+
+	it("reuses QUESTPIE owner and field access rules with frozen empty edit input", async () => {
+		const principal = humanPrincipal();
+		let updateInput: unknown;
+		const fakeApp = {
+			config: {
+				app: { url: "https://api.example.com" },
+				secret: "application-secret",
+				crdt: {
+					namespace: "acme-cms",
+					engines: { text: textEngine },
+					allowedOrigins: ["https://admin.example.com"],
+				},
+			},
+			db,
+			crdtManifests: { collections: { articles: manifest }, globals: {} },
+			crdtRegistry: {
+				collections: {
+					articles: {
+						ownerName: "articles",
+						fields: { title: { format: "text" }, content: { format: "text" } },
+					},
+				},
+				globals: {},
+			},
+			collections: {
+				articles: {
+					"~internalRelatedTable": articlesTable,
+					"~internalState": {
+						access: {
+							read: ({ data }: any) => data.content === "Secret policy input",
+							update: ({ input }: any) => {
+								updateInput = input;
+								return (
+									Object.isFrozen(input) && Object.keys(input).length === 0
+								);
+							},
+							fields: {
+								content: { read: false, update: false },
+								title: { read: true, update: true },
+							},
+						},
+						fieldDefinitions: {},
+					},
+				},
+			},
+			globals: {},
+			defaultAccess: {},
+			createContext: async (input: Record<string, unknown>) => ({
+				...input,
+				db,
+				locale: "en",
+				accessMode: "user",
+			}),
+		} as unknown as Questpie<any>;
+		const application = createQuestpieCrdtHostApplicationV1(fakeApp, {
+			audience: "https://api.example.com/api/crdt/socket",
+			authenticateBrowser: async () => principal,
+			openAuthenticatedSession: async () => ({
+				message: async () => {},
+				drain: async () => {},
+				close: async () => {},
+			}),
+		});
+
+		const response = await application.handleTicket(
+			new Request("https://api.example.com/api/crdt/ticket", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					origin: "https://admin.example.com",
+				},
+				body: JSON.stringify({
+					namespace: "acme-cms",
+					owner: {
+						kind: "collection",
+						key: "articles",
+						id: "article-1",
+					},
+					mode: "edit",
+				}),
+			}),
+		);
+
+		expect(response.status).toBe(201);
+		expect(updateInput).toEqual({});
+		expect(Object.isFrozen(updateInput)).toBe(true);
+		expect(await response.json()).toMatchObject({ effectiveMode: "edit" });
+	});
 });
 
 function humanAuthentication() {
-	return createHumanCrdtAuthentication({
+	return createHumanCrdtAuthentication(humanPrincipal());
+}
+
+function humanPrincipal(): Extract<Principal, { kind: "user" }> {
+	return {
 		kind: "user",
 		user: { id: "user-1" } as never,
 		session: {
 			id: "session-1",
 			expiresAt: new Date("2030-01-01T00:01:00.000Z"),
 		} as never,
-	});
+	};
 }
 
 function contract(engine: typeof textEngine) {

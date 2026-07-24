@@ -112,6 +112,9 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			revertToVersion: this.wrapWithAppContext(this.createRevertToVersion()),
 			transitionStage: this.wrapWithAppContext(this.createTransitionStage()),
 		};
+		crud["~internalState"] = this.state;
+		crud["~internalRelatedTable"] = this.table;
+		crud["~internalI18nTable"] = this.i18nTable;
 		return crud;
 	}
 

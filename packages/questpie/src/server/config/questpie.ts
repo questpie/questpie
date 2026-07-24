@@ -148,6 +148,8 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		collections: Object.freeze({}),
 		globals: Object.freeze({}),
 	});
+	/** @internal Qualified host application installed by the CRDT session kernel. */
+	public crdtHostApplication?: import("#questpie/server/modules/core/integrated/crdt/host.js").CrdtHostApplicationV1;
 	private resolvedLocales: Locale[] | null = null;
 
 	/**
