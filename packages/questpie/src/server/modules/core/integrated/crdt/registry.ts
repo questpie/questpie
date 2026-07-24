@@ -55,7 +55,11 @@ function createOwnerRegistration(
 			`QUESTPIE collaborative owner "${ownerKind}.${ownerKey}" has no CRDT fields`,
 		);
 	}
-	if (ownerKind === "globals" && owner.state.options.scoped !== undefined) {
+	if (
+		ownerKind === "globals" &&
+		"scoped" in owner.state.options &&
+		owner.state.options.scoped !== undefined
+	) {
 		throw new Error(
 			`QUESTPIE collaborative global "${ownerKind}.${ownerKey}" cannot be scoped`,
 		);
