@@ -46,8 +46,8 @@ export interface SandboxBindings {
 
 /** POST /run request body. */
 export interface SandboxRunRequest {
-	/** Authenticated provenance. The supervisor rejects omitted/unknown modes. */
-	mode: "agent_workload" | "non_agent";
+	/** Explicit transport admission. The supervisor rejects omitted/unknown modes. */
+	mode: "workload" | "host";
 	/** Guest TypeScript source. Must `export default` a `function(input)`. */
 	source: string;
 	/** Payload passed to the guest entry function. */
@@ -67,16 +67,35 @@ export interface SandboxRunRequest {
 }
 
 /** POST /run response body — also the `ExecutorAdapter.run` result shape. */
-export interface SandboxRunResult {
-	ok: boolean;
-	output?: unknown;
-	logs: string[];
-	error?: string;
-	/** True when the run was killed by the wall-clock timeout. */
-	timedOut?: boolean;
-	/** Wall-clock duration in ms (server-measured). */
-	ms?: number;
-}
+export type SandboxRunResult =
+	| {
+			ok: true;
+			output?: unknown;
+			logs: string[];
+			error?: never;
+			timedOut?: never;
+			/** Wall-clock duration in ms (server-measured). */
+			ms?: number;
+	  }
+	| {
+			ok: false;
+			error: string;
+			logs: string[];
+			output?: never;
+			timedOut?: never;
+			/** Wall-clock duration in ms (server-measured). */
+			ms?: number;
+	  }
+	| {
+			ok: false;
+			error: string;
+			logs: string[];
+			output?: never;
+			/** True when the run was killed by the wall-clock timeout. */
+			timedOut: true;
+			/** Wall-clock duration in ms (server-measured). */
+			ms?: number;
+	  };
 
 // ──────────────────────────────────────────────────────────────────────────
 // FRAMED stdio protocol (guest subprocess ⇄ supervisor) for the bindings path.
@@ -98,12 +117,11 @@ export const FRAME_MARKER = "__QP_SANDBOX_MSG__";
  */
 export const BINDINGS_TOKEN_HEADER = "x-questpie-sandbox-token";
 
-/** Host-issued admission proving an Agent request crossed the workload boundary. */
-export const AGENT_WORKLOAD_ADMISSION_HEADER =
-	"x-questpie-agent-workload-admission";
+/** Host-issued admission binding an authorized workload to one exact request. */
+export const WORKLOAD_ADMISSION_HEADER = "x-questpie-workload-admission";
 
-/** Trusted host service identity for the structurally separate non-Agent path. */
-export const NON_AGENT_ADMISSION_HEADER = "x-questpie-non-agent-admission";
+/** Trusted service identity for the structurally separate direct-host path. */
+export const HOST_ADMISSION_HEADER = "x-questpie-sandbox-host-admission";
 
 /** Structured error returned by the broker (mirrors `questpie` `BindingError`). */
 export interface SandboxBindingError {

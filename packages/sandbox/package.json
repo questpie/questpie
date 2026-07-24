@@ -17,9 +17,8 @@
 		"src/types.ts",
 		"src/guest-bindings.ts",
 		"src/guest-runtime-source.ts",
-		"src/agent-workload-admission.ts",
-		"src/agent-workload-denial.ts",
-		"src/agent-workload-runtime-audit.ts"
+		"src/workload-admission.ts",
+		"src/workload.ts"
 	],
 	"type": "module",
 	"sideEffects": false,
@@ -72,7 +71,6 @@
 		"test": "bun test"
 	},
 	"dependencies": {
-		"@questpie/ai": "workspace:*",
 		"questpie": "workspace:*"
 	},
 	"devDependencies": {
@@ -80,6 +78,6 @@
 		"tsdown": "^0.18.3"
 	},
 	"peerDependencies": {
-		"questpie": "^3.0.0"
+		"questpie": "^3.16.0"
 	}
 }

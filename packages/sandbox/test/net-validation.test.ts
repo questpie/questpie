@@ -136,6 +136,72 @@ describe("validateEgressHosts", () => {
 		});
 		expect(r.ok).toBe(true);
 	});
+
+	it("cancels a hanging validation and bounds resolver concurrency", async () => {
+		const controller = new AbortController();
+		let active = 0;
+		let peak = 0;
+		const resolver = async (): Promise<string[]> => {
+			active += 1;
+			peak = Math.max(peak, active);
+			try {
+				return await new Promise<string[]>(() => {});
+			} finally {
+				active -= 1;
+			}
+		};
+		const validation = validateEgressHosts(
+			Array.from({ length: 20 }, (_, index) => `host-${index}.example:443`),
+			{ resolve: resolver, signal: controller.signal, concurrency: 4 },
+		);
+		setTimeout(() => controller.abort(), 20);
+
+		const result = await validation;
+
+		expect(result.ok).toBe(false);
+		expect(result.reason).toContain("cancelled");
+		expect(peak).toBeLessThanOrEqual(4);
+	});
+
+	it("validates independent hosts concurrently without exceeding the bound", async () => {
+		let active = 0;
+		let peak = 0;
+		const result = await validateEgressHosts(
+			Array.from({ length: 12 }, (_, index) => `host-${index}.example:443`),
+			{
+				concurrency: 4,
+				resolve: async () => {
+					active += 1;
+					peak = Math.max(peak, active);
+					await new Promise((resolve) => setTimeout(resolve, 10));
+					active -= 1;
+					return ["93.184.216.34"];
+				},
+			},
+		);
+
+		expect(result.ok).toBe(true);
+		expect(peak).toBe(4);
+	});
+
+	it("applies one deadline to the complete host set rather than every wave", async () => {
+		const started = Date.now();
+		const result = await validateEgressHosts(
+			Array.from({ length: 12 }, (_, index) => `host-${index}.example:443`),
+			{
+				concurrency: 4,
+				timeoutMs: 50,
+				resolve: async () => {
+					await new Promise((resolve) => setTimeout(resolve, 40));
+					return ["93.184.216.34"];
+				},
+			},
+		);
+
+		expect(result.ok).toBe(false);
+		expect(result.reason).toMatch(/cancelled|timed out/);
+		expect(Date.now() - started).toBeLessThan(120);
+	});
 });
 
 describe("resolveAllowedEndpoints — kernel-firewall accept set (public IPs only)", () => {
@@ -182,6 +248,52 @@ describe("resolveAllowedEndpoints — kernel-firewall accept set (public IPs onl
 			},
 		);
 		expect(eps).toEqual([{ ip: "5.6.7.8", port: 443 }]);
+	});
+
+	it("resolves concurrently without exceeding the configured bound", async () => {
+		let active = 0;
+		let peak = 0;
+		const hosts = Array.from(
+			{ length: 12 },
+			(_, index) => `host-${index}.example:443`,
+		);
+		const started = Date.now();
+		const eps = await resolveAllowedEndpoints(hosts, {
+			concurrency: 4,
+			timeoutMs: 500,
+			resolve: async () => {
+				active += 1;
+				peak = Math.max(peak, active);
+				await new Promise((resolve) => setTimeout(resolve, 25));
+				active -= 1;
+				return ["93.184.216.34"];
+			},
+		});
+
+		expect(peak).toBe(4);
+		expect(eps).toEqual([{ ip: "93.184.216.34", port: 443 }]);
+		expect(Date.now() - started).toBeLessThan(180);
+	});
+
+	it("applies one cancellable deadline to the complete resolution set", async () => {
+		const controller = new AbortController();
+		setTimeout(() => controller.abort(), 35);
+		const started = Date.now();
+		const eps = await resolveAllowedEndpoints(
+			Array.from({ length: 12 }, (_, index) => `host-${index}.example:443`),
+			{
+				concurrency: 4,
+				signal: controller.signal,
+				timeoutMs: 500,
+				resolve: async () => {
+					await new Promise((resolve) => setTimeout(resolve, 25));
+					return ["93.184.216.34"];
+				},
+			},
+		);
+
+		expect(eps).toEqual([{ ip: "93.184.216.34", port: 443 }]);
+		expect(Date.now() - started).toBeLessThan(120);
 	});
 
 	it("returns an empty set for an empty host list (pure default-deny)", async () => {
@@ -304,20 +416,15 @@ describe("withDnsTimeout — a hanging resolver yields a deny, never a hang", ()
 		expect(elapsed).toBeLessThan(8_000);
 	}, 15_000);
 
-	// An INJECTED resolver is not wrapped by withDnsTimeout — guard the never-resolving
-	// case with an explicit race so a behavioural regression surfaces as a fast failure
-	// instead of stalling the suite.
-	it("never blocks the suite on a supplied resolver (explicit race guard)", async () => {
-		const sentinel = Symbol("still-pending");
-		const guard = new Promise<typeof sentinel>((resolve) =>
-			setTimeout(() => resolve(sentinel), 1_000),
-		);
-		const call = validateHostEgress("supplied-hang.example.com:443", {
+	it("bounds a supplied resolver with the same fail-closed deadline", async () => {
+		const started = Date.now();
+		const result = await validateHostEgress("supplied-hang.example.com:443", {
 			resolve: neverResolve,
+			timeoutMs: 25,
 		});
-		const winner = await Promise.race([call, guard]);
-		// Today the supplied resolver is awaited directly (no internal timeout), so the
-		// guard wins. This documents that the timeout guarantee is DEFAULT-resolver only.
-		expect(winner).toBe(sentinel);
+
+		expect(result.ok).toBe(false);
+		expect(result.reason).toContain("timed out");
+		expect(Date.now() - started).toBeLessThan(250);
 	});
 });

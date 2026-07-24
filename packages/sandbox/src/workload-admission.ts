@@ -1,55 +1,111 @@
-const ADMISSION_VERSION = "qpsa1";
+const ADMISSION_VERSION = "qpsw1";
 const MINIMUM_SECRET_BYTES = 32;
 const MAXIMUM_ADMISSION_TTL_MS = 5_000;
 
-export interface AgentWorkloadSandboxAdmissionClaims {
-	readonly kind: "agent_workload_sandbox_admission";
+export interface SandboxWorkloadAdmissionClaims {
+	readonly kind: "sandbox_workload_admission";
 	readonly version: 1;
 	readonly admissionId: string;
-	readonly principalId: string;
-	readonly runId: string;
-	readonly attemptId: string;
-	readonly workRequestId: string;
-	readonly companyId: string;
-	readonly anchorSpaceId: string;
-	readonly agentActorId: string;
-	readonly skillRevisionId: string;
-	readonly executionPolicyRevisionId: string;
-	readonly sourceSha256: string;
-	readonly inputProjectionId: string;
-	readonly grantEpoch: number;
-	readonly revocationEpoch: number;
-	readonly workerId: string;
-	readonly workerLeaseId: string;
-	readonly workerLeaseEpoch: number;
 	readonly supervisorInstanceId: string;
 	readonly expiresAt: string;
 	readonly requestSha256: string;
 }
 
-export interface AgentWorkloadSandboxAdmissionKey {
+export interface SandboxWorkloadAdmissionKey {
 	readonly keyId: string;
 	readonly secret: Uint8Array;
 	/** Unique per supervisor process; rotate on every restart. */
 	readonly instanceId: string;
 }
 
-export type AgentWorkloadSandboxAdmissionDenialReason =
+export type SandboxWorkloadAdmissionDenialReason =
 	| "invalid"
 	| "wrong_instance"
 	| "expired"
 	| "body_mismatch";
 
-export type AgentWorkloadSandboxAdmissionVerification =
+export type SandboxWorkloadAdmissionVerification =
 	| {
 			readonly ok: true;
-			readonly claims: AgentWorkloadSandboxAdmissionClaims;
+			readonly claims: SandboxWorkloadAdmissionClaims;
 	  }
 	| {
 			readonly ok: false;
-			readonly reason: AgentWorkloadSandboxAdmissionDenialReason;
-			readonly claims?: AgentWorkloadSandboxAdmissionClaims;
+			readonly reason: SandboxWorkloadAdmissionDenialReason;
+			readonly claims?: SandboxWorkloadAdmissionClaims;
 	  };
+
+interface ReplayExpiry {
+	readonly admissionId: string;
+	readonly expiresAt: number;
+}
+
+export class SandboxWorkloadReplayCache {
+	private readonly consumed = new Map<string, number>();
+	private readonly expiries: ReplayExpiry[] = [];
+
+	constructor(private readonly maximumEntries: number) {
+		if (!Number.isInteger(maximumEntries) || maximumEntries < 1) {
+			throw new Error("Invalid sandbox workload replay cache size.");
+		}
+	}
+
+	consume(
+		admission: SandboxWorkloadAdmissionClaims,
+		now = Date.now(),
+	): boolean {
+		this.deleteExpired(now);
+		if (this.consumed.has(admission.admissionId)) return false;
+		if (this.consumed.size >= this.maximumEntries) return false;
+		const expiresAt = Date.parse(admission.expiresAt);
+		if (!Number.isFinite(expiresAt) || expiresAt <= now) return false;
+		this.consumed.set(admission.admissionId, expiresAt);
+		this.push({ admissionId: admission.admissionId, expiresAt });
+		return true;
+	}
+
+	private deleteExpired(now: number): void {
+		while (this.expiries[0] && this.expiries[0].expiresAt <= now) {
+			const expired = this.pop()!;
+			if (this.consumed.get(expired.admissionId) === expired.expiresAt) {
+				this.consumed.delete(expired.admissionId);
+			}
+		}
+	}
+
+	private push(value: ReplayExpiry): void {
+		let index = this.expiries.push(value) - 1;
+		while (index > 0) {
+			const parent = Math.floor((index - 1) / 2);
+			if (this.expiries[parent]!.expiresAt <= value.expiresAt) break;
+			this.expiries[index] = this.expiries[parent]!;
+			index = parent;
+		}
+		this.expiries[index] = value;
+	}
+
+	private pop(): ReplayExpiry | undefined {
+		const root = this.expiries[0];
+		const last = this.expiries.pop();
+		if (!root || !last || this.expiries.length === 0) return root;
+		let index = 0;
+		while (true) {
+			const left = index * 2 + 1;
+			if (left >= this.expiries.length) break;
+			const right = left + 1;
+			const child =
+				right < this.expiries.length &&
+				this.expiries[right]!.expiresAt < this.expiries[left]!.expiresAt
+					? right
+					: left;
+			if (this.expiries[child]!.expiresAt >= last.expiresAt) break;
+			this.expiries[index] = this.expiries[child]!;
+			index = child;
+		}
+		this.expiries[index] = last;
+		return root;
+	}
+}
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -74,17 +130,31 @@ function decodeBase64Url(value: string): Uint8Array | null {
 	}
 }
 
-async function importHmacKey(
-	key: AgentWorkloadSandboxAdmissionKey,
-	usage: "sign" | "verify",
-): Promise<CryptoKey> {
+function isIdentity(value: unknown): value is string {
+	return (
+		typeof value === "string" &&
+		value.length <= 128 &&
+		/^[A-Za-z0-9_-]+$/.test(value)
+	);
+}
+
+export function assertSandboxWorkloadAdmissionKey(
+	key: SandboxWorkloadAdmissionKey,
+): void {
 	if (
-		key.keyId.length === 0 ||
+		!isIdentity(key.keyId) ||
 		!isIdentity(key.instanceId) ||
 		key.secret.byteLength < MINIMUM_SECRET_BYTES
 	) {
-		throw new Error("Invalid Agent workload sandbox admission configuration.");
+		throw new Error("Invalid sandbox workload admission configuration.");
 	}
+}
+
+async function importHmacKey(
+	key: SandboxWorkloadAdmissionKey,
+	usage: "sign" | "verify",
+): Promise<CryptoKey> {
+	assertSandboxWorkloadAdmissionKey(key);
 	return crypto.subtle.importKey(
 		"raw",
 		Uint8Array.from(key.secret),
@@ -101,12 +171,6 @@ async function sha256(value: string): Promise<string> {
 		.join("");
 }
 
-export function hashAgentWorkloadSandboxSource(
-	source: string,
-): Promise<string> {
-	return sha256(source);
-}
-
 function exactKeys(value: object, keys: readonly string[]): boolean {
 	const actual = Object.keys(value).sort();
 	const expected = [...keys].sort();
@@ -116,13 +180,7 @@ function exactKeys(value: object, keys: readonly string[]): boolean {
 	);
 }
 
-function isIdentity(value: unknown): value is string {
-	return typeof value === "string" && /^[A-Za-z0-9_-]+$/.test(value);
-}
-
-function parseClaims(
-	value: unknown,
-): AgentWorkloadSandboxAdmissionClaims | null {
+function parseClaims(value: unknown): SandboxWorkloadAdmissionClaims | null {
 	if (
 		typeof value !== "object" ||
 		value === null ||
@@ -131,22 +189,6 @@ function parseClaims(
 			"kind",
 			"version",
 			"admissionId",
-			"principalId",
-			"runId",
-			"attemptId",
-			"workRequestId",
-			"companyId",
-			"anchorSpaceId",
-			"agentActorId",
-			"skillRevisionId",
-			"executionPolicyRevisionId",
-			"sourceSha256",
-			"inputProjectionId",
-			"grantEpoch",
-			"revocationEpoch",
-			"workerId",
-			"workerLeaseId",
-			"workerLeaseEpoch",
 			"supervisorInstanceId",
 			"expiresAt",
 			"requestSha256",
@@ -156,33 +198,10 @@ function parseClaims(
 	}
 	const claims = value as Record<string, unknown>;
 	if (
-		claims.kind !== "agent_workload_sandbox_admission" ||
+		claims.kind !== "sandbox_workload_admission" ||
 		claims.version !== 1 ||
 		!isIdentity(claims.admissionId) ||
-		!isIdentity(claims.principalId) ||
-		!isIdentity(claims.runId) ||
-		!isIdentity(claims.attemptId) ||
-		!isIdentity(claims.workRequestId) ||
-		!isIdentity(claims.companyId) ||
-		!isIdentity(claims.anchorSpaceId) ||
-		!isIdentity(claims.agentActorId) ||
-		!isIdentity(claims.skillRevisionId) ||
-		!isIdentity(claims.executionPolicyRevisionId) ||
-		typeof claims.sourceSha256 !== "string" ||
-		!/^[a-f0-9]{64}$/.test(claims.sourceSha256) ||
-		!isIdentity(claims.inputProjectionId) ||
-		typeof claims.grantEpoch !== "number" ||
-		!Number.isSafeInteger(claims.grantEpoch) ||
-		claims.grantEpoch < 0 ||
-		typeof claims.revocationEpoch !== "number" ||
-		!Number.isSafeInteger(claims.revocationEpoch) ||
-		claims.revocationEpoch < 0 ||
-		!isIdentity(claims.workerId) ||
-		!isIdentity(claims.workerLeaseId) ||
 		!isIdentity(claims.supervisorInstanceId) ||
-		typeof claims.workerLeaseEpoch !== "number" ||
-		!Number.isSafeInteger(claims.workerLeaseEpoch) ||
-		claims.workerLeaseEpoch < 0 ||
 		typeof claims.expiresAt !== "string" ||
 		!Number.isFinite(Date.parse(claims.expiresAt)) ||
 		typeof claims.requestSha256 !== "string" ||
@@ -190,15 +209,15 @@ function parseClaims(
 	) {
 		return null;
 	}
-	return claims as unknown as AgentWorkloadSandboxAdmissionClaims;
+	return claims as unknown as SandboxWorkloadAdmissionClaims;
 }
 
-export async function sealAgentWorkloadSandboxAdmission(
-	key: AgentWorkloadSandboxAdmissionKey,
-	claims: Omit<AgentWorkloadSandboxAdmissionClaims, "requestSha256">,
+export async function sealSandboxWorkloadAdmission(
+	key: SandboxWorkloadAdmissionKey,
+	claims: Omit<SandboxWorkloadAdmissionClaims, "requestSha256">,
 	requestBody: string,
 ): Promise<string> {
-	const payload: AgentWorkloadSandboxAdmissionClaims = {
+	const payload: SandboxWorkloadAdmissionClaims = {
 		...claims,
 		requestSha256: await sha256(requestBody),
 	};
@@ -216,18 +235,19 @@ export async function sealAgentWorkloadSandboxAdmission(
 	return `${signed}.${encodeBase64Url(new Uint8Array(signature))}`;
 }
 
-export async function verifyAgentWorkloadSandboxAdmission(
-	key: AgentWorkloadSandboxAdmissionKey,
+export async function verifySandboxWorkloadAdmission(
+	key: SandboxWorkloadAdmissionKey,
 	envelope: string,
 	requestBody: string,
 	now = new Date(),
-): Promise<AgentWorkloadSandboxAdmissionVerification> {
+): Promise<SandboxWorkloadAdmissionVerification> {
 	const parts = envelope.split(".");
-	if (parts.length !== 4 || parts[0] !== ADMISSION_VERSION)
+	if (parts.length !== 4 || parts[0] !== ADMISSION_VERSION) {
 		return { ok: false, reason: "invalid" };
+	}
 	const encodedKeyId = encodeBase64Url(encoder.encode(key.keyId));
 	if (parts[1] !== encodedKeyId) return { ok: false, reason: "invalid" };
-	const signature = decodeBase64Url(parts[3]);
+	const signature = decodeBase64Url(parts[3]!);
 	if (!signature) return { ok: false, reason: "invalid" };
 	const signed = `${parts[0]}.${parts[1]}.${parts[2]}`;
 	const cryptoKey = await importHmacKey(key, "verify");
@@ -241,7 +261,7 @@ export async function verifyAgentWorkloadSandboxAdmission(
 	) {
 		return { ok: false, reason: "invalid" };
 	}
-	const encodedPayload = decodeBase64Url(parts[2]);
+	const encodedPayload = decodeBase64Url(parts[2]!);
 	if (!encodedPayload) return { ok: false, reason: "invalid" };
 	let decoded: unknown;
 	try {
@@ -266,19 +286,4 @@ export async function verifyAgentWorkloadSandboxAdmission(
 		return { ok: false, reason: "body_mismatch", claims: frozenClaims };
 	}
 	return { ok: true, claims: frozenClaims };
-}
-
-export async function openAgentWorkloadSandboxAdmission(
-	key: AgentWorkloadSandboxAdmissionKey,
-	envelope: string,
-	requestBody: string,
-	now = new Date(),
-): Promise<AgentWorkloadSandboxAdmissionClaims | null> {
-	const verification = await verifyAgentWorkloadSandboxAdmission(
-		key,
-		envelope,
-		requestBody,
-		now,
-	);
-	return verification.ok ? verification.claims : null;
 }

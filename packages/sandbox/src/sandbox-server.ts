@@ -65,16 +65,6 @@ import { spawn } from "node:child_process";
 import { Readable, Writable } from "node:stream";
 
 import {
-	hashAgentWorkloadSandboxSource,
-	verifyAgentWorkloadSandboxAdmission,
-	type AgentWorkloadSandboxAdmissionClaims,
-} from "./agent-workload-admission.ts";
-import { AGENT_WORKLOAD_SANDBOX_DENIAL_MESSAGE } from "./agent-workload-denial.ts";
-import {
-	createAgentWorkloadRuntimeAdmissionAuditEvent,
-	type AgentWorkloadRuntimeAdmissionReason,
-} from "./agent-workload-runtime-audit.ts";
-import {
 	type EgressFirewallPlan,
 	planEgressFirewall,
 	wrapWithNetns,
@@ -94,28 +84,50 @@ import {
 	extractResult,
 	importFlags,
 	netFlag,
+	normalizeBrokerUrl,
+	parseBrokerResponse,
+	parseSandboxRunResult,
 	type RunOutcome,
 } from "./server-internals.ts";
 import {
-	AGENT_WORKLOAD_ADMISSION_HEADER,
 	BINDINGS_TOKEN_HEADER,
 	FRAME_MARKER,
-	NON_AGENT_ADMISSION_HEADER,
+	HOST_ADMISSION_HEADER,
+	WORKLOAD_ADMISSION_HEADER,
 } from "./types.ts";
 import type {
 	SandboxCapabilities,
 	SandboxRunRequest,
 	SandboxRunResult,
 } from "./types.ts";
+import {
+	SandboxWorkloadReplayCache,
+	assertSandboxWorkloadAdmissionKey,
+	verifySandboxWorkloadAdmission,
+	type SandboxWorkloadAdmissionClaims,
+	type SandboxWorkloadAdmissionDenialReason,
+} from "./workload-admission.ts";
+import {
+	SANDBOX_WORKLOAD_DENIAL_MESSAGE,
+	parseSandboxRunRequest,
+} from "./workload.ts";
 
 /** Bound on a single binding RPC round-trip to the host broker. */
 const BROKER_FETCH_TIMEOUT_MS = 10_000;
+const MAX_BROKER_RESPONSE_BYTES = 1_048_576;
 
 const DEFAULT_TIMEOUT_MS = 5_000;
 const MAX_TIMEOUT_MS = 30_000;
 const DEFAULT_MEMORY_MB = 128;
 const MIN_MEMORY_MB = 16;
 const MAX_MEMORY_MB = 1024;
+const MAX_REQUEST_BODY_BYTES = 2 * 1024 * 1024;
+const MAX_CONSUMED_WORKLOAD_ADMISSIONS = 10_000;
+const MAX_FRAME_BYTES = 2 * 1024 * 1024;
+const MAX_TOTAL_OUTPUT_BYTES = 3 * 1024 * 1024;
+const MAX_STDERR_BYTES = 256 * 1024;
+const MAX_RPC_COUNT = 256;
+const MAX_INFLIGHT_RPCS = 16;
 /** Grace period after wall-timeout before SIGKILL (SIGTERM first). */
 const KILL_GRACE_MS = 250;
 
@@ -137,35 +149,72 @@ const DENO_BIN = Deno.env.get("DENO_BIN") ?? Deno.execPath();
  * but if a future/spoofed caller hands a stray `bindings.url`, the supervisor
  * must NOT mail the token to it. Set this env to the SAME trusted internal broker
  * URL the app uses; any `bindings.url` that does not match is rejected before any
- * relay. When UNSET, this check is skipped (back-compat) — set it in production.
+ * relay. Bindings fail closed when this canonical URL is missing or malformed.
  */
 const EXPECTED_BROKER_URL = Deno.env.get("SANDBOX_BROKER_URL")?.trim();
-const AGENT_ADMISSION_SECRET = Deno.env
-	.get("SANDBOX_AGENT_ADMISSION_SECRET")
+const WORKLOAD_ADMISSION_SECRET = Deno.env
+	.get("SANDBOX_WORKLOAD_ADMISSION_SECRET")
 	?.trim();
-const AGENT_ADMISSION_KEY_ID =
-	Deno.env.get("SANDBOX_AGENT_ADMISSION_KEY_ID")?.trim() ?? "sandbox-agent-v1";
+const WORKLOAD_ADMISSION_KEY_ID =
+	Deno.env.get("SANDBOX_WORKLOAD_ADMISSION_KEY_ID")?.trim() ??
+	"sandbox-workload-v1";
 const SANDBOX_INSTANCE_ID = Deno.env.get("SANDBOX_INSTANCE_ID")?.trim() ?? "";
-const AGENT_WORK_ROOT_BASE = Deno.env
-	.get("SANDBOX_AGENT_WORK_ROOT")
-	?.replace(/\/+$/, "");
-const NON_AGENT_ADMISSION_SECRET = Deno.env
-	.get("SANDBOX_NON_AGENT_ADMISSION_SECRET")
+const HOST_ADMISSION_SECRET = Deno.env
+	.get("SANDBOX_HOST_ADMISSION_SECRET")
 	?.trim();
-const consumedAgentAdmissions = new Map<string, number>();
+if (WORKLOAD_ADMISSION_SECRET) {
+	assertSandboxWorkloadAdmissionKey({
+		keyId: WORKLOAD_ADMISSION_KEY_ID,
+		secret: new TextEncoder().encode(WORKLOAD_ADMISSION_SECRET),
+		instanceId: SANDBOX_INSTANCE_ID,
+	});
+}
+const consumedWorkloadAdmissions = new SandboxWorkloadReplayCache(
+	MAX_CONSUMED_WORKLOAD_ADMISSIONS,
+);
 
 interface SandboxChildProcess {
 	readonly stdin: WritableStream<Uint8Array>;
 	readonly stdout: ReadableStream<Uint8Array>;
-	readonly stderr: Promise<Uint8Array>;
+	readonly stderr: ReadableStream<Uint8Array>;
 	readonly exited: Promise<void>;
 	kill(signal: "SIGKILL" | "SIGTERM"): void;
 }
 
+class SandboxOutputLimitError extends Error {}
+
+interface OutputBudget {
+	total: number;
+}
+
 async function readStream(
 	stream: ReadableStream<Uint8Array>,
+	budget: OutputBudget,
+	maximumBytes: number,
+	onLimit: () => void,
 ): Promise<Uint8Array> {
-	return new Uint8Array(await new Response(stream).arrayBuffer());
+	const reader = stream.getReader();
+	const chunks: Uint8Array[] = [];
+	let streamTotal = 0;
+	while (true) {
+		const { value, done } = await reader.read();
+		if (done) break;
+		streamTotal += value.byteLength;
+		budget.total += value.byteLength;
+		if (streamTotal > maximumBytes || budget.total > MAX_TOTAL_OUTPUT_BYTES) {
+			onLimit();
+			await reader.cancel();
+			throw new SandboxOutputLimitError();
+		}
+		chunks.push(value);
+	}
+	const output = new Uint8Array(streamTotal);
+	let offset = 0;
+	for (const chunk of chunks) {
+		output.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	return output;
 }
 
 function spawnSandboxChild(
@@ -187,7 +236,7 @@ function spawnSandboxChild(
 	return {
 		stdin: Writable.toWeb(child.stdin),
 		stdout: Readable.toWeb(child.stdout),
-		stderr: readStream(Readable.toWeb(child.stderr)),
+		stderr: Readable.toWeb(child.stderr),
 		exited,
 		kill: (signal) => {
 			child.kill(signal);
@@ -195,30 +244,15 @@ function spawnSandboxChild(
 	};
 }
 
-function consumeAgentAdmission(
-	admission: AgentWorkloadSandboxAdmissionClaims,
-): boolean {
-	const now = Date.now();
-	for (const [admissionId, expiresAt] of consumedAgentAdmissions) {
-		if (expiresAt <= now) consumedAgentAdmissions.delete(admissionId);
-	}
-	if (consumedAgentAdmissions.has(admission.admissionId)) return false;
-	consumedAgentAdmissions.set(
-		admission.admissionId,
-		Date.parse(admission.expiresAt),
-	);
-	return true;
-}
-
-function authenticatesNonAgentHost(value: string | null): boolean {
+function authenticatesHost(value: string | null): boolean {
 	if (
 		!value ||
-		!NON_AGENT_ADMISSION_SECRET ||
-		new TextEncoder().encode(NON_AGENT_ADMISSION_SECRET).byteLength < 32
+		!HOST_ADMISSION_SECRET ||
+		new TextEncoder().encode(HOST_ADMISSION_SECRET).byteLength < 32
 	) {
 		return false;
 	}
-	const expected = new TextEncoder().encode(NON_AGENT_ADMISSION_SECRET);
+	const expected = new TextEncoder().encode(HOST_ADMISSION_SECRET);
 	const actual = new TextEncoder().encode(value);
 	if (actual.byteLength !== expected.byteLength) return false;
 	let difference = 0;
@@ -228,31 +262,32 @@ function authenticatesNonAgentHost(value: string | null): boolean {
 	return difference === 0;
 }
 
-function auditAgentAdmission(
+type WorkloadAdmissionReason =
+	| SandboxWorkloadAdmissionDenialReason
+	| "authorized"
+	| "host_unauthorized"
+	| "missing"
+	| "replay"
+	| "unknown_mode";
+
+function auditWorkloadAdmission(
 	decision: "allowed" | "denied",
-	reason: AgentWorkloadRuntimeAdmissionReason,
-	claims?: AgentWorkloadSandboxAdmissionClaims,
+	reason: WorkloadAdmissionReason,
+	claims?: SandboxWorkloadAdmissionClaims,
 ): void {
 	console.log(
 		JSON.stringify(
-			createAgentWorkloadRuntimeAdmissionAuditEvent(decision, reason, claims),
+			Object.freeze({
+				event: "questpie.sandbox.workload_admission",
+				boundary: "sandbox.runtime_admission",
+				decision,
+				reason,
+				...(claims
+					? { supervisorInstanceId: claims.supervisorInstanceId }
+					: {}),
+			}),
 		),
 	);
-}
-
-function deriveAgentWorkRoot(
-	admission: AgentWorkloadSandboxAdmissionClaims,
-): string | null {
-	if (
-		!AGENT_WORK_ROOT_BASE ||
-		!AGENT_WORK_ROOT_BASE.startsWith("/") ||
-		AGENT_WORK_ROOT_BASE === "/" ||
-		AGENT_WORK_ROOT_BASE === Deno.cwd() ||
-		AGENT_WORK_ROOT_BASE === Deno.env.get("HOME")
-	) {
-		return null;
-	}
-	return `${AGENT_WORK_ROOT_BASE}/${admission.companyId}/${admission.workRequestId}/${admission.attemptId}/${admission.admissionId}`;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -274,23 +309,46 @@ function deriveAgentWorkRoot(
 const NETNS_FIREWALL_DISABLED =
 	Deno.env.get("SANDBOX_DISABLE_NETNS_FIREWALL") === "1";
 
-/** Probe PATH for a tool by exec'ing `<tool> --version` (no shell). Never throws. */
-async function hasTool(
-	tool: string,
-	versionArg = "--version",
+async function runProbe(
+	command: string,
+	args: string[],
+	signal?: AbortSignal,
 ): Promise<boolean> {
+	if (signal?.aborted) return false;
+	let child;
 	try {
-		const out = await new Deno.Command(tool, {
-			args: [versionArg],
+		child = new Deno.Command(command, {
+			args,
 			stdin: "null",
 			stdout: "null",
 			stderr: "null",
-		}).output();
-		// `unshare --version` / `nft --version` / `ip -V` all exit 0 when present.
-		return out.success;
+		}).spawn();
+		const onAbort = () => {
+			try {
+				child.kill("SIGKILL");
+			} catch {
+				/* already exited */
+			}
+		};
+		signal?.addEventListener("abort", onAbort, { once: true });
+		if (signal?.aborted) onAbort();
+		try {
+			return (await child.output()).success && !signal?.aborted;
+		} finally {
+			signal?.removeEventListener("abort", onAbort);
+		}
 	} catch {
-		return false; // ENOENT (not on PATH) or spawn denied
+		return false;
 	}
+}
+
+/** Probe PATH for a tool by exec'ing `<tool> --version` (no shell). Never throws. */
+function hasTool(
+	tool: string,
+	versionArg = "--version",
+	signal?: AbortSignal,
+): Promise<boolean> {
+	return runProbe(tool, [versionArg], signal);
 }
 
 /**
@@ -300,33 +358,13 @@ async function hasTool(
  * (unprivileged-userns or root) network namespace; if it EPERMs, we no-op.
  * This is the most honest probe: it tests the exact syscall path we'll use.
  */
-async function canCreateNetns(): Promise<boolean> {
-	try {
-		const out = await new Deno.Command("unshare", {
-			args: ["--net", "--map-root-user", "true"],
-			stdin: "null",
-			stdout: "null",
-			stderr: "null",
-		}).output();
-		return out.success;
-	} catch {
-		return false;
-	}
+function canCreateNetns(signal?: AbortSignal): Promise<boolean> {
+	return runProbe("unshare", ["--net", "--map-root-user", "true"], signal);
 }
 
 /** GNU env can set argv[0] for the Deno process inside the netns wrapper. */
-async function supportsVirtualArgv0Env(): Promise<boolean> {
-	try {
-		const output = await new Deno.Command("env", {
-			args: ["--argv0=/runtime/deno", "true"],
-			stdin: "null",
-			stdout: "null",
-			stderr: "null",
-		}).output();
-		return output.success;
-	} catch {
-		return false;
-	}
+function supportsVirtualArgv0Env(signal?: AbortSignal): Promise<boolean> {
+	return runProbe("env", ["--argv0=/runtime/deno", "true"], signal);
 }
 
 /**
@@ -338,6 +376,7 @@ async function supportsVirtualArgv0Env(): Promise<boolean> {
 async function buildEgressFirewallPlan(
 	netHosts: string[],
 	importHosts: string[],
+	signal?: AbortSignal,
 ): Promise<EgressFirewallPlan> {
 	if (NETNS_FIREWALL_DISABLED) {
 		return {
@@ -356,14 +395,16 @@ async function buildEgressFirewallPlan(
 		});
 	}
 	const [unshare, nft, ip] = await Promise.all([
-		hasTool("unshare"),
-		hasTool("nft"),
-		hasTool("ip", "-V"),
+		hasTool("unshare", "--version", signal),
+		hasTool("nft", "--version", signal),
+		hasTool("ip", "-V", signal),
 	]);
-	const hasCaps = unshare ? await canCreateNetns() : false;
+	const hasCaps = unshare ? await canCreateNetns(signal) : false;
 	// Resolve the allowlist to public IPs (best-effort; never throws). For the
 	// brokered path netHosts is [] → pure default-deny netns.
-	const allow = await resolveAllowedEndpoints([...netHosts, ...importHosts]);
+	const allow = await resolveAllowedEndpoints([...netHosts, ...importHosts], {
+		signal,
+	});
 	return planEgressFirewall({
 		os,
 		allow,
@@ -381,6 +422,7 @@ async function buildEgressFirewallPlan(
 async function applyEgressFirewall(
 	guestArgv: string[],
 	ruleset: string,
+	signal?: AbortSignal,
 ): Promise<{
 	cmd: string;
 	args: string[];
@@ -388,11 +430,20 @@ async function applyEgressFirewall(
 } | null> {
 	let rulesetPath: string;
 	try {
+		if (signal?.aborted) return null;
 		rulesetPath = await Deno.makeTempFile({
 			prefix: "qp-sandbox-egress-",
 			suffix: ".nft",
 		});
+		if (signal?.aborted) {
+			await Deno.remove(rulesetPath);
+			return null;
+		}
 		await Deno.writeTextFile(rulesetPath, ruleset);
+		if (signal?.aborted) {
+			await Deno.remove(rulesetPath);
+			return null;
+		}
 	} catch (err) {
 		console.warn(
 			`[sandbox] egress firewall: failed to stage ruleset (${err instanceof Error ? err.message : String(err)}); spawning without netns`,
@@ -428,16 +479,21 @@ async function brokerCall(
 	bindings: { url: string; token: string },
 	method: string,
 	args: unknown,
+	parentSignal?: AbortSignal,
 ): Promise<{
 	ok: boolean;
 	value?: unknown;
 	error?: { code: string; message: string };
 }> {
 	const controller = new AbortController();
+	const onAbort = () => controller.abort();
+	if (parentSignal?.aborted) controller.abort();
+	else parentSignal?.addEventListener("abort", onAbort, { once: true });
 	const t = setTimeout(() => controller.abort(), BROKER_FETCH_TIMEOUT_MS);
 	try {
 		const res = await fetch(bindings.url, {
 			method: "POST",
+			redirect: "error",
 			headers: {
 				"content-type": "application/json",
 				[BINDINGS_TOKEN_HEADER]: bindings.token,
@@ -445,28 +501,76 @@ async function brokerCall(
 			body: JSON.stringify({ method, args }),
 			signal: controller.signal,
 		});
-		const text = await res.text();
+		const reader = res.body?.getReader();
+		const chunks: Uint8Array[] = [];
+		let total = 0;
+		if (reader) {
+			while (true) {
+				const { value, done } = await reader.read();
+				if (done) break;
+				total += value.byteLength;
+				if (total > MAX_BROKER_RESPONSE_BYTES) {
+					await reader.cancel();
+					return {
+						ok: false,
+						error: {
+							code: "execution_error",
+							message: "sandbox broker returned an invalid response",
+						},
+					};
+				}
+				chunks.push(value);
+			}
+		}
+		const bytes = new Uint8Array(total);
+		let offset = 0;
+		for (const chunk of chunks) {
+			bytes.set(chunk, offset);
+			offset += chunk.byteLength;
+		}
+		const text = new TextDecoder().decode(bytes);
 		try {
-			return JSON.parse(text);
+			const parsed = parseBrokerResponse(JSON.parse(text));
+			if (!res.ok) {
+				return parsed && !parsed.ok
+					? parsed
+					: {
+							ok: false,
+							error: {
+								code: "execution_error",
+								message: "sandbox binding operation failed",
+							},
+						};
+			}
+			return (
+				parsed ?? {
+					ok: false,
+					error: {
+						code: "execution_error",
+						message: "sandbox broker returned an invalid response",
+					},
+				}
+			);
 		} catch {
 			return {
 				ok: false,
 				error: {
 					code: "execution_error",
-					message: `broker returned non-JSON (HTTP ${res.status})`,
+					message: "sandbox broker returned an invalid response",
 				},
 			};
 		}
-	} catch (err) {
+	} catch {
 		return {
 			ok: false,
 			error: {
 				code: "execution_error",
-				message: `broker request failed: ${err instanceof Error ? err.message : String(err)}`,
+				message: "sandbox broker request failed",
 			},
 		};
 	} finally {
 		clearTimeout(t);
+		parentSignal?.removeEventListener("abort", onAbort);
 	}
 }
 
@@ -485,8 +589,17 @@ async function relayBindingsRun(
 	child: SandboxChildProcess,
 	req: SandboxRunRequest,
 	timedOut: () => boolean,
+	stderrPromise: Promise<Uint8Array>,
+	outputBudget: OutputBudget,
+	onLimit: () => void,
+	onTerminal: () => void,
+	signal?: AbortSignal,
 ): Promise<RunOutcome> {
-	const bindings = req.bindings as { url: string; token: string };
+	const requestedBindings = req.bindings as { url: string; token: string };
+	const bindings = {
+		...requestedBindings,
+		url: normalizeBrokerUrl(requestedBindings.url)!,
+	};
 	const encoder = new TextEncoder();
 	const decoder = new TextDecoder();
 	const stdinWriter = child.stdin.getWriter();
@@ -524,8 +637,10 @@ async function relayBindingsRun(
 	// 2. Stream stdout, demuxing frames. Outstanding RPCs run concurrently so a
 	//    slow broker call doesn't block reading further frames.
 	let outcome: RunOutcome | null = null;
+	let terminalFailure: string | null = null;
 	let pending = "";
-	const inflight: Array<Promise<void>> = [];
+	let rpcCount = 0;
+	const inflight = new Set<Promise<void>>();
 
 	const handleLine = async (line: string) => {
 		if (!line.startsWith(FRAME_MARKER)) return; // stray output → ignore
@@ -549,9 +664,30 @@ async function relayBindingsRun(
 			typeof msg.id === "number" &&
 			typeof msg.method === "string"
 		) {
+			rpcCount += 1;
+			if (rpcCount > MAX_RPC_COUNT) {
+				onLimit();
+				throw new SandboxOutputLimitError();
+			}
+			while (inflight.size >= MAX_INFLIGHT_RPCS) {
+				await Promise.race(inflight);
+			}
 			const id = msg.id;
 			const p = (async () => {
-				const r = await brokerCall(bindings, msg.method as string, msg.args);
+				const r = await brokerCall(
+					bindings,
+					msg.method as string,
+					msg.args,
+					signal,
+				);
+				if (!r.ok) {
+					if (!terminalFailure && !outcome) {
+						terminalFailure = r.error.message;
+						onTerminal();
+					}
+					return;
+				}
+				if (signal?.aborted || terminalFailure || outcome) return;
 				await writeLine({
 					type: "rpc-result",
 					id,
@@ -560,14 +696,35 @@ async function relayBindingsRun(
 					error: r.error,
 				});
 			})();
-			inflight.push(p);
+			inflight.add(p);
+			void p.finally(() => inflight.delete(p));
 		} else if (msg.type === "result") {
-			outcome = {
-				ok: !!msg.ok,
-				output: msg.output,
-				error: msg.error,
-				logs: Array.isArray(msg.logs) ? msg.logs : [],
-			};
+			const keys = Object.keys(msg);
+			if (
+				keys.every((key) =>
+					["type", "ok", "output", "error", "logs"].includes(key),
+				)
+			) {
+				const parsed = parseSandboxRunResult({
+					ok: msg.ok,
+					...(Object.hasOwn(msg, "output") ? { output: msg.output } : {}),
+					...(Object.hasOwn(msg, "error") ? { error: msg.error } : {}),
+					logs: msg.logs,
+				});
+				if (!parsed) {
+					terminalFailure = "sandbox guest returned an invalid result";
+					onTerminal();
+				} else if (inflight.size > 0) {
+					terminalFailure = "sandbox result raced binding calls";
+					onTerminal();
+				} else {
+					outcome = parsed;
+					onTerminal();
+				}
+			} else {
+				terminalFailure = "sandbox guest returned an invalid result";
+				onTerminal();
+			}
 		}
 	};
 
@@ -576,22 +733,40 @@ async function relayBindingsRun(
 		while (true) {
 			const { value, done } = await reader.read();
 			if (done) break;
+			outputBudget.total += value.byteLength;
+			if (outputBudget.total > MAX_TOTAL_OUTPUT_BYTES) {
+				onLimit();
+				throw new SandboxOutputLimitError();
+			}
 			pending += decoder.decode(value, { stream: true });
+			if (
+				!pending.includes("\n") &&
+				encoder.encode(pending).byteLength > MAX_FRAME_BYTES
+			) {
+				onLimit();
+				throw new SandboxOutputLimitError();
+			}
 			let idx: number;
 			while ((idx = pending.indexOf("\n")) !== -1) {
 				const line = pending.slice(0, idx);
 				pending = pending.slice(idx + 1);
+				if (encoder.encode(line).byteLength > MAX_FRAME_BYTES) {
+					onLimit();
+					throw new SandboxOutputLimitError();
+				}
 				await handleLine(line);
+				if (outcome || terminalFailure) break;
 			}
-			if (outcome) break; // final result seen
+			if (outcome || terminalFailure) break;
 			if (timedOut()) break;
 		}
 		// Flush a trailing line without newline (the final result frame may not
 		// be newline-terminated before exit).
-		if (!outcome && pending.length > 0) {
+		if (!outcome && !terminalFailure && pending.length > 0) {
 			await handleLine(pending.trim());
 		}
-	} catch {
+	} catch (error) {
+		if (error instanceof SandboxOutputLimitError) throw error;
 		/* stdout closed abruptly — fall through to the no-result handling */
 	}
 
@@ -603,13 +778,16 @@ async function relayBindingsRun(
 	// Drain remaining stdout + collect stderr for diagnostics, then reap.
 	let stderrText = "";
 	try {
-		const stderr = await child.stderr;
+		const stderr = await stderrPromise;
 		await child.exited;
 		stderrText = decoder.decode(stderr).trim();
 	} catch {
 		/* already consumed/killed */
 	}
 
+	if (terminalFailure) {
+		return { ok: false, error: terminalFailure, logs: [] };
+	}
 	if (outcome) return outcome;
 	return {
 		ok: false,
@@ -627,22 +805,9 @@ async function relayBindingsRun(
  */
 async function runInSubprocess(
 	req: SandboxRunRequest,
-	workloadAdmission: AgentWorkloadSandboxAdmissionClaims | null = null,
+	signal?: AbortSignal,
 ): Promise<SandboxRunResult> {
 	const started = performance.now();
-	// Best-effort teardown for per-run resources (work root, firewall ruleset).
-	const cleanup: Array<() => void> = [];
-	const finish = (r: RunOutcome): SandboxRunResult => {
-		for (const dispose of cleanup.splice(0)) {
-			try {
-				dispose();
-			} catch {
-				/* best-effort cleanup */
-			}
-		}
-		return { ...r, ms: Math.round(performance.now() - started) };
-	};
-
 	const caps: SandboxCapabilities = req.capabilities ?? {
 		net: [],
 		import: [],
@@ -655,6 +820,54 @@ async function runInSubprocess(
 		1,
 		MAX_TIMEOUT_MS,
 	);
+	let deadlineTimedOut = false;
+	let parentCancelled = signal?.aborted ?? false;
+	const executionController = new AbortController();
+	const onParentAbort = () => {
+		parentCancelled = true;
+		executionController.abort();
+	};
+	if (signal?.aborted) executionController.abort();
+	else signal?.addEventListener("abort", onParentAbort, { once: true });
+	const absoluteTimer = setTimeout(() => {
+		deadlineTimedOut = true;
+		executionController.abort();
+	}, timeoutMs);
+	const executionSignal = executionController.signal;
+	// Best-effort teardown for per-run resources (work root, firewall ruleset).
+	const cleanup: Array<() => void> = [
+		() => clearTimeout(absoluteTimer),
+		() => signal?.removeEventListener("abort", onParentAbort),
+	];
+	const finish = (r: RunOutcome): SandboxRunResult => {
+		for (const dispose of cleanup.splice(0)) {
+			try {
+				dispose();
+			} catch {
+				/* best-effort cleanup */
+			}
+		}
+		return { ...r, ms: Math.round(performance.now() - started) };
+	};
+	const interrupted = (): SandboxRunResult =>
+		finish(
+			deadlineTimedOut
+				? {
+						ok: false,
+						timedOut: true,
+						error: `wall-time exceeded (${timeoutMs}ms)`,
+						logs: [],
+					}
+				: {
+						ok: false,
+						error: "sandbox request cancelled",
+						logs: [],
+					},
+		);
+	if (executionSignal.aborted) {
+		return interrupted();
+	}
+
 	const memoryMb = clampInt(
 		caps.memoryMb,
 		DEFAULT_MEMORY_MB,
@@ -665,7 +878,14 @@ async function runInSubprocess(
 	const importHosts = Array.isArray(caps.import) ? caps.import : [];
 
 	// ── EGRESS VALIDATION (SSRF / private-IP rejection) — before spawn. ──
-	const egress = await validateEgressHosts([...netHosts, ...importHosts]);
+	const egress = await validateEgressHosts([...netHosts, ...importHosts], {
+		signal: executionSignal,
+		timeoutMs,
+		concurrency: 4,
+	});
+	if (executionSignal.aborted) {
+		return interrupted();
+	}
 	if (!egress.ok) {
 		return finish({
 			ok: false,
@@ -695,15 +915,10 @@ async function runInSubprocess(
 	// permissions for it and guest-entry exposes only the virtual `/work` name.
 	let guestWorkRoot: string;
 	try {
-		if (workloadAdmission) {
-			const derived = deriveAgentWorkRoot(workloadAdmission);
-			if (!derived) throw new Error("invalid Agent work root configuration");
-			guestWorkRoot = derived;
-			await Deno.mkdir(guestWorkRoot, { recursive: true });
-		} else {
-			guestWorkRoot = await Deno.makeTempDir({ prefix: "qp-sandbox-work-" });
-		}
+		if (executionSignal.aborted) return interrupted();
+		guestWorkRoot = await Deno.makeTempDir({ prefix: "qp-sandbox-work-" });
 		cleanup.push(() => Deno.removeSync(guestWorkRoot, { recursive: true }));
+		if (executionSignal.aborted) return interrupted();
 	} catch {
 		return finish({
 			ok: false,
@@ -732,13 +947,18 @@ async function runInSubprocess(
 	let spawnCmd = DENO_BIN;
 	let spawnArgs = args;
 	try {
-		const plan = await buildEgressFirewallPlan(netHosts, importHosts);
+		const plan = await buildEgressFirewallPlan(
+			netHosts,
+			importHosts,
+			executionSignal,
+		);
 		if (plan.applied) {
-			const canVirtualizeArgv0 = await supportsVirtualArgv0Env();
+			const canVirtualizeArgv0 = await supportsVirtualArgv0Env(executionSignal);
 			const wrapped = canVirtualizeArgv0
 				? await applyEgressFirewall(
 						["env", "--argv0=/runtime/deno", DENO_BIN, ...args],
 						plan.nftRuleset,
+						executionSignal,
 					)
 				: null;
 			if (wrapped) {
@@ -765,6 +985,9 @@ async function runInSubprocess(
 			`[sandbox] egress firewall: probe failed (${err instanceof Error ? err.message : String(err)}); spawning without netns`,
 		);
 	}
+	if (executionSignal.aborted) {
+		return interrupted();
+	}
 
 	let child: SandboxChildProcess;
 	try {
@@ -778,35 +1001,81 @@ async function runInSubprocess(
 		});
 	}
 
-	let timedOut = false;
-	let killTimer: number | undefined;
-	let graceTimer: number | undefined;
-
-	try {
-		// HARD wall-time: SIGTERM, then SIGKILL after a grace period. Shared by
-		// both the legacy and the bindings I/O paths.
-		killTimer = setTimeout(() => {
-			timedOut = true;
+	let outputLimitExceeded = false;
+	let cancelGraceTimer: number | undefined;
+	const relayController = new AbortController();
+	let terminationStarted = false;
+	const terminateChild = () => {
+		if (terminationStarted) return;
+		terminationStarted = true;
+		try {
+			child.kill("SIGTERM");
+		} catch {
+			/* already gone */
+		}
+		cancelGraceTimer = setTimeout(() => {
 			try {
-				child.kill("SIGTERM");
+				child.kill("SIGKILL");
 			} catch {
 				/* already gone */
 			}
-			graceTimer = setTimeout(() => {
-				try {
-					child.kill("SIGKILL");
-				} catch {
-					/* already gone */
-				}
-			}, KILL_GRACE_MS);
-		}, timeoutMs);
+		}, KILL_GRACE_MS);
+	};
+	const onExecutionAbort = () => {
+		relayController.abort();
+		terminateChild();
+	};
+	const onOutputLimit = () => {
+		if (outputLimitExceeded) return;
+		outputLimitExceeded = true;
+		relayController.abort();
+		terminateChild();
+	};
+	if (executionSignal.aborted) onExecutionAbort();
+	else
+		executionSignal.addEventListener("abort", onExecutionAbort, { once: true });
+	const outputBudget: OutputBudget = { total: 0 };
+	const stderrPromise = readStream(
+		child.stderr,
+		outputBudget,
+		MAX_STDERR_BYTES,
+		onOutputLimit,
+	);
+	void stderrPromise.catch(() => {});
 
+	try {
 		// ── BINDINGS PATH: framed stdio relay to the host broker. ──
 		if (req.bindings) {
-			const outcome = await relayBindingsRun(child, req, () => timedOut);
-			clearTimeout(killTimer);
-			if (graceTimer !== undefined) clearTimeout(graceTimer);
-			if (timedOut) {
+			const outcome = await relayBindingsRun(
+				child,
+				req,
+				() => deadlineTimedOut,
+				stderrPromise,
+				outputBudget,
+				onOutputLimit,
+				() => {
+					relayController.abort();
+					terminateChild();
+				},
+				relayController.signal,
+			);
+			if (cancelGraceTimer !== undefined) clearTimeout(cancelGraceTimer);
+			executionSignal.removeEventListener("abort", onExecutionAbort);
+			if (parentCancelled) {
+				return finish({
+					ok: false,
+					error: "sandbox request cancelled",
+					logs: outcome?.logs ?? [],
+				});
+			}
+			if (outputLimitExceeded) {
+				return finish({
+					ok: false,
+					error: "sandbox output limit exceeded",
+					logs: [],
+				});
+			}
+			if (deadlineTimedOut) {
 				return finish({
 					ok: false,
 					timedOut: true,
@@ -828,14 +1097,33 @@ async function runInSubprocess(
 		await writer.close();
 
 		const [stdout, stderr] = await Promise.all([
-			readStream(child.stdout),
-			child.stderr,
+			readStream(
+				child.stdout,
+				outputBudget,
+				MAX_TOTAL_OUTPUT_BYTES,
+				onOutputLimit,
+			),
+			stderrPromise,
 			child.exited,
 		]);
-		clearTimeout(killTimer);
-		if (graceTimer !== undefined) clearTimeout(graceTimer);
+		if (cancelGraceTimer !== undefined) clearTimeout(cancelGraceTimer);
+		executionSignal.removeEventListener("abort", onExecutionAbort);
 
-		if (timedOut) {
+		if (parentCancelled) {
+			return finish({
+				ok: false,
+				error: "sandbox request cancelled",
+				logs: [],
+			});
+		}
+		if (outputLimitExceeded) {
+			return finish({
+				ok: false,
+				error: "sandbox output limit exceeded",
+				logs: [],
+			});
+		}
+		if (deadlineTimedOut) {
 			return finish({
 				ok: false,
 				timedOut: true,
@@ -860,16 +1148,20 @@ async function runInSubprocess(
 			logs: [],
 		});
 	} catch (err) {
-		if (killTimer !== undefined) clearTimeout(killTimer);
-		if (graceTimer !== undefined) clearTimeout(graceTimer);
+		if (cancelGraceTimer !== undefined) clearTimeout(cancelGraceTimer);
+		executionSignal.removeEventListener("abort", onExecutionAbort);
 		try {
 			child.kill("SIGKILL");
 		} catch {
 			/* noop */
 		}
+		if (parentCancelled || deadlineTimedOut) return interrupted();
 		return finish({
 			ok: false,
-			error: `sandbox IO error: ${err instanceof Error ? err.message : String(err)}`,
+			error:
+				outputLimitExceeded || err instanceof SandboxOutputLimitError
+					? "sandbox output limit exceeded"
+					: `sandbox IO error: ${err instanceof Error ? err.message : String(err)}`,
 			logs: [],
 		});
 	}
@@ -880,6 +1172,40 @@ function jsonResponse(body: unknown, status = 200): Response {
 		status,
 		headers: { "content-type": "application/json" },
 	});
+}
+
+class RequestBodyTooLargeError extends Error {}
+
+async function readBoundedRequestBody(request: Request): Promise<string> {
+	const declared = request.headers.get("content-length");
+	if (
+		declared !== null &&
+		Number.isFinite(Number(declared)) &&
+		Number(declared) > MAX_REQUEST_BODY_BYTES
+	) {
+		throw new RequestBodyTooLargeError();
+	}
+	if (!request.body) return "";
+	const reader = request.body.getReader();
+	const chunks: Uint8Array[] = [];
+	let total = 0;
+	while (true) {
+		const { value, done } = await reader.read();
+		if (done) break;
+		total += value.byteLength;
+		if (total > MAX_REQUEST_BODY_BYTES) {
+			await reader.cancel();
+			throw new RequestBodyTooLargeError();
+		}
+		chunks.push(value);
+	}
+	const body = new Uint8Array(total);
+	let offset = 0;
+	for (const chunk of chunks) {
+		body.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	return new TextDecoder().decode(body);
 }
 
 const port = Number(Deno.env.get("PORT") ?? 8787);
@@ -905,41 +1231,45 @@ Deno.serve(
 			let req: SandboxRunRequest;
 			let requestBody: string;
 			try {
-				requestBody = await request.text();
+				requestBody = await readBoundedRequestBody(request);
 				req = JSON.parse(requestBody) as SandboxRunRequest;
-			} catch {
+			} catch (error) {
+				if (error instanceof RequestBodyTooLargeError) {
+					return jsonResponse(
+						{ ok: false, error: "request body too large", logs: [] },
+						413,
+					);
+				}
 				return jsonResponse(
 					{ ok: false, error: "invalid JSON body", logs: [] },
 					400,
 				);
 			}
-			let workloadAdmission: AgentWorkloadSandboxAdmissionClaims | null = null;
-			let workloadDenialReason: AgentWorkloadRuntimeAdmissionReason = "missing";
-			let workloadDenialClaims: AgentWorkloadSandboxAdmissionClaims | undefined;
+			let workloadAdmission: SandboxWorkloadAdmissionClaims | null = null;
+			let workloadDenialReason: WorkloadAdmissionReason = "missing";
+			let workloadDenialClaims: SandboxWorkloadAdmissionClaims | undefined;
 			if (
-				req?.mode === "non_agent" &&
-				!authenticatesNonAgentHost(
-					request.headers.get(NON_AGENT_ADMISSION_HEADER),
-				)
+				req?.mode === "host" &&
+				!authenticatesHost(request.headers.get(HOST_ADMISSION_HEADER))
 			) {
-				auditAgentAdmission("denied", "non_agent_unauthorized");
+				auditWorkloadAdmission("denied", "host_unauthorized");
 				return jsonResponse(
 					{
 						ok: false,
-						error: AGENT_WORKLOAD_SANDBOX_DENIAL_MESSAGE,
+						error: SANDBOX_WORKLOAD_DENIAL_MESSAGE,
 						logs: [],
 					},
 					403,
 				);
 			}
-			if (req?.mode === "agent_workload") {
-				const envelope = request.headers.get(AGENT_WORKLOAD_ADMISSION_HEADER);
-				if (envelope && AGENT_ADMISSION_SECRET) {
+			if (req?.mode === "workload") {
+				const envelope = request.headers.get(WORKLOAD_ADMISSION_HEADER);
+				if (envelope && WORKLOAD_ADMISSION_SECRET) {
 					try {
-						const verification = await verifyAgentWorkloadSandboxAdmission(
+						const verification = await verifySandboxWorkloadAdmission(
 							{
-								keyId: AGENT_ADMISSION_KEY_ID,
-								secret: new TextEncoder().encode(AGENT_ADMISSION_SECRET),
+								keyId: WORKLOAD_ADMISSION_KEY_ID,
+								secret: new TextEncoder().encode(WORKLOAD_ADMISSION_SECRET),
 								instanceId: SANDBOX_INSTANCE_ID,
 							},
 							envelope,
@@ -956,24 +1286,9 @@ Deno.serve(
 						workloadDenialReason = "invalid";
 					}
 				}
-				if (
-					workloadAdmission &&
-					(typeof req.source !== "string" ||
-						(await hashAgentWorkloadSandboxSource(req.source)) !==
-							workloadAdmission.sourceSha256)
-				) {
-					workloadDenialReason = "source_mismatch";
-					workloadDenialClaims = workloadAdmission;
-					workloadAdmission = null;
-				}
-				if (workloadAdmission && !consumeAgentAdmission(workloadAdmission)) {
-					workloadDenialReason = "replay";
-					workloadDenialClaims = workloadAdmission;
-					workloadAdmission = null;
-				}
 			}
-			if (req?.mode === "agent_workload" && !workloadAdmission) {
-				auditAgentAdmission(
+			if (req?.mode === "workload" && !workloadAdmission) {
+				auditWorkloadAdmission(
 					"denied",
 					workloadDenialReason,
 					workloadDenialClaims,
@@ -981,38 +1296,61 @@ Deno.serve(
 				return jsonResponse(
 					{
 						ok: false,
-						error: AGENT_WORKLOAD_SANDBOX_DENIAL_MESSAGE,
+						error: SANDBOX_WORKLOAD_DENIAL_MESSAGE,
 						logs: [],
 					},
 					403,
 				);
 			}
-			if (req?.mode !== "agent_workload" && req?.mode !== "non_agent") {
-				auditAgentAdmission("denied", "unknown_mode");
+			if (req?.mode !== "workload" && req?.mode !== "host") {
+				auditWorkloadAdmission("denied", "unknown_mode");
 				return jsonResponse(
 					{
 						ok: false,
-						error: AGENT_WORKLOAD_SANDBOX_DENIAL_MESSAGE,
+						error: SANDBOX_WORKLOAD_DENIAL_MESSAGE,
 						logs: [],
 					},
 					403,
 				);
 			}
-			if (typeof req?.source !== "string" || !req?.capabilities) {
+			const validatedRequest = parseSandboxRunRequest(req);
+			if (!validatedRequest) {
 				return jsonResponse(
-					{ ok: false, error: "missing 'source' or 'capabilities'", logs: [] },
+					{ ok: false, error: "invalid sandbox request", logs: [] },
 					400,
 				);
 			}
-			if (workloadAdmission) {
-				auditAgentAdmission(
-					"allowed",
-					"admission_authorized",
-					workloadAdmission,
+			req = validatedRequest;
+			if (
+				workloadAdmission &&
+				!consumedWorkloadAdmissions.consume(workloadAdmission)
+			) {
+				auditWorkloadAdmission("denied", "replay", workloadAdmission);
+				return jsonResponse(
+					{
+						ok: false,
+						error: SANDBOX_WORKLOAD_DENIAL_MESSAGE,
+						logs: [],
+					},
+					403,
 				);
 			}
+			if (workloadAdmission) {
+				auditWorkloadAdmission("allowed", "authorized", workloadAdmission);
+			}
 			// runInSubprocess never throws — always a structured result.
-			const result = await runInSubprocess(req, workloadAdmission);
+			const result = await runInSubprocess(req, request.signal);
+			if (
+				req.mode === "workload" &&
+				!result.ok &&
+				!result.timedOut &&
+				result.error !== "sandbox request cancelled"
+			) {
+				return jsonResponse({
+					...result,
+					error: "sandbox execution failed",
+				});
+			}
 			return jsonResponse(result);
 		}
 

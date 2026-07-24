@@ -1,16 +1,17 @@
 # @questpie/sandbox
 
-Hardened sandboxed code execution for QUESTPIE executor workloads. The package ships the HTTP adapter used by a QUESTPIE app and the Deno supervisor source that executes untrusted code in a separate process with capability-scoped network, import, file, and app bindings.
+Hardened isolated-script execution for QUESTPIE. The package ships the HTTP
+adapter used by a QUESTPIE app and the Deno supervisor source that executes each
+untrusted script in a fresh, capability-scoped subprocess.
 
 ## Features
 
-- **HTTP executor adapter** - connect `ctx.executor.run()` to a standalone sandbox service.
-- **Deno supervisor** - run guest code outside the main Bun/Node app process.
-- **Capability-scoped bindings** - expose only declared collections, stores, files, and fetch access.
-- **SSRF protection** - validate literal IPs, DNS rebinding, redirects, and private/metadata ranges.
-- **Network isolation support** - Linux network namespace/firewall planning for defense in depth.
-- **Structured failures** - timeouts, non-JSON responses, and network failures return predictable results.
-- **Authenticated Agent path** - revalidate workload authority and bind the admitted request to its principal-derived policy and work root.
+- HTTP `ExecutorAdapter` for `ctx.executor.run()`
+- fresh Deno subprocess with bounded wall time and memory
+- capability-scoped collections, stores, files, and network bindings
+- SSRF, redirect, private-address, and metadata-address protection
+- optional Linux network namespace/firewall defense in depth
+- generic, consumer-supplied workload authorization
 
 ## Installation
 
@@ -18,10 +19,9 @@ Hardened sandboxed code execution for QUESTPIE executor workloads. The package s
 bun add @questpie/sandbox
 ```
 
-## Configure The Adapter
+## Trusted framework execution
 
 ```ts
-// config/app.ts
 import { httpSandboxAdapter } from "@questpie/sandbox/adapter";
 import { appConfig } from "questpie";
 
@@ -29,90 +29,133 @@ export default appConfig({
 	executor: {
 		sandboxed: httpSandboxAdapter({
 			url: process.env.SANDBOX_URL,
-			nonAgentAdmissionSecret: process.env.SANDBOX_NON_AGENT_ADMISSION_SECRET,
+			hostAdmissionSecret: process.env.SANDBOX_HOST_ADMISSION_SECRET,
 		}),
 	},
 });
 ```
 
-Guest bindings require a host-side broker route in the app or control-plane layer. Every explicit non-Agent `run()` also needs the same minimum-32-byte `SANDBOX_NON_AGENT_ADMISSION_SECRET` on the trusted adapter and supervisor. An omitted execution mode never falls back to this path.
+The adapter and supervisor must share the same random
+`SANDBOX_HOST_ADMISSION_SECRET` of at least 32 bytes. Omitting the credential
+fails closed. `SANDBOX_URL` must be a canonical HTTP(S) origin with no userinfo,
+fragment, query, or path prefix. The adapter never follows `/run` redirects, so
+the host admission credential cannot cross origins. Broker coordinates are still minted by QUESTPIE's core executor
+and remain capability-scoped. Any execution with bindings also requires the
+supervisor's canonical `SANDBOX_BROKER_URL`; missing, malformed, or non-matching
+protocol, host, effective port, path, or query is denied before spawn. Userinfo
+and fragments are forbidden; only one trailing path slash is treated as
+equivalent. The supervisor fetches the validated canonical URL, never the raw
+request spelling.
 
-## Agent Workload Boundary
+## Generic workload authorization
 
-Agent execution uses the separate `createAgentWorkloadSandboxBoundary()` seam. It accepts only an opaque `AuthenticatedAgentWorkloadEnvelope` from `@questpie/ai`, calls the injected sandbox-audience `resolver.validate()` when the boundary opens, before trusted request preparation, immediately before sandbox creation, and before every privileged binding or effect.
-
-The boundary policy is trusted server configuration loaded from the Run's pinned policy revisions. It is never accepted from guest input. It pins the exact Company, anchor Space, Skill, execution policy, executable source SHA-256, named input projection, disclosure boundary, filesystem paths, network/import hosts, named secret bindings, tools, and effects. Wildcard allow-all entries, real `HOME`, the process cwd, root, and relative work-root fallbacks are rejected.
+A remote consumer supplies its own opaque envelope and authorizer. QUESTPIE does
+not prescribe, inspect, or persist the envelope. The authorizer returns the
+complete sandbox policy for one execution; no source, input, process capability,
+secret, or broker binding can be supplied beside the envelope.
 
 ```ts
-import { createAgentWorkloadSandboxBoundary } from "@questpie/sandbox";
-
-const boundary = createAgentWorkloadSandboxBoundary({
-	resolver: sandboxAudienceResolver,
-	workRootBase: "/var/lib/questpie/workloads",
-	policy: pinnedSandboxPolicy,
-	audit: writeRedactedWorkloadAudit,
-});
+import { httpSandboxAdapter } from "@questpie/sandbox";
 
 const adapter = httpSandboxAdapter({
 	url: process.env.SANDBOX_URL,
-	agentWorkload: {
-		boundary,
+	workload: {
 		admission: {
-			keyId: process.env.SANDBOX_AGENT_ADMISSION_KEY_ID!,
+			keyId: process.env.SANDBOX_WORKLOAD_ADMISSION_KEY_ID!,
 			secret: new TextEncoder().encode(
-				process.env.SANDBOX_AGENT_ADMISSION_SECRET!,
+				process.env.SANDBOX_WORKLOAD_ADMISSION_SECRET!,
 			),
-			// Issued by the control plane for this supervisor process only.
-			instanceId: sandboxLease.instanceId,
+			instanceId: process.env.SANDBOX_INSTANCE_ID!,
 		},
-		execution: {
-			// Resolve source and projector from the revisions pinned by `policy`.
-			source: pinnedSkillSource,
-			timeoutMs: 8_000,
-			memoryMb: 128,
-			inputProjections: pinnedInputProjectionRegistry,
+		authorize: async (opaqueEnvelope, { phase, signal }) => {
+			const authorization = await consumerAuthority.authorize(opaqueEnvelope, {
+				phase,
+				signal,
+			});
+			if (!authorization) return null;
+
+			return {
+				source: authorization.source,
+				input: authorization.input,
+				capabilities: {
+					net: authorization.networkHosts,
+					import: authorization.importHosts,
+					timeoutMs: 5_000,
+					memoryMb: 128,
+				},
+				secrets: {},
+				validUntil: authorization.validUntil,
+			};
 		},
+		audit: writeRedactedSandboxDecision,
 	},
 });
 
-const result = await adapter.runAgentWorkload({
-	authority: authenticatedEnvelope,
-});
+const result = await adapter.runWorkload({ envelope: consumerEnvelope });
 ```
 
-`runAgentWorkload()` accepts only the authenticated envelope. The trusted registry resolves a projector by the complete pinned reference `{ id, skillRevisionId, executionPolicyRevisionId, sourceSha256 }`; a projector cannot travel beside a self-declared id in adapter configuration. The resolved projector derives guest input from only the fresh principal and disclosure boundary. Source, arbitrary input, network/import capabilities, limits, secrets, and bindings cannot be supplied per run: source and limits come from trusted runtime configuration, network/import hosts come from the pinned policy, and the initial Agent guest receives no raw secret values or broker binding.
+The authorizer is called at preparation and immediately before dispatch. Both
+normalized policies must be identical. Authorization and audit callbacks have
+hard deadlines, caller cancellation is propagated, and malformed/missing
+authorization fails closed. Policy input, secrets, bindings, source, combined
+egress hosts, wall time, memory, and the final request body all have hard bounds.
+Cancellation after dispatch aborts broker relays and terminates the guest with a
+bounded `SIGTERM`/`SIGKILL` sequence.
 
-The adapter validates the pinned source digest and projector before revalidating once more, signing the exact request body, and sending it to one supervisor instance. Admissions expire within five seconds, are bound to that instance, and are consumed once. The control plane must generate a new `SANDBOX_INSTANCE_ID` for every supervisor process/restart and distribute the matching value to authorized adapters; an admission for a sibling replica or previous process is rejected.
+The subprocess boundary additionally caps each frame and result at 2 MiB,
+combined stdout plus stderr at 3 MiB, stderr alone at 256 KiB, binding calls at
+256 per run, and concurrent broker relays at 16. Crossing a limit kills the
+guest and aborts outstanding relays. Broker and supervisor HTTP responses are
+streamed through byte caps and parsed against exact schemas; broker-provided
+error text is replaced by supervisor-owned stable messages before it can enter
+the guest. Broker and `/run` redirects are rejected. Any broker denial or
+malformed response latches a terminal run failure; guest `catch` code cannot
+turn it back into success. A valid result frame is terminal immediately, and a
+result racing an in-flight RPC is rejected.
 
-The Deno supervisor rejects missing, forged, expired, replayed, wrong-instance, or body-mismatched admissions before spawn. It creates the physical work root beneath `Company/WorkRequest/Attempt/Admission`, but the child process runs from stable `/` and guest-visible Deno and Node path surfaces report only `/work`, `questpie://sandbox/guest-entry.ts`, and `/runtime/deno`. The trusted entry and bindings are bundled into a self-contained local `data:` module before spawn, so bootstrap needs no host source path or supervisor socket and remains available inside a Linux network namespace.
+The adapter then signs a minimal, product-neutral transport admission. It is
+bound to the exact request body and one supervisor instance, expires within five
+seconds, and is consumed once. The supervisor rejects missing, forged, expired,
+replayed, wrong-instance, and body-mismatched admissions before spawning a
+subprocess. Consumer audit events distinguish authorization decisions from the
+terminal transport outcome and include only decision plus phase/reason. The
+supervisor's transport log additionally includes its own instance id. Neither
+surface contains the opaque envelope, source, inputs, secrets, or broker token.
 
-Denied operations use one existence-safe response. The supervisor emits structured `questpie.sandbox.agent_admission` events; valid signed claims preserve Run, attempt, Agent, Company, Space, Worker, lease, and supervisor attribution even for a denial. Events never include request or source hashes, hidden policy targets, arguments, credential values, or host paths. The legacy `run()` method remains the explicitly host-authenticated non-Agent executor path; Agent integrations use `runAgentWorkload()`.
+`SANDBOX_INSTANCE_ID` is a process incarnation, not a deployment or replica id.
+It must be newly generated for every supervisor process and restart. The
+adapter's `SANDBOX_URL` must route directly to the one process named by its
+configured instance id; do not put this admission path behind an unpinned
+round-robin load balancer. Reusing one instance id across replicas is forbidden.
+Replay state is deliberately process-local because the admission is
+cryptographically bound to that unique process incarnation.
 
-## Run The Supervisor
-
-The Deno supervisor source is published with the package:
+## Run the supervisor
 
 ```bash
-export SANDBOX_AGENT_ADMISSION_KEY_ID=sandbox-agent-v1
-export SANDBOX_AGENT_ADMISSION_SECRET='replace-with-at-least-32-random-bytes'
-export SANDBOX_NON_AGENT_ADMISSION_SECRET='replace-with-another-32-byte-secret'
-# Unique per supervisor process. The control plane must rotate it on restart.
+export SANDBOX_WORKLOAD_ADMISSION_KEY_ID=sandbox-workload-v1
+export SANDBOX_WORKLOAD_ADMISSION_SECRET='replace-with-at-least-32-random-bytes'
+export SANDBOX_HOST_ADMISSION_SECRET='replace-with-another-32-byte-secret'
+# Generate a new value for every supervisor process/restart.
 export SANDBOX_INSTANCE_ID=sandbox_instance_01HXYZ
-export SANDBOX_AGENT_WORK_ROOT=/var/lib/questpie/workloads
+# Required whenever a policy can receive QUESTPIE broker bindings.
+export SANDBOX_BROKER_URL='https://app.internal/api/sandbox/rpc'
 
 deno run --allow-net --allow-env --allow-run --allow-read \
-	--allow-write=/var/lib/questpie/workloads,$TMPDIR \
+	--allow-write=$TMPDIR \
 	node_modules/@questpie/sandbox/src/sandbox-server.ts
 ```
 
-Set `SANDBOX_URL` in the app to the supervisor URL.
+Set `SANDBOX_URL` in the app to the directly addressed URL of that supervisor
+instance.
 
 ## Exports
 
-| Entry Point                 | Purpose                                    |
-| --------------------------- | ------------------------------------------ |
-| `@questpie/sandbox`         | Adapter, validation, and binding utilities |
-| `@questpie/sandbox/adapter` | `httpSandboxAdapter()` only                |
+| Entry point                         | Purpose                                       |
+| ----------------------------------- | --------------------------------------------- |
+| `@questpie/sandbox`                 | Adapter, authorization, validation, bindings  |
+| `@questpie/sandbox/adapter`         | HTTP adapter and workload authorization types |
+| `@questpie/sandbox/modules/sandbox` | Generated broker route module                 |
 
 ## License
 

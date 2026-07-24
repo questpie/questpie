@@ -104,7 +104,7 @@ describe.if(!!SANDBOX_URL)(
 		const svc = new ExecutorService({
 			sandboxed: httpSandboxAdapter({
 				url: SANDBOX_URL,
-				nonAgentAdmissionSecret: process.env.SANDBOX_NON_AGENT_ADMISSION_SECRET,
+				hostAdmissionSecret: process.env.SANDBOX_HOST_ADMISSION_SECRET,
 			}),
 		});
 		const baseCaps = { net: [], import: [], timeoutMs: 5000, memoryMb: 128 };

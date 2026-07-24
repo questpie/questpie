@@ -132,15 +132,14 @@ describe("HttpSandboxAdapter — non-JSON server response", () => {
 		server?.stop(true);
 	});
 
-	it("surfaces 'non-JSON (HTTP <status>)' for an HTML 500 body", async () => {
+	it("treats an HTML 500 as transport failure without reflecting its body", async () => {
 		next = { status: 500, body: "<html><body>Bad Gateway</body></html>" };
 		const adapter = httpSandboxAdapter({ url: baseUrl });
 		const r = await runOnce(adapter);
 
 		expect(r.ok).toBe(false);
-		expect(r.error).toContain("sandbox returned non-JSON (HTTP 500)");
-		// The raw body prefix is included to aid debugging.
-		expect(r.error).toContain("Bad Gateway");
+		expect(r.error).toBe("sandbox request failed (HTTP 500)");
+		expect(r.error).not.toContain("Bad Gateway");
 		expect(r.logs).toEqual([]);
 	});
 
@@ -213,7 +212,12 @@ describe("HttpSandboxAdapter — URL trailing-slash normalization", () => {
 // ──────────────────────────────────────────────────────────────────────────
 describe("HttpSandboxAdapter — custom fetch option", () => {
 	it("uses the injected fetch (with its url + payload) instead of globalThis.fetch", async () => {
-		const seen: Array<{ url: string; body: unknown; hadSignal: boolean }> = [];
+		const seen: Array<{
+			url: string;
+			body: unknown;
+			hadSignal: boolean;
+			redirect?: RequestRedirect;
+		}> = [];
 		// A stub fetch that never touches the network — proves the adapter routes
 		// through options.fetch and forwards the request it built.
 		const customFetch = (async (
@@ -224,6 +228,7 @@ describe("HttpSandboxAdapter — custom fetch option", () => {
 				url: String(input),
 				body: init?.body ? JSON.parse(String(init.body)) : undefined,
 				hadSignal: !!init?.signal,
+				redirect: init?.redirect,
 			});
 			return new Response(
 				JSON.stringify({ ok: true, output: "via-custom", logs: [] }),
@@ -249,5 +254,123 @@ describe("HttpSandboxAdapter — custom fetch option", () => {
 			"export default async () => 1",
 		);
 		expect(seen[0]!.hadSignal).toBe(true);
+		expect(seen[0]!.redirect).toBe("error");
+	});
+
+	it("rejects malformed runtime results instead of coercing their shape", async () => {
+		const adapter = httpSandboxAdapter({
+			url: "http://sandbox.invalid",
+			fetch: (async () =>
+				Response.json({
+					ok: "yes",
+					logs: [],
+					extra: "smuggled",
+				})) as typeof fetch,
+		});
+		const result = await runOnce(adapter);
+
+		expect(result).toEqual({
+			ok: false,
+			error: "sandbox returned an invalid response",
+			logs: [],
+		});
+	});
+
+	it("cancels a streamed response once the hard byte cap is crossed", async () => {
+		let cancelled = false;
+		const body = new ReadableStream<Uint8Array>({
+			start(controller) {
+				const chunk = new Uint8Array(256 * 1024);
+				for (let index = 0; index < 12; index += 1) controller.enqueue(chunk);
+			},
+			cancel() {
+				cancelled = true;
+			},
+		});
+		const adapter = httpSandboxAdapter({
+			url: "http://sandbox.invalid",
+			fetch: (async () => new Response(body)) as typeof fetch,
+		});
+		const result = await runOnce(adapter);
+
+		expect(result).toEqual({
+			ok: false,
+			error: "sandbox returned an invalid response",
+			logs: [],
+		});
+		expect(cancelled).toBe(true);
+	});
+});
+
+describe("HttpSandboxAdapter — canonical endpoint and redirect pinning", () => {
+	it("rejects ambiguous or credential-bearing base URLs before fetch", async () => {
+		for (const url of [
+			"ftp://sandbox.example",
+			"https://user@sandbox.example",
+			"https://sandbox.example/#fragment",
+			"https://sandbox.example/?tenant=a",
+			"https://sandbox.example/api",
+			"https://sandbox.example/.",
+			"HTTPS://Sandbox.Example",
+		]) {
+			let fetches = 0;
+			const adapter = httpSandboxAdapter({
+				url,
+				fetch: (async () => {
+					fetches += 1;
+					return Response.json({ ok: true, output: 1, logs: [] });
+				}) as typeof fetch,
+			});
+			const result = await runOnce(adapter);
+			expect(result.ok, url).toBe(false);
+			expect(fetches, url).toBe(0);
+		}
+	});
+
+	it("does not follow a redirect or forward the host credential cross-origin", async () => {
+		let leakedCredential: string | null = null;
+		const sink = Bun.serve({
+			port: 0,
+			fetch(request) {
+				leakedCredential = request.headers.get(
+					"x-questpie-sandbox-host-admission",
+				);
+				return Response.json({ ok: true, output: "leaked", logs: [] });
+			},
+		});
+		const redirector = Bun.serve({
+			port: 0,
+			fetch() {
+				return Response.redirect(`http://127.0.0.1:${sink.port}/run`, 307);
+			},
+		});
+		try {
+			const adapter = httpSandboxAdapter({
+				url: `http://127.0.0.1:${redirector.port}`,
+				hostAdmissionSecret: "host-secret-must-not-cross-origin",
+			});
+			const result = await runOnce(adapter);
+			expect(result.ok).toBe(false);
+			expect(leakedCredential).toBeNull();
+		} finally {
+			redirector.stop(true);
+			sink.stop(true);
+		}
+	});
+
+	it("treats every non-2xx response as transport failure despite an ok:true body", async () => {
+		const adapter = httpSandboxAdapter({
+			url: "https://sandbox.example",
+			fetch: (async () =>
+				Response.json(
+					{ ok: true, output: "must-not-pass", logs: [] },
+					{ status: 403 },
+				)) as typeof fetch,
+		});
+		expect(await runOnce(adapter)).toEqual({
+			ok: false,
+			error: "sandbox request failed (HTTP 403)",
+			logs: [],
+		});
 	});
 });
