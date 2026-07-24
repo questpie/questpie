@@ -19,6 +19,7 @@ import pg from "pg";
 import type { AnyDrizzleClient } from "../../../src/server/config/types.js";
 import {
 	createCrdtAppendStore,
+	isCrdtProjectionFieldDirty,
 	loadCrdtAuthoritativeReplica,
 	prepareCrdtAppend,
 } from "../../../src/server/modules/core/integrated/crdt/append-store.js";
@@ -94,6 +95,11 @@ const manifest = resolveCrdtDesiredManifest(
 	}),
 	declarations,
 );
+
+it("marks an older unprojected field dirty in a later aggregate cut", () => {
+	expect(isCrdtProjectionFieldDirty(3n, 2n)).toBe(1);
+	expect(isCrdtProjectionFieldDirty(2n, 2n)).toBe(0);
+});
 
 describe("CRDT atomic append store", () => {
 	let ddl: string[];

@@ -855,7 +855,10 @@ async function appendTransaction(
 					: binding.headFieldCursor,
 				expectedCanonicalHash: binding.projectedCanonicalHash,
 				expectedCanonicalRevision: binding.projectedCanonicalRevision,
-				shouldWrite: part ? 1 : 0,
+				shouldWrite: isCrdtProjectionFieldDirty(
+					part ? part.baseFieldCursor + 1n : binding.headFieldCursor,
+					binding.projectedFieldCursor,
+				),
 			};
 		}),
 	);
@@ -906,6 +909,13 @@ async function appendTransaction(
 			),
 		}),
 	};
+}
+
+export function isCrdtProjectionFieldDirty(
+	targetFieldCursor: bigint,
+	projectedFieldCursor: bigint,
+): 0 | 1 {
+	return targetFieldCursor > projectedFieldCursor ? 1 : 0;
 }
 
 async function findReceipt(
