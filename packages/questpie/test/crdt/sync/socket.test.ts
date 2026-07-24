@@ -181,6 +181,27 @@ describe("CRDT synchronized protocol socket", () => {
 		await socket.close(1000, "done");
 	});
 
+	it("owns a rejected initial AUTH_OK when closed before transport drain", async () => {
+		let closes = 0;
+		const socket = await createCrdtAuthenticatedSyncSocketV1({
+			sessionId: "session",
+			authRequestId: 1n,
+			protocol: setupProtocol(),
+			source: source(),
+			aggregateHash: "e".repeat(64),
+			peer: {
+				send: () => false,
+				close: () => {
+					closes++;
+				},
+			},
+		});
+
+		await socket.close(1000, "closed before drain");
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(closes).toBe(1);
+	});
+
 	it("delivers one atomic live UPDATE through coordinator reconciliation", async () => {
 		let head = 0n;
 		let registered:

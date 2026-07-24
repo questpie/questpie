@@ -116,6 +116,9 @@ export async function createCrdtAuthenticatedSyncSocketV1(input: {
 			schemaVersion: basis.schemaVersion,
 		},
 	});
+	// The downstream socket owns this promise even when no later client message
+	// observes it (for example, close while the first send is backpressured).
+	void authentication.catch(() => {});
 
 	async function sendUpdate(commit: CrdtSyncCommit): Promise<void> {
 		if (commit.commitId.byteLength !== 16) throw rejected();
