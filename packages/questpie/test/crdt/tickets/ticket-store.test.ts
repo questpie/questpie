@@ -232,6 +232,7 @@ describe("CRDT durable ticket admission", () => {
 
 	it("enforces the aggregate cap across other subjects' reservations", async () => {
 		const otherSubject = "00000000-0000-4000-8000-000000000010";
+		const expiry = new Date(Date.now() + 5 * 60_000);
 		await db.insert(questpieCrdtSubjectTable).values({
 			id: otherSubject,
 			kind: 1,
@@ -261,8 +262,8 @@ describe("CRDT durable ticket admission", () => {
 				subjectReadFence: 0n,
 				subjectEditFence: 0n,
 				sessionGeneration: 0n,
-				authorityExpiresAt: new Date(Date.now() + 60_000),
-				expiresAt: new Date(Date.now() + 60_000),
+				authorityExpiresAt: expiry,
+				expiresAt: expiry,
 			})),
 		);
 
@@ -299,6 +300,13 @@ describe("CRDT durable ticket admission", () => {
 				),
 			);
 		}
+		await db
+			.update(questpieCrdtSubjectAdmissionTable)
+			.set({
+				ticketTokens: 0n,
+				ticketRefilledAt: sql`clock_timestamp() + interval '1 hour'`,
+			})
+			.where(eq(questpieCrdtSubjectAdmissionTable.subjectId, ID.subject));
 		await expect(
 			store.issue(
 				authorization({ credentialFingerprint: Buffer.alloc(32, 31) }),
