@@ -1,5 +1,6 @@
 import {
 	afterEach,
+	afterAll,
 	beforeAll,
 	beforeEach,
 	describe,
@@ -7,11 +8,15 @@ import {
 	it,
 } from "bun:test";
 import { Buffer } from "node:buffer";
+import { randomUUID } from "node:crypto";
 
 import { PGlite } from "@electric-sql/pglite";
 import { eq, sql } from "drizzle-orm";
+import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
 import { drizzle } from "drizzle-orm/pglite";
+import pg from "pg";
 
+import type { AnyDrizzleClient } from "../../../src/server/config/types.js";
 import { createCrdtAppendStore } from "../../../src/server/modules/core/integrated/crdt/append-store.js";
 import { createDeterministicTextEngine } from "../../../src/server/modules/core/integrated/crdt/deterministic-engine.js";
 import {
@@ -341,7 +346,113 @@ describe("CRDT atomic append store", () => {
 	});
 });
 
-async function lockOwnerRow(db: ReturnType<typeof drizzle<any>>) {
+const postgresUrl =
+	process.env.QUESTPIE_CRDT_DATABASE_URL ??
+	process.env.QUESTPIE_TRANSACTION_LOCK_DATABASE_URL;
+
+describe.skipIf(!postgresUrl)(
+	"CRDT atomic append store on PostgreSQL 15+",
+	() => {
+		const schemaName = `questpie_crdt_append_${randomUUID().replaceAll("-", "")}`;
+		let admin: pg.Pool;
+		let firstPool: pg.Pool;
+		let secondPool: pg.Pool;
+		let firstDb: ReturnType<typeof drizzlePg<typeof questpieCrdtTables>>;
+		let secondDb: ReturnType<typeof drizzlePg<typeof questpieCrdtTables>>;
+		let pgFixture: Awaited<ReturnType<typeof seedFixture>>;
+
+		beforeAll(async () => {
+			admin = new pg.Pool({ connectionString: postgresUrl, max: 1 });
+			const version = await admin.query<{ server_version_num: string }>(
+				"show server_version_num",
+			);
+			expect(
+				Number(version.rows[0]?.server_version_num),
+			).toBeGreaterThanOrEqual(150_000);
+			await admin.query(`CREATE SCHEMA "${schemaName}"`);
+			firstPool = new pg.Pool({
+				connectionString: postgresUrl,
+				max: 4,
+				options: `-c search_path=${schemaName}`,
+			});
+			secondPool = new pg.Pool({
+				connectionString: postgresUrl,
+				max: 4,
+				options: `-c search_path=${schemaName}`,
+			});
+			firstDb = drizzlePg(firstPool, { schema: questpieCrdtTables });
+			secondDb = drizzlePg(secondPool, { schema: questpieCrdtTables });
+			const { generateDrizzleJson, generateMigration } =
+				await import("drizzle-kit/api-postgres");
+			const empty = {
+				id: "00000000-0000-0000-0000-000000000000",
+				dialect: "postgres" as const,
+				prevIds: [],
+				version: "8" as const,
+				ddl: [],
+				renames: [],
+			};
+			for (const statement of await generateMigration(
+				empty,
+				await generateDrizzleJson(questpieCrdtTables, empty.id),
+			)) {
+				if (statement.trim()) await firstDb.execute(sql.raw(statement));
+			}
+			await firstDb.execute(sql`
+				CREATE TABLE articles (
+					id text PRIMARY KEY,
+					title text NOT NULL
+				)
+			`);
+			pgFixture = await seedFixture(firstDb);
+		});
+
+		afterAll(async () => {
+			await firstPool?.end();
+			await secondPool?.end();
+			if (admin) {
+				await admin.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
+				await admin.end();
+			}
+		});
+
+		it("serializes same-basis appends across independent pools", async () => {
+			const first = createCrdtAppendStore(firstDb, { lockOwnerRow });
+			const second = createCrdtAppendStore(secondDb, { lockOwnerRow });
+			const firstInput = appendInput(pgFixture);
+			const secondInput = {
+				...appendInput(pgFixture),
+				updateId: "00000000-0000-4000-8000-000000000307",
+				submittedBundleHash: Buffer.alloc(32, 0x41),
+				canonicalBundleHash: Buffer.alloc(32, 0x42),
+			};
+
+			const outcomes = await Promise.allSettled([
+				first.append(firstInput),
+				second.append(secondInput),
+			]);
+
+			expect(
+				outcomes.filter((outcome) => outcome.status === "fulfilled"),
+			).toHaveLength(1);
+			expect(
+				outcomes.filter((outcome) => outcome.status === "rejected"),
+			).toHaveLength(1);
+			expect(await firstDb.select().from(questpieCrdtCommitTable)).toHaveLength(
+				1,
+			);
+			const [epoch] = await firstDb
+				.select()
+				.from(questpieCrdtResourceEpochTable)
+				.where(
+					eq(questpieCrdtResourceEpochTable.id, pgFixture.resourceEpochId),
+				);
+			expect(epoch?.headCommitSeq).toBe(1n);
+		}, 30_000);
+	},
+);
+
+async function lockOwnerRow(db: AnyDrizzleClient<any>) {
 	await db.execute(sql`
 		SELECT id
 		FROM articles
@@ -403,7 +514,7 @@ function appendInput(fixture: Awaited<ReturnType<typeof seedFixture>>) {
 	};
 }
 
-async function seedFixture(db: ReturnType<typeof drizzle<any>>) {
+async function seedFixture(db: AnyDrizzleClient<any>) {
 	await db.execute(
 		sql`INSERT INTO articles (id, title) VALUES ('article-1', 'Shared')`,
 	);
