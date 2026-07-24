@@ -6,6 +6,7 @@ export * from "#questpie/server/modules/core/integrated/crdt/compaction.js";
 export * from "#questpie/server/modules/core/integrated/crdt/host-application.js";
 export * from "#questpie/server/modules/core/integrated/crdt/notice.js";
 export * from "#questpie/server/modules/core/integrated/crdt/projection.js";
+export * from "#questpie/server/modules/core/integrated/crdt/replace.js";
 export * from "#questpie/server/modules/core/integrated/crdt/questpie-host-application.js";
 export * from "#questpie/server/modules/core/integrated/crdt/sync-coordinator.js";
 export * from "#questpie/server/modules/core/integrated/crdt/sync-socket.js";
