@@ -582,6 +582,17 @@ type CollectionAPI<
 	) => Promise<ClientRow<TCollection, TCollections>>;
 
 	/**
+	 * Permanently purge a soft-deleted record by ID.
+	 *
+	 * Purge has separate server authorization from delete and rejects active
+	 * records. Unlike update/delete/restore, it intentionally has no alias.
+	 */
+	purgeById: (
+		params: { id: string },
+		options?: LocaleOptions,
+	) => Promise<{ success: true }>;
+
+	/**
 	 * Find version history for a single record
 	 */
 	findVersions: (
@@ -1337,6 +1348,20 @@ export function createClient<TApp extends QuestpieApp>(
 						arrayFormat: "brackets",
 					});
 					const path = `${apiBasePath}/${collectionName}/${id}/restore${queryString ? `?${queryString}` : ""}`;
+					return mutationRequest(path, {
+						method: "POST",
+					});
+				},
+
+				purgeById: async (
+					{ id }: { id: string },
+					options: LocaleOptions = {},
+				) => {
+					const queryString = qs.stringify(options, {
+						skipNulls: true,
+						arrayFormat: "brackets",
+					});
+					const path = `${apiBasePath}/${collectionName}/${id}/purge${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
 					});

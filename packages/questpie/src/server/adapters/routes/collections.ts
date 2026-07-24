@@ -468,6 +468,36 @@ export async function collectionRestore(
 	}
 }
 
+export async function collectionPurge(
+	app: Questpie<any>,
+	request: Request,
+	params: Record<string, string>,
+	context?: AdapterContext,
+	config: AdapterConfig<any> = {},
+): Promise<Response> {
+	const resolved = await resolveContext(app, request, config, context);
+	const crud = app.collections[params.collection as any];
+
+	if (!crud) {
+		return errorResponse(
+			app,
+			ApiError.notFound("Collection", params.collection),
+			request,
+			resolved.appContext.locale,
+		);
+	}
+
+	try {
+		const result = await crud.purgeById(
+			{ id: params.id as any },
+			resolved.appContext,
+		);
+		return smartResponse(result, request, 200, txidHeaders(result));
+	} catch (error) {
+		return errorResponse(app, error, request, resolved.appContext.locale);
+	}
+}
+
 export async function collectionUpdateMany(
 	app: Questpie<any>,
 	request: Request,
@@ -857,6 +887,14 @@ export const createCollectionRoutes = <
 			context?: AdapterContext,
 		): Promise<Response> => {
 			return collectionRestore(app, request, params, context, config);
+		},
+
+		purge: async (
+			request: Request,
+			params: { collection: string; id: string },
+			context?: AdapterContext,
+		): Promise<Response> => {
+			return collectionPurge(app, request, params, context, config);
 		},
 
 		updateMany: async (

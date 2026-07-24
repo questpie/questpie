@@ -16,6 +16,7 @@ import _route_collection_id from "../routes/[collection]/[id]";
 import _route_collection_id_DELETE from "../routes/[collection]/[id].delete";
 import _route_collection_id_PATCH from "../routes/[collection]/[id].patch";
 import _route_collection_id_audit from "../routes/[collection]/[id]/audit";
+import _route_collection_id_purge from "../routes/[collection]/[id]/purge";
 import _route_collection_id_restore from "../routes/[collection]/[id]/restore";
 import _route_collection_id_revert from "../routes/[collection]/[id]/revert";
 import _route_collection_id_transition from "../routes/[collection]/[id]/transition";
@@ -115,6 +116,7 @@ export type CoreRoutes = {
 	"[collection]/[id]:DELETE": typeof _route_collection_id_DELETE extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/[id]:DELETE">> : typeof _route_collection_id_DELETE;
 	"[collection]/[id]:PATCH": typeof _route_collection_id_PATCH extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/[id]:PATCH">> : typeof _route_collection_id_PATCH;
 	"[collection]/[id]/audit": typeof _route_collection_id_audit extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/[id]/audit">> : typeof _route_collection_id_audit;
+	"[collection]/[id]/purge": typeof _route_collection_id_purge extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/[id]/purge">> : typeof _route_collection_id_purge;
 	"[collection]/[id]/restore": typeof _route_collection_id_restore extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/[id]/restore">> : typeof _route_collection_id_restore;
 	"[collection]/[id]/revert": typeof _route_collection_id_revert extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/[id]/revert">> : typeof _route_collection_id_revert;
 	"[collection]/[id]/transition": typeof _route_collection_id_transition extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/[id]/transition">> : typeof _route_collection_id_transition;
@@ -225,6 +227,7 @@ const _module: CoreModule = {
 		"[collection]/[id]:DELETE": _route_collection_id_DELETE,
 		"[collection]/[id]:PATCH": _route_collection_id_PATCH,
 		"[collection]/[id]/audit": _route_collection_id_audit,
+		"[collection]/[id]/purge": _route_collection_id_purge,
 		"[collection]/[id]/restore": _route_collection_id_restore,
 		"[collection]/[id]/revert": _route_collection_id_revert,
 		"[collection]/[id]/transition": _route_collection_id_transition,

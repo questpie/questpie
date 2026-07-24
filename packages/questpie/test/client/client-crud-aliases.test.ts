@@ -75,6 +75,17 @@ describe("client by-id aliases (canonical CRUD vocabulary)", () => {
 		expect(calls[1]?.method).toBe("POST");
 	});
 
+	it("purgeById uses the dedicated irreversible endpoint", async () => {
+		await client.collections.posts.purgeById({ id: "post-1" });
+
+		expect(calls).toHaveLength(1);
+		expect(calls[0]?.url.pathname).toBe("/posts/post-1/purge");
+		expect(calls[0]?.method).toBe("POST");
+		expect(
+			"purge" in (client.collections.posts as Record<string, unknown>),
+		).toBe(false);
+	});
+
 	it("bulk methods keep their where-based endpoints", async () => {
 		await client.collections.posts.updateMany({
 			where: { status: "draft" },

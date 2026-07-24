@@ -271,6 +271,10 @@ type CollectionRestore<
 	TApp extends QuestpieApp,
 	K extends CollectionKeys<TApp>,
 > = QuestpieClient<TApp>["collections"][K]["restore"];
+type CollectionPurgeById<
+	TApp extends QuestpieApp,
+	K extends CollectionKeys<TApp>,
+> = QuestpieClient<TApp>["collections"][K]["purgeById"];
 type CollectionFindVersions<
 	TApp extends QuestpieApp,
 	K extends CollectionKeys<TApp>,
@@ -404,6 +408,10 @@ type CollectionQueryOptionsAPI<
 	restore: MutationBuilder<
 		FirstArg<CollectionRestore<TApp, K>>,
 		QueryData<CollectionRestore<TApp, K>>
+	>;
+	purgeById: MutationBuilder<
+		FirstArg<CollectionPurgeById<TApp, K>>,
+		QueryData<CollectionPurgeById<TApp, K>>
 	>;
 	findVersions: QueryBuilder<CollectionFindVersions<TApp, K>>;
 	revertToVersion: MutationBuilder<
@@ -826,6 +834,28 @@ export function createQuestpieQueryOptions<
 							mutationFn: wrapMutationFn(
 								(variables: { id: string }) =>
 									collection.restore(
+										variables,
+										locale || stage
+											? {
+													...(locale ? { locale } : {}),
+													...(stage ? { stage } : {}),
+												}
+											: undefined,
+									),
+								errorMap,
+							),
+						}),
+					purgeById: () =>
+						mutationOptions({
+							mutationKey: buildKey(keyPrefix, [
+								...baseKey,
+								"purgeById",
+								locale,
+								stage,
+							]),
+							mutationFn: wrapMutationFn(
+								(variables: { id: string }) =>
+									collection.purgeById(
 										variables,
 										locale || stage
 											? {
