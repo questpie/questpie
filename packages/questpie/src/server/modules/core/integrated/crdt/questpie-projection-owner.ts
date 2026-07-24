@@ -1,4 +1,4 @@
-import { and, eq, getTableColumns } from "drizzle-orm";
+import { eq, getTableColumns } from "drizzle-orm";
 
 import { onAfterCommit } from "#questpie/server/collection/crud/shared/transaction.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
