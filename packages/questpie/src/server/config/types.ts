@@ -592,6 +592,9 @@ export interface QuestpieConfig {
 	 */
 	realtime?: RealtimeConfig;
 
+	/** Collaborative aggregate runtime configuration. */
+	crdt?: import("../modules/core/integrated/crdt/config.js").CrdtRuntimeConfig;
+
 	/**
 	 * Logger configuration
 	 */

@@ -317,6 +317,17 @@ change or incompatible schema change requires a CLI-generated manifest
 migration and field-epoch fence. An old client never silently maps an update to
 a new field.
 
+The stable identities live in a checked-in `crdt.manifest.json` beside
+`questpie.config.ts`. The first `questpie crdt:manifest` run assigns random
+UUIDs and monotonically allocated slots; later runs preserve them, append
+schema generations, and require explicit rename mappings. Runtime and ordinary
+codegen never assign identities: they load and exact-validate the artifact.
+Its canonical fingerprint binds the namespace, owner kind/key and identity
+version, predecessor fingerprint, every field UUID/slot/path/format version,
+and the selected engine ID/version/codec fingerprint. An unchanged second CLI
+run must be byte-for-byte no-diff. Missing, stale, hand-edited, or
+newer-than-runtime artifacts fail readiness.
+
 Every manifest change is an aggregate control commit. Additive field add and an
 explicit rename preserve existing stable slots and record a bounded
 compatibility map. Every manifest change advances fences and closes all live
@@ -1333,6 +1344,9 @@ discovered category, plugin module or duplicate registry.
 
 Runtime `crdt.namespace`/server engine use ordinary runtime config; the client
 engine uses `createClient` config; Elysia attaches the concrete host capability.
+The checked-in owner identity artifact is `crdt.manifest.json` beside
+`questpie.config.ts`; it is generated only by `questpie crdt:manifest` and
+embedded into generated runtime output after exact validation.
 New public subpaths originate in `src/exports` and tsdown entries; package
 exports are never hand-edited. `@questpie/crdt-yjs` has no root export, only
 `/server` and `/client`, peers on generic `questpie`, and joins the fixed version

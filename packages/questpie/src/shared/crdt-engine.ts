@@ -67,6 +67,9 @@ export interface CrdtFieldEngine<
 	TValue = unknown,
 > {
 	readonly engineId: string;
+	readonly engineVersion: number;
+	readonly stateVersion: number;
+	readonly codecFingerprint: string;
 	readonly format: TFormat;
 	readonly formatVersion: number;
 	/**
@@ -239,7 +242,14 @@ export function assertReplicaBelongsToEngine(
 		(engine.format !== "text" && engine.format !== "set") ||
 		!Number.isSafeInteger(engine.formatVersion) ||
 		engine.formatVersion < 0 ||
-		engine.formatVersion > 0xffff
+		engine.formatVersion > 0xffff ||
+		!Number.isSafeInteger(engine.engineVersion) ||
+		engine.engineVersion < 0 ||
+		engine.engineVersion > 0xffff ||
+		!Number.isSafeInteger(engine.stateVersion) ||
+		engine.stateVersion < 0 ||
+		engine.stateVersion > 0xffff ||
+		!/^[0-9a-f]{64}$/.test(engine.codecFingerprint)
 	) {
 		throw new CrdtEngineError("invalid engine identity");
 	}
@@ -676,6 +686,9 @@ function resolveSubmittedMetadata(
 function captureCrdtEngine(engine: AnyEngine): AnyEngine {
 	return Object.freeze({
 		engineId: engine.engineId,
+		engineVersion: engine.engineVersion,
+		stateVersion: engine.stateVersion,
+		codecFingerprint: engine.codecFingerprint,
 		format: engine.format,
 		formatVersion: engine.formatVersion,
 		create: engine.create.bind(engine),

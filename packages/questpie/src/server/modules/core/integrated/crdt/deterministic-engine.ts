@@ -20,6 +20,12 @@ import type { CrdtTextOperation } from "./types.js";
 const TEXT_ENGINE_ID = "questpie.deterministic-text/v1";
 const SET_ENGINE_ID = "questpie.deterministic-add-wins-set/v1";
 const FORMAT_VERSION = 1;
+const ENGINE_VERSION = 1;
+const STATE_VERSION = 1;
+const TEXT_CODEC_FINGERPRINT =
+	"b74cc653f3387d2826ab9764d314791faf492762ae42a20d84f9fba82b001dd7";
+const SET_CODEC_FINGERPRINT =
+	"86fcad187b9019ecd4399137c4a69116510142858a148b762f0f842a00e8c161";
 
 type TextReplica = CrdtEngineReplica<"text", string>;
 type SetReplica = CrdtEngineReplica<"set", string[]>;
@@ -34,6 +40,9 @@ export function createDeterministicTextEngine(): CrdtFieldEngine<
 > {
 	const engine: CrdtFieldEngine<"text", string> = {
 		engineId: TEXT_ENGINE_ID,
+		engineVersion: ENGINE_VERSION,
+		stateVersion: STATE_VERSION,
+		codecFingerprint: TEXT_CODEC_FINGERPRINT,
 		format: "text",
 		formatVersion: FORMAT_VERSION,
 
@@ -159,6 +168,9 @@ export function createDeterministicSetEngine(): CrdtFieldEngine<
 > {
 	const engine: CrdtFieldEngine<"set", string[]> = {
 		engineId: SET_ENGINE_ID,
+		engineVersion: ENGINE_VERSION,
+		stateVersion: STATE_VERSION,
+		codecFingerprint: SET_CODEC_FINGERPRINT,
 		format: "set",
 		formatVersion: FORMAT_VERSION,
 
