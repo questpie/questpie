@@ -89,19 +89,30 @@ export class CrdtAppendRejectedError extends Error {
 export function createCrdtAppendStore(
 	db: CrdtDatabase,
 	options: Readonly<{
+		/**
+		 * Locks the host collection/global row with `FOR UPDATE`. This is always
+		 * invoked before any CRDT row is locked; it must not run application hooks.
+		 */
+		lockOwnerRow: (
+			transaction: CrdtDatabase,
+			owner: {
+				resourceId: string;
+				definitionId: string;
+			},
+		) => Promise<void>;
 		publishNotice?: (notice: {
 			kind: "crdt";
 			resourceId: string;
 			resourceEpochId: string;
 			commitSeq: bigint;
 		}) => Promise<void>;
-	}> = {},
+	}>,
 ) {
 	return Object.freeze({
 		async append(input: CrdtAppendInput): Promise<CrdtAppendReceipt> {
 			const candidate = snapshotInput(input);
 			const result = await db.transaction((tx) =>
-				appendTransaction(tx as CrdtDatabase, candidate),
+				appendTransaction(tx as CrdtDatabase, candidate, options.lockOwnerRow),
 			);
 			if (result.committed) {
 				try {
@@ -123,7 +134,15 @@ export function createCrdtAppendStore(
 async function appendTransaction(
 	db: CrdtDatabase,
 	input: CrdtAppendInput,
+	lockOwnerRow: (
+		transaction: CrdtDatabase,
+		owner: { resourceId: string; definitionId: string },
+	) => Promise<void>,
 ): Promise<{ receipt: CrdtAppendReceipt; committed: boolean }> {
+	await lockOwnerRow(db, {
+		resourceId: input.resourceId,
+		definitionId: input.definitionId,
+	});
 	const [resource] = await db
 		.select()
 		.from(questpieCrdtResourceTable)

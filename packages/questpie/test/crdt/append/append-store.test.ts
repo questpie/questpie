@@ -110,6 +110,7 @@ describe("CRDT atomic append store", () => {
 	it("commits one part, receipt, heads, then publishes a metadata-only notice", async () => {
 		const notices: unknown[] = [];
 		const store = createCrdtAppendStore(db, {
+			lockOwnerRow,
 			publishNotice: async (notice) => {
 				const commits = await db.select().from(questpieCrdtCommitTable);
 				expect(commits).toHaveLength(1);
@@ -151,6 +152,7 @@ describe("CRDT atomic append store", () => {
 	it("returns the durable receipt for an exact retry without another commit or notice", async () => {
 		const notices: unknown[] = [];
 		const store = createCrdtAppendStore(db, {
+			lockOwnerRow,
 			publishNotice: async (notice) => {
 				notices.push(notice);
 			},
@@ -167,7 +169,7 @@ describe("CRDT atomic append store", () => {
 	});
 
 	it("rejects update-id reuse with different immutable input", async () => {
-		const store = createCrdtAppendStore(db);
+		const store = createCrdtAppendStore(db, { lockOwnerRow });
 		const input = appendInput(fixture);
 		await store.append(input);
 
@@ -189,6 +191,7 @@ describe("CRDT atomic append store", () => {
 	it("rolls back stale staged bases without allocating a sequence or notice", async () => {
 		const notices: unknown[] = [];
 		const store = createCrdtAppendStore(db, {
+			lockOwnerRow,
 			publishNotice: async (notice) => {
 				notices.push(notice);
 			},
@@ -215,6 +218,15 @@ describe("CRDT atomic append store", () => {
 		expect(epoch?.headCommitSeq).toBe(0n);
 	});
 });
+
+async function lockOwnerRow(db: ReturnType<typeof drizzle<any>>) {
+	await db.execute(sql`
+		SELECT id
+		FROM articles
+		WHERE id = 'article-1'
+		FOR UPDATE
+	`);
+}
 
 function appendInput(fixture: Awaited<ReturnType<typeof seedFixture>>) {
 	const bytes = new TextEncoder().encode(
