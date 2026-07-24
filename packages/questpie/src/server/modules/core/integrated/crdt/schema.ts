@@ -275,6 +275,7 @@ export const questpieCrdtResourceTable = pgTable(
 		currentEpochStatus: smallint("current_epoch_status"),
 		readFence: counter("read_fence"),
 		editFence: counter("edit_fence"),
+		ownerPolicyRevision: counter("owner_policy_revision"),
 		sessionGeneration: counter("session_generation"),
 		retiredAt: optionalTime("retired_at"),
 		createdAt: createdAt(),
@@ -310,7 +311,7 @@ export const questpieCrdtResourceTable = pgTable(
 		),
 		check(
 			"ck_crdt_resource_fences",
-			sql`${table.readFence} >= 0 AND ${table.editFence} >= 0`,
+			sql`${table.readFence} >= 0 AND ${table.editFence} >= 0 AND ${table.ownerPolicyRevision} >= 0 AND ${table.sessionGeneration} >= 0`,
 		),
 	],
 );
@@ -1370,9 +1371,11 @@ export const questpieCrdtTicketTable = pgTable(
 		protocolMinor: smallint("protocol_minor").notNull(),
 		resourceReadFence: requiredCounter("resource_read_fence"),
 		resourceEditFence: requiredCounter("resource_edit_fence"),
+		ownerPolicyRevision: requiredCounter("owner_policy_revision"),
 		subjectReadFence: requiredCounter("subject_read_fence"),
 		subjectEditFence: requiredCounter("subject_edit_fence"),
 		sessionGeneration: requiredCounter("session_generation"),
+		authorityExpiresAt: requiredExpiry("authority_expires_at"),
 		expiresAt: requiredExpiry("expires_at"),
 		redeemedAt: optionalTime("redeemed_at"),
 		releasedAt: optionalTime("released_at"),
@@ -1414,6 +1417,7 @@ export const questpieCrdtTicketTable = pgTable(
 			table.sessionGeneration,
 			table.resourceReadFence,
 			table.resourceEditFence,
+			table.ownerPolicyRevision,
 			table.subjectReadFence,
 			table.subjectEditFence,
 		),
@@ -1436,6 +1440,10 @@ export const questpieCrdtTicketTable = pgTable(
 		check(
 			"ck_crdt_ticket_audience_origin",
 			sql`octet_length(${table.audience}) BETWEEN 1 AND 255 AND (${table.origin} IS NULL OR octet_length(${table.origin}) BETWEEN 1 AND 2048)`,
+		),
+		check(
+			"ck_crdt_ticket_authority_expiry",
+			sql`${table.expiresAt} <= ${table.authorityExpiresAt}`,
 		),
 	],
 );
@@ -1533,8 +1541,10 @@ export const questpieCrdtSessionTable = pgTable(
 		generation: requiredCounter("generation"),
 		resourceReadFence: requiredCounter("resource_read_fence"),
 		resourceEditFence: requiredCounter("resource_edit_fence"),
+		ownerPolicyRevision: requiredCounter("owner_policy_revision"),
 		subjectReadFence: requiredCounter("subject_read_fence"),
 		subjectEditFence: requiredCounter("subject_edit_fence"),
+		authorityExpiresAt: requiredExpiry("authority_expires_at"),
 		lastSeenCommitSeq: requiredCounter("last_seen_commit_seq"),
 		updateTokens: counter("update_tokens"),
 		updateRefilledAt: systemTimestamp("update_refilled_at")
@@ -1588,6 +1598,7 @@ export const questpieCrdtSessionTable = pgTable(
 				table.generation,
 				table.resourceReadFence,
 				table.resourceEditFence,
+				table.ownerPolicyRevision,
 				table.subjectReadFence,
 				table.subjectEditFence,
 			],
@@ -1603,6 +1614,7 @@ export const questpieCrdtSessionTable = pgTable(
 				questpieCrdtTicketTable.sessionGeneration,
 				questpieCrdtTicketTable.resourceReadFence,
 				questpieCrdtTicketTable.resourceEditFence,
+				questpieCrdtTicketTable.ownerPolicyRevision,
 				questpieCrdtTicketTable.subjectReadFence,
 				questpieCrdtTicketTable.subjectEditFence,
 			],
@@ -1634,6 +1646,10 @@ export const questpieCrdtSessionTable = pgTable(
 		check(
 			"ck_crdt_session_closed",
 			sql`(${table.closedAt} IS NULL AND ${table.closeReason} IS NULL) OR (${table.closedAt} IS NOT NULL AND ${table.closeReason} IS NOT NULL)`,
+		),
+		check(
+			"ck_crdt_session_authority_expiry",
+			sql`${table.leaseExpiresAt} <= ${table.authorityExpiresAt}`,
 		),
 	],
 );

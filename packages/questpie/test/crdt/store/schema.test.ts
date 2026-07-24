@@ -132,7 +132,11 @@ describe("CRDT durable schema", () => {
 
 	it("persists every ticket admission fence and the authorized incarnation", () => {
 		expect(columnNames(questpieCrdtResourceTable)).toEqual(
-			expect.arrayContaining(["incarnation_key", "session_generation"]),
+			expect.arrayContaining([
+				"incarnation_key",
+				"owner_policy_revision",
+				"session_generation",
+			]),
 		);
 		expect(indexNames(questpieCrdtResourceTable)).toContain(
 			"uq_crdt_resource_incarnation_key",
@@ -140,6 +144,7 @@ describe("CRDT durable schema", () => {
 		expect(columnNames(questpieCrdtTicketTable)).toEqual(
 			expect.arrayContaining([
 				"effective_mode",
+				"owner_policy_revision",
 				"subject_read_fence",
 				"subject_edit_fence",
 			]),
@@ -147,6 +152,7 @@ describe("CRDT durable schema", () => {
 		expect(columnNames(questpieCrdtSessionTable)).toEqual(
 			expect.arrayContaining([
 				"effective_mode",
+				"owner_policy_revision",
 				"subject_read_fence",
 				"subject_edit_fence",
 			]),

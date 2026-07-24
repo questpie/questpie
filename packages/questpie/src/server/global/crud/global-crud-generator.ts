@@ -963,6 +963,15 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 						db: tx,
 					}),
 				);
+				const crdtManifest = this.getCrdtManifest();
+				if (currentExisting && crdtManifest) {
+					await new CrdtOwnerLifecycleTransaction(
+						tx,
+					).advanceOwnerPolicyRevision({
+						manifest: crdtManifest,
+						locator: canonicalCrdtGlobalLocator(),
+					});
+				}
 				if (!currentExisting) {
 					await this.activateLockedCrdtGlobal(
 						tx,

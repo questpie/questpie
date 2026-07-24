@@ -325,6 +325,8 @@ describe("CRDT owner activation", () => {
 			status: 2,
 			currentEpochId: null,
 			currentEpochStatus: null,
+			ownerPolicyRevision: 1n,
+			sessionGeneration: 1n,
 		});
 		expect(retired?.retiredAt).not.toBeNull();
 
@@ -337,6 +339,14 @@ describe("CRDT owner activation", () => {
 
 		expect(restored.resourceId).toBe(created.resourceId);
 		expect(restored.resourceEpochId).not.toBe(created.resourceEpochId);
+		const [restoredResource] = await db
+			.select()
+			.from(questpieCrdtResourceTable)
+			.where(eq(questpieCrdtResourceTable.id, RESOURCE_ID));
+		expect(restoredResource).toMatchObject({
+			ownerPolicyRevision: 2n,
+			sessionGeneration: 2n,
+		});
 		const epochs = await db
 			.select()
 			.from(questpieCrdtResourceEpochTable)
@@ -459,6 +469,8 @@ describe("CRDT owner activation", () => {
 		expect(transitionedResource).toMatchObject({
 			readFence: 1n,
 			editFence: 1n,
+			ownerPolicyRevision: 1n,
+			sessionGeneration: 1n,
 		});
 		const [closedSession] = await db.select().from(questpieCrdtSessionTable);
 		expect(closedSession?.closedAt).not.toBeNull();
@@ -761,9 +773,11 @@ async function insertLiveSession(
 		protocolMinor: 0,
 		resourceReadFence: input.resource.readFence,
 		resourceEditFence: input.resource.editFence,
+		ownerPolicyRevision: input.resource.ownerPolicyRevision,
 		subjectReadFence: 0n,
 		subjectEditFence: 0n,
-		sessionGeneration: 1n,
+		sessionGeneration: input.resource.sessionGeneration,
+		authorityExpiresAt: expiresAt,
 		expiresAt,
 		redeemedAt: new Date(),
 	});
@@ -777,11 +791,13 @@ async function insertLiveSession(
 		credentialFingerprint,
 		requestedMode: 2,
 		effectiveMode: 2,
-		generation: 1n,
+		generation: input.resource.sessionGeneration,
 		resourceReadFence: input.resource.readFence,
 		resourceEditFence: input.resource.editFence,
+		ownerPolicyRevision: input.resource.ownerPolicyRevision,
 		subjectReadFence: 0n,
 		subjectEditFence: 0n,
+		authorityExpiresAt: expiresAt,
 		lastSeenCommitSeq: 0n,
 		leaseExpiresAt: expiresAt,
 	});

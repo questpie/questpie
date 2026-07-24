@@ -2292,6 +2292,25 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// handled above; fatal infrastructure errors still abort the transaction.
 				await Promise.all(afterChangePromises);
 
+				const crdtManifest = this.getCrdtManifest();
+				if (crdtManifest && !internal) {
+					const lifecycle = new CrdtOwnerLifecycleTransaction(tx);
+					const sortedOwners = [...refetchedRecords].sort((left, right) =>
+						Buffer.from(
+							canonicalCrdtCollectionLocator(left.id),
+							"utf8",
+						).compare(
+							Buffer.from(canonicalCrdtCollectionLocator(right.id), "utf8"),
+						),
+					);
+					for (const owner of sortedOwners) {
+						await lifecycle.advanceOwnerPolicyRevision({
+							manifest: crdtManifest,
+							locator: canonicalCrdtCollectionLocator(owner.id),
+						});
+					}
+				}
+
 				if (internal) {
 					const restored = refetchedRecords[0];
 					if (!restored || refetchedRecords.length !== 1) {

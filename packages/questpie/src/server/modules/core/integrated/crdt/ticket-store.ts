@@ -72,9 +72,11 @@ export type CrdtAuthorizedTicketSnapshot = Readonly<{
 	effectiveMode: CrdtMode;
 	resourceReadFence: bigint;
 	resourceEditFence: bigint;
+	ownerPolicyRevision: bigint;
 	subjectReadFence: bigint;
 	subjectEditFence: bigint;
 	sessionGeneration: bigint;
+	authorityExpiresAt: Date;
 	headCommitSeq: bigint;
 	/** Complete active aggregate cut, including fields hidden from this subject. */
 	bindings: readonly CrdtAuthorizedBindingCut[];
@@ -166,17 +168,26 @@ async function issueTicket(
 		6,
 	);
 
-	const [
-		subjectReservations,
-		subjectSessions,
-		resourceReservations,
-		resourceSessions,
-	] = await Promise.all([
-		activeTicketCount(db, "subject", authorization.subjectId),
-		activeSessionCount(db, "subject", authorization.subjectId),
-		activeTicketCount(db, "resource", authorization.resourceId),
-		activeSessionCount(db, "resource", authorization.resourceId),
-	]);
+	const subjectReservations = await activeTicketCount(
+		db,
+		"subject",
+		authorization.subjectId,
+	);
+	const subjectSessions = await activeSessionCount(
+		db,
+		"subject",
+		authorization.subjectId,
+	);
+	const resourceReservations = await activeTicketCount(
+		db,
+		"resource",
+		authorization.resourceId,
+	);
+	const resourceSessions = await activeSessionCount(
+		db,
+		"resource",
+		authorization.resourceId,
+	);
 	if (
 		subjectReservations + subjectSessions >= SUBJECT_SESSION_CAP ||
 		resourceReservations + resourceSessions >= RESOURCE_SESSION_CAP
@@ -205,10 +216,12 @@ async function issueTicket(
 			protocolMinor: 0,
 			resourceReadFence: authorization.resourceReadFence,
 			resourceEditFence: authorization.resourceEditFence,
+			ownerPolicyRevision: authorization.ownerPolicyRevision,
 			subjectReadFence: authorization.subjectReadFence,
 			subjectEditFence: authorization.subjectEditFence,
 			sessionGeneration: authorization.sessionGeneration,
-			expiresAt: sql`clock_timestamp() + interval '30 seconds'`,
+			authorityExpiresAt: authorization.authorityExpiresAt,
+			expiresAt: sql`LEAST(clock_timestamp() + interval '30 seconds', ${authorization.authorityExpiresAt})`,
 		})
 		.returning({ expiresAt: questpieCrdtTicketTable.expiresAt });
 	if (!ticket) throw rejected();
@@ -305,6 +318,10 @@ async function redeemTicket(
 					authorization.resourceEditFence,
 				),
 				eq(
+					questpieCrdtTicketTable.ownerPolicyRevision,
+					authorization.ownerPolicyRevision,
+				),
+				eq(
 					questpieCrdtTicketTable.subjectReadFence,
 					authorization.subjectReadFence,
 				),
@@ -340,13 +357,15 @@ async function redeemTicket(
 			generation: authorization.sessionGeneration,
 			resourceReadFence: authorization.resourceReadFence,
 			resourceEditFence: authorization.resourceEditFence,
+			ownerPolicyRevision: authorization.ownerPolicyRevision,
 			subjectReadFence: authorization.subjectReadFence,
 			subjectEditFence: authorization.subjectEditFence,
+			authorityExpiresAt: authorization.authorityExpiresAt,
 			lastSeenCommitSeq: authorization.headCommitSeq,
 			updateTokens: 120n,
 			updateByteTokens: 2n * 1024n * 1024n,
-			awarenessTokens: 40n,
-			leaseExpiresAt: sql`clock_timestamp() + interval '30 seconds'`,
+			awarenessTokens: 20n,
+			leaseExpiresAt: sql`LEAST(clock_timestamp() + interval '30 seconds', ${authorization.authorityExpiresAt})`,
 		})
 		.returning({ leaseExpiresAt: questpieCrdtSessionTable.leaseExpiresAt });
 	if (!session) throw rejected();
@@ -389,6 +408,7 @@ async function lockAuthorization(
 			currentEpochId: questpieCrdtResourceTable.currentEpochId,
 			readFence: questpieCrdtResourceTable.readFence,
 			editFence: questpieCrdtResourceTable.editFence,
+			ownerPolicyRevision: questpieCrdtResourceTable.ownerPolicyRevision,
 			sessionGeneration: questpieCrdtResourceTable.sessionGeneration,
 		})
 		.from(questpieCrdtResourceTable)
@@ -407,6 +427,7 @@ async function lockAuthorization(
 		resource.currentEpochId !== authorization.resourceEpochId ||
 		resource.readFence !== authorization.resourceReadFence ||
 		resource.editFence !== authorization.resourceEditFence ||
+		resource.ownerPolicyRevision !== authorization.ownerPolicyRevision ||
 		resource.sessionGeneration !== authorization.sessionGeneration
 	) {
 		throw rejected();
@@ -478,9 +499,19 @@ async function lockAuthorization(
 				eq(questpieCrdtSubjectFenceTable.subjectId, authorization.subjectId),
 			),
 		)
-		.orderBy(asc(questpieCrdtSubjectFenceTable.scopeKind))
+		.orderBy(
+			asc(questpieCrdtSubjectFenceTable.scopeKind),
+			asc(questpieCrdtSubjectFenceTable.stableFieldId),
+		)
 		.for("update");
 	if (!equalSubjectFences(subjectFences, authorization)) throw rejected();
+	const [authorityClock] = await db
+		.select({
+			current: sql<boolean>`${authorization.authorityExpiresAt} > clock_timestamp()`,
+		})
+		.from(questpieCrdtResourceTable)
+		.where(eq(questpieCrdtResourceTable.id, authorization.resourceId));
+	if (!authorityClock?.current) throw rejected();
 }
 
 async function lockAdmissionHeads(
@@ -606,6 +637,23 @@ function snapshotAuthorization(
 ): CrdtAuthorizedTicketSnapshot {
 	if (
 		input.credentialFingerprint.byteLength !== 32 ||
+		!validUuid(input.resourceId) ||
+		!validUuid(input.resourceEpochId) ||
+		!validUuid(input.definitionId) ||
+		!validUuid(input.schemaId) ||
+		!validUuid(input.incarnationKey) ||
+		!validUuid(input.subjectId) ||
+		!(input.authorityExpiresAt instanceof Date) ||
+		!Number.isFinite(input.authorityExpiresAt.getTime()) ||
+		!nonnegativeBigints(
+			input.resourceReadFence,
+			input.resourceEditFence,
+			input.ownerPolicyRevision,
+			input.subjectReadFence,
+			input.subjectEditFence,
+			input.sessionGeneration,
+			input.headCommitSeq,
+		) ||
 		input.bindings.length === 0 ||
 		input.bindings.length > 32 ||
 		input.grants.length === 0 ||
@@ -614,7 +662,11 @@ function snapshotAuthorization(
 		byteLength(input.audience) > 255 ||
 		(input.origin !== null &&
 			(byteLength(input.origin) < 1 || byteLength(input.origin) > 2048)) ||
-		(input.requestedMode === "view" && input.effectiveMode !== "view")
+		(input.requestedMode === "view" && input.effectiveMode !== "view") ||
+		(input.effectiveMode === "view" &&
+			input.grants.some((grant) => grant.grant !== "view")) ||
+		(input.effectiveMode === "edit" &&
+			!input.grants.some((grant) => grant.grant === "edit"))
 	) {
 		throw new TypeError("Invalid CRDT ticket authorization snapshot");
 	}
@@ -622,8 +674,19 @@ function snapshotAuthorization(
 	const bindings = input.bindings.map((binding) => {
 		if (
 			binding.stableFieldId <= previousBinding ||
+			!validUuid(binding.bindingId) ||
+			!validUuid(binding.stableFieldId) ||
 			binding.fieldSlot < 1 ||
-			binding.fieldSlot > 65_535
+			binding.fieldSlot > 65_535 ||
+			!Number.isSafeInteger(binding.formatVersion) ||
+			binding.formatVersion < 0 ||
+			binding.formatVersion > 65_535 ||
+			!nonnegativeBigints(
+				binding.fieldEpoch,
+				binding.headFieldCursor,
+				binding.fieldReadFence,
+				binding.fieldEditFence,
+			)
 		) {
 			throw new TypeError("Invalid CRDT ticket authorization binding cut");
 		}
@@ -637,8 +700,21 @@ function snapshotAuthorization(
 		);
 		if (
 			grant.stableFieldId <= previous ||
+			!validUuid(grant.bindingId) ||
+			!validUuid(grant.stableFieldId) ||
 			grant.fieldSlot < 1 ||
 			grant.fieldSlot > 65_535 ||
+			!Number.isSafeInteger(grant.formatVersion) ||
+			grant.formatVersion < 0 ||
+			grant.formatVersion > 65_535 ||
+			!nonnegativeBigints(
+				grant.fieldEpoch,
+				grant.headFieldCursor,
+				grant.fieldReadFence,
+				grant.fieldEditFence,
+				grant.subjectFieldReadFence,
+				grant.subjectFieldEditFence,
+			) ||
 			(grant.grant !== "view" && grant.grant !== "edit") ||
 			!binding ||
 			!equalGrantBinding(grant, binding)
@@ -651,6 +727,7 @@ function snapshotAuthorization(
 	return Object.freeze({
 		...input,
 		credentialFingerprint: Buffer.from(input.credentialFingerprint),
+		authorityExpiresAt: new Date(input.authorityExpiresAt),
 		bindings: Object.freeze(bindings),
 		grants: Object.freeze(grants),
 	});
@@ -765,6 +842,16 @@ function modeValue(mode: CrdtMode): 1 | 2 {
 
 function byteLength(value: string): number {
 	return Buffer.byteLength(value, "utf8");
+}
+
+function validUuid(value: string): boolean {
+	return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+		value,
+	);
+}
+
+function nonnegativeBigints(...values: bigint[]): boolean {
+	return values.every((value) => typeof value === "bigint" && value >= 0n);
 }
 
 function rejected(): CrdtTicketRejectedError {

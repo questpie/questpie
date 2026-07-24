@@ -10,7 +10,11 @@ export interface CrdtHostSocketPeerV1 {
 }
 
 export interface CrdtHostSocketSessionV1 {
-	message(data: Uint8Array): void | Promise<void>;
+	message(
+		data: Uint8Array,
+	):
+		| Readonly<{ authenticated: boolean }>
+		| Promise<Readonly<{ authenticated: boolean }>>;
 	drain(): void | Promise<void>;
 	close(code: number, reason: string): void | Promise<void>;
 }

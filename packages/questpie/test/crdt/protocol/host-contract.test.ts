@@ -13,6 +13,7 @@ describe("CRDT host contract", () => {
 		const session: CrdtHostSocketSessionV1 = {
 			message: async (data) => {
 				expect(data).toEqual(Uint8Array.of(1));
+				return { authenticated: true };
 			},
 			drain: async () => {},
 			close: async () => {},

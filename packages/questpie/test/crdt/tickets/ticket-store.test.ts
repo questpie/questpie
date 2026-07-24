@@ -192,9 +192,11 @@ describe("CRDT durable ticket admission", () => {
 				protocolMinor: 0,
 				resourceReadFence: 0n,
 				resourceEditFence: 0n,
+				ownerPolicyRevision: 0n,
 				subjectReadFence: 0n,
 				subjectEditFence: 0n,
 				sessionGeneration: 0n,
+				authorityExpiresAt: new Date(Date.now() + 60_000),
 				expiresAt: new Date(Date.now() + 60_000),
 			})),
 		);
@@ -237,6 +239,41 @@ describe("CRDT durable ticket admission", () => {
 				authorization({ credentialFingerprint: Buffer.alloc(32, 31) }),
 			),
 		).rejects.toBeInstanceOf(CrdtTicketRejectedError);
+	});
+
+	it("rejects an authorization snapshot when an ordinary owner write won the race", async () => {
+		const store = createCrdtTicketAdmissionStore(db, {
+			secretKey: SECRET_KEY,
+		});
+		await db.execute(sql`
+			UPDATE questpie_crdt_resource
+			SET owner_policy_revision = owner_policy_revision + 1
+			WHERE id = ${ID.resource}
+		`);
+
+		await expect(store.issue(authorization())).rejects.toBeInstanceOf(
+			CrdtTicketRejectedError,
+		);
+		const issued = await store.issue(
+			authorization({ ownerPolicyRevision: 1n }),
+		);
+		expect(issued.ticket).toBeString();
+	});
+
+	it("requires effective mode to agree with the persisted field grants", async () => {
+		const base = authorization();
+		await expect(
+			createCrdtTicketAdmissionStore(db, { secretKey: SECRET_KEY }).issue({
+				...base,
+				effectiveMode: "view",
+			}),
+		).rejects.toBeInstanceOf(TypeError);
+		await expect(
+			createCrdtTicketAdmissionStore(db, { secretKey: SECRET_KEY }).issue({
+				...base,
+				grants: base.grants.map((grant) => ({ ...grant, grant: "view" })),
+			}),
+		).rejects.toBeInstanceOf(TypeError);
 	});
 
 	it("revalidates hidden policy inputs without leaking them into ticket grants", async () => {
@@ -354,7 +391,9 @@ function authorization(
 		resourceEditFence: 0n,
 		subjectReadFence: 0n,
 		subjectEditFence: 0n,
+		ownerPolicyRevision: 0n,
 		sessionGeneration: 0n,
+		authorityExpiresAt: new Date(Date.now() + 60_000),
 		headCommitSeq: 0n,
 		bindings: [
 			{

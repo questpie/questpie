@@ -1,12 +1,12 @@
 import { migration } from "questpie/services"
 import type { OperationSnapshot } from "questpie/migration"
 import { sql } from "drizzle-orm"
-import snapshotJson from "./snapshots/20260724T020129_happy_orange_griffin.json"
+import snapshotJson from "./snapshots/20260724T085242_crdt-collaboration-kernel.json"
 
 const snapshot = snapshotJson as OperationSnapshot
 
 export default migration({
-	id: "happyOrangeGriffin20260724T020129",
+	id: "crdtCollaborationKernel20260724T085242",
 	async up({ db }) {
 		await db.execute(sql`CREATE TABLE "questpie_crdt_namespace" (
 	"singleton" smallint PRIMARY KEY,
@@ -66,6 +66,7 @@ export default migration({
 );`)
 		await db.execute(sql`CREATE TABLE "questpie_crdt_resource" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+	"incarnation_key" uuid DEFAULT gen_random_uuid() NOT NULL,
 	"definition_id" uuid NOT NULL,
 	"locator" text NOT NULL,
 	"locator_hash" bytea NOT NULL,
@@ -75,13 +76,15 @@ export default migration({
 	"current_epoch_status" smallint,
 	"read_fence" bigint DEFAULT 0 NOT NULL,
 	"edit_fence" bigint DEFAULT 0 NOT NULL,
+	"owner_policy_revision" bigint DEFAULT 0 NOT NULL,
+	"session_generation" bigint DEFAULT 0 NOT NULL,
 	"retired_at" timestamp with time zone,
 	"created_at" timestamp(3) DEFAULT now() NOT NULL,
 	"updated_at" timestamp(3) DEFAULT now() NOT NULL,
 	CONSTRAINT "ck_crdt_resource_locator" CHECK (octet_length("locator") BETWEEN 1 AND 4096 AND octet_length("locator_hash") = 32),
 	CONSTRAINT "ck_crdt_resource_status" CHECK ("status" IN (1, 2, 3)),
 	CONSTRAINT "ck_crdt_resource_retirement" CHECK (("status" = 1 AND "retired_at" IS NULL AND "current_epoch_id" IS NOT NULL AND "current_epoch_status" = 1) OR ("status" = 2 AND "retired_at" IS NOT NULL AND (("current_epoch_id" IS NULL AND "current_epoch_status" IS NULL) OR ("current_epoch_id" IS NOT NULL AND "current_epoch_status" = 2))) OR ("status" = 3 AND "retired_at" IS NULL AND (("current_epoch_id" IS NULL AND "current_epoch_status" IS NULL) OR ("current_epoch_id" IS NOT NULL AND "current_epoch_status" = 1)))),
-	CONSTRAINT "ck_crdt_resource_fences" CHECK ("read_fence" >= 0 AND "edit_fence" >= 0)
+	CONSTRAINT "ck_crdt_resource_fences" CHECK ("read_fence" >= 0 AND "edit_fence" >= 0 AND "owner_policy_revision" >= 0 AND "session_generation" >= 0)
 );`)
 		await db.execute(sql`CREATE TABLE "questpie_crdt_resource_epoch" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -342,18 +345,24 @@ export default migration({
 	"audience" text NOT NULL,
 	"origin" text,
 	"requested_mode" smallint NOT NULL,
+	"effective_mode" smallint NOT NULL,
 	"protocol_major" smallint NOT NULL,
 	"protocol_minor" smallint NOT NULL,
 	"resource_read_fence" bigint NOT NULL,
 	"resource_edit_fence" bigint NOT NULL,
+	"owner_policy_revision" bigint NOT NULL,
+	"subject_read_fence" bigint NOT NULL,
+	"subject_edit_fence" bigint NOT NULL,
 	"session_generation" bigint NOT NULL,
+	"authority_expires_at" timestamp with time zone NOT NULL,
 	"expires_at" timestamp with time zone NOT NULL,
 	"redeemed_at" timestamp with time zone,
 	"released_at" timestamp with time zone,
 	"created_at" timestamp(3) DEFAULT now() NOT NULL,
 	CONSTRAINT "ck_crdt_ticket_hashes" CHECK (octet_length("secret_hash") = 32 AND octet_length("credential_fingerprint") = 32),
-	CONSTRAINT "ck_crdt_ticket_mode_protocol" CHECK ("requested_mode" IN (1, 2) AND "protocol_major" = 1 AND "protocol_minor" = 0),
-	CONSTRAINT "ck_crdt_ticket_state" CHECK ("released_at" IS NULL OR "redeemed_at" IS NOT NULL)
+	CONSTRAINT "ck_crdt_ticket_mode_protocol" CHECK ("requested_mode" IN (1, 2) AND "effective_mode" IN (1, 2) AND "effective_mode" <= "requested_mode" AND "protocol_major" = 1 AND "protocol_minor" = 0),
+	CONSTRAINT "ck_crdt_ticket_audience_origin" CHECK (octet_length("audience") BETWEEN 1 AND 255 AND ("origin" IS NULL OR octet_length("origin") BETWEEN 1 AND 2048)),
+	CONSTRAINT "ck_crdt_ticket_authority_expiry" CHECK ("expires_at" <= "authority_expires_at")
 );`)
 		await db.execute(sql`CREATE TABLE "questpie_crdt_ticket_grant" (
 	"ticket_id" uuid,
@@ -368,6 +377,8 @@ export default migration({
 	"head_field_cursor" bigint NOT NULL,
 	"field_read_fence" bigint NOT NULL,
 	"field_edit_fence" bigint NOT NULL,
+	"subject_field_read_fence" bigint NOT NULL,
+	"subject_field_edit_fence" bigint NOT NULL,
 	CONSTRAINT "questpie_crdt_ticket_grant_pkey" PRIMARY KEY("ticket_id","binding_id"),
 	CONSTRAINT "ck_crdt_ticket_grant_values" CHECK ("field_slot" BETWEEN 1 AND 65535 AND "format_version" BETWEEN 0 AND 65535 AND "grant" IN (0, 1))
 );`)
@@ -380,9 +391,14 @@ export default migration({
 	"subject_id" uuid NOT NULL,
 	"credential_fingerprint" bytea NOT NULL,
 	"requested_mode" smallint NOT NULL,
+	"effective_mode" smallint NOT NULL,
 	"generation" bigint NOT NULL,
 	"resource_read_fence" bigint NOT NULL,
 	"resource_edit_fence" bigint NOT NULL,
+	"owner_policy_revision" bigint NOT NULL,
+	"subject_read_fence" bigint NOT NULL,
+	"subject_edit_fence" bigint NOT NULL,
+	"authority_expires_at" timestamp with time zone NOT NULL,
 	"last_seen_commit_seq" bigint NOT NULL,
 	"update_tokens" bigint DEFAULT 0 NOT NULL,
 	"update_refilled_at" timestamp(3) DEFAULT now() NOT NULL,
@@ -395,8 +411,9 @@ export default migration({
 	"close_reason" smallint,
 	"created_at" timestamp(3) DEFAULT now() NOT NULL,
 	"updated_at" timestamp(3) DEFAULT now() NOT NULL,
-	CONSTRAINT "ck_crdt_session_values" CHECK ("requested_mode" IN (1, 2) AND "generation" >= 0 AND "last_seen_commit_seq" >= 0 AND octet_length("credential_fingerprint") = 32 AND "update_tokens" >= 0 AND "update_byte_tokens" >= 0 AND "awareness_tokens" >= 0),
-	CONSTRAINT "ck_crdt_session_closed" CHECK (("closed_at" IS NULL AND "close_reason" IS NULL) OR ("closed_at" IS NOT NULL AND "close_reason" IS NOT NULL))
+	CONSTRAINT "ck_crdt_session_values" CHECK ("requested_mode" IN (1, 2) AND "effective_mode" IN (1, 2) AND "effective_mode" <= "requested_mode" AND "generation" >= 0 AND "last_seen_commit_seq" >= 0 AND octet_length("credential_fingerprint") = 32 AND "update_tokens" >= 0 AND "update_byte_tokens" >= 0 AND "awareness_tokens" >= 0),
+	CONSTRAINT "ck_crdt_session_closed" CHECK (("closed_at" IS NULL AND "close_reason" IS NULL) OR ("closed_at" IS NOT NULL AND "close_reason" IS NOT NULL)),
+	CONSTRAINT "ck_crdt_session_authority_expiry" CHECK ("lease_expires_at" <= "authority_expires_at")
 );`)
 		await db.execute(sql`CREATE TABLE "questpie_crdt_session_grant" (
 	"session_id" uuid,
@@ -412,6 +429,8 @@ export default migration({
 	"head_field_cursor" bigint NOT NULL,
 	"field_read_fence" bigint NOT NULL,
 	"field_edit_fence" bigint NOT NULL,
+	"subject_field_read_fence" bigint NOT NULL,
+	"subject_field_edit_fence" bigint NOT NULL,
 	CONSTRAINT "questpie_crdt_session_grant_pkey" PRIMARY KEY("session_id","binding_id"),
 	CONSTRAINT "ck_crdt_session_grant_values" CHECK ("field_slot" BETWEEN 1 AND 65535 AND "format_version" BETWEEN 0 AND 65535 AND "grant" IN (0, 1))
 );`)
@@ -483,6 +502,7 @@ export default migration({
 		await db.execute(sql`CREATE UNIQUE INDEX "uq_crdt_subject_tuple" ON "questpie_crdt_subject" ("kind","issuer_key","subject_key");`)
 		await db.execute(sql`CREATE UNIQUE INDEX "uq_crdt_subject_hash" ON "questpie_crdt_subject" ("subject_hash");`)
 		await db.execute(sql`CREATE UNIQUE INDEX "uq_crdt_resource_definition_id" ON "questpie_crdt_resource" ("id","definition_id");`)
+		await db.execute(sql`CREATE UNIQUE INDEX "uq_crdt_resource_incarnation_key" ON "questpie_crdt_resource" ("incarnation_key");`)
 		await db.execute(sql`CREATE UNIQUE INDEX "uq_crdt_resource_current_locator" ON "questpie_crdt_resource" ("definition_id","locator_hash") WHERE "retired_at" IS NULL;`)
 		await db.execute(sql`CREATE INDEX "idx_crdt_resource_locator" ON "questpie_crdt_resource" ("definition_id","locator_hash");`)
 		await db.execute(sql`CREATE INDEX "idx_crdt_resource_retired" ON "questpie_crdt_resource" ("retired_at");`)
@@ -523,11 +543,11 @@ export default migration({
 		await db.execute(sql`CREATE INDEX "idx_crdt_recovery_hold_expiry" ON "questpie_crdt_recovery_hold" ("expires_at");`)
 		await db.execute(sql`CREATE UNIQUE INDEX "uq_crdt_ticket_resource_id" ON "questpie_crdt_ticket" ("id","resource_id");`)
 		await db.execute(sql`CREATE UNIQUE INDEX "uq_crdt_ticket_resource_schema" ON "questpie_crdt_ticket" ("id","resource_id","schema_id");`)
-		await db.execute(sql`CREATE UNIQUE INDEX "uq_crdt_ticket_session_identity" ON "questpie_crdt_ticket" ("id","resource_id","resource_epoch_id","schema_id","subject_id","credential_fingerprint","requested_mode","session_generation","resource_read_fence","resource_edit_fence");`)
+		await db.execute(sql`CREATE UNIQUE INDEX "uq_crdt_ticket_session_identity" ON "questpie_crdt_ticket" ("id","resource_id","resource_epoch_id","schema_id","subject_id","credential_fingerprint","requested_mode","effective_mode","session_generation","resource_read_fence","resource_edit_fence","owner_policy_revision","subject_read_fence","subject_edit_fence");`)
 		await db.execute(sql`CREATE INDEX "idx_crdt_ticket_subject_expiry" ON "questpie_crdt_ticket" ("subject_id","expires_at");`)
 		await db.execute(sql`CREATE INDEX "idx_crdt_ticket_resource_expiry" ON "questpie_crdt_ticket" ("resource_id","expires_at");`)
 		await db.execute(sql`CREATE UNIQUE INDEX "uq_crdt_ticket_grant_stable" ON "questpie_crdt_ticket_grant" ("ticket_id","resource_id","stable_field_id");`)
-		await db.execute(sql`CREATE UNIQUE INDEX "uq_crdt_ticket_grant_exact" ON "questpie_crdt_ticket_grant" ("ticket_id","resource_id","schema_id","binding_id","stable_field_id","field_epoch","field_slot","format_version","grant","head_field_cursor","field_read_fence","field_edit_fence");`)
+		await db.execute(sql`CREATE UNIQUE INDEX "uq_crdt_ticket_grant_exact" ON "questpie_crdt_ticket_grant" ("ticket_id","resource_id","schema_id","binding_id","stable_field_id","field_epoch","field_slot","format_version","grant","head_field_cursor","field_read_fence","field_edit_fence","subject_field_read_fence","subject_field_edit_fence");`)
 		await db.execute(sql`CREATE UNIQUE INDEX "uq_crdt_session_ticket" ON "questpie_crdt_session" ("ticket_id");`)
 		await db.execute(sql`CREATE UNIQUE INDEX "uq_crdt_session_resource_id" ON "questpie_crdt_session" ("id","resource_id");`)
 		await db.execute(sql`CREATE UNIQUE INDEX "uq_crdt_session_resource_schema" ON "questpie_crdt_session" ("id","resource_id","schema_id");`)
@@ -590,10 +610,10 @@ export default migration({
 		await db.execute(sql`ALTER TABLE "questpie_crdt_ticket" ADD CONSTRAINT "fk_crdt_ticket_schema" FOREIGN KEY ("definition_id","schema_id") REFERENCES "questpie_crdt_schema"("definition_id","id") ON DELETE RESTRICT;`)
 		await db.execute(sql`ALTER TABLE "questpie_crdt_ticket_grant" ADD CONSTRAINT "fk_crdt_ticket_grant_parent" FOREIGN KEY ("ticket_id","resource_id","schema_id") REFERENCES "questpie_crdt_ticket"("id","resource_id","schema_id") ON DELETE RESTRICT;`)
 		await db.execute(sql`ALTER TABLE "questpie_crdt_ticket_grant" ADD CONSTRAINT "fk_crdt_ticket_grant_binding" FOREIGN KEY ("resource_id","binding_id","schema_id","stable_field_id","field_epoch","field_slot","format_version") REFERENCES "questpie_crdt_binding"("resource_id","id","schema_id","stable_field_id","field_epoch","field_slot","format_version") ON DELETE RESTRICT;`)
-		await db.execute(sql`ALTER TABLE "questpie_crdt_session" ADD CONSTRAINT "fk_crdt_session_ticket" FOREIGN KEY ("ticket_id","resource_id","resource_epoch_id","schema_id","subject_id","credential_fingerprint","requested_mode","generation","resource_read_fence","resource_edit_fence") REFERENCES "questpie_crdt_ticket"("id","resource_id","resource_epoch_id","schema_id","subject_id","credential_fingerprint","requested_mode","session_generation","resource_read_fence","resource_edit_fence") ON DELETE RESTRICT;`)
+		await db.execute(sql`ALTER TABLE "questpie_crdt_session" ADD CONSTRAINT "fk_crdt_session_ticket" FOREIGN KEY ("ticket_id","resource_id","resource_epoch_id","schema_id","subject_id","credential_fingerprint","requested_mode","effective_mode","generation","resource_read_fence","resource_edit_fence","owner_policy_revision","subject_read_fence","subject_edit_fence") REFERENCES "questpie_crdt_ticket"("id","resource_id","resource_epoch_id","schema_id","subject_id","credential_fingerprint","requested_mode","effective_mode","session_generation","resource_read_fence","resource_edit_fence","owner_policy_revision","subject_read_fence","subject_edit_fence") ON DELETE RESTRICT;`)
 		await db.execute(sql`ALTER TABLE "questpie_crdt_session" ADD CONSTRAINT "fk_crdt_session_epoch" FOREIGN KEY ("resource_id","resource_epoch_id") REFERENCES "questpie_crdt_resource_epoch"("resource_id","id") ON DELETE RESTRICT;`)
 		await db.execute(sql`ALTER TABLE "questpie_crdt_session_grant" ADD CONSTRAINT "fk_crdt_session_grant_parent" FOREIGN KEY ("session_id","ticket_id","resource_id","schema_id") REFERENCES "questpie_crdt_session"("id","ticket_id","resource_id","schema_id") ON DELETE RESTRICT;`)
-		await db.execute(sql`ALTER TABLE "questpie_crdt_session_grant" ADD CONSTRAINT "fk_crdt_session_grant_ticket_grant" FOREIGN KEY ("ticket_id","resource_id","schema_id","binding_id","stable_field_id","field_epoch","field_slot","format_version","grant","head_field_cursor","field_read_fence","field_edit_fence") REFERENCES "questpie_crdt_ticket_grant"("ticket_id","resource_id","schema_id","binding_id","stable_field_id","field_epoch","field_slot","format_version","grant","head_field_cursor","field_read_fence","field_edit_fence") ON DELETE RESTRICT;`)
+		await db.execute(sql`ALTER TABLE "questpie_crdt_session_grant" ADD CONSTRAINT "fk_crdt_session_grant_ticket_grant" FOREIGN KEY ("ticket_id","resource_id","schema_id","binding_id","stable_field_id","field_epoch","field_slot","format_version","grant","head_field_cursor","field_read_fence","field_edit_fence","subject_field_read_fence","subject_field_edit_fence") REFERENCES "questpie_crdt_ticket_grant"("ticket_id","resource_id","schema_id","binding_id","stable_field_id","field_epoch","field_slot","format_version","grant","head_field_cursor","field_read_fence","field_edit_fence","subject_field_read_fence","subject_field_edit_fence") ON DELETE RESTRICT;`)
 		await db.execute(sql`ALTER TABLE "questpie_crdt_session_grant" ADD CONSTRAINT "fk_crdt_session_grant_binding" FOREIGN KEY ("resource_id","binding_id","schema_id","stable_field_id","field_epoch","field_slot","format_version") REFERENCES "questpie_crdt_binding"("resource_id","id","schema_id","stable_field_id","field_epoch","field_slot","format_version") ON DELETE RESTRICT;`)
 		await db.execute(sql`ALTER TABLE "questpie_crdt_awareness" ADD CONSTRAINT "fk_crdt_awareness_session" FOREIGN KEY ("session_id","resource_id") REFERENCES "questpie_crdt_session"("id","resource_id") ON DELETE RESTRICT;`)
 		await db.execute(sql`ALTER TABLE "questpie_crdt_awareness" ADD CONSTRAINT "fk_crdt_awareness_active_field" FOREIGN KEY ("session_id","resource_id","active_stable_field_id") REFERENCES "questpie_crdt_session_grant"("session_id","resource_id","stable_field_id") ON DELETE RESTRICT;`)

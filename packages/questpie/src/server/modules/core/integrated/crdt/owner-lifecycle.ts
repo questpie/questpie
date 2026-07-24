@@ -297,6 +297,8 @@ export class CrdtOwnerLifecycleTransaction {
 				currentEpochStatus: null,
 				readFence: sql`${questpieCrdtResourceTable.readFence} + 1`,
 				editFence: sql`${questpieCrdtResourceTable.editFence} + 1`,
+				ownerPolicyRevision: sql`${questpieCrdtResourceTable.ownerPolicyRevision} + 1`,
+				sessionGeneration: sql`${questpieCrdtResourceTable.sessionGeneration} + 1`,
 				retiredAt: sql`now()`,
 				updatedAt: sql`now()`,
 			})
@@ -432,11 +434,53 @@ export class CrdtOwnerLifecycleTransaction {
 				currentEpochStatus: 1,
 				readFence: sql`${questpieCrdtResourceTable.readFence} + 1`,
 				editFence: sql`${questpieCrdtResourceTable.editFence} + 1`,
+				ownerPolicyRevision: sql`${questpieCrdtResourceTable.ownerPolicyRevision} + 1`,
+				sessionGeneration: sql`${questpieCrdtResourceTable.sessionGeneration} + 1`,
 				retiredAt: null,
 				updatedAt: sql`now()`,
 			})
 			.where(eq(questpieCrdtResourceTable.id, resource.id));
 		return identity;
+	}
+
+	async advanceOwnerPolicyRevision(input: {
+		manifest: CrdtDesiredManifest;
+		locator: string;
+	}): Promise<bigint> {
+		const locator = canonicalLocator(input.manifest.owner.kind, input.locator);
+		const locatorHash = Buffer.from(sha256(new TextEncoder().encode(locator)));
+		const [advanced] = await this.db
+			.update(questpieCrdtResourceTable)
+			.set({
+				ownerPolicyRevision: sql`${questpieCrdtResourceTable.ownerPolicyRevision} + 1`,
+				updatedAt: sql`now()`,
+			})
+			.from(questpieCrdtDefinitionTable)
+			.where(
+				and(
+					eq(
+						questpieCrdtResourceTable.definitionId,
+						questpieCrdtDefinitionTable.id,
+					),
+					eq(questpieCrdtDefinitionTable.ownerKind, input.manifest.owner.kind),
+					eq(questpieCrdtDefinitionTable.ownerKey, input.manifest.owner.key),
+					eq(
+						questpieCrdtDefinitionTable.identityVersion,
+						input.manifest.owner.identityVersion,
+					),
+					eq(questpieCrdtResourceTable.locatorHash, locatorHash),
+					eq(questpieCrdtResourceTable.status, 1),
+					sql`${questpieCrdtResourceTable.retiredAt} IS NULL`,
+				),
+			)
+			.returning({
+				locator: questpieCrdtResourceTable.locator,
+				revision: questpieCrdtResourceTable.ownerPolicyRevision,
+			});
+		if (!advanced || advanced.locator !== locator) {
+			throw conflict("CRDT owner policy revision target is not active");
+		}
+		return advanced.revision;
 	}
 
 	private async createActiveEpoch(input: {
@@ -1187,6 +1231,8 @@ export class CrdtOwnerLifecycleTransaction {
 			.set({
 				readFence: sql`${questpieCrdtResourceTable.readFence} + 1`,
 				editFence: sql`${questpieCrdtResourceTable.editFence} + 1`,
+				ownerPolicyRevision: sql`${questpieCrdtResourceTable.ownerPolicyRevision} + 1`,
+				sessionGeneration: sql`${questpieCrdtResourceTable.sessionGeneration} + 1`,
 				updatedAt: sql`now()`,
 			})
 			.where(eq(questpieCrdtResourceTable.id, input.resourceId));
