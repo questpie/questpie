@@ -21,9 +21,12 @@ import type {
 } from "./manifest.js";
 import {
 	questpieCrdtBindingTable,
+	questpieCrdtCommitTable,
 	questpieCrdtDefinitionTable,
 	questpieCrdtResourceEpochTable,
 	questpieCrdtResourceTable,
+	questpieCrdtSchemaCompatibilityFieldTable,
+	questpieCrdtSchemaCompatibilityTable,
 	questpieCrdtSchemaFieldTable,
 	questpieCrdtSchemaTable,
 	questpieCrdtSessionTable,
@@ -33,6 +36,8 @@ import {
 
 type CrdtDatabase = AnyDrizzleClient<any>;
 type CrdtCanonicalValue = string | readonly string[];
+const MAX_AGGREGATE_SNAPSHOT_BYTES = 32 * 1024 * 1024;
+const SCHEMA_COMPATIBILITY_HORIZON_DAYS = 30;
 
 export type CrdtOwnerCanonicalState = Readonly<{
 	locator: string;
@@ -92,6 +97,13 @@ export async function stageCrdtOwnerActivation(input: {
 			});
 		}),
 	);
+	const totalBytes = fields.reduce(
+		(total, field) => total + field.stateBytes,
+		0,
+	);
+	if (totalBytes > MAX_AGGREGATE_SNAPSHOT_BYTES) {
+		throw new TypeError("CRDT aggregate snapshot exceeds 32 MiB");
+	}
 	const staged = Object.freeze({
 		resourceId: input.resourceId,
 		manifest: input.manifest,
@@ -164,16 +176,13 @@ export class CrdtOwnerLifecycleTransaction {
 			) {
 				throw conflict("CRDT resource incarnation already exists");
 			}
-			await this.assertExistingActivation({
+			return this.ensureExistingActivation({
 				resourceId: existing.id,
 				resourceEpochId: existing.currentEpochId,
+				definitionId,
 				schemaId,
+				staged,
 				fields: staged.fields,
-			});
-			return Object.freeze({
-				resourceId: existing.id,
-				resourceEpochId: existing.currentEpochId,
-				schemaId,
 			});
 		}
 
@@ -637,16 +646,22 @@ export class CrdtOwnerLifecycleTransaction {
 		return identity;
 	}
 
-	private async assertExistingActivation(input: {
+	private async ensureExistingActivation(input: {
 		resourceId: string;
 		resourceEpochId: string;
+		definitionId: string;
 		schemaId: string;
+		staged: StagedCrdtOwnerActivation;
 		fields: readonly StagedCrdtOwnerField[];
-	}): Promise<void> {
+	}): Promise<CrdtOwnerActivationIdentity> {
 		const [epoch] = await this.db
 			.select({
 				schemaId: questpieCrdtResourceEpochTable.schemaId,
 				status: questpieCrdtResourceEpochTable.status,
+				headCommitSeq: questpieCrdtResourceEpochTable.headCommitSeq,
+				projectedCommitSeq: questpieCrdtResourceEpochTable.projectedCommitSeq,
+				currentSnapshotManifestId:
+					questpieCrdtResourceEpochTable.currentSnapshotManifestId,
 			})
 			.from(questpieCrdtResourceEpochTable)
 			.where(
@@ -656,15 +671,11 @@ export class CrdtOwnerLifecycleTransaction {
 				),
 			)
 			.for("update");
-		if (!epoch || epoch.status !== 1 || epoch.schemaId !== input.schemaId) {
+		if (!epoch || epoch.status !== 1) {
 			throw conflict("existing CRDT activation has no current schema epoch");
 		}
 		const bindings = await this.db
-			.select({
-				schemaId: questpieCrdtBindingTable.schemaId,
-				stableFieldId: questpieCrdtBindingTable.stableFieldId,
-				canonicalHash: questpieCrdtBindingTable.canonicalHash,
-			})
+			.select()
 			.from(questpieCrdtBindingTable)
 			.where(
 				and(
@@ -672,17 +683,28 @@ export class CrdtOwnerLifecycleTransaction {
 					sql`${questpieCrdtBindingTable.retiredAt} IS NULL`,
 				),
 			)
-			.orderBy(questpieCrdtBindingTable.fieldSlot)
+			.orderBy(questpieCrdtBindingTable.stableFieldId)
 			.for("update");
+		if (epoch.schemaId !== input.schemaId) {
+			return this.transitionManifest({
+				...input,
+				sourceSchemaId: epoch.schemaId,
+				epoch,
+				bindings,
+			});
+		}
+		const fieldsByStableId = new Map(
+			input.fields.map((field) => [field.manifestField.stableFieldId, field]),
+		);
 		if (
 			bindings.length !== input.fields.length ||
-			bindings.some((binding, index) => {
-				const field = input.fields[index];
+			bindings.some((binding) => {
+				const field = fieldsByStableId.get(binding.stableFieldId);
 				return (
 					!field ||
 					binding.schemaId !== input.schemaId ||
 					binding.stableFieldId !== field.manifestField.stableFieldId ||
-					!equalBytes(binding.canonicalHash, field.canonicalHash)
+					!equalBytes(binding.projectedCanonicalHash, field.canonicalHash)
 				);
 			})
 		) {
@@ -690,6 +712,503 @@ export class CrdtOwnerLifecycleTransaction {
 				"existing CRDT activation does not match the locked owner",
 			);
 		}
+		return Object.freeze({
+			resourceId: input.resourceId,
+			resourceEpochId: input.resourceEpochId,
+			schemaId: input.schemaId,
+		});
+	}
+
+	private async transitionManifest(input: {
+		resourceId: string;
+		resourceEpochId: string;
+		definitionId: string;
+		sourceSchemaId: string;
+		schemaId: string;
+		staged: StagedCrdtOwnerActivation;
+		fields: readonly StagedCrdtOwnerField[];
+		epoch: {
+			headCommitSeq: bigint;
+			projectedCommitSeq: bigint;
+			currentSnapshotManifestId: string | null;
+		};
+		bindings: Array<typeof questpieCrdtBindingTable.$inferSelect>;
+	}): Promise<CrdtOwnerActivationIdentity> {
+		if (
+			input.epoch.headCommitSeq !== input.epoch.projectedCommitSeq ||
+			!input.epoch.currentSnapshotManifestId
+		) {
+			throw conflict(
+				"CRDT manifest transition requires a fully projected verified cut",
+			);
+		}
+		for (const binding of input.bindings) {
+			if (
+				binding.schemaId !== input.sourceSchemaId ||
+				binding.status !== 1 ||
+				binding.headFieldCursor !== binding.projectedFieldCursor ||
+				binding.canonicalRevision !== binding.projectedCanonicalRevision ||
+				!equalBytes(binding.canonicalHash, binding.projectedCanonicalHash)
+			) {
+				throw conflict(
+					"CRDT manifest transition source binding is not quiescent",
+				);
+			}
+		}
+
+		const sourceSchemaFields = await this.db
+			.select()
+			.from(questpieCrdtSchemaFieldTable)
+			.where(eq(questpieCrdtSchemaFieldTable.schemaId, input.sourceSchemaId));
+		const targetSchemaFields = await this.db
+			.select()
+			.from(questpieCrdtSchemaFieldTable)
+			.where(eq(questpieCrdtSchemaFieldTable.schemaId, input.schemaId));
+		const [sourceSchema] = await this.db
+			.select()
+			.from(questpieCrdtSchemaTable)
+			.where(eq(questpieCrdtSchemaTable.id, input.sourceSchemaId));
+		const [targetSchema] = await this.db
+			.select()
+			.from(questpieCrdtSchemaTable)
+			.where(eq(questpieCrdtSchemaTable.id, input.schemaId));
+		if (
+			!sourceSchema ||
+			!targetSchema ||
+			sourceSchema.definitionId !== input.definitionId ||
+			targetSchema.definitionId !== input.definitionId ||
+			targetSchema.schemaVersion <= sourceSchema.schemaVersion
+		) {
+			throw conflict("CRDT manifest transition schema order is invalid");
+		}
+		const sourceFieldsByStableId = new Map(
+			sourceSchemaFields.map((field) => [field.stableFieldId, field]),
+		);
+		const targetFieldsByStableId = new Map(
+			targetSchemaFields.map((field) => [field.stableFieldId, field]),
+		);
+		const stagedByStableId = new Map(
+			input.fields.map((field) => [field.manifestField.stableFieldId, field]),
+		);
+		const sourceBindingsByStableId = new Map(
+			input.bindings.map((binding) => [binding.stableFieldId, binding]),
+		);
+		if (
+			sourceSchemaFields.length !== input.bindings.length ||
+			sourceFieldsByStableId.size !== sourceSchemaFields.length ||
+			sourceSchemaFields.some(
+				(field) => !sourceBindingsByStableId.has(field.stableFieldId),
+			)
+		) {
+			throw conflict("CRDT source schema binding set is incomplete");
+		}
+		for (const binding of input.bindings) {
+			const sourceField = sourceFieldsByStableId.get(binding.stableFieldId);
+			const targetField = targetFieldsByStableId.get(binding.stableFieldId);
+			const stagedField = stagedByStableId.get(binding.stableFieldId);
+			if (
+				!sourceField ||
+				!targetField ||
+				!stagedField ||
+				sourceField.fieldSlot !== targetField.fieldSlot ||
+				sourceField.format !== targetField.format ||
+				sourceField.formatVersion !== targetField.formatVersion ||
+				!equalBytes(
+					sourceField.codecFingerprint,
+					targetField.codecFingerprint,
+				) ||
+				!equalBytes(binding.projectedCanonicalHash, stagedField.canonicalHash)
+			) {
+				throw conflict("CRDT manifest transition is not compatibility-safe");
+			}
+		}
+		if (
+			targetSchemaFields.length !== input.fields.length ||
+			targetSchemaFields.some(
+				(field) => !stagedByStableId.has(field.stableFieldId),
+			)
+		) {
+			throw conflict("CRDT target schema fields are incomplete");
+		}
+
+		const [sourceManifest] = await this.db
+			.select()
+			.from(questpieCrdtSnapshotManifestTable)
+			.where(
+				and(
+					eq(
+						questpieCrdtSnapshotManifestTable.id,
+						input.epoch.currentSnapshotManifestId,
+					),
+					eq(questpieCrdtSnapshotManifestTable.resourceId, input.resourceId),
+					eq(
+						questpieCrdtSnapshotManifestTable.resourceEpochId,
+						input.resourceEpochId,
+					),
+				),
+			);
+		if (
+			!sourceManifest ||
+			sourceManifest.status !== 2 ||
+			sourceManifest.schemaId !== input.sourceSchemaId ||
+			sourceManifest.coversCommitSeq !== input.epoch.headCommitSeq ||
+			sourceManifest.fieldCount !== input.bindings.length
+		) {
+			throw conflict(
+				"CRDT manifest transition source snapshot is not head-covering",
+			);
+		}
+		const sourceSnapshots = (
+			await this.db
+				.select()
+				.from(questpieCrdtSnapshotTable)
+				.where(eq(questpieCrdtSnapshotTable.manifestId, sourceManifest.id))
+		).map((snapshot) => ({
+			...snapshot,
+			bytes: Buffer.from(snapshot.bytes),
+			checksum: Buffer.from(snapshot.checksum),
+		}));
+		const sourceSnapshotsByBinding = new Map(
+			sourceSnapshots.map((snapshot) => [snapshot.bindingId, snapshot]),
+		);
+		if (
+			sourceSnapshots.length !== input.bindings.length ||
+			input.bindings.some((binding) => {
+				const snapshot = sourceSnapshotsByBinding.get(binding.id);
+				return (
+					!snapshot ||
+					snapshot.schemaId !== input.sourceSchemaId ||
+					snapshot.stableFieldId !== binding.stableFieldId ||
+					snapshot.fieldEpoch !== binding.fieldEpoch ||
+					snapshot.fieldCursor !== binding.headFieldCursor ||
+					snapshot.sizeBytes !== snapshot.bytes.byteLength ||
+					!equalBytes(snapshot.checksum, sha256(snapshot.bytes)) ||
+					snapshot.engineId !==
+						stagedByStableId.get(binding.stableFieldId)?.engineId ||
+					snapshot.engineVersion !==
+						stagedByStableId.get(binding.stableFieldId)?.engineVersion
+				);
+			})
+		) {
+			throw conflict("CRDT manifest transition source snapshot is invalid");
+		}
+		const sourceSnapshotCut = sourceSnapshots.map((snapshot) => ({
+			bindingId: snapshot.bindingId,
+			stableFieldId: snapshot.stableFieldId,
+			fieldEpoch: snapshot.fieldEpoch,
+			fieldSlot: snapshot.fieldSlot,
+			formatVersion: snapshot.formatVersion,
+			fieldCursor: snapshot.fieldCursor,
+			engineId: snapshot.engineId,
+			engineVersion: snapshot.engineVersion,
+			stateVersion: snapshot.stateVersion,
+			sizeBytes: snapshot.sizeBytes,
+			checksum: snapshot.checksum,
+		}));
+		if (
+			!equalBytes(
+				sourceManifest.checksum,
+				createCrdtSnapshotManifestChecksum({
+					resourceId: input.resourceId,
+					resourceEpochId: input.resourceEpochId,
+					schemaId: input.sourceSchemaId,
+					coversCommitSeq: input.epoch.headCommitSeq,
+					fields: sourceSnapshotCut,
+				}),
+			) ||
+			sourceManifest.totalBytes !==
+				sourceSnapshots.reduce(
+					(total, snapshot) => total + snapshot.sizeBytes,
+					0,
+				)
+		) {
+			throw conflict(
+				"CRDT manifest transition source manifest checksum is invalid",
+			);
+		}
+
+		const targetBindings = input.fields.map((field) => {
+			const targetSchemaField = targetFieldsByStableId.get(
+				field.manifestField.stableFieldId,
+			);
+			if (!targetSchemaField) {
+				throw conflict("CRDT target schema field registration is incomplete");
+			}
+			const sourceBinding = sourceBindingsByStableId.get(
+				field.manifestField.stableFieldId,
+			);
+			const sourceSnapshot = sourceBinding
+				? sourceSnapshotsByBinding.get(sourceBinding.id)
+				: undefined;
+			if (sourceBinding && !sourceSnapshot) {
+				throw conflict("CRDT source snapshot binding is missing");
+			}
+			return {
+				id: randomUUID(),
+				schemaFieldId: targetSchemaField.id,
+				field,
+				sourceBinding,
+				fieldEpoch: sourceBinding ? sourceBinding.fieldEpoch + 1n : 1n,
+				fieldCursor: sourceBinding?.headFieldCursor ?? 0n,
+				snapshotBytes: Buffer.from(sourceSnapshot?.bytes ?? field.snapshot),
+				snapshotChecksum: Buffer.from(
+					sourceSnapshot?.checksum ?? field.snapshotChecksum,
+				),
+				engineId: sourceSnapshot?.engineId ?? field.engineId,
+				engineVersion: sourceSnapshot?.engineVersion ?? field.engineVersion,
+				stateVersion: sourceSnapshot?.stateVersion ?? field.stateVersion,
+			};
+		});
+		const totalBytes = targetBindings.reduce(
+			(total, binding) => total + binding.snapshotBytes.byteLength,
+			0,
+		);
+		if (totalBytes > MAX_AGGREGATE_SNAPSHOT_BYTES) {
+			throw conflict("CRDT target aggregate snapshot exceeds 32 MiB");
+		}
+
+		await this.db
+			.update(questpieCrdtBindingTable)
+			.set({
+				status: 2,
+				readFence: sql`${questpieCrdtBindingTable.readFence} + 1`,
+				editFence: sql`${questpieCrdtBindingTable.editFence} + 1`,
+				retiredAt: sql`now()`,
+				updatedAt: sql`now()`,
+			})
+			.where(
+				and(
+					eq(questpieCrdtBindingTable.resourceId, input.resourceId),
+					sql`${questpieCrdtBindingTable.retiredAt} IS NULL`,
+				),
+			);
+		await this.db.insert(questpieCrdtBindingTable).values(
+			targetBindings.map((binding) => ({
+				id: binding.id,
+				resourceId: input.resourceId,
+				definitionId: input.definitionId,
+				schemaId: input.schemaId,
+				schemaFieldId: binding.schemaFieldId,
+				stableFieldId: binding.field.manifestField.stableFieldId,
+				fieldSlot: binding.field.manifestField.fieldSlot,
+				sourcePath: binding.field.manifestField.sourcePath,
+				format: formatNumber(binding.field.manifestField.format),
+				formatVersion: binding.field.manifestField.formatVersion,
+				fieldEpoch: binding.fieldEpoch,
+				headFieldCursor: binding.fieldCursor,
+				projectedFieldCursor: binding.fieldCursor,
+				readFence: (binding.sourceBinding?.readFence ?? -1n) + 1n,
+				editFence: (binding.sourceBinding?.editFence ?? -1n) + 1n,
+				canonicalHash: Buffer.from(binding.field.canonicalHash),
+				canonicalRevision: binding.sourceBinding?.canonicalRevision ?? 0n,
+				projectedCanonicalHash: Buffer.from(binding.field.canonicalHash),
+				projectedCanonicalRevision:
+					binding.sourceBinding?.projectedCanonicalRevision ?? 0n,
+				status: 1,
+				stateBytes: BigInt(binding.snapshotBytes.byteLength),
+				elementCount:
+					binding.sourceBinding?.elementCount ??
+					BigInt(binding.field.elementCount),
+			})),
+		);
+
+		const manifestCommitSeq = input.epoch.headCommitSeq + 1n;
+		const targetSnapshotFields = targetBindings.map((binding) => ({
+			bindingId: binding.id,
+			stableFieldId: binding.field.manifestField.stableFieldId,
+			fieldEpoch: binding.fieldEpoch,
+			fieldSlot: binding.field.manifestField.fieldSlot,
+			formatVersion: binding.field.manifestField.formatVersion,
+			fieldCursor: binding.fieldCursor,
+			engineId: binding.engineId,
+			engineVersion: binding.engineVersion,
+			stateVersion: binding.stateVersion,
+			sizeBytes: binding.snapshotBytes.byteLength,
+			checksum: binding.snapshotChecksum,
+		}));
+		const targetManifestChecksum = createCrdtSnapshotManifestChecksum({
+			resourceId: input.resourceId,
+			resourceEpochId: input.resourceEpochId,
+			schemaId: input.schemaId,
+			coversCommitSeq: manifestCommitSeq,
+			fields: targetSnapshotFields,
+		});
+		const mapping = targetBindings
+			.filter(
+				(
+					binding,
+				): binding is typeof binding & {
+					sourceBinding: NonNullable<typeof binding.sourceBinding>;
+				} => !!binding.sourceBinding,
+			)
+			.map((binding) => ({
+				stableFieldId: binding.field.manifestField.stableFieldId,
+				sourceBindingId: binding.sourceBinding.id,
+				sourceFieldEpoch: binding.sourceBinding.fieldEpoch.toString(),
+				targetBindingId: binding.id,
+				targetFieldEpoch: binding.fieldEpoch.toString(),
+				fieldSlot: binding.field.manifestField.fieldSlot,
+				formatVersion: binding.field.manifestField.formatVersion,
+			}))
+			.sort((left, right) => left.fieldSlot - right.fieldSlot);
+		const controlPayload = {
+			version: 1,
+			kind: "manifest_change",
+			sourceSchemaId: input.sourceSchemaId,
+			sourceSchemaFingerprint: Buffer.from(
+				sourceSchema.schemaFingerprint,
+			).toString("hex"),
+			targetSchemaId: input.schemaId,
+			targetSchemaFingerprint: Buffer.from(
+				targetSchema.schemaFingerprint,
+			).toString("hex"),
+			targetSnapshotChecksum: Buffer.from(targetManifestChecksum).toString(
+				"hex",
+			),
+			mapping,
+		};
+		const controlHash = createCrdtManifestChangeControlHash({
+			resourceId: input.resourceId,
+			resourceEpochId: input.resourceEpochId,
+			commitSeq: manifestCommitSeq,
+			payload: controlPayload,
+		});
+		await this.db.insert(questpieCrdtCommitTable).values({
+			resourceId: input.resourceId,
+			resourceEpochId: input.resourceEpochId,
+			definitionId: input.definitionId,
+			commitSeq: manifestCommitSeq,
+			kind: 4,
+			schemaId: input.schemaId,
+			canonicalBundleHash: Buffer.from(controlHash),
+			deliveryCommitId: randomUUID(),
+			controlPayload,
+		});
+
+		const compatibilityId = randomUUID();
+		await this.db.insert(questpieCrdtSchemaCompatibilityTable).values({
+			id: compatibilityId,
+			resourceId: input.resourceId,
+			resourceEpochId: input.resourceEpochId,
+			definitionId: input.definitionId,
+			sourceSchemaId: input.sourceSchemaId,
+			targetSchemaId: input.schemaId,
+			manifestCommitSeq,
+			manifestCommitKind: 4,
+			expiresAt: sql`clock_timestamp() + (${SCHEMA_COMPATIBILITY_HORIZON_DAYS} * interval '1 day')`,
+		});
+		if (mapping.length > 0) {
+			await this.db.insert(questpieCrdtSchemaCompatibilityFieldTable).values(
+				mapping.map((entry) => {
+					const sourceBinding = sourceBindingsByStableId.get(
+						entry.stableFieldId,
+					)!;
+					const targetBinding = targetBindings.find(
+						(candidate) =>
+							candidate.field.manifestField.stableFieldId ===
+							entry.stableFieldId,
+					)!;
+					return {
+						compatibilityId,
+						resourceId: input.resourceId,
+						sourceSchemaId: input.sourceSchemaId,
+						sourceSchemaFieldId: sourceBinding.schemaFieldId,
+						sourceBindingId: sourceBinding.id,
+						sourceFieldEpoch: sourceBinding.fieldEpoch,
+						sourceFieldSlot: sourceBinding.fieldSlot,
+						sourceFormatVersion: sourceBinding.formatVersion,
+						targetSchemaId: input.schemaId,
+						targetSchemaFieldId: targetBinding.schemaFieldId,
+						targetBindingId: targetBinding.id,
+						targetFieldEpoch: targetBinding.fieldEpoch,
+						targetFieldSlot: targetBinding.field.manifestField.fieldSlot,
+						targetFormatVersion:
+							targetBinding.field.manifestField.formatVersion,
+					};
+				}),
+			);
+		}
+
+		const targetManifestId = randomUUID();
+		await this.db.insert(questpieCrdtSnapshotManifestTable).values({
+			id: targetManifestId,
+			resourceId: input.resourceId,
+			resourceEpochId: input.resourceEpochId,
+			definitionId: input.definitionId,
+			schemaId: input.schemaId,
+			coversCommitSeq: manifestCommitSeq,
+			status: 2,
+			totalBytes,
+			fieldCount: targetBindings.length,
+			checksum: Buffer.from(targetManifestChecksum),
+			leaseGeneration: 0n,
+			verifiedAt: sql`now()`,
+		});
+		await this.db.insert(questpieCrdtSnapshotTable).values(
+			targetBindings.map((binding) => ({
+				manifestId: targetManifestId,
+				resourceId: input.resourceId,
+				resourceEpochId: input.resourceEpochId,
+				schemaId: input.schemaId,
+				bindingId: binding.id,
+				stableFieldId: binding.field.manifestField.stableFieldId,
+				fieldEpoch: binding.fieldEpoch,
+				fieldSlot: binding.field.manifestField.fieldSlot,
+				formatVersion: binding.field.manifestField.formatVersion,
+				fieldCursor: binding.fieldCursor,
+				engineId: binding.engineId,
+				engineVersion: binding.engineVersion,
+				stateVersion: binding.stateVersion,
+				bytes: binding.snapshotBytes,
+				sizeBytes: binding.snapshotBytes.byteLength,
+				checksum: binding.snapshotChecksum,
+			})),
+		);
+		await this.db
+			.update(questpieCrdtResourceEpochTable)
+			.set({
+				schemaId: input.schemaId,
+				headCommitSeq: manifestCommitSeq,
+				projectedCommitSeq: manifestCommitSeq,
+				previousSnapshotManifestId: sourceManifest.id,
+				previousSnapshotStatus: 2,
+				currentSnapshotManifestId: targetManifestId,
+				currentSnapshotStatus: 2,
+				updatedAt: sql`now()`,
+			})
+			.where(
+				and(
+					eq(questpieCrdtResourceEpochTable.resourceId, input.resourceId),
+					eq(questpieCrdtResourceEpochTable.id, input.resourceEpochId),
+				),
+			);
+		await this.db
+			.update(questpieCrdtResourceTable)
+			.set({
+				readFence: sql`${questpieCrdtResourceTable.readFence} + 1`,
+				editFence: sql`${questpieCrdtResourceTable.editFence} + 1`,
+				updatedAt: sql`now()`,
+			})
+			.where(eq(questpieCrdtResourceTable.id, input.resourceId));
+		await this.db
+			.update(questpieCrdtSessionTable)
+			.set({
+				closedAt: sql`now()`,
+				closeReason: 2,
+				updatedAt: sql`now()`,
+			})
+			.where(
+				and(
+					eq(questpieCrdtSessionTable.resourceId, input.resourceId),
+					sql`${questpieCrdtSessionTable.closedAt} IS NULL`,
+				),
+			);
+
+		return Object.freeze({
+			resourceId: input.resourceId,
+			resourceEpochId: input.resourceEpochId,
+			schemaId: input.schemaId,
+		});
 	}
 }
 
@@ -912,6 +1431,47 @@ function formatNumber(format: CrdtEngineFormat): 1 | 2 {
 
 function compareUtf8(left: string, right: string): number {
 	return Buffer.compare(Buffer.from(left, "utf8"), Buffer.from(right, "utf8"));
+}
+
+export function createCrdtManifestChangeControlHash(input: {
+	resourceId: string;
+	resourceEpochId: string;
+	commitSeq: bigint;
+	payload: unknown;
+}): Uint8Array {
+	const hash = createHash("sha256");
+	hash.update("questpie-crdt-manifest-change-v1\0");
+	hash.update(input.resourceId);
+	hash.update("\0");
+	hash.update(input.resourceEpochId);
+	hash.update("\0");
+	hash.update(input.commitSeq.toString());
+	hash.update("\0");
+	hash.update(canonicalJson(input.payload));
+	return hash.digest();
+}
+
+function canonicalJson(value: unknown): string {
+	if (value === null) return "null";
+	if (typeof value === "string") return JSON.stringify(value);
+	if (typeof value === "boolean") return value ? "true" : "false";
+	if (typeof value === "number") {
+		if (!Number.isSafeInteger(value)) {
+			throw new TypeError("CRDT control payload numbers must be safe integers");
+		}
+		return String(value);
+	}
+	if (Array.isArray(value)) {
+		return `[${value.map(canonicalJson).join(",")}]`;
+	}
+	if (typeof value === "object") {
+		const record = value as Record<string, unknown>;
+		const keys = Object.keys(record).sort(compareUtf8);
+		return `{${keys
+			.map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
+			.join(",")}}`;
+	}
+	throw new TypeError("CRDT control payload is not canonical JSON");
 }
 
 function sha256(value: Uint8Array): Uint8Array {
