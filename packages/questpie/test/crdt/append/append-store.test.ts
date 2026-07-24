@@ -406,6 +406,64 @@ describe("CRDT atomic append store", () => {
 		expect(textEngine.project(authoritative.replica)).toBe("Shared");
 	});
 
+	it("falls back from a corrupt current manifest to the verified previous one", async () => {
+		const [epoch] = await db
+			.select()
+			.from(questpieCrdtResourceEpochTable)
+			.where(eq(questpieCrdtResourceEpochTable.id, fixture.resourceEpochId));
+		const corruptManifestId = "00000000-0000-4000-8000-000000000312";
+		const corruptBytes = new Uint8Array([0xff]);
+		await db.insert(questpieCrdtSnapshotManifestTable).values({
+			id: corruptManifestId,
+			resourceId: RESOURCE_ID,
+			resourceEpochId: fixture.resourceEpochId,
+			definitionId: fixture.definitionId,
+			schemaId: fixture.schemaId,
+			coversCommitSeq: 0n,
+			status: 2,
+			totalBytes: corruptBytes.byteLength,
+			fieldCount: 1,
+			checksum: Buffer.alloc(32, 0x62),
+			leaseGeneration: 0n,
+			verifiedAt: new Date(),
+		});
+		await db.insert(questpieCrdtSnapshotTable).values({
+			manifestId: corruptManifestId,
+			resourceId: RESOURCE_ID,
+			resourceEpochId: fixture.resourceEpochId,
+			schemaId: fixture.schemaId,
+			bindingId: fixture.binding.id,
+			stableFieldId: fixture.binding.stableFieldId,
+			fieldEpoch: 1n,
+			fieldSlot: fixture.binding.fieldSlot,
+			formatVersion: fixture.binding.formatVersion,
+			fieldCursor: 0n,
+			engineId: textEngine.engineId,
+			engineVersion: textEngine.engineVersion,
+			stateVersion: textEngine.stateVersion,
+			bytes: corruptBytes,
+			sizeBytes: corruptBytes.byteLength,
+			checksum: createHash("sha256").update(corruptBytes).digest(),
+		});
+		await db
+			.update(questpieCrdtResourceEpochTable)
+			.set({
+				currentSnapshotManifestId: corruptManifestId,
+				currentSnapshotStatus: 2,
+				previousSnapshotManifestId: epoch!.currentSnapshotManifestId,
+				previousSnapshotStatus: 2,
+			})
+			.where(eq(questpieCrdtResourceEpochTable.id, fixture.resourceEpochId));
+
+		const authoritative = await loadCrdtAuthoritativeReplica(db, {
+			bindingId: fixture.binding.id,
+			engine: textEngine,
+		});
+
+		expect(authoritative.replica.basis.fieldCursor).toBe(0n);
+		expect(textEngine.project(authoritative.replica)).toBe("Shared");
+	});
+
 	it("requires current read authority before returning an exact retry receipt", async () => {
 		const store = createCrdtAppendStore(db, { lockOwnerRow });
 		const staged = await appendInput(fixture);
@@ -611,6 +669,18 @@ const postgresUrl =
 	process.env.QUESTPIE_CRDT_DATABASE_URL ??
 	process.env.QUESTPIE_TRANSACTION_LOCK_DATABASE_URL;
 
+function postgresPoolConfig(url: string): pg.PoolConfig {
+	const parsed = new URL(url);
+	return {
+		database: parsed.pathname.slice(1),
+		host: parsed.hostname,
+		password: decodeURIComponent(parsed.password),
+		port: parsed.port ? Number(parsed.port) : 5432,
+		ssl: parsed.searchParams.get("sslmode") === "require",
+		user: decodeURIComponent(parsed.username),
+	};
+}
+
 describe.skipIf(!postgresUrl)(
 	"CRDT atomic append store on PostgreSQL 15+",
 	() => {
@@ -623,7 +693,8 @@ describe.skipIf(!postgresUrl)(
 		let pgFixture: Awaited<ReturnType<typeof seedFixture>>;
 
 		beforeAll(async () => {
-			admin = new pg.Pool({ connectionString: postgresUrl, max: 1 });
+			const poolConfig = postgresPoolConfig(postgresUrl!);
+			admin = new pg.Pool({ ...poolConfig, max: 1 });
 			const version = await admin.query<{ server_version_num: string }>(
 				"show server_version_num",
 			);
@@ -632,17 +703,23 @@ describe.skipIf(!postgresUrl)(
 			).toBeGreaterThanOrEqual(150_000);
 			await admin.query(`CREATE SCHEMA "${schemaName}"`);
 			firstPool = new pg.Pool({
-				connectionString: postgresUrl,
+				...poolConfig,
 				max: 4,
 				options: `-c search_path=${schemaName}`,
 			});
 			secondPool = new pg.Pool({
-				connectionString: postgresUrl,
+				...poolConfig,
 				max: 4,
 				options: `-c search_path=${schemaName}`,
 			});
-			firstDb = drizzlePg(firstPool, { schema: questpieCrdtTables });
-			secondDb = drizzlePg(secondPool, { schema: questpieCrdtTables });
+			firstDb = drizzlePg({
+				client: firstPool,
+				schema: questpieCrdtTables,
+			});
+			secondDb = drizzlePg({
+				client: secondPool,
+				schema: questpieCrdtTables,
+			});
 			const { generateDrizzleJson, generateMigration } =
 				await import("drizzle-kit/api-postgres");
 			const empty = {

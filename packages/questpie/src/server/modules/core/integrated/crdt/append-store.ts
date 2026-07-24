@@ -195,6 +195,7 @@ export async function loadCrdtAuthoritativeReplica(
 		);
 	if (!epoch) throw rejected();
 	let snapshot: typeof questpieCrdtSnapshotTable.$inferSelect | undefined;
+	let replica: CrdtEngineReplica<CrdtEngineFormat, any> | undefined;
 	for (const manifestId of [epoch.current, epoch.previous]) {
 		if (!manifestId) continue;
 		const [manifest] = await db
@@ -213,7 +214,7 @@ export async function loadCrdtAuthoritativeReplica(
 				),
 			);
 		if (!manifest) continue;
-		[snapshot] = await db
+		const [candidateSnapshot] = await db
 			.select()
 			.from(questpieCrdtSnapshotTable)
 			.where(
@@ -225,23 +226,40 @@ export async function loadCrdtAuthoritativeReplica(
 				),
 			)
 			.limit(1);
-		if (snapshot) break;
+		if (
+			!candidateSnapshot ||
+			candidateSnapshot.engineId !== input.engine.engineId ||
+			candidateSnapshot.formatVersion !== input.engine.formatVersion ||
+			!equalBytes(sha256(candidateSnapshot.bytes), candidateSnapshot.checksum)
+		) {
+			continue;
+		}
+		try {
+			const restored = await input.engine.restore({
+				snapshot: new Uint8Array(candidateSnapshot.bytes),
+				basis: {
+					fieldEpoch: candidateSnapshot.fieldEpoch,
+					fieldCursor: candidateSnapshot.fieldCursor,
+				},
+			});
+			if (
+				restored.engineId !== input.engine.engineId ||
+				restored.format !== input.engine.format ||
+				restored.formatVersion !== input.engine.formatVersion ||
+				restored.basis.fieldEpoch !== candidateSnapshot.fieldEpoch ||
+				restored.basis.fieldCursor !== candidateSnapshot.fieldCursor ||
+				!equalBytes(restored.state, candidateSnapshot.bytes)
+			) {
+				continue;
+			}
+			snapshot = candidateSnapshot;
+			replica = restored;
+			break;
+		} catch {
+			continue;
+		}
 	}
-	if (
-		!snapshot ||
-		snapshot.engineId !== input.engine.engineId ||
-		snapshot.formatVersion !== input.engine.formatVersion ||
-		!equalBytes(sha256(snapshot.bytes), snapshot.checksum)
-	) {
-		throw rejected();
-	}
-	let replica = await input.engine.restore({
-		snapshot: new Uint8Array(snapshot.bytes),
-		basis: {
-			fieldEpoch: snapshot.fieldEpoch,
-			fieldCursor: snapshot.fieldCursor,
-		},
-	});
+	if (!snapshot || !replica) throw rejected();
 	const updates = await db
 		.select()
 		.from(questpieCrdtUpdateTable)
