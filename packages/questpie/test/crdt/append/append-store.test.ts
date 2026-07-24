@@ -13,9 +13,14 @@ import { createHash, randomUUID } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
 import { eq, sql } from "drizzle-orm";
 import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
+import { pgTable, text } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 import pg from "pg";
 
+import {
+	getCurrentTransaction,
+	withTransaction,
+} from "../../../src/server/collection/crud/shared/transaction.js";
 import type { AnyDrizzleClient } from "../../../src/server/config/types.js";
 import {
 	createCrdtAppendStore,
@@ -37,6 +42,7 @@ import {
 	stageCrdtOwnerActivation,
 } from "../../../src/server/modules/core/integrated/crdt/owner-lifecycle.js";
 import { createCrdtProjectionStore } from "../../../src/server/modules/core/integrated/crdt/projection-store.js";
+import { createQuestpieProjectionOwnerPort } from "../../../src/server/modules/core/integrated/crdt/questpie-projection-owner.js";
 import {
 	questpieCrdtBindingTable,
 	questpieCrdtCommitTable,
@@ -64,6 +70,11 @@ const TICKET_ID = "00000000-0000-4000-8000-000000000303";
 const SESSION_ID = "00000000-0000-4000-8000-000000000304";
 const UPDATE_ID = "00000000-0000-4000-8000-000000000305";
 const textEngine = createDeterministicTextEngine();
+const articlesTable = pgTable("articles", {
+	id: text("id").primaryKey(),
+	title: text("title").notNull(),
+	content: text("content").notNull(),
+});
 const declarations = {
 	owner: { kind: 1 as const, key: "articles", identityVersion: 1 },
 	fields: {
@@ -256,10 +267,7 @@ describe("CRDT atomic append store", () => {
 							)!;
 							return [
 								candidate.bindingId,
-								{
-									hash: new Uint8Array(current.projectedCanonicalHash),
-									canonicalRevision: current.projectedCanonicalRevision,
-								},
+								new Uint8Array(current.projectedCanonicalHash),
 							];
 						}),
 					),
@@ -310,6 +318,61 @@ describe("CRDT atomic append store", () => {
 		);
 	});
 
+	it("writes the owner and realtime outbox through one managed transaction", async () => {
+		let notified = 0;
+		let appendTransaction: unknown;
+		const realtimeEvent = {
+			seq: 1,
+			resourceType: "collection" as const,
+			resource: "articles",
+			operation: "update" as const,
+			recordId: "article-1",
+			payload: { origin: "crdt_projection" as const },
+			createdAt: new Date(),
+		};
+		const app = {
+			db,
+			collections: {
+				articles: {
+					"~internalState": { name: "articles" },
+					"~internalRelatedTable": articlesTable,
+				},
+			},
+			globals: {},
+			realtime: {
+				appendChange: async () => {
+					appendTransaction = getCurrentTransaction();
+					return realtimeEvent;
+				},
+				notify: async () => {
+					notified++;
+				},
+			},
+		};
+		const ownerPort = createQuestpieProjectionOwnerPort(app as any);
+		let transaction: unknown;
+		await withTransaction(db, async (tx) => {
+			transaction = tx;
+			const owner = await ownerPort.lock(tx, { resourceId: RESOURCE_ID });
+			await ownerPort.writeCanonical(
+				tx,
+				owner,
+				new Map([["title", "projected"]]),
+			);
+			await ownerPort.appendRealtimeChange(tx, owner, {
+				origin: "crdt_projection",
+				resourceId: RESOURCE_ID,
+				resourceEpochId: fixture.resourceEpochId,
+				commitSeq: 1n,
+			});
+			expect(notified).toBe(0);
+		});
+		expect(appendTransaction).toBe(transaction);
+		expect(notified).toBe(1);
+		const rows = await db.select().from(articlesTable);
+		expect(rows[0]?.title).toBe("projected");
+	});
+
 	it("suspends the whole aggregate before writing when any raw field drifts", async () => {
 		await createCrdtAppendStore(db, { lockOwnerRow }).append(
 			await appendInput(fixture),
@@ -342,10 +405,7 @@ describe("CRDT atomic append store", () => {
 					new Map(
 						bindings.map((binding) => [
 							binding.bindingId,
-							{
-								hash: new Uint8Array(32).fill(0xff),
-								canonicalRevision: 0n,
-							},
+							new Uint8Array(32).fill(0xff),
 						]),
 					),
 				writeCanonical: async () => {

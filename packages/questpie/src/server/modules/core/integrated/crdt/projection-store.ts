@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 
 import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
+import { withTransaction } from "#questpie/server/collection/crud/shared/transaction.js";
 import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
 import {
 	type CrdtEngineFormat,
@@ -52,12 +53,7 @@ export type CrdtProjectionOwnerPort<TOwner> = Readonly<{
 			sourcePath: string;
 			format: 1 | 2;
 		}>[],
-	): Promise<
-		ReadonlyMap<
-			string,
-			Readonly<{ hash: Uint8Array; canonicalRevision: bigint }>
-		>
-	>;
+	): Promise<ReadonlyMap<string, Uint8Array>>;
 	writeCanonical(
 		transaction: CrdtDatabase,
 		owner: TOwner,
@@ -241,7 +237,7 @@ export function createCrdtProjectionStore<TOwner>(
 					};
 				},
 				commit: (prepared) =>
-					db.transaction((tx) =>
+					withTransaction(db, (tx) =>
 						commitProjection(tx as CrdtDatabase, prepared, options.owner),
 					),
 			});
@@ -475,12 +471,8 @@ async function commitProjection<TOwner>(
 		})),
 	);
 	const rawConflict = bindings.some((binding) => {
-		const raw = rawHashes.get(binding.id);
-		return (
-			!raw ||
-			!equalBytes(raw.hash, binding.projectedCanonicalHash) ||
-			raw.canonicalRevision !== binding.projectedCanonicalRevision
-		);
+		const rawHash = rawHashes.get(binding.id);
+		return !rawHash || !equalBytes(rawHash, binding.projectedCanonicalHash);
 	});
 	if (rawConflict) {
 		await suspendAggregate(db, claim.resourceId);

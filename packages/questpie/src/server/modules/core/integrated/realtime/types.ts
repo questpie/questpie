@@ -23,6 +23,7 @@ export type RealtimeEqualityProjection = Record<string, RealtimeEqualityValue>;
  * bulk changes carry only their affected ids and count.
  */
 export type RealtimeChangePayload = {
+	origin?: "crdt_projection" | "crdt_replace";
 	before?: RealtimeEqualityProjection | null;
 	after?: RealtimeEqualityProjection | null;
 	count?: number;
