@@ -41,8 +41,9 @@ type RunResult = {
 	conflict: number;
 	durationMs: number;
 	failed: number;
-	latenciesMs: number[];
 	notFound: number;
+	p50Ms: number;
+	p95Ms: number;
 	peakRssBytes: number;
 	purged: number;
 };
@@ -52,6 +53,7 @@ const DEFAULT_ROWS = 1_000;
 const DEFAULT_PAGE_SIZE = 100;
 const DEFAULT_CONCURRENCY = 4;
 const MAX_CONCURRENCY = 32;
+const LATENCY_RELATIVE_ACCURACY = 0.01;
 
 const rows = collection("purge_bench_rows")
 	.fields(({ f }) => ({
@@ -72,14 +74,48 @@ function positiveInteger(
 	return parsed;
 }
 
-function percentile(samples: number[], quantile: number): number {
-	if (samples.length === 0) return 0;
-	const sorted = [...samples].sort((left, right) => left - right);
-	const index = Math.min(
-		sorted.length - 1,
-		Math.max(0, Math.ceil(quantile * sorted.length) - 1),
+function positiveIntegerList(
+	name: string,
+	value: string | undefined,
+	fallback: number[],
+): number[] {
+	if (value === undefined) return fallback;
+	const entries = value.split(",").map((entry) => entry.trim());
+	if (entries.length === 0 || entries.some((entry) => entry.length === 0)) {
+		throw new Error(`${name} must be a comma-separated integer list`);
+	}
+	return entries.map((entry, index) =>
+		positiveInteger(`${name}[${index}]`, entry, 0),
 	);
-	return sorted[index]!;
+}
+
+class LatencySketch {
+	private readonly buckets = new Map<number, number>();
+	private readonly logGamma = Math.log(
+		(1 + LATENCY_RELATIVE_ACCURACY) / (1 - LATENCY_RELATIVE_ACCURACY),
+	);
+	private count = 0;
+
+	observe(valueMs: number): void {
+		const bucket = Math.ceil(
+			Math.log(Math.max(valueMs, Number.EPSILON)) / this.logGamma,
+		);
+		this.buckets.set(bucket, (this.buckets.get(bucket) ?? 0) + 1);
+		this.count += 1;
+	}
+
+	percentile(quantile: number): number {
+		if (this.count === 0) return 0;
+		const rank = Math.max(1, Math.ceil(quantile * this.count));
+		let seen = 0;
+		for (const [bucket, count] of [...this.buckets].sort(
+			([left], [right]) => left - right,
+		)) {
+			seen += count;
+			if (seen >= rank) return Math.exp(bucket * this.logGamma);
+		}
+		return 0;
+	}
 }
 
 function rounded(value: number, digits = 2): number {
@@ -125,7 +161,7 @@ async function assertDisposableDatabase(pool: Pool): Promise<void> {
 				SELECT count(*)::text
 				FROM pg_catalog.pg_class c
 				JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-				WHERE c.relkind IN ('r', 'p')
+				WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
 					AND n.nspname NOT IN ('pg_catalog', 'information_schema')
 					AND n.nspname !~ '^pg_toast'
 			) AS user_table_count
@@ -229,7 +265,10 @@ async function seedDeletedRows(
 			return {
 				id: randomUUID(),
 				title: `Purge benchmark row ${index}`,
-				deletedAt: new Date(cutoff.getTime() - (rowCount - index) * 1_000),
+				// Equal timestamps exercise the `(deletedAt, id)` tie-break path.
+				deletedAt: new Date(
+					cutoff.getTime() - (rowCount - Math.floor(index / 10)) * 1_000,
+				),
 			};
 		});
 		await app.db.insert(rows.table).values(values);
@@ -281,7 +320,7 @@ async function runBoundedPurge(
 	},
 ): Promise<RunResult> {
 	const context = createTestContext({ accessMode: "system" });
-	const latenciesMs: number[] = [];
+	const latencies = new LatencySketch();
 	let cursor: Cursor | null = null;
 	let purged = 0;
 	let notFound = 0;
@@ -310,10 +349,11 @@ async function runBoundedPurge(
 			if (page.length === 0) break;
 
 			let nextIndex = 0;
+			let fatalError: unknown;
 			const workers = Array.from(
 				{ length: Math.min(input.concurrency, page.length) },
 				async () => {
-					while (true) {
+					while (fatalError === undefined) {
 						const item = page[nextIndex];
 						nextIndex += 1;
 						if (!item) return;
@@ -332,15 +372,16 @@ async function runBoundedPurge(
 								conflict += 1;
 							} else {
 								failed += 1;
-								throw error;
+								fatalError ??= error;
 							}
 						} finally {
-							latenciesMs.push(performance.now() - itemStartedAt);
+							latencies.observe(performance.now() - itemStartedAt);
 						}
 					}
 				},
 			);
-			await Promise.all(workers);
+			await Promise.allSettled(workers);
+			if (fatalError !== undefined) throw fatalError;
 
 			const last = page.at(-1)!;
 			if (!last.deletedAt) {
@@ -358,8 +399,9 @@ async function runBoundedPurge(
 		conflict,
 		durationMs: performance.now() - startedAt,
 		failed,
-		latenciesMs,
 		notFound,
+		p50Ms: latencies.percentile(0.5),
+		p95Ms: latencies.percentile(0.95),
 		peakRssBytes,
 		purged,
 	};
@@ -396,8 +438,8 @@ async function benchmarkCase(
 		concurrency: input.concurrency,
 		durationMs: rounded(result.durationMs),
 		rowsPerSecond: rounded((result.purged / result.durationMs) * 1_000),
-		p50Ms: rounded(percentile(result.latenciesMs, 0.5)),
-		p95Ms: rounded(percentile(result.latenciesMs, 0.95)),
+		p50Ms: rounded(result.p50Ms),
+		p95Ms: rounded(result.p95Ms),
 		purged: result.purged,
 		notFound: result.notFound,
 		conflict: result.conflict,
@@ -438,74 +480,84 @@ async function main(): Promise<void> {
 		max: 2,
 		application_name: "questpie-purge-benchmark-control",
 	});
-	await assertDisposableDatabase(pool);
-
-	const concurrency = positiveInteger(
-		"PURGE_BENCH_CONCURRENCY",
-		process.env.PURGE_BENCH_CONCURRENCY,
-		DEFAULT_CONCURRENCY,
-	);
-	if (concurrency > MAX_CONCURRENCY) {
-		throw new Error(
-			`PURGE_BENCH_CONCURRENCY must not exceed ${MAX_CONCURRENCY}; increase only after reviewing pool and database headroom`,
-		);
-	}
-
-	const matrix = process.argv.includes("--matrix")
-		? [1_000, 10_000, 100_000].flatMap((rowCount) =>
-				[25, 100, 250].map((pageSize) => ({
-					concurrency,
-					pageSize,
-					rowCount,
-				})),
-			)
-		: [
-				{
-					concurrency,
-					pageSize: positiveInteger(
-						"PURGE_BENCH_PAGE_SIZE",
-						process.env.PURGE_BENCH_PAGE_SIZE,
-						DEFAULT_PAGE_SIZE,
-					),
-					rowCount: positiveInteger(
-						"PURGE_BENCH_ROWS",
-						process.env.PURGE_BENCH_ROWS,
-						DEFAULT_ROWS,
-					),
-				},
-			];
-
-	const setup = await buildMockApp(
-		{ collections: { purge_bench_rows: rows } },
-		{
-			db: {
-				url: databaseUrl,
-				pool: {
-					max: Math.max(4, concurrency + 2),
-					connectionTimeoutMs: 10_000,
-				},
-			},
-		},
-	);
-
 	try {
-		await runTestDbMigrations(setup.app);
+		await assertDisposableDatabase(pool);
+
+		const concurrency = positiveInteger(
+			"PURGE_BENCH_CONCURRENCY",
+			process.env.PURGE_BENCH_CONCURRENCY,
+			DEFAULT_CONCURRENCY,
+		);
+		if (concurrency > MAX_CONCURRENCY) {
+			throw new Error(
+				`PURGE_BENCH_CONCURRENCY must not exceed ${MAX_CONCURRENCY}; increase only after reviewing pool and database headroom`,
+			);
+		}
+
+		const matrix = process.argv.includes("--matrix")
+			? positiveIntegerList(
+					"PURGE_BENCH_MATRIX_ROWS",
+					process.env.PURGE_BENCH_MATRIX_ROWS,
+					[1_000, 10_000, 100_000],
+				).flatMap((rowCount) =>
+					positiveIntegerList(
+						"PURGE_BENCH_MATRIX_PAGE_SIZES",
+						process.env.PURGE_BENCH_MATRIX_PAGE_SIZES,
+						[25, 100, 250],
+					).map((pageSize) => ({
+						concurrency,
+						pageSize,
+						rowCount,
+					})),
+				)
+			: [
+					{
+						concurrency,
+						pageSize: positiveInteger(
+							"PURGE_BENCH_PAGE_SIZE",
+							process.env.PURGE_BENCH_PAGE_SIZE,
+							DEFAULT_PAGE_SIZE,
+						),
+						rowCount: positiveInteger(
+							"PURGE_BENCH_ROWS",
+							process.env.PURGE_BENCH_ROWS,
+							DEFAULT_ROWS,
+						),
+					},
+				];
+
 		const results: Array<Record<string, number | string | null>> = [];
 		for (const benchmark of matrix) {
 			console.log(
 				`Running ${benchmark.rowCount.toLocaleString()} rows, page ${benchmark.pageSize}, concurrency ${benchmark.concurrency}`,
 			);
-			results.push(await benchmarkCase(setup.app, pool, benchmark));
+			const setup = await buildMockApp(
+				{ collections: { purge_bench_rows: rows } },
+				{
+					db: {
+						url: databaseUrl,
+						pool: {
+							max: Math.max(4, concurrency + 2),
+							connectionTimeoutMs: 10_000,
+						},
+					},
+				},
+			);
+			try {
+				await runTestDbMigrations(setup.app);
+				results.push(await benchmarkCase(setup.app, pool, benchmark));
+			} finally {
+				try {
+					await setup.app.migrations.down();
+				} finally {
+					await setup.cleanup();
+				}
+			}
 		}
 		console.table(results);
 		console.log(JSON.stringify({ results }, null, 2));
 	} finally {
-		try {
-			await setup.app.migrations.down();
-		} finally {
-			await setup.cleanup();
-			await pool.end();
-		}
+		await pool.end();
 	}
 }
 
