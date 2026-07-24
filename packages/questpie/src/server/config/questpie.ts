@@ -37,6 +37,7 @@ import {
 	createCrdtRegistry,
 	type CrdtRegistry,
 } from "#questpie/server/modules/core/integrated/crdt/registry.js";
+import { questpieCrdtTables } from "#questpie/server/modules/core/integrated/crdt/schema.js";
 import type { ExecutorService } from "#questpie/server/modules/core/integrated/executor/service.js";
 import type { KVService } from "#questpie/server/modules/core/integrated/kv/service.js";
 import type { LoggerService } from "#questpie/server/modules/core/integrated/logger/service.js";
@@ -1244,7 +1245,12 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		schema.questpie_channel_presence = questpieChannelPresenceTable;
 		schema.questpie_realtime_topology = questpieRealtimeTopologyTable;
 
-		// 4. Add search tables if adapter provides local storage schemas
+		// 4. CRDT recovery history is framework-owned and must remain in the
+		// migration graph even when the current app has no collaborative owner.
+		// Conditional removal would generate destructive DROP TABLE migrations.
+		Object.assign(schema, questpieCrdtTables);
+
+		// 5. Add search tables if adapter provides local storage schemas
 		// Local adapters (Postgres, PgVector) return their tables for migration generation.
 		// External adapters (Meilisearch, Elasticsearch) don't need local tables.
 		const searchAdapter = this.search?.getAdapter();
@@ -1255,7 +1261,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			}
 		}
 
-		// 5. Add relations (Placeholder)
+		// 6. Add relations (Placeholder)
 		// To enable, import { relations } from 'drizzle-orm' and uncomment logic
 
 		return schema;

@@ -65,6 +65,7 @@ import _mig_20260712T094709_bold_red_griffin from "../migrations/20260712T094709
 import _mig_20260712T195414_eager_red_tiger from "../migrations/20260712T195414_eager_red_tiger";
 import _mig_20260721T210432_swift_blue_zebra from "../migrations/20260721T210432_swift_blue_zebra";
 import _mig_20260721T220717_bright_pink_tiger from "../migrations/20260721T220717_bright_pink_tiger";
+import _mig_20260724T020129_happy_orange_griffin from "../migrations/20260724T020129_happy_orange_griffin";
 
 // ── Seeds ──────────────────────────────────────────────────
 import _seed_blogPosts from "../seeds/blog-posts";
@@ -154,9 +155,14 @@ export type HookRuleContext<K extends keyof AppCollections | unknown = unknown> 
  * Use with `createClient<AppConfig>()` and `createAdminAuthClient<AppConfig>()`.
  * For handler context, use `AppContext` (auto-typed via module augmentation).
  */
+export type AppCrdt = CrdtRegistryFromApp<{ collections: AppCollections; globals: AppGlobals }>;
+export type AppCrdtClient = CrdtClientAPI<AppCrdt>;
+export type AppCrdtServer = CrdtServerAPI<AppCrdt>;
+
 export type AppConfig = {
 	collections: AppCollections;
 	channels: AppChannels;
+	crdt: AppCrdt;
 	globals: AppGlobals;
 	routes: AppRoutes;
 	storage: (typeof _runtime)["storage"];
@@ -204,7 +210,7 @@ _appPromise = createApp(
 			appointmentConfirmation: _email_appointmentConfirmation,
 			newBlogPost: _email_newBlogPost,
 		},
-		migrations: [_mig_20260206T174642_gentle_azure_eagle, _mig_20260206T180920_fancy_green_tiger, _mig_20260211T100836_calm_blue_phoenix, _mig_20260218T195452_calm_blue_dragon, _mig_20260218T223923_fancy_blue_panda, _mig_20260218T235924_kind_crimson_falcon, _mig_20260307T122102_eager_red_eagle, _mig_20260307T135142_fancy_orange_tiger, _mig_20260424T221327_bold_yellow_phoenix, _mig_20260427T093217_eager_blue_phoenix, _mig_20260429T170546_kind_yellow_eagle, _mig_20260615T084209_swift_orange_eagle, _mig_20260712T094709_bold_red_griffin, _mig_20260712T195414_eager_red_tiger, _mig_20260721T210432_swift_blue_zebra, _mig_20260721T220717_bright_pink_tiger],
+		migrations: [_mig_20260206T174642_gentle_azure_eagle, _mig_20260206T180920_fancy_green_tiger, _mig_20260211T100836_calm_blue_phoenix, _mig_20260218T195452_calm_blue_dragon, _mig_20260218T223923_fancy_blue_panda, _mig_20260218T235924_kind_crimson_falcon, _mig_20260307T122102_eager_red_eagle, _mig_20260307T135142_fancy_orange_tiger, _mig_20260424T221327_bold_yellow_phoenix, _mig_20260427T093217_eager_blue_phoenix, _mig_20260429T170546_kind_yellow_eagle, _mig_20260615T084209_swift_orange_eagle, _mig_20260712T094709_bold_red_griffin, _mig_20260712T195414_eager_red_tiger, _mig_20260721T210432_swift_blue_zebra, _mig_20260721T220717_bright_pink_tiger, _mig_20260724T020129_happy_orange_griffin],
 		seeds: [_seed_blogPosts, _seed_demoData, _seed_siteSettings],
 		fieldTypes: {
 			color: _ftype_color,

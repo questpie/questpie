@@ -59,6 +59,7 @@ import _mig_20260712T094709_bold_red_griffin from "../migrations/20260712T094709
 import _mig_20260712T195414_eager_red_tiger from "../migrations/20260712T195414_eager_red_tiger";
 import _mig_20260721T210432_swift_blue_zebra from "../migrations/20260721T210432_swift_blue_zebra";
 import _mig_20260721T220717_bright_pink_tiger from "../migrations/20260721T220717_bright_pink_tiger";
+import _mig_20260724T020129_happy_orange_griffin from "../migrations/20260724T020129_happy_orange_griffin";
 
 // ── Seeds ──────────────────────────────────────────────────
 import _seed_blogPosts from "../seeds/blog-posts";
@@ -100,7 +101,7 @@ import _mcpConfig from "../config/mcp";
 import _openapi from "../config/openapi";
 
 import type { AppCollections, AppChannels, AppGlobals, AppJobs, _ModuleCollections, _AppDefaultServices, _AppServicesSeam, _AppTopLevelServices, _AppCustomServiceNamespaces, AppEmailTemplates, _Registry_Collections, _Registry_Channels, _Registry_Globals, _Registry_Jobs, _Registry_Routes, _Registry_Services, _Registry_Emails, _Registry_FieldTypes, _Registry_Views, _Registry_Components, _Registry_Blocks, _Registry_McpTools, _AllModuleFields } from "./entities.gen";
-import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";
+import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AuthorityActor, CollectionAPI, CrdtClientAPI, CrdtRegistryFromApp, CrdtServerAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Principal, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";
 import type { ChannelsService } from "questpie/channels";
 
 type _MPSubModules<M> = M extends { modules: infer S extends readonly any[] } ? S : readonly [];
@@ -180,6 +181,8 @@ type _AppInfraRecord = {
 
 	// Request-scoped
 	session: _AppSession;
+	principal?: Principal;
+	actor?: AuthorityActor;
 	t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
 
 	// User services
