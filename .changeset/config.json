@@ -10,6 +10,7 @@
 			"questpie",
 			"@questpie/admin",
 			"@questpie/ai",
+			"@questpie/crdt-yjs",
 			"@questpie/elysia",
 			"@questpie/hono",
 			"@questpie/mcp",

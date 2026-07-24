@@ -1,0 +1,43 @@
+{
+	"name": "@questpie/crdt-yjs",
+	"version": "3.16.0",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/questpie/questpie.git",
+		"directory": "packages/crdt-yjs"
+	},
+	"files": [
+		"dist"
+	],
+	"type": "module",
+	"sideEffects": false,
+	"scripts": {
+		"build": "tsdown",
+		"check-types": "tsc --noEmit",
+		"test": "bun test"
+	},
+	"dependencies": {
+		"yjs": "13.6.31"
+	},
+	"devDependencies": {
+		"bun-types": "latest",
+		"questpie": "workspace:*",
+		"tsdown": "^0.18.3"
+	},
+	"peerDependencies": {
+		"questpie": "^3.16.0"
+	},
+	"main": "./dist/index.mjs",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.mts",
+	"exports": {
+		".": "./src/exports/index.ts",
+		"./package.json": "./package.json"
+	},
+	"publishConfig": {
+		"exports": {
+			".": "./dist/index.mjs",
+			"./package.json": "./package.json"
+		}
+	}
+}
