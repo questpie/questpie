@@ -38,6 +38,8 @@ import {
 import {
 	questpieCrdtBindingTable,
 	questpieCrdtCommitTable,
+	questpieCrdtProjectionFieldTable,
+	questpieCrdtProjectionTable,
 	questpieCrdtResourceAdmissionTable,
 	questpieCrdtResourceEpochTable,
 	questpieCrdtResourceTable,
@@ -167,6 +169,20 @@ describe("CRDT atomic append store", () => {
 			.from(questpieCrdtBindingTable)
 			.where(eq(questpieCrdtBindingTable.id, fixture.binding.id));
 		expect(epoch?.headCommitSeq).toBe(1n);
+		const [projection] = await db.select().from(questpieCrdtProjectionTable);
+		expect(projection?.targetCommitSeq).toBe(1n);
+		expect(projection?.status).toBe(1);
+		expect(projection!.dueAt.getTime() - Date.now()).toBeGreaterThan(3_000);
+		expect(projection!.dueAt.getTime() - Date.now()).toBeLessThanOrEqual(5_100);
+		const projectionFields = await db
+			.select()
+			.from(questpieCrdtProjectionFieldTable);
+		expect(projectionFields).toHaveLength(2);
+		expect(
+			projectionFields
+				.filter((field) => field.shouldWrite === 1)
+				.map((field) => field.targetFieldCursor),
+		).toEqual([1n]);
 		expect(epoch?.updateBytes).toBe(BigInt(appendUpdateBytes().byteLength));
 		expect(binding?.headFieldCursor).toBe(1n);
 		const [session] = await db

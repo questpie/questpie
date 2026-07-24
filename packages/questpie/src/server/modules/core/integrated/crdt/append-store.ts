@@ -17,6 +17,8 @@ import {
 import {
 	questpieCrdtBindingTable,
 	questpieCrdtCommitTable,
+	questpieCrdtProjectionFieldTable,
+	questpieCrdtProjectionTable,
 	questpieCrdtReceiptFieldTable,
 	questpieCrdtResourceAdmissionTable,
 	questpieCrdtResourceEpochTable,
@@ -818,6 +820,41 @@ async function appendTransaction(
 			updateBytes: sql`${questpieCrdtResourceEpochTable.updateBytes} + ${input.parts.reduce((size, part) => size + part.bytes.byteLength, 0)}`,
 		})
 		.where(eq(questpieCrdtResourceEpochTable.id, input.resourceEpochId));
+	const projectionId = randomUUID();
+	await db.insert(questpieCrdtProjectionTable).values({
+		id: projectionId,
+		resourceId: input.resourceId,
+		resourceEpochId: input.resourceEpochId,
+		schemaId: input.schemaId,
+		targetCommitSeq: commitSeq,
+		idempotencyKey: randomUUID(),
+		dueAt: sql`clock_timestamp() + interval '5 seconds'`,
+		leaseGeneration: 0n,
+	});
+	const partsByBinding = new Map(
+		input.parts.map((part) => [part.bindingId, part]),
+	);
+	await db.insert(questpieCrdtProjectionFieldTable).values(
+		activeBindings.map((binding) => {
+			const part = partsByBinding.get(binding.id);
+			return {
+				projectionId,
+				resourceId: input.resourceId,
+				schemaId: input.schemaId,
+				bindingId: binding.id,
+				stableFieldId: binding.stableFieldId,
+				fieldEpoch: binding.fieldEpoch,
+				fieldSlot: binding.fieldSlot,
+				formatVersion: binding.formatVersion,
+				targetFieldCursor: part
+					? part.baseFieldCursor + 1n
+					: binding.headFieldCursor,
+				expectedCanonicalHash: binding.projectedCanonicalHash,
+				expectedCanonicalRevision: binding.projectedCanonicalRevision,
+				shouldWrite: part ? 1 : 0,
+			};
+		}),
+	);
 	const [receipt] = await db
 		.insert(questpieCrdtUpdateReceiptTable)
 		.values({
