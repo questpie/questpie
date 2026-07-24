@@ -10,6 +10,10 @@ import {
 	separateNestedRelations,
 } from "#questpie/server/collection/crud/relation-mutations/nested-operations.js";
 import {
+	lockRelationSourceForWrite,
+	lockRelationTargetsForWrite,
+} from "#questpie/server/collection/crud/relation-mutations/purge-relations.js";
+import {
 	executeGlobalGlobalHooks,
 	executeGlobalGlobalTransitionHooks,
 } from "#questpie/server/collection/crud/shared/global-hooks.js";
@@ -988,6 +992,11 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			};
 
 			const updatedRecord = await withTransaction(db, async (tx: any) => {
+				await lockRelationSourceForWrite({
+					tx,
+					sourceState: this.state as any,
+					sourceTable: this.table,
+				});
 				if (!existing) {
 					// Serialize concurrent update auto-creates the same way get()
 					// does: take the lock first, then re-check inside the locked
@@ -997,6 +1006,15 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				}
 
 				const preparedFields = await prepareWrite(existing, tx);
+				if (this.app) {
+					await lockRelationTargetsForWrite({
+						tx,
+						app: this.app,
+						sourceState: this.state as any,
+						sourceTable: this.table,
+						values: preparedFields,
+					});
+				}
 				return writeRecord(tx, existing, preparedFields);
 			});
 			await this.ensureCrdtGlobal(db, normalized);

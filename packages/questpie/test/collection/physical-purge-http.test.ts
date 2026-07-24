@@ -16,6 +16,9 @@ const records = collection("purge_http_records")
 		delete: true,
 		purge: true,
 	});
+const hardRecords = collection("purge_http_hard_records")
+	.fields(({ f }) => ({ title: f.text().required() }))
+	.access({ purge: true });
 
 describe("physical purge HTTP contract", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
@@ -51,5 +54,26 @@ describe("physical purge HTTP contract", () => {
 				.select()
 				.from(setup.app.collections.records["~internalRelatedTable"]),
 		).toHaveLength(0);
+	});
+
+	it("fails closed with 501 for a collection without soft delete", async () => {
+		setup = await buildMockApp({
+			collections: { hardRecords },
+		});
+		await runTestDbMigrations(setup.app);
+		const handler = createFetchHandler(setup.app, {
+			accessMode: "system",
+		});
+
+		const response = await handler(
+			new Request(`http://localhost/hardRecords/${crypto.randomUUID()}/purge`, {
+				method: "POST",
+			}),
+		);
+
+		expect(response.status).toBe(501);
+		expect(await response.json()).toMatchObject({
+			error: expect.objectContaining({ code: "NOT_IMPLEMENTED" }),
+		});
 	});
 });

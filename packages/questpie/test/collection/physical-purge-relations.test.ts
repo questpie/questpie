@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 
-import { collection } from "../../src/exports/index.js";
+import { collection, global } from "../../src/exports/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createMockSession, createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -75,6 +75,68 @@ describe("physical purge relation safety", () => {
 		expect(parentRows).toHaveLength(1);
 		expect(childRows).toHaveLength(1);
 		expect(childRows[0]?.deletedAt).toBeInstanceOf(Date);
+	});
+
+	it("uses the registered collection key when inventorying incoming relations", async () => {
+		const parents = collection("purge_aliased_physical_parents")
+			.fields(({ f }) => ({ name: f.text().required() }))
+			.options({ softDelete: true })
+			.access({ purge: true });
+		const children = collection("purge_aliased_children").fields(({ f }) => ({
+			parent: f.relation("parents").required(),
+		}));
+		const setup = await buildMockApp({
+			collections: { parents, children },
+		});
+		cleanups.push(setup.cleanup);
+		await runTestDbMigrations(setup.app);
+		const ctx = createTestContext();
+		const parent = await setup.app.collections.parents.create(
+			{ name: "Parent" },
+			ctx,
+		);
+		await setup.app.collections.children.create({ parent: parent.id }, ctx);
+		await setup.app.collections.parents.deleteById({ id: parent.id }, ctx);
+
+		await expect(
+			setup.app.collections.parents.purgeById({ id: parent.id }, ctx),
+		).rejects.toMatchObject({
+			code: "CONFLICT",
+			message: "Cannot purge record while retained references exist",
+		});
+	});
+
+	it("blocks retained references owned by globals", async () => {
+		const parents = collection("purge_global_parents")
+			.fields(({ f }) => ({ name: f.text().required() }))
+			.options({ softDelete: true })
+			.access({ purge: true });
+		const settings = global("purge_global_settings").fields(({ f }) => ({
+			featuredParent: f.relation("parents"),
+		}));
+		const setup = await buildMockApp({
+			collections: { parents },
+			globals: { settings },
+		});
+		cleanups.push(setup.cleanup);
+		await runTestDbMigrations(setup.app);
+		const ctx = createTestContext();
+		const parent = await setup.app.collections.parents.create(
+			{ name: "Parent" },
+			ctx,
+		);
+		const settingsTable = setup.app.globals.settings["~internalRelatedTable"];
+		await setup.app.db
+			.insert(settingsTable)
+			.values({ featuredParent: parent.id });
+		await setup.app.collections.parents.deleteById({ id: parent.id }, ctx);
+
+		await expect(
+			setup.app.collections.parents.purgeById({ id: parent.id }, ctx),
+		).rejects.toMatchObject({
+			code: "CONFLICT",
+			message: "Cannot purge record while retained references exist",
+		});
 	});
 
 	it("preflights raw database ON DELETE CASCADE instead of hard-deleting its child", async () => {
@@ -240,6 +302,80 @@ describe("physical purge relation safety", () => {
 				.select()
 				.from(
 					setup.app.collections.purge_hook_app_parents["~internalRelatedTable"],
+				),
+		).toHaveLength(1);
+		expect(await setup.app.db.select().from(childTable)).toHaveLength(0);
+	});
+
+	it("cannot redirect the final relation rescan by mutating purge hook data", async () => {
+		const parents = collection("purge_hook_mutation_parents")
+			.fields(({ f }) => ({ name: f.text().required() }))
+			.options({ softDelete: true })
+			.access({ purge: true });
+		const children = collection("purge_hook_mutation_children").fields(
+			({ f }) => ({
+				name: f.text().required(),
+				parent: f.relation("purge_hook_mutation_parents").required(),
+			}),
+		);
+		let targetId: string | undefined;
+		let childTable: any;
+		const setup = await buildMockApp({
+			collections: {
+				purge_hook_mutation_parents: parents,
+				purge_hook_mutation_children: children,
+			},
+			hooks: {
+				collections: [
+					{
+						beforePurge: async ({ data, db }) => {
+							if (data.id !== targetId || !targetId) return;
+							await db.insert(childTable).values({
+								name: "Inserted before mutating the hook snapshot",
+								parent: targetId,
+							});
+							Reflect.set(data, "id", crypto.randomUUID());
+						},
+					},
+				],
+				globals: [],
+			},
+		});
+		cleanups.push(setup.cleanup);
+		childTable =
+			setup.app.collections.purge_hook_mutation_children[
+				"~internalRelatedTable"
+			];
+		await runTestDbMigrations(setup.app);
+		const ctx = createTestContext();
+		const created =
+			await setup.app.collections.purge_hook_mutation_parents.create(
+				{ name: "Parent" },
+				ctx,
+			);
+		targetId = created.id;
+		await setup.app.collections.purge_hook_mutation_parents.deleteById(
+			{ id: created.id },
+			ctx,
+		);
+
+		await expect(
+			setup.app.collections.purge_hook_mutation_parents.purgeById(
+				{ id: created.id },
+				ctx,
+			),
+		).rejects.toMatchObject({
+			code: "CONFLICT",
+			message: "Cannot purge record while retained references exist",
+		});
+
+		expect(
+			await setup.app.db
+				.select()
+				.from(
+					setup.app.collections.purge_hook_mutation_parents[
+						"~internalRelatedTable"
+					],
 				),
 		).toHaveLength(1);
 		expect(await setup.app.db.select().from(childTable)).toHaveLength(0);

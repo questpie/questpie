@@ -38,6 +38,14 @@ type ApplicationReference = {
 	};
 };
 
+type RelationSourceCrud = {
+	"~internalRelatedTable"?: PgTable;
+	"~internalState"?: {
+		name: string;
+		relations?: Record<string, RelationConfig>;
+	};
+};
+
 export type PreparedPurgeRelations = {
 	assertNoReferences(record: Record<string, unknown>): Promise<void>;
 };
@@ -119,7 +127,7 @@ async function loadPhysicalForeignKeys(
 
 function pushScalarReference(
 	references: ApplicationReference[],
-	sourceCrud: CRUD,
+	sourceCrud: RelationSourceCrud,
 	relation: RelationConfig,
 ): boolean {
 	const sourceState = sourceCrud["~internalState"] as CollectionBuilderState;
@@ -157,8 +165,16 @@ function collectApplicationReferences(
 	const unsupportedTables: PgTable[] = [];
 	let unsupported = false;
 
-	for (const sourceCrud of Object.values(app.collections) as CRUD[]) {
+	const sources = [
+		...Object.entries(app.collections),
+		...Object.entries(app.globals),
+	] as Array<[string, RelationSourceCrud]>;
+	for (const [sourceCollection, sourceCrud] of sources) {
 		const sourceState = sourceCrud["~internalState"] as CollectionBuilderState;
+		if (!sourceState || !sourceCrud["~internalRelatedTable"]) {
+			unsupported = true;
+			continue;
+		}
 		const relations = sourceState.relations ?? {};
 
 		for (const relation of Object.values(relations) as RelationConfig[]) {
@@ -203,7 +219,7 @@ function collectApplicationReferences(
 			}
 
 			if (
-				sourceState.name === targetCollection &&
+				sourceCollection === targetCollection &&
 				relation.type === "many" &&
 				!relation.fields
 			) {
@@ -246,7 +262,7 @@ function collectApplicationReferences(
 				field: string | undefined;
 				targetKey: string;
 			}> = [];
-			if (sourceState.name === targetCollection) {
+			if (sourceCollection === targetCollection) {
 				junctionReferences.push({
 					field: relation.sourceField,
 					targetKey: relation.sourceKey ?? "id",
@@ -336,11 +352,18 @@ async function physicalReferenceExists(
 export async function preparePurgeRelations(options: {
 	tx: any;
 	app: Questpie<any>;
-	targetCollection: string;
 	targetTable: PgTable;
 	i18nTable: PgTable | null;
 }): Promise<PreparedPurgeRelations> {
-	const { tx, app, targetCollection, targetTable, i18nTable } = options;
+	const { tx, app, targetTable, i18nTable } = options;
+	const targetCollection = Object.entries(app.collections).find(
+		([, crud]) => crud["~internalRelatedTable"] === targetTable,
+	)?.[0];
+	if (!targetCollection) throw relationConflict();
+	const targetIdentity = tableIdentity(targetTable);
+	await tx.execute(
+		sql`LOCK TABLE ${qualifiedIdentifier(targetIdentity.schema, targetIdentity.name)} IN SHARE UPDATE EXCLUSIVE MODE`,
+	);
 	const physicalForeignKeys = await loadPhysicalForeignKeys(tx, targetTable);
 	const applicationInventory = collectApplicationReferences(
 		app,
@@ -388,8 +411,6 @@ export async function preparePurgeRelations(options: {
 	}
 
 	const i18nIdentity = i18nTable ? tableIdentity(i18nTable) : null;
-	const targetIdentity = tableIdentity(targetTable);
-
 	return {
 		async assertNoReferences(record) {
 			if (applicationInventory.unsupported) throw relationConflict();

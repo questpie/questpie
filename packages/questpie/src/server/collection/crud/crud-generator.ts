@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 
 import {
 	and,
@@ -160,6 +161,24 @@ function attachCurrentTransactionTxid<T>(value: T): T {
 		for (const item of value) attachTxid(item, txid);
 	}
 	return attachTxid(value, txid);
+}
+
+function freezePurgeSnapshot<T>(value: T, seen = new WeakSet<object>()): T {
+	if (value === null || typeof value !== "object" || seen.has(value)) {
+		return value;
+	}
+	if (ArrayBuffer.isView(value)) return value;
+	seen.add(value);
+	for (const child of Object.values(value)) {
+		freezePurgeSnapshot(child, seen);
+	}
+	return Object.freeze(value);
+}
+
+function clonePurgeSnapshot(
+	record: Record<string, unknown>,
+): Record<string, unknown> {
+	return structuredClone(record);
 }
 
 export class CRUDGenerator<TState extends CollectionBuilderState> {
@@ -2671,7 +2690,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					) => {
 						const canPurge = await this.enforcePurgeAccess(
 							txContext,
-							preimage,
+							freezePurgeSnapshot(clonePurgeSnapshot(preimage)),
 							params,
 						);
 						if (
@@ -2696,17 +2715,17 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					// Resolve and authorize the complete localized preimage before
 					// taking locks on referring tables. The owner is re-read and the
 					// access rule re-evaluated after its row lock below.
-					const candidate = await findPreimage();
-					if (!candidate) {
+					const candidateResult = await findPreimage();
+					if (!candidateResult) {
 						throw ApiError.notFound("Record", String(id));
 					}
+					const candidate = freezePurgeSnapshot(candidateResult);
 					await assertPurgeAccess(candidate);
 
 					if (!this.app) throw retainedReferenceConflict();
 					const preparedRelations = await preparePurgeRelations({
 						tx,
 						app: this.app,
-						targetCollection: this.state.name,
 						targetTable: this.table,
 						i18nTable: this.i18nTable,
 					});
@@ -2720,10 +2739,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						throw ApiError.notFound("Record", String(id));
 					}
 
-					const preimage = await findPreimage();
-					if (!preimage) {
+					const preimageResult = await findPreimage();
+					if (!preimageResult) {
 						throw ApiError.notFound("Record", String(id));
 					}
+					const preimage = freezePurgeSnapshot(preimageResult);
 					await assertPurgeAccess(preimage);
 
 					if (locked.deletedAt == null) {
@@ -2732,9 +2752,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 					await preparedRelations.assertNoReferences(preimage);
 
+					const hookPreimage = freezePurgeSnapshot(
+						clonePurgeSnapshot(preimage),
+					);
 					const hookContext = this.createHookContext({
-						data: preimage,
-						original: preimage,
+						data: hookPreimage,
+						original: hookPreimage,
 						operation: "purge",
 						context: txContext,
 						db: tx,
@@ -2745,8 +2768,20 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						hookContext,
 					);
 
+					const revalidatedPreimage = await findPreimage();
+					if (
+						!revalidatedPreimage ||
+						revalidatedPreimage.deletedAt == null ||
+						!isDeepStrictEqual(revalidatedPreimage, preimage)
+					) {
+						throw ApiError.conflict(
+							"Purge hooks cannot mutate the owner record",
+						);
+					}
+
 					// Hooks run inside the transaction and may write through raw db
-					// access, so rescan immediately before the destructive boundary.
+					// access, so revalidate the tombstone and rescan immediately
+					// before the destructive boundary.
 					await preparedRelations.assertNoReferences(preimage);
 
 					try {
@@ -2775,6 +2810,47 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						this.state.hooks?.afterPurge,
 						hookContext,
 					);
+					const ownerRows = await tx
+						.select({ id: getColumn(this.table, "id")! })
+						.from(this.table)
+						.where(eq(getColumn(this.table, "id")!, id))
+						.limit(1);
+					if (ownerRows.length > 0) {
+						throw ApiError.conflict(
+							"Purge hooks cannot recreate the owner record",
+						);
+					}
+					const satelliteChecks = [
+						this.i18nTable
+							? tx
+									.select({ id: getColumn(this.i18nTable, "id")! })
+									.from(this.i18nTable)
+									.where(eq(getColumn(this.i18nTable, "parentId")!, id))
+									.limit(1)
+							: [],
+						this.versionsTable
+							? tx
+									.select({ id: getColumn(this.versionsTable, "id")! })
+									.from(this.versionsTable)
+									.where(eq(getColumn(this.versionsTable, "id")!, id))
+									.limit(1)
+							: [],
+						this.i18nVersionsTable
+							? tx
+									.select({
+										id: getColumn(this.i18nVersionsTable, "id")!,
+									})
+									.from(this.i18nVersionsTable)
+									.where(eq(getColumn(this.i18nVersionsTable, "parentId")!, id))
+									.limit(1)
+							: [],
+					];
+					const satelliteRows = await Promise.all(satelliteChecks);
+					if (satelliteRows.some((rows) => rows.length > 0)) {
+						throw ApiError.conflict(
+							"Purge hooks cannot recreate owner version or locale rows",
+						);
+					}
 					await preparedRelations.assertNoReferences(preimage);
 
 					return attachCurrentTransactionTxid({ success: true as const });
