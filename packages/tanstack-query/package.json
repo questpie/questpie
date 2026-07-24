@@ -42,6 +42,6 @@
 	},
 	"peerDependencies": {
 		"@tanstack/react-query": "^5.0.0",
-		"questpie": "^3.0.0"
+		"questpie": "^3.16.0"
 	}
 }
