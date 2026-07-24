@@ -67,7 +67,7 @@ describe("barbershop generated OpenAPI route snapshot", () => {
 		};
 
 		expect(routeSnapshot).toEqual({
-			pathCount: 56,
+			pathCount: 57,
 			methods: {
 				"/api/channels/auth": ["options", "post"],
 				"/api/channels/config": ["get"],
