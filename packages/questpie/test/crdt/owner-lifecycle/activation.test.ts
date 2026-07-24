@@ -236,6 +236,106 @@ describe("CRDT owner activation", () => {
 			.from(questpieCrdtResourceTable);
 		expect(resourceCount?.value).toBe(1);
 	});
+
+	it("retires a soft-deleted owner and restores the same incarnation in a new epoch", async () => {
+		const created = await db.transaction(async (tx) => {
+			await insertOwner(tx);
+			return new CrdtOwnerLifecycleTransaction(tx).activate({
+				staged: await stage(RESOURCE_ID),
+				owner: await lockOwner(tx),
+				mode: "create",
+			});
+		});
+
+		await db.transaction(async (tx) => {
+			await lockOwner(tx);
+			await new CrdtOwnerLifecycleTransaction(tx).retire({
+				manifest,
+				locator: canonicalCrdtCollectionLocator("article-1"),
+			});
+		});
+
+		const [retired] = await db
+			.select()
+			.from(questpieCrdtResourceTable)
+			.where(eq(questpieCrdtResourceTable.id, RESOURCE_ID));
+		expect(retired).toMatchObject({
+			status: 2,
+			currentEpochId: null,
+			currentEpochStatus: null,
+		});
+		expect(retired?.retiredAt).not.toBeNull();
+
+		const restored = await db.transaction(async (tx) =>
+			new CrdtOwnerLifecycleTransaction(tx).restore({
+				staged: await stage(ENSURE_RESOURCE_ID),
+				owner: await lockOwner(tx),
+			}),
+		);
+
+		expect(restored.resourceId).toBe(created.resourceId);
+		expect(restored.resourceEpochId).not.toBe(created.resourceEpochId);
+		const epochs = await db
+			.select()
+			.from(questpieCrdtResourceEpochTable)
+			.where(eq(questpieCrdtResourceEpochTable.resourceId, RESOURCE_ID));
+		expect(epochs.map((epoch) => epoch.aggregateEpoch).sort()).toEqual([
+			1n,
+			2n,
+		]);
+		expect(epochs.find((epoch) => epoch.aggregateEpoch === 1n)?.status).toBe(2);
+		expect(epochs.find((epoch) => epoch.aggregateEpoch === 2n)?.status).toBe(1);
+		const bindings = await db
+			.select()
+			.from(questpieCrdtBindingTable)
+			.where(eq(questpieCrdtBindingTable.resourceId, RESOURCE_ID));
+		expect(bindings.filter((binding) => binding.status === 1)).toHaveLength(3);
+		expect(
+			new Set(
+				bindings
+					.filter((binding) => binding.status === 1)
+					.map((binding) => binding.fieldEpoch),
+			),
+		).toEqual(new Set([2n]));
+	});
+
+	it("creates a new incarnation when a hard-deleted locator is recreated", async () => {
+		await db.transaction(async (tx) => {
+			await insertOwner(tx);
+			await new CrdtOwnerLifecycleTransaction(tx).activate({
+				staged: await stage(RESOURCE_ID),
+				owner: await lockOwner(tx),
+				mode: "create",
+			});
+		});
+		await db.transaction(async (tx) => {
+			await lockOwner(tx);
+			await tx.execute(sql`DELETE FROM articles WHERE id = 'article-1'`);
+			await new CrdtOwnerLifecycleTransaction(tx).retire({
+				manifest,
+				locator: canonicalCrdtCollectionLocator("article-1"),
+			});
+		});
+		await db.transaction(async (tx) => {
+			await insertOwner(tx);
+			await new CrdtOwnerLifecycleTransaction(tx).activate({
+				staged: await stage(ENSURE_RESOURCE_ID),
+				owner: await lockOwner(tx),
+				mode: "create",
+			});
+		});
+
+		const resources = await db
+			.select()
+			.from(questpieCrdtResourceTable)
+			.orderBy(questpieCrdtResourceTable.createdAt);
+		expect(resources.map((resource) => resource.id)).toEqual([
+			RESOURCE_ID,
+			ENSURE_RESOURCE_ID,
+		]);
+		expect(resources[0]?.status).toBe(2);
+		expect(resources[1]?.status).toBe(1);
+	});
 });
 
 async function stage(resourceId: string) {

@@ -21,10 +21,12 @@ import type {
 } from "./manifest.js";
 import {
 	questpieCrdtBindingTable,
+	questpieCrdtDefinitionTable,
 	questpieCrdtResourceEpochTable,
 	questpieCrdtResourceTable,
 	questpieCrdtSchemaFieldTable,
 	questpieCrdtSchemaTable,
+	questpieCrdtSessionTable,
 	questpieCrdtSnapshotManifestTable,
 	questpieCrdtSnapshotTable,
 } from "./schema.js";
@@ -116,23 +118,7 @@ export class CrdtOwnerLifecycleTransaction {
 			staged.manifest.owner.kind,
 			input.owner.locator,
 		);
-		for (const field of staged.fields) {
-			const rawValue = input.owner.values[field.manifestField.sourcePath];
-			const value =
-				field.manifestField.format === "text"
-					? canonicalValue("text", rawValue)
-					: canonicalValue("set", rawValue);
-			if (
-				!equalBytes(
-					field.canonicalHash,
-					hashCanonicalValue(field.manifestField.format, value),
-				)
-			) {
-				throw conflict(
-					`locked owner value changed after CRDT staging (${field.manifestField.sourcePath})`,
-				);
-			}
-		}
+		assertStagedOwnerValues(staged, input.owner.values);
 
 		const { definitionId, schemaId } = await this.registerCurrentManifest(
 			staged.manifest,
@@ -180,6 +166,7 @@ export class CrdtOwnerLifecycleTransaction {
 			}
 			await this.assertExistingActivation({
 				resourceId: existing.id,
+				resourceEpochId: existing.currentEpochId,
 				schemaId,
 				fields: staged.fields,
 			});
@@ -190,13 +177,274 @@ export class CrdtOwnerLifecycleTransaction {
 			});
 		}
 
+		const identity = await this.createActiveEpoch({
+			resourceId: staged.resourceId,
+			definitionId,
+			schemaId,
+			aggregateEpoch: 1n,
+			staged,
+			fieldEpochs: new Map(
+				staged.fields.map((field) => [field.manifestField.stableFieldId, 1n]),
+			),
+		});
+		await this.db
+			.update(questpieCrdtResourceTable)
+			.set({
+				status: 1,
+				currentEpochId: identity.resourceEpochId,
+				currentEpochStatus: 1,
+				updatedAt: sql`now()`,
+			})
+			.where(eq(questpieCrdtResourceTable.id, staged.resourceId));
+
+		return identity;
+	}
+
+	async retire(input: {
+		manifest: CrdtDesiredManifest;
+		locator: string;
+	}): Promise<CrdtOwnerActivationIdentity> {
+		const locator = canonicalLocator(input.manifest.owner.kind, input.locator);
+		const [definition] = await this.db
+			.select({
+				id: questpieCrdtDefinitionTable.id,
+				identityVersion: questpieCrdtDefinitionTable.identityVersion,
+			})
+			.from(questpieCrdtDefinitionTable)
+			.where(
+				and(
+					eq(questpieCrdtDefinitionTable.ownerKind, input.manifest.owner.kind),
+					eq(questpieCrdtDefinitionTable.ownerKey, input.manifest.owner.key),
+				),
+			);
+		if (
+			!definition ||
+			definition.identityVersion !== input.manifest.owner.identityVersion
+		) {
+			throw conflict("CRDT owner definition is not active");
+		}
+
+		const locatorHash = Buffer.from(sha256(new TextEncoder().encode(locator)));
+		const [resource] = await this.db
+			.select({
+				id: questpieCrdtResourceTable.id,
+				locator: questpieCrdtResourceTable.locator,
+				identityVersion: questpieCrdtResourceTable.identityVersion,
+				status: questpieCrdtResourceTable.status,
+				currentEpochId: questpieCrdtResourceTable.currentEpochId,
+			})
+			.from(questpieCrdtResourceTable)
+			.where(
+				and(
+					eq(questpieCrdtResourceTable.definitionId, definition.id),
+					eq(questpieCrdtResourceTable.locatorHash, locatorHash),
+					sql`${questpieCrdtResourceTable.retiredAt} IS NULL`,
+				),
+			)
+			.for("update");
+		if (
+			!resource?.currentEpochId ||
+			resource.locator !== locator ||
+			resource.identityVersion !== input.manifest.owner.identityVersion ||
+			resource.status !== 1
+		) {
+			throw conflict("CRDT resource incarnation is not active");
+		}
+
+		const [epoch] = await this.db
+			.select({
+				id: questpieCrdtResourceEpochTable.id,
+				schemaId: questpieCrdtResourceEpochTable.schemaId,
+				status: questpieCrdtResourceEpochTable.status,
+			})
+			.from(questpieCrdtResourceEpochTable)
+			.where(
+				and(
+					eq(questpieCrdtResourceEpochTable.resourceId, resource.id),
+					eq(questpieCrdtResourceEpochTable.id, resource.currentEpochId),
+				),
+			)
+			.for("update");
+		if (!epoch || epoch.status !== 1) {
+			throw conflict("CRDT resource epoch is not active");
+		}
+		await this.db
+			.select({ id: questpieCrdtBindingTable.id })
+			.from(questpieCrdtBindingTable)
+			.where(
+				and(
+					eq(questpieCrdtBindingTable.resourceId, resource.id),
+					sql`${questpieCrdtBindingTable.retiredAt} IS NULL`,
+				),
+			)
+			.orderBy(questpieCrdtBindingTable.stableFieldId)
+			.for("update");
+
+		await this.db
+			.update(questpieCrdtResourceTable)
+			.set({
+				status: 2,
+				currentEpochId: null,
+				currentEpochStatus: null,
+				readFence: sql`${questpieCrdtResourceTable.readFence} + 1`,
+				editFence: sql`${questpieCrdtResourceTable.editFence} + 1`,
+				retiredAt: sql`now()`,
+				updatedAt: sql`now()`,
+			})
+			.where(eq(questpieCrdtResourceTable.id, resource.id));
+		await this.db
+			.update(questpieCrdtResourceEpochTable)
+			.set({ status: 2, closedAt: sql`now()`, updatedAt: sql`now()` })
+			.where(eq(questpieCrdtResourceEpochTable.id, epoch.id));
+		await this.db
+			.update(questpieCrdtBindingTable)
+			.set({
+				status: 2,
+				readFence: sql`${questpieCrdtBindingTable.readFence} + 1`,
+				editFence: sql`${questpieCrdtBindingTable.editFence} + 1`,
+				retiredAt: sql`now()`,
+				updatedAt: sql`now()`,
+			})
+			.where(
+				and(
+					eq(questpieCrdtBindingTable.resourceId, resource.id),
+					sql`${questpieCrdtBindingTable.retiredAt} IS NULL`,
+				),
+			);
+		await this.db
+			.update(questpieCrdtSessionTable)
+			.set({
+				closedAt: sql`now()`,
+				closeReason: 1,
+				updatedAt: sql`now()`,
+			})
+			.where(
+				and(
+					eq(questpieCrdtSessionTable.resourceId, resource.id),
+					sql`${questpieCrdtSessionTable.closedAt} IS NULL`,
+				),
+			);
+
+		return Object.freeze({
+			resourceId: resource.id,
+			resourceEpochId: epoch.id,
+			schemaId: epoch.schemaId,
+		});
+	}
+
+	async restore(input: {
+		staged: StagedCrdtOwnerActivation;
+		owner: CrdtOwnerCanonicalState;
+	}): Promise<CrdtOwnerActivationIdentity> {
+		const staged = snapshotAndVerifyStagedActivation(input.staged);
+		const locator = canonicalLocator(
+			staged.manifest.owner.kind,
+			input.owner.locator,
+		);
+		assertStagedOwnerValues(staged, input.owner.values);
+		const { definitionId, schemaId } = await this.registerCurrentManifest(
+			staged.manifest,
+		);
+		const locatorHash = Buffer.from(sha256(new TextEncoder().encode(locator)));
+		const [resource] = await this.db
+			.select({
+				id: questpieCrdtResourceTable.id,
+				locator: questpieCrdtResourceTable.locator,
+				identityVersion: questpieCrdtResourceTable.identityVersion,
+				status: questpieCrdtResourceTable.status,
+			})
+			.from(questpieCrdtResourceTable)
+			.where(
+				and(
+					eq(questpieCrdtResourceTable.definitionId, definitionId),
+					eq(questpieCrdtResourceTable.locatorHash, locatorHash),
+					sql`${questpieCrdtResourceTable.retiredAt} IS NOT NULL`,
+				),
+			)
+			.orderBy(desc(questpieCrdtResourceTable.createdAt))
+			.limit(1)
+			.for("update");
+		if (
+			!resource ||
+			resource.locator !== locator ||
+			resource.identityVersion !== staged.manifest.owner.identityVersion ||
+			resource.status !== 2
+		) {
+			throw conflict("CRDT retired incarnation is not restorable");
+		}
+
+		const [previousEpoch] = await this.db
+			.select({
+				aggregateEpoch: questpieCrdtResourceEpochTable.aggregateEpoch,
+			})
+			.from(questpieCrdtResourceEpochTable)
+			.where(eq(questpieCrdtResourceEpochTable.resourceId, resource.id))
+			.orderBy(desc(questpieCrdtResourceEpochTable.aggregateEpoch))
+			.limit(1)
+			.for("update");
+		if (!previousEpoch) {
+			throw conflict("CRDT retired incarnation has no epoch history");
+		}
+		const previousBindings = await this.db
+			.select({
+				stableFieldId: questpieCrdtBindingTable.stableFieldId,
+				fieldEpoch: questpieCrdtBindingTable.fieldEpoch,
+			})
+			.from(questpieCrdtBindingTable)
+			.where(eq(questpieCrdtBindingTable.resourceId, resource.id))
+			.orderBy(questpieCrdtBindingTable.stableFieldId)
+			.for("update");
+		const fieldEpochs = new Map<string, bigint>();
+		for (const binding of previousBindings) {
+			const next = binding.fieldEpoch + 1n;
+			if ((fieldEpochs.get(binding.stableFieldId) ?? 0n) < next) {
+				fieldEpochs.set(binding.stableFieldId, next);
+			}
+		}
+		for (const field of staged.fields) {
+			if (!fieldEpochs.has(field.manifestField.stableFieldId)) {
+				fieldEpochs.set(field.manifestField.stableFieldId, 1n);
+			}
+		}
+
+		const identity = await this.createActiveEpoch({
+			resourceId: resource.id,
+			definitionId,
+			schemaId,
+			aggregateEpoch: previousEpoch.aggregateEpoch + 1n,
+			staged,
+			fieldEpochs,
+		});
+		await this.db
+			.update(questpieCrdtResourceTable)
+			.set({
+				status: 1,
+				currentEpochId: identity.resourceEpochId,
+				currentEpochStatus: 1,
+				readFence: sql`${questpieCrdtResourceTable.readFence} + 1`,
+				editFence: sql`${questpieCrdtResourceTable.editFence} + 1`,
+				retiredAt: null,
+				updatedAt: sql`now()`,
+			})
+			.where(eq(questpieCrdtResourceTable.id, resource.id));
+		return identity;
+	}
+
+	private async createActiveEpoch(input: {
+		resourceId: string;
+		definitionId: string;
+		schemaId: string;
+		aggregateEpoch: bigint;
+		staged: StagedCrdtOwnerActivation;
+		fieldEpochs: ReadonlyMap<string, bigint>;
+	}): Promise<CrdtOwnerActivationIdentity> {
 		const resourceEpochId = randomUUID();
 		await this.db.insert(questpieCrdtResourceEpochTable).values({
 			id: resourceEpochId,
-			resourceId: staged.resourceId,
-			definitionId,
-			aggregateEpoch: 1n,
-			schemaId,
+			resourceId: input.resourceId,
+			definitionId: input.definitionId,
+			aggregateEpoch: input.aggregateEpoch,
+			schemaId: input.schemaId,
 			status: 1,
 		});
 
@@ -206,36 +454,37 @@ export class CrdtOwnerLifecycleTransaction {
 				stableFieldId: questpieCrdtSchemaFieldTable.stableFieldId,
 			})
 			.from(questpieCrdtSchemaFieldTable)
-			.where(eq(questpieCrdtSchemaFieldTable.schemaId, schemaId));
+			.where(eq(questpieCrdtSchemaFieldTable.schemaId, input.schemaId));
 		const schemaFieldIds = new Map(
 			schemaFields.map((field) => [field.stableFieldId, field.id]),
 		);
-		const bindings = staged.fields.map((field) => {
-			const schemaFieldId = schemaFieldIds.get(
-				field.manifestField.stableFieldId,
-			);
-			if (!schemaFieldId) {
+		const bindings = input.staged.fields.map((field) => {
+			const stableFieldId = field.manifestField.stableFieldId;
+			const schemaFieldId = schemaFieldIds.get(stableFieldId);
+			const fieldEpoch = input.fieldEpochs.get(stableFieldId);
+			if (!schemaFieldId || fieldEpoch === undefined) {
 				throw conflict("CRDT schema field registration is incomplete");
 			}
 			return Object.freeze({
 				id: randomUUID(),
 				schemaFieldId,
+				fieldEpoch,
 				field,
 			});
 		});
 		await this.db.insert(questpieCrdtBindingTable).values(
-			bindings.map(({ id, schemaFieldId, field }) => ({
+			bindings.map(({ id, schemaFieldId, fieldEpoch, field }) => ({
 				id,
-				resourceId: staged.resourceId,
-				definitionId,
-				schemaId,
+				resourceId: input.resourceId,
+				definitionId: input.definitionId,
+				schemaId: input.schemaId,
 				schemaFieldId,
 				stableFieldId: field.manifestField.stableFieldId,
 				fieldSlot: field.manifestField.fieldSlot,
 				sourcePath: field.manifestField.sourcePath,
 				format: formatNumber(field.manifestField.format),
 				formatVersion: field.manifestField.formatVersion,
-				fieldEpoch: 1n,
+				fieldEpoch,
 				canonicalHash: Buffer.from(field.canonicalHash),
 				projectedCanonicalHash: Buffer.from(field.canonicalHash),
 				status: 1,
@@ -245,10 +494,10 @@ export class CrdtOwnerLifecycleTransaction {
 		);
 
 		const manifestId = randomUUID();
-		const snapshotFields = bindings.map(({ id, field }) => ({
+		const snapshotFields = bindings.map(({ id, fieldEpoch, field }) => ({
 			bindingId: id,
 			stableFieldId: field.manifestField.stableFieldId,
-			fieldEpoch: 1n,
+			fieldEpoch,
 			fieldSlot: field.manifestField.fieldSlot,
 			formatVersion: field.manifestField.formatVersion,
 			fieldCursor: 0n,
@@ -259,38 +508,38 @@ export class CrdtOwnerLifecycleTransaction {
 			checksum: field.snapshotChecksum,
 		}));
 		const manifestChecksum = createCrdtSnapshotManifestChecksum({
-			resourceId: staged.resourceId,
+			resourceId: input.resourceId,
 			resourceEpochId,
-			schemaId,
+			schemaId: input.schemaId,
 			coversCommitSeq: 0n,
 			fields: snapshotFields,
 		});
 		await this.db.insert(questpieCrdtSnapshotManifestTable).values({
 			id: manifestId,
-			resourceId: staged.resourceId,
+			resourceId: input.resourceId,
 			resourceEpochId,
-			definitionId,
-			schemaId,
+			definitionId: input.definitionId,
+			schemaId: input.schemaId,
 			coversCommitSeq: 0n,
 			status: 2,
-			totalBytes: staged.fields.reduce(
+			totalBytes: input.staged.fields.reduce(
 				(total, field) => total + field.stateBytes,
 				0,
 			),
-			fieldCount: staged.fields.length,
+			fieldCount: input.staged.fields.length,
 			checksum: Buffer.from(manifestChecksum),
 			leaseGeneration: 0n,
 			verifiedAt: sql`now()`,
 		});
 		await this.db.insert(questpieCrdtSnapshotTable).values(
-			bindings.map(({ id, field }) => ({
+			bindings.map(({ id, fieldEpoch, field }) => ({
 				manifestId,
-				resourceId: staged.resourceId,
+				resourceId: input.resourceId,
 				resourceEpochId,
-				schemaId,
+				schemaId: input.schemaId,
 				bindingId: id,
 				stableFieldId: field.manifestField.stableFieldId,
-				fieldEpoch: 1n,
+				fieldEpoch,
 				fieldSlot: field.manifestField.fieldSlot,
 				formatVersion: field.manifestField.formatVersion,
 				fieldCursor: 0n,
@@ -311,24 +560,15 @@ export class CrdtOwnerLifecycleTransaction {
 			})
 			.where(
 				and(
-					eq(questpieCrdtResourceEpochTable.resourceId, staged.resourceId),
+					eq(questpieCrdtResourceEpochTable.resourceId, input.resourceId),
 					eq(questpieCrdtResourceEpochTable.id, resourceEpochId),
 				),
 			);
-		await this.db
-			.update(questpieCrdtResourceTable)
-			.set({
-				status: 1,
-				currentEpochId: resourceEpochId,
-				currentEpochStatus: 1,
-				updatedAt: sql`now()`,
-			})
-			.where(eq(questpieCrdtResourceTable.id, staged.resourceId));
 
 		return Object.freeze({
-			resourceId: staged.resourceId,
+			resourceId: input.resourceId,
 			resourceEpochId,
-			schemaId,
+			schemaId: input.schemaId,
 		});
 	}
 
@@ -399,9 +639,26 @@ export class CrdtOwnerLifecycleTransaction {
 
 	private async assertExistingActivation(input: {
 		resourceId: string;
+		resourceEpochId: string;
 		schemaId: string;
 		fields: readonly StagedCrdtOwnerField[];
 	}): Promise<void> {
+		const [epoch] = await this.db
+			.select({
+				schemaId: questpieCrdtResourceEpochTable.schemaId,
+				status: questpieCrdtResourceEpochTable.status,
+			})
+			.from(questpieCrdtResourceEpochTable)
+			.where(
+				and(
+					eq(questpieCrdtResourceEpochTable.resourceId, input.resourceId),
+					eq(questpieCrdtResourceEpochTable.id, input.resourceEpochId),
+				),
+			)
+			.for("update");
+		if (!epoch || epoch.status !== 1 || epoch.schemaId !== input.schemaId) {
+			throw conflict("existing CRDT activation has no current schema epoch");
+		}
 		const bindings = await this.db
 			.select({
 				schemaId: questpieCrdtBindingTable.schemaId,
@@ -516,6 +773,29 @@ function hashCanonicalValue(
 		}
 	}
 	return hash.digest();
+}
+
+function assertStagedOwnerValues(
+	staged: StagedCrdtOwnerActivation,
+	values: Readonly<Record<string, unknown>>,
+): void {
+	for (const field of staged.fields) {
+		const rawValue = values[field.manifestField.sourcePath];
+		const value =
+			field.manifestField.format === "text"
+				? canonicalValue("text", rawValue)
+				: canonicalValue("set", rawValue);
+		if (
+			!equalBytes(
+				field.canonicalHash,
+				hashCanonicalValue(field.manifestField.format, value),
+			)
+		) {
+			throw conflict(
+				`locked owner value changed after CRDT staging (${field.manifestField.sourcePath})`,
+			);
+		}
+	}
 }
 
 function assertEngineContract(
