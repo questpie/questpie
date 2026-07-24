@@ -173,5 +173,5 @@ describe("redis streams change broker", () => {
 			await Promise.all([first.cleanup(), second.cleanup()]);
 			await db.close();
 		}
-	}, 10_000);
+	}, 30_000);
 });

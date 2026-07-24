@@ -247,7 +247,10 @@ describe("realtime scheduler", () => {
 			onFrame: (frame) => frames.push(frame),
 			onError: () => {},
 		});
-		await new Promise((resolve) => setTimeout(resolve, 25));
+		const deadline = Date.now() + 5_000;
+		while (frames.length < 2 && Date.now() < deadline) {
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
 		stop();
 
 		expect(computes).toBe(1);
