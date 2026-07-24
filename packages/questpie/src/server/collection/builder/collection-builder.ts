@@ -285,7 +285,9 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 						// Multiple columns (e.g., polymorphic relation with type + id)
 						for (const col of column) {
 							const colName =
-								(col as { name?: string }).name ?? `${name}_${columns.length}`;
+								(col as { name?: string; config?: { name?: string } }).name ??
+								(col as { config?: { name?: string } }).config?.name ??
+								`${name}_${columns.length}`;
 							columns[colName] = col;
 						}
 					} else {
@@ -404,9 +406,38 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		}
 
 		// Get target collection name (first one for polymorphic)
-		const targetName = Array.isArray(targetCollection)
-			? targetCollection[0]
-			: targetCollection;
+		let polymorphicTargets: RelationConfig["polymorphicTargets"];
+		if (
+			relationType === "morphTo" &&
+			_toConfig &&
+			typeof _toConfig === "object"
+		) {
+			polymorphicTargets = Object.entries(
+				_toConfig as Record<string, string | (() => { name: string })>,
+			).map(([discriminator, target]) => {
+				let collection: string | undefined;
+				if (typeof target === "string") {
+					collection = target;
+				} else if (typeof target === "function") {
+					try {
+						collection = target().name;
+					} catch {
+						collection = undefined;
+					}
+				}
+				return {
+					discriminator,
+					collection,
+					typeField: `${fieldName}Type`,
+					idField: `${fieldName}Id`,
+				};
+			});
+		}
+		const targetName =
+			polymorphicTargets?.find((target) => target.collection)?.collection ??
+			(Array.isArray(targetCollection)
+				? targetCollection[0]
+				: targetCollection);
 
 		// Upload fields (f.upload) populate through the parent row's read
 		// decision — see RelationConfig.inheritAccess.
@@ -469,10 +500,10 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 
 			case "morphTo": {
 				// Polymorphic - multiple possible targets
-				// For now, use first target for basic relation resolution
 				return {
 					type: "one",
 					collection: targetName,
+					polymorphicTargets,
 					references: ["id"],
 					relationName: metadata.relationName,
 					onDelete: metadata.onDelete,

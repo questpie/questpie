@@ -124,6 +124,127 @@ describe("physical purge relation safety", () => {
 		expect(childRows.docs).toHaveLength(1);
 	});
 
+	it("rescans physical references written by beforePurge and rolls them back", async () => {
+		const parent = collection("purge_hook_raw_parents")
+			.fields(({ f }) => ({ name: f.text().required() }))
+			.options({ softDelete: true })
+			.access({ purge: true })
+			.build();
+		const children = collection("purge_hook_raw_children")
+			.fields(({ f }) => ({
+				name: f.text().required(),
+				parentId: f.text(36).drizzle((column) =>
+					column.references(() => parent.table.id, {
+						onDelete: "cascade",
+					}),
+				),
+			}))
+			.build();
+		let targetId: string | undefined;
+		const setup = await buildMockApp({
+			collections: { parent, children },
+			hooks: {
+				collections: [
+					{
+						beforePurge: async ({ data, db }) => {
+							if (data.id !== targetId) return;
+							await db.insert(children.table).values({
+								name: "Inserted inside beforePurge",
+								parentId: data.id,
+							});
+						},
+					},
+				],
+				globals: [],
+			},
+		});
+		cleanups.push(setup.cleanup);
+		await runTestDbMigrations(setup.app);
+		const ctx = createTestContext();
+		const created = await setup.app.collections.parent.create(
+			{ name: "Parent" },
+			ctx,
+		);
+		targetId = created.id;
+		await setup.app.collections.parent.deleteById({ id: created.id }, ctx);
+
+		await expect(
+			setup.app.collections.parent.purgeById({ id: created.id }, ctx),
+		).rejects.toMatchObject({
+			code: "CONFLICT",
+			message: "Cannot purge record while retained references exist",
+		});
+
+		expect(await setup.app.db.select().from(parent.table)).toHaveLength(1);
+		expect(await setup.app.db.select().from(children.table)).toHaveLength(0);
+	});
+
+	it("rescans application references written by afterPurge and rolls them back", async () => {
+		const parents = collection("purge_hook_app_parents")
+			.fields(({ f }) => ({ name: f.text().required() }))
+			.options({ softDelete: true })
+			.access({ purge: true });
+		const children = collection("purge_hook_app_children").fields(({ f }) => ({
+			name: f.text().required(),
+			parent: f.relation("purge_hook_app_parents").required(),
+		}));
+		let targetId: string | undefined;
+		let childTable: any;
+		const setup = await buildMockApp({
+			collections: {
+				purge_hook_app_parents: parents,
+				purge_hook_app_children: children,
+			},
+			hooks: {
+				collections: [
+					{
+						afterPurge: async ({ data, db }) => {
+							if (data.id !== targetId) return;
+							await db.insert(childTable).values({
+								name: "Inserted inside afterPurge",
+								parent: data.id,
+							});
+						},
+					},
+				],
+				globals: [],
+			},
+		});
+		cleanups.push(setup.cleanup);
+		childTable =
+			setup.app.collections.purge_hook_app_children["~internalRelatedTable"];
+		await runTestDbMigrations(setup.app);
+		const ctx = createTestContext();
+		const created = await setup.app.collections.purge_hook_app_parents.create(
+			{ name: "Parent" },
+			ctx,
+		);
+		targetId = created.id;
+		await setup.app.collections.purge_hook_app_parents.deleteById(
+			{ id: created.id },
+			ctx,
+		);
+
+		await expect(
+			setup.app.collections.purge_hook_app_parents.purgeById(
+				{ id: created.id },
+				ctx,
+			),
+		).rejects.toMatchObject({
+			code: "CONFLICT",
+			message: "Cannot purge record while retained references exist",
+		});
+
+		expect(
+			await setup.app.db
+				.select()
+				.from(
+					setup.app.collections.purge_hook_app_parents["~internalRelatedTable"],
+				),
+		).toHaveLength(1);
+		expect(await setup.app.db.select().from(childTable)).toHaveLength(0);
+	});
+
 	it("fails closed when an incoming relation shape cannot be scanned soundly", async () => {
 		const parents = collection("purge_unknown_parents")
 			.fields(({ f }) => ({ name: f.text().required() }))
@@ -207,5 +328,152 @@ describe("physical purge relation safety", () => {
 			code: "CONFLICT",
 			message: "Cannot purge record while retained references exist",
 		});
+	});
+
+	it("rejects create and update writes to a missing application-only target", async () => {
+		const parents = collection("purge_validated_parents").fields(({ f }) => ({
+			name: f.text().required(),
+		}));
+		const children = collection("purge_validated_children").fields(({ f }) => ({
+			name: f.text().required(),
+			parent: f.relation("purge_validated_parents").required(),
+		}));
+		const setup = await buildMockApp({
+			collections: {
+				purge_validated_parents: parents,
+				purge_validated_children: children,
+			},
+		});
+		cleanups.push(setup.cleanup);
+		await runTestDbMigrations(setup.app);
+		const ctx = createTestContext();
+		const missingId = crypto.randomUUID();
+
+		await expect(
+			setup.app.collections.purge_validated_children.create(
+				{ name: "Dangling", parent: missingId },
+				ctx,
+			),
+		).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+		const firstParent =
+			await setup.app.collections.purge_validated_parents.create(
+				{ name: "First" },
+				ctx,
+			);
+		const child = await setup.app.collections.purge_validated_children.create(
+			{ name: "Valid", parent: firstParent.id },
+			ctx,
+		);
+		await expect(
+			setup.app.collections.purge_validated_children.updateById(
+				{ id: child.id, data: { parent: missingId } },
+				ctx,
+			),
+		).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+		const retained =
+			await setup.app.collections.purge_validated_children.findOne(
+				{ where: { id: child.id } },
+				ctx,
+			);
+		expect(retained?.parent).toBe(firstParent.id);
+	});
+
+	it("inspects every morphTo discriminator instead of only its first target", async () => {
+		const articles = collection("purge_poly_articles")
+			.fields(({ f }) => ({ title: f.text().required() }))
+			.options({ softDelete: true })
+			.access({ purge: true });
+		const comments = collection("purge_poly_comments")
+			.fields(({ f }) => ({ body: f.text().required() }))
+			.options({ softDelete: true })
+			.access({ purge: true });
+		const activities = collection("purge_poly_activities").fields(({ f }) => ({
+			subject: f.relation({
+				article: "purge_poly_articles",
+				comment: "purge_poly_comments",
+			} as any),
+		}));
+		const setup = await buildMockApp({
+			collections: {
+				purge_poly_articles: articles,
+				purge_poly_comments: comments,
+				purge_poly_activities: activities,
+			},
+		});
+		cleanups.push(setup.cleanup);
+		await runTestDbMigrations(setup.app);
+		const ctx = createTestContext();
+		const referenced = await setup.app.collections.purge_poly_comments.create(
+			{ body: "Referenced" },
+			ctx,
+		);
+		const unrelated = await setup.app.collections.purge_poly_comments.create(
+			{ body: "Wrong discriminator" },
+			ctx,
+		);
+		const activitiesTable =
+			setup.app.collections.purge_poly_activities["~internalRelatedTable"];
+		expect(
+			setup.app.collections.purge_poly_activities["~internalState"].relations
+				.subject.polymorphicTargets,
+		).toEqual([
+			{
+				discriminator: "article",
+				collection: "purge_poly_articles",
+				typeField: "subjectType",
+				idField: "subjectId",
+			},
+			{
+				discriminator: "comment",
+				collection: "purge_poly_comments",
+				typeField: "subjectType",
+				idField: "subjectId",
+			},
+		]);
+		await setup.app.db.insert(activitiesTable).values([
+			{
+				subjectType: "comment",
+				subjectId: referenced.id,
+			},
+			{
+				subjectType: "article",
+				subjectId: unrelated.id,
+			},
+		]);
+		expect(
+			(await setup.app.db.select().from(activitiesTable)).map((row: any) => [
+				row.subjectType,
+				row.subjectId,
+			]),
+		).toEqual([
+			["comment", referenced.id],
+			["article", unrelated.id],
+		]);
+		await setup.app.collections.purge_poly_comments.deleteById(
+			{ id: referenced.id },
+			ctx,
+		);
+		await setup.app.collections.purge_poly_comments.deleteById(
+			{ id: unrelated.id },
+			ctx,
+		);
+
+		await expect(
+			setup.app.collections.purge_poly_comments.purgeById(
+				{ id: referenced.id },
+				ctx,
+			),
+		).rejects.toMatchObject({
+			code: "CONFLICT",
+			message: "Cannot purge record while retained references exist",
+		});
+		await expect(
+			setup.app.collections.purge_poly_comments.purgeById(
+				{ id: unrelated.id },
+				ctx,
+			),
+		).resolves.toEqual({ success: true });
 	});
 });

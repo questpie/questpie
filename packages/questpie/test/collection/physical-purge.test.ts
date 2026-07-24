@@ -9,7 +9,9 @@ import { createMockSession, createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
 
 let failAfterPurge = false;
+let failAfterPurgeWithForeignKeyCode = false;
 const purgeHookCalls: string[] = [];
+const purgeHookTitles: unknown[] = [];
 
 const deniedDocuments = collection("purge_denied_documents")
 	.fields(({ f }) => ({
@@ -43,13 +45,44 @@ const documents = collection("purge_documents")
 		beforeOperation: ({ operation }) => {
 			if (operation === "purge") purgeHookCalls.push("attempt");
 		},
-		beforePurge: () => {
+		beforePurge: ({ data }) => {
 			purgeHookCalls.push("before");
+			purgeHookTitles.push(data.title);
 		},
 		afterPurge: () => {
 			purgeHookCalls.push("after");
 			if (failAfterPurge) throw new Error("fatal purge hook");
+			if (failAfterPurgeWithForeignKeyCode) {
+				throw Object.assign(new Error("hook-owned foreign key failure"), {
+					code: "23503",
+					constraint: "audit_owner_id_fkey",
+				});
+			}
 		},
+	});
+
+const localizedAccessDocuments = collection("purge_localized_access_documents")
+	.fields(({ f }) => ({
+		title: f.text().required().localized(),
+	}))
+	.options({ softDelete: true })
+	.access({
+		create: true,
+		read: true,
+		update: true,
+		delete: true,
+		purge: () => ({ title: "Allowed localized title" }),
+	});
+
+const unknownAccessDocuments = collection("purge_unknown_access_documents")
+	.fields(({ f }) => ({ title: f.text().required() }))
+	.options({ softDelete: true })
+	.access({
+		create: true,
+		read: true,
+		update: true,
+		delete: true,
+		purge: () => ({ misspelledTenantField: "tenant-a" }) as any,
 	});
 
 const hardDeleteDocuments = collection("purge_hard_documents")
@@ -61,12 +94,16 @@ describe("physical purge core contract", () => {
 
 	beforeEach(async () => {
 		failAfterPurge = false;
+		failAfterPurgeWithForeignKeyCode = false;
 		purgeHookCalls.length = 0;
+		purgeHookTitles.length = 0;
 		setup = await buildMockApp({
 			collections: {
 				deniedDocuments,
 				documents,
 				hardDeleteDocuments,
+				localizedAccessDocuments,
+				unknownAccessDocuments,
 			},
 			hooks: {
 				collections: [
@@ -133,6 +170,7 @@ describe("physical purge core contract", () => {
 			"after",
 			"global-after",
 		]);
+		expect(purgeHookTitles).toEqual(["Owned"]);
 
 		const rows = await setup.app.db
 			.select()
@@ -153,6 +191,51 @@ describe("physical purge core contract", () => {
 				createTestContext(),
 			),
 		).toEqual([]);
+	});
+
+	it("evaluates purge access against the full localized preimage", async () => {
+		const ctx = createTestContext({ accessMode: "user", locale: "en" });
+		const created = await setup.app.collections.localizedAccessDocuments.create(
+			{ title: "Allowed localized title" },
+			ctx,
+		);
+		await setup.app.collections.localizedAccessDocuments.deleteById(
+			{ id: created.id },
+			ctx,
+		);
+
+		await expect(
+			setup.app.collections.localizedAccessDocuments.purgeById(
+				{ id: created.id },
+				ctx,
+			),
+		).resolves.toEqual({ success: true });
+	});
+
+	it("fails closed when a purge access filter names an unknown field", async () => {
+		const ctx = createTestContext({ accessMode: "user" });
+		const created = await setup.app.collections.unknownAccessDocuments.create(
+			{ title: "Retain me" },
+			ctx,
+		);
+		await setup.app.collections.unknownAccessDocuments.deleteById(
+			{ id: created.id },
+			ctx,
+		);
+
+		await expect(
+			setup.app.collections.unknownAccessDocuments.purgeById(
+				{ id: created.id },
+				ctx,
+			),
+		).rejects.toMatchObject({ code: "NOT_FOUND" });
+		expect(
+			await setup.app.db
+				.select()
+				.from(
+					setup.app.collections.unknownAccessDocuments["~internalRelatedTable"],
+				),
+		).toHaveLength(1);
 	});
 
 	it("uses one disclosure-safe 404 for denied, missing, and repeated purge", async () => {
@@ -238,6 +321,30 @@ describe("physical purge core contract", () => {
 				createTestContext(),
 			),
 		).toHaveLength(versionsBefore.length);
+	});
+
+	it("does not relabel a foreign-key-shaped hook failure as a retained reference", async () => {
+		const user = createMockSession({ id: "tenant-a" });
+		const ctx = createTestContext({ accessMode: "user", session: user });
+		const created = await setup.app.collections.documents.create(
+			{ tenantId: "tenant-a", title: "Hook failure" },
+			ctx,
+		);
+		await setup.app.collections.documents.deleteById({ id: created.id }, ctx);
+		failAfterPurgeWithForeignKeyCode = true;
+
+		await expect(
+			setup.app.collections.documents.purgeById({ id: created.id }, ctx),
+		).rejects.toMatchObject({
+			code: "BAD_REQUEST",
+			message: expect.not.stringContaining("retained references"),
+		});
+
+		expect(
+			await setup.app.db
+				.select()
+				.from(setup.app.collections.documents["~internalRelatedTable"]),
+		).toHaveLength(1);
 	});
 
 	it("participates in an outer transaction and rolls back with it", async () => {

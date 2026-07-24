@@ -184,6 +184,17 @@ export type RelationType = "one" | "many" | "manyToMany";
 export interface RelationConfig {
 	type: RelationType;
 	collection: string;
+	/**
+	 * Complete discriminator-to-collection mapping for a morphTo relation.
+	 * Purge safety must inspect every entry; `collection` remains the primary
+	 * target used by legacy relation resolution.
+	 */
+	polymorphicTargets?: Array<{
+		discriminator: string;
+		collection?: string;
+		typeField: string;
+		idField: string;
+	}>;
 	/** Array of PgColumn references (new pattern) */
 	fields?: PgColumn[];
 	/** Singular string field name for FK lookup (legacy / f.relation pattern) */

@@ -10,6 +10,8 @@ export {
 } from "./cascade-delete.js";
 export {
 	isForeignKeyViolation,
+	lockRelationSourceForWrite,
+	lockRelationTargetsForWrite,
 	preparePurgeRelations,
 	type PreparedPurgeRelations,
 	retainedReferenceConflict,

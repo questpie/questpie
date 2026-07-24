@@ -22,6 +22,29 @@ const postgresLockTargets = collection("postgres_lock_targets")
 				: { visibility: "public" },
 	});
 
+let pausePurge: ((data: Record<string, unknown>) => Promise<void>) | undefined;
+let pauseRelationWrite:
+	| ((data: Record<string, unknown>) => Promise<void>)
+	| undefined;
+
+const postgresPurgeParents = collection("postgres_purge_parents")
+	.fields(({ f }) => ({ name: f.text().required() }))
+	.options({ softDelete: true })
+	.access({ purge: true })
+	.hooks({
+		beforePurge: ({ data }) => pausePurge?.(data),
+	});
+
+const postgresPurgeChildren = collection("postgres_purge_children")
+	.fields(({ f }) => ({
+		name: f.text().required(),
+		parent: f.relation("postgres_purge_parents").required(),
+	}))
+	.hooks({
+		afterChange: ({ data, operation }) =>
+			operation === "create" ? pauseRelationWrite?.(data) : undefined,
+	});
+
 function deferred() {
 	let resolve!: () => void;
 	const promise = new Promise<void>((done) => {
@@ -53,7 +76,13 @@ describe.skipIf(!runPostgresContract)(
 			}
 
 			setup = await buildMockApp(
-				{ collections: { postgresLockTargets } },
+				{
+					collections: {
+						postgresLockTargets,
+						postgres_purge_parents: postgresPurgeParents,
+						postgres_purge_children: postgresPurgeChildren,
+					},
+				},
 				{ db: { url: databaseUrl!, pool: { max: 10 } } },
 			);
 			await runTestDbMigrations(setup.app);
@@ -210,6 +239,89 @@ describe.skipIf(!runPostgresContract)(
 
 			await first;
 			expect(await waitingLock).toEqual([]);
+		});
+
+		it("serializes application-only relation writes with physical purge", async () => {
+			const purgeFirstParent =
+				await setup.app.collections.postgres_purge_parents.create(
+					{ name: "Purge wins" },
+					systemContext,
+				);
+			await setup.app.collections.postgres_purge_parents.deleteById(
+				{ id: purgeFirstParent.id },
+				systemContext,
+			);
+			const purgeLocked = deferred();
+			const releasePurge = deferred();
+			pausePurge = async (data) => {
+				if (data.id !== purgeFirstParent.id) return;
+				purgeLocked.resolve();
+				await releasePurge.promise;
+			};
+
+			const purge = setup.app.collections.postgres_purge_parents.purgeById(
+				{ id: purgeFirstParent.id },
+				systemContext,
+			);
+			await purgeLocked.promise;
+			let lateWriterFinished = false;
+			const lateWriter = setup.app.collections.postgres_purge_children
+				.create(
+					{
+						name: "Must not dangle",
+						parent: purgeFirstParent.id,
+					},
+					systemContext,
+				)
+				.finally(() => {
+					lateWriterFinished = true;
+				});
+			await waitForAttempt();
+			expect(lateWriterFinished).toBe(false);
+			releasePurge.resolve();
+			await purge;
+			await expect(lateWriter).rejects.toMatchObject({ code: "BAD_REQUEST" });
+			pausePurge = undefined;
+
+			const writerFirstParent =
+				await setup.app.collections.postgres_purge_parents.create(
+					{ name: "Writer wins" },
+					systemContext,
+				);
+			await setup.app.collections.postgres_purge_parents.deleteById(
+				{ id: writerFirstParent.id },
+				systemContext,
+			);
+			const writerInserted = deferred();
+			const releaseWriter = deferred();
+			pauseRelationWrite = async (data) => {
+				if (data.parent !== writerFirstParent.id) return;
+				writerInserted.resolve();
+				await releaseWriter.promise;
+			};
+			const writer = setup.app.collections.postgres_purge_children.create(
+				{
+					name: "Retained child",
+					parent: writerFirstParent.id,
+				},
+				systemContext,
+			);
+			await writerInserted.promise;
+			let waitingPurgeFinished = false;
+			const waitingPurge = setup.app.collections.postgres_purge_parents
+				.purgeById({ id: writerFirstParent.id }, systemContext)
+				.finally(() => {
+					waitingPurgeFinished = true;
+				});
+			await waitForAttempt();
+			expect(waitingPurgeFinished).toBe(false);
+			releaseWriter.resolve();
+			await writer;
+			await expect(waitingPurge).rejects.toMatchObject({
+				code: "CONFLICT",
+				message: "Cannot purge record while retained references exist",
+			});
+			pauseRelationWrite = undefined;
 		});
 	},
 );

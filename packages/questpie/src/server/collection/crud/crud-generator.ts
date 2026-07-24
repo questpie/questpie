@@ -38,6 +38,8 @@ import {
 	extractBelongsToConnectValues,
 	handleCascadeDelete,
 	isForeignKeyViolation,
+	lockRelationSourceForWrite,
+	lockRelationTargetsForWrite,
 	preparePurgeRelations,
 	processNestedRelations,
 	retainedReferenceConflict,
@@ -575,7 +577,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		options: FindManyOptions | FindOneOptionsBase,
 		context: CRUDContext,
 		mode: "many" | "one",
-		findOptions?: { skipOutputHooks?: boolean },
+		findOptions?: {
+			skipFieldFiltering?: boolean;
+			skipOutputHooks?: boolean;
+			skipReadLifecycle?: boolean;
+		},
 	): Promise<PaginatedResult<T> | GroupedPaginatedResult<T> | T | null> {
 		// Normalize context FIRST to ensure locale defaults are applied
 		const normalized = this.normalizeContext({
@@ -601,16 +607,18 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				_hookDepth,
 			},
 			async () => {
-				// Execute beforeOperation hook
-				await this.executeHooks(
-					this.state.hooks?.beforeOperation,
-					this.createHookContext({
-						data: options,
-						operation: "read",
-						context: normalized,
-						db,
-					}),
-				);
+				if (!findOptions?.skipReadLifecycle) {
+					// Execute beforeOperation hook
+					await this.executeHooks(
+						this.state.hooks?.beforeOperation,
+						this.createHookContext({
+							data: options,
+							operation: "read",
+							context: normalized,
+							db,
+						}),
+					);
+				}
 
 				// Enforce access control. Upload relations populate through the
 				// PARENT row's read decision: the relation dispatcher stamps nested
@@ -642,7 +650,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 
 				// Execute beforeRead hooks (read doesn't modify data)
-				if (this.state.hooks?.beforeRead) {
+				if (this.state.hooks?.beforeRead && !findOptions?.skipReadLifecycle) {
 					await this.executeHooks(
 						this.state.hooks.beforeRead,
 						this.createHookContext({
@@ -1126,7 +1134,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// caller after the tx commits.
 				await Promise.all(
 					rows.map(async (row: any) => {
-						await this.filterFieldsForRead(row, normalized);
+						if (!findOptions?.skipFieldFiltering) {
+							await this.filterFieldsForRead(row, normalized);
+						}
 						if (!findOptions?.skipOutputHooks) {
 							await this.runFieldOutputHooks(row, "read", normalized, db);
 						}
@@ -1701,6 +1711,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					let record: any;
 					try {
 						record = await withTransaction(db, async (tx: any) => {
+							await lockRelationSourceForWrite({
+								tx,
+								sourceState: this.state,
+								sourceTable: this.table,
+							});
 							({ regularFields, nestedRelations } =
 								await this.applyBelongsToRelationsInternal(
 									regularFields,
@@ -1713,6 +1728,15 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							// Auto-detects { $i18n: value } wrappers in JSONB fields
 							const { localized, nonLocalized, nestedLocalized } =
 								this.splitLocalizedFields(regularFields);
+							if (this.app) {
+								await lockRelationTargetsForWrite({
+									tx,
+									app: this.app,
+									sourceState: this.state,
+									sourceTable: this.table,
+									values: nonLocalized,
+								});
+							}
 
 							// Insert main record
 							const [insertedRecord] = await tx
@@ -2138,6 +2162,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		try {
 			updatedRecords = await withTransaction(db, async (tx: any) => {
 				const txContext = { ...normalized, db: tx };
+				await lockRelationSourceForWrite({
+					tx,
+					sourceState: this.state,
+					sourceTable: this.table,
+				});
 
 				// Claim check: lock candidate rows and re-assert the caller's
 				// predicate at write time. Rows that no longer match (lost a
@@ -2178,6 +2207,15 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// Split localized vs non-localized fields
 				const { localized, nonLocalized, nestedLocalized } =
 					this.splitLocalizedFields(regularFields);
+				if (this.app) {
+					await lockRelationTargetsForWrite({
+						tx,
+						app: this.app,
+						sourceState: this.state,
+						sourceTable: this.table,
+						values: nonLocalized,
+					});
+				}
 
 				// Update main table
 				if (
@@ -2613,6 +2651,37 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			try {
 				return await withTransaction(db, async (tx: any) => {
 					const txContext = { ...normalized, db: tx };
+					const findPreimage = async () =>
+						(await this._executeFind<Record<string, unknown>>(
+							{
+								where: { id },
+								includeDeleted: true,
+								stage: this.workflowConfig?.initialStage,
+							},
+							{ ...txContext, accessMode: "system" },
+							"one",
+							{
+								skipFieldFiltering: true,
+								skipOutputHooks: true,
+								skipReadLifecycle: true,
+							},
+						)) as Record<string, unknown> | null;
+					const assertPurgeAccess = async (
+						preimage: Record<string, unknown>,
+					) => {
+						const canPurge = await this.enforcePurgeAccess(
+							txContext,
+							preimage,
+							params,
+						);
+						if (
+							canPurge === false ||
+							(typeof canPurge === "object" &&
+								!(await this.checkAccessConditions(canPurge, preimage)))
+						) {
+							throw ApiError.notFound("Record", String(id));
+						}
+					};
 
 					await this.executeHooks(
 						this.state.hooks?.beforeOperation,
@@ -2624,17 +2693,14 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						}),
 					);
 
-					// Avoid locking every referring table for a target that never
-					// existed. This is only a candidate read; the authoritative row
-					// is reread and locked after deterministic table locks.
-					const candidateRows = await tx
-						.select({ id: getColumn(this.table, "id")! })
-						.from(this.table)
-						.where(eq(getColumn(this.table, "id")!, id))
-						.limit(1);
-					if (candidateRows.length === 0) {
+					// Resolve and authorize the complete localized preimage before
+					// taking locks on referring tables. The owner is re-read and the
+					// access rule re-evaluated after its row lock below.
+					const candidate = await findPreimage();
+					if (!candidate) {
 						throw ApiError.notFound("Record", String(id));
 					}
+					await assertPurgeAccess(candidate);
 
 					if (!this.app) throw retainedReferenceConflict();
 					const preparedRelations = await preparePurgeRelations({
@@ -2654,43 +2720,21 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						throw ApiError.notFound("Record", String(id));
 					}
 
-					const canPurge = await this.enforcePurgeAccess(
-						txContext,
-						locked,
-						params,
-					);
-					if (canPurge === false) {
+					const preimage = await findPreimage();
+					if (!preimage) {
 						throw ApiError.notFound("Record", String(id));
 					}
-					if (typeof canPurge === "object") {
-						const accessClause = this.buildWhereClause(
-							canPurge as Where,
-							false,
-							this.table,
-							txContext,
-						);
-						if (!accessClause) {
-							throw ApiError.notFound("Record", String(id));
-						}
-						const matchingRows = await tx
-							.select({ id: getColumn(this.table, "id")! })
-							.from(this.table)
-							.where(and(eq(getColumn(this.table, "id")!, id), accessClause))
-							.limit(1);
-						if (matchingRows.length === 0) {
-							throw ApiError.notFound("Record", String(id));
-						}
-					}
+					await assertPurgeAccess(preimage);
 
 					if (locked.deletedAt == null) {
 						throw ApiError.conflict("Only a soft-deleted record can be purged");
 					}
 
-					await preparedRelations.assertNoReferences(locked);
+					await preparedRelations.assertNoReferences(preimage);
 
 					const hookContext = this.createHookContext({
-						data: locked,
-						original: locked,
+						data: preimage,
+						original: preimage,
 						operation: "purge",
 						context: txContext,
 						db: tx,
@@ -2701,32 +2745,41 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						hookContext,
 					);
 
-					if (this.i18nVersionsTable) {
+					// Hooks run inside the transaction and may write through raw db
+					// access, so rescan immediately before the destructive boundary.
+					await preparedRelations.assertNoReferences(preimage);
+
+					try {
+						if (this.i18nVersionsTable) {
+							await tx
+								.delete(this.i18nVersionsTable)
+								.where(eq(getColumn(this.i18nVersionsTable, "parentId")!, id));
+						}
+						if (this.versionsTable) {
+							await tx
+								.delete(this.versionsTable)
+								.where(eq(getColumn(this.versionsTable, "id")!, id));
+						}
 						await tx
-							.delete(this.i18nVersionsTable)
-							.where(eq(getColumn(this.i18nVersionsTable, "parentId")!, id));
+							.delete(this.table)
+							.where(eq(getColumn(this.table, "id")!, id));
+					} catch (error: unknown) {
+						if (isForeignKeyViolation(error)) {
+							throw retainedReferenceConflict();
+						}
+						throw error;
 					}
-					if (this.versionsTable) {
-						await tx
-							.delete(this.versionsTable)
-							.where(eq(getColumn(this.versionsTable, "id")!, id));
-					}
-					await tx
-						.delete(this.table)
-						.where(eq(getColumn(this.table, "id")!, id));
 
 					await this.executeCollectionHooksWithGlobal(
 						"afterPurge",
 						this.state.hooks?.afterPurge,
 						hookContext,
 					);
+					await preparedRelations.assertNoReferences(preimage);
 
 					return attachCurrentTransactionTxid({ success: true as const });
 				});
 			} catch (error: unknown) {
-				if (isForeignKeyViolation(error)) {
-					throw retainedReferenceConflict();
-				}
 				const dbError = parseDatabaseError(error);
 				if (dbError) throw dbError;
 				throw error;

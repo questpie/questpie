@@ -150,7 +150,10 @@ export function extractFieldDefinitions<
 			if (Array.isArray(column)) {
 				// Multiple columns (e.g., polymorphic relation with type + id)
 				for (const col of column) {
-					const colName = (col as { name?: string }).name ?? name;
+					const colName =
+						(col as { name?: string; config?: { name?: string } }).name ??
+						(col as { config?: { name?: string } }).config?.name ??
+						name;
 					columns[colName] = col;
 				}
 			} else {

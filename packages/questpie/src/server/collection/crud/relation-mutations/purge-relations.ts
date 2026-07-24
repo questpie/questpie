@@ -32,6 +32,10 @@ type ApplicationReference = {
 	table: PgTable;
 	sourceColumn: AnyPgColumn;
 	targetKey: string;
+	predicate?: {
+		column: AnyPgColumn;
+		value: string;
+	};
 };
 
 export type PreparedPurgeRelations = {
@@ -158,6 +162,36 @@ function collectApplicationReferences(
 		const relations = sourceState.relations ?? {};
 
 		for (const relation of Object.values(relations) as RelationConfig[]) {
+			if (relation.polymorphicTargets) {
+				if (relation.polymorphicTargets.some((target) => !target.collection)) {
+					unsupported = true;
+					unsupportedTables.push(
+						sourceCrud["~internalRelatedTable"] as PgTable,
+					);
+				}
+				for (const target of relation.polymorphicTargets) {
+					if (target.collection !== targetCollection) continue;
+					const sourceTable = sourceCrud["~internalRelatedTable"] as PgTable;
+					const sourceColumn = getColumn(sourceTable, target.idField);
+					const typeColumn = getColumn(sourceTable, target.typeField);
+					if (!sourceColumn || !typeColumn) {
+						unsupported = true;
+						unsupportedTables.push(sourceTable);
+						continue;
+					}
+					references.push({
+						table: sourceTable,
+						sourceColumn,
+						targetKey: relation.references?.[0] ?? "id",
+						predicate: {
+							column: typeColumn,
+							value: target.discriminator,
+						},
+					});
+				}
+				continue;
+			}
+
 			if (relation.collection === targetCollection && relation.type === "one") {
 				if (!pushScalarReference(references, sourceCrud, relation)) {
 					unsupported = true;
@@ -246,7 +280,14 @@ function collectApplicationReferences(
 	for (const reference of references) {
 		const identity = tableIdentity(reference.table);
 		unique.set(
-			`${identity.schema}.${identity.name}.${reference.sourceColumn.name}:${reference.targetKey}`,
+			[
+				identity.schema,
+				identity.name,
+				reference.sourceColumn.name,
+				reference.targetKey,
+				reference.predicate?.column.name,
+				reference.predicate?.value,
+			].join(":"),
 			reference,
 		);
 	}
@@ -364,6 +405,11 @@ export async function preparePurgeRelations(options: {
 					? getColumn(reference.table, "id")
 					: undefined;
 				const predicates = [eq(reference.sourceColumn, targetValue)];
+				if (reference.predicate) {
+					predicates.push(
+						eq(reference.predicate.column, reference.predicate.value),
+					);
+				}
 				if (sourceId && record.id !== undefined) {
 					predicates.push(ne(sourceId, record.id));
 				}
@@ -411,4 +457,156 @@ export function isForeignKeyViolation(error: unknown): boolean {
 
 export function retainedReferenceConflict(): ApiError {
 	return relationConflict();
+}
+
+type RelationTargetLock = {
+	collection: string;
+	key: string;
+	value: unknown;
+};
+
+/** Acquire the source table lock before any nested relation work starts. */
+export async function lockRelationSourceForWrite(options: {
+	tx: any;
+	sourceState: CollectionBuilderState;
+	sourceTable: PgTable;
+}): Promise<void> {
+	const hasOwnedReference = Object.values(
+		options.sourceState.relations ?? {},
+	).some(
+		(relation) =>
+			relation.polymorphicTargets ||
+			(relation.type === "one" && (relation.fields?.length ?? 0) === 1),
+	);
+	if (!hasOwnedReference) return;
+	const sourceIdentity = tableIdentity(options.sourceTable);
+	await options.tx.execute(
+		sql`LOCK TABLE ${qualifiedIdentifier(sourceIdentity.schema, sourceIdentity.name)} IN ROW EXCLUSIVE MODE`,
+	);
+}
+
+/**
+ * Serialize application-only relation writes with purge.
+ *
+ * The caller has already taken the source table's normal write lock before
+ * nested work. It now key-shares every referenced target row before DML.
+ * Purge takes the stronger source-table lock before locking the owner.
+ */
+export async function lockRelationTargetsForWrite(options: {
+	tx: any;
+	app: Questpie<any>;
+	sourceState: CollectionBuilderState;
+	sourceTable: PgTable;
+	values: Record<string, unknown>;
+}): Promise<void> {
+	const { tx, app, sourceState, sourceTable, values } = options;
+	const targets: RelationTargetLock[] = [];
+
+	for (const relation of Object.values(
+		sourceState.relations ?? {},
+	) as RelationConfig[]) {
+		if (relation.polymorphicTargets) {
+			const configured = relation.polymorphicTargets[0];
+			if (!configured) continue;
+			const typeValue = values[configured.typeField];
+			const idValue = values[configured.idField];
+			if (typeValue == null && idValue == null) continue;
+			if (typeof typeValue !== "string" || idValue == null) {
+				throw ApiError.badRequest(
+					"Polymorphic relation writes require both type and id",
+				);
+			}
+			const target = relation.polymorphicTargets.find(
+				(candidate) => candidate.discriminator === typeValue,
+			);
+			if (!target?.collection) {
+				throw ApiError.badRequest(
+					`Unknown polymorphic relation type "${typeValue}"`,
+				);
+			}
+			targets.push({
+				collection: target.collection,
+				key: relation.references?.[0] ?? "id",
+				value: idValue,
+			});
+			continue;
+		}
+
+		if (relation.type !== "one" || (relation.fields?.length ?? 0) !== 1) {
+			continue;
+		}
+		const configuredField = relation.fields![0]!;
+		const sourceKey =
+			resolveFieldKey(sourceState, configuredField, sourceTable) ??
+			configuredField.name;
+		if (!sourceKey || !Object.hasOwn(values, sourceKey)) continue;
+		const value = values[sourceKey];
+		if (value == null) continue;
+		targets.push({
+			collection: relation.collection,
+			key: relation.references?.[0] ?? "id",
+			value,
+		});
+	}
+
+	if (targets.length === 0) return;
+
+	const resolvedTargets = targets.map((target) => {
+		const targetCrud = app.collections[target.collection] as CRUD | undefined;
+		const targetTable = targetCrud?.["~internalRelatedTable"] as
+			| PgTable
+			| undefined;
+		const targetColumn = targetTable
+			? getColumn(targetTable, target.key)
+			: undefined;
+		if (!targetTable || !targetColumn) {
+			throw ApiError.badRequest(
+				`Cannot validate relation target "${target.collection}.${target.key}"`,
+			);
+		}
+		const identity = tableIdentity(targetTable);
+		return { ...target, targetTable, targetColumn, identity };
+	});
+	const uniqueTargets = new Map<string, (typeof resolvedTargets)[number]>();
+	for (const target of resolvedTargets) {
+		uniqueTargets.set(
+			[
+				target.identity.schema,
+				target.identity.name,
+				target.targetColumn.name,
+				String(target.value),
+			].join(":"),
+			target,
+		);
+	}
+
+	for (const target of [...uniqueTargets.values()].sort((left, right) =>
+		[
+			left.identity.schema,
+			left.identity.name,
+			left.targetColumn.name,
+			String(left.value),
+		]
+			.join(":")
+			.localeCompare(
+				[
+					right.identity.schema,
+					right.identity.name,
+					right.targetColumn.name,
+					String(right.value),
+				].join(":"),
+			),
+	)) {
+		const rows = await tx
+			.select({ value: target.targetColumn })
+			.from(target.targetTable)
+			.where(eq(target.targetColumn, target.value))
+			.limit(1)
+			.for("key share");
+		if (rows.length === 0) {
+			throw ApiError.badRequest(
+				`Relation target "${target.collection}.${target.key}" does not exist`,
+			);
+		}
+	}
 }
