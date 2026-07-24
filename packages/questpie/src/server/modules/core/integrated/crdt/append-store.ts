@@ -1,11 +1,15 @@
 import { Buffer } from "node:buffer";
 import { createHash, randomUUID } from "node:crypto";
 
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm";
 
 import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
 import {
 	type CrdtStagedAggregateBundle,
+	type CrdtFieldEngine,
+	type CrdtEngineFormat,
+	type CrdtEngineReplica,
+	hashCrdtEngineState,
 	hashCrdtCanonicalValue,
 	verifyCrdtStagedAggregateBundle,
 } from "#questpie/shared/crdt-engine.js";
@@ -17,8 +21,10 @@ import {
 	questpieCrdtResourceAdmissionTable,
 	questpieCrdtResourceEpochTable,
 	questpieCrdtResourceTable,
+	questpieCrdtSchemaTable,
 	questpieCrdtSessionGrantTable,
 	questpieCrdtSessionTable,
+	questpieCrdtSnapshotTable,
 	questpieCrdtSubjectFenceTable,
 	questpieCrdtUpdateReceiptTable,
 	questpieCrdtUpdateTable,
@@ -37,6 +43,8 @@ type CrdtAppendInput = Readonly<{
 	resourceEpochId: string;
 	definitionId: string;
 	schemaId: string;
+	aggregateEpoch: bigint;
+	canonicalSchemaVersion: bigint;
 	sessionId: string;
 	subjectId: string;
 	updateId: string;
@@ -81,11 +89,14 @@ export type CrdtAppendPreparation = Readonly<{
 	authority: CrdtAppendInput["authority"];
 	overlay: readonly CrdtAppendOverlayPart[];
 	staged: CrdtStagedAggregateBundle;
-	bindings: readonly Readonly<{
-		fieldSlot: number;
-		bindingId: string;
-		stableFieldId: string;
-	}>[];
+	authoritative: readonly CrdtAuthoritativeReplica[];
+}>;
+
+export type CrdtAuthoritativeReplica = Readonly<{
+	bindingId: string;
+	stableFieldId: string;
+	fieldSlot: number;
+	replica: CrdtEngineReplica<CrdtEngineFormat, any>;
 }>;
 
 export type CrdtAppendOverlayPart = Readonly<{
@@ -134,23 +145,146 @@ export type CrdtReceiptQuery = Readonly<{
 }>;
 
 const stagedAppendInputs = new WeakMap<object, CrdtAppendInput>();
+const authoritativeReplicaProofs = new WeakMap<
+	object,
+	{
+		bindingId: string;
+		stableFieldId: string;
+		fieldSlot: number;
+		stateHash: Uint8Array;
+		fieldEpoch: bigint;
+		fieldCursor: bigint;
+	}
+>();
+
+export async function loadCrdtAuthoritativeReplica(
+	db: CrdtDatabase,
+	input: Readonly<{
+		bindingId: string;
+		engine: CrdtFieldEngine<CrdtEngineFormat, any>;
+	}>,
+): Promise<CrdtAuthoritativeReplica> {
+	const [binding] = await db
+		.select()
+		.from(questpieCrdtBindingTable)
+		.where(
+			and(
+				eq(questpieCrdtBindingTable.id, input.bindingId),
+				eq(questpieCrdtBindingTable.status, 1),
+				isNull(questpieCrdtBindingTable.retiredAt),
+			),
+		);
+	if (!binding) throw rejected();
+	const [snapshot] = await db
+		.select()
+		.from(questpieCrdtSnapshotTable)
+		.where(
+			and(
+				eq(questpieCrdtSnapshotTable.resourceId, binding.resourceId),
+				eq(questpieCrdtSnapshotTable.bindingId, binding.id),
+				eq(questpieCrdtSnapshotTable.fieldEpoch, binding.fieldEpoch),
+				lte(questpieCrdtSnapshotTable.fieldCursor, binding.headFieldCursor),
+			),
+		)
+		.orderBy(desc(questpieCrdtSnapshotTable.fieldCursor))
+		.limit(1);
+	if (
+		!snapshot ||
+		snapshot.engineId !== input.engine.engineId ||
+		snapshot.formatVersion !== input.engine.formatVersion ||
+		!equalBytes(sha256(snapshot.bytes), snapshot.checksum)
+	) {
+		throw rejected();
+	}
+	let replica = await input.engine.restore({
+		snapshot: new Uint8Array(snapshot.bytes),
+		basis: {
+			fieldEpoch: snapshot.fieldEpoch,
+			fieldCursor: snapshot.fieldCursor,
+		},
+	});
+	const updates = await db
+		.select()
+		.from(questpieCrdtUpdateTable)
+		.where(
+			and(
+				eq(questpieCrdtUpdateTable.resourceId, binding.resourceId),
+				eq(questpieCrdtUpdateTable.bindingId, binding.id),
+				eq(questpieCrdtUpdateTable.fieldEpoch, binding.fieldEpoch),
+				gt(questpieCrdtUpdateTable.fieldCursor, snapshot.fieldCursor),
+				lte(questpieCrdtUpdateTable.fieldCursor, binding.headFieldCursor),
+			),
+		)
+		.orderBy(asc(questpieCrdtUpdateTable.fieldCursor));
+	for (const update of updates) {
+		if (
+			update.baseFieldCursor !== replica.basis.fieldCursor ||
+			update.fieldCursor !== replica.basis.fieldCursor + 1n ||
+			!equalBytes(sha256(update.bytes), update.checksum)
+		) {
+			throw rejected();
+		}
+		const candidate = await input.engine.stage({
+			replica,
+			update: new Uint8Array(update.bytes),
+		});
+		replica = await input.engine.commit({
+			candidate,
+			current: replica,
+			assignedFieldCursor: update.fieldCursor,
+		});
+	}
+	if (
+		replica.basis.fieldEpoch !== binding.fieldEpoch ||
+		replica.basis.fieldCursor !== binding.headFieldCursor
+	) {
+		throw rejected();
+	}
+	const capability = Object.freeze({
+		bindingId: binding.id,
+		stableFieldId: binding.stableFieldId,
+		fieldSlot: binding.fieldSlot,
+		replica,
+	});
+	authoritativeReplicaProofs.set(capability, {
+		bindingId: binding.id,
+		stableFieldId: binding.stableFieldId,
+		fieldSlot: binding.fieldSlot,
+		stateHash: await hashCrdtEngineState(replica.state),
+		fieldEpoch: replica.basis.fieldEpoch,
+		fieldCursor: replica.basis.fieldCursor,
+	});
+	return capability;
+}
 
 export async function prepareCrdtAppend(
 	input: CrdtAppendPreparation,
 ): Promise<CrdtStagedAppend> {
 	const staged = await verifyCrdtStagedAggregateBundle(input.staged);
-	const bindingsBySlot = new Map(
-		input.bindings.map((binding) => [binding.fieldSlot, binding]),
+	const authoritativeBySlot = new Map(
+		input.authoritative.map((binding) => [binding.fieldSlot, binding]),
 	);
 	if (
-		bindingsBySlot.size !== input.bindings.length ||
-		staged.parts.some((part) => !bindingsBySlot.has(part.fieldSlot))
+		authoritativeBySlot.size !== input.authoritative.length ||
+		staged.parts.some((part) => !authoritativeBySlot.has(part.fieldSlot))
 	) {
 		throw rejected();
 	}
 	const parts = await Promise.all(
 		staged.parts.map(async (part) => {
-			const binding = bindingsBySlot.get(part.fieldSlot)!;
+			const binding = authoritativeBySlot.get(part.fieldSlot)!;
+			const proof = authoritativeReplicaProofs.get(binding);
+			if (
+				!proof ||
+				proof.bindingId !== binding.bindingId ||
+				proof.stableFieldId !== binding.stableFieldId ||
+				proof.fieldSlot !== binding.fieldSlot ||
+				proof.fieldEpoch !== part.candidate.basis.fieldEpoch ||
+				proof.fieldCursor !== part.candidate.basis.fieldCursor ||
+				!equalBytes(proof.stateHash, part.candidate.basisStateHash)
+			) {
+				throw rejected();
+			}
 			const assignedFieldCursor = part.candidate.basis.fieldCursor + 1n;
 			const nextReplica = await part.engine.restore({
 				snapshot: new Uint8Array(part.candidate.nextSnapshot),
@@ -192,6 +326,8 @@ export async function prepareCrdtAppend(
 		resourceEpochId: input.resourceEpochId,
 		definitionId: input.definitionId,
 		schemaId: input.schemaId,
+		aggregateEpoch: staged.aggregateEpoch,
+		canonicalSchemaVersion: BigInt(staged.canonicalSchemaVersion),
 		sessionId: input.sessionId,
 		subjectId: input.subjectId,
 		updateId: input.updateId,
@@ -360,8 +496,23 @@ async function appendTransaction(
 	) {
 		throw rejected();
 	}
+	const [schema] = await db
+		.select({ schemaVersion: questpieCrdtSchemaTable.schemaVersion })
+		.from(questpieCrdtSchemaTable)
+		.where(
+			and(
+				eq(questpieCrdtSchemaTable.id, input.schemaId),
+				eq(questpieCrdtSchemaTable.definitionId, input.definitionId),
+			),
+		);
+	if (
+		epoch.aggregateEpoch !== input.aggregateEpoch ||
+		schema?.schemaVersion !== input.canonicalSchemaVersion
+	) {
+		throw rejected();
+	}
 	const bindingIds = input.overlay.map((part) => part.bindingId).sort();
-	const bindings = await db
+	const activeBindings = await db
 		.select()
 		.from(questpieCrdtBindingTable)
 		.where(
@@ -371,11 +522,28 @@ async function appendTransaction(
 				isNull(questpieCrdtBindingTable.retiredAt),
 			),
 		)
+		.orderBy(asc(questpieCrdtBindingTable.id));
+	if (
+		activeBindings.length !== input.overlay.length ||
+		activeBindings.some((binding, index) => binding.id !== bindingIds[index])
+	) {
+		throw rejected();
+	}
+	const touchedBindingIds = input.parts.map((part) => part.bindingId).sort();
+	const bindings = await db
+		.select()
+		.from(questpieCrdtBindingTable)
+		.where(
+			and(
+				eq(questpieCrdtBindingTable.resourceId, input.resourceId),
+				inArray(questpieCrdtBindingTable.id, touchedBindingIds),
+			),
+		)
 		.orderBy(asc(questpieCrdtBindingTable.id))
 		.for("update");
 	if (
-		bindings.length !== input.overlay.length ||
-		bindings.some((binding, index) => binding.id !== bindingIds[index])
+		bindings.length !== touchedBindingIds.length ||
+		bindings.some((binding, index) => binding.id !== touchedBindingIds[index])
 	) {
 		throw rejected();
 	}
@@ -479,7 +647,7 @@ async function appendTransaction(
 		throw rejected();
 	}
 	const overlays = new Map(input.overlay.map((part) => [part.bindingId, part]));
-	for (const binding of bindings) {
+	for (const binding of activeBindings) {
 		const overlay = overlays.get(binding.id);
 		if (
 			!overlay ||
@@ -516,7 +684,7 @@ async function appendTransaction(
 	const nextStateBytesByBinding = new Map(
 		input.parts.map((part) => [part.bindingId, part.nextStateBytes]),
 	);
-	const aggregateStateBytes = bindings.reduce(
+	const aggregateStateBytes = activeBindings.reduce(
 		(total, binding) =>
 			total + (nextStateBytesByBinding.get(binding.id) ?? binding.stateBytes),
 		0n,
@@ -588,7 +756,10 @@ async function appendTransaction(
 	}
 	await db
 		.update(questpieCrdtResourceEpochTable)
-		.set({ headCommitSeq: commitSeq })
+		.set({
+			headCommitSeq: commitSeq,
+			updateBytes: sql`${questpieCrdtResourceEpochTable.updateBytes} + ${input.parts.reduce((size, part) => size + part.bytes.byteLength, 0)}`,
+		})
 		.where(eq(questpieCrdtResourceEpochTable.id, input.resourceEpochId));
 	const [receipt] = await db
 		.insert(questpieCrdtUpdateReceiptTable)

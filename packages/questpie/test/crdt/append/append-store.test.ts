@@ -19,6 +19,7 @@ import pg from "pg";
 import type { AnyDrizzleClient } from "../../../src/server/config/types.js";
 import {
 	createCrdtAppendStore,
+	loadCrdtAuthoritativeReplica,
 	prepareCrdtAppend,
 } from "../../../src/server/modules/core/integrated/crdt/append-store.js";
 import {
@@ -164,6 +165,7 @@ describe("CRDT atomic append store", () => {
 			.from(questpieCrdtBindingTable)
 			.where(eq(questpieCrdtBindingTable.id, fixture.binding.id));
 		expect(epoch?.headCommitSeq).toBe(1n);
+		expect(epoch?.updateBytes).toBe(BigInt(appendUpdateBytes().byteLength));
 		expect(binding?.headFieldCursor).toBe(1n);
 		const [session] = await db
 			.select()
@@ -215,6 +217,51 @@ describe("CRDT atomic append store", () => {
 		);
 	});
 
+	it("rolls back the first field when PostgreSQL rejects the second field insert", async () => {
+		const secondSlot = Math.max(
+			...fixture.bindings.map((binding) => binding.fieldSlot),
+		);
+		await db.execute(sql`
+			CREATE FUNCTION fail_second_crdt_part() RETURNS trigger AS $$
+			BEGIN
+				IF NEW.field_slot = ${sql.raw(String(secondSlot))} THEN
+					RAISE EXCEPTION 'injected second part failure';
+				END IF;
+				RETURN NEW;
+			END;
+			$$ LANGUAGE plpgsql;
+		`);
+		await db.execute(sql`
+			CREATE TRIGGER fail_second_crdt_part
+			BEFORE INSERT ON questpie_crdt_update
+			FOR EACH ROW EXECUTE FUNCTION fail_second_crdt_part()
+		`);
+		const store = createCrdtAppendStore(db, { lockOwnerRow });
+
+		await expect(
+			store.append(await multiFieldAppendInput(fixture)),
+		).rejects.toBeDefined();
+		expect(await db.select().from(questpieCrdtCommitTable)).toHaveLength(0);
+		expect(await db.select().from(questpieCrdtUpdateTable)).toHaveLength(0);
+		expect(await db.select().from(questpieCrdtUpdateReceiptTable)).toHaveLength(
+			0,
+		);
+		const bindings = await db
+			.select()
+			.from(questpieCrdtBindingTable)
+			.where(eq(questpieCrdtBindingTable.resourceId, RESOURCE_ID));
+		expect(bindings.map((binding) => binding.headFieldCursor)).toEqual([
+			0n,
+			0n,
+		]);
+		const [epoch] = await db
+			.select()
+			.from(questpieCrdtResourceEpochTable)
+			.where(eq(questpieCrdtResourceEpochTable.id, fixture.resourceEpochId));
+		expect(epoch?.headCommitSeq).toBe(0n);
+		expect(epoch?.updateBytes).toBe(0n);
+	});
+
 	it("returns the durable receipt for an exact retry without another commit or notice", async () => {
 		const notices: unknown[] = [];
 		const store = createCrdtAppendStore(db, {
@@ -249,6 +296,64 @@ describe("CRDT atomic append store", () => {
 		});
 		expect(ownerLocks).toBe(0);
 		expect(await db.select().from(questpieCrdtCommitTable)).toHaveLength(0);
+	});
+
+	it("rejects a staged candidate built from a non-authoritative replica", async () => {
+		const authoritative = await loadCrdtAuthoritativeReplica(db, {
+			bindingId: fixture.binding.id,
+			engine: textEngine,
+		});
+		const forgedReplica = await textEngine.create({
+			value: "Forged",
+			basis: authoritative.replica.basis,
+		});
+		const staged = await stageCrdtAggregateBundle({
+			aggregateEpoch: 1n,
+			submittedSchemaVersion: 1,
+			canonicalSchemaVersion: 1,
+			parts: [
+				{
+					fieldSlot: fixture.binding.fieldSlot,
+					engine: textEngine,
+					replica: forgedReplica,
+					update: encodeDeterministicTextUpdate([
+						{ type: "insert", index: 6, value: "!" },
+					]),
+				},
+			],
+		});
+
+		await expect(
+			prepareCrdtAppend({
+				resourceId: RESOURCE_ID,
+				resourceEpochId: fixture.resourceEpochId,
+				definitionId: fixture.definitionId,
+				schemaId: fixture.schemaId,
+				sessionId: SESSION_ID,
+				subjectId: SUBJECT_ID,
+				updateId: UPDATE_ID,
+				submittedSchemaId: fixture.schemaId,
+				decisionExpiresAt: new Date(Date.now() + 30_000),
+				authority: {
+					resourceReadFence: 0n,
+					resourceEditFence: 0n,
+					ownerPolicyRevision: 0n,
+					subjectReadFence: 0n,
+					subjectEditFence: 0n,
+					sessionGeneration: 0n,
+				},
+				overlay: fixture.bindings.map((binding) => ({
+					bindingId: binding.id,
+					stableFieldId: binding.stableFieldId,
+					fieldEpoch: binding.fieldEpoch,
+					fieldCursor: binding.headFieldCursor,
+					readFence: binding.readFence,
+					editFence: binding.editFence,
+				})),
+				staged,
+				authoritative: [authoritative],
+			}),
+		).rejects.toMatchObject({ code: "CRDT_APPEND_REJECTED" });
 	});
 
 	it("requires current read authority before returning an exact retry receipt", async () => {
@@ -330,27 +435,27 @@ describe("CRDT atomic append store", () => {
 
 	it("restages a stale basis with a bounded retry", async () => {
 		const store = createCrdtAppendStore(db, { lockOwnerRow });
-		await db
-			.update(questpieCrdtBindingTable)
-			.set({ headFieldCursor: 1n })
-			.where(eq(questpieCrdtBindingTable.id, fixture.binding.id));
+		const targetUpdate = encodeDeterministicTextUpdate([
+			{ type: "insert", index: 6, value: "?" },
+		]);
+		const staleCandidate = await appendInput(fixture, UPDATE_ID, targetUpdate);
+		await store.append(
+			await appendInput(fixture, "00000000-0000-4000-8000-000000000310"),
+		);
 		const attempts: number[] = [];
 
 		const receipt = await store.appendWithRestage(async (attempt) => {
 			attempts.push(attempt);
-			return appendInput(
-				fixture,
-				UPDATE_ID,
-				appendUpdateBytes(),
-				BigInt(attempt),
-			);
+			return attempt === 0
+				? staleCandidate
+				: appendInput(fixture, UPDATE_ID, targetUpdate);
 		});
 
 		expect(attempts).toEqual([0, 1]);
 		expect(receipt.fieldCursors).toEqual([
 			{ fieldSlot: fixture.binding.fieldSlot, fieldCursor: 2n },
 		]);
-		expect(await db.select().from(questpieCrdtCommitTable)).toHaveLength(1);
+		expect(await db.select().from(questpieCrdtCommitTable)).toHaveLength(2);
 	});
 
 	it("rolls back the whole append when a durable rate budget is exhausted", async () => {
@@ -523,26 +628,31 @@ describe.skipIf(!postgresUrl)(
 			}
 		});
 
-		it("serializes same-basis appends across independent pools", async () => {
+		it("serializes contention and revoke-before-append without deadlock", async () => {
 			const first = createCrdtAppendStore(firstDb, { lockOwnerRow });
 			const second = createCrdtAppendStore(secondDb, { lockOwnerRow });
 			const firstInput = await appendInput(pgFixture);
-			const secondInput = await appendInput(
-				pgFixture,
-				"00000000-0000-4000-8000-000000000307",
+			const contenders = await Promise.all(
+				Array.from({ length: 50 }, (_, index) =>
+					appendInput(
+						pgFixture,
+						`00000000-0000-4000-8000-${String(index + 400).padStart(12, "0")}`,
+					),
+				),
 			);
 
-			const outcomes = await Promise.allSettled([
-				first.append(firstInput),
-				second.append(secondInput),
-			]);
+			const outcomes = await Promise.allSettled(
+				[firstInput, ...contenders].map((input, index) =>
+					(index % 2 === 0 ? first : second).append(input),
+				),
+			);
 
 			expect(
 				outcomes.filter((outcome) => outcome.status === "fulfilled"),
 			).toHaveLength(1);
 			expect(
 				outcomes.filter((outcome) => outcome.status === "rejected"),
-			).toHaveLength(1);
+			).toHaveLength(50);
 			expect(await firstDb.select().from(questpieCrdtCommitTable)).toHaveLength(
 				1,
 			);
@@ -553,7 +663,52 @@ describe.skipIf(!postgresUrl)(
 					eq(questpieCrdtResourceEpochTable.id, pgFixture.resourceEpochId),
 				);
 			expect(epoch?.headCommitSeq).toBe(1n);
-		}, 30_000);
+
+			let releaseRevoke!: () => void;
+			const release = new Promise<void>((resolve) => {
+				releaseRevoke = resolve;
+			});
+			let announceLocked!: () => void;
+			const locked = new Promise<void>((resolve) => {
+				announceLocked = resolve;
+			});
+			const revoke = firstDb.transaction(async (tx) => {
+				await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+				await lockOwnerRow(tx, {
+					resourceId: RESOURCE_ID,
+					definitionId: pgFixture.definitionId,
+				});
+				await tx
+					.select()
+					.from(questpieCrdtResourceTable)
+					.where(eq(questpieCrdtResourceTable.id, RESOURCE_ID))
+					.for("update");
+				announceLocked();
+				await release;
+				await tx
+					.update(questpieCrdtResourceTable)
+					.set({ editFence: 1n })
+					.where(eq(questpieCrdtResourceTable.id, RESOURCE_ID));
+			});
+			await locked;
+			const afterFirst = await appendInput(
+				pgFixture,
+				"00000000-0000-4000-8000-000000000999",
+				encodeDeterministicTextUpdate([
+					{ type: "insert", index: 7, value: "?" },
+				]),
+			);
+			const racedAppend = second.append(afterFirst);
+			releaseRevoke();
+			await revoke;
+
+			await expect(racedAppend).rejects.toMatchObject({
+				code: "CRDT_APPEND_REJECTED",
+			});
+			expect(await firstDb.select().from(questpieCrdtCommitTable)).toHaveLength(
+				1,
+			);
+		}, 60_000);
 	},
 );
 
@@ -583,16 +738,24 @@ function appendUpdateBytes() {
 async function multiFieldAppendInput(
 	fixture: Awaited<ReturnType<typeof seedFixture>>,
 ) {
+	const authoritative = await Promise.all(
+		fixture.bindings.map((binding) =>
+			loadCrdtAuthoritativeReplica(fixture.db, {
+				bindingId: binding.id,
+				engine: textEngine,
+			}),
+		),
+	);
 	const parts = await Promise.all(
-		fixture.bindings.map(async (binding) => {
-			const value = binding.sourcePath === "title" ? "Shared" : "Body";
+		authoritative.map(async (binding) => {
+			const stored = fixture.bindings.find(
+				(candidate) => candidate.id === binding.bindingId,
+			)!;
+			const value = stored.sourcePath === "title" ? "Shared" : "Body";
 			return {
 				fieldSlot: binding.fieldSlot,
 				engine: textEngine,
-				replica: await textEngine.create({
-					value,
-					basis: { fieldEpoch: 1n, fieldCursor: 0n },
-				}),
+				replica: binding.replica,
 				update: encodeDeterministicTextUpdate([
 					{ type: "insert" as const, index: value.length, value: "!" },
 				]),
@@ -633,11 +796,7 @@ async function multiFieldAppendInput(
 			editFence: 0n,
 		})),
 		staged,
-		bindings: fixture.bindings.map((binding) => ({
-			fieldSlot: binding.fieldSlot,
-			bindingId: binding.id,
-			stableFieldId: binding.stableFieldId,
-		})),
+		authoritative,
 	});
 }
 
@@ -645,12 +804,15 @@ async function appendInput(
 	fixture: Awaited<ReturnType<typeof seedFixture>>,
 	updateId = UPDATE_ID,
 	update = appendUpdateBytes(),
-	baseFieldCursor = 0n,
 ) {
-	const replica = await textEngine.create({
-		value: "Shared",
-		basis: { fieldEpoch: 1n, fieldCursor: baseFieldCursor },
+	const authoritative = await loadCrdtAuthoritativeReplica(fixture.db, {
+		bindingId: fixture.binding.id,
+		engine: textEngine,
 	});
+	const currentBindings = await fixture.db
+		.select()
+		.from(questpieCrdtBindingTable)
+		.where(eq(questpieCrdtBindingTable.resourceId, RESOURCE_ID));
 	const staged = await stageCrdtAggregateBundle({
 		aggregateEpoch: 1n,
 		submittedSchemaVersion: 1,
@@ -659,7 +821,7 @@ async function appendInput(
 			{
 				fieldSlot: fixture.binding.fieldSlot,
 				engine: textEngine,
-				replica,
+				replica: authoritative.replica,
 				update,
 			},
 		],
@@ -682,22 +844,16 @@ async function appendInput(
 			subjectEditFence: 0n,
 			sessionGeneration: 0n,
 		},
-		overlay: fixture.bindings.map((binding) => ({
+		overlay: currentBindings.map((binding) => ({
 			bindingId: binding.id,
 			stableFieldId: binding.stableFieldId,
 			fieldEpoch: 1n,
-			fieldCursor: binding.id === fixture.binding.id ? baseFieldCursor : 0n,
+			fieldCursor: binding.headFieldCursor,
 			readFence: 0n,
 			editFence: 0n,
 		})),
 		staged,
-		bindings: [
-			{
-				bindingId: fixture.binding.id,
-				stableFieldId: fixture.binding.stableFieldId,
-				fieldSlot: fixture.binding.fieldSlot,
-			},
-		],
+		authoritative: [authoritative],
 	});
 }
 
@@ -835,5 +991,6 @@ async function seedFixture(db: AnyDrizzleClient<any>) {
 		resource: resource!,
 		binding: binding!,
 		bindings,
+		db,
 	};
 }
