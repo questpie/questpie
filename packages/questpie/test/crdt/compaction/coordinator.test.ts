@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+	collectCrdtGarbage,
+	createCrdtCompactionStore,
+} from "../../../src/server/modules/core/integrated/crdt/compaction-store.js";
+import {
 	createCrdtCompactionCoordinator,
 	planCrdtGarbageCollection,
 	shouldCompactCrdtAggregate,
@@ -91,6 +95,27 @@ describe("CRDT compaction coordinator", () => {
 });
 
 describe("CRDT retention plan", () => {
+	it("rejects an unbounded durable GC request before touching the database", async () => {
+		await expect(
+			collectCrdtGarbage({} as never, {
+				resourceId: "resource",
+				resourceEpochId: "epoch",
+				limit: 257,
+			}),
+		).rejects.toThrow("between 1 and 256");
+	});
+
+	it("rejects an invalid durable compaction lease configuration", () => {
+		expect(() =>
+			createCrdtCompactionStore({} as never, {
+				ownerId: "",
+				resolveEngine: () => {
+					throw new Error("must not resolve");
+				},
+			}),
+		).toThrow("lease configuration");
+	});
+
 	it("retains all commits until a previous verified basis exists", () => {
 		expect(
 			planCrdtGarbageCollection({
