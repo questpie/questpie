@@ -59,7 +59,7 @@ describe("admin realtime consumer regression", () => {
 			routes: {},
 			realtime: {
 				subscribe: () => () => {},
-				stream: async function* (topic: {
+				streamEvents: async function* (topic: {
 					resourceType: "collection" | "global";
 					resource: string;
 					operation?: "find" | "count" | "get";
@@ -68,9 +68,14 @@ describe("admin realtime consumer regression", () => {
 					const operation =
 						topic.operation ??
 						(topic.resourceType === "global" ? "get" : "find");
-					yield snapshots.get(
-						`${topic.resourceType}:${topic.resource}:${operation}`,
-					);
+					yield {
+						type: "snapshot" as const,
+						topicId: `${topic.resourceType}:${topic.resource}:${operation}`,
+						seq: 1,
+						data: snapshots.get(
+							`${topic.resourceType}:${topic.resource}:${operation}`,
+						),
+					};
 				},
 				destroy: () => {},
 				topicCount: 0,
