@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 
-import pg from "pg";
 import { memory } from "files-sdk/memory";
+import pg from "pg";
 
 import { collection, withTransaction } from "../../src/exports/index.js";
 import {
@@ -369,15 +369,16 @@ describe.skipIf(!runPostgresContract)(
 		it("serializes delayed cleanup against a writer reusing the same key", async () => {
 			const key = "postgres-contract/reused-key.txt";
 			await setup.app.storage.upload(key, new TextEncoder().encode("old"));
-			const original = await setup.app.collections.postgres_upload_assets.create(
-				{
-					key,
-					filename: "old.txt",
-					mimeType: "text/plain",
-					size: 3,
-				},
-				systemContext,
-			);
+			const original =
+				await setup.app.collections.postgres_upload_assets.create(
+					{
+						key,
+						filename: "old.txt",
+						mimeType: "text/plain",
+						size: 3,
+					},
+					systemContext,
+				);
 			await setup.app.collections.postgres_upload_assets.deleteById(
 				{ id: original.id },
 				systemContext,
