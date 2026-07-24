@@ -133,6 +133,56 @@ describe("CRDT durable ticket admission", () => {
 		expect(grantCount?.value).toBe(1);
 	});
 
+	it("inspects only a live valid credential and idempotently releases its session", async () => {
+		const store = createCrdtTicketAdmissionStore(db, {
+			secretKey: SECRET_KEY,
+		});
+		const issued = await Promise.all(
+			Array.from({ length: 5 }, () => store.issue(authorization())),
+		);
+		expect(await store.inspect(issued[0]!.ticket)).toEqual({
+			resourceId: ID.resource,
+			requestedMode: "edit",
+			audience: "questpie-test",
+			origin: "https://app.example",
+		});
+		const badSecret = `${issued[0]!.ticket.slice(0, issued[0]!.ticket.indexOf("."))}.${"A".repeat(43)}`;
+		await expect(store.inspect(badSecret)).rejects.toBeInstanceOf(
+			CrdtTicketRejectedError,
+		);
+
+		const redeemed = await store.redeem({
+			ticket: issued[0]!.ticket,
+			authorization: authorization(),
+		});
+		await expect(store.inspect(issued[0]!.ticket)).rejects.toBeInstanceOf(
+			CrdtTicketRejectedError,
+		);
+		await store.release(redeemed.sessionId);
+		await store.release(redeemed.sessionId);
+
+		const [session] = await db
+			.select({
+				closedAt: questpieCrdtSessionTable.closedAt,
+				closeReason: questpieCrdtSessionTable.closeReason,
+				leaseExpiresAt: questpieCrdtSessionTable.leaseExpiresAt,
+			})
+			.from(questpieCrdtSessionTable)
+			.where(eq(questpieCrdtSessionTable.id, redeemed.sessionId));
+		const ticketId = issued[0]!.ticket.slice(0, issued[0]!.ticket.indexOf("."));
+		const [ticket] = await db
+			.select({ releasedAt: questpieCrdtTicketTable.releasedAt })
+			.from(questpieCrdtTicketTable)
+			.where(eq(questpieCrdtTicketTable.id, ticketId));
+		expect(session?.closedAt).toBeInstanceOf(Date);
+		expect(session?.closeReason).toBe(1);
+		expect(session?.leaseExpiresAt.getTime()).toBeLessThanOrEqual(Date.now());
+		expect(ticket?.releasedAt).toBeInstanceOf(Date);
+
+		const replacement = await store.issue(authorization());
+		expect(replacement.ticket).toBeString();
+	});
+
 	it("counts reservations and sessions once and frees expired capacity without cleanup", async () => {
 		const store = createCrdtTicketAdmissionStore(db, {
 			secretKey: SECRET_KEY,

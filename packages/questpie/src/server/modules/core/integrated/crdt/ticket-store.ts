@@ -98,6 +98,13 @@ export type CrdtRedeemedTicket = Readonly<{
 	effectiveMode: CrdtMode;
 }>;
 
+export type CrdtTicketRedemptionClaim = Readonly<{
+	resourceId: string;
+	requestedMode: CrdtMode;
+	audience: string;
+	origin: string | null;
+}>;
+
 export function createCrdtTicketAdmissionStore(
 	db: CrdtDatabase,
 	options: Readonly<{ secretKey: string }>,
@@ -113,6 +120,53 @@ export function createCrdtTicketAdmissionStore(
 				);
 			} catch (error) {
 				if (error instanceof TypeError) throw error;
+				throw rejected();
+			}
+		},
+		async inspect(ticket: string): Promise<CrdtTicketRedemptionClaim> {
+			try {
+				const credential = parseCrdtTicketCredential({
+					token: ticket,
+					secretKey: options.secretKey,
+				});
+				const [claim] = await db
+					.select({
+						resourceId: questpieCrdtTicketTable.resourceId,
+						requestedMode: questpieCrdtTicketTable.requestedMode,
+						audience: questpieCrdtTicketTable.audience,
+						origin: questpieCrdtTicketTable.origin,
+					})
+					.from(questpieCrdtTicketTable)
+					.where(
+						and(
+							eq(questpieCrdtTicketTable.id, credential.ticketId),
+							eq(
+								questpieCrdtTicketTable.secretHash,
+								Buffer.from(credential.secretHash),
+							),
+							isNull(questpieCrdtTicketTable.redeemedAt),
+							isNull(questpieCrdtTicketTable.releasedAt),
+							gt(questpieCrdtTicketTable.expiresAt, sql`clock_timestamp()`),
+							gt(
+								questpieCrdtTicketTable.authorityExpiresAt,
+								sql`clock_timestamp()`,
+							),
+						),
+					);
+				if (!claim) throw rejected();
+				return Object.freeze({
+					resourceId: claim.resourceId,
+					requestedMode: modeName(claim.requestedMode),
+					audience: claim.audience,
+					origin: claim.origin,
+				});
+			} catch (error) {
+				if (
+					error instanceof TypeError &&
+					error.message === "CRDT ticket secret key must be at least 256 bits"
+				) {
+					throw error;
+				}
 				throw rejected();
 			}
 		},
@@ -139,6 +193,33 @@ export function createCrdtTicketAdmissionStore(
 				}
 				throw rejected();
 			}
+		},
+		async release(sessionId: string): Promise<void> {
+			if (!validUuid(sessionId)) {
+				throw new TypeError("CRDT session ID must be a UUID");
+			}
+			await db.transaction(async (tx) => {
+				const [closed] = await tx
+					.update(questpieCrdtSessionTable)
+					.set({
+						leaseExpiresAt: sql`LEAST(clock_timestamp(), ${questpieCrdtSessionTable.authorityExpiresAt})`,
+						closedAt: sql`clock_timestamp()`,
+						closeReason: 1,
+						updatedAt: sql`clock_timestamp()`,
+					})
+					.where(
+						and(
+							eq(questpieCrdtSessionTable.id, sessionId),
+							isNull(questpieCrdtSessionTable.closedAt),
+						),
+					)
+					.returning({ ticketId: questpieCrdtSessionTable.ticketId });
+				if (!closed) return;
+				await tx
+					.update(questpieCrdtTicketTable)
+					.set({ releasedAt: sql`clock_timestamp()` })
+					.where(eq(questpieCrdtTicketTable.id, closed.ticketId));
+			});
 		},
 	});
 }
@@ -838,6 +919,12 @@ function equalStoredGrants(
 
 function modeValue(mode: CrdtMode): 1 | 2 {
 	return mode === "view" ? 1 : 2;
+}
+
+function modeName(mode: number): CrdtMode {
+	if (mode === 1) return "view";
+	if (mode === 2) return "edit";
+	throw rejected();
 }
 
 function byteLength(value: string): number {
