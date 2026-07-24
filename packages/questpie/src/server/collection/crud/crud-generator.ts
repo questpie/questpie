@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 
 import {
@@ -235,6 +236,19 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				: defaultValue;
 		}
 		return values;
+	}
+
+	private async stageCrdtOwner(
+		values: Record<string, unknown>,
+	): Promise<StagedCrdtOwnerActivation | undefined> {
+		const manifest = this.getCrdtManifest();
+		if (!manifest) return undefined;
+		return stageCrdtOwnerActivation({
+			manifest,
+			resourceId: randomUUID(),
+			values: this.getCrdtCreateValues(values, manifest),
+			textEngine: this.app?.config.crdt?.engines?.text,
+		});
 	}
 
 	/**
@@ -1940,7 +1954,17 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			| UpdateParams<any, any, string | number>
 			| { where: Where; data: Record<string, any> },
 		context: CRUDContext = {},
+		internal?: { crdtRestore: StagedCrdtOwnerActivation },
 	) {
+		if (
+			this.getCrdtManifest() &&
+			Object.hasOwn(params.data, "deletedAt") &&
+			!internal
+		) {
+			throw ApiError.badRequest(
+				`Collaborative owner "${this.state.name}" can only be undeleted through restoreById`,
+			);
+		}
 		assertNoCrdtFieldsInOrdinaryMutation({
 			ownerName: this.state.name,
 			fieldDefinitions: this.state.fieldDefinitions,
@@ -2268,6 +2292,37 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// handled above; fatal infrastructure errors still abort the transaction.
 				await Promise.all(afterChangePromises);
 
+				if (internal) {
+					const restored = refetchedRecords[0];
+					if (!restored || refetchedRecords.length !== 1) {
+						throw new Error(
+							"Collaborative restore must resolve exactly one owner",
+						);
+					}
+					const [lockedOwner] = await tx
+						.select()
+						.from(this.table)
+						.where(eq(getColumn(this.table, "id")!, restored.id))
+						.for("update");
+					if (!lockedOwner) {
+						throw new Error(
+							"Restored owner disappeared before CRDT lifecycle restore",
+						);
+					}
+					if (lockedOwner.deletedAt != null) {
+						throw new Error(
+							"Collaborative owner remained deleted after restore hooks",
+						);
+					}
+					await new CrdtOwnerLifecycleTransaction(tx).restore({
+						staged: internal.crdtRestore,
+						owner: {
+							locator: canonicalCrdtCollectionLocator(restored.id),
+							values: lockedOwner,
+						},
+					});
+				}
+
 				return attachCurrentTransactionTxid(refetchedRecords);
 			});
 		} catch (error: unknown) {
@@ -2345,6 +2400,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			if (!existing) {
 				throw ApiError.notFound("Record", id);
 			}
+			if (this.state.options.softDelete && existing.deletedAt != null) {
+				throw ApiError.notFound("Record", id);
+			}
 
 			// Enforce access control
 			const canDelete = await this.enforceAccessControl(
@@ -2387,6 +2445,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					db,
 				}),
 			);
+			const stagedCrdtOwner = await this.stageCrdtOwner(existing);
 
 			// Use transaction for delete + version
 			await withTransaction(db, async (tx: any) => {
@@ -2400,6 +2459,20 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					candidateIds: [id],
 				});
 				if (claimed.length === 0) {
+					throw ApiError.notFound("Record", id);
+				}
+				const [lockedBeforeDelete] = await tx
+					.select()
+					.from(this.table)
+					.where(eq(getColumn(this.table, "id")!, id))
+					.for("update");
+				if (!lockedBeforeDelete) {
+					throw ApiError.notFound("Record", id);
+				}
+				if (
+					this.state.options.softDelete &&
+					lockedBeforeDelete.deletedAt != null
+				) {
 					throw ApiError.notFound("Record", id);
 				}
 
@@ -2440,6 +2513,35 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						`[QUESTPIE] afterDelete hook error for "${this.state.name}":`,
 						err,
 					);
+				}
+				if (stagedCrdtOwner) {
+					const terminalRows = await tx
+						.select()
+						.from(this.table)
+						.where(eq(getColumn(this.table, "id")!, id))
+						.for("update");
+					const terminalOwner = terminalRows[0];
+					if (
+						(this.state.options.softDelete &&
+							(!terminalOwner || terminalOwner.deletedAt == null)) ||
+						(!this.state.options.softDelete && terminalOwner)
+					) {
+						throw new Error(
+							"Collaborative owner is not terminally deleted after delete hooks",
+						);
+					}
+					const crdtOwner = terminalOwner ?? lockedBeforeDelete;
+					const lifecycle = new CrdtOwnerLifecycleTransaction(tx);
+					const locator = canonicalCrdtCollectionLocator(id);
+					await lifecycle.activate({
+						staged: stagedCrdtOwner,
+						owner: { locator, values: crdtOwner },
+						mode: "ensure",
+					});
+					await lifecycle.retire({
+						manifest: stagedCrdtOwner.manifest,
+						locator,
+					});
 				}
 				attachCurrentTransactionTxid(existing);
 			});
@@ -2522,13 +2624,14 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				return existing;
 			}
 
-			const updateFn = this.createUpdate();
-			return await updateFn(
+			const stagedCrdtOwner = await this.stageCrdtOwner(existing);
+			return await this._executeUpdate(
 				{
 					id,
 					data: { deletedAt: null } as Record<string, unknown>,
 				},
 				normalized,
+				stagedCrdtOwner ? { crdtRestore: stagedCrdtOwner } : undefined,
 			);
 		};
 	}
@@ -2660,13 +2763,23 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					}),
 				);
 			}
+			const stagedCrdtOwners = new Map<
+				string | number,
+				StagedCrdtOwnerActivation
+			>();
+			await Promise.all(
+				records.map(async (record) => {
+					const staged = await this.stageCrdtOwner(record);
+					if (staged) stagedCrdtOwners.set(record.id, staged);
+				}),
+			);
 			// 3. Batched DELETE query
 			// Claim check inside the tx: only rows that STILL match the caller's
 			// where at delete time are deleted ("winners").
 			const winners: any[] = await withTransaction(db, async (tx: any) => {
 				const txContext = { ...normalized, db: tx };
 
-				const winnerIdList = await this.claimRecords({
+				let winnerIdList = await this.claimRecords({
 					tx,
 					txContext,
 					candidateIds: records.map((r: any) => r.id),
@@ -2676,8 +2789,28 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				});
 				if (winnerIdList.length === 0) return [];
 
+				let lockedBeforeDelete = await tx
+					.select()
+					.from(this.table)
+					.where(inArray(getColumn(this.table, "id")!, winnerIdList))
+					.for("update");
+				if (this.state.options.softDelete) {
+					const activeIds = new Set(
+						lockedBeforeDelete
+							.filter((record: any) => record.deletedAt == null)
+							.map((record: any) => record.id),
+					);
+					winnerIdList = winnerIdList.filter((id) => activeIds.has(id));
+					lockedBeforeDelete = lockedBeforeDelete.filter((record: any) =>
+						activeIds.has(record.id),
+					);
+					if (winnerIdList.length === 0) return [];
+				}
 				const winnerIds = new Set(winnerIdList);
 				const claimedRecords = records.filter((r: any) => winnerIds.has(r.id));
+				const lockedById = new Map(
+					lockedBeforeDelete.map((record: any) => [record.id, record]),
+				);
 
 				for (const record of claimedRecords) {
 					await this.handleCascadeDeleteInternal(record.id, record, txContext);
@@ -2731,6 +2864,60 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							`[QUESTPIE] afterDelete hook error for "${this.state.name}":`,
 							err,
 						);
+					}
+				}
+				if (stagedCrdtOwners.size > 0) {
+					const terminalRows = await tx
+						.select()
+						.from(this.table)
+						.where(inArray(getColumn(this.table, "id")!, winnerIdList))
+						.for("update");
+					if (
+						(this.state.options.softDelete &&
+							(terminalRows.length !== winnerIdList.length ||
+								terminalRows.some(
+									(record: any) => record.deletedAt == null,
+								))) ||
+						(!this.state.options.softDelete && terminalRows.length > 0)
+					) {
+						throw new Error(
+							"Collaborative owners are not terminally deleted after delete hooks",
+						);
+					}
+					const currentRows = this.state.options.softDelete
+						? terminalRows
+						: lockedBeforeDelete;
+					const currentById = new Map(
+						currentRows.map((record: any) => [record.id, record]),
+					);
+					const orderedIds = [...winnerIdList].sort((left, right) =>
+						Buffer.compare(
+							Buffer.from(canonicalCrdtCollectionLocator(left), "utf8"),
+							Buffer.from(canonicalCrdtCollectionLocator(right), "utf8"),
+						),
+					);
+					const lifecycle = new CrdtOwnerLifecycleTransaction(tx);
+					for (const recordId of orderedIds) {
+						const staged = stagedCrdtOwners.get(recordId);
+						const owner = currentById.get(recordId) ?? lockedById.get(recordId);
+						if (!staged || !owner) {
+							throw new Error(
+								"Deleted owner disappeared before CRDT lifecycle retirement",
+							);
+						}
+						const locator = canonicalCrdtCollectionLocator(recordId);
+						await lifecycle.activate({
+							staged,
+							owner: {
+								locator,
+								values: owner as Record<string, unknown>,
+							},
+							mode: "ensure",
+						});
+						await lifecycle.retire({
+							manifest: staged.manifest,
+							locator,
+						});
 					}
 				}
 

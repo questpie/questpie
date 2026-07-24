@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
+import { eq } from "drizzle-orm";
+
 import { collection, global } from "../../src/exports/index.js";
 import { createDeterministicTextEngine } from "../../src/server/modules/core/integrated/crdt/deterministic-engine.js";
 import { createCrdtManifestDeclarations } from "../../src/server/modules/core/integrated/crdt/manifest-runtime.js";
@@ -7,11 +9,15 @@ import { updateCrdtManifestArtifact } from "../../src/server/modules/core/integr
 import { createCrdtRegistry } from "../../src/server/modules/core/integrated/crdt/registry.js";
 import {
 	questpieCrdtBindingTable,
+	questpieCrdtResourceEpochTable,
 	questpieCrdtResourceTable,
 } from "../../src/server/modules/core/integrated/crdt/schema.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 import { createTestContext } from "../utils/test-context.js";
 import { runTestDbMigrations } from "../utils/test-db.js";
+
+let afterChangeSabotage: ((context: any) => Promise<void>) | undefined;
+let afterDeleteSabotage: ((context: any) => Promise<void>) | undefined;
 
 const articles = collection("articles")
 	.fields(({ f }) => ({
@@ -25,7 +31,15 @@ const articles = collection("articles")
 		content: f.textarea().default("").required().crdt({ format: "text" }),
 	}))
 	.collaborative()
-	.options({ versioning: true });
+	.options({ softDelete: true, versioning: true })
+	.hooks({
+		afterChange: async (context) => {
+			await afterChangeSabotage?.(context);
+		},
+		afterDelete: async (context) => {
+			await afterDeleteSabotage?.(context);
+		},
+	});
 
 const siteSettings = global("site-settings")
 	.fields(({ f }) => ({
@@ -56,6 +70,8 @@ describe("CRDT ordinary CRUD guard", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
+		afterChangeSabotage = undefined;
+		afterDeleteSabotage = undefined;
 		setup = await buildMockApp(
 			{
 				collections: { articles },
@@ -68,6 +84,8 @@ describe("CRDT ordinary CRUD guard", () => {
 	});
 
 	afterEach(async () => {
+		afterChangeSabotage = undefined;
+		afterDeleteSabotage = undefined;
 		await setup.cleanup();
 	});
 
@@ -188,6 +206,164 @@ describe("CRDT ordinary CRUD guard", () => {
 		).rejects.toThrow(
 			'Version restore for "articles" contains CRDT-managed fields',
 		);
+	});
+
+	it("retires on soft delete, rejects ordinary undelete, and restores in a new epoch", async () => {
+		const ctx = createTestContext({ accessMode: "system" });
+		const created = await setup.app.collections.articles.create(
+			{ title: "Draft", content: "Shared" },
+			ctx,
+		);
+		const [before] = await setup.app.db
+			.select()
+			.from(questpieCrdtResourceTable);
+
+		await setup.app.collections.articles.deleteById({ id: created.id }, ctx);
+		const [retired] = await setup.app.db
+			.select()
+			.from(questpieCrdtResourceTable);
+		expect(retired).toMatchObject({
+			id: before?.id,
+			status: 2,
+			currentEpochId: null,
+		});
+		await expect(
+			setup.app.collections.articles.updateById(
+				{ id: created.id, data: { deletedAt: null } as never },
+				ctx,
+			),
+		).rejects.toThrow(
+			'Collaborative owner "articles" can only be undeleted through restoreById',
+		);
+
+		await setup.app.collections.articles.restoreById({ id: created.id }, ctx);
+		const [restored] = await setup.app.db
+			.select()
+			.from(questpieCrdtResourceTable);
+		expect(restored).toMatchObject({
+			id: before?.id,
+			status: 1,
+		});
+		const epochs = await setup.app.db
+			.select()
+			.from(questpieCrdtResourceEpochTable);
+		expect(epochs.map((epoch) => epoch.aggregateEpoch).sort()).toEqual([
+			1n,
+			2n,
+		]);
+	});
+
+	it("retires every collaborative owner in a bulk delete", async () => {
+		const ctx = createTestContext({ accessMode: "system" });
+		await setup.app.collections.articles.create(
+			{ title: "First", content: "One" },
+			ctx,
+		);
+		await setup.app.collections.articles.create(
+			{ title: "Second", content: "Two" },
+			ctx,
+		);
+
+		const result = await setup.app.collections.articles.deleteMany(
+			{ where: {} },
+			ctx,
+		);
+
+		expect(result.count).toBe(2);
+		const resources = await setup.app.db
+			.select()
+			.from(questpieCrdtResourceTable);
+		expect(resources).toHaveLength(2);
+		expect(resources.every((resource) => resource.status === 2)).toBe(true);
+	});
+
+	it("rolls back when an afterDelete hook resurrects the SQL owner", async () => {
+		const ctx = createTestContext({ accessMode: "system" });
+		const created = await setup.app.collections.articles.create(
+			{ title: "Draft", content: "Shared" },
+			ctx,
+		);
+		const table = setup.app.collections.articles[
+			"~internalRelatedTable"
+		] as any;
+		afterDeleteSabotage = async ({ db, data }) => {
+			await db
+				.update(table)
+				.set({ deletedAt: null })
+				.where(eq(table.id, data.id));
+		};
+
+		await expect(
+			setup.app.collections.articles.deleteById({ id: created.id }, ctx),
+		).rejects.toThrow(
+			"Collaborative owner is not terminally deleted after delete hooks",
+		);
+
+		expect(
+			await setup.app.collections.articles.findOne(
+				{ where: { id: created.id } },
+				ctx,
+			),
+		).not.toBeNull();
+		const [resource] = await setup.app.db
+			.select()
+			.from(questpieCrdtResourceTable);
+		expect(resource?.status).toBe(1);
+	});
+
+	it("rolls back when an afterChange hook re-deletes a restored SQL owner", async () => {
+		const ctx = createTestContext({ accessMode: "system" });
+		const created = await setup.app.collections.articles.create(
+			{ title: "Draft", content: "Shared" },
+			ctx,
+		);
+		await setup.app.collections.articles.deleteById({ id: created.id }, ctx);
+		const table = setup.app.collections.articles[
+			"~internalRelatedTable"
+		] as any;
+		afterChangeSabotage = async ({ db, data }) => {
+			if (data.deletedAt == null) {
+				await db
+					.update(table)
+					.set({ deletedAt: new Date() })
+					.where(eq(table.id, data.id));
+			}
+		};
+
+		await expect(
+			setup.app.collections.articles.restoreById({ id: created.id }, ctx),
+		).rejects.toThrow(
+			"Collaborative owner remained deleted after restore hooks",
+		);
+		const [resource] = await setup.app.db
+			.select()
+			.from(questpieCrdtResourceTable);
+		expect(resource?.status).toBe(2);
+	});
+
+	it("allows only one winner when soft delete races itself", async () => {
+		const ctx = createTestContext({ accessMode: "system" });
+		const created = await setup.app.collections.articles.create(
+			{ title: "Draft", content: "Shared" },
+			ctx,
+		);
+
+		const outcomes = await Promise.allSettled([
+			setup.app.collections.articles.deleteById({ id: created.id }, ctx),
+			setup.app.collections.articles.deleteById({ id: created.id }, ctx),
+		]);
+
+		expect(
+			outcomes.filter((outcome) => outcome.status === "fulfilled"),
+		).toHaveLength(1);
+		expect(
+			outcomes.filter((outcome) => outcome.status === "rejected"),
+		).toHaveLength(1);
+		const resources = await setup.app.db
+			.select()
+			.from(questpieCrdtResourceTable);
+		expect(resources).toHaveLength(1);
+		expect(resources[0]?.status).toBe(2);
 	});
 });
 
