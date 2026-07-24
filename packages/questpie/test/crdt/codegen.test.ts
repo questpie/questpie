@@ -129,6 +129,24 @@ describe("CRDT registry", () => {
 		);
 	});
 
+	it("rejects scoped collaborative globals until locators carry a scope", () => {
+		const settings = global("settings")
+			.options({ scoped: () => "tenant-1" })
+			.fields(({ f }) => ({
+				content: f.textarea().default("").required().crdt({ format: "text" }),
+			}))
+			.collaborative();
+
+		expect(() =>
+			createCrdtRegistry({
+				collections: {},
+				globals: { settings: settings.build() },
+			}),
+		).toThrow(
+			'QUESTPIE collaborative global "globals.settings" cannot be scoped',
+		);
+	});
+
 	it("uses other-wins owner config on merge and later fluent override", () => {
 		const firstAwareness = z.object({ source: z.literal("first") });
 		const secondAwareness = z.object({ source: z.literal("second") });
