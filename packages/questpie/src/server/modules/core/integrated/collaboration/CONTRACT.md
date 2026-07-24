@@ -984,12 +984,17 @@ least 256 bits of secret entropy.
 
 The database stores only a public random id plus keyed secret hash, internal
 aggregate reference, subject/credential fingerprint, audience/origin, requested
-mode and field grants, protocol/engine/schema versions, aggregate/field epochs
-and fences, expiry, and
-redemption time. The ticket is sent only in the first binary AUTH frame, never
-in a URL. Redemption is one atomic conditional update; concurrent redemption
-has exactly one winner. A redeemed ticket creates a durable session grant and
-is never itself continuing authority.
+and effective mode, authorized field grants, protocol/engine/schema versions,
+aggregate/field epochs, resource/subject fences, session generation, expiry,
+and redemption time. Before insertion, the transaction revalidates a complete
+sorted cut of every active binding, including fields hidden from the subject;
+only readable grants are persisted or returned. The authorized response also
+returns a random opaque resource-incarnation key for offline queue binding.
+Internal resource ids never cross that seam. The ticket is sent only in the
+first binary AUTH frame, never in a URL. Redemption reruns authorization,
+rechecks the complete current cut, and performs one atomic conditional ticket
+update. Concurrent redemption has exactly one winner. A redeemed ticket creates
+a durable session grant and is never itself continuing authority.
 
 Defaults:
 
