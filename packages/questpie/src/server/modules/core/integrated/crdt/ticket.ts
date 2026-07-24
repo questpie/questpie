@@ -1,6 +1,8 @@
 import { Buffer } from "node:buffer";
 import { createHmac, randomBytes as cryptoRandomBytes } from "node:crypto";
 
+import { isCrdtTicketCredentialV1 } from "#questpie/shared/crdt-protocol.js";
+
 export class CrdtTicketRejectedError extends Error {
 	constructor() {
 		super("CRDT ticket rejected");
@@ -34,9 +36,7 @@ export function parseCrdtTicketCredential(input: {
 		if (
 			typeof input.token !== "string" ||
 			input.token.length > 256 ||
-			!/^([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.([A-Za-z0-9_-]{43})$/.test(
-				input.token,
-			)
+			!isCrdtTicketCredentialV1(input.token)
 		) {
 			throw new Error();
 		}

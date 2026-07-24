@@ -5,9 +5,11 @@ import {
 	CrdtProtocolMachineV1,
 	decodeCrdtFrameV1,
 	encodeCrdtFrameV1,
+	isCrdtTicketCredentialV1,
 	parseCrdtHostMessageV1,
 	type CrdtFrameV1,
 } from "../../../src/server/modules/core/integrated/crdt/protocol.js";
+import { createCrdtTicketCredential } from "../../../src/server/modules/core/integrated/crdt/ticket.js";
 import { GOLDEN } from "./golden.test.js";
 
 function bytes(hex: string): Uint8Array {
@@ -37,6 +39,27 @@ function protocolError(operation: () => unknown): CrdtProtocolError {
 }
 
 describe("QPCR v1 frame boundary", () => {
+	it("round-trips the exact credential emitted by durable ticket admission", () => {
+		const credential = createCrdtTicketCredential({
+			ticketId: "00000000-0000-4000-8000-000000000301",
+			secretKey: "s".repeat(32),
+			randomSecret: Buffer.alloc(32, 0x42),
+		});
+		expect(isCrdtTicketCredentialV1(credential.token)).toBe(true);
+		const encoded = encodeCrdtFrameV1({
+			major: 1,
+			minor: 0,
+			opcode: 0x01,
+			connectionSeq: 1n,
+			requestId: 1n,
+			payload: { ticket: credential.token },
+		});
+		expect(decodeCrdtFrameV1(encoded)).toMatchObject({
+			opcode: 0x01,
+			payload: { ticket: credential.token },
+		});
+	});
+
 	it("rejects unknown header values, trailing bytes, and partial frames", () => {
 		for (const [offset, value] of [
 			[0, 0x00],

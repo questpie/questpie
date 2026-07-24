@@ -8,6 +8,16 @@ const MAX_RECEIPTS = 64;
 const MAX_U64 = (1n << 64n) - 1n;
 
 export const CRDT_PROTOCOL_V1_MAX_FRAME_BYTES = HEADER_BYTES + MAX_BUNDLE_BYTES;
+export const CRDT_TICKET_CREDENTIAL_V1_PATTERN =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.[A-Za-z0-9_-]{43}$/;
+
+export function isCrdtTicketCredentialV1(value: unknown): value is string {
+	return (
+		typeof value === "string" &&
+		value.length <= 256 &&
+		CRDT_TICKET_CREDENTIAL_V1_PATTERN.test(value)
+	);
+}
 
 export type CrdtProtocolDirection = "client-to-server" | "server-to-client";
 
@@ -557,8 +567,8 @@ function decodePayload(opcode: number, reader: Reader): CrdtFrameV1["payload"] {
 				throw new CrdtProtocolError("ticket must be ASCII");
 			}
 			const ticket = new TextDecoder().decode(value);
-			if (!/^[A-Za-z0-9_-]+$/.test(ticket)) {
-				throw new CrdtProtocolError("ticket must be base64url");
+			if (!isCrdtTicketCredentialV1(ticket)) {
+				throw new CrdtProtocolError("ticket credential is not canonical");
 			}
 			payload = { ticket };
 			break;
@@ -832,8 +842,8 @@ function encodePayload(frame: CrdtFrameV1): Uint8Array {
 	const writer = new Writer();
 	switch (frame.opcode) {
 		case 0x01: {
-			if (!/^[A-Za-z0-9_-]+$/.test(frame.payload.ticket)) {
-				throw new CrdtProtocolError("ticket must be base64url");
+			if (!isCrdtTicketCredentialV1(frame.payload.ticket)) {
+				throw new CrdtProtocolError("ticket credential is not canonical");
 			}
 			const ticket = new TextEncoder().encode(frame.payload.ticket);
 			if (ticket.byteLength === 0 || ticket.byteLength > 256) {
