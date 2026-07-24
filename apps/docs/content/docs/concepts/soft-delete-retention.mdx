@@ -1,0 +1,170 @@
+---
+title: Soft delete and durable retention
+description: Safely retain, restore, and physically purge deleted collection rows.
+---
+
+Soft delete and physical purge are two different authorities in QUESTPIE:
+
+- `deleteById` marks a row with `deletedAt`; it remains restorable.
+- `restoreById` returns that row to normal queries.
+- `purgeById` irreversibly removes an already deleted row.
+
+There is no `force: true` delete mode and delete permission never implies purge permission.
+
+## Enable and authorize purge
+
+Purge exists only on a collection configured with `softDelete: true`. Its access rule defaults to `false`, even if `delete` is public:
+
+```ts
+export const documents = collection("documents")
+	.fields(({ f }) => ({
+		tenantId: f.text().required(),
+		title: f.text().required(),
+	}))
+	.options({ softDelete: true })
+	.access({
+		read: true,
+		create: true,
+		update: true,
+		delete: ({ session }) => Boolean(session),
+		purge: ({ session }) =>
+			session?.user.role === "retention-worker"
+				? { tenantId: session.user.tenantId }
+				: false,
+	});
+```
+
+An `AccessWhere` result is applied inside the purge transaction. A missing row, an already purged row, a denied rule, and a row outside that filter all return the same not-found error. This keeps retries idempotent without disclosing protected row existence. System context is an explicit framework bypass; only trusted server code should create it.
+
+An authorized attempt against an active row returns conflict and does not mutate it. Soft-delete it first:
+
+```ts
+await ctx.collections.documents.deleteById({ id });
+await ctx.collections.documents.purgeById({ id });
+```
+
+The browser SDK exposes the same method:
+
+```ts
+await client.collections.documents.purgeById({ id });
+```
+
+The generic HTTP route is:
+
+```text
+POST /api/documents/:id/purge
+```
+
+The route and OpenAPI operation are generated only for soft-delete collections.
+
+## Transaction and hooks
+
+The full purge attempt runs in one database transaction:
+
+```text
+beforeOperation("purge")
+  → access and active-row checks
+  → retained-reference checks
+  → global beforePurge
+  → collection beforePurge
+  → physical owner/version/i18n removal
+  → collection afterPurge
+  → global afterPurge
+  → commit
+```
+
+`beforePurge` and `afterPurge` are dedicated, fatal hooks. Throwing from either rolls back the database transaction. Delete hooks do not run during purge.
+
+Use transaction-aware post-commit work for effects that must not happen after a rollback. Core integrations already follow that split:
+
+- Search and realtime receive idempotent removal signals.
+- Upload blobs survive soft delete and restore, then are removed after a committed purge.
+- Audit records a metadata-only purge fact without copying deleted content.
+- A collaborative resource is fenced when its owner is deleted. Purge does not promise immediate privacy erasure of independently retained CRDT tombstones or updates; configure and operate that retention separately.
+
+## Relation behavior is fail-closed
+
+Purge never turns a relation's soft-delete `cascade` into a hard-delete cascade, and it never nullifies a retained row. Any incoming application relation, junction row, or database foreign key blocks the purge. This includes references from rows that are themselves soft-deleted.
+
+QUESTPIE takes deterministic locks for known referring tables, checks references, and still relies on PostgreSQL constraints as the final race-safe boundary. Unknown raw foreign keys therefore fail closed too. Remove or independently purge referring data under its own policy before retrying the owner.
+
+## A bounded retention worker
+
+Do not load 100,000 IDs into memory or implement retention as one giant transaction. Keep `purgeById` as the irreversible unit and orchestrate bounded work around it. The API process may run `runOnce()` on a schedule, or your existing QUESTPIE worker may listen for queue jobs; purge does not require another process type.
+
+Use an application-owned retention-run record with at least:
+
+```ts
+{
+	id,
+	collection,
+	cutoff,
+	highWaterDeletedAt,
+	highWaterId,
+	cursorDeletedAt,
+	cursorId,
+	status,
+	attempted,
+	purged,
+	conflicted,
+	failed,
+}
+```
+
+At run creation:
+
+1. Freeze one cutoff timestamp, for example `now - 30 days`.
+2. Find the greatest eligible `(deletedAt, id)` tuple and persist it as the high-water mark.
+3. Read pages ordered ascending by the same tuple:
+
+```text
+deletedAt <= cutoff
+AND (deletedAt, id) <= (highWaterDeletedAt, highWaterId)
+AND (deletedAt, id) > (cursorDeletedAt, cursorId)
+ORDER BY deletedAt ASC, id ASC
+LIMIT pageSize
+```
+
+The soft-delete collection generates the matching partial composite index on `(deletedAt, id) WHERE deletedAt IS NOT NULL`. Generate the application migration with `questpie migrate:create`, review it, run generation again and require no diff, then deploy it with `questpie migrate`. Never hand-write an `ALTER` to approximate this index.
+
+For each page:
+
+1. Publish one durable job per ID, with the retention-run ID and tuple.
+2. Let each job call `purgeById` in its own transaction.
+3. Advance the durable page cursor only after every item reaches a terminal state.
+4. Bound queue prefetch and concurrency to leave database pool headroom; start with 1–4 concurrent purges and measure.
+
+Treat not-found as terminal success: the commit may have succeeded before a worker lost its acknowledgement. Treat conflict as a terminal blocked/skipped item that needs policy or relation cleanup, not a blind retry. Retry transient database/transport failures with bounded exponential backoff and jitter; send exhausted or unexpected failures to a dead-letter queue. Because the cursor advances only after terminal acknowledgement, a crash can repeat work but cannot skip the unfinished page.
+
+Record, per run and per collection:
+
+- attempted, purged, not-found, conflict, retry, and dead-letter counts;
+- oldest eligible tombstone age and cursor/high-water lag;
+- per-ID p50/p95 latency and page duration;
+- PostgreSQL transaction commit/rollback, WAL bytes, deadlocks, buffer hit/read, temporary bytes, active/waiting connections, and table dead tuples;
+- queue depth, worker saturation, storage-cleanup failures, and process peak RSS.
+
+Pause or reduce concurrency when pool waiters, lock waits, WAL pressure, replication lag, or downstream cleanup errors cross your operational thresholds.
+
+## Benchmark before setting an SLA
+
+QUESTPIE includes a real PostgreSQL harness. It deliberately refuses a non-empty database and requires an explicit disposable-database acknowledgement. Provision QUESTPIE's required `pg_trgm` extension in that disposable database before running the harness; the framework does not create database extensions:
+
+```bash
+cd packages/questpie
+PURGE_BENCH_DATABASE_URL=postgresql://localhost/questpie_purge_bench \
+PURGE_BENCH_CONFIRM_DISPOSABLE=I_UNDERSTAND \
+bun run bench:purge
+```
+
+Run the explicit matrix only on an ephemeral database:
+
+```bash
+PURGE_BENCH_DATABASE_URL=postgresql://localhost/questpie_purge_bench \
+PURGE_BENCH_CONFIRM_DISPOSABLE=I_UNDERSTAND \
+bun run bench:purge --matrix
+```
+
+The matrix covers 1,000, 10,000, and 100,000 rows with page sizes 25, 100, and 250. Override one run with `PURGE_BENCH_ROWS`, `PURGE_BENCH_PAGE_SIZE`, and `PURGE_BENCH_CONCURRENCY`.
+
+Do not copy a duration from another deployment. Hook cost, retained-reference scans, version/localization fan-out, Search/realtime integrations, upload cleanup, connection-pool size, WAL/replication capacity, and concurrent restores all materially change throughput. Add representative fixtures for those workloads and ratify your own batch window from captured metrics.

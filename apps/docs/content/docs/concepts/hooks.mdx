@@ -1,6 +1,6 @@
 ---
 title: Hooks
-description: Run your code at each stage of a collection's create, update, read, and delete lifecycle, to transform input, derive fields, enforce rules, and fire side effects only after the write commits.
+description: Run your code at each stage of a collection's create, update, read, delete, and purge lifecycle, to transform input, derive fields, enforce rules, and fire side effects only after the write commits.
 ---
 
 Hooks run logic at precise points in a collection lifecycle: transform input before validation, compute fields before a write, react to the saved record, and schedule side effects after commit. One `.hooks({ ... })` declaration governs REST, typed client, admin, and internal operations.
@@ -12,6 +12,7 @@ Hooks run logic at precise points in a collection lifecycle: transform input bef
 - **React to a completed write** in `afterChange` with the full saved record, plus `ctx.original` on update so you can diff old versus new.
 - **Shape query output** in `afterRead`, add computed fields, format values, redact.
 - **Guard and clean up deletes** with `beforeDelete` (block, cascade, back up) and `afterDelete` (cleanup, notify).
+- **Guard irreversible purge** with dedicated, fatal `beforePurge` and `afterPurge` hooks.
 - **Fire side effects only after the transaction commits** with `ctx.onAfterCommit`, jobs, emails, webhooks, search indexing.
 - **Abort an operation** by throwing in any `before*` hook.
 
@@ -99,7 +100,8 @@ Written **inline** on `.hooks({ ... })`, `data` / `original` / `operation` are a
 	reading it.
 
     On every *other* hook (`beforeOperation`, the `before*` write/read/delete
-    hooks, and `afterDelete`) `ctx.original` is `never`-typed, you can't read it
+    hooks, `afterDelete`, `beforePurge`, and `afterPurge`) `ctx.original` is
+    `never`-typed, you can't read it
     without a cast. (At runtime the delete path does pass the deleted row into
     `ctx.original` for `beforeDelete` / `afterDelete`, but the type contract hides
     it; read `ctx.data` for the deleted record instead.)
@@ -112,18 +114,20 @@ Written **inline** on `.hooks({ ... })`, `data` / `original` / `operation` are a
 
 Declare any subset of these on `.hooks({ ... })`. Each value is a **single function or an array of functions**, see [Arrays and composition](#arrays-and-composition).
 
-| Stage              | Fires on                     | `ctx.data`                 | `ctx.original`       | Throw aborts?                                                               |
-| ------------------ | ---------------------------- | -------------------------- | -------------------- | --------------------------------------------------------------------------- |
-| `beforeOperation`  | create, update, read, delete | input (type depends on op) | none                 | yes                                                                         |
-| `beforeValidate`   | create, update               | **mutable** input          | none                 | yes                                                                         |
-| `beforeChange`     | create, update               | **validated** input        | none                 | yes                                                                         |
-| `afterChange`      | create, update               | the saved record           | record (update only) | **on create only**, propagates + rolls back; on update it's caught + logged |
-| `beforeRead`       | read                         | query options              | none                 | yes                                                                         |
-| `afterRead`        | create, update, read, delete | the record                 | record (update only) | **yes**, propagates to the caller                                           |
-| `beforeDelete`     | delete                       | record to be deleted       | none                 | yes                                                                         |
-| `afterDelete`      | delete                       | the deleted record         | none                 | no, caught + logged                                                         |
-| `beforeTransition` | workflow transition          | the record                 | none                 | yes                                                                         |
-| `afterTransition`  | workflow transition          | the record                 | none                 | no, caught + logged                                                         |
+| Stage              | Fires on                            | `ctx.data`                 | `ctx.original`       | Throw aborts?                                                               |
+| ------------------ | ----------------------------------- | -------------------------- | -------------------- | --------------------------------------------------------------------------- |
+| `beforeOperation`  | create, update, read, delete, purge | input (type depends on op) | none                 | yes                                                                         |
+| `beforeValidate`   | create, update                      | **mutable** input          | none                 | yes                                                                         |
+| `beforeChange`     | create, update                      | **validated** input        | none                 | yes                                                                         |
+| `afterChange`      | create, update                      | the saved record           | record (update only) | **on create only**, propagates + rolls back; on update it's caught + logged |
+| `beforeRead`       | read                                | query options              | none                 | yes                                                                         |
+| `afterRead`        | create, update, read, delete        | the record                 | record (update only) | **yes**, propagates to the caller                                           |
+| `beforeDelete`     | delete                              | record to be deleted       | none                 | yes                                                                         |
+| `afterDelete`      | delete                              | the deleted record         | none                 | no, caught + logged                                                         |
+| `beforePurge`      | purge                               | the deleted record         | none                 | **yes**, propagates + rolls back                                            |
+| `afterPurge`       | purge                               | the purged record          | none                 | **yes**, propagates + rolls back                                            |
+| `beforeTransition` | workflow transition                 | the record                 | none                 | yes                                                                         |
+| `afterTransition`  | workflow transition                 | the record                 | none                 | no, caught + logged                                                         |
 
 `beforeTransition` / `afterTransition` fire only on workflow stage transitions and carry a different context, see [Transition hooks](#transition-hooks). The "Throw aborts?" column is subtle for the `after*` hooks, see [Aborting an operation](#aborting-an-operation) for exactly which ones swallow errors and which propagate.
 
@@ -133,10 +137,11 @@ Declare any subset of these on `.hooks({ ... })`. Each value is a **single funct
 Create  →  beforeOperation → beforeValidate → beforeChange → [INSERT] → afterChange → afterRead
 Update  →  beforeOperation → beforeValidate → beforeChange → [UPDATE] → afterChange → afterRead
 Delete  →  beforeOperation → beforeDelete   → [DELETE] → afterDelete → afterRead
+Purge   →  beforeOperation → beforePurge    → [PURGE]  → afterPurge
 Read    →  beforeOperation → beforeRead     → [SELECT] → afterRead
 ```
 
-`afterRead` is the only output hook that fires after **all four** operations, branch on `ctx.operation` to discriminate inside it. (The upload feature auto-injects an `afterRead` hook to generate file URLs, and an `afterDelete` hook to remove stored bytes, your hooks run alongside these.)
+`afterRead` is the output hook for create, update, delete, and read; purge returns only `{ success: true }` and does not expose the removed record through `afterRead`. Branch on `ctx.operation` to discriminate inside it. (The upload feature auto-injects an `afterRead` hook to generate file URLs, an `afterDelete` hook for committed hard deletes, and an `afterPurge` hook for committed purge cleanup; your hooks run alongside these.)
 
 <Callout type="info" title="Create and update share change hooks">
   Use `beforeValidate`, `beforeChange`, and `afterChange` for both operations, then branch on `ctx.operation === "create"` when behavior differs. Globals use `beforeUpdate` and `afterUpdate`. See [Globals](#related).
@@ -144,7 +149,7 @@ Read    →  beforeOperation → beforeRead     → [SELECT] → afterRead
 
 ### What each stage is for
 
-- **`beforeOperation`**, runs first for **every** operation, including read and delete. Use for logging, rate limiting, or early checks. `ctx.data` is the input (type depends on the operation), `ctx.original` is not available.
+- **`beforeOperation`**, runs first for **every** operation, including read, delete, and purge. Use for logging, rate limiting, or early checks. `ctx.data` is the input (type depends on the operation), `ctx.original` is not available.
 - **`beforeValidate`**, transform, normalize, and default the **mutable** input before the Zod schema runs. Mutate `ctx.data` in place. Create and update only.
 - **`beforeChange`**, business logic on **validated** input: slug generation, derived fields, complex cross-field validation. The last point at which you can change what gets written. Create and update only; `ctx.original` is _not_ available here, diff in `afterChange` instead.
 - **`afterChange`**, react to a completed write with the full record. Has `ctx.original` on update for diffing. Runs **inside** the transaction, defer durable side effects with [`onAfterCommit`](#side-effects-onaftercommit).
@@ -152,6 +157,8 @@ Read    →  beforeOperation → beforeRead     → [SELECT] → afterRead
 - **`afterRead`**, transform output, add computed fields, format values. Fires after create, update, delete, and read.
 - **`beforeDelete`**, block deletion (throw), cascade, or back up. `ctx.data` is the record about to be deleted.
 - **`afterDelete`**, cleanup, logging, notifications. `ctx.data` is the deleted record.
+- **`beforePurge`**, guard permanent removal of an already soft-deleted record. Throwing rolls back the purge.
+- **`afterPurge`**, schedule purge cleanup or record transactional facts. Unlike `afterDelete`, throwing is fatal and rolls back the purge. Use `onAfterCommit` for external side effects. See [Soft delete and durable retention](/docs/concepts/soft-delete-retention).
 
 ### The hook context (`ctx`)
 
@@ -161,7 +168,7 @@ Every hook receives one argument, the `HookContext`. It is your `AppContext` (al
 type HookContext = AppContext & {
   data: TData; // see the stage table for what this is
   original: TOriginal; // CollectionDoc<K> | undefined on afterChange/afterRead (set only on update); never-typed elsewhere
-  operation: "create" | "update" | "delete" | "read";
+  operation: "create" | "update" | "delete" | "purge" | "read";
   locale?: string;
   accessMode?: "user" | "system";
   onAfterCommit: (callback: () => Promise<void>) => void;

@@ -142,13 +142,16 @@ collection("posts").options({
 
 ### `softDelete`
 
-`boolean`, **default `false`**. Adds a nullable `deletedAt` column plus an auto-index `<name>_deleted_at_idx`. With it on:
+`boolean`, **default `false`**. Adds a nullable `deletedAt` column plus a partial composite index on `(deletedAt, id) WHERE deletedAt IS NOT NULL`. With it on:
 
 - `deleteById` / `deleteMany` set `deletedAt` instead of removing the row.
 - `restoreById` becomes available to bring a soft-deleted row back.
+- `purgeById` can permanently remove an already deleted row, but only through its separate `purge` access rule.
 - Queries hide deleted rows by default; pass `includeDeleted: true` to see them.
 
 For uniqueness that should free up again after a soft-delete (e.g. a unique email that another row may reclaim), use `softDeleteUniqueIndex()` inside `.indexes()`, it scopes the constraint to `WHERE deleted_at IS NULL`.
+
+Physical purge is intentionally stricter than delete: an active row is rejected, delete permission never grants purge, and retained references block the transaction. See [Soft delete and durable retention](/docs/concepts/soft-delete-retention) for hooks, client/HTTP examples, relation semantics, and a bounded worker recipe.
 
 ### `versioning`
 
@@ -191,7 +194,7 @@ Workflow stages create version snapshots, so workflow lives **under** `versionin
 
 ## Access control
 
-`.access()` declares who may read, create, update, delete (and, with workflow, transition) rows. Each rule is `boolean` or a function of the request context; for `read`, `update`, `delete`, and `transition` a function may return a **`where` object** to _filter_ rows rather than allow-or-deny.
+`.access()` declares who may read, create, update, delete, purge (and, with workflow, transition) rows. Each rule is `boolean` or a function of the request context; for `read`, `update`, `delete`, `purge`, and `transition` a function may return a **`where` object** to _filter_ rows rather than allow-or-deny. `purge` defaults to `false`, independently of `delete`.
 
 ```ts
 collection("posts").access({

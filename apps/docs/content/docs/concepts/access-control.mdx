@@ -3,11 +3,11 @@ title: Access control
 description: Per-operation, row-level, and field-level authorization on collections and globals, secure by default, with a system bypass for trusted server code. One rule guards the REST API, the typed client, and the admin UI.
 ---
 
-Access control decides **who can do what** to your data. You attach rules per operation, `read`, `create`, `update`, `delete`, plus `transition`, `serve`, and `introspect`, in a single `.access({ ... })` call on a collection or global. Each rule runs with the full request context (`session`, `db`, the loaded row, the input) and returns a boolean to allow or deny, or a `where`-shaped object to filter rows. The same engine guards the REST API, the typed client, and the admin UI, you write the rule once, and every entry point obeys it.
+Access control decides **who can do what** to your data. You attach rules per operation, `read`, `create`, `update`, `delete`, `purge`, plus `transition`, `serve`, and `introspect`, in a single `.access({ ... })` call on a collection or global. Each rule runs with the full request context (`session`, `db`, the loaded row, the input) and returns a boolean to allow or deny, or a `where`-shaped object to filter rows. The same engine guards the REST API, the typed client, and the admin UI, you write the rule once, and every entry point obeys it.
 
 ## What it does
 
-- **Authorizes every operation**, one rule per `read` / `create` / `update` / `delete`, evaluated before the database is touched. Deny early, fail loud.
+- **Authorizes every operation**, one rule per `read` / `create` / `update` / `delete` / `purge`.
 - **Filters rows (row-level security)**, return a `where`-shaped object from `read` and it is `AND`-merged into the query; rows the caller can't see never come back.
 - **Scopes individual fields**, hide a field on read or freeze it on write per operation with `access.fields`, independent of the row rules.
 - **Runs secure by default**, a collection with no rule for an operation requires an authenticated session. You opt into public access explicitly with `read: true`.
@@ -54,11 +54,11 @@ That single object now governs `GET/POST/PATCH/DELETE /api/posts`, every `client
 
 A function rule can return three kinds of value, and the framework reacts to each:
 
-| Return value            | Effect                                                                                                                                        |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `true`                  | Allow the operation.                                                                                                                          |
-| `false`                 | Deny, throws `ApiError.forbidden` (403).                                                                                                      |
-| an `AccessWhere` object | Filter: on `read` it is `AND`-merged into the query `WHERE`; on `update`/`delete` the loaded row is tested against it (mismatch → forbidden). |
+| Return value            | Effect                                                                                                                                                                                                          |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `true`                  | Allow the operation.                                                                                                                                                                                            |
+| `false`                 | Deny, throws `ApiError.forbidden` (403).                                                                                                                                                                        |
+| an `AccessWhere` object | Filter: on `read` it is `AND`-merged into the query `WHERE`; on `update`/`delete`/`purge` the loaded row is tested against it. A purge mismatch is disclosure-safe not-found; ordinary writes return forbidden. |
 
 A bare boolean shorthand, `read: true`, `create: false`, is the same as a function that always returns it.
 
@@ -92,7 +92,15 @@ flowchart TD
   Bool -->|AccessWhere| Filter
 ```
 
-So the resolution for each CRUD operation is: **collection's own `access[op]` → app-level `defaultAccess[op]` → require a session**. `defaultAccess` is set app-wide (next section); the starter module sets it to require a session for every operation, which is where the secure-by-default behavior comes from.
+So the resolution for each ordinary CRUD operation is: **collection's own `access[op]` → app-level `defaultAccess[op]` → require a session**. `defaultAccess` is set app-wide (next section); the starter module sets it to require a session for ordinary CRUD operations, which is where the secure-by-default behavior comes from.
+
+<Callout type="warn" title="Purge is independently default-deny">
+	`purge` never falls back to `delete` or to the authenticated-session rule. Its
+	resolution is `collection access.purge` → `defaultAccess.purge` → `false`.
+	Missing, denied, already purged, and row-filter-mismatched targets all return
+	not-found so callers cannot probe protected records. See [Soft delete and
+	durable retention](/docs/concepts/soft-delete-retention).
+</Callout>
 
 <Callout type="info">
 	**`.access()` replaces; `.hooks()` merges.** Calling `.access()` again
@@ -117,11 +125,12 @@ export default appConfig({
     create: ({ session }) => !!session,
     update: ({ session }) => !!session,
     delete: ({ session }) => !!session,
+    purge: false,
   },
 });
 ```
 
-`appConfig({ access })` accepts `read`, `create`, `update`, `delete`, `transition`, `serve`, and `introspect`, the same operation keys as a collection, **minus `fields`** (per-field rules belong on the collection or global that owns the field). Modules can contribute a `defaultAccess` too, and they compose; the starter module ships exactly the four-CRUD-require-session shape above.
+`appConfig({ access })` accepts `read`, `create`, `update`, `delete`, `purge`, `transition`, `serve`, and `introspect`, the same operation keys as a collection, **minus `fields`** (per-field rules belong on the collection or global that owns the field). Modules can contribute a `defaultAccess` too, and they compose. Leave app-wide purge denied unless every collection should share a carefully reviewed retention authority.
 
 <Callout type="info" title="Configure app-wide defaults in app config">
 	Set app-wide rules with `appConfig({ access })` or a module's
@@ -134,12 +143,13 @@ export default appConfig({
 
 Every rule function receives an `AccessContext`, the full app context (`db`, `session`, `collections`, `globals`, `queue`, `kv`, `storage`, `search`, `realtime`, `mailer`, `logger`, plus any context extensions you added in `appConfig({ context })`), plus a few operation-specific keys. What's populated depends on the operation:
 
-| Operation | `ctx.data`           | `ctx.input`                       | Can return `AccessWhere`?           |
-| --------- | -------------------- | --------------------------------- | ----------------------------------- |
-| `read`    | none (no row loaded) | none                              | yes, merges into the query          |
-| `create`  | none (no row yet)    | the raw input, **pre-validation** | no, there's no row to match         |
-| `update`  | the **existing** row | the patch                         | yes, checked against the loaded row |
-| `delete`  | the **existing** row | none                              | yes, checked against the loaded row |
+| Operation | `ctx.data`                   | `ctx.input`                       | Can return `AccessWhere`?                 |
+| --------- | ---------------------------- | --------------------------------- | ----------------------------------------- |
+| `read`    | none (no row loaded)         | none                              | yes, merges into the query                |
+| `create`  | none (no row yet)            | the raw input, **pre-validation** | no, there's no row to match               |
+| `update`  | the **existing** row         | the patch                         | yes, checked against the loaded row       |
+| `delete`  | the **existing** row         | none                              | yes, checked against the loaded row       |
+| `purge`   | the **existing deleted** row | `{ id }`                          | yes, checked inside the purge transaction |
 
 ```ts
 .access({
@@ -152,7 +162,7 @@ Every rule function receives an `AccessContext`, the full app context (`db`, `se
 	// create: `input` is the raw, pre-validation payload.
 	create: ({ session, input }) =>
 		!!session?.user && input?.status !== "published", // can't publish on create
-	// update/delete: `data` is the existing row, always loaded before the rule runs.
+	// update/delete/purge: `data` is the existing row.
 	update: ({ session, data }) =>
 		data.authorId === session?.user?.id || session?.user?.role === "admin",
 })
@@ -160,12 +170,13 @@ Every rule function receives an `AccessContext`, the full app context (`db`, `se
 
 <Callout type="info">**`request` is only set over HTTP.** `ctx.request` is present when the operation comes through an HTTP adapter, use it to tell the admin API apart from the public API by URL or header. Direct server calls (`app.collections.posts.find(...)`) carry no `request`.</Callout>
 
-### `read` vs `update`/`delete`: where the filter lands
+### `read` vs `update`/`delete`/`purge`: where the filter lands
 
 The same `AccessWhere` shape behaves differently depending on the operation:
 
 - On **`read`**, the `AccessWhere` is `AND`-merged into the query's `WHERE` (`{ AND: [yourWhere, accessWhere] }`). Non-matching rows are filtered out of the result, this is row-level security, applied in SQL.
 - On **`update`** / **`delete`**, the already-loaded row is tested against the `AccessWhere` in JavaScript. A mismatch throws `forbidden`. In bulk updates and deletes, each row is checked individually.
+- On **`purge`**, the locked row is checked inside the purge transaction. A mismatch returns the same not-found error as a missing or already purged row.
 
 ```ts title="Row-level read: a user only ever sees their own orders"
 .access({
