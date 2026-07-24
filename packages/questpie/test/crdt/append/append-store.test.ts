@@ -8,7 +8,7 @@ import {
 	it,
 } from "bun:test";
 import { Buffer } from "node:buffer";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { PGlite } from "@electric-sql/pglite";
 import { eq, sql } from "drizzle-orm";
@@ -43,6 +43,8 @@ import {
 	questpieCrdtResourceTable,
 	questpieCrdtSessionGrantTable,
 	questpieCrdtSessionTable,
+	questpieCrdtSnapshotManifestTable,
+	questpieCrdtSnapshotTable,
 	questpieCrdtSubjectTable,
 	questpieCrdtTables,
 	questpieCrdtTicketGrantTable,
@@ -356,6 +358,54 @@ describe("CRDT atomic append store", () => {
 		).rejects.toMatchObject({ code: "CRDT_APPEND_REJECTED" });
 	});
 
+	it("ignores a higher-cursor snapshot from an unpublished orphan manifest", async () => {
+		const orphanManifestId = "00000000-0000-4000-8000-000000000311";
+		const orphanReplica = await textEngine.create({
+			value: "Orphan",
+			basis: { fieldEpoch: 1n, fieldCursor: 5n },
+		});
+		const bytes = await textEngine.snapshot(orphanReplica);
+		await db.insert(questpieCrdtSnapshotManifestTable).values({
+			id: orphanManifestId,
+			resourceId: RESOURCE_ID,
+			resourceEpochId: fixture.resourceEpochId,
+			definitionId: fixture.definitionId,
+			schemaId: fixture.schemaId,
+			coversCommitSeq: 0n,
+			status: 1,
+			totalBytes: bytes.byteLength,
+			fieldCount: 1,
+			checksum: Buffer.alloc(32, 0x61),
+			leaseGeneration: 0n,
+		});
+		await db.insert(questpieCrdtSnapshotTable).values({
+			manifestId: orphanManifestId,
+			resourceId: RESOURCE_ID,
+			resourceEpochId: fixture.resourceEpochId,
+			schemaId: fixture.schemaId,
+			bindingId: fixture.binding.id,
+			stableFieldId: fixture.binding.stableFieldId,
+			fieldEpoch: 1n,
+			fieldSlot: fixture.binding.fieldSlot,
+			formatVersion: fixture.binding.formatVersion,
+			fieldCursor: 5n,
+			engineId: textEngine.engineId,
+			engineVersion: textEngine.engineVersion,
+			stateVersion: textEngine.stateVersion,
+			bytes,
+			sizeBytes: bytes.byteLength,
+			checksum: createHash("sha256").update(bytes).digest(),
+		});
+
+		const authoritative = await loadCrdtAuthoritativeReplica(db, {
+			bindingId: fixture.binding.id,
+			engine: textEngine,
+		});
+
+		expect(authoritative.replica.basis.fieldCursor).toBe(0n);
+		expect(textEngine.project(authoritative.replica)).toBe("Shared");
+	});
+
 	it("requires current read authority before returning an exact retry receipt", async () => {
 		const store = createCrdtAppendStore(db, { lockOwnerRow });
 		const staged = await appendInput(fixture);
@@ -628,9 +678,20 @@ describe.skipIf(!postgresUrl)(
 			}
 		});
 
-		it("serializes contention and revoke-before-append without deadlock", async () => {
-			const first = createCrdtAppendStore(firstDb, { lockOwnerRow });
-			const second = createCrdtAppendStore(secondDb, { lockOwnerRow });
+		it("serializes 50-way contention, visibility, and both revoke orders", async () => {
+			const wakes: unknown[] = [];
+			const first = createCrdtAppendStore(firstDb, {
+				lockOwnerRow,
+				publishNotice: async (notice) => {
+					wakes.push(notice);
+				},
+			});
+			const second = createCrdtAppendStore(secondDb, {
+				lockOwnerRow,
+				publishNotice: async (notice) => {
+					wakes.push(notice);
+				},
+			});
 			const firstInput = await appendInput(pgFixture);
 			const contenders = await Promise.all(
 				Array.from({ length: 50 }, (_, index) =>
@@ -663,6 +724,81 @@ describe.skipIf(!postgresUrl)(
 					eq(questpieCrdtResourceEpochTable.id, pgFixture.resourceEpochId),
 				);
 			expect(epoch?.headCommitSeq).toBe(1n);
+			const wakesBeforePausedAppend = wakes.length;
+
+			await firstDb.execute(
+				sql.raw(`
+				CREATE FUNCTION pause_crdt_receipt() RETURNS trigger AS $$
+				BEGIN
+					PERFORM pg_advisory_xact_lock(424242);
+					RETURN NEW;
+				END;
+				$$ LANGUAGE plpgsql
+			`),
+			);
+			await firstDb.execute(
+				sql.raw(`
+				CREATE TRIGGER pause_crdt_receipt
+				BEFORE INSERT ON questpie_crdt_update_receipt
+				FOR EACH ROW EXECUTE FUNCTION pause_crdt_receipt()
+			`),
+			);
+			await admin.query("SELECT pg_advisory_lock(424242)");
+			const appendWinsCandidate = await appendInput(
+				pgFixture,
+				"00000000-0000-4000-8000-000000000998",
+				encodeDeterministicTextUpdate([
+					{ type: "insert", index: 7, value: "?" },
+				]),
+			);
+			const appendWins = second.append(appendWinsCandidate);
+			for (let attempt = 0; attempt < 200; attempt++) {
+				const waiting = await firstPool.query<{ waiting: boolean }>(
+					"SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND NOT granted) AS waiting",
+				);
+				if (waiting.rows[0]?.waiting) break;
+				await new Promise((resolve) => setTimeout(resolve, 5));
+			}
+			expect(await firstDb.select().from(questpieCrdtCommitTable)).toHaveLength(
+				1,
+			);
+			const [invisibleEpoch] = await firstDb
+				.select()
+				.from(questpieCrdtResourceEpochTable)
+				.where(
+					eq(questpieCrdtResourceEpochTable.id, pgFixture.resourceEpochId),
+				);
+			expect(invisibleEpoch?.headCommitSeq).toBe(1n);
+			expect(wakes).toHaveLength(wakesBeforePausedAppend);
+			const appendThenRevoke = firstDb.transaction(async (tx) => {
+				await lockOwnerRow(tx, {
+					resourceId: RESOURCE_ID,
+					definitionId: pgFixture.definitionId,
+				});
+				await tx
+					.select()
+					.from(questpieCrdtResourceTable)
+					.where(eq(questpieCrdtResourceTable.id, RESOURCE_ID))
+					.for("update");
+				await tx
+					.update(questpieCrdtResourceTable)
+					.set({ editFence: 1n })
+					.where(eq(questpieCrdtResourceTable.id, RESOURCE_ID));
+			});
+			await admin.query("SELECT pg_advisory_unlock(424242)");
+			expect((await appendWins).commitSeq).toBe(2n);
+			expect(wakes).toHaveLength(wakesBeforePausedAppend + 1);
+			await appendThenRevoke;
+			expect(await firstDb.select().from(questpieCrdtCommitTable)).toHaveLength(
+				2,
+			);
+			await firstDb.execute(
+				sql`DROP TRIGGER pause_crdt_receipt ON questpie_crdt_update_receipt`,
+			);
+			await firstDb
+				.update(questpieCrdtResourceTable)
+				.set({ editFence: 0n })
+				.where(eq(questpieCrdtResourceTable.id, RESOURCE_ID));
 
 			let releaseRevoke!: () => void;
 			const release = new Promise<void>((resolve) => {
@@ -695,7 +831,7 @@ describe.skipIf(!postgresUrl)(
 				pgFixture,
 				"00000000-0000-4000-8000-000000000999",
 				encodeDeterministicTextUpdate([
-					{ type: "insert", index: 7, value: "?" },
+					{ type: "insert", index: 8, value: "#" },
 				]),
 			);
 			const racedAppend = second.append(afterFirst);
@@ -706,7 +842,7 @@ describe.skipIf(!postgresUrl)(
 				code: "CRDT_APPEND_REJECTED",
 			});
 			expect(await firstDb.select().from(questpieCrdtCommitTable)).toHaveLength(
-				1,
+				2,
 			);
 		}, 60_000);
 	},

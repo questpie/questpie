@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 import { createHash, randomUUID } from "node:crypto";
 
-import { and, asc, desc, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm";
 
 import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
 import {
@@ -24,6 +24,7 @@ import {
 	questpieCrdtSchemaTable,
 	questpieCrdtSessionGrantTable,
 	questpieCrdtSessionTable,
+	questpieCrdtSnapshotManifestTable,
 	questpieCrdtSnapshotTable,
 	questpieCrdtSubjectFenceTable,
 	questpieCrdtUpdateReceiptTable,
@@ -175,19 +176,57 @@ export async function loadCrdtAuthoritativeReplica(
 			),
 		);
 	if (!binding) throw rejected();
-	const [snapshot] = await db
-		.select()
-		.from(questpieCrdtSnapshotTable)
+	const [resource] = await db
+		.select({ currentEpochId: questpieCrdtResourceTable.currentEpochId })
+		.from(questpieCrdtResourceTable)
+		.where(eq(questpieCrdtResourceTable.id, binding.resourceId));
+	if (!resource?.currentEpochId) throw rejected();
+	const [epoch] = await db
+		.select({
+			current: questpieCrdtResourceEpochTable.currentSnapshotManifestId,
+			previous: questpieCrdtResourceEpochTable.previousSnapshotManifestId,
+		})
+		.from(questpieCrdtResourceEpochTable)
 		.where(
 			and(
-				eq(questpieCrdtSnapshotTable.resourceId, binding.resourceId),
-				eq(questpieCrdtSnapshotTable.bindingId, binding.id),
-				eq(questpieCrdtSnapshotTable.fieldEpoch, binding.fieldEpoch),
-				lte(questpieCrdtSnapshotTable.fieldCursor, binding.headFieldCursor),
+				eq(questpieCrdtResourceEpochTable.id, resource.currentEpochId),
+				eq(questpieCrdtResourceEpochTable.resourceId, binding.resourceId),
 			),
-		)
-		.orderBy(desc(questpieCrdtSnapshotTable.fieldCursor))
-		.limit(1);
+		);
+	if (!epoch) throw rejected();
+	let snapshot: typeof questpieCrdtSnapshotTable.$inferSelect | undefined;
+	for (const manifestId of [epoch.current, epoch.previous]) {
+		if (!manifestId) continue;
+		const [manifest] = await db
+			.select({ id: questpieCrdtSnapshotManifestTable.id })
+			.from(questpieCrdtSnapshotManifestTable)
+			.where(
+				and(
+					eq(questpieCrdtSnapshotManifestTable.id, manifestId),
+					eq(questpieCrdtSnapshotManifestTable.resourceId, binding.resourceId),
+					eq(
+						questpieCrdtSnapshotManifestTable.resourceEpochId,
+						resource.currentEpochId,
+					),
+					eq(questpieCrdtSnapshotManifestTable.status, 2),
+					sql`${questpieCrdtSnapshotManifestTable.verifiedAt} IS NOT NULL`,
+				),
+			);
+		if (!manifest) continue;
+		[snapshot] = await db
+			.select()
+			.from(questpieCrdtSnapshotTable)
+			.where(
+				and(
+					eq(questpieCrdtSnapshotTable.manifestId, manifest.id),
+					eq(questpieCrdtSnapshotTable.bindingId, binding.id),
+					eq(questpieCrdtSnapshotTable.fieldEpoch, binding.fieldEpoch),
+					lte(questpieCrdtSnapshotTable.fieldCursor, binding.headFieldCursor),
+				),
+			)
+			.limit(1);
+		if (snapshot) break;
+	}
 	if (
 		!snapshot ||
 		snapshot.engineId !== input.engine.engineId ||
