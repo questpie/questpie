@@ -36,6 +36,7 @@ import {
 	CrdtOwnerLifecycleTransaction,
 	stageCrdtOwnerActivation,
 } from "../../../src/server/modules/core/integrated/crdt/owner-lifecycle.js";
+import { createCrdtProjectionStore } from "../../../src/server/modules/core/integrated/crdt/projection-store.js";
 import {
 	questpieCrdtBindingTable,
 	questpieCrdtCommitTable,
@@ -214,6 +215,68 @@ describe("CRDT atomic append store", () => {
 				commitSeq: 1n,
 			},
 		]);
+
+		await db.update(questpieCrdtProjectionTable).set({ dueAt: new Date(0) });
+		let canonicalWrites = 0;
+		let realtimeChanges = 0;
+		const projector = createCrdtProjectionStore(db, {
+			materializeExactCut: async (database, _claim, scheduled) => {
+				const currentBindings = await database
+					.select()
+					.from(questpieCrdtBindingTable);
+				return scheduled.map((field) => {
+					const current = currentBindings.find(
+						(binding) => binding.id === field.bindingId,
+					)!;
+					return {
+						bindingId: current.id,
+						stableFieldId: current.stableFieldId,
+						fieldEpoch: current.fieldEpoch,
+						targetFieldCursor: field.targetFieldCursor,
+						canonicalHash: current.canonicalHash,
+						canonicalRevision: current.canonicalRevision,
+						value: current.sourcePath === "title" ? "projected" : "",
+						shouldWrite: field.shouldWrite,
+					};
+				});
+			},
+			owner: {
+				lock: async (transaction) => {
+					await transaction.execute(
+						sql`SELECT id FROM articles WHERE id = 'article-1' FOR UPDATE`,
+					);
+					return { id: "article-1" };
+				},
+				readCanonicalHashes: async (_transaction, _owner, bindings) =>
+					new Map(
+						bindings.map((candidate) => {
+							const current = fixture.bindings.find(
+								(candidateBinding) =>
+									candidateBinding.id === candidate.bindingId,
+							)!;
+							return [
+								candidate.bindingId,
+								new Uint8Array(current.projectedCanonicalHash),
+							];
+						}),
+					),
+				writeCanonical: async (transaction, _owner, values) => {
+					canonicalWrites++;
+					await transaction.execute(
+						sql`UPDATE articles SET title = ${values.get("title")} WHERE id = 'article-1'`,
+					);
+				},
+				appendRealtimeChange: async () => {
+					realtimeChanges++;
+				},
+			},
+		});
+		await expect(projector.runOnce()).resolves.toEqual({
+			status: "applied",
+			projectedCommitSeq: 1n,
+		});
+		expect(canonicalWrites).toBe(1);
+		expect(realtimeChanges).toBe(1);
 	});
 
 	it("commits two fields under one aggregate sequence and receipt", async () => {
