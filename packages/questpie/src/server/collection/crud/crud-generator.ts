@@ -37,7 +37,10 @@ import {
 	applyBelongsToRelations,
 	extractBelongsToConnectValues,
 	handleCascadeDelete,
+	isForeignKeyViolation,
+	preparePurgeRelations,
 	processNestedRelations,
+	retainedReferenceConflict,
 	separateNestedRelations,
 } from "#questpie/server/collection/crud/relation-mutations/index.js";
 import {
@@ -98,6 +101,7 @@ import type {
 	FindVersionsOptions,
 	OrderBy,
 	PaginatedResult,
+	PurgeParams,
 	RestoreParams,
 	RevertVersionOptions,
 	TransitionStageParams,
@@ -370,6 +374,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		const updateMany = this.wrapWithAppContext(this.createUpdateMany());
 		const updateBatch = this.wrapWithAppContext(this.createUpdateBatch());
 		const deleteMany = this.wrapWithAppContext(this.createDeleteMany());
+		const purgeById = this.wrapWithAppContext(this.createPurge());
 		const restoreById = this.wrapWithAppContext(this.createRestore());
 
 		const crud: CRUD = {
@@ -384,6 +389,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			update: updateMany,
 			updateBatch,
 			deleteById: this.wrapWithAppContext(this.createDelete()),
+			purgeById,
 			deleteMany,
 			// Deprecated alias of deleteMany (removed in v4)
 			delete: deleteMany,
@@ -2588,6 +2594,147 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	}
 
 	/**
+	 * Permanently remove an already soft-deleted record.
+	 *
+	 * This lifecycle is intentionally separate from delete: it has default-deny
+	 * authority, dedicated fatal hooks, and never reinterprets `onDelete`
+	 * relation declarations as irreversible graph authority.
+	 */
+	private createPurge() {
+		return async (params: PurgeParams, context: CRUDContext = {}) => {
+			if (!this.state.options.softDelete) {
+				throw ApiError.notImplemented("Physical purge");
+			}
+
+			const normalized = this.normalizeContext(context);
+			const db = this.getDb(normalized);
+			const { id } = params;
+
+			try {
+				return await withTransaction(db, async (tx: any) => {
+					const txContext = { ...normalized, db: tx };
+
+					await this.executeHooks(
+						this.state.hooks?.beforeOperation,
+						this.createHookContext({
+							data: params,
+							operation: "purge",
+							context: txContext,
+							db: tx,
+						}),
+					);
+
+					// Avoid locking every referring table for a target that never
+					// existed. This is only a candidate read; the authoritative row
+					// is reread and locked after deterministic table locks.
+					const candidateRows = await tx
+						.select({ id: getColumn(this.table, "id")! })
+						.from(this.table)
+						.where(eq(getColumn(this.table, "id")!, id))
+						.limit(1);
+					if (candidateRows.length === 0) {
+						throw ApiError.notFound("Record", String(id));
+					}
+
+					if (!this.app) throw retainedReferenceConflict();
+					const preparedRelations = await preparePurgeRelations({
+						tx,
+						app: this.app,
+						targetCollection: this.state.name,
+						targetTable: this.table,
+						i18nTable: this.i18nTable,
+					});
+
+					const [locked] = await tx
+						.select()
+						.from(this.table)
+						.where(eq(getColumn(this.table, "id")!, id))
+						.for("update");
+					if (!locked) {
+						throw ApiError.notFound("Record", String(id));
+					}
+
+					const canPurge = await this.enforcePurgeAccess(
+						txContext,
+						locked,
+						params,
+					);
+					if (canPurge === false) {
+						throw ApiError.notFound("Record", String(id));
+					}
+					if (typeof canPurge === "object") {
+						const accessClause = this.buildWhereClause(
+							canPurge as Where,
+							false,
+							this.table,
+							txContext,
+						);
+						if (!accessClause) {
+							throw ApiError.notFound("Record", String(id));
+						}
+						const matchingRows = await tx
+							.select({ id: getColumn(this.table, "id")! })
+							.from(this.table)
+							.where(and(eq(getColumn(this.table, "id")!, id), accessClause))
+							.limit(1);
+						if (matchingRows.length === 0) {
+							throw ApiError.notFound("Record", String(id));
+						}
+					}
+
+					if (locked.deletedAt == null) {
+						throw ApiError.conflict("Only a soft-deleted record can be purged");
+					}
+
+					await preparedRelations.assertNoReferences(locked);
+
+					const hookContext = this.createHookContext({
+						data: locked,
+						original: locked,
+						operation: "purge",
+						context: txContext,
+						db: tx,
+					});
+					await this.executeCollectionHooksWithGlobal(
+						"beforePurge",
+						this.state.hooks?.beforePurge,
+						hookContext,
+					);
+
+					if (this.i18nVersionsTable) {
+						await tx
+							.delete(this.i18nVersionsTable)
+							.where(eq(getColumn(this.i18nVersionsTable, "parentId")!, id));
+					}
+					if (this.versionsTable) {
+						await tx
+							.delete(this.versionsTable)
+							.where(eq(getColumn(this.versionsTable, "id")!, id));
+					}
+					await tx
+						.delete(this.table)
+						.where(eq(getColumn(this.table, "id")!, id));
+
+					await this.executeCollectionHooksWithGlobal(
+						"afterPurge",
+						this.state.hooks?.afterPurge,
+						hookContext,
+					);
+
+					return attachCurrentTransactionTxid({ success: true as const });
+				});
+			} catch (error: unknown) {
+				if (isForeignKeyViolation(error)) {
+					throw retainedReferenceConflict();
+				}
+				const dbError = parseDatabaseError(error);
+				if (dbError) throw dbError;
+				throw error;
+			}
+		};
+	}
+
+	/**
 	 * Restore soft-deleted record by ID
 	 */
 	private createRestore() {
@@ -3558,7 +3705,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	}
 
 	private async executeCollectionHooksWithGlobal(
-		hookName: "beforeChange" | "afterChange" | "beforeDelete" | "afterDelete",
+		hookName:
+			| "beforeChange"
+			| "afterChange"
+			| "beforeDelete"
+			| "afterDelete"
+			| "beforePurge"
+			| "afterPurge",
 		collectionHooks: any | any[] | undefined,
 		ctx: HookContext<any, any, any>,
 	) {
@@ -3640,7 +3793,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	private createHookContext(params: {
 		data: any;
 		original?: any;
-		operation: "create" | "update" | "delete" | "read";
+		operation: "create" | "update" | "delete" | "purge" | "read";
 		context: CRUDContext;
 		db: any;
 		bulk?: {
@@ -3681,6 +3834,39 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		// Use collection's access rule, or fall back to app defaultAccess
 		const accessRule =
 			this.state.access?.[operation] ?? this.app?.defaultAccess?.[operation];
+		return executeAccessRule(accessRule, {
+			app: this.app,
+			db,
+			session: normalized.session,
+			principal: normalized.principal,
+			actor: normalized.actor,
+			locale: normalized.locale,
+			row,
+			input,
+			request:
+				((context as any).req as Request | undefined) ??
+				((context as any).request as Request | undefined),
+			contextExtensions: normalized["~contextExtensions"],
+		});
+	}
+
+	/**
+	 * Purge deliberately has no authenticated-session fallback. An omitted
+	 * rule is a denial, even when delete is allowed.
+	 */
+	private async enforcePurgeAccess(
+		context: CRUDContext,
+		row: any,
+		input: PurgeParams,
+	): Promise<boolean | AccessWhere> {
+		const db = this.getDb(context);
+		const normalized = this.normalizeContext(context);
+		if (normalized.accessMode === "system") return true;
+
+		const accessRule =
+			this.state.access?.purge ?? this.app?.defaultAccess?.purge;
+		if (accessRule === undefined) return false;
+
 		return executeAccessRule(accessRule, {
 			app: this.app,
 			db,

@@ -425,10 +425,11 @@ export type HookContextBase<TData = any> = AppContext & {
 export type HookContext<
 	TData = any,
 	TOriginal = any,
-	TOperation extends "create" | "update" | "delete" | "read" =
+	TOperation extends "create" | "update" | "delete" | "purge" | "read" =
 		| "create"
 		| "update"
 		| "delete"
+		| "purge"
 		| "read",
 > = HookContextBase<TData> & {
 	/**
@@ -497,10 +498,11 @@ export type AccessContext<TData = any, TInput = unknown> = AppContext & {
 export type HookFunction<
 	TData = any,
 	TOriginal = any,
-	TOperation extends "create" | "update" | "delete" | "read" =
+	TOperation extends "create" | "update" | "delete" | "purge" | "read" =
 		| "create"
 		| "update"
 		| "delete"
+		| "purge"
 		| "read",
 > = (ctx: HookContext<TData, TOriginal, TOperation>) => Promise<void> | void;
 
@@ -517,7 +519,7 @@ export type BeforeOperationHook<
 > = HookFunction<
 	TInsert | TUpdate | TSelect,
 	never,
-	"create" | "update" | "delete" | "read"
+	"create" | "update" | "delete" | "purge" | "read"
 >;
 
 /**
@@ -630,6 +632,25 @@ export type AfterDeleteHook<TSelect = any> = (
 ) => Promise<void> | void;
 
 /**
+ * Dedicated irreversible-purge hook context.
+ *
+ * `data` and `original` are the locked soft-deleted preimage. Purge hooks run
+ * inside the purge transaction and are fatal: throwing rolls it back.
+ */
+export type PurgeHookContext<TSelect = any> = HookContextBase<TSelect> & {
+	operation: "purge";
+	original: TSelect;
+};
+
+export type BeforePurgeHook<TSelect = any> = (
+	ctx: PurgeHookContext<TSelect>,
+) => Promise<void> | void;
+
+export type AfterPurgeHook<TSelect = any> = (
+	ctx: PurgeHookContext<TSelect>,
+) => Promise<void> | void;
+
+/**
  * Context passed to workflow transition hooks.
  * Includes the stage transition info alongside standard hook fields.
  */
@@ -666,6 +687,7 @@ export type TransitionHook<TData = any> = (
  * - Create: beforeOperation → beforeValidate → beforeChange → [DB INSERT] → afterChange → afterRead
  * - Update: beforeOperation → beforeValidate → beforeChange → [DB UPDATE] → afterChange → afterRead
  * - Delete: beforeOperation → beforeDelete → [DB DELETE] → afterDelete → afterRead
+ * - Purge: beforeOperation → beforePurge → [DB PURGE] → afterPurge
  * - Read: beforeOperation → beforeRead → [DB SELECT] → afterRead
  *
  * @template TSelect - The complete record type (after read)
@@ -832,6 +854,19 @@ export interface CollectionHooks<TSelect = any, TInsert = any, TUpdate = any> {
 	afterDelete?: AfterDeleteHook<TSelect>[] | AfterDeleteHook<TSelect>;
 
 	/**
+	 * Runs inside the purge transaction before framework-owned rows are
+	 * physically removed. Throwing aborts the purge.
+	 */
+	beforePurge?: BeforePurgeHook<TSelect>[] | BeforePurgeHook<TSelect>;
+
+	/**
+	 * Runs inside the purge transaction after physical removal and before
+	 * commit. Throwing rolls the complete purge back. External side effects
+	 * belong in `onAfterCommit`.
+	 */
+	afterPurge?: AfterPurgeHook<TSelect>[] | AfterPurgeHook<TSelect>;
+
+	/**
 	 * Runs before a workflow stage transition (transitionStage).
 	 * Throw to abort the transition.
 	 *
@@ -944,6 +979,12 @@ export interface CollectionAccess<TSelect = any, TInsert = any, TUpdate = any> {
 	create?: AccessRule<undefined, TSelect, TInsert>;
 	update?: RowAccessRule<TSelect, TSelect, TUpdate>;
 	delete?: RowAccessRule<TSelect, TSelect>;
+	/**
+	 * Separate authority for irreversible removal of an already soft-deleted
+	 * record. Resolution is collection `purge`, app `defaultAccess.purge`,
+	 * then deny. It never falls back to delete or authenticated-session access.
+	 */
+	purge?: RowAccessRule<TSelect, TSelect>;
 	/**
 	 * Access rule for workflow stage transitions.
 	 * Falls back to `update` if not specified.

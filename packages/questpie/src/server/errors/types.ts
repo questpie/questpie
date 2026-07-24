@@ -30,8 +30,10 @@ export type HookErrorContext = {
 		| "beforeValidate"
 		| "beforeDelete"
 		| "afterDelete"
+		| "beforePurge"
+		| "afterPurge"
 		| "beforeOperation";
-	operation: "create" | "read" | "update" | "delete";
+	operation: "create" | "read" | "update" | "delete" | "purge";
 	collection?: string;
 	global?: string;
 	recordId?: string;
@@ -43,7 +45,7 @@ export type HookErrorContext = {
  * Access control error context
  */
 export type AccessErrorContext = {
-	operation: "create" | "read" | "update" | "delete";
+	operation: "create" | "read" | "update" | "delete" | "purge";
 	/** Collection or global name */
 	resource: string;
 	/** Human-readable reason */

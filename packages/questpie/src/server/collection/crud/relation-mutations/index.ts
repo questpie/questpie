@@ -8,6 +8,12 @@ export {
 	type CascadeDeleteOptions,
 	handleCascadeDelete,
 } from "./cascade-delete.js";
+export {
+	isForeignKeyViolation,
+	preparePurgeRelations,
+	type PreparedPurgeRelations,
+	retainedReferenceConflict,
+} from "./purge-relations.js";
 
 export {
 	applyBelongsToRelations,

@@ -939,11 +939,14 @@ export class Collection<TState extends CollectionBuilderState> {
 				Object.assign(constraints, indexesFn({ table: t as any }));
 			}
 
-			// Auto-index on deletedAt for soft delete
+			// Retention scans use a stable `(deletedAt, id)` keyset and never
+			// offset through an unbounded soft-delete set.
 			if (this.state.options.softDelete) {
-				constraints[`${tableName}_deleted_at_idx`] = index().on(
-					(t as any).deletedAt,
-				);
+				constraints[`${tableName}_deleted_at_idx`] = index(
+					`${tableName}_deleted_at_idx`,
+				)
+					.on((t as any).deletedAt, (t as any).id)
+					.where(sql`${(t as any).deletedAt} IS NOT NULL`);
 			}
 
 			return Object.values(constraints);

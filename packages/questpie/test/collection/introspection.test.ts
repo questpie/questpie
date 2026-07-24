@@ -108,6 +108,18 @@ const restricted = collection("restricted")
 		delete: false,
 	});
 
+let purgeIntrospectionRuleCalls = 0;
+const purge_introspection = collection("purge_introspection")
+	.fields(({ f }) => ({ tenantId: f.text().required() }))
+	.options({ softDelete: true })
+	.access({
+		read: true,
+		purge: () => {
+			purgeIntrospectionRuleCalls++;
+			return { tenantId: "tenant-a" };
+		},
+	});
+
 const field_access = collection("field_access").fields(({ f }) => ({
 	name: f.text().required(),
 	internal: f.text().access({
@@ -188,6 +200,7 @@ describe("collection introspection", () => {
 				versioned,
 				with_workflow,
 				restricted,
+				purge_introspection,
 				field_access,
 				collection_field_access,
 				with_relations,
@@ -404,6 +417,24 @@ describe("collection introspection", () => {
 	// ========================================================================
 
 	describe("access control", () => {
+		it("reports purge as conditional without invoking its row-aware rule", async () => {
+			purgeIntrospectionRuleCalls = 0;
+			const schema = await introspectCollection(
+				purge_introspection as any,
+				createTestContext({ role: "editor" }),
+				setup.app,
+			);
+
+			expect(schema.access.operations.purge.allowed).toBe("filtered");
+			expect(purgeIntrospectionRuleCalls).toBe(0);
+			const hardDeleteSchema = await introspectCollection(
+				simple as any,
+				createTestContext({ role: "editor" }),
+				setup.app,
+			);
+			expect(hardDeleteSchema.access.operations.purge.allowed).toBe(false);
+		});
+
 		it("evaluates access rules correctly for system mode with session", async () => {
 			// System mode with a session — access functions that check session should pass
 			const ctx = createTestContext({ role: "admin" });

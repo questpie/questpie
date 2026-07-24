@@ -53,7 +53,7 @@ export interface CreateHookContextParams {
 	/** Original data (for update operations) */
 	original?: any;
 	/** Operation type */
-	operation: "create" | "update" | "delete" | "read";
+	operation: "create" | "update" | "delete" | "purge" | "read";
 	/** CRUD context */
 	context: CRUDContext;
 	/** Database instance */

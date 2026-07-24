@@ -68,20 +68,28 @@ function matchesFilter(
 // ============================================================================
 
 /**
- * Execute global collection hooks (beforeChange, afterChange, beforeDelete, afterDelete).
+ * Execute global collection hooks.
  *
  * - `before*` hooks propagate errors (allow blocking operations).
- * - `after*` hooks swallow errors and log to console.
+ * - Ordinary `after*` hooks swallow errors and log.
+ * - `afterPurge` is fatal because it is part of the irreversible purge
+ *   transaction; external work belongs in `onAfterCommit`.
  */
 export async function executeGlobalCollectionHooks(
 	entries: GlobalCollectionHookEntry[] | undefined,
-	hookName: "beforeChange" | "afterChange" | "beforeDelete" | "afterDelete",
+	hookName:
+		| "beforeChange"
+		| "afterChange"
+		| "beforeDelete"
+		| "afterDelete"
+		| "beforePurge"
+		| "afterPurge",
 	collectionName: string,
 	ctx: GlobalCollectionHookContextInput,
 ): Promise<void> {
 	if (!entries || entries.length === 0) return;
 
-	const isBefore = hookName.startsWith("before");
+	const isFatal = hookName.startsWith("before") || hookName === "afterPurge";
 
 	// Enrich context with collection name for global hooks
 	const enrichedCtx: GlobalCollectionHookContext = {
@@ -93,7 +101,7 @@ export async function executeGlobalCollectionHooks(
 		const hookFn = entry[hookName];
 		if (!hookFn || !matchesFilter(entry, collectionName)) continue;
 
-		if (isBefore) {
+		if (isFatal) {
 			await hookFn(enrichedCtx);
 		} else {
 			try {

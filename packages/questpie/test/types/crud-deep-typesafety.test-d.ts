@@ -586,9 +586,7 @@ type WithNestedResult = ApplyQuery<
 	{ with: { comments: { with: { author: true } } } }
 >;
 type NestedCommentsArr = WithNestedResult["comments"];
-type NestedComment = NestedCommentsArr extends readonly (infer E)[]
-	? E
-	: never;
+type NestedComment = NestedCommentsArr extends readonly (infer E)[] ? E : never;
 type _nestedCommentHasContent = Expect<
 	Equal<HasKey<NestedComment, "content">, true>
 >;
@@ -797,6 +795,12 @@ type _countIsNumber = Expect<Equal<ArticleCountReturn, number>>;
 type ArticleDeleteReturn = Awaited<ReturnType<ArticleCRUD["deleteById"]>>;
 type _deleteHasSuccess = Expect<
 	Equal<HasKey<ArticleDeleteReturn, "success">, true>
+>;
+
+// --- purgeById() is canonical and returns the narrow success contract ---
+type ArticlePurgeReturn = Awaited<ReturnType<ArticleCRUD["purgeById"]>>;
+type _purgeReturnIsSuccess = Expect<
+	Equal<ArticlePurgeReturn, { success: true }>
 >;
 
 // ============================================================================
