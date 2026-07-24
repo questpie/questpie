@@ -174,6 +174,9 @@ describe("QPCR v1 frame boundary", () => {
 
 		awareness.payload.value = Number.POSITIVE_INFINITY;
 		expect(() => encodeCrdtFrameV1(awareness)).toThrow(CrdtProtocolError);
+
+		awareness.payload.value = "\ud800";
+		expect(() => encodeCrdtFrameV1(awareness)).toThrow(CrdtProtocolError);
 	});
 });
 
