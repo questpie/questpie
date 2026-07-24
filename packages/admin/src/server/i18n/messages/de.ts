@@ -940,6 +940,7 @@ export default {
 	"audit.action.create": "erstellte",
 	"audit.action.update": "aktualisierte",
 	"audit.action.delete": "löschte",
+	"audit.action.purge": "löschte endgültig",
 	"audit.action.transition": "änderte den Status von",
 	"audit.resourceType.collection": "Sammlung",
 	"audit.resourceType.global": "globale Einstellung",

@@ -934,6 +934,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			onAfterCommit,
 		}: any) => {
 			if (!app?.storage || !data?.key) return;
+			if (this.state.options.softDelete) return;
 
 			await deleteStorageObjectAfterCommit({
 				app,
@@ -941,6 +942,22 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				logger,
 				onAfterCommit,
 				message: "Failed to delete upload file from storage",
+			});
+		};
+		const uploadAfterPurgeHook = async ({
+			data,
+			app,
+			logger,
+			onAfterCommit,
+		}: any) => {
+			if (!app?.storage || !data?.key) return;
+
+			await deleteStorageObjectAfterCommit({
+				app,
+				key: data.key,
+				logger,
+				onAfterCommit,
+				message: "Failed to delete purged upload file from storage",
 			});
 		};
 
@@ -965,6 +982,12 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				? [uploadAfterDeleteHook, ...existingAfterDelete]
 				: [uploadAfterDeleteHook, existingAfterDelete]
 			: uploadAfterDeleteHook;
+		const existingAfterPurge = this.state.hooks?.afterPurge;
+		const mergedAfterPurge = existingAfterPurge
+			? Array.isArray(existingAfterPurge)
+				? [uploadAfterPurgeHook, ...existingAfterPurge]
+				: [uploadAfterPurgeHook, existingAfterPurge]
+			: uploadAfterPurgeHook;
 
 		const newState = {
 			...this.state,
@@ -981,6 +1004,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				afterRead: mergedAfterRead,
 				afterChange: mergedAfterChange,
 				afterDelete: mergedAfterDelete,
+				afterPurge: mergedAfterPurge,
 			},
 			upload: options,
 		} as any;

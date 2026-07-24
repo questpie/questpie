@@ -51,12 +51,20 @@ const events = collection("events").fields(({ f }) => ({
 	when: f.datetime(),
 }));
 
+const purgeRecords = collection("purge_records")
+	.fields(({ f }) => ({
+		title: f.text().required(),
+		secret: f.text().required(),
+	}))
+	.options({ softDelete: true })
+	.access({ purge: true });
+
 describe("audit module e2e", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
 		setup = await buildMockApp({
-			collections: { posts, skipped, events },
+			collections: { posts, skipped, events, purgeRecords },
 			globals: { settings },
 			modules: [auditModule],
 			defaultAccess: { read: true, create: true, update: true, delete: true },
@@ -144,6 +152,53 @@ describe("audit module e2e", () => {
 			accessMode: "system",
 			operation: "delete",
 		});
+	});
+
+	it("records purge as an attributable metadata-only fact", async () => {
+		const ctx = createTestContext({
+			accessMode: "system",
+			session: {
+				user: { id: "retention-worker", name: "Retention Worker" },
+				session: { id: "retention-session" },
+			} as any,
+		});
+		const record = await setup.app.collections.purgeRecords.create(
+			{ title: "Expired", secret: "must-not-survive-in-audit" },
+			ctx,
+		);
+		await setup.app.collections.purgeRecords.deleteById({ id: record.id }, ctx);
+		await setup.app.collections.purgeRecords.purgeById({ id: record.id }, ctx);
+
+		const logs = await setup.app.collections[AUDIT_LOG_COLLECTION].find(
+			{
+				where: {
+					resource: "purgeRecords",
+					resourceId: record.id,
+					action: "purge",
+				},
+			},
+			ctx,
+		);
+
+		expect(logs.docs).toHaveLength(1);
+		expect(logs.docs[0]).toMatchObject({
+			action: "purge",
+			resourceType: "collection",
+			resource: "purgeRecords",
+			resourceId: record.id,
+			resourceLabel: null,
+			userId: "retention-worker",
+			userName: "Retention Worker",
+			changes: null,
+		});
+		expect(logs.docs[0].metadata).toMatchObject({
+			actorType: "user",
+			accessMode: "system",
+			operation: "purge",
+		});
+		expect(JSON.stringify(logs.docs[0])).not.toContain(
+			"must-not-survive-in-audit",
+		);
 	});
 
 	it("labels system collection operations without a session as System", async () => {

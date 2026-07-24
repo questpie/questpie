@@ -199,6 +199,31 @@ const realtimeHook = {
 			}
 		}
 	},
+	afterPurge: async (ctx: GlobalCollectionHookContext) => {
+		const realtime = ctx.realtime;
+		if (!realtime) return;
+
+		try {
+			const change = await realtime.appendChange({
+				resourceType: "collection",
+				resource: ctx.collection,
+				operation: "delete",
+				recordId: ctx.data?.id ?? null,
+				locale: ctx.locale ?? null,
+				// Soft delete already emitted the equality projection needed to
+				// evict the live row. Purge is a second idempotent invalidation
+				// and must not retain another copy of the removed preimage.
+				payload: { before: null, after: null },
+			});
+			recordTransactionTxid(change.txid);
+			publishRealtimeAfterCommit(ctx, realtime, change);
+		} catch (error) {
+			handleRealtimeCaptureError(ctx.logger, error);
+			if (realtime.nativeDeltasEnabled) {
+				throw new FatalGlobalHookError(error);
+			}
+		}
+	},
 };
 
 // ============================================================================
@@ -294,6 +319,27 @@ const searchHook = {
 		});
 	},
 	afterDelete: async (ctx: GlobalCollectionHookContext) => {
+		const search = ctx.search;
+		const logger = ctx.logger;
+		if (!search) return;
+		const recordId = ctx.data?.id;
+		if (!recordId) return;
+
+		ctx.onAfterCommit(async () => {
+			try {
+				await search.remove({
+					collection: ctx.collection,
+					recordId: String(recordId),
+				});
+			} catch (err) {
+				logger?.error(
+					`[Core] Search remove failed for ${ctx.collection}:${recordId}:`,
+					err,
+				);
+			}
+		});
+	},
+	afterPurge: async (ctx: GlobalCollectionHookContext) => {
 		const search = ctx.search;
 		const logger = ctx.logger;
 		if (!search) return;

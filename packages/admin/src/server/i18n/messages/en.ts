@@ -917,6 +917,7 @@ export default {
 	"audit.action.create": "created",
 	"audit.action.update": "updated",
 	"audit.action.delete": "deleted",
+	"audit.action.purge": "purged",
 	"audit.action.transition": "changed status of",
 	"audit.resourceType.collection": "collection",
 	"audit.resourceType.global": "global",

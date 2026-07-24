@@ -660,6 +660,7 @@ export default {
 	"audit.action.create": "creó",
 	"audit.action.update": "actualizó",
 	"audit.action.delete": "eliminó",
+	"audit.action.purge": "eliminó permanentemente",
 	"audit.action.transition": "cambió el estado de",
 	"audit.resourceType.collection": "colección",
 	"audit.resourceType.global": "global",
