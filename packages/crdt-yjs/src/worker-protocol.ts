@@ -1,6 +1,7 @@
 import type { CrdtEngineLimits, CrdtEngineReplica } from "questpie/crdt";
 
 export type YjsWorkerOperation = Readonly<{
+	id: number;
 	method: "stage";
 	input: {
 		replica: CrdtEngineReplica<"text", string>;
@@ -10,5 +11,6 @@ export type YjsWorkerOperation = Readonly<{
 }>;
 
 export type YjsWorkerResponse =
-	| Readonly<{ ok: true; value: unknown }>
-	| Readonly<{ ok: false; message: string }>;
+	| Readonly<{ type: "ready" }>
+	| Readonly<{ type: "result"; id: number; ok: true; value: unknown }>
+	| Readonly<{ type: "result"; id: number; ok: false; message: string }>;

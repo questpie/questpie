@@ -8,7 +8,7 @@ import { yjsServerEngine } from "../src/exports/server.js";
 
 describe("Yjs text engine", () => {
 	it("converges reordered, duplicated, and offline Y.Text updates", async () => {
-		const engine = yjsServerEngine();
+		const engine = serverEngine();
 		const initial = await engine.create({
 			value: "hello",
 			basis: { fieldEpoch: 0n, fieldCursor: 0n },
@@ -37,7 +37,7 @@ describe("Yjs text engine", () => {
 	});
 
 	it("rejects documents with anything except one named Y.Text root", async () => {
-		const engine = yjsServerEngine();
+		const engine = serverEngine();
 		const initial = await engine.create({
 			value: "",
 			basis: { fieldEpoch: 0n, fieldCursor: 0n },
@@ -53,7 +53,7 @@ describe("Yjs text engine", () => {
 	});
 
 	it("rejects malformed proofs, updates, dependencies, and hard limits", async () => {
-		const engine = yjsServerEngine();
+		const engine = serverEngine();
 		const initial = await engine.create({
 			value: "safe",
 			basis: { fieldEpoch: 0n, fieldCursor: 0n },
@@ -104,7 +104,7 @@ describe("Yjs text engine", () => {
 	});
 
 	it("terminates an untrusted stage operation at its deadline", async () => {
-		const normal = yjsServerEngine();
+		const normal = serverEngine();
 		const initial = await normal.create({
 			value: "safe",
 			basis: { fieldEpoch: 0n, fieldCursor: 0n },
@@ -117,8 +117,36 @@ describe("Yjs text engine", () => {
 		);
 	});
 
+	it("rejects overflow instead of growing an unbounded worker queue", async () => {
+		const normal = serverEngine();
+		const initial = await normal.create({
+			value: "safe",
+			basis: { fieldEpoch: 0n, fieldCursor: 0n },
+		});
+		const update = updateFrom(initial.state, (text) => text.insert(4, "!"));
+		const bounded = yjsServerEngine({
+			operationTimeoutMs: 1,
+			maximumActiveWorkers: 1,
+			maximumPendingJobs: 1,
+		});
+		const outcomes = await Promise.allSettled(
+			Array.from({ length: 3 }, () =>
+				bounded.stage({ replica: initial, update }),
+			),
+		);
+
+		expect(
+			outcomes.some(
+				(outcome) =>
+					outcome.status === "rejected" &&
+					outcome.reason instanceof Error &&
+					outcome.reason.message === "Yjs worker queue is full",
+			),
+		).toBe(true);
+	});
+
 	it("keeps aggregate stage capability in the parent realm", async () => {
-		const engine = yjsServerEngine();
+		const engine = serverEngine();
 		const initial = await engine.create({
 			value: "hello",
 			basis: { fieldEpoch: 0n, fieldCursor: 0n },
@@ -148,6 +176,28 @@ describe("Yjs text engine", () => {
 		});
 		expect(engine.project(replica)).toBe("client");
 	});
+
+	it("preserves emoji, ZWJ, combining marks, and RTL scalar text", async () => {
+		const engine = yjsClientEngine();
+		const value = "👩‍💻 cafe\u0301 مرحبا";
+		const replica = await engine.create({
+			value,
+			basis: { fieldEpoch: 0n, fieldCursor: 0n },
+		});
+		expect(engine.project(replica)).toBe(value);
+		await expect(
+			engine.create({
+				value: "bad\0value",
+				basis: { fieldEpoch: 0n, fieldCursor: 0n },
+			}),
+		).rejects.toThrow("invalid Yjs text projection");
+		await expect(
+			engine.create({
+				value: "bad\uD800",
+				basis: { fieldEpoch: 0n, fieldCursor: 0n },
+			}),
+		).rejects.toThrow("invalid Yjs text projection");
+	});
 });
 
 function updateFrom(state: Uint8Array, mutate: (text: Y.Text) => void) {
@@ -155,4 +205,8 @@ function updateFrom(state: Uint8Array, mutate: (text: Y.Text) => void) {
 	Y.applyUpdate(document, state);
 	mutate(document.getText("text"));
 	return Y.encodeStateAsUpdate(document, Y.encodeStateVectorFromUpdate(state));
+}
+
+function serverEngine() {
+	return yjsServerEngine({ operationTimeoutMs: 5_000 });
 }

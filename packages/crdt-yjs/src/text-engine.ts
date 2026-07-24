@@ -14,6 +14,7 @@ import * as Y from "yjs";
 
 const ENGINE_ID = "questpie.yjs-text/v1";
 const FORMAT_VERSION = 1;
+const MAXIMUM_JOB_ARRAY_BUFFER_BYTES = 64 * 1024 * 1024;
 const CODEC_FINGERPRINT =
 	"fd9143e742c66683554636070a6ca3fc182e159511921b4dc91a4d49361f5c45";
 
@@ -66,6 +67,14 @@ export function createYjsTextEngineCore(): CrdtFieldEngine<"text", string> {
 				nextSnapshot.byteLength > limits.maxSnapshotBytes
 			) {
 				throw new CrdtEngineError("Yjs candidate exceeds result limits");
+			}
+			const jobArrayBufferBytes =
+				replica.state.byteLength +
+				update.byteLength +
+				nextSnapshot.byteLength +
+				update.byteLength;
+			if (jobArrayBufferBytes > MAXIMUM_JOB_ARRAY_BUFFER_BYTES) {
+				throw new CrdtEngineError("Yjs job exceeds ArrayBuffer ceiling");
 			}
 			const inspection = Object.freeze({
 				operationCount: decodedStructCount(update),
@@ -217,8 +226,10 @@ function hasUnpairedSurrogate(value: string): boolean {
 	for (let index = 0; index < value.length; index++) {
 		const code = value.charCodeAt(index);
 		if (code >= 0xd800 && code <= 0xdbff) {
-			const next = value.charCodeAt(++index);
+			if (index + 1 >= value.length) return true;
+			const next = value.charCodeAt(index + 1);
 			if (next < 0xdc00 || next > 0xdfff) return true;
+			index++;
 		} else if (code >= 0xdc00 && code <= 0xdfff) {
 			return true;
 		}
