@@ -13,9 +13,13 @@ import {
 	questpieCrdtResourceTable,
 	questpieCrdtResourceEpochTable,
 	questpieCrdtSchemaTable,
+	questpieCrdtSessionGrantTable,
+	questpieCrdtSessionTable,
 	questpieCrdtSnapshotManifestTable,
 	questpieCrdtSnapshotTable,
 	questpieCrdtTables,
+	questpieCrdtTicketGrantTable,
+	questpieCrdtTicketTable,
 	questpieCrdtUpdateReceiptTable,
 	questpieCrdtUpdateTable,
 } from "../../../src/server/modules/core/integrated/crdt/schema.js";
@@ -126,6 +130,40 @@ describe("CRDT durable schema", () => {
 		);
 	});
 
+	it("persists every ticket admission fence and the authorized incarnation", () => {
+		expect(columnNames(questpieCrdtResourceTable)).toEqual(
+			expect.arrayContaining(["incarnation_key", "session_generation"]),
+		);
+		expect(indexNames(questpieCrdtResourceTable)).toContain(
+			"uq_crdt_resource_incarnation_key",
+		);
+		expect(columnNames(questpieCrdtTicketTable)).toEqual(
+			expect.arrayContaining([
+				"effective_mode",
+				"subject_read_fence",
+				"subject_edit_fence",
+			]),
+		);
+		expect(columnNames(questpieCrdtSessionTable)).toEqual(
+			expect.arrayContaining([
+				"effective_mode",
+				"subject_read_fence",
+				"subject_edit_fence",
+			]),
+		);
+		for (const grantTable of [
+			questpieCrdtTicketGrantTable,
+			questpieCrdtSessionGrantTable,
+		]) {
+			expect(columnNames(grantTable)).toEqual(
+				expect.arrayContaining([
+					"subject_field_read_fence",
+					"subject_field_edit_fence",
+				]),
+			);
+		}
+	});
+
 	it("never cascade-deletes durable recovery or idempotency state", () => {
 		for (const table of Object.values(questpieCrdtTables)) {
 			const cascades = getTableConfig(table).foreignKeys.filter(
@@ -192,6 +230,10 @@ function uniqueIndexColumns(
 
 function indexNames(table: Parameters<typeof getTableConfig>[0]): string[] {
 	return getTableConfig(table).indexes.map((index) => index.config.name!);
+}
+
+function columnNames(table: Parameters<typeof getTableConfig>[0]): string[] {
+	return getTableConfig(table).columns.map((column) => column.name);
 }
 
 function foreignKeyNames(

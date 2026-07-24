@@ -261,6 +261,7 @@ export const questpieCrdtResourceTable = pgTable(
 	"questpie_crdt_resource",
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
+		incarnationKey: uuid("incarnation_key").defaultRandom().notNull(),
 		definitionId: uuid("definition_id")
 			.notNull()
 			.references(() => questpieCrdtDefinitionTable.id, {
@@ -274,6 +275,7 @@ export const questpieCrdtResourceTable = pgTable(
 		currentEpochStatus: smallint("current_epoch_status"),
 		readFence: counter("read_fence"),
 		editFence: counter("edit_fence"),
+		sessionGeneration: counter("session_generation"),
 		retiredAt: optionalTime("retired_at"),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
@@ -288,6 +290,7 @@ export const questpieCrdtResourceTable = pgTable(
 			table.id,
 			table.definitionId,
 		),
+		uniqueIndex("uq_crdt_resource_incarnation_key").on(table.incarnationKey),
 		uniqueIndex("uq_crdt_resource_current_locator")
 			.on(table.definitionId, table.locatorHash)
 			.where(sql`${table.retiredAt} IS NULL`),
@@ -1362,10 +1365,13 @@ export const questpieCrdtTicketTable = pgTable(
 		audience: text("audience").notNull(),
 		origin: text("origin"),
 		requestedMode: smallint("requested_mode").notNull(),
+		effectiveMode: smallint("effective_mode").notNull(),
 		protocolMajor: smallint("protocol_major").notNull(),
 		protocolMinor: smallint("protocol_minor").notNull(),
 		resourceReadFence: requiredCounter("resource_read_fence"),
 		resourceEditFence: requiredCounter("resource_edit_fence"),
+		subjectReadFence: requiredCounter("subject_read_fence"),
+		subjectEditFence: requiredCounter("subject_edit_fence"),
 		sessionGeneration: requiredCounter("session_generation"),
 		expiresAt: requiredExpiry("expires_at"),
 		redeemedAt: optionalTime("redeemed_at"),
@@ -1404,9 +1410,12 @@ export const questpieCrdtTicketTable = pgTable(
 			table.subjectId,
 			table.credentialFingerprint,
 			table.requestedMode,
+			table.effectiveMode,
 			table.sessionGeneration,
 			table.resourceReadFence,
 			table.resourceEditFence,
+			table.subjectReadFence,
+			table.subjectEditFence,
 		),
 		index("idx_crdt_ticket_subject_expiry").on(
 			table.subjectId,
@@ -1422,11 +1431,11 @@ export const questpieCrdtTicketTable = pgTable(
 		),
 		check(
 			"ck_crdt_ticket_mode_protocol",
-			sql`${table.requestedMode} IN (1, 2) AND ${table.protocolMajor} = 1 AND ${table.protocolMinor} = 0`,
+			sql`${table.requestedMode} IN (1, 2) AND ${table.effectiveMode} IN (1, 2) AND ${table.effectiveMode} <= ${table.requestedMode} AND ${table.protocolMajor} = 1 AND ${table.protocolMinor} = 0`,
 		),
 		check(
-			"ck_crdt_ticket_state",
-			sql`${table.releasedAt} IS NULL OR ${table.redeemedAt} IS NOT NULL`,
+			"ck_crdt_ticket_audience_origin",
+			sql`octet_length(${table.audience}) BETWEEN 1 AND 255 AND (${table.origin} IS NULL OR octet_length(${table.origin}) BETWEEN 1 AND 2048)`,
 		),
 	],
 );
@@ -1446,6 +1455,8 @@ export const questpieCrdtTicketGrantTable = pgTable(
 		headFieldCursor: requiredCounter("head_field_cursor"),
 		fieldReadFence: requiredCounter("field_read_fence"),
 		fieldEditFence: requiredCounter("field_edit_fence"),
+		subjectFieldReadFence: requiredCounter("subject_field_read_fence"),
+		subjectFieldEditFence: requiredCounter("subject_field_edit_fence"),
 	},
 	(table) => [
 		primaryKey({ columns: [table.ticketId, table.bindingId] }),
@@ -1497,6 +1508,8 @@ export const questpieCrdtTicketGrantTable = pgTable(
 			table.headFieldCursor,
 			table.fieldReadFence,
 			table.fieldEditFence,
+			table.subjectFieldReadFence,
+			table.subjectFieldEditFence,
 		),
 		check(
 			"ck_crdt_ticket_grant_values",
@@ -1516,9 +1529,12 @@ export const questpieCrdtSessionTable = pgTable(
 		subjectId: uuid("subject_id").notNull(),
 		credentialFingerprint: hash("credential_fingerprint"),
 		requestedMode: smallint("requested_mode").notNull(),
+		effectiveMode: smallint("effective_mode").notNull(),
 		generation: requiredCounter("generation"),
 		resourceReadFence: requiredCounter("resource_read_fence"),
 		resourceEditFence: requiredCounter("resource_edit_fence"),
+		subjectReadFence: requiredCounter("subject_read_fence"),
+		subjectEditFence: requiredCounter("subject_edit_fence"),
 		lastSeenCommitSeq: requiredCounter("last_seen_commit_seq"),
 		updateTokens: counter("update_tokens"),
 		updateRefilledAt: systemTimestamp("update_refilled_at")
@@ -1568,9 +1584,12 @@ export const questpieCrdtSessionTable = pgTable(
 				table.subjectId,
 				table.credentialFingerprint,
 				table.requestedMode,
+				table.effectiveMode,
 				table.generation,
 				table.resourceReadFence,
 				table.resourceEditFence,
+				table.subjectReadFence,
+				table.subjectEditFence,
 			],
 			foreignColumns: [
 				questpieCrdtTicketTable.id,
@@ -1580,9 +1599,12 @@ export const questpieCrdtSessionTable = pgTable(
 				questpieCrdtTicketTable.subjectId,
 				questpieCrdtTicketTable.credentialFingerprint,
 				questpieCrdtTicketTable.requestedMode,
+				questpieCrdtTicketTable.effectiveMode,
 				questpieCrdtTicketTable.sessionGeneration,
 				questpieCrdtTicketTable.resourceReadFence,
 				questpieCrdtTicketTable.resourceEditFence,
+				questpieCrdtTicketTable.subjectReadFence,
+				questpieCrdtTicketTable.subjectEditFence,
 			],
 		}).onDelete("restrict"),
 		foreignKey({
@@ -1607,7 +1629,7 @@ export const questpieCrdtSessionTable = pgTable(
 		),
 		check(
 			"ck_crdt_session_values",
-			sql`${table.requestedMode} IN (1, 2) AND ${table.generation} >= 0 AND ${table.lastSeenCommitSeq} >= 0 AND octet_length(${table.credentialFingerprint}) = 32 AND ${table.updateTokens} >= 0 AND ${table.updateByteTokens} >= 0 AND ${table.awarenessTokens} >= 0`,
+			sql`${table.requestedMode} IN (1, 2) AND ${table.effectiveMode} IN (1, 2) AND ${table.effectiveMode} <= ${table.requestedMode} AND ${table.generation} >= 0 AND ${table.lastSeenCommitSeq} >= 0 AND octet_length(${table.credentialFingerprint}) = 32 AND ${table.updateTokens} >= 0 AND ${table.updateByteTokens} >= 0 AND ${table.awarenessTokens} >= 0`,
 		),
 		check(
 			"ck_crdt_session_closed",
@@ -1632,6 +1654,8 @@ export const questpieCrdtSessionGrantTable = pgTable(
 		headFieldCursor: requiredCounter("head_field_cursor"),
 		fieldReadFence: requiredCounter("field_read_fence"),
 		fieldEditFence: requiredCounter("field_edit_fence"),
+		subjectFieldReadFence: requiredCounter("subject_field_read_fence"),
+		subjectFieldEditFence: requiredCounter("subject_field_edit_fence"),
 	},
 	(table) => [
 		primaryKey({ columns: [table.sessionId, table.bindingId] }),
@@ -1665,6 +1689,8 @@ export const questpieCrdtSessionGrantTable = pgTable(
 				table.headFieldCursor,
 				table.fieldReadFence,
 				table.fieldEditFence,
+				table.subjectFieldReadFence,
+				table.subjectFieldEditFence,
 			],
 			foreignColumns: [
 				questpieCrdtTicketGrantTable.ticketId,
@@ -1679,6 +1705,8 @@ export const questpieCrdtSessionGrantTable = pgTable(
 				questpieCrdtTicketGrantTable.headFieldCursor,
 				questpieCrdtTicketGrantTable.fieldReadFence,
 				questpieCrdtTicketGrantTable.fieldEditFence,
+				questpieCrdtTicketGrantTable.subjectFieldReadFence,
+				questpieCrdtTicketGrantTable.subjectFieldEditFence,
 			],
 		}).onDelete("restrict"),
 		foreignKey({

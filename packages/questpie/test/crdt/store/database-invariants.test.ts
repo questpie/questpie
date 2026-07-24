@@ -135,9 +135,9 @@ describe("CRDT cross-identity database invariants", () => {
 		await rejects(
 			db.execute(sql`
 				INSERT INTO questpie_crdt_ticket_grant
-					(ticket_id, resource_id, schema_id, binding_id, stable_field_id, field_epoch, field_slot, format_version, "grant", head_field_cursor, field_read_fence, field_edit_fence)
+					(ticket_id, resource_id, schema_id, binding_id, stable_field_id, field_epoch, field_slot, format_version, "grant", head_field_cursor, field_read_fence, field_edit_fence, subject_field_read_fence, subject_field_edit_fence)
 				VALUES
-					(${ID.ticketA}, ${ID.resourceB}, ${ID.schemaB}, ${ID.bindingB}, ${ID.stableB}, 0, 1, 1, 1, 0, 0, 0)
+					(${ID.ticketA}, ${ID.resourceB}, ${ID.schemaB}, ${ID.bindingB}, ${ID.stableB}, 0, 1, 1, 1, 0, 0, 0, 0, 0)
 			`),
 			"fk_crdt_ticket_grant_parent",
 		);
@@ -145,9 +145,9 @@ describe("CRDT cross-identity database invariants", () => {
 		await rejects(
 			db.execute(sql`
 				INSERT INTO questpie_crdt_session
-					(id, ticket_id, resource_id, resource_epoch_id, schema_id, subject_id, credential_fingerprint, requested_mode, generation, resource_read_fence, resource_edit_fence, last_seen_commit_seq, lease_expires_at)
+					(id, ticket_id, resource_id, resource_epoch_id, schema_id, subject_id, credential_fingerprint, requested_mode, effective_mode, generation, resource_read_fence, resource_edit_fence, subject_read_fence, subject_edit_fence, last_seen_commit_seq, lease_expires_at)
 				VALUES
-					('00000000-0000-4000-8000-000000000104', ${ID.ticketB}, ${ID.resourceB}, ${ID.epochB}, ${ID.schemaB}, ${ID.subjectA}, ${hash(0x71)}, 2, 1, 0, 0, 0, now() + interval '1 minute')
+					('00000000-0000-4000-8000-000000000104', ${ID.ticketB}, ${ID.resourceB}, ${ID.epochB}, ${ID.schemaB}, ${ID.subjectA}, ${hash(0x71)}, 2, 2, 1, 0, 0, 0, 0, 0, now() + interval '1 minute')
 			`),
 			"fk_crdt_session_ticket",
 		);
@@ -155,9 +155,9 @@ describe("CRDT cross-identity database invariants", () => {
 		await rejects(
 			db.execute(sql`
 				INSERT INTO questpie_crdt_session_grant
-					(session_id, ticket_id, resource_id, schema_id, binding_id, stable_field_id, field_epoch, field_slot, format_version, "grant", head_field_cursor, field_read_fence, field_edit_fence)
+					(session_id, ticket_id, resource_id, schema_id, binding_id, stable_field_id, field_epoch, field_slot, format_version, "grant", head_field_cursor, field_read_fence, field_edit_fence, subject_field_read_fence, subject_field_edit_fence)
 				VALUES
-					(${ID.sessionA}, ${ID.ticketA}, ${ID.resourceB}, ${ID.schemaB}, ${ID.bindingB}, ${ID.stableB}, 0, 1, 1, 1, 0, 0, 0)
+					(${ID.sessionA}, ${ID.ticketA}, ${ID.resourceB}, ${ID.schemaB}, ${ID.bindingB}, ${ID.stableB}, 0, 1, 1, 1, 0, 0, 0, 0, 0)
 			`),
 			"fk_crdt_session_grant_parent",
 		);
@@ -165,9 +165,9 @@ describe("CRDT cross-identity database invariants", () => {
 		await rejects(
 			db.execute(sql`
 				INSERT INTO questpie_crdt_session_grant
-					(session_id, ticket_id, resource_id, schema_id, binding_id, stable_field_id, field_epoch, field_slot, format_version, "grant", head_field_cursor, field_read_fence, field_edit_fence)
+					(session_id, ticket_id, resource_id, schema_id, binding_id, stable_field_id, field_epoch, field_slot, format_version, "grant", head_field_cursor, field_read_fence, field_edit_fence, subject_field_read_fence, subject_field_edit_fence)
 				VALUES
-					(${ID.sessionA}, ${ID.ticketA}, ${ID.resourceA}, ${ID.schemaA}, ${ID.bindingA}, ${ID.stableA}, 0, 1, 1, 1, 0, 0, 0)
+					(${ID.sessionA}, ${ID.ticketA}, ${ID.resourceA}, ${ID.schemaA}, ${ID.bindingA}, ${ID.stableA}, 0, 1, 1, 1, 0, 0, 0, 0, 0)
 			`),
 			"fk_crdt_session_grant_ticket_grant",
 		);
@@ -502,22 +502,22 @@ async function seedValidIdentities(
 	`);
 	await db.execute(sql`
 		INSERT INTO questpie_crdt_ticket
-			(id, resource_id, resource_epoch_id, definition_id, schema_id, subject_id, secret_hash, credential_fingerprint, audience, requested_mode, protocol_major, protocol_minor, resource_read_fence, resource_edit_fence, session_generation, expires_at)
+			(id, resource_id, resource_epoch_id, definition_id, schema_id, subject_id, secret_hash, credential_fingerprint, audience, requested_mode, effective_mode, protocol_major, protocol_minor, resource_read_fence, resource_edit_fence, subject_read_fence, subject_edit_fence, session_generation, expires_at)
 		VALUES
-			(${ID.ticketA}, ${ID.resourceA}, ${ID.epochA}, ${ID.definitionA}, ${ID.schemaA}, ${ID.subjectA}, ${hash(0x61)}, ${hash(0x71)}, 'questpie-test', 2, 1, 0, 0, 0, 1, now() + interval '1 minute'),
-			(${ID.ticketB}, ${ID.resourceA}, ${ID.epochA}, ${ID.definitionA}, ${ID.schemaA}, ${ID.subjectA}, ${hash(0x62)}, ${hash(0x71)}, 'questpie-test', 2, 1, 0, 0, 0, 1, now() + interval '1 minute');
+			(${ID.ticketA}, ${ID.resourceA}, ${ID.epochA}, ${ID.definitionA}, ${ID.schemaA}, ${ID.subjectA}, ${hash(0x61)}, ${hash(0x71)}, 'questpie-test', 2, 2, 1, 0, 0, 0, 0, 0, 1, now() + interval '1 minute'),
+			(${ID.ticketB}, ${ID.resourceA}, ${ID.epochA}, ${ID.definitionA}, ${ID.schemaA}, ${ID.subjectA}, ${hash(0x62)}, ${hash(0x71)}, 'questpie-test', 2, 2, 1, 0, 0, 0, 0, 0, 1, now() + interval '1 minute');
 	`);
 	await db.execute(sql`
 		INSERT INTO questpie_crdt_ticket_grant
-			(ticket_id, resource_id, schema_id, binding_id, stable_field_id, field_epoch, field_slot, format_version, "grant", head_field_cursor, field_read_fence, field_edit_fence)
+			(ticket_id, resource_id, schema_id, binding_id, stable_field_id, field_epoch, field_slot, format_version, "grant", head_field_cursor, field_read_fence, field_edit_fence, subject_field_read_fence, subject_field_edit_fence)
 		VALUES
-			(${ID.ticketA}, ${ID.resourceA}, ${ID.schemaA}, ${ID.bindingA}, ${ID.stableA}, 0, 1, 1, 0, 0, 0, 0);
+			(${ID.ticketA}, ${ID.resourceA}, ${ID.schemaA}, ${ID.bindingA}, ${ID.stableA}, 0, 1, 1, 0, 0, 0, 0, 0, 0);
 	`);
 	await db.execute(sql`
 		INSERT INTO questpie_crdt_session
-			(id, ticket_id, resource_id, resource_epoch_id, schema_id, subject_id, credential_fingerprint, requested_mode, generation, resource_read_fence, resource_edit_fence, last_seen_commit_seq, lease_expires_at)
+			(id, ticket_id, resource_id, resource_epoch_id, schema_id, subject_id, credential_fingerprint, requested_mode, effective_mode, generation, resource_read_fence, resource_edit_fence, subject_read_fence, subject_edit_fence, last_seen_commit_seq, lease_expires_at)
 		VALUES
-			(${ID.sessionA}, ${ID.ticketA}, ${ID.resourceA}, ${ID.epochA}, ${ID.schemaA}, ${ID.subjectA}, ${hash(0x71)}, 2, 1, 0, 0, 0, now() + interval '1 minute');
+			(${ID.sessionA}, ${ID.ticketA}, ${ID.resourceA}, ${ID.epochA}, ${ID.schemaA}, ${ID.subjectA}, ${hash(0x71)}, 2, 2, 1, 0, 0, 0, 0, 0, now() + interval '1 minute');
 	`);
 	await db.execute(sql`
 		INSERT INTO questpie_crdt_commit
