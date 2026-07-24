@@ -3,11 +3,9 @@ import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import {
-	createCrdtManifestDeclarations,
-	writeCrdtManifestFile,
-} from "../../../src/cli/commands/crdt-manifest.js";
+import { writeCrdtManifestFile } from "../../../src/cli/commands/crdt-manifest.js";
 import { createDeterministicTextEngine } from "../../../src/server/modules/core/integrated/crdt/deterministic-engine.js";
+import { createCrdtManifestDeclarations } from "../../../src/server/modules/core/integrated/crdt/manifest-runtime.js";
 
 describe("questpie crdt:manifest", () => {
 	it("atomically writes a deterministic artifact and leaves no diff on rerun", async () => {

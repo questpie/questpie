@@ -3,21 +3,15 @@ import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { Questpie } from "#questpie/server/config/questpie.js";
-import type { CrdtRuntimeConfig } from "#questpie/server/modules/core/integrated/crdt/config.js";
-import { createDeterministicSetEngine } from "#questpie/server/modules/core/integrated/crdt/deterministic-engine.js";
+import { createCrdtManifestDeclarations } from "#questpie/server/modules/core/integrated/crdt/manifest-runtime.js";
 import {
 	CRDT_MANIFEST_FILENAME,
 	type CrdtManifestArtifact,
 	type CrdtManifestDeclaration,
-	type CrdtManifestFieldContract,
 	type CrdtManifestRename,
 	serializeCrdtManifestArtifact,
 	updateCrdtManifestArtifact,
 } from "#questpie/server/modules/core/integrated/crdt/manifest.js";
-import type {
-	CrdtOwnerRegistration,
-	CrdtRegistry,
-} from "#questpie/server/modules/core/integrated/crdt/registry.js";
 
 import { loadQuestpieConfig, resolveConfigRoot } from "../config.js";
 import { resolveCliPath } from "../utils.js";
@@ -34,7 +28,18 @@ export async function generateCrdtManifestCommand(options: {
 }): Promise<WriteCrdtManifestResult | undefined> {
 	const requestedConfigPath = resolveCliPath(options.configPath);
 	const { configPath, rootDir } = await resolveConfigRoot(requestedConfigPath);
-	const loaded = await loadQuestpieConfig(configPath);
+	const previousGenerationMode = process.env.QUESTPIE_CRDT_MANIFEST_GENERATION;
+	process.env.QUESTPIE_CRDT_MANIFEST_GENERATION = "1";
+	let loaded;
+	try {
+		loaded = await loadQuestpieConfig(configPath);
+	} finally {
+		if (previousGenerationMode === undefined) {
+			delete process.env.QUESTPIE_CRDT_MANIFEST_GENERATION;
+		} else {
+			process.env.QUESTPIE_CRDT_MANIFEST_GENERATION = previousGenerationMode;
+		}
+	}
 	const app = loaded.app as Questpie;
 	const registry = app.crdtRegistry;
 	const ownerCount =
@@ -67,29 +72,6 @@ export async function generateCrdtManifestCommand(options: {
 			: `${result.path} is already current`,
 	);
 	return result;
-}
-
-export function createCrdtManifestDeclarations(input: {
-	registry: CrdtRegistry;
-	config: CrdtRuntimeConfig;
-}): readonly CrdtManifestDeclaration[] {
-	const setEngine = createDeterministicSetEngine();
-	const declarations: CrdtManifestDeclaration[] = [];
-	appendOwnerDeclarations({
-		declarations,
-		kind: 1,
-		owners: input.registry.collections,
-		config: input.config,
-		setEngine,
-	});
-	appendOwnerDeclarations({
-		declarations,
-		kind: 2,
-		owners: input.registry.globals,
-		config: input.config,
-		setEngine,
-	});
-	return Object.freeze(declarations);
 }
 
 export async function writeCrdtManifestFile(input: {
@@ -136,51 +118,6 @@ export async function writeCrdtManifestFile(input: {
 		throw error;
 	}
 	return Object.freeze({ path, changed: true, artifact });
-}
-
-function appendOwnerDeclarations(input: {
-	declarations: CrdtManifestDeclaration[];
-	kind: 1 | 2;
-	owners: Readonly<Record<string, CrdtOwnerRegistration>>;
-	config: CrdtRuntimeConfig;
-	setEngine: ReturnType<typeof createDeterministicSetEngine>;
-}): void {
-	for (const registryKey of Object.keys(input.owners).sort()) {
-		const registration = input.owners[registryKey]!;
-		const fields: Record<string, CrdtManifestFieldContract> = {};
-		for (const sourcePath of Object.keys(registration.fields).sort()) {
-			const field = registration.fields[sourcePath]!;
-			const engine =
-				field.format === "text" ? input.config.engines?.text : input.setEngine;
-			if (!engine) {
-				throw new Error(
-					`CRDT text owner "${registration.ownerName}" requires a configured text engine`,
-				);
-			}
-			if (engine.format !== field.format) {
-				throw new Error(
-					`CRDT engine format does not match "${registration.ownerName}.${sourcePath}"`,
-				);
-			}
-			fields[sourcePath] = Object.freeze({
-				format: field.format,
-				formatVersion: engine.formatVersion,
-				engineId: engine.engineId,
-				engineVersion: engine.engineVersion,
-				codecFingerprint: engine.codecFingerprint,
-			});
-		}
-		input.declarations.push(
-			Object.freeze({
-				owner: Object.freeze({
-					kind: input.kind,
-					key: registration.ownerName,
-					identityVersion: 1,
-				}),
-				fields: Object.freeze(fields),
-			}),
-		);
-	}
 }
 
 function parseCrdtManifestRenames(

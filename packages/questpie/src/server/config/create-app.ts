@@ -26,6 +26,7 @@ import {
 } from "#questpie/server/i18n/translator.js";
 import coreModule from "#questpie/server/modules/core/.generated/module.js";
 import { mergeAuthOptions } from "#questpie/server/modules/core/integrated/auth/merge.js";
+import { createCrdtRuntimeManifests } from "#questpie/server/modules/core/integrated/crdt/manifest-runtime.js";
 
 type RuntimeConfigStorageInputGuard<TInput> = TInput extends {
 	storage?: infer TStorage;
@@ -696,6 +697,7 @@ async function createAppFromDefinition(
 		routes: Object.keys(merged.routes).length > 0 ? merged.routes : undefined,
 		search: runtime.search,
 		realtime: runtime.realtime,
+		crdt: runtime.crdt,
 		logger: runtime.logger,
 		kv: runtime.kv,
 		executor: runtime.executor,
@@ -736,6 +738,13 @@ async function createAppFromDefinition(
 	}
 
 	instance.state = extensionState;
+	instance.crdtManifests = createCrdtRuntimeManifests({
+		registry: instance.crdtRegistry,
+		config: runtime.crdt,
+		artifact: merged.crdtManifest,
+		allowMissingForGeneration:
+			process.env.QUESTPIE_CRDT_MANIFEST_GENERATION === "1",
+	});
 
 	await instance._initServices();
 

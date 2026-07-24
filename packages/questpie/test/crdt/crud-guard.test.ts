@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { collection, global } from "../../src/exports/index.js";
+import { createDeterministicTextEngine } from "../../src/server/modules/core/integrated/crdt/deterministic-engine.js";
+import { createCrdtManifestDeclarations } from "../../src/server/modules/core/integrated/crdt/manifest-runtime.js";
+import { updateCrdtManifestArtifact } from "../../src/server/modules/core/integrated/crdt/manifest.js";
+import { createCrdtRegistry } from "../../src/server/modules/core/integrated/crdt/registry.js";
+import { questpieCrdtResourceTable } from "../../src/server/modules/core/integrated/crdt/schema.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 import { createTestContext } from "../utils/test-context.js";
 import { runTestDbMigrations } from "../utils/test-db.js";
@@ -26,15 +31,36 @@ const siteSettings = global("site-settings")
 	}))
 	.collaborative()
 	.options({ versioning: true });
+const textEngine = createDeterministicTextEngine();
+const crdtConfig = {
+	namespace: "questpie-crud-guard",
+	engines: { text: textEngine },
+};
+const crdtRegistry = createCrdtRegistry({
+	collections: { articles: articles.build() },
+	globals: { siteSettings: siteSettings.build() },
+});
+const crdtManifest = updateCrdtManifestArtifact({
+	namespace: crdtConfig.namespace,
+	declarations: createCrdtManifestDeclarations({
+		registry: crdtRegistry,
+		config: crdtConfig,
+	}),
+	createStableFieldId: uuidSequence().next,
+});
 
 describe("CRDT ordinary CRUD guard", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
-		setup = await buildMockApp({
-			collections: { articles },
-			globals: { siteSettings },
-		});
+		setup = await buildMockApp(
+			{
+				collections: { articles },
+				globals: { siteSettings },
+				crdtManifest,
+			},
+			{ crdt: crdtConfig },
+		);
 		await runTestDbMigrations(setup.app);
 	});
 
@@ -60,6 +86,10 @@ describe("CRDT ordinary CRUD guard", () => {
 		);
 		expect(stored?.title).toBe("Published");
 		expect(stored?.content).toBe("Initial");
+		const resources = await setup.app.db
+			.select()
+			.from(questpieCrdtResourceTable);
+		expect(resources).toHaveLength(1);
 	});
 
 	it("rejects collection by-id, bulk, batch, and system writes", async () => {
@@ -137,3 +167,11 @@ describe("CRDT ordinary CRUD guard", () => {
 		);
 	});
 });
+
+function uuidSequence() {
+	let value = 0;
+	return {
+		next: () =>
+			`00000000-0000-4000-8000-${(++value).toString(16).padStart(12, "0")}`,
+	};
+}

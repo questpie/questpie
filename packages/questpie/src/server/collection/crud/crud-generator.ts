@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import {
 	and,
 	asc,
@@ -122,6 +124,12 @@ import {
 	assertNoCrdtFieldsInVersionRestore,
 } from "#questpie/server/modules/core/integrated/crdt/crud-guard.js";
 import {
+	canonicalCrdtCollectionLocator,
+	CrdtOwnerLifecycleTransaction,
+	stageCrdtOwnerActivation,
+	type StagedCrdtOwnerActivation,
+} from "#questpie/server/modules/core/integrated/crdt/owner-lifecycle.js";
+import {
 	extractWorkflowFromVersioning,
 	type ResolvedWorkflowConfig,
 	resolveWorkflowConfig,
@@ -203,6 +211,30 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		}
 		// Legacy API: explicit localized array
 		return (this.state.localized ?? []) as string[];
+	}
+
+	private getCrdtManifest() {
+		return Object.values(this.app?.crdtManifests.collections ?? {}).find(
+			(manifest) => manifest.owner.key === this.state.name,
+		);
+	}
+
+	private getCrdtCreateValues(
+		data: Record<string, unknown>,
+		manifest: NonNullable<ReturnType<CRUDGenerator<TState>["getCrdtManifest"]>>,
+	): Record<string, unknown> {
+		const values = { ...data };
+		for (const field of manifest.fields) {
+			if (Object.hasOwn(values, field.sourcePath)) continue;
+			const definition = this.state.fieldDefinitions?.[field.sourcePath] as
+				| { _state?: { defaultValue?: unknown } }
+				| undefined;
+			const defaultValue = definition?.["_state"]?.defaultValue;
+			values[field.sourcePath] = Array.isArray(defaultValue)
+				? [...defaultValue]
+				: defaultValue;
+		}
+		return values;
 	}
 
 	/**
@@ -1636,6 +1668,16 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							db,
 						}),
 					);
+					const crdtManifest = this.getCrdtManifest();
+					const stagedCrdtActivation: StagedCrdtOwnerActivation | undefined =
+						crdtManifest
+							? await stageCrdtOwnerActivation({
+									manifest: crdtManifest,
+									resourceId: randomUUID(),
+									values: this.getCrdtCreateValues(regularFields, crdtManifest),
+									textEngine: this.app?.config.crdt?.engines?.text,
+								})
+							: undefined;
 					let record: any;
 					try {
 						record = await withTransaction(db, async (tx: any) => {
@@ -1760,6 +1802,29 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 									db: tx,
 								}),
 							);
+
+							// Final lock-acquiring framework step: no application hook may
+							// run after the owner row and CRDT resource are locked.
+							if (stagedCrdtActivation) {
+								const [lockedOwner] = await tx
+									.select()
+									.from(this.table)
+									.where(eq(getColumn(this.table, "id")!, insertedRecord.id))
+									.for("update");
+								if (!lockedOwner) {
+									throw new Error(
+										"Created owner disappeared before CRDT activation",
+									);
+								}
+								await new CrdtOwnerLifecycleTransaction(tx).activate({
+									staged: stagedCrdtActivation,
+									owner: {
+										locator: canonicalCrdtCollectionLocator(insertedRecord.id),
+										values: lockedOwner,
+									},
+									mode: "create",
+								});
+							}
 
 							// Queue search indexing to run after transaction commits (fire-and-forget)
 

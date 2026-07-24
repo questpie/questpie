@@ -33,6 +33,7 @@ import type {
 } from "#questpie/server/config/types.js";
 import { GlobalBuilder } from "#questpie/server/global/builder/global-builder.js";
 import type { Global } from "#questpie/server/global/builder/global.js";
+import type { CrdtRuntimeManifests } from "#questpie/server/modules/core/integrated/crdt/manifest-runtime.js";
 import {
 	createCrdtRegistry,
 	type CrdtRegistry,
@@ -143,6 +144,10 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	private _warnedContextExtensionKeys = new Set<string>();
 	public readonly config: TConfig;
 	public readonly crdtRegistry: CrdtRegistry;
+	public crdtManifests: CrdtRuntimeManifests = Object.freeze({
+		collections: Object.freeze({}),
+		globals: Object.freeze({}),
+	});
 	private resolvedLocales: Locale[] | null = null;
 
 	/**

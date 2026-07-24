@@ -13,6 +13,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { runCodegen } from "../../src/cli/codegen/index.js";
+import {
+	serializeCrdtManifestArtifact,
+	updateCrdtManifestArtifact,
+} from "../../src/server/modules/core/integrated/crdt/manifest.js";
 
 let rootDir: string;
 let outDir: string;
@@ -126,6 +130,44 @@ describe("codegen smoke", () => {
 
 		const { existsSync } = await import("node:fs");
 		expect(existsSync(outDir)).toBe(false);
+	});
+
+	it("embeds the exact checked-in CRDT manifest in server output", async () => {
+		const artifact = updateCrdtManifestArtifact({
+			namespace: "smoke",
+			declarations: [
+				{
+					owner: { kind: 1, key: "posts", identityVersion: 1 },
+					fields: {
+						content: {
+							format: "text",
+							formatVersion: 1,
+							engineId: "test/v1",
+							engineVersion: 1,
+							codecFingerprint: "11".repeat(32),
+						},
+					},
+				},
+			],
+			createStableFieldId: () => "00000000-0000-4000-8000-000000000001",
+		});
+		await writeFile(
+			join(rootDir, "crdt.manifest.json"),
+			serializeCrdtManifestArtifact(artifact),
+		);
+
+		const result = await runCodegen({
+			rootDir,
+			configPath: join(rootDir, "questpie.config.ts"),
+			outDir,
+			dryRun: true,
+		});
+
+		expect(result.code).toContain("crdtManifest:");
+		expect(result.code).toContain('"namespace":"smoke"');
+		expect(result.code).toContain(
+			'"stableFieldId":"00000000-0000-4000-8000-000000000001"',
+		);
 	});
 
 	it("non-dry run writes output file", async () => {

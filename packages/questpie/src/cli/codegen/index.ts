@@ -10,8 +10,13 @@
  * @see RFC-MODULE-ARCHITECTURE §9 (Generated Code)
  */
 
-import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
+
+import {
+	CRDT_MANIFEST_FILENAME,
+	validateCrdtManifestArtifact,
+} from "#questpie/server/modules/core/integrated/crdt/manifest.js";
 
 import { validateChannelWirePattern } from "./channel-pattern.js";
 import { discoverFiles } from "./discover.js";
@@ -509,6 +514,24 @@ export async function runCodegen(
 	const extraTypeDeclarations: string[] = [];
 	const extraRuntimeCode: string[] = [];
 	const extraEntities = new Map<string, string>();
+	if (!options.module && targetId === "server") {
+		const manifestPath = join(rootDir, CRDT_MANIFEST_FILENAME);
+		try {
+			const artifact = validateCrdtManifestArtifact(
+				JSON.parse(await readFile(manifestPath, "utf8")),
+			);
+			extraEntities.set("crdtManifest", JSON.stringify(artifact));
+		} catch (error) {
+			if (
+				!error ||
+				typeof error !== "object" ||
+				!("code" in error) ||
+				error.code !== "ENOENT"
+			) {
+				throw error;
+			}
+		}
+	}
 
 	const ctx: CodegenContext = {
 		categories: discovered.categories,
