@@ -5,6 +5,12 @@ import {
 	type Questpie,
 } from "questpie";
 
+export {
+	createElysiaCrdtHost,
+	type ElysiaCrdtHostConfig,
+	type ElysiaCrdtTrustedProxyResolver,
+} from "./crdt-host.js";
+
 /**
  * Context stored in Elysia decorator
  */
