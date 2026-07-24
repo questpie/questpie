@@ -26,6 +26,7 @@ import {
 import {
 	questpieCrdtBindingTable,
 	questpieCrdtCommitTable,
+	questpieCrdtResourceAdmissionTable,
 	questpieCrdtResourceEpochTable,
 	questpieCrdtResourceTable,
 	questpieCrdtSessionGrantTable,
@@ -139,6 +140,19 @@ describe("CRDT atomic append store", () => {
 			.where(eq(questpieCrdtBindingTable.id, fixture.binding.id));
 		expect(epoch?.headCommitSeq).toBe(1n);
 		expect(binding?.headFieldCursor).toBe(1n);
+		const [session] = await db
+			.select()
+			.from(questpieCrdtSessionTable)
+			.where(eq(questpieCrdtSessionTable.id, SESSION_ID));
+		const [admission] = await db
+			.select()
+			.from(questpieCrdtResourceAdmissionTable)
+			.where(eq(questpieCrdtResourceAdmissionTable.resourceId, RESOURCE_ID));
+		expect(session?.updateTokens).toBe(119n);
+		expect(session?.updateByteTokens).toBe(
+			2n * 1024n * 1024n - BigInt(appendInput(fixture).parts[0]!.bytes.length),
+		);
+		expect(admission?.partTokens).toBe(1_999n);
 		expect(notices).toEqual([
 			{
 				kind: "crdt",
@@ -216,6 +230,114 @@ describe("CRDT atomic append store", () => {
 			.from(questpieCrdtResourceEpochTable)
 			.where(eq(questpieCrdtResourceEpochTable.id, fixture.resourceEpochId));
 		expect(epoch?.headCommitSeq).toBe(0n);
+	});
+
+	it("rolls back the whole append when a durable rate budget is exhausted", async () => {
+		const store = createCrdtAppendStore(db, { lockOwnerRow });
+		await db
+			.update(questpieCrdtSessionTable)
+			.set({
+				updateTokens: 0n,
+				updateRefilledAt: new Date(Date.now() + 60_000),
+			})
+			.where(eq(questpieCrdtSessionTable.id, SESSION_ID));
+
+		await expect(store.append(appendInput(fixture))).rejects.toMatchObject({
+			code: "CRDT_APPEND_REJECTED",
+		});
+		expect(await db.select().from(questpieCrdtCommitTable)).toHaveLength(0);
+		expect(await db.select().from(questpieCrdtUpdateReceiptTable)).toHaveLength(
+			0,
+		);
+		const [binding] = await db
+			.select()
+			.from(questpieCrdtBindingTable)
+			.where(eq(questpieCrdtBindingTable.id, fixture.binding.id));
+		expect(binding?.headFieldCursor).toBe(0n);
+	});
+
+	it("rejects a combined bundle crossing 1 MiB before opening a transaction", async () => {
+		let ownerLocks = 0;
+		const store = createCrdtAppendStore(db, {
+			lockOwnerRow: async () => {
+				ownerLocks++;
+			},
+		});
+		const input = appendInput(fixture);
+		const parts = Array.from({ length: 5 }, (_, index) => {
+			const suffix = String(index + 10).padStart(12, "0");
+			return {
+				...input.parts[0]!,
+				bindingId: `00000000-0000-4000-8000-${suffix}`,
+				stableFieldId: `00000000-0000-4000-9000-${suffix}`,
+				fieldSlot: index + 1,
+				bytes: new Uint8Array(220 * 1024),
+			};
+		});
+
+		await expect(
+			store.append({
+				...input,
+				parts,
+				overlay: parts.map((part) => ({
+					...input.overlay[0]!,
+					bindingId: part.bindingId,
+					stableFieldId: part.stableFieldId,
+				})),
+			}),
+		).rejects.toMatchObject({ code: "CRDT_APPEND_REJECTED" });
+		expect(ownerLocks).toBe(0);
+		expect(await db.select().from(questpieCrdtCommitTable)).toHaveLength(0);
+	});
+
+	it("reconciles a lost ACK with read authority after edit revocation", async () => {
+		const store = createCrdtAppendStore(db, { lockOwnerRow });
+		const input = appendInput(fixture);
+		const committed = await store.append(input);
+		await db
+			.update(questpieCrdtResourceTable)
+			.set({ editFence: 1n })
+			.where(eq(questpieCrdtResourceTable.id, RESOURCE_ID));
+
+		const receipts = await store.reconcileReceipts({
+			resourceId: RESOURCE_ID,
+			resourceEpochId: fixture.resourceEpochId,
+			sessionId: SESSION_ID,
+			subjectId: SUBJECT_ID,
+			authority: { ...input.authority, resourceEditFence: 1n },
+			entries: [
+				{
+					updateId: UPDATE_ID,
+					submittedBundleHash: input.submittedBundleHash,
+					submittedSchemaVersion: input.submittedSchemaVersion,
+				},
+			],
+		});
+
+		expect(receipts).toEqual([committed]);
+	});
+
+	it("makes a wrong receipt hash indistinguishable from absent", async () => {
+		const store = createCrdtAppendStore(db, { lockOwnerRow });
+		const input = appendInput(fixture);
+		await store.append(input);
+
+		const receipts = await store.reconcileReceipts({
+			resourceId: RESOURCE_ID,
+			resourceEpochId: fixture.resourceEpochId,
+			sessionId: SESSION_ID,
+			subjectId: SUBJECT_ID,
+			authority: input.authority,
+			entries: [
+				{
+					updateId: UPDATE_ID,
+					submittedBundleHash: Buffer.alloc(32, 0x7f),
+					submittedSchemaVersion: input.submittedSchemaVersion,
+				},
+			],
+		});
+
+		expect(receipts).toEqual([]);
 	});
 });
 
@@ -318,6 +440,10 @@ async function seedFixture(db: ReturnType<typeof drizzle<any>>) {
 		subjectKey: "user-1",
 		subjectHash: Buffer.alloc(32, 0x42),
 	});
+	await db.insert(questpieCrdtResourceAdmissionTable).values({
+		resourceId: RESOURCE_ID,
+		partTokens: 2_000n,
+	});
 	await db.insert(questpieCrdtTicketTable).values({
 		id: TICKET_ID,
 		resourceId: RESOURCE_ID,
@@ -376,6 +502,9 @@ async function seedFixture(db: ReturnType<typeof drizzle<any>>) {
 		subjectEditFence: 0n,
 		authorityExpiresAt: expiresAt,
 		lastSeenCommitSeq: 0n,
+		updateTokens: 120n,
+		updateByteTokens: 2n * 1024n * 1024n,
+		awarenessTokens: 20n,
 		leaseExpiresAt: expiresAt,
 	});
 	await db.insert(questpieCrdtSessionGrantTable).values({
