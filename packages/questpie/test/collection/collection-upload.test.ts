@@ -241,6 +241,18 @@ describe("collection upload URL generation", () => {
 		);
 		app = setup.app;
 		await runTestDbMigrations(app);
+		await Promise.all(
+			[
+				"uploads/test-image.png",
+				"uploads/image1.png",
+				"uploads/image2.jpg",
+				"uploads/service-image.png",
+				"uploads/public-image.png",
+				"uploads/private-image.png",
+			].map((key) =>
+				app.storage.upload(key, textEncoder.encode(`fixture:${key}`)),
+			),
+		);
 	});
 
 	afterEach(async () => {
@@ -453,6 +465,7 @@ describe("collection upload storage access", () => {
 			},
 			createTestContext(),
 		);
+		storage.calls.exists = 0;
 
 		const response = await storageCollectionServe(
 			setup.app,
@@ -562,6 +575,7 @@ describe("collection storage route streaming", () => {
 		expect(uploaded.url).not.toBe(
 			`http://localhost:3000/api/assets/files/${uploaded.id}`,
 		);
+		storage.calls.exists = 0;
 
 		const served = await handler(new Request(uploaded.url));
 		expect(served).not.toBeNull();
@@ -664,7 +678,7 @@ describe("collection storage route streaming", () => {
 		expect(rows.docs).toHaveLength(0);
 	});
 
-	it("removes the previous stored object after an upload row key update", async () => {
+	it("durably removes the previous stored object after an upload row key update", async () => {
 		const oldBody = textEncoder.encode("old");
 		const newBody = textEncoder.encode("new");
 		const storage = createInstrumentedStorageAdapter({
@@ -703,12 +717,16 @@ describe("collection storage route streaming", () => {
 		);
 
 		expect(updated.key).toBe("new.txt");
+		expect(storage.calls.deletedKeys).toEqual([]);
+		expect(await app.storage.exists("old.txt")).toBe(true);
+
+		await app.queue.runOnce({ jobs: ["storageCleanup"] });
 		expect(storage.calls.deletedKeys).toEqual(["old.txt"]);
 		expect(await app.storage.exists("old.txt")).toBe(false);
 		expect(await app.storage.exists("new.txt")).toBe(true);
 	});
 
-	it("removes the previous stored object when a user afterChange hook throws", async () => {
+	it("durably removes the previous stored object when a user afterChange hook throws", async () => {
 		const oldBody = textEncoder.encode("old");
 		const newBody = textEncoder.encode("new");
 		const storage = createInstrumentedStorageAdapter({
@@ -747,6 +765,12 @@ describe("collection storage route streaming", () => {
 		);
 
 		expect(updated.key).toBe("new-throwing-after-change.txt");
+		expect(storage.calls.deletedKeys).toEqual([]);
+		expect(await app.storage.exists("old-throwing-after-change.txt")).toBe(
+			true,
+		);
+
+		await app.queue.runOnce({ jobs: ["storageCleanup"] });
 		expect(storage.calls.deletedKeys).toEqual([
 			"old-throwing-after-change.txt",
 		]);
@@ -923,6 +947,7 @@ describe("collection storage route streaming", () => {
 			},
 			createTestContext(),
 		);
+		storage.calls.exists = 0;
 
 		const handler = createFetchHandler(app, {
 			basePath: "/api",
@@ -963,7 +988,9 @@ describe("collection storage route streaming", () => {
 
 	it("serves files through storage from the resolved handler context", async () => {
 		const fileBody = textEncoder.encode("context file");
-		const appStorage = createInstrumentedStorageAdapter();
+		const appStorage = createInstrumentedStorageAdapter({
+			"context-file.txt": fileBody,
+		});
 		const contextStorage = createInstrumentedStorageAdapter({
 			"context-file.txt": fileBody,
 		});
@@ -985,6 +1012,7 @@ describe("collection storage route streaming", () => {
 			},
 			createTestContext(),
 		);
+		appStorage.calls.exists = 0;
 
 		const appContext = await app.createContext({
 			accessMode: "system",
@@ -1039,6 +1067,7 @@ describe("collection storage route streaming", () => {
 			},
 			createTestContext(),
 		);
+		storage.calls.exists = 0;
 
 		const routes = createAdapterRoutes(app, {
 			getSession: async () => null,
@@ -1081,6 +1110,7 @@ describe("collection storage route streaming", () => {
 			},
 			createTestContext(),
 		);
+		storage.calls.exists = 0;
 
 		const handler = createFetchHandler(app, {
 			basePath: "/api",
@@ -1251,6 +1281,7 @@ describe("serve access chain", () => {
 			},
 			createTestContext({ accessMode: "system" }),
 		);
+		storage.calls.exists = 0;
 
 		// Listing works anonymously (read: true)
 		const { docs } = await app.collections.split_assets.find(
