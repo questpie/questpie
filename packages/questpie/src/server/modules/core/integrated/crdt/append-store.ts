@@ -165,6 +165,7 @@ export async function loadCrdtAuthoritativeReplica(
 	input: Readonly<{
 		bindingId: string;
 		engine: CrdtFieldEngine<CrdtEngineFormat, any>;
+		bindingStatus?: 1 | 3;
 	}>,
 ): Promise<CrdtAuthoritativeReplica> {
 	const [binding] = await db
@@ -173,7 +174,7 @@ export async function loadCrdtAuthoritativeReplica(
 		.where(
 			and(
 				eq(questpieCrdtBindingTable.id, input.bindingId),
-				eq(questpieCrdtBindingTable.status, 1),
+				eq(questpieCrdtBindingTable.status, input.bindingStatus ?? 1),
 				isNull(questpieCrdtBindingTable.retiredAt),
 			),
 		);

@@ -29,39 +29,44 @@ export type CrdtReplaceResult = Readonly<{
 	origin: "crdt_replace";
 }>;
 
-export type CrdtReplaceAdapter<TStaged> = Readonly<{
+export type CrdtReplaceAdapter<TStaged, TCommitContext = undefined> = Readonly<{
 	fieldKeys(resourceId: string): Promise<readonly string[]>;
 	stageField(input: CrdtFieldReplaceInput): Promise<TStaged>;
 	stageAggregate(input: CrdtAggregateReplaceInput): Promise<TStaged>;
 	commitField(
 		input: CrdtFieldReplaceInput,
 		staged: TStaged,
+		context?: TCommitContext,
 	): Promise<CrdtReplaceResult>;
 	commitAggregate(
 		input: CrdtAggregateReplaceInput,
 		staged: TStaged,
+		context?: TCommitContext,
 	): Promise<CrdtReplaceResult>;
 }>;
 
 const stagedReplaceProofs = new WeakMap<object, object>();
 
-export function createCrdtReplaceCoordinator<TStaged>(
-	adapter: CrdtReplaceAdapter<TStaged>,
-) {
+export function createCrdtReplaceCoordinator<
+	TStaged,
+	TCommitContext = undefined,
+>(adapter: CrdtReplaceAdapter<TStaged, TCommitContext>) {
 	return Object.freeze({
 		async replaceField(
 			input: CrdtFieldReplaceInput,
+			context?: TCommitContext,
 		): Promise<CrdtReplaceResult> {
 			const candidate = snapshotFieldInput(input);
 			const staged = await stage(adapter.stageField(candidate), candidate);
 			verifyStaged(staged, candidate);
 			return verifyResult(
 				candidate.resourceId,
-				await adapter.commitField(candidate, staged),
+				await adapter.commitField(candidate, staged, context),
 			);
 		},
 		async replaceAggregate(
 			input: CrdtAggregateReplaceInput,
+			context?: TCommitContext,
 		): Promise<CrdtReplaceResult> {
 			const candidate = snapshotAggregateInput(input);
 			const fieldKeys = [
@@ -84,7 +89,7 @@ export function createCrdtReplaceCoordinator<TStaged>(
 			verifyStaged(staged, candidate);
 			return verifyResult(
 				candidate.resourceId,
-				await adapter.commitAggregate(candidate, staged),
+				await adapter.commitAggregate(candidate, staged, context),
 			);
 		},
 	});

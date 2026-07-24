@@ -212,6 +212,7 @@ describe("CRDT codegen", () => {
 		expect(code).toContain(
 			"export type AppCrdtServer = CrdtServerAPI<AppCrdt>;",
 		);
+		expect(code).toContain("\tcrdt: AppCrdtServer;");
 		expect(code).toContain("\tcrdt: AppCrdt;");
 	});
 });

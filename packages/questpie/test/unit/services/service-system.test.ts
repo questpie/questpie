@@ -299,4 +299,39 @@ describe("service system", () => {
 			await cleanup();
 		}
 	});
+
+	it("awaits CRDT shutdown before disposing realtime infrastructure", async () => {
+		const events: string[] = [];
+		const realtime = service()
+			.namespace(null)
+			.create(() => ({}))
+			.dispose(async () => {
+				events.push("realtime:start");
+				await Promise.resolve();
+				events.push("realtime:end");
+			});
+		const crdtOperations = service()
+			.namespace(null)
+			.create(() => ({}))
+			.dispose(async () => {
+				events.push("crdt:start");
+				await Promise.resolve();
+				events.push("crdt:end");
+			});
+		const { app, cleanup } = await createServiceApp({
+			realtime,
+			crdtOperations,
+		});
+		try {
+			await app.destroy();
+			expect(events).toEqual([
+				"crdt:start",
+				"crdt:end",
+				"realtime:start",
+				"realtime:end",
+			]);
+		} finally {
+			await cleanup();
+		}
+	});
 });

@@ -41,6 +41,7 @@ const SUBJECT_ID = "00000000-0000-4000-8000-000000000502";
 const TICKET_ID = "00000000-0000-4000-8000-000000000503";
 const SESSION_ID = "00000000-0000-4000-8000-000000000504";
 const CORRUPT_MANIFEST_ID = "00000000-0000-4000-8000-000000000505";
+const RESET_BINDING_ID = "00000000-0000-4000-8000-000000000508";
 const stableFieldIds = [
 	"00000000-0000-4000-8000-000000000506",
 	"00000000-0000-4000-8000-000000000507",
@@ -259,6 +260,95 @@ describe("CRDT repeatable aggregate sync store", () => {
 
 		expect(commits).toHaveLength(1);
 		expect(commits[0]!.fields).toEqual([]);
+	});
+
+	it("turns a durable field-reset control into a live reset without invalidating the aggregate basis", async () => {
+		const rollback = new Error("rollback field-reset fixture");
+		await expect(
+			db.transaction(async (transaction) => {
+				const source = createCrdtDatabaseSyncSource(transaction, {
+					resolveEngine: () => textEngine,
+				});
+				const basis = await source.captureBasis(SESSION_ID);
+				const commitSeq = basis.commitHead + 1n;
+				await transaction
+					.update(questpieCrdtBindingTable)
+					.set({ status: 2, retiredAt: new Date() })
+					.where(eq(questpieCrdtBindingTable.id, fixture.title.id));
+				await transaction.insert(questpieCrdtBindingTable).values({
+					...fixture.title,
+					id: RESET_BINDING_ID,
+					fieldEpoch: fixture.title.fieldEpoch + 1n,
+					headFieldCursor: 0n,
+					projectedFieldCursor: 0n,
+					status: 1,
+					retiredAt: null,
+				});
+				const [epoch] = await transaction
+					.select()
+					.from(questpieCrdtResourceEpochTable)
+					.where(
+						eq(questpieCrdtResourceEpochTable.id, fixture.resourceEpochId),
+					);
+				const [sourceSnapshot] = await transaction
+					.select()
+					.from(questpieCrdtSnapshotTable)
+					.where(eq(questpieCrdtSnapshotTable.bindingId, fixture.title.id))
+					.limit(1);
+				if (!epoch?.currentSnapshotManifestId || !sourceSnapshot) {
+					throw new Error("expected reset source snapshot");
+				}
+				await transaction.insert(questpieCrdtSnapshotTable).values({
+					...sourceSnapshot,
+					manifestId: epoch.currentSnapshotManifestId,
+					bindingId: RESET_BINDING_ID,
+					fieldEpoch: fixture.title.fieldEpoch + 1n,
+					fieldCursor: 0n,
+				});
+				await transaction.insert(questpieCrdtCommitTable).values({
+					resourceId: RESOURCE_ID,
+					resourceEpochId: fixture.resourceEpochId,
+					definitionId: fixture.definitionId,
+					commitSeq,
+					kind: 2,
+					schemaId: fixture.schemaId,
+					canonicalBundleHash: Buffer.alloc(32, 0x73),
+					deliveryCommitId: "00000000-0000-4000-8000-000000000510",
+					controlPayload: {
+						version: 1,
+						kind: "field_reset",
+						stableFieldId: fixture.title.stableFieldId,
+						sourceBindingId: fixture.title.id,
+						targetBindingId: RESET_BINDING_ID,
+						sourceFieldEpoch: fixture.title.fieldEpoch.toString(),
+						targetFieldEpoch: (fixture.title.fieldEpoch + 1n).toString(),
+						reason: "restore",
+					},
+				});
+				await transaction
+					.update(questpieCrdtResourceEpochTable)
+					.set({ headCommitSeq: commitSeq })
+					.where(
+						eq(questpieCrdtResourceEpochTable.id, fixture.resourceEpochId),
+					);
+
+				expect(await source.readHead(basis)).toBe(commitSeq);
+				const [commit] = await source.readCommits(
+					basis,
+					basis.commitHead,
+					commitSeq,
+				);
+				expect(commit?.kind).toBe(2);
+				if (commit?.kind !== 2) throw new Error("expected field reset");
+				expect(commit.transition).toEqual({
+					fieldSlot: fixture.title.fieldSlot,
+					grant: 1,
+					fieldEpoch: fixture.title.fieldEpoch + 1n,
+					headFieldCursor: 0n,
+				});
+				throw rollback;
+			}),
+		).rejects.toBe(rollback);
 	});
 
 	it("rejects an exact authority cut after its binding fence changes", async () => {

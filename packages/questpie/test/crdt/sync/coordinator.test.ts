@@ -10,6 +10,7 @@ class FakeRouter implements CrdtDrainNoticeRouter {
 	private input?: Parameters<CrdtDrainNoticeRouter["subscribe"]>[0];
 	subscriptions = 0;
 	releases = 0;
+	onRelease?: () => void;
 
 	async subscribe(
 		input: Parameters<CrdtDrainNoticeRouter["subscribe"]>[0],
@@ -17,6 +18,7 @@ class FakeRouter implements CrdtDrainNoticeRouter {
 		this.input = input;
 		this.subscriptions++;
 		return async () => {
+			this.onRelease?.();
 			this.releases++;
 			this.input = undefined;
 		};
@@ -79,6 +81,7 @@ describe("CRDT HA drain coordinator", () => {
 		const releaseFirst = coordinator.register({
 			id: "first",
 			aggregateHash: "a".repeat(64),
+			terminate: async () => {},
 			reconcile: async () => {
 				drains.first++;
 				return { behind: false };
@@ -87,6 +90,7 @@ describe("CRDT HA drain coordinator", () => {
 		coordinator.register({
 			id: "second",
 			aggregateHash: "b".repeat(64),
+			terminate: async () => {},
 			reconcile: async () => {
 				drains.second++;
 				return { behind: false };
@@ -112,6 +116,25 @@ describe("CRDT HA drain coordinator", () => {
 		expect(router.releases).toBe(1);
 	});
 
+	it("forwards broker wakes and reconnects to app-owned operational work", async () => {
+		const router = new FakeRouter();
+		const operational: string[] = [];
+		const coordinator = createCrdtDrainCoordinator({
+			router,
+			healthyPollMs: 60_000,
+			behindPollMs: 60_000,
+			onOperationalWake: (reason) => operational.push(reason),
+		});
+		await coordinator.start();
+
+		router.wake("a".repeat(64));
+		router.reconnect();
+		await settle();
+
+		expect(operational).toEqual(["notice", "reconnect"]);
+		await coordinator.stop();
+	});
+
 	it("coalesces duplicate/reordered wakes and never invokes a session concurrently", async () => {
 		const router = new FakeRouter();
 		let active = 0;
@@ -130,6 +153,7 @@ describe("CRDT HA drain coordinator", () => {
 		coordinator.register({
 			id: "session",
 			aggregateHash: "c".repeat(64),
+			terminate: async () => {},
 			reconcile: async () => {
 				active++;
 				maximum = Math.max(maximum, active);
@@ -166,6 +190,9 @@ describe("CRDT HA drain coordinator", () => {
 		coordinator.register({
 			id: "session",
 			aggregateHash: "d".repeat(64),
+			terminate: async () => {
+				await new Promise(() => {});
+			},
 			reconcile: async () => {
 				calls++;
 				await new Promise(() => {});
@@ -200,6 +227,7 @@ describe("CRDT HA drain coordinator", () => {
 		first.register({
 			id: "first",
 			aggregateHash: "e".repeat(64),
+			terminate: async () => {},
 			reconcile: async () => {
 				cursors.first = durableHead;
 				return { behind: false };
@@ -208,6 +236,7 @@ describe("CRDT HA drain coordinator", () => {
 		second.register({
 			id: "second",
 			aggregateHash: "e".repeat(64),
+			terminate: async () => {},
 			reconcile: async () => {
 				cursors.second = durableHead;
 				return { behind: false };
@@ -228,5 +257,29 @@ describe("CRDT HA drain coordinator", () => {
 		await first.poll();
 		expect(cursors).toEqual({ first: durableHead, second: durableHead });
 		await Promise.all([first.stop(), second.stop()]);
+	});
+
+	it("terminates idle sessions before releasing the router", async () => {
+		const router = new FakeRouter();
+		const events: string[] = [];
+		router.onRelease = () => events.push("router");
+		const coordinator = createCrdtDrainCoordinator({
+			router,
+			healthyPollMs: 60_000,
+			behindPollMs: 60_000,
+		});
+		await coordinator.start();
+		coordinator.register({
+			id: "idle",
+			aggregateHash: "f".repeat(64),
+			reconcile: async () => ({ behind: false }),
+			terminate: async () => {
+				events.push("terminate");
+			},
+		});
+
+		await coordinator.stop();
+
+		expect(events).toEqual(["terminate", "router"]);
 	});
 });

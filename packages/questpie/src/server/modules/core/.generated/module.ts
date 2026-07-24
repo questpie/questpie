@@ -54,6 +54,8 @@ import _route_search_reindex_collection from "../routes/search/reindex/[collecti
 import _svc_auth from "../services/auth";
 import _svc_channels from "../services/channels";
 import _svc_collectionsApi from "../services/collections-api";
+import _svc_crdt from "../services/crdt";
+import _svc_crdtOperations from "../services/crdt-operations";
 import _svc_db from "../services/db";
 import _svc_email from "../services/email";
 import _svc_executor from "../services/executor";
@@ -170,6 +172,8 @@ export type CoreServices = {
 	auth: typeof _svc_auth;
 	channels: typeof _svc_channels;
 	collectionsApi: typeof _svc_collectionsApi;
+	crdt: typeof _svc_crdt;
+	crdtOperations: typeof _svc_crdtOperations;
 	db: typeof _svc_db;
 	email: typeof _svc_email;
 	executor: typeof _svc_executor;
@@ -259,6 +263,8 @@ const _module: CoreModule = {
 		auth: _svc_auth,
 		channels: _svc_channels,
 		collectionsApi: _svc_collectionsApi,
+		crdt: _svc_crdt,
+		crdtOperations: _svc_crdtOperations,
 		db: _svc_db,
 		email: _svc_email,
 		executor: _svc_executor,

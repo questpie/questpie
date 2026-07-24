@@ -10,7 +10,7 @@ import type { CrdtHostSocketPeerV1 } from "./host.js";
 import type { CrdtDrainSession } from "./sync-coordinator.js";
 import {
 	createCrdtSyncSession,
-	type CrdtSyncCommit,
+	type CrdtSyncUpdateCommit,
 	type CrdtSyncSource,
 } from "./sync.js";
 
@@ -25,10 +25,12 @@ export async function createCrdtAuthenticatedSyncSocketV1(input: {
 	peer: CrdtHostSocketPeerV1;
 	source: CrdtSyncSource;
 	aggregateHash: string;
-	coordinator?: CrdtSyncCoordinatorRegistration;
+	coordinator: CrdtSyncCoordinatorRegistration;
 }): Promise<CrdtAuthenticatedSocketV1> {
+	if (!input.coordinator) throw rejected();
 	let serverSequence = 1n;
 	let syncRequestId: bigint | undefined;
+	let chunkRequestId: bigint | undefined;
 	let closed = false;
 	let releaseCoordinator: (() => void) | undefined;
 	let blocked:
@@ -57,18 +59,58 @@ export async function createCrdtAuthenticatedSyncSocketV1(input: {
 		sessionId: input.sessionId,
 		source: input.source,
 		send: async (chunk) => {
-			if (syncRequestId === undefined) throw rejected();
+			if (chunkRequestId === undefined) throw rejected();
 			await send({
 				major: 1,
 				minor: 0,
 				opcode: 0x82,
 				connectionSeq: serverSequence++,
-				requestId: syncRequestId,
+				requestId: chunkRequestId,
 				payload: chunk,
 			});
 		},
 		sendUpdate: async (commit) => {
 			await sendUpdate(commit);
+		},
+		sendFieldReset: async (commit) => {
+			await send({
+				major: 1,
+				minor: 0,
+				opcode: 0x86,
+				connectionSeq: serverSequence++,
+				requestId: 0n,
+				payload: {
+					schemaVersion: basis.schemaVersion,
+					transitions: [
+						{
+							fieldSlot: commit.transition.fieldSlot,
+							action: 2,
+							grant: 0,
+							fieldEpoch: commit.transition.fieldEpoch,
+							headFieldCursor: commit.transition.headFieldCursor,
+						},
+					],
+				},
+			});
+		},
+		onFieldReady: async (fields) => {
+			await send({
+				major: 1,
+				minor: 0,
+				opcode: 0x86,
+				connectionSeq: serverSequence++,
+				requestId: 0n,
+				payload: {
+					schemaVersion: basis.schemaVersion,
+					transitions: fields.map((field) => ({
+						fieldSlot: field.fieldSlot,
+						action: 0 as const,
+						grant: field.grant,
+						fieldEpoch: field.fieldEpoch,
+						headFieldCursor: field.fieldCursor,
+					})),
+				},
+			});
 		},
 		onReady: async (readyCut) => {
 			if (syncRequestId === undefined) throw rejected();
@@ -84,11 +126,11 @@ export async function createCrdtAuthenticatedSyncSocketV1(input: {
 				payload: {
 					aggregateEpoch: basis.aggregateEpoch,
 					schemaVersion: basis.schemaVersion,
-					grants: basis.fields.map((field) => ({
+					grants: readyCut.fields.map((field) => ({
 						fieldSlot: field.fieldSlot,
 						grant: field.grant,
 						fieldEpoch: field.fieldEpoch,
-						headFieldCursor: cursors.get(field.fieldSlot) ?? field.fieldCursor,
+						headFieldCursor: cursors.get(field.fieldSlot)!,
 					})),
 				},
 			});
@@ -105,6 +147,29 @@ export async function createCrdtAuthenticatedSyncSocketV1(input: {
 		await sync.stop();
 		input.peer.close(code, reason);
 	};
+	releaseCoordinator = input.coordinator.register({
+		id: input.sessionId,
+		aggregateHash: input.aggregateHash,
+		terminate: async () => {
+			await terminate(1012, "CRDT synchronization stopped");
+		},
+		reconcile: async (_reason, signal) => {
+			if (sync.state === "idle") return { behind: false };
+			const abort = () => {
+				void terminate(1012, "CRDT synchronization stopped");
+			};
+			signal.addEventListener("abort", abort, { once: true });
+			try {
+				await sync.poll(signal);
+				return { behind: sync.state !== "ready" };
+			} catch (error) {
+				await terminate(1012, "CRDT synchronization recovery required");
+				throw error;
+			} finally {
+				signal.removeEventListener("abort", abort);
+			}
+		},
+	});
 	const authentication = send({
 		major: 1,
 		minor: 0,
@@ -120,7 +185,7 @@ export async function createCrdtAuthenticatedSyncSocketV1(input: {
 	// observes it (for example, close while the first send is backpressured).
 	void authentication.catch(() => {});
 
-	async function sendUpdate(commit: CrdtSyncCommit): Promise<void> {
+	async function sendUpdate(commit: CrdtSyncUpdateCommit): Promise<void> {
 		if (commit.commitId.byteLength !== 16) throw rejected();
 		await send({
 			major: 1,
@@ -151,33 +216,16 @@ export async function createCrdtAuthenticatedSyncSocketV1(input: {
 			const frame = decodeCrdtFrameV1(data);
 			input.protocol.accept("client-to-server", frame);
 			if (frame.opcode === 0x02) {
-				if (
-					syncRequestId !== undefined ||
-					frame.payload.schemaVersion !== basis.schemaVersion
-				) {
+				if (frame.payload.schemaVersion !== basis.schemaVersion) {
 					throw rejected();
 				}
-				syncRequestId = frame.requestId;
-				releaseCoordinator = input.coordinator?.register({
-					id: input.sessionId,
-					aggregateHash: input.aggregateHash,
-					reconcile: async (_reason, signal) => {
-						const abort = () => {
-							void terminate(1012, "CRDT synchronization stopped");
-						};
-						signal.addEventListener("abort", abort, { once: true });
-						try {
-							await sync.poll(signal);
-							return { behind: sync.state !== "ready" };
-						} catch (error) {
-							await terminate(1012, "CRDT synchronization recovery required");
-							throw error;
-						} finally {
-							signal.removeEventListener("abort", abort);
-						}
-					},
-				});
-				await sync.start(frame.payload.parts);
+				chunkRequestId = frame.requestId;
+				if (syncRequestId === undefined) {
+					syncRequestId = frame.requestId;
+					await sync.start(frame.payload.parts);
+				} else {
+					await sync.startFieldSync(frame.payload.parts);
+				}
 				return;
 			}
 			if (frame.opcode === 0x03) {

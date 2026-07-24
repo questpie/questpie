@@ -113,6 +113,20 @@ describe("CRDT ordinary CRUD guard", () => {
 		expect(resources).toHaveLength(1);
 	});
 
+	it("owns one started HA drain registration in the app lifecycle", () => {
+		const registration = setup.app.crdtOperations.syncCoordinator;
+		expect(registration).toBeDefined();
+		const release = registration.register({
+			id: "runtime-session",
+			aggregateHash: "a".repeat(64),
+			async reconcile() {
+				return { behind: false };
+			},
+		});
+		expect(release).toBeFunction();
+		release();
+	});
+
 	it("rejects collection by-id, bulk, batch, and system writes", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
 		const created = await setup.app.collections.articles.create(

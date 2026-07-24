@@ -35,6 +35,10 @@ import {
 type CrdtDatabase = AnyDrizzleClient<any>;
 type CanonicalValue = string | readonly string[];
 
+export type CrdtReplaceCommitAuthorization = Readonly<{
+	authorizeCommit(transaction: CrdtDatabase): Promise<void>;
+}>;
+
 export type CrdtReplaceOwnerPort<TOwner> = Readonly<{
 	lock(
 		transaction: CrdtDatabase,
@@ -100,6 +104,7 @@ type StagedReplace = Readonly<{
 	currentManifestId: string;
 	targetResourceEpochId: string;
 	targetAggregateEpoch: bigint;
+	sourceStatus: 1 | 3;
 	fields: readonly StagedField[];
 }>;
 
@@ -131,7 +136,10 @@ export function createCrdtReplaceStore<TOwner>(
 		text: options.engines.text,
 		set: setEngine,
 	} as const;
-	const coordinator = createCrdtReplaceCoordinator<StagedReplace>({
+	const coordinator = createCrdtReplaceCoordinator<
+		StagedReplace,
+		CrdtReplaceCommitAuthorization
+	>({
 		async fieldKeys(resourceId) {
 			const rows = await db
 				.select({ sourcePath: questpieCrdtBindingTable.sourcePath })
@@ -156,15 +164,22 @@ export function createCrdtReplaceStore<TOwner>(
 			stagedProofs.set(staged, input);
 			return staged;
 		},
-		async commitField(input, staged) {
+		async commitField(input, staged, authorization) {
 			verifyStaged(staged, input, "field");
 			const result = await withTransaction(db, (tx) =>
-				commitFieldReplace(tx as CrdtDatabase, input, staged, options.owner),
+				commitFieldReplace(
+					tx as CrdtDatabase,
+					input,
+					staged,
+					options.owner,
+					engines,
+					authorization,
+				),
 			);
 			await publish(options.publishNotice, result, staged.resourceEpochId);
 			return result;
 		},
-		async commitAggregate(input, staged) {
+		async commitAggregate(input, staged, authorization) {
 			verifyStaged(staged, input, "aggregate");
 			const result = await withTransaction(db, (tx) =>
 				commitAggregateReplace(
@@ -172,6 +187,8 @@ export function createCrdtReplaceStore<TOwner>(
 					input,
 					staged,
 					options.owner,
+					engines,
+					authorization,
 				),
 			);
 			await publish(
@@ -194,13 +211,15 @@ async function stageReplace(
 	mode: "field" | "aggregate",
 	input: CrdtFieldReplaceInput | CrdtAggregateReplaceInput,
 ): Promise<StagedReplace> {
+	const resolving = input.reason === "resolve";
+	const sourceStatus = resolving ? 3 : 1;
 	const [resource] = await db
 		.select()
 		.from(questpieCrdtResourceTable)
 		.where(eq(questpieCrdtResourceTable.id, input.resourceId));
 	if (
 		!resource ||
-		resource.status !== 1 ||
+		resource.status !== sourceStatus ||
 		!resource.currentEpochId ||
 		resource.currentEpochStatus !== 1
 	) {
@@ -223,7 +242,7 @@ async function stageReplace(
 		.where(
 			and(
 				eq(questpieCrdtBindingTable.resourceId, input.resourceId),
-				eq(questpieCrdtBindingTable.status, 1),
+				eq(questpieCrdtBindingTable.status, sourceStatus),
 				isNull(questpieCrdtBindingTable.retiredAt),
 			),
 		)
@@ -241,17 +260,21 @@ async function stageReplace(
 		bindings.map(async (binding): Promise<StagedField> => {
 			const engine = binding.format === 1 ? engines.text : engines.set;
 			const anyEngine = engine as CrdtFieldEngine<CrdtEngineFormat, any>;
-			const authoritative = await loadCrdtAuthoritativeReplica(db, {
-				bindingId: binding.id,
-				engine: anyEngine,
-			});
 			const replacing =
 				mode === "aggregate" || binding.stableFieldId === targetStableFieldId;
+			const authoritative =
+				replacing && resolving
+					? null
+					: await loadCrdtAuthoritativeReplica(db, {
+							bindingId: binding.id,
+							engine: anyEngine,
+							bindingStatus: sourceStatus,
+						});
 			const targetValue = replacing
 				? mode === "field"
 					? (input as CrdtFieldReplaceInput).value
 					: (input as CrdtAggregateReplaceInput).values[binding.sourcePath]!
-				: anyEngine.project(authoritative.replica);
+				: anyEngine.project(authoritative!.replica);
 			const targetFieldEpoch = replacing
 				? binding.fieldEpoch + 1n
 				: binding.fieldEpoch;
@@ -260,7 +283,7 @@ async function stageReplace(
 						value: targetValue,
 						basis: { fieldEpoch: targetFieldEpoch, fieldCursor: 0n },
 					})
-				: authoritative.replica;
+				: authoritative!.replica;
 			const targetSnapshot = new Uint8Array(
 				await anyEngine.snapshot(targetReplica),
 			);
@@ -268,6 +291,12 @@ async function stageReplace(
 				binding.format === 1 ? "text" : "set",
 				targetValue,
 			);
+			if (
+				!replacing &&
+				!equalBytes(targetCanonicalHash, binding.canonicalHash)
+			) {
+				throw conflict();
+			}
 			const verifiedReplica = await anyEngine.restore({
 				snapshot: targetSnapshot,
 				basis: {
@@ -341,6 +370,7 @@ async function stageReplace(
 		targetResourceEpochId: mode === "aggregate" ? randomUUID() : epoch.id,
 		targetAggregateEpoch:
 			mode === "aggregate" ? epoch.aggregateEpoch + 1n : epoch.aggregateEpoch,
+		sourceStatus,
 		fields: Object.freeze(fields),
 	});
 }
@@ -350,6 +380,11 @@ async function commitFieldReplace<TOwner>(
 	input: CrdtFieldReplaceInput,
 	staged: StagedReplace,
 	ownerPort: CrdtReplaceOwnerPort<TOwner>,
+	engines: Readonly<{
+		text: CrdtFieldEngine<"text", string>;
+		set: CrdtFieldEngine<"set", readonly string[]>;
+	}>,
+	authorization?: CrdtReplaceCommitAuthorization,
 ): Promise<CrdtReplaceResult> {
 	const owner = await ownerPort.lock(db, {
 		resourceId: staged.resourceId,
@@ -367,6 +402,11 @@ async function commitFieldReplace<TOwner>(
 		throw conflict();
 	}
 	verifyLockedBasis(locked, staged);
+	if (staged.sourceStatus === 3) {
+		await verifyLockedUntouchedRecovery(db, staged, engines);
+	}
+	await authorization?.authorizeCommit(db);
+	const resolving = staged.sourceStatus === 3;
 	const commitSeq = locked.epoch.headCommitSeq + 1n;
 	const manifestId = randomUUID();
 	const controlPayload = {
@@ -401,11 +441,35 @@ async function commitFieldReplace<TOwner>(
 		})
 		.where(eq(questpieCrdtBindingTable.id, target.sourceBindingId));
 	await insertReplacementBinding(db, staged, target);
+	if (resolving) {
+		for (const field of staged.fields) {
+			if (field.sourceBindingId === target.sourceBindingId) continue;
+			await db
+				.update(questpieCrdtBindingTable)
+				.set({
+					status: 1,
+					projectedFieldCursor: field.headFieldCursor,
+					projectedCanonicalHash: Buffer.from(field.canonicalHash),
+					projectedCanonicalRevision: field.canonicalRevision,
+					readFence: field.readFence + 1n,
+					editFence: field.editFence + 1n,
+					updatedAt: sql`now()`,
+				})
+				.where(
+					and(
+						eq(questpieCrdtBindingTable.id, field.sourceBindingId),
+						eq(questpieCrdtBindingTable.status, 3),
+						isNull(questpieCrdtBindingTable.retiredAt),
+					),
+				);
+		}
+	}
 	await installManifest(db, staged, manifestId, commitSeq);
 	await db
 		.update(questpieCrdtResourceEpochTable)
 		.set({
 			headCommitSeq: commitSeq,
+			...(resolving ? { projectedCommitSeq: commitSeq } : {}),
 			previousSnapshotManifestId: staged.currentManifestId,
 			previousSnapshotStatus: 2,
 			currentSnapshotManifestId: manifestId,
@@ -413,18 +477,43 @@ async function commitFieldReplace<TOwner>(
 			updatedAt: sql`now()`,
 		})
 		.where(eq(questpieCrdtResourceEpochTable.id, staged.resourceEpochId));
+	if (resolving) {
+		await db
+			.update(questpieCrdtResourceTable)
+			.set({
+				status: 1,
+				readFence: sql`${questpieCrdtResourceTable.readFence} + 1`,
+				editFence: sql`${questpieCrdtResourceTable.editFence} + 1`,
+				ownerPolicyRevision: sql`${questpieCrdtResourceTable.ownerPolicyRevision} + 1`,
+				sessionGeneration: sql`${questpieCrdtResourceTable.sessionGeneration} + 1`,
+				updatedAt: sql`now()`,
+			})
+			.where(
+				and(
+					eq(questpieCrdtResourceTable.id, staged.resourceId),
+					eq(questpieCrdtResourceTable.status, 3),
+				),
+			);
+	}
 	await insertProjectionBarrier(
 		db,
 		staged,
 		commitSeq,
 		target.stableFieldId,
-		false,
+		resolving,
 	);
-	await fenceSessions(db, staged.resourceId);
+	if (resolving) {
+		await fenceSessions(db, staged.resourceId);
+	}
 	await ownerPort.writeCanonical(
 		db,
 		owner,
-		new Map([[target.sourcePath, target.targetValue]]),
+		new Map(
+			(resolving ? staged.fields : [target]).map((field) => [
+				field.sourcePath,
+				field.targetValue,
+			]),
+		),
 	);
 	const count = await ownerPort.appendRealtimeChange(db, owner, {
 		origin: "crdt_replace",
@@ -442,6 +531,11 @@ async function commitAggregateReplace<TOwner>(
 	input: CrdtAggregateReplaceInput,
 	staged: StagedReplace,
 	ownerPort: CrdtReplaceOwnerPort<TOwner>,
+	_engines: Readonly<{
+		text: CrdtFieldEngine<"text", string>;
+		set: CrdtFieldEngine<"set", readonly string[]>;
+	}>,
+	authorization?: CrdtReplaceCommitAuthorization,
 ): Promise<CrdtReplaceResult> {
 	const owner = await ownerPort.lock(db, {
 		resourceId: staged.resourceId,
@@ -458,6 +552,7 @@ async function commitAggregateReplace<TOwner>(
 		}
 	}
 	verifyLockedBasis(locked, staged);
+	await authorization?.authorizeCommit(db);
 	const commitSeq = 1n;
 	const manifestId = randomUUID();
 	await db
@@ -554,6 +649,41 @@ async function commitAggregateReplace<TOwner>(
 	return result(staged.resourceId, staged.targetAggregateEpoch, commitSeq);
 }
 
+async function verifyLockedUntouchedRecovery(
+	db: CrdtDatabase,
+	staged: StagedReplace,
+	engines: Readonly<{
+		text: CrdtFieldEngine<"text", string>;
+		set: CrdtFieldEngine<"set", readonly string[]>;
+	}>,
+): Promise<void> {
+	for (const field of staged.fields) {
+		if (field.targetBindingId !== field.sourceBindingId) continue;
+		const engine = field.format === 1 ? engines.text : engines.set;
+		const anyEngine = engine as CrdtFieldEngine<CrdtEngineFormat, any>;
+		const authoritative = await loadCrdtAuthoritativeReplica(db, {
+			bindingId: field.sourceBindingId,
+			engine: anyEngine,
+			bindingStatus: 3,
+		});
+		const value = anyEngine.project(authoritative.replica) as CanonicalValue;
+		const canonicalHash = await hashCrdtCanonicalValue(
+			field.format === 1 ? "text" : "set",
+			value,
+		);
+		const snapshot = new Uint8Array(
+			await anyEngine.snapshot(authoritative.replica),
+		);
+		if (
+			!equalBytes(canonicalHash, field.targetCanonicalHash) ||
+			!equalBytes(sha256(snapshot), field.targetSnapshotChecksum) ||
+			!equalCanonicalValue(value, field.targetValue)
+		) {
+			throw conflict();
+		}
+	}
+}
+
 async function lockBasis(db: CrdtDatabase, staged: StagedReplace) {
 	const [resource] = await db
 		.select()
@@ -576,7 +706,7 @@ async function lockBasis(db: CrdtDatabase, staged: StagedReplace) {
 		.where(
 			and(
 				eq(questpieCrdtBindingTable.resourceId, staged.resourceId),
-				eq(questpieCrdtBindingTable.status, 1),
+				eq(questpieCrdtBindingTable.status, staged.sourceStatus),
 				isNull(questpieCrdtBindingTable.retiredAt),
 			),
 		)
@@ -591,7 +721,7 @@ function verifyLockedBasis(
 	staged: StagedReplace,
 ): void {
 	if (
-		locked.resource.status !== 1 ||
+		locked.resource.status !== staged.sourceStatus ||
 		locked.resource.currentEpochId !== staged.resourceEpochId ||
 		locked.epoch.status !== 1 ||
 		locked.epoch.aggregateEpoch !== staged.aggregateEpoch ||
@@ -608,6 +738,7 @@ function verifyLockedBasis(
 		const field = staged.fields[index]!;
 		if (
 			binding.id !== field.sourceBindingId ||
+			binding.status !== staged.sourceStatus ||
 			binding.fieldEpoch !== field.sourceFieldEpoch ||
 			binding.headFieldCursor !== field.headFieldCursor ||
 			binding.projectedFieldCursor !== field.projectedFieldCursor ||
@@ -850,4 +981,17 @@ function controlHash(value: unknown): Uint8Array {
 
 function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
 	return Buffer.from(left).equals(Buffer.from(right));
+}
+
+function equalCanonicalValue(
+	left: CanonicalValue,
+	right: CanonicalValue,
+): boolean {
+	if (typeof left === "string" || typeof right === "string") {
+		return left === right;
+	}
+	return (
+		left.length === right.length &&
+		left.every((value, index) => value === right[index])
+	);
 }

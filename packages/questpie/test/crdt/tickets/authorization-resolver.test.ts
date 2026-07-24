@@ -255,6 +255,9 @@ describe("CRDT ticket authorization resolver", () => {
 			},
 			globals: {},
 			defaultAccess: {},
+			crdtOperations: {
+				syncCoordinator: { register: () => () => {} },
+			},
 			createContext: async (input: Record<string, unknown>) => ({
 				...input,
 				db,

@@ -21,13 +21,28 @@ import {
 	type CrdtResolvedOwnerV1,
 } from "./authorization-resolver.js";
 import { createCrdtHostApplicationV1 } from "./host-application.js";
+import type { CrdtSyncCoordinatorRegistration } from "./sync-socket.js";
 import { createCrdtTicketAdmissionStore } from "./ticket-store.js";
+
+type QuestpieCrdtOpenSessionInput = Parameters<
+	typeof createCrdtHostApplicationV1
+>[0]["openAuthenticatedSession"] extends (
+	input: infer TInput,
+) => Promise<unknown>
+	? TInput
+	: never;
 
 export type QuestpieCrdtHostApplicationConfigV1 = Readonly<{
 	audience: string;
-	openAuthenticatedSession: Parameters<
-		typeof createCrdtHostApplicationV1
-	>[0]["openAuthenticatedSession"];
+	openAuthenticatedSession(
+		input: QuestpieCrdtOpenSessionInput & {
+			coordinator: CrdtSyncCoordinatorRegistration;
+		},
+	): ReturnType<
+		Parameters<
+			typeof createCrdtHostApplicationV1
+		>[0]["openAuthenticatedSession"]
+	>;
 	authenticateBrowser?: (
 		request: Request,
 	) => Promise<Extract<Principal, { kind: "user" | "oauth" }> | null>;
@@ -45,6 +60,12 @@ export function createQuestpieCrdtHostApplicationV1(
 	if (typeof secret !== "string" || secret.length === 0) {
 		throw new TypeError("QUESTPIE CRDT host requires an application secret");
 	}
+	const syncCoordinator = app.crdtOperations?.syncCoordinator;
+	if (!syncCoordinator) {
+		throw new TypeError(
+			"QUESTPIE CRDT host requires the app drain coordinator",
+		);
+	}
 	const requestContexts = new WeakMap<Request, CRUDContext>();
 	const admission = createCrdtTicketAdmissionStore(app.db, {
 		secretKey: createHash("sha256")
@@ -59,7 +80,7 @@ export function createQuestpieCrdtHostApplicationV1(
 		engines: runtime.engines ?? {},
 		loadOwnerRecord: async ({ owner, authentication, request }) => {
 			await contextFor(app, requestContexts, request, authentication);
-			return loadRawOwnerRecord(app, owner);
+			return loadQuestpieCrdtOwnerRecord(app, owner);
 		},
 		authorizePolicy: async ({ owner, authentication, request, record }) => {
 			const context = await contextFor(
@@ -68,7 +89,7 @@ export function createQuestpieCrdtHostApplicationV1(
 				request,
 				authentication,
 			);
-			return evaluateQuestpiePolicy(app, owner, record, context);
+			return evaluateQuestpieCrdtOwnerPolicy(app, owner, record, context);
 		},
 	});
 
@@ -98,7 +119,11 @@ export function createQuestpieCrdtHostApplicationV1(
 		authenticateAgent: async (input) =>
 			(await runtime.authenticateAgent?.(input)) ?? null,
 		authorize,
-		openAuthenticatedSession: config.openAuthenticatedSession,
+		openAuthenticatedSession: (input) =>
+			config.openAuthenticatedSession({
+				...input,
+				coordinator: syncCoordinator,
+			}),
 	});
 }
 
@@ -137,9 +162,10 @@ async function contextFor(
 	return context as CRUDContext;
 }
 
-async function loadRawOwnerRecord(
+export async function loadQuestpieCrdtOwnerRecord(
 	app: Questpie<any>,
 	owner: CrdtResolvedOwnerV1,
+	database: Questpie<any>["db"] = app.db,
 ): Promise<Record<string, unknown> | null> {
 	const crud =
 		owner.kind === "collection"
@@ -148,12 +174,12 @@ async function loadRawOwnerRecord(
 	const table = crud?.["~internalRelatedTable"];
 	if (!table) return null;
 	if (owner.kind === "global") {
-		const [record] = await app.db.select().from(table).limit(1);
+		const [record] = await database.select().from(table).limit(1);
 		return (record as Record<string, unknown> | undefined) ?? null;
 	}
 	const id = getTableColumns(table).id;
 	if (!id) return null;
-	const [record] = await app.db
+	const [record] = await database
 		.select()
 		.from(table)
 		.where(eq(id, owner.id))
@@ -161,11 +187,12 @@ async function loadRawOwnerRecord(
 	return (record as Record<string, unknown> | undefined) ?? null;
 }
 
-async function evaluateQuestpiePolicy(
+export async function evaluateQuestpieCrdtOwnerPolicy(
 	app: Questpie<any>,
 	owner: CrdtResolvedOwnerV1,
 	record: Record<string, unknown>,
 	context: CRUDContext,
+	database: Questpie<any>["db"] = app.db,
 ) {
 	const crud =
 		owner.kind === "collection"
@@ -186,6 +213,7 @@ async function evaluateQuestpiePolicy(
 		record,
 		undefined,
 		owner.kind === "collection",
+		database,
 	);
 	if (!read) {
 		return { ownerRead: false, ownerEdit: false, fields: {} };
@@ -200,6 +228,7 @@ async function evaluateQuestpiePolicy(
 			record,
 			Object.freeze({}),
 			owner.kind === "collection",
+			database,
 		);
 	} catch {
 		edit = false;
@@ -211,7 +240,7 @@ async function evaluateQuestpiePolicy(
 	const restricted = new Set(
 		await getRestrictedReadFields(structuredClone(record), context, {
 			app,
-			db: app.db,
+			db: database,
 			fieldAccess,
 		}),
 	);
@@ -229,7 +258,7 @@ async function evaluateQuestpiePolicy(
 				path,
 				fieldAccess,
 				context,
-				{ app, db: app.db },
+				{ app, db: database },
 				"update",
 				record,
 			));
@@ -246,11 +275,12 @@ async function ownerAccess(
 	record: Record<string, unknown>,
 	input: unknown,
 	allowWhere: boolean,
+	database: Questpie<any>["db"],
 ): Promise<boolean> {
 	const rule = state.access?.[operation] ?? app.defaultAccess?.[operation];
 	const result = await executeAccessRule(rule, {
 		app,
-		db: app.db,
+		db: database,
 		session: context.session,
 		principal: context.principal,
 		actor: context.actor,

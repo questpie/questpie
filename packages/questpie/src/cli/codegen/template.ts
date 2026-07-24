@@ -327,7 +327,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		`import type { ${l3FromL1.join(", ")} } from "${layerImport(L1_FILE)}";`,
 	);
 	l3.push(
-		`import type { _AppQuestpie, AppAuthConfig, AppSession, AppSessionUser } from "${layerImport(L2_FILE)}";`,
+		`import type { _AppQuestpie, AppAuthConfig, AppCrdt, AppSession, AppSessionUser } from "${layerImport(L2_FILE)}";`,
 	);
 	l3.push("");
 	pushValueImports(l3);
@@ -882,6 +882,12 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 			lines.push("};");
 		}
 		lines.push("");
+		lines.push(
+			"export type AppCrdt = CrdtRegistryFromApp<{ collections: AppCollections; globals: AppGlobals }>;",
+		);
+		lines.push("export type AppCrdtClient = CrdtClientAPI<AppCrdt>;");
+		lines.push("export type AppCrdtServer = CrdtServerAPI<AppCrdt>;");
+		lines.push("");
 
 		lines.push(
 			"// ── AppContext augmentation — auto-types ALL handlers ──────",
@@ -915,6 +921,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		lines.push('\tsearch: _AppQuestpie["search"];');
 		lines.push('\trealtime: _AppQuestpie["realtime"];');
 		lines.push("\tchannels: ChannelsService<AppChannels>;");
+		lines.push("\tcrdt: AppCrdtServer;");
 		lines.push("");
 		lines.push("\t// Entity APIs");
 		lines.push("\tcollections: _CollectionsAPI;");
@@ -1352,12 +1359,6 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	// (`createClient<AppConfig>().collections.nope`). Module category maps are
 	// emitted as type aliases (implicit index signatures), so the plain
 	// aggregates already satisfy the SDK's `QuestpieApp` constraint.
-	lines.push(
-		"export type AppCrdt = CrdtRegistryFromApp<{ collections: AppCollections; globals: AppGlobals }>;",
-	);
-	lines.push("export type AppCrdtClient = CrdtClientAPI<AppCrdt>;");
-	lines.push("export type AppCrdtServer = CrdtServerAPI<AppCrdt>;");
-	lines.push("");
 	lines.push("export type AppConfig = {");
 	lines.push("\tcollections: AppCollections;");
 	lines.push("\tchannels: AppChannels;");

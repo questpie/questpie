@@ -18,6 +18,7 @@ export type CrdtDrainSession = Readonly<{
 	): Promise<{
 		behind: boolean;
 	}>;
+	terminate(signal: AbortSignal): Promise<void>;
 }>;
 
 type Entry = {
@@ -36,6 +37,7 @@ export function createCrdtDrainCoordinator(
 		healthyPollMs?: number;
 		behindPollMs?: number;
 		stopTimeoutMs?: number;
+		onOperationalWake?(reason: "notice" | "reconnect" | "overflow"): void;
 		onError?(error: unknown): void;
 	}>,
 ) {
@@ -57,6 +59,13 @@ export function createCrdtDrainCoordinator(
 			input.onError?.(error);
 		} catch {
 			// Observation cannot affect reconciliation.
+		}
+	};
+	const wakeOperational = (reason: "notice" | "reconnect" | "overflow") => {
+		try {
+			input.onOperationalWake?.(reason);
+		} catch (error) {
+			report(error);
 		}
 	};
 
@@ -97,6 +106,7 @@ export function createCrdtDrainCoordinator(
 	};
 
 	const onNotice = (notice: Extract<CoreNotice, { kind: "crdt" }>) => {
+		wakeOperational("notice");
 		for (const entry of entries.values()) {
 			if (entry.session.aggregateHash !== notice.wake.aggregateHash) continue;
 			entry.reason = "wake";
@@ -114,9 +124,15 @@ export function createCrdtDrainCoordinator(
 						kind: "crdt",
 						onNotice,
 						onError: report,
-						onOverflow: () => scheduleAll("poll"),
+						onOverflow: () => {
+							wakeOperational("overflow");
+							scheduleAll("poll");
+						},
 						onStateChange: (state) => {
-							if (state === "connected") scheduleAll("reconnect");
+							if (state === "connected") {
+								wakeOperational("reconnect");
+								scheduleAll("reconnect");
+							}
 						},
 					});
 					if (stopping) return;
@@ -179,17 +195,23 @@ export function createCrdtDrainCoordinator(
 				if (behindTimer) clearInterval(behindTimer);
 				healthyTimer = undefined;
 				behindTimer = undefined;
-				const pending = [...entries.values()]
-					.map((entry) => {
+				const activeEntries = [...entries.values()];
+				const pending = activeEntries
+					.flatMap((entry) => {
 						entry.active = false;
 						entry.dirty = false;
-						return entry.pending;
+						return [
+							entry.pending,
+							Promise.resolve().then(() =>
+								entry.session.terminate(abort.signal),
+							),
+						];
 					})
 					.filter((operation): operation is Promise<void> =>
 						Boolean(operation),
 					);
-				entries.clear();
 				await boundedWait(Promise.allSettled(pending), stopTimeoutMs);
+				entries.clear();
 				if (releaseRouter) {
 					await boundedWait(releaseRouter(), stopTimeoutMs);
 				}

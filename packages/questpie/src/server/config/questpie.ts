@@ -222,6 +222,8 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	public logger!: LoggerService;
 	public search!: SearchService;
 	public realtime!: RealtimeService;
+	/** @internal App-owned CRDT operational coordinator; request APIs resolve through the service container. */
+	public crdtOperations!: import("#questpie/server/modules/core/integrated/crdt/server-service.js").QuestpieCrdtOperationalService;
 	/** Extension state for plugin-contributed configurations (admin layout, blocks, sidebar, etc.) */
 	public state?: {
 		config?: import("./app-state-config.js").ResolvedAppStateConfig;
@@ -375,7 +377,6 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		}
 
 		// Dispose infrastructure services in reverse-DAG order
-		const infraDisposals: Promise<void>[] = [];
 		for (let i = Questpie._INFRA_SERVICES.length - 1; i >= 0; i--) {
 			const [svcName] = Questpie._INFRA_SERVICES[i]!;
 			const def = this._serviceDefs[svcName];
@@ -384,11 +385,8 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 			const result = def.dispose(this._singletonServices[svcName]);
 			if (result instanceof Promise) {
-				infraDisposals.push(result);
+				await result.catch(() => {});
 			}
-		}
-		if (infraDisposals.length > 0) {
-			await Promise.allSettled(infraDisposals);
 		}
 
 		this._singletonServices = {};
@@ -513,6 +511,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		["auth", "auth"],
 		["search", "search"],
 		["realtime", "realtime"],
+		["crdtOperations", "crdtOperations"],
 		// Tier 2: depend on logger + needs app.createContext
 		["queue", "queue"],
 	] as const;
