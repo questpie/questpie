@@ -2,6 +2,7 @@ export * from "#questpie/shared/crdt-engine.js";
 export * from "#questpie/shared/crdt-protocol.js";
 export * from "#questpie/server/modules/core/integrated/crdt/append-store.js";
 export * from "#questpie/server/modules/core/integrated/crdt/authorization-resolver.js";
+export * from "#questpie/server/modules/core/integrated/crdt/compaction.js";
 export * from "#questpie/server/modules/core/integrated/crdt/host-application.js";
 export * from "#questpie/server/modules/core/integrated/crdt/notice.js";
 export * from "#questpie/server/modules/core/integrated/crdt/projection.js";
