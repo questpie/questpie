@@ -30,8 +30,7 @@ export function createRuntimeScope(
 	workload?: WorkloadMcpBoundary,
 ): RuntimeScope {
 	const transport = options.transport ?? "http";
-	const accessMode =
-		options.accessMode ?? (transport === "stdio" ? "system" : "user");
+	const accessMode = options.accessMode ?? "user";
 	const createContext = createContextFactory(app);
 	let requestContextPromise:
 		| Promise<AppContext & Partial<RequestContext>>

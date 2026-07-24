@@ -112,7 +112,13 @@ export interface McpHttpConfig extends McpTransportConfig {
 	enableJsonResponse?: boolean;
 }
 
-export interface McpStdioConfig extends McpTransportConfig {}
+export interface McpStdioConfig {
+	/**
+	 * Explicitly grants this local stdio process maintenance authority. Without
+	 * this flag, stdio requires an exact user-mode `ctx`.
+	 */
+	trustedMaintenance?: boolean;
+}
 
 export interface McpConfig {
 	name?: string;

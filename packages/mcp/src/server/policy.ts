@@ -6,7 +6,6 @@ import {
 } from "questpie";
 
 import type {
-	McpAccessMode,
 	McpAccessRule,
 	McpConfig,
 	McpEntityPolicy,
@@ -45,7 +44,7 @@ export const DEFAULT_MCP_CONFIG: Required<
 		enableJsonResponse: true,
 	},
 	stdio: {
-		accessMode: "system",
+		trustedMaintenance: false,
 	},
 };
 
@@ -97,15 +96,6 @@ export function resolveMcpConfig(
 		),
 		override as Record<string, unknown> | undefined,
 	) as McpConfig;
-}
-
-export function defaultAccessModeForTransport(
-	config: McpConfig,
-	transport: McpTransportKind,
-): McpAccessMode {
-	return transport === "stdio"
-		? (config.stdio?.accessMode ?? "system")
-		: "user";
 }
 
 export function resolveEntityPolicy(

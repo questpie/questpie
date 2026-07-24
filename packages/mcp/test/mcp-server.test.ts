@@ -688,8 +688,29 @@ describe("@questpie/mcp server", () => {
 		}
 	});
 
-	it("uses stdio policy defaults as trusted system mode", async () => {
-		const server = await createMcpServer(setup.app, { transport: "stdio" });
+	it("rejects stdio without an explicit authority", async () => {
+		await expect(
+			createMcpServer(setup.app, { transport: "stdio" }),
+		).rejects.toThrow("explicit authority");
+		await expect(
+			createMcpServer(setup.app, {
+				transport: "stdio",
+				accessMode: "system",
+			}),
+		).rejects.toThrow("explicit authority");
+		await expect(
+			createMcpServer(setup.app, {
+				transport: "stdio",
+				ctx: createTestContext({ accessMode: "system" }),
+			}),
+		).rejects.toThrow("explicit authority");
+	});
+
+	it("uses stdio policy defaults only in explicit trusted-maintenance mode", async () => {
+		const server = await createMcpServer(setup.app, {
+			transport: "stdio",
+			config: { stdio: { trustedMaintenance: true } },
+		});
 		const { client, close } = await connect(server);
 
 		try {
@@ -747,9 +768,10 @@ describe("@questpie/mcp server", () => {
 	});
 
 	it("lets stdio be explicitly lowered to user mode", async () => {
+		const ctx = createTestContext({ accessMode: "user" });
 		const server = await createMcpServer(setup.app, {
 			transport: "stdio",
-			accessMode: "user",
+			ctx,
 		});
 		const { client, close } = await connect(server);
 

@@ -3,7 +3,7 @@ import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
 import { registerCrudTools } from "./crud-tools.js";
 import { registerCustomTools } from "./custom-tools.js";
-import { defaultAccessModeForTransport, resolveMcpConfig } from "./policy.js";
+import { resolveMcpConfig } from "./policy.js";
 import { registerSchemaResources } from "./resources.js";
 import { registerRouteTools } from "./route-tools.js";
 import { createRuntimeScope, type QuestpieApp } from "./runtime.js";
@@ -22,10 +22,9 @@ async function createServer(
 	const config = resolveMcpConfig(app, options.config);
 	const transport = options.transport ?? "http";
 	const accessMode =
-		transport === "http"
-			? "user"
-			: (options.accessMode ??
-				defaultAccessModeForTransport(config, transport));
+		transport === "stdio"
+			? resolveStdioAccessMode(options, config.stdio?.trustedMaintenance)
+			: "user";
 	const scope = createRuntimeScope(
 		app,
 		{
@@ -60,6 +59,32 @@ async function createServer(
 	}
 
 	return server;
+}
+
+function resolveStdioAccessMode(
+	options: McpExecutionOptions,
+	trustedMaintenance: boolean | undefined,
+): "user" | "system" {
+	if (trustedMaintenance === true) {
+		if (
+			options.ctx !== undefined ||
+			options.request !== undefined ||
+			options.accessMode === "user"
+		) {
+			throw new Error(
+				"Trusted-maintenance stdio cannot be combined with request authority",
+			);
+		}
+		return "system";
+	}
+
+	if (options.ctx?.accessMode === "user" && options.accessMode !== "system") {
+		return "user";
+	}
+
+	throw new Error(
+		"Stdio MCP requires explicit authority: provide a user-mode ctx or configure stdio.trustedMaintenance",
+	);
 }
 
 export async function createMcpServer(

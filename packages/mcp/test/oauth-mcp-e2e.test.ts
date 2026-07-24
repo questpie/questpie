@@ -15,7 +15,7 @@
  *  (a) External MCP client bounded by `scopes ∩ RBAC` — BOTH narrowing
  *      directions (scope-narrowed AND RBAC-narrowed) plus out-of-scope denied at
  *      call time.
- *  (b) stdio trusted `system` worker unchanged — full access, no OAuth.
+ *  (b) explicitly trusted stdio maintenance — full access, no OAuth.
  *
  * ── Real generated catalog (MO11) ──
  * The provider's *granular* per-resource scope catalog
@@ -535,14 +535,15 @@ describe("MO13 end-to-end OAuth MCP flow + system mode", () => {
 		}
 	});
 
-	// ── (b) stdio system worker: unchanged, full access, no OAuth ──
+	// ── (b) explicitly trusted stdio maintenance: full access, no OAuth ──
 
-	it("stdio trusted system worker retains full access with NO OAuth (system mode unchanged)", async () => {
+	it("stdio trusted maintenance retains full access with NO OAuth", async () => {
 		const { app, cleanup } = await setupApp();
 		try {
-			// No request, no token — stdio derives accessMode "system", bypassing both
-			// the RBAC gate and the scope gate.
-			const server = await createMcpServer(app, { transport: "stdio" });
+			const server = await createMcpServer(app, {
+				transport: "stdio",
+				config: { stdio: { trustedMaintenance: true } },
+			});
 			const { client, close } = await connectStdio(server);
 			try {
 				const names = (await client.listTools()).tools

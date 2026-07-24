@@ -41,6 +41,22 @@ export default mcpConfig({
 });
 ```
 
+## Stdio Authority
+
+Stdio has no ambient system authority. Bind it to an exact user-mode `ctx`, or
+explicitly opt a local maintenance process into the system bypass:
+
+```ts
+await startStdioServer(app, {
+	config: {
+		stdio: { trustedMaintenance: true },
+	},
+});
+```
+
+Do not enable `trustedMaintenance` for remote or requester-controlled
+processes. It intentionally bypasses ordinary user RBAC and OAuth scope checks.
+
 ## Custom Tools
 
 ```ts
