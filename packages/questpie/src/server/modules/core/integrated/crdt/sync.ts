@@ -98,7 +98,13 @@ export type CreateCrdtSyncSessionInput = Readonly<{
 	send(frame: CrdtSyncFrame): void | Promise<void>;
 	sendUpdate?(commit: CrdtSyncCommit): void | Promise<void>;
 	onBoundary?(boundary: SyncBoundary): void | Promise<void>;
-	onReady?(cut: bigint): void | Promise<void>;
+	onReady?(cut: {
+		commitSeq: bigint;
+		fields: readonly Readonly<{
+			fieldSlot: number;
+			fieldCursor: bigint;
+		}>[];
+	}): void | Promise<void>;
 }>;
 
 type QueuedFrame = CrdtSyncFrame & {
@@ -135,6 +141,8 @@ class CrdtSyncSession {
 	private advancing = false;
 	private drainCutPending?: bigint;
 	private readyDrain?: Promise<void>;
+	private readonly fieldCuts = new Map<number, bigint>();
+	private initialSyncBytes = 0;
 
 	constructor(private readonly input: CreateCrdtSyncSessionInput) {}
 
@@ -157,13 +165,15 @@ class CrdtSyncSession {
 		this.assertBasis(basis);
 		this.basis = basis;
 		this.cursor = basis.commitHead;
+		for (const field of basis.fields) {
+			this.fieldCuts.set(field.fieldSlot, field.fieldCursor);
+		}
 		await this.boundary("basis-captured");
 
 		this.assertProofs(proofs, basis);
 		const proofsBySlot = new Map(
 			proofs.map((proof) => [proof.fieldSlot, proof]),
 		);
-		let totalBytes = 0;
 		for (const field of basis.fields) {
 			let bytes = field.bytes;
 			const proof = proofsBySlot.get(field.fieldSlot);
@@ -182,8 +192,10 @@ class CrdtSyncSession {
 					bytes = field.bytes;
 				}
 			}
-			totalBytes += bytes.byteLength;
-			if (totalBytes > MAX_SYNC_BYTES) throw rejected();
+			this.initialSyncBytes += bytes.byteLength;
+			if (this.initialSyncBytes > MAX_SYNC_BYTES) {
+				throw new CrdtSyncRecoveryRequiredError();
+			}
 			this.queueBytes(field, bytes, "basis", basis.commitHead);
 		}
 		if (this.plans.length === 0) {
@@ -211,23 +223,29 @@ class CrdtSyncSession {
 		}
 		this.pendingFrames.shift();
 		this.unacknowledgedBytes -= frame.byteLength;
+		if (frame.final) {
+			this.fieldCuts.set(frame.fieldSlot, frame.throughFieldCursor);
+		}
 		await this.boundary("ack");
 		await this.pump();
 		await this.advanceAfterAcknowledgement();
 	}
 
-	async poll(): Promise<void> {
+	async poll(signal?: AbortSignal): Promise<void> {
+		assertNotAborted(signal);
 		if (this.state === "stopped" || this.state === "idle") throw rejected();
 		if (this.state === "ready") {
 			if (!this.readyDrain) {
-				this.readyDrain = this.drainReady().finally(() => {
+				this.readyDrain = this.drainReady(signal).finally(() => {
 					this.readyDrain = undefined;
 				});
 			}
 			await this.readyDrain;
+			assertNotAborted(signal);
 			return;
 		}
 		await this.advanceAfterAcknowledgement();
+		assertNotAborted(signal);
 	}
 
 	async stop(): Promise<void> {
@@ -381,28 +399,43 @@ class CrdtSyncSession {
 			if (head < this.cursor) throw rejected();
 			await this.boundary("drain-read");
 			if (head === this.cursor) {
-				await this.input.onReady?.(this.cursor);
+				await this.input.onReady?.({
+					commitSeq: this.cursor,
+					fields: Object.freeze(
+						[...this.fieldCuts]
+							.sort(([left], [right]) => left - right)
+							.map(([fieldSlot, fieldCursor]) =>
+								Object.freeze({ fieldSlot, fieldCursor }),
+							),
+					),
+				});
 				if (this.state !== "syncing") throw rejected();
 				this.state = "ready";
 				return;
 			}
+			const next = this.cursor + 1n;
 			const commits = await this.input.source.readCommits(
 				basis,
 				this.cursor,
-				head,
+				next,
 			);
-			this.assertCommits(commits, head);
+			this.assertCommits(commits, next);
 			for (const commit of commits) {
 				for (const field of commit.fields) {
-					this.queueBytes(field, field.bytes, "drain", head);
+					this.initialSyncBytes += field.bytes.byteLength;
+					if (this.initialSyncBytes > MAX_SYNC_BYTES) {
+						throw new CrdtSyncRecoveryRequiredError();
+					}
+					this.queueBytes(field, field.bytes, "drain", next);
 				}
 			}
 			if (this.plans.length > 0) {
-				this.drainCutPending = head;
+				this.drainCutPending = next;
 				await this.pump();
 				return;
 			}
-			this.cursor = head;
+			await this.input.source.registerCursor(this.input.sessionId, next);
+			this.cursor = next;
 		}
 	}
 
@@ -420,24 +453,32 @@ class CrdtSyncSession {
 		if (previous !== head) throw rejected();
 	}
 
-	private async drainReady(): Promise<void> {
+	private async drainReady(signal?: AbortSignal): Promise<void> {
 		const basis = this.basis;
 		if (!basis || this.state !== "ready") throw rejected();
+		assertNotAborted(signal);
 		const head = await this.input.source.readHead(basis);
+		assertNotAborted(signal);
 		if (head < this.cursor) throw rejected();
 		if (head === this.cursor) return;
-		const commits = await this.input.source.readCommits(
-			basis,
-			this.cursor,
-			head,
-		);
-		this.assertCommits(commits, head);
-		for (const commit of commits) {
+		while (this.cursor < head) {
+			const next = this.cursor + 1n;
+			const commits = await this.input.source.readCommits(
+				basis,
+				this.cursor,
+				next,
+			);
+			assertNotAborted(signal);
+			this.assertCommits(commits, next);
+			const commit = commits[0]!;
 			if (this.state !== "ready") throw rejected();
 			if (commit.fields.length > 0) {
 				if (!this.input.sendUpdate) throw rejected();
+				await this.input.source.validateBasis?.(basis);
+				assertNotAborted(signal);
 				await this.input.sendUpdate(commit);
 			}
+			assertNotAborted(signal);
 			if (this.state !== "ready") throw rejected();
 			await this.input.source.registerCursor(
 				this.input.sessionId,
@@ -454,4 +495,8 @@ class CrdtSyncSession {
 
 function rejected(): CrdtSyncRejectedError {
 	return new CrdtSyncRejectedError();
+}
+
+function assertNotAborted(signal?: AbortSignal): void {
+	if (signal?.aborted) throw rejected();
 }

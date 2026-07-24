@@ -70,8 +70,11 @@ export async function createCrdtAuthenticatedSyncSocketV1(input: {
 		sendUpdate: async (commit) => {
 			await sendUpdate(commit);
 		},
-		onReady: async () => {
+		onReady: async (readyCut) => {
 			if (syncRequestId === undefined) throw rejected();
+			const cursors = new Map(
+				readyCut.fields.map((field) => [field.fieldSlot, field.fieldCursor]),
+			);
 			await send({
 				major: 1,
 				minor: 0,
@@ -85,7 +88,7 @@ export async function createCrdtAuthenticatedSyncSocketV1(input: {
 						fieldSlot: field.fieldSlot,
 						grant: field.grant,
 						fieldEpoch: field.fieldEpoch,
-						headFieldCursor: field.fieldCursor,
+						headFieldCursor: cursors.get(field.fieldSlot) ?? field.fieldCursor,
 					})),
 				},
 			});
@@ -102,7 +105,7 @@ export async function createCrdtAuthenticatedSyncSocketV1(input: {
 		await sync.stop();
 		input.peer.close(code, reason);
 	};
-	await send({
+	const authentication = send({
 		major: 1,
 		minor: 0,
 		opcode: 0x89,
@@ -141,6 +144,7 @@ export async function createCrdtAuthenticatedSyncSocketV1(input: {
 	return Object.freeze({
 		async message(data) {
 			if (closed) throw rejected();
+			await authentication;
 			const frame = decodeCrdtFrameV1(data);
 			input.protocol.accept("client-to-server", frame);
 			if (frame.opcode === 0x02) {
@@ -154,13 +158,19 @@ export async function createCrdtAuthenticatedSyncSocketV1(input: {
 				releaseCoordinator = input.coordinator?.register({
 					id: input.sessionId,
 					aggregateHash: input.aggregateHash,
-					reconcile: async () => {
+					reconcile: async (_reason, signal) => {
+						const abort = () => {
+							void terminate(1012, "CRDT synchronization stopped");
+						};
+						signal.addEventListener("abort", abort, { once: true });
 						try {
-							await sync.poll();
+							await sync.poll(signal);
 							return { behind: sync.state !== "ready" };
 						} catch (error) {
 							await terminate(1012, "CRDT synchronization recovery required");
 							throw error;
+						} finally {
+							signal.removeEventListener("abort", abort);
 						}
 					},
 				});

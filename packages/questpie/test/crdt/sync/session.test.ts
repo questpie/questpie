@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import {
 	CrdtSyncRejectedError,
+	CrdtSyncRecoveryRequiredError,
 	createCrdtSyncSession,
 	type CrdtSyncBasis,
 	type CrdtSyncSource,
@@ -147,6 +148,7 @@ describe("CRDT flow-controlled synchronization", () => {
 	it("includes commits injected after basis, registration, chunk and ACK boundaries", async () => {
 		const durable = source(basis(1));
 		const cuts: bigint[] = [];
+		const fieldCuts: bigint[] = [];
 		let nextCommit = 5n;
 		const sync = createCrdtSyncSession({
 			sessionId: "session",
@@ -163,7 +165,10 @@ describe("CRDT flow-controlled synchronization", () => {
 					nextCommit++;
 				}
 			},
-			onReady: async (cut) => cuts.push(cut),
+			onReady: async ({ commitSeq, fields }) => {
+				cuts.push(commitSeq);
+				fieldCuts.push(fields[0]!.fieldCursor);
+			},
 		});
 
 		await sync.start([]);
@@ -178,6 +183,7 @@ describe("CRDT flow-controlled synchronization", () => {
 		}
 
 		expect(cuts).toEqual([8n]);
+		expect(fieldCuts).toEqual([8n]);
 		expect(sync.cursor).toBe(8n);
 	});
 
@@ -305,5 +311,33 @@ describe("CRDT flow-controlled synchronization", () => {
 		await acknowledgement;
 		await sync.poll();
 		expect(events).toEqual(["ready-start", "ready-end", "update"]);
+	});
+
+	it("counts pre-ready drain bytes toward the 64 MiB initial-sync cap", async () => {
+		const durable = source(basis(32 * MiB));
+		for (let commit = 5n; commit <= 37n; commit++) {
+			durable.append(commit, commit, new Uint8Array(MiB));
+		}
+		const sync = createCrdtSyncSession({
+			sessionId: "session",
+			source: durable.api,
+			send: async () => {},
+		});
+		await sync.start([]);
+
+		let rejected = false;
+		while (!rejected) {
+			const frame = sync.pendingFrames[0]!;
+			try {
+				await sync.ack(
+					frame.chunkIndex,
+					frame.fieldSlot,
+					frame.throughFieldCursor,
+				);
+			} catch (error) {
+				expect(error).toBeInstanceOf(CrdtSyncRecoveryRequiredError);
+				rejected = true;
+			}
+		}
 	});
 });

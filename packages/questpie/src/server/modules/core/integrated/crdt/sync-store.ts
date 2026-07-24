@@ -268,7 +268,7 @@ export function createCrdtDatabaseSyncSource(
 				)
 				.orderBy(asc(questpieCrdtCommitTable.commitSeq));
 			const updates =
-				commits.length === 0
+				commits.length === 0 || basis.fields.length === 0
 					? []
 					: await db
 							.select()
@@ -282,6 +282,10 @@ export function createCrdtDatabaseSyncSource(
 									),
 									gt(questpieCrdtUpdateTable.commitSeq, after),
 									lte(questpieCrdtUpdateTable.commitSeq, through),
+									inArray(
+										questpieCrdtUpdateTable.bindingId,
+										basis.fields.map((field) => field.bindingId),
+									),
 								),
 							)
 							.orderBy(

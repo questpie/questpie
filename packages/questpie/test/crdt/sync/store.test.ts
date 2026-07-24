@@ -6,7 +6,10 @@ import { PGlite } from "@electric-sql/pglite";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import { createDeterministicTextEngine } from "../../../src/server/modules/core/integrated/crdt/deterministic-engine.js";
+import {
+	createDeterministicTextEngine,
+	encodeDeterministicTextUpdate,
+} from "../../../src/server/modules/core/integrated/crdt/deterministic-engine.js";
 import {
 	resolveCrdtDesiredManifest,
 	updateCrdtManifestArtifact,
@@ -18,6 +21,7 @@ import {
 } from "../../../src/server/modules/core/integrated/crdt/owner-lifecycle.js";
 import {
 	questpieCrdtBindingTable,
+	questpieCrdtCommitTable,
 	questpieCrdtResourceEpochTable,
 	questpieCrdtResourceTable,
 	questpieCrdtSessionGrantTable,
@@ -28,6 +32,7 @@ import {
 	questpieCrdtTables,
 	questpieCrdtTicketGrantTable,
 	questpieCrdtTicketTable,
+	questpieCrdtUpdateTable,
 } from "../../../src/server/modules/core/integrated/crdt/schema.js";
 import { createCrdtDatabaseSyncSource } from "../../../src/server/modules/core/integrated/crdt/sync-store.js";
 
@@ -200,6 +205,60 @@ describe("CRDT repeatable aggregate sync store", () => {
 			},
 		});
 		expect(textEngine.project(replica)).toBe("Shared");
+	});
+
+	it("advances a hidden-only commit envelope without selecting its update payload", async () => {
+		const content = fixture.bindings.find(
+			(binding) => binding.sourcePath === "content",
+		)!;
+		const bytes = encodeDeterministicTextUpdate([
+			{ type: "insert", index: 4, value: " hidden" },
+		]);
+		await db.insert(questpieCrdtCommitTable).values({
+			resourceId: RESOURCE_ID,
+			resourceEpochId: fixture.resourceEpochId,
+			definitionId: fixture.definitionId,
+			commitSeq: 1n,
+			kind: 1,
+			schemaId: fixture.schemaId,
+			canonicalBundleHash: Buffer.alloc(32, 0x72),
+			deliveryCommitId: "00000000-0000-4000-8000-000000000509",
+			subjectId: SUBJECT_ID,
+			sessionId: SESSION_ID,
+		});
+		await db.insert(questpieCrdtUpdateTable).values({
+			resourceId: RESOURCE_ID,
+			resourceEpochId: fixture.resourceEpochId,
+			commitSeq: 1n,
+			schemaId: fixture.schemaId,
+			fieldSlot: content.fieldSlot,
+			bindingId: content.id,
+			stableFieldId: content.stableFieldId,
+			fieldEpoch: content.fieldEpoch,
+			formatVersion: content.formatVersion,
+			baseFieldCursor: 0n,
+			fieldCursor: 1n,
+			bytes,
+			sizeBytes: bytes.byteLength,
+			checksum: createHash("sha256").update(bytes).digest(),
+		});
+		await db
+			.update(questpieCrdtResourceEpochTable)
+			.set({ headCommitSeq: 1n })
+			.where(eq(questpieCrdtResourceEpochTable.id, fixture.resourceEpochId));
+		await db
+			.update(questpieCrdtBindingTable)
+			.set({ headFieldCursor: 1n })
+			.where(eq(questpieCrdtBindingTable.id, content.id));
+		const source = createCrdtDatabaseSyncSource(db, {
+			resolveEngine: () => textEngine,
+		});
+		const basis = await source.captureBasis(SESSION_ID);
+
+		const commits = await source.readCommits(basis, 0n, 1n);
+
+		expect(commits).toHaveLength(1);
+		expect(commits[0]!.fields).toEqual([]);
 	});
 
 	it("rejects an exact authority cut after its binding fence changes", async () => {

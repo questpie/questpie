@@ -152,4 +152,114 @@ describe("CRDT synchronized protocol socket", () => {
 		expect(frames).toHaveLength(2);
 		await socket.close(1000, "done");
 	});
+
+	it("returns a drainable downstream socket when the first AUTH_OK send is busy", async () => {
+		const frames: Uint8Array[] = [];
+		let writable = false;
+		const socket = await createCrdtAuthenticatedSyncSocketV1({
+			sessionId: "session",
+			authRequestId: 1n,
+			protocol: setupProtocol(),
+			source: source(),
+			aggregateHash: "c".repeat(64),
+			peer: {
+				send: (bytes) => {
+					if (!writable) return false;
+					frames.push(bytes);
+					return true;
+				},
+				close: () => {},
+			},
+		});
+		expect(frames).toHaveLength(0);
+
+		writable = true;
+		await socket.drain();
+		expect(frames.map(decodeCrdtFrameV1).map((frame) => frame.opcode)).toEqual([
+			0x89,
+		]);
+		await socket.close(1000, "done");
+	});
+
+	it("delivers one atomic live UPDATE through coordinator reconciliation", async () => {
+		let head = 0n;
+		let registered:
+			| {
+					reconcile(
+						reason: "wake" | "reconnect" | "poll",
+						signal: AbortSignal,
+					): Promise<{ behind: boolean }>;
+			  }
+			| undefined;
+		const durable = source();
+		durable.readHead = async () => head;
+		durable.readCommits = async (_basis, after, through) =>
+			after === 0n && through === 1n
+				? [
+						{
+							commitSeq: 1n,
+							kind: 1,
+							commitId: new Uint8Array(16).fill(0x44),
+							fields: [
+								{
+									fieldSlot: 1,
+									fieldEpoch: 1n,
+									formatVersion: 1,
+									fieldCursor: 1n,
+									bytes: new Uint8Array([9]),
+								},
+							],
+						},
+					]
+				: [];
+		const frames: ReturnType<typeof decodeCrdtFrameV1>[] = [];
+		const socket = await createCrdtAuthenticatedSyncSocketV1({
+			sessionId: "session",
+			authRequestId: 1n,
+			protocol: setupProtocol(),
+			source: durable,
+			aggregateHash: "d".repeat(64),
+			coordinator: {
+				register: (session) => {
+					registered = session;
+					return () => {};
+				},
+			},
+			peer: {
+				send: (bytes) => {
+					frames.push(decodeCrdtFrameV1(bytes));
+					return true;
+				},
+				close: () => {},
+			},
+		});
+		await socket.message(proofFrame());
+		const chunk = frames[1]!;
+		if (chunk.opcode !== 0x82) throw new Error("expected sync chunk");
+		await socket.message(
+			encodeCrdtFrameV1({
+				major: 1,
+				minor: 0,
+				opcode: 0x03,
+				connectionSeq: 3n,
+				requestId: 0n,
+				payload: {
+					chunkIndex: chunk.payload.chunkIndex,
+					fieldSlot: chunk.payload.fieldSlot,
+					throughFieldCursor: chunk.payload.throughFieldCursor,
+				},
+			}),
+		);
+		head = 1n;
+
+		await registered!.reconcile("wake", new AbortController().signal);
+
+		expect(frames.map((frame) => frame.opcode)).toEqual([
+			0x89, 0x82, 0x81, 0x83,
+		]);
+		const update = frames[3]!;
+		if (update.opcode !== 0x83) throw new Error("expected live update");
+		expect(update.payload.parts).toHaveLength(1);
+		await socket.close(1000, "done");
+	});
 });
