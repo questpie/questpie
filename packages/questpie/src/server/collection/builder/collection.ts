@@ -478,6 +478,33 @@ function getLocalizedFieldMode(
 	return null;
 }
 
+type HasSoftDeleteOption<TOptions> = "softDelete" extends keyof TOptions
+	? true extends TOptions["softDelete"]
+		? true
+		: false
+	: false;
+
+type GeneratedCollectionCRUD<TState extends CollectionBuilderState> = Omit<
+	CRUD<
+		CollectionSelect<TState>,
+		CollectionInsert<TState>,
+		CollectionUpdate<TState>,
+		TState["relations"]
+	>,
+	"purgeById"
+> &
+	(HasSoftDeleteOption<TState["options"]> extends true
+		? Pick<
+				CRUD<
+					CollectionSelect<TState>,
+					CollectionInsert<TState>,
+					CollectionUpdate<TState>,
+					TState["relations"]
+				>,
+				"purgeById"
+			>
+		: {});
+
 /**
  * Final Collection class - the result of build()
  * Contains the generated tables, types, and CRUD operations
@@ -1319,15 +1346,7 @@ export class Collection<TState extends CollectionBuilderState> {
 	/**
 	 * Generate CRUD operations (Drizzle RQB v2-like)
 	 */
-	generateCRUD(
-		db: any,
-		app?: any,
-	): CRUD<
-		CollectionSelect<TState>,
-		CollectionInsert<TState>,
-		CollectionUpdate<TState>,
-		TState["relations"]
-	> {
+	generateCRUD(db: any, app?: any): GeneratedCollectionCRUD<TState> {
 		const crud = new CRUDGenerator(
 			this.state,
 			this.table,
@@ -1345,12 +1364,7 @@ export class Collection<TState extends CollectionBuilderState> {
 			app,
 		);
 
-		return crud.generate() as CRUD<
-			CollectionSelect<TState>,
-			CollectionInsert<TState>,
-			CollectionUpdate<TState>,
-			TState["relations"]
-		>;
+		return crud.generate() as unknown as GeneratedCollectionCRUD<TState>;
 	}
 	// ...
 

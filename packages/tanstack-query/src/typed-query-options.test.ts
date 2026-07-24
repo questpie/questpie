@@ -23,11 +23,13 @@ const authors = collection("authors").fields(({ f }) => ({
 	name: f.text(255).required(),
 }));
 
-const news = collection("news").fields(({ f }) => ({
-	title: f.text(255).required(),
-	views: f.number().default(0),
-	author: f.relation("authors").required().relationName("author"),
-}));
+const news = collection("news")
+	.fields(({ f }) => ({
+		title: f.text(255).required(),
+		views: f.number().default(0),
+		author: f.relation("authors").required().relationName("author"),
+	}))
+	.options({ softDelete: true });
 
 const settings = global("settings").fields(({ f }) => ({
 	siteName: f.text(255).required(),
@@ -77,6 +79,12 @@ describe("typed query options proxy", () => {
 				? TVariables
 				: never;
 		type _purgeId = Expect<Equal<PurgeVariables, { id: string }>>;
+		type _hardDeleteHasNoPurge = Expect<
+			Equal<
+				"purgeById" extends keyof typeof q.collections.authors ? true : false,
+				false
+			>
+		>;
 
 		// relation typos in `with` are compile errors (direct-client parity)
 		// @ts-expect-error unknown relation in with must not typecheck

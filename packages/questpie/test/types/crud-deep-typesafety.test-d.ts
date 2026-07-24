@@ -802,6 +802,9 @@ type ArticlePurgeReturn = Awaited<ReturnType<ArticleCRUD["purgeById"]>>;
 type _purgeReturnIsSuccess = Expect<
 	Equal<ArticlePurgeReturn, { success: true }>
 >;
+type _hardDeleteHasNoPurge = Expect<
+	Equal<HasKey<CmsApp["collections"]["categories"], "purgeById">, false>
+>;
 
 // ============================================================================
 // Edge cases

@@ -378,11 +378,14 @@ describe("physical purge core contract", () => {
 			title: "Hard",
 		});
 
-		await expect(
-			setup.app.collections.hardDeleteDocuments.purgeById({
-				id: created.id,
-			}),
-		).rejects.toMatchObject({ code: "NOT_IMPLEMENTED" });
+		const runtimePurge = (
+			setup.app.collections.hardDeleteDocuments as unknown as {
+				purgeById(params: { id: string }): Promise<{ success: true }>;
+			}
+		).purgeById;
+		await expect(runtimePurge({ id: created.id })).rejects.toMatchObject({
+			code: "NOT_IMPLEMENTED",
+		});
 	});
 
 	it("builds the bounded retention keyset index for soft-delete collections", () => {

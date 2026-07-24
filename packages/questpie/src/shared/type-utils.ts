@@ -190,6 +190,21 @@ export type CollectionState<T> = T extends { state: infer State }
 	? State
 	: never;
 
+type IsAny<T> = 0 extends 1 & T ? true : false;
+
+/**
+ * Whether a concrete collection definition carries the soft-delete capability.
+ * Widened/dynamic collection types remain permissive for runtime glue code.
+ */
+export type CollectionHasSoftDelete<T> =
+	IsAny<T> extends true
+		? true
+		: IsAny<CollectionState<T>> extends true
+			? true
+			: CollectionState<T> extends { options: { softDelete: true } }
+				? true
+				: false;
+
 /**
  * Check if a Record type has specific keys (not just an index signature or empty).
  */

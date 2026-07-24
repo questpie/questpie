@@ -13,6 +13,7 @@ import { attachTxid, QUESTPIE_TXID_HEADER } from "#questpie/shared/txid.js";
 import type {
 	AnyCollection,
 	AnyCollectionOrBuilder,
+	CollectionHasSoftDelete,
 	CollectionInsert,
 	CollectionRelations,
 	CollectionUpdate,
@@ -397,12 +398,29 @@ type ClientRow<
 	TCollections extends Record<string, AnyCollectionOrBuilder>,
 > = CollectionSelectFromApp<TCollection, { collections: TCollections }>;
 
+type CollectionPurgeAPI<TCollection> =
+	CollectionHasSoftDelete<TCollection> extends true
+		? {
+				/**
+				 * Permanently purge a soft-deleted record by ID.
+				 *
+				 * Purge has separate server authorization from delete and rejects
+				 * active records. It intentionally has no alias.
+				 */
+				purgeById: (
+					params: { id: string },
+					options?: LocaleOptions,
+				) => Promise<{ success: true }>;
+			}
+		: {};
+
 /**
  * Type-safe collection API for a single collection
  */
 type CollectionAPI<
 	TCollection extends AnyCollection,
 	TCollections extends Record<string, AnyCollectionOrBuilder>,
+	TDefinition = TCollection,
 > = {
 	/**
 	 * Find many records (paginated)
@@ -582,17 +600,6 @@ type CollectionAPI<
 	) => Promise<ClientRow<TCollection, TCollections>>;
 
 	/**
-	 * Permanently purge a soft-deleted record by ID.
-	 *
-	 * Purge has separate server authorization from delete and rejects active
-	 * records. Unlike update/delete/restore, it intentionally has no alias.
-	 */
-	purgeById: (
-		params: { id: string },
-		options?: LocaleOptions,
-	) => Promise<{ success: true }>;
-
-	/**
 	 * Find version history for a single record
 	 */
 	findVersions: (
@@ -695,7 +702,7 @@ type CollectionAPI<
 	 * Includes evaluated access control for the current user and JSON Schema for validation
 	 */
 	schema: () => Promise<CollectionSchema>;
-};
+} & CollectionPurgeAPI<TDefinition>;
 
 /**
  * Collections API proxy with type-safe collection methods
@@ -703,7 +710,8 @@ type CollectionAPI<
 type CollectionsAPI<T extends QuestpieApp> = {
 	[K in keyof T["collections"]]: CollectionAPI<
 		GetCollection<T["collections"], K>,
-		T["collections"]
+		T["collections"],
+		T["collections"][K]
 	>;
 };
 

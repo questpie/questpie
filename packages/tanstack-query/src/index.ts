@@ -274,7 +274,11 @@ type CollectionRestore<
 type CollectionPurgeById<
 	TApp extends QuestpieApp,
 	K extends CollectionKeys<TApp>,
-> = QuestpieClient<TApp>["collections"][K]["purgeById"];
+> = QuestpieClient<TApp>["collections"][K] extends {
+	purgeById: infer TPurge extends AnyAsyncFn;
+}
+	? TPurge
+	: never;
 type CollectionFindVersions<
 	TApp extends QuestpieApp,
 	K extends CollectionKeys<TApp>,
@@ -409,10 +413,6 @@ type CollectionQueryOptionsAPI<
 		FirstArg<CollectionRestore<TApp, K>>,
 		QueryData<CollectionRestore<TApp, K>>
 	>;
-	purgeById: MutationBuilder<
-		FirstArg<CollectionPurgeById<TApp, K>>,
-		QueryData<CollectionPurgeById<TApp, K>>
-	>;
 	findVersions: QueryBuilder<CollectionFindVersions<TApp, K>>;
 	revertToVersion: MutationBuilder<
 		FirstArg<CollectionRevertToVersion<TApp, K>>,
@@ -430,7 +430,14 @@ type CollectionQueryOptionsAPI<
 		{ where: any },
 		{ success: boolean; count: number }
 	>;
-};
+} & ([CollectionPurgeById<TApp, K>] extends [never]
+	? {}
+	: {
+			purgeById: MutationBuilder<
+				FirstArg<CollectionPurgeById<TApp, K>>,
+				QueryData<CollectionPurgeById<TApp, K>>
+			>;
+		});
 
 type GlobalQueryOptionsAPI<
 	TApp extends QuestpieApp,
