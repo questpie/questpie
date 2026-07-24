@@ -162,6 +162,10 @@ export type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals" | "e
 	env: typeof _env;
 };
 
+export type AppCrdt = CrdtRegistryFromApp<{ collections: AppCollections; globals: AppGlobals }>;
+export type AppCrdtClient = CrdtClientAPI<AppCrdt>;
+export type AppCrdtServer = CrdtServerAPI<AppCrdt>;
+
 // ── AppContext augmentation — auto-types ALL handlers ──────
 type _AppInfraRecord = {
 	// Infrastructure
@@ -175,6 +179,7 @@ type _AppInfraRecord = {
 	search: _AppQuestpie["search"];
 	realtime: _AppQuestpie["realtime"];
 	channels: ChannelsService<AppChannels>;
+	crdt: AppCrdtServer;
 
 	// Entity APIs
 	collections: _CollectionsAPI;

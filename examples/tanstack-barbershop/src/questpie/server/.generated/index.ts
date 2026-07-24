@@ -4,9 +4,9 @@
 
 import { createApp, createContextFactory } from "questpie/app";
 import "./names.gen";
-import type { AccessContext, AppDefinition, CollectionSelect, GlobalSelect, HookContext, Where } from "questpie/types";
+import type { AccessContext, AppDefinition, CollectionSelect, CrdtClientAPI, CrdtRegistryFromApp, CrdtServerAPI, GlobalSelect, HookContext, Where } from "questpie/types";
 import type { AppCollections, AppChannels, AppGlobals, AppRoutes } from "./entities.gen";
-import type { _AppQuestpie, AppAuthConfig, AppSession, AppSessionUser } from "./context.gen";
+import type { _AppQuestpie, AppAuthConfig, AppCrdt, AppSession, AppSessionUser } from "./context.gen";
 
 // ── Env (validated before everything else) ─────────────────
 import _env from "../env";
@@ -157,10 +157,6 @@ export type HookRuleContext<K extends keyof AppCollections | unknown = unknown> 
  * Use with `createClient<AppConfig>()` and `createAdminAuthClient<AppConfig>()`.
  * For handler context, use `AppContext` (auto-typed via module augmentation).
  */
-export type AppCrdt = CrdtRegistryFromApp<{ collections: AppCollections; globals: AppGlobals }>;
-export type AppCrdtClient = CrdtClientAPI<AppCrdt>;
-export type AppCrdtServer = CrdtServerAPI<AppCrdt>;
-
 export type AppConfig = {
 	collections: AppCollections;
 	channels: AppChannels;

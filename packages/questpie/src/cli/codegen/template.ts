@@ -318,7 +318,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	// `relation("user")` strict keys regress. A side-effect import is never elided.
 	l3.push(`import "${layerImport(L0_FILE)}";`);
 	l3.push(
-		'import type { AccessContext, AppDefinition, CollectionSelect, GlobalSelect, HookContext, Where } from "questpie/types";',
+		'import type { AccessContext, AppDefinition, CollectionSelect, CrdtClientAPI, CrdtRegistryFromApp, CrdtServerAPI, GlobalSelect, HookContext, Where } from "questpie/types";',
 	);
 	// CollectionDoc/GlobalDoc/AppConfig/createContext read these from L1; the
 	// runtime `as _AppQuestpie` cast + AppSession re-exports read from L2.
