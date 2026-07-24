@@ -1,9 +1,14 @@
 import { Buffer } from "node:buffer";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
+import {
+	type CrdtStagedAggregateBundle,
+	hashCrdtCanonicalValue,
+	verifyCrdtStagedAggregateBundle,
+} from "#questpie/shared/crdt-engine.js";
 
 import {
 	questpieCrdtBindingTable,
@@ -27,7 +32,7 @@ const UPDATE_BYTE_RATE = 1024n * 1024n;
 const PART_BURST = 2_000n;
 const PART_RATE = 1_000n;
 
-export type CrdtAppendInput = Readonly<{
+type CrdtAppendInput = Readonly<{
 	resourceId: string;
 	resourceEpochId: string;
 	definitionId: string;
@@ -50,6 +55,37 @@ export type CrdtAppendInput = Readonly<{
 	}>;
 	overlay: readonly CrdtAppendOverlayPart[];
 	parts: readonly CrdtAppendPart[];
+}>;
+
+export type CrdtStagedAppend = Readonly<{
+	readonly updateId: string;
+	readonly resourceId: string;
+	readonly resourceEpochId: string;
+	readonly sessionId: string;
+	readonly subjectId: string;
+	readonly submittedSchemaVersion: bigint;
+	readonly submittedBundleHash: Uint8Array;
+	readonly authority: CrdtAppendInput["authority"];
+}>;
+
+export type CrdtAppendPreparation = Readonly<{
+	resourceId: string;
+	resourceEpochId: string;
+	definitionId: string;
+	schemaId: string;
+	sessionId: string;
+	subjectId: string;
+	updateId: string;
+	submittedSchemaId: string;
+	decisionExpiresAt: Date;
+	authority: CrdtAppendInput["authority"];
+	overlay: readonly CrdtAppendOverlayPart[];
+	staged: CrdtStagedAggregateBundle;
+	bindings: readonly Readonly<{
+		fieldSlot: number;
+		bindingId: string;
+		stableFieldId: string;
+	}>[];
 }>;
 
 export type CrdtAppendOverlayPart = Readonly<{
@@ -97,6 +133,91 @@ export type CrdtReceiptQuery = Readonly<{
 	}>[];
 }>;
 
+const stagedAppendInputs = new WeakMap<object, CrdtAppendInput>();
+
+export async function prepareCrdtAppend(
+	input: CrdtAppendPreparation,
+): Promise<CrdtStagedAppend> {
+	const staged = await verifyCrdtStagedAggregateBundle(input.staged);
+	const bindingsBySlot = new Map(
+		input.bindings.map((binding) => [binding.fieldSlot, binding]),
+	);
+	if (
+		bindingsBySlot.size !== input.bindings.length ||
+		staged.parts.some((part) => !bindingsBySlot.has(part.fieldSlot))
+	) {
+		throw rejected();
+	}
+	const parts = await Promise.all(
+		staged.parts.map(async (part) => {
+			const binding = bindingsBySlot.get(part.fieldSlot)!;
+			const assignedFieldCursor = part.candidate.basis.fieldCursor + 1n;
+			const nextReplica = await part.engine.restore({
+				snapshot: new Uint8Array(part.candidate.nextSnapshot),
+				basis: {
+					fieldEpoch: part.candidate.basis.fieldEpoch,
+					fieldCursor: assignedFieldCursor,
+				},
+			});
+			if (
+				nextReplica.engineId !== part.engine.engineId ||
+				nextReplica.format !== part.engine.format ||
+				nextReplica.formatVersion !== part.engine.formatVersion ||
+				nextReplica.basis.fieldEpoch !== part.candidate.basis.fieldEpoch ||
+				nextReplica.basis.fieldCursor !== assignedFieldCursor ||
+				!equalBytes(nextReplica.state, part.candidate.nextSnapshot)
+			) {
+				throw rejected();
+			}
+			return {
+				bindingId: binding.bindingId,
+				stableFieldId: binding.stableFieldId,
+				fieldEpoch: part.candidate.basis.fieldEpoch,
+				fieldSlot: part.fieldSlot,
+				formatVersion: part.candidate.formatVersion,
+				baseFieldCursor: part.candidate.basis.fieldCursor,
+				bytes: part.candidate.normalizedUpdate,
+				checksum: sha256(part.candidate.normalizedUpdate),
+				nextCanonicalHash: await hashCrdtCanonicalValue(
+					part.candidate.format,
+					part.engine.project(nextReplica),
+				),
+				nextStateBytes: BigInt(part.candidate.nextSnapshot.byteLength),
+				nextElementCount: BigInt(part.candidate.inspection.elementCount),
+			};
+		}),
+	);
+	const candidate = snapshotInput({
+		resourceId: input.resourceId,
+		resourceEpochId: input.resourceEpochId,
+		definitionId: input.definitionId,
+		schemaId: input.schemaId,
+		sessionId: input.sessionId,
+		subjectId: input.subjectId,
+		updateId: input.updateId,
+		submittedSchemaId: input.submittedSchemaId,
+		submittedSchemaVersion: BigInt(staged.submittedSchemaVersion),
+		submittedBundleHash: staged.submittedDigest,
+		canonicalBundleHash: staged.canonicalDigest,
+		decisionExpiresAt: input.decisionExpiresAt,
+		authority: input.authority,
+		overlay: input.overlay,
+		parts,
+	});
+	const capability = Object.freeze({
+		updateId: candidate.updateId,
+		resourceId: candidate.resourceId,
+		resourceEpochId: candidate.resourceEpochId,
+		sessionId: candidate.sessionId,
+		subjectId: candidate.subjectId,
+		submittedSchemaVersion: candidate.submittedSchemaVersion,
+		submittedBundleHash: new Uint8Array(candidate.submittedBundleHash),
+		authority: Object.freeze({ ...candidate.authority }),
+	});
+	stagedAppendInputs.set(capability, candidate);
+	return capability;
+}
+
 export class CrdtAppendRejectedError extends Error {
 	readonly code = "CRDT_APPEND_REJECTED";
 
@@ -105,6 +226,8 @@ export class CrdtAppendRejectedError extends Error {
 		this.name = "CrdtAppendRejectedError";
 	}
 }
+
+class CrdtStaleBasisError extends CrdtAppendRejectedError {}
 
 export function createCrdtAppendStore(
 	db: CrdtDatabase,
@@ -119,7 +242,7 @@ export function createCrdtAppendStore(
 				resourceId: string;
 				definitionId: string;
 			},
-		) => Promise<void>;
+		) => Promise<{ resourceId: string; definitionId: string }>;
 		publishNotice?: (notice: {
 			kind: "crdt";
 			resourceId: string;
@@ -128,25 +251,54 @@ export function createCrdtAppendStore(
 		}) => Promise<void>;
 	}>,
 ) {
+	const append = async (
+		input: CrdtStagedAppend,
+	): Promise<CrdtAppendReceipt> => {
+		const prepared = stagedAppendInputs.get(input);
+		if (!prepared) throw rejected();
+		const candidate = snapshotInput(prepared);
+		const result = await db.transaction((tx) =>
+			appendTransaction(tx as CrdtDatabase, candidate, options.lockOwnerRow),
+		);
+		if (result.committed) {
+			try {
+				await options.publishNotice?.({
+					kind: "crdt",
+					resourceId: candidate.resourceId,
+					resourceEpochId: candidate.resourceEpochId,
+					commitSeq: result.receipt.commitSeq,
+				});
+			} catch {
+				// Durable polling/reconnect drains make notices latency hints only.
+			}
+		}
+		return result.receipt;
+	};
 	return Object.freeze({
-		async append(input: CrdtAppendInput): Promise<CrdtAppendReceipt> {
-			const candidate = snapshotInput(input);
-			const result = await db.transaction((tx) =>
-				appendTransaction(tx as CrdtDatabase, candidate, options.lockOwnerRow),
-			);
-			if (result.committed) {
+		append,
+		async appendWithRestage(
+			stage: (attempt: number) => Promise<CrdtStagedAppend>,
+			maxRestages = 2,
+		): Promise<CrdtAppendReceipt> {
+			if (
+				!Number.isSafeInteger(maxRestages) ||
+				maxRestages < 0 ||
+				maxRestages > 4
+			) {
+				throw rejected();
+			}
+			for (let attempt = 0; attempt <= maxRestages; attempt++) {
 				try {
-					await options.publishNotice?.({
-						kind: "crdt",
-						resourceId: candidate.resourceId,
-						resourceEpochId: candidate.resourceEpochId,
-						commitSeq: result.receipt.commitSeq,
-					});
-				} catch {
-					// Durable polling/reconnect drains make notices latency hints only.
+					return await append(await stage(attempt));
+				} catch (error) {
+					if (
+						!(error instanceof CrdtStaleBasisError) ||
+						attempt === maxRestages
+					)
+						throw error;
 				}
 			}
-			return result.receipt;
+			throw rejected();
 		},
 		async reconcileReceipts(
 			input: CrdtReceiptQuery,
@@ -170,12 +322,18 @@ async function appendTransaction(
 	lockOwnerRow: (
 		transaction: CrdtDatabase,
 		owner: { resourceId: string; definitionId: string },
-	) => Promise<void>,
+	) => Promise<{ resourceId: string; definitionId: string }>,
 ): Promise<{ receipt: CrdtAppendReceipt; committed: boolean }> {
-	await lockOwnerRow(db, {
+	const lockedOwner = await lockOwnerRow(db, {
 		resourceId: input.resourceId,
 		definitionId: input.definitionId,
 	});
+	if (
+		lockedOwner.resourceId !== input.resourceId ||
+		lockedOwner.definitionId !== input.definitionId
+	) {
+		throw rejected();
+	}
 	const [resource] = await db
 		.select()
 		.from(questpieCrdtResourceTable)
@@ -202,9 +360,6 @@ async function appendTransaction(
 	) {
 		throw rejected();
 	}
-	const existing = await findReceipt(db, input);
-	if (existing) return { receipt: existing, committed: false };
-
 	const bindingIds = input.overlay.map((part) => part.bindingId).sort();
 	const bindings = await db
 		.select()
@@ -241,16 +396,12 @@ async function appendTransaction(
 	if (
 		!session ||
 		session.schemaId !== input.schemaId ||
-		session.effectiveMode !== 2 ||
 		session.generation !== input.authority.sessionGeneration ||
 		session.resourceReadFence !== input.authority.resourceReadFence ||
-		session.resourceEditFence !== input.authority.resourceEditFence ||
 		session.ownerPolicyRevision !== input.authority.ownerPolicyRevision ||
 		session.subjectReadFence !== input.authority.subjectReadFence ||
-		session.subjectEditFence !== input.authority.subjectEditFence ||
 		resource.sessionGeneration !== input.authority.sessionGeneration ||
 		resource.readFence !== input.authority.resourceReadFence ||
-		resource.editFence !== input.authority.resourceEditFence ||
 		resource.ownerPolicyRevision !== input.authority.ownerPolicyRevision
 	) {
 		throw rejected();
@@ -265,22 +416,6 @@ async function appendTransaction(
 	const [clock] = resultRows<{ current: boolean }>(clockResult);
 	if (!clock?.current) throw rejected();
 
-	const overlays = new Map(input.overlay.map((part) => [part.bindingId, part]));
-	for (const binding of bindings) {
-		const overlay = overlays.get(binding.id);
-		if (
-			!overlay ||
-			binding.status !== 1 ||
-			binding.retiredAt !== null ||
-			binding.stableFieldId !== overlay.stableFieldId ||
-			binding.fieldEpoch !== overlay.fieldEpoch ||
-			binding.headFieldCursor !== overlay.fieldCursor ||
-			binding.readFence !== overlay.readFence ||
-			binding.editFence !== overlay.editFence
-		) {
-			throw rejected();
-		}
-	}
 	const grants = await db
 		.select()
 		.from(questpieCrdtSessionGrantTable)
@@ -296,26 +431,6 @@ async function appendTransaction(
 	const grantsByBinding = new Map(
 		grants.map((grant) => [grant.bindingId, grant]),
 	);
-	for (const part of input.parts) {
-		const binding = bindings.find(
-			(candidate) => candidate.id === part.bindingId,
-		);
-		const grant = grantsByBinding.get(part.bindingId);
-		if (
-			!binding ||
-			!grant ||
-			grant.grant !== 1 ||
-			grant.headFieldCursor !== part.baseFieldCursor ||
-			grant.fieldReadFence !== binding.readFence ||
-			grant.fieldEditFence !== binding.editFence ||
-			binding.fieldEpoch !== part.fieldEpoch ||
-			binding.fieldSlot !== part.fieldSlot ||
-			binding.formatVersion !== part.formatVersion ||
-			binding.headFieldCursor !== part.baseFieldCursor
-		) {
-			throw rejected();
-		}
-	}
 	const subjectFences = await db
 		.select()
 		.from(questpieCrdtSubjectFenceTable)
@@ -330,12 +445,83 @@ async function appendTransaction(
 		(fence) => fence.scopeKind === 1,
 	);
 	if (
-		(resourceSubjectFence?.readFence ?? 0n) !==
-			input.authority.subjectReadFence ||
+		(resourceSubjectFence?.readFence ?? 0n) !== input.authority.subjectReadFence
+	) {
+		throw rejected();
+	}
+	for (const part of input.parts) {
+		const binding = bindings.find(
+			(candidate) => candidate.id === part.bindingId,
+		);
+		const grant = grantsByBinding.get(part.bindingId);
+		const fieldFence = subjectFences.find(
+			(fence) =>
+				fence.scopeKind === 2 && fence.stableFieldId === part.stableFieldId,
+		);
+		if (
+			!binding ||
+			!grant ||
+			grant.fieldReadFence !== binding.readFence ||
+			(fieldFence?.readFence ?? 0n) !== grant.subjectFieldReadFence
+		) {
+			throw rejected();
+		}
+	}
+	const existing = await findReceipt(db, input);
+	if (existing) return { receipt: existing, committed: false };
+	if (
+		session.effectiveMode !== 2 ||
+		session.resourceEditFence !== input.authority.resourceEditFence ||
+		session.subjectEditFence !== input.authority.subjectEditFence ||
+		resource.editFence !== input.authority.resourceEditFence ||
 		(resourceSubjectFence?.editFence ?? 0n) !== input.authority.subjectEditFence
 	) {
 		throw rejected();
 	}
+	const overlays = new Map(input.overlay.map((part) => [part.bindingId, part]));
+	for (const binding of bindings) {
+		const overlay = overlays.get(binding.id);
+		if (
+			!overlay ||
+			binding.stableFieldId !== overlay.stableFieldId ||
+			binding.fieldEpoch !== overlay.fieldEpoch ||
+			binding.headFieldCursor !== overlay.fieldCursor ||
+			binding.readFence !== overlay.readFence ||
+			binding.editFence !== overlay.editFence
+		) {
+			throw stale();
+		}
+	}
+	for (const part of input.parts) {
+		const binding = bindings.find(
+			(candidate) => candidate.id === part.bindingId,
+		);
+		const grant = grantsByBinding.get(part.bindingId);
+		if (binding && binding.headFieldCursor !== part.baseFieldCursor) {
+			throw stale();
+		}
+		if (
+			!binding ||
+			!grant ||
+			grant.grant !== 1 ||
+			grant.fieldReadFence !== binding.readFence ||
+			grant.fieldEditFence !== binding.editFence ||
+			binding.fieldEpoch !== part.fieldEpoch ||
+			binding.fieldSlot !== part.fieldSlot ||
+			binding.formatVersion !== part.formatVersion
+		) {
+			throw rejected();
+		}
+	}
+	const nextStateBytesByBinding = new Map(
+		input.parts.map((part) => [part.bindingId, part.nextStateBytes]),
+	);
+	const aggregateStateBytes = bindings.reduce(
+		(total, binding) =>
+			total + (nextStateBytesByBinding.get(binding.id) ?? binding.stateBytes),
+		0n,
+	);
+	if (aggregateStateBytes > 32n * 1024n * 1024n) throw rejected();
 	for (const part of input.parts) {
 		const grant = grantsByBinding.get(part.bindingId)!;
 		const fieldFence = subjectFences.find(
@@ -468,6 +654,7 @@ async function findReceipt(
 					input.resourceEpochId,
 				),
 				eq(questpieCrdtUpdateReceiptTable.updateId, input.updateId),
+				sql`${questpieCrdtUpdateReceiptTable.expiresAt} > clock_timestamp()`,
 			),
 		);
 	if (!receipt) return null;
@@ -504,17 +691,23 @@ async function reconcileReceiptsTransaction(
 	lockOwnerRow: (
 		transaction: CrdtDatabase,
 		owner: { resourceId: string; definitionId: string },
-	) => Promise<void>,
+	) => Promise<{ resourceId: string; definitionId: string }>,
 ): Promise<readonly CrdtAppendReceipt[]> {
 	const [resourceIdentity] = await db
 		.select({ definitionId: questpieCrdtResourceTable.definitionId })
 		.from(questpieCrdtResourceTable)
 		.where(eq(questpieCrdtResourceTable.id, input.resourceId));
 	if (!resourceIdentity) return [];
-	await lockOwnerRow(db, {
+	const lockedOwner = await lockOwnerRow(db, {
 		resourceId: input.resourceId,
 		definitionId: resourceIdentity.definitionId,
 	});
+	if (
+		lockedOwner.resourceId !== input.resourceId ||
+		lockedOwner.definitionId !== resourceIdentity.definitionId
+	) {
+		return [];
+	}
 	const [resource] = await db
 		.select()
 		.from(questpieCrdtResourceTable)
@@ -764,6 +957,7 @@ function snapshotInput(input: CrdtAppendInput): CrdtAppendInput {
 			(part) =>
 				part.baseFieldCursor < 0n ||
 				part.fieldEpoch < 0n ||
+				part.nextStateBytes > 24n * 1024n * 1024n ||
 				part.nextStateBytes < 0n ||
 				part.nextElementCount < 0n,
 		)
@@ -834,6 +1028,10 @@ function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
 	return Buffer.from(left).equals(Buffer.from(right));
 }
 
+function sha256(value: Uint8Array): Uint8Array {
+	return new Uint8Array(createHash("sha256").update(value).digest());
+}
+
 function resultRows<TRow>(result: unknown): readonly TRow[] {
 	if (Array.isArray(result)) return result as TRow[];
 	if (
@@ -849,4 +1047,8 @@ function resultRows<TRow>(result: unknown): readonly TRow[] {
 
 function rejected(): CrdtAppendRejectedError {
 	return new CrdtAppendRejectedError();
+}
+
+function stale(): CrdtStaleBasisError {
+	return new CrdtStaleBasisError();
 }

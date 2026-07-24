@@ -193,6 +193,53 @@ export async function hashCrdtEngineState(
 	return sha256(state);
 }
 
+export async function hashCrdtCanonicalValue(
+	format: CrdtEngineFormat,
+	value: unknown,
+): Promise<Uint8Array> {
+	const encoder = new TextEncoder();
+	const chunks: Uint8Array[] = [
+		encoder.encode("questpie-crdt-canonical-value-v1\0"),
+		encoder.encode(format),
+		new Uint8Array([0]),
+	];
+	if (format === "text") {
+		if (typeof value !== "string") {
+			throw new CrdtEngineError("invalid canonical text projection");
+		}
+		chunks.push(encoder.encode(value));
+	} else {
+		if (
+			!Array.isArray(value) ||
+			value.some((entry) => typeof entry !== "string")
+		) {
+			throw new CrdtEngineError("invalid canonical set projection");
+		}
+		const encoded = value.map((entry) => encoder.encode(entry));
+		for (let index = 0; index < encoded.length; index++) {
+			if (
+				(index > 0 &&
+					compareBytes(encoded[index - 1]!, encoded[index]!) >= 0) ||
+				encoded[index]!.byteLength > 4096
+			) {
+				throw new CrdtEngineError("set projection is not canonical");
+			}
+		}
+		chunks.push(u32Bytes(encoded.length));
+		for (const entry of encoded) {
+			chunks.push(u32Bytes(entry.byteLength), entry);
+		}
+	}
+	const size = chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
+	const bytes = new Uint8Array(size);
+	let offset = 0;
+	for (const chunk of chunks) {
+		bytes.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	return sha256(bytes);
+}
+
 export async function assertCrdtCandidateSourceState(
 	candidate: CrdtStagedFieldCandidate,
 	state: Uint8Array,
@@ -487,37 +534,13 @@ export async function commitCrdtAggregateBundle(input: {
 	current: ReadonlyMap<number, AnyReplica>;
 	assignedFieldCursors: ReadonlyMap<number, bigint>;
 }): Promise<Map<number, AnyReplica>> {
-	const expectedIntegrity = stagedAggregateIntegrity.get(input.staged);
-	if (!expectedIntegrity) {
-		throw new CrdtEngineError("unknown staged aggregate bundle");
-	}
-	// Take one synchronous defensive snapshot before the first await. Every
-	// subsequent check and adapter call uses only this coordinator-owned copy.
-	const staged = cloneStagedAggregateBundle(input.staged);
+	const staged = await verifyCrdtStagedAggregateBundle(input.staged);
 	const current = new Map(
 		[...input.current].map(
 			([slot, replica]) => [slot, cloneCrdtReplica(replica)] as const,
 		),
 	);
 	const assignedFieldCursors = new Map(input.assignedFieldCursors);
-	const actualIntegrity = await computeStagedAggregateIntegrity(staged);
-	if (!equalBytes(expectedIntegrity, actualIntegrity)) {
-		throw new CrdtEngineError("staged aggregate result integrity check failed");
-	}
-	const expectedSubmittedDigest = await computeAggregateDigest(
-		staged,
-		"submitted",
-	);
-	const expectedCanonicalDigest = await computeAggregateDigest(
-		staged,
-		"canonical",
-	);
-	if (
-		!equalBytes(expectedSubmittedDigest, staged.submittedDigest) ||
-		!equalBytes(expectedCanonicalDigest, staged.canonicalDigest)
-	) {
-		throw new CrdtEngineError("staged aggregate bundle integrity check failed");
-	}
 	for (const part of staged.parts) {
 		const currentReplica = current.get(part.fieldSlot);
 		const assigned = assignedFieldCursors.get(part.fieldSlot);
@@ -558,16 +581,51 @@ export async function commitCrdtAggregateBundle(input: {
 		if (
 			replica.basis.fieldEpoch !== part.candidate.basis.fieldEpoch ||
 			replica.basis.fieldCursor !== assignedFieldCursors.get(fieldSlot)! ||
-			!equalBytes(replica.state, part.candidate.nextSnapshot)
+			!equalBytes(
+				await hashCrdtEngineState(replica.state),
+				await hashCrdtEngineState(part.candidate.nextSnapshot),
+			)
 		) {
 			throw new CrdtEngineError(
 				"field engine returned an invalid committed replica",
 			);
 		}
-		await verifyCrdtCandidateToken(part.candidate);
-		safeCommitted.push([fieldSlot, cloneCrdtReplica(replica)] as const);
+		safeCommitted.push([fieldSlot, cloneCrdtReplica(replica)]);
 	}
 	return new Map(safeCommitted);
+}
+
+export async function verifyCrdtStagedAggregateBundle(
+	input: CrdtStagedAggregateBundle,
+): Promise<CrdtStagedAggregateBundle> {
+	const expectedIntegrity = stagedAggregateIntegrity.get(input);
+	if (!expectedIntegrity) {
+		throw new CrdtEngineError("unknown staged aggregate bundle");
+	}
+	const staged = cloneStagedAggregateBundle(input);
+	const actualIntegrity = await computeStagedAggregateIntegrity(staged);
+	if (!equalBytes(expectedIntegrity, actualIntegrity)) {
+		throw new CrdtEngineError("staged aggregate result integrity check failed");
+	}
+	const expectedSubmittedDigest = await computeAggregateDigest(
+		staged,
+		"submitted",
+	);
+	const expectedCanonicalDigest = await computeAggregateDigest(
+		staged,
+		"canonical",
+	);
+	if (
+		!equalBytes(expectedSubmittedDigest, staged.submittedDigest) ||
+		!equalBytes(expectedCanonicalDigest, staged.canonicalDigest)
+	) {
+		throw new CrdtEngineError("staged aggregate bundle integrity check failed");
+	}
+	for (const part of staged.parts) {
+		assertCandidateBelongsToEngine(part.engine, part.candidate);
+		await verifyCrdtCandidateToken(part.candidate);
+	}
+	return staged;
 }
 
 async function computeAggregateDigest(
@@ -884,4 +942,18 @@ function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
 		difference |= left[index]! ^ right[index]!;
 	}
 	return difference === 0;
+}
+
+function u32Bytes(value: number): Uint8Array {
+	const bytes = new Uint8Array(4);
+	new DataView(bytes.buffer).setUint32(0, value);
+	return bytes;
+}
+
+function compareBytes(left: Uint8Array, right: Uint8Array): number {
+	const length = Math.min(left.byteLength, right.byteLength);
+	for (let index = 0; index < length; index++) {
+		if (left[index] !== right[index]) return left[index]! - right[index]!;
+	}
+	return left.byteLength - right.byteLength;
 }
