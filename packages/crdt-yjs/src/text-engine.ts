@@ -239,7 +239,12 @@ function hasUnpairedSurrogate(value: string): boolean {
 
 function decodedStructCount(update: Uint8Array): number {
 	try {
-		return Y.decodeUpdate(update).structs.length;
+		const decoded = Y.decodeUpdate(update);
+		let deleteRanges = 0;
+		for (const ranges of decoded.ds.clients.values()) {
+			deleteRanges += ranges.length;
+		}
+		return decoded.structs.length + deleteRanges;
 	} catch {
 		throw new CrdtEngineError("invalid Yjs update");
 	}
