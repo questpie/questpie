@@ -771,18 +771,22 @@ async function appendTransaction(
 	);
 
 	const commitSeq = epoch.headCommitSeq + 1n;
-	await db.insert(questpieCrdtCommitTable).values({
-		resourceId: input.resourceId,
-		resourceEpochId: input.resourceEpochId,
-		definitionId: input.definitionId,
-		commitSeq,
-		kind: 1,
-		schemaId: input.schemaId,
-		canonicalBundleHash: Buffer.from(input.canonicalBundleHash),
-		deliveryCommitId: randomUUID(),
-		subjectId: input.subjectId,
-		sessionId: input.sessionId,
-	});
+	const [commit] = await db
+		.insert(questpieCrdtCommitTable)
+		.values({
+			resourceId: input.resourceId,
+			resourceEpochId: input.resourceEpochId,
+			definitionId: input.definitionId,
+			commitSeq,
+			kind: 1,
+			schemaId: input.schemaId,
+			canonicalBundleHash: Buffer.from(input.canonicalBundleHash),
+			deliveryCommitId: randomUUID(),
+			subjectId: input.subjectId,
+			sessionId: input.sessionId,
+		})
+		.returning({ committedAt: questpieCrdtCommitTable.committedAt });
+	if (!commit) throw rejected();
 	for (const part of input.parts) {
 		const fieldCursor = part.baseFieldCursor + 1n;
 		await db.insert(questpieCrdtUpdateTable).values({
@@ -828,7 +832,7 @@ async function appendTransaction(
 		schemaId: input.schemaId,
 		targetCommitSeq: commitSeq,
 		idempotencyKey: randomUUID(),
-		dueAt: sql`clock_timestamp() + interval '5 seconds'`,
+		dueAt: new Date(commit.committedAt.getTime() + 5_000),
 		leaseGeneration: 0n,
 	});
 	const partsByBinding = new Map(

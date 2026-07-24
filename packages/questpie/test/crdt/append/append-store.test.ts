@@ -170,10 +170,12 @@ describe("CRDT atomic append store", () => {
 			.where(eq(questpieCrdtBindingTable.id, fixture.binding.id));
 		expect(epoch?.headCommitSeq).toBe(1n);
 		const [projection] = await db.select().from(questpieCrdtProjectionTable);
+		const [commit] = await db.select().from(questpieCrdtCommitTable);
 		expect(projection?.targetCommitSeq).toBe(1n);
 		expect(projection?.status).toBe(1);
-		expect(projection!.dueAt.getTime() - Date.now()).toBeGreaterThan(3_000);
-		expect(projection!.dueAt.getTime() - Date.now()).toBeLessThanOrEqual(5_100);
+		expect(projection!.dueAt.getTime() - commit!.committedAt.getTime()).toBe(
+			5_000,
+		);
 		const projectionFields = await db
 			.select()
 			.from(questpieCrdtProjectionFieldTable);
