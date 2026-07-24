@@ -55,7 +55,10 @@ The generic HTTP route is:
 POST /api/documents/:id/purge
 ```
 
-The route and OpenAPI operation are generated only for soft-delete collections.
+Specific server, browser SDK, and TanStack Query types expose `purgeById` only
+for soft-delete collections. OpenAPI follows the same capability rule. The HTTP
+adapter keeps one generic collection route at runtime; asking it to purge a
+non-soft-delete collection fails closed with `501 NOT_IMPLEMENTED`.
 
 ## Transaction and hooks
 
@@ -78,7 +81,16 @@ beforeOperation("purge")
 Use transaction-aware post-commit work for effects that must not happen after a rollback. Core integrations already follow that split:
 
 - Search and realtime receive idempotent removal signals.
-- Upload blobs survive soft delete and restore, then are removed after a committed purge.
+- Upload blobs survive soft delete and restore. Purge writes a
+  `questpie_storage_cleanup` intent in the same transaction, then a core job
+  removes the provider object after commit. A provider failure or process crash
+  leaves durable retry work instead of losing cleanup. Cleanup and upload
+  writers serialize on `questpie_storage_object_key`, and cleanup scans every
+  upload-enabled collection before deleting, so a key retained by another
+  active or soft-deleted row is not removed. Coordination rows are deleted with
+  the final unreferenced object rather than forming an ever-growing history.
+  Creating or changing upload metadata to a missing provider key now fails with
+  a bad-request result.
 - Audit records a metadata-only purge fact without copying deleted content.
 - A collaborative resource is fenced when its owner is deleted. Purge does not promise immediate privacy erasure of independently retained CRDT tombstones or updates; configure and operate that retention separately.
 
@@ -86,7 +98,21 @@ Use transaction-aware post-commit work for effects that must not happen after a 
 
 Purge never turns a relation's soft-delete `cascade` into a hard-delete cascade, and it never nullifies a retained row. Any incoming application relation, junction row, or database foreign key blocks the purge. This includes references from rows that are themselves soft-deleted.
 
-QUESTPIE takes deterministic locks for known referring tables, checks references, and still relies on PostgreSQL constraints as the final race-safe boundary. Unknown raw foreign keys therefore fail closed too. Remove or independently purge referring data under its own policy before retrying the owner.
+QUESTPIE takes deterministic locks for known referring tables and checks
+references before and after purge hooks. It also holds a schema lock that
+permits ordinary DML but serializes concurrent foreign-key DDL with the frozen
+constraint inventory. Framework writers that materialize declared scalar or
+junction references join the same protocol: they lock their source table before
+nested work and key-share the referenced target before writing. PostgreSQL
+constraints remain the final boundary for physical foreign keys.
+
+Raw SQL that writes an application-only relation after its target has already
+been purged can still create a dangling reference because that relation has no
+database constraint. If other systems write those tables, add a real foreign key
+or an equivalent database-enforced protocol; otherwise physical purge is not a
+sound capability for that relation. Unknown raw foreign keys fail closed.
+Remove or independently purge referring data under its own policy before
+retrying the owner.
 
 ## A bounded retention worker
 
@@ -125,7 +151,7 @@ ORDER BY deletedAt ASC, id ASC
 LIMIT pageSize
 ```
 
-The soft-delete collection generates the matching partial composite index on `(deletedAt, id) WHERE deletedAt IS NOT NULL`. Generate the application migration with `questpie migrate:create`, review it, run generation again and require no diff, then deploy it with `questpie migrate`. Never hand-write an `ALTER` to approximate this index.
+The soft-delete collection generates the matching partial composite index on `(deletedAt, id) WHERE deletedAt IS NOT NULL`. Generate the application migration with `questpie migrate:generate`, review it, run generation again and require no diff, then deploy it with `questpie migrate`. Never hand-write an `ALTER` to approximate this index.
 
 For each page:
 
@@ -134,7 +160,17 @@ For each page:
 3. Advance the durable page cursor only after every item reaches a terminal state.
 4. Bound queue prefetch and concurrency to leave database pool headroom; start with 1–4 concurrent purges and measure.
 
-Treat not-found as terminal success: the commit may have succeeded before a worker lost its acknowledgement. Treat conflict as a terminal blocked/skipped item that needs policy or relation cleanup, not a blind retry. Retry transient database/transport failures with bounded exponential backoff and jitter; send exhausted or unexpected failures to a dead-letter queue. Because the cursor advances only after terminal acknowledgement, a crash can repeat work but cannot skip the unfinished page.
+Under a trusted system context, treat not-found as terminal success: the commit
+may have succeeded before a worker lost its acknowledgement. A user-mode 404
+also represents denied access or access-filter drift; do not silently count it
+as purged. If a retention worker deliberately uses user access, re-check the
+tombstone through trusted server code and alert or dead-letter it when the row
+still exists. Treat conflict as a terminal blocked/skipped item that needs
+policy or relation cleanup, not a blind retry. Retry transient
+database/transport failures with bounded exponential backoff and jitter; send
+exhausted or unexpected failures to a dead-letter queue. Because the cursor
+advances only after terminal acknowledgement, a crash can repeat work but cannot
+skip the unfinished page.
 
 Record, per run and per collection:
 
@@ -145,6 +181,13 @@ Record, per run and per collection:
 - queue depth, worker saturation, storage-cleanup failures, and process peak RSS.
 
 Pause or reduce concurrency when pool waiters, lock waits, WAL pressure, replication lag, or downstream cleanup errors cross your operational thresholds.
+
+The storage-cleanup job does not require another process type. An existing
+worker's `app.queue.listen()` registers its recurring schedule. In an API-only
+deployment, have the platform scheduler publish `queue.storageCleanup` and call
+`app.queue.runOnce({ jobs: ["storageCleanup"] })`. The fast-path wake is
+throttled, so a 100,000-row purge creates durable outbox rows but not 100,000
+queue messages.
 
 ## Benchmark before setting an SLA
 
@@ -165,6 +208,11 @@ PURGE_BENCH_CONFIRM_DISPOSABLE=I_UNDERSTAND \
 bun run bench:purge --matrix
 ```
 
-The matrix covers 1,000, 10,000, and 100,000 rows with page sizes 25, 100, and 250. Override one run with `PURGE_BENCH_ROWS`, `PURGE_BENCH_PAGE_SIZE`, and `PURGE_BENCH_CONCURRENCY`.
+The matrix covers 1,000, 10,000, and 100,000 rows with page sizes 25, 100, and 250. Override one run with `PURGE_BENCH_ROWS`, `PURGE_BENCH_PAGE_SIZE`, and
+`PURGE_BENCH_CONCURRENCY`. For a smoke-sized matrix, override the comma-separated
+`PURGE_BENCH_MATRIX_ROWS` and `PURGE_BENCH_MATRIX_PAGE_SIZES`. Each matrix case
+creates, migrates, rolls back, and closes a fresh app against the disposable
+database, so measurements do not inherit owner or outbox rows from the previous
+case.
 
 Do not copy a duration from another deployment. Hook cost, retained-reference scans, version/localization fan-out, Search/realtime integrations, upload cleanup, connection-pool size, WAL/replication capacity, and concurrent restores all materially change throughput. Add representative fixtures for those workloads and ratify your own batch window from captured metrics.
