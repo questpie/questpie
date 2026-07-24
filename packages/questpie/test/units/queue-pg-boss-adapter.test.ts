@@ -30,6 +30,8 @@ class FakePgBoss {
 	public started = false;
 	public createdQueues: string[] = [];
 	public failCalls: Array<{ name: string; id: string; data: unknown }> = [];
+	public completeCalls: Array<{ name: string; id: string }> = [];
+	public fetchedJobs: any[] = [];
 	public workCallbacks = new Map<string, WorkCallback>();
 
 	async start(): Promise<void> {
@@ -55,6 +57,12 @@ class FakePgBoss {
 	async fail(name: string, id: string, data: unknown): Promise<void> {
 		this.failCalls.push({ name, id, data });
 	}
+	async complete(name: string, id: string): Promise<void> {
+		this.completeCalls.push({ name, id });
+	}
+	async fetch(): Promise<any[]> {
+		return this.fetchedJobs.splice(0);
+	}
 }
 
 function makeAdapter() {
@@ -67,6 +75,32 @@ function makeAdapter() {
 }
 
 describe("PgBossAdapter — v10+ work() callback receives Job[]", () => {
+	it("completes successful runOnce jobs and fails handler errors", async () => {
+		const { adapter, fake } = makeAdapter();
+		fake.fetchedJobs.push({ id: "once-ok", data: { value: "ok" } });
+
+		await expect(
+			adapter.runOnce({
+				echo: async () => {},
+			}),
+		).resolves.toEqual({ processed: 1 });
+		expect(fake.completeCalls).toEqual([{ name: "echo", id: "once-ok" }]);
+
+		fake.fetchedJobs.push({ id: "once-bad", data: { value: "bad" } });
+		await expect(
+			adapter.runOnce({
+				echo: async () => {
+					throw new Error("runOnce failed");
+				},
+			}),
+		).rejects.toThrow("runOnce failed");
+		expect(fake.failCalls.at(-1)).toMatchObject({
+			name: "echo",
+			id: "once-bad",
+			data: { message: "runOnce failed" },
+		});
+	});
+
 	it("dispatches each job in the array to the handler with the correct payload", async () => {
 		const { adapter, fake } = makeAdapter();
 

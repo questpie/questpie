@@ -60,6 +60,8 @@ import _mig_20260712T195414_eager_red_tiger from "../migrations/20260712T195414_
 import _mig_20260721T210432_swift_blue_zebra from "../migrations/20260721T210432_swift_blue_zebra";
 import _mig_20260721T220717_bright_pink_tiger from "../migrations/20260721T220717_bright_pink_tiger";
 import _mig_20260724T085242_crdtCollaborationKernel from "../migrations/20260724T085242_crdt-collaboration-kernel";
+import _mig_20260724T221909_storageCleanup from "../migrations/20260724T221909_storage-cleanup";
+import _mig_20260724T224759_bold_blue_eagle from "../migrations/20260724T224759_bold_blue_eagle";
 
 // ── Seeds ──────────────────────────────────────────────────
 import _seed_blogPosts from "../seeds/blog-posts";

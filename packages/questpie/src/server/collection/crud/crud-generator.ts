@@ -4394,12 +4394,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				const createFn = this.createCreate();
 				return await createFn(
 					{
+						...additionalData,
 						key,
 						filename: sanitizedFilename,
 						mimeType,
 						size: file.size,
 						visibility,
-						...additionalData,
 					} as Record<string, unknown>,
 					context,
 				);

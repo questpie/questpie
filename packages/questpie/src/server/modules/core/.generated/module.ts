@@ -5,6 +5,7 @@
 // ── Jobs ────────────────────────────────────────────
 import _job_indexRecords from "../jobs/index-records";
 import _job_scheduledTransition from "../jobs/scheduled-transition";
+import _job_storageCleanup from "../jobs/storage-cleanup";
 
 // ── Routes ────────────────────────────────────────────
 import _route_wellKnown_oauthAuthorizationServer from "../routes/.well-known/oauth-authorization-server";
@@ -104,6 +105,7 @@ export type CoreGlobals = Record<never, never>;
 export type CoreJobs = {
 	indexRecords: Omit<typeof _job_indexRecords, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	scheduledTransition: Omit<typeof _job_scheduledTransition, "handler"> & { handler: (args: unknown) => Promise<unknown> };
+	storageCleanup: Omit<typeof _job_storageCleanup, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 };
 
 export type CoreRoutes = {
@@ -216,6 +218,7 @@ const _module: CoreModule = {
 	jobs: {
 		indexRecords: _job_indexRecords,
 		scheduledTransition: _job_scheduledTransition,
+		storageCleanup: _job_storageCleanup,
 	} as CoreJobs,
 	routes: {
 		".wellKnown/oauthAuthorizationServer": _route_wellKnown_oauthAuthorizationServer,

@@ -1,0 +1,257 @@
+{
+  "operations": [
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__questpie_storage_cleanup",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "questpie_storage_cleanup",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-07-24T22:19:09.392Z",
+      "migrationId": "storageCleanup20260724T221909"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_storage_cleanup__DOT__id",
+      "value": {
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_storage_cleanup"
+      },
+      "timestamp": "2026-07-24T22:19:09.392Z",
+      "migrationId": "storageCleanup20260724T221909"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_storage_cleanup__DOT__key",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "key",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_storage_cleanup"
+      },
+      "timestamp": "2026-07-24T22:19:09.392Z",
+      "migrationId": "storageCleanup20260724T221909"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_storage_cleanup__DOT__attempts",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "name": "attempts",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_storage_cleanup"
+      },
+      "timestamp": "2026-07-24T22:19:09.392Z",
+      "migrationId": "storageCleanup20260724T221909"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_storage_cleanup__DOT__available_at",
+      "value": {
+        "type": "timestamp with time zone",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "available_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_storage_cleanup"
+      },
+      "timestamp": "2026-07-24T22:19:09.392Z",
+      "migrationId": "storageCleanup20260724T221909"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_storage_cleanup__DOT__leased_until",
+      "value": {
+        "type": "timestamp with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "leased_until",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_storage_cleanup"
+      },
+      "timestamp": "2026-07-24T22:19:09.392Z",
+      "migrationId": "storageCleanup20260724T221909"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_storage_cleanup__DOT__lease_token",
+      "value": {
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "lease_token",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_storage_cleanup"
+      },
+      "timestamp": "2026-07-24T22:19:09.392Z",
+      "migrationId": "storageCleanup20260724T221909"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_storage_cleanup__DOT__last_error",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "last_error",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_storage_cleanup"
+      },
+      "timestamp": "2026-07-24T22:19:09.392Z",
+      "migrationId": "storageCleanup20260724T221909"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_storage_cleanup__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_storage_cleanup"
+      },
+      "timestamp": "2026-07-24T22:19:09.392Z",
+      "migrationId": "storageCleanup20260724T221909"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_storage_cleanup__DOT__idx_storage_cleanup_available",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "available_at",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "leased_until",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "created_at",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_storage_cleanup_available",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_storage_cleanup"
+      },
+      "timestamp": "2026-07-24T22:19:09.392Z",
+      "migrationId": "storageCleanup20260724T221909"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_storage_cleanup__DOT__idx_storage_cleanup_key",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "key",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_storage_cleanup_key",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_storage_cleanup"
+      },
+      "timestamp": "2026-07-24T22:19:09.392Z",
+      "migrationId": "storageCleanup20260724T221909"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__questpie_storage_cleanup__DOT__questpie_storage_cleanup_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "questpie_storage_cleanup_pkey",
+        "schema": "public",
+        "table": "questpie_storage_cleanup",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-07-24T22:19:09.392Z",
+      "migrationId": "storageCleanup20260724T221909"
+    }
+  ],
+  "metadata": {
+    "migrationId": "storageCleanup20260724T221909",
+    "timestamp": "2026-07-24T22:19:09.657Z",
+    "prevId": "00000000-0000-0000-0000-000000000000"
+  }
+}

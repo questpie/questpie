@@ -54,10 +54,7 @@ export class PgBossAdapter implements QueueAdapter {
 			// on a `standard` queue pg-boss stores the key but never dedupes.
 			// Policies only constrain KEYED jobs, so non-keyed jobs keep full
 			// throughput regardless.
-			await this.boss.createQueue(
-				jobName,
-				policy ? { policy } : undefined,
-			);
+			await this.boss.createQueue(jobName, policy ? { policy } : undefined);
 			this.createdQueues.add(jobName);
 		}
 	}
@@ -201,8 +198,19 @@ export class PgBossAdapter implements QueueAdapter {
 			const jobs = Array.isArray(fetched) ? fetched : fetched ? [fetched] : [];
 
 			for (const job of jobs) {
-				await handler({ id: String(job.id), data: job.data });
-				processed += 1;
+				const id = String(job.id);
+				try {
+					await handler({ id, data: job.data });
+					await this.boss.complete(jobName, id);
+					processed += 1;
+				} catch (error) {
+					const err = error instanceof Error ? error : new Error(String(error));
+					await this.boss.fail(jobName, id, {
+						message: err.message,
+						stack: err.stack,
+					});
+					throw err;
+				}
 			}
 		}
 

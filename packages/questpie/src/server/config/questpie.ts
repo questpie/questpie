@@ -55,6 +55,10 @@ import {
 } from "#questpie/server/modules/core/integrated/realtime/collection.js";
 import type { RealtimeService } from "#questpie/server/modules/core/integrated/realtime/service.js";
 import type { SearchService } from "#questpie/server/modules/core/integrated/search/types.js";
+import {
+	questpieStorageCleanupTable,
+	questpieStorageObjectKeyTable,
+} from "#questpie/server/modules/core/integrated/storage/cleanup-table.js";
 import { resolveAutoSeedCategories } from "#questpie/server/seed/types.js";
 import {
 	ServiceBuilder,
@@ -1256,7 +1260,13 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		// Conditional removal would generate destructive DROP TABLE migrations.
 		Object.assign(schema, questpieCrdtTables);
 
-		// 5. Add search tables if adapter provides local storage schemas
+		// 5. Storage cleanup intents are durable even when no queue consumer is
+		// currently running. Conditional removal would generate destructive
+		// schema diffs when upload collections are toggled.
+		schema.questpie_storage_cleanup = questpieStorageCleanupTable;
+		schema.questpie_storage_object_key = questpieStorageObjectKeyTable;
+
+		// 6. Add search tables if adapter provides local storage schemas
 		// Local adapters (Postgres, PgVector) return their tables for migration generation.
 		// External adapters (Meilisearch, Elasticsearch) don't need local tables.
 		const searchAdapter = this.search?.getAdapter();
@@ -1267,7 +1277,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			}
 		}
 
-		// 6. Add relations (Placeholder)
+		// 7. Add relations (Placeholder)
 		// To enable, import { relations } from 'drizzle-orm' and uncomment logic
 
 		return schema;

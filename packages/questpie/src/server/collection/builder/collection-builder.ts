@@ -28,6 +28,7 @@ import {
 	type ValidationSchemas,
 } from "#questpie/server/collection/builder/validation-helpers.js";
 import { isInTransaction } from "#questpie/server/collection/crud/shared/transaction.js";
+import { ApiError } from "#questpie/server/errors/base.js";
 import {
 	createFieldsCallbackContext,
 	type FieldsCallbackContext,
@@ -43,6 +44,11 @@ import type {
 	CrdtOwnerConfig,
 } from "#questpie/server/modules/core/integrated/crdt/capability.js";
 import type { SearchableConfig } from "#questpie/server/modules/core/integrated/search/types.js";
+import {
+	enqueueStorageCleanup,
+	lockStorageObjectKey,
+	wakeStorageCleanup,
+} from "#questpie/server/modules/core/integrated/storage/cleanup-store.js";
 import {
 	buildStorageFileUrl,
 	generateSignedUrlToken,
@@ -941,20 +947,26 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			data,
 			original,
 			app,
+			db,
 			operation,
 			logger,
 			onAfterCommit,
 		}: any) => {
-			if (operation !== "update") return;
 			if (!app?.storage || !data?.key) return;
+			if (operation === "create" || original?.key !== data.key) {
+				await lockStorageObjectKey(db, data.key);
+				if (!(await app.storage.exists(data.key))) {
+					throw ApiError.badRequest(
+						`Upload storage object "${data.key}" does not exist`,
+					);
+				}
+			}
+			if (operation !== "update") return;
 			if (!original?.key || original.key === data.key) return;
 
-			await deleteStorageObjectAfterCommit({
-				app,
-				key: original.key,
-				logger,
-				onAfterCommit,
-				message: "Failed to delete replaced upload file from storage",
+			await enqueueStorageCleanup(db, original.key);
+			onAfterCommit?.(async () => {
+				wakeStorageCleanup(app, logger);
 			});
 		};
 
@@ -978,17 +990,15 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		const uploadAfterPurgeHook = async ({
 			data,
 			app,
+			db,
 			logger,
 			onAfterCommit,
 		}: any) => {
 			if (!app?.storage || !data?.key) return;
 
-			await deleteStorageObjectAfterCommit({
-				app,
-				key: data.key,
-				logger,
-				onAfterCommit,
-				message: "Failed to delete purged upload file from storage",
+			await enqueueStorageCleanup(db, data.key);
+			onAfterCommit?.(async () => {
+				wakeStorageCleanup(app, logger);
 			});
 		};
 

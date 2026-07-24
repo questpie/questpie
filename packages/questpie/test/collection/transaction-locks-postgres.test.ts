@@ -1,8 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 
 import pg from "pg";
+import { memory } from "files-sdk/memory";
 
 import { collection, withTransaction } from "../../src/exports/index.js";
+import {
+	claimStorageCleanup,
+	enqueueStorageCleanup,
+} from "../../src/server/modules/core/integrated/storage/cleanup-store.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -45,6 +50,12 @@ const postgresPurgeChildren = collection("postgres_purge_children")
 			operation === "create" ? pauseRelationWrite?.(data) : undefined,
 	});
 
+const postgresUploadAssets = collection("postgres_upload_assets")
+	.fields(({ f }) => ({ alt: f.text() }))
+	.options({ softDelete: true })
+	.upload()
+	.access({ purge: true });
+
 function deferred() {
 	let resolve!: () => void;
 	const promise = new Promise<void>((done) => {
@@ -58,7 +69,7 @@ async function waitForAttempt() {
 }
 
 describe.skipIf(!runPostgresContract)(
-	"transaction-scoped locks on PostgreSQL 17",
+	"transaction-scoped locks on supported PostgreSQL",
 	() => {
 		let setup: Awaited<ReturnType<typeof buildMockApp>>;
 		const systemContext = createTestContext();
@@ -66,10 +77,12 @@ describe.skipIf(!runPostgresContract)(
 		beforeAll(async () => {
 			const pool = new pg.Pool({ connectionString: databaseUrl });
 			try {
-				const result = await pool.query<{ server_version: string }>(
-					"show server_version",
+				const result = await pool.query<{ server_version_num: string }>(
+					"show server_version_num",
 				);
-				expect(result.rows[0]?.server_version.startsWith("17.")).toBe(true);
+				expect(
+					Number(result.rows[0]?.server_version_num),
+				).toBeGreaterThanOrEqual(150_000);
 				await pool.query("create extension if not exists pg_trgm");
 			} finally {
 				await pool.end();
@@ -81,9 +94,13 @@ describe.skipIf(!runPostgresContract)(
 						postgresLockTargets,
 						postgres_purge_parents: postgresPurgeParents,
 						postgres_purge_children: postgresPurgeChildren,
+						postgres_upload_assets: postgresUploadAssets,
 					},
 				},
-				{ db: { url: databaseUrl!, pool: { max: 10 } } },
+				{
+					db: { url: databaseUrl!, pool: { max: 10 } },
+					storage: { adapter: memory() },
+				},
 			);
 			await runTestDbMigrations(setup.app);
 		});
@@ -276,11 +293,17 @@ describe.skipIf(!runPostgresContract)(
 				.finally(() => {
 					lateWriterFinished = true;
 				});
+			const lateWriterOutcome = lateWriter.then(
+				() => ({ error: undefined }),
+				(error: unknown) => ({ error }),
+			);
 			await waitForAttempt();
 			expect(lateWriterFinished).toBe(false);
 			releasePurge.resolve();
 			await purge;
-			await expect(lateWriter).rejects.toMatchObject({ code: "BAD_REQUEST" });
+			expect((await lateWriterOutcome).error).toMatchObject({
+				code: "BAD_REQUEST",
+			});
 			pausePurge = undefined;
 
 			const writerFirstParent =
@@ -313,15 +336,97 @@ describe.skipIf(!runPostgresContract)(
 				.finally(() => {
 					waitingPurgeFinished = true;
 				});
+			const waitingPurgeOutcome = waitingPurge.then(
+				() => ({ error: undefined }),
+				(error: unknown) => ({ error }),
+			);
 			await waitForAttempt();
 			expect(waitingPurgeFinished).toBe(false);
 			releaseWriter.resolve();
 			await writer;
-			await expect(waitingPurge).rejects.toMatchObject({
+			expect((await waitingPurgeOutcome).error).toMatchObject({
 				code: "CONFLICT",
 				message: "Cannot purge record while retained references exist",
 			});
 			pauseRelationWrite = undefined;
+		});
+
+		it("lets only one concurrent storage-cleanup drainer claim an intent", async () => {
+			await enqueueStorageCleanup(
+				setup.app.db,
+				"postgres-contract/concurrent-cleanup.txt",
+			);
+
+			const claims = await Promise.all([
+				claimStorageCleanup(setup.app.db, { batchSize: 1 }),
+				claimStorageCleanup(setup.app.db, { batchSize: 1 }),
+			]);
+
+			expect(claims.flat()).toHaveLength(1);
+			expect(claims.flat()[0]?.leaseToken).toBeString();
+		});
+
+		it("serializes delayed cleanup against a writer reusing the same key", async () => {
+			const key = "postgres-contract/reused-key.txt";
+			await setup.app.storage.upload(key, new TextEncoder().encode("old"));
+			const original = await setup.app.collections.postgres_upload_assets.create(
+				{
+					key,
+					filename: "old.txt",
+					mimeType: "text/plain",
+					size: 3,
+				},
+				systemContext,
+			);
+			await setup.app.collections.postgres_upload_assets.deleteById(
+				{ id: original.id },
+				systemContext,
+			);
+			await setup.app.collections.postgres_upload_assets.purgeById(
+				{ id: original.id },
+				systemContext,
+			);
+
+			const deleteStarted = deferred();
+			const releaseDelete = deferred();
+			const originalDelete = setup.app.storage.delete.bind(setup.app.storage);
+			setup.app.storage.delete = (async (...args: unknown[]) => {
+				if (args[0] === key) {
+					deleteStarted.resolve();
+					await releaseDelete.promise;
+				}
+				return originalDelete(...(args as [string]));
+			}) as typeof setup.app.storage.delete;
+
+			const cleanup = setup.app.queue.runOnce({ jobs: ["storageCleanup"] });
+			await deleteStarted.promise;
+			let writerSettled = false;
+			const writer = setup.app.collections.postgres_upload_assets
+				.create(
+					{
+						key,
+						filename: "replacement.txt",
+						mimeType: "text/plain",
+						size: 11,
+					},
+					systemContext,
+				)
+				.finally(() => {
+					writerSettled = true;
+				});
+			const writerOutcome = writer.then(
+				(value) => ({ value, error: undefined }),
+				(error: unknown) => ({ value: undefined, error }),
+			);
+			await waitForAttempt();
+			expect(writerSettled).toBe(false);
+			releaseDelete.resolve();
+			await cleanup;
+			expect((await writerOutcome).error).toMatchObject({
+				code: "BAD_REQUEST",
+			});
+			expect(await setup.app.storage.exists(key)).toBe(false);
+			setup.app.storage.delete = originalDelete;
 		});
 	},
 );
