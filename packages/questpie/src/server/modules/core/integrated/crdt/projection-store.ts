@@ -45,7 +45,12 @@ export type CrdtProjectionOwnerPort<TOwner> = Readonly<{
 			sourcePath: string;
 			format: 1 | 2;
 		}>[],
-	): Promise<ReadonlyMap<string, Uint8Array>>;
+	): Promise<
+		ReadonlyMap<
+			string,
+			Readonly<{ hash: Uint8Array; canonicalRevision: bigint }>
+		>
+	>;
 	writeCanonical(
 		transaction: CrdtDatabase,
 		owner: TOwner,
@@ -60,7 +65,7 @@ export type CrdtProjectionOwnerPort<TOwner> = Readonly<{
 			resourceEpochId: string;
 			commitSeq: bigint;
 		},
-	): Promise<void>;
+	): Promise<1>;
 }>;
 
 export function createCrdtProjectionStore<TOwner>(
@@ -81,60 +86,59 @@ export function createCrdtProjectionStore<TOwner>(
 		}) => Promise<void>;
 	}>,
 ) {
-	let appliedClaim: CrdtProjectionClaim | null = null;
-	const coordinator = createCrdtProjectionCoordinator({
-		claimDue: () => claimDueProjection(db),
-		async prepareExactCut(claim) {
-			const [epoch] = await db
-				.select({
-					projectedCommitSeq: questpieCrdtResourceEpochTable.projectedCommitSeq,
-				})
-				.from(questpieCrdtResourceEpochTable)
-				.where(
-					and(
-						eq(questpieCrdtResourceEpochTable.id, claim.resourceEpochId),
-						eq(questpieCrdtResourceEpochTable.resourceId, claim.resourceId),
-						eq(
-							questpieCrdtResourceEpochTable.aggregateEpoch,
-							claim.aggregateEpoch,
-						),
-						eq(questpieCrdtResourceEpochTable.schemaId, claim.schemaId),
-					),
-				);
-			if (!epoch || epoch.projectedCommitSeq >= claim.targetCommitSeq) {
-				return {
-					basisProjectedCommitSeq: claim.targetCommitSeq - 1n,
-					fields: await loadNoopFields(db, claim),
-				};
-			}
-			const scheduled = await loadScheduledFields(db, claim.id);
-			return {
-				basisProjectedCommitSeq: epoch.projectedCommitSeq,
-				fields: await options.materializeExactCut(
-					db,
-					claim,
-					scheduled,
-					epoch.projectedCommitSeq,
-				),
-			};
-		},
-		commit: (prepared) =>
-			db.transaction(async (tx) => {
-				const result = await commitProjection(
-					tx as CrdtDatabase,
-					prepared,
-					options.owner,
-				);
-				if (result.status === "applied") appliedClaim = prepared.claim;
-				return result;
-			}),
-	});
 	return Object.freeze({
 		async runOnce() {
+			const invocationClaim: { value: CrdtProjectionClaim | null } = {
+				value: null,
+			};
+			const coordinator = createCrdtProjectionCoordinator({
+				claimDue: async () => {
+					invocationClaim.value = await claimDueProjection(db);
+					return invocationClaim.value;
+				},
+				async prepareExactCut(claim) {
+					const [epoch] = await db
+						.select({
+							projectedCommitSeq:
+								questpieCrdtResourceEpochTable.projectedCommitSeq,
+						})
+						.from(questpieCrdtResourceEpochTable)
+						.where(
+							and(
+								eq(questpieCrdtResourceEpochTable.id, claim.resourceEpochId),
+								eq(questpieCrdtResourceEpochTable.resourceId, claim.resourceId),
+								eq(
+									questpieCrdtResourceEpochTable.aggregateEpoch,
+									claim.aggregateEpoch,
+								),
+								eq(questpieCrdtResourceEpochTable.schemaId, claim.schemaId),
+							),
+						);
+					if (!epoch || epoch.projectedCommitSeq >= claim.targetCommitSeq) {
+						return {
+							basisProjectedCommitSeq: claim.targetCommitSeq - 1n,
+							fields: await loadNoopFields(db, claim),
+						};
+					}
+					const scheduled = await loadScheduledFields(db, claim.id);
+					return {
+						basisProjectedCommitSeq: epoch.projectedCommitSeq,
+						fields: await options.materializeExactCut(
+							db,
+							claim,
+							scheduled,
+							epoch.projectedCommitSeq,
+						),
+					};
+				},
+				commit: (prepared) =>
+					db.transaction((tx) =>
+						commitProjection(tx as CrdtDatabase, prepared, options.owner),
+					),
+			});
 			const result = await coordinator.runOnce();
 			if (result?.status === "applied") {
-				const claim = appliedClaim;
-				appliedClaim = null;
+				const claim = invocationClaim.value;
 				if (claim) {
 					try {
 						await options.publishNotice?.({
@@ -252,21 +256,21 @@ async function commitProjection<TOwner>(
 		epoch.aggregateEpoch !== claim.aggregateEpoch ||
 		epoch.schemaId !== claim.schemaId
 	) {
-		await finishJob(db, claim.id, 3);
+		await finishJob(db, claim, 3);
 		return {
 			status: "noop" as const,
 			projectedCommitSeq: claim.targetCommitSeq,
 		};
 	}
 	if (epoch.projectedCommitSeq >= claim.targetCommitSeq) {
-		await finishJob(db, claim.id, 3);
+		await finishJob(db, claim, 3);
 		return {
 			status: "noop" as const,
 			projectedCommitSeq: epoch.projectedCommitSeq,
 		};
 	}
 	if (epoch.projectedCommitSeq !== prepared.basisProjectedCommitSeq) {
-		await finishJob(db, claim.id, 4);
+		await finishJob(db, claim, 4);
 		return {
 			status: "reprepare" as const,
 			projectedCommitSeq: epoch.projectedCommitSeq,
@@ -284,6 +288,23 @@ async function commitProjection<TOwner>(
 		)
 		.orderBy(asc(questpieCrdtBindingTable.id))
 		.for("update");
+	const [lockedJob] = await db
+		.select({ id: questpieCrdtProjectionTable.id })
+		.from(questpieCrdtProjectionTable)
+		.where(
+			and(
+				eq(questpieCrdtProjectionTable.id, claim.id),
+				eq(questpieCrdtProjectionTable.status, 2),
+				eq(questpieCrdtProjectionTable.leaseGeneration, claim.leaseGeneration),
+			),
+		)
+		.for("update");
+	if (!lockedJob) {
+		return {
+			status: "reprepare" as const,
+			projectedCommitSeq: epoch.projectedCommitSeq,
+		};
+	}
 	const scheduled = new Map(
 		(await loadScheduledFields(db, claim.id)).map((field) => [
 			field.bindingId,
@@ -295,6 +316,7 @@ async function commitProjection<TOwner>(
 	);
 	if (
 		bindings.length !== prepared.fields.length ||
+		bindings.length !== scheduled.size ||
 		bindings.some((binding) => {
 			const field = fields.get(binding.id);
 			const scheduledField = scheduled.get(binding.id);
@@ -305,6 +327,8 @@ async function commitProjection<TOwner>(
 				scheduledField.stableFieldId !== binding.stableFieldId ||
 				field.fieldEpoch !== binding.fieldEpoch ||
 				scheduledField.fieldEpoch !== binding.fieldEpoch ||
+				scheduledField.fieldSlot !== binding.fieldSlot ||
+				scheduledField.formatVersion !== binding.formatVersion ||
 				field.targetFieldCursor !== scheduledField.targetFieldCursor ||
 				field.shouldWrite !== scheduledField.shouldWrite ||
 				field.targetFieldCursor > binding.headFieldCursor ||
@@ -313,9 +337,9 @@ async function commitProjection<TOwner>(
 			);
 		})
 	) {
-		await finishJob(db, claim.id, 3);
+		await finishJob(db, claim, 5);
 		return {
-			status: "noop" as const,
+			status: "suspended" as const,
 			projectedCommitSeq: epoch.projectedCommitSeq,
 		};
 	}
@@ -329,11 +353,11 @@ async function commitProjection<TOwner>(
 		})),
 	);
 	const rawConflict = bindings.some((binding) => {
-		const hash = rawHashes.get(binding.id);
+		const raw = rawHashes.get(binding.id);
 		return (
-			!hash ||
-			!equalBytes(hash, binding.projectedCanonicalHash) ||
-			binding.projectedCanonicalRevision > binding.canonicalRevision
+			!raw ||
+			!equalBytes(raw.hash, binding.projectedCanonicalHash) ||
+			raw.canonicalRevision !== binding.projectedCanonicalRevision
 		);
 	});
 	if (rawConflict) {
@@ -350,7 +374,7 @@ async function commitProjection<TOwner>(
 					isNull(questpieCrdtBindingTable.retiredAt),
 				),
 			);
-		await finishJob(db, claim.id, 5);
+		await finishJob(db, claim, 5);
 		return {
 			status: "suspended" as const,
 			projectedCommitSeq: epoch.projectedCommitSeq,
@@ -390,12 +414,17 @@ async function commitProjection<TOwner>(
 		})
 		.where(eq(questpieCrdtResourceEpochTable.id, claim.resourceEpochId));
 	if (values.size > 0) {
-		await ownerPort.appendRealtimeChange(db, owner, {
+		const outboxChanges = await ownerPort.appendRealtimeChange(db, owner, {
 			origin: "crdt_projection",
 			resourceId: claim.resourceId,
 			resourceEpochId: claim.resourceEpochId,
 			commitSeq: claim.targetCommitSeq,
 		});
+		if (outboxChanges !== 1) {
+			throw new TypeError(
+				"CRDT projection must append exactly one realtime change",
+			);
+		}
 	}
 	await db
 		.update(questpieCrdtProjectionTable)
@@ -405,8 +434,10 @@ async function commitProjection<TOwner>(
 				eq(questpieCrdtProjectionTable.resourceId, claim.resourceId),
 				eq(questpieCrdtProjectionTable.resourceEpochId, claim.resourceEpochId),
 				lte(questpieCrdtProjectionTable.targetCommitSeq, claim.targetCommitSeq),
+				inArray(questpieCrdtProjectionTable.status, [1, 4]),
 			),
 		);
+	await finishJob(db, claim, 3);
 	return Object.freeze({
 		status: "applied" as const,
 		projectedCommitSeq: claim.targetCommitSeq,
@@ -467,13 +498,19 @@ async function loadNoopFields(
 
 async function finishJob(
 	db: CrdtDatabase,
-	id: string,
+	claim: CrdtProjectionClaim,
 	status: 3 | 4 | 5,
 ): Promise<void> {
 	await db
 		.update(questpieCrdtProjectionTable)
 		.set({ status, updatedAt: sql`now()` })
-		.where(eq(questpieCrdtProjectionTable.id, id));
+		.where(
+			and(
+				eq(questpieCrdtProjectionTable.id, claim.id),
+				eq(questpieCrdtProjectionTable.status, 2),
+				eq(questpieCrdtProjectionTable.leaseGeneration, claim.leaseGeneration),
+			),
+		);
 }
 
 function equalBytes(left: Uint8Array, right: Uint8Array): boolean {

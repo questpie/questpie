@@ -256,7 +256,10 @@ describe("CRDT atomic append store", () => {
 							)!;
 							return [
 								candidate.bindingId,
-								new Uint8Array(current.projectedCanonicalHash),
+								{
+									hash: new Uint8Array(current.projectedCanonicalHash),
+									canonicalRevision: current.projectedCanonicalRevision,
+								},
 							];
 						}),
 					),
@@ -268,6 +271,7 @@ describe("CRDT atomic append store", () => {
 				},
 				appendRealtimeChange: async () => {
 					realtimeChanges++;
+					return 1 as const;
 				},
 			},
 		});
@@ -304,6 +308,67 @@ describe("CRDT atomic append store", () => {
 		expect(await db.select().from(questpieCrdtUpdateReceiptTable)).toHaveLength(
 			1,
 		);
+	});
+
+	it("suspends the whole aggregate before writing when any raw field drifts", async () => {
+		await createCrdtAppendStore(db, { lockOwnerRow }).append(
+			await appendInput(fixture),
+		);
+		await db.update(questpieCrdtProjectionTable).set({ dueAt: new Date(0) });
+		let writes = 0;
+		let outbox = 0;
+		const projector = createCrdtProjectionStore(db, {
+			materializeExactCut: async (database, _claim, scheduled) => {
+				const bindings = await database.select().from(questpieCrdtBindingTable);
+				return scheduled.map((field) => {
+					const binding = bindings.find(
+						(candidate) => candidate.id === field.bindingId,
+					)!;
+					return {
+						bindingId: binding.id,
+						stableFieldId: binding.stableFieldId,
+						fieldEpoch: binding.fieldEpoch,
+						targetFieldCursor: field.targetFieldCursor,
+						canonicalHash: binding.canonicalHash,
+						canonicalRevision: binding.canonicalRevision,
+						value: "must-not-write",
+						shouldWrite: field.shouldWrite,
+					};
+				});
+			},
+			owner: {
+				lock: async () => ({ id: "article-1" }),
+				readCanonicalHashes: async (_transaction, _owner, bindings) =>
+					new Map(
+						bindings.map((binding) => [
+							binding.bindingId,
+							{
+								hash: new Uint8Array(32).fill(0xff),
+								canonicalRevision: 0n,
+							},
+						]),
+					),
+				writeCanonical: async () => {
+					writes++;
+				},
+				appendRealtimeChange: async () => {
+					outbox++;
+					return 1 as const;
+				},
+			},
+		});
+
+		await expect(projector.runOnce()).resolves.toEqual({
+			status: "suspended",
+			projectedCommitSeq: 0n,
+		});
+		expect(writes).toBe(0);
+		expect(outbox).toBe(0);
+		const [resource] = await db
+			.select()
+			.from(questpieCrdtResourceTable)
+			.where(eq(questpieCrdtResourceTable.id, RESOURCE_ID));
+		expect(resource?.status).toBe(3);
 	});
 
 	it("rolls back the first field when PostgreSQL rejects the second field insert", async () => {
