@@ -193,11 +193,7 @@ export type App = typeof app;
 export async function createContext(
 	options?: Parameters<ReturnType<typeof createContextFactory>>[0],
 ) {
-	while (!_appPromise) {
-		await new Promise((resolve) => setTimeout(resolve, 0));
-	}
-
-	return createContextFactory((await _appPromise) as unknown as _AppQuestpie)(options);
+	return createContextFactory(app)(options);
 }
 
 // Factories: import { collection, global, ... } from '#questpie/factories';

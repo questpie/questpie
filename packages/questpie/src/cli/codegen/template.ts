@@ -1419,13 +1419,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		"\toptions?: Parameters<ReturnType<typeof createContextFactory>>[0],",
 	);
 	lines.push(") {");
-	lines.push("\twhile (!_appPromise) {");
-	lines.push("\t\tawait new Promise((resolve) => setTimeout(resolve, 0));");
-	lines.push("\t}");
-	lines.push("");
-	lines.push(
-		"\treturn createContextFactory((await _appPromise) as unknown as _AppQuestpie)(options);",
-	);
+	lines.push("\treturn createContextFactory(app)(options);");
 	lines.push("}");
 	lines.push("");
 

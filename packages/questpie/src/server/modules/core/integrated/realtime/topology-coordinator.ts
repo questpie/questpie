@@ -211,7 +211,7 @@ function canonicalizeTopology(
 			if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
 				throw new Error("Realtime subscription must be an object");
 			}
-			const entry = raw as unknown as Record<string, unknown>;
+			const entry: Record<string, unknown> = { ...raw };
 			if (
 				typeof entry.id !== "string" ||
 				entry.id.length === 0 ||

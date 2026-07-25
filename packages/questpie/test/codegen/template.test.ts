@@ -375,9 +375,7 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 
 	it("emits createContext helper", () => {
 		expect(code).toContain("export async function createContext(");
-		expect(code).toContain(
-			"return createContextFactory((await _appPromise) as unknown as _AppQuestpie)(options);",
-		);
+		expect(code).toContain("return createContextFactory(app)(options);");
 	});
 
 	it("emits factory comment", () => {

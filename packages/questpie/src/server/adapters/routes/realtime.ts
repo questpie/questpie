@@ -132,21 +132,33 @@ type RealtimeRequestContext = RequestContext & {
 	req?: Request;
 };
 
+type RealtimeDefinition = {
+	state?: {
+		options?: {
+			realtime?:
+				| false
+				| {
+						accessCacheKey?: ValidatedTopicMetadata["accessCacheKey"];
+				  };
+		};
+	};
+};
+
 type ValidatedTopic =
 	| (Extract<NormalizedTopicInput, { resourceType: "collection" }> &
 			ValidatedTopicMetadata & { type: "collection" })
 	| (Extract<NormalizedTopicInput, { resourceType: "global" }> &
 			ValidatedTopicMetadata & { type: "global" });
 
-function collectionAccessCacheKey(definition: any) {
+function collectionAccessCacheKey(definition: RealtimeDefinition | undefined) {
 	const realtime = definition?.state?.options?.realtime;
-	return realtime && realtime !== false ? realtime.accessCacheKey : undefined;
+	return realtime ? realtime.accessCacheKey : undefined;
 }
 
 function enforceRowLiveQueryPolicy(
 	app: Questpie<any>,
 	topic: NormalizedTopicInput,
-	definition?: any,
+	definition?: RealtimeDefinition,
 ): void {
 	const result = admitRealtimeTopicPolicy(topic, {
 		rowLiveQueries: app.config?.realtime?.rowLiveQueries,
