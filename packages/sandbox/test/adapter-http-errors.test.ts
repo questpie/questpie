@@ -19,6 +19,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
 
 import { httpSandboxAdapter } from "../src/adapter-http.js";
+import { registerSandboxCustomToolsSession } from "../src/custom-tools.js";
 
 // Capabilities with empty net/import so egress validation is a no-op
 // (validateEgressHosts([]) → { ok: true }) and the adapter proceeds to fetch.
@@ -299,6 +300,71 @@ describe("HttpSandboxAdapter — custom fetch option", () => {
 			logs: [],
 		});
 		expect(cancelled).toBe(true);
+	});
+});
+
+describe("HttpSandboxAdapter — custom-tool session lifecycle", () => {
+	it("keeps the envelope host-only and revokes the token when transport settles", async () => {
+		let token = "";
+		const adapter = httpSandboxAdapter({
+			url: "https://sandbox.example",
+			validateEgress: false,
+			fetch: (async (_input, init) => {
+				const body = JSON.parse(String(init?.body));
+				expect(body).not.toHaveProperty("sandboxTools");
+				expect(JSON.stringify(body)).not.toContain("consumer-secret");
+				token = body.bindings.token;
+				expect(token).toMatch(/^[a-f0-9]{64}$/);
+				expect(() =>
+					registerSandboxCustomToolsSession(
+						token,
+						"https://app.example/api/sandbox/rpc",
+						{},
+						1_000,
+					),
+				).toThrow(/could not be registered/);
+				return Response.json({ ok: true, output: 42, logs: [] });
+			}) as typeof fetch,
+		});
+
+		const result = await runOnce(adapter, {
+			brokerUrl: "https://app.example/api/sandbox/rpc",
+			sandboxTools: {
+				envelope: { opaque: "consumer-secret" },
+			},
+		});
+
+		expect(result).toMatchObject({ ok: true, output: 42 });
+		const replacement = registerSandboxCustomToolsSession(
+			token,
+			"https://app.example/api/sandbox/rpc",
+			{},
+			1_000,
+		);
+		replacement.revoke();
+	});
+
+	it("fails closed when tools are requested without broker bindings", async () => {
+		let fetches = 0;
+		const adapter = httpSandboxAdapter({
+			url: "https://sandbox.example",
+			validateEgress: false,
+			fetch: (async () => {
+				fetches += 1;
+				return Response.json({ ok: true, logs: [] });
+			}) as typeof fetch,
+		});
+
+		expect(
+			await runOnce(adapter, {
+				sandboxTools: { envelope: { opaque: true } },
+			}),
+		).toEqual({
+			ok: false,
+			error: "sandbox custom tools require broker bindings",
+			logs: [],
+		});
+		expect(fetches).toBe(0);
 	});
 });
 

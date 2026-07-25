@@ -42,6 +42,7 @@ import {
 	type BindingTarget,
 	classifyIpLiteral,
 	type ExecutorCapabilities,
+	HTTP_FETCH_BODY_CAP_BYTES,
 	type IpValidationResult,
 	SandboxBroker,
 } from "questpie/executor";
@@ -151,7 +152,17 @@ async function waitForListen(
 		buf += decoder.decode(value, { stream: true });
 		const m = buf.match(/listening on :(\d+)/);
 		if (m) {
-			reader.releaseLock();
+			void (async () => {
+				try {
+					while (true) {
+						const chunk = await reader.read();
+						if (chunk.done) break;
+						// Keep the long-lived supervisor pipe drained for the suite.
+					}
+				} finally {
+					reader.releaseLock();
+				}
+			})();
 			return Number(m[1]);
 		}
 	}
@@ -177,6 +188,14 @@ beforeAll(async () => {
 				// 302 to a host that resolves PRIVATE — re-validated at the redirect hop.
 				res.writeHead(302, { location: "http://internal.evil.example/secret" });
 				return res.end();
+			}
+			const requestUrl = new URL(req.url ?? "/", "http://test.local");
+			if (requestUrl.pathname === "/large") {
+				const bytes = Number(requestUrl.searchParams.get("bytes"));
+				res.writeHead(FETCH_STATUS, {
+					"content-type": "application/octet-stream",
+				});
+				return res.end(Buffer.alloc(bytes, "x"));
 			}
 			// The default route returns the known 201 contract the shim reconstructs.
 			res.writeHead(FETCH_STATUS, {
@@ -380,25 +399,131 @@ describe.if(!!denoPath)(
 			}
 		}, 20_000);
 
-		it("the guest has NO direct network — a raw Deno.connect() fails (net=[])", async () => {
+		it("relays an exact-cap HTTP response and rejects max+1 before it reaches the guest", async () => {
+			const run = async (bytes: number) => {
+				const { token, revoke } = mintHttp({
+					net: [`${ALLOWED_HOST}:${originPort}`],
+					resolve: resolverFrom({ [ALLOWED_HOST]: ["127.0.0.1"] }),
+					validateIp: allowLoopback,
+				});
+				try {
+					return await adapter().run({
+						source: `export default async () => {
+							try {
+								const response = await fetch(${JSON.stringify(
+									`http://${ALLOWED_HOST}:${originPort}/large?bytes=${bytes}`,
+								)});
+								return { fetched: true, bytes: (await response.arrayBuffer()).byteLength };
+							} catch (error) {
+								return { fetched: false, message: String(error && error.message || error) };
+							}
+						}`,
+						isolation: "sandboxed",
+						capabilities: {
+							net: [],
+							import: [],
+							timeoutMs: 8000,
+							memoryMb: 128,
+						},
+						sandboxBindings: { url: brokerUrl, token },
+					} as never);
+				} finally {
+					revoke();
+				}
+			};
+
+			const exact = await run(HTTP_FETCH_BODY_CAP_BYTES);
+			expect(exact).toMatchObject({
+				ok: true,
+				output: { fetched: true, bytes: HTTP_FETCH_BODY_CAP_BYTES },
+			});
+
+			const tooLarge = await run(HTTP_FETCH_BODY_CAP_BYTES + 1);
+			expect(tooLarge).toMatchObject({
+				ok: false,
+				error: "sandbox binding operation failed",
+			});
+		}, 30_000);
+
+		it("relays an exact-cap HTTP upload and rejects max+1 before origin mutation", async () => {
+			const run = async (bytes: number) => {
+				const { token, revoke } = mintHttp({
+					net: [`${ALLOWED_HOST}:${originPort}`],
+					resolve: resolverFrom({ [ALLOWED_HOST]: ["127.0.0.1"] }),
+					validateIp: allowLoopback,
+				});
+				try {
+					return await adapter().run({
+						source: `export default async () => {
+							try {
+								const response = await fetch(${JSON.stringify(
+									`http://${ALLOWED_HOST}:${originPort}/upload`,
+								)}, {
+									method: "POST",
+									body: "x".repeat(${bytes}),
+								});
+								return { fetched: true, status: response.status };
+							} catch (error) {
+								return { fetched: false, message: String(error && error.message || error) };
+							}
+						}`,
+						isolation: "sandboxed",
+						capabilities: {
+							net: [],
+							import: [],
+							timeoutMs: 8000,
+							memoryMb: 128,
+						},
+						sandboxBindings: { url: brokerUrl, token },
+					} as never);
+				} finally {
+					revoke();
+				}
+			};
+
+			originSeen.length = 0;
+			const exact = await run(HTTP_FETCH_BODY_CAP_BYTES);
+			expect(exact).toMatchObject({
+				ok: true,
+				output: { fetched: true, status: FETCH_STATUS },
+			});
+			expect(originSeen).toHaveLength(1);
+			expect(Buffer.byteLength(originSeen[0]!.body)).toBe(
+				HTTP_FETCH_BODY_CAP_BYTES,
+			);
+
+			const tooLarge = await run(HTTP_FETCH_BODY_CAP_BYTES + 1);
+			expect(tooLarge).toMatchObject({
+				ok: false,
+				error: "invalid sandbox binding arguments",
+			});
+			expect(originSeen).toHaveLength(1);
+		}, 30_000);
+
+		it("bindings keep the net allowlist host-side — raw Deno.connect() fails even when net is granted", async () => {
 			const { token, revoke } = mint();
 			try {
 				// Deno.connect is a RAW TCP socket, untouched by the fetch shim — it is
-				// gated purely by --allow-net. With net=[], the guest's ONLY way out is
-				// the brokered relay; a direct connect (even to a public host:port) must
-				// be denied by the Deno permission sandbox.
+				// gated purely by --allow-net. A bindings run keeps the declared net
+				// allowlist on the trusted broker and gives the guest zero direct net,
+				// so even an explicitly granted public endpoint must be permission-denied.
 				const r = await adapter().run({
 					source: `export default async () => {
-					try {
-						const conn = await Deno.connect({ hostname: "example.com", port: 80 });
-						conn.close();
-						return { connected: true };
-					} catch (e) {
-						return { connected: false, name: String(e && e.name || e) };
-					}
-				}`,
+						try {
+							const conn = await Deno.connect({ hostname: "1.1.1.1", port: 443 });
+							conn.close();
+							return { connected: true };
+						} catch (e) {
+							return { connected: false, name: String(e && e.name || e) };
+						}
+					}`,
 					isolation: "sandboxed",
-					capabilities: { net: [], import: [], timeoutMs: 8000, memoryMb: 128 },
+					capabilities: {
+						net: ["1.1.1.1:443"],
+						import: [],
+						timeoutMs: 8000,
+						memoryMb: 128,
+					},
 					sandboxBindings: { url: brokerUrl, token },
 				} as never);
 				expect(r.ok).toBe(true);

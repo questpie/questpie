@@ -1,24 +1,25 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+	evaluateRouteAccess,
 	executeJsonRoute,
-	introspectRoutes,
+	extractAppServices,
 	isJsonRoute,
 	type IntrospectedRoute,
 } from "questpie";
 import { z } from "zod";
 
+import type { ResolvedMcpCatalog } from "./catalog.js";
+import { McpAccessDeniedError } from "./execution-boundary.js";
 import {
 	evaluateMcpRule,
 	operationRule,
 	requiredScopesForOperation,
-	resolveEntityPolicy,
 	scopeGateAllows,
 	scopesFromContext,
 	workloadRequirementForOperation,
 } from "./policy.js";
 import type { RuntimeScope } from "./runtime.js";
 import { toRequestContext, toToolError, toToolResult } from "./runtime.js";
-import type { McpConfig } from "./types.js";
 import {
 	authorizeWorkload,
 	executeWorkloadTool,
@@ -30,14 +31,6 @@ import {
 	toToolOutputJsonSchema,
 } from "./zod-json-schema.js";
 
-function sanitizeRouteKey(key: string): string {
-	return key
-		.replace(/[:/[\].]+/g, ".")
-		.replace(/\.+/g, ".")
-		.replace(/^\./, "")
-		.replace(/\.$/, "");
-}
-
 function routeInputSchema(route: IntrospectedRoute): z.ZodTypeAny {
 	if (!isJsonRoute(route.definition)) return z.object({});
 	if (route.params.length === 0)
@@ -48,33 +41,29 @@ function routeInputSchema(route: IntrospectedRoute): z.ZodTypeAny {
 		paramsShape[param] = z.string();
 	}
 
-	return z.object({
-		params: z.object(paramsShape),
-		input: jsonSchemaCompatibleSchema(route.definition.schema) ?? z.object({}),
-	});
+	return z
+		.object({
+			params: z.object(paramsShape).strict(),
+			input:
+				jsonSchemaCompatibleSchema(route.definition.schema) ?? z.object({}),
+		})
+		.strict();
 }
 
 export async function registerRouteTools(
 	server: McpServer,
 	scope: RuntimeScope,
-	config: McpConfig,
+	catalog: ResolvedMcpCatalog,
 ) {
-	if (config.routes?.exposeAnnotated === false) return;
-
-	for (const route of introspectRoutes(scope.app)) {
+	for (const [routeKey, catalogEntry] of catalog.routes) {
+		const route = catalogEntry.route;
 		const definition = route.definition;
 		if (!isJsonRoute(definition)) continue;
-		if (route.meta?.mcp?.expose !== true) continue;
+		const mcpMeta = route.meta?.mcp;
+		if (!mcpMeta) continue;
+		const policy = catalogEntry.policy;
 
-		const policy = resolveEntityPolicy(
-			config,
-			"route",
-			route.key,
-			scope.transport,
-		);
-		if (!policy.expose) continue;
-
-		const name = route.meta.mcp.name ?? `routes.${sanitizeRouteKey(route.key)}`;
+		const name = catalogEntry.toolName;
 		const workloadRequirement = workloadRequirementForOperation(
 			policy,
 			"execute",
@@ -84,7 +73,7 @@ export async function registerRouteTools(
 		}
 		const inputSchema = routeInputSchema(route);
 		const outputSchema = jsonSchemaCompatibleSchema(definition.outputSchema);
-		const annotations = route.meta.mcp.annotations;
+		const annotations = mcpMeta.annotations;
 		const workloadIdentity = {
 			kind: "route" as const,
 			name,
@@ -96,21 +85,42 @@ export async function registerRouteTools(
 		};
 		const allows = async (
 			ctx: Awaited<ReturnType<RuntimeScope["getContext"]>>,
-		) =>
-			(await evaluateMcpRule(
-				operationRule(policy, "execute") ?? operationRule(policy, "read"),
-				{ transport: scope.transport, accessMode: scope.accessMode, ctx },
-			)) &&
-			scopeGateAllows(
-				scopesFromContext(ctx),
-				requiredScopesForOperation(
-					policy,
-					"route",
-					route.key,
-					"execute",
-					"invoke",
-				),
+		) => {
+			const mcpAllowed =
+				(await evaluateMcpRule(operationRule(policy, "execute"), {
+					transport: scope.transport,
+					accessMode: scope.accessMode,
+					ctx,
+				})) &&
+				scopeGateAllows(
+					scopesFromContext(ctx),
+					requiredScopesForOperation(
+						policy,
+						"route",
+						routeKey,
+						"execute",
+						"invoke",
+					),
+				);
+			if (!mcpAllowed) return false;
+			const services = extractAppServices(scope.app, {
+				db: ctx.db ?? scope.app.db,
+				session: ctx.session,
+				locale: ctx.locale,
+				accessMode: ctx.accessMode,
+				principal: ctx.principal,
+			});
+			const params = Object.fromEntries(
+				route.params.map((param) => [param, ""]),
 			);
+			return evaluateRouteAccess(definition.access, {
+				...services,
+				...(ctx["~contextExtensions"] ?? {}),
+				locale: ctx.locale,
+				request: scope.request,
+				params,
+			});
+		};
 		if (!scope.workload) {
 			const ctx = await scope.getContext();
 			if (!(await allows(ctx))) continue;
@@ -119,59 +129,90 @@ export async function registerRouteTools(
 		server.registerTool(
 			name,
 			{
-				title: route.meta.mcp.title ?? route.meta.title,
-				description: route.meta.mcp.description ?? route.meta.description,
+				title: mcpMeta.title ?? route.meta?.title,
+				description: mcpMeta.description ?? route.meta?.description,
 				inputSchema,
 				outputSchema,
 				annotations,
 			},
 			async (input, extra) => {
 				try {
-					const workloadAuthorization = scope.workload
-						? await authorizeWorkload(
-								scope.workload,
-								"call",
-								workloadIdentity,
-								workloadRequirement,
-							)
-						: undefined;
-					if (scope.workload && !workloadAuthorization) {
-						throw new Error("MCP access denied");
-					}
-					const routeCtx =
-						workloadAuthorization?.context ?? (await scope.getContext());
-					if (!(await allows(routeCtx))) throw new Error("MCP access denied");
-
-					const invocation =
-						route.params.length > 0
-							? z
-									.object({
-										input: z.unknown(),
-										params: z.record(z.string(), z.string()),
-									})
-									.parse(input)
-							: { input, params: {} };
-					const requestContext = toRequestContext(routeCtx, scope.accessMode);
-					const invoke = async () =>
-						toToolResult(
-							await executeJsonRoute(
-								scope.app,
-								definition,
-								invocation.input,
-								requestContext,
-								scope.request ?? new Request("http://questpie.local/mcp"),
-								invocation.params,
-							),
-						);
-					if (scope.workload && workloadAuthorization && workloadRequirement) {
-						return executeWorkloadTool(
-							scope.workload,
-							workloadAuthorization,
-							extra?.["_meta"],
-							invoke,
-						);
-					}
-					return invoke();
+					let workloadAuthorization:
+						| Awaited<ReturnType<typeof authorizeWorkload>>
+						| undefined;
+					return await scope.execution.execute({
+						operation: name,
+						transport: scope.transport,
+						accessMode: scope.accessMode,
+						input,
+						extra,
+						authorize: async (control) => {
+							workloadAuthorization = scope.workload
+								? await authorizeWorkload(
+										scope.workload,
+										"call",
+										workloadIdentity,
+										workloadRequirement,
+										control,
+									)
+								: undefined;
+							if (scope.workload && !workloadAuthorization) {
+								throw new McpAccessDeniedError();
+							}
+							const routeCtx =
+								workloadAuthorization?.context ?? (await scope.getContext());
+							if (!(await allows(routeCtx))) {
+								throw new McpAccessDeniedError();
+							}
+							return routeCtx;
+						},
+						concurrencyKey: () => workloadAuthorization?.concurrencyKey,
+						invoke: async ({ ctx, signal, requestId, correlationId }) => {
+							const invocation =
+								route.params.length > 0
+									? z
+											.object({
+												input: z.unknown(),
+												params: z.record(z.string(), z.string()),
+											})
+											.parse(input)
+									: { input, params: {} };
+							const requestContext = toRequestContext(ctx, scope.accessMode);
+							const executionRequest = new Request(
+								scope.request?.url ?? "http://questpie.local/mcp",
+								{
+									method: scope.request?.method ?? "POST",
+									headers: scope.request?.headers,
+									signal,
+								},
+							);
+							const invoke = async () =>
+								toToolResult(
+									await executeJsonRoute(
+										scope.app,
+										definition,
+										invocation.input,
+										requestContext,
+										executionRequest,
+										invocation.params,
+									),
+								);
+							if (
+								scope.workload &&
+								workloadAuthorization &&
+								workloadRequirement
+							) {
+								return executeWorkloadTool(
+									scope.workload,
+									workloadAuthorization,
+									undefined,
+									{ signal, requestId, correlationId },
+									invoke,
+								);
+							}
+							return invoke();
+						},
+					});
 				} catch (error) {
 					return toToolError(error);
 				}
@@ -183,8 +224,8 @@ export async function registerRouteTools(
 				scope.workload,
 				{
 					name,
-					title: route.meta.mcp.title ?? route.meta.title,
-					description: route.meta.mcp.description ?? route.meta.description,
+					title: mcpMeta.title ?? route.meta?.title,
+					description: mcpMeta.description ?? route.meta?.description,
 					inputSchema: toToolInputJsonSchema(inputSchema),
 					...(discoveryOutputSchema
 						? { outputSchema: discoveryOutputSchema }

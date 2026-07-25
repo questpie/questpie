@@ -68,6 +68,7 @@ function isBoundedJson(
 	value: unknown,
 	budget = { nodes: 0, bytes: 0 },
 	depth = 0,
+	maximumBytes = MAX_RESULT_JSON_BYTES,
 ): boolean {
 	if (depth > MAX_RESULT_DEPTH) return false;
 	budget.nodes += 1;
@@ -82,18 +83,18 @@ function isBoundedJson(
 	} else if (Array.isArray(value)) {
 		budget.bytes += 2;
 		for (const item of value) {
-			if (!isBoundedJson(item, budget, depth + 1)) return false;
+			if (!isBoundedJson(item, budget, depth + 1, maximumBytes)) return false;
 		}
 	} else if (typeof value === "object" && value !== null) {
 		budget.bytes += 2;
 		for (const [key, item] of Object.entries(value)) {
 			budget.bytes += new TextEncoder().encode(key).byteLength;
-			if (!isBoundedJson(item, budget, depth + 1)) return false;
+			if (!isBoundedJson(item, budget, depth + 1, maximumBytes)) return false;
 		}
 	} else {
 		return false;
 	}
-	return budget.bytes <= MAX_RESULT_JSON_BYTES;
+	return budget.bytes <= maximumBytes;
 }
 
 export function parseSandboxRunResult(
@@ -149,7 +150,10 @@ export function parseSandboxRunResult(
 
 export type BrokerRelayResult =
 	| { ok: true; value?: unknown }
-	| { ok: false; error: { code: string; message: string } };
+	| {
+			ok: false;
+			error: { code: string; message: string; correlationId?: string };
+	  };
 
 const BROKER_ERROR_MESSAGES: Readonly<Record<string, string>> = Object.freeze({
 	bad_method: "invalid sandbox binding method",
@@ -160,12 +164,16 @@ const BROKER_ERROR_MESSAGES: Readonly<Record<string, string>> = Object.freeze({
 	execution_error: "sandbox binding operation failed",
 });
 
-export function parseBrokerResponse(value: unknown): BrokerRelayResult | null {
+export function parseBrokerResponse(
+	value: unknown,
+	maxValueBytes = MAX_RESULT_JSON_BYTES,
+): BrokerRelayResult | null {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
 	const response = value as Record<string, unknown>;
 	if (response.ok === true) {
 		if (!exactKeys(response, ["ok", "value"], [])) return null;
-		if (!isBoundedJson(response.value)) return null;
+		if (!isBoundedJson(response.value, undefined, 0, maxValueBytes))
+			return null;
 		return { ok: true, value: response.value };
 	}
 	if (
@@ -179,9 +187,12 @@ export function parseBrokerResponse(value: unknown): BrokerRelayResult | null {
 	}
 	const error = response.error as Record<string, unknown>;
 	if (
-		!exactKeys(error, ["code", "message"], []) ||
+		!exactKeys(error, ["code", "message"], ["correlationId"]) ||
 		typeof error.code !== "string" ||
-		typeof error.message !== "string"
+		typeof error.message !== "string" ||
+		(error.correlationId !== undefined &&
+			(typeof error.correlationId !== "string" ||
+				!/^[\w-]{1,128}$/.test(error.correlationId)))
 	) {
 		return null;
 	}
@@ -193,6 +204,9 @@ export function parseBrokerResponse(value: unknown): BrokerRelayResult | null {
 		error: {
 			code,
 			message: BROKER_ERROR_MESSAGES[code]!,
+			...(typeof error.correlationId === "string"
+				? { correlationId: error.correlationId }
+				: {}),
 		},
 	};
 }

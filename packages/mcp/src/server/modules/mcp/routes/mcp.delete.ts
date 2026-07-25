@@ -2,5 +2,10 @@ import { route } from "questpie";
 
 import { mcpHandler, mcpMeta } from "../../../mcp-http.js";
 
-// DELETE = session end. Shares `mcpHandler` on the `mcp` path (see `mcp.ts`).
-export default route().delete().raw().meta(mcpMeta).handler(mcpHandler);
+// Stateless mode has no session to delete; DELETE returns 405.
+export default route()
+	.delete()
+	.raw()
+	.access(true)
+	.meta(mcpMeta)
+	.handler(mcpHandler);

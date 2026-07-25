@@ -4,6 +4,7 @@ import type {
 	ExecutorRunResult,
 } from "questpie/executor";
 
+import { registerSandboxCustomToolsSession } from "./custom-tools.js";
 import { validateEgressHosts } from "./net-validation.js";
 import { parseSandboxRunResult } from "./server-internals.js";
 import {
@@ -73,6 +74,14 @@ const DEFAULT_AUDIT_TIMEOUT_MS = 250;
 const MAX_AUDIT_TIMEOUT_MS = 1_000;
 const MAX_REQUEST_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_RESPONSE_BODY_BYTES = 2 * 1024 * 1024;
+
+function opaqueBindingToken(): string {
+	const bytes = new Uint8Array(32);
+	crypto.getRandomValues(bytes);
+	return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
+		"",
+	);
+}
 
 class OperationDeadlineError extends Error {}
 class OperationCancelledError extends Error {}
@@ -331,26 +340,50 @@ export class HttpSandboxAdapter implements ExecutorAdapter {
 
 		// Untrusted app-bindings: when the executor service minted a scoped token,
 		// forward broker coordinates. This remains the explicit trusted-host path.
-		const bindings = options.sandboxBindings;
+		const bindings =
+			options.sandboxBindings ??
+			(options.sandboxTools && options.brokerUrl
+				? { url: options.brokerUrl, token: opaqueBindingToken() }
+				: undefined);
+		if (options.sandboxTools && !bindings) {
+			return {
+				ok: false,
+				error: "sandbox custom tools require broker bindings",
+				logs: [],
+			};
+		}
+		const toolsSession =
+			options.sandboxTools && bindings
+				? registerSandboxCustomToolsSession(
+						bindings.token,
+						bindings.url,
+						options.sandboxTools.envelope,
+						timeoutMs + 30_000,
+					)
+				: undefined;
 		const hostAdmissionSecret =
 			this.options.hostAdmissionSecret ??
 			(typeof process !== "undefined"
 				? process.env?.SANDBOX_HOST_ADMISSION_SECRET
 				: undefined);
-		return this.postRun(
-			JSON.stringify({
-				mode: "host",
-				source: options.source,
-				input: options.input ?? null,
-				capabilities: sandboxCaps,
-				secrets: options.secrets ?? {},
-				...(bindings ? { bindings } : {}),
-			}),
-			timeoutMs,
-			hostAdmissionSecret
-				? { [HOST_ADMISSION_HEADER]: hostAdmissionSecret }
-				: undefined,
-		);
+		try {
+			return await this.postRun(
+				JSON.stringify({
+					mode: "host",
+					source: options.source,
+					input: options.input ?? null,
+					capabilities: sandboxCaps,
+					secrets: options.secrets ?? {},
+					...(bindings ? { bindings } : {}),
+				}),
+				timeoutMs,
+				hostAdmissionSecret
+					? { [HOST_ADMISSION_HEADER]: hostAdmissionSecret }
+					: undefined,
+			);
+		} finally {
+			toolsSession?.revoke();
+		}
 	}
 
 	async runWorkload(
@@ -493,7 +526,8 @@ export class HttpSandboxAdapter implements ExecutorAdapter {
 		const current = await authorize("dispatch");
 		if (
 			serializeSandboxWorkloadPolicy(prepared) !==
-			serializeSandboxWorkloadPolicy(current)
+				serializeSandboxWorkloadPolicy(current) ||
+			prepared.sandboxTools?.envelope !== current.sandboxTools?.envelope
 		) {
 			await audit(
 				{
@@ -560,16 +594,29 @@ export class HttpSandboxAdapter implements ExecutorAdapter {
 					},
 					requestBody,
 				);
-				result = await this.postRun(
-					requestBody,
-					current.capabilities.timeoutMs,
-					{ [WORKLOAD_ADMISSION_HEADER]: admission },
-					options.signal,
-					true,
-					(status) => {
-						responseStatus = status;
-					},
-				);
+				const toolsSession =
+					current.sandboxTools && current.bindings
+						? registerSandboxCustomToolsSession(
+								current.bindings.token,
+								current.bindings.url,
+								current.sandboxTools.envelope,
+								current.capabilities.timeoutMs + 30_000,
+							)
+						: undefined;
+				try {
+					result = await this.postRun(
+						requestBody,
+						current.capabilities.timeoutMs,
+						{ [WORKLOAD_ADMISSION_HEADER]: admission },
+						options.signal,
+						true,
+						(status) => {
+							responseStatus = status;
+						},
+					);
+				} finally {
+					toolsSession?.revoke();
+				}
 			}
 		} catch {
 			await audit(

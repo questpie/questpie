@@ -23,13 +23,19 @@
  */
 
 import type { ExecutorCapabilities } from "../adapter.js";
-import { checkBindingCapability, isHttpHostAllowed } from "./capability-check.js";
+import {
+	checkBindingCapability,
+	isHttpHostAllowed,
+} from "./capability-check.js";
 import { type HostFetchOptions, hostFetch } from "./host-fetch.js";
 import {
 	type BindingError,
 	type BrokerRpcResponse,
+	BROKER_HTTP_RESULT_CAP_BYTES,
+	BROKER_NATIVE_RESULT_CAP_BYTES,
 	type HttpFetchRequest,
 	parseBindingMethod,
+	snapshotBoundedBrokerValue,
 } from "./protocol.js";
 
 /**
@@ -127,11 +133,29 @@ export interface MintedToken {
 	revoke(): void;
 }
 
+export interface SandboxBrokerDiagnosticEvent {
+	readonly correlationId: string;
+	readonly reason: "target_failed" | "invalid_result";
+	/** Trusted-only raw failure; never copied into the broker response. */
+	readonly error?: unknown;
+}
+
+export interface SandboxBrokerOptions {
+	readonly mintToken?: () => string;
+	readonly onDiagnostic?: (
+		event: SandboxBrokerDiagnosticEvent,
+	) => void | Promise<void>;
+}
+
 function brokerError(
 	code: BindingError["code"],
 	message: string,
+	correlationId?: string,
 ): { ok: false; error: BindingError } {
-	return { ok: false, error: { code, message } };
+	return {
+		ok: false,
+		error: { code, message, ...(correlationId ? { correlationId } : {}) },
+	};
 }
 
 /**
@@ -146,13 +170,19 @@ export class SandboxBroker {
 
 	private readonly runs = new Map<string, RunRecord>();
 	private readonly mintToken: () => string;
+	private readonly onDiagnostic?: SandboxBrokerOptions["onDiagnostic"];
 
 	/**
 	 * @param mintToken - Token generator. Defaults to a CSPRNG hex string. Inject
 	 *   a deterministic generator in tests.
 	 */
-	constructor(mintToken?: () => string) {
-		this.mintToken = mintToken ?? defaultTokenFactory;
+	constructor(options?: (() => string) | SandboxBrokerOptions) {
+		this.mintToken =
+			typeof options === "function"
+				? options
+				: (options?.mintToken ?? defaultTokenFactory);
+		this.onDiagnostic =
+			typeof options === "function" ? undefined : options?.onDiagnostic;
 	}
 
 	/** Number of live (registered, not yet revoked) runs — for tests/metrics. */
@@ -243,13 +273,51 @@ export class SandboxBroker {
 		}
 
 		try {
-			return await this.dispatch(parsed, args, run.target, run.capabilities);
-		} catch (err) {
-			return brokerError(
-				"execution_error",
-				err instanceof Error ? err.message : String(err),
+			const result = await this.dispatch(
+				parsed,
+				args,
+				run.target,
+				run.capabilities,
 			);
+			if (!result.ok) return result;
+			const normalized = snapshotBoundedBrokerValue(
+				result.value,
+				parsed.kind === "http"
+					? BROKER_HTTP_RESULT_CAP_BYTES
+					: BROKER_NATIVE_RESULT_CAP_BYTES,
+			);
+			if (!normalized.ok) {
+				return this.executionError("invalid_result");
+			}
+			return { ok: true, value: normalized.value };
+		} catch (err) {
+			return this.executionError("target_failed", err);
 		}
+	}
+
+	private executionError(
+		reason: SandboxBrokerDiagnosticEvent["reason"],
+		error?: unknown,
+	): BrokerRpcResponse {
+		const correlationId = crypto.randomUUID();
+		if (this.onDiagnostic) {
+			Promise.resolve(
+				this.onDiagnostic(
+					Object.freeze({
+						correlationId,
+						reason,
+						...(error !== undefined ? { error } : {}),
+					}),
+				),
+			).catch(() => undefined);
+		}
+		return brokerError(
+			"execution_error",
+			reason === "invalid_result"
+				? "sandbox binding result is invalid"
+				: "sandbox binding operation failed",
+			correlationId,
+		);
 	}
 
 	/** Route an ALREADY-AUTHORIZED call to the bound target. */

@@ -318,8 +318,7 @@ describe("hostFetch — SSRF denials (structured error, never throws)", () => {
 				{ resolve: resolverFrom({ "allowed.test": [resolved] }) },
 			);
 			expect(res.ok).toBe(false);
-			if (!res.ok)
-				expect(res.error.message.toLowerCase()).toContain("blocked");
+			if (!res.ok) expect(res.error.message.toLowerCase()).toContain("blocked");
 		}
 	});
 
@@ -341,8 +340,7 @@ describe("hostFetch — SSRF denials (structured error, never throws)", () => {
 			// Must be the POLICY block, NOT a connection failure: the pre-fix `[::1]`
 			// only "passed" because nothing was listening (ECONNREFUSED). A `blocked
 			// target` message proves resolveAndValidate rejected it BEFORE connecting.
-			if (!res.ok)
-				expect(res.error.message.toLowerCase()).toContain("blocked");
+			if (!res.ok) expect(res.error.message.toLowerCase()).toContain("blocked");
 		}
 	});
 

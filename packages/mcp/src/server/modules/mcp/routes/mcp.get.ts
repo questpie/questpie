@@ -2,5 +2,10 @@ import { route } from "questpie";
 
 import { mcpHandler, mcpMeta } from "../../../mcp-http.js";
 
-// GET = SSE stream. Shares `mcpHandler` on the `mcp` path (see `mcp.ts`).
-export default route().get().raw().meta(mcpMeta).handler(mcpHandler);
+// Stateless mode has no SSE session lifecycle; GET returns 405.
+export default route()
+	.get()
+	.raw()
+	.access(true)
+	.meta(mcpMeta)
+	.handler(mcpHandler);

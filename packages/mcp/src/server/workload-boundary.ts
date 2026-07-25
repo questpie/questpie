@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { types as nodeTypes } from "node:util";
 
 import type {
@@ -7,11 +8,20 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js";
 import type { AppContext, RequestContext } from "questpie";
 
+import {
+	assertBoundedMcpValue,
+	McpAccessDeniedError,
+	type McpExecutionBoundary,
+	type McpHandlerExtra,
+	McpPublicError,
+	mcpPublicErrorCode,
+} from "./execution-boundary.js";
 import type {
 	McpWorkloadAuthorization,
 	McpWorkloadAuthorizationRequest,
 	McpWorkloadAuditEvent,
 	McpWorkloadContextBindingInput,
+	McpWorkloadExecutionControl,
 	McpWorkloadHandoffInput,
 	McpWorkloadRequirement,
 	McpWorkloadToolFacts,
@@ -34,17 +44,21 @@ interface WorkloadDiscoveryTool {
 
 export interface AuthorizedWorkload {
 	readonly authorization: McpWorkloadAuthorization;
+	readonly concurrencyKey: string;
 	readonly context: AppContext & Partial<RequestContext>;
 	readonly tool: McpWorkloadToolFacts;
 }
 
 export interface WorkloadMcpBoundary {
 	readonly envelope: unknown;
+	readonly concurrencyKey: string;
 	readonly authorize: (
 		request: McpWorkloadAuthorizationRequest,
+		control?: McpWorkloadExecutionControl,
 	) => unknown | Promise<unknown>;
 	readonly bindContext: (
 		input: McpWorkloadContextBindingInput,
+		control?: McpWorkloadExecutionControl,
 	) => unknown | Promise<unknown>;
 	readonly audit?: (event: McpWorkloadAuditEvent) => void | Promise<void>;
 	readonly executeHandoff?: (
@@ -104,11 +118,25 @@ export function createWorkloadMcpBoundary(
 		) {
 			throw new Error(PUBLIC_ACCESS_DENIED);
 		}
+		const concurrencyKey =
+			options.concurrencyKey === undefined
+				? `boundary:${randomUUID()}`
+				: typeof options.concurrencyKey === "string" &&
+					  /^[\w.:-]{1,256}$/.test(options.concurrencyKey)
+					? `consumer:${options.concurrencyKey}`
+					: null;
+		if (!concurrencyKey) throw new Error(PUBLIC_ACCESS_DENIED);
 		const authorize = readMethod<
-			(request: McpWorkloadAuthorizationRequest) => unknown | Promise<unknown>
+			(
+				request: McpWorkloadAuthorizationRequest,
+				control?: McpWorkloadExecutionControl,
+			) => unknown | Promise<unknown>
 		>(options.authorizer, "authorize");
 		const bindContext = readMethod<
-			(input: McpWorkloadContextBindingInput) => unknown | Promise<unknown>
+			(
+				input: McpWorkloadContextBindingInput,
+				control?: McpWorkloadExecutionControl,
+			) => unknown | Promise<unknown>
 		>(options.contextBinder, "bind");
 		if (!authorize || !bindContext) throw new Error(PUBLIC_ACCESS_DENIED);
 		let executeHandoff:
@@ -127,6 +155,7 @@ export function createWorkloadMcpBoundary(
 		}
 		return {
 			envelope: options.envelope,
+			concurrencyKey,
 			authorize,
 			bindContext,
 			audit: options.audit,
@@ -265,7 +294,10 @@ export async function authorizeWorkload(
 	phase: "discovery" | "call",
 	identity: WorkloadToolIdentity,
 	requirement: McpWorkloadRequirement | undefined,
+	control?: McpWorkloadExecutionControl,
 ): Promise<AuthorizedWorkload | null> {
+	const cancelled = () => control?.signal.aborted === true;
+	if (cancelled()) return null;
 	const normalized = normalizeRequirement(requirement);
 	if (!normalized || (normalized.handoff && !boundary.executeHandoff)) {
 		await auditDecision(boundary, {
@@ -279,14 +311,18 @@ export async function authorizeWorkload(
 
 	let result: unknown;
 	try {
-		result = await boundary.authorize({
-			phase,
-			envelope: boundary.envelope,
-			tool,
-		});
+		result = await boundary.authorize(
+			{
+				phase,
+				envelope: boundary.envelope,
+				tool,
+			},
+			control,
+		);
 	} catch {
 		result = null;
 	}
+	if (cancelled()) return null;
 	const authorization = snapshotAuthorization(result);
 	if (!authorization) {
 		await auditDecision(boundary, {
@@ -297,16 +333,21 @@ export async function authorizeWorkload(
 		return null;
 	}
 
+	if (cancelled()) return null;
 	let context: unknown;
 	try {
-		context = await boundary.bindContext({
-			authorizationContext: authorization.context,
-			attribution: authorization.attribution,
-			tool,
-		});
+		context = await boundary.bindContext(
+			{
+				authorizationContext: authorization.context,
+				attribution: authorization.attribution,
+				tool,
+			},
+			control,
+		);
 	} catch {
 		context = null;
 	}
+	if (cancelled()) return null;
 	if (!isBoundContext(context)) {
 		await auditDecision(boundary, {
 			phase,
@@ -316,13 +357,20 @@ export async function authorizeWorkload(
 		return null;
 	}
 
+	if (cancelled()) return null;
 	await auditDecision(boundary, {
 		phase,
 		decision: "allowed",
 		toolName: tool.name,
 		attribution: authorization.attribution,
 	});
-	return Object.freeze({ authorization, context, tool });
+	if (cancelled()) return null;
+	return Object.freeze({
+		authorization,
+		concurrencyKey: boundary.concurrencyKey,
+		context,
+		tool,
+	});
 }
 
 export function registerWorkloadDiscoveryTool(
@@ -344,30 +392,85 @@ export function registerWorkloadDiscoveryTool(
 
 export async function listWorkloadTools(
 	boundary: WorkloadMcpBoundary,
+	execution: McpExecutionBoundary,
+	extra: McpHandlerExtra,
 ): Promise<ListToolsResult> {
 	const tools: Tool[] = [];
-	for (const candidate of boundary.discoveryTools) {
-		try {
-			const authorized = await authorizeWorkload(
-				boundary,
-				"discovery",
-				candidate.identity,
-				candidate.requirement,
-			);
-			if (authorized && (await candidate.allows(authorized.context))) {
-				tools.push(candidate.tool);
+	const controller = new AbortController();
+	let timedOut = false;
+	const cancel = () => controller.abort(extra.signal.reason);
+	if (extra.signal.aborted) cancel();
+	else extra.signal.addEventListener("abort", cancel, { once: true });
+	const timer = setTimeout(() => {
+		timedOut = true;
+		controller.abort(new Error("MCP discovery deadline exceeded"));
+	}, execution.limits.timeoutMs);
+	const boundedExtra = { ...extra, signal: controller.signal };
+
+	try {
+		for (const candidate of boundary.discoveryTools) {
+			try {
+				let workloadAuthorization: AuthorizedWorkload | null | undefined;
+				const tool = await execution.execute({
+					operation: "tools/list",
+					transport: "workload",
+					accessMode: "user",
+					input: { name: candidate.tool.name },
+					extra: boundedExtra,
+					authorize: async (control) => {
+						workloadAuthorization = await authorizeWorkload(
+							boundary,
+							"discovery",
+							candidate.identity,
+							candidate.requirement,
+							control,
+						);
+						if (
+							!workloadAuthorization ||
+							!(await candidate.allows(workloadAuthorization.context))
+						) {
+							throw new McpAccessDeniedError();
+						}
+						return workloadAuthorization.context;
+					},
+					concurrencyKey: () => workloadAuthorization?.concurrencyKey,
+					invoke: async () => candidate.tool,
+				});
+				tools.push(tool);
+			} catch (error) {
+				const code = mcpPublicErrorCode(error);
+				if (code === "access_denied" || code === "internal") continue;
+				if (timedOut && code === "cancelled") {
+					throw new McpPublicError("timeout");
+				}
+				throw error;
 			}
-		} catch {
-			// Discovery remains empty for this tool when authority or access fails.
 		}
+		assertBoundedMcpValue(
+			{ tools },
+			{
+				maxBytes: execution.limits.maxOutputBytes,
+				maxValueDepth: execution.limits.maxOutputDepth,
+				maxValueNodes: execution.limits.maxValueNodes,
+			},
+			"output_too_large",
+		);
+		return { tools };
+	} finally {
+		clearTimeout(timer);
+		extra.signal.removeEventListener("abort", cancel);
 	}
-	return { tools };
 }
 
 export async function executeWorkloadTool(
 	boundary: WorkloadMcpBoundary,
 	authorized: AuthorizedWorkload,
 	metadata: unknown,
+	execution: {
+		signal: AbortSignal;
+		requestId: string | number;
+		correlationId: string;
+	},
 	invoke: () => CallToolResult | Promise<CallToolResult>,
 ): Promise<CallToolResult> {
 	if (!authorized.tool.handoff) return invoke();
@@ -380,6 +483,9 @@ export async function executeWorkloadTool(
 			capability: authorized.tool.handoff,
 			tool: authorized.tool,
 			metadata,
+			signal: execution.signal,
+			requestId: execution.requestId,
+			correlationId: execution.correlationId,
 			invoke,
 		});
 	} catch {

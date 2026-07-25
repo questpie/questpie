@@ -46,9 +46,6 @@ export type McpEntityPolicy =
 	| boolean
 	| {
 			expose?: boolean;
-			read?: boolean | McpAccessRule;
-			write?: boolean | McpAccessRule;
-			delete?: boolean | McpAccessRule;
 			operations?: Record<string, boolean | McpAccessRule>;
 			/**
 			 * Scopes an OAuth caller must hold to reach this entity. Declarable at
@@ -73,33 +70,20 @@ export type McpEntityPolicy =
 			description?: string;
 	  };
 
-export interface McpCrudDefaults {
-	collections?: {
-		read?: boolean | McpAccessRule;
-		write?: boolean | McpAccessRule;
-		delete?: boolean | McpAccessRule;
-	};
-	globals?: {
-		read?: boolean | McpAccessRule;
-		write?: boolean | McpAccessRule;
-	};
-}
-
 export interface McpCrudConfig {
-	defaults?: McpCrudDefaults;
 	collections?: Record<string, McpEntityPolicy>;
 	globals?: Record<string, McpEntityPolicy>;
 	maxLimit?: number;
 }
 
 export interface McpRoutesConfig {
-	exposeAnnotated?: boolean;
 	routes?: Record<string, McpEntityPolicy>;
 }
 
 export interface McpResourcesConfig {
-	schemas?: boolean;
-	routes?: boolean;
+	collections?: Record<string, boolean>;
+	globals?: Record<string, boolean>;
+	routes?: Record<string, boolean>;
 }
 
 export interface McpTransportConfig {
@@ -120,6 +104,66 @@ export interface McpStdioConfig {
 	trustedMaintenance?: boolean;
 }
 
+export interface McpExecutionLimits {
+	/** Maximum serialized tool input accepted after protocol decoding. */
+	maxInputBytes?: number;
+	/** Maximum object/array nesting accepted in decoded operation input. */
+	maxInputDepth?: number;
+	/** Maximum object/array nesting accepted in operation output. */
+	maxOutputDepth?: number;
+	/** Maximum object properties and array entries visited per value. */
+	maxValueNodes?: number;
+	/** Maximum serialized tool result returned to a caller. */
+	maxOutputBytes?: number;
+	/** Wall-clock budget for authorization plus execution. */
+	timeoutMs?: number;
+	/** Maximum in-flight operations for one released app snapshot. */
+	maxConcurrency?: number;
+	/** Maximum in-flight operations for one resolved caller principal. */
+	maxConcurrencyPerPrincipal?: number;
+	/** Maximum released tools across custom, CRUD, and route catalogs. */
+	maxTools?: number;
+	/** Maximum released schema resources. */
+	maxResources?: number;
+}
+
+export type McpPublicErrorCode =
+	| "access_denied"
+	| "invalid_input"
+	| "input_too_large"
+	| "output_too_large"
+	| "timeout"
+	| "cancelled"
+	| "busy"
+	| "internal";
+
+export interface McpExecutionDiagnosticEvent {
+	correlationId: string;
+	requestId?: string | number;
+	transport: McpTransportKind;
+	operation: string;
+	durationMs: number;
+	outcome: "completed" | "rejected";
+	code?: McpPublicErrorCode;
+	/**
+	 * Bounded and credential-redacted. Inputs, outputs, sessions, authorization
+	 * envelopes, and workload attribution are never included.
+	 */
+	internalError?: {
+		kind: "Error" | "Unknown";
+	};
+}
+
+export interface McpExecutionConfig extends McpExecutionLimits {
+	/**
+	 * Trusted server-side diagnostics sink. At most one unresolved callback is
+	 * retained; subsequent events are dropped until it settles.
+	 */
+	onDiagnostic?: (
+		event: Readonly<McpExecutionDiagnosticEvent>,
+	) => void | Promise<void>;
+}
+
 export interface McpConfig {
 	name?: string;
 	version?: string;
@@ -128,6 +172,7 @@ export interface McpConfig {
 	resources?: McpResourcesConfig;
 	http?: McpHttpConfig;
 	stdio?: McpStdioConfig;
+	execution?: McpExecutionConfig;
 }
 
 export interface McpExecutionOptions {
@@ -161,9 +206,16 @@ export interface McpWorkloadAuthorization {
 	attribution?: unknown;
 }
 
+export interface McpWorkloadExecutionControl {
+	signal: AbortSignal;
+	requestId: string | number;
+	correlationId: string;
+}
+
 export interface McpWorkloadAuthorizer {
 	authorize(
 		request: McpWorkloadAuthorizationRequest,
+		control?: McpWorkloadExecutionControl,
 	): McpWorkloadAuthorization | null | Promise<McpWorkloadAuthorization | null>;
 }
 
@@ -180,6 +232,7 @@ export interface McpWorkloadContextBinder {
 	 */
 	bind(
 		input: McpWorkloadContextBindingInput,
+		control?: McpWorkloadExecutionControl,
 	):
 		| (AppContext & Partial<RequestContext>)
 		| Promise<AppContext & Partial<RequestContext>>;
@@ -192,6 +245,12 @@ export interface McpWorkloadContextBinder {
  */
 export interface WorkloadMcpServerOptions {
 	envelope: unknown;
+	/**
+	 * Stable, non-secret consumer/tenant key for per-principal concurrency.
+	 * Independent workload boundaries with different keys cannot exhaust one
+	 * another's per-principal bucket. Omitted keys are isolated per boundary.
+	 */
+	concurrencyKey?: string;
 	authorizer: McpWorkloadAuthorizer;
 	contextBinder: McpWorkloadContextBinder;
 	config?: McpConfig;
@@ -206,6 +265,9 @@ export interface McpWorkloadHandoffInput {
 	capability: string;
 	tool: McpWorkloadToolFacts;
 	metadata: unknown;
+	signal: AbortSignal;
+	requestId: string | number;
+	correlationId: string;
 	invoke: () => CallToolResult | Promise<CallToolResult>;
 }
 
@@ -229,6 +291,43 @@ export interface McpToolHandlerArgs<TInput = unknown> {
 	transport: McpTransportKind;
 	accessMode: McpAccessMode;
 	request?: Request;
+	signal: AbortSignal;
+	requestId: string | number;
+	correlationId: string;
+}
+
+export interface McpProgrammaticRequestOptions {
+	signal?: AbortSignal;
+	requestId?: string | number;
+}
+
+export interface McpProgrammaticTool {
+	name: string;
+	title?: string;
+	description?: string;
+	inputSchema: Record<string, unknown>;
+	outputSchema?: Record<string, unknown>;
+	annotations?: ToolAnnotations;
+	_meta?: Record<string, unknown>;
+}
+
+export interface McpProgrammaticToolResult {
+	content: Array<{ type: string; [key: string]: unknown }>;
+	structuredContent?: Record<string, unknown>;
+	isError?: boolean;
+	_meta?: Record<string, unknown>;
+}
+
+export interface McpWorkloadToolPort {
+	listCustomTools(
+		options?: McpProgrammaticRequestOptions,
+	): Promise<{ tools: McpProgrammaticTool[] }>;
+	callCustomTool(input: {
+		name: string;
+		input: unknown;
+		signal?: AbortSignal;
+		requestId?: string | number;
+	}): Promise<McpProgrammaticToolResult>;
 }
 
 export interface McpToolConfig<
@@ -240,15 +339,15 @@ export interface McpToolConfig<
 	inputSchema?: TInputSchema;
 	outputSchema?: TOutputSchema;
 	annotations?: ToolAnnotations;
-	access?: McpAccessRule;
+	access: McpAccessRule;
 	/**
 	 * Scopes an OAuth caller must hold to reach this custom tool (all required —
-	 * AND). Custom tools have no default mapping (there is no resource/operation
-	 * to derive one from), so an omitted value requires no scope. Enforced by the
+	 * AND), or `false` as an explicit no-OAuth-scope policy. Custom tools have no
+	 * default mapping, so omission keeps the tool out of the released catalog. Enforced by the
 	 * scope gate (`scopeGateAllows`) at both `tools/list` (hidden) and
 	 * `tools/call` (denied); `system`/`user` callers carry no scopes and skip it.
 	 */
-	scopes?: McpRequiredScopes;
+	scopes: McpRequiredScopes;
 	/** Explicit, fail-closed authority contract for remote workload execution. */
 	workload?: McpWorkloadRequirement;
 	_meta?: Record<string, unknown>;

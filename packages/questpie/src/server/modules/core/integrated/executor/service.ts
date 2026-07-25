@@ -43,8 +43,7 @@ export class ExecutorService {
 		this.config = config;
 		this.enabled = config !== undefined;
 		this.trustedAdapter =
-			config?.trusted ??
-			new InProcessExecutorAdapter(config?.defaultTimeoutMs);
+			config?.trusted ?? new InProcessExecutorAdapter(config?.defaultTimeoutMs);
 		this.sandboxedAdapter = config?.sandboxed;
 		this.broker = new SandboxBroker();
 	}
@@ -78,7 +77,7 @@ export class ExecutorService {
 			throw new Error(
 				"executor sandboxed isolation is not configured. Provide a sandboxed " +
 					"adapter (e.g. `executor: { sandboxed: httpSandboxAdapter({ url: process.env.SANDBOX_URL }) }`) " +
-					"to run untrusted code, or pass `isolation: \"trusted\"` for trusted code.",
+					'to run untrusted code, or pass `isolation: "trusted"` for trusted code.',
 			);
 		}
 

@@ -1,3 +1,4 @@
+import type { SandboxCustomToolsRunOptions } from "./custom-tools.js";
 import type {
 	SandboxBindings,
 	SandboxCapabilities,
@@ -22,6 +23,8 @@ export interface SandboxWorkloadPolicy {
 	readonly capabilities: SandboxCapabilities;
 	readonly secrets?: Readonly<Record<string, string>>;
 	readonly bindings?: SandboxBindings;
+	/** Host-only custom-tool authority. Never serialized to the supervisor. */
+	readonly sandboxTools?: SandboxCustomToolsRunOptions;
 	/** Optional consumer deadline; transport admission is additionally capped at 5s. */
 	readonly validUntil?: string;
 }
@@ -315,7 +318,7 @@ export function snapshotSandboxWorkloadPolicy(
 			!exactOrOptionalKeys(
 				policy,
 				["source", "capabilities"],
-				["input", "secrets", "bindings", "validUntil"],
+				["input", "secrets", "bindings", "sandboxTools", "validUntil"],
 			) ||
 			typeof policy.source !== "string" ||
 			policy.source.length === 0 ||
@@ -329,10 +332,19 @@ export function snapshotSandboxWorkloadPolicy(
 			policy.bindings === undefined
 				? undefined
 				: normalizeBindings(policy.bindings);
+		const sandboxTools =
+			policy.sandboxTools === undefined
+				? undefined
+				: snapshotDataRecord(policy.sandboxTools);
 		if (
 			!capabilities ||
 			!secrets ||
-			(policy.bindings !== undefined && !bindings)
+			(policy.bindings !== undefined && !bindings) ||
+			(policy.sandboxTools !== undefined &&
+				(!sandboxTools ||
+					!exactOrOptionalKeys(sandboxTools, ["envelope"], []) ||
+					sandboxTools.envelope === undefined ||
+					!bindings))
 		) {
 			return null;
 		}
@@ -352,6 +364,13 @@ export function snapshotSandboxWorkloadPolicy(
 			capabilities,
 			secrets,
 			...(bindings ? { bindings } : {}),
+			...(sandboxTools
+				? {
+						sandboxTools: Object.freeze({
+							envelope: sandboxTools.envelope,
+						}),
+					}
+				: {}),
 			...(typeof policy.validUntil === "string"
 				? { validUntil: policy.validUntil }
 				: {}),

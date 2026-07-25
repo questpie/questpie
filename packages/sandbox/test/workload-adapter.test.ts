@@ -77,6 +77,35 @@ describe("generic workload sandbox admission", () => {
 		expect(JSON.stringify(requests[0]!.body)).not.toContain("stolen");
 	});
 
+	it("binds a stable custom-tool envelope host-side without serializing it", async () => {
+		const envelope = { opaque: "tool-consumer-secret" };
+		let sentBody: Record<string, unknown> | undefined;
+		const adapter = httpSandboxAdapter({
+			url: "https://sandbox.example",
+			validateEgress: false,
+			fetch: (async (_input, init) => {
+				sentBody = JSON.parse(String(init?.body));
+				return response();
+			}) as typeof fetch,
+			workload: {
+				admission,
+				authorize: async () => ({
+					...policy,
+					bindings: {
+						url: "https://app.example/api/sandbox/rpc",
+						token: "workload-tools-token",
+					},
+					sandboxTools: { envelope },
+				}),
+			},
+		});
+
+		await adapter.runWorkload({ envelope: { consumer: "fixture" } });
+
+		expect(sentBody).not.toHaveProperty("sandboxTools");
+		expect(JSON.stringify(sentBody)).not.toContain("tool-consumer-secret");
+	});
+
 	it("fails closed without an authorizer or for malformed/changing policy", async () => {
 		let fetches = 0;
 		const fetch = (async () => {

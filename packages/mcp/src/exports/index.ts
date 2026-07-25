@@ -3,6 +3,15 @@ export {
 	createMcpServer,
 	createWorkloadMcpServer,
 } from "../server/create-server.js";
+export { createWorkloadMcpToolPort } from "../server/workload-tool-port.js";
+export { mcpPublicErrorCode } from "../server/execution-boundary.js";
+export {
+	resolveMcpCatalog,
+	type ResolvedMcpCatalog,
+	type ResolvedMcpCustomToolCatalogEntry,
+	type ResolvedMcpEntityCatalogEntry,
+	type ResolvedMcpRouteCatalogEntry,
+} from "../server/catalog.js";
 export { mcpConfig } from "../server/config.js";
 export { mcpTool } from "../server/mcp-tool.js";
 export { mcpPlugin } from "../server/plugin.js";
@@ -21,11 +30,17 @@ export type {
 	McpAccessRuleContext,
 	McpConfig,
 	McpCrudConfig,
-	McpCrudDefaults,
 	McpEntityPolicy,
 	McpExecutionOptions,
+	McpExecutionConfig,
+	McpExecutionDiagnosticEvent,
+	McpExecutionLimits,
 	McpHttpConfig,
 	McpRequiredScopes,
+	McpProgrammaticRequestOptions,
+	McpProgrammaticTool,
+	McpProgrammaticToolResult,
+	McpPublicErrorCode,
 	McpResourcesConfig,
 	McpRoutesConfig,
 	McpStdioConfig,
@@ -39,10 +54,12 @@ export type {
 	McpWorkloadAuthorizer,
 	McpWorkloadContextBinder,
 	McpWorkloadContextBindingInput,
+	McpWorkloadExecutionControl,
 	McpWorkloadHandoff,
 	McpWorkloadHandoffInput,
 	McpWorkloadRequirement,
 	McpWorkloadToolFacts,
 	McpWorkloadToolKind,
+	McpWorkloadToolPort,
 	WorkloadMcpServerOptions,
 } from "../server/types.js";

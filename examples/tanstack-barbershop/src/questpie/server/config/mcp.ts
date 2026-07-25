@@ -3,20 +3,31 @@ import { mcpConfig } from "@questpie/mcp";
 export default mcpConfig({
 	name: "barbershop",
 	crud: {
-		defaults: {
-			collections: { read: true, write: false, delete: false },
-			globals: { read: true, write: false },
-		},
 		collections: {
-			appointments: { read: true, write: true },
-			user: false,
+			appointments: {
+				operations: {
+					list: true,
+					count: true,
+					get: true,
+					create: true,
+					update: true,
+				},
+			},
 		},
 	},
 	routes: {
-		exposeAnnotated: true,
+		routes: {
+			getActiveBarbers: { operations: { execute: true } },
+			getAvailableTimeSlots: { operations: { execute: true } },
+			getRevenueStats: { operations: { execute: true } },
+		},
 	},
 	resources: {
-		schemas: true,
-		routes: true,
+		collections: { appointments: true },
+		routes: {
+			getActiveBarbers: true,
+			getAvailableTimeSlots: true,
+			getRevenueStats: true,
+		},
 	},
 });

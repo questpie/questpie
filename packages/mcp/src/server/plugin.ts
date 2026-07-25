@@ -40,7 +40,7 @@ export function mcpPlugin(): CodegenPlugin {
 						dir: "mcp-tools",
 						description: "MCP custom tool definition",
 						template: ({ kebab, camel }) =>
-							`import { mcpTool } from "@questpie/mcp";\nimport { z } from "zod";\n\nexport default mcpTool("${kebab}", {\n\tdescription: "Run ${kebab}.",\n\tinputSchema: z.object({}),\n}).handler(async ({ ctx }) => {\n\treturn {\n\t\tstructuredContent: { ok: true },\n\t\tcontent: [{ type: "text", text: "${camel} completed" }],\n\t};\n});\n`,
+							`import { mcpTool } from "@questpie/mcp";\nimport { z } from "zod";\n\nexport default mcpTool("${kebab}", {\n\taccess: ({ session }) => !!session,\n\tscopes: false,\n\tdescription: "Run ${kebab}.",\n\tinputSchema: z.object({}),\n}).handler(async ({ ctx }) => {\n\treturn {\n\t\tstructuredContent: { ok: true },\n\t\tcontent: [{ type: "text", text: "${camel} completed" }],\n\t};\n});\n`,
 					},
 				},
 			},

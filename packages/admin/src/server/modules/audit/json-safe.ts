@@ -6,8 +6,8 @@
  * array | record). But the audit diff captures RAW collection field values — a
  * `datetime` field yields a `Date`, a `bigint` column yields a `bigint`, etc. —
  * none of which the JSON-primitive schema accepts. That threw an `ApiError` on
- * every write that touched such a field (notably the `ai_workers` heartbeat's
- * `lastHeartbeat` Date, which spammed the log on every tick).
+ * every write that touched such a field (for example, a frequently updated
+ * heartbeat timestamp, which could spam the log on every tick).
  *
  * This recursively coerces a value into a JSON-safe shape BEFORE it reaches the
  * audit schema: Date -> ISO string, undefined -> null, bigint -> string,
@@ -39,7 +39,9 @@ export function toAuditJsonSafe(value: unknown): unknown {
 			return toAuditJsonSafe(maybeToJson.call(value));
 		}
 		const out: Record<string, unknown> = {};
-		for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+		for (const [key, item] of Object.entries(
+			value as Record<string, unknown>,
+		)) {
 			out[key] = toAuditJsonSafe(item);
 		}
 		return out;

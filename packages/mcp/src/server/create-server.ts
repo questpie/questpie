@@ -3,11 +3,19 @@ import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
 import { registerCrudTools } from "./crud-tools.js";
 import { registerCustomTools } from "./custom-tools.js";
-import { resolveMcpConfig } from "./policy.js";
+import {
+	createIsolatedMcpRelease,
+	createWorkloadMcpRelease,
+	getAppMcpRelease,
+} from "./release.js";
 import { registerSchemaResources } from "./resources.js";
 import { registerRouteTools } from "./route-tools.js";
 import { createRuntimeScope, type QuestpieApp } from "./runtime.js";
-import type { McpExecutionOptions, WorkloadMcpServerOptions } from "./types.js";
+import type {
+	McpConfig,
+	McpExecutionOptions,
+	WorkloadMcpServerOptions,
+} from "./types.js";
 import {
 	createWorkloadMcpBoundary,
 	listWorkloadTools,
@@ -19,7 +27,12 @@ async function createServer(
 	options: McpExecutionOptions,
 	workload?: WorkloadMcpBoundary,
 ): Promise<McpServer> {
-	const config = resolveMcpConfig(app, options.config);
+	const release = workload
+		? createWorkloadMcpRelease(app, options.config)
+		: options.config
+			? createIsolatedMcpRelease(app, options.config)
+			: getAppMcpRelease(app);
+	const { config, catalog } = release;
 	const transport = options.transport ?? "http";
 	const accessMode =
 		transport === "stdio"
@@ -33,6 +46,7 @@ async function createServer(
 			accessMode,
 			config,
 		},
+		release.execution,
 		workload,
 	);
 
@@ -44,18 +58,35 @@ async function createServer(
 		{
 			capabilities: {
 				tools: {},
-				resources: {},
+				...(catalog.resources.collections.size > 0 ||
+				catalog.resources.globals.size > 0 ||
+				catalog.resources.routes.size > 0
+					? { resources: {} }
+					: {}),
 			},
 		},
 	);
-	await registerCrudTools(server, scope, config);
-	await registerRouteTools(server, scope, config);
-	registerSchemaResources(server, scope, config);
-	await registerCustomTools(server, scope);
+	await registerCrudTools(server, scope, config as McpConfig, catalog);
+	await registerRouteTools(server, scope, catalog);
+	registerSchemaResources(server, scope, catalog);
+	await registerCustomTools(server, scope, catalog);
 	if (workload) {
-		server.server.setRequestHandler(ListToolsRequestSchema, () =>
-			listWorkloadTools(workload),
+		server.server.setRequestHandler(ListToolsRequestSchema, (_request, extra) =>
+			listWorkloadTools(workload, release.execution, extra),
 		);
+	} else if (
+		[...catalog.collections.values()].every(
+			(entry) => entry.operations.length === 0,
+		) &&
+		[...catalog.globals.values()].every(
+			(entry) => entry.operations.length === 0,
+		) &&
+		catalog.routes.size === 0 &&
+		catalog.customTools.size === 0
+	) {
+		server.server.setRequestHandler(ListToolsRequestSchema, () => ({
+			tools: [],
+		}));
 	}
 
 	return server;
@@ -104,10 +135,7 @@ export async function createWorkloadMcpServer(
 		{
 			transport: "workload",
 			accessMode: "user",
-			config: {
-				...options.config,
-				resources: { schemas: false, routes: false },
-			},
+			config: options.config,
 		},
 		boundary,
 	);

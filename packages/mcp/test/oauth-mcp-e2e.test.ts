@@ -290,6 +290,30 @@ describe("MO13 end-to-end OAuth MCP flow + system mode", () => {
 		}
 	});
 
+	it("rejects an OAuth scope for an app entity omitted from the MCP catalog", async () => {
+		const setup = await setupApp();
+		try {
+			const response = await setup.app.auth.handler(
+				new Request(`${AUTH_BASE}/oauth2/register`, {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						redirect_uris: [REDIRECT_URI],
+						client_name: "Overbroad MCP Client",
+						token_endpoint_auth_method: "none",
+						grant_types: ["authorization_code"],
+						response_types: ["code"],
+						scope: "openid collections:user:read",
+					}),
+				}),
+			);
+
+			expect(response.status).toBe(400);
+		} finally {
+			await setup.cleanup();
+		}
+	});
+
 	async function setupApp() {
 		const setup = await buildMockApp(
 			{
@@ -326,8 +350,26 @@ describe("MO13 end-to-end OAuth MCP flow + system mode", () => {
 					mcp: {
 						crud: {
 							collections: {
-								posts: { read: true, write: true, delete: true },
-								lockedNotes: { read: true, write: true, delete: true },
+								posts: {
+									operations: {
+										list: true,
+										count: true,
+										get: true,
+										create: true,
+										update: true,
+										delete: true,
+									},
+								},
+								lockedNotes: {
+									operations: {
+										list: true,
+										count: true,
+										get: true,
+										create: true,
+										update: true,
+										delete: true,
+									},
+								},
 							},
 						},
 					},

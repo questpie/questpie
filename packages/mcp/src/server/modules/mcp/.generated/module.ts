@@ -19,6 +19,8 @@ import type { RouteDefinition, RouteParamsFromKey } from "questpie/types";
 
 export type McpCollections = Record<never, never>;
 
+export type McpChannels = Record<never, never>;
+
 export type McpGlobals = Record<never, never>;
 
 export type McpJobs = Record<never, never>;
@@ -42,6 +44,7 @@ export type McpModule = {
 	name: "questpie-mcp";
 	routes: McpRoutes;
 	collections: McpCollections;
+	channels: McpChannels;
 	globals: McpGlobals;
 	jobs: McpJobs;
 	fieldTypes: McpFieldTypes;
@@ -63,6 +66,7 @@ const _module: McpModule = {
 		"mcp:OPTIONS": _route_mcp_OPTIONS,
 	} as McpRoutes,
 	collections: {},
+	channels: {},
 	globals: {},
 	jobs: {},
 	messages: {},

@@ -5,6 +5,7 @@ import {
 	umbrellaScopeFor,
 } from "questpie";
 
+import { validateMcpPrincipal } from "./principal.js";
 import type {
 	McpAccessRule,
 	McpConfig,
@@ -23,22 +24,20 @@ export { defaultOperationScope, umbrellaScopeFor };
 export type { ScopeOperationKind };
 
 export const DEFAULT_MCP_CONFIG: Required<
-	Pick<McpConfig, "crud" | "routes" | "resources" | "http" | "stdio">
+	Pick<
+		McpConfig,
+		"crud" | "routes" | "resources" | "http" | "stdio" | "execution"
+	>
 > = {
 	crud: {
 		maxLimit: 100,
-		defaults: {},
 		collections: {},
 		globals: {},
 	},
 	routes: {
-		exposeAnnotated: true,
 		routes: {},
 	},
-	resources: {
-		schemas: true,
-		routes: true,
-	},
+	resources: {},
 	http: {
 		accessMode: "user",
 		enableJsonResponse: true,
@@ -46,15 +45,13 @@ export const DEFAULT_MCP_CONFIG: Required<
 	stdio: {
 		trustedMaintenance: false,
 	},
+	execution: {},
 };
 
 export type EntityKind = "collection" | "global" | "route";
 
 export interface ResolvedMcpPolicy {
 	expose: boolean;
-	read?: boolean | McpAccessRule;
-	write?: boolean | McpAccessRule;
-	delete?: boolean | McpAccessRule;
 	operations: Record<string, boolean | McpAccessRule>;
 	requiredScopes?: McpRequiredScopes;
 	operationScopes: Record<string, McpRequiredScopes>;
@@ -68,20 +65,71 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 	return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+const UNSAFE_CONFIG_KEYS = new Set(["__proto__", "prototype", "constructor"]);
+
+function ownDataEntries(value: unknown): Array<[string, unknown]> {
+	if (!isPlainObject(value)) return [];
+	try {
+		return Object.entries(Object.getOwnPropertyDescriptors(value))
+			.filter(
+				([key, descriptor]) =>
+					!UNSAFE_CONFIG_KEYS.has(key) && "value" in descriptor,
+			)
+			.map(([key, descriptor]) => [
+				key,
+				(descriptor as PropertyDescriptor & { value: unknown }).value,
+			]);
+	} catch {
+		return [];
+	}
+}
+
+function safeCloneConfigValue(value: unknown): unknown {
+	if (Array.isArray(value)) {
+		return value.map((entry) => safeCloneConfigValue(entry));
+	}
+	if (!isPlainObject(value)) return value;
+	const clone: Record<string, unknown> = Object.create(null);
+	for (const [key, entry] of ownDataEntries(value)) {
+		clone[key] = safeCloneConfigValue(entry);
+	}
+	return clone;
+}
+
 function mergeDeep<T extends Record<string, unknown>>(
 	base: T,
 	override?: Record<string, unknown>,
 ): T {
-	if (!override) return { ...base };
-	const out: Record<string, unknown> = { ...base };
-	for (const [key, value] of Object.entries(override)) {
+	const out = safeCloneConfigValue(base) as Record<string, unknown>;
+	for (const [key, value] of ownDataEntries(override)) {
 		if (isPlainObject(value) && isPlainObject(out[key])) {
 			out[key] = mergeDeep(out[key] as Record<string, unknown>, value);
 		} else if (value !== undefined) {
-			out[key] = value;
+			out[key] = safeCloneConfigValue(value);
 		}
 	}
 	return out as T;
+}
+
+function ownValue<T>(
+	record: Record<string, T> | undefined,
+	key: string,
+): T | undefined {
+	if (!record || !Object.prototype.hasOwnProperty.call(record, key)) {
+		return undefined;
+	}
+	return record[key];
+}
+
+function replaceOwnEntries<T>(
+	base: Record<string, T> | undefined,
+	override: Record<string, T>,
+): Record<string, T> {
+	const next = safeCloneConfigValue(base ?? {}) as Record<string, T>;
+	for (const [key, value] of ownDataEntries(override)) {
+		next[key] = safeCloneConfigValue(value) as T;
+	}
+	return next;
 }
 
 export function resolveMcpConfig(
@@ -89,55 +137,147 @@ export function resolveMcpConfig(
 	override?: McpConfig,
 ): McpConfig {
 	const appConfig = (app.state?.config?.mcp ?? {}) as McpConfig;
-	return mergeDeep(
+	const safeOverride = safeCloneConfigValue(override) as McpConfig | undefined;
+	const resolved = mergeDeep(
 		mergeDeep(
 			DEFAULT_MCP_CONFIG as unknown as Record<string, unknown>,
 			appConfig as Record<string, unknown>,
 		),
-		override as Record<string, unknown> | undefined,
+		safeOverride as Record<string, unknown> | undefined,
 	) as McpConfig;
+	if (safeOverride?.crud?.collections) {
+		resolved.crud = {
+			...resolved.crud,
+			collections: replaceOwnEntries(
+				resolved.crud?.collections,
+				safeOverride.crud.collections,
+			),
+		};
+	}
+	if (safeOverride?.crud?.globals) {
+		resolved.crud = {
+			...resolved.crud,
+			globals: replaceOwnEntries(
+				resolved.crud?.globals,
+				safeOverride.crud.globals,
+			),
+		};
+	}
+	if (safeOverride?.routes?.routes) {
+		resolved.routes = {
+			...resolved.routes,
+			routes: replaceOwnEntries(
+				resolved.routes?.routes,
+				safeOverride.routes.routes,
+			),
+		};
+	}
+	return resolved;
+}
+
+/**
+ * Resolve workload authority maps atomically. A caller-provided map replaces
+ * the corresponding app map instead of inheriting entries or nested authority.
+ */
+export function resolveWorkloadMcpConfig(
+	app: Questpie<any>,
+	override?: McpConfig,
+): McpConfig {
+	const resolved = resolveMcpConfig(app, override);
+	if (!override) return resolved;
+	const safeOverride = safeCloneConfigValue(override) as McpConfig;
+
+	if (
+		Object.prototype.hasOwnProperty.call(safeOverride.crud ?? {}, "collections")
+	) {
+		resolved.crud = {
+			...resolved.crud,
+			collections: safeCloneConfigValue(
+				safeOverride.crud?.collections ?? {},
+			) as Record<string, McpEntityPolicy>,
+		};
+	}
+	if (
+		Object.prototype.hasOwnProperty.call(safeOverride.crud ?? {}, "globals")
+	) {
+		resolved.crud = {
+			...resolved.crud,
+			globals: safeCloneConfigValue(safeOverride.crud?.globals ?? {}) as Record<
+				string,
+				McpEntityPolicy
+			>,
+		};
+	}
+	if (
+		Object.prototype.hasOwnProperty.call(safeOverride.routes ?? {}, "routes")
+	) {
+		resolved.routes = {
+			...resolved.routes,
+			routes: safeCloneConfigValue(safeOverride.routes?.routes ?? {}) as Record<
+				string,
+				McpEntityPolicy
+			>,
+		};
+	}
+	for (const kind of ["collections", "globals", "routes"] as const) {
+		if (
+			Object.prototype.hasOwnProperty.call(safeOverride.resources ?? {}, kind)
+		) {
+			resolved.resources = {
+				...resolved.resources,
+				[kind]: safeCloneConfigValue(
+					safeOverride.resources?.[kind] ?? {},
+				) as Record<string, boolean>,
+			};
+		}
+	}
+	return resolved;
 }
 
 export function resolveEntityPolicy(
 	config: McpConfig,
 	kind: EntityKind,
 	name: string,
-	transport: McpTransportKind = "http",
+	_transport: McpTransportKind = "http",
 ): ResolvedMcpPolicy {
+	const crud = ownValue(config as unknown as Record<string, unknown>, "crud") as
+		| McpConfig["crud"]
+		| undefined;
+	const routes = ownValue(
+		config as unknown as Record<string, unknown>,
+		"routes",
+	) as McpConfig["routes"] | undefined;
 	if (kind === "route") {
-		const override = config.routes?.routes?.[name];
-		return normalizePolicy({ expose: true, read: true }, override);
+		const routePolicies = ownValue(
+			routes as unknown as Record<string, unknown>,
+			"routes",
+		) as Record<string, McpEntityPolicy> | undefined;
+		const override = ownValue(routePolicies, name);
+		return normalizePolicy({ expose: false }, override);
 	}
 
 	if (kind === "global") {
-		const transportDefaults =
-			transport === "stdio"
-				? { read: true, write: true }
-				: { read: true, write: false };
-		const defaults = {
-			...transportDefaults,
-			...(config.crud?.defaults?.globals ?? {}),
-		};
-		const override = config.crud?.globals?.[name];
-		return normalizePolicy({ expose: true, ...defaults }, override);
+		const globals = ownValue(
+			crud as unknown as Record<string, Record<string, McpEntityPolicy>>,
+			"globals",
+		);
+		const override = ownValue(globals, name);
+		return normalizePolicy({ expose: false }, override);
 	}
 
-	const transportDefaults =
-		transport === "stdio"
-			? { read: true, write: true, delete: true }
-			: { read: true, write: false, delete: false };
-	const defaults = {
-		...transportDefaults,
-		...(config.crud?.defaults?.collections ?? {}),
-	};
-	const override = config.crud?.collections?.[name];
-	return normalizePolicy({ expose: true, ...defaults }, override);
+	const collections = ownValue(
+		crud as unknown as Record<string, Record<string, McpEntityPolicy>>,
+		"collections",
+	);
+	const override = ownValue(collections, name);
+	return normalizePolicy({ expose: false }, override);
 }
 
 function normalizePolicy(
 	defaults: Partial<ResolvedMcpPolicy>,
 	override?: McpEntityPolicy,
 ): ResolvedMcpPolicy {
+	override = safeCloneConfigValue(override) as McpEntityPolicy | undefined;
 	if (override === false) {
 		return {
 			expose: false,
@@ -149,9 +289,6 @@ function normalizePolicy(
 
 	const base: ResolvedMcpPolicy = {
 		expose: defaults.expose ?? true,
-		read: defaults.read,
-		write: defaults.write,
-		delete: defaults.delete,
 		operations: { ...(defaults.operations ?? {}) },
 		requiredScopes: defaults.requiredScopes,
 		operationScopes: { ...(defaults.operationScopes ?? {}) },
@@ -161,12 +298,13 @@ function normalizePolicy(
 		description: defaults.description,
 	};
 
-	if (override === true || override === undefined) return base;
+	if (override === undefined) return base;
+	if (override === true) return { ...base, expose: true };
 
 	return {
 		...base,
 		...override,
-		expose: override.expose ?? base.expose,
+		expose: override.expose ?? true,
 		operations: {
 			...base.operations,
 			...(override.operations ?? {}),
@@ -195,12 +333,7 @@ export function operationRule(
 	policy: ResolvedMcpPolicy,
 	operation: string,
 ): boolean | McpAccessRule | undefined {
-	if (policy.operations[operation] !== undefined) {
-		return policy.operations[operation];
-	}
-	if (operation === "delete") return policy.delete;
-	if (operation === "create" || operation === "update") return policy.write;
-	return policy.read;
+	return policy.operations[operation];
 }
 
 /** Normalize an {@link McpRequiredScopes} declaration to a scope list. */
@@ -246,10 +379,12 @@ export function requiredScopesForOperation(
  */
 export function scopesFromContext(
 	ctx: AppContext & Partial<RequestContext>,
-): string[] | undefined {
+): string[] | undefined | null {
 	const principal = ctx.principal;
-	if (principal && principal.kind === "oauth") return principal.scopes;
-	return undefined;
+	if (principal === undefined || principal === null) return undefined;
+	const validated = validateMcpPrincipal(principal);
+	if (!validated) return null;
+	return validated.kind === "oauth" ? validated.scopes : undefined;
 }
 
 /**
@@ -284,9 +419,10 @@ export function scopesFromContext(
  * effective `oauth` permission is therefore `scopes ∩ RBAC`.
  */
 export function scopeGateAllows(
-	heldScopes: string[] | undefined,
+	heldScopes: string[] | undefined | null,
 	required: string[],
 ): boolean {
+	if (heldScopes === null) return false;
 	if (heldScopes === undefined) return true;
 	if (required.length === 0) return true;
 	const held = new Set(heldScopes);
@@ -303,13 +439,15 @@ export async function evaluateMcpRule(
 		Pick<McpExecutionOptions, "transport" | "accessMode" | "ctx">
 	>,
 ): Promise<boolean> {
+	const scopes = scopesFromContext(options.ctx);
+	if (scopes === null) return false;
 	if (rule === undefined) return true;
 	if (typeof rule === "boolean") return rule;
 	return rule({
 		transport: options.transport,
 		accessMode: options.accessMode,
 		session: options.ctx.session,
-		scopes: scopesFromContext(options.ctx),
+		scopes,
 		ctx: options.ctx,
 	});
 }

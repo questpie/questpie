@@ -67,6 +67,7 @@ const reportRoute = route()
 	.handler(async ({ input }) => ({ period: input.period, ok: true }));
 
 const scopedCustomTool = mcpTool("custom.scoped", {
+	access: true,
 	description: "A custom tool gated on an explicit scope.",
 	inputSchema: z.object({ message: z.string() }),
 	scopes: "custom:scoped:use",
@@ -76,6 +77,8 @@ const scopedCustomTool = mcpTool("custom.scoped", {
 }));
 
 const openCustomTool = mcpTool("custom.open", {
+	access: true,
+	scopes: false,
 	description: "A custom tool with no scope requirement.",
 	inputSchema: z.object({ message: z.string() }),
 }).handler(async ({ input }) => ({
@@ -137,10 +140,7 @@ function mutableOauthCtx(scopesRef: { current: string[] }): {
 		user: user as any,
 		clientId: "client-mut",
 		tokenId: "token-mut",
-		// Live view onto the mutable ref: `scopesFromContext` reads this each call.
-		get scopes() {
-			return scopesRef.current;
-		},
+		scopes: scopesRef.current,
 	};
 	const ctx = createTestContext({
 		accessMode: "user",
@@ -235,11 +235,36 @@ describe("MO8 OAuth scope gate", () => {
 				mcp: {
 					crud: {
 						collections: {
-							posts: { read: true, write: true, delete: true },
-							lockedNotes: { read: true, write: true, delete: true },
+							posts: {
+								operations: {
+									list: true,
+									count: true,
+									get: true,
+									create: true,
+									update: true,
+									delete: true,
+								},
+							},
+							lockedNotes: {
+								operations: {
+									list: true,
+									count: true,
+									get: true,
+									create: true,
+									update: true,
+									delete: true,
+								},
+							},
 						},
 						globals: {
-							siteSettings: { read: true, write: true },
+							siteSettings: {
+								operations: { get: true, update: true },
+							},
+						},
+					},
+					routes: {
+						routes: {
+							"reports/generate": { operations: { execute: true } },
 						},
 					},
 				},
@@ -421,7 +446,11 @@ describe("MO8 OAuth scope gate", () => {
 
 			// REVOKE the delete scope on the shared ctx. The tool stays registered
 			// (registration already happened) and still appears in tools/list.
-			scopesRef.current = ["collections:posts:read"];
+			scopesRef.current.splice(
+				0,
+				scopesRef.current.length,
+				"collections:posts:read",
+			);
 			const stillListed = (await client.listTools()).tools.map((t) => t.name);
 			expect(stillListed).toContain("collections.posts.delete");
 
@@ -467,7 +496,7 @@ describe("MO8 OAuth scope gate", () => {
 			);
 
 			// Revoke the scope; the tool stays listed but the call-time gate fires.
-			scopesRef.current = [];
+			scopesRef.current.splice(0);
 			expect((await client.listTools()).tools.map((t) => t.name)).toContain(
 				"custom.scoped",
 			);

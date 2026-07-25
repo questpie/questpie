@@ -122,7 +122,9 @@ describe("planEgressFirewall — applies on Linux with tools + caps", () => {
 		expect(plan.applied).toBe(true);
 		if (plan.applied) {
 			expect(plan.allowCount).toBe(1);
-			expect(plan.nftRuleset).toContain("ip daddr 93.184.216.34 tcp dport 443 accept");
+			expect(plan.nftRuleset).toContain(
+				"ip daddr 93.184.216.34 tcp dport 443 accept",
+			);
 		}
 	});
 });
@@ -132,7 +134,9 @@ describe("buildNftRuleset — drops the full private/metadata set", () => {
 
 	it("declares the inet table + default-drop output chain", () => {
 		expect(ruleset).toContain(`table inet ${NFT_TABLE} {`);
-		expect(ruleset).toContain("type filter hook output priority 0; policy drop;");
+		expect(ruleset).toContain(
+			"type filter hook output priority 0; policy drop;",
+		);
 	});
 
 	it("accepts established/related + loopback so own-process plumbing works", () => {
@@ -184,9 +188,15 @@ describe("buildNftRuleset — drops the full private/metadata set", () => {
 });
 
 describe("wrapWithNetns — pure argv transform", () => {
-	const guestArgv = ["/usr/bin/deno", "run", "--no-prompt", "--allow-net=", "/x/guest-entry.ts"];
+	const guestArgv = [
+		"/usr/bin/deno",
+		"run",
+		"--no-prompt",
+		"--allow-net=",
+		"/x/guest-entry.ts",
+	];
 
-	it("prefixes unshare --net --map-root-user and exec's the guest as \"$@\"", () => {
+	it('prefixes unshare --net --map-root-user and exec\'s the guest as "$@"', () => {
 		const { cmd, args } = wrapWithNetns(guestArgv, "/run/q.nft");
 		expect(cmd).toBe("unshare");
 		expect(args.slice(0, 3)).toEqual(["--net", "--map-root-user", "--"]);
@@ -203,7 +213,9 @@ describe("wrapWithNetns — pure argv transform", () => {
 		expect(bootstrap).toContain("ip link set lo up");
 		expect(bootstrap).toContain("nft -f '/run/q.nft'");
 		// exec the guest LAST.
-		expect(bootstrap.indexOf("nft -f")).toBeLessThan(bootstrap.indexOf('exec "$@"'));
+		expect(bootstrap.indexOf("nft -f")).toBeLessThan(
+			bootstrap.indexOf('exec "$@"'),
+		);
 	});
 
 	it("pins a deterministic PATH so nft/ip resolve under the cleared child env", () => {
@@ -211,7 +223,9 @@ describe("wrapWithNetns — pure argv transform", () => {
 		const bootstrap = args.find((a) => a.includes("exec")) as string;
 		expect(bootstrap).toContain("PATH=/usr/sbin:/usr/bin:/sbin:/bin");
 		// PATH is set before nft/ip run.
-		expect(bootstrap.indexOf("PATH=")).toBeLessThan(bootstrap.indexOf("nft -f"));
+		expect(bootstrap.indexOf("PATH=")).toBeLessThan(
+			bootstrap.indexOf("nft -f"),
+		);
 	});
 
 	it("single-quotes the ruleset path (defends against odd path chars)", () => {

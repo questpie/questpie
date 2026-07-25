@@ -21,6 +21,8 @@
  * that — the proxy reaches the broker only through the supervisor relay.
  */
 
+import { types as nodeTypes } from "node:util";
+
 /**
  * The PRIMITIVE surface exposed to a sandboxed guest, mirroring the server `ctx`
  * names (consistent-naming principle). Methods are addressed as dotted strings
@@ -85,6 +87,8 @@ export type BindingErrorCode =
 export interface BindingError {
 	code: BindingErrorCode;
 	message: string;
+	/** Safe identifier that links a public failure to trusted diagnostics. */
+	correlationId?: string;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -170,6 +174,13 @@ export type BrokerRpcResponse =
  */
 export const HTTP_FETCH_BODY_CAP_BYTES = 5 * 1024 * 1024;
 
+/** JSON value budget for the base64 HTTP response plus bounded metadata. */
+export const BROKER_HTTP_RESULT_CAP_BYTES =
+	4 * Math.ceil(HTTP_FETCH_BODY_CAP_BYTES / 3) + 124 * 1024;
+
+/** Maximum JSON value returned by non-HTTP native bindings. */
+export const BROKER_NATIVE_RESULT_CAP_BYTES = 768 * 1024;
+
 /** `args` of an `http.fetch` RPC (guest → broker). */
 export interface HttpFetchRequest {
 	/** Absolute `http:`/`https:` URL. Other schemes are rejected. */
@@ -199,6 +210,218 @@ export interface HttpFetchResponse {
 	bodyBase64: string;
 	/** True if the body hit the cap and was cut (the broker rejects by default). */
 	truncated: boolean;
+}
+
+export type BrokerJsonValue =
+	| null
+	| boolean
+	| number
+	| string
+	| BrokerJsonValue[]
+	| { [key: string]: BrokerJsonValue };
+
+export type BoundedBrokerValue =
+	| { ok: true; value: BrokerJsonValue; bytes: number }
+	| { ok: false };
+
+function jsonStringBytes(value: string, maximum: number): number {
+	if (maximum < 2 || value.length + 2 > maximum) return maximum + 1;
+	let bytes = 2;
+	for (let index = 0; index < value.length; index += 1) {
+		const code = value.charCodeAt(index);
+		if (code === 0x22 || code === 0x5c) bytes += 2;
+		else if (code <= 0x1f) {
+			bytes +=
+				code === 0x08 ||
+				code === 0x09 ||
+				code === 0x0a ||
+				code === 0x0c ||
+				code === 0x0d
+					? 2
+					: 6;
+		} else if (code <= 0x7f) bytes += 1;
+		else if (code <= 0x7ff) bytes += 2;
+		else if (
+			code >= 0xd800 &&
+			code <= 0xdbff &&
+			index + 1 < value.length &&
+			value.charCodeAt(index + 1) >= 0xdc00 &&
+			value.charCodeAt(index + 1) <= 0xdfff
+		) {
+			bytes += 4;
+			index += 1;
+		} else if (code >= 0xd800 && code <= 0xdfff) bytes += 6;
+		else bytes += 3;
+		if (bytes > maximum) return maximum + 1;
+	}
+	return bytes;
+}
+
+const OMIT_BROKER_VALUE = Symbol("omit-broker-value");
+
+/**
+ * Snapshot an arbitrary host result into inert JSON without invoking accessors,
+ * proxy traps, or user-owned `toJSON`, while enforcing depth/node/byte limits
+ * before the HTTP route calls `JSON.stringify`.
+ */
+export function snapshotBoundedBrokerValue(
+	value: unknown,
+	maxBytes: number,
+	maxDepth = 64,
+	maxNodes = 100_000,
+): BoundedBrokerValue {
+	const state = { bytes: 0, nodes: 0 };
+	const seen = new Set<object>();
+
+	const consume = (bytes: number): boolean => {
+		state.bytes += bytes;
+		return state.bytes <= maxBytes;
+	};
+	const snapshot = (
+		current: unknown,
+		depth: number,
+		arrayItem: boolean,
+	): BrokerJsonValue | typeof OMIT_BROKER_VALUE => {
+		state.nodes += 1;
+		if (state.nodes > maxNodes || depth > maxDepth) {
+			throw new Error("invalid broker value");
+		}
+		if (current === undefined) {
+			if (!arrayItem) return OMIT_BROKER_VALUE;
+			if (!consume(4)) throw new Error("invalid broker value");
+			return null;
+		}
+		if (current === null) {
+			if (!consume(4)) throw new Error("invalid broker value");
+			return null;
+		}
+		if (typeof current === "boolean") {
+			if (!consume(current ? 4 : 5)) throw new Error("invalid broker value");
+			return current;
+		}
+		if (typeof current === "number") {
+			if (!Number.isFinite(current) || !consume(String(current).length)) {
+				throw new Error("invalid broker value");
+			}
+			return current;
+		}
+		if (typeof current === "string") {
+			if (!consume(jsonStringBytes(current, maxBytes - state.bytes))) {
+				throw new Error("invalid broker value");
+			}
+			return current;
+		}
+		if (typeof current === "bigint") {
+			const normalized = current.toString();
+			if (!consume(jsonStringBytes(normalized, maxBytes - state.bytes))) {
+				throw new Error("invalid broker value");
+			}
+			return normalized;
+		}
+		if (
+			typeof current !== "object" ||
+			current === null ||
+			nodeTypes.isProxy(current)
+		) {
+			throw new Error("invalid broker value");
+		}
+		const prototype = Object.getPrototypeOf(current);
+		if (prototype === Date.prototype) {
+			let normalized: string;
+			try {
+				if (!Number.isFinite(Date.prototype.getTime.call(current))) {
+					throw new Error("invalid broker value");
+				}
+				normalized = Date.prototype.toISOString.call(current);
+			} catch {
+				throw new Error("invalid broker value");
+			}
+			if (!consume(jsonStringBytes(normalized, maxBytes - state.bytes))) {
+				throw new Error("invalid broker value");
+			}
+			return normalized;
+		}
+		if (seen.has(current)) throw new Error("invalid broker value");
+		seen.add(current);
+		try {
+			const descriptors = Object.getOwnPropertyDescriptors(current);
+			if (Array.isArray(current)) {
+				if (prototype !== Array.prototype)
+					throw new Error("invalid broker value");
+				const lengthDescriptor = descriptors.length;
+				const length =
+					lengthDescriptor && "value" in lengthDescriptor
+						? lengthDescriptor.value
+						: -1;
+				if (
+					!Number.isSafeInteger(length) ||
+					length < 0 ||
+					length > maxNodes ||
+					Object.keys(descriptors).some(
+						(key) => key !== "length" && !/^(0|[1-9]\d*)$/.test(key),
+					)
+				) {
+					throw new Error("invalid broker value");
+				}
+				if (!consume(2 + Math.max(0, length - 1))) {
+					throw new Error("invalid broker value");
+				}
+				const result: BrokerJsonValue[] = [];
+				for (let index = 0; index < length; index += 1) {
+					const descriptor = descriptors[String(index)];
+					if (!descriptor) {
+						if (!consume(4)) throw new Error("invalid broker value");
+						result.push(null);
+						continue;
+					}
+					if (!descriptor.enumerable || !("value" in descriptor)) {
+						throw new Error("invalid broker value");
+					}
+					const item = snapshot(descriptor.value, depth + 1, true);
+					if (item === OMIT_BROKER_VALUE)
+						throw new Error("invalid broker value");
+					result.push(item);
+				}
+				return result;
+			}
+			if (prototype !== Object.prototype && prototype !== null) {
+				throw new Error("invalid broker value");
+			}
+			if (!consume(2)) throw new Error("invalid broker value");
+			const result: Record<string, BrokerJsonValue> = Object.create(null);
+			let properties = 0;
+			for (const [key, descriptor] of Object.entries(descriptors)) {
+				if (!descriptor.enumerable) continue;
+				if (!("value" in descriptor) || key === "toJSON") {
+					throw new Error("invalid broker value");
+				}
+				const item = snapshot(descriptor.value, depth + 1, false);
+				if (item === OMIT_BROKER_VALUE) continue;
+				if (
+					!consume(
+						(properties > 0 ? 1 : 0) +
+							jsonStringBytes(key, maxBytes - state.bytes) +
+							1,
+					)
+				) {
+					throw new Error("invalid broker value");
+				}
+				result[key] = item;
+				properties += 1;
+			}
+			return result;
+		} finally {
+			seen.delete(current);
+		}
+	};
+
+	try {
+		const normalized = snapshot(value, 0, false);
+		if (normalized === OMIT_BROKER_VALUE) return { ok: false };
+		return { ok: true, value: normalized, bytes: state.bytes };
+	} catch {
+		return { ok: false };
+	}
 }
 
 /**

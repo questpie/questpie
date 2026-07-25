@@ -8,6 +8,8 @@ const inputSchema = z.object({
 });
 
 export default mcpTool("barbershop.check-availability", {
+	access: true,
+	scopes: false,
 	description:
 		"Check whether a barber is available on a given date. Returns working hours and booked time slots.",
 	inputSchema,

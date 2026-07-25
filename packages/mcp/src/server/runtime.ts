@@ -6,6 +6,12 @@ import {
 	type RequestContext,
 } from "questpie";
 
+import type { McpExecutionBoundary } from "./execution-boundary.js";
+import {
+	McpPublicError,
+	snapshotBoundedMcpValue,
+	toMcpToolError,
+} from "./execution-boundary.js";
 import type {
 	McpAccessMode,
 	McpExecutionOptions,
@@ -21,12 +27,14 @@ export interface RuntimeScope {
 	accessMode: McpAccessMode;
 	request?: Request;
 	workload?: WorkloadMcpBoundary;
+	execution: McpExecutionBoundary;
 	getContext(): Promise<AppContext & Partial<RequestContext>>;
 }
 
 export function createRuntimeScope(
 	app: QuestpieApp,
 	options: McpExecutionOptions,
+	execution: McpExecutionBoundary,
 	workload?: WorkloadMcpBoundary,
 ): RuntimeScope {
 	const transport = options.transport ?? "http";
@@ -42,6 +50,7 @@ export function createRuntimeScope(
 		accessMode,
 		request: options.request,
 		workload,
+		execution,
 		async getContext() {
 			if (options.ctx) return options.ctx;
 			if (options.request) {
@@ -82,56 +91,48 @@ export function toRequestContext(
 	};
 }
 
-export function safeJsonStringify(value: unknown): string {
-	return JSON.stringify(
+const MAX_MCP_RUNTIME_JSON_BYTES = 4 * 1024 * 1024;
+const UTF8_ENCODER = new TextEncoder();
+
+function runtimeSnapshot(value: unknown) {
+	return snapshotBoundedMcpValue(
 		value,
-		(_key, nestedValue) => {
-			if (typeof nestedValue === "bigint") return nestedValue.toString();
-			if (nestedValue instanceof Date) return nestedValue.toISOString();
-			return nestedValue;
+		{
+			maxBytes: MAX_MCP_RUNTIME_JSON_BYTES,
+			maxValueDepth: 64,
+			maxValueNodes: 100_000,
 		},
-		2,
+		"output_too_large",
 	);
 }
 
-export function toToolResult(value: unknown): CallToolResult {
-	if (
-		value &&
-		typeof value === "object" &&
-		("content" in value || "structuredContent" in value || "isError" in value)
-	) {
-		const result = value as CallToolResult;
-		if (!result.content) {
-			return {
-				...result,
-				content: [
-					{
-						type: "text",
-						text: safeJsonStringify(result.structuredContent ?? null),
-					},
-				],
-			};
-		}
-		return result;
+function stringifyRuntimeSnapshot(value: ReturnType<typeof runtimeSnapshot>) {
+	const serialized = JSON.stringify(value, null, 2);
+	if (UTF8_ENCODER.encode(serialized).byteLength > MAX_MCP_RUNTIME_JSON_BYTES) {
+		throw new McpPublicError("output_too_large");
 	}
+	return serialized;
+}
 
+export function safeJsonStringify(value: unknown): string {
+	return stringifyRuntimeSnapshot(runtimeSnapshot(value));
+}
+
+export function toToolResult(value: unknown): CallToolResult {
+	const snapshot = runtimeSnapshot(value);
 	const structuredContent =
-		value && typeof value === "object" && !Array.isArray(value)
-			? (value as Record<string, unknown>)
-			: { value };
+		snapshot && typeof snapshot === "object" && !Array.isArray(snapshot)
+			? snapshot
+			: { value: snapshot };
 
 	return {
 		structuredContent,
-		content: [{ type: "text", text: safeJsonStringify(value) }],
+		content: [{ type: "text", text: stringifyRuntimeSnapshot(snapshot) }],
 	};
 }
 
 export function toToolError(error: unknown): CallToolResult {
-	const message = error instanceof Error ? error.message : String(error);
-	return {
-		isError: true,
-		content: [{ type: "text", text: message }],
-	};
+	return toMcpToolError(error);
 }
 
 export function jsonResource(uri: string, value: unknown) {

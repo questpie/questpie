@@ -20,7 +20,8 @@
  *
  *   Per-subprocess flags:
  *     --v8-flags=--max-old-space-size=<memoryMb>   hard memory bound
- *     --allow-net=<hosts>     scoped fetch() allowlist   (INDEPENDENT axis)
+ *     --allow-net=<hosts>     compute-only direct fetch allowlist
+ *     --allow-net=[]          all bindings guests (network stays host-brokered)
  *     --allow-import=<hosts>  scoped module-import allowlist (INDEPENDENT axis)
  *     --no-prompt             never block on a permission prompt
  *     (no --allow-read/write/env/run/ffi/sys → all DENIED by default)
@@ -32,9 +33,10 @@
  *
  * EGRESS / SSRF: net + import hosts are validated against the private-IP policy
  * (`net-validation.ts`) at request time — a host that IS or RESOLVES TO a
- * private/link-local/loopback/metadata IP is rejected before spawn. The BASELINE
- * runtime defense is the brokered `http.fetch` path (guest runs `--allow-net=[]`,
- * so it cannot open sockets at all → no DNS-rebind surface).
+ * private/link-local/loopback/metadata IP is rejected before spawn. Bindings
+ * guests always run with `--allow-net=[]`; their declared `net` capability stays
+ * host-side and only the brokered, resolve/validate/pin `http.fetch` can use it.
+ * Legacy compute-only guests retain direct Deno networking for compatibility.
  *
  * DEFENSE-IN-DEPTH (LINUX cloud workers only): on a capable Linux host the guest
  * subprocess is additionally wrapped in a NETWORK NAMESPACE with an nftables
@@ -64,6 +66,14 @@
 import { spawn } from "node:child_process";
 import { Readable, Writable } from "node:stream";
 
+import {
+	BROKER_FRAME_CAP_BYTES,
+	BROKER_HTTP_BODY_CAP_BYTES,
+	BROKER_TOTAL_OUTPUT_CAP_BYTES,
+	brokerRequestWireCap,
+	brokerResultValueCap,
+	brokerResponseWireCap,
+} from "./broker-wire.ts";
 import {
 	type EgressFirewallPlan,
 	planEgressFirewall,
@@ -114,7 +124,6 @@ import {
 
 /** Bound on a single binding RPC round-trip to the host broker. */
 const BROKER_FETCH_TIMEOUT_MS = 10_000;
-const MAX_BROKER_RESPONSE_BYTES = 1_048_576;
 
 const DEFAULT_TIMEOUT_MS = 5_000;
 const MAX_TIMEOUT_MS = 30_000;
@@ -123,8 +132,6 @@ const MIN_MEMORY_MB = 16;
 const MAX_MEMORY_MB = 1024;
 const MAX_REQUEST_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_CONSUMED_WORKLOAD_ADMISSIONS = 10_000;
-const MAX_FRAME_BYTES = 2 * 1024 * 1024;
-const MAX_TOTAL_OUTPUT_BYTES = 3 * 1024 * 1024;
 const MAX_STDERR_BYTES = 256 * 1024;
 const MAX_RPC_COUNT = 256;
 const MAX_INFLIGHT_RPCS = 16;
@@ -138,7 +145,11 @@ const GUEST_BINDINGS_PATH = new URL("./guest-bindings.ts", import.meta.url)
 const GUEST_ENTRY_SOURCE = await Deno.readTextFile(GUEST_ENTRY_PATH);
 const GUEST_BINDINGS_SOURCE = await Deno.readTextFile(GUEST_BINDINGS_PATH);
 const GUEST_RUNTIME_MODULE = guestRuntimeDataUrl(
-	bundleGuestRuntimeSource(GUEST_ENTRY_SOURCE, GUEST_BINDINGS_SOURCE),
+	bundleGuestRuntimeSource(
+		GUEST_ENTRY_SOURCE,
+		GUEST_BINDINGS_SOURCE,
+		BROKER_HTTP_BODY_CAP_BYTES,
+	),
 );
 const DENO_BIN = Deno.env.get("DENO_BIN") ?? Deno.execPath();
 
@@ -201,7 +212,10 @@ async function readStream(
 		if (done) break;
 		streamTotal += value.byteLength;
 		budget.total += value.byteLength;
-		if (streamTotal > maximumBytes || budget.total > MAX_TOTAL_OUTPUT_BYTES) {
+		if (
+			streamTotal > maximumBytes ||
+			budget.total > BROKER_TOTAL_OUTPUT_CAP_BYTES
+		) {
 			onLimit();
 			await reader.cancel();
 			throw new SandboxOutputLimitError();
@@ -509,7 +523,7 @@ async function brokerCall(
 				const { value, done } = await reader.read();
 				if (done) break;
 				total += value.byteLength;
-				if (total > MAX_BROKER_RESPONSE_BYTES) {
+				if (total > brokerResponseWireCap(method)) {
 					await reader.cancel();
 					return {
 						ok: false,
@@ -530,7 +544,10 @@ async function brokerCall(
 		}
 		const text = new TextDecoder().decode(bytes);
 		try {
-			const parsed = parseBrokerResponse(JSON.parse(text));
+			const parsed = parseBrokerResponse(
+				JSON.parse(text),
+				brokerResultValueCap(method),
+			);
 			if (!res.ok) {
 				return parsed && !parsed.ok
 					? parsed
@@ -638,9 +655,21 @@ async function relayBindingsRun(
 	//    slow broker call doesn't block reading further frames.
 	let outcome: RunOutcome | null = null;
 	let terminalFailure: string | null = null;
-	let pending = "";
+	let pendingChunks: Uint8Array[] = [];
+	let pendingBytes = 0;
 	let rpcCount = 0;
 	const inflight = new Set<Promise<void>>();
+	const takePendingLine = (): string => {
+		const bytes = new Uint8Array(pendingBytes);
+		let offset = 0;
+		for (const chunk of pendingChunks) {
+			bytes.set(chunk, offset);
+			offset += chunk.byteLength;
+		}
+		pendingChunks = [];
+		pendingBytes = 0;
+		return decoder.decode(bytes);
+	};
 
 	const handleLine = async (line: string) => {
 		if (!line.startsWith(FRAME_MARKER)) return; // stray output → ignore
@@ -664,6 +693,13 @@ async function relayBindingsRun(
 			typeof msg.id === "number" &&
 			typeof msg.method === "string"
 		) {
+			if (
+				encoder.encode(line).byteLength >
+				brokerRequestWireCap(msg.method) + FRAME_MARKER.length
+			) {
+				onLimit();
+				throw new SandboxOutputLimitError();
+			}
 			rpcCount += 1;
 			if (rpcCount > MAX_RPC_COUNT) {
 				onLimit();
@@ -734,36 +770,35 @@ async function relayBindingsRun(
 			const { value, done } = await reader.read();
 			if (done) break;
 			outputBudget.total += value.byteLength;
-			if (outputBudget.total > MAX_TOTAL_OUTPUT_BYTES) {
+			if (outputBudget.total > BROKER_TOTAL_OUTPUT_CAP_BYTES) {
 				onLimit();
 				throw new SandboxOutputLimitError();
 			}
-			pending += decoder.decode(value, { stream: true });
-			if (
-				!pending.includes("\n") &&
-				encoder.encode(pending).byteLength > MAX_FRAME_BYTES
-			) {
-				onLimit();
-				throw new SandboxOutputLimitError();
-			}
-			let idx: number;
-			while ((idx = pending.indexOf("\n")) !== -1) {
-				const line = pending.slice(0, idx);
-				pending = pending.slice(idx + 1);
-				if (encoder.encode(line).byteLength > MAX_FRAME_BYTES) {
+			let start = 0;
+			while (start < value.byteLength) {
+				const newline = value.indexOf(0x0a, start);
+				const end = newline === -1 ? value.byteLength : newline;
+				const segment = value.subarray(start, end);
+				if (segment.byteLength > 0) {
+					pendingChunks.push(segment);
+					pendingBytes += segment.byteLength;
+				}
+				if (pendingBytes > BROKER_FRAME_CAP_BYTES) {
 					onLimit();
 					throw new SandboxOutputLimitError();
 				}
-				await handleLine(line);
+				if (newline === -1) break;
+				await handleLine(takePendingLine());
 				if (outcome || terminalFailure) break;
+				start = newline + 1;
 			}
 			if (outcome || terminalFailure) break;
 			if (timedOut()) break;
 		}
 		// Flush a trailing line without newline (the final result frame may not
 		// be newline-terminated before exit).
-		if (!outcome && !terminalFailure && pending.length > 0) {
-			await handleLine(pending.trim());
+		if (!outcome && !terminalFailure && pendingBytes > 0) {
+			await handleLine(takePendingLine().trim());
 		}
 	} catch (error) {
 		if (error instanceof SandboxOutputLimitError) throw error;
@@ -927,12 +962,16 @@ async function runInSubprocess(
 		});
 	}
 	// ── BUILD THE HARDENED SUBPROCESS COMMAND. ──
+	// Bindings guests keep their declared `net` allowlist on the trusted broker.
+	// Giving the subprocess the same `--allow-net` grant would let raw sockets
+	// bypass the resolve/validate/pin/redirect checks enforced by `http.fetch`.
+	const directNetHosts = req.bindings ? [] : netHosts;
 	const args = [
 		"run",
 		"--no-prompt",
 		`--v8-flags=--max-old-space-size=${memoryMb}`,
 		// net + import are INDEPENDENT axes from the manifest (do NOT alias import=net).
-		...netFlag(netHosts),
+		...netFlag(directNetHosts),
 		...importFlags(importHosts),
 		// A self-contained data module needs neither a host path nor a socket, so it
 		// remains loadable after the Linux network namespace is created.
@@ -948,7 +987,7 @@ async function runInSubprocess(
 	let spawnArgs = args;
 	try {
 		const plan = await buildEgressFirewallPlan(
-			netHosts,
+			directNetHosts,
 			importHosts,
 			executionSignal,
 		);
@@ -1100,7 +1139,7 @@ async function runInSubprocess(
 			readStream(
 				child.stdout,
 				outputBudget,
-				MAX_TOTAL_OUTPUT_BYTES,
+				BROKER_TOTAL_OUTPUT_CAP_BYTES,
 				onOutputLimit,
 			),
 			stderrPromise,

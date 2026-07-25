@@ -9,6 +9,7 @@ untrusted script in a fresh, capability-scoped subprocess.
 - HTTP `ExecutorAdapter` for `ctx.executor.run()`
 - fresh Deno subprocess with bounded wall time and memory
 - capability-scoped collections, stores, files, and network bindings
+- explicitly released custom MCP tools through a separate guest namespace
 - SSRF, redirect, private-address, and metadata-address protection
 - optional Linux network namespace/firewall defense in depth
 - generic, consumer-supplied workload authorization
@@ -46,6 +47,11 @@ protocol, host, effective port, path, or query is denied before spawn. Userinfo
 and fragments are forbidden; only one trailing path slash is treated as
 equivalent. The supervisor fetches the validated canonical URL, never the raw
 request spelling.
+
+Bindings guests always run with `--allow-net=[]`. Their declared `net`
+allowlist remains host-side and is used only by the resolve/validate/pin HTTP
+broker. The backwards-compatible compute-only path may still receive a direct
+Deno network grant.
 
 ## Generic workload authorization
 
@@ -102,16 +108,19 @@ egress hosts, wall time, memory, and the final request body all have hard bounds
 Cancellation after dispatch aborts broker relays and terminates the guest with a
 bounded `SIGTERM`/`SIGKILL` sequence.
 
-The subprocess boundary additionally caps each frame and result at 2 MiB,
-combined stdout plus stderr at 3 MiB, stderr alone at 256 KiB, binding calls at
-256 per run, and concurrent broker relays at 16. Crossing a limit kills the
-guest and aborts outstanding relays. Broker and supervisor HTTP responses are
-streamed through byte caps and parsed against exact schemas; broker-provided
-error text is replaced by supervisor-owned stable messages before it can enter
-the guest. Broker and `/run` redirects are rejected. Any broker denial or
-malformed response latches a terminal run failure; guest `catch` code cannot
-turn it back into success. A valid result frame is terminal immediately, and a
-result racing an in-flight RPC is rejected.
+The subprocess boundary uses one 5 MiB decoded HTTP body budget. Its
+method-aware request, response, frame, and cumulative-output limits are derived
+from the exact base64 expansion plus bounded JSON-envelope headroom. Native
+binding results and custom-tool results remain capped at 768 KiB. Stderr is
+independently capped at 256 KiB, binding calls at 256 per run, and concurrent
+broker relays at 16. Crossing a limit kills the guest and aborts outstanding
+relays. Broker and supervisor HTTP responses are streamed through byte caps and
+parsed against exact schemas; broker-provided error text is replaced by
+supervisor-owned stable messages before it can enter the guest. Broker and
+`/run` redirects are rejected. Any broker denial or malformed response latches
+a terminal run failure; guest `catch` code cannot turn it back into success. A
+valid result frame is terminal immediately, and a result racing an in-flight
+RPC is rejected.
 
 The adapter then signs a minimal, product-neutral transport admission. It is
 bound to the exact request body and one supervisor instance, expires within five
@@ -129,6 +138,78 @@ configured instance id; do not put this admission path behind an unpinned
 round-robin load balancer. Reusing one instance id across replicas is forbidden.
 Replay state is deliberately process-local because the admission is
 cryptographically bound to that unique process incarnation.
+
+## Custom tools
+
+Custom `mcpTool(...)` definitions can be exposed to a sandbox without turning
+MCP CRUD into the sandbox data API. Collections, files, and stores keep using
+their native broker primitives; only explicitly released custom tools enter the
+separate `questpie.tools` namespace.
+
+Configure the host-side consumer authorization port in `questpie.config.ts`:
+
+```ts
+import { sandboxCustomTools } from "@questpie/sandbox";
+import { runtimeConfig } from "questpie/app";
+
+export default runtimeConfig({
+	// db, executor, …
+	sandboxCustomTools: sandboxCustomTools({
+		authorizer: consumerToolAuthority,
+		contextBinder: consumerQuestpieContextBinder,
+		evidence: async (event) => {
+			// Product-neutral: phase, tool name, result, reason, duration only.
+			await evidenceSink.write(event);
+		},
+	}),
+});
+```
+
+The tool itself must be in the released MCP custom-tool catalog and declare an
+explicit workload requirement. Omitted exposure or workload policy remains
+invisible and uncallable. Every call repeats consumer authorization, binds a
+fresh user-mode QUESTPIE context, rechecks the tool access/scope policy, parses
+the original input schema, and invokes the original handler.
+
+The host supplies only an opaque envelope for the run:
+
+```ts
+const result = await ctx.executor.run({
+	isolation: "sandboxed",
+	source: `
+		export default async () => {
+			const { tools } = await globalThis.questpie.tools.list();
+			return globalThis.questpie.tools.call("reports.generate", {
+				period: "week",
+			});
+		}
+	`,
+	brokerUrl: "https://app.internal/api/sandbox/rpc",
+	sandboxTools: { envelope: consumerEnvelope },
+	capabilities: {
+		net: [],
+		import: [],
+		timeoutMs: 5_000,
+		memoryMb: 128,
+	},
+});
+```
+
+The adapter keeps the envelope in the app host. The broker endpoint and token
+are sent only to the trusted supervisor through the existing bindings
+coordinate; none of them is exposed to guest code or `globalThis.questpie`.
+Discovery, arguments, results, operation count, wall time, and concurrency are
+bounded. Evidence callbacks receive no envelope, arguments, result body,
+bearer credential, app instance, database handle, or request context.
+
+Defaults/hard maxima are: 64/256 discovered tools, 256 KiB/768 KiB discovery
+payload, 32 KiB/63 KiB arguments, 256 KiB/768 KiB result, 64/256 operations,
+5 s/30 s per operation, 4/16 concurrent operations, and 250 ms/1 s for
+observational evidence. Overrides must be positive safe integers at or below
+the hard maximum; `sandboxCustomTools(...)` rejects invalid configuration.
+Denied operations consume the call budget. A timed-out handler keeps its
+concurrency slot until the underlying MCP call settles, even if it ignores
+cancellation.
 
 ## Run the supervisor
 

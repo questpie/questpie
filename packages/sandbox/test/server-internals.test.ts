@@ -123,13 +123,18 @@ describe("parseBrokerResponse", () => {
 		expect(
 			parseBrokerResponse({
 				ok: false,
-				error: { code: "forbidden", message: "raw secret detail" },
+				error: {
+					code: "forbidden",
+					message: "raw secret detail",
+					correlationId: "broker-correlation-1",
+				},
 			}),
 		).toEqual({
 			ok: false,
 			error: {
 				code: "forbidden",
 				message: "sandbox binding operation forbidden",
+				correlationId: "broker-correlation-1",
 			},
 		});
 	});

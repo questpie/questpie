@@ -13,6 +13,10 @@
 		"skipLibCheck": true,
 		"types": ["bun-types"]
 	},
-	"include": ["src/**/*", "src/server/modules/mcp/.generated/*.ts"],
+	"include": [
+		"src/**/*",
+		"src/server/modules/mcp/.generated/*.ts",
+		"test/types/**/*.test-d.ts"
+	],
 	"exclude": ["node_modules", "dist"]
 }

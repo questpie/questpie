@@ -2,7 +2,13 @@ import { z } from "zod";
 
 import { jsonSchemaCompatibleSchema } from "./zod-json-schema.js";
 
-export const recordSchema = z.record(z.string(), z.unknown());
+const SYSTEM_FIELD_NAMES = [
+	"id",
+	"createdAt",
+	"updatedAt",
+	"deletedAt",
+	"_status",
+];
 
 type FieldPolicy = {
 	include?: string[];
@@ -182,8 +188,16 @@ function filterZodObjectSchema(
 	policy: PolicyWithFields,
 	knownFields?: string[],
 ): z.ZodTypeAny {
-	if (!schema) return recordSchema;
-	if (!(schema instanceof z.ZodObject)) return recordSchema;
+	if (!schema || !(schema instanceof z.ZodObject)) {
+		const allowed = allowedKeysFor(knownFields ?? [], policy);
+		return z
+			.object(
+				Object.fromEntries(
+					[...allowed].map((key) => [key, z.unknown().optional()]),
+				),
+			)
+			.strict();
+	}
 
 	const shape = (schema as z.ZodObject<Record<string, z.ZodTypeAny>>).shape;
 	const shouldFilter = hasFieldPolicy(policy) || !!knownFields?.length;
@@ -196,11 +210,39 @@ function filterZodObjectSchema(
 			nextShape[key] = jsonSchemaCompatibleSchema(shape[key]) ?? z.unknown();
 	}
 
-	return z.object(nextShape);
+	return z.object(nextShape).strict();
 }
 
-function entityFieldNames(entity: unknown): string[] | undefined {
+export function entityFieldNames(entity: unknown): string[] | undefined {
 	const fields = (entity as { state?: { fields?: unknown } }).state?.fields;
 	if (!isRecord(fields)) return undefined;
 	return Object.keys(fields);
+}
+
+export function allowedEntityFieldNames(
+	entity: unknown,
+	policy: PolicyWithFields,
+): string[] {
+	const entityFields = entityFieldNames(entity) ?? [];
+	const known = policy.fields?.include?.length
+		? entityFields
+		: [...new Set([...entityFields, ...SYSTEM_FIELD_NAMES])];
+	return [...allowedKeysFor(known, policy)];
+}
+
+export function allowedEntityRelationNames(
+	entity: unknown,
+	policy: PolicyWithFields,
+): string[] {
+	const fields = (entity as { state?: { fields?: unknown } }).state?.fields;
+	if (!isRecord(fields)) return [];
+	const allowed = new Set(allowedEntityFieldNames(entity, policy));
+	return Object.entries(fields)
+		.filter(([name, field]) => {
+			if (!allowed.has(name) || !isRecord(field)) return false;
+			const fieldState = field["_state"];
+			const state = isRecord(fieldState) ? fieldState : undefined;
+			return state?.type === "relation" || state?.type === "upload";
+		})
+		.map(([name]) => name);
 }

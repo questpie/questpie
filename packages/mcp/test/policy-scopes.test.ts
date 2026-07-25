@@ -1,12 +1,17 @@
 import { describe, expect, it } from "bun:test";
 
 import type { AppContext, RequestContext } from "questpie";
+import { z } from "zod";
 
+import { resolveMcpCatalog } from "../src/server/catalog.js";
+import { mcpTool } from "../src/server/mcp-tool.js";
 import {
 	defaultOperationScope,
 	evaluateMcpRule,
 	normalizeRequiredScopes,
+	operationRule,
 	requiredScopesForOperation,
+	resolveMcpConfig,
 	resolveEntityPolicy,
 	scopeGateAllows,
 	scopesFromContext,
@@ -21,6 +26,201 @@ function ctxWith(
 }
 
 describe("MO7 declarative scope model", () => {
+	describe("explicit named catalog policy", () => {
+		it("denies omitted entities and operations", () => {
+			for (const kind of ["collection", "global", "route"] as const) {
+				const policy = resolveEntityPolicy({}, kind, "omitted");
+				expect(policy.expose).toBe(false);
+				expect(operationRule(policy, "list")).toBeUndefined();
+				expect(operationRule(policy, "get")).toBeUndefined();
+				expect(operationRule(policy, "execute")).toBeUndefined();
+			}
+		});
+
+		it("resolves only existing, explicitly enabled operations and resources", () => {
+			const explicit = mcpTool("custom.explicit", {
+				access: true,
+				scopes: "custom:explicit:invoke",
+				inputSchema: z.object({}),
+			}).handler(async () => ({ content: [] }));
+			const omitted = mcpTool("custom.omitted", {
+				access: false,
+				scopes: "custom:omitted:invoke",
+				inputSchema: z.object({}),
+			}).handler(async () => ({ content: [] }));
+			const missingScope = mcpTool("custom.missing-scope", {
+				access: true,
+				inputSchema: z.object({}),
+			}).handler(async () => ({ content: [] }));
+			const explicitNoScope = mcpTool("custom.no-oauth-scope", {
+				access: true,
+				scopes: false,
+				inputSchema: z.object({}),
+			}).handler(async () => ({ content: [] }));
+			const app = {
+				getCollections: () => ({ posts: {}, hidden: {} }),
+				getGlobals: () => ({ siteSettings: {} }),
+				state: {
+					mcpTools: { explicit, omitted, missingScope, explicitNoScope },
+				},
+				config: {},
+			};
+			const catalog = resolveMcpCatalog(app as never, {
+				crud: {
+					collections: {
+						posts: { operations: { list: true } },
+						unknown: { operations: { delete: true } },
+					},
+				},
+				resources: { collections: { posts: true, hidden: true } },
+			});
+
+			expect([...catalog.collections.keys()]).toEqual(["posts"]);
+			expect(catalog.collections.get("posts")?.operations).toEqual(["list"]);
+			expect([...catalog.globals.keys()]).toEqual([]);
+			expect([...catalog.customTools.keys()]).toEqual([
+				"custom.explicit",
+				"custom.no-oauth-scope",
+			]);
+			expect([...catalog.resources.collections]).toEqual(["posts"]);
+			expect((catalog.collections as any).set).toBeUndefined();
+			expect(
+				Object.isFrozen(catalog.collections.get("posts")?.operations),
+			).toBe(true);
+			expect(
+				Object.isFrozen(
+					catalog.customTools.get("custom.explicit")?.tool.config,
+				),
+			).toBe(true);
+			expect(catalog.oauth.scopes).toEqual([
+				"collections:posts:read",
+				"custom:explicit:invoke",
+				"collections:read",
+			]);
+			expect(catalog.oauth.scopes).not.toContain("collections:posts:write");
+			expect(catalog.oauth.scopes).not.toContain("collections:unknown:delete");
+			expect(catalog.oauth.scopesSupported).toEqual(["collections:read"]);
+		});
+
+		it("fails closed on duplicate released tool names", () => {
+			const first = mcpTool("custom.duplicate", {
+				access: true,
+				scopes: false,
+			}).handler(async () => ({ content: [] }));
+			const second = mcpTool("custom.duplicate", {
+				access: true,
+				scopes: false,
+			}).handler(async () => ({ content: [] }));
+			const app = {
+				getCollections: () => ({}),
+				getGlobals: () => ({}),
+				state: { mcpTools: { first, second } },
+				config: {},
+			};
+
+			expect(() => resolveMcpCatalog(app as never, {})).toThrow(
+				"Duplicate MCP tool name",
+			);
+		});
+
+		it("replaces a named entity policy instead of inheriting omitted operations", () => {
+			const app = {
+				state: {
+					config: {
+						mcp: {
+							crud: {
+								collections: {
+									posts: {
+										operations: { list: true, delete: true },
+									},
+								},
+							},
+						},
+					},
+				},
+			};
+			const resolved = resolveMcpConfig(app as never, {
+				crud: {
+					collections: {
+						posts: { operations: { list: true } },
+					},
+				},
+			});
+
+			expect(resolved.crud?.collections?.posts).toEqual({
+				operations: { list: true },
+			});
+		});
+
+		it("ignores inherited and prototype-pollution config entries", () => {
+			const inherited = Object.create({
+				hidden: { operations: { list: true } },
+			}) as Record<string, unknown>;
+			inherited.posts = { operations: { list: true } };
+			Object.defineProperty(inherited, "constructor", {
+				enumerable: true,
+				value: { operations: { delete: true } },
+			});
+			Object.defineProperty(inherited, "__proto__", {
+				enumerable: true,
+				value: { operations: { delete: true } },
+			});
+
+			const app = {
+				state: {
+					config: {
+						mcp: {
+							crud: { collections: inherited },
+							resources: {
+								collections: Object.create({ hidden: true }),
+							},
+						},
+					},
+				},
+			};
+			const resolved = resolveMcpConfig(app as never);
+
+			expect(Object.getPrototypeOf(resolved.crud?.collections)).toBeNull();
+			expect(Object.keys(resolved.crud?.collections ?? {})).toEqual(["posts"]);
+			expect(resolveEntityPolicy(resolved, "collection", "hidden").expose).toBe(
+				false,
+			);
+			expect(
+				resolveEntityPolicy(resolved, "collection", "constructor").expose,
+			).toBe(false);
+			expect(
+				resolveEntityPolicy(resolved, "collection", "__proto__").expose,
+			).toBe(false);
+			expect(Object.keys(resolved.resources?.collections ?? {})).toEqual([]);
+
+			const inheritedTopLevel = Object.create({
+				crud: {
+					collections: { posts: { operations: { list: true } } },
+				},
+			}) as McpConfig;
+			expect(
+				resolveEntityPolicy(inheritedTopLevel, "collection", "posts").expose,
+			).toBe(false);
+
+			const inheritedResources = Object.create({
+				resources: { collections: { posts: true } },
+			}) as McpConfig;
+			inheritedResources.crud = {
+				collections: { posts: { operations: { list: true } } },
+			};
+			const directCatalog = resolveMcpCatalog(
+				{
+					getCollections: () => ({ posts: {} }),
+					getGlobals: () => ({}),
+					state: {},
+					config: {},
+				} as never,
+				inheritedResources,
+			);
+			expect([...directCatalog.resources.collections]).toEqual([]);
+		});
+	});
+
 	describe("defaultOperationScope (data-driven mapping)", () => {
 		it("maps collection operation kinds to <resource>:<name>:<verb>", () => {
 			expect(defaultOperationScope("collection", "posts", "read")).toBe(
@@ -66,7 +266,13 @@ describe("MO7 declarative scope model", () => {
 		it("falls back to the default mapping when nothing is declared", () => {
 			const policy = resolveEntityPolicy({}, "collection", "posts");
 			expect(
-				requiredScopesForOperation(policy, "collection", "posts", "list", "read"),
+				requiredScopesForOperation(
+					policy,
+					"collection",
+					"posts",
+					"list",
+					"read",
+				),
 			).toEqual(["collections:posts:read"]);
 			expect(
 				requiredScopesForOperation(
@@ -87,7 +293,13 @@ describe("MO7 declarative scope model", () => {
 			};
 			const policy = resolveEntityPolicy(config, "collection", "posts");
 			expect(
-				requiredScopesForOperation(policy, "collection", "posts", "list", "read"),
+				requiredScopesForOperation(
+					policy,
+					"collection",
+					"posts",
+					"list",
+					"read",
+				),
 			).toEqual(["team:posts"]);
 			expect(
 				requiredScopesForOperation(
@@ -127,7 +339,13 @@ describe("MO7 declarative scope model", () => {
 			).toEqual(["admin:posts", "collections:posts:delete"]);
 			// list: explicit `false` → no scope required (stops fallback)
 			expect(
-				requiredScopesForOperation(policy, "collection", "posts", "list", "read"),
+				requiredScopesForOperation(
+					policy,
+					"collection",
+					"posts",
+					"list",
+					"read",
+				),
 			).toEqual([]);
 			// update: not overridden → entity-level applies
 			expect(
@@ -146,15 +364,60 @@ describe("MO7 declarative scope model", () => {
 		it("returns scopes only for an oauth principal", () => {
 			expect(
 				scopesFromContext(
-					ctxWith({ kind: "oauth", scopes: ["collections:posts:read"] }),
+					ctxWith({
+						kind: "oauth",
+						user: { id: "user-1" },
+						clientId: "client-1",
+						tokenId: "token-1",
+						scopes: ["collections:posts:read"],
+					}),
 				),
 			).toEqual(["collections:posts:read"]);
 		});
 
 		it("returns undefined for user/system/absent principals", () => {
-			expect(scopesFromContext(ctxWith({ kind: "user" }))).toBeUndefined();
+			expect(
+				scopesFromContext(
+					ctxWith({
+						kind: "user",
+						user: { id: "user-1" },
+						session: { id: "session-1" },
+					}),
+				),
+			).toBeUndefined();
 			expect(scopesFromContext(ctxWith({ kind: "system" }))).toBeUndefined();
 			expect(scopesFromContext(ctxWith(undefined))).toBeUndefined();
+		});
+
+		it("fails closed for incomplete or malformed oauth principals", () => {
+			for (const principal of [
+				{ kind: "oauth" },
+				{
+					kind: "oauth",
+					user: { id: "user-1" },
+					clientId: "",
+					tokenId: "token-1",
+					scopes: [],
+				},
+				{
+					kind: "oauth",
+					user: { id: "user-1" },
+					clientId: "client-1",
+					tokenId: "token-1",
+				},
+				{
+					kind: "oauth",
+					user: { id: "user-1" },
+					clientId: "client-1",
+					tokenId: "token-1",
+					scopes: ["allowed", 42],
+				},
+			]) {
+				const held = scopesFromContext(ctxWith(principal));
+				expect(held).toBeNull();
+				expect(scopeGateAllows(held, [])).toBe(false);
+				expect(scopeGateAllows(held, ["allowed"])).toBe(false);
+			}
 		});
 	});
 
@@ -170,6 +433,9 @@ describe("MO7 declarative scope model", () => {
 				accessMode: "user",
 				ctx: ctxWith({
 					kind: "oauth",
+					user: { id: "user-1" },
+					clientId: "client-1",
+					tokenId: "token-1",
 					scopes: ["collections:posts:read", "collections:posts:write"],
 				}),
 			});
@@ -189,7 +455,11 @@ describe("MO7 declarative scope model", () => {
 				{
 					transport: "http",
 					accessMode: "user",
-					ctx: ctxWith({ kind: "user" }),
+					ctx: ctxWith({
+						kind: "user",
+						user: { id: "user-1" },
+						session: { id: "session-1" },
+					}),
 				},
 			);
 			expect(seen?.scopes).toBeUndefined();
@@ -229,10 +499,7 @@ describe("MO8 scope gate — coarse umbrellas", () => {
 			scopeGateAllows(["collections:posts:read"], ["collections:posts:read"]),
 		).toBe(true);
 		expect(
-			scopeGateAllows(
-				["collections:posts:write"],
-				["collections:posts:write"],
-			),
+			scopeGateAllows(["collections:posts:write"], ["collections:posts:write"]),
 		).toBe(true);
 		expect(
 			scopeGateAllows(
@@ -241,9 +508,10 @@ describe("MO8 scope gate — coarse umbrellas", () => {
 			),
 		).toBe(true);
 		expect(
-			scopeGateAllows(["globals:siteSettings:read"], [
-				"globals:siteSettings:read",
-			]),
+			scopeGateAllows(
+				["globals:siteSettings:read"],
+				["globals:siteSettings:read"],
+			),
 		).toBe(true);
 		expect(
 			scopeGateAllows(
@@ -255,9 +523,7 @@ describe("MO8 scope gate — coarse umbrellas", () => {
 
 	it("a missing granular scope with no held umbrella is denied (regression)", () => {
 		expect(
-			scopeGateAllows(["collections:posts:read"], [
-				"collections:other:read",
-			]),
+			scopeGateAllows(["collections:posts:read"], ["collections:other:read"]),
 		).toBe(false);
 		expect(scopeGateAllows([], ["collections:posts:read"])).toBe(false);
 	});
@@ -335,9 +601,10 @@ describe("MO8 scope gate — coarse umbrellas", () => {
 			),
 		).toBe(false);
 		expect(
-			scopeGateAllows(["collections:posts:delete"], [
-				"collections:posts:delete",
-			]),
+			scopeGateAllows(
+				["collections:posts:delete"],
+				["collections:posts:delete"],
+			),
 		).toBe(true);
 	});
 
@@ -363,9 +630,9 @@ describe("MO8 scope gate — coarse umbrellas", () => {
 	});
 
 	it("globals:read does NOT satisfy a collections:<name>:read requirement", () => {
-		expect(
-			scopeGateAllows(["globals:read"], ["collections:posts:read"]),
-		).toBe(false);
+		expect(scopeGateAllows(["globals:read"], ["collections:posts:read"])).toBe(
+			false,
+		);
 	});
 
 	// ---- a custom (non-resource) scope gains no umbrella --------------------

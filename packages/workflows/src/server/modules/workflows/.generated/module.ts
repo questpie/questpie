@@ -43,6 +43,8 @@ export type WorkflowsCollections = {
 	wf_step: typeof _coll_wf_step;
 };
 
+export type WorkflowsChannels = Record<never, never>;
+
 export type WorkflowsGlobals = Record<never, never>;
 
 export type WorkflowsJobs = {
@@ -85,6 +87,7 @@ export type WorkflowsModule = {
 	jobs: WorkflowsJobs;
 	routes: WorkflowsRoutes;
 	services: WorkflowsServices;
+	channels: WorkflowsChannels;
 	globals: WorkflowsGlobals;
 	fieldTypes: WorkflowsFieldTypes;
 	views: WorkflowsViews;
@@ -126,6 +129,7 @@ const _module: WorkflowsModule = {
 	services: {
 		workflows: _svc_workflows,
 	} as WorkflowsServices,
+	channels: {},
 	globals: {},
 	messages: {},
 	emails: {},

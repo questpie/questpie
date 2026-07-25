@@ -49,7 +49,10 @@ export interface ExecutorCapabilities {
 	};
 	/** Collections/globals/stores data access. Default-deny per entity. */
 	data?: {
-		collections?: Record<string, Array<"read" | "create" | "update" | "delete">>;
+		collections?: Record<
+			string,
+			Array<"read" | "create" | "update" | "delete">
+		>;
 		globals?: Record<string, Array<"read" | "write">>;
 		/**
 		 * `document_store` namespaced data access (Decision 8). A per-STORE axis,

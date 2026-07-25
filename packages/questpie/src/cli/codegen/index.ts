@@ -616,8 +616,13 @@ export async function runCodegen(
 		// Root app mode: generate index.ts (app with createApp)
 		outputFile = target.outputFile;
 		const configImportPath = computeRelativeImport(outDir, configPath);
+		const appInstanceId = await resolveGeneratedAppInstanceId(
+			rootDir,
+			configPath,
+		);
 		const tpl = generateTemplate({
 			configImportPath,
+			appInstanceId,
 			discovered,
 			categories: target.categories,
 			singletonFactories: target.registries.singletonFactories,
@@ -702,6 +707,37 @@ export async function runCodegen(
 		outputPath,
 		discovered,
 	};
+}
+
+async function resolveGeneratedAppInstanceId(
+	rootDir: string,
+	configPath: string,
+): Promise<string> {
+	let directory = resolve(rootDir);
+	while (true) {
+		try {
+			const packageJson = JSON.parse(
+				await readFile(join(directory, "package.json"), "utf8"),
+			) as { name?: unknown };
+			if (typeof packageJson.name === "string" && packageJson.name.length > 0) {
+				return [
+					packageJson.name,
+					normalizeIdentityPath(relative(directory, rootDir)) || ".",
+					normalizeIdentityPath(relative(directory, configPath)),
+				].join(":");
+			}
+		} catch {
+			// Continue to the parent; programmatic codegen may start below it.
+		}
+		const parent = dirname(directory);
+		if (parent === directory) break;
+		directory = parent;
+	}
+	return `questpie:${normalizeIdentityPath(relative(rootDir, configPath))}`;
+}
+
+function normalizeIdentityPath(path: string): string {
+	return path.replaceAll("\\", "/");
 }
 
 /**

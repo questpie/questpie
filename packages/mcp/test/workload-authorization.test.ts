@@ -40,6 +40,19 @@ function contextBinder(app: any, additions: Record<string, unknown> = {}) {
 	};
 }
 
+function accessDeniedResult() {
+	return {
+		isError: true,
+		content: [{ type: "text", text: "MCP access denied" }],
+		_meta: {
+			"questpie/error": {
+				code: "access_denied",
+				correlationId: expect.any(String),
+			},
+		},
+	};
+}
+
 describe("MCP workload authorization", () => {
 	it("reauthorizes discovery and every call with only opaque consumer context and named capability facts", async () => {
 		let allowed = true;
@@ -48,6 +61,8 @@ describe("MCP workload authorization", () => {
 		const setup = await buildMockApp({
 			mcpTools: {
 				readTask: mcpTool("tasks.get", {
+					access: true,
+					scopes: false,
 					inputSchema: z.object({ taskId: z.string() }),
 					annotations: { readOnlyHint: true },
 					workload: { capabilities: ["tasks.read"] },
@@ -93,10 +108,7 @@ describe("MCP workload authorization", () => {
 					name: "tasks.get",
 					arguments: { taskId: "task-2" },
 				}),
-			).toEqual({
-				isError: true,
-				content: [{ type: "text", text: "MCP access denied" }],
-			});
+			).toEqual(accessDeniedResult());
 			expect(handlerCalls).toBe(1);
 			expect(requests).toEqual([
 				{
@@ -159,12 +171,17 @@ describe("MCP workload authorization", () => {
 		const setup = await buildMockApp({
 			mcpTools: {
 				protected: mcpTool("protected.read", {
+					access: true,
+					scopes: false,
 					workload: { capabilities: ["protected.read"] },
 				}).handler(async () => {
 					handlerCalls += 1;
 					return { content: [{ type: "text", text: "secret" }] };
 				}),
-				undeclared: mcpTool("ambient.system", {}).handler(async () => {
+				undeclared: mcpTool("ambient.system", {
+					access: true,
+					scopes: false,
+				}).handler(async () => {
 					handlerCalls += 1;
 					return { content: [{ type: "text", text: "ambient" }] };
 				}),
@@ -209,10 +226,7 @@ describe("MCP workload authorization", () => {
 							name: "protected.read",
 							arguments: {},
 						}),
-					).toEqual({
-						isError: true,
-						content: [{ type: "text", text: "MCP access denied" }],
-					});
+					).toEqual(accessDeniedResult());
 				} finally {
 					await close();
 				}
@@ -251,6 +265,8 @@ describe("MCP workload authorization", () => {
 		const setup = await buildMockApp({
 			mcpTools: {
 				update: mcpTool("tasks.update", {
+					access: true,
+					scopes: false,
 					workload: {
 						capabilities: ["tasks.write"],
 						handoff: "tasks.commit",
@@ -285,10 +301,7 @@ describe("MCP workload authorization", () => {
 			expect((await client.listTools()).tools).toEqual([]);
 			expect(
 				await client.callTool({ name: "tasks.update", arguments: {} }),
-			).toEqual({
-				isError: true,
-				content: [{ type: "text", text: "MCP access denied" }],
-			});
+			).toEqual(accessDeniedResult());
 			expect(requests).toEqual([
 				{
 					phase: "discovery",
@@ -333,6 +346,7 @@ describe("MCP workload authorization", () => {
 				read: mcpTool("tenant.read", {
 					access: ({ ctx, transport }) =>
 						(ctx as any).tenantId === "tenant-a" && transport === "workload",
+					scopes: false,
 					annotations: { readOnlyHint: true },
 					workload: { capabilities: ["tenant.read"] },
 				}).handler(async ({ ctx, request, accessMode, transport }) => {
@@ -447,15 +461,125 @@ describe("MCP workload authorization", () => {
 
 		try {
 			expect((await client.listTools()).tools).toEqual([]);
-			expect(
-				await client.callTool({
+			await expect(
+				client.callTool({
 					name: "collections.workloadSafeDefaults.create",
 					arguments: { data: { title: "must-not-create" } },
 				}),
-			).toEqual({
-				isError: true,
-				content: [{ type: "text", text: "MCP access denied" }],
-			});
+			).rejects.toThrow();
+		} finally {
+			await close();
+			await setup.cleanup();
+		}
+	}, 15_000);
+
+	it("replaces workload authority maps atomically and exposes no unauthorizable resources", async () => {
+		const ambient = collection("ambientWorkload")
+			.fields(({ f }) => ({ title: f.text(255) }))
+			.access({ read: true });
+		const selected = collection("selectedWorkload")
+			.fields(({ f }) => ({ title: f.text(255) }))
+			.access({ read: true });
+		const requirement = { capabilities: ["selected.read"] };
+		const setup = await buildMockApp({
+			collections: { ambientWorkload: ambient, selectedWorkload: selected },
+			config: {
+				mcp: {
+					crud: {
+						collections: {
+							ambientWorkload: {
+								operations: { list: true },
+								operationWorkloads: {
+									list: { capabilities: ["ambient.read"] },
+								},
+							},
+						},
+					},
+					resources: { collections: { ambientWorkload: true } },
+				},
+			},
+		});
+		const server = await createWorkloadMcpServer(setup.app, {
+			envelope: "opaque",
+			authorizer: {
+				authorize: async () => ({ context: "opaque" }),
+			},
+			contextBinder: contextBinder(setup.app),
+			config: {
+				crud: {
+					collections: {
+						selectedWorkload: {
+							operations: { list: true },
+							operationWorkloads: { list: requirement },
+						},
+					},
+				},
+				resources: { collections: { ambientWorkload: true } },
+			},
+		});
+		const { client, close } = await connect(server);
+
+		try {
+			expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(
+				["collections.selectedWorkload.list"],
+			);
+			expect(client.getServerCapabilities()?.resources).toBeUndefined();
+			await expect(
+				client.readResource({
+					uri: "questpie://schema/collections/ambientWorkload",
+				}),
+			).rejects.toThrow();
+		} finally {
+			await close();
+			await setup.cleanup();
+		}
+	}, 15_000);
+
+	it("cannot add or widen definition-owned custom authority through config overrides", async () => {
+		const seen: unknown[] = [];
+		const setup = await buildMockApp({
+			mcpTools: {
+				ambient: mcpTool("custom.ambient", {
+					access: true,
+					scopes: false,
+				}).handler(async () => ({ content: [] })),
+				locked: mcpTool("custom.locked", {
+					access: true,
+					scopes: false,
+					workload: { capabilities: ["definition.locked"] },
+				}).handler(async () => ({ content: [] })),
+			},
+		});
+		const server = await createWorkloadMcpServer(setup.app, {
+			envelope: "opaque",
+			authorizer: {
+				authorize: async (request) => {
+					seen.push(request);
+					return { context: "opaque" };
+				},
+			},
+			contextBinder: contextBinder(setup.app),
+			config: {
+				customTools: {
+					"custom.ambient": true,
+					"custom.locked": {
+						workload: { capabilities: ["override.widened"] },
+					},
+				},
+			} as never,
+		});
+		const { client, close } = await connect(server);
+		try {
+			expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(
+				["custom.locked"],
+			);
+			expect(seen).toEqual([
+				expect.objectContaining({
+					tool: expect.objectContaining({
+						capabilities: ["definition.locked"],
+					}),
+				}),
+			]);
 		} finally {
 			await close();
 			await setup.cleanup();
@@ -468,6 +592,8 @@ describe("MCP workload authorization", () => {
 		const setup = await buildMockApp({
 			mcpTools: {
 				read: mcpTool("protected.proxy", {
+					access: true,
+					scopes: false,
 					workload: { capabilities: ["protected.read"] },
 				}).handler(async () => {
 					handlerCalls += 1;
@@ -513,10 +639,7 @@ describe("MCP workload authorization", () => {
 						name: "protected.proxy",
 						arguments: {},
 					});
-					expect(result).toEqual({
-						isError: true,
-						content: [{ type: "text", text: "MCP access denied" }],
-					});
+					expect(result).toEqual(accessDeniedResult());
 					expect(JSON.stringify(result)).not.toContain("consumer-secret");
 				} finally {
 					await close();
@@ -534,12 +657,16 @@ describe("MCP workload authorization", () => {
 		const setup = await buildMockApp({
 			mcpTools: {
 				read: mcpTool("protected.bound", {
+					access: true,
+					scopes: false,
 					workload: { capabilities: ["protected.read"] },
 				}).handler(async () => {
 					handlerCalls += 1;
 					return { content: [{ type: "text", text: "unexpected" }] };
 				}),
 				write: mcpTool("protected.write", {
+					access: true,
+					scopes: false,
 					workload: {
 						capabilities: ["protected.write"],
 						handoff: "protected.commit",
@@ -581,10 +708,7 @@ describe("MCP workload authorization", () => {
 						name: "protected.bound",
 						arguments: {},
 					});
-					expect(result).toEqual({
-						isError: true,
-						content: [{ type: "text", text: "MCP access denied" }],
-					});
+					expect(result).toEqual(accessDeniedResult());
 					expect(JSON.stringify(result)).not.toContain("binder-secret");
 				} finally {
 					await close();
@@ -609,10 +733,7 @@ describe("MCP workload authorization", () => {
 					name: "protected.write",
 					arguments: {},
 				});
-				expect(result).toEqual({
-					isError: true,
-					content: [{ type: "text", text: "MCP access denied" }],
-				});
+				expect(result).toEqual(accessDeniedResult());
 				expect(JSON.stringify(result)).not.toContain("handoff-secret");
 			} finally {
 				await handoffConnection.close();
@@ -629,6 +750,8 @@ describe("MCP workload authorization", () => {
 		const setup = await buildMockApp({
 			mcpTools: {
 				update: mcpTool("tasks.update", {
+					access: true,
+					scopes: false,
 					workload: {
 						capabilities: ["tasks.write"],
 						handoff: "tasks.commit",
@@ -691,12 +814,16 @@ describe("MCP workload authorization", () => {
 		const setup = await buildMockApp({
 			mcpTools: {
 				malformed: mcpTool("malformed.read", {
+					access: true,
+					scopes: false,
 					workload: { capabilities: [] },
 				}).handler(async () => {
 					handlerCalls += 1;
 					return { content: [{ type: "text", text: "unexpected" }] };
 				}),
 				requiresHandoff: mcpTool("tasks.commit", {
+					access: true,
+					scopes: false,
 					workload: {
 						capabilities: ["tasks.write"],
 						handoff: "tasks.commit",
@@ -719,10 +846,9 @@ describe("MCP workload authorization", () => {
 		try {
 			expect((await client.listTools()).tools).toEqual([]);
 			for (const name of ["malformed.read", "tasks.commit"]) {
-				expect(await client.callTool({ name, arguments: {} })).toEqual({
-					isError: true,
-					content: [{ type: "text", text: "MCP access denied" }],
-				});
+				expect(await client.callTool({ name, arguments: {} })).toEqual(
+					accessDeniedResult(),
+				);
 			}
 			expect(handlerCalls).toBe(0);
 		} finally {
@@ -736,6 +862,8 @@ describe("MCP workload authorization", () => {
 		const setup = await buildMockApp({
 			mcpTools: {
 				read: mcpTool("tasks.read", {
+					access: true,
+					scopes: false,
 					workload: { capabilities: ["tasks.read"] },
 				}).handler(async () => {
 					handlerCalls += 1;
@@ -764,10 +892,7 @@ describe("MCP workload authorization", () => {
 				name: "tasks.read",
 				arguments: {},
 			});
-			expect(result).toEqual({
-				isError: true,
-				content: [{ type: "text", text: "MCP access denied" }],
-			});
+			expect(result).toEqual(accessDeniedResult());
 			expect(JSON.stringify(result)).not.toContain("credential");
 			expect(handlerCalls).toBe(0);
 		} finally {
@@ -796,6 +921,8 @@ describe("MCP workload authorization", () => {
 			routes: { "tasks/lookup:POST": lookup },
 			mcpTools: {
 				custom: mcpTool("tasks.custom", {
+					access: true,
+					scopes: false,
 					workload: requirement,
 				}).handler(async () => {
 					customCalls += 1;
@@ -813,16 +940,17 @@ describe("MCP workload authorization", () => {
 				crud: {
 					collections: {
 						workloadTasks: {
-							read: true,
-							write: false,
-							delete: false,
+							operations: { list: true },
 							operationWorkloads: { list: requirement },
 						},
 					},
 				},
 				routes: {
 					routes: {
-						"tasks/lookup": { workload: requirement },
+						"tasks/lookup": {
+							operations: { execute: true },
+							workload: requirement,
+						},
 					},
 				},
 			},
@@ -839,10 +967,7 @@ describe("MCP workload authorization", () => {
 				{ name: "tasks.lookup", arguments: { taskId: "task-1" } },
 				{ name: "tasks.custom", arguments: {} },
 			]) {
-				expect(await client.callTool(request)).toEqual({
-					isError: true,
-					content: [{ type: "text", text: "MCP access denied" }],
-				});
+				expect(await client.callTool(request)).toEqual(accessDeniedResult());
 			}
 			expect(customCalls).toBe(0);
 		} finally {

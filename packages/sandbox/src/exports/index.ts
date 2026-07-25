@@ -44,8 +44,20 @@ export {
 	buildGuestBindings,
 	type GuestBindings,
 	type GuestCollection,
+	type GuestToolDescriptor,
+	type GuestToolResult,
+	type GuestTools,
 	type HostCall,
 } from "../guest-bindings.js";
+
+export {
+	sandboxCustomTools,
+	type SandboxCustomToolEvidenceContext,
+	type SandboxCustomToolEvidenceEvent,
+	type SandboxCustomToolsConfig,
+	type SandboxCustomToolsLimits,
+	type SandboxCustomToolsRunOptions,
+} from "../custom-tools.js";
 
 export {
 	SANDBOX_WORKLOAD_DENIAL_MESSAGE,

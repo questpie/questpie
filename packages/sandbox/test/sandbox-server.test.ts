@@ -26,6 +26,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 
+import { BROKER_TOTAL_OUTPUT_CAP_BYTES } from "../src/broker-wire.js";
 import {
 	sealSandboxWorkloadAdmission,
 	type SandboxWorkloadAdmissionKey,
@@ -846,7 +847,7 @@ describe.if(!!denoPath)(
 describe.if(!!denoPath)("sandbox-server — resource bounds", () => {
 	it("kills an output bomb and remains healthy", async () => {
 		const response = await postRun({
-			source: "export default async () => 'x'.repeat(4 * 1024 * 1024)",
+			source: `export default async () => 'x'.repeat(${BROKER_TOTAL_OUTPUT_CAP_BYTES + 1024})`,
 			input: null,
 			capabilities: { net: [], import: [], timeoutMs: 8_000, memoryMb: 128 },
 		});

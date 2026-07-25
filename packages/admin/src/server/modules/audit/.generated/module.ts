@@ -20,6 +20,8 @@ export type AuditCollections = {
 	admin_audit_log: typeof _coll_admin_audit_log;
 };
 
+export type AuditChannels = Record<never, never>;
+
 export type AuditGlobals = Record<never, never>;
 
 export type AuditJobs = {
@@ -44,6 +46,7 @@ export type AuditModule = {
 	name: "questpie-audit";
 	collections: AuditCollections;
 	jobs: AuditJobs;
+	channels: AuditChannels;
 	globals: AuditGlobals;
 	routes: AuditRoutes;
 	fieldTypes: AuditFieldTypes;
@@ -69,6 +72,7 @@ const _module: AuditModule = {
 	jobs: {
 		auditCleanup: _job_auditCleanup,
 	} as AuditJobs,
+	channels: {},
 	globals: {},
 	routes: {},
 	messages: {},

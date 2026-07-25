@@ -54,6 +54,31 @@ export interface GuestStore {
 	delete(args?: { where?: unknown }): Promise<unknown>;
 }
 
+/** Schema-preserving custom-tool descriptor returned by discovery. */
+export interface GuestToolDescriptor {
+	name: string;
+	title?: string;
+	description?: string;
+	inputSchema: Record<string, unknown>;
+	outputSchema?: Record<string, unknown>;
+	annotations?: Record<string, unknown>;
+	_meta?: Record<string, unknown>;
+}
+
+/** Protocol-safe custom-tool result returned to the guest. */
+export interface GuestToolResult {
+	content: Array<{ type: string; [key: string]: unknown }>;
+	structuredContent?: Record<string, unknown>;
+	isError?: boolean;
+	_meta?: Record<string, unknown>;
+}
+
+/** Explicit custom-tool discovery/call surface. Authorization stays host-side. */
+export interface GuestTools {
+	list(): Promise<{ tools: GuestToolDescriptor[] }>;
+	call(name: string, args?: Record<string, unknown>): Promise<GuestToolResult>;
+}
+
 /** The `globalThis.questpie` surface handed to untrusted guest code. */
 export interface GuestBindings {
 	/** Files (file-as-DB), scoped by the run's `capabilities.files`. */
@@ -76,6 +101,11 @@ export interface GuestBindings {
 	 * `collections.document_store.<op>` call.
 	 */
 	store: Record<string, GuestStore>;
+	/**
+	 * Explicitly released custom MCP tools. Built-in CRUD/file/store operations
+	 * never flow through this namespace.
+	 */
+	tools: GuestTools;
 }
 
 /**
@@ -142,5 +172,17 @@ export function buildGuestBindings(hostCall: HostCall): GuestBindings {
 		},
 	) as Record<string, GuestStore>;
 
-	return { files, collections, store };
+	const tools: GuestTools = {
+		list: async () =>
+			(await hostCall("tools.list", {})) as {
+				tools: GuestToolDescriptor[];
+			},
+		call: async (name, args) =>
+			(await hostCall("tools.call", {
+				name,
+				arguments: args ?? {},
+			})) as GuestToolResult,
+	};
+
+	return { files, collections, store, tools };
 }

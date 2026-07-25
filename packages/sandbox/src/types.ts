@@ -127,6 +127,7 @@ export const HOST_ADMISSION_HEADER = "x-questpie-sandbox-host-admission";
 export interface SandboxBindingError {
 	code: string;
 	message: string;
+	correlationId?: string;
 }
 
 /** Guest → supervisor: a binding RPC awaiting a brokered result. */

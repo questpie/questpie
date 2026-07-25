@@ -44,8 +44,8 @@ const skipped = collection("skipped")
 	}))
 	.set("admin", { audit: false });
 
-// A collection with a `datetime` field — its audit diff carries a raw Date (the
-// shape that broke the JSON-primitive audit schema, e.g. ai_workers.lastHeartbeat).
+// A collection with a `datetime` field — its audit diff carries a raw Date, the
+// shape that broke the JSON-primitive audit schema for heartbeat timestamps.
 const events = collection("events").fields(({ f }) => ({
 	title: f.text().required(),
 	when: f.datetime(),
@@ -324,7 +324,7 @@ describe("audit module e2e", () => {
 	});
 
 	it("records a Date-field update as a JSON-safe audit entry (no ApiError)", async () => {
-		// Regression: a raw Date in the audit diff (e.g. ai_workers.lastHeartbeat)
+		// Regression: a raw Date in a heartbeat timestamp's audit diff
 		// failed the JSON-primitive audit schema, so the entry was swallowed and the
 		// server log spammed `[Audit] Failed to log update ... received Date`.
 		const ctx = createTestContext({ accessMode: "system" });
@@ -521,7 +521,7 @@ describe("toAuditJsonSafe — JSON-safe audit changes/metadata", () => {
 		);
 	});
 
-	it("coerces the ai_workers heartbeat change shape (the reported bug)", () => {
+	it("coerces a heartbeat timestamp change shape", () => {
 		// computeChanges produced { lastHeartbeat: { from: Date, to: Date } }, which
 		// the JSON-primitive audit schema rejected on every heartbeat (ApiError spam).
 		const changes = {

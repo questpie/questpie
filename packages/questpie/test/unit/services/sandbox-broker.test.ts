@@ -23,7 +23,10 @@ import {
 	knowledgePathMatches,
 	normalizeKnowledgePath,
 } from "#questpie/server/modules/core/integrated/executor/bindings/capability-check.js";
-import { parseBindingMethod } from "#questpie/server/modules/core/integrated/executor/bindings/protocol.js";
+import {
+	BROKER_NATIVE_RESULT_CAP_BYTES,
+	parseBindingMethod,
+} from "#questpie/server/modules/core/integrated/executor/bindings/protocol.js";
 
 // ──────────────────────────────────────────────────────────────────────────
 // parseBindingMethod — syntactic classification (no capabilities consulted).
@@ -245,7 +248,8 @@ describe("checkBindingCapability — document_store (data.stores axis)", () => {
 			data: { stores: { invoices: ["read"] } },
 		};
 		expect(
-			checkBindingCapability("collections.document_store.find", {}, caps).allowed,
+			checkBindingCapability("collections.document_store.find", {}, caps)
+				.allowed,
 		).toBe(true);
 		expect(
 			checkBindingCapability("collections.document_store.findOne", {}, caps)
@@ -277,7 +281,8 @@ describe("checkBindingCapability — document_store (data.stores axis)", () => {
 			data: { collections: { document_store: ["read", "create"] } },
 		};
 		expect(
-			checkBindingCapability("collections.document_store.find", {}, caps).allowed,
+			checkBindingCapability("collections.document_store.find", {}, caps)
+				.allowed,
 		).toBe(false);
 		expect(
 			checkBindingCapability("collections.document_store.create", {}, caps)
@@ -359,9 +364,7 @@ describe("checkBindingCapability — knowledge", () => {
 	});
 
 	it("list requires a read scope; a prefix must be in-scope", () => {
-		expect(checkBindingCapability("files.list", {}, caps).allowed).toBe(
-			true,
-		);
+		expect(checkBindingCapability("files.list", {}, caps).allowed).toBe(true);
 		expect(
 			checkBindingCapability(
 				"files.list",
@@ -663,13 +666,19 @@ describe("SandboxBroker — per-call enforcement + dispatch (THE security bounda
 		if (!r.ok) expect(r.error.code).toBe("bad_method");
 	});
 
-	it("surfaces a target throw as a structured execution_error (never throws)", async () => {
-		const broker = new SandboxBroker();
+	it("redacts target failures and correlates them with trusted diagnostics", async () => {
+		const failure = new Error("postgres://user:secret@db.internal/tenant");
+		const diagnostics: unknown[] = [];
+		const broker = new SandboxBroker({
+			onDiagnostic: (event) => {
+				diagnostics.push(event);
+			},
+		});
 		const target: BindingTarget = {
 			collections: {
 				orders: {
 					find: async () => {
-						throw new Error("db exploded");
+						throw failure;
 					},
 				},
 			},
@@ -679,8 +688,100 @@ describe("SandboxBroker — per-call enforcement + dispatch (THE security bounda
 		expect(r.ok).toBe(false);
 		if (!r.ok) {
 			expect(r.error.code).toBe("execution_error");
-			expect(r.error.message).toContain("db exploded");
+			expect(r.error.message).toBe("sandbox binding operation failed");
+			expect(r.error.correlationId).toMatch(/^[0-9a-f]{8}-[0-9a-f-]{27}$/i);
+			expect(JSON.stringify(r)).not.toContain("secret");
+			expect(diagnostics).toEqual([
+				expect.objectContaining({
+					correlationId: r.error.correlationId,
+					reason: "target_failed",
+					error: failure,
+				}),
+			]);
 		}
+	});
+
+	it("rejects oversized and accessor-backed target results before serialization", async () => {
+		let getterCalls = 0;
+		let proxyTrapCalls = 0;
+		let value: unknown = "x".repeat(BROKER_NATIVE_RESULT_CAP_BYTES + 1);
+		const diagnostics: unknown[] = [];
+		const broker = new SandboxBroker({
+			onDiagnostic: (event) => {
+				diagnostics.push(event);
+			},
+		});
+		const target: BindingTarget = {
+			collections: {
+				orders: {
+					find: async () => value,
+				},
+			},
+		};
+		const { token } = broker.mint({ capabilities: SCOPE, target });
+
+		const oversized = await broker.handleRpc(
+			token,
+			"collections.orders.find",
+			{},
+		);
+		expect(oversized).toMatchObject({
+			ok: false,
+			error: {
+				code: "execution_error",
+				message: "sandbox binding result is invalid",
+			},
+		});
+
+		value = Object.defineProperty({}, "secret", {
+			enumerable: true,
+			get() {
+				getterCalls += 1;
+				return "must-not-run";
+			},
+		});
+		const accessor = await broker.handleRpc(
+			token,
+			"collections.orders.find",
+			{},
+		);
+		expect(accessor).toMatchObject({
+			ok: false,
+			error: {
+				code: "execution_error",
+				message: "sandbox binding result is invalid",
+			},
+		});
+		value = Object.create(
+			new Proxy(
+				{},
+				{
+					getPrototypeOf() {
+						proxyTrapCalls += 1;
+						return Object.prototype;
+					},
+				},
+			),
+		);
+		const proxyBacked = await broker.handleRpc(
+			token,
+			"collections.orders.find",
+			{},
+		);
+		expect(proxyBacked).toMatchObject({
+			ok: false,
+			error: {
+				code: "execution_error",
+				message: "sandbox binding result is invalid",
+			},
+		});
+		expect(getterCalls).toBe(0);
+		expect(proxyTrapCalls).toBe(0);
+		expect(diagnostics).toEqual([
+			expect.objectContaining({ reason: "invalid_result" }),
+			expect.objectContaining({ reason: "invalid_result" }),
+			expect.objectContaining({ reason: "invalid_result" }),
+		]);
 	});
 });
 
