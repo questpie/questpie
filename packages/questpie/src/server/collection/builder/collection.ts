@@ -967,10 +967,15 @@ export class Collection<TState extends CollectionBuilderState> {
 			}
 
 			// Retention scans use a stable `(deletedAt, id)` keyset and never
-			// offset through an unbounded soft-delete set.
+			// offset through an unbounded soft-delete set. Keep the original
+			// deletedAt index because normal reads filter active rows with
+			// `deletedAt IS NULL`.
 			if (this.state.options.softDelete) {
 				constraints[`${tableName}_deleted_at_idx`] = index(
 					`${tableName}_deleted_at_idx`,
+				).on((t as any).deletedAt);
+				constraints[`${tableName}_deleted_at_retention_idx`] = index(
+					`${tableName}_deleted_at_retention_idx`,
 				)
 					.on((t as any).deletedAt, (t as any).id)
 					.where(sql`${(t as any).deletedAt} IS NOT NULL`);

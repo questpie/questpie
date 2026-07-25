@@ -10,6 +10,7 @@ export {
 } from "./cascade-delete.js";
 export {
 	isForeignKeyViolation,
+	isPurgeLockTimeout,
 	lockRelationSourceForWrite,
 	lockRelationTargetsForWrite,
 	preparePurgeRelations,
@@ -19,6 +20,8 @@ export {
 
 export {
 	applyBelongsToRelations,
+	collapsePolymorphicRelationValues,
+	expandPolymorphicRelationValues,
 	extractBelongsToConnectValues,
 	type ProcessNestedRelationsOptions,
 	processHasManyNestedOperations,

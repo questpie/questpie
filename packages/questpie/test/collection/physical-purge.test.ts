@@ -91,6 +91,25 @@ const unknownAccessDocuments = collection("purge_unknown_access_documents")
 		purge: () => ({ misspelledTenantField: "tenant-a" }) as any,
 	});
 
+const negatedUnsupportedAccessDocuments = collection(
+	"purge_negated_unsupported_access_documents",
+)
+	.fields(({ f }) => ({
+		tenantId: f.text().required(),
+		title: f.text().required(),
+	}))
+	.options({ softDelete: true })
+	.access({
+		create: true,
+		read: true,
+		update: true,
+		delete: true,
+		purge: () =>
+			({
+				NOT: { tenantId: { ne: "tenant-a" } },
+			}) as any,
+	});
+
 const hardDeleteDocuments = collection("purge_hard_documents")
 	.fields(({ f }) => ({ title: f.text().required() }))
 	.access({ purge: true });
@@ -144,6 +163,7 @@ describe("physical purge core contract", () => {
 				hardDeleteDocuments,
 				lifecycleDocuments,
 				localizedAccessDocuments,
+				negatedUnsupportedAccessDocuments,
 				unknownAccessDocuments,
 			},
 			hooks: {
@@ -279,6 +299,35 @@ describe("physical purge core contract", () => {
 				.select()
 				.from(
 					setup.app.collections.unknownAccessDocuments["~internalRelatedTable"],
+				),
+		).toHaveLength(1);
+	});
+
+	it("fails closed when NOT contains an unsupported purge access leaf", async () => {
+		const ctx = createTestContext({ accessMode: "user" });
+		const created =
+			await setup.app.collections.negatedUnsupportedAccessDocuments.create(
+				{ tenantId: "tenant-b", title: "Retain me" },
+				ctx,
+			);
+		await setup.app.collections.negatedUnsupportedAccessDocuments.deleteById(
+			{ id: created.id },
+			ctx,
+		);
+
+		await expect(
+			setup.app.collections.negatedUnsupportedAccessDocuments.purgeById(
+				{ id: created.id },
+				ctx,
+			),
+		).rejects.toMatchObject({ code: "NOT_FOUND" });
+		expect(
+			await setup.app.db
+				.select()
+				.from(
+					setup.app.collections.negatedUnsupportedAccessDocuments[
+						"~internalRelatedTable"
+					],
 				),
 		).toHaveLength(1);
 	});
@@ -514,8 +563,21 @@ describe("physical purge core contract", () => {
 	});
 
 	it("builds the bounded retention keyset index for soft-delete collections", () => {
-		const index = getTableConfig(documents.table as any).indexes.find(
-			(candidate) => candidate.config.name === "purge_documents_deleted_at_idx",
+		const indexes = getTableConfig(documents.table as any).indexes;
+		const activeIndex = indexes.find(
+			(candidate) =>
+				candidate.config.where === undefined &&
+				candidate.config.columns.length === 1 &&
+				(candidate.config.columns[0] as any)?.name === "deleted_at",
+		);
+		expect(
+			activeIndex?.config.columns.map((column: any) => column.name),
+		).toEqual(["deleted_at"]);
+		expect(activeIndex?.config.where).toBeUndefined();
+
+		const index = indexes.find(
+			(candidate) =>
+				candidate.config.name === "purge_documents_deleted_at_retention_idx",
 		);
 		expect(index?.config.columns.map((column: any) => column.name)).toEqual([
 			"deleted_at",

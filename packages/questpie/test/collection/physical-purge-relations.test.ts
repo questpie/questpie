@@ -106,6 +106,44 @@ describe("physical purge relation safety", () => {
 		});
 	});
 
+	it("does not let an unrelated unsupported many-to-many block purge", async () => {
+		const targets = collection("purge_scoped_targets")
+			.fields(({ f }) => ({ name: f.text().required() }))
+			.options({ softDelete: true })
+			.access({ purge: true });
+		const unrelated = collection("purge_scoped_unrelated").fields(({ f }) => ({
+			tags: f.relation("tags").manyToMany({
+				through: "junction",
+				sourceField: "source",
+				targetField: "target",
+			}),
+		}));
+		const tags = collection("purge_scoped_tags").fields(({ f }) => ({
+			name: f.text().required(),
+		}));
+		const junction = collection("purge_scoped_junction").fields(({ f }) => ({
+			source: f.relation("unrelated"),
+			target: f.relation("tags"),
+		}));
+		const setup = await buildMockApp({
+			collections: { targets, unrelated, tags, junction },
+		});
+		cleanups.push(setup.cleanup);
+		await runTestDbMigrations(setup.app);
+		setup.app.collections.unrelated["~internalState"].relations.tags.through =
+			"missing_junction";
+		const ctx = createTestContext();
+		const target = await setup.app.collections.targets.create(
+			{ name: "Target" },
+			ctx,
+		);
+		await setup.app.collections.targets.deleteById({ id: target.id }, ctx);
+
+		await expect(
+			setup.app.collections.targets.purgeById({ id: target.id }, ctx),
+		).resolves.toEqual({ success: true });
+	});
+
 	it("blocks retained references owned by globals", async () => {
 		const parents = collection("purge_global_parents")
 			.fields(({ f }) => ({ name: f.text().required() }))
@@ -549,6 +587,10 @@ describe("physical purge relation safety", () => {
 			{ body: "Wrong discriminator" },
 			ctx,
 		);
+		await setup.app.collections.purge_poly_articles.create(
+			{ id: unrelated.id, title: "Matching article identity" },
+			ctx,
+		);
 		const activitiesTable =
 			setup.app.collections.purge_poly_activities["~internalRelatedTable"];
 		expect(
@@ -568,16 +610,27 @@ describe("physical purge relation safety", () => {
 				idField: "subjectId",
 			},
 		]);
-		await setup.app.db.insert(activitiesTable).values([
-			{
-				subjectType: "comment",
-				subjectId: referenced.id,
-			},
-			{
-				subjectType: "article",
-				subjectId: unrelated.id,
-			},
-		]);
+		const referencedActivity =
+			await setup.app.collections.purge_poly_activities.create(
+				{
+					subject: { type: "comment", id: referenced.id },
+				},
+				ctx,
+			);
+		const unrelatedActivity =
+			await setup.app.collections.purge_poly_activities.create(
+				{
+					subject: { type: "article", id: unrelated.id },
+				},
+				ctx,
+			);
+		expect(referencedActivity).toMatchObject({
+			subject: { type: "comment", id: referenced.id },
+		});
+		expect(unrelatedActivity.subject).toEqual({
+			type: "article",
+			id: unrelated.id,
+		});
 		expect(
 			(await setup.app.db.select().from(activitiesTable)).map((row: any) => [
 				row.subjectType,
@@ -587,6 +640,29 @@ describe("physical purge relation safety", () => {
 			["comment", referenced.id],
 			["article", unrelated.id],
 		]);
+		const replacement = await setup.app.collections.purge_poly_comments.create(
+			{ body: "Replacement" },
+			ctx,
+		);
+		const updatedActivity =
+			await setup.app.collections.purge_poly_activities.updateById(
+				{
+					id: referencedActivity.id,
+					data: { subject: { type: "comment", id: replacement.id } },
+				},
+				ctx,
+			);
+		expect(updatedActivity.subject).toEqual({
+			type: "comment",
+			id: replacement.id,
+		});
+		await setup.app.collections.purge_poly_activities.updateById(
+			{
+				id: referencedActivity.id,
+				data: { subject: { type: "comment", id: referenced.id } },
+			},
+			ctx,
+		);
 		await setup.app.collections.purge_poly_comments.deleteById(
 			{ id: referenced.id },
 			ctx,

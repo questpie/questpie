@@ -165,6 +165,70 @@ export async function matchesAccessConditions(
 }
 
 /**
+ * Match row-aware access conditions only when the complete condition tree can
+ * be evaluated by the in-memory equality matcher.
+ *
+ * Purge uses this stricter boundary because an unsupported leaf nested below
+ * `NOT` must deny the irreversible operation instead of being inverted into an
+ * allow. Query CRUD continues to use the SQL condition builder, which supports
+ * its wider operator vocabulary.
+ */
+export async function matchesStrictAccessConditions(
+	conditions: AccessWhere,
+	row: Record<string, any>,
+): Promise<boolean> {
+	if (!isStrictAccessWhereMatchable(conditions, row)) {
+		return false;
+	}
+
+	return matchesAccessConditions(conditions, row);
+}
+
+function isStrictAccessWhereMatchable(
+	conditions: AccessWhere,
+	row: Record<string, any>,
+): boolean {
+	if (
+		conditions === null ||
+		typeof conditions !== "object" ||
+		Array.isArray(conditions)
+	) {
+		return false;
+	}
+
+	for (const [key, value] of Object.entries(conditions)) {
+		if (key === "AND" || key === "OR") {
+			if (
+				!Array.isArray(value) ||
+				!value.every((condition) =>
+					isStrictAccessWhereMatchable(condition as AccessWhere, row),
+				)
+			) {
+				return false;
+			}
+			continue;
+		}
+
+		if (key === "NOT") {
+			if (!isStrictAccessWhereMatchable(value as AccessWhere, row)) {
+				return false;
+			}
+			continue;
+		}
+
+		if (
+			!Object.hasOwn(row, key) ||
+			(value !== null && typeof value === "object") ||
+			value === undefined
+		) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+/**
  * Options for filtering fields based on read access
  */
 export interface FilterFieldsForReadOptions {

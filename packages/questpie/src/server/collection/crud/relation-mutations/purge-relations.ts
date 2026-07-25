@@ -248,6 +248,12 @@ function collectApplicationReferences(
 			}
 
 			if (relation.type !== "manyToMany") continue;
+			if (
+				sourceCollection !== targetCollection &&
+				relation.collection !== targetCollection
+			) {
+				continue;
+			}
 
 			const junctionCrud = relation.through
 				? (app.collections[relation.through] as CRUD | undefined)
@@ -331,7 +337,9 @@ async function physicalReferenceExists(
 		const parentColumn = foreignKey.parentColumns[index];
 		const parentKey = columnKey(parentTable, parentColumn);
 		if (!parentKey) throw relationConflict();
-		return sql`${sql.identifier(childColumn)} = ${record[parentKey]}`;
+		const parentValue = record[parentKey];
+		if (parentValue === undefined) throw relationConflict();
+		return sql`${sql.identifier(childColumn)} = ${parentValue}`;
 	});
 	const result = await tx.execute(sql`
 		SELECT 1
@@ -361,6 +369,13 @@ export async function preparePurgeRelations(options: {
 	)?.[0];
 	if (!targetCollection) throw relationConflict();
 	const targetIdentity = tableIdentity(targetTable);
+	const [lockTimeoutRow] = rowsOf(
+		await tx.execute(
+			sql`SELECT current_setting('lock_timeout') AS "lockTimeout"`,
+		),
+	) as Array<{ lockTimeout?: string }>;
+	const previousLockTimeout = lockTimeoutRow?.lockTimeout ?? "0";
+	await tx.execute(sql`SELECT set_config('lock_timeout', '3s', true)`);
 	await tx.execute(
 		sql`LOCK TABLE ${qualifiedIdentifier(targetIdentity.schema, targetIdentity.name)} IN SHARE UPDATE EXCLUSIVE MODE`,
 	);
@@ -409,6 +424,9 @@ export async function preparePurgeRelations(options: {
 			sql`LOCK TABLE ${qualifiedIdentifier(entry.schema, entry.name)} IN SHARE ROW EXCLUSIVE MODE`,
 		);
 	}
+	await tx.execute(
+		sql`SELECT set_config('lock_timeout', ${previousLockTimeout}, true)`,
+	);
 
 	const i18nIdentity = i18nTable ? tableIdentity(i18nTable) : null;
 	return {
@@ -476,6 +494,22 @@ export function isForeignKeyViolation(error: unknown): boolean {
 	return false;
 }
 
+export function isPurgeLockTimeout(error: unknown): boolean {
+	let current = error;
+	const seen = new Set<object>();
+	while (current && typeof current === "object" && !seen.has(current)) {
+		seen.add(current);
+		const candidate = current as {
+			code?: unknown;
+			errno?: unknown;
+			cause?: unknown;
+		};
+		if (candidate.code === "55P03" || candidate.errno === "55P03") return true;
+		current = candidate.cause;
+	}
+	return false;
+}
+
 export function retainedReferenceConflict(): ApiError {
 	return relationConflict();
 }
@@ -519,8 +553,9 @@ export async function lockRelationTargetsForWrite(options: {
 	sourceState: CollectionBuilderState;
 	sourceTable: PgTable;
 	values: Record<string, unknown>;
+	originalRows?: Record<string, unknown>[];
 }): Promise<void> {
-	const { tx, app, sourceState, sourceTable, values } = options;
+	const { tx, app, sourceState, sourceTable, values, originalRows } = options;
 	const targets: RelationTargetLock[] = [];
 
 	for (const relation of Object.values(
@@ -529,27 +564,39 @@ export async function lockRelationTargetsForWrite(options: {
 		if (relation.polymorphicTargets) {
 			const configured = relation.polymorphicTargets[0];
 			if (!configured) continue;
-			const typeValue = values[configured.typeField];
-			const idValue = values[configured.idField];
-			if (typeValue == null && idValue == null) continue;
-			if (typeof typeValue !== "string" || idValue == null) {
-				throw ApiError.badRequest(
-					"Polymorphic relation writes require both type and id",
-				);
+			if (
+				!Object.hasOwn(values, configured.typeField) &&
+				!Object.hasOwn(values, configured.idField)
+			) {
+				continue;
 			}
-			const target = relation.polymorphicTargets.find(
-				(candidate) => candidate.discriminator === typeValue,
-			);
-			if (!target?.collection) {
-				throw ApiError.badRequest(
-					`Unknown polymorphic relation type "${typeValue}"`,
+			const candidateValues =
+				originalRows && originalRows.length > 0
+					? originalRows.map((row) => ({ ...row, ...values }))
+					: [values];
+			for (const candidateValuesForRow of candidateValues) {
+				const typeValue = candidateValuesForRow[configured.typeField];
+				const idValue = candidateValuesForRow[configured.idField];
+				if (typeValue == null && idValue == null) continue;
+				if (typeof typeValue !== "string" || idValue == null) {
+					throw ApiError.badRequest(
+						"Polymorphic relation writes require both type and id",
+					);
+				}
+				const target = relation.polymorphicTargets.find(
+					(candidate) => candidate.discriminator === typeValue,
 				);
+				if (!target?.collection) {
+					throw ApiError.badRequest(
+						`Unknown polymorphic relation type "${typeValue}"`,
+					);
+				}
+				targets.push({
+					collection: target.collection,
+					key: relation.references?.[0] ?? "id",
+					value: idValue,
+				});
 			}
-			targets.push({
-				collection: target.collection,
-				key: relation.references?.[0] ?? "id",
-				value: idValue,
-			});
 			continue;
 		}
 
@@ -572,7 +619,14 @@ export async function lockRelationTargetsForWrite(options: {
 
 	if (targets.length === 0) return;
 
-	const resolvedTargets = targets.map((target) => {
+	const resolvedTargets: Array<
+		RelationTargetLock & {
+			targetTable: PgTable;
+			targetColumn: AnyPgColumn;
+			identity: { schema: string; name: string };
+		}
+	> = [];
+	for (const target of targets) {
 		const targetCrud =
 			(app.collections[target.collection] as RelationSourceCrud | undefined) ??
 			(app.globals[target.collection] as RelationSourceCrud | undefined);
@@ -583,13 +637,16 @@ export async function lockRelationTargetsForWrite(options: {
 			? getColumn(targetTable, target.key)
 			: undefined;
 		if (!targetTable || !targetColumn) {
-			throw ApiError.badRequest(
-				`Cannot validate relation target "${target.collection}.${target.key}"`,
-			);
+			continue;
 		}
 		const identity = tableIdentity(targetTable);
-		return { ...target, targetTable, targetColumn, identity };
-	});
+		resolvedTargets.push({
+			...target,
+			targetTable,
+			targetColumn,
+			identity,
+		});
+	}
 	const uniqueTargets = new Map<string, (typeof resolvedTargets)[number]>();
 	for (const target of resolvedTargets) {
 		uniqueTargets.set(

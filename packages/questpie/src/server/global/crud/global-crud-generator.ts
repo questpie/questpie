@@ -6,6 +6,8 @@ import { alias, type PgTable } from "drizzle-orm/pg-core";
 import type { RelationConfig } from "#questpie/server/collection/builder/types.js";
 import { buildWhereClause } from "#questpie/server/collection/crud/query-builders/index.js";
 import {
+	collapsePolymorphicRelationValues,
+	expandPolymorphicRelationValues,
 	processNestedRelations,
 	separateNestedRelations,
 } from "#questpie/server/collection/crud/relation-mutations/nested-operations.js";
@@ -674,6 +676,9 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					});
 				}
 			}
+			if (row) {
+				collapsePolymorphicRelationValues(row, this.state.relations ?? {});
+			}
 
 			await this.ensureCrdtGlobal(db, normalized);
 
@@ -707,10 +712,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 		regularFields: any;
 		nestedRelations: Record<string, any>;
 	} {
-		const relationNames = this.state.relations
-			? new Set(Object.keys(this.state.relations))
-			: new Set<string>();
-		return separateNestedRelations(input, relationNames);
+		return separateNestedRelations(input, this.state.relations ?? {});
 	}
 
 	/**
@@ -837,7 +839,10 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					}),
 				);
 
-				return preparedFields;
+				return expandPolymorphicRelationValues(
+					preparedFields,
+					this.state.relations ?? {},
+				);
 			};
 
 			const writeRecord = async (
@@ -933,6 +938,12 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				if (!baseRecord) {
 					throw ApiError.internal("Global record not found after update");
 				}
+				if (updatedRecord) {
+					collapsePolymorphicRelationValues(
+						updatedRecord,
+						this.state.relations ?? {},
+					);
+				}
 
 				// Process nested relation operations (create, connect, connectOrCreate)
 				if (Object.keys(nestedRelations).length > 0) {
@@ -1013,6 +1024,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 						sourceState: this.state as any,
 						sourceTable: this.table,
 						values: preparedFields,
+						originalRows: existing ? [existing] : undefined,
 					});
 				}
 				return writeRecord(tx, existing, preparedFields);
@@ -1090,7 +1102,14 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			if (options.limit) query = query.limit(options.limit);
 			if (options.offset) query = query.offset(options.offset);
 
-			return (await query) as GlobalVersionRecord[];
+			const rows = (await query) as GlobalVersionRecord[];
+			for (const row of rows) {
+				collapsePolymorphicRelationValues(
+					row as Record<string, any>,
+					this.state.relations ?? {},
+				);
+			}
+			return rows;
 		};
 	}
 

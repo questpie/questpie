@@ -36,9 +36,12 @@ import {
 } from "#questpie/server/collection/crud/query-builders/index.js";
 import {
 	applyBelongsToRelations,
+	collapsePolymorphicRelationValues,
+	expandPolymorphicRelationValues,
 	extractBelongsToConnectValues,
 	handleCascadeDelete,
 	isForeignKeyViolation,
+	isPurgeLockTimeout,
 	lockRelationSourceForWrite,
 	lockRelationTargetsForWrite,
 	preparePurgeRelations,
@@ -56,6 +59,7 @@ import {
 	executeAccessRule,
 	getRestrictedReadFields,
 	matchesAccessConditions,
+	matchesStrictAccessConditions,
 	mergeFieldAccessRules,
 	mergeWhereWithAccess,
 	PRECHECKED_READ_ACCESS,
@@ -1138,6 +1142,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						hasFallback: needsFallback,
 					});
 				}
+				for (const row of rows) {
+					collapsePolymorphicRelationValues(row, this.state.relations ?? {});
+				}
 
 				// Handle relations
 				if (rows.length > 0 && options.with && this.app) {
@@ -1520,8 +1527,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		regularFields: any;
 		nestedRelations: Record<string, any>;
 	} {
-		const relationNames = new Set(Object.keys(this.state.relations || {}));
-		return separateNestedRelations(input, relationNames);
+		return separateNestedRelations(input, this.state.relations ?? {});
 	}
 
 	/**
@@ -1717,6 +1723,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							db,
 						}),
 					);
+					regularFields = expandPolymorphicRelationValues(
+						regularFields,
+						this.state.relations ?? {},
+					);
 					const crdtManifest = this.getCrdtManifest();
 					const stagedCrdtActivation: StagedCrdtOwnerActivation | undefined =
 						crdtManifest
@@ -1852,6 +1862,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 									localizedFields: this.getLocalizedFieldNames(),
 									hasFallback: needsFallback,
 								});
+							}
+							if (createdRecord) {
+								collapsePolymorphicRelationValues(
+									createdRecord,
+									this.state.relations ?? {},
+								);
 							}
 
 							// Execute afterChange hooks
@@ -2176,6 +2192,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}),
 			);
 		}
+		regularFields = expandPolymorphicRelationValues(
+			regularFields,
+			this.state.relations ?? {},
+		);
 		let updatedRecords: any[];
 
 		try {
@@ -2233,6 +2253,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						sourceState: this.state,
 						sourceTable: this.table,
 						values: nonLocalized,
+						originalRows: winners,
 					});
 				}
 
@@ -2696,7 +2717,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						if (
 							canPurge === false ||
 							(typeof canPurge === "object" &&
-								!(await this.checkAccessConditions(canPurge, preimage)))
+								!(await matchesStrictAccessConditions(canPurge, preimage)))
 						) {
 							throw ApiError.notFound("Record", String(id));
 						}
@@ -2721,6 +2742,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					}
 					const candidate = freezePurgeSnapshot(candidateResult);
 					await assertPurgeAccess(candidate);
+					if (candidate.deletedAt == null) {
+						throw ApiError.conflict("Only a soft-deleted record can be purged");
+					}
 
 					if (!this.app) throw retainedReferenceConflict();
 					const preparedRelations = await preparePurgeRelations({
@@ -2856,6 +2880,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					return attachCurrentTransactionTxid({ success: true as const });
 				});
 			} catch (error: unknown) {
+				if (isPurgeLockTimeout(error)) {
+					throw ApiError.conflict(
+						"Physical purge could not acquire relation locks; retry later",
+					);
+				}
 				const dbError = parseDatabaseError(error);
 				if (dbError) throw dbError;
 				throw error;
@@ -3347,6 +3376,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					localizedFields: this.getLocalizedFieldNames(),
 					hasFallback: needsFallback,
 				});
+			}
+			for (const row of rows) {
+				collapsePolymorphicRelationValues(row, this.state.relations ?? {});
 			}
 
 			return rows;

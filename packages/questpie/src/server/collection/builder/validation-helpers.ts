@@ -205,18 +205,30 @@ export function createCollectionValidationSchemas<
 		]);
 
 		for (const [key, fieldDef] of Object.entries(options.fieldDefinitions)) {
+			const meta = fieldDef.getMetadata?.() as
+				| {
+						type?: string;
+						isUpload?: boolean;
+						relationType?: string;
+				  }
+				| undefined;
+			const isPolymorphicRelation =
+				meta?.type === "relation" && meta.relationType === "morphTo";
 			// Only keys that actually have a column (skips virtual/hasMany)
-			if (!columnKeys.has(key)) continue;
+			// Morph fields are one logical input backed by two physical columns.
+			if (!columnKeys.has(key) && !isPolymorphicRelation) continue;
 			// Excluded keys stay excluded
 			if (options.exclude?.[key]) continue;
 			// input:false fields are system-written — keep column semantics
 			if (fieldDef._state?.input === false) continue;
 			// Relation/upload FK formats are app-defined (custom ids, auth
 			// providers) — the field schema's uuid check would reject them.
-			const meta = fieldDef.getMetadata?.() as
-				| { type?: string; isUpload?: boolean }
-				| undefined;
-			if (meta?.type === "relation" || meta?.type === "upload") continue;
+			if (
+				(meta?.type === "relation" && !isPolymorphicRelation) ||
+				meta?.type === "upload"
+			) {
+				continue;
+			}
 
 			let schema: z.ZodTypeAny = fieldDef.toZodSchema();
 

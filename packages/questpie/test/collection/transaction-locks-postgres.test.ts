@@ -258,6 +258,92 @@ describe.skipIf(!runPostgresContract)(
 			expect(await waitingLock).toEqual([]);
 		});
 
+		it("rejects an active purge before taking relation table locks", async () => {
+			const parent = await setup.app.collections.postgres_purge_parents.create(
+				{ name: "Still active" },
+				systemContext,
+			);
+			const writerInserted = deferred();
+			const releaseWriter = deferred();
+			pauseRelationWrite = async (data) => {
+				if (data.parent !== parent.id) return;
+				writerInserted.resolve();
+				await releaseWriter.promise;
+			};
+			const writer = setup.app.collections.postgres_purge_children.create(
+				{ name: "Concurrent child", parent: parent.id },
+				systemContext,
+			);
+			await writerInserted.promise;
+
+			const activePurgeOutcome = await Promise.race([
+				setup.app.collections.postgres_purge_parents
+					.purgeById({ id: parent.id }, systemContext)
+					.then(
+						() => ({ error: undefined }),
+						(error: unknown) => ({ error }),
+					),
+				new Promise<{ error: Error }>((resolve) =>
+					setTimeout(
+						() =>
+							resolve({
+								error: new Error(
+									"active purge waited for relation table locks",
+								),
+							}),
+						500,
+					),
+				),
+			]);
+			expect(activePurgeOutcome.error).toMatchObject({ code: "CONFLICT" });
+			expect(activePurgeOutcome.error).not.toMatchObject({
+				message: "active purge waited for relation table locks",
+			});
+
+			releaseWriter.resolve();
+			await writer;
+			pauseRelationWrite = undefined;
+		});
+
+		it("bounds relation table lock waits with a retryable conflict", async () => {
+			const parent = await setup.app.collections.postgres_purge_parents.create(
+				{ name: "Bounded wait" },
+				systemContext,
+			);
+			await setup.app.collections.postgres_purge_parents.deleteById(
+				{ id: parent.id },
+				systemContext,
+			);
+			const writerInserted = deferred();
+			const releaseWriter = deferred();
+			pauseRelationWrite = async (data) => {
+				if (data.parent !== parent.id) return;
+				writerInserted.resolve();
+				await releaseWriter.promise;
+			};
+			const writer = setup.app.collections.postgres_purge_children.create(
+				{ name: "Lock holder", parent: parent.id },
+				systemContext,
+			);
+			await writerInserted.promise;
+
+			const startedAt = Date.now();
+			await expect(
+				setup.app.collections.postgres_purge_parents.purgeById(
+					{ id: parent.id },
+					systemContext,
+				),
+			).rejects.toMatchObject({
+				code: "CONFLICT",
+				message: "Physical purge could not acquire relation locks; retry later",
+			});
+			expect(Date.now() - startedAt).toBeLessThan(5_000);
+
+			releaseWriter.resolve();
+			await writer;
+			pauseRelationWrite = undefined;
+		});
+
 		it("serializes application-only relation writes with physical purge", async () => {
 			const purgeFirstParent =
 				await setup.app.collections.postgres_purge_parents.create(
