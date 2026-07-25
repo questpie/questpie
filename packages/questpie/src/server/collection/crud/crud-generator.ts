@@ -1742,6 +1742,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						record = await withTransaction(db, async (tx: any) => {
 							await lockRelationSourceForWrite({
 								tx,
+								app: this.app,
 								sourceState: this.state,
 								sourceTable: this.table,
 							});
@@ -2203,6 +2204,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				const txContext = { ...normalized, db: tx };
 				await lockRelationSourceForWrite({
 					tx,
+					app: this.app,
 					sourceState: this.state,
 					sourceTable: this.table,
 				});
@@ -2715,8 +2717,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							params,
 						);
 						if (
-							canPurge === false ||
-							(typeof canPurge === "object" &&
+							canPurge !== true &&
+							(canPurge === null ||
+								typeof canPurge !== "object" ||
+								Array.isArray(canPurge) ||
 								!(await matchesStrictAccessConditions(canPurge, preimage)))
 						) {
 							throw ApiError.notFound("Record", String(id));
@@ -3744,7 +3748,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			await withTransaction(db, async (tx: any) => {
 				await createVersionRecord({
 					tx,
-					row: existing,
+					row: expandPolymorphicRelationValues(
+						existing,
+						this.state.relations ?? {},
+					),
 					operation: "update",
 					versionsTable: this.versionsTable!,
 					i18nVersionsTable: this.i18nVersionsTable,
@@ -3810,7 +3817,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 		await createVersionRecord({
 			tx,
-			row,
+			row: expandPolymorphicRelationValues(row, this.state.relations ?? {}),
 			operation,
 			versionsTable: this.versionsTable,
 			i18nVersionsTable: this.i18nVersionsTable,

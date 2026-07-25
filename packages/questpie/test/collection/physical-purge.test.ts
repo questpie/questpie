@@ -110,6 +110,19 @@ const negatedUnsupportedAccessDocuments = collection(
 			}) as any,
 	});
 
+const undefinedAccessDocuments = collection("purge_undefined_access_documents")
+	.fields(({ f }) => ({
+		title: f.text().required(),
+	}))
+	.options({ softDelete: true })
+	.access({
+		create: true,
+		read: true,
+		update: true,
+		delete: true,
+		purge: (() => undefined) as any,
+	});
+
 const hardDeleteDocuments = collection("purge_hard_documents")
 	.fields(({ f }) => ({ title: f.text().required() }))
 	.access({ purge: true });
@@ -164,6 +177,7 @@ describe("physical purge core contract", () => {
 				lifecycleDocuments,
 				localizedAccessDocuments,
 				negatedUnsupportedAccessDocuments,
+				undefinedAccessDocuments,
 				unknownAccessDocuments,
 			},
 			hooks: {
@@ -326,6 +340,36 @@ describe("physical purge core contract", () => {
 				.select()
 				.from(
 					setup.app.collections.negatedUnsupportedAccessDocuments[
+						"~internalRelatedTable"
+					],
+				),
+		).toHaveLength(1);
+	});
+
+	it("fails closed when a purge access rule returns no decision", async () => {
+		const ctx = createTestContext({ accessMode: "user" });
+		const created = await setup.app.collections.undefinedAccessDocuments.create(
+			{
+				title: "Missing decision",
+			},
+			ctx,
+		);
+		await setup.app.collections.undefinedAccessDocuments.deleteById(
+			{ id: created.id },
+			ctx,
+		);
+
+		await expect(
+			setup.app.collections.undefinedAccessDocuments.purgeById(
+				{ id: created.id },
+				ctx,
+			),
+		).rejects.toMatchObject({ code: "NOT_FOUND" });
+		expect(
+			await setup.app.db
+				.select()
+				.from(
+					setup.app.collections.undefinedAccessDocuments[
 						"~internalRelatedTable"
 					],
 				),
@@ -574,6 +618,7 @@ describe("physical purge core contract", () => {
 			activeIndex?.config.columns.map((column: any) => column.name),
 		).toEqual(["deleted_at"]);
 		expect(activeIndex?.config.where).toBeUndefined();
+		expect(activeIndex?.config.name).toBeUndefined();
 
 		const index = indexes.find(
 			(candidate) =>

@@ -144,6 +144,147 @@ describe("physical purge relation safety", () => {
 		).resolves.toEqual({ success: true });
 	});
 
+	it("scans unresolved morph discriminators without globally disabling purge", async () => {
+		const targets = collection("purge_unresolved_poly_targets")
+			.fields(({ f }) => ({ name: f.text().required() }))
+			.options({ softDelete: true })
+			.access({ purge: true });
+		const others = collection("purge_unresolved_poly_others").fields(
+			({ f }) => ({ name: f.text().required() }),
+		);
+		const activities = collection("purge_unresolved_poly_activities").fields(
+			({ f }) => ({
+				subject: f.relation({
+					target: "targets",
+					unresolved: "others",
+				}),
+			}),
+		);
+		const setup = await buildMockApp({
+			collections: { targets, others, activities },
+		});
+		cleanups.push(setup.cleanup);
+		await runTestDbMigrations(setup.app);
+		const polymorphicTargets =
+			setup.app.collections.activities["~internalState"].relations.subject
+				.polymorphicTargets;
+		polymorphicTargets[1].collection = undefined;
+		const ctx = createTestContext();
+		const unreferenced = await setup.app.collections.targets.create(
+			{ name: "Unreferenced" },
+			ctx,
+		);
+		await setup.app.collections.targets.deleteById(
+			{ id: unreferenced.id },
+			ctx,
+		);
+		await expect(
+			setup.app.collections.targets.purgeById({ id: unreferenced.id }, ctx),
+		).resolves.toEqual({ success: true });
+
+		const referenced = await setup.app.collections.targets.create(
+			{ name: "Conservatively referenced" },
+			ctx,
+		);
+		await setup.app.db
+			.insert(setup.app.collections.activities["~internalRelatedTable"])
+			.values({
+				subjectType: "unresolved",
+				subjectId: referenced.id,
+			});
+		await setup.app.collections.targets.deleteById({ id: referenced.id }, ctx);
+		await expect(
+			setup.app.collections.targets.purgeById({ id: referenced.id }, ctx),
+		).rejects.toMatchObject({
+			code: "CONFLICT",
+			message: "Cannot purge record while retained references exist",
+		});
+	});
+
+	it("uses hasMany foreignKey metadata without requiring relationName", async () => {
+		const parents = collection("purge_has_many_parents")
+			.fields(({ f }) => ({
+				name: f.text().required(),
+				children: f.relation("children").hasMany({ foreignKey: "parentId" }),
+			}))
+			.options({ softDelete: true })
+			.access({ purge: true });
+		const children = collection("purge_has_many_children").fields(({ f }) => ({
+			parentId: f.text(36).required(),
+		}));
+		const setup = await buildMockApp({
+			collections: { parents, children },
+		});
+		cleanups.push(setup.cleanup);
+		await runTestDbMigrations(setup.app);
+		const ctx = createTestContext();
+		const unreferenced = await setup.app.collections.parents.create(
+			{ name: "No child" },
+			ctx,
+		);
+		await setup.app.collections.parents.deleteById(
+			{ id: unreferenced.id },
+			ctx,
+		);
+		await expect(
+			setup.app.collections.parents.purgeById({ id: unreferenced.id }, ctx),
+		).resolves.toEqual({ success: true });
+
+		const referenced = await setup.app.collections.parents.create(
+			{ name: "Has child" },
+			ctx,
+		);
+		await setup.app.collections.children.create(
+			{ parentId: referenced.id },
+			ctx,
+		);
+		await setup.app.collections.parents.deleteById({ id: referenced.id }, ctx);
+		await expect(
+			setup.app.collections.parents.purgeById({ id: referenced.id }, ctx),
+		).rejects.toMatchObject({ code: "CONFLICT" });
+	});
+
+	it("validates raw junction fields inferred from many-to-many metadata", async () => {
+		const parents = collection("purge_raw_junction_parents")
+			.fields(({ f }) => ({
+				name: f.text().required(),
+				tags: f.relation("tags").manyToMany({
+					through: "junction",
+					sourceField: "parentId",
+					targetField: "tagId",
+				}),
+			}))
+			.options({ softDelete: true })
+			.access({ purge: true });
+		const tags = collection("purge_raw_junction_tags").fields(({ f }) => ({
+			name: f.text().required(),
+		}));
+		const junction = collection("purge_raw_junction_rows").fields(({ f }) => ({
+			parentId: f.text(36).required(),
+			tagId: f.text(36).required(),
+		}));
+		const setup = await buildMockApp({
+			collections: { parents, tags, junction },
+		});
+		cleanups.push(setup.cleanup);
+		await runTestDbMigrations(setup.app);
+		const ctx = createTestContext();
+		const parent = await setup.app.collections.parents.create(
+			{ name: "Parent" },
+			ctx,
+		);
+		const tag = await setup.app.collections.tags.create({ name: "Tag" }, ctx);
+		await setup.app.collections.parents.deleteById({ id: parent.id }, ctx);
+		await setup.app.collections.parents.purgeById({ id: parent.id }, ctx);
+
+		await expect(
+			setup.app.collections.junction.create(
+				{ parentId: parent.id, tagId: tag.id },
+				ctx,
+			),
+		).rejects.toMatchObject({ code: "BAD_REQUEST" });
+	});
+
 	it("blocks retained references owned by globals", async () => {
 		const parents = collection("purge_global_parents")
 			.fields(({ f }) => ({ name: f.text().required() }))
@@ -563,12 +704,14 @@ describe("physical purge relation safety", () => {
 			.fields(({ f }) => ({ body: f.text().required() }))
 			.options({ softDelete: true })
 			.access({ purge: true });
-		const activities = collection("purge_poly_activities").fields(({ f }) => ({
-			subject: f.relation({
-				article: "purge_poly_articles",
-				comment: "purge_poly_comments",
-			} as any),
-		}));
+		const activities = collection("purge_poly_activities")
+			.fields(({ f }) => ({
+				subject: f.relation({
+					article: "purge_poly_articles",
+					comment: "purge_poly_comments",
+				} as any),
+			}))
+			.options({ versioning: true });
 		const setup = await buildMockApp({
 			collections: {
 				purge_poly_articles: articles,
@@ -655,6 +798,30 @@ describe("physical purge relation safety", () => {
 		expect(updatedActivity.subject).toEqual({
 			type: "comment",
 			id: replacement.id,
+		});
+		const versions =
+			await setup.app.collections.purge_poly_activities.findVersions(
+				{ id: referencedActivity.id },
+				ctx,
+			);
+		expect(versions.at(-1)?.subject).toEqual({
+			type: "comment",
+			id: replacement.id,
+		});
+		await setup.app.collections.purge_poly_activities.revertToVersion(
+			{
+				id: referencedActivity.id,
+				version: versions.at(-1)!.versionNumber,
+			},
+			ctx,
+		);
+		expect(
+			await setup.app.collections.purge_poly_activities.findOne(
+				{ where: { id: referencedActivity.id } },
+				ctx,
+			),
+		).toMatchObject({
+			subject: { type: "comment", id: replacement.id },
 		});
 		await setup.app.collections.purge_poly_activities.updateById(
 			{

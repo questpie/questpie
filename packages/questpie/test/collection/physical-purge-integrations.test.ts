@@ -43,6 +43,17 @@ const uploadMirrors = collection("purge_upload_mirrors")
 		delete: true,
 		purge: true,
 	});
+const uploadOptionsLast = collection("purge_upload_options_last")
+	.fields(({ f }) => ({ alt: f.text() }))
+	.upload({ visibility: "private" })
+	.options({ softDelete: true })
+	.access({
+		create: true,
+		read: true,
+		update: true,
+		delete: true,
+		purge: true,
+	});
 
 const projectedRecords = collection("purge_projected_records")
 	.options({ softDelete: true })
@@ -65,6 +76,7 @@ describe("physical purge module integrations", () => {
 				collections: {
 					uploadAssets,
 					uploadMirrors,
+					uploadOptionsLast,
 					projectedRecords,
 				},
 			},
@@ -123,6 +135,32 @@ describe("physical purge module integrations", () => {
 				.from(questpieStorageObjectKeyTable)
 				.where(eq(questpieStorageObjectKeyTable.key, key)),
 		).toEqual([]);
+	});
+
+	it("retains soft-deleted upload bytes when options are chained after upload", async () => {
+		const key = "retention/options-last.txt";
+		await setup.app.storage.upload(key, new TextEncoder().encode("retained"));
+		const asset = await setup.app.collections.uploadOptionsLast.create(
+			{
+				key,
+				filename: "options-last.txt",
+				mimeType: "text/plain",
+				size: 8,
+				visibility: "private",
+			},
+			ctx,
+		);
+
+		await setup.app.collections.uploadOptionsLast.deleteById(
+			{ id: asset.id },
+			ctx,
+		);
+		expect(await setup.app.storage.exists(key)).toBe(true);
+		await setup.app.collections.uploadOptionsLast.restoreById(
+			{ id: asset.id },
+			ctx,
+		);
+		expect(await setup.app.storage.exists(key)).toBe(true);
 	});
 
 	it("does not run upload cleanup when an outer purge transaction rolls back", async () => {

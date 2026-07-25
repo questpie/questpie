@@ -1005,6 +1005,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			const updatedRecord = await withTransaction(db, async (tx: any) => {
 				await lockRelationSourceForWrite({
 					tx,
+					app: this.app,
 					sourceState: this.state as any,
 					sourceTable: this.table,
 				});
@@ -1499,7 +1500,10 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			await withTransaction(db, async (tx: any) => {
 				await createVersionRecord({
 					tx,
-					row: existing,
+					row: expandPolymorphicRelationValues(
+						existing,
+						this.state.relations ?? {},
+					),
 					operation: "update",
 					versionsTable: this.versionsTable!,
 					i18nVersionsTable: this.i18nVersionsTable,
@@ -1557,7 +1561,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 
 		await createVersionRecord({
 			tx,
-			row,
+			row: expandPolymorphicRelationValues(row, this.state.relations ?? {}),
 			operation,
 			versionsTable: this.versionsTable,
 			i18nVersionsTable: this.i18nVersionsTable,

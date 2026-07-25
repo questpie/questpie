@@ -471,6 +471,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				return {
 					type: "many",
 					collection: targetName,
+					field: foreignKey,
 					references: ["id"],
 					relationName: metadata.relationName,
 					onDelete: metadata.onDelete,
@@ -872,6 +873,12 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		const uploadFields = Collection.uploadCols();
 
 		const collectionSlug = this.state.name;
+		const isRuntimeSoftDeleteCollection = (app: any) =>
+			Object.values(app?.collections ?? {}).some(
+				(crud: any) =>
+					crud?.["~internalState"]?.name === collectionSlug &&
+					crud["~internalState"].options?.softDelete === true,
+			);
 		const logStorageCleanupError = (
 			logger: any,
 			message: string,
@@ -983,7 +990,9 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			onAfterCommit,
 		}: any) => {
 			if (!app?.storage || !data?.key) return;
-			if (this.state.options.softDelete) return;
+			if (this.state.options.softDelete || isRuntimeSoftDeleteCollection(app)) {
+				return;
+			}
 
 			await deleteStorageObjectAfterCommit({
 				app,

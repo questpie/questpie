@@ -31,6 +31,9 @@ let pausePurge: ((data: Record<string, unknown>) => Promise<void>) | undefined;
 let pauseRelationWrite:
 	| ((data: Record<string, unknown>) => Promise<void>)
 	| undefined;
+let pauseJunctionWrite:
+	| ((data: Record<string, unknown>) => Promise<void>)
+	| undefined;
 
 const postgresPurgeParents = collection("postgres_purge_parents")
 	.fields(({ f }) => ({ name: f.text().required() }))
@@ -55,6 +58,32 @@ const postgresUploadAssets = collection("postgres_upload_assets")
 	.options({ softDelete: true })
 	.upload()
 	.access({ purge: true });
+
+const postgresJunctionParents = collection("postgres_junction_parents")
+	.fields(({ f }) => ({
+		name: f.text().required(),
+		tags: f.relation("postgres_junction_tags").manyToMany({
+			through: "postgres_junction_rows",
+			sourceField: "parentId",
+			targetField: "tagId",
+		}),
+	}))
+	.options({ softDelete: true })
+	.access({ purge: true });
+
+const postgresJunctionTags = collection("postgres_junction_tags").fields(
+	({ f }) => ({ name: f.text().required() }),
+);
+
+const postgresJunctionRows = collection("postgres_junction_rows")
+	.fields(({ f }) => ({
+		parentId: f.text(36).required(),
+		tagId: f.text(36).required(),
+	}))
+	.hooks({
+		afterChange: ({ data, operation }) =>
+			operation === "create" ? pauseJunctionWrite?.(data) : undefined,
+	});
 
 function deferred() {
 	let resolve!: () => void;
@@ -95,6 +124,9 @@ describe.skipIf(!runPostgresContract)(
 						postgres_purge_parents: postgresPurgeParents,
 						postgres_purge_children: postgresPurgeChildren,
 						postgres_upload_assets: postgresUploadAssets,
+						postgres_junction_parents: postgresJunctionParents,
+						postgres_junction_tags: postgresJunctionTags,
+						postgres_junction_rows: postgresJunctionRows,
 					},
 				},
 				{
@@ -435,6 +467,54 @@ describe.skipIf(!runPostgresContract)(
 				message: "Cannot purge record while retained references exist",
 			});
 			pauseRelationWrite = undefined;
+		});
+
+		it("serializes raw junction writes inferred from many-to-many metadata", async () => {
+			const parent =
+				await setup.app.collections.postgres_junction_parents.create(
+					{ name: "Writer wins" },
+					systemContext,
+				);
+			const tag = await setup.app.collections.postgres_junction_tags.create(
+				{ name: "Tag" },
+				systemContext,
+			);
+			await setup.app.collections.postgres_junction_parents.deleteById(
+				{ id: parent.id },
+				systemContext,
+			);
+			const writerInserted = deferred();
+			const releaseWriter = deferred();
+			pauseJunctionWrite = async (data) => {
+				if (data.parentId !== parent.id) return;
+				writerInserted.resolve();
+				await releaseWriter.promise;
+			};
+			const writer = setup.app.collections.postgres_junction_rows.create(
+				{ parentId: parent.id, tagId: tag.id },
+				systemContext,
+			);
+			await writerInserted.promise;
+
+			let waitingPurgeFinished = false;
+			const waitingPurge = setup.app.collections.postgres_junction_parents
+				.purgeById({ id: parent.id }, systemContext)
+				.finally(() => {
+					waitingPurgeFinished = true;
+				});
+			const waitingPurgeOutcome = waitingPurge.then(
+				() => ({ error: undefined }),
+				(error: unknown) => ({ error }),
+			);
+			await waitForAttempt();
+			expect(waitingPurgeFinished).toBe(false);
+			releaseWriter.resolve();
+			await writer;
+			expect((await waitingPurgeOutcome).error).toMatchObject({
+				code: "CONFLICT",
+				message: "Cannot purge record while retained references exist",
+			});
+			pauseJunctionWrite = undefined;
 		});
 
 		it("lets only one concurrent storage-cleanup drainer claim an intent", async () => {

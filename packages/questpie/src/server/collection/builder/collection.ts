@@ -971,9 +971,9 @@ export class Collection<TState extends CollectionBuilderState> {
 			// deletedAt index because normal reads filter active rows with
 			// `deletedAt IS NULL`.
 			if (this.state.options.softDelete) {
-				constraints[`${tableName}_deleted_at_idx`] = index(
-					`${tableName}_deleted_at_idx`,
-				).on((t as any).deletedAt);
+				constraints[`${tableName}_deleted_at_index`] = index().on(
+					(t as any).deletedAt,
+				);
 				constraints[`${tableName}_deleted_at_retention_idx`] = index(
 					`${tableName}_deleted_at_retention_idx`,
 				)

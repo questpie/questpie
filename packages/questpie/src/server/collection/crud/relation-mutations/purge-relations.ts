@@ -179,14 +179,13 @@ function collectApplicationReferences(
 
 		for (const relation of Object.values(relations) as RelationConfig[]) {
 			if (relation.polymorphicTargets) {
-				if (relation.polymorphicTargets.some((target) => !target.collection)) {
-					unsupported = true;
-					unsupportedTables.push(
-						sourceCrud["~internalRelatedTable"] as PgTable,
-					);
-				}
 				for (const target of relation.polymorphicTargets) {
-					if (target.collection !== targetCollection) continue;
+					if (
+						target.collection !== undefined &&
+						target.collection !== targetCollection
+					) {
+						continue;
+					}
 					const sourceTable = sourceCrud["~internalRelatedTable"] as PgTable;
 					const sourceColumn = getColumn(sourceTable, target.idField);
 					const typeColumn = getColumn(sourceTable, target.typeField);
@@ -234,8 +233,11 @@ function collectApplicationReferences(
 					: undefined;
 				if (
 					!relatedCrud ||
-					!reverse ||
-					!pushScalarReference(references, relatedCrud, reverse)
+					!(
+						(relation.field &&
+							pushScalarReference(references, relatedCrud, relation)) ||
+						(reverse && pushScalarReference(references, relatedCrud, reverse))
+					)
 				) {
 					unsupported = true;
 					if (relatedCrud) {
@@ -520,19 +522,41 @@ type RelationTargetLock = {
 	value: unknown;
 };
 
+function isManyToManyJunctionTable(
+	app: Questpie<any>,
+	sourceTable: PgTable,
+): boolean {
+	for (const sourceCrud of Object.values(
+		app.collections,
+	) as RelationSourceCrud[]) {
+		const relations = sourceCrud["~internalState"]?.relations ?? {};
+		for (const relation of Object.values(relations)) {
+			if (relation.type !== "manyToMany" || !relation.through) continue;
+			const junctionCrud = app.collections[relation.through] as
+				| RelationSourceCrud
+				| undefined;
+			if (junctionCrud?.["~internalRelatedTable"] === sourceTable) return true;
+		}
+	}
+	return false;
+}
+
 /** Acquire the source table lock before any nested relation work starts. */
 export async function lockRelationSourceForWrite(options: {
 	tx: any;
+	app?: Questpie<any>;
 	sourceState: CollectionBuilderState;
 	sourceTable: PgTable;
 }): Promise<void> {
-	const hasOwnedReference = Object.values(
-		options.sourceState.relations ?? {},
-	).some(
-		(relation) =>
-			relation.polymorphicTargets ||
-			(relation.type === "one" && (relation.fields?.length ?? 0) === 1),
-	);
+	const hasOwnedReference =
+		Object.values(options.sourceState.relations ?? {}).some(
+			(relation) =>
+				relation.polymorphicTargets ||
+				(relation.type === "one" && (relation.fields?.length ?? 0) === 1),
+		) ||
+		(options.app
+			? isManyToManyJunctionTable(options.app, options.sourceTable)
+			: false);
 	if (!hasOwnedReference) return;
 	const sourceIdentity = tableIdentity(options.sourceTable);
 	await options.tx.execute(
@@ -615,6 +639,41 @@ export async function lockRelationTargetsForWrite(options: {
 			key: relation.references?.[0] ?? "id",
 			value,
 		});
+	}
+
+	for (const [sourceCollection, sourceCrud] of Object.entries(
+		app.collections,
+	) as Array<[string, RelationSourceCrud]>) {
+		for (const relation of Object.values(
+			sourceCrud["~internalState"]?.relations ?? {},
+		)) {
+			if (relation.type !== "manyToMany" || !relation.through) continue;
+			const junctionCrud = app.collections[relation.through] as
+				| RelationSourceCrud
+				| undefined;
+			if (junctionCrud?.["~internalRelatedTable"] !== sourceTable) continue;
+
+			if (relation.sourceField && Object.hasOwn(values, relation.sourceField)) {
+				const value = values[relation.sourceField];
+				if (value != null) {
+					targets.push({
+						collection: sourceCollection,
+						key: relation.sourceKey ?? "id",
+						value,
+					});
+				}
+			}
+			if (relation.targetField && Object.hasOwn(values, relation.targetField)) {
+				const value = values[relation.targetField];
+				if (value != null) {
+					targets.push({
+						collection: relation.collection,
+						key: relation.targetKey ?? "id",
+						value,
+					});
+				}
+			}
+		}
 	}
 
 	if (targets.length === 0) return;
