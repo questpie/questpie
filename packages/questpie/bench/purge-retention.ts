@@ -51,7 +51,7 @@ type RunResult = {
 const CONFIRMATION = "I_UNDERSTAND";
 const DEFAULT_ROWS = 1_000;
 const DEFAULT_PAGE_SIZE = 100;
-const DEFAULT_CONCURRENCY = 4;
+const DEFAULT_CONCURRENCY = 1;
 const MAX_CONCURRENCY = 32;
 const LATENCY_RELATIVE_ACCURACY = 0.01;
 
@@ -61,6 +61,13 @@ const rows = collection("purge_bench_rows")
 	}))
 	.options({ softDelete: true })
 	.access({ purge: true });
+
+// Keep one application-only incoming relation in the benchmark schema even
+// when the run has no retained children. This exercises the same relation
+// inventory and table-lock path as production collections.
+const references = collection("purge_bench_references").fields(({ f }) => ({
+	row: f.relation("purge_bench_rows"),
+}));
 
 function positiveInteger(
 	name: string,
@@ -532,7 +539,12 @@ async function main(): Promise<void> {
 				`Running ${benchmark.rowCount.toLocaleString()} rows, page ${benchmark.pageSize}, concurrency ${benchmark.concurrency}`,
 			);
 			const setup = await buildMockApp(
-				{ collections: { purge_bench_rows: rows } },
+				{
+					collections: {
+						purge_bench_references: references,
+						purge_bench_rows: rows,
+					},
+				},
 				{
 					db: {
 						url: databaseUrl,

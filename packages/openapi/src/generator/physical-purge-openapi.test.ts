@@ -36,6 +36,14 @@ describe("OpenAPI physical purge contract", () => {
 					in: "path",
 					required: true,
 				},
+				{
+					name: "locale",
+					in: "query",
+				},
+				{
+					name: "stage",
+					in: "query",
+				},
 			],
 		});
 		expect(spec.paths["/api/ephemeral/{id}/purge"]).toBeUndefined();

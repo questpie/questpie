@@ -297,7 +297,7 @@ export function generateCollectionPaths(
 					operationId: `${name}_purge`,
 					summary: `Permanently purge deleted ${name}`,
 					tags: [tag],
-					parameters: [idParam],
+					parameters: [idParam, ...singleQueryParameters()],
 					responses: jsonResponse(
 						ref("SuccessResponse"),
 						`Permanently purged ${name} record`,

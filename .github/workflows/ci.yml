@@ -128,6 +128,13 @@ jobs:
           QUESTPIE_MIGRATIONS_SILENT: "1"
           QUESTPIE_REALTIME_TXID_DATABASE_URL: postgresql://questpie:questpie@127.0.0.1:54329/questpie_realtime
 
+      - name: Run physical-purge transaction and storage-lock contracts
+        working-directory: packages/questpie
+        run: bun test test/collection/transaction-locks-postgres.test.ts
+        env:
+          QUESTPIE_MIGRATIONS_SILENT: "1"
+          QUESTPIE_TRANSACTION_LOCK_DATABASE_URL: postgresql://questpie:questpie@127.0.0.1:54329/questpie_realtime
+
       - name: Run realtime driver and security matrix
         working-directory: packages/questpie
         run: bun test test/ --test-name-pattern "matrix|storm|dos|channel"
