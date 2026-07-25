@@ -22,10 +22,27 @@ class FakeRedisStream {
 		lastId: string;
 		resolve: (value: unknown) => void;
 	}>();
+	private waiterObservers = new Set<() => void>();
 	private nextId = 1;
 
-	get waiterCount(): number {
-		return this.waiters.size;
+	async waitForWaiters(count: number): Promise<void> {
+		if (this.waiters.size >= count) return;
+
+		await new Promise<void>((resolve, reject) => {
+			let timeout: ReturnType<typeof setTimeout>;
+			const observe = () => {
+				if (this.waiters.size < count) return;
+				clearTimeout(timeout);
+				this.waiterObservers.delete(observe);
+				resolve();
+			};
+			timeout = setTimeout(() => {
+				this.waiterObservers.delete(observe);
+				reject(new Error(`Timed out waiting for ${count} Redis readers`));
+			}, 5_000);
+			this.waiterObservers.add(observe);
+			observe();
+		});
 	}
 
 	createClient(): RedisStreamsClient {
@@ -53,6 +70,7 @@ class FakeRedisStream {
 				return new Promise((resolve) => {
 					const waiter = { lastId, resolve };
 					this.waiters.add(waiter);
+					for (const observe of this.waiterObservers) observe();
 					setTimeout(() => {
 						if (!this.waiters.delete(waiter)) return;
 						resolve(null);
@@ -113,6 +131,7 @@ describe("redis streams change broker", () => {
 				onError: () => {},
 			}),
 		]);
+		await redis.waitForWaiters(2);
 		await first.publish(wake);
 
 		for (let attempt = 0; received.length < 2 && attempt < 100; attempt++) {
@@ -158,9 +177,7 @@ describe("redis streams change broker", () => {
 					}),
 				),
 			]);
-			for (let attempt = 0; redis.waiterCount < 2 && attempt < 100; attempt++) {
-				await new Promise((resolve) => setTimeout(resolve, 1));
-			}
+			await redis.waitForWaiters(2);
 
 			const event = await first.app.realtime.appendChange(change);
 			await first.app.realtime.notify(event);
