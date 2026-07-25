@@ -21,6 +21,7 @@ import type {
 	CollectionBuilderState,
 	RelationConfig,
 } from "#questpie/server/collection/builder/types.js";
+import { isAccessWhere } from "#questpie/server/collection/crud/shared/access-control.js";
 import {
 	getColumn,
 	getDb,
@@ -55,6 +56,8 @@ export interface BuildWhereClauseOptions {
 	useI18n?: boolean;
 	/** Database instance for subqueries */
 	db?: any;
+	/** Internal: this subtree came from an access rule and must never weaken. */
+	failClosedAccess?: boolean;
 }
 
 /**
@@ -146,6 +149,8 @@ export function buildWhereClause(
 		app,
 		useI18n = false,
 	} = options;
+	const failClosedAccess =
+		options.failClosedAccess === true || isAccessWhere(where);
 
 	const conditions: SQL[] = [];
 
@@ -162,6 +167,7 @@ export function buildWhereClause(
 						app,
 						useI18n,
 						db: options.db,
+						failClosedAccess,
 					}),
 				)
 				.filter(Boolean) as SQL[];
@@ -180,6 +186,7 @@ export function buildWhereClause(
 						app,
 						useI18n,
 						db: options.db,
+						failClosedAccess,
 					}),
 				)
 				.filter(Boolean) as SQL[];
@@ -196,11 +203,15 @@ export function buildWhereClause(
 				app,
 				useI18n,
 				db: options.db,
+				failClosedAccess,
 			});
 			if (subClause) {
 				conditions.push(not(subClause));
 			}
 		} else if (key === "RAW" && typeof value === "function") {
+			if (failClosedAccess) {
+				throw accessCompilationError(state.name, key);
+			}
 			conditions.push(
 				value({
 					table,
@@ -302,6 +313,9 @@ export function buildWhereClause(
 						fieldColumnOps,
 					);
 					if (condition) conditions.push(condition);
+					else if (failClosedAccess) {
+						throw accessCompilationError(state.name, key, op);
+					}
 				}
 			} else if (state.relations?.[key]) {
 				// Relation filter (has quantifiers or is a plain object for nested matching)
@@ -312,9 +326,12 @@ export function buildWhereClause(
 					context,
 					app,
 					db: options.db,
+					failClosedAccess,
 				});
 				if (relationClause) {
 					conditions.push(relationClause);
+				} else if (failClosedAccess) {
+					throw accessCompilationError(state.name, key);
 				}
 			} else {
 				// Fallback: treat as field operators
@@ -343,6 +360,9 @@ export function buildWhereClause(
 						fieldColumnOps,
 					);
 					if (condition) conditions.push(condition);
+					else if (failClosedAccess) {
+						throw accessCompilationError(state.name, key, op);
+					}
 				}
 			}
 		} else {
@@ -487,6 +507,8 @@ interface BuildRelationWhereOptions {
 	app?: Questpie<any>;
 	/** Database instance */
 	db?: any;
+	/** Whether this relation predicate originated from access control. */
+	failClosedAccess?: boolean;
 }
 
 /**
@@ -687,6 +709,7 @@ export function buildBelongsToExistsClause(
 			app,
 			useI18n: false,
 			db: options.db,
+			failClosedAccess: options.failClosedAccess,
 		});
 		if (nestedClause) whereConditions.push(nestedClause);
 	}
@@ -767,6 +790,7 @@ export function buildHasManyExistsClause(
 			app,
 			useI18n: false,
 			db: options.db,
+			failClosedAccess: options.failClosedAccess,
 		});
 		if (nestedClause) whereConditions.push(nestedClause);
 	}
@@ -842,6 +866,7 @@ export function buildManyToManyExistsClause(
 			app,
 			useI18n: false,
 			db: options.db,
+			failClosedAccess: options.failClosedAccess,
 		});
 		if (nestedClause) whereConditions.push(nestedClause);
 	}
@@ -868,4 +893,15 @@ export function buildManyToManyExistsClause(
 		.where(and(...whereConditions));
 
 	return sql`exists (${subquery})`;
+}
+
+function accessCompilationError(
+	collection: string,
+	field: string,
+	operator?: string,
+): Error {
+	const suffix = operator ? ` (operator '${operator}')` : "";
+	return new Error(
+		`Cannot compile access predicate '${collection}.${field}'${suffix}`,
+	);
 }

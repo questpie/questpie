@@ -22,6 +22,16 @@ import { getDb, normalizeContext } from "./context.js";
 
 /** Internal, non-JSON marker for access already evaluated before CRUD hooks. */
 export const PRECHECKED_READ_ACCESS = Symbol("questpie.precheckedReadAccess");
+/** Internal, non-JSON marker that keeps access predicates fail-closed in SQL compilation. */
+export const ACCESS_WHERE = Symbol("questpie.accessWhere");
+
+export function isAccessWhere(value: unknown): boolean {
+	return (
+		!!value &&
+		typeof value === "object" &&
+		(value as { [ACCESS_WHERE]?: unknown })[ACCESS_WHERE] === true
+	);
+}
 
 type FieldDefinitionLike = {
 	_state?: {
@@ -656,13 +666,19 @@ export function mergeWhereWithAccess<TWhere = any>(
 		return userWhere;
 	}
 
+	const markedAccessWhere = Object.defineProperty(
+		{ ...accessWhere },
+		ACCESS_WHERE,
+		{ value: true },
+	);
+
 	// Merge access conditions with user conditions
 	if (!userWhere) {
-		return accessWhere as TWhere;
+		return markedAccessWhere as TWhere;
 	}
 
 	// Combine with AND
 	return {
-		AND: [userWhere, accessWhere],
+		AND: [userWhere, markedAccessWhere],
 	} as TWhere;
 }
