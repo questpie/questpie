@@ -77,6 +77,10 @@ beforeOperation("purge")
 ```
 
 `beforePurge` and `afterPurge` are dedicated, fatal hooks. Throwing from either rolls back the database transaction. Delete hooks do not run during purge.
+Both hooks receive an immutable snapshot of the locked, localized preimage as
+`data` and `original`. Mutating that snapshot throws and rolls the transaction
+back; use a separate write through `db` for related cleanup, which QUESTPIE
+rescans before commit.
 
 Use transaction-aware post-commit work for effects that must not happen after a rollback. Core integrations already follow that split:
 
@@ -90,7 +94,11 @@ Use transaction-aware post-commit work for effects that must not happen after a 
   active or soft-deleted row is not removed. Coordination rows are deleted with
   the final unreferenced object rather than forming an ever-growing history.
   Creating or changing upload metadata to a missing provider key now fails with
-  a bad-request result.
+  a bad-request result. Deploy the generated `questpie_storage_cleanup` and
+  `questpie_storage_object_key` migration before the next upload metadata create
+  or key change, even if purge and its cleanup worker are not enabled yet.
+  File-derived `key`, sanitized filename, MIME type, size, and configured
+  visibility take precedence over `additionalData`.
 - Audit records a metadata-only purge fact without copying deleted content.
 - A collaborative resource is fenced when its owner is deleted. Purge does not promise immediate privacy erasure of independently retained CRDT updates.
   The CRDT compactor removes expired epochs, bindings, and the final
@@ -112,11 +120,20 @@ dangling reference. Relations to targets intentionally outside the registered
 QUESTPIE app cannot participate in this check. PostgreSQL constraints remain
 the final boundary for physical foreign keys.
 
+The source-table lock and target-row key-share add database work to every
+relation-bearing create/update. Upload metadata creates and key changes also
+perform one provider `exists` request with a 30-second bound. Include both costs
+in application latency and pool-capacity budgets.
+
 Polymorphic relations keep their public `{ type, id }` value while QUESTPIE
 materializes and locks the matching discriminator/id columns. Purge evaluates
 every configured discriminator, not only the first target. Generate and review
 the schema migration when adopting this release if an existing polymorphic
-field did not previously materialize both columns.
+field did not previously materialize both columns. Before enabling purge,
+backfill legacy discriminator/id pairs in a CLI-generated application data
+migration and verify that no retained reference has a null discriminator. A
+null legacy discriminator cannot be associated with a target collection and
+therefore cannot protect that target from purge.
 
 Raw SQL that writes an application-only relation after its target has already
 been purged can still create a dangling reference because that relation has no
