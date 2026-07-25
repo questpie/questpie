@@ -4,41 +4,77 @@ import type {
 	YjsWorkerResponse,
 } from "./worker-protocol.js";
 
-/* oxlint-disable unicorn/require-post-message-target-origin -- Worker.postMessage has no target origin. */
-declare const self: Worker;
+type WorkerEndpoint = {
+	post(message: YjsWorkerResponse): void;
+	onMessage(listener: (operation: YjsWorkerOperation) => void): void;
+};
 
 const engine = createYjsTextEngineCore();
-self.postMessage({ type: "ready" } satisfies YjsWorkerResponse);
+const endpoint = await createWorkerEndpoint();
+endpoint.post({ type: "ready" });
 
-self.addEventListener(
-	"message",
-	async (event: MessageEvent<YjsWorkerOperation>) => {
-		try {
-			const operation = event.data;
-			const memoryBefore = process.memoryUsage();
-			const value = await engine.stage(operation.input);
-			const memoryAfter = process.memoryUsage();
-			if (
-				memoryAfter.arrayBuffers - memoryBefore.arrayBuffers >
-					64 * 1024 * 1024 ||
-				memoryAfter.rss - memoryBefore.rss > 64 * 1024 * 1024
-			) {
-				throw new Error("Yjs worker exceeded measured memory ceiling");
-			}
-			self.postMessage({
-				type: "result",
-				id: operation.id,
-				ok: true,
-				value,
-			} satisfies YjsWorkerResponse);
-		} catch (error) {
-			self.postMessage({
-				type: "result",
-				id: event.data.id,
-				ok: false,
-				message: error instanceof Error ? error.message : "Yjs worker failed",
-			} satisfies YjsWorkerResponse);
+endpoint.onMessage(async (operation) => {
+	try {
+		const memoryBefore = measuredMemory();
+		const value = await engine.stage(operation.input);
+		const memoryAfter = measuredMemory();
+		if (
+			memoryBefore &&
+			memoryAfter &&
+			(memoryAfter.arrayBuffers - memoryBefore.arrayBuffers >
+				64 * 1024 * 1024 ||
+				memoryAfter.rss - memoryBefore.rss > 64 * 1024 * 1024)
+		) {
+			throw new Error("Yjs worker exceeded measured memory ceiling");
 		}
-	},
-);
-/* oxlint-enable unicorn/require-post-message-target-origin */
+		endpoint.post({
+			type: "result",
+			id: operation.id,
+			ok: true,
+			value,
+		});
+	} catch (error) {
+		endpoint.post({
+			type: "result",
+			id: operation.id,
+			ok: false,
+			message: error instanceof Error ? error.message : "Yjs worker failed",
+		});
+	}
+});
+
+async function createWorkerEndpoint(): Promise<WorkerEndpoint> {
+	/* oxlint-disable unicorn/require-post-message-target-origin -- Worker and worker_threads postMessage do not accept a target origin. */
+	if (
+		typeof globalThis.postMessage === "function" &&
+		typeof globalThis.addEventListener === "function"
+	) {
+		return {
+			post: (message) => globalThis.postMessage(message),
+			onMessage: (listener) =>
+				globalThis.addEventListener("message", (event) =>
+					listener((event as MessageEvent<YjsWorkerOperation>).data),
+				),
+		};
+	}
+	const { parentPort } = await import("node:worker_threads");
+	if (!parentPort) throw new Error("Yjs worker has no parent port");
+	return {
+		post: (message) => parentPort.postMessage(message),
+		onMessage: (listener) => parentPort.on("message", listener),
+	};
+	/* oxlint-enable unicorn/require-post-message-target-origin */
+}
+
+function measuredMemory():
+	| Readonly<{ arrayBuffers: number; rss: number }>
+	| undefined {
+	if (
+		typeof process === "undefined" ||
+		typeof process.memoryUsage !== "function"
+	) {
+		return undefined;
+	}
+	const usage = process.memoryUsage();
+	return { arrayBuffers: usage.arrayBuffers, rss: usage.rss };
+}

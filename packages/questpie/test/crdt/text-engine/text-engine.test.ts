@@ -10,9 +10,9 @@ import {
 	commitCrdtAggregateBundle,
 	createCrdtCandidateToken,
 	CrdtEngineError,
+	hashCrdtSubmittedAggregateBundle,
 	stageCrdtAggregateBundle,
 } from "../../../src/shared/crdt-engine.js";
-import { encodeCrdtFrameV1 } from "../../../src/shared/crdt-protocol.js";
 
 const BASIS = { fieldEpoch: 7n, fieldCursor: 10n };
 
@@ -221,14 +221,8 @@ describe("aggregate coordinator and deterministic add-wins set", () => {
 		expect(staged.parts.map((part) => part.fieldSlot)).toEqual([1, 2, 3]);
 		expect(staged.submittedDigest).toHaveLength(32);
 		expect(staged.canonicalDigest).toHaveLength(32);
-		const frame = encodeCrdtFrameV1({
-			major: 1,
-			minor: 0,
-			opcode: 0x04,
-			connectionSeq: 1n,
-			requestId: 1n,
-			payload: {
-				updateId: new Uint8Array(16),
+		expect(staged.submittedDigest).toEqual(
+			await hashCrdtSubmittedAggregateBundle({
 				aggregateEpoch: 3n,
 				schemaVersion: 9,
 				parts: staged.parts.map((part) => ({
@@ -238,14 +232,7 @@ describe("aggregate coordinator and deterministic add-wins set", () => {
 					baseFieldCursor: part.candidate.basis.fieldCursor,
 					bytes: part.submittedUpdate,
 				})),
-			},
-		});
-		const submittedPayload = new Uint8Array(frame.byteLength - 48);
-		submittedPayload.set(frame.subarray(48));
-		expect(staged.submittedDigest).toEqual(
-			new Uint8Array(
-				await crypto.subtle.digest("SHA-256", submittedPayload.buffer),
-			),
+			}),
 		);
 		const committed = await commitCrdtAggregateBundle({
 			staged,
@@ -572,14 +559,8 @@ describe("aggregate coordinator and deterministic add-wins set", () => {
 				},
 			],
 		});
-		const submittedFrame = encodeCrdtFrameV1({
-			major: 1,
-			minor: 0,
-			opcode: 0x04,
-			connectionSeq: 1n,
-			requestId: 1n,
-			payload: {
-				updateId: new Uint8Array(16),
+		expect(staged.submittedDigest).toEqual(
+			await hashCrdtSubmittedAggregateBundle({
 				aggregateEpoch: 3n,
 				schemaVersion: 8,
 				parts: [
@@ -591,16 +572,10 @@ describe("aggregate coordinator and deterministic add-wins set", () => {
 						bytes: update,
 					},
 				],
-			},
-		});
-		const canonicalFrame = encodeCrdtFrameV1({
-			major: 1,
-			minor: 0,
-			opcode: 0x04,
-			connectionSeq: 1n,
-			requestId: 1n,
-			payload: {
-				updateId: new Uint8Array(16),
+			}),
+		);
+		expect(staged.canonicalDigest).toEqual(
+			await hashCrdtSubmittedAggregateBundle({
 				aggregateEpoch: 3n,
 				schemaVersion: 9,
 				parts: [
@@ -612,14 +587,7 @@ describe("aggregate coordinator and deterministic add-wins set", () => {
 						bytes: update,
 					},
 				],
-			},
-		});
-
-		expect(staged.submittedDigest).toEqual(
-			await updatePayloadDigest(submittedFrame),
-		);
-		expect(staged.canonicalDigest).toEqual(
-			await updatePayloadDigest(canonicalFrame),
+			}),
 		);
 		expect(staged.submittedDigest).not.toEqual(staged.canonicalDigest);
 	});
@@ -962,12 +930,4 @@ function cumulativeDotOverflowSnapshot(): Uint8Array {
 	utf16("y");
 	u32(50_000);
 	return bytes;
-}
-
-async function updatePayloadDigest(frame: Uint8Array): Promise<Uint8Array> {
-	const payloadAfterUpdateId = new Uint8Array(frame.byteLength - 48);
-	payloadAfterUpdateId.set(frame.subarray(48));
-	return new Uint8Array(
-		await crypto.subtle.digest("SHA-256", payloadAfterUpdateId.buffer),
-	);
 }

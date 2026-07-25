@@ -8,6 +8,7 @@ import { encodeSseEvent } from "./sse-client-transport.js";
 import type {
 	RealtimeChangeEvent,
 	RealtimeErrorListener,
+	RealtimeSubscriptionScopeResolver,
 	RealtimeTopics,
 } from "./types.js";
 
@@ -26,9 +27,13 @@ type RealtimeSource = {
 };
 
 type AccessContext = {
-	session?: { session?: { id?: unknown } } | null;
+	session?: {
+		user?: { id?: unknown };
+		session?: { id?: unknown };
+	} | null;
 	principal?: {
 		kind: string;
+		user?: { id?: unknown };
 		session?: { id?: unknown };
 		tokenId?: unknown;
 	} | null;
@@ -41,26 +46,63 @@ export type RealtimeAccessCacheKeyResolver<TContext = AccessContext> = (
 	context: TContext,
 ) => string | null | undefined | Promise<string | null | undefined>;
 
+export async function resolveRealtimeSubscriptionScope<
+	TContext extends AccessContext,
+>(
+	context: TContext,
+	resolver?: RealtimeSubscriptionScopeResolver,
+): Promise<string | null> {
+	if (!resolver) return null;
+	const resolvedScope = await resolver(context);
+	if (resolvedScope === null || resolvedScope === undefined) return null;
+	if (
+		typeof resolvedScope !== "string" ||
+		resolvedScope.length === 0 ||
+		new TextEncoder().encode(resolvedScope).byteLength > 256
+	) {
+		throw new Error(
+			"Realtime subscription scope must be a non-empty string of at most 256 bytes",
+		);
+	}
+	return resolvedScope;
+}
+
 export async function resolveRealtimeAccessKey<TContext extends AccessContext>(
 	edgeSessionId: string,
 	context: TContext,
 	resolver?: RealtimeAccessCacheKeyResolver<TContext>,
+	scope: string | null = null,
 ): Promise<string> {
 	let identity: string | undefined;
+	let isolateToEdge = false;
 	if (resolver) {
 		try {
 			const sharedKey = await resolver(context);
-			if (sharedKey) identity = `shared:${sharedKey}`;
+			if (
+				typeof sharedKey === "string" &&
+				sharedKey.length > 0 &&
+				new TextEncoder().encode(sharedKey).byteLength <= 256
+			) {
+				identity = `shared:${sharedKey}`;
+			} else if (
+				sharedKey !== null &&
+				sharedKey !== undefined &&
+				sharedKey !== ""
+			) {
+				isolateToEdge = true;
+			}
 		} catch {
-			// An invalid opt-in must fail safe to the session-scoped default.
+			isolateToEdge = true;
 		}
 	}
 
 	if (!identity) {
 		const principal = context.principal;
-		const sessionId = principal?.session?.id ?? context.session?.session?.id;
-		if (typeof sessionId === "string" && sessionId) {
-			identity = `session:${sessionId}`;
+		const userId = principal?.user?.id ?? context.session?.user?.id;
+		if (isolateToEdge) {
+			identity = `edge:${edgeSessionId}`;
+		} else if (typeof userId === "string" && userId) {
+			identity = `principal:${userId}`;
 		} else if (
 			principal?.kind === "oauth" &&
 			typeof principal.tokenId === "string" &&
@@ -74,6 +116,7 @@ export async function resolveRealtimeAccessKey<TContext extends AccessContext>(
 
 	return JSON.stringify([
 		identity,
+		scope,
 		context.locale ?? "",
 		context.stage ?? "",
 		context.accessMode ?? "",
@@ -392,6 +435,10 @@ export class RealtimeRefreshScheduler {
 				group.latestSeq = Math.max(group.latestSeq, bootstrapSeq);
 				group.lastDeliveredSeq = Math.max(group.lastDeliveredSeq, bootstrapSeq);
 				const upToDate = await group.captureWatermark?.();
+				this.observe({
+					type: "routing.authoritative_db",
+					operation: "find",
+				});
 				const data = await this.runBounded(group.compute);
 				const postComputeSeq = group.ready
 					? bootstrapSeq
@@ -549,6 +596,10 @@ export class RealtimeRefreshScheduler {
 					continue;
 				}
 				const upToDate = await group.captureWatermark?.();
+				this.observe({
+					type: "routing.authoritative_db",
+					operation: "find",
+				});
 				const hydrated = snapshotRows(await group.hydrateRows(ids));
 				const rowsById = new Map<string, unknown>();
 				for (const row of hydrated) {
@@ -656,6 +707,10 @@ export class RealtimeRefreshScheduler {
 	private async resetDeltaGroup(group: DeltaGroup): Promise<void> {
 		const seq = await this.realtime.getLatestSeq();
 		const upToDate = await group.captureWatermark?.();
+		this.observe({
+			type: "routing.authoritative_db",
+			operation: "find",
+		});
 		const data = await this.runBounded(group.compute);
 		await this.replaceDeltaHashes(group, snapshotRows(data));
 		group.latestSeq = Math.max(group.latestSeq, seq);
@@ -848,6 +903,10 @@ export class RealtimeRefreshScheduler {
 					subscribers: group.subscribers.size,
 				});
 				const upToDate = await group.captureWatermark?.();
+				this.observe({
+					type: "routing.authoritative_db",
+					operation,
+				});
 				const data = await this.runBounded(group.compute);
 				if (group.disposed) return;
 				const serialized = JSON.stringify(data);

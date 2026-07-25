@@ -1298,14 +1298,21 @@ export const questpieCrdtSubjectAdmissionTable = pgTable(
 			.references(() => questpieCrdtSubjectTable.id, {
 				onDelete: "restrict",
 			}),
-		ticketTokens: counter("ticket_tokens"),
-		ticketRefilledAt: systemTimestamp("ticket_refilled_at")
+		openTokens: counter("open_tokens"),
+		openRefilledAt: systemTimestamp("open_refilled_at").defaultNow().notNull(),
+		pullByteTokens: bigint("pull_byte_tokens", { mode: "bigint" })
+			.default(136_314_880n)
+			.notNull(),
+		pullBytesRefilledAt: systemTimestamp("pull_bytes_refilled_at")
 			.defaultNow()
 			.notNull(),
 		updatedAt: updatedAt(),
 	},
 	(table) => [
-		check("ck_crdt_subject_admission_tokens", sql`${table.ticketTokens} >= 0`),
+		check(
+			"ck_crdt_subject_admission_tokens",
+			sql`${table.openTokens} >= 0 AND ${table.pullByteTokens} >= 0`,
+		),
 	],
 );
 
@@ -1313,10 +1320,8 @@ export const questpieCrdtCredentialAdmissionTable = pgTable(
 	"questpie_crdt_credential_admission",
 	{
 		credentialFingerprint: bytea("credential_fingerprint").primaryKey(),
-		ticketTokens: counter("ticket_tokens"),
-		ticketRefilledAt: systemTimestamp("ticket_refilled_at")
-			.defaultNow()
-			.notNull(),
+		openTokens: counter("open_tokens"),
+		openRefilledAt: systemTimestamp("open_refilled_at").defaultNow().notNull(),
 		updatedAt: updatedAt(),
 	},
 	(table) => [
@@ -1324,10 +1329,7 @@ export const questpieCrdtCredentialAdmissionTable = pgTable(
 			"ck_crdt_credential_admission_identity",
 			sql`octet_length(${table.credentialFingerprint}) = 32`,
 		),
-		check(
-			"ck_crdt_credential_admission_tokens",
-			sql`${table.ticketTokens} >= 0`,
-		),
+		check("ck_crdt_credential_admission_tokens", sql`${table.openTokens} >= 0`),
 	],
 );
 
@@ -1348,194 +1350,25 @@ export const questpieCrdtResourceAdmissionTable = pgTable(
 	],
 );
 
-export const questpieCrdtTicketTable = pgTable(
-	"questpie_crdt_ticket",
-	{
-		id: uuid("id").defaultRandom().primaryKey(),
-		resourceId: uuid("resource_id").notNull(),
-		resourceEpochId: uuid("resource_epoch_id").notNull(),
-		definitionId: uuid("definition_id").notNull(),
-		schemaId: uuid("schema_id").notNull(),
-		subjectId: uuid("subject_id")
-			.notNull()
-			.references(() => questpieCrdtSubjectTable.id, {
-				onDelete: "restrict",
-			}),
-		secretHash: hash("secret_hash"),
-		credentialFingerprint: hash("credential_fingerprint"),
-		audience: text("audience").notNull(),
-		origin: text("origin"),
-		requestedMode: smallint("requested_mode").notNull(),
-		effectiveMode: smallint("effective_mode").notNull(),
-		protocolMajor: smallint("protocol_major").notNull(),
-		protocolMinor: smallint("protocol_minor").notNull(),
-		resourceReadFence: requiredCounter("resource_read_fence"),
-		resourceEditFence: requiredCounter("resource_edit_fence"),
-		ownerPolicyRevision: requiredCounter("owner_policy_revision"),
-		subjectReadFence: requiredCounter("subject_read_fence"),
-		subjectEditFence: requiredCounter("subject_edit_fence"),
-		sessionGeneration: requiredCounter("session_generation"),
-		authorityExpiresAt: requiredExpiry("authority_expires_at"),
-		expiresAt: requiredExpiry("expires_at"),
-		redeemedAt: optionalTime("redeemed_at"),
-		releasedAt: optionalTime("released_at"),
-		createdAt: createdAt(),
-	},
-	(table) => [
-		foreignKey({
-			name: "fk_crdt_ticket_epoch",
-			columns: [table.resourceId, table.resourceEpochId, table.definitionId],
-			foreignColumns: [
-				questpieCrdtResourceEpochTable.resourceId,
-				questpieCrdtResourceEpochTable.id,
-				questpieCrdtResourceEpochTable.definitionId,
-			],
-		}).onDelete("restrict"),
-		foreignKey({
-			name: "fk_crdt_ticket_schema",
-			columns: [table.definitionId, table.schemaId],
-			foreignColumns: [
-				questpieCrdtSchemaTable.definitionId,
-				questpieCrdtSchemaTable.id,
-			],
-		}).onDelete("restrict"),
-		uniqueIndex("uq_crdt_ticket_resource_id").on(table.id, table.resourceId),
-		uniqueIndex("uq_crdt_ticket_resource_schema").on(
-			table.id,
-			table.resourceId,
-			table.schemaId,
-		),
-		uniqueIndex("uq_crdt_ticket_session_identity").on(
-			table.id,
-			table.resourceId,
-			table.resourceEpochId,
-			table.schemaId,
-			table.subjectId,
-			table.credentialFingerprint,
-			table.requestedMode,
-			table.effectiveMode,
-			table.sessionGeneration,
-			table.resourceReadFence,
-			table.resourceEditFence,
-			table.ownerPolicyRevision,
-			table.subjectReadFence,
-			table.subjectEditFence,
-		),
-		index("idx_crdt_ticket_subject_expiry").on(
-			table.subjectId,
-			table.expiresAt,
-		),
-		index("idx_crdt_ticket_resource_expiry").on(
-			table.resourceId,
-			table.expiresAt,
-		),
-		check(
-			"ck_crdt_ticket_hashes",
-			sql`octet_length(${table.secretHash}) = 32 AND octet_length(${table.credentialFingerprint}) = 32`,
-		),
-		check(
-			"ck_crdt_ticket_mode_protocol",
-			sql`${table.requestedMode} IN (1, 2) AND ${table.effectiveMode} IN (1, 2) AND ${table.effectiveMode} <= ${table.requestedMode} AND ${table.protocolMajor} = 1 AND ${table.protocolMinor} = 0`,
-		),
-		check(
-			"ck_crdt_ticket_audience_origin",
-			sql`octet_length(${table.audience}) BETWEEN 1 AND 255 AND (${table.origin} IS NULL OR octet_length(${table.origin}) BETWEEN 1 AND 2048)`,
-		),
-		check(
-			"ck_crdt_ticket_authority_expiry",
-			sql`${table.expiresAt} <= ${table.authorityExpiresAt}`,
-		),
-	],
-);
-
-export const questpieCrdtTicketGrantTable = pgTable(
-	"questpie_crdt_ticket_grant",
-	{
-		ticketId: uuid("ticket_id").notNull(),
-		resourceId: uuid("resource_id").notNull(),
-		schemaId: uuid("schema_id").notNull(),
-		bindingId: uuid("binding_id").notNull(),
-		stableFieldId: uuid("stable_field_id").notNull(),
-		fieldEpoch: requiredCounter("field_epoch"),
-		fieldSlot: integer("field_slot").notNull(),
-		formatVersion: integer("format_version").notNull(),
-		grant: smallint("grant").notNull(),
-		headFieldCursor: requiredCounter("head_field_cursor"),
-		fieldReadFence: requiredCounter("field_read_fence"),
-		fieldEditFence: requiredCounter("field_edit_fence"),
-		subjectFieldReadFence: requiredCounter("subject_field_read_fence"),
-		subjectFieldEditFence: requiredCounter("subject_field_edit_fence"),
-	},
-	(table) => [
-		primaryKey({ columns: [table.ticketId, table.bindingId] }),
-		foreignKey({
-			name: "fk_crdt_ticket_grant_parent",
-			columns: [table.ticketId, table.resourceId, table.schemaId],
-			foreignColumns: [
-				questpieCrdtTicketTable.id,
-				questpieCrdtTicketTable.resourceId,
-				questpieCrdtTicketTable.schemaId,
-			],
-		}).onDelete("restrict"),
-		foreignKey({
-			name: "fk_crdt_ticket_grant_binding",
-			columns: [
-				table.resourceId,
-				table.bindingId,
-				table.schemaId,
-				table.stableFieldId,
-				table.fieldEpoch,
-				table.fieldSlot,
-				table.formatVersion,
-			],
-			foreignColumns: [
-				questpieCrdtBindingTable.resourceId,
-				questpieCrdtBindingTable.id,
-				questpieCrdtBindingTable.schemaId,
-				questpieCrdtBindingTable.stableFieldId,
-				questpieCrdtBindingTable.fieldEpoch,
-				questpieCrdtBindingTable.fieldSlot,
-				questpieCrdtBindingTable.formatVersion,
-			],
-		}).onDelete("restrict"),
-		uniqueIndex("uq_crdt_ticket_grant_stable").on(
-			table.ticketId,
-			table.resourceId,
-			table.stableFieldId,
-		),
-		uniqueIndex("uq_crdt_ticket_grant_exact").on(
-			table.ticketId,
-			table.resourceId,
-			table.schemaId,
-			table.bindingId,
-			table.stableFieldId,
-			table.fieldEpoch,
-			table.fieldSlot,
-			table.formatVersion,
-			table.grant,
-			table.headFieldCursor,
-			table.fieldReadFence,
-			table.fieldEditFence,
-			table.subjectFieldReadFence,
-			table.subjectFieldEditFence,
-		),
-		check(
-			"ck_crdt_ticket_grant_values",
-			sql`${table.fieldSlot} BETWEEN 1 AND 65535 AND ${table.formatVersion} BETWEEN 0 AND 65535 AND ${table.grant} IN (0, 1)`,
-		),
-	],
-);
-
 export const questpieCrdtSessionTable = pgTable(
 	"questpie_crdt_session",
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
-		ticketId: uuid("ticket_id").notNull(),
+		openId: uuid("open_id").defaultRandom().notNull(),
+		bindingId: uuid("binding_id").defaultRandom().notNull(),
+		actorKind: smallint("actor_kind").default(1).notNull(),
 		resourceId: uuid("resource_id").notNull(),
+		resourceIncarnationKey: uuid("resource_incarnation_key").notNull(),
 		resourceEpochId: uuid("resource_epoch_id").notNull(),
+		aggregateEpoch: requiredCounter("aggregate_epoch"),
 		schemaId: uuid("schema_id").notNull(),
+		schemaVersion: schemaVersion("schema_version"),
+		openResultFingerprint: bytea("open_result_fingerprint"),
 		subjectId: uuid("subject_id").notNull(),
 		credentialFingerprint: hash("credential_fingerprint"),
+		edgeSessionKey: bytea("edge_session_key"),
+		edgeOwnerGeneration: requiredCounter("edge_owner_generation"),
+		deliveryGeneration: requiredCounter("delivery_generation"),
 		requestedMode: smallint("requested_mode").notNull(),
 		effectiveMode: smallint("effective_mode").notNull(),
 		generation: requiredCounter("generation"),
@@ -1558,6 +1391,12 @@ export const questpieCrdtSessionTable = pgTable(
 		awarenessRefilledAt: systemTimestamp("awareness_refilled_at")
 			.defaultNow()
 			.notNull(),
+		rosterTokens: bigint("roster_tokens", { mode: "bigint" })
+			.default(20n)
+			.notNull(),
+		rosterRefilledAt: systemTimestamp("roster_refilled_at")
+			.defaultNow()
+			.notNull(),
 		leaseExpiresAt: requiredExpiry("lease_expires_at"),
 		closedAt: optionalTime("closed_at"),
 		closeReason: smallint("close_reason"),
@@ -1565,16 +1404,15 @@ export const questpieCrdtSessionTable = pgTable(
 		updatedAt: updatedAt(),
 	},
 	(table) => [
-		uniqueIndex("uq_crdt_session_ticket").on(table.ticketId),
+		uniqueIndex("uq_crdt_session_binding").on(table.bindingId),
+		uniqueIndex("uq_crdt_session_id_binding").on(table.id, table.bindingId),
+		uniqueIndex("uq_crdt_session_subject_open").on(
+			table.subjectId,
+			table.openId,
+		),
 		uniqueIndex("uq_crdt_session_resource_id").on(table.id, table.resourceId),
 		uniqueIndex("uq_crdt_session_resource_schema").on(
 			table.id,
-			table.resourceId,
-			table.schemaId,
-		),
-		uniqueIndex("uq_crdt_session_ticket_resource_schema").on(
-			table.id,
-			table.ticketId,
 			table.resourceId,
 			table.schemaId,
 		),
@@ -1584,41 +1422,6 @@ export const questpieCrdtSessionTable = pgTable(
 			table.resourceEpochId,
 			table.subjectId,
 		),
-		foreignKey({
-			name: "fk_crdt_session_ticket",
-			columns: [
-				table.ticketId,
-				table.resourceId,
-				table.resourceEpochId,
-				table.schemaId,
-				table.subjectId,
-				table.credentialFingerprint,
-				table.requestedMode,
-				table.effectiveMode,
-				table.generation,
-				table.resourceReadFence,
-				table.resourceEditFence,
-				table.ownerPolicyRevision,
-				table.subjectReadFence,
-				table.subjectEditFence,
-			],
-			foreignColumns: [
-				questpieCrdtTicketTable.id,
-				questpieCrdtTicketTable.resourceId,
-				questpieCrdtTicketTable.resourceEpochId,
-				questpieCrdtTicketTable.schemaId,
-				questpieCrdtTicketTable.subjectId,
-				questpieCrdtTicketTable.credentialFingerprint,
-				questpieCrdtTicketTable.requestedMode,
-				questpieCrdtTicketTable.effectiveMode,
-				questpieCrdtTicketTable.sessionGeneration,
-				questpieCrdtTicketTable.resourceReadFence,
-				questpieCrdtTicketTable.resourceEditFence,
-				questpieCrdtTicketTable.ownerPolicyRevision,
-				questpieCrdtTicketTable.subjectReadFence,
-				questpieCrdtTicketTable.subjectEditFence,
-			],
-		}).onDelete("restrict"),
 		foreignKey({
 			name: "fk_crdt_session_epoch",
 			columns: [table.resourceId, table.resourceEpochId],
@@ -1639,9 +1442,13 @@ export const questpieCrdtSessionTable = pgTable(
 			table.credentialFingerprint,
 			table.leaseExpiresAt,
 		),
+		index("idx_crdt_session_edge_lease").on(
+			table.edgeSessionKey,
+			table.leaseExpiresAt,
+		),
 		check(
 			"ck_crdt_session_values",
-			sql`${table.requestedMode} IN (1, 2) AND ${table.effectiveMode} IN (1, 2) AND ${table.effectiveMode} <= ${table.requestedMode} AND ${table.generation} >= 0 AND ${table.lastSeenCommitSeq} >= 0 AND octet_length(${table.credentialFingerprint}) = 32 AND ${table.updateTokens} >= 0 AND ${table.updateByteTokens} >= 0 AND ${table.awarenessTokens} >= 0`,
+			sql`${table.actorKind} IN (1, 2, 3) AND ${table.requestedMode} IN (1, 2) AND ${table.effectiveMode} IN (1, 2) AND ${table.effectiveMode} <= ${table.requestedMode} AND ${table.generation} >= 0 AND ${table.aggregateEpoch} >= 0 AND ${table.schemaVersion} BETWEEN 0 AND 4294967295 AND (${table.openResultFingerprint} IS NULL OR octet_length(${table.openResultFingerprint}) = 32) AND ${table.edgeOwnerGeneration} >= 0 AND ${table.deliveryGeneration} >= 0 AND ${table.lastSeenCommitSeq} >= 0 AND octet_length(${table.credentialFingerprint}) = 32 AND (${table.edgeSessionKey} IS NULL OR octet_length(${table.edgeSessionKey}) = 32) AND ${table.updateTokens} >= 0 AND ${table.updateByteTokens} >= 0 AND ${table.awarenessTokens} >= 0 AND ${table.rosterTokens} >= 0`,
 		),
 		check(
 			"ck_crdt_session_closed",
@@ -1658,7 +1465,6 @@ export const questpieCrdtSessionGrantTable = pgTable(
 	"questpie_crdt_session_grant",
 	{
 		sessionId: uuid("session_id").notNull(),
-		ticketId: uuid("ticket_id").notNull(),
 		resourceId: uuid("resource_id").notNull(),
 		schemaId: uuid("schema_id").notNull(),
 		bindingId: uuid("binding_id").notNull(),
@@ -1676,53 +1482,12 @@ export const questpieCrdtSessionGrantTable = pgTable(
 	(table) => [
 		primaryKey({ columns: [table.sessionId, table.bindingId] }),
 		foreignKey({
-			name: "fk_crdt_session_grant_parent",
-			columns: [
-				table.sessionId,
-				table.ticketId,
-				table.resourceId,
-				table.schemaId,
-			],
+			name: "fk_crdt_session_grant_session",
+			columns: [table.sessionId, table.resourceId, table.schemaId],
 			foreignColumns: [
 				questpieCrdtSessionTable.id,
-				questpieCrdtSessionTable.ticketId,
 				questpieCrdtSessionTable.resourceId,
 				questpieCrdtSessionTable.schemaId,
-			],
-		}).onDelete("restrict"),
-		foreignKey({
-			name: "fk_crdt_session_grant_ticket_grant",
-			columns: [
-				table.ticketId,
-				table.resourceId,
-				table.schemaId,
-				table.bindingId,
-				table.stableFieldId,
-				table.fieldEpoch,
-				table.fieldSlot,
-				table.formatVersion,
-				table.grant,
-				table.headFieldCursor,
-				table.fieldReadFence,
-				table.fieldEditFence,
-				table.subjectFieldReadFence,
-				table.subjectFieldEditFence,
-			],
-			foreignColumns: [
-				questpieCrdtTicketGrantTable.ticketId,
-				questpieCrdtTicketGrantTable.resourceId,
-				questpieCrdtTicketGrantTable.schemaId,
-				questpieCrdtTicketGrantTable.bindingId,
-				questpieCrdtTicketGrantTable.stableFieldId,
-				questpieCrdtTicketGrantTable.fieldEpoch,
-				questpieCrdtTicketGrantTable.fieldSlot,
-				questpieCrdtTicketGrantTable.formatVersion,
-				questpieCrdtTicketGrantTable.grant,
-				questpieCrdtTicketGrantTable.headFieldCursor,
-				questpieCrdtTicketGrantTable.fieldReadFence,
-				questpieCrdtTicketGrantTable.fieldEditFence,
-				questpieCrdtTicketGrantTable.subjectFieldReadFence,
-				questpieCrdtTicketGrantTable.subjectFieldEditFence,
 			],
 		}).onDelete("restrict"),
 		foreignKey({
@@ -1754,6 +1519,139 @@ export const questpieCrdtSessionGrantTable = pgTable(
 		check(
 			"ck_crdt_session_grant_values",
 			sql`${table.fieldSlot} BETWEEN 1 AND 65535 AND ${table.formatVersion} BETWEEN 0 AND 65535 AND ${table.grant} IN (0, 1)`,
+		),
+	],
+);
+
+export const questpieCrdtPullTable = pgTable(
+	"questpie_crdt_pull",
+	{
+		id: uuid("id").primaryKey(),
+		sessionId: uuid("session_id").notNull(),
+		bindingId: uuid("binding_id").notNull(),
+		resourceId: uuid("resource_id").notNull(),
+		resourceIncarnationKey: uuid("resource_incarnation_key").notNull(),
+		resourceEpochId: uuid("resource_epoch_id").notNull(),
+		aggregateEpoch: requiredCounter("aggregate_epoch"),
+		targetCommitSeq: requiredCounter("target_commit_seq"),
+		schemaId: uuid("schema_id").notNull(),
+		schemaVersion: schemaVersion("schema_version"),
+		subjectId: uuid("subject_id").notNull(),
+		credentialFingerprint: hash("credential_fingerprint"),
+		sessionGeneration: requiredCounter("session_generation"),
+		deliveryGeneration: requiredCounter("delivery_generation"),
+		resourceReadFence: requiredCounter("resource_read_fence"),
+		resourceEditFence: requiredCounter("resource_edit_fence"),
+		ownerPolicyRevision: requiredCounter("owner_policy_revision"),
+		subjectReadFence: requiredCounter("subject_read_fence"),
+		subjectEditFence: requiredCounter("subject_edit_fence"),
+		grantFingerprint: hash("grant_fingerprint"),
+		requestFingerprint: hash("request_fingerprint"),
+		continuationClaimFingerprint: hash("continuation_claim_fingerprint"),
+		artifactFingerprint: bytea("artifact_fingerprint"),
+		currentSnapshotManifestId: uuid("current_snapshot_manifest_id").references(
+			() => questpieCrdtSnapshotManifestTable.id,
+			{ onDelete: "restrict" },
+		),
+		previousSnapshotManifestId: uuid(
+			"previous_snapshot_manifest_id",
+		).references(() => questpieCrdtSnapshotManifestTable.id, {
+			onDelete: "restrict",
+		}),
+		state: smallint("state").default(1).notNull(),
+		pageCount: integer("page_count").default(0).notNull(),
+		totalBytes: integer("total_bytes").default(0).notNull(),
+		retainedBytes: integer("retained_bytes").default(0).notNull(),
+		activeExpiresAt: requiredExpiry("active_expires_at"),
+		expiresAt: requiredExpiry("expires_at"),
+		completedAt: optionalTime("completed_at"),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+	},
+	(table) => [
+		foreignKey({
+			name: "fk_crdt_pull_session",
+			columns: [table.sessionId, table.bindingId],
+			foreignColumns: [
+				questpieCrdtSessionTable.id,
+				questpieCrdtSessionTable.bindingId,
+			],
+		}).onDelete("restrict"),
+		foreignKey({
+			name: "fk_crdt_pull_attribution",
+			columns: [
+				table.sessionId,
+				table.resourceId,
+				table.resourceEpochId,
+				table.subjectId,
+			],
+			foreignColumns: sessionAttributionColumns(),
+		}).onDelete("restrict"),
+		uniqueIndex("uq_crdt_pull_active_binding")
+			.on(table.bindingId)
+			.where(sql`${table.state} IN (1, 2)`),
+		index("idx_crdt_pull_subject_expiry").on(table.subjectId, table.expiresAt),
+		index("idx_crdt_pull_expiry").on(table.expiresAt),
+		check(
+			"ck_crdt_pull_values",
+			sql`${table.aggregateEpoch} >= 0 AND ${table.targetCommitSeq} >= 0 AND ${table.schemaVersion} BETWEEN 0 AND 4294967295 AND ${table.sessionGeneration} >= 0 AND ${table.deliveryGeneration} >= 0 AND ${table.resourceReadFence} >= 0 AND ${table.resourceEditFence} >= 0 AND ${table.ownerPolicyRevision} >= 0 AND ${table.subjectReadFence} >= 0 AND ${table.subjectEditFence} >= 0 AND octet_length(${table.credentialFingerprint}) = 32 AND octet_length(${table.grantFingerprint}) = 32 AND octet_length(${table.requestFingerprint}) = 32 AND octet_length(${table.continuationClaimFingerprint}) = 32 AND (${table.artifactFingerprint} IS NULL OR octet_length(${table.artifactFingerprint}) = 32) AND ${table.pageCount} BETWEEN 0 AND 65535 AND ${table.totalBytes} BETWEEN 0 AND 67108864 AND ${table.retainedBytes} BETWEEN 0 AND 68157440 AND ${table.activeExpiresAt} <= ${table.expiresAt}`,
+		),
+		check(
+			"ck_crdt_pull_state",
+			sql`(${table.state} = 1 AND ${table.artifactFingerprint} IS NULL AND ${table.pageCount} = 0 AND ${table.totalBytes} = 0 AND ${table.completedAt} IS NULL) OR (${table.state} = 2 AND ${table.artifactFingerprint} IS NOT NULL AND ${table.pageCount} > 0 AND ${table.completedAt} IS NULL) OR (${table.state} IN (3, 4) AND ${table.artifactFingerprint} IS NOT NULL AND ${table.pageCount} > 0 AND ${table.completedAt} IS NOT NULL)`,
+		),
+	],
+);
+
+export const questpieCrdtPullFieldTable = pgTable(
+	"questpie_crdt_pull_field",
+	{
+		pullId: uuid("pull_id")
+			.notNull()
+			.references(() => questpieCrdtPullTable.id, { onDelete: "restrict" }),
+		bindingId: uuid("binding_id")
+			.notNull()
+			.references(() => questpieCrdtBindingTable.id, {
+				onDelete: "restrict",
+			}),
+		fieldSlot: integer("field_slot").notNull(),
+		grant: smallint("grant").notNull(),
+		fieldEpoch: requiredCounter("field_epoch"),
+		formatVersion: integer("format_version").notNull(),
+		fieldCursor: requiredCounter("field_cursor"),
+		readFence: requiredCounter("read_fence"),
+		editFence: requiredCounter("edit_fence"),
+		proof: bytea("proof").notNull(),
+		proofSizeBytes: integer("proof_size_bytes").notNull(),
+	},
+	(table) => [
+		primaryKey({ columns: [table.pullId, table.fieldSlot] }),
+		uniqueIndex("uq_crdt_pull_field_binding").on(table.pullId, table.bindingId),
+		check(
+			"ck_crdt_pull_field_values",
+			sql`${table.fieldSlot} BETWEEN 1 AND 65535 AND ${table.grant} IN (0, 1) AND ${table.fieldEpoch} >= 0 AND ${table.formatVersion} BETWEEN 0 AND 65535 AND ${table.fieldCursor} >= 0 AND ${table.readFence} >= 0 AND ${table.editFence} >= 0 AND ${table.proofSizeBytes} BETWEEN 0 AND 65536 AND octet_length(${table.proof}) = ${table.proofSizeBytes}`,
+		),
+	],
+);
+
+export const questpieCrdtPullPageTable = pgTable(
+	"questpie_crdt_pull_page",
+	{
+		pullId: uuid("pull_id")
+			.notNull()
+			.references(() => questpieCrdtPullTable.id, { onDelete: "restrict" }),
+		pageIndex: integer("page_index").notNull(),
+		payload: bytea("payload").notNull(),
+		sizeBytes: integer("size_bytes").notNull(),
+		checksum: hash("checksum"),
+		final: smallint("final").notNull(),
+		createdAt: createdAt(),
+	},
+	(table) => [
+		primaryKey({ columns: [table.pullId, table.pageIndex] }),
+		check(
+			"ck_crdt_pull_page_values",
+			sql`${table.pageIndex} BETWEEN 0 AND 65534 AND ${table.sizeBytes} BETWEEN 1 AND 1048576 AND octet_length(${table.payload}) = ${table.sizeBytes} AND ${table.final} IN (0, 1)`,
 		),
 	],
 );
@@ -1947,10 +1845,11 @@ export const questpieCrdtTables = Object.freeze({
 	questpie_crdt_subject_admission: questpieCrdtSubjectAdmissionTable,
 	questpie_crdt_credential_admission: questpieCrdtCredentialAdmissionTable,
 	questpie_crdt_resource_admission: questpieCrdtResourceAdmissionTable,
-	questpie_crdt_ticket: questpieCrdtTicketTable,
-	questpie_crdt_ticket_grant: questpieCrdtTicketGrantTable,
 	questpie_crdt_session: questpieCrdtSessionTable,
 	questpie_crdt_session_grant: questpieCrdtSessionGrantTable,
+	questpie_crdt_pull: questpieCrdtPullTable,
+	questpie_crdt_pull_field: questpieCrdtPullFieldTable,
+	questpie_crdt_pull_page: questpieCrdtPullPageTable,
 	questpie_crdt_awareness: questpieCrdtAwarenessTable,
 	questpie_crdt_projection: questpieCrdtProjectionTable,
 	questpie_crdt_projection_field: questpieCrdtProjectionFieldTable,

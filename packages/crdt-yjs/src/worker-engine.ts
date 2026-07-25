@@ -51,6 +51,7 @@ export function createYjsTextEngine(
 		...core,
 		stage: (input: Parameters<typeof core.stage>[0]) =>
 			pool.execute<Awaited<ReturnType<typeof core.stage>>>(input),
+		dispose: () => pool.dispose(),
 	});
 }
 
@@ -65,8 +66,16 @@ type PendingJob = {
 	reject: (error: unknown) => void;
 };
 
+type RuntimeWorker = {
+	postMessage(message: YjsWorkerOperation): void;
+	onMessage(listener: (message: YjsWorkerResponse) => void): void;
+	onError(listener: () => void): void;
+	terminate(): Promise<void>;
+	unref?(): void;
+};
+
 type WorkerSlot = {
-	worker: Worker;
+	worker: RuntimeWorker;
 	ready: boolean;
 	job?: PendingJob;
 	timer?: ReturnType<typeof setTimeout>;
@@ -77,6 +86,13 @@ class YjsStageWorkerPool {
 	private readonly pending: PendingJob[] = [];
 	private readonly slots = new Set<WorkerSlot>();
 	private nextId = 1;
+	private accepting = true;
+	private shutdownPromise?: Promise<void>;
+	private resolveShutdown?: () => void;
+	private rejectShutdown?: (error: unknown) => void;
+	private readonly terminationOperations = new Set<Promise<void>>();
+	private terminationError?: unknown;
+	private terminating = false;
 
 	constructor(
 		private readonly timeoutMs: number,
@@ -85,6 +101,11 @@ class YjsStageWorkerPool {
 	) {}
 
 	execute<T>(input: StageInput): Promise<T> {
+		if (!this.accepting) {
+			return Promise.reject(
+				new CrdtEngineError("Yjs worker pool is shut down"),
+			);
+		}
 		const idle = [...this.slots].find((slot) => slot.ready && !slot.job);
 		if (!idle && this.pending.length >= this.maximumPendingJobs) {
 			return Promise.reject(new CrdtEngineError("Yjs worker queue is full"));
@@ -100,6 +121,17 @@ class YjsStageWorkerPool {
 		});
 	}
 
+	dispose(): Promise<void> {
+		if (this.shutdownPromise) return this.shutdownPromise;
+		this.accepting = false;
+		this.shutdownPromise = new Promise<void>((resolve, reject) => {
+			this.resolveShutdown = resolve;
+			this.rejectShutdown = reject;
+		});
+		this.finishShutdownIfDrained();
+		return this.shutdownPromise;
+	}
+
 	private pump(): void {
 		for (const slot of this.slots) {
 			if (!slot.ready || slot.job || this.pending.length === 0) continue;
@@ -111,20 +143,15 @@ class YjsStageWorkerPool {
 		) {
 			this.createSlot();
 		}
+		this.finishShutdownIfDrained();
 	}
 
 	private createSlot(): void {
 		const workerEntry = import.meta.url.endsWith(".ts")
 			? "./worker-entry.ts"
 			: "./worker-entry.mjs";
-		const worker = new Worker(new URL(workerEntry, import.meta.url), {
-			type: "module",
-		});
-		(
-			worker as Worker & {
-				unref?: () => void;
-			}
-		).unref?.();
+		const worker = createRuntimeWorker(new URL(workerEntry, import.meta.url));
+		worker.unref?.();
 		const slot: WorkerSlot = { worker, ready: false };
 		this.slots.add(slot);
 		this.start(slot, this.pending.shift()!);
@@ -134,12 +161,8 @@ class YjsStageWorkerPool {
 				new CrdtEngineError("Yjs worker startup timed out"),
 			);
 		}, 2_000);
-		worker.addEventListener(
-			"message",
-			(event: MessageEvent<YjsWorkerResponse>) =>
-				this.handleMessage(slot, event.data),
-		);
-		worker.addEventListener("error", () =>
+		worker.onMessage((response) => this.handleMessage(slot, response));
+		worker.onError(() =>
 			this.destroySlot(
 				slot,
 				new CrdtEngineError("Yjs worker operation failed"),
@@ -197,11 +220,90 @@ class YjsStageWorkerPool {
 
 	private destroySlot(slot: WorkerSlot, error: Error): void {
 		if (!this.slots.delete(slot)) return;
-		if (slot.timer) clearTimeout(slot.timer);
-		if (slot.startupTimer) clearTimeout(slot.startupTimer);
 		slot.job?.reject(error);
 		slot.job = undefined;
-		void slot.worker.terminate();
+		this.terminateSlot(slot);
 		this.pump();
 	}
+
+	private terminateSlot(slot: WorkerSlot): void {
+		if (slot.timer) clearTimeout(slot.timer);
+		if (slot.startupTimer) clearTimeout(slot.startupTimer);
+		const operation = Promise.resolve().then(() => slot.worker.terminate());
+		this.terminationOperations.add(operation);
+		void operation.then(
+			() => {
+				this.terminationOperations.delete(operation);
+				this.finishShutdownIfDrained();
+			},
+			(error) => {
+				this.terminationOperations.delete(operation);
+				this.terminationError ??= error;
+				this.finishShutdownIfDrained();
+			},
+		);
+	}
+
+	private finishShutdownIfDrained(): void {
+		if (
+			this.accepting ||
+			this.terminating ||
+			this.pending.length > 0 ||
+			[...this.slots].some((slot) => slot.job)
+		) {
+			return;
+		}
+		if (this.slots.size > 0) {
+			const slots = [...this.slots];
+			this.slots.clear();
+			for (const slot of slots) this.terminateSlot(slot);
+			return;
+		}
+		if (this.terminationOperations.size > 0) return;
+		this.terminating = true;
+		if (this.terminationError === undefined) this.resolveShutdown?.();
+		else this.rejectShutdown?.(this.terminationError);
+	}
 }
+
+function createRuntimeWorker(url: URL): RuntimeWorker {
+	/* oxlint-disable unicorn/require-post-message-target-origin -- Worker and worker_threads postMessage do not accept a target origin. */
+	if (typeof globalThis.Worker === "function") {
+		const worker = new globalThis.Worker(url, { type: "module" });
+		return {
+			postMessage: (message) => worker.postMessage(message),
+			onMessage: (listener) =>
+				worker.addEventListener("message", (event) =>
+					listener(event.data as YjsWorkerResponse),
+				),
+			onError: (listener) => worker.addEventListener("error", listener),
+			terminate: async () => {
+				await worker.terminate();
+			},
+			unref: (
+				worker as Worker & {
+					unref?: () => void;
+				}
+			).unref?.bind(worker),
+		};
+	}
+	if (!nodeWorkerConstructor) {
+		throw new CrdtEngineError("Yjs workers are unavailable in this runtime");
+	}
+	const worker = new nodeWorkerConstructor(url);
+	return {
+		postMessage: (message) => worker.postMessage(message),
+		onMessage: (listener) => worker.on("message", listener),
+		onError: (listener) => worker.on("error", listener),
+		terminate: async () => {
+			await worker.terminate();
+		},
+		unref: () => worker.unref(),
+	};
+	/* oxlint-enable unicorn/require-post-message-target-origin */
+}
+
+const nodeWorkerConstructor =
+	typeof globalThis.Worker === "function"
+		? undefined
+		: (await import("node:worker_threads")).Worker;

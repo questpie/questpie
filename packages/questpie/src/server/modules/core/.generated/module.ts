@@ -36,6 +36,8 @@ import _route_channels_auth_POST from "../routes/channels/auth.post";
 import _route_channels_config from "../routes/channels/config";
 import _route_channels_publish_OPTIONS from "../routes/channels/publish.options";
 import _route_channels_publish_POST from "../routes/channels/publish.post";
+import _route_channels_replay_OPTIONS from "../routes/channels/replay.options";
+import _route_channels_replay_POST from "../routes/channels/replay.post";
 import _route_globals_name from "../routes/globals/[name]";
 import _route_globals_name_PATCH from "../routes/globals/[name].patch";
 import _route_globals_name_audit from "../routes/globals/[name]/audit";
@@ -49,6 +51,8 @@ import _route_jwks from "../routes/jwks";
 import _route_realtime from "../routes/realtime";
 import _route_realtime_auth_POST from "../routes/realtime/auth.post";
 import _route_realtime_config from "../routes/realtime/config";
+import _route_realtime_crdt_exchange_POST from "../routes/realtime/crdt/exchange.post";
+import _route_realtime_crdt_open_POST from "../routes/realtime/crdt/open.post";
 import _route_search from "../routes/search";
 import _route_search_reindex_collection from "../routes/search/reindex/[collection]";
 
@@ -137,6 +141,8 @@ export type CoreRoutes = {
 	"channels/config": typeof _route_channels_config extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"channels/config">> : typeof _route_channels_config;
 	"channels/publish:OPTIONS": typeof _route_channels_publish_OPTIONS extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"channels/publish:OPTIONS">> : typeof _route_channels_publish_OPTIONS;
 	"channels/publish:POST": typeof _route_channels_publish_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"channels/publish:POST">> : typeof _route_channels_publish_POST;
+	"channels/replay:OPTIONS": typeof _route_channels_replay_OPTIONS extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"channels/replay:OPTIONS">> : typeof _route_channels_replay_OPTIONS;
+	"channels/replay:POST": typeof _route_channels_replay_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"channels/replay:POST">> : typeof _route_channels_replay_POST;
 	"globals/[name]": typeof _route_globals_name extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]">> : typeof _route_globals_name;
 	"globals/[name]:PATCH": typeof _route_globals_name_PATCH extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]:PATCH">> : typeof _route_globals_name_PATCH;
 	"globals/[name]/audit": typeof _route_globals_name_audit extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]/audit">> : typeof _route_globals_name_audit;
@@ -150,6 +156,8 @@ export type CoreRoutes = {
 	realtime: typeof _route_realtime extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime">> : typeof _route_realtime;
 	"realtime/auth:POST": typeof _route_realtime_auth_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime/auth:POST">> : typeof _route_realtime_auth_POST;
 	"realtime/config": typeof _route_realtime_config extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime/config">> : typeof _route_realtime_config;
+	"realtime/crdt/exchange:POST": typeof _route_realtime_crdt_exchange_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime/crdt/exchange:POST">> : typeof _route_realtime_crdt_exchange_POST;
+	"realtime/crdt/open:POST": typeof _route_realtime_crdt_open_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime/crdt/open:POST">> : typeof _route_realtime_crdt_open_POST;
 	search: typeof _route_search extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"search">> : typeof _route_search;
 	"search/reindex/[collection]": typeof _route_search_reindex_collection extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"search/reindex/[collection]">> : typeof _route_search_reindex_collection;
 };
@@ -249,6 +257,8 @@ const _module: CoreModule = {
 		"channels/config": _route_channels_config,
 		"channels/publish:OPTIONS": _route_channels_publish_OPTIONS,
 		"channels/publish:POST": _route_channels_publish_POST,
+		"channels/replay:OPTIONS": _route_channels_replay_OPTIONS,
+		"channels/replay:POST": _route_channels_replay_POST,
 		"globals/[name]": _route_globals_name,
 		"globals/[name]:PATCH": _route_globals_name_PATCH,
 		"globals/[name]/audit": _route_globals_name_audit,
@@ -262,6 +272,8 @@ const _module: CoreModule = {
 		realtime: _route_realtime,
 		"realtime/auth:POST": _route_realtime_auth_POST,
 		"realtime/config": _route_realtime_config,
+		"realtime/crdt/exchange:POST": _route_realtime_crdt_exchange_POST,
+		"realtime/crdt/open:POST": _route_realtime_crdt_open_POST,
 		search: _route_search,
 		"search/reindex/[collection]": _route_search_reindex_collection,
 	} as CoreRoutes,

@@ -180,6 +180,100 @@ describe("ordered channel event ledger", () => {
 		).toHaveLength(1);
 	});
 
+	test("measures the exact canonical provider envelope before ledger commit", async () => {
+		const events = ledger();
+		const channel = "private-room-1";
+		const event = "message";
+		const eventId = `${hashResolvedChannel(channel)}:1`;
+		const emptyEnvelopeBytes = new TextEncoder().encode(
+			JSON.stringify({ eventId, event, data: "" }),
+		).byteLength;
+		const exact = "x".repeat(10_000 - emptyEnvelopeBytes);
+
+		const receipt = await events.append({
+			channel,
+			event,
+			schemaIdentity: "room:message",
+			data: exact,
+		});
+		expect(receipt.eventId).toBe(eventId);
+
+		await expect(
+			events.append({
+				channel,
+				event,
+				schemaIdentity: "room:message",
+				data: `${exact}x`,
+			}),
+		).rejects.toThrow("10,000-byte");
+
+		const rows = await setup.app.db.select().from(questpieChannelEventTable);
+		const heads = await setup.app.db.select().from(questpieChannelHeadTable);
+		expect(rows).toHaveLength(1);
+		expect(rows[0].sizeBytes).toBe(10_000);
+		expect(Number(heads[0].lastSeq)).toBe(1);
+	});
+
+	test("includes event id sequence digit growth in the byte boundary", async () => {
+		const events = ledger();
+		const channel = "private-room-1";
+		const event = "message";
+		for (let index = 0; index < 9; index++) {
+			await events.append({
+				channel,
+				event,
+				schemaIdentity: "room:message",
+				data: { index },
+			});
+		}
+		const ninthId = `${hashResolvedChannel(channel)}:9`;
+		const emptyEnvelopeBytes = new TextEncoder().encode(
+			JSON.stringify({ eventId: ninthId, event, data: "" }),
+		).byteLength;
+		const fitsSequenceNine = "x".repeat(10_000 - emptyEnvelopeBytes);
+
+		await expect(
+			events.append({
+				channel,
+				event,
+				schemaIdentity: "room:message",
+				data: fitsSequenceNine,
+			}),
+		).rejects.toThrow("10,000-byte");
+
+		const heads = await setup.app.db.select().from(questpieChannelHeadTable);
+		expect(Number(heads[0].lastSeq)).toBe(9);
+	});
+
+	test("counts multibyte UTF-8 in the canonical envelope", async () => {
+		const events = ledger();
+		const channel = "private-room-1";
+		const event = "message";
+		const eventId = `${hashResolvedChannel(channel)}:1`;
+		const emptyEnvelopeBytes = new TextEncoder().encode(
+			JSON.stringify({ eventId, event, data: "" }),
+		).byteLength;
+		const remaining = 10_000 - emptyEnvelopeBytes;
+		const exact = `${"😀".repeat(Math.floor(remaining / 4))}${"x".repeat(
+			remaining % 4,
+		)}`;
+
+		await events.append({
+			channel,
+			event,
+			schemaIdentity: "room:message",
+			data: exact,
+		});
+		await expect(
+			events.append({
+				channel,
+				event,
+				schemaIdentity: "room:message",
+				data: `${exact}x`,
+			}),
+		).rejects.toThrow("10,000-byte");
+	});
+
 	test("two local instances deliver to every local sink exactly once", async () => {
 		const first = ledger();
 		const second = ledger();

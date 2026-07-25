@@ -103,6 +103,58 @@ describe("CRDT request-bound server service", () => {
 		}
 	});
 
+	it("awaits and deduplicates configured engine shutdown during app destroy", async () => {
+		const plain = collection("plain").fields(({ f }) => ({
+			title: f.text(),
+		}));
+		let disposals = 0;
+		let markDisposeStarted!: () => void;
+		const disposeStarted = new Promise<void>((resolve) => {
+			markDisposeStarted = resolve;
+		});
+		let releaseDispose!: () => void;
+		const disposed = new Promise<void>((resolve) => {
+			releaseDispose = resolve;
+		});
+		const setup = await buildMockApp(
+			{ collections: { plain } },
+			{
+				crdt: {
+					namespace: "test",
+					engines: {
+						text: {
+							async dispose() {
+								disposals++;
+								markDisposeStarted();
+								await disposed;
+							},
+						} as never,
+					},
+				},
+			},
+		);
+		try {
+			const destroying = setup.app.destroy();
+			await disposeStarted;
+			expect(disposals).toBe(1);
+
+			let destroyed = false;
+			void destroying.then(() => {
+				destroyed = true;
+			});
+			await Promise.resolve();
+			expect(destroyed).toBeFalse();
+
+			releaseDispose();
+			await destroying;
+			await setup.app.destroy();
+			expect(disposals).toBe(1);
+		} finally {
+			releaseDispose();
+			await setup.cleanup();
+		}
+	});
+
 	it("supplies fresh transaction-bound authorization to field replace", async () => {
 		const commitTransaction = {};
 		const authorizedDatabases: unknown[] = [];

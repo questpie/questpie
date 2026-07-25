@@ -1,5 +1,16 @@
 import type { GetAuthHeaders } from "../auth.js";
-import type { PusherModule, PusherRealtimeConfig } from "../realtime/pusher.js";
+import {
+	type ManagedPusherSubscription,
+	PusherConnectionManager,
+	type PusherModule,
+	type PusherRealtimeConfig,
+} from "../realtime/pusher-connection.js";
+import {
+	BoundedChannelQueue,
+	channelGapError,
+	channelSlowConsumerError,
+	OrderedChannelCursor,
+} from "./ordered-events.js";
 import type {
 	ChannelClientTransport,
 	ChannelConnectionInput,
@@ -18,9 +29,14 @@ type ProviderChannel = {
 type Entry = {
 	input: ChannelConnectionInput;
 	channel: ProviderChannel | null;
+	subscription: ManagedPusherSubscription | null;
 	subscribers: Set<(message: ChannelTransportMessage) => void>;
 	presenceSubscribers: Set<(members: readonly unknown[]) => void>;
 	errorCallbacks: Set<(error: Error) => void>;
+	cursor: OrderedChannelCursor;
+	replaying: boolean;
+	replayGeneration: number;
+	pendingLive: BoundedChannelQueue<ChannelTransportMessage>;
 	presence?: readonly unknown[];
 	presenceSignature?: string;
 	presenceWaiters: Set<{
@@ -52,9 +68,7 @@ function collectMembers(value: unknown, channel: ProviderChannel): unknown[] {
 /** Native ordered framework-channel subscriptions over managed Pusher/Soketi. */
 export class PusherChannelTransport implements ChannelClientTransport {
 	private readonly entries = new Map<string, Entry>();
-	private pusher: InstanceType<PusherModule["default"]> | null = null;
-	private pusherPromise: Promise<InstanceType<PusherModule["default"]>> | null =
-		null;
+	private readonly connection: PusherConnectionManager;
 	private destroyed = false;
 
 	constructor(
@@ -64,8 +78,13 @@ export class PusherChannelTransport implements ChannelClientTransport {
 			getAuthHeaders?: GetAuthHeaders;
 			config: PusherRealtimeConfig;
 			loadPusher?: () => Promise<PusherModule>;
+			connection?: PusherConnectionManager;
 		},
-	) {}
+	) {
+		this.connection =
+			options.connection ??
+			new PusherConnectionManager({ loadPusher: options.loadPusher });
+	}
 
 	subscribe(
 		input: ChannelConnectionInput,
@@ -168,47 +187,20 @@ export class PusherChannelTransport implements ChannelClientTransport {
 		});
 	}
 
-	private async getPusher(): Promise<InstanceType<PusherModule["default"]>> {
-		if (this.pusher) return this.pusher;
-		if (!this.pusherPromise) {
-			this.pusherPromise = (async () => {
-				const module = await (this.options.loadPusher?.() ??
-					import("pusher-js"));
-				if (this.destroyed) throw new Error("Channel transport is destroyed");
-				const config = this.options.config;
-				const pusher = new module.default(config.key, {
-					cluster: config.cluster ?? "mt1",
-					...(config.wsHost ? { wsHost: config.wsHost } : {}),
-					...(config.wsPort ? { wsPort: config.wsPort } : {}),
-					...(config.wssPort ? { wssPort: config.wssPort } : {}),
-					forceTLS: config.forceTLS ?? true,
-					channelAuthorization: {
-						customHandler: (request, callback) => {
-							void this.authorize(request.socketId, request.channelName)
-								.then((auth) => callback(null, auth))
-								.catch((error) => callback(normalizedError(error), null));
-						},
-					},
-				});
-				this.pusher = pusher;
-				return pusher;
-			})().catch((error) => {
-				this.pusherPromise = null;
-				throw error;
-			});
-		}
-		return this.pusherPromise;
-	}
-
 	private ensureEntry(input: ChannelConnectionInput): Entry {
 		let entry = this.entries.get(input.resolvedName);
 		if (entry) return entry;
 		entry = {
 			input,
 			channel: null,
+			subscription: null,
 			subscribers: new Set(),
 			presenceSubscribers: new Set(),
 			errorCallbacks: new Set(),
+			cursor: new OrderedChannelCursor(),
+			replaying: true,
+			replayGeneration: 0,
+			pendingLive: new BoundedChannelQueue(),
 			presenceWaiters: new Set(),
 		};
 		this.entries.set(input.resolvedName, entry);
@@ -256,21 +248,22 @@ export class PusherChannelTransport implements ChannelClientTransport {
 
 	private async mount(entry: Entry): Promise<void> {
 		try {
-			const pusher = await this.getPusher();
+			const subscription = await this.connection.subscribe({
+				config: this.options.config,
+				channelName: entry.input.resolvedName,
+				lane: "channel",
+				authorize: (socketId, channelName) =>
+					this.authorize(socketId, channelName),
+			});
 			if (
 				this.destroyed ||
 				this.entries.get(entry.input.resolvedName) !== entry
 			) {
-				if (this.entries.size === 0) {
-					pusher.disconnect();
-					this.pusher = null;
-					this.pusherPromise = null;
-				}
+				subscription.release();
 				return;
 			}
-			const channel = pusher.subscribe(
-				entry.input.resolvedName,
-			) as ProviderChannel;
+			const channel = subscription.channel as ProviderChannel;
+			entry.subscription = subscription;
 			entry.channel = channel;
 			channel.bind("questpie:channel", (payload) =>
 				this.handleMessage(entry, payload),
@@ -279,8 +272,10 @@ export class PusherChannelTransport implements ChannelClientTransport {
 				this.notify(entry, normalizedError(error)),
 			);
 			channel.bind("pusher:subscription_succeeded", (members) => {
-				if (entry.input.visibility !== "presence") return;
-				this.setPresence(entry, collectMembers(members, channel));
+				if (entry.input.visibility === "presence") {
+					this.setPresence(entry, collectMembers(members, channel));
+				}
+				void this.recover(entry);
 			});
 			const refreshPresence = () => {
 				if (entry.input.visibility === "presence") {
@@ -299,28 +294,140 @@ export class PusherChannelTransport implements ChannelClientTransport {
 			if (!payload || typeof payload !== "object") {
 				throw new Error("Invalid channel provider payload");
 			}
-			const envelope = payload as { eventId?: unknown; data?: unknown };
-			const decoded =
-				typeof envelope.data === "string"
-					? (JSON.parse(envelope.data) as { event?: unknown; data?: unknown })
-					: (envelope.data as { event?: unknown; data?: unknown });
+			const envelope = payload as {
+				eventId?: unknown;
+				event?: unknown;
+				data?: unknown;
+			};
 			if (
 				typeof envelope.eventId !== "string" ||
-				!decoded ||
-				typeof decoded.event !== "string"
+				typeof envelope.event !== "string"
 			) {
 				throw new Error("Invalid channel provider payload");
 			}
-			for (const callback of entry.subscribers) {
-				callback({
-					event: decoded.event,
-					eventId: envelope.eventId,
-					data: decoded.data,
-				});
+			const message = {
+				event: envelope.event,
+				eventId: envelope.eventId,
+				data: envelope.data,
+			};
+			if (entry.replaying) {
+				if (!entry.pendingLive.push(message)) {
+					this.failEntry(entry, channelSlowConsumerError());
+				}
+				return;
 			}
+			this.deliver(entry, message);
 		} catch (error) {
 			this.notify(entry, normalizedError(error));
 		}
+	}
+
+	private async recover(entry: Entry): Promise<void> {
+		if (this.entries.get(entry.input.resolvedName) !== entry) return;
+		const generation = ++entry.replayGeneration;
+		entry.replaying = true;
+		try {
+			while (entry.cursor.eventId) {
+				const authHeaders = await this.options.getAuthHeaders?.();
+				const response = await this.options.fetcher(
+					`${this.options.baseUrl}/channels/replay`,
+					{
+						method: "POST",
+						headers: { "Content-Type": "application/json", ...authHeaders },
+						body: JSON.stringify({
+							channel: entry.input.registryKey,
+							params: entry.input.params,
+							afterEventId: entry.cursor.eventId,
+						}),
+						credentials: "include",
+					},
+				);
+				if (!response.ok) {
+					throw new Error(`Channel replay failed: ${response.status}`);
+				}
+				const page = (await response.json()) as {
+					status?: unknown;
+					events?: unknown;
+					hasMore?: unknown;
+				};
+				if (page.status === "gap") throw channelGapError();
+				if (page.status !== "events" || !Array.isArray(page.events)) {
+					throw new Error("Invalid channel replay response");
+				}
+				if (!this.isReplayCurrent(entry, generation)) return;
+				const previousEventId = entry.cursor.eventId;
+				for (const replayed of page.events) {
+					if (!this.isReplayCurrent(entry, generation)) return;
+					this.deliver(entry, this.parseReplayMessage(replayed));
+					if (!this.isReplayCurrent(entry, generation)) return;
+				}
+				if (page.hasMore !== true) break;
+				if (entry.cursor.eventId === previousEventId) {
+					throw new Error("Channel replay cursor did not advance");
+				}
+			}
+			if (
+				generation !== entry.replayGeneration ||
+				this.entries.get(entry.input.resolvedName) !== entry
+			) {
+				return;
+			}
+			entry.replaying = false;
+			while (entry.pendingLive.length > 0) {
+				if (!this.isReplayCurrent(entry, generation)) return;
+				this.deliver(entry, entry.pendingLive.shift()!);
+				if (!this.isReplayCurrent(entry, generation)) return;
+			}
+		} catch (error) {
+			if (generation !== entry.replayGeneration) return;
+			this.failEntry(entry, normalizedError(error));
+		}
+	}
+
+	private isReplayCurrent(entry: Entry, generation: number): boolean {
+		return (
+			!this.destroyed &&
+			entry.replayGeneration === generation &&
+			this.entries.get(entry.input.resolvedName) === entry
+		);
+	}
+
+	private parseReplayMessage(value: unknown): ChannelTransportMessage {
+		if (!value || typeof value !== "object") {
+			throw new Error("Invalid channel replay response");
+		}
+		const message = value as {
+			eventId?: unknown;
+			event?: unknown;
+			data?: unknown;
+		};
+		if (
+			typeof message.eventId !== "string" ||
+			typeof message.event !== "string"
+		) {
+			throw new Error("Invalid channel replay response");
+		}
+		return {
+			eventId: message.eventId,
+			event: message.event,
+			data: message.data,
+		};
+	}
+
+	private deliver(entry: Entry, message: ChannelTransportMessage): void {
+		const decision = entry.cursor.accept(message);
+		if (decision.status === "duplicate") return;
+		if (decision.status === "gap") {
+			this.failEntry(entry, channelGapError());
+			return;
+		}
+		for (const callback of entry.subscribers) callback(message);
+	}
+
+	private failEntry(entry: Entry, error: Error): void {
+		if (this.entries.get(entry.input.resolvedName) !== entry) return;
+		this.notify(entry, error);
+		this.unmount(entry.input.resolvedName, entry);
 	}
 
 	private setPresence(entry: Entry, members: readonly unknown[]): void {
@@ -342,27 +449,26 @@ export class PusherChannelTransport implements ChannelClientTransport {
 	}
 
 	private unmount(name: string, entry: Entry): void {
-		entry.channel?.unbind();
-		this.pusher?.unsubscribe(name);
-		this.entries.delete(name);
-		if (this.entries.size === 0) {
-			this.pusher?.disconnect();
-			this.pusher = null;
-			this.pusherPromise = null;
-		}
+		entry.replayGeneration += 1;
+		entry.replaying = false;
+		entry.pendingLive.clear();
+		entry.subscription?.release();
+		entry.subscription = null;
+		entry.channel = null;
+		entry.subscribers.clear();
+		entry.presenceSubscribers.clear();
+		entry.errorCallbacks.clear();
+		entry.presenceWaiters.clear();
+		if (this.entries.get(name) === entry) this.entries.delete(name);
 	}
 
 	destroy(): void {
 		if (this.destroyed) return;
 		this.destroyed = true;
 		for (const entry of this.entries.values()) {
-			entry.channel?.unbind();
 			this.notify(entry, new Error("Channel transport destroyed"));
+			this.unmount(entry.input.resolvedName, entry);
 		}
-		this.entries.clear();
-		this.pusher?.disconnect();
-		this.pusher = null;
-		this.pusherPromise = null;
 	}
 
 	get channelCount(): number {

@@ -31,6 +31,13 @@ export default service({
 			resolveCollectionDependencies: (baseCollection, withConfig) => {
 				return app._resolveCollectionDependencies(baseCollection, withConfig);
 			},
+			resolveCollectionRelationNames: (baseCollection) =>
+				new Set(
+					Object.keys(
+						(app.getCollections() as Record<string, any>)[baseCollection]?.state
+							.relations ?? {},
+					),
+				),
 			resolveGlobalDependencies: (globalName, withConfig) => {
 				return app._resolveGlobalDependencies(globalName, withConfig);
 			},

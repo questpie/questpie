@@ -92,6 +92,7 @@ export const questpieChannelEventTable = pgTable(
 		event: text("event").notNull(),
 		schemaIdentity: text("schema_identity").notNull(),
 		payload: jsonbSafe("payload").notNull(),
+		wireJson: text("wire_json").notNull(),
 		sizeBytes: integer("size_bytes").notNull(),
 		createdAt: systemTimestamp("created_at").defaultNow().notNull(),
 	},

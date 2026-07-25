@@ -31,8 +31,9 @@ export type GlobalScopeResolver = (
  */
 export interface GlobalOptions {
 	/**
-	 * Realtime sharing policy. Cross-session sharing is disabled unless this
-	 * resolver returns the same deterministic key for equivalent outputs.
+	 * Realtime sharing policy. Stable principals share only across the same
+	 * server scope, locale, stage, and access mode. Return the same deterministic
+	 * key to explicitly share equivalent output across principals.
 	 */
 	realtime?: {
 		accessCacheKey?: (

@@ -10,28 +10,63 @@ import type { ChangePublisher, ChangeWake } from "./transport.js";
 
 export const REALTIME_TOPOLOGY_PROTOCOL = "questpie-realtime-topology" as const;
 export const MAX_REALTIME_TOPOLOGY_BYTES = 262_144;
+export const MANAGED_PROVIDER_CLIENT_LEASE_MS = 45_000;
 const DEFAULT_RECONCILIATION_INTERVAL_MS = 15_000;
 
-export type RealtimeTopologyTopic = {
+export type RealtimeTopologyQuery = {
+	kind: "query";
 	id: string;
 	topic: Record<string, unknown>;
 	sinceSeq?: number;
 };
 
 export type RealtimeTopologyChannel = {
+	kind: "channel";
 	id: string;
 	channel: string;
 	params: Record<string, string>;
 	lastEventId?: string;
 };
 
+export type RealtimeTopologyCrdt = {
+	kind: "crdt";
+	id: string;
+	bindingId: string;
+};
+
+export type RealtimeDesiredSubscription =
+	| RealtimeTopologyQuery
+	| RealtimeTopologyChannel
+	| RealtimeTopologyCrdt;
+
 export type RealtimeDesiredTopology = {
 	protocol: typeof REALTIME_TOPOLOGY_PROTOCOL;
-	version: 1;
+	version: 2;
 	revision: number;
-	topics: RealtimeTopologyTopic[];
-	channels: RealtimeTopologyChannel[];
+	subscriptions: RealtimeDesiredSubscription[];
 };
+
+export type RealtimeTopologyApplyInput = {
+	topology: RealtimeDesiredTopology;
+	ownerGeneration: number;
+	signal: AbortSignal;
+};
+
+export type RealtimeTopologyEntryError = {
+	id: string;
+	kind: string;
+	code: string;
+	message: string;
+};
+
+export class RealtimeTopologyApplyRejectedError extends Error {
+	readonly code = "REALTIME_TOPOLOGY_ENTRIES_REJECTED";
+
+	constructor(readonly entries: readonly RealtimeTopologyEntryError[]) {
+		super("Realtime topology entries were rejected");
+		this.name = "RealtimeTopologyApplyRejectedError";
+	}
+}
 
 type TopologyRow = {
 	sessionKey: string;
@@ -41,9 +76,18 @@ type TopologyRow = {
 	tokenHash: string;
 	identityHash: string;
 	leaseExpiresAt: Date;
+	clientSeenAt: Date;
 	desiredRevision: number;
 	appliedRevision: number;
 	desiredTopology: RealtimeDesiredTopology;
+};
+
+type DatabaseTopologyRow = Omit<
+	TopologyRow,
+	"clientSeenAt" | "desiredTopology"
+> & {
+	updatedAt: Date;
+	desiredTopology: unknown;
 };
 
 type TopologyMutation =
@@ -74,6 +118,11 @@ interface RealtimeTopologyStore {
 		identityHash: string;
 		mutate: (row: TopologyRow) => TopologyMutation;
 	}): Promise<TopologyMutationResult>;
+	authorize(input: {
+		sessionKey: string;
+		tokenHash: string;
+		identityHash: string;
+	}): Promise<TopologyRow | null>;
 	getOwned(input: {
 		sessionKey: string;
 		ownerId: string;
@@ -85,11 +134,20 @@ interface RealtimeTopologyStore {
 		ownerGeneration: number;
 		revision: number;
 	}): Promise<boolean>;
+	rejectOwned(input: {
+		sessionKey: string;
+		ownerId: string;
+		ownerGeneration: number;
+		rejectedRevision: number;
+		appliedRevision: number;
+		appliedTopology: RealtimeDesiredTopology;
+	}): Promise<boolean>;
 	renew(input: {
 		sessionKey: string;
 		ownerId: string;
 		ownerGeneration: number;
 		leaseMs: number;
+		clientLeaseMs?: number;
 	}): Promise<boolean>;
 	removeOwned(input: {
 		sessionKey: string;
@@ -125,47 +183,120 @@ function stableValue(value: unknown): unknown {
 	);
 }
 
+function hasExactKeys(
+	value: Record<string, unknown>,
+	allowed: readonly string[],
+): boolean {
+	const allowedKeys = new Set(allowed);
+	return Object.keys(value).every((key) => allowedKeys.has(key));
+}
+
 function canonicalizeTopology(
 	topology: RealtimeDesiredTopology,
 ): RealtimeDesiredTopology {
-	const ids = new Set<string>();
-	const topics = topology.topics
-		.map((entry) => ({
-			id: entry.id,
-			topic: stableValue(entry.topic) as Record<string, unknown>,
-			...(entry.sinceSeq === undefined ? {} : { sinceSeq: entry.sinceSeq }),
-		}))
-		.sort((left, right) => left.id.localeCompare(right.id));
-	const channels = topology.channels
-		.map((entry) => ({
-			id: entry.id,
-			channel: entry.channel,
-			params: stableValue(entry.params) as Record<string, string>,
-			...(entry.lastEventId === undefined
-				? {}
-				: { lastEventId: entry.lastEventId }),
-		}))
-		.sort((left, right) => left.id.localeCompare(right.id));
-	for (const entry of [...topics, ...channels]) {
-		if (!entry.id || ids.has(entry.id)) {
-			throw new Error("Realtime topology ids must be non-empty and unique");
-		}
-		ids.add(entry.id);
-	}
 	if (
+		!topology ||
+		typeof topology !== "object" ||
 		topology.protocol !== REALTIME_TOPOLOGY_PROTOCOL ||
-		topology.version !== 1 ||
+		topology.version !== 2 ||
 		!Number.isSafeInteger(topology.revision) ||
-		topology.revision < 0
+		topology.revision < 0 ||
+		!Array.isArray(topology.subscriptions)
 	) {
 		throw new Error("Invalid realtime topology envelope");
 	}
+	const ids = new Set<string>();
+	const subscriptions = topology.subscriptions
+		.map((raw): RealtimeDesiredSubscription => {
+			if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+				throw new Error("Realtime subscription must be an object");
+			}
+			const entry = raw as unknown as Record<string, unknown>;
+			if (
+				typeof entry.id !== "string" ||
+				entry.id.length === 0 ||
+				entry.id.length > 512 ||
+				ids.has(entry.id)
+			) {
+				throw new Error("Realtime topology ids must be non-empty and unique");
+			}
+			ids.add(entry.id);
+			if (entry.kind === "query") {
+				if (
+					!hasExactKeys(entry, ["kind", "id", "topic", "sinceSeq"]) ||
+					!entry.topic ||
+					typeof entry.topic !== "object" ||
+					Array.isArray(entry.topic) ||
+					(entry.sinceSeq !== undefined &&
+						(!Number.isSafeInteger(entry.sinceSeq) ||
+							(entry.sinceSeq as number) < 0))
+				) {
+					throw new Error("Invalid realtime query subscription");
+				}
+				return {
+					kind: "query",
+					id: entry.id,
+					topic: stableValue(entry.topic) as Record<string, unknown>,
+					...(entry.sinceSeq === undefined
+						? {}
+						: { sinceSeq: entry.sinceSeq as number }),
+				};
+			}
+			if (entry.kind === "channel") {
+				if (
+					!hasExactKeys(entry, [
+						"kind",
+						"id",
+						"channel",
+						"params",
+						"lastEventId",
+					]) ||
+					typeof entry.channel !== "string" ||
+					entry.channel.length === 0 ||
+					!entry.params ||
+					typeof entry.params !== "object" ||
+					Array.isArray(entry.params) ||
+					Object.values(entry.params).some(
+						(value) => typeof value !== "string",
+					) ||
+					(entry.lastEventId !== undefined &&
+						typeof entry.lastEventId !== "string")
+				) {
+					throw new Error("Invalid realtime channel subscription");
+				}
+				return {
+					kind: "channel",
+					id: entry.id,
+					channel: entry.channel,
+					params: stableValue(entry.params) as Record<string, string>,
+					...(entry.lastEventId === undefined
+						? {}
+						: { lastEventId: entry.lastEventId as string }),
+				};
+			}
+			if (entry.kind === "crdt") {
+				if (
+					!hasExactKeys(entry, ["kind", "id", "bindingId"]) ||
+					typeof entry.bindingId !== "string" ||
+					entry.bindingId.length === 0 ||
+					entry.bindingId.length > 512
+				) {
+					throw new Error("Invalid realtime CRDT subscription");
+				}
+				return {
+					kind: "crdt",
+					id: entry.id,
+					bindingId: entry.bindingId,
+				};
+			}
+			throw new Error("Unknown realtime subscription kind");
+		})
+		.sort((left, right) => left.id.localeCompare(right.id));
 	const canonical: RealtimeDesiredTopology = {
 		protocol: REALTIME_TOPOLOGY_PROTOCOL,
-		version: 1,
+		version: 2,
 		revision: topology.revision,
-		topics,
-		channels,
+		subscriptions,
 	};
 	if (
 		new TextEncoder().encode(JSON.stringify(canonical)).byteLength >
@@ -183,10 +314,15 @@ function topologyEquals(
 	return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function normalizeTopologyRow(row: TopologyRow): TopologyRow {
+function normalizeTopologyRow(
+	row: TopologyRow | DatabaseTopologyRow,
+): TopologyRow {
 	return {
 		...row,
-		desiredTopology: canonicalizeTopology(row.desiredTopology),
+		clientSeenAt: "clientSeenAt" in row ? row.clientSeenAt : row.updatedAt,
+		desiredTopology: canonicalizeTopology(
+			row.desiredTopology as RealtimeDesiredTopology,
+		),
 	};
 }
 
@@ -208,10 +344,11 @@ export class MemoryRealtimeTopologyStore implements RealtimeTopologyStore {
 			sessionKey: input.sessionKey,
 			ownerId: input.ownerId,
 			ownerGeneration: ++this.generation,
-			protocolVersion: 1,
+			protocolVersion: 2,
 			tokenHash: input.tokenHash,
 			identityHash: input.identityHash,
 			leaseExpiresAt: new Date(this.now().getTime() + input.leaseMs),
+			clientSeenAt: this.now(),
 			desiredRevision: input.topology.revision,
 			appliedRevision: input.topology.revision,
 			desiredTopology: input.topology,
@@ -236,11 +373,26 @@ export class MemoryRealtimeTopologyStore implements RealtimeTopologyStore {
 			return { status: "unavailable" };
 		}
 		const mutation = input.mutate(structuredClone(row));
+		row.clientSeenAt = this.now();
 		if (mutation.status === "accepted") {
 			row.desiredTopology = mutation.topology;
 			row.desiredRevision = mutation.topology.revision;
 		}
 		return { status: mutation.status, row: structuredClone(row) };
+	}
+
+	async authorize(input: {
+		sessionKey: string;
+		tokenHash: string;
+		identityHash: string;
+	}): Promise<TopologyRow | null> {
+		const row = this.rows.get(input.sessionKey);
+		return row &&
+			row.leaseExpiresAt > this.now() &&
+			hashEquals(row.tokenHash, input.tokenHash) &&
+			hashEquals(row.identityHash, input.identityHash)
+			? structuredClone(row)
+			: null;
 	}
 
 	async getOwned(input: {
@@ -270,17 +422,42 @@ export class MemoryRealtimeTopologyStore implements RealtimeTopologyStore {
 		return true;
 	}
 
+	async rejectOwned(input: {
+		sessionKey: string;
+		ownerId: string;
+		ownerGeneration: number;
+		rejectedRevision: number;
+		appliedRevision: number;
+		appliedTopology: RealtimeDesiredTopology;
+	}): Promise<boolean> {
+		const row = await this.getOwned(input);
+		if (!row || row.desiredRevision !== input.rejectedRevision) return false;
+		const stored = this.rows.get(input.sessionKey)!;
+		stored.desiredRevision = input.appliedRevision;
+		stored.desiredTopology = input.appliedTopology;
+		return true;
+	}
+
 	async renew(input: {
 		sessionKey: string;
 		ownerId: string;
 		ownerGeneration: number;
 		leaseMs: number;
+		clientLeaseMs?: number;
 	}): Promise<boolean> {
-		const row = await this.getOwned(input);
-		if (!row) return false;
-		this.rows.get(input.sessionKey)!.leaseExpiresAt = new Date(
-			this.now().getTime() + input.leaseMs,
-		);
+		const row = this.rows.get(input.sessionKey);
+		if (
+			!row ||
+			row.ownerId !== input.ownerId ||
+			row.ownerGeneration !== input.ownerGeneration ||
+			row.leaseExpiresAt <= this.now() ||
+			(input.clientLeaseMs !== undefined &&
+				row.clientSeenAt.getTime() + input.clientLeaseMs <=
+					this.now().getTime())
+		) {
+			return false;
+		}
+		row.leaseExpiresAt = new Date(this.now().getTime() + input.leaseMs);
 		return true;
 	}
 
@@ -325,7 +502,7 @@ export class PostgresRealtimeTopologyStore implements RealtimeTopologyStore {
 			.values({
 				sessionKey: input.sessionKey,
 				ownerId: input.ownerId,
-				protocolVersion: 1,
+				protocolVersion: 2,
 				tokenHash: input.tokenHash,
 				identityHash: input.identityHash,
 				leaseExpiresAt: this.leaseDeadline(input.leaseMs),
@@ -334,7 +511,7 @@ export class PostgresRealtimeTopologyStore implements RealtimeTopologyStore {
 				desiredTopology: input.topology,
 			})
 			.returning();
-		return normalizeTopologyRow(row as TopologyRow);
+		return normalizeTopologyRow(row as DatabaseTopologyRow);
 	}
 
 	async mutate(input: {
@@ -361,7 +538,7 @@ export class PostgresRealtimeTopologyStore implements RealtimeTopologyStore {
 			) {
 				return { status: "unavailable" };
 			}
-			const typedRow = normalizeTopologyRow(row as TopologyRow);
+			const typedRow = normalizeTopologyRow(row as DatabaseTopologyRow);
 			const mutation = input.mutate(typedRow);
 			if (mutation.status === "accepted") {
 				const [updated] = await tx
@@ -375,11 +552,43 @@ export class PostgresRealtimeTopologyStore implements RealtimeTopologyStore {
 					.returning();
 				return {
 					status: mutation.status,
-					row: normalizeTopologyRow(updated as TopologyRow),
+					row: normalizeTopologyRow(updated as DatabaseTopologyRow),
 				};
 			}
-			return { status: mutation.status, row: typedRow };
+			const [touched] = await tx
+				.update(questpieRealtimeTopologyTable)
+				.set({ updatedAt: sql`now()` })
+				.where(eq(questpieRealtimeTopologyTable.sessionKey, input.sessionKey))
+				.returning();
+			return {
+				status: mutation.status,
+				row: normalizeTopologyRow(touched as DatabaseTopologyRow),
+			};
 		});
+	}
+
+	async authorize(input: {
+		sessionKey: string;
+		tokenHash: string;
+		identityHash: string;
+	}): Promise<TopologyRow | null> {
+		const [row] = await this.db
+			.select()
+			.from(questpieRealtimeTopologyTable)
+			.where(
+				and(
+					eq(questpieRealtimeTopologyTable.sessionKey, input.sessionKey),
+					gt(questpieRealtimeTopologyTable.leaseExpiresAt, sql`now()`),
+				),
+			);
+		if (
+			!row ||
+			!hashEquals(row.tokenHash, input.tokenHash) ||
+			!hashEquals(row.identityHash, input.identityHash)
+		) {
+			return null;
+		}
+		return normalizeTopologyRow(row as DatabaseTopologyRow);
 	}
 
 	async getOwned(input: {
@@ -401,7 +610,7 @@ export class PostgresRealtimeTopologyStore implements RealtimeTopologyStore {
 					gt(questpieRealtimeTopologyTable.leaseExpiresAt, sql`now()`),
 				),
 			);
-		return row ? normalizeTopologyRow(row as TopologyRow) : null;
+		return row ? normalizeTopologyRow(row as DatabaseTopologyRow) : null;
 	}
 
 	async markApplied(input: {
@@ -412,7 +621,7 @@ export class PostgresRealtimeTopologyStore implements RealtimeTopologyStore {
 	}): Promise<boolean> {
 		const rows = await this.db
 			.update(questpieRealtimeTopologyTable)
-			.set({ appliedRevision: input.revision, updatedAt: sql`now()` })
+			.set({ appliedRevision: input.revision })
 			.where(
 				and(
 					eq(questpieRealtimeTopologyTable.sessionKey, input.sessionKey),
@@ -428,17 +637,19 @@ export class PostgresRealtimeTopologyStore implements RealtimeTopologyStore {
 		return rows.length === 1;
 	}
 
-	async renew(input: {
+	async rejectOwned(input: {
 		sessionKey: string;
 		ownerId: string;
 		ownerGeneration: number;
-		leaseMs: number;
+		rejectedRevision: number;
+		appliedRevision: number;
+		appliedTopology: RealtimeDesiredTopology;
 	}): Promise<boolean> {
 		const rows = await this.db
 			.update(questpieRealtimeTopologyTable)
 			.set({
-				leaseExpiresAt: this.leaseDeadline(input.leaseMs),
-				updatedAt: sql`now()`,
+				desiredRevision: input.appliedRevision,
+				desiredTopology: input.appliedTopology,
 			})
 			.where(
 				and(
@@ -448,9 +659,44 @@ export class PostgresRealtimeTopologyStore implements RealtimeTopologyStore {
 						questpieRealtimeTopologyTable.ownerGeneration,
 						input.ownerGeneration,
 					),
+					eq(
+						questpieRealtimeTopologyTable.desiredRevision,
+						input.rejectedRevision,
+					),
 					gt(questpieRealtimeTopologyTable.leaseExpiresAt, sql`now()`),
 				),
 			)
+			.returning({ sessionKey: questpieRealtimeTopologyTable.sessionKey });
+		return rows.length === 1;
+	}
+
+	async renew(input: {
+		sessionKey: string;
+		ownerId: string;
+		ownerGeneration: number;
+		leaseMs: number;
+		clientLeaseMs?: number;
+	}): Promise<boolean> {
+		const predicates = [
+			eq(questpieRealtimeTopologyTable.sessionKey, input.sessionKey),
+			eq(questpieRealtimeTopologyTable.ownerId, input.ownerId),
+			eq(questpieRealtimeTopologyTable.ownerGeneration, input.ownerGeneration),
+			gt(questpieRealtimeTopologyTable.leaseExpiresAt, sql`now()`),
+		];
+		if (input.clientLeaseMs !== undefined) {
+			predicates.push(
+				gt(
+					questpieRealtimeTopologyTable.updatedAt,
+					sql`now() - (${input.clientLeaseMs} * interval '1 millisecond')`,
+				),
+			);
+		}
+		const rows = await this.db
+			.update(questpieRealtimeTopologyTable)
+			.set({
+				leaseExpiresAt: this.leaseDeadline(input.leaseMs),
+			})
+			.where(and(...predicates))
 			.returning({ sessionKey: questpieRealtimeTopologyTable.sessionKey });
 		return rows.length === 1;
 	}
@@ -499,11 +745,14 @@ export type RealtimeTopologyResult =
 type LocalHandler = {
 	generation: number;
 	appliedRevision: number;
-	apply: (topology: RealtimeDesiredTopology) => Promise<void>;
+	appliedTopology: RealtimeDesiredTopology;
+	apply: (input: RealtimeTopologyApplyInput) => Promise<void>;
 	onClose: () => Promise<void> | void;
+	abortController: AbortController;
 	operation: Promise<void>;
 	reconciling: boolean;
 	reconcilePending: boolean;
+	clientLeaseMs?: number;
 };
 
 export class RealtimeTopologyCoordinator {
@@ -584,10 +833,24 @@ export class RealtimeTopologyCoordinator {
 		token: string;
 		identity: string;
 		topology: RealtimeDesiredTopology;
-		apply: (topology: RealtimeDesiredTopology) => Promise<void>;
+		/** Required only when no physical client connection can signal teardown. */
+		clientLeaseMs?: number;
+		apply: (input: RealtimeTopologyApplyInput) => Promise<void>;
 		onClose: () => Promise<void> | void;
-	}): Promise<{ generation: number; close(): Promise<void> }> {
+	}): Promise<{
+		generation: number;
+		signal: AbortSignal;
+		close(): Promise<void>;
+	}> {
 		await this.start();
+		if (
+			input.clientLeaseMs !== undefined &&
+			(!Number.isSafeInteger(input.clientLeaseMs) ||
+				input.clientLeaseMs < 1 ||
+				input.clientLeaseMs > 5 * 60_000)
+		) {
+			throw new Error("Invalid realtime client lease");
+		}
 		const topology = canonicalizeTopology(input.topology);
 		const sessionKey = hash(input.sessionId);
 		const row = await this.store.open({
@@ -598,14 +861,18 @@ export class RealtimeTopologyCoordinator {
 			topology,
 			leaseMs: this.leaseMs,
 		});
+		const abortController = new AbortController();
 		this.handlers.set(sessionKey, {
 			generation: row.ownerGeneration,
 			appliedRevision: topology.revision,
+			appliedTopology: topology,
 			apply: input.apply,
 			onClose: input.onClose,
+			abortController,
 			operation: Promise.resolve(),
 			reconciling: false,
 			reconcilePending: false,
+			clientLeaseMs: input.clientLeaseMs,
 		});
 		this.observe({
 			type: "topology.lifecycle",
@@ -616,6 +883,7 @@ export class RealtimeTopologyCoordinator {
 		});
 		return {
 			generation: row.ownerGeneration,
+			signal: abortController.signal,
 			close: () => this.closeLocal(sessionKey, true, false),
 		};
 	}
@@ -630,7 +898,7 @@ export class RealtimeTopologyCoordinator {
 		try {
 			topology = canonicalizeTopology(input.topology);
 		} catch {
-			const status = input.topology.version === 1 ? "invalid" : "unsupported";
+			const status = input.topology.version === 2 ? "invalid" : "unsupported";
 			this.observe({
 				type: "topology.lifecycle",
 				phase: "submit",
@@ -652,6 +920,29 @@ export class RealtimeTopologyCoordinator {
 			}
 			return { status: "accepted", topology };
 		});
+	}
+
+	/**
+	 * Validate a live edge capability without renewing or transferring it.
+	 * The returned key is the one-way durable identity used by CRDT bindings.
+	 */
+	async authorizeSession(input: {
+		sessionId: string;
+		token: string;
+		identity: string;
+	}): Promise<{ sessionKey: string; ownerGeneration: number } | null> {
+		const sessionKey = hash(input.sessionId);
+		const row = await this.store.authorize({
+			sessionKey,
+			tokenHash: hash(input.token),
+			identityHash: hash(input.identity),
+		});
+		return row
+			? {
+					sessionKey: row.sessionKey,
+					ownerGeneration: row.ownerGeneration,
+				}
+			: null;
 	}
 
 	private async commit(
@@ -803,8 +1094,33 @@ export class RealtimeTopologyCoordinator {
 			return;
 		}
 		try {
-			await handler.apply(row.desiredTopology);
+			await handler.apply({
+				topology: row.desiredTopology,
+				ownerGeneration: handler.generation,
+				signal: handler.abortController.signal,
+			});
 		} catch (error) {
+			if (error instanceof RealtimeTopologyApplyRejectedError) {
+				const reverted = await this.store.rejectOwned({
+					sessionKey,
+					ownerId: this.ownerId,
+					ownerGeneration: handler.generation,
+					rejectedRevision: row.desiredRevision,
+					appliedRevision: handler.appliedRevision,
+					appliedTopology: handler.appliedTopology,
+				});
+				this.observe({
+					type: "topology.lifecycle",
+					phase: "apply",
+					outcome: reverted ? "rejected" : "fenced",
+					desiredRevision: row.desiredRevision,
+					appliedRevision: handler.appliedRevision,
+				});
+				if (!reverted) {
+					await this.closeLocal(sessionKey, false, true);
+				}
+				return;
+			}
 			this.observe({
 				type: "topology.lifecycle",
 				phase: "apply",
@@ -821,6 +1137,17 @@ export class RealtimeTopologyCoordinator {
 			});
 			this.onError(error);
 			await this.closeLocal(sessionKey, true, true);
+			return;
+		}
+		if (
+			handler.abortController.signal.aborted ||
+			this.handlers.get(sessionKey) !== handler
+		) {
+			this.observe({
+				type: "topology.lifecycle",
+				phase: "apply",
+				outcome: "fenced",
+			});
 			return;
 		}
 		let marked: boolean;
@@ -856,6 +1183,7 @@ export class RealtimeTopologyCoordinator {
 			return;
 		}
 		handler.appliedRevision = row.desiredRevision;
+		handler.appliedTopology = row.desiredTopology;
 		this.observe({
 			type: "topology.lifecycle",
 			phase: "apply",
@@ -879,6 +1207,7 @@ export class RealtimeTopologyCoordinator {
 				ownerId: this.ownerId,
 				ownerGeneration: handler.generation,
 				leaseMs: this.leaseMs,
+				clientLeaseMs: handler.clientLeaseMs,
 			});
 			if (!renewed) {
 				this.observe({
@@ -886,7 +1215,7 @@ export class RealtimeTopologyCoordinator {
 					phase: "lease",
 					outcome: "expired",
 				});
-				await this.closeLocal(sessionKey, false, true);
+				await this.closeLocal(sessionKey, true, true);
 			}
 		}
 	}
@@ -899,6 +1228,7 @@ export class RealtimeTopologyCoordinator {
 		const handler = this.handlers.get(sessionKey);
 		if (!handler) return;
 		this.handlers.delete(sessionKey);
+		handler.abortController.abort();
 		if (removeOwned) {
 			await this.store.removeOwned({
 				sessionKey,

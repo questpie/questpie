@@ -5,17 +5,6 @@ import {
 	type Questpie,
 } from "questpie";
 
-import {
-	createElysiaCrdtHost,
-	type ElysiaCrdtTrustedProxyResolver,
-} from "./crdt-host.js";
-
-export {
-	createElysiaCrdtHost,
-	type ElysiaCrdtHostConfig,
-	type ElysiaCrdtTrustedProxyResolver,
-} from "./crdt-host.js";
-
 /**
  * Context stored in Elysia decorator
  */
@@ -35,17 +24,6 @@ export type ElysiaAdapterConfig = Pick<AdapterConfig, "requestLogging"> & {
 	 * @default '/'
 	 */
 	basePath?: string;
-	/**
-	 * CRDT endpoints relative to `basePath`.
-	 *
-	 * The Elysia host implementation is added separately; declaring this
-	 * namespace does not replace the existing HTTP realtime transport.
-	 */
-	crdt?: {
-		/** @default "/crdt" */
-		path?: `/${string}`;
-		resolveTrustedProxyClientIp?: ElysiaCrdtTrustedProxyResolver;
-	};
 };
 
 /**
@@ -103,21 +81,6 @@ export function questpieElysia(
 	});
 
 	const server = new Elysia({ prefix: basePath, name: "questpie" });
-	if (config.crdt) {
-		const application = app.crdtHostApplication;
-		if (!application) {
-			throw new TypeError(
-				"QUESTPIE Elysia CRDT host requires the CRDT session kernel",
-			);
-		}
-		server.use(
-			createElysiaCrdtHost({
-				path: config.crdt.path,
-				application,
-				resolveTrustedProxyClientIp: config.crdt.resolveTrustedProxyClientIp,
-			}),
-		);
-	}
 	server.all("/*", async ({ request }) => {
 		const response = await handler(request);
 		return (

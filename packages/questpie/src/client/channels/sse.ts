@@ -1,4 +1,6 @@
 import type { GetAuthHeaders } from "../auth.js";
+import type { SseConnectionManager } from "../realtime/sse-connection.js";
+import { channelGapError, OrderedChannelCursor } from "./ordered-events.js";
 import type {
 	ChannelClientTransport,
 	ChannelConnectionInput,
@@ -12,13 +14,14 @@ type Entry = {
 	subscribers: Set<(message: ChannelTransportMessage) => void>;
 	presenceSubscribers: Set<(members: readonly unknown[]) => void>;
 	errorCallbacks: Set<(error: Error) => void>;
-	lastEventId?: string;
+	cursor: OrderedChannelCursor;
 	presence?: readonly unknown[];
 	presenceSignature?: string;
 	presenceWaiters: Set<{
 		resolve: (members: readonly unknown[]) => void;
 		reject: (error: Error) => void;
 	}>;
+	sharedRelease?: () => void;
 };
 
 type SseEvent = { type: string; data: string };
@@ -58,6 +61,7 @@ export class SseChannelTransport implements ChannelClientTransport {
 			fetcher: typeof fetch;
 			getAuthHeaders?: GetAuthHeaders;
 			withCredentials: boolean;
+			connection?: SseConnectionManager;
 		},
 	) {}
 
@@ -189,15 +193,53 @@ export class SseChannelTransport implements ChannelClientTransport {
 			subscribers: new Set(),
 			presenceSubscribers: new Set(),
 			errorCallbacks: new Set(),
+			cursor: new OrderedChannelCursor(),
 			presenceWaiters: new Set(),
 		};
 		this.entries.set(input.resolvedName, entry);
-		this.applyTopology();
+		if (this.options.connection) {
+			try {
+				entry.sharedRelease = this.options.connection.registerChannel({
+					id,
+					openPayload: () => ({
+						id,
+						channel: input.registryKey,
+						params: input.params,
+						...(entry?.cursor.eventId
+							? { lastEventId: entry.cursor.eventId }
+							: {}),
+					}),
+					desiredPayload: () => ({
+						kind: "channel",
+						id,
+						channel: input.registryKey,
+						params: input.params,
+						...(entry?.cursor.eventId
+							? { lastEventId: entry.cursor.eventId }
+							: {}),
+					}),
+					onEvent: (event) => this.handleEvent(event),
+					onError: (error) => this.notifyEntry(entry!, error),
+				});
+			} catch (error) {
+				queueMicrotask(() =>
+					this.notifyEntry(
+						entry!,
+						error instanceof Error ? error : new Error(String(error)),
+					),
+				);
+			}
+		} else {
+			this.applyTopology();
+		}
 		return entry;
 	}
 
 	private removeEntry(name: string): void {
+		const entry = this.entries.get(name);
+		entry?.sharedRelease?.();
 		this.entries.delete(name);
+		if (this.options.connection) return;
 		if (this.entries.size === 0) {
 			this.abortController?.abort();
 			return;
@@ -232,7 +274,9 @@ export class SseChannelTransport implements ChannelClientTransport {
 							id: entry.id,
 							channel: entry.input.registryKey,
 							params: entry.input.params,
-							...(entry.lastEventId ? { lastEventId: entry.lastEventId } : {}),
+							...(entry.cursor.eventId
+								? { lastEventId: entry.cursor.eventId }
+								: {}),
 						})),
 					}),
 					credentials: this.options.withCredentials ? "include" : "omit",
@@ -249,7 +293,7 @@ export class SseChannelTransport implements ChannelClientTransport {
 			if ((error as Error).name !== "AbortError") {
 				const normalized =
 					error instanceof Error ? error : new Error(String(error));
-				if (![...this.entries.values()].some((entry) => entry.lastEventId)) {
+				if (![...this.entries.values()].some((entry) => entry.cursor.eventId)) {
 					this.notifyAll(normalized);
 				}
 				const delay = Math.min(1000 * 2 ** this.retryAttempt++, 30_000);
@@ -276,14 +320,16 @@ export class SseChannelTransport implements ChannelClientTransport {
 				if (!session) return;
 				const topology = {
 					protocol: "questpie-realtime-topology",
-					version: 1,
+					version: 2,
 					revision: ++this.desiredRevision,
-					topics: [],
-					channels: [...this.entries.values()].map((entry) => ({
+					subscriptions: [...this.entries.values()].map((entry) => ({
+						kind: "channel",
 						id: entry.id,
 						channel: entry.input.registryKey,
 						params: entry.input.params,
-						...(entry.lastEventId ? { lastEventId: entry.lastEventId } : {}),
+						...(entry.cursor.eventId
+							? { lastEventId: entry.cursor.eventId }
+							: {}),
 					})),
 				};
 				const operation = this.controlOperation
@@ -371,7 +417,7 @@ export class SseChannelTransport implements ChannelClientTransport {
 					typeof session.sessionId === "string" &&
 					typeof session.token === "string" &&
 					session.control?.protocol === "questpie-realtime-topology" &&
-					session.control.versions.includes(1)
+					session.control.versions.includes(2)
 				) {
 					this.controlSession = {
 						sessionId: session.sessionId,
@@ -380,7 +426,7 @@ export class SseChannelTransport implements ChannelClientTransport {
 					};
 				} else {
 					this.handleControlError(
-						new Error("Realtime server does not support desired topology v1"),
+						new Error("Realtime server does not support desired topology v2"),
 					);
 				}
 			} catch {}
@@ -394,16 +440,27 @@ export class SseChannelTransport implements ChannelClientTransport {
 			const frame = JSON.parse(event.data) as Record<string, unknown>;
 			if (event.type === "channel_event") {
 				const entry = this.entryForFrame(frame);
-				if (!entry || typeof frame.event !== "string") return;
-				if (typeof frame.eventId === "string")
-					entry.lastEventId = frame.eventId;
+				if (
+					!entry ||
+					typeof frame.event !== "string" ||
+					typeof frame.eventId !== "string"
+				)
+					return;
+				const message = {
+					event: frame.event,
+					eventId: frame.eventId,
+					data: frame.data,
+				};
+				const decision = entry.cursor.accept(message);
+				if (decision.status === "duplicate") return;
+				if (decision.status === "gap") {
+					this.notifyEntry(entry, channelGapError());
+					this.removeEntry(entry.input.resolvedName);
+					return;
+				}
 				this.retryAttempt = 0;
 				for (const callback of entry.subscribers) {
-					callback({
-						event: frame.event,
-						eventId: String(frame.eventId ?? ""),
-						data: frame.data,
-					});
+					callback(message);
 				}
 			} else if (event.type === "channel_presence") {
 				const entry = this.entryForFrame(frame);
@@ -411,8 +468,10 @@ export class SseChannelTransport implements ChannelClientTransport {
 				this.setPresence(entry, frame.members);
 			} else if (event.type === "channel_gap") {
 				const entry = this.entryForFrame(frame);
-				if (entry)
-					this.notifyEntry(entry, new Error("Channel event replay gap"));
+				if (entry) {
+					this.notifyEntry(entry, channelGapError());
+					this.removeEntry(entry.input.resolvedName);
+				}
 			} else if (event.type === "error") {
 				const id = frame.channelSubscriptionId;
 				const entry = [...this.entries.values()].find((item) => item.id === id);
@@ -457,6 +516,7 @@ export class SseChannelTransport implements ChannelClientTransport {
 	destroy(): void {
 		if (this.destroyed) return;
 		this.destroyed = true;
+		for (const entry of this.entries.values()) entry.sharedRelease?.();
 		this.abortController?.abort();
 		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
 		this.notifyAll(new Error("Channel transport destroyed"));

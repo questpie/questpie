@@ -17,6 +17,7 @@ type NoticeFor<TKind extends NoticeKind> = Extract<CoreNotice, { kind: TKind }>;
 
 export type CoreNoticeSubscription<TKind extends NoticeKind> = {
 	kind: TKind;
+	routingKey?: string;
 	onNotice: (notice: NoticeFor<TKind>) => void | Promise<void>;
 	onError?: (error: unknown) => void;
 	onOverflow?: (dropped: number) => void;
@@ -26,6 +27,7 @@ export type CoreNoticeSubscription<TKind extends NoticeKind> = {
 type Subscriber = {
 	active: boolean;
 	kind: NoticeKind;
+	routingKey?: string;
 	queue: BoundedQueue<CoreNotice>;
 	draining: boolean;
 	dropped: number;
@@ -50,6 +52,7 @@ function noticeBytes(notice: CoreNotice): number {
  */
 export class CoreNoticeRouter {
 	private readonly subscribers = new Set<Subscriber>();
+	private readonly keyedCrdtSubscribers = new Map<string, Set<Subscriber>>();
 	private readonly maxSubscriberItems: number;
 	private readonly maxSubscriberBytes: number;
 	private started = false;
@@ -72,9 +75,13 @@ export class CoreNoticeRouter {
 	async subscribe<TKind extends NoticeKind>(
 		input: CoreNoticeSubscription<TKind>,
 	): Promise<() => Promise<void>> {
+		if (input.routingKey !== undefined && input.kind !== "crdt") {
+			throw new Error("Only CRDT notices support keyed routing");
+		}
 		const subscriber: Subscriber = {
 			active: true,
 			kind: input.kind,
+			routingKey: input.routingKey,
 			queue: new BoundedQueue({
 				maxItems: this.maxSubscriberItems,
 				maxBytes: this.maxSubscriberBytes,
@@ -89,12 +96,18 @@ export class CoreNoticeRouter {
 			onStateChange: input.onStateChange,
 		};
 		this.subscribers.add(subscriber);
+		if (subscriber.routingKey !== undefined) {
+			const keyed =
+				this.keyedCrdtSubscribers.get(subscriber.routingKey) ?? new Set();
+			keyed.add(subscriber);
+			this.keyedCrdtSubscribers.set(subscriber.routingKey, keyed);
+		}
 
 		try {
 			await this.ensureStarted();
 		} catch (error) {
 			subscriber.active = false;
-			this.subscribers.delete(subscriber);
+			this.removeSubscriber(subscriber);
 			throw error;
 		}
 
@@ -104,7 +117,7 @@ export class CoreNoticeRouter {
 			released = true;
 			subscriber.active = false;
 			subscriber.queue.clear();
-			this.subscribers.delete(subscriber);
+			this.removeSubscriber(subscriber);
 			if (this.subscribers.size === 0) await this.stop();
 		};
 	}
@@ -162,9 +175,33 @@ export class CoreNoticeRouter {
 			wake.kind === "crdt"
 				? { kind: "crdt", wake }
 				: { kind: "realtime", wake };
+		if (notice.kind === "crdt") {
+			for (const subscriber of this.keyedCrdtSubscribers.get(
+				notice.wake.aggregateHash,
+			) ?? []) {
+				this.enqueue(subscriber, notice);
+			}
+			for (const subscriber of this.subscribers) {
+				if (subscriber.kind !== "crdt" || subscriber.routingKey !== undefined) {
+					continue;
+				}
+				this.enqueue(subscriber, notice);
+			}
+			return;
+		}
 		for (const subscriber of this.subscribers) {
 			if (subscriber.kind !== notice.kind) continue;
 			this.enqueue(subscriber, notice);
+		}
+	}
+
+	private removeSubscriber(subscriber: Subscriber): void {
+		this.subscribers.delete(subscriber);
+		if (subscriber.routingKey === undefined) return;
+		const keyed = this.keyedCrdtSubscribers.get(subscriber.routingKey);
+		keyed?.delete(subscriber);
+		if (keyed?.size === 0) {
+			this.keyedCrdtSubscribers.delete(subscriber.routingKey);
 		}
 	}
 

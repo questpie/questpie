@@ -4,6 +4,7 @@ import {
 	DEFAULT_REALTIME_ADMISSION,
 	RealtimeAdmissionRegistry,
 	admitRealtimeTopic,
+	admitRealtimeTopicPolicy,
 	resolveRealtimeAdmissionConfig,
 } from "../../src/server/modules/core/integrated/realtime/admission.js";
 
@@ -202,5 +203,43 @@ describe("realtime admission", () => {
 
 		first!();
 		expect(registry.acquire("user-1")).not.toBeNull();
+	});
+
+	it("keeps row-topic policy distinct from collection change capture", () => {
+		const topic = {
+			id: "posts",
+			resourceType: "collection" as const,
+			resource: "posts",
+		};
+		expect(
+			admitRealtimeTopicPolicy(topic, { rowLiveQueries: false }),
+		).toMatchObject({
+			accepted: false,
+			reason: "row_live_queries_disabled",
+		});
+		expect(
+			admitRealtimeTopicPolicy(topic, { collectionRealtime: false }),
+		).toMatchObject({
+			accepted: false,
+			reason: "collection_realtime_disabled",
+		});
+		expect(admitRealtimeTopicPolicy(topic, {})).toEqual({
+			accepted: true,
+			topic,
+		});
+		expect(
+			admitRealtimeTopicPolicy(
+				{
+					id: "settings",
+					resourceType: "global",
+					resource: "settings",
+					operation: "get",
+				},
+				{ rowLiveQueries: false, collectionRealtime: false },
+			),
+		).toMatchObject({
+			accepted: false,
+			reason: "row_live_queries_disabled",
+		});
 	});
 });

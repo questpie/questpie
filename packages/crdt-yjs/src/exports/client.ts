@@ -1,1 +1,1 @@
-export { createYjsTextEngineCore as yjsClientEngine } from "../text-engine.js";
+export { createYjsClientEngine as yjsClientEngine } from "../client-engine.js";

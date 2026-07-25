@@ -177,7 +177,7 @@ describe("OpenAPI 3.1 spec validity (full representative spec)", () => {
 	});
 });
 
-describe("post-realtime-v2 core module route coverage", () => {
+describe("realtime v3 core module route coverage", () => {
 	it("includes the channels and realtime route definitions with exact methods", async () => {
 		const app = {
 			getCollections: () => ({}),
@@ -204,17 +204,23 @@ describe("post-realtime-v2 core module route coverage", () => {
 			"/api/channels/auth": ["options", "post"],
 			"/api/channels/config": ["get"],
 			"/api/channels/publish": ["options", "post"],
+			"/api/channels/replay": ["options", "post"],
 			"/api/realtime": ["post"],
 			"/api/realtime/auth": ["post"],
 			"/api/realtime/config": ["get"],
+			"/api/realtime/crdt/exchange": ["post"],
+			"/api/realtime/crdt/open": ["post"],
 		});
 
 		for (const path of [
 			"/api/channels/auth",
 			"/api/channels/config",
 			"/api/channels/publish",
+			"/api/channels/replay",
 			"/api/realtime/auth",
 			"/api/realtime/config",
+			"/api/realtime/crdt/exchange",
+			"/api/realtime/crdt/open",
 		]) {
 			for (const operation of Object.values(spec.paths[path])) {
 				expect(operation.security).toEqual([]);

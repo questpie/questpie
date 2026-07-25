@@ -78,7 +78,7 @@ describe("CRDT ordinary CRUD guard", () => {
 				globals: { siteSettings },
 				crdtManifest,
 			},
-			{ crdt: crdtConfig },
+			{ crdt: crdtConfig, secret: "s".repeat(32) },
 		);
 		await runTestDbMigrations(setup.app);
 	});
@@ -113,18 +113,18 @@ describe("CRDT ordinary CRUD guard", () => {
 		expect(resources).toHaveLength(1);
 	});
 
-	it("owns one started HA drain registration in the app lifecycle", () => {
-		const registration = setup.app.crdtOperations.syncCoordinator;
-		expect(registration).toBeDefined();
-		const release = registration.register({
-			id: "runtime-session",
-			aggregateHash: "a".repeat(64),
-			async reconcile() {
-				return { behind: false };
-			},
-		});
-		expect(release).toBeFunction();
-		release();
+	it("owns only Fetch exchange and realtime binding operations in the app lifecycle", () => {
+		const operations = setup.app.crdtOperations;
+		expect(operations.available).toBe(true);
+		expect(operations.handleOpen).toBeFunction();
+		expect(operations.handleExchange).toBeFunction();
+		expect(operations.assertRealtimeBinding).toBeFunction();
+		expect(operations.subscribeRealtimeBinding).toBeFunction();
+		expect(operations.wake).toBeFunction();
+		expect(operations.stop).toBeFunction();
+		expect(operations).not.toHaveProperty("syncCoordinator");
+		expect(operations).not.toHaveProperty("syncSource");
+		expect(operations).not.toHaveProperty("presenceSource");
 	});
 
 	it("rejects collection by-id, bulk, batch, and system writes", async () => {

@@ -70,30 +70,70 @@ export function whereReferencesRelations(
 	return referencesRelation;
 }
 
-const DELTA_SHAPE_RULES: ReadonlyArray<
-	(topic: DeliveryTopic, relationNames: ReadonlySet<string>) => boolean
-> = [
-	(topic) => topic.mode === "delta",
-	(topic) => topic.resourceType === "collection",
-	(topic) => (topic.operation ?? "find") === "find",
-	(topic) => topic.limit === undefined,
-	(topic) => topic.offset === undefined,
-	(topic) => topic.orderBy === undefined,
-	(topic) => topic.with === undefined,
-	(topic) => topic.columns?.id !== false,
-	(topic) => !visitRealtimeWhereFields(topic.where, () => {}).hasRaw,
-	(topic, relationNames) =>
-		!whereReferencesRelations(topic.where, relationNames),
-];
+export type RealtimeDeliveryClassificationReason =
+	| "eligible"
+	| "requested_snapshot"
+	| "resource_type"
+	| "operation"
+	| "limit"
+	| "offset"
+	| "order_by"
+	| "with"
+	| "missing_id"
+	| "raw_where"
+	| "relation_where"
+	| "native_deltas_disabled"
+	| "transport_snapshot";
+
+export type RealtimeDeliveryDecision = Readonly<{
+	mode: RealtimeDeliveryMode;
+	reason: RealtimeDeliveryClassificationReason;
+}>;
+
+/** Explain the first frozen shape rule that prevents native row deltas. */
+export function classifyRealtimeDeliveryDecision(
+	topic: DeliveryTopic,
+	relationNames: ReadonlySet<string> = new Set(),
+): RealtimeDeliveryDecision {
+	if (topic.mode !== "delta") {
+		return { mode: "snapshot", reason: "requested_snapshot" };
+	}
+	if (topic.resourceType !== "collection") {
+		return { mode: "snapshot", reason: "resource_type" };
+	}
+	if ((topic.operation ?? "find") !== "find") {
+		return { mode: "snapshot", reason: "operation" };
+	}
+	if (topic.limit !== undefined) {
+		return { mode: "snapshot", reason: "limit" };
+	}
+	if (topic.offset !== undefined) {
+		return { mode: "snapshot", reason: "offset" };
+	}
+	if (topic.orderBy !== undefined) {
+		return { mode: "snapshot", reason: "order_by" };
+	}
+	if (topic.with !== undefined) {
+		return { mode: "snapshot", reason: "with" };
+	}
+	if (topic.columns?.id === false) {
+		return { mode: "snapshot", reason: "missing_id" };
+	}
+	if (visitRealtimeWhereFields(topic.where, () => {}).hasRaw) {
+		return { mode: "snapshot", reason: "raw_where" };
+	}
+	if (whereReferencesRelations(topic.where, relationNames)) {
+		return { mode: "snapshot", reason: "relation_where" };
+	}
+	return { mode: "delta", reason: "eligible" };
+}
 
 /** Resolve the requested topic mode through the frozen shape-subset predicate. */
 export function classifyRealtimeDelivery(
 	topic: DeliveryTopic,
 	relationNames: ReadonlySet<string> = new Set(),
 ): RealtimeDeliveryMode {
-	return DELTA_SHAPE_RULES.every((rule) => rule(topic, relationNames))
-		? "delta"
-		: "snapshot";
+	return classifyRealtimeDeliveryDecision(topic, relationNames).mode;
 }
 
 export type RealtimeDeltaOp = "insert" | "update" | "delete" | "noop";

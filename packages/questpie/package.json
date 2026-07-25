@@ -125,6 +125,7 @@
 	"scripts": {
 		"bench:purge": "QUESTPIE_MIGRATIONS_SILENT=1 bun run bench/purge-retention.ts",
 		"bench:realtime": "QUESTPIE_MIGRATIONS_SILENT=1 bun run bench/realtime-baseline.ts",
+		"bench:realtime:routing": "bun run bench/realtime-candidate-routing.ts",
 		"build": "tsdown",
 		"test": "QUESTPIE_MIGRATIONS_SILENT=1 bun test --max-concurrency=1",
 		"test:watch": "bun test --watch",

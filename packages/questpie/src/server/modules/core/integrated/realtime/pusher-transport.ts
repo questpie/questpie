@@ -241,9 +241,57 @@ type PusherSession = {
 	resolvePrincipal: () => Promise<Principal | null>;
 };
 
+type PusherInvalidationTarget = Readonly<{
+	kind: "query" | "crdt";
+	id: string;
+}>;
+
+const MAX_PUSHER_INVALIDATION_TARGETS = 128;
+const MAX_PUSHER_INVALIDATION_BYTES = 8 * 1024;
+const pusherFrameDecoder = new TextDecoder();
+const pusherPayloadEncoder = new TextEncoder();
+
+function pusherInvalidationTarget(
+	frame: Uint8Array,
+): PusherInvalidationTarget | null {
+	try {
+		const text = pusherFrameDecoder.decode(frame);
+		const lines = text.split("\n");
+		const event = lines
+			.find((line) => line.startsWith("event: "))
+			?.slice("event: ".length);
+		const data = lines
+			.filter((line) => line.startsWith("data: "))
+			.map((line) => line.slice("data: ".length))
+			.join("\n");
+		const payload = JSON.parse(data) as Record<string, unknown>;
+		if (
+			event === "crdt_dirty" &&
+			typeof payload.topologyEntryId === "string" &&
+			payload.topologyEntryId.length > 0 &&
+			payload.topologyEntryId.length <= 512
+		) {
+			return { kind: "crdt", id: payload.topologyEntryId };
+		}
+		if (
+			event === "snapshot" &&
+			typeof payload.topicId === "string" &&
+			payload.topicId.length > 0 &&
+			payload.topicId.length <= 512
+		) {
+			return { kind: "query", id: payload.topicId };
+		}
+		return null;
+	} catch {
+		return null;
+	}
+}
+
 class PusherSessionSink implements ClientSink {
 	private closed = false;
 	private queued = false;
+	private invalidateAll = false;
+	private readonly targets = new Map<string, PusherInvalidationTarget>();
 
 	constructor(
 		readonly sessionId: string,
@@ -254,22 +302,44 @@ class PusherSessionSink implements ClientSink {
 	) {}
 
 	async write(
-		_frame: Uint8Array,
+		frame: Uint8Array,
 		delivery: DeliveryClass,
 	): Promise<SinkWriteResult> {
 		if (this.closed) throw new Error("Pusher realtime session is closed");
 		if (delivery !== "latest-snapshot") {
 			throw new Error("Ordered channel events must use publishChannel()");
 		}
+		const target = pusherInvalidationTarget(frame);
+		if (!target) {
+			this.invalidateAll = true;
+			this.targets.clear();
+		} else if (!this.invalidateAll) {
+			this.targets.set(`${target.kind}:${target.id}`, target);
+			if (this.targets.size > MAX_PUSHER_INVALIDATION_TARGETS) {
+				this.invalidateAll = true;
+				this.targets.clear();
+			}
+		}
 		if (!this.queued) {
 			this.queued = true;
 			queueMicrotask(() => {
 				this.queued = false;
 				if (this.closed) return;
+				const targeted = {
+					sessionId: this.sessionId,
+					targets: [...this.targets.values()],
+				};
+				const data =
+					!this.invalidateAll &&
+					targeted.targets.length > 0 &&
+					pusherPayloadEncoder.encode(JSON.stringify(targeted)).byteLength <=
+						MAX_PUSHER_INVALIDATION_BYTES
+						? targeted
+						: { sessionId: this.sessionId };
+				this.invalidateAll = false;
+				this.targets.clear();
 				void this.provider
-					.trigger(this.clientChannel, "questpie:invalidate", {
-						sessionId: this.sessionId,
-					})
+					.trigger(this.clientChannel, "questpie:invalidate", data)
 					.catch(this.onError);
 			});
 		}
@@ -347,6 +417,7 @@ export class PusherClientTransport implements SharedProviderClientTransport {
 			() => {
 				this.sessions.delete(channel);
 				this.sinks.delete(input.sessionId);
+				input.onClose?.();
 			},
 		);
 		this.sinks.set(input.sessionId, sink);
@@ -511,10 +582,22 @@ export class PusherClientTransport implements SharedProviderClientTransport {
 		input: OrderedChannelDelivery,
 	): Promise<SinkWriteResult> {
 		assertPusherChannelName(input.channel);
-		await this.options.provider.trigger(input.channel, "questpie:channel", {
-			eventId: input.eventId,
-			data: new TextDecoder().decode(input.frame),
-		});
+		const envelope = JSON.parse(new TextDecoder().decode(input.frame)) as {
+			eventId?: unknown;
+			event?: unknown;
+			data?: unknown;
+		};
+		if (
+			envelope.eventId !== input.eventId ||
+			typeof envelope.event !== "string"
+		) {
+			throw new Error("Invalid canonical ordered channel envelope");
+		}
+		await this.options.provider.trigger(
+			input.channel,
+			"questpie:channel",
+			envelope,
+		);
 		return { status: "accepted", bufferedBytes: null };
 	}
 

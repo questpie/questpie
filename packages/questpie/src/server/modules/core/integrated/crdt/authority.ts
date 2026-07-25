@@ -52,6 +52,12 @@ export function createHumanCrdtAuthentication(
 			"CRDT human authentication requires a user or OAuth principal",
 		);
 	}
+	if (
+		principal.kind === "oauth" &&
+		(typeof principal.tokenId !== "string" || principal.tokenId.length === 0)
+	) {
+		throw new Error("CRDT OAuth authentication requires a stable token id");
+	}
 	const subjectId = requireIdentifier(principal.user.id, "Human subjectId");
 	return {
 		principal,

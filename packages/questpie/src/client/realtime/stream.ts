@@ -6,11 +6,13 @@
  */
 
 import type { GetAuthHeaders } from "../auth.js";
-import { RealtimeMultiplexer, type TopicConfig } from "./multiplexer.js";
+import type { TopicConfig } from "./multiplexer.js";
+import type { PusherConnectionManager } from "./pusher-connection.js";
 import {
-	PusherRealtimeTransport,
-	type PusherRealtimeConfig,
-} from "./pusher.js";
+	createRealtimeClientSession,
+	type RealtimeClientSession,
+} from "./session.js";
+import type { SseConnectionManager } from "./sse-connection.js";
 import type { RealtimeClientTransport } from "./transport.js";
 import { RealtimeTxidTracker } from "./txid.js";
 
@@ -583,69 +585,26 @@ export function createRealtimeAPI(opts: {
 	getAuthHeaders?: GetAuthHeaders;
 	fetcher?: typeof fetch;
 	refetchTopic?: (topic: TopicConfig) => Promise<unknown>;
+	pusherConnection?: PusherConnectionManager;
+	sseConnection?: SseConnectionManager;
+	/** @internal Shared owner used by createClient; not a public extension lane. */
+	realtimeSession?: RealtimeClientSession;
 }): RealtimeAPI {
-	let transport: RealtimeClientTransport | null = null;
-	let transportPromise: Promise<RealtimeClientTransport> | null = null;
-	let generation = 0;
-	const pending = new Set<object>();
 	const txids = new RealtimeTxidTracker();
-	const fetcher = opts.fetcher ?? globalThis.fetch;
-
-	const createSse = () =>
-		new RealtimeMultiplexer(
-			opts.baseUrl,
-			opts.withCredentials,
-			opts.debounceMs,
-			{},
-			opts.getAuthHeaders,
-			fetcher,
-		);
-
-	const getOrCreate = async (): Promise<RealtimeClientTransport> => {
-		if (transport) return transport;
-		if (!transportPromise) {
-			const selectedGeneration = generation;
-			transportPromise = (async () => {
-				try {
-					const authHeaders = await opts.getAuthHeaders?.();
-					const response = await fetcher(`${opts.baseUrl}/realtime/config`, {
-						headers: authHeaders,
-						credentials: opts.withCredentials ? "include" : "omit",
-					});
-					if (
-						response.ok &&
-						response.headers.get("content-type")?.includes("application/json")
-					) {
-						const selected = (await response.json()) as
-							| { transport: "sse" }
-							| { transport: "shared-provider"; config: PusherRealtimeConfig };
-						if (
-							selected.transport === "shared-provider" &&
-							selected.config?.provider === "pusher" &&
-							typeof selected.config.key === "string" &&
-							opts.refetchTopic
-						) {
-							return new PusherRealtimeTransport({
-								baseUrl: opts.baseUrl,
-								fetcher,
-								getAuthHeaders: opts.getAuthHeaders,
-								config: selected.config,
-								refetchTopic: opts.refetchTopic,
-							});
-						}
-					}
-				} catch {
-					// Backward compatibility with servers predating realtime/config.
-				}
-				return createSse();
-			})().then((selected) => {
-				if (selectedGeneration !== generation) selected.destroy();
-				else transport = selected;
-				return selected;
-			});
-		}
-		return transportPromise;
-	};
+	const ownsSession = opts.realtimeSession === undefined;
+	const realtimeSession =
+		opts.realtimeSession ??
+		createRealtimeClientSession({
+			baseUrl: opts.baseUrl,
+			withCredentials: opts.withCredentials,
+			debounceMs: opts.debounceMs,
+			getAuthHeaders: opts.getAuthHeaders,
+			fetcher: opts.fetcher,
+			refetchTopic: opts.refetchTopic,
+			pusherConnection: opts.pusherConnection,
+			sseConnection: opts.sseConnection,
+		});
+	const subscriptions = new Set<() => void>();
 
 	const subscribeEvents = (
 		topic: TopicConfig,
@@ -654,55 +613,41 @@ export function createRealtimeAPI(opts: {
 		customId?: string,
 		onError?: (error: Error) => void,
 	) => {
-		const subscriptionGeneration = generation;
 		const txidTopic = txids.registerTopic();
-		const marker = {};
-		pending.add(marker);
 		let stopped = false;
-		let stopInner: (() => void) | undefined;
-		void getOrCreate()
-			.then((selected) => {
-				pending.delete(marker);
-				if (stopped || subscriptionGeneration !== generation) return;
-				stopInner = selected.subscribe(
-					topic,
-					(event) => {
-						txids.observe(event, txidTopic);
-						callback(event);
-					},
-					signal,
-					customId,
-					onError,
-				);
-			})
-			.catch((error) => {
-				pending.delete(marker);
-				txids.unregisterTopic(txidTopic);
-				onError?.(error instanceof Error ? error : new Error(String(error)));
-			});
-		return () => {
+		const stopInner = realtimeSession.subscribe(
+			topic,
+			(event) => {
+				txids.observe(event, txidTopic);
+				callback(event);
+			},
+			signal,
+			customId,
+			onError,
+		);
+		const stop = () => {
+			if (stopped) return;
 			stopped = true;
-			pending.delete(marker);
+			subscriptions.delete(stop);
 			txids.unregisterTopic(txidTopic);
-			stopInner?.();
+			stopInner();
 		};
+		subscriptions.add(stop);
+		return stop;
 	};
 
 	const eventFacade: RealtimeClientTransport = {
 		subscribe: subscribeEvents,
 		destroy: () => {
-			generation += 1;
-			pending.clear();
-			transport?.destroy();
-			transport = null;
-			transportPromise = null;
+			for (const stop of subscriptions) stop();
+			if (ownsSession) realtimeSession.destroy();
 			txids.clear();
 		},
 		get topicCount() {
-			return transport?.topicCount ?? pending.size;
+			return realtimeSession.topicCount;
 		},
 		get subscriberCount() {
-			return transport?.subscriberCount ?? pending.size;
+			return realtimeSession.subscriberCount;
 		},
 	};
 
@@ -763,10 +708,10 @@ export function createRealtimeAPI(opts: {
 		awaitMutation: (result, signal) => txids.awaitMutation(result, signal),
 		destroy: eventFacade.destroy,
 		get topicCount() {
-			return transport?.topicCount ?? pending.size;
+			return realtimeSession.topicCount;
 		},
 		get subscriberCount() {
-			return transport?.subscriberCount ?? pending.size;
+			return realtimeSession.subscriberCount;
 		},
 	};
 }

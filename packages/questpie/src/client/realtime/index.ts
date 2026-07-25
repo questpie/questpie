@@ -8,6 +8,7 @@ export type {
 	RealtimeTopicRejectedDetails,
 	RealtimeTopicRejectedPayload,
 } from "../../shared/realtime-error.js";
+export { RealtimeCrdtBindingRejectedError } from "./crdt-error.js";
 export {
 	applyRealtimeFindEvent,
 	applyRealtimeScalarEvent,

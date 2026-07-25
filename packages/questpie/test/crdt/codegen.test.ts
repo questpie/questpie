@@ -19,9 +19,7 @@ import {
 
 describe("CRDT registry", () => {
 	it("derives one deterministic collection/global aggregate registry", () => {
-		const awareness = z
-			.object({ activeField: z.enum(["title", "tags", "content"]).optional() })
-			.strict();
+		const awareness = z.object({ name: z.string().max(64) }).strict();
 		const articles = collection("articles")
 			.fields(({ f }) => ({
 				title: f

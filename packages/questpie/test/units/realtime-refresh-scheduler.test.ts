@@ -4,6 +4,7 @@ import type { RealtimeObservation } from "../../src/server/modules/core/integrat
 import {
 	RealtimeRefreshScheduler,
 	resolveRealtimeAccessKey,
+	resolveRealtimeSubscriptionScope,
 } from "../../src/server/modules/core/integrated/realtime/refresh-scheduler.js";
 import type {
 	RealtimeChangeEvent,
@@ -774,7 +775,7 @@ describe("realtime scheduler", () => {
 });
 
 describe("realtime scheduler access keys", () => {
-	it("uses session identity by default and only shares through an explicit key", async () => {
+	it("isolates stable principal, scope, and locale identity", async () => {
 		const base = {
 			locale: "en",
 			stage: "published",
@@ -800,10 +801,96 @@ describe("realtime scheduler access keys", () => {
 		const aliceDefault = await resolveRealtimeAccessKey("edge-a", alice);
 		const bobDefault = await resolveRealtimeAccessKey("edge-b", bob);
 		expect(aliceDefault).not.toBe(bobDefault);
+		expect(
+			await resolveRealtimeAccessKey("edge-c", {
+				...alice,
+				principal: {
+					...alice.principal,
+					session: { id: "session-c" },
+				},
+			}),
+		).toBe(aliceDefault);
+		expect(
+			await resolveRealtimeAccessKey("edge-a", { ...alice, locale: "sk" }),
+		).not.toBe(aliceDefault);
+		expect(
+			await resolveRealtimeAccessKey(
+				"edge-a",
+				alice,
+				undefined,
+				await resolveRealtimeSubscriptionScope(alice, () => "scope-a"),
+			),
+		).not.toBe(
+			await resolveRealtimeAccessKey(
+				"edge-a",
+				alice,
+				undefined,
+				await resolveRealtimeSubscriptionScope(alice, () => "scope-b"),
+			),
+		);
 
 		const resolver = async () => "public-read";
 		expect(await resolveRealtimeAccessKey("edge-a", alice, resolver)).toBe(
 			await resolveRealtimeAccessKey("edge-b", bob, resolver),
 		);
+
+		const failingResolver = async () => {
+			throw new Error("scope backend unavailable");
+		};
+		expect(
+			await resolveRealtimeAccessKey("edge-a", alice, failingResolver),
+		).not.toBe(
+			await resolveRealtimeAccessKey("edge-b", alice, failingResolver),
+		);
+		const invalidResolver = async () => "x".repeat(257);
+		expect(
+			await resolveRealtimeAccessKey("edge-a", alice, invalidResolver),
+		).not.toBe(
+			await resolveRealtimeAccessKey("edge-b", alice, invalidResolver),
+		);
+	});
+
+	it("treats null as unscoped and rejects unbounded scope output", async () => {
+		const context = {
+			locale: "en",
+			principal: { kind: "user", user: { id: "alice" } },
+		};
+		expect(
+			await resolveRealtimeAccessKey(
+				"edge-a",
+				context,
+				undefined,
+				await resolveRealtimeSubscriptionScope(context, () => null),
+			),
+		).toBe(await resolveRealtimeAccessKey("edge-a", context));
+		await expect(
+			resolveRealtimeSubscriptionScope(context, () => "x".repeat(257)),
+		).rejects.toThrow("at most 256 bytes");
+	});
+
+	it("freezes one server scope value for all groups on an edge", async () => {
+		let calls = 0;
+		const context = {
+			locale: "en",
+			principal: { kind: "user", user: { id: "alice" } },
+		};
+		const frozen = resolveRealtimeSubscriptionScope(context, () => {
+			calls += 1;
+			return `scope-${calls}`;
+		});
+		const first = await resolveRealtimeAccessKey(
+			"edge-a",
+			context,
+			undefined,
+			await frozen,
+		);
+		const second = await resolveRealtimeAccessKey(
+			"edge-a",
+			context,
+			undefined,
+			await frozen,
+		);
+		expect(first).toBe(second);
+		expect(calls).toBe(1);
 	});
 });

@@ -35,7 +35,6 @@ import {
 	questpieCrdtSnapshotTable,
 	questpieCrdtSubjectTable,
 	questpieCrdtTables,
-	questpieCrdtTicketTable,
 } from "../../../src/server/modules/core/integrated/crdt/schema.js";
 
 const RESOURCE_ID = "00000000-0000-4000-8000-000000000101";
@@ -746,7 +745,6 @@ async function insertLiveSession(
 	},
 ): Promise<void> {
 	const subjectId = "00000000-0000-4000-8000-000000000201";
-	const ticketId = "00000000-0000-4000-8000-000000000202";
 	const sessionId = "00000000-0000-4000-8000-000000000203";
 	const credentialFingerprint = Buffer.alloc(32, 0x21);
 	const expiresAt = new Date(Date.now() + 60_000);
@@ -757,36 +755,14 @@ async function insertLiveSession(
 		subjectKey: "user-1",
 		subjectHash: Buffer.alloc(32, 0x20),
 	});
-	await db.insert(questpieCrdtTicketTable).values({
-		id: ticketId,
-		resourceId: input.resource.id,
-		resourceEpochId: input.resourceEpochId,
-		definitionId: input.resource.definitionId,
-		schemaId: input.schemaId,
-		subjectId,
-		secretHash: Buffer.alloc(32, 0x22),
-		credentialFingerprint,
-		audience: "test",
-		requestedMode: 2,
-		effectiveMode: 2,
-		protocolMajor: 1,
-		protocolMinor: 0,
-		resourceReadFence: input.resource.readFence,
-		resourceEditFence: input.resource.editFence,
-		ownerPolicyRevision: input.resource.ownerPolicyRevision,
-		subjectReadFence: 0n,
-		subjectEditFence: 0n,
-		sessionGeneration: input.resource.sessionGeneration,
-		authorityExpiresAt: expiresAt,
-		expiresAt,
-		redeemedAt: new Date(),
-	});
 	await db.insert(questpieCrdtSessionTable).values({
 		id: sessionId,
-		ticketId,
 		resourceId: input.resource.id,
+		resourceIncarnationKey: input.resource.incarnationKey,
 		resourceEpochId: input.resourceEpochId,
+		aggregateEpoch: 1n,
 		schemaId: input.schemaId,
+		schemaVersion: BigInt(manifest.version),
 		subjectId,
 		credentialFingerprint,
 		requestedMode: 2,
@@ -799,6 +775,8 @@ async function insertLiveSession(
 		subjectEditFence: 0n,
 		authorityExpiresAt: expiresAt,
 		lastSeenCommitSeq: 0n,
+		edgeOwnerGeneration: 0n,
+		deliveryGeneration: 0n,
 		leaseExpiresAt: expiresAt,
 	});
 }

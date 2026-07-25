@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { and, asc, desc, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm";
 
 import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
 import type {
@@ -8,12 +8,23 @@ import type {
 	CrdtEngineReplica,
 	CrdtFieldEngine,
 } from "#questpie/shared/crdt-engine.js";
+import {
+	hashCrdtSubmittedAggregateBundle,
+	stageCrdtAggregateBundle,
+} from "#questpie/shared/crdt-engine.js";
 
-import { loadCrdtAuthoritativeReplica } from "./append-store.js";
+import {
+	createCrdtAppendStore,
+	type CrdtAppendReceipt,
+	loadCrdtAuthoritativeReplica,
+	prepareCrdtAppend,
+} from "./append-store.js";
 import {
 	questpieCrdtBindingTable,
-	questpieCrdtCommitTable,
 	questpieCrdtResourceEpochTable,
+	questpieCrdtResourceTable,
+	questpieCrdtSchemaCompatibilityFieldTable,
+	questpieCrdtSchemaCompatibilityTable,
 	questpieCrdtSchemaTable,
 	questpieCrdtSessionGrantTable,
 	questpieCrdtSessionTable,
@@ -22,30 +33,19 @@ import {
 	questpieCrdtUpdateTable,
 } from "./schema.js";
 import type {
-	CrdtSyncBasis,
-	CrdtSyncCommit,
-	CrdtSyncField,
+	CrdtSyncAuthorityBasis,
+	CrdtSyncReceiptQueryEntry,
 	CrdtSyncSource,
-	CrdtSyncUpdateCommit,
+	CrdtSyncSubmittedUpdate,
 } from "./sync.js";
 import { CrdtSyncRecoveryRequiredError } from "./sync.js";
 
 type CrdtDatabase = AnyDrizzleClient<any>;
 type AnyEngine = CrdtFieldEngine<CrdtEngineFormat, any>;
-
-type MaterializedField = {
-	engine: AnyEngine;
-	replica: CrdtEngineReplica<CrdtEngineFormat, any>;
-};
-
-const materializedBases = new WeakMap<object, Map<number, MaterializedField>>();
-const activeFieldsByBasis = new WeakMap<object, Map<number, CrdtSyncField>>();
-const pendingFieldsByBasis = new WeakMap<object, Map<number, CrdtSyncField>>();
+type AppendStoreOptions = Parameters<typeof createCrdtAppendStore>[1];
 
 /**
- * Durable aggregate synchronization source. Basis materialization happens in
- * one repeatable-read transaction so independently authorized fields cannot
- * observe mixed aggregate cuts.
+ * Durable append and receipt source for the bounded Fetch exchange.
  */
 export function createCrdtDatabaseSyncSource(
 	db: CrdtDatabase,
@@ -54,430 +54,192 @@ export function createCrdtDatabaseSyncSource(
 			format: number;
 			formatVersion: number;
 		}): AnyEngine;
+		lockOwnerRow: AppendStoreOptions["lockOwnerRow"];
+		publishNotice: NonNullable<AppendStoreOptions["publishNotice"]>;
 	}>,
 ): CrdtSyncSource {
+	const appendStore = createCrdtAppendStore(db, {
+		lockOwnerRow: input.lockOwnerRow,
+		publishNotice: input.publishNotice,
+	});
 	const source: CrdtSyncSource = {
-		async captureBasis(sessionId) {
+		async captureAuthorityBasis(sessionId) {
 			return db.transaction(
-				async (transaction) => {
-					const tx = transaction as CrdtDatabase;
-					const [session] = await tx
-						.select()
-						.from(questpieCrdtSessionTable)
-						.where(
-							and(
-								eq(questpieCrdtSessionTable.id, sessionId),
-								isNull(questpieCrdtSessionTable.closedAt),
-							),
-						)
-						.limit(1);
-					if (!session) throw rejected();
-					const [epoch] = await tx
-						.select()
-						.from(questpieCrdtResourceEpochTable)
-						.where(
-							and(
-								eq(
-									questpieCrdtResourceEpochTable.resourceId,
-									session.resourceId,
-								),
-								eq(questpieCrdtResourceEpochTable.id, session.resourceEpochId),
-								eq(questpieCrdtResourceEpochTable.schemaId, session.schemaId),
-								eq(questpieCrdtResourceEpochTable.status, 1),
-							),
-						)
-						.limit(1);
-					if (!epoch) throw rejected();
-					const [schema] = await tx
-						.select({ version: questpieCrdtSchemaTable.schemaVersion })
-						.from(questpieCrdtSchemaTable)
-						.where(eq(questpieCrdtSchemaTable.id, session.schemaId))
-						.limit(1);
-					if (
-						!schema ||
-						schema.version < 0n ||
-						schema.version > BigInt(0xffff_ffff)
-					) {
-						throw rejected();
-					}
-					const grants = await tx
-						.select({
-							bindingId: questpieCrdtSessionGrantTable.bindingId,
-							fieldSlot: questpieCrdtSessionGrantTable.fieldSlot,
-							fieldEpoch: questpieCrdtSessionGrantTable.fieldEpoch,
-							grant: questpieCrdtSessionGrantTable.grant,
-							fieldReadFence: questpieCrdtSessionGrantTable.fieldReadFence,
-							fieldEditFence: questpieCrdtSessionGrantTable.fieldEditFence,
-						})
-						.from(questpieCrdtSessionGrantTable)
-						.where(eq(questpieCrdtSessionGrantTable.sessionId, sessionId))
-						.orderBy(asc(questpieCrdtSessionGrantTable.fieldSlot));
-					const readable = grants.filter((grant) => grant.grant >= 0);
-					const bindings =
-						readable.length === 0
-							? []
-							: await tx
-									.select()
-									.from(questpieCrdtBindingTable)
-									.where(
-										and(
-											eq(
-												questpieCrdtBindingTable.resourceId,
-												session.resourceId,
-											),
-											inArray(
-												questpieCrdtBindingTable.id,
-												readable.map((grant) => grant.bindingId),
-											),
-											eq(questpieCrdtBindingTable.status, 1),
-											isNull(questpieCrdtBindingTable.retiredAt),
-										),
-									);
-					const bindingById = new Map(
-						bindings.map((binding) => [binding.id, binding]),
-					);
-					const fields: CrdtSyncField[] = [];
-					const materialized = new Map<number, MaterializedField>();
-					const engines = new Map<number, AnyEngine>();
-					for (const grant of readable) {
-						const binding = bindingById.get(grant.bindingId);
-						if (
-							!binding ||
-							binding.fieldSlot !== grant.fieldSlot ||
-							binding.fieldEpoch !== grant.fieldEpoch ||
-							binding.readFence !== grant.fieldReadFence ||
-							binding.editFence !== grant.fieldEditFence
-						) {
-							throw rejected();
-						}
-						const engine = input.resolveEngine(binding);
-						if (
-							engine.formatVersion !== binding.formatVersion ||
-							(engine.format === "text" ? 1 : 2) !== binding.format
-						) {
-							throw rejected();
-						}
-						engines.set(binding.fieldSlot, engine);
-					}
-					const selected = await materializeCrdtAggregateAtCut(tx, {
-						resourceId: session.resourceId,
-						resourceEpochId: session.resourceEpochId,
-						schemaId: session.schemaId,
-						targetCommitSeq: epoch.headCommitSeq,
-						currentManifestId: epoch.currentSnapshotManifestId,
-						previousManifestId: epoch.previousSnapshotManifestId,
-						bindings,
-						engines,
-						targetFieldCursors: new Map(
-							bindings.map((binding) => [binding.id, binding.headFieldCursor]),
-						),
-					});
-					if (!selected) throw rejected();
-					let totalBytes = 0;
-					for (const grant of readable) {
-						const binding = bindingById.get(grant.bindingId)!;
-						const replica = selected.get(binding.fieldSlot);
-						const engine = engines.get(binding.fieldSlot)!;
-						if (!replica) throw rejected();
-						const bytes = await engine.snapshot(replica);
-						totalBytes += bytes.byteLength;
-						if (totalBytes > 64 * 1024 * 1024) throw rejected();
-						fields.push(
-							Object.freeze({
-								bindingId: binding.id,
-								fieldSlot: binding.fieldSlot,
-								fieldEpoch: binding.fieldEpoch,
-								grant: grant.grant as 0 | 1,
-								formatVersion: binding.formatVersion,
-								readFence: binding.readFence,
-								editFence: binding.editFence,
-								fieldCursor: replica.basis.fieldCursor,
-								bytes,
-							}),
-						);
-						materialized.set(binding.fieldSlot, { engine, replica });
-					}
-					const basis = Object.freeze({
-						sessionId,
-						resourceId: session.resourceId,
-						resourceEpochId: session.resourceEpochId,
-						schemaId: session.schemaId,
-						aggregateEpoch: epoch.aggregateEpoch,
-						schemaVersion: Number(schema.version),
-						commitHead: epoch.headCommitSeq,
-						fields: Object.freeze(fields),
-					});
-					materializedBases.set(basis, materialized);
-					activeFieldsByBasis.set(
-						basis,
-						new Map(fields.map((field) => [field.fieldSlot, field])),
-					);
-					pendingFieldsByBasis.set(basis, new Map());
-					return basis;
-				},
+				(transaction) =>
+					captureCrdtAuthorityBasis(transaction as CrdtDatabase, sessionId),
 				{
 					accessMode: "read only",
 					isolationLevel: "repeatable read",
 				},
 			);
 		},
-		async registerCursor(sessionId, cursor) {
-			const updated = await db
-				.update(questpieCrdtSessionTable)
-				.set({ lastSeenCommitSeq: cursor })
-				.where(
-					and(
-						eq(questpieCrdtSessionTable.id, sessionId),
-						isNull(questpieCrdtSessionTable.closedAt),
-						lte(questpieCrdtSessionTable.lastSeenCommitSeq, cursor),
-					),
-				)
-				.returning({ id: questpieCrdtSessionTable.id });
-			if (updated.length !== 1) throw rejected();
-		},
-		async verifyProof(basis, { field, proof }) {
-			return createCrdtBasisProofVerifier(basis)({ field, proof });
-		},
-		async validateBasis(basis) {
-			await validateBasisAuthority(db, basis);
-		},
-		async activateField(basis, field) {
-			const active = activeFieldsByBasis.get(basis);
-			const pending = pendingFieldsByBasis.get(basis);
-			if (!active || pending?.get(field.fieldSlot) !== field) throw rejected();
-			active.set(field.fieldSlot, field);
-			pending.delete(field.fieldSlot);
-		},
-		async readHead(basis) {
-			await validateBasisAuthority(db, basis);
-			const [epoch] = await db
-				.select({ head: questpieCrdtResourceEpochTable.headCommitSeq })
-				.from(questpieCrdtResourceEpochTable)
-				.where(
-					and(
-						eq(questpieCrdtResourceEpochTable.resourceId, basis.resourceId),
-						eq(questpieCrdtResourceEpochTable.id, basis.resourceEpochId),
-						eq(
-							questpieCrdtResourceEpochTable.aggregateEpoch,
-							basis.aggregateEpoch,
-						),
-						eq(questpieCrdtResourceEpochTable.status, 1),
-					),
-				)
-				.limit(1);
-			if (!epoch) throw rejected();
-			return epoch.head;
-		},
-		async readCommits(basis, after, through) {
-			if (through < after) throw rejected();
-			const activeFields = activeFieldsByBasis.get(basis);
-			const pendingFields = pendingFieldsByBasis.get(basis);
-			const materialized = materializedBases.get(basis);
-			if (!activeFields || !pendingFields || !materialized) throw rejected();
-			const visibleFields = [...activeFields.values()];
-			const commits = await db
-				.select({
-					commitSeq: questpieCrdtCommitTable.commitSeq,
-					kind: questpieCrdtCommitTable.kind,
-					schemaId: questpieCrdtCommitTable.schemaId,
-					deliveryCommitId: questpieCrdtCommitTable.deliveryCommitId,
-					controlPayload: questpieCrdtCommitTable.controlPayload,
-				})
-				.from(questpieCrdtCommitTable)
-				.where(
-					and(
-						eq(questpieCrdtCommitTable.resourceId, basis.resourceId),
-						eq(questpieCrdtCommitTable.resourceEpochId, basis.resourceEpochId),
-						gt(questpieCrdtCommitTable.commitSeq, after),
-						lte(questpieCrdtCommitTable.commitSeq, through),
-					),
-				)
-				.orderBy(asc(questpieCrdtCommitTable.commitSeq));
-			const updates =
-				commits.length === 0 || visibleFields.length === 0
-					? []
-					: await db
-							.select()
-							.from(questpieCrdtUpdateTable)
-							.where(
-								and(
-									eq(questpieCrdtUpdateTable.resourceId, basis.resourceId),
-									eq(
-										questpieCrdtUpdateTable.resourceEpochId,
-										basis.resourceEpochId,
+
+		async submitUpdate(basis, submitted) {
+			const update = snapshotSubmittedUpdate(submitted);
+			assertSubmittedUpdateMatchesBasis(basis, update);
+			const submittedHash = await hashCrdtSubmittedAggregateBundle({
+				aggregateEpoch: update.aggregateEpoch,
+				schemaVersion: update.schemaVersion,
+				parts: update.parts,
+			});
+			const updateId = bytesToUuid(update.updateId);
+			const context = await readCurrentAppendContext(db, basis, "receipt");
+			const [existing] = await appendStore.reconcileReceipts({
+				resourceId: basis.resourceId,
+				resourceEpochId: basis.resourceEpochId,
+				sessionId: basis.sessionId,
+				subjectId: context.session.subjectId,
+				authority: context.authority,
+				entries: [
+					{
+						updateId,
+						submittedBundleHash: submittedHash,
+						submittedSchemaVersion: BigInt(update.schemaVersion),
+					},
+				],
+			});
+			if (existing) return toSyncReceipt(existing);
+			try {
+				const receipt = await appendStore.appendWithRestage(async () => {
+					const current = await readCurrentAppendContext(db, basis, "edit");
+					const grantsBySlot = new Map(
+						current.grants.map((grant) => [grant.fieldSlot, grant]),
+					);
+					const bindingsBySlot = new Map(
+						current.activeBindings.map((binding) => [
+							binding.fieldSlot,
+							binding,
+						]),
+					);
+					const compatibleParts =
+						update.schemaVersion === basis.schemaVersion
+							? update.parts.map((part) => ({
+									submitted: part,
+									fieldSlot: part.fieldSlot,
+								}))
+							: await mapCompatibleSubmittedParts(db, {
+									basis,
+									update,
+									definitionId: current.resource.definitionId,
+									activeBindings: current.activeBindings,
+								});
+					const authoritative = await Promise.all(
+						compatibleParts.map(({ submitted, fieldSlot }) => {
+							const grant = grantsBySlot.get(fieldSlot);
+							const binding = bindingsBySlot.get(fieldSlot);
+							if (
+								!grant ||
+								!binding ||
+								grant.grant !== 1 ||
+								grant.bindingId !== binding.id ||
+								grant.stableFieldId !== binding.stableFieldId ||
+								grant.fieldEpoch !== binding.fieldEpoch ||
+								grant.formatVersion !== binding.formatVersion ||
+								grant.fieldReadFence !== binding.readFence ||
+								grant.fieldEditFence !== binding.editFence ||
+								(update.schemaVersion === basis.schemaVersion &&
+									(submitted.fieldEpoch !== binding.fieldEpoch ||
+										submitted.formatVersion !== binding.formatVersion))
+							) {
+								throw rejected();
+							}
+							const engine = input.resolveEngine(binding);
+							if (
+								engine.formatVersion !== binding.formatVersion ||
+								(engine.format === "text" ? 1 : 2) !== binding.format
+							) {
+								throw rejected();
+							}
+							return loadCrdtAuthoritativeReplica(db, {
+								bindingId: binding.id,
+								engine,
+							}).then((replica) => ({ engine, replica }));
+						}),
+					);
+					const staged = await stageCrdtAggregateBundle({
+						aggregateEpoch: update.aggregateEpoch,
+						submittedSchemaVersion: update.schemaVersion,
+						canonicalSchemaVersion: current.schemaVersion,
+						parts: compatibleParts.map(({ submitted, fieldSlot }, index) => ({
+							fieldSlot,
+							engine: authoritative[index]!.engine,
+							replica: authoritative[index]!.replica.replica,
+							update: submitted.bytes,
+							submitted: {
+								fieldSlot: submitted.fieldSlot,
+								fieldEpoch: submitted.fieldEpoch,
+								formatVersion: submitted.formatVersion,
+								baseFieldCursor: submitted.baseFieldCursor,
+							},
+						})),
+					});
+					return prepareCrdtAppend({
+						resourceId: basis.resourceId,
+						resourceEpochId: basis.resourceEpochId,
+						definitionId: current.resource.definitionId,
+						schemaId: basis.schemaId,
+						sessionId: basis.sessionId,
+						subjectId: current.session.subjectId,
+						updateId,
+						submittedSchemaId:
+							update.schemaVersion === basis.schemaVersion
+								? basis.schemaId
+								: await resolveSchemaId(
+										db,
+										current.resource.definitionId,
+										update.schemaVersion,
 									),
-									gt(questpieCrdtUpdateTable.commitSeq, after),
-									lte(questpieCrdtUpdateTable.commitSeq, through),
-									inArray(
-										questpieCrdtUpdateTable.bindingId,
-										visibleFields.map((field) => field.bindingId),
-									),
-								),
-							)
-							.orderBy(
-								asc(questpieCrdtUpdateTable.commitSeq),
-								asc(questpieCrdtUpdateTable.fieldSlot),
-							);
-			const visibleSlots = new Set(
-				visibleFields.map((field) => field.fieldSlot),
-			);
-			const visibleBySlot = new Map(
-				visibleFields.map((field) => [field.fieldSlot, field]),
-			);
-			if (commits.some((commit) => commit.schemaId !== basis.schemaId)) {
-				throw new CrdtSyncRecoveryRequiredError();
+						decisionExpiresAt: new Date(Date.now() + 5_000),
+						authority: current.authority,
+						overlay: current.activeBindings.map((binding) => ({
+							bindingId: binding.id,
+							stableFieldId: binding.stableFieldId,
+							fieldEpoch: binding.fieldEpoch,
+							fieldCursor: binding.headFieldCursor,
+							readFence: binding.readFence,
+							editFence: binding.editFence,
+						})),
+						staged,
+						authoritative: authoritative.map((part) => part.replica),
+					});
+				});
+				return toSyncReceipt(receipt);
+			} catch (error) {
+				if (error instanceof CrdtSyncRecoveryRequiredError) throw error;
+				throw rejected();
 			}
-			const updatesByCommit = new Map<
-				bigint,
-				CrdtSyncUpdateCommit["fields"][number][]
-			>();
-			const expectedCursors = new Map<number, bigint>();
-			for (const field of visibleFields) {
-				if (after === basis.commitHead) {
-					expectedCursors.set(field.fieldSlot, field.fieldCursor);
-					continue;
-				}
-				const [latest] = await db
-					.select({ fieldCursor: questpieCrdtUpdateTable.fieldCursor })
-					.from(questpieCrdtUpdateTable)
-					.where(
-						and(
-							eq(questpieCrdtUpdateTable.resourceId, basis.resourceId),
-							eq(
-								questpieCrdtUpdateTable.resourceEpochId,
-								basis.resourceEpochId,
-							),
-							eq(questpieCrdtUpdateTable.bindingId, field.bindingId),
-							lte(questpieCrdtUpdateTable.commitSeq, after),
-						),
-					)
-					.orderBy(desc(questpieCrdtUpdateTable.commitSeq))
-					.limit(1);
-				expectedCursors.set(
-					field.fieldSlot,
-					latest?.fieldCursor ?? field.fieldCursor,
-				);
-			}
-			for (const update of updates) {
-				if (!visibleSlots.has(update.fieldSlot)) continue;
-				const field = visibleBySlot.get(update.fieldSlot);
-				const expectedCursor = expectedCursors.get(update.fieldSlot);
+		},
+		async reconcileReceipts(basis, submittedEntries) {
+			const entries = snapshotReceiptEntries(submittedEntries);
+			if (entries.length === 0) return [];
+			for (const entry of entries) {
 				if (
-					!field ||
-					expectedCursor === undefined ||
-					update.bindingId !== field.bindingId ||
-					update.schemaId !== basis.schemaId ||
-					update.fieldEpoch !== field.fieldEpoch ||
-					update.formatVersion !== field.formatVersion ||
-					update.baseFieldCursor !== expectedCursor ||
-					update.fieldCursor !== expectedCursor + 1n ||
-					update.sizeBytes !== update.bytes.byteLength ||
-					!equalBytes(
-						createHash("sha256").update(update.bytes).digest(),
-						update.checksum,
-					)
+					entry.aggregateEpoch !== basis.aggregateEpoch ||
+					entry.schemaVersion > basis.schemaVersion
 				) {
 					throw rejected();
 				}
-				expectedCursors.set(update.fieldSlot, update.fieldCursor);
-				const fields = updatesByCommit.get(update.commitSeq) ?? [];
-				fields.push({
-					fieldSlot: update.fieldSlot,
-					fieldEpoch: update.fieldEpoch,
-					formatVersion: update.formatVersion,
-					fieldCursor: update.fieldCursor,
-					bytes: new Uint8Array(update.bytes),
-				});
-				updatesByCommit.set(update.commitSeq, fields);
 			}
-			return Promise.all(
-				commits.map(async (commit): Promise<CrdtSyncCommit> => {
-					if (commit.kind === 1) {
-						return Object.freeze({
-							commitSeq: commit.commitSeq,
-							kind: 1 as const,
-							commitId: uuidBytes(commit.deliveryCommitId),
-							fields: Object.freeze(
-								updatesByCommit.get(commit.commitSeq) ?? [],
-							),
-						});
-					}
-					if (commit.kind !== 2) {
-						throw new CrdtSyncRecoveryRequiredError();
-					}
-					const control = parseFieldResetControl(commit.controlPayload);
-					const source = [
-						...pendingFields.values(),
-						...activeFields.values(),
-					].find((field) => field.bindingId === control.sourceBindingId);
-					if (!source) throw new CrdtSyncRecoveryRequiredError();
-					const [target] = await db
-						.select()
-						.from(questpieCrdtBindingTable)
-						.where(
-							and(
-								eq(questpieCrdtBindingTable.resourceId, basis.resourceId),
-								eq(questpieCrdtBindingTable.id, control.targetBindingId),
-								eq(questpieCrdtBindingTable.schemaId, basis.schemaId),
-								eq(questpieCrdtBindingTable.status, 1),
-								isNull(questpieCrdtBindingTable.retiredAt),
-							),
-						)
-						.limit(1);
-					if (
-						!target ||
-						target.stableFieldId !== control.stableFieldId ||
-						target.fieldSlot !== source.fieldSlot ||
-						target.fieldEpoch !== control.targetFieldEpoch ||
-						target.headFieldCursor !== 0n
-					) {
-						throw new CrdtSyncRecoveryRequiredError();
-					}
-					const engine = input.resolveEngine(target);
-					if (
-						engine.formatVersion !== target.formatVersion ||
-						(engine.format === "text" ? 1 : 2) !== target.format
-					) {
-						throw new CrdtSyncRecoveryRequiredError();
-					}
-					let authoritative;
-					try {
-						authoritative = await loadCrdtAuthoritativeReplica(db, {
-							bindingId: target.id,
-							engine,
-						});
-					} catch {
-						throw new CrdtSyncRecoveryRequiredError();
-					}
-					const bytes = await engine.snapshot(authoritative.replica);
-					const field = Object.freeze({
-						bindingId: target.id,
-						fieldSlot: target.fieldSlot,
-						fieldEpoch: target.fieldEpoch,
-						grant: source.grant,
-						formatVersion: target.formatVersion,
-						readFence: target.readFence,
-						editFence: target.editFence,
-						fieldCursor: target.headFieldCursor,
-						bytes,
-					});
-					pendingFields.set(field.fieldSlot, field);
-					materialized.set(field.fieldSlot, {
-						engine,
-						replica: authoritative.replica,
-					});
-					return Object.freeze({
-						commitSeq: commit.commitSeq,
-						kind: 2 as const,
-						commitId: uuidBytes(commit.deliveryCommitId),
-						field,
-						transition: Object.freeze({
-							fieldSlot: target.fieldSlot,
-							grant: source.grant,
-							fieldEpoch: target.fieldEpoch,
-							headFieldCursor: target.headFieldCursor,
-						}),
-					});
+			const context = await readCurrentAppendContext(db, basis, "receipt");
+			const receipts = await appendStore.reconcileReceipts({
+				resourceId: basis.resourceId,
+				resourceEpochId: basis.resourceEpochId,
+				sessionId: basis.sessionId,
+				subjectId: context.session.subjectId,
+				authority: context.authority,
+				entries: entries.map((entry) => ({
+					updateId: bytesToUuid(entry.updateId),
+					submittedBundleHash: entry.submittedHash,
+					submittedSchemaVersion: BigInt(entry.schemaVersion),
+				})),
+			});
+			const receiptsById = new Map(
+				receipts.map((receipt) => [receipt.updateId, receipt]),
+			);
+			return Object.freeze(
+				entries.flatMap((entry) => {
+					const receipt = receiptsById.get(bytesToUuid(entry.updateId));
+					return receipt ? [toSyncReceipt(receipt)] : [];
 				}),
 			);
 		},
@@ -485,24 +247,528 @@ export function createCrdtDatabaseSyncSource(
 	return source;
 }
 
-export function createCrdtBasisProofVerifier(basis: CrdtSyncBasis) {
-	const fields = materializedBases.get(basis);
-	if (!fields) throw rejected();
-	return async ({
-		field,
-		proof,
-	}: {
-		field: CrdtSyncField;
-		proof: Uint8Array;
-	}): Promise<Uint8Array | null> => {
-		const materialized = fields.get(field.fieldSlot);
-		if (!materialized) throw rejected();
-		const diff = await materialized.engine.diff({
-			replica: materialized.replica,
-			proof,
+async function captureCrdtAuthorityBasis(
+	db: CrdtDatabase,
+	sessionId: string,
+): Promise<CrdtSyncAuthorityBasis> {
+	const [session] = await db
+		.select()
+		.from(questpieCrdtSessionTable)
+		.where(
+			and(
+				eq(questpieCrdtSessionTable.id, sessionId),
+				isNull(questpieCrdtSessionTable.closedAt),
+				gt(questpieCrdtSessionTable.leaseExpiresAt, sql`clock_timestamp()`),
+				gt(questpieCrdtSessionTable.authorityExpiresAt, sql`clock_timestamp()`),
+			),
+		)
+		.limit(1);
+	if (!session) throw rejected();
+	const [epoch] = await db
+		.select()
+		.from(questpieCrdtResourceEpochTable)
+		.where(
+			and(
+				eq(questpieCrdtResourceEpochTable.resourceId, session.resourceId),
+				eq(questpieCrdtResourceEpochTable.id, session.resourceEpochId),
+				eq(questpieCrdtResourceEpochTable.schemaId, session.schemaId),
+				eq(questpieCrdtResourceEpochTable.status, 1),
+			),
+		)
+		.limit(1);
+	if (!epoch) throw rejected();
+	const [schema] = await db
+		.select({ version: questpieCrdtSchemaTable.schemaVersion })
+		.from(questpieCrdtSchemaTable)
+		.where(eq(questpieCrdtSchemaTable.id, session.schemaId))
+		.limit(1);
+	if (!schema || schema.version < 0n || schema.version > BigInt(0xffff_ffff)) {
+		throw rejected();
+	}
+	const grants = await db
+		.select({
+			bindingId: questpieCrdtSessionGrantTable.bindingId,
+			fieldSlot: questpieCrdtSessionGrantTable.fieldSlot,
+			fieldEpoch: questpieCrdtSessionGrantTable.fieldEpoch,
+			grant: questpieCrdtSessionGrantTable.grant,
+			fieldReadFence: questpieCrdtSessionGrantTable.fieldReadFence,
+			fieldEditFence: questpieCrdtSessionGrantTable.fieldEditFence,
+		})
+		.from(questpieCrdtSessionGrantTable)
+		.where(eq(questpieCrdtSessionGrantTable.sessionId, sessionId))
+		.orderBy(asc(questpieCrdtSessionGrantTable.fieldSlot));
+	const readable = grants.filter((grant) => grant.grant >= 0);
+	const bindings =
+		readable.length === 0
+			? []
+			: await db
+					.select()
+					.from(questpieCrdtBindingTable)
+					.where(
+						and(
+							eq(questpieCrdtBindingTable.resourceId, session.resourceId),
+							inArray(
+								questpieCrdtBindingTable.id,
+								readable.map((grant) => grant.bindingId),
+							),
+							eq(questpieCrdtBindingTable.status, 1),
+							isNull(questpieCrdtBindingTable.retiredAt),
+						),
+					);
+	const bindingsById = new Map(
+		bindings.map((binding) => [binding.id, binding]),
+	);
+	const fields = readable.map((grant) => {
+		const binding = bindingsById.get(grant.bindingId);
+		if (
+			!binding ||
+			(grant.grant !== 0 && grant.grant !== 1) ||
+			binding.schemaId !== session.schemaId ||
+			binding.fieldSlot !== grant.fieldSlot ||
+			binding.fieldEpoch !== grant.fieldEpoch ||
+			binding.readFence !== grant.fieldReadFence ||
+			binding.editFence !== grant.fieldEditFence
+		) {
+			throw rejected();
+		}
+		return Object.freeze({
+			bindingId: binding.id,
+			fieldSlot: binding.fieldSlot,
+			fieldEpoch: binding.fieldEpoch,
+			grant: grant.grant,
+			formatVersion: binding.formatVersion,
+			readFence: binding.readFence,
+			editFence: binding.editFence,
+			fieldCursor: binding.headFieldCursor,
 		});
-		return diff.kind === "current" ? new Uint8Array() : diff.snapshot;
+	});
+	return Object.freeze({
+		sessionId,
+		bindingId: session.bindingId,
+		sessionGeneration: session.generation,
+		deliveryGeneration: session.deliveryGeneration,
+		resourceId: session.resourceId,
+		resourceEpochId: session.resourceEpochId,
+		schemaId: session.schemaId,
+		aggregateEpoch: epoch.aggregateEpoch,
+		schemaVersion: Number(schema.version),
+		fields: Object.freeze(fields),
+	});
+}
+
+function snapshotSubmittedUpdate(
+	input: CrdtSyncSubmittedUpdate,
+): CrdtSyncSubmittedUpdate {
+	const updateId = new Uint8Array(input.updateId);
+	if (updateId.byteLength !== 16) throw rejected();
+	const parts = input.parts.map((part) =>
+		Object.freeze({
+			fieldSlot: part.fieldSlot,
+			fieldEpoch: part.fieldEpoch,
+			formatVersion: part.formatVersion,
+			baseFieldCursor: part.baseFieldCursor,
+			bytes: new Uint8Array(part.bytes),
+		}),
+	);
+	return Object.freeze({
+		updateId,
+		aggregateEpoch: input.aggregateEpoch,
+		schemaVersion: input.schemaVersion,
+		parts: Object.freeze(parts),
+	});
+}
+
+function snapshotReceiptEntries(
+	input: readonly CrdtSyncReceiptQueryEntry[],
+): readonly CrdtSyncReceiptQueryEntry[] {
+	if (input.length > 64) throw rejected();
+	const entries = input.map((entry) => {
+		const updateId = new Uint8Array(entry.updateId);
+		const submittedHash = new Uint8Array(entry.submittedHash);
+		if (updateId.byteLength !== 16 || submittedHash.byteLength !== 32) {
+			throw rejected();
+		}
+		return Object.freeze({
+			updateId,
+			submittedHash,
+			aggregateEpoch: entry.aggregateEpoch,
+			schemaVersion: entry.schemaVersion,
+		});
+	});
+	const ids = entries.map((entry) => bytesToUuid(entry.updateId));
+	if (new Set(ids).size !== ids.length) throw rejected();
+	return Object.freeze(entries);
+}
+
+function assertSubmittedUpdateMatchesBasis(
+	basis: CrdtSyncAuthorityBasis,
+	update: CrdtSyncSubmittedUpdate,
+): void {
+	if (
+		update.aggregateEpoch !== basis.aggregateEpoch ||
+		update.schemaVersion > basis.schemaVersion
+	) {
+		throw rejected();
+	}
+	bytesToUuid(update.updateId);
+}
+
+async function resolveSchemaId(
+	db: CrdtDatabase,
+	definitionId: string,
+	schemaVersion: number,
+): Promise<string> {
+	const schemas = await db
+		.select({ id: questpieCrdtSchemaTable.id })
+		.from(questpieCrdtSchemaTable)
+		.where(
+			and(
+				eq(questpieCrdtSchemaTable.definitionId, definitionId),
+				eq(questpieCrdtSchemaTable.schemaVersion, BigInt(schemaVersion)),
+			),
+		)
+		.limit(2);
+	if (schemas.length !== 1) throw new CrdtSyncRecoveryRequiredError();
+	return schemas[0]!.id;
+}
+
+async function mapCompatibleSubmittedParts(
+	db: CrdtDatabase,
+	input: Readonly<{
+		basis: CrdtSyncAuthorityBasis;
+		update: CrdtSyncSubmittedUpdate;
+		definitionId: string;
+		activeBindings: readonly (typeof questpieCrdtBindingTable.$inferSelect)[];
+	}>,
+): Promise<
+	readonly Readonly<{
+		submitted: CrdtSyncSubmittedUpdate["parts"][number];
+		fieldSlot: number;
+	}>[]
+> {
+	const sourceSchemaId = await resolveSchemaId(
+		db,
+		input.definitionId,
+		input.update.schemaVersion,
+	);
+	const compatibility = await db
+		.select()
+		.from(questpieCrdtSchemaCompatibilityTable)
+		.where(
+			and(
+				eq(
+					questpieCrdtSchemaCompatibilityTable.resourceId,
+					input.basis.resourceId,
+				),
+				eq(
+					questpieCrdtSchemaCompatibilityTable.resourceEpochId,
+					input.basis.resourceEpochId,
+				),
+				eq(
+					questpieCrdtSchemaCompatibilityTable.definitionId,
+					input.definitionId,
+				),
+				gt(
+					questpieCrdtSchemaCompatibilityTable.expiresAt,
+					sql`clock_timestamp()`,
+				),
+			),
+		);
+	const paths: (typeof compatibility)[] = [];
+	const visit = (
+		schemaId: string,
+		path: typeof compatibility,
+		seen: ReadonlySet<string>,
+	): void => {
+		if (paths.length > 1 || path.length > 32) return;
+		if (schemaId === input.basis.schemaId) {
+			paths.push(path);
+			return;
+		}
+		for (const edge of compatibility) {
+			if (edge.sourceSchemaId !== schemaId || seen.has(edge.targetSchemaId)) {
+				continue;
+			}
+			visit(
+				edge.targetSchemaId,
+				[...path, edge],
+				new Set([...seen, edge.targetSchemaId]),
+			);
+		}
 	};
+	visit(sourceSchemaId, [], new Set([sourceSchemaId]));
+	if (paths.length !== 1 || paths[0]!.length === 0) {
+		throw new CrdtSyncRecoveryRequiredError();
+	}
+	const path = paths[0]!;
+	const mappings = await db
+		.select()
+		.from(questpieCrdtSchemaCompatibilityFieldTable)
+		.where(
+			inArray(
+				questpieCrdtSchemaCompatibilityFieldTable.compatibilityId,
+				path.map((edge) => edge.id),
+			),
+		);
+	const bindingIds = new Set<string>();
+	for (const mapping of mappings) {
+		bindingIds.add(mapping.sourceBindingId);
+		bindingIds.add(mapping.targetBindingId);
+	}
+	const bindings =
+		bindingIds.size === 0
+			? []
+			: await db
+					.select()
+					.from(questpieCrdtBindingTable)
+					.where(
+						and(
+							eq(questpieCrdtBindingTable.resourceId, input.basis.resourceId),
+							inArray(questpieCrdtBindingTable.id, [...bindingIds]),
+						),
+					);
+	const bindingById = new Map(bindings.map((binding) => [binding.id, binding]));
+	const mappingsByCompatibilityId = new Map<string, typeof mappings>();
+	for (const edge of path) {
+		mappingsByCompatibilityId.set(
+			edge.id,
+			mappings.filter((mapping) => mapping.compatibilityId === edge.id),
+		);
+	}
+	const activeBySlot = new Map(
+		input.activeBindings.map((binding) => [binding.fieldSlot, binding]),
+	);
+	const mapped = input.update.parts.map((submitted) => {
+		let fieldSlot = submitted.fieldSlot;
+		let fieldEpoch = submitted.fieldEpoch;
+		let formatVersion = submitted.formatVersion;
+		let stableFieldId: string | undefined;
+		let format: number | undefined;
+		for (const edge of path) {
+			const matches = (mappingsByCompatibilityId.get(edge.id) ?? []).filter(
+				(mapping) =>
+					mapping.sourceSchemaId === edge.sourceSchemaId &&
+					mapping.targetSchemaId === edge.targetSchemaId &&
+					mapping.sourceFieldSlot === fieldSlot &&
+					mapping.sourceFieldEpoch === fieldEpoch &&
+					mapping.sourceFormatVersion === formatVersion,
+			);
+			if (matches.length !== 1) {
+				throw new CrdtSyncRecoveryRequiredError();
+			}
+			const mapping = matches[0]!;
+			const source = bindingById.get(mapping.sourceBindingId);
+			const target = bindingById.get(mapping.targetBindingId);
+			if (
+				!source ||
+				!target ||
+				source.schemaId !== edge.sourceSchemaId ||
+				target.schemaId !== edge.targetSchemaId ||
+				source.schemaFieldId !== mapping.sourceSchemaFieldId ||
+				target.schemaFieldId !== mapping.targetSchemaFieldId ||
+				source.stableFieldId !== target.stableFieldId ||
+				source.format !== target.format ||
+				source.formatVersion !== target.formatVersion ||
+				source.fieldSlot !== mapping.sourceFieldSlot ||
+				source.fieldEpoch !== mapping.sourceFieldEpoch ||
+				source.formatVersion !== mapping.sourceFormatVersion ||
+				target.fieldSlot !== mapping.targetFieldSlot ||
+				target.fieldEpoch !== mapping.targetFieldEpoch ||
+				target.formatVersion !== mapping.targetFormatVersion ||
+				(stableFieldId !== undefined &&
+					stableFieldId !== source.stableFieldId) ||
+				(format !== undefined && format !== source.format)
+			) {
+				throw new CrdtSyncRecoveryRequiredError();
+			}
+			stableFieldId = target.stableFieldId;
+			format = target.format;
+			fieldSlot = target.fieldSlot;
+			fieldEpoch = target.fieldEpoch;
+			formatVersion = target.formatVersion;
+		}
+		const active = activeBySlot.get(fieldSlot);
+		if (
+			!active ||
+			active.schemaId !== input.basis.schemaId ||
+			active.stableFieldId !== stableFieldId ||
+			active.format !== format ||
+			active.fieldEpoch !== fieldEpoch ||
+			active.formatVersion !== formatVersion ||
+			active.status !== 1 ||
+			active.retiredAt !== null
+		) {
+			throw new CrdtSyncRecoveryRequiredError();
+		}
+		return Object.freeze({ submitted, fieldSlot });
+	});
+	mapped.sort((left, right) => left.fieldSlot - right.fieldSlot);
+	if (new Set(mapped.map((part) => part.fieldSlot)).size !== mapped.length) {
+		throw new CrdtSyncRecoveryRequiredError();
+	}
+	return Object.freeze(mapped);
+}
+
+async function readCurrentAppendContext(
+	db: CrdtDatabase,
+	basis: CrdtSyncAuthorityBasis,
+	capability: "read" | "receipt" | "edit",
+) {
+	const [session] = await db
+		.select()
+		.from(questpieCrdtSessionTable)
+		.where(
+			and(
+				eq(questpieCrdtSessionTable.id, basis.sessionId),
+				eq(questpieCrdtSessionTable.resourceId, basis.resourceId),
+				eq(questpieCrdtSessionTable.resourceEpochId, basis.resourceEpochId),
+				eq(questpieCrdtSessionTable.schemaId, basis.schemaId),
+				...(basis.bindingId === undefined
+					? []
+					: [eq(questpieCrdtSessionTable.bindingId, basis.bindingId)]),
+				...(basis.sessionGeneration === undefined
+					? []
+					: [eq(questpieCrdtSessionTable.generation, basis.sessionGeneration)]),
+				...(basis.deliveryGeneration === undefined
+					? []
+					: [
+							eq(
+								questpieCrdtSessionTable.deliveryGeneration,
+								basis.deliveryGeneration,
+							),
+						]),
+				isNull(questpieCrdtSessionTable.closedAt),
+				gt(questpieCrdtSessionTable.authorityExpiresAt, sql`clock_timestamp()`),
+				gt(questpieCrdtSessionTable.leaseExpiresAt, sql`clock_timestamp()`),
+			),
+		)
+		.limit(1);
+	const [resource] = await db
+		.select()
+		.from(questpieCrdtResourceTable)
+		.where(
+			and(
+				eq(questpieCrdtResourceTable.id, basis.resourceId),
+				eq(questpieCrdtResourceTable.currentEpochId, basis.resourceEpochId),
+				eq(questpieCrdtResourceTable.status, 1),
+				isNull(questpieCrdtResourceTable.retiredAt),
+			),
+		)
+		.limit(1);
+	const [epoch] = await db
+		.select()
+		.from(questpieCrdtResourceEpochTable)
+		.where(
+			and(
+				eq(questpieCrdtResourceEpochTable.id, basis.resourceEpochId),
+				eq(questpieCrdtResourceEpochTable.resourceId, basis.resourceId),
+				eq(questpieCrdtResourceEpochTable.schemaId, basis.schemaId),
+				eq(questpieCrdtResourceEpochTable.aggregateEpoch, basis.aggregateEpoch),
+				eq(questpieCrdtResourceEpochTable.status, 1),
+			),
+		)
+		.limit(1);
+	const [schema] = resource
+		? await db
+				.select({ version: questpieCrdtSchemaTable.schemaVersion })
+				.from(questpieCrdtSchemaTable)
+				.where(
+					and(
+						eq(questpieCrdtSchemaTable.id, basis.schemaId),
+						eq(questpieCrdtSchemaTable.definitionId, resource.definitionId),
+					),
+				)
+				.limit(1)
+		: [];
+	if (
+		!session ||
+		!resource ||
+		!epoch ||
+		!schema ||
+		schema.version !== BigInt(basis.schemaVersion) ||
+		epoch.definitionId !== resource.definitionId ||
+		session.generation !== resource.sessionGeneration ||
+		session.resourceReadFence !== resource.readFence ||
+		session.ownerPolicyRevision !== resource.ownerPolicyRevision ||
+		(capability === "edit" &&
+			(session.effectiveMode !== 2 ||
+				session.resourceEditFence !== resource.editFence))
+	) {
+		throw rejected();
+	}
+	const grants = await db
+		.select()
+		.from(questpieCrdtSessionGrantTable)
+		.where(eq(questpieCrdtSessionGrantTable.sessionId, basis.sessionId))
+		.orderBy(asc(questpieCrdtSessionGrantTable.fieldSlot));
+	if (
+		grants.length !== basis.fields.length ||
+		grants.some((grant, index) => {
+			const field = basis.fields[index];
+			return (
+				!field ||
+				grant.resourceId !== basis.resourceId ||
+				grant.schemaId !== basis.schemaId ||
+				grant.bindingId !== field.bindingId ||
+				grant.fieldSlot !== field.fieldSlot ||
+				grant.fieldEpoch !== field.fieldEpoch ||
+				grant.formatVersion !== field.formatVersion ||
+				(capability === "receipt"
+					? !(
+							grant.grant === field.grant ||
+							(field.grant === 1 && grant.grant === 0)
+						)
+					: grant.grant !== field.grant) ||
+				grant.fieldReadFence !== field.readFence ||
+				grant.fieldEditFence !== field.editFence
+			);
+		})
+	) {
+		throw rejected();
+	}
+	const activeBindings = await db
+		.select()
+		.from(questpieCrdtBindingTable)
+		.where(
+			and(
+				eq(questpieCrdtBindingTable.resourceId, basis.resourceId),
+				eq(questpieCrdtBindingTable.status, 1),
+				isNull(questpieCrdtBindingTable.retiredAt),
+			),
+		)
+		.orderBy(asc(questpieCrdtBindingTable.id));
+	if (activeBindings.some((binding) => binding.schemaId !== basis.schemaId)) {
+		throw rejected();
+	}
+	return Object.freeze({
+		session,
+		resource,
+		schemaVersion: Number(schema.version),
+		grants: Object.freeze(grants),
+		activeBindings: Object.freeze(activeBindings),
+		authority: Object.freeze({
+			resourceReadFence: session.resourceReadFence,
+			resourceEditFence: session.resourceEditFence,
+			ownerPolicyRevision: session.ownerPolicyRevision,
+			subjectReadFence: session.subjectReadFence,
+			subjectEditFence: session.subjectEditFence,
+			sessionGeneration: session.generation,
+		}),
+	});
+}
+
+function toSyncReceipt(receipt: CrdtAppendReceipt) {
+	return Object.freeze({
+		updateId: uuidBytes(receipt.updateId),
+		cursors: Object.freeze(
+			receipt.fieldCursors.map((cursor) =>
+				Object.freeze({
+					fieldSlot: cursor.fieldSlot,
+					fieldCursor: cursor.fieldCursor,
+				}),
+			),
+		),
+	});
 }
 
 export async function materializeCrdtAggregateAtCut(
@@ -665,144 +931,6 @@ export async function materializeCrdtAggregateAtCut(
 	return null;
 }
 
-async function validateBasisAuthority(
-	db: CrdtDatabase,
-	basis: CrdtSyncBasis,
-): Promise<void> {
-	const resetBindings = await readResetSourceBindings(db, basis);
-	const [session] = await db
-		.select({ id: questpieCrdtSessionTable.id })
-		.from(questpieCrdtSessionTable)
-		.where(
-			and(
-				eq(questpieCrdtSessionTable.id, basis.sessionId),
-				eq(questpieCrdtSessionTable.resourceId, basis.resourceId),
-				eq(questpieCrdtSessionTable.resourceEpochId, basis.resourceEpochId),
-				eq(questpieCrdtSessionTable.schemaId, basis.schemaId),
-				isNull(questpieCrdtSessionTable.closedAt),
-				gt(questpieCrdtSessionTable.authorityExpiresAt, sql`clock_timestamp()`),
-				gt(questpieCrdtSessionTable.leaseExpiresAt, sql`clock_timestamp()`),
-			),
-		)
-		.limit(1);
-	if (!session) throw rejected();
-	const grants = await db
-		.select({
-			bindingId: questpieCrdtSessionGrantTable.bindingId,
-			fieldEpoch: questpieCrdtSessionGrantTable.fieldEpoch,
-			fieldSlot: questpieCrdtSessionGrantTable.fieldSlot,
-			grant: questpieCrdtSessionGrantTable.grant,
-			fieldReadFence: questpieCrdtSessionGrantTable.fieldReadFence,
-			fieldEditFence: questpieCrdtSessionGrantTable.fieldEditFence,
-		})
-		.from(questpieCrdtSessionGrantTable)
-		.where(eq(questpieCrdtSessionGrantTable.sessionId, basis.sessionId))
-		.orderBy(asc(questpieCrdtSessionGrantTable.fieldSlot));
-	if (grants.length !== basis.fields.length) throw rejected();
-	for (let index = 0; index < grants.length; index++) {
-		const grant = grants[index]!;
-		const expected = basis.fields[index]!;
-		if (
-			grant.bindingId !== expected.bindingId ||
-			grant.fieldSlot !== expected.fieldSlot ||
-			grant.fieldEpoch !== expected.fieldEpoch ||
-			grant.grant !== expected.grant ||
-			grant.fieldReadFence !== expected.readFence ||
-			grant.fieldEditFence !== expected.editFence
-		) {
-			throw rejected();
-		}
-	}
-	const bindings =
-		grants.length === 0
-			? []
-			: await db
-					.select()
-					.from(questpieCrdtBindingTable)
-					.where(
-						and(
-							eq(questpieCrdtBindingTable.resourceId, basis.resourceId),
-							inArray(
-								questpieCrdtBindingTable.id,
-								grants.map((grant) => grant.bindingId),
-							),
-							eq(questpieCrdtBindingTable.status, 1),
-							isNull(questpieCrdtBindingTable.retiredAt),
-						),
-					);
-	const bindingsById = new Map(
-		bindings.map((binding) => [binding.id, binding]),
-	);
-	for (const expected of basis.fields) {
-		const binding = bindingsById.get(expected.bindingId);
-		if (!binding && resetBindings.has(expected.bindingId)) continue;
-		if (
-			!binding ||
-			binding.fieldEpoch !== expected.fieldEpoch ||
-			binding.fieldSlot !== expected.fieldSlot ||
-			binding.formatVersion !== expected.formatVersion ||
-			binding.readFence !== expected.readFence ||
-			binding.editFence !== expected.editFence
-		) {
-			throw rejected();
-		}
-	}
-}
-
-type FieldResetControl = Readonly<{
-	stableFieldId: string;
-	sourceBindingId: string;
-	targetBindingId: string;
-	targetFieldEpoch: bigint;
-}>;
-
-function parseFieldResetControl(value: unknown): FieldResetControl {
-	if (!value || typeof value !== "object") {
-		throw new CrdtSyncRecoveryRequiredError();
-	}
-	const control = value as Record<string, unknown>;
-	if (
-		control.version !== 1 ||
-		control.kind !== "field_reset" ||
-		typeof control.stableFieldId !== "string" ||
-		typeof control.sourceBindingId !== "string" ||
-		typeof control.targetBindingId !== "string" ||
-		typeof control.targetFieldEpoch !== "string" ||
-		!/^(0|[1-9][0-9]*)$/.test(control.targetFieldEpoch)
-	) {
-		throw new CrdtSyncRecoveryRequiredError();
-	}
-	return {
-		stableFieldId: control.stableFieldId,
-		sourceBindingId: control.sourceBindingId,
-		targetBindingId: control.targetBindingId,
-		targetFieldEpoch: BigInt(control.targetFieldEpoch),
-	};
-}
-
-async function readResetSourceBindings(
-	db: CrdtDatabase,
-	basis: CrdtSyncBasis,
-): Promise<Set<string>> {
-	const controls = await db
-		.select({ payload: questpieCrdtCommitTable.controlPayload })
-		.from(questpieCrdtCommitTable)
-		.where(
-			and(
-				eq(questpieCrdtCommitTable.resourceId, basis.resourceId),
-				eq(questpieCrdtCommitTable.resourceEpochId, basis.resourceEpochId),
-				eq(questpieCrdtCommitTable.schemaId, basis.schemaId),
-				eq(questpieCrdtCommitTable.kind, 2),
-				gt(questpieCrdtCommitTable.commitSeq, basis.commitHead),
-			),
-		);
-	return new Set(
-		controls.map(
-			(control) => parseFieldResetControl(control.payload).sourceBindingId,
-		),
-	);
-}
-
 function rejected(): Error {
 	return new Error("CRDT synchronization rejected");
 }
@@ -815,6 +943,19 @@ function uuidBytes(value: string): Uint8Array {
 			Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16),
 		),
 	);
+}
+
+function bytesToUuid(value: Uint8Array): string {
+	if (!(value instanceof Uint8Array) || value.byteLength !== 16) {
+		throw rejected();
+	}
+	const hex = Array.from(value, (byte) =>
+		byte.toString(16).padStart(2, "0"),
+	).join("");
+	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(
+		12,
+		16,
+	)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 function equalBytes(left: Uint8Array, right: Uint8Array): boolean {

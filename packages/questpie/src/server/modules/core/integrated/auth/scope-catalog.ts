@@ -6,11 +6,9 @@
  * catalog. For a real DCR-registered MCP client to obtain the GRANULAR scopes the
  * MCP scope gate requires (`collections:<name>:read|write|delete`,
  * `globals:<name>:read|write`, `routes:<key>:invoke`), those scopes must be in
- * the catalog. This module derives that catalog from the app's discovered
- * collections / globals / routes — the SAME declarative source the gate derives
- * its required scopes from (both call {@link defaultOperationScope}) — so the two
- * halves can never drift, and adding a collection/global/route contributes its
- * scopes for free (QUESTPIE invariant: scales without touching framework code).
+ * the catalog. Core does not infer package-specific scopes from app entities.
+ * Packages contribute an exact released catalog through the generic
+ * `oauthScopeCatalogs` module registry, so omission cannot advertise authority.
  *
  * {@link applyOAuthScopeCatalog} merges the derived catalog into the app's
  * `oauthProvider()` at auth-instance build time (see `core/services/auth.ts`) —
@@ -21,14 +19,11 @@
 import { oauthProvider, type OAuthOptions } from "@better-auth/oauth-provider";
 import type { BetterAuthOptions } from "better-auth";
 
-import { introspectRoutes } from "#questpie/server/routes/introspection.js";
-import { isJsonRoute, type RoutesTree } from "#questpie/server/routes/types.js";
-
 import {
-	defaultOperationScope,
-	SCOPE_RESOURCE_BY_KIND,
-	UMBRELLA_ELIGIBLE_VERBS,
-} from "./scope-names.js";
+	buildCrdtOAuthScopeCatalog,
+	hasCrdtOAuthOwners,
+} from "../crdt/oauth-scope.js";
+import { questpieApiAudienceForApp } from "./api-audience.js";
 
 export interface OAuthScopeCatalog {
 	/**
@@ -46,29 +41,32 @@ export interface OAuthScopeCatalog {
 	scopesSupported: string[];
 }
 
+export interface OAuthScopeCatalogContributorApp {
+	config?: { app?: { url?: string } };
+	crdtRegistry?: {
+		collections?: Record<string, unknown>;
+		globals?: Record<string, unknown>;
+	};
+	state?: {
+		oauthScopeCatalogs?: Record<string, OAuthScopeCatalogContributor>;
+	} & Record<string, unknown>;
+}
+
+export type OAuthScopeCatalogContributor = (
+	app: OAuthScopeCatalogContributorApp,
+) => OAuthScopeCatalog;
+
 /** The better-auth plugin id the OAuth provider registers under. */
 const OAUTH_PROVIDER_PLUGIN_ID = "oauth-provider";
 
-type ScopeCatalogApp = {
-	getCollections(): object;
-	getGlobals(): object;
-	config?: {
-		routes?: RoutesTree;
-	};
-};
+type ScopeCatalogApp = OAuthScopeCatalogContributorApp;
 
 function unique(values: string[]): string[] {
 	return [...new Set(values)];
 }
 
 /**
- * Derive the OAuth scope catalog from the app's discovered resources.
- *
- * - collections → `collections:<name>:read|write|delete`
- * - globals     → `globals:<name>:read|write`
- * - routes      → `routes:<key>:invoke`, only for MCP-exposed JSON routes
- *   (`meta.mcp.expose === true`) — exactly the routes the MCP gate scopes.
- * - plus the coarse collection umbrellas `collections:read` / `collections:write`.
+ * Aggregate exact package-owned OAuth scope catalogs.
  *
  * OIDC scopes (`openid`/`profile`/`email`/`offline_access`) are NOT included —
  * they are an OIDC concern owned by the provider config; the catalog only owns
@@ -76,36 +74,21 @@ function unique(values: string[]): string[] {
  * whatever the provider already declares.
  */
 export function buildScopeCatalog(app: ScopeCatalogApp): OAuthScopeCatalog {
-	const scopes = new Set<string>();
-
-	// Coarse collection umbrellas (LOCKED #2): only collections get umbrellas,
-	// only for the umbrella-eligible verbs (read/write). Derived from the shared
-	// UMBRELLA_ELIGIBLE_VERBS so the catalog and the gate agree on which verbs
-	// have an umbrella.
-	const umbrellas: string[] = [];
-	for (const verb of UMBRELLA_ELIGIBLE_VERBS) {
-		umbrellas.push(`${SCOPE_RESOURCE_BY_KIND.collection}:${verb}`);
+	const crdt = buildCrdtOAuthScopeCatalog(app.crdtRegistry);
+	const scopes: string[] = [...crdt.scopes];
+	const scopesSupported: string[] = [...crdt.scopesSupported];
+	for (const contributor of Object.values(
+		app.state?.oauthScopeCatalogs ?? {},
+	)) {
+		const contribution = contributor(app);
+		for (const scope of contribution.scopes) {
+			if (!scopes.includes(scope)) scopes.push(scope);
+		}
+		for (const scope of contribution.scopesSupported) {
+			if (!scopesSupported.includes(scope)) scopesSupported.push(scope);
+		}
 	}
-	for (const umbrella of umbrellas) scopes.add(umbrella);
-
-	for (const name of Object.keys(app.getCollections())) {
-		scopes.add(defaultOperationScope("collection", name, "read"));
-		scopes.add(defaultOperationScope("collection", name, "write"));
-		scopes.add(defaultOperationScope("collection", name, "delete"));
-	}
-
-	for (const name of Object.keys(app.getGlobals())) {
-		scopes.add(defaultOperationScope("global", name, "read"));
-		scopes.add(defaultOperationScope("global", name, "write"));
-	}
-
-	for (const route of introspectRoutes(app)) {
-		if (!isJsonRoute(route.definition)) continue;
-		if (route.meta?.mcp?.expose !== true) continue;
-		scopes.add(defaultOperationScope("route", route.key, "invoke"));
-	}
-
-	return { scopes: [...scopes], scopesSupported: umbrellas };
+	return { scopes, scopesSupported };
 }
 
 /**
@@ -130,6 +113,11 @@ export function applyOAuthScopeCatalog(
 	}
 
 	const catalog = buildScopeCatalog(app);
+	const crdtAudience =
+		hasCrdtOAuthOwners(app.crdtRegistry) &&
+		typeof app.config?.app?.url === "string"
+			? questpieApiAudienceForApp(app as { config: { app: { url: string } } })
+			: undefined;
 
 	const nextPlugins = plugins.map((plugin) => {
 		if (plugin?.id !== OAUTH_PROVIDER_PLUGIN_ID) return plugin;
@@ -138,6 +126,10 @@ export function applyOAuthScopeCatalog(
 		return oauthProvider({
 			...options,
 			scopes: unique([...(options.scopes ?? []), ...catalog.scopes]),
+			validAudiences: unique([
+				...(options.validAudiences ?? []),
+				...(crdtAudience ? [crdtAudience] : []),
+			]),
 			advertisedMetadata: {
 				...options.advertisedMetadata,
 				scopes_supported: unique([

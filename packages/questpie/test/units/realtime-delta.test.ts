@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import {
 	classifyRealtimeDelivery,
+	classifyRealtimeDeliveryDecision,
 	deriveDeltaOp,
 	whereReferencesRelations,
 } from "../../src/server/modules/core/integrated/realtime/delta.js";
@@ -45,6 +46,40 @@ describe("realtime delta delivery", () => {
 				"snapshot",
 			);
 		}
+	});
+
+	it("reports one stable machine-readable classification reason", () => {
+		const base = {
+			mode: "delta" as const,
+			resourceType: "collection" as const,
+			operation: "find" as const,
+		};
+		expect(classifyRealtimeDeliveryDecision(base)).toEqual({
+			mode: "delta",
+			reason: "eligible",
+		});
+		expect(
+			classifyRealtimeDeliveryDecision(
+				{ ...base, where: { author: { eq: "user-a" } } },
+				new Set(["author"]),
+			),
+		).toEqual({ mode: "snapshot", reason: "relation_where" });
+		expect(
+			classifyRealtimeDeliveryDecision({
+				...base,
+				where: { RAW: "opaque" },
+			}),
+		).toEqual({ mode: "snapshot", reason: "raw_where" });
+		expect(classifyRealtimeDeliveryDecision({ ...base, limit: 10 })).toEqual({
+			mode: "snapshot",
+			reason: "limit",
+		});
+		expect(
+			classifyRealtimeDeliveryDecision({ ...base, orderBy: { id: "asc" } }),
+		).toEqual({ mode: "snapshot", reason: "order_by" });
+		expect(
+			classifyRealtimeDeliveryDecision({ ...base, with: { author: true } }),
+		).toEqual({ mode: "snapshot", reason: "with" });
 	});
 
 	it("walks logical where branches using relation metadata", () => {

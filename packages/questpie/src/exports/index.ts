@@ -216,6 +216,11 @@ export * from "#questpie/server/global/crud/global-crud-generator.js";
 export * from "#questpie/server/global/crud/types.js";
 export * from "#questpie/server/i18n/types.js";
 export { auth } from "#questpie/server/modules/core/integrated/auth/merge.js";
+export type {
+	OAuthScopeCatalog,
+	OAuthScopeCatalogContributor,
+	OAuthScopeCatalogContributorApp,
+} from "#questpie/server/modules/core/integrated/auth/scope-catalog.js";
 export {
 	defaultOperationScope,
 	SCOPE_RESOURCE_BY_KIND,

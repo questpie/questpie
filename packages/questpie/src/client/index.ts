@@ -39,14 +39,23 @@ import type {
 	With,
 } from "../server/collection/crud/types.js";
 import type { GlobalUpdateInput } from "../server/global/crud/types.js";
+import type {
+	CrdtClientAPI,
+	CrdtRegistryShape,
+} from "../server/modules/core/integrated/crdt/types.js";
 import type { GetAuthHeaders } from "./auth.js";
 import { createChannelsAPI, type ChannelsClient } from "./channels/index.js";
+import { createCrdtClientAPI } from "./crdt/index.js";
+import type { CrdtClientRuntimeConfig } from "./crdt/types.js";
 import {
 	buildCollectionTopic,
 	buildGlobalTopic,
 	createRealtimeAPI,
 	type RealtimeAPI,
 } from "./realtime/index.js";
+import { PusherConnectionManager } from "./realtime/pusher-connection.js";
+import { createRealtimeClientSession } from "./realtime/session.js";
+import { SseConnectionManager } from "./realtime/sse-connection.js";
 
 export type { AuthHeaders, GetAuthHeaders } from "./auth.js";
 
@@ -131,6 +140,7 @@ import type { AnyGlobal, GetGlobal } from "#questpie/shared/type-utils.js";
 export interface QuestpieApp {
 	collections: Record<string, AnyCollectionOrBuilder>;
 	channels?: ChannelDefinitions;
+	crdt?: CrdtRegistryShape;
 	globals?: Record<string, any>;
 	routes?: Record<string, any>;
 	auth?: any;
@@ -267,6 +277,12 @@ export type QuestpieClientConfig = {
 	 * @default true
 	 */
 	useSuperJSON?: boolean;
+
+	/**
+	 * Optional collaborative-document runtime. Merely creating the client or a
+	 * document handle is inert; browser storage and transport start at connect().
+	 */
+	crdt?: CrdtClientRuntimeConfig;
 };
 
 /**
@@ -1004,6 +1020,11 @@ type RouteCallOptions = Omit<RequestInit, "method"> & {
 export type QuestpieClient<in out TApp extends QuestpieApp> = {
 	collections: CollectionsAPI<TApp>;
 	channels: ChannelsClient<AppChannelDefinitions<TApp>>;
+	crdt: CrdtClientAPI<
+		NonNullable<TApp["crdt"]> extends CrdtRegistryShape
+			? NonNullable<TApp["crdt"]>
+			: { collections: {}; globals: {} }
+	>;
 	globals: GlobalsAPI<TApp>;
 	routes: RoutesClient<TApp["routes"]>;
 	search: SearchAPI;
@@ -1163,62 +1184,97 @@ export function createClient<TApp extends QuestpieApp>(
 		return attachTxid(data, headers.get(QUESTPIE_TXID_HEADER));
 	}
 
+	const refetchRealtimeTopic = async (
+		topic: Parameters<RealtimeAPI["subscribe"]>[0],
+	): Promise<unknown> => {
+		if (topic.resourceType === "collection") {
+			if (topic.operation === "count") {
+				const queryString = qs.stringify(
+					{ where: topic.where, locale: topic.locale },
+					{ skipNulls: true, arrayFormat: "brackets" },
+				);
+				const result = await request(
+					`${apiBasePath}/${topic.resource}/count${queryString ? `?${queryString}` : ""}`,
+				);
+				return result.count;
+			}
+			if (topic.operation === "get") {
+				const queryString = qs.stringify(
+					{ with: topic.with, locale: topic.locale },
+					{ skipNulls: true, arrayFormat: "brackets" },
+				);
+				return request(
+					`${apiBasePath}/${topic.resource}/${topic.id}${queryString ? `?${queryString}` : ""}`,
+				);
+			}
+			const queryString = qs.stringify(
+				{
+					where: topic.where,
+					with: topic.with,
+					limit: topic.limit,
+					offset: topic.offset,
+					orderBy: topic.orderBy,
+					locale: topic.locale,
+				},
+				{ skipNulls: true, arrayFormat: "brackets" },
+			);
+			return request(
+				`${apiBasePath}/${topic.resource}${queryString ? `?${queryString}` : ""}`,
+			);
+		}
+		const queryString = qs.stringify(
+			{ where: topic.where, with: topic.with, locale: topic.locale },
+			{ skipNulls: true, arrayFormat: "brackets" },
+		);
+		return request(
+			`${apiBasePath}/globals/${topic.resource}${queryString ? `?${queryString}` : ""}`,
+		);
+	};
+	const pusherConnection = new PusherConnectionManager();
+	const sseConnection = new SseConnectionManager({
+		baseUrl: `${config.baseURL}${apiBasePath}`,
+		withCredentials: true,
+		fetcher,
+		getAuthHeaders: config.getAuthHeaders,
+		debounceMs: 50,
+	});
+	const realtimeSession = createRealtimeClientSession({
+		baseUrl: `${config.baseURL}${apiBasePath}`,
+		withCredentials: true,
+		debounceMs: 50,
+		getAuthHeaders: config.getAuthHeaders,
+		fetcher,
+		pusherConnection,
+		sseConnection,
+		refetchTopic: refetchRealtimeTopic,
+	});
 	const realtimeApi = createRealtimeAPI({
 		baseUrl: `${config.baseURL}${apiBasePath}`,
 		withCredentials: true,
 		debounceMs: 50,
 		getAuthHeaders: config.getAuthHeaders,
 		fetcher,
-		refetchTopic: async (topic) => {
-			if (topic.resourceType === "collection") {
-				if (topic.operation === "count") {
-					const queryString = qs.stringify(
-						{ where: topic.where, locale: topic.locale },
-						{ skipNulls: true, arrayFormat: "brackets" },
-					);
-					const result = await request(
-						`${apiBasePath}/${topic.resource}/count${queryString ? `?${queryString}` : ""}`,
-					);
-					return result.count;
-				}
-				if (topic.operation === "get") {
-					const queryString = qs.stringify(
-						{ with: topic.with, locale: topic.locale },
-						{ skipNulls: true, arrayFormat: "brackets" },
-					);
-					return request(
-						`${apiBasePath}/${topic.resource}/${topic.id}${queryString ? `?${queryString}` : ""}`,
-					);
-				}
-				const queryString = qs.stringify(
-					{
-						where: topic.where,
-						with: topic.with,
-						limit: topic.limit,
-						offset: topic.offset,
-						orderBy: topic.orderBy,
-						locale: topic.locale,
-					},
-					{ skipNulls: true, arrayFormat: "brackets" },
-				);
-				return request(
-					`${apiBasePath}/${topic.resource}${queryString ? `?${queryString}` : ""}`,
-				);
-			}
-			const queryString = qs.stringify(
-				{ where: topic.where, with: topic.with, locale: topic.locale },
-				{ skipNulls: true, arrayFormat: "brackets" },
-			);
-			return request(
-				`${apiBasePath}/globals/${topic.resource}${queryString ? `?${queryString}` : ""}`,
-			);
-		},
+		pusherConnection,
+		sseConnection,
+		refetchTopic: refetchRealtimeTopic,
+		realtimeSession,
 	});
 	const channelsApi = createChannelsAPI<AppChannelDefinitions<TApp>>({
 		baseUrl: `${config.baseURL}${apiBasePath}`,
 		withCredentials: true,
 		fetcher,
 		getAuthHeaders: config.getAuthHeaders,
+		pusherConnection,
+		sseConnection,
+	});
+	const crdtApi = createCrdtClientAPI({
+		baseURL: config.baseURL,
+		basePath: apiBasePath,
+		fetcher,
+		defaultHeaders,
+		getAuthHeaders: config.getAuthHeaders,
+		runtime: config.crdt,
+		realtimeSession,
 	});
 
 	/**
@@ -1940,6 +1996,7 @@ export function createClient<TApp extends QuestpieApp>(
 	return {
 		collections,
 		channels: channelsApi,
+		crdt: crdtApi,
 		globals,
 		routes: routesProxy,
 		search,
@@ -2017,6 +2074,7 @@ export {
 	deriveFindDeltas,
 	envelopeMeta,
 	realtimeEventResolvesTxid,
+	RealtimeCrdtBindingRejectedError,
 	RealtimeTxidTracker,
 	RealtimeTopicRejectedError,
 } from "./realtime/index.js";
@@ -2028,6 +2086,7 @@ export type {
 	ChannelsClient,
 	ChannelSubscribeOptions,
 } from "./channels/index.js";
+export * from "./crdt/index.js";
 // Re-export the query-surface types the client's own method signatures are
 // built from, so consumers (e.g. @questpie/tanstack-query) can derive
 // per-call generics without reaching into server internals.

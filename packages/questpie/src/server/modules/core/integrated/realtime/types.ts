@@ -76,6 +76,10 @@ export type RealtimeSubscriptionContext = {
 		baseCollection: string,
 		withConfig?: Record<string, any>,
 	) => Set<string>;
+	/** Own the relation-name boundary used by conservative payload routing. */
+	resolveCollectionRelationNames?: (
+		baseCollection: string,
+	) => ReadonlySet<string>;
 	/**
 	 * Function to resolve global dependencies from WITH config.
 	 */
@@ -84,6 +88,24 @@ export type RealtimeSubscriptionContext = {
 		withConfig?: Record<string, any>,
 	) => { collections: Set<string>; globals: Set<string> };
 };
+
+export type RealtimeSubscriptionScopeContext = {
+	principal?: {
+		kind: string;
+		user?: { id?: unknown };
+		tokenId?: unknown;
+	} | null;
+	session?: { user?: { id?: unknown }; session?: { id?: unknown } } | null;
+	locale?: string;
+	stage?: string;
+	accessMode?: string;
+	request?: Request;
+	req?: Request;
+};
+
+export type RealtimeSubscriptionScopeResolver = (
+	context: RealtimeSubscriptionScopeContext,
+) => string | null | undefined | Promise<string | null | undefined>;
 
 export interface RealtimeConfig {
 	/**
@@ -94,6 +116,18 @@ export interface RealtimeConfig {
 	 * @default false
 	 */
 	nativeDeltas?: boolean;
+	/**
+	 * Authoritative server switch for collection/global row live queries.
+	 * Change capture, dependency watches, typed channels, and CRDT stay enabled.
+	 *
+	 * @default true
+	 */
+	rowLiveQueries?: boolean;
+	/**
+	 * Resolve one stable server-owned scope at admission. `null`/`undefined`
+	 * means explicitly unscoped; switching scope requires a new subscription.
+	 */
+	subscriptionScope?: RealtimeSubscriptionScopeResolver;
 	/** Diagnostic event sink. Observer failures are isolated from delivery. */
 	observer?: import("./observer.js").RealtimeObserver;
 	/** Realtime edge-session admission limits. */

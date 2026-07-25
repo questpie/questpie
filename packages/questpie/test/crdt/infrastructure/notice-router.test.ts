@@ -133,6 +133,29 @@ describe("core notice router", () => {
 		await releaseCrdt();
 	});
 
+	it("routes keyed CRDT wakes before they enter unrelated subscriber queues", async () => {
+		const broker = new TestBroker();
+		const router = new CoreNoticeRouter(broker);
+		const delivered: string[] = [];
+		const first = await router.subscribe({
+			kind: "crdt",
+			routingKey: "a".repeat(64),
+			onNotice: () => delivered.push("first"),
+		});
+		const second = await router.subscribe({
+			kind: "crdt",
+			routingKey: "b".repeat(64),
+			onNotice: () => delivered.push("second"),
+		});
+
+		broker.wake({ ...crdtWake, aggregateHash: "a".repeat(64) });
+		await flushTasks();
+		expect(delivered).toEqual(["first"]);
+
+		await first();
+		await second();
+	});
+
 	it("isolates a slow and failing CRDT subscriber from realtime", async () => {
 		const broker = new TestBroker();
 		const errors: unknown[] = [];

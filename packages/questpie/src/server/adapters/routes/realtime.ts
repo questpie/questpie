@@ -5,6 +5,8 @@
  * Accepts multiple topics via POST and streams updates for all of them.
  */
 
+import { Buffer } from "node:buffer";
+
 import type { RealtimeTopicRejectedPayload } from "#questpie/shared/realtime-error.js";
 
 import {
@@ -15,8 +17,10 @@ import { executeAccessRule } from "../../collection/crud/shared/access-control.j
 import type { RequestContext } from "../../config/context.js";
 import type { Questpie } from "../../config/questpie.js";
 import { ApiError } from "../../errors/index.js";
+import { CrdtRealtimeBindingRejectedError } from "../../modules/core/integrated/crdt/realtime-binding.js";
 import {
 	admitRealtimeTopic,
+	admitRealtimeTopicPolicy,
 	createConcurrencyLimiter,
 	getRealtimeAdmissionRegistry,
 	RealtimeTopicAdmissionError,
@@ -25,12 +29,20 @@ import {
 	resolveRealtimeAdmissionConfig,
 } from "../../modules/core/integrated/realtime/admission.js";
 import {
-	classifyRealtimeDelivery,
+	classifyRealtimeDeliveryDecision,
 	type RealtimeDeliveryMode,
 } from "../../modules/core/integrated/realtime/delta.js";
 import {
+	RealtimeBindingOutputGate,
+	type RealtimeEdgeBinding,
+	RealtimeEdgeBindingStageError,
+	RealtimeEdgeSession,
+} from "../../modules/core/integrated/realtime/edge-session.js";
+import { realtimeControlIdentity } from "../../modules/core/integrated/realtime/identity.js";
+import {
 	getRealtimeRefreshScheduler,
 	resolveRealtimeAccessKey,
+	resolveRealtimeSubscriptionScope,
 } from "../../modules/core/integrated/realtime/refresh-scheduler.js";
 import {
 	captureRealtimeWatermark,
@@ -46,7 +58,15 @@ import {
 	SseOrderedDeltaWriter,
 } from "../../modules/core/integrated/realtime/sse-client-transport.js";
 import { sharedSseKeepAliveTicker } from "../../modules/core/integrated/realtime/sse-keep-alive.js";
-import type { RealtimeDesiredTopology } from "../../modules/core/integrated/realtime/topology-coordinator.js";
+import {
+	MAX_REALTIME_TOPOLOGY_BYTES,
+	MANAGED_PROVIDER_CLIENT_LEASE_MS,
+	RealtimeTopologyApplyRejectedError,
+	type RealtimeDesiredTopology,
+	type RealtimeTopologyChannel,
+	type RealtimeTopologyCrdt,
+	type RealtimeTopologyQuery,
+} from "../../modules/core/integrated/realtime/topology-coordinator.js";
 import type { ClientSink } from "../../modules/core/integrated/realtime/transport.js";
 import type { AdapterConfig, AdapterContext } from "../types.js";
 import { resolveContext } from "../utils/context.js";
@@ -118,6 +138,30 @@ type ValidatedTopic =
 	| (Extract<NormalizedTopicInput, { resourceType: "global" }> &
 			ValidatedTopicMetadata & { type: "global" });
 
+function collectionAccessCacheKey(definition: any) {
+	const realtime = definition?.state?.options?.realtime;
+	return realtime && realtime !== false ? realtime.accessCacheKey : undefined;
+}
+
+function enforceRowLiveQueryPolicy(
+	app: Questpie<any>,
+	topic: NormalizedTopicInput,
+	definition?: any,
+): void {
+	const result = admitRealtimeTopicPolicy(topic, {
+		rowLiveQueries: app.config?.realtime?.rowLiveQueries,
+		collectionRealtime:
+			topic.resourceType === "collection"
+				? definition?.state?.options?.realtime !== false
+				: undefined,
+	});
+	if (!result.accepted) {
+		throw new RealtimeTopicAdmissionError(
+			realtimeTopicRejectedPayload(topic, result),
+		);
+	}
+}
+
 type ChannelSubscriptionInput = {
 	id?: string;
 	channel?: string;
@@ -142,32 +186,209 @@ function createInitialTopology(
 ): RealtimeDesiredTopology {
 	return {
 		protocol: "questpie-realtime-topology",
-		version: 1,
+		version: 2,
 		revision: 0,
-		topics: topics
-			.filter((topic) => validTopicIds.has(topic.id))
-			.map(({ id, sinceSeq, ...topic }) => ({
-				id,
-				topic,
-				...(sinceSeq === undefined ? {} : { sinceSeq }),
-			})),
-		channels: channels
-			.filter(
-				(
+		subscriptions: [
+			...topics
+				.filter((topic) => validTopicIds.has(topic.id))
+				.map(({ id, sinceSeq, ...topic }) => ({
+					kind: "query" as const,
+					id,
+					topic,
+					...(sinceSeq === undefined ? {} : { sinceSeq }),
+				})),
+			...channels
+				.filter(
+					(
+						channel,
+					): channel is Required<
+						Pick<ChannelSubscriptionInput, "id" | "channel" | "params">
+					> &
+						ChannelSubscriptionInput =>
+						Boolean(channel.id && validChannelIds.has(channel.id)),
+				)
+				.map(({ id, channel, params, lastEventId }) => ({
+					kind: "channel" as const,
+					id,
 					channel,
-				): channel is Required<
-					Pick<ChannelSubscriptionInput, "id" | "channel" | "params">
-				> &
-					ChannelSubscriptionInput =>
-					Boolean(channel.id && validChannelIds.has(channel.id)),
-			)
-			.map(({ id, channel, params, lastEventId }) => ({
-				id,
-				channel,
-				params,
-				...(lastEventId === undefined ? {} : { lastEventId }),
-			})),
+					params,
+					...(lastEventId === undefined ? {} : { lastEventId }),
+				})),
+		],
 	};
+}
+
+function topologyQueries(
+	topology: RealtimeDesiredTopology,
+): RealtimeTopologyQuery[] {
+	return topology.subscriptions.filter(
+		(entry): entry is RealtimeTopologyQuery => entry.kind === "query",
+	);
+}
+
+function topologyChannels(
+	topology: RealtimeDesiredTopology,
+): RealtimeTopologyChannel[] {
+	return topology.subscriptions.filter(
+		(entry): entry is RealtimeTopologyChannel => entry.kind === "channel",
+	);
+}
+
+function topologyCrdt(
+	topology: RealtimeDesiredTopology,
+): RealtimeTopologyCrdt[] {
+	return topology.subscriptions.filter(
+		(entry): entry is RealtimeTopologyCrdt => entry.kind === "crdt",
+	);
+}
+
+type ResolvedRealtimeTopologyCandidate = {
+	queries: Map<
+		string,
+		{
+			desired: RealtimeTopologyQuery;
+			topic: ValidatedTopic;
+			context: RealtimeRequestContext;
+		}
+	>;
+	channels: Map<
+		string,
+		{
+			desired: RealtimeTopologyChannel;
+			channel: ValidatedChannelSubscription;
+		}
+	>;
+	crdt: Map<string, RealtimeTopologyCrdt>;
+};
+
+async function resolveRealtimeTopologyCandidate(
+	app: Questpie<any>,
+	topology: RealtimeDesiredTopology,
+	baseContext: RealtimeRequestContext,
+	admission: ReturnType<typeof resolveRealtimeAdmissionConfig>,
+): Promise<ResolvedRealtimeTopologyCandidate> {
+	const candidate: ResolvedRealtimeTopologyCandidate = {
+		queries: new Map(),
+		channels: new Map(),
+		crdt: new Map(topologyCrdt(topology).map((entry) => [entry.id, entry])),
+	};
+	const errors: Array<{
+		id: string;
+		kind: string;
+		code: string;
+		message: string;
+	}> = [];
+	if (topology.subscriptions.length > admission.maxTopicsPerConnection) {
+		for (const subscription of topology.subscriptions.slice(
+			admission.maxTopicsPerConnection,
+		)) {
+			errors.push({
+				id: subscription.id,
+				kind: subscription.kind,
+				code: "REALTIME_SUBSCRIPTION_LIMIT_EXCEEDED",
+				message: `Connection accepts at most ${admission.maxTopicsPerConnection} subscriptions`,
+			});
+		}
+	}
+	for (const desired of topologyQueries(topology)) {
+		try {
+			const rawTopic = {
+				...desired.topic,
+				...(desired.topic.resourceType === "collection" &&
+				desired.topic.operation === "get"
+					? { recordId: desired.topic.id }
+					: {}),
+				id: desired.id,
+				sinceSeq: desired.sinceSeq,
+			} as TopicInput;
+			const topicContext =
+				rawTopic.locale && rawTopic.locale !== baseContext.locale
+					? { ...baseContext, locale: rawTopic.locale }
+					: baseContext;
+			candidate.queries.set(desired.id, {
+				desired,
+				topic: await resolveIncrementalTopic(
+					app,
+					rawTopic,
+					topicContext,
+					admission,
+				),
+				context: topicContext,
+			});
+		} catch (error) {
+			errors.push({
+				id: desired.id,
+				kind: desired.kind,
+				code:
+					error instanceof RealtimeTopicAdmissionError
+						? error.payload.code
+						: "REALTIME_SUBSCRIPTION_REJECTED",
+				message:
+					error instanceof Error ? error.message : "Realtime query rejected",
+			});
+		}
+	}
+	for (const desired of topologyChannels(topology)) {
+		try {
+			candidate.channels.set(desired.id, {
+				desired,
+				channel: await resolveChannelSubscription(
+					app,
+					{
+						id: desired.id,
+						channel: desired.channel,
+						params: desired.params,
+						lastEventId: desired.lastEventId,
+					},
+					baseContext,
+				),
+			});
+		} catch (error) {
+			errors.push({
+				id: desired.id,
+				kind: desired.kind,
+				code: "REALTIME_SUBSCRIPTION_REJECTED",
+				message:
+					error instanceof Error ? error.message : "Realtime channel rejected",
+			});
+		}
+	}
+	if (errors.length > 0) {
+		throw new RealtimeTopologyApplyRejectedError(errors);
+	}
+	return candidate;
+}
+
+function createFencedClientSink(
+	sink: ClientSink,
+	isActive: () => boolean,
+): ClientSink {
+	return {
+		sessionId: sink.sessionId,
+		...(sink.clientChannel ? { clientChannel: sink.clientChannel } : {}),
+		write: (frame, delivery) =>
+			isActive()
+				? sink.write(frame, delivery)
+				: Promise.resolve({ status: "accepted", bufferedBytes: null }),
+		close: (reason) => (isActive() ? sink.close(reason) : Promise.resolve()),
+	};
+}
+
+function edgeStageRejection(
+	error: unknown,
+): RealtimeTopologyApplyRejectedError | null {
+	if (!(error instanceof RealtimeEdgeBindingStageError)) return null;
+	return new RealtimeTopologyApplyRejectedError([
+		{
+			id: error.subscription.id,
+			kind: error.subscription.kind,
+			code: "REALTIME_SUBSCRIPTION_ACTIVATION_REJECTED",
+			message:
+				error.cause instanceof Error
+					? error.cause.message
+					: "Realtime subscription activation failed",
+		},
+	]);
 }
 
 function normalizeTopicOperation(topic: TopicInput): NormalizedTopicInput {
@@ -296,11 +517,11 @@ function schedulerKey(topic: ValidatedTopic, accessKey: string): string {
 	return `${JSON.stringify(stableValue(input))}:${accessKey}`;
 }
 
-function classifyValidatedTopic(topic: ValidatedTopic): RealtimeDeliveryMode {
+function classifyValidatedTopic(topic: ValidatedTopic) {
 	const relationNames = new Set(
 		Object.keys(topic.definition.state.relations ?? {}),
 	);
-	return classifyRealtimeDelivery(
+	return classifyRealtimeDeliveryDecision(
 		{ ...topic, where: topic.requestedWhere },
 		relationNames,
 	);
@@ -378,19 +599,6 @@ function isPermanentAccessError(error: unknown): boolean {
 	);
 }
 
-function realtimeControlIdentity(context: RealtimeRequestContext): string {
-	const principal = context.principal;
-	if (principal?.kind === "user" && principal.session?.id) {
-		return `user-session:${principal.session.id}`;
-	}
-	if (principal?.kind === "oauth" && principal.tokenId) {
-		return `oauth:${principal.tokenId}`;
-	}
-	if (principal?.kind === "system") return "system";
-	const sessionId = context.session?.session?.id;
-	return sessionId ? `user-session:${sessionId}` : "anonymous";
-}
-
 async function resolveIncrementalTopic(
 	app: Questpie<any>,
 	rawTopic: TopicInput,
@@ -424,6 +632,7 @@ async function resolveIncrementalTopic(
 			topic.resource
 		];
 		if (!crud || !definition) throw new Error("Collection not found");
+		enforceRowLiveQueryPolicy(app, topic, definition);
 		return evaluateTopicAccess(
 			app,
 			{
@@ -432,7 +641,7 @@ async function resolveIncrementalTopic(
 				crud,
 				definition,
 				requestedWhere: topic.where,
-				accessCacheKey: definition.state.options.realtime?.accessCacheKey,
+				accessCacheKey: collectionAccessCacheKey(definition),
 			},
 			context,
 		);
@@ -444,6 +653,7 @@ async function resolveIncrementalTopic(
 			topic.resource
 		];
 		if (!crud || !definition) throw new Error("Global not found");
+		enforceRowLiveQueryPolicy(app, topic, definition);
 		return evaluateTopicAccess(
 			app,
 			{
@@ -523,7 +733,7 @@ async function resolveChannelSubscription(
  *
  * POST /realtime
  * Initial body: { topics: [{ id, resourceType, resource, where?, with?, limit?, offset?, orderBy?, sinceSeq? }] }
- * Control body: { sessionId, token, topology: { protocol, version, revision, topics, channels } }
+ * Control body: { sessionId, token, topology: { protocol, version, revision, subscriptions } }
  *
  * Response: SSE stream with events:
  * - session: { sessionId, token }
@@ -570,6 +780,8 @@ export async function realtimeSubscribe(
 			| "query_limit"
 			| "relation_depth"
 			| "snapshot_bytes"
+			| "row_live_queries_disabled"
+			| "collection_realtime_disabled"
 			| "access",
 		details: Partial<
 			Pick<RealtimeTopicRejectedPayload, "resource" | "operation"> & {
@@ -594,12 +806,19 @@ export async function realtimeSubscribe(
 
 	// Resolve context (auth, locale, etc.)
 	const resolved = await resolveContext(app, request, config, context);
+	let frozenSubscriptionScope: Promise<string | null> | undefined;
+	const getFrozenSubscriptionScope = () =>
+		(frozenSubscriptionScope ??= resolveRealtimeSubscriptionScope(
+			resolved.appContext,
+			app.config?.realtime?.subscriptionScope,
+		));
 
 	// Parse request body
 	let body: {
 		topics?: TopicInput[];
 		channels?: ChannelSubscriptionInput[];
 		transport?: "shared-provider";
+		crdtHold?: true;
 		sessionId?: string;
 		token?: string;
 		topology?: RealtimeDesiredTopology;
@@ -619,20 +838,30 @@ export async function realtimeSubscribe(
 	}
 
 	const { channels: channelInputs, topics } = body;
+	const crdtHold = body.crdtHold === true;
 	const admission = resolveRealtimeAdmissionConfig(
 		app.config?.realtime?.admission,
 	);
 	if (body.topology !== undefined) {
+		if ((body.topology as { version?: unknown }).version !== 2) {
+			return Response.json(
+				{
+					error: {
+						code: "REALTIME_TOPOLOGY_VERSION_UNSUPPORTED",
+						message: "Realtime topology was rejected",
+					},
+				},
+				{ status: 400 },
+			);
+		}
 		if (
 			!body.sessionId ||
 			!body.token ||
 			body.topology.protocol !== "questpie-realtime-topology" ||
 			!Number.isSafeInteger(body.topology.revision) ||
 			body.topology.revision < 1 ||
-			!Array.isArray(body.topology.topics) ||
-			!Array.isArray(body.topology.channels) ||
-			body.topology.topics.length + body.topology.channels.length >
-				admission.maxTopicsPerConnection
+			!Array.isArray(body.topology.subscriptions) ||
+			body.topology.subscriptions.length > admission.maxTopicsPerConnection
 		) {
 			return Response.json(
 				{
@@ -645,28 +874,133 @@ export async function realtimeSubscribe(
 			);
 		}
 		try {
-			for (const desired of body.topology.topics) {
-				await resolveIncrementalTopic(
-					app,
-					{
-						...desired.topic,
-						id: desired.id,
-						sinceSeq: desired.sinceSeq,
-					} as TopicInput,
-					resolved.appContext,
-					admission,
-				);
+			const entryErrors: Array<{
+				id: string;
+				kind: string;
+				code: string;
+				message: string;
+				rejection?: RealtimeTopicRejectedPayload;
+			}> = [];
+			const crdtSubscriptions: RealtimeTopologyCrdt[] = [];
+			for (const desired of body.topology.subscriptions) {
+				try {
+					if (desired.kind === "query") {
+						await resolveIncrementalTopic(
+							app,
+							{
+								...desired.topic,
+								id: desired.id,
+								sinceSeq: desired.sinceSeq,
+							} as TopicInput,
+							resolved.appContext,
+							admission,
+						);
+					} else if (desired.kind === "channel") {
+						await resolveChannelSubscription(
+							app,
+							{
+								id: desired.id,
+								channel: desired.channel,
+								params: desired.params,
+								lastEventId: desired.lastEventId,
+							},
+							resolved.appContext,
+						);
+					} else if (
+						desired.kind !== "crdt" ||
+						typeof desired.bindingId !== "string" ||
+						desired.bindingId.length === 0
+					) {
+						throw new Error("Invalid realtime subscription");
+					} else {
+						crdtSubscriptions.push(desired);
+					}
+				} catch (error) {
+					entryErrors.push({
+						id: typeof desired.id === "string" ? desired.id : "unknown",
+						kind: typeof desired.kind === "string" ? desired.kind : "unknown",
+						code:
+							error instanceof RealtimeTopicAdmissionError
+								? error.payload.code
+								: "REALTIME_SUBSCRIPTION_REJECTED",
+						message:
+							error instanceof Error
+								? error.message
+								: "Realtime subscription rejected",
+						...(error instanceof RealtimeTopicAdmissionError
+							? { rejection: error.payload }
+							: {}),
+					});
+				}
 			}
-			for (const desired of body.topology.channels) {
-				await resolveChannelSubscription(
-					app,
+			if (entryErrors.length === 0 && crdtSubscriptions.length > 0) {
+				let capability;
+				try {
+					capability = await app.realtime.authorizeTopologySession({
+						sessionId: body.sessionId,
+						token: body.token,
+						identity: realtimeControlIdentity(resolved.appContext),
+					});
+				} catch {
+					return Response.json(
+						{
+							error: {
+								code: "REALTIME_TOPOLOGY_STORAGE_UNAVAILABLE",
+								message: "Realtime topology storage is unavailable",
+							},
+						},
+						{ status: 503 },
+					);
+				}
+				if (!capability) {
+					for (const desired of crdtSubscriptions) {
+						entryErrors.push({
+							id: desired.id,
+							kind: desired.kind,
+							code: "REALTIME_SUBSCRIPTION_REJECTED",
+							message: "CRDT realtime binding unavailable",
+						});
+					}
+				} else {
+					for (const desired of crdtSubscriptions) {
+						try {
+							await app.crdtOperations.assertRealtimeBinding({
+								bindingId: desired.bindingId,
+								edgeSessionKey: Buffer.from(capability.sessionKey, "hex"),
+								edgeOwnerGeneration: BigInt(capability.ownerGeneration),
+							});
+						} catch (error) {
+							if (!(error instanceof CrdtRealtimeBindingRejectedError)) {
+								return Response.json(
+									{
+										error: {
+											code: "REALTIME_TOPOLOGY_STORAGE_UNAVAILABLE",
+											message: "Realtime topology storage is unavailable",
+										},
+									},
+									{ status: 503 },
+								);
+							}
+							entryErrors.push({
+								id: desired.id,
+								kind: desired.kind,
+								code: "REALTIME_SUBSCRIPTION_REJECTED",
+								message: "CRDT realtime binding unavailable",
+							});
+						}
+					}
+				}
+			}
+			if (entryErrors.length > 0) {
+				return Response.json(
 					{
-						id: desired.id,
-						channel: desired.channel,
-						params: desired.params,
-						lastEventId: desired.lastEventId,
+						error: {
+							code: "REALTIME_TOPOLOGY_ENTRIES_REJECTED",
+							message: "Realtime topology entries were rejected",
+							entries: entryErrors,
+						},
 					},
-					resolved.appContext,
+					{ status: 400 },
 				);
 			}
 			let result;
@@ -721,7 +1055,7 @@ export async function realtimeSubscribe(
 			return Response.json(
 				{
 					protocol: "questpie-realtime-topology",
-					version: 1,
+					version: 2,
 					...result,
 				},
 				{ status: result.status === "accepted" ? 202 : 200 },
@@ -747,7 +1081,7 @@ export async function realtimeSubscribe(
 			{
 				error: {
 					code: "REALTIME_TOPOLOGY_INVALID",
-					message: "Realtime control requires desired topology protocol v1",
+					message: "Realtime control requires desired topology protocol v2",
 				},
 			},
 			{ status: 400 },
@@ -756,9 +1090,14 @@ export async function realtimeSubscribe(
 
 	// Initial sessions may carry live-query topics, framework channels, or both.
 	if (
+		(body.crdtHold !== undefined && body.crdtHold !== true) ||
 		(topics !== undefined && !Array.isArray(topics)) ||
 		(channelInputs !== undefined && !Array.isArray(channelInputs)) ||
-		((topics?.length ?? 0) === 0 && (channelInputs?.length ?? 0) === 0)
+		(crdtHold &&
+			((topics?.length ?? 0) !== 0 || (channelInputs?.length ?? 0) !== 0)) ||
+		(!crdtHold &&
+			(topics?.length ?? 0) === 0 &&
+			(channelInputs?.length ?? 0) === 0)
 	) {
 		return errorResponse(
 			ApiError.badRequest(
@@ -876,13 +1215,25 @@ export async function realtimeSubscribe(
 			}
 			collectionCruds.set(topic.resource, crud);
 			const definition = collectionDefinitions[topic.resource];
+			try {
+				enforceRowLiveQueryPolicy(app, topic, definition);
+			} catch (error) {
+				if (!(error instanceof RealtimeTopicAdmissionError)) throw error;
+				observeTopicRejection(error);
+				topicErrors.push({
+					id: topic.id,
+					message: error.message,
+					rejection: error.payload,
+				});
+				continue;
+			}
 			validatedTopics.push({
 				...topic,
 				type: "collection",
 				crud,
 				definition,
 				requestedWhere: topic.where,
-				accessCacheKey: definition?.state.options.realtime?.accessCacheKey,
+				accessCacheKey: collectionAccessCacheKey(definition),
 			});
 		} else if (topic.resourceType === "global") {
 			try {
@@ -891,6 +1242,7 @@ export async function realtimeSubscribe(
 				if (!crud) throw new Error("Global not found");
 				globalCruds.set(topic.resource, crud);
 				const definition = globalDefinitions[topic.resource];
+				enforceRowLiveQueryPolicy(app, topic, definition);
 				validatedTopics.push({
 					...topic,
 					type: "global",
@@ -899,7 +1251,16 @@ export async function realtimeSubscribe(
 					requestedWhere: topic.where,
 					accessCacheKey: definition?.state.options.realtime?.accessCacheKey,
 				});
-			} catch {
+			} catch (error) {
+				if (error instanceof RealtimeTopicAdmissionError) {
+					observeTopicRejection(error);
+					topicErrors.push({
+						id: topic.id,
+						message: error.message,
+						rejection: error.payload,
+					});
+					continue;
+				}
 				topicErrors.push({
 					id: topic.id,
 					message: app.t(
@@ -961,7 +1322,11 @@ export async function realtimeSubscribe(
 		}
 	}
 
-	if (accessValidatedTopics.length === 0 && validatedChannelsById.size === 0) {
+	if (
+		!crdtHold &&
+		accessValidatedTopics.length === 0 &&
+		validatedChannelsById.size === 0
+	) {
 		const rejectionErrors = topicErrors.flatMap((error) =>
 			error.rejection ? [error.rejection] : [],
 		);
@@ -1022,46 +1387,57 @@ export async function realtimeSubscribe(
 	}
 
 	if (body.transport === "shared-provider") {
-		if (validatedChannelsById.size > 0 || validatedTopicsById.size === 0) {
+		if (
+			validatedChannelsById.size > 0 ||
+			(validatedTopicsById.size === 0 && !crdtHold)
+		) {
 			releaseConnection();
 			return errorResponse(
 				ApiError.badRequest(
-					"Shared-provider session bootstrap only accepts live-query topics",
+					"Shared-provider session bootstrap accepts live-query topics or an explicit CRDT hold",
 				),
 				request,
 				resolved.appContext.locale,
 			);
 		}
-		const transportConfig = await app.realtime.getClientTransportConfig({
-			request,
-		});
-		if (transportConfig.transport !== "shared-provider") {
-			releaseConnection();
-			return errorResponse(
-				ApiError.badRequest("Shared-provider realtime is not configured"),
-				request,
-				resolved.appContext.locale,
-			);
-		}
-
 		const edgeSessionId = globalThis.crypto.randomUUID();
 		const controlToken = globalThis.crypto.randomUUID();
-		const topicUnsubscribers = new Map<string, () => void>();
 		let unregisterControl = () => {};
 		let sink: ClientSink | null = null;
+		let edge: RealtimeEdgeSession | null = null;
 		let closed = false;
-		let applyingTopology = false;
-		let appliedTopology = createInitialTopology(
+		let provisionalCrdtHold = crdtHold;
+		let activeOwnerGeneration = 0;
+		let ownerSignal: AbortSignal | null = null;
+		let closeFromTransport = () => {};
+		let retainAdmission = false;
+		const ownerIsActive = (generation: number) =>
+			!closed &&
+			generation === activeOwnerGeneration &&
+			ownerSignal !== null &&
+			!ownerSignal.aborted;
+		const initialTopology = createInitialTopology(
 			topics ?? [],
 			[],
 			new Set(validatedTopicsById.keys()),
 			new Set(),
 		);
 		try {
+			const transportConfig = await app.realtime.getClientTransportConfig({
+				request,
+			});
+			if (transportConfig.transport !== "shared-provider") {
+				return errorResponse(
+					ApiError.badRequest("Shared-provider realtime is not configured"),
+					request,
+					resolved.appContext.locale,
+				);
+			}
 			sink = await app.realtime.openClientSession({
 				sessionId: edgeSessionId,
 				principal: resolved.appContext.principal ?? null,
 				resolvePrincipal: async () => resolved.appContext.principal ?? null,
+				onClose: () => closeFromTransport(),
 			});
 			if (!sink.clientChannel) {
 				throw new Error(
@@ -1075,29 +1451,31 @@ export async function realtimeSubscribe(
 			);
 			const heartbeatIntervalMs =
 				app.config?.realtime?.keepAliveIntervalMs ?? 8000;
+			const originalIdentity = realtimeControlIdentity(resolved.appContext);
 			const close = () => {
 				if (closed) return;
 				closed = true;
 				releaseConnection();
 				unregisterControl();
-				for (const unsubscribe of topicUnsubscribers.values()) unsubscribe();
-				topicUnsubscribers.clear();
+				void edge?.close().catch(() => {});
 				void activeSink.close("normal").catch(() => {});
 			};
+			closeFromTransport = close;
+			const closeIfEmpty = () => {
+				if (edge?.size && provisionalCrdtHold) provisionalCrdtHold = false;
+				if (edge?.size === 0 && !provisionalCrdtHold) close();
+			};
 			const teardownTopic = (topicId: string) => {
-				const unsubscribe = topicUnsubscribers.get(topicId);
-				if (!unsubscribe) return;
-				topicUnsubscribers.delete(topicId);
-				unsubscribe();
-				if (topicUnsubscribers.size === 0 && !applyingTopology) close();
+				void edge?.drop(topicId).then(closeIfEmpty).catch(close);
 			};
 			const subscribeTopic = async (
 				topic: ValidatedTopic,
 				baseContext: RealtimeRequestContext,
-			) => {
+			): Promise<RealtimeEdgeBinding> => {
 				if (closed) throw new Error("Realtime session is closed");
-				if (topicUnsubscribers.has(topic.id)) {
-					throw new Error("Topic id is already subscribed");
+				const bindingGeneration = activeOwnerGeneration;
+				if (!ownerIsActive(bindingGeneration)) {
+					throw new Error("Realtime owner is fenced");
 				}
 				const topicContext =
 					topic.locale && topic.locale !== baseContext.locale
@@ -1107,12 +1485,30 @@ export async function realtimeSubscribe(
 					edgeSessionId,
 					topicContext,
 					topic.accessCacheKey,
+					await getFrozenSubscriptionScope(),
 				);
+				if (!ownerIsActive(bindingGeneration)) {
+					throw new Error("Realtime owner is fenced");
+				}
 				const snapshotTopic = stampValidatedTopicMode(
 					topic,
 					"snapshot",
 					admission.maxFindLimit,
 				);
+				const shapeDecision = classifyValidatedTopic(topic);
+				app.realtime!.record({
+					type: "delivery.classified",
+					mode: "snapshot",
+					reason:
+						shapeDecision.mode === "snapshot"
+							? shapeDecision.reason
+							: "transport_snapshot",
+				});
+				const output = new RealtimeBindingOutputGate(activeSink, {
+					maximumOrderedEvents: admission.maxBufferedDeltaEvents,
+					maximumBufferedBytes: admission.maxBufferedSnapshotBytes,
+					onError: close,
+				});
 				const unsubscribe = refreshScheduler.subscribe({
 					key: schedulerKey(snapshotTopic, accessKey),
 					topicId: topic.id,
@@ -1131,93 +1527,211 @@ export async function realtimeSubscribe(
 					heartbeatIntervalMs,
 					compute: () =>
 						limitSnapshotConcurrency(async () => {
+							if (!ownerIsActive(bindingGeneration)) {
+								throw new Error("Realtime owner is fenced");
+							}
 							const admitted = await evaluateTopicAccess(
 								app,
 								snapshotTopic,
 								topicContext,
 							);
-							return computeRealtimeSnapshot(admitted, topicContext);
+							const snapshot = await computeRealtimeSnapshot(
+								admitted,
+								topicContext,
+							);
+							if (!ownerIsActive(bindingGeneration)) {
+								throw new Error("Realtime owner is fenced");
+							}
+							return snapshot;
 						}),
 					onFrame: async (frame) => {
+						if (!ownerIsActive(bindingGeneration)) return;
 						if (frame.byteLength > admission.maxBufferedSnapshotBytes) {
+							const error = new Error(
+								`Snapshot exceeds ${admission.maxBufferedSnapshotBytes} bytes`,
+							);
+							if (!output.active) {
+								output.reject(error);
+								return;
+							}
 							teardownTopic(topic.id);
 							return;
 						}
-						await activeSink.write(frame, "latest-snapshot");
+						await output.write(frame, "latest-snapshot");
 					},
 					onError: (error) => {
+						if (!ownerIsActive(bindingGeneration)) return;
 						if (
 							isPermanentAccessError(error) ||
 							error instanceof RealtimeSnapshotBufferOverflowError
 						) {
-							teardownTopic(topic.id);
+							if (output.active) teardownTopic(topic.id);
+							else output.reject(error);
 						}
 					},
-					onTransportError: close,
+					onTransportError: (error) => {
+						if (output.active) close();
+						else output.reject(error);
+					},
 				});
-				topicUnsubscribers.set(topic.id, unsubscribe);
+				if (output.error) {
+					unsubscribe();
+					await output.dispose();
+					throw output.error;
+				}
+				return {
+					activate: () => output.activate(),
+					assertReady: () => output.assertReady(),
+					close: async () => {
+						unsubscribe();
+						await output.dispose();
+					},
+				};
 			};
 
-			const originalIdentity = realtimeControlIdentity(resolved.appContext);
+			const subscribeCrdt = async (
+				subscription: RealtimeTopologyCrdt,
+			): Promise<RealtimeEdgeBinding> => {
+				const bindingGeneration = activeOwnerGeneration;
+				if (!ownerIsActive(bindingGeneration)) {
+					throw new Error("Realtime owner is fenced");
+				}
+				const capability = await app.realtime.authorizeTopologySession({
+					sessionId: edgeSessionId,
+					token: controlToken,
+					identity: originalIdentity,
+				});
+				if (
+					!capability ||
+					capability.ownerGeneration !== bindingGeneration ||
+					!ownerIsActive(bindingGeneration)
+				) {
+					throw new Error("Realtime owner is fenced");
+				}
+				const output = new RealtimeBindingOutputGate(activeSink, {
+					maximumOrderedEvents: 0,
+					maximumBufferedBytes: admission.maxBufferedSnapshotBytes,
+					onError: close,
+				});
+				let release: (() => Promise<void>) | undefined;
+				try {
+					release = await app.crdtOperations.subscribeRealtimeBinding({
+						bindingId: subscription.bindingId,
+						edgeSessionKey: Buffer.from(capability.sessionKey, "hex"),
+						edgeOwnerGeneration: BigInt(bindingGeneration),
+						signal: ownerSignal!,
+						onDirty: async () => {
+							await output.write(
+								encodeSseEvent("crdt_dirty", {
+									topologyEntryId: subscription.id,
+								}),
+								"latest-snapshot",
+							);
+						},
+						onError: (error) => {
+							if (output.active) close();
+							else output.reject(error);
+						},
+					});
+					if (output.error) throw output.error;
+					return {
+						activate: () => output.activate(),
+						assertReady: () => output.assertReady(),
+						close: async () => {
+							await release?.();
+							await output.dispose();
+						},
+					};
+				} catch (error) {
+					await release?.();
+					await output.dispose();
+					throw error;
+				}
+			};
+
 			const topologySession = await app.realtime.openTopologySession({
 				sessionId: edgeSessionId,
 				token: controlToken,
 				identity: originalIdentity,
-				topology: appliedTopology,
-				apply: async (topology) => {
+				topology: initialTopology,
+				clientLeaseMs: MANAGED_PROVIDER_CLIENT_LEASE_MS,
+				apply: async ({ topology, ownerGeneration, signal }) => {
 					if (closed) throw new Error("Realtime session is closed");
-					applyingTopology = true;
-					const current = new Map(
-						appliedTopology.topics.map((topic) => [topic.id, topic]),
+					if (signal.aborted) throw new Error("Realtime owner is fenced");
+					if (ownerGeneration !== activeOwnerGeneration) {
+						throw new Error("Realtime owner generation mismatch");
+					}
+					const candidate = await resolveRealtimeTopologyCandidate(
+						app,
+						topology,
+						resolved.appContext,
+						admission,
 					);
-					const desiredIds = new Set(topology.topics.map((topic) => topic.id));
-					for (const topicId of topicUnsubscribers.keys()) {
-						const desired = topology.topics.find(
-							(topic) => topic.id === topicId,
+					if (candidate.channels.size > 0) {
+						throw new RealtimeTopologyApplyRejectedError(
+							[...candidate.channels.keys()].map((id) => ({
+								id,
+								kind: "channel",
+								code: "REALTIME_SUBSCRIPTION_REJECTED",
+								message:
+									"Shared-provider topology accepts queries and CRDT bindings only",
+							})),
 						);
-						if (
-							!desiredIds.has(topicId) ||
-							JSON.stringify(current.get(topicId)) !== JSON.stringify(desired)
-						) {
-							teardownTopic(topicId);
-						}
 					}
-					for (const desired of topology.topics) {
-						if (topicUnsubscribers.has(desired.id)) continue;
-						if (topicUnsubscribers.size >= admission.maxTopicsPerConnection) {
-							observeAdmission("subscription_limit");
-							throw new Error(
-								`Connection accepts at most ${admission.maxTopicsPerConnection} topics`,
-							);
-						}
-						const rawTopic = {
-							...desired.topic,
-							...(desired.topic.resourceType === "collection" &&
-							desired.topic.operation === "get"
-								? { recordId: desired.topic.id }
-								: {}),
-							id: desired.id,
-							sinceSeq: desired.sinceSeq,
-						} as TopicInput;
-						const topic = await resolveIncrementalTopic(
-							app,
-							rawTopic,
-							resolved.appContext,
-							admission,
+					if (signal.aborted) throw new Error("Realtime owner is fenced");
+					try {
+						await edge!.apply(
+							{ topology, ownerGeneration, signal },
+							async (subscription) => {
+								if (subscription.kind === "query") {
+									const resolvedQuery = candidate.queries.get(subscription.id)!;
+									return subscribeTopic(
+										resolvedQuery.topic,
+										resolvedQuery.context,
+									);
+								}
+								if (subscription.kind === "crdt") {
+									return subscribeCrdt(candidate.crdt.get(subscription.id)!);
+								}
+								return { activate: () => {}, close: () => {} };
+							},
 						);
-						await subscribeTopic(topic, resolved.appContext);
+					} catch (error) {
+						throw edgeStageRejection(error) ?? error;
 					}
-					appliedTopology = topology;
-					applyingTopology = false;
-					if (topicUnsubscribers.size === 0) close();
+					closeIfEmpty();
 				},
 				onClose: close,
 			});
+			activeOwnerGeneration = topologySession.generation;
+			ownerSignal = topologySession.signal;
 			unregisterControl = () => void topologySession.close();
-			for (const topic of validatedTopicsById.values()) {
-				await subscribeTopic(topic, resolved.appContext);
-			}
+			edge = new RealtimeEdgeSession({
+				...initialTopology,
+				subscriptions: [],
+			});
+			await edge.apply(
+				{
+					topology: initialTopology,
+					ownerGeneration: topologySession.generation,
+					signal: topologySession.signal,
+				},
+				async (subscription) => {
+					if (subscription.kind !== "query") {
+						if (subscription.kind === "crdt") {
+							return subscribeCrdt(subscription);
+						}
+						return { activate: () => {}, close: () => {} };
+					}
+					return subscribeTopic(
+						validatedTopicsById.get(subscription.id)!,
+						resolved.appContext,
+					);
+				},
+			);
+			closeIfEmpty();
 
+			retainAdmission = true;
 			return Response.json(
 				{
 					transport: "shared-provider",
@@ -1226,18 +1740,19 @@ export async function realtimeSubscribe(
 					channel: activeSink.clientChannel,
 					control: {
 						protocol: "questpie-realtime-topology",
-						versions: [1],
+						versions: [2],
 					},
 					...(topicErrors.length ? { errors: topicErrors } : {}),
 				},
 				{ headers: { "Cache-Control": "no-store" } },
 			);
 		} catch (error) {
-			if (!closed) releaseConnection();
 			unregisterControl();
-			for (const unsubscribe of topicUnsubscribers.values()) unsubscribe();
+			await edge?.close().catch(() => {});
 			if (sink) void sink.close("transport_error").catch(() => {});
 			return errorResponse(error, request, resolved.appContext.locale);
+		} finally {
+			if (!retainAdmission) releaseConnection();
 		}
 	}
 
@@ -1251,12 +1766,18 @@ export async function realtimeSubscribe(
 		start: async (controller) => {
 			let transport: SseClientTransport | null = null;
 			try {
-				const topicUnsubscribers = new Map<string, () => void>();
-				const channelUnsubscribers = new Map<string, () => void>();
+				let edge: RealtimeEdgeSession | null = null;
 				let closed = false;
 				let closeRequested = false;
-				let applyingTopology = false;
-				let appliedTopology = createInitialTopology(
+				let provisionalCrdtHold = crdtHold;
+				let activeOwnerGeneration = 0;
+				let ownerSignal: AbortSignal | null = null;
+				const ownerIsActive = (generation: number) =>
+					!closed &&
+					generation === activeOwnerGeneration &&
+					ownerSignal !== null &&
+					!ownerSignal.aborted;
+				const initialTopology = createInitialTopology(
 					topics ?? [],
 					channelInputs ?? [],
 					new Set(validatedTopicsById.keys()),
@@ -1279,18 +1800,30 @@ export async function realtimeSubscribe(
 					principal: resolved.appContext.principal ?? null,
 					resolvePrincipal: async () => resolved.appContext.principal ?? null,
 				});
+				const sessionSink = createFencedClientSink(sink, () =>
+					ownerIsActive(activeOwnerGeneration),
+				);
 				const snapshotWriter = new SseLatestSnapshotWriter(
-					sink,
+					sessionSink,
 					admission.maxBufferedSnapshotBytes,
 				);
-				const deltaWriter = new SseOrderedDeltaWriter(sink, {
+				const writerObservationKey = globalThis.crypto.randomUUID();
+				const crdtDirtyWriter = new SseLatestSnapshotWriter(
+					sessionSink,
+					Math.min(
+						admission.maxBufferedSnapshotBytes,
+						MAX_REALTIME_TOPOLOGY_BYTES,
+					),
+					{ includeTransportBufferedBytesInLimit: false },
+				);
+				const deltaWriter = new SseOrderedDeltaWriter(sessionSink, {
 					maximumBufferedEvents: admission.maxBufferedDeltaEvents,
 					maximumBufferedBytes: admission.maxBufferedDeltaBytes,
 					onBuffer: (events, bytes) =>
 						app.realtime!.record({
 							type: "delta.buffer",
 							scope: "writer",
-							key: edgeSessionId,
+							key: writerObservationKey,
 							events,
 							bytes,
 						}),
@@ -1307,10 +1840,13 @@ export async function realtimeSubscribe(
 				);
 				const heartbeatIntervalMs =
 					app.config?.realtime?.keepAliveIntervalMs ?? 8000;
+				const originalIdentity = realtimeControlIdentity(resolved.appContext);
+				const controlToken = globalThis.crypto.randomUUID();
 				let removeKeepAlive = () => {};
 				let unregisterControl = () => {};
 				flushPending = () => {
 					void snapshotWriter.flush().catch(requestClose);
+					void crdtDirtyWriter.flush().catch(requestClose);
 				};
 				const close = () => {
 					if (closed) return;
@@ -1320,16 +1856,10 @@ export async function realtimeSubscribe(
 					unregisterControl();
 					flushPending = null;
 					snapshotWriter.clear();
+					crdtDirtyWriter.clear();
 					deltaWriter.clear();
 					request.signal.removeEventListener("abort", close);
-					for (const unsub of topicUnsubscribers.values()) {
-						unsub();
-					}
-					topicUnsubscribers.clear();
-					for (const unsub of channelUnsubscribers.values()) {
-						unsub();
-					}
-					channelUnsubscribers.clear();
+					void edge?.close().catch(() => {});
 					void transport?.stop().catch(() => {});
 				};
 				closeStream = close;
@@ -1341,8 +1871,11 @@ export async function realtimeSubscribe(
 
 				// Helper to send SSE event
 				const send = async (event: string, data: unknown) => {
-					if (closed) return;
-					await sink.write(encodeSseEvent(event, data), "latest-snapshot");
+					if (!ownerIsActive(activeOwnerGeneration)) return;
+					await sessionSink.write(
+						encodeSseEvent(event, data),
+						"latest-snapshot",
+					);
 				};
 
 				// Send per-topic error
@@ -1357,50 +1890,37 @@ export async function realtimeSubscribe(
 					send("error", { channelSubscriptionId: subscriptionId, message });
 
 				const closeIfEmpty = () => {
-					if (applyingTopology) return;
-					if (
-						topicUnsubscribers.size === 0 &&
-						channelUnsubscribers.size === 0
-					) {
-						requestClose();
-					}
+					if (edge?.size && provisionalCrdtHold) provisionalCrdtHold = false;
+					if (edge?.size === 0 && !provisionalCrdtHold) requestClose();
 				};
 
 				const teardownTopic = (topicId: string) => {
-					const unsubscribe = topicUnsubscribers.get(topicId);
-					if (!unsubscribe) return;
-
-					topicUnsubscribers.delete(topicId);
-					unsubscribe();
-					closeIfEmpty();
-				};
-
-				const teardownChannel = (subscriptionId: string) => {
-					const unsubscribe = channelUnsubscribers.get(subscriptionId);
-					if (!unsubscribe) return;
-					channelUnsubscribers.delete(subscriptionId);
-					unsubscribe();
-					closeIfEmpty();
+					void edge?.drop(topicId).then(closeIfEmpty).catch(requestClose);
 				};
 
 				const subscribeChannel = async (
 					channel: ValidatedChannelSubscription,
-				) => {
-					if (closed) return;
-					if (channelUnsubscribers.has(channel.id)) {
-						await sendChannelError(
-							channel.id,
-							"Channel subscription id is already used",
-						);
-						return;
+				): Promise<RealtimeEdgeBinding> => {
+					const bindingGeneration = activeOwnerGeneration;
+					if (!ownerIsActive(bindingGeneration)) {
+						throw new Error("Realtime owner is fenced");
 					}
 					let unsubscribeLedger: (() => void) | undefined;
 					let unsubscribePresence: (() => Promise<void>) | undefined;
+					const bindingInstanceId = globalThis.crypto.randomUUID();
+					const fencedSink = createFencedClientSink(sink, () =>
+						ownerIsActive(bindingGeneration),
+					);
+					const subscriptionSink = new RealtimeBindingOutputGate(fencedSink, {
+						maximumOrderedEvents: admission.maxBufferedDeltaEvents,
+						maximumBufferedBytes: admission.maxBufferedDeltaBytes,
+						onError: requestClose,
+					});
 					try {
 						unsubscribeLedger = await app.realtime!.subscribeChannel({
-							subscriptionId: `${edgeSessionId}:${channel.id}`,
+							subscriptionId: `${edgeSessionId}:${channel.id}:${bindingInstanceId}`,
 							channel: channel.resolvedName,
-							sink,
+							sink: subscriptionSink,
 							lastEventId: channel.lastEventId,
 							encodeFrame: (frame) => transport!.encodeChannelFrame(frame),
 						});
@@ -1414,20 +1934,30 @@ export async function realtimeSubscribe(
 							unsubscribePresence = await app.realtime!.registerChannelPresence(
 								{
 									channel: channel.resolvedName,
-									connectionId: `${edgeSessionId}:${channel.id}`,
+									connectionId: `${edgeSessionId}:${channel.id}:${bindingInstanceId}`,
 									principalId,
-									sink,
+									sink: subscriptionSink,
 									data: channel.presence,
 								},
 							);
 						}
-						channelUnsubscribers.set(channel.id, () => {
-							void unsubscribePresence?.().catch(requestClose);
-							unsubscribeLedger?.();
-						});
+						if (!ownerIsActive(bindingGeneration)) {
+							throw new Error("Realtime owner is fenced");
+						}
+						if (subscriptionSink.error) throw subscriptionSink.error;
+						return {
+							activate: () => subscriptionSink.activate(),
+							assertReady: () => subscriptionSink.assertReady(),
+							close: async () => {
+								await unsubscribePresence?.().catch(requestClose);
+								unsubscribeLedger?.();
+								await subscriptionSink.dispose();
+							},
+						};
 					} catch (error) {
 						await unsubscribePresence?.();
 						unsubscribeLedger?.();
+						await subscriptionSink.dispose();
 						throw error;
 					}
 				};
@@ -1435,11 +1965,10 @@ export async function realtimeSubscribe(
 				const subscribeTopic = async (
 					topic: ValidatedTopic,
 					baseContext: RealtimeRequestContext,
-				) => {
-					if (closed) return;
-					if (topicUnsubscribers.has(topic.id)) {
-						await sendTopicError(topic.id, "Topic id is already subscribed");
-						return;
+				): Promise<RealtimeEdgeBinding> => {
+					const bindingGeneration = activeOwnerGeneration;
+					if (!ownerIsActive(bindingGeneration)) {
+						throw new Error("Realtime owner is fenced");
 					}
 					const topicContext =
 						topic.locale && topic.locale !== baseContext.locale
@@ -1449,18 +1978,51 @@ export async function realtimeSubscribe(
 						edgeSessionId,
 						topicContext,
 						topic.accessCacheKey,
+						await getFrozenSubscriptionScope(),
 					);
-					const requestedDeliveryMode = classifyValidatedTopic(topic);
-					const deliveryMode =
-						requestedDeliveryMode === "delta" &&
+					if (!ownerIsActive(bindingGeneration)) {
+						throw new Error("Realtime owner is fenced");
+					}
+					const shapeDecision = classifyValidatedTopic(topic);
+					const deliveryDecision =
+						shapeDecision.mode === "delta" &&
 						app.config.realtime?.nativeDeltas !== true
-							? "snapshot"
-							: requestedDeliveryMode;
+							? {
+									mode: "snapshot" as const,
+									reason: "native_deltas_disabled" as const,
+								}
+							: shapeDecision;
+					const deliveryMode = deliveryDecision.mode;
+					app.realtime!.record({
+						type: "delivery.classified",
+						...deliveryDecision,
+					});
 					const deliveryTopic = stampValidatedTopicMode(
 						topic,
 						deliveryMode,
 						admission.maxFindLimit,
 					);
+					const topicSink: ClientSink = {
+						sessionId: sessionSink.sessionId,
+						write: (frame, delivery) => {
+							if (delivery === "row-delta") {
+								return deltaWriter.write(frame);
+							}
+							if (delivery === "latest-snapshot") {
+								return snapshotWriter.write(topic.id, frame);
+							}
+							return sessionSink.write(frame, delivery);
+						},
+						close: (reason) => sessionSink.close(reason),
+					};
+					const output = new RealtimeBindingOutputGate(topicSink, {
+						maximumOrderedEvents: admission.maxBufferedDeltaEvents,
+						maximumBufferedBytes: Math.max(
+							admission.maxBufferedSnapshotBytes,
+							admission.maxBufferedDeltaBytes,
+						),
+						onError: requestClose,
+					});
 					const unsub = refreshScheduler.subscribe({
 						key: schedulerKey(deliveryTopic, accessKey),
 						topicId: topic.id,
@@ -1480,6 +2042,9 @@ export async function realtimeSubscribe(
 						heartbeatIntervalMs,
 						compute: () =>
 							limitSnapshotConcurrency(async () => {
+								if (!ownerIsActive(bindingGeneration)) {
+									throw new Error("Realtime owner is fenced");
+								}
 								const admittedTopic = await evaluateTopicAccess(
 									app,
 									deliveryTopic,
@@ -1504,18 +2069,24 @@ export async function realtimeSubscribe(
 										);
 									}
 								}
+								if (!ownerIsActive(bindingGeneration)) {
+									throw new Error("Realtime owner is fenced");
+								}
 								return data;
 							}),
 						hydrateRows:
 							deliveryMode === "delta"
 								? (recordIds) =>
 										limitDeltaHydration(async () => {
+											if (!ownerIsActive(bindingGeneration)) {
+												throw new Error("Realtime owner is fenced");
+											}
 											const admittedTopic = await evaluateTopicAccess(
 												app,
 												deliveryTopic,
 												topicContext,
 											);
-											return hydrateRealtimeRows(
+											const rows = await hydrateRealtimeRows(
 												admittedTopic as Extract<
 													ValidatedTopic,
 													{
@@ -1526,6 +2097,10 @@ export async function realtimeSubscribe(
 												recordIds,
 												topicContext,
 											);
+											if (!ownerIsActive(bindingGeneration)) {
+												throw new Error("Realtime owner is fenced");
+											}
+											return rows;
 										})
 								: undefined,
 						maxDeltaQueueEvents: admission.maxBufferedDeltaEvents,
@@ -1536,6 +2111,7 @@ export async function realtimeSubscribe(
 								? admission.deltaRebootstrapIntervalMs
 								: undefined,
 						onFrame: async (frame, frameKind) => {
+							if (!ownerIsActive(bindingGeneration)) return;
 							if (deliveryMode === "delta") {
 								const maximumBootstrapBytes = Math.min(
 									admission.maxBufferedSnapshotBytes,
@@ -1551,226 +2127,278 @@ export async function realtimeSubscribe(
 										frame.byteLength,
 									);
 								}
-								await deltaWriter.write(frame);
+								await output.write(frame, "row-delta");
 								return;
 							}
 							if (frame.byteLength > admission.maxBufferedSnapshotBytes) {
 								observeAdmission("snapshot_bytes");
-								await sendTopicError(
-									topic.id,
+								const error = new Error(
 									`Snapshot exceeds ${admission.maxBufferedSnapshotBytes} bytes`,
 								);
+								if (!output.active) {
+									output.reject(error);
+									return;
+								}
+								await sendTopicError(topic.id, error.message);
 								teardownTopic(topic.id);
 								return;
 							}
-							await snapshotWriter.write(topic.id, frame);
+							await output.write(frame, "latest-snapshot");
 						},
 						onError: (error) => {
+							if (!ownerIsActive(bindingGeneration)) return;
 							if (error instanceof RealtimeTopicAdmissionError) {
 								observeTopicRejection(error);
 							}
-							void sendTopicError(
-								topic.id,
-								error instanceof Error ? error.message : "Refresh failed",
+							const errorPayload =
 								error instanceof RealtimeTopicAdmissionError
 									? error.payload
-									: undefined,
-							)
+									: {
+											topicId: topic.id,
+											message:
+												error instanceof Error
+													? error.message
+													: "Refresh failed",
+										};
+							const permanent =
+								isPermanentAccessError(error) ||
+								error instanceof RealtimeSnapshotBufferOverflowError ||
+								error instanceof RealtimeDeltaBufferOverflowError ||
+								error instanceof RealtimeTopicAdmissionError;
+							if (permanent && !output.active) {
+								output.reject(error);
+								return;
+							}
+							void output
+								.write(encodeSseEvent("error", errorPayload), "latest-snapshot")
 								.catch(requestClose)
 								.finally(() => {
 									// Transient compute/hydration failures remain subscribed so a
 									// later change can drive the delta group through recovery.
-									if (
-										isPermanentAccessError(error) ||
-										error instanceof RealtimeSnapshotBufferOverflowError ||
-										error instanceof RealtimeDeltaBufferOverflowError ||
-										error instanceof RealtimeTopicAdmissionError
-									) {
+									if (permanent) {
 										teardownTopic(topic.id);
 									}
 								});
 						},
 						onTransportError: (error) => {
-							void send("error", {
-								topicId: "*",
-								message:
-									error instanceof Error
-										? error.message
-										: "Realtime transport failed",
-							})
+							if (!ownerIsActive(bindingGeneration)) return;
+							if (!output.active) {
+								output.reject(error);
+								return;
+							}
+							void output
+								.write(
+									encodeSseEvent("error", {
+										topicId: "*",
+										message:
+											error instanceof Error
+												? error.message
+												: "Realtime transport failed",
+									}),
+									"latest-snapshot",
+								)
 								.catch(() => {})
 								.finally(requestClose);
 						},
 					});
-					topicUnsubscribers.set(topic.id, unsub);
+					if (output.error) {
+						unsub();
+						await output.dispose();
+						throw output.error;
+					}
+					return {
+						activate: () => output.activate(),
+						assertReady: () => output.assertReady(),
+						close: async () => {
+							unsub();
+							await output.dispose();
+						},
+					};
 				};
 
-				const originalIdentity = realtimeControlIdentity(resolved.appContext);
-				const controlToken = globalThis.crypto.randomUUID();
+				const subscribeCrdt = async (
+					subscription: RealtimeTopologyCrdt,
+				): Promise<RealtimeEdgeBinding> => {
+					const bindingGeneration = activeOwnerGeneration;
+					if (!ownerIsActive(bindingGeneration)) {
+						throw new Error("Realtime owner is fenced");
+					}
+					const capability = await app.realtime!.authorizeTopologySession({
+						sessionId: edgeSessionId,
+						token: controlToken,
+						identity: originalIdentity,
+					});
+					if (
+						!capability ||
+						capability.ownerGeneration !== bindingGeneration ||
+						!ownerIsActive(bindingGeneration)
+					) {
+						throw new Error("Realtime owner is fenced");
+					}
+					const crdtSink: ClientSink = {
+						sessionId: sessionSink.sessionId,
+						write: (frame, delivery) =>
+							delivery === "latest-snapshot"
+								? crdtDirtyWriter.write(subscription.id, frame)
+								: sessionSink.write(frame, delivery),
+						close: (reason) => sessionSink.close(reason),
+					};
+					const output = new RealtimeBindingOutputGate(crdtSink, {
+						maximumOrderedEvents: 0,
+						maximumBufferedBytes: admission.maxBufferedSnapshotBytes,
+						onError: requestClose,
+					});
+					let release: (() => Promise<void>) | undefined;
+					try {
+						release = await app.crdtOperations.subscribeRealtimeBinding({
+							bindingId: subscription.bindingId,
+							edgeSessionKey: Buffer.from(capability.sessionKey, "hex"),
+							edgeOwnerGeneration: BigInt(bindingGeneration),
+							signal: ownerSignal!,
+							onDirty: async () => {
+								await output.write(
+									encodeSseEvent("crdt_dirty", {
+										topologyEntryId: subscription.id,
+									}),
+									"latest-snapshot",
+								);
+							},
+							onError: (error) => {
+								if (output.active) requestClose();
+								else output.reject(error);
+							},
+						});
+						if (output.error) throw output.error;
+						return {
+							activate: () => output.activate(),
+							assertReady: () => output.assertReady(),
+							close: async () => {
+								await release?.();
+								await output.dispose();
+							},
+						};
+					} catch (error) {
+						await release?.();
+						await output.dispose();
+						throw error;
+					}
+				};
+
 				const topologySession = await app.realtime.openTopologySession({
 					sessionId: edgeSessionId,
 					token: controlToken,
 					identity: originalIdentity,
-					topology: appliedTopology,
-					apply: async (topology) => {
+					topology: initialTopology,
+					apply: async ({ topology, ownerGeneration, signal }) => {
 						if (closed) throw new Error("Realtime session is closed");
-						applyingTopology = true;
-						const currentTopics = new Map(
-							appliedTopology.topics.map((topic) => [topic.id, topic]),
-						);
-						const currentChannels = new Map(
-							appliedTopology.channels.map((channel) => [channel.id, channel]),
-						);
-						const desiredTopicIds = new Set(
-							topology.topics.map((topic) => topic.id),
-						);
-						const desiredChannelIds = new Set(
-							topology.channels.map((channel) => channel.id),
-						);
-						for (const topicId of topicUnsubscribers.keys()) {
-							const desired = topology.topics.find(
-								(topic) => topic.id === topicId,
+						if (signal.aborted) throw new Error("Realtime owner is fenced");
+						if (ownerGeneration !== activeOwnerGeneration) {
+							throw new Error("Realtime owner generation mismatch");
+						}
+						let candidate: ResolvedRealtimeTopologyCandidate;
+						try {
+							candidate = await resolveRealtimeTopologyCandidate(
+								app,
+								topology,
+								resolved.appContext,
+								admission,
 							);
-							if (
-								!desiredTopicIds.has(topicId) ||
-								JSON.stringify(currentTopics.get(topicId)) !==
-									JSON.stringify(desired)
-							) {
-								teardownTopic(topicId);
-							}
-						}
-						for (const channelId of channelUnsubscribers.keys()) {
-							const desired = topology.channels.find(
-								(channel) => channel.id === channelId,
-							);
-							if (
-								!desiredChannelIds.has(channelId) ||
-								JSON.stringify(currentChannels.get(channelId)) !==
-									JSON.stringify(desired)
-							) {
-								teardownChannel(channelId);
-							}
-						}
-
-						for (const desired of topology.channels) {
-							if (channelUnsubscribers.has(desired.id)) continue;
-							if (
-								topicUnsubscribers.size + channelUnsubscribers.size >=
-								admission.maxTopicsPerConnection
-							) {
-								observeAdmission("subscription_limit");
-								await sendChannelError(
-									desired.id,
-									`Connection accepts at most ${admission.maxTopicsPerConnection} subscriptions`,
-								);
-								throw new Error(
-									`Connection accepts at most ${admission.maxTopicsPerConnection} subscriptions`,
-								);
-							}
-							try {
-								const channel = await resolveChannelSubscription(
-									app,
-									{
-										id: desired.id,
-										channel: desired.channel,
-										params: desired.params,
-										lastEventId: desired.lastEventId,
-									},
-									resolved.appContext,
-								);
-								await subscribeChannel(channel);
-							} catch (error) {
-								await sendChannelError(
-									desired.id,
-									error instanceof Error ? error.message : "Channel rejected",
-								);
-								throw error;
-							}
-						}
-						for (const desired of topology.topics) {
-							if (topicUnsubscribers.has(desired.id)) continue;
-							if (
-								topicUnsubscribers.size + channelUnsubscribers.size >=
-								admission.maxTopicsPerConnection
-							) {
-								observeAdmission("subscription_limit");
-								await sendTopicError(
-									desired.id,
-									`Connection accepts at most ${admission.maxTopicsPerConnection} topics`,
-								);
-								throw new Error(
-									`Connection accepts at most ${admission.maxTopicsPerConnection} topics`,
-								);
-							}
-							try {
-								const rawTopic = {
-									...desired.topic,
-									...(desired.topic.resourceType === "collection" &&
-									desired.topic.operation === "get"
-										? { recordId: desired.topic.id }
-										: {}),
-									id: desired.id,
-									sinceSeq: desired.sinceSeq,
-								} as TopicInput;
-								const topicContext =
-									rawTopic.locale &&
-									rawTopic.locale !== resolved.appContext.locale
-										? { ...resolved.appContext, locale: rawTopic.locale }
-										: resolved.appContext;
-								const topic = await resolveIncrementalTopic(
-									app,
-									rawTopic,
-									topicContext,
-									admission,
-								);
-								await subscribeTopic(topic, topicContext);
-							} catch (error) {
-								if (error instanceof RealtimeTopicAdmissionError) {
-									observeTopicRejection(error);
-									await sendTopicError(
-										error.payload.topicId,
-										error.message,
-										error.payload,
-									);
-									throw error;
+						} catch (error) {
+							if (error instanceof RealtimeTopologyApplyRejectedError) {
+								for (const entry of error.entries) {
+									await send("error", {
+										topologyEntryId: entry.id,
+										kind: entry.kind,
+										code: entry.code,
+										message: entry.message,
+									});
 								}
-								await sendTopicError(
-									desired.id,
-									error instanceof Error ? error.message : "Topic rejected",
-								);
-								throw error;
 							}
+							throw error;
 						}
-						appliedTopology = topology;
-						applyingTopology = false;
+						if (signal.aborted) throw new Error("Realtime owner is fenced");
+						try {
+							await edge!.apply(
+								{ topology, ownerGeneration, signal },
+								async (subscription) => {
+									if (subscription.kind === "query") {
+										const resolvedQuery = candidate.queries.get(
+											subscription.id,
+										)!;
+										return subscribeTopic(
+											resolvedQuery.topic,
+											resolvedQuery.context,
+										);
+									}
+									if (subscription.kind === "channel") {
+										return subscribeChannel(
+											candidate.channels.get(subscription.id)!.channel,
+										);
+									}
+									if (subscription.kind === "crdt") {
+										return subscribeCrdt(candidate.crdt.get(subscription.id)!);
+									}
+									return { activate: () => {}, close: () => {} };
+								},
+							);
+						} catch (error) {
+							const rejection = edgeStageRejection(error);
+							if (rejection) {
+								for (const entry of rejection.entries) {
+									await send("error", {
+										topologyEntryId: entry.id,
+										kind: entry.kind,
+										code: entry.code,
+										message: entry.message,
+									});
+								}
+								throw rejection;
+							}
+							throw error;
+						}
 						closeIfEmpty();
 					},
 					onClose: requestClose,
 				});
+				activeOwnerGeneration = topologySession.generation;
+				ownerSignal = topologySession.signal;
 				unregisterControl = () => void topologySession.close();
+				edge = new RealtimeEdgeSession({
+					...initialTopology,
+					subscriptions: [],
+				});
 				await send("session", {
 					sessionId: edgeSessionId,
 					token: controlToken,
 					control: {
 						protocol: "questpie-realtime-topology",
-						versions: [1],
+						versions: [2],
 					},
 				});
-
-				// Subscribe to each initial topic.
-				for (const topic of validatedTopicsById.values()) {
-					await subscribeTopic(topic, resolved.appContext);
-				}
-				for (const channel of validatedChannelsById.values()) {
-					try {
-						await subscribeChannel(channel);
-					} catch (error) {
-						await sendChannelError(
-							channel.id,
-							error instanceof Error ? error.message : "Channel rejected",
-						);
-					}
-				}
+				await edge.apply(
+					{
+						topology: initialTopology,
+						ownerGeneration: topologySession.generation,
+						signal: topologySession.signal,
+					},
+					async (subscription) => {
+						if (subscription.kind === "query") {
+							return subscribeTopic(
+								validatedTopicsById.get(subscription.id)!,
+								resolved.appContext,
+							);
+						}
+						if (subscription.kind === "channel") {
+							return subscribeChannel(
+								validatedChannelsById.get(subscription.id)!,
+							);
+						}
+						if (subscription.kind === "crdt") {
+							return subscribeCrdt(subscription);
+						}
+						return { activate: () => {}, close: () => {} };
+					},
+				);
 
 				// Send initial errors for invalid topics
 				for (const error of topicErrors) {
@@ -1786,7 +2414,9 @@ export async function realtimeSubscribe(
 				removeKeepAlive = sharedSseKeepAliveTicker.register(
 					heartbeatIntervalMs,
 					(frame) => {
-						void sink.write(frame, "latest-snapshot").catch(requestClose);
+						void sessionSink
+							.write(frame, "latest-snapshot")
+							.catch(requestClose);
 					},
 				);
 

@@ -153,7 +153,6 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		globals: Object.freeze({}),
 	});
 	/** @internal Qualified host application installed by the CRDT session kernel. */
-	public crdtHostApplication?: import("#questpie/server/modules/core/integrated/crdt/host.js").CrdtHostApplicationV1;
 	private resolvedLocales: Locale[] | null = null;
 
 	/**
@@ -308,18 +307,6 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 		// Resolve service definitions so _initServices can use them
 		this._resolveServiceDefs();
-
-		// In development, track this instance in globalThis so that HMR module
-		// re-evaluations automatically close the previous instance's connection
-		// pools instead of leaking them (postgres "too many clients" in dev).
-		if (getNodeEnv() !== "production") {
-			const hmrKey = `__questpie_hmr_${config.app.url}`;
-			const existing = (globalThis as Record<string, unknown>)[hmrKey];
-			if (existing && typeof (existing as Questpie).destroy === "function") {
-				(existing as Questpie).destroy().catch(() => {});
-			}
-			(globalThis as Record<string, unknown>)[hmrKey] = this;
-		}
 	}
 
 	/**
@@ -343,21 +330,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	 *
 	 * Call this during server shutdown or HMR teardown to prevent connection leaks.
 	 *
-	 * @example HMR-safe singleton pattern (TanStack Start / Nitro):
-	 * ```ts
-	 * // app.ts
-	 * declare global { var __app: typeof app | undefined }
-	 *
-	 * globalThis.__app ??= baseApp.build({ db: { url: DATABASE_URL }, ... })
-	 * export const app = globalThis.__app
-	 *
-	 * if (import.meta.hot) {
-	 *   import.meta.hot.dispose(async () => {
-	 *     await globalThis.__app?.destroy()
-	 *     globalThis.__app = undefined
-	 *   })
-	 * }
-	 * ```
+	 * Generated app entrypoints install the corresponding HMR teardown.
 	 */
 	async destroy(): Promise<void> {
 		// Dispose user services first (non-infrastructure)

@@ -233,6 +233,9 @@ export class SseLatestSnapshotWriter {
 	constructor(
 		private readonly sink: ClientSink,
 		private readonly maximumBufferedBytes = 1024 * 1024,
+		private readonly options: {
+			includeTransportBufferedBytesInLimit?: boolean;
+		} = {},
 	) {}
 
 	get bufferedBytes(): number {
@@ -295,8 +298,12 @@ export class SseLatestSnapshotWriter {
 		frame: Uint8Array,
 		transportBufferedBytes: number,
 	): void {
+		const countedTransportBytes =
+			this.options.includeTransportBufferedBytesInLimit === false
+				? 0
+				: transportBufferedBytes;
 		if (
-			transportBufferedBytes + this.pendingBytes + frame.byteLength >
+			countedTransportBytes + this.pendingBytes + frame.byteLength >
 			this.maximumBufferedBytes
 		) {
 			throw new RealtimeSnapshotBufferOverflowError(this.maximumBufferedBytes);

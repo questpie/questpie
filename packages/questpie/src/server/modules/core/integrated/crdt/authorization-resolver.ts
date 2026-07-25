@@ -8,8 +8,17 @@ import {
 	authoritySubject,
 	type CrdtAuthentication,
 } from "#questpie/server/modules/core/integrated/crdt/authority.js";
+import {
+	CrdtAuthorizationRejectedError,
+	type CrdtAuthorizationInputV1,
+	type CrdtAuthorizationSnapshot,
+	type CrdtAuthorizedBindingCut,
+	type CrdtAuthorizedGrant,
+	type CrdtTargetV1,
+} from "#questpie/server/modules/core/integrated/crdt/authorization.js";
 import { createDeterministicSetEngine } from "#questpie/server/modules/core/integrated/crdt/deterministic-engine.js";
 import type { CrdtDesiredManifest } from "#questpie/server/modules/core/integrated/crdt/manifest.js";
+import { oauthCrdtScopesAllow } from "#questpie/server/modules/core/integrated/crdt/oauth-scope.js";
 import {
 	canonicalCrdtCollectionLocator,
 	canonicalCrdtGlobalLocator,
@@ -32,17 +41,6 @@ import type {
 	CrdtEngineReplica,
 } from "#questpie/shared/crdt-engine.js";
 
-import type {
-	CrdtHostAuthorizationInputV1,
-	CrdtTicketTargetV1,
-} from "./host-application.js";
-import type {
-	CrdtAuthorizedBindingCut,
-	CrdtAuthorizedTicketGrant,
-	CrdtAuthorizedTicketSnapshot,
-} from "./ticket-store.js";
-import { CrdtTicketRejectedError } from "./ticket.js";
-
 type CrdtDatabase = AnyDrizzleClient<any>;
 type CrdtMode = "view" | "edit";
 type AnyEngine = CrdtFieldEngine<CrdtEngineFormat, any>;
@@ -54,7 +52,7 @@ export type CrdtOwnerPolicyDecisionV1 = Readonly<{
 	fields: Readonly<Record<string, Readonly<{ read: boolean; edit: boolean }>>>;
 }>;
 
-export type CrdtTicketAuthorizationResolverConfigV1 = Readonly<{
+export type CrdtAuthorizationResolverConfigV1 = Readonly<{
 	db: CrdtDatabase;
 	namespace: string;
 	manifests: Readonly<{
@@ -77,6 +75,7 @@ export type CrdtTicketAuthorizationResolverConfigV1 = Readonly<{
 			record: Record<string, unknown>;
 		}>,
 	): Promise<CrdtOwnerPolicyDecisionV1>;
+	isAwarenessEnabled?(owner: CrdtResolvedOwnerV1): boolean;
 	now?: () => Date;
 }>;
 
@@ -125,11 +124,9 @@ type BindingRow = Readonly<{
 	canonicalHash: Uint8Array;
 }>;
 
-export function createCrdtTicketAuthorizationResolverV1(
-	config: CrdtTicketAuthorizationResolverConfigV1,
-): (
-	input: CrdtHostAuthorizationInputV1,
-) => Promise<CrdtAuthorizedTicketSnapshot> {
+export function createCrdtAuthorizationResolverV1(
+	config: CrdtAuthorizationResolverConfigV1,
+): (input: CrdtAuthorizationInputV1) => Promise<CrdtAuthorizationSnapshot> {
 	if (
 		typeof config.namespace !== "string" ||
 		config.namespace.length === 0 ||
@@ -147,7 +144,16 @@ export function createCrdtTicketAuthorizationResolverV1(
 			const resource =
 				input.purpose === "issue"
 					? await resolveIssueResource(config, input.target)
-					: await resolveRedemptionResource(config, input.resourceId);
+					: await resolveExchangeResource(config, input.resourceId);
+			const requestedMode =
+				input.purpose === "issue" ? input.target.mode : input.requestedMode;
+			const principal = input.authentication.principal;
+			if (
+				principal?.kind === "oauth" &&
+				!oauthCrdtScopesAllow(principal, resource.owner, requestedMode)
+			) {
+				throw rejected();
+			}
 			const subject = await resolveSubject(config.db, input.authentication);
 			const canonicalValues = await materializeCanonicalValues(
 				config.db,
@@ -168,10 +174,8 @@ export function createCrdtTicketAuthorizationResolverV1(
 				request: input.request,
 				record,
 			});
-			const requestedMode =
-				input.purpose === "issue" ? input.target.mode : input.requestedMode;
 			const expectedEffectiveMode =
-				input.purpose === "redeem" ? input.effectiveMode : undefined;
+				input.purpose === "issue" ? undefined : input.effectiveMode;
 			const fieldFences = await readSubjectFences(
 				config.db,
 				resource.id,
@@ -200,6 +204,31 @@ export function createCrdtTicketAuthorizationResolverV1(
 				throw rejected();
 			}
 			const authorityExpiresAt = authorityExpiry(input.authentication, now);
+			const offlineSubjectKey = createHash("sha256")
+				.update("questpie-crdt-offline-subject-v1\0")
+				.update(config.namespace)
+				.update("\0")
+				.update(subject.id)
+				.digest("base64url");
+			const manifestFieldsByStableId = new Map(
+				resource.manifest.fields.map((field) => [field.stableFieldId, field]),
+			);
+			const clientFields = Object.fromEntries(
+				grants.map((grant) => {
+					const field = manifestFieldsByStableId.get(grant.stableFieldId);
+					if (!field) throw rejected();
+					return [
+						field.sourcePath,
+						Object.freeze({
+							fieldSlot: field.fieldSlot,
+							format: field.format,
+							formatVersion: field.formatVersion,
+							engineId: field.engineId,
+							grant: grant.grant,
+						}),
+					];
+				}),
+			);
 			return Object.freeze({
 				resourceId: resource.id,
 				resourceEpochId: resource.resourceEpochId,
@@ -220,6 +249,16 @@ export function createCrdtTicketAuthorizationResolverV1(
 				sessionGeneration: resource.sessionGeneration,
 				authorityExpiresAt,
 				headCommitSeq: resource.headCommitSeq,
+				offlineSubjectKey,
+				clientManifest: Object.freeze({
+					schemaVersion: resource.manifest.version,
+					schemaFingerprint: Buffer.from(
+						resource.manifest.fingerprint,
+					).toString("base64url"),
+					awarenessEnabled:
+						config.isAwarenessEnabled?.(resource.owner) ?? false,
+					fields: Object.freeze(clientFields),
+				}),
 				bindings: Object.freeze(bindings),
 				grants: Object.freeze(grants),
 			});
@@ -231,8 +270,8 @@ export function createCrdtTicketAuthorizationResolverV1(
 }
 
 async function resolveIssueResource(
-	config: CrdtTicketAuthorizationResolverConfigV1,
-	target: CrdtTicketTargetV1,
+	config: CrdtAuthorizationResolverConfigV1,
+	target: CrdtTargetV1,
 ): Promise<ResolvedResource> {
 	if (target.namespace !== config.namespace) throw rejected();
 	const manifests =
@@ -272,8 +311,8 @@ async function resolveIssueResource(
 	return loadResource(config, resource.id, target.owner.key, manifest);
 }
 
-async function resolveRedemptionResource(
-	config: CrdtTicketAuthorizationResolverConfigV1,
+async function resolveExchangeResource(
+	config: CrdtAuthorizationResolverConfigV1,
 	resourceId: string,
 ): Promise<ResolvedResource> {
 	const [identity] = await config.db
@@ -312,7 +351,7 @@ async function resolveRedemptionResource(
 }
 
 async function loadResource(
-	config: CrdtTicketAuthorizationResolverConfigV1,
+	config: CrdtAuthorizationResolverConfigV1,
 	resourceId: string,
 	registryKey: string,
 	manifest: CrdtDesiredManifest,
@@ -629,8 +668,8 @@ function authorizedGrants(
 	decision: CrdtOwnerPolicyDecisionV1,
 	fences: Awaited<ReturnType<typeof readSubjectFences>>,
 	requestedMode: CrdtMode,
-): CrdtAuthorizedTicketGrant[] {
-	const grants: CrdtAuthorizedTicketGrant[] = [];
+): CrdtAuthorizedGrant[] {
+	const grants: CrdtAuthorizedGrant[] = [];
 	for (const binding of bindings) {
 		const policy = decision.fields[binding.sourcePath];
 		if (policy?.read !== true) continue;
@@ -667,7 +706,7 @@ function bindingCut(binding: BindingRow): CrdtAuthorizedBindingCut {
 
 function resolveEffectiveMode(input: {
 	requestedMode: CrdtMode;
-	grants: readonly CrdtAuthorizedTicketGrant[];
+	grants: readonly CrdtAuthorizedGrant[];
 	allowFallback: boolean;
 }): CrdtMode {
 	if (input.requestedMode === "view") return "view";
@@ -713,7 +752,7 @@ function bindingsMatchManifest(
 }
 
 function authorityExpiry(authentication: CrdtAuthentication, now: Date): Date {
-	const maximum = now.getTime() + 30_000;
+	const maximum = now.getTime() + 90_000;
 	let credentialExpiry = maximum;
 	if (authentication.actor.kind === "agent") {
 		credentialExpiry = authentication.actor.expiresAt.getTime();
@@ -889,6 +928,6 @@ function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
 	return Buffer.from(left).equals(Buffer.from(right));
 }
 
-function rejected(): CrdtTicketRejectedError {
-	return new CrdtTicketRejectedError();
+function rejected(): CrdtAuthorizationRejectedError {
+	return new CrdtAuthorizationRejectedError();
 }

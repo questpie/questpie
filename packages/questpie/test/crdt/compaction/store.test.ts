@@ -255,6 +255,116 @@ describe("CRDT durable compaction store", () => {
 			),
 		).toHaveLength(0);
 	}, 20_000);
+
+	it("drains pull pages, fields, and roots before a closed epoch session", async () => {
+		await db.execute(sql`
+			INSERT INTO questpie_crdt_subject
+				(id, kind, issuer_key, subject_key, subject_hash)
+			VALUES (${ID.subject}, 1, '', 'pull-retention-user',
+				decode(repeat('73', 32), 'hex'))
+		`);
+		const [closed] = rowsOf<{ id: string }>(
+			await db.execute(sql`
+				INSERT INTO questpie_crdt_resource_epoch
+					(resource_id, definition_id, aggregate_epoch, schema_id,
+					 status, closed_at)
+				VALUES (${ID.resource}, ${ID.definition}, 3001, ${ID.schema}, 2,
+					clock_timestamp() - interval '31 days')
+				RETURNING id
+			`),
+		);
+		const sessionId = "00000000-0000-4000-8000-00000000900d";
+		const sessionBindingId = "00000000-0000-4000-8000-00000000900e";
+		const pullId = "00000000-0000-4000-8000-00000000900f";
+		await db.execute(sql`
+			INSERT INTO questpie_crdt_session
+				(id, open_id, binding_id, resource_id, resource_incarnation_key,
+				 resource_epoch_id, aggregate_epoch, schema_id, schema_version,
+				 subject_id, credential_fingerprint, edge_owner_generation,
+				 delivery_generation, requested_mode, effective_mode, generation,
+				 resource_read_fence, resource_edit_fence, owner_policy_revision,
+				 subject_read_fence, subject_edit_fence, authority_expires_at,
+				 last_seen_commit_seq, lease_expires_at, closed_at, close_reason)
+			SELECT ${sessionId}, gen_random_uuid(), ${sessionBindingId}, r.id,
+				r.incarnation_key, ${closed!.id}, 3001, ${ID.schema}, 1,
+				${ID.subject}, decode(repeat('74', 32), 'hex'), 0, 0, 1, 1, 0,
+				0, 0, 0, 0, 0, clock_timestamp() + interval '1 day', 0,
+				clock_timestamp() - interval '1 day',
+				clock_timestamp() - interval '31 days', 1
+			FROM questpie_crdt_resource r WHERE r.id = ${ID.resource}
+		`);
+		await db.execute(sql`
+			INSERT INTO questpie_crdt_pull
+				(id, session_id, binding_id, resource_id,
+				 resource_incarnation_key, resource_epoch_id, aggregate_epoch,
+				 target_commit_seq, schema_id, schema_version, subject_id,
+				 credential_fingerprint, session_generation, delivery_generation,
+				 resource_read_fence, resource_edit_fence, owner_policy_revision,
+				 subject_read_fence, subject_edit_fence, grant_fingerprint,
+				 request_fingerprint, continuation_claim_fingerprint,
+				 artifact_fingerprint, state, page_count, total_bytes,
+				 retained_bytes, active_expires_at, expires_at, completed_at)
+			SELECT ${pullId}, ${sessionId}, ${sessionBindingId}, r.id,
+				r.incarnation_key, ${closed!.id}, 3001, 0, ${ID.schema}, 1,
+				${ID.subject}, decode(repeat('74', 32), 'hex'), 0, 0, 0, 0, 0,
+				0, 0, decode(repeat('75', 32), 'hex'),
+				decode(repeat('76', 32), 'hex'),
+				decode(repeat('77', 32), 'hex'),
+				decode(repeat('78', 32), 'hex'), 3, 1, 1, 1,
+				clock_timestamp() - interval '1 day',
+				clock_timestamp() + interval '1 day',
+				clock_timestamp() - interval '1 day'
+			FROM questpie_crdt_resource r WHERE r.id = ${ID.resource}
+		`);
+		await db.execute(sql`
+			INSERT INTO questpie_crdt_pull_field
+				(pull_id, binding_id, field_slot, "grant", field_epoch,
+				 format_version, field_cursor, read_fence, edit_fence, proof,
+				 proof_size_bytes)
+			VALUES (${pullId}, ${ID.binding}, 1, 0, 0, 1, 0, 0, 0, ''::bytea, 0)
+		`);
+		await db.execute(sql`
+			INSERT INTO questpie_crdt_pull_page
+				(pull_id, page_index, payload, size_bytes, checksum, final)
+			VALUES (${pullId}, 0, decode('01', 'hex'), 1,
+				decode(repeat('79', 32), 'hex'), 1)
+		`);
+
+		let passes = 0;
+		while (
+			rowsOf(
+				await db.execute(
+					sql`SELECT id FROM questpie_crdt_resource_epoch WHERE id = ${closed!.id}`,
+				),
+			).length > 0
+		) {
+			await collectCrdtExpiredRecoveryRoots(db, { limit: 2 });
+			if (++passes > 10) throw new Error("closed epoch pull drain stalled");
+		}
+
+		expect(passes).toBeGreaterThan(1);
+		for (const table of [
+			"questpie_crdt_pull_page",
+			"questpie_crdt_pull_field",
+			"questpie_crdt_pull",
+			"questpie_crdt_session",
+		]) {
+			expect(
+				rowsOf(
+					await db.execute(
+						sql.raw(
+							`SELECT 1 FROM ${table} WHERE ${
+								table === "questpie_crdt_session" ||
+								table === "questpie_crdt_pull"
+									? "id"
+									: "pull_id"
+							} = '${table === "questpie_crdt_session" ? sessionId : pullId}'::uuid`,
+						),
+					),
+				),
+			).toHaveLength(0);
+		}
+	}, 20_000);
 });
 
 async function seedCompactionBasis(

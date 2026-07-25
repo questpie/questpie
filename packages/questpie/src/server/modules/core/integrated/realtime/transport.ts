@@ -28,6 +28,7 @@ export type ChangeWake =
 			head: number;
 			fenceGeneration: number;
 			reason: "publish" | "reconnect" | "reconcile";
+			lane?: "visible" | "awareness";
 	  };
 
 function isNonNegativeSafeInteger(value: unknown): value is number {
@@ -97,6 +98,9 @@ export function normalizeChangeWake(value: unknown): ChangeWake | null {
 			!isNonNegativeSafeInteger(wake.aggregateEpoch) ||
 			!isNonNegativeSafeInteger(wake.head) ||
 			!isNonNegativeSafeInteger(wake.fenceGeneration) ||
+			(wake.lane !== undefined &&
+				wake.lane !== "visible" &&
+				wake.lane !== "awareness") ||
 			(wake.reason !== "publish" &&
 				wake.reason !== "reconnect" &&
 				wake.reason !== "reconcile")
@@ -110,6 +114,7 @@ export function normalizeChangeWake(value: unknown): ChangeWake | null {
 			head: wake.head,
 			fenceGeneration: wake.fenceGeneration,
 			reason: wake.reason,
+			...(wake.lane === undefined ? {} : { lane: wake.lane }),
 		};
 	}
 
@@ -189,6 +194,8 @@ export type EdgeSessionInput = {
 	sessionId: string;
 	principal: Principal | null;
 	resolvePrincipal: () => Promise<Principal | null>;
+	/** Called when the physical provider session closes or is revoked. */
+	onClose?: () => void;
 };
 
 export type ClientConfigInput = {

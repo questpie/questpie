@@ -48,6 +48,6 @@
 		"@tanstack/query-db-collection": "1.1.0",
 		"@tanstack/react-db": "0.1.94",
 		"@tanstack/react-query": "^5.0.0",
-		"questpie": "^3.16.0"
+		"questpie": "workspace:^"
 	}
 }

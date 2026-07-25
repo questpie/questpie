@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { createClient } from "../../src/client/index.js";
 import { collection, global } from "../../src/exports/index.js";
 import type {
 	CrdtClientAPI,
@@ -9,7 +10,7 @@ import type {
 import type { Equal, Expect } from "./type-test-utils.js";
 
 const awareness = z.object({
-	activeField: z.enum(["title", "tags", "content"]).optional(),
+	name: z.string(),
 });
 const articles = collection("articles")
 	.fields(({ f }) => ({
@@ -100,7 +101,14 @@ article.transaction(({ fields }) => {
 	fields.title.text.apply([{ type: "insert", index: 0, value: "New " }]);
 	fields.tags.set.add("tag-2");
 });
-article.awareness.set({ activeField: "title" });
+article.awareness.set(
+	{ name: "Ada" },
+	{ activeField: "title", cursor: 0, selectionEnd: 1 },
+);
+// @ts-expect-error activity keys are reserved for the typed second argument
+article.awareness.set({ name: "Ada", activeField: "title" });
+article.export();
+article.discard();
 
 const settings = client.globals.siteSettings.document();
 type _globalAwarenessPort = Expect<
@@ -121,6 +129,48 @@ void article.fields.tags.text;
 void article.fields.title.set;
 // @ts-expect-error no-arg collaborative owners have awareness disabled
 settings.awareness.set({});
+
+const generatedClient = createClient<{
+	collections: {
+		articles: typeof articles;
+		plain: typeof plain;
+	};
+	globals: { siteSettings: typeof siteSettings };
+	crdt: Registry;
+}>({
+	baseURL: "https://example.com",
+	crdt: {},
+});
+generatedClient.crdt.collections.articles
+	.document({ id: "article-1" })
+	.fields.tags.set.add("tag-3");
+const generatedArticle = generatedClient.crdt.collections.articles.document({
+	id: "article-1",
+});
+// @ts-expect-error createClient<AppConfig>() must not expose non-CRDT fields
+void generatedArticle.fields.status;
+
+createClient({
+	baseURL: "https://example.com",
+	crdt: {
+		// @ts-expect-error the server-issued open response owns the authorized manifest
+		manifest: {},
+	},
+});
+createClient({
+	baseURL: "https://example.com",
+	crdt: {
+		// @ts-expect-error the server-issued open response owns the offline subject key
+		getSubject: () => "user-1",
+	},
+});
+createClient({
+	baseURL: "https://example.com",
+	crdt: {
+		// @ts-expect-error namespace is server-issued, never client-configured
+		namespace: "app",
+	},
+});
 
 declare const server: CrdtServerAPI<Registry>;
 const serverArticle = server.collections.articles.document({ id: "article-1" });

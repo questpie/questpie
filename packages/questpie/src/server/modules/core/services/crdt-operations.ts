@@ -11,7 +11,9 @@ export default service({
 	lifecycle: "singleton",
 	create: async ({ app }) =>
 		getEnv(QUESTPIE_SCHEMA_INTROSPECTION_ENV) === "1"
-			? createUnavailableQuestpieCrdtOperationalService()
+			? createUnavailableQuestpieCrdtOperationalService(
+					app.config.crdt?.engines,
+				)
 			: await createQuestpieCrdtOperationalService(
 					app as unknown as Questpie<any>,
 				),

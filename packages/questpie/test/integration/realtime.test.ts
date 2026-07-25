@@ -471,6 +471,7 @@ describe("realtime matrix", () => {
 					userId: f.textarea().required(),
 					document: f.relation("documents").required().relationName("document"),
 				}))
+				.options({ realtime: false })
 				.access({ read: true, create: true, delete: true });
 			setup = await buildMockApp(
 				{ collections: { documents, documentMemberships } },
@@ -1338,7 +1339,7 @@ describe("realtime matrix", () => {
 			unsub?.();
 		});
 
-		it("conservatively refreshes create for complex filters", async () => {
+		it("proves an OR miss when every supported branch misses", async () => {
 			const adapter = new MockChangeBroker();
 			const posts = collection("posts").fields(({ f }) => ({
 				title: f.textarea().required(),
@@ -1372,8 +1373,7 @@ describe("realtime matrix", () => {
 			);
 			await new Promise((resolve) => setTimeout(resolve, 100));
 
-			expect(events.length).toBe(1);
-			expect(events[0].operation).toBe("create");
+			expect(events.length).toBe(0);
 
 			unsub?.();
 		});
@@ -1784,11 +1784,13 @@ describe("realtime matrix", () => {
 			unsub?.();
 		});
 
-		it("service-level WITH dependency tracking", async () => {
+		it("keeps a direct-disabled collection as a watched dependency", async () => {
 			const adapter = new MockChangeBroker();
-			const categories = collection("categories").fields(({ f }) => ({
-				name: f.textarea().required(),
-			}));
+			const categories = collection("categories")
+				.fields(({ f }) => ({
+					name: f.textarea().required(),
+				}))
+				.options({ realtime: false });
 
 			const products = collection("products").fields(({ f }) => ({
 				name: f.textarea().required(),
@@ -2236,6 +2238,7 @@ describe("realtime matrix", () => {
 
 		it("scales filtered routing across many subscribers", async () => {
 			const adapter = new MockChangeBroker();
+			const observations: unknown[] = [];
 			const messages = collection("messages").fields(({ f }) => ({
 				roomId: f.textarea().required(),
 				content: f.textarea().required(),
@@ -2244,7 +2247,10 @@ describe("realtime matrix", () => {
 			const testModule = { collections: { messages } };
 
 			setup = await buildMockApp(testModule, {
-				realtime: { changeBroker: adapter },
+				realtime: {
+					changeBroker: adapter,
+					observer: { record: (event) => observations.push(event) },
+				},
 			});
 			await runTestDbMigrations(setup.app);
 
@@ -2286,6 +2292,10 @@ describe("realtime matrix", () => {
 
 			expect(targetHits).toBe(subscriberCount / rooms);
 			expect(nonTargetHits).toBe(0);
+			expect(observations).toContainEqual({
+				type: "routing.candidates",
+				groups: subscriberCount / rooms,
+			});
 
 			for (const unsub of unsubscribers) {
 				unsub();
@@ -2822,6 +2832,71 @@ describe("realtime matrix", () => {
 			expect(JSON.stringify(payload)).not.toContain("must-not-leak");
 		});
 
+		it("rejects disabled collection topics before scheduler allocation or bootstrap", async () => {
+			let reads = 0;
+			const items = collection("items")
+				.fields(({ f }) => ({ name: f.textarea().required() }))
+				.options({ realtime: false })
+				.hooks({ beforeRead: () => void (reads += 1) })
+				.access({ read: true });
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: true },
+			);
+			await runTestDbMigrations(setup.app);
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("items")]),
+				{},
+				undefined,
+			);
+
+			expect(response.status).toBe(400);
+			expect(await response.json()).toMatchObject({
+				errors: [
+					{
+						code: "REALTIME_TOPIC_REJECTED",
+						details: { reason: "collection_realtime_disabled" },
+					},
+				],
+			});
+			expect(reads).toBe(0);
+			expect(setup.app.realtime.listeners.size).toBe(0);
+		});
+
+		it("rejects app-disabled row topics before scheduler allocation or bootstrap", async () => {
+			let reads = 0;
+			const items = collection("items")
+				.fields(({ f }) => ({ name: f.textarea().required() }))
+				.hooks({ beforeRead: () => void (reads += 1) })
+				.access({ read: true });
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { rowLiveQueries: false } },
+			);
+			await runTestDbMigrations(setup.app);
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("items")]),
+				{},
+				undefined,
+			);
+
+			expect(response.status).toBe(400);
+			expect(await response.json()).toMatchObject({
+				errors: [
+					{
+						code: "REALTIME_TOPIC_REJECTED",
+						details: { reason: "row_live_queries_disabled" },
+					},
+				],
+			});
+			expect(reads).toBe(0);
+			expect(setup.app.realtime.listeners.size).toBe(0);
+		});
+
 		it("preserves the access where constraint alongside the requested filter", async () => {
 			const adapter = new MockChangeBroker();
 			const documents = collection("documents")
@@ -2978,10 +3053,11 @@ describe("realtime matrix", () => {
 						token: session.data.token,
 						topology: {
 							protocol: "questpie-realtime-topology",
-							version: 1,
+							version: 2,
 							revision: 1,
-							topics: [
+							subscriptions: [
 								{
+									kind: "query",
 									id: "items-desired-rejected",
 									topic: {
 										resourceType: "collection",
@@ -2991,7 +3067,6 @@ describe("realtime matrix", () => {
 									},
 								},
 							],
-							channels: [],
 						},
 					}),
 				}),
@@ -3002,17 +3077,29 @@ describe("realtime matrix", () => {
 			const desiredError = await desiredRejected.json();
 			expect(desiredError).toEqual({
 				error: {
-					code: "REALTIME_TOPIC_REJECTED",
-					message: "Topic limit must be between 1 and 100",
-					topicId: "items-desired-rejected",
-					resource: "items",
-					operation: "find",
-					retryable: false,
-					details: {
-						reason: "query_limit",
-						requestedLimit: 2000,
-						configuredLimit: 100,
-					},
+					code: "REALTIME_TOPOLOGY_ENTRIES_REJECTED",
+					message: "Realtime topology entries were rejected",
+					entries: [
+						{
+							id: "items-desired-rejected",
+							kind: "query",
+							code: "REALTIME_TOPIC_REJECTED",
+							message: "Topic limit must be between 1 and 100",
+							rejection: {
+								code: "REALTIME_TOPIC_REJECTED",
+								message: "Topic limit must be between 1 and 100",
+								topicId: "items-desired-rejected",
+								resource: "items",
+								operation: "find",
+								retryable: false,
+								details: {
+									reason: "query_limit",
+									requestedLimit: 2000,
+									configuredLimit: 100,
+								},
+							},
+						},
+					],
 				},
 			});
 			expect(JSON.stringify(desiredError)).not.toContain("must-not-leak");
@@ -3026,10 +3113,9 @@ describe("realtime matrix", () => {
 						token: session.data.token,
 						topology: {
 							protocol: "questpie-realtime-topology",
-							version: 2,
+							version: 1,
 							revision: 1,
-							topics: [],
-							channels: [],
+							subscriptions: [],
 						},
 					}),
 				}),
@@ -3053,10 +3139,11 @@ describe("realtime matrix", () => {
 						token: session.data.token,
 						topology: {
 							protocol: "questpie-realtime-topology",
-							version: 1,
+							version: 2,
 							revision: 1,
-							topics: [
+							subscriptions: [
 								{
+									kind: "query",
 									id: "duplicate",
 									topic: {
 										resourceType: "collection",
@@ -3064,6 +3151,7 @@ describe("realtime matrix", () => {
 									},
 								},
 								{
+									kind: "query",
 									id: "duplicate",
 									topic: {
 										resourceType: "collection",
@@ -3071,7 +3159,6 @@ describe("realtime matrix", () => {
 									},
 								},
 							],
-							channels: [],
 						},
 					}),
 				}),
@@ -3103,7 +3190,7 @@ describe("realtime matrix", () => {
 			expect(await removedDeltaProtocol.json()).toEqual({
 				error: {
 					code: "REALTIME_TOPOLOGY_INVALID",
-					message: "Realtime control requires desired topology protocol v1",
+					message: "Realtime control requires desired topology protocol v2",
 				},
 			});
 
@@ -3118,10 +3205,12 @@ describe("realtime matrix", () => {
 							token: session.data.token,
 							topology: {
 								protocol: "questpie-realtime-topology",
-								version: 1,
+								version: 2,
 								revision: ++revision,
-								topics: desiredTopics,
-								channels: [],
+								subscriptions: desiredTopics.map((topic) => ({
+									kind: "query",
+									...(topic as object),
+								})),
 							},
 						}),
 					}),
@@ -3153,6 +3242,14 @@ describe("realtime matrix", () => {
 
 			const rejected = await control([
 				{
+					id: "items-valid-not-applied",
+					topic: {
+						resourceType: "collection",
+						resource: "items",
+						where: { name: "valid-but-atomic-candidate-rejected" },
+					},
+				},
+				{
 					id: "items-rejected",
 					topic: {
 						resourceType: "collection",
@@ -3166,17 +3263,29 @@ describe("realtime matrix", () => {
 			const rejection = await rejected.json();
 			expect(rejection).toEqual({
 				error: {
-					code: "REALTIME_TOPIC_REJECTED",
-					message: "Topic limit must be between 1 and 100",
-					topicId: "items-rejected",
-					resource: "items",
-					operation: "find",
-					retryable: false,
-					details: {
-						reason: "query_limit",
-						requestedLimit: 500,
-						configuredLimit: 100,
-					},
+					code: "REALTIME_TOPOLOGY_ENTRIES_REJECTED",
+					message: "Realtime topology entries were rejected",
+					entries: [
+						{
+							id: "items-rejected",
+							kind: "query",
+							code: "REALTIME_TOPIC_REJECTED",
+							message: "Topic limit must be between 1 and 100",
+							rejection: {
+								code: "REALTIME_TOPIC_REJECTED",
+								message: "Topic limit must be between 1 and 100",
+								topicId: "items-rejected",
+								resource: "items",
+								operation: "find",
+								retryable: false,
+								details: {
+									reason: "query_limit",
+									requestedLimit: 500,
+									configuredLimit: 100,
+								},
+							},
+						},
+					],
 				},
 			});
 			expect(JSON.stringify(rejection)).not.toContain("must-not-leak");
@@ -3324,7 +3433,7 @@ describe("realtime matrix", () => {
 			expect(setup.app.realtime.listeners.size).toBe(0);
 		});
 
-		it("separates different sessions unless the entity explicitly shares", async () => {
+		it("separates different principals unless the entity explicitly shares", async () => {
 			const adapter = new MockChangeBroker();
 			let privateRuns = 0;
 			let publicRuns = 0;

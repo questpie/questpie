@@ -82,7 +82,7 @@ describe("channel module routes", () => {
 			},
 			{
 				app: { url: "https://app.example.com" },
-				realtime: { retentionDays: 0 },
+				realtime: { retentionDays: 0, rowLiveQueries: false },
 			},
 		);
 		cleanup = setup.cleanup;
@@ -244,6 +244,97 @@ describe("channel module routes", () => {
 		expect(configText).not.toContain("provider-secret");
 	});
 
+	test("replays a bounded channel page only after fresh subscribe authorization", async () => {
+		const setup = await buildMockApp(
+			{
+				channels: {
+					room: channel("room-[id]")
+						.events({ message: z.object({ text: z.string() }) })
+						.authorize({
+							subscribe: ({ session }) => session?.user?.id === "member-1",
+							publish: true,
+						}),
+				},
+			},
+			{
+				app: { url: "https://app.example.com" },
+				realtime: { retentionDays: 0 },
+			},
+		);
+		cleanup = setup.cleanup;
+		await runTestDbMigrations(setup.app);
+		const handler = createFetchHandler(setup.app, {
+			getSession: async (request) => ({
+				user: { id: request.headers.get("x-user") },
+				session: { id: "session-1" },
+			}),
+		});
+		const request = (
+			path: string,
+			body: Record<string, unknown>,
+			user = "member-1",
+		) =>
+			handler(
+				channelRequest(path, body, {
+					origin: "https://app.example.com",
+					cookie: true,
+					headers: { "x-user": user },
+				}),
+			);
+		const publish = (text: string) =>
+			request("channels/publish", {
+				channel: "room",
+				params: { id: "one" },
+				event: "message",
+				data: { text },
+			});
+		const first = (await (await publish("one")).json()) as { eventId: string };
+		const second = (await (await publish("two")).json()) as { eventId: string };
+
+		const replay = await request("channels/replay", {
+			channel: "room",
+			params: { id: "one" },
+			afterEventId: first.eventId,
+		});
+		expect(replay.status).toBe(200);
+		expect(await replay.json()).toEqual({
+			status: "events",
+			events: [
+				{
+					eventId: second.eventId,
+					event: "message",
+					data: { text: "two" },
+				},
+			],
+			hasMore: false,
+		});
+
+		expect(
+			(
+				await request(
+					"channels/replay",
+					{
+						channel: "room",
+						params: { id: "one" },
+						afterEventId: first.eventId,
+					},
+					"member-2",
+				)
+			).status,
+		).toBe(403);
+
+		const gap = await request("channels/replay", {
+			channel: "room",
+			params: { id: "one" },
+			afterEventId: `${"f".repeat(64)}:1`,
+		});
+		expect(gap.status).toBe(200);
+		expect(await gap.json()).toMatchObject({
+			status: "gap",
+			requestedEventId: `${"f".repeat(64)}:1`,
+		});
+	});
+
 	test("enforces publish authorization, schema, payload, and rate before ledger allocation", async () => {
 		const setup = await buildMockApp(
 			{
@@ -308,7 +399,7 @@ describe("channel module routes", () => {
 			channel: "fallback",
 			params: { id: "one" },
 			event: "message",
-			data: "x".repeat(9_998),
+			data: "x".repeat(9_000),
 		});
 		expect(accepted.status).toBe(200);
 		expect(await accepted.json()).toEqual({ eventId: expect.any(String) });
@@ -373,7 +464,7 @@ describe("channel module routes", () => {
 		expect((await publishFromTab("tab-3")).status).toBe(200);
 	});
 
-	test("uses one strict origin and credentialed CORS policy for auth and publish", async () => {
+	test("uses one strict origin and credentialed CORS policy for channel authority routes", async () => {
 		const setup = await buildMockApp(
 			{ channels: { publicNews: channel("news") } },
 			{
@@ -388,7 +479,11 @@ describe("channel module routes", () => {
 		);
 		cleanup = setup.cleanup;
 		const handler = createFetchHandler(setup.app);
-		for (const path of ["channels/auth", "channels/publish"]) {
+		for (const path of [
+			"channels/auth",
+			"channels/publish",
+			"channels/replay",
+		]) {
 			const missing = await handler(channelRequest(path, {}, { cookie: true }));
 			expect(missing.status).toBe(403);
 			const untrusted = await handler(

@@ -1,5 +1,7 @@
 import type { LoggerAdapter } from "#questpie/server/modules/core/integrated/logger/types.js";
 
+import type { RealtimeDeliveryClassificationReason } from "./delta.js";
+import type { RealtimeRoutingFeature } from "./topic-routing.js";
 import type { ClientCloseReason, DeliveryClass } from "./transport.js";
 
 export type RealtimeObservation =
@@ -80,6 +82,25 @@ export type RealtimeObservation =
 			events: number;
 			bytes: number;
 	  }
+	| { type: "routing.candidates"; groups: number }
+	| {
+			type: "routing.plan";
+			anchor: "required" | "missing";
+			feature: RealtimeRoutingFeature | "none";
+	  }
+	| {
+			type: "routing.guard";
+			outcome: "match" | "miss" | "unknown";
+	  }
+	| {
+			type: "routing.authoritative_db";
+			operation: "find" | "count" | "get";
+	  }
+	| {
+			type: "delivery.classified";
+			mode: "snapshot" | "delta";
+			reason: RealtimeDeliveryClassificationReason;
+	  }
 	| {
 			type: "sink.write";
 			delivery: DeliveryClass;
@@ -100,6 +121,8 @@ export type RealtimeObservation =
 				| "query_limit"
 				| "relation_depth"
 				| "snapshot_bytes"
+				| "row_live_queries_disabled"
+				| "collection_realtime_disabled"
 				| "access";
 			resource?: string;
 			operation?: "find" | "count" | "get";
@@ -121,6 +144,7 @@ export type RealtimeObservation =
 				| "started"
 				| "current"
 				| "applied"
+				| "rejected"
 				| "failed"
 				| "expired"
 				| "fenced"
@@ -205,6 +229,16 @@ function metricKey(event: RealtimeObservation): string {
 			return `${event.type}|reason=${event.reason}`;
 		case "delta.buffer":
 			return `${event.type}|scope=${event.scope}`;
+		case "routing.candidates":
+			return event.type;
+		case "routing.plan":
+			return `${event.type}|anchor=${event.anchor}|feature=${event.feature}`;
+		case "routing.guard":
+			return `${event.type}|outcome=${event.outcome}`;
+		case "routing.authoritative_db":
+			return `${event.type}|operation=${event.operation}`;
+		case "delivery.classified":
+			return `${event.type}|mode=${event.mode}|reason=${event.reason}`;
 		case "sink.write":
 			return `${event.type}|delivery=${event.delivery}|outcome=${event.outcome}`;
 		case "session.opened":
@@ -212,7 +246,7 @@ function metricKey(event: RealtimeObservation): string {
 		case "session.closed":
 			return `${event.type}|reason=${event.reason}|transport=${event.transport}`;
 		case "admission.rejected":
-			return `${event.type}|reason=${event.reason}|resource=${event.resource ?? "unknown"}|rollout_mode=${event.rolloutMode ?? "v2"}`;
+			return `${event.type}|reason=${event.reason}|rollout_mode=${event.rolloutMode ?? "v2"}`;
 		case "topology.lifecycle":
 			return `${event.type}|outcome=${event.outcome}|phase=${event.phase}`;
 		case "resume":
@@ -242,6 +276,7 @@ function alertLevel(
 			(event.outcome === "conflict" ||
 				event.outcome === "unsupported" ||
 				event.outcome === "invalid" ||
+				event.outcome === "rejected" ||
 				event.outcome === "unavailable" ||
 				event.outcome === "expired" ||
 				event.outcome === "fenced")) ||
@@ -283,6 +318,19 @@ export class RealtimeObservability implements RealtimeObserver {
 				`refresh.subscriber_deliveries|operation=${event.operation}`,
 				event.subscribers,
 			);
+			this.increment(
+				`refresh.frame_bytes|operation=${event.operation}`,
+				Math.max(0, event.frameBytes),
+			);
+		}
+		if (event.type === "delta.emitted") {
+			this.increment(
+				`delta.frame_bytes|operation=${event.operation}`,
+				Math.max(0, event.frameBytes),
+			);
+		}
+		if (event.type === "routing.candidates") {
+			this.increment("routing.candidate_groups", Math.max(0, event.groups));
 		}
 		if (event.type === "session.opened") this.activeSessions += 1;
 		if (event.type === "session.closed") {

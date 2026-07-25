@@ -145,6 +145,117 @@ describe("Yjs text engine", () => {
 		).toBe(true);
 	});
 
+	it("drains accepted work, terminates once, and rejects work after shutdown", async () => {
+		const engine = yjsServerEngine({
+			operationTimeoutMs: 5_000,
+			maximumActiveWorkers: 1,
+			maximumPendingJobs: 2,
+		});
+		const initial = await engine.create({
+			value: "safe",
+			basis: { fieldEpoch: 0n, fieldCursor: 0n },
+		});
+		const update = updateFrom(initial.state, (text) => text.insert(4, "!"));
+		const accepted = [
+			engine.stage({ replica: initial, update }),
+			engine.stage({ replica: initial, update }),
+		];
+
+		const firstShutdown = engine.dispose!();
+		expect(engine.dispose!()).toBe(firstShutdown);
+		await expect(Promise.all(accepted)).resolves.toHaveLength(2);
+		await firstShutdown;
+		await expect(engine.stage({ replica: initial, update })).rejects.toThrow(
+			"Yjs worker pool is shut down",
+		);
+	});
+
+	it("awaits failed worker termination before dispose settles", async () => {
+		const normal = serverEngine();
+		const initial = await normal.create({
+			value: "safe",
+			basis: { fieldEpoch: 0n, fieldCursor: 0n },
+		});
+		const update = updateFrom(initial.state, (text) => text.insert(4, "!"));
+
+		for (const failure of ["timeout", "error"] as const) {
+			const originalWorker = globalThis.Worker;
+			let releaseTermination!: () => void;
+			let terminationCalls = 0;
+			class FailingWorker {
+				private readonly listeners = new Map<
+					string,
+					Set<(event?: unknown) => void>
+				>();
+
+				constructor() {
+					queueMicrotask(() =>
+						this.emit("message", { data: { type: "ready" } }),
+					);
+				}
+
+				addEventListener(
+					type: string,
+					listener: (event?: unknown) => void,
+				): void {
+					let listeners = this.listeners.get(type);
+					if (!listeners) {
+						listeners = new Set();
+						this.listeners.set(type, listeners);
+					}
+					listeners.add(listener);
+				}
+
+				postMessage(): void {
+					if (failure === "error") queueMicrotask(() => this.emit("error"));
+				}
+
+				terminate(): Promise<void> {
+					terminationCalls += 1;
+					return new Promise((resolve) => {
+						releaseTermination = resolve;
+					});
+				}
+
+				private emit(type: string, event?: unknown): void {
+					for (const listener of this.listeners.get(type) ?? []) {
+						listener(event);
+					}
+				}
+			}
+			Object.defineProperty(globalThis, "Worker", {
+				configurable: true,
+				value: FailingWorker,
+			});
+			try {
+				const engine = yjsServerEngine({
+					operationTimeoutMs: failure === "timeout" ? 1 : 5_000,
+					maximumActiveWorkers: 1,
+				});
+				await expect(
+					engine.stage({ replica: initial, update }),
+				).rejects.toThrow(
+					failure === "timeout" ? "timed out" : "operation failed",
+				);
+				let disposed = false;
+				const disposal = engine.dispose!().then(() => {
+					disposed = true;
+				});
+				await new Promise((resolve) => setTimeout(resolve, 5));
+				expect(terminationCalls).toBe(1);
+				expect(disposed).toBe(false);
+				releaseTermination();
+				await disposal;
+				expect(disposed).toBe(true);
+			} finally {
+				Object.defineProperty(globalThis, "Worker", {
+					configurable: true,
+					value: originalWorker,
+				});
+			}
+		}
+	});
+
 	it("keeps aggregate stage capability in the parent realm", async () => {
 		const engine = serverEngine();
 		const initial = await engine.create({
@@ -170,33 +281,33 @@ describe("Yjs text engine", () => {
 
 	it("keeps the client engine worker-free", async () => {
 		const engine = yjsClientEngine();
-		const replica = await engine.create({
-			value: "client",
-			basis: { fieldEpoch: 0n, fieldCursor: 0n },
-		});
-		expect(engine.project(replica)).toBe("client");
+		const replica = engine.restore(initialState("client"));
+		expect(engine.value(replica)).toBe("client");
+		const changed = engine.apply(replica, [
+			{ type: "insert", index: 6, value: " side" },
+		]);
+		expect(engine.value(replica)).toBe("client");
+		expect(engine.value(changed.replica)).toBe("client side");
 	});
 
 	it("preserves emoji, ZWJ, combining marks, and RTL scalar text", async () => {
 		const engine = yjsClientEngine();
 		const value = "👩‍💻 cafe\u0301 مرحبا";
-		const replica = await engine.create({
-			value,
-			basis: { fieldEpoch: 0n, fieldCursor: 0n },
-		});
-		expect(engine.project(replica)).toBe(value);
-		await expect(
-			engine.create({
-				value: "bad\0value",
-				basis: { fieldEpoch: 0n, fieldCursor: 0n },
-			}),
-		).rejects.toThrow("invalid Yjs text projection");
-		await expect(
-			engine.create({
-				value: "bad\uD800",
-				basis: { fieldEpoch: 0n, fieldCursor: 0n },
-			}),
-		).rejects.toThrow("invalid Yjs text projection");
+		const replica = engine.restore(initialState(value));
+		expect(engine.value(replica)).toBe(value);
+		const position = engine.toRelativePosition!(replica, 5);
+		expect(engine.fromRelativePosition!(replica, position)).toBe(5);
+		expect(() =>
+			engine.apply(replica, [
+				{ type: "insert", index: 0, value: "bad\0value" },
+			]),
+		).toThrow("invalid Yjs text insertion");
+		expect(() =>
+			engine.apply(replica, [{ type: "insert", index: 0, value: "bad\uD800" }]),
+		).toThrow("invalid Yjs text insertion");
+		expect(() =>
+			engine.apply(replica, [{ type: "delete", index: 1, length: 1 }]),
+		).toThrow("invalid UTF-16 text offset");
 	});
 });
 
@@ -205,6 +316,12 @@ function updateFrom(state: Uint8Array, mutate: (text: Y.Text) => void) {
 	Y.applyUpdate(document, state);
 	mutate(document.getText("text"));
 	return Y.encodeStateAsUpdate(document, Y.encodeStateVectorFromUpdate(state));
+}
+
+function initialState(value: string): Uint8Array {
+	const document = new Y.Doc();
+	document.getText("text").insert(0, value);
+	return Y.encodeStateAsUpdate(document);
 }
 
 function serverEngine() {

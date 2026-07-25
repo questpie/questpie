@@ -40,6 +40,11 @@ describe("realtime jsonb encoding", () => {
 			event: "message",
 			schemaIdentity: "message-v1",
 			payload: "hello",
+			wireJson: JSON.stringify({
+				eventId: "event-id",
+				event: "message",
+				data: "hello",
+			}),
 			sizeBytes: 16,
 		});
 		await setup.app.db.insert(questpieChannelPresenceTable).values({
@@ -53,7 +58,7 @@ describe("realtime jsonb encoding", () => {
 		await setup.app.db.insert(questpieRealtimeTopologyTable).values({
 			sessionKey: "session-key",
 			ownerId: "owner-id",
-			protocolVersion: 1,
+			protocolVersion: 2,
 			tokenHash: "token-hash",
 			identityHash: "identity-hash",
 			leaseExpiresAt: new Date(Date.now() + 60_000),
@@ -61,10 +66,9 @@ describe("realtime jsonb encoding", () => {
 			appliedRevision: 0,
 			desiredTopology: {
 				protocol: "questpie-realtime-topology",
-				version: 1,
+				version: 2,
 				revision: 0,
-				topics: [],
-				channels: [],
+				subscriptions: [],
 			},
 		});
 
@@ -116,14 +120,20 @@ describe("realtime jsonb encoding", () => {
 				event: "message",
 				schemaIdentity: "message-v1",
 				payload,
+				wireJson: JSON.stringify({
+					eventId: `event-${index}`,
+					event: "message",
+					data: payload,
+				}),
 				sizeBytes: 16,
 			})),
 		);
 		await setup.app.db.execute(sql`
 			insert into questpie_channel_event (
-				channel_hash, seq, event_id, channel, event, schema_identity, payload, size_bytes
+				channel_hash, seq, event_id, channel, event, schema_identity, payload, wire_json, size_bytes
 			) values (
-				'scalar-matrix', 9, 'event-8', 'room-1', 'message', 'message-v1', 'null'::jsonb, 16
+				'scalar-matrix', 9, 'event-8', 'room-1', 'message', 'message-v1', 'null'::jsonb,
+				'{"eventId":"event-8","event":"message","data":null}', 16
 			)
 		`);
 

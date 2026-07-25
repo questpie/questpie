@@ -8,6 +8,7 @@ import {
 	type PusherSubscriber,
 } from "#questpie/server/modules/core/integrated/realtime/pusher-transport.js";
 import { RealtimeService } from "#questpie/server/modules/core/integrated/realtime/service.js";
+import { encodeSseEvent } from "#questpie/server/modules/core/integrated/realtime/sse-client-transport.js";
 import type {
 	ChangeBroker,
 	ChangeBrokerState,
@@ -366,6 +367,75 @@ describe("pusher channel matrix client delivery", () => {
 		).rejects.toThrow("publishChannel");
 	});
 
+	test("coalesces bounded opaque targets and falls back to a generic invalidation on overflow", async () => {
+		const targeted = createProvider();
+		const targetedTransport = new PusherClientTransport({
+			provider: targeted.provider,
+			key: "public-key",
+			identityKey: "test-secret",
+		});
+		await targetedTransport.start({ onError: () => {} });
+		const targetedSink = await targetedTransport.openSession({
+			sessionId: "018f1d92-7ab0-7d68-a230-000000000001",
+			principal: null,
+			resolvePrincipal: async () => null,
+		});
+
+		await Promise.all([
+			targetedSink.write(
+				encodeSseEvent("snapshot", {
+					topicId: "opaque-query",
+					data: "TOP SECRET",
+				}),
+				"latest-snapshot",
+			),
+			targetedSink.write(
+				encodeSseEvent("crdt_dirty", {
+					topologyEntryId: "opaque-document",
+				}),
+				"latest-snapshot",
+			),
+		]);
+		await tick();
+		expect(targeted.triggers[0]?.data).toEqual({
+			sessionId: "018f1d92-7ab0-7d68-a230-000000000001",
+			targets: [
+				{ kind: "query", id: "opaque-query" },
+				{ kind: "crdt", id: "opaque-document" },
+			],
+		});
+		expect(JSON.stringify(targeted.triggers[0]?.data)).not.toContain(
+			"TOP SECRET",
+		);
+
+		const overflow = createProvider();
+		const overflowTransport = new PusherClientTransport({
+			provider: overflow.provider,
+			key: "public-key",
+			identityKey: "test-secret",
+		});
+		await overflowTransport.start({ onError: () => {} });
+		const overflowSink = await overflowTransport.openSession({
+			sessionId: "018f1d92-7ab0-7d68-a230-000000000002",
+			principal: null,
+			resolvePrincipal: async () => null,
+		});
+		await Promise.all(
+			Array.from({ length: 129 }, (_, index) =>
+				overflowSink.write(
+					encodeSseEvent("crdt_dirty", {
+						topologyEntryId: `opaque-document-${index}`,
+					}),
+					"latest-snapshot",
+				),
+			),
+		);
+		await tick();
+		expect(overflow.triggers[0]?.data).toEqual({
+			sessionId: "018f1d92-7ab0-7d68-a230-000000000002",
+		});
+	});
+
 	test("maps one ordered publish call to exactly one provider publish", async () => {
 		const { provider, triggers } = createProvider();
 		const transport = new PusherClientTransport({
@@ -378,7 +448,9 @@ describe("pusher channel matrix client delivery", () => {
 		const result = await transport.publishChannel({
 			channel: "private-chat-room-123",
 			eventId: "event-1",
-			frame: new TextEncoder().encode('{"message":"hello"}'),
+			frame: new TextEncoder().encode(
+				'{"eventId":"event-1","event":"message","data":{"message":"hello"}}',
+			),
 		});
 
 		expect(result).toEqual({ status: "accepted", bufferedBytes: null });
@@ -386,7 +458,11 @@ describe("pusher channel matrix client delivery", () => {
 			{
 				channel: "private-chat-room-123",
 				event: "questpie:channel",
-				data: { eventId: "event-1", data: '{"message":"hello"}' },
+				data: {
+					eventId: "event-1",
+					event: "message",
+					data: { message: "hello" },
+				},
 			},
 		]);
 	});
@@ -470,6 +546,15 @@ describe("pusher channel matrix client delivery", () => {
 			user: { id: "user-1" } as any,
 			session: { id: "session-1" } as any,
 		};
+		let closedSessions = 0;
+		await transport.openSession({
+			sessionId: "018f1d92-7ab0-7d68-a230-000000000009",
+			principal,
+			resolvePrincipal: async () => principal,
+			onClose: () => {
+				closedSessions++;
+			},
+		});
 
 		await expect(
 			transport.generatePresenceAuth({
@@ -493,6 +578,7 @@ describe("pusher channel matrix client delivery", () => {
 
 		await transport.revokePrincipal(principal);
 		expect(terminated).toEqual([channelData.user_id]);
+		expect(closedSessions).toBe(1);
 		await expect(
 			transport.generateUserAuth({ socketId: "123.456", principal }),
 		).rejects.toThrow("revoked");

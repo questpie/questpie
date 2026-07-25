@@ -210,6 +210,34 @@ export function admitRealtimeTopic<TTopic extends AdmissionTopic>(
 	return { accepted: true, topic: { ...topic, limit } };
 }
 
+/** Authoritative server policy, separate from durable change capture. */
+export function admitRealtimeTopicPolicy<TTopic extends AdmissionTopic>(
+	topic: TTopic,
+	policy: {
+		rowLiveQueries?: boolean;
+		collectionRealtime?: boolean;
+	},
+): TopicAdmissionResult<TTopic> {
+	if (policy.rowLiveQueries === false) {
+		return {
+			accepted: false,
+			message: "Row live queries are disabled by server policy",
+			reason: "row_live_queries_disabled",
+		};
+	}
+	if (
+		topic.resourceType === "collection" &&
+		policy.collectionRealtime === false
+	) {
+		return {
+			accepted: false,
+			message: "Direct realtime subscriptions are disabled for this collection",
+			reason: "collection_realtime_disabled",
+		};
+	}
+	return { accepted: true, topic: { ...topic } };
+}
+
 export class RealtimeAdmissionRegistry {
 	private readonly counts = new Map<string, number>();
 

@@ -40,6 +40,6 @@
 		"tsdown": "^0.18.3"
 	},
 	"peerDependencies": {
-		"questpie": "^3.16.0"
+		"questpie": "workspace:^"
 	}
 }

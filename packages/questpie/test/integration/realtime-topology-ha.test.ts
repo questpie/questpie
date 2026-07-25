@@ -68,7 +68,7 @@ function createSseReader(stream: ReadableStream<Uint8Array>) {
 	const read = async (eventType: string, topicId?: string) => {
 		while (true) {
 			const event = await readEvent();
-			if (event.event === "error") {
+			if (event.event === "error" && eventType !== "error") {
 				throw new Error(`Realtime stream error: ${JSON.stringify(event.data)}`);
 			}
 			if (event.event !== eventType) continue;
@@ -119,10 +119,12 @@ function desiredRequest(
 			token: session.token,
 			topology: {
 				protocol: "questpie-realtime-topology",
-				version: 1,
+				version: 2,
 				revision,
-				topics,
-				channels: [],
+				subscriptions: topics.map((topic) => ({
+					kind: "query",
+					...topic,
+				})),
 			},
 		}),
 	});
@@ -308,10 +310,11 @@ test("applies topic additions and removals through a different app instance", as
 					token: session.token,
 					topology: {
 						protocol: "questpie-realtime-topology",
-						version: 1,
+						version: 2,
 						revision: 4,
-						topics: [
+						subscriptions: [
 							{
+								kind: "query",
 								id: "items-replacement",
 								topic: {
 									resourceType: "collection",
@@ -319,9 +322,8 @@ test("applies topic additions and removals through a different app instance", as
 									where: { name: "replacement" },
 								},
 							},
-						],
-						channels: [
 							{
+								kind: "channel",
 								id: "room-one",
 								channel: "room",
 								params: { id: "one" },
@@ -397,7 +399,23 @@ test("applies topic additions and removals through a different app instance", as
 			undefined,
 		);
 		expect(ownerApplyFailure.status).toBe(202);
-		await waitFor(() => first.app.realtime.listeners.size === 0);
+		expect(
+			await withTimeout(
+				reader.read("error"),
+				"cross-instance owner admission rejection",
+			),
+		).toMatchObject({
+			topologyEntryId: "control-only",
+			kind: "query",
+			code: "REALTIME_SUBSCRIPTION_REJECTED",
+		});
+		await waitFor(() => first.app.realtime.listeners.size === 1);
+		await waitFor(
+			() =>
+				(first.app.realtime.getMetrics().counters[
+					"topology.lifecycle|outcome=rejected|phase=apply"
+				] ?? 0) === 1,
+		);
 		expect(session.sessionId).toBeTruthy();
 	} finally {
 		await reader?.close().catch(() => {});

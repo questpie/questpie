@@ -45,7 +45,10 @@ import type { User } from "better-auth/types";
 import type { Principal } from "../../config/context.js";
 import type { Questpie } from "../../config/questpie.js";
 import type { QuestpieConfig } from "../../config/types.js";
+import { questpieApiAudienceForApp } from "../../modules/core/integrated/auth/api-audience.js";
 import type { AdapterConfig } from "../types.js";
+
+export { questpieApiAudienceForApp };
 
 /**
  * The resolved OAuth identity for a request. `session` mirrors Better Auth's
@@ -206,6 +209,7 @@ export async function resolveOAuthPrincipal<
 	app: Questpie<TConfig>,
 	request: Request,
 	config: AdapterConfig<TConfig>,
+	expectedAudience?: string,
 ): Promise<ResolvedOAuthPrincipal | null> {
 	// A custom session resolver replaces the whole Better Auth path — don't
 	// second-guess it with token verification.
@@ -214,6 +218,7 @@ export async function resolveOAuthPrincipal<
 
 	const token = getBearerToken(request);
 	if (!token || !looksLikeJwt(token)) return null;
+	const audience = expectedAudience ?? mcpAudienceForApp(app);
 
 	let payload: Record<string, unknown>;
 	try {
@@ -228,7 +233,7 @@ export async function resolveOAuthPrincipal<
 		const issuer = await oauthIssuerForAuth(app.auth);
 		payload = (await resourceClient.getActions().verifyAccessToken(token, {
 			verifyOptions: {
-				audience: mcpAudienceForApp(app),
+				audience,
 				algorithms: EXPECTED_TOKEN_ALGORITHMS,
 				...(issuer ? { issuer } : {}),
 			},

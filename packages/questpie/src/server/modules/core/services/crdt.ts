@@ -3,7 +3,7 @@ import type { Questpie } from "#questpie/server/config/questpie.js";
 import {
 	evaluateQuestpieCrdtOwnerPolicy,
 	loadQuestpieCrdtOwnerRecord,
-} from "#questpie/server/modules/core/integrated/crdt/questpie-host-application.js";
+} from "#questpie/server/modules/core/integrated/crdt/questpie-authorization.js";
 import { service } from "#questpie/server/services/define-service.js";
 
 export default service({

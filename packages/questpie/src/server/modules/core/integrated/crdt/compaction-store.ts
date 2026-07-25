@@ -245,6 +245,11 @@ export async function collectCrdtGarbage(
 								input.resourceEpochId,
 							),
 							notInArray(questpieCrdtSnapshotManifestTable.id, protectedIds),
+							sql`NOT EXISTS (
+									SELECT 1 FROM questpie_crdt_pull p
+									WHERE p.current_snapshot_manifest_id = ${questpieCrdtSnapshotManifestTable.id}
+									   OR p.previous_snapshot_manifest_id = ${questpieCrdtSnapshotManifestTable.id}
+								)`,
 						),
 					)
 					.orderBy(asc(questpieCrdtSnapshotManifestTable.createdAt))
@@ -448,7 +453,6 @@ export async function collectCrdtExpiredRecoveryRoots(
 			  AND NOT EXISTS (SELECT 1 FROM questpie_crdt_snapshot s WHERE s.binding_id = b.id)
 			  AND NOT EXISTS (SELECT 1 FROM questpie_crdt_receipt_field rf WHERE rf.binding_id = b.id)
 			  AND NOT EXISTS (SELECT 1 FROM questpie_crdt_projection_field pf WHERE pf.binding_id = b.id)
-			  AND NOT EXISTS (SELECT 1 FROM questpie_crdt_ticket_grant tg WHERE tg.binding_id = b.id)
 			  AND NOT EXISTS (SELECT 1 FROM questpie_crdt_session_grant sg WHERE sg.binding_id = b.id)
 			  AND NOT EXISTS (
 					SELECT 1 FROM questpie_crdt_schema_compatibility_field cf
@@ -552,6 +556,29 @@ async function drainClosedEpoch(
 	let deleted = 0;
 	const stages = [
 		() => sql`WITH doomed AS (
+			SELECT pp.ctid FROM questpie_crdt_pull_page pp
+			JOIN questpie_crdt_pull p ON p.id = pp.pull_id
+			WHERE p.resource_id = ${epoch.resourceId}
+			  AND p.resource_epoch_id = ${epoch.id}
+			LIMIT ${remaining} FOR UPDATE OF pp SKIP LOCKED
+		) DELETE FROM questpie_crdt_pull_page
+		  WHERE ctid IN (SELECT ctid FROM doomed) RETURNING pull_id`,
+		() => sql`WITH doomed AS (
+			SELECT pf.ctid FROM questpie_crdt_pull_field pf
+			JOIN questpie_crdt_pull p ON p.id = pf.pull_id
+			WHERE p.resource_id = ${epoch.resourceId}
+			  AND p.resource_epoch_id = ${epoch.id}
+			LIMIT ${remaining} FOR UPDATE OF pf SKIP LOCKED
+		) DELETE FROM questpie_crdt_pull_field
+		  WHERE ctid IN (SELECT ctid FROM doomed) RETURNING pull_id`,
+		() => sql`WITH doomed AS (
+			SELECT p.ctid FROM questpie_crdt_pull p
+			WHERE p.resource_id = ${epoch.resourceId}
+			  AND p.resource_epoch_id = ${epoch.id}
+			LIMIT ${remaining} FOR UPDATE OF p SKIP LOCKED
+		) DELETE FROM questpie_crdt_pull
+		  WHERE ctid IN (SELECT ctid FROM doomed) RETURNING id`,
+		() => sql`WITH doomed AS (
 			SELECT a.ctid FROM questpie_crdt_awareness a
 			JOIN questpie_crdt_session s ON s.id = a.session_id
 			WHERE s.resource_id = ${epoch.resourceId}
@@ -567,14 +594,6 @@ async function drainClosedEpoch(
 			LIMIT ${remaining} FOR UPDATE OF sg SKIP LOCKED
 		) DELETE FROM questpie_crdt_session_grant
 		  WHERE ctid IN (SELECT ctid FROM doomed) RETURNING session_id`,
-		() => sql`WITH doomed AS (
-			SELECT tg.ctid FROM questpie_crdt_ticket_grant tg
-			JOIN questpie_crdt_ticket t ON t.id = tg.ticket_id
-			WHERE t.resource_id = ${epoch.resourceId}
-			  AND t.resource_epoch_id = ${epoch.id}
-			LIMIT ${remaining} FOR UPDATE OF tg SKIP LOCKED
-		) DELETE FROM questpie_crdt_ticket_grant
-		  WHERE ctid IN (SELECT ctid FROM doomed) RETURNING ticket_id`,
 		() => sql`WITH doomed AS (
 			SELECT rf.ctid FROM questpie_crdt_receipt_field rf
 			JOIN questpie_crdt_update_receipt r ON r.id = rf.receipt_id
@@ -643,7 +662,6 @@ async function drainClosedEpoch(
 		["questpie_crdt_commit", "delivery_commit_id"],
 		["questpie_crdt_recovery_hold", "id"],
 		["questpie_crdt_session", "id"],
-		["questpie_crdt_ticket", "id"],
 	] as const;
 	for (const [table, returning] of directStages) {
 		const removed = await limitedDelete(

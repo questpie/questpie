@@ -22,12 +22,19 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { generateKeyPairSync, sign } from "node:crypto";
 
-import { createAdapterContext } from "../../src/server/adapters/utils/context.js";
-import { resolveOAuthPrincipal } from "../../src/server/adapters/utils/oauth-principal.js";
+import {
+	createAdapterContext,
+	createAdapterContextForOAuthAudience,
+} from "../../src/server/adapters/utils/context.js";
+import {
+	questpieApiAudienceForApp,
+	resolveOAuthPrincipal,
+} from "../../src/server/adapters/utils/oauth-principal.js";
 import { accessModeForPrincipal } from "../../src/server/config/context.js";
 
 const BASE_URL = "https://app.example.test";
 const AUDIENCE = `${BASE_URL}/api/mcp`;
+const CRDT_AUDIENCE = BASE_URL;
 
 function b64url(input: Buffer | string): string {
 	return Buffer.from(input).toString("base64url");
@@ -253,6 +260,32 @@ describe("createAdapterContext — oauth principal threads through", () => {
 		);
 		expect(context.session?.user.id).toBe("user-1");
 		expect(context.appContext.session?.user.id).toBe("user-1");
+	});
+
+	test("binds a CRDT bearer to the CRDT resource audience, never the MCP audience", async () => {
+		stubJwks();
+		const app = {
+			...makeApp(makeMockAuth()),
+			createContext: async (ctx: any) => ({
+				...ctx,
+				accessMode: ctx.principal
+					? accessModeForPrincipal(ctx.principal)
+					: (ctx.accessMode ?? "user"),
+			}),
+		};
+		const request = bearerRequest(mintToken({ aud: CRDT_AUDIENCE }));
+
+		const mcpContext = await createAdapterContext(app, request, {});
+		expect(mcpContext.appContext.principal).toBeUndefined();
+
+		const crdtContext = await createAdapterContextForOAuthAudience(
+			app,
+			request,
+			{},
+			questpieApiAudienceForApp(app),
+		);
+		expect((crdtContext.appContext.principal as any)?.kind).toBe("oauth");
+		expect(crdtContext.appContext.accessMode).toBe("user");
 	});
 });
 

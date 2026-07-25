@@ -248,6 +248,42 @@ export async function parseChannelPublishRequest(request: Request): Promise<
 	return parsed.data;
 }
 
+export async function parseChannelReplayRequest(
+	request: Request,
+): Promise<ChannelRouteInput & { afterEventId: string }> {
+	const mediaType = (request.headers.get("content-type") ?? "")
+		.split(";", 1)[0]
+		?.trim()
+		.toLowerCase();
+	if (mediaType !== "application/json") {
+		throw Object.assign(new Error("Unsupported channel replay content type"), {
+			status: 415,
+		});
+	}
+	let json: unknown;
+	try {
+		json = await request.json();
+	} catch {
+		throw Object.assign(new Error("Invalid channel replay body"), {
+			status: 400,
+		});
+	}
+	const parsed = await z
+		.object({
+			channel: z.string().min(1),
+			params: z.record(z.string(), z.string()).default({}),
+			afterEventId: z.string().min(1).max(256),
+		})
+		.strict()
+		.safeParseAsync(json);
+	if (!parsed.success) {
+		throw Object.assign(new Error("Invalid channel replay body"), {
+			status: 400,
+		});
+	}
+	return parsed.data;
+}
+
 export function requestChannels(ctx: ChannelRouteContext): ChannelsService {
 	const app = routeApp(ctx);
 	return new ChannelsService(

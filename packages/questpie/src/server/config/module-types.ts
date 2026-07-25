@@ -124,6 +124,12 @@ export interface ModuleDefinition {
 		import("#questpie/server/services/define-service.js").ServiceBuilder<any>
 	>;
 
+	/** Package-owned exact OAuth scope catalogs, merged by contributor name. */
+	oauthScopeCatalogs?: Record<
+		string,
+		import("#questpie/server/modules/core/integrated/auth/scope-catalog.js").OAuthScopeCatalogContributor
+	>;
+
 	/** Migrations this module contributes — concatenated with others. */
 	migrations?: Migration[];
 

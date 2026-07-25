@@ -9,6 +9,9 @@ import { DrizzleMigrationGenerator } from "../../../src/server/migration/generat
 import {
 	questpieCrdtBindingTable,
 	questpieCrdtCommitTable,
+	questpieCrdtPullFieldTable,
+	questpieCrdtPullPageTable,
+	questpieCrdtPullTable,
 	questpieCrdtRecoveryHoldTable,
 	questpieCrdtResourceTable,
 	questpieCrdtResourceEpochTable,
@@ -17,9 +20,9 @@ import {
 	questpieCrdtSessionTable,
 	questpieCrdtSnapshotManifestTable,
 	questpieCrdtSnapshotTable,
+	questpieCrdtSubjectAdmissionTable,
 	questpieCrdtTables,
-	questpieCrdtTicketGrantTable,
-	questpieCrdtTicketTable,
+	questpieCrdtCredentialAdmissionTable,
 	questpieCrdtUpdateReceiptTable,
 	questpieCrdtUpdateTable,
 } from "../../../src/server/modules/core/integrated/crdt/schema.js";
@@ -43,10 +46,11 @@ const REQUIRED_TABLES = [
 	"questpie_crdt_snapshot",
 	"questpie_crdt_recovery_hold",
 	"questpie_crdt_subject",
-	"questpie_crdt_ticket",
-	"questpie_crdt_ticket_grant",
 	"questpie_crdt_session",
 	"questpie_crdt_session_grant",
+	"questpie_crdt_pull",
+	"questpie_crdt_pull_field",
+	"questpie_crdt_pull_page",
 	"questpie_crdt_subject_fence",
 	"questpie_crdt_subject_admission",
 	"questpie_crdt_credential_admission",
@@ -130,7 +134,7 @@ describe("CRDT durable schema", () => {
 		);
 	});
 
-	it("persists every ticket admission fence and the authorized incarnation", () => {
+	it("persists every admission fence, open identity, and edge generation", () => {
 		expect(columnNames(questpieCrdtResourceTable)).toEqual(
 			expect.arrayContaining([
 				"incarnation_key",
@@ -141,33 +145,75 @@ describe("CRDT durable schema", () => {
 		expect(indexNames(questpieCrdtResourceTable)).toContain(
 			"uq_crdt_resource_incarnation_key",
 		);
-		expect(columnNames(questpieCrdtTicketTable)).toEqual(
-			expect.arrayContaining([
-				"effective_mode",
-				"owner_policy_revision",
-				"subject_read_fence",
-				"subject_edit_fence",
-			]),
+		expect(columnNames(questpieCrdtSubjectAdmissionTable)).toEqual(
+			expect.arrayContaining(["open_tokens", "open_refilled_at"]),
+		);
+		expect(columnNames(questpieCrdtCredentialAdmissionTable)).toEqual(
+			expect.arrayContaining(["open_tokens", "open_refilled_at"]),
 		);
 		expect(columnNames(questpieCrdtSessionTable)).toEqual(
 			expect.arrayContaining([
+				"open_id",
+				"binding_id",
+				"actor_kind",
+				"resource_incarnation_key",
+				"aggregate_epoch",
+				"schema_version",
+				"open_result_fingerprint",
+				"edge_session_key",
+				"edge_owner_generation",
+				"delivery_generation",
 				"effective_mode",
 				"owner_policy_revision",
 				"subject_read_fence",
 				"subject_edit_fence",
 			]),
 		);
-		for (const grantTable of [
-			questpieCrdtTicketGrantTable,
-			questpieCrdtSessionGrantTable,
-		]) {
-			expect(columnNames(grantTable)).toEqual(
-				expect.arrayContaining([
-					"subject_field_read_fence",
-					"subject_field_edit_fence",
-				]),
-			);
-		}
+		expect(indexNames(questpieCrdtSessionTable)).toEqual(
+			expect.arrayContaining([
+				"uq_crdt_session_binding",
+				"uq_crdt_session_subject_open",
+				"idx_crdt_session_edge_lease",
+			]),
+		);
+		expect(foreignKeyNames(questpieCrdtSessionGrantTable)).toContain(
+			"fk_crdt_session_grant_session",
+		);
+		expect(columnNames(questpieCrdtSessionGrantTable)).toEqual(
+			expect.arrayContaining([
+				"subject_field_read_fence",
+				"subject_field_edit_fence",
+			]),
+		);
+	});
+
+	it("persists immutable pull artifacts with one active lease per binding", () => {
+		expect(columnNames(questpieCrdtPullTable)).toEqual(
+			expect.arrayContaining([
+				"binding_id",
+				"session_generation",
+				"delivery_generation",
+				"grant_fingerprint",
+				"request_fingerprint",
+				"continuation_claim_fingerprint",
+				"artifact_fingerprint",
+				"current_snapshot_manifest_id",
+				"previous_snapshot_manifest_id",
+				"state",
+				"retained_bytes",
+				"active_expires_at",
+				"expires_at",
+			]),
+		);
+		expect(indexNames(questpieCrdtPullTable)).toContain(
+			"uq_crdt_pull_active_binding",
+		);
+		expect(primaryKeyColumns(questpieCrdtPullFieldTable)).toContain(
+			"pull_id,field_slot",
+		);
+		expect(primaryKeyColumns(questpieCrdtPullPageTable)).toContain(
+			"pull_id,page_index",
+		);
 	});
 
 	it("never cascade-deletes durable recovery or idempotency state", () => {

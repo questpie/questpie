@@ -93,7 +93,7 @@ describe("channel security", () => {
 		).toThrow("collision");
 	});
 
-	test("enforces exact serialized 10,000-byte payload boundary", () => {
+	test("preflights the serialized application-data upper bound", () => {
 		const accepted = "x".repeat(9_998);
 		const rejected = "x".repeat(9_999);
 		expect(assertChannelPayloadSize(accepted)).toBe(`"${accepted}"`);

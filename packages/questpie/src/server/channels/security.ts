@@ -277,7 +277,10 @@ export function assertUniqueResolvedChannelName(
 	return resolved;
 }
 
-/** Return the exact JSON string whose UTF-8 bytes enter the ledger/provider. */
+/**
+ * Cheap necessary preflight before authorization/sequence allocation.
+ * The ledger measures the larger canonical eventId/event/data envelope exactly.
+ */
 export function assertChannelPayloadSize(data: unknown): string {
 	let serialized: string | undefined;
 	try {

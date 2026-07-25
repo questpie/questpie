@@ -105,6 +105,11 @@ export interface CrdtFieldEngine<
 		basis: CrdtEngineBasis;
 	}): Promise<CrdtEngineReplica<TFormat, TValue>>;
 	project(replica: CrdtEngineReplica<TFormat, TValue>): TValue;
+	/**
+	 * Release engine-owned resources after the application has stopped accepting
+	 * work. Implementations must make repeated calls share the same shutdown.
+	 */
+	dispose?(): Promise<void>;
 }
 
 export class CrdtEngineError extends Error {
@@ -359,6 +364,54 @@ export type CrdtStagedAggregateBundle = Readonly<{
 	canonicalDigest: Uint8Array;
 	totalUpdateBytes: number;
 }>;
+
+export async function hashCrdtSubmittedAggregateBundle(input: {
+	aggregateEpoch: bigint;
+	schemaVersion: number;
+	parts: readonly Readonly<{
+		fieldSlot: number;
+		fieldEpoch: bigint;
+		formatVersion: number;
+		baseFieldCursor: bigint;
+		bytes: Uint8Array;
+	}>[];
+}): Promise<Uint8Array> {
+	assertU64(input.aggregateEpoch, "aggregate epoch");
+	assertU32(input.schemaVersion, "submitted schema version");
+	if (input.parts.length === 0 || input.parts.length > 32) {
+		throw new CrdtEngineError(
+			"aggregate parts must contain between 1 and 32 fields",
+		);
+	}
+	assertStrictlyIncreasingSlots(input.parts);
+	const writer = new CrdtDigestWriter();
+	writer.u64(input.aggregateEpoch);
+	writer.u32(input.schemaVersion);
+	writer.u16(input.parts.length);
+	let wireBytes = 16 + 8 + 4 + 2;
+	for (const part of input.parts) {
+		assertU64(part.fieldEpoch, "field epoch");
+		assertU16(part.formatVersion, "format version");
+		assertU64(part.baseFieldCursor, "base field cursor");
+		if (
+			!(part.bytes instanceof Uint8Array) ||
+			part.bytes.byteLength === 0 ||
+			part.bytes.byteLength > 256 * 1024
+		) {
+			throw new CrdtEngineError("invalid aggregate field update");
+		}
+		wireBytes += 2 + 8 + 2 + 8 + 4 + part.bytes.byteLength;
+		if (wireBytes > 1024 * 1024) {
+			throw new CrdtEngineError("aggregate update bundle exceeds limit");
+		}
+		writer.u16(part.fieldSlot);
+		writer.u64(part.fieldEpoch);
+		writer.u16(part.formatVersion);
+		writer.u64(part.baseFieldCursor);
+		writer.lengthPrefixed(part.bytes);
+	}
+	return sha256(writer.finish());
+}
 
 export async function stageCrdtAggregateBundle(input: {
 	aggregateEpoch: bigint;
@@ -637,38 +690,38 @@ async function computeAggregateDigest(
 	},
 	source: "submitted" | "canonical",
 ): Promise<Uint8Array> {
+	if (source === "submitted") {
+		return hashCrdtSubmittedAggregateBundle({
+			aggregateEpoch: input.aggregateEpoch,
+			schemaVersion: input.submittedSchemaVersion,
+			parts: input.parts.map((part) => ({
+				fieldSlot: part.submitted.fieldSlot,
+				fieldEpoch: part.submitted.fieldEpoch,
+				formatVersion: part.submitted.formatVersion,
+				baseFieldCursor: part.submitted.baseFieldCursor,
+				bytes: part.submittedUpdate,
+			})),
+		});
+	}
 	const writer = new CrdtDigestWriter();
 	writer.u64(input.aggregateEpoch);
-	writer.u32(
-		source === "submitted"
-			? input.submittedSchemaVersion
-			: input.canonicalSchemaVersion,
-	);
+	writer.u32(input.canonicalSchemaVersion);
 	writer.u16(input.parts.length);
-	const parts = [...input.parts].sort((left, right) =>
-		source === "submitted"
-			? left.submitted.fieldSlot - right.submitted.fieldSlot
-			: left.fieldSlot - right.fieldSlot,
+	const parts = [...input.parts].sort(
+		(left, right) => left.fieldSlot - right.fieldSlot,
 	);
 	for (const part of parts) {
-		const metadata =
-			source === "submitted"
-				? part.submitted
-				: {
-						fieldSlot: part.fieldSlot,
-						fieldEpoch: part.candidate.basis.fieldEpoch,
-						formatVersion: part.candidate.formatVersion,
-						baseFieldCursor: part.candidate.basis.fieldCursor,
-					};
+		const metadata = {
+			fieldSlot: part.fieldSlot,
+			fieldEpoch: part.candidate.basis.fieldEpoch,
+			formatVersion: part.candidate.formatVersion,
+			baseFieldCursor: part.candidate.basis.fieldCursor,
+		};
 		writer.u16(metadata.fieldSlot);
 		writer.u64(metadata.fieldEpoch);
 		writer.u16(metadata.formatVersion);
 		writer.u64(metadata.baseFieldCursor);
-		writer.lengthPrefixed(
-			source === "submitted"
-				? part.submittedUpdate
-				: part.candidate.normalizedUpdate,
-		);
+		writer.lengthPrefixed(part.candidate.normalizedUpdate);
 	}
 	return sha256(writer.finish());
 }
@@ -873,6 +926,12 @@ function assertU64(value: bigint, label: string): void {
 
 function assertU32(value: number, label: string): void {
 	if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffffff) {
+		throw new CrdtEngineError(`invalid ${label}`);
+	}
+}
+
+function assertU16(value: number, label: string): void {
+	if (!Number.isSafeInteger(value) || value < 0 || value > 0xffff) {
 		throw new CrdtEngineError(`invalid ${label}`);
 	}
 }

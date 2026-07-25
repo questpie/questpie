@@ -126,7 +126,7 @@ describe("client live queries", () => {
 			connections.push(connection);
 			controller.enqueue(
 				encoder.encode(
-					`event: session\ndata: ${JSON.stringify({ sessionId: `session-${connections.length}`, token: `token-${connections.length}`, control: { protocol: "questpie-realtime-topology", versions: [1] } })}\n\n`,
+					`event: session\ndata: ${JSON.stringify({ sessionId: `session-${connections.length}`, token: `token-${connections.length}`, control: { protocol: "questpie-realtime-topology", versions: [2] } })}\n\n`,
 				),
 			);
 			return new Response(body, {
@@ -323,7 +323,10 @@ describe("client live queries", () => {
 		const stopPages = client.collections.pages.live({}, () => {});
 		await waitFor(() =>
 			controlTopologies.some((topology) =>
-				topology.topics.some((entry: any) => entry.topic.resource === "pages"),
+				topology.subscriptions.some(
+					(entry: any) =>
+						entry.kind === "query" && entry.topic.resource === "pages",
+				),
 			),
 		);
 
@@ -331,13 +334,13 @@ describe("client live queries", () => {
 		expect(connections[0].aborted).toBe(false);
 		expect(controlTopologies).toHaveLength(1);
 		expect(controlTopologies[0].protocol).toBe("questpie-realtime-topology");
-		expect(controlTopologies[0].topics).toHaveLength(2);
+		expect(controlTopologies[0].subscriptions).toHaveLength(2);
 
 		stopPages();
 		stopPosts();
 	});
 
-	it("coalesces advertised v1 desired topology and closes the last topic locally", async () => {
+	it("coalesces advertised v2 desired topology and closes the last topic locally", async () => {
 		const controls: Array<Record<string, any>> = [];
 		let streamController!: ReadableStreamDefaultController<Uint8Array>;
 		let aborted = false;
@@ -348,7 +351,7 @@ describe("client live queries", () => {
 				return Response.json(
 					{
 						protocol: "questpie-realtime-topology",
-						version: 1,
+						version: 2,
 						status: "accepted",
 						revision: payload.topology.revision,
 						desiredRevision: payload.topology.revision,
@@ -367,7 +370,7 @@ describe("client live queries", () => {
 								token: "token-v1",
 								control: {
 									protocol: "questpie-realtime-topology",
-									versions: [1],
+									versions: [2],
 								},
 							})}\n\n`,
 						),
@@ -406,14 +409,14 @@ describe("client live queries", () => {
 
 		await waitFor(() => controls.length === 1);
 		expect(controls[0].topology.revision).toBe(1);
-		expect(controls[0].topology.topics).toHaveLength(3);
+		expect(controls[0].topology.subscriptions).toHaveLength(3);
 		expect(controls[0].frames).toBeUndefined();
 
 		stopPages();
 		stopUsers();
 		await waitFor(() => controls.length === 2);
 		expect(controls[1].topology.revision).toBe(2);
-		expect(controls[1].topology.topics).toHaveLength(1);
+		expect(controls[1].topology.subscriptions).toHaveLength(1);
 		stopPosts();
 		await waitFor(() => aborted);
 		expect(controls).toHaveLength(2);

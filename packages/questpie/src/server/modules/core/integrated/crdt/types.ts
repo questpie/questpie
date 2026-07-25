@@ -103,12 +103,49 @@ export interface CrdtSetFieldPort<T extends string> {
 	readonly set: CrdtSetReplica<T>;
 }
 
-export type CrdtAwarenessPort<TAwareness> = [TAwareness] extends [never]
+export type CrdtAwarenessActiveField<TField extends PropertyKey> = Readonly<{
+	activeField: TField;
+	cursor?: number;
+	selectionEnd?: number;
+}>;
+
+export type CrdtRosterSession<
+	TAwareness,
+	TField extends PropertyKey,
+> = Readonly<{
+	sessionId: string;
+	value: TAwareness;
+	active?: Readonly<{
+		field: TField;
+		cursor?: number;
+		selectionEnd?: number;
+	}>;
+	expiresAtMs: number;
+}>;
+
+export type CrdtRosterParticipant<
+	TAwareness,
+	TField extends PropertyKey,
+> = Readonly<{
+	participantId: string;
+	sessions: readonly CrdtRosterSession<TAwareness, TField>[];
+}>;
+
+export type CrdtAwarenessPort<
+	TAwareness,
+	TField extends PropertyKey = string,
+> = [TAwareness] extends [never]
 	? { readonly enabled: false }
 	: {
 			readonly enabled: true;
-			set(value: TAwareness): void;
+			set(value: TAwareness, active?: CrdtAwarenessActiveField<TField>): void;
 			clear(): void;
+			getRoster(): readonly CrdtRosterParticipant<TAwareness, TField>[];
+			subscribe(
+				listener: (
+					roster: readonly CrdtRosterParticipant<TAwareness, TField>[],
+				) => void,
+			): () => void;
 		};
 
 export type CrdtNonReadyDocumentState =
@@ -183,7 +220,7 @@ export interface CrdtAggregateDocument<
 > {
 	readonly fields: TFields;
 	readonly replicaRevision: number;
-	readonly awareness: CrdtAwarenessPort<TAwareness>;
+	readonly awareness: CrdtAwarenessPort<TAwareness, keyof TFields>;
 	getSnapshot(): CrdtDocumentState<keyof TFields>;
 	subscribe(
 		listener: (state: CrdtDocumentState<keyof TFields>) => void,
@@ -191,6 +228,8 @@ export interface CrdtAggregateDocument<
 	connect(options: { mode: "view" | "edit"; fallback?: "view" }): Promise<void>;
 	disconnect(): Promise<void>;
 	close(): Promise<void>;
+	export(): Promise<Uint8Array>;
+	discard(): Promise<void>;
 	transaction(callback: (tx: { readonly fields: TFields }) => void): void;
 }
 

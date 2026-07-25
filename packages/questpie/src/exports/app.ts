@@ -10,6 +10,15 @@ export {
 } from "#questpie/server/config/create-app.js";
 export { createContextFactory } from "#questpie/server/config/create-context-factory.js";
 export {
+	acquireGeneratedApp,
+	type GeneratedAppLease,
+} from "#questpie/server/config/generated-app-registry.js";
+export {
+	createGracefulServerShutdown,
+	type GracefulServer,
+	type GracefulServerShutdown,
+} from "#questpie/server/config/graceful-server-shutdown.js";
+export {
 	appConfig,
 	authConfig,
 	type TypedAuthConfig,

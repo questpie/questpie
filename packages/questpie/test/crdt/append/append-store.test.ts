@@ -57,8 +57,6 @@ import {
 	questpieCrdtSnapshotTable,
 	questpieCrdtSubjectTable,
 	questpieCrdtTables,
-	questpieCrdtTicketGrantTable,
-	questpieCrdtTicketTable,
 	questpieCrdtUpdateReceiptTable,
 	questpieCrdtUpdateTable,
 } from "../../../src/server/modules/core/integrated/crdt/schema.js";
@@ -66,7 +64,6 @@ import { stageCrdtAggregateBundle } from "../../../src/shared/crdt-engine.js";
 
 const RESOURCE_ID = "00000000-0000-4000-8000-000000000301";
 const SUBJECT_ID = "00000000-0000-4000-8000-000000000302";
-const TICKET_ID = "00000000-0000-4000-8000-000000000303";
 const SESSION_ID = "00000000-0000-4000-8000-000000000304";
 const UPDATE_ID = "00000000-0000-4000-8000-000000000305";
 const textEngine = createDeterministicTextEngine();
@@ -1326,54 +1323,14 @@ async function seedFixture(db: AnyDrizzleClient<any>) {
 		resourceId: RESOURCE_ID,
 		partTokens: 2_000n,
 	});
-	await db.insert(questpieCrdtTicketTable).values({
-		id: TICKET_ID,
-		resourceId: RESOURCE_ID,
-		resourceEpochId: identity.resourceEpochId,
-		definitionId: resource!.definitionId,
-		schemaId: identity.schemaId,
-		subjectId: SUBJECT_ID,
-		secretHash: Buffer.alloc(32, 0x43),
-		credentialFingerprint,
-		audience: "test",
-		requestedMode: 2,
-		effectiveMode: 2,
-		protocolMajor: 1,
-		protocolMinor: 0,
-		resourceReadFence: 0n,
-		resourceEditFence: 0n,
-		ownerPolicyRevision: 0n,
-		subjectReadFence: 0n,
-		subjectEditFence: 0n,
-		sessionGeneration: 0n,
-		authorityExpiresAt: expiresAt,
-		expiresAt,
-		redeemedAt: new Date(),
-	});
-	await db.insert(questpieCrdtTicketGrantTable).values(
-		bindings.map((candidate) => ({
-			ticketId: TICKET_ID,
-			resourceId: RESOURCE_ID,
-			schemaId: identity.schemaId,
-			bindingId: candidate.id,
-			stableFieldId: candidate.stableFieldId,
-			fieldEpoch: 1n,
-			fieldSlot: candidate.fieldSlot,
-			formatVersion: candidate.formatVersion,
-			grant: 1,
-			headFieldCursor: 0n,
-			fieldReadFence: 0n,
-			fieldEditFence: 0n,
-			subjectFieldReadFence: 0n,
-			subjectFieldEditFence: 0n,
-		})),
-	);
 	await db.insert(questpieCrdtSessionTable).values({
 		id: SESSION_ID,
-		ticketId: TICKET_ID,
 		resourceId: RESOURCE_ID,
+		resourceIncarnationKey: resource!.incarnationKey,
 		resourceEpochId: identity.resourceEpochId,
+		aggregateEpoch: 1n,
 		schemaId: identity.schemaId,
+		schemaVersion: BigInt(manifest.version),
 		subjectId: SUBJECT_ID,
 		credentialFingerprint,
 		requestedMode: 2,
@@ -1389,12 +1346,13 @@ async function seedFixture(db: AnyDrizzleClient<any>) {
 		updateTokens: 120n,
 		updateByteTokens: 2n * 1024n * 1024n,
 		awarenessTokens: 20n,
+		edgeOwnerGeneration: 0n,
+		deliveryGeneration: 0n,
 		leaseExpiresAt: expiresAt,
 	});
 	await db.insert(questpieCrdtSessionGrantTable).values(
 		bindings.map((candidate) => ({
 			sessionId: SESSION_ID,
-			ticketId: TICKET_ID,
 			resourceId: RESOURCE_ID,
 			schemaId: identity.schemaId,
 			bindingId: candidate.id,
