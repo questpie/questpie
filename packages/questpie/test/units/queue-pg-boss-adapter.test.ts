@@ -101,6 +101,31 @@ describe("PgBossAdapter — v10+ work() callback receives Job[]", () => {
 		});
 	});
 
+	it("settles every fetched runOnce job before surfacing a batch failure", async () => {
+		const { adapter, fake } = makeAdapter();
+		fake.fetchedJobs.push(
+			{ id: "once-bad-first", data: { fail: true } },
+			{ id: "once-ok-second", data: { fail: false } },
+		);
+
+		await expect(
+			adapter.runOnce({
+				echo: async ({ data }) => {
+					if ((data as { fail: boolean }).fail) {
+						throw new Error("first job failed");
+					}
+				},
+			}),
+		).rejects.toThrow("first job failed");
+
+		expect(fake.failCalls).toEqual([
+			expect.objectContaining({ name: "echo", id: "once-bad-first" }),
+		]);
+		expect(fake.completeCalls).toEqual([
+			{ name: "echo", id: "once-ok-second" },
+		]);
+	});
+
 	it("dispatches each job in the array to the handler with the correct payload", async () => {
 		const { adapter, fake } = makeAdapter();
 

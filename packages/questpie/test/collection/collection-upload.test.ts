@@ -9,6 +9,7 @@ import {
 	createFetchHandler,
 } from "../../src/server/adapters/http.js";
 import { storageCollectionServe } from "../../src/server/adapters/routes/storage.js";
+import { questpieStorageObjectKeyTable } from "../../src/server/modules/core/integrated/storage/cleanup-table.js";
 import { generateSignedUrlToken } from "../../src/server/modules/core/integrated/storage/signed-url.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createMockSession, createTestContext } from "../utils/test-context";
@@ -814,6 +815,9 @@ describe("collection storage route streaming", () => {
 		expect(result.success).toBe(true);
 		expect(storage.calls.deletedKeys).toEqual(["delete.txt"]);
 		expect(await app.storage.exists("delete.txt")).toBe(false);
+		expect(await app.db.select().from(questpieStorageObjectKeyTable)).toEqual(
+			[],
+		);
 		const deleted = await app.collections.assets.findOne(
 			{ where: { id: asset.id } },
 			createTestContext(),

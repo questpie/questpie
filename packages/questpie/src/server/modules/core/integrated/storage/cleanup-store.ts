@@ -107,6 +107,36 @@ export async function enqueueStorageCleanup(
 }
 
 /**
+ * Delete a provider object only while the key is fenced against reuse and no
+ * upload collection retains it. Missing provider objects converge as success.
+ */
+export async function deleteUnreferencedStorageObject(options: {
+	app: any;
+	db: any;
+	key: string;
+	storage: Files;
+}): Promise<"deleted" | "retained"> {
+	return options.db.transaction(async (tx: any) => {
+		await lockStorageObjectKey(tx, options.key);
+		if (await hasRetainedStorageReference(options.app, tx, options.key)) {
+			return "retained";
+		}
+
+		try {
+			await options.storage.delete(options.key, {
+				timeout: DELETE_TIMEOUT_MS,
+			});
+		} catch (error) {
+			if (!isMissingObject(error)) throw error;
+		}
+		await tx
+			.delete(questpieStorageObjectKeyTable)
+			.where(eq(questpieStorageObjectKeyTable.key, options.key));
+		return "deleted";
+	});
+}
+
+/**
  * Best-effort low-latency wake. The outbox row and recurring job are the
  * durability mechanism; this is throttled so a 100k-row retention batch does
  * not publish 100k queue messages.
@@ -266,27 +296,13 @@ export async function drainStorageCleanup(
 				if (!task) return;
 
 				try {
-					try {
-						await options.db.transaction(async (tx: any) => {
-							await lockStorageObjectKey(tx, task.key);
-							if (
-								await hasRetainedStorageReference(options.app, tx, task.key)
-							) {
-								await acknowledgeStorageCleanup(tx, task);
-								return;
-							}
-							await options.storage.delete(task.key, {
-								timeout: DELETE_TIMEOUT_MS,
-							});
-							await acknowledgeStorageCleanup(tx, task);
-							await tx
-								.delete(questpieStorageObjectKeyTable)
-								.where(eq(questpieStorageObjectKeyTable.key, task.key));
-						});
-					} catch (error) {
-						if (!isMissingObject(error)) throw error;
-						await acknowledgeStorageCleanup(options.db, task);
-					}
+					await deleteUnreferencedStorageObject({
+						app: options.app,
+						db: options.db,
+						key: task.key,
+						storage: options.storage,
+					});
+					await acknowledgeStorageCleanup(options.db, task);
 					completed += 1;
 				} catch (error) {
 					failed += 1;

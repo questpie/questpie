@@ -105,6 +105,10 @@ describe("physical purge CRDT retention boundary", () => {
 			.update(questpieCrdtBindingTable)
 			.set({ retiredAt: expiredAt })
 			.where(eq(questpieCrdtBindingTable.resourceId, resource!.id));
+		await setup.app.db
+			.update(questpieCrdtResourceTable)
+			.set({ retiredAt: expiredAt })
+			.where(eq(questpieCrdtResourceTable.id, resource!.id));
 
 		await collectCrdtExpiredRecoveryRoots(setup.app.db, { limit: 256 });
 
@@ -114,11 +118,9 @@ describe("physical purge CRDT retention boundary", () => {
 		expect(
 			await setup.app.db.select().from(questpieCrdtBindingTable),
 		).toHaveLength(0);
-		// A content-free retired identity tombstone remains. Purge is not a
-		// synchronous privacy-erasure guarantee for the CRDT retention domain.
 		expect(
 			await setup.app.db.select().from(questpieCrdtResourceTable),
-		).toHaveLength(1);
+		).toHaveLength(0);
 	});
 });
 

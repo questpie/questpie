@@ -13,7 +13,10 @@ import {
 	claimStorageCleanup,
 	enqueueStorageCleanup,
 } from "../../src/server/modules/core/integrated/storage/cleanup-store.js";
-import { questpieStorageCleanupTable } from "../../src/server/modules/core/integrated/storage/cleanup-table.js";
+import {
+	questpieStorageCleanupTable,
+	questpieStorageObjectKeyTable,
+} from "../../src/server/modules/core/integrated/storage/cleanup-table.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 import { createTestContext } from "../utils/test-context.js";
 import { runTestDbMigrations } from "../utils/test-db.js";
@@ -113,6 +116,12 @@ describe("physical purge module integrations", () => {
 		expect(await setup.app.storage.exists(key)).toBe(false);
 		expect(
 			await setup.app.db.select().from(questpieStorageCleanupTable),
+		).toEqual([]);
+		expect(
+			await setup.app.db
+				.select()
+				.from(questpieStorageObjectKeyTable)
+				.where(eq(questpieStorageObjectKeyTable.key, key)),
 		).toEqual([]);
 	});
 
@@ -300,10 +309,19 @@ describe("physical purge module integrations", () => {
 		await setup.app.collections.uploadAssets.purgeById({ id: asset.id }, ctx);
 
 		await setup.app.storage.delete(key);
+		setup.app.storage.delete = (async () => {
+			throw new FilesError("NotFound", "Object was already removed");
+		}) as typeof setup.app.storage.delete;
 		await setup.app.queue.runOnce({ jobs: ["storageCleanup"] });
 
 		expect(
 			await setup.app.db.select().from(questpieStorageCleanupTable),
+		).toEqual([]);
+		expect(
+			await setup.app.db
+				.select()
+				.from(questpieStorageObjectKeyTable)
+				.where(eq(questpieStorageObjectKeyTable.key, key)),
 		).toEqual([]);
 	});
 

@@ -463,7 +463,83 @@ export async function collectCrdtExpiredRecoveryRoots(
 		WHERE b.id = c.id
 		RETURNING b.id
 	`);
-	deleted += resultRowCount(removedBindings);
+	const removedBindingCount = resultRowCount(removedBindings);
+	deleted += removedBindingCount;
+	remaining -= removedBindingCount;
+	if (remaining < 1) return deleted;
+
+	const retiredResources = await db
+		.select({ id: questpieCrdtResourceTable.id })
+		.from(questpieCrdtResourceTable)
+		.where(
+			and(
+				eq(questpieCrdtResourceTable.status, 2),
+				isNull(questpieCrdtResourceTable.currentEpochId),
+				sql`${questpieCrdtResourceTable.retiredAt} <= clock_timestamp() - interval '30 days'`,
+				sql`NOT EXISTS (
+					SELECT 1 FROM questpie_crdt_resource_epoch e
+					WHERE e.resource_id = ${questpieCrdtResourceTable.id}
+				)`,
+				sql`NOT EXISTS (
+					SELECT 1 FROM questpie_crdt_binding b
+					WHERE b.resource_id = ${questpieCrdtResourceTable.id}
+				)`,
+				sql`NOT EXISTS (
+					SELECT 1 FROM questpie_crdt_recovery_hold h
+					WHERE h.resource_id = ${questpieCrdtResourceTable.id}
+				)`,
+			),
+		)
+		.orderBy(asc(questpieCrdtResourceTable.retiredAt))
+		.limit(remaining)
+		.for("update", { skipLocked: true });
+
+	for (const resource of retiredResources) {
+		for (const table of [
+			"questpie_crdt_subject_fence",
+			"questpie_crdt_resource_admission",
+			"questpie_crdt_lease",
+		] as const) {
+			const removed = await limitedDelete(
+				db,
+				sql.raw(`WITH doomed AS (
+					SELECT ctid FROM ${table}
+					WHERE resource_id = '${resource.id}'::uuid
+					LIMIT ${remaining} FOR UPDATE SKIP LOCKED
+				) DELETE FROM ${table}
+				  WHERE ctid IN (SELECT ctid FROM doomed) RETURNING resource_id`),
+			);
+			deleted += removed;
+			remaining -= removed;
+			if (remaining < 1) return deleted;
+		}
+
+		const removed = await db
+			.delete(questpieCrdtResourceTable)
+			.where(
+				and(
+					eq(questpieCrdtResourceTable.id, resource.id),
+					eq(questpieCrdtResourceTable.status, 2),
+					isNull(questpieCrdtResourceTable.currentEpochId),
+					sql`NOT EXISTS (
+						SELECT 1 FROM questpie_crdt_resource_epoch e
+						WHERE e.resource_id = ${questpieCrdtResourceTable.id}
+					)`,
+					sql`NOT EXISTS (
+						SELECT 1 FROM questpie_crdt_binding b
+						WHERE b.resource_id = ${questpieCrdtResourceTable.id}
+					)`,
+					sql`NOT EXISTS (
+						SELECT 1 FROM questpie_crdt_recovery_hold h
+						WHERE h.resource_id = ${questpieCrdtResourceTable.id}
+					)`,
+				),
+			)
+			.returning({ id: questpieCrdtResourceTable.id });
+		deleted += removed.length;
+		remaining -= removed.length;
+		if (remaining < 1) return deleted;
+	}
 	return deleted;
 }
 

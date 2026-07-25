@@ -174,6 +174,7 @@ export class PgBossAdapter implements QueueAdapter {
 
 		const batchSize = Math.max(1, options?.batchSize ?? 10);
 		let processed = 0;
+		let firstError: Error | undefined;
 
 		for (const jobName of selectedJobNames) {
 			const handler = handlers[jobName];
@@ -205,15 +206,22 @@ export class PgBossAdapter implements QueueAdapter {
 					processed += 1;
 				} catch (error) {
 					const err = error instanceof Error ? error : new Error(String(error));
-					await this.boss.fail(jobName, id, {
-						message: err.message,
-						stack: err.stack,
-					});
-					throw err;
+					firstError ??= err;
+					try {
+						await this.boss.fail(jobName, id, {
+							message: err.message,
+							stack: err.stack,
+						});
+					} catch {
+						// Continue settling siblings already fetched into this
+						// process. pg-boss will recover this active item through
+						// its lease/expiry path.
+					}
 				}
 			}
 		}
 
+		if (firstError) throw firstError;
 		return { processed };
 	}
 

@@ -45,6 +45,7 @@ import type {
 } from "#questpie/server/modules/core/integrated/crdt/capability.js";
 import type { SearchableConfig } from "#questpie/server/modules/core/integrated/search/types.js";
 import {
+	deleteUnreferencedStorageObject,
 	enqueueStorageCleanup,
 	lockStorageObjectKey,
 	wakeStorageCleanup,
@@ -897,7 +898,12 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		}) => {
 			const cleanup = async () => {
 				try {
-					await app.storage.delete(key);
+					await deleteUnreferencedStorageObject({
+						app,
+						db: app.db,
+						key,
+						storage: app.storage,
+					});
 				} catch (error) {
 					logStorageCleanupError(logger, message, key, error);
 				}
@@ -955,7 +961,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			if (!app?.storage || !data?.key) return;
 			if (operation === "create" || original?.key !== data.key) {
 				await lockStorageObjectKey(db, data.key);
-				if (!(await app.storage.exists(data.key))) {
+				if (!(await app.storage.exists(data.key, { timeout: 30_000 }))) {
 					throw ApiError.badRequest(
 						`Upload storage object "${data.key}" does not exist`,
 					);
