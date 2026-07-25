@@ -1,11 +1,16 @@
 ---
 "@questpie/sandbox": minor
 "@questpie/mcp": minor
-"@questpie/executor": minor
 ---
 
-Authenticated Agent-workload authority across sandbox, mcp, and executor.
+Fail-closed remote workload authority across sandbox and MCP.
 
-- **sandbox**: an authenticated Agent workload adapter path with principal-derived sandbox policy and work roots.
-- **mcp**: a fail-closed Agent-workload boundary that gates CRUD, route, and custom tools with explicit named policy.
-- **executor**: the workload boundary seam that carries principal authority into execution.
+- **sandbox**: add a generic, consumer-authorized workload admission path with
+  signed single-use transport binding, strict resource limits, canonical broker
+  routing, safe audit events, and no product-specific principal model.
+- **mcp**: require explicit catalog entries for every CRUD operation, route,
+  resource, and custom tool; derive OAuth scopes from that same catalog and
+  re-authorize discovery and invocation through scopes, RBAC, and an opaque
+  workload authorizer.
+- Remove ambient stdio system authority and retire the private executor package;
+  sandbox execution remains available through QUESTPIE's core executor service.

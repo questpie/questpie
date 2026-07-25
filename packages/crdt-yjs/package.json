@@ -28,14 +28,26 @@
 		"questpie": "^3.16.0"
 	},
 	"exports": {
-		"./client": "./src/exports/client.ts",
-		"./server": "./src/exports/server.ts",
+		"./client": {
+			"types": "./src/exports/client.ts",
+			"default": "./src/exports/client.ts"
+		},
+		"./server": {
+			"types": "./src/exports/server.ts",
+			"default": "./src/exports/server.ts"
+		},
 		"./package.json": "./package.json"
 	},
 	"publishConfig": {
 		"exports": {
-			"./client": "./dist/client.mjs",
-			"./server": "./dist/server.mjs",
+			"./client": {
+				"types": "./dist/client.d.mts",
+				"default": "./dist/client.mjs"
+			},
+			"./server": {
+				"types": "./dist/server.d.mts",
+				"default": "./dist/server.mjs"
+			},
 			"./package.json": "./package.json"
 		}
 	}

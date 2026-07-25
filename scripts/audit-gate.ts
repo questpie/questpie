@@ -26,14 +26,6 @@ const KNOWN = new Map<string, string>([
 	// vite `server.fs.deny` bypass via Windows alternate paths — dev-server-only,
 	// Windows-only. Clears when vite is bumped >=7.3.5 / >=8.0.16 (dep-hygiene PR).
 	["GHSA-fx2h-pf6j-xcff", "TODO: bump vite>=8.0.16 / >=7.3.5 (dep-hygiene PR; dev-server-only, Windows-only)"],
-	// ws memory-exhaustion DoS from tiny fragments/data chunks — transitive dep.
-	// Clears when ws is bumped >=8.21.0 (dep-hygiene PR).
-	["GHSA-96hv-2xvq-fx4p", "TODO: bump ws>=8.21.0 (dep-hygiene PR; transitive)"],
-	// linkify-it ReDoS — LinkifyIt#match has quadratic complexity on crafted
-	// input. Affected <=5.0.0 (no fixed release yet); transitive via
-	// markdown-it@14 (docs/markdown rendering only, not on a request hot path).
-	// Clears when linkify-it ships >5.0.0 with the fix.
-	["GHSA-22p9-wv53-3rq4", "TODO: bump linkify-it once >5.0.0 ships the fix (transitive via markdown-it@14; docs/markdown only)"],
 ]);
 
 type Advisory = {

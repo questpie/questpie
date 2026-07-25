@@ -14,4 +14,9 @@
 #
 # Trade-off: legitimate new releases also take ~3 days to land in our
 # tree. Accept that — supply-chain hygiene > 3-day update lag.
+#
+# Emergency security exception recorded in PR #188: brace-expansion 5.0.8 was
+# reviewed and pinned exactly before its 72-hour window elapsed because it is
+# the first release fixing a high-severity advisory. Do not add it to
+# minimumReleaseAgeExcludes: future versions must remain quarantined.
 minimumReleaseAge = 259200  # 72 hours

@@ -11,7 +11,7 @@ export default defineConfig({
 	shims: true,
 	exports: {
 		devExports: true,
-		customExports: async (generatedExports) => {
+		customExports: async (generatedExports, { isPublish }) => {
 			const exportsWithTypes: Record<
 				string,
 				string | { types: string; default: string }
@@ -19,7 +19,7 @@ export default defineConfig({
 			const current = generatedExports["."];
 			if (typeof current === "string") {
 				exportsWithTypes["."] = {
-					types: "./dist/index.d.mts",
+					types: isPublish ? "./dist/index.d.mts" : "./src/exports/index.ts",
 					default: current,
 				};
 			}

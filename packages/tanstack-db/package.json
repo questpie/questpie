@@ -16,7 +16,7 @@
 	"types": "./dist/index.d.mts",
 	"exports": {
 		".": {
-			"types": "./dist/index.d.mts",
+			"types": "./src/exports/index.ts",
 			"default": "./src/exports/index.ts"
 		},
 		"./package.json": "./package.json"
