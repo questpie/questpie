@@ -237,6 +237,11 @@ describe.skipIf(!runDrivers)("realtime ChangeBroker driver matrix", () => {
 				event: "message",
 				schemaIdentity: "message-v1",
 				payload: "hello",
+				wireJson: JSON.stringify({
+					eventId: "event-id",
+					event: "message",
+					data: "hello",
+				}),
 				sizeBytes: 7,
 			});
 			const channelRaw = await setup.app.db.execute(
@@ -266,6 +271,11 @@ describe.skipIf(!runDrivers)("realtime ChangeBroker driver matrix", () => {
 					event: "message",
 					schemaIdentity: "message-v1",
 					payload,
+					wireJson: JSON.stringify({
+						eventId: `scalar-${index}`,
+						event: "message",
+						data: payload,
+					}),
 					sizeBytes: 16,
 				})),
 			);
