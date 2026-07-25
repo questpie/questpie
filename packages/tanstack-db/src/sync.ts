@@ -23,10 +23,11 @@ export function resolveSync<TRow>(options: {
 }): {
 	queryFn: () => Promise<TRow[]>;
 	getSnapshotRevision: () => number;
-	updateSnapshot: (
+	reconcileMutation: (
 		revision: number,
 		update: (rows: TRow[]) => TRow[],
-	) => boolean;
+		fallback: (rows: TRow[]) => TRow[],
+	) => Promise<void>;
 } {
 	const { client, findOptions, mode, queryClient, queryKey, onDispose } =
 		options;
@@ -35,22 +36,48 @@ export function resolveSync<TRow>(options: {
 		return {
 			queryFn: async () => (await client.find(findOptions)).docs,
 			getSnapshotRevision: () => 0,
-			updateSnapshot: () => false,
+			reconcileMutation: async () => {},
 		};
 	}
 
 	let latest: TRow[] | undefined;
 	let initial: Promise<TRow[]> | undefined;
 	let snapshotRevision = 0;
+	const setLatest = (rows: TRow[]) => {
+		latest = rows;
+		queryClient.setQueryData(queryKey, latest);
+	};
+	const acceptSnapshot = (rows: TRow[]) => {
+		snapshotRevision += 1;
+		setLatest(rows);
+	};
 	return {
 		getSnapshotRevision: () => snapshotRevision,
-		updateSnapshot: (revision, update) => {
-			if (revision !== snapshotRevision) return false;
-			latest = update(
-				latest ?? queryClient.getQueryData<TRow[]>(queryKey) ?? [],
-			);
-			queryClient.setQueryData(queryKey, latest);
-			return true;
+		reconcileMutation: async (revision, update, fallback) => {
+			if (revision === snapshotRevision) {
+				setLatest(
+					update(latest ?? queryClient.getQueryData<TRow[]>(queryKey) ?? []),
+				);
+				return;
+			}
+
+			// Snapshot-mode queryFn serves the latest live value, so a normal
+			// Query refetch cannot repair a snapshot that raced the mutation.
+			const refreshRevision = snapshotRevision;
+			try {
+				const refreshed = await client.find(findOptions);
+				if (refreshRevision === snapshotRevision) {
+					acceptSnapshot(refreshed.docs);
+				}
+			} catch {
+				if (refreshRevision === snapshotRevision) {
+					setLatest(
+						fallback(
+							latest ?? queryClient.getQueryData<TRow[]>(queryKey) ?? [],
+						),
+					);
+				}
+			}
 		},
 		queryFn: () => {
 			if (latest) return Promise.resolve(latest);
@@ -64,12 +91,10 @@ export function resolveSync<TRow>(options: {
 				const liveDispose = client.live(
 					findOptions,
 					(snapshot) => {
-						snapshotRevision += 1;
-						latest = snapshot.docs;
-						queryClient.setQueryData(queryKey, latest);
+						acceptSnapshot(snapshot.docs);
 						if (!settled) {
 							settled = true;
-							resolve(latest);
+							resolve(snapshot.docs);
 						}
 					},
 					{

@@ -811,7 +811,7 @@ describe("realtime matrix", () => {
 			await reader.close();
 		});
 
-		it("fails closed when both delta hydration and its authoritative reset fail", async () => {
+		it("keeps a delta topic registered after a transient refresh failure and recovers", async () => {
 			const adapter = new MockChangeBroker();
 			let rejectReads = false;
 			const posts = collection("posts")
@@ -860,9 +860,66 @@ describe("realtime matrix", () => {
 				data: { topicId: "col-posts", message: "read projection failed" },
 			});
 			await new Promise((resolve) => setTimeout(resolve, 20));
+			expect(setup.app.realtime.listeners.size).toBe(1);
+
+			rejectReads = false;
+			await setup.app.collections.posts.updateById(
+				{ id: created.id, data: { title: "Recovered" } },
+				createTestContext(),
+			);
+			expect(await reader.readSnapshot()).toMatchObject({
+				event: "update",
+				data: {
+					topicId: "col-posts",
+					key: created.id,
+					row: { id: created.id, title: "Recovered" },
+				},
+			});
+			await reader.close();
+		}, 30_000);
+
+		it("tears down a delta topic when refreshed access is permanently revoked", async () => {
+			const adapter = new MockChangeBroker();
+			let allowReads = true;
+			const posts = collection("posts")
+				.fields(({ f }) => ({ title: f.textarea().required() }))
+				.access({
+					read: () => allowReads,
+					create: true,
+					update: true,
+				});
+			setup = await buildMockApp(
+				{ collections: { posts } },
+				{ realtime: { changeBroker: adapter, nativeDeltas: true } },
+			);
+			await runTestDbMigrations(setup.app);
+			const created = await setup.app.collections.posts.create(
+				{ title: "Initially readable" },
+				createTestContext(),
+			);
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("posts", { mode: "delta" })]),
+				{},
+				undefined,
+			);
+			const reader = createSSEReader(response.body!);
+			await reader.readSnapshot();
+
+			allowReads = false;
+			await setup.app.collections.posts.updateById(
+				{ id: created.id, data: { title: "No longer readable" } },
+				createTestContext(),
+			);
+
+			expect(await reader.readSnapshot()).toMatchObject({
+				event: "error",
+				data: { topicId: "col-posts" },
+			});
+			await new Promise((resolve) => setTimeout(resolve, 20));
 			expect(setup.app.realtime.listeners.size).toBe(0);
 			await reader.close();
-		});
+		}, 30_000);
 	});
 
 	// ==========================================================================

@@ -30,8 +30,21 @@ function envelope(docs: Row[]) {
 
 function createFakeClient(initial: Row[]) {
 	let rows = initial;
+	let failFind = false;
 	let failUpdate = false;
+	let heldCreate:
+		| {
+				started: () => void;
+				wait: Promise<void>;
+		  }
+		| undefined;
 	let heldUpdate:
+		| {
+				started: () => void;
+				wait: Promise<void>;
+		  }
+		| undefined;
+	let heldDelete:
 		| {
 				started: () => void;
 				wait: Promise<void>;
@@ -43,11 +56,19 @@ function createFakeClient(initial: Row[]) {
 	const api = {
 		find: async () => {
 			calls.find += 1;
+			if (failFind) {
+				failFind = false;
+				throw new Error("snapshot refresh rejected");
+			}
 			return envelope(rows);
 		},
 		create: async (row: Row) => {
 			calls.create += 1;
 			rows = [...rows, row];
+			const held = heldCreate;
+			heldCreate = undefined;
+			held?.started();
+			await held?.wait;
 			return row;
 		},
 		update: async ({ id, data }: { id: string; data: Partial<Row> }) => {
@@ -64,6 +85,10 @@ function createFakeClient(initial: Row[]) {
 		delete: async ({ id }: { id: string }) => {
 			calls.delete += 1;
 			rows = rows.filter((row) => row.id !== id);
+			const held = heldDelete;
+			heldDelete = undefined;
+			held?.started();
+			await held?.wait;
 			return { success: true };
 		},
 		live: (
@@ -81,8 +106,23 @@ function createFakeClient(initial: Row[]) {
 	return {
 		client: { collections: { posts: api } } as unknown as QuestpieClient<App>,
 		calls,
+		failNextFind() {
+			failFind = true;
+		},
 		failNextUpdate() {
 			failUpdate = true;
+		},
+		holdNextCreate() {
+			let markStarted = () => {};
+			const started = new Promise<void>((resolve) => {
+				markStarted = resolve;
+			});
+			let release = () => {};
+			const wait = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			heldCreate = { started: markStarted, wait };
+			return { started, release };
 		},
 		holdNextUpdate() {
 			let markStarted = () => {};
@@ -96,9 +136,24 @@ function createFakeClient(initial: Row[]) {
 			heldUpdate = { started: markStarted, wait };
 			return { started, release };
 		},
+		holdNextDelete() {
+			let markStarted = () => {};
+			const started = new Promise<void>((resolve) => {
+				markStarted = resolve;
+			});
+			let release = () => {};
+			const wait = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			heldDelete = { started: markStarted, wait };
+			return { started, release };
+		},
 		emit(next: Row[]) {
 			rows = next;
 			liveListener?.(envelope(rows));
+		},
+		emitSnapshot(next: Row[]) {
+			liveListener?.(envelope(next));
 		},
 	};
 }
@@ -255,6 +310,118 @@ describe("createQuestpieCollections", () => {
 		await transaction.isPersisted.promise;
 
 		expect(db.collections.posts.get("one")?.title).toBe("Newer snapshot");
+		db.destroy();
+	});
+
+	it("reconciles a persisted update after a stale snapshot arrives mid-flight", async () => {
+		const fake = createFakeClient([{ id: "one", title: "Before" }]);
+		const db = createQuestpieCollections(fake.client, {
+			queryClient: new QueryClient(),
+			syncMode: "snapshot",
+		});
+		await db.collections.posts.preload();
+		const held = fake.holdNextUpdate();
+
+		const transaction = db.collections.posts.update("one", (draft) => {
+			draft.title = "Persisted";
+		});
+		await held.started;
+		fake.emitSnapshot([{ id: "one", title: "Before" }]);
+		held.release();
+		await transaction.isPersisted.promise;
+
+		expect(db.collections.posts.get("one")?.title).toBe("Persisted");
+		db.destroy();
+	});
+
+	it("keeps a committed update when its reconciliation read fails", async () => {
+		const fake = createFakeClient([{ id: "one", title: "Before" }]);
+		const db = createQuestpieCollections(fake.client, {
+			queryClient: new QueryClient(),
+			syncMode: "snapshot",
+		});
+		await db.collections.posts.preload();
+		const held = fake.holdNextUpdate();
+
+		const transaction = db.collections.posts.update("one", (draft) => {
+			draft.title = "Persisted";
+		});
+		await held.started;
+		fake.emitSnapshot([{ id: "one", title: "Before" }]);
+		fake.failNextFind();
+		held.release();
+
+		await transaction.isPersisted.promise;
+		expect(db.collections.posts.get("one")?.title).toBe("Persisted");
+		db.destroy();
+	});
+
+	it("preserves a newer live value when its reconciliation read fails", async () => {
+		const fake = createFakeClient([{ id: "one", title: "Before" }]);
+		const db = createQuestpieCollections(fake.client, {
+			queryClient: new QueryClient(),
+			syncMode: "snapshot",
+		});
+		await db.collections.posts.preload();
+		const held = fake.holdNextUpdate();
+
+		const transaction = db.collections.posts.update("one", (draft) => {
+			draft.title = "Delayed response";
+		});
+		await held.started;
+		fake.emit([{ id: "one", title: "Newer snapshot" }]);
+		fake.failNextFind();
+		held.release();
+		await transaction.isPersisted.promise;
+
+		expect(db.collections.posts.get("one")?.title).toBe("Newer snapshot");
+		db.destroy();
+	});
+
+	it("keeps a committed insert when its reconciliation read fails", async () => {
+		const fake = createFakeClient([{ id: "one", title: "Before" }]);
+		const db = createQuestpieCollections(fake.client, {
+			queryClient: new QueryClient(),
+			syncMode: "snapshot",
+		});
+		await db.collections.posts.preload();
+		const held = fake.holdNextCreate();
+
+		const now = new Date();
+		const transaction = db.collections.posts.insert({
+			id: "two",
+			_title: "Persisted",
+			createdAt: now,
+			updatedAt: now,
+			title: "Persisted",
+		});
+		await held.started;
+		fake.emitSnapshot([{ id: "one", title: "Before" }]);
+		fake.failNextFind();
+		held.release();
+		await transaction.isPersisted.promise;
+
+		expect(db.collections.posts.get("two")?.title).toBe("Persisted");
+		db.destroy();
+	});
+
+	it("keeps a committed delete when its reconciliation read fails", async () => {
+		const fake = createFakeClient([{ id: "one", title: "Before" }]);
+		const db = createQuestpieCollections(fake.client, {
+			queryClient: new QueryClient(),
+			syncMode: "snapshot",
+		});
+		await db.collections.posts.preload();
+		const held = fake.holdNextDelete();
+
+		const transaction = db.collections.posts.delete("one");
+		await held.started;
+		fake.emitSnapshot([{ id: "one", title: "Before" }]);
+		fake.failNextFind();
+		held.release();
+		await transaction.isPersisted.promise;
+
+		expect(db.collections.posts.has("one")).toBe(false);
 		db.destroy();
 	});
 

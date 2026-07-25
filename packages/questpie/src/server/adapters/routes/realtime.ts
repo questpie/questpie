@@ -1578,8 +1578,9 @@ export async function realtimeSubscribe(
 							)
 								.catch(requestClose)
 								.finally(() => {
+									// Transient compute/hydration failures remain subscribed so a
+									// later change can drive the delta group through recovery.
 									if (
-										deliveryMode === "delta" ||
 										isPermanentAccessError(error) ||
 										error instanceof RealtimeSnapshotBufferOverflowError ||
 										error instanceof RealtimeDeltaBufferOverflowError ||

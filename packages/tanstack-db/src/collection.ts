@@ -1,6 +1,7 @@
 import {
 	and,
 	createCollection,
+	deepEquals,
 	eq,
 	gt,
 	inArray,
@@ -37,6 +38,15 @@ function rowId(row: MutableRow): string {
 	return row.id;
 }
 
+function persistedRow<TRow extends MutableRow>(
+	result: unknown,
+	fallback: TRow,
+): TRow {
+	return result && typeof result === "object" && "id" in result
+		? (result as TRow)
+		: fallback;
+}
+
 export function createQuestpieCollection<TRow extends MutableRow>(options: {
 	client: MutationCollectionClient<TRow>;
 	name: string;
@@ -55,7 +65,7 @@ export function createQuestpieCollection<TRow extends MutableRow>(options: {
 		syncMode,
 		onDispose,
 	} = options;
-	const { getSnapshotRevision, queryFn, updateSnapshot } = resolveSync({
+	const { getSnapshotRevision, queryFn, reconcileMutation } = resolveSync({
 		client,
 		findOptions,
 		mode: syncMode,
@@ -79,21 +89,29 @@ export function createQuestpieCollection<TRow extends MutableRow>(options: {
 						client.create(mutation.modified),
 					),
 				);
-				updateSnapshot(snapshotRevision, (rows) => {
-					const next = [...rows];
-					for (let index = 0; index < transaction.mutations.length; index++) {
-						const optimistic = transaction.mutations[index]!.modified;
-						const result = persisted[index];
-						const row =
-							result && typeof result === "object" && "id" in result
-								? (result as TRow)
-								: optimistic;
-						const existing = next.findIndex((item) => item.id === row.id);
-						if (existing === -1) next.push(row);
-						else next[existing] = row;
-					}
-					return next;
-				});
+				await reconcileMutation(
+					snapshotRevision,
+					(rows) => {
+						const next = [...rows];
+						for (let index = 0; index < transaction.mutations.length; index++) {
+							const optimistic = transaction.mutations[index]!.modified;
+							const row = persistedRow(persisted[index], optimistic);
+							const existing = next.findIndex((item) => item.id === row.id);
+							if (existing === -1) next.push(row);
+							else next[existing] = row;
+						}
+						return next;
+					},
+					(rows) => {
+						const next = [...rows];
+						for (let index = 0; index < transaction.mutations.length; index++) {
+							const optimistic = transaction.mutations[index]!.modified;
+							const row = persistedRow(persisted[index], optimistic);
+							if (!next.some((item) => item.id === row.id)) next.push(row);
+						}
+						return next;
+					},
+				);
 				return skipRefetch;
 			},
 			onUpdate: async ({ transaction }) => {
@@ -106,22 +124,46 @@ export function createQuestpieCollection<TRow extends MutableRow>(options: {
 						}),
 					),
 				);
-				updateSnapshot(snapshotRevision, (rows) => {
-					const byId = new Map(rows.map((row) => [row.id, row]));
-					for (let index = 0; index < transaction.mutations.length; index++) {
-						const mutation = transaction.mutations[index]!;
-						const result = persisted[index];
-						const current = byId.get(String(mutation.key));
-						if (!current) continue;
-						byId.set(
-							String(mutation.key),
-							result && typeof result === "object" && "id" in result
-								? (result as TRow)
-								: ({ ...current, ...mutation.changes } as TRow),
-						);
-					}
-					return rows.map((row) => byId.get(row.id) ?? row);
-				});
+				await reconcileMutation(
+					snapshotRevision,
+					(rows) => {
+						const byId = new Map(rows.map((row) => [row.id, row]));
+						for (let index = 0; index < transaction.mutations.length; index++) {
+							const mutation = transaction.mutations[index]!;
+							const current = byId.get(String(mutation.key));
+							if (!current) continue;
+							byId.set(
+								String(mutation.key),
+								persistedRow(persisted[index], {
+									...current,
+									...mutation.changes,
+								} as TRow),
+							);
+						}
+						return rows.map((row) => byId.get(row.id) ?? row);
+					},
+					(rows) => {
+						const byId = new Map(rows.map((row) => [row.id, row]));
+						for (let index = 0; index < transaction.mutations.length; index++) {
+							const mutation = transaction.mutations[index]!;
+							const current = byId.get(String(mutation.key));
+							if (!current) continue;
+							const original = mutation.original as TRow;
+							const result = persistedRow(persisted[index], {
+								...original,
+								...mutation.changes,
+							} as TRow);
+							const merged = { ...current };
+							for (const key of Object.keys(result) as Array<keyof TRow>) {
+								if (deepEquals(current[key], original[key])) {
+									merged[key] = result[key];
+								}
+							}
+							byId.set(String(mutation.key), merged);
+						}
+						return rows.map((row) => byId.get(row.id) ?? row);
+					},
+				);
 				return skipRefetch;
 			},
 			onDelete: async ({ transaction }) => {
@@ -134,8 +176,21 @@ export function createQuestpieCollection<TRow extends MutableRow>(options: {
 				const deleted = new Set(
 					transaction.mutations.map((mutation) => String(mutation.key)),
 				);
-				updateSnapshot(snapshotRevision, (rows) =>
-					rows.filter((row) => !deleted.has(row.id)),
+				await reconcileMutation(
+					snapshotRevision,
+					(rows) => rows.filter((row) => !deleted.has(row.id)),
+					(rows) => {
+						const originals = new Map(
+							transaction.mutations.map((mutation) => [
+								String(mutation.key),
+								mutation.original as TRow,
+							]),
+						);
+						return rows.filter((row) => {
+							const original = originals.get(row.id);
+							return !original || !deepEquals(row, original);
+						});
+					},
 				);
 				return skipRefetch;
 			},

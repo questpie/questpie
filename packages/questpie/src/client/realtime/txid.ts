@@ -41,14 +41,33 @@ export class RealtimeTxidTracker {
 
 	registerTopic(): object {
 		const token = {};
+		const isFirstTopic = this.topicWatermarks.size === 0;
 		this.topicWatermarks.set(token, undefined);
+		if (isFirstTopic) {
+			for (const waiters of this.pending.values()) {
+				for (const waiter of waiters) {
+					if (waiter.requiredTopics === undefined) {
+						waiter.requiredTopics = new Set([token]);
+					}
+				}
+			}
+		}
 		return token;
 	}
 
 	unregisterTopic(token: object): void {
 		if (!this.topicWatermarks.delete(token)) return;
-		for (const waiters of this.pending.values()) {
-			for (const waiter of waiters) waiter.requiredTopics?.delete(token);
+		for (const [txid, waiters] of this.pending) {
+			for (const waiter of waiters) {
+				if (!waiter.requiredTopics?.delete(token)) continue;
+				if (waiter.requiredTopics.size > 0) continue;
+				waiters.delete(waiter);
+				waiter.dispose();
+				waiter.reject(
+					new Error("Realtime txid topic was removed before reconciliation"),
+				);
+			}
+			if (waiters.size === 0) this.pending.delete(txid);
 		}
 		this.settleResolved();
 	}

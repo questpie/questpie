@@ -93,6 +93,47 @@ describe("realtime txid reconciliation", () => {
 		expect(settled).toBe(true);
 	});
 
+	it("rejects instead of falsely resolving when its last required topic is removed", async () => {
+		const tracker = new RealtimeTxidTracker();
+		const posts = tracker.registerTopic();
+		const pending = tracker.awaitTxId("42");
+
+		tracker.unregisterTopic(posts);
+
+		await expect(pending).rejects.toThrow(
+			"Realtime txid topic was removed before reconciliation",
+		);
+	});
+
+	it("binds a waiter created before the first topic to that topic's watermark", async () => {
+		const tracker = new RealtimeTxidTracker();
+		const controller = new AbortController();
+		const pending = tracker
+			.awaitTxId("42", controller.signal)
+			.then(() => "resolved" as const)
+			.catch(() => "rejected" as const);
+
+		const posts = tracker.registerTopic();
+		tracker.observe(
+			{
+				type: "up-to-date",
+				topicId: "posts",
+				seq: 1,
+				upToDate: "43",
+			},
+			posts,
+		);
+
+		const outcome = await Promise.race([
+			pending,
+			new Promise<"pending">((resolve) =>
+				setTimeout(() => resolve("pending"), 20),
+			),
+		]);
+		if (outcome === "pending") controller.abort();
+		expect(outcome).toBe("resolved");
+	});
+
 	it("extracts mutation txids and remembers an early exact frame", async () => {
 		const tracker = new RealtimeTxidTracker();
 		tracker.observe({
