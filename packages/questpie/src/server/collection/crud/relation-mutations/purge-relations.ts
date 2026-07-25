@@ -129,11 +129,19 @@ function pushScalarReference(
 	references: ApplicationReference[],
 	sourceCrud: RelationSourceCrud,
 	relation: RelationConfig,
+	configuredFieldOverride?: string,
 ): boolean {
 	const sourceState = sourceCrud["~internalState"] as CollectionBuilderState;
 	const sourceTable = sourceCrud["~internalRelatedTable"] as PgTable;
-	const configuredField = relation.fields?.[0] ?? relation.field;
-	if (!configuredField || (relation.fields?.length ?? 1) !== 1) return false;
+	const configuredField =
+		configuredFieldOverride ?? relation.fields?.[0] ?? relation.field;
+	if (
+		!configuredField ||
+		(configuredFieldOverride === undefined &&
+			(relation.fields?.length ?? 1) !== 1)
+	) {
+		return false;
+	}
 
 	const sourceKey =
 		resolveFieldKey(sourceState, configuredField, sourceTable) ??
@@ -234,8 +242,13 @@ function collectApplicationReferences(
 				if (
 					!relatedCrud ||
 					!(
-						(relation.field &&
-							pushScalarReference(references, relatedCrud, relation)) ||
+						(relation.foreignKey &&
+							pushScalarReference(
+								references,
+								relatedCrud,
+								relation,
+								relation.foreignKey,
+							)) ||
 						(reverse && pushScalarReference(references, relatedCrud, reverse))
 					)
 				) {

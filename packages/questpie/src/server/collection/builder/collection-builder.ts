@@ -471,7 +471,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				return {
 					type: "many",
 					collection: targetName,
-					field: foreignKey,
+					foreignKey,
 					references: ["id"],
 					relationName: metadata.relationName,
 					onDelete: metadata.onDelete,

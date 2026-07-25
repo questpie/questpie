@@ -199,6 +199,8 @@ export interface RelationConfig {
 	fields?: PgColumn[];
 	/** Singular string field name for FK lookup (legacy / f.relation pattern) */
 	field?: string;
+	/** Foreign-key field on the target collection for a hasMany relation. */
+	foreignKey?: string;
 	references: string[];
 	relationName?: string; // For linking corresponding relations
 	onDelete?: "cascade" | "set null" | "restrict" | "no action";
