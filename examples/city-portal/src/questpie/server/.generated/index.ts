@@ -4,9 +4,9 @@
 
 import { createApp, createContextFactory } from "questpie/app";
 import "./names.gen";
-import type { AccessContext, AppDefinition, CollectionSelect, GlobalSelect, HookContext, Where } from "questpie/types";
+import type { AccessContext, AppDefinition, CollectionSelect, CrdtClientAPI, CrdtRegistryFromApp, CrdtServerAPI, GlobalSelect, HookContext, Where } from "questpie/types";
 import type { AppCollections, AppChannels, AppGlobals, AppRoutes } from "./entities.gen";
-import type { _AppQuestpie, AppAuthConfig, AppSession, AppSessionUser } from "./context.gen";
+import type { _AppQuestpie, AppAuthConfig, AppCrdt, AppSession, AppSessionUser } from "./context.gen";
 
 // ── Runtime ────────────────────────────────────────────────
 import _runtime from "../questpie.config";
@@ -31,6 +31,7 @@ import _glob_site_settings from "../globals/site-settings";
 import _mig_20260211T164057_bright_yellow_tiger from "../migrations/20260211T164057_bright_yellow_tiger";
 import _mig_20260721T210525_kind_pink_dolphin from "../migrations/20260721T210525_kind_pink_dolphin";
 import _mig_20260721T220739_calm_purple_griffin from "../migrations/20260721T220739_calm_purple_griffin";
+import _mig_20260725T050305_crdtStorageFoundation from "../migrations/20260725T050305_crdt-storage-foundation";
 
 // ── Blocks ─────────────────────────────────────────────────
 import { accordionBlock as _bloc_accordion } from "../blocks/accordion";
@@ -110,6 +111,7 @@ export type HookRuleContext<K extends keyof AppCollections | unknown = unknown> 
 export type AppConfig = {
 	collections: AppCollections;
 	channels: AppChannels;
+	crdt: AppCrdt;
 	globals: AppGlobals;
 	routes: AppRoutes;
 	storage: (typeof _runtime)["storage"];
@@ -138,7 +140,7 @@ _appPromise = createApp(
 		globals: {
 			site_settings: _glob_site_settings,
 		},
-		migrations: [_mig_20260211T164057_bright_yellow_tiger, _mig_20260721T210525_kind_pink_dolphin, _mig_20260721T220739_calm_purple_griffin],
+		migrations: [_mig_20260211T164057_bright_yellow_tiger, _mig_20260721T210525_kind_pink_dolphin, _mig_20260721T220739_calm_purple_griffin, _mig_20260725T050305_crdtStorageFoundation],
 		blocks: {
 			[_bloc_accordion.state.name]: _bloc_accordion,
 			[_bloc_announcementBanner.state.name]: _bloc_announcementBanner,
