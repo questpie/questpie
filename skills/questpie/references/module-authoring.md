@@ -37,13 +37,13 @@ Single files (discover patterns): `config/app.ts`, `config/auth.ts`, `plugin.ts`
 
 ## Authoring a package module (the full shape)
 
-Reference implementation: **`@questpie/ai`** - `packages/ai/src/server/modules/ai/`:
+Reference implementation: **`@questpie/mcp`** - `packages/mcp/src/server/modules/mcp/`:
 
 ```
-modules/ai/
-  collections/   routes/   jobs/   services/   config/   lib/   ← _-prefixed/helpers
-  .generated/module.ts                                          ← GENERATED
-  index.ts                                                      ← barrel
+modules/mcp/
+  routes/               ← convention files
+  .generated/module.ts  ← GENERATED
+  index.ts              ← barrel
 ```
 
 `package.json`:
@@ -55,21 +55,31 @@ modules/ai/
 Barrel `index.ts` (the ONLY hand-written wiring):
 
 ```ts
+import { mcpOAuthScopeCatalog } from "../../oauth-scope-catalog.js";
 import generatedModule from "./.generated/module.js";
+
 export type {
-	AiCollections,
-	AiRoutes,
-	AiJobs,
-	AiModule /* … */,
+	McpCollections,
+	McpRoutes,
+	McpModule /* … */,
 } from "./.generated/module.js";
-export const aiModule = generatedModule;
+
+export const mcpModule = {
+	...generatedModule,
+	oauthScopeCatalogs: {
+		mcp: mcpOAuthScopeCatalog,
+	},
+} as const;
 ```
+
+This wrapper may attach package-owned runtime metadata to the generated module;
+it must not re-declare generated routes, collections, services, or registries.
 
 The consuming app lists it as a **static entry** in `modules.ts` (never a factory call - see SKILL.md "Module And Plugin Configuration"):
 
 ```ts
-import { aiModule } from "@questpie/ai/server";
-export default [aiModule] as const;
+import { mcpModule } from "@questpie/mcp/modules/mcp";
+export default [mcpModule] as const;
 ```
 
 To add a route to the module: create `routes/my-endpoint.ts` exporting `route()…`, then `questpie generate`. Do **not** add it by editing `module.ts`.

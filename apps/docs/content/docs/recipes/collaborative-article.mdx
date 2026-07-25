@@ -1,0 +1,86 @@
+---
+title: Collaborative article
+description: Configure one article record so multiple users can edit title, tags, and body concurrently through TanStack Start.
+---
+
+This recipe creates one collaborative aggregate per article. Title and body use
+Yjs text replicas; tags use QUESTPIE's add-wins set. Status remains normal CRUD.
+
+## 1. Add the engine and schema
+
+```bash
+bun add @questpie/crdt-yjs
+```
+
+Use the collection definition from
+[Collaborative documents](/docs/concepts/collaborative-documents), including
+the `title`, `tags`, and `content` CRDT fields plus `.collaborative()`. Normal
+collection and field access rules remain the authority source.
+
+## 2. Configure server and browser engines
+
+Configure `yjsServerEngine()` under `runtimeConfig({ crdt })` and
+`yjsClientEngine()` under `createClient({ crdt })` as shown in the concept
+guide. The existing `src/routes/api/$.ts` Fetch handler serves the CRDT routes.
+Do not mount a separate WebSocket server.
+
+## 3. Generate durable artifacts
+
+```bash
+bun run questpie:generate
+bunx questpie crdt:manifest
+bunx questpie migrate:generate
+bunx questpie migrate:up
+```
+
+Run `crdt:manifest` and `migrate:generate` again. Both must report no diff.
+Commit the generated manifest and migration; never hand-write the
+infrastructure tables.
+
+## 4. Connect and edit
+
+```ts
+import { client } from "@/lib/client";
+
+const article = client.crdt.collections.articles.document({ id: articleId });
+const stop = article.subscribe((state) => renderConnectionState(state));
+
+await article.connect({ mode: "edit", fallback: "view" });
+
+article.transaction(({ fields }) => {
+	fields.title.text.apply([
+		{ type: "insert", index: 0, value: "A shared title" },
+	]);
+	fields.tags.set.add("news");
+	fields.content.text.apply([
+		{ type: "insert", index: 0, value: "A shared opening." },
+	]);
+});
+
+article.awareness.set(
+	{ name: currentUser.name },
+	{ activeField: "content", cursor: 17 },
+);
+
+// Route/component cleanup:
+await article.disconnect();
+stop();
+```
+
+Each participant may edit a different field concurrently. The transaction
+above is one aggregate commit, so other clients never observe only part of it.
+
+## 5. Test the lifecycle
+
+Cover at least:
+
+1. two authenticated clients concurrently edit different fields and converge;
+2. a view-only actor can read but cannot append;
+3. a field-hidden actor never sees its content or cursor;
+4. disconnect/reconnect reconciles a lost append response exactly once;
+5. soft delete retires the active resource and restore creates a fresh epoch;
+6. process shutdown closes the generated app once and does not leak worker
+   threads.
+
+For transport and recovery details, see
+[Collaborative documents](/docs/concepts/collaborative-documents).

@@ -208,7 +208,7 @@ export default runtimeConfig({
 });
 ```
 
-The client discovers the selected transport from `/channels/config`; `client.channels.*` call sites do not change.
+The client discovers the selected transport from `/channels/config`; `client.channels.*` call sites do not change. After a managed-provider reconnect, the established subscription reauthorizes a bounded `/channels/replay` drain from its last applied event id. Live provider events arriving during that drain are buffered behind the replay cursor, then deduplicated and released in order.
 
 <Callout type="warn" title="Direct Pusher client events are a separate unsafe capability">
 Provider client events bypass QUESTPIE's publish route, per-verb authorization, Zod schemas, ordered ledger, replay, and rate limits. They are off by default. Enabling `clientEvents` requires `acknowledgeProviderWideRisk: true`; its `allowedChannels` list is only an SDK affordance and a raw provider client can bypass it. Prefer `client.channels.<name>.publish()`.
@@ -218,8 +218,12 @@ Provider client events bypass QUESTPIE's publish route, per-verb authorization, 
 
 - Framework events are ordered per resolved channel and are never coalesced. Reconnect may replay an event id; clients deduplicate it.
 - Falling behind the bounded replay horizon produces an explicit channel gap rather than invented state. Recover from a persisted collection or subscribe from now.
-- A slow SSE consumer is disconnected after bounded event/byte queues fill; ordered events are not silently dropped.
-- Payloads must be JSON-serializable and at most 10,000 UTF-8 bytes.
+- Server delivery queues, managed-provider replay races, and client async iterators are bounded by event count and serialized UTF-8 bytes. A slow consumer terminates with an explicit error; ordered events are not silently dropped.
+- A managed-provider edge sends an authenticated control probe every 15 seconds. Missing three probes expires the independent client lease and releases admission, query, and CRDT bindings even when the provider cannot report an abrupt browser disappearance.
+- Payloads must be JSON-serializable. The complete canonical
+  `{ eventId, event, data }` envelope must fit 10,000 UTF-8 bytes, so the
+  application `data` budget is slightly smaller and varies with the event id
+  and event name.
 - Cookie-authenticated authority routes require an exact trusted `Origin`. Additional origins belong in `realtime.channelSecurity.trustedOrigins`.
 - Client publishes use independent per-session and per-principal token buckets (defaults: 10/s, burst 20).
 

@@ -17,6 +17,7 @@ Reference these guidelines when:
 - Configuring adapters (queue, search, storage, realtime, email, KV)
 - Setting up access control, hooks, or validation
 - Building typed client SDK queries or TanStack Query integrations
+- Building collaborative collection/global aggregates with typed CRDT fields
 - Writing modules or plugins for QUESTPIE
 - Exposing QUESTPIE through MCP tools or resources
 - Scaffolding a new project or onboarding
@@ -108,35 +109,35 @@ Files starting with `_`, `index.ts`, declaration files, tests, and specs are int
 
 ### Core
 
-| Topic             | File                            | Covers                                                                                                             |
-| ----------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Architecture      | `references/architecture.md`    | Framework overview, tech stack, project structure, file conventions, app bootstrap, data flow                      |
-| Quickstart        | `references/quickstart.md`      | Scaffold, configure, codegen, migrate, serve, zero to running app                                                  |
-| Data Modeling     | `references/data-modeling.md`   | Collections, globals, fields, relations, options, localization                                                     |
-| Field Types       | `references/field-types.md`     | All built-in field types with options and operators                                                                |
-| Type Inference    | `references/type-inference.md`  | The infer-first map: `CollectionDoc` / `CollectionWhere`, `AccessContext` helpers, per-op rule typing, cycle rules |
-| Rules             | `references/rules.md`           | Access control (row/field level), hooks lifecycle, validation, derived request context                             |
-| Business Logic    | `references/business-logic.md`  | Routes, jobs, services, email templates, context injection                                                         |
-| AppContext        | `references/app-context.md`     | The `AppContext` runtime interface, where it's available, `getContext`, partial context overrides                  |
-| Durable Workflows | `references/workflows.md`       | Long-running workflows, steps, events, cron, admin UI                                                              |
-| Sandboxed Code    | `references/sandbox.md`         | `ctx.executor.run()`, isolation modes, capability model, Deno engine deployment                                    |
-| CRUD API          | `references/crud-api.md`        | `find`, `create`, `updateById`/`updateMany`, `deleteById`/`deleteMany`, atomic conditional updates, globals API    |
-| Seeds             | `references/seeds.md`           | `seed()` vs `seed.steps()`, idempotency, checkpointed steps, categories, `dependsOn`, `undo`, `autoSeed`, seed CLI |
-| Query Operators   | `references/query-operators.md` | `where` clause operators by field type                                                                             |
-| Realtime          | `references/realtime.md`        | Transactional outbox, reconciliation, live queries, broker/client transport seams, admission                       |
-| Channels          | `references/channels.md`        | Typed application events, authorization, publish contexts, client, presence, TanStack Query                        |
+| Topic             | File                                    | Covers                                                                                                                    |
+| ----------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Architecture      | `references/architecture.md`            | Framework overview, tech stack, project structure, file conventions, app bootstrap, data flow                             |
+| Quickstart        | `references/quickstart.md`              | Scaffold, configure, codegen, migrate, serve, zero to running app                                                         |
+| Data Modeling     | `references/data-modeling.md`           | Collections, globals, fields, relations, options, localization                                                            |
+| Field Types       | `references/field-types.md`             | All built-in field types with options and operators                                                                       |
+| Type Inference    | `references/type-inference.md`          | The infer-first map: `CollectionDoc` / `CollectionWhere`, `AccessContext` helpers, per-op rule typing, cycle rules        |
+| Rules             | `references/rules.md`                   | Access control (row/field level), hooks lifecycle, validation, derived request context                                    |
+| Business Logic    | `references/business-logic.md`          | Routes, jobs, services, email templates, context injection                                                                |
+| AppContext        | `references/app-context.md`             | The `AppContext` runtime interface, where it's available, `getContext`, partial context overrides                         |
+| Durable Workflows | `references/workflows.md`               | Long-running workflows, steps, events, cron, admin UI                                                                     |
+| Sandboxed Code    | `references/sandbox.md`                 | `ctx.executor.run()`, isolation modes, capability model, Deno engine deployment                                           |
+| CRUD API          | `references/crud-api.md`                | `find`, `create`, `updateById`/`updateMany`, `deleteById`/`deleteMany`, atomic conditional updates, globals API           |
+| Seeds             | `references/seeds.md`                   | `seed()` vs `seed.steps()`, idempotency, checkpointed steps, categories, `dependsOn`, `undo`, `autoSeed`, seed CLI        |
+| Query Operators   | `references/query-operators.md`         | `where` clause operators by field type                                                                                    |
+| Realtime          | `references/realtime.md`                | Transactional outbox, reconciliation, live queries, broker/client transport seams, admission                              |
+| Channels          | `references/channels.md`                | Typed application events, authorization, publish contexts, client, presence, TanStack Query                               |
+| Collaboration     | `references/collaborative-documents.md` | Collection/global CRDT aggregates, Yjs engines, generated client, authority, lifecycle, Fetch + shared realtime transport |
 
 ### Infrastructure
 
-| Topic       | File                                    | Covers                                                                                        |
-| ----------- | --------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Production  | `references/production.md`              | Queue, search, realtime, storage, email, KV adapter setup                                     |
-| Environment | `references/env.md`                     | `env.ts` + `env.client.ts`: boot-validated, typed env, generated client modules               |
-| Auth        | `references/auth.md`                    | Better Auth integration, session, providers, access patterns                                  |
-| Adapters    | `references/infrastructure-adapters.md` | All adapter configs: pg-boss, S3, SMTP, pgNotify, Redis                                       |
-| MCP         | `references/mcp.md`                     | MCP setup, CRUD tools, route tools, custom tools, OAuth 2.1 + scope∩RBAC                      |
-| OpenAPI     | `references/openapi.md`                 | OpenAPI 3.1 spec + Scalar UI: introspection, config, caching, honest limitations              |
-| AI Runs     | `references/ai.md`                      | Claude Code agent runs: `aiModule`, embedded worker, resumable streams, exactly-once finalize |
+| Topic       | File                                    | Covers                                                                           |
+| ----------- | --------------------------------------- | -------------------------------------------------------------------------------- |
+| Production  | `references/production.md`              | Queue, search, realtime, storage, email, KV adapter setup                        |
+| Environment | `references/env.md`                     | `env.ts` + `env.client.ts`: boot-validated, typed env, generated client modules  |
+| Auth        | `references/auth.md`                    | Better Auth integration, session, providers, access patterns                     |
+| Adapters    | `references/infrastructure-adapters.md` | All adapter configs: pg-boss, S3, SMTP, pgNotify, Redis                          |
+| MCP         | `references/mcp.md`                     | MCP setup, CRUD tools, route tools, custom tools, OAuth 2.1 + scope∩RBAC         |
+| OpenAPI     | `references/openapi.md`                 | OpenAPI 3.1 spec + Scalar UI: introspection, config, caching, honest limitations |
 
 ### Extend
 
@@ -563,18 +564,24 @@ export const notificationsModule = module({
 
 When several modules (and the app) contribute the same key, `createApp()` merges them deterministically, later modules win per entry:
 
-| Key | Strategy |
-| --- | --- |
-| `collections`, `globals`, `jobs`, `routes`, `fields`, `services` | record spread-merge, same key: later wins |
-| `messages` | deep-merge by locale, same message key: later wins |
-| `migrations`, `seeds` | array concatenation |
-| `config.*` (app, auth, admin, plugin config keys) | per-key strategies; `auth`/`admin` deep-merge; unknown keys: incoming replaces existing |
-| anything else | auto-detect: object+object → spread, array+array → concat, otherwise incoming wins |
+| Key                                                              | Strategy                                                                                |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `collections`, `globals`, `jobs`, `routes`, `fields`, `services` | record spread-merge, same key: later wins                                               |
+| `messages`                                                       | deep-merge by locale, same message key: later wins                                      |
+| `migrations`, `seeds`                                            | array concatenation                                                                     |
+| `config.*` (app, auth, admin, plugin config keys)                | per-key strategies; `auth`/`admin` deep-merge; unknown keys: incoming replaces existing |
+| anything else                                                    | auto-detect: object+object → spread, array+array → concat, otherwise incoming wins      |
 
 The merge helpers behind these strategies are exported from `questpie/app` for module authors combining config fragments of their own:
 
 ```ts
-import { lastWins, mergeConcat, mergeDeepConcat, mergeRecord, type MergeFn } from "questpie/app";
+import {
+	lastWins,
+	mergeConcat,
+	mergeDeepConcat,
+	mergeRecord,
+	type MergeFn,
+} from "questpie/app";
 
 mergeRecord(a, b); // { ...a, ...b }
 mergeConcat(a, b); // [...a, ...b]
@@ -646,7 +653,13 @@ The admin renderer is a declarative `field()` definition (not a bare component):
 import { field, type FieldComponentProps } from "@questpie/admin/client";
 
 function ColorField({ value, onChange }: FieldComponentProps<string>) {
-	return <input type="color" value={value ?? "#000000"} onChange={(e) => onChange?.(e.target.value)} />;
+	return (
+		<input
+			type="color"
+			value={value ?? "#000000"}
+			onChange={(e) => onChange?.(e.target.value)}
+		/>
+	);
 }
 
 export default field("color", { component: ColorField });
@@ -929,10 +942,10 @@ Source of truth: `packages/questpie/src/cli/codegen/` (`discover.ts`, `index.ts`
 
 A module is a directory of **convention files**. Codegen discovers them and emits a static module definition. There are two output modes of the same pipeline (`runCodegen`):
 
-| Mode | Trigger | Emits | For |
-| --- | --- | --- | --- |
-| Root app | `questpie generate` | `index.ts` + `names.gen.ts` + `entities.gen.ts` + `context.gen.ts` + `factories.ts` | the application |
-| Module | `questpie generate --module` | `.generated/module.ts` (+ `registries.ts` when needed) | a packaged/reusable module |
+| Mode     | Trigger                      | Emits                                                                               | For                        |
+| -------- | ---------------------------- | ----------------------------------------------------------------------------------- | -------------------------- |
+| Root app | `questpie generate`          | `index.ts` + `names.gen.ts` + `entities.gen.ts` + `context.gen.ts` + `factories.ts` | the application            |
+| Module   | `questpie generate --module` | `.generated/module.ts` (+ `registries.ts` when needed)                              | a packaged/reusable module |
 
 The generated file carries `// AUTO-GENERATED by questpie codegen - DO NOT EDIT`. Never edit it; never replace it with a hand-written equivalent.
 
@@ -940,17 +953,17 @@ The generated file carries `// AUTO-GENERATED by questpie codegen - DO NOT EDIT`
 
 Declared by `coreCodegenPlugin` (`cli/codegen/index.ts`). Inside a module root:
 
-| Dir | Factory / shape | Notes |
-| --- | --- | --- |
-| `collections/` | `collection("name")` | registry key, app state |
-| `globals/` | `global("name")` | registry key, app state |
-| `routes/`, `functions/` | `route()` | **recursive**, key = path segments (`keySeparator: "/"`); HTTP method via filename suffix (`[id].patch.ts` → `[id]:PATCH`) |
-| `jobs/` | default-export `job({...})` | |
-| `services/` | `service()` | emitted onto `AppContext` |
-| `emails/` | `email({...})` (`.tsx`) | |
-| `migrations/`, `seeds/` | default export | emitted as arrays |
-| `fields/` | `fieldType()` | custom field types |
-| `messages/` | message defs | typed only |
+| Dir                     | Factory / shape             | Notes                                                                                                                      |
+| ----------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `collections/`          | `collection("name")`        | registry key, app state                                                                                                    |
+| `globals/`              | `global("name")`            | registry key, app state                                                                                                    |
+| `routes/`, `functions/` | `route()`                   | **recursive**, key = path segments (`keySeparator: "/"`); HTTP method via filename suffix (`[id].patch.ts` → `[id]:PATCH`) |
+| `jobs/`                 | default-export `job({...})` |                                                                                                                            |
+| `services/`             | `service()`                 | emitted onto `AppContext`                                                                                                  |
+| `emails/`               | `email({...})` (`.tsx`)     |                                                                                                                            |
+| `migrations/`, `seeds/` | default export              | emitted as arrays                                                                                                          |
+| `fields/`               | `fieldType()`               | custom field types                                                                                                         |
+| `messages/`             | message defs                | typed only                                                                                                                 |
 
 Single files (discover patterns): `config/app.ts`, `config/auth.ts`, `plugin.ts`, `modules.ts`, `env.ts`, `env.client.ts`.
 
@@ -958,31 +971,49 @@ Single files (discover patterns): `config/app.ts`, `config/auth.ts`, `plugin.ts`
 
 ## Authoring a package module (the full shape)
 
-Reference implementation: **`@questpie/ai`** - `packages/ai/src/server/modules/ai/`:
+Reference implementation: **`@questpie/mcp`** - `packages/mcp/src/server/modules/mcp/`:
 
 ```
-modules/ai/
-  collections/   routes/   jobs/   services/   config/   lib/   ← _-prefixed/helpers
-  .generated/module.ts                                          ← GENERATED
-  index.ts                                                      ← barrel
+modules/mcp/
+  routes/               ← convention files
+  .generated/module.ts  ← GENERATED
+  index.ts              ← barrel
 ```
 
 `package.json`:
+
 ```json
 { "scripts": { "questpie:generate": "bun questpie generate --verbose" } }
 ```
 
 Barrel `index.ts` (the ONLY hand-written wiring):
+
 ```ts
+import { mcpOAuthScopeCatalog } from "../../oauth-scope-catalog.js";
 import generatedModule from "./.generated/module.js";
-export type { AiCollections, AiRoutes, AiJobs, AiModule /* … */ } from "./.generated/module.js";
-export const aiModule = generatedModule;
+
+export type {
+	McpCollections,
+	McpRoutes,
+	McpModule /* … */,
+} from "./.generated/module.js";
+
+export const mcpModule = {
+	...generatedModule,
+	oauthScopeCatalogs: {
+		mcp: mcpOAuthScopeCatalog,
+	},
+} as const;
 ```
 
+This wrapper may attach package-owned runtime metadata to the generated module;
+it must not re-declare generated routes, collections, services, or registries.
+
 The consuming app lists it as a **static entry** in `modules.ts` (never a factory call - see SKILL.md "Module And Plugin Configuration"):
+
 ```ts
-import { aiModule } from "@questpie/ai/server";
-export default [aiModule] as const;
+import { mcpModule } from "@questpie/mcp/modules/mcp";
+export default [mcpModule] as const;
 ```
 
 To add a route to the module: create `routes/my-endpoint.ts` exporting `route()…`, then `questpie generate`. Do **not** add it by editing `module.ts`.
@@ -992,17 +1023,24 @@ To add a route to the module: create `routes/my-endpoint.ts` exporting `route()�
 ```ts
 // ❌ packages/foo/src/server/module.ts - hand-written, inline route, no codegen
 const fooRoute = route().get().handler(/* … */);
-export const fooModule = module({ name: "foo", plugin: fooPlugin(), routes: { foo: fooRoute } });
+export const fooModule = module({
+	name: "foo",
+	plugin: fooPlugin(),
+	routes: { foo: fooRoute },
+});
 ```
+
 Problems: bypasses discovery, drifts from the generated type surface, forces context/`app` casts (the package compiles without the app's codegen so `Questpie.AppContext` is empty → `ctx.app` untyped → cast), and violates the core principle "built-in modules use the EXACT same file conventions as user code - no imperative hacks."
 
 ## The ONLY exception
 
 A hand-written `someModule({...})` factory is acceptable **only for a trivial runtime-only module whose plugin identity and codegen contributions never change** - it contributes NO routes/collections/globals/jobs/services/etc. The moment it has any discoverable contribution (e.g. a route), it MUST be restructured to the convention. (SKILL.md:68; full DO/DON'T in `references/extend.md`.)
 
-## Known violators (to migrate)
-
-`@questpie/mcp` and `@questpie/executor` currently hand-write `src/server/module.ts` with an inline `route()`. Both have routes → both must move to `server/modules/<name>/routes/*.ts` + `questpie generate --module` + a barrel. See also `references/codegen-plugin-api.md` for adding new categories/discover patterns.
+`@questpie/mcp` and `@questpie/sandbox` are reference implementations of this
+rule: their routes live below `server/modules/<name>/routes`, their checked-in
+module is generated, and their public module barrel is built from
+`src/exports/modules`. See also `references/codegen-plugin-api.md` for adding
+new categories or discovery patterns.
 
 ---
 
@@ -2109,15 +2147,15 @@ When workflow is the publication source for pages, public reads use `stage: "pub
 
 All access kinds and when each is checked:
 
-| Kind         | Gates                                                              |
-| ------------ | ------------------------------------------------------------------ |
-| `read`       | Listing and fetching records                                       |
-| `create`     | Creating records                                                   |
-| `update`     | Updating records                                                   |
-| `delete`     | Deleting records                                                   |
-| `transition` | Workflow stage transitions (falls back to `update`)                |
-| `serve`      | Upload file bytes by key (`GET /:collection/files/:key`)           |
-| `introspect` | Schema/meta routes (`GET /:collection/{schema,meta}`)              |
+| Kind         | Gates                                                    |
+| ------------ | -------------------------------------------------------- |
+| `read`       | Listing and fetching records                             |
+| `create`     | Creating records                                         |
+| `update`     | Updating records                                         |
+| `delete`     | Deleting records                                         |
+| `transition` | Workflow stage transitions (falls back to `update`)      |
+| `serve`      | Upload file bytes by key (`GET /:collection/files/:key`) |
+| `introspect` | Schema/meta routes (`GET /:collection/{schema,meta}`)    |
 
 Resolution chain for every kind: collection `.access()` → app `defaultAccess`
 (from `appConfig({ access })`) → require session. No hidden framework grants, deny-all `defaultAccess` really closes the whole REST surface. Two kinds have
@@ -2215,18 +2253,18 @@ See `references/field-types.md` for complete config options per field type.
 
 Fields take a positional constructor argument (e.g. `f.text(255)`, `f.select([...])`), then a fluent chain. There is NO constructor-options object. Common chain methods on every field:
 
-| Method             | Description                              |
-| ------------------ | ---------------------------------------- |
-| `.required()`      | Field must have a value                  |
-| `.default(value)`  | Default value                            |
-| `.label(text)`     | Display label (supports i18n)            |
-| `.description(text)`| Help text (supports i18n)               |
-| `.localized()`     | Enable per-locale values                 |
-| `.inputOptional()` | Optional in API input but required in DB |
-| `.outputFalse()`   | Exclude from output, write-only field   |
-| `.array()`         | Wrap as a repeatable array               |
-| `.admin(config)`   | Admin UI rendering hints                 |
-| `.virtual(sql)`    | SQL expression for computed fields       |
+| Method               | Description                              |
+| -------------------- | ---------------------------------------- |
+| `.required()`        | Field must have a value                  |
+| `.default(value)`    | Default value                            |
+| `.label(text)`       | Display label (supports i18n)            |
+| `.description(text)` | Help text (supports i18n)                |
+| `.localized()`       | Enable per-locale values                 |
+| `.inputOptional()`   | Optional in API input but required in DB |
+| `.outputFalse()`     | Exclude from output, write-only field    |
+| `.array()`           | Wrap as a repeatable array               |
+| `.admin(config)`     | Admin UI rendering hints                 |
+| `.virtual(sql)`      | SQL expression for computed fields       |
 
 ```ts
 title: f.text(255).required(),
@@ -2554,25 +2592,25 @@ Complete configuration patterns for built-in QUESTPIE field types. Fields use a 
 
 Every field factory returns a chainable field. These methods are shared by all field types:
 
-| Method               | Description                                            |
-| -------------------- | ------------------------------------------------------ |
-| `.required()`        | Field must have a value (NOT NULL)                     |
-| `.default(value)`    | Default value (value, `() => value`, or SQL)           |
-| `.label(text)`       | Display label (supports i18n)                          |
-| `.description(text)` | Help text (supports i18n)                              |
-| `.localized()`       | Per-locale values                                      |
-| `.inputOptional()`   | Optional in API input but required in DB               |
-| `.inputFalse()`      | Exclude from API input                                 |
-| `.outputFalse()`     | Exclude from output, write-only field                 |
-| `.array()`           | Wrap as a repeatable array (see [`.array()`](#array))  |
-| `.minItems(n)` / `.maxItems(n)` | Array item bounds                           |
-| `.admin(config)`     | Admin UI rendering hints (see [Reactive Admin Behaviors](#reactive-admin-behaviors)) |
-| `.access(rules)`     | Per-field access control                               |
-| `.hooks(handlers)`   | Per-field lifecycle hooks                              |
-| `.virtual(sql?)`     | SQL expression for computed read-only field            |
-| `.zod(fn)`           | Extend/replace Zod schema (output narrows value type)  |
-| `.drizzle(fn)`       | Raw Drizzle column builder, constraints/SQL defaults land in DDL; `$type` narrows value type |
-| `.$type<T>()`        | Explicitly set TS value type (type-level; mainly json) |
+| Method                          | Description                                                                                  |
+| ------------------------------- | -------------------------------------------------------------------------------------------- |
+| `.required()`                   | Field must have a value (NOT NULL)                                                           |
+| `.default(value)`               | Default value (value, `() => value`, or SQL)                                                 |
+| `.label(text)`                  | Display label (supports i18n)                                                                |
+| `.description(text)`            | Help text (supports i18n)                                                                    |
+| `.localized()`                  | Per-locale values                                                                            |
+| `.inputOptional()`              | Optional in API input but required in DB                                                     |
+| `.inputFalse()`                 | Exclude from API input                                                                       |
+| `.outputFalse()`                | Exclude from output, write-only field                                                        |
+| `.array()`                      | Wrap as a repeatable array (see [`.array()`](#array))                                        |
+| `.minItems(n)` / `.maxItems(n)` | Array item bounds                                                                            |
+| `.admin(config)`                | Admin UI rendering hints (see [Reactive Admin Behaviors](#reactive-admin-behaviors))         |
+| `.access(rules)`                | Per-field access control                                                                     |
+| `.hooks(handlers)`              | Per-field lifecycle hooks                                                                    |
+| `.virtual(sql?)`                | SQL expression for computed read-only field                                                  |
+| `.zod(fn)`                      | Extend/replace Zod schema (output narrows value type)                                        |
+| `.drizzle(fn)`                  | Raw Drizzle column builder, constraints/SQL defaults land in DDL; `$type` narrows value type |
+| `.$type<T>()`                   | Explicitly set TS value type (type-level; mainly json)                                       |
 
 > `.admin()` is contributed by the admin module. Type-specific helpers also exist (e.g. text `.pattern()`/`.trim()`, number `.min()`/`.max()`/`.positive()`/`.int()`/`.step()`, date `.autoNow()`); they are documented under each field below.
 
@@ -2706,13 +2744,13 @@ Single value from a predefined list. DB type: `varchar`.
 
 Constructor arg: `options: SelectOption[]`, an array of objects (there is no bare `string[]` overload). Each option:
 
-| Key           | Type                | Description                              |
-| ------------- | ------------------- | ---------------------------------------- |
-| `value`       | `string \| number`  | Stored value (REQUIRED)                  |
-| `label`       | `string \| i18n`    | Display label (REQUIRED)                 |
-| `description` | `string \| i18n`    | Optional helper text                     |
-| `icon`        | `ComponentReference`| Optional icon (e.g. `c.icon("ph:check")`)|
-| `disabled`    | `boolean`           | Disable this option                      |
+| Key           | Type                 | Description                               |
+| ------------- | -------------------- | ----------------------------------------- |
+| `value`       | `string \| number`   | Stored value (REQUIRED)                   |
+| `label`       | `string \| i18n`     | Display label (REQUIRED)                  |
+| `description` | `string \| i18n`     | Optional helper text                      |
+| `icon`        | `ComponentReference` | Optional icon (e.g. `c.icon("ph:check")`) |
+| `disabled`    | `boolean`            | Disable this option                       |
 
 Multi-select is `.array()`; the type-specific `.enum(name)` switches storage to a Postgres enum.
 
@@ -2911,12 +2949,12 @@ settings: f.json().zod(() => z.object({ theme: z.enum(["light", "dark"]) })),
 
 Admin rendering hints and reactive behaviors are authored with the chained `.admin({...})` call. Beyond per-field display options (`placeholder`, `displayAs`, `orderable`, `mode`, ...), every field's `.admin()` accepts reactive behaviors:
 
-| Behavior   | Type                                  | Description                          |
-| ---------- | ------------------------------------- | ------------------------------------ |
-| `hidden`   | `boolean \| ({ data }) => boolean`    | Conditionally hide the field         |
-| `readOnly` | `boolean \| ({ data }) => boolean`    | Conditionally make read-only         |
-| `disabled` | `boolean \| ({ data }) => boolean`    | Conditionally disable                |
-| `compute`  | `({ data }) => value` or `{ handler, deps, debounce }` | Auto-compute the value |
+| Behavior   | Type                                                   | Description                  |
+| ---------- | ------------------------------------------------------ | ---------------------------- |
+| `hidden`   | `boolean \| ({ data }) => boolean`                     | Conditionally hide the field |
+| `readOnly` | `boolean \| ({ data }) => boolean`                     | Conditionally make read-only |
+| `disabled` | `boolean \| ({ data }) => boolean`                     | Conditionally disable        |
+| `compute`  | `({ data }) => value` or `{ handler, deps, debounce }` | Auto-compute the value       |
 
 ```ts
 slug: f.text().admin({ placeholder: "auto-generated" }),
@@ -2945,29 +2983,29 @@ The schema is the single source of types. If you are hand-writing a type that re
 
 ## The Map, "I Need Type X"
 
-| # | You need | Write exactly this | Notes |
-| --- | --- | --- | --- |
-| 1 | Row of **another** collection | `import type { CollectionDoc } from "#questpie"` → `CollectionDoc<"toys">` | Type-only import. See cycle rules below |
-| 2 | Own row inside `.access()` / `.hooks()` | Nothing, `ctx.data` / `ctx.input` are already typed by the builder | Never name your own doc type inside the defining collection |
-| 3 | Shared access-helper parameter | Collection-imported helper: `AccessContext` from `"questpie"`. Anywhere else: `AccessRuleContext<"posts">` from `#questpie` (narrows `ctx.data`) | See cycle rules below |
-| 4 | Shared hook-helper parameter | `HookContext` from `"questpie"` (collection-imported) or `HookRuleContext<"posts">` from `#questpie` | Same rules as #3 |
-| 5 | App/services in a function without a ctx param | `getContext<App>()` with `import type { App } from "#questpie"` | Type-only `App` import, no runtime cycle |
-| 6 | Global doc | `import type { GlobalDoc } from "#questpie"` → `GlobalDoc<"siteSettings">` | Same cycle rules as `CollectionDoc` |
-| 7 | Session / user shape | In handlers: `ctx.session?.user` is typed. Standalone: `import type { AppSession, AppSessionUser } from "#questpie"` | Generated from the app auth config |
-| 8 | Route input/output in the handler | Nothing, inferred from `.schema()` / return type | |
-| 9 | Route input/output standalone | `InferRouteInput<typeof def>` / `InferRouteOutput<typeof def>` / `InferRouteParams<typeof def>` from `questpie/types` | tRPC-style; `def` is the route file's default export |
-| 10 | Client-side types | `createClient<AppConfig>()`, everything flows from the generic | See `references/tanstack-query.md` |
-| 11 | Job payload in the handler | Nothing, `payload` is typed from `schema` | |
-| 12 | Job payload standalone | `InferJobPayload<typeof jobDef>` from `questpie/queue` (or `z.infer<typeof jobDef.schema>`) | |
-| 13 | `db` / `session` inside job/workflow handlers | Honest gap: generated job context types them `unknown` today | Use `collections` (typed) or narrow explicitly; do not restate schemas |
-| 14 | Publishing jobs outside job files | `ctx.queue.<name>.publish(payload)`, payload typed | |
-| 15 | Relation target autocomplete | Nothing, codegen populates `Questpie.CollectionKeys` from discovered files; `f.relation("…")` autocompletes after `questpie generate` | Plain strings always compile |
-| 16 | Realtime payloads | `live()` / `liveIter()` snapshots are typed; raw `client.realtime.subscribe` data is untyped, annotate with `CollectionDoc<"posts">` | Typed realtime contract is planned |
-| 17 | Env vars | `env.ts` / `env.client.ts` with `env()`, see `references/env.md` | Never `process.env.X!` |
-| 18 | Field-level rule ctx (`.access({ fields })`) | `doc` is typed as the row, `user` is typed from the generated session, destructure, don't annotate | |
-| 19 | Derived request context (tenant, role) | `appConfig({ context })` result is inferred and arrives flat on rules, **annotate the resolver return with a self-contained DTO** (inferring it from `.find().docs` re-enters the generated index) | App-level `access` rules get the base ctx (`session`/`db`), not extensions, by design, cycle-free |
-| 20 | Select-option unions | `CollectionDoc<"events">["type"]` (server-side) | No client-safe union export yet; clients infer from SDK responses |
-| 21 | `where` filter for a collection (esp. one built up dynamically) | `import type { CollectionWhere } from "#questpie"` → `CollectionWhere<"appointments">` | Field keys are mutable, so `const where: CollectionWhere<"appointments"> = {}; if (x) where.status = "…"` type-checks. Same cycle rules as `CollectionDoc`. Inline `find({ where: { … } })` is already typed, reach for this only for a standalone/dynamic variable |
+| #   | You need                                                        | Write exactly this                                                                                                                                                                                 | Notes                                                                                                                                                                                                                                                               |
+| --- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Row of **another** collection                                   | `import type { CollectionDoc } from "#questpie"` → `CollectionDoc<"toys">`                                                                                                                         | Type-only import. See cycle rules below                                                                                                                                                                                                                             |
+| 2   | Own row inside `.access()` / `.hooks()`                         | Nothing, `ctx.data` / `ctx.input` are already typed by the builder                                                                                                                                 | Never name your own doc type inside the defining collection                                                                                                                                                                                                         |
+| 3   | Shared access-helper parameter                                  | Collection-imported helper: `AccessContext` from `"questpie"`. Anywhere else: `AccessRuleContext<"posts">` from `#questpie` (narrows `ctx.data`)                                                   | See cycle rules below                                                                                                                                                                                                                                               |
+| 4   | Shared hook-helper parameter                                    | `HookContext` from `"questpie"` (collection-imported) or `HookRuleContext<"posts">` from `#questpie`                                                                                               | Same rules as #3                                                                                                                                                                                                                                                    |
+| 5   | App/services in a function without a ctx param                  | `getContext<App>()` with `import type { App } from "#questpie"`                                                                                                                                    | Type-only `App` import, no runtime cycle                                                                                                                                                                                                                            |
+| 6   | Global doc                                                      | `import type { GlobalDoc } from "#questpie"` → `GlobalDoc<"siteSettings">`                                                                                                                         | Same cycle rules as `CollectionDoc`                                                                                                                                                                                                                                 |
+| 7   | Session / user shape                                            | In handlers: `ctx.session?.user` is typed. Standalone: `import type { AppSession, AppSessionUser } from "#questpie"`                                                                               | Generated from the app auth config                                                                                                                                                                                                                                  |
+| 8   | Route input/output in the handler                               | Nothing, inferred from `.schema()` / return type                                                                                                                                                   |                                                                                                                                                                                                                                                                     |
+| 9   | Route input/output standalone                                   | `InferRouteInput<typeof def>` / `InferRouteOutput<typeof def>` / `InferRouteParams<typeof def>` from `questpie/types`                                                                              | tRPC-style; `def` is the route file's default export                                                                                                                                                                                                                |
+| 10  | Client-side types                                               | `createClient<AppConfig>()`, everything flows from the generic                                                                                                                                     | See `references/tanstack-query.md`                                                                                                                                                                                                                                  |
+| 11  | Job payload in the handler                                      | Nothing, `payload` is typed from `schema`                                                                                                                                                          |                                                                                                                                                                                                                                                                     |
+| 12  | Job payload standalone                                          | `InferJobPayload<typeof jobDef>` from `questpie/queue` (or `z.infer<typeof jobDef.schema>`)                                                                                                        |                                                                                                                                                                                                                                                                     |
+| 13  | `db` / `session` inside job/workflow handlers                   | Honest gap: generated job context types them `unknown` today                                                                                                                                       | Use `collections` (typed) or narrow explicitly; do not restate schemas                                                                                                                                                                                              |
+| 14  | Publishing jobs outside job files                               | `ctx.queue.<name>.publish(payload)`, payload typed                                                                                                                                                 |                                                                                                                                                                                                                                                                     |
+| 15  | Relation target autocomplete                                    | Nothing, codegen populates `Questpie.CollectionKeys` from discovered files; `f.relation("…")` autocompletes after `questpie generate`                                                              | Plain strings always compile                                                                                                                                                                                                                                        |
+| 16  | Realtime payloads                                               | `live()` / `liveIter()` snapshots are typed; raw `client.realtime.subscribe` data is untyped, annotate with `CollectionDoc<"posts">`                                                               | Typed realtime contract is planned                                                                                                                                                                                                                                  |
+| 17  | Env vars                                                        | `env.ts` / `env.client.ts` with `env()`, see `references/env.md`                                                                                                                                   | Never `process.env.X!`                                                                                                                                                                                                                                              |
+| 18  | Field-level rule ctx (`.access({ fields })`)                    | `doc` is typed as the row, `user` is typed from the generated session, destructure, don't annotate                                                                                                 |                                                                                                                                                                                                                                                                     |
+| 19  | Derived request context (tenant, role)                          | `appConfig({ context })` result is inferred and arrives flat on rules, **annotate the resolver return with a self-contained DTO** (inferring it from `.find().docs` re-enters the generated index) | App-level `access` rules get the base ctx (`session`/`db`), not extensions, by design, cycle-free                                                                                                                                                                   |
+| 20  | Select-option unions                                            | `CollectionDoc<"events">["type"]` (server-side)                                                                                                                                                    | No client-safe union export yet; clients infer from SDK responses                                                                                                                                                                                                   |
+| 21  | `where` filter for a collection (esp. one built up dynamically) | `import type { CollectionWhere } from "#questpie"` → `CollectionWhere<"appointments">`                                                                                                             | Field keys are mutable, so `const where: CollectionWhere<"appointments"> = {}; if (x) where.status = "…"` type-checks. Same cycle rules as `CollectionDoc`. Inline `find({ where: { … } })` is already typed, reach for this only for a standalone/dynamic variable |
 
 ## The Two Cycle Rules
 
@@ -2999,7 +3037,9 @@ export async function resolveOrderToy(
 }
 
 /** Narrow `data` structurally when the helper only reads a few fields. */
-export function canCancelOrder(ctx: AccessContext<{ priority?: string | null }>) {
+export function canCancelOrder(
+	ctx: AccessContext<{ priority?: string | null }>,
+) {
 	if (ctx.data?.priority === "rush") return !!ctx.session?.user;
 	return true;
 }
@@ -3013,13 +3053,13 @@ Helpers **not** imported by any collection (scripts, routes, services, jobs) may
 
 `.access()` rules are typed per operation by the builder, no annotations, no casts:
 
-| Rule | `ctx.data` | `ctx.input` |
-| --- | --- | --- |
-| `read` | not loaded (return `AccessWhere` to filter) | none |
-| `create` | none (no row exists yet) | typed insert shape (pre-validation) |
-| `update` | the existing row, **non-optional** | typed update patch |
-| `delete` | the existing row, **non-optional** | none |
-| `transition` / `serve` | the existing row, non-optional | none |
+| Rule                   | `ctx.data`                                  | `ctx.input`                         |
+| ---------------------- | ------------------------------------------- | ----------------------------------- |
+| `read`                 | not loaded (return `AccessWhere` to filter) | none                                |
+| `create`               | none (no row exists yet)                    | typed insert shape (pre-validation) |
+| `update`               | the existing row, **non-optional**          | typed update patch                  |
+| `delete`               | the existing row, **non-optional**          | none                                |
+| `transition` / `serve` | the existing row, non-optional              | none                                |
 
 ```ts
 export default collection("production_orders")
@@ -3030,7 +3070,7 @@ export default collection("production_orders")
 	.access({
 		create: ({ session, input }) => !!session && input?.priority !== "rush",
 		update: async (ctx) => {
-			ctx.data;  // typed row, non-optional, no `as` cast, no isRecord() dance
+			ctx.data; // typed row, non-optional, no `as` cast, no isRecord() dance
 			ctx.input; // typed patch
 			return (await resolveOrderToy(ctx, ctx.data.toy)).userId !== null;
 		},
@@ -3080,9 +3120,16 @@ Names-only registries give `f.relation()` target autocomplete without entering t
 // types/questpie-keys.d.ts (any ambient file)
 declare global {
 	namespace Questpie {
-		interface CollectionKeys { toys: unknown; production_orders: unknown }
-		interface GlobalKeys { factorySettings: unknown }
-		interface JobKeys { sendReminder: unknown }
+		interface CollectionKeys {
+			toys: unknown;
+			production_orders: unknown;
+		}
+		interface GlobalKeys {
+			factorySettings: unknown;
+		}
+		interface JobKeys {
+			sendReminder: unknown;
+		}
 	}
 }
 export {};
@@ -3100,14 +3147,14 @@ For columns whose value type the field cannot infer, stay declarative, see `refe
 
 ## Never Do
 
-| Anti-pattern | Why | Instead |
-| --- | --- | --- |
-| Hand-rolled `EventDoc = { id: string; ownerUser?: string }` | Silent nullability drift vs the real schema | `CollectionDoc<"events">` (row 1) |
-| `ctx.data as MemberDoc` inside own `.access()` | Builder already types it; self-key casts can cycle (TS2456) | Trust `ctx.data` (row 2) |
-| Hand-rolled `CollectionsLike` / `AccessRuleCtx` ctx mirrors | Structural matching of CRUD generics → deep error walls, tsc 5.9 crashes | `AccessContext` param (row 3) |
-| Module-level `app` singleton for callbacks | Import cycles; stale instance in tests | `getContext<App>()` (row 5) |
-| Collection-imported helper returning unannotated `ctx.collections` results | TS7022/TS2502 self-reference | Explicit return annotation (Rule 2) |
-| `const where: Record<string, unknown>` built by hand | No field/operator checking; silent drift from the schema | `CollectionWhere<"posts">` (row 21) |
+| Anti-pattern                                                               | Why                                                                      | Instead                             |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------- |
+| Hand-rolled `EventDoc = { id: string; ownerUser?: string }`                | Silent nullability drift vs the real schema                              | `CollectionDoc<"events">` (row 1)   |
+| `ctx.data as MemberDoc` inside own `.access()`                             | Builder already types it; self-key casts can cycle (TS2456)              | Trust `ctx.data` (row 2)            |
+| Hand-rolled `CollectionsLike` / `AccessRuleCtx` ctx mirrors                | Structural matching of CRUD generics → deep error walls, tsc 5.9 crashes | `AccessContext` param (row 3)       |
+| Module-level `app` singleton for callbacks                                 | Import cycles; stale instance in tests                                   | `getContext<App>()` (row 5)         |
+| Collection-imported helper returning unannotated `ctx.collections` results | TS7022/TS2502 self-reference                                             | Explicit return annotation (Rule 2) |
+| `const where: Record<string, unknown>` built by hand                       | No field/operator checking; silent drift from the schema                 | `CollectionWhere<"posts">` (row 21) |
 
 ---
 
@@ -3673,12 +3720,12 @@ Every handler (route, raw route, job, service, email) receives the same base `Ap
 
 Each primitive then adds its own keys to this base, see the delta tables below. JSON route handlers add:
 
-| Property  | Description                                       |
-| --------- | ------------------------------------------------- |
-| `input`   | Validated data matching the Zod schema            |
-| `params`  | URL path parameters (when pattern-matched)        |
-| `locale`  | Current locale                                    |
-| `request` | The raw `Request`, when executed over HTTP        |
+| Property  | Description                                |
+| --------- | ------------------------------------------ |
+| `input`   | Validated data matching the Zod schema     |
+| `params`  | URL path parameters (when pattern-matched) |
+| `locale`  | Current locale                             |
+| `request` | The raw `Request`, when executed over HTTP |
 
 Derived request context (from `appConfig({ context })`) reaches route access rules and handlers alike, destructure the keys directly. Inside any nested code, `getContext<App>()` exposes the same keys (see `references/multi-tenancy.md`).
 
@@ -3769,7 +3816,9 @@ export default job({
 		retryDelay: 5, // seconds, NOT ms
 		retryBackoff: true, // exponential
 	},
-	handler: async ({ payload }) => { /* ... */ },
+	handler: async ({ payload }) => {
+		/* ... */
+	},
 });
 ```
 
@@ -3879,11 +3928,11 @@ Supported: `.get()`, `.post()`, `.put()`, `.delete()`, `.patch()`. The built-in 
 
 Raw route handlers receive the base `AppContext` (see [Handler Context](#handler-context)) plus:
 
-| Property  | Type                     | Description                |
-| --------- | ------------------------ | -------------------------- |
-| `request` | `Request`                | Standard Web API Request   |
-| `params`  | `Record<string, string>` | URL path parameters        |
-| `locale`  | `string`                 | Current locale             |
+| Property  | Type                     | Description              |
+| --------- | ------------------------ | ------------------------ |
+| `request` | `Request`                | Standard Web API Request |
+| `params`  | `Record<string, string>` | URL path parameters      |
+| `locale`  | `string`                 | Current locale           |
 
 Raw route handlers must return a `Response` object.
 
@@ -3946,7 +3995,9 @@ export default route()
 			start(controller) {
 				controller.enqueue("id,total,createdAt\n");
 				for (const order of docs) {
-					controller.enqueue(`${order.id},${order.total},${order.createdAt.toISOString()}\n`);
+					controller.enqueue(
+						`${order.id},${order.total},${order.createdAt.toISOString()}\n`,
+					);
 				}
 				controller.close();
 			},
@@ -4234,7 +4285,7 @@ interface AppContext {
 | Collection hooks                                                                        | First argument: `async (ctx) => { ... }`                                                                                                      |
 | Route handlers                                                                          | Destructure: `async ({ db, session, collections }) => { ... }`                                                                                |
 | Job handlers                                                                            | Destructure: `async ({ payload, queue, email }) => { ... }`                                                                                   |
-| Email templates                                                                         | Destructure: `async ({ input, collections }) => { ... }`                                                                                       |
+| Email templates                                                                         | Destructure: `async ({ input, collections }) => { ... }`                                                                                      |
 | Access rules                                                                            | Destructure: `({ session, data }) => boolean`                                                                                                 |
 | Seeds                                                                                   | `async ({ collections, log }) => { ... }`                                                                                                     |
 | Services                                                                                | `create: ({ app }) => ...` (app instance only, not full context)                                                                              |
@@ -4494,10 +4545,10 @@ Unconfigured = disabled: without an `executor` key in `questpie.config.ts`, `ctx
 
 ## Two Isolation Modes
 
-| Mode | Runs in | For |
-| --- | --- | --- |
-| `"sandboxed"` (default) | fresh, hardened **Deno** subprocess per request (scoped net/import, fs/env/run/ffi denied, memory bound) | untrusted code (user/AI mini-apps) |
-| `"trusted"` | in-process (Bun) with a soft timeout | code you already own (code-mode agents, scheduled scripts) |
+| Mode                    | Runs in                                                                                                  | For                                                        |
+| ----------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `"sandboxed"` (default) | fresh, hardened **Deno** subprocess per request (scoped net/import, fs/env/run/ffi denied, memory bound) | untrusted code (user/AI mini-apps)                         |
+| `"trusted"`             | in-process (Bun) with a soft timeout                                                                     | code you already own (code-mode agents, scheduled scripts) |
 
 Untrusted-by-default: omitting `isolation` means `"sandboxed"`; trusted callers opt in explicitly.
 
@@ -4518,6 +4569,7 @@ export default runtimeConfig({
 	executor: {
 		sandboxed: httpSandboxAdapter({
 			url: process.env.SANDBOX_URL ?? "http://127.0.0.1:8787",
+			hostAdmissionSecret: process.env.SANDBOX_HOST_ADMISSION_SECRET,
 		}),
 		// TRUSTED internal URL of this app's own broker endpoint, required only
 		// for the untrusted app-bindings path. NEVER derive from request Host.
@@ -4528,6 +4580,19 @@ export default runtimeConfig({
 ```
 
 `executor.trusted` defaults to the built-in in-process adapter, override only to customize.
+The adapter and supervisor must share a random
+`SANDBOX_HOST_ADMISSION_SECRET` of at least 32 bytes. Missing admission
+credentials fail closed.
+
+If a sandbox policy can receive QUESTPIE bindings, register the generated
+broker route statically:
+
+```ts
+// modules.ts
+import { sandboxModule } from "@questpie/sandbox/modules/sandbox";
+
+export default [sandboxModule] as const;
+```
 
 ## Running Code
 
@@ -4552,21 +4617,109 @@ const result = await ctx.executor.run({
 
 Result shape: `{ ok, output?, logs, error?, timedOut?, ms? }`.
 
+## Remote Workload Admission
+
+Consumer-owned remote workloads call `adapter.runWorkload({ envelope })`.
+Configure a `workload` authorizer on `httpSandboxAdapter()`; it receives only
+the opaque envelope, phase, and signal and must return the complete bounded
+policy. QUESTPIE invokes it before preparation and again immediately before
+dispatch, and both normalized policies must match exactly.
+
+Do not pass source, input, capabilities, secrets, or bindings beside the
+envelope. Missing or malformed authorization, authorization drift, expired
+policy, audit failure, replay, wrong supervisor instance, or request-body
+mismatch fails closed with `SandboxWorkloadDeniedError`.
+
+## Explicit Custom MCP Tools
+
+Sandbox guests can call only custom `mcpTool(...)` definitions that declare an
+explicit workload policy. Built-in collection CRUD, files, and stores remain on
+the native sandbox broker; they are never widened into an MCP surface.
+
+Register both static modules:
+
+```ts
+// modules.ts
+import { mcpModule } from "@questpie/mcp/modules/mcp";
+import { sandboxModule } from "@questpie/sandbox/modules/sandbox";
+
+export default [mcpModule, sandboxModule] as const;
+```
+
+Configure the host-only authorization and context-binding seams with the public
+`sandboxCustomTools(...)` helper:
+
+```ts
+// questpie.config.ts
+import { sandboxCustomTools } from "@questpie/sandbox";
+import { httpSandboxAdapter } from "@questpie/sandbox/adapter";
+import { runtimeConfig } from "questpie/app";
+
+export default runtimeConfig({
+	executor: {
+		sandboxed: httpSandboxAdapter({
+			url: process.env.SANDBOX_URL,
+		}),
+	},
+	sandboxCustomTools: sandboxCustomTools({
+		authorizer: consumerToolAuthority,
+		contextBinder: consumerQuestpieContextBinder,
+		evidence: async (event) => evidenceSink.write(event),
+	}),
+});
+```
+
+The caller supplies an opaque, host-only envelope and the trusted canonical
+broker endpoint. Neither is exposed to guest code:
+
+```ts
+const result = await ctx.executor.run({
+	isolation: "sandboxed",
+	source: `export default async () => {
+		const { tools } = await globalThis.questpie.tools.list();
+		return globalThis.questpie.tools.call("reports.generate", {
+			period: "week",
+		});
+	}`,
+	brokerUrl: process.env.SANDBOX_BROKER_URL,
+	sandboxTools: { envelope: consumerEnvelope },
+	capabilities: {
+		net: [],
+		import: [],
+		timeoutMs: 5_000,
+		memoryMb: 128,
+	},
+});
+```
+
+The host pins the released tool catalog and broker endpoint for the run, then
+reauthorizes discovery and every call against a freshly bound user-mode
+QUESTPIE context. Tool count, discovery bytes, argument bytes, result bytes,
+operation count, time, concurrency, evidence time, and active sessions are
+bounded. Tokens are revoked when transport settles; expired sessions are
+reclaimed. Evidence is product-neutral and receives no envelope, arguments,
+result body, bearer credential, app/database handle, or request context.
+
 ## The Capability Model
 
 Every run declares a manifest; anything not granted is denied (default-deny):
 
-| Axis | Grants | Enforced by |
-| --- | --- | --- |
-| `net` | `fetch()` host allowlist (`host[:port]`) | sandbox engine (`--allow-net`) |
-| `import` | remote module-import host allowlist (independent of `net`) | sandbox engine (`--allow-import`) |
-| `timeoutMs` / `memoryMb` | hard wall-clock / real V8 heap cap (`--max-old-space-size`) | sandbox engine |
-| `files` | read/write path globs into the file store | bindings broker |
-| `data.collections` | per-collection verbs (`read`/`create`/`update`/`delete`) | bindings broker |
-| `data.globals` / `data.stores` | per-global and per-`document_store`-namespace verbs | bindings broker |
-| `services` / `jobs` / `workflows` | allowed service names / enqueueable jobs / triggerable workflows | bindings broker |
+| Axis                              | Grants                                                           | Enforced by                                          |
+| --------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------- |
+| `net`                             | outbound HTTP host allowlist (`host[:port]`)                     | engine for compute-only; trusted broker for bindings |
+| `import`                          | remote module-import host allowlist (independent of `net`)       | sandbox engine (`--allow-import`)                    |
+| `timeoutMs` / `memoryMb`          | hard wall-clock / real V8 heap cap (`--max-old-space-size`)      | sandbox engine                                       |
+| `files`                           | read/write path globs into the file store                        | bindings broker                                      |
+| `data.collections`                | per-collection verbs (`read`/`create`/`update`/`delete`)         | bindings broker                                      |
+| `data.globals` / `data.stores`    | per-global and per-`document_store`-namespace verbs              | bindings broker                                      |
+| `services` / `jobs` / `workflows` | allowed service names / enqueueable jobs / triggerable workflows | bindings broker                                      |
 
-Only `net`/`import`/`timeoutMs`/`memoryMb` are enforced by the **engine** (the Deno subprocess flags). Everything below the line is typed in the manifest but enforced by the **broker** at call time, the engine never sees your collections.
+`import`/`timeoutMs`/`memoryMb` are enforced by the **engine**. `net` is
+engine-enforced only for the backwards-compatible compute-only path. As soon as
+app bindings or custom tools are present, the guest receives `--allow-net=[]`
+and the same `net` grant is enforced exclusively by the trusted, address-pinning
+HTTP broker. Everything below the line is enforced by the broker at call time;
+the engine never sees your collections.
 
 `import` **fails open**: omitting `--allow-import` does NOT deny, Deno silently grants ~7 default hosts (`esm.sh`, `jsr.io`, `deno.land`, …), so an empty `import` allowlist is compiled to an explicit `--deny-import=<those hosts>`. Never alias `net` and `import`.
 
@@ -4582,7 +4735,9 @@ const posts = await questpie.collections.posts.find({ limit: 10 });
 const file = await questpie.files.read({ path: "company/data/report.json" });
 ```
 
-The broker endpoint is a route the host app mounts (product layers like Autopilot's mini-app runner do this); the guest never imports your app. For trusted in-process runs, `bindings` injects host globals directly instead.
+The broker endpoint is a route the host application or workload runner mounts;
+the guest never imports your app. For trusted in-process runs, `bindings`
+injects host globals directly instead.
 
 ## Deployment
 
@@ -4600,9 +4755,26 @@ Supervisor env: `PORT` (default 8787), `DENO_BIN`, `SANDBOX_BROKER_URL`, `SANDBO
 ## Security Internals
 
 - **Process-per-request**, not a warm Worker: a Worker can't enforce `memoryMb` and can't reap grandchild Workers, so each run is a fresh subprocess with a real heap cap and SIGTERM→SIGKILL teardown. Before guest code runs, `globalThis.Worker` is nulled and `SharedArrayBuffer`/`Atomics` are deleted.
-- **SSRF egress validation** at manifest time, in BOTH adapter and server: any `net`/`import` host that is (or DNS-resolves to) private/loopback/link-local/CGNAT or `169.254.169.254` is rejected; DNS fails closed. **DNS-rebind pinning is NOT implemented** (`TODO(security)`), the socket IP isn't re-pinned across redirects. The brokered path is safe anyway because the guest runs `--allow-net=[]`.
+- **SSRF egress validation** at manifest time, in BOTH adapter and server: any `net`/`import` host that is (or DNS-resolves to) private/loopback/link-local/CGNAT or `169.254.169.254` is rejected; DNS fails closed. Direct-network compute runs do not pin the socket IP across redirects (`TODO(security)`). Bindings guests do not have that surface: they run `--allow-net=[]`, and brokered `http.fetch` resolves, validates, pins, and revalidates redirects host-side.
 - **Brokered `fetch` on the app-bindings path**: the guest has no sockets (`--allow-net=[]`); its native `fetch` is replaced by a shim that RPCs `http.fetch` over stdio to the supervisor, which relays to `brokerUrl` carrying a supervisor-only per-run token (`x-questpie-sandbox-token`).
 - **Linux kernel egress firewall (belt-and-suspenders)**: on Linux with `unshare`/`nft`/`ip` + caps, each run also gets a per-run netns + nftables ruleset (default-DROP). **Gracefully absent** off Linux or when tools/caps are missing (logs a notice, runs without it). Disable with `SANDBOX_DISABLE_NETNS_FIREWALL=1`. The subprocess permission flags are the primary boundary; this is a second layer.
+
+### Broker result and wire budgets
+
+The decoded HTTP upload and response budget is
+`HTTP_FETCH_BODY_CAP_BYTES` (5 MiB). Base64 and JSON envelopes are derived from
+that decoded cap; native binding results use
+`BROKER_NATIVE_RESULT_CAP_BYTES`, while brokered HTTP results use
+`BROKER_HTTP_RESULT_CAP_BYTES`. The supervisor applies method-aware request,
+response, frame, and cumulative-output limits, so an exact-cap HTTP body fits
+but max+1 never reaches or escapes the broker.
+
+Adapters that expose the generic broker route must call
+`snapshotBoundedBrokerValue` before `Response.json`/`JSON.stringify`. It creates
+an inert, bounded JSON snapshot without invoking getters, proxy traps, or
+consumer `toJSON` methods. Invalid results and target failures return stable
+redacted messages plus a correlation ID; raw errors may go only to the trusted
+`SandboxBrokerOptions.onDiagnostic` callback.
 
 ## Rules
 
@@ -5221,11 +5393,11 @@ Seeds run in **system mode** by default (bypass access rules, so bootstrap data 
 
 ## `seed()` vs `seed.steps()`
 
-| | `seed({...})` | `seed.steps({...})` |
-| --- | --- | --- |
-| Transaction | one seed-wide tx; throw → all DB writes + tracking row roll back together | **no** seed-wide tx; each `step(name, fn)` runs in its own tx |
-| Resume | re-runs from the top | completed steps skip; checkpoints stored in `questpie_seed_steps` |
-| Use for | normal bootstrap/demo data | uploads, slow imports, external API calls, large datasets |
+|             | `seed({...})`                                                             | `seed.steps({...})`                                               |
+| ----------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Transaction | one seed-wide tx; throw → all DB writes + tracking row roll back together | **no** seed-wide tx; each `step(name, fn)` runs in its own tx     |
+| Resume      | re-runs from the top                                                      | completed steps skip; checkpoints stored in `questpie_seed_steps` |
+| Use for     | normal bootstrap/demo data                                                | uploads, slow imports, external API calls, large datasets         |
 
 ```ts title="seeds/site-settings.ts"
 import { seed } from "questpie";
@@ -5255,7 +5427,9 @@ export default seed.steps({
 	id: "demoContent",
 	category: "dev",
 	async run({ step }) {
-		const fixture = await step("prepare", async () => ({ posts: [{ slug: "demo" }] }));
+		const fixture = await step("prepare", async () => ({
+			posts: [{ slug: "demo" }],
+		}));
 		await step("create", async ({ collections }) => {
 			for (const p of fixture.posts) await collections.posts.create(p);
 		});
@@ -5282,12 +5456,12 @@ Every seed has one `category`: `required` (bootstrap data for every env), `dev` 
 
 ## CLI
 
-| Command | Effect |
-| --- | --- |
-| `questpie seed` | Run pending seeds |
-| `questpie seed:status` | List pending + executed seeds |
-| `questpie seed:undo` | Run `undo` handlers for executed seeds, then remove tracking rows |
-| `questpie seed:reset` | Clear tracking rows + step checkpoints (NOT an undo - leaves data, marks seeds pending) |
+| Command                | Effect                                                                                  |
+| ---------------------- | --------------------------------------------------------------------------------------- |
+| `questpie seed`        | Run pending seeds                                                                       |
+| `questpie seed:status` | List pending + executed seeds                                                           |
+| `questpie seed:undo`   | Run `undo` handlers for executed seeds, then remove tracking rows                       |
+| `questpie seed:reset`  | Clear tracking rows + step checkpoints (NOT an undo - leaves data, marks seeds pending) |
 
 Options: `--category <required,dev,test>` (`seed`, `seed:undo`), `--only <ids>` (`seed`, `seed:undo`, `seed:reset`), `-f, --force` (re-run despite tracking), `--validate` (run inside a transaction and roll back).
 
@@ -5320,38 +5494,38 @@ Full reference for all `where` clause operators in QUESTPIE CRUD queries.
 
 Applies to: `text`, `textarea`, `email`, `url`. (`slug` is just a `text` field; rich-text content is stored as blocks/JSON, not queried with these operators.)
 
-| Operator     | Example                            | Description                |
-| ------------ | ---------------------------------- | -------------------------- |
-| equality     | `{ title: "Hello" }`               | Exact match (shorthand)    |
-| `eq`         | `{ title: { eq: "Hello" } }`       | Exact match                |
-| `ne`         | `{ title: { ne: "Hello" } }`       | Not equal                  |
+| Operator     | Example                            | Description                                 |
+| ------------ | ---------------------------------- | ------------------------------------------- |
+| equality     | `{ title: "Hello" }`               | Exact match (shorthand)                     |
+| `eq`         | `{ title: { eq: "Hello" } }`       | Exact match                                 |
+| `ne`         | `{ title: { ne: "Hello" } }`       | Not equal                                   |
 | `not`        | `{ title: { not: "Hello" } }`      | Alias for `ne`; `not: null` → `IS NOT NULL` |
-| `in`         | `{ title: { in: ["A", "B"] } }`    | One of values              |
-| `notIn`      | `{ title: { notIn: ["A", "B"] } }` | None of values             |
-| `contains`   | `{ title: { contains: "ell" } }`   | Substring match            |
-| `startsWith` | `{ title: { startsWith: "He" } }`  | Prefix match               |
-| `endsWith`   | `{ title: { endsWith: "lo" } }`    | Suffix match               |
-| `like`       | `{ title: { like: "He%o" } }`      | SQL LIKE (case-sensitive)  |
-| `ilike`      | `{ title: { ilike: "he%o" } }`     | SQL LIKE (case-insensitive) |
-| `notLike`    | `{ title: { notLike: "He%o" } }`   | Negated LIKE               |
-| `notIlike`   | `{ title: { notIlike: "he%o" } }`  | Negated case-insensitive LIKE |
-| `isNull`     | `{ title: { isNull: true } }`      | Is NULL                    |
-| `isNotNull`  | `{ title: { isNotNull: true } }`   | Is NOT NULL                |
+| `in`         | `{ title: { in: ["A", "B"] } }`    | One of values                               |
+| `notIn`      | `{ title: { notIn: ["A", "B"] } }` | None of values                              |
+| `contains`   | `{ title: { contains: "ell" } }`   | Substring match                             |
+| `startsWith` | `{ title: { startsWith: "He" } }`  | Prefix match                                |
+| `endsWith`   | `{ title: { endsWith: "lo" } }`    | Suffix match                                |
+| `like`       | `{ title: { like: "He%o" } }`      | SQL LIKE (case-sensitive)                   |
+| `ilike`      | `{ title: { ilike: "he%o" } }`     | SQL LIKE (case-insensitive)                 |
+| `notLike`    | `{ title: { notLike: "He%o" } }`   | Negated LIKE                                |
+| `notIlike`   | `{ title: { notIlike: "he%o" } }`  | Negated case-insensitive LIKE               |
+| `isNull`     | `{ title: { isNull: true } }`      | Is NULL                                     |
+| `isNotNull`  | `{ title: { isNotNull: true } }`   | Is NOT NULL                                 |
 
 `email` fields add domain matching on top of the text operators:
 
-| Operator   | Example                                                    | Description           |
-| ---------- | ---------------------------------------------------------- | --------------------- |
-| `domain`   | `{ email: { domain: "acme.com" } }`                        | Match by email domain |
-| `domainIn` | `{ email: { domainIn: ["acme.com", "x.io"] } }`            | Domain is one of      |
+| Operator   | Example                                         | Description           |
+| ---------- | ----------------------------------------------- | --------------------- |
+| `domain`   | `{ email: { domain: "acme.com" } }`             | Match by email domain |
+| `domainIn` | `{ email: { domainIn: ["acme.com", "x.io"] } }` | Domain is one of      |
 
 `url` fields add host and protocol matching on top of the text operators:
 
-| Operator   | Example                                       | Description        |
-| ---------- | --------------------------------------------- | ------------------ |
-| `host`     | `{ link: { host: "example.com" } }`           | Match by host      |
-| `hostIn`   | `{ link: { hostIn: ["a.com", "b.com"] } }`    | Host is one of     |
-| `protocol` | `{ link: { protocol: "https" } }`             | Match by protocol  |
+| Operator   | Example                                    | Description       |
+| ---------- | ------------------------------------------ | ----------------- |
+| `host`     | `{ link: { host: "example.com" } }`        | Match by host     |
+| `hostIn`   | `{ link: { hostIn: ["a.com", "b.com"] } }` | Host is one of    |
+| `protocol` | `{ link: { protocol: "https" } }`          | Match by protocol |
 
 ## Number Fields
 
@@ -5376,33 +5550,33 @@ Applies to: `number`
 
 Applies to: `boolean`
 
-| Operator    | Example                             | Description |
-| ----------- | ----------------------------------- | ----------- |
-| equality    | `{ isActive: true }`                | Exact match |
-| `eq`        | `{ isActive: { eq: true } }`        | Exact match |
-| `ne`        | `{ isActive: { ne: true } }`        | Not equal   |
+| Operator    | Example                             | Description  |
+| ----------- | ----------------------------------- | ------------ |
+| equality    | `{ isActive: true }`                | Exact match  |
+| `eq`        | `{ isActive: { eq: true } }`        | Exact match  |
+| `ne`        | `{ isActive: { ne: true } }`        | Not equal    |
 | `not`       | `{ isActive: { not: true } }`       | Alias for ne |
-| `isNull`    | `{ isActive: { isNull: true } }`    | Is NULL     |
-| `isNotNull` | `{ isActive: { isNotNull: true } }` | Is NOT NULL |
+| `isNull`    | `{ isActive: { isNull: true } }`    | Is NULL      |
+| `isNotNull` | `{ isActive: { isNotNull: true } }` | Is NOT NULL  |
 
 ## Date / DateTime / Time Fields
 
 Applies to: `date`, `datetime`, `time` (all three share the same operators).
 
-| Operator    | Example                                                  | Description    |
-| ----------- | -------------------------------------------------------- | -------------- |
-| equality    | `{ date: "2025-03-01" }`                                 | Exact match    |
-| `eq`        | `{ date: { eq: someDate } }`                             | Exact match    |
-| `ne`        | `{ date: { ne: someDate } }`                             | Not equal      |
-| `not`       | `{ date: { not: someDate } }`                            | Alias for `ne` |
-| `gt`        | `{ date: { gt: "2025-01-01" } }`                         | After          |
-| `gte`       | `{ date: { gte: "2025-01-01" } }`                        | On or after    |
-| `lt`        | `{ date: { lt: "2025-12-31" } }`                         | Before         |
-| `lte`       | `{ date: { lte: "2025-12-31" } }`                        | On or before   |
-| `in`        | `{ date: { in: ["2025-01-01", "2025-02-01"] } }`         | One of values  |
-| `notIn`     | `{ date: { notIn: ["2025-01-01", "2025-02-01"] } }`      | None of values |
-| `isNull`    | `{ date: { isNull: true } }`                             | Is NULL        |
-| `isNotNull` | `{ date: { isNotNull: true } }`                          | Is NOT NULL    |
+| Operator    | Example                                             | Description    |
+| ----------- | --------------------------------------------------- | -------------- |
+| equality    | `{ date: "2025-03-01" }`                            | Exact match    |
+| `eq`        | `{ date: { eq: someDate } }`                        | Exact match    |
+| `ne`        | `{ date: { ne: someDate } }`                        | Not equal      |
+| `not`       | `{ date: { not: someDate } }`                       | Alias for `ne` |
+| `gt`        | `{ date: { gt: "2025-01-01" } }`                    | After          |
+| `gte`       | `{ date: { gte: "2025-01-01" } }`                   | On or after    |
+| `lt`        | `{ date: { lt: "2025-12-31" } }`                    | Before         |
+| `lte`       | `{ date: { lte: "2025-12-31" } }`                   | On or before   |
+| `in`        | `{ date: { in: ["2025-01-01", "2025-02-01"] } }`    | One of values  |
+| `notIn`     | `{ date: { notIn: ["2025-01-01", "2025-02-01"] } }` | None of values |
+| `isNull`    | `{ date: { isNull: true } }`                        | Is NULL        |
+| `isNotNull` | `{ date: { isNotNull: true } }`                     | Is NOT NULL    |
 
 For `Date` instance values, always use the explicit `{ eq: someDate }`
 operator, the bare equality shorthand only works for string/primitive
@@ -5417,46 +5591,46 @@ compares exactly against the stored value, safe for keyset cursors
 
 Applies to: `select` (single value).
 
-| Operator    | Example                                       | Description    |
-| ----------- | --------------------------------------------- | -------------- |
-| equality    | `{ status: "published" }`                     | Exact match    |
-| `eq`        | `{ status: { eq: "published" } }`             | Exact match    |
-| `ne`        | `{ status: { ne: "draft" } }`                 | Not equal      |
-| `not`       | `{ status: { not: "draft" } }`                | Alias for `ne` |
-| `in`        | `{ status: { in: ["draft", "published"] } }`  | One of values  |
-| `notIn`     | `{ status: { notIn: ["archived"] } }`         | None of values |
-| `isNull`    | `{ status: { isNull: true } }`                | Is NULL        |
-| `isNotNull` | `{ status: { isNotNull: true } }`             | Is NOT NULL    |
+| Operator    | Example                                      | Description    |
+| ----------- | -------------------------------------------- | -------------- |
+| equality    | `{ status: "published" }`                    | Exact match    |
+| `eq`        | `{ status: { eq: "published" } }`            | Exact match    |
+| `ne`        | `{ status: { ne: "draft" } }`                | Not equal      |
+| `not`       | `{ status: { not: "draft" } }`               | Alias for `ne` |
+| `in`        | `{ status: { in: ["draft", "published"] } }` | One of values  |
+| `notIn`     | `{ status: { notIn: ["archived"] } }`        | None of values |
+| `isNull`    | `{ status: { isNull: true } }`               | Is NULL        |
+| `isNotNull` | `{ status: { isNotNull: true } }`            | Is NOT NULL    |
 
 ## Multi-Select Fields
 
 Applies to a multi-value select, `f.select([...]).array()` (an array of values, stored as JSONB). There is no separate `multiSelect` field type; `.array()` switches the field to this operator set. It is **distinct** from the single-select set above (`in`/`notIn` do not apply here):
 
-| Operator      | Example                                          | Description                  |
-| ------------- | ------------------------------------------------ | ---------------------------- |
-| `eq`          | `{ tags: { eq: ["a", "b"] } }`                   | Array equals exactly         |
-| `containsAll` | `{ tags: { containsAll: ["a", "b"] } }`          | Contains all listed values   |
-| `containsAny` | `{ tags: { containsAny: ["a", "b"] } }`          | Contains any listed value    |
-| `length`      | `{ tags: { length: 3 } }`                        | Array has N elements         |
-| `isEmpty`     | `{ tags: { isEmpty: true } }`                    | Empty array or NULL          |
-| `isNotEmpty`  | `{ tags: { isNotEmpty: true } }`                 | Non-empty array              |
-| `isNull`      | `{ tags: { isNull: true } }`                     | Is NULL                      |
-| `isNotNull`   | `{ tags: { isNotNull: true } }`                  | Is NOT NULL                  |
+| Operator      | Example                                 | Description                |
+| ------------- | --------------------------------------- | -------------------------- |
+| `eq`          | `{ tags: { eq: ["a", "b"] } }`          | Array equals exactly       |
+| `containsAll` | `{ tags: { containsAll: ["a", "b"] } }` | Contains all listed values |
+| `containsAny` | `{ tags: { containsAny: ["a", "b"] } }` | Contains any listed value  |
+| `length`      | `{ tags: { length: 3 } }`               | Array has N elements       |
+| `isEmpty`     | `{ tags: { isEmpty: true } }`           | Empty array or NULL        |
+| `isNotEmpty`  | `{ tags: { isNotEmpty: true } }`        | Non-empty array            |
+| `isNull`      | `{ tags: { isNull: true } }`            | Is NULL                    |
+| `isNotNull`   | `{ tags: { isNotNull: true } }`         | Is NOT NULL                |
 
 ## Relation Fields
 
 ### belongsTo (single relation, FK on this table)
 
-| Operator    | Example                                  | Description                 |
-| ----------- | ---------------------------------------- | --------------------------- |
-| equality    | `{ author: "user-id" }`                  | Match by related ID         |
-| `eq`        | `{ author: { eq: "user-id" } }`          | Match by related ID         |
-| `ne`        | `{ author: { ne: "user-id" } }`          | Not this related ID         |
-| `in`        | `{ author: { in: ["id1", "id2"] } }`     | Related ID is one of        |
-| `notIn`     | `{ author: { notIn: ["id1"] } }`         | Related ID is none of       |
-| `isNull`    | `{ author: { isNull: true } }`           | No related record           |
-| `isNotNull` | `{ author: { isNotNull: true } }`        | Has a related record        |
-| `is`        | `{ author: { is: { role: "admin" } } }`  | Related record matches where |
+| Operator    | Example                                    | Description                   |
+| ----------- | ------------------------------------------ | ----------------------------- |
+| equality    | `{ author: "user-id" }`                    | Match by related ID           |
+| `eq`        | `{ author: { eq: "user-id" } }`            | Match by related ID           |
+| `ne`        | `{ author: { ne: "user-id" } }`            | Not this related ID           |
+| `in`        | `{ author: { in: ["id1", "id2"] } }`       | Related ID is one of          |
+| `notIn`     | `{ author: { notIn: ["id1"] } }`           | Related ID is none of         |
+| `isNull`    | `{ author: { isNull: true } }`             | No related record             |
+| `isNotNull` | `{ author: { isNotNull: true } }`          | Has a related record          |
+| `is`        | `{ author: { is: { role: "admin" } } }`    | Related record matches where  |
 | `isNot`     | `{ author: { isNot: { role: "admin" } } }` | Related record does NOT match |
 
 You can also pass the target's `where` directly as a shorthand for `is`: `{ author: { role: "admin" } }`.
@@ -5465,29 +5639,29 @@ You can also pass the target's `where` directly as a shorthand for `is`: `{ auth
 
 To-many relations expose only the quantifiers below (no bare FK value). Each takes a sub-`where` against the related collection:
 
-| Operator | Example                                          | Description                       |
-| -------- | ------------------------------------------------ | --------------------------------- |
-| `some`   | `{ comments: { some: { approved: true } } }`     | At least one related row matches  |
-| `none`   | `{ comments: { none: { spam: true } } }`         | No related row matches            |
-| `every`  | `{ comments: { every: { approved: true } } }`    | All related rows match            |
+| Operator | Example                                       | Description                      |
+| -------- | --------------------------------------------- | -------------------------------- |
+| `some`   | `{ comments: { some: { approved: true } } }`  | At least one related row matches |
+| `none`   | `{ comments: { none: { spam: true } } }`      | No related row matches           |
+| `every`  | `{ comments: { every: { approved: true } } }` | All related rows match           |
 
 ## JSON / Object Fields
 
 Applies to: `object` (structured nested fields stored as JSONB). The schemaless `json` field uses the basic set instead (`eq`, `ne`, `in`, `notIn`, `isNull`, `isNotNull`).
 
-| Operator      | Example                                                       | Description                          |
-| ------------- | ------------------------------------------------------------- | ------------------------------------ |
-| `contains`    | `{ meta: { contains: { active: true } } }`                    | JSONB `@>` (contains object)         |
-| `containedBy` | `{ meta: { containedBy: { a: 1, b: 2 } } }`                   | JSONB `<@` (contained by object)     |
-| `hasKey`      | `{ meta: { hasKey: "active" } }`                              | Top-level key exists                 |
-| `hasKeys`     | `{ meta: { hasKeys: ["a", "b"] } }`                           | All listed keys exist                |
-| `hasAnyKeys`  | `{ meta: { hasAnyKeys: ["a", "b"] } }`                        | Any listed key exists                |
-| `pathEquals`  | `{ meta: { pathEquals: { path: ["a", "b"], val: 1 } } }`      | Value at JSON path equals            |
-| `jsonPath`    | `{ meta: { jsonPath: "$.a ? (@ > 1)" } }`                     | Matches a JSONPath predicate (`@@`)  |
-| `isEmpty`     | `{ meta: { isEmpty: true } }`                                 | Empty object `{}` or NULL            |
-| `isNotEmpty`  | `{ meta: { isNotEmpty: true } }`                              | Non-empty object                     |
-| `isNull`      | `{ meta: { isNull: true } }`                                  | Is NULL                              |
-| `isNotNull`   | `{ meta: { isNotNull: true } }`                               | Is NOT NULL                          |
+| Operator      | Example                                                  | Description                         |
+| ------------- | -------------------------------------------------------- | ----------------------------------- |
+| `contains`    | `{ meta: { contains: { active: true } } }`               | JSONB `@>` (contains object)        |
+| `containedBy` | `{ meta: { containedBy: { a: 1, b: 2 } } }`              | JSONB `<@` (contained by object)    |
+| `hasKey`      | `{ meta: { hasKey: "active" } }`                         | Top-level key exists                |
+| `hasKeys`     | `{ meta: { hasKeys: ["a", "b"] } }`                      | All listed keys exist               |
+| `hasAnyKeys`  | `{ meta: { hasAnyKeys: ["a", "b"] } }`                   | Any listed key exists               |
+| `pathEquals`  | `{ meta: { pathEquals: { path: ["a", "b"], val: 1 } } }` | Value at JSON path equals           |
+| `jsonPath`    | `{ meta: { jsonPath: "$.a ? (@ > 1)" } }`                | Matches a JSONPath predicate (`@@`) |
+| `isEmpty`     | `{ meta: { isEmpty: true } }`                            | Empty object `{}` or NULL           |
+| `isNotEmpty`  | `{ meta: { isNotEmpty: true } }`                         | Non-empty object                    |
+| `isNull`      | `{ meta: { isNull: true } }`                             | Is NULL                             |
+| `isNotNull`   | `{ meta: { isNotNull: true } }`                          | Is NOT NULL                         |
 
 ## Combining Operators
 
@@ -5619,11 +5793,18 @@ const { data } = useQuery(
 
 `count(..., { realtime: true })` yields a number, not a paginated snapshot. `findOne()` and `findVersions()` do not have realtime forms.
 
+Mutation results carry non-enumerable transaction metadata. The shared
+realtime API exposes `awaitMutation(result)` (or `awaitTxId(txid)`) to wait
+until every subscribed topic has reconciled that commit. `getTxid(result)`
+reads the metadata when custom coordination is necessary. Advanced transport
+authors can use `RealtimeTxidTracker` and `realtimeEventResolvesTxid`; ordinary
+apps should use the client-wide realtime API.
+
 ## Transport selection
 
 SSE is the default `ClientTransport`; no browser transport config is required. With a normal Postgres URL the server auto-wires `PgNotifyChangeBroker`; otherwise it polls every 2s. Redis Streams and Pusher are supported v2 broker overrides. A clean v2 configuration uses one `ChangeBroker`.
 
-Realtime topology is durable in `questpie_realtime_topology`. Complete desired topology uses monotonic revisions; a metadata-only broker wake lowers latency and one-second reconciliation heals dropped wakes. This makes companion control HA-safe without sticky routing after the migration is applied and every request-handling replica supports the advertised `questpie-realtime-topology` v1 capability.
+Realtime topology is durable in `questpie_realtime_topology`. Complete desired topology uses monotonic revisions; a metadata-only broker wake lowers latency and one-second reconciliation heals dropped wakes. This makes companion control HA-safe without sticky routing after the migration is applied and every request-handling replica supports the advertised `questpie-realtime-topology` v2 capability.
 
 Before a production upgrade, run `bunx questpie migrate:create`, review and commit the generated migration, then run `bunx questpie migrate`. Never use `push` for this production schema change.
 
@@ -5644,6 +5825,13 @@ export default runtimeConfig({ realtime: { ...managed } });
 ```
 
 `pusherRealtime()` supplies both the notice broker and client transport. App-facing `live()`, TanStack, and channel APIs do not change. Direct provider client events are off by default because they bypass framework publish authorization, Zod validation, rate limits, ordered ledger, and replay.
+
+Pusher invalidations contain opaque target ids only, never snapshots or CRDT
+updates. QUESTPIE caps one targeted invalidation at 128 targets and an 8 KiB
+JSON envelope, leaving headroom for JSON/provider serialization. Overflow or
+malformed targeting collapses to one generic reconcile. Channel application
+events use the exact 10,000-byte QUESTPIE cap while remaining below the
+provider's <10 kB ceiling.
 
 ## Admission and lifecycle
 
@@ -5668,6 +5856,70 @@ Keep `keepAliveIntervalMs` (default 8s) below the server/proxy idle timeout. `li
 
 A future `realtime: { mode: "invalidate" }` is separate-spec work and is not
 implemented.
+
+## Scalable row realtime
+
+Correctness does not imply scalability. The database query plus current read
+access is authoritative; client filters and routing guards never authorize a
+row.
+
+- Put a stable, indexed own-column `scopeId`, `partitionId`, `parentId`,
+  `principalId`, `recipientId`, or `audienceId` on ordinary realtime rows.
+- Let TanStack DB compose joins, ordering, limits, and derived live views from
+  authorized normalized rows.
+- At admission, freeze only stable principal, server-derived scope, topic
+  locale, stage, and access mode. Never store expanded membership or permission
+  id sets in subscription context.
+- Resolve scope with
+  `realtime.subscriptionScope(({ request }) => request?.headers.get("x-scope-id") ?? null)`.
+  `null` means unscoped; a value is capped at 256 UTF-8 bytes. A scope switch
+  opens a new subscription and bootstraps a fresh client store.
+- Collection/global `realtime.accessCacheKey` is an explicit proof that output
+  may be shared across principals within the frozen scope tuple. Its key is
+  capped at 256 UTF-8 bytes; invalid or throwing resolvers stay edge-isolated.
+- Mutable membership/access stays in the database. Watched-resource changes
+  trigger targeted reset; periodic delta re-bootstrap is only the safety net.
+
+Payload routing is conservative. It returns `match | miss | unknown`; only
+`miss` skips work. Own-column scalar equality, `eq`, and bounded `in` are cheap.
+Relations, `RAW`, unsupported operators, missing projections, and ambiguous
+values are `unknown`. Updates inspect before and after, so moving a row between
+scopes wakes both partitions. The full database matcher still decides
+membership and access.
+
+Disable direct topics without disabling dependency capture:
+
+```ts
+collection("memberships")
+	.fields(({ f }) => ({
+		scopeId: f.text(128).required(),
+		principalId: f.text(128).required(),
+	}))
+	.options({ realtime: false });
+```
+
+Use `realtime: { rowLiveQueries: false }` for an app-wide row-topic deny.
+Typed channels, CRDT, the outbox, change capture, and watched dependency
+invalidation stay enabled. Raw topics receive the same
+`collection_realtime_disabled` or `row_live_queries_disabled` rejection as
+typed clients, before scheduler allocation or bootstrap.
+
+A personalized relation query for 100,000 principals in one shared scope can
+cause 100,000 authoritative recomputations. Snapshot fallback is correct but
+expensive. Prefer materialized inbox rows with direct `recipientId`, a shared
+typed audience channel, an invalidation/refetch event, or a normal query.
+`bun --cwd packages/questpie run bench:realtime:routing` runs the deterministic
+100,000-subscription / 1,000-scope routing harness and its high-blast
+personalized adversary.
+
+Observer metrics expose candidate groups, guard outcomes, authoritative DB
+calls, snapshot bytes, delta frames, fallback reasons, and bounded queue
+gauges. Metric labels never contain raw principal, scope, topic, record, query,
+or result values. Advanced diagnostics can call
+`classifyRealtimeDeliveryDecision()` to inspect the stable delivery mode/reason
+without executing a query. Missing/mismatched reverse relation metadata in an access
+predicate must reject/deny; normal reads, hydration, realtime bootstrap, and
+authoritative matching share the fail-closed compiler.
 
 Full adapter options and deployment guidance: `references/infrastructure-adapters.md`.
 
@@ -5779,6 +6031,149 @@ The event subscription accumulates messages. The presence query and live-query `
 - Cookie-authenticated authority routes require an exact trusted Origin; configure extra origins under `realtime.channelSecurity.trustedOrigins`.
 - Client publish token buckets default to 10/s with burst 20 per session and principal.
 - Pusher/Soketi is an opt-in transport preset. Direct provider client events are a separate unsafe capability and are off by default.
+
+---
+
+# Collaborative documents
+
+Use QUESTPIE's collaborative aggregate when concurrent actors must edit fields
+of one collection record or global. It is a framework data primitive, not a UI
+editor integration.
+
+## Definition
+
+```ts
+import { collection } from "#questpie/factories";
+import { z } from "zod";
+
+export default collection("articles")
+	.fields(({ f }) => ({
+		title: f
+			.text({ mode: "text" })
+			.default("")
+			.required()
+			.crdt({ format: "text" }),
+		tags: f
+			.text({ mode: "text" })
+			.array()
+			.default([])
+			.required()
+			.crdt({ format: "set", conflict: "add-wins" }),
+		body: f.textarea().default("").required().crdt({ format: "text" }),
+		status: f.text().default("draft"),
+	}))
+	.collaborative({
+		awareness: z.object({ name: z.string().max(64) }).strict(),
+	});
+```
+
+Both `.collaborative()` and at least one `.crdt()` field are required. V1
+qualifies required, empty-default identity text and required string-array
+add-wins sets. Do not mark localized, bounded, relation, upload, ordered-list,
+object/map, transformed, or custom-codec fields.
+
+CRDT-managed fields may be seeded during create but are absent from ordinary
+update types. Never bypass that guard with system access, raw CRUD, hooks, bulk
+update, or version restore.
+
+## Runtime
+
+```ts
+import { yjsServerEngine } from "@questpie/crdt-yjs/server";
+import { runtimeConfig } from "questpie/app";
+
+export default runtimeConfig({
+	db: { url: process.env.DATABASE_URL! },
+	realtime: true,
+	crdt: {
+		namespace: "my-app",
+		allowedOrigins: [process.env.APP_URL!],
+		engines: { text: yjsServerEngine() },
+	},
+});
+```
+
+```ts
+import { yjsClientEngine } from "@questpie/crdt-yjs/client";
+import { createClient } from "questpie/client";
+import type { AppConfig } from "#questpie";
+
+export const client = createClient<AppConfig>({
+	baseURL: window.location.origin,
+	crdt: { engines: { text: yjsClientEngine() } },
+});
+```
+
+`createFetchHandler()` already exposes `/realtime/crdt/open` and
+`/realtime/crdt/exchange`. Never add an Elysia host, WebSocket route, second
+Pusher connection, sidecar, or another process. CRDT bytes use bounded Fetch.
+The existing client-wide SSE or Pusher session carries only opaque dirty hints.
+Missed hints reconcile from PostgreSQL.
+
+The server Yjs engine uses bounded in-process worker threads for untrusted CPU
+work. That is private runtime machinery, not another deployable worker service.
+
+## Generated client
+
+```ts
+const article = client.crdt.collections.articles.document({ id });
+await article.connect({ mode: "edit", fallback: "view" });
+
+article.transaction(({ fields }) => {
+	fields.title.text.apply([{ type: "insert", index: 0, value: "Shared " }]);
+	fields.tags.set.add("news");
+	fields.body.text.apply([{ type: "insert", index: 0, value: "Opening." }]);
+});
+
+article.awareness.set({ name: "Ada" }, { activeField: "body", cursor: 8 });
+
+await article.disconnect();
+```
+
+Construction and SSR are inert. `connect()` opens IndexedDB and transport.
+Subscribe to lifecycle state and surface `recovery-required`; never silently
+discard or replay recovery bundles. Use `export()` or an explicit user-approved
+`discard()`.
+
+Client failures are typed. Handle `CrdtConnectError`, `CrdtMutationError`, and
+`CrdtReadError` by their stable `code` rather than parsing messages.
+`CRDT_OFFLINE_HORIZON_MS` is the framework's 30-day acknowledged-offline
+retention horizon; a bundle older than that requires the explicit recovery
+flow. `RealtimeCrdtBindingRejectedError` reports that the optional dirty-hint
+lease was rejected; it never grants data authority.
+
+## Security and lifecycle
+
+- Reuse normal collection/global and field access rules.
+- Rebuild authority on open and every exchange.
+- Cookie requests require an exact allowed HTTP(S) Origin.
+- OAuth retains stable credential identity; agents require explicit
+  authentication and `crdt:edit`.
+- Soft delete retires an epoch; restore starts a fresh epoch; purge removes the
+  retired collaboration state transactionally.
+- Hidden fields reveal no data, cursor, or aggregate head.
+- A visible realtime binding grants delivery only, never data authority.
+
+## Generation and operations
+
+After definitions or manifests change:
+
+1. run `questpie generate`;
+2. run `questpie crdt:manifest`;
+3. generate a migration through the CLI and review it;
+4. run `crdt:manifest` and migration generation a second time and require no
+   diff;
+5. apply committed migrations in production.
+
+Never hand-edit manifest identity, package exports, or migration SQL.
+QUESTPIE requires PostgreSQL 15+. Pusher documents event data as limited to
+10 KB; QUESTPIE measures the canonical JSON envelope in UTF-8 and enforces an
+exact 10,000-byte cap. CRDT documents do not ride Channels: exchange payloads
+allow 256 KiB per field, 1 MiB per request, and a 64 MiB verified bootstrap
+artifact.
+
+For normative soundness details, inspect
+`packages/questpie/src/server/modules/core/integrated/collaboration/CONTRACT.md`.
 
 ---
 
@@ -6237,10 +6632,14 @@ Pass it to `env({ client })`. Server-side, client vars validate under the unpref
 import _envClient from "../env.client";
 import { resolveClientEnv } from "questpie/env-client";
 
-export const env = resolveClientEnv(_envClient, {
-	APP_URL: import.meta.env.VITE_APP_URL,
-	POSTHOG_KEY: import.meta.env.VITE_POSTHOG_KEY,
-}, "vite");
+export const env = resolveClientEnv(
+	_envClient,
+	{
+		APP_URL: import.meta.env.VITE_APP_URL,
+		POSTHOG_KEY: import.meta.env.VITE_POSTHOG_KEY,
+	},
+	"vite",
+);
 export type ClientEnv = typeof env;
 ```
 
@@ -6252,8 +6651,7 @@ import type { AppConfig } from "#questpie";
 import { env } from "#questpie/env.client.vite";
 
 export const client = createClient<AppConfig>({
-	baseURL:
-		typeof window !== "undefined" ? window.location.origin : env.APP_URL,
+	baseURL: typeof window !== "undefined" ? window.location.origin : env.APP_URL,
 	basePath: "/api",
 });
 ```
@@ -6284,13 +6682,13 @@ Custom: `{ name: "astro", prefix: "PUBLIC_", envObject: "import.meta.env" }`.
 ## Rules
 
 | Severity | Rule                                                                                                            |
-| -------- | ---------------------------------------------------------------------------------------------------------------- |
-| CRITICAL | No raw `process.env.X` / `process.env.X!` in app/server code, declare in `env.ts`, import `env` from there.      |
-| CRITICAL | Secrets never go in `env.client.ts` vars, everything there ships in client bundles.                              |
-| CRITICAL | Never edit `.generated/env.client.*.ts`, regenerate with `questpie generate`.                                    |
-| HIGH     | Client code never imports `env.ts` (throws), import the generated `env.client.<consumer>` module.                |
-| HIGH     | Set the PREFIXED spelling (`VITE_APP_URL`, `EXPO_PUBLIC_APP_URL`) in frontend build environments (EAS, Vercel).   |
-| MEDIUM   | Devtools-only toggles read by the bundler (e.g. `import.meta.env.DEV`) don't need declaration.                    |
+| -------- | --------------------------------------------------------------------------------------------------------------- |
+| CRITICAL | No raw `process.env.X` / `process.env.X!` in app/server code, declare in `env.ts`, import `env` from there.     |
+| CRITICAL | Secrets never go in `env.client.ts` vars, everything there ships in client bundles.                             |
+| CRITICAL | Never edit `.generated/env.client.*.ts`, regenerate with `questpie generate`.                                   |
+| HIGH     | Client code never imports `env.ts` (throws), import the generated `env.client.<consumer>` module.               |
+| HIGH     | Set the PREFIXED spelling (`VITE_APP_URL`, `EXPO_PUBLIC_APP_URL`) in frontend build environments (EAS, Vercel). |
+| MEDIUM   | Devtools-only toggles read by the bundler (e.g. `import.meta.env.DEV`) don't need declaration.                  |
 
 ---
 
@@ -6338,9 +6736,9 @@ Effective defaults below are what the `starterModule` ships (your config merges 
 | ------------------------------------------- | --------- | ------------- | ----------------------------------------------------------- |
 | `emailAndPassword.enabled`                  | `boolean` | `true`        | Enable email/password authentication                        |
 | `emailAndPassword.requireEmailVerification` | `boolean` | `true`        | Require email verification before login                     |
-| `baseURL`                                   | `string`  | none | Application public URL (used for OAuth callbacks)           |
+| `baseURL`                                   | `string`  | none          | Application public URL (used for OAuth callbacks)           |
 | `basePath`                                  | `string`  | `"/api/auth"` | Auth API route prefix                                       |
-| `secret`                                    | `string`  | none | Session signing secret. **Must be 32+ chars in production** |
+| `secret`                                    | `string`  | none          | Session signing secret. **Must be 32+ chars in production** |
 
 ## Social Providers (OAuth)
 
@@ -7443,20 +7841,24 @@ import { mcpConfig } from "@questpie/mcp";
 
 export default mcpConfig({
 	crud: {
-		defaults: {
-			collections: { read: true, write: false, delete: false },
-			globals: { read: true, write: false },
-		},
 		collections: {
-			posts: { read: true, write: true },
-			users: false,
+			posts: {
+				operations: { list: true, get: true, create: true },
+			},
 		},
 		globals: {
-			siteSettings: { read: true, write: true },
+			siteSettings: { operations: { get: true } },
 		},
 	},
 	routes: {
-		exposeAnnotated: true,
+		routes: {
+			"reports/generate": { operations: { execute: true } },
+		},
+	},
+	resources: {
+		collections: { posts: true },
+		globals: { siteSettings: true },
+		routes: { "reports/generate": true },
 	},
 });
 ```
@@ -7481,14 +7883,10 @@ Generated global tools:
 - `globals.{name}.get`
 - `globals.{name}.update`
 
-Policy order:
-
-1. Transport defaults.
-2. CRUD defaults.
-3. Per-entity override.
-4. QUESTPIE access rules execute last and can still deny.
-
-HTTP is user mode and read-oriented by default. HTTP cannot be made system mode with config or options. Stdio defaults to trusted system mode unless explicitly lowered to user mode.
+There are no transport or CRUD exposure defaults. Omission exposes nothing.
+Each entity name and exact operation must be present under `operations`.
+QUESTPIE access rules execute after the catalog and can still deny. HTTP cannot
+be elevated to system mode.
 
 Use `fields.include` / `fields.exclude` for top-level filtering. It applies to create/update input, CRUD outputs, list docs, global results, and schema resources. Nested relation projection is out of scope for v1.
 
@@ -7541,7 +7939,11 @@ Scopes are `<resource>:<name>:<verb>`, derived declaratively from the entity - n
 
 Plus two coarse **umbrellas**: `collections:read` and `collections:write`. An umbrella satisfies the matching granular `read`/`write` requirement for the same resource kind (`collections:read` covers `collections:posts:read`). Umbrellas exist for `read`/`write` ONLY - there is deliberately no umbrella for `:delete` or `routes:…:invoke` (least privilege), and `read`/`write` never cross (holding `collections:write` does not satisfy a `:read` requirement).
 
-> The full granular catalog is DERIVED live, not hand-seeded: `buildScopeCatalog` + `applyOAuthScopeCatalog` (`core/integrated/auth/scope-catalog.ts`, wired at `core/services/auth.ts`) emit `collections:<name>:read|write|delete`, `globals:<name>:read|write`, and `routes:<key>:invoke` and union them into `oauthProvider.scopes` at auth-instance build. So a real DCR client CAN request the granular scopes. Nuance: only the umbrellas are advertised in discovery (`advertisedMetadata.scopes_supported`); the granular scopes are grantable but not enumerated there.
+> The OAuth catalog is derived from the exact resolved MCP catalog and contributed
+> through QUESTPIE core's generic `oauthScopeCatalogs` registry. Only explicitly
+> released operations contribute granular scopes or their applicable umbrellas.
+> App entities and operations omitted from MCP are neither grantable nor
+> advertised.
 
 ### Effective Permission = scopes ∩ RBAC
 
@@ -7560,8 +7962,7 @@ export default mcpConfig({
 	crud: {
 		collections: {
 			posts: {
-				read: true,
-				write: true,
+				operations: { list: true, create: true, update: true, delete: true },
 				// entity-level: every operation needs this
 				requiredScopes: "collections:posts:write",
 				// or per-operation (overrides the entity-level + default)
@@ -7572,10 +7973,13 @@ export default mcpConfig({
 });
 ```
 
-Custom tools declare their own scope (no default mapping exists for them, so omitting it requires no scope):
+Custom tools declare their own scope. No default mapping exists; use
+`scopes: false` as an explicit no-OAuth-scope policy. Omission keeps the tool
+out of the released catalog:
 
 ```ts
 export default mcpTool("reports.generate", {
+	access: ({ session }) => !!session,
 	inputSchema: z.object({ period: z.string() }),
 	scopes: "routes:reports/generate:invoke",
 }).handler(async ({ input, ctx }) => ({
@@ -7591,7 +7995,7 @@ Only simple JSON routes are auto-converted:
 - Route has `.schema(...)`.
 - Route is not `.raw()`.
 - Route has `meta.mcp.expose === true`.
-- `routes.exposeAnnotated` is not `false`.
+- Its exact route key has `operations.execute` enabled in `config/mcp.ts`.
 
 ```ts
 route()
@@ -7622,7 +8026,12 @@ Built-in resources:
 - `questpie://schema/routes`
 - `questpie://schema/routes/{key}`
 
-Resources honor MCP policy and QUESTPIE access visibility. Route resources include input/output JSON Schema when the route has Zod schemas.
+Each exact resource name must be `true` under `resources.collections`,
+`resources.globals`, or `resources.routes`. Resources also require a released
+read/invoke operation, honor call-time MCP policy and QUESTPIE access
+visibility, and use the same field include/exclude policy as tool schemas,
+inputs, and results. Route resources include input/output JSON Schema when the
+route has Zod schemas.
 
 ## Custom Tools
 
@@ -7642,25 +8051,106 @@ export default mcpTool("generate-report", {
 }));
 ```
 
-Custom tool access is checked during `tools/list` and again during `tools/call`.
+`access` is required. Custom tool access is checked during `tools/list` and
+again during `tools/call`; `access: false` removes the tool from the released
+catalog.
 
 ## Programmatic Servers
 
 Use `createMcpServer(app, { transport: "http", request })` for programmatic HTTP setup. If no `ctx` is passed, the request is preserved through `app.createContext()`.
 
-Use `startStdioServer(app)` for trusted stdio integrations:
+Stdio has no ambient system authority. Bind `startStdioServer()` to an exact
+user-mode context, or explicitly opt a local maintenance process into the
+system bypass:
 
 ```ts
 import { app } from "#questpie";
 import { startStdioServer } from "@questpie/mcp/stdio";
 
-await startStdioServer(app);
+await startStdioServer(app, {
+	config: { stdio: { trustedMaintenance: true } },
+});
 ```
+
+Never enable `trustedMaintenance` for a remote or requester-controlled process.
+
+## Remote Workloads
+
+Remote agent/executor workloads use `createWorkloadMcpServer()`, not HTTP
+request or stdio authority. The factory receives only an opaque envelope,
+consumer-owned authorization and context binding, plus optional audit and
+effect-handoff callbacks. The bound context must remain in `accessMode: "user"`.
+
+Every visible tool declares explicit workload facts:
+
+```ts
+import { createWorkloadMcpServer, mcpTool } from "@questpie/mcp";
+
+const reply = mcpTool("messages.reply", {
+	access: true,
+	scopes: false,
+	inputSchema,
+	workload: {
+		capabilities: ["messages.write"],
+		handoff: "messages.commit",
+	},
+}).handler(handler);
+
+const server = await createWorkloadMcpServer(app, {
+	envelope: opaqueEnvelope,
+	concurrencyKey: tenant.id,
+	authorizer: authorizeWorkload,
+	contextBinder: bindAuthorizedContext,
+	handoff: executeDurableEffect,
+});
+```
+
+Discovery and every call authorize and bind independently. A tool without an
+explicit workload requirement stays hidden. Missing, malformed, expired, or
+non-user authorization fails closed; QUESTPIE does not interpret or persist the
+consumer envelope. `concurrencyKey` is a stable, non-secret consumer or tenant
+identifier: independent servers/ports with the same key share the
+per-principal concurrency bucket, while different keys cannot exhaust one
+another's bucket. Omitting it isolates the bucket to that one boundary instance.
+
+For a trusted in-process subsystem that needs only those explicit custom tools,
+use `createWorkloadMcpToolPort(app, options)` instead of constructing an
+in-memory MCP client/server transport:
+
+```ts
+import { createWorkloadMcpToolPort, mcpPublicErrorCode } from "@questpie/mcp";
+
+const port = createWorkloadMcpToolPort(app, {
+	envelope,
+	concurrencyKey: tenant.id,
+	authorizer,
+	contextBinder,
+	handoff,
+});
+
+const { tools } = await port.listCustomTools({ signal, requestId: runId });
+const result = await port.callCustomTool({
+	name: "messages.reply",
+	input: { body: "Hello" },
+	signal,
+	requestId: runId,
+});
+```
+
+This is deliberately a custom-tool-only port, not a broad in-process MCP
+client: generated CRUD tools, routes, resources, HTTP identity, stdio authority,
+and system mode are absent by construction. Discovery and every call still use
+the released catalog, workload authorizer, context binder, current MCP/RBAC
+access rule, input/output schema validation, shared concurrency/deadline
+budgets, and cancellation. Failures expose only a stable code and correlation
+ID. `mcpPublicErrorCode(error)` reads the stable code from thrown
+list/cancellation errors without inspecting messages or invoking accessors;
+tool-call results carry the equivalent under `_meta["questpie/error"]`.
 
 ## Gotchas
 
 - Add `mcpModule` to static `modules.ts`, then run codegen.
-- HTTP callers are always `user` or `oauth`, never `system` - HTTP cannot be elevated to system mode. External access goes through OAuth (bounded by `scopes ∩ RBAC`), not system mode. Only stdio is `system`.
+- HTTP callers are always `user` or `oauth`, never `system` - HTTP cannot be elevated to system mode. External access goes through OAuth (bounded by `scopes ∩ RBAC`), not system mode. Stdio is also non-system unless a local maintenance process explicitly enables `trustedMaintenance`.
 - Field filtering is top-level only.
 - Raw routes and unannotated routes are not tools.
 - Custom tool results must include `content`; add `structuredContent` for machine-readable output.
@@ -7690,9 +8180,10 @@ import { openApiConfig } from "@questpie/openapi/server";
 export default openApiConfig({
 	info: { title: "My API", version: "1.0.0" },
 	servers: [{ url: "https://api.example.com" }],
-	basePath: "/api",           // MUST match the fetch handler's base path
+	basePath: "/api", // MUST match the fetch handler's base path
 	scalar: { theme: "purple" },
-	auth: true, search: true,   // set false to omit those paths
+	auth: true,
+	search: true, // set false to omit those paths
 });
 ```
 
@@ -7735,82 +8226,6 @@ Two security schemes advertised: `bearerAuth` (http bearer) + `cookieAuth` (`bet
 - Don't rely on per-operation security or typed path params yet (see Limitations).
 
 Full reference: docs page `integrations/openapi`. Related: [[mcp]] (same route introspection, but consumes `.meta()`), routes reference.
-
----
-
-# AI Agent Runs (@questpie/ai)
-
-Run-orchestration layer for executing **Claude Code** agents against durable run records. It owns the reliability primitives, worker leases, exactly-once finalization, and a resumable stream, not a chat SDK. **Headless-first**: server/worker code drives everything; an admin UI can sit on top.
-
-Opt-in package: `bun add @questpie/ai`. Peer deps `questpie`, `@questpie/admin`, `react ^19`, `zod ^4`, `@tanstack/react-query`.
-
-## What Ships vs What You Own
-
-Register `aiModule` in `modules.ts`, then `bun questpie generate`. The module contributes:
-- Collection `ai_workers` (admin-hidden), the worker registry. (`ai_worker_leases` also exists but is **vestigial**; leases now live on `run_links.producerLease`.)
-- Service `workerManager`, `registerWorker`, `deregister`, `heartbeat`, `claimRun`, `authenticate`.
-- Routes `enrollmentTokens`/`enrollmentEnroll`/`workerRegister`/`workerPoll`/`workerHeartbeat`/`workerDeregister`.
-- Cron job `ai-worker-timeout` (`*/5 * * * *`), reaps expired leases, marks dead workers offline.
-
-**You own the `run_links` collection**, the single execution record. The package does NOT ship it; worker/finalize/reap code operates on the injected `collections.run_links`. Fields to model: `kind`, `runtime`, `status` (`pending|claimed|running|completed|failed|cancelled`), `instructions`, `activeStreamId`, `producerLease` (json), `harnessResumeState`, `uiMessages`, `finalizedAt`, `retryPolicy` (`auto`|…).
-
-## Exports
-
-| Import | Contents |
-| --- | --- |
-| `@questpie/ai/modules/ai` | `aiModule` |
-| `@questpie/ai/worker` | `startAIWorker(ctx, config) → { stop, workerId }`, `EmbeddedWorkerConfig`, `HarnessRuntime` (=`"claude-code"`) |
-| `@questpie/ai/harness-core` | `createHarnessAgent`, `resumeOrCreateSession`, `streamTurn`, `toUIMessages`, `ResumableUIMessageStore`, `createQuestpieResumableStreamStore({kv})`, `finalizeRun`, `reapExpiredRunLinks` |
-| `@questpie/ai` | `aiConfig`, `aiPlugin`, contract types (`AiRunStatus`, `AgentRuntimeRunRequest`, …), **hooks unwired, see Gotchas** |
-
-## Embedded Worker (the real execution path)
-
-A separate process with a **system context** (reads `ctx.services.workerManager`, `ctx.collections`, `ctx.kv`):
-
-```ts
-// src/ai-worker.ts
-import { createContext } from "#questpie";
-import { startAIWorker } from "@questpie/ai/worker";
-
-const ctx = await createContext({ accessMode: "system" });
-await startAIWorker(ctx, {
-	runtimes: [{ runtime: "claude-code" }],
-	maxConcurrentRuns: 1,
-	pollIntervalMs: 1000,
-	sandbox: { passthroughHomeForAuth: true }, // reuse ~/.claude on a personal machine
-	mcpServers: [{ name: "questpie", command: process.execPath, args: ["--bun", "run", "./src/mcp-entry.ts"], env: {} }],
-});
-```
-
-Loop: `heartbeat` → `claimRun` (id-scoped CAS `pending`→`claimed`, bumps `producerLease.epoch`) → `executeRun` (streams into the KV sink) → the single `finalizeRun`.
-
-## Resumable Stream + Finalize
-
-Output streams into a KV-backed store (`createQuestpieResumableStreamStore({ kv })`, keys `rs:{id}:*`, 1h TTL). Serve an SSE tail off `store.readFrom(activeStreamId, offset)`; resume via `Last-Event-ID`/`?offset`, `gap`→`expired` fallback to the persisted transcript.
-
-`finalizeRun(deps, input)` is the **exactly-once** latch: `finalizedAt IS NULL` ∧ matching lease `epoch` ∧ non-terminal `status`. It seals the stream, writes terminal status/summary/tokens/`uiMessages`, and (for `kind:"task"`/`"chat"`) writes knowledge artifacts + assistant `chat_messages`, once, even if two workers race.
-
-`reapExpiredRunLinks(deps, now?)` (the cron + inline on each tail read) requeues expired leases when `retryPolicy:"auto"` (bump epoch → `pending`) or fails them via `finalizeRun` otherwise.
-
-## Gotchas (verified against the current `@questpie/ai` module API)
-
-- **`claude-code` runtime ONLY.** `createHarnessAgent` throws for anything else.
-- **`aiConfig`/`aiPlugin`/`config/ai.ts` + `onBeforeRun`/`onAfterComplete` are DEFINED BUT NOT WIRED**, placeholder surface, consumed nowhere. Do not tell users to configure them.
-- **`@questpie/ai/client` exports NOTHING** (relay streaming removed in the chat-v7 cutover). Client streaming = server resumable sink + app-owned SSE tail. The `.tsx` components under `src/client/.../components/` are dead/unexported.
-- **HTTP worker fleet is PARKED** (finalize-over-HTTP is a HITL follow-up). Real usage = in-process embedded worker with in-process `finalizeRun`.
-- **The bundled sandbox is NOT isolation.** `@questpie/ai` uses its own `createLocalHostSandbox` (host `bash -lc`, isolates HOME/XDG, filters secret env). `passthroughHomeForAuth:true` relaxes HOME isolation to read `~/.claude`; the worker runs `permissionMode:"allow-all"`. This is **unrelated** to [[sandbox]] (`@questpie/sandbox`, the Deno code-execution engine), do not conflate.
-- **No live cross-turn attach.** Resume is replay against the persisted per-session HOME; `harnessResumeState` is written once at end-of-turn (the bridge session is destroyed when the turn's job ends).
-- **A decoupled worker needs shared KV (Redis).** The HTTP tail can't see an in-process MemoryKV sink written by another process.
-- **Postgres-coupled epoch fence**, the exactly-once CAS is a raw JSONB predicate over the double-encoded `producerLease` column.
-
-## Rules
-
-- Model `run_links` in the app; never expect the package to ship it.
-- Run the worker as its own process with `createContext({ accessMode: "system" })`.
-- Use the embedded worker + in-process `finalizeRun`; the HTTP fleet is not complete.
-- Don't reach for `@questpie/ai` for trusted first-party automation, that's [[workflows]] and [jobs]. This is for streaming Claude Code agent turns.
-
-Full reference: docs page `integrations/ai`. Related: [[sandbox]] (different sandbox), [[mcp]] (agents connect out via MCP), [[workflows]].
 
 ---
 
@@ -8306,18 +8721,18 @@ export default appConfig({
 
 The resolver receives the base request params plus the full system-mode service surface (typed via codegen, `Questpie.ContextResolverContext`):
 
-| Parameter     | Type                        | Description                                      |
-| ------------- | --------------------------- | ------------------------------------------------ |
-| `request`     | `Request`                   | The incoming HTTP request (Web API)              |
-| `session`     | `{ user, session } \| null` | Resolved auth session (null if unauthenticated)  |
-| `db`          | `Database`                  | Raw database client                              |
-| `collections` | `CollectionsAPI`            | Typed collections (system mode, hooks/i18n run)  |
-| `globals`     | `GlobalsAPI`                | Typed globals                                    |
-| `logger`      | `LoggerService`             | App logger                                       |
-| `kv`          | `KVService`                 | Key-value store                                  |
-| `queue`       | `QueueClient`               | Queue client                                     |
-| `t`           | `(key, params?) => string`  | Translations                                     |
-| `services`    |                             | User services from `services/`                   |
+| Parameter     | Type                        | Description                                     |
+| ------------- | --------------------------- | ----------------------------------------------- |
+| `request`     | `Request`                   | The incoming HTTP request (Web API)             |
+| `session`     | `{ user, session } \| null` | Resolved auth session (null if unauthenticated) |
+| `db`          | `Database`                  | Raw database client                             |
+| `collections` | `CollectionsAPI`            | Typed collections (system mode, hooks/i18n run) |
+| `globals`     | `GlobalsAPI`                | Typed globals                                   |
+| `logger`      | `LoggerService`             | App logger                                      |
+| `kv`          | `KVService`                 | Key-value store                                 |
+| `queue`       | `QueueClient`               | Queue client                                    |
+| `t`           | `(key, params?) => string`  | Translations                                    |
+| `services`    |                             | User services from `services/`                  |
 
 ### Lifecycle Rules
 
@@ -8464,11 +8879,11 @@ A dropdown for selecting the current scope. Render it into the sidebar through t
 
 | Prop          | Type                           | Default       | Description                                |
 | ------------- | ------------------------------ | ------------- | ------------------------------------------ |
-| `collection`  | `string`                       | none | Collection to fetch options from           |
+| `collection`  | `string`                       | none          | Collection to fetch options from           |
 | `labelField`  | `string`                       | `"name"`      | Field to display as label                  |
 | `valueField`  | `string`                       | `"id"`        | Field to use as value                      |
-| `options`     | `ScopeOption[]`                | none | Static options (alternative to collection) |
-| `loadOptions` | `() => Promise<ScopeOption[]>` | none | Async options loader                       |
+| `options`     | `ScopeOption[]`                | none          | Static options (alternative to collection) |
+| `loadOptions` | `() => Promise<ScopeOption[]>` | none          | Async options loader                       |
 | `placeholder` | `string`                       | `"Select..."` | Placeholder text                           |
 | `allowClear`  | `boolean`                      | `false`       | Show "All" option to clear scope           |
 | `clearText`   | `string`                       | `"All"`       | Label for the clear option                 |
@@ -8535,10 +8950,10 @@ Extensions arrive **flat** on rule and hook contexts. There is no `ctx` sub-obje
 
 ```ts
 // WRONG, there is no ctx wrapper
-read: ({ ctx }) => ({ workspace: ctx.workspaceId })
+read: ({ ctx }) => ({ workspace: ctx.workspaceId });
 
 // RIGHT, destructure flat
-read: ({ workspaceId }) => (workspaceId ? { workspace: workspaceId } : false)
+read: ({ workspaceId }) => (workspaceId ? { workspace: workspaceId } : false);
 ```
 
 ### HIGH: Not filtering in access rules

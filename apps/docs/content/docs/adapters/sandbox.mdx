@@ -42,7 +42,11 @@ export default runtimeConfig({
 `httpSandboxAdapter(options?)` takes `url` (defaults to `SANDBOX_URL`; `run` throws if unset), `fetchTimeoutMs?` (default = guest `timeoutMs + 10s`), `validateEgress?` (default `true`), and a custom `fetch?`.
 
 <Callout type="warn" title="Unconfigured means disabled">
-If you never set `executor.sandboxed`, `ctx.executor.run({ isolation: "sandboxed" })` is a no-op boundary, sandboxed execution is opt-in. `isolation: "trusted"` uses core's in-process adapter instead (no isolation, for code you wrote).
+If you never set `executor.sandboxed`,
+`ctx.executor.run({ isolation: "sandboxed" })` throws before executing anything.
+Sandboxed execution is opt-in and fails closed until an adapter is configured.
+`isolation: "trusted"` uses core's in-process adapter instead (no isolation,
+for code you wrote).
 </Callout>
 
 ## Running the supervisor

@@ -51,6 +51,12 @@ resource changes.
 
 See [Client realtime](/docs/client/realtime) for `live()`, `liveIter()`, lifecycle options, and TanStack Query integration.
 
+For multi-tenant and high-fanout systems, read
+[Scalable realtime modeling](/docs/concepts/scalable-realtime). It explains
+scope identity, conservative routing, immutable buckets, server opt-out, and
+when channels or materialized inboxes are a better model than generic row
+realtime.
+
 ## Channels
 
 Channels define typed event streams in `channels/`. Codegen adds publish and subscribe methods to server context and the generated client.
@@ -74,7 +80,7 @@ Clients multiplex subscriptions over a shared connection. A broker distributes i
 
 Desired topic/channel topology is stored durably with revisions, owner leases,
 and fencing. After the generated topology migration is applied and every
-request-handling replica supports desired topology protocol v1, topology
+request-handling replica supports desired topology protocol v2, topology
 updates, reconnect, and resume may hit any replica. Sticky affinity is not a
 steady-state HA requirement and should be removed after rollout verification.
 

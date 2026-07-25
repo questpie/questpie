@@ -68,6 +68,8 @@ Use `realtime: true` to turn on the default transport. Use an object when you wa
 
 ```ts
 interface RealtimeConfig {
+	rowLiveQueries?: boolean; // default true; false leaves channels/capture enabled
+	subscriptionScope?: (context) => string | null | Promise<string | null>;
 	observer?: RealtimeObserver;
 	admission?: Partial<RealtimeAdmissionConfig>;
 	connectionAcceptPacingMs?: number;
@@ -86,6 +88,8 @@ interface RealtimeConfig {
 | Option                     | Default                                        | What it controls                                                                                                                                                                                                         |
 | -------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `observer`                 | _(none)_                                       | Structured lifecycle/admission/transport diagnostics. Observer failures are isolated from delivery.                                                                                                                      |
+| `rowLiveQueries`           | `true`                                         | Authoritative app-wide admission for collection/global row topics. `false` leaves channels, CRDT, outbox capture, and dependency watches enabled.                                                                        |
+| `subscriptionScope`        | `() => null`                                   | Server-owned principal scope included in scheduler identity. Resolve from trusted request context; non-null output is capped at 256 UTF-8 bytes.                                                                         |
 | `admission`                | limits below                                   | Edge-session topic, connection, query-shape, concurrency, and buffer caps.                                                                                                                                               |
 | `connectionAcceptPacingMs` | `0`                                            | Optional maximum random delay before accepting a new edge session.                                                                                                                                                       |
 | `changeBroker`             | Postgres `PgNotifyChangeBroker` when available | Notice-only broker. Set it explicitly for Redis, Pusher, or a custom broker.                                                                                                                                             |

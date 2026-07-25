@@ -20,6 +20,7 @@ Reference these guidelines when:
 - Configuring adapters (queue, search, storage, realtime, email, KV)
 - Setting up access control, hooks, or validation
 - Building typed client SDK queries or TanStack Query integrations
+- Building collaborative collection/global aggregates with typed CRDT fields
 - Writing modules or plugins for QUESTPIE
 - Exposing QUESTPIE through MCP tools or resources
 - Scaffolding a new project or onboarding
@@ -111,35 +112,35 @@ Files starting with `_`, `index.ts`, declaration files, tests, and specs are int
 
 ### Core
 
-| Topic             | File                            | Covers                                                                                                             |
-| ----------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Architecture      | `references/architecture.md`    | Framework overview, tech stack, project structure, file conventions, app bootstrap, data flow                      |
-| Quickstart        | `references/quickstart.md`      | Scaffold, configure, codegen, migrate, serve, zero to running app                                                  |
-| Data Modeling     | `references/data-modeling.md`   | Collections, globals, fields, relations, options, localization                                                     |
-| Field Types       | `references/field-types.md`     | All built-in field types with options and operators                                                                |
-| Type Inference    | `references/type-inference.md`  | The infer-first map: `CollectionDoc` / `CollectionWhere`, `AccessContext` helpers, per-op rule typing, cycle rules |
-| Rules             | `references/rules.md`           | Access control (row/field level), hooks lifecycle, validation, derived request context                             |
-| Business Logic    | `references/business-logic.md`  | Routes, jobs, services, email templates, context injection                                                         |
-| AppContext        | `references/app-context.md`     | The `AppContext` runtime interface, where it's available, `getContext`, partial context overrides                  |
-| Durable Workflows | `references/workflows.md`       | Long-running workflows, steps, events, cron, admin UI                                                              |
-| Sandboxed Code    | `references/sandbox.md`         | `ctx.executor.run()`, isolation modes, capability model, Deno engine deployment                                    |
-| CRUD API          | `references/crud-api.md`        | `find`, `create`, `updateById`/`updateMany`, `deleteById`/`deleteMany`, atomic conditional updates, globals API    |
-| Seeds             | `references/seeds.md`           | `seed()` vs `seed.steps()`, idempotency, checkpointed steps, categories, `dependsOn`, `undo`, `autoSeed`, seed CLI |
-| Query Operators   | `references/query-operators.md` | `where` clause operators by field type                                                                             |
-| Realtime          | `references/realtime.md`        | Transactional outbox, reconciliation, live queries, broker/client transport seams, admission                       |
-| Channels          | `references/channels.md`        | Typed application events, authorization, publish contexts, client, presence, TanStack Query                        |
+| Topic             | File                                    | Covers                                                                                                                    |
+| ----------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Architecture      | `references/architecture.md`            | Framework overview, tech stack, project structure, file conventions, app bootstrap, data flow                             |
+| Quickstart        | `references/quickstart.md`              | Scaffold, configure, codegen, migrate, serve, zero to running app                                                         |
+| Data Modeling     | `references/data-modeling.md`           | Collections, globals, fields, relations, options, localization                                                            |
+| Field Types       | `references/field-types.md`             | All built-in field types with options and operators                                                                       |
+| Type Inference    | `references/type-inference.md`          | The infer-first map: `CollectionDoc` / `CollectionWhere`, `AccessContext` helpers, per-op rule typing, cycle rules        |
+| Rules             | `references/rules.md`                   | Access control (row/field level), hooks lifecycle, validation, derived request context                                    |
+| Business Logic    | `references/business-logic.md`          | Routes, jobs, services, email templates, context injection                                                                |
+| AppContext        | `references/app-context.md`             | The `AppContext` runtime interface, where it's available, `getContext`, partial context overrides                         |
+| Durable Workflows | `references/workflows.md`               | Long-running workflows, steps, events, cron, admin UI                                                                     |
+| Sandboxed Code    | `references/sandbox.md`                 | `ctx.executor.run()`, isolation modes, capability model, Deno engine deployment                                           |
+| CRUD API          | `references/crud-api.md`                | `find`, `create`, `updateById`/`updateMany`, `deleteById`/`deleteMany`, atomic conditional updates, globals API           |
+| Seeds             | `references/seeds.md`                   | `seed()` vs `seed.steps()`, idempotency, checkpointed steps, categories, `dependsOn`, `undo`, `autoSeed`, seed CLI        |
+| Query Operators   | `references/query-operators.md`         | `where` clause operators by field type                                                                                    |
+| Realtime          | `references/realtime.md`                | Transactional outbox, reconciliation, live queries, broker/client transport seams, admission                              |
+| Channels          | `references/channels.md`                | Typed application events, authorization, publish contexts, client, presence, TanStack Query                               |
+| Collaboration     | `references/collaborative-documents.md` | Collection/global CRDT aggregates, Yjs engines, generated client, authority, lifecycle, Fetch + shared realtime transport |
 
 ### Infrastructure
 
-| Topic       | File                                    | Covers                                                                                        |
-| ----------- | --------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Production  | `references/production.md`              | Queue, search, realtime, storage, email, KV adapter setup                                     |
-| Environment | `references/env.md`                     | `env.ts` + `env.client.ts`: boot-validated, typed env, generated client modules               |
-| Auth        | `references/auth.md`                    | Better Auth integration, session, providers, access patterns                                  |
-| Adapters    | `references/infrastructure-adapters.md` | All adapter configs: pg-boss, S3, SMTP, pgNotify, Redis                                       |
-| MCP         | `references/mcp.md`                     | MCP setup, CRUD tools, route tools, custom tools, OAuth 2.1 + scope∩RBAC                      |
-| OpenAPI     | `references/openapi.md`                 | OpenAPI 3.1 spec + Scalar UI: introspection, config, caching, honest limitations              |
-| AI Runs     | `references/ai.md`                      | Claude Code agent runs: `aiModule`, embedded worker, resumable streams, exactly-once finalize |
+| Topic       | File                                    | Covers                                                                           |
+| ----------- | --------------------------------------- | -------------------------------------------------------------------------------- |
+| Production  | `references/production.md`              | Queue, search, realtime, storage, email, KV adapter setup                        |
+| Environment | `references/env.md`                     | `env.ts` + `env.client.ts`: boot-validated, typed env, generated client modules  |
+| Auth        | `references/auth.md`                    | Better Auth integration, session, providers, access patterns                     |
+| Adapters    | `references/infrastructure-adapters.md` | All adapter configs: pg-boss, S3, SMTP, pgNotify, Redis                          |
+| MCP         | `references/mcp.md`                     | MCP setup, CRUD tools, route tools, custom tools, OAuth 2.1 + scope∩RBAC         |
+| OpenAPI     | `references/openapi.md`                 | OpenAPI 3.1 spec + Scalar UI: introspection, config, caching, honest limitations |
 
 ### Extend
 

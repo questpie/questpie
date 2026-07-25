@@ -9,7 +9,6 @@
 		[
 			"questpie",
 			"@questpie/admin",
-			"@questpie/ai",
 			"@questpie/crdt-yjs",
 			"@questpie/elysia",
 			"@questpie/hono",
@@ -26,7 +25,11 @@
 	"access": "public",
 	"baseBranch": "main",
 	"updateInternalDependencies": "patch",
-	"ignore": ["city-portal-example", "tanstack-barbershop-example"],
+	"ignore": [
+		"city-portal-example",
+		"tanstack-barbershop-example",
+		"toy-factory-backend-example"
+	],
 	"___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
 		"onlyUpdatePeerDependentsWhenOutOfRange": true
 	}

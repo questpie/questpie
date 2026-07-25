@@ -37,6 +37,12 @@ const PUBLISH_SUMMARY_PATH = path.join(
 	"publish-summary.json",
 );
 
+export function npmReleaseCommand(dryRun: boolean): string {
+	return dryRun
+		? "npm pack --dry-run --json"
+		: "npm publish --access public --provenance";
+}
+
 interface PackageJson {
 	name: string;
 	version: string;
@@ -122,7 +128,13 @@ function topoSort(
 }
 
 async function main() {
+	const dryRun = process.argv.includes("--dry-run");
 	console.log("🔄 Preparing packages for publish...\n");
+	if (dryRun) {
+		console.log(
+			"🔍 Dry run: packages will be packed and validated, never published\n",
+		);
+	}
 
 	const packages = getPackages();
 	console.log("🔎 Verifying npm package registration...\n");
@@ -141,10 +153,11 @@ async function main() {
 		),
 	);
 
-	fs.rmSync(PUBLISH_SUMMARY_PATH, { force: true });
+	if (!dryRun) fs.rmSync(PUBLISH_SUMMARY_PATH, { force: true });
 	const versions = getWorkspaceVersions(packages);
 	const originals = new Map<string, string>();
 	const publishedNow: PublishedPackageSummary[] = [];
+	const validated: string[] = [];
 	const skipped: string[] = [];
 	const failed: string[] = [];
 
@@ -234,26 +247,32 @@ async function main() {
 				continue;
 			}
 
-			console.log(`📤 Publishing ${name}@${version}...`);
+			console.log(
+				dryRun
+					? `🔍 Validating ${name}@${version}...`
+					: `📤 Publishing ${name}@${version}...`,
+			);
 
 			try {
-				const { stdout, stderr } = await execAsync(
-					`npm publish --access public --provenance`,
-					{
-						cwd: entry.dir,
-						env: { ...process.env },
-					},
-				);
+				const { stdout, stderr } = await execAsync(npmReleaseCommand(dryRun), {
+					cwd: entry.dir,
+					env: { ...process.env },
+				});
 				if (stdout) console.log(`  ${stdout.trim()}`);
 				if (stderr && !stderr.includes("npm warn")) {
 					console.error(`  ${stderr.trim()}`);
 				}
-				console.log(`  ✅ ${name}@${version} published\n`);
-				publishedNow.push({
-					name,
-					version,
-					dir: path.relative(ROOT_DIR, entry.dir),
-				});
+				if (dryRun) {
+					console.log(`  ✅ ${name}@${version} package is publishable\n`);
+					validated.push(name);
+				} else {
+					console.log(`  ✅ ${name}@${version} published\n`);
+					publishedNow.push({
+						name,
+						version,
+						dir: path.relative(ROOT_DIR, entry.dir),
+					});
+				}
 			} catch (error: any) {
 				console.error(`  ❌ ${name}@${version} failed`);
 				if (error.stderr) console.error(`  ${error.stderr.trim()}`);
@@ -287,6 +306,9 @@ async function main() {
 			`✅ Published: ${publishedNow.map(({ name }) => name).join(", ")}`,
 		);
 	}
+	if (validated.length > 0) {
+		console.log(`✅ Dry-run validated: ${validated.join(", ")}`);
+	}
 	if (skipped.length > 0) {
 		console.log(`⏭️  Already published: ${skipped.join(", ")}`);
 	}
@@ -295,10 +317,16 @@ async function main() {
 		process.exit(1);
 	}
 
-	console.log("\n🎉 All packages published successfully!");
+	console.log(
+		dryRun
+			? "\n🎉 Release dry run completed without publishing!"
+			: "\n🎉 All packages published successfully!",
+	);
 }
 
-main().catch((error) => {
-	console.error("Fatal error:", error);
-	process.exit(1);
-});
+if (import.meta.main) {
+	main().catch((error) => {
+		console.error("Fatal error:", error);
+		process.exit(1);
+	});
+}

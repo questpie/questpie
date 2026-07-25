@@ -17,6 +17,8 @@
 		"emails",
 		"search",
 		"realtime",
+		"scalable-realtime",
+		"collaborative-documents",
 		"storage",
 		"kv",
 		"sandboxed-code",

@@ -1,9 +1,11 @@
 ---
+"questpie": minor
 "@questpie/crdt-yjs": minor
-"@questpie/elysia": minor
 ---
 
-Add the Yjs CRDT engine package and the Elysia collaboration host integration.
+Add collection-wide collaborative aggregates with typed text and set fields.
 
-- Publish typed server and client entrypoints for `@questpie/crdt-yjs`, while keeping its worker entry internal to the package runtime.
-- Expose `createElysiaCrdtHost` and its trusted-proxy configuration as the adapter surface for hosting QUESTPIE collaborative documents.
+- Declare collaborative owners and fields with `.collaborative()` and `.crdt()`, then consume their generated, fully typed client and server APIs.
+- Synchronize CRDT bytes through bounded Fetch routes while reusing the existing SSE or Pusher realtime session for opaque dirty hints, with no adapter-specific host or second provider connection.
+- Preserve aggregate-wide atomic transactions, fresh field-level authorization, lifecycle fencing, idempotent retry, offline IndexedDB recovery, and bounded awareness rosters.
+- Publish Yjs text engines for browser and server use from `@questpie/crdt-yjs`; its worker entry remains private package runtime machinery, and its bounded pool drains and terminates with application shutdown.

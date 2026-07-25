@@ -6,6 +6,7 @@
 		"tanstack-query",
 		"realtime",
 		"channels",
+		"collaborative-documents",
 		"reactive-apps"
 	]
 }

@@ -155,6 +155,10 @@ safe fields `topicId`, `resource`, `operation`, and `details`. Details may carry
 the bounded reason plus requested/configured limits; they never include the
 topic's `where`, session, token, identity, or query result.
 
+Server policy denials use `collection_realtime_disabled` or
+`row_live_queries_disabled`. They are not retryable client failures: choose a
+normal read or the typed channel exposed by the application.
+
 The default `maxFindLimit` is `100` per snapshot, including the first result and
 every later refresh. QUESTPIE rejects an oversized topic instead of clamping or
 splitting it, because either would change ordering, pagination, completeness,
