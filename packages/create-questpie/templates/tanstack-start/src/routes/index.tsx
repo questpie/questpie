@@ -23,7 +23,7 @@ function Home() {
 			</head>
 			<body className="bg-background text-foreground min-h-screen antialiased">
 				<main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 py-16 text-center">
-					<span className="text-muted-foreground mb-4 text-xs font-medium uppercase tracking-widest">
+					<span className="text-muted-foreground mb-4 text-xs font-medium tracking-widest uppercase">
 						Powered by QUESTPIE
 					</span>
 					<h1 className="text-4xl font-bold tracking-tight sm:text-5xl">

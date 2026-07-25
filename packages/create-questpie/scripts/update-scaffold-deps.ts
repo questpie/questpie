@@ -42,8 +42,7 @@ function latestVersion(name: string): string | null {
 	const result = spawnSync("npm", ["view", name, "version"], {
 		encoding: "utf-8",
 	});
-	const version =
-		result.status === 0 ? result.stdout.trim() || null : null;
+	const version = result.status === 0 ? result.stdout.trim() || null : null;
 	if (!version) {
 		console.warn(`  ! could not resolve latest for ${name} — skipping`);
 	}

@@ -9,7 +9,10 @@ import viteTsConfigPaths from "vite-tsconfig-paths";
 export default defineConfig({
 	plugins: [
 		devtools(),
-		nitro({ preset: "bun" }) as unknown as PluginOption,
+		nitro({
+			preset: "bun",
+			plugins: ["./src/questpie-nitro-plugin.ts"],
+		}) as unknown as PluginOption,
 		viteTsConfigPaths({ projects: ["./tsconfig.json"] }),
 		tailwindcss(),
 		tanstackStart(),

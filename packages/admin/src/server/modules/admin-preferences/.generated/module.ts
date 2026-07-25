@@ -17,6 +17,8 @@ export type AdminPreferencesCollections = {
 	admin_saved_views: typeof _coll_admin_saved_views;
 };
 
+export type AdminPreferencesChannels = Record<never, never>;
+
 export type AdminPreferencesGlobals = Record<never, never>;
 
 export type AdminPreferencesJobs = Record<never, never>;
@@ -38,6 +40,7 @@ export type AdminPreferencesBlocks = Record<never, never>;
 export type AdminPreferencesModule = {
 	name: "questpie-admin-preferences";
 	collections: AdminPreferencesCollections;
+	channels: AdminPreferencesChannels;
 	globals: AdminPreferencesGlobals;
 	jobs: AdminPreferencesJobs;
 	routes: AdminPreferencesRoutes;
@@ -59,6 +62,7 @@ const _module: AdminPreferencesModule = {
 		admin_preferences: _coll_admin_preferences,
 		admin_saved_views: _coll_admin_saved_views,
 	} as AdminPreferencesCollections,
+	channels: {},
 	globals: {},
 	jobs: {},
 	routes: {},

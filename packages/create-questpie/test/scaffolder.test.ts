@@ -55,6 +55,14 @@ describe("scaffold", () => {
 			join(projectDir, "docker-compose.yml"),
 			"utf-8",
 		);
+		const nitroPlugin = await readFile(
+			join(projectDir, "src", "questpie-nitro-plugin.ts"),
+			"utf-8",
+		);
+		const viteConfig = await readFile(
+			join(projectDir, "vite.config.ts"),
+			"utf-8",
+		);
 
 		expect(existsSync(join(projectDir, ".gitignore"))).toBe(true);
 		expect(existsSync(join(projectDir, "gitignore"))).toBe(false);
@@ -91,6 +99,11 @@ describe("scaffold", () => {
 		expect(existsSync(join(projectDir, "src", "vite-env.d.ts"))).toBe(true);
 		expect(existsSync(join(projectDir, "src", "tanstack-start.d.ts"))).toBe(
 			true,
+		);
+		expect(viteConfig).toContain("./src/questpie-nitro-plugin.ts");
+		expect(nitroPlugin).toContain("createGracefulServerShutdown");
+		expect(nitroPlugin).toContain(
+			"tracingSrvxPlugins.push((server) => lifecycle.attach(server))",
 		);
 
 		// Skills are installed by the official CLI only when explicitly enabled.

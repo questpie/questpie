@@ -2,13 +2,466 @@ import { sql } from "drizzle-orm";
 import type { OperationSnapshot } from "questpie/migration";
 import { migration } from "questpie/services";
 
-import snapshotJson from "./snapshots/20260725T050305_crdt-storage-foundation.json";
+import snapshotJson from "./snapshots/20260725T184252_realtime-v3-umbrella.json";
 
 const snapshot = snapshotJson as OperationSnapshot;
 
 export default migration({
-	id: "crdtStorageFoundation20260725T050305",
+	id: "realtimeV3Umbrella20260725T184252",
 	async up({ db }) {
+		await db.execute(sql`CREATE TABLE "jwks" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"publicKey" text NOT NULL,
+	"privateKey" text NOT NULL,
+	"createdAt" timestamp(3) with time zone NOT NULL,
+	"expiresAt" timestamp(3) with time zone
+);`);
+		await db.execute(sql`CREATE TABLE "oauthAccessToken" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"token" varchar(500),
+	"clientId" varchar(255) NOT NULL,
+	"sessionId" varchar(255),
+	"userId" varchar(255),
+	"referenceId" varchar(255),
+	"refreshId" varchar(255),
+	"expiresAt" timestamp(3) with time zone,
+	"createdAt" timestamp(3) with time zone,
+	"scopes" jsonb NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "oauthClient" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"clientId" varchar(255) NOT NULL,
+	"clientSecret" varchar(500),
+	"disabled" boolean DEFAULT false,
+	"skipConsent" boolean,
+	"enableEndSession" boolean,
+	"subjectType" varchar(255),
+	"scopes" jsonb,
+	"userId" varchar(255),
+	"createdAt" timestamp(3) with time zone,
+	"updatedAt" timestamp(3) with time zone,
+	"name" varchar(255),
+	"uri" varchar(500),
+	"icon" varchar(500),
+	"contacts" jsonb,
+	"tos" varchar(500),
+	"policy" varchar(500),
+	"softwareId" varchar(255),
+	"softwareVersion" varchar(255),
+	"softwareStatement" text,
+	"redirectUris" jsonb NOT NULL,
+	"postLogoutRedirectUris" jsonb,
+	"tokenEndpointAuthMethod" varchar(255),
+	"grantTypes" jsonb,
+	"responseTypes" jsonb,
+	"public" boolean,
+	"type" varchar(255),
+	"requirePKCE" boolean,
+	"referenceId" varchar(255),
+	"metadata" jsonb
+);`);
+		await db.execute(sql`CREATE TABLE "oauthConsent" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"clientId" varchar(255) NOT NULL,
+	"userId" varchar(255),
+	"referenceId" varchar(255),
+	"scopes" jsonb NOT NULL,
+	"createdAt" timestamp(3) with time zone,
+	"updatedAt" timestamp(3) with time zone
+);`);
+		await db.execute(sql`CREATE TABLE "oauthRefreshToken" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"token" varchar(500) NOT NULL,
+	"clientId" varchar(255) NOT NULL,
+	"sessionId" varchar(255),
+	"userId" varchar(255) NOT NULL,
+	"referenceId" varchar(255),
+	"expiresAt" timestamp(3) with time zone,
+	"createdAt" timestamp(3) with time zone,
+	"revoked" timestamp(3) with time zone,
+	"authTime" timestamp(3) with time zone,
+	"scopes" jsonb NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "account" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"userId" varchar(255) NOT NULL,
+	"accountId" varchar(255) NOT NULL,
+	"providerId" varchar(255) NOT NULL,
+	"accessToken" varchar(500),
+	"refreshToken" varchar(500),
+	"accessTokenExpiresAt" timestamp(3) with time zone,
+	"refreshTokenExpiresAt" timestamp(3) with time zone,
+	"scope" varchar(255),
+	"idToken" varchar(500),
+	"password" varchar(255),
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "apikey" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"configId" varchar(255) DEFAULT 'default' NOT NULL,
+	"name" varchar(255),
+	"start" varchar(255),
+	"prefix" varchar(255),
+	"key" varchar(500) NOT NULL,
+	"userId" varchar(255) NOT NULL,
+	"refillInterval" integer,
+	"refillAmount" integer,
+	"lastRefillAt" timestamp(3) with time zone,
+	"enabled" boolean DEFAULT true,
+	"rateLimitEnabled" boolean DEFAULT true,
+	"rateLimitTimeWindow" integer,
+	"rateLimitMax" integer,
+	"requestCount" integer DEFAULT 0,
+	"remaining" integer,
+	"lastRequest" timestamp(3) with time zone,
+	"expiresAt" timestamp(3) with time zone,
+	"permissions" text,
+	"metadata" text,
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "assets" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"width" integer,
+	"height" integer,
+	"alt" varchar(500),
+	"caption" text,
+	"key" varchar(255),
+	"filename" varchar(255),
+	"mime_type" varchar(100),
+	"size" integer,
+	"visibility" varchar(20) DEFAULT 'public' NOT NULL,
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "session" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"userId" varchar(255) NOT NULL,
+	"token" varchar(255) NOT NULL,
+	"expiresAt" timestamp(3) with time zone NOT NULL,
+	"ipAddress" varchar(45),
+	"userAgent" varchar(500),
+	"impersonatedBy" varchar(255),
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "user" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"name" varchar(255) NOT NULL,
+	"email" varchar(255) NOT NULL,
+	"emailVerified" boolean NOT NULL,
+	"image" varchar(500),
+	"avatar" varchar(36),
+	"role" varchar(50),
+	"banned" boolean DEFAULT false,
+	"banReason" varchar(255),
+	"banExpires" timestamp(3) with time zone,
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "verification" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"identifier" varchar(255) NOT NULL,
+	"value" text NOT NULL,
+	"expiresAt" timestamp(3) with time zone NOT NULL,
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "admin_locks" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"resourceType" varchar(50) NOT NULL,
+	"resource" varchar(255) NOT NULL,
+	"resourceId" varchar(255) NOT NULL,
+	"user" varchar(36) NOT NULL,
+	"sessionId" varchar(64) NOT NULL,
+	"expiresAt" date NOT NULL,
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "admin_preferences" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"userId" varchar(255) NOT NULL,
+	"key" varchar(255) NOT NULL,
+	"value" jsonb NOT NULL,
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "admin_saved_views" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"userId" varchar(255) NOT NULL,
+	"collectionName" varchar(255) NOT NULL,
+	"name" varchar(255) NOT NULL,
+	"configuration" jsonb NOT NULL,
+	"isDefault" boolean DEFAULT false,
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "admin_audit_log" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"action" varchar(50) NOT NULL,
+	"resourceType" varchar(50) NOT NULL,
+	"resource" varchar(255) NOT NULL,
+	"resourceId" varchar(255),
+	"resourceLabel" varchar(500),
+	"userId" varchar(255),
+	"userName" varchar(255),
+	"locale" varchar(10),
+	"changes" jsonb,
+	"metadata" jsonb,
+	"title" varchar(1000),
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "announcements" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"city" varchar(36) NOT NULL,
+	"title" varchar(255) NOT NULL,
+	"content" jsonb,
+	"category" varchar(50) DEFAULT 'notice' NOT NULL,
+	"validFrom" date NOT NULL,
+	"validTo" date NOT NULL,
+	"isPinned" boolean DEFAULT false,
+	"referenceNumber" varchar(100),
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "cities" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"name" varchar(255) NOT NULL,
+	"slug" varchar(100) NOT NULL,
+	"logo" varchar(36),
+	"email" varchar(255),
+	"phone" varchar(50),
+	"address" text,
+	"website" varchar(255),
+	"population" integer,
+	"isActive" boolean DEFAULT true,
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "cityMembers" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"user" varchar(36) NOT NULL,
+	"city" varchar(36) NOT NULL,
+	"role" varchar(50) DEFAULT 'editor' NOT NULL,
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "contacts" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"city" varchar(36) NOT NULL,
+	"department" varchar(255) NOT NULL,
+	"description" text,
+	"contactPerson" varchar(255),
+	"position" varchar(255),
+	"email" varchar(255),
+	"phone" varchar(50),
+	"address" text,
+	"officeHours" varchar(255),
+	"order" integer DEFAULT 0,
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "documents" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"city" varchar(36) NOT NULL,
+	"title" varchar(255) NOT NULL,
+	"description" text,
+	"category" varchar(50) DEFAULT 'other' NOT NULL,
+	"file" varchar(36) NOT NULL,
+	"publishedDate" date,
+	"version" varchar(50),
+	"isPublished" boolean DEFAULT true,
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "news" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"city" varchar(36) NOT NULL,
+	"title" varchar(255) NOT NULL,
+	"slug" varchar(255) NOT NULL,
+	"excerpt" text,
+	"content" jsonb,
+	"image" varchar(36),
+	"category" varchar(50) DEFAULT 'general',
+	"publishedAt" timestamp(3) with time zone,
+	"author" varchar(255),
+	"isPublished" boolean DEFAULT false,
+	"isFeatured" boolean DEFAULT false,
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "pages" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"city" varchar(36) NOT NULL,
+	"title" varchar(255) NOT NULL,
+	"slug" varchar(255) NOT NULL,
+	"content" jsonb,
+	"excerpt" text,
+	"parent" varchar(36),
+	"order" integer DEFAULT 0,
+	"showInNav" boolean DEFAULT true,
+	"featuredImage" varchar(36),
+	"isPublished" boolean DEFAULT false,
+	"metaTitle" varchar(70),
+	"metaDescription" text,
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "submissions" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"city" varchar(36) NOT NULL,
+	"name" varchar(255) NOT NULL,
+	"email" varchar(255) NOT NULL,
+	"phone" varchar(50),
+	"subject" varchar(255) NOT NULL,
+	"message" text NOT NULL,
+	"department" varchar(50) DEFAULT 'general',
+	"status" varchar(50) DEFAULT 'new' NOT NULL,
+	"notes" text,
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "site_settings" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"scope_id" text,
+	"siteName" varchar(255) DEFAULT 'City Council' NOT NULL,
+	"tagline" varchar(255) DEFAULT 'Working for our community',
+	"logo" varchar(36),
+	"favicon" varchar(36),
+	"primaryColour" varchar(255) DEFAULT '#1e40af',
+	"secondaryColour" varchar(255) DEFAULT '#64748b',
+	"navigation" jsonb DEFAULT '[{"label":"Home","href":"/","isExternal":false},{"label":"News","href":"/news","isExternal":false},{"label":"Services","href":"/services","isExternal":false},{"label":"Contact","href":"/contact","isExternal":false}]',
+	"footerText" text DEFAULT 'Your local council, working for you.',
+	"footerLinks" jsonb DEFAULT '[{"label":"Privacy Policy","href":"/privacy","isExternal":false},{"label":"Accessibility","href":"/accessibility","isExternal":false},{"label":"Contact Us","href":"/contact","isExternal":false}]',
+	"copyrightText" varchar(255) DEFAULT 'City Council. All rights reserved.',
+	"socialLinks" jsonb DEFAULT '[]',
+	"contactEmail" varchar(255) DEFAULT 'enquiries@council.gov.uk',
+	"contactPhone" varchar(255) DEFAULT '+44 20 7123 4567',
+	"address" text DEFAULT 'Council House
+City Centre
+Postcode',
+	"emergencyPhone" varchar(255),
+	"openingHours" text DEFAULT 'Monday - Friday: 9:00 - 17:00
+Saturday - Sunday: Closed',
+	"metaTitle" varchar(255) DEFAULT 'City Council - Official Website',
+	"metaDescription" text DEFAULT 'Official website of the City Council. Find information about local services, news, and how to contact us.',
+	"ogImage" varchar(36),
+	"googleAnalyticsId" varchar(255),
+	"alertEnabled" boolean DEFAULT false,
+	"alertMessage" text,
+	"alertType" varchar(50) DEFAULT 'info',
+	"alertLink" varchar(255),
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "site_settings_versions" (
+	"version_id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"id" text NOT NULL,
+	"version_number" integer NOT NULL,
+	"version_operation" text NOT NULL,
+	"version_stage" text,
+	"version_from_stage" text,
+	"version_user_id" text,
+	"version_created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"scope_id" text,
+	"siteName" varchar(255) DEFAULT 'City Council' NOT NULL,
+	"tagline" varchar(255) DEFAULT 'Working for our community',
+	"logo" varchar(36),
+	"favicon" varchar(36),
+	"primaryColour" varchar(255) DEFAULT '#1e40af',
+	"secondaryColour" varchar(255) DEFAULT '#64748b',
+	"navigation" jsonb DEFAULT '[{"label":"Home","href":"/","isExternal":false},{"label":"News","href":"/news","isExternal":false},{"label":"Services","href":"/services","isExternal":false},{"label":"Contact","href":"/contact","isExternal":false}]',
+	"footerText" text DEFAULT 'Your local council, working for you.',
+	"footerLinks" jsonb DEFAULT '[{"label":"Privacy Policy","href":"/privacy","isExternal":false},{"label":"Accessibility","href":"/accessibility","isExternal":false},{"label":"Contact Us","href":"/contact","isExternal":false}]',
+	"copyrightText" varchar(255) DEFAULT 'City Council. All rights reserved.',
+	"socialLinks" jsonb DEFAULT '[]',
+	"contactEmail" varchar(255) DEFAULT 'enquiries@council.gov.uk',
+	"contactPhone" varchar(255) DEFAULT '+44 20 7123 4567',
+	"address" text DEFAULT 'Council House
+City Centre
+Postcode',
+	"emergencyPhone" varchar(255),
+	"openingHours" text DEFAULT 'Monday - Friday: 9:00 - 17:00
+Saturday - Sunday: Closed',
+	"metaTitle" varchar(255) DEFAULT 'City Council - Official Website',
+	"metaDescription" text DEFAULT 'Official website of the City Council. Find information about local services, news, and how to contact us.',
+	"ogImage" varchar(36),
+	"googleAnalyticsId" varchar(255),
+	"alertEnabled" boolean DEFAULT false,
+	"alertMessage" text,
+	"alertType" varchar(50) DEFAULT 'info',
+	"alertLink" varchar(255),
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "questpie_realtime_log" (
+	"seq" bigserial PRIMARY KEY,
+	"txid" xid8 DEFAULT pg_current_xact_id(),
+	"resource_type" text NOT NULL,
+	"resource" text NOT NULL,
+	"operation" text NOT NULL,
+	"record_id" text,
+	"locale" text,
+	"payload" jsonb DEFAULT '{}',
+	"created_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "questpie_realtime_head" (
+	"id" text PRIMARY KEY,
+	"last_seq" bigint DEFAULT 0 NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "questpie_channel_head" (
+	"channel_hash" text PRIMARY KEY,
+	"channel" text NOT NULL,
+	"last_seq" bigint DEFAULT 0 NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "questpie_channel_event" (
+	"channel_hash" text,
+	"seq" bigint,
+	"event_id" text NOT NULL,
+	"channel" text NOT NULL,
+	"event" text NOT NULL,
+	"schema_identity" text NOT NULL,
+	"payload" jsonb NOT NULL,
+	"wire_json" text NOT NULL,
+	"size_bytes" integer NOT NULL,
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	CONSTRAINT "questpie_channel_event_pkey" PRIMARY KEY("channel_hash","seq")
+);`);
+		await db.execute(sql`CREATE TABLE "questpie_channel_dispatch" (
+	"channel_hash" text PRIMARY KEY,
+	"published_seq" bigint DEFAULT 0 NOT NULL,
+	"lease_owner" text,
+	"lease_expires_at" timestamp with time zone,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(sql`CREATE TABLE "questpie_channel_presence" (
+	"channel_hash" text,
+	"connection_id" text,
+	"principal_id" text NOT NULL,
+	"channel" text NOT NULL,
+	"data" jsonb NOT NULL,
+	"expires_at" timestamp with time zone NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL,
+	CONSTRAINT "questpie_channel_presence_pkey" PRIMARY KEY("channel_hash","connection_id")
+);`);
+		await db.execute(sql`CREATE TABLE "questpie_realtime_topology" (
+	"session_key" text PRIMARY KEY,
+	"owner_id" text NOT NULL,
+	"owner_generation" bigserial,
+	"protocol_version" integer NOT NULL,
+	"token_hash" text NOT NULL,
+	"identity_hash" text NOT NULL,
+	"lease_expires_at" timestamp with time zone NOT NULL,
+	"desired_revision" bigint DEFAULT 0 NOT NULL,
+	"applied_revision" bigint DEFAULT 0 NOT NULL,
+	"desired_topology" jsonb NOT NULL,
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
 		await db.execute(sql`CREATE TABLE "questpie_crdt_namespace" (
 	"singleton" smallint PRIMARY KEY,
 	"namespace" text NOT NULL,
@@ -314,18 +767,20 @@ export default migration({
 );`);
 		await db.execute(sql`CREATE TABLE "questpie_crdt_subject_admission" (
 	"subject_id" uuid PRIMARY KEY,
-	"ticket_tokens" bigint DEFAULT 0 NOT NULL,
-	"ticket_refilled_at" timestamp(3) DEFAULT now() NOT NULL,
+	"open_tokens" bigint DEFAULT 0 NOT NULL,
+	"open_refilled_at" timestamp(3) DEFAULT now() NOT NULL,
+	"pull_byte_tokens" bigint DEFAULT 136314880 NOT NULL,
+	"pull_bytes_refilled_at" timestamp(3) DEFAULT now() NOT NULL,
 	"updated_at" timestamp(3) DEFAULT now() NOT NULL,
-	CONSTRAINT "ck_crdt_subject_admission_tokens" CHECK ("ticket_tokens" >= 0)
+	CONSTRAINT "ck_crdt_subject_admission_tokens" CHECK ("open_tokens" >= 0 AND "pull_byte_tokens" >= 0)
 );`);
 		await db.execute(sql`CREATE TABLE "questpie_crdt_credential_admission" (
 	"credential_fingerprint" bytea PRIMARY KEY,
-	"ticket_tokens" bigint DEFAULT 0 NOT NULL,
-	"ticket_refilled_at" timestamp(3) DEFAULT now() NOT NULL,
+	"open_tokens" bigint DEFAULT 0 NOT NULL,
+	"open_refilled_at" timestamp(3) DEFAULT now() NOT NULL,
 	"updated_at" timestamp(3) DEFAULT now() NOT NULL,
 	CONSTRAINT "ck_crdt_credential_admission_identity" CHECK (octet_length("credential_fingerprint") = 32),
-	CONSTRAINT "ck_crdt_credential_admission_tokens" CHECK ("ticket_tokens" >= 0)
+	CONSTRAINT "ck_crdt_credential_admission_tokens" CHECK ("open_tokens" >= 0)
 );`);
 		await db.execute(sql`CREATE TABLE "questpie_crdt_resource_admission" (
 	"resource_id" uuid PRIMARY KEY,
@@ -334,63 +789,23 @@ export default migration({
 	"head_updated_at" timestamp(3) DEFAULT now() NOT NULL,
 	CONSTRAINT "ck_crdt_resource_admission_tokens" CHECK ("part_tokens" >= 0)
 );`);
-		await db.execute(sql`CREATE TABLE "questpie_crdt_ticket" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-	"resource_id" uuid NOT NULL,
-	"resource_epoch_id" uuid NOT NULL,
-	"definition_id" uuid NOT NULL,
-	"schema_id" uuid NOT NULL,
-	"subject_id" uuid NOT NULL,
-	"secret_hash" bytea NOT NULL,
-	"credential_fingerprint" bytea NOT NULL,
-	"audience" text NOT NULL,
-	"origin" text,
-	"requested_mode" smallint NOT NULL,
-	"effective_mode" smallint NOT NULL,
-	"protocol_major" smallint NOT NULL,
-	"protocol_minor" smallint NOT NULL,
-	"resource_read_fence" bigint NOT NULL,
-	"resource_edit_fence" bigint NOT NULL,
-	"owner_policy_revision" bigint NOT NULL,
-	"subject_read_fence" bigint NOT NULL,
-	"subject_edit_fence" bigint NOT NULL,
-	"session_generation" bigint NOT NULL,
-	"authority_expires_at" timestamp with time zone NOT NULL,
-	"expires_at" timestamp with time zone NOT NULL,
-	"redeemed_at" timestamp with time zone,
-	"released_at" timestamp with time zone,
-	"created_at" timestamp(3) DEFAULT now() NOT NULL,
-	CONSTRAINT "ck_crdt_ticket_hashes" CHECK (octet_length("secret_hash") = 32 AND octet_length("credential_fingerprint") = 32),
-	CONSTRAINT "ck_crdt_ticket_mode_protocol" CHECK ("requested_mode" IN (1, 2) AND "effective_mode" IN (1, 2) AND "effective_mode" <= "requested_mode" AND "protocol_major" = 1 AND "protocol_minor" = 0),
-	CONSTRAINT "ck_crdt_ticket_audience_origin" CHECK (octet_length("audience") BETWEEN 1 AND 255 AND ("origin" IS NULL OR octet_length("origin") BETWEEN 1 AND 2048)),
-	CONSTRAINT "ck_crdt_ticket_authority_expiry" CHECK ("expires_at" <= "authority_expires_at")
-);`);
-		await db.execute(sql`CREATE TABLE "questpie_crdt_ticket_grant" (
-	"ticket_id" uuid,
-	"resource_id" uuid NOT NULL,
-	"schema_id" uuid NOT NULL,
-	"binding_id" uuid,
-	"stable_field_id" uuid NOT NULL,
-	"field_epoch" bigint NOT NULL,
-	"field_slot" integer NOT NULL,
-	"format_version" integer NOT NULL,
-	"grant" smallint NOT NULL,
-	"head_field_cursor" bigint NOT NULL,
-	"field_read_fence" bigint NOT NULL,
-	"field_edit_fence" bigint NOT NULL,
-	"subject_field_read_fence" bigint NOT NULL,
-	"subject_field_edit_fence" bigint NOT NULL,
-	CONSTRAINT "questpie_crdt_ticket_grant_pkey" PRIMARY KEY("ticket_id","binding_id"),
-	CONSTRAINT "ck_crdt_ticket_grant_values" CHECK ("field_slot" BETWEEN 1 AND 65535 AND "format_version" BETWEEN 0 AND 65535 AND "grant" IN (0, 1))
-);`);
 		await db.execute(sql`CREATE TABLE "questpie_crdt_session" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-	"ticket_id" uuid NOT NULL,
+	"open_id" uuid DEFAULT gen_random_uuid() NOT NULL,
+	"binding_id" uuid DEFAULT gen_random_uuid() NOT NULL,
+	"actor_kind" smallint DEFAULT 1 NOT NULL,
 	"resource_id" uuid NOT NULL,
+	"resource_incarnation_key" uuid NOT NULL,
 	"resource_epoch_id" uuid NOT NULL,
+	"aggregate_epoch" bigint NOT NULL,
 	"schema_id" uuid NOT NULL,
+	"schema_version" bigint NOT NULL,
+	"open_result_fingerprint" bytea,
 	"subject_id" uuid NOT NULL,
 	"credential_fingerprint" bytea NOT NULL,
+	"edge_session_key" bytea,
+	"edge_owner_generation" bigint NOT NULL,
+	"delivery_generation" bigint NOT NULL,
 	"requested_mode" smallint NOT NULL,
 	"effective_mode" smallint NOT NULL,
 	"generation" bigint NOT NULL,
@@ -407,18 +822,19 @@ export default migration({
 	"update_bytes_refilled_at" timestamp(3) DEFAULT now() NOT NULL,
 	"awareness_tokens" bigint DEFAULT 0 NOT NULL,
 	"awareness_refilled_at" timestamp(3) DEFAULT now() NOT NULL,
+	"roster_tokens" bigint DEFAULT 20 NOT NULL,
+	"roster_refilled_at" timestamp(3) DEFAULT now() NOT NULL,
 	"lease_expires_at" timestamp with time zone NOT NULL,
 	"closed_at" timestamp with time zone,
 	"close_reason" smallint,
 	"created_at" timestamp(3) DEFAULT now() NOT NULL,
 	"updated_at" timestamp(3) DEFAULT now() NOT NULL,
-	CONSTRAINT "ck_crdt_session_values" CHECK ("requested_mode" IN (1, 2) AND "effective_mode" IN (1, 2) AND "effective_mode" <= "requested_mode" AND "generation" >= 0 AND "last_seen_commit_seq" >= 0 AND octet_length("credential_fingerprint") = 32 AND "update_tokens" >= 0 AND "update_byte_tokens" >= 0 AND "awareness_tokens" >= 0),
+	CONSTRAINT "ck_crdt_session_values" CHECK ("actor_kind" IN (1, 2, 3) AND "requested_mode" IN (1, 2) AND "effective_mode" IN (1, 2) AND "effective_mode" <= "requested_mode" AND "generation" >= 0 AND "aggregate_epoch" >= 0 AND "schema_version" BETWEEN 0 AND 4294967295 AND ("open_result_fingerprint" IS NULL OR octet_length("open_result_fingerprint") = 32) AND "edge_owner_generation" >= 0 AND "delivery_generation" >= 0 AND "last_seen_commit_seq" >= 0 AND octet_length("credential_fingerprint") = 32 AND ("edge_session_key" IS NULL OR octet_length("edge_session_key") = 32) AND "update_tokens" >= 0 AND "update_byte_tokens" >= 0 AND "awareness_tokens" >= 0 AND "roster_tokens" >= 0),
 	CONSTRAINT "ck_crdt_session_closed" CHECK (("closed_at" IS NULL AND "close_reason" IS NULL) OR ("closed_at" IS NOT NULL AND "close_reason" IS NOT NULL)),
 	CONSTRAINT "ck_crdt_session_authority_expiry" CHECK ("lease_expires_at" <= "authority_expires_at")
 );`);
 		await db.execute(sql`CREATE TABLE "questpie_crdt_session_grant" (
 	"session_id" uuid,
-	"ticket_id" uuid NOT NULL,
 	"resource_id" uuid NOT NULL,
 	"schema_id" uuid NOT NULL,
 	"binding_id" uuid,
@@ -434,6 +850,70 @@ export default migration({
 	"subject_field_edit_fence" bigint NOT NULL,
 	CONSTRAINT "questpie_crdt_session_grant_pkey" PRIMARY KEY("session_id","binding_id"),
 	CONSTRAINT "ck_crdt_session_grant_values" CHECK ("field_slot" BETWEEN 1 AND 65535 AND "format_version" BETWEEN 0 AND 65535 AND "grant" IN (0, 1))
+);`);
+		await db.execute(sql`CREATE TABLE "questpie_crdt_pull" (
+	"id" uuid PRIMARY KEY,
+	"session_id" uuid NOT NULL,
+	"binding_id" uuid NOT NULL,
+	"resource_id" uuid NOT NULL,
+	"resource_incarnation_key" uuid NOT NULL,
+	"resource_epoch_id" uuid NOT NULL,
+	"aggregate_epoch" bigint NOT NULL,
+	"target_commit_seq" bigint NOT NULL,
+	"schema_id" uuid NOT NULL,
+	"schema_version" bigint NOT NULL,
+	"subject_id" uuid NOT NULL,
+	"credential_fingerprint" bytea NOT NULL,
+	"session_generation" bigint NOT NULL,
+	"delivery_generation" bigint NOT NULL,
+	"resource_read_fence" bigint NOT NULL,
+	"resource_edit_fence" bigint NOT NULL,
+	"owner_policy_revision" bigint NOT NULL,
+	"subject_read_fence" bigint NOT NULL,
+	"subject_edit_fence" bigint NOT NULL,
+	"grant_fingerprint" bytea NOT NULL,
+	"request_fingerprint" bytea NOT NULL,
+	"continuation_claim_fingerprint" bytea NOT NULL,
+	"artifact_fingerprint" bytea,
+	"current_snapshot_manifest_id" uuid,
+	"previous_snapshot_manifest_id" uuid,
+	"state" smallint DEFAULT 1 NOT NULL,
+	"page_count" integer DEFAULT 0 NOT NULL,
+	"total_bytes" integer DEFAULT 0 NOT NULL,
+	"retained_bytes" integer DEFAULT 0 NOT NULL,
+	"active_expires_at" timestamp with time zone NOT NULL,
+	"expires_at" timestamp with time zone NOT NULL,
+	"completed_at" timestamp with time zone,
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL,
+	CONSTRAINT "ck_crdt_pull_values" CHECK ("aggregate_epoch" >= 0 AND "target_commit_seq" >= 0 AND "schema_version" BETWEEN 0 AND 4294967295 AND "session_generation" >= 0 AND "delivery_generation" >= 0 AND "resource_read_fence" >= 0 AND "resource_edit_fence" >= 0 AND "owner_policy_revision" >= 0 AND "subject_read_fence" >= 0 AND "subject_edit_fence" >= 0 AND octet_length("credential_fingerprint") = 32 AND octet_length("grant_fingerprint") = 32 AND octet_length("request_fingerprint") = 32 AND octet_length("continuation_claim_fingerprint") = 32 AND ("artifact_fingerprint" IS NULL OR octet_length("artifact_fingerprint") = 32) AND "page_count" BETWEEN 0 AND 65535 AND "total_bytes" BETWEEN 0 AND 67108864 AND "retained_bytes" BETWEEN 0 AND 68157440 AND "active_expires_at" <= "expires_at"),
+	CONSTRAINT "ck_crdt_pull_state" CHECK (("state" = 1 AND "artifact_fingerprint" IS NULL AND "page_count" = 0 AND "total_bytes" = 0 AND "completed_at" IS NULL) OR ("state" = 2 AND "artifact_fingerprint" IS NOT NULL AND "page_count" > 0 AND "completed_at" IS NULL) OR ("state" IN (3, 4) AND "artifact_fingerprint" IS NOT NULL AND "page_count" > 0 AND "completed_at" IS NOT NULL))
+);`);
+		await db.execute(sql`CREATE TABLE "questpie_crdt_pull_field" (
+	"pull_id" uuid,
+	"binding_id" uuid NOT NULL,
+	"field_slot" integer,
+	"grant" smallint NOT NULL,
+	"field_epoch" bigint NOT NULL,
+	"format_version" integer NOT NULL,
+	"field_cursor" bigint NOT NULL,
+	"read_fence" bigint NOT NULL,
+	"edit_fence" bigint NOT NULL,
+	"proof" bytea NOT NULL,
+	"proof_size_bytes" integer NOT NULL,
+	CONSTRAINT "questpie_crdt_pull_field_pkey" PRIMARY KEY("pull_id","field_slot"),
+	CONSTRAINT "ck_crdt_pull_field_values" CHECK ("field_slot" BETWEEN 1 AND 65535 AND "grant" IN (0, 1) AND "field_epoch" >= 0 AND "format_version" BETWEEN 0 AND 65535 AND "field_cursor" >= 0 AND "read_fence" >= 0 AND "edit_fence" >= 0 AND "proof_size_bytes" BETWEEN 0 AND 65536 AND octet_length("proof") = "proof_size_bytes")
+);`);
+		await db.execute(sql`CREATE TABLE "questpie_crdt_pull_page" (
+	"pull_id" uuid,
+	"page_index" integer,
+	"payload" bytea NOT NULL,
+	"size_bytes" integer NOT NULL,
+	"checksum" bytea NOT NULL,
+	"final" smallint NOT NULL,
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	CONSTRAINT "questpie_crdt_pull_page_pkey" PRIMARY KEY("pull_id","page_index"),
+	CONSTRAINT "ck_crdt_pull_page_values" CHECK ("page_index" BETWEEN 0 AND 65534 AND "size_bytes" BETWEEN 1 AND 1048576 AND octet_length("payload") = "size_bytes" AND "final" IN (0, 1))
 );`);
 		await db.execute(sql`CREATE TABLE "questpie_crdt_awareness" (
 	"session_id" uuid PRIMARY KEY,
@@ -502,6 +982,89 @@ export default migration({
 	"key" text PRIMARY KEY,
 	"created_at" timestamp(3) DEFAULT now() NOT NULL
 );`);
+		await db.execute(sql`CREATE TABLE "questpie_search" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"collection_name" text NOT NULL,
+	"record_id" text NOT NULL,
+	"locale" text NOT NULL,
+	"title" text NOT NULL,
+	"content" text,
+	"metadata" jsonb DEFAULT '{}',
+	"fts_vector" tsvector GENERATED ALWAYS AS (setweight(to_tsvector('simple', coalesce(title, '')), 'A') || setweight(to_tsvector('simple', coalesce(content, '')), 'B')) STORED NOT NULL,
+	"created_at" timestamp(3) DEFAULT now() NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL,
+	CONSTRAINT "uq_search_entry" UNIQUE("collection_name","record_id","locale")
+);`);
+		await db.execute(sql`CREATE TABLE "questpie_search_facets" (
+	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
+	"search_id" text NOT NULL,
+	"collection_name" text NOT NULL,
+	"locale" text NOT NULL,
+	"facet_name" text NOT NULL,
+	"facet_value" text NOT NULL,
+	"numeric_value" numeric,
+	"created_at" timestamp(3) DEFAULT now() NOT NULL
+);`);
+		await db.execute(
+			sql`CREATE UNIQUE INDEX "admin_preferences_user_key_idx" ON "admin_preferences" ("userId","key");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "audit_log_resource_type_idx" ON "admin_audit_log" ("resource","resourceType");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "audit_log_user_id_idx" ON "admin_audit_log" ("userId");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "audit_log_created_at_idx" ON "admin_audit_log" ("created_at");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "audit_log_resource_id_idx" ON "admin_audit_log" ("resource","resourceId");`,
+		);
+		await db.execute(
+			sql`CREATE UNIQUE INDEX "cities_slug_unique" ON "cities" ("slug");`,
+		);
+		await db.execute(
+			sql`CREATE UNIQUE INDEX "city_members_unique" ON "cityMembers" ("user","city");`,
+		);
+		await db.execute(
+			sql`CREATE UNIQUE INDEX "news_city_slug_unique" ON "news" ("city","slug");`,
+		);
+		await db.execute(
+			sql`CREATE UNIQUE INDEX "pages_city_slug_unique" ON "pages" ("city","slug");`,
+		);
+		await db.execute(
+			sql`CREATE UNIQUE INDEX "site_settings_scope_idx" ON "site_settings" ("scope_id");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "site_settings_versions_id_version_number_index" ON "site_settings_versions" ("id","version_number");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "site_settings_versions_id_version_stage_version_number_index" ON "site_settings_versions" ("id","version_stage","version_number");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "site_settings_versions_version_created_at_index" ON "site_settings_versions" ("version_created_at");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_realtime_log_created_at" ON "questpie_realtime_log" ("created_at");`,
+		);
+		await db.execute(
+			sql`CREATE UNIQUE INDEX "uq_channel_event_event_id" ON "questpie_channel_event" ("event_id");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_channel_event_created_at" ON "questpie_channel_event" ("created_at");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_channel_presence_channel" ON "questpie_channel_presence" ("channel_hash");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_channel_presence_expiry" ON "questpie_channel_presence" ("expires_at");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_realtime_topology_owner_lease" ON "questpie_realtime_topology" ("owner_id","lease_expires_at");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_realtime_topology_lease" ON "questpie_realtime_topology" ("lease_expires_at");`,
+		);
 		await db.execute(
 			sql`CREATE UNIQUE INDEX "uq_crdt_namespace_value" ON "questpie_crdt_namespace" ("namespace");`,
 		);
@@ -665,37 +1228,19 @@ export default migration({
 			sql`CREATE INDEX "idx_crdt_recovery_hold_expiry" ON "questpie_crdt_recovery_hold" ("expires_at");`,
 		);
 		await db.execute(
-			sql`CREATE UNIQUE INDEX "uq_crdt_ticket_resource_id" ON "questpie_crdt_ticket" ("id","resource_id");`,
+			sql`CREATE UNIQUE INDEX "uq_crdt_session_binding" ON "questpie_crdt_session" ("binding_id");`,
 		);
 		await db.execute(
-			sql`CREATE UNIQUE INDEX "uq_crdt_ticket_resource_schema" ON "questpie_crdt_ticket" ("id","resource_id","schema_id");`,
+			sql`CREATE UNIQUE INDEX "uq_crdt_session_id_binding" ON "questpie_crdt_session" ("id","binding_id");`,
 		);
 		await db.execute(
-			sql`CREATE UNIQUE INDEX "uq_crdt_ticket_session_identity" ON "questpie_crdt_ticket" ("id","resource_id","resource_epoch_id","schema_id","subject_id","credential_fingerprint","requested_mode","effective_mode","session_generation","resource_read_fence","resource_edit_fence","owner_policy_revision","subject_read_fence","subject_edit_fence");`,
-		);
-		await db.execute(
-			sql`CREATE INDEX "idx_crdt_ticket_subject_expiry" ON "questpie_crdt_ticket" ("subject_id","expires_at");`,
-		);
-		await db.execute(
-			sql`CREATE INDEX "idx_crdt_ticket_resource_expiry" ON "questpie_crdt_ticket" ("resource_id","expires_at");`,
-		);
-		await db.execute(
-			sql`CREATE UNIQUE INDEX "uq_crdt_ticket_grant_stable" ON "questpie_crdt_ticket_grant" ("ticket_id","resource_id","stable_field_id");`,
-		);
-		await db.execute(
-			sql`CREATE UNIQUE INDEX "uq_crdt_ticket_grant_exact" ON "questpie_crdt_ticket_grant" ("ticket_id","resource_id","schema_id","binding_id","stable_field_id","field_epoch","field_slot","format_version","grant","head_field_cursor","field_read_fence","field_edit_fence","subject_field_read_fence","subject_field_edit_fence");`,
-		);
-		await db.execute(
-			sql`CREATE UNIQUE INDEX "uq_crdt_session_ticket" ON "questpie_crdt_session" ("ticket_id");`,
+			sql`CREATE UNIQUE INDEX "uq_crdt_session_subject_open" ON "questpie_crdt_session" ("subject_id","open_id");`,
 		);
 		await db.execute(
 			sql`CREATE UNIQUE INDEX "uq_crdt_session_resource_id" ON "questpie_crdt_session" ("id","resource_id");`,
 		);
 		await db.execute(
 			sql`CREATE UNIQUE INDEX "uq_crdt_session_resource_schema" ON "questpie_crdt_session" ("id","resource_id","schema_id");`,
-		);
-		await db.execute(
-			sql`CREATE UNIQUE INDEX "uq_crdt_session_ticket_resource_schema" ON "questpie_crdt_session" ("id","ticket_id","resource_id","schema_id");`,
 		);
 		await db.execute(
 			sql`CREATE UNIQUE INDEX "uq_crdt_session_attribution" ON "questpie_crdt_session" ("id","resource_id","resource_epoch_id","subject_id");`,
@@ -710,7 +1255,22 @@ export default migration({
 			sql`CREATE INDEX "idx_crdt_session_credential_lease" ON "questpie_crdt_session" ("credential_fingerprint","lease_expires_at");`,
 		);
 		await db.execute(
+			sql`CREATE INDEX "idx_crdt_session_edge_lease" ON "questpie_crdt_session" ("edge_session_key","lease_expires_at");`,
+		);
+		await db.execute(
 			sql`CREATE UNIQUE INDEX "uq_crdt_session_grant_stable" ON "questpie_crdt_session_grant" ("session_id","resource_id","stable_field_id");`,
+		);
+		await db.execute(
+			sql`CREATE UNIQUE INDEX "uq_crdt_pull_active_binding" ON "questpie_crdt_pull" ("binding_id") WHERE "state" IN (1, 2);`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_crdt_pull_subject_expiry" ON "questpie_crdt_pull" ("subject_id","expires_at");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_crdt_pull_expiry" ON "questpie_crdt_pull" ("expires_at");`,
+		);
+		await db.execute(
+			sql`CREATE UNIQUE INDEX "uq_crdt_pull_field_binding" ON "questpie_crdt_pull_field" ("pull_id","binding_id");`,
 		);
 		await db.execute(
 			sql`CREATE INDEX "idx_crdt_awareness_expiry" ON "questpie_crdt_awareness" ("resource_id","expires_at");`,
@@ -735,6 +1295,27 @@ export default migration({
 		);
 		await db.execute(
 			sql`CREATE INDEX "idx_storage_cleanup_key" ON "questpie_storage_cleanup" ("key");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_search_fts" ON "questpie_search" USING gin ("fts_vector");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_search_trigram" ON "questpie_search" USING gin ("title" gin_trgm_ops);`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_search_collection_locale" ON "questpie_search" ("collection_name","locale");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_search_record_id" ON "questpie_search" ("record_id");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_facets_agg" ON "questpie_search_facets" ("collection_name","locale","facet_name","facet_value");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_facets_search_id" ON "questpie_search_facets" ("search_id");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_facets_collection" ON "questpie_search_facets" ("collection_name");`,
 		);
 		await db.execute(
 			sql`ALTER TABLE "questpie_crdt_definition" ADD CONSTRAINT "questpie_crdt_definition_NsT4P6R1txr3_fkey" FOREIGN KEY ("namespace_singleton") REFERENCES "questpie_crdt_namespace"("singleton") ON DELETE RESTRICT;`,
@@ -863,34 +1444,34 @@ export default migration({
 			sql`ALTER TABLE "questpie_crdt_resource_admission" ADD CONSTRAINT "questpie_crdt_resource_admission_3vf82Grc4Nek_fkey" FOREIGN KEY ("resource_id") REFERENCES "questpie_crdt_resource"("id") ON DELETE RESTRICT;`,
 		);
 		await db.execute(
-			sql`ALTER TABLE "questpie_crdt_ticket" ADD CONSTRAINT "questpie_crdt_ticket_subject_id_questpie_crdt_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "questpie_crdt_subject"("id") ON DELETE RESTRICT;`,
-		);
-		await db.execute(
-			sql`ALTER TABLE "questpie_crdt_ticket" ADD CONSTRAINT "fk_crdt_ticket_epoch" FOREIGN KEY ("resource_id","resource_epoch_id","definition_id") REFERENCES "questpie_crdt_resource_epoch"("resource_id","id","definition_id") ON DELETE RESTRICT;`,
-		);
-		await db.execute(
-			sql`ALTER TABLE "questpie_crdt_ticket" ADD CONSTRAINT "fk_crdt_ticket_schema" FOREIGN KEY ("definition_id","schema_id") REFERENCES "questpie_crdt_schema"("definition_id","id") ON DELETE RESTRICT;`,
-		);
-		await db.execute(
-			sql`ALTER TABLE "questpie_crdt_ticket_grant" ADD CONSTRAINT "fk_crdt_ticket_grant_parent" FOREIGN KEY ("ticket_id","resource_id","schema_id") REFERENCES "questpie_crdt_ticket"("id","resource_id","schema_id") ON DELETE RESTRICT;`,
-		);
-		await db.execute(
-			sql`ALTER TABLE "questpie_crdt_ticket_grant" ADD CONSTRAINT "fk_crdt_ticket_grant_binding" FOREIGN KEY ("resource_id","binding_id","schema_id","stable_field_id","field_epoch","field_slot","format_version") REFERENCES "questpie_crdt_binding"("resource_id","id","schema_id","stable_field_id","field_epoch","field_slot","format_version") ON DELETE RESTRICT;`,
-		);
-		await db.execute(
-			sql`ALTER TABLE "questpie_crdt_session" ADD CONSTRAINT "fk_crdt_session_ticket" FOREIGN KEY ("ticket_id","resource_id","resource_epoch_id","schema_id","subject_id","credential_fingerprint","requested_mode","effective_mode","generation","resource_read_fence","resource_edit_fence","owner_policy_revision","subject_read_fence","subject_edit_fence") REFERENCES "questpie_crdt_ticket"("id","resource_id","resource_epoch_id","schema_id","subject_id","credential_fingerprint","requested_mode","effective_mode","session_generation","resource_read_fence","resource_edit_fence","owner_policy_revision","subject_read_fence","subject_edit_fence") ON DELETE RESTRICT;`,
-		);
-		await db.execute(
 			sql`ALTER TABLE "questpie_crdt_session" ADD CONSTRAINT "fk_crdt_session_epoch" FOREIGN KEY ("resource_id","resource_epoch_id") REFERENCES "questpie_crdt_resource_epoch"("resource_id","id") ON DELETE RESTRICT;`,
 		);
 		await db.execute(
-			sql`ALTER TABLE "questpie_crdt_session_grant" ADD CONSTRAINT "fk_crdt_session_grant_parent" FOREIGN KEY ("session_id","ticket_id","resource_id","schema_id") REFERENCES "questpie_crdt_session"("id","ticket_id","resource_id","schema_id") ON DELETE RESTRICT;`,
-		);
-		await db.execute(
-			sql`ALTER TABLE "questpie_crdt_session_grant" ADD CONSTRAINT "fk_crdt_session_grant_ticket_grant" FOREIGN KEY ("ticket_id","resource_id","schema_id","binding_id","stable_field_id","field_epoch","field_slot","format_version","grant","head_field_cursor","field_read_fence","field_edit_fence","subject_field_read_fence","subject_field_edit_fence") REFERENCES "questpie_crdt_ticket_grant"("ticket_id","resource_id","schema_id","binding_id","stable_field_id","field_epoch","field_slot","format_version","grant","head_field_cursor","field_read_fence","field_edit_fence","subject_field_read_fence","subject_field_edit_fence") ON DELETE RESTRICT;`,
+			sql`ALTER TABLE "questpie_crdt_session_grant" ADD CONSTRAINT "fk_crdt_session_grant_session" FOREIGN KEY ("session_id","resource_id","schema_id") REFERENCES "questpie_crdt_session"("id","resource_id","schema_id") ON DELETE RESTRICT;`,
 		);
 		await db.execute(
 			sql`ALTER TABLE "questpie_crdt_session_grant" ADD CONSTRAINT "fk_crdt_session_grant_binding" FOREIGN KEY ("resource_id","binding_id","schema_id","stable_field_id","field_epoch","field_slot","format_version") REFERENCES "questpie_crdt_binding"("resource_id","id","schema_id","stable_field_id","field_epoch","field_slot","format_version") ON DELETE RESTRICT;`,
+		);
+		await db.execute(
+			sql`ALTER TABLE "questpie_crdt_pull" ADD CONSTRAINT "questpie_crdt_pull_tnNv8QDNOPL3_fkey" FOREIGN KEY ("current_snapshot_manifest_id") REFERENCES "questpie_crdt_snapshot_manifest"("id") ON DELETE RESTRICT;`,
+		);
+		await db.execute(
+			sql`ALTER TABLE "questpie_crdt_pull" ADD CONSTRAINT "questpie_crdt_pull_Kh82XlcIg1fR_fkey" FOREIGN KEY ("previous_snapshot_manifest_id") REFERENCES "questpie_crdt_snapshot_manifest"("id") ON DELETE RESTRICT;`,
+		);
+		await db.execute(
+			sql`ALTER TABLE "questpie_crdt_pull" ADD CONSTRAINT "fk_crdt_pull_session" FOREIGN KEY ("session_id","binding_id") REFERENCES "questpie_crdt_session"("id","binding_id") ON DELETE RESTRICT;`,
+		);
+		await db.execute(
+			sql`ALTER TABLE "questpie_crdt_pull" ADD CONSTRAINT "fk_crdt_pull_attribution" FOREIGN KEY ("session_id","resource_id","resource_epoch_id","subject_id") REFERENCES "questpie_crdt_session"("id","resource_id","resource_epoch_id","subject_id") ON DELETE RESTRICT;`,
+		);
+		await db.execute(
+			sql`ALTER TABLE "questpie_crdt_pull_field" ADD CONSTRAINT "questpie_crdt_pull_field_pull_id_questpie_crdt_pull_id_fkey" FOREIGN KEY ("pull_id") REFERENCES "questpie_crdt_pull"("id") ON DELETE RESTRICT;`,
+		);
+		await db.execute(
+			sql`ALTER TABLE "questpie_crdt_pull_field" ADD CONSTRAINT "questpie_crdt_pull_field_LKMT6gR6WWsY_fkey" FOREIGN KEY ("binding_id") REFERENCES "questpie_crdt_binding"("id") ON DELETE RESTRICT;`,
+		);
+		await db.execute(
+			sql`ALTER TABLE "questpie_crdt_pull_page" ADD CONSTRAINT "questpie_crdt_pull_page_pull_id_questpie_crdt_pull_id_fkey" FOREIGN KEY ("pull_id") REFERENCES "questpie_crdt_pull"("id") ON DELETE RESTRICT;`,
 		);
 		await db.execute(
 			sql`ALTER TABLE "questpie_crdt_awareness" ADD CONSTRAINT "fk_crdt_awareness_session" FOREIGN KEY ("session_id","resource_id") REFERENCES "questpie_crdt_session"("id","resource_id") ON DELETE RESTRICT;`,
@@ -1039,34 +1620,34 @@ export default migration({
 			sql`ALTER TABLE "questpie_crdt_resource_admission" DROP CONSTRAINT IF EXISTS "questpie_crdt_resource_admission_3vf82Grc4Nek_fkey";`,
 		);
 		await db.execute(
-			sql`ALTER TABLE "questpie_crdt_ticket" DROP CONSTRAINT IF EXISTS "questpie_crdt_ticket_subject_id_questpie_crdt_subject_id_fkey";`,
-		);
-		await db.execute(
-			sql`ALTER TABLE "questpie_crdt_ticket" DROP CONSTRAINT IF EXISTS "fk_crdt_ticket_epoch";`,
-		);
-		await db.execute(
-			sql`ALTER TABLE "questpie_crdt_ticket" DROP CONSTRAINT IF EXISTS "fk_crdt_ticket_schema";`,
-		);
-		await db.execute(
-			sql`ALTER TABLE "questpie_crdt_ticket_grant" DROP CONSTRAINT IF EXISTS "fk_crdt_ticket_grant_parent";`,
-		);
-		await db.execute(
-			sql`ALTER TABLE "questpie_crdt_ticket_grant" DROP CONSTRAINT IF EXISTS "fk_crdt_ticket_grant_binding";`,
-		);
-		await db.execute(
-			sql`ALTER TABLE "questpie_crdt_session" DROP CONSTRAINT IF EXISTS "fk_crdt_session_ticket";`,
-		);
-		await db.execute(
 			sql`ALTER TABLE "questpie_crdt_session" DROP CONSTRAINT IF EXISTS "fk_crdt_session_epoch";`,
 		);
 		await db.execute(
-			sql`ALTER TABLE "questpie_crdt_session_grant" DROP CONSTRAINT IF EXISTS "fk_crdt_session_grant_parent";`,
-		);
-		await db.execute(
-			sql`ALTER TABLE "questpie_crdt_session_grant" DROP CONSTRAINT IF EXISTS "fk_crdt_session_grant_ticket_grant";`,
+			sql`ALTER TABLE "questpie_crdt_session_grant" DROP CONSTRAINT IF EXISTS "fk_crdt_session_grant_session";`,
 		);
 		await db.execute(
 			sql`ALTER TABLE "questpie_crdt_session_grant" DROP CONSTRAINT IF EXISTS "fk_crdt_session_grant_binding";`,
+		);
+		await db.execute(
+			sql`ALTER TABLE "questpie_crdt_pull" DROP CONSTRAINT IF EXISTS "questpie_crdt_pull_tnNv8QDNOPL3_fkey";`,
+		);
+		await db.execute(
+			sql`ALTER TABLE "questpie_crdt_pull" DROP CONSTRAINT IF EXISTS "questpie_crdt_pull_Kh82XlcIg1fR_fkey";`,
+		);
+		await db.execute(
+			sql`ALTER TABLE "questpie_crdt_pull" DROP CONSTRAINT IF EXISTS "fk_crdt_pull_session";`,
+		);
+		await db.execute(
+			sql`ALTER TABLE "questpie_crdt_pull" DROP CONSTRAINT IF EXISTS "fk_crdt_pull_attribution";`,
+		);
+		await db.execute(
+			sql`ALTER TABLE "questpie_crdt_pull_field" DROP CONSTRAINT IF EXISTS "questpie_crdt_pull_field_pull_id_questpie_crdt_pull_id_fkey";`,
+		);
+		await db.execute(
+			sql`ALTER TABLE "questpie_crdt_pull_field" DROP CONSTRAINT IF EXISTS "questpie_crdt_pull_field_LKMT6gR6WWsY_fkey";`,
+		);
+		await db.execute(
+			sql`ALTER TABLE "questpie_crdt_pull_page" DROP CONSTRAINT IF EXISTS "questpie_crdt_pull_page_pull_id_questpie_crdt_pull_id_fkey";`,
 		);
 		await db.execute(
 			sql`ALTER TABLE "questpie_crdt_awareness" DROP CONSTRAINT IF EXISTS "fk_crdt_awareness_session";`,
@@ -1086,6 +1667,38 @@ export default migration({
 		await db.execute(
 			sql`ALTER TABLE "questpie_crdt_lease" DROP CONSTRAINT IF EXISTS "questpie_crdt_lease_resource_id_questpie_crdt_resource_id_fkey";`,
 		);
+		await db.execute(sql`DROP TABLE "jwks";`);
+		await db.execute(sql`DROP TABLE "oauthAccessToken";`);
+		await db.execute(sql`DROP TABLE "oauthClient";`);
+		await db.execute(sql`DROP TABLE "oauthConsent";`);
+		await db.execute(sql`DROP TABLE "oauthRefreshToken";`);
+		await db.execute(sql`DROP TABLE "account";`);
+		await db.execute(sql`DROP TABLE "apikey";`);
+		await db.execute(sql`DROP TABLE "assets";`);
+		await db.execute(sql`DROP TABLE "session";`);
+		await db.execute(sql`DROP TABLE "user";`);
+		await db.execute(sql`DROP TABLE "verification";`);
+		await db.execute(sql`DROP TABLE "admin_locks";`);
+		await db.execute(sql`DROP TABLE "admin_preferences";`);
+		await db.execute(sql`DROP TABLE "admin_saved_views";`);
+		await db.execute(sql`DROP TABLE "admin_audit_log";`);
+		await db.execute(sql`DROP TABLE "announcements";`);
+		await db.execute(sql`DROP TABLE "cities";`);
+		await db.execute(sql`DROP TABLE "cityMembers";`);
+		await db.execute(sql`DROP TABLE "contacts";`);
+		await db.execute(sql`DROP TABLE "documents";`);
+		await db.execute(sql`DROP TABLE "news";`);
+		await db.execute(sql`DROP TABLE "pages";`);
+		await db.execute(sql`DROP TABLE "submissions";`);
+		await db.execute(sql`DROP TABLE "site_settings";`);
+		await db.execute(sql`DROP TABLE "site_settings_versions";`);
+		await db.execute(sql`DROP TABLE "questpie_realtime_log";`);
+		await db.execute(sql`DROP TABLE "questpie_realtime_head";`);
+		await db.execute(sql`DROP TABLE "questpie_channel_head";`);
+		await db.execute(sql`DROP TABLE "questpie_channel_event";`);
+		await db.execute(sql`DROP TABLE "questpie_channel_dispatch";`);
+		await db.execute(sql`DROP TABLE "questpie_channel_presence";`);
+		await db.execute(sql`DROP TABLE "questpie_realtime_topology";`);
 		await db.execute(sql`DROP TABLE "questpie_crdt_namespace";`);
 		await db.execute(sql`DROP TABLE "questpie_crdt_definition";`);
 		await db.execute(sql`DROP TABLE "questpie_crdt_schema";`);
@@ -1109,16 +1722,19 @@ export default migration({
 		await db.execute(sql`DROP TABLE "questpie_crdt_subject_admission";`);
 		await db.execute(sql`DROP TABLE "questpie_crdt_credential_admission";`);
 		await db.execute(sql`DROP TABLE "questpie_crdt_resource_admission";`);
-		await db.execute(sql`DROP TABLE "questpie_crdt_ticket";`);
-		await db.execute(sql`DROP TABLE "questpie_crdt_ticket_grant";`);
 		await db.execute(sql`DROP TABLE "questpie_crdt_session";`);
 		await db.execute(sql`DROP TABLE "questpie_crdt_session_grant";`);
+		await db.execute(sql`DROP TABLE "questpie_crdt_pull";`);
+		await db.execute(sql`DROP TABLE "questpie_crdt_pull_field";`);
+		await db.execute(sql`DROP TABLE "questpie_crdt_pull_page";`);
 		await db.execute(sql`DROP TABLE "questpie_crdt_awareness";`);
 		await db.execute(sql`DROP TABLE "questpie_crdt_projection";`);
 		await db.execute(sql`DROP TABLE "questpie_crdt_projection_field";`);
 		await db.execute(sql`DROP TABLE "questpie_crdt_lease";`);
 		await db.execute(sql`DROP TABLE "questpie_storage_cleanup";`);
 		await db.execute(sql`DROP TABLE "questpie_storage_object_key";`);
+		await db.execute(sql`DROP TABLE "questpie_search";`);
+		await db.execute(sql`DROP TABLE "questpie_search_facets";`);
 	},
 	snapshot,
 });
