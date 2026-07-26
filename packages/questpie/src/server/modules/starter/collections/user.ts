@@ -1,5 +1,10 @@
 import { collection } from "#questpie/server/collection/builder/collection-builder.js";
 
+const isAdmin = (user: unknown): boolean =>
+	!!user &&
+	typeof user === "object" &&
+	(user as { role?: unknown }).role === "admin";
+
 export default collection("user")
 	.options({ timestamps: true })
 	.fields(({ f }) => ({
@@ -109,6 +114,48 @@ export default collection("user")
 				fallback: "When the user's ban should expire",
 			}),
 	}))
+	.access({
+		read: ({ session }) => {
+			if (isAdmin(session?.user)) return true;
+			const userId = session?.user?.id;
+			return userId ? { id: userId } : false;
+		},
+		create: ({ session }) => isAdmin(session?.user),
+		update: ({ session, data }) =>
+			isAdmin(session?.user) ||
+			(!!session?.user?.id && data.id === session.user.id),
+		delete: ({ session }) => isAdmin(session?.user),
+		fields: {
+			email: {
+				create: ({ user }) => isAdmin(user),
+				update: ({ user }) => isAdmin(user),
+			},
+			emailVerified: {
+				create: ({ user }) => isAdmin(user),
+				update: ({ user }) => isAdmin(user),
+			},
+			image: {
+				create: ({ user }) => isAdmin(user),
+				update: ({ user }) => isAdmin(user),
+			},
+			role: {
+				create: ({ user }) => isAdmin(user),
+				update: ({ user }) => isAdmin(user),
+			},
+			banned: {
+				create: ({ user }) => isAdmin(user),
+				update: ({ user }) => isAdmin(user),
+			},
+			banReason: {
+				create: ({ user }) => isAdmin(user),
+				update: ({ user }) => isAdmin(user),
+			},
+			banExpires: {
+				create: ({ user }) => isAdmin(user),
+				update: ({ user }) => isAdmin(user),
+			},
+		},
+	})
 	.hooks({
 		beforeChange: async (ctx) => {
 			const collections = (ctx as any).collections;

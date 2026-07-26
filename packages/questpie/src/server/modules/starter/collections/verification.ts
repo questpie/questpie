@@ -15,6 +15,10 @@ export default collection("verification")
 		expiresAt: f.datetime().required(),
 	}))
 	.access({
+		read: false,
+		create: false,
+		update: false,
+		delete: false,
 		fields: {
 			value: { read: false, create: false, update: false },
 		},

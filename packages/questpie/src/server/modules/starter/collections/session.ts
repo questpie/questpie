@@ -11,6 +11,10 @@ export default collection("session")
 		impersonatedBy: f.text(255),
 	}))
 	.access({
+		read: false,
+		create: false,
+		update: false,
+		delete: false,
 		fields: {
 			token: { read: false, create: false, update: false },
 		},
