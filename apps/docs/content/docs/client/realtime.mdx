@@ -13,6 +13,7 @@ description: Subscribe to typed, access-controlled collection and global snapsho
 - **One client runtime for many topics.** The default multiplexer holds one `POST /realtime` SSE stream; managed Pusher/Soketi uses one provider connection and private per-session delivery.
 - **`{ realtime: true }` on TanStack Query.** Opt a `find` / `count` / `get` query into live mode with one flag and the hook streams instead of one-shot fetching.
 - **Push for latency, reconciliation for correctness.** A transaction-bound outbox is durable truth. pg_notify, Redis, Cloudflare, or Pusher wakes reduce latency; a slow reconciliation poll still heals a missed wake.
+- **Temporal values stay typed.** Snapshot and row-delta frames carry explicit versioned path metadata, so actual datetime fields remain `Date` while ISO-looking strings remain strings. See [Temporal values](/docs/concepts/temporal-values).
 
 ## Quick start
 

@@ -2705,9 +2705,9 @@ isActive: f.boolean().default(true).admin({ displayAs: "switch" }),
 
 ## `f.date()`
 
-Calendar dates (ISO date string). DB type: `date`.
+Calendar dates (exact `YYYY-MM-DD` string, never `Date`). DB type: `date`.
 
-Constructor arg: none. Type-specific chain methods: `.autoNow()` (default to now on create), `.autoNowUpdate()` (set to now on every write).
+Constructor arg: none. Type-specific chain methods: `.autoNow()` (default to the current UTC `YYYY-MM-DD` on create), `.autoNowUpdate()` (set that UTC date string on every write).
 
 ```ts
 publishedAt: f.date(),
@@ -2728,7 +2728,7 @@ eventTime: f.time({ precision: 3 }),
 
 ## `f.datetime(config?)`
 
-Date + time. DB type: `timestamp`. Value is a `Date`.
+One instant. Default DB type: `timestamptz(3)`. Server and official typed-client value is a `Date`; plain JSON/MCP/OpenAPI input is RFC 3339 with `Z` or an explicit offset. Reject timezone-less strings rather than guessing.
 
 Constructor arg: `config?: { precision?: 0-6; withTimezone?: boolean }`. Type-specific chain methods: `.autoNow()`, `.autoNowUpdate()`.
 
@@ -2737,6 +2737,8 @@ scheduledAt: f.datetime().required(),
 createdAt: f.datetime().autoNow().inputFalse(),
 updatedAt: f.datetime().autoNowUpdate().inputFalse(),
 ```
+
+Nested `Date` values survive official HTTP, realtime, Channels, and supported TanStack hydration through explicit type metadata. Never implement an ISO-looking-string reviver: `f.date()` and ordinary strings must stay strings.
 
 ## `f.select(options)`
 
@@ -3407,29 +3409,25 @@ export default collection("appointments")
 			}
 		},
 
-		afterChange: async ({
-			data,
-			operation,
-			original,
-			queue,
-			onAfterCommit,
-		}) => {
-			// Side effects run AFTER the tx commits, never publish/email directly
-			// inside afterChange (the write may still roll back).
+		afterChange: async ({ data, operation, original, queue }) => {
+			// Queue publish joins the hook transaction. Direct email/HTTP calls
+			// still belong in onAfterCommit.
 			if (operation === "create") {
-				onAfterCommit(() =>
-					queue.sendAppointmentConfirmation.publish({
+				await queue.sendAppointmentConfirmation.publish(
+					{
 						appointmentId: data.id,
 						customerId: data.customer,
-					}),
+					},
+					{ idempotencyKey: `appointment-confirmed:${data.id}` },
 				);
 			}
 			if (operation === "update" && data.status === "cancelled") {
-				onAfterCommit(() =>
-					queue.sendAppointmentCancellation.publish({
+				await queue.sendAppointmentCancellation.publish(
+					{
 						appointmentId: data.id,
 						customerId: data.customer,
-					}),
+					},
+					{ idempotencyKey: `appointment-cancelled:${data.id}` },
 				);
 			}
 		},
@@ -3491,17 +3489,18 @@ All dependencies come through destructuring. No need to import the app instance:
     data.readingTime = blog.computeReadingTime(data.content);
   },
 
-  afterChange: async ({ data, operation, original, queue, onAfterCommit }) => {
+  afterChange: async ({ data, operation, original, queue }) => {
     if (
       operation === "update" &&
       original?.status !== "published" &&
       data.status === "published"
     ) {
-      onAfterCommit(() =>
-        queue.notifyBlogSubscribers.publish({
+      await queue.notifyBlogSubscribers.publish(
+        {
           postId: data.id,
           title: data.title,
-        }),
+        },
+        { idempotencyKey: `blog-published:${data.id}` },
       );
     }
   },
@@ -3833,13 +3832,17 @@ Publish from hooks, routes, or other jobs via the typed `queue` context:
       await queue.sendAppointmentConfirmation.publish({
         appointmentId: data.id,
         customerId: data.customer,
+      }, {
+        idempotencyKey: `appointment-confirmation:${data.id}`,
       });
     }
   },
 })
 ```
 
-The `queue` object provides full autocompletion for all jobs and their payloads.
+The `queue` object provides full autocompletion for all jobs and their payloads. `publish()` is ambient-transaction-aware: call and await it directly inside collection hooks. pg-boss inserts the Job through the current Drizzle transaction; BullMQ, Cloudflare, and custom external adapters commit an internal `questpie_queue_dispatch` intent with the business write and relay it after commit. A rollback creates neither.
+
+`idempotencyKey` is portable, scoped to the durable job name, and separate from `singletonKey`. Reusing the same 1-512 character non-secret key returns the same stable logical `dispatchId`; the first payload wins, even after pg-boss retention or an adapter change. QUESTPIE rejects combining `idempotencyKey` with `singletonKey`, because broker singleton suppression cannot identify a newly accepted logical dispatch. Handlers receive optional `dispatchId` and `idempotencyKey` alongside `payload` and `locale`. Delivery remains at-least-once, so use `dispatchId` for downstream dedupe.
 
 ### Recurring Jobs (Cron)
 
@@ -3870,14 +3873,18 @@ Use job-level cron for simple recurring tasks (cleanup, digests, syncs). Reach f
 
 Job handlers receive the base `AppContext` (see [Handler Context](#handler-context)) plus:
 
-| Property  | Description                            |
-| --------- | -------------------------------------- |
-| `payload` | Validated data matching the Zod schema |
-| `locale`  | Current locale                         |
+| Property         | Description                                  |
+| ---------------- | -------------------------------------------- |
+| `payload`        | Validated data matching the Zod schema       |
+| `locale`         | Current locale                               |
+| `dispatchId`     | Stable logical identity across relay retries |
+| `idempotencyKey` | Caller-provided portable identity, when set  |
 
 ### Queue Adapter Configuration
 
 Jobs require a queue adapter in `questpie.config.ts` (`runtimeConfig({ queue: { adapter } })`). Adapter shapes (pg-boss, BullMQ, Cloudflare Queues) and connection options: `references/infrastructure-adapters.md`.
+
+Email delivery is an application recipe, not a second subsystem: define a typed send-mail Job, call `email.sendTemplate()` in its handler, and dispatch it with `queue.<job>.publish()`. There is no `email.enqueueTemplate()` or mail-specific outbox. Avoid secret-bearing Queue payloads; generic payload encryption is a separate Queue security follow-up.
 
 ## Raw Routes
 
@@ -5780,6 +5787,10 @@ client.globals.siteSettings.live(undefined, (settings) => applyTheme(settings));
 
 `live()` accepts the query options supported by the wire contract: `where`, `with`, `limit`, `offset`, `orderBy`, and `locale`. Prefer these typed wrappers over raw `client.realtime.subscribe()`.
 
+Snapshot and row-delta frames preserve nested `Date` values with versioned
+path metadata. Older JSON consumers still see ISO strings; current typed
+clients revive only marked paths. Never add a heuristic ISO-string reviver.
+
 TanStack Query uses the stream for its initial result too; it does not issue a duplicate REST fetch:
 
 ```tsx
@@ -5928,6 +5939,11 @@ Full adapter options and deployment guidance: `references/infrastructure-adapter
 # Channels
 
 Channels are typed, ordered application-event streams over the realtime runtime. Use them for chat notifications, progress, typing, or presence. The bounded replay ledger is delivery infrastructure, not durable application history; persist events users must retrieve later in a collection.
+
+Ordered events, replay, and presence preserve nested `Date` values over SSE and
+Pusher/Soketi using the same versioned metadata as live queries. ISO-looking
+string fields remain strings. The reserved metadata key and its bytes are part
+of the canonical bounded envelope.
 
 ## Define and generate
 
@@ -7224,12 +7240,25 @@ The `queue` context object is fully typed:
 
 ```ts
 handler: async ({ queue }) => {
-	await queue.sendConfirmation.publish({
-		appointmentId: "abc",
-		customerId: "def",
-	});
+	const dispatchId = await queue.sendConfirmation.publish(
+		{
+			appointmentId: "abc",
+			customerId: "def",
+		},
+		{ idempotencyKey: "confirmation:abc" },
+	);
 };
 ```
+
+`publish()` is the only application dispatch API. Inside an ambient QUESTPIE transaction, pg-boss uses its `fromDrizzle(tx, sql)` path so the Job and business data commit together. BullMQ, Cloudflare Queues, and custom adapters without `publishInTransaction` persist a private `questpie_queue_dispatch` intent in that transaction and relay it with leases, backoff, and crash recovery. The Queue ledger is not the realtime outbox.
+
+`idempotencyKey` (1-512 non-secret characters) produces a stable logical `dispatchId` per durable job name and is separate from `singletonKey`, which controls adapter-native in-flight deduplication. Combining both keys fails closed because a singleton-suppressed publish cannot prove a new logical Job was accepted. Accepted identity receipts survive pg-boss retention and adapter switches. Delivery remains at-least-once if a process dies after broker acceptance but before recording the receipt; every retry carries the same `dispatchId`.
+
+Long-running `listen()` recovers a bounded ten-batch burst every five seconds. `runOnce()` and push-consumer entrypoints also drain bounded work before consuming. On Cloudflare or another push-only deployment, add a platform cron that calls `app.queue.drain({ batchSize, concurrency, maxBatches })` so recovery does not depend on an incoming queue batch. A relay row becomes terminal after 25 adapter-publication attempts; `drain()` reports `{ terminal }` and emits a payload-free structured error. This does not start another QUESTPIE process.
+
+pg-boss `runOnce()` explicitly calls `complete` for successful fetched jobs and `fail` for handler errors. Same-transaction pg-boss publishing requires the application and pg-boss to share PostgreSQL; set `useApplicationTransaction: false` when pg-boss uses a separate database. Cloudflare handler failures, poison envelopes, and missing handlers call `retry` instead of silently acknowledging. Its `retryLimit` is an observable framework threshold; Cloudflare `max_retries` and configured `dead_letter_queue` own terminal delivery.
+
+Email remains an application recipe: typed send-mail Job, then `email.sendTemplate()`, then the mail adapter. Do not add a public outbox or mail-specific enqueue API. Secret-bearing Queue payload encryption is not yet a framework guarantee; pass durable identifiers and resolve sensitive values inside the handler.
 
 ## Realtime
 
@@ -9064,6 +9093,13 @@ bun add @questpie/tanstack-query @tanstack/react-query
 ```
 
 ## Setup
+
+Temporal contract: query data from the official client retains `Date` values
+through TanStack Query dehydration and TanStack Start's Seroval hydration.
+TanStack DB snapshot reconciliation does not JSON-clone rows. For a custom
+JSON-only hydration/cache boundary, use a Date-aware serializer; never revive
+every ISO-looking string because date-only and ordinary string fields must stay
+strings.
 
 ### 1. Create the QUESTPIE Client
 

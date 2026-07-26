@@ -242,11 +242,12 @@ collection("posts").hooks({
 			data.slug = slugify(data.title); // mutate the incoming payload in place
 		}
 	},
-	afterChange: ({ data, onAfterCommit, queue }) => {
-		// Defer side effects until the transaction commits.
-		onAfterCommit(async () => {
-			await queue.notify.publish({ postId: data.id });
-		});
+	afterChange: async ({ data, queue }) => {
+		// Queue dispatch commits atomically with the collection write.
+		await queue.notify.publish(
+			{ postId: data.id },
+			{ idempotencyKey: `post-notify:${data.id}` },
+		);
 	},
 });
 ```

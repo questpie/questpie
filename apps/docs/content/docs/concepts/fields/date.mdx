@@ -23,8 +23,8 @@ Use `f.date()` inside a `.fields()` callback. It takes no constructor argument; 
 import { collection } from "#questpie/factories";
 
 export const announcements = collection("announcements").fields(({ f }) => ({
-  validFrom: f.date().label("Valid From").required(), // ISO date, NOT NULL
-  validTo: f.date().label("Valid Until"), // nullable
+	validFrom: f.date().label("Valid From").required(), // ISO date, NOT NULL
+	validTo: f.date().label("Valid Until"), // nullable
 }));
 ```
 
@@ -37,30 +37,37 @@ That gives `announcements` two `date` columns typed `string` on read, one requir
 If you need a timestamp (a moment in time, with timezone) use [`f.datetime()`](/docs/concepts/fields/datetime); for a time of day with no date use [`f.time()`](/docs/concepts/fields/time).
 
 <Callout type="info" title="The value is a string, not a `Date`">
-  A `date` field's data type is `string`, an ISO date like `"2024-01-31"`. Its schema (`z.string().date()`) rejects both `Date` objects and full ISO date-time strings (e.g. `"2024-01-31T00:00:00Z"`). Pass the bare date string when you create or update, and expect a string when you read. This is the deliberate
-  difference from `f.datetime()`, whose data *is* a `Date`.
+	A `date` field's data type is `string`, an ISO date like `"2024-01-31"`. Its
+	schema (`z.string().date()`) rejects both `Date` objects and full ISO
+	date-time strings (e.g. `"2024-01-31T00:00:00Z"`). Pass the bare date string
+	when you create or update, and expect a string when you read. This is the
+	deliberate difference from `f.datetime()`, whose data *is* a `Date`.
 </Callout>
 
 ## Chained methods
 
 These two methods are specific to `date` (on top of the [shared modifiers](/docs/concepts/fields#shared-methods) every field has). Each returns a new immutable field, so they chain in any order.
 
-| Method             | Effect                                                                                                                            |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `.autoNow()`       | Sets a default of the current time on **create**, `hasDefault: true`, `defaultValue: () => new Date()`. Makes the input optional. |
-| `.autoNowUpdate()` | Adds a `beforeChange` hook that returns the current time on **every write** (create and update), merged with any existing hooks.  |
+| Method             | Effect                                                                                                                                       |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.autoNow()`       | Sets a default of the current UTC `YYYY-MM-DD` on **create**. Makes the input optional.                                                      |
+| `.autoNowUpdate()` | Adds a `beforeChange` hook that returns the current UTC `YYYY-MM-DD` on **every write** (create and update), merged with any existing hooks. |
 
 The common pattern is to pair either method with [`.inputFalse()`](/docs/concepts/fields#input-output-shaping) so the field is system-managed and never accepted from the client:
 
 ```ts
 collection("posts").fields(({ f }) => ({
-  publishedOn: f.date().autoNow().inputFalse(), // stamped once, on create
-  reviewedOn: f.date().autoNowUpdate().inputFalse(), // re-stamped on every write
+	publishedOn: f.date().autoNow().inputFalse(), // stamped once, on create
+	reviewedOn: f.date().autoNowUpdate().inputFalse(), // re-stamped on every write
 }));
 ```
 
-<Callout type="warn" title="`.autoNow()` produces a `Date`, but the column stores a date string">
-Both helpers use `() => new Date()` as the value, a full timestamp, even though the column is a date-only string. Drizzle's date-string column serializes that `Date` with `toISOString()` (a full **UTC** ISO timestamp, e.g. `"2024-01-31T12:34:56.789Z"`), and Postgres truncates it to the calendar date on insert. So the stored value is a correct date, but it reflects the **UTC** day, not the local one: near midnight in a non-UTC timezone, "today" can land on the previous or next calendar day. If you need a specific calendar date (a fixed day, or "today" in a particular timezone), set the value explicitly with `.default("2024-01-01")` or a field hook that returns the exact `YYYY-MM-DD` string instead. For real timestamp columns, prefer [`f.datetime().autoNow()`](/docs/concepts/fields/datetime).
+<Callout type="info" title="Auto date means the UTC calendar day">
+	Both helpers return `new Date().toISOString().slice(0, 10)`, already in the
+	field's exact string type. If “today” means a tenant or business timezone
+	rather than UTC, compute that calendar date in application policy and write
+	the explicit `YYYY-MM-DD` string. For an exact instant, use
+	[`f.datetime().autoNow()`](/docs/concepts/fields/datetime).
 </Callout>
 
 ## Filtering, operators
@@ -79,10 +86,10 @@ Both helpers use `() => new Date()` as the value, a full timestamp, even though 
 // Announcements valid as of today:
 const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
 const { docs } = await app.collections.announcements.find({
-  where: {
-    validFrom: { lte: today },
-    validTo: { gte: today },
-  },
+	where: {
+		validFrom: { lte: today },
+		validTo: { gte: today },
+	},
 });
 ```
 
@@ -122,6 +129,7 @@ type AnnouncementFilter = CollectionWhere<"announcements">; // { validFrom?: { g
 
 ## Related
 
+- [Temporal values](/docs/concepts/temporal-values), the authoritative typed-wire, external JSON, realtime, Channels, and SSR contract.
 - [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.array()`, `.localized()`, …).
 - [`f.datetime()`](/docs/concepts/fields/datetime), a timestamp (moment in time, with timezone) read back as a `Date`.
 - [`f.time()`](/docs/concepts/fields/time), a time of day with no date.

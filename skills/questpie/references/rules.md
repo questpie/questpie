@@ -254,29 +254,25 @@ export default collection("appointments")
 			}
 		},
 
-		afterChange: async ({
-			data,
-			operation,
-			original,
-			queue,
-			onAfterCommit,
-		}) => {
-			// Side effects run AFTER the tx commits, never publish/email directly
-			// inside afterChange (the write may still roll back).
+		afterChange: async ({ data, operation, original, queue }) => {
+			// Queue publish joins the hook transaction. Direct email/HTTP calls
+			// still belong in onAfterCommit.
 			if (operation === "create") {
-				onAfterCommit(() =>
-					queue.sendAppointmentConfirmation.publish({
+				await queue.sendAppointmentConfirmation.publish(
+					{
 						appointmentId: data.id,
 						customerId: data.customer,
-					}),
+					},
+					{ idempotencyKey: `appointment-confirmed:${data.id}` },
 				);
 			}
 			if (operation === "update" && data.status === "cancelled") {
-				onAfterCommit(() =>
-					queue.sendAppointmentCancellation.publish({
+				await queue.sendAppointmentCancellation.publish(
+					{
 						appointmentId: data.id,
 						customerId: data.customer,
-					}),
+					},
+					{ idempotencyKey: `appointment-cancelled:${data.id}` },
 				);
 			}
 		},
@@ -338,17 +334,18 @@ All dependencies come through destructuring. No need to import the app instance:
     data.readingTime = blog.computeReadingTime(data.content);
   },
 
-  afterChange: async ({ data, operation, original, queue, onAfterCommit }) => {
+  afterChange: async ({ data, operation, original, queue }) => {
     if (
       operation === "update" &&
       original?.status !== "published" &&
       data.status === "published"
     ) {
-      onAfterCommit(() =>
-        queue.notifyBlogSubscribers.publish({
+      await queue.notifyBlogSubscribers.publish(
+        {
           postId: data.id,
           title: data.title,
-        }),
+        },
+        { idempotencyKey: `blog-published:${data.id}` },
       );
     }
   },

@@ -28,25 +28,25 @@ Complete configuration patterns for built-in QUESTPIE field types. Fields use a 
 
 Every field factory returns a chainable field. These methods are shared by all field types:
 
-| Method               | Description                                            |
-| -------------------- | ------------------------------------------------------ |
-| `.required()`        | Field must have a value (NOT NULL)                     |
-| `.default(value)`    | Default value (value, `() => value`, or SQL)           |
-| `.label(text)`       | Display label (supports i18n)                          |
-| `.description(text)` | Help text (supports i18n)                              |
-| `.localized()`       | Per-locale values                                      |
-| `.inputOptional()`   | Optional in API input but required in DB               |
-| `.inputFalse()`      | Exclude from API input                                 |
-| `.outputFalse()`     | Exclude from output, write-only field                 |
-| `.array()`           | Wrap as a repeatable array (see [`.array()`](#array))  |
-| `.minItems(n)` / `.maxItems(n)` | Array item bounds                           |
-| `.admin(config)`     | Admin UI rendering hints (see [Reactive Admin Behaviors](#reactive-admin-behaviors)) |
-| `.access(rules)`     | Per-field access control                               |
-| `.hooks(handlers)`   | Per-field lifecycle hooks                              |
-| `.virtual(sql?)`     | SQL expression for computed read-only field            |
-| `.zod(fn)`           | Extend/replace Zod schema (output narrows value type)  |
-| `.drizzle(fn)`       | Raw Drizzle column builder, constraints/SQL defaults land in DDL; `$type` narrows value type |
-| `.$type<T>()`        | Explicitly set TS value type (type-level; mainly json) |
+| Method                          | Description                                                                                  |
+| ------------------------------- | -------------------------------------------------------------------------------------------- |
+| `.required()`                   | Field must have a value (NOT NULL)                                                           |
+| `.default(value)`               | Default value (value, `() => value`, or SQL)                                                 |
+| `.label(text)`                  | Display label (supports i18n)                                                                |
+| `.description(text)`            | Help text (supports i18n)                                                                    |
+| `.localized()`                  | Per-locale values                                                                            |
+| `.inputOptional()`              | Optional in API input but required in DB                                                     |
+| `.inputFalse()`                 | Exclude from API input                                                                       |
+| `.outputFalse()`                | Exclude from output, write-only field                                                        |
+| `.array()`                      | Wrap as a repeatable array (see [`.array()`](#array))                                        |
+| `.minItems(n)` / `.maxItems(n)` | Array item bounds                                                                            |
+| `.admin(config)`                | Admin UI rendering hints (see [Reactive Admin Behaviors](#reactive-admin-behaviors))         |
+| `.access(rules)`                | Per-field access control                                                                     |
+| `.hooks(handlers)`              | Per-field lifecycle hooks                                                                    |
+| `.virtual(sql?)`                | SQL expression for computed read-only field                                                  |
+| `.zod(fn)`                      | Extend/replace Zod schema (output narrows value type)                                        |
+| `.drizzle(fn)`                  | Raw Drizzle column builder, constraints/SQL defaults land in DDL; `$type` narrows value type |
+| `.$type<T>()`                   | Explicitly set TS value type (type-level; mainly json)                                       |
 
 > `.admin()` is contributed by the admin module. Type-specific helpers also exist (e.g. text `.pattern()`/`.trim()`, number `.min()`/`.max()`/`.positive()`/`.int()`/`.step()`, date `.autoNow()`); they are documented under each field below.
 
@@ -141,9 +141,9 @@ isActive: f.boolean().default(true).admin({ displayAs: "switch" }),
 
 ## `f.date()`
 
-Calendar dates (ISO date string). DB type: `date`.
+Calendar dates (exact `YYYY-MM-DD` string, never `Date`). DB type: `date`.
 
-Constructor arg: none. Type-specific chain methods: `.autoNow()` (default to now on create), `.autoNowUpdate()` (set to now on every write).
+Constructor arg: none. Type-specific chain methods: `.autoNow()` (default to the current UTC `YYYY-MM-DD` on create), `.autoNowUpdate()` (set that UTC date string on every write).
 
 ```ts
 publishedAt: f.date(),
@@ -164,7 +164,7 @@ eventTime: f.time({ precision: 3 }),
 
 ## `f.datetime(config?)`
 
-Date + time. DB type: `timestamp`. Value is a `Date`.
+One instant. Default DB type: `timestamptz(3)`. Server and official typed-client value is a `Date`; plain JSON/MCP/OpenAPI input is RFC 3339 with `Z` or an explicit offset. Reject timezone-less strings rather than guessing.
 
 Constructor arg: `config?: { precision?: 0-6; withTimezone?: boolean }`. Type-specific chain methods: `.autoNow()`, `.autoNowUpdate()`.
 
@@ -174,19 +174,21 @@ createdAt: f.datetime().autoNow().inputFalse(),
 updatedAt: f.datetime().autoNowUpdate().inputFalse(),
 ```
 
+Nested `Date` values survive official HTTP, realtime, Channels, and supported TanStack hydration through explicit type metadata. Never implement an ISO-looking-string reviver: `f.date()` and ordinary strings must stay strings.
+
 ## `f.select(options)`
 
 Single value from a predefined list. DB type: `varchar`.
 
 Constructor arg: `options: SelectOption[]`, an array of objects (there is no bare `string[]` overload). Each option:
 
-| Key           | Type                | Description                              |
-| ------------- | ------------------- | ---------------------------------------- |
-| `value`       | `string \| number`  | Stored value (REQUIRED)                  |
-| `label`       | `string \| i18n`    | Display label (REQUIRED)                 |
-| `description` | `string \| i18n`    | Optional helper text                     |
-| `icon`        | `ComponentReference`| Optional icon (e.g. `c.icon("ph:check")`)|
-| `disabled`    | `boolean`           | Disable this option                      |
+| Key           | Type                 | Description                               |
+| ------------- | -------------------- | ----------------------------------------- |
+| `value`       | `string \| number`   | Stored value (REQUIRED)                   |
+| `label`       | `string \| i18n`     | Display label (REQUIRED)                  |
+| `description` | `string \| i18n`     | Optional helper text                      |
+| `icon`        | `ComponentReference` | Optional icon (e.g. `c.icon("ph:check")`) |
+| `disabled`    | `boolean`            | Disable this option                       |
 
 Multi-select is `.array()`; the type-specific `.enum(name)` switches storage to a Postgres enum.
 
@@ -385,12 +387,12 @@ settings: f.json().zod(() => z.object({ theme: z.enum(["light", "dark"]) })),
 
 Admin rendering hints and reactive behaviors are authored with the chained `.admin({...})` call. Beyond per-field display options (`placeholder`, `displayAs`, `orderable`, `mode`, ...), every field's `.admin()` accepts reactive behaviors:
 
-| Behavior   | Type                                  | Description                          |
-| ---------- | ------------------------------------- | ------------------------------------ |
-| `hidden`   | `boolean \| ({ data }) => boolean`    | Conditionally hide the field         |
-| `readOnly` | `boolean \| ({ data }) => boolean`    | Conditionally make read-only         |
-| `disabled` | `boolean \| ({ data }) => boolean`    | Conditionally disable                |
-| `compute`  | `({ data }) => value` or `{ handler, deps, debounce }` | Auto-compute the value |
+| Behavior   | Type                                                   | Description                  |
+| ---------- | ------------------------------------------------------ | ---------------------------- |
+| `hidden`   | `boolean \| ({ data }) => boolean`                     | Conditionally hide the field |
+| `readOnly` | `boolean \| ({ data }) => boolean`                     | Conditionally make read-only |
+| `disabled` | `boolean \| ({ data }) => boolean`                     | Conditionally disable        |
+| `compute`  | `({ data }) => value` or `{ handler, deps, debounce }` | Auto-compute the value       |
 
 ```ts
 slug: f.text().admin({ placeholder: "auto-generated" }),

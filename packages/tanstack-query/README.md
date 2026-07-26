@@ -219,6 +219,13 @@ export default async function PostsPage() {
 }
 ```
 
+TanStack Query's dehydrated state remains a JavaScript object and retains
+QUESTPIE `Date` values. TanStack Start's Seroval hydration preserves them across
+its serialization boundary. Other hosts must use their documented Date-aware
+transport. If you move the state through an application-owned JSON-only
+boundary, use a Date-aware serializer; never revive all ISO-looking strings
+heuristically because `f.date()` and ordinary string fields must remain strings.
+
 ## Query Key Structure
 
 ```ts

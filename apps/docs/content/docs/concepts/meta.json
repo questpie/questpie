@@ -5,6 +5,7 @@
 		"soft-delete-retention",
 		"globals",
 		"fields",
+		"temporal-values",
 		"relations",
 		"blocks",
 		"access-control",

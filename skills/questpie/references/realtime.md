@@ -46,6 +46,10 @@ client.globals.siteSettings.live(undefined, (settings) => applyTheme(settings));
 
 `live()` accepts the query options supported by the wire contract: `where`, `with`, `limit`, `offset`, `orderBy`, and `locale`. Prefer these typed wrappers over raw `client.realtime.subscribe()`.
 
+Snapshot and row-delta frames preserve nested `Date` values with versioned
+path metadata. Older JSON consumers still see ISO strings; current typed
+clients revive only marked paths. Never add a heuristic ISO-string reviver.
+
 TanStack Query uses the stream for its initial result too; it does not issue a duplicate REST fetch:
 
 ```tsx

@@ -102,12 +102,12 @@ Every handler (route, raw route, job, service, email) receives the same base `Ap
 
 Each primitive then adds its own keys to this base, see the delta tables below. JSON route handlers add:
 
-| Property  | Description                                       |
-| --------- | ------------------------------------------------- |
-| `input`   | Validated data matching the Zod schema            |
-| `params`  | URL path parameters (when pattern-matched)        |
-| `locale`  | Current locale                                    |
-| `request` | The raw `Request`, when executed over HTTP        |
+| Property  | Description                                |
+| --------- | ------------------------------------------ |
+| `input`   | Validated data matching the Zod schema     |
+| `params`  | URL path parameters (when pattern-matched) |
+| `locale`  | Current locale                             |
+| `request` | The raw `Request`, when executed over HTTP |
 
 Derived request context (from `appConfig({ context })`) reaches route access rules and handlers alike, destructure the keys directly. Inside any nested code, `getContext<App>()` exposes the same keys (see `references/multi-tenancy.md`).
 
@@ -198,7 +198,9 @@ export default job({
 		retryDelay: 5, // seconds, NOT ms
 		retryBackoff: true, // exponential
 	},
-	handler: async ({ payload }) => { /* ... */ },
+	handler: async ({ payload }) => {
+		/* ... */
+	},
 });
 ```
 
@@ -213,13 +215,17 @@ Publish from hooks, routes, or other jobs via the typed `queue` context:
       await queue.sendAppointmentConfirmation.publish({
         appointmentId: data.id,
         customerId: data.customer,
+      }, {
+        idempotencyKey: `appointment-confirmation:${data.id}`,
       });
     }
   },
 })
 ```
 
-The `queue` object provides full autocompletion for all jobs and their payloads.
+The `queue` object provides full autocompletion for all jobs and their payloads. `publish()` is ambient-transaction-aware: call and await it directly inside collection hooks. pg-boss inserts the Job through the current Drizzle transaction; BullMQ, Cloudflare, and custom external adapters commit an internal `questpie_queue_dispatch` intent with the business write and relay it after commit. A rollback creates neither.
+
+`idempotencyKey` is portable, scoped to the durable job name, and separate from `singletonKey`. Reusing the same 1-512 character non-secret key returns the same stable logical `dispatchId`; the first payload wins, even after pg-boss retention or an adapter change. QUESTPIE rejects combining `idempotencyKey` with `singletonKey`, because broker singleton suppression cannot identify a newly accepted logical dispatch. Handlers receive optional `dispatchId` and `idempotencyKey` alongside `payload` and `locale`. Delivery remains at-least-once, so use `dispatchId` for downstream dedupe.
 
 ### Recurring Jobs (Cron)
 
@@ -250,14 +256,18 @@ Use job-level cron for simple recurring tasks (cleanup, digests, syncs). Reach f
 
 Job handlers receive the base `AppContext` (see [Handler Context](#handler-context)) plus:
 
-| Property  | Description                            |
-| --------- | -------------------------------------- |
-| `payload` | Validated data matching the Zod schema |
-| `locale`  | Current locale                         |
+| Property         | Description                                  |
+| ---------------- | -------------------------------------------- |
+| `payload`        | Validated data matching the Zod schema       |
+| `locale`         | Current locale                               |
+| `dispatchId`     | Stable logical identity across relay retries |
+| `idempotencyKey` | Caller-provided portable identity, when set  |
 
 ### Queue Adapter Configuration
 
 Jobs require a queue adapter in `questpie.config.ts` (`runtimeConfig({ queue: { adapter } })`). Adapter shapes (pg-boss, BullMQ, Cloudflare Queues) and connection options: `references/infrastructure-adapters.md`.
+
+Email delivery is an application recipe, not a second subsystem: define a typed send-mail Job, call `email.sendTemplate()` in its handler, and dispatch it with `queue.<job>.publish()`. There is no `email.enqueueTemplate()` or mail-specific outbox. Avoid secret-bearing Queue payloads; generic payload encryption is a separate Queue security follow-up.
 
 ## Raw Routes
 
@@ -308,11 +318,11 @@ Supported: `.get()`, `.post()`, `.put()`, `.delete()`, `.patch()`. The built-in 
 
 Raw route handlers receive the base `AppContext` (see [Handler Context](#handler-context)) plus:
 
-| Property  | Type                     | Description                |
-| --------- | ------------------------ | -------------------------- |
-| `request` | `Request`                | Standard Web API Request   |
-| `params`  | `Record<string, string>` | URL path parameters        |
-| `locale`  | `string`                 | Current locale             |
+| Property  | Type                     | Description              |
+| --------- | ------------------------ | ------------------------ |
+| `request` | `Request`                | Standard Web API Request |
+| `params`  | `Record<string, string>` | URL path parameters      |
+| `locale`  | `string`                 | Current locale           |
 
 Raw route handlers must return a `Response` object.
 
@@ -375,7 +385,9 @@ export default route()
 			start(controller) {
 				controller.enqueue("id,total,createdAt\n");
 				for (const order of docs) {
-					controller.enqueue(`${order.id},${order.total},${order.createdAt.toISOString()}\n`);
+					controller.enqueue(
+						`${order.id},${order.total},${order.createdAt.toISOString()}\n`,
+					);
 				}
 				controller.close();
 			},

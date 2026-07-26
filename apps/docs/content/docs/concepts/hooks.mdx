@@ -45,12 +45,13 @@ export const posts = collection("posts")
 		},
 
 		// Runs after the write, INSIDE the CRUD transaction.
-		// Defer the side effect so it only fires once the data is durable.
-		afterChange: ({ data, operation, onAfterCommit, queue }) => {
+		// Queue publish joins that transaction automatically.
+		afterChange: async ({ data, operation, queue }) => {
 			if (operation !== "create") return;
-			onAfterCommit(async () => {
-				await queue.notifyPost.publish({ postId: data.id });
-			});
+			await queue.notifyPost.publish(
+				{ postId: data.id },
+				{ idempotencyKey: `post-notify:${data.id}` },
+			);
 		},
 	});
 ```
@@ -210,18 +211,21 @@ type HookContext = AppContext & {
 
 ### Side effects (`onAfterCommit`)
 
-`afterChange`, `afterDelete`, and `afterTransition` run **inside** the CRUD transaction. If you dispatch a job, send an email, or index a document directly from one of them and the transaction later rolls back, you've fired a side effect for data that never landed. (`afterRead` runs _after_ the transaction closes, but the same rule applies, keep durable side effects out of hook bodies.)
+`afterChange`, `afterDelete`, and `afterTransition` run **inside** the CRUD transaction. `queue.<job>.publish()` is transaction-aware: call and await it directly so pg-boss joins the transaction or the framework commits an external-adapter dispatch intent with the data. Direct email, HTTP calls, and other non-transactional effects must still wait until commit. (`afterRead` runs _after_ the transaction closes.)
 
-Use `ctx.onAfterCommit(cb)` to defer the side effect until the **outermost** transaction commits:
+Use `ctx.onAfterCommit(cb)` to defer only those non-transactional side effects until the **outermost** transaction commits:
 
 ```ts title="src/questpie/server/collections/posts.ts"
 .hooks({
-	afterChange: ({ data, operation, onAfterCommit, queue, search }) => {
+	afterChange: async ({ data, operation, onAfterCommit, queue, search }) => {
+		if (operation === "create") {
+			await queue.welcomePost.publish(
+				{ postId: data.id },
+				{ idempotencyKey: `welcome-post:${data.id}` },
+			);
+		}
 		onAfterCommit(async () => {
 			await search.scheduleIndex("posts", String(data.id));
-			if (operation === "create") {
-				await queue.welcomePost.publish({ postId: data.id });
-			}
 		});
 	},
 })
@@ -292,14 +296,15 @@ import { ApiError } from "questpie/errors";
 
 ```ts title="src/questpie/server/collections/posts.ts"
 .hooks({
-	afterChange: ({ data, isBatch, recordIds, count, onAfterCommit, queue }) => {
+	afterChange: async ({ data, isBatch, recordIds, count, queue }) => {
 		if (isBatch) {
-			// This callback still fires once per affected record;
+			// This hook still fires once per affected record;
 			// recordIds / count describe the whole batch.
 		}
-		onAfterCommit(async () => {
-			await queue.reindexPost.publish({ id: data.id });
-		});
+		await queue.reindexPost.publish(
+			{ id: data.id },
+			{ idempotencyKey: `reindex-post:${data.id}` },
+		);
 	},
 })
 ```
@@ -328,10 +333,11 @@ With versioning and workflow enabled, `beforeTransition` and `afterTransition` f
 			throw new Error("Set publishedAt before publishing.");
 		}
 	},
-	afterTransition: ({ data, fromStage, toStage, onAfterCommit, queue }) => {
-		onAfterCommit(async () => {
-			await queue.announce.publish({ postId: data.id, stage: toStage });
-		});
+	afterTransition: async ({ data, fromStage, toStage, queue }) => {
+		await queue.announce.publish(
+			{ postId: data.id, stage: toStage },
+			{ idempotencyKey: `announce:${data.id}:${toStage}` },
+		);
 	},
 })
 ```
@@ -402,4 +408,4 @@ import type { HookContext, HookFunction } from "questpie";
 - **[Validation](/docs/concepts/validation)**, the Zod schema that runs between `beforeValidate` and `beforeChange`; `exclude` / `refine` and field-level `.zod()`; the full `ApiError` surface you throw from `before*` hooks.
 - **[Collections](/docs/concepts/collections)**, where `.hooks()` lives, alongside fields, indexes, access, and admin config.
 - **[Globals](/docs/concepts/globals)**, singletons with their own `beforeUpdate` / `afterUpdate` hook stages.
-- **[Jobs](/docs/concepts/jobs)**, what you dispatch from `onAfterCommit`; the typed `queue.*` services available on `ctx`.
+- **[Jobs](/docs/concepts/jobs)**, whose typed `queue.*.publish()` joins the ambient hook transaction.

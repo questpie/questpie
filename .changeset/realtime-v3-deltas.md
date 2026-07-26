@@ -2,6 +2,7 @@
 "questpie": minor
 "@questpie/tanstack-query": minor
 "@questpie/tanstack-db": minor
+"@questpie/openapi": minor
 ---
 
 Add the Realtime v3 snapshot/delta event contract, opt-in native SSE row deltas,
@@ -17,7 +18,30 @@ TanStack DB collection package.
 - Keep disabled row live queries isolated from collection dependency capture,
   application channels, CRDT notices, and broker coordination, and reject them
   before allocating subscription state.
+- Preserve `Date` identity and exact epoch milliseconds across official typed
+  CRUD, realtime, Channels, replay, presence, TanStack hydration, and
+  reconciliation paths through one versioned exact-path wire contract. Keep
+  `f.date()` as an exact `YYYY-MM-DD` string, require explicit RFC 3339 zones
+  for external datetime input, and emit accurate OpenAPI `date`/`date-time`
+  schemas.
 - Publish every fixed-group companion against the current Questpie minor train
   instead of retaining a `^3.16.0` peer floor.
 - Database startup now enforces QUESTPIE's documented PostgreSQL 15 minimum; the
   realtime xid8 schema still has its explicit PostgreSQL 13 capability preflight.
+- Make the existing typed Queue `publish(payload, options)` operation
+  ambient-transaction-aware without adding a public outbox API. pg-boss inserts
+  through the current Drizzle transaction; BullMQ, Cloudflare Queues, and custom
+  external adapters use the framework-owned `questpie_queue_dispatch` ledger
+  with leased crash recovery. Deploy the generated migration before this
+  version.
+- Add portable `idempotencyKey` and stable logical `dispatchId` metadata,
+  retain adapter-portable idempotency receipts, reject ambiguous
+  `idempotencyKey` + `singletonKey` combinations, explicitly settle pg-boss
+  `runOnce()` jobs, and keep Cloudflare poison or exhausted-retry messages
+  observable for platform failure/DLQ handling. Queue delivery remains
+  at-least-once, and `publish()` now returns the logical dispatch UUID for all
+  built-in adapters instead of an adapter-specific physical id or `null`.
+- Bound Queue relay recovery to 25 adapter-publication attempts, expose terminal
+  counts and payload-free structured errors through `queue.drain()`, and allow
+  bounded multi-batch recovery through `maxBatches`. pg-boss deployments using
+  a separate database must set `useApplicationTransaction: false`.
