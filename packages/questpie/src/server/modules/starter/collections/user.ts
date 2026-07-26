@@ -5,6 +5,18 @@ const isAdmin = (user: unknown): boolean =>
 	typeof user === "object" &&
 	(user as { role?: unknown }).role === "admin";
 
+const sessionUser = (
+	context: unknown,
+): { id?: string; role?: unknown } | undefined => {
+	if (!context || typeof context !== "object") return undefined;
+	const session = (context as { session?: unknown }).session;
+	if (!session || typeof session !== "object") return undefined;
+	const user = (session as { user?: unknown }).user;
+	if (!user || typeof user !== "object") return undefined;
+	const { id, role } = user as { id?: unknown; role?: unknown };
+	return { id: typeof id === "string" ? id : undefined, role };
+};
+
 export default collection("user")
 	.options({ timestamps: true })
 	.fields(({ f }) => ({
@@ -115,16 +127,18 @@ export default collection("user")
 			}),
 	}))
 	.access({
-		read: ({ session }) => {
-			if (isAdmin(session?.user)) return true;
-			const userId = session?.user?.id;
+		read: (context) => {
+			const user = sessionUser(context);
+			if (isAdmin(user)) return true;
+			const userId = user?.id;
 			return userId ? { id: userId } : false;
 		},
-		create: ({ session }) => isAdmin(session?.user),
-		update: ({ session, data }) =>
-			isAdmin(session?.user) ||
-			(!!session?.user?.id && data.id === session.user.id),
-		delete: ({ session }) => isAdmin(session?.user),
+		create: (context) => isAdmin(sessionUser(context)),
+		update: (context) => {
+			const user = sessionUser(context);
+			return isAdmin(user) || (!!user?.id && context.data.id === user.id);
+		},
+		delete: (context) => isAdmin(sessionUser(context)),
 		fields: {
 			email: {
 				create: ({ user }) => isAdmin(user),
