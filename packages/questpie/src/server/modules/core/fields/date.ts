@@ -5,6 +5,8 @@
 import { type PgDateStringBuilder, date as pgDate } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
+import { currentUtcDateString } from "#questpie/shared/temporal.js";
+
 import type { DefaultFieldState } from "../../../fields/field-class-types.js";
 import { field, Field } from "../../../fields/field-class.js";
 import { fieldType, wrapFieldComplete } from "../../../fields/field-type.js";
@@ -33,6 +35,8 @@ export interface DateFieldMethods {
 	autoNowUpdate(): any;
 }
 
+const currentUtcDate = (): string => currentUtcDateString();
+
 /**
  * Create a date field (ISO date string, stored as `date` in PostgreSQL).
  *
@@ -43,19 +47,23 @@ export interface DateFieldMethods {
  * ```
  */
 export function date(): FieldWithMethods<DateFieldState, DateFieldMethods> {
-	return wrapFieldComplete(field<DateFieldState>({
-		type: "date",
-		columnFactory: (name) => pgDate(name, { mode: "string" }),
-		schemaFactory: () => z.string().date(),
-		operatorSet: dateStringOps,
-		notNull: false,
-		hasDefault: false,
-		localized: false,
-		virtual: false,
-		input: true,
-		output: true,
-		isArray: false,
-	}), dateFieldType.methods, {}) as any;
+	return wrapFieldComplete(
+		field<DateFieldState>({
+			type: "date",
+			columnFactory: (name) => pgDate(name, { mode: "string" }),
+			schemaFactory: () => z.string().date(),
+			operatorSet: dateStringOps,
+			notNull: false,
+			hasDefault: false,
+			localized: false,
+			virtual: false,
+			input: true,
+			output: true,
+			isArray: false,
+		}),
+		dateFieldType.methods,
+		{},
+	) as any;
 }
 
 // ---- fieldType() definition (QUE-265) ----
@@ -76,12 +84,12 @@ export const dateFieldType = fieldType("date", {
 	}),
 	methods: {
 		autoNow: (f: Field<any>) =>
-			f.derive({ hasDefault: true, defaultValue: () => new Date() }),
+			f.derive({ hasDefault: true, defaultValue: currentUtcDate }),
 		autoNowUpdate: (f: Field<any>) =>
 			f.derive({
 				hooks: {
 					...(f._state.hooks ?? {}),
-					beforeChange: () => new Date(),
+					beforeChange: currentUtcDate,
 				},
 			}),
 	},

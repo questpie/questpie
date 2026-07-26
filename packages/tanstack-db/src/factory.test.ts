@@ -159,6 +159,42 @@ function createFakeClient(initial: Row[]) {
 }
 
 describe("createQuestpieCollections", () => {
+	it("keeps temporal values intact while reconciling live snapshots", async () => {
+		const instant = new Date("2025-03-30T00:30:00.123Z");
+		type TemporalRow = {
+			id: string;
+			startsAt: Date;
+			dateOnly: string;
+			isoLookingString: string;
+		};
+		const row: TemporalRow = {
+			id: "event-1",
+			startsAt: instant,
+			dateOnly: "2025-03-30",
+			isoLookingString: instant.toISOString(),
+		};
+		const queryClient = new QueryClient();
+		const sync = resolveSync<TemporalRow>({
+			client: {
+				find: async () => ({ docs: [row] }),
+				live: (_options, onSnapshot) => {
+					queueMicrotask(() => onSnapshot({ docs: [row] }));
+					return () => {};
+				},
+			},
+			mode: "snapshot",
+			queryClient,
+			queryKey: ["events"],
+			onDispose: () => {},
+		});
+
+		const [synced] = await sync.queryFn();
+		expect(synced?.startsAt).toBeInstanceOf(Date);
+		expect(synced?.startsAt.getTime()).toBe(instant.getTime());
+		expect(synced?.dateOnly).toBe("2025-03-30");
+		expect(synced?.isoLookingString).not.toBeInstanceOf(Date);
+	});
+
 	it("retries snapshot subscription after a transient initial error", async () => {
 		const queryClient = new QueryClient();
 		let liveCalls = 0;

@@ -3,7 +3,8 @@
  */
 
 import { type PgTimestampBuilder, timestamp } from "drizzle-orm/pg-core";
-import { z } from "zod";
+
+import { createInstantInputSchema } from "#questpie/shared/temporal.js";
 
 import type { DefaultFieldState } from "../../../fields/field-class-types.js";
 import { field } from "../../../fields/field-class.js";
@@ -51,23 +52,29 @@ interface DatetimeConfig {
  * eventTime: f.datetime({ precision: 0 })
  * ```
  */
-export function datetime(config?: DatetimeConfig): FieldWithMethods<DatetimeFieldState, DatetimeFieldMethods> {
+export function datetime(
+	config?: DatetimeConfig,
+): FieldWithMethods<DatetimeFieldState, DatetimeFieldMethods> {
 	const { precision = 3, withTimezone = true } = config ?? {};
 
-	return wrapFieldComplete(field<DatetimeFieldState>({
-		type: "datetime",
-		columnFactory: (name) =>
-			timestamp(name, { precision, withTimezone, mode: "date" }),
-		schemaFactory: () => z.coerce.date(),
-		operatorSet: dateOps,
-		notNull: false,
-		hasDefault: false,
-		localized: false,
-		virtual: false,
-		input: true,
-		output: true,
-		isArray: false,
-	}), datetimeFieldType.methods, {}) as any;
+	return wrapFieldComplete(
+		field<DatetimeFieldState>({
+			type: "datetime",
+			columnFactory: (name) =>
+				timestamp(name, { precision, withTimezone, mode: "date" }),
+			schemaFactory: createInstantInputSchema,
+			operatorSet: dateOps,
+			notNull: false,
+			hasDefault: false,
+			localized: false,
+			virtual: false,
+			input: true,
+			output: true,
+			isArray: false,
+		}),
+		datetimeFieldType.methods,
+		{},
+	) as any;
 }
 
 import type { Field } from "../../../fields/field-class.js";
@@ -82,7 +89,7 @@ export const datetimeFieldType = fieldType("datetime", {
 			type: "datetime",
 			columnFactory: (name: string) =>
 				timestamp(name, { precision, withTimezone, mode: "date" }),
-			schemaFactory: () => z.coerce.date(),
+			schemaFactory: createInstantInputSchema,
 			operatorSet: dateOps,
 			notNull: false,
 			hasDefault: false,

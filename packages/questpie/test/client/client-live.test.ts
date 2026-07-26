@@ -7,6 +7,7 @@ import {
 	realtimeReconnectDelay,
 } from "../../src/client/realtime/multiplexer.js";
 import { sseSnapshotStream } from "../../src/client/realtime/stream.js";
+import { stringifyCompatibleTypedEventWire } from "../../src/shared/typed-wire.js";
 
 /**
  * `live()` / `liveIter()` are thin wrappers over the realtime multiplexer,
@@ -32,6 +33,7 @@ type SSEConnection = {
 		sinceSeq?: number;
 	}>;
 	sendEvent: (type: string, payload: Record<string, unknown>) => void;
+	sendRawEvent: (type: string, data: string) => void;
 	sendSnapshot: (topicId: string, seq: number, data: unknown) => void;
 	sendError: (
 		topicId: string,
@@ -88,11 +90,12 @@ describe("client live queries", () => {
 				topics,
 				aborted: false,
 				sendEvent(type, payload) {
+					this.sendRawEvent(type, stringifyCompatibleTypedEventWire(payload));
+				},
+				sendRawEvent(type, data) {
 					try {
 						controller.enqueue(
-							encoder.encode(
-								`event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`,
-							),
+							encoder.encode(`event: ${type}\ndata: ${data}\n\n`),
 						);
 					} catch {
 						// Stream already closed
@@ -470,6 +473,66 @@ describe("client live queries", () => {
 		multiplexer.destroy();
 	});
 
+	it("preserves instant values across snapshots, deltas, and reconnect", async () => {
+		const instant = new Date("2025-03-30T00:30:00.123Z");
+		const resumedInstant = new Date("2025-11-02T05:30:00.000Z");
+		const multiplexer = new RealtimeMultiplexer(
+			"http://localhost:3000",
+			true,
+			0,
+			{
+				retryBaseMs: 10,
+				maxRetryMs: 10,
+				pingWatchdogMs: 1000,
+				random: () => 0.5,
+			},
+		);
+		const events: any[] = [];
+		multiplexer.subscribe(
+			{ resourceType: "collection", resource: "events" },
+			(event) => events.push(event),
+			undefined,
+			"temporal-events",
+		);
+		await waitFor(() => connections.length === 1);
+
+		connections[0].sendSnapshot("temporal-events", 1, {
+			docs: [
+				{
+					id: "event-1",
+					startsAt: instant,
+					dateOnly: "2025-03-30",
+					isoLookingString: instant.toISOString(),
+				},
+			],
+		});
+		connections[0].sendEvent("update", {
+			topicId: "temporal-events",
+			seq: 2,
+			key: "event-1",
+			row: { id: "event-1", startsAt: resumedInstant },
+		});
+		await waitFor(() => events.length === 2);
+		expect(events[0].data.docs[0].startsAt).toBeInstanceOf(Date);
+		expect(events[0].data.docs[0].startsAt.getTime()).toBe(instant.getTime());
+		expect(events[0].data.docs[0].dateOnly).toBe("2025-03-30");
+		expect(events[0].data.docs[0].isoLookingString).not.toBeInstanceOf(Date);
+		expect(events[1].row.startsAt).toBeInstanceOf(Date);
+		expect(events[1].row.startsAt.getTime()).toBe(resumedInstant.getTime());
+
+		connections[0].close();
+		await waitFor(() => connections.length === 2);
+		connections[1].sendSnapshot("temporal-events", 3, {
+			docs: [{ id: "event-1", startsAt: resumedInstant }],
+		});
+		await waitFor(() => events.length === 3);
+		expect(events[2].data.docs[0].startsAt).toBeInstanceOf(Date);
+		expect(events[2].data.docs[0].startsAt.getTime()).toBe(
+			resumedInstant.getTime(),
+		);
+		multiplexer.destroy();
+	});
+
 	it("reconnects a half-open stream when ping activity stops", async () => {
 		const multiplexer = new RealtimeMultiplexer(
 			"http://localhost:3000",
@@ -567,6 +630,38 @@ describe("client live queries", () => {
 
 		stopPosts();
 		stopPages();
+	});
+
+	it("terminates an affected topic on an incompatible typed frame", async () => {
+		const snapshots: unknown[] = [];
+		const errors: Error[] = [];
+		client.realtime.subscribe(
+			{ resourceType: "collection", resource: "posts" },
+			(event) => snapshots.push(event),
+			undefined,
+			"posts-topic",
+			(error) => errors.push(error),
+		);
+		await waitFor(() => connections.length === 1);
+
+		connections[0].sendRawEvent(
+			"snapshot",
+			JSON.stringify({
+				topicId: "posts-topic",
+				seq: 1,
+				data: { docs: [] },
+				__questpieTypedWire: { version: 2, dates: [] },
+			}),
+		);
+		await waitFor(() => errors.length === 1);
+		expect(errors[0]?.message).toContain("typed event protocol error");
+		expect(client.realtime.topicCount).toBe(0);
+
+		connections[0].sendSnapshot("posts-topic", 2, {
+			docs: [{ id: "must-not-arrive" }],
+		});
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		expect(snapshots).toHaveLength(0);
 	});
 
 	it("delivers an initial admission response once and removes the rejected topic", async () => {

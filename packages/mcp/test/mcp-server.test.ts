@@ -466,6 +466,25 @@ describe("@questpie/mcp server", () => {
 		const { client, close } = await connect(server);
 
 		try {
+			const createTool = (await client.listTools()).tools.find(
+				(tool) => tool.name === "collections.posts.create",
+			);
+			if (!createTool)
+				throw new Error("Expected generated collection create tool");
+			const scheduledAtSchema = (createTool.inputSchema as any).properties.data
+				.properties.scheduledAt;
+			const scheduledAtBranches = scheduledAtSchema.anyOf ?? [
+				scheduledAtSchema,
+			];
+			expect(scheduledAtBranches).toContainEqual(
+				expect.objectContaining({
+					type: "string",
+					format: "date-time",
+					pattern: expect.any(String),
+				}),
+			);
+			expect(scheduledAtBranches).not.toContainEqual({});
+
 			const listResult = await client.callTool({
 				name: "collections.posts.list",
 				arguments: { limit: 10 },
@@ -481,11 +500,31 @@ describe("@questpie/mcp server", () => {
 
 			const createResult = await client.callTool({
 				name: "collections.posts.create",
-				arguments: { data: { title: "Created", published: false } },
+				arguments: {
+					data: {
+						title: "Created",
+						published: false,
+						scheduledAt: "2025-03-30T01:30:00.123+01:00",
+					},
+				},
 			});
 			expect(createResult.isError).toBeUndefined();
+			expect((createResult.structuredContent as any).scheduledAt).toBe(
+				"2025-03-30T00:30:00.123Z",
+			);
 			const createdId = (createResult.structuredContent as any).id;
 			expect(typeof createdId).toBe("string");
+
+			const ambiguousInstant = await client.callTool({
+				name: "collections.posts.create",
+				arguments: {
+					data: {
+						title: "Ambiguous",
+						scheduledAt: "2025-03-30T01:30:00.123",
+					},
+				},
+			});
+			expect(ambiguousInstant.isError).toBe(true);
 
 			const getResult = await client.callTool({
 				name: "collections.posts.get",

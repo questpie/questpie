@@ -128,7 +128,6 @@ export type RealtimeObservation =
 			operation?: "find" | "count" | "get";
 			requestedLimit?: number;
 			configuredLimit?: number;
-			rolloutMode?: "v2";
 	  }
 	| {
 			type: "topology.lifecycle";
@@ -246,7 +245,7 @@ function metricKey(event: RealtimeObservation): string {
 		case "session.closed":
 			return `${event.type}|reason=${event.reason}|transport=${event.transport}`;
 		case "admission.rejected":
-			return `${event.type}|reason=${event.reason}|rollout_mode=${event.rolloutMode ?? "v2"}`;
+			return `${event.type}|reason=${event.reason}`;
 		case "topology.lifecycle":
 			return `${event.type}|outcome=${event.outcome}|phase=${event.phase}`;
 		case "resume":

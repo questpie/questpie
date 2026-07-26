@@ -72,6 +72,11 @@ class FakePusher {
 mock.module("pusher-js", () => ({ default: FakePusher }));
 
 import { createClient } from "../../src/client/index.js";
+import {
+	parseTypedWire,
+	serializeCompatibleTypedEventWire,
+	stringifyCompatibleTypedEventWire,
+} from "../../src/shared/typed-wire.js";
 
 async function waitFor(
 	assertion: () => boolean,
@@ -86,7 +91,49 @@ async function waitFor(
 }
 
 describe("channels client", () => {
+	test("keeps explicit plain JSON channel publishing interoperable", async () => {
+		const instant = new Date("2026-03-29T00:30:00.000Z");
+		let publishRequest: RequestInit | undefined;
+		const client = createClient<any>({
+			baseURL: "http://localhost:3000",
+			useSuperJSON: false,
+			fetch: async (input, init) => {
+				const url = String(input);
+				if (url.endsWith("/channels/config")) {
+					return Response.json({
+						transport: "sse",
+						channels: {
+							news: { pattern: "news", visibility: "public" },
+						},
+					});
+				}
+				if (url.endsWith("/channels/publish")) {
+					publishRequest = init;
+					return Response.json({ eventId: "event-1" });
+				}
+				throw new Error(`Unexpected request: ${url}`);
+			},
+		});
+
+		await client.channels.news.publish({
+			event: "updated",
+			data: { startsAt: instant },
+		});
+
+		expect(new Headers(publishRequest?.headers).get("Content-Type")).toBe(
+			"application/json",
+		);
+		expect(JSON.parse(String(publishRequest?.body))).toEqual({
+			channel: "news",
+			params: {},
+			event: "updated",
+			data: { startsAt: instant.toISOString() },
+		});
+		client.channels.destroy();
+	});
+
 	test("subscribes and publishes through the SSE transport with fresh auth", async () => {
+		const instant = new Date("2025-03-30T00:30:00.123Z");
 		const requests: Array<{ url: string; init?: RequestInit }> = [];
 		let streamController:
 			| ReadableStreamDefaultController<Uint8Array>
@@ -156,15 +203,21 @@ describe("channels client", () => {
 		await waitFor(() => !!streamController);
 		streamController!.enqueue(
 			encoder.encode(
-				`event: channel_event\ndata: ${JSON.stringify({ type: "channel_event", channel: "news", event: "updated", eventId: `${"d".repeat(64)}:1`, data: { title: "Hello" } })}\n\n`,
+				`event: channel_event\ndata: ${stringifyCompatibleTypedEventWire({ type: "channel_event", channel: "news", event: "updated", eventId: `${"d".repeat(64)}:1`, data: { title: "Hello", startsAt: instant, isoLookingString: instant.toISOString() } })}\n\n`,
 			),
 		);
 		await waitFor(() => messages.length === 1);
 		expect(messages[0]).toEqual({
 			event: "updated",
 			eventId: `${"d".repeat(64)}:1`,
-			data: { title: "Hello" },
+			data: {
+				title: "Hello",
+				startsAt: instant,
+				isoLookingString: instant.toISOString(),
+			},
 		});
+		expect((messages[0] as any).data.startsAt).toBeInstanceOf(Date);
+		expect((messages[0] as any).data.isoLookingString).not.toBeInstanceOf(Date);
 		expect(errors).toHaveLength(0);
 		streamController!.enqueue(
 			encoder.encode(
@@ -184,17 +237,20 @@ describe("channels client", () => {
 		await expect(
 			client.channels.news.publish({
 				event: "updated",
-				data: { title: "Published" },
+				data: { title: "Published", startsAt: instant },
 			}),
 		).resolves.toEqual({ eventId: "event-1" });
 		const publishRequest = requests.find(({ url }) =>
 			url.endsWith("/channels/publish"),
 		);
-		expect(JSON.parse(String(publishRequest?.init?.body))).toEqual({
+		expect(new Headers(publishRequest?.init?.headers).get("Content-Type")).toBe(
+			"application/superjson+json",
+		);
+		expect(parseTypedWire(String(publishRequest?.init?.body))).toEqual({
 			channel: "news",
 			params: {},
 			event: "updated",
-			data: { title: "Published" },
+			data: { title: "Published", startsAt: instant },
 		});
 
 		stopPresence();
@@ -208,6 +264,33 @@ describe("channels client", () => {
 				);
 			}),
 		);
+		streamController!.enqueue(
+			encoder.encode(
+				`event: channel_event\ndata: ${JSON.stringify({
+					type: "channel_event",
+					channel: "news",
+					event: "updated",
+					eventId: `${"d".repeat(64)}:2`,
+					data: {},
+					__questpieTypedWire: { version: 2, dates: [] },
+				})}\n\n`,
+			),
+		);
+		await waitFor(() => errors.length === 1);
+		expect(errors[0]?.message).toContain("typed event protocol error");
+		streamController!.enqueue(
+			encoder.encode(
+				`event: channel_event\ndata: ${JSON.stringify({
+					type: "channel_event",
+					channel: "news",
+					event: "updated",
+					eventId: `${"d".repeat(64)}:3`,
+					data: { title: "must-not-arrive" },
+				})}\n\n`,
+			),
+		);
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		expect(messages).toHaveLength(1);
 		const controlCount = requests.filter(({ url, init }) => {
 			if (!url.endsWith("/realtime")) return false;
 			return Boolean(JSON.parse(String(init?.body)).sessionId);
@@ -307,6 +390,7 @@ describe("channels client", () => {
 
 	test("subscribes to typed provider channels and exposes native presence", async () => {
 		FakePusher.instances = [];
+		const instant = new Date("2025-11-02T05:30:00.000Z");
 		const requests: Array<{ url: string; init?: RequestInit }> = [];
 		let token = 0;
 		const fetcher: typeof fetch = async (input, init) => {
@@ -364,23 +448,46 @@ describe("channels client", () => {
 		await waitFor(() => FakePusher.instances.length === 1);
 		const provider = FakePusher.instances[0];
 		expect(provider.key).toBe("public-key");
+		provider.channel.memberInfos = [
+			serializeCompatibleTypedEventWire({
+				id: "member-1",
+				roomId: "one",
+				joinedAt: instant,
+			}),
+		];
 		provider.channel.emit(
 			"pusher:subscription_succeeded",
 			provider.channel.members,
 		);
-		provider.channel.emit("questpie:channel", {
-			eventId: `${"b".repeat(64)}:2`,
-			event: "message",
-			data: { text: "hello" },
-		});
+		provider.channel.emit(
+			"questpie:channel",
+			serializeCompatibleTypedEventWire({
+				eventId: `${"b".repeat(64)}:2`,
+				event: "message",
+				data: {
+					text: "hello",
+					startsAt: instant,
+					isoLookingString: instant.toISOString(),
+				},
+			}),
+		);
 		await waitFor(() => messages.length === 1);
 		expect(messages[0]).toEqual({
 			event: "message",
 			eventId: `${"b".repeat(64)}:2`,
-			data: { text: "hello" },
+			data: {
+				text: "hello",
+				startsAt: instant,
+				isoLookingString: instant.toISOString(),
+			},
 		});
+		expect((messages[0] as any).data.startsAt).toBeInstanceOf(Date);
+		expect((messages[0] as any).data.isoLookingString).not.toBeInstanceOf(Date);
 		await waitFor(() => rosters.length === 1);
-		expect(rosters[0]).toEqual([{ id: "member-1", roomId: "one" }]);
+		expect(rosters[0]).toEqual([
+			{ id: "member-1", roomId: "one", joinedAt: instant },
+		]);
+		expect((rosters[0] as any)[0].joinedAt).toBeInstanceOf(Date);
 		provider.channel.memberInfos = [
 			{ id: "member-1", roomId: "one" },
 			{ id: "member-2", roomId: "one" },
@@ -453,6 +560,7 @@ describe("channels client", () => {
 	test("replays missed Pusher events after subscription recovery and deduplicates live races", async () => {
 		FakePusher.instances = [];
 		const channelHash = "a".repeat(64);
+		const replayedInstant = new Date("2025-03-30T00:30:00.123Z");
 		const replayRequests: Record<string, unknown>[] = [];
 		let resolveReplay: ((response: Response) => void) | undefined;
 		const fetcher: typeof fetch = async (input, init) => {
@@ -479,10 +587,10 @@ describe("channels client", () => {
 			fetch: fetcher,
 			getAuthHeaders: () => ({ Authorization: "Bearer fresh" }),
 		});
-		const messages: Array<{ eventId: string }> = [];
+		const messages: Array<{ eventId: string; data: any }> = [];
 		const errors: Error[] = [];
 		const stop = client.channels.news.subscribe(
-			(message: { eventId: string }) => messages.push(message),
+			(message: { eventId: string; data: any }) => messages.push(message),
 			{ onError: (error: Error) => errors.push(error) },
 		);
 
@@ -522,11 +630,15 @@ describe("channels client", () => {
 						event: "updated",
 						data: { value: 1 },
 					},
-					{
+					serializeCompatibleTypedEventWire({
 						eventId: `${channelHash}:2`,
 						event: "updated",
-						data: { value: 2 },
-					},
+						data: {
+							value: 2,
+							startsAt: replayedInstant,
+							isoLookingString: replayedInstant.toISOString(),
+						},
+					}),
 				],
 				hasMore: false,
 			}),
@@ -538,6 +650,11 @@ describe("channels client", () => {
 			`${channelHash}:2`,
 			`${channelHash}:3`,
 		]);
+		expect(messages[1]?.data.startsAt).toBeInstanceOf(Date);
+		expect(messages[1]?.data.startsAt.getTime()).toBe(
+			replayedInstant.getTime(),
+		);
+		expect(messages[1]?.data.isoLookingString).not.toBeInstanceOf(Date);
 		expect(errors).toEqual([]);
 
 		stop();
@@ -725,6 +842,169 @@ describe("channels client", () => {
 
 		await waitFor(() => errors.length === 1);
 		expect(errors[0]?.message).toBe("Channel event replay gap");
+		expect(client.channels.channelCount).toBe(0);
+		client.channels.destroy();
+	});
+
+	test("terminates a Pusher channel on an incompatible live frame", async () => {
+		FakePusher.instances = [];
+		const fetcher: typeof fetch = async (input) => {
+			const url = String(input);
+			if (url.endsWith("/channels/config")) {
+				return Response.json({
+					transport: "shared-provider",
+					config: { provider: "pusher", key: "public-key" },
+					channels: {
+						news: { pattern: "news", visibility: "public" },
+					},
+				});
+			}
+			throw new Error(`Unexpected request: ${url}`);
+		};
+		const client = createClient<any>({
+			baseURL: "http://localhost:3000",
+			fetch: fetcher,
+		});
+		const messages: unknown[] = [];
+		const errors: Error[] = [];
+		client.channels.news.subscribe(
+			(message: unknown) => messages.push(message),
+			{ onError: (error: Error) => errors.push(error) },
+		);
+
+		await waitFor(() => FakePusher.instances.length === 1);
+		const provider = FakePusher.instances[0];
+		provider.channel.emit("pusher:subscription_succeeded", {});
+		provider.channel.emit("questpie:channel", {
+			eventId: `${"7".repeat(64)}:1`,
+			event: "updated",
+			data: {},
+			__questpieTypedWire: { version: 2, dates: [] },
+		});
+
+		await waitFor(() => errors.length === 1);
+		expect(errors[0]?.message).toContain(
+			"Unsupported QUESTPIE typed event wire version",
+		);
+		expect(client.channels.channelCount).toBe(0);
+		provider.channel.emit("questpie:channel", {
+			eventId: `${"7".repeat(64)}:2`,
+			event: "updated",
+			data: { value: "must-not-arrive" },
+		});
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		expect(messages).toHaveLength(0);
+		client.channels.destroy();
+	});
+
+	test("rejects presence waiters on incompatible Pusher member metadata", async () => {
+		FakePusher.instances = [];
+		const fetcher: typeof fetch = async (input) => {
+			const url = String(input);
+			if (url.endsWith("/channels/config")) {
+				return Response.json({
+					transport: "shared-provider",
+					config: { provider: "pusher", key: "public-key" },
+					channels: {
+						room: {
+							pattern: "room-[roomId]",
+							visibility: "presence",
+						},
+					},
+				});
+			}
+			if (url.endsWith("/channels/auth")) {
+				return Response.json({ auth: "signed", channel_data: "{}" });
+			}
+			throw new Error(`Unexpected request: ${url}`);
+		};
+		const client = createClient<any>({
+			baseURL: "http://localhost:3000",
+			fetch: fetcher,
+		});
+		const errors: Error[] = [];
+		const presence = client.channels.room.presence(
+			{ roomId: "one" },
+			{ onError: (error: Error) => errors.push(error) },
+		);
+
+		await waitFor(() => FakePusher.instances.length === 1);
+		const provider = FakePusher.instances[0];
+		provider.channel.memberInfos = [
+			{
+				id: "member-1",
+				__questpieTypedWire: { version: 2, dates: [] },
+			},
+		];
+		provider.channel.emit(
+			"pusher:subscription_succeeded",
+			provider.channel.members,
+		);
+
+		await expect(presence).rejects.toThrow(
+			"Unsupported QUESTPIE typed event wire version",
+		);
+		expect(errors).toHaveLength(1);
+		expect(client.channels.channelCount).toBe(0);
+		client.channels.destroy();
+	});
+
+	test("terminates a Pusher channel on an incompatible replay frame", async () => {
+		FakePusher.instances = [];
+		const channelHash = "8".repeat(64);
+		let replay = 0;
+		const fetcher: typeof fetch = async (input) => {
+			const url = String(input);
+			if (url.endsWith("/channels/config")) {
+				return Response.json({
+					transport: "shared-provider",
+					config: { provider: "pusher", key: "public-key" },
+					channels: {
+						news: { pattern: "news", visibility: "public" },
+					},
+				});
+			}
+			if (url.endsWith("/channels/replay")) {
+				replay += 1;
+				return Response.json({
+					status: "events",
+					events: [
+						{
+							eventId: `${channelHash}:2`,
+							event: "updated",
+							data: {},
+							__questpieTypedWire: { version: 2, dates: [] },
+						},
+					],
+					hasMore: false,
+				});
+			}
+			throw new Error(`Unexpected request: ${url}`);
+		};
+		const client = createClient<any>({
+			baseURL: "http://localhost:3000",
+			fetch: fetcher,
+		});
+		const errors: Error[] = [];
+		client.channels.news.subscribe(() => {}, {
+			onError: (error: Error) => errors.push(error),
+		});
+
+		await waitFor(() => FakePusher.instances.length === 1);
+		const provider = FakePusher.instances[0];
+		provider.channel.emit("pusher:subscription_succeeded", {});
+		provider.channel.emit("questpie:channel", {
+			eventId: `${channelHash}:1`,
+			event: "updated",
+			data: {},
+		});
+		provider.channel.emit("pusher:subscription_succeeded", {});
+
+		await waitFor(() => errors.length === 1);
+		expect(replay).toBe(1);
+		expect(errors[0]?.message).toContain(
+			"Unsupported QUESTPIE typed event wire version",
+		);
 		expect(client.channels.channelCount).toBe(0);
 		client.channels.destroy();
 	});

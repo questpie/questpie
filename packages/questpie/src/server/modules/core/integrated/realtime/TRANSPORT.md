@@ -833,10 +833,11 @@ can select `redisStreamsChangeBroker`; neither broker is the durable topology
 store. Generic KV is not a coordinator and load-balancer affinity is not part
 of the correctness contract.
 
-QuestPie 4 accepts only desired topology protocol v2 and uses `ChangeBroker` as
-the only cross-instance wake seam. All request-handling replicas and clients are
-upgraded together across this major-version boundary. After the topology
-migration and multi-pod verification, load-balancer affinity is removed.
+The current QUESTPIE 3.x realtime contract accepts only desired topology
+protocol v2 and uses `ChangeBroker` as the only cross-instance wake seam. All
+request-handling replicas and clients must be upgraded together for this
+consolidated minor train. After the topology migration and multi-pod
+verification, load-balancer affinity is removed.
 
 ## Defect mapping
 

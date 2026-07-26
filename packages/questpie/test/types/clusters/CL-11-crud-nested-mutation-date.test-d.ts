@@ -30,14 +30,14 @@
  *      AUTHORITATIVE TARGET (proposal §CL-11 reviewer override, sub-fix B,
  *      "option b — runtime-safe"): the runtime stores ISO date STRINGS and
  *      `z.string().date()` rejects both Date objects and full-ISO strings, and
- *      the client wire layer uses plain `JSON.stringify` (no superjson). So the
- *      fix NARROWS the date WHERE to `string` (a dedicated `dateStringOps`), it
- *      does NOT widen create to `Date`. The invariant the fix establishes is
- *      therefore **create === where SYMMETRY on `string`** for a date field, and
- *      datetime stays `Date` on both. (The raw findings phrase the target as
- *      "create accepts Date"; the reviewer override supersedes them — we encode
- *      the symmetry + `string`-create as the authoritative goal and note the
- *      discrepancy at each assertion.)
+ *      the typed client wire layer preserves nested `Date` values by exact
+ *      metadata path. So the fix NARROWS the date WHERE to `string` (a dedicated
+ *      `dateStringOps`), it does NOT widen create to `Date`. The invariant the
+ *      fix establishes is therefore **create === where SYMMETRY on `string`**
+ *      for a date field, and datetime stays `Date` on both. (The raw findings
+ *      phrase the target as "create accepts Date"; the reviewer override
+ *      supersedes them — we encode the symmetry + `string`-create as the
+ *      authoritative goal and note the discrepancy at each assertion.)
  *
  * SEQUENCING: this cluster is sequenced AFTER CL-01 — `Exact` over object/json
  * field values (index signatures from CL-01) can mis-fire, so a positive
@@ -60,11 +60,8 @@ import type {
 	NestedRelationMutation,
 	Where as WhereType,
 } from "#questpie/server/collection/crud/types.js";
-import type {
-	ExtractRelationSelect,
-} from "#questpie/shared/type-utils.js";
+import type { ExtractRelationSelect } from "#questpie/shared/type-utils.js";
 
-import type { App, QuestpieApp } from "../_fixtures.js";
 import type {
 	Equal,
 	Expect,
@@ -76,6 +73,7 @@ import type {
 	NoUnknown,
 	Not,
 } from "../_assert.js";
+import type { App, QuestpieApp } from "../_fixtures.js";
 
 // ============================================================================
 // Shared param extractors — route through the REAL public CRUD surface.
@@ -103,9 +101,8 @@ type UpdateByIdArg<K extends keyof Cols> = Cols[K] extends {
 	: never;
 
 /** The id type the by-id surface threads for collection K. */
-type ByIdIdType<K extends keyof Cols> = UpdateByIdArg<K> extends { id: infer I }
-	? I
-	: never;
+type ByIdIdType<K extends keyof Cols> =
+	UpdateByIdArg<K> extends { id: infer I } ? I : never;
 
 // Sanity: the extractors resolve to real objects, never `any`/`never`.
 // (If these fail the whole file is probing the wrong surface — keep them green.)
@@ -230,11 +227,12 @@ void app.collections.articles.create({
 // --- A.5  Nested create-MEMBER well-formed (guards the union is not `any`). ---
 // An `any` member would mean freshness can never apply on either surface; the
 // fix wraps a CONCRETE insert shape. (Structural, surface-independent.)
-type CommentsCreateMember = CreateArg<"articles"> extends {
-	comments?: infer M;
-}
-	? M
-	: never;
+type CommentsCreateMember =
+	CreateArg<"articles"> extends {
+		comments?: infer M;
+	}
+		? M
+		: never;
 type _commentsMemberNotAny = Expect<NoAny<CommentsCreateMember>>;
 type _commentsMemberNotNever = Expect<NoNever<CommentsCreateMember>>;
 
@@ -274,9 +272,8 @@ type _ticketByIdNotString = Expect<Not<Equal<ByIdIdType<"tickets">, string>>>;
 // --- Extract the nested `parent` mutation off the tickets create input. ---
 // `tickets.parent` is a to-one self-relation; its nested mutation `connect.id`
 // and `connectOrCreate.where.id` should be `number` (target = tickets, PK number).
-type TicketParentMutation = CreateArg<"tickets"> extends { parent?: infer M }
-	? M
-	: never;
+type TicketParentMutation =
+	CreateArg<"tickets"> extends { parent?: infer M } ? M : never;
 type _ticketParentNotAny = Expect<NoAny<TicketParentMutation>>;
 
 type TicketParentConnect = TicketParentMutation extends {
@@ -309,20 +306,17 @@ type TicketParentCocWhere = TicketParentCoc extends { where: infer W }
 		? W2
 		: never;
 // `where` is `{ id } | Partial<TInsert>`; extract the by-id arm's id.
-type TicketParentCocWhereId = Extract<
-	TicketParentCocWhere,
-	{ id: any }
-> extends { id: infer I }
-	? I
-	: never;
+type TicketParentCocWhereId =
+	Extract<TicketParentCocWhere, { id: any }> extends { id: infer I }
+		? I
+		: never;
 type _ticketParentCocWhereIdNumber = ExactType<TicketParentCocWhereId, number>;
 
 // --- B.3  String-PK control: an `authors`-targeting connect stays `string`. ---
 // `articles.author` → authors (string PK). After the fix this must remain
 // `string`, proving the threading is target-driven, not blanket-numeric.
-type ArticleAuthorMutation = CreateArg<"articles"> extends { author?: infer M }
-	? M
-	: never;
+type ArticleAuthorMutation =
+	CreateArg<"articles"> extends { author?: infer M } ? M : never;
 type ArticleAuthorConnect = ArticleAuthorMutation extends { connect?: infer C }
 	? NonNullable<C>
 	: never;
@@ -418,7 +412,9 @@ type _dateCreateWhereSymmetry = ExactType<
 // --- C.4  datetime contract is UNCHANGED — create === where === Date (control). ---
 // `f.datetime()` is already symmetric on Date; these must stay green through the fix.
 type _datetimeCreateIsDate = ExactType<NonNullable<PublishedAtCreate>, Date>;
-type _datetimeWhereAcceptsDate = Expect<[Date] extends [PublishedAtWhereVal] ? true : false>;
+type _datetimeWhereAcceptsDate = Expect<
+	[Date] extends [PublishedAtWhereVal] ? true : false
+>;
 type _datetimeCreateWhereSymmetry = Expect<
 	[NonNullable<PublishedAtCreate>] extends [PublishedAtWhereVal]
 		? [PublishedAtWhereVal] extends [Date | string]

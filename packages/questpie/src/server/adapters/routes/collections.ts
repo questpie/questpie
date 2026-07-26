@@ -4,6 +4,7 @@
  * Collection CRUD route handlers.
  */
 
+import { parseRfc3339Instant } from "#questpie/shared/temporal.js";
 import { getTxid, QUESTPIE_TXID_HEADER } from "#questpie/shared/txid.js";
 
 import {
@@ -408,19 +409,8 @@ export async function collectionTransition(
 		};
 
 		if (payload.scheduledAt !== undefined) {
-			if (
-				typeof payload.scheduledAt !== "string" &&
-				!(payload.scheduledAt instanceof Date)
-			) {
-				throw ApiError.badRequest(
-					"Invalid scheduledAt date",
-					undefined,
-					"error.invalidDateField",
-					{ field: "scheduledAt" },
-				);
-			}
-			const date = new Date(payload.scheduledAt);
-			if (Number.isNaN(date.getTime())) {
+			const date = parseRfc3339Instant(payload.scheduledAt);
+			if (!date) {
 				throw ApiError.badRequest(
 					"Invalid scheduledAt date",
 					undefined,

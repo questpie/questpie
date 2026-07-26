@@ -37,6 +37,7 @@
 	},
 	"devDependencies": {
 		"bun-types": "latest",
+		"seroval": "1.5.4",
 		"tsdown": "^0.18.3",
 		"zod": "^4.2.1"
 	},

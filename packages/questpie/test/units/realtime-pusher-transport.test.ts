@@ -15,6 +15,7 @@ import type {
 	ChangeWake,
 } from "#questpie/server/modules/core/integrated/realtime/transport.js";
 import type { RealtimeChangeEvent } from "#questpie/server/modules/core/integrated/realtime/types.js";
+import { deserializeCompatibleTypedEventWire } from "#questpie/shared/typed-wire.js";
 
 type Trigger = {
 	channel: string;
@@ -532,6 +533,7 @@ describe("pusher channel matrix client delivery", () => {
 	});
 
 	test("enforces presence limits and can revoke provider-authenticated users", async () => {
+		const instant = new Date("2025-03-30T00:30:00.123Z");
 		const terminated: string[] = [];
 		const { provider } = createProvider();
 		provider.getPresenceMemberCount = async () => 100;
@@ -570,11 +572,23 @@ describe("pusher channel matrix client delivery", () => {
 			socketId: "123.456",
 			channel: "presence-chat-room-1",
 			principal,
-			member: { user_info: { displayName: "Ada" } },
+			member: {
+				user_info: {
+					displayName: "Ada",
+					startsAt: instant,
+					isoLookingString: instant.toISOString(),
+				},
+			},
 		});
 		const channelData = JSON.parse(auth.channel_data!);
 		expect(channelData.user_id).toHaveLength(64);
 		expect(channelData.user_id).not.toContain("user-1");
+		const member = deserializeCompatibleTypedEventWire<any>(
+			channelData.user_info,
+		);
+		expect(member.startsAt).toBeInstanceOf(Date);
+		expect(member.startsAt.getTime()).toBe(instant.getTime());
+		expect(member.isoLookingString).not.toBeInstanceOf(Date);
 
 		await transport.revokePrincipal(principal);
 		expect(terminated).toEqual([channelData.user_id]);

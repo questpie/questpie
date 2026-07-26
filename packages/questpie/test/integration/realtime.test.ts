@@ -2773,7 +2773,6 @@ describe("realtime matrix", () => {
 				operation: "find",
 				requestedLimit: 101,
 				configuredLimit: 100,
-				rolloutMode: "v2",
 			});
 			expect(JSON.stringify(observations)).not.toContain("item-1");
 			expect(observedLimits).toHaveLength(18);

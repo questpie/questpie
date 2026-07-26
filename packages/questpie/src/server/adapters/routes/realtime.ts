@@ -806,7 +806,6 @@ export async function realtimeSubscribe(
 			type: "admission.rejected",
 			reason,
 			...details,
-			rolloutMode: "v2",
 		});
 	const observeTopicRejection = (error: RealtimeTopicAdmissionError) =>
 		observeAdmission(error.payload.details.reason, {

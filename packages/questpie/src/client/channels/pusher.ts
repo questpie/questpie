@@ -1,3 +1,5 @@
+import { deserializeCompatibleTypedEventWire } from "#questpie/shared/typed-wire.js";
+
 import type { GetAuthHeaders } from "../auth.js";
 import {
 	type ManagedPusherSubscription,
@@ -61,7 +63,9 @@ function collectMembers(value: unknown, channel: ProviderChannel): unknown[] {
 		value && typeof value === "object" && "each" in value
 			? (value as ProviderChannel["members"])
 			: channel.members;
-	source?.each((member) => members.push(member.info ?? member));
+	source?.each((member) =>
+		members.push(deserializeCompatibleTypedEventWire(member.info ?? member)),
+	);
 	return members;
 }
 
@@ -272,33 +276,41 @@ export class PusherChannelTransport implements ChannelClientTransport {
 				this.notify(entry, normalizedError(error)),
 			);
 			channel.bind("pusher:subscription_succeeded", (members) => {
-				if (entry.input.visibility === "presence") {
-					this.setPresence(entry, collectMembers(members, channel));
+				try {
+					if (entry.input.visibility === "presence") {
+						this.setPresence(entry, collectMembers(members, channel));
+					}
+					void this.recover(entry);
+				} catch (error) {
+					this.failEntry(entry, normalizedError(error));
 				}
-				void this.recover(entry);
 			});
 			const refreshPresence = () => {
-				if (entry.input.visibility === "presence") {
-					this.setPresence(entry, collectMembers(undefined, channel));
+				try {
+					if (entry.input.visibility === "presence") {
+						this.setPresence(entry, collectMembers(undefined, channel));
+					}
+				} catch (error) {
+					this.failEntry(entry, normalizedError(error));
 				}
 			};
 			channel.bind("pusher:member_added", refreshPresence);
 			channel.bind("pusher:member_removed", refreshPresence);
 		} catch (error) {
-			this.notify(entry, normalizedError(error));
+			this.failEntry(entry, normalizedError(error));
 		}
 	}
 
 	private handleMessage(entry: Entry, payload: unknown): void {
 		try {
-			if (!payload || typeof payload !== "object") {
-				throw new Error("Invalid channel provider payload");
-			}
-			const envelope = payload as {
+			const envelope = deserializeCompatibleTypedEventWire<{
 				eventId?: unknown;
 				event?: unknown;
 				data?: unknown;
-			};
+			}>(payload);
+			if (!envelope || typeof envelope !== "object") {
+				throw new Error("Invalid channel provider payload");
+			}
 			if (
 				typeof envelope.eventId !== "string" ||
 				typeof envelope.event !== "string"
@@ -318,7 +330,7 @@ export class PusherChannelTransport implements ChannelClientTransport {
 			}
 			this.deliver(entry, message);
 		} catch (error) {
-			this.notify(entry, normalizedError(error));
+			this.failEntry(entry, normalizedError(error));
 		}
 	}
 
@@ -393,14 +405,14 @@ export class PusherChannelTransport implements ChannelClientTransport {
 	}
 
 	private parseReplayMessage(value: unknown): ChannelTransportMessage {
-		if (!value || typeof value !== "object") {
-			throw new Error("Invalid channel replay response");
-		}
-		const message = value as {
+		const message = deserializeCompatibleTypedEventWire<{
 			eventId?: unknown;
 			event?: unknown;
 			data?: unknown;
-		};
+		}>(value);
+		if (!message || typeof message !== "object") {
+			throw new Error("Invalid channel replay response");
+		}
 		if (
 			typeof message.eventId !== "string" ||
 			typeof message.event !== "string"

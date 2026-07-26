@@ -1,6 +1,7 @@
 import { createHmac, createHash } from "node:crypto";
 
 import type { Principal } from "#questpie/server/config/context.js";
+import { serializeCompatibleTypedEventWire } from "#questpie/shared/typed-wire.js";
 
 import {
 	normalizeChangeWake,
@@ -541,7 +542,13 @@ export class PusherClientTransport implements SharedProviderClientTransport {
 		}
 		const presence = {
 			user_id: userId,
-			...(input.member?.user_info ? { user_info: input.member.user_info } : {}),
+			...(input.member?.user_info
+				? {
+						user_info: serializeCompatibleTypedEventWire(
+							input.member.user_info,
+						),
+					}
+				: {}),
 		};
 		if (byteLength(presence) > MAX_PRESENCE_DATA_BYTES) {
 			throw new Error(

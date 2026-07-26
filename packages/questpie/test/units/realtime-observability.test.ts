@@ -31,7 +31,6 @@ describe("realtime matrix observability", () => {
 			operation: "find",
 			requestedLimit: 240,
 			configuredLimit: 100,
-			rolloutMode: "v2",
 		});
 
 		expect(events).toEqual([
@@ -42,11 +41,10 @@ describe("realtime matrix observability", () => {
 				operation: "find",
 				requestedLimit: 240,
 				configuredLimit: 100,
-				rolloutMode: "v2",
 			},
 		]);
 		expect(observability.snapshot().counters).toMatchObject({
-			"admission.rejected|reason=query_limit|rollout_mode=v2": 1,
+			"admission.rejected|reason=query_limit": 1,
 		});
 		expect(JSON.stringify(warnings)).not.toContain("where");
 	});

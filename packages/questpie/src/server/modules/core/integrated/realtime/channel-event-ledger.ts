@@ -12,6 +12,10 @@ import {
 } from "#questpie/server/collection/crud/shared/transaction.js";
 import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
 import type { LoggerAdapter } from "#questpie/server/modules/core/integrated/logger/types.js";
+import {
+	parseCompatibleTypedEventWire,
+	stringifyCompatibleTypedEventWire,
+} from "#questpie/shared/typed-wire.js";
 
 import {
 	questpieChannelDispatchTable,
@@ -137,7 +141,7 @@ function canonicalChannelEnvelope(
 ): { wireJson: string; sizeBytes: number } {
 	let wireJson: string | undefined;
 	try {
-		wireJson = JSON.stringify({ eventId, event, data });
+		wireJson = stringifyCompatibleTypedEventWire({ eventId, event, data });
 	} catch {
 		throw new ChannelSecurityError(
 			"channel_payload_invalid",
@@ -440,11 +444,7 @@ export class ChannelEventLedger {
 				hasMore = true;
 				break;
 			}
-			events.push({
-				eventId: row.eventId,
-				event: row.event,
-				data: row.payload,
-			});
+			events.push(JSON.parse(row.wireJson));
 			bytes += row.sizeBytes;
 		}
 		if (hasMore && events.length === 0) {
@@ -683,12 +683,17 @@ export class ChannelEventLedger {
 	}
 
 	private toLocalFrame(row: ChannelEventRow): OrderedChannelEventFrame {
+		const envelope = parseCompatibleTypedEventWire<{
+			eventId: string;
+			event: string;
+			data: unknown;
+		}>(row.wireJson);
 		return {
 			type: "channel_event",
 			channel: row.channel,
-			event: row.event,
-			eventId: row.eventId,
-			data: row.payload,
+			event: envelope.event,
+			eventId: envelope.eventId,
+			data: envelope.data,
 		};
 	}
 

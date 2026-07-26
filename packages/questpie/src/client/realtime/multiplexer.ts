@@ -9,6 +9,7 @@ import {
 	isRealtimeTopicRejectedPayload,
 	type RealtimeTopicRejectedPayload,
 } from "../../shared/realtime-error.js";
+import { parseCompatibleTypedEventWire } from "../../shared/typed-wire.js";
 import type { GetAuthHeaders } from "../auth.js";
 import type { CrdtRealtimeEdgeCapability } from "./session.js";
 import type { SseConnectionManager } from "./sse-connection.js";
@@ -426,6 +427,48 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		}
 	}
 
+	private failTopic(topicId: string, error: Error): void {
+		if (!this.topics.has(topicId)) return;
+		this.notifyTopicError(topicId, error);
+		this.sharedTopicReleases.get(topicId)?.();
+		this.sharedTopicReleases.delete(topicId);
+		this.subscribers.delete(topicId);
+		this.errorCallbacks.delete(topicId);
+		this.topics.delete(topicId);
+		this.lastSeq.delete(topicId);
+		for (const [topicHash, customId] of this.customIds) {
+			if (customId === topicId) this.customIds.delete(topicHash);
+		}
+		this.applyTopologyChange(topicId);
+	}
+
+	private failProtocolEvent(data: string, cause: unknown): void {
+		const normalized =
+			cause instanceof Error ? cause : new Error(String(cause));
+		const error = new Error(
+			`Realtime typed event protocol error: ${normalized.message}`,
+		);
+		let topicId: string | undefined;
+		try {
+			const legacyFrame = JSON.parse(data) as unknown;
+			if (
+				legacyFrame &&
+				typeof legacyFrame === "object" &&
+				typeof (legacyFrame as { topicId?: unknown }).topicId === "string"
+			) {
+				topicId = (legacyFrame as { topicId: string }).topicId;
+			}
+		} catch {}
+
+		if (topicId && this.topics.has(topicId)) {
+			this.failTopic(topicId, error);
+			return;
+		}
+		for (const activeTopicId of this.topics.keys()) {
+			this.failTopic(activeTopicId, error);
+		}
+	}
+
 	/**
 	 * Schedule a reconnection with debounce.
 	 * If stream is active, abort it immediately to apply new topics.
@@ -618,9 +661,16 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		) {
 			try {
 				const payload = {
-					...JSON.parse(event.data),
+					...parseCompatibleTypedEventWire<Record<string, unknown>>(event.data),
 					type: event.type,
 				} as RealtimeStreamEvent;
+				if (
+					typeof payload.topicId !== "string" ||
+					!Number.isSafeInteger(payload.seq) ||
+					payload.seq < 0
+				) {
+					throw new Error("Invalid realtime event envelope");
+				}
 				if (Number.isSafeInteger(payload.seq) && payload.seq >= 0) {
 					this.lastSeq.set(payload.topicId, payload.seq);
 				}
@@ -631,8 +681,8 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 						callback(payload);
 					}
 				}
-			} catch {
-				// Ignore parse errors
+			} catch (error) {
+				this.failProtocolEvent(event.data, error);
 			}
 		} else if (event.type === "session") {
 			try {

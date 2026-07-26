@@ -1,3 +1,5 @@
+import { parseCompatibleTypedEventWire } from "#questpie/shared/typed-wire.js";
+
 import type { GetAuthHeaders } from "../auth.js";
 import type { SseConnectionManager } from "../realtime/sse-connection.js";
 import { channelGapError, OrderedChannelCursor } from "./ordered-events.js";
@@ -437,7 +439,9 @@ export class SseChannelTransport implements ChannelClientTransport {
 			return;
 		}
 		try {
-			const frame = JSON.parse(event.data) as Record<string, unknown>;
+			const frame = parseCompatibleTypedEventWire<Record<string, unknown>>(
+				event.data,
+			);
 			if (event.type === "channel_event") {
 				const entry = this.entryForFrame(frame);
 				if (
@@ -482,7 +486,41 @@ export class SseChannelTransport implements ChannelClientTransport {
 					);
 				}
 			}
+		} catch (error) {
+			this.failProtocolFrame(event.data, error);
+		}
+	}
+
+	private failProtocolFrame(data: string, cause: unknown): void {
+		const normalized =
+			cause instanceof Error ? cause : new Error(String(cause));
+		const error = new Error(
+			`Channel typed event protocol error: ${normalized.message}`,
+		);
+		let channel: string | undefined;
+		try {
+			const legacyFrame = JSON.parse(data) as unknown;
+			if (
+				legacyFrame &&
+				typeof legacyFrame === "object" &&
+				typeof (legacyFrame as { channel?: unknown }).channel === "string"
+			) {
+				channel = (legacyFrame as { channel: string }).channel;
+			}
 		} catch {}
+
+		if (channel) {
+			const entry = this.entries.get(channel);
+			if (entry) {
+				this.notifyEntry(entry, error);
+				this.removeEntry(channel);
+				return;
+			}
+		}
+		for (const entry of this.entries.values()) {
+			this.notifyEntry(entry, error);
+			this.removeEntry(entry.input.resolvedName);
+		}
 	}
 
 	private setPresence(entry: Entry, members: readonly unknown[]): void {

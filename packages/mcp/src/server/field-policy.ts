@@ -166,7 +166,12 @@ export function createCollectionDataSchema(
 			? validation?.insertSchema
 			: validation?.updateSchema;
 
-	return filterZodObjectSchema(schema, policy, entityFieldNames(collection));
+	return filterZodObjectSchema(
+		schema,
+		policy,
+		entityFieldNames(collection),
+		entityFieldDefinitions(collection),
+	);
 }
 
 export function createGlobalDataSchema(
@@ -180,6 +185,7 @@ export function createGlobalDataSchema(
 		validation?.updateSchema,
 		policy,
 		entityFieldNames(global),
+		entityFieldDefinitions(global),
 	);
 }
 
@@ -187,6 +193,7 @@ function filterZodObjectSchema(
 	schema: z.ZodTypeAny | undefined,
 	policy: PolicyWithFields,
 	knownFields?: string[],
+	fieldDefinitions?: Record<string, unknown>,
 ): z.ZodTypeAny {
 	if (!schema || !(schema instanceof z.ZodObject)) {
 		const allowed = allowedKeysFor(knownFields ?? [], policy);
@@ -207,16 +214,78 @@ function filterZodObjectSchema(
 	const nextShape: Record<string, z.ZodTypeAny> = {};
 	for (const key of allowed) {
 		if (hasOwn(shape, key))
-			nextShape[key] = jsonSchemaCompatibleSchema(shape[key]) ?? z.unknown();
+			nextShape[key] =
+				jsonCompatibleFieldSchema(fieldDefinitions?.[key], shape[key]) ??
+				z.unknown();
 	}
 
 	return z.object(nextShape).strict();
+}
+
+function jsonCompatibleFieldSchema(
+	fieldDefinition: unknown,
+	schema: z.ZodTypeAny,
+): z.ZodTypeAny | undefined {
+	if (!isRecord(fieldDefinition) || !isRecord(fieldDefinition._state)) {
+		return jsonSchemaCompatibleSchema(schema);
+	}
+	const state = fieldDefinition._state;
+	const type = state.type;
+	let external: z.ZodTypeAny | undefined;
+
+	if (type === "datetime" || type === "date") {
+		const item =
+			type === "datetime" ? z.iso.datetime({ offset: true }) : z.iso.date();
+		if (state.isArray === true) {
+			let arraySchema = z.array(item);
+			if (typeof state.minItems === "number") {
+				arraySchema = arraySchema.min(state.minItems);
+			}
+			if (typeof state.maxItems === "number") {
+				arraySchema = arraySchema.max(state.maxItems);
+			}
+			external = arraySchema;
+		} else {
+			external = item;
+		}
+	} else if (type === "object" && isRecord(state.nestedFields)) {
+		const nestedShape: Record<string, z.ZodTypeAny> = {};
+		for (const [key, nestedDefinition] of Object.entries(state.nestedFields)) {
+			if (
+				!isRecord(nestedDefinition) ||
+				typeof nestedDefinition.toZodSchema !== "function"
+			) {
+				continue;
+			}
+			const nestedSchema = nestedDefinition.toZodSchema() as z.ZodTypeAny;
+			nestedShape[key] =
+				jsonCompatibleFieldSchema(nestedDefinition, nestedSchema) ??
+				z.unknown();
+		}
+		external = z.object(nestedShape);
+	} else {
+		return jsonSchemaCompatibleSchema(schema);
+	}
+
+	if (!external) return undefined;
+	if (schema.isNullable()) external = external.nullable();
+	if (schema.isOptional()) external = external.optional();
+	return external;
 }
 
 export function entityFieldNames(entity: unknown): string[] | undefined {
 	const fields = (entity as { state?: { fields?: unknown } }).state?.fields;
 	if (!isRecord(fields)) return undefined;
 	return Object.keys(fields);
+}
+
+function entityFieldDefinitions(
+	entity: unknown,
+): Record<string, unknown> | undefined {
+	const fieldDefinitions = (
+		entity as { state?: { fieldDefinitions?: unknown } }
+	).state?.fieldDefinitions;
+	return isRecord(fieldDefinitions) ? fieldDefinitions : undefined;
 }
 
 export function allowedEntityFieldNames(

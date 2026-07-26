@@ -1,5 +1,4 @@
 import qs from "qs";
-import superjson from "superjson";
 
 import type { GlobalSchema } from "#questpie/server/global/introspection.js";
 import type {
@@ -23,6 +22,10 @@ import type {
 	GlobalUpdate,
 	ResolveRelationsDeep,
 } from "#questpie/shared/type-utils.js";
+import {
+	parseTypedWire,
+	stringifyTypedWire,
+} from "#questpie/shared/typed-wire.js";
 
 import type { ChannelDefinitions } from "../server/channels/channel-builder.js";
 import type {
@@ -1073,9 +1076,13 @@ export function createClient<TApp extends QuestpieApp>(
 	/**
 	 * Make a request to the app API
 	 */
+	type QuestpieRequestInit = RequestInit & {
+		json?: unknown;
+	};
+
 	async function requestWithMeta(
 		path: string,
-		options: RequestInit = {},
+		options: QuestpieRequestInit = {},
 	): Promise<{ data: any; headers: Headers }> {
 		const url = `${config.baseURL}${path}`;
 		const useSuperJSON = config.useSuperJSON !== false; // default true
@@ -1096,19 +1103,16 @@ export function createClient<TApp extends QuestpieApp>(
 			headers["X-SuperJSON"] = "1";
 		}
 
-		// Serialize body with SuperJSON if enabled
-		let body = options.body;
-		if (body && typeof body === "string" && useSuperJSON) {
-			try {
-				const parsed = JSON.parse(body);
-				body = superjson.stringify(parsed);
-			} catch {
-				// If parsing fails, keep original body
-			}
-		}
+		const { json, ...requestOptions } = options;
+		const body =
+			json === undefined
+				? requestOptions.body
+				: useSuperJSON
+					? stringifyTypedWire(json)
+					: JSON.stringify(json);
 
 		const response = await fetcher(url, {
-			...options,
+			...requestOptions,
 			headers,
 			body,
 			credentials: "include", // Ensure cookies are sent with requests
@@ -1122,7 +1126,7 @@ export function createClient<TApp extends QuestpieApp>(
 				const text = await response.text();
 				if (text) {
 					errorData = responseContentType?.includes("superjson")
-						? superjson.parse(text)
+						? parseTypedWire(text)
 						: JSON.parse(text);
 				}
 			} catch {
@@ -1163,7 +1167,7 @@ export function createClient<TApp extends QuestpieApp>(
 
 		return {
 			data: responseContentType?.includes("superjson")
-				? superjson.parse(text)
+				? parseTypedWire(text)
 				: JSON.parse(text),
 			headers: response.headers,
 		};
@@ -1171,14 +1175,14 @@ export function createClient<TApp extends QuestpieApp>(
 
 	async function request(
 		path: string,
-		options: RequestInit = {},
+		options: QuestpieRequestInit = {},
 	): Promise<any> {
 		return (await requestWithMeta(path, options)).data;
 	}
 
 	async function mutationRequest(
 		path: string,
-		options: RequestInit,
+		options: QuestpieRequestInit,
 	): Promise<any> {
 		const { data, headers } = await requestWithMeta(path, options);
 		return attachTxid(data, headers.get(QUESTPIE_TXID_HEADER));
@@ -1263,6 +1267,7 @@ export function createClient<TApp extends QuestpieApp>(
 		baseUrl: `${config.baseURL}${apiBasePath}`,
 		withCredentials: true,
 		fetcher,
+		useSuperJSON: config.useSuperJSON !== false,
 		getAuthHeaders: config.getAuthHeaders,
 		pusherConnection,
 		sseConnection,
@@ -1373,7 +1378,7 @@ export function createClient<TApp extends QuestpieApp>(
 					const path = `${apiBasePath}/${collectionName}${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
-						body: JSON.stringify(data),
+						json: data,
 					});
 				},
 
@@ -1388,7 +1393,7 @@ export function createClient<TApp extends QuestpieApp>(
 					const path = `${apiBasePath}/${collectionName}/${id}${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "PATCH",
-						body: JSON.stringify(data),
+						json: data,
 					});
 				},
 
@@ -1469,7 +1474,7 @@ export function createClient<TApp extends QuestpieApp>(
 					const path = `${apiBasePath}/${collectionName}/${id}/revert${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
-						body: JSON.stringify({ version, versionId }),
+						json: { version, versionId },
 					});
 				},
 
@@ -1495,7 +1500,7 @@ export function createClient<TApp extends QuestpieApp>(
 					};
 					return request(path, {
 						method: "POST",
-						body: JSON.stringify(body),
+						json: body,
 					});
 				},
 
@@ -1510,7 +1515,7 @@ export function createClient<TApp extends QuestpieApp>(
 					const path = `${apiBasePath}/${collectionName}${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "PATCH",
-						body: JSON.stringify({ where, data }),
+						json: { where, data },
 					});
 				},
 
@@ -1525,7 +1530,7 @@ export function createClient<TApp extends QuestpieApp>(
 					const path = `${apiBasePath}/${collectionName}/update-batch${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
-						body: JSON.stringify({ updates }),
+						json: { updates },
 					});
 				},
 
@@ -1540,7 +1545,7 @@ export function createClient<TApp extends QuestpieApp>(
 					const path = `${apiBasePath}/${collectionName}/delete-many${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
-						body: JSON.stringify({ where }),
+						json: { where },
 					});
 				},
 
@@ -1800,7 +1805,7 @@ export function createClient<TApp extends QuestpieApp>(
 						`${apiBasePath}/globals/${globalName}${queryString ? `?${queryString}` : ""}`,
 						{
 							method: "PATCH",
-							body: JSON.stringify(data),
+							json: data,
 						},
 					);
 				},
@@ -1858,7 +1863,7 @@ export function createClient<TApp extends QuestpieApp>(
 						`${apiBasePath}/globals/${globalName}/revert${queryString ? `?${queryString}` : ""}`,
 						{
 							method: "POST",
-							body: JSON.stringify(params),
+							json: params,
 						},
 					);
 				},
@@ -1881,7 +1886,7 @@ export function createClient<TApp extends QuestpieApp>(
 						`${apiBasePath}/globals/${globalName}/transition${queryString ? `?${queryString}` : ""}`,
 						{
 							method: "POST",
-							body: JSON.stringify({
+							json: {
 								stage: params.stage,
 								...(params.scheduledAt !== undefined
 									? {
@@ -1891,7 +1896,7 @@ export function createClient<TApp extends QuestpieApp>(
 													: params.scheduledAt,
 										}
 									: {}),
-							}),
+							},
 						},
 					);
 				},
@@ -1908,7 +1913,7 @@ export function createClient<TApp extends QuestpieApp>(
 		search: async (options: SearchOptions) => {
 			return request(`${apiBasePath}/search`, {
 				method: "POST",
-				body: JSON.stringify(options),
+				json: options,
 			});
 		},
 
@@ -1939,7 +1944,7 @@ export function createClient<TApp extends QuestpieApp>(
 			const path = segments.map(camelToKebab).join("/");
 			return request(`${apiBasePath}/${path}`, {
 				method: "POST",
-				body: input !== undefined ? JSON.stringify(input) : undefined,
+				json: input,
 			});
 		};
 
@@ -1967,7 +1972,7 @@ export function createClient<TApp extends QuestpieApp>(
 						}
 						return request(`${apiBasePath}/${path}`, {
 							method: methodUpper,
-							body: input !== undefined ? JSON.stringify(input) : undefined,
+							json: input,
 						});
 					};
 				}
@@ -1980,7 +1985,7 @@ export function createClient<TApp extends QuestpieApp>(
 				const path = segments.map(camelToKebab).join("/");
 				return request(`${apiBasePath}/${path}`, {
 					method: "POST",
-					body: input !== undefined ? JSON.stringify(input) : undefined,
+					json: input,
 				});
 			},
 		});

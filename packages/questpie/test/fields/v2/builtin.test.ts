@@ -251,11 +251,26 @@ describe("date()", () => {
 		const f = date().autoNow();
 		expect(f._state.hasDefault).toBe(true);
 		expect(f._state.defaultValue).toBeTypeOf("function");
+		const value = (f._state.defaultValue as () => unknown)();
+		expect(value).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+		expect(value).not.toBeInstanceOf(Date);
 	});
 
 	it(".autoNowUpdate() sets hooks", () => {
 		const f = date().autoNowUpdate();
 		expect(f._state.hooks?.beforeChange).toBeDefined();
+		const value = f._state.hooks?.beforeChange?.("2000-01-01", {} as never);
+		expect(value).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+		expect(value).not.toBeInstanceOf(Date);
+	});
+
+	it("keeps date-only values as exact strings", () => {
+		const schema = date().required().toZodSchema();
+		expect(schema.safeParse("2025-03-30").data).toBe("2025-03-30");
+		expect(schema.safeParse(new Date("2025-03-30T00:00:00.000Z")).success).toBe(
+			false,
+		);
+		expect(schema.safeParse("2025-03-30T00:00:00.000Z").success).toBe(false);
 	});
 });
 
@@ -279,10 +294,19 @@ describe("datetime()", () => {
 		expect(col).toBeDefined();
 	});
 
-	it("generates schema that coerces dates", () => {
+	it("accepts Date objects and RFC 3339 instants with explicit zones", () => {
 		const schema = datetime().required().toZodSchema();
-		expect(schema.safeParse(new Date()).success).toBe(true);
-		expect(schema.safeParse("2024-01-01T00:00:00Z").success).toBe(true);
+		const instant = new Date("2025-03-30T00:30:00.123Z");
+		expect(schema.safeParse(instant).data).toEqual(instant);
+		expect(schema.safeParse("2025-03-30T01:30:00.123+01:00").data).toEqual(
+			instant,
+		);
+	});
+
+	it("rejects ambiguous timezone-less datetime strings", () => {
+		const schema = datetime().required().toZodSchema();
+		expect(schema.safeParse("2025-03-30T01:30:00.123").success).toBe(false);
+		expect(schema.safeParse("2025-03-30").success).toBe(false);
 	});
 });
 

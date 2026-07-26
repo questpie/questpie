@@ -5,6 +5,7 @@ import type {
 	FieldHookContext,
 	FieldHooks,
 } from "#questpie/server/fields/types.js";
+import { parseRfc3339Instant } from "#questpie/shared/temporal.js";
 
 type RuntimeOperation = "create" | "read" | "update";
 
@@ -42,6 +43,47 @@ function createFieldHookContext(params: {
 		db: params.db,
 		config: params.config,
 	};
+}
+
+function hydrateFieldOutput(field: Field<FieldState>, value: unknown): unknown {
+	if (value === null || value === undefined) return value;
+	const state = field._state;
+
+	if (state.isArray === true) {
+		if (!Array.isArray(value)) {
+			throw new TypeError("QUESTPIE array field returned a non-array value");
+		}
+		const innerField = state.innerField as Field<FieldState> | undefined;
+		return innerField
+			? value.map((item) => hydrateFieldOutput(innerField, item))
+			: value;
+	}
+
+	if (state.type === "datetime") {
+		const instant = parseRfc3339Instant(value);
+		if (!instant) {
+			throw new TypeError(
+				"QUESTPIE datetime field returned an invalid stored instant",
+			);
+		}
+		return instant;
+	}
+
+	if (state.type === "object" && state.nestedFields) {
+		if (typeof value !== "object" || Array.isArray(value)) {
+			throw new TypeError("QUESTPIE object field returned a non-object value");
+		}
+		const output = { ...(value as Record<string, unknown>) };
+		for (const [fieldName, nestedField] of Object.entries(
+			state.nestedFields as Record<string, Field<FieldState>>,
+		)) {
+			if (!(fieldName in output)) continue;
+			output[fieldName] = hydrateFieldOutput(nestedField, output[fieldName]);
+		}
+		return output;
+	}
+
+	return value;
 }
 
 export async function applyFieldInputHooks(params: {
@@ -116,6 +158,10 @@ export async function applyFieldOutputHooks(params: {
 
 	for (const [fieldName, fieldDef] of Object.entries(params.fieldDefinitions)) {
 		if (!(fieldName in params.data)) continue;
+		params.data[fieldName] = hydrateFieldOutput(
+			fieldDef,
+			params.data[fieldName],
+		);
 
 		const hooks = fieldDef._state.hooks as FieldHooks<unknown> | undefined;
 		if (!hooks?.afterRead) continue;

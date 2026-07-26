@@ -13,6 +13,7 @@ import {
 import type { Principal } from "#questpie/server/config/context.js";
 import type { ChannelSecurityObservationReason } from "#questpie/server/modules/core/integrated/realtime/observer.js";
 import { routeApp } from "#questpie/server/routes/route-app.js";
+import { parseTypedWire } from "#questpie/shared/typed-wire.js";
 
 type ChannelRouteContext = object & {
 	db?: unknown;
@@ -218,14 +219,20 @@ export async function parseChannelPublishRequest(request: Request): Promise<
 		.split(";", 1)[0]
 		?.trim()
 		.toLowerCase();
-	if (mediaType !== "application/json") {
+	if (
+		mediaType !== "application/json" &&
+		mediaType !== "application/superjson+json"
+	) {
 		throw Object.assign(new Error("Unsupported channel publish content type"), {
 			status: 415,
 		});
 	}
 	let json: unknown;
 	try {
-		json = await request.json();
+		json =
+			mediaType === "application/superjson+json"
+				? parseTypedWire(await request.text())
+				: await request.json();
 	} catch {
 		throw Object.assign(new Error("Invalid channel publish body"), {
 			status: 400,

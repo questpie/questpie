@@ -1,4 +1,5 @@
 import type { ChannelDefinitions } from "#questpie/server/channels/channel-builder.js";
+import { stringifyTypedWire } from "#questpie/shared/typed-wire.js";
 
 import type { GetAuthHeaders } from "../auth.js";
 import {
@@ -98,6 +99,7 @@ export function createChannelsAPI<
 	baseUrl: string;
 	withCredentials: boolean;
 	fetcher: typeof fetch;
+	useSuperJSON?: boolean;
 	getAuthHeaders?: GetAuthHeaders;
 	pusherConnection?: PusherConnectionManager;
 	sseConnection?: SseConnectionManager;
@@ -232,8 +234,16 @@ export function createChannelsAPI<
 					`${options.baseUrl}/channels/publish`,
 					{
 						method: "POST",
-						headers: { "Content-Type": "application/json", ...authHeaders },
-						body: JSON.stringify({
+						headers: {
+							"Content-Type":
+								options.useSuperJSON !== false
+									? "application/superjson+json"
+									: "application/json",
+							...authHeaders,
+						},
+						body: (options.useSuperJSON !== false
+							? stringifyTypedWire
+							: JSON.stringify)({
 							channel: registryKey,
 							params: input.params ?? {},
 							event: input.event,

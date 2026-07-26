@@ -9,6 +9,10 @@ import type { RealtimeObservation } from "../../src/server/modules/core/integrat
 import type { PusherProvider } from "../../src/server/modules/core/integrated/realtime/pusher-transport.js";
 import { PusherClientTransport } from "../../src/server/modules/core/integrated/realtime/pusher-transport.js";
 import { setChannelPublishLimiterForTests } from "../../src/server/modules/core/routes/channels/_shared.js";
+import {
+	parseCompatibleTypedEventWire,
+	stringifyTypedWire,
+} from "../../src/shared/typed-wire.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 import { runTestDbMigrations } from "../utils/test-db.js";
 
@@ -51,7 +55,9 @@ async function readSseEvent(
 				.split("\n")
 				.find((line) => line.startsWith("data: "))
 				?.slice(6);
-			if (type === eventType && data) return JSON.parse(data);
+			if (type === eventType && data) {
+				return parseCompatibleTypedEventWire<Record<string, unknown>>(data);
+			}
 		}
 		const next = await reader.read();
 		if (next.done) throw new Error(`SSE ended before ${eventType}`);
@@ -152,6 +158,71 @@ describe("channel module routes", () => {
 			eventId: expect.any(String),
 			data: { text: "hello" },
 		});
+		await reader.cancel();
+	});
+
+	test("preserves typed instants from publish validation through SSE delivery", async () => {
+		const instant = new Date("2025-03-30T00:30:00.123Z");
+		const setup = await buildMockApp(
+			{
+				channels: {
+					events: channel("events")
+						.events({
+							scheduled: z.object({
+								startsAt: z.date(),
+								dateOnly: z.string().date(),
+								isoLookingString: z.string(),
+							}),
+						})
+						.authorize({ subscribe: true, publish: true }),
+				},
+			},
+			{
+				app: { url: "https://app.example.com" },
+				realtime: { retentionDays: 0, rowLiveQueries: false },
+			},
+		);
+		cleanup = setup.cleanup;
+		await runTestDbMigrations(setup.app);
+		const handler = createFetchHandler(setup.app);
+		const streamResponse = await handler(
+			channelRequest("realtime", {
+				channels: [{ id: "events", channel: "events", params: {} }],
+			}),
+		);
+		expect(streamResponse.status).toBe(200);
+		const reader = streamResponse.body!.getReader();
+		const state = { buffer: "" };
+		await readSseEvent(reader, state, "session");
+
+		const publishResponse = await handler(
+			new Request("https://app.example.com/channels/publish", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/superjson+json",
+					Origin: "https://app.example.com",
+				},
+				body: stringifyTypedWire({
+					channel: "events",
+					params: {},
+					event: "scheduled",
+					data: {
+						startsAt: instant,
+						dateOnly: "2025-03-30",
+						isoLookingString: instant.toISOString(),
+					},
+				}),
+			}),
+		);
+		expect(publishResponse.status).toBe(200);
+		const delivered = await readSseEvent(reader, state, "channel_event");
+		expect((delivered.data as any).startsAt).toBeInstanceOf(Date);
+		expect((delivered.data as any).startsAt.getTime()).toBe(instant.getTime());
+		expect((delivered.data as any).dateOnly).toBe("2025-03-30");
+		expect((delivered.data as any).isoLookingString).toBe(
+			instant.toISOString(),
+		);
+		expect((delivered.data as any).isoLookingString).not.toBeInstanceOf(Date);
 		await reader.cancel();
 	});
 

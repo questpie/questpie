@@ -1,3 +1,5 @@
+import { stringifyCompatibleTypedEventWire } from "#questpie/shared/typed-wire.js";
+
 import type { RealtimeObservation, RealtimeObserver } from "./observer.js";
 import { BoundedOrderedFifoWriter } from "./ordered-fifo-writer.js";
 import type {
@@ -26,9 +28,11 @@ export function encodeSseComment(comment: string): Uint8Array {
 }
 
 export function encodeSseEvent(event: string, data: unknown): Uint8Array {
-	return new TextEncoder().encode(
-		`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`,
-	);
+	const serialized =
+		typeof data === "object" && data !== null && !Array.isArray(data)
+			? stringifyCompatibleTypedEventWire(data as Record<string, unknown>)
+			: JSON.stringify(data);
+	return new TextEncoder().encode(`event: ${event}\ndata: ${serialized}\n\n`);
 }
 
 class SseClientSink implements ClientSink {
