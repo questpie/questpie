@@ -45,6 +45,7 @@
 		"./channels": "./src/exports/channels.ts",
 		"./cli": "./src/exports/cli.ts",
 		"./client": "./src/exports/client.ts",
+		"./client-react": "./src/exports/client-react.ts",
 		"./codegen": "./src/exports/codegen.ts",
 		"./crdt": "./src/exports/crdt.ts",
 		"./drizzle": "./src/exports/drizzle.ts",
@@ -96,6 +97,7 @@
 			"./channels": "./dist/channels.mjs",
 			"./cli": "./dist/cli.mjs",
 			"./client": "./dist/client.mjs",
+			"./client-react": "./dist/client-react.mjs",
 			"./codegen": "./dist/codegen.mjs",
 			"./crdt": "./dist/crdt.mjs",
 			"./drizzle": "./dist/drizzle.mjs",
@@ -158,11 +160,14 @@
 		"bullmq": "^5.0.0",
 		"bun-types": "latest",
 		"drizzle-kit": "1.0.0-beta.6-4414a19",
+		"jsdom": "^27.4.0",
 		"nodemailer": "^9.0.0",
 		"pg": "^8.13.1",
 		"pg-boss": "^12.5.4",
 		"pusher": "^5.3.4",
 		"pusher-js": "^8.5.0",
+		"react": "^19.2.0",
+		"react-dom": "^19.2.0",
 		"redis": "^4.7.0",
 		"tsdown": "^0.18.3"
 	},
@@ -175,7 +180,8 @@
 		"pg": "^8.13.1",
 		"pg-boss": "^12.5.4",
 		"pusher": "^5.3.4",
-		"pusher-js": "^8.5.0"
+		"pusher-js": "^8.5.0",
+		"react": "^18.0.0 || ^19.0.0"
 	},
 	"peerDependenciesMeta": {
 		"@react-email/components": {
@@ -203,6 +209,9 @@
 			"optional": true
 		},
 		"pusher-js": {
+			"optional": true
+		},
+		"react": {
 			"optional": true
 		}
 	}

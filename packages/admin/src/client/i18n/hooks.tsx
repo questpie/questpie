@@ -4,152 +4,20 @@
  * React context and hooks for i18n in the admin UI.
  */
 
+import { useSafeI18n, useTranslation } from "questpie/client-react";
 import { DEFAULT_LOCALE } from "questpie/shared";
 import * as React from "react";
-import { createContext, useCallback, useContext } from "react";
+import { useCallback } from "react";
 
 import { resolveDateFnsLocale } from "./date-locale";
-import type {
-	I18nAdapter,
-	I18nContext as I18nContextType,
-	I18nProviderProps,
-	I18nText,
-	UseTranslationResult,
-} from "./types";
+import type { I18nContext as I18nContextType, I18nText } from "./types";
 
-// ============================================================================
-// Context
-// ============================================================================
-
-const I18nContext = createContext<I18nAdapter | null>(null);
-
-// ============================================================================
-// Provider
-// ============================================================================
-
-/**
- * I18n Provider Component
- *
- * Provides i18n to all child components.
- * The adapter is the source of truth for UI locale.
- *
- * @example
- * ```tsx
- * import { I18nProvider, createSimpleI18n } from "@questpie/admin/i18n";
- *
- * const i18n = createSimpleI18n({ ... });
- *
- * <I18nProvider adapter={i18n}>
- *   <App />
- * </I18nProvider>
- * ```
- */
-export function I18nProvider({
-	adapter,
-	children,
-}: I18nProviderProps): React.ReactElement {
-	// Force re-render when locale changes in adapter
-	const [, forceUpdate] = React.useReducer((x) => x + 1, 0);
-
-	// Subscribe to locale changes from adapter
-	React.useEffect(() => {
-		return adapter.onLocaleChange(() => {
-			forceUpdate();
-		});
-	}, [adapter]);
-
-	// Context value - adapter is source of truth
-	// useMemo depends on adapter.locale to create new reference when locale changes
-	const contextValue = React.useMemo<I18nAdapter>(
-		() => ({
-			locale: adapter.locale,
-			locales: adapter.locales,
-			t: adapter.t.bind(adapter),
-			setLocale: adapter.setLocale.bind(adapter),
-			onLocaleChange: adapter.onLocaleChange.bind(adapter),
-			formatDate: adapter.formatDate.bind(adapter),
-			formatNumber: adapter.formatNumber.bind(adapter),
-			formatRelative: adapter.formatRelative?.bind(adapter),
-			getLocaleName: adapter.getLocaleName.bind(adapter),
-			isRTL: adapter.isRTL.bind(adapter),
-		}),
-		// oxlint-disable-next-line react/exhaustive-deps
-		[adapter, adapter.locale],
-	);
-
-	return (
-		<I18nContext.Provider value={contextValue}>{children}</I18nContext.Provider>
-	);
-}
-
-// ============================================================================
-// Hooks
-// ============================================================================
-
-/**
- * Get the i18n adapter (throws if not in provider)
- */
-function useI18n(): I18nAdapter {
-	const adapter = useContext(I18nContext);
-	if (!adapter) {
-		throw new Error("useI18n must be used within I18nProvider");
-	}
-	return adapter;
-}
-
-/**
- * Get i18n adapter or null (safe version)
- */
-export function useSafeI18n(): I18nAdapter | null {
-	return useContext(I18nContext);
-}
-
-/**
- * Main translation hook
- *
- * @example
- * ```tsx
- * function MyComponent() {
- *   const { t, locale, formatDate } = useTranslation();
- *   return <h1>{t("dashboard.title")}</h1>;
- * }
- * ```
- */
-export function useTranslation(): UseTranslationResult {
-	const adapter = useI18n();
-
-	return {
-		locale: adapter.locale,
-		locales: adapter.locales,
-		t: adapter.t,
-		setLocale: adapter.setLocale,
-		formatDate: adapter.formatDate,
-		formatNumber: adapter.formatNumber,
-		getLocaleName: adapter.getLocaleName,
-		isRTL: adapter.isRTL(),
-	};
-}
-
-/**
- * Get just the translate function
- */
-function useT(): I18nAdapter["t"] {
-	return useI18n().t;
-}
-
-/**
- * Get current locale
- */
-function useLocale(): string {
-	return useI18n().locale;
-}
-
-/**
- * Get locale setter
- */
-function useSetLocale(): I18nAdapter["setLocale"] {
-	return useI18n().setLocale;
-}
+export {
+	I18nProvider,
+	useI18n,
+	useSafeI18n,
+	useTranslation,
+} from "questpie/client-react";
 
 /**
  * Returns the date-fns `Locale` object matching the current admin UI locale.

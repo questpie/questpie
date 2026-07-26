@@ -3,6 +3,7 @@
 	"pages": [
 		"index",
 		"sdk",
+		"i18n",
 		"tanstack-query",
 		"realtime",
 		"channels",
