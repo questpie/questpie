@@ -14,7 +14,10 @@
 
 import type { Locale } from "#questpie/server/config/types.js";
 
-import { buildIndexParams } from "./index-params.js";
+import {
+	buildIndexParams,
+	resolveAutomaticSearchableConfig,
+} from "./index-params.js";
 import type { IndexParams, SearchableConfig } from "./types.js";
 
 /** Structural slice of the Questpie app this reindex reaches for. */
@@ -58,10 +61,10 @@ export async function reindexCollection(
 		return { collection: collectionName, indexed: 0, skipped: true };
 	}
 
-	// Respect the collection's declarative searchable config (false = opted out).
-	const searchable = app.getCollectionConfig?.(collectionName)?.state
-		?.searchable;
-	if (searchable === false) {
+	// Only explicitly enabled, automatically managed projections are reindexed.
+	const searchable =
+		app.getCollectionConfig?.(collectionName)?.state?.searchable;
+	if (!resolveAutomaticSearchableConfig(searchable)) {
 		return { collection: collectionName, indexed: 0, skipped: true };
 	}
 

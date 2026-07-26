@@ -30,12 +30,29 @@ const posts = collection("posts")
 	.fields(({ f }) => ({
 		title: f.text(255).required(),
 		content: f.textarea(),
+		tenantId: f.text(64),
+		category: f.text(64),
+		price: f.number(),
 	}))
 	.title(({ f }) => f.title)
 	.searchable({
 		content: (record) => record.content || "",
+		metadata: (record) => ({
+			category: record.category,
+			price: record.price,
+		}),
+		facets: {
+			category: true,
+			price: {
+				type: "range",
+				buckets: [
+					{ label: "low", max: 50 },
+					{ label: "high", min: 50 },
+				],
+			},
+		},
 	})
-	.options({ timestamps: true });
+	.options({ timestamps: true, softDelete: true });
 
 describe("Search Access Filtering", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
@@ -89,6 +106,25 @@ describe("Search Access Filtering", () => {
 			expect(response.results.length).toBe(3);
 			expect(response.total).toBe(3);
 		});
+
+		it("rejects semantic and hybrid modes it does not implement", async () => {
+			expect(adapter.capabilities.hybrid).toBe(false);
+			expect(adapter.capabilities.semantic).toBe(false);
+			await expect(
+				setup.app.search.search({
+					query: "Post",
+					locale: "en",
+					mode: "hybrid",
+				}),
+			).rejects.toThrow('does not support "hybrid"');
+			await expect(
+				setup.app.search.search({
+					query: "Post",
+					locale: "en",
+					mode: "semantic",
+				}),
+			).rejects.toThrow('does not support "semantic"');
+		});
 	});
 
 	describe("with accessWhere: false", () => {
@@ -135,12 +171,22 @@ describe("Search Access Filtering", () => {
 	describe("with accessWhere: true", () => {
 		it("should return all results when full access is granted", async () => {
 			const collections = setup.app.getCollections();
+			const crud = collections.posts.generateCRUD(setup.app.db, setup.app);
 
 			const accessFilters: CollectionAccessFilter[] = [
 				{
 					collection: "posts",
 					table: collections.posts.table,
 					accessWhere: true,
+					state: collections.posts.state,
+					i18nTable: crud["~internalI18nTable"],
+					context: {
+						accessMode: "user",
+						locale: "en",
+						db: setup.app.db,
+					},
+					app: setup.app,
+					db: setup.app.db,
 				},
 			];
 
@@ -180,7 +226,213 @@ describe("Search Access Filtering", () => {
 			expect(response.total).toBe(0);
 		});
 	});
+
+	describe("canonical authorized candidate universe", () => {
+		it("supports in and nested boolean predicates without broadening", async () => {
+			const allowed = await createAndIndexPost(setup, {
+				title: "Allowed Post",
+				tenantId: "tenant-a",
+				category: "public",
+				price: 20,
+			});
+			await createAndIndexPost(setup, {
+				title: "Also Allowed Post",
+				tenantId: "tenant-a",
+				category: "internal",
+				price: 80,
+			});
+			await createAndIndexPost(setup, {
+				title: "Secret Post",
+				tenantId: "tenant-b",
+				category: "secret",
+				price: 500,
+			});
+
+			const response = await setup.app.search.search({
+				query: "Post",
+				locale: "en",
+				accessFilters: [
+					buildAccessFilter(setup, {
+						AND: [
+							{ tenantId: { in: ["tenant-a"] } },
+							{
+								OR: [
+									{ category: "public" },
+									{ NOT: { id: { in: ["never-block", allowed.id] } } },
+								],
+							},
+						],
+					}),
+				],
+			});
+
+			expect(response.total).toBe(2);
+			expect(response.results.map((result) => result.recordId).sort()).toEqual(
+				expect.arrayContaining([allowed.id]),
+			);
+			expect(
+				response.results.some((result) => result.title === "Secret Post"),
+			).toBe(false);
+		});
+
+		it("uses the same candidates for page, total, facets, and statistics", async () => {
+			await createAndIndexPost(setup, {
+				title: "Public Post",
+				tenantId: "tenant-a",
+				category: "public",
+				price: 20,
+			});
+			await createAndIndexPost(setup, {
+				title: "Internal Post",
+				tenantId: "tenant-a",
+				category: "internal",
+				price: 80,
+			});
+			await createAndIndexPost(setup, {
+				title: "Leaking Post",
+				tenantId: "tenant-b",
+				category: "secret",
+				price: 500,
+			});
+
+			const response = await setup.app.search.search({
+				query: "Post",
+				locale: "en",
+				limit: 1,
+				facets: [{ field: "category" }, { field: "price" }],
+				accessFilters: [
+					buildAccessFilter(setup, {
+						tenantId: { in: ["tenant-a"] },
+					}),
+				],
+			});
+
+			expect(response.results).toHaveLength(1);
+			expect(response.total).toBe(2);
+			expect(response.facets?.[0].values).toEqual(
+				expect.arrayContaining([
+					{ value: "public", count: 1 },
+					{ value: "internal", count: 1 },
+				]),
+			);
+			expect(response.facets?.[0].values).not.toContainEqual({
+				value: "secret",
+				count: 1,
+			});
+			expect(response.facets?.[1].stats).toEqual({ min: 20, max: 80 });
+		});
+
+		it("excludes stale index rows after a source row is soft-deleted", async () => {
+			const post = await createAndIndexPost(setup, {
+				title: "Deleted Post",
+				tenantId: "tenant-a",
+				category: "public",
+				price: 20,
+			});
+			await setup.app.collections.posts.deleteById(
+				{ id: post.id },
+				{ accessMode: "system" },
+			);
+
+			const response = await setup.app.search.search({
+				query: "Deleted",
+				locale: "en",
+				accessFilters: [buildAccessFilter(setup, true)],
+			});
+
+			expect(response.results).toEqual([]);
+			expect(response.total).toBe(0);
+		});
+
+		it("rejects an unsupported access operator instead of weakening it", async () => {
+			await createAndIndexPost(setup, {
+				title: "Protected Post",
+				tenantId: "tenant-a",
+				category: "public",
+				price: 20,
+			});
+
+			await expect(
+				setup.app.search.search({
+					query: "Protected",
+					locale: "en",
+					accessFilters: [
+						buildAccessFilter(setup, {
+							tenantId: { unsupportedOperator: "tenant-a" },
+						}),
+					],
+				}),
+			).rejects.toThrow("Cannot compile access predicate");
+
+			await expect(
+				setup.app.search.search({
+					query: "Protected",
+					locale: "en",
+					accessFilters: [buildAccessFilter(setup, { OR: [] })],
+				}),
+			).rejects.toThrow("empty or invalid OR branch");
+		});
+	});
 });
+
+function buildAccessFilter(
+	setup: Awaited<ReturnType<typeof buildMockApp>>,
+	accessWhere: CollectionAccessFilter["accessWhere"],
+): CollectionAccessFilter {
+	const collectionConfig = setup.app.getCollections().posts;
+	const crud = collectionConfig.generateCRUD(setup.app.db, setup.app);
+	return {
+		collection: "posts",
+		table: collectionConfig.table,
+		accessWhere,
+		softDelete: true,
+		state: collectionConfig.state,
+		i18nTable: crud["~internalI18nTable"],
+		context: {
+			accessMode: "user",
+			locale: "en",
+			defaultLocale: "en",
+			db: setup.app.db,
+		},
+		app: setup.app,
+		db: setup.app.db,
+	};
+}
+
+async function createAndIndexPost(
+	setup: Awaited<ReturnType<typeof buildMockApp>>,
+	input: {
+		title: string;
+		tenantId: string;
+		category: string;
+		price: number;
+	},
+): Promise<Record<string, any>> {
+	const post = await setup.app.collections.posts.create(
+		{ ...input, content: input.title },
+		{ accessMode: "system" },
+	);
+	await setup.app.search.index({
+		collection: "posts",
+		recordId: post.id,
+		locale: "en",
+		title: input.title,
+		content: input.title,
+		metadata: {
+			category: input.category,
+			price: input.price,
+		},
+		facets: [
+			{ name: "category", value: input.category },
+			{
+				name: "price",
+				value: input.price < 50 ? "low" : "high",
+				numericValue: input.price,
+			},
+		],
+	});
+	return post;
+}
 
 async function runSearchMigrations(db: any): Promise<void> {
 	const adapter = createPostgresSearchAdapter();

@@ -1226,9 +1226,9 @@ export interface CollectionBuilderState {
 	access: CollectionAccessStorage;
 	/**
 	 * Search indexing configuration.
-	 * - undefined: auto-index with defaults (title + auto-generated content)
+	 * - undefined: not indexed
 	 * - false: explicitly disable indexing
-	 * - SearchableConfig: custom indexing configuration
+	 * - SearchableConfig: explicitly enable indexing
 	 */
 	searchable: SearchableConfig | false | undefined;
 	validation: ValidationSchemas | undefined;

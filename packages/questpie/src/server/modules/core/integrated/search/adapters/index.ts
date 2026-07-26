@@ -42,7 +42,7 @@ export {
  * - Uses @elastic/elasticsearch client
  * - getMigrations() returns empty (external system)
  * - initialize() creates index mapping if not exists
- * - Supports hybrid search with kNN if vectors provided
+ * - Must qualify access-filtered candidates and advertise only implemented modes
  */
 
 /**

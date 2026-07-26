@@ -24,7 +24,10 @@ import type {
 	RealtimeChangePayload,
 	RealtimeEqualityProjection,
 } from "#questpie/server/modules/core/integrated/realtime/types.js";
-import { buildIndexParams } from "#questpie/server/modules/core/integrated/search/index-params.js";
+import {
+	buildIndexParams,
+	resolveAutomaticSearchableConfig,
+} from "#questpie/server/modules/core/integrated/search/index-params.js";
 import type { SearchableConfig } from "#questpie/server/modules/core/integrated/search/types.js";
 import {
 	TransitionScheduledError,
@@ -251,8 +254,7 @@ function asSearchApp(app: unknown): AppSearchSurface {
 
 /**
  * Resolve a collection's `.searchable(...)` config from the app instance.
- * Returns `undefined` when the collection (or accessor) is unavailable, which
- * {@link buildIndexParams} treats as the default auto-index config.
+ * Returns `undefined` when the collection has not explicitly opted in.
  */
 function resolveSearchableConfig(
 	app: AppSearchSurface,
@@ -282,6 +284,9 @@ const searchHook = {
 		if (!search) return;
 		const recordId = ctx.data?.id;
 		if (!recordId) return;
+		const app = asSearchApp(ctx.app);
+		const searchable = resolveSearchableConfig(app, ctx.collection);
+		if (!resolveAutomaticSearchableConfig(searchable)) return;
 
 		// Schedule debounced async indexing (fire-and-forget after commit)
 		ctx.onAfterCommit(async () => {
@@ -295,13 +300,12 @@ const searchHook = {
 					// No queue — index synchronously for current locale.
 					// Resolve the collection's declarative `searchable` config so
 					// content/metadata/facets/embedding are populated (not title-only).
-					const app = asSearchApp(ctx.app);
 					const params = await buildIndexParams(
 						ctx.data as Record<string, any>,
 						{
 							collection: ctx.collection,
 							locale: ctx.locale ?? DEFAULT_LOCALE,
-							searchable: resolveSearchableConfig(app, ctx.collection),
+							searchable,
 							app: ctx.app,
 							defaultLocale: resolveDefaultLocale(app),
 						},

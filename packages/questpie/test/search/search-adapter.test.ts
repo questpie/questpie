@@ -378,6 +378,30 @@ describe("PostgresSearchAdapter", () => {
 			expect(response.results[0].recordId).toBe("post-1");
 		});
 
+		it("removes stale facets when an updated projection omits them", async () => {
+			await setup.app.search.index({
+				collection: "posts",
+				recordId: "post-1",
+				locale: "en",
+				title: "Faceted Post",
+				facets: [{ name: "category", value: "secret" }],
+			});
+			await setup.app.search.index({
+				collection: "posts",
+				recordId: "post-1",
+				locale: "en",
+				title: "Title-only Post",
+			});
+
+			const response = await setup.app.search.search({
+				query: "",
+				locale: "en",
+				facets: [{ field: "category" }],
+			});
+
+			expect(response.facets?.[0]?.values).toEqual([]);
+		});
+
 		it("should return highlights", async () => {
 			await setup.app.search.index({
 				collection: "posts",

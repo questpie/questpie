@@ -2,7 +2,7 @@
  * Search Hook
  *
  * React hook for FTS-powered search using the app Search API.
- * Returns full records with search metadata (score, highlights, indexed title).
+ * Returns field-filtered records with relevance scores.
  */
 
 import { type UseQueryOptions, useQuery } from "@tanstack/react-query";
@@ -103,15 +103,6 @@ interface UseSearchOptions {
 interface SearchMeta {
 	/** Relevance score from search */
 	score: number;
-	/** Highlighted snippets with <mark> tags */
-	highlights?: {
-		title?: string;
-		content?: string;
-	};
-	/** Title as stored in search index */
-	indexedTitle: string;
-	/** Content preview from search index */
-	indexedContent?: string;
 }
 
 /**
@@ -186,7 +177,6 @@ interface SearchResponse<T = Record<string, any>> {
  * items.forEach(item => {
  *   console.log(item.title); // Full record field
  *   console.log(item._search.score); // Search score
- *   console.log(item._search.highlights?.title); // Highlighted title
  * });
  * ```
  */
@@ -314,7 +304,7 @@ interface UseGlobalSearchOptions {
  *
  * // Show results grouped by collection
  * data?.docs.forEach(item => {
- *   console.log(`${item._collection}: ${item._search.indexedTitle}`);
+ *   console.log(`${item._collection}: ${item._title ?? item.id}`);
  * });
  * ```
  */

@@ -7,11 +7,12 @@
  * UPDATE; (2) the `semantic` search embeds the query and runs a cosine ORDER BY;
  * (3) `toVectorLiteral` formats + guards the vector. The live pgvector round-trip
  * (real cosine ranking against a real index) is a separate live e2e — see the task
- * report. The base-adapter delegation (lexical/hybrid → Postgres) is unchanged and
- * covered by the Postgres adapter's own behavior.
+ * report. The base-adapter delegation (lexical → Postgres) is covered by the
+ * Postgres adapter's own behavior.
  */
 import { describe, expect, it, mock } from "bun:test";
 
+import { collection } from "../../src/exports/index.js";
 import {
 	PgVectorSearchAdapter,
 	toVectorLiteral,
@@ -78,6 +79,9 @@ function fakeDb(rows: any[] = []) {
 		}),
 		select: mock((_columns?: any) => makeThenable()),
 		insert: mock((_table?: any) => makeInsertChain()),
+		delete: mock((_table?: any) => ({
+			where: mock(() => Promise.resolve()),
+		})),
 		executed,
 		selectChainCalls,
 	};
@@ -108,10 +112,10 @@ describe("toVectorLiteral", () => {
 });
 
 describe("capabilities", () => {
-	it("advertises semantic + hybrid (the pgvector value-add)", async () => {
+	it("advertises semantic but not unimplemented hybrid fusion", async () => {
 		const { adapter } = await makeAdapter();
 		expect(adapter.capabilities.semantic).toBe(true);
-		expect(adapter.capabilities.hybrid).toBe(true);
+		expect(adapter.capabilities.hybrid).toBe(false);
 		expect(adapter.capabilities.lexical).toBe(true);
 	});
 });
@@ -193,6 +197,7 @@ describe("search({ mode: 'semantic' }) — embeds query + cosine ORDER BY", () =
 				locale: "en",
 				updated_at: new Date(),
 				score: 0.92,
+				count: 7,
 			},
 		];
 		const { adapter, db, provider } = await makeAdapter(rows);
@@ -208,8 +213,8 @@ describe("search({ mode: 'semantic' }) — embeds query + cosine ORDER BY", () =
 		// The query was embedded once.
 		expect(provider.calls).toEqual(["how to schedule posts"]);
 		// A fluent select chain was built (from→where→orderBy→limit→offset).
-		expect(db.select).toHaveBeenCalledTimes(1);
-		expect(db.selectChainCalls.where).toBe(1);
+		expect(db.select).toHaveBeenCalledTimes(2);
+		expect(db.selectChainCalls.where).toBe(2);
 		expect(db.selectChainCalls.orderBy).toBe(1);
 		expect(db.selectChainCalls.limit).toBe(1);
 
@@ -221,18 +226,57 @@ describe("search({ mode: 'semantic' }) — embeds query + cosine ORDER BY", () =
 			score: 0.92,
 			metadata: { importance: 8 },
 		});
+		expect(response.total).toBe(7);
 	});
 
-	it("lexical/hybrid modes do NOT embed (delegate to the base adapter)", async () => {
-		// Base adapter requires its own init; we only assert the provider is not
-		// called for non-semantic modes by checking calls stay empty after a throw.
+	it("rejects hybrid instead of silently delegating to lexical", async () => {
 		const { adapter, provider } = await makeAdapter();
-		// Hybrid delegates to the (separately-initialized) postgres adapter; we don't
-		// exercise its query here — only that the embedding provider is untouched.
-		await adapter
-			.search({ query: "x", mode: "hybrid", collections: ["c"] })
-			.catch(() => {});
+		await expect(
+			adapter.search({ query: "x", mode: "hybrid", collections: ["c"] }),
+		).rejects.toThrow('does not support "hybrid"');
 		expect(provider.calls).toEqual([]);
+	});
+
+	it("applies canonical access candidates before semantic ordering and counting", async () => {
+		const memories = collection("agent_memory").fields(({ f }) => ({
+			title: f.text(255),
+			tenantId: f.text(64),
+		}));
+		const rows = [
+			{
+				id: "s1",
+				collection_name: "agent_memory",
+				record_id: "m1",
+				title: "Allowed",
+				content: null,
+				metadata: {},
+				locale: "en",
+				updated_at: new Date(),
+				score: 0.9,
+				count: 1,
+			},
+		];
+		const { adapter, db } = await makeAdapter(rows);
+
+		const response = await adapter.search({
+			query: "allowed",
+			mode: "semantic",
+			collections: ["agent_memory"],
+			accessFilters: [
+				{
+					collection: "agent_memory",
+					table: memories.table,
+					state: memories.state,
+					accessWhere: { tenantId: { in: ["tenant-a"] } },
+					context: { locale: "en", accessMode: "user" },
+				},
+			],
+		});
+
+		expect(response.results.map((result) => result.recordId)).toEqual(["m1"]);
+		expect(response.total).toBe(1);
+		expect(db.selectChainCalls.where).toBe(2);
+		expect(db.selectChainCalls.orderBy).toBe(1);
 	});
 
 	it("throws if used before initialize() (no db)", async () => {

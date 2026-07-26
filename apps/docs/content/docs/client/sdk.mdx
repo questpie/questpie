@@ -392,18 +392,18 @@ const results = await client.search.search({
 	collections: ["posts", "pages"], // optional, restrict scope
 	mode: "hybrid", // "lexical" | "semantic" | "hybrid"
 	limit: 20,
-	highlights: true,
 	facets: [{ field: "tags", limit: 10, sortBy: "count" }],
 });
 
-// results.docs: each is the full record + { _collection, _search: { score, highlights, indexedTitle } }
+// results.docs: each is the field-filtered live record
+// + { _collection, _search: { score } }
 // results.total, results.facets?
 
 // Force a rebuild of a collection's index.
 await client.search.reindex("posts");
 ```
 
-`SearchResponse` is `{ docs: PopulatedSearchResult[]; total: number; facets? }`, where each doc is `T & { _collection, _search }`. `reindex` returns `{ success, collection }`; its server-side access defaults to the target collection's `update` rule.
+`SearchResponse` is `{ docs: PopulatedSearchResult[]; total: number; facets? }`, where each doc is `T & { _collection, _search: { score } }`. Index title, content, and highlights are not copied into this hydrated response: they are a search snapshot and could bypass current field access. `reindex` returns `{ success, collection }`; its server-side access defaults to the target collection's `update` rule.
 
 ## Realtime, live queries
 

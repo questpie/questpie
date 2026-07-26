@@ -751,7 +751,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 *   })
 	 * ```
 	 */
-	searchable<TNewSearchable extends SearchableConfig>(
+	searchable<TNewSearchable extends SearchableConfig | false>(
 		searchable: TNewSearchable,
 	): CollectionBuilder<Override<TState, { searchable: TNewSearchable }>> {
 		const newState = {

@@ -1739,7 +1739,7 @@ function TableViewInner({
 	const isSearching = debouncedSearchTerm.trim().length > 0;
 
 	// Search API for FTS-powered search
-	// Returns full records with search metadata (_search.score, _search.highlights)
+	// Returns full field-filtered records with relevance scores
 	const {
 		data: searchData,
 		isLoading: searchLoading,

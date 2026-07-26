@@ -934,15 +934,6 @@ export interface SearchOptions {
 export interface SearchMeta {
 	/** Relevance score from search */
 	score: number;
-	/** Highlighted snippets with <mark> tags */
-	highlights?: {
-		title?: string;
-		content?: string;
-	};
-	/** Title as stored in search index */
-	indexedTitle: string;
-	/** Content preview from search index */
-	indexedContent?: string;
 }
 
 /**

@@ -44,26 +44,28 @@ export function generateSearchPaths(config: OpenApiConfig): {
 				{
 					type: "object",
 					properties: {
-						results: {
+						docs: {
 							type: "array",
 							items: {
 								type: "object",
+								additionalProperties: true,
 								properties: {
-									collection: { type: "string" },
-									doc: { type: "object" },
+									_collection: { type: "string" },
 									_search: {
 										type: "object",
 										properties: {
 											score: { type: "number" },
-											highlights: { type: "object" },
-											indexedTitle: { type: "string" },
 										},
+										required: ["score"],
 									},
 								},
+								required: ["_collection", "_search"],
 							},
 						},
-						totalResults: { type: "integer" },
+						total: { type: "integer" },
+						facets: { type: "array", items: { type: "object" } },
 					},
+					required: ["docs", "total"],
 				},
 				"Search results",
 			),

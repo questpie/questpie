@@ -19,63 +19,30 @@ import type {
 } from "./types.js";
 
 /**
- * Fields excluded from auto-generated search content
- */
-const EXCLUDED_CONTENT_FIELDS = new Set([
-	"id",
-	"_title",
-	"createdAt",
-	"updatedAt",
-	"deletedAt",
-	"_locale",
-	"_parentId",
-]);
-
-/**
- * Auto-generate searchable content from record fields.
- * Creates "fieldName: value" pairs for primitive fields.
- *
- * Used as the fallback when a collection does not declare a custom
- * `searchable.content` function.
- */
-export function generateAutoContent(record: Record<string, any>): string {
-	const parts: string[] = [];
-
-	for (const [key, value] of Object.entries(record)) {
-		// Skip excluded fields
-		if (EXCLUDED_CONTENT_FIELDS.has(key)) continue;
-
-		// Skip null/undefined values
-		if (value == null) continue;
-
-		// Skip objects and arrays (complex nested data)
-		if (typeof value === "object") continue;
-
-		// Add primitive values as "fieldName: value"
-		parts.push(`${key}: ${String(value)}`);
-	}
-
-	return parts.join(", ");
-}
-
-/**
  * Resolve a collection's `searchable` builder state to a config object.
  * Returns `null` when indexing must be skipped:
  * - `.searchable(false)` (explicit opt-out)
  * - `.searchable({ disabled: true })`
  * - `.searchable({ manual: true })` (user controls indexing via hooks)
  *
- * Otherwise returns the resolved {@link SearchableConfig} (an empty object when
- * the collection has no custom config — the default auto-index behavior).
+ * Otherwise returns the explicitly enabled {@link SearchableConfig}.
  */
-function resolveSearchable(
+export function resolveAutomaticSearchableConfig(
 	searchable: SearchableConfig | false | undefined,
 ): SearchableConfig | null {
-	if (searchable === false) return null;
-	if (!searchable) return {};
+	if (!searchable) return null;
 	if (searchable.disabled) return null;
 	if (searchable.manual) return null;
 	return searchable;
+}
+
+/** Whether a collection is visible to Search, including manual projections. */
+export function isSearchableConfigEnabled(
+	searchable: SearchableConfig | false | undefined,
+): searchable is SearchableConfig {
+	return (
+		searchable !== undefined && searchable !== false && !searchable.disabled
+	);
 }
 
 /**
@@ -108,16 +75,18 @@ export async function buildIndexParams(
 	record: Record<string, any>,
 	options: BuildIndexParamsOptions,
 ): Promise<IndexParams | null> {
-	const config = resolveSearchable(options.searchable);
+	const config = resolveAutomaticSearchableConfig(options.searchable);
 	if (!config) return null;
 
 	// Title: _title field or fallback to id
 	const title = String(record._title ?? record.id);
 
-	// Content: custom function or auto-generated
+	// Content is deliberately opt-in. Automatically projecting every primitive
+	// field can make field-level secrets searchable by actors who may read the
+	// row but not the source field.
 	const content = config.content
 		? config.content(record) || undefined
-		: generateAutoContent(record) || undefined;
+		: undefined;
 
 	// Metadata: only from custom config
 	const metadata = config.metadata ? config.metadata(record) : undefined;
