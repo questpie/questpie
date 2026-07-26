@@ -18,7 +18,7 @@ implement + adversarial-review loop before calling a track done).
 
 - Small, reviewable commits. Every changed line traces to a task id (§7) or a must-fix (§8).
 - **Do NOT touch** the broker adapters (PgNotify/Redis/Pusher), HA topology-coordinator, or
-  poll-reconcile. They stay UNCHANGED (§4). The change *source* and *delivery* are decoupled
+  poll-reconcile. They stay UNCHANGED (§4). The change _source_ and _delivery_ are decoupled
   from the broker by design.
 - Typecheck a package: `bunx tsc --noEmit -p packages/<pkg>/tsconfig.json`. Lint: oxlint/oxfmt.
 - Ship order: the delta-server **emitter is on HOLD** until its soundness items (§8, §9) are
@@ -56,11 +56,11 @@ path is KEPT** (nothing is removed or deprecated).
      event keyed to a `recordId`.
   2. **O(1) computability** — the delta is computable from the single hydrated row without
      re-querying the whole set.
-  Concretely: `collection.find`, **own-column** scalar/logical `where`, **no** `limit`/`offset`/
-  `orderBy`/`with`/relation-`where`. Everything else (`count`, `get`, `groupBy`, aggregates,
-  windowed/ordered/joined finds) → **snapshot mode** (always correct, re-runs the whole query).
-  This is a correctness floor, not a policy. **You do not lose order/limit/join** — they move to
-  the CLIENT (tanstack-db live-queries over the synced collection do them incrementally).
+     Concretely: `collection.find`, **own-column** scalar/logical `where`, **no** `limit`/`offset`/
+     `orderBy`/`with`/relation-`where`. Everything else (`count`, `get`, `groupBy`, aggregates,
+     windowed/ordered/joined finds) → **snapshot mode** (always correct, re-runs the whole query).
+     This is a correctness floor, not a policy. **You do not lose order/limit/join** — they move to
+     the CLIENT (tanstack-db live-queries over the synced collection do them incrementally).
 - **txid** (optimistic reconciliation): outbox column `DEFAULT pg_current_xact_id()` (xid8, stored
   as text), evaluated inside the mutation tx so `outbox.txid == mutation.txid`. Watermark =
   `pg_snapshot_xmin(pg_current_snapshot())` captured **strictly BEFORE** compute; client drops
@@ -69,7 +69,7 @@ path is KEPT** (nothing is removed or deprecated).
   requirement** (add a fail-fast preflight).
 - **Access = app architecture, NOT a new framework capability.** Write access rules **relationally
   through the membership collection** (e.g. `channels.read = { space: { in: <spaces where a
-  membership row exists for :principalId> } }`), NOT materialized id-sets baked into context. The
+membership row exists for :principalId> } }`), NOT materialized id-sets baked into context. The
   delta path **reuses** existing `PRECHECKED_READ_ACCESS` (per-row enforcement) + `watchedResources`
   (a membership change on the third collection triggers a targeted re-bootstrap). **Access-
   equivalence key = principal id.** Realtime context = **principal id + organization id only**;
@@ -82,7 +82,7 @@ path is KEPT** (nothing is removed or deprecated).
 
 ## 3. Locked decisions — FROZEN
 
-- **Delta enablement:** **OPT-IN per topic for v3.0.** The classifier still gates *eligibility*
+- **Delta enablement:** **OPT-IN per topic for v3.0.** The classifier still gates _eligibility_
   (only shape-subset topics can be delta), but even eligible topics stay snapshot unless the topic
   opts in. Flip to auto-classify **later**, once the acceptance suite + delta-server soundness fixes
   bake. Rationale: contain the blast radius of delta's real correctness surface on the first ship.
@@ -116,11 +116,41 @@ the server `RealtimeDeltaFrame` (ds-1) matches it field-for-field.
 
 ```ts
 type RealtimeStreamEvent<TData = unknown> =
-  | { type: 'snapshot';   topicId: string; seq: number; data: TData; reset?: boolean; upToDate?: string }
-  | { type: 'insert';     topicId: string; seq: number; txid?: string; key: string; row: unknown; index?: number }
-  | { type: 'update';     topicId: string; seq: number; txid?: string; key: string; row: unknown; index?: number }
-  | { type: 'delete';     topicId: string; seq: number; txid?: string; key: string }
-  | { type: 'up-to-date'; topicId: string; seq: number; txid?: string; upToDate?: string; meta?: { totalDocs?: number } }
+	| {
+			type: "snapshot";
+			topicId: string;
+			seq: number;
+			data: TData;
+			reset?: boolean;
+			upToDate?: string;
+	  }
+	| {
+			type: "insert";
+			topicId: string;
+			seq: number;
+			txid?: string;
+			key: string;
+			row: unknown;
+			index?: number;
+	  }
+	| {
+			type: "update";
+			topicId: string;
+			seq: number;
+			txid?: string;
+			key: string;
+			row: unknown;
+			index?: number;
+	  }
+	| { type: "delete"; topicId: string; seq: number; txid?: string; key: string }
+	| {
+			type: "up-to-date";
+			topicId: string;
+			seq: number;
+			txid?: string;
+			upToDate?: string;
+			meta?: { totalDocs?: number };
+	  };
 ```
 
 Rules (must-fix-derived): `upToDate` MUST also ride the `up-to-date` frame (+ an idle heartbeat) so a
@@ -148,10 +178,12 @@ drops the `reset` field (multiplexer.ts).
 ## 7. Task graph (ids + deps; files cited inline)
 
 **Shared wire**
+
 - `tq-1` (no deps): `RealtimeStreamEvent<TData>` union + apply helpers (`applyRealtimeFindEvent/Scalar/Single`, `envelopeMeta`) in `client/realtime/stream.ts`; re-export through `realtime/index.ts` → `client/index.ts` → `exports/client.ts`.
 - `ds-1` (dep tq-1): `realtime/delta.ts` — `RealtimeDeliveryMode`, `classifyRealtimeDelivery`, `whereReferencesRelations`, `deriveDeltaOp`, `RealtimeDeltaFrame` (byte-compatible with tq-1).
 
 **tanstack-query-delta** (client differ path — no server dependency)
+
 - `tq-2` (dep tq-1): change `RealtimeSubscriber` `(data)=>void` → `(event: RealtimeStreamEvent)=>void` — contained to `transport.ts` + `multiplexer.ts` + `pusher.ts` + `stream.ts`.
 - `tq-3` (dep tq-1,tq-2): client differ `deriveFindDeltas(source, keyOf=d=>d.id)` + `streamEvents<TData>` on `RealtimeAPI` in `stream.ts`; keep `subscribe/stream/.live()/.liveIter` yielding full `TData` (materialize internally).
 - `tq-4` (dep tq-2): `multiplexer.handleEvent` — honor `reset` on snapshot + add insert/update/delete/up-to-date branches forwarding the typed event; `pusher.ts` wraps snapshot/late-join replay as `{type:'snapshot'}`.
@@ -159,6 +191,7 @@ drops the `reset` field (multiplexer.ts).
 - `tq-6` (dep tq-5): tests in `realtime-query-options.test.ts`.
 
 **delta-server** (emitter on HOLD; ds-2 buildable now)
+
 - `ds-2` (no deps): ordered non-coalescing delta transport (`SseOrderedDeltaWriter`, append-only, byte-bounded, overflow→teardown) in `sse-client-transport.ts`; add `'row-delta'` `DeliveryClass` in `transport.ts`. (See §9 — prefer extracting the shared ordered-FIFO primitive already in `channel-event-ledger.ts` rather than duplicating.)
 - `ds-3` (dep ds-1): admission caps + `mode` in `admission.ts` (see §8 cap-coherence).
 - `ds-4` (dep ds-1): `columns?` on `SnapshotQuery` + `hydrateRealtimeRow(topic, context)` in `snapshot.ts` (single-row analog of `computeRealtimeSnapshot`).
@@ -169,6 +202,7 @@ drops the `reset` field (multiplexer.ts).
 - `ds-9` (dep ds-6,ds-8): acceptance suite (see §11).
 
 **txid** (tx-1..7 now; tx-8/9 after ds-5)
+
 - `tx-1` (no deps): xid8 drizzle customType (`fromDriver→String`) + nullable `txid` column `DEFAULT pg_current_xact_id()` on `questpieRealtimeLogTable` in `realtime/collection.ts`.
 - `tx-2` (dep tx-1): thread `txid` through `RealtimeChangeEvent` (types.ts), `service.appendChange` `.returning()`, `readSince` select.
 - `tx-3` (dep tx-2): in-tx txid channel — `AsyncLocalStorage` `recordTransactionTxid/getTransactionTxid` in `crud/shared/transaction.ts`; call it from the global `realtimeHook`/`globalRealtimeHook` in `app.ts` (already on the mutation-bound db).
@@ -180,6 +214,7 @@ drops the `reset` field (multiplexer.ts).
 - `tx-9` (dep tx-6,tx-8,tq-5): client watermark resolution — pending-txid set from `getTxid`; resolve on `BigInt(upToDate)>BigInt(T)` or exact `txid===T`; watermark-math tests.
 
 **tanstack-db** (independent; re-pin versions first)
+
 - `db-1` (no deps): scaffold `@questpie/tanstack-db` (package.json / tsdown.config.ts / tsconfig / README / CHANGELOG mirroring `packages/tanstack-query`); **RE-PIN actual versions** (§8) + reconcile the existing `@tanstack/db ^0.1.1` devDep; peer + tsdown-external `questpie`, `@tanstack/react-query`, `@tanstack/react-db`, `@tanstack/query-db-collection`, `@tanstack/db`.
 - `db-2` (dep db-1): type derivation `src/types.ts` — `CollectionKeys/CollectionSelectOf/CollectionRelationsOf/CollectionRowOf(ApplyQuery base-select)/IdOf/FindOptionsOf/QuestpieDb`, importing ONLY from `questpie/client`; mirrors `tanstack-query/src/index.ts` but the store element is a single **ROW**, not a `PaginatedResult`.
 - `db-3` (dep db-2): runtime proxy `createQuestpieCollections(client, {...})` returning a name-caching Proxy (one `Collection<CollectionRowOf,IdOf>` singleton per name); re-export `useLiveQuery` + operators (`eq/and/or/gt/lt/inArray`).
@@ -211,7 +246,7 @@ drops the `reset` field (multiplexer.ts).
    values into an 'en' subscriber's set. `event.locale` may gate whether an event is considered, not
    the projection locale.
 4. **[ds-8] Bulk hydrate omits `topicWhere`.** Batch hydrate MUST merge `topicWhere AND accessWhere
-   AND {id:{in:recordIds}}` (identical to ds-4 mergeWhere): present⇒upsert, absent-from-result⇒delete
+AND {id:{in:recordIds}}` (identical to ds-4 mergeWhere): present⇒upsert, absent-from-result⇒delete
    (rows that left the set). Treat empty OR missing `recordIds` as the reset-snapshot fallback, not a
    no-op.
 5. **[tq-4] No seq-based drop guard.** Bulk emits many frames at one seq; a `seq<=last` guard drops
@@ -232,8 +267,8 @@ drops the `reset` field (multiplexer.ts).
    queue and collapse to a single reset snapshot (`delta.fallback_snapshot`).
 9. **[ds-6/ds-9] Access eviction via existing mechanisms (no new machinery).** The cited "coarse
    session revalidation" does not exist. **Fix:** delta path reuses `PRECHECKED_READ_ACCESS` (per-row)
-   + `watchedResources` (membership change → targeted re-bootstrap) + the periodic re-bootstrap
-   (§3). Make ds-9's access-change test match this; document the widened staleness window vs snapshot.
+   - `watchedResources` (membership change → targeted re-bootstrap) + the periodic re-bootstrap
+     (§3). Make ds-9's access-change test match this; document the widened staleness window vs snapshot.
 10. **[tq-1/ds-1/tx-8] Freeze the wire from §5, complete the watermark frame.** Use `row` (not
     `value`); put `upToDate` on the `up-to-date` frame + an idle heartbeat so non-member mutations
     still resolve pending optimistic txids.
@@ -242,7 +277,7 @@ drops the `reset` field (multiplexer.ts).
     `BigInt(upToDate)>BigInt(T)`.
 12. **[tq-5/ds-5] totalDocs/pagination regression.** A delta result is single-page (limit/offset
     forbidden): have the find reducer / `.live()` recompute `{totalDocs:docs.length,totalPages:1,
-    page:1,has*Page:false,prev/nextPage:null}` on each apply, OR emit the envelope in `up-to-date.meta`.
+page:1,has*Page:false,prev/nextPage:null}` on each apply, OR emit the envelope in `up-to-date.meta`.
 13. **[db-1] tanstack-db versions are wrong.** NOT `0.5.x`. Actual lines: `@tanstack/react-db 0.1.x`,
     `@tanstack/db 0.6.x`, `@tanstack/query-db-collection 1.x`. `@tanstack/db ^0.1.1` is ALREADY a
     devDep in `packages/admin` + `examples/tanstack-barbershop`. **Before scaffolding:** pin the

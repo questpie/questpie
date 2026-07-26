@@ -173,9 +173,7 @@ describe("PostgresSearchAdapter", () => {
 			// out-of-band (docker-init / managed DB). The test DB ships pg_trgm
 			// so the adapter's trigram index/search works against it.
 			const result = await setup.app.db.execute(
-				sql.raw(
-					"SELECT extname FROM pg_extension WHERE extname = 'pg_trgm'",
-				),
+				sql.raw("SELECT extname FROM pg_extension WHERE extname = 'pg_trgm'"),
 			);
 			const rows = (result as { rows?: unknown[] }).rows ?? result;
 			expect((rows as unknown[]).length).toBe(1);

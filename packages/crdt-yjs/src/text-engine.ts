@@ -46,10 +46,7 @@ export function createYjsTextEngineCore(): CrdtTextFieldEngine {
 					input,
 				);
 			},
-			resolve(
-				replica: CrdtEngineReplica<"text", string>,
-				position: string,
-			) {
+			resolve(replica: CrdtEngineReplica<"text", string>, position: string) {
 				assertReplicaBelongsToEngine(engine, replica);
 				const document = restoreDocument(replica.state);
 				return resolveYjsRelativePosition(

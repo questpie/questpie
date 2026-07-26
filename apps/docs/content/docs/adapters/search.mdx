@@ -134,7 +134,7 @@ The **client/HTTP** `search` returns field-filtered live records, not index snap
 | `offset`      | `number`                              | `0`             | Page offset.                                                                      |
 | `mode`        | `"lexical" \| "semantic" \| "hybrid"` | `"lexical"`     | Ranking strategy. Built-in adapters reject unsupported modes.                     |
 | `filters`     | `Record<string, string \| string[]>`  | none            | Match against indexed `metadata`. Array = OR within a field; across fields = AND. |
-| `highlights`  | `boolean`                             | `true`          | Raw `app.search.search(...)` only. Hydrated HTTP/client results omit snapshots.    |
+| `highlights`  | `boolean`                             | `true`          | Raw `app.search.search(...)` only. Hydrated HTTP/client results omit snapshots.   |
 | `facets`      | `FacetDefinition[]`                   | none            | Request facet aggregations (see [Facets](#facets)).                               |
 
 `filters` matches the `metadata` you index per collection. For example, with `.searchable({ metadata: (r) => ({ status: r.status }) })`:

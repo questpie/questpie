@@ -19,4 +19,4 @@
 # reviewed and pinned exactly before its 72-hour window elapsed because it is
 # the first release fixing a high-severity advisory. Do not add it to
 # minimumReleaseAgeExcludes: future versions must remain quarantined.
-minimumReleaseAge = 259200  # 72 hours
+minimumReleaseAge = 259200 # 72 hours

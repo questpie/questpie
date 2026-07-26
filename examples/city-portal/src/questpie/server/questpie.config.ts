@@ -6,10 +6,10 @@
  * Sidebar, dashboard, branding, locale, context are file conventions.
  */
 
-import { runtimeConfig } from "questpie/app";
 import { ConsoleAdapter } from "questpie/adapters/console";
 import { pgBossAdapter } from "questpie/adapters/pg-boss";
 import { SmtpAdapter } from "questpie/adapters/smtp";
+import { runtimeConfig } from "questpie/app";
 
 const DATABASE_URL =
 	process.env.DATABASE_URL || "postgres://localhost/cityportal";
