@@ -1,3 +1,10 @@
+import {
+	getCurrentTransaction,
+	getTransactionContext,
+	onAfterCommit,
+	withTransaction,
+} from "#questpie/server/collection/crud/shared/transaction.js";
+
 import type {
 	QueueAdapter,
 	QueueAdapterCapabilities,
@@ -6,10 +13,19 @@ import type {
 	QueuePushConsumerHandler,
 	QueueRunOnceOptions,
 } from "./adapter.js";
+import {
+	acceptReservedQueueDispatch,
+	drainQueueDispatches,
+	enqueueQueueDispatch,
+	reserveQueueDispatch,
+	stableQueueDispatchId,
+} from "./dispatch-store.js";
 import type {
 	JobDefinition,
 	PublishOptions,
 	QueueClient,
+	QueueDrainOptions,
+	QueueDrainResult,
 	QueueListenRuntimeOptions,
 	QueueRegisterSchedulesOptions,
 } from "./types.js";
@@ -28,6 +44,7 @@ type QueueLogger = {
 
 export interface QueueClientRuntimeOptions {
 	createContext?: () => Promise<QueueRuntimeContext>;
+	getDatabase?: () => unknown;
 	getApp?: () => unknown;
 	logger?: QueueLogger;
 }
@@ -94,11 +111,17 @@ export function createQueueClient<
 ): QueueClient<TJobs> {
 	const logger = runtimeOptions.logger ?? defaultLogger;
 	const capabilities = resolveCapabilities(adapter);
+	const canPublishInTransaction =
+		adapter.transactionalPublishing !== false &&
+		typeof adapter.publishInTransaction === "function";
 
 	// Track if started
 	let started = false;
 	let signalCleanup: (() => void) | undefined;
 	let shutdownInProgress = false;
+	let relayTimer: ReturnType<typeof setInterval> | undefined;
+	let activeDrain: Promise<QueueDrainResult> | undefined;
+	const transactionsWithScheduledDrain = new WeakSet<object>();
 
 	// Auto-start helper
 	const ensureStarted = async () => {
@@ -109,8 +132,8 @@ export function createQueueClient<
 	};
 
 	// Error handling
-	adapter.on("error", (error: Error) => {
-		logger.error("[QUESTPIE Queue] Adapter error:", error);
+	adapter.on("error", () => {
+		logger.error("[QUESTPIE Queue] Adapter reported an error");
 	});
 
 	const getContextOrThrow = async () => {
@@ -153,9 +176,8 @@ export function createQueueClient<
 				// HTTP/CRUD scopes. Jobs are system scope (matches today's empty-ALS
 				// fallback). `runWithContext` only inherits `_hookDepth` from an
 				// existing parent; a top-level job has none, so no double-count.
-				const { runWithContext } = await import(
-					"#questpie/server/config/context.js"
-				);
+				const { runWithContext } =
+					await import("#questpie/server/config/context.js");
 				await runWithContext(
 					{
 						app: appInstance,
@@ -169,6 +191,8 @@ export function createQueueClient<
 							...services,
 							payload: validated,
 							locale: context.locale,
+							dispatchId: job.dispatchId,
+							idempotencyKey: job.idempotencyKey,
 						} as any),
 				);
 			};
@@ -217,11 +241,82 @@ export function createQueueClient<
 		signalCleanup?.();
 		signalCleanup = undefined;
 		shutdownInProgress = false;
+		if (relayTimer) clearInterval(relayTimer);
+		relayTimer = undefined;
+		const drainInProgress = activeDrain;
+		if (drainInProgress) await drainInProgress;
 
 		if (started) {
 			await adapter.stop();
 			started = false;
 		}
+	};
+
+	const drain = (options?: QueueDrainOptions): Promise<QueueDrainResult> => {
+		if (activeDrain) return activeDrain;
+		activeDrain = (async () => {
+			await ensureStarted();
+			const db = runtimeOptions.getDatabase?.();
+			if (!db) {
+				return { claimed: 0, accepted: 0, failed: 0, terminal: 0 };
+			}
+			const maxBatches = options?.maxBatches ?? 1;
+			if (
+				!Number.isSafeInteger(maxBatches) ||
+				maxBatches <= 0 ||
+				maxBatches > 100
+			) {
+				throw new Error(
+					"Expected maxBatches to be an integer between 1 and 100",
+				);
+			}
+			const batchSize = options?.batchSize ?? 100;
+			const total: QueueDrainResult = {
+				claimed: 0,
+				accepted: 0,
+				failed: 0,
+				terminal: 0,
+			};
+			for (let batch = 0; batch < maxBatches; batch += 1) {
+				const result = await drainQueueDispatches({
+					adapter,
+					db,
+					logger,
+					batchSize,
+					concurrency: options?.concurrency,
+				});
+				total.claimed += result.claimed;
+				total.accepted += result.accepted;
+				total.failed += result.failed;
+				total.terminal += result.terminal;
+				if (result.claimed < batchSize) break;
+			}
+			return total;
+		})().finally(() => {
+			activeDrain = undefined;
+		});
+		return activeDrain;
+	};
+
+	const startRelayTimer = () => {
+		if (relayTimer) return;
+		relayTimer = setInterval(() => {
+			void drain({ maxBatches: 10 }).catch((error) => {
+				logger.warn("[QUESTPIE Queue] Dispatch recovery tick failed", error);
+			});
+		}, 5_000);
+		relayTimer.unref?.();
+	};
+
+	const schedulePostCommitDrain = () => {
+		const transactionContext = getTransactionContext();
+		if (!transactionContext) return;
+		if (transactionsWithScheduledDrain.has(transactionContext)) return;
+		transactionsWithScheduledDrain.add(transactionContext);
+		onAfterCommit(async () => {
+			transactionsWithScheduledDrain.delete(transactionContext);
+			await drain();
+		});
 	};
 
 	const setupGracefulShutdown = (options?: QueueListenRuntimeOptions) => {
@@ -311,7 +406,9 @@ export function createQueueClient<
 				}
 			}
 
+			await drain({ maxBatches: 10 });
 			await adapter.listen(buildHandlers(), buildWorkOptions(options));
+			startRelayTimer();
 			setupGracefulShutdown(options);
 
 			return {
@@ -332,11 +429,13 @@ export function createQueueClient<
 			const selectedJobNames = Object.values(selectedJobs).map(
 				(job) => job.name,
 			);
+			await drain();
 			return adapter.runOnce(buildHandlers(selectedJobs), {
 				batchSize: options?.batchSize,
 				jobs: selectedJobNames,
 			});
 		},
+		drain,
 		registerSchedules,
 		stop: async () => {
 			await stopInternal();
@@ -354,6 +453,7 @@ export function createQueueClient<
 
 			return async (batch) => {
 				await ensureStarted();
+				await drain({ maxBatches: 10 });
 				await consumer(batch);
 			};
 		},
@@ -385,8 +485,114 @@ export function createQueueClient<
 					...jobDef.options,
 					...publishOptions,
 				};
+				if (
+					options.idempotencyKey !== undefined &&
+					options.singletonKey !== undefined
+				) {
+					throw new Error(
+						"QUESTPIE Queue: idempotencyKey and singletonKey cannot be combined because singleton suppression cannot identify a newly accepted logical dispatch.",
+					);
+				}
+				const dispatchId = await stableQueueDispatchId(
+					jobDef.name,
+					options.idempotencyKey,
+				);
+				const tx = getCurrentTransaction();
 
-				return adapter.publish(jobDef.name, validated, options);
+				if (tx && canPublishInTransaction && options.idempotencyKey) {
+					const reservation = await reserveQueueDispatch(tx, {
+						dispatchId,
+						jobName: jobDef.name,
+						idempotencyKey: options.idempotencyKey,
+						payload: validated,
+						options,
+					});
+					if (!reservation.inserted) return reservation.dispatchId;
+					const adapterJobId = await adapter.publishInTransaction!(
+						tx,
+						jobDef.name,
+						validated,
+						options,
+						dispatchId,
+					);
+					await acceptReservedQueueDispatch(
+						tx,
+						reservation.dispatchId,
+						adapterJobId,
+					);
+					return reservation.dispatchId;
+				}
+
+				if (tx && canPublishInTransaction) {
+					await adapter.publishInTransaction!(
+						tx,
+						jobDef.name,
+						validated,
+						options,
+						dispatchId,
+					);
+					return dispatchId;
+				}
+
+				if (tx) {
+					const persistedId = await enqueueQueueDispatch(tx, {
+						dispatchId,
+						jobName: jobDef.name,
+						idempotencyKey: options.idempotencyKey,
+						payload: validated,
+						options,
+					});
+					schedulePostCommitDrain();
+					return persistedId;
+				}
+
+				if (options.idempotencyKey) {
+					const db = runtimeOptions.getDatabase?.();
+					if (!db) {
+						throw new Error(
+							"QUESTPIE Queue: database context is required for portable idempotency.",
+						);
+					}
+					if (canPublishInTransaction) {
+						return withTransaction(db, async (transaction) => {
+							const reservation = await reserveQueueDispatch(transaction, {
+								dispatchId,
+								jobName: jobDef.name,
+								idempotencyKey: options.idempotencyKey,
+								payload: validated,
+								options,
+							});
+							if (!reservation.inserted) return reservation.dispatchId;
+							const adapterJobId = await adapter.publishInTransaction!(
+								transaction,
+								jobDef.name,
+								validated,
+								options,
+								reservation.dispatchId,
+							);
+							await acceptReservedQueueDispatch(
+								transaction,
+								reservation.dispatchId,
+								adapterJobId,
+							);
+							return reservation.dispatchId;
+						});
+					}
+					const persistedId = await withTransaction(db, (transaction) =>
+						enqueueQueueDispatch(transaction, {
+							dispatchId,
+							jobName: jobDef.name,
+							idempotencyKey: options.idempotencyKey,
+							payload: validated,
+							options,
+						}),
+					);
+					await drain();
+					return persistedId;
+				}
+
+				await adapter.publish(jobDef.name, validated, options, dispatchId);
+				return dispatchId;
 			},
 
 			/**
@@ -395,7 +601,7 @@ export function createQueueClient<
 			schedule: async (
 				payload: any,
 				cron: string,
-				publishOptions?: Omit<PublishOptions, "startAfter">,
+				publishOptions?: Omit<PublishOptions, "idempotencyKey" | "startAfter">,
 			) => {
 				await ensureStarted();
 

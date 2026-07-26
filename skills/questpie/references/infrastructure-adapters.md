@@ -244,12 +244,25 @@ The `queue` context object is fully typed:
 
 ```ts
 handler: async ({ queue }) => {
-	await queue.sendConfirmation.publish({
-		appointmentId: "abc",
-		customerId: "def",
-	});
+	const dispatchId = await queue.sendConfirmation.publish(
+		{
+			appointmentId: "abc",
+			customerId: "def",
+		},
+		{ idempotencyKey: "confirmation:abc" },
+	);
 };
 ```
+
+`publish()` is the only application dispatch API. Inside an ambient QUESTPIE transaction, pg-boss uses its `fromDrizzle(tx, sql)` path so the Job and business data commit together. BullMQ, Cloudflare Queues, and custom adapters without `publishInTransaction` persist a private `questpie_queue_dispatch` intent in that transaction and relay it with leases, backoff, and crash recovery. The Queue ledger is not the realtime outbox.
+
+`idempotencyKey` (1-512 non-secret characters) produces a stable logical `dispatchId` per durable job name and is separate from `singletonKey`, which controls adapter-native in-flight deduplication. Combining both keys fails closed because a singleton-suppressed publish cannot prove a new logical Job was accepted. Accepted identity receipts survive pg-boss retention and adapter switches. Delivery remains at-least-once if a process dies after broker acceptance but before recording the receipt; every retry carries the same `dispatchId`.
+
+Long-running `listen()` recovers a bounded ten-batch burst every five seconds. `runOnce()` and push-consumer entrypoints also drain bounded work before consuming. On Cloudflare or another push-only deployment, add a platform cron that calls `app.queue.drain({ batchSize, concurrency, maxBatches })` so recovery does not depend on an incoming queue batch. A relay row becomes terminal after 25 adapter-publication attempts; `drain()` reports `{ terminal }` and emits a payload-free structured error. This does not start another QUESTPIE process.
+
+pg-boss `runOnce()` explicitly calls `complete` for successful fetched jobs and `fail` for handler errors. Same-transaction pg-boss publishing requires the application and pg-boss to share PostgreSQL; set `useApplicationTransaction: false` when pg-boss uses a separate database. Cloudflare handler failures, poison envelopes, and missing handlers call `retry` instead of silently acknowledging. Its `retryLimit` is an observable framework threshold; Cloudflare `max_retries` and configured `dead_letter_queue` own terminal delivery.
+
+Email remains an application recipe: typed send-mail Job, then `email.sendTemplate()`, then the mail adapter. Do not add a public outbox or mail-specific enqueue API. Secret-bearing Queue payload encryption is not yet a framework guarantee; pass durable identifiers and resolve sensitive values inside the handler.
 
 ## Realtime
 

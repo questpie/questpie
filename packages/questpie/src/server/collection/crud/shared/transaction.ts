@@ -6,15 +6,17 @@
  * 2. Supports afterCommit callbacks that run only after outermost transaction commits
  * 3. Handles nested transactions by reusing the parent transaction
  *
- * This solves the problem of operations like search indexing, job dispatching,
- * or email sending that should only run after data is durably committed.
+ * This solves the problem of non-transactional effects like HTTP calls or
+ * direct email sending that should only run after data is durably committed.
+ * QUESTPIE Queue publish() uses the ambient transaction directly and does not
+ * need to be wrapped in onAfterCommit.
  *
  * ## Why afterCommit?
  *
- * When you dispatch a job, send an email, or call a webhook inside a transaction,
+ * When you send an email or call a webhook inside a transaction,
  * there's a risk that the transaction could roll back AFTER the side effect occurred.
- * This leads to inconsistent state - emails sent for orders that don't exist, jobs
- * processing records that were rolled back, etc.
+ * This leads to inconsistent state - emails sent for orders that don't exist,
+ * webhooks for rolled-back changes, etc.
  *
  * `onAfterCommit` queues callbacks to run ONLY after the outermost transaction
  * successfully commits, ensuring side effects only happen when data is durable.
@@ -44,12 +46,11 @@
  *           });
  *         });
  *
- *         // Queue background job AFTER transaction commits
- *         onAfterCommit(async () => {
- *           await context.app.queue.add("process-order", {
- *             orderId: data.id,
- *           });
- *         });
+ *         // Queue publish joins the current transaction automatically.
+ *         await context.queue.processOrder.publish(
+ *           { orderId: data.id },
+ *           { idempotencyKey: `process-order:${data.id}` },
+ *         );
  *       }
  *     },
  *   },
@@ -80,10 +81,18 @@
  *         );
  *       }
  *
- *       // Queue notifications AFTER everything commits
+ *       // Queue dispatches commit with the business transaction.
+ *       await app.queue.sendOrderConfirmation.publish(
+ *         { orderId: order.id },
+ *         { idempotencyKey: `order-confirmation:${order.id}` },
+ *       );
+ *
+ *       // Non-transactional notifications still wait until commit.
  *       onAfterCommit(async () => {
- *         await app.queue.add("send-order-confirmation", { orderId: order.id });
- *         await app.queue.add("notify-warehouse", { orderId: order.id });
+ *         await fetch("https://warehouse.example/orders", {
+ *           method: "POST",
+ *           body: JSON.stringify({ orderId: order.id }),
+ *         });
  *       });
  *
  *       return order;
@@ -192,7 +201,6 @@ export function isInTransaction(): boolean {
  * and will run only after the outermost transaction successfully commits.
  *
  * **Use this for any side effect that should only happen when data is durable:**
- * - Dispatching background jobs
  * - Sending emails or push notifications
  * - Calling external webhooks/APIs
  * - Search indexing
@@ -200,8 +208,10 @@ export function isInTransaction(): boolean {
  *
  * **Why not just put these after the transaction?**
  * In hooks (afterChange, afterCreate, etc.), you're already inside the CRUD
- * transaction. You can't "step outside" it. `onAfterCommit` lets you queue
- * work to run after the hook's parent transaction commits.
+ * transaction. You can't "step outside" it. `onAfterCommit` lets you run
+ * non-transactional work after the hook's parent transaction commits.
+ * Transaction-aware services such as Queue publish() should be awaited
+ * directly instead.
  *
  * @param callback - Async function to run after commit
  *
@@ -209,12 +219,14 @@ export function isInTransaction(): boolean {
  * ```typescript
  * // In a collection hook
  * .hooks({
- *   afterChange: async ({ data, context }) => {
- *     // This runs inside the transaction - DON'T dispatch jobs here directly!
+ *   afterChange: async ({ data, queue }) => {
+ *     await queue.syncToExternal.publish(
+ *       { id: data.id },
+ *       { idempotencyKey: `sync:${data.id}` },
+ *     );
  *
- *     // Instead, queue for after commit:
+ *     // Defer the actual external call until commit:
  *     onAfterCommit(async () => {
- *       await context.app.queue.add("sync-to-external", { id: data.id });
  *       await fetch("https://webhook.site/...", {
  *         method: "POST",
  *         body: JSON.stringify(data),

@@ -55,6 +55,10 @@ export type JobHandlerArgs<TPayload = unknown> = JobHandlerContext & {
 	payload: TPayload;
 	/** Current locale */
 	locale?: string;
+	/** Stable logical identity shared by retries and duplicate physical delivery. */
+	dispatchId?: string;
+	/** Caller-provided portable idempotency identity, when present. */
+	idempotencyKey?: string;
 };
 
 /**
@@ -163,6 +167,14 @@ export type InferJobResult<T> =
  * Publish options for jobs
  */
 export interface PublishOptions {
+	/**
+	 * Portable logical idempotency identity.
+	 *
+	 * Reusing the same key for one job name resolves to the same dispatch.
+	 * This is distinct from singleton scheduling/concurrency policy.
+	 */
+	idempotencyKey?: string;
+
 	/**
 	 * Priority (higher = more important)
 	 */
@@ -273,6 +285,20 @@ export interface QueueRegisterSchedulesOptions {
 	jobs?: string[];
 }
 
+export interface QueueDrainOptions {
+	batchSize?: number;
+	concurrency?: number;
+	/** Maximum number of consecutive batches processed by this bounded drain. */
+	maxBatches?: number;
+}
+
+export interface QueueDrainResult {
+	claimed: number;
+	accepted: number;
+	failed: number;
+	terminal: number;
+}
+
 export interface QueueListenHandle {
 	stop: () => Promise<void>;
 }
@@ -292,7 +318,7 @@ export type QueueJobClient<TJob> = {
 	schedule: (
 		payload: InferJobPayload<TJob>,
 		cron: string,
-		options?: Omit<PublishOptions, "startAfter">,
+		options?: Omit<PublishOptions, "idempotencyKey" | "startAfter">,
 	) => Promise<void>;
 
 	/**
@@ -354,6 +380,14 @@ export type QueueClient<TJobs extends Record<string, any>> = {
 	 * Process one bounded batch of jobs.
 	 */
 	runOnce: (options?: QueueRunOnceOptions) => Promise<QueueRunOnceResult>;
+
+	/**
+	 * Drain durable external-adapter dispatch intents.
+	 *
+	 * Long-running workers call this automatically. Push-only deployments may
+	 * invoke it from a platform cron trigger for crash recovery.
+	 */
+	drain: (options?: QueueDrainOptions) => Promise<QueueDrainResult>;
 
 	/**
 	 * Register recurring cron schedules declared in job options.

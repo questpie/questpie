@@ -1,4 +1,5 @@
-import { type ConstructorOptions, PgBoss } from "pg-boss";
+import { sql } from "drizzle-orm";
+import { fromDrizzle, type ConstructorOptions, PgBoss } from "pg-boss";
 
 import type {
 	QueueAdapter,
@@ -7,9 +8,22 @@ import type {
 	QueueRunOnceOptions,
 	QueueRunOnceResult,
 } from "../adapter.js";
+import {
+	decodeQueueDispatchEnvelope,
+	encodeQueueDispatchEnvelope,
+} from "../dispatch-envelope.js";
 import type { PublishOptions } from "../types.js";
 
-export type PgBossAdapterOptions = ConstructorOptions;
+export type PgBossAdapterOptions = ConstructorOptions & {
+	/**
+	 * Use the current QUESTPIE Drizzle transaction for Job insertion.
+	 *
+	 * Keep enabled only when pg-boss points at the same PostgreSQL database as
+	 * the application. Set false for a separate pg-boss database; QUESTPIE then
+	 * uses its durable dispatch relay.
+	 */
+	useApplicationTransaction?: boolean;
+};
 
 export class PgBossAdapter implements QueueAdapter {
 	public readonly capabilities = {
@@ -24,9 +38,12 @@ export class PgBossAdapter implements QueueAdapter {
 	private started = false;
 	private createdQueues = new Set<string>();
 	private warnedSingletonNoop = new Set<string>();
+	public readonly transactionalPublishing: boolean;
 
 	constructor(options: PgBossAdapterOptions) {
-		this.boss = new PgBoss(options);
+		const { useApplicationTransaction = true, ...pgBossOptions } = options;
+		this.transactionalPublishing = useApplicationTransaction;
+		this.boss = new PgBoss(pgBossOptions);
 	}
 
 	async start(): Promise<void> {
@@ -81,21 +98,61 @@ export class PgBossAdapter implements QueueAdapter {
 		jobName: string,
 		payload: any,
 		options?: PublishOptions,
+		dispatchId?: string,
 	): Promise<string | null> {
 		await this.start();
 		await this.ensureQueue(jobName, { policy: options?.queuePolicy });
 		this.warnIfSingletonNoop(jobName, options);
 		// PublishOptions closely mirrors pg-boss send options; queuePolicy is
 		// consumed by ensureQueue above, not forwarded to send().
-		const { queuePolicy: _queuePolicy, ...sendOptions } = options ?? {};
-		return this.boss.send(jobName, payload, sendOptions as any);
+		const {
+			queuePolicy: _queuePolicy,
+			idempotencyKey,
+			...sendOptions
+		} = options ?? {};
+		return this.boss.send(
+			jobName,
+			dispatchId
+				? encodeQueueDispatchEnvelope(payload, dispatchId, idempotencyKey)
+				: payload,
+			{
+				...sendOptions,
+				...(dispatchId ? { id: dispatchId } : {}),
+			} as any,
+		);
+	}
+
+	async publishInTransaction(
+		tx: unknown,
+		jobName: string,
+		payload: any,
+		options: PublishOptions | undefined,
+		dispatchId: string,
+	): Promise<string | null> {
+		await this.start();
+		await this.ensureQueue(jobName, { policy: options?.queuePolicy });
+		this.warnIfSingletonNoop(jobName, options);
+		const {
+			queuePolicy: _queuePolicy,
+			idempotencyKey,
+			...sendOptions
+		} = options ?? {};
+		return this.boss.send(
+			jobName,
+			encodeQueueDispatchEnvelope(payload, dispatchId, idempotencyKey),
+			{
+				...sendOptions,
+				id: dispatchId,
+				db: fromDrizzle(tx as any, sql),
+			} as any,
+		);
 	}
 
 	async schedule(
 		jobName: string,
 		cron: string,
 		payload: any,
-		options?: Omit<PublishOptions, "startAfter">,
+		options?: Omit<PublishOptions, "idempotencyKey" | "startAfter">,
 	): Promise<void> {
 		await this.start();
 		await this.ensureQueue(jobName, { policy: options?.queuePolicy });
@@ -130,7 +187,10 @@ export class PgBossAdapter implements QueueAdapter {
 				const arr: any[] = Array.isArray(jobs) ? jobs : jobs ? [jobs] : [];
 				for (const j of arr) {
 					try {
-						await handler({ id: String(j.id), data: j.data });
+						await handler({
+							id: String(j.id),
+							...decodeQueueDispatchEnvelope(j.data, String(j.id)),
+						});
 					} catch (error) {
 						const err =
 							error instanceof Error
@@ -201,7 +261,10 @@ export class PgBossAdapter implements QueueAdapter {
 			for (const job of jobs) {
 				const id = String(job.id);
 				try {
-					await handler({ id, data: job.data });
+					await handler({
+						id,
+						...decodeQueueDispatchEnvelope(job.data, id),
+					});
 					await this.boss.complete(jobName, id);
 					processed += 1;
 				} catch (error) {

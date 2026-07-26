@@ -15,6 +15,7 @@ Read [Jobs](/docs/concepts/jobs) first, it owns `job()`, `queue.<name>.publish/s
 
 - **Choose your backend with one line.** Pass an adapter to `.build({ queue: { adapter } })`; everything above it, the typed `app.queue` client, dispatch, retries, scheduling, stays identical.
 - **Stay portable.** Job handlers and `publish` calls never name the backend. Moving from pg-boss in dev to BullMQ in production is an adapter swap, nothing else.
+- **Commit dispatch with business data.** `publish()` detects QUESTPIE's ambient transaction. pg-boss joins it directly; external brokers use a private durable dispatch ledger and post-commit relay.
 - **Run on Postgres, Redis, or Cloudflare.** Reuse your existing database (pg-boss), a Redis instance (BullMQ), or a push-based serverless queue (Cloudflare Queues).
 - **Advertise capabilities.** Each adapter declares whether it supports long-running workers, one-batch draining, push delivery, cron scheduling, and singleton dedup, so the runtime can fail fast or branch.
 - **Keep drivers out of your bundle.** Each adapter lives at its own import subpath (`questpie/adapters/pg-boss`, …), so `pg-boss` / `bullmq` / Cloudflare bindings load only when you import them.
@@ -28,8 +29,8 @@ Pick one adapter and pass it to `.build()`. Codegen fills `jobs` from your `jobs
 import { pgBossAdapter } from "questpie/adapters/pg-boss";
 
 export default questpie(/* modules */).build({
-  // `jobs` is filled by codegen from your jobs/ files, you only supply the adapter.
-  queue: { adapter: pgBossAdapter({ connectionString: env.DATABASE_URL }) },
+	// `jobs` is filled by codegen from your jobs/ files, you only supply the adapter.
+	queue: { adapter: pgBossAdapter({ connectionString: env.DATABASE_URL }) },
 });
 ```
 
@@ -57,9 +58,18 @@ Each adapter advertises what it can do through capability flags. These gate whic
 | `scheduling` (`options.cron`, `queue.<n>.schedule()`) | yes     | yes    | no                |
 | `singleton` (`singletonKey` dedup)                    | yes     | yes    | no                |
 
-<Callout type="info" title="Detect capabilities at runtime with `app.queue.capabilities`">
-  The resolved flags are exposed on `app.queue.capabilities`, `longRunningConsumer`, `runOnceConsumer`, `pushConsumer`, `scheduling`, `singleton`. If one codebase targets multiple runtimes, check the relevant flag before calling `listen` / `runOnce` / `schedule` rather than catching the throw. When an adapter omits
-  `capabilities`, the runtime infers them: `longRunningConsumer`/`runOnceConsumer`/`pushConsumer` default to *"is the matching method implemented?"*, `scheduling` to *"are both `schedule` and `unschedule` functions?"*, and `singleton` to `false`.
+<Callout
+	type="info"
+	title="Detect capabilities at runtime with `app.queue.capabilities`"
+>
+	The resolved flags are exposed on `app.queue.capabilities`,
+	`longRunningConsumer`, `runOnceConsumer`, `pushConsumer`, `scheduling`,
+	`singleton`. If one codebase targets multiple runtimes, check the relevant
+	flag before calling `listen` / `runOnce` / `schedule` rather than catching the
+	throw. When an adapter omits `capabilities`, the runtime infers them:
+	`longRunningConsumer`/`runOnceConsumer`/`pushConsumer` default to *"is the
+	matching method implemented?"*, `scheduling` to *"are both `schedule` and
+	`unschedule` functions?"*, and `singleton` to `false`.
 </Callout>
 
 ## The consumer models
@@ -71,7 +81,33 @@ The adapter's capabilities decide _how_ a worker drains the queue. The mechanics
 - **Push** (`queue.createPushConsumer()`), the platform delivers batches to your worker; you don't poll. Cloudflare Queues only.
 
 <Callout type="info" title="Workers start from application entrypoints">
-  Import the built app and call `app.queue.listen()` for a long-running worker, `app.queue.runOnce()` for a serverless tick, or wire `app.queue.createPushConsumer()` to the platform queue entrypoint. See [Jobs → Running a worker](/docs/concepts/jobs#running-a-worker).
+	Import the built app and call `app.queue.listen()` for a long-running worker,
+	`app.queue.runOnce()` for a serverless tick, or wire
+	`app.queue.createPushConsumer()` to the platform queue entrypoint. See [Jobs →
+	Running a worker](/docs/concepts/jobs#running-a-worker).
+</Callout>
+
+## Transaction and recovery contract
+
+`queue.<job>.publish(payload, options)` is the only application dispatch API:
+
+- With pg-boss inside a QUESTPIE transaction, the framework reserves any idempotency receipt and inserts the Job using the same Drizzle transaction.
+- With BullMQ, Cloudflare Queues, or a custom adapter without `publishInTransaction`, QUESTPIE stores an internal `questpie_queue_dispatch` intent in the business transaction. A leased relay publishes it after commit and retries with exponential backoff.
+- A rollback creates neither a Job nor a dispatch intent.
+- A crash after commit but before broker acceptance is recovered by `listen()`, `runOnce()`, push-consumer startup, or the operational `queue.drain()` method.
+- A crash after broker acceptance but before the receipt is recorded can cause another physical delivery. Every attempt keeps the same `dispatchId`; handlers must be idempotent.
+- Outside a transaction, a publish without `idempotencyKey` continues to await adapter acceptance directly. Supplying `idempotencyKey` uses the durable ledger so repeated calls resolve to one logical dispatch.
+- `idempotencyKey` and `singletonKey` cannot be combined. Native singleton suppression cannot produce a trustworthy receipt for a newly accepted logical dispatch.
+
+The ledger is Queue-owned and is intentionally separate from the realtime outbox. It is always part of `app.getSchema()` so adapter changes do not accidentally drop recovery state; deploy the generated migration before running the new framework version. Accepted idempotent rows retain only identity and adapter-receipt metadata with no automatic expiry, while non-idempotent accepted rows are removed. Keep idempotency keys non-secret.
+
+Adapter-publication recovery is bounded: 25 attempts, exponential backoff capped at one hour. A terminal row remains `failed`; `queue.drain()` reports it in `{ terminal }` and emits a payload-free structured error. Fix the adapter and publish a new logical attempt with a new `idempotencyKey`; the original key remains bound to its terminal receipt. Failed rows retain their payload for diagnosis, so use opaque identifiers rather than bearer secrets until the separate generic Queue payload-encryption capability exists.
+
+<Callout type="warn" title="Recovery requires an execution opportunity">
+	Node/Bun `listen()` runs a five-second recovery tick. Serverless and push-only
+	deployments must invoke `runOnce()`, receive a push batch, or schedule
+	`queue.drain()` from a platform cron. The framework does not start a second
+	process.
 </Callout>
 
 ## pg-boss (Postgres)
@@ -86,24 +122,28 @@ import { pgBossAdapter } from "questpie/adapters/pg-boss";
 });
 ```
 
-`PgBossAdapterOptions` **is** pg-boss's own `ConstructorOptions`, a direct re-export, so every option passes straight through to `new PgBoss(...)`:
+`PgBossAdapterOptions` extends pg-boss's `ConstructorOptions` with one QUESTPIE switch; every other option passes straight through to `new PgBoss(...)`:
 
 ```ts
 import { pgBossAdapter } from "questpie/adapters/pg-boss";
 
 pgBossAdapter({
-  connectionString: env.DATABASE_URL, // or pass `db`, `host`/`port`/`user`/…
-  schema: "pgboss", // dedicated schema for queue tables (pg-boss default)
-  max: 10, // connection pool size
+	connectionString: env.DATABASE_URL, // or pass `db`, `host`/`port`/`user`/…
+	schema: "pgboss", // dedicated schema for queue tables (pg-boss default)
+	max: 10, // connection pool size
+	useApplicationTransaction: true, // QUESTPIE option; this is the app database
 });
 ```
 
 Behavior worth knowing:
 
 - **Queues are created on demand.** The adapter calls `createQueue(jobName)` the first time it touches a job and caches it, you never declare queues yourself.
-- **`PublishOptions` maps ~1:1** to pg-boss send options (`priority`, `startAfter`, `singletonKey`, `retryLimit`, `retryDelay`, `expireInSeconds`), passed through directly.
+- **Ambient transactions stay atomic.** pg-boss receives `db: fromDrizzle(tx, sql)`, so the Job insert commits or rolls back with the current QUESTPIE transaction.
+- **The application and pg-boss must share PostgreSQL.** Same-transaction insertion is enabled by default. If pg-boss points at a separate database, set `useApplicationTransaction: false`; QUESTPIE then commits an application-database dispatch intent and relays it to pg-boss after commit.
+- **Logical identity is portable.** The stable `dispatchId` becomes pg-boss's Job `id`; the framework identity receipt survives pg-boss Job retention and adapter changes. `idempotencyKey` is not forwarded as a scheduling option.
+- **Other `PublishOptions` map ~1:1** to pg-boss send options (`priority`, `startAfter`, `singletonKey`, `retryLimit`, `retryDelay`, `expireInSeconds`).
 - **Batches are processed serially.** pg-boss always hands an array to its `work()` callback; the adapter iterates items one at a time and reports per-item failures via `boss.fail(...)` so a sibling failure doesn't sink the rest of the batch.
-- **`runOnce` needs pg-boss `fetch()` support**, it throws _"PgBossAdapter.runOnce requires pg-boss fetch() support."_ if the installed pg-boss version doesn't expose it.
+- **`runOnce` explicitly settles fetched work.** Successful jobs call `boss.complete(...)`; handler failures call `boss.fail(...)` before the first batch error is surfaced. It throws _"PgBossAdapter.runOnce requires pg-boss fetch() support."_ if the installed pg-boss version doesn't expose it.
 
 Supports long-running workers, `runOnce`, cron scheduling, and native `singletonKey`.
 
@@ -127,24 +167,28 @@ import { bullMQAdapter } from "questpie/adapters/bullmq";
 
 ```ts
 interface BullMQAdapterOptions {
-  connection: ConnectionOptions; // bullmq/ioredis connection (required)
-  queuePrefix?: string; // namespace key prefix for queues/workers
-  workerOptions?: Omit<WorkerOptions, "connection" | "prefix">; // extra bullmq Worker opts
+	connection: ConnectionOptions; // bullmq/ioredis connection (required)
+	queuePrefix?: string; // namespace key prefix for queues/workers
+	workerOptions?: Omit<WorkerOptions, "connection" | "prefix">; // extra bullmq Worker opts
 }
 ```
 
 Behavior worth knowing:
 
 - **Lazy connect.** `start()` is a no-op; queues and workers connect when first used.
+- **Transactional handoff uses PostgreSQL.** Inside an ambient transaction, QUESTPIE writes `questpie_queue_dispatch`; a leased relay publishes to Redis after commit and recovers after process death.
 - **One `Worker` per job name.** `listen()` creates a BullMQ `Worker` for each job; `teamSize` maps to the worker's `concurrency`.
-- **Option mapping** (`PublishOptions` → BullMQ `JobsOptions`): `startAfter` → `delay` (ms), `singletonKey` → `jobId` (dedup _by id_, not a true singleton lock), `retryLimit` → `attempts` (`retryLimit + 1`), `retryDelay` → `backoff.delay` in **milliseconds** (`type: exponential` when `retryBackoff`, else `fixed`), `expireInSeconds` → `removeOnComplete: { age }`, `priority` → `priority`.
+- **Identity mapping is deliberate.** Stable `dispatchId` → BullMQ `jobId`; `singletonKey` → BullMQ `deduplication.id`. Logical idempotency and in-flight scheduling dedupe are not aliases.
+- **Option mapping** (`PublishOptions` → BullMQ `JobsOptions`): `startAfter` → `delay` (ms), `retryLimit` → `attempts` (`retryLimit + 1`), `retryDelay` → `backoff.delay` in **milliseconds** (`type: exponential` when `retryBackoff`, else `fixed`), `expireInSeconds` → `removeOnComplete: { age }`, `priority` → `priority`.
 - **Scheduling** uses BullMQ's repeatable jobs (`repeat: { pattern: cron, key: "questpie:<jobName>" }`); `unschedule()` removes every repeatable tied to that name.
 
 <Callout type="warn" title="`retryDelay` is still in seconds, even on BullMQ">
-  You always pass `retryDelay` in **seconds**, matching every other adapter. The BullMQ adapter multiplies it by 1000 internally to get BullMQ's millisecond `backoff.delay`. Don't pre-multiply.
+	You always pass `retryDelay` in **seconds**, matching every other adapter. The
+	BullMQ adapter multiplies it by 1000 internally to get BullMQ's millisecond
+	`backoff.delay`. Don't pre-multiply.
 </Callout>
 
-Supports long-running workers, `runOnce`, cron scheduling, and `singletonKey` (id-dedup).
+Supports long-running workers, `runOnce`, cron scheduling, and `singletonKey` through BullMQ deduplication.
 
 ## Cloudflare Queues (push)
 
@@ -162,12 +206,15 @@ import { cloudflareQueuesAdapter } from "questpie/adapters/cloudflare-queues";
 
 ```ts
 interface CloudflareQueuesAdapterOptions {
-  // A Cloudflare Queues producer binding (or a function returning one).
-  queue?: CloudflareQueueBinding | (() => MaybePromise<CloudflareQueueBinding>);
-  // ...or your own enqueue function (returns a message id, or null).
-  enqueue?: (message: CloudflareQueueEnvelope, opts?: { delaySeconds?: number }) => Promise<string | null>;
-  // Decode a raw pushed body into an envelope (defaults to requiring a `jobName` string).
-  decode?: (body: unknown) => CloudflareQueueEnvelope | null;
+	// A Cloudflare Queues producer binding (or a function returning one).
+	queue?: CloudflareQueueBinding | (() => MaybePromise<CloudflareQueueBinding>);
+	// ...or your own enqueue function (returns a message id, or null).
+	enqueue?: (
+		message: CloudflareQueueEnvelope,
+		opts?: { delaySeconds?: number },
+	) => Promise<string | null>;
+	// Decode a raw pushed body into an envelope (defaults to requiring a `jobName` string).
+	decode?: (body: unknown) => CloudflareQueueEnvelope | null;
 }
 ```
 
@@ -179,18 +226,19 @@ import { app } from "#questpie";
 const consume = app.queue.createPushConsumer();
 
 export default {
-  async queue(batch, _env, _ctx) {
-    await consume(batch as never);
-  },
+	async queue(batch, _env, _ctx) {
+		await consume(batch as never);
+	},
 };
 ```
 
 Behavior worth knowing:
 
 - **Push-only.** `schedule()` / `unschedule()` **throw**, _"…does not support cron scheduling. Use platform cron triggers."_ Use Cloudflare's [Cron Triggers](/docs/concepts/jobs#recurring-jobs) for recurring work, calling `runOnce`-style draining from a scheduled handler if needed.
-- **`publish()` returns `null`** with the `queue` binding form, because Cloudflare's `send()` exposes no stable message id.
+- **Public `publish()` still returns `dispatchId`.** Cloudflare's `send()` has no physical message id, but the QUESTPIE Queue client owns the logical UUID.
+- **Transactional handoff uses PostgreSQL.** Inside an ambient transaction, QUESTPIE commits `questpie_queue_dispatch` and relays to the binding after commit. Add a platform Cron Trigger that calls `app.queue.drain()` so a committed intent is recovered even when no new push batch arrives.
 - **Delays cap at 24 hours.** `startAfter` → `delaySeconds` and `retryDelay` → retry `delaySeconds`, both throwing if they exceed 24h (or if `startAfter` is an invalid ISO string).
-- **Retry handling.** On a handler error the consumer calls `message.retry(...)`. The message is only acked (dropped) when a `retryLimit` was published _and_ `attempts >= retryLimit + 1`; with no `retryLimit` set, a failing message always retries. Undecodable messages and messages with no matching handler are acked and skipped.
+- **Retry handling is fail-closed.** Handler errors, undecodable messages, and missing handlers call `message.retry(...)`; they are never silently acknowledged. `retryLimit` emits an observable QUESTPIE error threshold, but Cloudflare's consumer `max_retries` is the actual terminal bound. Configure `dead_letter_queue`; without it, Cloudflare permanently deletes a message after `max_retries`.
 - **`runtime: "cloudflare"` marker.** The adapter carries this so QUESTPIE's [runtime-compatibility check](/docs/concepts/configuration) can verify a Cloudflare Workers deploy uses a push-based queue. A custom adapter targeting Workers must set `runtime: "cloudflare"` and implement `createPushConsumer()`.
 
 ## The `QueueAdapter` contract
@@ -199,28 +247,55 @@ Every adapter, built-in or custom, implements this interface. It's the single se
 
 ```ts
 interface QueueAdapter {
-  capabilities?: Partial<QueueAdapterCapabilities>;
+	capabilities?: Partial<QueueAdapterCapabilities>;
 
-  // Required:
-  start(): Promise<void>;
-  stop(): Promise<void>;
-  publish(jobName: string, payload: any, options?: PublishOptions): Promise<string | null>;
-  schedule(jobName: string, cron: string, payload: any, options?: Omit<PublishOptions, "startAfter">): Promise<void>;
-  unschedule(jobName: string): Promise<void>;
-  on(event: "error", handler: (error: Error) => void): void;
+	// Required:
+	start(): Promise<void>;
+	stop(): Promise<void>;
+	publish(
+		jobName: string,
+		payload: any,
+		options?: PublishOptions,
+		dispatchId?: string,
+	): Promise<string | null>;
+	publishInTransaction?(
+		tx: unknown,
+		jobName: string,
+		payload: any,
+		options: PublishOptions | undefined,
+		dispatchId: string,
+	): Promise<string | null>;
+	transactionalPublishing?: boolean;
+	schedule(
+		jobName: string,
+		cron: string,
+		payload: any,
+		options?: Omit<PublishOptions, "idempotencyKey" | "startAfter">,
+	): Promise<void>;
+	unschedule(jobName: string): Promise<void>;
+	on(event: "error", handler: (error: Error) => void): void;
 
-  // Optional, presence drives capability fallbacks:
-  listen?(handlers: QueueHandlerMap, options?: QueueListenOptions): Promise<void>;
-  runOnce?(handlers: QueueHandlerMap, options?: QueueRunOnceOptions): Promise<QueueRunOnceResult>;
-  createPushConsumer?(args: { handlers: QueueHandlerMap }): QueuePushConsumerHandler;
+	// Optional, presence drives capability fallbacks:
+	listen?(
+		handlers: QueueHandlerMap,
+		options?: QueueListenOptions,
+	): Promise<void>;
+	runOnce?(
+		handlers: QueueHandlerMap,
+		options?: QueueRunOnceOptions,
+	): Promise<QueueRunOnceResult>;
+	createPushConsumer?(args: {
+		handlers: QueueHandlerMap;
+	}): QueuePushConsumerHandler;
 }
 ```
 
 `start` / `stop` / `publish` / `schedule` / `unschedule` / `on` are **required**; `listen` / `runOnce` / `createPushConsumer` are **optional**, whether you implement each one determines the matching capability flag when `capabilities` leaves it unset (see the capability callout above).
 
-Two contract details adapter authors rely on:
+Three contract details adapter authors rely on:
 
-- **Handlers are keyed by the durable job name.** The framework builds a `QueueHandlerMap` (`Record<jobName, handler>`) and passes it to `listen` / `runOnce` / `createPushConsumer`. Each handler receives a `QueueJobRecord`, `{ id: string; data: unknown }`.
+- **`dispatchId` is stable logical identity.** QUESTPIE passes it as the fourth `publish` argument; use it for the broker's physical dedupe id and carry it back to handlers. Implement `publishInTransaction` only when the adapter can insert through the supplied application Drizzle transaction. Set `transactionalPublishing: false` when a conditionally transactional adapter uses separate storage; the runtime then uses the framework dispatch ledger.
+- **Handlers are keyed by the durable job name.** The framework builds a `QueueHandlerMap` (`Record<jobName, handler>`) and passes it to `listen` / `runOnce` / `createPushConsumer`. Each handler receives a `QueueJobRecord`, `{ id, data, dispatchId?, idempotencyKey? }`.
 - **`data` is raw, the framework re-validates it.** Adapters store and replay the raw payload; QUESTPIE re-parses `data` against the job's Zod schema before invoking the user handler. Your adapter never needs to validate. (See [Jobs](/docs/concepts/jobs#the-handler) for the dispatch- and handler-time validation passes.)
 
 ## Extending: a custom adapter
@@ -231,45 +306,45 @@ Implement `QueueAdapter`, declare its `capabilities`, and pass an instance to `.
 import type { QueueAdapter } from "questpie/queue";
 
 class MyAdapter implements QueueAdapter {
-  capabilities = {
-    longRunningConsumer: true,
-    runOnceConsumer: false,
-    pushConsumer: false,
-    scheduling: false,
-    singleton: false,
-  };
+	capabilities = {
+		longRunningConsumer: true,
+		runOnceConsumer: false,
+		pushConsumer: false,
+		scheduling: false,
+		singleton: false,
+	};
 
-  async start() {
-    /* connect to broker */
-  }
-  async stop() {
-    /* disconnect */
-  }
-  async publish(jobName, payload, options) {
-    /* enqueue */ return "job-id";
-  }
-  async schedule(jobName, cron, payload, options) {
-    /* register cron */
-  }
-  async unschedule(jobName) {
-    /* cancel cron */
-  }
-  on(event, handler) {
-    /* register an "error" listener */
-  }
+	async start() {
+		/* connect to broker */
+	}
+	async stop() {
+		/* disconnect */
+	}
+	async publish(jobName, payload, options, dispatchId) {
+		/* enqueue */ return "job-id";
+	}
+	async schedule(jobName, cron, payload, options) {
+		/* register cron */
+	}
+	async unschedule(jobName) {
+		/* cancel cron */
+	}
+	on(event, handler) {
+		/* register an "error" listener */
+	}
 
-  // Optional, implement what your broker supports:
-  async listen(handlers, options) {
-    /* long-running consumer */
-  }
-  async runOnce(handlers, options) {
-    return { processed: 0 };
-  }
-  createPushConsumer(args) {
-    return async (batch) => {
-      /* drain a pushed batch */
-    };
-  }
+	// Optional, implement what your broker supports:
+	async listen(handlers, options) {
+		/* long-running consumer */
+	}
+	async runOnce(handlers, options) {
+		return { processed: 0 };
+	}
+	createPushConsumer(args) {
+		return async (batch) => {
+			/* drain a pushed batch */
+		};
+	}
 }
 
 // .build({ queue: { adapter: new MyAdapter() } })
@@ -282,11 +357,20 @@ This is the QUESTPIE principle in action: **core, modules, and your own code rea
 The adapter contract types are public from `questpie/queue`; each adapter's option types come from its own subpath:
 
 ```ts
-import type { QueueAdapter, QueueAdapterCapabilities, QueueHandlerMap, QueueJobRecord, QueuePushBatch } from "questpie/queue";
+import type {
+	QueueAdapter,
+	QueueAdapterCapabilities,
+	QueueHandlerMap,
+	QueueJobRecord,
+	QueuePushBatch,
+} from "questpie/queue";
 
 import type { PgBossAdapterOptions } from "questpie/adapters/pg-boss";
 import type { BullMQAdapterOptions } from "questpie/adapters/bullmq";
-import type { CloudflareQueuesAdapterOptions, CloudflareQueueEnvelope } from "questpie/adapters/cloudflare-queues";
+import type {
+	CloudflareQueuesAdapterOptions,
+	CloudflareQueueEnvelope,
+} from "questpie/adapters/cloudflare-queues";
 ```
 
 `questpie/queue` re-exports the whole contract surface (`QueueAdapter`, the `Queue*` types, capabilities). The concrete adapters are deliberately **not** re-exported from `questpie/queue`, importing them from `questpie/adapters/*` keeps `pg-boss` / `bullmq` / Cloudflare bindings out of your bundle unless you use them. The job-facing types (`JobDefinition`, `PublishOptions`, `QueueClient`, `InferJobPayload`, …) are documented in [Jobs → TypeScript](/docs/concepts/jobs#typescript).

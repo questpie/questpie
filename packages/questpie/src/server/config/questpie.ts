@@ -43,6 +43,7 @@ import type { ExecutorService } from "#questpie/server/modules/core/integrated/e
 import type { KVService } from "#questpie/server/modules/core/integrated/kv/service.js";
 import type { LoggerService } from "#questpie/server/modules/core/integrated/logger/service.js";
 import type { MailerService } from "#questpie/server/modules/core/integrated/mailer/service.js";
+import { questpieQueueDispatchTable } from "#questpie/server/modules/core/integrated/queue/dispatch-table.js";
 import type { QueueClient } from "#questpie/server/modules/core/integrated/queue/types.js";
 import {
 	questpieChannelDispatchTable,
@@ -1239,7 +1240,12 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		schema.questpie_storage_cleanup = questpieStorageCleanupTable;
 		schema.questpie_storage_object_key = questpieStorageObjectKeyTable;
 
-		// 6. Add search tables if adapter provides local storage schemas
+		// 6. Queue dispatch intent remains in the migration graph even when an
+		// adapter can publish directly, so changing adapters never proposes a
+		// destructive DROP TABLE migration.
+		schema.questpie_queue_dispatch = questpieQueueDispatchTable;
+
+		// 7. Add search tables if adapter provides local storage schemas
 		// Local adapters (Postgres, PgVector) return their tables for migration generation.
 		// External adapters (Meilisearch, Elasticsearch) don't need local tables.
 		const searchAdapter = this.search?.getAdapter();
@@ -1250,7 +1256,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			}
 		}
 
-		// 7. Add relations (Placeholder)
+		// 8. Add relations (Placeholder)
 		// To enable, import { relations } from 'drizzle-orm' and uncomment logic
 
 		return schema;

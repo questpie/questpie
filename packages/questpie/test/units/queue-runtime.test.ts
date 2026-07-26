@@ -11,12 +11,14 @@ describe("queue runtime api", () => {
 	test("listen and runOnce process jobs", async () => {
 		const adapter = new MockQueueAdapter();
 		const events: string[] = [];
+		let handledDispatchId: string | undefined;
 
 		const jobs = {
 			notify: {
 				name: "notify",
 				schema: z.object({ id: z.string().optional() }),
-				handler: async ({ payload }: any) => {
+				handler: async ({ payload, dispatchId }: any) => {
+					handledDispatchId = dispatchId;
 					events.push(`notify:${payload.id}`);
 				},
 				options: { cron: "0 * * * *" },
@@ -31,9 +33,10 @@ describe("queue runtime api", () => {
 		await queue.listen({ gracefulShutdown: false, teamSize: 2, batchSize: 2 });
 		expect(adapter.getScheduledJob("notify")?.cron).toBe("0 * * * *");
 
-		await queue.notify.publish({ id: "a" });
+		const dispatchId = await queue.notify.publish({ id: "a" });
 		await adapter.processAllJobs();
 		expect(events).toEqual(["notify:a"]);
+		expect(handledDispatchId).toBe(dispatchId);
 
 		await queue.notify.publish({ id: "b" });
 		await queue.notify.publish({ id: "c" });
@@ -92,7 +95,7 @@ describe("queue runtime api", () => {
 		await queue.stop();
 	});
 
-	test("cloudflare adapter push consumer acks permanent failures and retries handler errors", async () => {
+	test("cloudflare adapter retries poison messages toward platform DLQ", async () => {
 		const published: any[] = [];
 		const adapter = cloudflareQueuesAdapter({
 			enqueue: async (message) => {
@@ -101,10 +104,24 @@ describe("queue runtime api", () => {
 			},
 		});
 
-		await adapter.publish("notify", { id: "x" });
-		expect(published[0]?.jobName).toBe("notify");
+		const dispatchId = "0e79a7d5-da2f-55e7-ae4c-3e95c5633071";
+		await adapter.publish(
+			"notify",
+			{ id: "x" },
+			{ idempotencyKey: "notify:one" },
+			dispatchId,
+		);
+		expect(published[0]).toMatchObject({
+			jobName: "notify",
+			dispatchId,
+			idempotencyKey: "notify:one",
+		});
 
 		const handled: string[] = [];
+		const handledDispatches: Array<{
+			dispatchId?: string;
+			idempotencyKey?: string;
+		}> = [];
 		const errors: string[] = [];
 		adapter.on("error", (error) => {
 			errors.push(error.message);
@@ -114,6 +131,10 @@ describe("queue runtime api", () => {
 			handlers: {
 				notify: async (job) => {
 					handled.push(String((job.data as any)?.id));
+					handledDispatches.push({
+						dispatchId: job.dispatchId,
+						idempotencyKey: job.idempotencyKey,
+					});
 				},
 				thrower: async () => {
 					throw new Error("transient failure");
@@ -128,7 +149,7 @@ describe("queue runtime api", () => {
 			messages: [
 				{
 					id: "1",
-					body: { jobName: "notify", payload: { id: "ok" } },
+					body: { ...published[0], payload: { id: "ok" } },
 					ack: async () => {
 						acked += 1;
 					},
@@ -170,8 +191,11 @@ describe("queue runtime api", () => {
 		});
 
 		expect(handled).toEqual(["ok"]);
-		expect(acked).toBe(3);
-		expect(retried).toBe(1);
+		expect(handledDispatches).toEqual([
+			{ dispatchId, idempotencyKey: "notify:one" },
+		]);
+		expect(acked).toBe(1);
+		expect(retried).toBe(3);
 		expect(errors).toEqual([
 			'CloudflareQueuesAdapter missing handler for job "missing".',
 			"CloudflareQueuesAdapter failed to decode message envelope.",
@@ -242,7 +266,7 @@ describe("queue runtime api", () => {
 		expect(retryCalls).toEqual([{ delaySeconds: 5 }]);
 	});
 
-	test("cloudflare adapter acks handler failures after retryLimit", async () => {
+	test("cloudflare adapter keeps exhausted failures observable for platform DLQ", async () => {
 		const adapter = cloudflareQueuesAdapter({
 			enqueue: async () => null,
 		});
@@ -257,6 +281,8 @@ describe("queue runtime api", () => {
 
 		let acked = 0;
 		let retried = 0;
+		const errors: string[] = [];
+		adapter.on("error", (error) => errors.push(error.message));
 		await consumer({
 			messages: [
 				{
@@ -277,8 +303,12 @@ describe("queue runtime api", () => {
 			],
 		});
 
-		expect(acked).toBe(1);
-		expect(retried).toBe(0);
+		expect(acked).toBe(0);
+		expect(retried).toBe(1);
+		expect(errors).toEqual([
+			"still failing",
+			'CloudflareQueuesAdapter retryLimit reached for job "notify"; Cloudflare max_retries remains the terminal bound, so the message was retried for platform failure metrics or its configured DLQ.',
+		]);
 	});
 
 	test("registerSchedules supports job selection by key and internal name", async () => {

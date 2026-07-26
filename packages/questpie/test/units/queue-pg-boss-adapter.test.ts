@@ -31,6 +31,11 @@ class FakePgBoss {
 	public createdQueues: string[] = [];
 	public failCalls: Array<{ name: string; id: string; data: unknown }> = [];
 	public completeCalls: Array<{ name: string; id: string }> = [];
+	public sendCalls: Array<{
+		name: string;
+		data: unknown;
+		options: Record<string, unknown>;
+	}> = [];
 	public fetchedJobs: any[] = [];
 	public workCallbacks = new Map<string, WorkCallback>();
 
@@ -43,8 +48,13 @@ class FakePgBoss {
 	async createQueue(name: string): Promise<void> {
 		this.createdQueues.push(name);
 	}
-	async send(): Promise<string> {
-		return "fake-id";
+	async send(
+		name: string,
+		data: unknown,
+		options: Record<string, unknown>,
+	): Promise<string> {
+		this.sendCalls.push({ name, data, options });
+		return String(options.id ?? "fake-id");
 	}
 	async work(
 		name: string,
@@ -75,6 +85,53 @@ function makeAdapter() {
 }
 
 describe("PgBossAdapter — v10+ work() callback receives Job[]", () => {
+	it("publishes through the supplied Drizzle transaction with stable dispatch metadata", async () => {
+		const { adapter, fake } = makeAdapter();
+		const dispatchId = "0e79a7d5-da2f-55e7-ae4c-3e95c5633071";
+		const tx = {
+			execute: async () => ({ rows: [] }),
+		};
+
+		await expect(
+			adapter.publishInTransaction(
+				tx,
+				"notify",
+				{ value: "transactional" },
+				{ idempotencyKey: "notify:one", retryLimit: 2 },
+				dispatchId,
+			),
+		).resolves.toBe(dispatchId);
+
+		expect(fake.sendCalls).toHaveLength(1);
+		expect(fake.sendCalls[0]).toMatchObject({
+			name: "notify",
+			data: {
+				__questpieQueue: {
+					version: 1,
+					dispatchId,
+					idempotencyKey: "notify:one",
+				},
+				payload: { value: "transactional" },
+			},
+			options: {
+				id: dispatchId,
+				retryLimit: 2,
+			},
+		});
+		const sendCall = fake.sendCalls[0];
+		if (!sendCall) throw new Error("Expected one pg-boss send call");
+		expect(typeof sendCall.options.db).toBe("object");
+		expect(typeof (sendCall.options.db as any).executeSql).toBe("function");
+	});
+
+	it("can opt out of the application transaction for a separate pg-boss database", () => {
+		const adapter = new PgBossAdapter({
+			useApplicationTransaction: false,
+		} as any);
+
+		expect(adapter.transactionalPublishing).toBe(false);
+	});
+
 	it("completes successful runOnce jobs and fails handler errors", async () => {
 		const { adapter, fake } = makeAdapter();
 		fake.fetchedJobs.push({ id: "once-ok", data: { value: "ok" } });

@@ -1,5 +1,5 @@
-import { service } from "#questpie/server/services/define-service.js";
 import { createQueueClient } from "#questpie/server/modules/core/integrated/queue/service.js";
+import { service } from "#questpie/server/services/define-service.js";
 
 /**
  * Queue service — creates the QueueClient from app config.
@@ -25,6 +25,7 @@ export default service({
 
 		return createQueueClient(config.queue.jobs, config.queue.adapter, {
 			createContext: async () => app.createContext({ accessMode: "system" }),
+			getDatabase: () => app.db,
 			getApp: () => app,
 			logger: app.logger,
 		});

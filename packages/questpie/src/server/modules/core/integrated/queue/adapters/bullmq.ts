@@ -13,6 +13,10 @@ import type {
 	QueueRunOnceOptions,
 	QueueRunOnceResult,
 } from "../adapter.js";
+import {
+	decodeQueueDispatchEnvelope,
+	encodeQueueDispatchEnvelope,
+} from "../dispatch-envelope.js";
 import type { PublishOptions } from "../types.js";
 
 export type BullMQAdapterOptions = {
@@ -95,37 +99,42 @@ export class BullMQAdapter implements QueueAdapter {
 		return ms > 0 ? ms : 0;
 	}
 
-	private mapPublishOptions(options?: PublishOptions): JobsOptions {
-		if (!options) return {};
+	private mapPublishOptions(
+		options?: PublishOptions,
+		dispatchId?: string,
+	): JobsOptions {
+		if (!options && !dispatchId) return {};
 		const opts: JobsOptions = {};
 
-		const delay = this.toDelayMs(options.startAfter);
+		const delay = this.toDelayMs(options?.startAfter);
 		if (delay !== undefined) opts.delay = delay;
 
-		if (options.singletonKey !== undefined) {
-			// BullMQ deduplicates by jobId; reuse it as the singleton lock.
-			opts.jobId = options.singletonKey;
+		if (options?.singletonKey !== undefined) {
+			// Scheduling/concurrency dedupe remains separate from logical
+			// idempotency, whose stable dispatchId owns jobId.
+			opts.deduplication = { id: options.singletonKey };
 		}
+		if (dispatchId) opts.jobId = dispatchId;
 
-		if (options.expireInSeconds !== undefined) {
+		if (options?.expireInSeconds !== undefined) {
 			// No direct TTL; expire completed entries by age instead.
 			opts.removeOnComplete = { age: options.expireInSeconds };
 		}
 
-		if (options.retryLimit !== undefined) {
+		if (options?.retryLimit !== undefined) {
 			opts.attempts = options.retryLimit + 1;
 		}
 
-		if (options.retryDelay !== undefined) {
+		if (options?.retryDelay !== undefined) {
 			opts.backoff = {
 				type: options.retryBackoff ? "exponential" : "fixed",
 				delay: options.retryDelay * 1000,
 			};
-		} else if (options.retryBackoff) {
+		} else if (options?.retryBackoff) {
 			opts.backoff = { type: "exponential" };
 		}
 
-		if (options.priority !== undefined) {
+		if (options?.priority !== undefined) {
 			opts.priority = options.priority;
 		}
 
@@ -136,12 +145,19 @@ export class BullMQAdapter implements QueueAdapter {
 		jobName: string,
 		payload: any,
 		options?: PublishOptions,
+		dispatchId?: string,
 	): Promise<string | null> {
 		const queue = this.getQueue(jobName);
 		const job = await queue.add(
 			jobName,
-			payload,
-			this.mapPublishOptions(options),
+			dispatchId
+				? encodeQueueDispatchEnvelope(
+						payload,
+						dispatchId,
+						options?.idempotencyKey,
+					)
+				: payload,
+			this.mapPublishOptions(options, dispatchId),
 		);
 		return job.id ?? null;
 	}
@@ -150,7 +166,7 @@ export class BullMQAdapter implements QueueAdapter {
 		jobName: string,
 		cron: string,
 		payload: any,
-		options?: Omit<PublishOptions, "startAfter">,
+		options?: Omit<PublishOptions, "idempotencyKey" | "startAfter">,
 	): Promise<void> {
 		const queue = this.getQueue(jobName);
 		// Use a deterministic repeat key keyed by jobName so unschedule() can
@@ -186,7 +202,10 @@ export class BullMQAdapter implements QueueAdapter {
 			const worker = new Worker(
 				jobName,
 				async (job) => {
-					await handler({ id: String(job.id), data: job.data });
+					await handler({
+						id: String(job.id),
+						...decodeQueueDispatchEnvelope(job.data, String(job.id)),
+					});
 				},
 				{
 					connection: this.connection,
@@ -224,7 +243,10 @@ export class BullMQAdapter implements QueueAdapter {
 			const worker = new Worker(
 				jobName,
 				async (job) => {
-					await handler({ id: String(job.id), data: job.data });
+					await handler({
+						id: String(job.id),
+						...decodeQueueDispatchEnvelope(job.data, String(job.id)),
+					});
 				},
 				{
 					connection: this.connection,
