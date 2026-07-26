@@ -77,7 +77,7 @@ export function I18nProvider<
 	);
 
 	return (
-		<I18nContext.Provider value={contextValue as unknown as ContextAdapter}>
+		<I18nContext.Provider value={contextValue as ContextAdapter}>
 			{children}
 		</I18nContext.Provider>
 	);
@@ -87,10 +87,7 @@ export function useSafeI18n<
 	TLocale extends string = string,
 	TMessageKey extends string = string,
 >(): I18nAdapter<TLocale, TMessageKey> | null {
-	return useContext(I18nContext) as unknown as I18nAdapter<
-		TLocale,
-		TMessageKey
-	> | null;
+	return useContext(I18nContext) as I18nAdapter<TLocale, TMessageKey> | null;
 }
 
 export function useI18n<
