@@ -109,8 +109,8 @@ async function handleSessionList(
 			? currentValue.session.id
 			: undefined;
 
-	const projected = sessions
-		.toSorted((left, right) => {
+	const projected = [...sessions]
+		.sort((left, right) => {
 			if (left.id === currentSessionId) return -1;
 			if (right.id === currentSessionId) return 1;
 			return (

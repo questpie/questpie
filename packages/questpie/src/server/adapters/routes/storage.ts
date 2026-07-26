@@ -468,10 +468,9 @@ export async function storageCollectionServe(
 							context: resolved.appContext,
 						});
 					} catch (error) {
-						resolved.appContext.logger?.warn(
+						app.logger.warn(
 							"[QUESTPIE Storage] Serve access compilation failed closed",
-							{ collection },
-							error,
+							{ collection, err: error },
 						);
 						allowed = false;
 					}
