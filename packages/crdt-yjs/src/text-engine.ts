@@ -6,11 +6,18 @@ import {
 	createCrdtReplica,
 	CrdtEngineError,
 	hashCrdtEngineState,
-	type CrdtFieldEngine,
+	type CrdtEngineReplica,
+	type CrdtTextAffinity,
+	type CrdtTextFieldEngine,
 	resolveCrdtEngineLimits,
 	verifyCrdtCandidateToken,
 } from "questpie/crdt";
 import * as Y from "yjs";
+
+import {
+	createYjsRelativePosition,
+	resolveYjsRelativePosition,
+} from "./relative-position.js";
 
 const ENGINE_ID = "questpie.yjs-text/v1";
 const FORMAT_VERSION = 1;
@@ -18,14 +25,40 @@ const MAXIMUM_JOB_ARRAY_BUFFER_BYTES = 64 * 1024 * 1024;
 const CODEC_FINGERPRINT =
 	"fd9143e742c66683554636070a6ca3fc182e159511921b4dc91a4d49361f5c45";
 
-export function createYjsTextEngineCore(): CrdtFieldEngine<"text", string> {
-	const engine: CrdtFieldEngine<"text", string> = {
+export function createYjsTextEngineCore(): CrdtTextFieldEngine {
+	const engine: CrdtTextFieldEngine = {
 		engineId: ENGINE_ID,
 		engineVersion: 1,
 		stateVersion: 1,
 		codecFingerprint: CODEC_FINGERPRINT,
 		format: "text",
 		formatVersion: FORMAT_VERSION,
+		relativePositions: Object.freeze({
+			create(
+				replica: CrdtEngineReplica<"text", string>,
+				input: Readonly<{ offset: number; affinity: CrdtTextAffinity }>,
+			) {
+				assertReplicaBelongsToEngine(engine, replica);
+				const document = restoreDocument(replica.state);
+				return createYjsRelativePosition(
+					document,
+					document.getText("text"),
+					input,
+				);
+			},
+			resolve(
+				replica: CrdtEngineReplica<"text", string>,
+				position: string,
+			) {
+				assertReplicaBelongsToEngine(engine, replica);
+				const document = restoreDocument(replica.state);
+				return resolveYjsRelativePosition(
+					document,
+					document.getText("text"),
+					position,
+				);
+			},
+		}),
 
 		async create({ value, basis }) {
 			assertText(value);

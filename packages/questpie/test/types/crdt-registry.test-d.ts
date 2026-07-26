@@ -97,6 +97,12 @@ article.fields.title.text.apply([
 article.fields.tags.set.add("tag-1");
 article.fields.tags.set.delete("tag-1");
 article.fields.content.text.apply([{ type: "delete", index: 0, length: 1 }]);
+const clientAnchor = article.fields.title.anchors.create({
+	kind: "range",
+	start: 0,
+	end: 1,
+});
+article.fields.title.anchors.resolve(clientAnchor);
 article.transaction(({ fields }) => {
 	fields.title.text.apply([{ type: "insert", index: 0, value: "New " }]);
 	fields.tags.set.add("tag-2");
@@ -127,6 +133,8 @@ client.globals.siteSettings.document({ id: "nope" });
 void article.fields.tags.text;
 // @ts-expect-error text ports do not expose set operations
 void article.fields.title.set;
+// @ts-expect-error set ports do not expose text anchors
+void article.fields.tags.anchors;
 // @ts-expect-error no-arg collaborative owners have awareness disabled
 settings.awareness.set({});
 
@@ -180,6 +188,14 @@ type _titleFormat = Expect<
 >;
 const tagStatus = serverArticle.fields.tags.status();
 type _tagFormat = Expect<Equal<Awaited<typeof tagStatus>["format"], "set">>;
+const serverAnchor = serverArticle.fields.title.anchors.create({
+	kind: "point",
+	offset: 1,
+});
+serverArticle.fields.title.anchors.resolve("opaque-token");
+// @ts-expect-error set fields do not expose text anchors
+void serverArticle.fields.tags.anchors;
+void serverAnchor;
 
 serverArticle.fields.title.replace({
 	value: "replacement",

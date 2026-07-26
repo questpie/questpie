@@ -35,4 +35,9 @@ export function createCrdtClientAPI(
 	} as CrdtClientAPI<any>;
 }
 
+export type {
+	CrdtTextAnchorInput,
+	CrdtTextAnchorResolution,
+	CrdtTextAnchorToken,
+} from "../../shared/crdt-anchor.js";
 export * from "./types.js";

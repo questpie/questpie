@@ -70,7 +70,43 @@ stop();
 Each participant may edit a different field concurrently. The transaction
 above is one aggregate commit, so other clients never observe only part of it.
 
-## 5. Test the lifecycle
+## 5. Attach a durable comment
+
+Create an anchor only after the relevant text update is acknowledged:
+
+```ts
+const state = article.getSnapshot();
+if (state.status !== "ready" || state.pendingUpdates !== 0) {
+	throw new Error("Wait for the collaborative update receipt");
+}
+
+const anchor = article.fields.content.anchors.create({
+	kind: "range",
+	start: selectionStart,
+	end: selectionEnd,
+});
+
+await saveComment({
+	articleId,
+	anchor,
+	quotedText: article.fields.content.text
+		.value()
+		.slice(selectionStart, selectionEnd),
+	body: commentBody,
+});
+```
+
+`saveComment` is application code: store the opaque anchor with the comment or
+annotation record and keep the quote for product-specific fallback. To render,
+load the comment and call `fields.content.anchors.resolve(comment.anchor)`.
+Handle `detached` explicitly, for example by showing the retained quote as
+historical context.
+
+The structural token survives ordinary concurrent edits and compaction. It
+intentionally detaches after replace/import/restore, incompatible schema
+recreation, purge, or delete-then-recreate. It carries no read authority.
+
+## 6. Test the lifecycle
 
 Cover at least:
 
@@ -79,7 +115,9 @@ Cover at least:
 3. a field-hidden actor never sees its content or cursor;
 4. disconnect/reconnect reconciles a lost append response exactly once;
 5. soft delete retires the active resource and restore creates a fresh epoch;
-6. process shutdown closes the generated app once and does not leak worker
+6. a browser-created text anchor resolves through a server route after
+   concurrent edits, but detaches after restore or recreation;
+7. process shutdown closes the generated app once and does not leak worker
    threads.
 
 For transport and recovery details, see

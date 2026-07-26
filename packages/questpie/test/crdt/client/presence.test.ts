@@ -110,7 +110,11 @@ describe("CRDT awareness over the bounded exchange", () => {
 					"A".repeat(22),
 					"00000000-0000-4000-8000-000000000001",
 					{ name: "Ada" },
-					{ fieldSlot: 1, cursor: "AQ", selectionEnd: "Ag" },
+					{
+						fieldSlot: 1,
+						cursor: "AQAAAAE",
+						selectionEnd: "AQAAAAI",
+					},
 				),
 			]),
 		]);

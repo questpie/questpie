@@ -11,6 +11,7 @@ import {
 	type CrdtEngineReplica,
 	type CrdtFieldEngine,
 	type CrdtStagedFieldCandidate,
+	type CrdtTextFieldEngine,
 	resolveCrdtEngineLimits,
 	verifyCrdtCandidateToken,
 } from "#questpie/shared/crdt-engine.js";
@@ -34,17 +35,49 @@ export type DeterministicSetUpdateOperation =
 	| { type: "add"; value: string; dot: string }
 	| { type: "delete"; value: string; observedDots: readonly string[] };
 
-export function createDeterministicTextEngine(): CrdtFieldEngine<
-	"text",
-	string
-> {
-	const engine: CrdtFieldEngine<"text", string> = {
+export function createDeterministicTextEngine(): CrdtTextFieldEngine {
+	const engine: CrdtTextFieldEngine = {
 		engineId: TEXT_ENGINE_ID,
 		engineVersion: ENGINE_VERSION,
 		stateVersion: STATE_VERSION,
 		codecFingerprint: TEXT_CODEC_FINGERPRINT,
 		format: "text",
 		formatVersion: FORMAT_VERSION,
+		relativePositions: Object.freeze({
+			create(
+				replica: TextReplica,
+				input: Readonly<{
+					offset: number;
+					affinity: "preceding" | "following";
+				}>,
+			) {
+				assertReplicaBelongsToEngine(engine, replica);
+				const value = decodeTextSnapshot(replica.state);
+				assertTextAnchorOffset(value, input.offset);
+				const bytes = new Uint8Array(5);
+				const view = new DataView(bytes.buffer);
+				view.setUint8(0, input.affinity === "preceding" ? 0 : 1);
+				view.setUint32(1, input.offset);
+				return encodeBase64Url(bytes);
+			},
+			resolve(replica: TextReplica, position: string) {
+				assertReplicaBelongsToEngine(engine, replica);
+				const bytes = decodeBase64Url(position);
+				if (bytes.byteLength !== 5 || (bytes[0] !== 0 && bytes[0] !== 1)) {
+					throw new CrdtEngineError("invalid relative position");
+				}
+				const offset = new DataView(
+					bytes.buffer,
+					bytes.byteOffset,
+					bytes.byteLength,
+				).getUint32(1);
+				assertTextAnchorOffset(decodeTextSnapshot(replica.state), offset);
+				return Object.freeze({
+					offset,
+					affinity: bytes[0] === 0 ? "preceding" : "following",
+				});
+			},
+		}),
 
 		async create({ value, basis }) {
 			assertText(value);
@@ -545,6 +578,41 @@ function assertScalarBoundary(value: string, index: number): void {
 	) {
 		throw new CrdtEngineError("text index splits a UTF-16 scalar boundary");
 	}
+}
+
+function assertTextAnchorOffset(value: string, offset: number): void {
+	assertIndex(offset, value.length, "text anchor offset");
+	assertScalarBoundary(value, offset);
+}
+
+function decodeBase64Url(value: string): Uint8Array {
+	if (
+		typeof value !== "string" ||
+		value.length === 0 ||
+		value.length > 344 ||
+		value.length % 4 === 1 ||
+		!/^[A-Za-z0-9_-]+$/.test(value)
+	) {
+		throw new CrdtEngineError("invalid relative position");
+	}
+	const binary = atob(
+		value.replace(/-/g, "+").replace(/_/g, "/") +
+			"=".repeat((4 - (value.length % 4)) % 4),
+	);
+	const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+	if (encodeBase64Url(bytes) !== value) {
+		throw new CrdtEngineError("invalid relative position");
+	}
+	return bytes;
+}
+
+function encodeBase64Url(value: Uint8Array): string {
+	let binary = "";
+	for (const byte of value) binary += String.fromCharCode(byte);
+	return btoa(binary)
+		.replace(/\+/g, "-")
+		.replace(/\//g, "_")
+		.replace(/=+$/, "");
 }
 
 function isHighSurrogate(code: number): boolean {

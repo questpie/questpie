@@ -1,5 +1,11 @@
 import type { CrdtClientTextEngine } from "questpie/client";
+import type { CrdtTextAffinity } from "questpie/crdt";
 import * as Y from "yjs";
+
+import {
+	createYjsRelativePosition,
+	resolveYjsRelativePosition,
+} from "./relative-position.js";
 
 const ENGINE_ID = "questpie.yjs-text/v1";
 const FORMAT_VERSION = 1;
@@ -18,6 +24,23 @@ export function createYjsClientEngine(): CrdtClientTextEngine<unknown> {
 	const engine: CrdtClientTextEngine<unknown> = {
 		engineId: ENGINE_ID,
 		formatVersion: FORMAT_VERSION,
+		relativePositions: Object.freeze({
+			create(
+				replica: unknown,
+				input: Readonly<{ offset: number; affinity: CrdtTextAffinity }>,
+			) {
+				const current = asReplica(replica);
+				return createYjsRelativePosition(current.document, current.text, input);
+			},
+			resolve(replica: unknown, position: string) {
+				const current = asReplica(replica);
+				return resolveYjsRelativePosition(
+					current.document,
+					current.text,
+					position,
+				);
+			},
+		}),
 		restore: (snapshot) => restore(snapshot),
 		snapshot: (replica) =>
 			new Uint8Array(Y.encodeStateAsUpdate(asReplica(replica).document)),
@@ -67,31 +90,6 @@ export function createYjsClientEngine(): CrdtClientTextEngine<unknown> {
 			} catch {
 				throw new Error("invalid Yjs client updates");
 			}
-		},
-		toRelativePosition(replica, offset) {
-			const current = asReplica(replica);
-			assertOffset(current.text.toString(), offset);
-			return encodeBase64Url(
-				Y.encodeRelativePosition(
-					Y.createRelativePositionFromTypeIndex(current.text, offset),
-				),
-			);
-		},
-		fromRelativePosition(replica, position) {
-			const current = asReplica(replica);
-			let relative: Y.RelativePosition;
-			try {
-				relative = Y.decodeRelativePosition(decodeBase64Url(position));
-			} catch {
-				throw new Error("invalid Yjs relative position");
-			}
-			const absolute = Y.createAbsolutePositionFromRelativePosition(
-				relative,
-				current.document,
-			);
-			if (!absolute || absolute.type !== current.text) return undefined;
-			assertOffset(current.text.toString(), absolute.index);
-			return absolute.index;
 		},
 	};
 	return Object.freeze(engine);
@@ -190,35 +188,6 @@ function assertDocument(document: Y.Doc): void {
 	if (store.pendingStructs || store.pendingDs) {
 		throw new Error("Yjs update has unresolved dependencies");
 	}
-}
-
-function decodeBase64Url(value: string): Uint8Array {
-	if (
-		typeof value !== "string" ||
-		value.length === 0 ||
-		value.length > 344 ||
-		value.length % 4 === 1 ||
-		!/^[A-Za-z0-9_-]+$/.test(value)
-	) {
-		throw new Error("invalid base64url");
-	}
-	const binary = atob(
-		value.replace(/-/g, "+").replace(/_/g, "/") +
-			"=".repeat((4 - (value.length % 4)) % 4),
-	);
-	const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-	if (encodeBase64Url(bytes) !== value)
-		throw new Error("noncanonical base64url");
-	return bytes;
-}
-
-function encodeBase64Url(value: Uint8Array): string {
-	let binary = "";
-	for (const byte of value) binary += String.fromCharCode(byte);
-	return btoa(binary)
-		.replace(/\+/g, "-")
-		.replace(/\//g, "_")
-		.replace(/=+$/, "");
 }
 
 function hasUnpairedSurrogate(value: string): boolean {

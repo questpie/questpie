@@ -8,7 +8,18 @@ import {
 	withTransaction,
 } from "#questpie/server/collection/crud/shared/transaction.js";
 import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
+import {
+	createCrdtTextAnchorToken,
+	resolveCrdtTextAnchorToken,
+	type CrdtTextAnchorBinding,
+	type CrdtTextAnchorInput,
+} from "#questpie/shared/crdt-anchor.js";
+import type {
+	CrdtEngineFormat,
+	CrdtFieldEngine,
+} from "#questpie/shared/crdt-engine.js";
 
+import { loadCrdtAuthoritativeReplica } from "./append-store.js";
 import {
 	canonicalCrdtCollectionLocator,
 	canonicalCrdtGlobalLocator,
@@ -35,6 +46,7 @@ import type {
 } from "./types.js";
 
 type CrdtDatabase = AnyDrizzleClient<any>;
+type AnyEngine = CrdtFieldEngine<CrdtEngineFormat, any>;
 type ReplaceStore = Readonly<{
 	replaceField(
 		input: CrdtFieldReplaceInput,
@@ -77,18 +89,26 @@ const authorityTargets = new WeakMap<object, AuthorityTargetState>();
 
 export type CrdtServerOperationsConfig = Readonly<{
 	db: CrdtDatabase;
+	namespace?: string;
+	resolveEngine?(binding: { format: number; formatVersion: number }): AnyEngine;
 	replace: ReplaceStore;
 	owners: Readonly<{
 		collections: Readonly<
 			Record<
 				string,
-				Readonly<{ ownerName: string; fields: Record<string, unknown> }>
+				Readonly<{
+					ownerName: string;
+					fields: Record<string, Readonly<{ format?: "text" | "set" }>>;
+				}>
 			>
 		>;
 		globals: Readonly<
 			Record<
 				string,
-				Readonly<{ ownerName: string; fields: Record<string, unknown> }>
+				Readonly<{
+					ownerName: string;
+					fields: Record<string, Readonly<{ format?: "text" | "set" }>>;
+				}>
 			>
 		>;
 	}>;
@@ -145,6 +165,7 @@ export function createCrdtServerOperations(
 		const [resource] = await database
 			.select({
 				id: questpieCrdtResourceTable.id,
+				incarnationKey: questpieCrdtResourceTable.incarnationKey,
 				status: questpieCrdtResourceTable.status,
 				currentEpochId: questpieCrdtResourceTable.currentEpochId,
 			})
@@ -305,54 +326,148 @@ export function createCrdtServerOperations(
 		return fieldStatus(binding);
 	};
 
+	const loadTextAnchorField = async (
+		owner: OwnerDefinition,
+		fieldPath: string,
+		database: CrdtDatabase,
+	) => {
+		await assertAuthority(owner, fieldPath, "read", database);
+		if (!config.namespace || !config.resolveEngine) {
+			throw new Error("CRDT text anchors are unavailable");
+		}
+		const resource = await resolveResource(owner, database);
+		const [binding] = await database
+			.select()
+			.from(questpieCrdtBindingTable)
+			.where(
+				and(
+					eq(questpieCrdtBindingTable.resourceId, resource.id),
+					eq(questpieCrdtBindingTable.sourcePath, fieldPath),
+					eq(questpieCrdtBindingTable.format, 1),
+					isNull(questpieCrdtBindingTable.retiredAt),
+				),
+			);
+		if (!binding) throw new Error("CRDT field is unavailable");
+		if (binding.status !== 1 && binding.status !== 3) {
+			throw new Error("CRDT field is unavailable");
+		}
+		const engine = config.resolveEngine(binding);
+		if (
+			engine.format !== "text" ||
+			engine.formatVersion !== binding.formatVersion ||
+			!engine.relativePositions
+		) {
+			throw new Error("CRDT text anchor engine is unavailable or incompatible");
+		}
+		const authoritative = await loadCrdtAuthoritativeReplica(database, {
+			bindingId: binding.id,
+			engine,
+			bindingStatus: binding.status,
+		});
+		const replica = authoritative.replica;
+		const anchorBinding: CrdtTextAnchorBinding = Object.freeze({
+			namespace: config.namespace,
+			incarnationKey: resource.incarnationKey,
+			fieldSlot: binding.fieldSlot,
+			fieldEpoch: binding.fieldEpoch,
+			engineId: engine.engineId,
+			formatVersion: engine.formatVersion,
+		});
+		return Object.freeze({
+			binding: anchorBinding,
+			engine,
+			replica,
+			value: engine.project(replica) as string,
+			relativePositions: engine.relativePositions,
+		});
+	};
+
 	function document(owner: OwnerDefinition): any {
 		const registration =
 			owner.kind === "collection"
 				? config.owners.collections[owner.registryKey]
 				: config.owners.globals[owner.registryKey];
 		const fields = Object.fromEntries(
-			Object.keys(registration?.fields ?? {}).map((fieldPath) => [
-				fieldPath,
-				Object.freeze({
-					status: () => readFieldStatus(owner, fieldPath),
-					async replace(input: any) {
-						await assertAuthority(owner, fieldPath, "edit");
-						const resource = await resolveResource(owner);
-						const [binding] = await config.db
-							.select({ stableFieldId: questpieCrdtBindingTable.stableFieldId })
-							.from(questpieCrdtBindingTable)
-							.where(
-								and(
-									eq(questpieCrdtBindingTable.resourceId, resource.id),
-									eq(questpieCrdtBindingTable.sourcePath, fieldPath),
-									isNull(questpieCrdtBindingTable.retiredAt),
-								),
-							);
-						if (!binding) throw new Error("CRDT field is unavailable");
-						await config.replace.replaceField(
-							{
-								resourceId: resource.id,
-								stableFieldId: binding.stableFieldId,
-								value: input.value,
-								expected: {
-									fieldEpoch: parseCounter(input.expected.fieldEpoch),
-									canonicalRevision: parseCounter(
-										input.expected.canonicalRevision,
+			Object.entries(registration?.fields ?? {}).map(
+				([fieldPath, fieldDefinition]) => [
+					fieldPath,
+					Object.freeze({
+						status: () => readFieldStatus(owner, fieldPath),
+						...(fieldDefinition.format === "text"
+							? {
+									anchors: Object.freeze({
+										async create(anchor: CrdtTextAnchorInput) {
+											const database =
+												(getCurrentTransaction() as CrdtDatabase | undefined) ??
+												config.db;
+											const field = await loadTextAnchorField(
+												owner,
+												fieldPath,
+												database,
+											);
+											return createCrdtTextAnchorToken({
+												...field,
+												anchor,
+											});
+										},
+										async resolve(token: string) {
+											const database =
+												(getCurrentTransaction() as CrdtDatabase | undefined) ??
+												config.db;
+											const field = await loadTextAnchorField(
+												owner,
+												fieldPath,
+												database,
+											);
+											return resolveCrdtTextAnchorToken({
+												...field,
+												token,
+											});
+										},
+									}),
+								}
+							: {}),
+						async replace(input: any) {
+							await assertAuthority(owner, fieldPath, "edit");
+							const resource = await resolveResource(owner);
+							const [binding] = await config.db
+								.select({
+									stableFieldId: questpieCrdtBindingTable.stableFieldId,
+								})
+								.from(questpieCrdtBindingTable)
+								.where(
+									and(
+										eq(questpieCrdtBindingTable.resourceId, resource.id),
+										eq(questpieCrdtBindingTable.sourcePath, fieldPath),
+										isNull(questpieCrdtBindingTable.retiredAt),
 									),
+								);
+							if (!binding) throw new Error("CRDT field is unavailable");
+							await config.replace.replaceField(
+								{
+									resourceId: resource.id,
+									stableFieldId: binding.stableFieldId,
+									value: input.value,
+									expected: {
+										fieldEpoch: parseCounter(input.expected.fieldEpoch),
+										canonicalRevision: parseCounter(
+											input.expected.canonicalRevision,
+										),
+									},
+									reason: input.reason,
 								},
-								reason: input.reason,
-							},
-							{
-								authorizeCommit: (transaction) =>
-									assertAuthority(owner, fieldPath, "edit", transaction),
-							},
-						);
-						return readFieldStatus(owner, fieldPath);
-					},
-					authorityTarget: (input: any) => target(owner, fieldPath, input),
-					revoke: (input: any) => revoke(owner, fieldPath, input),
-				}),
-			]),
+								{
+									authorizeCommit: (transaction) =>
+										assertAuthority(owner, fieldPath, "edit", transaction),
+								},
+							);
+							return readFieldStatus(owner, fieldPath);
+						},
+						authorityTarget: (input: any) => target(owner, fieldPath, input),
+						revoke: (input: any) => revoke(owner, fieldPath, input),
+					}),
+				],
+			),
 		);
 		return Object.freeze({
 			fields: Object.freeze(fields),

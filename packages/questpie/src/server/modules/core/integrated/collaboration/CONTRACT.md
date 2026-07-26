@@ -254,6 +254,44 @@ explicit recovery state; they never silently replay under new authority.
 Disconnect or authority invalidation revokes the local lifecycle so late open,
 pull, storage or realtime callbacks cannot publish ready/editable state.
 
+## Durable text anchors
+
+Every generated text field exposes an opaque durable-anchor port:
+
+```ts
+const anchor = article.fields.content.anchors.create({
+	kind: "range",
+	start: 12,
+	end: 28,
+});
+const resolution = article.fields.content.anchors.resolve(anchor);
+```
+
+Points default to following affinity. Ranges default inward: the start follows
+insertions at its boundary and the end precedes them. Inputs use UTF-16 code
+unit offsets at scalar boundaries; ranges must be nonempty and ordered.
+
+The client may create an anchor from a readable view or edit grant only after
+the field basis is acknowledged. Creation rejects while that field is syncing,
+has a pending update, or participates in an active local transaction. Resolve
+uses the currently readable replica. The request-scoped server API exposes the
+same field port asynchronously; create and resolve each rebuild fresh read
+authority and load the authoritative field head.
+
+The branded string is bounded to 2,048 characters and wraps bounded
+engine-relative positions. It binds the server namespace, owner incarnation,
+field slot, field epoch, engine id and format version. It is not an authority
+capability and must never be parsed or manufactured by application code.
+Malformed, foreign, stale and unresolvable tokens all return the same
+`{ status: "detached" }` result after read authority succeeds.
+
+Ordinary CRDT edits and snapshot compaction preserve anchors. Replacement,
+import, restore, incompatible schema transition, physical purge and
+delete-then-recreate establish a new bound identity and detach old anchors.
+An application that stores review comments or annotations owns their quote,
+excerpt and fallback policy; QUESTPIE owns only the durable structural
+position.
+
 ## Projection, compaction and operations
 
 Collaborative commits, receipts, field cursors, snapshots, recovery holds,

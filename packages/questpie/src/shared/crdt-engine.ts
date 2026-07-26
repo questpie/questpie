@@ -1,5 +1,18 @@
 export type CrdtEngineFormat = "text" | "set";
 
+export type CrdtTextAffinity = "preceding" | "following";
+
+export interface CrdtTextRelativePositionPort<TReplica> {
+	create(
+		replica: TReplica,
+		input: Readonly<{ offset: number; affinity: CrdtTextAffinity }>,
+	): string;
+	resolve(
+		replica: TReplica,
+		position: string,
+	): Readonly<{ offset: number; affinity: CrdtTextAffinity }> | undefined;
+}
+
 export type CrdtEngineBasis = Readonly<{
 	fieldEpoch: bigint;
 	fieldCursor: bigint;
@@ -72,6 +85,9 @@ export interface CrdtFieldEngine<
 	readonly codecFingerprint: string;
 	readonly format: TFormat;
 	readonly formatVersion: number;
+	readonly relativePositions?: TFormat extends "text"
+		? CrdtTextRelativePositionPort<CrdtEngineReplica<TFormat, TValue>>
+		: never;
 	/**
 	 * Every method is pure with respect to its inputs: engines must not mutate
 	 * replicas, candidates, updates, proofs, or snapshots supplied by the kernel.
@@ -111,6 +127,16 @@ export interface CrdtFieldEngine<
 	 */
 	dispose?(): Promise<void>;
 }
+
+/** Text engine that qualifies the durable relative-position capability. */
+export type CrdtTextFieldEngine<TValue = string> = CrdtFieldEngine<
+	"text",
+	TValue
+> & {
+	readonly relativePositions: CrdtTextRelativePositionPort<
+		CrdtEngineReplica<"text", TValue>
+	>;
+};
 
 export class CrdtEngineError extends Error {
 	constructor(message: string) {

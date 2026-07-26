@@ -290,13 +290,71 @@ describe("Yjs text engine", () => {
 		expect(engine.value(changed.replica)).toBe("client side");
 	});
 
+	it("resolves explicit text affinities identically in browser and server replicas", async () => {
+		const server = serverEngine();
+		const initial = await server.create({
+			value: "ac",
+			basis: { fieldEpoch: 1n, fieldCursor: 0n },
+		});
+		const client = yjsClientEngine();
+		const clientReplica = client.restore(initial.state);
+		const preceding = client.relativePositions.create(clientReplica, {
+			offset: 1,
+			affinity: "preceding",
+		});
+		const following = server.relativePositions.create(initial, {
+			offset: 1,
+			affinity: "following",
+		});
+		const changed = client.apply(clientReplica, [
+			{ type: "insert", index: 1, value: "b" },
+		]);
+		const candidate = await server.stage({
+			replica: initial,
+			update: changed.update,
+		});
+		const committed = await server.commit({
+			candidate,
+			current: initial,
+			assignedFieldCursor: 1n,
+		});
+		const restored = await server.restore({
+			snapshot: await server.snapshot(committed),
+			basis: committed.basis,
+		});
+
+		expect(
+			client.relativePositions.resolve(changed.replica, preceding),
+		).toEqual({
+			offset: 1,
+			affinity: "preceding",
+		});
+		expect(server.relativePositions.resolve(restored, preceding)).toEqual({
+			offset: 1,
+			affinity: "preceding",
+		});
+		expect(
+			client.relativePositions.resolve(changed.replica, following),
+		).toEqual({
+			offset: 2,
+			affinity: "following",
+		});
+		expect(server.relativePositions.resolve(restored, following)).toEqual({
+			offset: 2,
+			affinity: "following",
+		});
+	});
+
 	it("preserves emoji, ZWJ, combining marks, and RTL scalar text", async () => {
 		const engine = yjsClientEngine();
 		const value = "👩‍💻 cafe\u0301 مرحبا";
 		const replica = engine.restore(initialState(value));
 		expect(engine.value(replica)).toBe(value);
-		const position = engine.toRelativePosition!(replica, 5);
-		expect(engine.fromRelativePosition!(replica, position)).toBe(5);
+		const position = engine.relativePositions.create(replica, {
+			offset: 5,
+			affinity: "following",
+		});
+		expect(engine.relativePositions.resolve(replica, position)?.offset).toBe(5);
 		expect(() =>
 			engine.apply(replica, [
 				{ type: "insert", index: 0, value: "bad\0value" },

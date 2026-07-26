@@ -1,4 +1,4 @@
-import { CrdtEngineError, type CrdtFieldEngine } from "questpie/crdt";
+import { CrdtEngineError, type CrdtTextFieldEngine } from "questpie/crdt";
 
 import { createYjsTextEngineCore } from "./text-engine.js";
 import type {
@@ -24,7 +24,7 @@ export type YjsTextEngineOptions = Readonly<{
 
 export function createYjsTextEngine(
 	options: YjsTextEngineOptions = {},
-): CrdtFieldEngine<"text", string> {
+): CrdtTextFieldEngine {
 	const core = createYjsTextEngineCore();
 	const timeout = options.operationTimeoutMs ?? 100;
 	if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 30_000) {

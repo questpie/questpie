@@ -2,6 +2,16 @@ import type {
 	IsEligibleCrdtSetField,
 	IsEligibleCrdtTextField,
 } from "#questpie/server/fields/field-class-types.js";
+import type {
+	CrdtTextAnchorInput,
+	CrdtTextAnchorResolution,
+	CrdtTextAnchorToken,
+} from "#questpie/shared/crdt-anchor.js";
+export type {
+	CrdtTextAnchorInput,
+	CrdtTextAnchorResolution,
+	CrdtTextAnchorToken,
+} from "#questpie/shared/crdt-anchor.js";
 
 import type { CrdtAwarenessOfOwner } from "./capability.js";
 
@@ -85,6 +95,11 @@ export interface CrdtTextReplica {
 	apply(operations: readonly CrdtTextOperation[]): void;
 }
 
+export interface CrdtTextAnchorPort {
+	create(input: CrdtTextAnchorInput): CrdtTextAnchorToken;
+	resolve(token: string): CrdtTextAnchorResolution;
+}
+
 export interface CrdtSetReplica<T extends string> {
 	values(): readonly T[];
 	has(value: T): boolean;
@@ -96,6 +111,7 @@ export interface CrdtSetReplica<T extends string> {
 export interface CrdtTextFieldPort {
 	readonly format: "text";
 	readonly text: CrdtTextReplica;
+	readonly anchors: CrdtTextAnchorPort;
 }
 
 export interface CrdtSetFieldPort<T extends string> {
@@ -286,9 +302,7 @@ type CrdtServerFieldDefinition = {
 	value: unknown;
 };
 
-export interface CrdtServerField<
-	TDefinition extends CrdtServerFieldDefinition,
-> {
+interface CrdtServerFieldBase<TDefinition extends CrdtServerFieldDefinition> {
 	status(): Promise<CrdtServerFieldStatus<TDefinition["format"]>>;
 	replace(input: {
 		value: TDefinition["value"];
@@ -305,6 +319,17 @@ export interface CrdtServerField<
 		tx: unknown;
 	}): Promise<CrdtServerFieldStatus<TDefinition["format"]>>;
 }
+
+export interface CrdtServerTextAnchorPort {
+	create(input: CrdtTextAnchorInput): Promise<CrdtTextAnchorToken>;
+	resolve(token: string): Promise<CrdtTextAnchorResolution>;
+}
+
+export type CrdtServerField<TDefinition extends CrdtServerFieldDefinition> =
+	CrdtServerFieldBase<TDefinition> &
+		(TDefinition extends { format: "text" }
+			? { readonly anchors: CrdtServerTextAnchorPort }
+			: {});
 
 export interface CrdtServerDocumentStatus<
 	TFields extends Record<string, CrdtServerFieldDefinition>,

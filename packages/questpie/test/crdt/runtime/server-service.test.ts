@@ -7,9 +7,14 @@ import {
 	createCrdtServerOperations,
 	orderCrdtAuthorityFencePlans,
 } from "../../../src/server/modules/core/integrated/crdt/crdt-operations.js";
+import { createDeterministicTextEngine } from "../../../src/server/modules/core/integrated/crdt/deterministic-engine.js";
+import { createCrdtManifestDeclarations } from "../../../src/server/modules/core/integrated/crdt/manifest-runtime.js";
+import { updateCrdtManifestArtifact } from "../../../src/server/modules/core/integrated/crdt/manifest.js";
+import { createCrdtRegistry } from "../../../src/server/modules/core/integrated/crdt/registry.js";
 import { drainCrdtProjection } from "../../../src/server/modules/core/integrated/crdt/server-service.js";
 import crdtService from "../../../src/server/modules/core/services/crdt.js";
 import { buildMockApp } from "../../utils/mocks/mock-app-builder.js";
+import { createTestContext } from "../../utils/test-context.js";
 import { runTestDbMigrations } from "../../utils/test-db.js";
 
 describe("CRDT request-bound server service", () => {
@@ -211,6 +216,73 @@ describe("CRDT request-bound server service", () => {
 		expect(authorizedDatabases).toEqual([db, commitTransaction]);
 	});
 
+	it("creates and resolves text anchors from an authorized server document", async () => {
+		const anchorArticles = collection("anchor_articles")
+			.fields(({ f }) => ({
+				title: f.text().required(),
+				body: f.textarea().default("").required().crdt({ format: "text" }),
+			}))
+			.collaborative();
+		const textEngine = createDeterministicTextEngine();
+		const crdtConfig = {
+			namespace: "server-anchor-test",
+			engines: { text: textEngine },
+		};
+		const registry = createCrdtRegistry({
+			collections: { anchorArticles: anchorArticles.build() },
+			globals: {},
+		});
+		const manifest = updateCrdtManifestArtifact({
+			namespace: crdtConfig.namespace,
+			declarations: createCrdtManifestDeclarations({
+				registry,
+				config: crdtConfig,
+			}),
+			createStableFieldId: uuidSequence().next,
+		});
+		const setup = await buildMockApp(
+			{ collections: { anchorArticles }, crdtManifest: manifest },
+			{ crdt: crdtConfig, secret: "s".repeat(32) },
+		);
+		try {
+			await runTestDbMigrations(setup.app);
+			const article = await setup.app.collections.anchorArticles.create(
+				{ title: "Draft", body: "Body" },
+				createTestContext({ accessMode: "system" }),
+			);
+			let authorizations = 0;
+			let readable = true;
+			const crdt = setup.app.crdtOperations.createRequestOperations({
+				authorize: async () => {
+					authorizations++;
+					return {
+						ownerRead: readable,
+						ownerEdit: false,
+						fields: { body: { read: readable, edit: false } },
+					};
+				},
+			});
+			const anchors = crdt.collections.anchorArticles.document({
+				id: article.id,
+			}).fields.body.anchors;
+
+			const token = await anchors.create({ kind: "point", offset: 2 });
+
+			expect(await anchors.resolve(token)).toEqual({
+				status: "resolved",
+				kind: "point",
+				offset: 2,
+			});
+			readable = false;
+			await expect(anchors.resolve(token)).rejects.toThrow(
+				"CRDT authority denied",
+			);
+			expect(authorizations).toBe(3);
+		} finally {
+			await setup.cleanup();
+		}
+	});
+
 	it("supplies fresh transaction-bound authorization for the whole aggregate", async () => {
 		const commitTransaction = {};
 		const authorizedDatabases: unknown[] = [];
@@ -330,4 +402,12 @@ function queuedSelectDatabase(results: unknown[][]) {
 		},
 	};
 	return database;
+}
+
+function uuidSequence() {
+	let value = 0;
+	return {
+		next: () =>
+			`00000000-0000-4000-8000-${(++value).toString(16).padStart(12, "0")}`,
+	};
 }

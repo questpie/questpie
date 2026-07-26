@@ -35,6 +35,12 @@ QUESTPIE carries bytes over its normal Fetch handler and reuses the client's
 existing SSE or Pusher realtime connection for opaque dirty hints. No
 adapter-specific WebSocket host is required.
 
+Text fields also expose `fields.<name>.anchors.create()` and `.resolve()`.
+QUESTPIE wraps Yjs relative positions in a bounded, lifecycle-bound opaque
+token shared by the browser and server engines. Normal edits and compaction
+preserve it; field or owner recreation detaches it. Applications must store the
+token opaquely and enforce their own annotation/comment policy.
+
 The server engine uses a bounded, in-process worker-thread pool to isolate
 untrusted CRDT decoding and merge CPU work. The same server export selects
 Node.js `worker_threads` on Node 18+ and the Web Worker-compatible runtime on

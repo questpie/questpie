@@ -1,3 +1,11 @@
+import {
+	createCrdtTextAnchorToken,
+	resolveCrdtTextAnchorToken,
+	type CrdtTextAnchorBinding,
+	type CrdtTextAnchorInput,
+	type CrdtTextAnchorResolution,
+	type CrdtTextAnchorToken,
+} from "#questpie/shared/crdt-anchor.js";
 import type {
 	CrdtExchangeAppendReceiptV1,
 	CrdtExchangePullFieldV1,
@@ -27,6 +35,7 @@ import {
 	CrdtHttpRecoveryError,
 } from "./transport.js";
 import {
+	CrdtAnchorError,
 	CrdtConnectError,
 	CrdtMutationError,
 	CrdtReadError,
@@ -2173,12 +2182,14 @@ export class CrdtClientDocument {
 			!Number.isSafeInteger(offset) ||
 			offset < 0 ||
 			offset > text.length ||
-			!isUtf16Boundary(text, offset) ||
-			!engine.toRelativePosition
+			!isUtf16Boundary(text, offset)
 		) {
 			throw new CrdtMutationError("INVALID_OPERATION");
 		}
-		const position = engine.toRelativePosition(field.replica, offset);
+		const position = engine.relativePositions.create(field.replica, {
+			offset,
+			affinity: "following",
+		});
 		if (!isCanonicalBase64Url(position, 64)) {
 			throw new CrdtMutationError("INVALID_OPERATION");
 		}
@@ -2383,8 +2394,7 @@ export class CrdtClientDocument {
 			!field ||
 			field.contract.format !== "text" ||
 			field.replica === undefined ||
-			field.grant === undefined ||
-			!this.textEngine!.fromRelativePosition
+			field.grant === undefined
 		) {
 			throw new CrdtConnectError("CRDT_PROTOCOL_REJECTED");
 		}
@@ -2399,11 +2409,12 @@ export class CrdtClientDocument {
 			if (typeof token !== "string" || !isCanonicalBase64Url(token)) {
 				throw new CrdtConnectError("CRDT_PROTOCOL_REJECTED");
 			}
-			const offset = this.textEngine!.fromRelativePosition!(
+			const resolved = this.textEngine!.relativePositions.resolve(
 				field.replica,
 				token,
 			);
-			if (offset === undefined) continue;
+			if (resolved === undefined) continue;
+			const offset = resolved.offset;
 			const text = this.textEngine!.value(field.replica);
 			if (
 				!Number.isSafeInteger(offset) ||
@@ -2545,6 +2556,12 @@ export class CrdtClientDocument {
 									operations,
 								),
 						}),
+						anchors: Object.freeze({
+							create: (input: CrdtTextAnchorInput) =>
+								this.createTextAnchor(this.requireField(key, "text"), input),
+							resolve: (token: string) =>
+								this.resolveTextAnchor(this.requireField(key, "text"), token),
+						}),
 						set: Object.freeze({
 							values: () => this.readSet(this.requireField(key, "set")),
 							has: (value: string) =>
@@ -2637,6 +2654,9 @@ export class CrdtClientDocument {
 				(field) => field.format === "text",
 			) &&
 			(!this.textEngine ||
+				!this.textEngine.relativePositions ||
+				typeof this.textEngine.relativePositions.create !== "function" ||
+				typeof this.textEngine.relativePositions.resolve !== "function" ||
 				Object.values(normalized.fields).some(
 					(field) =>
 						field.format === "text" &&
@@ -2680,6 +2700,73 @@ export class CrdtClientDocument {
 			throw new CrdtReadError("NOT_READY");
 		}
 		return projectClientSetReplica(replica);
+	}
+
+	private createTextAnchor(
+		field: FieldRuntime,
+		anchor: CrdtTextAnchorInput,
+	): CrdtTextAnchorToken {
+		if (field.syncing || this.state.status === "synchronizing") {
+			throw new CrdtAnchorError("UNACKNOWLEDGED_STATE");
+		}
+		this.assertReadable(field);
+		if (
+			this.activeTransaction !== undefined ||
+			this.pending.some((bundle) =>
+				bundle.parts.some(
+					(part) => part.fieldSlot === field.contract.fieldSlot,
+				),
+			)
+		) {
+			throw new CrdtAnchorError("UNACKNOWLEDGED_STATE");
+		}
+		const binding = this.textAnchorBinding(field);
+		const replica = field.replica!;
+		try {
+			return createCrdtTextAnchorToken({
+				binding,
+				replica,
+				value: this.textEngine!.value(replica),
+				anchor,
+				relativePositions: this.textEngine!.relativePositions,
+			});
+		} catch {
+			throw new CrdtAnchorError("INVALID_INPUT");
+		}
+	}
+
+	private resolveTextAnchor(
+		field: FieldRuntime,
+		token: string,
+	): CrdtTextAnchorResolution {
+		this.assertReadable(field);
+		const binding = this.textAnchorBinding(field);
+		const replica = this.transactionReplica(field);
+		return resolveCrdtTextAnchorToken({
+			binding,
+			replica,
+			value: this.textEngine!.value(replica),
+			token,
+			relativePositions: this.textEngine!.relativePositions,
+		});
+	}
+
+	private textAnchorBinding(field: FieldRuntime): CrdtTextAnchorBinding {
+		if (
+			!this.serverNamespace ||
+			!this.incarnationKey ||
+			field.fieldEpoch === undefined
+		) {
+			throw new CrdtReadError("NOT_READY");
+		}
+		return Object.freeze({
+			namespace: this.serverNamespace,
+			incarnationKey: this.incarnationKey,
+			fieldSlot: field.contract.fieldSlot,
+			fieldEpoch: field.fieldEpoch,
+			engineId: field.contract.engineId,
+			formatVersion: field.contract.formatVersion,
+		});
 	}
 
 	private mutateText(

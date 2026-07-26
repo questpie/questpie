@@ -77,7 +77,7 @@ export async function createQuestpieCrdtOperationalService(
 	if (
 		!runtime ||
 		ownerCount === 0 ||
-		(requiresText && !textEngine) ||
+		(requiresText && (!textEngine || !textEngine.relativePositions)) ||
 		Object.keys(app.crdtManifests.collections).length +
 			Object.keys(app.crdtManifests.globals).length ===
 			0
@@ -349,6 +349,8 @@ export async function createQuestpieCrdtOperationalService(
 		createRequestOperations({ authorize }) {
 			return createCrdtServerOperations({
 				db: app.db,
+				namespace: runtime.namespace,
+				resolveEngine,
 				replace,
 				owners: app.crdtRegistry,
 				authorize,

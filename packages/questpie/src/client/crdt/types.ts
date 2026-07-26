@@ -1,9 +1,19 @@
+import type { CrdtTextRelativePositionPort } from "#questpie/shared/crdt-engine.js";
 import type {
 	CrdtExchangeRequestFrameV1,
 	CrdtExchangeResponseFrameV1,
 } from "#questpie/shared/crdt-exchange.js";
 
 import type { CrdtTextOperation } from "../../server/modules/core/integrated/crdt/types.js";
+
+export type CrdtAnchorErrorCode = "INVALID_INPUT" | "UNACKNOWLEDGED_STATE";
+
+export class CrdtAnchorError extends Error {
+	constructor(public readonly code: CrdtAnchorErrorCode) {
+		super(`CRDT anchor rejected: ${code}`);
+		this.name = "CrdtAnchorError";
+	}
+}
 
 export type CrdtMutationErrorCode =
 	| "NOT_READY"
@@ -80,6 +90,7 @@ export type CrdtClientAuthorizedManifestOwner = Readonly<{
 export interface CrdtClientTextEngine<TReplica = unknown> {
 	readonly engineId: string;
 	readonly formatVersion: number;
+	readonly relativePositions: CrdtTextRelativePositionPort<TReplica>;
 	restore(snapshot: Uint8Array): TReplica;
 	snapshot(replica: TReplica): Uint8Array;
 	proof(replica: TReplica): Uint8Array;
@@ -90,11 +101,6 @@ export interface CrdtClientTextEngine<TReplica = unknown> {
 	): Readonly<{ replica: TReplica; update: Uint8Array }>;
 	applyUpdate(replica: TReplica, update: Uint8Array): TReplica;
 	mergeUpdates(updates: readonly Uint8Array[]): Uint8Array;
-	toRelativePosition?(replica: TReplica, offset: number): string;
-	fromRelativePosition?(
-		replica: TReplica,
-		position: string,
-	): number | undefined;
 }
 
 export type CrdtClientStoredDocument = Readonly<{

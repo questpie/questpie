@@ -6158,6 +6158,37 @@ retention horizon; a bundle older than that requires the explicit recovery
 flow. `RealtimeCrdtBindingRejectedError` reports that the optional dirty-hint
 lease was rejected; it never grants data authority.
 
+### Durable text anchors
+
+```ts
+const anchor = article.fields.body.anchors.create({
+	kind: "range",
+	start: 4,
+	end: 12,
+});
+const position = article.fields.body.anchors.resolve(anchor);
+```
+
+Point affinity defaults to `following`; range affinity defaults inward
+(`start: following`, `end: preceding`). Inputs are scalar-boundary UTF-16
+offsets and ranges must be nonempty.
+
+Client creation requires a readable, acknowledged basis. Catch
+`CrdtAnchorError` by code: `UNACKNOWLEDGED_STATE` means wait for sync/pending
+append completion and create outside an aggregate transaction;
+`INVALID_INPUT` means the offset or range is invalid. View-only readers may
+create anchors. Server request context exposes async
+`ctx.crdt.collections.<owner>.document({ id }).fields.<text>.anchors` and
+reauthorizes read plus reloads the authoritative head for every create and
+resolve.
+
+Persist the branded string opaquely. Never parse it and never treat it as
+authority. Normal edits and compaction preserve it. Replace/import/restore,
+schema recreation, purge, and delete-then-recreate detach it. Malformed,
+cross-owner/field/epoch/engine, and otherwise stale tokens resolve to the same
+`{ status: "detached" }` after current read authority succeeds. Store quotes or
+excerpts separately when the product needs historical fallback.
+
 ## Security and lifecycle
 
 - Reuse normal collection/global and field access rules.

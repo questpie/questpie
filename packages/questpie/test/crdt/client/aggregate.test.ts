@@ -1,7 +1,10 @@
 import { describe, expect, it } from "bun:test";
 
 import { createClientSetSnapshot } from "../../../src/client/crdt/set-engine.js";
-import { CrdtMutationError } from "../../../src/client/crdt/types.js";
+import {
+	CrdtAnchorError,
+	CrdtMutationError,
+} from "../../../src/client/crdt/types.js";
 import { CrdtExchangeHarness } from "./http-harness.js";
 
 const AGGREGATE_FIELDS = [
@@ -37,6 +40,123 @@ describe("CRDT aggregate transactions over typed exchange", () => {
 		expect(harness.opened).toHaveLength(1);
 		expect(harness.registrations).toHaveLength(1);
 		expect(harness.sent.map((frame) => frame.opcode)).toContain(0x01);
+	});
+
+	it("creates and resolves a durable range on a readable text field", async () => {
+		const harness = new CrdtExchangeHarness({ fields: AGGREGATE_FIELDS });
+		const document = harness.createDocument();
+		await document.connect({ mode: "view" });
+
+		const anchor = (document.fields.content as any).anchors.create({
+			kind: "range",
+			start: 0,
+			end: 4,
+		});
+
+		expect(typeof anchor).toBe("string");
+		expect(anchor.length).toBeLessThanOrEqual(2_048);
+		expect((document.fields.content as any).anchors.resolve(anchor)).toEqual({
+			status: "resolved",
+			kind: "range",
+			start: 0,
+			end: 4,
+		});
+	});
+
+	it("rejects anchor creation from an unacknowledged local text state", async () => {
+		const harness = new CrdtExchangeHarness({
+			fields: AGGREGATE_FIELDS,
+			autoAcknowledge: false,
+		});
+		const document = harness.createDocument();
+		await document.connect({ mode: "edit" });
+		(document.fields.content as any).text.apply([
+			{ type: "insert", index: 4, value: " pending" },
+		]);
+
+		expect(() =>
+			(document.fields.content as any).anchors.create({
+				kind: "point",
+				offset: 4,
+			}),
+		).toThrow(new CrdtAnchorError("UNACKNOWLEDGED_STATE"));
+	});
+
+	it("rejects anchor creation inside an active aggregate transaction", async () => {
+		const harness = new CrdtExchangeHarness({ fields: AGGREGATE_FIELDS });
+		const document = harness.createDocument();
+		await document.connect({ mode: "edit" });
+
+		expect(() =>
+			document.transaction(({ fields }: any) => {
+				fields.content.anchors.create({ kind: "point", offset: 2 });
+			}),
+		).toThrow(new CrdtAnchorError("UNACKNOWLEDGED_STATE"));
+	});
+
+	it("rejects anchor creation while a refreshed field basis is syncing", async () => {
+		const harness = new CrdtExchangeHarness({ fields: AGGREGATE_FIELDS });
+		const document = harness.createDocument();
+		await document.connect({ mode: "view" });
+		harness.setText(3, "Remote body", 1n);
+		let releasePull: (() => void) | undefined;
+		harness.responseOverride = (request, response) =>
+			request.opcode === 0x01
+				? new Promise((resolve) => {
+						releasePull = () => resolve(response);
+					})
+				: response;
+
+		harness.dirty("visible");
+		await waitUntil(() => document.getSnapshot().status === "synchronizing");
+		expect(() =>
+			(document.fields.content as any).anchors.create({
+				kind: "point",
+				offset: 2,
+			}),
+		).toThrow(new CrdtAnchorError("UNACKNOWLEDGED_STATE"));
+		harness.responseOverride = undefined;
+		releasePull?.();
+		await waitUntil(() => document.getSnapshot().status === "ready");
+	});
+
+	it("detaches malformed and cross-boundary anchor tokens without disclosure", async () => {
+		const firstHarness = new CrdtExchangeHarness({
+			fields: AGGREGATE_FIELDS,
+			incarnationKey: "00000000-0000-4000-8000-000000000030",
+		});
+		const secondHarness = new CrdtExchangeHarness({
+			fields: AGGREGATE_FIELDS.map((field) =>
+				field.key === "content" ? { ...field, fieldEpoch: 2n } : field,
+			),
+			incarnationKey: "00000000-0000-4000-8000-000000000031",
+		});
+		const first = firstHarness.createDocument();
+		const second = secondHarness.createDocument();
+		await first.connect({ mode: "view" });
+		await second.connect({ mode: "view" });
+		const anchor = (first.fields.content as any).anchors.create({
+			kind: "point",
+			offset: 2,
+		});
+
+		expect((first.fields.title as any).anchors.resolve(anchor)).toEqual({
+			status: "detached",
+		});
+		expect((second.fields.content as any).anchors.resolve(anchor)).toEqual({
+			status: "detached",
+		});
+		for (const token of [
+			"",
+			"not-an-anchor",
+			anchor.replace("qpa1_", "qpa2_"),
+			`${anchor}A`,
+			`qpa1_${"A".repeat(2_044)}`,
+		]) {
+			expect((first.fields.content as any).anchors.resolve(token)).toEqual({
+				status: "detached",
+			});
+		}
 	});
 
 	it("publishes title, tags, and content as one sorted all-or-nothing append", async () => {

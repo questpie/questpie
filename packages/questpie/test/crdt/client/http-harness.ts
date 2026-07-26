@@ -75,6 +75,7 @@ export class CrdtExchangeHarness {
 	) => void | Promise<void>;
 	private readonly snapshots = new Map<number, Uint8Array>();
 	private readonly cursors = new Map<number, bigint>();
+	private readonly epochs = new Map<number, bigint>();
 	private readonly acknowledged = new Map<
 		string,
 		CrdtExchangeAppendReceiptV1
@@ -123,6 +124,7 @@ export class CrdtExchangeHarness {
 					: createClientSetSnapshot(field.value as readonly string[]),
 			);
 			this.cursors.set(field.fieldSlot, field.fieldCursor ?? 0n);
+			this.epochs.set(field.fieldSlot, field.fieldEpoch ?? 1n);
 		}
 		this.manifest = Object.freeze({
 			schemaVersion: options.schemaVersion ?? 1,
@@ -360,7 +362,7 @@ export class CrdtExchangeHarness {
 			const field = Object.freeze({
 				fieldSlot: contract.fieldSlot,
 				grant: contract.grant === "edit" ? (1 as const) : (0 as const),
-				fieldEpoch: 1n,
+				fieldEpoch: this.epochs.get(contract.fieldSlot) ?? 1n,
 				formatVersion: contract.formatVersion,
 				fieldCursor: this.cursors.get(contract.fieldSlot) ?? 0n,
 				byteLength: bytes.byteLength,
@@ -427,6 +429,29 @@ export function testTextEngine(): CrdtClientTextEngine<string> {
 	return Object.freeze({
 		engineId: "test-text",
 		formatVersion: 1,
+		relativePositions: Object.freeze({
+			create(_replica, input) {
+				const bytes = new Uint8Array(5);
+				const view = new DataView(bytes.buffer);
+				view.setUint8(0, input.affinity === "preceding" ? 0 : 1);
+				view.setUint32(1, input.offset);
+				return base64Url(bytes);
+			},
+			resolve(_replica, position) {
+				const bytes = fromBase64Url(position);
+				if (bytes.byteLength !== 5 || (bytes[0] !== 0 && bytes[0] !== 1)) {
+					throw new Error("invalid test relative position");
+				}
+				return Object.freeze({
+					offset: new DataView(
+						bytes.buffer,
+						bytes.byteOffset,
+						bytes.byteLength,
+					).getUint32(1),
+					affinity: bytes[0] === 0 ? "preceding" : "following",
+				});
+			},
+		}),
 		restore: (snapshot) => new TextDecoder().decode(snapshot),
 		snapshot: (replica) => new TextEncoder().encode(replica),
 		proof: () => new Uint8Array(),
@@ -448,8 +473,6 @@ export function testTextEngine(): CrdtClientTextEngine<string> {
 					),
 				),
 			),
-		toRelativePosition: (_replica, offset) => base64Url(Uint8Array.of(offset)),
-		fromRelativePosition: (_replica, position) => fromBase64Url(position)[0],
 	});
 }
 
