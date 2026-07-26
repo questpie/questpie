@@ -40,6 +40,7 @@
 		"@changesets/cli": "^2.29.8",
 		"@iconify/json": "^2.2.452",
 		"fumadocs-typescript": "^5.0.0",
+		"jsdom": "^27.4.0",
 		"oxfmt": "^0.41.0",
 		"oxlint": "^1.56.0",
 		"shadcn": "^3.6.3",

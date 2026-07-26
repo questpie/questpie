@@ -160,7 +160,6 @@
 		"bullmq": "^5.0.0",
 		"bun-types": "latest",
 		"drizzle-kit": "1.0.0-beta.6-4414a19",
-		"jsdom": "^27.4.0",
 		"nodemailer": "^9.0.0",
 		"pg": "^8.13.1",
 		"pg-boss": "^12.5.4",
