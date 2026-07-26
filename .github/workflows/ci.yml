@@ -171,6 +171,9 @@ jobs:
       - name: Build packages
         run: bunx turbo run build --filter='./packages/*'
 
+      - name: Dist syntax gate
+        run: find packages/*/dist -name '*.mjs' -print0 | xargs -0 -n1 node --check
+
       - name: Dist types gate
         run: bun run scripts/check-dist-types.ts
 

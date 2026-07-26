@@ -5,7 +5,7 @@
 		"target": "ES2022",
 		"module": "ES2022",
 		"moduleResolution": "bundler",
-		"jsx": "preserve",
+		"jsx": "react-jsx",
 		"esModuleInterop": true,
 		"forceConsistentCasingInFileNames": true,
 		"strict": true,
