@@ -1,5 +1,10 @@
 import { sql } from "drizzle-orm";
-import { fromDrizzle, type ConstructorOptions, PgBoss } from "pg-boss";
+import {
+	fromDrizzle,
+	type ConstructorOptions,
+	PgBoss,
+	type SendOptions,
+} from "pg-boss";
 
 import type {
 	QueueAdapter,
@@ -118,14 +123,14 @@ export class PgBossAdapter implements QueueAdapter {
 			{
 				...sendOptions,
 				...(dispatchId ? { id: dispatchId } : {}),
-			} as any,
+			} satisfies SendOptions,
 		);
 	}
 
 	async publishInTransaction(
 		tx: unknown,
 		jobName: string,
-		payload: any,
+		payload: unknown,
 		options: PublishOptions | undefined,
 		dispatchId: string,
 	): Promise<string | null> {
@@ -143,8 +148,8 @@ export class PgBossAdapter implements QueueAdapter {
 			{
 				...sendOptions,
 				id: dispatchId,
-				db: fromDrizzle(tx as any, sql),
-			} as any,
+				db: fromDrizzle(tx as Parameters<typeof fromDrizzle>[0], sql),
+			} satisfies SendOptions,
 		);
 	}
 

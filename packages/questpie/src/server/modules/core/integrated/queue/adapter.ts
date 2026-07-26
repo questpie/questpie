@@ -96,7 +96,7 @@ export interface QueueAdapter {
 	publishInTransaction?(
 		tx: unknown,
 		jobName: string,
-		payload: any,
+		payload: unknown,
 		options: PublishOptions | undefined,
 		dispatchId: string,
 	): Promise<string | null>;

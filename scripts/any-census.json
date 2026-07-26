@@ -3,7 +3,7 @@
 	"packages": {
 		"questpie": {
 			": any": 602,
-			"as any": 499,
+			"as any": 498,
 			"as unknown as": 49,
 			"@ts-expect-error": 0
 		},

@@ -1,5 +1,7 @@
 import { and, asc, eq, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 
+import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
+
 import type { QueueAdapter } from "./adapter.js";
 import { questpieQueueDispatchTable } from "./dispatch-table.js";
 import type { PublishOptions, QueueDrainResult } from "./types.js";
@@ -11,6 +13,8 @@ const MAX_RELAY_ATTEMPTS = 25;
 const MAX_IDEMPOTENCY_KEY_LENGTH = 512;
 const MAX_RETRY_DELAY_SECONDS = 3_600;
 const SAFE_ADAPTER_PUBLICATION_ERROR = "Adapter publication failed";
+
+type QueueDatabase = AnyDrizzleClient;
 
 export type QueueDispatchRecord =
 	typeof questpieQueueDispatchTable.$inferSelect;
@@ -55,7 +59,7 @@ export async function stableQueueDispatchId(
 }
 
 export async function enqueueQueueDispatch(
-	db: any,
+	db: QueueDatabase,
 	input: {
 		dispatchId: string;
 		jobName: string;
@@ -68,7 +72,7 @@ export async function enqueueQueueDispatch(
 }
 
 export async function reserveQueueDispatch(
-	db: any,
+	db: QueueDatabase,
 	input: {
 		dispatchId: string;
 		jobName: string;
@@ -127,7 +131,7 @@ function retryDelaySeconds(attempts: number): number {
 }
 
 export async function claimQueueDispatches(
-	db: any,
+	db: QueueDatabase,
 	options: { batchSize?: number; leaseMs?: number; now?: Date } = {},
 ): Promise<QueueDispatchRecord[]> {
 	const batchSize = boundedInteger(
@@ -142,7 +146,7 @@ export async function claimQueueDispatches(
 		: sql`CURRENT_TIMESTAMP + (${leaseMs} * interval '1 millisecond')`;
 	const leaseToken = crypto.randomUUID();
 
-	return db.transaction(async (tx: any) => {
+	return db.transaction(async (tx) => {
 		const available = await tx
 			.select({ dispatchId: questpieQueueDispatchTable.dispatchId })
 			.from(questpieQueueDispatchTable)
@@ -182,7 +186,7 @@ export async function claimQueueDispatches(
 }
 
 async function acceptQueueDispatch(
-	db: any,
+	db: QueueDatabase,
 	task: QueueDispatchRecord,
 	adapterJobId: string | null,
 	now?: Date,
@@ -217,7 +221,7 @@ async function acceptQueueDispatch(
 }
 
 export async function acceptReservedQueueDispatch(
-	db: any,
+	db: QueueDatabase,
 	dispatchId: string,
 	adapterJobId: string | null,
 ): Promise<void> {
@@ -248,7 +252,7 @@ export async function acceptReservedQueueDispatch(
 }
 
 async function retryQueueDispatch(
-	db: any,
+	db: QueueDatabase,
 	task: QueueDispatchRecord,
 	now?: Date,
 ): Promise<"lost" | "retry" | "terminal"> {
@@ -281,7 +285,7 @@ export async function drainQueueDispatches(options: {
 	adapter: QueueAdapter;
 	batchSize?: number;
 	concurrency?: number;
-	db: any;
+	db: QueueDatabase;
 	logger?: QueueDispatchLogger;
 	now?: Date;
 }): Promise<QueueDrainResult> {

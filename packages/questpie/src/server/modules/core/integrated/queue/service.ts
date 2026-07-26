@@ -4,6 +4,7 @@ import {
 	onAfterCommit,
 	withTransaction,
 } from "#questpie/server/collection/crud/shared/transaction.js";
+import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
 
 import type {
 	QueueAdapter,
@@ -33,7 +34,7 @@ import type {
 type QueueRuntimeContext = {
 	session?: unknown;
 	locale?: string;
-	db?: unknown;
+	db?: AnyDrizzleClient;
 };
 
 type QueueLogger = {
@@ -44,7 +45,7 @@ type QueueLogger = {
 
 export interface QueueClientRuntimeOptions {
 	createContext?: () => Promise<QueueRuntimeContext>;
-	getDatabase?: () => unknown;
+	getDatabase?: () => AnyDrizzleClient | undefined;
 	getApp?: () => unknown;
 	logger?: QueueLogger;
 }
