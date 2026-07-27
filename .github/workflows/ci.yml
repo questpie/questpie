@@ -202,6 +202,15 @@ jobs:
       - name: Dist types gate
         run: bun run scripts/check-dist-types.ts
 
+      # What npm would actually publish (`npm pack --dry-run`, so `files` and
+      # .npmignore are honoured) vs the committed budget. Fails on >5% growth
+      # in any package's unpacked size — tighter than the type budget's 10%,
+      # because build output is near-deterministic for a fixed toolchain, so a
+      # jump is a real change in what ships rather than measurement noise.
+      # Re-baseline with --update. Must run after the build above.
+      - name: Package size budget
+        run: bun run scripts/size-budget.ts
+
       # Deterministic tsc metrics (Types/Instantiations) vs committed budget —
       # fails on >10% instantiation regression. Re-baseline with --update.
       - name: Type budget gate
