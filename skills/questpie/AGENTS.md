@@ -6131,8 +6131,16 @@ work. That is private runtime machinery, not another deployable worker service.
 
 ## Generated client
 
+Build the CRDT API from an existing client with `createCrdtClient` — it reuses
+that client's realtime session (still one connection), and keeps the CRDT
+implementation out of the bundle of every app that never calls it.
+
 ```ts
-const article = client.crdt.collections.articles.document({ id });
+import { createCrdtClient } from "questpie/crdt";
+
+const crdt = createCrdtClient(client);
+
+const article = crdt.collections.articles.document({ id });
 await article.connect({ mode: "edit", fallback: "view" });
 
 article.transaction(({ fields }) => {

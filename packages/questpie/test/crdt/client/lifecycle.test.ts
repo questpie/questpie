@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
+import { createCrdtClient } from "../../../src/client/crdt/create-crdt-client.js";
 import {
 	CrdtConnectError,
 	CrdtMutationError,
@@ -36,7 +37,7 @@ describe("CRDT client lifecycle over shared realtime", () => {
 				engines: { text: testTextEngine() },
 			},
 		});
-		const document = client.crdt.collections.articles.document({
+		const document = createCrdtClient(client).collections.articles.document({
 			id: "article-1",
 		});
 

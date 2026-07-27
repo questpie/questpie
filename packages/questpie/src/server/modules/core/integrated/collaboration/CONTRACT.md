@@ -33,8 +33,12 @@ An owner must opt in with `.collaborative()`. Eligible fields opt in with a
 exposes:
 
 ```ts
-const article = client.crdt.collections.articles.document({ id: "article-1" });
-const settings = client.crdt.globals.siteSettings.document();
+import { createCrdtClient } from "questpie/crdt";
+
+const crdt = createCrdtClient(client);
+
+const article = crdt.collections.articles.document({ id: "article-1" });
+const settings = crdt.globals.siteSettings.document();
 
 await article.connect({ mode: "edit", fallback: "view" });
 
