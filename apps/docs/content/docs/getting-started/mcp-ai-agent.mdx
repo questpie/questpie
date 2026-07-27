@@ -59,7 +59,11 @@ bun run db:push
 ```
 
 <Callout type="warn" title="db:push is local development only">
-  `bun run db:push` calls `questpie push`. Never run it against production, in a deployment job, or in an init container. `--force` does not make it production-safe. For production, generate a migration with `bun run migrate:create`, review and commit it, then apply it with `bun run migrate` during deployment.
+	`bun run db:push` calls `questpie push`. Never run it against production, in a
+	deployment job, or in an init container. `--force` does not make it
+	production-safe. For production, generate a migration with `bun run
+	migrate:create`, review and commit it, then apply it with `bun run migrate`
+	during deployment.
 </Callout>
 
 Start the app:
@@ -78,14 +82,14 @@ HTTP MCP is read-only by default. Add `config/mcp.ts` to allow authenticated age
 import { mcpConfig } from "@questpie/mcp";
 
 export default mcpConfig({
-  crud: {
-    collections: {
-      posts: { read: true, write: true, delete: false },
-    },
-    globals: {
-      siteSettings: { read: true, write: false },
-    },
-  },
+	crud: {
+		collections: {
+			posts: { read: true, write: true, delete: false },
+		},
+		globals: {
+			siteSettings: { read: true, write: false },
+		},
+	},
 });
 ```
 
@@ -110,19 +114,19 @@ import { mcpTool } from "@questpie/mcp";
 import { z } from "zod";
 
 export default mcpTool("posts.countPublished", {
-  description: "Count published posts.",
-  inputSchema: z.object({}),
-  outputSchema: z.object({ count: z.number() }),
-  annotations: { readOnlyHint: true },
+	description: "Count published posts.",
+	inputSchema: z.object({}),
+	outputSchema: z.object({ count: z.number() }),
+	annotations: { readOnlyHint: true },
 }).handler(async ({ ctx }) => {
-  const count = await ctx.collections.posts.count({
-    where: { published: true },
-  });
+	const count = await ctx.collections.posts.count({
+		where: { published: true },
+	});
 
-  return {
-    structuredContent: { count },
-    content: [{ type: "text", text: `${count} published posts` }],
-  };
+	return {
+		structuredContent: { count },
+		content: [{ type: "text", text: `${count} published posts` }],
+	};
 });
 ```
 
@@ -186,7 +190,9 @@ bun run migrate
 ```
 
 <Callout type="warn" title="Never replace migrate with push">
-  Production uses `questpie migrate`, not `questpie push`. Do not put `push`, `db:push`, or `push --force` in a container command, init container, CI deploy step, or production runbook.
+	Production uses `questpie migrate`, not `questpie push`. Do not put `push`,
+	`db:push`, or `push --force` in a container command, init container, CI deploy
+	step, or production runbook.
 </Callout>
 
 Before connecting a client, confirm that `/api/mcp`, both root `/.well-known/*` documents, `/api/auth/oauth2/register`, `/admin/login`, and `/admin/oauth/consent` all route to the same deployment.
@@ -214,12 +220,12 @@ Add a workspace MCP configuration:
 
 ```json title=".vscode/mcp.json"
 {
-  "servers": {
-    "questpie": {
-      "type": "http",
-      "url": "https://cms.example.com/api/mcp"
-    }
-  }
+	"servers": {
+		"questpie": {
+			"type": "http",
+			"url": "https://cms.example.com/api/mcp"
+		}
+	}
 }
 ```
 
@@ -257,5 +263,5 @@ Delete remains unavailable because the server policy set `delete: false`, regard
 
 - [MCP integration](/docs/integrations/mcp) is the complete tool, resource, policy, transport, and custom-tool reference.
 - [MCP over OAuth 2.1](/docs/integrations/mcp-oauth) covers DCR, PKCE, consent, scopes, token verification, and `scopes ∩ RBAC` in depth.
-- [AI integration](/docs/integrations/ai) is the separate server-side worker and resumable execution package. You do not need `@questpie/ai` to expose an MCP server to Claude or an IDE.
+- [Sandboxed code](/docs/concepts/sandboxed-code) covers isolated execution for application-owned workloads. You do not need a framework-owned agent runtime to expose MCP to Claude or an IDE.
 - [Access control](/docs/concepts/access-control) is the security boundary beneath MCP policy and OAuth scopes.

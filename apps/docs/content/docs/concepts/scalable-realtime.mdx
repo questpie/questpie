@@ -1,0 +1,137 @@
+---
+title: Scalable realtime modeling
+description: Model scoped row live queries, understand conservative routing and delta fallback, and choose channels or refetch for high-fanout workloads.
+---
+
+Realtime correctness and realtime scalability are different promises. QUESTPIE always treats the database query plus current read access as authoritative. A snapshot fallback is correct, but a personalized query that re-runs 100,000 times can still be the wrong production model.
+
+## Scope, access, and client composition
+
+These three concerns are independent:
+
+- **Scope** narrows which subscription groups may be affected. Put a stable own-column key such as `scopeId`, `partitionId`, `parentId`, `recipientId`, or `audienceId` on ordinary tenant-owned rows.
+- **Access** authorizes every row from current database state. Client filters and routing guards never grant access.
+- **Client composition** joins, orders, limits, and derives views from authorized normalized rows. TanStack DB is the preferred place for that composition.
+
+Use a direct, indexed scope field even when membership is modeled through relations:
+
+```ts title="collections/activity.ts"
+import { index } from "questpie/drizzle-pg-core";
+import { collection } from "#questpie/factories";
+
+export const activity = collection("activity")
+	.fields(({ f }) => ({
+		scopeId: f.text(128).required(),
+		actorId: f.text(128).required(),
+		message: f.textarea().required(),
+	}))
+	.indexes(({ table }) => [
+		index("activity_scope_created_idx").on(table.scopeId, table.createdAt),
+	]);
+```
+
+Prefer stable parent keys or immutable bucket keys when one scope becomes too large. Do not use moving time windows, `LIMIT`/`OFFSET` pages, or rankings as semantic partitions: rows cross those boundaries as ordinary writes occur.
+
+## Subscription identity and lifecycle
+
+At admission, QUESTPIE freezes only stable subscription identity:
+
+- the authenticated principal, or an edge-local identity for anonymous clients;
+- one server-derived scope;
+- the topic locale, stage, and access mode.
+
+No expanded membership, permission, space, channel, or record-id set is stored in the subscription context. Mutable authorization is re-evaluated from the database during bootstrap and authoritative matching. Changes to watched membership/access resources trigger a targeted reset; periodic delta re-bootstrap remains a recovery net.
+
+Resolve a scope from trusted request context, not from an unverified topic field:
+
+```ts title="questpie.config.ts"
+import { runtimeConfig } from "questpie/app";
+
+export default runtimeConfig({
+	realtime: {
+		subscriptionScope: ({ request }) =>
+			request?.headers.get("x-scope-id") ?? null,
+	},
+});
+```
+
+`null` means explicitly unscoped. A non-null scope must be a non-empty string of at most 256 UTF-8 bytes. The value is used only inside the server group key and is never emitted as an observer label or error field.
+
+By default, equivalent topics share work only for the same stable principal and frozen scope tuple. A collection/global `realtime.accessCacheKey` may explicitly prove equivalent output across principals; its non-empty key is also bounded to 256 UTF-8 bytes. A throwing or invalid resolver stays edge-isolated rather than falling back to a shared principal group.
+
+A scope switch closes the old subscription and opens a new one, which bootstraps a fresh scoped client store. Reconnect derives the scope again. Session/claim revocation does not currently push-close every existing connection by itself; model mutable grants in database-backed access resources so their change can trigger a targeted reset.
+
+## Conservative candidate routing
+
+Each live topic has two independent matchers:
+
+1. A payload-local guard returns `match`, `miss`, or `unknown`.
+2. The normal database query plus current read access remains authoritative.
+
+Only a proven `miss` skips work. Own-column scalar equality, `eq`, and a bounded `in` can prove a result. `AND`/`OR`/`NOT` preserve three-valued logic. Relations, `RAW`, unsupported operators, missing fields, empty or oversized `in`, and ambiguous values return `unknown`.
+
+Updates evaluate both the before and after projection. Moving a row from `scope-a` to `scope-b` therefore wakes both partitions. Bulk changes or incomplete projections fall back conservatively.
+
+Positive required equality anchors outside `OR`/`NOT` feed an indexed candidate router. A topic such as `{ scopeId, RAW: ... }` considers only its scope, then continues through the authoritative database matcher because the residual predicate is unknown.
+
+## Delta eligibility and snapshot fallback
+
+Native keyed deltas require an explicit `mode: "delta"` and an unwindowed collection `find` with an id, own-column filters, and no `limit`, `offset`, `orderBy`, `with`, relation predicate, or `RAW`. The server reports a stable classification reason such as `limit`, `order_by`, `with`, `relation_where`, `raw_where`, `missing_id`, `native_deltas_disabled`, or `transport_snapshot`.
+
+Routing diagnostics are separate: `routing.plan` reports a required or missing anchor and a bounded feature such as `relation`, `raw`, `unsupported_operator`, `oversized_in`, or `ambiguous_value`. Neither classifier is an access engine.
+
+## Server opt-out
+
+Disable direct row subscriptions on a collection without disabling its change capture:
+
+```ts
+export const memberships = collection("memberships")
+	.fields(({ f }) => ({
+		scopeId: f.text(128).required(),
+		principalId: f.text(128).required(),
+	}))
+	.options({ realtime: false });
+```
+
+Raw handcrafted topics and typed clients receive `collection_realtime_disabled` before scheduler allocation or bootstrap. Changes to `memberships` still invalidate topics that watch it as an access or relation dependency.
+
+Disable every collection/global row live query at the app boundary with:
+
+```ts
+export default runtimeConfig({
+	realtime: { rowLiveQueries: false },
+});
+```
+
+Typed channels, channel replay/presence, CRDT collaboration, brokers, the outbox, and dependency capture remain available. The rejection reason is `row_live_queries_disabled`.
+
+## The 100,000-subscriber failure mode
+
+Suppose one activity item belongs to a shared scope, but each of 100,000 users subscribes through a personalized recipient relation. One insert can make all 100,000 groups candidates. The relation predicate is correctly classified as snapshot/unknown, but correctness does not make 100,000 database recomputations cheap.
+
+Choose one of these explicit models:
+
+| Requirement                     | Model                                             |
+| ------------------------------- | ------------------------------------------------- |
+| Bounded shared collection state | Scoped generic collection realtime                |
+| Per-user durable feed           | Materialized inbox rows with direct `recipientId` |
+| Shared audience notification    | Typed channel keyed by `audienceId`               |
+| Ranking or page became stale    | Typed invalidation followed by normal refetch     |
+| No push requirement             | Normal query                                      |
+
+Run the deterministic routing harness with `bun --cwd packages/questpie run bench:realtime:routing`. It creates 100,000 groups across 1,000 scopes and proves one scoped event considers 100 groups. Its adversarial one-scope personalized relation case intentionally considers all 100,000 and reports snapshot classification.
+
+## Production diagnostics
+
+`RealtimeObserver` exposes bounded-cardinality events and counters for:
+
+- candidate groups and guard `match | miss | unknown`;
+- authoritative database calls;
+- snapshot computes, bytes, and suppression;
+- delta frames and fallback reasons;
+- queue event/byte gauges and overflow resets;
+- admission and delivery-classification reasons.
+
+Metric keys never contain raw principal, scope, topic, record, query, or result values. Size admission, indexes, snapshot limits, and transport buffers from measured production shapes rather than assuming every correct query scales.
+
+Relational access used by normal reads, hydration, bootstrap, and authoritative matching must compile through the same fail-closed metadata path. Missing or mismatched reverse relation metadata rejects/denies; QUESTPIE never drops a required predicate.

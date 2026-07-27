@@ -26,6 +26,7 @@ import type {
 	QuestpieApp,
 	QuestpieClient,
 	RealtimeAPI,
+	RealtimeStreamEvent,
 	ResolveRelationsDeep,
 	TopicConfig,
 	With,
@@ -42,13 +43,22 @@ export type { QueryKey, DefaultError, UseQueryOptions, UseMutationOptions };
 // ============================================================================
 
 export {
+	applyRealtimeFindEvent,
+	applyRealtimeScalarEvent,
+	applyRealtimeSingleEvent,
 	buildCollectionTopic,
 	buildGlobalTopic,
 	type RealtimeAPI,
 	type TopicConfig,
 } from "questpie/client";
 
-import { buildCollectionTopic, buildGlobalTopic } from "questpie/client";
+import {
+	applyRealtimeFindEvent,
+	applyRealtimeScalarEvent,
+	applyRealtimeSingleEvent,
+	buildCollectionTopic,
+	buildGlobalTopic,
+} from "questpie/client";
 
 // ============================================================================
 // Core Types
@@ -90,11 +100,14 @@ type QueryBuilder<TFn extends AnyAsyncFn> =
 /**
  * Per-query realtime flag — the second argument to `find` / `count` / `get`.
  */
-export type RealtimeQueryConfig = {
+export type RealtimeQueryConfig<TData = unknown> = Omit<
+	UseQueryOptions<TData>,
+	"queryFn" | "queryKey"
+> & {
 	/**
-	 * Subscribe the query to live snapshots over the multiplexed SSE stream.
-	 * The server supplies both the initial value and later full snapshots through
-	 * the same stream (via `experimental_streamedQuery`).
+	 * Subscribe the query to the multiplexed realtime stream. The initial value
+	 * and later keyed changes share one stream, so realtime mode performs no
+	 * separate REST fetch.
 	 */
 	realtime?: boolean;
 };
@@ -107,11 +120,11 @@ type LiveQueryBuilder<TFn extends AnyAsyncFn> =
 	undefined extends FirstArg<TFn>
 		? (
 				options?: FirstArg<TFn>,
-				queryConfig?: RealtimeQueryConfig,
+				queryConfig?: RealtimeQueryConfig<QueryData<TFn>>,
 			) => UseQueryOptions<QueryData<TFn>>
 		: (
 				options: FirstArg<TFn>,
-				queryConfig?: RealtimeQueryConfig,
+				queryConfig?: RealtimeQueryConfig<QueryData<TFn>>,
 			) => UseQueryOptions<QueryData<TFn>>;
 
 type KeyBuilder<TFn extends AnyAsyncFn> =
@@ -258,6 +271,14 @@ type CollectionRestore<
 	TApp extends QuestpieApp,
 	K extends CollectionKeys<TApp>,
 > = QuestpieClient<TApp>["collections"][K]["restore"];
+type CollectionPurgeById<
+	TApp extends QuestpieApp,
+	K extends CollectionKeys<TApp>,
+> = QuestpieClient<TApp>["collections"][K] extends {
+	purgeById: infer TPurge extends AnyAsyncFn;
+}
+	? TPurge
+	: never;
 type CollectionFindVersions<
 	TApp extends QuestpieApp,
 	K extends CollectionKeys<TApp>,
@@ -347,7 +368,13 @@ type CollectionQueryOptionsAPI<
 			| undefined = undefined,
 	>(
 		options?: TQuery,
-		queryConfig?: RealtimeQueryConfig,
+		queryConfig?: RealtimeQueryConfig<
+			FindResult<
+				CollectionSelectOf<TApp, K>,
+				CollectionRelationsOf<TApp, K>,
+				TQuery
+			>
+		>,
 	) => UseQueryOptions<
 		FindResult<
 			CollectionSelectOf<TApp, K>,
@@ -403,7 +430,14 @@ type CollectionQueryOptionsAPI<
 		{ where: any },
 		{ success: boolean; count: number }
 	>;
-};
+} & ([CollectionPurgeById<TApp, K>] extends [never]
+	? {}
+	: {
+			purgeById: MutationBuilder<
+				FirstArg<CollectionPurgeById<TApp, K>>,
+				QueryData<CollectionPurgeById<TApp, K>>
+			>;
+		});
 
 type GlobalQueryOptionsAPI<
 	TApp extends QuestpieApp,
@@ -576,11 +610,14 @@ async function* streamRealtimeQuery<TInitialData>(options: {
 	topic: TopicConfig;
 	signal?: AbortSignal;
 	errorMap: QuestpieQueryErrorMap;
-}): AsyncGenerator<TInitialData, void, unknown> {
+}): AsyncGenerator<RealtimeStreamEvent<TInitialData>, void, unknown> {
 	const { realtime, topic, signal, errorMap } = options;
 	try {
-		for await (const snapshot of realtime.stream<TInitialData>(topic, signal)) {
-			yield snapshot;
+		for await (const event of realtime.streamEvents<TInitialData>(
+			topic,
+			signal,
+		)) {
+			yield event;
 		}
 	} catch (error) {
 		throw mapRealtimeError(error, errorMap);
@@ -645,10 +682,14 @@ export function createQuestpieQueryOptions<
 						]);
 
 						if (queryConfig?.realtime && client.realtime) {
+							const { realtime: _realtime, ...overrides } = queryConfig;
 							const topic = buildCollectionTopic(collectionName, options);
 							return queryOptions({
 								queryKey: qKey,
 								retry: realtimeRetry,
+								staleTime: 0,
+								refetchOnMount: "always",
+								...overrides,
 								queryFn: streamedQuery({
 									streamFn: ({ signal }) =>
 										streamRealtimeQuery<any>({
@@ -657,7 +698,7 @@ export function createQuestpieQueryOptions<
 											signal,
 											errorMap,
 										}),
-									reducer: (_: any, chunk: any) => chunk,
+									reducer: applyRealtimeFindEvent,
 									initialValue: undefined,
 									refetchMode: "append",
 								}),
@@ -679,6 +720,7 @@ export function createQuestpieQueryOptions<
 						]);
 
 						if (queryConfig?.realtime && client.realtime) {
+							const { realtime: _realtime, ...overrides } = queryConfig;
 							const topic = buildCollectionTopic(
 								collectionName,
 								options,
@@ -687,6 +729,9 @@ export function createQuestpieQueryOptions<
 							return queryOptions({
 								queryKey: qKey,
 								retry: realtimeRetry,
+								staleTime: 0,
+								refetchOnMount: "always",
+								...overrides,
 								queryFn: streamedQuery({
 									streamFn: ({ signal }) =>
 										streamRealtimeQuery<number>({
@@ -695,7 +740,8 @@ export function createQuestpieQueryOptions<
 											signal,
 											errorMap,
 										}),
-									reducer: (_: any, chunk: number) => chunk,
+									reducer: (current: any, event: any) =>
+										applyRealtimeScalarEvent(current, event),
 									initialValue: undefined,
 									refetchMode: "append",
 								}),
@@ -795,6 +841,28 @@ export function createQuestpieQueryOptions<
 							mutationFn: wrapMutationFn(
 								(variables: { id: string }) =>
 									collection.restore(
+										variables,
+										locale || stage
+											? {
+													...(locale ? { locale } : {}),
+													...(stage ? { stage } : {}),
+												}
+											: undefined,
+									),
+								errorMap,
+							),
+						}),
+					purgeById: () =>
+						mutationOptions({
+							mutationKey: buildKey(keyPrefix, [
+								...baseKey,
+								"purgeById",
+								locale,
+								stage,
+							]),
+							mutationFn: wrapMutationFn(
+								(variables: { id: string }) =>
+									collection.purgeById(
 										variables,
 										locale || stage
 											? {
@@ -947,10 +1015,14 @@ export function createQuestpieQueryOptions<
 					]);
 
 					if (queryConfig?.realtime && client.realtime) {
+						const { realtime: _realtime, ...overrides } = queryConfig;
 						const topic = buildGlobalTopic(globalName as string, options);
 						return queryOptions({
 							queryKey: qKey,
 							retry: realtimeRetry,
+							staleTime: 0,
+							refetchOnMount: "always",
+							...overrides,
 							queryFn: streamedQuery({
 								streamFn: ({ signal }) =>
 									streamRealtimeQuery({
@@ -959,7 +1031,8 @@ export function createQuestpieQueryOptions<
 										signal,
 										errorMap,
 									}),
-								reducer: (_: any, chunk: any) => chunk,
+								reducer: (current: any, event: any) =>
+									applyRealtimeSingleEvent(current, event),
 								initialValue: undefined,
 								refetchMode: "append",
 							}),

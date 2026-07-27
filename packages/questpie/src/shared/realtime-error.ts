@@ -1,6 +1,11 @@
 export type RealtimeTopicOperation = "find" | "count" | "get";
 
-export type RealtimeTopicRejectionReason = "query_limit" | "relation_depth";
+export type RealtimeTopicRejectionReason =
+	| "query_limit"
+	| "relation_depth"
+	| "snapshot_bytes"
+	| "row_live_queries_disabled"
+	| "collection_realtime_disabled";
 
 export type RealtimeTopicRejectedDetails = {
 	reason: RealtimeTopicRejectionReason;
@@ -35,6 +40,9 @@ export function isRealtimeTopicRejectedPayload(
 		payload.retryable === false &&
 		Boolean(payload.details) &&
 		(payload.details?.reason === "query_limit" ||
-			payload.details?.reason === "relation_depth")
+			payload.details?.reason === "relation_depth" ||
+			payload.details?.reason === "snapshot_bytes" ||
+			payload.details?.reason === "row_live_queries_disabled" ||
+			payload.details?.reason === "collection_realtime_disabled")
 	);
 }

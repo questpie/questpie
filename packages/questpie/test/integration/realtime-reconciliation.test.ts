@@ -221,6 +221,28 @@ describe("realtime matrix reconciliation", () => {
 		expect(adapter.startCalls).toBe(1);
 	});
 
+	it("G1: concurrent initialize and repeated destroy own one broker lifecycle", async () => {
+		const adapter = new DroppingChangeBroker();
+		const realtime = new RealtimeService(
+			new ControlledRealtimeReadDb() as never,
+			{ changeBroker: adapter, pollIntervalMs: 0 },
+		);
+		cleanup = () => realtime.destroy();
+
+		await Promise.all([
+			realtime.initialize(),
+			realtime.initialize(),
+			realtime.initialize(),
+		]);
+		expect(adapter.startCalls).toBe(1);
+
+		await realtime.destroy();
+		cleanup = undefined;
+		await realtime.destroy();
+
+		expect(adapter.stops).toBe(1);
+	});
+
 	it("G1: zero listeners keep the app-lifecycle publisher running", async () => {
 		const adapter = new DroppingChangeBroker();
 		const setup = await buildMockApp(

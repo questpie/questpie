@@ -13,6 +13,8 @@ import type { SQL } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import type { ZodType } from "zod";
 
+import type { Principal } from "#questpie/server/config/context.js";
+import type { AuthorityActor } from "#questpie/server/modules/core/integrated/crdt/authority.js";
 import type { I18nText } from "#questpie/shared/i18n/types.js";
 
 // ============================================================================
@@ -52,6 +54,12 @@ export interface FieldAccessContext {
 
 	/** Authenticated user (if any) */
 	user?: unknown;
+
+	/** Legacy request authentication discriminant. */
+	principal?: Principal;
+
+	/** Stable Human/Agent collaboration authority actor. */
+	actor?: AuthorityActor;
 
 	/** Current document (for update/read) */
 	doc?: Record<string, unknown>;
@@ -572,8 +580,7 @@ export type ExtractRelationFields<TFields extends Record<string, any>> =
  * state. `Field<TState>` → `ExtractInputType<TState>`.
  */
 export type FieldInput<T> = T extends {
-	readonly _: infer TState extends
-		import("./field-class-types.js").FieldState;
+	readonly _: infer TState extends import("./field-class-types.js").FieldState;
 }
 	? import("./field-class-types.js").ExtractInputType<TState>
 	: never;

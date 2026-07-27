@@ -267,6 +267,7 @@ export function collection<TName extends string>(
 	validation: undefined;
 	output: undefined;
 	upload: undefined;
+	collaborative: undefined;
 	fieldDefinitions: Record<string, never>;
 	"~questpieApp": undefined;
 }> {
@@ -286,6 +287,7 @@ export function collection<TName extends string>(
 			validation: undefined,
 			output: undefined,
 			upload: undefined,
+			collaborative: undefined,
 			fieldDefinitions: {},
 			"~questpieApp": undefined,
 		}),
@@ -307,6 +309,7 @@ export function global<TName extends string>(
 	options: Record<string, never>;
 	hooks: Record<string, never>;
 	access: Record<string, never>;
+	collaborative: undefined;
 	fieldDefinitions: Record<string, never>;
 	"~questpieApp": undefined;
 }> {
@@ -320,6 +323,7 @@ export function global<TName extends string>(
 			options: {},
 			hooks: {},
 			access: {},
+			collaborative: undefined,
 			fieldDefinitions: {},
 			"~questpieApp": undefined,
 		}),

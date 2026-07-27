@@ -64,11 +64,11 @@
 	"scripts": {
 		"build": "tsdown",
 		"check-types": "tsc --noEmit",
-		"questpie:generate": "bun questpie generate --verbose"
+		"questpie:generate": "bun questpie generate --verbose",
+		"test": "bun test ./test"
 	},
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "^1.29.0",
-		"@questpie/ai": "workspace:*",
 		"questpie": "workspace:*",
 		"zod": "^4.2.1"
 	},
@@ -79,6 +79,6 @@
 		"tsdown": "^0.18.3"
 	},
 	"peerDependencies": {
-		"questpie": "^3.0.0"
+		"questpie": "workspace:^"
 	}
 }

@@ -43,7 +43,7 @@ export interface ProcessNestedRelationsOptions {
  */
 export function separateNestedRelations(
 	input: Record<string, any>,
-	relationNames: Set<string>,
+	relations: Record<string, RelationConfig>,
 ): {
 	regularFields: Record<string, any>;
 	nestedRelations: Record<string, any>;
@@ -52,7 +52,13 @@ export function separateNestedRelations(
 	const nestedRelations: Record<string, any> = {};
 
 	for (const [key, value] of Object.entries(input)) {
-		if (relationNames.has(key) && typeof value === "object" && value !== null) {
+		const relation = relations[key];
+		if (
+			relation &&
+			!relation.polymorphicTargets &&
+			typeof value === "object" &&
+			value !== null
+		) {
 			nestedRelations[key] = value;
 		} else {
 			regularFields[key] = value;
@@ -60,6 +66,77 @@ export function separateNestedRelations(
 	}
 
 	return { regularFields, nestedRelations };
+}
+
+/**
+ * Convert the public `{ type, id }` morph value into its physical columns.
+ * Hooks and validation keep seeing the logical field; only database writes use
+ * the expanded representation.
+ */
+export function expandPolymorphicRelationValues(
+	values: Record<string, any>,
+	relations: Record<string, RelationConfig>,
+): Record<string, any> {
+	const expanded = { ...values };
+
+	for (const [relationName, relation] of Object.entries(relations)) {
+		const configured = relation.polymorphicTargets?.[0];
+		if (!configured || !Object.hasOwn(expanded, relationName)) continue;
+
+		const value = expanded[relationName];
+		delete expanded[relationName];
+		if (value === null) {
+			expanded[configured.typeField] = null;
+			expanded[configured.idField] = null;
+			continue;
+		}
+		if (
+			typeof value !== "object" ||
+			typeof value.type !== "string" ||
+			typeof value.id !== "string"
+		) {
+			throw ApiError.badRequest(
+				`Polymorphic relation "${relationName}" requires { type, id }`,
+			);
+		}
+		if (
+			!relation.polymorphicTargets?.some(
+				(target) => target.discriminator === value.type,
+			)
+		) {
+			throw ApiError.badRequest(
+				`Unknown polymorphic relation type "${value.type}"`,
+			);
+		}
+		expanded[configured.typeField] = value.type;
+		expanded[configured.idField] = value.id;
+	}
+
+	return expanded;
+}
+
+/** Restore the public morph field and hide its physical storage columns. */
+export function collapsePolymorphicRelationValues(
+	row: Record<string, any>,
+	relations: Record<string, RelationConfig>,
+): Record<string, any> {
+	for (const [relationName, relation] of Object.entries(relations)) {
+		const configured = relation.polymorphicTargets?.[0];
+		if (
+			!configured ||
+			(!Object.hasOwn(row, configured.typeField) &&
+				!Object.hasOwn(row, configured.idField))
+		) {
+			continue;
+		}
+
+		const type = row[configured.typeField];
+		const id = row[configured.idField];
+		row[relationName] = type == null && id == null ? null : { type, id };
+		delete row[configured.typeField];
+		delete row[configured.idField];
+	}
+	return row;
 }
 
 /**

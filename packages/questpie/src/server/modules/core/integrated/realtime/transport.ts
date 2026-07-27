@@ -20,6 +20,15 @@ export type ChangeWake =
 			ownerGeneration: number;
 			desiredRevision: number;
 			reason: "submit" | "reconnect" | "reconcile";
+	  }
+	| {
+			kind: "crdt";
+			aggregateHash: string;
+			aggregateEpoch: number;
+			head: number;
+			fenceGeneration: number;
+			reason: "publish" | "reconnect" | "reconcile";
+			lane?: "visible" | "awareness";
 	  };
 
 function isNonNegativeSafeInteger(value: unknown): value is number {
@@ -82,6 +91,33 @@ export function normalizeChangeWake(value: unknown): ChangeWake | null {
 		};
 	}
 
+	if (wake.kind === "crdt") {
+		if (
+			typeof wake.aggregateHash !== "string" ||
+			!/^[a-f0-9]{64}$/.test(wake.aggregateHash) ||
+			!isNonNegativeSafeInteger(wake.aggregateEpoch) ||
+			!isNonNegativeSafeInteger(wake.head) ||
+			!isNonNegativeSafeInteger(wake.fenceGeneration) ||
+			(wake.lane !== undefined &&
+				wake.lane !== "visible" &&
+				wake.lane !== "awareness") ||
+			(wake.reason !== "publish" &&
+				wake.reason !== "reconnect" &&
+				wake.reason !== "reconcile")
+		) {
+			return null;
+		}
+		return {
+			kind: wake.kind,
+			aggregateHash: wake.aggregateHash,
+			aggregateEpoch: wake.aggregateEpoch,
+			head: wake.head,
+			fenceGeneration: wake.fenceGeneration,
+			reason: wake.reason,
+			...(wake.lane === undefined ? {} : { lane: wake.lane }),
+		};
+	}
+
 	if (
 		wake.kind !== "topology-maybe-advanced" ||
 		typeof wake.sessionKey !== "string" ||
@@ -118,6 +154,10 @@ export interface ChangeBroker {
 	stop(): Promise<void>;
 }
 
+export interface ChangePublisher {
+	publish(wake: ChangeWake): Promise<void>;
+}
+
 export type ChangeBrokerState =
 	| "connecting"
 	| "connected"
@@ -125,7 +165,10 @@ export type ChangeBrokerState =
 	| "failed"
 	| "disconnected";
 
-export type DeliveryClass = "latest-snapshot" | "ordered-channel-event";
+export type DeliveryClass =
+	| "latest-snapshot"
+	| "ordered-channel-event"
+	| "row-delta";
 
 export type SinkWriteResult =
 	| { status: "accepted"; bufferedBytes: number | null }
@@ -151,6 +194,8 @@ export type EdgeSessionInput = {
 	sessionId: string;
 	principal: Principal | null;
 	resolvePrincipal: () => Promise<Principal | null>;
+	/** Called when the physical provider session closes or is revoked. */
+	onClose?: () => void;
 };
 
 export type ClientConfigInput = {

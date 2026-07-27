@@ -292,6 +292,18 @@ export function generateCollectionPaths(
 					),
 				},
 			};
+			paths[`${prefix}/{id}/purge`] = {
+				post: {
+					operationId: `${name}_purge`,
+					summary: `Permanently purge deleted ${name}`,
+					tags: [tag],
+					parameters: [idParam, ...singleQueryParameters()],
+					responses: jsonResponse(
+						ref("SuccessResponse"),
+						`Permanently purged ${name} record`,
+					),
+				},
+			};
 		}
 
 		// GET /{collection}/{id}/versions

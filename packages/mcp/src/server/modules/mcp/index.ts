@@ -1,3 +1,4 @@
+import { mcpOAuthScopeCatalog } from "../../oauth-scope-catalog.js";
 /**
  * MCP Module
  *
@@ -14,11 +15,17 @@ export type {
 	McpFieldTypes,
 	McpGlobals,
 	McpJobs,
-	McpModule,
 	McpMcpTools,
 	McpRoutes,
 } from "./.generated/module.js";
 
-export const mcpModule = generatedModule;
+export type McpModule = typeof mcpModule;
+
+export const mcpModule = {
+	...generatedModule,
+	oauthScopeCatalogs: {
+		mcp: mcpOAuthScopeCatalog,
+	},
+} as const;
 
 export default mcpModule;

@@ -8,11 +8,19 @@ export type {
 	RealtimeTopicRejectedDetails,
 	RealtimeTopicRejectedPayload,
 } from "../../shared/realtime-error.js";
+export { RealtimeCrdtBindingRejectedError } from "./crdt-error.js";
 export {
+	applyRealtimeFindEvent,
+	applyRealtimeScalarEvent,
+	applyRealtimeSingleEvent,
 	buildCollectionTopic,
 	buildGlobalTopic,
 	createRealtimeAPI,
+	deriveFindDeltas,
+	envelopeMeta,
 	type RealtimeAPI,
+	type RealtimeStreamEvent,
+	sseEventStream,
 	sseSnapshotStream,
 } from "./stream.js";
 export {
@@ -20,3 +28,4 @@ export {
 	type PusherRealtimeConfig,
 } from "./pusher.js";
 export type { RealtimeClientTransport } from "./transport.js";
+export { realtimeEventResolvesTxid, RealtimeTxidTracker } from "./txid.js";

@@ -4,62 +4,41 @@ import type {
 	ExecutorRunResult,
 } from "questpie/executor";
 
-import type { AuthenticatedAgentWorkloadEnvelope } from "@questpie/ai";
-
-import {
-	hashAgentWorkloadSandboxSource,
-	sealAgentWorkloadSandboxAdmission,
-	type AgentWorkloadSandboxAdmissionKey,
-} from "./agent-workload-admission.js";
-import type {
-	AgentWorkloadSandboxBoundary,
-	AgentWorkloadSandboxHostContext,
-} from "./agent-workload-boundary.js";
-import { AgentWorkloadSandboxDeniedError } from "./agent-workload-denial.js";
+import { registerSandboxCustomToolsSession } from "./custom-tools.js";
 import { validateEgressHosts } from "./net-validation.js";
+import { parseSandboxRunResult } from "./server-internals.js";
 import {
-	AGENT_WORKLOAD_ADMISSION_HEADER,
-	NON_AGENT_ADMISSION_HEADER,
+	HOST_ADMISSION_HEADER,
+	WORKLOAD_ADMISSION_HEADER,
 	type SandboxCapabilities,
-	type SandboxRunResult,
 } from "./types.js";
+import {
+	sealSandboxWorkloadAdmission,
+	type SandboxWorkloadAdmissionKey,
+} from "./workload-admission.js";
+import {
+	SandboxWorkloadDeniedError,
+	serializeSandboxWorkloadPolicy,
+	snapshotSandboxWorkloadPolicy,
+	type SandboxWorkloadAuditContext,
+	type SandboxWorkloadAuditEvent,
+	type SandboxWorkloadAuthorizer,
+	type SandboxWorkloadPolicy,
+	type SandboxWorkloadRunOptions,
+} from "./workload.js";
 
-export interface AgentWorkloadHttpSandboxOptions {
-	readonly boundary: AgentWorkloadSandboxBoundary;
-	readonly admission: AgentWorkloadSandboxAdmissionKey;
-	readonly execution: {
-		/** Trusted source resolved for the boundary's pinned Skill revision. */
-		readonly source: string;
-		readonly timeoutMs: number;
-		readonly memoryMb: number;
-		readonly inputProjections: AgentWorkloadInputProjectionRegistry;
-	};
-}
-
-export interface AgentWorkloadInputProjectionReference {
-	readonly id: string;
-	readonly skillRevisionId: string;
-	readonly executionPolicyRevisionId: string;
-	readonly sourceSha256: string;
-}
-
-export type AgentWorkloadInputProjector = (context: {
-	readonly principal: AgentWorkloadSandboxHostContext["principal"];
-	readonly disclosure: AgentWorkloadSandboxHostContext["context"]["disclosure"];
-}) => unknown | Promise<unknown>;
-
-/** Trusted registry resolved from the Run's pinned immutable revisions. */
-export interface AgentWorkloadInputProjectionRegistry {
-	resolve(
-		reference: AgentWorkloadInputProjectionReference,
-	):
-		| AgentWorkloadInputProjector
-		| null
-		| Promise<AgentWorkloadInputProjector | null>;
-}
-
-export interface AgentWorkloadHttpRunOptions {
-	readonly authority: AuthenticatedAgentWorkloadEnvelope;
+export interface WorkloadHttpSandboxOptions {
+	readonly authorize: SandboxWorkloadAuthorizer;
+	readonly admission: SandboxWorkloadAdmissionKey;
+	/** Hard bound around each consumer authorization read. Default 2s, max 5s. */
+	readonly authorizationTimeoutMs?: number;
+	/** Redacted audit seam. Allowed decisions fail closed when it cannot settle. */
+	readonly audit?: (
+		event: SandboxWorkloadAuditEvent,
+		context: SandboxWorkloadAuditContext,
+	) => void | Promise<void>;
+	/** Hard bound around the audit callback. Default 250ms, max 1s. */
+	readonly auditTimeoutMs?: number;
 }
 
 export interface HttpSandboxAdapterOptions {
@@ -81,14 +60,105 @@ export interface HttpSandboxAdapterOptions {
 	 * the sandbox (defense-in-depth; the server validates too). Default: true.
 	 */
 	validateEgress?: boolean;
-	/** Explicit fail-closed Agent path. Legacy `run()` never consumes this. */
-	agentWorkload?: AgentWorkloadHttpSandboxOptions;
-	/** Trusted host service credential for the explicit non-Agent `run()` path. */
-	nonAgentAdmissionSecret?: string;
+	/** Consumer-owned fail-closed admission for opaque remote workloads. */
+	workload?: WorkloadHttpSandboxOptions;
+	/** Trusted host credential for the direct framework `run()` path. */
+	hostAdmissionSecret?: string;
 }
 
 const DEFAULT_GUEST_TIMEOUT_MS = 5_000;
-const MAX_AGENT_ADMISSION_TTL_MS = 5_000;
+const MAX_WORKLOAD_ADMISSION_TTL_MS = 5_000;
+const DEFAULT_AUTHORIZATION_TIMEOUT_MS = 2_000;
+const MAX_AUTHORIZATION_TIMEOUT_MS = 5_000;
+const DEFAULT_AUDIT_TIMEOUT_MS = 250;
+const MAX_AUDIT_TIMEOUT_MS = 1_000;
+const MAX_REQUEST_BODY_BYTES = 2 * 1024 * 1024;
+const MAX_RESPONSE_BODY_BYTES = 2 * 1024 * 1024;
+
+function opaqueBindingToken(): string {
+	const bytes = new Uint8Array(32);
+	crypto.getRandomValues(bytes);
+	return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
+		"",
+	);
+}
+
+class OperationDeadlineError extends Error {}
+class OperationCancelledError extends Error {}
+class ResponseBodyTooLargeError extends Error {}
+
+async function readResponseTextBounded(
+	response: Response,
+	maximumBytes: number,
+): Promise<string> {
+	if (!response.body) return "";
+	const reader = response.body.getReader();
+	const chunks: Uint8Array[] = [];
+	let total = 0;
+	while (true) {
+		const { value, done } = await reader.read();
+		if (done) break;
+		total += value.byteLength;
+		if (total > maximumBytes) {
+			await reader.cancel();
+			throw new ResponseBodyTooLargeError();
+		}
+		chunks.push(value);
+	}
+	const body = new Uint8Array(total);
+	let offset = 0;
+	for (const chunk of chunks) {
+		body.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	return new TextDecoder().decode(body);
+}
+
+function boundedMs(
+	value: number | undefined,
+	fallback: number,
+	maximum: number,
+): number {
+	return typeof value === "number" && Number.isFinite(value)
+		? Math.min(maximum, Math.max(1, Math.round(value)))
+		: fallback;
+}
+
+async function settleWithin<T>(
+	work: (signal: AbortSignal) => T | Promise<T>,
+	timeoutMs: number,
+	parent?: AbortSignal,
+): Promise<T> {
+	const controller = new AbortController();
+	const onAbort = () => controller.abort(new OperationCancelledError());
+	if (parent?.aborted) controller.abort(new OperationCancelledError());
+	else parent?.addEventListener("abort", onAbort, { once: true });
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			Promise.resolve().then(() => work(controller.signal)),
+			new Promise<T>((_, reject) => {
+				timer = setTimeout(() => {
+					const error = new OperationDeadlineError();
+					controller.abort(error);
+					reject(error);
+				}, timeoutMs);
+				controller.signal.addEventListener(
+					"abort",
+					() =>
+						reject(controller.signal.reason ?? new OperationCancelledError()),
+					{ once: true },
+				);
+				if (controller.signal.aborted) {
+					reject(controller.signal.reason ?? new OperationCancelledError());
+				}
+			}),
+		]);
+	} finally {
+		if (timer !== undefined) clearTimeout(timer);
+		parent?.removeEventListener("abort", onAbort);
+	}
+}
 
 /**
  * Production sandboxed `ExecutorAdapter` — POSTs the run to the standalone Deno
@@ -108,42 +178,106 @@ export class HttpSandboxAdapter implements ExecutorAdapter {
 	}
 
 	private resolveUrl(): string {
-		const url =
+		const raw =
 			this.options.url ??
 			(typeof process !== "undefined" ? process.env?.SANDBOX_URL : undefined);
-		if (!url) {
+		if (!raw) {
 			throw new Error(
 				"HttpSandboxAdapter: no sandbox URL configured. Pass `url` or set SANDBOX_URL.",
 			);
 		}
-		return url.replace(/\/$/, "");
+		let url: URL;
+		try {
+			url = new URL(raw);
+		} catch {
+			throw new Error(
+				"HttpSandboxAdapter: sandbox URL must be canonical HTTP(S).",
+			);
+		}
+		if (
+			(url.protocol !== "http:" && url.protocol !== "https:") ||
+			url.username.length > 0 ||
+			url.password.length > 0 ||
+			url.hash.length > 0 ||
+			url.search.length > 0 ||
+			url.pathname !== "/" ||
+			(raw !== url.origin && raw !== `${url.origin}/`)
+		) {
+			throw new Error(
+				"HttpSandboxAdapter: sandbox URL must be canonical HTTP(S).",
+			);
+		}
+		return url.origin;
 	}
 
 	private async postRun(
 		requestBody: string,
 		timeoutMs: number,
 		headers?: Readonly<Record<string, string>>,
+		signal?: AbortSignal,
+		sanitizeTransportErrors = false,
+		onResponseStatus?: (status: number) => void,
 	): Promise<ExecutorRunResult> {
 		const fetchTimeoutMs = this.options.fetchTimeoutMs ?? timeoutMs + 10_000;
-		const controller = new AbortController();
-		const abortTimer = setTimeout(() => controller.abort(), fetchTimeoutMs);
 
 		try {
-			const res = await this.fetchImpl(`${this.resolveUrl()}/run`, {
-				method: "POST",
-				headers: { "content-type": "application/json", ...headers },
-				body: requestBody,
-				signal: controller.signal,
-			});
-
-			const text = await res.text();
-			let parsed: SandboxRunResult;
+			if (signal?.aborted) {
+				return {
+					ok: false,
+					error: "sandbox request cancelled",
+					logs: [],
+				};
+			}
+			const { res, text } = await settleWithin(
+				async (requestSignal) => {
+					const res = await this.fetchImpl(`${this.resolveUrl()}/run`, {
+						method: "POST",
+						redirect: "error",
+						headers: { "content-type": "application/json", ...headers },
+						body: requestBody,
+						signal: requestSignal,
+					});
+					if (!res.ok) {
+						await res.body?.cancel();
+						return { res, text: "" };
+					}
+					return {
+						res,
+						text: await readResponseTextBounded(res, MAX_RESPONSE_BODY_BYTES),
+					};
+				},
+				fetchTimeoutMs,
+				signal,
+			);
+			onResponseStatus?.(res.status);
+			if (!res.ok) {
+				return {
+					ok: false,
+					error: sanitizeTransportErrors
+						? "sandbox transport failed"
+						: `sandbox request failed (HTTP ${res.status})`,
+					logs: [],
+				};
+			}
+			let decoded: unknown;
 			try {
-				parsed = JSON.parse(text) as SandboxRunResult;
+				decoded = JSON.parse(text);
 			} catch {
 				return {
 					ok: false,
-					error: `sandbox returned non-JSON (HTTP ${res.status}): ${text.slice(0, 200)}`,
+					error: sanitizeTransportErrors
+						? "sandbox transport returned invalid response"
+						: `sandbox returned non-JSON (HTTP ${res.status}): ${text.slice(0, 200)}`,
+					logs: [],
+				};
+			}
+			const parsed = parseSandboxRunResult(decoded);
+			if (!parsed) {
+				return {
+					ok: false,
+					error: sanitizeTransportErrors
+						? "sandbox transport returned invalid response"
+						: "sandbox returned an invalid response",
 					logs: [],
 				};
 			}
@@ -157,16 +291,24 @@ export class HttpSandboxAdapter implements ExecutorAdapter {
 				ms: parsed.ms,
 			};
 		} catch (err) {
-			const aborted = err instanceof Error && err.name === "AbortError";
 			return {
 				ok: false,
-				error: aborted
-					? `sandbox request timed out after ${fetchTimeoutMs}ms`
-					: `sandbox request failed: ${err instanceof Error ? err.message : String(err)}`,
+				error:
+					signal?.aborted || err instanceof OperationCancelledError
+						? "sandbox request cancelled"
+						: err instanceof OperationDeadlineError
+							? sanitizeTransportErrors
+								? "sandbox transport timed out"
+								: `sandbox request timed out after ${fetchTimeoutMs}ms`
+							: err instanceof ResponseBodyTooLargeError
+								? sanitizeTransportErrors
+									? "sandbox transport returned invalid response"
+									: "sandbox returned an invalid response"
+								: sanitizeTransportErrors
+									? "sandbox transport failed"
+									: `sandbox request failed: ${err instanceof Error ? err.message : String(err)}`,
 				logs: [],
 			};
-		} finally {
-			clearTimeout(abortTimer);
 		}
 	}
 
@@ -196,128 +338,321 @@ export class HttpSandboxAdapter implements ExecutorAdapter {
 			memoryMb: caps.memoryMb ?? 128,
 		};
 
-		// Untrusted app-bindings: when the executor service minted a per-run token,
-		// forward broker coordinates. This remains the explicit non-Agent path.
-		const bindings = options.sandboxBindings;
-		const nonAgentAdmissionSecret =
-			this.options.nonAgentAdmissionSecret ??
-			(typeof process !== "undefined"
-				? process.env?.SANDBOX_NON_AGENT_ADMISSION_SECRET
+		// Untrusted app-bindings: when the executor service minted a scoped token,
+		// forward broker coordinates. This remains the explicit trusted-host path.
+		const bindings =
+			options.sandboxBindings ??
+			(options.sandboxTools && options.brokerUrl
+				? { url: options.brokerUrl, token: opaqueBindingToken() }
 				: undefined);
-		return this.postRun(
-			JSON.stringify({
-				mode: "non_agent",
-				source: options.source,
-				input: options.input ?? null,
-				capabilities: sandboxCaps,
-				secrets: options.secrets ?? {},
-				...(bindings ? { bindings } : {}),
-			}),
-			timeoutMs,
-			nonAgentAdmissionSecret
-				? { [NON_AGENT_ADMISSION_HEADER]: nonAgentAdmissionSecret }
-				: undefined,
-		);
+		if (options.sandboxTools && !bindings) {
+			return {
+				ok: false,
+				error: "sandbox custom tools require broker bindings",
+				logs: [],
+			};
+		}
+		const toolsSession =
+			options.sandboxTools && bindings
+				? registerSandboxCustomToolsSession(
+						bindings.token,
+						bindings.url,
+						options.sandboxTools.envelope,
+						timeoutMs + 30_000,
+					)
+				: undefined;
+		const hostAdmissionSecret =
+			this.options.hostAdmissionSecret ??
+			(typeof process !== "undefined"
+				? process.env?.SANDBOX_HOST_ADMISSION_SECRET
+				: undefined);
+		try {
+			return await this.postRun(
+				JSON.stringify({
+					mode: "host",
+					source: options.source,
+					input: options.input ?? null,
+					capabilities: sandboxCaps,
+					secrets: options.secrets ?? {},
+					...(bindings ? { bindings } : {}),
+				}),
+				timeoutMs,
+				hostAdmissionSecret
+					? { [HOST_ADMISSION_HEADER]: hostAdmissionSecret }
+					: undefined,
+			);
+		} finally {
+			toolsSession?.revoke();
+		}
 	}
 
-	async runAgentWorkload(
-		options: AgentWorkloadHttpRunOptions,
+	async runWorkload(
+		options: SandboxWorkloadRunOptions,
 	): Promise<ExecutorRunResult> {
-		const configured = this.options.agentWorkload;
-		if (!configured) {
-			throw new Error(
-				"HttpSandboxAdapter: no Agent workload boundary configured.",
-			);
+		if (options.signal?.aborted) {
+			return {
+				ok: false,
+				error: "sandbox request cancelled",
+				logs: [],
+			};
 		}
-		const session = await configured.boundary.open(options.authority);
-		const prepared = await session.prepare(
-			async ({ principal, guest, context }) => {
-				const sourceDigest = await hashAgentWorkloadSandboxSource(
-					configured.execution.source,
-				);
-				if (sourceDigest !== context.execution.sourceSha256) {
-					throw new AgentWorkloadSandboxDeniedError();
-				}
-				let projectedInput: unknown;
-				try {
-					const projector = await configured.execution.inputProjections.resolve(
-						Object.freeze({
-							id: context.execution.inputProjectionId,
-							skillRevisionId: principal.policies.skillRevisionId,
-							executionPolicyRevisionId:
-								principal.policies.executionPolicyRevisionId,
-							sourceSha256: context.execution.sourceSha256,
-						}),
-					);
-					if (!projector) throw new AgentWorkloadSandboxDeniedError();
-					projectedInput = await projector({
-						principal,
-						disclosure: context.disclosure,
-					});
-				} catch {
-					throw new AgentWorkloadSandboxDeniedError();
-				}
-				const net = [...guest.handles.network.fetch];
-				const importHosts = [...guest.handles.network.import];
-				if (this.validateEgress) {
-					const egress = await validateEgressHosts([...net, ...importHosts]);
-					if (!egress.ok) {
-						throw new AgentWorkloadSandboxDeniedError();
-					}
-				}
-				const requestBody = JSON.stringify({
-					mode: "agent_workload",
-					source: configured.execution.source,
-					input: projectedInput ?? null,
-					capabilities: {
-						net,
-						import: importHosts,
-						timeoutMs: configured.execution.timeoutMs,
-						memoryMb: configured.execution.memoryMb,
-					},
-					secrets: {},
-				});
-				return { requestBody, timeoutMs: configured.execution.timeoutMs };
-			},
+		const configured = this.options.workload;
+		if (!configured) {
+			throw new SandboxWorkloadDeniedError();
+		}
+		const authorizationTimeoutMs = boundedMs(
+			configured.authorizationTimeoutMs,
+			DEFAULT_AUTHORIZATION_TIMEOUT_MS,
+			MAX_AUTHORIZATION_TIMEOUT_MS,
 		);
-		return session.create(async ({ principal, context }) => {
-			const admission = await sealAgentWorkloadSandboxAdmission(
-				configured.admission,
-				{
-					kind: "agent_workload_sandbox_admission",
-					version: 1,
-					admissionId: crypto.randomUUID(),
-					principalId: principal.principalId,
-					runId: principal.run.id,
-					attemptId: principal.run.attemptId,
-					workRequestId: principal.run.workRequestId,
-					companyId: principal.scope.companyId,
-					anchorSpaceId: principal.scope.anchorSpaceId,
-					agentActorId: principal.attribution.agentActorId,
-					skillRevisionId: principal.policies.skillRevisionId,
-					executionPolicyRevisionId:
-						principal.policies.executionPolicyRevisionId,
-					sourceSha256: context.execution.sourceSha256,
-					inputProjectionId: context.execution.inputProjectionId,
-					grantEpoch: principal.epochs.grant,
-					revocationEpoch: principal.epochs.revocation,
-					workerId: principal.execution.workerId,
-					workerLeaseId: principal.execution.workerLeaseId,
-					workerLeaseEpoch: principal.execution.workerLeaseEpoch,
-					supervisorInstanceId: configured.admission.instanceId,
-					expiresAt: new Date(
-						Math.min(
-							Date.parse(principal.expiresAt),
-							Date.now() + MAX_AGENT_ADMISSION_TTL_MS,
+		const auditTimeoutMs = boundedMs(
+			configured.auditTimeoutMs,
+			DEFAULT_AUDIT_TIMEOUT_MS,
+			MAX_AUDIT_TIMEOUT_MS,
+		);
+		const audit = async (
+			event: SandboxWorkloadAuditEvent,
+			required: boolean,
+		): Promise<void> => {
+			if (!configured.audit) return;
+			try {
+				await settleWithin(
+					(signal) => configured.audit!(Object.freeze(event), { signal }),
+					auditTimeoutMs,
+					options.signal,
+				);
+			} catch {
+				if (required) throw new SandboxWorkloadDeniedError();
+			}
+		};
+		const authorize = async (
+			phase: "prepare" | "dispatch",
+		): Promise<SandboxWorkloadPolicy> => {
+			if (options.signal?.aborted) {
+				await audit(
+					{
+						boundary: "sandbox.workload",
+						phase,
+						decision: "denied",
+						reason: "cancelled",
+					},
+					false,
+				);
+				throw new SandboxWorkloadDeniedError();
+			}
+			let resolved: unknown;
+			try {
+				resolved = await settleWithin(
+					(signal) => configured.authorize(options.envelope, { phase, signal }),
+					authorizationTimeoutMs,
+					options.signal,
+				);
+			} catch (error) {
+				await audit(
+					{
+						boundary: "sandbox.workload",
+						phase,
+						decision: "denied",
+						reason:
+							options.signal?.aborted ||
+							error instanceof OperationCancelledError
+								? "cancelled"
+								: error instanceof OperationDeadlineError
+									? "authorization_timed_out"
+									: "authorization_failed",
+					},
+					false,
+				);
+				throw new SandboxWorkloadDeniedError();
+			}
+			const policy = snapshotSandboxWorkloadPolicy(resolved);
+			if (!policy) {
+				await audit(
+					{
+						boundary: "sandbox.workload",
+						phase,
+						decision: "denied",
+						reason: "policy_invalid",
+					},
+					false,
+				);
+				throw new SandboxWorkloadDeniedError();
+			}
+			return policy;
+		};
+
+		const prepared = await authorize("prepare");
+		if (this.validateEgress) {
+			let egress;
+			try {
+				egress = await settleWithin(
+					(signal) =>
+						validateEgressHosts(
+							[...prepared.capabilities.net, ...prepared.capabilities.import],
+							{
+								signal,
+								timeoutMs: authorizationTimeoutMs,
+								concurrency: 4,
+							},
 						),
-					).toISOString(),
+					authorizationTimeoutMs,
+					options.signal,
+				);
+			} catch {
+				await audit(
+					{
+						boundary: "sandbox.workload",
+						phase: "prepare",
+						decision: "denied",
+						reason: options.signal?.aborted ? "cancelled" : "egress_denied",
+					},
+					false,
+				);
+				throw new SandboxWorkloadDeniedError();
+			}
+			if (!egress.ok) {
+				await audit(
+					{
+						boundary: "sandbox.workload",
+						phase: "prepare",
+						decision: "denied",
+						reason: "egress_denied",
+					},
+					false,
+				);
+				throw new SandboxWorkloadDeniedError();
+			}
+		}
+		const current = await authorize("dispatch");
+		if (
+			serializeSandboxWorkloadPolicy(prepared) !==
+				serializeSandboxWorkloadPolicy(current) ||
+			prepared.sandboxTools?.envelope !== current.sandboxTools?.envelope
+		) {
+			await audit(
+				{
+					boundary: "sandbox.workload",
+					phase: "dispatch",
+					decision: "denied",
+					reason: "policy_changed",
 				},
-				prepared.requestBody,
+				false,
 			);
-			return this.postRun(prepared.requestBody, prepared.timeoutMs, {
-				[AGENT_WORKLOAD_ADMISSION_HEADER]: admission,
-			});
-		});
+			throw new SandboxWorkloadDeniedError();
+		}
+		await audit(
+			{
+				boundary: "sandbox.workload",
+				phase: "dispatch",
+				decision: "allowed",
+				reason: "authorization_succeeded",
+			},
+			true,
+		);
+
+		let result: ExecutorRunResult;
+		let responseStatus: number | undefined;
+		try {
+			if (options.signal?.aborted) {
+				result = {
+					ok: false,
+					error: "sandbox request cancelled",
+					logs: [],
+				};
+			} else {
+				const requestBody = JSON.stringify({
+					mode: "workload",
+					source: current.source,
+					input: current.input ?? null,
+					capabilities: current.capabilities,
+					secrets: current.secrets ?? {},
+					...(current.bindings ? { bindings: current.bindings } : {}),
+				});
+				if (
+					new TextEncoder().encode(requestBody).byteLength >
+					MAX_REQUEST_BODY_BYTES
+				) {
+					throw new SandboxWorkloadDeniedError();
+				}
+				const now = Date.now();
+				const expiresAt = new Date(
+					Math.min(
+						current.validUntil
+							? Date.parse(current.validUntil)
+							: Number.POSITIVE_INFINITY,
+						now + MAX_WORKLOAD_ADMISSION_TTL_MS,
+					),
+				).toISOString();
+				const admission = await sealSandboxWorkloadAdmission(
+					configured.admission,
+					{
+						kind: "sandbox_workload_admission",
+						version: 1,
+						admissionId: crypto.randomUUID(),
+						supervisorInstanceId: configured.admission.instanceId,
+						expiresAt,
+					},
+					requestBody,
+				);
+				const toolsSession =
+					current.sandboxTools && current.bindings
+						? registerSandboxCustomToolsSession(
+								current.bindings.token,
+								current.bindings.url,
+								current.sandboxTools.envelope,
+								current.capabilities.timeoutMs + 30_000,
+							)
+						: undefined;
+				try {
+					result = await this.postRun(
+						requestBody,
+						current.capabilities.timeoutMs,
+						{ [WORKLOAD_ADMISSION_HEADER]: admission },
+						options.signal,
+						true,
+						(status) => {
+							responseStatus = status;
+						},
+					);
+				} finally {
+					toolsSession?.revoke();
+				}
+			}
+		} catch {
+			await audit(
+				{
+					boundary: "sandbox.workload",
+					phase: "transport",
+					decision: "denied",
+					reason: "transport_failed",
+				},
+				false,
+			);
+			throw new SandboxWorkloadDeniedError();
+		}
+		const terminal =
+			responseStatus !== undefined &&
+			(responseStatus < 200 || responseStatus >= 300)
+				? ("transport_denied" as const)
+				: result.error === "sandbox request cancelled"
+					? ("transport_cancelled" as const)
+					: result.error === "sandbox transport timed out"
+						? ("transport_timed_out" as const)
+						: result.error === "sandbox transport returned invalid response"
+							? ("transport_invalid_response" as const)
+							: result.error === "sandbox transport failed"
+								? ("transport_failed" as const)
+								: ("transport_completed" as const);
+		await audit(
+			{
+				boundary: "sandbox.workload",
+				phase: "transport",
+				decision: terminal === "transport_completed" ? "allowed" : "denied",
+				reason: terminal,
+			},
+			false,
+		);
+		return result;
 	}
 }
 

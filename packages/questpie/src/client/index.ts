@@ -1,5 +1,4 @@
 import qs from "qs";
-import superjson from "superjson";
 
 import type { GlobalSchema } from "#questpie/server/global/introspection.js";
 import type {
@@ -8,11 +7,12 @@ import type {
 	InferRouteOutput,
 	JsonRouteDefinition,
 	RawRouteDefinition,
-	RouteDefinition,
 } from "#questpie/server/routes/types.js";
+import { attachTxid, QUESTPIE_TXID_HEADER } from "#questpie/shared/txid.js";
 import type {
 	AnyCollection,
 	AnyCollectionOrBuilder,
+	CollectionHasSoftDelete,
 	CollectionInsert,
 	CollectionRelations,
 	CollectionUpdate,
@@ -22,6 +22,10 @@ import type {
 	GlobalUpdate,
 	ResolveRelationsDeep,
 } from "#questpie/shared/type-utils.js";
+import {
+	parseTypedWire,
+	stringifyTypedWire,
+} from "#questpie/shared/typed-wire.js";
 
 import type { ChannelDefinitions } from "../server/channels/channel-builder.js";
 import type {
@@ -38,14 +42,23 @@ import type {
 	With,
 } from "../server/collection/crud/types.js";
 import type { GlobalUpdateInput } from "../server/global/crud/types.js";
+import type {
+	CrdtClientAPI,
+	CrdtRegistryShape,
+} from "../server/modules/core/integrated/crdt/types.js";
 import type { GetAuthHeaders } from "./auth.js";
 import { createChannelsAPI, type ChannelsClient } from "./channels/index.js";
+import { createCrdtClientAPI } from "./crdt/index.js";
+import type { CrdtClientRuntimeConfig } from "./crdt/types.js";
 import {
 	buildCollectionTopic,
 	buildGlobalTopic,
 	createRealtimeAPI,
 	type RealtimeAPI,
 } from "./realtime/index.js";
+import { PusherConnectionManager } from "./realtime/pusher-connection.js";
+import { createRealtimeClientSession } from "./realtime/session.js";
+import { SseConnectionManager } from "./realtime/sse-connection.js";
 
 export type { AuthHeaders, GetAuthHeaders } from "./auth.js";
 
@@ -130,6 +143,7 @@ import type { AnyGlobal, GetGlobal } from "#questpie/shared/type-utils.js";
 export interface QuestpieApp {
 	collections: Record<string, AnyCollectionOrBuilder>;
 	channels?: ChannelDefinitions;
+	crdt?: CrdtRegistryShape;
 	globals?: Record<string, any>;
 	routes?: Record<string, any>;
 	auth?: any;
@@ -266,6 +280,12 @@ export type QuestpieClientConfig = {
 	 * @default true
 	 */
 	useSuperJSON?: boolean;
+
+	/**
+	 * Optional collaborative-document runtime. Merely creating the client or a
+	 * document handle is inert; browser storage and transport start at connect().
+	 */
+	crdt?: CrdtClientRuntimeConfig;
 };
 
 /**
@@ -397,12 +417,29 @@ type ClientRow<
 	TCollections extends Record<string, AnyCollectionOrBuilder>,
 > = CollectionSelectFromApp<TCollection, { collections: TCollections }>;
 
+type CollectionPurgeAPI<TCollection> =
+	CollectionHasSoftDelete<TCollection> extends true
+		? {
+				/**
+				 * Permanently purge a soft-deleted record by ID.
+				 *
+				 * Purge has separate server authorization from delete and rejects
+				 * active records. It intentionally has no alias.
+				 */
+				purgeById: (
+					params: { id: string },
+					options?: LocaleOptions,
+				) => Promise<{ success: true }>;
+			}
+		: {};
+
 /**
  * Type-safe collection API for a single collection
  */
 type CollectionAPI<
 	TCollection extends AnyCollection,
 	TCollections extends Record<string, AnyCollectionOrBuilder>,
+	TDefinition = TCollection,
 > = {
 	/**
 	 * Find many records (paginated)
@@ -684,7 +721,7 @@ type CollectionAPI<
 	 * Includes evaluated access control for the current user and JSON Schema for validation
 	 */
 	schema: () => Promise<CollectionSchema>;
-};
+} & CollectionPurgeAPI<TDefinition>;
 
 /**
  * Collections API proxy with type-safe collection methods
@@ -692,7 +729,8 @@ type CollectionAPI<
 type CollectionsAPI<T extends QuestpieApp> = {
 	[K in keyof T["collections"]]: CollectionAPI<
 		GetCollection<T["collections"], K>,
-		T["collections"]
+		T["collections"],
+		T["collections"][K]
 	>;
 };
 
@@ -896,15 +934,6 @@ export interface SearchOptions {
 export interface SearchMeta {
 	/** Relevance score from search */
 	score: number;
-	/** Highlighted snippets with <mark> tags */
-	highlights?: {
-		title?: string;
-		content?: string;
-	};
-	/** Title as stored in search index */
-	indexedTitle: string;
-	/** Content preview from search index */
-	indexedContent?: string;
 }
 
 /**
@@ -985,6 +1014,11 @@ type RouteCallOptions = Omit<RequestInit, "method"> & {
 export type QuestpieClient<in out TApp extends QuestpieApp> = {
 	collections: CollectionsAPI<TApp>;
 	channels: ChannelsClient<AppChannelDefinitions<TApp>>;
+	crdt: CrdtClientAPI<
+		NonNullable<TApp["crdt"]> extends CrdtRegistryShape
+			? NonNullable<TApp["crdt"]>
+			: { collections: {}; globals: {} }
+	>;
 	globals: GlobalsAPI<TApp>;
 	routes: RoutesClient<TApp["routes"]>;
 	search: SearchAPI;
@@ -1033,10 +1067,14 @@ export function createClient<TApp extends QuestpieApp>(
 	/**
 	 * Make a request to the app API
 	 */
-	async function request(
+	type QuestpieRequestInit = RequestInit & {
+		json?: unknown;
+	};
+
+	async function requestWithMeta(
 		path: string,
-		options: RequestInit = {},
-	): Promise<any> {
+		options: QuestpieRequestInit = {},
+	): Promise<{ data: any; headers: Headers }> {
 		const url = `${config.baseURL}${path}`;
 		const useSuperJSON = config.useSuperJSON !== false; // default true
 
@@ -1056,19 +1094,16 @@ export function createClient<TApp extends QuestpieApp>(
 			headers["X-SuperJSON"] = "1";
 		}
 
-		// Serialize body with SuperJSON if enabled
-		let body = options.body;
-		if (body && typeof body === "string" && useSuperJSON) {
-			try {
-				const parsed = JSON.parse(body);
-				body = superjson.stringify(parsed);
-			} catch {
-				// If parsing fails, keep original body
-			}
-		}
+		const { json, ...requestOptions } = options;
+		const body =
+			json === undefined
+				? requestOptions.body
+				: useSuperJSON
+					? stringifyTypedWire(json)
+					: JSON.stringify(json);
 
 		const response = await fetcher(url, {
-			...options,
+			...requestOptions,
 			headers,
 			body,
 			credentials: "include", // Ensure cookies are sent with requests
@@ -1082,7 +1117,7 @@ export function createClient<TApp extends QuestpieApp>(
 				const text = await response.text();
 				if (text) {
 					errorData = responseContentType?.includes("superjson")
-						? superjson.parse(text)
+						? parseTypedWire(text)
 						: JSON.parse(text);
 				}
 			} catch {
@@ -1119,69 +1154,123 @@ export function createClient<TApp extends QuestpieApp>(
 		// Parse successful response (could be SuperJSON or regular JSON)
 		const responseContentType = response.headers.get("Content-Type");
 		const text = await response.text();
-		if (!text) return undefined;
+		if (!text) return { data: undefined, headers: response.headers };
 
-		return responseContentType?.includes("superjson")
-			? superjson.parse(text)
-			: JSON.parse(text);
+		return {
+			data: responseContentType?.includes("superjson")
+				? parseTypedWire(text)
+				: JSON.parse(text),
+			headers: response.headers,
+		};
 	}
 
+	async function request(
+		path: string,
+		options: QuestpieRequestInit = {},
+	): Promise<any> {
+		return (await requestWithMeta(path, options)).data;
+	}
+
+	async function mutationRequest(
+		path: string,
+		options: QuestpieRequestInit,
+	): Promise<any> {
+		const { data, headers } = await requestWithMeta(path, options);
+		return attachTxid(data, headers.get(QUESTPIE_TXID_HEADER));
+	}
+
+	const refetchRealtimeTopic = async (
+		topic: Parameters<RealtimeAPI["subscribe"]>[0],
+	): Promise<unknown> => {
+		if (topic.resourceType === "collection") {
+			if (topic.operation === "count") {
+				const queryString = qs.stringify(
+					{ where: topic.where, locale: topic.locale },
+					{ skipNulls: true, arrayFormat: "brackets" },
+				);
+				const result = await request(
+					`${apiBasePath}/${topic.resource}/count${queryString ? `?${queryString}` : ""}`,
+				);
+				return result.count;
+			}
+			if (topic.operation === "get") {
+				const queryString = qs.stringify(
+					{ with: topic.with, locale: topic.locale },
+					{ skipNulls: true, arrayFormat: "brackets" },
+				);
+				return request(
+					`${apiBasePath}/${topic.resource}/${topic.id}${queryString ? `?${queryString}` : ""}`,
+				);
+			}
+			const queryString = qs.stringify(
+				{
+					where: topic.where,
+					with: topic.with,
+					limit: topic.limit,
+					offset: topic.offset,
+					orderBy: topic.orderBy,
+					locale: topic.locale,
+				},
+				{ skipNulls: true, arrayFormat: "brackets" },
+			);
+			return request(
+				`${apiBasePath}/${topic.resource}${queryString ? `?${queryString}` : ""}`,
+			);
+		}
+		const queryString = qs.stringify(
+			{ where: topic.where, with: topic.with, locale: topic.locale },
+			{ skipNulls: true, arrayFormat: "brackets" },
+		);
+		return request(
+			`${apiBasePath}/globals/${topic.resource}${queryString ? `?${queryString}` : ""}`,
+		);
+	};
+	const pusherConnection = new PusherConnectionManager();
+	const sseConnection = new SseConnectionManager({
+		baseUrl: `${config.baseURL}${apiBasePath}`,
+		withCredentials: true,
+		fetcher,
+		getAuthHeaders: config.getAuthHeaders,
+		debounceMs: 50,
+	});
+	const realtimeSession = createRealtimeClientSession({
+		baseUrl: `${config.baseURL}${apiBasePath}`,
+		withCredentials: true,
+		debounceMs: 50,
+		getAuthHeaders: config.getAuthHeaders,
+		fetcher,
+		pusherConnection,
+		sseConnection,
+		refetchTopic: refetchRealtimeTopic,
+	});
 	const realtimeApi = createRealtimeAPI({
 		baseUrl: `${config.baseURL}${apiBasePath}`,
 		withCredentials: true,
 		debounceMs: 50,
 		getAuthHeaders: config.getAuthHeaders,
 		fetcher,
-		refetchTopic: async (topic) => {
-			if (topic.resourceType === "collection") {
-				if (topic.operation === "count") {
-					const queryString = qs.stringify(
-						{ where: topic.where, locale: topic.locale },
-						{ skipNulls: true, arrayFormat: "brackets" },
-					);
-					const result = await request(
-						`${apiBasePath}/${topic.resource}/count${queryString ? `?${queryString}` : ""}`,
-					);
-					return result.count;
-				}
-				if (topic.operation === "get") {
-					const queryString = qs.stringify(
-						{ with: topic.with, locale: topic.locale },
-						{ skipNulls: true, arrayFormat: "brackets" },
-					);
-					return request(
-						`${apiBasePath}/${topic.resource}/${topic.id}${queryString ? `?${queryString}` : ""}`,
-					);
-				}
-				const queryString = qs.stringify(
-					{
-						where: topic.where,
-						with: topic.with,
-						limit: topic.limit,
-						offset: topic.offset,
-						orderBy: topic.orderBy,
-						locale: topic.locale,
-					},
-					{ skipNulls: true, arrayFormat: "brackets" },
-				);
-				return request(
-					`${apiBasePath}/${topic.resource}${queryString ? `?${queryString}` : ""}`,
-				);
-			}
-			const queryString = qs.stringify(
-				{ where: topic.where, with: topic.with, locale: topic.locale },
-				{ skipNulls: true, arrayFormat: "brackets" },
-			);
-			return request(
-				`${apiBasePath}/globals/${topic.resource}${queryString ? `?${queryString}` : ""}`,
-			);
-		},
+		pusherConnection,
+		sseConnection,
+		refetchTopic: refetchRealtimeTopic,
+		realtimeSession,
 	});
 	const channelsApi = createChannelsAPI<AppChannelDefinitions<TApp>>({
 		baseUrl: `${config.baseURL}${apiBasePath}`,
 		withCredentials: true,
 		fetcher,
+		useSuperJSON: config.useSuperJSON !== false,
 		getAuthHeaders: config.getAuthHeaders,
+		pusherConnection,
+		sseConnection,
+	});
+	const crdtApi = createCrdtClientAPI({
+		baseURL: config.baseURL,
+		basePath: apiBasePath,
+		fetcher,
+		defaultHeaders,
+		getAuthHeaders: config.getAuthHeaders,
+		runtime: config.crdt,
+		realtimeSession,
 	});
 
 	/**
@@ -1278,9 +1367,9 @@ export function createClient<TApp extends QuestpieApp>(
 						arrayFormat: "brackets",
 					});
 					const path = `${apiBasePath}/${collectionName}${queryString ? `?${queryString}` : ""}`;
-					return request(path, {
+					return mutationRequest(path, {
 						method: "POST",
-						body: JSON.stringify(data),
+						json: data,
 					});
 				},
 
@@ -1293,9 +1382,9 @@ export function createClient<TApp extends QuestpieApp>(
 						arrayFormat: "brackets",
 					});
 					const path = `${apiBasePath}/${collectionName}/${id}${queryString ? `?${queryString}` : ""}`;
-					return request(path, {
+					return mutationRequest(path, {
 						method: "PATCH",
-						body: JSON.stringify(data),
+						json: data,
 					});
 				},
 
@@ -1305,7 +1394,7 @@ export function createClient<TApp extends QuestpieApp>(
 						arrayFormat: "brackets",
 					});
 					const path = `${apiBasePath}/${collectionName}/${id}${queryString ? `?${queryString}` : ""}`;
-					return request(path, {
+					return mutationRequest(path, {
 						method: "DELETE",
 					});
 				},
@@ -1319,7 +1408,21 @@ export function createClient<TApp extends QuestpieApp>(
 						arrayFormat: "brackets",
 					});
 					const path = `${apiBasePath}/${collectionName}/${id}/restore${queryString ? `?${queryString}` : ""}`;
-					return request(path, {
+					return mutationRequest(path, {
+						method: "POST",
+					});
+				},
+
+				purgeById: async (
+					{ id }: { id: string },
+					options: LocaleOptions = {},
+				) => {
+					const queryString = qs.stringify(options, {
+						skipNulls: true,
+						arrayFormat: "brackets",
+					});
+					const path = `${apiBasePath}/${collectionName}/${id}/purge${queryString ? `?${queryString}` : ""}`;
+					return mutationRequest(path, {
 						method: "POST",
 					});
 				},
@@ -1360,9 +1463,9 @@ export function createClient<TApp extends QuestpieApp>(
 						arrayFormat: "brackets",
 					});
 					const path = `${apiBasePath}/${collectionName}/${id}/revert${queryString ? `?${queryString}` : ""}`;
-					return request(path, {
+					return mutationRequest(path, {
 						method: "POST",
-						body: JSON.stringify({ version, versionId }),
+						json: { version, versionId },
 					});
 				},
 
@@ -1388,7 +1491,7 @@ export function createClient<TApp extends QuestpieApp>(
 					};
 					return request(path, {
 						method: "POST",
-						body: JSON.stringify(body),
+						json: body,
 					});
 				},
 
@@ -1401,9 +1504,9 @@ export function createClient<TApp extends QuestpieApp>(
 						arrayFormat: "brackets",
 					});
 					const path = `${apiBasePath}/${collectionName}${queryString ? `?${queryString}` : ""}`;
-					return request(path, {
+					return mutationRequest(path, {
 						method: "PATCH",
-						body: JSON.stringify({ where, data }),
+						json: { where, data },
 					});
 				},
 
@@ -1416,9 +1519,9 @@ export function createClient<TApp extends QuestpieApp>(
 						arrayFormat: "brackets",
 					});
 					const path = `${apiBasePath}/${collectionName}/update-batch${queryString ? `?${queryString}` : ""}`;
-					return request(path, {
+					return mutationRequest(path, {
 						method: "POST",
-						body: JSON.stringify({ updates }),
+						json: { updates },
 					});
 				},
 
@@ -1431,9 +1534,9 @@ export function createClient<TApp extends QuestpieApp>(
 						arrayFormat: "brackets",
 					});
 					const path = `${apiBasePath}/${collectionName}/delete-many${queryString ? `?${queryString}` : ""}`;
-					return request(path, {
+					return mutationRequest(path, {
 						method: "POST",
-						body: JSON.stringify({ where }),
+						json: { where },
 					});
 				},
 
@@ -1689,11 +1792,11 @@ export function createClient<TApp extends QuestpieApp>(
 						},
 						{ skipNulls: true, arrayFormat: "brackets" },
 					);
-					return request(
+					return mutationRequest(
 						`${apiBasePath}/globals/${globalName}${queryString ? `?${queryString}` : ""}`,
 						{
 							method: "PATCH",
-							body: JSON.stringify(data),
+							json: data,
 						},
 					);
 				},
@@ -1747,11 +1850,11 @@ export function createClient<TApp extends QuestpieApp>(
 						},
 						{ skipNulls: true, arrayFormat: "brackets" },
 					);
-					return request(
+					return mutationRequest(
 						`${apiBasePath}/globals/${globalName}/revert${queryString ? `?${queryString}` : ""}`,
 						{
 							method: "POST",
-							body: JSON.stringify(params),
+							json: params,
 						},
 					);
 				},
@@ -1774,7 +1877,7 @@ export function createClient<TApp extends QuestpieApp>(
 						`${apiBasePath}/globals/${globalName}/transition${queryString ? `?${queryString}` : ""}`,
 						{
 							method: "POST",
-							body: JSON.stringify({
+							json: {
 								stage: params.stage,
 								...(params.scheduledAt !== undefined
 									? {
@@ -1784,7 +1887,7 @@ export function createClient<TApp extends QuestpieApp>(
 													: params.scheduledAt,
 										}
 									: {}),
-							}),
+							},
 						},
 					);
 				},
@@ -1801,7 +1904,7 @@ export function createClient<TApp extends QuestpieApp>(
 		search: async (options: SearchOptions) => {
 			return request(`${apiBasePath}/search`, {
 				method: "POST",
-				body: JSON.stringify(options),
+				json: options,
 			});
 		},
 
@@ -1832,7 +1935,7 @@ export function createClient<TApp extends QuestpieApp>(
 			const path = segments.map(camelToKebab).join("/");
 			return request(`${apiBasePath}/${path}`, {
 				method: "POST",
-				body: input !== undefined ? JSON.stringify(input) : undefined,
+				json: input,
 			});
 		};
 
@@ -1860,7 +1963,7 @@ export function createClient<TApp extends QuestpieApp>(
 						}
 						return request(`${apiBasePath}/${path}`, {
 							method: methodUpper,
-							body: input !== undefined ? JSON.stringify(input) : undefined,
+							json: input,
 						});
 					};
 				}
@@ -1873,7 +1976,7 @@ export function createClient<TApp extends QuestpieApp>(
 				const path = segments.map(camelToKebab).join("/");
 				return request(`${apiBasePath}/${path}`, {
 					method: "POST",
-					body: input !== undefined ? JSON.stringify(input) : undefined,
+					json: input,
 				});
 			},
 		});
@@ -1889,6 +1992,7 @@ export function createClient<TApp extends QuestpieApp>(
 	return {
 		collections,
 		channels: channelsApi,
+		crdt: crdtApi,
 		globals,
 		routes: routesProxy,
 		search,
@@ -1951,14 +2055,23 @@ export type { GlobalMeta } from "#questpie/shared/global-meta.js";
 // Re-export realtime types and helpers
 export type {
 	RealtimeAPI,
+	RealtimeStreamEvent,
 	RealtimeTopicRejectedDetails,
 	RealtimeTopicRejectedPayload,
 	TopicConfig,
 	TopicInput,
 } from "./realtime/index.js";
 export {
+	applyRealtimeFindEvent,
+	applyRealtimeScalarEvent,
+	applyRealtimeSingleEvent,
 	buildCollectionTopic,
 	buildGlobalTopic,
+	deriveFindDeltas,
+	envelopeMeta,
+	realtimeEventResolvesTxid,
+	RealtimeCrdtBindingRejectedError,
+	RealtimeTxidTracker,
 	RealtimeTopicRejectedError,
 } from "./realtime/index.js";
 export type {
@@ -1969,11 +2082,13 @@ export type {
 	ChannelsClient,
 	ChannelSubscribeOptions,
 } from "./channels/index.js";
+export * from "./crdt/index.js";
 // Re-export the query-surface types the client's own method signatures are
 // built from, so consumers (e.g. @questpie/tanstack-query) can derive
 // per-call generics without reaching into server internals.
 export type {
 	ApplyQuery,
+	CollectionSelect as CollectionSelectFromApp,
 	FindManyOptions,
 	FindOneOptionsBase,
 	FindResult,
@@ -1995,3 +2110,9 @@ export type {
 	GlobalSelect,
 	ResolveRelationsDeep,
 } from "#questpie/shared/type-utils.js";
+export {
+	attachTxid,
+	getTxid,
+	QUESTPIE_TXID,
+	QUESTPIE_TXID_HEADER,
+} from "#questpie/shared/txid.js";

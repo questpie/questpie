@@ -23,6 +23,7 @@ export type RealtimeEqualityProjection = Record<string, RealtimeEqualityValue>;
  * bulk changes carry only their affected ids and count.
  */
 export type RealtimeChangePayload = {
+	origin?: "crdt_projection" | "crdt_replace";
 	before?: RealtimeEqualityProjection | null;
 	after?: RealtimeEqualityProjection | null;
 	count?: number;
@@ -31,6 +32,7 @@ export type RealtimeChangePayload = {
 
 export type RealtimeChangeEvent = {
 	seq: number;
+	txid?: string;
 	resourceType: RealtimeResourceType;
 	resource: string;
 	operation: RealtimeOperation;
@@ -67,13 +69,17 @@ export type RealtimeTopics = {
 
 export type RealtimeSubscriptionContext = {
 	/**
-	 * Function to resolve collection dependencies from WITH config.
+	 * Function to resolve collection dependencies from a WITH or WHERE fragment.
 	 * Returns all collections that should trigger refresh (main + relations).
 	 */
 	resolveCollectionDependencies?: (
 		baseCollection: string,
 		withConfig?: Record<string, any>,
 	) => Set<string>;
+	/** Own the relation-name boundary used by conservative payload routing. */
+	resolveCollectionRelationNames?: (
+		baseCollection: string,
+	) => ReadonlySet<string>;
 	/**
 	 * Function to resolve global dependencies from WITH config.
 	 */
@@ -83,7 +89,45 @@ export type RealtimeSubscriptionContext = {
 	) => { collections: Set<string>; globals: Set<string> };
 };
 
+export type RealtimeSubscriptionScopeContext = {
+	principal?: {
+		kind: string;
+		user?: { id?: unknown };
+		tokenId?: unknown;
+	} | null;
+	session?: { user?: { id?: unknown }; session?: { id?: unknown } } | null;
+	locale?: string;
+	stage?: string;
+	accessMode?: string;
+	request?: Request;
+	req?: Request;
+};
+
+export type RealtimeSubscriptionScopeResolver = (
+	context: RealtimeSubscriptionScopeContext,
+) => string | null | undefined | Promise<string | null | undefined>;
+
 export interface RealtimeConfig {
+	/**
+	 * Enables native row-delta emission after every writer replica has been
+	 * upgraded to the commit-order outbox protocol. Keep disabled during the
+	 * first phase of a rolling deployment; snapshot realtime remains available.
+	 *
+	 * @default false
+	 */
+	nativeDeltas?: boolean;
+	/**
+	 * Authoritative server switch for collection/global row live queries.
+	 * Change capture, dependency watches, typed channels, and CRDT stay enabled.
+	 *
+	 * @default true
+	 */
+	rowLiveQueries?: boolean;
+	/**
+	 * Resolve one stable server-owned scope at admission. `null`/`undefined`
+	 * means explicitly unscoped; switching scope requires a new subscription.
+	 */
+	subscriptionScope?: RealtimeSubscriptionScopeResolver;
 	/** Diagnostic event sink. Observer failures are isolated from delivery. */
 	observer?: import("./observer.js").RealtimeObserver;
 	/** Realtime edge-session admission limits. */

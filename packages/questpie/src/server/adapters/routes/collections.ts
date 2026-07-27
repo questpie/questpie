@@ -4,6 +4,9 @@
  * Collection CRUD route handlers.
  */
 
+import { parseRfc3339Instant } from "#questpie/shared/temporal.js";
+import { getTxid, QUESTPIE_TXID_HEADER } from "#questpie/shared/txid.js";
+
 import {
 	introspectCollection,
 	resolveIntrospectionAccess,
@@ -32,6 +35,11 @@ function errorResponse(
 	locale?: string,
 ): Response {
 	return handleError(error, { request, app, locale });
+}
+
+function txidHeaders(result: unknown): HeadersInit | undefined {
+	const txid = getTxid(result);
+	return txid ? { [QUESTPIE_TXID_HEADER]: txid } : undefined;
 }
 
 // ============================================================================
@@ -133,7 +141,7 @@ export async function collectionCreate(
 
 	try {
 		const result = await crud.create(body, resolved.appContext);
-		return smartResponse(result, request);
+		return smartResponse(result, request, 200, txidHeaders(result));
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -214,7 +222,7 @@ export async function collectionUpdate(
 			{ id: params.id as any, data: body },
 			resolved.appContext,
 		);
-		return smartResponse(result, request);
+		return smartResponse(result, request, 200, txidHeaders(result));
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -240,8 +248,11 @@ export async function collectionRemove(
 	}
 
 	try {
-		await crud.deleteById({ id: params.id as any }, resolved.appContext);
-		return smartResponse({ success: true }, request);
+		const result = await crud.deleteById(
+			{ id: params.id as any },
+			resolved.appContext,
+		);
+		return smartResponse({ success: true }, request, 200, txidHeaders(result));
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -341,7 +352,7 @@ export async function collectionRevert(
 			},
 			resolved.appContext,
 		);
-		return smartResponse(result, request);
+		return smartResponse(result, request, 200, txidHeaders(result));
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -398,19 +409,8 @@ export async function collectionTransition(
 		};
 
 		if (payload.scheduledAt !== undefined) {
-			if (
-				typeof payload.scheduledAt !== "string" &&
-				!(payload.scheduledAt instanceof Date)
-			) {
-				throw ApiError.badRequest(
-					"Invalid scheduledAt date",
-					undefined,
-					"error.invalidDateField",
-					{ field: "scheduledAt" },
-				);
-			}
-			const date = new Date(payload.scheduledAt);
-			if (Number.isNaN(date.getTime())) {
+			const date = parseRfc3339Instant(payload.scheduledAt);
+			if (!date) {
 				throw ApiError.badRequest(
 					"Invalid scheduledAt date",
 					undefined,
@@ -452,7 +452,37 @@ export async function collectionRestore(
 			{ id: params.id as any },
 			resolved.appContext,
 		);
-		return smartResponse(result, request);
+		return smartResponse(result, request, 200, txidHeaders(result));
+	} catch (error) {
+		return errorResponse(app, error, request, resolved.appContext.locale);
+	}
+}
+
+export async function collectionPurge(
+	app: Questpie<any>,
+	request: Request,
+	params: Record<string, string>,
+	context?: AdapterContext,
+	config: AdapterConfig<any> = {},
+): Promise<Response> {
+	const resolved = await resolveContext(app, request, config, context);
+	const crud = app.collections[params.collection as any];
+
+	if (!crud) {
+		return errorResponse(
+			app,
+			ApiError.notFound("Collection", params.collection),
+			request,
+			resolved.appContext.locale,
+		);
+	}
+
+	try {
+		const result = await crud.purgeById(
+			{ id: params.id as any },
+			resolved.appContext,
+		);
+		return smartResponse(result, request, 200, txidHeaders(result));
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -495,7 +525,7 @@ export async function collectionUpdateMany(
 	try {
 		const { where, data } = body as { where: any; data: any };
 		const result = await crud.updateMany({ where, data }, resolved.appContext);
-		return smartResponse(result, request);
+		return smartResponse(result, request, 200, txidHeaders(result));
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -538,7 +568,7 @@ export async function collectionUpdateBatch(
 	try {
 		const { updates } = body as { updates: Array<{ id: any; data: any }> };
 		const result = await crud.updateBatch({ updates }, resolved.appContext);
-		return smartResponse(result, request);
+		return smartResponse(result, request, 200, txidHeaders(result));
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -581,7 +611,7 @@ export async function collectionDeleteMany(
 	try {
 		const { where } = body as { where: any };
 		const result = await crud.deleteMany({ where }, resolved.appContext);
-		return smartResponse(result, request);
+		return smartResponse(result, request, 200, txidHeaders(result));
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -847,6 +877,14 @@ export const createCollectionRoutes = <
 			context?: AdapterContext,
 		): Promise<Response> => {
 			return collectionRestore(app, request, params, context, config);
+		},
+
+		purge: async (
+			request: Request,
+			params: { collection: string; id: string },
+			context?: AdapterContext,
+		): Promise<Response> => {
+			return collectionPurge(app, request, params, context, config);
 		},
 
 		updateMany: async (

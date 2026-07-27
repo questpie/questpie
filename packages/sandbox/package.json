@@ -10,6 +10,7 @@
 	"files": [
 		"dist",
 		"src/sandbox-server.ts",
+		"src/broker-wire.ts",
 		"src/guest-entry.ts",
 		"src/net-validation.ts",
 		"src/server-internals.ts",
@@ -17,9 +18,8 @@
 		"src/types.ts",
 		"src/guest-bindings.ts",
 		"src/guest-runtime-source.ts",
-		"src/agent-workload-admission.ts",
-		"src/agent-workload-denial.ts",
-		"src/agent-workload-runtime-audit.ts"
+		"src/workload-admission.ts",
+		"src/workload.ts"
 	],
 	"type": "module",
 	"sideEffects": false,
@@ -34,6 +34,10 @@
 		"./adapter": {
 			"types": "./src/exports/adapter.ts",
 			"default": "./src/exports/adapter.ts"
+		},
+		"./modules/sandbox": {
+			"types": "./src/exports/modules/sandbox.ts",
+			"default": "./src/exports/modules/sandbox.ts"
 		},
 		"./package.json": {
 			"types": "./package.json",
@@ -51,6 +55,10 @@
 				"types": "./dist/adapter.d.mts",
 				"default": "./dist/adapter.mjs"
 			},
+			"./modules/sandbox": {
+				"types": "./dist/modules/sandbox.d.mts",
+				"default": "./dist/modules/sandbox.mjs"
+			},
 			"./package.json": {
 				"types": "./package.json",
 				"default": "./package.json"
@@ -60,17 +68,19 @@
 	"scripts": {
 		"build": "tsdown",
 		"check-types": "tsc --noEmit",
+		"questpie:generate": "bun questpie generate --verbose",
 		"test": "bun test"
 	},
 	"dependencies": {
-		"@questpie/ai": "workspace:*",
+		"@questpie/mcp": "workspace:*",
 		"questpie": "workspace:*"
 	},
 	"devDependencies": {
 		"bun-types": "latest",
-		"tsdown": "^0.18.3"
+		"tsdown": "^0.18.3",
+		"zod": "^4.2.1"
 	},
 	"peerDependencies": {
-		"questpie": "^3.0.0"
+		"questpie": "workspace:^"
 	}
 }

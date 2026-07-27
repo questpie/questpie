@@ -13,8 +13,8 @@ import {
 
 const ROOT_DIR = resolve(import.meta.dir, "..");
 const REQUIRED_REFERENCES = [
-	"ai.md",
 	"channels.md",
+	"collaborative-documents.md",
 	"module-authoring.md",
 	"openapi.md",
 	"reactive-apps.md",

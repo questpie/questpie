@@ -1,4 +1,29 @@
 {
-  "title": "Concepts",
-  "pages": ["collections", "globals", "fields", "relations", "blocks", "access-control", "hooks", "validation", "routes", "jobs", "seeds", "services", "emails", "search", "realtime", "storage", "kv", "sandboxed-code", "configuration", "environment"]
+	"title": "Concepts",
+	"pages": [
+		"collections",
+		"soft-delete-retention",
+		"globals",
+		"fields",
+		"temporal-values",
+		"relations",
+		"blocks",
+		"access-control",
+		"hooks",
+		"validation",
+		"routes",
+		"jobs",
+		"seeds",
+		"services",
+		"emails",
+		"search",
+		"realtime",
+		"scalable-realtime",
+		"collaborative-documents",
+		"storage",
+		"kv",
+		"sandboxed-code",
+		"configuration",
+		"environment"
+	]
 }

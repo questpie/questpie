@@ -9,7 +9,11 @@ import {
 	isRealtimeTopicRejectedPayload,
 	type RealtimeTopicRejectedPayload,
 } from "../../shared/realtime-error.js";
+import { parseCompatibleTypedEventWire } from "../../shared/typed-wire.js";
 import type { GetAuthHeaders } from "../auth.js";
+import type { CrdtRealtimeEdgeCapability } from "./session.js";
+import type { SseConnectionManager } from "./sse-connection.js";
+import type { RealtimeStreamEvent } from "./stream.js";
 import type { RealtimeClientTransport } from "./transport.js";
 
 // ============================================================================
@@ -30,9 +34,12 @@ export type TopicConfig =
 			operation?: "find";
 			where?: Record<string, unknown>;
 			with?: Record<string, unknown>;
+			columns?: Record<string, boolean>;
 			limit?: number;
 			offset?: number;
 			orderBy?: Record<string, "asc" | "desc">;
+			/** Native server deltas are opt-in and shape-gated. */
+			mode?: "snapshot" | "delta";
 	  })
 	| (TopicCommon & {
 			resourceType: "collection";
@@ -58,7 +65,7 @@ export type TopicInput = TopicConfig & {
 	id?: string;
 };
 
-type Subscriber = (data: unknown) => void;
+type Subscriber = (event: RealtimeStreamEvent) => void;
 type ErrorCallback = (error: Error) => void;
 
 type SSEEvent = {
@@ -172,6 +179,7 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 	private readonly maxRetryMs: number;
 	private readonly pingWatchdogMs: number;
 	private readonly random: () => number;
+	private readonly sharedTopicReleases = new Map<string, () => void>();
 
 	constructor(
 		private baseUrl: string,
@@ -183,11 +191,19 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		// `this.fetcher(...)` — an unbound native fetch throws
 		// "Illegal invocation" in browsers when invoked with a foreign `this`.
 		private fetcher: typeof fetch = globalThis.fetch.bind(globalThis),
+		private sharedConnection?: SseConnectionManager,
 	) {
 		this.retryBaseMs = runtime.retryBaseMs ?? 1000;
 		this.maxRetryMs = runtime.maxRetryMs ?? 30_000;
 		this.pingWatchdogMs = runtime.pingWatchdogMs ?? 25_000;
 		this.random = runtime.random ?? Math.random;
+	}
+
+	acquire(signal?: AbortSignal): Promise<CrdtRealtimeEdgeCapability> {
+		if (!this.sharedConnection) {
+			throw new Error("Shared SSE realtime session is unavailable");
+		}
+		return this.sharedConnection.acquire(signal);
 	}
 
 	/**
@@ -270,6 +286,49 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 
 	private applyTopologyChange(topicId: string): void {
 		if (this.destroyed) return;
+		if (this.sharedConnection) {
+			const topic = this.topics.get(topicId);
+			if (!topic) {
+				this.sharedTopicReleases.get(topicId)?.();
+				this.sharedTopicReleases.delete(topicId);
+				return;
+			}
+			if (this.sharedTopicReleases.has(topicId)) return;
+			try {
+				const release = this.sharedConnection.registerTopic({
+					id: topicId,
+					openPayload: () => ({
+						...topic,
+						...(topic.resourceType === "collection" && topic.operation === "get"
+							? { recordId: topic.id }
+							: {}),
+						id: topicId,
+						...(this.lastSeq.has(topicId)
+							? { sinceSeq: this.lastSeq.get(topicId) }
+							: {}),
+					}),
+					desiredPayload: () => ({
+						kind: "query",
+						id: topicId,
+						topic,
+						...(this.lastSeq.has(topicId)
+							? { sinceSeq: this.lastSeq.get(topicId) }
+							: {}),
+					}),
+					onEvent: (event) => this.handleEvent(event),
+					onError: (error) => this.notifyTopicError(topicId, error),
+				});
+				this.sharedTopicReleases.set(topicId, release);
+			} catch (error) {
+				queueMicrotask(() =>
+					this.notifyTopicError(
+						topicId,
+						error instanceof Error ? error : new Error(String(error)),
+					),
+				);
+			}
+			return;
+		}
 		this.pendingControlTopicIds.add(topicId);
 		if (this.controlSession) {
 			if (this.topics.size === 0) {
@@ -302,14 +361,14 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		this.pendingControlTopicIds.clear();
 		const topology = {
 			protocol: "questpie-realtime-topology" as const,
-			version: 1 as const,
+			version: 2 as const,
 			revision: ++this.desiredRevision,
-			topics: [...this.topics.entries()].map(([id, topic]) => ({
+			subscriptions: [...this.topics.entries()].map(([id, topic]) => ({
+				kind: "query" as const,
 				id,
 				topic,
 				...(this.lastSeq.has(id) ? { sinceSeq: this.lastSeq.get(id) } : {}),
 			})),
-			channels: [],
 		};
 		this.controlOperation = this.controlOperation
 			.then(async () => {
@@ -357,12 +416,56 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 
 	private rejectTopic(error: RealtimeTopicRejectedError): void {
 		this.notifyTopicError(error.topicId, error);
+		this.sharedTopicReleases.get(error.topicId)?.();
+		this.sharedTopicReleases.delete(error.topicId);
 		this.subscribers.delete(error.topicId);
 		this.errorCallbacks.delete(error.topicId);
 		this.topics.delete(error.topicId);
 		this.lastSeq.delete(error.topicId);
 		for (const [topicHash, customId] of this.customIds) {
 			if (customId === error.topicId) this.customIds.delete(topicHash);
+		}
+	}
+
+	private failTopic(topicId: string, error: Error): void {
+		if (!this.topics.has(topicId)) return;
+		this.notifyTopicError(topicId, error);
+		this.sharedTopicReleases.get(topicId)?.();
+		this.sharedTopicReleases.delete(topicId);
+		this.subscribers.delete(topicId);
+		this.errorCallbacks.delete(topicId);
+		this.topics.delete(topicId);
+		this.lastSeq.delete(topicId);
+		for (const [topicHash, customId] of this.customIds) {
+			if (customId === topicId) this.customIds.delete(topicHash);
+		}
+		this.applyTopologyChange(topicId);
+	}
+
+	private failProtocolEvent(data: string, cause: unknown): void {
+		const normalized =
+			cause instanceof Error ? cause : new Error(String(cause));
+		const error = new Error(
+			`Realtime typed event protocol error: ${normalized.message}`,
+		);
+		let topicId: string | undefined;
+		try {
+			const legacyFrame = JSON.parse(data) as unknown;
+			if (
+				legacyFrame &&
+				typeof legacyFrame === "object" &&
+				typeof (legacyFrame as { topicId?: unknown }).topicId === "string"
+			) {
+				topicId = (legacyFrame as { topicId: string }).topicId;
+			}
+		} catch {}
+
+		if (topicId && this.topics.has(topicId)) {
+			this.failTopic(topicId, error);
+			return;
+		}
+		for (const activeTopicId of this.topics.keys()) {
+			this.failTopic(activeTopicId, error);
 		}
 	}
 
@@ -453,7 +556,9 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 			const response = await this.fetcher(`${this.baseUrl}/realtime`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json", ...authHeaders },
-				body: JSON.stringify({ topics: getTopicsPayload() }),
+				body: JSON.stringify({
+					topics: getTopicsPayload(),
+				}),
 				credentials: this.withCredentials ? "include" : "omit",
 				signal: this.abortController.signal,
 			});
@@ -547,25 +652,37 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 	 * Handle a parsed SSE event.
 	 */
 	private handleEvent(event: SSEEvent): void {
-		if (event.type === "snapshot") {
+		if (
+			event.type === "snapshot" ||
+			event.type === "insert" ||
+			event.type === "update" ||
+			event.type === "delete" ||
+			event.type === "up-to-date"
+		) {
 			try {
-				const { topicId, seq, data } = JSON.parse(event.data) as {
-					topicId: string;
-					seq: number;
-					data: unknown;
-				};
-				if (Number.isSafeInteger(seq) && seq >= 0) {
-					this.lastSeq.set(topicId, seq);
+				const payload = {
+					...parseCompatibleTypedEventWire<Record<string, unknown>>(event.data),
+					type: event.type,
+				} as RealtimeStreamEvent;
+				if (
+					typeof payload.topicId !== "string" ||
+					!Number.isSafeInteger(payload.seq) ||
+					payload.seq < 0
+				) {
+					throw new Error("Invalid realtime event envelope");
+				}
+				if (Number.isSafeInteger(payload.seq) && payload.seq >= 0) {
+					this.lastSeq.set(payload.topicId, payload.seq);
 				}
 				this.reconnectAttempts = 0;
-				const subs = this.subscribers.get(topicId);
+				const subs = this.subscribers.get(payload.topicId);
 				if (subs) {
 					for (const callback of subs) {
-						callback(data);
+						callback(payload);
 					}
 				}
-			} catch {
-				// Ignore parse errors
+			} catch (error) {
+				this.failProtocolEvent(event.data, error);
 			}
 		} else if (event.type === "session") {
 			try {
@@ -574,14 +691,14 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 					session.sessionId &&
 					session.token &&
 					session.control?.protocol === "questpie-realtime-topology" &&
-					session.control.versions.includes(1)
+					session.control.versions.includes(2)
 				) {
 					this.controlSession = session;
 					this.scheduleControlFlush();
 				} else {
 					this.notifyTopicError(
 						"*",
-						new Error("Realtime server does not support desired topology v1"),
+						new Error("Realtime server does not support desired topology v2"),
 					);
 					this.reconnectPending = true;
 					this.abortController?.abort();
@@ -650,6 +767,8 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 	 */
 	destroy(): void {
 		this.destroyed = true;
+		for (const release of this.sharedTopicReleases.values()) release();
+		this.sharedTopicReleases.clear();
 		this.abortController?.abort();
 		if (this.reconnectTimer) {
 			clearTimeout(this.reconnectTimer);

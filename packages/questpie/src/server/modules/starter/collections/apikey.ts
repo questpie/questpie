@@ -24,6 +24,10 @@ export default collection("apikey")
 		metadata: f.textarea(),
 	}))
 	.access({
+		read: false,
+		create: false,
+		update: false,
+		delete: false,
 		fields: {
 			key: { read: false, create: false, update: false },
 		},

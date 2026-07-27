@@ -6,17 +6,14 @@ import type { AccessMode } from "#questpie/server/config/types.js";
 // ============================================================================
 
 /** Hook-specific fields for global collection hooks. */
-export type GlobalCollectionHookContextFields<
-	TData = any,
-	TOriginal = any,
-> = {
+export type GlobalCollectionHookContextFields<TData = any, TOriginal = any> = {
 	/** The name/slug of the collection being operated on */
 	collection: string;
 	data: TData;
 	original: TOriginal | undefined;
 	locale?: string;
 	accessMode?: AccessMode;
-	operation: "create" | "update" | "delete";
+	operation: "create" | "update" | "delete" | "purge";
 	/** True when this hook is invoked as part of a bulk operation (updateMany/deleteMany) */
 	isBatch?: boolean;
 	/** IDs of all affected records in the batch */
@@ -39,8 +36,11 @@ export type GlobalCollectionHookContextFields<
  * Context passed to global collection hooks.
  * Extends the lazy {@link ResolvedAppHookContext} infra seam; generated apps fill it (and augment full {@link AppContext}) separately.
  */
-export type GlobalCollectionHookContext<TData = any, TOriginal = any> =
-	GlobalCollectionHookContextFields<TData, TOriginal> & ResolvedAppHookContext;
+export type GlobalCollectionHookContext<
+	TData = any,
+	TOriginal = any,
+> = GlobalCollectionHookContextFields<TData, TOriginal> &
+	ResolvedAppHookContext;
 
 /**
  * Context passed to global collection hooks before the collection name is injected.
@@ -95,6 +95,8 @@ export interface GlobalCollectionHookEntry {
 	afterChange?: (ctx: GlobalCollectionHookContext) => Promise<void> | void;
 	beforeDelete?: (ctx: GlobalCollectionHookContext) => Promise<void> | void;
 	afterDelete?: (ctx: GlobalCollectionHookContext) => Promise<void> | void;
+	beforePurge?: (ctx: GlobalCollectionHookContext) => Promise<void> | void;
+	afterPurge?: (ctx: GlobalCollectionHookContext) => Promise<void> | void;
 	beforeTransition?: (
 		ctx: GlobalCollectionTransitionHookContext,
 	) => Promise<void> | void;

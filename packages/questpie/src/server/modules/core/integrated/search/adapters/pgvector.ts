@@ -2,7 +2,7 @@
  * PgVectorSearchAdapter
  *
  * Extends PostgresSearchAdapter capabilities with semantic/embedding search.
- * Combines FTS + trigram + pgvector for hybrid lexical + semantic search.
+ * Adds authorized pgvector semantic search to the Postgres lexical adapter.
  *
  * This adapter internally uses PostgresSearchAdapter for lexical search
  * and adds vector similarity search using pgvector extension.
@@ -18,9 +18,6 @@
  *       apiKey: process.env.OPENAI_API_KEY,
  *       model: "text-embedding-3-small",
  *     }),
- *     // Optional: customize hybrid scoring
- *     lexicalWeight: 0.4,
- *     semanticWeight: 0.6,
  *   }),
  *   db: { url: process.env.DATABASE_URL! },
  *   app: { url: process.env.APP_URL! },
@@ -46,8 +43,7 @@
  * ### Search Modes
  * - `lexical`: delegates to PostgresSearchAdapter (FTS + trigram)
  * - `semantic`: pure vector similarity using cosine distance
- * - `hybrid`: combines lexical + semantic scores
- *   - Formula: `score = lexical_score * lexicalWeight + semantic_score * semanticWeight`
+ * - `hybrid`: rejected until true lexical + semantic fusion ships
  *
  * ### Indexing
  * - On `index()`: call embeddingProvider.generate(title + content), store in `embedding` column
@@ -57,7 +53,7 @@
  * - lexical: true (from PostgresSearchAdapter)
  * - trigram: true (from PostgresSearchAdapter, if pg_trgm available)
  * - semantic: true
- * - hybrid: true
+ * - hybrid: false
  */
 
 import { and, eq, inArray, or, sql } from "drizzle-orm";
@@ -65,12 +61,15 @@ import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 
+import { buildAuthorizedCandidateCondition } from "../access-plan.js";
 import { questpieSearchTable } from "../collection.js";
+import { querySearchFacets } from "../facets-query.js";
 import type {
 	AdapterCapabilities,
 	AdapterInitContext,
 	AdapterMigration,
 	EmbeddingProvider,
+	FacetResult,
 	IndexParams,
 	RemoveParams,
 	SearchAdapter,
@@ -114,14 +113,12 @@ export interface PgVectorSearchAdapterOptions extends PostgresSearchAdapterOptio
 	embeddingProvider: EmbeddingProvider;
 
 	/**
-	 * Weight for lexical score in hybrid mode (0-1)
-	 * @default 0.4
+	 * @deprecated Currently ignored. Hybrid is rejected until qualified.
 	 */
 	lexicalWeight?: number;
 
 	/**
-	 * Weight for semantic score in hybrid mode (0-1)
-	 * @default 0.6
+	 * @deprecated Currently ignored. Hybrid is rejected until qualified.
 	 */
 	semanticWeight?: number;
 
@@ -147,24 +144,19 @@ export interface PgVectorSearchAdapterOptions extends PostgresSearchAdapterOptio
  * Modes:
  *  - `lexical`  → base adapter (unchanged).
  *  - `semantic` → embed the query, ORDER BY cosine distance (`<=>`) over `embedding`.
- *  - `hybrid`   → base lexical (FTS + trigram) for now; a fused lexical+semantic
- *                 re-rank is a follow-up. Semantic is the path memory recall needs.
+ *  - `hybrid`   → rejected until a fused lexical+semantic implementation ships.
  */
 export class PgVectorSearchAdapter implements SearchAdapter {
 	readonly name = "pgvector";
 
 	private postgresAdapter: PostgresSearchAdapter;
 	private embeddingProvider: EmbeddingProvider;
-	private lexicalWeight: number;
-	private semanticWeight: number;
 	private indexType: "ivfflat" | "hnsw";
 	private initialized = false;
 	private db: PostgresJsDatabase<any> | null = null;
 
 	constructor(options: PgVectorSearchAdapterOptions) {
 		this.embeddingProvider = options.embeddingProvider;
-		this.lexicalWeight = options.lexicalWeight ?? 0.4;
-		this.semanticWeight = options.semanticWeight ?? 0.6;
 		this.indexType = options.indexType ?? "ivfflat";
 
 		// Create internal PostgresSearchAdapter for lexical search
@@ -179,7 +171,7 @@ export class PgVectorSearchAdapter implements SearchAdapter {
 			lexical: true,
 			trigram: this.postgresAdapter.capabilities.trigram,
 			semantic: true,
-			hybrid: true,
+			hybrid: false,
 			facets: true,
 		};
 	}
@@ -227,17 +219,20 @@ export class PgVectorSearchAdapter implements SearchAdapter {
 	}
 
 	async search(options: SearchOptions): Promise<SearchResponse> {
-		const mode = options.mode ?? "hybrid";
+		const mode = options.mode ?? "lexical";
+
+		if (mode === "hybrid") {
+			throw new Error(
+				'PgVectorSearchAdapter does not support "hybrid" search mode',
+			);
+		}
 
 		// Semantic: embed the query and rank by cosine distance over `embedding`.
 		if (mode === "semantic") {
 			return this.searchSemantic(options);
 		}
 
-		// Lexical + hybrid: delegate to the base adapter (FTS + trigram). A fused
-		// lexical+semantic re-rank for `hybrid` is a follow-up; semantic is the path
-		// memory recall depends on and is fully implemented here.
-		return this.postgresAdapter.search(options);
+		return this.postgresAdapter.search({ ...options, mode: "lexical" });
 	}
 
 	/**
@@ -246,11 +241,8 @@ export class PgVectorSearchAdapter implements SearchAdapter {
 	 * is `1 - cosine_distance` so it is comparable to the lexical scores (higher =
 	 * better). Rows whose `embedding` is NULL (not yet embedded) are excluded.
 	 *
-	 * Filters (`collections`, `locale`, metadata `filters`) are applied as a WHERE
-	 * so semantic search is scope-able exactly like lexical search. `accessFilters`
-	 * are NOT yet wired through the semantic path (memory recall scopes via metadata
-	 * `filters`, not collection-access JOINs) — a follow-up if external semantic
-	 * search needs row-level access JOINs.
+	 * Filters and the canonical authorized candidate predicate are applied before
+	 * vector ordering and pagination.
 	 */
 	private async searchSemantic(
 		options: SearchOptions,
@@ -266,6 +258,8 @@ export class PgVectorSearchAdapter implements SearchAdapter {
 			limit = 10,
 			offset = 0,
 			filters,
+			facets: facetRequests,
+			accessFilters,
 		} = options;
 
 		const queryEmbedding = await this.embeddingProvider.generate(query);
@@ -289,11 +283,13 @@ export class PgVectorSearchAdapter implements SearchAdapter {
 			for (const [key, value] of Object.entries(filters)) {
 				if (Array.isArray(value)) {
 					conditions.push(
-						sql`${or(
-							...value.map(
-								(v) => sql`${questpieSearchTable.metadata}->>${key} = ${v}`,
-							),
-						)}`,
+						value.length > 0
+							? or(
+									...value.map(
+										(v) => sql`${questpieSearchTable.metadata}->>${key} = ${v}`,
+									),
+								)!
+							: sql`FALSE`,
 					);
 				} else {
 					conditions.push(
@@ -302,6 +298,9 @@ export class PgVectorSearchAdapter implements SearchAdapter {
 				}
 			}
 		}
+		const authorizedCandidates =
+			buildAuthorizedCandidateCondition(accessFilters);
+		if (authorizedCandidates) conditions.push(authorizedCandidates);
 
 		// `<=>` = cosine distance (0 = identical, 2 = opposite). Score = 1 - distance.
 		const distanceExpr = sql`${embeddingCol} <=> ${vectorLiteral}::vector`;
@@ -335,7 +334,23 @@ export class PgVectorSearchAdapter implements SearchAdapter {
 			updatedAt: row.updated_at,
 		}));
 
-		return { results, total: results.length };
+		const countRows = await this.db
+			.select({ count: sql<number>`COUNT(*)` })
+			.from(questpieSearchTable)
+			.where(and(...conditions));
+		const total = Number(countRows[0]?.count) || 0;
+
+		let facets: FacetResult[] | undefined;
+		if (facetRequests && facetRequests.length > 0) {
+			facets = await querySearchFacets(
+				this.db,
+				facetRequests,
+				conditions,
+				locale,
+			);
+		}
+
+		return { results, total, facets };
 	}
 
 	async index(params: IndexParams): Promise<void> {
@@ -351,9 +366,13 @@ export class PgVectorSearchAdapter implements SearchAdapter {
 		//    hook); otherwise we generate it here from the indexed text. If the text
 		//    is empty there is nothing to embed — leave the column NULL (the row is
 		//    still lexically searchable; it is simply excluded from semantic ranking).
-		const text = [params.title, params.content].filter(Boolean).join(" ").trim();
+		const text = [params.title, params.content]
+			.filter(Boolean)
+			.join(" ")
+			.trim();
 		const embedding =
-			params.embedding ?? (text.length > 0 ? await this.embeddingProvider.generate(text) : null);
+			params.embedding ??
+			(text.length > 0 ? await this.embeddingProvider.generate(text) : null);
 		if (!embedding) return;
 
 		// 3. Store the vector on the just-upserted row (scoped by its natural key).

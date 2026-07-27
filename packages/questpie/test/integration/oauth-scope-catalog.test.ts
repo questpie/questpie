@@ -50,7 +50,7 @@ describe("MO11 OAuth scope catalog", () => {
 		setup = undefined;
 	});
 
-	test("derives granular scopes + coarse umbrellas from discovered resources", async () => {
+	test("aggregates only exact scopes from explicit package contributors", async () => {
 		setup = await buildMockApp({
 			collections: { posts, products },
 			globals: { siteSettings },
@@ -59,41 +59,43 @@ describe("MO11 OAuth scope catalog", () => {
 				"search/run:POST": hiddenRoute,
 			},
 		});
+		expect(buildScopeCatalog(setup.app)).toEqual({
+			scopes: [],
+			scopesSupported: [],
+		});
+		setup.app.state = {
+			...setup.app.state,
+			oauthScopeCatalogs: {
+				example: () => ({
+					scopes: [
+						"collections:posts:read",
+						"collections:posts:read",
+						"custom:invoke",
+					],
+					scopesSupported: ["collections:posts:read"],
+				}),
+			},
+		};
 		const { scopes, scopesSupported } = buildScopeCatalog(setup.app);
 
-		// Coarse collection umbrellas (LOCKED #2).
-		expect(scopes).toContain("collections:read");
-		expect(scopes).toContain("collections:write");
-
-		// Granular per-collection — adding a collection auto-adds its scopes.
-		for (const s of [
-			"collections:posts:read",
-			"collections:posts:write",
-			"collections:posts:delete",
-			"collections:products:read",
-			"collections:products:write",
-			"collections:products:delete",
-		]) {
-			expect(scopes).toContain(s);
-		}
-
-		// Globals get read/write, never delete.
-		expect(scopes).toContain("globals:siteSettings:read");
-		expect(scopes).toContain("globals:siteSettings:write");
-		expect(scopes).not.toContain("globals:siteSettings:delete");
-
-		// Only MCP-exposed routes contribute an invoke scope.
-		expect(scopes).toContain("routes:reports/generate:invoke");
-		expect(scopes).not.toContain("routes:search/run:invoke");
-
-		// Public subset is the coarse umbrellas only — granular names are grantable
-		// but not publicly enumerated at discovery.
-		expect(scopesSupported).toEqual(["collections:read", "collections:write"]);
-		expect(scopesSupported).not.toContain("collections:posts:read");
+		expect(scopes).toEqual(["collections:posts:read", "custom:invoke"]);
+		expect(scopesSupported).toEqual(["collections:posts:read"]);
+		expect(scopes).not.toContain("collections:products:read");
+		expect(scopes).not.toContain("globals:siteSettings:read");
+		expect(scopes).not.toContain("routes:reports/generate:invoke");
 	}, 30_000);
 
 	test("unions the catalog into the oauthProvider, preserving its own scopes", async () => {
 		setup = await buildMockApp({ collections: { posts } });
+		setup.app.state = {
+			...setup.app.state,
+			oauthScopeCatalogs: {
+				example: () => ({
+					scopes: ["collections:posts:read"],
+					scopesSupported: ["collections:posts:read"],
+				}),
+			},
+		};
 
 		const enriched = applyOAuthScopeCatalog(setup.app, {
 			plugins: [oauthProvider({ scopes: ["openid", "custom:keep"] })],
@@ -113,7 +115,42 @@ describe("MO11 OAuth scope catalog", () => {
 		// …and the derived resource scopes are merged in.
 		expect(provider.options.scopes).toContain("collections:posts:read");
 		expect(provider.options.advertisedMetadata.scopes_supported).toContain(
-			"collections:read",
+			"collections:posts:read",
+		);
+	}, 30_000);
+
+	test("derives collaborative scopes and the shared API audience from the resolved app", async () => {
+		setup = await buildMockApp({ collections: { posts } });
+		(setup.app as any).crdtRegistry = {
+			collections: { posts: {} },
+			globals: { siteSettings: {} },
+		};
+		(setup.app as any).config.app.url = "https://runtime.example.test/root";
+
+		const enriched = applyOAuthScopeCatalog(setup.app, {
+			plugins: [
+				oauthProvider({
+					scopes: ["openid"],
+					validAudiences: ["http://localhost:3000/api/mcp"],
+				}),
+			],
+		});
+		const provider = enriched.plugins?.find(
+			(plugin) => (plugin as { id?: string }).id === "oauth-provider",
+		) as {
+			options: { scopes: string[]; validAudiences: string[] };
+		};
+
+		expect(provider.options.scopes).toEqual(
+			expect.arrayContaining([
+				"collections:posts:read",
+				"collections:posts:write",
+				"globals:siteSettings:read",
+				"globals:siteSettings:write",
+			]),
+		);
+		expect(provider.options.validAudiences).toContain(
+			"https://runtime.example.test",
 		);
 	}, 30_000);
 

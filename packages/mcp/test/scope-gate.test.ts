@@ -67,6 +67,7 @@ const reportRoute = route()
 	.handler(async ({ input }) => ({ period: input.period, ok: true }));
 
 const scopedCustomTool = mcpTool("custom.scoped", {
+	access: true,
 	description: "A custom tool gated on an explicit scope.",
 	inputSchema: z.object({ message: z.string() }),
 	scopes: "custom:scoped:use",
@@ -76,6 +77,8 @@ const scopedCustomTool = mcpTool("custom.scoped", {
 }));
 
 const openCustomTool = mcpTool("custom.open", {
+	access: true,
+	scopes: false,
 	description: "A custom tool with no scope requirement.",
 	inputSchema: z.object({ message: z.string() }),
 }).handler(async ({ input }) => ({
@@ -137,10 +140,7 @@ function mutableOauthCtx(scopesRef: { current: string[] }): {
 		user: user as any,
 		clientId: "client-mut",
 		tokenId: "token-mut",
-		// Live view onto the mutable ref: `scopesFromContext` reads this each call.
-		get scopes() {
-			return scopesRef.current;
-		},
+		scopes: scopesRef.current,
 	};
 	const ctx = createTestContext({
 		accessMode: "user",
@@ -197,15 +197,12 @@ async function listToolNames(
 	}
 }
 
-// List the tools a stdio (trusted `system`) transport exposes. Over stdio the
-// runtime derives `accessMode: "system"` from the transport itself — no ctx is
-// fabricated. This is how a `system` principal actually arises in production:
-// `system` ⇔ `accessMode: "system"` (see `accessModeForPrincipal`); an HTTP
-// request can NEVER be `system` (the adapter forces `"user"`), so modelling
-// system-over-HTTP would be a fiction. stdio bypasses both RBAC and the scope
-// gate, matching `mcp-server.test.ts`'s "stdio policy defaults" contract.
+// List the tools an explicitly trusted stdio maintenance process exposes.
 async function listStdioToolNames(app: any): Promise<string[]> {
-	const server = await createMcpServer(app, { transport: "stdio" });
+	const server = await createMcpServer(app, {
+		transport: "stdio",
+		config: { stdio: { trustedMaintenance: true } },
+	});
 	const { client, close } = await connect(server);
 	try {
 		const tools = await client.listTools();
@@ -238,11 +235,36 @@ describe("MO8 OAuth scope gate", () => {
 				mcp: {
 					crud: {
 						collections: {
-							posts: { read: true, write: true, delete: true },
-							lockedNotes: { read: true, write: true, delete: true },
+							posts: {
+								operations: {
+									list: true,
+									count: true,
+									get: true,
+									create: true,
+									update: true,
+									delete: true,
+								},
+							},
+							lockedNotes: {
+								operations: {
+									list: true,
+									count: true,
+									get: true,
+									create: true,
+									update: true,
+									delete: true,
+								},
+							},
 						},
 						globals: {
-							siteSettings: { read: true, write: true },
+							siteSettings: {
+								operations: { get: true, update: true },
+							},
+						},
+					},
+					routes: {
+						routes: {
+							"reports/generate": { operations: { execute: true } },
 						},
 					},
 				},
@@ -378,9 +400,7 @@ describe("MO8 OAuth scope gate", () => {
 	// ---- system (stdio): scope gate bypassed entirely -----------------------
 
 	it("a system principal (stdio) bypasses the scope gate (full access)", async () => {
-		// stdio ⇒ `accessMode: "system"`, the only way a `system` principal exists.
-		// It bypasses RBAC (so RBAC-denied `lockedNotes.delete` is present) and the
-		// scope gate (no scopes are consulted): the full tool set is exposed.
+		// Explicit trusted-maintenance mode bypasses RBAC and the scope gate.
 		const names = await listStdioToolNames(setup.app);
 		expect(names).toContain("collections.posts.delete");
 		expect(names).toContain("collections.lockedNotes.delete");
@@ -426,7 +446,11 @@ describe("MO8 OAuth scope gate", () => {
 
 			// REVOKE the delete scope on the shared ctx. The tool stays registered
 			// (registration already happened) and still appears in tools/list.
-			scopesRef.current = ["collections:posts:read"];
+			scopesRef.current.splice(
+				0,
+				scopesRef.current.length,
+				"collections:posts:read",
+			);
 			const stillListed = (await client.listTools()).tools.map((t) => t.name);
 			expect(stillListed).toContain("collections.posts.delete");
 
@@ -472,7 +496,7 @@ describe("MO8 OAuth scope gate", () => {
 			);
 
 			// Revoke the scope; the tool stays listed but the call-time gate fires.
-			scopesRef.current = [];
+			scopesRef.current.splice(0);
 			expect((await client.listTools()).tools.map((t) => t.name)).toContain(
 				"custom.scoped",
 			);
@@ -567,9 +591,9 @@ describe("MO8 OAuth scope gate", () => {
 
 			// Negative: create is neither listed nor callable — a blind call errors,
 			// proving the read umbrella did not silently widen into write.
-			expect(
-				(await client.listTools()).tools.map((t) => t.name),
-			).not.toContain("collections.posts.create");
+			expect((await client.listTools()).tools.map((t) => t.name)).not.toContain(
+				"collections.posts.create",
+			);
 			const created = await client.callTool({
 				name: "collections.posts.create",
 				arguments: { data: { title: "should not be created" } },
@@ -621,10 +645,7 @@ describe("MO8 OAuth scope gate", () => {
 	});
 
 	it("coarse globals:read grants the global read tool but not its update", async () => {
-		const names = await listToolNames(
-			oauthCtx(["globals:read"]),
-			setup.app,
-		);
+		const names = await listToolNames(oauthCtx(["globals:read"]), setup.app);
 		expect(names).toContain("globals.siteSettings.get");
 		// No over-grant: globals:read must not enable the global write tool…
 		expect(names).not.toContain("globals.siteSettings.update");
@@ -645,9 +666,9 @@ describe("MO8 OAuth scope gate", () => {
 		});
 		const { client, close } = await connect(server);
 		try {
-			expect(
-				(await client.listTools()).tools.map((t) => t.name),
-			).not.toContain("collections.posts.delete");
+			expect((await client.listTools()).tools.map((t) => t.name)).not.toContain(
+				"collections.posts.delete",
+			);
 			const res = await client.callTool({
 				name: "collections.posts.delete",
 				arguments: { id: (seeded as any).id },

@@ -34,12 +34,12 @@ Admin routes use the same app auth instance as your public app. Cookies flow thr
 
 The admin guard checks the active session user role.
 
-| Session role | Admin access |
-|---|---|
-| `"admin"` | Allowed. |
-| `"user"` | Rejected. |
-| Missing role | Rejected. |
-| No session | Rejected and redirected to login. |
+| Session role | Admin access                      |
+| ------------ | --------------------------------- |
+| `"admin"`    | Allowed.                          |
+| `"user"`     | Rejected.                         |
+| Missing role | Rejected.                         |
+| No session   | Rejected and redirected to login. |
 
 If you extend the Better Auth `user` collection, keep the admin starter fields and role propagation. The setup route expects the canonical `user` collection to include `id`, `role`, and `emailVerified`.
 
@@ -66,6 +66,33 @@ Then `AppSession`, `AppSessionUser`, `AppConfig.auth`, route handler `session`, 
 
 Do not write `(session?.user as any)?.role`. If `role` is missing, the auth module/config/codegen chain is wrong and should be fixed at the source.
 
+## Starter identity security boundary
+
+The starter module treats Better Auth's infrastructure collections as internal
+state. `session`, `account`, `verification`, and `apikey` deny user-mode generic
+CRUD and introspection even if your app-level default access allows CRUD to
+every signed-in user. Better Auth and trusted server code continue to use their
+system/database paths.
+
+The starter `user` collection is narrower:
+
+- administrators may manage users,
+- a signed-in non-admin may read and edit only their own profile row,
+- auth-owned fields such as `email`, `emailVerified`, `role`, and ban state are
+  administrator-only through collection CRUD.
+
+Use Better Auth's dedicated identity flows for email, password, verification,
+session, and provider changes. Do not weaken these collection rules to make an
+identity screen work.
+
+QUESTPIE also hardens Better Auth's session list/revoke wire contract. The
+`list-sessions` response never returns reusable bearer session tokens. For
+compatibility with Better Auth clients, its historical `token` property contains
+the non-secret session row ID and `sessionId` contains the same value.
+`revoke-session` resolves that owned opaque ID to the bearer token only inside
+the server. Supplying a raw bearer token or another user's ID is a
+disclosure-safe no-op.
+
 ## First admin setup
 
 The admin client includes a setup screen for the first admin account. When no admin user exists, the login page redirects to `/admin/setup`. The setup route creates the first user through Better Auth, marks the email as verified, and sets `role` to `"admin"`.
@@ -76,14 +103,14 @@ After any admin user exists, setup refuses to create more users. Additional admi
 
 `AdminRouter` includes the built-in pages for:
 
-| Page | Purpose |
-|---|---|
-| `/admin/login` | Admin login. |
-| `/admin/setup` | First admin account. |
-| `/admin/invite` | Create an invitation. |
-| `/admin/accept-invite` | Accept an invitation. |
-| `/admin/forgot-password` | Request reset email. |
-| `/admin/reset-password` | Complete password reset. |
+| Page                     | Purpose                  |
+| ------------------------ | ------------------------ |
+| `/admin/login`           | Admin login.             |
+| `/admin/setup`           | First admin account.     |
+| `/admin/invite`          | Create an invitation.    |
+| `/admin/accept-invite`   | Accept an invitation.    |
+| `/admin/forgot-password` | Request reset email.     |
+| `/admin/reset-password`  | Complete password reset. |
 
 These pages use the admin auth layout. Override `src/questpie/admin/components/admin-auth-layout.tsx` when the shell needs brand-specific structure.
 
@@ -98,7 +125,11 @@ For a project-specific flow, keep the same role rule: users who should access ad
 Use helpers from `@questpie/admin/server` when protecting framework routes or server code outside the built-in admin router.
 
 ```ts
-import { getAdminSession, isAdminUser, requireAdminAuth } from "@questpie/admin/server";
+import {
+	getAdminSession,
+	isAdminUser,
+	requireAdminAuth,
+} from "@questpie/admin/server";
 import { app } from "#questpie";
 
 export async function loader(request: Request) {

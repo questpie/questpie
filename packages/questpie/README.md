@@ -23,6 +23,8 @@ Server-first TypeScript backend framework with a proxy-based field builder, coll
 
 ## Installation
 
+QUESTPIE requires PostgreSQL 15 or newer.
+
 ```bash
 bun add questpie drizzle-orm@beta zod
 ```

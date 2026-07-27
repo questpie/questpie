@@ -24,7 +24,10 @@ flowchart LR
 The admin panel, the client SDK, and the OpenAPI spec are **projections** of your schema, the same way a mobile app would be, not separate definitions you keep in sync by hand. Change a field, re-run codegen, and every layer updates with correct types.
 
 <Callout type="info" title="One term, one concept">
-  A *collection* is a database table. A *global* is a singleton. A *field* describes one column. A *module* (or *plugin*) is config you add. These names mean the same thing on the server, in codegen, in the client, and in the admin, no synonyms.
+	A *collection* is a database table. A *global* is a singleton. A *field*
+	describes one column. A *module* (or *plugin*) is config you add. These names
+	mean the same thing on the server, in codegen, in the client, and in the
+	admin, no synonyms.
 </Callout>
 
 ## What you get out of the box
@@ -42,7 +45,10 @@ Scaffold a new app with `bunx create-questpie my-app` and you ship from a real s
 Pick a runtime and follow its [getting-started guide](/docs/getting-started/tanstack-start) to a booting app.
 
 <Callout type="info" title="Four runtimes, one core">
-  TanStack Start and Next.js are fullstack (admin UI included); Hono and Elysia are headless API + typed-client. The `src/questpie/**` core is identical across all four, only a thin runtime adapter (how the handler is mounted) differs.
+	TanStack Start and Next.js are fullstack (admin UI included); Hono and Elysia
+	are headless API + typed-client. The `src/questpie/**` core is identical
+	across all four, only a thin runtime adapter (how the handler is mounted)
+	differs.
 </Callout>
 
 ## Your first collection, end to end
@@ -55,22 +61,25 @@ Here is the whole payoff in three steps: define a collection, generate, query it
 import { collection } from "#questpie/factories";
 
 export const posts = collection("posts")
-  .fields(({ f }) => ({
-    title: f.text(255).required(),
-    body: f.richText(),
-    author: f.relation("user"),
-    status: f.select([
-      { value: "draft", label: "Draft" },
-      { value: "published", label: "Published" },
-    ]),
-    publishedAt: f.datetime(),
-  }))
-  .title(({ f }) => f.title);
+	.fields(({ f }) => ({
+		title: f.text(255).required(),
+		body: f.richText(),
+		author: f.relation("user"),
+		status: f.select([
+			{ value: "draft", label: "Draft" },
+			{ value: "published", label: "Published" },
+		]),
+		publishedAt: f.datetime(),
+	}))
+	.title(({ f }) => f.title);
 ```
 
 <Callout type="info" title="Import from `#questpie/factories`, not `questpie`">
-  Codegen generates the `collection()` factory so that module-contributed field types (`f.richText()`, `f.blocks()` from the admin module) appear on `f`. A bare `import {collection} from "questpie"` only sees the 15 built-in field types. Always import from `#questpie/factories`. See [Codegen](/docs/extend/codegen) for
-  how the generated factory is wired.
+	Codegen generates the `collection()` factory so that module-contributed field
+	types (`f.richText()`, `f.blocks()` from the admin module) appear on `f`. A
+	bare `import {collection} from "questpie"` only sees the 15 built-in field
+	types. Always import from `#questpie/factories`. See
+	[Codegen](/docs/extend/codegen) for how the generated factory is wired.
 </Callout>
 
 **2. Run codegen.** This discovers your files and writes the typed runtime to `src/questpie/server/.generated/`.
@@ -85,10 +94,10 @@ questpie generate
 import { client } from "@/lib/client";
 
 const result = await client.collections.posts.find({
-  where: { status: "published" },
-  orderBy: { publishedAt: "desc" },
-  with: { author: true },
-  limit: 10,
+	where: { status: "published" },
+	orderBy: { publishedAt: "desc" },
+	with: { author: true },
+	limit: 10,
 });
 
 result.docs[0].title;
@@ -140,7 +149,9 @@ comments: f.relation("comment").hasMany({ foreignKey: "postId" });
 ```
 
 <Callout type="info" title="Relation targets are validated after codegen">
-  Pre-codegen, `f.relation("usr")` is just a string. Once codegen runs, the target name is validated against your real collections, a typo becomes a compile error.
+	Pre-codegen, `f.relation("usr")` is just a string. Once codegen runs, the
+	target name is validated against your real collections, a typo becomes a
+	compile error.
 </Callout>
 
 ### Rules and lifecycle
@@ -149,27 +160,35 @@ comments: f.relation("comment").hasMany({ foreignKey: "postId" });
 
 ```ts
 collection("posts").access({
-  read: true,
-  update: ({ session }) => !!session?.user,
+	read: true,
+	update: ({ session }) => !!session?.user,
 });
 ```
 
 <Callout type="warn" title="Secure by default, except routes">
-  An `undefined` access rule on a collection requires a session, it does not default to public. Routes are the opposite: a route with no `.access()` is **public** until you add one. Be deliberate about both. See [Access control](/docs/concepts/access-control) and [Routes](/docs/concepts/routes).
+	An `undefined` access rule on a collection requires a session, it does not
+	default to public. Routes are the opposite: a route with no `.access()` is
+	**public** until you add one. Be deliberate about both. See [Access
+	control](/docs/concepts/access-control) and [Routes](/docs/concepts/routes).
 </Callout>
 
-**[Hooks](/docs/concepts/hooks)**, lifecycle callbacks on `.hooks({ ... })`: `beforeChange`, `afterChange`, `beforeDelete`, and more. Each receives the full app context. Use `onAfterCommit(cb)` for side effects (jobs, emails, search) so they only fire once the transaction is durable.
+**[Hooks](/docs/concepts/hooks)**, lifecycle callbacks on `.hooks({ ... })`: `beforeChange`, `afterChange`, `beforeDelete`, and more. Each receives the full app context. Queue `publish()` joins the ambient transaction automatically; use `onAfterCommit(cb)` for non-transactional effects such as direct email or HTTP calls.
 
 ```ts
 collection("posts").hooks({
-  afterChange: async ({ data, queue, onAfterCommit }) => {
-    onAfterCommit(() => queue.notifySubscribers.publish({ postId: data.id }));
-  },
+	afterChange: async ({ data, queue }) => {
+		await queue.notifySubscribers.publish(
+			{ postId: data.id },
+			{ idempotencyKey: `post-notify:${data.id}` },
+		);
+	},
 });
 ```
 
 <Callout type="warn" title="Don't run output hooks inside an open transaction">
-  Block/upload `afterRead` work re-entering an open tx can deadlock the database driver. Schedule durable-data side effects with `onAfterCommit` instead. See [Hooks](/docs/concepts/hooks).
+	Block/upload `afterRead` work re-entering an open tx can deadlock the database
+	driver. Schedule durable-data side effects with `onAfterCommit` instead. See
+	[Hooks](/docs/concepts/hooks).
 </Callout>
 
 **[Validation](/docs/concepts/validation)**, Zod schemas for create and update are generated automatically from your field definitions. Use `.validation({ refine, exclude })` only when you need to tighten or drop a specific field.
@@ -183,11 +202,11 @@ import { route } from "questpie/services";
 import { z } from "zod";
 
 export default route()
-  .post()
-  .schema(z.object({ postId: z.string() }))
-  .handler(async ({ input, collections }) => {
-    return collections.posts.findOne({ where: { id: input.postId } });
-  });
+	.post()
+	.schema(z.object({ postId: z.string() }))
+	.handler(async ({ input, collections }) => {
+		return collections.posts.findOne({ where: { id: input.postId } });
+	});
 ```
 
 **[Jobs](/docs/concepts/jobs)**, background work as files in `jobs/`. Define a payload schema and handler; dispatch with `queue.<name>.publish(payload)`. Add `options.cron` for a recurring schedule. Adapters: pg-boss, BullMQ, Cloudflare Queues.
@@ -197,16 +216,18 @@ import { job } from "questpie";
 import { z } from "zod";
 
 export default job({
-  name: "send-digest",
-  schema: z.object({ userId: z.string() }),
-  handler: async ({ payload, email }) => {
-    /* … */
-  },
+	name: "send-digest",
+	schema: z.object({ userId: z.string() }),
+	handler: async ({ payload, email }) => {
+		/* … */
+	},
 });
 ```
 
 <Callout type="info" title="Workers start from application entrypoints">
-  Import the built app and call `app.queue.listen()` for a long-running worker or `app.queue.runOnce()` for one serverless batch. See [Jobs](/docs/concepts/jobs).
+	Import the built app and call `app.queue.listen()` for a long-running worker
+	or `app.queue.runOnce()` for one serverless batch. See
+	[Jobs](/docs/concepts/jobs).
 </Callout>
 
 **[Services](/docs/concepts/services)**, reusable singletons (a Stripe client, a third-party SDK) injected into context. Resolve dependencies from the `create(ctx)` argument.
@@ -215,7 +236,7 @@ export default job({
 import { service } from "questpie/services";
 
 export default service({
-  create: ({ db }) => new BillingClient(db),
+	create: ({ db }) => new BillingClient(db),
 });
 ```
 
@@ -226,9 +247,9 @@ import { email } from "questpie/services";
 import { z } from "zod";
 
 export default email({
-  name: "welcome",
-  schema: z.object({ name: z.string() }),
-  handler: ({ input }) => ({ subject: `Welcome, ${input.name}`, html: "…" }),
+	name: "welcome",
+	schema: z.object({ name: z.string() }),
+	handler: ({ input }) => ({ subject: `Welcome, ${input.name}`, html: "…" }),
 });
 ```
 
@@ -272,9 +293,9 @@ import { runtimeConfig } from "questpie/app";
 import { pgBossAdapter } from "questpie/adapters/pg-boss";
 
 export default runtimeConfig({
-  queue: {
-    adapter: pgBossAdapter({ connectionString: process.env.DATABASE_URL }),
-  },
+	queue: {
+		adapter: pgBossAdapter({ connectionString: process.env.DATABASE_URL }),
+	},
 });
 ```
 
@@ -289,7 +310,9 @@ export default runtimeConfig({
 **[Codegen](/docs/extend/codegen)**, the engine that turns your files into the typed runtime. `questpie generate` runs it once; `questpie dev` watches and regenerates on file add/remove. Codegen output is committed to git. A module's codegen `plugin` lets a package contribute its own file conventions without you editing config.
 
 <Callout type="warn" title="Re-run codegen after adding or removing files">
-  New collections, routes, and jobs only enter the typed runtime once `questpie generate` (or `questpie dev`) regenerates `.generated/`. Editing the *body* of an existing file does not require a regen, only adding/removing files does.
+	New collections, routes, and jobs only enter the typed runtime once `questpie
+	generate` (or `questpie dev`) regenerates `.generated/`. Editing the *body* of
+	an existing file does not require a regen, only adding/removing files does.
 </Callout>
 
 ## Where to next

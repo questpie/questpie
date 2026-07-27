@@ -78,7 +78,89 @@ export interface FieldState {
 	relationTo?: string | Record<string, string>;
 	/** Relation kind: "one" (belongsTo/upload), "many" (hasMany/manyToMany) */
 	relationKind?: "one" | "many";
+	/** CRDT capability marker contributed by the core `.crdt()` method. */
+	crdt?: unknown;
 }
+
+export type CrdtTextConfig = {
+	format: "text";
+};
+
+export type CrdtSetConfig = {
+	format: "set";
+	conflict: "add-wins";
+};
+
+export type CrdtFieldConfig = CrdtTextConfig | CrdtSetConfig;
+
+export type CrdtTextCapability = {
+	format: "text";
+};
+
+export type CrdtSetCapability = {
+	format: "set";
+	conflict: "add-wins";
+};
+
+export type CrdtFieldCapability = CrdtTextCapability | CrdtSetCapability;
+
+export type CrdtFormatOf<TField> = TField extends {
+	readonly _: { crdt: { format: infer TFormat extends "text" | "set" } };
+}
+	? TFormat
+	: never;
+
+export type IsEligibleCrdtTextField<TField> = TField extends {
+	readonly _: infer TState;
+}
+	? TState extends { hooks: unknown }
+		? false
+		: TState extends {
+					type: "textarea" | "text";
+					data: string;
+					notNull: true;
+					hasDefault: true;
+					localized: false;
+					virtual: false;
+					input: true;
+					output: true;
+					isArray: false;
+					crdt: { format: "text" };
+			  }
+			? TState["type"] extends "text"
+				? TState extends { textStorage: "text" }
+					? true
+					: false
+				: true
+			: false
+	: false;
+
+export type IsEligibleCrdtSetField<TField> = TField extends {
+	readonly _: infer TState;
+}
+	? TState extends { hooks: unknown }
+		? false
+		: TState extends {
+					type: "text";
+					textStorage: "text";
+					data: string[];
+					notNull: true;
+					hasDefault: true;
+					localized: false;
+					virtual: false;
+					input: true;
+					output: true;
+					isArray: true;
+					crdt: { format: "set"; conflict: "add-wins" };
+					innerState: {
+						type: "text";
+						textStorage: "text";
+						data: string;
+					};
+			  }
+			? true
+			: false
+	: false;
 
 /**
  * Default field state — starting point for all field builders.
@@ -177,6 +259,10 @@ export interface FieldRuntimeState {
 	fromDbFn?: (value: unknown) => unknown;
 	/** toDb transform */
 	toDbFn?: (value: unknown) => unknown;
+	/** Normalized CRDT field capability. */
+	crdt?: CrdtFieldCapability;
+	/** Physical text storage selected by the text field factory. */
+	textStorage?: "text" | "varchar";
 
 	// ---- Field-specific refinements (accumulated by chain methods) ----
 	/** Max length (text/email/url) */

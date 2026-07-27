@@ -10,6 +10,12 @@ export type RealtimeAdmissionConfig = {
 	maxWithDepth: number;
 	initialSnapshotConcurrency: number;
 	maxBufferedSnapshotBytes: number;
+	maxDeltaFindLimit: number;
+	estimatedDeltaRowBytes: number;
+	maxBufferedDeltaEvents: number;
+	maxBufferedDeltaBytes: number;
+	deltaHydrationConcurrency: number;
+	deltaRebootstrapIntervalMs: number;
 };
 
 export const DEFAULT_REALTIME_ADMISSION: RealtimeAdmissionConfig = {
@@ -19,6 +25,12 @@ export const DEFAULT_REALTIME_ADMISSION: RealtimeAdmissionConfig = {
 	maxWithDepth: 3,
 	initialSnapshotConcurrency: 4,
 	maxBufferedSnapshotBytes: 1024 * 1024,
+	maxDeltaFindLimit: 384,
+	estimatedDeltaRowBytes: 2048,
+	maxBufferedDeltaEvents: 512,
+	maxBufferedDeltaBytes: 1024 * 1024,
+	deltaHydrationConcurrency: 4,
+	deltaRebootstrapIntervalMs: 60_000,
 };
 
 export function resolveRealtimeAdmissionConfig(
@@ -32,6 +44,26 @@ export function resolveRealtimeAdmissionConfig(
 		Number.isFinite(value) && Number.isInteger(value) && (value as number) >= 0
 			? (value as number)
 			: fallback;
+
+	const maxBufferedSnapshotBytes = positiveInteger(
+		config?.maxBufferedSnapshotBytes,
+		DEFAULT_REALTIME_ADMISSION.maxBufferedSnapshotBytes,
+	);
+	const estimatedDeltaRowBytes = positiveInteger(
+		config?.estimatedDeltaRowBytes,
+		DEFAULT_REALTIME_ADMISSION.estimatedDeltaRowBytes,
+	);
+	const maxBufferedDeltaBytes = positiveInteger(
+		config?.maxBufferedDeltaBytes,
+		DEFAULT_REALTIME_ADMISSION.maxBufferedDeltaBytes,
+	);
+	const deltaBootstrapCapacity = Math.max(
+		1,
+		Math.floor(
+			Math.min(maxBufferedSnapshotBytes, maxBufferedDeltaBytes) /
+				estimatedDeltaRowBytes,
+		),
+	);
 
 	return {
 		maxTopicsPerConnection: positiveInteger(
@@ -54,9 +86,27 @@ export function resolveRealtimeAdmissionConfig(
 			config?.initialSnapshotConcurrency,
 			DEFAULT_REALTIME_ADMISSION.initialSnapshotConcurrency,
 		),
-		maxBufferedSnapshotBytes: positiveInteger(
-			config?.maxBufferedSnapshotBytes,
-			DEFAULT_REALTIME_ADMISSION.maxBufferedSnapshotBytes,
+		maxBufferedSnapshotBytes,
+		maxDeltaFindLimit: Math.min(
+			positiveInteger(
+				config?.maxDeltaFindLimit,
+				DEFAULT_REALTIME_ADMISSION.maxDeltaFindLimit,
+			),
+			deltaBootstrapCapacity,
+		),
+		estimatedDeltaRowBytes,
+		maxBufferedDeltaEvents: positiveInteger(
+			config?.maxBufferedDeltaEvents,
+			DEFAULT_REALTIME_ADMISSION.maxBufferedDeltaEvents,
+		),
+		maxBufferedDeltaBytes,
+		deltaHydrationConcurrency: positiveInteger(
+			config?.deltaHydrationConcurrency,
+			DEFAULT_REALTIME_ADMISSION.deltaHydrationConcurrency,
+		),
+		deltaRebootstrapIntervalMs: positiveInteger(
+			config?.deltaRebootstrapIntervalMs,
+			DEFAULT_REALTIME_ADMISSION.deltaRebootstrapIntervalMs,
 		),
 	};
 }
@@ -66,6 +116,7 @@ type AdmissionTopic = {
 	resourceType: "collection" | "global";
 	resource: string;
 	operation?: "find" | "count" | "get";
+	mode?: "snapshot" | "delta";
 	limit?: number;
 	with?: Record<string, unknown>;
 } & Record<string, unknown>;
@@ -141,6 +192,9 @@ export function admitRealtimeTopic<TTopic extends AdmissionTopic>(
 	if ((topic.operation ?? "find") !== "find") {
 		return { accepted: true, topic: { ...topic } };
 	}
+	if (topic.mode === "delta" && topic.limit === undefined) {
+		return { accepted: true, topic: { ...topic } };
+	}
 
 	const limit = topic.limit ?? config.maxFindLimit;
 	if (!Number.isInteger(limit) || limit < 1 || limit > config.maxFindLimit) {
@@ -154,6 +208,34 @@ export function admitRealtimeTopic<TTopic extends AdmissionTopic>(
 	}
 
 	return { accepted: true, topic: { ...topic, limit } };
+}
+
+/** Authoritative server policy, separate from durable change capture. */
+export function admitRealtimeTopicPolicy<TTopic extends AdmissionTopic>(
+	topic: TTopic,
+	policy: {
+		rowLiveQueries?: boolean;
+		collectionRealtime?: boolean;
+	},
+): TopicAdmissionResult<TTopic> {
+	if (policy.rowLiveQueries === false) {
+		return {
+			accepted: false,
+			message: "Row live queries are disabled by server policy",
+			reason: "row_live_queries_disabled",
+		};
+	}
+	if (
+		topic.resourceType === "collection" &&
+		policy.collectionRealtime === false
+	) {
+		return {
+			accepted: false,
+			message: "Direct realtime subscriptions are disabled for this collection",
+			reason: "collection_realtime_disabled",
+		};
+	}
+	return { accepted: true, topic: { ...topic } };
 }
 
 export class RealtimeAdmissionRegistry {

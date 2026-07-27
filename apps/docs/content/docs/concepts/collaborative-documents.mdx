@@ -1,0 +1,170 @@
+---
+title: Collaborative documents
+description: Model one collection record or global as an access-controlled collaborative aggregate with typed CRDT fields.
+---
+
+QUESTPIE collaboration is a framework data primitive, not an editor or
+WebSocket integration. One collection record or one global is one
+**collaborative aggregate**. Explicitly marked text and set fields keep
+independent CRDT replicas, while sharing identity, authorization, lifecycle,
+commit order, presence, and atomic multi-field transactions.
+
+That means three people can edit a title, add tags, and write body text at the
+same time. A single client transaction can also change all three atomically.
+Non-collaborative fields continue through normal CRUD.
+
+## Declare an aggregate
+
+Install the Yjs engine:
+
+```bash
+bun add @questpie/crdt-yjs
+```
+
+Mark the owner and each collaborative field:
+
+```ts title="src/questpie/server/collections/articles.ts"
+import { collection } from "#questpie/factories";
+import { z } from "zod";
+
+export default collection("articles")
+	.fields(({ f }) => ({
+		title: f
+			.text({ mode: "text" })
+			.default("")
+			.required()
+			.crdt({ format: "text" }),
+		tags: f
+			.text({ mode: "text" })
+			.array()
+			.default([])
+			.required()
+			.crdt({ format: "set", conflict: "add-wins" }),
+		content: f.textarea().default("").required().crdt({ format: "text" }),
+		status: f
+			.select([
+				{ label: "Draft", value: "draft" },
+				{ label: "Published", value: "published" },
+			])
+			.default("draft"),
+	}))
+	.collaborative({
+		awareness: z.object({ name: z.string().max(64) }).strict(),
+	});
+```
+
+The owner opt-in and field markers are both required. Codegen fails closed for
+orphan markers, an aggregate with no CRDT fields, or an ineligible field.
+
+V1 supports:
+
+- required, unbounded, non-localized text with an empty default and identity
+  encoding;
+- required string arrays using the add-wins set strategy.
+
+Relations, uploads, localized fields, bounded varchar, ordered lists,
+object/map values, transforms, and custom codecs are not silently coerced into
+CRDTs.
+
+## Configure both text-engine halves
+
+The server validates and merges untrusted Yjs bytes in a bounded in-process
+worker-thread pool. It uses Node.js `worker_threads` on Node 18+ and the
+Web Worker-compatible runtime on Bun. The browser engine creates local updates
+and maintains the offline replica.
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { yjsServerEngine } from "@questpie/crdt-yjs/server";
+import { runtimeConfig } from "questpie/app";
+
+export default runtimeConfig({
+	db: { url: process.env.DATABASE_URL! },
+	realtime: true,
+	crdt: {
+		namespace: "my-app",
+		allowedOrigins: ["https://app.example.com"],
+		engines: { text: yjsServerEngine() },
+	},
+});
+```
+
+```ts title="src/lib/client.ts"
+import { yjsClientEngine } from "@questpie/crdt-yjs/client";
+import { createClient } from "questpie/client";
+import type { AppConfig } from "#questpie";
+
+export const client = createClient<AppConfig>({
+	baseURL:
+		typeof window === "undefined"
+			? process.env.APP_URL!
+			: window.location.origin,
+	basePath: "/api",
+	crdt: { engines: { text: yjsClientEngine() } },
+});
+```
+
+Run codegen, `bunx questpie crdt:manifest`, and
+`bunx questpie migrate:generate`. Run the manifest and migration generation
+commands a second time and require no diff. Commit the generated artifacts,
+then apply the committed migration with `bunx questpie migrate:up`. Do not
+hand-edit the manifest or migration SQL.
+
+## Transport: one realtime connection, normal Fetch
+
+CRDT data uses two routes already mounted by `createFetchHandler()`:
+
+```text
+POST /api/realtime/crdt/open
+POST /api/realtime/crdt/exchange
+```
+
+The generated client reuses its one lazy SSE or Pusher connection for opaque
+visible-dirty and awareness-dirty hints. Updates, locators, fields, cursors,
+grants, and credentials never ride the channel payload. A missed or duplicate
+hint is harmless because the client reconciles through the database-backed
+Fetch exchange.
+
+You do not add an Elysia host, WebSocket route, second provider connection,
+sidecar, or dedicated service. The ordinary TanStack Start catch-all API route
+already serves collaboration.
+
+## Authority and lifecycle
+
+Open and every exchange rebuild fresh request authority. Normal owner and
+field access rules decide read/edit grants. Cookie requests require an exact
+configured HTTP(S) Origin. OAuth actors retain their stable credential
+identity. Verified agents require the explicit agent authentication seam and
+`crdt:edit` for edits.
+
+Ordinary update, bulk update, system mode, hooks, and version restore cannot
+mutate CRDT-managed fields. Soft delete retires the active resource epoch;
+restore creates a new epoch. Purge physically removes the retired
+collaboration state in the same transaction as the owner.
+
+Sessions and field grants are durable and fenced. Policy changes, session
+generation changes, owner lifecycle transitions, or field downgrades cannot
+silently replay stale offline edits under new authority.
+
+## Limits and operational model
+
+The binary exchange accepts at most 256 KiB per field update, 32 field parts,
+and 1 MiB per request payload. A verified bootstrap artifact may total at most
+64 MiB. Awareness input is capped at 1 KiB and coalesced to 20 writes per
+second. These are CRDT data-plane limits. Pusher documents event data as
+limited to 10 KB; QUESTPIE measures the canonical JSON envelope in UTF-8 and
+enforces an exact 10,000-byte cap. That does not cap documents because channels
+carry only tiny dirty hints.
+
+QUESTPIE requires PostgreSQL 15+. Collaborative state, idempotency receipts,
+fences, sessions, snapshots, pulls, and presence are durable database state.
+Broker delivery improves latency but is not the source of truth.
+
+The server engine's worker threads are bounded CPU-isolation machinery inside
+the API or queue process that already uses the app. They do not require another
+deployable process. Lifecycle shutdown is registered once per generated app
+and drains during the existing Nitro/TanStack Start shutdown.
+
+See [Client collaborative documents](/docs/client/collaborative-documents) for
+the generated API and
+[the collaborative article recipe](/docs/recipes/collaborative-article) for an
+end-to-end flow.

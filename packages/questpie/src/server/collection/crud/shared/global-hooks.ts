@@ -15,6 +15,23 @@ type ContextLogger = {
 	error: (message: string, ...args: unknown[]) => void;
 };
 
+/** Marks an after-hook failure that must abort its surrounding transaction. */
+export class FatalGlobalHookError extends Error {
+	constructor(readonly original: unknown) {
+		super(
+			original instanceof Error
+				? original.message
+				: "Fatal global hook failure",
+			{ cause: original },
+		);
+		this.name = "FatalGlobalHookError";
+	}
+}
+
+export function rethrowFatalGlobalHookError(error: unknown): void {
+	if (error instanceof FatalGlobalHookError) throw error;
+}
+
 function getContextLogger(ctx: object): ContextLogger | undefined {
 	if (
 		"logger" in ctx &&
@@ -51,20 +68,28 @@ function matchesFilter(
 // ============================================================================
 
 /**
- * Execute global collection hooks (beforeChange, afterChange, beforeDelete, afterDelete).
+ * Execute global collection hooks.
  *
  * - `before*` hooks propagate errors (allow blocking operations).
- * - `after*` hooks swallow errors and log to console.
+ * - Ordinary `after*` hooks swallow errors and log.
+ * - `afterPurge` is fatal because it is part of the irreversible purge
+ *   transaction; external work belongs in `onAfterCommit`.
  */
 export async function executeGlobalCollectionHooks(
 	entries: GlobalCollectionHookEntry[] | undefined,
-	hookName: "beforeChange" | "afterChange" | "beforeDelete" | "afterDelete",
+	hookName:
+		| "beforeChange"
+		| "afterChange"
+		| "beforeDelete"
+		| "afterDelete"
+		| "beforePurge"
+		| "afterPurge",
 	collectionName: string,
 	ctx: GlobalCollectionHookContextInput,
 ): Promise<void> {
 	if (!entries || entries.length === 0) return;
 
-	const isBefore = hookName.startsWith("before");
+	const isFatal = hookName.startsWith("before") || hookName === "afterPurge";
 
 	// Enrich context with collection name for global hooks
 	const enrichedCtx: GlobalCollectionHookContext = {
@@ -76,12 +101,13 @@ export async function executeGlobalCollectionHooks(
 		const hookFn = entry[hookName];
 		if (!hookFn || !matchesFilter(entry, collectionName)) continue;
 
-		if (isBefore) {
+		if (isFatal) {
 			await hookFn(enrichedCtx);
 		} else {
 			try {
 				await hookFn(enrichedCtx);
 			} catch (err) {
+				rethrowFatalGlobalHookError(err);
 				getContextLogger(enrichedCtx)?.error(
 					`[QUESTPIE] Global collection hook "${hookName}" error for "${collectionName}":`,
 					err,
@@ -123,6 +149,7 @@ export async function executeGlobalCollectionTransitionHooks(
 			try {
 				await hookFn(enrichedCtx);
 			} catch (err) {
+				rethrowFatalGlobalHookError(err);
 				getContextLogger(enrichedCtx)?.error(
 					`[QUESTPIE] Global collection hook "${hookName}" error for "${collectionName}":`,
 					err,
@@ -165,6 +192,7 @@ export async function executeGlobalGlobalHooks(
 			try {
 				await hookFn(enrichedCtx);
 			} catch (err) {
+				rethrowFatalGlobalHookError(err);
 				getContextLogger(enrichedCtx)?.error(
 					`[QUESTPIE] Global global hook "${hookName}" error for "${globalName}":`,
 					err,
@@ -206,6 +234,7 @@ export async function executeGlobalGlobalTransitionHooks(
 			try {
 				await hookFn(enrichedCtx);
 			} catch (err) {
+				rethrowFatalGlobalHookError(err);
 				getContextLogger(enrichedCtx)?.error(
 					`[QUESTPIE] Global global hook "${hookName}" error for "${globalName}":`,
 					err,

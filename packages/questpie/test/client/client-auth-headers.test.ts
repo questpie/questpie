@@ -110,13 +110,14 @@ describe("client dynamic auth headers", () => {
 		]);
 	});
 
-	it("resolves fresh auth headers for realtime discovery and every connection", async () => {
+	it("resolves fresh auth headers for one realtime discovery and every connection", async () => {
 		const requests: Array<{
+			url: string;
 			authorization: string | null;
 			credentials: RequestCredentials | undefined;
 		}> = [];
 
-		globalThis.fetch = (async (_input, init) => {
+		globalThis.fetch = (async (input, init) => {
 			let controller!: ReadableStreamDefaultController<Uint8Array>;
 			const body = new ReadableStream<Uint8Array>({
 				start(streamController) {
@@ -125,6 +126,7 @@ describe("client dynamic auth headers", () => {
 			});
 			init?.signal?.addEventListener("abort", () => controller.close());
 			requests.push({
+				url: String(input),
 				authorization: new Headers(init?.headers).get("Authorization"),
 				credentials: init?.credentials,
 			});
@@ -149,25 +151,24 @@ describe("client dynamic auth headers", () => {
 		client.realtime.destroy();
 
 		const stopSecond = client.collections.posts.live({}, () => {});
-		await waitFor(() => requests.length === 4);
+		await waitFor(() => requests.length === 3);
 		stopSecond();
 		client.realtime.destroy();
 
 		expect(requests).toEqual([
 			{
+				url: "http://localhost:3000/realtime/config",
 				authorization: "Bearer realtime-1",
 				credentials: "include",
 			},
 			{
+				url: "http://localhost:3000/realtime",
 				authorization: "Bearer realtime-2",
 				credentials: "include",
 			},
 			{
+				url: "http://localhost:3000/realtime",
 				authorization: "Bearer realtime-3",
-				credentials: "include",
-			},
-			{
-				authorization: "Bearer realtime-4",
 				credentials: "include",
 			},
 		]);

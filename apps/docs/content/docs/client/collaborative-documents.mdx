@@ -1,0 +1,160 @@
+---
+title: Collaborative documents
+description: Connect, edit, transact, observe, and recover typed QUESTPIE collaborative aggregates from the generated client.
+---
+
+Codegen exposes only the owners and fields that opted into collaboration. A
+document handle is inert during construction and SSR; network and IndexedDB
+work starts at `connect()`.
+
+```ts
+const article = client.crdt.collections.articles.document({
+	id: "article-1",
+});
+
+await article.connect({ mode: "edit", fallback: "view" });
+```
+
+`fallback: "view"` permits an authorized read-only result when edit access is
+not available. Without it, edit denial fails the connection.
+
+## Read and edit typed fields
+
+```ts
+const title = article.fields.title.text.value();
+
+article.fields.title.text.apply([
+	{ type: "insert", index: title.length, value: " together" },
+]);
+
+article.fields.tags.set.add("news");
+article.fields.tags.set.delete("draft");
+```
+
+Text indices are UTF-16 code-unit offsets at Unicode scalar boundaries. Invalid
+or hidden fields fail explicitly. A view-only grant cannot mutate.
+
+Use an aggregate transaction when fields must commit together:
+
+```ts
+article.transaction(({ fields }) => {
+	fields.title.text.apply([{ type: "insert", index: 0, value: "Shared: " }]);
+	fields.tags.set.add("collaboration");
+	fields.content.text.apply([
+		{ type: "insert", index: 0, value: "First paragraph." },
+	]);
+});
+```
+
+The callback is synchronous and cannot nest. Any invalid part rejects the
+whole local transaction; the server also authorizes and appends every part
+atomically.
+
+## Durable text anchors
+
+Text fields can create opaque points or ranges that move with ordinary CRDT
+edits:
+
+```ts
+const anchor = article.fields.content.anchors.create({
+	kind: "range",
+	start: 12,
+	end: 20,
+});
+
+const current = article.fields.content.anchors.resolve(anchor);
+if (current.status === "resolved" && current.kind === "range") {
+	highlight(current.start, current.end);
+}
+```
+
+A point follows insertions at its boundary by default. A range uses inward
+affinity by default: its start follows and its end precedes boundary
+insertions. Pass explicit `affinity`, `startAffinity`, or `endAffinity` only
+when the product needs different semantics.
+
+Creation works with either a readable view or edit grant, but only from an
+acknowledged field basis. It throws `CrdtAnchorError` with
+`UNACKNOWLEDGED_STATE` while the field is syncing, has a pending local update,
+or is inside an aggregate transaction. Invalid offsets and ranges use
+`INVALID_INPUT`. Wait for the append receipt and create the anchor from the
+resulting ready state.
+
+Store the returned branded string as an opaque value. Do not parse it or use it
+as an access capability. Resolve returns `{ status: "detached" }` for malformed
+tokens, another field or owner, or a lifecycle that recreated the field. Normal
+edits and compaction preserve it; replace, import, restore, schema recreation,
+purge, and delete-then-recreate detach it.
+
+Server routes and hooks receive the request-scoped asynchronous equivalent:
+
+```ts
+import { route } from "questpie/services";
+import { z } from "zod";
+
+export default route()
+	.post()
+	.schema(z.object({ articleId: z.string(), anchor: z.string() }))
+	.handler(({ crdt, input }) =>
+		crdt.collections.articles
+			.document({ id: input.articleId })
+			.fields.content.anchors.resolve(input.anchor),
+	);
+```
+
+Every server create or resolve reloads current read authority and the
+authoritative CRDT head. Possessing a token never grants read access.
+
+## State and teardown
+
+Subscribe to lifecycle changes before connecting:
+
+```ts
+const unsubscribe = article.subscribe((state) => {
+	if (state.status === "ready") renderReady(state.fieldGrants);
+	if (state.status === "recovery-required") showRecovery(state);
+});
+
+// Later:
+await article.disconnect();
+unsubscribe();
+```
+
+Offline updates are stored in IndexedDB under server-issued deployment,
+namespace, owner-incarnation, and subject partitions. Reconnect reconciles
+durable receipts before replay. Authority or epoch changes, corruption,
+retention expiry, and queue overflow enter explicit recovery instead of
+replaying under a different identity.
+
+Call `discard()` only after the user chooses to abandon a recovery bundle. Use
+`export()` when offering a recovery download.
+
+## Awareness
+
+An owner exposes awareness only when its `.collaborative({ awareness })`
+schema enables it:
+
+```ts
+article.awareness.set(
+	{ name: "Ada" },
+	{ activeField: "content", cursor: 12, selectionEnd: 20 },
+);
+
+const stopRoster = article.awareness.subscribe((participants) => {
+	renderCollaborators(participants);
+});
+```
+
+The server validates awareness, assigns participant identity, filters the
+roster through shared readable field grants, and expires stale entries.
+Provider-native presence is not an authority or identity source.
+
+## Framework-agnostic UI
+
+The API is plain TypeScript. React, Tiptap, ProseMirror, and TanStack Query are
+not required. In TanStack Start, keep the document handle in the component or
+route lifetime that owns it, subscribe with your preferred state adapter, and
+disconnect during cleanup. The same generated API works in any browser client.
+
+See [Collaborative documents](/docs/concepts/collaborative-documents) for
+server setup, transport, authorization, and limits.

@@ -13,6 +13,7 @@ import {
 import type { Principal } from "#questpie/server/config/context.js";
 import type { ChannelSecurityObservationReason } from "#questpie/server/modules/core/integrated/realtime/observer.js";
 import { routeApp } from "#questpie/server/routes/route-app.js";
+import { parseTypedWire } from "#questpie/shared/typed-wire.js";
 
 type ChannelRouteContext = object & {
 	db?: unknown;
@@ -218,14 +219,20 @@ export async function parseChannelPublishRequest(request: Request): Promise<
 		.split(";", 1)[0]
 		?.trim()
 		.toLowerCase();
-	if (mediaType !== "application/json") {
+	if (
+		mediaType !== "application/json" &&
+		mediaType !== "application/superjson+json"
+	) {
 		throw Object.assign(new Error("Unsupported channel publish content type"), {
 			status: 415,
 		});
 	}
 	let json: unknown;
 	try {
-		json = await request.json();
+		json =
+			mediaType === "application/superjson+json"
+				? parseTypedWire(await request.text())
+				: await request.json();
 	} catch {
 		throw Object.assign(new Error("Invalid channel publish body"), {
 			status: 400,
@@ -242,6 +249,42 @@ export async function parseChannelPublishRequest(request: Request): Promise<
 		.safeParseAsync(json);
 	if (!parsed.success) {
 		throw Object.assign(new Error("Invalid channel publish body"), {
+			status: 400,
+		});
+	}
+	return parsed.data;
+}
+
+export async function parseChannelReplayRequest(
+	request: Request,
+): Promise<ChannelRouteInput & { afterEventId: string }> {
+	const mediaType = (request.headers.get("content-type") ?? "")
+		.split(";", 1)[0]
+		?.trim()
+		.toLowerCase();
+	if (mediaType !== "application/json") {
+		throw Object.assign(new Error("Unsupported channel replay content type"), {
+			status: 415,
+		});
+	}
+	let json: unknown;
+	try {
+		json = await request.json();
+	} catch {
+		throw Object.assign(new Error("Invalid channel replay body"), {
+			status: 400,
+		});
+	}
+	const parsed = await z
+		.object({
+			channel: z.string().min(1),
+			params: z.record(z.string(), z.string()).default({}),
+			afterEventId: z.string().min(1).max(256),
+		})
+		.strict()
+		.safeParseAsync(json);
+	if (!parsed.success) {
+		throw Object.assign(new Error("Invalid channel replay body"), {
 			status: 400,
 		});
 	}

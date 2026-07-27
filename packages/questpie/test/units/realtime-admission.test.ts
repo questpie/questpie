@@ -4,6 +4,7 @@ import {
 	DEFAULT_REALTIME_ADMISSION,
 	RealtimeAdmissionRegistry,
 	admitRealtimeTopic,
+	admitRealtimeTopicPolicy,
 	resolveRealtimeAdmissionConfig,
 } from "../../src/server/modules/core/integrated/realtime/admission.js";
 
@@ -88,16 +89,73 @@ describe("realtime admission", () => {
 	});
 
 	it("keeps configured admission limits finite", () => {
-		expect(
-			resolveRealtimeAdmissionConfig({
-				maxTopicsPerConnection: Number.POSITIVE_INFINITY,
-				maxWithDepth: -1,
-				initialSnapshotConcurrency: 0,
-			}),
-		).toMatchObject({
+		const config = resolveRealtimeAdmissionConfig({
+			maxTopicsPerConnection: Number.POSITIVE_INFINITY,
+			maxWithDepth: -1,
+			initialSnapshotConcurrency: 0,
+			maxDeltaFindLimit: 1_000,
+			estimatedDeltaRowBytes: 4096,
+			maxBufferedSnapshotBytes: 1024 * 1024,
+		});
+		expect(config).toMatchObject({
 			maxTopicsPerConnection: 20,
 			maxWithDepth: 3,
 			initialSnapshotConcurrency: 4,
+			maxDeltaFindLimit: 256,
+		});
+		expect(
+			config.maxDeltaFindLimit * config.estimatedDeltaRowBytes,
+		).toBeLessThanOrEqual(config.maxBufferedSnapshotBytes);
+	});
+
+	it("uses the smaller snapshot or ordered-delta byte budget", () => {
+		const config = resolveRealtimeAdmissionConfig({
+			maxBufferedSnapshotBytes: 1024 * 1024,
+			maxBufferedDeltaBytes: 16 * 1024,
+			estimatedDeltaRowBytes: 2048,
+			maxDeltaFindLimit: 384,
+		});
+
+		expect(config.maxDeltaFindLimit).toBe(8);
+		expect(
+			config.maxDeltaFindLimit * config.estimatedDeltaRowBytes,
+		).toBeLessThanOrEqual(config.maxBufferedDeltaBytes);
+	});
+
+	it("uses coherent finite defaults for delta bootstrap and queue caps", () => {
+		expect(DEFAULT_REALTIME_ADMISSION).toMatchObject({
+			maxDeltaFindLimit: 384,
+			estimatedDeltaRowBytes: 2048,
+			maxBufferedDeltaEvents: 512,
+			maxBufferedDeltaBytes: 1024 * 1024,
+			deltaHydrationConcurrency: 4,
+			deltaRebootstrapIntervalMs: 60_000,
+		});
+		expect(
+			DEFAULT_REALTIME_ADMISSION.maxDeltaFindLimit *
+				DEFAULT_REALTIME_ADMISSION.estimatedDeltaRowBytes,
+		).toBeLessThanOrEqual(DEFAULT_REALTIME_ADMISSION.maxBufferedSnapshotBytes);
+	});
+
+	it("preserves an unwindowed explicit delta find for route classification", () => {
+		expect(
+			admitRealtimeTopic(
+				{
+					id: "posts-delta",
+					resourceType: "collection",
+					resource: "posts",
+					mode: "delta",
+				},
+				DEFAULT_REALTIME_ADMISSION,
+			),
+		).toEqual({
+			accepted: true,
+			topic: {
+				id: "posts-delta",
+				resourceType: "collection",
+				resource: "posts",
+				mode: "delta",
+			},
 		});
 	});
 
@@ -132,5 +190,56 @@ describe("realtime admission", () => {
 			),
 		).toMatchObject({ accepted: false });
 		for (const release of releases) release?.();
+	});
+
+	it("counts every live stream as a distinct server-owned admission slot", () => {
+		const registry = new RealtimeAdmissionRegistry(2);
+
+		const first = registry.acquire("user-1");
+		const second = registry.acquire("user-1");
+		expect(first).not.toBeNull();
+		expect(second).not.toBeNull();
+		expect(registry.acquire("user-1")).toBeNull();
+
+		first!();
+		expect(registry.acquire("user-1")).not.toBeNull();
+	});
+
+	it("keeps row-topic policy distinct from collection change capture", () => {
+		const topic = {
+			id: "posts",
+			resourceType: "collection" as const,
+			resource: "posts",
+		};
+		expect(
+			admitRealtimeTopicPolicy(topic, { rowLiveQueries: false }),
+		).toMatchObject({
+			accepted: false,
+			reason: "row_live_queries_disabled",
+		});
+		expect(
+			admitRealtimeTopicPolicy(topic, { collectionRealtime: false }),
+		).toMatchObject({
+			accepted: false,
+			reason: "collection_realtime_disabled",
+		});
+		expect(admitRealtimeTopicPolicy(topic, {})).toEqual({
+			accepted: true,
+			topic,
+		});
+		expect(
+			admitRealtimeTopicPolicy(
+				{
+					id: "settings",
+					resourceType: "global",
+					resource: "settings",
+					operation: "get",
+				},
+				{ rowLiveQueries: false, collectionRealtime: false },
+			),
+		).toMatchObject({
+			accepted: false,
+			reason: "row_live_queries_disabled",
+		});
 	});
 });

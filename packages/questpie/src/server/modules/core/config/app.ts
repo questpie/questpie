@@ -11,21 +11,23 @@
  * Phase 3: Direct CRUD calls will be removed, these hooks become sole source.
  */
 
+import { FatalGlobalHookError } from "#questpie/server/collection/crud/shared/global-hooks.js";
+import { recordTransactionTxid } from "#questpie/server/collection/crud/shared/transaction.js";
 import type {
 	GlobalCollectionHookContext,
 	GlobalCollectionTransitionHookContext,
 	GlobalGlobalHookContext,
 } from "#questpie/server/config/global-hooks-types.js";
-import type {
-	DrizzleClientFromQuestpieConfig,
-	Locale,
-} from "#questpie/server/config/types.js";
+import type { Locale } from "#questpie/server/config/types.js";
 import type {
 	RealtimeChangeEvent,
 	RealtimeChangePayload,
 	RealtimeEqualityProjection,
 } from "#questpie/server/modules/core/integrated/realtime/types.js";
-import { buildIndexParams } from "#questpie/server/modules/core/integrated/search/index-params.js";
+import {
+	buildIndexParams,
+	resolveAutomaticSearchableConfig,
+} from "#questpie/server/modules/core/integrated/search/index-params.js";
 import type { SearchableConfig } from "#questpie/server/modules/core/integrated/search/types.js";
 import {
 	TransitionScheduledError,
@@ -36,17 +38,6 @@ import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 // ============================================================================
 // Realtime helpers
 // ============================================================================
-
-/**
- * The pre-codegen hook context deliberately keeps infrastructure members
- * unknown. Runtime hook execution always supplies the mutation-bound client;
- * keep that assertion local so generated app hooks retain their precise schema.
- */
-function asRealtimeMutationDb(
-	db: unknown,
-): DrizzleClientFromQuestpieConfig<any> {
-	return db as DrizzleClientFromQuestpieConfig<any>;
-}
 
 function resolveRealtimeOperation(
 	ctx: GlobalCollectionHookContext,
@@ -166,21 +157,22 @@ const realtimeHook = {
 		const payload = resolveRealtimePayload(ctx, "change");
 
 		try {
-			const change = await realtime.appendChange(
-				{
-					resourceType: "collection",
-					resource: ctx.collection,
-					operation,
-					recordId: ctx.isBatch ? null : (ctx.data?.id ?? null),
-					locale: ctx.locale ?? null,
-					payload,
-				},
-				{ db: asRealtimeMutationDb(ctx.db) },
-			);
+			const change = await realtime.appendChange({
+				resourceType: "collection",
+				resource: ctx.collection,
+				operation,
+				recordId: ctx.isBatch ? null : (ctx.data?.id ?? null),
+				locale: ctx.locale ?? null,
+				payload,
+			});
+			recordTransactionTxid(change.txid);
 
 			publishRealtimeAfterCommit(ctx, realtime, change);
 		} catch (error) {
 			handleRealtimeCaptureError(ctx.logger, error);
+			if (realtime.nativeDeltasEnabled) {
+				throw new FatalGlobalHookError(error);
+			}
 		}
 	},
 	afterDelete: async (ctx: GlobalCollectionHookContext) => {
@@ -192,21 +184,47 @@ const realtimeHook = {
 		const payload = resolveRealtimePayload(ctx, "delete");
 
 		try {
-			const change = await realtime.appendChange(
-				{
-					resourceType: "collection",
-					resource: ctx.collection,
-					operation,
-					recordId: ctx.isBatch ? null : (ctx.data?.id ?? null),
-					locale: ctx.locale ?? null,
-					payload,
-				},
-				{ db: asRealtimeMutationDb(ctx.db) },
-			);
+			const change = await realtime.appendChange({
+				resourceType: "collection",
+				resource: ctx.collection,
+				operation,
+				recordId: ctx.isBatch ? null : (ctx.data?.id ?? null),
+				locale: ctx.locale ?? null,
+				payload,
+			});
+			recordTransactionTxid(change.txid);
 
 			publishRealtimeAfterCommit(ctx, realtime, change);
 		} catch (error) {
 			handleRealtimeCaptureError(ctx.logger, error);
+			if (realtime.nativeDeltasEnabled) {
+				throw new FatalGlobalHookError(error);
+			}
+		}
+	},
+	afterPurge: async (ctx: GlobalCollectionHookContext) => {
+		const realtime = ctx.realtime;
+		if (!realtime) return;
+
+		try {
+			const change = await realtime.appendChange({
+				resourceType: "collection",
+				resource: ctx.collection,
+				operation: "delete",
+				recordId: ctx.data?.id ?? null,
+				locale: ctx.locale ?? null,
+				// Soft delete already emitted the equality projection needed to
+				// evict the live row. Purge is a second idempotent invalidation
+				// and must not retain another copy of the removed preimage.
+				payload: { before: null, after: null },
+			});
+			recordTransactionTxid(change.txid);
+			publishRealtimeAfterCommit(ctx, realtime, change);
+		} catch (error) {
+			handleRealtimeCaptureError(ctx.logger, error);
+			if (realtime.nativeDeltasEnabled) {
+				throw new FatalGlobalHookError(error);
+			}
 		}
 	},
 };
@@ -236,8 +254,7 @@ function asSearchApp(app: unknown): AppSearchSurface {
 
 /**
  * Resolve a collection's `.searchable(...)` config from the app instance.
- * Returns `undefined` when the collection (or accessor) is unavailable, which
- * {@link buildIndexParams} treats as the default auto-index config.
+ * Returns `undefined` when the collection has not explicitly opted in.
  */
 function resolveSearchableConfig(
 	app: AppSearchSurface,
@@ -267,23 +284,28 @@ const searchHook = {
 		if (!search) return;
 		const recordId = ctx.data?.id;
 		if (!recordId) return;
+		const app = asSearchApp(ctx.app);
+		const searchable = resolveSearchableConfig(app, ctx.collection);
+		if (!resolveAutomaticSearchableConfig(searchable)) return;
 
 		// Schedule debounced async indexing (fire-and-forget after commit)
 		ctx.onAfterCommit(async () => {
 			try {
 				// Try per-instance debounced scheduling first
-				const scheduled = search.scheduleIndex(ctx.collection, String(recordId));
+				const scheduled = search.scheduleIndex(
+					ctx.collection,
+					String(recordId),
+				);
 				if (!scheduled) {
 					// No queue — index synchronously for current locale.
 					// Resolve the collection's declarative `searchable` config so
 					// content/metadata/facets/embedding are populated (not title-only).
-					const app = asSearchApp(ctx.app);
 					const params = await buildIndexParams(
 						ctx.data as Record<string, any>,
 						{
 							collection: ctx.collection,
 							locale: ctx.locale ?? DEFAULT_LOCALE,
-							searchable: resolveSearchableConfig(app, ctx.collection),
+							searchable,
 							app: ctx.app,
 							defaultLocale: resolveDefaultLocale(app),
 						},
@@ -301,6 +323,27 @@ const searchHook = {
 		});
 	},
 	afterDelete: async (ctx: GlobalCollectionHookContext) => {
+		const search = ctx.search;
+		const logger = ctx.logger;
+		if (!search) return;
+		const recordId = ctx.data?.id;
+		if (!recordId) return;
+
+		ctx.onAfterCommit(async () => {
+			try {
+				await search.remove({
+					collection: ctx.collection,
+					recordId: String(recordId),
+				});
+			} catch (err) {
+				logger?.error(
+					`[Core] Search remove failed for ${ctx.collection}:${recordId}:`,
+					err,
+				);
+			}
+		});
+	},
+	afterPurge: async (ctx: GlobalCollectionHookContext) => {
 		const search = ctx.search;
 		const logger = ctx.logger;
 		if (!search) return;
@@ -365,24 +408,25 @@ const globalRealtimeHook = {
 		if (!realtime) return;
 
 		try {
-			const change = await realtime.appendChange(
-				{
-					resourceType: "global",
-					resource: ctx.global,
-					operation: "update",
-					recordId: ctx.data?.id ?? null,
-					locale: ctx.locale ?? null,
-					payload: {
-						before: null,
-						after: projectRealtimeEqualityFields(ctx.data),
-					},
+			const change = await realtime.appendChange({
+				resourceType: "global",
+				resource: ctx.global,
+				operation: "update",
+				recordId: ctx.data?.id ?? null,
+				locale: ctx.locale ?? null,
+				payload: {
+					before: null,
+					after: projectRealtimeEqualityFields(ctx.data),
 				},
-				{ db: asRealtimeMutationDb(ctx.db) },
-			);
+			});
+			recordTransactionTxid(change.txid);
 
 			publishRealtimeAfterCommit(ctx, realtime, change);
 		} catch (error) {
 			handleRealtimeCaptureError(ctx.logger, error);
+			if (realtime.nativeDeltasEnabled) {
+				throw new FatalGlobalHookError(error);
+			}
 		}
 	},
 };

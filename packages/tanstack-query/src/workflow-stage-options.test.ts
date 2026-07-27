@@ -129,4 +129,36 @@ describe("tanstack query workflow stage config", () => {
 		});
 		expect(globalTransitionCalls[0]?.options).toEqual({ locale: "en" });
 	});
+
+	it("generates a separately named purgeById mutation", async () => {
+		const calls: Array<{ params: unknown; options: unknown }> = [];
+		const client = {
+			collections: {
+				posts: {
+					purgeById: async (params: any, options?: any) => {
+						calls.push({ params, options });
+						return { success: true as const };
+					},
+				},
+			},
+			globals: {},
+			rpc: {},
+			realtime: undefined,
+		} as unknown as QuestpieClient<QuestpieApp>;
+
+		const queryOptions = createQuestpieQueryOptions(client, {
+			keyPrefix: ["questpie"],
+			locale: "sk",
+		});
+		const mutation = queryOptions.collections.posts.purgeById();
+
+		expect(mutation.mutationKey).toContain("purgeById");
+		await mutation.mutationFn?.({ id: "post-1" }, mutationContext);
+		expect(calls).toEqual([
+			{
+				params: { id: "post-1" },
+				options: { locale: "sk" },
+			},
+		]);
+	});
 });

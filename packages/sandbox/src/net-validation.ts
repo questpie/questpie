@@ -144,7 +144,11 @@ function isPrivateIpv6(raw: string): boolean {
 	}
 
 	// fc00::/7 unique-local (fc.. and fd..).
-	if (/^f[cd][0-9a-f]{0,2}:/.test(ip) || ip.startsWith("fc") || ip.startsWith("fd")) {
+	if (
+		/^f[cd][0-9a-f]{0,2}:/.test(ip) ||
+		ip.startsWith("fc") ||
+		ip.startsWith("fd")
+	) {
 		const first = ip.split(":")[0];
 		if (first.length > 0) {
 			const hi = Number.parseInt(first.padStart(4, "0").slice(0, 2), 16);
@@ -153,7 +157,12 @@ function isPrivateIpv6(raw: string): boolean {
 	}
 
 	// fe80::/10 link-local.
-	if (ip.startsWith("fe8") || ip.startsWith("fe9") || ip.startsWith("fea") || ip.startsWith("feb")) {
+	if (
+		ip.startsWith("fe8") ||
+		ip.startsWith("fe9") ||
+		ip.startsWith("fea") ||
+		ip.startsWith("feb")
+	) {
 		return true;
 	}
 
@@ -182,13 +191,36 @@ export function classifyIpLiteral(ip: string): IpValidationResult {
 /** Bound each DNS lookup so a slow/hanging resolver can't stall validation. */
 const DNS_TIMEOUT_MS = 3_000;
 
-function withDnsTimeout<T>(p: Promise<T>): Promise<T> {
-	return Promise.race([
-		p,
-		new Promise<T>((_, reject) =>
-			setTimeout(() => reject(new Error(`DNS lookup timed out (${DNS_TIMEOUT_MS}ms)`)), DNS_TIMEOUT_MS),
-		),
-	]);
+function withDnsTimeout<T>(
+	promise: Promise<T>,
+	timeoutMs = DNS_TIMEOUT_MS,
+	signal?: AbortSignal,
+): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		let settled = false;
+		const finish = (callback: () => void) => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timer);
+			signal?.removeEventListener("abort", onAbort);
+			callback();
+		};
+		const onAbort = () =>
+			finish(() => reject(new Error("DNS lookup cancelled")));
+		const timer = setTimeout(
+			() =>
+				finish(() =>
+					reject(new Error(`DNS lookup timed out (${timeoutMs}ms)`)),
+				),
+			timeoutMs,
+		);
+		if (signal?.aborted) onAbort();
+		else signal?.addEventListener("abort", onAbort, { once: true });
+		void promise.then(
+			(value) => finish(() => resolve(value)),
+			(error) => finish(() => reject(error)),
+		);
+	});
 }
 
 /** Lazily load `node:dns/promises` `resolve` (works on both Bun and Deno). */
@@ -208,7 +240,11 @@ async function defaultResolver(hostname: string): Promise<string[]> {
 			// If BOTH lookups failed (incl. timeout), surface an error so the caller
 			// fails CLOSED (rejects the host) rather than treating it as "no private
 			// addresses found" → allowed.
-			if (out.length === 0 && v4.status === "rejected" && v6.status === "rejected") {
+			if (
+				out.length === 0 &&
+				v4.status === "rejected" &&
+				v6.status === "rejected"
+			) {
 				throw new Error(
 					`DNS resolution failed (v4: ${reasonOf(v4)}, v6: ${reasonOf(v6)})`,
 				);
@@ -236,8 +272,15 @@ function reasonOf(settled: PromiseRejectedResult): string {
  */
 export async function validateHostEgress(
 	entry: string,
-	opts: { resolve?: DnsResolver } = {},
+	opts: {
+		resolve?: DnsResolver;
+		signal?: AbortSignal;
+		timeoutMs?: number;
+	} = {},
 ): Promise<IpValidationResult> {
+	if (opts.signal?.aborted) {
+		return { ok: false, reason: "DNS lookup cancelled" };
+	}
 	const { host } = parseHostEntry(entry);
 	const lower = host.toLowerCase();
 
@@ -245,7 +288,11 @@ export async function validateHostEgress(
 		return { ok: false, reason: "empty host" };
 	}
 	// Obvious loopback / mDNS names — never resolve these out.
-	if (lower === "localhost" || lower.endsWith(".localhost") || lower.endsWith(".local")) {
+	if (
+		lower === "localhost" ||
+		lower.endsWith(".localhost") ||
+		lower.endsWith(".local")
+	) {
 		return { ok: false, reason: `loopback/mDNS hostname not allowed: ${host}` };
 	}
 
@@ -260,7 +307,11 @@ export async function validateHostEgress(
 	const resolver = opts.resolve ?? defaultResolver;
 	let addrs: string[];
 	try {
-		addrs = await resolver(host);
+		addrs = await withDnsTimeout(
+			resolver(host),
+			opts.timeoutMs ?? DNS_TIMEOUT_MS,
+			opts.signal,
+		);
 	} catch (err) {
 		return {
 			ok: false,
@@ -268,7 +319,10 @@ export async function validateHostEgress(
 		};
 	}
 	if (addrs.length === 0) {
-		return { ok: false, reason: `DNS resolution returned no addresses for ${host}` };
+		return {
+			ok: false,
+			reason: `DNS resolution returned no addresses for ${host}`,
+		};
 	}
 	for (const addr of addrs) {
 		const c = classifyIpLiteral(addr);
@@ -288,11 +342,60 @@ export async function validateHostEgress(
  */
 export async function validateEgressHosts(
 	hosts: readonly string[],
-	opts: { resolve?: DnsResolver } = {},
+	opts: {
+		resolve?: DnsResolver;
+		signal?: AbortSignal;
+		timeoutMs?: number;
+		concurrency?: number;
+	} = {},
 ): Promise<IpValidationResult> {
-	for (const entry of hosts) {
-		const r = await validateHostEgress(entry, opts);
-		if (!r.ok) return { ok: false, reason: `host "${entry}": ${r.reason}` };
+	if (hosts.length === 0) return { ok: true };
+	const controller = new AbortController();
+	const onAbort = () => controller.abort();
+	if (opts.signal?.aborted) controller.abort();
+	else opts.signal?.addEventListener("abort", onAbort, { once: true });
+	const timeoutMs = Math.max(
+		1,
+		Math.min(DNS_TIMEOUT_MS, Math.floor(opts.timeoutMs ?? DNS_TIMEOUT_MS)),
+	);
+	const timer = setTimeout(() => controller.abort(), timeoutMs);
+	const concurrency = Math.max(
+		1,
+		Math.min(8, Math.floor(opts.concurrency ?? 4)),
+	);
+	const results = Array.from<IpValidationResult | undefined>({
+		length: hosts.length,
+	});
+	let cursor = 0;
+	const worker = async () => {
+		while (cursor < hosts.length) {
+			const index = cursor;
+			cursor += 1;
+			results[index] = await validateHostEgress(hosts[index]!, {
+				...opts,
+				signal: controller.signal,
+				timeoutMs,
+			});
+		}
+	};
+	try {
+		await Promise.all(
+			Array.from({ length: Math.min(concurrency, hosts.length) }, () =>
+				worker(),
+			),
+		);
+	} finally {
+		clearTimeout(timer);
+		opts.signal?.removeEventListener("abort", onAbort);
+	}
+	for (let index = 0; index < results.length; index += 1) {
+		const result = results[index]!;
+		if (!result.ok) {
+			return {
+				ok: false,
+				reason: `host "${hosts[index]}": ${result.reason}`,
+			};
+		}
 	}
 	return { ok: true };
 }
@@ -314,45 +417,95 @@ export interface ResolvedEndpoint {
  * so a private result here is a rebind/inconsistency and must NOT become an
  * `accept` rule). The drop rules cover the private space regardless.
  *
- * Best-effort + fail-OPEN-on-resolution-error by design: a host that fails to
- * resolve simply yields no `accept` rule (the guest can't reach it → still safe);
- * this never throws so it cannot break the spawn path. The SECURITY guarantee is
- * carried by the DROP rules + the default-deny policy, not by this function.
+ * Best-effort and fail-safe on resolution error: a host that fails to resolve
+ * simply yields no `accept` rule (the guest can't reach it). This never throws,
+ * and the security guarantee remains the DROP rules plus default-deny policy.
  */
 export async function resolveAllowedEndpoints(
 	hosts: readonly string[],
-	opts: { resolve?: DnsResolver } = {},
+	opts: {
+		resolve?: DnsResolver;
+		signal?: AbortSignal;
+		timeoutMs?: number;
+		concurrency?: number;
+	} = {},
 ): Promise<ResolvedEndpoint[]> {
+	const resolver = opts.resolve ?? defaultResolver;
+	const controller = new AbortController();
+	const onAbort = () => controller.abort();
+	if (opts.signal?.aborted) controller.abort();
+	else opts.signal?.addEventListener("abort", onAbort, { once: true });
+	const timeoutMs = Math.max(
+		1,
+		Math.min(DNS_TIMEOUT_MS, Math.floor(opts.timeoutMs ?? DNS_TIMEOUT_MS)),
+	);
+	const timer = setTimeout(() => controller.abort(), timeoutMs);
+	const concurrency = Math.max(
+		1,
+		Math.min(8, Math.floor(opts.concurrency ?? 4)),
+	);
+	const resolved = Array.from<ResolvedEndpoint[] | undefined>({
+		length: hosts.length,
+	});
+	let cursor = 0;
+
+	try {
+		const worker = async () => {
+			while (cursor < hosts.length && !controller.signal.aborted) {
+				const index = cursor;
+				cursor += 1;
+				const { host, port } = parseHostEntry(hosts[index]!);
+				const lower = host.toLowerCase();
+				if (
+					lower.length === 0 ||
+					lower === "localhost" ||
+					lower.endsWith(".localhost") ||
+					lower.endsWith(".local")
+				) {
+					resolved[index] = [];
+					continue;
+				}
+				// IP literal → accept only if it classifies as PUBLIC.
+				if (isIpv4Literal(host) || isIpv6Literal(host)) {
+					resolved[index] = classifyIpLiteral(host).ok
+						? [port === undefined ? { ip: host } : { ip: host, port }]
+						: [];
+					continue;
+				}
+				// Hostname → resolve; pin each PUBLIC address.
+				try {
+					const addrs = await withDnsTimeout(
+						resolver(host),
+						timeoutMs,
+						controller.signal,
+					);
+					resolved[index] = addrs
+						.filter((addr) => classifyIpLiteral(addr).ok)
+						.map((ip) => (port === undefined ? { ip } : { ip, port }));
+				} catch {
+					// Unresolvable or cancelled → no accept rule.
+					resolved[index] = [];
+				}
+			}
+		};
+		await Promise.all(
+			Array.from({ length: Math.min(concurrency, hosts.length) }, () =>
+				worker(),
+			),
+		);
+	} finally {
+		clearTimeout(timer);
+		opts.signal?.removeEventListener("abort", onAbort);
+	}
+
 	const out: ResolvedEndpoint[] = [];
 	const seen = new Set<string>();
-	const push = (ip: string, port?: number) => {
-		const key = `${ip}|${port ?? ""}`;
-		if (seen.has(key)) return;
-		seen.add(key);
-		out.push(port === undefined ? { ip } : { ip, port });
-	};
-	const resolver = opts.resolve ?? defaultResolver;
-
-	for (const entry of hosts) {
-		const { host, port } = parseHostEntry(entry);
-		const lower = host.toLowerCase();
-		if (lower.length === 0 || lower === "localhost" || lower.endsWith(".localhost") || lower.endsWith(".local")) {
-			continue;
-		}
-		// IP literal → accept only if it classifies as PUBLIC.
-		if (isIpv4Literal(host) || isIpv6Literal(host)) {
-			if (classifyIpLiteral(host).ok) push(host, port);
-			continue;
-		}
-		// Hostname → resolve; pin each PUBLIC address.
-		let addrs: string[];
-		try {
-			addrs = await resolver(host);
-		} catch {
-			continue; // unresolvable → no accept rule (guest can't reach it anyway)
-		}
-		for (const addr of addrs) {
-			if (classifyIpLiteral(addr).ok) push(addr, port);
+	for (const endpoints of resolved) {
+		for (const endpoint of endpoints ?? []) {
+			const key = `${endpoint.ip}|${endpoint.port ?? ""}`;
+			if (seen.has(key)) continue;
+			seen.add(key);
+			out.push(endpoint);
 		}
 	}
 	return out;

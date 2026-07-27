@@ -41,12 +41,21 @@ const unsubscribe = client.collections.posts.live(
 
 The first callback receives the current snapshot. Later invalidations refresh only subscriptions affected by the changed collection, global, locale, stage, and query scope.
 
-Every refresh is a complete snapshot rather than a delta. The default
-`maxFindLimit` is `100` per snapshot; oversized topics are rejected instead of
-silently clamped or split. Keep large or paginated read models on bounded normal
-reads, or use a purpose-built channel/projection flow for their update signal.
+Snapshot delivery remains the default. Its `maxFindLimit` is `100`; oversized
+topics are rejected instead of silently clamped or split. The raw realtime API
+can explicitly request native keyed deltas for an unwindowed collection `find`
+with only own-column filters. Windowing, ordering, relations, counts, and globals
+remain snapshots, so correctness never depends on a partial delta. Delta groups
+periodically re-bootstrap and reset immediately when a configured watched access
+resource changes.
 
 See [Client realtime](/docs/client/realtime) for `live()`, `liveIter()`, lifecycle options, and TanStack Query integration.
+
+For multi-tenant and high-fanout systems, read
+[Scalable realtime modeling](/docs/concepts/scalable-realtime). It explains
+scope identity, conservative routing, immutable buckets, server opt-out, and
+when channels or materialized inboxes are a better model than generic row
+realtime.
 
 ## Channels
 
@@ -71,7 +80,7 @@ Clients multiplex subscriptions over a shared connection. A broker distributes i
 
 Desired topic/channel topology is stored durably with revisions, owner leases,
 and fencing. After the generated topology migration is applied and every
-request-handling replica supports desired topology protocol v1, topology
+request-handling replica supports desired topology protocol v2, topology
 updates, reconnect, and resume may hit any replica. Sticky affinity is not a
 steady-state HA requirement and should be removed after rollout verification.
 

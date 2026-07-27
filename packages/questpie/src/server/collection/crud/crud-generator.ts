@@ -1,3 +1,7 @@
+import { Buffer } from "node:buffer";
+import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
+
 import {
 	and,
 	asc,
@@ -32,9 +36,17 @@ import {
 } from "#questpie/server/collection/crud/query-builders/index.js";
 import {
 	applyBelongsToRelations,
+	collapsePolymorphicRelationValues,
+	expandPolymorphicRelationValues,
 	extractBelongsToConnectValues,
 	handleCascadeDelete,
+	isForeignKeyViolation,
+	isPurgeLockTimeout,
+	lockRelationSourceForWrite,
+	lockRelationTargetsForWrite,
+	preparePurgeRelations,
 	processNestedRelations,
+	retainedReferenceConflict,
 	separateNestedRelations,
 } from "#questpie/server/collection/crud/relation-mutations/index.js";
 import {
@@ -47,6 +59,7 @@ import {
 	executeAccessRule,
 	getRestrictedReadFields,
 	matchesAccessConditions,
+	matchesStrictAccessConditions,
 	mergeFieldAccessRules,
 	mergeWhereWithAccess,
 	PRECHECKED_READ_ACCESS,
@@ -63,11 +76,13 @@ import { getColumn } from "#questpie/server/collection/crud/shared/field-resolve
 import {
 	executeGlobalCollectionHooks,
 	executeGlobalCollectionTransitionHooks,
+	rethrowFatalGlobalHookError,
 } from "#questpie/server/collection/crud/shared/global-hooks.js";
 import {
 	createHookContext,
 	executeHooks,
 	getCurrentTransaction,
+	getTransactionTxid,
 	getDb,
 	guardCrudMethods,
 	isInTransaction,
@@ -93,6 +108,7 @@ import type {
 	FindVersionsOptions,
 	OrderBy,
 	PaginatedResult,
+	PurgeParams,
 	RestoreParams,
 	RevertVersionOptions,
 	TransitionStageParams,
@@ -116,10 +132,21 @@ import {
 } from "#questpie/server/fields/runtime.js";
 import type { FieldAccess } from "#questpie/server/fields/types.js";
 import {
+	assertNoCrdtFieldsInOrdinaryMutation,
+	assertNoCrdtFieldsInVersionRestore,
+} from "#questpie/server/modules/core/integrated/crdt/crud-guard.js";
+import {
+	canonicalCrdtCollectionLocator,
+	CrdtOwnerLifecycleTransaction,
+	stageCrdtOwnerActivation,
+	type StagedCrdtOwnerActivation,
+} from "#questpie/server/modules/core/integrated/crdt/owner-lifecycle.js";
+import {
 	extractWorkflowFromVersioning,
 	type ResolvedWorkflowConfig,
 	resolveWorkflowConfig,
 } from "#questpie/server/modules/core/workflow/config.js";
+import { attachTxid, getTxid } from "#questpie/shared/txid.js";
 
 /**
  * True when a where clause constrains nothing but `id`.
@@ -130,6 +157,32 @@ function isIdOnlyWhere(where: Where | undefined): boolean {
 	if (!where || typeof where !== "object") return false;
 	const keys = Object.keys(where);
 	return keys.length === 1 && keys[0] === "id";
+}
+
+function attachCurrentTransactionTxid<T>(value: T): T {
+	const txid = getTransactionTxid();
+	if (Array.isArray(value)) {
+		for (const item of value) attachTxid(item, txid);
+	}
+	return attachTxid(value, txid);
+}
+
+function freezePurgeSnapshot<T>(value: T, seen = new WeakSet<object>()): T {
+	if (value === null || typeof value !== "object" || seen.has(value)) {
+		return value;
+	}
+	if (ArrayBuffer.isView(value)) return value;
+	seen.add(value);
+	for (const child of Object.values(value)) {
+		freezePurgeSnapshot(child, seen);
+	}
+	return Object.freeze(value);
+}
+
+function clonePurgeSnapshot(
+	record: Record<string, unknown>,
+): Record<string, unknown> {
+	return structuredClone(record);
 }
 
 export class CRUDGenerator<TState extends CollectionBuilderState> {
@@ -188,6 +241,43 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		}
 		// Legacy API: explicit localized array
 		return (this.state.localized ?? []) as string[];
+	}
+
+	private getCrdtManifest() {
+		return Object.values(this.app?.crdtManifests.collections ?? {}).find(
+			(manifest) => manifest.owner.key === this.state.name,
+		);
+	}
+
+	private getCrdtCreateValues(
+		data: Record<string, unknown>,
+		manifest: NonNullable<ReturnType<CRUDGenerator<TState>["getCrdtManifest"]>>,
+	): Record<string, unknown> {
+		const values = { ...data };
+		for (const field of manifest.fields) {
+			if (Object.hasOwn(values, field.sourcePath)) continue;
+			const definition = this.state.fieldDefinitions?.[field.sourcePath] as
+				| { _state?: { defaultValue?: unknown } }
+				| undefined;
+			const defaultValue = definition?.["_state"]?.defaultValue;
+			values[field.sourcePath] = Array.isArray(defaultValue)
+				? [...defaultValue]
+				: defaultValue;
+		}
+		return values;
+	}
+
+	private async stageCrdtOwner(
+		values: Record<string, unknown>,
+	): Promise<StagedCrdtOwnerActivation | undefined> {
+		const manifest = this.getCrdtManifest();
+		if (!manifest) return undefined;
+		return stageCrdtOwnerActivation({
+			manifest,
+			resourceId: randomUUID(),
+			values: this.getCrdtCreateValues(values, manifest),
+			textEngine: this.app?.config.crdt?.engines?.text,
+		});
 	}
 
 	/**
@@ -309,6 +399,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		const updateMany = this.wrapWithAppContext(this.createUpdateMany());
 		const updateBatch = this.wrapWithAppContext(this.createUpdateBatch());
 		const deleteMany = this.wrapWithAppContext(this.createDeleteMany());
+		const purgeById = this.wrapWithAppContext(this.createPurge());
 		const restoreById = this.wrapWithAppContext(this.createRestore());
 
 		const crud: CRUD = {
@@ -323,6 +414,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			update: updateMany,
 			updateBatch,
 			deleteById: this.wrapWithAppContext(this.createDelete()),
+			purgeById,
 			deleteMany,
 			// Deprecated alias of deleteMany (removed in v4)
 			delete: deleteMany,
@@ -508,7 +600,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		options: FindManyOptions | FindOneOptionsBase,
 		context: CRUDContext,
 		mode: "many" | "one",
-		findOptions?: { skipOutputHooks?: boolean },
+		findOptions?: {
+			skipFieldFiltering?: boolean;
+			skipOutputHooks?: boolean;
+			skipReadLifecycle?: boolean;
+		},
 	): Promise<PaginatedResult<T> | GroupedPaginatedResult<T> | T | null> {
 		// Normalize context FIRST to ensure locale defaults are applied
 		const normalized = this.normalizeContext({
@@ -524,6 +620,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			{
 				app: this.app,
 				session: normalized.session,
+				principal: normalized.principal,
+				actor: normalized.actor,
 				db,
 				locale: normalized.locale,
 				accessMode: normalized.accessMode,
@@ -532,16 +630,18 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				_hookDepth,
 			},
 			async () => {
-				// Execute beforeOperation hook
-				await this.executeHooks(
-					this.state.hooks?.beforeOperation,
-					this.createHookContext({
-						data: options,
-						operation: "read",
-						context: normalized,
-						db,
-					}),
-				);
+				if (!findOptions?.skipReadLifecycle) {
+					// Execute beforeOperation hook
+					await this.executeHooks(
+						this.state.hooks?.beforeOperation,
+						this.createHookContext({
+							data: options,
+							operation: "read",
+							context: normalized,
+							db,
+						}),
+					);
+				}
 
 				// Enforce access control. Upload relations populate through the
 				// PARENT row's read decision: the relation dispatcher stamps nested
@@ -573,7 +673,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 
 				// Execute beforeRead hooks (read doesn't modify data)
-				if (this.state.hooks?.beforeRead) {
+				if (this.state.hooks?.beforeRead && !findOptions?.skipReadLifecycle) {
 					await this.executeHooks(
 						this.state.hooks.beforeRead,
 						this.createHookContext({
@@ -1042,6 +1142,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						hasFallback: needsFallback,
 					});
 				}
+				for (const row of rows) {
+					collapsePolymorphicRelationValues(row, this.state.relations ?? {});
+				}
 
 				// Handle relations
 				if (rows.length > 0 && options.with && this.app) {
@@ -1057,7 +1160,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// caller after the tx commits.
 				await Promise.all(
 					rows.map(async (row: any) => {
-						await this.filterFieldsForRead(row, normalized);
+						if (!findOptions?.skipFieldFiltering) {
+							await this.filterFieldsForRead(row, normalized);
+						}
 						if (!findOptions?.skipOutputHooks) {
 							await this.runFieldOutputHooks(row, "read", normalized, db);
 						}
@@ -1422,8 +1527,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		regularFields: any;
 		nestedRelations: Record<string, any>;
 	} {
-		const relationNames = new Set(Object.keys(this.state.relations || {}));
-		return separateNestedRelations(input, relationNames);
+		return separateNestedRelations(input, this.state.relations ?? {});
 	}
 
 	/**
@@ -1517,6 +1621,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				{
 					app: this.app,
 					session: normalized.session,
+					principal: normalized.principal,
+					actor: normalized.actor,
 					db,
 					locale: normalized.locale,
 					accessMode: normalized.accessMode,
@@ -1617,9 +1723,29 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							db,
 						}),
 					);
+					regularFields = expandPolymorphicRelationValues(
+						regularFields,
+						this.state.relations ?? {},
+					);
+					const crdtManifest = this.getCrdtManifest();
+					const stagedCrdtActivation: StagedCrdtOwnerActivation | undefined =
+						crdtManifest
+							? await stageCrdtOwnerActivation({
+									manifest: crdtManifest,
+									resourceId: randomUUID(),
+									values: this.getCrdtCreateValues(regularFields, crdtManifest),
+									textEngine: this.app?.config.crdt?.engines?.text,
+								})
+							: undefined;
 					let record: any;
 					try {
 						record = await withTransaction(db, async (tx: any) => {
+							await lockRelationSourceForWrite({
+								tx,
+								app: this.app,
+								sourceState: this.state,
+								sourceTable: this.table,
+							});
 							({ regularFields, nestedRelations } =
 								await this.applyBelongsToRelationsInternal(
 									regularFields,
@@ -1632,6 +1758,15 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							// Auto-detects { $i18n: value } wrappers in JSONB fields
 							const { localized, nonLocalized, nestedLocalized } =
 								this.splitLocalizedFields(regularFields);
+							if (this.app) {
+								await lockRelationTargetsForWrite({
+									tx,
+									app: this.app,
+									sourceState: this.state,
+									sourceTable: this.table,
+									values: nonLocalized,
+								});
+							}
 
 							// Insert main record
 							const [insertedRecord] = await tx
@@ -1729,6 +1864,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 									hasFallback: needsFallback,
 								});
 							}
+							if (createdRecord) {
+								collapsePolymorphicRelationValues(
+									createdRecord,
+									this.state.relations ?? {},
+								);
+							}
 
 							// Execute afterChange hooks
 							await this.executeCollectionHooksWithGlobal(
@@ -1742,9 +1883,32 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 								}),
 							);
 
+							// Final lock-acquiring framework step: no application hook may
+							// run after the owner row and CRDT resource are locked.
+							if (stagedCrdtActivation) {
+								const [lockedOwner] = await tx
+									.select()
+									.from(this.table)
+									.where(eq(getColumn(this.table, "id")!, insertedRecord.id))
+									.for("update");
+								if (!lockedOwner) {
+									throw new Error(
+										"Created owner disappeared before CRDT activation",
+									);
+								}
+								await new CrdtOwnerLifecycleTransaction(tx).activate({
+									staged: stagedCrdtActivation,
+									owner: {
+										locator: canonicalCrdtCollectionLocator(insertedRecord.id),
+										values: lockedOwner,
+									},
+									mode: "create",
+								});
+							}
+
 							// Queue search indexing to run after transaction commits (fire-and-forget)
 
-							return createdRecord;
+							return attachCurrentTransactionTxid(createdRecord);
 						});
 					} catch (error: unknown) {
 						// Check if it's a database constraint violation
@@ -1856,7 +2020,23 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			| UpdateParams<any, any, string | number>
 			| { where: Where; data: Record<string, any> },
 		context: CRUDContext = {},
+		internal?: { crdtRestore: StagedCrdtOwnerActivation },
 	) {
+		if (
+			this.getCrdtManifest() &&
+			Object.hasOwn(params.data, "deletedAt") &&
+			!internal
+		) {
+			throw ApiError.badRequest(
+				`Collaborative owner "${this.state.name}" can only be undeleted through restoreById`,
+			);
+		}
+		assertNoCrdtFieldsInOrdinaryMutation({
+			ownerName: this.state.name,
+			fieldDefinitions: this.state.fieldDefinitions,
+			data: params.data,
+		});
+
 		const normalized = this.normalizeContext(context);
 
 		const db = this.getDb(normalized);
@@ -2013,11 +2193,21 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}),
 			);
 		}
+		regularFields = expandPolymorphicRelationValues(
+			regularFields,
+			this.state.relations ?? {},
+		);
 		let updatedRecords: any[];
 
 		try {
 			updatedRecords = await withTransaction(db, async (tx: any) => {
 				const txContext = { ...normalized, db: tx };
+				await lockRelationSourceForWrite({
+					tx,
+					app: this.app,
+					sourceState: this.state,
+					sourceTable: this.table,
+				});
 
 				// Claim check: lock candidate rows and re-assert the caller's
 				// predicate at write time. Rows that no longer match (lost a
@@ -2058,6 +2248,16 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// Split localized vs non-localized fields
 				const { localized, nonLocalized, nestedLocalized } =
 					this.splitLocalizedFields(regularFields);
+				if (this.app) {
+					await lockRelationTargetsForWrite({
+						tx,
+						app: this.app,
+						sourceState: this.state,
+						sourceTable: this.table,
+						values: nonLocalized,
+						originalRows: winners,
+					});
+				}
 
 				// Update main table
 				if (
@@ -2166,6 +2366,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 								bulk: afterBulkMeta,
 							}),
 						).catch((err) => {
+							rethrowFatalGlobalHookError(err);
 							console.error(
 								`[QUESTPIE] afterChange hook error in bulk update:`,
 								err,
@@ -2173,10 +2374,61 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						}),
 					);
 				}
-				// Execute all afterChange hooks in parallel (non-fatal)
-				await Promise.allSettled(afterChangePromises);
+				// Execute all afterChange hooks in parallel. Ordinary hook errors were
+				// handled above; fatal infrastructure errors still abort the transaction.
+				await Promise.all(afterChangePromises);
 
-				return refetchedRecords;
+				const crdtManifest = this.getCrdtManifest();
+				if (crdtManifest && !internal) {
+					const lifecycle = new CrdtOwnerLifecycleTransaction(tx);
+					const sortedOwners = [...refetchedRecords].sort((left, right) =>
+						Buffer.from(
+							canonicalCrdtCollectionLocator(left.id),
+							"utf8",
+						).compare(
+							Buffer.from(canonicalCrdtCollectionLocator(right.id), "utf8"),
+						),
+					);
+					for (const owner of sortedOwners) {
+						await lifecycle.advanceOwnerPolicyRevision({
+							manifest: crdtManifest,
+							locator: canonicalCrdtCollectionLocator(owner.id),
+						});
+					}
+				}
+
+				if (internal) {
+					const restored = refetchedRecords[0];
+					if (!restored || refetchedRecords.length !== 1) {
+						throw new Error(
+							"Collaborative restore must resolve exactly one owner",
+						);
+					}
+					const [lockedOwner] = await tx
+						.select()
+						.from(this.table)
+						.where(eq(getColumn(this.table, "id")!, restored.id))
+						.for("update");
+					if (!lockedOwner) {
+						throw new Error(
+							"Restored owner disappeared before CRDT lifecycle restore",
+						);
+					}
+					if (lockedOwner.deletedAt != null) {
+						throw new Error(
+							"Collaborative owner remained deleted after restore hooks",
+						);
+					}
+					await new CrdtOwnerLifecycleTransaction(tx).restore({
+						staged: internal.crdtRestore,
+						owner: {
+							locator: canonicalCrdtCollectionLocator(restored.id),
+							values: lockedOwner,
+						},
+					});
+				}
+
+				return attachCurrentTransactionTxid(refetchedRecords);
 			});
 		} catch (error: unknown) {
 			const dbError = parseDatabaseError(error);
@@ -2253,6 +2505,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			if (!existing) {
 				throw ApiError.notFound("Record", id);
 			}
+			if (this.state.options.softDelete && existing.deletedAt != null) {
+				throw ApiError.notFound("Record", id);
+			}
 
 			// Enforce access control
 			const canDelete = await this.enforceAccessControl(
@@ -2295,6 +2550,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					db,
 				}),
 			);
+			const stagedCrdtOwner = await this.stageCrdtOwner(existing);
 
 			// Use transaction for delete + version
 			await withTransaction(db, async (tx: any) => {
@@ -2308,6 +2564,20 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					candidateIds: [id],
 				});
 				if (claimed.length === 0) {
+					throw ApiError.notFound("Record", id);
+				}
+				const [lockedBeforeDelete] = await tx
+					.select()
+					.from(this.table)
+					.where(eq(getColumn(this.table, "id")!, id))
+					.for("update");
+				if (!lockedBeforeDelete) {
+					throw ApiError.notFound("Record", id);
+				}
+				if (
+					this.state.options.softDelete &&
+					lockedBeforeDelete.deletedAt != null
+				) {
 					throw ApiError.notFound("Record", id);
 				}
 
@@ -2342,15 +2612,49 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						}),
 					);
 				} catch (err) {
+					rethrowFatalGlobalHookError(err);
 					// afterDelete hook errors are non-fatal — log and continue
 					console.error(
 						`[QUESTPIE] afterDelete hook error for "${this.state.name}":`,
 						err,
 					);
 				}
+				if (stagedCrdtOwner) {
+					const terminalRows = await tx
+						.select()
+						.from(this.table)
+						.where(eq(getColumn(this.table, "id")!, id))
+						.for("update");
+					const terminalOwner = terminalRows[0];
+					if (
+						(this.state.options.softDelete &&
+							(!terminalOwner || terminalOwner.deletedAt == null)) ||
+						(!this.state.options.softDelete && terminalOwner)
+					) {
+						throw new Error(
+							"Collaborative owner is not terminally deleted after delete hooks",
+						);
+					}
+					const crdtOwner = terminalOwner ?? lockedBeforeDelete;
+					const lifecycle = new CrdtOwnerLifecycleTransaction(tx);
+					const locator = canonicalCrdtCollectionLocator(id);
+					await lifecycle.activate({
+						staged: stagedCrdtOwner,
+						owner: { locator, values: crdtOwner },
+						mode: "ensure",
+					});
+					await lifecycle.retire({
+						manifest: stagedCrdtOwner.manifest,
+						locator,
+					});
+				}
+				attachCurrentTransactionTxid(existing);
 			});
 
-			const result = { success: true, data: existing };
+			const result = attachTxid(
+				{ success: true, data: existing },
+				getTxid(existing),
+			);
 
 			// Execute afterRead hook (transform output)
 			await this.executeHooks(
@@ -2366,6 +2670,229 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			await this.filterFieldsForRead(existing, normalized);
 
 			return result;
+		};
+	}
+
+	/**
+	 * Permanently remove an already soft-deleted record.
+	 *
+	 * This lifecycle is intentionally separate from delete: it has default-deny
+	 * authority, dedicated fatal hooks, and never reinterprets `onDelete`
+	 * relation declarations as irreversible graph authority.
+	 */
+	private createPurge() {
+		return async (params: PurgeParams, context: CRUDContext = {}) => {
+			if (!this.state.options.softDelete) {
+				throw ApiError.notImplemented("Physical purge");
+			}
+
+			const normalized = this.normalizeContext(context);
+			const db = this.getDb(normalized);
+			const { id } = params;
+
+			try {
+				return await withTransaction(db, async (tx: any) => {
+					const txContext = { ...normalized, db: tx };
+					const findPreimage = async () =>
+						(await this._executeFind<Record<string, unknown>>(
+							{
+								where: { id },
+								includeDeleted: true,
+								stage: this.workflowConfig?.initialStage,
+							},
+							{ ...txContext, accessMode: "system" },
+							"one",
+							{
+								skipFieldFiltering: true,
+								skipOutputHooks: true,
+								skipReadLifecycle: true,
+							},
+						)) as Record<string, unknown> | null;
+					const assertPurgeAccess = async (
+						preimage: Record<string, unknown>,
+					) => {
+						const canPurge = await this.enforcePurgeAccess(
+							txContext,
+							freezePurgeSnapshot(clonePurgeSnapshot(preimage)),
+							params,
+						);
+						if (
+							canPurge !== true &&
+							(canPurge === null ||
+								typeof canPurge !== "object" ||
+								Array.isArray(canPurge) ||
+								!(await matchesStrictAccessConditions(canPurge, preimage)))
+						) {
+							throw ApiError.notFound("Record", String(id));
+						}
+					};
+
+					await this.executeHooks(
+						this.state.hooks?.beforeOperation,
+						this.createHookContext({
+							data: params,
+							operation: "purge",
+							context: txContext,
+							db: tx,
+						}),
+					);
+
+					// Resolve and authorize the complete localized preimage before
+					// taking locks on referring tables. The owner is re-read and the
+					// access rule re-evaluated after its row lock below.
+					const candidateResult = await findPreimage();
+					if (!candidateResult) {
+						throw ApiError.notFound("Record", String(id));
+					}
+					const candidate = freezePurgeSnapshot(candidateResult);
+					await assertPurgeAccess(candidate);
+					if (candidate.deletedAt == null) {
+						throw ApiError.conflict("Only a soft-deleted record can be purged");
+					}
+
+					if (!this.app) throw retainedReferenceConflict();
+					const preparedRelations = await preparePurgeRelations({
+						tx,
+						app: this.app,
+						targetTable: this.table,
+						i18nTable: this.i18nTable,
+					});
+
+					const [locked] = await tx
+						.select()
+						.from(this.table)
+						.where(eq(getColumn(this.table, "id")!, id))
+						.for("update");
+					if (!locked) {
+						throw ApiError.notFound("Record", String(id));
+					}
+
+					const preimageResult = await findPreimage();
+					if (!preimageResult) {
+						throw ApiError.notFound("Record", String(id));
+					}
+					const preimage = freezePurgeSnapshot(preimageResult);
+					await assertPurgeAccess(preimage);
+
+					if (locked.deletedAt == null) {
+						throw ApiError.conflict("Only a soft-deleted record can be purged");
+					}
+
+					await preparedRelations.assertNoReferences(preimage);
+
+					const hookPreimage = freezePurgeSnapshot(
+						clonePurgeSnapshot(preimage),
+					);
+					const hookContext = this.createHookContext({
+						data: hookPreimage,
+						original: hookPreimage,
+						operation: "purge",
+						context: txContext,
+						db: tx,
+					});
+					await this.executeCollectionHooksWithGlobal(
+						"beforePurge",
+						this.state.hooks?.beforePurge,
+						hookContext,
+					);
+
+					const revalidatedPreimage = await findPreimage();
+					if (
+						!revalidatedPreimage ||
+						revalidatedPreimage.deletedAt == null ||
+						!isDeepStrictEqual(revalidatedPreimage, preimage)
+					) {
+						throw ApiError.conflict(
+							"Purge hooks cannot mutate the owner record",
+						);
+					}
+
+					// Hooks run inside the transaction and may write through raw db
+					// access, so revalidate the tombstone and rescan immediately
+					// before the destructive boundary.
+					await preparedRelations.assertNoReferences(preimage);
+
+					try {
+						if (this.i18nVersionsTable) {
+							await tx
+								.delete(this.i18nVersionsTable)
+								.where(eq(getColumn(this.i18nVersionsTable, "parentId")!, id));
+						}
+						if (this.versionsTable) {
+							await tx
+								.delete(this.versionsTable)
+								.where(eq(getColumn(this.versionsTable, "id")!, id));
+						}
+						await tx
+							.delete(this.table)
+							.where(eq(getColumn(this.table, "id")!, id));
+					} catch (error: unknown) {
+						if (isForeignKeyViolation(error)) {
+							throw retainedReferenceConflict();
+						}
+						throw error;
+					}
+
+					await this.executeCollectionHooksWithGlobal(
+						"afterPurge",
+						this.state.hooks?.afterPurge,
+						hookContext,
+					);
+					const ownerRows = await tx
+						.select({ id: getColumn(this.table, "id")! })
+						.from(this.table)
+						.where(eq(getColumn(this.table, "id")!, id))
+						.limit(1);
+					if (ownerRows.length > 0) {
+						throw ApiError.conflict(
+							"Purge hooks cannot recreate the owner record",
+						);
+					}
+					const satelliteChecks = [
+						this.i18nTable
+							? tx
+									.select({ id: getColumn(this.i18nTable, "id")! })
+									.from(this.i18nTable)
+									.where(eq(getColumn(this.i18nTable, "parentId")!, id))
+									.limit(1)
+							: [],
+						this.versionsTable
+							? tx
+									.select({ id: getColumn(this.versionsTable, "id")! })
+									.from(this.versionsTable)
+									.where(eq(getColumn(this.versionsTable, "id")!, id))
+									.limit(1)
+							: [],
+						this.i18nVersionsTable
+							? tx
+									.select({
+										id: getColumn(this.i18nVersionsTable, "id")!,
+									})
+									.from(this.i18nVersionsTable)
+									.where(eq(getColumn(this.i18nVersionsTable, "parentId")!, id))
+									.limit(1)
+							: [],
+					];
+					const satelliteRows = await Promise.all(satelliteChecks);
+					if (satelliteRows.some((rows) => rows.length > 0)) {
+						throw ApiError.conflict(
+							"Purge hooks cannot recreate owner version or locale rows",
+						);
+					}
+					await preparedRelations.assertNoReferences(preimage);
+
+					return attachCurrentTransactionTxid({ success: true as const });
+				});
+			} catch (error: unknown) {
+				if (isPurgeLockTimeout(error)) {
+					throw ApiError.conflict(
+						"Physical purge could not acquire relation locks; retry later",
+					);
+				}
+				const dbError = parseDatabaseError(error);
+				if (dbError) throw dbError;
+				throw error;
+			}
 		};
 	}
 
@@ -2425,13 +2952,14 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				return existing;
 			}
 
-			const updateFn = this.createUpdate();
-			return await updateFn(
+			const stagedCrdtOwner = await this.stageCrdtOwner(existing);
+			return await this._executeUpdate(
 				{
 					id,
 					data: { deletedAt: null } as Record<string, unknown>,
 				},
 				normalized,
+				stagedCrdtOwner ? { crdtRestore: stagedCrdtOwner } : undefined,
 			);
 		};
 	}
@@ -2486,7 +3014,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					);
 				}
 
-				return updatedRecords;
+				return attachCurrentTransactionTxid(updatedRecords);
 			});
 		};
 	}
@@ -2563,13 +3091,23 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					}),
 				);
 			}
+			const stagedCrdtOwners = new Map<
+				string | number,
+				StagedCrdtOwnerActivation
+			>();
+			await Promise.all(
+				records.map(async (record) => {
+					const staged = await this.stageCrdtOwner(record);
+					if (staged) stagedCrdtOwners.set(record.id, staged);
+				}),
+			);
 			// 3. Batched DELETE query
 			// Claim check inside the tx: only rows that STILL match the caller's
 			// where at delete time are deleted ("winners").
 			const winners: any[] = await withTransaction(db, async (tx: any) => {
 				const txContext = { ...normalized, db: tx };
 
-				const winnerIdList = await this.claimRecords({
+				let winnerIdList = await this.claimRecords({
 					tx,
 					txContext,
 					candidateIds: records.map((r: any) => r.id),
@@ -2579,8 +3117,28 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				});
 				if (winnerIdList.length === 0) return [];
 
+				let lockedBeforeDelete = await tx
+					.select()
+					.from(this.table)
+					.where(inArray(getColumn(this.table, "id")!, winnerIdList))
+					.for("update");
+				if (this.state.options.softDelete) {
+					const activeIds = new Set(
+						lockedBeforeDelete
+							.filter((record: any) => record.deletedAt == null)
+							.map((record: any) => record.id),
+					);
+					winnerIdList = winnerIdList.filter((id) => activeIds.has(id));
+					lockedBeforeDelete = lockedBeforeDelete.filter((record: any) =>
+						activeIds.has(record.id),
+					);
+					if (winnerIdList.length === 0) return [];
+				}
 				const winnerIds = new Set(winnerIdList);
 				const claimedRecords = records.filter((r: any) => winnerIds.has(r.id));
+				const lockedById = new Map(
+					lockedBeforeDelete.map((record: any) => [record.id, record]),
+				);
 
 				for (const record of claimedRecords) {
 					await this.handleCascadeDeleteInternal(record.id, record, txContext);
@@ -2628,6 +3186,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							}),
 						);
 					} catch (err) {
+						rethrowFatalGlobalHookError(err);
 						// afterDelete hook errors are non-fatal — log and continue
 						console.error(
 							`[QUESTPIE] afterDelete hook error for "${this.state.name}":`,
@@ -2635,11 +3194,68 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						);
 					}
 				}
+				if (stagedCrdtOwners.size > 0) {
+					const terminalRows = await tx
+						.select()
+						.from(this.table)
+						.where(inArray(getColumn(this.table, "id")!, winnerIdList))
+						.for("update");
+					if (
+						(this.state.options.softDelete &&
+							(terminalRows.length !== winnerIdList.length ||
+								terminalRows.some(
+									(record: any) => record.deletedAt == null,
+								))) ||
+						(!this.state.options.softDelete && terminalRows.length > 0)
+					) {
+						throw new Error(
+							"Collaborative owners are not terminally deleted after delete hooks",
+						);
+					}
+					const currentRows = this.state.options.softDelete
+						? terminalRows
+						: lockedBeforeDelete;
+					const currentById = new Map(
+						currentRows.map((record: any) => [record.id, record]),
+					);
+					const orderedIds = [...winnerIdList].sort((left, right) =>
+						Buffer.compare(
+							Buffer.from(canonicalCrdtCollectionLocator(left), "utf8"),
+							Buffer.from(canonicalCrdtCollectionLocator(right), "utf8"),
+						),
+					);
+					const lifecycle = new CrdtOwnerLifecycleTransaction(tx);
+					for (const recordId of orderedIds) {
+						const staged = stagedCrdtOwners.get(recordId);
+						const owner = currentById.get(recordId) ?? lockedById.get(recordId);
+						if (!staged || !owner) {
+							throw new Error(
+								"Deleted owner disappeared before CRDT lifecycle retirement",
+							);
+						}
+						const locator = canonicalCrdtCollectionLocator(recordId);
+						await lifecycle.activate({
+							staged,
+							owner: {
+								locator,
+								values: owner as Record<string, unknown>,
+							},
+							mode: "ensure",
+						});
+						await lifecycle.retire({
+							manifest: staged.manifest,
+							locator,
+						});
+					}
+				}
 
-				return claimedRecords;
+				return attachCurrentTransactionTxid(claimedRecords);
 			});
 
-			return { success: true, count: winners.length };
+			return attachTxid(
+				{ success: true, count: winners.length },
+				getTxid(winners),
+			);
 		};
 	}
 
@@ -2765,6 +3381,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					hasFallback: needsFallback,
 				});
 			}
+			for (const row of rows) {
+				collapsePolymorphicRelationValues(row, this.state.relations ?? {});
+			}
 
 			return rows;
 		};
@@ -2775,6 +3394,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	 */
 	private createRevertToVersion() {
 		return async (options: RevertVersionOptions, context: CRUDContext = {}) => {
+			assertNoCrdtFieldsInVersionRestore({
+				ownerName: this.state.name,
+				fieldDefinitions: this.state.fieldDefinitions,
+			});
+
 			const db = this.getDb(context);
 			const normalized = this.normalizeContext(context);
 			if (!this.versionsTable) throw ApiError.notImplemented("Versioning");
@@ -2991,7 +3615,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				if (result) {
 				}
 
-				return result;
+				return attachCurrentTransactionTxid(result);
 			});
 
 			await this.filterFieldsForRead(updated, normalized);
@@ -3049,6 +3673,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					app: this.app,
 					db,
 					session: normalized.session,
+					principal: normalized.principal,
+					actor: normalized.actor,
 					locale: normalized.locale,
 					row: existing,
 					request:
@@ -3086,6 +3712,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const transitionServices = extractAppServices(this.app, {
 				db,
 				session: normalized.session,
+				principal: normalized.principal,
+				actor: normalized.actor,
 			});
 			const transitionCtx: TransitionHookContext = {
 				...transitionServices,
@@ -3120,7 +3748,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			await withTransaction(db, async (tx: any) => {
 				await createVersionRecord({
 					tx,
-					row: existing,
+					row: expandPolymorphicRelationValues(
+						existing,
+						this.state.relations ?? {},
+					),
 					operation: "update",
 					versionsTable: this.versionsTable!,
 					i18nVersionsTable: this.i18nVersionsTable,
@@ -3186,7 +3817,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 		await createVersionRecord({
 			tx,
-			row,
+			row: expandPolymorphicRelationValues(row, this.state.relations ?? {}),
 			operation,
 			versionsTable: this.versionsTable,
 			i18nVersionsTable: this.i18nVersionsTable,
@@ -3242,7 +3873,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	}
 
 	private async executeCollectionHooksWithGlobal(
-		hookName: "beforeChange" | "afterChange" | "beforeDelete" | "afterDelete",
+		hookName:
+			| "beforeChange"
+			| "afterChange"
+			| "beforeDelete"
+			| "afterDelete"
+			| "beforePurge"
+			| "afterPurge",
 		collectionHooks: any | any[] | undefined,
 		ctx: HookContext<any, any, any>,
 	) {
@@ -3324,7 +3961,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	private createHookContext(params: {
 		data: any;
 		original?: any;
-		operation: "create" | "update" | "delete" | "read";
+		operation: "create" | "update" | "delete" | "purge" | "read";
 		context: CRUDContext;
 		db: any;
 		bulk?: {
@@ -3369,6 +4006,41 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			app: this.app,
 			db,
 			session: normalized.session,
+			principal: normalized.principal,
+			actor: normalized.actor,
+			locale: normalized.locale,
+			row,
+			input,
+			request:
+				((context as any).req as Request | undefined) ??
+				((context as any).request as Request | undefined),
+			contextExtensions: normalized["~contextExtensions"],
+		});
+	}
+
+	/**
+	 * Purge deliberately has no authenticated-session fallback. An omitted
+	 * rule is a denial, even when delete is allowed.
+	 */
+	private async enforcePurgeAccess(
+		context: CRUDContext,
+		row: any,
+		input: PurgeParams,
+	): Promise<boolean | AccessWhere> {
+		const db = this.getDb(context);
+		const normalized = this.normalizeContext(context);
+		if (normalized.accessMode === "system") return true;
+
+		const accessRule =
+			this.state.access?.purge ?? this.app?.defaultAccess?.purge;
+		if (accessRule === undefined) return false;
+
+		return executeAccessRule(accessRule, {
+			app: this.app,
+			db,
+			session: normalized.session,
+			principal: normalized.principal,
+			actor: normalized.actor,
 			locale: normalized.locale,
 			row,
 			input,
@@ -3761,12 +4433,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				const createFn = this.createCreate();
 				return await createFn(
 					{
+						...additionalData,
 						key,
 						filename: sanitizedFilename,
 						mimeType,
 						size: file.size,
 						visibility,
-						...additionalData,
 					} as Record<string, unknown>,
 					context,
 				);

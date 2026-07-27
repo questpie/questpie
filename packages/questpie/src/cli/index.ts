@@ -17,6 +17,7 @@ import {
 	isSilentCloudError,
 } from "./commands/cloud.js";
 import { devCommand, generateCommand } from "./commands/codegen.js";
+import { generateCrdtManifestCommand } from "./commands/crdt-manifest.js";
 import { generateMigrationCommand } from "./commands/generate.js";
 import { pushCommand } from "./commands/push.js";
 import { runMigrationCommand } from "./commands/run.js";
@@ -87,6 +88,32 @@ program
 			});
 		} catch (error) {
 			console.error("Dev mode error:", error);
+			process.exit(1);
+		}
+	});
+
+program
+	.command("crdt:manifest")
+	.description("Generate or validate the checked-in CRDT identity manifest")
+	.option(
+		"-c, --config <path>",
+		"Path to questpie.config.ts",
+		"questpie.config.ts",
+	)
+	.option(
+		"--rename <mapping>",
+		"Explicit field rename: collection:owner:newPath=oldPath",
+		(value, previous: string[]) => [...previous, value],
+		[],
+	)
+	.action(async (options) => {
+		try {
+			await generateCrdtManifestCommand({
+				configPath: options.config,
+				renames: options.rename,
+			});
+		} catch (error) {
+			console.error("Failed to generate CRDT manifest:", error);
 			process.exit(1);
 		}
 	});

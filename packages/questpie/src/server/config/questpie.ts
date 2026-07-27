@@ -33,21 +33,33 @@ import type {
 } from "#questpie/server/config/types.js";
 import { GlobalBuilder } from "#questpie/server/global/builder/global-builder.js";
 import type { Global } from "#questpie/server/global/builder/global.js";
+import type { CrdtRuntimeManifests } from "#questpie/server/modules/core/integrated/crdt/manifest-runtime.js";
+import {
+	createCrdtRegistry,
+	type CrdtRegistry,
+} from "#questpie/server/modules/core/integrated/crdt/registry.js";
+import { questpieCrdtTables } from "#questpie/server/modules/core/integrated/crdt/schema.js";
 import type { ExecutorService } from "#questpie/server/modules/core/integrated/executor/service.js";
 import type { KVService } from "#questpie/server/modules/core/integrated/kv/service.js";
 import type { LoggerService } from "#questpie/server/modules/core/integrated/logger/service.js";
 import type { MailerService } from "#questpie/server/modules/core/integrated/mailer/service.js";
+import { questpieQueueDispatchTable } from "#questpie/server/modules/core/integrated/queue/dispatch-table.js";
 import type { QueueClient } from "#questpie/server/modules/core/integrated/queue/types.js";
 import {
 	questpieChannelDispatchTable,
 	questpieChannelEventTable,
 	questpieChannelHeadTable,
 	questpieChannelPresenceTable,
+	questpieRealtimeHeadTable,
 	questpieRealtimeLogTable,
 	questpieRealtimeTopologyTable,
 } from "#questpie/server/modules/core/integrated/realtime/collection.js";
 import type { RealtimeService } from "#questpie/server/modules/core/integrated/realtime/service.js";
 import type { SearchService } from "#questpie/server/modules/core/integrated/search/types.js";
+import {
+	questpieStorageCleanupTable,
+	questpieStorageObjectKeyTable,
+} from "#questpie/server/modules/core/integrated/storage/cleanup-table.js";
 import { resolveAutoSeedCategories } from "#questpie/server/seed/types.js";
 import {
 	ServiceBuilder,
@@ -83,6 +95,7 @@ interface ResolvedServiceDefinition {
 const RESERVED_CONTEXT_KEYS = new Set([
 	"session",
 	"principal",
+	"actor",
 	"db",
 	"locale",
 	"defaultLocale",
@@ -135,6 +148,12 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	private _customServiceNamespaces = new Set<string>();
 	private _warnedContextExtensionKeys = new Set<string>();
 	public readonly config: TConfig;
+	public readonly crdtRegistry: CrdtRegistry;
+	public crdtManifests: CrdtRuntimeManifests = Object.freeze({
+		collections: Object.freeze({}),
+		globals: Object.freeze({}),
+	});
+	/** @internal Qualified host application installed by the CRDT session kernel. */
 	private resolvedLocales: Locale[] | null = null;
 
 	/**
@@ -207,6 +226,8 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	public logger!: LoggerService;
 	public search!: SearchService;
 	public realtime!: RealtimeService;
+	/** @internal App-owned CRDT operational coordinator; request APIs resolve through the service container. */
+	public crdtOperations!: import("#questpie/server/modules/core/integrated/crdt/server-service.js").QuestpieCrdtOperationalService;
 	/** Extension state for plugin-contributed configurations (admin layout, blocks, sidebar, etc.) */
 	public state?: {
 		config?: import("./app-state-config.js").ResolvedAppStateConfig;
@@ -271,6 +292,11 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			this.registerGlobals(config.globals);
 		}
 
+		this.crdtRegistry = createCrdtRegistry({
+			collections: this._collections,
+			globals: this._globals,
+		});
+
 		// Inject global hooks into individual collection/global hooks
 		this.injectGlobalHooks();
 
@@ -282,18 +308,6 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 		// Resolve service definitions so _initServices can use them
 		this._resolveServiceDefs();
-
-		// In development, track this instance in globalThis so that HMR module
-		// re-evaluations automatically close the previous instance's connection
-		// pools instead of leaking them (postgres "too many clients" in dev).
-		if (getNodeEnv() !== "production") {
-			const hmrKey = `__questpie_hmr_${config.app.url}`;
-			const existing = (globalThis as Record<string, unknown>)[hmrKey];
-			if (existing && typeof (existing as Questpie).destroy === "function") {
-				(existing as Questpie).destroy().catch(() => {});
-			}
-			(globalThis as Record<string, unknown>)[hmrKey] = this;
-		}
 	}
 
 	/**
@@ -317,21 +331,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	 *
 	 * Call this during server shutdown or HMR teardown to prevent connection leaks.
 	 *
-	 * @example HMR-safe singleton pattern (TanStack Start / Nitro):
-	 * ```ts
-	 * // app.ts
-	 * declare global { var __app: typeof app | undefined }
-	 *
-	 * globalThis.__app ??= baseApp.build({ db: { url: DATABASE_URL }, ... })
-	 * export const app = globalThis.__app
-	 *
-	 * if (import.meta.hot) {
-	 *   import.meta.hot.dispose(async () => {
-	 *     await globalThis.__app?.destroy()
-	 *     globalThis.__app = undefined
-	 *   })
-	 * }
-	 * ```
+	 * Generated app entrypoints install the corresponding HMR teardown.
 	 */
 	async destroy(): Promise<void> {
 		// Dispose user services first (non-infrastructure)
@@ -355,7 +355,6 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		}
 
 		// Dispose infrastructure services in reverse-DAG order
-		const infraDisposals: Promise<void>[] = [];
 		for (let i = Questpie._INFRA_SERVICES.length - 1; i >= 0; i--) {
 			const [svcName] = Questpie._INFRA_SERVICES[i]!;
 			const def = this._serviceDefs[svcName];
@@ -364,11 +363,8 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 			const result = def.dispose(this._singletonServices[svcName]);
 			if (result instanceof Promise) {
-				infraDisposals.push(result);
+				await result.catch(() => {});
 			}
-		}
-		if (infraDisposals.length > 0) {
-			await Promise.allSettled(infraDisposals);
 		}
 
 		this._singletonServices = {};
@@ -493,6 +489,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		["auth", "auth"],
 		["search", "search"],
 		["realtime", "realtime"],
+		["crdtOperations", "crdtOperations"],
 		// Tier 2: depend on logger + needs app.createContext
 		["queue", "queue"],
 	] as const;
@@ -1007,6 +1004,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			 * a principal is derived from `session`/`accessMode` for back-compat.
 			 */
 			principal?: Principal;
+			actor?: import("#questpie/server/modules/core/integrated/crdt/authority.js").AuthorityActor;
 			locale?: string;
 			accessMode?: AccessMode;
 			db?: any;
@@ -1078,6 +1076,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			...(extensions ?? {}),
 			session: userCtx.session,
 			...(principal ? { principal } : {}),
+			...(userCtx.actor ? { actor: userCtx.actor } : {}),
 			locale,
 			defaultLocale,
 			accessMode,
@@ -1223,13 +1222,30 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 		// 3. Always include realtime log table since realtime service is always initialized
 		schema.questpie_realtime_log = questpieRealtimeLogTable;
+		schema.questpie_realtime_head = questpieRealtimeHeadTable;
 		schema.questpie_channel_head = questpieChannelHeadTable;
 		schema.questpie_channel_event = questpieChannelEventTable;
 		schema.questpie_channel_dispatch = questpieChannelDispatchTable;
 		schema.questpie_channel_presence = questpieChannelPresenceTable;
 		schema.questpie_realtime_topology = questpieRealtimeTopologyTable;
 
-		// 4. Add search tables if adapter provides local storage schemas
+		// 4. CRDT recovery history is framework-owned and must remain in the
+		// migration graph even when the current app has no collaborative owner.
+		// Conditional removal would generate destructive DROP TABLE migrations.
+		Object.assign(schema, questpieCrdtTables);
+
+		// 5. Storage cleanup intents are durable even when no queue consumer is
+		// currently running. Conditional removal would generate destructive
+		// schema diffs when upload collections are toggled.
+		schema.questpie_storage_cleanup = questpieStorageCleanupTable;
+		schema.questpie_storage_object_key = questpieStorageObjectKeyTable;
+
+		// 6. Queue dispatch intent remains in the migration graph even when an
+		// adapter can publish directly, so changing adapters never proposes a
+		// destructive DROP TABLE migration.
+		schema.questpie_queue_dispatch = questpieQueueDispatchTable;
+
+		// 7. Add search tables if adapter provides local storage schemas
 		// Local adapters (Postgres, PgVector) return their tables for migration generation.
 		// External adapters (Meilisearch, Elasticsearch) don't need local tables.
 		const searchAdapter = this.search?.getAdapter();
@@ -1240,15 +1256,16 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			}
 		}
 
-		// 5. Add relations (Placeholder)
+		// 8. Add relations (Placeholder)
 		// To enable, import { relations } from 'drizzle-orm' and uncomment logic
 
 		return schema;
 	}
 
 	/**
-	 * Resolve collection dependencies from WITH config for realtime subscriptions.
-	 * Returns all collections that should trigger a refresh (main + relations).
+	 * Resolve collection dependencies from a WITH or WHERE query fragment for
+	 * realtime subscriptions. Returns every collection that should trigger a
+	 * refresh (main + relations).
 	 * @internal Exposed for service definitions (realtime).
 	 */
 	_resolveCollectionDependencies(
@@ -1355,6 +1372,29 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 		for (const [relationName, relationOptions] of Object.entries(withConfig)) {
 			if (!relationOptions) continue;
+			if (relationName === "AND" || relationName === "OR") {
+				const branches = Array.isArray(relationOptions)
+					? relationOptions
+					: [relationOptions];
+				for (const branch of branches) {
+					this.visitCollectionRelations(
+						collectionMap,
+						dependencies,
+						collectionName,
+						branch as Record<string, any>,
+					);
+				}
+				continue;
+			}
+			if (relationName === "NOT") {
+				this.visitCollectionRelations(
+					collectionMap,
+					dependencies,
+					collectionName,
+					relationOptions as Record<string, any>,
+				);
+				continue;
+			}
 			const relation = collection.state.relations?.[relationName];
 			if (!relation) continue;
 
@@ -1364,10 +1404,10 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 				dependencies.add(relation.through);
 			}
 
-			// Support both formats:
+			// Support WITH and relation-WHERE formats:
 			// 1. { post: { with: { user: true } } } - explicit .with
 			// 2. { post: { user: true } } - direct nesting (user is itself a relation)
-			// In format 2, the object keys are relation names, not .with property
+			// 3. { posts: { some: { author: { is: { ... } } } } } - relation filter
 			let nestedWith: Record<string, any> | undefined;
 
 			if (
@@ -1377,9 +1417,19 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 				// Check if it has explicit .with property
 				if ("with" in relationOptions) {
 					nestedWith = (relationOptions as any).with;
-				} else if (relationOptions !== true) {
-					// The object itself contains nested relations (direct nesting format)
-					nestedWith = relationOptions as Record<string, any>;
+				} else {
+					const relationFilter = ["some", "none", "every", "is", "isNot"]
+						.map((operator) => (relationOptions as any)[operator])
+						.find(
+							(value) =>
+								value && typeof value === "object" && !Array.isArray(value),
+						);
+					if (relationFilter) {
+						nestedWith = relationFilter as Record<string, any>;
+					} else if (relationOptions !== true) {
+						// The object itself contains nested relations (direct nesting format)
+						nestedWith = relationOptions as Record<string, any>;
+					}
 				}
 			}
 

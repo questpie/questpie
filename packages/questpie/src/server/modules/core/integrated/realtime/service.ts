@@ -1,17 +1,26 @@
-import { asc, desc, gt, lt } from "drizzle-orm";
+import { asc, desc, eq, gt, lt, sql } from "drizzle-orm";
 
+import {
+	getCurrentTransaction,
+	withTransaction,
+} from "#questpie/server/collection/crud/shared/transaction.js";
 import type { DrizzleClientFromQuestpieConfig } from "#questpie/server/config/types.js";
 import type { LoggerAdapter } from "#questpie/server/modules/core/integrated/logger/types.js";
 
+import { CoreNoticeRouter } from "../collaboration/notice-router.js";
 import { PgNotifyChangeBroker } from "./adapters/pg-notify.js";
 import {
 	type AppendChannelEventInput,
 	type AppendChannelEventOptions,
 	ChannelEventLedger,
 	type ChannelEventReceipt,
+	type ChannelReplayPage,
 	type LocalChannelSubscriptionInput,
 } from "./channel-event-ledger.js";
-import { questpieRealtimeLogTable } from "./collection.js";
+import {
+	questpieRealtimeHeadTable,
+	questpieRealtimeLogTable,
+} from "./collection.js";
 import {
 	RealtimeObservability,
 	type RealtimeMetricsSnapshot,
@@ -22,13 +31,19 @@ import {
 	SseChannelPresenceRegistry,
 } from "./sse-channel-presence.js";
 import {
+	compileRealtimeTopicRouting,
+	evaluateRealtimeChangeRouting,
+	RealtimeCandidateRouter,
+	type RealtimeTopicRoutingPlan,
+} from "./topic-routing.js";
+import {
 	createPostgresRealtimeTopologyCoordinator,
 	type RealtimeDesiredTopology,
 	RealtimeTopologyCoordinator,
+	type RealtimeTopologyApplyInput,
 	type RealtimeTopologyResult,
 } from "./topology-coordinator.js";
 import type {
-	ChangeBroker,
 	ClientAuthInput,
 	ClientAuthResponse,
 	ClientConfigInput,
@@ -51,11 +66,10 @@ import type {
 
 export type RealtimeListener = (event: RealtimeChangeEvent) => void;
 
-type AppendChangeInput = Omit<RealtimeChangeEvent, "seq" | "createdAt">;
-
-type AppendChangeOptions = {
-	db?: DrizzleClientFromQuestpieConfig<any>;
-};
+type AppendChangeInput = Omit<
+	RealtimeChangeEvent,
+	"seq" | "txid" | "createdAt"
+>;
 
 const DEFAULT_RETENTION_DAYS = 3;
 const DEFAULT_ADAPTER_RECONCILIATION_INTERVAL_MS = 15_000;
@@ -64,8 +78,7 @@ type ListenerEntry = {
 	listener: RealtimeListener;
 	errorListener?: RealtimeErrorListener;
 	topics: import("./types").RealtimeTopics;
-	whereFilters: Record<string, unknown>;
-	hasComplexWhere: boolean;
+	routing: RealtimeTopicRoutingPlan;
 	// Track which resources this listener cares about (main + dependencies)
 	watchedResources: {
 		collections: Set<string>;
@@ -73,85 +86,19 @@ type ListenerEntry = {
 	};
 };
 
-/** Compare a durable scalar projection with a normalized equality filter. */
-function projectionMatch(
-	projection: Record<string, unknown> | null | undefined,
-	filters: Record<string, unknown>,
-): "match" | "miss" | "unknown" {
-	if (projection === null) return "miss";
-	if (!projection || typeof projection !== "object") return "unknown";
-	let missing = false;
-	for (const [key, value] of Object.entries(filters)) {
-		if (!(key in projection)) {
-			missing = true;
-			continue;
-		}
-		if (projection[key] !== value) return "miss";
-	}
-	return missing ? "unknown" : "match";
-}
-
-/**
- * Analyze WHERE clause for realtime matching strategy.
- * - `filters`: simple equality subset used for fast create matching
- * - `hasComplex`: true when where contains logical operators or non-equality operators
- *
- * When `hasComplex` is true we must avoid strict payload-only filtering to prevent
- * false negatives (stale snapshots) for create events.
- */
-function analyzeWhere(where: any): {
-	filters: Record<string, unknown>;
-	hasComplex: boolean;
-} {
-	if (!where || typeof where !== "object") {
-		return { filters: {}, hasComplex: false };
-	}
-
-	const filters: Record<string, unknown> = {};
-	let hasComplex = false;
-
-	for (const [key, value] of Object.entries(where)) {
-		if (["AND", "OR", "NOT", "RAW"].includes(key)) {
-			hasComplex = true;
-			continue;
-		}
-
-		if (
-			typeof value === "string" ||
-			typeof value === "number" ||
-			typeof value === "boolean"
-		) {
-			filters[key] = value;
-			continue;
-		}
-
-		if (value && typeof value === "object") {
-			const valueObject = value as Record<string, unknown>;
-			if ("eq" in valueObject) {
-				filters[key] = valueObject.eq;
-
-				const operatorKeys = Object.keys(valueObject).filter((k) => k !== "eq");
-				if (operatorKeys.length > 0) {
-					hasComplex = true;
-				}
-				continue;
-			}
-
-			hasComplex = true;
-			continue;
-		}
-
-		hasComplex = true;
-	}
-
-	return { filters, hasComplex };
-}
-
 export class RealtimeService {
-	private changeBroker?: ChangeBroker;
+	readonly nativeDeltasEnabled: boolean;
+	/** @internal Shared physical notice lifecycle for realtime and CRDT. */
+	readonly noticeRouter: CoreNoticeRouter;
+	private readonly hasPhysicalBroker: boolean;
+	private unsubscribeNotices?: () => Promise<void>;
 	private clientTransport?: ClientTransport;
 	private listeners = new Set<ListenerEntry>();
 	private directCollectionListeners = new Map<string, Set<ListenerEntry>>();
+	private directCollectionRouters = new Map<
+		string,
+		RealtimeCandidateRouter<ListenerEntry>
+	>();
 	private directGlobalListeners = new Map<string, Set<ListenerEntry>>();
 	private watchedCollectionListeners = new Map<string, Set<ListenerEntry>>();
 	private watchedGlobalListeners = new Map<string, Set<ListenerEntry>>();
@@ -160,6 +107,7 @@ export class RealtimeService {
 	private batchSize: number;
 	private draining = false;
 	private drainPending = false;
+	private drainSignalGeneration = 0;
 	private started = false;
 	private startPromise: Promise<void> | null = null;
 	private publisherStartPromise: Promise<void> | null = null;
@@ -184,7 +132,9 @@ export class RealtimeService {
 		config: RealtimeConfig = {},
 		private pgConnectionString?: string,
 		private logger?: Pick<LoggerAdapter, "error" | "warn">,
+		noticeRouter?: CoreNoticeRouter,
 	) {
+		this.nativeDeltasEnabled = config.nativeDeltas === true;
 		const broker =
 			config.changeBroker ??
 			(this.pgConnectionString
@@ -192,12 +142,13 @@ export class RealtimeService {
 						connectionString: this.pgConnectionString,
 					})
 				: undefined);
-		this.changeBroker = broker;
+		this.noticeRouter = noticeRouter ?? new CoreNoticeRouter(broker);
+		this.hasPhysicalBroker = Boolean(broker || noticeRouter);
 		this.clientTransport = config.clientTransport;
 		this.batchSize = config.batchSize ?? 500;
 		this.pollIntervalMs =
 			config.pollIntervalMs ??
-			(this.changeBroker || this.pgConnectionString
+			(this.hasPhysicalBroker || this.pgConnectionString
 				? DEFAULT_ADAPTER_RECONCILIATION_INTERVAL_MS
 				: 2000);
 		this.configuredPollIntervalMs = this.pollIntervalMs;
@@ -212,7 +163,8 @@ export class RealtimeService {
 		this.topologyCoordinator = createPostgresRealtimeTopologyCoordinator(
 			this.db,
 			{
-				broker: this.changeBroker,
+				broker: this.noticeRouter,
+				reconcileMs: this.configuredPollIntervalMs,
 				observer: this.observability,
 				onError: (error) =>
 					this.reportTransportFailure(
@@ -223,7 +175,7 @@ export class RealtimeService {
 		);
 		this.channelEventLedger = new ChannelEventLedger(
 			this.db,
-			this.changeBroker,
+			this.noticeRouter,
 			this.clientTransport,
 			config.channelEvents,
 			this.logger,
@@ -294,6 +246,12 @@ export class RealtimeService {
 		});
 	}
 
+	private drainOrDeferUntilStarted(reason: "broker" | "reconnect"): void {
+		this.drainSignalGeneration += 1;
+		if (this.startPromise && !this.started) return;
+		this.drainSafely(reason);
+	}
+
 	private cleanupSafely(force = false): void {
 		void this.scheduleRetentionCleanup(force).catch((error) => {
 			this.logger?.warn("[Realtime] Outbox cleanup failed", error);
@@ -348,13 +306,38 @@ export class RealtimeService {
 		}
 	}
 
-	async appendChange(
+	async appendChange(input: AppendChangeInput): Promise<RealtimeChangeEvent> {
+		const currentTransaction = getCurrentTransaction();
+		if (currentTransaction) {
+			return this.appendChangeInTransaction(input, currentTransaction);
+		}
+		return withTransaction(this.db, (tx) =>
+			this.appendChangeInTransaction(input, tx),
+		);
+	}
+
+	private async appendChangeInTransaction(
 		input: AppendChangeInput,
-		options: AppendChangeOptions = {},
+		db: DrizzleClientFromQuestpieConfig<any>,
 	): Promise<RealtimeChangeEvent> {
-		const db = options.db ?? this.db;
+		// The head-row lock must remain held until the outbox insert commits. This
+		// makes sequence order commit order for native delta cursors.
 		let row: typeof questpieRealtimeLogTable.$inferSelect;
 		try {
+			await db
+				.insert(questpieRealtimeHeadTable)
+				.values({
+					id: "global",
+					lastSeq: sql<number>`coalesce((select max(${questpieRealtimeLogTable.seq}) from ${questpieRealtimeLogTable}), 0)`,
+				})
+				.onConflictDoNothing();
+			const [head] = await db
+				.update(questpieRealtimeHeadTable)
+				.set({ updatedAt: new Date() })
+				.where(eq(questpieRealtimeHeadTable.id, "global"))
+				.returning({ id: questpieRealtimeHeadTable.id });
+			if (!head)
+				throw new Error("Realtime outbox sequence head is unavailable");
 			[row] = await db
 				.insert(questpieRealtimeLogTable)
 				.values({
@@ -366,14 +349,19 @@ export class RealtimeService {
 					payload: input.payload ?? {},
 				})
 				.returning();
+			await db
+				.update(questpieRealtimeHeadTable)
+				.set({ lastSeq: Number(row.seq), updatedAt: new Date() })
+				.where(eq(questpieRealtimeHeadTable.id, "global"));
 			this.observe({ type: "outbox.capture", outcome: "accepted" });
 		} catch (error) {
 			this.observe({ type: "outbox.capture", outcome: "failed" });
 			throw error;
 		}
 
-		const event = {
+		const event: RealtimeChangeEvent = {
 			seq: Number(row.seq),
+			...(row.txid === null ? {} : { txid: row.txid }),
 			resourceType: row.resourceType as RealtimeResourceType,
 			resource: row.resource,
 			operation: row.operation as RealtimeOperation,
@@ -388,10 +376,10 @@ export class RealtimeService {
 	}
 
 	async notify(event: RealtimeChangeEvent): Promise<void> {
-		if (!this.changeBroker) return;
+		if (!this.hasPhysicalBroker) return;
 		await this.initialize();
 		await this.publishObserved(() =>
-			this.changeBroker!.publish({
+			this.noticeRouter.publish({
 				kind: "outbox-maybe-advanced",
 				highWaterSeq: event.seq,
 				reason: "publish",
@@ -417,8 +405,9 @@ export class RealtimeService {
 		}
 
 		this.publisherStartPromise = (async () => {
-			await this.changeBroker?.start({
-				onWake: (wake) => {
+			this.unsubscribeNotices = await this.noticeRouter.subscribe({
+				kind: "realtime",
+				onNotice: ({ wake }) => {
 					if (wake.kind === "topology-maybe-advanced") {
 						this.topologyCoordinator.onWake(wake);
 						return;
@@ -434,7 +423,7 @@ export class RealtimeService {
 							);
 						return;
 					}
-					this.drainSafely(
+					this.drainOrDeferUntilStarted(
 						wake.reason === "reconnect" ? "reconnect" : "broker",
 					);
 				},
@@ -444,7 +433,7 @@ export class RealtimeService {
 					this.observe({ type: "broker.lifecycle", state });
 					if (state === "connected") {
 						this.setReconciliationPollInterval(this.configuredPollIntervalMs);
-						this.drainSafely("reconnect");
+						this.drainOrDeferUntilStarted("reconnect");
 						void this.channelEventLedger
 							.drain()
 							.catch((error) =>
@@ -460,6 +449,25 @@ export class RealtimeService {
 								: 0,
 						);
 					}
+				},
+				onOverflow: () => {
+					this.drainOrDeferUntilStarted("reconnect");
+					void this.channelEventLedger
+						.drain()
+						.catch((error) =>
+							this.reportTransportFailure(
+								"[Realtime] Channel overflow reconciliation failed",
+								error,
+							),
+						);
+					void this.topologyCoordinator
+						.reconcile()
+						.catch((error) =>
+							this.reportTransportFailure(
+								"[Realtime] Topology overflow reconciliation failed",
+								error,
+							),
+						);
 				},
 			});
 			await this.topologyCoordinator.start();
@@ -485,9 +493,14 @@ export class RealtimeService {
 		token: string;
 		identity: string;
 		topology: RealtimeDesiredTopology;
-		apply: (topology: RealtimeDesiredTopology) => Promise<void>;
+		clientLeaseMs?: number;
+		apply: (input: RealtimeTopologyApplyInput) => Promise<void>;
 		onClose: () => Promise<void> | void;
-	}): Promise<{ generation: number; close(): Promise<void> }> {
+	}): Promise<{
+		generation: number;
+		signal: AbortSignal;
+		close(): Promise<void>;
+	}> {
 		await this.initialize();
 		return this.topologyCoordinator.open(input);
 	}
@@ -501,6 +514,16 @@ export class RealtimeService {
 	}): Promise<RealtimeTopologyResult> {
 		await this.initialize();
 		return this.topologyCoordinator.submit(input);
+	}
+
+	/** @internal Validate a live topology capability for a CRDT binding. */
+	async authorizeTopologySession(input: {
+		sessionId: string;
+		token: string;
+		identity: string;
+	}): Promise<{ sessionKey: string; ownerGeneration: number } | null> {
+		await this.initialize();
+		return this.topologyCoordinator.authorizeSession(input);
 	}
 
 	async getClientTransportConfig(
@@ -615,6 +638,14 @@ export class RealtimeService {
 		return this.channelEventLedger.subscribeLocal(input);
 	}
 
+	/** Read a bounded page after route-level channel authorization. */
+	replayChannelEvents(
+		channel: string,
+		afterEventId: string,
+	): Promise<ChannelReplayPage> {
+		return this.channelEventLedger.replay(channel, afterEventId);
+	}
+
 	async registerChannelPresence(
 		input: RegisterChannelPresenceInput,
 	): Promise<() => Promise<void>> {
@@ -625,6 +656,7 @@ export class RealtimeService {
 	private setReconciliationPollInterval(intervalMs: number): void {
 		if (this.pollIntervalMs === intervalMs) return;
 		this.pollIntervalMs = intervalMs;
+		this.topologyCoordinator.setReconciliationPollInterval(intervalMs);
 		if (this.channelPollTimer) {
 			clearInterval(this.channelPollTimer);
 			this.channelPollTimer = null;
@@ -691,17 +723,39 @@ export class RealtimeService {
 			resourceType: "collection",
 			resource: "*",
 		};
-		const whereAnalysis = analyzeWhere(resolvedTopics.where);
+		const relationNames =
+			resolvedTopics.resourceType === "collection"
+				? this.subscriptionContext?.resolveCollectionRelationNames?.(
+						resolvedTopics.resource,
+					)
+				: undefined;
+		const routing = compileRealtimeTopicRouting(
+			resolvedTopics.where,
+			relationNames,
+		);
+		this.observe({
+			type: "routing.plan",
+			anchor: routing.anchors.length > 0 ? "required" : "missing",
+			feature: routing.features.values().next().value ?? "none",
+		});
 
-		// Resolve dependencies from WITH config
+		// Resolve dependencies from both the requested relation graph and the
+		// access-merged WHERE. A change to an access relation must rebootstrap a
+		// delta topic even when that relation was not requested in the output.
 		let watchedResources: { collections: Set<string>; globals: Set<string> };
 
-		if (resolvedTopics.resourceType === "collection" && resolvedTopics.with) {
-			const collections =
+		if (resolvedTopics.resourceType === "collection") {
+			const withCollections =
 				this.subscriptionContext?.resolveCollectionDependencies?.(
 					resolvedTopics.resource,
 					resolvedTopics.with,
 				) ?? new Set([resolvedTopics.resource]);
+			const whereCollections =
+				this.subscriptionContext?.resolveCollectionDependencies?.(
+					resolvedTopics.resource,
+					resolvedTopics.where,
+				) ?? new Set([resolvedTopics.resource]);
+			const collections = new Set([...withCollections, ...whereCollections]);
 			watchedResources = { collections, globals: new Set() };
 		} else if (
 			resolvedTopics.resourceType === "global" &&
@@ -715,41 +769,57 @@ export class RealtimeService {
 				globals: new Set([resolvedTopics.resource]),
 			};
 		} else {
-			// No WITH config - only watch main resource
-			watchedResources =
-				resolvedTopics.resourceType === "collection"
-					? {
-							collections: new Set([resolvedTopics.resource]),
-							globals: new Set(),
-						}
-					: {
-							collections: new Set(),
-							globals: new Set([resolvedTopics.resource]),
-						};
+			watchedResources = {
+				collections: new Set(),
+				globals: new Set([resolvedTopics.resource]),
+			};
 		}
 
 		const entry: ListenerEntry = {
 			listener,
 			errorListener,
 			topics: resolvedTopics,
-			whereFilters: whereAnalysis.filters,
-			hasComplexWhere: whereAnalysis.hasComplex,
+			routing,
 			watchedResources,
 		};
 
 		this.listeners.add(entry);
 
-		const directIndex =
-			resolvedTopics.resourceType === "collection"
-				? this.directCollectionListeners
-				: this.directGlobalListeners;
-		this.addIndexedListener(directIndex, resolvedTopics.resource, entry);
+		if (
+			resolvedTopics.resourceType === "collection" &&
+			resolvedTopics.resource !== "*"
+		) {
+			let router = this.directCollectionRouters.get(resolvedTopics.resource);
+			if (!router) {
+				router = new RealtimeCandidateRouter();
+				this.directCollectionRouters.set(resolvedTopics.resource, router);
+			}
+			router.add(entry, routing);
+		} else {
+			const directIndex =
+				resolvedTopics.resourceType === "collection"
+					? this.directCollectionListeners
+					: this.directGlobalListeners;
+			this.addIndexedListener(directIndex, resolvedTopics.resource, entry);
+		}
 
 		for (const resource of watchedResources.collections) {
+			if (
+				resolvedTopics.resourceType === "collection" &&
+				resource === resolvedTopics.resource
+			) {
+				continue;
+			}
 			this.addIndexedListener(this.watchedCollectionListeners, resource, entry);
 		}
 
 		for (const resource of watchedResources.globals) {
+			if (
+				resolvedTopics.resourceType === "global" &&
+				resource === resolvedTopics.resource
+			) {
+				continue;
+			}
 			this.addIndexedListener(this.watchedGlobalListeners, resource, entry);
 		}
 
@@ -758,17 +828,33 @@ export class RealtimeService {
 		return () => {
 			this.listeners.delete(entry);
 
-			const removeDirectIndex =
-				resolvedTopics.resourceType === "collection"
-					? this.directCollectionListeners
-					: this.directGlobalListeners;
-			this.removeIndexedListener(
-				removeDirectIndex,
-				resolvedTopics.resource,
-				entry,
-			);
+			if (
+				resolvedTopics.resourceType === "collection" &&
+				resolvedTopics.resource !== "*"
+			) {
+				const router = this.directCollectionRouters.get(
+					resolvedTopics.resource,
+				);
+				router?.delete(entry);
+			} else {
+				const removeDirectIndex =
+					resolvedTopics.resourceType === "collection"
+						? this.directCollectionListeners
+						: this.directGlobalListeners;
+				this.removeIndexedListener(
+					removeDirectIndex,
+					resolvedTopics.resource,
+					entry,
+				);
+			}
 
 			for (const resource of watchedResources.collections) {
+				if (
+					resolvedTopics.resourceType === "collection" &&
+					resource === resolvedTopics.resource
+				) {
+					continue;
+				}
 				this.removeIndexedListener(
 					this.watchedCollectionListeners,
 					resource,
@@ -777,6 +863,12 @@ export class RealtimeService {
 			}
 
 			for (const resource of watchedResources.globals) {
+				if (
+					resolvedTopics.resourceType === "global" &&
+					resource === resolvedTopics.resource
+				) {
+					continue;
+				}
 				this.removeIndexedListener(
 					this.watchedGlobalListeners,
 					resource,
@@ -818,6 +910,7 @@ export class RealtimeService {
 		const rows = await this.db
 			.select({
 				seq: questpieRealtimeLogTable.seq,
+				txid: questpieRealtimeLogTable.txid,
 				resourceType: questpieRealtimeLogTable.resourceType,
 				resource: questpieRealtimeLogTable.resource,
 				operation: questpieRealtimeLogTable.operation,
@@ -833,6 +926,7 @@ export class RealtimeService {
 
 		return rows.map((row: any) => ({
 			seq: Number(row.seq),
+			...(row.txid == null ? {} : { txid: String(row.txid) }),
 			resourceType: row.resourceType as RealtimeResourceType,
 			resource: row.resource,
 			operation: row.operation as RealtimeOperation,
@@ -851,14 +945,16 @@ export class RealtimeService {
 		}
 
 		this.startPromise = (async () => {
+			const signalGeneration = this.drainSignalGeneration;
 			const latestSeq = await this.getLatestSeq();
+			this.lastSeq = latestSeq;
+			this.started = true;
 			await this.initialize();
 
 			this.startPollTimer();
-
-			this.lastSeq = latestSeq;
-			this.started = true;
-			this.drainSafely("startup");
+			if (this.drainSignalGeneration === signalGeneration) {
+				this.drainSafely("startup");
+			}
 			this.cleanupSafely(true);
 		})()
 			.catch(async (error) => {
@@ -889,7 +985,8 @@ export class RealtimeService {
 			!this.started &&
 			!this.startPromise &&
 			!this.publisherStarted &&
-			!this.publisherStartPromise
+			!this.publisherStartPromise &&
+			!this.unsubscribeNotices
 		) {
 			return;
 		}
@@ -925,7 +1022,8 @@ export class RealtimeService {
 		}
 
 		this.channelEventLedger.destroy();
-		await this.changeBroker?.stop();
+		await this.unsubscribeNotices?.();
+		this.unsubscribeNotices = undefined;
 		await this.clientTransport?.stop();
 		this.publisherStarted = false;
 	}
@@ -985,6 +1083,12 @@ export class RealtimeService {
 	private emit(event: RealtimeChangeEvent): void {
 		const candidates = new Set<ListenerEntry>();
 		if (event.resourceType === "collection") {
+			const routed = this.directCollectionRouters
+				.get(event.resource)
+				?.candidates(event);
+			if (routed) {
+				for (const entry of routed) candidates.add(entry);
+			}
 			this.collectIndexedCandidates(
 				this.directCollectionListeners,
 				event.resource,
@@ -1007,6 +1111,7 @@ export class RealtimeService {
 				candidates,
 			);
 		}
+		this.observe({ type: "routing.candidates", groups: candidates.size });
 
 		const notifiedListeners = new Set<ListenerEntry>();
 
@@ -1023,26 +1128,9 @@ export class RealtimeService {
 				continue;
 			}
 
-			if (!entry.topics.where) {
-				notifiedListeners.add(entry);
-				continue;
-			}
-
-			// Complex WHERE clauses cannot be safely evaluated from payload-only filters.
-			// Refresh to avoid false negatives for OR/nested/operator-heavy conditions.
-			if (entry.hasComplexWhere) {
-				notifiedListeners.add(entry);
-				continue;
-			}
-
-			const before = projectionMatch(event.payload?.before, entry.whereFilters);
-			const after = projectionMatch(event.payload?.after, entry.whereFilters);
-			const definitelyUnrelated =
-				(event.operation === "create" && after === "miss") ||
-				(event.operation === "delete" && before === "miss") ||
-				(event.operation === "update" && before === "miss" && after === "miss");
-
-			if (!definitelyUnrelated) {
+			const outcome = evaluateRealtimeChangeRouting(entry.routing, event);
+			this.observe({ type: "routing.guard", outcome });
+			if (outcome !== "miss") {
 				notifiedListeners.add(entry);
 			}
 		}

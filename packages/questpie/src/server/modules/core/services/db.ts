@@ -2,12 +2,34 @@ import type {
 	DbCreateResult,
 	QuestpieConfig,
 } from "#questpie/server/config/types.js";
+import { assertSupportedPostgresVersion } from "#questpie/server/db/postgres-version.js";
 import { service } from "#questpie/server/services/define-service.js";
 
 function isWrappedDbCreateResult(
 	value: unknown,
 ): value is Extract<DbCreateResult, { drizzle: unknown }> {
 	return Boolean(value && typeof value === "object" && "drizzle" in value);
+}
+
+type VersionQueryableDb = {
+	execute(query: unknown): Promise<unknown>;
+};
+
+function isVersionQueryableDb(value: unknown): value is VersionQueryableDb {
+	return Boolean(
+		value &&
+		typeof value === "object" &&
+		"execute" in value &&
+		typeof value.execute === "function",
+	);
+}
+
+async function acceptCustomDb<T>(db: T): Promise<T> {
+	// Real Drizzle PostgreSQL clients expose execute(), so enforce the baseline
+	// when the custom client is queryable. Opaque adapters keep their existing
+	// initialization contract; migration execution performs the same preflight.
+	if (isVersionQueryableDb(db)) await assertSupportedPostgresVersion(db);
+	return db;
 }
 
 /**
@@ -25,11 +47,10 @@ export default service({
 		// narrowed to the app's concrete shape (breaking the `in` guards below).
 		const config = app.config as QuestpieConfig;
 		const schema = app.getSchema();
-
 		if ("drizzle" in config.db) {
 			app._pgConnectionString = config.db.connectionString;
 			app._dbCleanup = config.db.close;
-			return config.db.drizzle;
+			return acceptCustomDb(config.db.drizzle);
 		}
 
 		if ("create" in config.db) {
@@ -43,11 +64,20 @@ export default service({
 			if (isWrappedDbCreateResult(created)) {
 				app._pgConnectionString = created.connectionString;
 				app._dbCleanup = created.close;
-				return created.drizzle;
+				return acceptCustomDb(created.drizzle);
 			}
 
-			return created;
+			return acceptCustomDb(created);
 		}
+
+		const accept = async <
+			T extends { execute(query: unknown): Promise<unknown> },
+		>(
+			db: T,
+		): Promise<T> => {
+			await assertSupportedPostgresVersion(db);
+			return db;
+		};
 
 		if ("url" in config.db) {
 			app._pgConnectionString = config.db.url;
@@ -83,7 +113,7 @@ export default service({
 					...(pool?.prepare !== undefined ? { prepare: pool.prepare } : {}),
 				});
 				app._dbCleanup = () => bunSqlClient.close({ timeout: 5 });
-				return drizzleBun({ client: bunSqlClient, schema });
+				return accept(drizzleBun({ client: bunSqlClient, schema }));
 			}
 
 			const [{ default: pg }, { drizzle: drizzlePg }] = await Promise.all([
@@ -109,12 +139,12 @@ export default service({
 					: {}),
 			});
 			app._dbCleanup = () => pgPool.end();
-			return drizzlePg({ client: pgPool, schema });
+			return accept(drizzlePg({ client: pgPool, schema }));
 		}
 
 		const { drizzle: drizzlePgLite } = await import("drizzle-orm/pglite");
 
-		return drizzlePgLite({ client: config.db.pglite as any, schema });
+		return accept(drizzlePgLite({ client: config.db.pglite as any, schema }));
 	},
 	dispose: () => {
 		// Driver cleanup is handled by the app-level _dbCleanup callback because

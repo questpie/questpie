@@ -1,8 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 
+import { memory } from "files-sdk/memory";
 import pg from "pg";
 
 import { collection, withTransaction } from "../../src/exports/index.js";
+import {
+	claimStorageCleanup,
+	enqueueStorageCleanup,
+} from "../../src/server/modules/core/integrated/storage/cleanup-store.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -22,6 +27,64 @@ const postgresLockTargets = collection("postgres_lock_targets")
 				: { visibility: "public" },
 	});
 
+let pausePurge: ((data: Record<string, unknown>) => Promise<void>) | undefined;
+let pauseRelationWrite:
+	| ((data: Record<string, unknown>) => Promise<void>)
+	| undefined;
+let pauseJunctionWrite:
+	| ((data: Record<string, unknown>) => Promise<void>)
+	| undefined;
+
+const postgresPurgeParents = collection("postgres_purge_parents")
+	.fields(({ f }) => ({ name: f.text().required() }))
+	.options({ softDelete: true })
+	.access({ purge: true })
+	.hooks({
+		beforePurge: ({ data }) => pausePurge?.(data),
+	});
+
+const postgresPurgeChildren = collection("postgres_purge_children")
+	.fields(({ f }) => ({
+		name: f.text().required(),
+		parent: f.relation("postgres_purge_parents").required(),
+	}))
+	.hooks({
+		afterChange: ({ data, operation }) =>
+			operation === "create" ? pauseRelationWrite?.(data) : undefined,
+	});
+
+const postgresUploadAssets = collection("postgres_upload_assets")
+	.fields(({ f }) => ({ alt: f.text() }))
+	.options({ softDelete: true })
+	.upload()
+	.access({ purge: true });
+
+const postgresJunctionParents = collection("postgres_junction_parents")
+	.fields(({ f }) => ({
+		name: f.text().required(),
+		tags: f.relation("postgres_junction_tags").manyToMany({
+			through: "postgres_junction_rows",
+			sourceField: "parentId",
+			targetField: "tagId",
+		}),
+	}))
+	.options({ softDelete: true })
+	.access({ purge: true });
+
+const postgresJunctionTags = collection("postgres_junction_tags").fields(
+	({ f }) => ({ name: f.text().required() }),
+);
+
+const postgresJunctionRows = collection("postgres_junction_rows")
+	.fields(({ f }) => ({
+		parentId: f.text(36).required(),
+		tagId: f.text(36).required(),
+	}))
+	.hooks({
+		afterChange: ({ data, operation }) =>
+			operation === "create" ? pauseJunctionWrite?.(data) : undefined,
+	});
+
 function deferred() {
 	let resolve!: () => void;
 	const promise = new Promise<void>((done) => {
@@ -35,7 +98,7 @@ async function waitForAttempt() {
 }
 
 describe.skipIf(!runPostgresContract)(
-	"transaction-scoped locks on PostgreSQL 17",
+	"transaction-scoped locks on supported PostgreSQL",
 	() => {
 		let setup: Awaited<ReturnType<typeof buildMockApp>>;
 		const systemContext = createTestContext();
@@ -43,18 +106,33 @@ describe.skipIf(!runPostgresContract)(
 		beforeAll(async () => {
 			const pool = new pg.Pool({ connectionString: databaseUrl });
 			try {
-				const result = await pool.query<{ server_version: string }>(
-					"show server_version",
+				const result = await pool.query<{ server_version_num: string }>(
+					"show server_version_num",
 				);
-				expect(result.rows[0]?.server_version.startsWith("17.")).toBe(true);
+				expect(
+					Number(result.rows[0]?.server_version_num),
+				).toBeGreaterThanOrEqual(150_000);
 				await pool.query("create extension if not exists pg_trgm");
 			} finally {
 				await pool.end();
 			}
 
 			setup = await buildMockApp(
-				{ collections: { postgresLockTargets } },
-				{ db: { url: databaseUrl!, pool: { max: 10 } } },
+				{
+					collections: {
+						postgresLockTargets,
+						postgres_purge_parents: postgresPurgeParents,
+						postgres_purge_children: postgresPurgeChildren,
+						postgres_upload_assets: postgresUploadAssets,
+						postgres_junction_parents: postgresJunctionParents,
+						postgres_junction_tags: postgresJunctionTags,
+						postgres_junction_rows: postgresJunctionRows,
+					},
+				},
+				{
+					db: { url: databaseUrl!, pool: { max: 10 } },
+					storage: { adapter: memory() },
+				},
 			);
 			await runTestDbMigrations(setup.app);
 		});
@@ -210,6 +288,312 @@ describe.skipIf(!runPostgresContract)(
 
 			await first;
 			expect(await waitingLock).toEqual([]);
+		});
+
+		it("rejects an active purge before taking relation table locks", async () => {
+			const parent = await setup.app.collections.postgres_purge_parents.create(
+				{ name: "Still active" },
+				systemContext,
+			);
+			const writerInserted = deferred();
+			const releaseWriter = deferred();
+			pauseRelationWrite = async (data) => {
+				if (data.parent !== parent.id) return;
+				writerInserted.resolve();
+				await releaseWriter.promise;
+			};
+			const writer = setup.app.collections.postgres_purge_children.create(
+				{ name: "Concurrent child", parent: parent.id },
+				systemContext,
+			);
+			await writerInserted.promise;
+
+			const activePurgeOutcome = await Promise.race([
+				setup.app.collections.postgres_purge_parents
+					.purgeById({ id: parent.id }, systemContext)
+					.then(
+						() => ({ error: undefined }),
+						(error: unknown) => ({ error }),
+					),
+				new Promise<{ error: Error }>((resolve) =>
+					setTimeout(
+						() =>
+							resolve({
+								error: new Error(
+									"active purge waited for relation table locks",
+								),
+							}),
+						500,
+					),
+				),
+			]);
+			expect(activePurgeOutcome.error).toMatchObject({ code: "CONFLICT" });
+			expect(activePurgeOutcome.error).not.toMatchObject({
+				message: "active purge waited for relation table locks",
+			});
+
+			releaseWriter.resolve();
+			await writer;
+			pauseRelationWrite = undefined;
+		});
+
+		it("bounds relation table lock waits with a retryable conflict", async () => {
+			const parent = await setup.app.collections.postgres_purge_parents.create(
+				{ name: "Bounded wait" },
+				systemContext,
+			);
+			await setup.app.collections.postgres_purge_parents.deleteById(
+				{ id: parent.id },
+				systemContext,
+			);
+			const writerInserted = deferred();
+			const releaseWriter = deferred();
+			pauseRelationWrite = async (data) => {
+				if (data.parent !== parent.id) return;
+				writerInserted.resolve();
+				await releaseWriter.promise;
+			};
+			const writer = setup.app.collections.postgres_purge_children.create(
+				{ name: "Lock holder", parent: parent.id },
+				systemContext,
+			);
+			await writerInserted.promise;
+
+			const startedAt = Date.now();
+			await expect(
+				setup.app.collections.postgres_purge_parents.purgeById(
+					{ id: parent.id },
+					systemContext,
+				),
+			).rejects.toMatchObject({
+				code: "CONFLICT",
+				message: "Physical purge could not acquire relation locks; retry later",
+			});
+			expect(Date.now() - startedAt).toBeLessThan(5_000);
+
+			releaseWriter.resolve();
+			await writer;
+			pauseRelationWrite = undefined;
+		});
+
+		it("serializes application-only relation writes with physical purge", async () => {
+			const purgeFirstParent =
+				await setup.app.collections.postgres_purge_parents.create(
+					{ name: "Purge wins" },
+					systemContext,
+				);
+			await setup.app.collections.postgres_purge_parents.deleteById(
+				{ id: purgeFirstParent.id },
+				systemContext,
+			);
+			const purgeLocked = deferred();
+			const releasePurge = deferred();
+			pausePurge = async (data) => {
+				if (data.id !== purgeFirstParent.id) return;
+				purgeLocked.resolve();
+				await releasePurge.promise;
+			};
+
+			const purge = setup.app.collections.postgres_purge_parents.purgeById(
+				{ id: purgeFirstParent.id },
+				systemContext,
+			);
+			await purgeLocked.promise;
+			let lateWriterFinished = false;
+			const lateWriter = setup.app.collections.postgres_purge_children
+				.create(
+					{
+						name: "Must not dangle",
+						parent: purgeFirstParent.id,
+					},
+					systemContext,
+				)
+				.finally(() => {
+					lateWriterFinished = true;
+				});
+			const lateWriterOutcome = lateWriter.then(
+				() => ({ error: undefined }),
+				(error: unknown) => ({ error }),
+			);
+			await waitForAttempt();
+			expect(lateWriterFinished).toBe(false);
+			releasePurge.resolve();
+			await purge;
+			expect((await lateWriterOutcome).error).toMatchObject({
+				code: "BAD_REQUEST",
+			});
+			pausePurge = undefined;
+
+			const writerFirstParent =
+				await setup.app.collections.postgres_purge_parents.create(
+					{ name: "Writer wins" },
+					systemContext,
+				);
+			await setup.app.collections.postgres_purge_parents.deleteById(
+				{ id: writerFirstParent.id },
+				systemContext,
+			);
+			const writerInserted = deferred();
+			const releaseWriter = deferred();
+			pauseRelationWrite = async (data) => {
+				if (data.parent !== writerFirstParent.id) return;
+				writerInserted.resolve();
+				await releaseWriter.promise;
+			};
+			const writer = setup.app.collections.postgres_purge_children.create(
+				{
+					name: "Retained child",
+					parent: writerFirstParent.id,
+				},
+				systemContext,
+			);
+			await writerInserted.promise;
+			let waitingPurgeFinished = false;
+			const waitingPurge = setup.app.collections.postgres_purge_parents
+				.purgeById({ id: writerFirstParent.id }, systemContext)
+				.finally(() => {
+					waitingPurgeFinished = true;
+				});
+			const waitingPurgeOutcome = waitingPurge.then(
+				() => ({ error: undefined }),
+				(error: unknown) => ({ error }),
+			);
+			await waitForAttempt();
+			expect(waitingPurgeFinished).toBe(false);
+			releaseWriter.resolve();
+			await writer;
+			expect((await waitingPurgeOutcome).error).toMatchObject({
+				code: "CONFLICT",
+				message: "Cannot purge record while retained references exist",
+			});
+			pauseRelationWrite = undefined;
+		});
+
+		it("serializes raw junction writes inferred from many-to-many metadata", async () => {
+			const parent =
+				await setup.app.collections.postgres_junction_parents.create(
+					{ name: "Writer wins" },
+					systemContext,
+				);
+			const tag = await setup.app.collections.postgres_junction_tags.create(
+				{ name: "Tag" },
+				systemContext,
+			);
+			await setup.app.collections.postgres_junction_parents.deleteById(
+				{ id: parent.id },
+				systemContext,
+			);
+			const writerInserted = deferred();
+			const releaseWriter = deferred();
+			pauseJunctionWrite = async (data) => {
+				if (data.parentId !== parent.id) return;
+				writerInserted.resolve();
+				await releaseWriter.promise;
+			};
+			const writer = setup.app.collections.postgres_junction_rows.create(
+				{ parentId: parent.id, tagId: tag.id },
+				systemContext,
+			);
+			await writerInserted.promise;
+
+			let waitingPurgeFinished = false;
+			const waitingPurge = setup.app.collections.postgres_junction_parents
+				.purgeById({ id: parent.id }, systemContext)
+				.finally(() => {
+					waitingPurgeFinished = true;
+				});
+			const waitingPurgeOutcome = waitingPurge.then(
+				() => ({ error: undefined }),
+				(error: unknown) => ({ error }),
+			);
+			await waitForAttempt();
+			expect(waitingPurgeFinished).toBe(false);
+			releaseWriter.resolve();
+			await writer;
+			expect((await waitingPurgeOutcome).error).toMatchObject({
+				code: "CONFLICT",
+				message: "Cannot purge record while retained references exist",
+			});
+			pauseJunctionWrite = undefined;
+		});
+
+		it("lets only one concurrent storage-cleanup drainer claim an intent", async () => {
+			await enqueueStorageCleanup(
+				setup.app.db,
+				"postgres-contract/concurrent-cleanup.txt",
+			);
+
+			const claims = await Promise.all([
+				claimStorageCleanup(setup.app.db, { batchSize: 1 }),
+				claimStorageCleanup(setup.app.db, { batchSize: 1 }),
+			]);
+
+			expect(claims.flat()).toHaveLength(1);
+			expect(claims.flat()[0]?.leaseToken).toBeString();
+		});
+
+		it("serializes delayed cleanup against a writer reusing the same key", async () => {
+			const key = "postgres-contract/reused-key.txt";
+			await setup.app.storage.upload(key, new TextEncoder().encode("old"));
+			const original =
+				await setup.app.collections.postgres_upload_assets.create(
+					{
+						key,
+						filename: "old.txt",
+						mimeType: "text/plain",
+						size: 3,
+					},
+					systemContext,
+				);
+			await setup.app.collections.postgres_upload_assets.deleteById(
+				{ id: original.id },
+				systemContext,
+			);
+			await setup.app.collections.postgres_upload_assets.purgeById(
+				{ id: original.id },
+				systemContext,
+			);
+
+			const deleteStarted = deferred();
+			const releaseDelete = deferred();
+			const originalDelete = setup.app.storage.delete.bind(setup.app.storage);
+			setup.app.storage.delete = (async (...args: unknown[]) => {
+				if (args[0] === key) {
+					deleteStarted.resolve();
+					await releaseDelete.promise;
+				}
+				return originalDelete(...(args as [string]));
+			}) as typeof setup.app.storage.delete;
+
+			const cleanup = setup.app.queue.runOnce({ jobs: ["storageCleanup"] });
+			await deleteStarted.promise;
+			let writerSettled = false;
+			const writer = setup.app.collections.postgres_upload_assets
+				.create(
+					{
+						key,
+						filename: "replacement.txt",
+						mimeType: "text/plain",
+						size: 11,
+					},
+					systemContext,
+				)
+				.finally(() => {
+					writerSettled = true;
+				});
+			const writerOutcome = writer.then(
+				(value) => ({ value, error: undefined }),
+				(error: unknown) => ({ value: undefined, error }),
+			);
+			await waitForAttempt();
+			expect(writerSettled).toBe(false);
+			releaseDelete.resolve();
+			await cleanup;
+			expect((await writerOutcome).error).toMatchObject({
+				code: "BAD_REQUEST",
+			});
+			expect(await setup.app.storage.exists(key)).toBe(false);
+			setup.app.storage.delete = originalDelete;
 		});
 	},
 );

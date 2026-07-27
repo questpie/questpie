@@ -24,6 +24,7 @@ import type { I18nText } from "#questpie/shared/i18n/types.js";
 import { buildZodFromState } from "./derive-schema.js";
 import type {
 	ArrayFieldState,
+	CrdtFieldConfig,
 	FieldRuntimeState,
 	FieldState,
 } from "./field-class-types.js";
@@ -178,6 +179,15 @@ export class Field<TState extends FieldState = FieldState> {
 	/** Set field-level access control. */
 	access(a: FieldAccess): Field<TState & { access: FieldAccess }> {
 		return this._clone<{ access: FieldAccess }>({ access: a });
+	}
+
+	/** Mark this field with a framework-owned CRDT merge strategy. */
+	crdt<const TConfig extends CrdtFieldConfig>(
+		config: TConfig,
+	): Field<TState & { crdt: TConfig }> {
+		return this._clone<{ crdt: TConfig }>({
+			crdt: { ...config },
+		});
 	}
 
 	/**

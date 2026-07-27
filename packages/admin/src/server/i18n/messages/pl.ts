@@ -656,6 +656,7 @@ export default {
 	"audit.action.create": "utworzył(a)",
 	"audit.action.update": "zaktualizował(a)",
 	"audit.action.delete": "usunął/usunęła",
+	"audit.action.purge": "trwale usunął/usunęła",
 	"audit.action.transition": "zmienił(a) status",
 	"audit.resourceType.collection": "kolekcję",
 	"audit.resourceType.global": "globalne ustawienie",

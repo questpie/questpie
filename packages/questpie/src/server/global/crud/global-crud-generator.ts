@@ -1,12 +1,20 @@
+import { randomUUID } from "node:crypto";
+
 import { and, avg, count, eq, inArray, max, min, sql, sum } from "drizzle-orm";
 import { alias, type PgTable } from "drizzle-orm/pg-core";
 
 import type { RelationConfig } from "#questpie/server/collection/builder/types.js";
 import { buildWhereClause } from "#questpie/server/collection/crud/query-builders/index.js";
 import {
+	collapsePolymorphicRelationValues,
+	expandPolymorphicRelationValues,
 	processNestedRelations,
 	separateNestedRelations,
 } from "#questpie/server/collection/crud/relation-mutations/nested-operations.js";
+import {
+	lockRelationSourceForWrite,
+	lockRelationTargetsForWrite,
+} from "#questpie/server/collection/crud/relation-mutations/purge-relations.js";
 import {
 	executeGlobalGlobalHooks,
 	executeGlobalGlobalTransitionHooks,
@@ -15,6 +23,7 @@ import {
 	executeAccessRule,
 	extractNestedLocalizationSchemas,
 	getDb,
+	getTransactionTxid,
 	getRestrictedReadFields,
 	mergeFieldAccessRules,
 	mergeI18nRows,
@@ -49,11 +58,22 @@ import type {
 	GlobalTransitionHookContext,
 } from "#questpie/server/global/builder/types.js";
 import {
+	assertNoCrdtFieldsInOrdinaryMutation,
+	assertNoCrdtFieldsInVersionRestore,
+} from "#questpie/server/modules/core/integrated/crdt/crud-guard.js";
+import {
+	canonicalCrdtGlobalLocator,
+	CrdtOwnerLifecycleTransaction,
+	stageCrdtOwnerActivation,
+	type StagedCrdtOwnerActivation,
+} from "#questpie/server/modules/core/integrated/crdt/owner-lifecycle.js";
+import {
 	extractWorkflowFromVersioning,
 	type ResolvedWorkflowConfig,
 	resolveWorkflowConfig,
 } from "#questpie/server/modules/core/workflow/config.js";
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
+import { attachTxid } from "#questpie/shared/txid.js";
 
 import type {
 	GlobalCRUD,
@@ -98,11 +118,87 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			revertToVersion: this.wrapWithAppContext(this.createRevertToVersion()),
 			transitionStage: this.wrapWithAppContext(this.createTransitionStage()),
 		};
+		crud["~internalState"] = this.state;
+		crud["~internalRelatedTable"] = this.table;
+		crud["~internalI18nTable"] = this.i18nTable;
 		return crud;
 	}
 
 	private getDb(context?: CRUDContext) {
 		return getDb(this.db, context);
+	}
+
+	private getCrdtManifest() {
+		return Object.values(this.app?.crdtManifests.globals ?? {}).find(
+			(manifest: any) => manifest.owner.key === this.state.name,
+		) as
+			| import("#questpie/server/modules/core/integrated/crdt/manifest.js").CrdtDesiredManifest
+			| undefined;
+	}
+
+	private getCrdtValues(
+		data: Record<string, unknown>,
+	): Record<string, unknown> {
+		const values = { ...data };
+		for (const field of this.getCrdtManifest()?.fields ?? []) {
+			if (Object.hasOwn(values, field.sourcePath)) continue;
+			const definition = this.state.fieldDefinitions?.[field.sourcePath] as
+				| { _state?: { defaultValue?: unknown } }
+				| undefined;
+			const defaultValue = definition?.["_state"]?.defaultValue;
+			values[field.sourcePath] = Array.isArray(defaultValue)
+				? [...defaultValue]
+				: defaultValue;
+		}
+		return values;
+	}
+
+	private async stageCrdtActivation(
+		values: Record<string, unknown>,
+	): Promise<StagedCrdtOwnerActivation | undefined> {
+		const manifest = this.getCrdtManifest();
+		if (!manifest) return undefined;
+		return stageCrdtOwnerActivation({
+			manifest,
+			resourceId: randomUUID(),
+			values: this.getCrdtValues(values),
+			textEngine: this.app?.config.crdt?.engines?.text,
+		});
+	}
+
+	private async activateLockedCrdtGlobal(
+		tx: any,
+		recordId: string,
+		staged: StagedCrdtOwnerActivation | undefined,
+		mode: "create" | "ensure",
+	): Promise<void> {
+		if (!staged) return;
+		const [lockedOwner] = await tx
+			.select()
+			.from(this.table)
+			.where(eq((this.table as any).id, recordId))
+			.for("update");
+		if (!lockedOwner) {
+			throw new Error("Global owner disappeared before CRDT activation");
+		}
+		await new CrdtOwnerLifecycleTransaction(tx).activate({
+			staged,
+			owner: {
+				locator: canonicalCrdtGlobalLocator(),
+				values: lockedOwner,
+			},
+			mode,
+		});
+	}
+
+	private async ensureCrdtGlobal(db: any, context: CRUDContext): Promise<void> {
+		if (!this.getCrdtManifest()) return;
+		const owner = await this.getCurrentRow(db, context);
+		if (!owner) return;
+		const staged = await this.stageCrdtActivation(owner);
+		await withTransaction(db, async (tx: any) => {
+			await this.activateLockedCrdtGlobal(tx, owner.id, staged, "ensure");
+		});
 	}
 
 	/**
@@ -429,6 +525,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				let baseRow = await this.getCurrentRow(db, normalized);
 
 				if (!baseRow) {
+					const stagedCreate = await this.stageCrdtActivation({});
 					baseRow = await withTransaction(db, async (tx: any) => {
 						// Serialize concurrent auto-creates: take the lock first, then
 						// re-check existence inside the locked transaction. Without this
@@ -462,6 +559,12 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 							inserted,
 							"create",
 							createStageContext,
+						);
+						await this.activateLockedCrdtGlobal(
+							tx,
+							inserted.id,
+							stagedCreate,
+							"create",
 						);
 						return inserted;
 					});
@@ -513,6 +616,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				row = rows[0] || null;
 
 				if (!row) {
+					const stagedCreate = await this.stageCrdtActivation({});
 					row = await withTransaction(db, async (tx: any) => {
 						// Serialize concurrent auto-creates: take the lock first, then
 						// re-check existence inside the locked transaction. Without this
@@ -538,6 +642,12 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 							}
 
 							await this.createVersion(tx, inserted, "create", normalized);
+							await this.activateLockedCrdtGlobal(
+								tx,
+								inserted.id,
+								stagedCreate,
+								"create",
+							);
 							baseRecord = inserted;
 						}
 
@@ -566,6 +676,11 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					});
 				}
 			}
+			if (row) {
+				collapsePolymorphicRelationValues(row, this.state.relations ?? {});
+			}
+
+			await this.ensureCrdtGlobal(db, normalized);
 
 			if (row && options.with && this.app) {
 				await this.resolveRelations([row], options.with, normalized);
@@ -597,10 +712,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 		regularFields: any;
 		nestedRelations: Record<string, any>;
 	} {
-		const relationNames = this.state.relations
-			? new Set(Object.keys(this.state.relations))
-			: new Set<string>();
-		return separateNestedRelations(input, relationNames);
+		return separateNestedRelations(input, this.state.relations ?? {});
 	}
 
 	/**
@@ -632,6 +744,12 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			context: CRUDContext = {},
 			options: GlobalUpdateOptions = {},
 		) => {
+			assertNoCrdtFieldsInOrdinaryMutation({
+				ownerName: this.state.name,
+				fieldDefinitions: this.state.fieldDefinitions,
+				data,
+			});
+
 			const db = this.getDb(context);
 			const normalized = this.normalizeContext({
 				...context,
@@ -644,6 +762,9 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			const isScoped = this.state.options.scoped !== undefined;
 			const scopeId = isScoped ? this.resolveScopeId(normalized) : undefined;
 			let existing = await this.getCurrentRow(db, normalized);
+			const stagedCreate = existing
+				? undefined
+				: await this.stageCrdtActivation({});
 
 			// Separate nested relation operations from regular fields
 			let { regularFields: baseRegularFields, nestedRelations } =
@@ -718,7 +839,10 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					}),
 				);
 
-				return preparedFields;
+				return expandPolymorphicRelationValues(
+					preparedFields,
+					this.state.relations ?? {},
+				);
 			};
 
 			const writeRecord = async (
@@ -814,6 +938,12 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				if (!baseRecord) {
 					throw ApiError.internal("Global record not found after update");
 				}
+				if (updatedRecord) {
+					collapsePolymorphicRelationValues(
+						updatedRecord,
+						this.state.relations ?? {},
+					);
+				}
 
 				// Process nested relation operations (create, connect, connectOrCreate)
 				if (Object.keys(nestedRelations).length > 0) {
@@ -851,11 +981,34 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 						db: tx,
 					}),
 				);
+				const crdtManifest = this.getCrdtManifest();
+				if (currentExisting && crdtManifest) {
+					await new CrdtOwnerLifecycleTransaction(
+						tx,
+					).advanceOwnerPolicyRevision({
+						manifest: crdtManifest,
+						locator: canonicalCrdtGlobalLocator(),
+					});
+				}
+				if (!currentExisting) {
+					await this.activateLockedCrdtGlobal(
+						tx,
+						updatedId,
+						stagedCreate,
+						"create",
+					);
+				}
 
-				return updatedRecord;
+				return attachTxid(updatedRecord, getTransactionTxid());
 			};
 
 			const updatedRecord = await withTransaction(db, async (tx: any) => {
+				await lockRelationSourceForWrite({
+					tx,
+					app: this.app,
+					sourceState: this.state as any,
+					sourceTable: this.table,
+				});
 				if (!existing) {
 					// Serialize concurrent update auto-creates the same way get()
 					// does: take the lock first, then re-check inside the locked
@@ -865,8 +1018,19 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				}
 
 				const preparedFields = await prepareWrite(existing, tx);
+				if (this.app) {
+					await lockRelationTargetsForWrite({
+						tx,
+						app: this.app,
+						sourceState: this.state as any,
+						sourceTable: this.table,
+						values: preparedFields,
+						originalRows: existing ? [existing] : undefined,
+					});
+				}
 				return writeRecord(tx, existing, preparedFields);
 			});
+			await this.ensureCrdtGlobal(db, normalized);
 
 			// Resolve relations if requested
 			if (updatedRecord && options.with && this.app) {
@@ -939,7 +1103,14 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			if (options.limit) query = query.limit(options.limit);
 			if (options.offset) query = query.offset(options.offset);
 
-			return (await query) as GlobalVersionRecord[];
+			const rows = (await query) as GlobalVersionRecord[];
+			for (const row of rows) {
+				collapsePolymorphicRelationValues(
+					row as Record<string, any>,
+					this.state.relations ?? {},
+				);
+			}
+			return rows;
 		};
 	}
 
@@ -948,6 +1119,11 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			options: GlobalRevertVersionOptions,
 			context: CRUDContext = {},
 		) => {
+			assertNoCrdtFieldsInVersionRestore({
+				ownerName: this.state.name,
+				fieldDefinitions: this.state.fieldDefinitions,
+			});
+
 			const db = this.getDb(context);
 			const normalized = this.normalizeContext(context);
 			if (!this.versionsTable) throw ApiError.notImplemented("Versioning");
@@ -1209,7 +1385,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					);
 				}
 
-				return updatedRecord;
+				return attachTxid(updatedRecord, getTransactionTxid());
 			});
 		};
 	}
@@ -1260,6 +1436,8 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					app: this.app,
 					db,
 					session: normalized.session,
+					principal: normalized.principal,
+					actor: normalized.actor,
 					locale: normalized.locale,
 					row: existing,
 					request:
@@ -1298,6 +1476,8 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			const transitionServices = extractAppServices(this.app, {
 				db,
 				session: normalized.session,
+				principal: normalized.principal,
+				actor: normalized.actor,
 			});
 			const transitionCtx: GlobalTransitionHookContext = {
 				...transitionServices,
@@ -1320,7 +1500,10 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			await withTransaction(db, async (tx: any) => {
 				await createVersionRecord({
 					tx,
-					row: existing,
+					row: expandPolymorphicRelationValues(
+						existing,
+						this.state.relations ?? {},
+					),
 					operation: "update",
 					versionsTable: this.versionsTable!,
 					i18nVersionsTable: this.i18nVersionsTable,
@@ -1378,7 +1561,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 
 		await createVersionRecord({
 			tx,
-			row,
+			row: expandPolymorphicRelationValues(row, this.state.relations ?? {}),
 			operation,
 			versionsTable: this.versionsTable,
 			i18nVersionsTable: this.i18nVersionsTable,
@@ -1559,6 +1742,8 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 		const services = extractAppServices(this.app, {
 			db: params.db,
 			session: normalized.session,
+			principal: normalized.principal,
+			actor: normalized.actor,
 		});
 		return {
 			...services,
@@ -1700,6 +1885,8 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			app: this.app,
 			db,
 			session: normalized.session,
+			principal: normalized.principal,
+			actor: normalized.actor,
 			locale: normalized.locale,
 			row,
 			input,

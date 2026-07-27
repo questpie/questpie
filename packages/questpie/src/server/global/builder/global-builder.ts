@@ -1,14 +1,11 @@
 import type { SQL } from "drizzle-orm";
+import type { ZodType } from "zod";
 
 import type { RelationConfig } from "#questpie/server/collection/builder/types.js";
 import {
 	createFieldsCallbackContext,
 	type FieldsCallbackContext,
 } from "#questpie/server/fields/builder.js";
-import {
-	type BuiltinFields,
-	builtinFields,
-} from "#questpie/server/modules/core/fields/index.js";
 import type { RelationFieldMetadata } from "#questpie/server/fields/types.js";
 import { Global } from "#questpie/server/global/builder/global.js";
 import type {
@@ -18,6 +15,14 @@ import type {
 	GlobalHooks,
 	GlobalOptions,
 } from "#questpie/server/global/builder/types.js";
+import {
+	type BuiltinFields,
+	builtinFields,
+} from "#questpie/server/modules/core/fields/index.js";
+import type {
+	CrdtOwnerCapability,
+	CrdtOwnerConfig,
+} from "#questpie/server/modules/core/integrated/crdt/capability.js";
 import type { Override, Prettify } from "#questpie/shared/type-utils.js";
 
 /**
@@ -101,6 +106,7 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 			options: {},
 			hooks: {},
 			access: {},
+			collaborative: undefined,
 			fieldDefinitions: {},
 		});
 		if (fieldDefs) {
@@ -284,6 +290,21 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 
 		const newBuilder = new GlobalBuilder(newState);
 		return newBuilder;
+	}
+
+	/** Enable one collaborative aggregate for this global singleton/scope. */
+	collaborative<TAwarenessSchema extends ZodType | undefined = undefined>(
+		config?: CrdtOwnerConfig<TAwarenessSchema>,
+	): GlobalBuilder<
+		Override<TState, { collaborative: CrdtOwnerCapability<TAwarenessSchema> }>
+	> {
+		const newState = {
+			...this.state,
+			collaborative: {
+				awarenessSchema: config?.awareness,
+			},
+		} as any;
+		return new GlobalBuilder(newState);
 	}
 
 	/**
@@ -527,6 +548,7 @@ export function global<TName extends string>(
 		options: {},
 		hooks: {},
 		access: {},
+		collaborative: undefined,
 		fieldDefinitions: {},
 	}) as any;
 }

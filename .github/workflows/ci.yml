@@ -46,15 +46,15 @@ jobs:
         run: bun install --frozen-lockfile
 
       # Gates the `questpie` package type surface — INCLUDING the committed
-      # full-app fixture (tsconfig.fullapp.json, wired into the package's
-      # `check-types`). This is the gate that was structurally BLIND to the
+      # full-app fixture — plus both TanStack integration packages. This is the
+      # gate that was structurally BLIND to the
       # AppContext⇄config codegen cycle: it now compiles a real composed
       # AppContext, so a re-leak of the cycle/`any` fails CI here. The broader
       # repo-wide `turbo run check-types` stays out until the remaining packages
       # are clean; the per-example cold-error truth is gated by the
       # `example-errors ratchet` in the `build` job below.
-      - name: Run type check (questpie package + full-app fixture)
-        run: bunx turbo run check-types --filter=questpie
+      - name: Run type check (questpie + TanStack packages)
+        run: bunx turbo run check-types --filter=questpie --filter=@questpie/tanstack-query --filter=@questpie/tanstack-db
 
   audit:
     name: Audit
@@ -115,8 +115,25 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Verify realtime migration generation is idempotent
+        run: bun run verify:realtime-migrations
+
       - name: Start Postgres, Redis, and Soketi
         run: docker compose -f packages/questpie/test/fixtures/soketi/compose.yml up -d --wait
+
+      - name: Run PostgreSQL txid ordering acceptance
+        working-directory: packages/questpie
+        run: bun test test/integration/realtime-txid-postgres.test.ts
+        env:
+          QUESTPIE_MIGRATIONS_SILENT: "1"
+          QUESTPIE_REALTIME_TXID_DATABASE_URL: postgresql://questpie:questpie@127.0.0.1:54329/questpie_realtime
+
+      - name: Run physical-purge transaction and storage-lock contracts
+        working-directory: packages/questpie
+        run: bun test test/collection/transaction-locks-postgres.test.ts
+        env:
+          QUESTPIE_MIGRATIONS_SILENT: "1"
+          QUESTPIE_TRANSACTION_LOCK_DATABASE_URL: postgresql://questpie:questpie@127.0.0.1:54329/questpie_realtime
 
       - name: Run realtime driver and security matrix
         working-directory: packages/questpie
@@ -153,6 +170,9 @@ jobs:
 
       - name: Build packages
         run: bunx turbo run build --filter='./packages/*'
+
+      - name: Dist syntax gate
+        run: find packages/*/dist -name '*.mjs' -print0 | xargs -0 -n1 node --check
 
       - name: Dist types gate
         run: bun run scripts/check-dist-types.ts

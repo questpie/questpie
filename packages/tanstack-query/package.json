@@ -32,15 +32,17 @@
 	},
 	"scripts": {
 		"build": "tsdown",
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit",
+		"test": "bun test"
 	},
 	"devDependencies": {
 		"bun-types": "latest",
+		"seroval": "1.5.4",
 		"tsdown": "^0.18.3",
 		"zod": "^4.2.1"
 	},
 	"peerDependencies": {
 		"@tanstack/react-query": "^5.0.0",
-		"questpie": "^3.0.0"
+		"questpie": "workspace:^"
 	}
 }

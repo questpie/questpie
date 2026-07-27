@@ -66,4 +66,21 @@ describe("db service", () => {
 		expect(app._pgConnectionString).toBe("postgres://direct.example/db");
 		expect(app._dbCleanup).toBe(cleanup);
 	});
+
+	test("enforces PostgreSQL 15 for queryable custom clients", async () => {
+		const app = {
+			config: {
+				db: {
+					drizzle: {
+						execute: async () => [{ serverVersionNum: 140_000 }],
+					},
+				},
+			},
+			getSchema: () => ({}),
+		};
+
+		await expect(dbService.state.create!({ app })).rejects.toThrow(
+			"QUESTPIE requires PostgreSQL 15 or newer",
+		);
+	});
 });

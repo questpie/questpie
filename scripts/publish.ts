@@ -19,6 +19,10 @@ import * as path from "node:path";
 import { promisify } from "node:util";
 
 import {
+	assertPackagesRegistered,
+	isNpmPackageVersionPublished,
+} from "./npm-package-preflight";
+import {
 	assertNoWorkspaceProtocols,
 	replaceWorkspaceVersions,
 } from "./publish-manifest";
@@ -32,6 +36,12 @@ const PUBLISH_SUMMARY_PATH = path.join(
 	".changeset",
 	"publish-summary.json",
 );
+
+export function npmReleaseCommand(dryRun: boolean): string {
+	return dryRun
+		? "npm pack --dry-run --json"
+		: "npm publish --access public --provenance";
+}
 
 interface PackageJson {
 	name: string;
@@ -117,148 +127,166 @@ function topoSort(
 	return order;
 }
 
-// Check if a package version is already published on npm
-async function isPublished(name: string, version: string): Promise<boolean> {
-	try {
-		await execAsync(`npm view "${name}@${version}" version`, {
-			env: { ...process.env },
-		});
-		return true;
-	} catch {
-		return false;
-	}
-}
-
 async function main() {
+	const dryRun = process.argv.includes("--dry-run");
 	console.log("🔄 Preparing packages for publish...\n");
-	fs.rmSync(PUBLISH_SUMMARY_PATH, { force: true });
+	if (dryRun) {
+		console.log(
+			"🔍 Dry run: packages will be packed and validated, never published\n",
+		);
+	}
 
 	const packages = getPackages();
-	const versions = getWorkspaceVersions(packages);
-	const originals = new Map<string, string>();
+	console.log("🔎 Verifying npm package registration...\n");
+	await assertPackagesRegistered(packages.keys());
+	console.log("✅ Every public workspace package is registered on npm\n");
 
-	// Save originals and apply transformations
-	for (const [, { dir }] of packages) {
-		const packageJsonPath = path.join(dir, "package.json");
-		const original = fs.readFileSync(packageJsonPath, "utf-8");
-		originals.set(packageJsonPath, original);
-
-		const packageJson: PackageJson = JSON.parse(original);
-		console.log(`📦 ${packageJson.name}`);
-
-		let modified = false;
-
-		// 1. Apply publishConfig overrides
-		if (packageJson.publishConfig) {
-			console.log("  Applying publishConfig overrides:");
-			for (const [key, value] of Object.entries(packageJson.publishConfig)) {
-				if (key === "access" || key === "registry" || key === "tag") continue;
-				console.log(`    ${key}`);
-				packageJson[key] = value;
-				modified = true;
-			}
-		}
-
-		// 2. Convert workspace:* in dependencies
-		if (packageJson.dependencies) {
-			const hasWorkspace = Object.values(packageJson.dependencies).some((v) =>
-				v.startsWith("workspace:"),
-			);
-			if (hasWorkspace) {
-				console.log("  Converting workspace dependencies:");
-				packageJson.dependencies = replaceWorkspaceVersions(
-					packageJson.dependencies,
-					versions,
-				);
-				modified = true;
-			}
-		}
-
-		// 3. Convert workspace:* in peerDependencies
-		if (packageJson.peerDependencies) {
-			const hasWorkspace = Object.values(packageJson.peerDependencies).some(
-				(v) => v.startsWith("workspace:"),
-			);
-			if (hasWorkspace) {
-				console.log("  Converting workspace peerDependencies:");
-				packageJson.peerDependencies = replaceWorkspaceVersions(
-					packageJson.peerDependencies,
-					versions,
-				);
-				modified = true;
-			}
-		}
-
-		assertNoWorkspaceProtocols(packageJson);
-
-		if (modified) {
-			fs.writeFileSync(
-				packageJsonPath,
-				JSON.stringify(packageJson, null, "\t") + "\n",
-			);
-			console.log("  ✅ Modified\n");
-		} else {
-			console.log("  (no changes needed)\n");
-		}
-	}
-
-	// Determine publish order
-	const publishOrder = topoSort(packages);
-	console.log(
-		`\n📋 Publish order: ${publishOrder.map((n) => n.replace("@questpie/", "")).join(" → ")}\n`,
+	const publishedVersions = new Map(
+		await Promise.all(
+			[...packages].map(
+				async ([name, { pkg }]) =>
+					[
+						name,
+						await isNpmPackageVersionPublished(name, pkg.version),
+					] as const,
+			),
+		),
 	);
 
-	// Publish packages sequentially in topological order
-	console.log("🚀 Publishing packages...\n");
-
+	if (!dryRun) fs.rmSync(PUBLISH_SUMMARY_PATH, { force: true });
+	const versions = getWorkspaceVersions(packages);
+	const originals = new Map<string, string>();
 	const publishedNow: PublishedPackageSummary[] = [];
+	const validated: string[] = [];
 	const skipped: string[] = [];
 	const failed: string[] = [];
 
-	for (const name of publishOrder) {
-		const entry = packages.get(name)!;
-		const version = entry.pkg.version;
+	try {
+		// Save originals and apply transformations
+		for (const [, { dir }] of packages) {
+			const packageJsonPath = path.join(dir, "package.json");
+			const original = fs.readFileSync(packageJsonPath, "utf-8");
+			originals.set(packageJsonPath, original);
 
-		// Skip if already published
-		if (await isPublished(name, version)) {
-			console.log(`⏭️  ${name}@${version} — already on npm, skipping`);
-			skipped.push(name);
-			continue;
+			const packageJson: PackageJson = JSON.parse(original);
+			console.log(`📦 ${packageJson.name}`);
+
+			let modified = false;
+
+			// 1. Apply publishConfig overrides
+			if (packageJson.publishConfig) {
+				console.log("  Applying publishConfig overrides:");
+				for (const [key, value] of Object.entries(packageJson.publishConfig)) {
+					if (key === "access" || key === "registry" || key === "tag") continue;
+					console.log(`    ${key}`);
+					packageJson[key] = value;
+					modified = true;
+				}
+			}
+
+			// 2. Convert workspace:* in dependencies
+			if (packageJson.dependencies) {
+				const hasWorkspace = Object.values(packageJson.dependencies).some((v) =>
+					v.startsWith("workspace:"),
+				);
+				if (hasWorkspace) {
+					console.log("  Converting workspace dependencies:");
+					packageJson.dependencies = replaceWorkspaceVersions(
+						packageJson.dependencies,
+						versions,
+					);
+					modified = true;
+				}
+			}
+
+			// 3. Convert workspace:* in peerDependencies
+			if (packageJson.peerDependencies) {
+				const hasWorkspace = Object.values(packageJson.peerDependencies).some(
+					(v) => v.startsWith("workspace:"),
+				);
+				if (hasWorkspace) {
+					console.log("  Converting workspace peerDependencies:");
+					packageJson.peerDependencies = replaceWorkspaceVersions(
+						packageJson.peerDependencies,
+						versions,
+					);
+					modified = true;
+				}
+			}
+
+			assertNoWorkspaceProtocols(packageJson);
+
+			if (modified) {
+				fs.writeFileSync(
+					packageJsonPath,
+					JSON.stringify(packageJson, null, "\t") + "\n",
+				);
+				console.log("  ✅ Modified\n");
+			} else {
+				console.log("  (no changes needed)\n");
+			}
 		}
 
-		console.log(`📤 Publishing ${name}@${version}...`);
+		// Determine publish order
+		const publishOrder = topoSort(packages);
+		console.log(
+			`\n📋 Publish order: ${publishOrder.map((n) => n.replace("@questpie/", "")).join(" → ")}\n`,
+		);
 
-		try {
-			const { stdout, stderr } = await execAsync(
-				`npm publish --access public --provenance`,
-				{
+		// Publish packages sequentially in topological order
+		console.log("🚀 Publishing packages...\n");
+
+		for (const name of publishOrder) {
+			const entry = packages.get(name)!;
+			const version = entry.pkg.version;
+
+			// Skip if already published
+			if (publishedVersions.get(name)) {
+				console.log(`⏭️  ${name}@${version} — already on npm, skipping`);
+				skipped.push(name);
+				continue;
+			}
+
+			console.log(
+				dryRun
+					? `🔍 Validating ${name}@${version}...`
+					: `📤 Publishing ${name}@${version}...`,
+			);
+
+			try {
+				const { stdout, stderr } = await execAsync(npmReleaseCommand(dryRun), {
 					cwd: entry.dir,
 					env: { ...process.env },
-				},
-			);
-			if (stdout) console.log(`  ${stdout.trim()}`);
-			if (stderr && !stderr.includes("npm warn")) {
-				console.error(`  ${stderr.trim()}`);
+				});
+				if (stdout) console.log(`  ${stdout.trim()}`);
+				if (stderr && !stderr.includes("npm warn")) {
+					console.error(`  ${stderr.trim()}`);
+				}
+				if (dryRun) {
+					console.log(`  ✅ ${name}@${version} package is publishable\n`);
+					validated.push(name);
+				} else {
+					console.log(`  ✅ ${name}@${version} published\n`);
+					publishedNow.push({
+						name,
+						version,
+						dir: path.relative(ROOT_DIR, entry.dir),
+					});
+				}
+			} catch (error: any) {
+				console.error(`  ❌ ${name}@${version} failed`);
+				if (error.stderr) console.error(`  ${error.stderr.trim()}`);
+				failed.push(name);
 			}
-			console.log(`  ✅ ${name}@${version} published\n`);
-			publishedNow.push({
-				name,
-				version,
-				dir: path.relative(ROOT_DIR, entry.dir),
-			});
-		} catch (error: any) {
-			console.error(`  ❌ ${name}@${version} failed`);
-			if (error.stderr) console.error(`  ${error.stderr.trim()}`);
-			failed.push(name);
 		}
+	} finally {
+		// Always restore transformed manifests, including unexpected failures.
+		console.log("\n🔄 Restoring original package.json files...");
+		for (const [packageJsonPath, original] of originals) {
+			fs.writeFileSync(packageJsonPath, original);
+		}
+		console.log("✅ Restored\n");
 	}
-
-	// Restore originals
-	console.log("\n🔄 Restoring original package.json files...");
-	for (const [packageJsonPath, original] of originals) {
-		fs.writeFileSync(packageJsonPath, original);
-	}
-	console.log("✅ Restored\n");
 
 	if (publishedNow.length > 0) {
 		const summary: PublishSummary = {
@@ -278,6 +306,9 @@ async function main() {
 			`✅ Published: ${publishedNow.map(({ name }) => name).join(", ")}`,
 		);
 	}
+	if (validated.length > 0) {
+		console.log(`✅ Dry-run validated: ${validated.join(", ")}`);
+	}
 	if (skipped.length > 0) {
 		console.log(`⏭️  Already published: ${skipped.join(", ")}`);
 	}
@@ -286,10 +317,16 @@ async function main() {
 		process.exit(1);
 	}
 
-	console.log("\n🎉 All packages published successfully!");
+	console.log(
+		dryRun
+			? "\n🎉 Release dry run completed without publishing!"
+			: "\n🎉 All packages published successfully!",
+	);
 }
 
-main().catch((error) => {
-	console.error("Fatal error:", error);
-	process.exit(1);
-});
+if (import.meta.main) {
+	main().catch((error) => {
+		console.error("Fatal error:", error);
+		process.exit(1);
+	});
+}

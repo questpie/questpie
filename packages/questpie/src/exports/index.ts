@@ -16,6 +16,12 @@ export * from "#questpie/server/adapters/http.js";
 // Re-export standalone factory functions
 export { collection } from "#questpie/server/collection/builder/collection-builder.js";
 export * from "#questpie/server/collection/builder/index.js";
+export {
+	attachTxid,
+	getTxid,
+	QUESTPIE_TXID,
+	QUESTPIE_TXID_HEADER,
+} from "#questpie/shared/txid.js";
 // Access control utilities
 export {
 	type AccessRuleEvaluationContext,
@@ -77,6 +83,12 @@ export type {
 	InferSessionFromApp,
 } from "#questpie/server/config/context.js";
 export * from "#questpie/server/config/context.js";
+export type {
+	AuthorityActor,
+	CrdtAuthentication,
+	CrdtAuthoritySubject,
+	VerifiedAgentCredential,
+} from "#questpie/server/modules/core/integrated/crdt/authority.js";
 export * from "#questpie/server/config/create-app.js";
 export {
 	createApp,
@@ -179,6 +191,7 @@ export type {
 	FieldWithMethods,
 } from "#questpie/server/fields/field-with-methods.js";
 export type * from "#questpie/server/fields/reactive-types.js";
+export type * from "#questpie/server/modules/core/integrated/crdt/types.js";
 export { global } from "#questpie/server/global/builder/global-builder.js";
 // Global builder (expanded from global/builder/index.ts barrel)
 export {
@@ -203,6 +216,11 @@ export * from "#questpie/server/global/crud/global-crud-generator.js";
 export * from "#questpie/server/global/crud/types.js";
 export * from "#questpie/server/i18n/types.js";
 export { auth } from "#questpie/server/modules/core/integrated/auth/merge.js";
+export type {
+	OAuthScopeCatalog,
+	OAuthScopeCatalogContributor,
+	OAuthScopeCatalogContributorApp,
+} from "#questpie/server/modules/core/integrated/auth/scope-catalog.js";
 export {
 	defaultOperationScope,
 	SCOPE_RESOURCE_BY_KIND,

@@ -15,6 +15,10 @@ export default collection("account")
 		password: f.text(255),
 	}))
 	.access({
+		read: false,
+		create: false,
+		update: false,
+		delete: false,
 		fields: {
 			accessToken: { read: false, create: false, update: false },
 			refreshToken: { read: false, create: false, update: false },

@@ -24,8 +24,8 @@ import _svc_reporting from "../services/reporting";
 import _appConfig from "../config/app";
 import _authConfig from "../config/auth";
 
-import type { AppCollections, AppGlobals, AppJobs, _ModuleCollections, _AppDefaultServices, _AppServicesSeam, _AppTopLevelServices, _AppCustomServiceNamespaces, _Registry_Collections, _Registry_Globals, _Registry_Jobs, _Registry_Routes, _Registry_Services, _Registry_Emails, _Registry_FieldTypes, _AllModuleFields } from "./entities.gen";
-import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";
+import type { AppCollections, AppChannels, AppGlobals, AppJobs, _ModuleCollections, _AppDefaultServices, _AppServicesSeam, _AppTopLevelServices, _AppCustomServiceNamespaces, _Registry_Collections, _Registry_Channels, _Registry_Globals, _Registry_Jobs, _Registry_Routes, _Registry_Services, _Registry_Emails, _Registry_FieldTypes, _AllModuleFields } from "./entities.gen";
+import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AuthorityActor, CollectionAPI, CrdtClientAPI, CrdtRegistryFromApp, CrdtServerAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Principal, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";
 import type { ChannelsService } from "questpie/channels";
 
 type _MPSubModules<M> = M extends { modules: infer S extends readonly any[] } ? S : readonly [];
@@ -43,11 +43,7 @@ type _JobHandlerCollections = _ModuleCollections & {
 	categories: typeof _coll_categories;
 	user: typeof _coll_user;
 };
-type _JobHandlerCollectionsAPI = {
-	articles: CollectionAPI<typeof _coll_articles, _JobHandlerCollections>;
-	categories: CollectionAPI<typeof _coll_categories, _JobHandlerCollections>;
-	user: CollectionAPI<typeof _coll_user, _JobHandlerCollections>;
-};
+type _JobHandlerCollectionsAPI = { [K in keyof _JobHandlerCollections]: CollectionAPI<_JobHandlerCollections[K], _JobHandlerCollections> };
 type _ExecutionContextJob<T> = T extends { name: infer TName extends string; schema: z.ZodSchema<infer TPayload> } ? QueueJobType<TPayload, TName> : never;
 type _ExecutionContextJobs = {};
 type _ExecutionContextServiceDefinitions = {
@@ -57,10 +53,11 @@ type _ExecutionContextServiceDefinitions = {
 type _ExecutionContextDefaultServices = ServiceInstancesInNamespace<_ExecutionContextServiceDefinitions, "services">;
 type _AppCollectionDefinitions = AppCollections & Record<string, AnyCollectionOrBuilder>;
 type _AppGlobalDefinitions = AppGlobals & Record<string, AnyGlobalOrBuilder>;
-type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "globals" | "auth" | "~contextExtensions"> & {
+type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "channels" | "globals" | "auth" | "~contextExtensions"> & {
 	app: (typeof _runtime)["app"];
 	db: (typeof _runtime)["db"];
 	collections: _AppCollectionDefinitions;
+	channels: AppChannels;
 	globals: _AppGlobalDefinitions;
 	auth: _AppAuthConfig;
 	storage: (typeof _runtime)["storage"];
@@ -76,6 +73,10 @@ export type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals"> & {
 	globals: _AppGlobalsAPI;
 };
 
+export type AppCrdt = CrdtRegistryFromApp<{ collections: AppCollections; globals: AppGlobals }>;
+export type AppCrdtClient = CrdtClientAPI<AppCrdt>;
+export type AppCrdtServer = CrdtServerAPI<AppCrdt>;
+
 // ── AppContext augmentation — auto-types ALL handlers ──────
 type _AppInfraRecord = {
 	// Infrastructure
@@ -88,7 +89,8 @@ type _AppInfraRecord = {
 	logger: _AppQuestpie["logger"];
 	search: _AppQuestpie["search"];
 	realtime: _AppQuestpie["realtime"];
-	channels: ChannelsService;
+	channels: ChannelsService<AppChannels>;
+	crdt: AppCrdtServer;
 
 	// Entity APIs
 	collections: _CollectionsAPI;
@@ -97,6 +99,8 @@ type _AppInfraRecord = {
 
 	// Request-scoped
 	session: _AppSession;
+	principal?: Principal;
+	actor?: AuthorityActor;
 	t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
 
 	// User services
@@ -120,7 +124,7 @@ declare global {
 			logger: _AppQuestpie["logger"];
 			search: _AppQuestpie["search"];
 			realtime: _AppQuestpie["realtime"];
-			channels: ChannelsService;
+			channels: ChannelsService<AppChannels>;
 
 			// Entity APIs
 			collections: _JobHandlerCollectionsAPI;
@@ -148,7 +152,7 @@ declare global {
 			logger: _AppQuestpie["logger"];
 			search: _AppQuestpie["search"];
 			realtime: _AppQuestpie["realtime"];
-			channels: ChannelsService;
+			channels: ChannelsService<AppChannels>;
 
 			// Entity APIs
 			collections: _JobHandlerCollectionsAPI;
@@ -200,6 +204,7 @@ declare global {
 
 		interface Registry {
 			collections: _Registry_Collections;
+			channels: _Registry_Channels;
 			globals: _Registry_Globals;
 			jobs: _Registry_Jobs;
 			routes: _Registry_Routes;

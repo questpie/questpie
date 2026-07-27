@@ -26,6 +26,7 @@ import type {
 	I18nFieldAccessor,
 	InferSQLType,
 } from "#questpie/server/collection/builder/types.js";
+import { systemTimestamp } from "#questpie/server/db/system-columns.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { GlobalFieldDefinitionsWithSystem } from "#questpie/server/fields/field-types.js";
 import type {
@@ -35,7 +36,6 @@ import type {
 	ExtractOutputObject,
 	ExtractVirtualFields,
 } from "#questpie/server/fields/types.js";
-import { systemTimestamp } from "#questpie/server/db/system-columns.js";
 import type {
 	GlobalBuilderState,
 	InferGlobalTableWithColumns,
@@ -115,6 +115,14 @@ type HasGlobalFieldDefs<TFieldDefs> = [TFieldDefs] extends [
 			? false
 			: true
 		: false;
+
+type CrdtManagedFieldKeys<TFieldDefs extends Record<string, any>> = {
+	[K in keyof TFieldDefs]: TFieldDefs[K] extends {
+		readonly _: { crdt: { format: "text" | "set" } };
+	}
+		? K
+		: never;
+}[keyof TFieldDefs];
 
 /**
  * Legacy (raw-Drizzle) global select — used when no field definitions exist.
@@ -218,11 +226,22 @@ type InferGlobalUpdate<
 	TOptions extends { timestamps?: boolean } = {},
 > =
 	HasGlobalFieldDefs<TFieldDefs> extends true
-		? Prettify<
-				Partial<
-					InferGlobalInsert<TTable, TFields, TLocalized, TFieldDefs, TOptions>
+		? TFieldDefs extends Record<string, any>
+			? Prettify<
+					Partial<
+						Omit<
+							InferGlobalInsert<
+								TTable,
+								TFields,
+								TLocalized,
+								TFieldDefs,
+								TOptions
+							>,
+							CrdtManagedFieldKeys<TFieldDefs>
+						>
+					>
 				>
-			>
+			: InferLegacyGlobalUpdate<TTable, TFields, TLocalized>
 		: InferLegacyGlobalUpdate<TTable, TFields, TLocalized>;
 
 export class Global<TState extends GlobalBuilderState> {

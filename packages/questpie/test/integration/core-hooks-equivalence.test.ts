@@ -50,10 +50,12 @@ class MockChangeBroker implements ChangeBroker {
 
 const createTestModule = () => ({
 	collections: {
-		posts: collection("posts").fields(({ f }) => ({
-			title: f.textarea().required(),
-			status: f.text(50),
-		})),
+		posts: collection("posts")
+			.fields(({ f }) => ({
+				title: f.textarea().required(),
+				status: f.text(50),
+			}))
+			.searchable({}),
 	},
 });
 

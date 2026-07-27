@@ -22,6 +22,16 @@ import { getDb, normalizeContext } from "./context.js";
 
 /** Internal, non-JSON marker for access already evaluated before CRUD hooks. */
 export const PRECHECKED_READ_ACCESS = Symbol("questpie.precheckedReadAccess");
+/** Internal, non-JSON marker that keeps access predicates fail-closed in SQL compilation. */
+export const ACCESS_WHERE = Symbol("questpie.accessWhere");
+
+export function isAccessWhere(value: unknown): boolean {
+	return (
+		!!value &&
+		typeof value === "object" &&
+		(value as { [ACCESS_WHERE]?: unknown })[ACCESS_WHERE] === true
+	);
+}
 
 type FieldDefinitionLike = {
 	_state?: {
@@ -39,6 +49,8 @@ export interface AccessRuleEvaluationContext {
 	app?: Questpie<any>;
 	db: any;
 	session?: CRUDContext["session"];
+	principal?: CRUDContext["principal"];
+	actor?: CRUDContext["actor"];
 	locale?: string;
 	row?: any;
 	input?: any;
@@ -97,6 +109,8 @@ export async function executeAccessRule(
 		const services = extractAppServices(context.app, {
 			db: context.db,
 			session: context.session,
+			principal: context.principal,
+			actor: context.actor,
 		});
 		// data is non-optional for RowAccessRule callers (they always pass the
 		// loaded row); plain rules tolerate undefined — widen via the cast.
@@ -154,6 +168,70 @@ export async function matchesAccessConditions(
 			if (row[key] !== value) {
 				return false;
 			}
+		}
+	}
+
+	return true;
+}
+
+/**
+ * Match row-aware access conditions only when the complete condition tree can
+ * be evaluated by the in-memory equality matcher.
+ *
+ * Purge uses this stricter boundary because an unsupported leaf nested below
+ * `NOT` must deny the irreversible operation instead of being inverted into an
+ * allow. Query CRUD continues to use the SQL condition builder, which supports
+ * its wider operator vocabulary.
+ */
+export async function matchesStrictAccessConditions(
+	conditions: AccessWhere,
+	row: Record<string, any>,
+): Promise<boolean> {
+	if (!isStrictAccessWhereMatchable(conditions, row)) {
+		return false;
+	}
+
+	return matchesAccessConditions(conditions, row);
+}
+
+function isStrictAccessWhereMatchable(
+	conditions: AccessWhere,
+	row: Record<string, any>,
+): boolean {
+	if (
+		conditions === null ||
+		typeof conditions !== "object" ||
+		Array.isArray(conditions)
+	) {
+		return false;
+	}
+
+	for (const [key, value] of Object.entries(conditions)) {
+		if (key === "AND" || key === "OR") {
+			if (
+				!Array.isArray(value) ||
+				!value.every((condition) =>
+					isStrictAccessWhereMatchable(condition as AccessWhere, row),
+				)
+			) {
+				return false;
+			}
+			continue;
+		}
+
+		if (key === "NOT") {
+			if (!isStrictAccessWhereMatchable(value as AccessWhere, row)) {
+				return false;
+			}
+			continue;
+		}
+
+		if (
+			!Object.hasOwn(row, key) ||
+			(value !== null && typeof value === "object") ||
+			value === undefined
+		) {
+			return false;
 		}
 	}
 
@@ -275,6 +353,8 @@ export function createFieldAccessContext(params: {
 		...(req ? { req } : {}),
 		// session is typed as { user: User; session: Session } | null | undefined
 		user: params.context.session?.user,
+		principal: params.context.principal,
+		actor: params.context.actor,
 		doc: params.doc,
 		operation: params.operation,
 	};
@@ -586,13 +666,19 @@ export function mergeWhereWithAccess<TWhere = any>(
 		return userWhere;
 	}
 
+	const markedAccessWhere = Object.defineProperty(
+		{ ...accessWhere },
+		ACCESS_WHERE,
+		{ value: true },
+	);
+
 	// Merge access conditions with user conditions
 	if (!userWhere) {
-		return accessWhere as TWhere;
+		return markedAccessWhere as TWhere;
 	}
 
 	// Combine with AND
 	return {
-		AND: [userWhere, accessWhere],
+		AND: [userWhere, markedAccessWhere],
 	} as TWhere;
 }

@@ -82,13 +82,16 @@ decisions. Correctness therefore never depends on a wake being delivered.
 Every app instance starts its broker during app startup, including workers and
 instances with no local subscribers. Startup is idempotent. `stop()` is awaited
 during app shutdown. A broker reconnect emits one `reason: "reconnect"` wake;
-the runtime immediately drains from its lag-window cursor.
+the runtime immediately drains from its durable sequence cursor.
 
 The runtime also schedules unconditional slow reconciliation while a broker is
 active. It drains both durable sources: the live-query outbox and the channel
-delivery ledger. An outbox drain reads rows, rescans a configurable lag window
-behind the last observed sequence, deduplicates by `seq`, and advances a cursor
-only after local dispatch. A channel drain follows the ordered-ledger rules
+delivery ledger. Every new writer locks the singleton outbox head inside the
+business transaction before inserting, so sequence order is commit order. An
+outbox drain reads strictly after its cursor and advances only after local
+dispatch. Native deltas have a two-phase rollout gate: deploy every writer with
+`nativeDeltas` disabled first, then enable it only after no legacy writer can
+append without the head lock. A channel drain follows the ordered-ledger rules
 below. These drains are the guarantee; broker delivery is only the latency
 optimization.
 
@@ -164,7 +167,10 @@ companion request keyed by the edge-session id; adding or removing a topic does
 not recreate the SSE stream. The Pusher/Soketi implementation has
 `channelDeliveryScope: "shared-provider"`, maps live-query sinks to per-session
 private delivery, implements `publishChannel()` for native multicast, and
-returns the managed-WS client config from `getClientConfig()`.
+returns the managed-WS client config from `getClientConfig()`. Framework channel
+payload recovery does not rely on provider history: after native subscription
+success the client reauthorizes a bounded `/channels/replay` ledger page, keeps
+live races behind the replay cursor, then applies one shared dedupe/gap reducer.
 
 ## QoS classes
 
@@ -270,25 +276,33 @@ export type RealtimeTopic =
 			locale?: string;
 	  };
 
-export type RealtimeDesiredTopicV1 = {
-	id: string;
-	topic: RealtimeTopic;
-	sinceSeq?: number;
-};
+export type RealtimeDesiredSubscription =
+	| { kind: "query"; id: string; topic: RealtimeTopic; sinceSeq?: number }
+	| {
+			kind: "channel";
+			id: string;
+			channel: string;
+			params: Record<string, string>;
+			lastEventId?: string;
+	  }
+	| { kind: "crdt"; id: string; bindingId: string };
 
-export type RealtimeTopologyControlV1 = {
+export type RealtimeTopologyControlV2 = {
 	protocol: "questpie-realtime-topology";
-	version: 1;
+	version: 2;
 	revision: number;
-	topics: RealtimeDesiredTopicV1[];
-	channels: RealtimeDesiredChannelV1[];
+	subscriptions: RealtimeDesiredSubscription[];
 };
 ```
 
-Each desired topic `id` is unique within an edge session. Normalized topic content, not a
-truncated hash, forms the scheduler topic key. Every control request submits the
-complete desired topology. The owner admits and authorizes additions before
-applying one diff, cancels removals, and keeps unchanged subscriptions mounted.
+Each `id` is unique across query, Channel and CRDT bindings in one edge session.
+Normalized query content, not a truncated hash, forms the scheduler topic key.
+Every control request submits the complete desired topology. Candidate
+canonicalization and admission create no bindings. The owner stages every
+changed binding behind a bounded output gate, publishes one complete binding
+map synchronously, activates staged output, then closes replaced bindings.
+Failure or fencing discards the staged graph and leaves the previous complete
+revision mounted. Unchanged bindings retain their subscription and cursor.
 
 Snapshots use `{ type: "snapshot", topicId, seq, data, reset }`. `count` returns
 a number and never fetches documents. `get` returns one access-filtered record or
@@ -303,6 +317,22 @@ On resume, the runtime compares `sinceSeq` with the retained outbox horizon:
 
 No code path treats an unavailable cursor as caught up. Resume never produces a
 silent gap.
+
+## Native-delta identity and queue ownership
+
+QUESTPIE collections always expose a canonical `id` field: the collection
+builder installs it unless the collection defines its own `id`. Native delta
+frames and TanStack DB therefore use `String(row.id)` as their stable key. A
+separate configurable primary-key field is not supported by the collection
+contract and is not threaded through the realtime wire format.
+
+Native delta SSE delivery and ordered channel delivery both use bounded,
+non-coalescing FIFO behavior, but their implementations are deliberately kept
+separate. Channel ledger topology is frozen and remains owned by
+`channel-event-ledger.ts`; the delta implementation lives in
+`ordered-fifo-writer.ts`. Their count/byte caps, busy-retry behavior, and
+overflow teardown semantics must remain aligned. This duplication is an
+explicit topology-preserving exception, not permission to weaken either queue.
 
 ## Refresh scheduler and access equivalence
 
@@ -401,6 +431,11 @@ compatibility evidence:
 | `with` relation depth                               |       3 |
 | concurrent initial computations per edge session    |       4 |
 | queued latest-snapshot bytes per edge session       |   1 MiB |
+| maximum native-delta bootstrap rows                 |     384 |
+| queued native-delta events per group/session        |     512 |
+| queued native-delta bytes per group/session         |   1 MiB |
+| concurrent native-delta hydration batches           |       4 |
+| periodic native-delta re-bootstrap                  |     60s |
 | queued ordered channel events per edge session      |     100 |
 | queued ordered channel-event bytes per edge session |   1 MiB |
 
@@ -431,7 +466,7 @@ close the edge session.
 
 ## Protocol and privacy
 
-Client control submits complete desired topology protocol v1 over SSE control
+Client control submits complete desired topology protocol v2 over SSE control
 HTTP or managed-provider control. Authorization and state transitions are
 identical across both delivery transports.
 Server frames are versioned and include `snapshot`, `channel_event`,
@@ -443,8 +478,11 @@ Live-query data is private by construction:
 - SSE writes the authorized result only to the requesting edge session.
 - Pusher/Soketi live queries use a per-session private channel. For this driver,
   the latest-wins frame is an invalidation cursor rather than snapshot bytes; the
-  client refetches with normal authorization. An ACL'd snapshot never rides a
-  shared Pusher channel.
+  client refetches with normal authorization. An ACL'd snapshot or CRDT update
+  never rides a shared Pusher channel. A targeted invalidation is capped at 128
+  opaque targets and an 8 KiB JSON envelope to leave headroom for provider
+  serialization; overflow or malformed targeting collapses to one generic
+  reconcile.
 - Scheduler sharing changes computation reuse, never the destination ACL.
 
 Framework channel events may multicast only after event-schema validation,
@@ -611,7 +649,7 @@ before ledger/provider writes. Initial framework defaults are:
 | server-mediated publishes per edge session per second     |        10 |
 | server-mediated publish token-bucket burst                |        20 |
 | authorization-rule execution timeout                      |  5,000 ms |
-| serialized framework event data (UTF-8 JSON bytes)        |    10,000 |
+| canonical `{ eventId, event, data }` UTF-8 JSON envelope  |    10,000 |
 | direct client events per managed-WS connection per second |        10 |
 | presence members per resolved channel                     |       100 |
 | serialized presence member object, including id and info  |   1,024 B |
@@ -699,7 +737,7 @@ framework unless an explicitly configured provider webhook supplies metadata.
 | SEC-09 | Cookie auth/publish rejects missing, null, malformed, and untrusted origins.                                                                         | RT3.3 CSRF table tests.                                       |
 | SEC-10 | Credentialed CORS reflects only exact trusted origins with `Vary: Origin`; never wildcard.                                                           | RT3.3 OPTIONS/POST tests.                                     |
 | SEC-11 | Per-session and per-principal publish buckets return 429 and recover after the window.                                                               | RT3.3 fake-clock tests; RT4.1 multi-tab flood.                |
-| SEC-12 | Exact serialized payload boundary accepts 10,000 bytes, rejects 10,001 with no event id.                                                             | RT3.3 unit/integration; RT4.1 all drivers.                    |
+| SEC-12 | Exact canonical envelope boundary accepts 10,000 bytes; one byte over rolls back sequence/ledger and event-id digit growth is counted.               | RT3.3 ledger integration; RT4.1 all drivers.                  |
 | SEC-13 | Presence exposes only the resolver object and enforces 100 members, 1,024 bytes, 128-char id.                                                        | RT2.1 provider auth tests; RT4.1 SSE/WS parity.               |
 | SEC-14 | Auth signatures are socket/channel-bound, `no-store`, and config never leaks provider secret.                                                        | RT2.1 mint/config tests.                                      |
 | SEC-15 | Session revocation denies new grants and terminates/re-authenticates established sessions within the declared window.                                | RT2.1 revocation test; RT4.1 measured drill.                  |
@@ -768,7 +806,7 @@ and fencing generation. The live sink and its apply/close callbacks remain in
 the owner process and are never serialized.
 
 An opening SSE or shared-provider session advertises
-`questpie-realtime-topology` version `1`. New clients then submit a complete
+`questpie-realtime-topology` version `2`. New clients then submit a complete
 bounded topology with one positive revision; unchanged topics/channels stay
 mounted while the owner applies only additions and removals. The accepting
 replica commits the desired revision before acknowledging it, then publishes a
@@ -776,6 +814,13 @@ metadata-only `topology-maybe-advanced` wake. The owner re-reads the durable
 row and a one-second reconciliation loop heals a lost wake. The default lease
 is 30 seconds with a 10-second heartbeat, both using database time and fenced
 updates.
+
+The owner lease proves server-process ownership; it is not client liveness.
+Shared-provider clients additionally refresh a durable client-activity timestamp
+with an authenticated control probe every 15 seconds. The owner stops renewing
+and tears down the session after the independent 45-second client lease expires.
+SSE does not need this second lease because cancellation of its physical stream
+already invokes teardown. Owner heartbeats never refresh client activity.
 
 Session ids, control tokens, and identities are stored as SHA-256 hashes. Wakes
 contain only the session hash, owner id/generation, desired revision, and a
@@ -788,17 +833,18 @@ can select `redisStreamsChangeBroker`; neither broker is the durable topology
 store. Generic KV is not a coordinator and load-balancer affinity is not part
 of the correctness contract.
 
-QuestPie 4 accepts only desired topology protocol v1 and uses `ChangeBroker` as
-the only cross-instance wake seam. All request-handling replicas and clients are
-upgraded together across this major-version boundary. After the topology
-migration and multi-pod verification, load-balancer affinity is removed.
+The current QUESTPIE 3.x realtime contract accepts only desired topology
+protocol v2 and uses `ChangeBroker` as the only cross-instance wake seam. All
+request-handling replicas and clients must be upgraded together for this
+consolidated minor train. After the topology migration and multi-pod
+verification, load-balancer affinity is removed.
 
 ## Defect mapping
 
 | Defect | Design element that removes it                                                                                                                                  |
 | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | G1     | App-lifecycle `ChangeBroker.start()` on every instance, independent of subscribers.                                                                             |
-| G2     | Unconditional reconciliation, reconnect drain, lag-window rescan, and lossy wake contract.                                                                      |
+| G2     | Unconditional reconciliation, reconnect drain, commit-ordered outbox cursor, and lossy wake contract.                                                           |
 | G3     | Explicit broker error callback, idempotent reconnect lifecycle, crash-safe callbacks, and immediate reconnect drain.                                            |
 | G4     | Broadcast conformance tests for every broker; durable ordered state is drained independently by each instance rather than shared consumer-group load balancing. |
 | G5     | Broker messages are notice-only; Cloudflare fan-out is sharded and query execution remains in the requesting worker.                                            |
@@ -814,7 +860,7 @@ migration and multi-pod verification, load-balancer affinity is removed.
 | Invariant | Concrete mechanism                                                                                                                              | Required proof                                                                         |
 | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | H1        | Both seams start/stop with app lifecycle; no subscriber-gated broker start.                                                                     | Write-only instance wakes a separate subscriber instance.                              |
-| H2        | Lossy wake contract plus unconditional poll, reconnect drain, lag-window rescan, and seq dedupe.                                                | Drop/reorder wakes and expose an out-of-order commit; state still converges.           |
+| H2        | Lossy wake contract plus unconditional poll, reconnect drain, head-locked commit order, and the two-phase native-delta rollout gate.            | Drop/reorder wakes; prove commit-order capture and snapshot fallback during rollout.   |
 | H3        | Logical-operation batch guard; one in-tx append; caught post-commit publish.                                                                    | Exact event/insert/notify counts and response-path latency assertion.                  |
 | H4        | Scheduler keyed by topic and access equivalence; immutable byte fan-out; hash suppression; pre/post match.                                      | N equivalent sinks cause one query and unchanged results emit no frame.                |
 | H5        | Admission config, pre-registration access execution, bounded concurrency, finite limits.                                                        | Cap matrix and denied-topic teardown tests.                                            |

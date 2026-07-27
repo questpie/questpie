@@ -1,5 +1,22 @@
 import { collection } from "#questpie/server/collection/builder/collection-builder.js";
 
+const isAdmin = (user: unknown): boolean =>
+	!!user &&
+	typeof user === "object" &&
+	(user as { role?: unknown }).role === "admin";
+
+const sessionUser = (
+	context: unknown,
+): { id?: string; role?: unknown } | undefined => {
+	if (!context || typeof context !== "object") return undefined;
+	const session = (context as { session?: unknown }).session;
+	if (!session || typeof session !== "object") return undefined;
+	const user = (session as { user?: unknown }).user;
+	if (!user || typeof user !== "object") return undefined;
+	const { id, role } = user as { id?: unknown; role?: unknown };
+	return { id: typeof id === "string" ? id : undefined, role };
+};
+
 export default collection("user")
 	.options({ timestamps: true })
 	.fields(({ f }) => ({
@@ -109,6 +126,50 @@ export default collection("user")
 				fallback: "When the user's ban should expire",
 			}),
 	}))
+	.access({
+		read: (context) => {
+			const user = sessionUser(context);
+			if (isAdmin(user)) return true;
+			const userId = user?.id;
+			return userId ? { id: userId } : false;
+		},
+		create: (context) => isAdmin(sessionUser(context)),
+		update: (context) => {
+			const user = sessionUser(context);
+			return isAdmin(user) || (!!user?.id && context.data.id === user.id);
+		},
+		delete: (context) => isAdmin(sessionUser(context)),
+		fields: {
+			email: {
+				create: ({ user }) => isAdmin(user),
+				update: ({ user }) => isAdmin(user),
+			},
+			emailVerified: {
+				create: ({ user }) => isAdmin(user),
+				update: ({ user }) => isAdmin(user),
+			},
+			image: {
+				create: ({ user }) => isAdmin(user),
+				update: ({ user }) => isAdmin(user),
+			},
+			role: {
+				create: ({ user }) => isAdmin(user),
+				update: ({ user }) => isAdmin(user),
+			},
+			banned: {
+				create: ({ user }) => isAdmin(user),
+				update: ({ user }) => isAdmin(user),
+			},
+			banReason: {
+				create: ({ user }) => isAdmin(user),
+				update: ({ user }) => isAdmin(user),
+			},
+			banExpires: {
+				create: ({ user }) => isAdmin(user),
+				update: ({ user }) => isAdmin(user),
+			},
+		},
+	})
 	.hooks({
 		beforeChange: async (ctx) => {
 			const collections = (ctx as any).collections;

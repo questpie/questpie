@@ -13,6 +13,7 @@ description: Subscribe to typed, access-controlled collection and global snapsho
 - **One client runtime for many topics.** The default multiplexer holds one `POST /realtime` SSE stream; managed Pusher/Soketi uses one provider connection and private per-session delivery.
 - **`{ realtime: true }` on TanStack Query.** Opt a `find` / `count` / `get` query into live mode with one flag and the hook streams instead of one-shot fetching.
 - **Push for latency, reconciliation for correctness.** A transaction-bound outbox is durable truth. pg_notify, Redis, Cloudflare, or Pusher wakes reduce latency; a slow reconciliation poll still heals a missed wake.
+- **Temporal values stay typed.** Snapshot and row-delta frames carry explicit versioned path metadata, so actual datetime fields remain `Date` while ISO-looking strings remain strings. See [Temporal values](/docs/concepts/temporal-values).
 
 ## Quick start
 
@@ -155,6 +156,10 @@ safe fields `topicId`, `resource`, `operation`, and `details`. Details may carry
 the bounded reason plus requested/configured limits; they never include the
 topic's `where`, session, token, identity, or query result.
 
+Server policy denials use `collection_realtime_disabled` or
+`row_live_queries_disabled`. They are not retryable client failures: choose a
+normal read or the typed channel exposed by the application.
+
 The default `maxFindLimit` is `100` per snapshot, including the first result and
 every later refresh. QUESTPIE rejects an oversized topic instead of clamping or
 splitting it, because either would change ordering, pagination, completeness,
@@ -280,7 +285,36 @@ const stopRaw = client.realtime.subscribe<MySnapshot>(
 );
 ```
 
-`RealtimeAPI` is `{ subscribe<TData>(topic, callback, signal?, customId?, onError?) => unsubscribe; stream<TData>(topic, signal?, customId?) => AsyncGenerator; destroy(); topicCount; subscriberCount }`. `subscribe` is the callback form, `stream` the async-iterable form. `destroy()` tears the multiplexer down entirely (it re-creates on the next subscribe). Prefer the typed wrappers, they infer `TData` from the query and can't drift from the topic shape.
+`RealtimeAPI` also exposes `streamEvents<TData>()`, which yields the shared `snapshot | insert | update | delete | up-to-date` event union, plus `awaitTxId()` / `awaitMutation()` for optimistic reconciliation. `subscribe` and `stream` continue to materialize complete values. `destroy()` tears the multiplexer down entirely (it re-creates on the next subscribe).
+
+Native server deltas require both a server rollout gate and an explicit raw-topic opt-in. Keep the gate off during the first deployment phase; after every writer replica runs the head-locking outbox implementation, enable it in a second config rollout:
+
+```ts title="src/questpie/server/questpie.config.ts"
+export default runtimeConfig({
+	db: { url: env.DATABASE_URL },
+	realtime: { nativeDeltas: true },
+});
+```
+
+Until `nativeDeltas` is enabled, even a raw delta request safely receives the existing full-snapshot stream. Once the fleet is upgraded and the gate is enabled, opt a raw topic into deltas:
+
+```ts
+for await (const event of client.realtime.streamEvents<MySnapshot>({
+	resourceType: "collection",
+	resource: "posts",
+	operation: "find",
+	mode: "delta",
+	where: { published: true },
+})) {
+	// initial snapshot, then keyed row events and up-to-date watermarks
+}
+```
+
+The server accepts native deltas only for an unwindowed collection `find` with own-column filters: no `limit`, `offset`, `orderBy`, `with`, raw SQL, or relation filter. An unsupported shape stays on the correct snapshot path. Managed shared-provider delivery is snapshot-only. The first delta frame and every reset are authoritative snapshots.
+
+Delta reads reuse the normal row/field/`afterRead` access path. The server derives `watchedResources` from both requested relations and the access-merged relational `where`, so a change to an access relation triggers an immediate reset. Every delta group also re-bootstraps at least once per minute; that interval is the maximum access-staleness window for claim changes that do not emit a watched-resource change. Use snapshot mode when that window is unacceptable.
+
+Every QUESTPIE collection has a canonical `id` field. Native delta keys and TanStack DB collection keys are `String(row.id)`; custom non-`id` primary-key names are not part of the collection or realtime contract.
 
 `questpie/client` exports `buildCollectionTopic`, `buildGlobalTopic`, and the `RealtimeAPI`, `TopicConfig`, and `TopicInput` types. Application subscriptions use the generated wrappers or `client.realtime`.
 
@@ -301,7 +335,7 @@ client.collections.posts.live(
 
 - **Always unsubscribe.** `live()` returns an unsubscribe function and accepts a `signal`; `liveIter()` ends on `signal` abort. Leaking subscriptions keeps the multiplexer's SSE connection alive and the server pushing snapshots. In React, call the returned function in your effect cleanup (or pass an `AbortController` signal).
 - **No realtime config = no live mode.** `live()`/`liveIter()`/`{ realtime: true }` need `realtime` set in the **server** config. Without it the SSE endpoint isn't served and subscriptions error (via `onError` / a thrown generator).
-- **Snapshots are full re-runs, not deltas.** Every push is the complete `find()` result for your query (re-evaluated under access rules), not a patch. Keep each topic within the server's measured `maxFindLimit`; use ordinary pagination or a purpose-built event/projection flow instead of streaming thousands of rows on every change.
+- **Snapshot mode remains the default.** Typed `live()` / `liveIter()` and TanStack Query live reads still receive complete, access-controlled values. Native row deltas require the explicit raw topic above and fall back to snapshots for unsupported query shapes.
 - **`liveIter()` throws on disconnect; `live()` calls `onError`.** Pick the form that matches your error handling, wrap `for await` in `try/catch`, or pass `onError` to `live()`.
 
 ## TypeScript

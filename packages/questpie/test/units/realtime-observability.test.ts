@@ -31,7 +31,6 @@ describe("realtime matrix observability", () => {
 			operation: "find",
 			requestedLimit: 240,
 			configuredLimit: 100,
-			rolloutMode: "v2",
 		});
 
 		expect(events).toEqual([
@@ -42,13 +41,51 @@ describe("realtime matrix observability", () => {
 				operation: "find",
 				requestedLimit: 240,
 				configuredLimit: 100,
-				rolloutMode: "v2",
 			},
 		]);
 		expect(observability.snapshot().counters).toMatchObject({
-			"admission.rejected|reason=query_limit|resource=media|rollout_mode=v2": 1,
+			"admission.rejected|reason=query_limit": 1,
 		});
 		expect(JSON.stringify(warnings)).not.toContain("where");
+	});
+
+	test("records high-fanout costs without identity labels", () => {
+		const observability = new RealtimeObservability();
+		observability.record({
+			type: "routing.plan",
+			anchor: "missing",
+			feature: "relation",
+		});
+		observability.record({ type: "routing.candidates", groups: 100 });
+		observability.record({ type: "routing.guard", outcome: "miss" });
+		observability.record({
+			type: "routing.authoritative_db",
+			operation: "find",
+		});
+		observability.record({
+			type: "delivery.classified",
+			mode: "snapshot",
+			reason: "relation_where",
+		});
+		observability.record({
+			type: "delta.emitted",
+			operation: "update",
+			subscribers: 2,
+			frameBytes: 64,
+		});
+
+		const counters = observability.snapshot().counters;
+		expect(counters).toMatchObject({
+			"routing.plan|anchor=missing|feature=relation": 1,
+			"routing.candidates": 1,
+			"routing.candidate_groups": 100,
+			"routing.guard|outcome=miss": 1,
+			"routing.authoritative_db|operation=find": 1,
+			"delivery.classified|mode=snapshot|reason=relation_where": 1,
+			"delta.frame_bytes|operation=update": 64,
+		});
+		expect(JSON.stringify(counters)).not.toContain("scope-");
+		expect(JSON.stringify(counters)).not.toContain("topic-");
 	});
 
 	test("records bounded topology lifecycle metrics and warnings", () => {
@@ -108,7 +145,45 @@ describe("realtime matrix observability", () => {
 			counters: {
 				"broker.publish|outcome=failed|seam=v2": 1,
 			},
-			gauges: { activeSessions: 0, bufferedBytes: 0 },
+			gauges: {
+				activeSessions: 0,
+				bufferedBytes: 0,
+				deltaBufferedEvents: 0,
+				deltaBufferedBytes: 0,
+			},
+		});
+	});
+
+	test("aggregates bounded delta memory gauges by internal buffer key", () => {
+		const observability = new RealtimeObservability();
+		observability.record({
+			type: "delta.buffer",
+			scope: "group",
+			key: "group-a",
+			events: 2,
+			bytes: 64,
+		});
+		observability.record({
+			type: "delta.buffer",
+			scope: "subscriber",
+			key: "subscriber-b",
+			events: 1,
+			bytes: 32,
+		});
+		expect(observability.snapshot().gauges).toMatchObject({
+			deltaBufferedEvents: 3,
+			deltaBufferedBytes: 96,
+		});
+		observability.record({
+			type: "delta.buffer",
+			scope: "group",
+			key: "group-a",
+			events: 0,
+			bytes: 0,
+		});
+		expect(observability.snapshot().gauges).toMatchObject({
+			deltaBufferedEvents: 1,
+			deltaBufferedBytes: 32,
 		});
 	});
 
@@ -203,6 +278,7 @@ describe("realtime matrix observability", () => {
 			"drain.rows|reason=poll": 4,
 			"drain.seq_delta|reason=poll": 7,
 			"refresh.started|operation=find": 1,
+			"refresh.frame_bytes|operation=find": 100,
 			"refresh.subscriber_deliveries|operation=find": 3,
 		});
 	});

@@ -17,23 +17,24 @@ const KNOWN = new Map<string, string>([
 	// install). Fixed in esbuild 0.28.1, but a global override is blocked by
 	// upstream ranges: drizzle-kit ^0.25.10, tsx ~0.27.0, fumadocs-mdx ^0.27.2,
 	// vite@7 ^0.27.0. Clears once those widen to esbuild 0.28.
-	["GHSA-gv7w-rqvm-qjhr", "TODO: override esbuild>=0.28.1 once drizzle-kit/tsx/fumadocs/vite7 widen ranges"],
+	[
+		"GHSA-gv7w-rqvm-qjhr",
+		"TODO: override esbuild>=0.28.1 once drizzle-kit/tsx/fumadocs/vite7 widen ranges",
+	],
 	// hono CORS middleware reflects any Origin with credentials when `origin`
 	// defaults to the wildcard. @questpie/hono does NOT use hono's cors()
 	// middleware, so this is not exploitable via the adapter. Clears when hono
 	// is bumped >=4.12.25 (dep-hygiene follow-up PR).
-	["GHSA-88fw-hqm2-52qc", "TODO: bump hono>=4.12.25 (dep-hygiene PR; @questpie/hono doesn't use hono cors())"],
+	[
+		"GHSA-88fw-hqm2-52qc",
+		"TODO: bump hono>=4.12.25 (dep-hygiene PR; @questpie/hono doesn't use hono cors())",
+	],
 	// vite `server.fs.deny` bypass via Windows alternate paths — dev-server-only,
 	// Windows-only. Clears when vite is bumped >=7.3.5 / >=8.0.16 (dep-hygiene PR).
-	["GHSA-fx2h-pf6j-xcff", "TODO: bump vite>=8.0.16 / >=7.3.5 (dep-hygiene PR; dev-server-only, Windows-only)"],
-	// ws memory-exhaustion DoS from tiny fragments/data chunks — transitive dep.
-	// Clears when ws is bumped >=8.21.0 (dep-hygiene PR).
-	["GHSA-96hv-2xvq-fx4p", "TODO: bump ws>=8.21.0 (dep-hygiene PR; transitive)"],
-	// linkify-it ReDoS — LinkifyIt#match has quadratic complexity on crafted
-	// input. Affected <=5.0.0 (no fixed release yet); transitive via
-	// markdown-it@14 (docs/markdown rendering only, not on a request hot path).
-	// Clears when linkify-it ships >5.0.0 with the fix.
-	["GHSA-22p9-wv53-3rq4", "TODO: bump linkify-it once >5.0.0 ships the fix (transitive via markdown-it@14; docs/markdown only)"],
+	[
+		"GHSA-fx2h-pf6j-xcff",
+		"TODO: bump vite>=8.0.16 / >=7.3.5 (dep-hygiene PR; dev-server-only, Windows-only)",
+	],
 ]);
 
 type Advisory = {
@@ -101,7 +102,9 @@ if (unhandled.length === 0) {
 	process.exit(0);
 }
 
-console.error(`✗ ${unhandled.length} unhandled high/critical advisor${unhandled.length === 1 ? "y" : "ies"}:\n`);
+console.error(
+	`✗ ${unhandled.length} unhandled high/critical advisor${unhandled.length === 1 ? "y" : "ies"}:\n`,
+);
 for (const hit of unhandled) {
 	console.error(`  ${hit.advisory.severity.toUpperCase()}  ${hit.pkg}`);
 	console.error(`    ${hit.advisory.title}`);

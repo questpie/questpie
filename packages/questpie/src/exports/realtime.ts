@@ -4,6 +4,7 @@ export {
 } from "#questpie/server/modules/core/integrated/realtime/admission.js";
 export * from "#questpie/server/modules/core/integrated/realtime/collection.js";
 export * from "#questpie/server/modules/core/integrated/realtime/channel-event-ledger.js";
+export * from "#questpie/server/modules/core/integrated/realtime/delta.js";
 export * from "#questpie/server/modules/core/integrated/realtime/observer.js";
 export * from "#questpie/server/modules/core/integrated/realtime/service.js";
 export * from "#questpie/server/modules/core/integrated/realtime/snapshot.js";

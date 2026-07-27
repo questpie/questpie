@@ -10,8 +10,13 @@
  * @see RFC-MODULE-ARCHITECTURE §9 (Generated Code)
  */
 
-import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
+
+import {
+	CRDT_MANIFEST_FILENAME,
+	validateCrdtManifestArtifact,
+} from "#questpie/server/modules/core/integrated/crdt/manifest.js";
 
 import { validateChannelWirePattern } from "./channel-pattern.js";
 import { discoverFiles } from "./discover.js";
@@ -509,6 +514,24 @@ export async function runCodegen(
 	const extraTypeDeclarations: string[] = [];
 	const extraRuntimeCode: string[] = [];
 	const extraEntities = new Map<string, string>();
+	if (!options.module && targetId === "server") {
+		const manifestPath = join(rootDir, CRDT_MANIFEST_FILENAME);
+		try {
+			const artifact = validateCrdtManifestArtifact(
+				JSON.parse(await readFile(manifestPath, "utf8")),
+			);
+			extraEntities.set("crdtManifest", JSON.stringify(artifact));
+		} catch (error) {
+			if (
+				!error ||
+				typeof error !== "object" ||
+				!("code" in error) ||
+				error.code !== "ENOENT"
+			) {
+				throw error;
+			}
+		}
+	}
 
 	const ctx: CodegenContext = {
 		categories: discovered.categories,
@@ -593,8 +616,13 @@ export async function runCodegen(
 		// Root app mode: generate index.ts (app with createApp)
 		outputFile = target.outputFile;
 		const configImportPath = computeRelativeImport(outDir, configPath);
+		const appInstanceId = await resolveGeneratedAppInstanceId(
+			rootDir,
+			configPath,
+		);
 		const tpl = generateTemplate({
 			configImportPath,
+			appInstanceId,
 			discovered,
 			categories: target.categories,
 			singletonFactories: target.registries.singletonFactories,
@@ -679,6 +707,37 @@ export async function runCodegen(
 		outputPath,
 		discovered,
 	};
+}
+
+async function resolveGeneratedAppInstanceId(
+	rootDir: string,
+	configPath: string,
+): Promise<string> {
+	let directory = resolve(rootDir);
+	while (true) {
+		try {
+			const packageJson = JSON.parse(
+				await readFile(join(directory, "package.json"), "utf8"),
+			) as { name?: unknown };
+			if (typeof packageJson.name === "string" && packageJson.name.length > 0) {
+				return [
+					packageJson.name,
+					normalizeIdentityPath(relative(directory, rootDir)) || ".",
+					normalizeIdentityPath(relative(directory, configPath)),
+				].join(":");
+			}
+		} catch {
+			// Continue to the parent; programmatic codegen may start below it.
+		}
+		const parent = dirname(directory);
+		if (parent === directory) break;
+		directory = parent;
+	}
+	return `questpie:${normalizeIdentityPath(relative(rootDir, configPath))}`;
+}
+
+function normalizeIdentityPath(path: string): string {
+	return path.replaceAll("\\", "/");
 }
 
 /**

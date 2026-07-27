@@ -1,3 +1,4 @@
+import { deriveDeltaOp, type RealtimeDeliveryMode } from "./delta.js";
 import {
 	realtimeOperation,
 	type RealtimeObservation,
@@ -7,6 +8,7 @@ import { encodeSseEvent } from "./sse-client-transport.js";
 import type {
 	RealtimeChangeEvent,
 	RealtimeErrorListener,
+	RealtimeSubscriptionScopeResolver,
 	RealtimeTopics,
 } from "./types.js";
 
@@ -25,9 +27,13 @@ type RealtimeSource = {
 };
 
 type AccessContext = {
-	session?: { session?: { id?: unknown } } | null;
+	session?: {
+		user?: { id?: unknown };
+		session?: { id?: unknown };
+	} | null;
 	principal?: {
 		kind: string;
+		user?: { id?: unknown };
 		session?: { id?: unknown };
 		tokenId?: unknown;
 	} | null;
@@ -40,26 +46,63 @@ export type RealtimeAccessCacheKeyResolver<TContext = AccessContext> = (
 	context: TContext,
 ) => string | null | undefined | Promise<string | null | undefined>;
 
+export async function resolveRealtimeSubscriptionScope<
+	TContext extends AccessContext,
+>(
+	context: TContext,
+	resolver?: RealtimeSubscriptionScopeResolver,
+): Promise<string | null> {
+	if (!resolver) return null;
+	const resolvedScope = await resolver(context);
+	if (resolvedScope === null || resolvedScope === undefined) return null;
+	if (
+		typeof resolvedScope !== "string" ||
+		resolvedScope.length === 0 ||
+		new TextEncoder().encode(resolvedScope).byteLength > 256
+	) {
+		throw new Error(
+			"Realtime subscription scope must be a non-empty string of at most 256 bytes",
+		);
+	}
+	return resolvedScope;
+}
+
 export async function resolveRealtimeAccessKey<TContext extends AccessContext>(
 	edgeSessionId: string,
 	context: TContext,
 	resolver?: RealtimeAccessCacheKeyResolver<TContext>,
+	scope: string | null = null,
 ): Promise<string> {
 	let identity: string | undefined;
+	let isolateToEdge = false;
 	if (resolver) {
 		try {
 			const sharedKey = await resolver(context);
-			if (sharedKey) identity = `shared:${sharedKey}`;
+			if (
+				typeof sharedKey === "string" &&
+				sharedKey.length > 0 &&
+				new TextEncoder().encode(sharedKey).byteLength <= 256
+			) {
+				identity = `shared:${sharedKey}`;
+			} else if (
+				sharedKey !== null &&
+				sharedKey !== undefined &&
+				sharedKey !== ""
+			) {
+				isolateToEdge = true;
+			}
 		} catch {
-			// An invalid opt-in must fail safe to the session-scoped default.
+			isolateToEdge = true;
 		}
 	}
 
 	if (!identity) {
 		const principal = context.principal;
-		const sessionId = principal?.session?.id ?? context.session?.session?.id;
-		if (typeof sessionId === "string" && sessionId) {
-			identity = `session:${sessionId}`;
+		const userId = principal?.user?.id ?? context.session?.user?.id;
+		if (isolateToEdge) {
+			identity = `edge:${edgeSessionId}`;
+		} else if (typeof userId === "string" && userId) {
+			identity = `principal:${userId}`;
 		} else if (
 			principal?.kind === "oauth" &&
 			typeof principal.tokenId === "string" &&
@@ -73,6 +116,7 @@ export async function resolveRealtimeAccessKey<TContext extends AccessContext>(
 
 	return JSON.stringify([
 		identity,
+		scope,
 		context.locale ?? "",
 		context.stage ?? "",
 		context.accessMode ?? "",
@@ -80,7 +124,11 @@ export async function resolveRealtimeAccessKey<TContext extends AccessContext>(
 }
 
 type Subscriber = {
-	onFrame: (frame: Uint8Array) => Promise<void> | void;
+	topicId: string;
+	onFrame: (
+		frame: Uint8Array,
+		delivery?: RealtimeDeliveryMode,
+	) => Promise<void> | void;
 	onError: RealtimeErrorListener;
 	onTransportError?: RealtimeErrorListener;
 };
@@ -91,6 +139,7 @@ type SchedulerGroup = {
 	topics: RealtimeTopics;
 	sinceSeq?: number;
 	compute: () => Promise<unknown>;
+	captureWatermark?: () => Promise<string>;
 	subscribers: Set<Subscriber>;
 	unsubscribe: () => void;
 	lastSeq: number;
@@ -99,6 +148,8 @@ type SchedulerGroup = {
 	refreshInFlight: boolean;
 	refreshQueued: boolean;
 	nextReset: boolean;
+	heartbeatTimer?: ReturnType<typeof setInterval>;
+	heartbeatInFlight: boolean;
 	disposed: boolean;
 };
 
@@ -108,9 +159,20 @@ export type RefreshSubscriptionInput = {
 	topics: RealtimeTopics;
 	sinceSeq?: number;
 	compute: () => Promise<unknown>;
-	onFrame: (frame: Uint8Array) => Promise<void> | void;
+	captureWatermark?: () => Promise<string>;
+	onFrame: (
+		frame: Uint8Array,
+		delivery?: RealtimeDeliveryMode,
+	) => Promise<void> | void;
 	onError: RealtimeErrorListener;
 	onTransportError?: RealtimeErrorListener;
+	mode?: RealtimeDeliveryMode;
+	hydrateRows?: (recordIds: string[]) => Promise<unknown>;
+	maxDeltaQueueEvents?: number;
+	maxDeltaQueueBytes?: number;
+	maxDeltaRows?: number;
+	deltaRebootstrapIntervalMs?: number;
+	heartbeatIntervalMs?: number;
 };
 
 const sha256 = async (value: string): Promise<string> => {
@@ -123,9 +185,70 @@ const sha256 = async (value: string): Promise<string> => {
 	).join("");
 };
 
+type DeltaSubscriber = Subscriber & {
+	observationKey: string;
+	ready: boolean;
+	pending: Array<{ frame: Uint8Array; delivery: RealtimeDeliveryMode }>;
+	pendingBytes: number;
+	rebootstrap: boolean;
+};
+
+type DeltaGroup = {
+	key: string;
+	observationKey: string;
+	topics: RealtimeTopics;
+	compute: () => Promise<unknown>;
+	captureWatermark?: () => Promise<string>;
+	hydrateRows: (recordIds: string[]) => Promise<unknown>;
+	subscribers: Set<DeltaSubscriber>;
+	unsubscribe: () => void;
+	queue: RealtimeChangeEvent[];
+	queueBytes: number;
+	maxQueueEvents: number;
+	maxQueueBytes: number;
+	maxRows: number;
+	latestSeq: number;
+	lastDeliveredSeq: number;
+	rowHashes: Map<string, string>;
+	ready: boolean;
+	processing: boolean;
+	resetQueued: boolean;
+	heartbeatQueued: boolean;
+	rebootstrapTimer?: ReturnType<typeof setInterval>;
+	heartbeatTimer?: ReturnType<typeof setInterval>;
+	disposed: boolean;
+};
+
+function snapshotRows(data: unknown): unknown[] {
+	if (Array.isArray(data)) return data;
+	if (data && typeof data === "object") {
+		const docs = (data as { docs?: unknown }).docs;
+		if (Array.isArray(docs)) return docs;
+	}
+	return [];
+}
+
+function rowKey(row: unknown): string | null {
+	if (!row || typeof row !== "object") return null;
+	const id = (row as { id?: unknown }).id;
+	return typeof id === "string" || typeof id === "number" ? String(id) : null;
+}
+
+function eventRecordIds(event: RealtimeChangeEvent): string[] | null {
+	if (event.operation === "bulk_update" || event.operation === "bulk_delete") {
+		const ids = event.payload?.recordIds;
+		if (!ids || ids.length === 0) return null;
+		return ids.map(String);
+	}
+	return event.recordId === null || event.recordId === undefined
+		? null
+		: [String(event.recordId)];
+}
+
 /** App-scoped compute-once/deliver-many scheduler for live-query snapshots. */
 export class RealtimeRefreshScheduler {
 	private readonly groups = new Map<string, SchedulerGroup>();
+	private readonly deltaGroups = new Map<string, DeltaGroup>();
 	private readonly pendingComputations: Array<() => void> = [];
 	private activeComputations = 0;
 
@@ -144,6 +267,8 @@ export class RealtimeRefreshScheduler {
 	}
 
 	subscribe(input: RefreshSubscriptionInput): () => void {
+		if (input.mode === "delta") return this.subscribeDelta(input);
+
 		let group = this.groups.get(input.key);
 		let created = false;
 		if (!group) {
@@ -154,12 +279,14 @@ export class RealtimeRefreshScheduler {
 				topics: input.topics,
 				sinceSeq: input.sinceSeq,
 				compute: input.compute,
+				captureWatermark: input.captureWatermark,
 				subscribers: new Set(),
 				unsubscribe: () => {},
 				lastSeq: 0,
 				refreshInFlight: false,
 				refreshQueued: false,
 				nextReset: false,
+				heartbeatInFlight: false,
 				disposed: false,
 			};
 			this.groups.set(input.key, group);
@@ -168,9 +295,15 @@ export class RealtimeRefreshScheduler {
 				input.topics,
 				(error) => this.reportTransportError(group!, error),
 			);
+			if (input.captureWatermark && input.heartbeatIntervalMs !== undefined) {
+				group.heartbeatTimer = setInterval(() => {
+					void this.sendSnapshotHeartbeat(group!);
+				}, input.heartbeatIntervalMs);
+			}
 		}
 
 		const subscriber: Subscriber = {
+			topicId: input.topicId,
 			onFrame: input.onFrame,
 			onError: input.onError,
 			onTransportError: input.onTransportError,
@@ -187,9 +320,498 @@ export class RealtimeRefreshScheduler {
 			if (!group!.subscribers.delete(subscriber)) return;
 			if (group!.subscribers.size > 0) return;
 			group!.disposed = true;
+			if (group!.heartbeatTimer) clearInterval(group!.heartbeatTimer);
 			group!.unsubscribe();
 			this.groups.delete(group!.key);
 		};
+	}
+
+	private subscribeDelta(input: RefreshSubscriptionInput): () => void {
+		if (!input.hydrateRows) {
+			throw new Error("Delta subscriptions require hydrateRows");
+		}
+		let group = this.deltaGroups.get(input.key);
+		if (!group) {
+			group = {
+				key: input.key,
+				observationKey: globalThis.crypto.randomUUID(),
+				topics: input.topics,
+				compute: input.compute,
+				captureWatermark: input.captureWatermark,
+				hydrateRows: input.hydrateRows,
+				subscribers: new Set(),
+				unsubscribe: () => {},
+				queue: [],
+				queueBytes: 0,
+				maxQueueEvents: input.maxDeltaQueueEvents ?? 512,
+				maxQueueBytes: input.maxDeltaQueueBytes ?? 1024 * 1024,
+				maxRows: input.maxDeltaRows ?? 384,
+				latestSeq: 0,
+				lastDeliveredSeq: 0,
+				rowHashes: new Map(),
+				ready: false,
+				processing: false,
+				resetQueued: false,
+				heartbeatQueued: false,
+				disposed: false,
+			};
+			this.deltaGroups.set(input.key, group);
+			group.unsubscribe = this.realtime.subscribe(
+				(event) => this.onDeltaChange(group!, event),
+				input.topics,
+				(error) => this.reportDeltaTransportError(group!, error),
+			);
+			if (input.deltaRebootstrapIntervalMs !== undefined) {
+				group.rebootstrapTimer = setInterval(() => {
+					if (group!.disposed) return;
+					this.observe({
+						type: "delta.fallback_snapshot",
+						reason: "periodic",
+					});
+					group!.resetQueued = true;
+					if (group!.ready) void this.processDeltaQueue(group!);
+				}, input.deltaRebootstrapIntervalMs);
+			}
+			if (input.captureWatermark && input.heartbeatIntervalMs !== undefined) {
+				group.heartbeatTimer = setInterval(() => {
+					if (group!.disposed) return;
+					group!.heartbeatQueued = true;
+					if (group!.ready) void this.processDeltaQueue(group!);
+				}, input.heartbeatIntervalMs);
+			}
+		}
+
+		const subscriber: DeltaSubscriber = {
+			topicId: input.topicId,
+			observationKey: globalThis.crypto.randomUUID(),
+			onFrame: input.onFrame,
+			onError: input.onError,
+			onTransportError: input.onTransportError,
+			ready: false,
+			pending: [],
+			pendingBytes: 0,
+			rebootstrap: false,
+		};
+		group.subscribers.add(subscriber);
+		void this.bootstrapDeltaSubscriber(group, subscriber);
+
+		return () => {
+			if (!group!.subscribers.delete(subscriber)) return;
+			this.observe({
+				type: "delta.buffer",
+				scope: "subscriber",
+				key: subscriber.observationKey,
+				events: 0,
+				bytes: 0,
+			});
+			if (group!.subscribers.size > 0) return;
+			group!.disposed = true;
+			this.observe({
+				type: "delta.buffer",
+				scope: "group",
+				key: group!.observationKey,
+				events: 0,
+				bytes: 0,
+			});
+			if (group!.rebootstrapTimer) clearInterval(group!.rebootstrapTimer);
+			if (group!.heartbeatTimer) clearInterval(group!.heartbeatTimer);
+			group!.unsubscribe();
+			this.deltaGroups.delete(group!.key);
+		};
+	}
+
+	private async bootstrapDeltaSubscriber(
+		group: DeltaGroup,
+		subscriber: DeltaSubscriber,
+	): Promise<void> {
+		try {
+			do {
+				subscriber.rebootstrap = false;
+				subscriber.pending = [];
+				subscriber.pendingBytes = 0;
+				const bootstrapSeq = group.ready
+					? group.lastDeliveredSeq
+					: await this.realtime.getLatestSeq();
+				group.latestSeq = Math.max(group.latestSeq, bootstrapSeq);
+				group.lastDeliveredSeq = Math.max(group.lastDeliveredSeq, bootstrapSeq);
+				const upToDate = await group.captureWatermark?.();
+				this.observe({
+					type: "routing.authoritative_db",
+					operation: "find",
+				});
+				const data = await this.runBounded(group.compute);
+				const postComputeSeq = group.ready
+					? bootstrapSeq
+					: await this.realtime.getLatestSeq();
+				if (group.disposed || !group.subscribers.has(subscriber)) return;
+				if (!group.ready) {
+					await this.replaceDeltaHashes(group, snapshotRows(data));
+					group.ready = true;
+					if (postComputeSeq > bootstrapSeq) {
+						group.latestSeq = Math.max(group.latestSeq, postComputeSeq);
+						group.resetQueued = true;
+					}
+					void this.processDeltaQueue(group);
+				}
+				const bootstrapFrame = encodeSseEvent("snapshot", {
+					topicId: subscriber.topicId,
+					seq: bootstrapSeq,
+					data,
+					reset: false,
+					...(upToDate === undefined ? {} : { upToDate }),
+				});
+				this.observe({
+					type: "delta.emitted",
+					operation: "snapshot",
+					subscribers: 1,
+					frameBytes: bootstrapFrame.byteLength,
+				});
+				await subscriber.onFrame(bootstrapFrame, "snapshot");
+				while (!subscriber.rebootstrap && subscriber.pending.length > 0) {
+					const { frame, delivery } = subscriber.pending.shift()!;
+					subscriber.pendingBytes -= frame.byteLength;
+					this.observe({
+						type: "delta.buffer",
+						scope: "subscriber",
+						key: subscriber.observationKey,
+						events: subscriber.pending.length,
+						bytes: subscriber.pendingBytes,
+					});
+					await subscriber.onFrame(frame, delivery);
+				}
+			} while (subscriber.rebootstrap && !group.disposed);
+			subscriber.ready = true;
+		} catch (error) {
+			subscriber.onError(error);
+		}
+	}
+
+	private onDeltaChange(group: DeltaGroup, event: RealtimeChangeEvent): void {
+		if (group.disposed) return;
+		group.latestSeq = Math.max(group.latestSeq, event.seq);
+		const bytes = new TextEncoder().encode(JSON.stringify(event)).byteLength;
+		if (
+			group.queue.length + 1 > group.maxQueueEvents ||
+			group.queueBytes + bytes > group.maxQueueBytes
+		) {
+			this.observe({
+				type: "delta.fallback_snapshot",
+				reason: "queue_overflow",
+			});
+			group.queue = [];
+			group.queueBytes = 0;
+			group.resetQueued = true;
+		} else {
+			group.queue.push(event);
+			group.queueBytes += bytes;
+		}
+		this.observe({
+			type: "delta.buffer",
+			scope: "group",
+			key: group.observationKey,
+			events: group.queue.length,
+			bytes: group.queueBytes,
+		});
+		if (group.ready) void this.processDeltaQueue(group);
+	}
+
+	private async processDeltaQueue(group: DeltaGroup): Promise<void> {
+		if (group.processing || group.disposed || !group.ready) return;
+		group.processing = true;
+		let resetting = false;
+		try {
+			while (
+				!group.disposed &&
+				(group.resetQueued || group.queue.length > 0 || group.heartbeatQueued)
+			) {
+				if (group.resetQueued) {
+					resetting = true;
+					group.resetQueued = false;
+					group.queue = [];
+					group.queueBytes = 0;
+					this.observe({
+						type: "delta.buffer",
+						scope: "group",
+						key: group.observationKey,
+						events: 0,
+						bytes: 0,
+					});
+					await this.resetDeltaGroup(group);
+					resetting = false;
+					continue;
+				}
+				if (group.queue.length === 0 && group.heartbeatQueued) {
+					group.heartbeatQueued = false;
+					const upToDate = await group.captureWatermark?.();
+					const seq = await this.realtime.getLatestSeq();
+					group.lastDeliveredSeq = Math.max(group.lastDeliveredSeq, seq);
+					this.deliverDeltaEvent(
+						group,
+						"up-to-date",
+						{
+							type: "up-to-date",
+							seq,
+							...(upToDate === undefined ? {} : { upToDate }),
+							meta: { totalDocs: group.rowHashes.size },
+						},
+						"delta",
+					);
+					continue;
+				}
+
+				const events = group.queue.splice(0);
+				group.queueBytes = 0;
+				this.observe({
+					type: "delta.buffer",
+					scope: "group",
+					key: group.observationKey,
+					events: 0,
+					bytes: 0,
+				});
+				if (
+					events.some(
+						(event) =>
+							event.resourceType !== group.topics.resourceType ||
+							event.resource !== group.topics.resource ||
+							eventRecordIds(event) === null,
+					)
+				) {
+					this.observe({
+						type: "delta.fallback_snapshot",
+						reason: "dependency_change",
+					});
+					group.resetQueued = true;
+					continue;
+				}
+
+				const ids = [
+					...new Set(events.flatMap((event) => eventRecordIds(event)!)),
+				];
+				if (ids.length > group.maxRows) {
+					this.observe({
+						type: "delta.fallback_snapshot",
+						reason: "bulk_budget",
+					});
+					group.resetQueued = true;
+					continue;
+				}
+				const upToDate = await group.captureWatermark?.();
+				this.observe({
+					type: "routing.authoritative_db",
+					operation: "find",
+				});
+				const hydrated = snapshotRows(await group.hydrateRows(ids));
+				const rowsById = new Map<string, unknown>();
+				for (const row of hydrated) {
+					const key = rowKey(row);
+					if (key !== null) rowsById.set(key, row);
+				}
+				const projectedRows =
+					group.rowHashes.size +
+					[...rowsById.keys()].filter((key) => !group.rowHashes.has(key))
+						.length;
+				if (projectedRows > group.maxRows) {
+					this.observe({
+						type: "delta.fallback_snapshot",
+						reason: "row_cap",
+					});
+					group.resetQueued = true;
+					continue;
+				}
+
+				for (const event of events) {
+					for (const key of eventRecordIds(event)!) {
+						const row = rowsById.get(key);
+						const previousHash = group.rowHashes.get(key);
+						const operation = deriveDeltaOp({
+							present: row !== undefined,
+							operation: event.operation,
+							beforeMatch: previousHash !== undefined,
+						});
+						if (row !== undefined) {
+							const hash = await sha256(JSON.stringify(row));
+							group.rowHashes.set(key, hash);
+							if (operation !== "noop" && hash !== previousHash) {
+								this.deliverDeltaEvent(
+									group,
+									operation,
+									{
+										type: operation,
+										seq: event.seq,
+										...(event.txid ? { txid: event.txid } : {}),
+										key,
+										row,
+									},
+									"delta",
+								);
+							} else {
+								this.observe({
+									type: "delta.suppressed",
+									reason: operation === "noop" ? "noop" : "unchanged",
+								});
+							}
+						} else if (operation === "delete") {
+							group.rowHashes.delete(key);
+							this.deliverDeltaEvent(
+								group,
+								"delete",
+								{
+									type: "delete",
+									seq: event.seq,
+									...(event.txid ? { txid: event.txid } : {}),
+									key,
+								},
+								"delta",
+							);
+						} else {
+							this.observe({ type: "delta.suppressed", reason: "noop" });
+						}
+					}
+					group.lastDeliveredSeq = Math.max(group.lastDeliveredSeq, event.seq);
+					this.deliverDeltaEvent(
+						group,
+						"up-to-date",
+						{
+							type: "up-to-date",
+							seq: event.seq,
+							...(event.txid ? { txid: event.txid } : {}),
+							...(upToDate === undefined ? {} : { upToDate }),
+							meta: { totalDocs: group.rowHashes.size },
+						},
+						"delta",
+					);
+				}
+			}
+		} catch (error) {
+			if (resetting) {
+				this.reportDeltaError(group, error);
+			} else {
+				this.observe({
+					type: "delta.fallback_snapshot",
+					reason: "processing_error",
+				});
+				group.resetQueued = true;
+			}
+		} finally {
+			group.processing = false;
+			if (
+				group.resetQueued ||
+				group.queue.length > 0 ||
+				group.heartbeatQueued
+			) {
+				void this.processDeltaQueue(group);
+			}
+		}
+	}
+
+	private async resetDeltaGroup(group: DeltaGroup): Promise<void> {
+		const seq = await this.realtime.getLatestSeq();
+		const upToDate = await group.captureWatermark?.();
+		this.observe({
+			type: "routing.authoritative_db",
+			operation: "find",
+		});
+		const data = await this.runBounded(group.compute);
+		await this.replaceDeltaHashes(group, snapshotRows(data));
+		group.latestSeq = Math.max(group.latestSeq, seq);
+		group.lastDeliveredSeq = Math.max(group.lastDeliveredSeq, seq);
+		this.deliverDeltaEvent(
+			group,
+			"snapshot",
+			{
+				seq,
+				data,
+				reset: true,
+				...(upToDate === undefined ? {} : { upToDate }),
+			},
+			"snapshot",
+		);
+	}
+
+	private async replaceDeltaHashes(
+		group: DeltaGroup,
+		rows: unknown[],
+	): Promise<void> {
+		group.rowHashes.clear();
+		for (const row of rows) {
+			const key = rowKey(row);
+			if (key !== null) {
+				if (
+					!group.rowHashes.has(key) &&
+					group.rowHashes.size >= group.maxRows
+				) {
+					throw new Error(
+						`Realtime delta bootstrap exceeds ${group.maxRows} rows`,
+					);
+				}
+				group.rowHashes.set(key, await sha256(JSON.stringify(row)));
+			}
+		}
+	}
+
+	private deliverDeltaEvent(
+		group: DeltaGroup,
+		event: "insert" | "update" | "delete" | "up-to-date" | "snapshot",
+		data: Record<string, unknown>,
+		delivery: RealtimeDeliveryMode,
+	): void {
+		let observed = false;
+		for (const subscriber of group.subscribers) {
+			const frame = encodeSseEvent(event, {
+				...data,
+				topicId: subscriber.topicId,
+			});
+			if (!observed) {
+				observed = true;
+				this.observe({
+					type: "delta.emitted",
+					operation: event,
+					subscribers: group.subscribers.size,
+					frameBytes: frame.byteLength,
+				});
+			}
+			if (subscriber.ready) {
+				void Promise.resolve(subscriber.onFrame(frame, delivery)).catch(
+					subscriber.onError,
+				);
+				continue;
+			}
+			if (
+				subscriber.pending.length + 1 > group.maxQueueEvents ||
+				subscriber.pendingBytes + frame.byteLength > group.maxQueueBytes
+			) {
+				subscriber.pending = [];
+				subscriber.pendingBytes = 0;
+				subscriber.rebootstrap = true;
+				this.observe({
+					type: "delta.buffer",
+					scope: "subscriber",
+					key: subscriber.observationKey,
+					events: 0,
+					bytes: 0,
+				});
+				continue;
+			}
+			subscriber.pending.push({ frame, delivery });
+			subscriber.pendingBytes += frame.byteLength;
+			this.observe({
+				type: "delta.buffer",
+				scope: "subscriber",
+				key: subscriber.observationKey,
+				events: subscriber.pending.length,
+				bytes: subscriber.pendingBytes,
+			});
+		}
+	}
+
+	private reportDeltaError(group: DeltaGroup, error: unknown): void {
+		for (const subscriber of group.subscribers) subscriber.onError(error);
+	}
+
+	private reportDeltaTransportError(group: DeltaGroup, error: unknown): void {
+		for (const subscriber of group.subscribers) {
+			(subscriber.onTransportError ?? subscriber.onError)(error);
+		}
 	}
 
 	private async initialize(group: SchedulerGroup): Promise<void> {
@@ -226,6 +848,38 @@ export class RealtimeRefreshScheduler {
 		}
 	}
 
+	private async sendSnapshotHeartbeat(group: SchedulerGroup): Promise<void> {
+		if (
+			group.disposed ||
+			group.refreshInFlight ||
+			group.heartbeatInFlight ||
+			!group.captureWatermark
+		) {
+			return;
+		}
+		group.heartbeatInFlight = true;
+		try {
+			const upToDate = await group.captureWatermark();
+			const seq = await this.realtime.getLatestSeq();
+			if (group.disposed) return;
+			const frame = encodeSseEvent("up-to-date", {
+				type: "up-to-date",
+				topicId: group.topicId,
+				seq,
+				upToDate,
+			});
+			for (const subscriber of group.subscribers) {
+				void Promise.resolve(subscriber.onFrame(frame)).catch(
+					subscriber.onError,
+				);
+			}
+		} catch (error) {
+			this.reportError(group, error);
+		} finally {
+			group.heartbeatInFlight = false;
+		}
+	}
+
 	private requestRefresh(group: SchedulerGroup, seq: number): void {
 		if (group.disposed) return;
 		group.lastSeq = Math.max(group.lastSeq, seq);
@@ -248,6 +902,11 @@ export class RealtimeRefreshScheduler {
 					operation,
 					subscribers: group.subscribers.size,
 				});
+				const upToDate = await group.captureWatermark?.();
+				this.observe({
+					type: "routing.authoritative_db",
+					operation,
+				});
 				const data = await this.runBounded(group.compute);
 				if (group.disposed) return;
 				const serialized = JSON.stringify(data);
@@ -258,6 +917,19 @@ export class RealtimeRefreshScheduler {
 						operation,
 						subscribers: group.subscribers.size,
 					});
+					if (upToDate !== undefined) {
+						const frame = encodeSseEvent("up-to-date", {
+							type: "up-to-date",
+							topicId: group.topicId,
+							seq: group.lastSeq,
+							upToDate,
+						});
+						for (const subscriber of group.subscribers) {
+							void Promise.resolve(subscriber.onFrame(frame)).catch(
+								subscriber.onError,
+							);
+						}
+					}
 					continue;
 				}
 
@@ -267,6 +939,7 @@ export class RealtimeRefreshScheduler {
 					seq: group.lastSeq,
 					data,
 					reset: group.nextReset,
+					...(upToDate === undefined ? {} : { upToDate }),
 				});
 				group.nextReset = false;
 				const frame = group.lastFrame;

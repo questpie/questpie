@@ -126,6 +126,7 @@ export async function buildMockApp(
 		},
 		search: runtimeOverrides.search,
 		realtime: runtimeOverrides.realtime,
+		crdt: runtimeOverrides.crdt,
 		executor: runtimeOverrides.executor,
 		secret: runtimeOverrides.secret,
 	} as RuntimeConfig);

@@ -41,6 +41,48 @@ class FakePgClient {
 	}
 }
 
+class BlockingPublisherClient extends FakePgClient {
+	private releaseNotify = () => {};
+	private resolveNotifyStarted = () => {};
+	readonly notifyStarted = new Promise<void>((resolve) => {
+		this.resolveNotifyStarted = resolve;
+	});
+
+	override async query(text: string, params?: unknown[]): Promise<void> {
+		this.queries.push({ text, params });
+		if (!text.startsWith("select pg_notify")) return;
+		this.resolveNotifyStarted();
+		await new Promise<void>((resolve) => {
+			this.releaseNotify = resolve;
+		});
+	}
+
+	release(): void {
+		this.releaseNotify();
+	}
+}
+
+class BlockingReconnectClient extends FakePgClient {
+	private releaseReconnect = () => {};
+	private resolveReconnectStarted = () => {};
+	readonly reconnectStarted = new Promise<void>((resolve) => {
+		this.resolveReconnectStarted = resolve;
+	});
+
+	override async connect(): Promise<void> {
+		this.connectCalls += 1;
+		if (this.connectCalls !== 2) return;
+		this.resolveReconnectStarted();
+		await new Promise<void>((resolve) => {
+			this.releaseReconnect = resolve;
+		});
+	}
+
+	release(): void {
+		this.releaseReconnect();
+	}
+}
+
 const topologyWake: ChangeWake = {
 	kind: "topology-maybe-advanced",
 	sessionKey: "sha256-session-key",
@@ -151,6 +193,61 @@ describe("pg-notify change broker", () => {
 		}
 	});
 
+	test("awaits an in-flight LISTEN reconnect before shutdown completes", async () => {
+		const listener = new BlockingReconnectClient();
+		const publisher = new FakePgClient();
+		const states: ChangeBrokerState[] = [];
+		let reconnect: (() => void) | undefined;
+		const timeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(
+			(handler) => {
+				reconnect = () => {
+					if (typeof handler === "function") handler();
+				};
+				return 1 as unknown as ReturnType<typeof setTimeout>;
+			},
+		);
+		const broker = new PgNotifyChangeBroker({
+			client: listener as any,
+			publisherClient: publisher as any,
+		});
+
+		try {
+			await broker.start({
+				onWake: () => {},
+				onError: () => {},
+				onStateChange: (state) => states.push(state),
+			});
+			listener.emit("error", new Error("listener lost"));
+			reconnect?.();
+			await listener.reconnectStarted;
+
+			let stopped = false;
+			const stopping = broker.stop().then(() => {
+				stopped = true;
+			});
+			await Promise.resolve();
+			await Promise.resolve();
+			await Promise.resolve();
+			expect(stopped).toBe(false);
+
+			listener.release();
+			await stopping;
+			expect(
+				listener.queries.filter(({ text }) => text.startsWith("LISTEN")),
+			).toHaveLength(1);
+			expect(states).toEqual([
+				"connecting",
+				"connected",
+				"unavailable",
+				"disconnected",
+			]);
+		} finally {
+			listener.release();
+			timeoutSpy.mockRestore();
+			await broker.stop();
+		}
+	});
+
 	test("ignores payloads that are not valid ChangeWake metadata", async () => {
 		const listener = new FakePgClient();
 		const publisher = new FakePgClient();
@@ -177,5 +274,37 @@ describe("pg-notify change broker", () => {
 		expect(wakes).toEqual([]);
 		expect(errors).toHaveLength(1);
 		await broker.stop();
+	});
+
+	test("drains the active publish and cancels queued work on stop", async () => {
+		const listener = new FakePgClient();
+		const publisher = new BlockingPublisherClient();
+		const errors: unknown[] = [];
+		const broker = new PgNotifyChangeBroker({
+			client: listener as any,
+			publisherClient: publisher as any,
+		});
+		await broker.start({
+			onWake: () => {},
+			onError: (error) => errors.push(error),
+		});
+
+		const active = broker.publish(topologyWake);
+		await publisher.notifyStarted;
+		const queued = broker.publish({
+			...topologyWake,
+			desiredRevision: topologyWake.desiredRevision + 1,
+		});
+		const stopping = broker.stop();
+		publisher.release();
+
+		await active;
+		await expect(queued).rejects.toThrow("stopping");
+		await stopping;
+		expect(
+			publisher.queries.filter(({ text }) =>
+				text.startsWith("select pg_notify"),
+			),
+		).toHaveLength(1);
 	});
 });

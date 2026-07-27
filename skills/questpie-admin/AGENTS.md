@@ -1251,21 +1251,21 @@ Inline block edits target `_values`, for example `content._values.<blockId>.titl
 
 This skill builds on questpie-admin.
 
-Custom admin UI - field renderers, custom views, dashboard widgets - is **declarative**, exactly like the rest of QUESTPIE. You write a *definition* with a factory (`field()`, `view()`, `widget()` from `@questpie/admin/client`), default-export it from a convention directory, and `questpie generate` discovers it and wires it into `admin/.generated/client.ts`.
+Custom admin UI - field renderers, custom views, dashboard widgets - is **declarative**, exactly like the rest of QUESTPIE. You write a _definition_ with a factory (`field()`, `view()`, `widget()` from `@questpie/admin/client`), default-export it from a convention directory, and `questpie generate` discovers it and wires it into `admin/.generated/client.ts`.
 
-There is **no imperative wiring**: you never call a registry, never register a renderer in `modules.ts`, and **never edit anything under `.generated/`** (it is codegen output). A definition is a plain frozen `name → component` object - and all field *options* (label, required, validation, placeholder, …) come from **server introspection at runtime**, so a component reads them off its props; it does not declare them.
+There is **no imperative wiring**: you never call a registry, never register a renderer in `modules.ts`, and **never edit anything under `.generated/`** (it is codegen output). A definition is a plain frozen `name → component` object - and all field _options_ (label, required, validation, placeholder, …) come from **server introspection at runtime**, so a component reads them off its props; it does not declare them.
 
 ## Where definitions live
 
 Drop a default-exported definition in the admin client root (`src/questpie/admin/`); codegen merges it with the built-ins:
 
-| Directory | Factory | Renders |
-| --- | --- | --- |
-| `fields/` | `field()` | a field type's edit control + table cell |
-| `views/` | `view()` | a custom list/form/… view |
-| `widgets/` | `widget()` | a dashboard widget |
-| `pages/` | `page()` | a full custom admin screen / route |
-| `blocks/` | (block renderer) | a block - see `references/blocks.md` |
+| Directory     | Factory                  | Renders                                  |
+| ------------- | ------------------------ | ---------------------------------------- |
+| `fields/`     | `field()`                | a field type's edit control + table cell |
+| `views/`      | `view()`                 | a custom list/form/… view                |
+| `widgets/`    | `widget()`               | a dashboard widget                       |
+| `pages/`      | `page()`                 | a full custom admin screen / route       |
+| `blocks/`     | (block renderer)         | a block - see `references/blocks.md`     |
 | `components/` | server-driven components | components referenced from server config |
 
 Scaffold one with `questpie add field|view|widget|block <name>` (creates the file in the right directory), then run `questpie generate`.
@@ -1274,16 +1274,16 @@ Scaffold one with `questpie add field|view|widget|block <name>` (creates the fil
 
 When you author a custom component, import its prop type so props are typed. Everything comes from `@questpie/admin/client` **except** `BlockProps`, which is generated per-app:
 
-| Component | Prop type | Import from |
-| --- | --- | --- |
-| field `component` | `FieldComponentProps<TValue>` (extends `BaseFieldProps`) | `@questpie/admin/client` |
-| field `cell` | none - type inline as `{ value }: { value: unknown }` | - |
-| view, `kind: "list"` | `CollectionListViewProps` | `@questpie/admin/client` |
-| view, `kind: "form"` (collection) | `CollectionFormViewProps` | `@questpie/admin/client` |
-| view, `kind: "form"` (global) | `GlobalFormViewProps` | `@questpie/admin/client` |
-| widget `component` | `WidgetComponentProps<TData>` | `@questpie/admin/client` |
-| page `component` | none - a plain route component; fetch via the typed client | - |
-| block renderer | `BlockProps<"name">` (typed per block name) | `../.generated/client` (relative) |
+| Component                         | Prop type                                                  | Import from                       |
+| --------------------------------- | ---------------------------------------------------------- | --------------------------------- |
+| field `component`                 | `FieldComponentProps<TValue>` (extends `BaseFieldProps`)   | `@questpie/admin/client`          |
+| field `cell`                      | none - type inline as `{ value }: { value: unknown }`      | -                                 |
+| view, `kind: "list"`              | `CollectionListViewProps`                                  | `@questpie/admin/client`          |
+| view, `kind: "form"` (collection) | `CollectionFormViewProps`                                  | `@questpie/admin/client`          |
+| view, `kind: "form"` (global)     | `GlobalFormViewProps`                                      | `@questpie/admin/client`          |
+| widget `component`                | `WidgetComponentProps<TData>`                              | `@questpie/admin/client`          |
+| page `component`                  | none - a plain route component; fetch via the typed client | -                                 |
+| block renderer                    | `BlockProps<"name">` (typed per block name)                | `../.generated/client` (relative) |
 
 ```tsx
 // every admin prop type is a named import from the package:
@@ -1299,7 +1299,13 @@ A field renderer is `field("typeName", { component, cell? })`. `typeName` matche
 ```tsx title="src/questpie/admin/fields/color.tsx"
 import { field, type FieldComponentProps } from "@questpie/admin/client";
 
-function ColorField({ value, onChange, onBlur, disabled, error }: FieldComponentProps<string>) {
+function ColorField({
+	value,
+	onChange,
+	onBlur,
+	disabled,
+	error,
+}: FieldComponentProps<string>) {
 	return (
 		<input
 			type="color"
@@ -1319,26 +1325,26 @@ function ColorCell({ value }: { value: unknown }) {
 export default field("color", { component: ColorField, cell: ColorCell });
 ```
 
-That is the whole wiring - no registry call, nothing added to `modules.ts`. (Creating the *server* field type that adds `f.color()` to the builder is separate: see the questpie skill's `references/extend.md` and `references/field-types.md`. The client side only maps a type name to a component.)
+That is the whole wiring - no registry call, nothing added to `modules.ts`. (Creating the _server_ field type that adds `f.color()` to the builder is separate: see the questpie skill's `references/extend.md` and `references/field-types.md`. The client side only maps a type name to a component.)
 
 ### Field component props
 
 The `component` receives `FieldComponentProps<TValue>` (the typed superset of `BaseFieldProps`, which is what `questpie add field` scaffolds):
 
-| Prop | Type | Meaning |
-| --- | --- | --- |
-| `value` | `TValue` | current value (typed) |
-| `onChange?` | `(value: TValue) => void` | commit a new value - **pass the value, not a DOM event**; omitted in read-only/preview |
-| `onBlur` | `() => void` | mark touched / trigger validation |
-| `config?` | `FieldUIConfig` | resolved UI config from server introspection |
-| `name` | `string` | field name |
-| `disabled` / `readOnly` | `boolean` | disabled or read-only |
-| `error` | `string` | validation message to display |
-| `label` / `description` / `placeholder` | `string` | already resolved (i18n applied) |
-| `required` | `boolean` | required field |
-| `localized` / `locale` | `boolean` / `string` | localized field + current content locale |
-| `hideLabel` | `boolean` | render the control without its own label (compact rows) |
-| `className` | `string` | class to apply to the control |
+| Prop                                    | Type                      | Meaning                                                                                |
+| --------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------- |
+| `value`                                 | `TValue`                  | current value (typed)                                                                  |
+| `onChange?`                             | `(value: TValue) => void` | commit a new value - **pass the value, not a DOM event**; omitted in read-only/preview |
+| `onBlur`                                | `() => void`              | mark touched / trigger validation                                                      |
+| `config?`                               | `FieldUIConfig`           | resolved UI config from server introspection                                           |
+| `name`                                  | `string`                  | field name                                                                             |
+| `disabled` / `readOnly`                 | `boolean`                 | disabled or read-only                                                                  |
+| `error`                                 | `string`                  | validation message to display                                                          |
+| `label` / `description` / `placeholder` | `string`                  | already resolved (i18n applied)                                                        |
+| `required`                              | `boolean`                 | required field                                                                         |
+| `localized` / `locale`                  | `boolean` / `string`      | localized field + current content locale                                               |
+| `hideLabel`                             | `boolean`                 | render the control without its own label (compact rows)                                |
+| `className`                             | `string`                  | class to apply to the control                                                          |
 
 Read options off these props - don't re-declare them; they flow from the server `f.xxx()` definition via introspection. A `cell` component receives just `{ value }` (the column value).
 
@@ -1363,16 +1369,19 @@ Use it declaratively on a collection: `.list(({ v }) => v.kanban({ columns: "sta
 
 A widget is `widget("name", { component })`; the component receives `WidgetComponentProps<TData>`:
 
-| Prop | Type | Meaning |
-| --- | --- | --- |
-| `config` | `WidgetConfig \| Record<string, any>` | widget config from the dashboard declaration |
-| `data?` | `TData` | data from the widget's data source |
-| `isLoading?` | `boolean` | loading state |
+| Prop         | Type                                  | Meaning                                      |
+| ------------ | ------------------------------------- | -------------------------------------------- |
+| `config`     | `WidgetConfig \| Record<string, any>` | widget config from the dashboard declaration |
+| `data?`      | `TData`                               | data from the widget's data source           |
+| `isLoading?` | `boolean`                             | loading state                                |
 
 ```tsx title="src/questpie/admin/widgets/sales.tsx"
 import { widget, type WidgetComponentProps } from "@questpie/admin/client";
 
-function SalesWidget({ data, isLoading }: WidgetComponentProps<{ total: number }>) {
+function SalesWidget({
+	data,
+	isLoading,
+}: WidgetComponentProps<{ total: number }>) {
 	if (isLoading) return null;
 	return <div className="text-2xl font-mono">{data?.total ?? 0}</div>;
 }
@@ -1388,7 +1397,9 @@ A page is a full custom admin screen: `page("name", { component, path, showInNav
 import { page } from "@questpie/admin/client";
 
 function ReportsPage() {
-	return <div>{/* free-form React; call the backend via the typed client */}</div>;
+	return (
+		<div>{/* free-form React; call the backend via the typed client */}</div>
+	);
 }
 
 export default page("reports", {
@@ -1403,15 +1414,15 @@ export default page("reports", {
 
 For reference, the built-in field types render as:
 
-| Type | Renderer | Type | Renderer |
-| --- | --- | --- | --- |
-| `text` | text input | `relation` | relation picker |
-| `textarea` | textarea | `upload` | file upload |
-| `richText` | TipTap editor | `object` | nested form |
-| `number` | number input | `array` | repeatable items |
-| `boolean` | checkbox / switch | `blocks` | block editor |
-| `date` / `datetime` | date picker | `json` | JSON editor |
-| `select` | select dropdown | | |
+| Type                | Renderer          | Type       | Renderer         |
+| ------------------- | ----------------- | ---------- | ---------------- |
+| `text`              | text input        | `relation` | relation picker  |
+| `textarea`          | textarea          | `upload`   | file upload      |
+| `richText`          | TipTap editor     | `object`   | nested form      |
+| `number`            | number input      | `array`    | repeatable items |
+| `boolean`           | checkbox / switch | `blocks`   | block editor     |
+| `date` / `datetime` | date picker       | `json`     | JSON editor      |
+| `select`            | select dropdown   |            |                  |
 
 ## Reactive Field System
 
@@ -1491,15 +1502,15 @@ Task-oriented recipes for extending the admin. Every recipe is **declarative**: 
 
 A custom field has **two independent halves** that connect by name:
 
-| | BE field (server) | FE field (admin client) |
-| --- | --- | --- |
-| What | the **field type** - adds `f.color()` to the builder | the **renderer** - how that type looks in the admin |
-| Owns | storage column, Zod validation, operators, options/metadata | the edit control + the table cell |
-| Factory | `from()` / `field()` / `fieldType()` (from `questpie/builders`) | `field("color", { component, cell })` (from `@questpie/admin/client`) |
-| Lives in | a module's `fields` (questpie skill `references/extend.md`) | `src/questpie/admin/fields/color.tsx` |
-| Without the other | works headless, no admin needed | a default control is used if you ship none |
+|                   | BE field (server)                                               | FE field (admin client)                                               |
+| ----------------- | --------------------------------------------------------------- | --------------------------------------------------------------------- |
+| What              | the **field type** - adds `f.color()` to the builder            | the **renderer** - how that type looks in the admin                   |
+| Owns              | storage column, Zod validation, operators, options/metadata     | the edit control + the table cell                                     |
+| Factory           | `from()` / `field()` / `fieldType()` (from `questpie/builders`) | `field("color", { component, cell })` (from `@questpie/admin/client`) |
+| Lives in          | a module's `fields` (questpie skill `references/extend.md`)     | `src/questpie/admin/fields/color.tsx`                                 |
+| Without the other | works headless, no admin needed                                 | a default control is used if you ship none                            |
 
-They never import each other. The server type emits introspection metadata under its type name; the admin looks up the renderer by the **same name** and feeds it the resolved options as props. So options are declared once (server) and *read* off props (client) - never duplicated.
+They never import each other. The server type emits introspection metadata under its type name; the admin looks up the renderer by the **same name** and feeds it the resolved options as props. So options are declared once (server) and _read_ off props (client) - never duplicated.
 
 ## Recipe: a custom field, end to end
 
@@ -1513,7 +1524,10 @@ import { varchar } from "questpie/drizzle-pg-core";
 import { z } from "zod";
 
 export const color = (def = "#000000") =>
-	from(varchar("", { length: 7 }), z.string().regex(/^#[0-9a-fA-F]{6}$/)).default(def);
+	from(
+		varchar("", { length: 7 }),
+		z.string().regex(/^#[0-9a-fA-F]{6}$/),
+	).default(def);
 ```
 
 Register it on a module so it appears on `f`, then use it (options live here, on the server):
@@ -1534,7 +1548,13 @@ export default [module({ name: "app-fields", fields: { color } })] as const;
 ```tsx title="src/questpie/admin/fields/color.tsx"
 import { field, type FieldComponentProps } from "@questpie/admin/client";
 
-function ColorField({ value, onChange, onBlur, disabled, error }: FieldComponentProps<string>) {
+function ColorField({
+	value,
+	onChange,
+	onBlur,
+	disabled,
+	error,
+}: FieldComponentProps<string>) {
 	return (
 		<input
 			type="color"
@@ -1566,7 +1586,9 @@ import { useState } from "react";
 import { client } from "@/lib/client"; // the app's typed client SDK
 
 function ChatPage() {
-	const [messages, setMessages] = useState<{ role: string; text: string }[]>([]);
+	const [messages, setMessages] = useState<{ role: string; text: string }[]>(
+		[],
+	);
 
 	async function send(text: string) {
 		setMessages((m) => [...m, { role: "user", text }]);
@@ -1601,7 +1623,11 @@ import { view, type CollectionListViewProps } from "@questpie/admin/client";
 
 function KanbanView(props: CollectionListViewProps) {
 	// props carries the list context: rows, columns, sort, selection, pagination
-	return <div className="flex gap-4">{/* group props.data by a status column */}</div>;
+	return (
+		<div className="flex gap-4">
+			{/* group props.data by a status column */}
+		</div>
+	);
 }
 
 export default view("kanban", { kind: "list", component: KanbanView });

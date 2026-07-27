@@ -18,14 +18,18 @@
 
 import { z } from "zod";
 
-import type { Locale } from "#questpie/server/config/types.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
-import { buildIndexParams } from "../integrated/search/index-params.js";
+import type { Locale } from "#questpie/server/config/types.js";
+
+import { job } from "../integrated/queue/job.js";
+import {
+	buildIndexParams,
+	resolveAutomaticSearchableConfig,
+} from "../integrated/search/index-params.js";
 import type {
 	IndexParams,
 	SearchableConfig,
 } from "../integrated/search/types.js";
-import { job } from "../integrated/queue/job.js";
 
 /**
  * Schema for index records job payload
@@ -106,8 +110,9 @@ const indexRecordsJob = job({
 
 			// Resolve the collection's declarative `searchable` config once
 			// per collection so content/metadata/facets/embedding are populated.
-			const searchable = app.getCollectionConfig?.(collection)?.state
-				?.searchable;
+			const searchable =
+				app.getCollectionConfig?.(collection)?.state?.searchable;
+			if (!resolveAutomaticSearchableConfig(searchable)) continue;
 
 			// Index ALL locales for this record
 			for (const locale of localeCodes) {

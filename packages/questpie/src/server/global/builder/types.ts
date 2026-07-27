@@ -16,6 +16,7 @@ import type {
 import type { AppContext } from "#questpie/server/config/app-context.js";
 import type { BaseRequestContext } from "#questpie/server/config/context.js";
 import type { AccessMode } from "#questpie/server/config/types.js";
+import type { CrdtOwnerCapability } from "#questpie/server/modules/core/integrated/crdt/capability.js";
 
 /**
  * Scope resolver function type for globals.
@@ -30,8 +31,9 @@ export type GlobalScopeResolver = (
  */
 export interface GlobalOptions {
 	/**
-	 * Realtime sharing policy. Cross-session sharing is disabled unless this
-	 * resolver returns the same deterministic key for equivalent outputs.
+	 * Realtime sharing policy. Stable principals share only across the same
+	 * server scope, locale, stage, and access mode. Return the same deterministic
+	 * key to explicitly share equivalent output across principals.
 	 */
 	realtime?: {
 		accessCacheKey?: (
@@ -299,6 +301,8 @@ export interface GlobalBuilderState {
 	 * undefined when using raw Drizzle columns.
 	 */
 	fieldDefinitions: Record<string, any> | undefined;
+	/** Explicit owner-level collaborative aggregate capability. */
+	collaborative: CrdtOwnerCapability<any> | undefined;
 	/**
 	 * Phantom type for field types available in .fields(({ f }) => ...).
 	 * Set directly via EmptyGlobalState generic parameter.
@@ -330,6 +334,7 @@ export type EmptyGlobalState<
 	hooks: {};
 	access: {};
 	fieldDefinitions: undefined;
+	collaborative: undefined;
 	"~fieldTypes": TFieldTypes;
 };
 

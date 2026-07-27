@@ -161,7 +161,9 @@ function looksIpv4(ip: string): boolean {
 	const parts = ip.split(".");
 	return (
 		parts.length === 4 &&
-		parts.every((p) => /^\d{1,3}$/.test(p) && Number(p) >= 0 && Number(p) <= 255)
+		parts.every(
+			(p) => /^\d{1,3}$/.test(p) && Number(p) >= 0 && Number(p) <= 255,
+		)
 	);
 }
 
@@ -182,7 +184,9 @@ function looksIpv4(ip: string): boolean {
 export function buildNftRuleset(allow: readonly AllowedEndpoint[]): string {
 	const lines: string[] = [];
 	lines.push(`# QUESTPIE sandbox egress firewall (defense-in-depth, per-run).`);
-	lines.push(`# Default-deny: only the resolved allowlist + broker may egress.`);
+	lines.push(
+		`# Default-deny: only the resolved allowlist + broker may egress.`,
+	);
 	lines.push(`table inet ${NFT_TABLE} {`);
 	lines.push(`\tchain output {`);
 	lines.push(`\t\ttype filter hook output priority 0; policy drop;`);
@@ -228,7 +232,9 @@ export function buildNftRuleset(allow: readonly AllowedEndpoint[]): string {
  * default-deny netns, the correct posture for the brokered (`--allow-net=[]`)
  * path. The guest has nothing to reach over raw sockets; the kernel enforces it.
  */
-export function planEgressFirewall(input: EgressFirewallPlanInput): EgressFirewallPlan {
+export function planEgressFirewall(
+	input: EgressFirewallPlanInput,
+): EgressFirewallPlan {
 	if (!isLinux(input.os)) {
 		return {
 			applied: false,

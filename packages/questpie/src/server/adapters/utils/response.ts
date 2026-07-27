@@ -4,8 +4,9 @@
  * Utilities for creating HTTP responses with proper serialization.
  */
 
-import superjson from "superjson";
 import { ZodError } from "zod";
+
+import { stringifyTypedWire } from "#questpie/shared/typed-wire.js";
 
 import type { Questpie } from "../../config/questpie.js";
 import { ApiError, parseDatabaseError } from "../../errors/index.js";
@@ -49,11 +50,17 @@ export const smartResponse = (
 	data: unknown,
 	request: Request,
 	status = 200,
+	extraHeaders?: HeadersInit,
 ) => {
 	const useSuperJSON = supportsSuperJSON(request);
 
-	const body = useSuperJSON ? superjson.stringify(data) : JSON.stringify(data);
-	const headers = useSuperJSON ? superjsonHeaders : jsonHeaders;
+	const body = useSuperJSON ? stringifyTypedWire(data) : JSON.stringify(data);
+	const headers = new Headers(useSuperJSON ? superjsonHeaders : jsonHeaders);
+	if (extraHeaders) {
+		for (const [name, value] of new Headers(extraHeaders)) {
+			headers.set(name, value);
+		}
+	}
 
 	return new Response(body, { status, headers });
 };
@@ -112,7 +119,7 @@ export const handleError = (
 	if (error instanceof ApiError) {
 		const errorData = { error: error.toJSON(isDev, translator, locale) };
 		if (request && supportsSuperJSON(request)) {
-			return new Response(superjson.stringify(errorData), {
+			return new Response(stringifyTypedWire(errorData), {
 				status: error.getHTTPStatus(),
 				headers: superjsonHeaders,
 			});
@@ -128,7 +135,7 @@ export const handleError = (
 		const cmsError = ApiError.fromZodError(error);
 		const errorData = { error: cmsError.toJSON(isDev, translator, locale) };
 		if (request && supportsSuperJSON(request)) {
-			return new Response(superjson.stringify(errorData), {
+			return new Response(stringifyTypedWire(errorData), {
 				status: cmsError.getHTTPStatus(),
 				headers: superjsonHeaders,
 			});
@@ -144,7 +151,7 @@ export const handleError = (
 	if (dbError) {
 		const errorData = { error: dbError.toJSON(isDev, translator, locale) };
 		if (request && supportsSuperJSON(request)) {
-			return new Response(superjson.stringify(errorData), {
+			return new Response(stringifyTypedWire(errorData), {
 				status: dbError.getHTTPStatus(),
 				headers: superjsonHeaders,
 			});
@@ -161,7 +168,7 @@ export const handleError = (
 	const errorData = { error: wrappedError.toJSON(isDev, translator, locale) };
 
 	if (request && supportsSuperJSON(request)) {
-		return new Response(superjson.stringify(errorData), {
+		return new Response(stringifyTypedWire(errorData), {
 			status: wrappedError.getHTTPStatus(),
 			headers: superjsonHeaders,
 		});

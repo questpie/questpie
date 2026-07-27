@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 
 import {
 	collection,
+	getTxid,
 	global,
 	questpieRealtimeLogTable,
 	type RealtimeChangeEvent,
@@ -87,11 +88,11 @@ describe("realtime matrix transactional change capture", () => {
 		);
 		await runTestDbMigrations(setup.app);
 		ctx = createTestContext(setup.app);
-	});
+	}, 30_000);
 
 	afterEach(async () => {
 		await setup.cleanup();
-	});
+	}, 30_000);
 
 	it("G11: writes the outbox row inside the mutation transaction", async () => {
 		let rowsVisibleInsideTransaction = 0;
@@ -103,6 +104,96 @@ describe("realtime matrix transactional change capture", () => {
 		await setup.app.collections.posts.create({ title: "Captured" }, ctx);
 
 		expect(rowsVisibleInsideTransaction).toBe(1);
+	});
+
+	it("returns the same transaction id as the committed outbox row", async () => {
+		const result = await setup.app.collections.posts.create(
+			{ title: "Correlated" },
+			ctx,
+		);
+		const rows = await setup.app.db.select().from(questpieRealtimeLogTable);
+
+		expect(rows).toHaveLength(1);
+		expect(rows[0]?.txid).toBeString();
+		expect(getTxid(result)).toBe(rows[0]?.txid);
+	});
+
+	it("assigns outbox cursors in commit order without dropping a late commit", async () => {
+		let firstAppended = () => {};
+		const appended = new Promise<void>((resolve) => {
+			firstAppended = resolve;
+		});
+		let releaseFirst = () => {};
+		const holdFirst = new Promise<void>((resolve) => {
+			releaseFirst = resolve;
+		});
+
+		const first = withTransaction(setup.app.db, async () => {
+			const event = await setup.app.realtime.appendChange({
+				resourceType: "collection",
+				resource: "posts",
+				operation: "update",
+				recordId: "first",
+			});
+			firstAppended();
+			await holdFirst;
+			return event;
+		});
+
+		await appended;
+		const second = withTransaction(setup.app.db, () =>
+			setup.app.realtime.appendChange({
+				resourceType: "collection",
+				resource: "posts",
+				operation: "update",
+				recordId: "second",
+			}),
+		);
+
+		expect(await settleWithinEventLoopTurns(second)).toBe(false);
+		releaseFirst();
+		const [firstEvent, secondEvent] = await Promise.all([first, second]);
+
+		expect([firstEvent.seq, secondEvent.seq]).toEqual([1, 2]);
+		const rows = await setup.app.db
+			.select()
+			.from(questpieRealtimeLogTable)
+			.orderBy(questpieRealtimeLogTable.seq);
+		expect(rows.map((row) => row.recordId)).toEqual(["first", "second"]);
+	});
+
+	it("wraps public appendChange calls in the commit-order transaction", async () => {
+		const originalTransaction = setup.app.db.transaction.bind(setup.app.db);
+		const transactionSpy = spyOn(
+			setup.app.db,
+			"transaction",
+		).mockImplementation((callback: any) => originalTransaction(callback));
+
+		try {
+			const appendWithHostileOverride = setup.app.realtime.appendChange.bind(
+				setup.app.realtime,
+			) as (
+				input: Parameters<typeof setup.app.realtime.appendChange>[0],
+				options?: { db: typeof setup.app.db },
+			) => ReturnType<typeof setup.app.realtime.appendChange>;
+			const events = await Promise.all(
+				["first", "second"].map((recordId) =>
+					appendWithHostileOverride(
+						{
+							resourceType: "collection",
+							resource: "posts",
+							operation: "update",
+							recordId,
+						},
+						{ db: setup.app.db },
+					),
+				),
+			);
+			expect(events.map((event) => event.seq)).toEqual([1, 2]);
+			expect(transactionSpy).toHaveBeenCalledTimes(2);
+		} finally {
+			transactionSpy.mockRestore();
+		}
 	});
 
 	it("G11: writes global changes inside the mutation transaction", async () => {
@@ -431,5 +522,53 @@ describe("realtime matrix transactional change capture", () => {
 				"Realtime change capture failed",
 			),
 		).toHaveLength(1);
+	});
+
+	it("rolls back mutations when native delta capture fails", async () => {
+		const first = await setup.app.collections.posts.create(
+			{ title: "First" },
+			ctx,
+		);
+		const second = await setup.app.collections.posts.create(
+			{ title: "Second" },
+			ctx,
+		);
+		const appendSpy = spyOn(
+			setup.app.realtime,
+			"appendChange",
+		).mockImplementation(async () => {
+			throw Object.assign(new Error("database unavailable"), { code: "08006" });
+		});
+		Object.assign(setup.app.realtime, { nativeDeltasEnabled: true });
+
+		try {
+			await expect(
+				setup.app.collections.posts.create({ title: "Must roll back" }, ctx),
+			).rejects.toThrow("database unavailable");
+			await expect(
+				setup.app.collections.posts.update(
+					{
+						where: { id: { in: [first.id, second.id] } },
+						data: { title: "Must roll back" },
+					},
+					ctx,
+				),
+			).rejects.toThrow("database unavailable");
+			await expect(
+				setup.app.collections.posts.delete(
+					{ where: { id: { in: [first.id, second.id] } } },
+					ctx,
+				),
+			).rejects.toThrow("database unavailable");
+		} finally {
+			Object.assign(setup.app.realtime, { nativeDeltasEnabled: false });
+			appendSpy.mockRestore();
+		}
+
+		expect(
+			(await setup.app.collections.posts.find({}, ctx)).docs
+				.map((post: { title: string }) => post.title)
+				.sort(),
+		).toEqual(["First", "Second"]);
 	});
 });

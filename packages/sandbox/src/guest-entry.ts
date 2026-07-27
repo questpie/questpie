@@ -46,6 +46,8 @@ import { buildGuestBindings } from "./guest-bindings.ts";
 const RESULT_MARKER = "__QP_SANDBOX_RESULT__";
 /** Marker prefixing each FRAMED protocol message (bindings path). */
 const FRAME_MARKER = "__QP_SANDBOX_MSG__";
+/** Injected by the supervisor from the canonical decoded broker-body budget. */
+const HTTP_FETCH_BODY_CAP_BYTES = __QP_HTTP_FETCH_BODY_CAP_BYTES__;
 
 // ── 1. HARDEN GLOBALS (must happen before importing/eval'ing guest source) ──
 
@@ -202,8 +204,8 @@ function createLineReader() {
 	};
 }
 
-/** Write one framed message line to stdout. */
-function writeFrame(msg: unknown) {
+/** Write one complete framed message line to stdout without blocking the guest loop. */
+async function writeFrame(msg: unknown): Promise<void> {
 	let payload: string;
 	try {
 		payload = JSON.stringify(msg);
@@ -216,7 +218,22 @@ function writeFrame(msg: unknown) {
 		});
 	}
 	// deno-lint-ignore no-explicit-any
-	(Deno as any).stdout.writeSync(encoder.encode(FRAME_MARKER + payload + "\n"));
+	const stdout = (Deno as any).stdout;
+	const frame = encoder.encode(FRAME_MARKER + payload + "\n");
+	const maximumWriteBytes = 64 * 1024;
+	let offset = 0;
+	while (offset < frame.byteLength) {
+		const written = await stdout.write(
+			frame.subarray(
+				offset,
+				Math.min(frame.byteLength, offset + maximumWriteBytes),
+			),
+		);
+		if (!Number.isSafeInteger(written) || written <= 0) {
+			throw new Error("sandbox stdout closed during frame");
+		}
+		offset += written;
+	}
 }
 
 /** Emit the LEGACY single-line result (no bindings). */
@@ -277,6 +294,7 @@ type Envelope = {
 
 /** Encode raw bytes to base64 (works for arbitrary binary; no Buffer in Deno). */
 function bytesToBase64(bytes: Uint8Array): string {
+	if (typeof bytes.toBase64 === "function") return bytes.toBase64();
 	let binary = "";
 	const chunk = 0x8000; // chunk to avoid arg-count limits on String.fromCharCode
 	for (let i = 0; i < bytes.length; i += chunk) {
@@ -287,6 +305,9 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 /** Decode base64 to raw bytes (inverse of {@link bytesToBase64}). */
 function base64ToBytes(b64: string): Uint8Array {
+	if (typeof Uint8Array.fromBase64 === "function") {
+		return Uint8Array.fromBase64(b64);
+	}
 	const binary = atob(b64);
 	const out = new Uint8Array(binary.length);
 	for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
@@ -327,7 +348,14 @@ function installFetchShim(
 		// no body; `arrayBuffer()` yields an empty buffer which we omit.
 		let bodyBase64: string | undefined;
 		const buf = await req.arrayBuffer();
-		if (buf.byteLength > 0) bodyBase64 = bytesToBase64(new Uint8Array(buf));
+		if (buf.byteLength > HTTP_FETCH_BODY_CAP_BYTES) {
+			// Send a deliberately malformed, tiny value so the trusted host performs
+			// the authoritative rejection and the supervisor latches it terminally.
+			// This avoids base64-encoding data already known to exceed the shared cap.
+			bodyBase64 = 0 as unknown as string;
+		} else if (buf.byteLength > 0) {
+			bodyBase64 = bytesToBase64(new Uint8Array(buf));
+		}
 
 		const request: HttpFetchRequest = {
 			url: req.url,
@@ -393,12 +421,18 @@ async function runWithBindings(
 	let nextId = 1;
 
 	// The injected transport: write an `rpc` frame, await its `rpc-result`.
-	const hostCall = (method: string, args: unknown): Promise<unknown> => {
+	const hostCall = async (method: string, args: unknown): Promise<unknown> => {
 		const id = nextId++;
-		return new Promise<unknown>((resolve, reject) => {
+		const response = new Promise<unknown>((resolve, reject) => {
 			pending.set(id, { resolve, reject });
-			writeFrame({ type: "rpc", id, method, args });
 		});
+		try {
+			await writeFrame({ type: "rpc", id, method, args });
+		} catch (error) {
+			pending.delete(id);
+			throw error;
+		}
+		return response;
 	};
 
 	// Background loop: consume `rpc-result` frames and settle pending calls. It
@@ -454,9 +488,9 @@ async function runWithBindings(
 	try {
 		const entry = await loadGuestEntry(envelope.source);
 		const output = await entry(envelope.input);
-		writeFrame({ type: "result", ok: true, output, logs });
+		await writeFrame({ type: "result", ok: true, output, logs });
 	} catch (err) {
-		writeFrame({
+		await writeFrame({
 			type: "result",
 			ok: false,
 			error: err instanceof Error ? err.message : String(err),

@@ -91,8 +91,10 @@ export {
 export {
 	getCurrentTransaction,
 	getTransactionContext,
+	getTransactionTxid,
 	isInTransaction,
 	onAfterCommit,
+	recordTransactionTxid,
 	type TransactionContext,
 	withTransaction,
 	withTransactionOrExisting,

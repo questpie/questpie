@@ -914,6 +914,7 @@ export default {
 	"audit.action.create": "vytvořil(a)",
 	"audit.action.update": "upravil(a)",
 	"audit.action.delete": "smazal(a)",
+	"audit.action.purge": "nevratně smazal(a)",
 	"audit.action.transition": "změnil(a) stav",
 	"audit.resourceType.collection": "kolekci",
 	"audit.resourceType.global": "globální nastavení",

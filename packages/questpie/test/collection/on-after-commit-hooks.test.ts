@@ -10,7 +10,9 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+	getTransactionTxid,
 	onAfterCommit,
+	recordTransactionTxid,
 	withTransaction,
 } from "../../src/server/collection/crud/shared/transaction.js";
 
@@ -139,5 +141,23 @@ describe("onAfterCommit (QUE-243)", () => {
 
 		// All callbacks fire after outermost commits, in registration order
 		expect(order).toEqual(["outer-1", "inner", "outer-2"]);
+	});
+
+	it("shares the captured transaction id through nested mutation hooks", async () => {
+		const mockDb = {
+			transaction: async (fn: (tx: object) => Promise<unknown>) => fn({}),
+		};
+
+		const captured = await withTransaction(mockDb, async () => {
+			expect(getTransactionTxid()).toBeUndefined();
+			recordTransactionTxid("123");
+			await withTransaction(mockDb, async () => {
+				expect(getTransactionTxid()).toBe("123");
+			});
+			return getTransactionTxid();
+		});
+
+		expect(captured).toBe("123");
+		expect(getTransactionTxid()).toBeUndefined();
 	});
 });

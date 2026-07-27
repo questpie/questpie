@@ -57,6 +57,7 @@ import _mig_20260429T170546_kind_yellow_eagle from "../migrations/20260429T17054
 import _mig_20260615T084209_swift_orange_eagle from "../migrations/20260615T084209_swift_orange_eagle";
 import _mig_20260712T094709_bold_red_griffin from "../migrations/20260712T094709_bold_red_griffin";
 import _mig_20260712T195414_eager_red_tiger from "../migrations/20260712T195414_eager_red_tiger";
+import _mig_20260725T184252_realtimeV3Umbrella from "../migrations/20260725T184252_realtime-v3-umbrella";
 
 // ── Seeds ──────────────────────────────────────────────────
 import _seed_blogPosts from "../seeds/blog-posts";
@@ -98,7 +99,7 @@ import _mcpConfig from "../config/mcp";
 import _openapi from "../config/openapi";
 
 import type { AppCollections, AppChannels, AppGlobals, AppJobs, _ModuleCollections, _AppDefaultServices, _AppServicesSeam, _AppTopLevelServices, _AppCustomServiceNamespaces, AppEmailTemplates, _Registry_Collections, _Registry_Channels, _Registry_Globals, _Registry_Jobs, _Registry_Routes, _Registry_Services, _Registry_Emails, _Registry_FieldTypes, _Registry_Views, _Registry_Components, _Registry_Blocks, _Registry_McpTools, _AllModuleFields } from "./entities.gen";
-import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";
+import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AuthorityActor, CollectionAPI, CrdtClientAPI, CrdtRegistryFromApp, CrdtServerAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Principal, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";
 import type { ChannelsService } from "questpie/channels";
 
 type _MPSubModules<M> = M extends { modules: infer S extends readonly any[] } ? S : readonly [];
@@ -157,6 +158,10 @@ export type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals" | "e
 	env: typeof _env;
 };
 
+export type AppCrdt = CrdtRegistryFromApp<{ collections: AppCollections; globals: AppGlobals }>;
+export type AppCrdtClient = CrdtClientAPI<AppCrdt>;
+export type AppCrdtServer = CrdtServerAPI<AppCrdt>;
+
 // ── AppContext augmentation — auto-types ALL handlers ──────
 type _AppInfraRecord = {
 	// Infrastructure
@@ -170,6 +175,7 @@ type _AppInfraRecord = {
 	search: _AppQuestpie["search"];
 	realtime: _AppQuestpie["realtime"];
 	channels: ChannelsService<AppChannels>;
+	crdt: AppCrdtServer;
 
 	// Entity APIs
 	collections: _CollectionsAPI;
@@ -178,6 +184,8 @@ type _AppInfraRecord = {
 
 	// Request-scoped
 	session: _AppSession;
+	principal?: Principal;
+	actor?: AuthorityActor;
 	t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
 
 	// User services

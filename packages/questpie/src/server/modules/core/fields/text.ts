@@ -25,12 +25,14 @@ export interface TextFieldMeta extends Questpie.TextFieldMeta {
 	_?: never;
 }
 
-export type TextFieldState = Omit<DefaultFieldState, "operators"> & {
-	type: "text";
-	data: string;
-	column: PgVarcharBuilder<[string, ...string[]]>;
-	operators: typeof stringOps;
-};
+export type TextFieldState<TStorage extends "text" | "varchar" = "varchar"> =
+	Omit<DefaultFieldState, "operators"> & {
+		type: "text";
+		data: string;
+		column: PgVarcharBuilder<[string, ...string[]]>;
+		operators: typeof stringOps;
+		textStorage: TStorage;
+	};
 
 export interface TextFieldMethods {
 	pattern(re: RegExp): any;
@@ -52,31 +54,42 @@ export interface TextFieldMethods {
  * bio: f.text({ mode: "text" })
  * ```
  */
-export function text(maxLength?: number): FieldWithMethods<TextFieldState, TextFieldMethods>;
-export function text(config: { mode: "text" }): FieldWithMethods<TextFieldState, TextFieldMethods>;
-export function text(arg?: number | { mode: "text" }): FieldWithMethods<TextFieldState, TextFieldMethods> {
+export function text(
+	maxLength?: number,
+): FieldWithMethods<TextFieldState<"varchar">, TextFieldMethods>;
+export function text(config: {
+	mode: "text";
+}): FieldWithMethods<TextFieldState<"text">, TextFieldMethods>;
+export function text(
+	arg?: number | { mode: "text" },
+): FieldWithMethods<TextFieldState<"text" | "varchar">, TextFieldMethods> {
 	const isTextMode = typeof arg === "object" && arg?.mode === "text";
 	const maxLen = typeof arg === "number" ? arg : isTextMode ? undefined : 255;
 
-	return wrapFieldComplete(field<TextFieldState>({
-		type: "text",
-		columnFactory: (name) =>
-			isTextMode ? pgText(name) : varchar(name, { length: maxLen }),
-		schemaFactory: () => {
-			let s = z.string();
-			if (maxLen !== undefined) s = s.max(maxLen);
-			return s;
-		},
-		operatorSet: stringOps,
-		notNull: false,
-		hasDefault: false,
-		localized: false,
-		virtual: false,
-		input: true,
-		output: true,
-		isArray: false,
-		maxLength: maxLen,
-	}), textFieldType.methods, {}) as any;
+	return wrapFieldComplete(
+		field<TextFieldState>({
+			type: "text",
+			columnFactory: (name) =>
+				isTextMode ? pgText(name) : varchar(name, { length: maxLen }),
+			schemaFactory: () => {
+				let s = z.string();
+				if (maxLen !== undefined) s = s.max(maxLen);
+				return s;
+			},
+			operatorSet: stringOps,
+			notNull: false,
+			hasDefault: false,
+			localized: false,
+			virtual: false,
+			input: true,
+			output: true,
+			isArray: false,
+			maxLength: maxLen,
+			textStorage: isTextMode ? "text" : "varchar",
+		}),
+		textFieldType.methods,
+		{},
+	) as any;
 }
 
 // ---- fieldType() definition (QUE-265) ----
@@ -99,6 +112,7 @@ export const textFieldType = fieldType("text", {
 		output: true,
 		isArray: false,
 		maxLength,
+		textStorage: "varchar",
 	}),
 	methods: {
 		pattern: (f: Field<any>, re: RegExp) => f.derive({ pattern: re }),

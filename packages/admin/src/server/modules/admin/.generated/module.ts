@@ -73,6 +73,8 @@ export type AdminCollections = {
 	verification: typeof _coll_verification;
 };
 
+export type AdminChannels = Record<never, never>;
+
 export type AdminGlobals = Record<never, never>;
 
 export type AdminJobs = Record<never, never>;
@@ -106,6 +108,7 @@ export type AdminModule = {
 	routes: AdminRoutes;
 	views: AdminViews;
 	components: AdminComponents;
+	channels: AdminChannels;
 	globals: AdminGlobals;
 	jobs: AdminJobs;
 	fieldTypes: AdminFieldTypes;
@@ -163,6 +166,7 @@ const _module: AdminModule = {
 		badge: _comp_badge,
 		icon: _comp_icon,
 	} as AdminComponents,
+	channels: {},
 	globals: {},
 	jobs: {},
 	messages: {},

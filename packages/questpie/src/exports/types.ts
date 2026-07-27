@@ -40,8 +40,15 @@ export { extractAppServices } from "#questpie/server/config/app-context.js";
 export type {
 	RequestContext,
 	BaseRequestContext,
+	Principal,
 	StoredContext,
 } from "#questpie/server/config/context.js";
+export type {
+	AuthorityActor,
+	CrdtAuthentication,
+	CrdtAuthoritySubject,
+	VerifiedAgentCredential,
+} from "#questpie/server/modules/core/integrated/crdt/authority.js";
 export type { z } from "zod";
 export {
 	getContext,
@@ -179,3 +186,4 @@ export {
 export * from "#questpie/server/i18n/types.js";
 export * from "#questpie/server/config/global-hooks-types.js";
 export type { LoggerConfig } from "#questpie/server/modules/core/integrated/logger/types.js";
+export type * from "#questpie/server/modules/core/integrated/crdt/types.js";

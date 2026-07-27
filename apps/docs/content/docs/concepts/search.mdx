@@ -15,7 +15,7 @@ The data flow has five stages:
 4. `app.search.search()` ranks matching index rows.
 5. The client search endpoint applies access rules and hydrates allowed results into collection documents.
 
-The collection remains the source of truth. Search results are a derived view that can be rebuilt from collection records.
+The collection remains the source of truth. Search results are a derived view that can be rebuilt from collection records. Collections without an explicit `.searchable(...)` declaration are not indexed or exposed through the Search HTTP endpoint.
 
 ## Define the projection
 
@@ -63,21 +63,29 @@ Automatic indexing starts after a durable collection change. QUESTPIE batches ra
 
 Without a queue, indexing runs synchronously. `manual: true` moves lifecycle control to your application for imports, external synchronization, or specialized batching.
 
+Use `.searchable({})` for the safe title-only default projection. Add `content`, `metadata`, facets, or embeddings explicitly; those custom projections must be safe for every actor who may read the row because a shared index cannot enforce dynamic field access inside projected values. `undefined`, `.searchable(false)`, and `{ disabled: true }` do not index. A manual projection remains queryable, but automatic write hooks and bulk reindex skip it.
+
 ## Ranking modes
 
 The public query contract supports three modes:
 
-| Mode       | Purpose                                                        |
-| ---------- | -------------------------------------------------------------- |
-| `lexical`  | Rank exact terms and full-text matches.                        |
-| `hybrid`   | Combine the lexical signals supported by the selected adapter. |
-| `semantic` | Rank by embedding similarity.                                  |
+| Mode       | Purpose                                                                             |
+| ---------- | ----------------------------------------------------------------------------------- |
+| `lexical`  | Rank full-text and fuzzy lexical matches.                                           |
+| `semantic` | Rank by embedding similarity when the adapter supports it.                          |
+| `hybrid`   | Reserved for true lexical + semantic fusion; built-in adapters currently reject it. |
 
 Adapter capabilities determine which modes are available. Application query code stays stable when the backend changes.
 
 ## Access and consistency
 
-The HTTP search route derives collection access filters before returning documents. Treat search as a read model: writes become searchable after the indexing step completes.
+The HTTP search route compiles collection read access with the same fail-closed WHERE compiler as CRUD. Hits, totals, facets, numeric statistics, browse results, and semantic ranking all use the same authorized source-row candidates. Unsupported access predicates fail the request instead of broadening results.
+
+Hydration is also fail closed: if a ranked candidate can no longer be read, the route rejects the response rather than returning a shorter page with stale totals or facets. Treat search as a read model: writes become searchable after the indexing step completes.
+
+The hydrated HTTP/client response exposes the live field-filtered row and only
+the relevance `score`; raw index title, content, and highlights remain available
+to trusted server code through `app.search.search(...)`.
 
 Render record data from hydrated documents when freshness matters. Use indexed title, snippets, score, and facets for discovery UI.
 

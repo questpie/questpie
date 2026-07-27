@@ -219,6 +219,8 @@ interface S3StorageOptions {
 	secretKey: string;
 }
 
+const FILES_S3_MODULE = "files-sdk/s3";
+
 const S3_ADAPTER_METHODS = new Set([
 	"upload",
 	"download",
@@ -251,9 +253,13 @@ function createLazyS3StorageAdapter(options: S3StorageOptions): Adapter {
 	const ensureAdapter = (): Promise<Adapter> => {
 		if (adapter) return Promise.resolve(adapter);
 		if (!initPromise) {
-			initPromise = import("files-sdk/s3")
+			initPromise = (
+				import(/* @vite-ignore */ FILES_S3_MODULE) as Promise<
+					typeof import("files-sdk/s3")
+				>
+			)
 				.then(({ s3 }) => {
-					adapter = s3({
+					const resolvedAdapter = s3({
 						credentials: {
 							accessKeyId: options.accessKey,
 							secretAccessKey: options.secretKey,
@@ -263,7 +269,8 @@ function createLazyS3StorageAdapter(options: S3StorageOptions): Adapter {
 						endpoint: options.endpoint,
 						forcePathStyle: true,
 					});
-					return adapter;
+					adapter = resolvedAdapter;
+					return resolvedAdapter;
 				})
 				.catch((err) => {
 					throw new Error(

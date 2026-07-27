@@ -26,11 +26,11 @@ describe("mcp codegen plugin", () => {
 		);
 		await writeFile(
 			join(root, "config", "mcp.ts"),
-			`import { mcpConfig } from "@questpie/mcp";\n\nexport default mcpConfig({ crud: { collections: { posts: { read: true } } } });\n`,
+			`import { mcpConfig } from "@questpie/mcp";\n\nexport default mcpConfig({ crud: { collections: { posts: { operations: { list: true } } } } });\n`,
 		);
 		await writeFile(
 			join(root, "mcp-tools", "report.ts"),
-			`import { mcpTool } from "@questpie/mcp";\nimport { z } from "zod";\n\nexport default mcpTool("generate-report", { inputSchema: z.object({}) }).handler(async () => ({ content: [{ type: "text", text: "ok" }] }));\n`,
+			`import { mcpTool } from "@questpie/mcp";\nimport { z } from "zod";\n\nexport default mcpTool("generate-report", { access: true, scopes: false, inputSchema: z.object({}) }).handler(async () => ({ content: [{ type: "text", text: "ok" }] }));\n`,
 		);
 	});
 

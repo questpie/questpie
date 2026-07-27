@@ -3,6 +3,8 @@ import { treaty } from "@elysiajs/eden";
 import type Elysia from "elysia";
 import {
 	createClient,
+	type CrdtClientRuntimeConfig,
+	type GetAuthHeaders,
 	type QuestpieApp,
 	type QuestpieClient,
 } from "questpie/client";
@@ -34,6 +36,16 @@ export type ElysiaClientConfig = {
 	 * Default headers to include in all requests
 	 */
 	headers?: Record<string, string>;
+
+	/**
+	 * Resolve authentication headers for each QUESTPIE request.
+	 */
+	getAuthHeaders?: GetAuthHeaders;
+
+	/**
+	 * Optional collaborative-document client runtime.
+	 */
+	crdt?: CrdtClientRuntimeConfig;
 };
 
 /**
@@ -71,6 +83,8 @@ export function createClientFromEden<
 		fetch: config.fetch,
 		basePath: config.basePath,
 		headers: config.headers,
+		getAuthHeaders: config.getAuthHeaders,
+		crdt: config.crdt,
 	});
 
 	// Create Eden Treaty client for custom routes
@@ -83,6 +97,7 @@ export function createClientFromEden<
 	return {
 		...edenClient,
 		collections: qpClient.collections,
+		crdt: qpClient.crdt,
 		globals: qpClient.globals,
 	} as QuestpieClient<TQP> & Treaty.Create<TApp>;
 }

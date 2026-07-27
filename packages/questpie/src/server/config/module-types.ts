@@ -62,6 +62,7 @@ import type {
 } from "#questpie/server/config/types.js";
 import type { TranslationsConfig } from "#questpie/server/i18n/types.js";
 import type { Migration } from "#questpie/server/migration/types.js";
+import type { CrdtRuntimeConfig } from "#questpie/server/modules/core/integrated/crdt/config.js";
 import type { ExecutorConfig } from "#questpie/server/modules/core/integrated/executor/types.js";
 import type { KVConfig } from "#questpie/server/modules/core/integrated/kv/types.js";
 import type { LoggerConfig } from "#questpie/server/modules/core/integrated/logger/types.js";
@@ -121,6 +122,12 @@ export interface ModuleDefinition {
 	services?: Record<
 		string,
 		import("#questpie/server/services/define-service.js").ServiceBuilder<any>
+	>;
+
+	/** Package-owned exact OAuth scope catalogs, merged by contributor name. */
+	oauthScopeCatalogs?: Record<
+		string,
+		import("#questpie/server/modules/core/integrated/auth/scope-catalog.js").OAuthScopeCatalogContributor
 	>;
 
 	/** Migrations this module contributes — concatenated with others. */
@@ -356,6 +363,9 @@ export interface RuntimeConfig<
 
 	/** Realtime configuration. */
 	realtime?: RealtimeConfig;
+
+	/** Collaborative aggregate runtime. Dormant when no owner is collaborative. */
+	crdt?: CrdtRuntimeConfig;
 
 	/** Logger configuration. */
 	logger?: LoggerConfig;

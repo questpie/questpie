@@ -6,13 +6,14 @@
  * Features:
  * - Access control filtering via SQL JOINs (accurate pagination)
  * - Populates full records via CRUD (hooks run)
- * - Returns search metadata (score, highlights, indexed title) with records
+ * - Returns only field-access-safe hydrated records plus relevance scores
  */
 
 import { executeAccessRule } from "../../collection/crud/shared/access-control.js";
 import type { Questpie } from "../../config/questpie.js";
 import type { QuestpieConfig } from "../../config/types.js";
 import { ApiError } from "../../errors/index.js";
+import { isSearchableConfigEnabled } from "../../modules/core/integrated/search/index-params.js";
 import { reindexCollection } from "../../modules/core/integrated/search/reindex.js";
 import type {
 	CollectionAccessFilter,
@@ -135,37 +136,59 @@ export async function searchSearch(
 	}
 
 	try {
-		// Build access filters for each collection
 		const allCollections = app.getCollections();
 		const requestedCollections: string[] =
 			body.collections ?? Object.keys(allCollections);
+		const searchLocale = body.locale ?? resolved.appContext.locale;
+		const db = resolved.appContext.db ?? app.db;
+		const accessContext = {
+			session: resolved.appContext.session,
+			principal: resolved.appContext.principal,
+			actor: resolved.appContext.actor,
+			locale: searchLocale,
+			defaultLocale: resolved.appContext.defaultLocale,
+			localeFallback: resolved.appContext.localeFallback,
+			accessMode: resolved.appContext.accessMode,
+			stage: resolved.appContext.stage,
+			db,
+			"~contextExtensions": resolved.appContext["~contextExtensions"],
+		};
 		const accessFilters: CollectionAccessFilter[] = [];
 		const accessibleCollections: string[] = [];
 
 		for (const collectionName of requestedCollections) {
 			const collection = allCollections[collectionName as any];
 			if (!collection) continue;
+			const state = (collection as any).state;
+			if (!isSearchableConfigEnabled(state?.searchable)) continue;
 
 			// Check read access for this collection (falls back to defaultAccess)
-			const accessRule =
-				(collection as any).state?.access?.read ?? app.defaultAccess?.read;
+			const accessRule = state?.access?.read ?? app.defaultAccess?.read;
 			const accessWhere = await executeAccessRule(accessRule, {
 				app,
-				db: resolved.appContext.db ?? app.db,
+				db,
 				session: resolved.appContext.session,
-				locale: resolved.appContext.locale,
+				principal: resolved.appContext.principal,
+				actor: resolved.appContext.actor,
+				locale: searchLocale,
+				request,
 				contextExtensions: resolved.appContext["~contextExtensions"],
 			});
 
 			// Skip collections with no access
 			if (accessWhere === false) continue;
 
-			// Build access filter for this collection
+			const crud = (collection as any).generateCRUD?.(db, app);
 			accessFilters.push({
 				collection: collectionName,
 				table: (collection as any).table,
 				accessWhere,
-				softDelete: (collection as any).state?.options?.softDelete ?? false,
+				softDelete: state?.options?.softDelete ?? false,
+				state,
+				i18nTable: crud?.["~internalI18nTable"] ?? null,
+				context: accessContext,
+				app,
+				db,
 			});
 			accessibleCollections.push(collectionName);
 		}
@@ -186,11 +209,13 @@ export async function searchSearch(
 		const searchResults = await app.search.search({
 			query: body.query || "",
 			collections: accessibleCollections,
-			locale: body.locale ?? resolved.appContext.locale,
+			locale: searchLocale,
 			limit: body.limit ?? 10,
 			offset: body.offset ?? 0,
 			filters: body.filters,
-			highlights: body.highlights ?? true,
+			// The hydrated HTTP response must not expose index snapshots because
+			// they can contain values removed by CRUD field access.
+			highlights: false,
 			facets: body.facets,
 			mode: body.mode,
 			accessFilters,
@@ -214,9 +239,6 @@ export async function searchSearch(
 			const key = `${result.collection}:${result.recordId}`;
 			searchMetaMap.set(key, {
 				score: result.score,
-				highlights: result.highlights,
-				indexedTitle: result.title,
-				indexedContent: result.content,
 			});
 		}
 
@@ -228,59 +250,66 @@ export async function searchSearch(
 			idsByCollection.set(result.collection, ids);
 		}
 
-		// Populate full records via CRUD (this runs hooks!)
-		const populatedDocs: any[] = [];
+		// Populate full records via CRUD (this runs hooks). Hydration is
+		// fail-closed: one missing or rejected candidate invalidates the response
+		// instead of returning docs whose cardinality disagrees with total/facets.
+		const populatedByKey = new Map<string, any>();
 		const crudContext = {
 			session: resolved.appContext.session,
-			locale: resolved.appContext.locale,
-			db: resolved.appContext.db ?? app.db,
+			principal: resolved.appContext.principal,
+			actor: resolved.appContext.actor,
+			locale: searchLocale,
+			defaultLocale: resolved.appContext.defaultLocale,
+			localeFallback: resolved.appContext.localeFallback,
+			accessMode: resolved.appContext.accessMode,
+			stage: resolved.appContext.stage,
+			db,
+			request,
+			"~contextExtensions": resolved.appContext["~contextExtensions"],
 		};
 
 		for (const [collectionName, ids] of idsByCollection) {
 			const collection = allCollections[collectionName as any];
-			if (!collection) continue;
+			if (!collection) {
+				throw new Error(
+					`Search adapter returned unknown collection "${collectionName}"`,
+				);
+			}
 
 			// Generate CRUD for this collection
-			const crud = (collection as any).generateCRUD?.(
-				resolved.appContext.db ?? app.db,
-				app,
+			const crud = (collection as any).generateCRUD?.(db, app);
+			if (!crud) {
+				throw new Error(
+					`Search collection "${collectionName}" has no CRUD hydrator`,
+				);
+			}
+
+			const crudResult = await crud.find(
+				{
+					where: { id: { in: ids } },
+					limit: ids.length,
+				},
+				crudContext,
 			);
-			if (!crud) continue;
 
-			try {
-				const crudResult = await crud.find(
-					{
-						where: { id: { in: ids } },
-						limit: ids.length,
-					},
-					crudContext,
-				);
-
-				// Merge search metadata with CRUD results
-				for (const doc of crudResult.docs) {
-					const key = `${collectionName}:${doc.id}`;
-					const searchMeta = searchMetaMap.get(key);
-					if (searchMeta) {
-						populatedDocs.push({
-							...doc,
-							_collection: collectionName,
-							_search: searchMeta,
-						});
-					}
-				}
-			} catch (err) {
-				// Log but continue - don't fail entire search if one collection errors
-				(resolved.appContext as any).logger?.error(
-					`[Search] Failed to populate ${collectionName}:`,
-					err,
-				);
+			for (const doc of crudResult.docs) {
+				populatedByKey.set(`${collectionName}:${doc.id}`, doc);
 			}
 		}
 
-		// Re-sort by search score to maintain relevance order
-		populatedDocs.sort(
-			(a, b) => (b._search?.score ?? 0) - (a._search?.score ?? 0),
-		);
+		const populatedDocs = searchResults.results.map((result) => {
+			const key = `${result.collection}:${result.recordId}`;
+			const doc = populatedByKey.get(key);
+			const searchMeta = searchMetaMap.get(key);
+			if (!doc || !searchMeta) {
+				throw new Error(`Search hydration rejected candidate "${key}"`);
+			}
+			return {
+				...doc,
+				_collection: result.collection,
+				_search: searchMeta,
+			};
+		});
 
 		return smartResponse(
 			{

@@ -191,6 +191,11 @@ export type AdapterRoutes = {
 			params: { collection: string; id: string },
 			context?: AdapterContext,
 		) => Promise<Response>;
+		purge: (
+			request: Request,
+			params: { collection: string; id: string },
+			context?: AdapterContext,
+		) => Promise<Response>;
 		updateMany: (
 			request: Request,
 			params: { collection: string },

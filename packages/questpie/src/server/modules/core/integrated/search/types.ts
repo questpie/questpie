@@ -1,4 +1,9 @@
+import type { PgTable } from "drizzle-orm/pg-core";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
+
+import type { CollectionBuilderState } from "#questpie/server/collection/builder/types.js";
+import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
+import type { Questpie } from "#questpie/server/config/questpie.js";
 
 // ============================================================================
 // Collection-level searchable config
@@ -57,12 +62,17 @@ export type FacetsConfig = Record<string, FacetFieldConfig>;
  * Search configuration for a collection
  * Defines what data from records gets indexed
  *
- * By default, all collections are indexed using `_title` (or `id` fallback)
- * and auto-generated content from field values.
+ * Collections are indexed only after an explicit `.searchable(...)`
+ * declaration. An empty object enables a title-only projection using `_title`
+ * (or `id` as fallback). Content, metadata, and facets are opt-in because their
+ * projection must be safe for every actor allowed to search the row.
  *
  * @example
  * ```ts
- * // Opt-out of auto-indexing
+ * // Explicitly enable default indexing
+ * collection("posts").searchable({})
+ *
+ * // Explicitly opt out
  * collection("internalLogs").searchable(false)
  *
  * // Custom search config
@@ -106,7 +116,7 @@ export type SearchableConfig = {
 
 	/**
 	 * Extract searchable content from record
-	 * If not provided, auto-generates content as "fieldName: value" pairs
+	 * If not provided, only the collection title is indexed.
 	 * @example content: (record) => extractTextFromJson(record.content)
 	 */
 	content?: (record: any) => string | null;
@@ -279,6 +289,22 @@ export type CollectionAccessFilter = {
 	 * Whether collection uses soft delete
 	 */
 	softDelete?: boolean;
+
+	/**
+	 * Canonical collection state used by the fail-closed WHERE compiler.
+	 * Required by built-in adapters for conditional access predicates.
+	 */
+	state?: CollectionBuilderState;
+
+	/** Collection localization table, when localized access fields are present. */
+	i18nTable?: PgTable | null;
+
+	/** Request context used by relation and localized predicate compilation. */
+	context?: CRUDContext;
+
+	/** App and database used by canonical relation predicate compilation. */
+	app?: Questpie<any>;
+	db?: any;
 };
 
 /**
@@ -311,10 +337,11 @@ export type SearchOptions = {
 	offset?: number;
 
 	/**
-	 * Search mode hint (default: adapter decides)
+	 * Search mode hint (default: "lexical")
 	 * - "lexical": text-based search (FTS, trigram)
 	 * - "semantic": vector/embedding-based search
-	 * - "hybrid": combine lexical + semantic
+	 * - "hybrid": reserved for true lexical + semantic fusion; built-in
+	 *   adapters reject it until that implementation ships
 	 */
 	mode?: SearchMode;
 
@@ -464,24 +491,6 @@ export type SearchMeta = {
 	 * Relevance score from search
 	 */
 	score: number;
-
-	/**
-	 * Highlighted snippets with <mark> tags
-	 */
-	highlights?: {
-		title?: string;
-		content?: string;
-	};
-
-	/**
-	 * Title as stored in search index
-	 */
-	indexedTitle: string;
-
-	/**
-	 * Content preview from search index
-	 */
-	indexedContent?: string;
 };
 
 /**
@@ -489,7 +498,8 @@ export type SearchMeta = {
  */
 export type PopulatedSearchResult<T = any> = T & {
 	/**
-	 * Search-specific metadata (score, highlights, indexed title)
+	 * Search-specific metadata. Index snapshots are intentionally not exposed
+	 * by the hydrated HTTP/client response because they bypass field access.
 	 */
 	_search: SearchMeta;
 };

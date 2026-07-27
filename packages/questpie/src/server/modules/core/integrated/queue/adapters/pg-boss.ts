@@ -1,4 +1,10 @@
-import { type ConstructorOptions, PgBoss } from "pg-boss";
+import { sql } from "drizzle-orm";
+import {
+	fromDrizzle,
+	type ConstructorOptions,
+	PgBoss,
+	type SendOptions,
+} from "pg-boss";
 
 import type {
 	QueueAdapter,
@@ -7,9 +13,22 @@ import type {
 	QueueRunOnceOptions,
 	QueueRunOnceResult,
 } from "../adapter.js";
+import {
+	decodeQueueDispatchEnvelope,
+	encodeQueueDispatchEnvelope,
+} from "../dispatch-envelope.js";
 import type { PublishOptions } from "../types.js";
 
-export type PgBossAdapterOptions = ConstructorOptions;
+export type PgBossAdapterOptions = ConstructorOptions & {
+	/**
+	 * Use the current QUESTPIE Drizzle transaction for Job insertion.
+	 *
+	 * Keep enabled only when pg-boss points at the same PostgreSQL database as
+	 * the application. Set false for a separate pg-boss database; QUESTPIE then
+	 * uses its durable dispatch relay.
+	 */
+	useApplicationTransaction?: boolean;
+};
 
 export class PgBossAdapter implements QueueAdapter {
 	public readonly capabilities = {
@@ -24,9 +43,12 @@ export class PgBossAdapter implements QueueAdapter {
 	private started = false;
 	private createdQueues = new Set<string>();
 	private warnedSingletonNoop = new Set<string>();
+	public readonly transactionalPublishing: boolean;
 
 	constructor(options: PgBossAdapterOptions) {
-		this.boss = new PgBoss(options);
+		const { useApplicationTransaction = true, ...pgBossOptions } = options;
+		this.transactionalPublishing = useApplicationTransaction;
+		this.boss = new PgBoss(pgBossOptions);
 	}
 
 	async start(): Promise<void> {
@@ -54,10 +76,7 @@ export class PgBossAdapter implements QueueAdapter {
 			// on a `standard` queue pg-boss stores the key but never dedupes.
 			// Policies only constrain KEYED jobs, so non-keyed jobs keep full
 			// throughput regardless.
-			await this.boss.createQueue(
-				jobName,
-				policy ? { policy } : undefined,
-			);
+			await this.boss.createQueue(jobName, policy ? { policy } : undefined);
 			this.createdQueues.add(jobName);
 		}
 	}
@@ -84,21 +103,61 @@ export class PgBossAdapter implements QueueAdapter {
 		jobName: string,
 		payload: any,
 		options?: PublishOptions,
+		dispatchId?: string,
 	): Promise<string | null> {
 		await this.start();
 		await this.ensureQueue(jobName, { policy: options?.queuePolicy });
 		this.warnIfSingletonNoop(jobName, options);
 		// PublishOptions closely mirrors pg-boss send options; queuePolicy is
 		// consumed by ensureQueue above, not forwarded to send().
-		const { queuePolicy: _queuePolicy, ...sendOptions } = options ?? {};
-		return this.boss.send(jobName, payload, sendOptions as any);
+		const {
+			queuePolicy: _queuePolicy,
+			idempotencyKey,
+			...sendOptions
+		} = options ?? {};
+		return this.boss.send(
+			jobName,
+			dispatchId
+				? encodeQueueDispatchEnvelope(payload, dispatchId, idempotencyKey)
+				: payload,
+			{
+				...sendOptions,
+				...(dispatchId ? { id: dispatchId } : {}),
+			} satisfies SendOptions,
+		);
+	}
+
+	async publishInTransaction(
+		tx: unknown,
+		jobName: string,
+		payload: unknown,
+		options: PublishOptions | undefined,
+		dispatchId: string,
+	): Promise<string | null> {
+		await this.start();
+		await this.ensureQueue(jobName, { policy: options?.queuePolicy });
+		this.warnIfSingletonNoop(jobName, options);
+		const {
+			queuePolicy: _queuePolicy,
+			idempotencyKey,
+			...sendOptions
+		} = options ?? {};
+		return this.boss.send(
+			jobName,
+			encodeQueueDispatchEnvelope(payload, dispatchId, idempotencyKey),
+			{
+				...sendOptions,
+				id: dispatchId,
+				db: fromDrizzle(tx as Parameters<typeof fromDrizzle>[0], sql),
+			} satisfies SendOptions,
+		);
 	}
 
 	async schedule(
 		jobName: string,
 		cron: string,
 		payload: any,
-		options?: Omit<PublishOptions, "startAfter">,
+		options?: Omit<PublishOptions, "idempotencyKey" | "startAfter">,
 	): Promise<void> {
 		await this.start();
 		await this.ensureQueue(jobName, { policy: options?.queuePolicy });
@@ -133,7 +192,10 @@ export class PgBossAdapter implements QueueAdapter {
 				const arr: any[] = Array.isArray(jobs) ? jobs : jobs ? [jobs] : [];
 				for (const j of arr) {
 					try {
-						await handler({ id: String(j.id), data: j.data });
+						await handler({
+							id: String(j.id),
+							...decodeQueueDispatchEnvelope(j.data, String(j.id)),
+						});
 					} catch (error) {
 						const err =
 							error instanceof Error
@@ -177,6 +239,7 @@ export class PgBossAdapter implements QueueAdapter {
 
 		const batchSize = Math.max(1, options?.batchSize ?? 10);
 		let processed = 0;
+		let firstError: Error | undefined;
 
 		for (const jobName of selectedJobNames) {
 			const handler = handlers[jobName];
@@ -201,11 +264,32 @@ export class PgBossAdapter implements QueueAdapter {
 			const jobs = Array.isArray(fetched) ? fetched : fetched ? [fetched] : [];
 
 			for (const job of jobs) {
-				await handler({ id: String(job.id), data: job.data });
-				processed += 1;
+				const id = String(job.id);
+				try {
+					await handler({
+						id,
+						...decodeQueueDispatchEnvelope(job.data, id),
+					});
+					await this.boss.complete(jobName, id);
+					processed += 1;
+				} catch (error) {
+					const err = error instanceof Error ? error : new Error(String(error));
+					firstError ??= err;
+					try {
+						await this.boss.fail(jobName, id, {
+							message: err.message,
+							stack: err.stack,
+						});
+					} catch {
+						// Continue settling siblings already fetched into this
+						// process. pg-boss will recover this active item through
+						// its lease/expiry path.
+					}
+				}
 			}
 		}
 
+		if (firstError) throw firstError;
 		return { processed };
 	}
 

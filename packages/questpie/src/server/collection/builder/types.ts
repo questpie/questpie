@@ -14,6 +14,7 @@ import type { AppContext } from "#questpie/server/config/app-context.js";
 import type { AccessMode } from "#questpie/server/config/types.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { FieldLocation } from "#questpie/server/fields/types.js";
+import type { CrdtOwnerCapability } from "#questpie/server/modules/core/integrated/crdt/capability.js";
 import type { SearchableConfig } from "#questpie/server/modules/core/integrated/search/types.js";
 
 /**
@@ -107,14 +108,17 @@ export interface UploadOptions {
  */
 export interface CollectionOptions {
 	/**
-	 * Realtime sharing policy. Cross-session sharing is disabled unless this
-	 * resolver returns the same deterministic key for equivalent outputs.
+	 * Realtime sharing policy. Stable principals share only across the same
+	 * server scope, locale, stage, and access mode. Return the same deterministic
+	 * key to explicitly share equivalent output across principals.
 	 */
-	realtime?: {
-		accessCacheKey?: (
-			context: AppContext,
-		) => string | null | undefined | Promise<string | null | undefined>;
-	};
+	realtime?:
+		| false
+		| {
+				accessCacheKey?: (
+					context: AppContext,
+				) => string | null | undefined | Promise<string | null | undefined>;
+		  };
 	/**
 	 * Postgres schema name to place this collection's tables in.
 	 *
@@ -183,10 +187,23 @@ export type RelationType = "one" | "many" | "manyToMany";
 export interface RelationConfig {
 	type: RelationType;
 	collection: string;
+	/**
+	 * Complete discriminator-to-collection mapping for a morphTo relation.
+	 * Purge safety must inspect every entry; `collection` remains the primary
+	 * target used by legacy relation resolution.
+	 */
+	polymorphicTargets?: Array<{
+		discriminator: string;
+		collection?: string;
+		typeField: string;
+		idField: string;
+	}>;
 	/** Array of PgColumn references (new pattern) */
 	fields?: PgColumn[];
 	/** Singular string field name for FK lookup (legacy / f.relation pattern) */
 	field?: string;
+	/** Foreign-key field on the target collection for a hasMany relation. */
+	foreignKey?: string;
 	references: string[];
 	relationName?: string; // For linking corresponding relations
 	onDelete?: "cascade" | "set null" | "restrict" | "no action";
@@ -424,10 +441,11 @@ export type HookContextBase<TData = any> = AppContext & {
 export type HookContext<
 	TData = any,
 	TOriginal = any,
-	TOperation extends "create" | "update" | "delete" | "read" =
+	TOperation extends "create" | "update" | "delete" | "purge" | "read" =
 		| "create"
 		| "update"
 		| "delete"
+		| "purge"
 		| "read",
 > = HookContextBase<TData> & {
 	/**
@@ -496,10 +514,11 @@ export type AccessContext<TData = any, TInput = unknown> = AppContext & {
 export type HookFunction<
 	TData = any,
 	TOriginal = any,
-	TOperation extends "create" | "update" | "delete" | "read" =
+	TOperation extends "create" | "update" | "delete" | "purge" | "read" =
 		| "create"
 		| "update"
 		| "delete"
+		| "purge"
 		| "read",
 > = (ctx: HookContext<TData, TOriginal, TOperation>) => Promise<void> | void;
 
@@ -516,7 +535,7 @@ export type BeforeOperationHook<
 > = HookFunction<
 	TInsert | TUpdate | TSelect,
 	never,
-	"create" | "update" | "delete" | "read"
+	"create" | "update" | "delete" | "purge" | "read"
 >;
 
 /**
@@ -629,6 +648,25 @@ export type AfterDeleteHook<TSelect = any> = (
 ) => Promise<void> | void;
 
 /**
+ * Dedicated irreversible-purge hook context.
+ *
+ * `data` and `original` are the locked soft-deleted preimage. Purge hooks run
+ * inside the purge transaction and are fatal: throwing rolls it back.
+ */
+export type PurgeHookContext<TSelect = any> = HookContextBase<TSelect> & {
+	operation: "purge";
+	original: TSelect;
+};
+
+export type BeforePurgeHook<TSelect = any> = (
+	ctx: PurgeHookContext<TSelect>,
+) => Promise<void> | void;
+
+export type AfterPurgeHook<TSelect = any> = (
+	ctx: PurgeHookContext<TSelect>,
+) => Promise<void> | void;
+
+/**
  * Context passed to workflow transition hooks.
  * Includes the stage transition info alongside standard hook fields.
  */
@@ -665,6 +703,7 @@ export type TransitionHook<TData = any> = (
  * - Create: beforeOperation → beforeValidate → beforeChange → [DB INSERT] → afterChange → afterRead
  * - Update: beforeOperation → beforeValidate → beforeChange → [DB UPDATE] → afterChange → afterRead
  * - Delete: beforeOperation → beforeDelete → [DB DELETE] → afterDelete → afterRead
+ * - Purge: beforeOperation → beforePurge → [DB PURGE] → afterPurge
  * - Read: beforeOperation → beforeRead → [DB SELECT] → afterRead
  *
  * @template TSelect - The complete record type (after read)
@@ -831,6 +870,19 @@ export interface CollectionHooks<TSelect = any, TInsert = any, TUpdate = any> {
 	afterDelete?: AfterDeleteHook<TSelect>[] | AfterDeleteHook<TSelect>;
 
 	/**
+	 * Runs inside the purge transaction before framework-owned rows are
+	 * physically removed. Throwing aborts the purge.
+	 */
+	beforePurge?: BeforePurgeHook<TSelect>[] | BeforePurgeHook<TSelect>;
+
+	/**
+	 * Runs inside the purge transaction after physical removal and before
+	 * commit. Throwing rolls the complete purge back. External side effects
+	 * belong in `onAfterCommit`.
+	 */
+	afterPurge?: AfterPurgeHook<TSelect>[] | AfterPurgeHook<TSelect>;
+
+	/**
 	 * Runs before a workflow stage transition (transitionStage).
 	 * Throw to abort the transition.
 	 *
@@ -943,6 +995,12 @@ export interface CollectionAccess<TSelect = any, TInsert = any, TUpdate = any> {
 	create?: AccessRule<undefined, TSelect, TInsert>;
 	update?: RowAccessRule<TSelect, TSelect, TUpdate>;
 	delete?: RowAccessRule<TSelect, TSelect>;
+	/**
+	 * Separate authority for irreversible removal of an already soft-deleted
+	 * record. Resolution is collection `purge`, app `defaultAccess.purge`,
+	 * then deny. It never falls back to delete or authenticated-session access.
+	 */
+	purge?: RowAccessRule<TSelect, TSelect>;
 	/**
 	 * Access rule for workflow stage transitions.
 	 * Falls back to `update` if not specified.
@@ -1168,9 +1226,9 @@ export interface CollectionBuilderState {
 	access: CollectionAccessStorage;
 	/**
 	 * Search indexing configuration.
-	 * - undefined: auto-index with defaults (title + auto-generated content)
+	 * - undefined: not indexed
 	 * - false: explicitly disable indexing
-	 * - SearchableConfig: custom indexing configuration
+	 * - SearchableConfig: explicitly enable indexing
 	 */
 	searchable: SearchableConfig | false | undefined;
 	validation: ValidationSchemas | undefined;
@@ -1185,6 +1243,8 @@ export interface CollectionBuilderState {
 	 * for this collection including CRUD methods and HTTP routes.
 	 */
 	upload: UploadOptions | undefined;
+	/** Explicit owner-level collaborative aggregate capability. */
+	collaborative: CrdtOwnerCapability<any> | undefined;
 	/**
 	 * Field definitions from Field Builder.
 	 * Stores the Field objects for validation, introspection, and localization.
@@ -1254,6 +1314,7 @@ export type EmptyCollectionState<
 	validation: undefined;
 	output: undefined;
 	upload: undefined;
+	collaborative: undefined;
 	fieldDefinitions: {};
 	"~fieldTypes": TFieldTypes;
 };

@@ -144,6 +144,14 @@ type ExtractInputObject<TFieldDefs extends Record<string, any>> = Prettify<
 	}
 >;
 
+type CrdtManagedFieldKeys<TFieldDefs extends Record<string, any>> = {
+	[K in keyof TFieldDefs]: TFieldDefs[K] extends {
+		readonly _: { crdt: { format: "text" | "set" } };
+	}
+		? K
+		: never;
+}[keyof TFieldDefs];
+
 /**
  * Extract output types from field definitions.
  * Maps each field to its output type from $types.output.
@@ -200,7 +208,14 @@ type InferCollectionInsert<
 type InferCollectionUpdate<
 	TMainTable extends PgTable,
 	TFieldDefs extends Record<string, any>,
-> = Prettify<Partial<InferCollectionInsert<TMainTable, TFieldDefs>>>;
+> = Prettify<
+	Partial<
+		Omit<
+			InferCollectionInsert<TMainTable, TFieldDefs>,
+			CrdtManagedFieldKeys<TFieldDefs>
+		>
+	>
+>;
 
 /**
  * Legacy select type for raw Drizzle columns (fieldDefinitions is undefined).
@@ -462,6 +477,33 @@ function getLocalizedFieldMode(
 	}
 	return null;
 }
+
+type HasSoftDeleteOption<TOptions> = "softDelete" extends keyof TOptions
+	? true extends TOptions["softDelete"]
+		? true
+		: false
+	: false;
+
+type GeneratedCollectionCRUD<TState extends CollectionBuilderState> = Omit<
+	CRUD<
+		CollectionSelect<TState>,
+		CollectionInsert<TState>,
+		CollectionUpdate<TState>,
+		TState["relations"]
+	>,
+	"purgeById"
+> &
+	(HasSoftDeleteOption<TState["options"]> extends true
+		? Pick<
+				CRUD<
+					CollectionSelect<TState>,
+					CollectionInsert<TState>,
+					CollectionUpdate<TState>,
+					TState["relations"]
+				>,
+				"purgeById"
+			>
+		: {});
 
 /**
  * Final Collection class - the result of build()
@@ -924,11 +966,19 @@ export class Collection<TState extends CollectionBuilderState> {
 				Object.assign(constraints, indexesFn({ table: t as any }));
 			}
 
-			// Auto-index on deletedAt for soft delete
+			// Retention scans use a stable `(deletedAt, id)` keyset and never
+			// offset through an unbounded soft-delete set. Keep the original
+			// deletedAt index because normal reads filter active rows with
+			// `deletedAt IS NULL`.
 			if (this.state.options.softDelete) {
-				constraints[`${tableName}_deleted_at_idx`] = index().on(
+				constraints[`${tableName}_deleted_at_index`] = index().on(
 					(t as any).deletedAt,
 				);
+				constraints[`${tableName}_deleted_at_retention_idx`] = index(
+					`${tableName}_deleted_at_retention_idx`,
+				)
+					.on((t as any).deletedAt, (t as any).id)
+					.where(sql`${(t as any).deletedAt} IS NOT NULL`);
 			}
 
 			return Object.values(constraints);
@@ -1301,15 +1351,7 @@ export class Collection<TState extends CollectionBuilderState> {
 	/**
 	 * Generate CRUD operations (Drizzle RQB v2-like)
 	 */
-	generateCRUD(
-		db: any,
-		app?: any,
-	): CRUD<
-		CollectionSelect<TState>,
-		CollectionInsert<TState>,
-		CollectionUpdate<TState>,
-		TState["relations"]
-	> {
+	generateCRUD(db: any, app?: any): GeneratedCollectionCRUD<TState> {
 		const crud = new CRUDGenerator(
 			this.state,
 			this.table,
@@ -1327,12 +1369,7 @@ export class Collection<TState extends CollectionBuilderState> {
 			app,
 		);
 
-		return crud.generate() as CRUD<
-			CollectionSelect<TState>,
-			CollectionInsert<TState>,
-			CollectionUpdate<TState>,
-			TState["relations"]
-		>;
+		return crud.generate() as unknown as GeneratedCollectionCRUD<TState>;
 	}
 	// ...
 

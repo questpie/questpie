@@ -7,6 +7,7 @@ import _modules from "../modules";
 
 // ── Module entity-name key sets (distributive `keyof`) ─────
 type _ModuleCollectionsKeyNames = (typeof _modules)[number] extends infer M ? M extends { collections: infer C } ? keyof C & string : never : never;
+type _ModuleChannelsKeyNames = (typeof _modules)[number] extends infer M ? M extends { channels: infer C } ? keyof C & string : never : never;
 type _ModuleGlobalsKeyNames = (typeof _modules)[number] extends infer M ? M extends { globals: infer C } ? keyof C & string : never : never;
 type _ModuleJobsKeyNames = (typeof _modules)[number] extends infer M ? M extends { jobs: infer C } ? keyof C & string : never : never;
 type _ModuleRoutesKeyNames = (typeof _modules)[number] extends infer M ? M extends { routes: infer C } ? keyof C & string : never : never;
@@ -19,6 +20,7 @@ type _ModuleBlocksKeyNames = (typeof _modules)[number] extends infer M ? M exten
 declare global {
 	namespace Questpie {
 		interface CollectionKeys extends Record<_ModuleCollectionsKeyNames, unknown> {}
+		interface ChannelKeys extends Record<_ModuleChannelsKeyNames, unknown> {}
 		interface GlobalKeys extends Record<_ModuleGlobalsKeyNames, unknown> {}
 		interface JobKeys extends Record<_ModuleJobsKeyNames, unknown> {}
 		interface RouteKeys extends Record<_ModuleRoutesKeyNames, unknown> {}

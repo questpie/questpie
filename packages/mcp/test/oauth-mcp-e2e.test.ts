@@ -15,7 +15,7 @@
  *  (a) External MCP client bounded by `scopes ∩ RBAC` — BOTH narrowing
  *      directions (scope-narrowed AND RBAC-narrowed) plus out-of-scope denied at
  *      call time.
- *  (b) stdio trusted `system` worker unchanged — full access, no OAuth.
+ *  (b) explicitly trusted stdio maintenance — full access, no OAuth.
  *
  * ── Real generated catalog (MO11) ──
  * The provider's *granular* per-resource scope catalog
@@ -290,6 +290,30 @@ describe("MO13 end-to-end OAuth MCP flow + system mode", () => {
 		}
 	});
 
+	it("rejects an OAuth scope for an app entity omitted from the MCP catalog", async () => {
+		const setup = await setupApp();
+		try {
+			const response = await setup.app.auth.handler(
+				new Request(`${AUTH_BASE}/oauth2/register`, {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						redirect_uris: [REDIRECT_URI],
+						client_name: "Overbroad MCP Client",
+						token_endpoint_auth_method: "none",
+						grant_types: ["authorization_code"],
+						response_types: ["code"],
+						scope: "openid collections:user:read",
+					}),
+				}),
+			);
+
+			expect(response.status).toBe(400);
+		} finally {
+			await setup.cleanup();
+		}
+	});
+
 	async function setupApp() {
 		const setup = await buildMockApp(
 			{
@@ -326,8 +350,26 @@ describe("MO13 end-to-end OAuth MCP flow + system mode", () => {
 					mcp: {
 						crud: {
 							collections: {
-								posts: { read: true, write: true, delete: true },
-								lockedNotes: { read: true, write: true, delete: true },
+								posts: {
+									operations: {
+										list: true,
+										count: true,
+										get: true,
+										create: true,
+										update: true,
+										delete: true,
+									},
+								},
+								lockedNotes: {
+									operations: {
+										list: true,
+										count: true,
+										get: true,
+										create: true,
+										update: true,
+										delete: true,
+									},
+								},
 							},
 						},
 					},
@@ -535,14 +577,15 @@ describe("MO13 end-to-end OAuth MCP flow + system mode", () => {
 		}
 	});
 
-	// ── (b) stdio system worker: unchanged, full access, no OAuth ──
+	// ── (b) explicitly trusted stdio maintenance: full access, no OAuth ──
 
-	it("stdio trusted system worker retains full access with NO OAuth (system mode unchanged)", async () => {
+	it("stdio trusted maintenance retains full access with NO OAuth", async () => {
 		const { app, cleanup } = await setupApp();
 		try {
-			// No request, no token — stdio derives accessMode "system", bypassing both
-			// the RBAC gate and the scope gate.
-			const server = await createMcpServer(app, { transport: "stdio" });
+			const server = await createMcpServer(app, {
+				transport: "stdio",
+				config: { stdio: { trustedMaintenance: true } },
+			});
 			const { client, close } = await connectStdio(server);
 			try {
 				const names = (await client.listTools()).tools

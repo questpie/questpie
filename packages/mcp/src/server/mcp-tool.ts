@@ -38,19 +38,20 @@ class McpToolBuilder<
  * `config` mirrors the MCP tool contract: `inputSchema`/`outputSchema` (Zod),
  * `title`/`description`/`annotations` for discovery, plus the two QUESTPIE
  * authorization hooks that compose exactly like the built-in tools:
- * - `access` — an {@link McpAccessRule} run against the caller's transport /
+ * - `access` — required explicit opt-in and an {@link McpAccessRule} run against the caller's transport /
  *   accessMode / session (and, for an OAuth caller, its scopes). Same RBAC-style
  *   gate the CRUD tools use.
  * - `scopes` — the OAuth scopes an `oauth` caller must hold ({@link McpToolConfig.scopes}).
  *   Custom tools have no default scope mapping (unlike CRUD, there is no
- *   resource/operation to derive one from), so an omitted value requires no
- *   scope. The shipped scope gate ({@link scopeGateAllows}) enforces this at both
+ *   resource/operation to derive one from), so it is required; use `false` for
+ *   an explicit no-OAuth-scope policy. The shipped scope gate ({@link scopeGateAllows}) enforces this at both
  *   `tools/list` (hidden) and `tools/call` (denied); `system`/`user` callers
  *   carry no scopes and skip it, so the effective bound is always `scopes ∩ RBAC`.
  *
  * @example
  * ```ts
  * export const ping = mcpTool("ops.ping", {
+ *   access: ({ session }) => !!session,
  *   description: "Health probe",
  *   inputSchema: z.object({}),
  *   scopes: "routes:ops/ping:invoke", // only OAuth callers holding this scope
@@ -62,7 +63,7 @@ export function mcpTool<
 	TOutputSchema extends z.ZodTypeAny = z.ZodTypeAny,
 >(
 	name: string,
-	config: McpToolConfig<TInputSchema, TOutputSchema> = {},
+	config: McpToolConfig<TInputSchema, TOutputSchema>,
 ): McpToolBuilder<TInputSchema, TOutputSchema> {
 	return new McpToolBuilder(name, config);
 }
@@ -71,7 +72,7 @@ export function isMcpTool(value: unknown): value is McpToolDefinition {
 	return (
 		!!value &&
 		typeof value === "object" &&
-		(value as { __brand?: unknown }).__brand === "mcpTool" &&
+		(value as { __brand?: unknown })["__brand"] === "mcpTool" &&
 		typeof (value as { handler?: unknown }).handler === "function"
 	);
 }

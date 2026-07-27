@@ -6,7 +6,9 @@ description: Run untrusted or dynamically-authored code behind a real resource-a
 The **sandbox adapter** enforces the isolated mode described in [Sandboxed code](/docs/concepts/sandboxed-code). `@questpie/sandbox` runs each guest in a fresh Deno subprocess with bounded memory, restricted permissions, scoped network and import allowlists, and validated egress.
 
 <Callout type="info" title="Prerequisites">
-  Start with [Sandboxed code](/docs/concepts/sandboxed-code) for execution modes, capabilities, brokered access, and lifecycle. This page covers the Deno supervisor, deployment, security layers, and platform limits. [`@questpie/ai`](/docs/integrations/ai) has a separate host execution model.
+	Start with [Sandboxed code](/docs/concepts/sandboxed-code) for execution
+	modes, capabilities, brokered access, and lifecycle. This page covers the Deno
+	supervisor, deployment, security layers, and platform limits.
 </Callout>
 
 ## What it does
@@ -25,21 +27,26 @@ import { httpSandboxAdapter } from "@questpie/sandbox/adapter";
 import { runtimeConfig } from "questpie/app";
 
 export default runtimeConfig({
-  executor: {
-    // The isolated engine for `isolation: "sandboxed"` runs
-    sandboxed: httpSandboxAdapter({
-      url: process.env.SANDBOX_URL ?? "http://127.0.0.1:8787",
-    }),
-    // Where the guest's brokered capability calls are relayed (server-to-server)
-    brokerUrl: process.env.SANDBOX_BROKER_URL ?? "http://127.0.0.1:3000/api/sandbox/rpc",
-  },
+	executor: {
+		// The isolated engine for `isolation: "sandboxed"` runs
+		sandboxed: httpSandboxAdapter({
+			url: process.env.SANDBOX_URL ?? "http://127.0.0.1:8787",
+		}),
+		// Where the guest's brokered capability calls are relayed (server-to-server)
+		brokerUrl:
+			process.env.SANDBOX_BROKER_URL ?? "http://127.0.0.1:3000/api/sandbox/rpc",
+	},
 });
 ```
 
 `httpSandboxAdapter(options?)` takes `url` (defaults to `SANDBOX_URL`; `run` throws if unset), `fetchTimeoutMs?` (default = guest `timeoutMs + 10s`), `validateEgress?` (default `true`), and a custom `fetch?`.
 
 <Callout type="warn" title="Unconfigured means disabled">
-If you never set `executor.sandboxed`, `ctx.executor.run({ isolation: "sandboxed" })` is a no-op boundary, sandboxed execution is opt-in. `isolation: "trusted"` uses core's in-process adapter instead (no isolation, for code you wrote).
+If you never set `executor.sandboxed`,
+`ctx.executor.run({ isolation: "sandboxed" })` throws before executing anything.
+Sandboxed execution is opt-in and fails closed until an adapter is configured.
+`isolation: "trusted"` uses core's in-process adapter instead (no isolation,
+for code you wrote).
 </Callout>
 
 ## Running the supervisor
@@ -61,12 +68,12 @@ Guest source must `export default` a `function(input)`. Grant only the hosts it 
 
 ```ts
 const result = await ctx.executor.run({
-  source: `export default async function (input) {
+	source: `export default async function (input) {
     const res = await fetch("https://api.example.com/data?since=" + input.since);
     return { count: (await res.json()).length };
   }`,
-  capabilities: { net: ["api.example.com"], timeoutMs: 5_000, memoryMb: 128 },
-  input: { since: "2026-01-01" },
+	capabilities: { net: ["api.example.com"], timeoutMs: 5_000, memoryMb: 128 },
+	input: { since: "2026-01-01" },
 });
 // → { ok: true, output: { count: 42 }, logs: [...], ms: 312 }
 ```
@@ -77,11 +84,11 @@ To give a guest scoped access to your app (collections, files, services), pass `
 
 ```ts
 const result = await executor.run({
-  source: buildEndpointEntrySource(entrySource, fn),
-  isolation: "sandboxed",
-  capabilities,
-  appBindings: target, // capability-scoped surface
-  brokerUrl, // from config
+	source: buildEndpointEntrySource(entrySource, fn),
+	isolation: "sandboxed",
+	capabilities,
+	appBindings: target, // capability-scoped surface
+	brokerUrl, // from config
 });
 // inside the guest:
 //   const posts = await questpie.collections.posts.find({ limit: 10 });
@@ -95,9 +102,19 @@ const result = await executor.run({
 - **Brokered `fetch` on the bindings path.** When `appBindings` is present the guest runs at `--allow-net=[]` (no sockets at all) and its native `fetch` is replaced by a shim that RPCs `http.fetch` over stdio to the supervisor, which relays to your broker carrying a per-run token in `x-questpie-sandbox-token`. The token is supervisor-only, and the broker (`/api/sandbox/rpc`) re-checks the run's capabilities on every call.
 
 <Callout type="warn" title="Honest limitations">
-  - **DNS-rebind pinning is not implemented.** Egress validation happens at manifest time; the exact socket IP is not re-pinned across redirects (`TODO(security)`). The brokered path is safe because the guest has no sockets at all (`--allow-net=[]`); a raw `net`-granted run is validated once, not continuously. - **The
-  kernel egress firewall is Linux-only and belt-and-suspenders.** On Linux with `unshare`/`nft`/`ip` and the right capabilities, each run also gets a per-run network namespace + nftables ruleset (default-DROP, private CIDRs dropped, public allowlist accepted). Off Linux, or when those tools/caps are missing, it is
-  **gracefully absent** (logs a notice and runs without it). Disable with `SANDBOX_DISABLE_NETNS_FIREWALL=1`. The ruleset logic is unit-tested; the actual kernel drop is only verified on a real Linux worker. Treat it as a second layer, the subprocess permission flags are the primary boundary.
+	- **DNS-rebind pinning is not implemented.** Egress validation happens at
+	manifest time; the exact socket IP is not re-pinned across redirects
+	(`TODO(security)`). The brokered path is safe because the guest has no sockets
+	at all (`--allow-net=[]`); a raw `net`-granted run is validated once, not
+	continuously. - **The kernel egress firewall is Linux-only and
+	belt-and-suspenders.** On Linux with `unshare`/`nft`/`ip` and the right
+	capabilities, each run also gets a per-run network namespace + nftables
+	ruleset (default-DROP, private CIDRs dropped, public allowlist accepted). Off
+	Linux, or when those tools/caps are missing, it is **gracefully absent** (logs
+	a notice and runs without it). Disable with
+	`SANDBOX_DISABLE_NETNS_FIREWALL=1`. The ruleset logic is unit-tested; the
+	actual kernel drop is only verified on a real Linux worker. Treat it as a
+	second layer, the subprocess permission flags are the primary boundary.
 </Callout>
 
 ## How it fits

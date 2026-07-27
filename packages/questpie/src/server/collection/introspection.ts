@@ -538,6 +538,7 @@ export interface CollectionAccessInfo {
 		read: AccessResult;
 		update: AccessResult;
 		delete: AccessResult;
+		purge: AccessResult;
 	};
 }
 
@@ -1226,6 +1227,8 @@ async function evaluateCollectionAccess(
 	const services = extractAppServices(app, {
 		db: context.db,
 		session: context.session,
+		principal: context.principal,
+		actor: context.actor,
 	});
 	const accessContext: AccessContext = {
 		...services,
@@ -1249,6 +1252,11 @@ async function evaluateCollectionAccess(
 			access?.delete ?? appDefaultAccess?.delete,
 			accessContext,
 		),
+		purge: state.options.softDelete
+			? evaluatePurgeIntrospectionAccess(
+					access?.purge ?? appDefaultAccess?.purge,
+				)
+			: { allowed: false },
 	};
 
 	// Determine visibility and level
@@ -1295,6 +1303,19 @@ export async function resolveIntrospectionAccess(
 ): Promise<boolean> {
 	const access = await evaluateCollectionAccess(state, context, app);
 	return access.visible;
+}
+
+/**
+ * Purge is row-aware and default-deny. Introspection must not invoke its
+ * function with fabricated row data: a function means the capability is
+ * conditional, while actual authorization happens against the locked row.
+ */
+function evaluatePurgeIntrospectionAccess(
+	rule: RowAccessRule | undefined,
+): AccessResult {
+	if (rule === undefined || rule === false) return { allowed: false };
+	if (rule === true) return { allowed: true };
+	return { allowed: "filtered" };
 }
 
 /**

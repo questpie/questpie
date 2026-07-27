@@ -43,6 +43,7 @@ const whoamiTool = mcpTool("custom.whoami", {
 	description: "Return the authenticated user id.",
 	inputSchema: z.object({}),
 	access: ({ ctx }) => typeof ctx.session?.user?.id === "string",
+	scopes: false,
 }).handler(async ({ ctx }) => ({
 	structuredContent: { userId: ctx.session?.user.id },
 	content: [{ type: "text", text: ctx.session?.user.id ?? "" }],
@@ -162,7 +163,9 @@ describe("MO9 HTTP MCP route auth gate", () => {
 		await runTestDbMigrations(setup.app);
 		const handler = createFetchHandler(setup.app);
 
-		const response = await handler(toolsListRequest(`${BASE_URL}/mcp`));
+		const response = await handler(
+			toolsListRequest("https://cms.example.com:8443/mcp"),
+		);
 
 		expect(response!.status).toBe(401);
 		expect(response!.headers.get("WWW-Authenticate")).toBe(
@@ -190,7 +193,14 @@ describe("MO9 HTTP MCP route auth gate", () => {
 	});
 
 	it("answers a CORS OPTIONS preflight with 204 and CORS headers (not 401)", async () => {
-		const setup = await buildMockApp({ modules: [mcpModule] });
+		const setup = await buildMockApp({
+			modules: [mcpModule],
+			config: {
+				mcp: {
+					http: { allowedOrigins: ["https://client.example.com"] },
+				},
+			},
+		});
 		cleanup = setup.cleanup;
 		await runTestDbMigrations(setup.app);
 		const handler = createFetchHandler(setup.app);
@@ -198,7 +208,10 @@ describe("MO9 HTTP MCP route auth gate", () => {
 		const response = await handler(
 			new Request(`${BASE_URL}/mcp`, {
 				method: "OPTIONS",
-				headers: { origin: "https://client.example.com" },
+				headers: {
+					origin: "https://client.example.com",
+					"access-control-request-method": "POST",
+				},
 			}),
 		);
 

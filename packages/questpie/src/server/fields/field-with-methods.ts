@@ -18,7 +18,11 @@ import type { ZodType } from "zod";
 
 import type { I18nText } from "#questpie/shared/i18n/types.js";
 
-import type { ArrayFieldState, FieldState } from "./field-class-types.js";
+import type {
+	ArrayFieldState,
+	CrdtFieldConfig,
+	FieldState,
+} from "./field-class-types.js";
 import type { Field } from "./field-class.js";
 import type { OperatorSetDefinition } from "./operators/types.js";
 import type { FieldAccess, FieldHooks, ReferentialAction } from "./types.js";
@@ -136,11 +140,18 @@ type FieldTypeMethodsWrapped<
 		: TMethods[K];
 };
 
+type CrdtFieldMethodWrapped<TState extends FieldState, TMethods> = {
+	crdt<const TConfig extends CrdtFieldConfig>(
+		config: TConfig,
+	): FieldWithMethods<TState & { crdt: TConfig }, TMethods>;
+};
+
 export type FieldWithMethods<TState extends FieldState, TMethods> =
 	// Method override maps must come BEFORE Field<TState> in the intersection.
 	// TypeScript resolves method calls on intersections using the FIRST matching
 	// overload, so placing the override maps first ensures the re-wrapped return
 	// types are used rather than Field<TState>'s own return types.
-	FieldCommonMethodsWrapped<TState, TMethods> &
+	CrdtFieldMethodWrapped<TState, TMethods> &
+		FieldCommonMethodsWrapped<TState, TMethods> &
 		FieldTypeMethodsWrapped<TState, TMethods> &
 		Field<TState>;

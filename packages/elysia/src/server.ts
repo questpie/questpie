@@ -80,19 +80,17 @@ export function questpieElysia(
 		requestLogging: config.requestLogging,
 	});
 
-	const server = new Elysia({ prefix: basePath, name: "questpie" }).all(
-		"/*",
-		async ({ request }) => {
-			const response = await handler(request);
-			return (
-				response ??
-				new Response(JSON.stringify({ error: "Not found" }), {
-					status: 404,
-					headers: { "Content-Type": "application/json" },
-				})
-			);
-		},
-	);
+	const server = new Elysia({ prefix: basePath, name: "questpie" });
+	server.all("/*", async ({ request }) => {
+		const response = await handler(request);
+		return (
+			response ??
+			new Response(JSON.stringify({ error: "Not found" }), {
+				status: 404,
+				headers: { "Content-Type": "application/json" },
+			})
+		);
+	});
 
 	return server;
 }

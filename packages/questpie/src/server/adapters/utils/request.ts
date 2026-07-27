@@ -5,7 +5,8 @@
  */
 
 import qs from "qs";
-import superjson from "superjson";
+
+import { parseTypedWire } from "#questpie/shared/typed-wire.js";
 
 import type { UploadFile } from "../types.js";
 import { supportsSuperJSON } from "./response.js";
@@ -77,7 +78,7 @@ export const parseRouteBody = async (request: Request) => {
 	const useSuperJSON = supportsSuperJSON(request);
 
 	try {
-		return useSuperJSON ? superjson.parse(text) : JSON.parse(text);
+		return useSuperJSON ? parseTypedWire(text) : JSON.parse(text);
 	} catch {
 		return null;
 	}

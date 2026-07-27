@@ -1,0 +1,98 @@
+---
+title: Client internationalization
+description: Add a typed, framework-neutral locale adapter to any QUESTPIE client, with optional React bindings in a separate entrypoint.
+---
+
+QUESTPIE provides a small client-side internationalization primitive without
+owning your locale preference, catalog storage, or catalog delivery. Your
+application supplies complete catalogs and decides how a locale change is
+persisted.
+
+The universal API is exported from `questpie/client`. It does not import React
+or `@questpie/admin`, so it is safe in browser, server, worker, and non-React
+clients.
+
+```ts
+import { createSimpleI18n } from "questpie/client";
+
+export const i18n = createSimpleI18n({
+	locale: "en",
+	locales: ["en", "sk"] as const,
+	messages: {
+		en: {
+			"nav.home": "Home",
+			"items.count": {
+				one: "{{count}} item",
+				other: "{{count}} items",
+			},
+		},
+		sk: {
+			"nav.home": "Domov",
+			"items.count": {
+				one: "{{count}} položka",
+				other: "{{count}} položiek",
+			},
+		},
+	},
+	fallbackLocale: "en",
+	onLocaleChange(locale) {
+		// Persist the interface preference or trigger your catalog loader here.
+		localStorage.setItem("interface-locale", locale);
+	},
+});
+
+i18n.t("nav.home");
+i18n.t("items.count", { count: 3 });
+i18n.formatDate(new Date());
+i18n.formatNumber(1234.5);
+```
+
+The locale tuple and message keys remain literal types. TypeScript rejects an
+unknown initial or fallback locale, missing or extra locale catalogs, and
+catalogs whose keys differ. The same invariants are checked at runtime before
+an adapter is created, which protects JavaScript callers and data loaded across
+an untyped boundary.
+
+Interpolation only replaces `{{name}}` placeholders and always returns a plain
+string. It does not parse HTML or execute rich messages. Plural selection and
+date, number, relative-time, and locale-name formatting use native `Intl`
+formatters. Formatter caches are bounded per adapter. RTL detection uses the
+base language, so regional locales such as `ar-EG` are handled correctly.
+
+## React bindings
+
+React is an optional peer and lives in the separate `questpie/client-react`
+entrypoint:
+
+```tsx
+import { I18nProvider, useTranslation } from "questpie/client-react";
+
+function Navigation() {
+	const { locale, setLocale, t } = useTranslation();
+
+	return (
+		<nav>
+			<span>{t("nav.home")}</span>
+			<button onClick={() => setLocale(locale === "en" ? "sk" : "en")}>
+				{locale}
+			</button>
+		</nav>
+	);
+}
+
+export function App() {
+	return (
+		<I18nProvider adapter={i18n}>
+			<Navigation />
+		</I18nProvider>
+	);
+}
+```
+
+The provider subscribes through `useSyncExternalStore`, cleans up the
+subscription on unmount, and supplies an SSR snapshot. Initialize the adapter
+with the same locale on the server and during hydration.
+
+`@questpie/admin` uses this same primitive internally. Admin-specific inline
+label resolution remains an Admin concern; it is not part of the universal
+adapter.

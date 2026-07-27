@@ -16,6 +16,7 @@ const config = defineConfig(({ mode }) => ({
 		devtools(),
 		nitro({
 			preset: "bun",
+			plugins: ["./src/questpie-nitro-plugin.ts"],
 		}) as unknown as PluginOption,
 		tailwindcss(),
 		tanstackStart(),

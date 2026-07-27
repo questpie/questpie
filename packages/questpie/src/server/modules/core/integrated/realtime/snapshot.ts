@@ -1,4 +1,7 @@
+import { sql } from "drizzle-orm";
+
 import { PRECHECKED_READ_ACCESS } from "#questpie/server/collection/crud/shared/access-control.js";
+import { rowsOf } from "#questpie/server/db/driver-result.js";
 
 type CollectionFindSnapshotCrud = {
 	find(options: Record<string, unknown>, context: unknown): Promise<unknown>;
@@ -16,10 +19,11 @@ type GlobalSnapshotCrud = {
 	get(options: Record<string, unknown>, context: unknown): Promise<unknown>;
 };
 
-type SnapshotQuery = {
+export type SnapshotQuery = {
 	accessWhere?: true | Record<string, unknown>;
 	where?: Record<string, unknown>;
 	with?: Record<string, unknown>;
+	columns?: Record<string, boolean>;
 	limit?: number;
 	offset?: number;
 	orderBy?: Record<string, "asc" | "desc">;
@@ -37,7 +41,7 @@ export type RealtimeSnapshotTopic =
 			operation: "count";
 			crud: CollectionCountSnapshotCrud;
 	  })
-	| (Pick<SnapshotQuery, "accessWhere" | "with" | "locale"> & {
+	| (Pick<SnapshotQuery, "accessWhere" | "with" | "columns" | "locale"> & {
 			type: "collection";
 			operation: "get";
 			recordId: string;
@@ -48,6 +52,39 @@ export type RealtimeSnapshotTopic =
 			operation: "get";
 			crud: GlobalSnapshotCrud;
 	  });
+
+type WatermarkContext = {
+	db?: {
+		execute(query: any): Promise<any>;
+	};
+};
+
+/** Capture PostgreSQL's visibility watermark before the associated read starts. */
+export async function captureRealtimeWatermark(
+	context: WatermarkContext,
+): Promise<string> {
+	if (!context.db) {
+		throw new Error(
+			"Realtime transaction watermarks require a database context",
+		);
+	}
+	const rows = rowsOf<{ upToDate: unknown }>(
+		await context.db.execute(
+			sql`select pg_snapshot_xmin(pg_current_snapshot())::text as "upToDate"`,
+		),
+	);
+	const value = rows[0]?.upToDate;
+	if (
+		typeof value !== "string" &&
+		typeof value !== "number" &&
+		typeof value !== "bigint"
+	) {
+		throw new Error(
+			"PostgreSQL did not return a realtime transaction watermark",
+		);
+	}
+	return String(value);
+}
 
 /** Compute one authorized snapshot without knowing how its bytes are delivered. */
 export function computeRealtimeSnapshot(
@@ -72,6 +109,7 @@ export function computeRealtimeSnapshot(
 					[PRECHECKED_READ_ACCESS]: topic.accessWhere,
 					where: { id: topic.recordId },
 					with: topic.with,
+					columns: topic.columns,
 					locale: topic.locale,
 				},
 				context,
@@ -83,6 +121,7 @@ export function computeRealtimeSnapshot(
 				[PRECHECKED_READ_ACCESS]: topic.accessWhere,
 				where: topic.where,
 				with: topic.with,
+				columns: topic.columns,
 				limit: topic.limit,
 				offset: topic.offset,
 				orderBy: topic.orderBy,
@@ -97,6 +136,57 @@ export function computeRealtimeSnapshot(
 			[PRECHECKED_READ_ACCESS]: topic.accessWhere,
 			where: topic.where,
 			with: topic.with,
+			columns: topic.columns,
+			locale: topic.locale,
+		},
+		context,
+	);
+}
+
+type RealtimeHydrateTopic = Omit<
+	Extract<RealtimeSnapshotTopic, { type: "collection"; operation: "find" }>,
+	"crud"
+> & {
+	crud: CollectionFindSnapshotCrud & CollectionGetSnapshotCrud;
+};
+
+export function mergeRealtimeWhere(
+	left: Record<string, unknown> | undefined,
+	right: Record<string, unknown>,
+): Record<string, unknown> {
+	return left ? { AND: [left, right] } : right;
+}
+
+/** Hydrate one authoritative row in the topic's projection and locale. */
+export function hydrateRealtimeRow(
+	topic: RealtimeHydrateTopic,
+	recordId: string,
+	context: unknown,
+): Promise<unknown> {
+	return topic.crud.findOne(
+		{
+			[PRECHECKED_READ_ACCESS]: topic.accessWhere,
+			where: mergeRealtimeWhere(topic.where, { id: recordId }),
+			columns: topic.columns,
+			...(topic.with === undefined ? {} : { with: topic.with }),
+			locale: topic.locale,
+		},
+		context,
+	);
+}
+
+/** Hydrate authoritative rows for one delta drain without dropping topic membership. */
+export function hydrateRealtimeRows(
+	topic: RealtimeHydrateTopic,
+	recordIds: string[],
+	context: unknown,
+): Promise<unknown> {
+	return topic.crud.find(
+		{
+			[PRECHECKED_READ_ACCESS]: topic.accessWhere,
+			where: mergeRealtimeWhere(topic.where, { id: { in: recordIds } }),
+			columns: topic.columns,
+			...(topic.with === undefined ? {} : { with: topic.with }),
 			locale: topic.locale,
 		},
 		context,

@@ -11,6 +11,11 @@ This skill builds on questpie-core.
 
 Channels are typed, ordered application-event streams over the realtime runtime. Use them for chat notifications, progress, typing, or presence. The bounded replay ledger is delivery infrastructure, not durable application history; persist events users must retrieve later in a collection.
 
+Ordered events, replay, and presence preserve nested `Date` values over SSE and
+Pusher/Soketi using the same versioned metadata as live queries. ISO-looking
+string fields remain strings. The reserved metadata key and its bytes are part
+of the canonical bounded envelope.
+
 ## Define and generate
 
 ```ts title="channels/chat-room.ts"

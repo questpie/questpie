@@ -5,7 +5,12 @@
  * Designed to work with any i18n library.
  */
 
-import type * as React from "react";
+import type { I18nAdapter as GenericI18nAdapter } from "questpie/client";
+
+export type {
+	I18nProviderProps,
+	UseTranslationResult,
+} from "questpie/client-react";
 
 // ============================================================================
 // Message Registry (Type-Safe Translation Keys)
@@ -47,69 +52,7 @@ type MessageKey = MessageRegistry extends { messages: infer T }
 // Core Adapter Interface
 // ============================================================================
 
-/**
- * I18n Adapter Interface
- *
- * This is the contract that any i18n implementation must fulfill.
- * Designed to be easily implemented by wrapping i18next, react-intl, etc.
- */
-export interface I18nAdapter {
-	/**
-	 * Current UI locale (e.g., "en", "de", "sk")
-	 */
-	readonly locale: string;
-
-	/**
-	 * Available locales
-	 */
-	readonly locales: string[];
-
-	/**
-	 * Translate a key
-	 *
-	 * @param key - Translation key (e.g., "common.save")
-	 * @param params - Interpolation values (e.g., { count: 5 })
-	 */
-	t(key: string, params?: Record<string, unknown>): string;
-
-	/**
-	 * Change the current locale
-	 */
-	setLocale(locale: string): void | Promise<void>;
-
-	/**
-	 * Subscribe to locale changes
-	 *
-	 * @param callback - Called when locale changes
-	 * @returns Unsubscribe function
-	 */
-	onLocaleChange(callback: (locale: string) => void): () => void;
-
-	/**
-	 * Format a date (uses Intl.DateTimeFormat)
-	 */
-	formatDate(date: Date | number, options?: Intl.DateTimeFormatOptions): string;
-
-	/**
-	 * Format a number (uses Intl.NumberFormat)
-	 */
-	formatNumber(value: number, options?: Intl.NumberFormatOptions): string;
-
-	/**
-	 * Format relative time (e.g., "2 days ago")
-	 */
-	formatRelative?(date: Date | number): string;
-
-	/**
-	 * Get display name for a locale (e.g., "en" -> "English")
-	 */
-	getLocaleName(locale: string): string;
-
-	/**
-	 * Check if current locale is RTL
-	 */
-	isRTL(): boolean;
-}
+export type I18nAdapter = GenericI18nAdapter<string, MessageKey>;
 
 // ============================================================================
 // I18nText - For Config Values
@@ -165,45 +108,4 @@ export interface I18nContext {
 	t: I18nAdapter["t"];
 	formatDate: I18nAdapter["formatDate"];
 	formatNumber: I18nAdapter["formatNumber"];
-}
-
-// ============================================================================
-// React Types
-// ============================================================================
-
-/**
- * Props for the I18nProvider component
- */
-export interface I18nProviderProps {
-	/**
-	 * I18n adapter instance (source of truth for UI locale)
-	 */
-	adapter: I18nAdapter;
-
-	/**
-	 * Children to render
-	 */
-	children: React.ReactNode;
-}
-
-/**
- * Return type of useTranslation hook
- */
-export interface UseTranslationResult {
-	/** Current locale */
-	locale: string;
-	/** Available locales */
-	locales: string[];
-	/** Translate function */
-	t: I18nAdapter["t"];
-	/** Change locale */
-	setLocale: I18nAdapter["setLocale"];
-	/** Format date */
-	formatDate: I18nAdapter["formatDate"];
-	/** Format number */
-	formatNumber: I18nAdapter["formatNumber"];
-	/** Get locale display name */
-	getLocaleName: I18nAdapter["getLocaleName"];
-	/** Is RTL locale */
-	isRTL: boolean;
 }

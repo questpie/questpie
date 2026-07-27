@@ -11,6 +11,8 @@ export interface CloudflareQueueEnvelope {
 	jobName: string;
 	payload: unknown;
 	options?: PublishOptions;
+	dispatchId?: string;
+	idempotencyKey?: string;
 }
 
 export interface CloudflareQueueBinding {
@@ -38,8 +40,9 @@ export interface CloudflareQueuesAdapterOptions {
 	/**
 	 * Cloudflare Queues producer binding.
 	 *
-	 * `send()` does not expose a stable message id, so publish() returns `null`
-	 * when this form is used.
+	 * `send()` does not expose a physical message id, so the adapter method
+	 * returns `null`. The public Queue client still returns its logical
+	 * `dispatchId`.
 	 */
 	queue?: CloudflareQueueBindingInput;
 
@@ -65,6 +68,12 @@ function defaultDecode(body: unknown): CloudflareQueueEnvelope | null {
 		jobName: maybeEnvelope.jobName,
 		payload: maybeEnvelope.payload,
 		options: maybeEnvelope.options as PublishOptions | undefined,
+		...(typeof maybeEnvelope.dispatchId === "string"
+			? { dispatchId: maybeEnvelope.dispatchId }
+			: {}),
+		...(typeof maybeEnvelope.idempotencyKey === "string"
+			? { idempotencyKey: maybeEnvelope.idempotencyKey }
+			: {}),
 	};
 }
 
@@ -164,10 +173,19 @@ export class CloudflareQueuesAdapter implements QueueAdapter {
 		jobName: string,
 		payload: unknown,
 		options?: PublishOptions,
+		dispatchId?: string,
 	): Promise<string | null> {
 		try {
 			return await this.enqueue(
-				{ jobName, payload, options },
+				{
+					jobName,
+					payload,
+					options,
+					...(dispatchId ? { dispatchId } : {}),
+					...(options?.idempotencyKey
+						? { idempotencyKey: options.idempotencyKey }
+						: {}),
+				},
 				toSendOptions(options),
 			);
 		} catch (error) {
@@ -202,7 +220,7 @@ export class CloudflareQueuesAdapter implements QueueAdapter {
 							"CloudflareQueuesAdapter failed to decode message envelope.",
 						),
 					);
-					await message.ack();
+					await message.retry();
 					continue;
 				}
 
@@ -213,12 +231,17 @@ export class CloudflareQueuesAdapter implements QueueAdapter {
 							`CloudflareQueuesAdapter missing handler for job "${envelope.jobName}".`,
 						),
 					);
-					await message.ack();
+					await message.retry();
 					continue;
 				}
 
 				try {
-					await handler({ id: message.id, data: envelope.payload });
+					await handler({
+						id: message.id,
+						data: envelope.payload,
+						dispatchId: envelope.dispatchId,
+						idempotencyKey: envelope.idempotencyKey,
+					});
 					await message.ack();
 				} catch (error) {
 					this.notifyError(normalizeError(error));
@@ -226,10 +249,13 @@ export class CloudflareQueuesAdapter implements QueueAdapter {
 					if (
 						envelope.options?.retryLimit !== undefined &&
 						message.attempts !== undefined &&
-						message.attempts >= envelope.options.retryLimit + 1
+						message.attempts === envelope.options.retryLimit + 1
 					) {
-						await message.ack();
-						continue;
+						this.notifyError(
+							new Error(
+								`CloudflareQueuesAdapter retryLimit reached for job "${envelope.jobName}"; Cloudflare max_retries remains the terminal bound, so the message was retried for platform failure metrics or its configured DLQ.`,
+							),
+						);
 					}
 					await message.retry(retryOptions);
 				}

@@ -3,8 +3,14 @@ import { z } from "zod";
 type FieldDefinitionLike = {
 	toZodSchema?: () => unknown;
 	_state?: {
+		type?: unknown;
 		input?: unknown;
 		output?: unknown;
+		notNull?: unknown;
+		isArray?: unknown;
+		minItems?: unknown;
+		maxItems?: unknown;
+		localized?: unknown;
 		nestedFields?: Record<string, unknown>;
 	};
 };
@@ -118,35 +124,107 @@ function applyFieldFlags(
 			markProperty(schema, fieldName, "readOnly");
 		}
 
-		const propertySchema = getProperty(schema, fieldName);
-		if (propertySchema && state.nestedFields) {
-			applyFieldFlags(propertySchema, state.nestedFields, mode);
+		for (const propertySchema of getPropertySchemas(schema, fieldName)) {
+			applyTemporalFieldSchema(propertySchema, state);
+			if (state.nestedFields) {
+				applyFieldFlags(propertySchema, state.nestedFields, mode);
+			}
 		}
 	}
 }
 
-function getProperty(schema: unknown, fieldName: string): unknown {
-	if (!schema || typeof schema !== "object") return undefined;
+function applyTemporalFieldSchema(
+	schema: unknown,
+	state: NonNullable<FieldDefinitionLike["_state"]>,
+): void {
+	if (!schema || typeof schema !== "object" || Array.isArray(schema)) return;
+	const format =
+		state.type === "datetime"
+			? "date-time"
+			: state.type === "date"
+				? "date"
+				: null;
+	if (!format) return;
 
-	const properties = (schema as { properties?: Record<string, unknown> })
-		.properties;
-	return properties?.[fieldName];
+	const target = schema as Record<string, unknown>;
+	const retained = Object.fromEntries(
+		Object.entries(target).filter(
+			([key]) =>
+				key === "title" ||
+				key === "description" ||
+				key === "default" ||
+				key === "examples" ||
+				key === "deprecated" ||
+				key === "readOnly" ||
+				key === "writeOnly" ||
+				key.startsWith("x-") ||
+				(state.isArray === true &&
+					(key === "minItems" || key === "maxItems" || key === "uniqueItems")),
+		),
+	);
+	for (const key of Object.keys(target)) delete target[key];
+	Object.assign(target, retained);
+	if (state.isArray === true) {
+		target.type = state.notNull === true ? "array" : ["array", "null"];
+		target.items = { type: "string", format };
+		if (typeof state.minItems === "number") target.minItems = state.minItems;
+		if (typeof state.maxItems === "number") target.maxItems = state.maxItems;
+	} else {
+		target.type = state.notNull === true ? "string" : ["string", "null"];
+		target.format = format;
+	}
+}
+
+function schemaObjectsWithProperties(
+	schema: unknown,
+	seen = new Set<object>(),
+): Array<{ properties: Record<string, unknown>; required?: unknown }> {
+	if (!schema || typeof schema !== "object" || Array.isArray(schema)) return [];
+	if (seen.has(schema)) return [];
+	seen.add(schema);
+
+	const object = schema as Record<string, unknown>;
+	const containers: Array<{
+		properties: Record<string, unknown>;
+		required?: unknown;
+	}> = [];
+	if (
+		object.properties &&
+		typeof object.properties === "object" &&
+		!Array.isArray(object.properties)
+	) {
+		containers.push(
+			object as {
+				properties: Record<string, unknown>;
+				required?: unknown;
+			},
+		);
+	}
+	for (const keyword of ["anyOf", "oneOf", "allOf"] as const) {
+		const branches = object[keyword];
+		if (!Array.isArray(branches)) continue;
+		for (const branch of branches) {
+			containers.push(...schemaObjectsWithProperties(branch, seen));
+		}
+	}
+	return containers;
+}
+
+function getPropertySchemas(schema: unknown, fieldName: string): unknown[] {
+	return schemaObjectsWithProperties(schema)
+		.map(({ properties }) => properties[fieldName])
+		.filter((property) => property !== undefined);
 }
 
 function removeProperty(schema: unknown, fieldName: string): void {
-	if (!schema || typeof schema !== "object") return;
-
-	const schemaObject = schema as {
-		properties?: Record<string, unknown>;
-		required?: unknown;
-	};
-	if (!schemaObject.properties?.[fieldName]) return;
-
-	delete schemaObject.properties[fieldName];
-	if (Array.isArray(schemaObject.required)) {
-		schemaObject.required = schemaObject.required.filter(
-			(field) => field !== fieldName,
-		);
+	for (const schemaObject of schemaObjectsWithProperties(schema)) {
+		if (!schemaObject.properties[fieldName]) continue;
+		delete schemaObject.properties[fieldName];
+		if (Array.isArray(schemaObject.required)) {
+			schemaObject.required = schemaObject.required.filter(
+				(field) => field !== fieldName,
+			);
+		}
 	}
 }
 
@@ -155,15 +233,9 @@ function markProperty(
 	fieldName: string,
 	flag: "readOnly" | "writeOnly",
 ): void {
-	if (!schema || typeof schema !== "object") return;
-
-	const properties = (schema as { properties?: Record<string, unknown> })
-		.properties;
-	if (!properties?.[fieldName] || typeof properties[fieldName] !== "object")
-		return;
-
-	properties[fieldName] = {
-		...(properties[fieldName] as Record<string, unknown>),
-		[flag]: true,
-	};
+	for (const { properties } of schemaObjectsWithProperties(schema)) {
+		if (!properties[fieldName] || typeof properties[fieldName] !== "object")
+			continue;
+		(properties[fieldName] as Record<string, unknown>)[flag] = true;
+	}
 }

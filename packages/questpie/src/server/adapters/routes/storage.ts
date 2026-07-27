@@ -4,13 +4,14 @@
  * File upload and serving route handlers.
  */
 
+import { and, eq, isNull } from "drizzle-orm";
+import { alias, type PgTable } from "drizzle-orm/pg-core";
 import type { Files } from "files-sdk";
 
 import type { CollectionAccess } from "../../collection/builder/types.js";
-import {
-	executeAccessRule,
-	matchesAccessConditions,
-} from "../../collection/crud/shared/access-control.js";
+import { buildWhereClause } from "../../collection/crud/query-builders/where-builder.js";
+import { executeAccessRule } from "../../collection/crud/shared/access-control.js";
+import { getColumn } from "../../collection/crud/shared/index.js";
 import type { Questpie } from "../../config/questpie.js";
 import type { StorageVisibility } from "../../config/types.js";
 import { ApiError } from "../../errors/index.js";
@@ -46,6 +47,81 @@ const getStorageFromContext = (
 	}
 	return storage as Files;
 };
+
+async function matchesServeAccessWhere(params: {
+	app: Questpie<any>;
+	collection: {
+		table: PgTable;
+		i18nTable?: PgTable | null;
+		state: any;
+	};
+	accessWhere: Record<string, unknown>;
+	recordId: unknown;
+	context: AdapterContext["appContext"];
+}): Promise<boolean> {
+	const { app, collection, accessWhere, recordId, context } = params;
+	const db = context.db ?? app.db;
+	const table = collection.table;
+	const idColumn = getColumn(table, "id");
+	if (!idColumn || recordId === null || recordId === undefined) return false;
+
+	const i18nSource = collection.i18nTable ?? null;
+	const locale = context.locale ?? context.defaultLocale ?? "en";
+	const defaultLocale = context.defaultLocale ?? locale;
+	const needsFallback =
+		!!i18nSource &&
+		context.localeFallback !== false &&
+		locale !== defaultLocale;
+	const i18nCurrentTable = i18nSource
+		? alias(i18nSource, "storage_serve_i18n_current")
+		: null;
+	const i18nFallbackTable =
+		i18nSource && needsFallback
+			? alias(i18nSource, "storage_serve_i18n_fallback")
+			: null;
+
+	const accessPredicate = buildWhereClause(accessWhere as any, {
+		table,
+		state: collection.state,
+		i18nCurrentTable,
+		i18nFallbackTable,
+		context,
+		app,
+		useI18n: !!i18nSource,
+		db,
+		failClosedAccess: true,
+	});
+	if (!accessPredicate) return false;
+
+	let query: any = db.select({ id: idColumn }).from(table);
+	if (i18nCurrentTable) {
+		query = query.leftJoin(
+			i18nCurrentTable,
+			and(
+				eq(getColumn(i18nCurrentTable, "parentId")!, idColumn),
+				eq(getColumn(i18nCurrentTable, "locale")!, locale),
+			),
+		);
+	}
+	if (i18nFallbackTable) {
+		query = query.leftJoin(
+			i18nFallbackTable,
+			and(
+				eq(getColumn(i18nFallbackTable, "parentId")!, idColumn),
+				eq(getColumn(i18nFallbackTable, "locale")!, defaultLocale),
+			),
+		);
+	}
+
+	const predicates = [eq(idColumn, recordId), accessPredicate];
+	if (collection.state.options?.softDelete) {
+		const deletedAt = getColumn(table, "deletedAt");
+		if (deletedAt) predicates.push(isNull(deletedAt));
+	}
+
+	const rows = await query.where(and(...predicates)).limit(1);
+	return rows.length === 1;
+}
 
 const toUint8Array = (chunk: unknown): Uint8Array => {
 	if (chunk instanceof Uint8Array) return chunk;
@@ -355,59 +431,6 @@ export async function storageCollectionServe(
 			app.config.storage?.defaultVisibility ||
 			"public";
 
-		// For private files, verify the signed token first. The token is the
-		// capability mechanism — a serve rule cannot disable it.
-		if (visibility === "private") {
-			if (!token) {
-				return errorResponse(
-					ApiError.unauthorized(
-						"Token required for private files",
-						"upload.tokenRequired",
-					),
-					request,
-					resolved.appContext.locale,
-				);
-			}
-
-			const secret = app.config.secret;
-			if (!secret) {
-				return errorResponse(
-					ApiError.internal(
-						"Storage secret not configured. Set 'secret' in your app config to serve private files.",
-					),
-					request,
-					resolved.appContext.locale,
-				);
-			}
-			const payload = await verifySignedUrlToken(
-				token,
-				secret,
-				params.collection,
-			);
-
-			if (!payload) {
-				return errorResponse(
-					ApiError.unauthorized(
-						"Invalid or expired token",
-						"upload.tokenInvalid",
-					),
-					request,
-					resolved.appContext.locale,
-				);
-			}
-
-			if (payload.key !== key) {
-				return errorResponse(
-					ApiError.unauthorized(
-						"Token does not match requested file",
-						"upload.tokenMismatch",
-					),
-					request,
-					resolved.appContext.locale,
-				);
-			}
-		}
-
 		// Serve access chain: `access.serve` → explicit collection `access.read`
 		// (row-aware, back-compat) → `defaultAccess.serve` → allow. App-level
 		// `defaultAccess.read` is deliberately NOT consulted — it governs the
@@ -427,29 +450,65 @@ export async function storageCollectionServe(
 					app,
 					db: resolved.appContext.db ?? app.db,
 					session: resolved.appContext.session,
+					principal: resolved.appContext.principal,
+					actor: resolved.appContext.actor,
 					locale: resolved.appContext.locale,
 					row: record,
 					request,
+					contextExtensions: resolved.appContext["~contextExtensions"],
 				});
-				const allowed =
-					decision === true ||
-					(typeof decision === "object" &&
-						(await matchesAccessConditions(
-							decision,
-							record as Record<string, any>,
-						)));
+				let allowed = decision === true;
+				if (typeof decision === "object") {
+					try {
+						allowed = await matchesServeAccessWhere({
+							app,
+							collection: collectionConfig,
+							accessWhere: decision,
+							recordId: (record as any).id,
+							context: resolved.appContext,
+						});
+					} catch (error) {
+						app.logger.warn(
+							"[QUESTPIE Storage] Serve access compilation failed closed",
+							{ collection, err: error },
+						);
+						allowed = false;
+					}
+				}
 
 				if (!allowed) {
 					return errorResponse(
-						ApiError.forbidden({
-							operation: "read",
-							resource: collection,
-							reason: "User does not have permission to serve this file",
-						}),
+						ApiError.notFound("File", key),
 						request,
 						resolved.appContext.locale,
 					);
 				}
+			}
+		}
+
+		// A private signed URL is an additional capability gate. All failures
+		// deliberately share the same not-found response as an absent/deleted
+		// row or a denied serve rule, so storage keys are not existence probes.
+		if (visibility === "private") {
+			const secret = app.config.secret;
+			if (!token || !secret) {
+				return errorResponse(
+					ApiError.notFound("File", key),
+					request,
+					resolved.appContext.locale,
+				);
+			}
+			const payload = await verifySignedUrlToken(
+				token,
+				secret,
+				params.collection,
+			);
+			if (!payload || payload.key !== key) {
+				return errorResponse(
+					ApiError.notFound("File", key),
+					request,
+					resolved.appContext.locale,
+				);
 			}
 		}
 

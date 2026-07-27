@@ -35,6 +35,13 @@ bun add @questpie/tanstack-query @tanstack/react-query
 
 ## Setup
 
+Temporal contract: query data from the official client retains `Date` values
+through TanStack Query dehydration and TanStack Start's Seroval hydration.
+TanStack DB snapshot reconciliation does not JSON-clone rows. For a custom
+JSON-only hydration/cache boundary, use a Date-aware serializer; never revive
+every ISO-looking string because date-only and ordinary string fields must stay
+strings.
+
 ### 1. Create the QUESTPIE Client
 
 ```ts title="lib/client.ts"

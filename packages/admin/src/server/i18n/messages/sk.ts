@@ -871,6 +871,7 @@ export default {
 	"audit.action.create": "vytvoril(a)",
 	"audit.action.update": "upravil(a)",
 	"audit.action.delete": "zmazal(a)",
+	"audit.action.purge": "nenávratne zmazal(a)",
 	"audit.action.transition": "zmenil(a) stav",
 	"audit.resourceType.collection": "kolekciu",
 	"audit.resourceType.global": "globálne nastavenie",

@@ -5,7 +5,7 @@
 		"target": "ES2022",
 		"module": "ES2022",
 		"moduleResolution": "bundler",
-		"jsx": "preserve",
+		"jsx": "react-jsx",
 		"esModuleInterop": true,
 		"forceConsistentCasingInFileNames": true,
 		"strict": true,
@@ -20,5 +20,10 @@
 		"src/server/modules/starter/.generated/*.ts",
 		"test/types"
 	],
-	"exclude": ["node_modules", "dist", "test/types/clusters", "test/types/__fullapp__"]
+	"exclude": [
+		"node_modules",
+		"dist",
+		"test/types/clusters",
+		"test/types/__fullapp__"
+	]
 }

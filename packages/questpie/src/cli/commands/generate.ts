@@ -2,6 +2,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 
+import { QUESTPIE_SCHEMA_INTROSPECTION_ENV } from "../../server/db/postgres-version.js";
 import {
 	DrizzleMigrationGenerator,
 	type GenerateMigrationOptions,
@@ -110,8 +111,22 @@ async function generateMigrationInternal(
 		throw new Error(`Config file not found: ${resolvedConfigPath}`);
 	}
 
-	// Load config
-	const cmsConfig = await loadQuestpieConfig(resolvedConfigPath);
+	// Schema generation imports the generated app but must remain database-free.
+	// Runtime startup and migrate:up still execute database preflights normally.
+	const previousSchemaIntrospection =
+		process.env[QUESTPIE_SCHEMA_INTROSPECTION_ENV];
+	process.env[QUESTPIE_SCHEMA_INTROSPECTION_ENV] = "1";
+	let cmsConfig: Awaited<ReturnType<typeof loadQuestpieConfig>>;
+	try {
+		cmsConfig = await loadQuestpieConfig(resolvedConfigPath);
+	} finally {
+		if (previousSchemaIntrospection === undefined) {
+			delete process.env[QUESTPIE_SCHEMA_INTROSPECTION_ENV];
+		} else {
+			process.env[QUESTPIE_SCHEMA_INTROSPECTION_ENV] =
+				previousSchemaIntrospection;
+		}
+	}
 	const app = cmsConfig.app;
 
 	// Get schema from app

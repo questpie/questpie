@@ -6,12 +6,14 @@
 
 export {
 	createAdapterContext,
+	createAdapterContextForOAuthAudience,
 	resolveContext,
 	resolveLocale,
 	resolveSession,
 } from "./context.js";
 export {
 	mcpAudienceForApp,
+	questpieApiAudienceForApp,
 	type ResolvedOAuthPrincipal,
 	resolveOAuthPrincipal,
 } from "./oauth-principal.js";

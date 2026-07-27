@@ -23,11 +23,13 @@ const authors = collection("authors").fields(({ f }) => ({
 	name: f.text(255).required(),
 }));
 
-const news = collection("news").fields(({ f }) => ({
-	title: f.text(255).required(),
-	views: f.number().default(0),
-	author: f.relation("authors").required().relationName("author"),
-}));
+const news = collection("news")
+	.fields(({ f }) => ({
+		title: f.text(255).required(),
+		views: f.number().default(0),
+		author: f.relation("authors").required().relationName("author"),
+	}))
+	.options({ softDelete: true });
 
 const settings = global("settings").fields(({ f }) => ({
 	siteName: f.text(255).required(),
@@ -56,18 +58,33 @@ describe("typed query options proxy", () => {
 		type _authorIsFk = Expect<Equal<PlainDoc["author"], string>>;
 
 		// findOne result is nullable and narrowed the same way
-		const findOne = () =>
-			q.collections.news.findOne({ where: { title: "x" } });
+		const findOne = () => q.collections.news.findOne({ where: { title: "x" } });
 		type OneResult = DataOf<ReturnType<typeof findOne>>;
 		type _nullable = Expect<Equal<null extends OneResult ? true : false, true>>;
-		type _oneTitle = Expect<
-			Equal<NonNullable<OneResult>["title"], string>
-		>;
+		type _oneTitle = Expect<Equal<NonNullable<OneResult>["title"], string>>;
 
 		// global get is narrowed too
 		const getSettings = () => q.globals.settings.get();
 		type Settings = DataOf<ReturnType<typeof getSettings>>;
 		type _siteName = Expect<Equal<Settings["siteName"], string>>;
+
+		// purge stays a separately named, typed by-id mutation
+		type Purge = ReturnType<(typeof q.collections.news)["purgeById"]>;
+		const purge = null as unknown as Purge;
+		type PurgeVariables =
+			NonNullable<typeof purge.mutationFn> extends (
+				variables: infer TVariables,
+				...args: any[]
+			) => any
+				? TVariables
+				: never;
+		type _purgeId = Expect<Equal<PurgeVariables, { id: string }>>;
+		type _hardDeleteHasNoPurge = Expect<
+			Equal<
+				"purgeById" extends keyof typeof q.collections.authors ? true : false,
+				false
+			>
+		>;
 
 		// relation typos in `with` are compile errors (direct-client parity)
 		// @ts-expect-error unknown relation in with must not typecheck
@@ -90,7 +107,8 @@ describe("typed query options proxy", () => {
 			badWith,
 			badColumns,
 			badCollection,
+			() => purge,
 		];
-		expect(builders.length).toBe(7);
+		expect(builders.length).toBe(8);
 	});
 });

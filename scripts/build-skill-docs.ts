@@ -17,6 +17,7 @@
  *   bun run scripts/build-skill-docs.ts --check    # exit 1 if any AGENTS.md is stale (CI gate)
  */
 
+import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -38,6 +39,19 @@ function stripFrontmatter(md: string): string {
 /** Drop the "This skill builds on X." lineage line - noise inside one bundle. */
 function stripLineage(body: string): string {
 	return body.replace(/^This skill builds on [^\n]*\n+/, "");
+}
+
+function formatGeneratedMarkdown(path: string, content: string): string {
+	const result = spawnSync("bun", ["x", "oxfmt", `--stdin-filepath=${path}`], {
+		encoding: "utf8",
+		input: content,
+	});
+	if (result.status !== 0) {
+		throw new Error(
+			`Failed to format ${path}: ${result.stderr || result.stdout}`,
+		);
+	}
+	return result.stdout;
 }
 
 /** Reference filenames in the order they first appear in the SKILL.md body. */
@@ -102,7 +116,10 @@ function buildSkill(skill: string): {
 
 	return {
 		path: join(dir, "AGENTS.md"),
-		content: `${parts.join("\n\n---\n\n")}\n`,
+		content: formatGeneratedMarkdown(
+			join(dir, "AGENTS.md"),
+			`${parts.join("\n\n---\n\n")}\n`,
+		),
 		refs,
 	};
 }

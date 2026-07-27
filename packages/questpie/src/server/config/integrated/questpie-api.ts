@@ -17,6 +17,7 @@ import type {
 } from "#questpie/server/global/crud/types.js";
 import type {
 	AnyCollectionOrBuilder,
+	CollectionHasSoftDelete,
 	CollectionInsert,
 	CollectionState,
 	CollectionUpdate,
@@ -39,6 +40,11 @@ type CollectionHasUpload<TCollection> =
 			? true
 			: false
 		: false;
+
+type CollectionPurgeMethods<TCollection, TSelect, TRelations> =
+	CollectionHasSoftDelete<TCollection> extends true
+		? Pick<CRUD<TSelect, any, any, TRelations>, "purgeById">
+		: {};
 
 /**
  * Build an app-like context from TCollections for field-definition resolution.
@@ -75,7 +81,7 @@ type CollectionCRUD<
 		CollectionUpdate<TCollection>,
 		TRelations
 	>,
-	"find" | "findOne" | "count"
+	"find" | "findOne" | "count" | "purgeById"
 > & {
 	find<TQuery extends FindOptions<TCollection, TApp>>(
 		options?: TQuery,
@@ -96,7 +102,13 @@ type CollectionCRUD<
 export type CollectionAPI<
 	TCollection,
 	TCollections extends Record<string, any>,
+	TDefinition = TCollection,
 > = Omit<CollectionCRUD<TCollection, TCollections>, "upload" | "uploadMany"> &
+	CollectionPurgeMethods<
+		TDefinition,
+		CollectionSelectFromApp<TCollection, AppFromCollections<TCollections>>,
+		CollectionRelationsFromApp<TCollection, AppFromCollections<TCollections>>
+	> &
 	(CollectionHasUpload<TCollection> extends true
 		? UploadMethods<
 				CollectionSelectFromApp<TCollection, AppFromCollections<TCollections>>,
@@ -130,7 +142,8 @@ export class QuestpieAPI<TConfig extends QuestpieConfig = QuestpieConfig> {
 	public get collections(): {
 		[K in keyof TConfig["collections"]]: CollectionAPI<
 			GetCollection<TConfig["collections"], K>,
-			TConfig["collections"]
+			TConfig["collections"],
+			TConfig["collections"][K]
 		>;
 	} {
 		const collectionsProxy = {};
@@ -148,7 +161,8 @@ export class QuestpieAPI<TConfig extends QuestpieConfig = QuestpieConfig> {
 		return collectionsProxy as {
 			[K in keyof TConfig["collections"]]: CollectionAPI<
 				GetCollection<TConfig["collections"], K>,
-				TConfig["collections"]
+				TConfig["collections"],
+				TConfig["collections"][K]
 			>;
 		};
 	}

@@ -173,9 +173,7 @@ describe("PostgresSearchAdapter", () => {
 			// out-of-band (docker-init / managed DB). The test DB ships pg_trgm
 			// so the adapter's trigram index/search works against it.
 			const result = await setup.app.db.execute(
-				sql.raw(
-					"SELECT extname FROM pg_extension WHERE extname = 'pg_trgm'",
-				),
+				sql.raw("SELECT extname FROM pg_extension WHERE extname = 'pg_trgm'"),
 			);
 			const rows = (result as { rows?: unknown[] }).rows ?? result;
 			expect((rows as unknown[]).length).toBe(1);
@@ -376,6 +374,30 @@ describe("PostgresSearchAdapter", () => {
 
 			expect(response.results.length).toBe(1);
 			expect(response.results[0].recordId).toBe("post-1");
+		});
+
+		it("removes stale facets when an updated projection omits them", async () => {
+			await setup.app.search.index({
+				collection: "posts",
+				recordId: "post-1",
+				locale: "en",
+				title: "Faceted Post",
+				facets: [{ name: "category", value: "secret" }],
+			});
+			await setup.app.search.index({
+				collection: "posts",
+				recordId: "post-1",
+				locale: "en",
+				title: "Title-only Post",
+			});
+
+			const response = await setup.app.search.search({
+				query: "",
+				locale: "en",
+				facets: [{ field: "category" }],
+			});
+
+			expect(response.facets?.[0]?.values).toEqual([]);
 		});
 
 		it("should return highlights", async () => {

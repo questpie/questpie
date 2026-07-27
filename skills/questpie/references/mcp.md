@@ -17,20 +17,24 @@ import { mcpConfig } from "@questpie/mcp";
 
 export default mcpConfig({
 	crud: {
-		defaults: {
-			collections: { read: true, write: false, delete: false },
-			globals: { read: true, write: false },
-		},
 		collections: {
-			posts: { read: true, write: true },
-			users: false,
+			posts: {
+				operations: { list: true, get: true, create: true },
+			},
 		},
 		globals: {
-			siteSettings: { read: true, write: true },
+			siteSettings: { operations: { get: true } },
 		},
 	},
 	routes: {
-		exposeAnnotated: true,
+		routes: {
+			"reports/generate": { operations: { execute: true } },
+		},
+	},
+	resources: {
+		collections: { posts: true },
+		globals: { siteSettings: true },
+		routes: { "reports/generate": true },
 	},
 });
 ```
@@ -55,14 +59,10 @@ Generated global tools:
 - `globals.{name}.get`
 - `globals.{name}.update`
 
-Policy order:
-
-1. Transport defaults.
-2. CRUD defaults.
-3. Per-entity override.
-4. QUESTPIE access rules execute last and can still deny.
-
-HTTP is user mode and read-oriented by default. HTTP cannot be made system mode with config or options. Stdio defaults to trusted system mode unless explicitly lowered to user mode.
+There are no transport or CRUD exposure defaults. Omission exposes nothing.
+Each entity name and exact operation must be present under `operations`.
+QUESTPIE access rules execute after the catalog and can still deny. HTTP cannot
+be elevated to system mode.
 
 Use `fields.include` / `fields.exclude` for top-level filtering. It applies to create/update input, CRUD outputs, list docs, global results, and schema resources. Nested relation projection is out of scope for v1.
 
@@ -115,7 +115,11 @@ Scopes are `<resource>:<name>:<verb>`, derived declaratively from the entity - n
 
 Plus two coarse **umbrellas**: `collections:read` and `collections:write`. An umbrella satisfies the matching granular `read`/`write` requirement for the same resource kind (`collections:read` covers `collections:posts:read`). Umbrellas exist for `read`/`write` ONLY - there is deliberately no umbrella for `:delete` or `routes:…:invoke` (least privilege), and `read`/`write` never cross (holding `collections:write` does not satisfy a `:read` requirement).
 
-> The full granular catalog is DERIVED live, not hand-seeded: `buildScopeCatalog` + `applyOAuthScopeCatalog` (`core/integrated/auth/scope-catalog.ts`, wired at `core/services/auth.ts`) emit `collections:<name>:read|write|delete`, `globals:<name>:read|write`, and `routes:<key>:invoke` and union them into `oauthProvider.scopes` at auth-instance build. So a real DCR client CAN request the granular scopes. Nuance: only the umbrellas are advertised in discovery (`advertisedMetadata.scopes_supported`); the granular scopes are grantable but not enumerated there.
+> The OAuth catalog is derived from the exact resolved MCP catalog and contributed
+> through QUESTPIE core's generic `oauthScopeCatalogs` registry. Only explicitly
+> released operations contribute granular scopes or their applicable umbrellas.
+> App entities and operations omitted from MCP are neither grantable nor
+> advertised.
 
 ### Effective Permission = scopes ∩ RBAC
 
@@ -134,8 +138,7 @@ export default mcpConfig({
 	crud: {
 		collections: {
 			posts: {
-				read: true,
-				write: true,
+				operations: { list: true, create: true, update: true, delete: true },
 				// entity-level: every operation needs this
 				requiredScopes: "collections:posts:write",
 				// or per-operation (overrides the entity-level + default)
@@ -146,10 +149,13 @@ export default mcpConfig({
 });
 ```
 
-Custom tools declare their own scope (no default mapping exists for them, so omitting it requires no scope):
+Custom tools declare their own scope. No default mapping exists; use
+`scopes: false` as an explicit no-OAuth-scope policy. Omission keeps the tool
+out of the released catalog:
 
 ```ts
 export default mcpTool("reports.generate", {
+	access: ({ session }) => !!session,
 	inputSchema: z.object({ period: z.string() }),
 	scopes: "routes:reports/generate:invoke",
 }).handler(async ({ input, ctx }) => ({
@@ -165,7 +171,7 @@ Only simple JSON routes are auto-converted:
 - Route has `.schema(...)`.
 - Route is not `.raw()`.
 - Route has `meta.mcp.expose === true`.
-- `routes.exposeAnnotated` is not `false`.
+- Its exact route key has `operations.execute` enabled in `config/mcp.ts`.
 
 ```ts
 route()
@@ -196,7 +202,12 @@ Built-in resources:
 - `questpie://schema/routes`
 - `questpie://schema/routes/{key}`
 
-Resources honor MCP policy and QUESTPIE access visibility. Route resources include input/output JSON Schema when the route has Zod schemas.
+Each exact resource name must be `true` under `resources.collections`,
+`resources.globals`, or `resources.routes`. Resources also require a released
+read/invoke operation, honor call-time MCP policy and QUESTPIE access
+visibility, and use the same field include/exclude policy as tool schemas,
+inputs, and results. Route resources include input/output JSON Schema when the
+route has Zod schemas.
 
 ## Custom Tools
 
@@ -216,25 +227,106 @@ export default mcpTool("generate-report", {
 }));
 ```
 
-Custom tool access is checked during `tools/list` and again during `tools/call`.
+`access` is required. Custom tool access is checked during `tools/list` and
+again during `tools/call`; `access: false` removes the tool from the released
+catalog.
 
 ## Programmatic Servers
 
 Use `createMcpServer(app, { transport: "http", request })` for programmatic HTTP setup. If no `ctx` is passed, the request is preserved through `app.createContext()`.
 
-Use `startStdioServer(app)` for trusted stdio integrations:
+Stdio has no ambient system authority. Bind `startStdioServer()` to an exact
+user-mode context, or explicitly opt a local maintenance process into the
+system bypass:
 
 ```ts
 import { app } from "#questpie";
 import { startStdioServer } from "@questpie/mcp/stdio";
 
-await startStdioServer(app);
+await startStdioServer(app, {
+	config: { stdio: { trustedMaintenance: true } },
+});
 ```
+
+Never enable `trustedMaintenance` for a remote or requester-controlled process.
+
+## Remote Workloads
+
+Remote agent/executor workloads use `createWorkloadMcpServer()`, not HTTP
+request or stdio authority. The factory receives only an opaque envelope,
+consumer-owned authorization and context binding, plus optional audit and
+effect-handoff callbacks. The bound context must remain in `accessMode: "user"`.
+
+Every visible tool declares explicit workload facts:
+
+```ts
+import { createWorkloadMcpServer, mcpTool } from "@questpie/mcp";
+
+const reply = mcpTool("messages.reply", {
+	access: true,
+	scopes: false,
+	inputSchema,
+	workload: {
+		capabilities: ["messages.write"],
+		handoff: "messages.commit",
+	},
+}).handler(handler);
+
+const server = await createWorkloadMcpServer(app, {
+	envelope: opaqueEnvelope,
+	concurrencyKey: tenant.id,
+	authorizer: authorizeWorkload,
+	contextBinder: bindAuthorizedContext,
+	handoff: executeDurableEffect,
+});
+```
+
+Discovery and every call authorize and bind independently. A tool without an
+explicit workload requirement stays hidden. Missing, malformed, expired, or
+non-user authorization fails closed; QUESTPIE does not interpret or persist the
+consumer envelope. `concurrencyKey` is a stable, non-secret consumer or tenant
+identifier: independent servers/ports with the same key share the
+per-principal concurrency bucket, while different keys cannot exhaust one
+another's bucket. Omitting it isolates the bucket to that one boundary instance.
+
+For a trusted in-process subsystem that needs only those explicit custom tools,
+use `createWorkloadMcpToolPort(app, options)` instead of constructing an
+in-memory MCP client/server transport:
+
+```ts
+import { createWorkloadMcpToolPort, mcpPublicErrorCode } from "@questpie/mcp";
+
+const port = createWorkloadMcpToolPort(app, {
+	envelope,
+	concurrencyKey: tenant.id,
+	authorizer,
+	contextBinder,
+	handoff,
+});
+
+const { tools } = await port.listCustomTools({ signal, requestId: runId });
+const result = await port.callCustomTool({
+	name: "messages.reply",
+	input: { body: "Hello" },
+	signal,
+	requestId: runId,
+});
+```
+
+This is deliberately a custom-tool-only port, not a broad in-process MCP
+client: generated CRUD tools, routes, resources, HTTP identity, stdio authority,
+and system mode are absent by construction. Discovery and every call still use
+the released catalog, workload authorizer, context binder, current MCP/RBAC
+access rule, input/output schema validation, shared concurrency/deadline
+budgets, and cancellation. Failures expose only a stable code and correlation
+ID. `mcpPublicErrorCode(error)` reads the stable code from thrown
+list/cancellation errors without inspecting messages or invoking accessors;
+tool-call results carry the equivalent under `_meta["questpie/error"]`.
 
 ## Gotchas
 
 - Add `mcpModule` to static `modules.ts`, then run codegen.
-- HTTP callers are always `user` or `oauth`, never `system` - HTTP cannot be elevated to system mode. External access goes through OAuth (bounded by `scopes ∩ RBAC`), not system mode. Only stdio is `system`.
+- HTTP callers are always `user` or `oauth`, never `system` - HTTP cannot be elevated to system mode. External access goes through OAuth (bounded by `scopes ∩ RBAC`), not system mode. Stdio is also non-system unless a local maintenance process explicitly enables `trustedMaintenance`.
 - Field filtering is top-level only.
 - Raw routes and unannotated routes are not tools.
 - Custom tool results must include `content`; add `structuredContent` for machine-readable output.

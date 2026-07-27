@@ -162,6 +162,7 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 
 	code = generateTemplate({
 		configImportPath: "../questpie.config",
+		appInstanceId: "example:src/questpie/server",
 		discovered: minimalResult(),
 		categories: coreCategories(),
 		singletonFactories: coreSingletonFactories(),
@@ -173,7 +174,7 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 	});
 
 	it("imports createApp from questpie/app", () => {
-		expect(code).toContain("import { createApp");
+		expect(code).toContain("acquireGeneratedApp, createApp");
 		expect(code).toContain('from "questpie/app"');
 	});
 
@@ -264,12 +265,24 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 	});
 
 	it("emits createApp call with modules", () => {
-		expect(code).toContain("_appPromise = createApp(");
+		expect(code).toContain(
+			'acquireGeneratedApp("example:src/questpie/server", () => createApp(',
+		);
 		expect(code).toContain(
 			"export const app = (await _appPromise) as unknown as _AppQuestpie;",
 		);
 		expect(code).toContain("modules: _modules,");
 		expect(code).not.toContain("ModuleDefinition[]");
+	});
+
+	it("shares one app instance across duplicated server bundle chunks", () => {
+		expect(code).toContain(
+			'acquireGeneratedApp("example:src/questpie/server", () => createApp(',
+		);
+		expect(code).toContain("var _appPromise = _appLease.promise;");
+		expect(code).toContain("await _appLease.shutdown();");
+		expect(code).toContain("_hot?.dispose(() => _appLease.release());");
+		expect(code).not.toContain("_runtime.app.url");
 	});
 
 	it("derives session from auth config instead of typeof app", () => {
@@ -362,9 +375,7 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 
 	it("emits createContext helper", () => {
 		expect(code).toContain("export async function createContext(");
-		expect(code).toContain(
-			"return createContextFactory((await _appPromise) as _AppQuestpie)(options);",
-		);
+		expect(code).toContain("return createContextFactory(app)(options);");
 	});
 
 	it("emits factory comment", () => {
@@ -926,7 +937,7 @@ describe("generateTemplate — emails", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		expect(code).toContain("MailerService, Questpie");
+		expect(code).toContain("MailerService, Principal, Questpie");
 		expect(code.match(/\bMailerService\b/g)?.length).toBe(4);
 	});
 

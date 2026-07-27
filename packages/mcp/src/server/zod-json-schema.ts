@@ -71,7 +71,10 @@ export function toJsonSchema(schema: z.ZodTypeAny | undefined) {
 	if (!compatible) return undefined;
 
 	try {
-		return z.toJSONSchema(compatible);
+		// CRUD query schemas intentionally reuse the same bounded condition
+		// schemas across fields and logical levels. Preserve that sharing as
+		// `$defs`/`$ref`; inlining turns a one-field list schema into megabytes.
+		return z.toJSONSchema(compatible, { reused: "ref" });
 	} catch {
 		return undefined;
 	}

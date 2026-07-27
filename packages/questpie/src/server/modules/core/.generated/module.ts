@@ -5,6 +5,7 @@
 // ── Jobs ────────────────────────────────────────────
 import _job_indexRecords from "../jobs/index-records";
 import _job_scheduledTransition from "../jobs/scheduled-transition";
+import _job_storageCleanup from "../jobs/storage-cleanup";
 
 // ── Routes ────────────────────────────────────────────
 import _route_wellKnown_oauthAuthorizationServer from "../routes/.well-known/oauth-authorization-server";
@@ -16,6 +17,7 @@ import _route_collection_id from "../routes/[collection]/[id]";
 import _route_collection_id_DELETE from "../routes/[collection]/[id].delete";
 import _route_collection_id_PATCH from "../routes/[collection]/[id].patch";
 import _route_collection_id_audit from "../routes/[collection]/[id]/audit";
+import _route_collection_id_purge from "../routes/[collection]/[id]/purge";
 import _route_collection_id_restore from "../routes/[collection]/[id]/restore";
 import _route_collection_id_revert from "../routes/[collection]/[id]/revert";
 import _route_collection_id_transition from "../routes/[collection]/[id]/transition";
@@ -34,6 +36,8 @@ import _route_channels_auth_POST from "../routes/channels/auth.post";
 import _route_channels_config from "../routes/channels/config";
 import _route_channels_publish_OPTIONS from "../routes/channels/publish.options";
 import _route_channels_publish_POST from "../routes/channels/publish.post";
+import _route_channels_replay_OPTIONS from "../routes/channels/replay.options";
+import _route_channels_replay_POST from "../routes/channels/replay.post";
 import _route_globals_name from "../routes/globals/[name]";
 import _route_globals_name_PATCH from "../routes/globals/[name].patch";
 import _route_globals_name_audit from "../routes/globals/[name]/audit";
@@ -47,6 +51,8 @@ import _route_jwks from "../routes/jwks";
 import _route_realtime from "../routes/realtime";
 import _route_realtime_auth_POST from "../routes/realtime/auth.post";
 import _route_realtime_config from "../routes/realtime/config";
+import _route_realtime_crdt_exchange_POST from "../routes/realtime/crdt/exchange.post";
+import _route_realtime_crdt_open_POST from "../routes/realtime/crdt/open.post";
 import _route_search from "../routes/search";
 import _route_search_reindex_collection from "../routes/search/reindex/[collection]";
 
@@ -54,6 +60,8 @@ import _route_search_reindex_collection from "../routes/search/reindex/[collecti
 import _svc_auth from "../services/auth";
 import _svc_channels from "../services/channels";
 import _svc_collectionsApi from "../services/collections-api";
+import _svc_crdt from "../services/crdt";
+import _svc_crdtOperations from "../services/crdt-operations";
 import _svc_db from "../services/db";
 import _svc_email from "../services/email";
 import _svc_executor from "../services/executor";
@@ -101,6 +109,7 @@ export type CoreGlobals = Record<never, never>;
 export type CoreJobs = {
 	indexRecords: Omit<typeof _job_indexRecords, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	scheduledTransition: Omit<typeof _job_scheduledTransition, "handler"> & { handler: (args: unknown) => Promise<unknown> };
+	storageCleanup: Omit<typeof _job_storageCleanup, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 };
 
 export type CoreRoutes = {
@@ -113,6 +122,7 @@ export type CoreRoutes = {
 	"[collection]/[id]:DELETE": typeof _route_collection_id_DELETE extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/[id]:DELETE">> : typeof _route_collection_id_DELETE;
 	"[collection]/[id]:PATCH": typeof _route_collection_id_PATCH extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/[id]:PATCH">> : typeof _route_collection_id_PATCH;
 	"[collection]/[id]/audit": typeof _route_collection_id_audit extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/[id]/audit">> : typeof _route_collection_id_audit;
+	"[collection]/[id]/purge": typeof _route_collection_id_purge extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/[id]/purge">> : typeof _route_collection_id_purge;
 	"[collection]/[id]/restore": typeof _route_collection_id_restore extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/[id]/restore">> : typeof _route_collection_id_restore;
 	"[collection]/[id]/revert": typeof _route_collection_id_revert extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/[id]/revert">> : typeof _route_collection_id_revert;
 	"[collection]/[id]/transition": typeof _route_collection_id_transition extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/[id]/transition">> : typeof _route_collection_id_transition;
@@ -131,6 +141,8 @@ export type CoreRoutes = {
 	"channels/config": typeof _route_channels_config extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"channels/config">> : typeof _route_channels_config;
 	"channels/publish:OPTIONS": typeof _route_channels_publish_OPTIONS extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"channels/publish:OPTIONS">> : typeof _route_channels_publish_OPTIONS;
 	"channels/publish:POST": typeof _route_channels_publish_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"channels/publish:POST">> : typeof _route_channels_publish_POST;
+	"channels/replay:OPTIONS": typeof _route_channels_replay_OPTIONS extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"channels/replay:OPTIONS">> : typeof _route_channels_replay_OPTIONS;
+	"channels/replay:POST": typeof _route_channels_replay_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"channels/replay:POST">> : typeof _route_channels_replay_POST;
 	"globals/[name]": typeof _route_globals_name extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]">> : typeof _route_globals_name;
 	"globals/[name]:PATCH": typeof _route_globals_name_PATCH extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]:PATCH">> : typeof _route_globals_name_PATCH;
 	"globals/[name]/audit": typeof _route_globals_name_audit extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]/audit">> : typeof _route_globals_name_audit;
@@ -144,6 +156,8 @@ export type CoreRoutes = {
 	realtime: typeof _route_realtime extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime">> : typeof _route_realtime;
 	"realtime/auth:POST": typeof _route_realtime_auth_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime/auth:POST">> : typeof _route_realtime_auth_POST;
 	"realtime/config": typeof _route_realtime_config extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime/config">> : typeof _route_realtime_config;
+	"realtime/crdt/exchange:POST": typeof _route_realtime_crdt_exchange_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime/crdt/exchange:POST">> : typeof _route_realtime_crdt_exchange_POST;
+	"realtime/crdt/open:POST": typeof _route_realtime_crdt_open_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime/crdt/open:POST">> : typeof _route_realtime_crdt_open_POST;
 	search: typeof _route_search extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"search">> : typeof _route_search;
 	"search/reindex/[collection]": typeof _route_search_reindex_collection extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"search/reindex/[collection]">> : typeof _route_search_reindex_collection;
 };
@@ -170,6 +184,8 @@ export type CoreServices = {
 	auth: typeof _svc_auth;
 	channels: typeof _svc_channels;
 	collectionsApi: typeof _svc_collectionsApi;
+	crdt: typeof _svc_crdt;
+	crdtOperations: typeof _svc_crdtOperations;
 	db: typeof _svc_db;
 	email: typeof _svc_email;
 	executor: typeof _svc_executor;
@@ -210,6 +226,7 @@ const _module: CoreModule = {
 	jobs: {
 		indexRecords: _job_indexRecords,
 		scheduledTransition: _job_scheduledTransition,
+		storageCleanup: _job_storageCleanup,
 	} as CoreJobs,
 	routes: {
 		".wellKnown/oauthAuthorizationServer": _route_wellKnown_oauthAuthorizationServer,
@@ -221,6 +238,7 @@ const _module: CoreModule = {
 		"[collection]/[id]:DELETE": _route_collection_id_DELETE,
 		"[collection]/[id]:PATCH": _route_collection_id_PATCH,
 		"[collection]/[id]/audit": _route_collection_id_audit,
+		"[collection]/[id]/purge": _route_collection_id_purge,
 		"[collection]/[id]/restore": _route_collection_id_restore,
 		"[collection]/[id]/revert": _route_collection_id_revert,
 		"[collection]/[id]/transition": _route_collection_id_transition,
@@ -239,6 +257,8 @@ const _module: CoreModule = {
 		"channels/config": _route_channels_config,
 		"channels/publish:OPTIONS": _route_channels_publish_OPTIONS,
 		"channels/publish:POST": _route_channels_publish_POST,
+		"channels/replay:OPTIONS": _route_channels_replay_OPTIONS,
+		"channels/replay:POST": _route_channels_replay_POST,
 		"globals/[name]": _route_globals_name,
 		"globals/[name]:PATCH": _route_globals_name_PATCH,
 		"globals/[name]/audit": _route_globals_name_audit,
@@ -252,6 +272,8 @@ const _module: CoreModule = {
 		realtime: _route_realtime,
 		"realtime/auth:POST": _route_realtime_auth_POST,
 		"realtime/config": _route_realtime_config,
+		"realtime/crdt/exchange:POST": _route_realtime_crdt_exchange_POST,
+		"realtime/crdt/open:POST": _route_realtime_crdt_open_POST,
 		search: _route_search,
 		"search/reindex/[collection]": _route_search_reindex_collection,
 	} as CoreRoutes,
@@ -259,6 +281,8 @@ const _module: CoreModule = {
 		auth: _svc_auth,
 		channels: _svc_channels,
 		collectionsApi: _svc_collectionsApi,
+		crdt: _svc_crdt,
+		crdtOperations: _svc_crdtOperations,
 		db: _svc_db,
 		email: _svc_email,
 		executor: _svc_executor,

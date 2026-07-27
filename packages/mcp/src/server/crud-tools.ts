@@ -7,24 +7,19 @@ import {
 } from "questpie";
 import { z } from "zod";
 
+import type { ResolvedMcpCatalog } from "./catalog.js";
+import { McpAccessDeniedError } from "./execution-boundary.js";
 import {
-	authorizeAgentWorkloadCall,
-	executeAgentWorkloadTool,
-	permitsAgentWorkloadDiscovery,
-	registerAgentWorkloadDiscoveryTool,
-} from "./agent-workload-boundary.js";
-import {
+	allowedEntityFieldNames,
+	allowedEntityRelationNames,
 	createCollectionDataSchema,
 	createGlobalDataSchema,
 	filterCrudResultFields,
-	filterRecordFields,
-	recordSchema,
 } from "./field-policy.js";
 import {
 	evaluateMcpRule,
 	operationRule,
 	requiredScopesForOperation,
-	resolveEntityPolicy,
 	scopeGateAllows,
 	scopesFromContext,
 	type EntityKind,
@@ -35,79 +30,169 @@ import {
 import type { RuntimeScope } from "./runtime.js";
 import { toToolError, toToolResult } from "./runtime.js";
 import type { McpConfig } from "./types.js";
+import {
+	authorizeWorkload,
+	executeWorkloadTool,
+	registerWorkloadDiscoveryTool,
+} from "./workload-boundary.js";
 import { toToolInputJsonSchema } from "./zod-json-schema.js";
-
-const whereSchema = z.record(z.string(), z.unknown());
-const relationLoadSchema = z.record(z.string(), z.unknown());
-
-const findOptionsSchema = z
-	.object({
-		where: whereSchema.optional(),
-		sort: z
-			.record(z.string(), z.union([z.literal("asc"), z.literal("desc")]))
-			.optional(),
-		limit: z.number().int().positive().optional(),
-		page: z.number().int().positive().optional(),
-		offset: z.number().int().nonnegative().optional(),
-		with: relationLoadSchema.optional(),
-		columns: z.record(z.string(), z.boolean()).optional(),
-		locale: z.string().optional(),
-		includeDeleted: z.boolean().optional(),
-		stage: z.string().optional(),
-	})
-	.passthrough();
-
-const countOptionsSchema = z
-	.object({
-		where: whereSchema.optional(),
-		includeDeleted: z.boolean().optional(),
-	})
-	.passthrough();
 
 const idSchema = z.union([z.string(), z.number()]);
 
-const getOptionsSchema = z
+const deleteSchema = z
 	.object({
 		id: idSchema,
-		with: relationLoadSchema.optional(),
-		columns: z.record(z.string(), z.boolean()).optional(),
-		locale: z.string().optional(),
+	})
+	.strict();
+
+const MAX_QUERY_FIELDS = 64;
+const MAX_WHERE_DEPTH = 3;
+const MAX_LOGICAL_CLAUSES = 16;
+const MAX_OPERATOR_VALUES = 100;
+const MAX_OFFSET = 10_000;
+
+const scalarQueryValue = z.union([
+	z.string().max(4096),
+	z.number().finite(),
+	z.boolean(),
+	z.null(),
+]);
+const queryValue = z.union([
+	scalarQueryValue,
+	z.array(scalarQueryValue).max(MAX_OPERATOR_VALUES),
+]);
+const operatorSchema = z
+	.object(
+		Object.fromEntries(
+			[
+				"eq",
+				"ne",
+				"not",
+				"gt",
+				"gte",
+				"lt",
+				"lte",
+				"in",
+				"notIn",
+				"like",
+				"ilike",
+				"notLike",
+				"notIlike",
+				"contains",
+				"startsWith",
+				"endsWith",
+				"isNull",
+				"isNotNull",
+				"arrayOverlaps",
+				"arrayContained",
+				"arrayContains",
+			].map((operator) => [operator, queryValue.optional()]),
+		),
+	)
+	.strict();
+const fieldCondition = z
+	.union([queryValue, operatorSchema])
+	.meta({ id: "QuestpieMcpFieldCondition" });
+
+function boundedFields(fields: string[]): string[] {
+	return fields.slice(0, MAX_QUERY_FIELDS);
+}
+
+function whereSchema(fields: string[], depth = 0): z.ZodTypeAny {
+	const shape: Record<string, z.ZodTypeAny> = Object.fromEntries(
+		boundedFields(fields).map((field) => [field, fieldCondition.optional()]),
+	);
+	if (depth < MAX_WHERE_DEPTH) {
+		const nested = whereSchema(fields, depth + 1);
+		shape.AND = z.array(nested).max(MAX_LOGICAL_CLAUSES).optional();
+		shape.OR = z.array(nested).max(MAX_LOGICAL_CLAUSES).optional();
+		shape.NOT = nested.optional();
+	}
+	return z.object(shape).strict();
+}
+
+function columnsSchema(fields: string[]) {
+	return z
+		.object(
+			Object.fromEntries(
+				boundedFields(fields).map((field) => [field, z.boolean().optional()]),
+			),
+		)
+		.strict();
+}
+
+function sortSchema(fields: string[]) {
+	return z
+		.object(
+			Object.fromEntries(
+				boundedFields(fields).map((field) => [
+					field,
+					z.enum(["asc", "desc"]).optional(),
+				]),
+			),
+		)
+		.strict();
+}
+
+function relationLoadSchema(relations: string[]) {
+	return z
+		.object(
+			Object.fromEntries(
+				boundedFields(relations).map((field) => [
+					field,
+					z.literal(true).optional(),
+				]),
+			),
+		)
+		.strict();
+}
+
+function collectionReadSchemas(collection: unknown, policy: ResolvedMcpPolicy) {
+	const fields = allowedEntityFieldNames(collection, policy);
+	const relations = allowedEntityRelationNames(collection, policy);
+	const common = {
+		with: relationLoadSchema(relations).optional(),
+		columns: columnsSchema(fields).optional(),
+		locale: z.string().max(64).optional(),
 		includeDeleted: z.boolean().optional(),
-		stage: z.string().optional(),
-	})
-	.passthrough();
+		stage: z.string().max(64).optional(),
+	};
+	return {
+		list: z
+			.object({
+				where: whereSchema(fields).optional(),
+				sort: sortSchema(fields).optional(),
+				limit: z.number().int().positive().max(10_000).optional(),
+				page: z.number().int().positive().max(1000).optional(),
+				offset: z.number().int().nonnegative().max(MAX_OFFSET).optional(),
+				...common,
+			})
+			.strict(),
+		count: z
+			.object({
+				where: whereSchema(fields).optional(),
+				includeDeleted: z.boolean().optional(),
+			})
+			.strict(),
+		get: z
+			.object({
+				id: idSchema,
+				...common,
+			})
+			.strict(),
+	};
+}
 
-const createSchema = z.object({
-	data: recordSchema,
-});
-
-const updateSchema = z.object({
-	id: idSchema,
-	data: recordSchema,
-});
-
-const deleteSchema = z.object({
-	id: idSchema,
-});
-
-const globalGetSchema = z
-	.object({
-		with: relationLoadSchema.optional(),
-		columns: z.record(z.string(), z.boolean()).optional(),
-		locale: z.string().optional(),
-		stage: z.string().optional(),
-	})
-	.passthrough();
-
-const globalUpdateSchema = z
-	.object({
-		data: recordSchema,
-		with: relationLoadSchema.optional(),
-		columns: z.record(z.string(), z.boolean()).optional(),
-		locale: z.string().optional(),
-		stage: z.string().optional(),
-	})
-	.passthrough();
+function globalOperationBaseSchema(global: unknown, policy: ResolvedMcpPolicy) {
+	const fields = allowedEntityFieldNames(global, policy);
+	const relations = allowedEntityRelationNames(global, policy);
+	return {
+		with: relationLoadSchema(relations).optional(),
+		columns: columnsSchema(fields).optional(),
+		locale: z.string().max(64).optional(),
+		stage: z.string().max(64).optional(),
+	};
+}
 
 type OperationKind = "read" | "write" | "delete";
 
@@ -115,7 +200,6 @@ const COLLECTION_OPERATIONS: Array<{
 	name: string;
 	kind: OperationKind;
 	description: (name: string) => string;
-	schema: z.ZodTypeAny;
 	execute: (
 		crud: any,
 		input: any,
@@ -127,7 +211,6 @@ const COLLECTION_OPERATIONS: Array<{
 		name: "list",
 		kind: "read",
 		description: (name) => `List ${name} records.`,
-		schema: findOptionsSchema,
 		execute: (crud, input, ctx, maxLimit) =>
 			crud.find(
 				{ ...input, limit: Math.min(input.limit ?? maxLimit, maxLimit) },
@@ -138,14 +221,12 @@ const COLLECTION_OPERATIONS: Array<{
 		name: "count",
 		kind: "read",
 		description: (name) => `Count ${name} records.`,
-		schema: countOptionsSchema,
 		execute: (crud, input, ctx) => crud.count(input, ctx),
 	},
 	{
 		name: "get",
 		kind: "read",
 		description: (name) => `Get one ${name} record by id.`,
-		schema: getOptionsSchema,
 		execute: (crud, input, ctx) => {
 			const { id, ...options } = input;
 			return crud.findOne({ ...options, where: { id } }, ctx);
@@ -155,14 +236,12 @@ const COLLECTION_OPERATIONS: Array<{
 		name: "create",
 		kind: "write",
 		description: (name) => `Create a ${name} record.`,
-		schema: createSchema,
 		execute: (crud, input, ctx) => crud.create(input.data, ctx),
 	},
 	{
 		name: "update",
 		kind: "write",
 		description: (name) => `Update a ${name} record by id.`,
-		schema: updateSchema,
 		execute: (crud, input, ctx) =>
 			crud.updateById({ id: input.id, data: input.data }, ctx),
 	},
@@ -170,7 +249,6 @@ const COLLECTION_OPERATIONS: Array<{
 		name: "delete",
 		kind: "delete",
 		description: (name) => `Delete a ${name} record by id.`,
-		schema: deleteSchema,
 		execute: (crud, input, ctx) => crud.deleteById({ id: input.id }, ctx),
 	},
 ];
@@ -179,21 +257,18 @@ const GLOBAL_OPERATIONS: Array<{
 	name: string;
 	kind: Exclude<OperationKind, "delete">;
 	description: (name: string) => string;
-	schema: z.ZodTypeAny;
 	execute: (crud: any, input: any, ctx: any) => Promise<unknown>;
 }> = [
 	{
 		name: "get",
 		kind: "read",
 		description: (name) => `Get the ${name} global.`,
-		schema: globalGetSchema,
 		execute: (crud, input, ctx) => crud.get(input, ctx),
 	},
 	{
 		name: "update",
 		kind: "write",
 		description: (name) => `Update the ${name} global.`,
-		schema: globalUpdateSchema,
 		execute: (crud, input, ctx) => {
 			const { data, ...options } = input;
 			return crud.update(data, ctx, options);
@@ -207,20 +282,22 @@ function collectionOperationSchema(
 	policy: ResolvedMcpPolicy,
 ) {
 	if (operationName === "create") {
-		return z.object({
-			data: createCollectionDataSchema(collection, "create", policy),
-		});
+		return z
+			.object({
+				data: createCollectionDataSchema(collection, "create", policy),
+			})
+			.strict();
 	}
 	if (operationName === "update") {
-		return z.object({
-			id: idSchema,
-			data: createCollectionDataSchema(collection, "update", policy),
-		});
+		return z
+			.object({
+				id: idSchema,
+				data: createCollectionDataSchema(collection, "update", policy),
+			})
+			.strict();
 	}
-	return (
-		COLLECTION_OPERATIONS.find((operation) => operation.name === operationName)
-			?.schema ?? recordSchema
-	);
+	const readSchemas = collectionReadSchemas(collection, policy);
+	return readSchemas[operationName as keyof typeof readSchemas] ?? deleteSchema;
 }
 
 function globalOperationSchema(
@@ -229,45 +306,25 @@ function globalOperationSchema(
 	policy: ResolvedMcpPolicy,
 ) {
 	if (operationName === "update") {
-		return globalUpdateSchema.extend({
-			data: createGlobalDataSchema(global, policy),
-		});
+		return z
+			.object({
+				data: createGlobalDataSchema(global, policy),
+				...globalOperationBaseSchema(global, policy),
+			})
+			.strict();
 	}
-	return (
-		GLOBAL_OPERATIONS.find((operation) => operation.name === operationName)
-			?.schema ?? recordSchema
-	);
-}
-
-function filterOperationInput(
-	operationName: string,
-	input: unknown,
-	policy: ResolvedMcpPolicy,
-) {
-	if (
-		(operationName === "create" || operationName === "update") &&
-		input &&
-		typeof input === "object" &&
-		"data" in input
-	) {
-		return {
-			...(input as Record<string, unknown>),
-			data: filterRecordFields((input as { data: unknown }).data, policy),
-		};
-	}
-
-	return input;
+	return z.object(globalOperationBaseSchema(global, policy)).strict();
 }
 
 async function questpieAllows(
 	scope: RuntimeScope,
+	ctx: Awaited<ReturnType<RuntimeScope["getContext"]>>,
 	kind: Exclude<EntityKind, "route">,
 	name: string,
-	operation: OperationKind,
+	operationName: string,
 ): Promise<boolean> {
 	if (scope.accessMode === "system") return true;
 
-	const ctx = await scope.getContext();
 	const crudContext = {
 		db: ctx.db ?? scope.app.db,
 		session: ctx.session,
@@ -286,7 +343,12 @@ async function questpieAllows(
 			scope.app,
 		)) as CollectionSchema;
 		if (!schema.access.visible) return false;
-		const mappedOperation = operation === "write" ? "update" : operation;
+		const mappedOperation =
+			operationName === "create" ||
+			operationName === "update" ||
+			operationName === "delete"
+				? operationName
+				: "read";
 		const result = schema.access.operations[mappedOperation];
 		return !!result && result.allowed !== false;
 	}
@@ -298,45 +360,25 @@ async function questpieAllows(
 		scope.app,
 	)) as GlobalSchema;
 	if (!schema.access.visible) return false;
-	const mappedOperation = operation === "write" ? "update" : "read";
+	const mappedOperation = operationName === "update" ? "update" : "read";
 	const result = schema.access.operations[mappedOperation];
 	return !!result && result.allowed !== false;
 }
 
-async function shouldRegister(
+async function allowsOperation(
 	scope: RuntimeScope,
+	ctx: Awaited<ReturnType<RuntimeScope["getContext"]>>,
 	policy: ResolvedMcpPolicy,
 	kind: Exclude<EntityKind, "route">,
 	entityName: string,
 	operationName: string,
 	operationKind: OperationKind,
 ): Promise<boolean> {
-	if (!policy.expose) return false;
-	const toolName = `${kind === "collection" ? "collections" : "globals"}.${entityName}.${operationName}`;
-	if (
-		scope.agentWorkload &&
-		!(await permitsAgentWorkloadDiscovery(
-			scope.agentWorkload,
-			toolName,
-			workloadRequirementForOperation(policy, operationName),
-		))
-	) {
-		return false;
-	}
-	const ctx = await scope.getContext();
 	const mcpAllowed = await evaluateMcpRule(
-		operationRule(policy, operationName) ??
-			operationRule(
-				policy,
-				operationKind === "write" ? "update" : operationKind,
-			),
+		operationRule(policy, operationName),
 		{ transport: scope.transport, accessMode: scope.accessMode, ctx },
 	);
 	if (!mcpAllowed) return false;
-	// Scope gate (MO8): for an `oauth` caller, additionally require the operation's
-	// scopes. `scopesFromContext` is `undefined` for `user`/`system`, so the gate
-	// passes untouched for them — this only narrows `oauth`. ANDed with the RBAC
-	// check below, so the effective `oauth` permission is `scopes ∩ RBAC`.
 	if (
 		!scopeGateAllows(
 			scopesFromContext(ctx),
@@ -351,29 +393,54 @@ async function shouldRegister(
 	) {
 		return false;
 	}
-	return questpieAllows(scope, kind, entityName, operationKind);
+	return questpieAllows(scope, ctx, kind, entityName, operationName);
+}
+
+async function shouldRegister(
+	scope: RuntimeScope,
+	policy: ResolvedMcpPolicy,
+	kind: Exclude<EntityKind, "route">,
+	entityName: string,
+	operationName: string,
+	operationKind: OperationKind,
+): Promise<boolean> {
+	if (!policy.expose) return false;
+	if (
+		scope.workload &&
+		!workloadRequirementForOperation(policy, operationName)
+	) {
+		return false;
+	}
+	if (scope.workload) return true;
+	const ctx = await scope.getContext();
+	return allowsOperation(
+		scope,
+		ctx,
+		policy,
+		kind,
+		entityName,
+		operationName,
+		operationKind,
+	);
 }
 
 export async function registerCrudTools(
 	server: McpServer,
 	scope: RuntimeScope,
 	config: McpConfig,
+	catalog: ResolvedMcpCatalog,
 ) {
 	const maxLimit = config.crud?.maxLimit ?? 100;
 	const collections = scope.app.getCollections() as Record<string, any>;
 	const globals = scope.app.getGlobals() as Record<string, any>;
 
-	for (const name of Object.keys(collections)) {
+	for (const [name, catalogEntry] of catalog.collections) {
 		const collection = collections[name];
-		const policy = resolveEntityPolicy(
-			config,
-			"collection",
-			name,
-			scope.transport,
-		);
+		const policy = catalogEntry.policy;
 		const crud = (scope.app.collections as Record<string, any>)[name];
 
 		for (const operation of COLLECTION_OPERATIONS) {
+			if (!catalogEntry.operations.includes(operation.name)) continue;
 			const toolName = `collections.${name}.${operation.name}`;
 			const inputSchema = collectionOperationSchema(
 				operation.name,
@@ -390,6 +457,25 @@ export async function registerCrudTools(
 				policy,
 				operation.name,
 			);
+			const workloadIdentity = {
+				kind: "collection" as const,
+				name: toolName,
+				operation: operation.name,
+				intent:
+					operation.kind === "read" && !workloadRequirement?.handoff
+						? ("read" as const)
+						: ("effect" as const),
+			};
+			const allows = (ctx: Awaited<ReturnType<RuntimeScope["getContext"]>>) =>
+				allowsOperation(
+					scope,
+					ctx,
+					policy,
+					"collection",
+					name,
+					operation.name,
+					operation.kind,
+				);
 			if (
 				!(await shouldRegister(
 					scope,
@@ -410,95 +496,93 @@ export async function registerCrudTools(
 					inputSchema,
 					annotations,
 				},
-				async (input, extra) => {
+				async (input: any, extra: any) => {
 					try {
-						const workloadPrincipal = scope.agentWorkload
-							? await authorizeAgentWorkloadCall(
-									scope.agentWorkload,
-									toolName,
-									workloadRequirement,
-								)
-							: undefined;
-						if (scope.agentWorkload && !workloadPrincipal) {
-							throw new Error("MCP access denied");
-						}
-						const ctx = await scope.getContext();
-						const allowed = await evaluateMcpRule(
-							operationRule(policy, operation.name) ??
-								operationRule(
-									policy,
-									operation.kind === "write" ? "update" : operation.kind,
-								),
-							{ transport: scope.transport, accessMode: scope.accessMode, ctx },
-						);
-						if (!allowed) throw new Error("MCP access denied");
-						// Scope gate at call time (defense in depth): a tool hidden from
-						// listing for a missing scope must also be denied if called directly.
-						if (
-							!scopeGateAllows(
-								scopesFromContext(ctx),
-								requiredScopesForOperation(
-									policy,
-									"collection",
-									name,
-									operation.name,
-									operation.kind as ScopeOperationKind,
-								),
-							)
-						) {
-							throw new Error("MCP access denied");
-						}
-						const nextInput = filterOperationInput(
-							operation.name,
+						let workloadAuthorization:
+							| Awaited<ReturnType<typeof authorizeWorkload>>
+							| undefined;
+						return await scope.execution.execute({
+							operation: toolName,
+							transport: scope.transport,
+							accessMode: scope.accessMode,
 							input,
-							policy,
-						);
-						const invoke = async () => {
-							const value = await operation.execute(
-								crud,
-								nextInput,
-								ctx,
-								maxLimit,
-							);
-							return toToolResult(filterCrudResultFields(value, policy));
-						};
-						if (
-							scope.agentWorkload &&
-							workloadPrincipal &&
-							workloadRequirement
-						) {
-							return executeAgentWorkloadTool(
-								scope.agentWorkload,
-								workloadPrincipal,
-								toolName,
-								workloadRequirement,
-								extra["_meta"],
-								invoke,
-							);
-						}
-						return invoke();
+							extra,
+							authorize: async (control) => {
+								workloadAuthorization = scope.workload
+									? await authorizeWorkload(
+											scope.workload,
+											"call",
+											workloadIdentity,
+											workloadRequirement,
+											control,
+										)
+									: undefined;
+								if (scope.workload && !workloadAuthorization) {
+									throw new McpAccessDeniedError();
+								}
+								const ctx =
+									workloadAuthorization?.context ?? (await scope.getContext());
+								if (!(await allows(ctx))) {
+									throw new McpAccessDeniedError();
+								}
+								return ctx;
+							},
+							concurrencyKey: () => workloadAuthorization?.concurrencyKey,
+							invoke: async ({ ctx, signal, requestId, correlationId }) => {
+								const invoke = async () => {
+									const value = await operation.execute(
+										crud,
+										input,
+										ctx,
+										maxLimit,
+									);
+									return toToolResult(filterCrudResultFields(value, policy));
+								};
+								if (
+									scope.workload &&
+									workloadAuthorization &&
+									workloadRequirement
+								) {
+									return executeWorkloadTool(
+										scope.workload,
+										workloadAuthorization,
+										undefined,
+										{ signal, requestId, correlationId },
+										invoke,
+									);
+								}
+								return invoke();
+							},
+						});
 					} catch (error) {
 						return toToolError(error);
 					}
 				},
 			);
-			if (scope.agentWorkload) {
-				registerAgentWorkloadDiscoveryTool(scope.agentWorkload, {
-					name: toolName,
-					description: policy.description ?? operation.description(name),
-					inputSchema: toToolInputJsonSchema(inputSchema),
-					annotations,
-				});
+			if (scope.workload) {
+				registerWorkloadDiscoveryTool(
+					scope.workload,
+					{
+						name: toolName,
+						description: policy.description ?? operation.description(name),
+						inputSchema: toToolInputJsonSchema(inputSchema),
+						annotations,
+					},
+					workloadIdentity,
+					workloadRequirement,
+					allows,
+				);
 			}
 		}
 	}
 
-	for (const name of Object.keys(globals)) {
+	for (const [name, catalogEntry] of catalog.globals) {
 		const global = globals[name];
-		const policy = resolveEntityPolicy(config, "global", name, scope.transport);
+		const policy = catalogEntry.policy;
 		const crud = (scope.app.globals as Record<string, any>)[name];
 
 		for (const operation of GLOBAL_OPERATIONS) {
+			if (!catalogEntry.operations.includes(operation.name)) continue;
 			const toolName = `globals.${name}.${operation.name}`;
 			const inputSchema = globalOperationSchema(operation.name, global, policy);
 			const annotations = {
@@ -509,6 +593,25 @@ export async function registerCrudTools(
 				policy,
 				operation.name,
 			);
+			const workloadIdentity = {
+				kind: "global" as const,
+				name: toolName,
+				operation: operation.name,
+				intent:
+					operation.kind === "read" && !workloadRequirement?.handoff
+						? ("read" as const)
+						: ("effect" as const),
+			};
+			const allows = (ctx: Awaited<ReturnType<RuntimeScope["getContext"]>>) =>
+				allowsOperation(
+					scope,
+					ctx,
+					policy,
+					"global",
+					name,
+					operation.name,
+					operation.kind,
+				);
 			if (
 				!(await shouldRegister(
 					scope,
@@ -529,80 +632,77 @@ export async function registerCrudTools(
 					inputSchema,
 					annotations,
 				},
-				async (input, extra) => {
+				async (input: any, extra: any) => {
 					try {
-						const workloadPrincipal = scope.agentWorkload
-							? await authorizeAgentWorkloadCall(
-									scope.agentWorkload,
-									toolName,
-									workloadRequirement,
-								)
-							: undefined;
-						if (scope.agentWorkload && !workloadPrincipal) {
-							throw new Error("MCP access denied");
-						}
-						const ctx = await scope.getContext();
-						const allowed = await evaluateMcpRule(
-							operationRule(policy, operation.name) ??
-								operationRule(
-									policy,
-									operation.kind === "write" ? "update" : operation.kind,
-								),
-							{ transport: scope.transport, accessMode: scope.accessMode, ctx },
-						);
-						if (!allowed) throw new Error("MCP access denied");
-						// Scope gate at call time (defense in depth): a tool hidden from
-						// listing for a missing scope must also be denied if called directly.
-						if (
-							!scopeGateAllows(
-								scopesFromContext(ctx),
-								requiredScopesForOperation(
-									policy,
-									"global",
-									name,
-									operation.name,
-									operation.kind as ScopeOperationKind,
-								),
-							)
-						) {
-							throw new Error("MCP access denied");
-						}
-						const nextInput = filterOperationInput(
-							operation.name,
+						let workloadAuthorization:
+							| Awaited<ReturnType<typeof authorizeWorkload>>
+							| undefined;
+						return await scope.execution.execute({
+							operation: toolName,
+							transport: scope.transport,
+							accessMode: scope.accessMode,
 							input,
-							policy,
-						);
-						const invoke = async () => {
-							const value = await operation.execute(crud, nextInput, ctx);
-							return toToolResult(filterCrudResultFields(value, policy));
-						};
-						if (
-							scope.agentWorkload &&
-							workloadPrincipal &&
-							workloadRequirement
-						) {
-							return executeAgentWorkloadTool(
-								scope.agentWorkload,
-								workloadPrincipal,
-								toolName,
-								workloadRequirement,
-								extra["_meta"],
-								invoke,
-							);
-						}
-						return invoke();
+							extra,
+							authorize: async (control) => {
+								workloadAuthorization = scope.workload
+									? await authorizeWorkload(
+											scope.workload,
+											"call",
+											workloadIdentity,
+											workloadRequirement,
+											control,
+										)
+									: undefined;
+								if (scope.workload && !workloadAuthorization) {
+									throw new McpAccessDeniedError();
+								}
+								const ctx =
+									workloadAuthorization?.context ?? (await scope.getContext());
+								if (!(await allows(ctx))) {
+									throw new McpAccessDeniedError();
+								}
+								return ctx;
+							},
+							concurrencyKey: () => workloadAuthorization?.concurrencyKey,
+							invoke: async ({ ctx, signal, requestId, correlationId }) => {
+								const invoke = async () => {
+									const value = await operation.execute(crud, input, ctx);
+									return toToolResult(filterCrudResultFields(value, policy));
+								};
+								if (
+									scope.workload &&
+									workloadAuthorization &&
+									workloadRequirement
+								) {
+									return executeWorkloadTool(
+										scope.workload,
+										workloadAuthorization,
+										undefined,
+										{ signal, requestId, correlationId },
+										invoke,
+									);
+								}
+								return invoke();
+							},
+						});
 					} catch (error) {
 						return toToolError(error);
 					}
 				},
 			);
-			if (scope.agentWorkload) {
-				registerAgentWorkloadDiscoveryTool(scope.agentWorkload, {
-					name: toolName,
-					description: policy.description ?? operation.description(name),
-					inputSchema: toToolInputJsonSchema(inputSchema),
-					annotations,
-				});
+			if (scope.workload) {
+				registerWorkloadDiscoveryTool(
+					scope.workload,
+					{
+						name: toolName,
+						description: policy.description ?? operation.description(name),
+						inputSchema: toToolInputJsonSchema(inputSchema),
+						annotations,
+					},
+					workloadIdentity,
+					workloadRequirement,
+					allows,
+				);
 			}
 		}
 	}

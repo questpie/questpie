@@ -10,6 +10,8 @@ declare global {
 			app?: unknown;
 			db?: any;
 			session?: any | null;
+			principal?: import("#questpie/server/config/context.js").Principal;
+			actor?: import("#questpie/server/modules/core/integrated/crdt/authority.js").AuthorityActor;
 			queue?: any;
 			email?: any;
 			storage?: any;

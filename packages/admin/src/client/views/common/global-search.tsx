@@ -339,11 +339,10 @@ export function GlobalSearch({
 			return {
 				id: `record-${collectionName}-${doc.id}`,
 				type: "record",
-				label: doc._search?.indexedTitle || doc.id,
+				label: doc._title || doc.title || doc.id,
 				sublabel: collectionLabel,
 				href: `${basePath}/collections/${collectionName}/${doc.id}`,
 				icon,
-				highlights: doc._search?.highlights,
 			};
 		});
 	}, [searchResults, serverConfig, basePath, resolveText]);

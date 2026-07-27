@@ -44,19 +44,27 @@ const skipped = collection("skipped")
 	}))
 	.set("admin", { audit: false });
 
-// A collection with a `datetime` field — its audit diff carries a raw Date (the
-// shape that broke the JSON-primitive audit schema, e.g. ai_workers.lastHeartbeat).
+// A collection with a `datetime` field — its audit diff carries a raw Date, the
+// shape that broke the JSON-primitive audit schema for heartbeat timestamps.
 const events = collection("events").fields(({ f }) => ({
 	title: f.text().required(),
 	when: f.datetime(),
 }));
+
+const purgeRecords = collection("purge_records")
+	.fields(({ f }) => ({
+		title: f.text().required(),
+		secret: f.text().required(),
+	}))
+	.options({ softDelete: true })
+	.access({ purge: true });
 
 describe("audit module e2e", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
 		setup = await buildMockApp({
-			collections: { posts, skipped, events },
+			collections: { posts, skipped, events, purgeRecords },
 			globals: { settings },
 			modules: [auditModule],
 			defaultAccess: { read: true, create: true, update: true, delete: true },
@@ -144,6 +152,53 @@ describe("audit module e2e", () => {
 			accessMode: "system",
 			operation: "delete",
 		});
+	});
+
+	it("records purge as an attributable metadata-only fact", async () => {
+		const ctx = createTestContext({
+			accessMode: "system",
+			session: {
+				user: { id: "retention-worker", name: "Retention Worker" },
+				session: { id: "retention-session" },
+			} as any,
+		});
+		const record = await setup.app.collections.purgeRecords.create(
+			{ title: "Expired", secret: "must-not-survive-in-audit" },
+			ctx,
+		);
+		await setup.app.collections.purgeRecords.deleteById({ id: record.id }, ctx);
+		await setup.app.collections.purgeRecords.purgeById({ id: record.id }, ctx);
+
+		const logs = await setup.app.collections[AUDIT_LOG_COLLECTION].find(
+			{
+				where: {
+					resource: "purgeRecords",
+					resourceId: record.id,
+					action: "purge",
+				},
+			},
+			ctx,
+		);
+
+		expect(logs.docs).toHaveLength(1);
+		expect(logs.docs[0]).toMatchObject({
+			action: "purge",
+			resourceType: "collection",
+			resource: "purgeRecords",
+			resourceId: record.id,
+			resourceLabel: null,
+			userId: "retention-worker",
+			userName: "Retention Worker",
+			changes: null,
+		});
+		expect(logs.docs[0].metadata).toMatchObject({
+			actorType: "user",
+			accessMode: "system",
+			operation: "purge",
+		});
+		expect(JSON.stringify(logs.docs[0])).not.toContain(
+			"must-not-survive-in-audit",
+		);
 	});
 
 	it("labels system collection operations without a session as System", async () => {
@@ -269,7 +324,7 @@ describe("audit module e2e", () => {
 	});
 
 	it("records a Date-field update as a JSON-safe audit entry (no ApiError)", async () => {
-		// Regression: a raw Date in the audit diff (e.g. ai_workers.lastHeartbeat)
+		// Regression: a raw Date in a heartbeat timestamp's audit diff
 		// failed the JSON-primitive audit schema, so the entry was swallowed and the
 		// server log spammed `[Audit] Failed to log update ... received Date`.
 		const ctx = createTestContext({ accessMode: "system" });
@@ -466,7 +521,7 @@ describe("toAuditJsonSafe — JSON-safe audit changes/metadata", () => {
 		);
 	});
 
-	it("coerces the ai_workers heartbeat change shape (the reported bug)", () => {
+	it("coerces a heartbeat timestamp change shape", () => {
 		// computeChanges produced { lastHeartbeat: { from: Date, to: Date } }, which
 		// the JSON-primitive audit schema rejected on every heartbeat (ApiError spam).
 		const changes = {

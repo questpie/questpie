@@ -1,5 +1,7 @@
 import type { LoggerAdapter } from "#questpie/server/modules/core/integrated/logger/types.js";
 
+import type { RealtimeDeliveryClassificationReason } from "./delta.js";
+import type { RealtimeRoutingFeature } from "./topic-routing.js";
 import type { ClientCloseReason, DeliveryClass } from "./transport.js";
 
 export type RealtimeObservation =
@@ -54,6 +56,52 @@ export type RealtimeObservation =
 			subscribers: number;
 	  }
 	| {
+			type: "delta.emitted";
+			operation: "insert" | "update" | "delete" | "up-to-date" | "snapshot";
+			subscribers: number;
+			frameBytes: number;
+	  }
+	| {
+			type: "delta.suppressed";
+			reason: "unchanged" | "noop";
+	  }
+	| {
+			type: "delta.fallback_snapshot";
+			reason:
+				| "queue_overflow"
+				| "row_cap"
+				| "bulk_budget"
+				| "dependency_change"
+				| "processing_error"
+				| "periodic";
+	  }
+	| {
+			type: "delta.buffer";
+			scope: "group" | "subscriber" | "writer";
+			key: string;
+			events: number;
+			bytes: number;
+	  }
+	| { type: "routing.candidates"; groups: number }
+	| {
+			type: "routing.plan";
+			anchor: "required" | "missing";
+			feature: RealtimeRoutingFeature | "none";
+	  }
+	| {
+			type: "routing.guard";
+			outcome: "match" | "miss" | "unknown";
+	  }
+	| {
+			type: "routing.authoritative_db";
+			operation: "find" | "count" | "get";
+	  }
+	| {
+			type: "delivery.classified";
+			mode: "snapshot" | "delta";
+			reason: RealtimeDeliveryClassificationReason;
+	  }
+	| {
 			type: "sink.write";
 			delivery: DeliveryClass;
 			outcome: "accepted" | "busy" | "failed";
@@ -73,12 +121,13 @@ export type RealtimeObservation =
 				| "query_limit"
 				| "relation_depth"
 				| "snapshot_bytes"
+				| "row_live_queries_disabled"
+				| "collection_realtime_disabled"
 				| "access";
 			resource?: string;
 			operation?: "find" | "count" | "get";
 			requestedLimit?: number;
 			configuredLimit?: number;
-			rolloutMode?: "v2";
 	  }
 	| {
 			type: "topology.lifecycle";
@@ -92,7 +141,9 @@ export type RealtimeObservation =
 				| "invalid"
 				| "unavailable"
 				| "started"
+				| "current"
 				| "applied"
+				| "rejected"
 				| "failed"
 				| "expired"
 				| "fenced"
@@ -139,6 +190,8 @@ export type RealtimeMetricsSnapshot = Readonly<{
 	gauges: Readonly<{
 		activeSessions: number;
 		bufferedBytes: number;
+		deltaBufferedEvents: number;
+		deltaBufferedBytes: number;
 	}>;
 }>;
 
@@ -167,6 +220,24 @@ function metricKey(event: RealtimeObservation): string {
 		case "refresh.suppressed":
 		case "refresh.failed":
 			return `${event.type}|operation=${event.operation}`;
+		case "delta.emitted":
+			return `${event.type}|operation=${event.operation}`;
+		case "delta.suppressed":
+			return `${event.type}|reason=${event.reason}`;
+		case "delta.fallback_snapshot":
+			return `${event.type}|reason=${event.reason}`;
+		case "delta.buffer":
+			return `${event.type}|scope=${event.scope}`;
+		case "routing.candidates":
+			return event.type;
+		case "routing.plan":
+			return `${event.type}|anchor=${event.anchor}|feature=${event.feature}`;
+		case "routing.guard":
+			return `${event.type}|outcome=${event.outcome}`;
+		case "routing.authoritative_db":
+			return `${event.type}|operation=${event.operation}`;
+		case "delivery.classified":
+			return `${event.type}|mode=${event.mode}|reason=${event.reason}`;
 		case "sink.write":
 			return `${event.type}|delivery=${event.delivery}|outcome=${event.outcome}`;
 		case "session.opened":
@@ -174,7 +245,7 @@ function metricKey(event: RealtimeObservation): string {
 		case "session.closed":
 			return `${event.type}|reason=${event.reason}|transport=${event.transport}`;
 		case "admission.rejected":
-			return `${event.type}|reason=${event.reason}|resource=${event.resource ?? "unknown"}|rollout_mode=${event.rolloutMode ?? "v2"}`;
+			return `${event.type}|reason=${event.reason}`;
 		case "topology.lifecycle":
 			return `${event.type}|outcome=${event.outcome}|phase=${event.phase}`;
 		case "resume":
@@ -204,6 +275,7 @@ function alertLevel(
 			(event.outcome === "conflict" ||
 				event.outcome === "unsupported" ||
 				event.outcome === "invalid" ||
+				event.outcome === "rejected" ||
 				event.outcome === "unavailable" ||
 				event.outcome === "expired" ||
 				event.outcome === "fenced")) ||
@@ -221,6 +293,10 @@ export class RealtimeObservability implements RealtimeObserver {
 	private readonly counters = new Map<string, number>();
 	private activeSessions = 0;
 	private bufferedBytes = 0;
+	private readonly deltaBuffers = new Map<
+		string,
+		{ events: number; bytes: number }
+	>();
 
 	constructor(private readonly options: RealtimeObservabilityOptions = {}) {}
 
@@ -241,6 +317,19 @@ export class RealtimeObservability implements RealtimeObserver {
 				`refresh.subscriber_deliveries|operation=${event.operation}`,
 				event.subscribers,
 			);
+			this.increment(
+				`refresh.frame_bytes|operation=${event.operation}`,
+				Math.max(0, event.frameBytes),
+			);
+		}
+		if (event.type === "delta.emitted") {
+			this.increment(
+				`delta.frame_bytes|operation=${event.operation}`,
+				Math.max(0, event.frameBytes),
+			);
+		}
+		if (event.type === "routing.candidates") {
+			this.increment("routing.candidate_groups", Math.max(0, event.groups));
 		}
 		if (event.type === "session.opened") this.activeSessions += 1;
 		if (event.type === "session.closed") {
@@ -248,6 +337,16 @@ export class RealtimeObservability implements RealtimeObserver {
 		}
 		if (event.type === "sink.write") {
 			this.bufferedBytes = Math.max(0, event.bufferedBytes);
+		}
+		if (event.type === "delta.buffer") {
+			if (event.events === 0 && event.bytes === 0) {
+				this.deltaBuffers.delete(event.key);
+			} else {
+				this.deltaBuffers.set(event.key, {
+					events: Math.max(0, event.events),
+					bytes: Math.max(0, event.bytes),
+				});
+			}
 		}
 
 		try {
@@ -271,11 +370,19 @@ export class RealtimeObservability implements RealtimeObserver {
 	}
 
 	snapshot(): RealtimeMetricsSnapshot {
+		let deltaBufferedEvents = 0;
+		let deltaBufferedBytes = 0;
+		for (const buffer of this.deltaBuffers.values()) {
+			deltaBufferedEvents += buffer.events;
+			deltaBufferedBytes += buffer.bytes;
+		}
 		return {
 			counters: Object.fromEntries(this.counters),
 			gauges: {
 				activeSessions: this.activeSessions,
 				bufferedBytes: this.bufferedBytes,
+				deltaBufferedEvents,
+				deltaBufferedBytes,
 			},
 		};
 	}

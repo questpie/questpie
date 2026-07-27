@@ -12,6 +12,8 @@ export interface MockJob {
 	name: string;
 	payload: any;
 	options?: PublishOptions;
+	dispatchId?: string;
+	idempotencyKey?: string;
 	publishedAt: Date;
 }
 
@@ -19,7 +21,7 @@ export interface MockScheduledJob {
 	name: string;
 	cron: string;
 	payload: any;
-	options?: Omit<PublishOptions, "startAfter">;
+	options?: Omit<PublishOptions, "idempotencyKey" | "startAfter">;
 }
 
 export interface MockWorker {
@@ -44,6 +46,11 @@ export class MockQueueAdapter implements QueueAdapter {
 	private scheduledJobs: MockScheduledJob[] = [];
 	private workers: MockWorker[] = [];
 	private errorHandlers: Array<(error: Error) => void> = [];
+	private publishFailuresRemaining = 0;
+
+	failNextPublishes(count = 1): void {
+		this.publishFailuresRemaining = Math.max(0, count);
+	}
 
 	/**
 	 * Get all published jobs (test utility)
@@ -103,7 +110,12 @@ export class MockQueueAdapter implements QueueAdapter {
 			throw new Error(`No worker registered for job: ${job.name}`);
 		}
 
-		await handler({ id: job.id, data: job.payload });
+		await handler({
+			id: job.id,
+			data: job.payload,
+			dispatchId: job.dispatchId,
+			idempotencyKey: job.idempotencyKey,
+		});
 	}
 
 	/**
@@ -115,7 +127,12 @@ export class MockQueueAdapter implements QueueAdapter {
 			const handler = worker?.handlers[job.name];
 			if (handler) {
 				try {
-					await handler({ id: job.id, data: job.payload });
+					await handler({
+						id: job.id,
+						data: job.payload,
+						dispatchId: job.dispatchId,
+						idempotencyKey: job.idempotencyKey,
+					});
 				} catch (error) {
 					for (const handler of this.errorHandlers) {
 						handler(error as Error);
@@ -141,12 +158,19 @@ export class MockQueueAdapter implements QueueAdapter {
 		jobName: string,
 		payload: any,
 		options?: PublishOptions,
+		dispatchId?: string,
 	): Promise<string | null> {
+		if (this.publishFailuresRemaining > 0) {
+			this.publishFailuresRemaining -= 1;
+			throw new Error("Mock queue publish failed");
+		}
 		const job: MockJob = {
 			id: crypto.randomUUID(),
 			name: jobName,
 			payload,
 			options,
+			dispatchId,
+			idempotencyKey: options?.idempotencyKey,
 			publishedAt: new Date(),
 		};
 
@@ -158,7 +182,7 @@ export class MockQueueAdapter implements QueueAdapter {
 		jobName: string,
 		cron: string,
 		payload: any,
-		options?: Omit<PublishOptions, "startAfter">,
+		options?: Omit<PublishOptions, "idempotencyKey" | "startAfter">,
 	): Promise<void> {
 		// Remove existing scheduled job with same name
 		this.scheduledJobs = this.scheduledJobs.filter(
@@ -205,7 +229,12 @@ export class MockQueueAdapter implements QueueAdapter {
 			const handler = handlers[job.name];
 			if (!handler) continue;
 
-			await handler({ id: job.id, data: job.payload });
+			await handler({
+				id: job.id,
+				data: job.payload,
+				dispatchId: job.dispatchId,
+				idempotencyKey: job.idempotencyKey,
+			});
 			processed += 1;
 		}
 

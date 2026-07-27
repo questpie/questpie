@@ -1364,6 +1364,13 @@ export interface DeleteParams<TId = string> {
 }
 
 /**
+ * Permanently purge one already soft-deleted record.
+ */
+export interface PurgeParams<TId = string> {
+	id: TId;
+}
+
+/**
  * Restore soft-deleted record params
  */
 export interface RestoreParams<TId = string> {
@@ -1734,6 +1741,18 @@ export interface CRUD<
 		params: DeleteParams<TId>,
 		context?: CRUDContext,
 	): Promise<{ success: boolean }>;
+
+	/**
+	 * Permanently remove an already soft-deleted record.
+	 *
+	 * Purge has distinct access and hook lifecycles. Delete authority never
+	 * grants purge authority. Collections without soft delete reject this
+	 * operation at runtime.
+	 */
+	purgeById(
+		params: PurgeParams<TId>,
+		context?: CRUDContext,
+	): Promise<{ success: true }>;
 
 	/**
 	 * Restore a single soft-deleted record by ID

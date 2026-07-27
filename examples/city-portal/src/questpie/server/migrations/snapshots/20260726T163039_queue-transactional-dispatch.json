@@ -1,0 +1,395 @@
+{
+	"operations": [
+		{
+			"type": "set",
+			"path": "ddl.table__COLON__public__DOT__questpie_queue_dispatch",
+			"value": {
+				"isRlsEnabled": false,
+				"name": "questpie_queue_dispatch",
+				"entityType": "tables",
+				"schema": "public"
+			},
+			"timestamp": "2026-07-26T16:30:40.106Z",
+			"migrationId": "queueTransactionalDispatch20260726T163039"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__questpie_queue_dispatch__DOT__dispatch_id",
+			"value": {
+				"type": "uuid",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "dispatch_id",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "questpie_queue_dispatch"
+			},
+			"timestamp": "2026-07-26T16:30:40.106Z",
+			"migrationId": "queueTransactionalDispatch20260726T163039"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__questpie_queue_dispatch__DOT__job_name",
+			"value": {
+				"type": "text",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "job_name",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "questpie_queue_dispatch"
+			},
+			"timestamp": "2026-07-26T16:30:40.106Z",
+			"migrationId": "queueTransactionalDispatch20260726T163039"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__questpie_queue_dispatch__DOT__idempotency_key",
+			"value": {
+				"type": "text",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "idempotency_key",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "questpie_queue_dispatch"
+			},
+			"timestamp": "2026-07-26T16:30:40.106Z",
+			"migrationId": "queueTransactionalDispatch20260726T163039"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__questpie_queue_dispatch__DOT__payload",
+			"value": {
+				"type": "jsonb",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "payload",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "questpie_queue_dispatch"
+			},
+			"timestamp": "2026-07-26T16:30:40.106Z",
+			"migrationId": "queueTransactionalDispatch20260726T163039"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__questpie_queue_dispatch__DOT__options",
+			"value": {
+				"type": "jsonb",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "options",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "questpie_queue_dispatch"
+			},
+			"timestamp": "2026-07-26T16:30:40.106Z",
+			"migrationId": "queueTransactionalDispatch20260726T163039"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__questpie_queue_dispatch__DOT__status",
+			"value": {
+				"type": "text",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": "'pending'",
+				"generated": null,
+				"identity": null,
+				"name": "status",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "questpie_queue_dispatch"
+			},
+			"timestamp": "2026-07-26T16:30:40.106Z",
+			"migrationId": "queueTransactionalDispatch20260726T163039"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__questpie_queue_dispatch__DOT__attempts",
+			"value": {
+				"type": "integer",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": "0",
+				"generated": null,
+				"identity": null,
+				"name": "attempts",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "questpie_queue_dispatch"
+			},
+			"timestamp": "2026-07-26T16:30:40.106Z",
+			"migrationId": "queueTransactionalDispatch20260726T163039"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__questpie_queue_dispatch__DOT__available_at",
+			"value": {
+				"type": "timestamp with time zone",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": "now()",
+				"generated": null,
+				"identity": null,
+				"name": "available_at",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "questpie_queue_dispatch"
+			},
+			"timestamp": "2026-07-26T16:30:40.106Z",
+			"migrationId": "queueTransactionalDispatch20260726T163039"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__questpie_queue_dispatch__DOT__lease_token",
+			"value": {
+				"type": "uuid",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "lease_token",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "questpie_queue_dispatch"
+			},
+			"timestamp": "2026-07-26T16:30:40.106Z",
+			"migrationId": "queueTransactionalDispatch20260726T163039"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__questpie_queue_dispatch__DOT__leased_until",
+			"value": {
+				"type": "timestamp with time zone",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "leased_until",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "questpie_queue_dispatch"
+			},
+			"timestamp": "2026-07-26T16:30:40.106Z",
+			"migrationId": "queueTransactionalDispatch20260726T163039"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__questpie_queue_dispatch__DOT__adapter_job_id",
+			"value": {
+				"type": "text",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "adapter_job_id",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "questpie_queue_dispatch"
+			},
+			"timestamp": "2026-07-26T16:30:40.106Z",
+			"migrationId": "queueTransactionalDispatch20260726T163039"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__questpie_queue_dispatch__DOT__last_error",
+			"value": {
+				"type": "text",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "last_error",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "questpie_queue_dispatch"
+			},
+			"timestamp": "2026-07-26T16:30:40.106Z",
+			"migrationId": "queueTransactionalDispatch20260726T163039"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__questpie_queue_dispatch__DOT__accepted_at",
+			"value": {
+				"type": "timestamp with time zone",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "accepted_at",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "questpie_queue_dispatch"
+			},
+			"timestamp": "2026-07-26T16:30:40.106Z",
+			"migrationId": "queueTransactionalDispatch20260726T163039"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__questpie_queue_dispatch__DOT__created_at",
+			"value": {
+				"type": "timestamp(3)",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": "now()",
+				"generated": null,
+				"identity": null,
+				"name": "created_at",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "questpie_queue_dispatch"
+			},
+			"timestamp": "2026-07-26T16:30:40.106Z",
+			"migrationId": "queueTransactionalDispatch20260726T163039"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__questpie_queue_dispatch__DOT__updated_at",
+			"value": {
+				"type": "timestamp(3)",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": "now()",
+				"generated": null,
+				"identity": null,
+				"name": "updated_at",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "questpie_queue_dispatch"
+			},
+			"timestamp": "2026-07-26T16:30:40.106Z",
+			"migrationId": "queueTransactionalDispatch20260726T163039"
+		},
+		{
+			"type": "set",
+			"path": "ddl.index__COLON__public__DOT__questpie_queue_dispatch__DOT__uq_queue_dispatch_idempotency",
+			"value": {
+				"nameExplicit": true,
+				"columns": [
+					{
+						"value": "job_name",
+						"isExpression": false,
+						"asc": true,
+						"nullsFirst": false,
+						"opclass": null
+					},
+					{
+						"value": "idempotency_key",
+						"isExpression": false,
+						"asc": true,
+						"nullsFirst": false,
+						"opclass": null
+					}
+				],
+				"isUnique": true,
+				"where": null,
+				"with": "",
+				"method": "btree",
+				"concurrently": false,
+				"name": "uq_queue_dispatch_idempotency",
+				"entityType": "indexes",
+				"schema": "public",
+				"table": "questpie_queue_dispatch"
+			},
+			"timestamp": "2026-07-26T16:30:40.106Z",
+			"migrationId": "queueTransactionalDispatch20260726T163039"
+		},
+		{
+			"type": "set",
+			"path": "ddl.index__COLON__public__DOT__questpie_queue_dispatch__DOT__idx_queue_dispatch_ready",
+			"value": {
+				"nameExplicit": true,
+				"columns": [
+					{
+						"value": "status",
+						"isExpression": false,
+						"asc": true,
+						"nullsFirst": false,
+						"opclass": null
+					},
+					{
+						"value": "available_at",
+						"isExpression": false,
+						"asc": true,
+						"nullsFirst": false,
+						"opclass": null
+					},
+					{
+						"value": "leased_until",
+						"isExpression": false,
+						"asc": true,
+						"nullsFirst": false,
+						"opclass": null
+					}
+				],
+				"isUnique": false,
+				"where": null,
+				"with": "",
+				"method": "btree",
+				"concurrently": false,
+				"name": "idx_queue_dispatch_ready",
+				"entityType": "indexes",
+				"schema": "public",
+				"table": "questpie_queue_dispatch"
+			},
+			"timestamp": "2026-07-26T16:30:40.106Z",
+			"migrationId": "queueTransactionalDispatch20260726T163039"
+		},
+		{
+			"type": "set",
+			"path": "ddl.pk__COLON__public__DOT__questpie_queue_dispatch__DOT__questpie_queue_dispatch_pkey",
+			"value": {
+				"columns": ["dispatch_id"],
+				"nameExplicit": false,
+				"name": "questpie_queue_dispatch_pkey",
+				"schema": "public",
+				"table": "questpie_queue_dispatch",
+				"entityType": "pks"
+			},
+			"timestamp": "2026-07-26T16:30:40.106Z",
+			"migrationId": "queueTransactionalDispatch20260726T163039"
+		}
+	],
+	"metadata": {
+		"migrationId": "queueTransactionalDispatch20260726T163039",
+		"timestamp": "2026-07-26T16:30:40.377Z",
+		"prevId": "00000000-0000-0000-0000-000000000000"
+	}
+}

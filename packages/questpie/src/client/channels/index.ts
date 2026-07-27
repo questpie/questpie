@@ -1,7 +1,16 @@
 import type { ChannelDefinitions } from "#questpie/server/channels/channel-builder.js";
+import { stringifyTypedWire } from "#questpie/shared/typed-wire.js";
 
 import type { GetAuthHeaders } from "../auth.js";
-import type { PusherRealtimeConfig } from "../realtime/pusher.js";
+import {
+	type PusherConnectionManager,
+	type PusherRealtimeConfig,
+} from "../realtime/pusher-connection.js";
+import type { SseConnectionManager } from "../realtime/sse-connection.js";
+import {
+	BoundedChannelQueue,
+	channelSlowConsumerError,
+} from "./ordered-events.js";
 import { PusherChannelTransport } from "./pusher.js";
 import { SseChannelTransport } from "./sse.js";
 import {
@@ -38,37 +47,48 @@ async function* channelIterator<TMessage>(
 	signal?: AbortSignal,
 ): AsyncGenerator<TMessage, void, unknown> {
 	if (signal?.aborted) return;
-	const queue: TMessage[] = [];
+	const queue = new BoundedChannelQueue<TMessage>();
 	let resolveNext: (() => void) | undefined;
-	let rejectNext: ((error: Error) => void) | undefined;
+	let terminalError: Error | undefined;
+	let stop: (() => void) | undefined;
 	let closed = false;
-	const stop = await subscribe(
-		(message) => {
-			queue.push(message);
-			resolveNext?.();
-		},
-		(error) => rejectNext?.(error),
-	);
+	const fail = (error: Error) => {
+		if (terminalError || closed) return;
+		terminalError = error;
+		queue.clear();
+		stop?.();
+		resolveNext?.();
+	};
+	stop = await subscribe((message) => {
+		if (!queue.push(message)) {
+			fail(channelSlowConsumerError());
+			return;
+		}
+		resolveNext?.();
+	}, fail);
 	const abort = () => {
 		closed = true;
+		stop?.();
 		resolveNext?.();
 	};
 	signal?.addEventListener("abort", abort, { once: true });
 	try {
 		while (true) {
+			if (terminalError) throw terminalError;
 			if (closed || signal?.aborted) break;
-			while (queue.length) yield queue.shift()!;
+			while (queue.length) {
+				yield queue.shift()!;
+				if (terminalError) throw terminalError;
+			}
 			if (closed || signal?.aborted) break;
-			await new Promise<void>((resolve, reject) => {
+			await new Promise<void>((resolve) => {
 				resolveNext = resolve;
-				rejectNext = reject;
 			});
 			resolveNext = undefined;
-			rejectNext = undefined;
 		}
 	} finally {
 		signal?.removeEventListener("abort", abort);
-		stop();
+		stop?.();
 	}
 }
 
@@ -79,7 +99,10 @@ export function createChannelsAPI<
 	baseUrl: string;
 	withCredentials: boolean;
 	fetcher: typeof fetch;
+	useSuperJSON?: boolean;
 	getAuthHeaders?: GetAuthHeaders;
+	pusherConnection?: PusherConnectionManager;
+	sseConnection?: SseConnectionManager;
 }): ChannelsClient<TChannels> {
 	let transport: ChannelClientTransport | null = null;
 	let config: ChannelClientTransportConfig | null = null;
@@ -120,12 +143,16 @@ export function createChannelsAPI<
 						fetcher: options.fetcher,
 						getAuthHeaders: options.getAuthHeaders,
 						config: selected.config as PusherRealtimeConfig,
+						connection: options.pusherConnection,
 					});
 				}
 				if (selected.transport !== "sse") {
 					throw new Error("Unsupported channel client transport");
 				}
-				return new SseChannelTransport(options);
+				return new SseChannelTransport({
+					...options,
+					connection: options.sseConnection,
+				});
 			})()
 				.then((selected) => {
 					if (selectedGeneration !== generation) selected.destroy();
@@ -207,8 +234,16 @@ export function createChannelsAPI<
 					`${options.baseUrl}/channels/publish`,
 					{
 						method: "POST",
-						headers: { "Content-Type": "application/json", ...authHeaders },
-						body: JSON.stringify({
+						headers: {
+							"Content-Type":
+								options.useSuperJSON !== false
+									? "application/superjson+json"
+									: "application/json",
+							...authHeaders,
+						},
+						body: (options.useSuperJSON !== false
+							? stringifyTypedWire
+							: JSON.stringify)({
 							channel: registryKey,
 							params: input.params ?? {},
 							event: input.event,

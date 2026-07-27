@@ -313,11 +313,10 @@ describe("default access control", () => {
 			);
 
 			// Read should work without session (explicit public read access)
-			const found =
-				await setup.app.collections.partial_access_posts.findOne(
-					{ where: { id: post.id } },
-					noSessionCtx,
-				);
+			const found = await setup.app.collections.partial_access_posts.findOne(
+				{ where: { id: post.id } },
+				noSessionCtx,
+			);
 			expect(found?.title).toBe("Public Post");
 
 			// Create should fail without session (fallback to defaultAccess)
@@ -399,10 +398,7 @@ describe("default access control", () => {
 				systemCtx,
 			);
 
-			const settings = await setup.app.globals.site_settings.get(
-				{},
-				userCtx,
-			);
+			const settings = await setup.app.globals.site_settings.get({}, userCtx);
 			expect(settings).toBeDefined();
 			expect(settings?.siteName).toBe("Test Site");
 		});
@@ -456,10 +452,7 @@ describe("default access control", () => {
 			).rejects.toThrow();
 
 			// Admin should be allowed
-			const settings = await setup.app.globals.admin_settings.get(
-				{},
-				adminCtx,
-			);
+			const settings = await setup.app.globals.admin_settings.get({}, adminCtx);
 			expect(settings).toBeDefined();
 			expect(settings?.secretKey).toBe("secret123");
 		});
@@ -468,20 +461,23 @@ describe("default access control", () => {
 	describe("public-visibility upload collections", () => {
 		const createAsset = async (overrides: Record<string, unknown> = {}) => {
 			const systemCtx = createTestContext({ accessMode: "system" });
-			return setup.app.collections.media_assets.create(
-				{
-					id: crypto.randomUUID(),
-					key: `uploads/${crypto.randomUUID()}.png`,
-					filename: "image.png",
-					mimeType: "image/png",
-					size: 100,
-					visibility: "public",
-					alt: "An image",
-					internalNote: "internal-only",
-					...overrides,
-				},
-				systemCtx,
+			const data = {
+				id: crypto.randomUUID(),
+				key: `uploads/${crypto.randomUUID()}.png`,
+				filename: "image.png",
+				mimeType: "image/png",
+				size: 100,
+				visibility: "public",
+				alt: "An image",
+				internalNote: "internal-only",
+				...overrides,
+			};
+			if (typeof data.key !== "string") throw new Error("Fixture key required");
+			await setup.app.storage.upload(
+				data.key,
+				new TextEncoder().encode("fixture:image"),
 			);
+			return setup.app.collections.media_assets.create(data, systemCtx);
 		};
 
 		it("denies anonymous find/count despite public visibility (defaultAccess applies)", async () => {

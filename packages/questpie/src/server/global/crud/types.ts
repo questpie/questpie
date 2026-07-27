@@ -251,4 +251,9 @@ export interface GlobalCRUD<
 		params: GlobalTransitionStageParams,
 		context?: CRUDContext,
 	): Promise<TSelect>;
+
+	// Internal properties (not part of public API)
+	"~internalState"?: any;
+	"~internalRelatedTable"?: any;
+	"~internalI18nTable"?: any;
 }

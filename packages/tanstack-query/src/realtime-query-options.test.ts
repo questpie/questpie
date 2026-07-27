@@ -44,11 +44,12 @@ describe("realtime query options", () => {
 					subscribeCalls++;
 					return () => {};
 				},
-				stream: async function* () {
+				streamEvents: async function* () {
 					streamCalls++;
-					yield await new Promise<unknown>((resolve) => {
+					const data = await new Promise<unknown>((resolve) => {
 						emitSnapshot = resolve;
 					});
+					yield { type: "snapshot", topicId: "posts", seq: 1, data };
 				},
 				destroy: () => {},
 				topicCount: 0,
@@ -102,6 +103,132 @@ describe("realtime query options", () => {
 		expect(typeof reject).toBe("function");
 	});
 
+	it("applies keyed events and preserves realtime query overrides", async () => {
+		const unchanged = { id: "unchanged", title: "Same" };
+		const placeholder = {
+			docs: [],
+			totalDocs: 0,
+			limit: 10,
+			totalPages: 0,
+			page: 1,
+			pagingCounter: 1,
+			hasPrevPage: false,
+			hasNextPage: false,
+			prevPage: null,
+			nextPage: null,
+		};
+		const client = {
+			collections: { posts: { find: async () => ({ docs: [] }) } },
+			globals: {},
+			routes: {},
+			realtime: {
+				subscribe: () => () => {},
+				streamEvents: async function* (_topic: unknown, signal?: AbortSignal) {
+					yield {
+						type: "snapshot",
+						topicId: "posts",
+						seq: 1,
+						data: {
+							docs: [unchanged, { id: "removed", title: "Remove" }],
+							totalDocs: 2,
+						},
+					};
+					yield {
+						type: "update",
+						topicId: "posts",
+						seq: 2,
+						key: "unchanged",
+						row: unchanged,
+					};
+					yield {
+						type: "insert",
+						topicId: "posts",
+						seq: 2,
+						key: "inserted",
+						row: { id: "inserted", title: "New" },
+					};
+					yield {
+						type: "delete",
+						topicId: "posts",
+						seq: 2,
+						key: "removed",
+					};
+					yield {
+						type: "up-to-date",
+						topicId: "posts",
+						seq: 2,
+						meta: { totalDocs: 2 },
+					};
+					await new Promise<void>((resolve) =>
+						signal?.addEventListener("abort", () => resolve(), { once: true }),
+					);
+				},
+				stream: async function* () {},
+				destroy: () => {},
+				topicCount: 0,
+				subscriberCount: 0,
+			},
+		} as unknown as QuestpieClient<QuestpieApp>;
+		const queryClient = new QueryClient();
+		const abortController = new AbortController();
+		const options = createQuestpieQueryOptions(client).collections.posts.find(
+			{},
+			{
+				realtime: true,
+				placeholderData: placeholder,
+				staleTime: 123,
+				refetchOnMount: false,
+			},
+		);
+
+		expect(options.placeholderData).toBe(placeholder);
+		expect(options.staleTime).toBe(123);
+		expect(options.refetchOnMount).toBe(false);
+
+		const queryPromise = (options.queryFn as any)({
+			client: queryClient,
+			queryKey: options.queryKey,
+			signal: abortController.signal,
+		});
+		await waitFor(() => {
+			const data = queryClient.getQueryData<any>(options.queryKey);
+			return data?.docs?.some((row: any) => row.id === "inserted") ?? false;
+		});
+		const result = queryClient.getQueryData<any>(options.queryKey);
+		expect(result.docs[0]).toBe(unchanged);
+		expect(result).toMatchObject({
+			docs: [unchanged, { id: "inserted", title: "New" }],
+			totalDocs: 2,
+			totalPages: 1,
+		});
+
+		abortController.abort();
+		await queryPromise;
+	});
+
+	it("uses safe realtime freshness defaults", () => {
+		const client = {
+			collections: { posts: { find: async () => ({ docs: [] }) } },
+			globals: {},
+			routes: {},
+			realtime: {
+				subscribe: () => () => {},
+				streamEvents: async function* () {},
+				stream: async function* () {},
+				destroy: () => {},
+				topicCount: 0,
+				subscriberCount: 0,
+			},
+		} as unknown as QuestpieClient<QuestpieApp>;
+		const options = createQuestpieQueryOptions(client).collections.posts.find(
+			{},
+			{ realtime: true },
+		);
+
+		expect(options.staleTime).toBe(0);
+		expect(options.refetchOnMount).toBe("always");
+	});
+
 	it("subscribes live counts with a count topic and consumes the scalar payload", async () => {
 		let subscribedTopic: unknown;
 		const client = {
@@ -114,9 +241,14 @@ describe("realtime query options", () => {
 			routes: {},
 			realtime: {
 				subscribe: () => () => {},
-				stream: async function* (topic: unknown) {
+				streamEvents: async function* (topic: unknown) {
 					subscribedTopic = topic;
-					yield 10_000;
+					yield {
+						type: "snapshot",
+						topicId: "posts-count",
+						seq: 1,
+						data: 10_000,
+					};
 				},
 				destroy: () => {},
 				topicCount: 0,
@@ -144,6 +276,57 @@ describe("realtime query options", () => {
 		expect(value).toBe(10_000);
 	});
 
+	it("uses the realtime global snapshot instead of the REST get result", async () => {
+		let subscribedTopic: unknown;
+		let getCalls = 0;
+		const client = {
+			collections: {},
+			globals: {
+				settings: {
+					get: async () => {
+						getCalls += 1;
+						return { theme: "rest" };
+					},
+				},
+			},
+			routes: {},
+			realtime: {
+				subscribe: () => () => {},
+				streamEvents: async function* (topic: unknown) {
+					subscribedTopic = topic;
+					yield {
+						type: "snapshot",
+						topicId: "settings",
+						seq: 1,
+						data: { theme: "realtime" },
+					};
+				},
+				destroy: () => {},
+				topicCount: 0,
+				subscriberCount: 0,
+			},
+		} as unknown as QuestpieClient<QuestpieApp>;
+		const queryClient = new QueryClient();
+		const options = createQuestpieQueryOptions(client).globals.settings.get(
+			{},
+			{ realtime: true },
+		);
+
+		const value = await (options.queryFn as any)({
+			client: queryClient,
+			queryKey: options.queryKey,
+			signal: new AbortController().signal,
+		});
+
+		expect(subscribedTopic).toEqual({
+			resourceType: "global",
+			resource: "settings",
+			operation: "get",
+		});
+		expect(value).toEqual({ theme: "realtime" });
+		expect(getCalls).toBe(0);
+	});
+
 	it("surfaces non-retryable admission failures as query errors after one attempt", async () => {
 		let streamCalls = 0;
 		const client = {
@@ -154,7 +337,7 @@ describe("realtime query options", () => {
 			routes: {},
 			realtime: {
 				subscribe: () => () => {},
-				stream: async function* () {
+				streamEvents: async function* () {
 					streamCalls += 1;
 					yield await Promise.reject(
 						new RealtimeTopicRejectedError({

@@ -158,6 +158,7 @@ function generateTitle(
 		create: "created",
 		update: "updated",
 		delete: "deleted",
+		purge: "purged",
 		transition: "changed status of",
 	};
 
@@ -336,6 +337,59 @@ async function collectionAfterDelete(ctx: GlobalCollectionHookContext) {
 	}
 }
 
+async function collectionAfterPurge(ctx: GlobalCollectionHookContext) {
+	try {
+		const collections =
+			(ctx as any).collections ?? (ctx as any).app?.collections;
+
+		if (isAuditDisabled("collection", ctx.collection)) return;
+
+		const actor = resolveAuditActor(ctx);
+		const resourceTypeLabel = getResourceTypeLabel(
+			"collection",
+			ctx.collection,
+		);
+		const resourceId = ctx.data?.id ? String(ctx.data.id) : null;
+
+		await collections[AUDIT_LOG_COLLECTION].create(
+			{
+				action: "purge",
+				resourceType: "collection",
+				resource: ctx.collection,
+				resourceId,
+				// The irreversible fact must not retain the purged row's label
+				// or field-level preimage.
+				resourceLabel: null,
+				userId: actor.userId,
+				userName: actor.userName,
+				locale: ctx.locale || null,
+				changes: null,
+				metadata: buildAuditMetadata(ctx, actor, {
+					operation: "purge",
+				}),
+				title: generateTitle(
+					"purge",
+					"collection",
+					resourceTypeLabel,
+					resourceId,
+					actor.userName,
+				),
+			},
+			{
+				accessMode: "system",
+				db: ctx.db,
+			},
+		);
+	} catch (err) {
+		logAuditFailure(
+			ctx,
+			`[Audit] Failed to log purge for collection "${ctx.collection}":`,
+			err,
+		);
+		throw err;
+	}
+}
+
 async function collectionAfterTransition(
 	ctx: GlobalCollectionTransitionHookContext,
 ) {
@@ -499,6 +553,7 @@ export default appConfig({
 		collections: {
 			afterChange: collectionAfterChange,
 			afterDelete: collectionAfterDelete,
+			afterPurge: collectionAfterPurge,
 			afterTransition: collectionAfterTransition,
 		},
 		globals: {

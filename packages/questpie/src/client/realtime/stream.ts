@@ -6,16 +6,265 @@
  */
 
 import type { GetAuthHeaders } from "../auth.js";
-import { RealtimeMultiplexer, type TopicConfig } from "./multiplexer.js";
+import type { TopicConfig } from "./multiplexer.js";
+import type { PusherConnectionManager } from "./pusher-connection.js";
 import {
-	PusherRealtimeTransport,
-	type PusherRealtimeConfig,
-} from "./pusher.js";
+	createRealtimeClientSession,
+	type RealtimeClientSession,
+} from "./session.js";
+import type { SseConnectionManager } from "./sse-connection.js";
 import type { RealtimeClientTransport } from "./transport.js";
+import { RealtimeTxidTracker } from "./txid.js";
 
 // ============================================================================
 // Types
 // ============================================================================
+
+export type RealtimeStreamEvent<TData = unknown> =
+	| {
+			type: "snapshot";
+			topicId: string;
+			seq: number;
+			data: TData;
+			reset?: boolean;
+			upToDate?: string;
+	  }
+	| {
+			type: "insert" | "update";
+			topicId: string;
+			seq: number;
+			txid?: string;
+			key: string;
+			row: unknown;
+			index?: number;
+	  }
+	| {
+			type: "delete";
+			topicId: string;
+			seq: number;
+			txid?: string;
+			key: string;
+	  }
+	| {
+			type: "up-to-date";
+			topicId: string;
+			seq: number;
+			txid?: string;
+			upToDate?: string;
+			meta?: { totalDocs?: number };
+	  };
+
+type RealtimeFindData<TRow> = {
+	docs: TRow[];
+	totalDocs?: number;
+	[key: string]: unknown;
+};
+
+/** Convert full find snapshots into the same keyed event union as native deltas. */
+export async function* deriveFindDeltas<
+	TRow,
+	TData extends RealtimeFindData<TRow>,
+>(
+	source: AsyncIterable<RealtimeStreamEvent<TData>>,
+	keyOf: (row: TRow) => string = (row) => String((row as { id?: unknown }).id),
+): AsyncGenerator<RealtimeStreamEvent<TData>, void, unknown> {
+	let previous: TData | undefined;
+
+	for await (const event of source) {
+		if (event.type !== "snapshot") {
+			yield event;
+			continue;
+		}
+		if (!previous || event.reset) {
+			previous = event.data;
+			yield event;
+			continue;
+		}
+
+		const previousByKey = new Map(
+			previous.docs.map((row, index) => [
+				keyOf(row),
+				{ row, index, serialized: JSON.stringify(row) },
+			]),
+		);
+		const nextKeys = new Set(event.data.docs.map(keyOf));
+		for (const row of previous.docs) {
+			const key = keyOf(row);
+			if (!nextKeys.has(key)) {
+				yield {
+					type: "delete",
+					topicId: event.topicId,
+					seq: event.seq,
+					key,
+				};
+			}
+		}
+
+		const materializedDocs: TRow[] = [];
+		for (const [index, row] of event.data.docs.entries()) {
+			const key = keyOf(row);
+			const old = previousByKey.get(key);
+			if (!old) {
+				materializedDocs.push(row);
+				yield {
+					type: "insert",
+					topicId: event.topicId,
+					seq: event.seq,
+					key,
+					row,
+					index,
+				};
+				continue;
+			}
+			const unchanged = old.serialized === JSON.stringify(row);
+			materializedDocs.push(unchanged ? old.row : row);
+			if (unchanged && old.index === index) continue;
+			yield {
+				type: "update",
+				topicId: event.topicId,
+				seq: event.seq,
+				key,
+				row: unchanged ? old.row : row,
+				index,
+			};
+		}
+
+		previous = { ...event.data, docs: materializedDocs };
+		yield {
+			type: "up-to-date",
+			topicId: event.topicId,
+			seq: event.seq,
+			...(event.upToDate === undefined ? {} : { upToDate: event.upToDate }),
+			meta: { totalDocs: event.data.totalDocs ?? event.data.docs.length },
+		};
+	}
+}
+
+type RealtimeFindEnvelope<TRow> = RealtimeFindData<TRow>;
+
+/** Metadata for an unwindowed realtime find result. */
+export function envelopeMeta<TRow>(
+	docs: readonly TRow[],
+	totalDocs = docs.length,
+) {
+	return {
+		totalDocs,
+		totalPages: 1,
+		page: 1,
+		hasNextPage: false,
+		hasPrevPage: false,
+		nextPage: null,
+		prevPage: null,
+	};
+}
+
+/** Apply one snapshot or keyed row event to an unwindowed find result. */
+export function applyRealtimeFindEvent<
+	TRow,
+	TData extends RealtimeFindEnvelope<TRow>,
+>(
+	current: TData | undefined,
+	event: RealtimeStreamEvent<TData>,
+	keyOf: (row: TRow) => string = (row) => String((row as { id?: unknown }).id),
+): TData {
+	if (event.type === "snapshot") return event.data;
+	if (!current) {
+		throw new Error("Realtime find deltas require an initial snapshot");
+	}
+
+	if (event.type === "up-to-date") {
+		return {
+			...current,
+			...envelopeMeta(
+				current.docs,
+				event.meta?.totalDocs ?? current.docs.length,
+			),
+		} as TData;
+	}
+
+	const index = current.docs.findIndex((row) => keyOf(row) === event.key);
+	let docs: TRow[];
+	if (event.type === "delete") {
+		if (index < 0) return current;
+		docs = [...current.docs.slice(0, index), ...current.docs.slice(index + 1)];
+	} else {
+		const row = event.row as TRow;
+		if (index >= 0) {
+			const targetIndex =
+				event.index === undefined
+					? index
+					: Math.max(0, Math.min(event.index, current.docs.length - 1));
+			docs = current.docs.slice();
+			docs.splice(index, 1);
+			docs.splice(targetIndex, 0, row);
+		} else {
+			const insertionIndex =
+				event.index === undefined
+					? current.docs.length
+					: Math.max(0, Math.min(event.index, current.docs.length));
+			docs = [
+				...current.docs.slice(0, insertionIndex),
+				row,
+				...current.docs.slice(insertionIndex),
+			];
+		}
+	}
+
+	return { ...current, docs, ...envelopeMeta(docs) } as TData;
+}
+
+/** Apply snapshot/count metadata frames to a scalar realtime result. */
+export function applyRealtimeScalarEvent<TData>(
+	current: TData | undefined,
+	event: RealtimeStreamEvent<TData>,
+): TData | undefined {
+	if (event.type === "snapshot") return event.data;
+	if (event.type === "up-to-date" && event.meta?.totalDocs !== undefined) {
+		return event.meta.totalDocs as TData;
+	}
+	return current;
+}
+
+/** Apply snapshot or keyed row frames to a single-row realtime result. */
+export function applyRealtimeSingleEvent<TData>(
+	current: TData | null | undefined,
+	event: RealtimeStreamEvent<TData | null>,
+): TData | null | undefined {
+	if (event.type === "snapshot") return event.data;
+	if (event.type === "delete") return null;
+	if (event.type === "insert" || event.type === "update") {
+		return event.row as TData;
+	}
+	return current;
+}
+
+function isFindTopic(topic: TopicConfig): boolean {
+	return (
+		topic.resourceType === "collection" &&
+		(topic.operation ?? "find") === "find"
+	);
+}
+
+function applyRealtimeTopicEvent<TData>(
+	topic: TopicConfig,
+	current: TData | null | undefined,
+	event: RealtimeStreamEvent<TData>,
+): TData | null | undefined {
+	if (isFindTopic(topic)) {
+		return applyRealtimeFindEvent(current as any, event as any) as TData;
+	}
+	if (topic.resourceType === "collection" && topic.operation === "count") {
+		return applyRealtimeScalarEvent(current as TData | undefined, event);
+	}
+	return applyRealtimeSingleEvent(
+		current,
+		event as RealtimeStreamEvent<TData | null>,
+	);
+}
+
+function emitsMaterializedValue(event: RealtimeStreamEvent): boolean {
+	return event.type === "snapshot" || event.type === "up-to-date";
+}
 
 export type RealtimeAPI = {
 	/**
@@ -39,6 +288,18 @@ export type RealtimeAPI = {
 		signal?: AbortSignal,
 		customId?: string,
 	) => AsyncGenerator<TData, void, unknown>;
+
+	/** Create an AsyncGenerator over the shared snapshot/delta wire union. */
+	streamEvents: <TData>(
+		topic: TopicConfig,
+		signal?: AbortSignal,
+		customId?: string,
+	) => AsyncGenerator<RealtimeStreamEvent<TData>, void, unknown>;
+
+	/** Resolve when an exact delta txid or a strictly newer visibility watermark arrives. */
+	awaitTxId: (txid: string, signal?: AbortSignal) => Promise<void>;
+	/** Extract a mutation result's txid and await its realtime reconciliation. */
+	awaitMutation: (result: unknown, signal?: AbortSignal) => Promise<void>;
 
 	/** Destroy the multiplexer and clean up all resources */
 	destroy: () => void;
@@ -69,16 +330,23 @@ export type RealtimeAPI = {
  * }
  * ```
  */
-export async function* sseSnapshotStream<TData>(options: {
+export async function* sseEventStream<TData>(options: {
 	multiplexer: RealtimeClientTransport;
 	topic: TopicConfig;
 	signal?: AbortSignal;
 	customId?: string;
-}): AsyncGenerator<TData, void, unknown> {
+}): AsyncGenerator<RealtimeStreamEvent<TData>, void, unknown> {
 	const { multiplexer, topic, signal, customId } = options;
 
-	// Queue for data waiting to be consumed
-	const queue: TData[] = [];
+	const maximumQueuedEvents = 512;
+	const maximumQueuedBytes = 1024 * 1024;
+	const encoder = new TextEncoder();
+	const queue: Array<{
+		event: RealtimeStreamEvent<TData>;
+		bytes: number;
+	}> = [];
+	let queueHead = 0;
+	let queuedBytes = 0;
 
 	// Promise resolver/rejecter for when new data arrives or connection fails
 	let resolveNext: (() => void) | null = null;
@@ -87,6 +355,13 @@ export async function* sseSnapshotStream<TData>(options: {
 
 	// Track if the stream is closed
 	let closed = false;
+	let rawUnsubscribe: (() => void) | undefined;
+	let unsubscribeRequested = false;
+	const unsubscribe = () => {
+		if (unsubscribeRequested) return;
+		unsubscribeRequested = true;
+		rawUnsubscribe?.();
+	};
 
 	// Error callback - rejects the waiting promise so the generator throws
 	// instead of waiting forever (prevents infinite loading on server errors)
@@ -100,27 +375,49 @@ export async function* sseSnapshotStream<TData>(options: {
 	};
 
 	// Subscribe to the topic via multiplexer
-	const unsubscribe = multiplexer.subscribe(
+	rawUnsubscribe = multiplexer.subscribe(
 		topic,
-		(data) => {
-			if (!closed) {
-				queue.push(data as TData);
-				resolveNext?.();
+		(event) => {
+			if (closed) return;
+			const typedEvent = event as RealtimeStreamEvent<TData>;
+			const bytes = encoder.encode(JSON.stringify(typedEvent)).byteLength;
+			if (
+				queue.length - queueHead >= maximumQueuedEvents ||
+				queuedBytes + bytes > maximumQueuedBytes
+			) {
+				pendingError = new Error(
+					`Realtime client event buffer exceeds ${maximumQueuedEvents} events or ${maximumQueuedBytes} bytes`,
+				);
+				closed = true;
+				unsubscribe();
+				rejectNext?.(pendingError);
+				return;
 			}
+			queue.push({ event: typedEvent, bytes });
+			queuedBytes += bytes;
+			resolveNext?.();
 		},
 		signal,
 		customId,
 		onError,
 	);
+	if (unsubscribeRequested) rawUnsubscribe();
 	signal?.addEventListener("abort", handleAbort, { once: true });
 
 	try {
-		while (!closed && !signal?.aborted) {
+		for (;;) {
+			if (signal?.aborted) break;
 			if (pendingError) throw pendingError;
 			// Yield all queued items
-			while (queue.length > 0) {
-				yield queue.shift()!;
+			while (queueHead < queue.length) {
+				if (pendingError) throw pendingError;
+				const queued = queue[queueHead++]!;
+				queuedBytes -= queued.bytes;
+				yield queued.event;
 			}
+			queue.length = 0;
+			queueHead = 0;
+			if (closed) break;
 
 			// Wait for more data or connection error
 			if (!closed && !signal?.aborted) {
@@ -137,6 +434,36 @@ export async function* sseSnapshotStream<TData>(options: {
 		signal?.removeEventListener("abort", handleAbort);
 		unsubscribe();
 	}
+}
+
+async function* materializeRealtimeStream<TData>(
+	topic: TopicConfig,
+	source: AsyncIterable<RealtimeStreamEvent<TData>>,
+): AsyncGenerator<TData, void, unknown> {
+	let current: TData | null | undefined;
+	for await (const event of source) {
+		current = applyRealtimeTopicEvent(topic, current, event);
+		if (emitsMaterializedValue(event) && current !== undefined) {
+			yield current as TData;
+		}
+	}
+}
+
+export function sseSnapshotStream<TData>(options: {
+	multiplexer: RealtimeClientTransport;
+	topic: TopicConfig;
+	signal?: AbortSignal;
+	customId?: string;
+}): AsyncGenerator<TData, void, unknown> {
+	const raw = sseEventStream<TData>(options);
+	const events = isFindTopic(options.topic)
+		? (deriveFindDeltas(raw as any) as AsyncGenerator<
+				RealtimeStreamEvent<TData>,
+				void,
+				unknown
+			>)
+		: raw;
+	return materializeRealtimeStream(options.topic, events);
 }
 
 // ============================================================================
@@ -258,67 +585,90 @@ export function createRealtimeAPI(opts: {
 	getAuthHeaders?: GetAuthHeaders;
 	fetcher?: typeof fetch;
 	refetchTopic?: (topic: TopicConfig) => Promise<unknown>;
+	pusherConnection?: PusherConnectionManager;
+	sseConnection?: SseConnectionManager;
+	/** @internal Shared owner used by createClient; not a public extension lane. */
+	realtimeSession?: RealtimeClientSession;
 }): RealtimeAPI {
-	let transport: RealtimeClientTransport | null = null;
-	let transportPromise: Promise<RealtimeClientTransport> | null = null;
-	let generation = 0;
-	const pending = new Set<object>();
-	const fetcher = opts.fetcher ?? globalThis.fetch;
+	const txids = new RealtimeTxidTracker();
+	const ownsSession = opts.realtimeSession === undefined;
+	const realtimeSession =
+		opts.realtimeSession ??
+		createRealtimeClientSession({
+			baseUrl: opts.baseUrl,
+			withCredentials: opts.withCredentials,
+			debounceMs: opts.debounceMs,
+			getAuthHeaders: opts.getAuthHeaders,
+			fetcher: opts.fetcher,
+			refetchTopic: opts.refetchTopic,
+			pusherConnection: opts.pusherConnection,
+			sseConnection: opts.sseConnection,
+		});
+	const subscriptions = new Set<() => void>();
 
-	const createSse = () =>
-		new RealtimeMultiplexer(
-			opts.baseUrl,
-			opts.withCredentials,
-			opts.debounceMs,
-			{},
-			opts.getAuthHeaders,
-			fetcher,
+	const subscribeEvents = (
+		topic: TopicConfig,
+		callback: (event: RealtimeStreamEvent) => void,
+		signal?: AbortSignal,
+		customId?: string,
+		onError?: (error: Error) => void,
+	) => {
+		const txidTopic = txids.registerTopic();
+		let stopped = false;
+		const stopInner = realtimeSession.subscribe(
+			topic,
+			(event) => {
+				txids.observe(event, txidTopic);
+				callback(event);
+			},
+			signal,
+			customId,
+			onError,
 		);
+		const stop = () => {
+			if (stopped) return;
+			stopped = true;
+			subscriptions.delete(stop);
+			txids.unregisterTopic(txidTopic);
+			stopInner();
+		};
+		subscriptions.add(stop);
+		return stop;
+	};
 
-	const getOrCreate = async (): Promise<RealtimeClientTransport> => {
-		if (transport) return transport;
-		if (!transportPromise) {
-			const selectedGeneration = generation;
-			transportPromise = (async () => {
-				try {
-					const authHeaders = await opts.getAuthHeaders?.();
-					const response = await fetcher(`${opts.baseUrl}/realtime/config`, {
-						headers: authHeaders,
-						credentials: opts.withCredentials ? "include" : "omit",
-					});
-					if (
-						response.ok &&
-						response.headers.get("content-type")?.includes("application/json")
-					) {
-						const selected = (await response.json()) as
-							| { transport: "sse" }
-							| { transport: "shared-provider"; config: PusherRealtimeConfig };
-						if (
-							selected.transport === "shared-provider" &&
-							selected.config?.provider === "pusher" &&
-							typeof selected.config.key === "string" &&
-							opts.refetchTopic
-						) {
-							return new PusherRealtimeTransport({
-								baseUrl: opts.baseUrl,
-								fetcher,
-								getAuthHeaders: opts.getAuthHeaders,
-								config: selected.config,
-								refetchTopic: opts.refetchTopic,
-							});
-						}
-					}
-				} catch {
-					// Backward compatibility with servers predating realtime/config.
-				}
-				return createSse();
-			})().then((selected) => {
-				if (selectedGeneration !== generation) selected.destroy();
-				else transport = selected;
-				return selected;
-			});
-		}
-		return transportPromise;
+	const eventFacade: RealtimeClientTransport = {
+		subscribe: subscribeEvents,
+		destroy: () => {
+			for (const stop of subscriptions) stop();
+			if (ownsSession) realtimeSession.destroy();
+			txids.clear();
+		},
+		get topicCount() {
+			return realtimeSession.topicCount;
+		},
+		get subscriberCount() {
+			return realtimeSession.subscriberCount;
+		},
+	};
+
+	const streamEvents = <TData>(
+		topic: TopicConfig,
+		signal?: AbortSignal,
+		customId?: string,
+	): AsyncGenerator<RealtimeStreamEvent<TData>, void, unknown> => {
+		const raw = sseEventStream<TData>({
+			multiplexer: eventFacade,
+			topic,
+			signal,
+			customId,
+		});
+		return isFindTopic(topic)
+			? (deriveFindDeltas(raw as any) as AsyncGenerator<
+					RealtimeStreamEvent<TData>,
+					void,
+					unknown
+				>)
+			: raw;
 	};
 
 	return {
@@ -329,63 +679,39 @@ export function createRealtimeAPI(opts: {
 			customId?: string,
 			onError?: (error: Error) => void,
 		) {
-			const subscriptionGeneration = generation;
-			const marker = {};
-			pending.add(marker);
-			let stopped = false;
-			let stopInner: (() => void) | undefined;
-			void getOrCreate()
-				.then((selected) => {
-					pending.delete(marker);
-					if (stopped || subscriptionGeneration !== generation) return;
-					stopInner = selected.subscribe(
-						topic,
-						callback as (data: unknown) => void,
-						signal,
-						customId,
-						onError,
-					);
-				})
-				.catch((error) => {
-					pending.delete(marker);
-					onError?.(error instanceof Error ? error : new Error(String(error)));
-				});
-			return () => {
-				stopped = true;
-				pending.delete(marker);
-				stopInner?.();
-			};
-		},
-		stream<TData>(topic: TopicConfig, signal?: AbortSignal, customId?: string) {
-			const facade: RealtimeClientTransport = {
-				subscribe: (...args) => this.subscribe(...args),
-				destroy: () => this.destroy(),
-				get topicCount() {
-					return transport?.topicCount ?? pending.size;
-				},
-				get subscriberCount() {
-					return transport?.subscriberCount ?? pending.size;
-				},
-			};
-			return sseSnapshotStream<TData>({
-				multiplexer: facade,
+			let current: TData | null | undefined;
+			return subscribeEvents(
 				topic,
+				(event) => {
+					current = applyRealtimeTopicEvent(
+						topic,
+						current,
+						event as RealtimeStreamEvent<TData>,
+					);
+					if (emitsMaterializedValue(event) && current !== undefined) {
+						callback(current as TData);
+					}
+				},
 				signal,
 				customId,
-			});
+				onError,
+			);
 		},
-		destroy() {
-			generation += 1;
-			pending.clear();
-			transport?.destroy();
-			transport = null;
-			transportPromise = null;
+		stream<TData>(topic: TopicConfig, signal?: AbortSignal, customId?: string) {
+			return materializeRealtimeStream(
+				topic,
+				streamEvents<TData>(topic, signal, customId),
+			);
 		},
+		streamEvents,
+		awaitTxId: (txid, signal) => txids.awaitTxId(txid, signal),
+		awaitMutation: (result, signal) => txids.awaitMutation(result, signal),
+		destroy: eventFacade.destroy,
 		get topicCount() {
-			return transport?.topicCount ?? pending.size;
+			return realtimeSession.topicCount;
 		},
 		get subscriberCount() {
-			return transport?.subscriberCount ?? pending.size;
+			return realtimeSession.subscriberCount;
 		},
 	};
 }

@@ -39,6 +39,8 @@ import type {
 export interface TemplateOptions {
 	/** Path to questpie.config.ts relative to .generated directory. */
 	configImportPath: string;
+	/** Stable package-and-source identity for the generated app singleton. */
+	appInstanceId?: string;
 	/** Discovery result with all found files. */
 	discovered: DiscoveryResult;
 	/** Merged category declarations from the resolved target. */
@@ -94,6 +96,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	let lines: string[] = l3;
 	const {
 		configImportPath,
+		appInstanceId = "questpie-app",
 		discovered,
 		categories,
 		singletonFactories,
@@ -297,7 +300,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		`import type { ${l1ToL2.join(", ")} } from "${layerImport(L1_FILE)}";`,
 	);
 	l2.push(
-		'import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";',
+		'import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AuthorityActor, CollectionAPI, CrdtClientAPI, CrdtRegistryFromApp, CrdtServerAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Principal, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";',
 	);
 	l2.push('import type { ChannelsService } from "questpie/channels";');
 	if (extraImports && extraImports.length > 0) {
@@ -310,7 +313,9 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 
 	// ── L3 index.ts — createApp + value preamble + lower-layer named types ──
 	genHeader(l3);
-	l3.push('import { createApp, createContextFactory } from "questpie/app";');
+	l3.push(
+		'import { acquireGeneratedApp, createApp, createContextFactory } from "questpie/app";',
+	);
 	// Side-effect import of names.gen.ts — it lives in the `.generated` dot-folder
 	// (NOT matched by `src/**/*.ts` globs) and is imported by nothing else, so
 	// without this its ambient `declare global` (the MODULE entity-name half of
@@ -318,7 +323,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	// `relation("user")` strict keys regress. A side-effect import is never elided.
 	l3.push(`import "${layerImport(L0_FILE)}";`);
 	l3.push(
-		'import type { AccessContext, AppDefinition, CollectionSelect, GlobalSelect, HookContext, Where } from "questpie/types";',
+		'import type { AccessContext, AppDefinition, CollectionSelect, CrdtClientAPI, CrdtRegistryFromApp, CrdtServerAPI, GlobalSelect, HookContext, Where } from "questpie/types";',
 	);
 	// CollectionDoc/GlobalDoc/AppConfig/createContext read these from L1; the
 	// runtime `as _AppQuestpie` cast + AppSession re-exports read from L2.
@@ -327,7 +332,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		`import type { ${l3FromL1.join(", ")} } from "${layerImport(L1_FILE)}";`,
 	);
 	l3.push(
-		`import type { _AppQuestpie, AppAuthConfig, AppSession, AppSessionUser } from "${layerImport(L2_FILE)}";`,
+		`import type { _AppQuestpie, AppAuthConfig, AppCrdt, AppSession, AppSessionUser } from "${layerImport(L2_FILE)}";`,
 	);
 	l3.push("");
 	pushValueImports(l3);
@@ -882,6 +887,12 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 			lines.push("};");
 		}
 		lines.push("");
+		lines.push(
+			"export type AppCrdt = CrdtRegistryFromApp<{ collections: AppCollections; globals: AppGlobals }>;",
+		);
+		lines.push("export type AppCrdtClient = CrdtClientAPI<AppCrdt>;");
+		lines.push("export type AppCrdtServer = CrdtServerAPI<AppCrdt>;");
+		lines.push("");
 
 		lines.push(
 			"// ── AppContext augmentation — auto-types ALL handlers ──────",
@@ -915,6 +926,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		lines.push('\tsearch: _AppQuestpie["search"];');
 		lines.push('\trealtime: _AppQuestpie["realtime"];');
 		lines.push("\tchannels: ChannelsService<AppChannels>;");
+		lines.push("\tcrdt: AppCrdtServer;");
 		lines.push("");
 		lines.push("\t// Entity APIs");
 		lines.push("\tcollections: _CollectionsAPI;");
@@ -923,6 +935,8 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		lines.push("");
 		lines.push("\t// Request-scoped");
 		lines.push("\tsession: _AppSession;");
+		lines.push("\tprincipal?: Principal;");
+		lines.push("\tactor?: AuthorityActor;");
 		if (hasMessages) {
 			lines.push(
 				"\tt: (key: AppMessageKeys | (string & {}), params?: Record<string, unknown>, locale?: string) => string;",
@@ -1353,6 +1367,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	lines.push("export type AppConfig = {");
 	lines.push("\tcollections: AppCollections;");
 	lines.push("\tchannels: AppChannels;");
+	lines.push("\tcrdt: AppCrdt;");
 	lines.push("\tglobals: AppGlobals;");
 	lines.push("\troutes: AppRoutes;");
 	lines.push('\tstorage: (typeof _runtime)["storage"];');
@@ -1369,7 +1384,13 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	lines.push("// ════════════════════════════════════════════════════════════");
 	lines.push("");
 
-	emitNewArchitectureRuntime(lines, discovered, allDecls, extraEntities);
+	emitNewArchitectureRuntime(
+		lines,
+		discovered,
+		allDecls,
+		appInstanceId,
+		extraEntities,
+	);
 
 	lines.push("/** Fully typed QUESTPIE app instance. */");
 	lines.push("export type App = typeof app;");
@@ -1398,13 +1419,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		"\toptions?: Parameters<ReturnType<typeof createContextFactory>>[0],",
 	);
 	lines.push(") {");
-	lines.push("\twhile (!_appPromise) {");
-	lines.push("\t\tawait new Promise((resolve) => setTimeout(resolve, 0));");
-	lines.push("\t}");
-	lines.push("");
-	lines.push(
-		"\treturn createContextFactory((await _appPromise) as _AppQuestpie)(options);",
-	);
+	lines.push("\treturn createContextFactory(app)(options);");
 	lines.push("}");
 	lines.push("");
 
@@ -1447,6 +1462,7 @@ function emitNewArchitectureRuntime(
 	lines: string[],
 	discovered: DiscoveryResult,
 	allDecls: Map<string, CategoryDeclaration>,
+	appInstanceId: string,
 	extraEntities?: Map<string, string>,
 ): void {
 	const modulesFile = discovered.singles.get("modules");
@@ -1456,9 +1472,9 @@ function emitNewArchitectureRuntime(
 	const envFile = discovered.singles.get("env") ?? null;
 	const coreSingles = getCategorizedSingles(discovered.singles, allDecls);
 
-	lines.push("var _appPromise: Promise<unknown> | undefined;");
-	lines.push("");
-	lines.push("_appPromise = createApp(");
+	lines.push(
+		`var _appLease = acquireGeneratedApp(${JSON.stringify(appInstanceId)}, () => createApp(`,
+	);
 	lines.push("\t({");
 
 	// Modules — preserve the concrete exported module types directly.
@@ -1542,11 +1558,21 @@ function emitNewArchitectureRuntime(
 
 	lines.push("\t}) satisfies AppDefinition,");
 	lines.push("\t_runtime,");
-	lines.push(");");
+	lines.push("));");
+	lines.push("var _appPromise = _appLease.promise;");
 	lines.push("");
 	lines.push(
 		"export const app = (await _appPromise) as unknown as _AppQuestpie;",
 	);
+	lines.push("");
+	lines.push("export async function destroyApp(): Promise<void> {");
+	lines.push("\tawait _appLease.shutdown();");
+	lines.push("}");
+	lines.push("");
+	lines.push(
+		"const _hot = (import.meta as ImportMeta & { hot?: { dispose(callback: () => void | Promise<void>): void } }).hot;",
+	);
+	lines.push("_hot?.dispose(() => _appLease.release());");
 	lines.push("");
 	if (envFile) {
 		lines.push("/** Validated app environment (from env.ts). */");

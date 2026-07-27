@@ -10,6 +10,7 @@ import { buildMockApp } from "../../questpie/test/utils/mocks/mock-app-builder.j
 import { createTestContext } from "../../questpie/test/utils/test-context.js";
 import { runTestDbMigrations } from "../../questpie/test/utils/test-db.js";
 import { createMcpServer, mcpTool } from "../src/exports/index.js";
+import { mcpOAuthScopeCatalog } from "../src/server/oauth-scope-catalog.js";
 
 const posts = collection("posts")
 	.fields(({ f }) => ({
@@ -38,8 +39,11 @@ const siteSettings = global("siteSettings")
 	}))
 	.access({ read: true, update: true });
 
+let reportRouteAllowed = true;
+
 const reportRoute = route()
 	.post()
+	.access(() => reportRouteAllowed)
 	.schema(z.object({ period: z.enum(["day", "week"]) }))
 	.outputSchema(z.object({ period: z.enum(["day", "week"]), ok: z.boolean() }))
 	.meta({
@@ -92,6 +96,8 @@ const dateRoute = route()
 	.handler(async ({ input }) => ({ iso: input.at.toISOString() }));
 
 const echoTool = mcpTool("custom.echo", {
+	access: true,
+	scopes: false,
 	description: "Echo a message.",
 	inputSchema: z.object({ message: z.string() }),
 }).handler(async ({ input }) => ({
@@ -100,6 +106,8 @@ const echoTool = mcpTool("custom.echo", {
 }));
 
 const dateTool = mcpTool("custom.date", {
+	access: true,
+	scopes: false,
 	description: "Parse a date.",
 	inputSchema: z.object({ at: z.coerce.date() }),
 }).handler(async ({ input }) => ({
@@ -113,6 +121,7 @@ const guardedTool = mcpTool("custom.guarded", {
 	description: "Guarded custom tool.",
 	inputSchema: z.object({ message: z.string() }),
 	access: () => guardedToolAllowed,
+	scopes: false,
 }).handler(async ({ input }) => ({
 	structuredContent: { message: input.message },
 	content: [{ type: "text", text: input.message }],
@@ -123,6 +132,7 @@ const requestHeaderTool = mcpTool("custom.request-header", {
 	inputSchema: z.object({}),
 	access: ({ ctx }) =>
 		(ctx as any).request?.headers.get("x-mcp-test") === "present",
+	scopes: false,
 }).handler(async ({ ctx }) => ({
 	structuredContent: {
 		header: (ctx as any).request?.headers.get("x-mcp-test"),
@@ -139,6 +149,7 @@ const principalTool = mcpTool("custom.principal", {
 	description: "Return the authenticated principal.",
 	inputSchema: z.object({}),
 	access: ({ ctx }) => typeof ctx.session?.user?.id === "string",
+	scopes: false,
 }).handler(async ({ ctx }) => ({
 	structuredContent: {
 		userId: ctx.session?.user.id,
@@ -166,6 +177,7 @@ describe("@questpie/mcp server", () => {
 
 	beforeEach(async () => {
 		guardedToolAllowed = true;
+		reportRouteAllowed = true;
 		setup = await buildMockApp({
 			collections: { posts, privateNotes },
 			globals: { siteSettings },
@@ -187,11 +199,48 @@ describe("@questpie/mcp server", () => {
 				mcp: {
 					crud: {
 						collections: {
-							posts: { read: true, write: true, delete: true },
-							privateNotes: { read: true, write: true },
+							posts: {
+								operations: {
+									list: true,
+									count: true,
+									get: true,
+									create: true,
+									update: true,
+									delete: true,
+								},
+							},
+							privateNotes: {
+								operations: {
+									list: true,
+									count: true,
+									get: true,
+									create: true,
+									update: true,
+								},
+							},
 						},
 						globals: {
-							siteSettings: { read: true, write: true },
+							siteSettings: {
+								operations: { get: true, update: true },
+							},
+						},
+					},
+					routes: {
+						routes: {
+							"reports/generate": { operations: { execute: true } },
+							"reports/[id]": { operations: { execute: true } },
+							"reports/denied": { operations: { execute: true } },
+							"dates/parse": { operations: { execute: true } },
+						},
+					},
+					resources: {
+						collections: { posts: true, privateNotes: true },
+						globals: { siteSettings: true },
+						routes: {
+							"reports/generate": true,
+							"reports/[id]": true,
+							"reports/denied": true,
+							"dates/parse": true,
 						},
 					},
 				},
@@ -210,6 +259,106 @@ describe("@questpie/mcp server", () => {
 
 	afterEach(async () => {
 		await setup?.cleanup();
+	});
+
+	it("exposes nothing when named MCP policy is omitted", async () => {
+		const omitted = await buildMockApp({
+			collections: { posts },
+			globals: { siteSettings },
+			routes: { "reports/generate:POST": reportRoute },
+		});
+		try {
+			const server = await createMcpServer(omitted.app, {
+				transport: "http",
+			});
+			const { client, close } = await connect(server);
+			try {
+				expect((await client.listTools()).tools).toEqual([]);
+				expect(client.getServerCapabilities()?.resources).toBeUndefined();
+			} finally {
+				await close();
+			}
+		} finally {
+			await omitted.cleanup();
+		}
+	});
+
+	it("reuses the immutable OAuth release snapshot for later server calls", async () => {
+		const mutableToolConfig = {
+			access: true,
+			scopes: "custom:frozen:invoke",
+		};
+		const frozenTool = mcpTool("custom.frozen", mutableToolConfig).handler(
+			async () => ({ content: [{ type: "text", text: "frozen" }] }),
+		);
+		const local = await buildMockApp({
+			collections: { posts },
+			mcpTools: { frozenTool },
+			config: {
+				mcp: {
+					crud: {
+						collections: { posts: { operations: { list: true } } },
+					},
+				},
+			},
+		});
+
+		const advertised = mcpOAuthScopeCatalog(local.app as never);
+		mutableToolConfig.access = false;
+		mutableToolConfig.scopes = "custom:mutated:invoke";
+		(
+			local.app.state!.config!.mcp!.crud!.collections!.posts as {
+				operations: Record<string, boolean>;
+			}
+		).operations.delete = true;
+
+		const server = await createMcpServer(local.app);
+		const { client, close } = await connect(server);
+		try {
+			expect(advertised.scopes).toContain("custom:frozen:invoke");
+			expect(advertised.scopes).not.toContain("custom:mutated:invoke");
+			expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(
+				["collections.posts.list", "custom.frozen"],
+			);
+			expect(
+				(
+					await client.callTool({
+						name: "custom.frozen",
+						arguments: {},
+					})
+				).isError,
+			).toBeUndefined();
+		} finally {
+			await close();
+			await local.cleanup();
+		}
+	});
+
+	it("fails closed when a route and custom tool resolve to the same name", async () => {
+		const duplicateTool = mcpTool("reports.generate", {
+			access: true,
+			scopes: false,
+		}).handler(async () => ({ content: [] }));
+		const collision = await buildMockApp({
+			routes: { "reports/generate:POST": reportRoute },
+			mcpTools: { duplicateTool },
+			config: {
+				mcp: {
+					routes: {
+						routes: {
+							"reports/generate": { operations: { execute: true } },
+						},
+					},
+				},
+			},
+		});
+		try {
+			await expect(
+				createMcpServer(collision.app, { transport: "http" }),
+			).rejects.toThrow("Duplicate MCP tool name");
+		} finally {
+			await collision.cleanup();
+		}
 	});
 
 	it("handles JSON-RPC initialize plus tool and resource discovery", async () => {
@@ -231,6 +380,7 @@ describe("@questpie/mcp server", () => {
 			expect(toolNames).not.toContain("collections.privateNotes.list");
 			expect(toolNames).not.toContain("routes.reports.unannotated");
 			expect(toolNames).not.toContain("raw.exposed");
+			expect(toolNames).not.toContain("routes.reports.denied");
 
 			const resources = await client.listResources();
 			const resourceUris = resources.resources.map((resource) => resource.uri);
@@ -316,6 +466,25 @@ describe("@questpie/mcp server", () => {
 		const { client, close } = await connect(server);
 
 		try {
+			const createTool = (await client.listTools()).tools.find(
+				(tool) => tool.name === "collections.posts.create",
+			);
+			if (!createTool)
+				throw new Error("Expected generated collection create tool");
+			const scheduledAtSchema = (createTool.inputSchema as any).properties.data
+				.properties.scheduledAt;
+			const scheduledAtBranches = scheduledAtSchema.anyOf ?? [
+				scheduledAtSchema,
+			];
+			expect(scheduledAtBranches).toContainEqual(
+				expect.objectContaining({
+					type: "string",
+					format: "date-time",
+					pattern: expect.any(String),
+				}),
+			);
+			expect(scheduledAtBranches).not.toContainEqual({});
+
 			const listResult = await client.callTool({
 				name: "collections.posts.list",
 				arguments: { limit: 10 },
@@ -331,11 +500,31 @@ describe("@questpie/mcp server", () => {
 
 			const createResult = await client.callTool({
 				name: "collections.posts.create",
-				arguments: { data: { title: "Created", published: false } },
+				arguments: {
+					data: {
+						title: "Created",
+						published: false,
+						scheduledAt: "2025-03-30T01:30:00.123+01:00",
+					},
+				},
 			});
 			expect(createResult.isError).toBeUndefined();
+			expect((createResult.structuredContent as any).scheduledAt).toBe(
+				"2025-03-30T00:30:00.123Z",
+			);
 			const createdId = (createResult.structuredContent as any).id;
 			expect(typeof createdId).toBe("string");
+
+			const ambiguousInstant = await client.callTool({
+				name: "collections.posts.create",
+				arguments: {
+					data: {
+						title: "Ambiguous",
+						scheduledAt: "2025-03-30T01:30:00.123",
+					},
+				},
+			});
+			expect(ambiguousInstant.isError).toBe(true);
 
 			const getResult = await client.callTool({
 				name: "collections.posts.get",
@@ -411,6 +600,25 @@ describe("@questpie/mcp server", () => {
 				period: "week",
 			});
 
+			const extraParamResult = await client.callTool({
+				name: "routes.reports.id",
+				arguments: {
+					params: { id: "sales", forged: "value" },
+					input: { period: "week" },
+				},
+			});
+			expect(extraParamResult.isError).toBe(true);
+
+			const extraWrapperResult = await client.callTool({
+				name: "routes.reports.id",
+				arguments: {
+					params: { id: "sales" },
+					input: { period: "week" },
+					forged: "value",
+				},
+			});
+			expect(extraWrapperResult.isError).toBe(true);
+
 			const dateRouteResult = await client.callTool({
 				name: "dates.parse",
 				arguments: { at: "2026-05-08T12:00:00.000Z" },
@@ -419,6 +627,25 @@ describe("@questpie/mcp server", () => {
 				iso: "2026-05-08T12:00:00.000Z",
 			});
 		} finally {
+			await close();
+		}
+	});
+
+	it("rechecks ordinary route access after discovery", async () => {
+		const server = await createMcpServer(setup.app, { transport: "http" });
+		const { client, close } = await connect(server);
+		try {
+			expect(
+				(await client.listTools()).tools.map((tool) => tool.name),
+			).toContain("reports.generate");
+			reportRouteAllowed = false;
+			const result = await client.callTool({
+				name: "reports.generate",
+				arguments: { period: "day" },
+			});
+			expect(result.isError).toBe(true);
+		} finally {
+			reportRouteAllowed = true;
 			await close();
 		}
 	});
@@ -443,6 +670,40 @@ describe("@questpie/mcp server", () => {
 			});
 		} finally {
 			await close();
+		}
+	});
+
+	it("redacts raw custom tool failures from protocol responses", async () => {
+		const secretFailure = mcpTool("custom.secret-failure", {
+			access: true,
+			scopes: false,
+		}).handler(async () => {
+			throw new Error("postgres://user:password@internal/database");
+		});
+		const local = await buildMockApp({
+			mcpTools: { secretFailure },
+		});
+		const server = await createMcpServer(local.app);
+		const { client, close } = await connect(server);
+		try {
+			const result = await client.callTool({
+				name: "custom.secret-failure",
+				arguments: {},
+			});
+			expect(result.isError).toBe(true);
+			expect(JSON.stringify(result)).not.toContain("password");
+			expect(result.content).toEqual([
+				{ type: "text", text: "MCP operation failed" },
+			]);
+			expect(result["_meta"]).toEqual({
+				"questpie/error": {
+					code: "internal",
+					correlationId: expect.any(String),
+				},
+			});
+		} finally {
+			await close();
+			await local.cleanup();
 		}
 	});
 
@@ -475,23 +736,27 @@ describe("@questpie/mcp server", () => {
 		}
 	});
 
-	it("applies top-level field include and exclude policy to inputs, outputs, and resources", async () => {
+	it("applies field policy exactly to mutations, recursive queries, outputs, and resources", async () => {
 		const server = await createMcpServer(setup.app, {
 			transport: "http",
 			config: {
 				crud: {
 					collections: {
 						posts: {
-							read: true,
-							write: true,
-							delete: true,
+							operations: {
+								list: true,
+								count: true,
+								get: true,
+								create: true,
+								update: true,
+								delete: true,
+							},
 							fields: { include: ["title", "published"] },
 						},
 					},
 					globals: {
 						siteSettings: {
-							read: true,
-							write: true,
+							operations: { get: true, update: true },
 							fields: { exclude: ["privateToken"] },
 						},
 					},
@@ -501,13 +766,34 @@ describe("@questpie/mcp server", () => {
 		const { client, close } = await connect(server);
 
 		try {
+			for (const [name, args] of [
+				[
+					"collections.posts.create",
+					{
+						data: {
+							title: "Rejected",
+							published: true,
+							secret: "must-reject",
+						},
+					},
+				],
+				["collections.posts.count", { where: { secret: "oracle" } }],
+				["collections.posts.list", { where: { AND: [{ secret: "oracle" }] } }],
+				["collections.posts.list", { sort: { secret: "asc" } }],
+				["collections.posts.list", { columns: { secret: true } }],
+				["collections.posts.list", { with: { secret: true } }],
+			] as const) {
+				expect((await client.callTool({ name, arguments: args })).isError).toBe(
+					true,
+				);
+			}
+
 			const createResult = await client.callTool({
 				name: "collections.posts.create",
 				arguments: {
 					data: {
 						title: "Filtered",
 						published: true,
-						secret: "should-not-store",
 					},
 				},
 			});
@@ -519,13 +805,21 @@ describe("@questpie/mcp server", () => {
 				{ where: { title: "Filtered" } },
 				createTestContext({ accessMode: "system" }),
 			);
-			expect((stored as any).secret).not.toBe("should-not-store");
+			expect((stored as any).secret).toBeNull();
 
-			const updateResult = await client.callTool({
+			const rejectedUpdate = await client.callTool({
 				name: "collections.posts.update",
 				arguments: {
 					id: (stored as any).id,
 					data: { title: "Filtered update", secret: "still-not-store" },
+				},
+			});
+			expect(rejectedUpdate.isError).toBe(true);
+			const updateResult = await client.callTool({
+				name: "collections.posts.update",
+				arguments: {
+					id: (stored as any).id,
+					data: { title: "Filtered update" },
 				},
 			});
 			expect((updateResult.structuredContent as any).secret).toBeUndefined();
@@ -545,10 +839,17 @@ describe("@questpie/mcp server", () => {
 				(listResult.structuredContent as any).docs[0].secret,
 			).toBeUndefined();
 
-			const globalResult = await client.callTool({
+			const rejectedGlobal = await client.callTool({
 				name: "globals.siteSettings.update",
 				arguments: {
 					data: { siteName: "Filtered Site", privateToken: "new-token" },
+				},
+			});
+			expect(rejectedGlobal.isError).toBe(true);
+			const globalResult = await client.callTool({
+				name: "globals.siteSettings.update",
+				arguments: {
+					data: { siteName: "Filtered Site" },
 				},
 			});
 			expect((globalResult.structuredContent as any).siteName).toBe(
@@ -589,15 +890,19 @@ describe("@questpie/mcp server", () => {
 				crud: {
 					collections: {
 						posts: {
-							read: true,
-							write: true,
+							operations: {
+								list: true,
+								count: true,
+								get: true,
+								create: true,
+								update: true,
+							},
 							fields: { include: ["title", "published"] },
 						},
 					},
 					globals: {
 						siteSettings: {
-							read: true,
-							write: true,
+							operations: { get: true, update: true },
 							fields: { exclude: ["privateToken"] },
 						},
 					},
@@ -674,22 +979,56 @@ describe("@questpie/mcp server", () => {
 	it("can disable annotated route resources globally", async () => {
 		const server = await createMcpServer(setup.app, {
 			transport: "http",
-			config: { routes: { exposeAnnotated: false } },
+			config: {
+				resources: {
+					routes: {
+						"reports/generate": false,
+						"reports/[id]": false,
+						"reports/denied": false,
+						"dates/parse": false,
+					},
+				},
+			},
 		});
 		const { client, close } = await connect(server);
 
 		try {
-			const routesResource = await client.readResource({
-				uri: "questpie://schema/routes",
-			});
-			expect(JSON.parse(routesResource.contents[0].text!)).toEqual([]);
+			expect(
+				(await client.listResources()).resources.map(
+					(resource) => resource.uri,
+				),
+			).not.toContain("questpie://schema/routes");
+			await expect(
+				client.readResource({ uri: "questpie://schema/routes" }),
+			).rejects.toThrow();
 		} finally {
 			await close();
 		}
 	});
 
-	it("uses stdio policy defaults as trusted system mode", async () => {
-		const server = await createMcpServer(setup.app, { transport: "stdio" });
+	it("rejects stdio without an explicit authority", async () => {
+		await expect(
+			createMcpServer(setup.app, { transport: "stdio" }),
+		).rejects.toThrow("explicit authority");
+		await expect(
+			createMcpServer(setup.app, {
+				transport: "stdio",
+				accessMode: "system",
+			}),
+		).rejects.toThrow("explicit authority");
+		await expect(
+			createMcpServer(setup.app, {
+				transport: "stdio",
+				ctx: createTestContext({ accessMode: "system" }),
+			}),
+		).rejects.toThrow("explicit authority");
+	});
+
+	it("uses stdio policy defaults only in explicit trusted-maintenance mode", async () => {
+		const server = await createMcpServer(setup.app, {
+			transport: "stdio",
+			config: { stdio: { trustedMaintenance: true } },
+		});
 		const { client, close } = await connect(server);
 
 		try {
@@ -747,9 +1086,10 @@ describe("@questpie/mcp server", () => {
 	});
 
 	it("lets stdio be explicitly lowered to user mode", async () => {
+		const ctx = createTestContext({ accessMode: "user" });
 		const server = await createMcpServer(setup.app, {
 			transport: "stdio",
-			accessMode: "user",
+			ctx,
 		});
 		const { client, close } = await connect(server);
 
@@ -770,7 +1110,9 @@ describe("@questpie/mcp server", () => {
 			config: {
 				crud: {
 					collections: {
-						posts: { read: true, write: false, delete: false },
+						posts: {
+							operations: { list: true, count: true, get: true },
+						},
 					},
 					globals: {
 						siteSettings: false,
@@ -796,17 +1138,30 @@ describe("@questpie/mcp server", () => {
 		}
 	});
 
-	it("applies config precedence before QUESTPIE access rules", async () => {
+	it("intersects named config with QUESTPIE access rules", async () => {
 		const server = await createMcpServer(setup.app, {
 			transport: "http",
 			config: {
 				crud: {
-					defaults: {
-						collections: { read: true, write: false, delete: false },
-					},
 					collections: {
-						posts: { read: true, write: true, delete: false },
-						privateNotes: { read: true, write: true },
+						posts: {
+							operations: {
+								list: true,
+								count: true,
+								get: true,
+								create: true,
+								update: true,
+							},
+						},
+						privateNotes: {
+							operations: {
+								list: true,
+								count: true,
+								get: true,
+								create: true,
+								update: true,
+							},
+						},
 					},
 				},
 			},
@@ -822,6 +1177,39 @@ describe("@questpie/mcp server", () => {
 			expect(toolNames).not.toContain("collections.privateNotes.list");
 		} finally {
 			await close();
+		}
+	});
+
+	it("maps create, update, delete, and read to their exact QUESTPIE access rules", async () => {
+		const asymmetric = collection("asymmetric")
+			.fields(({ f }) => ({ title: f.text(255).required() }))
+			.access({ read: false, create: false, update: true, delete: false });
+		const local = await buildMockApp({ collections: { asymmetric } });
+		const server = await createMcpServer(local.app, {
+			config: {
+				crud: {
+					collections: {
+						asymmetric: {
+							operations: {
+								list: true,
+								create: true,
+								update: true,
+								delete: true,
+							},
+						},
+					},
+				},
+			},
+		});
+		const { client, close } = await connect(server);
+
+		try {
+			expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(
+				["collections.asymmetric.update"],
+			);
+		} finally {
+			await close();
+			await local.cleanup();
 		}
 	});
 

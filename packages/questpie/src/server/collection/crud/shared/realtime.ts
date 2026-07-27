@@ -35,7 +35,7 @@ export interface AppendRealtimeChangeParams {
 export async function appendRealtimeChange(
 	params: AppendRealtimeChangeParams,
 	context: CRUDContext,
-	db: any,
+	_db: any,
 	app: Questpie<any> | undefined,
 	resourceName: string,
 	resourceType: "collection" | "global" = "collection",
@@ -44,17 +44,14 @@ export async function appendRealtimeChange(
 
 	const normalized = normalizeContext(context);
 
-	return app.realtime.appendChange(
-		{
-			resourceType,
-			resource: resourceName,
-			operation: params.operation,
-			recordId: params.recordId ?? null,
-			locale: normalized.locale ?? null,
-			payload: params.payload ?? {},
-		},
-		{ db },
-	);
+	return app.realtime.appendChange({
+		resourceType,
+		resource: resourceName,
+		operation: params.operation,
+		recordId: params.recordId ?? null,
+		locale: normalized.locale ?? null,
+		payload: params.payload ?? {},
+	});
 }
 
 /**

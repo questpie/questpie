@@ -1,4 +1,7 @@
+import { stringifyCompatibleTypedEventWire } from "#questpie/shared/typed-wire.js";
+
 import type { RealtimeObservation, RealtimeObserver } from "./observer.js";
+import { BoundedOrderedFifoWriter } from "./ordered-fifo-writer.js";
 import type {
 	ClientCloseReason,
 	ClientConfigInput,
@@ -25,9 +28,11 @@ export function encodeSseComment(comment: string): Uint8Array {
 }
 
 export function encodeSseEvent(event: string, data: unknown): Uint8Array {
-	return new TextEncoder().encode(
-		`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`,
-	);
+	const serialized =
+		typeof data === "object" && data !== null && !Array.isArray(data)
+			? stringifyCompatibleTypedEventWire(data as Record<string, unknown>)
+			: JSON.stringify(data);
+	return new TextEncoder().encode(`event: ${event}\ndata: ${serialized}\n\n`);
 }
 
 class SseClientSink implements ClientSink {
@@ -125,6 +130,103 @@ export class RealtimeSnapshotBufferOverflowError extends Error {
 	}
 }
 
+export class RealtimeDeltaBufferOverflowError extends Error {
+	constructor(
+		readonly maximumEvents: number,
+		readonly maximumBytes: number,
+	) {
+		super(
+			`Realtime delta buffer exceeds ${maximumEvents} events or ${maximumBytes} bytes`,
+		);
+		this.name = "RealtimeDeltaBufferOverflowError";
+	}
+}
+
+export type SseOrderedDeltaWriterOptions = {
+	maximumBufferedEvents?: number;
+	maximumBufferedBytes?: number;
+	busyRetryMs?: number;
+	onBuffer?: (events: number, bytes: number) => void;
+};
+
+/** Per-session append-only writer for row deltas. Overflow closes the session. */
+export class SseOrderedDeltaWriter {
+	private readonly queue: BoundedOrderedFifoWriter<Uint8Array>;
+	private readonly maximumEvents: number;
+	private readonly maximumBytes: number;
+	private overflowClose: Promise<void> = Promise.resolve();
+
+	constructor(
+		private readonly sink: ClientSink,
+		private readonly options: SseOrderedDeltaWriterOptions = {},
+	) {
+		this.maximumEvents = options.maximumBufferedEvents ?? 512;
+		this.maximumBytes = options.maximumBufferedBytes ?? 1024 * 1024;
+		this.queue = new BoundedOrderedFifoWriter({
+			maximumItems: this.maximumEvents,
+			maximumBytes: this.maximumBytes,
+			busyRetryMs: options.busyRetryMs ?? 25,
+			byteLength: (frame) => frame.byteLength,
+			write: (frame) => this.sink.write(frame, "row-delta"),
+			onAccepted: () => this.observeBuffer(),
+			onOverflow: () => {
+				this.observeBuffer();
+				this.overflowClose = this.sink.close("slow_consumer");
+			},
+			onError: () => {
+				this.queue.clear();
+				this.observeBuffer();
+				this.overflowClose = this.sink.close("write_failed");
+			},
+			onRetryDrained: () => this.observeBuffer(),
+		});
+	}
+
+	get bufferedBytes(): number {
+		return this.queue.bufferedBytes;
+	}
+
+	async write(frame: Uint8Array): Promise<SinkWriteResult> {
+		if (!this.queue.enqueue(frame)) {
+			await this.overflowClose;
+			throw this.overflowError();
+		}
+		this.observeBuffer();
+		const result = await this.queue.flush();
+		this.observeBuffer();
+		if (result === "overflow") {
+			await this.overflowClose;
+			throw this.overflowError();
+		}
+		return result === "busy"
+			? { status: "busy", bufferedBytes: this.queue.totalBufferedBytes }
+			: {
+					status: "accepted",
+					bufferedBytes: this.queue.totalBufferedBytes,
+				};
+	}
+
+	clear(): void {
+		this.queue.clear();
+		this.observeBuffer();
+	}
+
+	private observeBuffer(): void {
+		try {
+			this.options.onBuffer?.(this.queue.length, this.queue.totalBufferedBytes);
+		} catch {
+			// Observability cannot break ordered delivery.
+		}
+	}
+
+	private overflowError(): RealtimeDeltaBufferOverflowError {
+		return new RealtimeDeltaBufferOverflowError(
+			this.maximumEvents,
+			this.maximumBytes,
+		);
+	}
+}
+
 /** Per-session latest-wins queue used when an SSE stream applies backpressure. */
 export class SseLatestSnapshotWriter {
 	private readonly pending = new Map<string, Uint8Array>();
@@ -135,6 +237,9 @@ export class SseLatestSnapshotWriter {
 	constructor(
 		private readonly sink: ClientSink,
 		private readonly maximumBufferedBytes = 1024 * 1024,
+		private readonly options: {
+			includeTransportBufferedBytesInLimit?: boolean;
+		} = {},
 	) {}
 
 	get bufferedBytes(): number {
@@ -197,8 +302,12 @@ export class SseLatestSnapshotWriter {
 		frame: Uint8Array,
 		transportBufferedBytes: number,
 	): void {
+		const countedTransportBytes =
+			this.options.includeTransportBufferedBytesInLimit === false
+				? 0
+				: transportBufferedBytes;
 		if (
-			transportBufferedBytes + this.pendingBytes + frame.byteLength >
+			countedTransportBytes + this.pendingBytes + frame.byteLength >
 			this.maximumBufferedBytes
 		) {
 			throw new RealtimeSnapshotBufferOverflowError(this.maximumBufferedBytes);

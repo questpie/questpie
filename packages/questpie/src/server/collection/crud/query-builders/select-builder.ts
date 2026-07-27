@@ -437,6 +437,21 @@ export function getIncludedFields(
 		}
 	}
 
+	for (const [relationName, relation] of Object.entries(
+		state.relations ?? {},
+	)) {
+		const configured = relation.polymorphicTargets?.[0];
+		if (!configured) continue;
+		if (columns[relationName] === true) {
+			included.add(configured.typeField);
+			included.add(configured.idField);
+		}
+		if (columns[relationName] === false) {
+			included.delete(configured.typeField);
+			included.delete(configured.idField);
+		}
+	}
+
 	// Always include 'id'
 	included.add("id");
 

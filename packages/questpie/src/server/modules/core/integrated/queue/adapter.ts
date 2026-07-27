@@ -1,4 +1,4 @@
-import type { JobDefinition, PublishOptions } from "./types.js";
+import type { PublishOptions } from "./types.js";
 
 export interface QueueAdapterCapabilities {
 	longRunningConsumer: boolean;
@@ -11,6 +11,10 @@ export interface QueueAdapterCapabilities {
 export interface QueueJobRecord {
 	id: string;
 	data: unknown;
+	/** Stable logical dispatch identity, independent of adapter job id. */
+	dispatchId?: string;
+	/** Portable caller-supplied idempotency identity. */
+	idempotencyKey?: string;
 }
 
 export interface QueueListenOptions {
@@ -82,7 +86,26 @@ export interface QueueAdapter {
 		jobName: string,
 		payload: any,
 		options?: PublishOptions,
+		dispatchId?: string,
 	): Promise<string | null>;
+
+	/**
+	 * Publish through the current QUESTPIE database transaction when the
+	 * adapter owns compatible storage. pg-boss implements this capability.
+	 */
+	publishInTransaction?(
+		tx: unknown,
+		jobName: string,
+		payload: unknown,
+		options: PublishOptions | undefined,
+		dispatchId: string,
+	): Promise<string | null>;
+
+	/**
+	 * Set false when publishInTransaction cannot use the application's current
+	 * PostgreSQL transaction. The runtime then uses the durable dispatch relay.
+	 */
+	transactionalPublishing?: boolean;
 
 	/**
 	 * Schedule a recurring job with cron
@@ -91,7 +114,7 @@ export interface QueueAdapter {
 		jobName: string,
 		cron: string,
 		payload: any,
-		options?: Omit<PublishOptions, "startAfter">,
+		options?: Omit<PublishOptions, "idempotencyKey" | "startAfter">,
 	): Promise<void>;
 
 	/**

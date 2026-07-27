@@ -28,7 +28,10 @@ describe("guest collections: read + write method names", () => {
 		await q.collections.posts.find({ where: { a: 1 } });
 		await q.collections.posts.findOne({ where: { id: "p1" } });
 		await q.collections.posts.create({ title: "hi" });
-		await q.collections.posts.update({ where: { id: "p1" }, data: { title: "x" } });
+		await q.collections.posts.update({
+			where: { id: "p1" },
+			data: { title: "x" },
+		});
 		await q.collections.posts.delete({ where: { id: "p1" } });
 
 		expect(calls.map((c) => c.method)).toEqual([
@@ -42,6 +45,30 @@ describe("guest collections: read + write method names", () => {
 	});
 });
 
+describe("guest custom tools: separate discovery and call methods", () => {
+	it("maps only list/call under the tools namespace", async () => {
+		const { calls, hostCall } = recorder();
+		const guest = buildGuestBindings(hostCall);
+
+		await guest.tools.list();
+		await guest.tools.call("reports.generate", { period: "week" });
+
+		expect(calls).toEqual([
+			{ method: "tools.list", args: {} },
+			{
+				method: "tools.call",
+				args: {
+					name: "reports.generate",
+					arguments: { period: "week" },
+				},
+			},
+		]);
+		expect("app" in guest).toBe(false);
+		expect("db" in guest).toBe(false);
+		expect("token" in guest.tools).toBe(false);
+	});
+});
+
 describe("store.<name> sugar → collections.document_store.<op> with store injected", () => {
 	it("create injects a top-level `store` (the row field)", async () => {
 		const { calls, hostCall } = recorder();
@@ -51,7 +78,11 @@ describe("store.<name> sugar → collections.document_store.<op> with store inje
 
 		expect(calls).toHaveLength(1);
 		expect(calls[0]!.method).toBe("collections.document_store.create");
-		expect(calls[0]!.args).toEqual({ key: "k1", data: { v: 1 }, store: "posts" });
+		expect(calls[0]!.args).toEqual({
+			key: "k1",
+			data: { v: 1 },
+			store: "posts",
+		});
 	});
 
 	it("find/findOne/delete inject `where.store` (scoping to the one store)", async () => {
@@ -73,7 +104,10 @@ describe("store.<name> sugar → collections.document_store.<op> with store inje
 		const { calls, hostCall } = recorder();
 		const q = buildGuestBindings(hostCall);
 
-		await q.store.posts.update({ where: { key: "k1" }, data: { data: { v: 2 } } });
+		await q.store.posts.update({
+			where: { key: "k1" },
+			data: { data: { v: 2 } },
+		});
 
 		expect(calls[0]!.method).toBe("collections.document_store.update");
 		expect(calls[0]!.args).toEqual({

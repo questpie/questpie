@@ -69,13 +69,14 @@ export const resolveLocale = async <
 	return header?.split(",")[0]?.trim() || undefined;
 };
 
-export const createAdapterContext = async <
+const createAdapterContextInternal = async <
 	TConfig extends QuestpieConfig = QuestpieConfig,
 >(
 	app: Questpie<TConfig>,
 	request: Request,
 	config: AdapterConfig<TConfig> = {},
 	observability?: { requestId?: string; traceId?: string },
+	oauthAudience?: string,
 ): Promise<AdapterContext> => {
 	const parsedQuery = getQueryParams(new URL(request.url));
 	const queryLocale =
@@ -98,7 +99,7 @@ export const createAdapterContext = async <
 	const oauthPrincipal =
 		config.accessMode === "system"
 			? null
-			: await resolveOAuthPrincipal(app, request, config);
+			: await resolveOAuthPrincipal(app, request, config, oauthAudience);
 
 	const [resolvedSession, locale] = await Promise.all([
 		oauthPrincipal
@@ -154,6 +155,37 @@ export const createAdapterContext = async <
 			: {}),
 	};
 };
+
+export const createAdapterContext = <
+	TConfig extends QuestpieConfig = QuestpieConfig,
+>(
+	app: Questpie<TConfig>,
+	request: Request,
+	config: AdapterConfig<TConfig> = {},
+	observability?: { requestId?: string; traceId?: string },
+): Promise<AdapterContext> =>
+	createAdapterContextInternal(app, request, config, observability);
+
+/**
+ * Build the normal adapter context while binding OAuth JWT verification to an
+ * explicit RFC 8707 resource audience instead of the default MCP audience.
+ */
+export const createAdapterContextForOAuthAudience = <
+	TConfig extends QuestpieConfig = QuestpieConfig,
+>(
+	app: Questpie<TConfig>,
+	request: Request,
+	config: AdapterConfig<TConfig>,
+	oauthAudience: string,
+	observability?: { requestId?: string; traceId?: string },
+): Promise<AdapterContext> =>
+	createAdapterContextInternal(
+		app,
+		request,
+		config,
+		observability,
+		oauthAudience,
+	);
 
 export const resolveContext = async <
 	TConfig extends QuestpieConfig = QuestpieConfig,

@@ -3,11 +3,11 @@ title: Access control
 description: Per-operation, row-level, and field-level authorization on collections and globals, secure by default, with a system bypass for trusted server code. One rule guards the REST API, the typed client, and the admin UI.
 ---
 
-Access control decides **who can do what** to your data. You attach rules per operation, `read`, `create`, `update`, `delete`, plus `transition`, `serve`, and `introspect`, in a single `.access({ ... })` call on a collection or global. Each rule runs with the full request context (`session`, `db`, the loaded row, the input) and returns a boolean to allow or deny, or a `where`-shaped object to filter rows. The same engine guards the REST API, the typed client, and the admin UI, you write the rule once, and every entry point obeys it.
+Access control decides **who can do what** to your data. You attach rules per operation, `read`, `create`, `update`, `delete`, `purge`, plus `transition`, `serve`, and `introspect`, in a single `.access({ ... })` call on a collection or global. Each rule runs with the full request context (`session`, `db`, the loaded row, the input) and returns a boolean to allow or deny, or a `where`-shaped object to filter rows. The same engine guards the REST API, the typed client, and the admin UI, you write the rule once, and every entry point obeys it.
 
 ## What it does
 
-- **Authorizes every operation**, one rule per `read` / `create` / `update` / `delete`, evaluated before the database is touched. Deny early, fail loud.
+- **Authorizes every operation**, one rule per `read` / `create` / `update` / `delete` / `purge`.
 - **Filters rows (row-level security)**, return a `where`-shaped object from `read` and it is `AND`-merged into the query; rows the caller can't see never come back.
 - **Scopes individual fields**, hide a field on read or freeze it on write per operation with `access.fields`, independent of the row rules.
 - **Runs secure by default**, a collection with no rule for an operation requires an authenticated session. You opt into public access explicitly with `read: true`.
@@ -22,43 +22,48 @@ Attach `.access({ ... })` to a collection. A boolean allows or denies outright; 
 import { collection } from "#questpie/factories";
 
 export const posts = collection("posts")
-  .fields(({ f }) => ({
-    title: f.text(255).required(),
-    body: f.richText(),
-    authorId: f.relation("user"),
-    status: f.select([
-      { value: "draft", label: "Draft" },
-      { value: "published", label: "Published" },
-    ]),
-  }))
-  .access({
-    // Signed-in users see their own posts; everyone else sees published ones.
-    read: ({ session }) => (session?.user ? { authorId: session.user.id } : { status: "published" }),
-    // Must be signed in to create.
-    create: ({ session }) => !!session?.user,
-    // Only the author may edit or delete. `data` is the existing row.
-    update: ({ session, data }) => data.authorId === session?.user?.id,
-    delete: ({ session, data }) => data.authorId === session?.user?.id,
-  });
+	.fields(({ f }) => ({
+		title: f.text(255).required(),
+		body: f.richText(),
+		authorId: f.relation("user"),
+		status: f.select([
+			{ value: "draft", label: "Draft" },
+			{ value: "published", label: "Published" },
+		]),
+	}))
+	.access({
+		// Signed-in users see their own posts; everyone else sees published ones.
+		read: ({ session }) =>
+			session?.user ? { authorId: session.user.id } : { status: "published" },
+		// Must be signed in to create.
+		create: ({ session }) => !!session?.user,
+		// Only the author may edit or delete. `data` is the existing row.
+		update: ({ session, data }) => data.authorId === session?.user?.id,
+		delete: ({ session, data }) => data.authorId === session?.user?.id,
+	});
 // Full option list and the per-operation context table are below.
 ```
 
 That single object now governs `GET/POST/PATCH/DELETE /api/posts`, every `client.collections.posts.*` call, and the admin panel for this collection.
 
 <Callout type="warn">
-  **Secure by default, collections require a session.** Leaving an operation's rule out does **not** make it public: the framework requires an authenticated session for it (`rule === undefined → !!session`). To make an operation public you must say so explicitly with `read: true`. (Routes are the opposite, a route with
-  no `.access()` is public until you add one. See [Routes](/docs/concepts/routes).)
+	**Secure by default, collections require a session.** Leaving an operation's
+	rule out does **not** make it public: the framework requires an authenticated
+	session for it (`rule === undefined → !!session`). To make an operation public
+	you must say so explicitly with `read: true`. (Routes are the opposite, a
+	route with no `.access()` is public until you add one. See
+	[Routes](/docs/concepts/routes).)
 </Callout>
 
 ## What the rule returns
 
 A function rule can return three kinds of value, and the framework reacts to each:
 
-| Return value            | Effect                                                                                                                                        |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `true`                  | Allow the operation.                                                                                                                          |
-| `false`                 | Deny, throws `ApiError.forbidden` (403).                                                                                                      |
-| an `AccessWhere` object | Filter: on `read` it is `AND`-merged into the query `WHERE`; on `update`/`delete` the loaded row is tested against it (mismatch → forbidden). |
+| Return value            | Effect                                                                                                                                                                                                          |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `true`                  | Allow the operation.                                                                                                                                                                                            |
+| `false`                 | Deny, throws `ApiError.forbidden` (403).                                                                                                                                                                        |
+| an `AccessWhere` object | Filter: on `read` it is `AND`-merged into the query `WHERE`; on `update`/`delete`/`purge` the loaded row is tested against it. A purge mismatch is disclosure-safe not-found; ordinary writes return forbidden. |
 
 A bare boolean shorthand, `read: true`, `create: false`, is the same as a function that always returns it.
 
@@ -92,7 +97,15 @@ flowchart TD
   Bool -->|AccessWhere| Filter
 ```
 
-So the resolution for each CRUD operation is: **collection's own `access[op]` → app-level `defaultAccess[op]` → require a session**. `defaultAccess` is set app-wide (next section); the starter module sets it to require a session for every operation, which is where the secure-by-default behavior comes from.
+So the resolution for each ordinary CRUD operation is: **collection's own `access[op]` → app-level `defaultAccess[op]` → require a session**. `defaultAccess` is set app-wide (next section); the starter module sets it to require a session for ordinary CRUD operations, which is where the secure-by-default behavior comes from.
+
+<Callout type="warn" title="Purge is independently default-deny">
+	`purge` never falls back to `delete` or to the authenticated-session rule. Its
+	resolution is `collection access.purge` → `defaultAccess.purge` → `false`.
+	Missing, denied, already purged, and row-filter-mismatched targets all return
+	not-found so callers cannot probe protected records. See [Soft delete and
+	durable retention](/docs/concepts/soft-delete-retention).
+</Callout>
 
 <Callout type="info">
 	**`.access()` replaces; `.hooks()` merges.** Calling `.access()` again
@@ -111,17 +124,18 @@ To set the fallback for **every** collection and global at once, configure `acce
 import { appConfig } from "#questpie/factories";
 
 export default appConfig({
-  access: {
-    // Default for any collection/global that doesn't set its own rule.
-    read: ({ session }) => !!session,
-    create: ({ session }) => !!session,
-    update: ({ session }) => !!session,
-    delete: ({ session }) => !!session,
-  },
+	access: {
+		// Default for any collection/global that doesn't set its own rule.
+		read: ({ session }) => !!session,
+		create: ({ session }) => !!session,
+		update: ({ session }) => !!session,
+		delete: ({ session }) => !!session,
+		purge: false,
+	},
 });
 ```
 
-`appConfig({ access })` accepts `read`, `create`, `update`, `delete`, `transition`, `serve`, and `introspect`, the same operation keys as a collection, **minus `fields`** (per-field rules belong on the collection or global that owns the field). Modules can contribute a `defaultAccess` too, and they compose; the starter module ships exactly the four-CRUD-require-session shape above.
+`appConfig({ access })` accepts `read`, `create`, `update`, `delete`, `purge`, `transition`, `serve`, and `introspect`, the same operation keys as a collection, **minus `fields`** (per-field rules belong on the collection or global that owns the field). Modules can contribute a `defaultAccess` too, and they compose. Leave app-wide purge denied unless every collection should share a carefully reviewed retention authority.
 
 <Callout type="info" title="Configure app-wide defaults in app config">
 	Set app-wide rules with `appConfig({ access })` or a module's
@@ -134,12 +148,13 @@ export default appConfig({
 
 Every rule function receives an `AccessContext`, the full app context (`db`, `session`, `collections`, `globals`, `queue`, `kv`, `storage`, `search`, `realtime`, `mailer`, `logger`, plus any context extensions you added in `appConfig({ context })`), plus a few operation-specific keys. What's populated depends on the operation:
 
-| Operation | `ctx.data`           | `ctx.input`                       | Can return `AccessWhere`?           |
-| --------- | -------------------- | --------------------------------- | ----------------------------------- |
-| `read`    | none (no row loaded) | none                              | yes, merges into the query          |
-| `create`  | none (no row yet)    | the raw input, **pre-validation** | no, there's no row to match         |
-| `update`  | the **existing** row | the patch                         | yes, checked against the loaded row |
-| `delete`  | the **existing** row | none                              | yes, checked against the loaded row |
+| Operation | `ctx.data`                   | `ctx.input`                       | Can return `AccessWhere`?                 |
+| --------- | ---------------------------- | --------------------------------- | ----------------------------------------- |
+| `read`    | none (no row loaded)         | none                              | yes, merges into the query                |
+| `create`  | none (no row yet)            | the raw input, **pre-validation** | no, there's no row to match               |
+| `update`  | the **existing** row         | the patch                         | yes, checked against the loaded row       |
+| `delete`  | the **existing** row         | none                              | yes, checked against the loaded row       |
+| `purge`   | the **existing deleted** row | `{ id }`                          | yes, checked inside the purge transaction |
 
 ```ts
 .access({
@@ -152,20 +167,26 @@ Every rule function receives an `AccessContext`, the full app context (`db`, `se
 	// create: `input` is the raw, pre-validation payload.
 	create: ({ session, input }) =>
 		!!session?.user && input?.status !== "published", // can't publish on create
-	// update/delete: `data` is the existing row, always loaded before the rule runs.
+	// update/delete/purge: `data` is the existing row.
 	update: ({ session, data }) =>
 		data.authorId === session?.user?.id || session?.user?.role === "admin",
 })
 ```
 
-<Callout type="info">**`request` is only set over HTTP.** `ctx.request` is present when the operation comes through an HTTP adapter, use it to tell the admin API apart from the public API by URL or header. Direct server calls (`app.collections.posts.find(...)`) carry no `request`.</Callout>
+<Callout type="info">
+	**`request` is only set over HTTP.** `ctx.request` is present when the
+	operation comes through an HTTP adapter, use it to tell the admin API apart
+	from the public API by URL or header. Direct server calls
+	(`app.collections.posts.find(...)`) carry no `request`.
+</Callout>
 
-### `read` vs `update`/`delete`: where the filter lands
+### `read` vs `update`/`delete`/`purge`: where the filter lands
 
 The same `AccessWhere` shape behaves differently depending on the operation:
 
 - On **`read`**, the `AccessWhere` is `AND`-merged into the query's `WHERE` (`{ AND: [yourWhere, accessWhere] }`). Non-matching rows are filtered out of the result, this is row-level security, applied in SQL.
 - On **`update`** / **`delete`**, the already-loaded row is tested against the `AccessWhere` in JavaScript. A mismatch throws `forbidden`. In bulk updates and deletes, each row is checked individually.
+- On **`purge`**, the locked row is checked inside the purge transaction. A mismatch returns the same not-found error as a missing or already purged row.
 
 ```ts title="Row-level read: a user only ever sees their own orders"
 .access({
@@ -189,7 +210,7 @@ The same `AccessWhere` shape behaves differently depending on the operation:
 
 ```ts
 read: ({ session }) => ({
-  OR: [{ authorId: session?.user?.id }, { status: "published" }],
+	OR: [{ authorId: session?.user?.id }, { status: "published" }],
 });
 ```
 
@@ -248,13 +269,22 @@ Knowing the exact sequence helps you reason about which rule fires first and whe
 For an **update** it's the same shape, with `access.update` first (plus the `AccessWhere` row-match), then `beforeValidate`, validation, `access.fields[...].update`, `beforeChange`, **UPDATE**, `afterChange`, the `afterRead` hook, and finally the field read filter. **Reads** run `access.read` (producing the merged `WHERE`), the **SELECT**, then the field read filter and `afterRead`.
 
 <Callout type="info">
-  **The field read filter and `afterRead` run in opposite orders on writes vs reads.** On a **write** (create/update) the `afterRead` hook fires *before* the field read filter strips denied fields, so your hook sees the full row, then the filter runs last on the way out. On a **read** the field read filter runs
-  *before* `afterRead`. If an `afterRead` hook depends on a field that a `read` rule denies, that field is present after a write but already stripped on a plain read.
+	**The field read filter and `afterRead` run in opposite orders on writes vs
+	reads.** On a **write** (create/update) the `afterRead` hook fires *before*
+	the field read filter strips denied fields, so your hook sees the full row,
+	then the filter runs last on the way out. On a **read** the field read filter
+	runs *before* `afterRead`. If an `afterRead` hook depends on a field that a
+	`read` rule denies, that field is present after a write but already stripped
+	on a plain read.
 </Callout>
 
 <Callout type="info">
-  **Access runs before validation; field-write runs before validation too.** Row-level access and field-level *write* access both gate the input **before** the Zod schema sees it, so a denied write never reaches validation. Field-level *read* filtering runs on the way out, after the row is loaded. See
-  [Hooks](/docs/concepts/hooks) for the full lifecycle and [Validation](/docs/concepts/validation) for the schema step.
+	**Access runs before validation; field-write runs before validation too.**
+	Row-level access and field-level *write* access both gate the input **before**
+	the Zod schema sees it, so a denied write never reaches validation.
+	Field-level *read* filtering runs on the way out, after the row is loaded. See
+	[Hooks](/docs/concepts/hooks) for the full lifecycle and
+	[Validation](/docs/concepts/validation) for the schema step.
 </Callout>
 
 ## Beyond CRUD: `transition`, `serve`, `introspect`
@@ -270,8 +300,12 @@ Three more operations have their own rules, each with a deliberate fallback chai
 > Resolution: `access.serve` → collection `access.read` → app `defaultAccess.serve` → **allow**. App-level `defaultAccess.read` is deliberately _not_ in this chain: listing rows and fetching bytes by key are distinct permissions.
 
 <Callout type="warn">
-  **`serve` falls open, and private files always check the token too.** If `serve`, the collection's `read`, and `defaultAccess.serve` are all undefined, byte serving is **allowed**. For `visibility: "private"` uploads a signed-token check always applies **in addition** to this rule, but for `"public"` uploads, set
-  `serve` explicitly if the bytes shouldn't be world-readable.
+	**`serve` falls open, and private files always check the token too.** If
+	`serve`, the collection's `read`, and `defaultAccess.serve` are all undefined,
+	byte serving is **allowed**. For `visibility: "private"` uploads a
+	signed-token check always applies **in addition** to this rule, but for
+	`"public"` uploads, set `serve` explicitly if the bytes shouldn't be
+	world-readable.
 </Callout>
 
 **`introspect`**, guards the schema/meta endpoints (`GET /:collection/{schema,meta}`) that the admin UI and OpenAPI generator read.
@@ -288,21 +322,24 @@ You set it on the **context**, then pass that context to CRUD calls. Inside a se
 import { seed } from "questpie";
 
 export default seed({
-  id: "demoPosts",
-  description: "Seed demo posts with full access",
-  category: "dev",
-  async run({ collections, createContext, log }) {
-    const ctx = await createContext({
-      accessMode: "system", // bypass all access + field rules
-    });
+	id: "demoPosts",
+	description: "Seed demo posts with full access",
+	category: "dev",
+	async run({ collections, createContext, log }) {
+		const ctx = await createContext({
+			accessMode: "system", // bypass all access + field rules
+		});
 
-    // Pass ctx as the second argument to any operation.
-    const existing = await collections.posts.findOne({ where: { slug: "seeded-post" } }, ctx);
-    if (!existing) {
-      await collections.posts.create({ title: "Seeded post" }, ctx);
-      log("Seeded demo post");
-    }
-  },
+		// Pass ctx as the second argument to any operation.
+		const existing = await collections.posts.findOne(
+			{ where: { slug: "seeded-post" } },
+			ctx,
+		);
+		if (!existing) {
+			await collections.posts.create({ title: "Seeded post" }, ctx);
+			log("Seeded demo post");
+		}
+	},
 });
 ```
 
@@ -312,12 +349,15 @@ Outside a seed, build the context from the app instance, handy in server-side da
 import { app } from "#questpie";
 
 export async function createServerContext() {
-  return app.createContext({ accessMode: "system" });
+	return app.createContext({ accessMode: "system" });
 }
 ```
 
 <Callout type="warn">
-  **`system` skips everything, keep it server-only.** System mode is a complete bypass of both row-level and field-level access. Never derive it from user-controlled input. Direct backend calls default to system mode; the HTTP adapter runs requests in `"user"` mode so the public API is always enforced.
+	**`system` skips everything, keep it server-only.** System mode is a complete
+	bypass of both row-level and field-level access. Never derive it from
+	user-controlled input. Direct backend calls default to system mode; the HTTP
+	adapter runs requests in `"user"` mode so the public API is always enforced.
 </Callout>
 
 ## Globals
@@ -328,19 +368,22 @@ Globals (singletons) use the same model with a narrower surface: `.access({ read
 import { global } from "#questpie/factories";
 
 export const siteSettings = global("siteSettings")
-  .fields(({ f }) => ({
-    siteName: f.text().required(),
-    maintenanceMode: f.boolean(),
-  }))
-  .access({
-    read: true, // settings are public
-    update: ({ session }) => session?.user?.role === "admin",
-  });
+	.fields(({ f }) => ({
+		siteName: f.text().required(),
+		maintenanceMode: f.boolean(),
+	}))
+	.access({
+		read: true, // settings are public
+		update: ({ session }) => session?.user?.role === "admin",
+	});
 ```
 
 <Callout type="info">
-  **Global rules return booleans only.** With a single row there is nothing to filter, so global access rules cannot return an `AccessWhere`, only `true` / `false` (or a predicate that returns one). On `update`, `ctx.data` is the existing record (`undefined` on the very first write) and `ctx.input` is the patch. The
-  same `transition` / `introspect` fallback chains apply.
+	**Global rules return booleans only.** With a single row there is nothing to
+	filter, so global access rules cannot return an `AccessWhere`, only `true` /
+	`false` (or a predicate that returns one). On `update`, `ctx.data` is the
+	existing record (`undefined` on the very first write) and `ctx.input` is the
+	patch. The same `transition` / `introspect` fallback chains apply.
 </Callout>
 
 ## Throwing your own errors
@@ -397,7 +440,7 @@ For **shared helpers** in routes, services, jobs, or scripts, import the generat
 import type { AccessRuleContext } from "#questpie";
 
 export function isOwner(ctx: AccessRuleContext<"posts">) {
-  return ctx.data?.authorId === ctx.session?.user?.id; // ctx.collections typed too
+	return ctx.data?.authorId === ctx.session?.user?.id; // ctx.collections typed too
 }
 ```
 
@@ -413,7 +456,12 @@ export function isOwner(ctx: AccessRuleContext<"posts">) {
 The full set of access types, `CollectionAccess`, `AccessRule`, `RowAccessRule`, `AccessContext`, `AccessWhere`, `FieldAccess`, `FieldAccessRule`, `FieldAccessRuleContext`, `GlobalAccess`, `GlobalAccessRule`, `GlobalAccessContext`, `AccessMode`, is exported from `questpie/types`.
 
 ```ts
-import type { CollectionAccess, AccessRule, AccessWhere, AccessMode } from "questpie/types";
+import type {
+	CollectionAccess,
+	AccessRule,
+	AccessWhere,
+	AccessMode,
+} from "questpie/types";
 ```
 
 ## Related

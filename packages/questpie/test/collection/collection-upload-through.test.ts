@@ -53,6 +53,12 @@ describe("upload + through (many-to-many)", () => {
 		});
 		app = setup.app;
 		await runTestDbMigrations(app);
+		await Promise.all(
+			["uploads/image1.png", "uploads/image2.jpg", "uploads/image3.gif"].map(
+				(key) =>
+					app.storage.upload(key, new TextEncoder().encode(`fixture:${key}`)),
+			),
+		);
 	});
 
 	afterEach(async () => {
@@ -283,6 +289,10 @@ describe("upload + through population inherits parent access", () => {
 		});
 		app = setup.app;
 		await runTestDbMigrations(app);
+		await app.storage.upload(
+			"uploads/gallery-image.png",
+			new TextEncoder().encode("fixture:gallery-image"),
+		);
 	});
 
 	afterEach(async () => {

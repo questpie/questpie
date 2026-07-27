@@ -21,6 +21,7 @@ import type {
 	CollectionBuilderState,
 	RelationConfig,
 } from "#questpie/server/collection/builder/types.js";
+import { isAccessWhere } from "#questpie/server/collection/crud/shared/access-control.js";
 import {
 	getColumn,
 	getDb,
@@ -34,6 +35,10 @@ import { ApiError } from "#questpie/server/errors/base.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { Field } from "#questpie/server/fields/field-class.js";
 import type { OperatorFn } from "#questpie/server/fields/types.js";
+import {
+	parseCalendarDate,
+	parseRfc3339Instant,
+} from "#questpie/shared/temporal.js";
 
 /**
  * Options for building WHERE clause
@@ -55,6 +60,8 @@ export interface BuildWhereClauseOptions {
 	useI18n?: boolean;
 	/** Database instance for subqueries */
 	db?: any;
+	/** Internal: this subtree came from an access rule and must never weaken. */
+	failClosedAccess?: boolean;
 }
 
 /**
@@ -126,6 +133,57 @@ function isNonQueryableVirtualField(
 	return !(state.virtuals && field in state.virtuals);
 }
 
+const TEMPORAL_VALUE_OPERATORS = new Set([
+	"eq",
+	"ne",
+	"not",
+	"gt",
+	"gte",
+	"lt",
+	"lte",
+]);
+
+function normalizeTemporalWhereValue(
+	field: Field<FieldState> | undefined,
+	operator: string,
+	value: unknown,
+): unknown {
+	const state = field?._state;
+	if (!state || state.isArray === true) return value;
+	if (
+		!TEMPORAL_VALUE_OPERATORS.has(operator) &&
+		operator !== "in" &&
+		operator !== "notIn"
+	) {
+		return value;
+	}
+	if (operator === "not" && value === null) return null;
+
+	const normalizeOne = (candidate: unknown): unknown => {
+		if (state.type === "datetime") {
+			const instant = parseRfc3339Instant(candidate);
+			if (instant) return instant;
+			throw ApiError.badRequest(
+				"Datetime filters require a Date or RFC 3339 value with Z or an explicit offset",
+			);
+		}
+		if (state.type === "date") {
+			const date = parseCalendarDate(candidate);
+			if (date) return date;
+			throw ApiError.badRequest(
+				"Date filters require an exact YYYY-MM-DD calendar date",
+			);
+		}
+		return candidate;
+	};
+
+	if (operator === "in" || operator === "notIn") {
+		if (!Array.isArray(value)) return normalizeOne(value);
+		return value.map(normalizeOne);
+	}
+	return normalizeOne(value);
+}
+
 /**
  * Build WHERE clause from WHERE object
  *
@@ -146,6 +204,8 @@ export function buildWhereClause(
 		app,
 		useI18n = false,
 	} = options;
+	const failClosedAccess =
+		options.failClosedAccess === true || isAccessWhere(where);
 
 	const conditions: SQL[] = [];
 
@@ -162,6 +222,7 @@ export function buildWhereClause(
 						app,
 						useI18n,
 						db: options.db,
+						failClosedAccess,
 					}),
 				)
 				.filter(Boolean) as SQL[];
@@ -180,6 +241,7 @@ export function buildWhereClause(
 						app,
 						useI18n,
 						db: options.db,
+						failClosedAccess,
 					}),
 				)
 				.filter(Boolean) as SQL[];
@@ -196,11 +258,15 @@ export function buildWhereClause(
 				app,
 				useI18n,
 				db: options.db,
+				failClosedAccess,
 			});
 			if (subClause) {
 				conditions.push(not(subClause));
 			}
 		} else if (key === "RAW" && typeof value === "function") {
+			if (failClosedAccess) {
+				throw accessCompilationError(state.name, key);
+			}
 			conditions.push(
 				value({
 					table,
@@ -298,10 +364,13 @@ export function buildWhereClause(
 					const condition = resolveFieldOperatorCondition(
 						column,
 						op,
-						val,
+						normalizeTemporalWhereValue(fieldDef, op, val),
 						fieldColumnOps,
 					);
 					if (condition) conditions.push(condition);
+					else if (failClosedAccess) {
+						throw accessCompilationError(state.name, key, op);
+					}
 				}
 			} else if (state.relations?.[key]) {
 				// Relation filter (has quantifiers or is a plain object for nested matching)
@@ -312,9 +381,12 @@ export function buildWhereClause(
 					context,
 					app,
 					db: options.db,
+					failClosedAccess,
 				});
 				if (relationClause) {
 					conditions.push(relationClause);
+				} else if (failClosedAccess) {
+					throw accessCompilationError(state.name, key);
 				}
 			} else {
 				// Fallback: treat as field operators
@@ -339,10 +411,13 @@ export function buildWhereClause(
 					const condition = resolveFieldOperatorCondition(
 						column,
 						op,
-						val,
+						normalizeTemporalWhereValue(fieldDef, op, val),
 						fieldColumnOps,
 					);
 					if (condition) conditions.push(condition);
+					else if (failClosedAccess) {
+						throw accessCompilationError(state.name, key, op);
+					}
 				}
 			}
 		} else {
@@ -368,7 +443,15 @@ export function buildWhereClause(
 				conditions.push(sql`${column} IS NULL`);
 			} else {
 				// Column ref may be AnyPgColumn | SQL | Name — eq() needs Column overload
-				conditions.push(eq(column as Column, value));
+				const fieldDef = state.fieldDefinitions?.[key] as
+					| Field<FieldState>
+					| undefined;
+				conditions.push(
+					eq(
+						column as Column,
+						normalizeTemporalWhereValue(fieldDef, "eq", value),
+					),
+				);
 			}
 		}
 	}
@@ -487,6 +570,8 @@ interface BuildRelationWhereOptions {
 	app?: Questpie<any>;
 	/** Database instance */
 	db?: any;
+	/** Whether this relation predicate originated from access control. */
+	failClosedAccess?: boolean;
 }
 
 /**
@@ -687,6 +772,7 @@ export function buildBelongsToExistsClause(
 			app,
 			useI18n: false,
 			db: options.db,
+			failClosedAccess: options.failClosedAccess,
 		});
 		if (nestedClause) whereConditions.push(nestedClause);
 	}
@@ -767,6 +853,7 @@ export function buildHasManyExistsClause(
 			app,
 			useI18n: false,
 			db: options.db,
+			failClosedAccess: options.failClosedAccess,
 		});
 		if (nestedClause) whereConditions.push(nestedClause);
 	}
@@ -842,6 +929,7 @@ export function buildManyToManyExistsClause(
 			app,
 			useI18n: false,
 			db: options.db,
+			failClosedAccess: options.failClosedAccess,
 		});
 		if (nestedClause) whereConditions.push(nestedClause);
 	}
@@ -868,4 +956,15 @@ export function buildManyToManyExistsClause(
 		.where(and(...whereConditions));
 
 	return sql`exists (${subquery})`;
+}
+
+function accessCompilationError(
+	collection: string,
+	field: string,
+	operator?: string,
+): Error {
+	const suffix = operator ? ` (operator '${operator}')` : "";
+	return new Error(
+		`Cannot compile access predicate '${collection}.${field}'${suffix}`,
+	);
 }

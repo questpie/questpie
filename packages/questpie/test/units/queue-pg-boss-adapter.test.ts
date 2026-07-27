@@ -30,6 +30,13 @@ class FakePgBoss {
 	public started = false;
 	public createdQueues: string[] = [];
 	public failCalls: Array<{ name: string; id: string; data: unknown }> = [];
+	public completeCalls: Array<{ name: string; id: string }> = [];
+	public sendCalls: Array<{
+		name: string;
+		data: unknown;
+		options: Record<string, unknown>;
+	}> = [];
+	public fetchedJobs: any[] = [];
 	public workCallbacks = new Map<string, WorkCallback>();
 
 	async start(): Promise<void> {
@@ -41,8 +48,13 @@ class FakePgBoss {
 	async createQueue(name: string): Promise<void> {
 		this.createdQueues.push(name);
 	}
-	async send(): Promise<string> {
-		return "fake-id";
+	async send(
+		name: string,
+		data: unknown,
+		options: Record<string, unknown>,
+	): Promise<string> {
+		this.sendCalls.push({ name, data, options });
+		return String(options.id ?? "fake-id");
 	}
 	async work(
 		name: string,
@@ -54,6 +66,12 @@ class FakePgBoss {
 	}
 	async fail(name: string, id: string, data: unknown): Promise<void> {
 		this.failCalls.push({ name, id, data });
+	}
+	async complete(name: string, id: string): Promise<void> {
+		this.completeCalls.push({ name, id });
+	}
+	async fetch(): Promise<any[]> {
+		return this.fetchedJobs.splice(0);
 	}
 }
 
@@ -67,6 +85,104 @@ function makeAdapter() {
 }
 
 describe("PgBossAdapter — v10+ work() callback receives Job[]", () => {
+	it("publishes through the supplied Drizzle transaction with stable dispatch metadata", async () => {
+		const { adapter, fake } = makeAdapter();
+		const dispatchId = "0e79a7d5-da2f-55e7-ae4c-3e95c5633071";
+		const tx = {
+			execute: async () => ({ rows: [] }),
+		};
+
+		await expect(
+			adapter.publishInTransaction(
+				tx,
+				"notify",
+				{ value: "transactional" },
+				{ idempotencyKey: "notify:one", retryLimit: 2 },
+				dispatchId,
+			),
+		).resolves.toBe(dispatchId);
+
+		expect(fake.sendCalls).toHaveLength(1);
+		expect(fake.sendCalls[0]).toMatchObject({
+			name: "notify",
+			data: {
+				__questpieQueue: {
+					version: 1,
+					dispatchId,
+					idempotencyKey: "notify:one",
+				},
+				payload: { value: "transactional" },
+			},
+			options: {
+				id: dispatchId,
+				retryLimit: 2,
+			},
+		});
+		const sendCall = fake.sendCalls[0];
+		if (!sendCall) throw new Error("Expected one pg-boss send call");
+		expect(typeof sendCall.options.db).toBe("object");
+		expect(typeof (sendCall.options.db as any).executeSql).toBe("function");
+	});
+
+	it("can opt out of the application transaction for a separate pg-boss database", () => {
+		const adapter = new PgBossAdapter({
+			useApplicationTransaction: false,
+		} as any);
+
+		expect(adapter.transactionalPublishing).toBe(false);
+	});
+
+	it("completes successful runOnce jobs and fails handler errors", async () => {
+		const { adapter, fake } = makeAdapter();
+		fake.fetchedJobs.push({ id: "once-ok", data: { value: "ok" } });
+
+		await expect(
+			adapter.runOnce({
+				echo: async () => {},
+			}),
+		).resolves.toEqual({ processed: 1 });
+		expect(fake.completeCalls).toEqual([{ name: "echo", id: "once-ok" }]);
+
+		fake.fetchedJobs.push({ id: "once-bad", data: { value: "bad" } });
+		await expect(
+			adapter.runOnce({
+				echo: async () => {
+					throw new Error("runOnce failed");
+				},
+			}),
+		).rejects.toThrow("runOnce failed");
+		expect(fake.failCalls.at(-1)).toMatchObject({
+			name: "echo",
+			id: "once-bad",
+			data: { message: "runOnce failed" },
+		});
+	});
+
+	it("settles every fetched runOnce job before surfacing a batch failure", async () => {
+		const { adapter, fake } = makeAdapter();
+		fake.fetchedJobs.push(
+			{ id: "once-bad-first", data: { fail: true } },
+			{ id: "once-ok-second", data: { fail: false } },
+		);
+
+		await expect(
+			adapter.runOnce({
+				echo: async ({ data }) => {
+					if ((data as { fail: boolean }).fail) {
+						throw new Error("first job failed");
+					}
+				},
+			}),
+		).rejects.toThrow("first job failed");
+
+		expect(fake.failCalls).toEqual([
+			expect.objectContaining({ name: "echo", id: "once-bad-first" }),
+		]);
+		expect(fake.completeCalls).toEqual([
+			{ name: "echo", id: "once-ok-second" },
+		]);
+	});
+
 	it("dispatches each job in the array to the handler with the correct payload", async () => {
 		const { adapter, fake } = makeAdapter();
 

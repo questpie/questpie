@@ -1,8 +1,6 @@
 {
 	"name": "@questpie/workflows",
 	"version": "3.16.0",
-	"type": "module",
-	"sideEffects": false,
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/questpie/questpie.git",
@@ -11,52 +9,11 @@
 	"files": [
 		"dist"
 	],
-	"scripts": {
-		"build": "tsdown",
-		"check-types": "tsc --noEmit",
-		"questpie:generate": "bun questpie generate --verbose"
-	},
-	"dependencies": {
-		"@iconify/react": "^6.0.2",
-		"@questpie/admin": "workspace:*",
-		"questpie": "workspace:*"
-	},
-	"devDependencies": {
-		"@tanstack/react-query": "^5.x",
-		"@types/react": "^19.2.0",
-		"@types/react-dom": "^19.2.0",
-		"bun-types": "latest",
-		"drizzle-orm": "1.0.0-beta.6-4414a19",
-		"react": "^19.2.0",
-		"react-dom": "^19.2.0",
-		"tsdown": "^0.18.3"
-	},
-	"peerDependencies": {
-		"@questpie/admin": "^3.0.0",
-		"@tanstack/react-query": "^5.x",
-		"drizzle-orm": "1.0.0-beta.6-4414a19",
-		"questpie": "^3.0.0",
-		"react": "^19.2.0",
-		"react-dom": "^19.2.0",
-		"zod": "^4.2.1"
-	},
-	"peerDependenciesMeta": {
-		"drizzle-orm": {
-			"optional": true
-		},
-		"@questpie/admin": {
-			"optional": true
-		},
-		"@tanstack/react-query": {
-			"optional": true
-		},
-		"react": {
-			"optional": true
-		},
-		"react-dom": {
-			"optional": true
-		}
-	},
+	"type": "module",
+	"sideEffects": false,
+	"main": "./dist/index.mjs",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.mts",
 	"exports": {
 		".": {
 			"types": "./src/exports/index.ts",
@@ -120,7 +77,50 @@
 			}
 		}
 	},
-	"main": "./dist/index.mjs",
-	"module": "./dist/index.mjs",
-	"types": "./dist/index.d.mts"
+	"scripts": {
+		"build": "tsdown",
+		"check-types": "tsc --noEmit",
+		"questpie:generate": "bun questpie generate --verbose"
+	},
+	"dependencies": {
+		"@iconify/react": "^6.0.2",
+		"@questpie/admin": "workspace:*",
+		"questpie": "workspace:*"
+	},
+	"devDependencies": {
+		"@tanstack/react-query": "^5.x",
+		"@types/react": "^19.2.0",
+		"@types/react-dom": "^19.2.0",
+		"bun-types": "latest",
+		"drizzle-orm": "1.0.0-beta.6-4414a19",
+		"react": "^19.2.0",
+		"react-dom": "^19.2.0",
+		"tsdown": "^0.18.3"
+	},
+	"peerDependencies": {
+		"@questpie/admin": "workspace:^",
+		"@tanstack/react-query": "^5.x",
+		"drizzle-orm": "1.0.0-beta.6-4414a19",
+		"questpie": "workspace:^",
+		"react": "^19.2.0",
+		"react-dom": "^19.2.0",
+		"zod": "^4.2.1"
+	},
+	"peerDependenciesMeta": {
+		"drizzle-orm": {
+			"optional": true
+		},
+		"@questpie/admin": {
+			"optional": true
+		},
+		"@tanstack/react-query": {
+			"optional": true
+		},
+		"react": {
+			"optional": true
+		},
+		"react-dom": {
+			"optional": true
+		}
+	}
 }

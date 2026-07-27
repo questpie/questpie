@@ -5,26 +5,25 @@
  * - Full-text search (FTS) with ts_rank_cd (no extensions required)
  * - Trigram fuzzy matching (requires pg_trgm extension)
  *
- * The adapter automatically detects if pg_trgm is available and uses
- * hybrid scoring (FTS + trigram) when possible, falling back to pure FTS otherwise.
+ * FTS rank and trigram similarity are combined as one lexical strategy.
  */
 
-import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 
-import { rowsOf } from "#questpie/server/db/driver-result.js";
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 
+import { buildAuthorizedCandidateCondition } from "../access-plan.js";
 import {
 	questpieSearchFacetsTable,
 	questpieSearchTable,
 } from "../collection.js";
+import { querySearchFacets } from "../facets-query.js";
 import type {
 	AdapterCapabilities,
 	AdapterInitContext,
 	AdapterMigration,
 	FacetResult,
-	FacetStats,
 	IndexParams,
 	RemoveParams,
 	SearchAdapter,
@@ -45,7 +44,7 @@ export interface PostgresSearchAdapterOptions {
 	trigramThreshold?: number;
 
 	/**
-	 * Weight for FTS score in hybrid mode (0-1)
+	 * Weight for FTS score in lexical ranking (0-1)
 	 * Trigram weight = 1 - ftsWeight
 	 * @default 0.7
 	 */
@@ -85,7 +84,7 @@ export class PostgresSearchAdapter implements SearchAdapter {
 			lexical: true,
 			trigram: true, // requires the pg_trgm extension (provided out-of-band)
 			semantic: false,
-			hybrid: true, // FTS + trigram
+			hybrid: false,
 			facets: true,
 		};
 	}
@@ -204,15 +203,20 @@ export class PostgresSearchAdapter implements SearchAdapter {
 			locale = DEFAULT_LOCALE,
 			limit = 10,
 			offset = 0,
-			mode = "hybrid",
+			mode = "lexical",
 			filters,
 			highlights = true,
 			facets: facetRequests,
 			accessFilters,
 		} = options;
 
-		// Build WHERE conditions
-		const conditions: any[] = [];
+		if (mode !== "lexical") {
+			throw new Error(
+				`PostgresSearchAdapter does not support "${mode}" search mode`,
+			);
+		}
+
+		const conditions: SQL[] = [];
 
 		// Filter by collections
 		if (collections && collections.length > 0) {
@@ -228,11 +232,13 @@ export class PostgresSearchAdapter implements SearchAdapter {
 				if (Array.isArray(value)) {
 					// OR within field: status IN ("published", "draft")
 					conditions.push(
-						or(
-							...value.map(
-								(v) => sql`${questpieSearchTable.metadata}->>${key} = ${v}`,
-							),
-						),
+						value.length > 0
+							? or(
+									...value.map(
+										(v) => sql`${questpieSearchTable.metadata}->>${key} = ${v}`,
+									),
+								)!
+							: sql`FALSE`,
 					);
 				} else {
 					conditions.push(
@@ -242,43 +248,28 @@ export class PostgresSearchAdapter implements SearchAdapter {
 			}
 		}
 
-		// Build query condition (for non-empty queries)
+		const authorizedCandidates =
+			buildAuthorizedCandidateCondition(accessFilters);
+		if (authorizedCandidates) conditions.push(authorizedCandidates);
+
 		const prefixQuery = buildPrefixTsQuery(query);
 		const hasQuery = prefixQuery !== null;
 		const tsQuery = prefixQuery
 			? sql`to_tsquery('simple', ${prefixQuery})`
 			: null;
+		const searchConditions = [...conditions];
+		if (hasQuery) {
+			searchConditions.push(this.buildLexicalMatchCondition(query, tsQuery!));
+		}
 
-		// Build access filter condition if provided
-		const accessCondition = this.buildAccessCondition(accessFilters);
-
-		// Get results
 		let rows: any[];
 		if (!hasQuery) {
-			// Browse mode - no query, just filters
-			rows = await this.browseRecordsWithAccess(
-				conditions,
-				accessFilters,
-				accessCondition,
-				limit,
-				offset,
-			);
-		} else if (mode === "hybrid") {
-			rows = await this.searchHybridWithAccess(
+			rows = await this.browseRecords(searchConditions, limit, offset);
+		} else {
+			rows = await this.searchLexical(
 				query,
 				tsQuery!,
-				conditions,
-				accessFilters,
-				accessCondition,
-				limit,
-				offset,
-			);
-		} else {
-			rows = await this.searchFTSWithAccess(
-				tsQuery!,
-				conditions,
-				accessFilters,
-				accessCondition,
+				searchConditions,
 				limit,
 				offset,
 			);
@@ -301,160 +292,26 @@ export class PostgresSearchAdapter implements SearchAdapter {
 			updatedAt: row.updated_at,
 		}));
 
-		// Get total count
-		const total = await this.getTotalWithAccess(
-			conditions,
-			tsQuery,
-			accessFilters,
-			accessCondition,
-		);
+		const total = await this.getTotal(searchConditions);
 
-		// Get facets if requested
 		let facets: FacetResult[] | undefined;
 		if (facetRequests && facetRequests.length > 0) {
-			facets = await this.getFacets(facetRequests, conditions, tsQuery, locale);
+			facets = await querySearchFacets(
+				this.db,
+				facetRequests,
+				searchConditions,
+				locale,
+			);
 		}
 
 		return { results, total, facets };
 	}
 
 	/**
-	 * Build CASE-based access condition for filtering by collection access rules
-	 */
-	private buildAccessCondition(
-		accessFilters?: SearchOptions["accessFilters"],
-	): ReturnType<typeof sql> | null {
-		if (!accessFilters || accessFilters.length === 0) {
-			return null;
-		}
-
-		// Build individual CASE conditions
-		const caseConditions: ReturnType<typeof sql>[] = [];
-
-		for (const filter of accessFilters) {
-			const { collection, table, accessWhere, softDelete } = filter;
-			const tableName =
-				(table as any)[Symbol.for("drizzle:Name")] || collection;
-
-			if (accessWhere === false) {
-				// No access - always false for this collection
-				caseConditions.push(
-					sql`WHEN ${questpieSearchTable.collectionName} = ${collection} THEN FALSE`,
-				);
-			} else if (accessWhere === true) {
-				// Full access - just check existence and soft delete
-				caseConditions.push(
-					sql`WHEN ${questpieSearchTable.collectionName} = ${collection} THEN (${this.buildAccessRowExistsCondition(tableName, softDelete)})`,
-				);
-			} else {
-				// Conditional access - apply WHERE conditions
-				const conditions = [
-					this.buildAccessRowExistsCondition(tableName, softDelete),
-				];
-				const accessCondition = this.accessWhereToSql(accessWhere, tableName);
-				if (accessCondition) conditions.push(accessCondition);
-				caseConditions.push(
-					sql`WHEN ${questpieSearchTable.collectionName} = ${collection} THEN (${sql.join(conditions, sql` AND `)})`,
-				);
-			}
-		}
-
-		if (caseConditions.length === 0) {
-			return null;
-		}
-
-		// Combine all CASE conditions
-		return sql`CASE ${sql.join(caseConditions, sql` `)} ELSE FALSE END`;
-	}
-
-	private buildAccessRowExistsCondition(
-		tableName: string,
-		softDelete?: boolean,
-	): ReturnType<typeof sql> {
-		const idColumn = sql`${sql.identifier(tableName)}.${sql.identifier("id")}`;
-		if (!softDelete) {
-			return sql`${idColumn} IS NOT NULL`;
-		}
-
-		const deletedAtColumn = sql`${sql.identifier(tableName)}.${sql.identifier("deleted_at")}`;
-		return sql`${idColumn} IS NOT NULL AND ${deletedAtColumn} IS NULL`;
-	}
-
-	/**
-	 * Convert AccessWhere object to a parameterized SQL fragment.
-	 */
-	private accessWhereToSql(
-		accessWhere: Record<string, any>,
-		tableName: string,
-	): ReturnType<typeof sql> | null {
-		const conditions: ReturnType<typeof sql>[] = [];
-
-		for (const [key, value] of Object.entries(accessWhere)) {
-			if (key === "AND" && Array.isArray(value)) {
-				const andConditions = value
-					.map((v) => this.accessWhereToSql(v, tableName))
-					.filter((condition): condition is ReturnType<typeof sql> =>
-						Boolean(condition),
-					);
-				if (andConditions.length > 0) {
-					conditions.push(sql`(${sql.join(andConditions, sql` AND `)})`);
-				}
-			} else if (key === "OR" && Array.isArray(value)) {
-				const orConditions = value
-					.map((v) => this.accessWhereToSql(v, tableName))
-					.filter((condition): condition is ReturnType<typeof sql> =>
-						Boolean(condition),
-					);
-				if (orConditions.length > 0) {
-					conditions.push(sql`(${sql.join(orConditions, sql` OR `)})`);
-				}
-			} else if (key === "NOT" && typeof value === "object") {
-				const notCondition = this.accessWhereToSql(value, tableName);
-				if (notCondition) {
-					conditions.push(sql`NOT (${notCondition})`);
-				}
-			} else {
-				// Simple field = value condition
-				const column = sql`${sql.identifier(tableName)}.${sql.identifier(key)}`;
-				conditions.push(
-					value === null ? sql`${column} IS NULL` : sql`${column} = ${value}`,
-				);
-			}
-		}
-
-		return conditions.length > 0 ? sql.join(conditions, sql` AND `) : null;
-	}
-
-	/**
-	 * Build LEFT JOINs for access filtering
-	 */
-	private buildAccessJoins(
-		accessFilters?: SearchOptions["accessFilters"],
-	): ReturnType<typeof sql> | null {
-		if (!accessFilters || accessFilters.length === 0) {
-			return null;
-		}
-
-		const joinParts: ReturnType<typeof sql>[] = [];
-
-		for (const filter of accessFilters) {
-			const { collection, table } = filter;
-			const tableName =
-				(table as any)[Symbol.for("drizzle:Name")] || collection;
-			const idColumn = sql`${sql.identifier(tableName)}.${sql.identifier("id")}`;
-			joinParts.push(
-				sql`LEFT JOIN ${sql.identifier(tableName)} ON ${questpieSearchTable.collectionName} = ${collection} AND ${questpieSearchTable.recordId} = ${idColumn}::text`,
-			);
-		}
-
-		return joinParts.length > 0 ? sql.join(joinParts, sql` `) : null;
-	}
-
-	/**
 	 * Browse records without a search query (for facet-only or browsing)
 	 */
 	private async browseRecords(
-		conditions: any[],
+		conditions: SQL[],
 		limit: number,
 		offset: number,
 	): Promise<any[]> {
@@ -476,298 +333,36 @@ export class PostgresSearchAdapter implements SearchAdapter {
 			.offset(offset);
 	}
 
-	/**
-	 * Browse records with access filtering via JOINs
-	 */
-	private async browseRecordsWithAccess(
-		conditions: any[],
-		accessFilters: SearchOptions["accessFilters"],
-		accessCondition: ReturnType<typeof sql> | null,
-		limit: number,
-		offset: number,
-	): Promise<any[]> {
-		// If no access filters, fall back to regular browse
-		if (!accessFilters || accessFilters.length === 0 || !accessCondition) {
-			return this.browseRecords(conditions, limit, offset);
-		}
-
-		const joins = this.buildAccessJoins(accessFilters);
-		const allConditions = [...conditions];
-		if (accessCondition) {
-			allConditions.push(accessCondition);
-		}
-
-		const query = sql`
-			SELECT
-				${questpieSearchTable.id} as id,
-				${questpieSearchTable.collectionName} as collection_name,
-				${questpieSearchTable.recordId} as record_id,
-				${questpieSearchTable.title} as title,
-				${questpieSearchTable.content} as content,
-				${questpieSearchTable.metadata} as metadata,
-				${questpieSearchTable.locale} as locale,
-				${questpieSearchTable.updatedAt} as updated_at,
-				1 as score
-			FROM ${questpieSearchTable}
-			${joins}
-			WHERE ${and(...allConditions)}
-			ORDER BY ${questpieSearchTable.updatedAt} DESC
-			LIMIT ${limit} OFFSET ${offset}
-		`;
-
-		const result = await this.db!.execute(query);
-		return rowsOf(result);
-	}
-
-	/**
-	 * Get total count of matching records
-	 */
-	private async getTotal(conditions: any[], tsQuery: any): Promise<number> {
-		const countConditions = [...conditions];
-		if (tsQuery) {
-			countConditions.push(sql`${questpieSearchTable.ftsVector} @@ ${tsQuery}`);
-		}
-
+	private async getTotal(conditions: SQL[]): Promise<number> {
 		const result = await this.db!.select({
 			count: sql<number>`COUNT(*)`,
 		})
 			.from(questpieSearchTable)
-			.where(and(...countConditions));
+			.where(and(...conditions));
 
 		return Number(result[0]?.count) || 0;
 	}
 
-	/**
-	 * Get total count with access filtering
-	 */
-	private async getTotalWithAccess(
-		conditions: any[],
-		tsQuery: any,
-		accessFilters: SearchOptions["accessFilters"],
-		accessCondition: ReturnType<typeof sql> | null,
-	): Promise<number> {
-		// If no access filters, fall back to regular count
-		if (!accessFilters || accessFilters.length === 0 || !accessCondition) {
-			return this.getTotal(conditions, tsQuery);
-		}
-
-		const joins = this.buildAccessJoins(accessFilters);
-		const countConditions = [...conditions];
-		if (tsQuery) {
-			countConditions.push(sql`${questpieSearchTable.ftsVector} @@ ${tsQuery}`);
-		}
-		if (accessCondition) {
-			countConditions.push(accessCondition);
-		}
-
-		const query = sql`
-			SELECT COUNT(*) as count
-			FROM ${questpieSearchTable}
-			${joins}
-			WHERE ${and(...countConditions)}
-		`;
-
-		const result = await this.db!.execute(query);
-		const rows = rowsOf<{ count: unknown }>(result);
-		return Number(rows[0]?.count) || 0;
-	}
-
-	/**
-	 * Get facet aggregations
-	 */
-	private async getFacets(
-		facetRequests: Array<{
-			field: string;
-			limit?: number;
-			sortBy?: "count" | "alpha";
-		}>,
-		conditions: any[],
-		tsQuery: any,
-		locale: string,
-	): Promise<FacetResult[]> {
-		const results: FacetResult[] = [];
-
-		// Build subquery to get matching search IDs
-		const searchConditions = [...conditions];
-		if (tsQuery) {
-			searchConditions.push(
-				sql`${questpieSearchTable.ftsVector} @@ ${tsQuery}`,
-			);
-		}
-
-		for (const facetReq of facetRequests) {
-			const { field, limit = 10, sortBy = "count" } = facetReq;
-
-			// Aggregate facet values using subquery
-			const facetRows = await this.db!.select({
-				value: questpieSearchFacetsTable.facetValue,
-				count: sql<number>`COUNT(*)`,
-			})
-				.from(questpieSearchFacetsTable)
-				.where(
-					and(
-						eq(questpieSearchFacetsTable.facetName, field),
-						eq(questpieSearchFacetsTable.locale, locale),
-						// Join condition: facet's search_id must be in matching search results
-						sql`${questpieSearchFacetsTable.searchId} IN (
-							SELECT ${questpieSearchTable.id} FROM ${questpieSearchTable}
-							WHERE ${and(...searchConditions)}
-						)`,
-					),
-				)
-				.groupBy(questpieSearchFacetsTable.facetValue)
-				.orderBy(
-					sortBy === "alpha"
-						? asc(questpieSearchFacetsTable.facetValue)
-						: desc(sql`COUNT(*)`),
-				)
-				.limit(limit);
-
-			// Get numeric stats for range facets
-			const stats = await this.getFacetStats(field, searchConditions, locale);
-
-			results.push({
-				field,
-				values: facetRows.map((row) => ({
-					value: row.value,
-					count: Number(row.count),
-				})),
-				stats,
-			});
-		}
-
-		return results;
-	}
-
-	/**
-	 * Get numeric stats (min/max) for range facets
-	 */
-	private async getFacetStats(
-		field: string,
-		searchConditions: any[],
-		locale: string,
-	): Promise<FacetStats | undefined> {
-		const result = await this.db!.select({
-			min: sql<number>`MIN(${questpieSearchFacetsTable.numericValue}::numeric)`,
-			max: sql<number>`MAX(${questpieSearchFacetsTable.numericValue}::numeric)`,
-		})
-			.from(questpieSearchFacetsTable)
-			.where(
-				and(
-					eq(questpieSearchFacetsTable.facetName, field),
-					eq(questpieSearchFacetsTable.locale, locale),
-					sql`${questpieSearchFacetsTable.numericValue} IS NOT NULL`,
-					sql`${questpieSearchFacetsTable.searchId} IN (
-						SELECT ${questpieSearchTable.id} FROM ${questpieSearchTable}
-						WHERE ${and(...searchConditions)}
-					)`,
-				),
-			);
-
-		const row = result[0];
-		if (row && row.min !== null && row.max !== null) {
-			return {
-				min: Number(row.min),
-				max: Number(row.max),
-			};
-		}
-
-		return undefined;
-	}
-
-	/**
-	 * Pure FTS search using ts_rank_cd (no extensions required)
-	 */
-	private async searchFTS(
-		tsQuery: any,
-		conditions: any[],
-		limit: number,
-		offset: number,
-	): Promise<any[]> {
-		return this.db!.select({
-			id: questpieSearchTable.id,
-			collection_name: questpieSearchTable.collectionName,
-			record_id: questpieSearchTable.recordId,
-			title: questpieSearchTable.title,
-			content: questpieSearchTable.content,
-			metadata: questpieSearchTable.metadata,
-			locale: questpieSearchTable.locale,
-			updated_at: questpieSearchTable.updatedAt,
-			score: sql<number>`ts_rank_cd(${questpieSearchTable.ftsVector}, ${tsQuery})`,
-		})
-			.from(questpieSearchTable)
-			.where(
-				and(...conditions, sql`${questpieSearchTable.ftsVector} @@ ${tsQuery}`),
-			)
-			.orderBy(
-				desc(sql`ts_rank_cd(${questpieSearchTable.ftsVector}, ${tsQuery})`),
-			)
-			.limit(limit)
-			.offset(offset);
-	}
-
-	/**
-	 * Pure FTS search with access filtering via JOINs
-	 */
-	private async searchFTSWithAccess(
-		tsQuery: any,
-		conditions: any[],
-		accessFilters: SearchOptions["accessFilters"],
-		accessCondition: ReturnType<typeof sql> | null,
-		limit: number,
-		offset: number,
-	): Promise<any[]> {
-		// If no access filters, fall back to regular FTS
-		if (!accessFilters || accessFilters.length === 0 || !accessCondition) {
-			return this.searchFTS(tsQuery, conditions, limit, offset);
-		}
-
-		const joins = this.buildAccessJoins(accessFilters);
-		const allConditions = [
-			...conditions,
+	private buildLexicalMatchCondition(query: string, tsQuery: SQL): SQL {
+		return or(
 			sql`${questpieSearchTable.ftsVector} @@ ${tsQuery}`,
-		];
-		if (accessCondition) {
-			allConditions.push(accessCondition);
-		}
-
-		const whereClause = and(...allConditions);
-
-		const query = sql`
-			SELECT
-				${questpieSearchTable.id} as id,
-				${questpieSearchTable.collectionName} as collection_name,
-				${questpieSearchTable.recordId} as record_id,
-				${questpieSearchTable.title} as title,
-				${questpieSearchTable.content} as content,
-				${questpieSearchTable.metadata} as metadata,
-				${questpieSearchTable.locale} as locale,
-				${questpieSearchTable.updatedAt} as updated_at,
-				ts_rank_cd(${questpieSearchTable.ftsVector}, ${tsQuery}) as score
-			FROM ${questpieSearchTable}
-			${joins}
-			WHERE ${whereClause}
-			ORDER BY ts_rank_cd(${questpieSearchTable.ftsVector}, ${tsQuery}) DESC
-			LIMIT ${limit} OFFSET ${offset}
-		`;
-
-		const result = await this.db!.execute(query);
-		return rowsOf(result);
+			sql`similarity(${questpieSearchTable.title}, ${query}) > ${this.trigramThreshold}`,
+		)!;
 	}
 
 	/**
-	 * Hybrid search combining FTS + trigram (requires pg_trgm)
+	 * Lexical search combines FTS rank with trigram similarity. This is one
+	 * lexical ranking strategy, not the reserved lexical+semantic hybrid mode.
 	 */
-	private async searchHybrid(
+	private async searchLexical(
 		query: string,
-		tsQuery: any,
-		conditions: any[],
+		tsQuery: SQL,
+		conditions: SQL[],
 		limit: number,
 		offset: number,
 	): Promise<any[]> {
 		const ftsWeight = this.ftsWeight;
 		const trigramWeight = 1 - ftsWeight;
-		const threshold = this.trigramThreshold;
 		const rows = await this.db!.select({
 			id: questpieSearchTable.id,
 			collection_name: questpieSearchTable.collectionName,
@@ -777,22 +372,13 @@ export class PostgresSearchAdapter implements SearchAdapter {
 			metadata: questpieSearchTable.metadata,
 			locale: questpieSearchTable.locale,
 			updated_at: questpieSearchTable.updatedAt,
-			// Combined score: FTS * ftsWeight + trigram * trigramWeight
 			score: sql<number>`(
 						COALESCE(ts_rank_cd(${questpieSearchTable.ftsVector}, ${tsQuery}), 0) * ${ftsWeight} +
 						COALESCE(similarity(${questpieSearchTable.title}, ${query}), 0) * ${trigramWeight}
 					)`,
 		})
 			.from(questpieSearchTable)
-			.where(
-				and(
-					...conditions,
-					or(
-						sql`${questpieSearchTable.ftsVector} @@ ${tsQuery}`,
-						sql`similarity(${questpieSearchTable.title}, ${query}) > ${threshold}`,
-					),
-				),
-			)
+			.where(and(...conditions))
 			.orderBy(
 				desc(sql`(
 					COALESCE(ts_rank_cd(${questpieSearchTable.ftsVector}, ${tsQuery}), 0) * ${ftsWeight} +
@@ -803,66 +389,6 @@ export class PostgresSearchAdapter implements SearchAdapter {
 			.offset(offset);
 
 		return rows;
-	}
-
-	/**
-	 * Hybrid search with access filtering via JOINs
-	 */
-	private async searchHybridWithAccess(
-		query: string,
-		tsQuery: any,
-		conditions: any[],
-		accessFilters: SearchOptions["accessFilters"],
-		accessCondition: ReturnType<typeof sql> | null,
-		limit: number,
-		offset: number,
-	): Promise<any[]> {
-		// If no access filters, fall back to regular hybrid search
-		if (!accessFilters || accessFilters.length === 0 || !accessCondition) {
-			return this.searchHybrid(query, tsQuery, conditions, limit, offset);
-		}
-
-		const ftsWeight = this.ftsWeight;
-		const trigramWeight = 1 - ftsWeight;
-		const threshold = this.trigramThreshold;
-
-		const joins = this.buildAccessJoins(accessFilters);
-		const allConditions = [
-			...conditions,
-			or(
-				sql`${questpieSearchTable.ftsVector} @@ ${tsQuery}`,
-				sql`similarity(${questpieSearchTable.title}, ${query}) > ${threshold}`,
-			),
-		];
-		if (accessCondition) {
-			allConditions.push(accessCondition);
-		}
-
-		const scoreExpr = sql`(
-			COALESCE(ts_rank_cd(${questpieSearchTable.ftsVector}, ${tsQuery}), 0) * ${ftsWeight} +
-			COALESCE(similarity(${questpieSearchTable.title}, ${query}), 0) * ${trigramWeight}
-		)`;
-
-		const sqlQuery = sql`
-			SELECT
-				${questpieSearchTable.id} as id,
-				${questpieSearchTable.collectionName} as collection_name,
-				${questpieSearchTable.recordId} as record_id,
-				${questpieSearchTable.title} as title,
-				${questpieSearchTable.content} as content,
-				${questpieSearchTable.metadata} as metadata,
-				${questpieSearchTable.locale} as locale,
-				${questpieSearchTable.updatedAt} as updated_at,
-				${scoreExpr} as score
-			FROM ${questpieSearchTable}
-			${joins}
-			WHERE ${and(...allConditions)}
-			ORDER BY ${scoreExpr} DESC
-			LIMIT ${limit} OFFSET ${offset}
-		`;
-
-		const result = await this.db!.execute(sqlQuery);
-		return rowsOf(result);
 	}
 
 	/**
@@ -944,24 +470,25 @@ export class PostgresSearchAdapter implements SearchAdapter {
 			})
 			.returning({ id: questpieSearchTable.id });
 
-		// Handle facets if provided
-		if (facets && facets.length > 0 && searchRecord) {
-			// Delete existing facets for this record
+		// Facets are a replacement projection. Clear previous values even when the
+		// new projection is empty so removed fields cannot remain observable.
+		if (searchRecord) {
 			await this.db
 				.delete(questpieSearchFacetsTable)
 				.where(eq(questpieSearchFacetsTable.searchId, searchRecord.id));
 
-			// Insert new facets
-			await this.db.insert(questpieSearchFacetsTable).values(
-				facets.map((f) => ({
-					searchId: searchRecord.id,
-					collectionName: collection,
-					locale,
-					facetName: f.name,
-					facetValue: f.value,
-					numericValue: f.numericValue?.toString(),
-				})),
-			);
+			if (facets && facets.length > 0) {
+				await this.db.insert(questpieSearchFacetsTable).values(
+					facets.map((f) => ({
+						searchId: searchRecord.id,
+						collectionName: collection,
+						locale,
+						facetName: f.name,
+						facetValue: f.value,
+						numericValue: f.numericValue?.toString(),
+					})),
+				);
+			}
 		}
 	}
 
@@ -1017,23 +544,23 @@ export class PostgresSearchAdapter implements SearchAdapter {
 					r.locale === param.locale,
 			);
 
-			if (param.facets && param.facets.length > 0 && searchRecord) {
-				// Delete existing facets for this record
+			if (searchRecord) {
 				await this.db
 					.delete(questpieSearchFacetsTable)
 					.where(eq(questpieSearchFacetsTable.searchId, searchRecord.id));
 
-				// Insert new facets
-				await this.db.insert(questpieSearchFacetsTable).values(
-					param.facets.map((f) => ({
-						searchId: searchRecord.id,
-						collectionName: param.collection,
-						locale: param.locale,
-						facetName: f.name,
-						facetValue: f.value,
-						numericValue: f.numericValue?.toString(),
-					})),
-				);
+				if (param.facets && param.facets.length > 0) {
+					await this.db.insert(questpieSearchFacetsTable).values(
+						param.facets.map((f) => ({
+							searchId: searchRecord.id,
+							collectionName: param.collection,
+							locale: param.locale,
+							facetName: f.name,
+							facetValue: f.value,
+							numericValue: f.numericValue?.toString(),
+						})),
+					);
+				}
 			}
 		}
 	}

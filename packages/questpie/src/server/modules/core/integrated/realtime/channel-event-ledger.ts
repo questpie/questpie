@@ -3,11 +3,19 @@ import { createHash } from "node:crypto";
 import { and, asc, eq, gt, isNull, lt, lte, or, sql } from "drizzle-orm";
 
 import {
+	CHANNEL_MAX_PAYLOAD_BYTES,
+	ChannelSecurityError,
+} from "#questpie/server/channels/security.js";
+import {
 	onAfterCommit,
 	withTransactionOrExisting,
 } from "#questpie/server/collection/crud/shared/transaction.js";
 import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
 import type { LoggerAdapter } from "#questpie/server/modules/core/integrated/logger/types.js";
+import {
+	parseCompatibleTypedEventWire,
+	stringifyCompatibleTypedEventWire,
+} from "#questpie/shared/typed-wire.js";
 
 import {
 	questpieChannelDispatchTable,
@@ -17,7 +25,7 @@ import {
 import type { RealtimeObservation, RealtimeObserver } from "./observer.js";
 import type {
 	ChannelGapFrame,
-	ChangeBroker,
+	ChangePublisher,
 	ClientSink,
 	ClientTransport,
 	OrderedChannelDelivery,
@@ -63,6 +71,22 @@ export type AppendChannelEventOptions = {
 export type ChannelEventReceipt = Readonly<{
 	eventId: string;
 }>;
+
+export type ChannelReplayPage =
+	| Readonly<{
+			status: "events";
+			events: readonly Readonly<{
+				eventId: string;
+				event: string;
+				data: unknown;
+			}>[];
+			hasMore: boolean;
+	  }>
+	| Readonly<{
+			status: "gap";
+			requestedEventId: string;
+			oldestEventId: string | null;
+	  }>;
 
 export type LocalChannelSubscriptionInput = {
 	subscriptionId: string;
@@ -110,8 +134,34 @@ function parseChannelEventId(
 	return { channelHash: match[1], seq };
 }
 
-function byteLength(value: unknown): number {
-	return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+function canonicalChannelEnvelope(
+	eventId: string,
+	event: string,
+	data: unknown,
+): { wireJson: string; sizeBytes: number } {
+	let wireJson: string | undefined;
+	try {
+		wireJson = stringifyCompatibleTypedEventWire({ eventId, event, data });
+	} catch {
+		throw new ChannelSecurityError(
+			"channel_payload_invalid",
+			"Channel event data must be JSON serializable",
+		);
+	}
+	if (wireJson === undefined) {
+		throw new ChannelSecurityError(
+			"channel_payload_invalid",
+			"Channel event data must be JSON serializable",
+		);
+	}
+	const sizeBytes = new TextEncoder().encode(wireJson).byteLength;
+	if (sizeBytes > CHANNEL_MAX_PAYLOAD_BYTES) {
+		throw new ChannelSecurityError(
+			"channel_payload_too_large",
+			"Channel event envelope exceeds the 10,000-byte limit",
+		);
+	}
+	return { wireJson, sizeBytes };
 }
 
 function hasPostgresErrorCode(error: unknown, code: string): boolean {
@@ -146,7 +196,7 @@ export class ChannelEventLedger {
 
 	constructor(
 		private readonly db: AnyDrizzleClient<any>,
-		private readonly changeBroker: ChangeBroker | undefined,
+		private readonly changeBroker: ChangePublisher | undefined,
 		private readonly clientTransport: ClientTransport | undefined,
 		config: Partial<ChannelEventLedgerConfig> = {},
 		private readonly logger?: Pick<LoggerAdapter, "error" | "warn">,
@@ -201,6 +251,11 @@ export class ChannelEventLedger {
 
 			const seq = Number(head.seq);
 			eventId = channelEventId(channelHash, seq);
+			const envelope = canonicalChannelEnvelope(
+				eventId,
+				input.event,
+				input.data,
+			);
 			await tx.insert(questpieChannelEventTable).values({
 				channelHash,
 				seq,
@@ -209,7 +264,8 @@ export class ChannelEventLedger {
 				event: input.event,
 				schemaIdentity: input.schemaIdentity,
 				payload: input.data,
-				sizeBytes: byteLength(input),
+				wireJson: envelope.wireJson,
+				sizeBytes: envelope.sizeBytes,
 			});
 			await tx
 				.insert(questpieChannelDispatchTable)
@@ -319,6 +375,86 @@ export class ChannelEventLedger {
 		await this.drainLocalSubscription(subscription);
 
 		return () => this.removeLocalSubscription(subscription);
+	}
+
+	/** Read one bounded replay page for an already-authorized channel identity. */
+	async replay(
+		channel: string,
+		afterEventId: string,
+	): Promise<ChannelReplayPage> {
+		const channelHash = hashResolvedChannel(channel);
+		const parsed = parseChannelEventId(afterEventId);
+		const [head] = await this.db
+			.select({ lastSeq: questpieChannelHeadTable.lastSeq })
+			.from(questpieChannelHeadTable)
+			.where(eq(questpieChannelHeadTable.channelHash, channelHash))
+			.limit(1);
+		const latestSeq = Number(head?.lastSeq ?? 0);
+		const [oldest] = await this.db
+			.select({
+				seq: questpieChannelEventTable.seq,
+				eventId: questpieChannelEventTable.eventId,
+			})
+			.from(questpieChannelEventTable)
+			.where(eq(questpieChannelEventTable.channelHash, channelHash))
+			.orderBy(asc(questpieChannelEventTable.seq))
+			.limit(1);
+		const outsideRetention =
+			!parsed ||
+			parsed.channelHash !== channelHash ||
+			parsed.seq > latestSeq ||
+			(parsed.seq < latestSeq &&
+				(!oldest || parsed.seq < Number(oldest.seq) - 1));
+		if (outsideRetention) {
+			this.observe({ type: "resume", outcome: "gap" });
+			return {
+				status: "gap",
+				requestedEventId: afterEventId,
+				oldestEventId: oldest?.eventId ?? null,
+			};
+		}
+
+		const maximumEvents = Math.max(
+			1,
+			Math.min(this.config.batchSize, this.config.maxBufferedEvents),
+		);
+		const rows = await this.db
+			.select()
+			.from(questpieChannelEventTable)
+			.where(
+				and(
+					eq(questpieChannelEventTable.channelHash, channelHash),
+					gt(questpieChannelEventTable.seq, parsed.seq),
+				),
+			)
+			.orderBy(asc(questpieChannelEventTable.seq))
+			.limit(maximumEvents + 1);
+		const events: Array<{
+			eventId: string;
+			event: string;
+			data: unknown;
+		}> = [];
+		let bytes = 0;
+		let hasMore = false;
+		for (const row of rows) {
+			if (
+				events.length >= maximumEvents ||
+				bytes + row.sizeBytes > this.config.maxBufferedBytes
+			) {
+				hasMore = true;
+				break;
+			}
+			events.push(JSON.parse(row.wireJson));
+			bytes += row.sizeBytes;
+		}
+		if (hasMore && events.length === 0) {
+			throw new Error("Channel replay event exceeds the configured byte limit");
+		}
+		this.observe({
+			type: "resume",
+			outcome: events.length === 0 ? "current" : "replay",
+		});
+		return { status: "events", events, hasMore };
 	}
 
 	async drain(channelHash?: string): Promise<void> {
@@ -547,12 +683,17 @@ export class ChannelEventLedger {
 	}
 
 	private toLocalFrame(row: ChannelEventRow): OrderedChannelEventFrame {
+		const envelope = parseCompatibleTypedEventWire<{
+			eventId: string;
+			event: string;
+			data: unknown;
+		}>(row.wireJson);
 		return {
 			type: "channel_event",
 			channel: row.channel,
-			event: row.event,
-			eventId: row.eventId,
-			data: row.payload,
+			event: envelope.event,
+			eventId: envelope.eventId,
+			data: envelope.data,
 		};
 	}
 
@@ -682,9 +823,7 @@ export class ChannelEventLedger {
 					const delivery: OrderedChannelDelivery = {
 						channel: row.channel,
 						eventId: row.eventId,
-						frame: this.encoder.encode(
-							JSON.stringify({ event: row.event, data: row.payload }),
-						),
+						frame: this.encoder.encode(row.wireJson),
 					};
 					const result = await this.clientTransport.publishChannel(delivery);
 					if (result.status === "busy") return;

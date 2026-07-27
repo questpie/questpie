@@ -3,11 +3,14 @@ import { describe, expect, it } from "bun:test";
 import {
 	encodeSseComment,
 	encodeSseEvent,
+	RealtimeDeltaBufferOverflowError,
 	RealtimeSnapshotBufferOverflowError,
+	SseOrderedDeltaWriter,
 	SseLatestSnapshotWriter,
 	SseClientTransport,
 } from "../../src/server/modules/core/integrated/realtime/sse-client-transport.js";
 import { SharedSseKeepAliveTicker } from "../../src/server/modules/core/integrated/realtime/sse-keep-alive.js";
+import { parseCompatibleTypedEventWire } from "../../src/shared/typed-wire.js";
 
 describe("realtime matrix SseClientTransport", () => {
 	it("delivers serialized frames through a local-session sink", async () => {
@@ -53,6 +56,37 @@ describe("realtime matrix SseClientTransport", () => {
 		await transport.stop();
 		await transport.stop();
 		expect(closeCalls).toBe(1);
+	});
+
+	it("preserves Date identity for typed clients without breaking legacy JSON", () => {
+		const instant = new Date("2025-03-30T00:30:00.123Z");
+		const frame = new TextDecoder().decode(
+			encodeSseEvent("snapshot", {
+				topicId: "events",
+				seq: 1,
+				data: {
+					docs: [
+						{
+							startsAt: instant,
+							isoLookingString: instant.toISOString(),
+						},
+					],
+				},
+			}),
+		);
+		const wireData = frame.match(/^event: snapshot\ndata: (.+)\n\n$/)?.[1];
+		expect(wireData).toBeDefined();
+
+		const legacy = JSON.parse(wireData!);
+		expect(legacy.data.docs[0].startsAt).toBe(instant.toISOString());
+
+		const typed = parseCompatibleTypedEventWire<{
+			data: { docs: Array<{ startsAt: Date; isoLookingString: string }> };
+		}>(wireData!);
+		expect(typed.data.docs[0]?.startsAt).toBeInstanceOf(Date);
+		expect(typed.data.docs[0]?.startsAt.getTime()).toBe(instant.getTime());
+		expect(typed.data.docs[0]?.isoLookingString).toBe(instant.toISOString());
+		expect(typed.data.docs[0]?.isoLookingString).not.toBeInstanceOf(Date);
 	});
 
 	it("reports and rejects controller write failures", async () => {
@@ -144,6 +178,35 @@ describe("realtime matrix SseClientTransport", () => {
 			writer.write("posts", new Uint8Array(9)),
 		).rejects.toBeInstanceOf(RealtimeSnapshotBufferOverflowError);
 		expect(writer.bufferedBytes).toBe(0);
+	});
+
+	it("queues row deltas in order and tears down on overflow", async () => {
+		const closed: string[] = [];
+		const buffers: Array<{ events: number; bytes: number }> = [];
+		const sink = {
+			sessionId: "session-1",
+			write: async () => ({ status: "busy" as const, bufferedBytes: 0 }),
+			close: async (reason: string) => {
+				closed.push(reason);
+			},
+		};
+		const writer = new SseOrderedDeltaWriter(sink, {
+			maximumBufferedEvents: 2,
+			maximumBufferedBytes: 8,
+			busyRetryMs: 60_000,
+			onBuffer: (events, bytes) => buffers.push({ events, bytes }),
+		});
+
+		await expect(writer.write(new Uint8Array(5))).resolves.toMatchObject({
+			status: "busy",
+		});
+		await expect(writer.write(new Uint8Array(4))).rejects.toBeInstanceOf(
+			RealtimeDeltaBufferOverflowError,
+		);
+		expect(closed).toEqual(["slow_consumer"]);
+		expect(writer.bufferedBytes).toBe(0);
+		expect(buffers).toContainEqual({ events: 1, bytes: 5 });
+		expect(buffers.at(-1)).toEqual({ events: 0, bytes: 0 });
 	});
 });
 

@@ -9,6 +9,10 @@ import type { RealtimeObservation } from "../../src/server/modules/core/integrat
 import type { PusherProvider } from "../../src/server/modules/core/integrated/realtime/pusher-transport.js";
 import { PusherClientTransport } from "../../src/server/modules/core/integrated/realtime/pusher-transport.js";
 import { setChannelPublishLimiterForTests } from "../../src/server/modules/core/routes/channels/_shared.js";
+import {
+	parseCompatibleTypedEventWire,
+	stringifyTypedWire,
+} from "../../src/shared/typed-wire.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 import { runTestDbMigrations } from "../utils/test-db.js";
 
@@ -51,7 +55,9 @@ async function readSseEvent(
 				.split("\n")
 				.find((line) => line.startsWith("data: "))
 				?.slice(6);
-			if (type === eventType && data) return JSON.parse(data);
+			if (type === eventType && data) {
+				return parseCompatibleTypedEventWire<Record<string, unknown>>(data);
+			}
 		}
 		const next = await reader.read();
 		if (next.done) throw new Error(`SSE ended before ${eventType}`);
@@ -82,7 +88,7 @@ describe("channel module routes", () => {
 			},
 			{
 				app: { url: "https://app.example.com" },
-				realtime: { retentionDays: 0 },
+				realtime: { retentionDays: 0, rowLiveQueries: false },
 			},
 		);
 		cleanup = setup.cleanup;
@@ -152,6 +158,71 @@ describe("channel module routes", () => {
 			eventId: expect.any(String),
 			data: { text: "hello" },
 		});
+		await reader.cancel();
+	});
+
+	test("preserves typed instants from publish validation through SSE delivery", async () => {
+		const instant = new Date("2025-03-30T00:30:00.123Z");
+		const setup = await buildMockApp(
+			{
+				channels: {
+					events: channel("events")
+						.events({
+							scheduled: z.object({
+								startsAt: z.date(),
+								dateOnly: z.string().date(),
+								isoLookingString: z.string(),
+							}),
+						})
+						.authorize({ subscribe: true, publish: true }),
+				},
+			},
+			{
+				app: { url: "https://app.example.com" },
+				realtime: { retentionDays: 0, rowLiveQueries: false },
+			},
+		);
+		cleanup = setup.cleanup;
+		await runTestDbMigrations(setup.app);
+		const handler = createFetchHandler(setup.app);
+		const streamResponse = await handler(
+			channelRequest("realtime", {
+				channels: [{ id: "events", channel: "events", params: {} }],
+			}),
+		);
+		expect(streamResponse.status).toBe(200);
+		const reader = streamResponse.body!.getReader();
+		const state = { buffer: "" };
+		await readSseEvent(reader, state, "session");
+
+		const publishResponse = await handler(
+			new Request("https://app.example.com/channels/publish", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/superjson+json",
+					Origin: "https://app.example.com",
+				},
+				body: stringifyTypedWire({
+					channel: "events",
+					params: {},
+					event: "scheduled",
+					data: {
+						startsAt: instant,
+						dateOnly: "2025-03-30",
+						isoLookingString: instant.toISOString(),
+					},
+				}),
+			}),
+		);
+		expect(publishResponse.status).toBe(200);
+		const delivered = await readSseEvent(reader, state, "channel_event");
+		expect((delivered.data as any).startsAt).toBeInstanceOf(Date);
+		expect((delivered.data as any).startsAt.getTime()).toBe(instant.getTime());
+		expect((delivered.data as any).dateOnly).toBe("2025-03-30");
+		expect((delivered.data as any).isoLookingString).toBe(
+			instant.toISOString(),
+		);
+		expect((delivered.data as any).isoLookingString).not.toBeInstanceOf(Date);
 		await reader.cancel();
 	});
 
@@ -244,6 +315,97 @@ describe("channel module routes", () => {
 		expect(configText).not.toContain("provider-secret");
 	});
 
+	test("replays a bounded channel page only after fresh subscribe authorization", async () => {
+		const setup = await buildMockApp(
+			{
+				channels: {
+					room: channel("room-[id]")
+						.events({ message: z.object({ text: z.string() }) })
+						.authorize({
+							subscribe: ({ session }) => session?.user?.id === "member-1",
+							publish: true,
+						}),
+				},
+			},
+			{
+				app: { url: "https://app.example.com" },
+				realtime: { retentionDays: 0 },
+			},
+		);
+		cleanup = setup.cleanup;
+		await runTestDbMigrations(setup.app);
+		const handler = createFetchHandler(setup.app, {
+			getSession: async (request) => ({
+				user: { id: request.headers.get("x-user") },
+				session: { id: "session-1" },
+			}),
+		});
+		const request = (
+			path: string,
+			body: Record<string, unknown>,
+			user = "member-1",
+		) =>
+			handler(
+				channelRequest(path, body, {
+					origin: "https://app.example.com",
+					cookie: true,
+					headers: { "x-user": user },
+				}),
+			);
+		const publish = (text: string) =>
+			request("channels/publish", {
+				channel: "room",
+				params: { id: "one" },
+				event: "message",
+				data: { text },
+			});
+		const first = (await (await publish("one")).json()) as { eventId: string };
+		const second = (await (await publish("two")).json()) as { eventId: string };
+
+		const replay = await request("channels/replay", {
+			channel: "room",
+			params: { id: "one" },
+			afterEventId: first.eventId,
+		});
+		expect(replay.status).toBe(200);
+		expect(await replay.json()).toEqual({
+			status: "events",
+			events: [
+				{
+					eventId: second.eventId,
+					event: "message",
+					data: { text: "two" },
+				},
+			],
+			hasMore: false,
+		});
+
+		expect(
+			(
+				await request(
+					"channels/replay",
+					{
+						channel: "room",
+						params: { id: "one" },
+						afterEventId: first.eventId,
+					},
+					"member-2",
+				)
+			).status,
+		).toBe(403);
+
+		const gap = await request("channels/replay", {
+			channel: "room",
+			params: { id: "one" },
+			afterEventId: `${"f".repeat(64)}:1`,
+		});
+		expect(gap.status).toBe(200);
+		expect(await gap.json()).toMatchObject({
+			status: "gap",
+			requestedEventId: `${"f".repeat(64)}:1`,
+		});
+	});
+
 	test("enforces publish authorization, schema, payload, and rate before ledger allocation", async () => {
 		const setup = await buildMockApp(
 			{
@@ -308,7 +470,7 @@ describe("channel module routes", () => {
 			channel: "fallback",
 			params: { id: "one" },
 			event: "message",
-			data: "x".repeat(9_998),
+			data: "x".repeat(9_000),
 		});
 		expect(accepted.status).toBe(200);
 		expect(await accepted.json()).toEqual({ eventId: expect.any(String) });
@@ -373,7 +535,7 @@ describe("channel module routes", () => {
 		expect((await publishFromTab("tab-3")).status).toBe(200);
 	});
 
-	test("uses one strict origin and credentialed CORS policy for auth and publish", async () => {
+	test("uses one strict origin and credentialed CORS policy for channel authority routes", async () => {
 		const setup = await buildMockApp(
 			{ channels: { publicNews: channel("news") } },
 			{
@@ -388,7 +550,11 @@ describe("channel module routes", () => {
 		);
 		cleanup = setup.cleanup;
 		const handler = createFetchHandler(setup.app);
-		for (const path of ["channels/auth", "channels/publish"]) {
+		for (const path of [
+			"channels/auth",
+			"channels/publish",
+			"channels/replay",
+		]) {
 			const missing = await handler(channelRequest(path, {}, { cookie: true }));
 			expect(missing.status).toBe(403);
 			const untrusted = await handler(

@@ -140,6 +140,45 @@ describe("pusher channel matrix module routes", () => {
 		expect(response.headers.get("cache-control")).toBe("no-store");
 	});
 
+	test("releases principal admission when provider config loading fails", async () => {
+		setup = await buildMockApp(
+			{},
+			{
+				realtime: {
+					admission: { maxConnectionsPerPrincipal: 1 },
+					retentionDays: 0,
+				},
+			},
+		);
+		let configCalls = 0;
+		const realtime = setup.app.realtime as typeof setup.app.realtime & {
+			getClientTransportConfig(): Promise<never>;
+		};
+		realtime.getClientTransportConfig = async () => {
+			configCalls += 1;
+			throw new Error("provider config unavailable");
+		};
+		const handler = createFetchHandler(setup.app, {
+			getSession: async () => ({
+				user: { id: "admission-user" },
+				session: { id: "admission-session" },
+			}),
+		});
+		const request = () =>
+			new Request("http://localhost/realtime", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					transport: "shared-provider",
+					crdtHold: true,
+				}),
+			});
+
+		expect((await handler(request())).status).toBe(500);
+		expect((await handler(request())).status).toBe(500);
+		expect(configCalls).toBe(2);
+	});
+
 	test("bootstraps and tears down a private provider live-query session", async () => {
 		const authorizedChannels: string[] = [];
 		const sessionProvider: PusherProvider = {
@@ -199,7 +238,7 @@ describe("pusher channel matrix module routes", () => {
 			};
 		};
 		expect(session.channel).toMatch(/^private-questpie-rt-/);
-		expect(session.control.versions).toContain(1);
+		expect(session.control.versions).toContain(2);
 
 		const auth = new URLSearchParams({
 			socket_id: "123.456",
@@ -224,10 +263,9 @@ describe("pusher channel matrix module routes", () => {
 					token: session.token,
 					topology: {
 						protocol: "questpie-realtime-topology",
-						version: 1,
+						version: 2,
 						revision: 1,
-						topics: [],
-						channels: [],
+						subscriptions: [],
 					},
 				}),
 			}),
@@ -324,10 +362,12 @@ describe("pusher channel matrix module routes", () => {
 							token: session.token,
 							topology: {
 								protocol: "questpie-realtime-topology",
-								version: 1,
+								version: 2,
 								revision,
-								topics,
-								channels: [],
+								subscriptions: topics.map((topic) => ({
+									kind: "query",
+									...(topic as object),
+								})),
 							},
 						}),
 					}),

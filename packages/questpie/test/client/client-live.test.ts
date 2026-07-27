@@ -7,6 +7,7 @@ import {
 	realtimeReconnectDelay,
 } from "../../src/client/realtime/multiplexer.js";
 import { sseSnapshotStream } from "../../src/client/realtime/stream.js";
+import { stringifyCompatibleTypedEventWire } from "../../src/shared/typed-wire.js";
 
 /**
  * `live()` / `liveIter()` are thin wrappers over the realtime multiplexer,
@@ -31,6 +32,8 @@ type SSEConnection = {
 		orderBy?: Record<string, string>;
 		sinceSeq?: number;
 	}>;
+	sendEvent: (type: string, payload: Record<string, unknown>) => void;
+	sendRawEvent: (type: string, data: string) => void;
 	sendSnapshot: (topicId: string, seq: number, data: unknown) => void;
 	sendError: (
 		topicId: string,
@@ -86,16 +89,20 @@ describe("client live queries", () => {
 			const connection: SSEConnection = {
 				topics,
 				aborted: false,
-				sendSnapshot(topicId, seq, data) {
+				sendEvent(type, payload) {
+					this.sendRawEvent(type, stringifyCompatibleTypedEventWire(payload));
+				},
+				sendRawEvent(type, data) {
 					try {
 						controller.enqueue(
-							encoder.encode(
-								`event: snapshot\ndata: ${JSON.stringify({ topicId, seq, data })}\n\n`,
-							),
+							encoder.encode(`event: ${type}\ndata: ${data}\n\n`),
 						);
 					} catch {
 						// Stream already closed
 					}
+				},
+				sendSnapshot(topicId, seq, data) {
+					this.sendEvent("snapshot", { topicId, seq, data });
 				},
 				sendError(topicId, message, payload = {}) {
 					controller.enqueue(
@@ -122,7 +129,7 @@ describe("client live queries", () => {
 			connections.push(connection);
 			controller.enqueue(
 				encoder.encode(
-					`event: session\ndata: ${JSON.stringify({ sessionId: `session-${connections.length}`, token: `token-${connections.length}`, control: { protocol: "questpie-realtime-topology", versions: [1] } })}\n\n`,
+					`event: session\ndata: ${JSON.stringify({ sessionId: `session-${connections.length}`, token: `token-${connections.length}`, control: { protocol: "questpie-realtime-topology", versions: [2] } })}\n\n`,
 				),
 			);
 			return new Response(body, {
@@ -191,6 +198,97 @@ describe("client live queries", () => {
 		expect(snapshots).toHaveLength(2);
 	});
 
+	it("streamEvents preserves reset and forwards every same-seq delta", async () => {
+		const abortController = new AbortController();
+		const stream = client.realtime.streamEvents(
+			{ resourceType: "collection", resource: "posts" },
+			abortController.signal,
+			"delta-posts",
+		);
+
+		const bootstrap = stream.next();
+		await waitFor(() => connections.length === 1);
+		const connection = connections[0];
+		connection.sendEvent("snapshot", {
+			topicId: "delta-posts",
+			seq: 1,
+			reset: true,
+			data: { docs: [], totalDocs: 0 },
+		});
+		expect((await bootstrap).value).toEqual({
+			type: "snapshot",
+			topicId: "delta-posts",
+			seq: 1,
+			reset: true,
+			data: { docs: [], totalDocs: 0 },
+		});
+
+		connection.sendEvent("insert", {
+			topicId: "delta-posts",
+			seq: 2,
+			key: "first",
+			row: { id: "first" },
+		});
+		connection.sendEvent("insert", {
+			topicId: "delta-posts",
+			seq: 2,
+			key: "second",
+			row: { id: "second" },
+		});
+		expect((await stream.next()).value).toMatchObject({
+			type: "insert",
+			key: "first",
+			seq: 2,
+		});
+		expect((await stream.next()).value).toMatchObject({
+			type: "insert",
+			key: "second",
+			seq: 2,
+		});
+
+		abortController.abort();
+		await stream.next();
+	});
+
+	it("live materializes a same-seq delta batch only when it is up to date", async () => {
+		const snapshots: any[] = [];
+		const stop = client.collections.posts.live({}, (snapshot) =>
+			snapshots.push(snapshot),
+		);
+		await waitFor(() => connections.length === 1);
+		const connection = connections[0];
+		const topicId = connection.topics[0].id;
+		connection.sendSnapshot(topicId, 1, { docs: [], totalDocs: 0 });
+		await waitFor(() => snapshots.length === 1);
+
+		connection.sendEvent("insert", {
+			topicId,
+			seq: 2,
+			key: "first",
+			row: { id: "first" },
+		});
+		connection.sendEvent("insert", {
+			topicId,
+			seq: 2,
+			key: "second",
+			row: { id: "second" },
+		});
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		expect(snapshots).toHaveLength(1);
+
+		connection.sendEvent("up-to-date", {
+			topicId,
+			seq: 2,
+			meta: { totalDocs: 2 },
+		});
+		await waitFor(() => snapshots.length === 2);
+		expect(snapshots[1]).toMatchObject({
+			docs: [{ id: "first" }, { id: "second" }],
+			totalDocs: 2,
+		});
+		stop();
+	});
+
 	it("keeps collection get record ids separate from subscription ids", async () => {
 		const multiplexer = new RealtimeMultiplexer(
 			"http://localhost:3000",
@@ -228,7 +326,10 @@ describe("client live queries", () => {
 		const stopPages = client.collections.pages.live({}, () => {});
 		await waitFor(() =>
 			controlTopologies.some((topology) =>
-				topology.topics.some((entry: any) => entry.topic.resource === "pages"),
+				topology.subscriptions.some(
+					(entry: any) =>
+						entry.kind === "query" && entry.topic.resource === "pages",
+				),
 			),
 		);
 
@@ -236,13 +337,13 @@ describe("client live queries", () => {
 		expect(connections[0].aborted).toBe(false);
 		expect(controlTopologies).toHaveLength(1);
 		expect(controlTopologies[0].protocol).toBe("questpie-realtime-topology");
-		expect(controlTopologies[0].topics).toHaveLength(2);
+		expect(controlTopologies[0].subscriptions).toHaveLength(2);
 
 		stopPages();
 		stopPosts();
 	});
 
-	it("coalesces advertised v1 desired topology and closes the last topic locally", async () => {
+	it("coalesces advertised v2 desired topology and closes the last topic locally", async () => {
 		const controls: Array<Record<string, any>> = [];
 		let streamController!: ReadableStreamDefaultController<Uint8Array>;
 		let aborted = false;
@@ -253,7 +354,7 @@ describe("client live queries", () => {
 				return Response.json(
 					{
 						protocol: "questpie-realtime-topology",
-						version: 1,
+						version: 2,
 						status: "accepted",
 						revision: payload.topology.revision,
 						desiredRevision: payload.topology.revision,
@@ -272,7 +373,7 @@ describe("client live queries", () => {
 								token: "token-v1",
 								control: {
 									protocol: "questpie-realtime-topology",
-									versions: [1],
+									versions: [2],
 								},
 							})}\n\n`,
 						),
@@ -311,14 +412,14 @@ describe("client live queries", () => {
 
 		await waitFor(() => controls.length === 1);
 		expect(controls[0].topology.revision).toBe(1);
-		expect(controls[0].topology.topics).toHaveLength(3);
+		expect(controls[0].topology.subscriptions).toHaveLength(3);
 		expect(controls[0].frames).toBeUndefined();
 
 		stopPages();
 		stopUsers();
 		await waitFor(() => controls.length === 2);
 		expect(controls[1].topology.revision).toBe(2);
-		expect(controls[1].topology.topics).toHaveLength(1);
+		expect(controls[1].topology.subscriptions).toHaveLength(1);
 		stopPosts();
 		await waitFor(() => aborted);
 		expect(controls).toHaveLength(2);
@@ -369,6 +470,66 @@ describe("client live queries", () => {
 		]);
 		await new Promise((resolve) => setTimeout(resolve, 20));
 		expect(snapshots).toHaveLength(2);
+		multiplexer.destroy();
+	});
+
+	it("preserves instant values across snapshots, deltas, and reconnect", async () => {
+		const instant = new Date("2025-03-30T00:30:00.123Z");
+		const resumedInstant = new Date("2025-11-02T05:30:00.000Z");
+		const multiplexer = new RealtimeMultiplexer(
+			"http://localhost:3000",
+			true,
+			0,
+			{
+				retryBaseMs: 10,
+				maxRetryMs: 10,
+				pingWatchdogMs: 1000,
+				random: () => 0.5,
+			},
+		);
+		const events: any[] = [];
+		multiplexer.subscribe(
+			{ resourceType: "collection", resource: "events" },
+			(event) => events.push(event),
+			undefined,
+			"temporal-events",
+		);
+		await waitFor(() => connections.length === 1);
+
+		connections[0].sendSnapshot("temporal-events", 1, {
+			docs: [
+				{
+					id: "event-1",
+					startsAt: instant,
+					dateOnly: "2025-03-30",
+					isoLookingString: instant.toISOString(),
+				},
+			],
+		});
+		connections[0].sendEvent("update", {
+			topicId: "temporal-events",
+			seq: 2,
+			key: "event-1",
+			row: { id: "event-1", startsAt: resumedInstant },
+		});
+		await waitFor(() => events.length === 2);
+		expect(events[0].data.docs[0].startsAt).toBeInstanceOf(Date);
+		expect(events[0].data.docs[0].startsAt.getTime()).toBe(instant.getTime());
+		expect(events[0].data.docs[0].dateOnly).toBe("2025-03-30");
+		expect(events[0].data.docs[0].isoLookingString).not.toBeInstanceOf(Date);
+		expect(events[1].row.startsAt).toBeInstanceOf(Date);
+		expect(events[1].row.startsAt.getTime()).toBe(resumedInstant.getTime());
+
+		connections[0].close();
+		await waitFor(() => connections.length === 2);
+		connections[1].sendSnapshot("temporal-events", 3, {
+			docs: [{ id: "event-1", startsAt: resumedInstant }],
+		});
+		await waitFor(() => events.length === 3);
+		expect(events[2].data.docs[0].startsAt).toBeInstanceOf(Date);
+		expect(events[2].data.docs[0].startsAt.getTime()).toBe(
+			resumedInstant.getTime(),
+		);
 		multiplexer.destroy();
 	});
 
@@ -471,6 +632,38 @@ describe("client live queries", () => {
 		stopPages();
 	});
 
+	it("terminates an affected topic on an incompatible typed frame", async () => {
+		const snapshots: unknown[] = [];
+		const errors: Error[] = [];
+		client.realtime.subscribe(
+			{ resourceType: "collection", resource: "posts" },
+			(event) => snapshots.push(event),
+			undefined,
+			"posts-topic",
+			(error) => errors.push(error),
+		);
+		await waitFor(() => connections.length === 1);
+
+		connections[0].sendRawEvent(
+			"snapshot",
+			JSON.stringify({
+				topicId: "posts-topic",
+				seq: 1,
+				data: { docs: [] },
+				__questpieTypedWire: { version: 2, dates: [] },
+			}),
+		);
+		await waitFor(() => errors.length === 1);
+		expect(errors[0]?.message).toContain("typed event protocol error");
+		expect(client.realtime.topicCount).toBe(0);
+
+		connections[0].sendSnapshot("posts-topic", 2, {
+			docs: [{ id: "must-not-arrive" }],
+		});
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		expect(snapshots).toHaveLength(0);
+	});
+
 	it("delivers an initial admission response once and removes the rejected topic", async () => {
 		let calls = 0;
 		const fetcher = (async () => {
@@ -562,16 +755,30 @@ describe("client live queries", () => {
 		} as unknown as RealtimeMultiplexer;
 		const stream = sseSnapshotStream<number>({
 			multiplexer,
-			topic: { resourceType: "collection", resource: "posts" },
+			topic: {
+				resourceType: "collection",
+				resource: "posts",
+				operation: "count",
+			},
 			signal: abortController.signal,
 		});
 
 		const first = stream.next();
 		await waitFor(() => typeof deliver === "function");
-		deliver!(1);
+		deliver!({
+			type: "snapshot",
+			topicId: "posts",
+			seq: 1,
+			data: 1,
+		});
 		expect((await first).value).toBe(1);
 		const second = stream.next();
-		deliver!(2);
+		deliver!({
+			type: "snapshot",
+			topicId: "posts",
+			seq: 2,
+			data: 2,
+		});
 		expect((await second).value).toBe(2);
 		expect(addSpy).toHaveBeenCalledTimes(1);
 

@@ -15,7 +15,7 @@ type _realtimeTrueResolvesToConfig = Expect<
 runtimeConfig({
 	db: { url: "postgres://localhost/test" },
 	realtime: {
-		// @ts-expect-error realtime rollout modes were removed in QuestPie 4
+		// @ts-expect-error realtime rollout modes are not part of the current contract
 		rollout: { mode: "dual" },
 	},
 });
@@ -23,7 +23,7 @@ runtimeConfig({
 runtimeConfig({
 	db: { url: "postgres://localhost/test" },
 	realtime: {
-		// @ts-expect-error realtime.adapter was removed in QuestPie 4
+		// @ts-expect-error realtime.adapter is not part of the current contract
 		adapter: {},
 	},
 });

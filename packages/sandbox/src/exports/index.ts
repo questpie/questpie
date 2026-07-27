@@ -8,12 +8,8 @@
 export {
 	HttpSandboxAdapter,
 	httpSandboxAdapter,
-	type AgentWorkloadHttpRunOptions,
-	type AgentWorkloadHttpSandboxOptions,
-	type AgentWorkloadInputProjectionReference,
-	type AgentWorkloadInputProjectionRegistry,
-	type AgentWorkloadInputProjector,
 	type HttpSandboxAdapterOptions,
+	type WorkloadHttpSandboxOptions,
 } from "../adapter-http.js";
 
 export {
@@ -38,35 +34,45 @@ export type {
 	SandboxRunResult,
 } from "../types.js";
 export {
-	AGENT_WORKLOAD_ADMISSION_HEADER,
 	BINDINGS_TOKEN_HEADER,
 	FRAME_MARKER,
-	NON_AGENT_ADMISSION_HEADER,
+	HOST_ADMISSION_HEADER,
+	WORKLOAD_ADMISSION_HEADER,
 } from "../types.js";
 
 export {
 	buildGuestBindings,
 	type GuestBindings,
 	type GuestCollection,
+	type GuestToolDescriptor,
+	type GuestToolResult,
+	type GuestTools,
 	type HostCall,
 } from "../guest-bindings.js";
 
 export {
-	createAgentWorkloadSandboxBoundary,
-	type AgentWorkloadSandboxBoundary,
-	type AgentWorkloadSandboxContext,
-	type AgentWorkloadSandboxGuestContext,
-	type AgentWorkloadSandboxHostContext,
-	type AgentWorkloadSandboxBoundaryOptions,
-	type AgentWorkloadSandboxSession,
-} from "../agent-workload-boundary.js";
-export type { AgentWorkloadSandboxAuditEvent } from "../agent-workload-audit.js";
-export type { AgentWorkloadSandboxPolicy } from "../agent-workload-policy.js";
+	sandboxCustomTools,
+	type SandboxCustomToolEvidenceContext,
+	type SandboxCustomToolEvidenceEvent,
+	type SandboxCustomToolsConfig,
+	type SandboxCustomToolsLimits,
+	type SandboxCustomToolsRunOptions,
+} from "../custom-tools.js";
+
 export {
-	AGENT_WORKLOAD_SANDBOX_DENIAL_MESSAGE,
-	AgentWorkloadSandboxDeniedError,
-} from "../agent-workload-denial.js";
-export {
-	allowsAgentWorkloadSandboxCapability,
-	type AgentWorkloadSandboxCapabilityRequest,
-} from "../agent-workload-capabilities.js";
+	SANDBOX_WORKLOAD_DENIAL_MESSAGE,
+	SandboxWorkloadDeniedError,
+	type SandboxWorkloadAuditContext,
+	type SandboxWorkloadAuditEvent,
+	type SandboxWorkloadAuthorizationContext,
+	type SandboxWorkloadAuthorizationPhase,
+	type SandboxWorkloadAuthorizer,
+	type SandboxWorkloadPolicy,
+	type SandboxWorkloadRunOptions,
+} from "../workload.js";
+export type {
+	SandboxWorkloadAdmissionClaims,
+	SandboxWorkloadAdmissionDenialReason,
+	SandboxWorkloadAdmissionKey,
+	SandboxWorkloadAdmissionVerification,
+} from "../workload-admission.js";

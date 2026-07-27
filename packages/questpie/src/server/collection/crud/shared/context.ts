@@ -104,6 +104,9 @@ export function normalizeContext(context: CRUDContext = {}): NormalizedContext {
 		// principal: inherited from ALS like session, so nested CRUD and access
 		// rules see the caller's identity (incl. OAuth scopes) automatically.
 		principal: context.principal ?? stored?.principal,
+		// actor is an additive Human/Agent authority seam. It is never derived
+		// from ambient system mode and follows the same explicit → ALS priority.
+		actor: context.actor ?? stored?.actor,
 		db: context.db ?? stored?.db,
 		accessMode: context.accessMode ?? storedAccessMode ?? "system",
 		locale:

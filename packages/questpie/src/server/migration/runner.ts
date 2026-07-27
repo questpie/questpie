@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 
 import { rowsOf } from "#questpie/server/db/driver-result.js";
+import { assertSupportedPostgresVersion } from "#questpie/server/db/postgres-version.js";
 import { getEnv, getNodeEnv } from "#questpie/server/utils/env.js";
 
 import type {
@@ -79,6 +80,7 @@ export class MigrationRunner {
 		migrations: Migration[],
 		options: RunMigrationsOptions = {},
 	): Promise<void> {
+		await assertSupportedPostgresVersion(this.db);
 		await this.ensureMigrationsTable();
 
 		const executed = await this.getExecutedMigrations();

@@ -1,7 +1,7 @@
 import type { Prettify } from "better-auth";
 import type { SQL } from "drizzle-orm";
 import type { AnyPgColumn, PgTableExtraConfigValue } from "drizzle-orm/pg-core";
-import type { z } from "zod";
+import type { ZodType, z } from "zod";
 
 import type {
 	CollectionInsert,
@@ -28,6 +28,7 @@ import {
 	type ValidationSchemas,
 } from "#questpie/server/collection/builder/validation-helpers.js";
 import { isInTransaction } from "#questpie/server/collection/crud/shared/transaction.js";
+import { ApiError } from "#questpie/server/errors/base.js";
 import {
 	createFieldsCallbackContext,
 	type FieldsCallbackContext,
@@ -38,7 +39,17 @@ import {
 	type BuiltinFields,
 	builtinFields,
 } from "#questpie/server/modules/core/fields/index.js";
+import type {
+	CrdtOwnerCapability,
+	CrdtOwnerConfig,
+} from "#questpie/server/modules/core/integrated/crdt/capability.js";
 import type { SearchableConfig } from "#questpie/server/modules/core/integrated/search/types.js";
+import {
+	deleteUnreferencedStorageObject,
+	enqueueStorageCleanup,
+	lockStorageObjectKey,
+	wakeStorageCleanup,
+} from "#questpie/server/modules/core/integrated/storage/cleanup-store.js";
 import {
 	buildStorageFileUrl,
 	generateSignedUrlToken,
@@ -154,6 +165,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			validation: undefined,
 			output: undefined,
 			upload: undefined,
+			collaborative: undefined,
 			fieldDefinitions: {},
 		});
 		if (fieldDefs) {
@@ -280,7 +292,9 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 						// Multiple columns (e.g., polymorphic relation with type + id)
 						for (const col of column) {
 							const colName =
-								(col as { name?: string }).name ?? `${name}_${columns.length}`;
+								(col as { name?: string; config?: { name?: string } }).name ??
+								(col as { config?: { name?: string } }).config?.name ??
+								`${name}_${columns.length}`;
 							columns[colName] = col;
 						}
 					} else {
@@ -399,9 +413,38 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		}
 
 		// Get target collection name (first one for polymorphic)
-		const targetName = Array.isArray(targetCollection)
-			? targetCollection[0]
-			: targetCollection;
+		let polymorphicTargets: RelationConfig["polymorphicTargets"];
+		if (
+			relationType === "morphTo" &&
+			_toConfig &&
+			typeof _toConfig === "object"
+		) {
+			polymorphicTargets = Object.entries(
+				_toConfig as Record<string, string | (() => { name: string })>,
+			).map(([discriminator, target]) => {
+				let collection: string | undefined;
+				if (typeof target === "string") {
+					collection = target;
+				} else if (typeof target === "function") {
+					try {
+						collection = target().name;
+					} catch {
+						collection = undefined;
+					}
+				}
+				return {
+					discriminator,
+					collection,
+					typeField: `${fieldName}Type`,
+					idField: `${fieldName}Id`,
+				};
+			});
+		}
+		const targetName =
+			polymorphicTargets?.find((target) => target.collection)?.collection ??
+			(Array.isArray(targetCollection)
+				? targetCollection[0]
+				: targetCollection);
 
 		// Upload fields (f.upload) populate through the parent row's read
 		// decision — see RelationConfig.inheritAccess.
@@ -428,6 +471,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				return {
 					type: "many",
 					collection: targetName,
+					foreignKey,
 					references: ["id"],
 					relationName: metadata.relationName,
 					onDelete: metadata.onDelete,
@@ -464,10 +508,10 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 
 			case "morphTo": {
 				// Polymorphic - multiple possible targets
-				// For now, use first target for basic relation resolution
 				return {
 					type: "one",
 					collection: targetName,
+					polymorphicTargets,
 					references: ["id"],
 					relationName: metadata.relationName,
 					onDelete: metadata.onDelete,
@@ -517,6 +561,23 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		// Copy existing callback functions and set new indexesFn
 		newBuilder._indexesFn = fn;
 
+		return newBuilder;
+	}
+
+	/** Enable one collaborative aggregate per collection record. */
+	collaborative<TAwarenessSchema extends ZodType | undefined = undefined>(
+		config?: CrdtOwnerConfig<TAwarenessSchema>,
+	): CollectionBuilder<
+		Override<TState, { collaborative: CrdtOwnerCapability<TAwarenessSchema> }>
+	> {
+		const newState = {
+			...this.state,
+			collaborative: {
+				awarenessSchema: config?.awareness,
+			},
+		} as any;
+		const newBuilder = new CollectionBuilder(newState);
+		newBuilder._indexesFn = this._indexesFn;
 		return newBuilder;
 	}
 
@@ -690,7 +751,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 *   })
 	 * ```
 	 */
-	searchable<TNewSearchable extends SearchableConfig>(
+	searchable<TNewSearchable extends SearchableConfig | false>(
 		searchable: TNewSearchable,
 	): CollectionBuilder<Override<TState, { searchable: TNewSearchable }>> {
 		const newState = {
@@ -812,6 +873,12 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		const uploadFields = Collection.uploadCols();
 
 		const collectionSlug = this.state.name;
+		const isRuntimeSoftDeleteCollection = (app: any) =>
+			Object.values(app?.collections ?? {}).some(
+				(crud: any) =>
+					crud?.["~internalState"]?.name === collectionSlug &&
+					crud["~internalState"].options?.softDelete === true,
+			);
 		const logStorageCleanupError = (
 			logger: any,
 			message: string,
@@ -838,7 +905,12 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		}) => {
 			const cleanup = async () => {
 				try {
-					await app.storage.delete(key);
+					await deleteUnreferencedStorageObject({
+						app,
+						db: app.db,
+						key,
+						storage: app.storage,
+					});
 				} catch (error) {
 					logStorageCleanupError(logger, message, key, error);
 				}
@@ -888,20 +960,26 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			data,
 			original,
 			app,
+			db,
 			operation,
 			logger,
 			onAfterCommit,
 		}: any) => {
-			if (operation !== "update") return;
 			if (!app?.storage || !data?.key) return;
+			if (operation === "create" || original?.key !== data.key) {
+				await lockStorageObjectKey(db, data.key);
+				if (!(await app.storage.exists(data.key, { timeout: 30_000 }))) {
+					throw ApiError.badRequest(
+						`Upload storage object "${data.key}" does not exist`,
+					);
+				}
+			}
+			if (operation !== "update") return;
 			if (!original?.key || original.key === data.key) return;
 
-			await deleteStorageObjectAfterCommit({
-				app,
-				key: original.key,
-				logger,
-				onAfterCommit,
-				message: "Failed to delete replaced upload file from storage",
+			await enqueueStorageCleanup(db, original.key);
+			onAfterCommit?.(async () => {
+				wakeStorageCleanup(app, logger);
 			});
 		};
 
@@ -912,6 +990,9 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			onAfterCommit,
 		}: any) => {
 			if (!app?.storage || !data?.key) return;
+			if (this.state.options.softDelete || isRuntimeSoftDeleteCollection(app)) {
+				return;
+			}
 
 			await deleteStorageObjectAfterCommit({
 				app,
@@ -919,6 +1000,20 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				logger,
 				onAfterCommit,
 				message: "Failed to delete upload file from storage",
+			});
+		};
+		const uploadAfterPurgeHook = async ({
+			data,
+			app,
+			db,
+			logger,
+			onAfterCommit,
+		}: any) => {
+			if (!app?.storage || !data?.key) return;
+
+			await enqueueStorageCleanup(db, data.key);
+			onAfterCommit?.(async () => {
+				wakeStorageCleanup(app, logger);
 			});
 		};
 
@@ -943,6 +1038,12 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				? [uploadAfterDeleteHook, ...existingAfterDelete]
 				: [uploadAfterDeleteHook, existingAfterDelete]
 			: uploadAfterDeleteHook;
+		const existingAfterPurge = this.state.hooks?.afterPurge;
+		const mergedAfterPurge = existingAfterPurge
+			? Array.isArray(existingAfterPurge)
+				? [uploadAfterPurgeHook, ...existingAfterPurge]
+				: [uploadAfterPurgeHook, existingAfterPurge]
+			: uploadAfterPurgeHook;
 
 		const newState = {
 			...this.state,
@@ -959,6 +1060,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				afterRead: mergedAfterRead,
 				afterChange: mergedAfterChange,
 				afterDelete: mergedAfterDelete,
+				afterPurge: mergedAfterPurge,
 			},
 			upload: options,
 		} as any;
@@ -1106,6 +1208,9 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				upload: TOtherState["upload"] extends UploadOptions
 					? TOtherState["upload"]
 					: TState["upload"];
+				collaborative: TOtherState["collaborative"] extends CrdtOwnerCapability
+					? TOtherState["collaborative"]
+					: TState["collaborative"];
 				output: (TState["output"] extends Record<string, any>
 					? TState["output"]
 					: {}) &
@@ -1179,6 +1284,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				...(other.state.fieldDefinitions || {}),
 			},
 			upload: other.state.upload ?? this.state.upload,
+			collaborative: other.state.collaborative ?? this.state.collaborative,
 			output: {
 				...(this.state.output || {}),
 				...(other.state.output || {}),
@@ -1265,6 +1371,7 @@ export function collection<TName extends string>(
 		validation: undefined,
 		output: undefined,
 		upload: undefined,
+		collaborative: undefined,
 		fieldDefinitions: {},
 	}) as any;
 }

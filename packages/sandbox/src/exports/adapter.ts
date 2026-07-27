@@ -5,10 +5,21 @@
 export {
 	HttpSandboxAdapter,
 	httpSandboxAdapter,
-	type AgentWorkloadHttpRunOptions,
-	type AgentWorkloadHttpSandboxOptions,
-	type AgentWorkloadInputProjectionReference,
-	type AgentWorkloadInputProjectionRegistry,
-	type AgentWorkloadInputProjector,
 	type HttpSandboxAdapterOptions,
+	type WorkloadHttpSandboxOptions,
 } from "../adapter-http.js";
+export {
+	sandboxCustomTools,
+	type SandboxCustomToolEvidenceContext,
+	type SandboxCustomToolEvidenceEvent,
+	type SandboxCustomToolsConfig,
+	type SandboxCustomToolsLimits,
+	type SandboxCustomToolsRunOptions,
+} from "../custom-tools.js";
+export type {
+	SandboxWorkloadAuditContext,
+	SandboxWorkloadAuditEvent,
+	SandboxWorkloadAuthorizer,
+	SandboxWorkloadPolicy,
+	SandboxWorkloadRunOptions,
+} from "../workload.js";
