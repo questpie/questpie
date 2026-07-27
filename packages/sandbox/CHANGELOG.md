@@ -1,5 +1,36 @@
 # @questpie/sandbox
 
+## 3.17.0
+
+### Minor Changes
+
+- [#186](https://github.com/questpie/questpie/pull/186) [`d6931de`](https://github.com/questpie/questpie/commit/d6931defd2705525091dd0cace56c516a8f9d5c3) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Fail-closed remote workload authority across sandbox and MCP.
+
+  - **sandbox**: add a generic, consumer-authorized workload admission path with
+    signed single-use transport binding, strict resource limits, canonical broker
+    routing, safe audit events, and no product-specific principal model. Sandboxed
+    guests can list and invoke an explicitly bound subset of application MCP custom
+    tools through opaque, revocable, bounded host sessions; guests never receive
+    the application, database, authorizer, or native broker token.
+  - **mcp**: require explicit catalog entries for every CRUD operation, route,
+    resource, and custom tool; derive OAuth scopes from that same catalog and
+    re-authorize discovery and invocation through scopes, RBAC, and an opaque
+    workload authorizer. Apply shared input/output, depth, node, deadline,
+    cancellation, catalog-size, global-concurrency, and per-principal-concurrency
+    bounds across HTTP, stdio, resources, and direct workload tool calls while
+    keeping public errors disclosure-safe.
+  - Retire the unsupported `@questpie/ai` workspace runtime and its
+    worker/fleet/Harness/provider application model. Historical npm versions remain
+    available, but QUESTPIE does not publish a compatibility stub.
+  - Remove ambient stdio system authority and the private executor spike; sandbox
+    execution remains available through QUESTPIE's core executor service.
+
+### Patch Changes
+
+- Updated dependencies [[`f534369`](https://github.com/questpie/questpie/commit/f53436930137368000294877b5f02ced55b2dbf4), [`4be1529`](https://github.com/questpie/questpie/commit/4be15299ffafa8a4808474823815a3dc6d49689d), [`079be69`](https://github.com/questpie/questpie/commit/079be6971f1ff3b8f6aed4a1c8bc0b3182bfcb99), [`b5c2b78`](https://github.com/questpie/questpie/commit/b5c2b78f274d444a0b63867d262025d2ebd592a9), [`d6931de`](https://github.com/questpie/questpie/commit/d6931defd2705525091dd0cace56c516a8f9d5c3), [`d752314`](https://github.com/questpie/questpie/commit/d75231406e016b0e07f36182fc6dc9dbb1f8b224), [`c1ab1c0`](https://github.com/questpie/questpie/commit/c1ab1c0b8873a66a163effbc31ec431a5d442298), [`1a750e0`](https://github.com/questpie/questpie/commit/1a750e02a7c9eea7a52c035b009b78b79742961c), [`158ff0c`](https://github.com/questpie/questpie/commit/158ff0c58933a4b498191d99544222af134bea49), [`875ae8c`](https://github.com/questpie/questpie/commit/875ae8c23fbdebd7e557a86ce4ee19c8c180d9aa), [`5c4804a`](https://github.com/questpie/questpie/commit/5c4804a8f45a34e3b8f20fc1210c2518f18e6f6a)]:
+  - questpie@3.17.0
+  - @questpie/mcp@3.17.0
+
 ## 3.16.0
 
 ### Patch Changes

@@ -1,5 +1,24 @@
 # create-questpie
 
+## 2.3.0
+
+### Minor Changes
+
+- [#183](https://github.com/questpie/questpie/pull/183) [`4be1529`](https://github.com/questpie/questpie/commit/4be15299ffafa8a4808474823815a3dc6d49689d) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Remove the deprecated realtime compatibility layer and make Realtime v2 the only supported contract.
+
+  QUESTPIE currently has no external realtime adopters, so this cleanup ships during
+  the pre-adoption 3.x window as a minor release instead of reserving an otherwise
+  empty 4.0 major solely for the removed compatibility surface.
+
+  - Remove `RealtimeAdapter`, `realtime.adapter`, `realtime.rollout`, the `legacy` and `dual` modes, and the old Postgres, Redis Streams, and Cloudflare realtime adapter entrypoints.
+  - Remove delta control frames and client downgrade behavior. Companion control now requires complete desired topology protocol v2.
+  - Keep `ChangeBroker`, the distributed topology coordinator, structured non-retryable admission errors, and the default `maxFindLimit` of 100 as the supported framework path.
+
+  Upgrade all QUESTPIE realtime clients and servers together within the consolidated
+  3.x minor train. Postgres apps continue to receive the automatic
+  `PgNotifyChangeBroker`; Redis deployments should configure
+  `redisStreamsChangeBroker`.
+
 ## 2.2.2
 
 ### Patch Changes
