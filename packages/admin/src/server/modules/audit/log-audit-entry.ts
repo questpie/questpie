@@ -186,9 +186,10 @@ export async function logAuditEntry(
 			userId,
 			userName,
 			locale: options.locale ?? null,
-			changes: toAuditJsonSafe(options.changes ?? null) as
-				| Record<string, unknown>
-				| null,
+			changes: toAuditJsonSafe(options.changes ?? null) as Record<
+				string,
+				unknown
+			> | null,
 			metadata: toAuditJsonSafe({
 				actorType,
 				accessMode: ctx.accessMode ?? "system",

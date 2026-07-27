@@ -28,6 +28,7 @@
 	"ignorePatterns": [
 		"**/*.gen.ts",
 		"**/.generated",
+		"**/migrations/**",
 		"**/templates/**/*.yml",
 		"**/templates/**/*.yaml"
 	]

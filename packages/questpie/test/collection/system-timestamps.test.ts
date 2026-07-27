@@ -7,13 +7,7 @@
  * precision cap, Postgres stores microseconds a JS `Date` cannot represent,
  * and round-tripped values (keyset cursors, `eq` comparisons) silently miss.
  */
-import {
-	afterEach,
-	beforeEach,
-	describe,
-	expect,
-	it,
-} from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { sql } from "drizzle-orm";
 

@@ -7,7 +7,6 @@
 - [#188](https://github.com/questpie/questpie/pull/188) [`d752314`](https://github.com/questpie/questpie/commit/d75231406e016b0e07f36182fc6dc9dbb1f8b224) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add the Realtime v3 snapshot/delta event contract, opt-in native SSE row deltas,
   transaction-id reconciliation, TanStack Query delta reduction, and the new
   TanStack DB collection package.
-
   - Add collection- and application-level row-live-query policies, bounded
     server-only subscription scopes and access-equivalence keys, conservative
     three-valued topic routing, structured classifier diagnostics, high-fanout

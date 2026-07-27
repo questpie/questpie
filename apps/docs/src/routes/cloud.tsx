@@ -13,10 +13,7 @@ import {
 	MigrationSection,
 	TemplatesSection,
 } from "@/components/landing/cloud-sections";
-import {
-	StarBanner,
-	useRevealOnScroll,
-} from "@/components/landing/primitives";
+import { StarBanner, useRevealOnScroll } from "@/components/landing/primitives";
 import { SharedFooter } from "@/components/landing/shared-footer";
 import { SharedNav } from "@/components/landing/shared-nav";
 import { generateLinks, generateMeta, siteConfig } from "@/lib/seo";
@@ -30,8 +27,7 @@ export const Route = createFileRoute("/cloud")({
 			includePreconnect: false,
 		}),
 		meta: generateMeta({
-			title:
-				"QUESTPIE Cloud — Your runtime, managed. Your data, yours.",
+			title: "QUESTPIE Cloud — Your runtime, managed. Your data, yours.",
 			description:
 				"The runtime control plane for QUESTPIE: managed Postgres, health-checked deploys, custom domains, hosted Autopilot. Q3 2026 waitlist open.",
 			url: `${siteConfig.url}/cloud`,

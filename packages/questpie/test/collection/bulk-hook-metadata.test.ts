@@ -97,10 +97,7 @@ describe("Bulk Hook Metadata (QUE-238)", () => {
 	// ========================================================================
 
 	it("single create: isBatch is undefined", async () => {
-		await setup.app.collections.articles.create(
-			{ title: "Single" },
-			ctx,
-		);
+		await setup.app.collections.articles.create({ title: "Single" }, ctx);
 
 		const beforeChange = captured.find((c) => c.hookName === "beforeChange");
 		expect(beforeChange).toBeDefined();
@@ -136,10 +133,7 @@ describe("Bulk Hook Metadata (QUE-238)", () => {
 		captured.length = 0;
 
 		// deleteById — single record, not batch
-		await setup.app.collections.articles.deleteById(
-			{ id: created.id },
-			ctx,
-		);
+		await setup.app.collections.articles.deleteById({ id: created.id }, ctx);
 
 		const beforeDelete = captured.find((c) => c.hookName === "beforeDelete");
 		expect(beforeDelete).toBeDefined();
@@ -170,9 +164,7 @@ describe("Bulk Hook Metadata (QUE-238)", () => {
 			ctx,
 		);
 
-		const beforeChanges = captured.filter(
-			(c) => c.hookName === "beforeChange",
-		);
+		const beforeChanges = captured.filter((c) => c.hookName === "beforeChange");
 		expect(beforeChanges.length).toBe(2);
 
 		for (const hook of beforeChanges) {
@@ -204,9 +196,7 @@ describe("Bulk Hook Metadata (QUE-238)", () => {
 			ctx,
 		);
 
-		const afterChanges = captured.filter(
-			(c) => c.hookName === "afterChange",
-		);
+		const afterChanges = captured.filter((c) => c.hookName === "afterChange");
 		expect(afterChanges.length).toBe(2);
 
 		for (const hook of afterChanges) {
@@ -240,9 +230,7 @@ describe("Bulk Hook Metadata (QUE-238)", () => {
 			ctx,
 		);
 
-		const beforeDeletes = captured.filter(
-			(c) => c.hookName === "beforeDelete",
-		);
+		const beforeDeletes = captured.filter((c) => c.hookName === "beforeDelete");
 		expect(beforeDeletes.length).toBe(2);
 
 		for (const hook of beforeDeletes) {
@@ -272,9 +260,7 @@ describe("Bulk Hook Metadata (QUE-238)", () => {
 			ctx,
 		);
 
-		const afterDeletes = captured.filter(
-			(c) => c.hookName === "afterDelete",
-		);
+		const afterDeletes = captured.filter((c) => c.hookName === "afterDelete");
 		expect(afterDeletes.length).toBe(2);
 
 		for (const hook of afterDeletes) {

@@ -24,31 +24,31 @@ import { route } from "questpie/services";
 import { z } from "zod";
 
 export default route()
-  .post()
-  .schema(
-    z.object({
-      barberId: z.string(),
-      serviceId: z.string(),
-      scheduledAt: z.string().datetime(),
-      customerEmail: z.string().email(),
-    }),
-  )
-  .handler(async ({ input, collections }) => {
-    // `input` is fully typed and already validated.
-    const service = await collections.services.findOne({
-      where: { id: input.serviceId },
-    });
-    if (!service) throw new Error("Service not found");
+	.post()
+	.schema(
+		z.object({
+			barberId: z.string(),
+			serviceId: z.string(),
+			scheduledAt: z.string().datetime(),
+			customerEmail: z.string().email(),
+		}),
+	)
+	.handler(async ({ input, collections }) => {
+		// `input` is fully typed and already validated.
+		const service = await collections.services.findOne({
+			where: { id: input.serviceId },
+		});
+		if (!service) throw new Error("Service not found");
 
-    const booking = await collections.appointments.create({
-      barber: input.barberId,
-      service: input.serviceId,
-      scheduledAt: new Date(input.scheduledAt),
-      customerEmail: input.customerEmail,
-    });
+		const booking = await collections.appointments.create({
+			barber: input.barberId,
+			service: input.serviceId,
+			scheduledAt: new Date(input.scheduledAt),
+			customerEmail: input.customerEmail,
+		});
 
-    return { id: booking.id, scheduledAt: booking.scheduledAt };
-  });
+		return { id: booking.id, scheduledAt: booking.scheduledAt };
+	});
 // Full chain reference, every method, .access(), .meta(), .raw(), is below.
 ```
 
@@ -56,10 +56,10 @@ Run `questpie generate` (or `questpie dev`, which watches) and the route is live
 
 ```ts
 const booking = await client.routes.createBooking.post({
-  barberId: "brb_1",
-  serviceId: "svc_1",
-  scheduledAt: "2026-07-01T10:00:00.000Z",
-  customerEmail: "ada@example.com",
+	barberId: "brb_1",
+	serviceId: "svc_1",
+	scheduledAt: "2026-07-01T10:00:00.000Z",
+	customerEmail: "ada@example.com",
 });
 // booking: { id: string; scheduledAt: Date }
 ```
@@ -68,8 +68,13 @@ const booking = await client.routes.createBooking.post({
 A route with **no** `.access()` is reachable by anyone, the framework adds no auth wrapper, and the HTTP adapter does not inject one. To require a session, add `.access(({ session }) => !!session?.user)`. This is the opposite of collections, which require a session unless you opt an operation into public access.
 </Callout>
 
-<Callout type="info" title="Re-run codegen after adding or removing a route file">
-  A new route only enters the typed runtime and the client once `questpie generate` / `questpie dev` regenerates `.generated/`. Editing the *body* of an existing route does not need a regen.
+<Callout
+	type="info"
+	title="Re-run codegen after adding or removing a route file"
+>
+	A new route only enters the typed runtime and the client once `questpie
+	generate` / `questpie dev` regenerates `.generated/`. Editing the *body* of an
+	existing route does not need a regen.
 </Callout>
 
 ## Where route files live
@@ -90,9 +95,18 @@ The filename drives three things at once. A route file maps to a per-segment cam
 
 Folders nest in both the URL and client proxy: `routes/admin/stats.get.ts` becomes `client.routes.admin.stats.get(input)`. A `[param]` segment maps to dynamic `:param` in the URL and remains the literal bracketed key on the typed client, such as `client.routes.posts["[id]"].get`. Pass the parameter through the route input schema.
 
-<Callout type="warn" title="The typed client has no value-substitution form for dynamic routes">
-  A `[param]` route is reachable on the typed client only as its **literal** key plus method leaf (`client.routes.posts["[id]"].get`), which builds the URL `/api/posts/[id]` verbatim, not a real `:id` lookup. To call a dynamic route with an actual id, hit it over HTTP yourself (`fetch("/api/posts/p_1")`) or build the
-  URL manually; the typed client does not splice the value in. The route's **server** handler still reads the resolved value through `params` (see below), it's only the client *call* surface that has no first-class dynamic form.
+<Callout
+	type="warn"
+	title="The typed client has no value-substitution form for dynamic routes"
+>
+	A `[param]` route is reachable on the typed client only as its **literal** key
+	plus method leaf (`client.routes.posts["[id]"].get`), which builds the URL
+	`/api/posts/[id]` verbatim, not a real `:id` lookup. To call a dynamic route
+	with an actual id, hit it over HTTP yourself (`fetch("/api/posts/p_1")`) or
+	build the URL manually; the typed client does not splice the value in. The
+	route's **server** handler still reads the resolved value through `params`
+	(see below), it's only the client *call* surface that has no first-class
+	dynamic form.
 </Callout>
 
 ## Path params
@@ -103,14 +117,14 @@ URL parameters come from `[param]` segments in the file path. They are **not** d
 import { route } from "questpie/services";
 
 export default route()
-  .get()
-  .params<{ id: string }>() // type-only: declares the URL params shape
-  .handler(async ({ params, collections }) => {
-    // `params.id` is typed `string`. Without .params<…>() this is a compile error.
-    const post = await collections.posts.findOne({ where: { id: params.id } });
-    if (!post) throw new Error("Not found");
-    return post;
-  });
+	.get()
+	.params<{ id: string }>() // type-only: declares the URL params shape
+	.handler(async ({ params, collections }) => {
+		// `params.id` is typed `string`. Without .params<…>() this is a compile error.
+		const post = await collections.posts.findOne({ where: { id: params.id } });
+		if (!post) throw new Error("Not found");
+		return post;
+	});
 ```
 
 <Callout type="warn" title="Without `.params<…>()`, param access is a compile error">
@@ -123,22 +137,28 @@ Add `.access(rule)` to gate a route. The rule is a boolean, or a predicate that 
 
 ```ts title="Require a signed-in user"
 export default route()
-  .post()
-  .schema(z.object({ title: z.string() }))
-  .access(({ session }) => !!session?.user) // deny anonymous callers
-  .handler(async ({ input, session, collections }) => {
-    return collections.posts.create({
-      title: input.title,
-      authorId: session!.user.id,
-    });
-  });
+	.post()
+	.schema(z.object({ title: z.string() }))
+	.access(({ session }) => !!session?.user) // deny anonymous callers
+	.handler(async ({ input, session, collections }) => {
+		return collections.posts.create({
+			title: input.title,
+			authorId: session!.user.id,
+		});
+	});
 ```
 
 The access context (`RouteAccessContext`) is the full app context (`session`, `db`, `collections`, …) plus `locale`, `request`, and `params`. You can also pass the object form `{ execute: rule }`, routes have a single `execute` operation, with none of the read/create/update/delete split that collections have.
 
-<Callout type="warn" title="A thrown error in the access rule is treated as deny">
-  The rule runs inside a `try/catch`; **any** exception is swallowed and resolves to `false` (denied), it is **not** propagated to the client. If you need a specific status or message, return `false` for a generic `403` and throw your `ApiError` from inside the **handler** instead. A denied route throws
-  `ApiError.forbidden` (HTTP `403`) before the handler runs.
+<Callout
+	type="warn"
+	title="A thrown error in the access rule is treated as deny"
+>
+	The rule runs inside a `try/catch`; **any** exception is swallowed and
+	resolves to `false` (denied), it is **not** propagated to the client. If you
+	need a specific status or message, return `false` for a generic `403` and
+	throw your `ApiError` from inside the **handler** instead. A denied route
+	throws `ApiError.forbidden` (HTTP `403`) before the handler runs.
 </Callout>
 
 ## Validation and output
@@ -147,24 +167,31 @@ The access context (`RouteAccessContext`) is the full app context (`session`, `d
 
 ```ts title="src/questpie/server/routes/subscribe.post.ts"
 export default route()
-  .post()
-  .schema(z.object({ email: z.string().email() }))
-  .outputSchema(z.object({ id: z.string(), status: z.literal("subscribed") }))
-  .handler(async ({ input, collections }) => {
-    const sub = await collections.subscribers.create({
-      email: input.email,
-    });
-    // Must match the outputSchema, a mismatch is a compile error.
-    return { id: sub.id, status: "subscribed" as const };
-  });
+	.post()
+	.schema(z.object({ email: z.string().email() }))
+	.outputSchema(z.object({ id: z.string(), status: z.literal("subscribed") }))
+	.handler(async ({ input, collections }) => {
+		const sub = await collections.subscribers.create({
+			email: input.email,
+		});
+		// Must match the outputSchema, a mismatch is a compile error.
+		return { id: sub.id, status: "subscribed" as const };
+	});
 ```
 
 - **Input**, `schema.parse(input)` runs **first**, before access control and before the handler. A Zod failure throws and your code never runs. The typed client mirrors the method leaf: `.get(input)` serializes input into the query string, while `.post(input)`, `.put(input)`, `.patch(input)`, and `.delete(input)` send a JSON body.
 - **Output**, when present, `outputSchema.parse(result)` validates and coerces the handler's return at the end. The schema type also **becomes** the route's output type and constrains what the handler may return.
 
-<Callout type="info" title="`.schema()` alone gives you a typed return, `.outputSchema()` is optional">
-  For a schema route without an output schema, the handler's inferred return type is threaded into the route's output type (and into the client), so you only reach for `.outputSchema()` when you want **runtime** response validation/coercion on top of the inferred type. An `.outputSchema()`-only chain (no `.schema()`)
-  is still a JSON route, its `input` is `unknown`, never raw.
+<Callout
+	type="info"
+	title="`.schema()` alone gives you a typed return, `.outputSchema()` is optional"
+>
+	For a schema route without an output schema, the handler's inferred return
+	type is threaded into the route's output type (and into the client), so you
+	only reach for `.outputSchema()` when you want **runtime** response
+	validation/coercion on top of the inferred type. An `.outputSchema()`-only
+	chain (no `.schema()`) is still a JSON route, its `input` is `unknown`, never
+	raw.
 </Callout>
 
 ## Metadata: OpenAPI and MCP
@@ -173,45 +200,50 @@ export default route()
 
 ```ts title="src/questpie/server/routes/get-revenue-stats.post.ts"
 export default route()
-  .post()
-  .schema(
-    z.object({
-      startDate: z.string().datetime(),
-      endDate: z.string().datetime(),
-      completedOnly: z.boolean().optional().default(true),
-    }),
-  )
-  .meta({
-    title: "Get revenue stats",
-    description: "Revenue for a date range based on completed appointments.",
-    tags: ["reports"],
-    mcp: {
-      expose: true, // opt this route into MCP tool exposure
-      name: "reports.revenue", // the MCP tool name
-      annotations: { readOnlyHint: true },
-    },
-  })
-  .handler(async ({ input, collections }) => {
-    const { docs } = await collections.appointments.find({
-      where: {
-        scheduledAt: {
-          gte: new Date(input.startDate),
-          lte: new Date(input.endDate),
-        },
-        ...(input.completedOnly ? { status: "completed" } : {}),
-      },
-      with: { service: true },
-      limit: 10_000,
-    });
-    const totalRevenue = docs.reduce((sum, a) => sum + (a.service?.price ?? 0), 0);
-    return { totalRevenue, appointmentCount: docs.length };
-  });
+	.post()
+	.schema(
+		z.object({
+			startDate: z.string().datetime(),
+			endDate: z.string().datetime(),
+			completedOnly: z.boolean().optional().default(true),
+		}),
+	)
+	.meta({
+		title: "Get revenue stats",
+		description: "Revenue for a date range based on completed appointments.",
+		tags: ["reports"],
+		mcp: {
+			expose: true, // opt this route into MCP tool exposure
+			name: "reports.revenue", // the MCP tool name
+			annotations: { readOnlyHint: true },
+		},
+	})
+	.handler(async ({ input, collections }) => {
+		const { docs } = await collections.appointments.find({
+			where: {
+				scheduledAt: {
+					gte: new Date(input.startDate),
+					lte: new Date(input.endDate),
+				},
+				...(input.completedOnly ? { status: "completed" } : {}),
+			},
+			with: { service: true },
+			limit: 10_000,
+		});
+		const totalRevenue = docs.reduce(
+			(sum, a) => sum + (a.service?.price ?? 0),
+			0,
+		);
+		return { totalRevenue, appointmentCount: docs.length };
+	});
 ```
 
 `RouteMeta` is `{ title?, description?, tags?, mcp?, [key]: unknown }`, the open index signature lets you add arbitrary serializable keys (e.g. extra OpenAPI hints). `RouteMcpMeta` is `{ expose?, name?, title?, description?, annotations?, [key]: unknown }`, where `annotations` carries the standard MCP tool hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`).
 
 <Callout type="info" title="Serializable route metadata">
-  OpenAPI reads top-level `title`, `description`, and `tags`, plus additional serializable keys. MCP metadata lives in the dedicated `mcp` sub-object, whose structural shape keeps route definitions independent of the MCP SDK.
+	OpenAPI reads top-level `title`, `description`, and `tags`, plus additional
+	serializable keys. MCP metadata lives in the dedicated `mcp` sub-object, whose
+	structural shape keeps route definitions independent of the MCP SDK.
 </Callout>
 
 ## Raw routes
@@ -222,19 +254,23 @@ When you need full control of the response, streaming, redirects, custom content
 import { route } from "questpie/services";
 
 export default route()
-  .get()
-  .raw()
-  .handler(({ request, db }) => {
-    // No `input`; parse `request` yourself and return a Response.
-    return new Response(JSON.stringify({ ok: true, url: request.url }), {
-      headers: { "content-type": "application/json" },
-    });
-  });
+	.get()
+	.raw()
+	.handler(({ request, db }) => {
+		// No `input`; parse `request` yourself and return a Response.
+		return new Response(JSON.stringify({ ok: true, url: request.url }), {
+			headers: { "content-type": "application/json" },
+		});
+	});
 ```
 
 <Callout type="warn" title="`.raw()` and `.schema()` are mutually exclusive">
-  `.raw()` clears any schema and output schema and switches the handler to the `Request → Response` signature; `.schema()` switches back to a typed JSON route. The builder's type-state makes the two chains mutually exclusive, pick one per route. Raw handlers get **no** input parsing and **no** output validation;
-  `request` is **required** on the handler args (unlike JSON handlers, where it is optional).
+	`.raw()` clears any schema and output schema and switches the handler to the
+	`Request → Response` signature; `.schema()` switches back to a typed JSON
+	route. The builder's type-state makes the two chains mutually exclusive, pick
+	one per route. Raw handlers get **no** input parsing and **no** output
+	validation; `request` is **required** on the handler args (unlike JSON
+	handlers, where it is optional).
 </Callout>
 
 ## Multiple methods
@@ -245,7 +281,7 @@ One route definition owns one HTTP method. When the same path needs multiple ver
 import type { RawRouteHandlerArgs } from "questpie/types";
 
 export async function handleWebhook({ request }: RawRouteHandlerArgs) {
-  return new Response("ok");
+	return new Response("ok");
 }
 ```
 
@@ -283,8 +319,14 @@ The handler argument extends the full app context, the same `AppContext` your co
 | **JSON** (after `.schema()`) | `input` (typed, validated), `params`, `locale?`, `request?` | the handler's inferred return, or the `outputSchema` type |
 | **Raw** (after `.raw()`)     | `request` (always present), `params`, `locale?`             | `Response \| Promise<Response>`                           |
 
-<Callout type="info" title="Use `ctx.collections` / `ctx.globals`, not `ctx.app.api.*`">
-  The typed CRUD API lives on `collections` and `globals` directly. `session` may be `null` for an unauthenticated request, narrow it before use. `request` is **optional** on JSON handlers (a JSON route can be executed standalone, without an HTTP request, see below) but **required** on raw handlers.
+<Callout
+	type="info"
+	title="Use `ctx.collections` / `ctx.globals`, not `ctx.app.api.*`"
+>
+	The typed CRUD API lives on `collections` and `globals` directly. `session`
+	may be `null` for an unauthenticated request, narrow it before use. `request`
+	is **optional** on JSON handlers (a JSON route can be executed standalone,
+	without an HTTP request, see below) but **required** on raw handlers.
 </Callout>
 
 ## Executing a route directly
@@ -296,7 +338,7 @@ import { executeJsonRoute } from "questpie/services";
 import subscribe from "@/questpie/server/routes/subscribe.post";
 
 const result = await executeJsonRoute(app, subscribe, {
-  email: "ada@example.com",
+	email: "ada@example.com",
 });
 // result: { id: string; status: "subscribed" }
 ```
@@ -332,7 +374,11 @@ A few behaviours worth internalising before they bite:
 Routes are typed end to end without any manual annotations, the handler infers `input` from `.schema()`, `params` from `.params<…>()`, and the return type flows to the client. When you need the types by hand (shared helpers, wrappers), import the inference helpers from `questpie/types`:
 
 ```ts title="Infer a route's input, output, and params"
-import type { InferRouteInput, InferRouteOutput, InferRouteParams } from "questpie/types";
+import type {
+	InferRouteInput,
+	InferRouteOutput,
+	InferRouteParams,
+} from "questpie/types";
 
 import type createBooking from "@/questpie/server/routes/create-booking.post";
 

@@ -170,7 +170,10 @@ describe("openApiRoute — ETag / 304 caching", () => {
 	function invoke(routeDef: any, app: object, ifNoneMatch?: string) {
 		const headers = new Headers();
 		if (ifNoneMatch) headers.set("if-none-match", ifNoneMatch);
-		const ctx = { app, request: new Request("http://x/api/openapi.json", { headers }) };
+		const ctx = {
+			app,
+			request: new Request("http://x/api/openapi.json", { headers }),
+		};
 		return routeDef.handler(ctx) as Promise<Response>;
 	}
 

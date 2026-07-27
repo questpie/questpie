@@ -30,8 +30,8 @@ export type {
 	AdminRoutes,
 	AdminViews,
 } from "./.generated/module.js";
-import _generatedModule from "./.generated/module.js";
 import { adminPlugin } from "../../plugin.js";
+import _generatedModule from "./.generated/module.js";
 
 /**
  * Admin module with codegen plugin attached.

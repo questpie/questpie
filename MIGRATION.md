@@ -93,9 +93,7 @@ What still works without any change:
 To restore the old world-listable behavior, say it explicitly:
 
 ```ts
-collection("assets")
-	.upload({ visibility: "public" })
-	.access({ read: true });
+collection("assets").upload({ visibility: "public" }).access({ read: true });
 ```
 
 #### Schema/meta introspection is gated through the access system
@@ -110,7 +108,7 @@ readable; a deny-all app exposes nothing.
 Override per collection/global or app-wide with the new `introspect` kind:
 
 ```ts
-collection("catalog").access({ introspect: true });   // shape public, data closed
+collection("catalog").access({ introspect: true }); // shape public, data closed
 collection("audit_log").access({
 	read: ({ session }) => (session?.user as any)?.role === "admin",
 	introspect: ({ session }) => (session?.user as any)?.role === "admin",

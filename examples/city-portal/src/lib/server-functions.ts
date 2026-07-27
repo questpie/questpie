@@ -208,9 +208,7 @@ const SUBMISSION_DEPARTMENTS = [
 
 type SubmissionDepartment = (typeof SUBMISSION_DEPARTMENTS)[number];
 
-function narrowSubmissionDepartment(
-	department: string,
-): SubmissionDepartment {
+function narrowSubmissionDepartment(department: string): SubmissionDepartment {
 	return SUBMISSION_DEPARTMENTS.includes(department as SubmissionDepartment)
 		? (department as SubmissionDepartment)
 		: "other";
@@ -295,7 +293,9 @@ export const getAnnouncementsList = createServerFn({ method: "GET" })
 			{
 				where: {
 					city: city.id,
-					...(data.showExpired ? {} : { validTo: { gte: new Date().toISOString() } }),
+					...(data.showExpired
+						? {}
+						: { validTo: { gte: new Date().toISOString() } }),
 				},
 				orderBy: { isPinned: "desc", validFrom: "desc" },
 				limit: 50,

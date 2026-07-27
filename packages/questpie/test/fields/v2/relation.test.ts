@@ -6,11 +6,11 @@
 
 import { describe, expect, it } from "bun:test";
 
+import { Field } from "#questpie/server/fields/field-class.js";
 import {
 	relation,
 	upload,
 } from "#questpie/server/modules/core/fields/index.js";
-import { Field } from "#questpie/server/fields/field-class.js";
 
 // ============================================================================
 // BelongsTo (default)

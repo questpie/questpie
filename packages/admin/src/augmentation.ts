@@ -309,19 +309,25 @@ export interface RelationFieldAdminMeta extends BaseAdminMeta {
 		| ((ctx: {
 				data: Record<string, unknown>;
 				sibling: Record<string, unknown>;
-				prev: { data: Record<string, unknown>; sibling: Record<string, unknown> };
+				prev: {
+					data: Record<string, unknown>;
+					sibling: Record<string, unknown>;
+				};
 				ctx: unknown;
-			}) => Record<string, unknown> | Promise<Record<string, unknown>>)
+		  }) => Record<string, unknown> | Promise<Record<string, unknown>>)
 		| {
 				handler: (ctx: {
 					data: Record<string, unknown>;
 					sibling: Record<string, unknown>;
-					prev: { data: Record<string, unknown>; sibling: Record<string, unknown> };
+					prev: {
+						data: Record<string, unknown>;
+						sibling: Record<string, unknown>;
+					};
 					ctx: unknown;
 				}) => Record<string, unknown> | Promise<Record<string, unknown>>;
 				deps?: string[];
 				debounce?: number;
-			};
+		  };
 	/**
 	 * List table cell rendering for relation values.
 	 * - "chip": default text chip

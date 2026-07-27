@@ -96,8 +96,9 @@ export interface ServerActionEffects {
  * `queue`, `email`, `storage`, `kv`, `services`, … — directly from `ctx`,
  * just like a route handler. The action-specific fields below layer on top.
  */
-export interface ServerActionContext<TData = Record<string, unknown>>
-	extends AppContextBase {
+export interface ServerActionContext<
+	TData = Record<string, unknown>,
+> extends AppContextBase {
 	/** Form data submitted */
 	data: TData;
 	/** Item ID (for single-item actions) */

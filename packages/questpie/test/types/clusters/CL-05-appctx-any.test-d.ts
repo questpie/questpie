@@ -46,6 +46,21 @@
  */
 
 import type {
+	getContext,
+	InferContextExtensionsFromAppConfig,
+} from "#questpie/server/config/context.js";
+import { appConfig } from "#questpie/server/config/factories.js";
+import type {
+	GlobalCollectionHookContext,
+	GlobalGlobalHookContext,
+} from "#questpie/server/config/global-hooks-types.js";
+import type {
+	AppDefaultAccessRule,
+	AppConfigInput,
+} from "#questpie/server/config/module-types.js";
+import type { ContextResolverParams } from "#questpie/server/config/types.js";
+
+import type {
 	Equal,
 	Expect,
 	HasKey,
@@ -55,21 +70,6 @@ import type {
 	NoAny,
 } from "../_assert.js";
 import type { App } from "../_fixtures.js";
-
-import { appConfig } from "#questpie/server/config/factories.js";
-import type {
-	getContext,
-	InferContextExtensionsFromAppConfig,
-} from "#questpie/server/config/context.js";
-import type {
-	AppDefaultAccessRule,
-	AppConfigInput,
-} from "#questpie/server/config/module-types.js";
-import type {
-	GlobalCollectionHookContext,
-	GlobalGlobalHookContext,
-} from "#questpie/server/config/global-hooks-types.js";
-import type { ContextResolverParams } from "#questpie/server/config/types.js";
 
 // ============================================================================
 // Extractors — pull the ctx parameter out of each app-level rule/hook surface.
@@ -92,7 +92,9 @@ type AppCollHookCtx = Parameters<
 type GlobalHookCtx = GlobalGlobalHookContext;
 
 /** ctx-03 — app default access-rule ctx via the canonical rule type. */
-type DefAccessCtx = Parameters<Extract<AppDefaultAccessRule, (...a: any[]) => any>>[0];
+type DefAccessCtx = Parameters<
+	Extract<AppDefaultAccessRule, (...a: any[]) => any>
+>[0];
 
 /** ctx-03 — app default access-rule ctx via the exact `appConfig({ access })` chain. */
 type AppAccessInput = NonNullable<Parameters<typeof appConfig>[0]["access"]>;
@@ -115,13 +117,17 @@ type _hook_session_notAny = Expect<NoAny<HookCtx["session"]>>;
 type _hook_queue_notAny = Expect<NoAny<HookCtx["queue"]>>;
 
 // Exact-finding probes via `appConfig({ hooks })` (the ctx-02 regressionTest).
-type _appHook_collections_notAny = Expect<Not<IsAny<AppCollHookCtx["collections"]>>>;
+type _appHook_collections_notAny = Expect<
+	Not<IsAny<AppCollHookCtx["collections"]>>
+>;
 type _appHook_session_notAny = Expect<Not<IsAny<AppCollHookCtx["session"]>>>;
 type _appHook_db_notAny = Expect<Not<IsAny<AppCollHookCtx["db"]>>>;
 type _appHook_queue_notAny = Expect<Not<IsAny<AppCollHookCtx["queue"]>>>;
 
 // Global-hook ctx shares the same `AppContextBase` erasure — same class.
-type _globalHook_collections_notAny = Expect<NoAny<GlobalHookCtx["collections"]>>;
+type _globalHook_collections_notAny = Expect<
+	NoAny<GlobalHookCtx["collections"]>
+>;
 type _globalHook_db_notAny = Expect<NoAny<GlobalHookCtx["db"]>>;
 type _globalHook_session_notAny = Expect<NoAny<GlobalHookCtx["session"]>>;
 
@@ -151,8 +157,12 @@ type _access_collections_notAny = Expect<NoAny<DefAccessCtx["collections"]>>;
 type _access_db_notAny = Expect<NoAny<DefAccessCtx["db"]>>;
 
 // Exact-finding probes via `appConfig({ access })` (the ctx-03 regressionTest).
-type _appAccess_session_notAny = Expect<Not<IsAny<AppCreateAccessCtx["session"]>>>;
-type _appAccess_collections_notAny = Expect<Not<IsAny<AppCreateAccessCtx["collections"]>>>;
+type _appAccess_session_notAny = Expect<
+	Not<IsAny<AppCreateAccessCtx["session"]>>
+>;
+type _appAccess_collections_notAny = Expect<
+	Not<IsAny<AppCreateAccessCtx["collections"]>>
+>;
 type _appAccess_db_notAny = Expect<Not<IsAny<AppCreateAccessCtx["db"]>>>;
 
 // The access-rule extras (data/input/locale/request) survive the seam swap.
@@ -221,13 +231,19 @@ const _cfgBadNull = appConfig({
 // ============================================================================
 
 type _resolverParams_db_notAny = Expect<NoAny<ContextResolverParams["db"]>>;
-type _resolverParams_session_notAny = Expect<NoAny<ContextResolverParams["session"]>>;
+type _resolverParams_session_notAny = Expect<
+	NoAny<ContextResolverParams["session"]>
+>;
 
 // The resolver params must still carry `request` (HTTP request is always there)
 // and the session/db keys — guards against the seam dropping them.
-type _resolverParams_hasRequest = Expect<HasKey<ContextResolverParams, "request">>;
+type _resolverParams_hasRequest = Expect<
+	HasKey<ContextResolverParams, "request">
+>;
 type _resolverParams_hasDb = Expect<HasKey<ContextResolverParams, "db">>;
-type _resolverParams_hasSession = Expect<HasKey<ContextResolverParams, "session">>;
+type _resolverParams_hasSession = Expect<
+	HasKey<ContextResolverParams, "session">
+>;
 
 // ============================================================================
 // cyc-5 (reviewer-authoritative scope) — request-scoped precision lives in the
@@ -249,7 +265,9 @@ const _cfgGuaranteed = appConfig({
 type GuaranteedExt = InferContextExtensionsFromAppConfig<typeof _cfgGuaranteed>;
 
 // The guaranteed key is REQUIRED (not optional) in the inferred bundle.
-type _cyc5_cityId_required = Expect<Equal<IsOptional<GuaranteedExt, "cityId">, false>>;
+type _cyc5_cityId_required = Expect<
+	Equal<IsOptional<GuaranteedExt, "cityId">, false>
+>;
 // And it carries its real type, not `any`.
 type _cyc5_cityId_exact = Expect<Equal<GuaranteedExt["cityId"], string | null>>;
 

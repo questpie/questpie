@@ -61,6 +61,17 @@
  *     positive control over the COMPLETE map that must stay a real row.
  */
 
+import type { RelationConfig } from "#questpie/server/collection/builder/types.js";
+import type { CollectionRelationsFromApp } from "#questpie/server/collection/crud/types.js";
+import type {
+	CollectionRelations,
+	CollectionSelect as CollectionSelectOneArg,
+	ExtractRelationSelect,
+	GetCollection,
+	ResolveRelations,
+	ResolveRelationsDeep,
+} from "#questpie/shared/type-utils.js";
+
 import type {
 	Equal,
 	Expect,
@@ -71,22 +82,7 @@ import type {
 	Not,
 	NoAny,
 } from "../_assert.js";
-import type {
-	App,
-	Collections,
-	QuestpieApp,
-} from "../_fixtures.js";
-
-import type {
-	CollectionRelations,
-	CollectionSelect as CollectionSelectOneArg,
-	ExtractRelationSelect,
-	GetCollection,
-	ResolveRelations,
-	ResolveRelationsDeep,
-} from "#questpie/shared/type-utils.js";
-import type { CollectionRelationsFromApp } from "#questpie/server/collection/crud/types.js";
-import type { RelationConfig } from "#questpie/server/collection/builder/types.js";
+import type { App, Collections, QuestpieApp } from "../_fixtures.js";
 
 // ============================================================================
 // §0  Relation-config fixtures — `references`-complete (CL-04 caveat #1).
@@ -144,13 +140,22 @@ type RelToMissingMany = {
 // the assertions below truly exercise the resolver body and not the constraint
 // rejection path.
 type _cfgValidPresentOne = Expect<
-	Equal<RelToPresentOne extends Record<string, RelationConfig> ? true : false, true>
+	Equal<
+		RelToPresentOne extends Record<string, RelationConfig> ? true : false,
+		true
+	>
 >;
 type _cfgValidMissingOne = Expect<
-	Equal<RelToMissingOne extends Record<string, RelationConfig> ? true : false, true>
+	Equal<
+		RelToMissingOne extends Record<string, RelationConfig> ? true : false,
+		true
+	>
 >;
 type _cfgValidMissingMany = Expect<
-	Equal<RelToMissingMany extends Record<string, RelationConfig> ? true : false, true>
+	Equal<
+		RelToMissingMany extends Record<string, RelationConfig> ? true : false,
+		true
+	>
 >;
 
 // ============================================================================
@@ -179,7 +184,9 @@ type RR_PresentOne = ResolveRelations<RelToPresentOne, Collections>;
 type RR_PresentOne_Author = RR_PresentOne["author"];
 
 /** PASSES now and after: a present to-one stays a precise row. */
-type _b1_presentOne_notNever = Expect<Equal<IsNever<RR_PresentOne_Author>, false>>;
+type _b1_presentOne_notNever = Expect<
+	Equal<IsNever<RR_PresentOne_Author>, false>
+>;
 type _b1_presentOne_notAny = Expect<NoAny<RR_PresentOne_Author>>;
 type _b1_presentOne_hasName = Expect<HasKey<RR_PresentOne_Author, "name">>;
 
@@ -196,9 +203,13 @@ type RR_PresentMany = ResolveRelations<RelToPresentMany, Collections>;
 type RR_PresentMany_El = RR_PresentMany["comments"][number];
 
 /** PASSES now and after: a present to-many stays an array of precise rows. */
-type _b1_presentMany_elNotNever = Expect<Equal<IsNever<RR_PresentMany_El>, false>>;
+type _b1_presentMany_elNotNever = Expect<
+	Equal<IsNever<RR_PresentMany_El>, false>
+>;
 type _b1_presentMany_elNotAny = Expect<NoAny<RR_PresentMany_El>>;
-type _b1_presentMany_elHasContent = Expect<HasKey<RR_PresentMany_El, "content">>;
+type _b1_presentMany_elHasContent = Expect<
+	HasKey<RR_PresentMany_El, "content">
+>;
 
 // ============================================================================
 // §2  Part B — DEEP path (`ResolveRelationsDeep` → `ResolveCollectionRelation`).
@@ -219,7 +230,9 @@ type _b2_deepMissingOne_notAny = Expect<NoAny<RRD_MissingOne_Sel>>;
 
 // --- deep to-many, missing target → extracted element select must be `never`
 type RRD_MissingMany = ResolveRelationsDeep<RelToMissingMany, Collections>;
-type RRD_MissingMany_Sel = ExtractRelationSelect<RRD_MissingMany["comments"][number]>;
+type RRD_MissingMany_Sel = ExtractRelationSelect<
+	RRD_MissingMany["comments"][number]
+>;
 
 /** FAILS today: deep to-many missing-target element select is `any`, not `never`. */
 type _b2_deepMissingMany_isNever = Expect<IsNever<RRD_MissingMany_Sel>>;
@@ -230,7 +243,9 @@ type RRD_PresentOne = ResolveRelationsDeep<RelToPresentOne, Collections>;
 type RRD_PresentOne_Sel = ExtractRelationSelect<RRD_PresentOne["author"]>;
 
 /** PASSES now and after: a present deep to-one yields a real select with `name`. */
-type _b2_deepPresentOne_notNever = Expect<Equal<IsNever<RRD_PresentOne_Sel>, false>>;
+type _b2_deepPresentOne_notNever = Expect<
+	Equal<IsNever<RRD_PresentOne_Sel>, false>
+>;
 type _b2_deepPresentOne_notAny = Expect<NoAny<RRD_PresentOne_Sel>>;
 type _b2_deepPresentOne_hasName = Expect<HasKey<RRD_PresentOne_Sel, "name">>;
 
@@ -244,7 +259,9 @@ type _b2_deepPresentOne_hasName = Expect<HasKey<RRD_PresentOne_Sel, "name">>;
 // models the job-ctx omission of a module collection.
 // ============================================================================
 
-type ArticleRelCfgs = CollectionRelations<GetCollection<Collections, "articles">>;
+type ArticleRelCfgs = CollectionRelations<
+	GetCollection<Collections, "articles">
+>;
 
 /** Collections map with the `authors` target OMITTED (models the job-ctx omission). */
 type CollectionsSansAuthors = Omit<Collections, "authors">;
@@ -255,11 +272,16 @@ type FGC1_Control_AuthorSel = ExtractRelationSelect<FGC1_Control["author"]>;
 
 /** PASSES now and after: with the complete map the relation is a precise row. */
 type _b3_control_notAny = Expect<NoAny<FGC1_Control_AuthorSel>>;
-type _b3_control_notNever = Expect<Equal<IsNever<FGC1_Control_AuthorSel>, false>>;
+type _b3_control_notNever = Expect<
+	Equal<IsNever<FGC1_Control_AuthorSel>, false>
+>;
 type _b3_control_hasName = Expect<HasKey<FGC1_Control_AuthorSel, "name">>;
 
 // --- the leak: target omitted → silent `any` today, must become `never` ----
-type FGC1_Missing = ResolveRelationsDeep<ArticleRelCfgs, CollectionsSansAuthors>;
+type FGC1_Missing = ResolveRelationsDeep<
+	ArticleRelCfgs,
+	CollectionsSansAuthors
+>;
 type FGC1_Missing_AuthorSel = ExtractRelationSelect<FGC1_Missing["author"]>;
 
 /** FAILS today: omitting the target degrades the relation to `any`, silently. */
@@ -292,7 +314,9 @@ type CRFA_Control_AuthorSel = ExtractRelationSelect<CRFA_Control["author"]>;
 
 /** PASSES now and after: the app-aware deep path over a complete App is precise. */
 type _b4_control_notAny = Expect<NoAny<CRFA_Control_AuthorSel>>;
-type _b4_control_notNever = Expect<Equal<IsNever<CRFA_Control_AuthorSel>, false>>;
+type _b4_control_notNever = Expect<
+	Equal<IsNever<CRFA_Control_AuthorSel>, false>
+>;
 type _b4_control_hasName = Expect<HasKey<CRFA_Control_AuthorSel, "name">>;
 
 // --- the leak: App with the target omitted → silent `any`, must be `never` -
@@ -330,7 +354,9 @@ type _b5_survivor_notNever = Expect<
 type _b5_survivor_notEmpty = Expect<
 	Equal<IsEmptyObject<FGC1_Missing_CommentsSel>, false>
 >;
-type _b5_survivor_hasContent = Expect<HasKey<FGC1_Missing_CommentsSel, "content">>;
+type _b5_survivor_hasContent = Expect<
+	HasKey<FGC1_Missing_CommentsSel, "content">
+>;
 
 // ============================================================================
 // §6  Part A surrogate — app-level collections parity the job-ctx map unifies onto.

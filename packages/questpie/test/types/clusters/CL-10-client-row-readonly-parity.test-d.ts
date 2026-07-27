@@ -41,11 +41,6 @@
 import type { QuestpieClient } from "#questpie/client/index.js";
 
 import type {
-	App,
-	QuestpieApp,
-} from "../_fixtures.js";
-
-import type {
 	Equal,
 	ExactType,
 	Expect,
@@ -55,6 +50,7 @@ import type {
 	NoAny,
 	NotEmptyObject,
 } from "../_assert.js";
+import type { App, QuestpieApp } from "../_fixtures.js";
 
 // ============================================================================
 // Row extractors — ONE conceptual row, TWO resolvers.
@@ -108,9 +104,15 @@ type _authorRowIdentity = Expect<Equal<ClientAuthor, ServerAuthor>>;
 // Per-key value parity is a NECESSARY (but not sufficient) part of identity —
 // these likely PASS today (values match; only modifiers differ), pinning that
 // the unification doesn't accidentally CHANGE a field's value type.
-type _titleValueParity = ExactType<ClientArticle["title"], ServerArticle["title"]>;
+type _titleValueParity = ExactType<
+	ClientArticle["title"],
+	ServerArticle["title"]
+>;
 type _idValueParity = ExactType<ClientArticle["id"], ServerArticle["id"]>;
-type _authorNameValueParity = ExactType<ClientAuthor["name"], ServerAuthor["name"]>;
+type _authorNameValueParity = ExactType<
+	ClientAuthor["name"],
+	ServerAuthor["name"]
+>;
 
 // ============================================================================
 // TARGET 2 — `readonly` is ASSERTED on BOTH surfaces, for the WHOLE class.
@@ -123,17 +125,25 @@ type _authorNameValueParity = ExactType<ClientAuthor["name"], ServerAuthor["name
 
 // --- Server: readonly today (negative control — these PASS now and after). ---
 type _serverIdRO = Expect<Equal<IsReadonly<ServerArticle, "id">, true>>;
-type _serverCreatedAtRO = Expect<Equal<IsReadonly<ServerArticle, "createdAt">, true>>;
+type _serverCreatedAtRO = Expect<
+	Equal<IsReadonly<ServerArticle, "createdAt">, true>
+>;
 type _serverTitleRO = Expect<Equal<IsReadonly<ServerArticle, "title">, true>>;
 type _serverStatusRO = Expect<Equal<IsReadonly<ServerArticle, "status">, true>>;
-type _serverAuthorNameRO = Expect<Equal<IsReadonly<ServerAuthor, "name">, true>>;
+type _serverAuthorNameRO = Expect<
+	Equal<IsReadonly<ServerAuthor, "name">, true>
+>;
 
 // --- Client: MUTABLE today → must become readonly. These FAIL today (burndown). ---
 type _clientIdRO = Expect<Equal<IsReadonly<ClientArticle, "id">, true>>;
-type _clientCreatedAtRO = Expect<Equal<IsReadonly<ClientArticle, "createdAt">, true>>;
+type _clientCreatedAtRO = Expect<
+	Equal<IsReadonly<ClientArticle, "createdAt">, true>
+>;
 type _clientTitleRO = Expect<Equal<IsReadonly<ClientArticle, "title">, true>>;
 type _clientStatusRO = Expect<Equal<IsReadonly<ClientArticle, "status">, true>>;
-type _clientAuthorNameRO = Expect<Equal<IsReadonly<ClientAuthor, "name">, true>>;
+type _clientAuthorNameRO = Expect<
+	Equal<IsReadonly<ClientAuthor, "name">, true>
+>;
 
 // ============================================================================
 // TARGET 3 — Nested relation rows loaded via `with` mirror the parity.
@@ -168,14 +178,24 @@ type _serverNestedHasName = Expect<HasKey<ServerNestedAuthor, "name">>;
 type _clientNestedHasName = Expect<HasKey<ClientNestedAuthor, "name">>;
 
 // Nested row identity — client nested === server nested. FAILS today (romut-4).
-type _nestedAuthorIdentity = Expect<Equal<ClientNestedAuthor, ServerNestedAuthor>>;
+type _nestedAuthorIdentity = Expect<
+	Equal<ClientNestedAuthor, ServerNestedAuthor>
+>;
 
 // Nested readonly parity — server nested readonly (PASS now), client nested must
 // become readonly (FAILS today).
-type _serverNestedIdRO = Expect<Equal<IsReadonly<ServerNestedAuthor, "id">, true>>;
-type _serverNestedNameRO = Expect<Equal<IsReadonly<ServerNestedAuthor, "name">, true>>;
-type _clientNestedIdRO = Expect<Equal<IsReadonly<ClientNestedAuthor, "id">, true>>;
-type _clientNestedNameRO = Expect<Equal<IsReadonly<ClientNestedAuthor, "name">, true>>;
+type _serverNestedIdRO = Expect<
+	Equal<IsReadonly<ServerNestedAuthor, "id">, true>
+>;
+type _serverNestedNameRO = Expect<
+	Equal<IsReadonly<ServerNestedAuthor, "name">, true>
+>;
+type _clientNestedIdRO = Expect<
+	Equal<IsReadonly<ClientNestedAuthor, "id">, true>
+>;
+type _clientNestedNameRO = Expect<
+	Equal<IsReadonly<ClientNestedAuthor, "name">, true>
+>;
 
 // ============================================================================
 // TARGET 4 — Reviewer override #1: OUTPUT readonly, WRITE-staging MUTABLE.
@@ -189,7 +209,9 @@ type _clientNestedNameRO = Expect<Equal<IsReadonly<ClientNestedAuthor, "name">, 
 // ============================================================================
 
 /** The create-input arg — the reachable "write-staging doc" (must be mutable). */
-type ServerCreateInput = Parameters<typeof server.collections.authors.create>[0];
+type ServerCreateInput = Parameters<
+	typeof server.collections.authors.create
+>[0];
 /** The create RETURN — an output row (must be readonly, like findOne). */
 type ServerCreateReturn = Awaited<
 	ReturnType<typeof server.collections.authors.create>
@@ -202,14 +224,20 @@ type _createInputHasName = Expect<HasKey<ServerCreateInput, "name">>;
 // WRITE-staging stays MUTABLE — `name` on the create input is NOT readonly. This
 // PASSES today and MUST KEEP passing after the fix (the guard against over-applying
 // `Readonly` to the write path — reviewer's required mutability test).
-type _writeInputMutable = Expect<Equal<IsReadonly<ServerCreateInput, "name">, false>>;
+type _writeInputMutable = Expect<
+	Equal<IsReadonly<ServerCreateInput, "name">, false>
+>;
 
 // OUTPUT row from create is readonly (`id` cannot be reassigned). Server already
 // readonly (PASS); pinned here so the create RETURN tracks `findOne`'s row.
-type _createReturnIdRO = Expect<Equal<IsReadonly<ServerCreateReturn, "id">, true>>;
+type _createReturnIdRO = Expect<
+	Equal<IsReadonly<ServerCreateReturn, "id">, true>
+>;
 // The create RETURN row must equal the findOne row (one output-row contract for
 // `authors` across read and write methods).
-type _createReturnEqualsFindOne = Expect<Equal<ServerCreateReturn, ServerAuthor>>;
+type _createReturnEqualsFindOne = Expect<
+	Equal<ServerCreateReturn, ServerAuthor>
+>;
 
 // ============================================================================
 // TARGET 5 — TSQ-2 fix-source guarantee (the typed surface the tanstack layer

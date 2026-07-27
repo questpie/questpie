@@ -16,29 +16,29 @@ export default [adminModule, auditModule] as const;
 
 The audit module contributes:
 
-| Export | Purpose |
-|---|---|
-| `auditModule` | Static module definition for app registration. |
-| `auditLogCollection` | The collection builder for the audit log. |
-| `AUDIT_LOG_COLLECTION` | The collection slug, `"admin_audit_log"`. |
-| `logAuditEntry()` | Public helper for custom audit entries. |
+| Export                 | Purpose                                        |
+| ---------------------- | ---------------------------------------------- |
+| `auditModule`          | Static module definition for app registration. |
+| `auditLogCollection`   | The collection builder for the audit log.      |
+| `AUDIT_LOG_COLLECTION` | The collection slug, `"admin_audit_log"`.      |
+| `logAuditEntry()`      | Public helper for custom audit entries.        |
 
 ## Audit log collection
 
 The module registers `admin_audit_log` with fields for:
 
-| Field | Meaning |
-|---|---|
-| `action` | Operation name such as `create`, `update`, `delete`, or a custom action. |
-| `resourceType` | Resource category, usually `collection`, `global`, `system`, `job`, or `webhook`. |
-| `resource` | Collection slug, global slug, job name, or custom resource key. |
-| `resourceId` | Optional record id. |
-| `resourceLabel` | Human-readable record or resource label. |
-| `userId` and `userName` | Actor metadata resolved from the current session when available. |
-| `locale` | Locale attached to the operation when available. |
-| `changes` | Structured field-level or operation data. |
-| `metadata` | Extra structured context, including actor type and access mode. |
-| `title` | Display title used by admin list views. |
+| Field                   | Meaning                                                                           |
+| ----------------------- | --------------------------------------------------------------------------------- |
+| `action`                | Operation name such as `create`, `update`, `delete`, or a custom action.          |
+| `resourceType`          | Resource category, usually `collection`, `global`, `system`, `job`, or `webhook`. |
+| `resource`              | Collection slug, global slug, job name, or custom resource key.                   |
+| `resourceId`            | Optional record id.                                                               |
+| `resourceLabel`         | Human-readable record or resource label.                                          |
+| `userId` and `userName` | Actor metadata resolved from the current session when available.                  |
+| `locale`                | Locale attached to the operation when available.                                  |
+| `changes`               | Structured field-level or operation data.                                         |
+| `metadata`              | Extra structured context, including actor type and access mode.                   |
+| `title`                 | Display title used by admin list views.                                           |
 
 The audit collection is visible in the admin under the administration section. It has read-only admin actions by default and opts out of auditing itself.
 

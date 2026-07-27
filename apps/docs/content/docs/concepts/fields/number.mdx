@@ -23,9 +23,9 @@ Use `f.number()` inside a `.fields()` callback. The optional argument selects th
 import { collection } from "#questpie/factories";
 
 export const products = collection("products").fields(({ f }) => ({
-  stock: f.number().required(), // integer, NOT NULL
-  rating: f.number("smallint").min(1).max(5), // smallint, 1..5
-  price: f.number({ mode: "decimal", precision: 10, scale: 2 }), // numeric(10,2)
+	stock: f.number().required(), // integer, NOT NULL
+	rating: f.number("smallint").min(1).max(5), // smallint, 1..5
+	price: f.number({ mode: "decimal", precision: 10, scale: 2 }), // numeric(10,2)
 }));
 ```
 
@@ -47,8 +47,12 @@ That gives `products` a `stock` column typed `number` on read, required on inser
 The resulting field data is always `number`. The derived Zod schema is `z.number()`, with `.int()` added automatically for the **integer** and **smallint** modes (`isInt` flag). The float modes (`real`, `double`) and `decimal` accept fractional values.
 
 <Callout type="info" title="`bigint` and `decimal` read back as JS `number`">
-  Both use Drizzle's `mode: "number"`, so the value type on read/insert/update is a plain JS `number`. That keeps the API uniform, but a `number` only holds integers exactly up to `Number.MAX_SAFE_INTEGER` (2^53 − 1) and `decimal` arithmetic goes through floating point. For money or IDs beyond that range, store an
-  exact string value with `f.text()` and validate the format with `.zod()`, or create a dedicated custom field type.
+	Both use Drizzle's `mode: "number"`, so the value type on read/insert/update
+	is a plain JS `number`. That keeps the API uniform, but a `number` only holds
+	integers exactly up to `Number.MAX_SAFE_INTEGER` (2^53 − 1) and `decimal`
+	arithmetic goes through floating point. For money or IDs beyond that range,
+	store an exact string value with `f.text()` and validate the format with
+	`.zod()`, or create a dedicated custom field type.
 </Callout>
 
 ## Chained methods
@@ -65,15 +69,21 @@ These methods are specific to `number` (on top of the [shared modifiers](/docs/c
 
 ```ts
 collection("orders").fields(({ f }) => ({
-  quantity: f.number().required().min(1).step(1), // ≥ 1, whole units
-  discount: f.number("real").min(0).max(100), // percentage 0..100
+	quantity: f.number().required().min(1).step(1), // ≥ 1, whole units
+	discount: f.number("real").min(0).max(100), // percentage 0..100
 }));
 ```
 
 All five refinements are applied to the derived Zod schema during create and update validation.
 
-<Callout type="info" title="`.min()` / `.max()` here are VALUE bounds, not string length">
-  On a number field, `.min(n)` / `.max(n)` constrain the numeric **value**. On [`f.text()`](/docs/concepts/fields/text) the same method names constrain **string length** (they map to `minLength` / `maxLength`). Same names, different meaning, sized by the field's type.
+<Callout
+	type="info"
+	title="`.min()` / `.max()` here are VALUE bounds, not string length"
+>
+	On a number field, `.min(n)` / `.max(n)` constrain the numeric **value**. On
+	[`f.text()`](/docs/concepts/fields/text) the same method names constrain
+	**string length** (they map to `minLength` / `maxLength`). Same names,
+	different meaning, sized by the field's type.
 </Callout>
 
 ## Filtering, operators
@@ -91,10 +101,10 @@ All five refinements are applied to the derived Zod schema during create and upd
 ```ts
 // In-stock products priced between 10 and 50:
 const { docs } = await app.collections.products.find({
-  where: {
-    stock: { gt: 0 },
-    price: { gte: 10, lte: 50 },
-  },
+	where: {
+		stock: { gt: 0 },
+		price: { gte: 10, lte: 50 },
+	},
 });
 ```
 

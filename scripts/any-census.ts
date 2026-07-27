@@ -81,7 +81,9 @@ function* walk(dir: string): Generator<string> {
 
 function countPackage(pkg: string): Counts {
 	const srcDir = join(ROOT, "packages", pkg, "src");
-	const counts: Counts = Object.fromEntries(Object.keys(PATTERNS).map((p) => [p, 0]));
+	const counts: Counts = Object.fromEntries(
+		Object.keys(PATTERNS).map((p) => [p, 0]),
+	);
 	for (const file of walk(srcDir)) {
 		if (TEST_PATH.test(relative(srcDir, file))) continue;
 		const content = readFileSync(file, "utf8");
@@ -90,7 +92,9 @@ function countPackage(pkg: string): Counts {
 			// Skip pure comment lines (prose like "matches any value" is not debt).
 			// @ts-expect-error lives in comments by definition — always counted.
 			const isComment =
-				trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*");
+				trimmed.startsWith("//") ||
+				trimmed.startsWith("*") ||
+				trimmed.startsWith("/*");
 			for (const [name, re] of Object.entries(PATTERNS)) {
 				if (isComment && name !== "@ts-expect-error") continue;
 				counts[name] += line.match(re)?.length ?? 0;
@@ -109,11 +113,15 @@ for (const pkg of PACKAGES) {
 const pad = (s: string, n: number) => s.padEnd(n);
 const nameWidth = Math.max(8, ...PACKAGES.map((p) => p.length)) + 2;
 console.log(
-	`${pad("package", nameWidth)}${Object.keys(PATTERNS).map((p) => pad(p, 18)).join("")}`,
+	`${pad("package", nameWidth)}${Object.keys(PATTERNS)
+		.map((p) => pad(p, 18))
+		.join("")}`,
 );
 for (const pkg of PACKAGES) {
 	console.log(
-		`${pad(pkg, nameWidth)}${Object.entries(current[pkg]).map(([, n]) => pad(String(n), 18)).join("")}`,
+		`${pad(pkg, nameWidth)}${Object.entries(current[pkg])
+			.map(([, n]) => pad(String(n), 18))
+			.join("")}`,
 	);
 }
 
@@ -146,7 +154,9 @@ for (const pkg of PACKAGES) {
 	for (const [pattern, count] of Object.entries(current[pkg])) {
 		const allowed = want[pattern] ?? 0;
 		if (count > allowed) {
-			console.error(`✗ ${pkg}: "${pattern}" went ${allowed} → ${count} (ratchet only goes down)`);
+			console.error(
+				`✗ ${pkg}: "${pattern}" went ${allowed} → ${count} (ratchet only goes down)`,
+			);
 			failed = true;
 		} else if (count < allowed) {
 			improved = true;
@@ -159,7 +169,9 @@ for (const pkg of PACKAGES) {
 // the committed JSON is drifting from reality — say so rather than carrying it.
 for (const pkg of Object.keys(baseline.packages)) {
 	if (!PACKAGES.includes(pkg)) {
-		console.warn(`! ${pkg}: in baseline but not on disk — re-baseline to drop it`);
+		console.warn(
+			`! ${pkg}: in baseline but not on disk — re-baseline to drop it`,
+		);
 	}
 }
 

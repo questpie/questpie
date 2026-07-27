@@ -152,15 +152,15 @@ When workflow is the publication source for pages, public reads use `stage: "pub
 
 All access kinds and when each is checked:
 
-| Kind         | Gates                                                              |
-| ------------ | ------------------------------------------------------------------ |
-| `read`       | Listing and fetching records                                       |
-| `create`     | Creating records                                                   |
-| `update`     | Updating records                                                   |
-| `delete`     | Deleting records                                                   |
-| `transition` | Workflow stage transitions (falls back to `update`)                |
-| `serve`      | Upload file bytes by key (`GET /:collection/files/:key`)           |
-| `introspect` | Schema/meta routes (`GET /:collection/{schema,meta}`)              |
+| Kind         | Gates                                                    |
+| ------------ | -------------------------------------------------------- |
+| `read`       | Listing and fetching records                             |
+| `create`     | Creating records                                         |
+| `update`     | Updating records                                         |
+| `delete`     | Deleting records                                         |
+| `transition` | Workflow stage transitions (falls back to `update`)      |
+| `serve`      | Upload file bytes by key (`GET /:collection/files/:key`) |
+| `introspect` | Schema/meta routes (`GET /:collection/{schema,meta}`)    |
 
 Resolution chain for every kind: collection `.access()` → app `defaultAccess`
 (from `appConfig({ access })`) → require session. No hidden framework grants, deny-all `defaultAccess` really closes the whole REST surface. Two kinds have
@@ -258,18 +258,18 @@ See `references/field-types.md` for complete config options per field type.
 
 Fields take a positional constructor argument (e.g. `f.text(255)`, `f.select([...])`), then a fluent chain. There is NO constructor-options object. Common chain methods on every field:
 
-| Method             | Description                              |
-| ------------------ | ---------------------------------------- |
-| `.required()`      | Field must have a value                  |
-| `.default(value)`  | Default value                            |
-| `.label(text)`     | Display label (supports i18n)            |
-| `.description(text)`| Help text (supports i18n)               |
-| `.localized()`     | Enable per-locale values                 |
-| `.inputOptional()` | Optional in API input but required in DB |
-| `.outputFalse()`   | Exclude from output, write-only field   |
-| `.array()`         | Wrap as a repeatable array               |
-| `.admin(config)`   | Admin UI rendering hints                 |
-| `.virtual(sql)`    | SQL expression for computed fields       |
+| Method               | Description                              |
+| -------------------- | ---------------------------------------- |
+| `.required()`        | Field must have a value                  |
+| `.default(value)`    | Default value                            |
+| `.label(text)`       | Display label (supports i18n)            |
+| `.description(text)` | Help text (supports i18n)                |
+| `.localized()`       | Enable per-locale values                 |
+| `.inputOptional()`   | Optional in API input but required in DB |
+| `.outputFalse()`     | Exclude from output, write-only field    |
+| `.array()`           | Wrap as a repeatable array               |
+| `.admin(config)`     | Admin UI rendering hints                 |
+| `.virtual(sql)`      | SQL expression for computed fields       |
 
 ```ts
 title: f.text(255).required(),

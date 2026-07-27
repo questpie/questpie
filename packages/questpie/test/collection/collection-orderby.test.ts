@@ -6,13 +6,7 @@
  * pin the full result order (not just relative positions) so a regression to
  * "only the last clause applies" fails deterministically.
  */
-import {
-	afterEach,
-	beforeEach,
-	describe,
-	expect,
-	it,
-} from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { collection } from "../../src/exports/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";

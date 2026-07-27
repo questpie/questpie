@@ -78,7 +78,8 @@ export function localizeAuditTitle(
 	const resource = String(data.resource ?? "");
 	const userName = String(data.userName ?? "");
 
-	const actionText = lookupMessage(messages, `audit.action.${action}`) ?? action;
+	const actionText =
+		lookupMessage(messages, `audit.action.${action}`) ?? action;
 	const resourceTypeText =
 		lookupMessage(messages, `audit.resourceType.${resourceType}`) ??
 		resourceType;

@@ -8,8 +8,11 @@ Your [MCP endpoint](/docs/integrations/mcp) at `/api/mcp` is not meant to be ope
 This is the remote, network-facing story. Local, trusted clients (a CLI on your own machine) use the [stdio transport](/docs/integrations/mcp#stdio-transport) and are unaffected - they run as a `system` principal with no OAuth.
 
 <Callout type="info" title="Prerequisites">
-  Read the [MCP integration](/docs/integrations/mcp) page first - it covers `mcpModule`, how collections/globals/routes become tools, and the `config/mcp.ts` policy surface. This page adds the OAuth 2.1 auth layer on top. Familiarity with [Access control](/docs/concepts/access-control) helps too, since scopes layer on
-  top of your existing RBAC.
+	Read the [MCP integration](/docs/integrations/mcp) page first - it covers
+	`mcpModule`, how collections/globals/routes become tools, and the
+	`config/mcp.ts` policy surface. This page adds the OAuth 2.1 auth layer on
+	top. Familiarity with [Access control](/docs/concepts/access-control) helps
+	too, since scopes layer on top of your existing RBAC.
 </Callout>
 
 ## What you get
@@ -54,10 +57,21 @@ questpie generate
 
 That is the whole setup on an admin-enabled app: `adminModule` provides the OAuth provider + tables + discovery (via the starter it bundles), and `mcpModule` mounts the OAuth-gated `/api/mcp` route. This composition is covered end to end by the framework test suite.
 
-<Callout type="info" title="Headless runtimes (Hono, Elysia) add the OAuth provider with `oauthModule`">
-  The OAuth provider lives in the self-contained, composable **`oauthModule`**, alongside the `oauthProvider()` + `jwt()` plugins, the `oauth-*` tables + `jwks`, and the discovery routes. `starterModule` bundles it and `adminModule` pulls the starter in, so an admin-enabled app gets it for free (as above). A **headless
-  / custom-auth** app that ships neither can add `oauthModule` on top of its own better-auth model to get the same provider + tables + discovery, HTTP MCP then works there too. (This shipped in 3.3.0, it is no longer a hand-wire-it-yourself follow-up.) With no provider at all, `/api/mcp` still mounts but stays `401`
-  with nothing to discover. Local [stdio](/docs/integrations/mcp#stdio-transport) needs no OAuth and works everywhere.
+<Callout
+	type="info"
+	title="Headless runtimes (Hono, Elysia) add the OAuth provider with `oauthModule`"
+>
+	The OAuth provider lives in the self-contained, composable **`oauthModule`**,
+	alongside the `oauthProvider()` + `jwt()` plugins, the `oauth-*` tables +
+	`jwks`, and the discovery routes. `starterModule` bundles it and `adminModule`
+	pulls the starter in, so an admin-enabled app gets it for free (as above). A
+	**headless / custom-auth** app that ships neither can add `oauthModule` on top
+	of its own better-auth model to get the same provider + tables + discovery,
+	HTTP MCP then works there too. (This shipped in 3.3.0, it is no longer a
+	hand-wire-it-yourself follow-up.) With no provider at all, `/api/mcp` still
+	mounts but stays `401` with nothing to discover. Local
+	[stdio](/docs/integrations/mcp#stdio-transport) needs no OAuth and works
+	everywhere.
 </Callout>
 
 ## The flow
@@ -98,9 +112,17 @@ Step by step:
 5. **Token exchange.** The client exchanges the `code` at `/api/auth/oauth2/token`, sending the PKCE `code_verifier` and the same `resource`. It receives a short-lived (1-hour) access token.
 6. **Call the endpoint.** The client sends `Authorization: Bearer <token>` on `POST /mcp`. The app verifies the token statelessly against `/jwks`, resolves it to an `oauth` principal (the real user + consented scopes), and dispatches tool calls under `scopes ∩ RBAC`.
 
-<Callout type="info" title="Discovery lives at the server root, not under `/api/auth`">
-  Better Auth serves OAuth metadata under its own base path (`/api/auth/*`), but MCP clients expect it at the server root. QUESTPIE's core module (always included) re-exposes all three documents at the root as ordinary routes - `/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource`, and
-  `/jwks` - each delegating to the provider's own helpers, so the advertised issuer/JWKS/audience always match how tokens are actually issued.
+<Callout
+	type="info"
+	title="Discovery lives at the server root, not under `/api/auth`"
+>
+	Better Auth serves OAuth metadata under its own base path (`/api/auth/*`), but
+	MCP clients expect it at the server root. QUESTPIE's core module (always
+	included) re-exposes all three documents at the root as ordinary routes -
+	`/.well-known/oauth-authorization-server`,
+	`/.well-known/oauth-protected-resource`, and `/jwks` - each delegating to the
+	provider's own helpers, so the advertised issuer/JWKS/audience always match
+	how tokens are actually issued.
 </Callout>
 
 <Callout type="warn" title="A token is a verifiable JWT only when the client sets `resource`">
@@ -124,9 +146,18 @@ Scopes describe **what slice of your app** an agent asked for. They are declarat
 
 The mapping is pure data, parameterized by `(resource kind, name, verb)` - adding a collection, global, or route contributes its scopes automatically, with no framework code to touch.
 
-<Callout type="info" title="Umbrellas exist for `read` and `write` only - never `delete` or `invoke`">
-  A granular `collections:posts:read` requirement is *also* satisfied by holding the coarse `collections:read` umbrella (and likewise for `write`). But there is **no** umbrella for `:delete` or `routes:…:invoke`: those always require the exact granular scope. `read` and `write` umbrellas are independent - holding
-  `collections:write` never satisfies a `:read` requirement, and vice versa - and an umbrella never crosses resource kinds (`collections:read` never grants a `globals:…` scope). This keeps the convenience narrow and least-privilege.
+<Callout
+	type="info"
+	title="Umbrellas exist for `read` and `write` only - never `delete` or `invoke`"
+>
+	A granular `collections:posts:read` requirement is *also* satisfied by holding
+	the coarse `collections:read` umbrella (and likewise for `write`). But there
+	is **no** umbrella for `:delete` or `routes:…:invoke`: those always require
+	the exact granular scope. `read` and `write` umbrellas are independent -
+	holding `collections:write` never satisfies a `:read` requirement, and vice
+	versa - and an umbrella never crosses resource kinds (`collections:read` never
+	grants a `globals:…` scope). This keeps the convenience narrow and
+	least-privilege.
 </Callout>
 
 ### Effective permission = scopes ∩ RBAC
@@ -150,8 +181,11 @@ Both gates must pass, in either direction of narrowing:
 Out-of-scope (and out-of-RBAC) tools are **absent from `tools/list`** _and_ rejected if the client calls them directly by name.
 
 <Callout type="info" title="`user` and `system` principals are unchanged">
-  The scope gate only applies to the `oauth` principal. A first-party admin cookie/bearer session is a `user` principal - no scopes, RBAC as today. A trusted local [stdio](/docs/integrations/mcp#stdio-transport) worker is a `system` principal - it bypasses both the RBAC and scope gates entirely (full access). Only the
-  network-facing OAuth path is scope-gated.
+	The scope gate only applies to the `oauth` principal. A first-party admin
+	cookie/bearer session is a `user` principal - no scopes, RBAC as today. A
+	trusted local [stdio](/docs/integrations/mcp#stdio-transport) worker is a
+	`system` principal - it bypasses both the RBAC and scope gates entirely (full
+	access). Only the network-facing OAuth path is scope-gated.
 </Callout>
 
 ### What the user sees on the consent screen
@@ -170,7 +204,10 @@ The consent page renders each requested scope as a human-readable line, so the g
 Unknown scopes fall back to a readable rendering of the raw string rather than a blank row, so a new resource never shows up unlabeled.
 
 <Callout type="info" title="Consent uses the admin page">
-  The consent screen lives at `/admin/oauth/consent`, the configured `consentPage`. It reads the signed authorization query, presents the requested scopes, and submits the decision to `POST /oauth2/consent`. The provider approves trusted clients with `skip_consent` server-side.
+	The consent screen lives at `/admin/oauth/consent`, the configured
+	`consentPage`. It reads the signed authorization query, presents the requested
+	scopes, and submits the decision to `POST /oauth2/consent`. The provider
+	approves trusted clients with `skip_consent` server-side.
 </Callout>
 
 ## Custom tool scopes
@@ -182,16 +219,16 @@ import { mcpTool } from "@questpie/mcp";
 import { z } from "zod";
 
 export default mcpTool("recalculate-stats", {
-  description: "Recompute cached site statistics.",
-  inputSchema: z.object({ since: z.string().optional() }),
-  scopes: ["collections:stats:write"], // OAuth callers must hold this
-  access: ({ session }) => session?.user?.role === "admin",
+	description: "Recompute cached site statistics.",
+	inputSchema: z.object({ since: z.string().optional() }),
+	scopes: ["collections:stats:write"], // OAuth callers must hold this
+	access: ({ session }) => session?.user?.role === "admin",
 }).handler(async ({ input, ctx }) => {
-  const updated = await ctx.services.stats.recompute(input.since);
-  return {
-    structuredContent: { updated },
-    content: [{ type: "text", text: `Updated ${updated} rows.` }],
-  };
+	const updated = await ctx.services.stats.recompute(input.since);
+	return {
+		structuredContent: { updated },
+		content: [{ type: "text", text: `Updated ${updated} rows.` }],
+	};
 });
 ```
 
@@ -206,7 +243,10 @@ As always, `scopes` is an OAuth-only narrowing on top of `access` - a `user` or 
 - **PKCE, always.** Every DCR-registered client is public and must use PKCE.
 
 <Callout type="info" title="RBAC is the floor, scopes are the ceiling">
-  Because effective permission is `scopes ∩ RBAC`, an over-broad scope grant can never bypass your access rules, and a misconfigured access rule can never be widened by a scope. Design your `.access()` rules as the real security boundary; treat scopes as the user's least-privilege consent on top.
+	Because effective permission is `scopes ∩ RBAC`, an over-broad scope grant can
+	never bypass your access rules, and a misconfigured access rule can never be
+	widened by a scope. Design your `.access()` rules as the real security
+	boundary; treat scopes as the user's least-privilege consent on top.
 </Callout>
 
 ## Related

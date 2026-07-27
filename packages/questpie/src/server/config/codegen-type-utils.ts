@@ -13,7 +13,6 @@ import type {
 	ServiceNamespace,
 	ServiceNamespaceOf,
 } from "#questpie/server/services/define-service.js";
-
 import type { Override } from "#questpie/shared/type-utils.js";
 
 import type { Registry } from "./app-context.js";

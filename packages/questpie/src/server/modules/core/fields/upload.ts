@@ -36,15 +36,17 @@ export interface UploadFieldMeta extends Questpie.UploadFieldMeta {
 // Types
 // ============================================================================
 
-export type UploadFieldState<TTo extends string = "assets"> =
-	Omit<DefaultFieldState, "operators"> & {
-		type: "upload";
-		data: string;
-		column: PgVarcharBuilder<[string, ...string[]]>;
-		operators: typeof belongsToOps;
-		relationTo: TTo;
-		relationKind: "one";
-	};
+export type UploadFieldState<TTo extends string = "assets"> = Omit<
+	DefaultFieldState,
+	"operators"
+> & {
+	type: "upload";
+	data: string;
+	column: PgVarcharBuilder<[string, ...string[]]>;
+	operators: typeof belongsToOps;
+	relationTo: TTo;
+	relationKind: "one";
+};
 
 export interface UploadFieldMethods {
 	multiple(): any;

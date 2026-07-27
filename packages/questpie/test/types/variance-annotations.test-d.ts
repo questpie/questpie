@@ -116,7 +116,9 @@ type _globalBareToSpecific = Expect<Extends<GlobalCRUD, SpecificGlobalCRUD>>;
 
 type Rels = { author: unknown; comments: unknown };
 
-type _withKeysPreserved = Expect<Equal<keyof With<Rels>, "author" | "comments">>;
+type _withKeysPreserved = Expect<
+	Equal<keyof With<Rels>, "author" | "comments">
+>;
 
 // ============================================================================
 // FieldWithMethods split — chain-order semantics preserved
@@ -124,7 +126,9 @@ type _withKeysPreserved = Expect<Equal<keyof With<Rels>, "author" | "comments">>
 
 // Type-specific methods survive a common-method call...
 const requiredFirst = text(255).required().trim();
-type _trimAfterRequired = Expect<Equal<HasKey<typeof requiredFirst, "trim">, true>>;
+type _trimAfterRequired = Expect<
+	Equal<HasKey<typeof requiredFirst, "trim">, true>
+>;
 type _commonAfterRequired = Expect<
 	Equal<HasKey<typeof requiredFirst, "required">, true>
 >;
@@ -132,7 +136,9 @@ type _commonAfterRequired = Expect<
 // ...and common methods survive a type-specific call (override maps stay
 // ahead of Field<TState> in the intersection).
 const typeFirst = text(255).trim().required();
-type _patternAfterChain = Expect<Equal<HasKey<typeof typeFirst, "pattern">, true>>;
+type _patternAfterChain = Expect<
+	Equal<HasKey<typeof typeFirst, "pattern">, true>
+>;
 
 // State accumulation still flows through the wrapped common methods
 type RequiredValue = (typeof requiredFirst)["$types"]["value"];

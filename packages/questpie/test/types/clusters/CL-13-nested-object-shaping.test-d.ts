@@ -47,13 +47,13 @@
  *     green once the generic lands, and the file always compiles.
  */
 
+import { collection } from "#questpie/server/collection/builder/collection-builder.js";
+import type { CollectionSelect as PublicCollectionSelect } from "#questpie/server/collection/builder/collection.js";
 import type {
 	CollectionSelect as CollectionSelectFromApp,
 	// public 2-arg field-def selector consumed via AppCollections<TApp>
 } from "#questpie/server/collection/crud/types.js";
-import type { CollectionSelect as PublicCollectionSelect } from "#questpie/server/collection/builder/collection.js";
 import type { Field } from "#questpie/server/fields/field-class.js";
-import { collection } from "#questpie/server/collection/builder/collection-builder.js";
 import {
 	from as fromFactory,
 	json as jsonFactory,
@@ -72,7 +72,6 @@ import type {
 	NoNever,
 	NoUnknown,
 } from "../_assert.js";
-
 // `articles` is a runtime const (used via `typeof`); `App` is a type alias.
 import { articles } from "../_fixtures.js";
 import type { App } from "../_fixtures.js";
@@ -144,11 +143,17 @@ type _keywordsParityWithTopLevel = ExactType<
 	MetaApp["keywords"],
 	ArticleSelect_App["tagList"]
 >;
-type _keywordsParity_Public = ExactType<MetaPublic["keywords"], MetaApp["keywords"]>;
+type _keywordsParity_Public = ExactType<
+	MetaPublic["keywords"],
+	MetaApp["keywords"]
+>;
 // Element type + array-ness must survive regardless of nullability (catches a nested
 // array degrading to a scalar / `any[]` / collapsing). The element is `string`.
 type _keywordsIsArray = Expect<ExpectArray<MetaApp["keywords"]>>;
-type _keywordsElement = ExactType<ArrayElement<NonNullable<MetaApp["keywords"]>>, string>;
+type _keywordsElement = ExactType<
+	ArrayElement<NonNullable<MetaApp["keywords"]>>,
+	string
+>;
 type _keywords_notAny = Expect<NoAny<MetaApp["keywords"]>>;
 type _keywords_notNever = Expect<NoNever<MetaApp["keywords"]>>;
 
@@ -188,9 +193,13 @@ type _topSecretAbsent = Expect<
 >;
 // Kept field survives precisely.
 type _topVisibleKept = Expect<Equal<WithHiddenSelect["visible"], string>>;
-type _topVisiblePresent = Expect<Equal<HasKey<WithHiddenSelect, "visible">, true>>;
+type _topVisiblePresent = Expect<
+	Equal<HasKey<WithHiddenSelect, "visible">, true>
+>;
 // The whole row must not collapse to `{}` from an over-eager never-filter.
-type _withHidden_notEmpty = Expect<Equal<IsEmptyObject<WithHiddenSelect>, false>>;
+type _withHidden_notEmpty = Expect<
+	Equal<IsEmptyObject<WithHiddenSelect>, false>
+>;
 
 // ============================================================================
 // FIX B (json-6) — `JsonValue` must be a STRICT recursive JSON type.
@@ -247,11 +256,12 @@ type _acceptsArray = Expect<
 //     with zero risk of a hand-rolled state-shape mismatch leaving it permanently red. ---
 
 /** What `f.json()` (no arg) resolves its `data` to. Must remain `JsonValue` (baseline). */
-type JsonBaselineData = ReturnType<typeof jsonFactory> extends Field<infer S>
-	? S extends { data: infer D }
-		? D
-		: never
-	: never;
+type JsonBaselineData =
+	ReturnType<typeof jsonFactory> extends Field<infer S>
+		? S extends { data: infer D }
+			? D
+			: never
+		: never;
 type _jsonBaseline = ExactType<JsonBaselineData, JsonValue>;
 type _jsonBaseline_notUnknown = Expect<NoUnknown<JsonBaselineData>>;
 type _jsonBaseline_notAny = Expect<NoAny<JsonBaselineData>>;
@@ -261,13 +271,12 @@ type _jsonBaseline_notAny = Expect<NoAny<JsonBaselineData>>;
 // type arguments") on this very line — exactly the burndown signal; it clears the
 // moment the generic lands. NO `@ts-expect-error` (a directive would invert the
 // red→green direction: it would be unused today and become required after the fix).
-type JsonNarrowedData = ReturnType<typeof jsonFactory<{ k: number }>> extends Field<
-	infer S
->
-	? S extends { data: infer D }
-		? D
-		: never
-	: never;
+type JsonNarrowedData =
+	ReturnType<typeof jsonFactory<{ k: number }>> extends Field<infer S>
+		? S extends { data: infer D }
+			? D
+			: never
+		: never;
 // POSITIVE companion (kit rule 4): once the generic lands, the narrowed data is exactly
 // `{ k: number }`. RED today (the line above errors; this resolves to the fixed default).
 type _jsonNarrows = ExactType<JsonNarrowedData, { k: number }>;
@@ -277,28 +286,28 @@ type _jsonNarrows = ExactType<JsonNarrowedData, { k: number }>;
 //     no-arg baseline control + a `typeof fromFactory<T>` narrowing probe. ---
 
 /** What `f.from(col)` resolves its `data` to today (`unknown`). */
-type FromBaselineData = ReturnType<typeof fromFactory> extends {
-	readonly _: infer S;
-}
-	? S extends { data: infer D }
-		? D
-		: never
-	: never;
+type FromBaselineData =
+	ReturnType<typeof fromFactory> extends {
+		readonly _: infer S;
+	}
+		? S extends { data: infer D }
+			? D
+			: never
+		: never;
 // Documents the current degraded state (`unknown`); positive control, stays informative.
 type _fromBaseline_isUnknownToday = ExactType<FromBaselineData, unknown>;
 
 // Resolve the `data` of a (post-fix) typed `from<T>(col, schema)` via `typeof fromFactory<T>`.
 // RED today as a HARD error (TS2558) on this line; clears when `from<T>` lands. No directive
 // (same red→green-direction reasoning as the json case above).
-type FromNarrowedData = ReturnType<
-	typeof fromFactory<{ lat: number; lng: number }>
-> extends {
-	readonly _: infer S;
-}
-	? S extends { data: infer D }
-		? D
-		: never
-	: never;
+type FromNarrowedData =
+	ReturnType<typeof fromFactory<{ lat: number; lng: number }>> extends {
+		readonly _: infer S;
+	}
+		? S extends { data: infer D }
+			? D
+			: never
+		: never;
 // POSITIVE companion: a typed `from<{lat;lng}>` must yield `data: { lat; lng }`. RED today.
 type _fromNarrows = ExactType<FromNarrowedData, { lat: number; lng: number }>;
 
@@ -313,5 +322,7 @@ type _fromNarrows = ExactType<FromNarrowedData, { lat: number; lng: number }>;
 
 type _configIsJson = ExactType<ArticleSelect_App["config"], JsonValue | null>;
 type _bodyIsJson = ExactType<ArticleSelect_App["body"], JsonValue | null>;
-type _config_notUnknown = Expect<NoUnknown<NonNullable<ArticleSelect_App["config"]>>>;
+type _config_notUnknown = Expect<
+	NoUnknown<NonNullable<ArticleSelect_App["config"]>>
+>;
 type _config_notAny = Expect<NoAny<ArticleSelect_App["config"]>>;

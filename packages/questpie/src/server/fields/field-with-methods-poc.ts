@@ -31,9 +31,7 @@ export interface FieldCommonMethods<TState extends FieldState> {
 			column: NotNull<TState["column"]>;
 		}
 	>;
-	default<V>(
-		value: V | (() => V),
-	): PocField<
+	default<V>(value: V | (() => V)): PocField<
 		Omit<TState, "hasDefault" | "column"> & {
 			hasDefault: true;
 			column: HasDefault<TState["column"]>;
@@ -117,9 +115,7 @@ export type FieldWithMethods<
 } & {
 	// Re-wrap type-specific methods: return FieldWithMethods<TState, TMethods>
 	// (type-specific methods don't change TState — they use derive() at runtime)
-	[K in keyof TMethods]: TMethods[K] extends (
-		...args: infer A
-	) => any
+	[K in keyof TMethods]: TMethods[K] extends (...args: infer A) => any
 		? (...args: A) => FieldWithMethods<TState, TMethods>
 		: TMethods[K];
 };
@@ -266,7 +262,11 @@ export function pocUsageTest() {
 	const t3 = t2.pattern(/^[A-Z]/); // MUST work — TMethods preserved
 
 	// Chain mix
-	const t4 = t.label({ en: "Name" }).required().pattern(/^[A-Z]/).trim();
+	const t4 = t
+		.label({ en: "Name" })
+		.required()
+		.pattern(/^[A-Z]/)
+		.trim();
 
 	// Number field — different methods
 	const n = pocNumberField.factory();

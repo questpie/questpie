@@ -64,27 +64,27 @@ Tailwind v4 via `@theme inline`. No `tailwind.config.ts`.
 
 ### Radii
 
-| Token                    | Value | Use                                                                |
-| ------------------------ | ----- | ------------------------------------------------------------------ |
-| `--radius-control-inner` | 8 px  | Icon buttons / actions nested inside controls.                     |
-| `--radius-control`       | 12 px | Inputs, selects, buttons, compact controls.                        |
-| `--radius-surface`       | 14 px | Cards, panels, grouped fields, docs blocks.                        |
-| `--radius-floating`      | 14 px | Menus, popovers, dialogs, command panels.                          |
-| `20–28 px`               | —     | Large auth panels, landing hero mockups (rare).                    |
+| Token                    | Value | Use                                             |
+| ------------------------ | ----- | ----------------------------------------------- |
+| `--radius-control-inner` | 8 px  | Icon buttons / actions nested inside controls.  |
+| `--radius-control`       | 12 px | Inputs, selects, buttons, compact controls.     |
+| `--radius-surface`       | 14 px | Cards, panels, grouped fields, docs blocks.     |
+| `--radius-floating`      | 14 px | Menus, popovers, dialogs, command panels.       |
+| `20–28 px`               | —     | Large auth panels, landing hero mockups (rare). |
 
 Nested radii must be concentric: inner radius < outer radius by roughly the
 padding between them. Never equal radii on nested surfaces.
 
 ### Spacing & density
 
-| Token               | Default | Use                               |
-| ------------------- | ------- | --------------------------------- |
-| `--control-height`  | 40 px   | Default one-line controls.        |
-| `--control-height-sm` | 32 px | Compact controls (badges, chips). |
-| `--spacing-input`   | 12 px   | Horizontal input padding.         |
-| `--spacing-card`    | 16 px   | Small panel / card padding.       |
-| `--spacing-panel`   | 20 px   | Larger panel interiors.           |
-| `--spacing-section` | 24 px   | App section gaps.                 |
+| Token                 | Default | Use                               |
+| --------------------- | ------- | --------------------------------- |
+| `--control-height`    | 40 px   | Default one-line controls.        |
+| `--control-height-sm` | 32 px   | Compact controls (badges, chips). |
+| `--spacing-input`     | 12 px   | Horizontal input padding.         |
+| `--spacing-card`      | 16 px   | Small panel / card padding.       |
+| `--spacing-panel`     | 20 px   | Larger panel interiors.           |
+| `--spacing-section`   | 24 px   | App section gaps.                 |
 
 ### Motion
 
@@ -97,6 +97,7 @@ padding between them. Never equal radii on nested surfaces.
 ```
 
 Rules:
+
 - Use property-specific transitions. **Never** `transition: all`.
 - Buttons use `translateY(1px)` on press (matches depth recipe).
 - Floating content animates opacity + small scale/translate.
@@ -106,10 +107,10 @@ Rules:
 
 ## 2. Typography
 
-| Token         | Use                                                          |
-| ------------- | ------------------------------------------------------------ |
-| `--font-sans` | Body, prose, headings, labels, navigation. Geist.            |
-| `--font-mono` | Code, file paths, commands, IDs, kbd, technical metadata.    |
+| Token         | Use                                                       |
+| ------------- | --------------------------------------------------------- |
+| `--font-sans` | Body, prose, headings, labels, navigation. Geist.         |
+| `--font-mono` | Code, file paths, commands, IDs, kbd, technical metadata. |
 
 - Apply font smoothing at root (`-webkit-font-smoothing: antialiased`).
 - Headings use `text-wrap: balance`.
@@ -121,14 +122,14 @@ Rules:
 
 ### Scale
 
-| Element           | Size         | Line / Letter             |
-| ----------------- | ------------ | ------------------------- |
-| Display H1        | 40–60 px     | 1.0 / -0.025em / 600      |
-| Section H2        | 28–42 px     | 1.1 / -0.015em / 600      |
-| Subsection H3     | 18–22 px     | 1.2 / 600                 |
-| Lede              | 16–17 px     | 1.55–1.6 / 400 / max ~580 |
-| Body              | 14 px        | 1.5 / 400                 |
-| Eyebrow           | 11 px mono   | 0.04em / 500 / uppercase  |
+| Element       | Size       | Line / Letter             |
+| ------------- | ---------- | ------------------------- |
+| Display H1    | 40–60 px   | 1.0 / -0.025em / 600      |
+| Section H2    | 28–42 px   | 1.1 / -0.015em / 600      |
+| Subsection H3 | 18–22 px   | 1.2 / 600                 |
+| Lede          | 16–17 px   | 1.55–1.6 / 400 / max ~580 |
+| Body          | 14 px      | 1.5 / 400                 |
+| Eyebrow       | 11 px mono | 0.04em / 500 / uppercase  |
 
 ---
 
@@ -136,18 +137,18 @@ Rules:
 
 Pick the lowest surface that communicates the structure.
 
-| Pattern            | Treatment                                                              |
-| ------------------ | ---------------------------------------------------------------------- |
-| Page shell         | `bg-background`, no shadow.                                            |
-| Sidebar            | `bg-sidebar`, subtle border.                                           |
-| Card / panel       | `bg-card`, `border-border-subtle`, `--radius-surface`, no shadow.      |
-| Toolbar            | `bg-card` or `bg-surface-low`, subtle border.                          |
-| Table header       | `bg-muted`, muted text, no shadow.                                     |
-| Item row           | Transparent default, `bg-surface-high` on active/hover.                |
-| Code block         | `bg-card`, subtle border, header strip if titled.                      |
-| Floating layer     | `bg-popover`, `border-border-subtle`, `--floating-shadow`.             |
-| **Depth surface**  | Elevated CTA / hero panel — see §4 shadow recipe.                      |
-| **Control depth**  | Inputs / selects / textareas — see §4 inset recipe.                    |
+| Pattern           | Treatment                                                         |
+| ----------------- | ----------------------------------------------------------------- |
+| Page shell        | `bg-background`, no shadow.                                       |
+| Sidebar           | `bg-sidebar`, subtle border.                                      |
+| Card / panel      | `bg-card`, `border-border-subtle`, `--radius-surface`, no shadow. |
+| Toolbar           | `bg-card` or `bg-surface-low`, subtle border.                     |
+| Table header      | `bg-muted`, muted text, no shadow.                                |
+| Item row          | Transparent default, `bg-surface-high` on active/hover.           |
+| Code block        | `bg-card`, subtle border, header strip if titled.                 |
+| Floating layer    | `bg-popover`, `border-border-subtle`, `--floating-shadow`.        |
+| **Depth surface** | Elevated CTA / hero panel — see §4 shadow recipe.                 |
+| **Control depth** | Inputs / selects / textareas — see §4 inset recipe.               |
 
 Borders structure. Shadows elevate.
 
@@ -163,16 +164,16 @@ Primary CTA + brand-emphasis buttons:
 
 ```css
 .btn-primary {
-  background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--primary) 100%, white 4%),
-    var(--primary)
-  );
-  box-shadow:
-    inset 0 1px 0 0 color-mix(in srgb, white 22%, transparent),
-    inset 0 -1px 0 0 color-mix(in srgb, black 18%, transparent),
-    0 1px 2px -1px color-mix(in srgb, var(--primary) 60%, transparent),
-    0 2px 6px -2px rgba(0, 0, 0, 0.35);
+	background: linear-gradient(
+		to bottom,
+		color-mix(in srgb, var(--primary) 100%, white 4%),
+		var(--primary)
+	);
+	box-shadow:
+		inset 0 1px 0 0 color-mix(in srgb, white 22%, transparent),
+		inset 0 -1px 0 0 color-mix(in srgb, black 18%, transparent),
+		0 1px 2px -1px color-mix(in srgb, var(--primary) 60%, transparent),
+		0 2px 6px -2px rgba(0, 0, 0, 0.35);
 }
 ```
 
@@ -189,11 +190,11 @@ Inputs, textareas, selects:
 
 ```css
 .control-depth {
-  background: var(--surface-low);
-  border: 1px solid var(--border-subtle);
-  box-shadow:
-    inset 0 1px 2px 0 color-mix(in srgb, black 14%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, var(--foreground) 2%, transparent);
+	background: var(--surface-low);
+	border: 1px solid var(--border-subtle);
+	box-shadow:
+		inset 0 1px 2px 0 color-mix(in srgb, black 14%, transparent),
+		inset 0 0 0 1px color-mix(in srgb, var(--foreground) 2%, transparent);
 }
 ```
 
@@ -222,13 +223,14 @@ do not cast shadows.
 
 Three variants only.
 
-| Variant       | Use                                              | Treatment                                       |
-| ------------- | ------------------------------------------------ | ----------------------------------------------- |
-| `btn-primary` | Brand CTA, main action on a page                 | Depth recipe 4a, gradient, brand glow            |
-| `btn-secondary` | Quiet action, side-by-side with primary        | Depth recipe 4a at lower intensity, hairline   |
-| `btn-ghost`   | Tertiary action, inline links inside dense rows  | Flat, surface-mid tint on hover                  |
+| Variant         | Use                                             | Treatment                                    |
+| --------------- | ----------------------------------------------- | -------------------------------------------- |
+| `btn-primary`   | Brand CTA, main action on a page                | Depth recipe 4a, gradient, brand glow        |
+| `btn-secondary` | Quiet action, side-by-side with primary         | Depth recipe 4a at lower intensity, hairline |
+| `btn-ghost`     | Tertiary action, inline links inside dense rows | Flat, surface-mid tint on hover              |
 
 Rules:
+
 - Default height `40 px`. Compact `32 px` only when documented.
 - Press feedback: `translateY(1px)` (buttons) — never `scale(0.92)`.
 - Icons use `inline-start` / `inline-end` slots.
@@ -239,17 +241,17 @@ Rules:
 
 ## 6. Forms & inputs
 
-| Pattern         | Treatment                                                           |
-| --------------- | ------------------------------------------------------------------- |
-| Text input      | Recipe 4b. Height `40 px`, radius `12 px`.                          |
-| Textarea        | Same recipe, `min-height 92 px`, `resize: vertical`.                |
-| Single select   | Control-depth shell + popover with hairline border.                 |
-| Multi select    | Control-depth shell + inline chips.                                 |
-| Combobox        | Floating recipe (4c) + ⌘K hint + autocomplete list.                |
-| Toggle          | 36×20 pill. On = primary, off = surface-high.                       |
-| Checkbox        | 16×16 with 4 px radius. On = primary.                              |
-| Validation      | Border + helper text in `--destructive`. No big red blocks.         |
-| Disabled        | `surface-mid` background, `foreground-disabled` text.               |
+| Pattern       | Treatment                                                   |
+| ------------- | ----------------------------------------------------------- |
+| Text input    | Recipe 4b. Height `40 px`, radius `12 px`.                  |
+| Textarea      | Same recipe, `min-height 92 px`, `resize: vertical`.        |
+| Single select | Control-depth shell + popover with hairline border.         |
+| Multi select  | Control-depth shell + inline chips.                         |
+| Combobox      | Floating recipe (4c) + ⌘K hint + autocomplete list.         |
+| Toggle        | 36×20 pill. On = primary, off = surface-high.               |
+| Checkbox      | 16×16 with 4 px radius. On = primary.                       |
+| Validation    | Border + helper text in `--destructive`. No big red blocks. |
+| Disabled      | `surface-mid` background, `foreground-disabled` text.       |
 
 Focus uses `--border-strong` border + neutral ring. **Never** primary purple.
 
@@ -259,15 +261,16 @@ Focus uses `--border-strong` border + neutral ring. **Never** primary purple.
 
 Tones:
 
-| Tone     | Color reference         | Use                                      |
-| -------- | ----------------------- | ---------------------------------------- |
-| neutral  | `surface-mid`           | Generic counts, metadata                 |
-| live     | `--success`             | "Available now", current run             |
-| soon     | `--pillar-cloud`        | "Q3 26", upcoming, beta                  |
-| beta     | `--pillar-autopilot`    | Early access, in-review                  |
-| destructive | `--destructive`      | Errors, dangerous actions                |
+| Tone        | Color reference      | Use                          |
+| ----------- | -------------------- | ---------------------------- |
+| neutral     | `surface-mid`        | Generic counts, metadata     |
+| live        | `--success`          | "Available now", current run |
+| soon        | `--pillar-cloud`     | "Q3 26", upcoming, beta      |
+| beta        | `--pillar-autopilot` | Early access, in-review      |
+| destructive | `--destructive`      | Errors, dangerous actions    |
 
 Rules:
+
 - Badges use tabular numerals when they contain numbers.
 - Status is never communicated by color alone — use label, icon, or position.
 - Live status badges may use a pulsing dot (`0 0 0 3px tone 25% transparent`).
@@ -278,14 +281,14 @@ Rules:
 
 From `apps/autopilot/src/.../collections/tasks.ts`:
 
-| Internal     | Label          | Icon                  | Color                       |
-| ------------ | -------------- | --------------------- | --------------------------- |
-| backlog      | Backlog        | dashed circle         | `--foreground-subtle`       |
-| todo         | Todo           | empty circle          | `--foreground-muted`        |
-| in_progress  | In progress    | half-fill circle      | `#eab308` (yellow)          |
-| in_review    | In review      | check circle outline  | `#22c55e` (green)           |
-| done         | Done           | filled check          | `#818cf8` (indigo)          |
-| cancelled    | Cancelled      | filled x              | `--foreground-subtle`       |
+| Internal    | Label       | Icon                 | Color                 |
+| ----------- | ----------- | -------------------- | --------------------- |
+| backlog     | Backlog     | dashed circle        | `--foreground-subtle` |
+| todo        | Todo        | empty circle         | `--foreground-muted`  |
+| in_progress | In progress | half-fill circle     | `#eab308` (yellow)    |
+| in_review   | In review   | check circle outline | `#22c55e` (green)     |
+| done        | Done        | filled check         | `#818cf8` (indigo)    |
+| cancelled   | Cancelled   | filled x             | `--foreground-subtle` |
 
 These icons are the canonical issue-status visualization across the product.
 
@@ -346,7 +349,7 @@ These icons are the canonical issue-status visualization across the product.
 
 Anti-patterns that scream "AI generated this":
 
-- Em-dashes ` — ` in prose.
+- Em-dashes `—` in prose.
 - Cards with rounded corners + colored left-border accent strip.
 - Rainbow gradient backgrounds, bokeh blobs, ambient cosmic glows.
 - Hand-drawn SVG icons / illustrations of people / emojis used as bullets.
@@ -395,27 +398,29 @@ Tailwind v4 is CSS-first — no `tailwind.config.ts` needed.
 shadcn token aliases (paste under your token block in `design-system/tokens.css`):
 
 ```css
-:root, .dark, .light {
-  --background: var(--background);
-  --foreground: var(--foreground);
-  --card: var(--card);
-  --card-foreground: var(--foreground);
-  --popover: var(--popover);
-  --popover-foreground: var(--foreground);
-  --primary: var(--primary);
-  --primary-foreground: var(--primary-foreground);
-  --secondary: var(--surface-mid);
-  --secondary-foreground: var(--foreground);
-  --muted: var(--muted);
-  --muted-foreground: var(--foreground-muted);
-  --accent: var(--surface-high);
-  --accent-foreground: var(--foreground);
-  --destructive: var(--destructive);
-  --destructive-foreground: #ffffff;
-  --border: var(--border-subtle);
-  --input: var(--border-subtle);
-  --ring: var(--ring);
-  --radius: 0.75rem;
+:root,
+.dark,
+.light {
+	--background: var(--background);
+	--foreground: var(--foreground);
+	--card: var(--card);
+	--card-foreground: var(--foreground);
+	--popover: var(--popover);
+	--popover-foreground: var(--foreground);
+	--primary: var(--primary);
+	--primary-foreground: var(--primary-foreground);
+	--secondary: var(--surface-mid);
+	--secondary-foreground: var(--foreground);
+	--muted: var(--muted);
+	--muted-foreground: var(--foreground-muted);
+	--accent: var(--surface-high);
+	--accent-foreground: var(--foreground);
+	--destructive: var(--destructive);
+	--destructive-foreground: #ffffff;
+	--border: var(--border-subtle);
+	--input: var(--border-subtle);
+	--ring: var(--ring);
+	--radius: 0.75rem;
 }
 ```
 

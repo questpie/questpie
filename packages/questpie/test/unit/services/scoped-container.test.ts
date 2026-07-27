@@ -17,9 +17,7 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function container(
-	defs: Record<string, ServiceDef>,
-): ScopedContainer {
+function container(defs: Record<string, ServiceDef>): ScopedContainer {
 	const c = new ScopedContainer();
 	for (const [name, def] of Object.entries(defs)) {
 		c.register(name, def);
@@ -151,9 +149,7 @@ describe("async scoped creation", () => {
 		await c.init();
 
 		const scope = c.createScope();
-		expect(() => scope.resolve("asyncSvc")).toThrow(
-			"returned a Promise",
-		);
+		expect(() => scope.resolve("asyncSvc")).toThrow("returned a Promise");
 
 		await scope.dispose();
 		await c.destroy();

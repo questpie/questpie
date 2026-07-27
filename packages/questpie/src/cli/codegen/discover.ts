@@ -1263,7 +1263,10 @@ function findDeclarationEquals(content: string, startIndex: number): number {
 	return -1;
 }
 
-function skipWhitespaceAndComments(content: string, startIndex: number): number {
+function skipWhitespaceAndComments(
+	content: string,
+	startIndex: number,
+): number {
 	let index = startIndex;
 
 	while (index < content.length) {

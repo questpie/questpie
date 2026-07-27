@@ -25,10 +25,10 @@ import { clientEnv } from "questpie/env";
 import { z } from "zod";
 
 export default clientEnv({
-  consumers: ["vite"], // the bundler(s) that will inline these, see presets below
-  vars: {
-    APP_URL: z.string().default("http://localhost:3000"),
-  },
+	consumers: ["vite"], // the bundler(s) that will inline these, see presets below
+	vars: {
+		APP_URL: z.string().default("http://localhost:3000"),
+	},
 });
 ```
 
@@ -41,12 +41,12 @@ import { z } from "zod";
 import client from "./env.client";
 
 export default env({
-  client,
-  server: {
-    DATABASE_URL: z.string().default("postgres://localhost/app"),
-    BETTER_AUTH_SECRET: z.string().default("dev-secret-change-me"),
-    SMTP_PORT: z.coerce.number().default(1025),
-  },
+	client,
+	server: {
+		DATABASE_URL: z.string().default("postgres://localhost/app"),
+		BETTER_AUTH_SECRET: z.string().default("dev-secret-change-me"),
+		SMTP_PORT: z.coerce.number().default(1025),
+	},
 });
 ```
 
@@ -70,8 +70,12 @@ env.APP_URL; // string, inlined from import.meta.env.VITE_APP_URL at build time
 ```
 
 <Callout type="info" title="Two files, two factories, one source of truth">
-  `env.ts` → `env()` (server, validated at boot). `env.client.ts` → `clientEnv()` (a pure definition, no validation, no env reads). The client vars are declared **once** in `env.client.ts` and consumed in both places: the server validates them under their unprefixed name, and the browser gets them through the generated
-  module under their prefixed name. You never write the prefix yourself.
+	`env.ts` → `env()` (server, validated at boot). `env.client.ts` →
+	`clientEnv()` (a pure definition, no validation, no env reads). The client
+	vars are declared **once** in `env.client.ts` and consumed in both places: the
+	server validates them under their unprefixed name, and the browser gets them
+	through the generated module under their prefixed name. You never write the
+	prefix yourself.
 </Callout>
 
 ## Example → real output
@@ -88,11 +92,11 @@ import { resolveClientEnv } from "questpie/env-client";
 
 /** Typed client env for the vite consumer, server keys are physically absent. */
 export const env = resolveClientEnv(
-  _envClient,
-  {
-    APP_URL: import.meta.env.VITE_APP_URL,
-  },
-  "vite",
+	_envClient,
+	{
+		APP_URL: import.meta.env.VITE_APP_URL,
+	},
+	"vite",
 );
 export type ClientEnv = typeof env;
 ```
@@ -123,14 +127,21 @@ The two sides read the same logical vars from different places, by design, so a 
 **Browser (generated module):** the generated `env.client.<consumer>.ts` reads the physical prefixed literal (`import.meta.env.VITE_APP_URL`) so the bundler can inline it, then validates through `resolveClientEnv()`. Provide the public-prefixed value in the build environment.
 
 <Callout type="warn" title="In production, prefix your client vars">
-  The unprefixed fallback only helps on the server. A browser bundle can only see vars the bundler inlined, which means the **prefixed** name. Ship `VITE_APP_URL` / `NEXT_PUBLIC_APP_URL` / `EXPO_PUBLIC_APP_URL` in your production environment (e.g. EAS, Vercel, your CI), not bare `APP_URL`. If it's missing,
-  `resolveClientEnv()` throws at import of the generated module, and its error names the **physical** var (`VITE_APP_URL`) so the fix is obvious.
+	The unprefixed fallback only helps on the server. A browser bundle can only
+	see vars the bundler inlined, which means the **prefixed** name. Ship
+	`VITE_APP_URL` / `NEXT_PUBLIC_APP_URL` / `EXPO_PUBLIC_APP_URL` in your
+	production environment (e.g. EAS, Vercel, your CI), not bare `APP_URL`. If
+	it's missing, `resolveClientEnv()` throws at import of the generated module,
+	and its error names the **physical** var (`VITE_APP_URL`) so the fix is
+	obvious.
 </Callout>
 
 ## `env()`, server API
 
 ```ts
-function env<TServer, TClient>(options: EnvOptions<TServer, TClient>): ResolvedEnv<TServer, TClient>;
+function env<TServer, TClient>(
+	options: EnvOptions<TServer, TClient>,
+): ResolvedEnv<TServer, TClient>;
 ```
 
 Import from `questpie/env`. Call it as the **default export** of `env.ts`. It validates at call time (= when `env.ts` is evaluated) and returns a frozen, typed object.
@@ -149,9 +160,16 @@ server: {
 }
 ```
 
-<Callout type="warn" title="A server var with a public prefix is a compile error">
-  `env.ts` is server-only, so a key named `NEXT_PUBLIC_API_KEY` (or `VITE_*`, `EXPO_PUBLIC_*`, `PUBLIC_*`) under `server` is almost certainly a mistake, it reads like a secret but would be inlined into client bundles. The `ValidateServerKeys` mapped type turns any such key into `["server var must not use a client
-  prefix", K]`, so the schema no longer type-checks. Public vars belong in `env.client.ts`.
+<Callout
+	type="warn"
+	title="A server var with a public prefix is a compile error"
+>
+	`env.ts` is server-only, so a key named `NEXT_PUBLIC_API_KEY` (or `VITE_*`,
+	`EXPO_PUBLIC_*`, `PUBLIC_*`) under `server` is almost certainly a mistake, it
+	reads like a secret but would be inlined into client bundles. The
+	`ValidateServerKeys` mapped type turns any such key into `["server var must
+	not use a client prefix", K]`, so the schema no longer type-checks. Public
+	vars belong in `env.client.ts`.
 </Callout>
 
 ### `client`
@@ -164,11 +182,12 @@ server: {
 
 ```ts
 env({
-  client,
-  server: { BETTER_AUTH_SECRET: z.string().min(32) },
-  refine: (e) => {
-    if (e.NODE_ENV === "production" && e.BETTER_AUTH_SECRET === "dev-secret") return "BETTER_AUTH_SECRET must not be the dev default in production";
-  },
+	client,
+	server: { BETTER_AUTH_SECRET: z.string().min(32) },
+	refine: (e) => {
+		if (e.NODE_ENV === "production" && e.BETTER_AUTH_SECRET === "dev-secret")
+			return "BETTER_AUTH_SECRET must not be the dev default in production";
+	},
 });
 ```
 
@@ -189,7 +208,9 @@ env({
 </Callout>
 
 <Callout type="warn" title="Schemas must be synchronous">
-  Validation is synchronous. If any schema's `validate` returns a `Promise` (an async refinement), `env()` throws a clear error naming the var. Keep `env.ts` schemas sync.
+	Validation is synchronous. If any schema's `validate` returns a `Promise` (an
+	async refinement), `env()` throws a clear error naming the var. Keep `env.ts`
+	schemas sync.
 </Callout>
 
 ### The framework base preset
@@ -209,13 +230,20 @@ server: {
 Your `server` keys and client `vars` win over base keys with the same name (the base key is omitted from the result type where you override it).
 
 <Callout type="info" title="Why the base vars are all optional">
-  Presence varies by deployment, Cloud injects `QUESTPIE_DB`, self-host uses `DATABASE_URL`, an explicit `db: {url}` in config needs neither. So the base schema can't statically require any of them; the **runtime resolvers** enforce what they actually need. Re-declare a var in `server` when *your* app requires it.
+	Presence varies by deployment, Cloud injects `QUESTPIE_DB`, self-host uses
+	`DATABASE_URL`, an explicit `db: {url}` in config needs neither. So the base
+	schema can't statically require any of them; the **runtime resolvers** enforce
+	what they actually need. Re-declare a var in `server` when *your* app requires
+	it.
 </Callout>
 
 ## `clientEnv()`, client definition API
 
 ```ts
-function clientEnv<TVars, TConsumers>(def: { consumers: TConsumers; vars: TVars }): ClientEnvDefinition<TVars, TConsumers>;
+function clientEnv<TVars, TConsumers>(def: {
+	consumers: TConsumers;
+	vars: TVars;
+}): ClientEnvDefinition<TVars, TConsumers>;
 ```
 
 Import from `questpie/env`. Default-export it from `env.client.ts`. It's a **pure, frozen definition**, it performs no validation and reads no env. Its only runtime behavior is to fail fast on a typo'd preset name (it resolves each consumer at definition time).
@@ -224,7 +252,9 @@ Import from `questpie/env`. Default-export it from `env.client.ts`. It's a **pur
 - **`consumers`**, `readonly ClientConsumer[]`. One generated module is emitted per consumer. A consumer is either a built-in preset **name** or an explicit config object.
 
 <Callout type="warn" title="`env.client.ts` must stay a client-safe leaf">
-  This file is imported by the browser (transitively, via the generated module), so it may import **only** `questpie/env` and a Standard Schema validator (Zod, etc.), nothing server-side, no secrets, no Node APIs. Keep it tiny.
+	This file is imported by the browser (transitively, via the generated module),
+	so it may import **only** `questpie/env` and a Standard Schema validator (Zod,
+	etc.), nothing server-side, no secrets, no Node APIs. Keep it tiny.
 </Callout>
 
 ### Consumer presets
@@ -239,14 +269,17 @@ The three built-in presets map a logical var to the physical prefix + the env ob
 
 ```ts
 clientEnv({
-  consumers: ["next", "vite"], // emits env.client.next.ts AND env.client.vite.ts
-  vars: { APP_URL: z.string().url() },
+	consumers: ["next", "vite"], // emits env.client.next.ts AND env.client.vite.ts
+	vars: { APP_URL: z.string().url() },
 });
 ```
 
 <Callout type="info" title="`PUBLIC_` is a guarded prefix, not a preset">
-  The compile-time guard rejects four public prefixes on server vars, `EXPO_PUBLIC_`, `VITE_`, `NEXT_PUBLIC_`, and `PUBLIC_`, but only three have built-in presets. `PUBLIC_` (the SvelteKit-style spelling) is reserved so it can't slip into `server`, but there's no built-in `"public"` consumer; supply a custom consumer
-  config (below) if you need it.
+	The compile-time guard rejects four public prefixes on server vars,
+	`EXPO_PUBLIC_`, `VITE_`, `NEXT_PUBLIC_`, and `PUBLIC_`, but only three have
+	built-in presets. `PUBLIC_` (the SvelteKit-style spelling) is reserved so it
+	can't slip into `server`, but there's no built-in `"public"` consumer; supply
+	a custom consumer config (below) if you need it.
 </Callout>
 
 ### Custom bundlers, a `ClientConsumerConfig`
@@ -255,8 +288,11 @@ For any bundler without a built-in preset, pass an explicit config instead of a 
 
 ```ts
 clientEnv({
-  consumers: ["vite", { name: "sveltekit", prefix: "PUBLIC_", envObject: "import.meta.env" }],
-  vars: { APP_URL: z.string().url() },
+	consumers: [
+		"vite",
+		{ name: "sveltekit", prefix: "PUBLIC_", envObject: "import.meta.env" },
+	],
+	vars: { APP_URL: z.string().url() },
 });
 // emits env.client.vite.ts AND env.client.sveltekit.ts
 ```
@@ -280,7 +316,10 @@ QUESTPIE_SKIP_ENV_VALIDATION=1 questpie generate
 `questpie generate` and friends set this for you; reach for it manually only in your own build/CI scripts.
 
 <Callout type="warn" title="The skip flag only reaches the server `env()`">
-  `QUESTPIE_SKIP_ENV_VALIDATION` is read at `env()` call time on the server. The **generated client module** validates unconditionally at import, skip flags can't be read after the bundler has inlined the values, so there's no way (and no reason) to skip client validation.
+	`QUESTPIE_SKIP_ENV_VALIDATION` is read at `env()` call time on the server. The
+	**generated client module** validates unconditionally at import, skip flags
+	can't be read after the bundler has inlined the values, so there's no way (and
+	no reason) to skip client validation.
 </Callout>
 
 ## TypeScript
@@ -291,13 +330,13 @@ The factories infer everything; the public types are exported when you need to r
 // Server env types, from questpie/env
 import type { EnvOptions, ResolvedEnv, QuestpieBaseEnv } from "questpie/env";
 import type {
-  ClientEnvDefinition,
-  ClientConsumer,
-  ClientConsumerConfig,
-  ClientConsumerPreset, // "expo" | "vite" | "next"
-  PublicVarPrefix, // "EXPO_PUBLIC_" | "VITE_" | "NEXT_PUBLIC_" | "PUBLIC_"
-  InferShape,
-  StandardSchemaV1,
+	ClientEnvDefinition,
+	ClientConsumer,
+	ClientConsumerConfig,
+	ClientConsumerPreset, // "expo" | "vite" | "next"
+	PublicVarPrefix, // "EXPO_PUBLIC_" | "VITE_" | "NEXT_PUBLIC_" | "PUBLIC_"
+	InferShape,
+	StandardSchemaV1,
 } from "questpie/env";
 
 // The resolved server env type, derived from your own files:

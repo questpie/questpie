@@ -1,6 +1,9 @@
 import type { MergeFn } from "#questpie/server/config/create-app.js";
 
-function mergeDeepConcatLocal(a: Record<string, unknown>, b: Record<string, unknown>) {
+function mergeDeepConcatLocal(
+	a: Record<string, unknown>,
+	b: Record<string, unknown>,
+) {
 	const result: Record<string, unknown> = { ...a };
 	for (const [key, value] of Object.entries(b)) {
 		if (Array.isArray(result[key]) && Array.isArray(value)) {

@@ -235,10 +235,7 @@ describe("collection query operations", () => {
 		it("limits results", async () => {
 			const ctx = createTestContext();
 
-			const result = await setup.app.collections.posts.find(
-				{ limit: 2 },
-				ctx,
-			);
+			const result = await setup.app.collections.posts.find({ limit: 2 }, ctx);
 			expect(result.docs.length).toBe(2);
 			expect(result.limit).toBe(2);
 			expect(result.totalDocs).toBe(6);

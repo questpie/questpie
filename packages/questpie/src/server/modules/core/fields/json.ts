@@ -80,19 +80,23 @@ export function json<TData extends JsonValue = JsonValue>(config?: {
 }): Field<JsonFieldState<TData>> {
 	const mode = config?.mode ?? "jsonb";
 
-	return wrapFieldComplete(field<JsonFieldState<TData>>({
-		type: "json",
-		columnFactory: (name) => (mode === "json" ? pgJson(name) : jsonb(name)),
-		schemaFactory: () => jsonValueSchema,
-		operatorSet: basicOps,
-		notNull: false,
-		hasDefault: false,
-		localized: false,
-		virtual: false,
-		input: true,
-		output: true,
-		isArray: false,
-	}), jsonFieldType.methods, {}) as any;
+	return wrapFieldComplete(
+		field<JsonFieldState<TData>>({
+			type: "json",
+			columnFactory: (name) => (mode === "json" ? pgJson(name) : jsonb(name)),
+			schemaFactory: () => jsonValueSchema,
+			operatorSet: basicOps,
+			notNull: false,
+			hasDefault: false,
+			localized: false,
+			virtual: false,
+			input: true,
+			output: true,
+			isArray: false,
+		}),
+		jsonFieldType.methods,
+		{},
+	) as any;
 }
 
 import type { Field } from "../../../fields/field-class.js";

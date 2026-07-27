@@ -40,13 +40,18 @@ export default collection("post")
 
 That's the whole surface for the common case. The generated schemas now back `POST /api/post` and `PATCH /api/post/:id`, the typed client's `create` / `update`, and the admin form, all enforcing the same rules. Every option is in [Full API](#full-api) below.
 
-<Callout type="info" title="Import the factory from `#questpie/factories`, not `questpie`">
-The generated `collection()` factory carries every field type, including module-contributed ones (`f.richText()`, `f.blocks()`). A bare `import { collection } from "questpie"` only sees the builtin field types.
+<Callout
+	type="info"
+	title="Import the factory from `#questpie/factories`, not `questpie`"
+>
+	The generated `collection()` factory carries every field type, including
+	module-contributed ones (`f.richText()`, `f.blocks()`). A bare `import{" "}
+	{collection} from "questpie"` only sees the builtin field types.
 </Callout>
 
 ## When validation runs
 
-On create and update, validation sits between input transformation and the database write. The runtime order in the CRUD generator is fixed, but **field write-access and schema validation run in the opposite relative order on create vs. update**: create checks field write-access *before* the schema, update parses the schema *first*:
+On create and update, validation sits between input transformation and the database write. The runtime order in the CRUD generator is fixed, but **field write-access and schema validation run in the opposite relative order on create vs. update**: create checks field write-access _before_ the schema, update parses the schema _first_:
 
 ```mermaid
 flowchart LR
@@ -71,13 +76,21 @@ flowchart LR
   BC --> W
 ```
 
-<Callout type="info" title="Why the create/update order differs, and why it rarely matters">
-On create, a denied field write-access aborts before the schema ever parses; on update, the schema parses first and *then* field write-access is checked. Either way both gates run before `beforeChange` and before any row is written, so a denied or invalid write never reaches the database, the only observable difference is *which* error (`FORBIDDEN` vs `VALIDATION_ERROR`) a request that trips both gates gets back.
+<Callout
+	type="info"
+	title="Why the create/update order differs, and why it rarely matters"
+>
+	On create, a denied field write-access aborts before the schema ever parses;
+	on update, the schema parses first and *then* field write-access is checked.
+	Either way both gates run before `beforeChange` and before any row is written,
+	so a denied or invalid write never reaches the database, the only observable
+	difference is *which* error (`FORBIDDEN` vs `VALIDATION_ERROR`) a request that
+	trips both gates gets back.
 </Callout>
 
 Two consequences matter:
 
-- **`beforeValidate` is your pre-validation transform.** It runs *before* the schema parses, with `ctx.data` as the mutable input. Trim, lowercase, default, or derive values there and they're validated as-is. After the schema passes, `beforeChange` runs on the *validated* data, too late to fix a value the schema already rejected.
+- **`beforeValidate` is your pre-validation transform.** It runs _before_ the schema parses, with `ctx.data` as the mutable input. Trim, lowercase, default, or derive values there and they're validated as-is. After the schema passes, `beforeChange` runs on the _validated_ data, too late to fix a value the schema already rejected.
 - **A failed parse aborts the operation.** The CRUD generator wraps `insertSchema.parse` / `updateSchema.parse` and rethrows any Zod error as `ApiError.fromZodError(error)`, no row is written, no `beforeChange` / `afterChange` runs, and the caller gets a `VALIDATION_ERROR`.
 
 ```ts
@@ -85,7 +98,10 @@ Two consequences matter:
 import { collection } from "#questpie/factories";
 
 function slugify(input: string): string {
-	return input.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+	return input
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-|-$/g, "");
 }
 
 export default collection("post")
@@ -107,8 +123,13 @@ export default collection("post")
 	.title(({ f }) => f.title);
 ```
 
-<Callout type="info" title="`ctx.data` in `beforeValidate` is the input, mutated in place">
-It's `TInsert` on create and `TUpdate` on update, assign to it to transform; don't return anything. The hook fires only on create and update (never read or delete).
+<Callout
+	type="info"
+	title="`ctx.data` in `beforeValidate` is the input, mutated in place"
+>
+	It's `TInsert` on create and `TUpdate` on update, assign to it to transform;
+	don't return anything. The hook fires only on create and update (never read or
+	delete).
 </Callout>
 
 ## Full API
@@ -130,7 +151,9 @@ export default collection("product")
 		sku: f
 			.text()
 			.required()
-			.zod((s) => s.refine((v) => v.startsWith("SKU-"), "Must start with SKU-")),
+			.zod((s) =>
+				s.refine((v) => v.startsWith("SKU-"), "Must start with SKU-"),
+			),
 
 		// REPLACE, narrow a loose JSON field to a concrete shape.
 		// `settings` is now typed { theme: "light" | "dark"; compact: boolean }
@@ -146,11 +169,11 @@ export default collection("product")
 
 **How the return type maps to the field value type:**
 
-| You call | Schema output | Field value type |
-| --- | --- | --- |
-| `.zod((s) => s.refine(...))` / `.regex(...)` / `.min(...)` | same as input | unchanged |
-| `.zod(() => z.object({...}))` (replace) | the new schema's output | narrows to that output |
-| `.zod((s) => s)` returning a plain `ZodType` | `unknown` | unchanged (kept as-is) |
+| You call                                                   | Schema output           | Field value type       |
+| ---------------------------------------------------------- | ----------------------- | ---------------------- |
+| `.zod((s) => s.refine(...))` / `.regex(...)` / `.min(...)` | same as input           | unchanged              |
+| `.zod(() => z.object({...}))` (replace)                    | the new schema's output | narrows to that output |
+| `.zod((s) => s)` returning a plain `ZodType`               | `unknown`               | unchanged (kept as-is) |
 
 The transform is applied after auto-derivation, when the field's schema is compiled into the collection's create/update schemas (`toZodSchema()` runs, then the result is overlaid onto the column-derived schema). The field definition is the validation source of truth wherever one exists.
 
@@ -158,8 +181,16 @@ The transform is applied after auto-derivation, when the field's schema is compi
 `f.json().$type<Layout>()` sets the TypeScript value type with **no runtime check**, bad data still gets in. Pair it with `.zod()` (or replace the schema as above) when you also need the value enforced at runtime.
 </Callout>
 
-<Callout type="warn" title="`.zod()` on relation and upload fields is skipped on input">
-Their foreign-key columns accept app-defined ids (custom ids, auth-provider ids), so the collection schema keeps the **column-derived** shape for these fields and skips the field's `.zod()` overlay on input, the field schema's uuid check would otherwise reject a valid app id. Validate relation targets in a `beforeChange` hook instead. `input(false)` fields are also skipped (system-written).
+<Callout
+	type="warn"
+	title="`.zod()` on relation and upload fields is skipped on input"
+>
+	Their foreign-key columns accept app-defined ids (custom ids, auth-provider
+	ids), so the collection schema keeps the **column-derived** shape for these
+	fields and skips the field's `.zod()` overlay on input, the field schema's
+	uuid check would otherwise reject a valid app id. Validate relation targets in
+	a `beforeChange` hook instead. `input(false)` fields are also skipped
+	(system-written).
 </Callout>
 
 ### `.validation({ exclude, refine })`, customize the whole collection
@@ -187,17 +218,25 @@ export default collection("article")
 	.title(({ f }) => f.title);
 ```
 
-| Option | Type | Effect |
-| --- | --- | --- |
-| `exclude` | `Record<string, true>` | Removes those keys from both the create and update schemas. Use for fields written by the system or migrated raw. |
-| `refine` | `Record<string, (schema) => schema>` | Applies a transform on top of the named field's generated schema, for both create and update. |
+| Option    | Type                                 | Effect                                                                                                            |
+| --------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `exclude` | `Record<string, true>`               | Removes those keys from both the create and update schemas. Use for fields written by the system or migrated raw. |
+| `refine`  | `Record<string, (schema) => schema>` | Applies a transform on top of the named field's generated schema, for both create and update.                     |
 
-<Callout type="info" title="`refine` composes with `.zod()`, it doesn't replace it">
-A field's own `.zod()` runs first (it's baked into `toZodSchema()`), then `.validation({ refine })` wraps that result. Prefer `.zod()` for a single field; reach for `.validation({ refine })` when you're tuning several fields together or keeping validation config out of the field list.
+<Callout
+	type="info"
+	title="`refine` composes with `.zod()`, it doesn't replace it"
+>
+	A field's own `.zod()` runs first (it's baked into `toZodSchema()`), then
+	`.validation({refine})` wraps that result. Prefer `.zod()` for a single field;
+	reach for `.validation({refine})` when you're tuning several fields together
+	or keeping validation config out of the field list.
 </Callout>
 
 <Callout type="warn" title="`.validation()` replaces; it does not merge">
-Each `.validation()` call recomputes both schemas from scratch and overwrites the builder's `validation` state, the last call wins. Pass all your `exclude` / `refine` in one call.
+	Each `.validation()` call recomputes both schemas from scratch and overwrites
+	the builder's `validation` state, the last call wins. Pass all your `exclude`
+	/ `refine` in one call.
 </Callout>
 
 ### `beforeValidate` hook, transform input first
@@ -240,10 +279,15 @@ A field's runtime schema and its database column are derived together, then the 
 3. **`.validation({ refine })`**, a final per-field wrap layered on top of (2), applied across the collection.
 4. **`updateSchema` partial**, on update only, the composed field schema is made optional.
 
-So `f.email().zod((s) => s.endsWith("@acme.com"))` validates *both* that the value is an email (from the type) *and* that it ends with `@acme.com` (from your refine), refinements add to the field's constraints, they don't discard them.
+So `f.email().zod((s) => s.endsWith("@acme.com"))` validates _both_ that the value is an email (from the type) _and_ that it ends with `@acme.com` (from your refine), refinements add to the field's constraints, they don't discard them.
 
-<Callout type="warn" title="`.required()` is a field modifier, not a Zod call, keep them straight">
-`.required()` makes the column non-nullable and the field required in create input. Format and value constraints are `.zod()` (or the field type's own checks). Use `.required()` for presence, `.zod()` for shape.
+<Callout
+	type="warn"
+	title="`.required()` is a field modifier, not a Zod call, keep them straight"
+>
+	`.required()` makes the column non-nullable and the field required in create
+	input. Format and value constraints are `.zod()` (or the field type's own
+	checks). Use `.required()` for presence, `.zod()` for shape.
 </Callout>
 
 ## Validation errors
@@ -260,8 +304,12 @@ A failed parse becomes an `ApiError` via `ApiError.fromZodError`:
 	"code": "VALIDATION_ERROR",
 	"message": "Validation failed",
 	"fieldErrors": [
-		{ "path": "slug", "message": "Use lowercase letters, numbers, and dashes", "value": "My Post" }
-	]
+		{
+			"path": "slug",
+			"message": "Use lowercase letters, numbers, and dashes",
+			"value": "My Post",
+		},
+	],
 }
 ```
 
@@ -280,13 +328,22 @@ beforeChange: ({ data, operation }) => {
 },
 ```
 
-<Callout type="warn" title="Globals validate differently, no generated schema, no `.zod()` overlay">
-A global builds a column-derived `updateSchema` from its fields, but the global CRUD path does **not** parse it at runtime and has **no `.validation()` method and no `beforeValidate` stage**. Globals enforce shape through their field-level input hooks (coercion / defaults) plus field write-access, not a Zod `updateSchema`, and field `.zod()` overlays do not apply. For cross-field rules on a global, validate in a `beforeChange` hook and throw `ApiError.badRequest`.
+<Callout
+	type="warn"
+	title="Globals validate differently, no generated schema, no `.zod()` overlay"
+>
+	A global builds a column-derived `updateSchema` from its fields, but the
+	global CRUD path does **not** parse it at runtime and has **no `.validation()`
+	method and no `beforeValidate` stage**. Globals enforce shape through their
+	field-level input hooks (coercion / defaults) plus field write-access, not a
+	Zod `updateSchema`, and field `.zod()` overlays do not apply. For cross-field
+	rules on a global, validate in a `beforeChange` hook and throw
+	`ApiError.badRequest`.
 </Callout>
 
 ## TypeScript
 
-You rarely touch the schemas directly, they're applied for you. The type you *do* use is the generated document type, which already reflects every `.zod()` narrowing:
+You rarely touch the schemas directly, they're applied for you. The type you _do_ use is the generated document type, which already reflects every `.zod()` narrowing:
 
 ```ts
 // src/questpie/server/some-helper.ts

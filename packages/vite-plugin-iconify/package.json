@@ -2,19 +2,19 @@
 	"name": "@questpie/vite-plugin-iconify",
 	"version": "0.0.2",
 	"description": "Vite plugin that auto-bundles only the Iconify icons you use",
+	"license": "MIT",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/questpie/questpie.git",
 		"directory": "packages/vite-plugin-iconify"
 	},
-	"license": "MIT",
+	"files": [
+		"dist"
+	],
 	"type": "module",
 	"main": "./dist/index.mjs",
 	"module": "./dist/index.mjs",
 	"types": "./dist/index.d.mts",
-	"files": [
-		"dist"
-	],
 	"exports": {
 		".": {
 			"types": "./dist/index.d.mts",
@@ -29,14 +29,14 @@
 		"build": "tsdown",
 		"check-types": "tsc --noEmit"
 	},
-	"peerDependencies": {
-		"@iconify/json": ">=2",
-		"vite": ">=6"
-	},
 	"devDependencies": {
 		"@iconify/json": ">=2",
 		"tsdown": "^0.18.3",
 		"typescript": "^5.9.3",
+		"vite": ">=6"
+	},
+	"peerDependencies": {
+		"@iconify/json": ">=2",
 		"vite": ">=6"
 	}
 }

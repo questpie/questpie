@@ -282,11 +282,11 @@ Import the admin base stylesheet and scan the admin package:
 
 There are two layers, deliberately separated:
 
-| Layer        | Configured in                                   | Covers                                       |
-| ------------ | ----------------------------------------------- | -------------------------------------------- |
-| **Content**  | `config/admin.ts` → `branding`                  | Name, logo, tagline, favicon                 |
-| **Theme**    | Your app's `admin.css`                          | Colors, fonts, radii, shadows, motion        |
-| **Chrome**   | Files in `questpie/admin/components/` (see below) | Sidebar brand, nav item, auth layout       |
+| Layer       | Configured in                                     | Covers                                |
+| ----------- | ------------------------------------------------- | ------------------------------------- |
+| **Content** | `config/admin.ts` → `branding`                    | Name, logo, tagline, favicon          |
+| **Theme**   | Your app's `admin.css`                            | Colors, fonts, radii, shadows, motion |
+| **Chrome**  | Files in `questpie/admin/components/` (see below) | Sidebar brand, nav item, auth layout  |
 
 ### Branding (config-driven)
 
@@ -357,7 +357,9 @@ yourself:
 ```tsx
 // routes/admin.tsx
 export const Route = createFileRoute("/admin")({
-	loader: async ({ context }) => ({ config: await context.client.routes.getAdminConfig.post({}) }),
+	loader: async ({ context }) => ({
+		config: await context.client.routes.getAdminConfig.post({}),
+	}),
 	head: ({ loaderData }) => ({
 		links: [
 			{ rel: "stylesheet", href: adminCss },

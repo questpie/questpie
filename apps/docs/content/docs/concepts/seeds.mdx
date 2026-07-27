@@ -26,22 +26,22 @@ Create a seed file under the server `seeds/` directory:
 import { seed } from "questpie";
 
 export default seed({
-  id: "siteSettings",
-  description: "Create default site settings",
-  category: "required",
-  async run({ globals, createContext, log }) {
-    const ctx = await createContext({ accessMode: "system" });
+	id: "siteSettings",
+	description: "Create default site settings",
+	category: "required",
+	async run({ globals, createContext, log }) {
+		const ctx = await createContext({ accessMode: "system" });
 
-    await globals.siteSettings.update(
-      {
-        siteName: "QUESTPIE",
-        supportEmail: "support@example.com",
-      },
-      ctx,
-    );
+		await globals.siteSettings.update(
+			{
+				siteName: "QUESTPIE",
+				supportEmail: "support@example.com",
+			},
+			ctx,
+		);
 
-    log("Default site settings written");
-  },
+		log("Default site settings written");
+	},
 });
 ```
 
@@ -73,41 +73,41 @@ A seed should still be safe to run more than once. The runner skips already-reco
 import { seed } from "questpie";
 
 export default seed({
-  id: "demoPosts",
-  description: "Create demo posts for local development",
-  category: "dev",
-  async run({ collections, createContext, log }) {
-    const ctx = await createContext({ accessMode: "system" });
+	id: "demoPosts",
+	description: "Create demo posts for local development",
+	category: "dev",
+	async run({ collections, createContext, log }) {
+		const ctx = await createContext({ accessMode: "system" });
 
-    const existing = await collections.posts.findOne(
-      { where: { slug: "hello-questpie" } },
-      ctx,
-    );
+		const existing = await collections.posts.findOne(
+			{ where: { slug: "hello-questpie" } },
+			ctx,
+		);
 
-    if (existing) {
-      log("Demo post already exists");
-      return;
-    }
+		if (existing) {
+			log("Demo post already exists");
+			return;
+		}
 
-    await collections.posts.create(
-      {
-        title: "Hello QUESTPIE",
-        slug: "hello-questpie",
-        status: "draft",
-      },
-      ctx,
-    );
-  },
-  async undo({ collections, createContext }) {
-    const ctx = await createContext({ accessMode: "system" });
+		await collections.posts.create(
+			{
+				title: "Hello QUESTPIE",
+				slug: "hello-questpie",
+				status: "draft",
+			},
+			ctx,
+		);
+	},
+	async undo({ collections, createContext }) {
+		const ctx = await createContext({ accessMode: "system" });
 
-    await collections.posts.deleteMany(
-      {
-        where: { slug: { eq: "hello-questpie" } },
-      },
-      ctx,
-    );
-  },
+		await collections.posts.deleteMany(
+			{
+				where: { slug: { eq: "hello-questpie" } },
+			},
+			ctx,
+		);
+	},
 });
 ```
 
@@ -119,22 +119,22 @@ Use `seed.steps({...})` when a seed does work that should not restart from the t
 import { seed } from "questpie";
 
 export default seed.steps({
-  id: "demoContent",
-  description: "Create demo content with resumable checkpoints",
-  category: "dev",
-  async run({ collections, step }) {
-    const fixture = await step("prepare-fixture", async () => {
-      return {
-        posts: [{ title: "Demo post", slug: "demo-post" }],
-      };
-    });
+	id: "demoContent",
+	description: "Create demo content with resumable checkpoints",
+	category: "dev",
+	async run({ collections, step }) {
+		const fixture = await step("prepare-fixture", async () => {
+			return {
+				posts: [{ title: "Demo post", slug: "demo-post" }],
+			};
+		});
 
-    await step("create-posts", async ({ collections }) => {
-      for (const post of fixture.posts) {
-        await collections.posts.create(post);
-      }
-    });
-  },
+		await step("create-posts", async ({ collections }) => {
+			for (const post of fixture.posts) {
+				await collections.posts.create(post);
+			}
+		});
+	},
 });
 ```
 
@@ -146,11 +146,11 @@ Keep database mutations in a step seed inside `step(...)`. A step seed does not 
 
 Every seed has one category:
 
-| Category | Use it for |
-|---|---|
+| Category   | Use it for                                                                                                     |
+| ---------- | -------------------------------------------------------------------------------------------------------------- |
 | `required` | Bootstrap data required in every environment, such as roles, baseline settings, or the first admin invitation. |
-| `dev` | Local and preview data, such as demo posts, fake users, sample products, or screenshots. |
-| `test` | Deterministic fixtures for integration and end-to-end tests. |
+| `dev`      | Local and preview data, such as demo posts, fake users, sample products, or screenshots.                       |
+| `test`     | Deterministic fixtures for integration and end-to-end tests.                                                   |
 
 Run one or more categories from the CLI:
 
@@ -169,15 +169,15 @@ Use `dependsOn` when one seed needs data another seed creates:
 import { seed } from "questpie";
 
 export default seed({
-  id: "demoPosts",
-  category: "dev",
-  dependsOn: ["siteSettings"],
-  async run({ collections }) {
-    await collections.posts.create({
-      title: "Seeded post",
-      status: "draft",
-    });
-  },
+	id: "demoPosts",
+	category: "dev",
+	dependsOn: ["siteSettings"],
+	async run({ collections }) {
+		await collections.posts.create({
+			title: "Seeded post",
+			status: "draft",
+		});
+	},
 });
 ```
 
@@ -187,9 +187,9 @@ Dependencies are seed ids, not filenames. If a dependency is outside the selecte
 
 Seed handlers receive a `SeedContext`, which is the app context plus:
 
-| Helper | Purpose |
-|---|---|
-| `log(message)` | Writes a seed-scoped log line. |
+| Helper                    | Purpose                                                                             |
+| ------------------------- | ----------------------------------------------------------------------------------- |
+| `log(message)`            | Writes a seed-scoped log line.                                                      |
 | `createContext(options?)` | Builds a request context for CRUD calls that need a locale or explicit access mode. |
 
 The runner creates seed work in system mode. Use `createContext()` when you need to pass a specific request context into CRUD methods, especially for localized globals and collections:
@@ -198,15 +198,15 @@ The runner creates seed work in system mode. Use `createContext()` when you need
 import { seed } from "questpie";
 
 export default seed({
-  id: "localizedSettings",
-  category: "required",
-  async run({ globals, createContext }) {
-    const en = await createContext({ locale: "en", accessMode: "system" });
-    const sk = await createContext({ locale: "sk", accessMode: "system" });
+	id: "localizedSettings",
+	category: "required",
+	async run({ globals, createContext }) {
+		const en = await createContext({ locale: "en", accessMode: "system" });
+		const sk = await createContext({ locale: "sk", accessMode: "system" });
 
-    await globals.siteSettings.update({ tagline: "Build faster" }, en);
-    await globals.siteSettings.update({ tagline: "Stavaj rychlejsie" }, sk);
-  },
+		await globals.siteSettings.update({ tagline: "Build faster" }, en);
+		await globals.siteSettings.update({ tagline: "Stavaj rychlejsie" }, sk);
+	},
 });
 ```
 
@@ -214,27 +214,31 @@ Do not use seeds to model user-facing permissions. Seeds are trusted internal co
 
 ## CLI commands
 
-| Command | What it does |
-|---|---|
-| `questpie seed` | Runs pending seeds. |
-| `questpie seed:status` | Prints pending and executed seeds. |
-| `questpie seed:undo` | Runs `undo` handlers for executed seeds, then removes their tracking rows. |
-| `questpie seed:reset` | Clears tracking rows and step checkpoints without changing app data. |
+| Command                | What it does                                                               |
+| ---------------------- | -------------------------------------------------------------------------- |
+| `questpie seed`        | Runs pending seeds.                                                        |
+| `questpie seed:status` | Prints pending and executed seeds.                                         |
+| `questpie seed:undo`   | Runs `undo` handlers for executed seeds, then removes their tracking rows. |
+| `questpie seed:reset`  | Clears tracking rows and step checkpoints without changing app data.       |
 
 Shared options:
 
-| Option | Commands | Effect |
-|---|---|---|
-| `-c, --config <path>` | all | Use a non-default `questpie.config.ts`. |
-| `--category <categories>` | `seed`, `seed:undo` | Comma-separated category filter: `required`, `dev`, `test`. |
-| `--only <ids>` | `seed`, `seed:undo`, `seed:reset` | Comma-separated seed id filter. |
-| `-f, --force` | `seed` | Re-run selected seeds even when tracking says they already executed. |
-| `--validate` | `seed` | Run selected seeds inside a transaction and roll it back. |
+| Option                    | Commands                          | Effect                                                               |
+| ------------------------- | --------------------------------- | -------------------------------------------------------------------- |
+| `-c, --config <path>`     | all                               | Use a non-default `questpie.config.ts`.                              |
+| `--category <categories>` | `seed`, `seed:undo`               | Comma-separated category filter: `required`, `dev`, `test`.          |
+| `--only <ids>`            | `seed`, `seed:undo`, `seed:reset` | Comma-separated seed id filter.                                      |
+| `-f, --force`             | `seed`                            | Re-run selected seeds even when tracking says they already executed. |
+| `--validate`              | `seed`                            | Run selected seeds inside a transaction and roll it back.            |
 
 `seed:reset` is not an undo. It only clears tracking and step checkpoints, so the next `questpie seed` treats those seeds as pending again.
 
 <Callout type="warn" title="Validate only rolls back database writes">
-`questpie seed --validate` runs seed database work inside a transaction and rolls it back. External side effects still run if your seed sends email, calls an HTTP API, publishes a queue job, writes to object storage, or mutates another system. Keep validation-safe seeds free of external side effects, or guard those calls yourself.
+	`questpie seed --validate` runs seed database work inside a transaction and
+	rolls it back. External side effects still run if your seed sends email, calls
+	an HTTP API, publishes a queue job, writes to object storage, or mutates
+	another system. Keep validation-safe seeds free of external side effects, or
+	guard those calls yourself.
 </Callout>
 
 ## Auto-seed
@@ -245,19 +249,19 @@ Shared options:
 import { runtimeConfig } from "questpie/app";
 
 export default runtimeConfig({
-  autoSeed: "required",
+	autoSeed: "required",
 });
 ```
 
 The shorthand resolves like this:
 
-| Value | Categories |
-|---|---|
-| `true` | all pending seeds |
-| `"required"` | `required` |
-| `"dev"` | `required`, `dev` |
-| `"test"` | `required`, `test` |
-| `["dev"]` | exactly `dev` |
+| Value              | Categories            |
+| ------------------ | --------------------- |
+| `true`             | all pending seeds     |
+| `"required"`       | `required`            |
+| `"dev"`            | `required`, `dev`     |
+| `"test"`           | `required`, `test`    |
+| `["dev"]`          | exactly `dev`         |
 | `false` or omitted | no automatic seed run |
 
 Use automatic seeds for bootstrap data that must exist before the app serves traffic. Keep demo and test data opt-in unless the environment is explicitly meant for it.
@@ -271,18 +275,18 @@ import { module } from "questpie/app";
 import { seed } from "questpie";
 
 const requiredSettings = seed({
-  id: "acmeRequiredSettings",
-  category: "required",
-  async run({ globals }) {
-    await globals.siteSettings.update({
-      siteName: "Acme",
-    });
-  },
+	id: "acmeRequiredSettings",
+	category: "required",
+	async run({ globals }) {
+		await globals.siteSettings.update({
+			siteName: "Acme",
+		});
+	},
 });
 
 export const acmeModule = module({
-  name: "acme",
-  seeds: [requiredSettings],
+	name: "acme",
+	seeds: [requiredSettings],
 });
 ```
 
@@ -294,12 +298,12 @@ Seed arrays concatenate across modules. They are not keyed object maps, so make 
 type SeedCategory = "required" | "dev" | "test";
 
 type Seed = {
-  id: string;
-  description?: string;
-  category: SeedCategory;
-  run: (ctx: SeedContext) => Promise<void>;
-  undo?: (ctx: SeedContext) => Promise<void>;
-  dependsOn?: string[];
+	id: string;
+	description?: string;
+	category: SeedCategory;
+	run: (ctx: SeedContext) => Promise<void>;
+	undo?: (ctx: SeedContext) => Promise<void>;
+	dependsOn?: string[];
 };
 ```
 

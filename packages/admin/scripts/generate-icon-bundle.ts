@@ -48,7 +48,16 @@ for (const ref of grepResult.split("\n").filter(Boolean)) {
 	if (
 		prefix.length < 2 ||
 		prefix.includes("/") ||
-		["http", "https", "data", "var", "oklch", "from", "node", "workspace"].includes(prefix)
+		[
+			"http",
+			"https",
+			"data",
+			"var",
+			"oklch",
+			"from",
+			"node",
+			"workspace",
+		].includes(prefix)
 	)
 		continue;
 
@@ -69,7 +78,12 @@ if (byPrefix.size === 0) {
 }
 
 // Build minimal bundles per prefix
-const collections: Array<{ prefix: string; count: number; sizeKB: number; json: string }> = [];
+const collections: Array<{
+	prefix: string;
+	count: number;
+	sizeKB: number;
+	json: string;
+}> = [];
 
 for (const [prefix, names] of byPrefix) {
 	const jsonPath = resolve(iconJsonDir, `${prefix}.json`);

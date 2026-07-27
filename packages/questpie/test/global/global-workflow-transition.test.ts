@@ -61,10 +61,7 @@ describe("global transitionStage", () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
 		// Create the global record via update (globals are singletons)
-		await setup.app.globals.site_settings.update(
-			{ siteName: "My Site" },
-			ctx,
-		);
+		await setup.app.globals.site_settings.update({ siteName: "My Site" }, ctx);
 
 		const result = await setup.app.globals.site_settings.transitionStage(
 			{ stage: "published" },
@@ -86,10 +83,7 @@ describe("global transitionStage", () => {
 	it("throws for unknown target stage", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
-		await setup.app.globals.site_settings.update(
-			{ siteName: "My Site" },
-			ctx,
-		);
+		await setup.app.globals.site_settings.update({ siteName: "My Site" }, ctx);
 
 		await expect(
 			setup.app.globals.site_settings.transitionStage(

@@ -16,6 +16,13 @@
  * `.hooks()` inference (the spec's stated risk).
  */
 
+import { collection } from "#questpie/server/collection/builder/collection-builder.js";
+import type {
+	AfterChangeHook,
+	AfterDeleteHook,
+	CollectionHooks,
+} from "#questpie/server/collection/builder/types.js";
+
 import type {
 	Equal,
 	Expect,
@@ -24,13 +31,6 @@ import type {
 	IsRequired,
 	NoAny,
 } from "../_assert.js";
-
-import { collection } from "#questpie/server/collection/builder/collection-builder.js";
-import type {
-	AfterChangeHook,
-	AfterDeleteHook,
-	CollectionHooks,
-} from "#questpie/server/collection/builder/types.js";
 
 type Row = { id: string; title: string; status: string };
 
@@ -44,7 +44,9 @@ type ACUpdate = Extract<ACCtx, { operation: "update" }>;
 
 // create: `original` is absent (undefined + optional), `operation` is the literal.
 type _ac_create_op = Expect<Equal<ACCreate["operation"], "create">>;
-type _ac_create_original_undefined = Expect<Equal<ACCreate["original"], undefined>>;
+type _ac_create_original_undefined = Expect<
+	Equal<ACCreate["original"], undefined>
+>;
 type _ac_create_original_optional = Expect<IsOptional<ACCreate, "original">>;
 
 // update: `original` is the non-optional previous row.
@@ -62,7 +64,10 @@ type _ac_update_data = Expect<Equal<ACUpdate["data"], Row>>;
 // ============================================================================
 
 type ViaHooks = Parameters<
-	Extract<NonNullable<CollectionHooks<Row>["afterChange"]>, (...a: any[]) => any>
+	Extract<
+		NonNullable<CollectionHooks<Row>["afterChange"]>,
+		(...a: any[]) => any
+	>
 >[0];
 type _viahooks_equal = Expect<Equal<ViaHooks, ACCtx>>;
 
@@ -105,7 +110,9 @@ collection("hook_ctx_probe")
 			type _del_op = Expect<Equal<typeof ctx.operation, "delete">>;
 			// The deleted row is available (concrete, not `any`) on both keys.
 			type _del_original_notAny = Expect<NoAny<typeof ctx.original>>;
-			type _del_original_hasTitle = Expect<HasKey<typeof ctx.original, "title">>;
+			type _del_original_hasTitle = Expect<
+				HasKey<typeof ctx.original, "title">
+			>;
 			type _del_data_hasTitle = Expect<HasKey<typeof ctx.data, "title">>;
 		},
 	});

@@ -30,7 +30,7 @@ import { join } from "node:path";
 const ROOT = join(import.meta.dirname, "..");
 const BUDGET_PATH = join(ROOT, "scripts", "type-budget.json");
 /** Fail when instantiations exceed budget by more than this ratio. */
-const TOLERANCE = 0.10;
+const TOLERANCE = 0.1;
 
 const TARGETS = [
 	"packages/questpie",
@@ -54,7 +54,15 @@ function measure(target: string): Metrics {
 	const cwd = join(ROOT, target);
 	const res = spawnSync(
 		"bunx",
-		["tsc", "--noEmit", "-p", "tsconfig.json", "--extendedDiagnostics", "--incremental", "false"],
+		[
+			"tsc",
+			"--noEmit",
+			"-p",
+			"tsconfig.json",
+			"--extendedDiagnostics",
+			"--incremental",
+			"false",
+		],
 		{ cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
 	);
 	const out = `${res.stdout ?? ""}\n${res.stderr ?? ""}`;
@@ -72,7 +80,10 @@ function measure(target: string): Metrics {
 }
 
 function tsVersion(): string {
-	const res = spawnSync("bunx", ["tsc", "--version"], { cwd: ROOT, encoding: "utf8" });
+	const res = spawnSync("bunx", ["tsc", "--version"], {
+		cwd: ROOT,
+		encoding: "utf8",
+	});
 	return (res.stdout ?? "").trim().replace(/^Version\s+/, "");
 }
 
@@ -117,7 +128,8 @@ for (const target of TARGETS) {
 		continue;
 	}
 	const limit = Math.round(want.instantiations * (1 + TOLERANCE));
-	const delta = ((got.instantiations - want.instantiations) / want.instantiations) * 100;
+	const delta =
+		((got.instantiations - want.instantiations) / want.instantiations) * 100;
 	const deltaStr = `${delta >= 0 ? "+" : ""}${delta.toFixed(1)}%`;
 	if (got.instantiations > limit) {
 		console.error(

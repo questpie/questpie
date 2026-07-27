@@ -139,10 +139,7 @@ describe("generateRoutePaths — route meta", () => {
 		expect(op.tags).toEqual(["Bookings", "Public API"]);
 		// meta.tags surface in the top-level tags array (no orphans), and the
 		// default `Routes: bookings` bucket is NOT registered when overridden.
-		expect(result.tags).toEqual([
-			{ name: "Bookings" },
-			{ name: "Public API" },
-		]);
+		expect(result.tags).toEqual([{ name: "Bookings" }, { name: "Public API" }]);
 	});
 
 	it("uses meta.description for a raw route instead of the default blurb", () => {

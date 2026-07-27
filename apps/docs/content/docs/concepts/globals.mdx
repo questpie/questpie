@@ -15,7 +15,8 @@ A global is a **singleton**. Use it for data your app has exactly one of: site s
 - **Scopes per tenant with `scoped`**, one row per city, property, or tenant from the same definition.
 
 <Callout type="info" title="Global or collection">
-  Use a [collection](/docs/concepts/collections) for a set of records. Use a global for one settings document, homepage, footer, or other singleton.
+	Use a [collection](/docs/concepts/collections) for a set of records. Use a
+	global for one settings document, homepage, footer, or other singleton.
 </Callout>
 
 ## Quick start
@@ -26,22 +27,22 @@ Create a file under your `globals/` directory. This is the smallest complete glo
 import { global } from "#questpie/factories";
 
 export const siteSettings = global("site_settings")
-  .fields(({ f }) => ({
-    siteName: f.text().label("Site Name").required().default("My Site"),
-    description: f.textarea().label("Site Description"),
-  }))
-  .access({
-    read: true, // expose to anonymous frontend requests
-  })
-  .admin(({ c }) => ({
-    label: "Site Settings",
-    icon: c.icon("ph:gear"),
-  }))
-  .form(({ v, f }) =>
-    v.globalForm({
-      fields: [f.siteName, f.description],
-    }),
-  );
+	.fields(({ f }) => ({
+		siteName: f.text().label("Site Name").required().default("My Site"),
+		description: f.textarea().label("Site Description"),
+	}))
+	.access({
+		read: true, // expose to anonymous frontend requests
+	})
+	.admin(({ c }) => ({
+		label: "Site Settings",
+		icon: c.icon("ph:gear"),
+	}))
+	.form(({ v, f }) =>
+		v.globalForm({
+			fields: [f.siteName, f.description],
+		}),
+	);
 
 // Full options, timestamps, versioning, scoped, under "Builder API" below.
 ```
@@ -54,7 +55,10 @@ questpie push       # create the table (dev), or migrate:create for prod
 ```
 
 <Callout type="info" title="Import from `#questpie/factories`, not `questpie`">
-  Import `global` from **`#questpie/factories`**, not from `questpie` directly. The generated factory injects your module field types (`richText`, `blocks`, …) into `f`. A plain `global()` from the package only sees builtin field types.
+	Import `global` from **`#questpie/factories`**, not from `questpie` directly.
+	The generated factory injects your module field types (`richText`, `blocks`,
+	…) into `f`. A plain `global()` from the package only sees builtin field
+	types.
 </Callout>
 
 ## Reading and writing
@@ -78,15 +82,21 @@ console.log(settings.siteName);
 
 ```ts
 const settings = await app.globals.siteSettings.get(
-  { with: { logo: true }, locale: "sk" },
-  { accessMode: "user", session }, // CRUDContext, enforces .access() rules
+	{ with: { logo: true }, locale: "sk" },
+	{ accessMode: "user", session }, // CRUDContext, enforces .access() rules
 );
 ```
 
 `GlobalGetOptions` accepts `with` for relations, `columns` for partial selection, `locale`, `localeFallback`, and workflow `stage`. Singleton reads return that one scoped row, so filtering and pagination options belong to collection queries.
 
-<Callout type="warn" title="`get()` returns `null` until the row exists, and `.default()` does not change that">
-  A global has no row until something writes it: a seed, an admin save, or an `update()`. Field `.default(...)` values describe the **admin form's initial state**, not a database default, they are *not* auto-inserted on first read. Always handle `null` on the first read (or seed the global at boot).
+<Callout
+	type="warn"
+	title="`get()` returns `null` until the row exists, and `.default()` does not change that"
+>
+	A global has no row until something writes it: a seed, an admin save, or an
+	`update()`. Field `.default(...)` values describe the **admin form's initial
+	state**, not a database default, they are *not* auto-inserted on first read.
+	Always handle `null` on the first read (or seed the global at boot).
 </Callout>
 
 ### update(data, context?, options?)
@@ -95,8 +105,8 @@ const settings = await app.globals.siteSettings.get(
 import { app } from "#questpie";
 
 const updated = await app.globals.siteSettings.update({
-  siteName: "QUESTPIE",
-  description: "Server-first TypeScript CMS",
+	siteName: "QUESTPIE",
+	description: "Server-first TypeScript CMS",
 });
 //    ^? { id: string; siteName: string; description: string | null;
 //         createdAt: Date; updatedAt: Date }
@@ -111,8 +121,14 @@ On the server, `update(data, context, options)` takes the patch **first**, then 
 To write per-locale content, pass a locale-bound context (or the `locale` option) and call `update()` once per locale:
 
 ```ts
-await app.globals.siteSettings.update({ tagline: "Sharp cuts, every time" }, { accessMode: "system", locale: "en" });
-await app.globals.siteSettings.update({ tagline: "Ostré strihy, vždy" }, { accessMode: "system", locale: "sk" });
+await app.globals.siteSettings.update(
+	{ tagline: "Sharp cuts, every time" },
+	{ accessMode: "system", locale: "en" },
+);
+await app.globals.siteSettings.update(
+	{ tagline: "Ostré strihy, vždy" },
+	{ accessMode: "system", locale: "sk" },
+);
 ```
 
 ### Versions and workflow
@@ -133,7 +149,8 @@ await app.globals.siteSettings.transitionStage({ stage: "published" });
 `transitionStage()` exists only on workflow-enabled globals; its `scheduledAt` param schedules the transition for a future date instead of running it now (`GlobalTransitionStageParams`). `revertToVersion()` accepts `{ version }`, `{ versionId }`, or `{ id }` (`GlobalRevertVersionOptions`).
 
 <Callout type="info" title="`GlobalVersionRecord` has no `versionStage`">
-  A collection's version record carries the workflow stage; a global's does not, read the current stage via the `stage` option on `get()` instead.
+	A collection's version record carries the workflow stage; a global's does not,
+	read the current stage via the `stage` option on `get()` instead.
 </Callout>
 
 ### From the typed client
@@ -142,7 +159,10 @@ The typed client exposes the same global over HTTP at `client.globals.<name>`. C
 
 ```ts
 // update(data, options?), NO context arg on the client
-const settings = await client.globals.siteSettings.update({ siteName: "QUESTPIE" }, { with: { logo: true } });
+const settings = await client.globals.siteSettings.update(
+	{ siteName: "QUESTPIE" },
+	{ with: { logo: true } },
+);
 
 const schema = await client.globals.siteSettings.schema(); // full introspection
 const meta = await client.globals.siteSettings.meta(); // timestamps/versioning/localized
@@ -155,7 +175,9 @@ The `GlobalAPI` client surface is `get`, `update`, `schema`, `meta`, `findVersio
 `global(name)` returns a `GlobalBuilder`. Every method returns the builder, so you chain them and export the result, **codegen calls `.build()` for you**; you never call it yourself in app code.
 
 <Callout type="info" title="Method order does not matter">
-  `.fields()`, `.options()`, `.access()`, `.hooks()`, `.admin()`, and `.form()` can appear in any order. The barbershop example places `.options()` and `.access()` last; the quick start places them first. Both are valid.
+	`.fields()`, `.options()`, `.access()`, `.hooks()`, `.admin()`, and `.form()`
+	can appear in any order. The barbershop example places `.options()` and
+	`.access()` last; the quick start places them first. Both are valid.
 </Callout>
 
 ### `.fields(({ f }) => ({ ... }))`
@@ -164,16 +186,16 @@ Define the global's fields with the field builder. **Cumulative + override-by-ke
 
 ```ts
 global("site_settings").fields(({ f }) => ({
-  siteName: f.text().required(),
-  contactEmail: f.email(),
-  tagline: f.text().localized(), // per-locale value
-  logo: f.upload({ to: "assets" }), // relation to an upload collection
-  navigation: f
-    .object({
-      label: f.text().required(),
-      href: f.text().required(),
-    })
-    .array(), // repeatable nested objects
+	siteName: f.text().required(),
+	contactEmail: f.email(),
+	tagline: f.text().localized(), // per-locale value
+	logo: f.upload({ to: "assets" }), // relation to an upload collection
+	navigation: f
+		.object({
+			label: f.text().required(),
+			href: f.text().required(),
+		})
+		.array(), // repeatable nested objects
 }));
 ```
 
@@ -280,10 +302,10 @@ Set `versioning: true` to snapshot every update into a `<name>_versions` table, 
 
 ```ts
 const siteSettings = global("site_settings")
-  .fields(({ f }) => ({ siteName: f.text().required() }))
-  .options({
-    versioning: { workflow: true }, // stages: ['draft', 'published']
-  });
+	.fields(({ f }) => ({ siteName: f.text().required() }))
+	.options({
+		versioning: { workflow: true }, // stages: ['draft', 'published']
+	});
 ```
 
 Enabling `workflow` adds `transitionStage()`, `beforeTransition`/`afterTransition` hooks, and an `access.transition` rule, and writes a version snapshot at each stage change. Read a specific stage with the `stage` option on `get()`. The publishing model is shared with collections.
@@ -298,22 +320,24 @@ A plain global is one row for the whole app. `scoped` makes it one row **per sco
 
 ```ts
 const propertySettings = global("property_settings")
-  .options({
-    scoped: (ctx) => ctx.propertyId, // from a context extension
-  })
-  .fields(({ f }) => ({
-    welcomeMessage: f.text(),
-    theme: f.select([
-      { value: "light", label: "Light" },
-      { value: "dark", label: "Dark" },
-    ]),
-  }));
+	.options({
+		scoped: (ctx) => ctx.propertyId, // from a context extension
+	})
+	.fields(({ f }) => ({
+		welcomeMessage: f.text(),
+		theme: f.select([
+			{ value: "light", label: "Light" },
+			{ value: "dark", label: "Dark" },
+		]),
+	}));
 ```
 
 Behind the scenes a nullable `scope_id` column and a unique `<name>_scope_idx` index are added (and `scope_id` is carried into the versions table too). `get()` and `update()` then read and write the row for whatever scope the context resolves to, you call them exactly as before; **the scope is selected from context, not passed as an argument**. Wiring `ctx.propertyId` is covered under multi-tenancy.
 
 <Callout type="info" title="The resolver may return `null`/`undefined`">
-  When it does, the global resolves the unscoped (null-scope) row, useful for a shared default across tenants. The resolver runs per request, so it sees the same context your hooks and access rules see.
+	When it does, the global resolves the unscoped (null-scope) row, useful for a
+	shared default across tenants. The resolver runs per request, so it sees the
+	same context your hooks and access rules see.
 </Callout>
 
 ### What gets generated

@@ -41,7 +41,6 @@
 		"zod": "^4.2.1"
 	},
 	"devDependencies": {
-		"bun-types": "latest",
 		"@iconify/json": ">=2",
 		"@questpie/vite-plugin-iconify": "workspace:*",
 		"@tanstack/devtools-vite": "^0.3.11",
@@ -49,6 +48,7 @@
 		"@types/react": "^19.2.0",
 		"@types/react-dom": "^19.2.0",
 		"@vitejs/plugin-react": "^5.0.4",
+		"bun-types": "latest",
 		"typescript": "^5.7.2",
 		"vite": "^7.1.7",
 		"vite-tsconfig-paths": "^5.1.4"

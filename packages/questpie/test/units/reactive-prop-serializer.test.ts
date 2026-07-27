@@ -77,9 +77,9 @@ describe("isReactivePropPlaceholder", () => {
 	});
 
 	it("returns true only for the exact `~reactive: prop` discriminator", () => {
-		expect(
-			isReactivePropPlaceholder({ "~reactive": "prop", watch: [] }),
-		).toBe(true);
+		expect(isReactivePropPlaceholder({ "~reactive": "prop", watch: [] })).toBe(
+			true,
+		);
 		// Wrong discriminator value
 		expect(
 			isReactivePropPlaceholder({ "~reactive": "compute", watch: [] }),

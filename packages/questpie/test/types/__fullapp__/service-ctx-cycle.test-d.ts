@@ -30,13 +30,11 @@
  *   (b) the `ctx.services` surface as seen INSIDE the inferred-return service.
  */
 import "./.generated/factories.js";
+import type { NoAny } from "../_assert.js";
+import type { Equal, Expect, HasKey } from "../type-test-utils.js";
 import type { AppServices } from "./.generated/index.js";
-
 import { analyticsService } from "./services/analytics.js";
 import { reportingService } from "./services/reporting.js";
-
-import type { Equal, Expect, HasKey } from "../type-test-utils.js";
-import type { NoAny } from "../_assert.js";
 
 // ── (a) The composed services fold resolves (no TS2456 degradation) ─────────
 // AppServices must carry BOTH the inferred-return cycle-trigger (`analytics`)
@@ -50,7 +48,9 @@ type _reportingNotAny = Expect<NoAny<AppServices["reporting"]>>;
 type _analyticsInstance = AppServices["analytics"];
 type _analyticsHasCrossRef = Expect<HasKey<_analyticsInstance, "crossRef">>;
 type _analyticsHasPeek = Expect<HasKey<_analyticsInstance, "peek">>;
-type _analyticsLabelExact = Expect<Equal<_analyticsInstance["label"], "analytics">>;
+type _analyticsLabelExact = Expect<
+	Equal<_analyticsInstance["label"], "analytics">
+>;
 // The eager cross-property `crossRef` is the REAL reporting instance, not `any`.
 type _analyticsCrossRefNotAny = Expect<NoAny<_analyticsInstance["crossRef"]>>;
 type _analyticsCrossRefHasMethod = Expect<
@@ -74,13 +74,17 @@ type _ctxServicesHasAnalytics = Expect<
 
 // ctx.services.reporting (cross) is the REAL instance — NoAny + carries its
 // method (would be `any`/error under the degraded TS2538 ctx.services).
-type _ctxReportingNotAny = Expect<NoAny<AnalyticsCreateCtx["services"]["reporting"]>>;
+type _ctxReportingNotAny = Expect<
+	NoAny<AnalyticsCreateCtx["services"]["reporting"]>
+>;
 type _ctxReportingHasMethod = Expect<
 	HasKey<AnalyticsCreateCtx["services"]["reporting"], "countArticles">
 >;
 
 // ctx.services.analytics (self) is the REAL instance — NoAny + carries `peek`.
-type _ctxAnalyticsNotAny = Expect<NoAny<AnalyticsCreateCtx["services"]["analytics"]>>;
+type _ctxAnalyticsNotAny = Expect<
+	NoAny<AnalyticsCreateCtx["services"]["analytics"]>
+>;
 type _ctxAnalyticsHasPeek = Expect<
 	HasKey<AnalyticsCreateCtx["services"]["analytics"], "peek">
 >;

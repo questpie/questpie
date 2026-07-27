@@ -3,13 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-import {
-	Eyebrow,
-	LIcon,
-	Reveal,
-	Section,
-	SectionHeading,
-} from "./primitives";
+import { Eyebrow, LIcon, Reveal, Section, SectionHeading } from "./primitives";
 import { smoothScrollNavigate } from "./shared-nav";
 
 const AP_ACCENT = "var(--pillar-autopilot)";
@@ -37,8 +31,12 @@ const BUILDER_MESSAGES: Array<{
 	},
 	{
 		who: "agent",
-		text: 'Added a Team section with three columns and image placeholders. Hooked to the `team` collection so you can edit in admin.',
-		diff: ["+ <TeamSection/>", "+ collections/team.ts (3 rows)", "+ image slots"],
+		text: "Added a Team section with three columns and image placeholders. Hooked to the `team` collection so you can edit in admin.",
+		diff: [
+			"+ <TeamSection/>",
+			"+ collections/team.ts (3 rows)",
+			"+ image slots",
+		],
 	},
 ];
 
@@ -441,8 +439,7 @@ function BuilderPreview() {
 							fontSize: 10,
 							padding: "2px 8px",
 							borderRadius: 4,
-							background:
-								"color-mix(in srgb, var(--success) 12%, transparent)",
+							background: "color-mix(in srgb, var(--success) 12%, transparent)",
 							color: "var(--success)",
 							border:
 								"1px solid color-mix(in srgb, var(--success) 28%, transparent)",
@@ -598,9 +595,7 @@ export function IntegrationsSection() {
 									gap: 8,
 								}}
 							>
-								<div
-									style={{ display: "flex", alignItems: "center", gap: 10 }}
-								>
+								<div style={{ display: "flex", alignItems: "center", gap: 10 }}>
 									<LIcon
 										name={it.icon}
 										size={15}
@@ -754,9 +749,7 @@ export function PacksSection() {
 							>
 								{p.desc}
 							</p>
-							<div
-								style={{ display: "flex", flexWrap: "wrap", gap: 6 }}
-							>
+							<div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
 								{p.items.map((it) => (
 									<span
 										key={it}
@@ -869,10 +862,7 @@ export function RuntimeMCPSection() {
 							}}
 						>
 							<div>
-								<div
-									className="landing-eyebrow"
-									style={{ marginBottom: 4 }}
-								>
+								<div className="landing-eyebrow" style={{ marginBottom: 4 }}>
 									Providers
 								</div>
 								<div
@@ -948,9 +938,7 @@ export function RuntimeMCPSection() {
 											style={{
 												marginTop: 4,
 												fontSize: 10,
-												color: active
-													? AP_ACCENT
-													: "var(--foreground-subtle)",
+												color: active ? AP_ACCENT : "var(--foreground-subtle)",
 												letterSpacing: "0.04em",
 												textTransform: "uppercase",
 											}}
@@ -988,10 +976,7 @@ export function RuntimeMCPSection() {
 							}}
 						>
 							<div>
-								<div
-									className="landing-eyebrow"
-									style={{ marginBottom: 4 }}
-								>
+								<div className="landing-eyebrow" style={{ marginBottom: 4 }}>
 									MCP
 								</div>
 								<div
@@ -1034,8 +1019,7 @@ export function RuntimeMCPSection() {
 								write, delete
 							</div>
 							<div style={{ paddingLeft: 14 }}>
-								<span style={{ color: AP_ACCENT }}>schedules</span>: read,
-								write
+								<span style={{ color: AP_ACCENT }}>schedules</span>: read, write
 							</div>
 							<div
 								style={{
@@ -1231,10 +1215,7 @@ function QapTui() {
 						/>
 					))}
 				</div>
-				<span
-					className="landing-mono"
-					style={{ fontSize: 11, color: "#666" }}
-				>
+				<span className="landing-mono" style={{ fontSize: 11, color: "#666" }}>
 					~/dev/marekstreet · autopilot
 				</span>
 				<span
@@ -1362,7 +1343,9 @@ export function OpenSourceSection() {
 							}}
 						>
 							<a
-								className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+								className={cn(
+									buttonVariants({ variant: "outline", size: "sm" }),
+								)}
 								href="https://github.com/questpie/questpie"
 								target="_blank"
 								rel="noreferrer"

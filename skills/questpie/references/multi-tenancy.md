@@ -1,6 +1,7 @@
 ---
 name: questpie-core-multi-tenancy
-description: QUESTPIE multi-tenant scope context resolver header-based tenant isolation appConfig context ScopeProvider ScopePicker request-scoped derived context data filtering access control workspace organization property
+description:
+  QUESTPIE multi-tenant scope context resolver header-based tenant isolation appConfig context ScopeProvider ScopePicker request-scoped derived context data filtering access control workspace organization property
   - questpie-core
   - questpie-core-rules
   - questpie-core-business-logic
@@ -87,18 +88,18 @@ export default appConfig({
 
 The resolver receives the base request params plus the full system-mode service surface (typed via codegen, `Questpie.ContextResolverContext`):
 
-| Parameter     | Type                        | Description                                      |
-| ------------- | --------------------------- | ------------------------------------------------ |
-| `request`     | `Request`                   | The incoming HTTP request (Web API)              |
-| `session`     | `{ user, session } \| null` | Resolved auth session (null if unauthenticated)  |
-| `db`          | `Database`                  | Raw database client                              |
-| `collections` | `CollectionsAPI`            | Typed collections (system mode, hooks/i18n run)  |
-| `globals`     | `GlobalsAPI`                | Typed globals                                    |
-| `logger`      | `LoggerService`             | App logger                                       |
-| `kv`          | `KVService`                 | Key-value store                                  |
-| `queue`       | `QueueClient`               | Queue client                                     |
-| `t`           | `(key, params?) => string`  | Translations                                     |
-| `services`    |                             | User services from `services/`                   |
+| Parameter     | Type                        | Description                                     |
+| ------------- | --------------------------- | ----------------------------------------------- |
+| `request`     | `Request`                   | The incoming HTTP request (Web API)             |
+| `session`     | `{ user, session } \| null` | Resolved auth session (null if unauthenticated) |
+| `db`          | `Database`                  | Raw database client                             |
+| `collections` | `CollectionsAPI`            | Typed collections (system mode, hooks/i18n run) |
+| `globals`     | `GlobalsAPI`                | Typed globals                                   |
+| `logger`      | `LoggerService`             | App logger                                      |
+| `kv`          | `KVService`                 | Key-value store                                 |
+| `queue`       | `QueueClient`               | Queue client                                    |
+| `t`           | `(key, params?) => string`  | Translations                                    |
+| `services`    |                             | User services from `services/`                  |
 
 ### Lifecycle Rules
 
@@ -245,11 +246,11 @@ A dropdown for selecting the current scope. Render it into the sidebar through t
 
 | Prop          | Type                           | Default       | Description                                |
 | ------------- | ------------------------------ | ------------- | ------------------------------------------ |
-| `collection`  | `string`                       | none | Collection to fetch options from           |
+| `collection`  | `string`                       | none          | Collection to fetch options from           |
 | `labelField`  | `string`                       | `"name"`      | Field to display as label                  |
 | `valueField`  | `string`                       | `"id"`        | Field to use as value                      |
-| `options`     | `ScopeOption[]`                | none | Static options (alternative to collection) |
-| `loadOptions` | `() => Promise<ScopeOption[]>` | none | Async options loader                       |
+| `options`     | `ScopeOption[]`                | none          | Static options (alternative to collection) |
+| `loadOptions` | `() => Promise<ScopeOption[]>` | none          | Async options loader                       |
 | `placeholder` | `string`                       | `"Select..."` | Placeholder text                           |
 | `allowClear`  | `boolean`                      | `false`       | Show "All" option to clear scope           |
 | `clearText`   | `string`                       | `"All"`       | Label for the clear option                 |
@@ -316,10 +317,10 @@ Extensions arrive **flat** on rule and hook contexts. There is no `ctx` sub-obje
 
 ```ts
 // WRONG, there is no ctx wrapper
-read: ({ ctx }) => ({ workspace: ctx.workspaceId })
+read: ({ ctx }) => ({ workspace: ctx.workspaceId });
 
 // RIGHT, destructure flat
-read: ({ workspaceId }) => (workspaceId ? { workspace: workspaceId } : false)
+read: ({ workspaceId }) => (workspaceId ? { workspace: workspaceId } : false);
 ```
 
 ### HIGH: Not filtering in access rules

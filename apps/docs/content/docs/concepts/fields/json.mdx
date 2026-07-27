@@ -22,8 +22,8 @@ Use `f.json()` inside a `.fields()` callback. It takes an optional config object
 import { collection } from "#questpie/factories";
 
 export const posts = collection("posts").fields(({ f }) => ({
-  metadata: f.json(), // jsonb, any JSON value
-  settings: f.json<{ theme: "light" | "dark" }>(), // typed, schema-less
+	metadata: f.json(), // jsonb, any JSON value
+	settings: f.json<{ theme: "light" | "dark" }>(), // typed, schema-less
 }));
 ```
 
@@ -60,16 +60,16 @@ The type argument on `f.json<T>()` is shorthand for `.$type<T>()`, both are type
 import { z } from "zod";
 
 collection("users").fields(({ f }) => ({
-  // Typed AND validated: TS knows the shape; Zod enforces it on write.
-  preferences: f
-    .json<{ theme: "light" | "dark"; density: number }>()
-    .zod(() =>
-      z.object({
-        theme: z.enum(["light", "dark"]),
-        density: z.number().int().min(1).max(5),
-      }),
-    )
-    .required(),
+	// Typed AND validated: TS knows the shape; Zod enforces it on write.
+	preferences: f
+		.json<{ theme: "light" | "dark"; density: number }>()
+		.zod(() =>
+			z.object({
+				theme: z.enum(["light", "dark"]),
+				density: z.number().int().min(1).max(5),
+			}),
+		)
+		.required(),
 }));
 ```
 
@@ -90,12 +90,12 @@ collection("users").fields(({ f }) => ({
 ```ts
 // Rows whose settings exactly match this value
 const { docs } = await app.collections.posts.find({
-  where: { settings: { eq: { theme: "dark" } } },
+	where: { settings: { eq: { theme: "dark" } } },
 });
 
 // Rows where metadata was never set
 const { docs: unset } = await app.collections.posts.find({
-  where: { metadata: { isNull: true } },
+	where: { metadata: { isNull: true } },
 });
 ```
 
@@ -127,8 +127,8 @@ An untyped `f.json()` contributes the loose `JsonValue` union to the generated r
 
 ```ts
 export const posts = collection("posts").fields(({ f }) => ({
-  settings: f.json<{ theme: "light" | "dark" }>(),
-  metadata: f.json(),
+	settings: f.json<{ theme: "light" | "dark" }>(),
+	metadata: f.json(),
 }));
 
 type Post = typeof posts.$infer.select;

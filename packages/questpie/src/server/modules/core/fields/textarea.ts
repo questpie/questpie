@@ -41,20 +41,27 @@ export interface TextareaFieldMethods {
  * bio: f.textarea().label({ en: "Biography" })
  * ```
  */
-export function textarea(): FieldWithMethods<TextareaFieldState, TextareaFieldMethods> {
-	return wrapFieldComplete(field<TextareaFieldState>({
-		type: "textarea",
-		columnFactory: (name) => pgText(name),
-		schemaFactory: () => z.string(),
-		operatorSet: stringOps,
-		notNull: false,
-		hasDefault: false,
-		localized: false,
-		virtual: false,
-		input: true,
-		output: true,
-		isArray: false,
-	}), textareaFieldType.methods, {}) as any;
+export function textarea(): FieldWithMethods<
+	TextareaFieldState,
+	TextareaFieldMethods
+> {
+	return wrapFieldComplete(
+		field<TextareaFieldState>({
+			type: "textarea",
+			columnFactory: (name) => pgText(name),
+			schemaFactory: () => z.string(),
+			operatorSet: stringOps,
+			notNull: false,
+			hasDefault: false,
+			localized: false,
+			virtual: false,
+			input: true,
+			output: true,
+			isArray: false,
+		}),
+		textareaFieldType.methods,
+		{},
+	) as any;
 }
 
 // Re-export Field to avoid missing import in return type

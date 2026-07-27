@@ -27,13 +27,16 @@ import { SmtpAdapter } from "questpie/adapters/smtp";
 import { env } from "@/lib/env.js";
 
 export default runtimeConfig({
-  app: { url: env.APP_URL },
-  db: { url: env.DATABASE_URL },
-  email: {
-    // The provider that delivers mail. Pick exactly one.
-    adapter: env.NODE_ENV === "production" ? new SmtpAdapter({ transport: env.SMTP_URL }) : new ConsoleAdapter(),
-    defaults: { from: "no-reply@example.com" }, // fallback From for every message
-  },
+	app: { url: env.APP_URL },
+	db: { url: env.DATABASE_URL },
+	email: {
+		// The provider that delivers mail. Pick exactly one.
+		adapter:
+			env.NODE_ENV === "production"
+				? new SmtpAdapter({ transport: env.SMTP_URL })
+				: new ConsoleAdapter(),
+		defaults: { from: "no-reply@example.com" }, // fallback From for every message
+	},
 });
 ```
 
@@ -49,7 +52,7 @@ Every adapter extends one tiny abstract class:
 
 ```ts
 abstract class MailAdapter {
-  abstract send(options: SerializableMailOptions): Promise<void>;
+	abstract send(options: SerializableMailOptions): Promise<void>;
 }
 ```
 
@@ -57,20 +60,20 @@ By the time `send` is called, the mailer has already **serialized** the message:
 
 ```ts
 type SerializableMailOptions = {
-  from: string; // present + non-empty (defaulted at serialize)
-  to: string | string[];
-  cc?: string | string[];
-  bcc?: string | string[];
-  subject: string;
-  text: string; // present (derived from html if absent); may be "" if html was provided
-  html: string; // present; may be "" on a text-only send
-  replyTo?: string;
-  headers?: Record<string, string>;
-  attachments?: Array<{
-    filename: string;
-    content: Buffer | string;
-    contentType?: string;
-  }>;
+	from: string; // present + non-empty (defaulted at serialize)
+	to: string | string[];
+	cc?: string | string[];
+	bcc?: string | string[];
+	subject: string;
+	text: string; // present (derived from html if absent); may be "" if html was provided
+	html: string; // present; may be "" on a text-only send
+	replyTo?: string;
+	headers?: Record<string, string>;
+	attachments?: Array<{
+		filename: string;
+		content: Buffer | string;
+		contentType?: string;
+	}>;
 };
 ```
 
@@ -102,12 +105,12 @@ Sends through any SMTP server via [nodemailer](https://nodemailer.com). The gene
 import { SmtpAdapter } from "questpie/adapters/smtp";
 
 new SmtpAdapter({
-  transport: {
-    host: "smtp.example.com",
-    port: 587,
-    secure: false,
-    auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
-  },
+	transport: {
+		host: "smtp.example.com",
+		port: 587,
+		secure: false,
+		auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
+	},
 });
 
 // or pass a connection string:
@@ -129,8 +132,8 @@ new SmtpAdapter({ transport: "smtp://user:pass@smtp.example.com:587" });
 import { createEtherealSmtpAdapter } from "questpie/adapters/smtp";
 
 export default runtimeConfig({
-  // ...
-  email: { adapter: createEtherealSmtpAdapter() }, // returns Promise<SmtpAdapter>
+	// ...
+	email: { adapter: createEtherealSmtpAdapter() }, // returns Promise<SmtpAdapter>
 });
 ```
 
@@ -177,7 +180,9 @@ plunkAdapter({ apiKey: env.PLUNK_SECRET_KEY });
 | `afterSendCallback` | `(response: PlunkSendResponse, options) => void \| Promise<void>` | none                              | Runs with the parsed body after Plunk accepts the email.                           |
 
 <Callout type="warn" title="Plunk rejects CC and BCC">
-  `PlunkAdapter` throws if a message sets `cc` or `bcc`, Plunk's transactional API doesn't document those fields. It also treats a `success: false` body as an error even on an HTTP 2xx response. If you need CC/BCC, use SMTP or Resend.
+	`PlunkAdapter` throws if a message sets `cc` or `bcc`, Plunk's transactional
+	API doesn't document those fields. It also treats a `success: false` body as
+	an error even on an HTTP 2xx response. If you need CC/BCC, use SMTP or Resend.
 </Callout>
 
 ## Choosing an adapter
@@ -211,30 +216,32 @@ import { MailAdapter } from "questpie/mailer";
 import type { SerializableMailOptions } from "questpie/mailer";
 
 export class MyMailAdapter extends MailAdapter {
-  constructor(private apiKey: string) {
-    super();
-  }
+	constructor(private apiKey: string) {
+		super();
+	}
 
-  async send(options: SerializableMailOptions): Promise<void> {
-    const res = await fetch("https://mail.example.com/send", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: options.from, // already defaulted (non-empty)
-        to: options.to,
-        subject: options.subject,
-        text: options.text, // present; may be "" if only html was sent
-        html: options.html, // present; may be "" on a text-only send
-      }),
-    });
+	async send(options: SerializableMailOptions): Promise<void> {
+		const res = await fetch("https://mail.example.com/send", {
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${this.apiKey}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				from: options.from, // already defaulted (non-empty)
+				to: options.to,
+				subject: options.subject,
+				text: options.text, // present; may be "" if only html was sent
+				html: options.html, // present; may be "" on a text-only send
+			}),
+		});
 
-    if (!res.ok) {
-      throw new Error(`Mail provider error (${res.status}): ${await res.text()}`);
-    }
-  }
+		if (!res.ok) {
+			throw new Error(
+				`Mail provider error (${res.status}): ${await res.text()}`,
+			);
+		}
+	}
 }
 ```
 
@@ -244,8 +251,8 @@ Then set it in config, same slot as any built-in adapter:
 import { MyMailAdapter } from "@/questpie/server/lib/my-mail-adapter.js";
 
 export default runtimeConfig({
-  // ...
-  email: { adapter: new MyMailAdapter(env.MAIL_API_KEY) },
+	// ...
+	email: { adapter: new MyMailAdapter(env.MAIL_API_KEY) },
 });
 ```
 
@@ -259,10 +266,19 @@ Import the adapter base class and the contract type from `questpie/mailer`; impo
 import { MailAdapter } from "questpie/mailer";
 import type { SerializableMailOptions, MailerConfig } from "questpie/mailer";
 
-import { ConsoleAdapter, type ConsoleAdapterOptions } from "questpie/adapters/console";
+import {
+	ConsoleAdapter,
+	type ConsoleAdapterOptions,
+} from "questpie/adapters/console";
 import { SmtpAdapter, type SmtpAdapterOptions } from "questpie/adapters/smtp";
-import { resendAdapter, type ResendAdapterOptions } from "questpie/adapters/resend";
-import { plunkAdapter, type PlunkAdapterOptions } from "questpie/adapters/plunk";
+import {
+	resendAdapter,
+	type ResendAdapterOptions,
+} from "questpie/adapters/resend";
+import {
+	plunkAdapter,
+	type PlunkAdapterOptions,
+} from "questpie/adapters/plunk";
 ```
 
 ## Related

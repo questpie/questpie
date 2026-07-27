@@ -73,9 +73,15 @@ describe("RequestScope (QUE-255)", () => {
 		scope.getOrCreate("c", () => "instanceC");
 
 		const disposers = new Map<string, (i: unknown) => void>();
-		disposers.set("a", () => { order.push("a"); });
-		disposers.set("b", () => { order.push("b"); });
-		disposers.set("c", () => { order.push("c"); });
+		disposers.set("a", () => {
+			order.push("a");
+		});
+		disposers.set("b", () => {
+			order.push("b");
+		});
+		disposers.set("c", () => {
+			order.push("c");
+		});
 
 		await scope.dispose(disposers);
 

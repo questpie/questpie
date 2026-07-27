@@ -192,8 +192,7 @@ function getRichTextOperators(): ContextualOperators {
 
 const markdownOperators = {
 	contains: (col: any, value: any) => sql`${col} ILIKE ${"%" + value + "%"}`,
-	isEmpty: (col: any) =>
-		sql`(${col} IS NULL OR length(trim(${col})) = 0)`,
+	isEmpty: (col: any) => sql`(${col} IS NULL OR length(trim(${col})) = 0)`,
 	isNotEmpty: (col: any) =>
 		sql`(${col} IS NOT NULL AND length(trim(${col})) > 0)`,
 	isNull: (col: any) => isNull(col),
@@ -220,10 +219,10 @@ type RichTextColumn<TMode extends RichTextMode> = TMode extends "markdown"
 
 export type RichTextFieldState<TMode extends RichTextMode = "json"> =
 	DefaultFieldState & {
-	type: "richText";
-	data: RichTextData<TMode>;
-	column: RichTextColumn<TMode>;
-};
+		type: "richText";
+		data: RichTextData<TMode>;
+		column: RichTextColumn<TMode>;
+	};
 
 /**
  * Create a rich text field.
@@ -298,9 +297,9 @@ function createRichTextState(options?: RichTextOptions) {
 }
 
 export function richText(): Field<RichTextFieldState<"json">>;
-export function richText<const TMode extends RichTextMode>(
-	options: { mode: TMode },
-): Field<RichTextFieldState<TMode>>;
+export function richText<const TMode extends RichTextMode>(options: {
+	mode: TMode;
+}): Field<RichTextFieldState<TMode>>;
 export function richText(options?: RichTextOptions): Field<RichTextFieldState> {
 	return field(createRichTextState(options));
 }

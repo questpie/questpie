@@ -48,16 +48,16 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "../../components/ui/tooltip";
+import {
+	adminCollectionKey,
+	getCollectionQueryApi,
+} from "../../hooks/query-access";
 import { useActions } from "../../hooks/use-action";
 import {
 	useCollectionDelete,
 	useCollectionList,
 	useCollectionRestore,
 } from "../../hooks/use-collection";
-import {
-	adminCollectionKey,
-	getCollectionQueryApi,
-} from "../../hooks/query-access";
 import { useCollectionFields } from "../../hooks/use-collection-fields";
 import { useSuspenseCollectionMeta } from "../../hooks/use-collection-meta";
 import { useSessionState } from "../../hooks/use-current-user";
@@ -824,10 +824,8 @@ function ListViewInner({
 	const edgeQueries = useQueries({
 		queries: edgeLevels.map((level) => {
 			return (
-				getCollectionQueryApi(
-					queryOpts,
-					adminCollectionKey(level.collection),
-				).find as any
+				getCollectionQueryApi(queryOpts, adminCollectionKey(level.collection))
+					.find as any
 			)({
 				where: level.where,
 				with: {

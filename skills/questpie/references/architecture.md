@@ -1,6 +1,7 @@
 ---
 name: questpie-core/architecture
-description: QUESTPIE architecture overview tech stack monorepo packages project structure file conventions directory layout codegen discovery export conventions feature-first app bootstrap createApp module merge data flow startup HTTP request admin panel module contribution primitive hierarchy
+description:
+  QUESTPIE architecture overview tech stack monorepo packages project structure file conventions directory layout codegen discovery export conventions feature-first app bootstrap createApp module merge data flow startup HTTP request admin panel module contribution primitive hierarchy
   - questpie-core
 ---
 

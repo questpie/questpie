@@ -137,9 +137,8 @@ describe("Namespace + Lifecycle Projection (QUE-260)", () => {
 				},
 			});
 
-			const { RequestScope } = await import(
-				"../../../src/server/config/request-scope.js"
-			);
+			const { RequestScope } =
+				await import("../../../src/server/config/request-scope.js");
 			const scope = new RequestScope();
 
 			const ctx1 = extractAppServices(setup.app, {

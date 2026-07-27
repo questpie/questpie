@@ -28,13 +28,13 @@
  * REAL composed-app RED→GREEN proof.
  */
 
-import type { Equal, Expect, HasKey, NoAny } from "../_assert.js";
-
-import type { ServiceInstanceOf } from "#questpie/server/services/define-service.js";
 import type {
 	ServiceInstancesInNamespace,
 	ServiceDefinitionsInNamespace,
 } from "#questpie/server/config/codegen-type-utils.js";
+import type { ServiceInstanceOf } from "#questpie/server/services/define-service.js";
+
+import type { Equal, Expect, HasKey, NoAny } from "../_assert.js";
 
 // ============================================================================
 // (a) PRE-CODEGEN ambient seam contract.

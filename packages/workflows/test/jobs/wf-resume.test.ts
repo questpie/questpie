@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+
 import { wfResumeJob } from "../../src/server/modules/workflows/jobs/wf-resume.js";
 import { createJobContext, createMockStores } from "./helpers.js";
 

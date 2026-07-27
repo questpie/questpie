@@ -17,6 +17,7 @@
  */
 
 import { expect } from "bun:test";
+
 import { Validator } from "@seriousme/openapi-schema-validator";
 
 import type { OpenApiSpec, PathOperation } from "../../../openapi/src/types.js";
@@ -113,10 +114,7 @@ export function getOperation(
 /**
  * Assert an operation has a non-empty `summary` (optionally an exact value).
  */
-export function assertHasSummary(
-	op: PathOperation,
-	expected?: string,
-): void {
+export function assertHasSummary(op: PathOperation, expected?: string): void {
 	expect(typeof op.summary).toBe("string");
 	expect((op.summary ?? "").length).toBeGreaterThan(0);
 	if (expected !== undefined) {
@@ -144,10 +142,7 @@ export function assertSecurityInherited(op: PathOperation): void {
  * Assert an operation declares a required `path` parameter with the given name
  * (and, by default, a string schema — matching the generator's path templates).
  */
-export function assertPathParam(
-	op: PathOperation,
-	name: string,
-): void {
+export function assertPathParam(op: PathOperation, name: string): void {
 	const params = (op.parameters ?? []) as Array<Record<string, unknown>>;
 	const param = params.find((p) => p.name === name && p.in === "path");
 	if (!param) {

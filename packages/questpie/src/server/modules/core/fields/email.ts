@@ -43,21 +43,27 @@ export interface EmailFieldMethods {
  * email: f.email().required()
  * ```
  */
-export function email(maxLength = 255): FieldWithMethods<EmailFieldState, EmailFieldMethods> {
-	return wrapFieldComplete(field<EmailFieldState>({
-		type: "email",
-		columnFactory: (name) => varchar(name, { length: maxLength }),
-		schemaFactory: () => z.string().email().max(maxLength),
-		operatorSet: emailOps,
-		notNull: false,
-		hasDefault: false,
-		localized: false,
-		virtual: false,
-		input: true,
-		output: true,
-		isArray: false,
-		maxLength,
-	}), emailFieldType.methods, {}) as any;
+export function email(
+	maxLength = 255,
+): FieldWithMethods<EmailFieldState, EmailFieldMethods> {
+	return wrapFieldComplete(
+		field<EmailFieldState>({
+			type: "email",
+			columnFactory: (name) => varchar(name, { length: maxLength }),
+			schemaFactory: () => z.string().email().max(maxLength),
+			operatorSet: emailOps,
+			notNull: false,
+			hasDefault: false,
+			localized: false,
+			virtual: false,
+			input: true,
+			output: true,
+			isArray: false,
+			maxLength,
+		}),
+		emailFieldType.methods,
+		{},
+	) as any;
 }
 
 import type { Field } from "../../../fields/field-class.js";

@@ -88,10 +88,14 @@ Pass it to `env({ client })`. Server-side, client vars validate under the unpref
 import _envClient from "../env.client";
 import { resolveClientEnv } from "questpie/env-client";
 
-export const env = resolveClientEnv(_envClient, {
-	APP_URL: import.meta.env.VITE_APP_URL,
-	POSTHOG_KEY: import.meta.env.VITE_POSTHOG_KEY,
-}, "vite");
+export const env = resolveClientEnv(
+	_envClient,
+	{
+		APP_URL: import.meta.env.VITE_APP_URL,
+		POSTHOG_KEY: import.meta.env.VITE_POSTHOG_KEY,
+	},
+	"vite",
+);
 export type ClientEnv = typeof env;
 ```
 
@@ -103,8 +107,7 @@ import type { AppConfig } from "#questpie";
 import { env } from "#questpie/env.client.vite";
 
 export const client = createClient<AppConfig>({
-	baseURL:
-		typeof window !== "undefined" ? window.location.origin : env.APP_URL,
+	baseURL: typeof window !== "undefined" ? window.location.origin : env.APP_URL,
 	basePath: "/api",
 });
 ```
@@ -135,10 +138,10 @@ Custom: `{ name: "astro", prefix: "PUBLIC_", envObject: "import.meta.env" }`.
 ## Rules
 
 | Severity | Rule                                                                                                            |
-| -------- | ---------------------------------------------------------------------------------------------------------------- |
-| CRITICAL | No raw `process.env.X` / `process.env.X!` in app/server code, declare in `env.ts`, import `env` from there.      |
-| CRITICAL | Secrets never go in `env.client.ts` vars, everything there ships in client bundles.                              |
-| CRITICAL | Never edit `.generated/env.client.*.ts`, regenerate with `questpie generate`.                                    |
-| HIGH     | Client code never imports `env.ts` (throws), import the generated `env.client.<consumer>` module.                |
-| HIGH     | Set the PREFIXED spelling (`VITE_APP_URL`, `EXPO_PUBLIC_APP_URL`) in frontend build environments (EAS, Vercel).   |
-| MEDIUM   | Devtools-only toggles read by the bundler (e.g. `import.meta.env.DEV`) don't need declaration.                    |
+| -------- | --------------------------------------------------------------------------------------------------------------- |
+| CRITICAL | No raw `process.env.X` / `process.env.X!` in app/server code, declare in `env.ts`, import `env` from there.     |
+| CRITICAL | Secrets never go in `env.client.ts` vars, everything there ships in client bundles.                             |
+| CRITICAL | Never edit `.generated/env.client.*.ts`, regenerate with `questpie generate`.                                   |
+| HIGH     | Client code never imports `env.ts` (throws), import the generated `env.client.<consumer>` module.               |
+| HIGH     | Set the PREFIXED spelling (`VITE_APP_URL`, `EXPO_PUBLIC_APP_URL`) in frontend build environments (EAS, Vercel). |
+| MEDIUM   | Devtools-only toggles read by the bundler (e.g. `import.meta.env.DEV`) don't need declaration.                  |

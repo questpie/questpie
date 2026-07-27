@@ -20,6 +20,8 @@ import type { JsonRouteParams } from "./types.js";
  *   .handler(({ input }) => ({ ok: true }));
  * ```
  */
-export function route<TParams extends JsonRouteParams = JsonRouteParams>(): RouteBuilder<TParams> {
+export function route<
+	TParams extends JsonRouteParams = JsonRouteParams,
+>(): RouteBuilder<TParams> {
 	return new RouteBuilder();
 }

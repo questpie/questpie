@@ -74,11 +74,10 @@ describe("global versioning + workflow", () => {
 				ctx,
 			);
 
-			const result =
-				await setup.app.globals.shorthand_config.transitionStage(
-					{ stage: "published" },
-					ctx,
-				);
+			const result = await setup.app.globals.shorthand_config.transitionStage(
+				{ stage: "published" },
+				ctx,
+			);
 
 			expect(result.siteName).toBe("To Publish");
 
@@ -227,10 +226,7 @@ describe("global versioning + workflow", () => {
 		it("re-publishing updates the published snapshot", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			await setup.app.globals.workflow_config.update(
-				{ siteName: "V1" },
-				ctx,
-			);
+			await setup.app.globals.workflow_config.update({ siteName: "V1" }, ctx);
 
 			// First publish
 			await setup.app.globals.workflow_config.transitionStage(
@@ -245,10 +241,7 @@ describe("global versioning + workflow", () => {
 			expect(published?.siteName).toBe("V1");
 
 			// Update draft
-			await setup.app.globals.workflow_config.update(
-				{ siteName: "V2" },
-				ctx,
-			);
+			await setup.app.globals.workflow_config.update({ siteName: "V2" }, ctx);
 
 			// Published still V1
 			published = await setup.app.globals.workflow_config.get(

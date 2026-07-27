@@ -12,4 +12,3 @@ describe("runtimeConfig", () => {
 		expect(config.realtime).toEqual({});
 	});
 });
-

@@ -186,10 +186,7 @@ export function StatusBadge({
 	tone?: Tone;
 	children: ReactNode;
 }) {
-	const tones: Record<
-		Tone,
-		{ color: string; bg: string; border: string }
-	> = {
+	const tones: Record<Tone, { color: string; bg: string; border: string }> = {
 		neutral: {
 			color: "var(--foreground-muted)",
 			bg: "var(--surface-mid)",
@@ -464,11 +461,7 @@ export function SectionHeading({
 }
 
 /* ---------- Star-on-GitHub callout ---------- */
-export function StarBanner({
-	accent = "var(--primary)",
-}: {
-	accent?: string;
-}) {
+export function StarBanner({ accent = "var(--primary)" }: { accent?: string }) {
 	return (
 		<Section pad="0 24px 24px">
 			<a

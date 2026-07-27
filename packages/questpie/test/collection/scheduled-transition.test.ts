@@ -57,11 +57,10 @@ describe("scheduled transitions", () => {
 
 			const futureDate = new Date(Date.now() + 60_000);
 
-			const result =
-				await setup.app.collections.workflow_posts.transitionStage(
-					{ id: created.id, stage: "published", scheduledAt: futureDate },
-					ctx,
-				);
+			const result = await setup.app.collections.workflow_posts.transitionStage(
+				{ id: created.id, stage: "published", scheduledAt: futureDate },
+				ctx,
+			);
 
 			// Should return the existing record unchanged
 			expect(result.id).toBe(created.id);

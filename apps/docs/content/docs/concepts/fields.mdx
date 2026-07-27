@@ -22,20 +22,24 @@ Fields define the shape of your data. Inside a collection, global, or block you 
 import { collection } from "#questpie/factories";
 
 export const posts = collection("posts").fields(({ f }) => ({
-  title: f.text(255).required(),
-  slug: f.text(255).required().inputOptional(),
-  excerpt: f.textarea(),
-  views: f.number().default(0),
-  published: f.boolean().default(false),
-  publishedAt: f.datetime(),
-  author: f.relation("user").required(),
-  // Full field types + every chain method are documented below.
+	title: f.text(255).required(),
+	slug: f.text(255).required().inputOptional(),
+	excerpt: f.textarea(),
+	views: f.number().default(0),
+	published: f.boolean().default(false),
+	publishedAt: f.datetime(),
+	author: f.relation("user").required(),
+	// Full field types + every chain method are documented below.
 }));
 ```
 
 That gives you a `posts` table with the right columns, a validation schema, typed filters, and an admin form, no migrations to hand-write, no types to declare.
 
-<Callout type="info">`f` is a proxy over the registered field types. Accessing an unknown type throws at build time, `Unknown field type: "x". Available types: …`, so typos surface immediately.</Callout>
+<Callout type="info">
+	`f` is a proxy over the registered field types. Accessing an unknown type
+	throws at build time, `Unknown field type: "x". Available types: …`, so typos
+	surface immediately.
+</Callout>
 
 ## Example → inferred types
 
@@ -43,10 +47,10 @@ Each field flows into the generated collection types. A `notNull` field with no 
 
 ```ts
 const posts = collection("posts").fields(({ f }) => ({
-  title: f.text(255).required(), // required on insert, string on read
-  views: f.number().default(0), // optional on insert (has default)
-  slug: f.text(255).required().inputOptional(), // NOT NULL column, optional input
-  author: f.relation("user").required(), // FK column, required id string
+	title: f.text(255).required(), // required on insert, string on read
+	views: f.number().default(0), // optional on insert (has default)
+	slug: f.text(255).required().inputOptional(), // NOT NULL column, optional input
+	author: f.relation("user").required(), // FK column, required id string
 }));
 
 // After `questpie generate`, the typed client returns rows shaped like:
@@ -106,8 +110,11 @@ website: f.url(),                          // validated z.string().url(), len 20
 For `text`/`textarea`/`email`/`url`, `.min(n)` / `.max(n)` constrain **string length** (they map to `minLength` / `maxLength`). `email` and `url` add `.email()` / `.url()` format validation automatically.
 
 <Callout type="warn">
-  `.trim()`, `.lowercase()`, and `.uppercase()` set runtime state but are **not currently applied to the Zod schema**, `derive-schema.ts` only emits `maxLength` / `minLength` / `pattern` for strings, so these three do not transform or validate the value yet. To normalize input, use a `.zod()` refinement or a field hook
-  instead.
+	`.trim()`, `.lowercase()`, and `.uppercase()` set runtime state but are **not
+	currently applied to the Zod schema**, `derive-schema.ts` only emits
+	`maxLength` / `minLength` / `pattern` for strings, so these three do not
+	transform or validate the value yet. To normalize input, use a `.zod()`
+	refinement or a field hook instead.
 </Callout>
 
 ### Number
@@ -210,7 +217,12 @@ The default form is **belongsTo**: it owns a `varchar(36)` foreign-key column an
 
 The `target` collection name is checked against your registry once codegen runs, so a typo'd target fails to type-check.
 
-<Callout type="info">`.hasMany()`, `.manyToMany()`, `.multiple()` are **transition** methods, they re-shape the field's type state. Chain them early; the order-preserving `.onDelete()` / `.onUpdate()` / `.relationName()` keep whatever state you have accumulated.</Callout>
+<Callout type="info">
+	`.hasMany()`, `.manyToMany()`, `.multiple()` are **transition** methods, they
+	re-shape the field's type state. Chain them early; the order-preserving
+	`.onDelete()` / `.onUpdate()` / `.relationName()` keep whatever state you have
+	accumulated.
+</Callout>
 
 ### Upload
 
@@ -226,7 +238,11 @@ gallery: f.upload({ to: "assets" }).multiple(),  // inline jsonb array of asset 
 
 `upload` is a relation specialised for files, by default it owns a `varchar(36)` FK to the `assets` collection and the admin renders an upload widget (not a relation picker). Setting `through` makes it many-to-many (virtual); `.multiple()` stores an inline `jsonb` array of asset ids.
 
-<Callout type="warn">`mimeTypes` and `maxSize` are captured as admin metadata, **not** enforced as column constraints. They guide the upload UI; enforce hard limits in your storage adapter or a field hook.</Callout>
+<Callout type="warn">
+	`mimeTypes` and `maxSize` are captured as admin metadata, **not** enforced as
+	column constraints. They guide the upload UI; enforce hard limits in your
+	storage adapter or a field hook.
+</Callout>
 
 ### Structured
 
@@ -260,7 +276,9 @@ Keep the QUESTPIE field type and use `.drizzle()` when the field needs column-le
 ```ts
 import { sql } from "drizzle-orm";
 
-const externalId = f.text(255).drizzle((column) => column.$type<`ext_${string}`>());
+const externalId = f
+	.text(255)
+	.drizzle((column) => column.$type<`ext_${string}`>());
 
 const createdAt = f.datetime().drizzle((column) => column.default(sql`now()`));
 ```
@@ -282,7 +300,12 @@ body: f.blocks(),                          // block-based page builder
 
 These two are contributed by `@questpie/admin` and are only on `f` when the admin module is active. `richText` defaults to a TipTap JSON document (`mode: "markdown"` stores a markdown string instead). `blocks` stores a block tree built from your `block(name)` declarations.
 
-<Callout type="info">`f.richText()` and `f.blocks()` exist only when the admin module is registered, they ride in on the generated `f` alongside the 15 core types. Without the admin module, accessing them throws the "Unknown field type" error.</Callout>
+<Callout type="info">
+	`f.richText()` and `f.blocks()` exist only when the admin module is
+	registered, they ride in on the generated `f` alongside the 15 core types.
+	Without the admin module, accessing them throws the "Unknown field type"
+	error.
+</Callout>
 
 ## Shared methods
 
@@ -348,8 +371,11 @@ phone: f.text(50).admin({ placeholder: "+1 (555) 000-0000" }),
 ```
 
 <Callout type="warn">
-  Field `afterRead` hooks (and `f.blocks()`'s built-in afterRead) run output processing that can deadlock Bun SQL if executed inside an already-open transaction, the context-inherited tx connection blocks. Keep heavy afterRead/block hydration outside an open `tx`. See the framework invariant in `CLAUDE.md`
-  (`feedback_save_inside_tx`).
+	Field `afterRead` hooks (and `f.blocks()`'s built-in afterRead) run output
+	processing that can deadlock Bun SQL if executed inside an already-open
+	transaction, the context-inherited tx connection blocks. Keep heavy
+	afterRead/block hydration outside an open `tx`. See the framework invariant in
+	`CLAUDE.md` (`feedback_save_inside_tx`).
 </Callout>
 
 ### Low-level escape hatches
@@ -389,7 +415,12 @@ type PostFilter = CollectionWhere<"posts">; // the typed where clause
 
 If you need the field primitives themselves (building a plugin or a custom field type), they are exported from `questpie` and `questpie/builders`: `Field`, `field`, `fieldType`, `FieldState`, `FieldWithMethods`, the `Extract*Type` helpers, and the reactive types. Admin's `richText` / `blocks` and their state/document types come from `@questpie/admin/fields`.
 
-<Callout type="info">You don't import the field factories (`text`, `relation`, …) directly in app code, they ride in on the destructured `f` inside `.fields()`. Direct factory imports are for library/plugin authors building custom `f` proxies via `createFieldBuilder`.</Callout>
+<Callout type="info">
+	You don't import the field factories (`text`, `relation`, …) directly in app
+	code, they ride in on the destructured `f` inside `.fields()`. Direct factory
+	imports are for library/plugin authors building custom `f` proxies via
+	`createFieldBuilder`.
+</Callout>
 
 ## Related
 

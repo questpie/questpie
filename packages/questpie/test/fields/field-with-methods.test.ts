@@ -5,13 +5,20 @@
  * with the Proxy-based wrapFieldComplete from QUE-263.
  */
 import { describe, expect, it } from "bun:test";
-import { z } from "zod";
+
 import { varchar } from "drizzle-orm/pg-core";
+import { z } from "zod";
 
 import { Field, field } from "../../src/server/fields/field-class.js";
-import { fieldType, wrapFieldComplete } from "../../src/server/fields/field-type.js";
+import {
+	fieldType,
+	wrapFieldComplete,
+} from "../../src/server/fields/field-type.js";
+import type {
+	FieldWithMethods,
+	FieldCommonMethods,
+} from "../../src/server/fields/field-with-methods.js";
 import { stringOps } from "../../src/server/fields/operators/builtin.js";
-import type { FieldWithMethods, FieldCommonMethods } from "../../src/server/fields/field-with-methods.js";
 
 // ============================================================================
 // Test field type for verification

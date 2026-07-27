@@ -536,5 +536,4 @@ describe("adapter route config", () => {
 			void reindexedCollections;
 		});
 	});
-
 });

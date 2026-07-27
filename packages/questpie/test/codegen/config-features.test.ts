@@ -12,11 +12,11 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { extractPluginsFromModules } from "../../src/cli/codegen/extract-plugins.js";
 import {
 	discoverFiles,
 	type DiscoverFilesOptions,
 } from "../../src/cli/codegen/discover.js";
+import { extractPluginsFromModules } from "../../src/cli/codegen/extract-plugins.js";
 import {
 	coreCodegenPlugin,
 	resolveTargetGraph,
@@ -139,11 +139,20 @@ function makeDiscoveryResult(opts: {
  * Build a full DiscoveryResult with all core categories initialized (empty).
  * Useful to avoid the template complaining about missing category maps.
  */
-function makeFullDiscoveryResult(opts: Parameters<typeof makeDiscoveryResult>[0]): DiscoveryResult {
+function makeFullDiscoveryResult(
+	opts: Parameters<typeof makeDiscoveryResult>[0],
+): DiscoveryResult {
 	const result = makeDiscoveryResult(opts);
 	const coreNames = [
-		"collections", "globals", "jobs", "routes", "messages",
-		"services", "emails", "migrations", "seeds",
+		"collections",
+		"globals",
+		"jobs",
+		"routes",
+		"messages",
+		"services",
+		"emails",
+		"migrations",
+		"seeds",
 	];
 	for (const name of coreNames) {
 		if (!result.categories.has(name)) {
@@ -159,19 +168,14 @@ function makeFullDiscoveryResult(opts: Parameters<typeof makeDiscoveryResult>[0]
 
 describe("extractPluginsFromModules", () => {
 	it("returns empty array for modules with no plugins", () => {
-		const modules = [
-			{ name: "mod-a" },
-			{ name: "mod-b" },
-		];
+		const modules = [{ name: "mod-a" }, { name: "mod-b" }];
 		const result = extractPluginsFromModules(modules);
 		expect(result).toEqual([]);
 	});
 
 	it("extracts single plugin from a module", () => {
 		const plugin = { name: "my-plugin", targets: {} };
-		const modules = [
-			{ name: "mod-a", plugin },
-		];
+		const modules = [{ name: "mod-a", plugin }];
 		const result = extractPluginsFromModules(modules);
 		expect(result).toHaveLength(1);
 		expect(result[0]).toBe(plugin);
@@ -185,9 +189,7 @@ describe("extractPluginsFromModules", () => {
 			{
 				name: "parent",
 				plugin: pluginParent,
-				modules: [
-					{ name: "child", plugin: pluginChild },
-				],
+				modules: [{ name: "child", plugin: pluginChild }],
 			},
 		];
 		const result = extractPluginsFromModules(modules);
@@ -198,8 +200,14 @@ describe("extractPluginsFromModules", () => {
 	});
 
 	it("deduplicates plugins by name (first wins)", () => {
-		const plugin1 = { name: "shared-plugin", targets: { server: { root: ".", outputFile: "a.ts" } } };
-		const plugin2 = { name: "shared-plugin", targets: { server: { root: ".", outputFile: "b.ts" } } };
+		const plugin1 = {
+			name: "shared-plugin",
+			targets: { server: { root: ".", outputFile: "a.ts" } },
+		};
+		const plugin2 = {
+			name: "shared-plugin",
+			targets: { server: { root: ".", outputFile: "b.ts" } },
+		};
 		const modules = [
 			{ name: "mod-a", plugin: plugin1 },
 			{ name: "mod-b", plugin: plugin2 },
@@ -213,9 +221,7 @@ describe("extractPluginsFromModules", () => {
 	it("handles array of plugins on a module", () => {
 		const pluginA = { name: "plugin-a", targets: {} };
 		const pluginB = { name: "plugin-b", targets: {} };
-		const modules = [
-			{ name: "mod", plugin: [pluginA, pluginB] },
-		];
+		const modules = [{ name: "mod", plugin: [pluginA, pluginB] }];
 		const result = extractPluginsFromModules(modules);
 		expect(result).toHaveLength(2);
 		expect(result[0].name).toBe("plugin-a");
@@ -323,7 +329,10 @@ describe("discoverFiles — configKey on DiscoverPattern", () => {
 	}
 
 	it("discovers config/app.ts as appConfig single with configKey", async () => {
-		await write("config/app.ts", "export default { locale: {}, access: {}, hooks: {}, context: () => ({}) };");
+		await write(
+			"config/app.ts",
+			"export default { locale: {}, access: {}, hooks: {}, context: () => ({}) };",
+		);
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
 		const appConfig = result.singles.get("appConfig");
@@ -367,7 +376,12 @@ describe("generateTemplate — config bucket emission", () => {
 	it("authConfig with configKey emits into config bucket", () => {
 		const result = makeFullDiscoveryResult({
 			singles: [
-				{ key: "authConfig", varName: "_authConfig", exportType: "default", configKey: "auth" },
+				{
+					key: "authConfig",
+					varName: "_authConfig",
+					exportType: "default",
+					configKey: "auth",
+				},
 			],
 		});
 
@@ -389,7 +403,12 @@ describe("generateTemplate — config bucket emission", () => {
 	it("appConfig with configKey emits as whole object into config bucket", () => {
 		const result = makeFullDiscoveryResult({
 			singles: [
-				{ key: "appConfig", varName: "_appConfig", exportType: "default", configKey: "app" },
+				{
+					key: "appConfig",
+					varName: "_appConfig",
+					exportType: "default",
+					configKey: "app",
+				},
 			],
 		});
 
@@ -409,8 +428,18 @@ describe("generateTemplate — config bucket emission", () => {
 	it("multiple config singles are grouped in a single config bucket", () => {
 		const result = makeFullDiscoveryResult({
 			singles: [
-				{ key: "authConfig", varName: "_authConfig", exportType: "default", configKey: "auth" },
-				{ key: "appConfig", varName: "_appConfig", exportType: "default", configKey: "app" },
+				{
+					key: "authConfig",
+					varName: "_authConfig",
+					exportType: "default",
+					configKey: "auth",
+				},
+				{
+					key: "appConfig",
+					varName: "_appConfig",
+					exportType: "default",
+					configKey: "app",
+				},
 			],
 		});
 
@@ -431,7 +460,12 @@ describe("generateTemplate — config bucket emission", () => {
 	it("non-config singles are emitted as flat keys alongside config bucket", () => {
 		const result = makeFullDiscoveryResult({
 			singles: [
-				{ key: "appConfig", varName: "_appConfig", exportType: "default", configKey: "app" },
+				{
+					key: "appConfig",
+					varName: "_appConfig",
+					exportType: "default",
+					configKey: "app",
+				},
 				{ key: "fields", varName: "_fields", exportType: "default" },
 			],
 		});

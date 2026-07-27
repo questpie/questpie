@@ -50,8 +50,7 @@ describe("Search Schema Integration", () => {
 			name: "mock",
 			dimensions: 1536,
 			model: "mock-model",
-			generate: async (_text: string) =>
-				Array.from({ length: 1536 }, () => 0),
+			generate: async (_text: string) => Array.from({ length: 1536 }, () => 0),
 		};
 
 		const adapter = createPgVectorSearchAdapter({

@@ -28,6 +28,8 @@ export * from "./actions.js";
 // Admin Config Input — composite config/admin.ts type
 // ============================================================================
 
+import type { AdminSidebarMode } from "questpie";
+
 import type { AdminLocaleConfig } from "./common.js";
 import type {
 	DashboardContribution,
@@ -35,7 +37,6 @@ import type {
 	ServerDashboardConfig,
 } from "./dashboard.js";
 import type { ServerAdminShellConfig } from "./shell.js";
-import type { AdminSidebarMode } from "questpie";
 import type { SidebarContribution } from "./sidebar.js";
 
 /**

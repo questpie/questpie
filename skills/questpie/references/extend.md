@@ -1,6 +1,7 @@
 ---
 name: questpie-core/extend
-description: QUESTPIE extensibility, codegen plugins CodegenPlugin CategoryDeclaration CallbackParamDefinition ScaffoldConfig scaffolds, building modules, custom field types field()/fieldType()/from() factory columnFactory schemaFactory operatorSet metadataFactory, custom adapters createFetchHandler Elysia Hono Next.js TanStack Start, type registries FieldTypeRegistry ComponentTypeRegistry ViewKindRegistry declare module augmentation, package distribution tsdown npm publishing changesets
+description:
+  QUESTPIE extensibility, codegen plugins CodegenPlugin CategoryDeclaration CallbackParamDefinition ScaffoldConfig scaffolds, building modules, custom field types field()/fieldType()/from() factory columnFactory schemaFactory operatorSet metadataFactory, custom adapters createFetchHandler Elysia Hono Next.js TanStack Start, type registries FieldTypeRegistry ComponentTypeRegistry ViewKindRegistry declare module augmentation, package distribution tsdown npm publishing changesets
   - questpie-core
 ---
 
@@ -269,18 +270,24 @@ export const notificationsModule = module({
 
 When several modules (and the app) contribute the same key, `createApp()` merges them deterministically, later modules win per entry:
 
-| Key | Strategy |
-| --- | --- |
-| `collections`, `globals`, `jobs`, `routes`, `fields`, `services` | record spread-merge, same key: later wins |
-| `messages` | deep-merge by locale, same message key: later wins |
-| `migrations`, `seeds` | array concatenation |
-| `config.*` (app, auth, admin, plugin config keys) | per-key strategies; `auth`/`admin` deep-merge; unknown keys: incoming replaces existing |
-| anything else | auto-detect: object+object → spread, array+array → concat, otherwise incoming wins |
+| Key                                                              | Strategy                                                                                |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `collections`, `globals`, `jobs`, `routes`, `fields`, `services` | record spread-merge, same key: later wins                                               |
+| `messages`                                                       | deep-merge by locale, same message key: later wins                                      |
+| `migrations`, `seeds`                                            | array concatenation                                                                     |
+| `config.*` (app, auth, admin, plugin config keys)                | per-key strategies; `auth`/`admin` deep-merge; unknown keys: incoming replaces existing |
+| anything else                                                    | auto-detect: object+object → spread, array+array → concat, otherwise incoming wins      |
 
 The merge helpers behind these strategies are exported from `questpie/app` for module authors combining config fragments of their own:
 
 ```ts
-import { lastWins, mergeConcat, mergeDeepConcat, mergeRecord, type MergeFn } from "questpie/app";
+import {
+	lastWins,
+	mergeConcat,
+	mergeDeepConcat,
+	mergeRecord,
+	type MergeFn,
+} from "questpie/app";
 
 mergeRecord(a, b); // { ...a, ...b }
 mergeConcat(a, b); // [...a, ...b]
@@ -352,7 +359,13 @@ The admin renderer is a declarative `field()` definition (not a bare component):
 import { field, type FieldComponentProps } from "@questpie/admin/client";
 
 function ColorField({ value, onChange }: FieldComponentProps<string>) {
-	return <input type="color" value={value ?? "#000000"} onChange={(e) => onChange?.(e.target.value)} />;
+	return (
+		<input
+			type="color"
+			value={value ?? "#000000"}
+			onChange={(e) => onChange?.(e.target.value)}
+		/>
+	);
 }
 
 export default field("color", { component: ColorField });

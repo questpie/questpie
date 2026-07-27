@@ -88,9 +88,7 @@ function DocumentsListing() {
 			) : (
 				<div className="max-w-4xl divide-y rounded-lg border">
 					{documents.map((doc) => {
-						const fileUrl = getUploadUrl(
-							(doc as Record<string, unknown>).file,
-						);
+						const fileUrl = getUploadUrl((doc as Record<string, unknown>).file);
 
 						return (
 							<div

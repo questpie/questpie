@@ -13,11 +13,7 @@ import { z } from "zod";
 import type { PreviewConfig } from "../../../augmentation.js";
 import { hasAdminRole } from "../auth-helpers.js";
 import { translateAdminMessage } from "./i18n-helpers.js";
-import {
-	getApp,
-	getCollectionState,
-	getLocale,
-} from "./route-helpers.js";
+import { getApp, getCollectionState, getLocale } from "./route-helpers.js";
 
 // ============================================================================
 // Token Utilities

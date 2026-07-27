@@ -55,7 +55,12 @@ const GENERATED_DIRS = [
  * rank. A downward edge goes from a HIGHER rank to a LOWER rank; any edge to an
  * equal-or-higher rank is a violation.
  */
-const LAYERS = ["names.gen.ts", "entities.gen.ts", "context.gen.ts", "index.ts"] as const;
+const LAYERS = [
+	"names.gen.ts",
+	"entities.gen.ts",
+	"context.gen.ts",
+	"index.ts",
+] as const;
 type LayerFile = (typeof LAYERS)[number];
 
 const RANK: Record<LayerFile, number> = {
@@ -117,7 +122,11 @@ interface Violation {
 }
 
 /** Build the intra-layer edge set for one generated dir and collect violations. */
-function checkDir(relDir: string): { violations: Violation[]; edges: Array<[number, number]>; present: LayerFile[] } {
+function checkDir(relDir: string): {
+	violations: Violation[];
+	edges: Array<[number, number]>;
+	present: LayerFile[];
+} {
 	const absDir = join(ROOT, relDir);
 	const violations: Violation[] = [];
 	const edges: Array<[number, number]> = [];
@@ -140,7 +149,12 @@ function checkDir(relDir: string): { violations: Violation[]; edges: Array<[numb
 			if (toRank === fromRank) {
 				violations.push({ dir: relDir, from: file, to: target, kind: "self" });
 			} else if (toRank > fromRank) {
-				violations.push({ dir: relDir, from: file, to: target, kind: "upward" });
+				violations.push({
+					dir: relDir,
+					from: file,
+					to: target,
+					kind: "upward",
+				});
 			}
 		}
 	}
@@ -159,7 +173,9 @@ function findCycle(edges: Array<[number, number]>): [number, number] | null {
 		if (!adj.has(a)) adj.set(a, []);
 		adj.get(a)!.push(b);
 	}
-	const WHITE = 0, GRAY = 1, BLACK = 2;
+	const WHITE = 0,
+		GRAY = 1,
+		BLACK = 2;
 	const color = new Map<number, number>();
 	let back: [number, number] | null = null;
 
@@ -208,7 +224,9 @@ for (const relDir of GENERATED_DIRS) {
 	if (cycle) {
 		const [a, b] = cycle;
 		const name = (r: number) => LAYERS[r];
-		console.error(`✗ ${relDir}: import CYCLE detected (${name(a)} → ${name(b)} closes a loop)`);
+		console.error(
+			`✗ ${relDir}: import CYCLE detected (${name(a)} → ${name(b)} closes a loop)`,
+		);
 		failed = true;
 	}
 
@@ -229,7 +247,9 @@ for (const relDir of GENERATED_DIRS) {
 }
 
 if (checkedDirs === 0) {
-	console.error("✗ no generated layer-DAG dirs found — nothing was checked (this is itself a failure)");
+	console.error(
+		"✗ no generated layer-DAG dirs found — nothing was checked (this is itself a failure)",
+	);
 	failed = true;
 }
 
@@ -242,4 +262,6 @@ if (failed) {
 	process.exit(1);
 }
 
-console.log(`\n✓ all ${checkedDirs} generated layer DAGs are one-way + acyclic`);
+console.log(
+	`\n✓ all ${checkedDirs} generated layer DAGs are one-way + acyclic`,
+);
