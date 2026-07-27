@@ -1,5 +1,135 @@
 # questpie
 
+## 3.17.0
+
+### Minor Changes
+
+- [#188](https://github.com/questpie/questpie/pull/188) [`f534369`](https://github.com/questpie/questpie/commit/f53436930137368000294877b5f02ced55b2dbf4) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add collection-wide collaborative aggregates with typed text and set fields.
+
+  - Declare collaborative owners and fields with `.collaborative()` and `.crdt()`, then consume their generated, fully typed client and server APIs.
+  - Synchronize CRDT bytes through bounded Fetch routes while reusing the existing SSE or Pusher realtime session for opaque dirty hints, with no adapter-specific host or second provider connection.
+  - Preserve aggregate-wide atomic transactions, fresh field-level authorization, lifecycle fencing, idempotent retry, offline IndexedDB recovery, and bounded awareness rosters.
+  - Create and resolve bounded opaque text anchors through symmetric typed browser and request-scoped server field APIs, preserving ordinary edits while detaching across field or owner recreation.
+  - Publish Yjs text engines for browser and server use from `@questpie/crdt-yjs`; its worker entry remains private package runtime machinery, and its bounded pool drains and terminates with application shutdown.
+
+- [#183](https://github.com/questpie/questpie/pull/183) [`4be1529`](https://github.com/questpie/questpie/commit/4be15299ffafa8a4808474823815a3dc6d49689d) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Remove the deprecated realtime compatibility layer and make Realtime v2 the only supported contract.
+
+  QUESTPIE currently has no external realtime adopters, so this cleanup ships during
+  the pre-adoption 3.x window as a minor release instead of reserving an otherwise
+  empty 4.0 major solely for the removed compatibility surface.
+
+  - Remove `RealtimeAdapter`, `realtime.adapter`, `realtime.rollout`, the `legacy` and `dual` modes, and the old Postgres, Redis Streams, and Cloudflare realtime adapter entrypoints.
+  - Remove delta control frames and client downgrade behavior. Companion control now requires complete desired topology protocol v2.
+  - Keep `ChangeBroker`, the distributed topology coordinator, structured non-retryable admission errors, and the default `maxFindLimit` of 100 as the supported framework path.
+
+  Upgrade all QUESTPIE realtime clients and servers together within the consolidated
+  3.x minor train. Postgres apps continue to receive the automatic
+  `PgNotifyChangeBroker`; Redis deployments should configure
+  `redisStreamsChangeBroker`.
+
+- [#188](https://github.com/questpie/questpie/pull/188) [`079be69`](https://github.com/questpie/questpie/commit/079be6971f1ff3b8f6aed4a1c8bc0b3182bfcb99) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add a generic, Admin-independent client i18n adapter with strict locale and
+  catalog validation, bounded Intl formatter caches, base-language RTL detection,
+  and separately importable React bindings built on `useSyncExternalStore`.
+
+  Reuse the generic adapter and React bindings inside `@questpie/admin` while
+  preserving its server-fetched catalog compatibility layer.
+
+- [#188](https://github.com/questpie/questpie/pull/188) [`d752314`](https://github.com/questpie/questpie/commit/d75231406e016b0e07f36182fc6dc9dbb1f8b224) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add the Realtime v3 snapshot/delta event contract, opt-in native SSE row deltas,
+  transaction-id reconciliation, TanStack Query delta reduction, and the new
+  TanStack DB collection package.
+
+  - Add collection- and application-level row-live-query policies, bounded
+    server-only subscription scopes and access-equivalence keys, conservative
+    three-valued topic routing, structured classifier diagnostics, high-fanout
+    observability, and deterministic 100k-subscription benchmark scenarios.
+    Unsupported or ambiguous predicates remain candidates; only a proven miss
+    suppresses refresh.
+  - Keep disabled row live queries isolated from collection dependency capture,
+    application channels, CRDT notices, and broker coordination, and reject them
+    before allocating subscription state.
+  - Preserve `Date` identity and exact epoch milliseconds across official typed
+    CRUD, realtime, Channels, replay, presence, TanStack hydration, and
+    reconciliation paths through one versioned exact-path wire contract. Keep
+    `f.date()` as an exact `YYYY-MM-DD` string, require explicit RFC 3339 zones
+    for external datetime input, and emit accurate OpenAPI `date`/`date-time`
+    schemas.
+  - Publish every fixed-group companion against the current Questpie minor train
+    instead of retaining a `^3.16.0` peer floor.
+  - Database startup now enforces QUESTPIE's documented PostgreSQL 15 minimum; the
+    realtime xid8 schema still has its explicit PostgreSQL 13 capability preflight.
+  - Make the existing typed Queue `publish(payload, options)` operation
+    ambient-transaction-aware without adding a public outbox API. pg-boss inserts
+    through the current Drizzle transaction; BullMQ, Cloudflare Queues, and custom
+    external adapters use the framework-owned `questpie_queue_dispatch` ledger
+    with leased crash recovery. Deploy the generated migration before this
+    version.
+  - Add portable `idempotencyKey` and stable logical `dispatchId` metadata,
+    retain adapter-portable idempotency receipts, reject ambiguous
+    `idempotencyKey` + `singletonKey` combinations, explicitly settle pg-boss
+    `runOnce()` jobs, and keep Cloudflare poison or exhausted-retry messages
+    observable for platform failure/DLQ handling. Queue delivery remains
+    at-least-once, and `publish()` now returns the logical dispatch UUID for all
+    built-in adapters instead of an adapter-specific physical id or `null`.
+  - Bound Queue relay recovery to 25 adapter-publication attempts, expose terminal
+    counts and payload-free structured errors through `queue.drain()`, and allow
+    bounded multi-batch recovery through `maxBatches`. pg-boss deployments using
+    a separate database must set `useApplicationTransaction: false`.
+
+- [#188](https://github.com/questpie/questpie/pull/188) [`c1ab1c0`](https://github.com/questpie/questpie/commit/c1ab1c0b8873a66a163effbc31ec431a5d442298) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add a separately authorized physical-purge lifecycle for soft-delete collections.
+
+  - Expose capability-aware `purgeById` server, HTTP, browser client, OpenAPI, and TanStack Query surfaces without adding a force-delete alias.
+  - Require an explicit `purge` access rule, reject active rows, hide denied or missing targets behind the same not-found result, and run dedicated fatal purge hooks transactionally.
+  - Strictly prevalidate purge `AccessWhere` trees so unknown or unsupported leaves, including leaves nested below `NOT`, fail closed.
+  - Block retained collection/global relations and concurrent foreign-key DDL instead of converting soft-delete cascades into destructive cascades. Declared relation writes to a missing registered target now fail with bad request so a writer delayed behind purge cannot commit a dangling reference.
+  - Serialize purge per collection behind a PostgreSQL schema fence, bound relation-lock waits to three seconds, and return a retryable conflict on contention.
+  - Add two mandatory core tables, `questpie_storage_cleanup` and `questpie_storage_object_key`. Every application with upload collections must generate and deploy the migration before its next upload metadata create/key change, even when purge and the durable cleanup worker are not enabled yet.
+  - Preserve upload bytes through soft delete/restore. Replaced upload keys and committed purge now depend on the existing API/queue worker running the durable `storageCleanup` job; provider failures and crashes retain leased retry work. Hard-delete uploads remain post-commit but now use the same reference-aware key fence, and missing provider objects converge without leaking coordination rows.
+  - Reject upload metadata creation or key replacement when the provider object does not exist, with a bounded provider existence check.
+  - Integrate committed purge with audit, realtime, Search, and CRDT retention. Expired CRDT epochs, bindings, and the final retired identity tombstone are removed after the recovery window.
+  - Preserve the original active-row `deletedAt` index and add a partial `(deletedAt, id)` index for bounded retention keysets.
+  - Correct polymorphic relation persistence so public `{ type, id }` values map to both physical discriminator/id columns on create and update, reads and versions restore the public shape, and purge inspects every discriminator. Applications using polymorphic relations must review and deploy the generated schema migration, backfill legacy discriminator/id pairs, and verify that no retained reference has a null discriminator before enabling purge.
+  - Keep framework-derived upload `key`, sanitized `filename`, MIME type, size, and configured visibility authoritative over `additionalData`; validate upload keys against the provider and relation targets against registered rows before writing. These checks add one bounded provider lookup or target-row lock to affected writes.
+  - Make PostgreSQL queue `runOnce()` explicitly complete/fail fetched jobs and settle every fetched sibling before surfacing the first handler error.
+  - Add a bounded high-water/keyset retention recipe, a relation-bearing real PostgreSQL benchmark harness, and a mandatory CI concurrency/key-reuse contract.
+
+- [#188](https://github.com/questpie/questpie/pull/188) [`1a750e0`](https://github.com/questpie/questpie/commit/1a750e02a7c9eea7a52c035b009b78b79742961c) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Harden the starter authentication boundary.
+
+  - Deny user-mode generic CRUD and introspection for Better Auth infrastructure
+    collections while preserving system and Better Auth database operations.
+  - Scope non-admin starter user CRUD to the current profile and reserve
+    identity/authority fields for administrators.
+  - Project only opaque owned session IDs from session listing and resolve them
+    server-side for revocation, so reusable Better Auth bearer tokens never cross
+    the list-sessions wire contract.
+
+- [#188](https://github.com/questpie/questpie/pull/188) [`158ff0c`](https://github.com/questpie/questpie/commit/158ff0c58933a4b498191d99544222af134bea49) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Make upload-byte serving disclosure-safe and fail closed.
+
+  - Compile filtered `serve` access through the canonical collection WHERE engine
+    with full principal, actor, request, locale, and context-extension authority.
+  - Re-check the exact current row, localization joins, relations, and soft-delete
+    state before reading storage.
+  - Return one not-found outcome for denied, absent, deleted, or invalid private
+    signed-URL requests so file keys cannot be used as existence probes.
+
+- [#188](https://github.com/questpie/questpie/pull/188) [`5c4804a`](https://github.com/questpie/questpie/commit/5c4804a8f45a34e3b8f20fc1210c2518f18e6f6a) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Make built-in Search authorization fail closed and capability reporting truthful. Search now requires explicit `.searchable(...)` opt-in, uses one canonical authorized source-row universe for hits, totals, facets, statistics, browse, and semantic ranking, rejects unimplemented hybrid mode, and fails the HTTP response when hydration no longer matches ranked candidates. The default projection is title-only, and hydrated HTTP/client results expose only the relevance score instead of index snapshots that could bypass field access.
+
+### Patch Changes
+
+- [#186](https://github.com/questpie/questpie/pull/186) [`b5c2b78`](https://github.com/questpie/questpie/commit/b5c2b78f274d444a0b63867d262025d2ebd592a9) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Collection engine hardening: transaction-scoped row locks, CRUD refactor, and a function-preserving deep-merge.
+
+  - Add typed transaction-scoped collection row locks for cross-collection invariants.
+  - Refactor the CRUD builder/generator with grouped-find result typing.
+  - Replace `structuredClone` in `deepMerge` with a function-preserving `safeClone`, so app configs that hold callbacks (e.g. Better Auth `sendVerificationEmail`) merge without a `DataCloneError`.
+
+- [#188](https://github.com/questpie/questpie/pull/188) [`875ae8c`](https://github.com/questpie/questpie/commit/875ae8c23fbdebd7e557a86ce4ee19c8c180d9aa) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Harden PostgreSQL realtime coordination and storage.
+
+  - Bound and coalesce topology reconciliation work while exposing terminal reconcile outcomes.
+  - Fence superseded reconnect streams so admission slots cannot leak or be reused to bypass per-principal limits.
+  - Recover pg-notify listeners cleanly after a PostgreSQL connection terminates, and bound serialized NOTIFY work across shutdown.
+  - Store realtime payloads, presence data, and desired topology as native JSONB with Bun SQL.
+  - Replay exact SSE and Pusher topology after reconnect, bound dirty-notice queues with latest-wins reconcile semantics, and fence owner takeover with provider liveness checks.
+  - Route targeted query and collaborative-document invalidations below an 8 KiB framework budget and 128-target cap, leaving serialization headroom beneath the provider's <10 kB ceiling and QUESTPIE's exact 10,000-byte application-event cap; overflow falls back to generic reconcile instead of dropping invalidation or creating a refresh herd.
+
 ## 3.16.0
 
 ### Minor Changes
