@@ -34,6 +34,39 @@
 			"rules": {
 				"typescript/no-explicit-any": "error"
 			}
+		},
+		{
+			// Type-level tests (`.test-d.ts`) assert types, not values. A bare
+			// expression statement under `// @ts-expect-error` IS the assertion —
+			// it exists to make tsc raise an error, and has no runtime purpose.
+			// `no-unused-expressions` cannot see that and flags every one.
+			"files": ["**/*.test-d.ts"],
+			"rules": {
+				"eslint/no-unused-expressions": "off"
+			}
+		},
+		{
+			// `design-system/showcase/**` is the static design-handoff artifact
+			// described in DESIGN.md: `<script type="text/babel">` sources loaded
+			// by design-system.html, not part of any package, build, or bundle.
+			// They read `React` and `window.Icon` off script-tag globals, which
+			// is why `react/jsx-no-undef` fired 47 times — declaring the globals
+			// is the root-cause fix, not suppressing the rule. (`env.browser`
+			// does NOT satisfy jsx-no-undef; only `globals` does.)
+			//
+			// The a11y rules drop to `warn` for these files only: a showcase page
+			// full of `<a href="#">` nav stubs is not a shipped interface. This
+			// override deliberately does NOT extend to `packages/**`, `apps/**`,
+			// or `examples/**` — a11y stays an error in anything users run.
+			"files": ["design-system/showcase/**"],
+			"globals": {
+				"React": "readonly",
+				"window": "readonly"
+			},
+			"rules": {
+				"jsx-a11y/anchor-is-valid": "warn",
+				"jsx-a11y/click-events-have-key-events": "warn"
+			}
 		}
 	]
 }

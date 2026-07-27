@@ -12,10 +12,7 @@ import {
 	describe,
 	expect,
 	it,
-	setDefaultTimeout,
 } from "bun:test";
-
-setDefaultTimeout(15_000);
 
 import { collection } from "../../src/exports/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";

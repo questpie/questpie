@@ -154,9 +154,9 @@ describe("mixed localization modes", () => {
 		);
 		expect(enProduct?.name).toBe("Hair Gel");
 		expect(
-			(enProduct?.description as any)?.content[0]?.content?.[0]?.text,
+			(enProduct?.description as any)?.content?.[0]?.content?.[0]?.text,
 		).toBe("Strong hold all day.");
-		expect((enProduct?.metadata as any).category).toBe("Styling");
+		expect((enProduct?.metadata as any)?.category).toBe("Styling");
 
 		// Read in SK
 		const skProduct = await setup.app.collections.products.findOne(
@@ -165,9 +165,9 @@ describe("mixed localization modes", () => {
 		);
 		expect(skProduct?.name).toBe("Gél na vlasy");
 		expect(
-			(skProduct?.description as any)?.content[0]?.content?.[0]?.text,
+			(skProduct?.description as any)?.content?.[0]?.content?.[0]?.text,
 		).toBe("Silné držanie celý deň.");
-		expect((skProduct?.metadata as any).category).toBe("Štýlovanie");
+		expect((skProduct?.metadata as any)?.category).toBe("Štýlovanie");
 	});
 
 	it("falls back correctly for each mode", async () => {
@@ -204,9 +204,9 @@ describe("mixed localization modes", () => {
 		// All should fallback to EN
 		expect(deProduct?.name).toBe("Conditioner"); // flat field fallback
 		expect(
-			(deProduct?.description as any)?.content[0]?.content?.[0]?.text,
+			(deProduct?.description as any)?.content?.[0]?.content?.[0]?.text,
 		).toBe("Moisturizing formula."); // whole-mode JSONB fallback
-		expect((deProduct?.metadata as any).slogan).toBe("The best for your hair"); // nested-mode fallback
+		expect((deProduct?.metadata as any)?.slogan).toBe("The best for your hair"); // nested-mode fallback
 	});
 
 	it("preserves static values in nested-mode while localizing marked fields", async () => {

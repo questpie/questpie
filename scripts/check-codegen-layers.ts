@@ -176,7 +176,7 @@ function findCycle(edges: Array<[number, number]>): [number, number] | null {
 		color.set(node, BLACK);
 	}
 
-	for (const node of [...adj.keys()]) {
+	for (const node of adj.keys()) {
 		if ((color.get(node) ?? WHITE) === WHITE) dfs(node);
 		if (back) break;
 	}

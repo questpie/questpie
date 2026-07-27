@@ -135,9 +135,11 @@ export class CloudflareKVAdapter implements KVAdapter {
 		ttl?: number,
 	): Promise<void> {
 		const namespace = await this.getNamespace();
-		await namespace.put(this.toStorageKey(key), this.serialize(value), {
-			...(ttl ? { expirationTtl: ttl } : {}),
-		});
+		await namespace.put(
+			this.toStorageKey(key),
+			this.serialize(value),
+			ttl ? { expirationTtl: ttl } : {},
+		);
 	}
 
 	private serialize(value: unknown): string {

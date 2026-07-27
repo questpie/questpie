@@ -306,7 +306,7 @@ function InputsSection() {
       title="Inputs"
       lede="Inputs use the same control tokens. Focus uses --border-strong + neutral ring, never the brand color."
     >
-      <div className="depth-surface" style={{ padding: 24, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }} className="ds-inputs-grid">
+      <div className="depth-surface ds-inputs-grid" style={{ padding: 24, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
         <Field label="Text input" hint="Default state. 40px height, 12px radius.">
           <input
             placeholder="you@company.com"

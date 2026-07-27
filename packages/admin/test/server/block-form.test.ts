@@ -180,8 +180,8 @@ describe("Block introspection — form layout", () => {
 		expect(schema.name).toBe("hero");
 		expect(schema.form).toBeDefined();
 		expect(schema.form?.fields).toHaveLength(1);
-		expect((schema.form?.fields[0] as any).type).toBe("section");
-		expect((schema.form?.fields[0] as any).fields).toEqual([
+		expect((schema.form?.fields?.[0] as any)?.type).toBe("section");
+		expect((schema.form?.fields?.[0] as any)?.fields).toEqual([
 			"title",
 			"subtitle",
 		]);

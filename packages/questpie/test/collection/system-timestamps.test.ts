@@ -13,10 +13,7 @@ import {
 	describe,
 	expect,
 	it,
-	setDefaultTimeout,
 } from "bun:test";
-
-setDefaultTimeout(15_000);
 
 import { sql } from "drizzle-orm";
 

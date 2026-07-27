@@ -23,21 +23,37 @@
  *   bun run scripts/any-census.ts --update   # rewrite baseline from current state
  */
 
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const ROOT = join(import.meta.dirname, "..");
 const BASELINE_PATH = join(ROOT, "scripts", "any-census.json");
 
-const PACKAGES = [
-	"questpie",
-	"admin",
-	"tanstack-query",
-	"workflows",
-	"hono",
-	"elysia",
-	"next",
-];
+/**
+ * Discovered, never hand-listed: every `packages/*` with a package.json and a
+ * src/ directory is censused. A hardcoded list is how five packages (mcp,
+ * sandbox, openapi, crdt-yjs, tanstack-db) accumulated ~50 uncounted escapes —
+ * they were simply never added. A newly created package now shows up here
+ * automatically and fails the gate with "missing from baseline" until it is
+ * baselined, instead of being silently skipped.
+ *
+ * Directories left behind by a removed package (stale dist/ or node_modules
+ * with no package.json or src/) are skipped by the same rule.
+ */
+function discoverPackages(): string[] {
+	const packagesDir = join(ROOT, "packages");
+	return readdirSync(packagesDir, { withFileTypes: true })
+		.filter((entry) => entry.isDirectory())
+		.map((entry) => entry.name)
+		.filter(
+			(name) =>
+				existsSync(join(packagesDir, name, "package.json")) &&
+				existsSync(join(packagesDir, name, "src")),
+		)
+		.sort();
+}
+
+const PACKAGES = discoverPackages();
 
 const PATTERNS: Record<string, RegExp> = {
 	": any": /:\s*any\b/g,
@@ -91,19 +107,20 @@ for (const pkg of PACKAGES) {
 }
 
 const pad = (s: string, n: number) => s.padEnd(n);
+const nameWidth = Math.max(8, ...PACKAGES.map((p) => p.length)) + 2;
 console.log(
-	`${pad("package", 16)}${Object.keys(PATTERNS).map((p) => pad(p, 18)).join("")}`,
+	`${pad("package", nameWidth)}${Object.keys(PATTERNS).map((p) => pad(p, 18)).join("")}`,
 );
 for (const pkg of PACKAGES) {
 	console.log(
-		`${pad(pkg, 16)}${Object.entries(current[pkg]).map(([, n]) => pad(String(n), 18)).join("")}`,
+		`${pad(pkg, nameWidth)}${Object.entries(current[pkg]).map(([, n]) => pad(String(n), 18)).join("")}`,
 	);
 }
 
 if (update) {
 	const baseline = {
 		$comment:
-			"any-census baseline (per-package type-escape counts, non-test src). Regenerate with `bun run scripts/any-census.ts --update` — only commit decreases unless the increase was explicitly approved. CI fails on any increase.",
+			"any-census baseline (per-package type-escape counts, non-test src). Packages are DISCOVERED from packages/*/src — a new package appears here automatically and fails the gate until baselined, so never hand-edit the package list. Regenerate with `bun run scripts/any-census.ts --update` — only commit decreases unless the increase was explicitly approved. CI fails on any increase.",
 		packages: current,
 	};
 	writeFileSync(BASELINE_PATH, `${JSON.stringify(baseline, null, "\t")}\n`);
@@ -117,11 +134,13 @@ const baseline: { packages: Record<string, Counts> } = JSON.parse(
 
 let failed = false;
 let improved = false;
+let unbaselined = false;
 for (const pkg of PACKAGES) {
 	const want = baseline.packages[pkg];
 	if (!want) {
 		console.error(`✗ ${pkg}: missing from baseline — run with --update`);
 		failed = true;
+		unbaselined = true;
 		continue;
 	}
 	for (const [pattern, count] of Object.entries(current[pkg])) {
@@ -135,9 +154,20 @@ for (const pkg of PACKAGES) {
 	}
 }
 
+// Reverse direction: a baseline entry with no package on disk is stale. Harmless
+// for the ratchet itself (a deleted package cannot increase a count), but it means
+// the committed JSON is drifting from reality — say so rather than carrying it.
+for (const pkg of Object.keys(baseline.packages)) {
+	if (!PACKAGES.includes(pkg)) {
+		console.warn(`! ${pkg}: in baseline but not on disk — re-baseline to drop it`);
+	}
+}
+
 if (failed) {
 	console.error(
-		"\nany-census ratchet failed: new type escapes were added. Type the code properly (infer-first), or — for an intentional category-(b) builder cast — get the baseline bump approved and re-run with --update.",
+		unbaselined
+			? "\nany-census ratchet failed: a package under packages/*/src has no baseline entry. If it is new, review its counts above and lock them in with `bun run scripts/any-census.ts --update`."
+			: "\nany-census ratchet failed: new type escapes were added. Type the code properly (infer-first), or — for an intentional category-(b) builder cast — get the baseline bump approved and re-run with --update.",
 	);
 	process.exit(1);
 }

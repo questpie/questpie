@@ -6,7 +6,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { useCurrentUser } from "./use-current-user";
 import { useQuestpieQueryOptions } from "./use-questpie-query-options";
@@ -181,13 +181,19 @@ export function useLocks(options: UseLocksOptions): UseLocksResult {
 
 	const data = rawData as { docs?: LockInfo[] } | undefined;
 
-	// Build lock map
-	const locks = new Map<string, LockInfo>();
-	if (data?.docs) {
-		for (const lock of data.docs) {
-			locks.set(lock.resourceId, lock);
+	// Build lock map. This MUST be memoised: an unmemoised `new Map()` gets a
+	// fresh identity every render, which made the three callbacks below
+	// re-create on every render (defeating their `useCallback` entirely) and
+	// invalidated any consumer memoising on the returned `locks`. The query
+	// data is referentially stable between renders, so `data?.docs` is a sound
+	// key.
+	const locks = useMemo(() => {
+		const map = new Map<string, LockInfo>();
+		for (const lock of data?.docs ?? []) {
+			map.set(lock.resourceId, lock);
 		}
-	}
+		return map;
+	}, [data?.docs]);
 
 	const isLocked = useCallback(
 		(resourceId: string) => locks.has(resourceId),

@@ -45,16 +45,20 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # Gates the `questpie` package type surface — INCLUDING the committed
-      # full-app fixture — plus both TanStack integration packages. This is the
-      # gate that was structurally BLIND to the
-      # AppContext⇄config codegen cycle: it now compiles a real composed
-      # AppContext, so a re-leak of the cycle/`any` fails CI here. The broader
-      # repo-wide `turbo run check-types` stays out until the remaining packages
-      # are clean; the per-example cold-error truth is gated by the
+      # Gates EVERY package that declares a `check-types` script — no filter.
+      # This includes the `questpie` full-app fixture, which compiles a real
+      # composed AppContext and is the gate that was structurally BLIND to the
+      # AppContext⇄config codegen cycle, so a re-leak of the cycle/`any` fails
+      # here. The per-example cold-error truth is gated separately by the
       # `example-errors ratchet` in the `build` job below.
-      - name: Run type check (questpie + TanStack packages)
-        run: bunx turbo run check-types --filter=questpie --filter=@questpie/tanstack-query --filter=@questpie/tanstack-db
+      #
+      # This ran filtered to 3 of 14 packages until 2026-07-27, leaving admin,
+      # mcp, sandbox, workflows, crdt-yjs, openapi, hono, next, elysia,
+      # create-questpie and vite-plugin-iconify ungated. The unfiltered run was
+      # already green when the filter was removed; the extra packages cost
+      # ~3 min on top of the graph this job already pays for.
+      - name: Run type check (all packages)
+        run: bunx turbo run check-types
 
   audit:
     name: Audit
