@@ -606,6 +606,12 @@ export interface QuestpieConfig {
 	kv?: import("../modules/core/integrated/kv/types.js").KVConfig;
 
 	/**
+	 * Tracing and metrics. Unconfigured = a zero-cost no-op: framework seams
+	 * still call `observability.span(...)`, which calls straight through.
+	 */
+	observability?: import("../modules/core/integrated/observability/types.js").ObservabilityConfig;
+
+	/**
 	 * Executor configuration (sandboxed / trusted code execution).
 	 * Unconfigured = disabled (`ctx.executor.run` throws a clear error).
 	 */
