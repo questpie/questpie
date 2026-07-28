@@ -119,6 +119,7 @@ import type {
 } from "#questpie/server/collection/crud/types.js";
 import { createVersionRecord } from "#questpie/server/collection/crud/versioning/index.js";
 import { extractAppServices } from "#questpie/server/config/app-context.js";
+import { tryGetContext } from "#questpie/server/config/context.js";
 import {
 	guardHookRecursion,
 	runWithContext,
@@ -141,6 +142,8 @@ import {
 	stageCrdtOwnerActivation,
 	type StagedCrdtOwnerActivation,
 } from "#questpie/server/modules/core/integrated/crdt/owner-lifecycle.js";
+import type { ObservabilityService } from "#questpie/server/modules/core/integrated/observability/service.js";
+import type { ObservabilitySpan } from "#questpie/server/modules/core/integrated/observability/types.js";
 import {
 	extractWorkflowFromVersioning,
 	type ResolvedWorkflowConfig,
@@ -394,40 +397,64 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	 * Generate CRUD operations
 	 */
 	generate(): CRUD {
-		const find = this.wrapWithAppContext(this.createFind());
-		const findOne = this.wrapWithAppContext(this.createFindOne());
-		const updateMany = this.wrapWithAppContext(this.createUpdateMany());
-		const updateBatch = this.wrapWithAppContext(this.createUpdateBatch());
-		const deleteMany = this.wrapWithAppContext(this.createDeleteMany());
-		const purgeById = this.wrapWithAppContext(this.createPurge());
-		const restoreById = this.wrapWithAppContext(this.createRestore());
+		const find = this.wrapWithAppContext("find", this.createFind());
+		const findOne = this.wrapWithAppContext("findOne", this.createFindOne());
+		const updateMany = this.wrapWithAppContext(
+			"updateMany",
+			this.createUpdateMany(),
+		);
+		const updateBatch = this.wrapWithAppContext(
+			"updateBatch",
+			this.createUpdateBatch(),
+		);
+		const deleteMany = this.wrapWithAppContext(
+			"deleteMany",
+			this.createDeleteMany(),
+		);
+		const purgeById = this.wrapWithAppContext("purge", this.createPurge());
+		const restoreById = this.wrapWithAppContext(
+			"restore",
+			this.createRestore(),
+		);
 
 		const crud: CRUD = {
 			find: find as CRUD["find"],
 			findOne,
-			count: this.wrapWithAppContext(this.createCount()),
-			lockMany: this.wrapWithAppContext(this.createLockMany()),
-			create: this.wrapWithAppContext(this.createCreate()),
-			updateById: this.wrapWithAppContext(this.createUpdate()),
+			count: this.wrapWithAppContext("count", this.createCount()),
+			lockMany: this.wrapWithAppContext("lockMany", this.createLockMany()),
+			create: this.wrapWithAppContext("create", this.createCreate()),
+			updateById: this.wrapWithAppContext("update", this.createUpdate()),
 			updateMany,
 			// Deprecated alias of updateMany (removed in v4)
 			update: updateMany,
 			updateBatch,
-			deleteById: this.wrapWithAppContext(this.createDelete()),
+			deleteById: this.wrapWithAppContext("delete", this.createDelete()),
 			purgeById,
 			deleteMany,
 			// Deprecated alias of deleteMany (removed in v4)
 			delete: deleteMany,
 			restoreById,
-			findVersions: this.wrapWithAppContext(this.createFindVersions()),
-			revertToVersion: this.wrapWithAppContext(this.createRevertToVersion()),
-			transitionStage: this.wrapWithAppContext(this.createTransitionStage()),
+			findVersions: this.wrapWithAppContext(
+				"findVersions",
+				this.createFindVersions(),
+			),
+			revertToVersion: this.wrapWithAppContext(
+				"revertToVersion",
+				this.createRevertToVersion(),
+			),
+			transitionStage: this.wrapWithAppContext(
+				"transitionStage",
+				this.createTransitionStage(),
+			),
 		};
 
 		// Add upload methods if collection has upload config
 		if (this.state.upload) {
-			crud.upload = this.wrapWithAppContext(this.createUpload());
-			crud.uploadMany = this.wrapWithAppContext(this.createUploadMany());
+			crud.upload = this.wrapWithAppContext("upload", this.createUpload());
+			crud.uploadMany = this.wrapWithAppContext(
+				"uploadMany",
+				this.createUploadMany(),
+			);
 		}
 
 		crud["~internalState"] = this.state;
@@ -518,11 +545,38 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		return normalizeContext(context);
 	}
 
+	/**
+	 * The single choke point every CRUD method passes through, which is why the
+	 * span goes here rather than in twenty individual methods.
+	 *
+	 * Observability is read from the ambient AppContext rather than injected,
+	 * matching how the rest of CRUD already reaches request state — a CRUD call
+	 * can originate from HTTP, a job, a hook or a script, and only the ambient
+	 * context knows which.
+	 */
 	private wrapWithAppContext<TArgs extends any[], TResult>(
+		operation: string,
 		fn: (...args: TArgs) => Promise<TResult>,
 	): (...args: TArgs) => Promise<TResult> {
-		// Direct passthrough - context is passed explicitly through function arguments
-		return fn;
+		return (...args: TArgs): Promise<TResult> => {
+			const ambient = tryGetContext() as
+				| { app?: { observability?: ObservabilityService } }
+				| undefined;
+			const observability = ambient?.app?.observability;
+			if (!observability?.enabled) return fn(...args);
+
+			return observability.span(
+				`collection.${operation}`,
+				(span: ObservabilitySpan) => {
+					span.setAttributes({
+						"db.operation.name": operation,
+						"db.collection.name": this.state.name,
+					});
+					return fn(...args);
+				},
+				{ kind: "internal" },
+			);
+		};
 	}
 
 	private getFieldAccessRules(): Record<string, FieldAccess> | undefined {
