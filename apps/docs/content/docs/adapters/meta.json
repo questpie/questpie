@@ -8,6 +8,7 @@
 		"storage",
 		"email",
 		"kv",
+		"observability",
 		"sandbox"
 	]
 }

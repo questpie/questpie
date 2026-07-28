@@ -9,7 +9,7 @@ work starts at `connect()`.
 
 Build the CRDT API explicitly from the client you already have. It reuses that
 client's realtime session, so a collaborative app still holds exactly one
-connection — and apps that never call `createCrdtClient` do not bundle the CRDT
+connection. Apps that never call `createCrdtClient` do not bundle the CRDT
 implementation at all.
 
 ```ts

@@ -597,6 +597,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			kv: this.kv,
 			executor: this.executor,
 			logger: this.logger,
+			observability: this.observability,
 			search: this.search,
 			realtime: this.realtime,
 			email: this.email,

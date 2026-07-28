@@ -337,6 +337,7 @@ type ExtractAppServicesBase = {
 	kv: unknown;
 	executor: unknown;
 	logger: unknown;
+	observability: unknown;
 	search: unknown;
 	realtime: unknown;
 	collections: unknown;
@@ -391,6 +392,7 @@ export function extractAppServices(
 		kv: app.kv,
 		executor: app.executor,
 		logger: app.logger,
+		observability: app.observability,
 		search: app.search,
 		realtime: app.realtime,
 		collections: app.collections,
