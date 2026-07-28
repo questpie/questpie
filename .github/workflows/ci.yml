@@ -73,6 +73,17 @@ jobs:
       # here. The per-example cold-error truth is gated separately by the
       # `example-errors ratchet` in the `build` job below.
       #
+      # turbo.json cannot carry comments, so the two facts behind this step live
+      # here. `check-types` depends on `^build`, NOT `^check-types`: what a
+      # dependent package needs is its dependencies' EMITTED .d.ts, and
+      # `^check-types` only proves they typechecked their own sources — it emits
+      # nothing. It was `^check-types` until 2026-07-29 and passed on every
+      # developer machine purely because dist/ was already lying around from an
+      # earlier build; the first CI run on a clean checkout failed with TS2307
+      # "Cannot find module '@questpie/vite-plugin-iconify'". Relatedly, `build`
+      # now declares `dist/**` in outputs — without it turbo logged "no output
+      # files found" on every task and could not cache or restore a build.
+      #
       # This ran filtered to 3 of 14 packages until 2026-07-27, leaving admin,
       # mcp, sandbox, workflows, crdt-yjs, openapi, hono, next, elysia,
       # create-questpie and vite-plugin-iconify ungated. The unfiltered run was
