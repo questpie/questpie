@@ -2,11 +2,15 @@
 "questpie": patch
 ---
 
-The client no longer bundles `qs`, cutting **90 KB (−21%)** from the browser
-bundle. No API change and no wire-format change.
+The client no longer bundles `qs`, cutting **90 KB** from the browser bundle. No
+API change and no wire-format change.
 
 Measured with esbuild on `import { createClient } from "questpie/client"`:
-431.9 KB → 341.7 KB, and 83 modules → 38.
+431.9 KB → 341.7 KB, and 83 modules → 38. Those are single-file
+(`--bundle --outfile`) figures. The saving lands on the **entry chunk** in a real
+code-splitting build too, because `qs` was a static import and a static import
+always ends up in the chunk that imports it — for reference, the entry chunk with
+splitting on is now 175.0 KB, with `pusher-js` correctly in its own lazy chunk.
 
 `qs` is 13 KB but drags `object-inspect` (19 KB), `get-intrinsic` (15 KB) and
 their tail — in a bundle whose actual typed client is only 27 KB, query-string
