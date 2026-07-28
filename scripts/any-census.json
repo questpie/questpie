@@ -43,6 +43,12 @@
 			"as unknown as": 0,
 			"@ts-expect-error": 0
 		},
+		"observability": {
+			": any": 0,
+			"as any": 0,
+			"as unknown as": 0,
+			"@ts-expect-error": 0
+		},
 		"openapi": {
 			": any": 2,
 			"as any": 9,

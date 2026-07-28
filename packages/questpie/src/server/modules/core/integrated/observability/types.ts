@@ -10,12 +10,20 @@
  * app can ship a Datadog or a homegrown adapter just as easily.
  */
 
-/** Attribute values a span or metric can carry. Mirrors OTel's AttributeValue. */
+/**
+ * Attribute values a span or metric can carry. Mirrors OTel's AttributeValue.
+ *
+ * Arrays must be homogeneous. A mixed `(string | number)[]` is not a valid OTLP
+ * attribute and would be dropped or rejected at export time, so allowing it here
+ * would only move the failure from compile time to production.
+ */
 export type ObservabilityAttributeValue =
 	| string
 	| number
 	| boolean
-	| Array<string | number | boolean>;
+	| string[]
+	| number[]
+	| boolean[];
 
 export type ObservabilityAttributes = Record<
 	string,
