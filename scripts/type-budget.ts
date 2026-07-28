@@ -6,7 +6,12 @@
  * deterministic metrics (Types / Instantiations) against the committed
  * budget table in scripts/type-budget.json. Wall-clock times are noisy
  * across machines; Types/Instantiations are stable for a given TS version,
- * so the gate is on instantiations only (>10% over budget fails).
+ * so the gate is on instantiations only (see TOLERANCE below).
+ *
+ * "Wall-clock is noisy" is not a hedge — it was measured. The same example,
+ * same machine, same TS version, differed 8x in wall clock (50s vs 402s) purely
+ * with background load, while instantiations moved 0.08%. That is exactly why
+ * this gate must never be extended to time.
  *
  * Background: the 3.6.x variance-annotation work (`in out` on the CRUD/field
  * hot-path generics) cut example-app instantiations by ~40%. This gate stops
@@ -29,8 +34,24 @@ import { join } from "node:path";
 
 const ROOT = join(import.meta.dirname, "..");
 const BUDGET_PATH = join(ROOT, "scripts", "type-budget.json");
-/** Fail when instantiations exceed budget by more than this ratio. */
-const TOLERANCE = 0.1;
+/**
+ * Fail when instantiations exceed budget by more than this ratio.
+ *
+ * Was 0.1. Measured 2026-07-28: the same example typechecked in two different
+ * worktrees, on the same machine, under loadavg 8 and loadavg 200, differed by
+ * 0.08% in instantiations (8,805,963 vs 8,813,101) while WALL CLOCK differed by
+ * 8x (50s vs 402s). Instantiation counts are essentially deterministic for a
+ * fixed TS version; the 10% band was sized for a noise level that does not
+ * exist, and it let all four targets drift +1.0-1.8% over budget unnoticed.
+ *
+ * 0.03 is ~37x the observed noise floor — loose enough that a legitimate
+ * feature does not trip it on the first PR, tight enough that repeated silent
+ * drift has to be acknowledged with an explicit `--update`.
+ *
+ * Do NOT raise this to make a red gate green. Re-baseline with --update and
+ * review the diff, which is the same discipline scripts/any-census.ts uses.
+ */
+const TOLERANCE = 0.03;
 
 const TARGETS = [
 	"packages/questpie",
