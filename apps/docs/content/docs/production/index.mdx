@@ -1,0 +1,122 @@
+---
+title: Deploying
+description: The process model, environment, and a Dockerfile that works. What QUESTPIE needs to run in production and what it deliberately leaves to you.
+---
+
+A QUESTPIE deployment is one or two processes and a PostgreSQL database. Nothing
+else is required.
+
+## The process model
+
+| Process    | Command                        | Required             |
+| ---------- | ------------------------------ | -------------------- |
+| **App**    | your framework's start command | Yes                  |
+| **Worker** | `bun run worker`               | Only if you use jobs |
+
+The app serves HTTP. The worker runs background jobs. They are separate
+processes so a slow job cannot occupy a request handler, and so you can scale
+them independently.
+
+Running the worker in the same process is possible but is not recommended past
+the smallest deployments: a job that saturates the CPU will slow every request
+on that instance.
+
+```ts title="src/worker.ts"
+import { app } from "#questpie";
+
+await app.queue.listen({
+	teamSize: 5, // concurrent jobs
+	batchSize: 3, // jobs fetched per poll
+});
+```
+
+## Environment
+
+Environment variables are declared and validated in `src/lib/env.ts`. An invalid
+or missing variable fails at startup rather than at the first request that needs
+it, which is what you want in a rollout.
+
+The minimum:
+
+```bash
+DATABASE_URL=postgresql://user:pass@host:5432/db
+APP_URL=https://example.com
+BETTER_AUTH_SECRET=<32+ random bytes>
+```
+
+`BETTER_AUTH_SECRET` **must be at least 32 characters**. A shorter value fails at
+startup. Generate one with `openssl rand -base64 32`, and use a different value
+per environment.
+
+Anything the browser needs must be declared separately in `env.client.ts` and
+prefixed for your bundler (`VITE_` for Vite). Server variables are never exposed
+to the client bundle; that separation is enforced, not conventional.
+
+## PostgreSQL
+
+**PostgreSQL 15 or newer is required** and checked at startup.
+
+Realtime additionally uses `xid8`, which needs PostgreSQL 13+; that has its own
+explicit capability preflight, so an unsupported server fails with a clear
+message rather than at the first subscription.
+
+Some features need extensions that the framework does **not** create for you,
+because doing so requires privileges a production database user should not have:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_trgm;   -- fuzzy search
+CREATE EXTENSION IF NOT EXISTS vector;    -- pgvector semantic search
+```
+
+Run these once as a superuser during provisioning.
+
+## Dockerfile
+
+```dockerfile
+FROM oven/bun:1.3.13-slim AS base
+WORKDIR /app
+
+FROM base AS deps
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
+
+FROM base AS build
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN bun run build
+
+FROM base AS release
+ENV NODE_ENV=production
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/package.json ./
+# Migrations are applied by a separate step, not on boot - see Migrations.
+CMD ["bun", "run", "start"]
+```
+
+The worker uses the same image with a different command:
+
+```yaml
+command: ["bun", "run", "worker"]
+```
+
+Build once, run both. A worker on a different image than the app will eventually
+run a job whose handler no longer matches the payload.
+
+## What QUESTPIE does not do for you
+
+Stated plainly, because assuming otherwise is how deployments get hurt:
+
+- **No rate limiting.** Put it at the edge (your CDN, load balancer or reverse
+  proxy). The framework does not throttle requests.
+- **No TLS termination.** Terminate it in front.
+- **No process supervision.** Use your platform's restart policy.
+- **No secret management.** `DATABASE_URL` and `BETTER_AUTH_SECRET` come from the
+  environment; where they come from before that is yours.
+- **No automatic backups.** See your database provider.
+
+## Next
+
+- [Migrations](/docs/production/migrations) - applying schema changes safely
+- [Scaling](/docs/production/scaling) - replicas, workers and realtime
+- [Monitoring](/docs/production/monitoring) - probes, traces and logs
