@@ -15,6 +15,7 @@ import type {
 	RequestLoggingConfig,
 	RequestLogMeta,
 } from "../modules/core/integrated/logger/types.js";
+import type { ObservabilitySpan } from "../modules/core/integrated/observability/types.js";
 import {
 	executeJsonRouteInternal,
 	executeRawRouteInternal,
@@ -255,9 +256,34 @@ export const createFetchHandler = (
 		const traceId = context?.traceId ?? getTraceId(request) ?? requestId;
 		let routePattern: string | undefined;
 
+		// The root span for the request. Assigned once the span is open (below);
+		// `complete` stamps it because that is the only place the status code and
+		// the matched route pattern are both known.
+		let rootSpan: ObservabilitySpan | undefined;
+
 		const complete = (response: Response, error?: unknown): Response => {
 			const durationMs =
 				Math.round((performance.now() - startedAt) * 100) / 100;
+
+			if (rootSpan) {
+				rootSpan.setAttributes({
+					"http.request.method": request.method,
+					"url.path": pathname,
+					"http.response.status_code": response.status,
+					...(routePattern ? { "http.route": routePattern } : {}),
+					"questpie.request_id": requestId,
+					"questpie.trace_id": traceId,
+				});
+				if (error) rootSpan.recordError(error);
+				// A 5xx without a thrown error still failed. Backends alert on
+				// span status, so a handler that returns 500 rather than throwing
+				// must not look healthy.
+				else if (response.status >= 500) {
+					rootSpan.recordError(
+						new Error(`HTTP ${response.status} ${response.statusText}`),
+					);
+				}
+			}
 			const meta: RequestLogMeta = {
 				event: "http.request",
 				requestId,
@@ -281,137 +307,144 @@ export const createFetchHandler = (
 				: pathname === basePath || pathname.startsWith(`${basePath}/`);
 		if (!matchesBase) return null;
 
-		try {
-			const relativePath =
-				basePath === "/" ? pathname : pathname.slice(basePath.length);
-			let segments = relativePath.split("/").filter(Boolean);
+		return appInstance.observability.span(
+			`${request.method} ${routePattern ?? pathname}`,
+			async (span) => {
+				rootSpan = span;
+				try {
+					const relativePath =
+						basePath === "/" ? pathname : pathname.slice(basePath.length);
+					let segments = relativePath.split("/").filter(Boolean);
 
-			// Legacy /questpie/ prefix stripping
-			if (segments[0] === "questpie") {
-				segments = segments.slice(1);
-			}
+					// Legacy /questpie/ prefix stripping
+					if (segments[0] === "questpie") {
+						segments = segments.slice(1);
+					}
 
-			if (segments.length === 0) {
-				return complete(
-					handleError(ApiError.notFound("Route"), {
-						request,
-						app: appInstance,
-					}),
-				);
-			}
-
-			// Match against compiled trie
-			if (matcher) {
-				const path = segments.join("/");
-				const match = matcher.match(path);
-				routePattern = match?.pattern;
-
-				if (match) {
-					const def = match.methods.get(request.method);
-
-					if (!def) {
-						// Path matches but method doesn't → 405
-						const resolved = await resolveContext(
-							appInstance,
-							request,
-							config,
-							context,
-							{ requestId, traceId },
-						);
+					if (segments.length === 0) {
 						return complete(
-							new Response(
-								appInstance.t(
-									"error.methodNotAllowed",
-									undefined,
-									resolved.appContext.locale,
-								),
-								{
-									status: 405,
-									headers: {
-										Allow: Array.from(match.methods.keys()).join(", "),
-									},
-								},
-							),
+							handleError(ApiError.notFound("Route"), {
+								request,
+								app: appInstance,
+							}),
 						);
 					}
 
-					// Resolve session, locale, and create app context
-					const resolved = await resolveContext(
-						appInstance,
-						request,
-						config,
-						context,
-						{ requestId, traceId },
-					);
+					// Match against compiled trie
+					if (matcher) {
+						const path = segments.join("/");
+						const match = matcher.match(path);
+						routePattern = match?.pattern;
 
-					try {
-						if (isJsonRoute(def)) {
-							const body = await parseRouteBody(request);
-							if (body === null) {
+						if (match) {
+							const def = match.methods.get(request.method);
+
+							if (!def) {
+								// Path matches but method doesn't → 405
+								const resolved = await resolveContext(
+									appInstance,
+									request,
+									config,
+									context,
+									{ requestId, traceId },
+								);
 								return complete(
-									handleError(
-										ApiError.badRequest(
-											"Invalid JSON body",
+									new Response(
+										appInstance.t(
+											"error.methodNotAllowed",
 											undefined,
-											"error.invalidJsonBody",
+											resolved.appContext.locale,
 										),
 										{
-											request,
-											app: appInstance,
-											locale: resolved.appContext.locale,
+											status: 405,
+											headers: {
+												Allow: Array.from(match.methods.keys()).join(", "),
+											},
 										},
 									),
 								);
 							}
-							const result = await executeJsonRouteInternal(
+
+							// Resolve session, locale, and create app context
+							const resolved = await resolveContext(
 								appInstance,
-								def,
-								body,
-								resolved,
 								request,
-								match.params,
+								config,
+								context,
+								{ requestId, traceId },
 							);
-							return complete(smartResponse(result, request));
+
+							try {
+								if (isJsonRoute(def)) {
+									const body = await parseRouteBody(request);
+									if (body === null) {
+										return complete(
+											handleError(
+												ApiError.badRequest(
+													"Invalid JSON body",
+													undefined,
+													"error.invalidJsonBody",
+												),
+												{
+													request,
+													app: appInstance,
+													locale: resolved.appContext.locale,
+												},
+											),
+										);
+									}
+									const result = await executeJsonRouteInternal(
+										appInstance,
+										def,
+										body,
+										resolved,
+										request,
+										match.params,
+									);
+									return complete(smartResponse(result, request));
+								}
+
+								// Raw route — pass matched params through
+								return complete(
+									await executeRawRouteInternal(
+										appInstance,
+										def,
+										request,
+										resolved,
+										match.params,
+									),
+								);
+							} catch (error) {
+								return complete(
+									handleError(error, {
+										request,
+										app: appInstance,
+										locale: resolved.appContext.locale,
+									}),
+									error,
+								);
+							}
 						}
-
-						// Raw route — pass matched params through
-						return complete(
-							await executeRawRouteInternal(
-								appInstance,
-								def,
-								request,
-								resolved,
-								match.params,
-							),
-						);
-					} catch (error) {
-						return complete(
-							handleError(error, {
-								request,
-								app: appInstance,
-								locale: resolved.appContext.locale,
-							}),
-							error,
-						);
 					}
-				}
-			}
 
-			// No route matched → 404
-			return complete(
-				handleError(ApiError.notFound("Route"), {
-					request,
-					app: appInstance,
-				}),
-			);
-		} catch (error) {
-			return complete(
-				handleError(error, {
-					request,
-					app: appInstance,
-				}),
-				error,
-			);
-		}
+					// No route matched → 404
+					return complete(
+						handleError(ApiError.notFound("Route"), {
+							request,
+							app: appInstance,
+						}),
+					);
+				} catch (error) {
+					return complete(
+						handleError(error, {
+							request,
+							app: appInstance,
+						}),
+						error,
+					);
+				}
+			},
+			{ kind: "server" },
+		);
 	};
 };
