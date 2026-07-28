@@ -9,5 +9,5 @@ import { service } from "#questpie/server/services/define-service.js";
 export default service({
 	namespace: null,
 	lifecycle: "singleton",
-	create: ({ app }) => new KVService(app.config.kv),
+	create: ({ app }) => new KVService(app.config.kv, app.observability),
 });

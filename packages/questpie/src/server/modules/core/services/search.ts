@@ -11,7 +11,12 @@ export default service({
 	namespace: null,
 	lifecycle: "singleton",
 	create: ({ app }) => {
-		const search = createSearchService(app.config.search, app.db, app.logger);
+		const search = createSearchService(
+			app.config.search,
+			app.db,
+			app.logger,
+			app.observability,
+		);
 
 		// Initialize search adapter asynchronously (lazy init on first use)
 		search.initialize().catch((err: unknown) => {
