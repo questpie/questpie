@@ -47,6 +47,7 @@ import _route_globals_name_schema from "../routes/globals/[name]/schema";
 import _route_globals_name_transition from "../routes/globals/[name]/transition";
 import _route_globals_name_versions from "../routes/globals/[name]/versions";
 import _route_health from "../routes/health";
+import _route_health_live from "../routes/health/live";
 import _route_jwks from "../routes/jwks";
 import _route_realtime from "../routes/realtime";
 import _route_realtime_auth_POST from "../routes/realtime/auth.post";
@@ -152,6 +153,7 @@ export type CoreRoutes = {
 	"globals/[name]/transition": typeof _route_globals_name_transition extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]/transition">> : typeof _route_globals_name_transition;
 	"globals/[name]/versions": typeof _route_globals_name_versions extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]/versions">> : typeof _route_globals_name_versions;
 	health: typeof _route_health extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"health">> : typeof _route_health;
+	"health/live": typeof _route_health_live extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"health/live">> : typeof _route_health_live;
 	jwks: typeof _route_jwks extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"jwks">> : typeof _route_jwks;
 	realtime: typeof _route_realtime extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime">> : typeof _route_realtime;
 	"realtime/auth:POST": typeof _route_realtime_auth_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime/auth:POST">> : typeof _route_realtime_auth_POST;
@@ -268,6 +270,7 @@ const _module: CoreModule = {
 		"globals/[name]/transition": _route_globals_name_transition,
 		"globals/[name]/versions": _route_globals_name_versions,
 		health: _route_health,
+		"health/live": _route_health_live,
 		jwks: _route_jwks,
 		realtime: _route_realtime,
 		"realtime/auth:POST": _route_realtime_auth_POST,
