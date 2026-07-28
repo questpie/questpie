@@ -45,9 +45,9 @@
 		"@tanstack/db": "0.6.16",
 		"@tanstack/react-devtools": "^0.7.0",
 		"@tanstack/react-query": "^5.62.11",
-		"@tanstack/react-router": "^1.132.0",
-		"@tanstack/react-router-devtools": "^1.132.0",
-		"@tanstack/react-start": "^1.132.0",
+		"@tanstack/react-router": "^1.170.18",
+		"@tanstack/react-router-devtools": "^1.167.0",
+		"@tanstack/react-start": "^1.167.42",
 		"@tanstack/react-table": "^8.20.5",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
@@ -82,7 +82,7 @@
 		"oxlint": "^1.56.0",
 		"shadcn": "^3.6.1",
 		"typescript": "^5.9.2",
-		"vite": "^8.0.0",
+		"vite": "^8.0.16",
 		"vitest": "^3.0.5"
 	}
 }
