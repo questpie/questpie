@@ -69,14 +69,28 @@ Out of scope:
 These are documented rather than secret. Reporting them again is not necessary,
 but a working exploit that goes beyond what is described here is.
 
-- **Sandbox DNS rebinding.** `@questpie/sandbox` rejects private and link-local
-  IPs at manifest-validation time. Connect-time re-resolution and IP pinning
-  (including across redirects) are **not implemented** — see the `TODO(security)`
-  in `packages/sandbox/src/net-validation.ts`. Do not run untrusted code against
-  a network where rebinding matters until that lands.
 - **Queue payload encryption.** Job payloads are stored unencrypted by the queue
   adapter. Do not put secrets in a job payload; pass a reference and resolve it
   inside the handler.
+
+## Sandbox egress model
+
+Worth stating explicitly, because it is the question people ask first about
+running untrusted code:
+
+The guest has **no network at all** — it runs with `--allow-net=[]` and cannot
+open a socket. Every request is relayed to a broker on the trusted host, which
+resolves the hostname itself, validates every A and AAAA record against the
+private/link-local/loopback/metadata/CGNAT policy, and **pins the socket to a
+validated IP literal** while keeping the hostname for TLS SNI and the `Host`
+header. Auto-follow is disabled; each redirect hop is re-parsed, re-resolved,
+re-validated and re-pinned, so an open redirect on an allowlisted host cannot
+reach an internal target mid-chain.
+
+On Linux there is a second, independent boundary: a kernel-level egress drop
+(network namespace + nftables) that discards packets to private ranges even if
+the guest somehow obtained a socket. It is absent on macOS and Windows, where
+the brokered path is the whole defense.
 
 ## Dependency advisories
 
