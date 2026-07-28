@@ -237,6 +237,19 @@ jobs:
       - name: example-errors ratchet
         run: bun run scripts/example-errors.ts
 
+      # Committed `.generated/**` must equal what codegen emits TODAY. This was
+      # blind until 2026-07-29: toy-factory-backend's output was last committed
+      # before #167 and no longer typechecked when regenerated, so the
+      # example-errors ratchet above was certifying a frozen artifact codegen had
+      # stopped producing. Runs twice — a second generation must also be a no-op,
+      # which proves the output is deterministic and not merely stable once.
+      - name: Codegen freshness (committed output matches a fresh generation)
+        run: |
+          bunx turbo run questpie:generate
+          git diff --exit-code
+          bunx turbo run questpie:generate
+          git diff --exit-code
+
       # ENFORCE the one-way codegen layer DAG (index → context.gen →
       # entities.gen → names.gen): every generated `.generated/` must import
       # DOWNWARD only, with no cycle. This locks in (BY CONSTRUCTION) the

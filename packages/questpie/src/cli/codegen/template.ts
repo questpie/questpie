@@ -804,9 +804,41 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 				lines.push(`\t${safeKey(file.key)}: typeof ${file.varName};`);
 			}
 			lines.push("};");
+			// LOCAL collections must be explicit members, NOT part of the mapped
+			// type. A single mapped type over the whole set looks equivalent and
+			// is not.
+			//
+			// `resolveMappedTypeMembers` installs an EMPTY member table before it
+			// evaluates the template. Evaluating `CollectionAPI<…>` reaches
+			// `AppJobs`, which is `typeof _job_*` — an eager demand that re-enters
+			// the job's own `job({...})` call to infer its return type, and that
+			// nested check resolves `collections.<local>` against the still-empty
+			// table. TS2339. The table is complete the moment the call returns, so
+			// the failure is invisible to any probe taken afterwards.
+			//
+			// Splitting it makes `_JobHandlerCollectionsAPI` an intersection:
+			// `getPropertyOfType` walks constituents and finds a local key in the
+			// plain object literal without ever evaluating the mapped template, so
+			// the re-entrant lookup succeeds. Module collections keep the mapped
+			// form — they come from `typeof _modules`, not from the user job path,
+			// so they never re-enter it.
+			//
+			// Three conditions must coincide to trigger the bug, which is why only
+			// one example ever showed it: this mapped emission, a collection hook
+			// that BINDS `queue` in its ctx parameter (binding alone is enough —
+			// `QueueClient<AppJobs>` puts `LiteralJobNamesFromDefinitions` in key
+			// position, forcing every `typeof _job_*`), and a job handler that
+			// RETURNS a value so `TResult` must be inferred from its body.
+			// tanstack-barbershop has four jobs and not one of them returns.
 			lines.push(
-				"type _JobHandlerCollectionsAPI = { [K in keyof _JobHandlerCollections]: CollectionAPI<_JobHandlerCollections[K], _JobHandlerCollections> };",
+				"type _JobHandlerCollectionsAPI = { [K in keyof _ModuleCollections]: CollectionAPI<_ModuleCollections[K], _JobHandlerCollections> } & {",
 			);
+			for (const file of localCollections) {
+				lines.push(
+					`\t${safeKey(file.key)}: CollectionAPI<typeof ${file.varName}, _JobHandlerCollections>;`,
+				);
+			}
+			lines.push("};");
 		} else {
 			lines.push("type _JobHandlerCollections = AppCollections;");
 			lines.push("type _JobHandlerCollectionsAPI = _CollectionsAPI;");
