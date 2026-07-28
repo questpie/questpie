@@ -252,13 +252,17 @@ jobs:
       # blind until 2026-07-29: toy-factory-backend's output was last committed
       # before #167 and no longer typechecked when regenerated, so the
       # example-errors ratchet above was certifying a frozen artifact codegen had
-      # stopped producing. Runs twice — a second generation must also be a no-op,
-      # which proves the output is deterministic and not merely stable once.
+      # stopped producing.
+      #
+      # The second run needs `--force`. Without it turbo sees unchanged inputs,
+      # restores `**/.generated/**` from cache and reports FULL TURBO — which
+      # proves the cache works and says nothing about the generator. `--force`
+      # makes it a real second generation, so a no-op diff means deterministic.
       - name: Codegen freshness (committed output matches a fresh generation)
         run: |
           bunx turbo run questpie:generate
           git diff --exit-code
-          bunx turbo run questpie:generate
+          bunx turbo run questpie:generate --force
           git diff --exit-code
 
       # ENFORCE the one-way codegen layer DAG (index → context.gen →

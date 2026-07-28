@@ -68,7 +68,7 @@
 	"scripts": {
 		"build": "tsdown",
 		"check-types": "tsc --noEmit",
-		"questpie:generate": "bun questpie generate --verbose",
+		"questpie:generate": "bun run ../questpie/src/exports/cli.ts generate --verbose",
 		"test": "bun test"
 	},
 	"dependencies": {
