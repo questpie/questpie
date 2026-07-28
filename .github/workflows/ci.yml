@@ -211,6 +211,16 @@ jobs:
       - name: Package size budget
         run: bun run scripts/size-budget.ts
 
+      # What a BROWSER downloads, which is a different number from the one
+      # above and catches the wins that one misses: moving CRDT off the default
+      # client path cut 189 KB from every bundle while the published package got
+      # slightly bigger. Measured with esbuild --splitting (what Vite/Rollup/
+      # webpack do) and scored on the ENTRY chunk only — without splitting,
+      # esbuild inlines dynamic imports and a correctly lazy dependency looks
+      # like part of the entry. Fails on >3% growth.
+      - name: Consumer bundle budget
+        run: bun run scripts/bundle-budget.ts
+
       # Deterministic tsc metrics (Types/Instantiations) vs committed budget —
       # fails on >10% instantiation regression. Re-baseline with --update.
       - name: Type budget gate
