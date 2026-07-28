@@ -42,6 +42,19 @@ const ROOT = join(import.meta.dirname, "..");
 const BUDGET_PATH = join(ROOT, "scripts", "size-budget.json");
 /** Fail when unpacked size exceeds budget by more than this ratio. */
 const TOLERANCE = 0.05;
+/**
+ * …and by more than this many bytes. Both conditions must hold.
+ *
+ * A percentage alone is unusable on the small packages: `@questpie/next` is
+ * 6 KB and `@questpie/observability` 9 KB, where 5% is a few hundred bytes and
+ * adding one JSDoc block to a public option trips the gate. That happened on
+ * 2026-07-29 and it is exactly how a gate earns a reputation for crying wolf —
+ * the lint job in this repo sat commented out for months for the same reason.
+ * A genuine regression on a package this size (a dependency getting bundled in,
+ * tests leaking past `files`) is orders of magnitude past 1 KB, so the floor
+ * costs no real coverage.
+ */
+const MIN_GROWTH_BYTES = 1024;
 
 interface Metrics {
 	unpackedSize: number;
@@ -172,13 +185,19 @@ for (const pkg of PACKAGES) {
 		unbudgeted = true;
 		continue;
 	}
-	const limit = Math.round(want.unpackedSize * (1 + TOLERANCE));
+	// Both gates, not either: the ratio catches proportional bloat on the big
+	// packages, the byte floor stops the small ones failing on a comment.
+	const limit = Math.max(
+		Math.round(want.unpackedSize * (1 + TOLERANCE)),
+		want.unpackedSize + MIN_GROWTH_BYTES,
+	);
+	const growth = got.unpackedSize - want.unpackedSize;
 	const delta =
 		((got.unpackedSize - want.unpackedSize) / want.unpackedSize) * 100;
 	const deltaStr = `${delta >= 0 ? "+" : ""}${delta.toFixed(1)}%`;
 	if (got.unpackedSize > limit) {
 		console.error(
-			`✗ ${pkg}: ${kb(got.unpackedSize)} exceeds budget ${kb(want.unpackedSize)} by ${deltaStr} (limit ${kb(limit)})`,
+			`✗ ${pkg}: ${kb(got.unpackedSize)} exceeds budget ${kb(want.unpackedSize)} by ${deltaStr} (+${growth} bytes; limit ${kb(limit)})`,
 		);
 		failed = true;
 	} else if (got.unpackedSize < want.unpackedSize) {

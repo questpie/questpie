@@ -141,10 +141,10 @@ export class MigrationRunner {
 
 					// Re-check under the lock: a runner that was waiting must not
 					// redo work the winner already committed.
-					const applied: any = await tx.execute(
+					const applied = await tx.execute(
 						sql`SELECT 1 FROM ${sql.identifier(this.tableName)} WHERE id = ${migration.id}`,
 					);
-					if (rowsOf<any>(applied).length > 0) {
+					if (rowsOf(applied).length > 0) {
 						this.log(`⏭️  Already applied by another process: ${migration.id}`);
 						return;
 					}

@@ -86,6 +86,16 @@ export interface OtelObservabilityOptions {
 	metricIntervalMs?: number;
 	/** Extra resource attributes, merged last so they can override the above. */
 	resourceAttributes?: Attributes;
+	/**
+	 * Additional span processors, appended after the OTLP and console ones.
+	 *
+	 * `BasicTracerProvider` takes its processors at construction and has no
+	 * `addSpanProcessor`, so without this there is no way to attach a different
+	 * exporter (Jaeger, Zipkin, a custom enricher) or to capture spans in memory
+	 * for a test — which is how the span-tree assertions in this package's
+	 * `otel-tree.test.ts` work.
+	 */
+	spanProcessors?: SpanProcessor[];
 }
 
 const SPAN_KINDS: Record<SpanKind, OtelSpanKind> = {
@@ -230,6 +240,9 @@ export function otelObservability(
 		// Simple, not batched: in development you want the span when it ends,
 		// not up to 5 seconds later.
 		spanProcessors.push(new SimpleSpanProcessor(new ConsoleSpanExporter()));
+	}
+	if (options.spanProcessors) {
+		spanProcessors.push(...options.spanProcessors);
 	}
 
 	const tracerProvider = new BasicTracerProvider({
