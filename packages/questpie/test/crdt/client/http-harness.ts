@@ -256,6 +256,27 @@ export class CrdtExchangeHarness {
 		}
 	}
 
+	/**
+	 * Merge one appended update into the stored snapshot, using the same engine
+	 * the clients use.
+	 *
+	 * Only text fields are merged: set fields have their own snapshot encoding
+	 * and no test needs cross-client set convergence yet. A set append still
+	 * bumps its cursor, exactly as before.
+	 */
+	private commitPart(fieldSlot: number, update: Uint8Array): void {
+		const contract = Object.values(this.activeManifest.fields).find(
+			(field) => field.fieldSlot === fieldSlot,
+		);
+		if (!contract || contract.format !== "text") return;
+
+		const engine = this.options.textEngine ?? testTextEngine();
+		const current = this.snapshots.get(fieldSlot);
+		if (!current) return;
+		const merged = engine.applyUpdate(engine.restore(current), update);
+		this.snapshots.set(fieldSlot, engine.snapshot(merged));
+	}
+
 	setText(fieldSlot: number, value: string, fieldCursor?: bigint): void {
 		this.snapshots.set(fieldSlot, new TextEncoder().encode(value));
 		if (fieldCursor !== undefined) this.cursors.set(fieldSlot, fieldCursor);
@@ -331,6 +352,11 @@ export class CrdtExchangeHarness {
 				const cursors = frame.payload.parts.map((part) => {
 					const cursor = (this.cursors.get(part.fieldSlot) ?? 0n) + 1n;
 					this.cursors.set(part.fieldSlot, cursor);
+					// Actually COMMIT the update into the stored snapshot. Without
+					// this the harness acknowledged writes and threw them away, so a
+					// second client pulling afterwards still saw the original text
+					// and two clients could never converge.
+					this.commitPart(part.fieldSlot, part.bytes);
 					return { fieldSlot: part.fieldSlot, fieldCursor: cursor };
 				});
 				const receipt = Object.freeze({
