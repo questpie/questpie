@@ -120,6 +120,35 @@ export class MigrationRunner {
 			try {
 				// Run the migration within a transaction
 				await this.db.transaction(async (tx) => {
+					// Serialize concurrent runners. The migrations table has
+					// `id TEXT PRIMARY KEY`, so a duplicate INSERT already makes
+					// double-APPLY impossible: the loser conflicts and its whole
+					// transaction, including its up(), rolls back. What that does
+					// NOT prevent is the loser having already DONE the work, which
+					// wastes time and, for anything a migration does outside this
+					// transaction (an HTTP call, a dispatch to an external queue),
+					// actually happens twice.
+					//
+					// An xact-scoped advisory lock is used rather than a session
+					// one because it is released automatically on commit or
+					// rollback and is bound to this transaction connection, so it
+					// is correct behind a pooler. The key is derived from the
+					// migrations table name so two apps sharing a database under
+					// different schemas do not block each other.
+					await tx.execute(
+						sql`SELECT pg_advisory_xact_lock(hashtext(${this.tableName}))`,
+					);
+
+					// Re-check under the lock: a runner that was waiting must not
+					// redo work the winner already committed.
+					const applied: any = await tx.execute(
+						sql`SELECT 1 FROM ${sql.identifier(this.tableName)} WHERE id = ${migration.id}`,
+					);
+					if (rowsOf<any>(applied).length > 0) {
+						this.log(`⏭️  Already applied by another process: ${migration.id}`);
+						return;
+					}
+
 					// Run the migration
 					await migration.up({ db: tx });
 

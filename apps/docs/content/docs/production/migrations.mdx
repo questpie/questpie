@@ -15,16 +15,26 @@ bun run migrate:down       # roll back the last one
 
 ## Apply as a deploy step, not on boot
 
-`build({ autoMigrate: true })` exists and is convenient in development. **Do not
-use it in production with more than one replica.**
+`build({ autoMigrate: true })` exists and is convenient in development. In
+production, prefer a separate step.
 
-Each migration runs inside its own transaction, but there is **no advisory lock
-around the runner**. Two instances booting at the same time can both see the same
-pending migration and both try to apply it. What happens next depends on the
-migration: a `CREATE TABLE` fails the loser cleanly, but a data backfill can run
-twice.
+Concurrent runners are safe by construction, and it is worth knowing why rather
+than trusting it. Each migration runs in its own transaction, which first takes a
+PostgreSQL advisory lock and then re-checks whether the migration is already
+recorded. A runner that was waiting therefore finds the work done and skips it.
+Even without the lock the migrations table's primary key would make a double
+apply impossible, because the loser's `INSERT` conflicts and rolls its whole
+transaction back, `up()` included.
 
-Run migrations as their own step, once, before the new version starts serving:
+What that does **not** cover is anything a migration does outside its
+transaction: an HTTP call, a dispatch to an external queue, a write to another
+database. Those escape the rollback. Keep migrations to schema work.
+
+The reason to run migrations as their own step is different and simpler: you want
+to know the schema change succeeded **before** any new code starts serving, and
+you want one place that failed rather than a replica that crash-looped.
+
+Run it once, before the new version rolls:
 
 ```yaml title="Kubernetes"
 # A Job that must complete before the Deployment rolls
