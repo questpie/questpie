@@ -88,6 +88,30 @@ That is intentional.
 - Commit messages: conventional commits (`feat:`, `fix:`, `chore:`, `ci:`,
   `docs:`, `style:`, `refactor:`, `test:`). Add `!` for a breaking change.
 
+### Dependency overrides
+
+`package.json` is strict JSON and cannot carry comments, so every entry under
+`overrides` is justified here. Do not remove one without reading its reason.
+
+- **`unrun: 0.2.37`** — `0.2.38` is a broken npm publish: 3 files, 6,637 bytes,
+  containing only `LICENSE`, `package.json` and `README.md` while its
+  `package.json` points `main`/`exports`/`bin` at a `dist/` it does not ship
+  (0.2.37 is 10 files, 43,577 bytes). `unrun` is a transitive dependency of
+  `tsdown`, the build tool for every package here.
+
+  It does not break CI, and the reason is worth knowing before you "clean this
+  up": tsdown only imports `unrun` when its config loader is not native —
+  `const autoLoader = isBun || nativeTS && isSupported ? "native" : "unrun"`.
+  CI runs `bunx turbo run build`, so `isBun` is true and the broken package is
+  never touched. Anyone building under plain Node takes the `unrun` path and
+  gets `ERR_MODULE_NOT_FOUND`. A latent trap that happens to miss CI, not a
+  sign that CI builds something other than what we think — the Build job on
+  `8d4cc1b5` reports `0 cached, 14 total`, so it genuinely ran.
+
+  The durable fix is upgrading `tsdown` past `0.22`, which dropped `unrun`
+  entirely. That is a build-tool bump for every package and needs its own PR:
+  the dist syntax, dist types, size and bundle gates all measure tsdown output.
+
 ## Changesets
 
 Any change to a published package needs one:
