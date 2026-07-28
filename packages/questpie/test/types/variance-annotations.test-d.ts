@@ -13,9 +13,10 @@
  *    default TId to `unknown`/`string`, and method bivariance only bridges
  *    `string` vs `unknown` through the structural fallback that an
  *    annotation would forbid.
- * 3. The FieldWithMethods alias split (FieldCommonMethodsWrapped /
- *    FieldTypeMethodsWrapped) preserves chain-order semantics: type-specific
- *    methods survive common-method calls and vice versa.
+ * 3. FieldWithMethods preserves chain-order semantics: type-specific methods
+ *    survive common-method calls and vice versa. This was two separate wrapper
+ *    maps until 2026-07-29 and is now one (`FieldAllMethodsWrapped`) — the
+ *    assertions below are what proves the merge kept common keys winning.
  *
  * Compile-time only — run with: tsc --noEmit
  */

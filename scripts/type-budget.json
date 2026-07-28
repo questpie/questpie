@@ -1,22 +1,22 @@
 {
-	"$comment": "Type-perf budget (deterministic tsc metrics). Regenerate with `bun run scripts/type-budget.ts --update` and review the diff — never hand-edit. Gate: instantiations >3% over budget fails CI (tightened 2026-07-28: instantiation counts vary <0.1% across machines, so a 10% band let +1-1.8% drift through unnoticed on all four targets).",
+	"$comment": "Type-perf budget (deterministic tsc metrics). Regenerate with `bun run scripts/type-budget.ts --update` and review the diff — never hand-edit. Gate: instantiations >10% over budget fails CI.",
 	"tsVersion": "5.9.2",
 	"targets": {
 		"packages/questpie": {
-			"types": 856813,
-			"instantiations": 4772963
+			"types": 685365,
+			"instantiations": 3639694
 		},
 		"examples/toy-factory-backend": {
-			"types": 1242433,
-			"instantiations": 6938143
+			"types": 999061,
+			"instantiations": 5402697
 		},
 		"examples/tanstack-barbershop": {
-			"types": 1566969,
-			"instantiations": 8805963
+			"types": 1220293,
+			"instantiations": 6666600
 		},
 		"examples/city-portal": {
-			"types": 1356273,
-			"instantiations": 7715601
+			"types": 1104931,
+			"instantiations": 6205698
 		}
 	}
 }

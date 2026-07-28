@@ -35,8 +35,10 @@ import type { FieldAccess, FieldHooks, ReferentialAction } from "./types.js";
  * Explicit interface describing every common method on Field.
  * The Field class implements these; FieldWithMethods maps over them.
  *
- * Extensions (e.g., admin module) augment this interface to add
- * .admin(), .form() etc. The mapped type picks them up automatically.
+ * Exported so consumers can declaration-merge additional common methods in;
+ * the wrapper map re-wraps whatever they add. Note this is NOT how `.admin()`
+ * and `.form()` work — those are codegen-emitted extension proxies over
+ * `Field.set()` and never touch this interface.
  */
 export interface FieldCommonMethods<TState extends FieldState> {
 	required(): Field<
@@ -85,73 +87,112 @@ export interface FieldCommonMethods<TState extends FieldState> {
 // FieldWithMethods — mapped wrapper type
 // ============================================================================
 
-/**
- * Wrapper type that adds type-specific methods to Field and preserves
- * them across all common method chains.
- *
- * How it works:
- * 1. Re-maps each common method: if it returns Field<R>, return FieldWithMethods<R, TMethods>
- * 2. Re-maps each TMethods method: always returns FieldWithMethods<TState, TMethods>
- *    (type-specific methods don't change TState — they use derive() at runtime)
- * 3. Intersects with Field<TState> for runtime accessors (getType, toColumn, etc.)
- *
- * @template TState - Accumulated type state
- * @template TMethods - Type-specific methods interface (e.g., TextMethods)
- */
-type FieldCommonMethodsWrapped<
-	in out TState extends FieldState,
-	in out TMethods,
-> = {
-	// Re-wrap common methods: preserve TMethods across chain
-	[K in keyof FieldCommonMethods<TState>]: FieldCommonMethods<TState>[K] extends (
-		...args: infer A
-	) => Field<infer R extends FieldState>
-		? (...args: A) => FieldWithMethods<R, TMethods>
-		: FieldCommonMethods<TState>[K];
-};
-
 /** Local any-detector — keep this file self-contained (no cross-module import). */
 type _IsAny<T> = 0 extends 1 & T ? true : false;
 
-type FieldTypeMethodsWrapped<
+/**
+ * ONE map over BOTH key sets. This was two separate maps
+ * (`FieldCommonMethodsWrapped` + `FieldTypeMethodsWrapped`) until 2026-07-29;
+ * merging them is worth roughly a fifth of the whole typecheck and is not a
+ * cosmetic tidy-up. Measured on `examples/tanstack-barbershop` (4,580 files),
+ * same machine, back to back:
+ *
+ *   instantiations  8,802,197 → 6,666,633   (−24.3%)
+ *   types           1,569,880 → 1,220,332   (−22.3%)
+ *   memory              3,145 → 2,481 MB    (−21.1%)
+ *   check time          21.08 → 17.22 s     (−18.3%)
+ *
+ * Why it pays: `FieldWithMethods` is re-instantiated at EVERY link of every
+ * field-builder chain, and `structuredTypeRelatedTo` dominates the trace
+ * (2.8 M ms cumulative, ~3× everything else combined) with `FieldWithMethods`
+ * comparisons in 5 of the top 8. Relating two intersections walks each target
+ * constituent separately, so dropping a constituent removes a full property
+ * walk from every one of those comparisons.
+ *
+ * Two earlier directions were tried and did NOT work — do not re-litigate them:
+ *   - A nominal `interface FieldWithMethods extends …` fails with 212 errors:
+ *     TS2320 (interface extends requires IDENTICAL members, but the whole
+ *     mechanism here is that declaration order resolves the conflicts) and
+ *     TS2312 (a mapped type over a generic `TMethods` has no statically known
+ *     members and cannot be extended at all).
+ *   - Hand-writing the wrapped methods instead of mapping would freeze the key
+ *     set. `FieldCommonMethods` is exported as public API precisely so a
+ *     consumer can declaration-merge into it, and the map is what re-wraps
+ *     whatever they add. (Nothing in this repo does so today — `.admin()` and
+ *     `.form()` are codegen-emitted extension proxies over `Field.set()`, NOT
+ *     augmentations of this interface. The comment on `FieldCommonMethods`
+ *     claiming otherwise predates the extension registry.)
+ *
+ * INVARIANTS — all four survive the merge and must survive any future edit:
+ *
+ * 1. Common keys WIN over `TMethods` keys. The intersection this replaced
+ *    resolved calls by declaration order with the common map first; the
+ *    `K extends keyof FieldCommonMethods<TState>` branch is what preserves it.
+ * 2. The `_IsAny<Ret>` short-circuit MUST come BEFORE the state test.
+ *    `any extends { _: infer R } ? A : B` evaluates to the UNION `A | B`, so a
+ *    `(): any` method (text().pattern(), relation().relationName()) would
+ *    otherwise poison the field state to `any`.
+ * 3. The transition is probed via the phantom `_`, not `Field<infer R>`.
+ *    Field's methods reference `TState` contravariantly, which defeats `infer`
+ *    on the class itself; `Field<R>` and `FieldWithMethods<R,_>` both expose
+ *    `readonly _: R`.
+ * 4. `in out` on both parameters. The annotations exist so the checker never
+ *    has to compute variance structurally for a recursive type — removing them
+ *    cost ~40% in instantiations when this was last measured.
+ */
+type FieldAllMethodsWrapped<
 	in out TState extends FieldState,
 	in out TMethods,
 > = {
-	// Re-wrap type-specific methods, honoring each method's DECLARED return:
-	//   - `Field<R>` / `FieldWithMethods<R, _>` returns transition to R (e.g.
-	//     relation `.hasMany()` → ToManyRelationFieldState);
-	//   - everything else (incl. `(): any` state-preserving methods like
-	//     text().pattern(), relation().relationName()) keeps the current TState.
-	//
-	// CRITICAL: the `IsAny<Ret>` short-circuit MUST come BEFORE the state test.
-	// `any extends { _: infer R } ? A : B` evaluates to the UNION `A | B`, so a
-	// `(): any` method would otherwise poison the field state to `any`.
-	//
-	// The transition is probed via the phantom `_` (Field<R> and FieldWithMethods
-	// <R,_> both expose `readonly _: R`). Probing `_` directly avoids the class-
-	// generic inference fragility of `Field<infer R>` (Field's methods reference
-	// TState contravariantly, which defeats `infer` on the class itself).
-	[K in keyof TMethods]: TMethods[K] extends (...args: infer A) => infer Ret
-		? _IsAny<Ret> extends true
-			? (...args: A) => FieldWithMethods<TState, TMethods>
-			: Ret extends { readonly _: infer R extends FieldState }
-				? (...args: A) => FieldWithMethods<R, TMethods>
-				: (...args: A) => FieldWithMethods<TState, TMethods>
-		: TMethods[K];
+	[K in
+		| keyof FieldCommonMethods<TState>
+		| keyof TMethods]: K extends keyof FieldCommonMethods<TState>
+		? // Common methods: re-wrap so TMethods survives the chain.
+			FieldCommonMethods<TState>[K] extends (
+				...args: infer A
+			) => Field<infer R extends FieldState>
+			? (...args: A) => FieldWithMethods<R, TMethods>
+			: FieldCommonMethods<TState>[K]
+		: K extends keyof TMethods
+			? // Type-specific methods: honour each method's DECLARED return.
+				// `Field<R>` / `FieldWithMethods<R,_>` transitions to R (relation
+				// `.hasMany()` → ToManyRelationFieldState); everything else keeps
+				// the current TState.
+				TMethods[K] extends (...args: infer A) => infer Ret
+				? _IsAny<Ret> extends true
+					? (...args: A) => FieldWithMethods<TState, TMethods>
+					: Ret extends { readonly _: infer R extends FieldState }
+						? (...args: A) => FieldWithMethods<R, TMethods>
+						: (...args: A) => FieldWithMethods<TState, TMethods>
+				: TMethods[K]
+			: never;
 };
 
+/**
+ * `crdt()` stays OUT of the map above. Routing it through the wrapper would
+ * force its signature through `(...args: infer A)`, and inferring a signature
+ * erases the `const` type parameter to its constraint — `crdt({ … })` would
+ * widen from the literal config to `CrdtFieldConfig`.
+ */
 type CrdtFieldMethodWrapped<TState extends FieldState, TMethods> = {
 	crdt<const TConfig extends CrdtFieldConfig>(
 		config: TConfig,
 	): FieldWithMethods<TState & { crdt: TConfig }, TMethods>;
 };
 
+/**
+ * Field plus its type-specific methods, preserved across every common-method
+ * chain. `FieldAllMethodsWrapped` supplies the re-wrapped methods; `Field
+ * <TState>` supplies the runtime accessors (getType, toColumn, …).
+ *
+ * @template TState - Accumulated type state
+ * @template TMethods - Type-specific methods interface (e.g., TextMethods)
+ */
 export type FieldWithMethods<TState extends FieldState, TMethods> =
 	// Method override maps must come BEFORE Field<TState> in the intersection.
 	// TypeScript resolves method calls on intersections using the FIRST matching
 	// overload, so placing the override maps first ensures the re-wrapped return
 	// types are used rather than Field<TState>'s own return types.
 	CrdtFieldMethodWrapped<TState, TMethods> &
-		FieldCommonMethodsWrapped<TState, TMethods> &
-		FieldTypeMethodsWrapped<TState, TMethods> &
+		FieldAllMethodsWrapped<TState, TMethods> &
 		Field<TState>;
