@@ -468,6 +468,14 @@ bun run dev --filter=docs
 - **Logging**: [Pino](https://getpino.io)
 - **Admin UI**: React + [Tailwind CSS v4](https://tailwindcss.com) + [shadcn/ui](https://ui.shadcn.com)
 
+## Contributing
+
+- [CONTRIBUTING.md](./CONTRIBUTING.md) — setup, the checks CI runs, PR size policy,
+  and how the ratchet baselines work
+- [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)
+- [SECURITY.md](./SECURITY.md) — **report vulnerabilities privately**, never in a
+  public issue
+
 ## License
 
 MIT
