@@ -119,24 +119,24 @@ That is intentional.
 `package.json` is strict JSON and cannot carry comments, so every entry under
 `overrides` is justified here. Do not remove one without reading its reason.
 
-- **`unrun: 0.2.37`** — `0.2.38` is a broken npm publish: 3 files, 6,637 bytes,
+- **`unrun: 0.2.39`** — `0.2.38` was a broken npm publish: 3 files, 6,637 bytes,
   containing only `LICENSE`, `package.json` and `README.md` while its
-  `package.json` points `main`/`exports`/`bin` at a `dist/` it does not ship
-  (0.2.37 is 10 files, 43,577 bytes). `unrun` is a transitive dependency of
-  `tsdown`, the build tool for every package here.
+  `package.json` pointed `main`/`exports`/`bin` at a `dist/` it did not ship.
+  `unrun` is transitive through `tsdown`, the build tool for every package here,
+  so a lockfile resolving to it cannot build under plain Node.
 
-  It does not break CI, and the reason is worth knowing before you "clean this
-  up": tsdown only imports `unrun` when its config loader is not native —
-  `const autoLoader = isBun || nativeTS && isSupported ? "native" : "unrun"`.
-  CI runs `bunx turbo run build`, so `isBun` is true and the broken package is
-  never touched. Anyone building under plain Node takes the `unrun` path and
-  gets `ERR_MODULE_NOT_FOUND`. A latent trap that happens to miss CI, not a
-  sign that CI builds something other than what we think — the Build job on
-  `8d4cc1b5` reports `0 cached, 14 total`, so it genuinely ran.
+  Upstream has since republished a clean `0.2.39` (10 files, 43,577 bytes —
+  byte-identical in size to the last good `0.2.37`), so the override now pins
+  that rather than holding the line at `0.2.37`. It satisfies tsdown's
+  `^0.2.21`. Keep the override until `tsdown` moves past `0.22`, which dropped
+  `unrun` entirely; then delete it.
 
-  The durable fix is upgrading `tsdown` past `0.22`, which dropped `unrun`
-  entirely. That is a build-tool bump for every package and needs its own PR:
-  the dist syntax, dist types, size and bundle gates all measure tsdown output.
+  Worth knowing before you "clean this up": this never broke CI, and the reason
+  is not that it was harmless. tsdown only imports `unrun` when its config
+  loader is not native (`isBun || nativeTS && isSupported ? "native" : "unrun"`).
+  CI runs `bunx turbo run build`, so `isBun` is true and the broken package was
+  never touched. Anyone building under plain Node took the other branch and got
+  `ERR_MODULE_NOT_FOUND`.
 
 ## Changesets
 
