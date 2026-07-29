@@ -220,6 +220,40 @@ describe("observability end to end", () => {
 		expect(attributeBlob).not.toContain("a-very-distinctive-title");
 	});
 
+	it("continues an inbound traceparent instead of starting its own trace", async () => {
+		// Without this every service begins its own trace and the distributed
+		// waterfall breaks at each hop — the caller's span and ours never join.
+		const h = harness();
+		const app = await buildApp(h.adapter);
+		await syncSchema(app as never);
+		const handle = createFetchHandler(app);
+		h.spans.reset();
+
+		const upstream = "12345678901234567890123456789012";
+		await handle(
+			new Request("http://localhost:3000/notes", {
+				headers: { traceparent: `00-${upstream}-1234567890123456-01` },
+			}),
+		);
+
+		const finished = h.spans.getFinishedSpans();
+		const { root, spans } = requestTrace(finished);
+		await h.adapter.shutdown();
+
+		expect(root).toBeDefined();
+		// Trace-id continuity is what this test owns: it proves the HTTP layer
+		// hands the inbound headers to the adapter as a carrier. That the remote
+		// span becomes the literal PARENT is asserted in otel-tree.test.ts,
+		// against the adapter directly — deliberately not here, because these
+		// tests share one process and OTel's globals are per-process, so the
+		// exact parent link is only reliable in isolation.
+		expect(root!.spanContext().traceId).toBe(upstream);
+		expect(spans.length).toBeGreaterThan(1);
+		for (const span of spans) {
+			expect(span.spanContext().traceId).toBe(upstream);
+		}
+	});
+
 	it("records the RED histogram for the request", async () => {
 		// One histogram, not three instruments: rate is its count, and errors are
 		// that count sliced by status code.

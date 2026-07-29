@@ -50,6 +50,20 @@ export type SpanKind =
 export interface StartSpanOptions {
 	kind?: SpanKind;
 	attributes?: ObservabilityAttributes;
+	/**
+	 * Inbound propagation headers, for a span that continues someone else's
+	 * trace rather than starting one.
+	 *
+	 * Pass the request headers at the HTTP root and nowhere else — every other
+	 * span nests through the active context automatically. The framework cannot
+	 * parse `traceparent` into a parent itself (no OpenTelemetry dependency, and
+	 * W3C is only one of several formats an adapter might accept), so the raw
+	 * carrier goes to the adapter and it decides.
+	 *
+	 * Ignored by adapters that do not implement propagation, which is why this
+	 * is a plain record rather than anything OTel-shaped.
+	 */
+	carrier?: Record<string, string | undefined>;
 }
 
 export interface Tracer {

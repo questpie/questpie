@@ -462,7 +462,19 @@ export const createFetchHandler = (
 					);
 				}
 			},
-			{ kind: "server" },
+			{
+				kind: "server",
+				// Continue the caller's trace instead of starting a fresh one.
+				// Only the root span gets a carrier — everything below nests
+				// through the active context. Passing the headers raw lets the
+				// adapter decide the format; the framework has no OpenTelemetry
+				// dependency and W3C is not the only propagator that exists.
+				carrier: {
+					traceparent: request.headers.get("traceparent") ?? undefined,
+					tracestate: request.headers.get("tracestate") ?? undefined,
+					baggage: request.headers.get("baggage") ?? undefined,
+				},
+			},
 		);
 	};
 };

@@ -170,15 +170,24 @@ function wrapTracer(tracer: OtelTracer): Tracer {
 			options: StartSpanOptions,
 			fn: (span: ObservabilitySpan) => T,
 		): T {
-			return tracer.startActiveSpan(
-				name,
-				{
-					kind: options.kind ? SPAN_KINDS[options.kind] : undefined,
-					attributes: toOtelAttributes(options.attributes),
-				},
-				// The framework's span() owns ending the span (including the
-				// async case), so this must NOT end it here.
-				(span) => fn(wrapSpan(span)),
+			const spanOptions = {
+				kind: options.kind ? SPAN_KINDS[options.kind] : undefined,
+				attributes: toOtelAttributes(options.attributes),
+			};
+			// The framework's span() owns ending the span (including the async
+			// case), so the callback must NOT end it here.
+			const run = () =>
+				tracer.startActiveSpan(name, spanOptions, (span) => fn(wrapSpan(span)));
+
+			// A carrier means "continue this trace". Extracting yields a context
+			// whose active span is the REMOTE parent, so the span started under it
+			// inherits the upstream trace id instead of beginning a new one.
+			// Without this every service starts its own trace and the distributed
+			// waterfall breaks at each hop.
+			if (!options.carrier) return run();
+			return context.with(
+				propagation.extract(context.active(), options.carrier),
+				run,
 			);
 		},
 	};
