@@ -112,7 +112,7 @@ type _AppAuthConfig = _MPConfigSub<typeof _modules, "auth"> & typeof _authConfig
 type _AppSessionAuthConfig = _AppAuthConfig;
 type _AppSession = NonNullable<InferSessionFromAuthConfig<_AppSessionAuthConfig>> | null;
 
-export type AppRouteKeys = "getAvailableTimeSlots" | "getRevenueStats" | "getActiveBarbers" | "createBooking";
+export type AppRouteKeys = "createBooking" | "getActiveBarbers" | "getAvailableTimeSlots" | "getRevenueStats";
 
 type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };
 type _JobHandlerCollections = _ModuleCollections & {

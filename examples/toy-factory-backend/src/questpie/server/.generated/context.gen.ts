@@ -63,7 +63,7 @@ type _AppAuthConfig = _MPConfigSub<typeof _modules, "auth"> & typeof _authConfig
 type _AppSessionAuthConfig = _AppAuthConfig;
 type _AppSession = NonNullable<InferSessionFromAuthConfig<_AppSessionAuthConfig>> | null;
 
-export type AppRouteKeys = "rpc/planning/startProduction" | "rpc/planning/receiveMaterials" | "rpc/planning/capacitySummary";
+export type AppRouteKeys = "rpc/planning/capacitySummary" | "rpc/planning/receiveMaterials" | "rpc/planning/startProduction";
 
 type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };
 type _JobHandlerCollections = _ModuleCollections & {
