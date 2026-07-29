@@ -61,9 +61,16 @@ job, not from the readiness path.
 ## Traces and metrics
 
 Install `@questpie/observability` and point it at any OTLP collector. HTTP
-requests, CRUD operations, jobs, KV and Search are instrumented; see
+requests, CRUD operations, database queries and transactions, jobs, KV and
+Search are instrumented, and an inbound `traceparent` is continued so a
+distributed trace stays connected across services. See
 [Observability](/docs/adapters/observability) for the full seam table and for
-what is deliberately not recorded.
+what is deliberately not recorded, or
+[Trace a slow request](/docs/recipes/trace-a-slow-request) to go from install to
+reading a waterfall.
+
+Database queries are traced on every `db` config variant, including the ones
+where you supply your own Drizzle client.
 
 ```ts title="questpie.config.ts"
 observability: {
@@ -75,6 +82,12 @@ observability: {
 	}),
 }
 ```
+
+Requests also record `http.server.request.duration` (seconds, OTel semantic
+conventions). That one histogram is the whole RED triple: rate is its count,
+errors are that count sliced by `http.response.status_code`, duration is the
+histogram. Do not add parallel counters; they duplicate the same series and
+drift apart from it.
 
 Flush on shutdown, or spans still in the batch are lost:
 
@@ -89,6 +102,14 @@ process.on("SIGTERM", async () => {
 Logs are structured JSON via Pino. Every request line carries `requestId` and
 `traceId`, and those same values are stamped on the corresponding span, so a
 trace and its log lines join on either.
+
+With an observability adapter configured, records additionally carry `trace_id`
+and `span_id` from the span that was open when they were written. Those are the
+OTel log conventions and are what a backend joins on; the camelCase `traceId`
+beside them is the framework's own correlation id from the inbound
+`traceparent`, which is a different value once an adapter owns propagation. With
+an `otlpEndpoint` set the records are exported on the OTel logs signal too,
+alongside the existing Pino output rather than instead of it.
 
 ```ts title="questpie.config.ts"
 logger: {

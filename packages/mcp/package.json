@@ -1,6 +1,7 @@
 {
 	"name": "@questpie/mcp",
 	"version": "3.17.0",
+	"description": "Model Context Protocol server for QUESTPIE apps, under the app's own access rules",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/questpie/questpie.git",
