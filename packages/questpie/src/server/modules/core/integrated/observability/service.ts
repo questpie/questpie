@@ -5,6 +5,7 @@ import {
 	noopTracer,
 	type Meter,
 	type ObservabilityAttributes,
+	type ObservabilityLogRecord,
 	type ObservabilityConfig,
 	type ObservabilitySpan,
 	type StartSpanOptions,
@@ -37,6 +38,14 @@ export class ObservabilityService {
 	 */
 	activeSpanContext(): { traceId: string; spanId: string } | undefined {
 		return this.config.adapter?.activeSpanContext?.();
+	}
+
+	/**
+	 * Mirror a log record onto the adapter's logs signal. No-op without one.
+	 * Called by LoggerService for every record it writes.
+	 */
+	emitLog(record: ObservabilityLogRecord): void {
+		this.config.adapter?.emitLog?.(record);
 	}
 
 	tracer(name = "questpie"): Tracer {

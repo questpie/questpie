@@ -21,23 +21,64 @@ export class LoggerService implements LoggerAdapter {
 
 	debug(msg: string, ...args: any[]) {
 		this.adapter.debug(msg, ...this.withContext(args));
+		this.tee("debug", msg, args);
 	}
 
 	info(msg: string, ...args: any[]) {
 		this.adapter.info(msg, ...this.withContext(args));
+		this.tee("info", msg, args);
 	}
 
 	warn(msg: string, ...args: any[]) {
 		this.adapter.warn(msg, ...this.withContext(args));
+		this.tee("warn", msg, args);
 	}
 
 	error(msg: string, ...args: any[]) {
 		this.adapter.error(msg, ...this.withContext(args));
+		this.tee("error", msg, args);
 	}
 
 	child(bindings: Record<string, any>): LoggerService {
 		const childAdapter = this.adapter.child(bindings);
 		return new LoggerService({ adapter: childAdapter });
+	}
+
+	/**
+	 * Mirror the record onto the OTel logs signal when an adapter wants it.
+	 *
+	 * A TEE, not a redirect — the Pino output above already happened. An app
+	 * scraping stdout keeps working; one exporting OTLP gets records too.
+	 *
+	 * Swallows adapter failures on purpose. A telemetry backend being down must
+	 * never turn a log line into a thrown error, and the one thing we could do
+	 * about it — log — is the path that just failed.
+	 */
+	private tee(
+		level: "debug" | "info" | "warn" | "error",
+		msg: string,
+		args: any[],
+	): void {
+		const observability = (
+			tryGetContext()?.app as
+				| { observability?: { emitLog?(record: unknown): void } }
+				| undefined
+		)?.observability;
+		if (!observability?.emitLog) return;
+
+		const first = args[0];
+		const attributes =
+			first && typeof first === "object" && !Array.isArray(first)
+				? first instanceof Error
+					? { "exception.message": first.message }
+					: (first as Record<string, unknown>)
+				: undefined;
+
+		try {
+			observability.emitLog({ level, message: msg, attributes });
+		} catch {
+			/* telemetry must not break the caller */
+		}
 	}
 
 	private withContext(args: any[]): any[] {

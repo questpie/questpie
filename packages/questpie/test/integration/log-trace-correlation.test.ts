@@ -138,3 +138,72 @@ describe("log/trace correlation", () => {
 		expect(() => logger.info("hello")).not.toThrow();
 	});
 });
+
+describe("log records tee onto the observability signal", () => {
+	function teeing() {
+		const emitted: Array<{
+			level: string;
+			message: string;
+			attributes?: unknown;
+		}> = [];
+		const observability = new ObservabilityService({
+			adapter: {
+				...withActiveSpan({ traceId: TRACE, spanId: SPAN }),
+				emitLog: (record) => {
+					emitted.push(record);
+				},
+			},
+		});
+		return { observability, emitted };
+	}
+
+	it("mirrors every level without replacing the Pino output", async () => {
+		const log = capturing();
+		const logger = new LoggerService({ adapter: log.adapter });
+		const { observability, emitted } = teeing();
+
+		await runWithContext({ app: { observability } } as never, async () => {
+			logger.info("hello", { orderId: "o-1" });
+		});
+
+		// Both, not either: an app scraping stdout keeps working.
+		expect(log.records).toHaveLength(1);
+		expect(emitted).toHaveLength(1);
+		expect(emitted[0]!.level).toBe("info");
+		expect(emitted[0]!.message).toBe("hello");
+		expect(emitted[0]!.attributes).toMatchObject({ orderId: "o-1" });
+	});
+
+	it("does not let a failing telemetry backend break the caller", async () => {
+		// The one thing we could do about an emit failure is log it, and that is
+		// the path that just failed.
+		const log = capturing();
+		const logger = new LoggerService({ adapter: log.adapter });
+		const observability = new ObservabilityService({
+			adapter: {
+				...withActiveSpan(undefined),
+				emitLog: () => {
+					throw new Error("collector down");
+				},
+			},
+		});
+
+		await runWithContext({ app: { observability } } as never, async () => {
+			expect(() => logger.info("hello")).not.toThrow();
+		});
+		expect(log.records).toHaveLength(1);
+	});
+
+	it("emits nothing when the adapter has no logs signal", async () => {
+		const log = capturing();
+		const logger = new LoggerService({ adapter: log.adapter });
+		const observability = new ObservabilityService({
+			adapter: withActiveSpan({ traceId: TRACE, spanId: SPAN }),
+		});
+
+		await runWithContext({ app: { observability } } as never, async () => {
+			expect(() => logger.info("hello")).not.toThrow();
+		});
+		expect(log.records).toHaveLength(1);
+	});
+});

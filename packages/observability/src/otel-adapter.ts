@@ -26,11 +26,18 @@ import {
 	type SpanKind as OtelSpanKind,
 	type Tracer as OtelTracer,
 } from "@opentelemetry/api";
+import { SeverityNumber, logs } from "@opentelemetry/api-logs";
 import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
 import { W3CTraceContextPropagator } from "@opentelemetry/core";
+import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { resourceFromAttributes } from "@opentelemetry/resources";
+import {
+	BatchLogRecordProcessor,
+	LoggerProvider,
+	type LogRecordProcessor,
+} from "@opentelemetry/sdk-logs";
 import {
 	MeterProvider,
 	PeriodicExportingMetricReader,
@@ -97,7 +104,22 @@ export interface OtelObservabilityOptions {
 	 * `otel-tree.test.ts` work.
 	 */
 	spanProcessors?: SpanProcessor[];
+	/**
+	 * Additional log-record processors, appended after the OTLP one. Same
+	 * reasoning as `spanProcessors`: `LoggerProvider` takes its processors at
+	 * construction, so without this there is no way to capture records in a test
+	 * or send them anywhere else.
+	 */
+	logRecordProcessors?: LogRecordProcessor[];
 }
+
+/** OTel severity numbers for the four levels the framework logger exposes. */
+const SEVERITY: Record<string, SeverityNumber> = {
+	debug: SeverityNumber.DEBUG,
+	info: SeverityNumber.INFO,
+	warn: SeverityNumber.WARN,
+	error: SeverityNumber.ERROR,
+};
 
 const SPAN_KINDS: Record<SpanKind, OtelSpanKind> = {
 	internal: 0,
@@ -275,6 +297,27 @@ export function otelObservability(
 	});
 	metrics.setGlobalMeterProvider(meterProvider);
 
+	const logRecordProcessors: LogRecordProcessor[] = [];
+	if (options.otlpEndpoint) {
+		logRecordProcessors.push(
+			new BatchLogRecordProcessor({
+				exporter: new OTLPLogExporter({
+					url: `${options.otlpEndpoint.replace(/\/$/, "")}/v1/logs`,
+					headers: options.otlpHeaders,
+				}),
+			}),
+		);
+	}
+	if (options.logRecordProcessors) {
+		logRecordProcessors.push(...options.logRecordProcessors);
+	}
+	const loggerProvider = new LoggerProvider({
+		resource,
+		processors: logRecordProcessors,
+	});
+	logs.setGlobalLoggerProvider(loggerProvider);
+	const otelLogger = loggerProvider.getLogger("questpie");
+
 	return {
 		tracer(name) {
 			return wrapTracer(tracerProvider.getTracer(name));
@@ -289,11 +332,22 @@ export function otelObservability(
 		meter(name) {
 			return wrapMeter(meterProvider.getMeter(name));
 		},
+		emitLog(record) {
+			// The SDK stamps trace_id/span_id from the ACTIVE context itself, so
+			// nothing has to be threaded through the call site.
+			otelLogger.emit({
+				severityNumber: SEVERITY[record.level] ?? SeverityNumber.INFO,
+				severityText: record.level.toUpperCase(),
+				body: record.message,
+				attributes: toOtelAttributes(record.attributes),
+			});
+		},
 		async shutdown() {
 			// Both, and in this order: spans are usually what you are missing
 			// when a process exits without flushing.
 			await tracerProvider.shutdown();
 			await meterProvider.shutdown();
+			await loggerProvider.shutdown();
 		},
 	};
 }

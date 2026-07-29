@@ -107,7 +107,25 @@ export interface ObservabilityAdapter {
 	 * it is not a trace id at all.
 	 */
 	activeSpanContext?(): { traceId: string; spanId: string } | undefined;
+	/**
+	 * Emit one log record on the OTel logs signal.
+	 *
+	 * Optional, and a TEE rather than a replacement: the existing Pino output
+	 * (console, pretty, whatever the app configured) is untouched. An app that
+	 * ships logs by scraping stdout keeps working; one that wants them on OTLP
+	 * gets them without changing how it logs.
+	 *
+	 * Trace correlation is not passed in — the adapter reads the active context
+	 * itself, which is both cheaper and harder to get wrong at the call site.
+	 */
+	emitLog?(record: ObservabilityLogRecord): void;
 	shutdown(): Promise<void>;
+}
+
+export interface ObservabilityLogRecord {
+	level: "debug" | "info" | "warn" | "error";
+	message: string;
+	attributes?: ObservabilityAttributes;
 }
 
 export interface ObservabilityConfig {

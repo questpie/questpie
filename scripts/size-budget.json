@@ -2,7 +2,7 @@
 	"$comment": "Published package-size budget (npm pack --dry-run unpackedSize, so `files`/.npmignore are respected). Packages are DISCOVERED from packages/* — never hand-edit the list. Regenerate with `bun run scripts/size-budget.ts --update` after a build, and review the diff. Gate: unpackedSize >5% over budget fails CI. entryCount is informational only.",
 	"targets": {
 		"admin": {
-			"unpackedSize": 2705303,
+			"unpackedSize": 2705603,
 			"entryCount": 624
 		},
 		"crdt-yjs": {
@@ -22,7 +22,7 @@
 			"entryCount": 6
 		},
 		"mcp": {
-			"unpackedSize": 151635,
+			"unpackedSize": 151661,
 			"entryCount": 17
 		},
 		"next": {
@@ -30,19 +30,19 @@
 			"entryCount": 4
 		},
 		"observability": {
-			"unpackedSize": 8953,
+			"unpackedSize": 11581,
 			"entryCount": 3
 		},
 		"openapi": {
-			"unpackedSize": 57650,
+			"unpackedSize": 57657,
 			"entryCount": 13
 		},
 		"questpie": {
-			"unpackedSize": 3759682,
-			"entryCount": 768
+			"unpackedSize": 3767904,
+			"entryCount": 770
 		},
 		"sandbox": {
-			"unpackedSize": 245311,
+			"unpackedSize": 245337,
 			"entryCount": 23
 		},
 		"tanstack-db": {
@@ -58,7 +58,7 @@
 			"entryCount": 6
 		},
 		"workflows": {
-			"unpackedSize": 203720,
+			"unpackedSize": 203746,
 			"entryCount": 30
 		}
 	}

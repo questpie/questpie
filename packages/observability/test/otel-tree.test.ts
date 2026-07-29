@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it } from "bun:test";
 
 import { context, propagation, trace, type Context } from "@opentelemetry/api";
 import {
+	InMemoryLogRecordExporter,
+	SimpleLogRecordProcessor,
+} from "@opentelemetry/sdk-logs";
+import {
 	InMemorySpanExporter,
 	SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
@@ -230,5 +234,74 @@ describe("activeSpanContext — the seam the logger correlates on", () => {
 		// like correlation and joins to nothing.
 		const { adapter } = harness();
 		expect(adapter.activeSpanContext?.()).toBeUndefined();
+	});
+});
+
+describe("OTLP log records", () => {
+	it("emits a record carrying the active trace context", async () => {
+		// The whole point of the logs signal over scraping stdout: the SDK stamps
+		// trace_id/span_id from the active context, so the backend can join the
+		// record to the exact span it happened in.
+		const exporter = new InMemoryLogRecordExporter();
+		const adapter = otelObservability({
+			serviceName: "logs-test",
+			logRecordProcessors: [new SimpleLogRecordProcessor({ exporter })],
+		});
+		const service = new ObservabilityService({ adapter });
+
+		await service.span("http.request", async () => {
+			service.emitLog({
+				level: "error",
+				message: "boom",
+				attributes: { orderId: "o-1" },
+			});
+		});
+
+		const records = exporter.getFinishedLogRecords();
+		await adapter.shutdown();
+
+		expect(records).toHaveLength(1);
+		expect(records[0]!.body).toBe("boom");
+		expect(records[0]!.severityText).toBe("ERROR");
+		expect(records[0]!.attributes.orderId).toBe("o-1");
+		expect(records[0]!.spanContext?.traceId).toBeDefined();
+	});
+
+	it("maps every level to a distinct severity", async () => {
+		const exporter = new InMemoryLogRecordExporter();
+		const adapter = otelObservability({
+			serviceName: "logs-levels",
+			logRecordProcessors: [new SimpleLogRecordProcessor({ exporter })],
+		});
+		const service = new ObservabilityService({ adapter });
+
+		for (const level of ["debug", "info", "warn", "error"] as const) {
+			service.emitLog({ level, message: level });
+		}
+
+		const records = exporter.getFinishedLogRecords();
+		await adapter.shutdown();
+
+		expect(records.map((r) => r.severityText)).toEqual([
+			"DEBUG",
+			"INFO",
+			"WARN",
+			"ERROR",
+		]);
+		// Distinct numbers, not all defaulted to INFO.
+		expect(new Set(records.map((r) => r.severityNumber)).size).toBe(4);
+	});
+
+	it("emits nothing when no adapter is configured", async () => {
+		const exporter = new InMemoryLogRecordExporter();
+		otelObservability({
+			serviceName: "logs-noop",
+			logRecordProcessors: [new SimpleLogRecordProcessor({ exporter })],
+		});
+		const noop = new ObservabilityService({});
+
+		noop.emitLog({ level: "info", message: "ignored" });
+
+		expect(exporter.getFinishedLogRecords()).toHaveLength(0);
 	});
 });
