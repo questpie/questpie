@@ -14,6 +14,27 @@ bunx turbo run test --filter='./packages/*'
 We use **bun 1.3.13** (pinned in `packageManager`) and **turbo**. Node 18+ works for
 consuming the published packages, but developing the repo needs bun.
 
+**`questpie` will not be on your PATH, and that is expected.** Its `bin` points at
+`dist/cli.mjs`, which is built rather than committed, and `bun install` skips the
+`node_modules/.bin` entry for a workspace package whose bin target does not exist
+yet — so on a fresh clone the binary is never linked. (The package symlink _is_
+created, so imports work fine.) Every script in this repo therefore invokes the
+CLI through the package, not the binary:
+
+```bash
+bun run node_modules/questpie/src/exports/cli.ts generate   # in an example
+bun run ../questpie/src/exports/cli.ts generate             # in packages/*
+```
+
+Once `.bin` _is_ linked, `questpie …`, `bun questpie …` and `bun x questpie …` all
+work — which is why the user-facing docs use them, and why this only bites in
+this repo. The first two simply have nothing to resolve to on a fresh clone
+(`bun questpie` then reports `Script not found "questpie"`, which is misleading;
+it falls back to the binary fine when one exists). `bun x questpie` is worse than
+unavailable: with no local match it silently uses the published CLI from bun's
+global cache, so anything comparing generated output checks against the wrong
+generator and passes.
+
 Postgres is needed for some tests. Most suites use in-memory PGlite and need
 nothing; the ones that need a real server say so and are gated behind env vars
 (`QUESTPIE_REALTIME_TXID_DATABASE_URL`, `QUESTPIE_SOKETI_INTEGRATION`, …). There is
