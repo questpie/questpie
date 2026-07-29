@@ -58,6 +58,7 @@ import _mig_20260615T084209_swift_orange_eagle from "../migrations/20260615T0842
 import _mig_20260712T094709_bold_red_griffin from "../migrations/20260712T094709_bold_red_griffin";
 import _mig_20260712T195414_eager_red_tiger from "../migrations/20260712T195414_eager_red_tiger";
 import _mig_20260725T184252_realtimeV3Umbrella from "../migrations/20260725T184252_realtime-v3-umbrella";
+import _mig_20260726T163042_queueTransactionalDispatch from "../migrations/20260726T163042_queue-transactional-dispatch";
 
 // ── Seeds ──────────────────────────────────────────────────
 import _seed_blogPosts from "../seeds/blog-posts";
@@ -123,7 +124,15 @@ type _JobHandlerCollections = _ModuleCollections & {
 	reviews: typeof _coll_reviews;
 	services: typeof _coll_services;
 };
-type _JobHandlerCollectionsAPI = { [K in keyof _JobHandlerCollections]: CollectionAPI<_JobHandlerCollections[K], _JobHandlerCollections> };
+type _JobHandlerCollectionsAPI = { [K in keyof _ModuleCollections]: CollectionAPI<_ModuleCollections[K], _JobHandlerCollections> } & {
+	appointments: CollectionAPI<typeof _coll_appointments, _JobHandlerCollections>;
+	barber_services: CollectionAPI<typeof _coll_barber_services, _JobHandlerCollections>;
+	barbers: CollectionAPI<typeof _coll_barbers, _JobHandlerCollections>;
+	blog_posts: CollectionAPI<typeof _coll_blog_posts, _JobHandlerCollections>;
+	pages: CollectionAPI<typeof _coll_pages, _JobHandlerCollections>;
+	reviews: CollectionAPI<typeof _coll_reviews, _JobHandlerCollections>;
+	services: CollectionAPI<typeof _coll_services, _JobHandlerCollections>;
+};
 type _ExecutionContextJob<T> = T extends { name: infer TName extends string; schema: z.ZodSchema<infer TPayload> } ? QueueJobType<TPayload, TName> : never;
 type _ExecutionContextJobs = {
 	notifyBlogSubscribers: _ExecutionContextJob<typeof _job_notifyBlogSubscribers>;

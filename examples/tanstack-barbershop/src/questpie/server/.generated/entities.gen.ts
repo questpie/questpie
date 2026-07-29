@@ -59,6 +59,7 @@ import _mig_20260615T084209_swift_orange_eagle from "../migrations/20260615T0842
 import _mig_20260712T094709_bold_red_griffin from "../migrations/20260712T094709_bold_red_griffin";
 import _mig_20260712T195414_eager_red_tiger from "../migrations/20260712T195414_eager_red_tiger";
 import _mig_20260725T184252_realtimeV3Umbrella from "../migrations/20260725T184252_realtime-v3-umbrella";
+import _mig_20260726T163042_queueTransactionalDispatch from "../migrations/20260726T163042_queue-transactional-dispatch";
 
 // ── Seeds ──────────────────────────────────────────────────
 import _seed_blogPosts from "../seeds/blog-posts";

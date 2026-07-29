@@ -23,6 +23,7 @@ import _glob_site_settings from "../globals/site-settings";
 
 // ── Migrations ─────────────────────────────────────────────
 import _mig_20260725T184252_realtimeV3Umbrella from "../migrations/20260725T184252_realtime-v3-umbrella";
+import _mig_20260726T163039_queueTransactionalDispatch from "../migrations/20260726T163039_queue-transactional-dispatch";
 
 // ── Blocks ─────────────────────────────────────────────────
 import { accordionBlock as _bloc_accordion } from "../blocks/accordion";
@@ -74,7 +75,16 @@ type _JobHandlerCollections = _ModuleCollections & {
 	pages: typeof _coll_pages;
 	submissions: typeof _coll_submissions;
 };
-type _JobHandlerCollectionsAPI = { [K in keyof _JobHandlerCollections]: CollectionAPI<_JobHandlerCollections[K], _JobHandlerCollections> };
+type _JobHandlerCollectionsAPI = { [K in keyof _ModuleCollections]: CollectionAPI<_ModuleCollections[K], _JobHandlerCollections> } & {
+	announcements: CollectionAPI<typeof _coll_announcements, _JobHandlerCollections>;
+	cities: CollectionAPI<typeof _coll_cities, _JobHandlerCollections>;
+	cityMembers: CollectionAPI<typeof _coll_cityMembers, _JobHandlerCollections>;
+	contacts: CollectionAPI<typeof _coll_contacts, _JobHandlerCollections>;
+	documents: CollectionAPI<typeof _coll_documents, _JobHandlerCollections>;
+	news: CollectionAPI<typeof _coll_news, _JobHandlerCollections>;
+	pages: CollectionAPI<typeof _coll_pages, _JobHandlerCollections>;
+	submissions: CollectionAPI<typeof _coll_submissions, _JobHandlerCollections>;
+};
 type _ExecutionContextJob<T> = T extends { name: infer TName extends string; schema: z.ZodSchema<infer TPayload> } ? QueueJobType<TPayload, TName> : never;
 type _ExecutionContextJobs = {};
 type _ExecutionContextServiceDefinitions = {};
