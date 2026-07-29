@@ -1,5 +1,5 @@
 ---
-"questpie": major
+"questpie": minor
 ---
 
 Field builder chains typecheck about **twice as fast**. Instantiation counts on
@@ -33,14 +33,14 @@ the mapped mirror, so they fell through to a bare `Field` and lost the field
 type's own methods. `f.text().required().$type<string>().pattern(/x/)` now
 compiles; it used to be an error.
 
-**BREAKING: `FieldCommonMethods` is removed.** It was exported from
-`questpie/builders`, so this is a major, not the patch this changeset first
-claimed. It
+**`FieldCommonMethods` is deprecated, not removed.** It is now an alias for
+`Field<TState, TMethods>`, so existing imports keep compiling and this stays a
+minor. It
 existed as a hand-maintained mirror of the class's method signatures, and
 nothing checked the two stayed in sync (they had already drifted on `.drizzle()`
-and `.operators()`). It was exported so consumers could declaration-merge extra
-common methods in; the supported way to add methods is a `fieldType()` with
-`methods`. `FieldWithMethods` is unchanged and still exported.
+and `.operators()`). It existed so consumers could declaration-merge extra common methods in, and
+that no longer does anything — the supported way to add methods is a
+`fieldType()` with `methods`. `FieldWithMethods` is unchanged.
 
 **`.drizzle()` no longer re-derives the field's value type from the column it
 returns.** It swaps the column and leaves `data` alone. Only

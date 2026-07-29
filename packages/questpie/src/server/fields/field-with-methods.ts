@@ -133,3 +133,21 @@ export type FieldWithMethods<TState extends FieldState, TMethods> = Field<
 	TMethods
 > &
 	FieldTypeMethodsWrapped<TState, TMethods>;
+
+/**
+ * @deprecated Use `Field<TState, TMethods>` directly.
+ *
+ * Until 3.18 this was a hand-maintained interface mirroring the class's ~22
+ * common method signatures, and the mapped wrapper read it to rewrite their
+ * return types. The class now declares those returns itself, so the mirror is
+ * gone — nothing checked the two stayed in sync and they had already drifted on
+ * `.drizzle()` and `.operators()`.
+ *
+ * Kept as an alias so the removal is not a breaking change for anyone who
+ * imported it. To ADD common methods, declare a `fieldType()` with `methods`;
+ * declaration-merging into this alias does nothing.
+ */
+export type FieldCommonMethods<
+	TState extends FieldState,
+	TMethods = {},
+> = Field<TState, TMethods>;

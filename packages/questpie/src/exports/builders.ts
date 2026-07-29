@@ -78,7 +78,10 @@ export {
 	wrapFieldComplete,
 	type FieldTypeDefinition,
 } from "#questpie/server/fields/field-type.js";
-export type { FieldWithMethods } from "#questpie/server/fields/field-with-methods.js";
+export type {
+	FieldCommonMethods,
+	FieldWithMethods,
+} from "#questpie/server/fields/field-with-methods.js";
 
 export {
 	getCurrentTransaction,
