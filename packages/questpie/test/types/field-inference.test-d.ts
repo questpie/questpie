@@ -277,3 +277,72 @@ type _SelectNotAny = Expect<Equal<IsAny<S_select>, false>>;
 type _SelectRequired = Expect<Equal<S_select["notNull"], true>>;
 // @ts-expect-error select's state is exact, not widened by the wrapper.
 const _twinSelect: S_select["notNull"] = false as boolean;
+
+// ============================================================================
+// 6. Completeness gate — the part that survives an unasserted loosening
+//
+// Everything above asserts named properties, and that is exactly as strong as
+// the list of properties someone remembered to name. Demonstrated, not assumed:
+// dropping the `NotNull<>` wrapper from `required()`'s column type produces ZERO
+// errors across the whole package — no assertion above mentions `column` on the
+// required path, and the framework's own select/insert typing keys off
+// `TState extends { notNull: true }` rather than the Drizzle column, so even the
+// `create({})` checks in field-input-integrity.test-d.ts stay green. The
+// loosening is real (it reaches `ctx.tables` and raw `ctx.db` usage) and it was
+// invisible.
+//
+// So: pin the whole key surface, then assert every key. Loosening a key breaks
+// that key's assertion; ADDING a state property breaks the `keyof` assertion and
+// forces whoever added it to say what it should be. Neither can pass silently.
+//
+// Keep this on ONE canonical chain. Repeating it per field type buys little and
+// rots fast — the point is that the state surface cannot change unnoticed.
+// ============================================================================
+
+type S_canonical = StateOf<ReturnType<ReturnType<typeof text>["required"]>>;
+
+type _CanonicalKeys = Expect<
+	Equal<
+		keyof S_canonical,
+		| "type"
+		| "data"
+		| "column"
+		| "notNull"
+		| "hasDefault"
+		| "localized"
+		| "virtual"
+		| "input"
+		| "output"
+		| "isArray"
+		| "operators"
+		| "textStorage"
+	>
+>;
+
+type _CanonicalType = Expect<Equal<S_canonical["type"], "text">>;
+type _CanonicalData = Expect<Equal<S_canonical["data"], string>>;
+type _CanonicalNotNull = Expect<Equal<S_canonical["notNull"], true>>;
+type _CanonicalHasDefault = Expect<Equal<S_canonical["hasDefault"], false>>;
+type _CanonicalLocalized = Expect<Equal<S_canonical["localized"], false>>;
+type _CanonicalVirtual = Expect<Equal<S_canonical["virtual"], false>>;
+type _CanonicalInput = Expect<Equal<S_canonical["input"], true>>;
+type _CanonicalOutput = Expect<Equal<S_canonical["output"], true>>;
+type _CanonicalIsArray = Expect<Equal<S_canonical["isArray"], false>>;
+type _CanonicalStorage = Expect<Equal<S_canonical["textStorage"], "text">>;
+type _CanonicalOperators = Expect<
+	Equal<IsAny<S_canonical["operators"]>, false>
+>;
+
+// The Drizzle column must still carry the notNull marker. This is the one the
+// named assertions missed: nothing else in the suite reads `column`, and the
+// framework API does not depend on it, so it can be dropped without a single
+// test going red.
+type _CanonicalColumnNotNull = Expect<
+	Equal<S_canonical["column"]["_"]["notNull"], true>
+>;
+
+// …and `.default()` must mark the column as defaulted, for the same reason.
+type S_defaulted = StateOf<ReturnType<ReturnType<typeof text>["default"]>>;
+type _DefaultedColumn = Expect<
+	Equal<S_defaulted["column"]["_"]["hasDefault"], true>
+>;
