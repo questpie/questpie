@@ -700,6 +700,11 @@ async function createAppFromDefinition(
 		crdt: runtime.crdt,
 		logger: runtime.logger,
 		kv: runtime.kv,
+		// Was missing until 2026-07-29, which meant `runtimeConfig({
+		// observability: { adapter } })` was accepted by the types, silently
+		// dropped here, and the service came up disabled — so the documented way
+		// to turn tracing on did nothing at all.
+		observability: runtime.observability,
 		executor: runtime.executor,
 		migrations: {
 			migrations: [...merged.migrations],

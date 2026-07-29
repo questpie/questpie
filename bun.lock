@@ -405,7 +405,10 @@
         "@opentelemetry/semantic-conventions": "^1.43.0",
       },
       "devDependencies": {
+        "@electric-sql/pglite": "^0.3.14",
         "bun-types": "latest",
+        "drizzle-kit": "1.0.0-beta.6-4414a19",
+        "drizzle-orm": "1.0.0-beta.6-4414a19",
         "tsdown": "^0.18.3",
       },
       "peerDependencies": {

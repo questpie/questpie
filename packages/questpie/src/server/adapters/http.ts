@@ -284,6 +284,24 @@ export const createFetchHandler = (
 					);
 				}
 			}
+			// RED as ONE histogram, not three instruments. Rate is its count and
+			// errors are that count sliced by `http.response.status_code`, which
+			// is what every backend's dashboards already assume — separate
+			// request/error counters would duplicate the same series and drift.
+			// Name and attributes follow OTel HTTP semconv so an off-the-shelf
+			// dashboard works without remapping; the unit is SECONDS per spec,
+			// though the log line beside it stays in ms for humans.
+			appInstance.observability
+				.histogram("http.server.request.duration", {
+					unit: "s",
+					description: "Duration of inbound HTTP requests",
+				})
+				.record(durationMs / 1000, {
+					"http.request.method": request.method,
+					"http.response.status_code": response.status,
+					...(routePattern ? { "http.route": routePattern } : {}),
+				});
+
 			const meta: RequestLogMeta = {
 				event: "http.request",
 				requestId,

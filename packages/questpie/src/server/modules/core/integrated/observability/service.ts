@@ -3,6 +3,9 @@ import { tryGetContext } from "#questpie/server/config/context.js";
 import {
 	noopMeter,
 	noopTracer,
+	type Counter,
+	type Histogram,
+	type InstrumentOptions,
 	type Meter,
 	type ObservabilityAttributes,
 	type ObservabilityLogRecord,
@@ -22,6 +25,8 @@ export class ObservabilityService {
 	private readonly config: ObservabilityConfig;
 	private readonly tracers = new Map<string, Tracer>();
 	private readonly meters = new Map<string, Meter>();
+	private readonly histograms = new Map<string, Histogram>();
+	private readonly counters = new Map<string, Counter>();
 
 	constructor(config: ObservabilityConfig = {}) {
 		this.config = config;
@@ -46,6 +51,28 @@ export class ObservabilityService {
 	 */
 	emitLog(record: ObservabilityLogRecord): void {
 		this.config.adapter?.emitLog?.(record);
+	}
+
+	/**
+	 * Cached histogram. Instruments must be created ONCE, not per call — a fresh
+	 * instrument per request is both an allocation on the hot path and, in some
+	 * backends, a fresh time series.
+	 */
+	histogram(name: string, options?: InstrumentOptions): Histogram {
+		const cached = this.histograms.get(name);
+		if (cached) return cached;
+		const resolved = this.meter().createHistogram(name, options);
+		this.histograms.set(name, resolved);
+		return resolved;
+	}
+
+	/** Cached counter — same reasoning as `histogram`. */
+	counter(name: string, options?: InstrumentOptions): Counter {
+		const cached = this.counters.get(name);
+		if (cached) return cached;
+		const resolved = this.meter().createCounter(name, options);
+		this.counters.set(name, resolved);
+		return resolved;
 	}
 
 	tracer(name = "questpie"): Tracer {
