@@ -410,14 +410,16 @@ import { ApiError } from "questpie/errors";
 })
 ```
 
-| Factory                                       | Code                    | HTTP |
-| --------------------------------------------- | ----------------------- | ---- |
-| `ApiError.unauthorized(message?)`             | `UNAUTHORIZED`          | 401  |
-| `ApiError.forbidden(context)`                 | `FORBIDDEN`             | 403  |
-| `ApiError.notFound(resource, id?)`            | `NOT_FOUND`             | 404  |
-| `ApiError.badRequest(message?, fieldErrors?)` | `BAD_REQUEST`           | 400  |
-| `ApiError.conflict(message)`                  | `CONFLICT`              | 409  |
-| `ApiError.internal(message?, cause?)`         | `INTERNAL_SERVER_ERROR` | 500  |
+| Factory                                                                    | Code                    | HTTP |
+| -------------------------------------------------------------------------- | ----------------------- | ---- |
+| `ApiError.unauthorized(message?, messageKey?, messageParams?)`             | `UNAUTHORIZED`          | 401  |
+| `ApiError.forbidden(context, messageKey?, messageParams?)`                 | `FORBIDDEN`             | 403  |
+| `ApiError.notFound(resource, id?, messageKey?, messageParams?)`            | `NOT_FOUND`             | 404  |
+| `ApiError.badRequest(message?, fieldErrors?, messageKey?, messageParams?)` | `BAD_REQUEST`           | 400  |
+| `ApiError.conflict(message, messageKey?, messageParams?)`                  | `CONFLICT`              | 409  |
+| `ApiError.internal(message?, cause?, messageKey?, messageParams?)`         | `INTERNAL_SERVER_ERROR` | 500  |
+
+Every factory takes an optional `messageKey` (plus `messageParams` for interpolation) so the error can be localized for the requesting user instead of reaching the client as the untranslated `message`. Omit it and you get the built-in default key for that code. `notFound` always exposes `{{resource}}` and `{{id}}` to the translation, `forbidden` always exposes `{{reason}}`, and anything you pass in `messageParams` overrides them.
 
 `ApiError.forbidden(context)` takes `{ operation, resource, reason, requiredRole?, userRole?, fieldPath? }`. A `reason` of `"Access denied"` triggers the built-in localized message; any other `reason` is sent to the client verbatim. `401` means _no auth_; `403` means _authenticated but not permitted_, reach for `unauthorized` vs `forbidden` accordingly. Every `ApiError` serializes to a stable JSON shape (`{ code, message, fieldErrors?, context? }`) the typed client surfaces, and the full code set (`BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `VALIDATION_ERROR`, `HOOK_ERROR`, …) is exported from `questpie/errors`.
 

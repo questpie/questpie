@@ -595,6 +595,217 @@ describe("i18n", () => {
 		});
 	});
 
+	describe("ApiError constructor message keys", () => {
+		const t = createTranslator({
+			messages: {
+				en: allBackendMessagesEN,
+				sk: {
+					"error.conflict": "Konflikt zdroja",
+					"error.forbidden": "Pristup zamietnuty",
+					"error.internal": "Interna chyba servera",
+					"error.notFound": "Zdroj nenajdeny",
+					"error.notFound.withId": "{{resource}} nenajdeny: {{id}}",
+					"post.conflict.staleVersion": "Prispevok {{id}} bol medzitym zmeneny",
+					"post.forbidden.draft": "Koncept {{id}} nie je pristupny",
+					"post.internal.indexer": "Indexovanie {{collection}} zlyhalo",
+					"post.notFound": "Prispevok {{id}} neexistuje",
+				},
+			},
+			fallbackLocale: "en",
+		});
+
+		describe("conflict", () => {
+			test("should preserve a supplied key and params", () => {
+				const error = ApiError.conflict(
+					"Post 42 was modified by someone else",
+					"post.conflict.staleVersion",
+					{ id: "42" },
+				);
+
+				expect(error.messageKey).toBe("post.conflict.staleVersion");
+				expect(error.messageParams).toEqual({ id: "42" });
+			});
+
+			test("should render a supplied key through a translate function", () => {
+				const error = ApiError.conflict(
+					"Post 42 was modified by someone else",
+					"post.conflict.staleVersion",
+					{ id: "42" },
+				);
+
+				expect(error.toJSON(false, t, "sk").message).toBe(
+					"Prispevok 42 bol medzitym zmeneny",
+				);
+			});
+
+			test("should behave exactly as before when no key is given", () => {
+				const error = ApiError.conflict("Post 42 was modified by someone else");
+
+				expect(error.code).toBe("CONFLICT");
+				expect(error.message).toBe("Post 42 was modified by someone else");
+				expect(error.messageKey).toBe("error.conflict");
+				expect(error.messageParams).toBeUndefined();
+				expect(error.toJSON(false).message).toBe(
+					"Post 42 was modified by someone else",
+				);
+				expect(error.toJSON(false, t, "sk").message).toBe("Konflikt zdroja");
+			});
+		});
+
+		describe("notFound", () => {
+			test("should preserve a supplied key and merge params over resource/id", () => {
+				const error = ApiError.notFound("Post", "42", "post.notFound");
+
+				expect(error.messageKey).toBe("post.notFound");
+				expect(error.messageParams).toEqual({ resource: "Post", id: "42" });
+
+				const overridden = ApiError.notFound("Post", "42", "post.notFound", {
+					id: "99",
+				});
+
+				expect(overridden.messageParams).toEqual({
+					resource: "Post",
+					id: "99",
+				});
+			});
+
+			test("should render a supplied key through a translate function", () => {
+				const error = ApiError.notFound("Post", "42", "post.notFound");
+
+				expect(error.toJSON(false, t, "sk").message).toBe(
+					"Prispevok 42 neexistuje",
+				);
+			});
+
+			test("should behave exactly as before when no key is given", () => {
+				const withId = ApiError.notFound("Post", "42");
+
+				expect(withId.code).toBe("NOT_FOUND");
+				expect(withId.message).toBe("Post not found: 42");
+				expect(withId.messageKey).toBe("error.notFound.withId");
+				expect(withId.messageParams).toEqual({ resource: "Post", id: "42" });
+				expect(withId.toJSON(false, t, "sk").message).toBe(
+					"Post nenajdeny: 42",
+				);
+
+				const withoutId = ApiError.notFound("Post");
+
+				expect(withoutId.message).toBe("Post not found");
+				expect(withoutId.messageKey).toBe("error.notFound");
+				expect(withoutId.toJSON(false, t, "sk").message).toBe(
+					"Zdroj nenajdeny",
+				);
+			});
+		});
+
+		describe("forbidden", () => {
+			const draftContext = {
+				operation: "read",
+				resource: "posts",
+				reason: "Draft is private",
+			} as const;
+
+			test("should preserve a supplied key and merge params over reason", () => {
+				const error = ApiError.forbidden(draftContext, "post.forbidden.draft", {
+					id: "42",
+				});
+
+				expect(error.messageKey).toBe("post.forbidden.draft");
+				expect(error.messageParams).toEqual({
+					reason: "Draft is private",
+					id: "42",
+				});
+			});
+
+			test("should render a supplied key through a translate function", () => {
+				const error = ApiError.forbidden(draftContext, "post.forbidden.draft", {
+					id: "42",
+				});
+
+				expect(error.toJSON(false, t, "sk").message).toBe(
+					"Koncept 42 nie je pristupny",
+				);
+			});
+
+			test("should keep the access context free of translation metadata", () => {
+				const error = ApiError.forbidden(draftContext, "post.forbidden.draft", {
+					id: "42",
+				});
+
+				expect(error.toJSON(false, t, "sk").context?.access).toEqual({
+					operation: "read",
+					resource: "posts",
+					reason: "Draft is private",
+				});
+			});
+
+			test("should behave exactly as before when no key is given", () => {
+				const custom = ApiError.forbidden(draftContext);
+
+				expect(custom.code).toBe("FORBIDDEN");
+				expect(custom.message).toBe("Draft is private");
+				expect(custom.messageKey).toBeUndefined();
+				expect(custom.messageParams).toBeUndefined();
+				expect(custom.toJSON(false, t, "sk").message).toBe("Draft is private");
+
+				const fallback = ApiError.forbidden({
+					operation: "read",
+					resource: "posts",
+					reason: "Access denied",
+				});
+
+				expect(fallback.messageKey).toBe("error.forbidden");
+				expect(fallback.messageParams).toEqual({ reason: "Access denied" });
+				expect(fallback.toJSON(false, t, "sk").message).toBe(
+					"Pristup zamietnuty",
+				);
+			});
+		});
+
+		describe("internal", () => {
+			test("should preserve a supplied key and params alongside the cause", () => {
+				const cause = new Error("connection reset");
+				const error = ApiError.internal(
+					"Indexer crashed",
+					cause,
+					"post.internal.indexer",
+					{ collection: "posts" },
+				);
+
+				expect(error.messageKey).toBe("post.internal.indexer");
+				expect(error.messageParams).toEqual({ collection: "posts" });
+				expect(error.cause).toBe(cause);
+			});
+
+			test("should render a supplied key through a translate function", () => {
+				const error = ApiError.internal(
+					"Indexer crashed",
+					undefined,
+					"post.internal.indexer",
+					{ collection: "posts" },
+				);
+
+				expect(error.toJSON(false, t, "sk").message).toBe(
+					"Indexovanie posts zlyhalo",
+				);
+			});
+
+			test("should behave exactly as before when no key is given", () => {
+				const error = ApiError.internal("Database connection failed");
+
+				expect(error.code).toBe("INTERNAL_SERVER_ERROR");
+				expect(error.message).toBe("Database connection failed");
+				expect(error.messageKey).toBe("error.internal");
+				expect(error.messageParams).toBeUndefined();
+				expect(error.cause).toBeUndefined();
+				expect(error.toJSON(false).message).toBe("Database connection failed");
+				expect(error.toJSON(false, t, "sk").message).toBe(
+					"Interna chyba servera",
+				);
+			});
+		});
+	});
+
 	describe("integration", () => {
 		test("should work with full translation config", () => {
 			const config: TranslationsConfig = {

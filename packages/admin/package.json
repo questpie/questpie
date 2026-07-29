@@ -1,6 +1,6 @@
 {
 	"name": "@questpie/admin",
-	"version": "3.17.0",
+	"version": "3.18.0",
 	"description": "Config-driven admin UI for QUESTPIE (React, Tailwind v4, shadcn)",
 	"repository": {
 		"type": "git",
@@ -60,9 +60,9 @@
 		"dev": "tsdown --watch",
 		"build": "tsdown",
 		"check-types": "tsc --noEmit",
-		"test": "bun test --max-concurrency=1 --timeout=60000 test/",
+		"test": "bun test --max-concurrency=1 test/",
 		"test:watch": "bun test --watch test/",
-		"questpie:generate": "bun run ../questpie/src/exports/cli.ts generate --verbose"
+		"questpie:generate": "bun x questpie generate --verbose"
 	},
 	"dependencies": {
 		"@base-ui/react": "^1.0.0",

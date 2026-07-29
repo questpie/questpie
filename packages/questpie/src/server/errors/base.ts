@@ -177,27 +177,49 @@ export class ApiError extends Error {
 
 	/**
 	 * Create NOT_FOUND error
+	 *
+	 * `resource` and `id` are always available to the translation as
+	 * `{{resource}}` / `{{id}}`; `messageParams` overrides them.
 	 */
-	static notFound(resource: string, id?: string): ApiError {
+	static notFound(
+		resource: string,
+		id?: string,
+		messageKey?: BackendMessageKey,
+		messageParams?: Record<string, unknown>,
+	): ApiError {
 		return new ApiError({
 			code: "NOT_FOUND",
 			message: id ? `${resource} not found: ${id}` : `${resource} not found`,
-			messageKey: id ? "error.notFound.withId" : "error.notFound",
-			messageParams: { resource, id },
+			messageKey:
+				messageKey ?? (id ? "error.notFound.withId" : "error.notFound"),
+			messageParams: { resource, id, ...messageParams },
 		});
 	}
 
 	/**
 	 * Create FORBIDDEN error with access context
+	 *
+	 * The key is a separate parameter rather than a field on
+	 * `AccessErrorContext`, because that context is serialized verbatim into the
+	 * client-facing `context.access` payload.
+	 *
+	 * `context.reason` is always available to the translation as `{{reason}}`;
+	 * `messageParams` overrides it.
 	 */
-	static forbidden(context: AccessErrorContext): ApiError {
+	static forbidden(
+		context: AccessErrorContext,
+		messageKey?: BackendMessageKey,
+		messageParams?: Record<string, unknown>,
+	): ApiError {
 		const useDefaultTranslation = context.reason === "Access denied";
+		const resolvedKey =
+			messageKey ?? (useDefaultTranslation ? "error.forbidden" : undefined);
 		return new ApiError({
 			code: "FORBIDDEN",
 			message: context.reason,
-			messageKey: useDefaultTranslation ? "error.forbidden" : undefined,
-			messageParams: useDefaultTranslation
-				? { reason: context.reason }
+			messageKey: resolvedKey,
+			messageParams: resolvedKey
+				? { reason: context.reason, ...messageParams }
 				: undefined,
 			context: { access: context },
 		});
@@ -264,11 +286,14 @@ export class ApiError extends Error {
 	static internal(
 		message = "Internal server error",
 		cause?: unknown,
+		messageKey?: BackendMessageKey,
+		messageParams?: Record<string, unknown>,
 	): ApiError {
 		return new ApiError({
 			code: "INTERNAL_SERVER_ERROR",
 			message,
-			messageKey: "error.internal",
+			messageKey: messageKey ?? "error.internal",
+			messageParams,
 			cause,
 		});
 	}
@@ -288,11 +313,16 @@ export class ApiError extends Error {
 	/**
 	 * Create CONFLICT error
 	 */
-	static conflict(message: string): ApiError {
+	static conflict(
+		message: string,
+		messageKey?: BackendMessageKey,
+		messageParams?: Record<string, unknown>,
+	): ApiError {
 		return new ApiError({
 			code: "CONFLICT",
 			message,
-			messageKey: "error.conflict",
+			messageKey: messageKey ?? "error.conflict",
+			messageParams,
 		});
 	}
 }

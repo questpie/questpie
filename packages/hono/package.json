@@ -1,6 +1,6 @@
 {
 	"name": "@questpie/hono",
-	"version": "3.17.0",
+	"version": "3.18.0",
 	"description": "Hono adapter for QUESTPIE, with a unified typed client",
 	"repository": {
 		"type": "git",
@@ -29,7 +29,7 @@
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
-		"hono": "^4.12.25",
+		"hono": "^4.6.14",
 		"qs": "^6.13.1",
 		"questpie": "workspace:*"
 	},

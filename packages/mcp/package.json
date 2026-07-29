@@ -1,6 +1,6 @@
 {
 	"name": "@questpie/mcp",
-	"version": "3.17.0",
+	"version": "3.18.0",
 	"description": "Model Context Protocol server for QUESTPIE apps, under the app's own access rules",
 	"repository": {
 		"type": "git",
@@ -65,7 +65,7 @@
 	"scripts": {
 		"build": "tsdown",
 		"check-types": "tsc --noEmit",
-		"questpie:generate": "bun run ../questpie/src/exports/cli.ts generate --verbose",
+		"questpie:generate": "bun questpie generate --verbose",
 		"test": "bun test ./test"
 	},
 	"dependencies": {
