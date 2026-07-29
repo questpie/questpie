@@ -57,7 +57,10 @@ export class LoggerService implements LoggerAdapter {
 	private tee(
 		level: "debug" | "info" | "warn" | "error",
 		msg: string,
-		args: any[],
+		// `unknown[]`, not `any[]`: this only ever inspects args[0] and narrows
+		// it. The surrounding methods take `any[]` because they forward to an
+		// adapter with that signature; there is no reason to inherit it here.
+		args: unknown[],
 	): void {
 		const observability = (
 			tryGetContext()?.app as
