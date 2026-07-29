@@ -6243,6 +6243,7 @@ For normative soundness details, inspect
 - [Realtime & SSE Keepalive](#realtime--sse-keepalive)
 - [Deployment](#deployment), Docker, env vars, checklist, health check
 - [Realtime and Live Preview](#realtime-and-live-preview)
+- [Observability](#observability), tracing, metrics, log correlation
 - [Common Mistakes](#common-mistakes)
 
 ## Overview
@@ -6470,6 +6471,65 @@ export default route()
 		await db.execute(sql`SELECT 1`);
 		return Response.json({ status: "ok" });
 	});
+```
+
+## Observability
+
+Opt-in. With no adapter configured every seam calls through and allocates
+nothing, so the framework wraps unconditionally without an unused-feature cost.
+
+```ts title="questpie.config.ts"
+import { otelObservability } from "@questpie/observability";
+
+export default runtimeConfig({
+	observability: {
+		adapter: otelObservability({
+			serviceName: "my-app",
+			otlpEndpoint: process.env.OTLP_ENDPOINT,
+			environment: process.env.NODE_ENV,
+			samplingRatio: 0.1, // parent-based; a sampled upstream trace stays sampled
+		}),
+	},
+});
+```
+
+**Instrumented seams**, all nested under the request that caused them:
+`GET /posts` (server) → `collection.find` → `db.select` / `db.transaction`,
+plus `kv.*`, `search.*`, and `job <name>` as a trace ROOT with `kind: consumer`
+(a job runs outside any request; making it a child would bury it).
+
+Database queries are traced on **every** `db` config variant, including
+`{ drizzle }` and `{ create }` where the app supplies its own client: the
+instrumentation attaches to Drizzle's session, not the driver, because the
+driver is invisible in exactly those variants (Hyperdrive, Neon, Vercel).
+`instrumentDbClient` is exported for a client built entirely outside the
+framework.
+
+**Metrics:** one histogram, `http.server.request.duration` (seconds, OTel
+semconv attributes). Rate is its count, errors are that count sliced by
+`http.response.status_code`. Do not add parallel counters; they duplicate the
+same series and drift.
+
+**Logs:** Pino output is untouched; records gain `trace_id`/`span_id` from the
+active span (snake_case — those are the keys backends join on) and, with an
+`otlpEndpoint`, are exported on the OTel logs signal too. The existing camelCase
+`traceId` is a different value: the framework's correlation id from the inbound
+`traceparent`/`x-request-id`, not the span's.
+
+**Propagation:** an inbound `traceparent` is continued with the remote span as
+parent, so a distributed waterfall stays connected. Only the root reads headers.
+
+**Never recorded, by design:** search query text, KV keys (length only), record
+contents and CRUD inputs, and SQL parameters. Tracing backends are searchable,
+long-lived and widely readable inside a company. Add what a specific
+investigation needs on a userland `span()`, where the decision is explicit.
+
+Shut down on SIGTERM or the last batch of spans never leaves the process:
+
+```ts
+process.on("SIGTERM", async () => {
+	await app.observability.shutdown();
+});
 ```
 
 ## Common Mistakes
