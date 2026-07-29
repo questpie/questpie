@@ -60,7 +60,7 @@
 		"shadcn": "^3.6.1",
 		"tailwindcss": "^4.0.0",
 		"tw-animate-css": "^1.0.0",
-		"typescript": "^5.9.2",
+		"typescript": "5.9.2",
 		"vite": "^8.0.16",
 		"vite-tsconfig-paths": "^6.1.1"
 	}

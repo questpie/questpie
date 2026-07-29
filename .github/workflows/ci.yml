@@ -23,8 +23,22 @@ jobs:
         with:
           bun-version: "1.3.13"
 
+      # NOT --frozen-lockfile. bun 1.3.13 rejects a lockfile it wrote itself
+      # moments earlier: delete bun.lock, `bun install`, then
+      # `bun install --frozen-lockfile` and it still reports "lockfile had
+      # changes". Its comparator disagrees with its own writer, so the flag is
+      # unusable here and the audit job has been working around it for months.
+      #
+      # `git diff --exit-code` gives the protection frozen was there for, and
+      # gives it more honestly: it fails when installing actually CHANGES the
+      # committed lockfile. That only works because the lockfile is now
+      # deterministic — `typescript` is pinned to one exact version across the
+      # workspace, and the caret range that used to sit in @questpie/admin made
+      # consecutive installs disagree about a nested typescript@5.9.3.
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: |
+          bun install
+          git diff --exit-code bun.lock
 
       # Gates ERRORS only. ~25s over 1994 files.
       #
@@ -63,8 +77,11 @@ jobs:
         with:
           bun-version: "1.3.13"
 
+      # See the Lint & Format job for why this is not --frozen-lockfile.
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: |
+          bun install
+          git diff --exit-code bun.lock
 
       # Gates EVERY package that declares a `check-types` script — no filter.
       # This includes the `questpie` full-app fixture, which compiles a real
@@ -104,14 +121,11 @@ jobs:
         with:
           bun-version: "1.3.13"
 
-      # `bun install` (not --frozen-lockfile) is intentional: bun 1.3.13's
-      # frozen-lockfile check has a long-standing false-positive bug in this
-      # monorepo (the lockfile is bit-identical after a fresh install but
-      # frozen still reports "lockfile had changes"). The audit gate works
-      # against the resolved tree either way — anything new that resolves
-      # in is exactly what we'd want to catch.
+      # See the Lint & Format job for why this is not --frozen-lockfile.
       - name: Install dependencies
-        run: bun install
+        run: |
+          bun install
+          git diff --exit-code bun.lock
 
       - name: Block new high/critical advisories
         run: bun run scripts/audit-gate.ts
@@ -128,8 +142,11 @@ jobs:
         with:
           bun-version: "1.3.13"
 
+      # See the Lint & Format job for why this is not --frozen-lockfile.
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: |
+          bun install
+          git diff --exit-code bun.lock
 
       - name: Run tests
         run: bunx turbo run test --filter='./packages/*' --concurrency=1
@@ -148,8 +165,11 @@ jobs:
         with:
           bun-version: "1.3.13"
 
+      # See the Lint & Format job for why this is not --frozen-lockfile.
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: |
+          bun install
+          git diff --exit-code bun.lock
 
       - name: Verify realtime migration generation is idempotent
         run: bun run verify:realtime-migrations
@@ -201,8 +221,11 @@ jobs:
         with:
           bun-version: "1.3.13"
 
+      # See the Lint & Format job for why this is not --frozen-lockfile.
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: |
+          bun install
+          git diff --exit-code bun.lock
 
       - name: Build packages
         run: bunx turbo run build --filter='./packages/*'
@@ -285,8 +308,11 @@ jobs:
         with:
           bun-version: "1.3.13"
 
+      # See the Lint & Format job for why this is not --frozen-lockfile.
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: |
+          bun install
+          git diff --exit-code bun.lock
 
       - name: Validate docs
         run: bun run validate:docs -- --docs-app
