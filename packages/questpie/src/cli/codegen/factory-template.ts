@@ -147,7 +147,11 @@ export function generateFactoryTemplate(
 	// Also import builtinFields (runtime value) for constructing the merged field defs map
 	lines.push("// ── Core Imports ───────────────────────────────────────────");
 	if (hasExtensions || hasFieldExtensions) {
-		const fieldImport = hasFieldExtensions ? ", Field" : "";
+		// `FieldWithMethods` rides along because the emitted extension proxies
+		// return it, not `Field` — see the augmentation below.
+		const fieldImport = hasFieldExtensions
+			? ", Field, type FieldWithMethods"
+			: "";
 		lines.push(
 			`import { CollectionBuilder, GlobalBuilder, wrapBuilderWithExtensions, builtinFields, type EmptyCollectionState, type EmptyGlobalState, type BuiltinFields, type CollectionBuilderState, type GlobalBuilderState, type FieldState${fieldImport} } from "questpie/builders";`,
 		);
@@ -424,8 +428,13 @@ export function generateFactoryTemplate(
 			}
 
 			if (fieldExtensions.size > 0) {
+				// TWO parameters, matching the class. A one-parameter interface
+				// merges without complaint, but every merged method then returns
+				// `Field<TState, {}>` and the field type's own methods are gone:
+				// `f.text().admin({}).pattern(/x/)` fails while
+				// `f.text().pattern(/x/).admin({})` works, purely on call order.
 				lines.push(
-					"\tinterface Field<TState extends FieldState = FieldState> {",
+					"\tinterface Field<TState extends FieldState = FieldState, TMethods = {}> {",
 				);
 				for (const [name, ext] of fieldExtensions) {
 					const paramName = ext.isCallback ? "configFn" : "config";
@@ -435,7 +444,12 @@ export function generateFactoryTemplate(
 						hasModules,
 						placeholderMap,
 					);
-					lines.push(`\t\t${name}(${paramName}: ${paramType}): Field<TState>;`);
+					// `FieldWithMethods`, not `Field`: the proxy must hand back the
+					// type-specific methods it was given, or it silently truncates
+					// the builder chain.
+					lines.push(
+						`\t\t${name}(${paramName}: ${paramType}): FieldWithMethods<TState, TMethods>;`,
+					);
 				}
 				lines.push("\t}");
 			}

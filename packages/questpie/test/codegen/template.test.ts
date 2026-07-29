@@ -466,9 +466,15 @@ describe("generateFactoryTemplate — builder module augmentation", () => {
 		expect(code).toContain(
 			"interface GlobalBuilder<TState extends GlobalBuilderState>",
 		);
+		// TWO parameters. A one-parameter interface merges with the two-parameter
+		// class without any TS error, so nothing here would go red — but every
+		// merged proxy would then return `Field<TState, {}>` and silently drop
+		// the field type's own methods.
 		expect(code).toContain(
-			"interface Field<TState extends FieldState = FieldState>",
+			"interface Field<TState extends FieldState = FieldState, TMethods = {}>",
 		);
+		// …and the proxies must hand the methods back, not truncate the chain.
+		expect(code).toContain("): FieldWithMethods<TState, TMethods>;");
 	});
 });
 

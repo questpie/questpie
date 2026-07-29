@@ -3,7 +3,7 @@
 // Typed factory functions with plugin extensions. Regenerate with: questpie generate
 
 // ── Core Imports ───────────────────────────────────────────
-import { CollectionBuilder, GlobalBuilder, wrapBuilderWithExtensions, builtinFields, type EmptyCollectionState, type EmptyGlobalState, type BuiltinFields, type CollectionBuilderState, type GlobalBuilderState, type FieldState, Field } from "questpie/builders";
+import { CollectionBuilder, GlobalBuilder, wrapBuilderWithExtensions, builtinFields, type EmptyCollectionState, type EmptyGlobalState, type BuiltinFields, type CollectionBuilderState, type GlobalBuilderState, type FieldState, Field, type FieldWithMethods } from "questpie/builders";
 
 // ── Runtime Field Imports ──────────────────────────────────
 import { adminFields } from "@questpie/admin/fields";
@@ -81,9 +81,9 @@ declare module "questpie/builders" {
 		admin(configFn: AdminGlobalConfig | ((ctx: AdminConfigContext<_ComponentsRecord>) => AdminGlobalConfig)): GlobalBuilder<TState>;
 		form(configFn: (ctx: FormViewConfigContext<TState extends { fieldDefinitions: infer F extends Record<string, unknown> } ? F : Record<string, unknown>, FilterViewsByKind<_ViewsRecord, "form">>) => FormViewConfig): GlobalBuilder<TState>;
 	}
-	interface Field<TState extends FieldState = FieldState> {
-		admin(config: unknown): Field<TState>;
-		form(configFn: (ctx: { f: Record<string, string> }) => { fields: import('@questpie/admin/factories').FieldLayoutItem[] }): Field<TState>;
+	interface Field<TState extends FieldState = FieldState, TMethods = {}> {
+		admin(config: unknown): FieldWithMethods<TState, TMethods>;
+		form(configFn: (ctx: { f: Record<string, string> }) => { fields: import('@questpie/admin/factories').FieldLayoutItem[] }): FieldWithMethods<TState, TMethods>;
 	}
 }
 
