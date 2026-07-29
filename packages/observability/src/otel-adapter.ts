@@ -15,6 +15,7 @@
 
 import {
 	context,
+	isSpanContextValid,
 	metrics,
 	propagation,
 	SpanStatusCode,
@@ -277,6 +278,13 @@ export function otelObservability(
 	return {
 		tracer(name) {
 			return wrapTracer(tracerProvider.getTracer(name));
+		},
+		activeSpanContext() {
+			const active = trace.getActiveSpan()?.spanContext();
+			// A non-recording span carries the all-zero trace id; emitting that
+			// into logs looks like correlation and joins to nothing.
+			if (!active || !isSpanContextValid(active)) return undefined;
+			return { traceId: active.traceId, spanId: active.spanId };
 		},
 		meter(name) {
 			return wrapMeter(meterProvider.getMeter(name));

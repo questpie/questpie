@@ -190,3 +190,45 @@ describe("otel adapter — exported span tree", () => {
 		expect(await collect()).toHaveLength(0);
 	});
 });
+
+describe("activeSpanContext — the seam the logger correlates on", () => {
+	it("reports the ids of the span that is actually open", async () => {
+		const { service, adapter, collect } = harness();
+
+		let reported: { traceId: string; spanId: string } | undefined;
+		await service.span("http.request", async () => {
+			reported = adapter.activeSpanContext?.();
+		});
+
+		const root = byName(await collect()).get("http.request")!;
+		expect(reported).toBeDefined();
+		expect(reported!.traceId).toBe(root.spanContext().traceId);
+		expect(reported!.spanId).toBe(root.spanContext().spanId);
+	});
+
+	it("reports the INNERMOST span, not the root", async () => {
+		// A log written inside a DB query should join to that query, not to the
+		// request — otherwise the correlation is too coarse to be useful.
+		const { service, adapter, collect } = harness();
+
+		let inner: { traceId: string; spanId: string } | undefined;
+		await service.span("http.request", async () => {
+			await service.span("db.select", async () => {
+				inner = adapter.activeSpanContext?.();
+			});
+		});
+
+		const spans = byName(await collect());
+		expect(inner!.spanId).toBe(spans.get("db.select")!.spanContext().spanId);
+		expect(inner!.spanId).not.toBe(
+			spans.get("http.request")!.spanContext().spanId,
+		);
+	});
+
+	it("returns undefined outside any span rather than an all-zero id", async () => {
+		// The invalid context is all zeroes. Emitting it into a log record looks
+		// like correlation and joins to nothing.
+		const { adapter } = harness();
+		expect(adapter.activeSpanContext?.()).toBeUndefined();
+	});
+});

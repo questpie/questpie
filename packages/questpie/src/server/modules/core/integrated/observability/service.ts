@@ -31,6 +31,14 @@ export class ObservabilityService {
 		return Boolean(this.config.adapter);
 	}
 
+	/**
+	 * Ids of the active span, when an adapter is wired and one is open.
+	 * Used by the logger to correlate records with the trace.
+	 */
+	activeSpanContext(): { traceId: string; spanId: string } | undefined {
+		return this.config.adapter?.activeSpanContext?.();
+	}
+
 	tracer(name = "questpie"): Tracer {
 		const cached = this.tracers.get(name);
 		if (cached) return cached;

@@ -93,6 +93,20 @@ export interface Meter {
 export interface ObservabilityAdapter {
 	tracer(name: string): Tracer;
 	meter(name: string): Meter;
+	/**
+	 * Trace and span id of the CURRENTLY ACTIVE span, for correlating logs.
+	 *
+	 * Optional so an existing adapter keeps compiling, and read through the
+	 * adapter because the framework has no OpenTelemetry dependency — only the
+	 * adapter can see the active context.
+	 *
+	 * This is not the same thing as `ctx.traceId`, which the HTTP layer derives
+	 * from the incoming `traceparent` (falling back to `x-request-id`). Once an
+	 * adapter owns propagation, the SPAN's ids are the ones a backend joins logs
+	 * to; the ambient value can differ, and on a request with no inbound header
+	 * it is not a trace id at all.
+	 */
+	activeSpanContext?(): { traceId: string; spanId: string } | undefined;
 	shutdown(): Promise<void>;
 }
 
