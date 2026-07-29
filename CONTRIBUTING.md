@@ -98,7 +98,12 @@ That is intentional.
 ## Conventions
 
 - **Codegen output is committed.** `.generated/` directories are checked in. Never
-  hand-edit them — run `bunx turbo run questpie:generate`.
+  hand-edit them — run `bunx turbo run questpie:generate`. **Never run a formatter
+  over them either.** `.oxfmtrc.json` ignores `**/.generated` and `**/*.gen.ts`,
+  but handing oxfmt an explicit path overrides the ignore list, and a formatted
+  generated file can never match a fresh generation — the freshness gate then
+  fails on a diff that no amount of regenerating will fix. The generator is the
+  authority on its own bytes.
 - **Migrations are CLI-generated and immutable.** Use `migrate:generate`; never
   hand-write SQL and never edit a committed migration or its snapshot. They are
   excluded from the formatter for this reason.
