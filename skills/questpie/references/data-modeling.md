@@ -7,7 +7,7 @@ This skill builds on questpie-core. It covers collections, globals, fields, rela
 ## Contents
 
 - [Imports](#imports)
-- [Collections](#collections)
+- [Collections](#collections), including [Record Lifecycle](#record-lifecycle): timestamps, softDelete, versioning, workflow
 - [Globals](#globals)
 - [Fields](#fields)
 - [Relations](#relations)
@@ -92,13 +92,135 @@ export default collection("user")
 
 Fields/options/extension keys combine by key (merged-in side wins), hooks concatenate, and `.fields()` after `.merge()` is cumulative, it never wipes merged fields. The result stays fully typed.
 
-### Collection Options
+### Record Lifecycle
+
+Four options that all sound alike and do different jobs. Pick by the job, not by
+the name, because adopting the wrong one is silent: nothing errors, you simply
+do not get the guarantee you assumed.
+
+| You need                                          | Use                   | QUESTPIE provides it |
+| ------------------------------------------------- | --------------------- | -------------------- |
+| When a row was created/changed                    | `timestamps: true`    | Yes                  |
+| Recover a deleted row / keep referential history  | `softDelete: true`    | Yes                  |
+| The history of past states, and revert to one     | `versioning: true`    | Yes                  |
+| Legal stage transitions (draft to review to live) | `versioning.workflow` | Yes                  |
+| Reject a write made against a stale read          | optimistic locking    | **No, build it**     |
+| Who did what, for accountability                  | audit                 | Separate concern     |
 
 ```ts
 .options({
-  timestamps: true,   // adds createdAt, updatedAt
-  versioning: true,   // track content versions
-  softDelete: true,   // mark as deleted instead of removing
+  timestamps: true,
+  softDelete: true,
+  versioning: { maxVersions: 50, workflow: { stages: ["draft", "published"] } },
+})
+```
+
+#### timestamps
+
+Adds `createdAt` and `updatedAt`, maintained by the framework.
+
+#### softDelete
+
+`delete()` marks the row instead of removing it. Reads exclude soft-deleted rows
+unless you pass `includeDeleted: true`.
+
+#### versioning
+
+`versioning: true` (or `{ maxVersions }`) creates a `<collection>_versions`
+table alongside the collection, and a `<collection>_i18n_versions` table when the
+collection is localized.
+
+Columns: `versionId` (uuid primary key), `id` (the record, typed to match the
+parent id column), `versionNumber`, `versionOperation` (`create` / `update` /
+`delete`), `versionStage`, `versionFromStage`, `versionUserId`,
+`versionCreatedAt`.
+
+A row is written on **create, update and delete** (both soft and hard). History
+is **per record**: `versionNumber` counts up per `id`, and pruning to
+`maxVersions` (default 50) applies per record, not per collection.
+
+Read it back with:
+
+```ts
+const history = await ctx.collections.posts.findVersions({ id, limit: 20 });
+const restored = await ctx.collections.posts.revertToVersion({
+	id,
+	versionNumber: 3,
+});
+```
+
+**What versioning does NOT do: it is not optimistic locking.** There is no
+`expectedVersion` parameter anywhere in the API. The server never compares a
+client-supplied version against the stored one and never rejects a stale write.
+Two concurrent updates both succeed, both write a version row, and the second
+silently wins. If you need compare-and-set, you build it yourself, and today that
+means a column of your own plus `updateMany({ where: { id, version: expected } })`
+with a `count !== 1` check. `versionNumber` is history, written after the fact.
+
+#### Workflow stages
+
+Workflow lives **under** versioning because stage transitions are stored as
+version snapshots. Enabling workflow with versioning disabled throws at build
+time: `"Collection X enables workflow but versioning is disabled"`.
+
+```ts
+.options({
+  versioning: {
+    workflow: {
+      stages: {
+        draft:     { transitions: ["review"] },
+        review:    { transitions: ["draft", "published"] },
+        published: { transitions: ["draft"] },
+      },
+      initialStage: "draft",
+    },
+  },
+})
+```
+
+`workflow: true` is shorthand for stages `["draft", "published"]`. `stages` also
+accepts a plain `string[]`. A stage with no `transitions` key is unrestricted:
+any configured stage may be targeted from it. `initialStage` defaults to the
+first configured stage.
+
+Transition through the CRUD API, not by writing a field:
+
+```ts
+await ctx.collections.posts.transitionStage({ id, stage: "published" });
+// or schedule it
+await ctx.collections.posts.transitionStage({
+	id,
+	stage: "published",
+	scheduledAt: futureDate,
+});
+```
+
+`transitionStage` performs **no data mutation**. It creates a version snapshot at
+the target stage. Read a specific stage back with `find({ stage: "published" })`.
+
+Validated at **config time**: stage names, `initialStage` existing, and every
+transition target naming a configured stage. Validated at **call time**: that the
+transition from the record's current stage to the requested one is in the table.
+
+Enabling workflow also adds `versionStage` / `versionFromStage` columns,
+`beforeTransition` / `afterTransition` hooks, and an `access.transition` rule.
+
+**What workflow does NOT do: the stage table carries no condition.** A stage
+option is `{ label, description, transitions }` and nothing else, so the table
+is static shape only. There is no guard or predicate on a transition, and no way
+to express "legal only when `reviewRequired` is false" in the config.
+
+Put the condition in a `beforeTransition` hook, which aborts the transition when
+it throws, or in `access.transition` when the rule is about who may move the
+record rather than about its data:
+
+```ts
+.hooks({
+  beforeTransition: async ({ data, to }) => {
+    if (to === "published" && data.reviewRequired) {
+      throw new Error("cannot publish while review is pending");
+    }
+  },
 })
 ```
 
