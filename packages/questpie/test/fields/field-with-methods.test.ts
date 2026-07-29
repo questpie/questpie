@@ -1,5 +1,5 @@
 /**
- * QUE-264: FieldCommonMethods + FieldWithMethods type tests
+ * QUE-264: FieldWithMethods type tests
  *
  * Runtime tests verifying that the type infrastructure works
  * with the Proxy-based wrapFieldComplete from QUE-263.
@@ -14,10 +14,7 @@ import {
 	fieldType,
 	wrapFieldComplete,
 } from "../../src/server/fields/field-type.js";
-import type {
-	FieldWithMethods,
-	FieldCommonMethods,
-} from "../../src/server/fields/field-with-methods.js";
+import type { FieldWithMethods } from "../../src/server/fields/field-with-methods.js";
 import { stringOps } from "../../src/server/fields/operators/builtin.js";
 
 // ============================================================================
@@ -101,12 +98,5 @@ describe("FieldWithMethods type behavior (QUE-264)", () => {
 		expect(patterned.getType()).toBe("text");
 		// Pattern should be set
 		expect(patterned._state.pattern?.source).toBe("^[A-Z]");
-	});
-
-	it("FieldCommonMethods interface is augmentable", () => {
-		// This test verifies the structural pattern — augmentation
-		// happens at module declaration level, not at runtime
-		// The PoC in QUE-247 proved this works through tsdown .d.ts emit
-		expect(true).toBe(true);
 	});
 });

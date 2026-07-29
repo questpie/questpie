@@ -28,6 +28,7 @@ import type {
 	FieldRuntimeState,
 	FieldState,
 } from "./field-class-types.js";
+import type { FieldWithMethods } from "./field-with-methods.js";
 import { selectMultiOps } from "./operators/builtin.js";
 import { resolveContextualOperators } from "./operators/resolve.js";
 import type { OperatorSetDefinition } from "./operators/types.js";
@@ -52,8 +53,21 @@ import type {
  * The `TState` generic accumulates properties through intersection.
  *
  * @template TState - Accumulated type state (grows via intersection at each step)
+ * @template TMethods - Type-specific methods contributed by the field type
+ *
+ * VARIANCE — declared, never inferred, and not interchangeable:
+ * `out TState` is what lets `_clone<TExtra>` keep its own type parameter and
+ * what keeps `Field<BooleanFieldState>` assignable to `Field<FieldState>` (the
+ * constraint on every collection's `fields()`). Bare fails TS2322 on the four
+ * `Omit`-returning methods; `in out` fails the `Record<string, Field<FieldState>>`
+ * constraint in every example app. `in out TMethods` is forced — the wrapper map
+ * takes `keyof TMethods`, which makes it invariant, and `out` is TS2636 here.
+ * See field-with-methods.ts for the full argument.
  */
-export class Field<TState extends FieldState = FieldState> {
+export class Field<
+	out TState extends FieldState = FieldState,
+	in out TMethods = {},
+> {
 	/**
 	 * Phantom type property for type-level state access.
 	 * Not used at runtime — provides the TState type to type extractors.
@@ -81,10 +95,11 @@ export class Field<TState extends FieldState = FieldState> {
 	 */
 	private _clone<TExtra>(
 		extra: Partial<FieldRuntimeState>,
-	): Field<TState & TExtra> {
-		return new Field({ ...this._state, ...extra }) as unknown as Field<
-			TState & TExtra
-		>;
+	): FieldWithMethods<TState & TExtra, TMethods> {
+		return new Field({
+			...this._state,
+			...extra,
+		}) as unknown as FieldWithMethods<TState & TExtra, TMethods>;
 	}
 
 	// ========================================================================
@@ -92,11 +107,12 @@ export class Field<TState extends FieldState = FieldState> {
 	// ========================================================================
 
 	/** Mark field as NOT NULL (required). */
-	required(): Field<
+	required(): FieldWithMethods<
 		Omit<TState, "notNull" | "column"> & {
 			notNull: true;
 			column: NotNull<TState["column"]>;
-		}
+		},
+		TMethods
 	> {
 		return new Field({ ...this._state, notNull: true }) as any;
 	}
@@ -109,11 +125,14 @@ export class Field<TState extends FieldState = FieldState> {
 	 * Accepts a literal value, a factory, or a raw SQL expression.
 	 * For column-level SQL defaults use `.drizzle((c) => c.default(...))`.
 	 */
-	default(value: TState["data"] | (() => TState["data"]) | SQL): Field<
+	default(
+		value: TState["data"] | (() => TState["data"]) | SQL,
+	): FieldWithMethods<
 		Omit<TState, "hasDefault" | "column"> & {
 			hasDefault: true;
 			column: HasDefault<TState["column"]>;
-		}
+		},
+		TMethods
 	> {
 		return new Field({
 			...this._state,
@@ -123,37 +142,54 @@ export class Field<TState extends FieldState = FieldState> {
 	}
 
 	/** Set display label. */
-	label(l: I18nText): Field<TState & { label: I18nText }> {
+	label(l: I18nText): FieldWithMethods<TState & { label: I18nText }, TMethods> {
 		return this._clone<{ label: I18nText }>({ label: l });
 	}
 
 	/** Set description / help text. */
-	description(d: I18nText): Field<TState & { description: I18nText }> {
+	description(
+		d: I18nText,
+	): FieldWithMethods<TState & { description: I18nText }, TMethods> {
 		return this._clone<{ description: I18nText }>({ description: d });
 	}
 
 	/** Mark field as localized (stored in i18n table). */
-	localized(): Field<Omit<TState, "localized"> & { localized: true }> {
+	localized(): FieldWithMethods<
+		Omit<TState, "localized"> & { localized: true },
+		TMethods
+	> {
 		return new Field({ ...this._state, localized: true }) as any;
 	}
 
 	/** Exclude field from input (read-only). */
-	inputFalse(): Field<Omit<TState, "input"> & { input: false }> {
+	inputFalse(): FieldWithMethods<
+		Omit<TState, "input"> & { input: false },
+		TMethods
+	> {
 		return this._clone<{ input: false }>({ input: false });
 	}
 
 	/** Make input always optional (even if field is NOT NULL). */
-	inputOptional(): Field<Omit<TState, "input"> & { input: "optional" }> {
+	inputOptional(): FieldWithMethods<
+		Omit<TState, "input"> & { input: "optional" },
+		TMethods
+	> {
 		return this._clone<{ input: "optional" }>({ input: "optional" });
 	}
 
 	/** Force field into input (even if virtual). */
-	inputTrue(): Field<Omit<TState, "input"> & { input: true }> {
+	inputTrue(): FieldWithMethods<
+		Omit<TState, "input"> & { input: true },
+		TMethods
+	> {
 		return this._clone<{ input: true }>({ input: true });
 	}
 
 	/** Exclude field from output (write-only). */
-	outputFalse(): Field<Omit<TState, "output"> & { output: false }> {
+	outputFalse(): FieldWithMethods<
+		Omit<TState, "output"> & { output: false },
+		TMethods
+	> {
 		return this._clone<{ output: false }>({ output: false });
 	}
 
@@ -163,8 +199,9 @@ export class Field<TState extends FieldState = FieldState> {
 	 */
 	virtual(
 		expr?: SQL,
-	): Field<
-		Omit<TState, "virtual" | "column"> & { virtual: true; column: null }
+	): FieldWithMethods<
+		Omit<TState, "virtual" | "column"> & { virtual: true; column: null },
+		TMethods
 	> {
 		return new Field({ ...this._state, virtual: expr ?? true }) as any;
 	}
@@ -172,19 +209,21 @@ export class Field<TState extends FieldState = FieldState> {
 	/** Set field-level hooks. Hook values are typed to the field's data type. */
 	hooks<H extends FieldHooks<TState["data"]>>(
 		h: H,
-	): Field<TState & { hooks: H }> {
+	): FieldWithMethods<TState & { hooks: H }, TMethods> {
 		return this._clone<{ hooks: H }>({ hooks: h as FieldHooks });
 	}
 
 	/** Set field-level access control. */
-	access(a: FieldAccess): Field<TState & { access: FieldAccess }> {
+	access(
+		a: FieldAccess,
+	): FieldWithMethods<TState & { access: FieldAccess }, TMethods> {
 		return this._clone<{ access: FieldAccess }>({ access: a });
 	}
 
 	/** Mark this field with a framework-owned CRDT merge strategy. */
 	crdt<const TConfig extends CrdtFieldConfig>(
 		config: TConfig,
-	): Field<TState & { crdt: TConfig }> {
+	): FieldWithMethods<TState & { crdt: TConfig }, TMethods> {
 		return this._clone<{ crdt: TConfig }>({
 			crdt: { ...config },
 		});
@@ -194,7 +233,7 @@ export class Field<TState extends FieldState = FieldState> {
 	 * Wrap this field in an array (stored as JSONB).
 	 * The inner field's type becomes the element type.
 	 */
-	array(): Field<ArrayFieldState<TState>> {
+	array(): FieldWithMethods<ArrayFieldState<TState>, TMethods> {
 		return new Field({
 			...this._state,
 			isArray: true,
@@ -203,7 +242,7 @@ export class Field<TState extends FieldState = FieldState> {
 			columnFactory: (name: string) => jsonb(name),
 			// Override operator set for array
 			operatorSet: selectMultiOps,
-		}) as unknown as Field<ArrayFieldState<TState>>;
+		}) as unknown as FieldWithMethods<ArrayFieldState<TState>, TMethods>;
 	}
 
 	/**
@@ -211,7 +250,7 @@ export class Field<TState extends FieldState = FieldState> {
 	 */
 	operators<TOps extends OperatorSetDefinition>(
 		ops: TOps,
-	): Field<TState & { operators: TOps }> {
+	): FieldWithMethods<TState & { operators: TOps }, TMethods> {
 		return this._clone<{ operators: TOps }>({ operatorSet: ops });
 	}
 
@@ -219,19 +258,16 @@ export class Field<TState extends FieldState = FieldState> {
 	 * Escape hatch: modify the underlying Drizzle column builder.
 	 * The transform receives the column builder and returns a (possibly different) one.
 	 *
-	 * If the returned column has a narrower `$type<T>()`, it propagates to
-	 * the field's `data` type. A column whose `_.data` is still `unknown`
-	 * leaves the field's existing `data` in place.
+	 * `.drizzle()` replaces the column and leaves the field's `data` alone.
+	 * To change the value type use `.$type<T>()` (type-level) or `.zod()`
+	 * (type + validation).
 	 */
-	drizzle<TNewCol>(fn: (col: TState["column"]) => TNewCol): Field<
+	drizzle<TNewCol>(fn: (col: TState["column"]) => TNewCol): FieldWithMethods<
 		Omit<TState, "column" | "data"> & {
 			column: TNewCol;
-			data: TNewCol extends { _: { data: infer D } }
-				? unknown extends D
-					? TState["data"]
-					: D
-				: TState["data"];
-		}
+			data: TState["data"];
+		},
+		TMethods
 	> {
 		return this._clone({ drizzleTransform: fn as any }) as any;
 	}
@@ -255,12 +291,13 @@ export class Field<TState extends FieldState = FieldState> {
 	 */
 	zod<TSchema extends ZodType = ZodType>(
 		fn: (schema: ZodType) => TSchema,
-	): Field<
+	): FieldWithMethods<
 		Omit<TState, "data"> & {
 			data: unknown extends z.output<TSchema>
 				? TState["data"]
 				: z.output<TSchema>;
-		}
+		},
+		TMethods
 	> {
 		return this._clone({ zodTransform: fn }) as any;
 	}
@@ -280,17 +317,17 @@ export class Field<TState extends FieldState = FieldState> {
 	 * layout: f.json().$type<Layout>()
 	 * ```
 	 */
-	$type<T>(): Field<Omit<TState, "data"> & { data: T }> {
+	$type<T>(): FieldWithMethods<Omit<TState, "data"> & { data: T }, TMethods> {
 		return this._clone({}) as any;
 	}
 
 	/** Transform value after reading from DB. */
-	fromDb(fn: (value: unknown) => unknown): Field<TState> {
+	fromDb(fn: (value: unknown) => unknown): FieldWithMethods<TState, TMethods> {
 		return this._clone<{}>({ fromDbFn: fn });
 	}
 
 	/** Transform value before writing to DB. */
-	toDb(fn: (value: unknown) => unknown): Field<TState> {
+	toDb(fn: (value: unknown) => unknown): FieldWithMethods<TState, TMethods> {
 		return this._clone<{}>({ toDbFn: fn });
 	}
 
@@ -316,8 +353,11 @@ export class Field<TState extends FieldState = FieldState> {
 			| "isArray"
 			| "virtual"
 		>,
-	): Field<TState> {
-		return new Field({ ...this._state, ...extra }) as unknown as Field<TState>;
+	): FieldWithMethods<TState, TMethods> {
+		return new Field({
+			...this._state,
+			...extra,
+		}) as unknown as FieldWithMethods<TState, TMethods>;
 	}
 
 	// ========================================================================
@@ -331,11 +371,14 @@ export class Field<TState extends FieldState = FieldState> {
 	 * @param key - Extension key (e.g. "admin", "form")
 	 * @param value - Extension value
 	 */
-	set<TKey extends string>(key: TKey, value: unknown): Field<TState> {
+	set<TKey extends string>(
+		key: TKey,
+		value: unknown,
+	): FieldWithMethods<TState, TMethods> {
 		return new Field({
 			...this._state,
 			extensions: { ...this._state.extensions, [key]: value },
-		}) as unknown as Field<TState>;
+		}) as unknown as FieldWithMethods<TState, TMethods>;
 	}
 
 	// ========================================================================
@@ -343,12 +386,12 @@ export class Field<TState extends FieldState = FieldState> {
 	// ========================================================================
 
 	/** Set minimum items for array field. */
-	minItems(n: number): Field<TState> {
+	minItems(n: number): FieldWithMethods<TState, TMethods> {
 		return this._clone<{}>({ minItems: n });
 	}
 
 	/** Set maximum items for array field. */
-	maxItems(n: number): Field<TState> {
+	maxItems(n: number): FieldWithMethods<TState, TMethods> {
 		return this._clone<{}>({ maxItems: n });
 	}
 

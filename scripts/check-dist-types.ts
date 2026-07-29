@@ -33,8 +33,9 @@ const ASSERTIONS: Array<{ file: string; mustContain: string; why: string }> = [
 	},
 	{
 		file: "packages/questpie/dist/server/fields/field-class.d.mts",
-		mustContain: "declare class Field<TState extends FieldState = FieldState>",
-		why: "same merging contract for Field augmentations",
+		mustContain:
+			"declare class Field<out TState extends FieldState = FieldState, in out TMethods = {}>",
+		why: "same merging contract for Field augmentations. The generated extension proxies still declare a ONE-parameter `interface Field<TState extends FieldState = FieldState>`, which merges fine with the two-parameter class — but a renamed or dropped param would break every consumer. The variance annotations are load-bearing too: `out TState` is what keeps `Field<BooleanFieldState>` assignable to `Field<FieldState>`, and losing it degrades inference without any error here",
 	},
 ];
 

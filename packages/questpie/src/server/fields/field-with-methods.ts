@@ -4,84 +4,17 @@
  * When a field type defines methods (e.g., text has .pattern(), .trim()),
  * these methods must survive common operations like .required(), .label(), etc.
  *
- * FieldWithMethods wraps the common method return types to re-attach TMethods,
- * ensuring the full method set is always available regardless of chain order.
+ * The ~22 COMMON methods used to be re-wrapped here too. They are now declared
+ * with their real return types on the `Field` class itself, so all this file
+ * still owes is re-attaching `TMethods` to the type-specific methods.
  *
  * Proven in QUE-247 PoC: tsdown .d.ts emit preserves these mapped types.
  *
  * @module
  */
 
-import type { SQL } from "drizzle-orm";
-import type { HasDefault, NotNull } from "drizzle-orm/column-builder";
-import type { ZodType } from "zod";
-
-import type { I18nText } from "#questpie/shared/i18n/types.js";
-
-import type {
-	ArrayFieldState,
-	CrdtFieldConfig,
-	FieldState,
-} from "./field-class-types.js";
+import type { FieldState } from "./field-class-types.js";
 import type { Field } from "./field-class.js";
-import type { OperatorSetDefinition } from "./operators/types.js";
-import type { FieldAccess, FieldHooks, ReferentialAction } from "./types.js";
-
-// ============================================================================
-// FieldCommonMethods — source of truth for common method signatures
-// ============================================================================
-
-/**
- * Explicit interface describing every common method on Field.
- * The Field class implements these; FieldWithMethods maps over them.
- *
- * Exported so consumers can declaration-merge additional common methods in;
- * the wrapper map re-wraps whatever they add. Note this is NOT how `.admin()`
- * and `.form()` work — those are codegen-emitted extension proxies over
- * `Field.set()` and never touch this interface.
- */
-export interface FieldCommonMethods<TState extends FieldState> {
-	required(): Field<
-		Omit<TState, "notNull" | "column"> & {
-			notNull: true;
-			column: NotNull<TState["column"]>;
-		}
-	>;
-	default(value: TState["data"] | (() => TState["data"]) | SQL): Field<
-		Omit<TState, "hasDefault" | "column"> & {
-			hasDefault: true;
-			column: HasDefault<TState["column"]>;
-		}
-	>;
-	label(l: I18nText): Field<TState & { label: I18nText }>;
-	description(d: I18nText): Field<TState & { description: I18nText }>;
-	localized(): Field<Omit<TState, "localized"> & { localized: true }>;
-	inputFalse(): Field<Omit<TState, "input"> & { input: false }>;
-	inputOptional(): Field<Omit<TState, "input"> & { input: "optional" }>;
-	inputTrue(): Field<Omit<TState, "input"> & { input: true }>;
-	outputFalse(): Field<Omit<TState, "output"> & { output: false }>;
-	virtual(
-		expr?: SQL,
-	): Field<
-		Omit<TState, "virtual" | "column"> & { virtual: true; column: null }
-	>;
-	hooks<H extends FieldHooks<TState["data"]>>(
-		h: H,
-	): Field<TState & { hooks: H }>;
-	access(a: FieldAccess): Field<TState & { access: FieldAccess }>;
-	array(): Field<ArrayFieldState<TState>>;
-	operators<TOps extends OperatorSetDefinition>(
-		ops: TOps,
-	): Field<TState & { operators: TOps }>;
-	drizzle<TNewCol>(
-		fn: (col: TState["column"]) => TNewCol,
-	): Field<TState & { column: TNewCol }>;
-	zod(fn: (schema: ZodType) => ZodType): Field<TState>;
-	fromDb(fn: (value: unknown) => unknown): Field<TState>;
-	toDb(fn: (value: unknown) => unknown): Field<TState>;
-	minItems(n: number): Field<TState>;
-	maxItems(n: number): Field<TState>;
-}
 
 // ============================================================================
 // FieldWithMethods — mapped wrapper type
@@ -91,23 +24,41 @@ export interface FieldCommonMethods<TState extends FieldState> {
 type _IsAny<T> = 0 extends 1 & T ? true : false;
 
 /**
- * ONE map over BOTH key sets. This was two separate maps
- * (`FieldCommonMethodsWrapped` + `FieldTypeMethodsWrapped`) until 2026-07-29;
- * merging them is worth roughly a fifth of the whole typecheck and is not a
- * cosmetic tidy-up. Measured on `examples/tanstack-barbershop` (4,580 files),
- * same machine, back to back:
+ * MEASURED HISTORY — this file has been the single hottest thing in the
+ * checker, and both wins came from REMOVING constituents, not from tuning.
+ *
+ * Two maps (`FieldCommonMethodsWrapped` + `FieldTypeMethodsWrapped`) merged
+ * into one, 2026-07-29, on `examples/tanstack-barbershop` (4,580 files):
  *
  *   instantiations  8,802,197 → 6,666,633   (−24.3%)
  *   types           1,569,880 → 1,220,332   (−22.3%)
  *   memory              3,145 → 2,481 MB    (−21.1%)
  *   check time          21.08 → 17.22 s     (−18.3%)
  *
- * Why it pays: `FieldWithMethods` is re-instantiated at EVERY link of every
- * field-builder chain, and `structuredTypeRelatedTo` dominates the trace
- * (2.8 M ms cumulative, ~3× everything else combined) with `FieldWithMethods`
- * comparisons in 5 of the top 8. Relating two intersections walks each target
- * constituent separately, so dropping a constituent removes a full property
- * walk from every one of those comparisons.
+ * Then the 27-key common map deleted outright (Lever B) by giving `Field` a
+ * second type parameter, so the class declares its own correct return types.
+ * The old map's only job was rewriting return types the class could have
+ * declared itself, and building its member table forced ~22 `Omit<TState,…>`
+ * computations at EVERY link of EVERY builder chain even when one method was
+ * called. `CrdtFieldMethodWrapped` went with it — it existed as a separate
+ * intersection constituent ONLY because mapping erased its `const TConfig`,
+ * and on a class declaration `const` survives. Same example, same machine:
+ *
+ *   instantiations  6,668,339 → 3,499,885   (−47.5%)
+ *   types           1,220,506 →   997,331   (−18.3%)
+ *   check time          16.45 → 14.42 s     (−12.3%)
+ *   memory              2,478 → 2,552 MB    (+3.0%)
+ *
+ * Memory is the honest outlier: peak heap did NOT follow instantiations down,
+ * so do not sell this change on memory. Instantiations roughly halve on all
+ * four budget targets (−47.5% to −56.0%).
+ *
+ * Why removal is what pays: `FieldWithMethods` is re-instantiated at EVERY
+ * link of every field-builder chain, and `structuredTypeRelatedTo` dominates
+ * the trace (2.8 M ms cumulative, ~3× everything else combined) with
+ * `FieldWithMethods` comparisons in 5 of the top 8. Relating two intersections
+ * walks each target constituent separately, so dropping a constituent removes
+ * a full property walk from every one of those comparisons.
  *
  * Two earlier directions were tried and did NOT work — do not re-litigate them:
  *   - A nominal `interface FieldWithMethods extends …` fails with 212 errors:
@@ -116,18 +67,22 @@ type _IsAny<T> = 0 extends 1 & T ? true : false;
  *     TS2312 (a mapped type over a generic `TMethods` has no statically known
  *     members and cannot be extended at all).
  *   - Hand-writing the wrapped methods instead of mapping would freeze the key
- *     set. `FieldCommonMethods` is exported as public API precisely so a
- *     consumer can declaration-merge into it, and the map is what re-wraps
- *     whatever they add. (Nothing in this repo does so today — `.admin()` and
- *     `.form()` are codegen-emitted extension proxies over `Field.set()`, NOT
- *     augmentations of this interface. The comment on `FieldCommonMethods`
- *     claiming otherwise predates the extension registry.)
+ *     set — field modules declare their methods without knowing `TMethods`.
+ */
+
+/**
+ * Map over `TMethods` ONLY. This map cannot follow the common methods onto the
+ * class: field modules declare `pattern(): any` and `hasMany(): Field<R>`
+ * without knowing `TMethods`, so something must re-attach it.
  *
- * INVARIANTS — all four survive the merge and must survive any future edit:
- *
- * 1. Common keys WIN over `TMethods` keys. The intersection this replaced
- *    resolved calls by declaration order with the common map first; the
- *    `K extends keyof FieldCommonMethods<TState>` branch is what preserves it.
+ * INVARIANTS:
+ * 1. Common keys WIN over colliding `TMethods` keys — now by intersection
+ *    ORDER: `Field<TState, TMethods>` comes FIRST in `FieldWithMethods`, and TS
+ *    resolves a call on an intersection through the first matching signature.
+ *    The old map had to PRECEDE `Field<TState>` to override it; the class is
+ *    now correct, so the order inverts. Same invariant, reversed mechanism.
+ *    Pinned by `field-inference.test-d.ts` §7b — nothing else detects a
+ *    reversal, because no builtin field type has a colliding key.
  * 2. The `_IsAny<Ret>` short-circuit MUST come BEFORE the state test.
  *    `any extends { _: infer R } ? A : B` evaluates to the UNION `A | B`, so a
  *    `(): any` method (text().pattern(), relation().relationName()) would
@@ -136,63 +91,45 @@ type _IsAny<T> = 0 extends 1 & T ? true : false;
  *    Field's methods reference `TState` contravariantly, which defeats `infer`
  *    on the class itself; `Field<R>` and `FieldWithMethods<R,_>` both expose
  *    `readonly _: R`.
- * 4. `in out` on both parameters. The annotations exist so the checker never
- *    has to compute variance structurally for a recursive type — removing them
- *    cost ~40% in instantiations when this was last measured.
+ * 4. Variance is DECLARED, never inferred, on both parameters and in both
+ *    places (here and on the class). `out TState`: measured — bare leaves TS
+ *    structurally recursing `inputFalse() → FWM<Omit<Omit<Omit<…>>>>` and
+ *    `_clone` fails TS2322; `in out TState` additionally breaks
+ *    `Field<BooleanFieldState>` → `Field<FieldState>`, i.e. the constraint on
+ *    every collection's `fields()` (110 errors). `in out TMethods`: forced —
+ *    `keyof TMethods` here makes it invariant, and `out` is TS2636 at the class
+ *    declaration. This alias must also stay a plain mapped type: wrapping it in
+ *    a conditional is TS2637 and would forfeit the annotations entirely.
+ *
+ *    The annotations ON THIS ALIAS are worth ~2%, and it is `in out TMethods`
+ *    that earns it. Barbershop instantiations, all three swept after the flip:
+ *    `out`/`in out` 3,499,885 · bare/bare 3,565,270 (+1.9%) ·
+ *    `out`/bare 3,565,227 (+1.9%). Same ordering on all four budget targets.
+ *    Dropping them costs; do not "simplify" them away.
  */
-type FieldAllMethodsWrapped<
-	in out TState extends FieldState,
-	in out TMethods,
-> = {
-	[K in
-		| keyof FieldCommonMethods<TState>
-		| keyof TMethods]: K extends keyof FieldCommonMethods<TState>
-		? // Common methods: re-wrap so TMethods survives the chain.
-			FieldCommonMethods<TState>[K] extends (
-				...args: infer A
-			) => Field<infer R extends FieldState>
-			? (...args: A) => FieldWithMethods<R, TMethods>
-			: FieldCommonMethods<TState>[K]
-		: K extends keyof TMethods
-			? // Type-specific methods: honour each method's DECLARED return.
-				// `Field<R>` / `FieldWithMethods<R,_>` transitions to R (relation
-				// `.hasMany()` → ToManyRelationFieldState); everything else keeps
-				// the current TState.
-				TMethods[K] extends (...args: infer A) => infer Ret
-				? _IsAny<Ret> extends true
-					? (...args: A) => FieldWithMethods<TState, TMethods>
-					: Ret extends { readonly _: infer R extends FieldState }
-						? (...args: A) => FieldWithMethods<R, TMethods>
-						: (...args: A) => FieldWithMethods<TState, TMethods>
-				: TMethods[K]
-			: never;
+type FieldTypeMethodsWrapped<out TState extends FieldState, in out TMethods> = {
+	[K in keyof TMethods]: TMethods[K] extends (...args: infer A) => infer Ret
+		? _IsAny<Ret> extends true
+			? (...args: A) => FieldWithMethods<TState, TMethods>
+			: Ret extends { readonly _: infer R extends FieldState }
+				? (...args: A) => FieldWithMethods<R, TMethods>
+				: (...args: A) => FieldWithMethods<TState, TMethods>
+		: TMethods[K];
 };
 
 /**
- * `crdt()` stays OUT of the map above. Routing it through the wrapper would
- * force its signature through `(...args: infer A)`, and inferring a signature
- * erases the `const` type parameter to its constraint — `crdt({ … })` would
- * widen from the literal config to `CrdtFieldConfig`.
- */
-type CrdtFieldMethodWrapped<TState extends FieldState, TMethods> = {
-	crdt<const TConfig extends CrdtFieldConfig>(
-		config: TConfig,
-	): FieldWithMethods<TState & { crdt: TConfig }, TMethods>;
-};
-
-/**
- * Field plus its type-specific methods, preserved across every common-method
- * chain. `FieldAllMethodsWrapped` supplies the re-wrapped methods; `Field
- * <TState>` supplies the runtime accessors (getType, toColumn, …).
+ * Field plus its type-specific methods, preserved across every chain link.
+ *
+ * `Field<TState, TMethods>` comes FIRST: it now carries the correct return
+ * types itself, so it must win a colliding `TMethods` key (invariant 1). Do not
+ * reorder — before Lever B the maps had to come first, and the comment saying
+ * so was load-bearing in exactly the opposite direction.
  *
  * @template TState - Accumulated type state
  * @template TMethods - Type-specific methods interface (e.g., TextMethods)
  */
-export type FieldWithMethods<TState extends FieldState, TMethods> =
-	// Method override maps must come BEFORE Field<TState> in the intersection.
-	// TypeScript resolves method calls on intersections using the FIRST matching
-	// overload, so placing the override maps first ensures the re-wrapped return
-	// types are used rather than Field<TState>'s own return types.
-	CrdtFieldMethodWrapped<TState, TMethods> &
-		FieldAllMethodsWrapped<TState, TMethods> &
-		Field<TState>;
+export type FieldWithMethods<TState extends FieldState, TMethods> = Field<
+	TState,
+	TMethods
+> &
+	FieldTypeMethodsWrapped<TState, TMethods>;

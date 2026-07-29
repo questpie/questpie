@@ -120,10 +120,22 @@ for (const target of TARGETS) {
 	);
 }
 
+const DEFAULT_COMMENT =
+	"Type-perf budget (deterministic tsc metrics). Regenerate with `bun run scripts/type-budget.ts --update` and review the diff — never hand-edit the NUMBERS. Gate: instantiations >3% over budget fails CI.";
+
 if (update) {
+	// Keep whatever note is already in the file. `--update` used to hardcode the
+	// comment, so every re-baseline silently deleted the maintenance context
+	// someone had written there — the numbers are generated, the prose is not.
+	let existingComment: string | undefined;
+	try {
+		existingComment = (JSON.parse(readFileSync(BUDGET_PATH, "utf8")) as Budget)
+			.$comment;
+	} catch {
+		// no readable budget yet — fall through to the default
+	}
 	const budget: Budget = {
-		$comment:
-			"Type-perf budget (deterministic tsc metrics). Regenerate with `bun run scripts/type-budget.ts --update` and review the diff — never hand-edit. Gate: instantiations >10% over budget fails CI.",
+		$comment: existingComment || DEFAULT_COMMENT,
 		tsVersion: version,
 		targets: current,
 	};
