@@ -254,6 +254,46 @@ describe("observability end to end", () => {
 		}
 	});
 
+	it("nests a cache seam span under the work that triggered it", async () => {
+		// kv/search wrap themselves the same way CRUD does; what matters is that
+		// they land under the caller rather than as orphan roots.
+		const h = harness();
+		const app = (await buildApp(h.adapter)) as {
+			observability: {
+				span<T>(n: string, fn: () => T, o?: unknown): T;
+			};
+			kv: {
+				set(k: string, v: unknown): Promise<void>;
+				get(k: string): Promise<unknown>;
+			};
+		};
+		h.spans.reset();
+
+		await app.observability.span(
+			"http.request",
+			async () => {
+				await app.kv.set("cache-key", { hit: true });
+				await app.kv.get("cache-key");
+			},
+			{ kind: "server" },
+		);
+
+		const finished = h.spans.getFinishedSpans();
+		await h.adapter.shutdown();
+
+		const outer = finished.find((x) => x.name === "http.request")!;
+		const kvSpans = finished.filter((x) => x.name.startsWith("kv."));
+		expect(kvSpans.length).toBeGreaterThan(0);
+		for (const span of kvSpans) {
+			expect(span.parentSpanContext?.spanId).toBe(outer.spanContext().spanId);
+		}
+		// The key itself must never be an attribute — keys routinely embed ids
+		// and occasionally tokens.
+		expect(JSON.stringify(kvSpans.map((x) => x.attributes))).not.toContain(
+			"cache-key",
+		);
+	});
+
 	it("records the RED histogram for the request", async () => {
 		// One histogram, not three instruments: rate is its count, and errors are
 		// that count sliced by status code.
