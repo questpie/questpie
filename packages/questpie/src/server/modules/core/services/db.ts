@@ -2,6 +2,7 @@ import type {
 	DbCreateResult,
 	QuestpieConfig,
 } from "#questpie/server/config/types.js";
+import { instrumentDbClient } from "#questpie/server/db/instrument.js";
 import { assertSupportedPostgresVersion } from "#questpie/server/db/postgres-version.js";
 import { service } from "#questpie/server/services/define-service.js";
 
@@ -42,6 +43,12 @@ export default service({
 	namespace: null,
 	lifecycle: "singleton",
 	create: async ({ app }) => {
+		// Query spans are attached to EVERY config variant, including the two
+		// where the user hands us a fully built client — see db/instrument.ts for
+		// why the seam is the Drizzle session rather than the driver. No-op when
+		// no observability adapter is configured.
+		const instrument = <T>(db: T): T =>
+			instrumentDbClient(db, app.observability);
 		// Widen to the general config union — this service must handle EVERY
 		// DbConfig variant at runtime, while the generated `app.config.db` is
 		// narrowed to the app's concrete shape (breaking the `in` guards below).
@@ -50,7 +57,7 @@ export default service({
 		if ("drizzle" in config.db) {
 			app._pgConnectionString = config.db.connectionString;
 			app._dbCleanup = config.db.close;
-			return acceptCustomDb(config.db.drizzle);
+			return instrument(await acceptCustomDb(config.db.drizzle));
 		}
 
 		if ("create" in config.db) {
@@ -64,10 +71,10 @@ export default service({
 			if (isWrappedDbCreateResult(created)) {
 				app._pgConnectionString = created.connectionString;
 				app._dbCleanup = created.close;
-				return acceptCustomDb(created.drizzle);
+				return instrument(await acceptCustomDb(created.drizzle));
 			}
 
-			return acceptCustomDb(created);
+			return instrument(await acceptCustomDb(created));
 		}
 
 		const accept = async <
@@ -113,7 +120,9 @@ export default service({
 					...(pool?.prepare !== undefined ? { prepare: pool.prepare } : {}),
 				});
 				app._dbCleanup = () => bunSqlClient.close({ timeout: 5 });
-				return accept(drizzleBun({ client: bunSqlClient, schema }));
+				return instrument(
+					await accept(drizzleBun({ client: bunSqlClient, schema })),
+				);
 			}
 
 			const [{ default: pg }, { drizzle: drizzlePg }] = await Promise.all([
@@ -139,12 +148,14 @@ export default service({
 					: {}),
 			});
 			app._dbCleanup = () => pgPool.end();
-			return accept(drizzlePg({ client: pgPool, schema }));
+			return instrument(await accept(drizzlePg({ client: pgPool, schema })));
 		}
 
 		const { drizzle: drizzlePgLite } = await import("drizzle-orm/pglite");
 
-		return accept(drizzlePgLite({ client: config.db.pglite as any, schema }));
+		return instrument(
+			await accept(drizzlePgLite({ client: config.db.pglite as any, schema })),
+		);
 	},
 	dispose: () => {
 		// Driver cleanup is handled by the app-level _dbCleanup callback because
