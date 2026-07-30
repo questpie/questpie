@@ -23,6 +23,10 @@ import type {
 } from "../builder/types/action-types";
 import { useTranslation } from "../i18n/hooks";
 import { selectAdmin, selectClient, useAdminStore } from "../runtime";
+import {
+	type OptimisticLockConfig,
+	optimisticActionInput,
+} from "../utils/optimistic-lock";
 import { useCollectionSchema } from "./use-collection-schema";
 
 type ServerExecuteActionResponse = {
@@ -174,6 +178,7 @@ function mapServerAction(
 	client: any,
 	locale: string,
 	t: (key: string, params?: Record<string, unknown>) => string,
+	optimisticLock?: OptimisticLockConfig,
 ): ActionDefinition & { scope?: string } {
 	const action: ActionDefinition & { scope?: string } = {
 		id: serverAction.id,
@@ -246,6 +251,17 @@ function mapServerAction(
 						actionId: serverAction.id,
 						itemId,
 						itemIds,
+						...optimisticActionInput(
+							ctx.item && !Array.isArray(ctx.item)
+								? (ctx.item as Record<string, any>)
+								: undefined,
+							Array.isArray(ctx.items)
+								? (ctx.items as Array<Record<string, any>>)
+								: Array.isArray(ctx.item)
+									? (ctx.item as Array<Record<string, any>>)
+									: undefined,
+							optimisticLock,
+						),
 						data,
 						locale,
 					})) as ServerExecuteActionResponse;
@@ -328,9 +344,18 @@ export function useServerActions({
 				client,
 				locale,
 				t,
+				schema?.options?.optimisticLock,
 			),
 		);
-	}, [schema?.admin?.actions, collection, admin, client, locale, t]);
+	}, [
+		schema?.admin?.actions,
+		schema?.options?.optimisticLock,
+		collection,
+		admin,
+		client,
+		locale,
+		t,
+	]);
 
 	return {
 		serverActions,

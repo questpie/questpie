@@ -444,6 +444,52 @@ export function useCollectionDelete<K extends ResolvedCollectionNames>(
 }
 
 /**
+ * Hook to atomically delete every record matching a collection filter.
+ */
+export function useCollectionDeleteMany<K extends ResolvedCollectionNames>(
+	collection: K,
+	mutationOptions?: Omit<UseMutationOptions, "mutationFn">,
+): any {
+	const { queryOpts, queryClient, locale } = useQuestpieQueryOptions();
+
+	const baseOptions = (queryOpts.collections as any)[
+		collection as string
+	].deleteMany();
+	const listQueryKey = queryOpts.key([
+		"collections",
+		collection as string,
+		"find",
+		locale,
+	]);
+	const countQueryKey = queryOpts.key([
+		"collections",
+		collection as string,
+		"count",
+		locale,
+	]);
+	const itemQueryKey = queryOpts.key([
+		"collections",
+		collection as string,
+		"findOne",
+		locale,
+	]);
+
+	return useMutation({
+		...baseOptions,
+		onSuccess: (data: any, variables: any, context: any) => {
+			(mutationOptions?.onSuccess as any)?.(data, variables, context);
+		},
+		onSettled: (data: any, error: any, variables: any, context: any) => {
+			queryClient.invalidateQueries({ queryKey: listQueryKey });
+			queryClient.invalidateQueries({ queryKey: countQueryKey });
+			queryClient.removeQueries({ queryKey: itemQueryKey });
+			(mutationOptions?.onSettled as any)?.(data, error, variables, context);
+		},
+		...mutationOptions,
+	} as any);
+}
+
+/**
  * Hook to restore soft-deleted collection item
  */
 export function useCollectionRestore<K extends ResolvedCollectionNames>(

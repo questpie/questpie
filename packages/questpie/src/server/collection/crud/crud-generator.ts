@@ -2003,6 +2003,74 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		return lockedIds.filter((id) => matched.has(id));
 	}
 
+	private getOptimisticLock() {
+		const config = this.state.options.optimisticLock;
+		if (!config) return undefined;
+
+		const column = getColumn(this.table, config.field);
+		if (!column) {
+			throw new Error(
+				`Optimistic lock field "${config.field}" does not exist on collection "${this.state.name}"`,
+			);
+		}
+
+		return { ...config, column };
+	}
+
+	private assertExpectedVersion(
+		params: { expectedVersion?: number },
+		records: Array<Record<string, any>>,
+	): void {
+		const optimisticLock = this.getOptimisticLock();
+		if (!optimisticLock) return;
+
+		if (
+			typeof params.expectedVersion !== "number" ||
+			!Number.isFinite(params.expectedVersion) ||
+			records.some(
+				(record) => record[optimisticLock.field] !== params.expectedVersion,
+			)
+		) {
+			throw ApiError.conflict("Optimistic lock conflict");
+		}
+	}
+
+	private assertExpectedVersions(
+		params: {
+			expectedVersions?: Array<{
+				id: string | number;
+				expectedVersion: number;
+			}>;
+		},
+		records: Array<Record<string, any>>,
+	): Map<string | number, number> | undefined {
+		if (!this.getOptimisticLock()) return undefined;
+		if (
+			!Array.isArray(params.expectedVersions) ||
+			params.expectedVersions.length !== records.length
+		) {
+			throw ApiError.conflict("Optimistic lock conflict");
+		}
+
+		const byId = new Map<string | number, number>();
+		for (const entry of params.expectedVersions) {
+			if (
+				entry.id == null ||
+				typeof entry.expectedVersion !== "number" ||
+				!Number.isFinite(entry.expectedVersion) ||
+				byId.has(entry.id)
+			) {
+				throw ApiError.conflict("Optimistic lock conflict");
+			}
+			byId.set(entry.id, entry.expectedVersion);
+		}
+
+		if (records.some((record) => !byId.has(record.id))) {
+			throw ApiError.conflict("Optimistic lock conflict");
+		}
+		return byId;
+	}
+
 	/**
 	 * Shared core update handler for updateById and updateMany
 	 * Ensures consistency in access control, hooks, validation, and re-fetching.
@@ -2073,12 +2141,34 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		const records = recordsResult.docs;
 
 		if (records.length === 0) {
-			if (isBatch) return [];
+			if (isBatch) {
+				this.assertExpectedVersions(
+					params as {
+						expectedVersions?: Array<{
+							id: string | number;
+							expectedVersion: number;
+						}>;
+					},
+					records,
+				);
+				return [];
+			}
 			throw ApiError.notFound(
 				"Record",
 				String((params as { id: string | number }).id),
 			);
 		}
+		const expectedVersions = isBatch
+			? this.assertExpectedVersions(
+					params as {
+						expectedVersions?: Array<{
+							id: string | number;
+							expectedVersion: number;
+						}>;
+					},
+					records,
+				)
+			: undefined;
 
 		// 3. Process each record (Access Control + beforeValidate)
 		for (const existing of records) {
@@ -2230,11 +2320,42 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							String((params as { id: string | number }).id),
 						);
 					}
+					if (expectedVersions) {
+						throw ApiError.conflict("Optimistic lock conflict");
+					}
 					return [];
+				}
+				if (expectedVersions && recordIds.length !== records.length) {
+					throw ApiError.conflict("Optimistic lock conflict");
 				}
 
 				const winnerIds = new Set(recordIds);
 				const winners = records.filter((r: any) => winnerIds.has(r.id));
+				const optimisticLock = this.getOptimisticLock();
+				if (optimisticLock) {
+					const lockedRecords = await tx
+						.select()
+						.from(this.table)
+						.where(inArray(getColumn(this.table, "id")!, recordIds))
+						.for("update");
+					if (expectedVersions) {
+						if (
+							lockedRecords.length !== expectedVersions.size ||
+							lockedRecords.some(
+								(record: any) =>
+									record[optimisticLock.field] !==
+									expectedVersions.get(record.id),
+							)
+						) {
+							throw ApiError.conflict("Optimistic lock conflict");
+						}
+					} else {
+						this.assertExpectedVersion(
+							params as { expectedVersion?: number },
+							lockedRecords,
+						);
+					}
+				}
 
 				// Apply belongsTo relations
 				({ regularFields, nestedRelations } =
@@ -2262,12 +2383,18 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// Update main table
 				if (
 					Object.keys(nonLocalized).length > 0 ||
-					this.state.options.timestamps !== false
+					this.state.options.timestamps !== false ||
+					optimisticLock
 				) {
 					await tx
 						.update(this.table)
 						.set({
 							...nonLocalized,
+							...(optimisticLock
+								? {
+										[optimisticLock.field]: sql`${optimisticLock.column} + 1`,
+									}
+								: {}),
 							...(this.state.options.timestamps !== false
 								? { updatedAt: new Date() }
 								: {}),
@@ -2580,6 +2707,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				) {
 					throw ApiError.notFound("Record", id);
 				}
+				this.assertExpectedVersion(params, [lockedBeforeDelete]);
 
 				await this.handleCascadeDeleteInternal(id, existing, txContext);
 
@@ -2588,9 +2716,17 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 				// Soft delete or hard delete
 				if (this.state.options.softDelete) {
+					const optimisticLock = this.getOptimisticLock();
 					await tx
 						.update(this.table)
-						.set({ deletedAt: new Date() })
+						.set({
+							deletedAt: new Date(),
+							...(optimisticLock
+								? {
+										[optimisticLock.field]: sql`${optimisticLock.column} + 1`,
+									}
+								: {}),
+						})
 						.where(eq(getColumn(this.table, "id")!, id));
 				} else {
 					await tx
@@ -2948,14 +3084,41 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			}
 
 			if (!existing.deletedAt) {
-				await this.filterFieldsForRead(existing, normalized);
-				return existing;
+				return withTransaction(db, async (tx: any) => {
+					const [locked] = await tx
+						.select()
+						.from(this.table)
+						.where(eq(getColumn(this.table, "id")!, id))
+						.for("update");
+
+					if (!locked) {
+						throw ApiError.notFound("Record", id);
+					}
+					this.assertExpectedVersion(params, [locked]);
+
+					if (!locked.deletedAt) {
+						await this.filterFieldsForRead(locked, normalized);
+						return locked;
+					}
+
+					const stagedCrdtOwner = await this.stageCrdtOwner(locked);
+					return this._executeUpdate(
+						{
+							id,
+							expectedVersion: params.expectedVersion,
+							data: { deletedAt: null } as Record<string, unknown>,
+						},
+						{ ...normalized, db: tx },
+						stagedCrdtOwner ? { crdtRestore: stagedCrdtOwner } : undefined,
+					);
+				});
 			}
 
 			const stagedCrdtOwner = await this.stageCrdtOwner(existing);
 			return await this._executeUpdate(
 				{
 					id,
+					expectedVersion: params.expectedVersion,
 					data: { deletedAt: null } as Record<string, unknown>,
 				},
 				normalized,
@@ -2969,7 +3132,14 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	 */
 	private createUpdateMany() {
 		return async (
-			params: { where: Where; data: UpdateParams["data"] },
+			params: {
+				where: Where;
+				expectedVersions?: Array<{
+					id: string | number;
+					expectedVersion: number;
+				}>;
+				data: UpdateParams["data"];
+			},
 			context: CRUDContext = {},
 		) => {
 			return this._executeUpdate(params, context);
@@ -2982,7 +3152,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	private createUpdateBatch() {
 		return async (
 			params: {
-				updates: Array<{ id: string | number; data: UpdateParams["data"] }>;
+				updates: Array<{
+					id: string | number;
+					expectedVersion?: number;
+					data: UpdateParams["data"];
+				}>;
 			},
 			context: CRUDContext = {},
 		) => {
@@ -3008,7 +3182,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				for (const update of params.updates) {
 					updatedRecords.push(
 						await this._executeUpdate(
-							{ id: update.id, data: update.data },
+							{
+								id: update.id,
+								expectedVersion: update.expectedVersion,
+								data: update.data,
+							},
 							txContext,
 						),
 					);
@@ -3027,7 +3205,16 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	 * 4. Loop through afterDelete hooks
 	 */
 	private createDeleteMany() {
-		return async (params: { where: Where }, context: CRUDContext = {}) => {
+		return async (
+			params: {
+				where: Where;
+				expectedVersions?: Array<{
+					id: string | number;
+					expectedVersion: number;
+				}>;
+			},
+			context: CRUDContext = {},
+		) => {
 			const normalized = this.normalizeContext(context);
 			const db = this.getDb(normalized);
 			const find = this.createFind();
@@ -3036,8 +3223,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const { docs: records } = await find({ where: params.where }, normalized);
 
 			if (records.length === 0) {
+				this.assertExpectedVersions(params, records);
 				return { success: true, count: 0 };
 			}
+			const expectedVersions = this.assertExpectedVersions(params, records);
 
 			// Compute bulk metadata (pre-image for delete)
 			const deleteBulkMeta = {
@@ -3115,6 +3304,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					includeDeleted: false,
 					stage: normalized.stage,
 				});
+				if (expectedVersions && winnerIdList.length !== records.length) {
+					throw ApiError.conflict("Optimistic lock conflict");
+				}
 				if (winnerIdList.length === 0) return [];
 
 				let lockedBeforeDelete = await tx
@@ -3132,7 +3324,24 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					lockedBeforeDelete = lockedBeforeDelete.filter((record: any) =>
 						activeIds.has(record.id),
 					);
-					if (winnerIdList.length === 0) return [];
+					if (winnerIdList.length === 0) {
+						if (expectedVersions) {
+							throw ApiError.conflict("Optimistic lock conflict");
+						}
+						return [];
+					}
+				}
+				const optimisticLock = this.getOptimisticLock();
+				if (
+					expectedVersions &&
+					(lockedBeforeDelete.length !== expectedVersions.size ||
+						lockedBeforeDelete.some(
+							(record: any) =>
+								record[optimisticLock!.field] !==
+								expectedVersions.get(record.id),
+						))
+				) {
+					throw ApiError.conflict("Optimistic lock conflict");
 				}
 				const winnerIds = new Set(winnerIdList);
 				const claimedRecords = records.filter((r: any) => winnerIds.has(r.id));
@@ -3153,7 +3362,14 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				if (this.state.options.softDelete) {
 					await tx
 						.update(this.table)
-						.set({ deletedAt: new Date() })
+						.set({
+							deletedAt: new Date(),
+							...(optimisticLock
+								? {
+										[optimisticLock.field]: sql`${optimisticLock.column} + 1`,
+									}
+								: {}),
+						})
 						.where(inArray(getColumn(this.table, "id")!, winnerIdList));
 				} else {
 					await tx
@@ -3455,10 +3671,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 			const localizedFieldNames = this.getLocalizedFieldNames();
 			const localizedFieldSet = new Set(localizedFieldNames);
+			const optimisticLock = this.getOptimisticLock();
 
 			const nonLocalized: Record<string, any> = {};
 			for (const [name] of Object.entries(this.state.fields)) {
 				if (localizedFieldSet.has(name)) continue;
+				if (name === optimisticLock?.field) continue;
 				nonLocalized[name] = version[name];
 			}
 			if (this.state.options.softDelete) {
@@ -3534,11 +3752,30 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			);
 
 			const updated = await withTransaction(db, async (tx: any) => {
-				if (Object.keys(nonLocalized).length > 0) {
+				const [lockedExisting] = await tx
+					.select()
+					.from(this.table)
+					.where(eq(getColumn(this.table, "id")!, options.id))
+					.for("update");
+				if (!lockedExisting) {
+					throw ApiError.notFound("Record", options.id);
+				}
+				this.assertExpectedVersion(options, [lockedExisting]);
+
+				if (
+					Object.keys(nonLocalized).length > 0 ||
+					this.state.options.timestamps !== false ||
+					optimisticLock
+				) {
 					await tx
 						.update(this.table)
 						.set({
 							...nonLocalized,
+							...(optimisticLock
+								? {
+										[optimisticLock.field]: sql`${optimisticLock.column} + 1`,
+									}
+								: {}),
 							...(this.state.options.timestamps !== false
 								? { updatedAt: new Date() }
 								: {}),
@@ -3604,7 +3841,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					this.state.hooks?.afterChange,
 					this.createHookContext({
 						data: result,
-						original: existing,
+						original: lockedExisting,
 						operation: "update",
 						context: normalized,
 						db: tx,

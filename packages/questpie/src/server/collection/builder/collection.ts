@@ -44,7 +44,10 @@ import type {
 } from "#questpie/server/collection/builder/types.js";
 import { createCollectionValidationSchemas } from "#questpie/server/collection/builder/validation-helpers.js";
 import { CRUDGenerator } from "#questpie/server/collection/crud/index.js";
-import type { CRUD } from "#questpie/server/collection/crud/types.js";
+import type {
+	CRUD,
+	ExtractIdType,
+} from "#questpie/server/collection/crud/types.js";
 import { systemTimestamp } from "#questpie/server/db/system-columns.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { FieldSelect } from "#questpie/server/fields/field-types.js";
@@ -489,7 +492,9 @@ type GeneratedCollectionCRUD<TState extends CollectionBuilderState> = Omit<
 		CollectionSelect<TState>,
 		CollectionInsert<TState>,
 		CollectionUpdate<TState>,
-		TState["relations"]
+		TState["relations"],
+		ExtractIdType<CollectionSelect<TState>>,
+		TState["options"]
 	>,
 	"purgeById"
 > &
@@ -499,7 +504,9 @@ type GeneratedCollectionCRUD<TState extends CollectionBuilderState> = Omit<
 					CollectionSelect<TState>,
 					CollectionInsert<TState>,
 					CollectionUpdate<TState>,
-					TState["relations"]
+					TState["relations"],
+					ExtractIdType<CollectionSelect<TState>>,
+					TState["options"]
 				>,
 				"purgeById"
 			>
@@ -683,6 +690,7 @@ export class Collection<TState extends CollectionBuilderState> {
 
 		// Build the main table
 		this.table = this.generateMainTable(indexesFn) as any;
+		this.validateOptimisticLockField();
 
 		// Build the i18n table if there are localized fields
 		this.i18nTable = this.generateI18nTable() as any;
@@ -743,6 +751,52 @@ export class Collection<TState extends CollectionBuilderState> {
 
 		// Type inference helper (empty runtime object, types only)
 		this.$infer = {} as any;
+	}
+
+	private validateOptimisticLockField(): void {
+		const config = this.state.options.optimisticLock;
+		if (!config) return;
+
+		const field = config.field;
+		const fieldDefinition = (
+			this.state.fieldDefinitions as Record<
+				string,
+				{
+					getLocation?: () => string;
+					getType?: () => string;
+				}
+			>
+		)[field];
+		const location = fieldDefinition?.getLocation?.();
+
+		if (location && location !== "main") {
+			throw new Error(
+				`Optimistic lock field "${field}" on collection "${this.state.name}" must be a persisted, non-localized main-table field`,
+			);
+		}
+
+		const column = (
+			this.table as unknown as Record<string, PgColumn | undefined>
+		)[field];
+		if (!column) {
+			throw new Error(
+				`Optimistic lock field "${field}" does not exist on collection "${this.state.name}"`,
+			);
+		}
+		if (!column.notNull) {
+			throw new Error(
+				`Optimistic lock field "${field}" on collection "${this.state.name}" must be non-nullable`,
+			);
+		}
+
+		if (
+			(fieldDefinition && fieldDefinition.getType?.() !== "number") ||
+			!column.dataType.startsWith("number")
+		) {
+			throw new Error(
+				`Optimistic lock field "${field}" on collection "${this.state.name}" must be numeric`,
+			);
+		}
 	}
 
 	/**
@@ -1415,6 +1469,7 @@ export class Collection<TState extends CollectionBuilderState> {
 			title: titleMeta,
 			timestamps: this.state.options.timestamps !== false,
 			softDelete: this.state.options.softDelete || false,
+			optimisticLock: this.state.options.optimisticLock,
 			virtualFields: this.state.virtuals
 				? Object.keys(this.state.virtuals)
 				: [],

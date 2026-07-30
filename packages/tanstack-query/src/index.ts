@@ -271,6 +271,18 @@ type CollectionRestore<
 	TApp extends QuestpieApp,
 	K extends CollectionKeys<TApp>,
 > = QuestpieClient<TApp>["collections"][K]["restore"];
+type CollectionUpdateMany<
+	TApp extends QuestpieApp,
+	K extends CollectionKeys<TApp>,
+> = QuestpieClient<TApp>["collections"][K]["updateMany"];
+type CollectionUpdateBatch<
+	TApp extends QuestpieApp,
+	K extends CollectionKeys<TApp>,
+> = QuestpieClient<TApp>["collections"][K]["updateBatch"];
+type CollectionDeleteMany<
+	TApp extends QuestpieApp,
+	K extends CollectionKeys<TApp>,
+> = QuestpieClient<TApp>["collections"][K]["deleteMany"];
 type CollectionPurgeById<
 	TApp extends QuestpieApp,
 	K extends CollectionKeys<TApp>,
@@ -423,12 +435,16 @@ type CollectionQueryOptionsAPI<
 		QueryData<CollectionTransitionStage<TApp, K>>
 	>;
 	updateMany: MutationBuilder<
-		{ where: any; data: any },
-		QueryData<CollectionUpdate<TApp, K>>
+		FirstArg<CollectionUpdateMany<TApp, K>>,
+		QueryData<CollectionUpdateMany<TApp, K>>
+	>;
+	updateBatch: MutationBuilder<
+		FirstArg<CollectionUpdateBatch<TApp, K>>,
+		QueryData<CollectionUpdateBatch<TApp, K>>
 	>;
 	deleteMany: MutationBuilder<
-		{ where: any },
-		{ success: boolean; count: number }
+		FirstArg<CollectionDeleteMany<TApp, K>>,
+		QueryData<CollectionDeleteMany<TApp, K>>
 	>;
 } & ([CollectionPurgeById<TApp, K>] extends [never]
 	? {}
@@ -795,7 +811,7 @@ export function createQuestpieQueryOptions<
 								stage,
 							]),
 							mutationFn: wrapMutationFn(
-								(variables: { id: string; data: any }) =>
+								(variables: any) =>
 									collection.update(
 										variables,
 										locale || stage
@@ -817,7 +833,7 @@ export function createQuestpieQueryOptions<
 								stage,
 							]),
 							mutationFn: wrapMutationFn(
-								(variables: { id: string }) =>
+								(variables: any) =>
 									collection.delete(
 										variables,
 										locale || stage
@@ -839,7 +855,7 @@ export function createQuestpieQueryOptions<
 								stage,
 							]),
 							mutationFn: wrapMutationFn(
-								(variables: { id: string }) =>
+								(variables: any) =>
 									collection.restore(
 										variables,
 										locale || stage
@@ -861,7 +877,7 @@ export function createQuestpieQueryOptions<
 								stage,
 							]),
 							mutationFn: wrapMutationFn(
-								(variables: { id: string }) =>
+								(variables: any) =>
 									collection.purgeById(
 										variables,
 										locale || stage
@@ -910,11 +926,7 @@ export function createQuestpieQueryOptions<
 								stage,
 							]),
 							mutationFn: wrapMutationFn(
-								(variables: {
-									id: string;
-									version?: number;
-									versionId?: string;
-								}) =>
+								(variables: Parameters<typeof collection.revertToVersion>[0]) =>
 									collection.revertToVersion(
 										variables,
 										locale || stage
@@ -958,8 +970,30 @@ export function createQuestpieQueryOptions<
 								stage,
 							]),
 							mutationFn: wrapMutationFn(
-								(variables: { where: any; data: any }) =>
+								(variables: any) =>
 									collection.updateMany(
+										variables,
+										locale || stage
+											? {
+													...(locale ? { locale } : {}),
+													...(stage ? { stage } : {}),
+												}
+											: undefined,
+									),
+								errorMap,
+							),
+						}),
+					updateBatch: () =>
+						mutationOptions({
+							mutationKey: buildKey(keyPrefix, [
+								...baseKey,
+								"updateBatch",
+								locale,
+								stage,
+							]),
+							mutationFn: wrapMutationFn(
+								(variables: any) =>
+									collection.updateBatch(
 										variables,
 										locale || stage
 											? {
@@ -980,7 +1014,7 @@ export function createQuestpieQueryOptions<
 								stage,
 							]),
 							mutationFn: wrapMutationFn(
-								(variables: { where: any }) =>
+								(variables: any) =>
 									collection.deleteMany(
 										variables,
 										locale || stage

@@ -1,10 +1,12 @@
 import type { UploadOptions } from "#questpie/server/collection/builder/index.js";
+import type { CollectionOptions } from "#questpie/server/collection/builder/types.js";
 import type {
 	ApplyQuery,
 	CollectionRelationsFromApp,
 	CollectionSelectFromApp,
 	CRUD,
 	CRUDContext,
+	ExtractIdType,
 	FindResult,
 	FindOneOptions,
 	FindOptions,
@@ -57,6 +59,13 @@ type AppFromCollections<TCollections extends Record<string, any>> = {
 /** Detect `any` to short-circuit expensive type resolution */
 type IsAny<T> = 0 extends 1 & T ? true : false;
 
+type CollectionOptionsOf<TCollection> =
+	CollectionState<TCollection> extends {
+		options: infer TOptions extends CollectionOptions;
+	}
+		? TOptions
+		: CollectionOptions;
+
 /**
  * Collection-aware CRUD that uses FindOptions/FindOneOptions typed against
  * the collection + TApp context for field-definition-aware operator types.
@@ -79,7 +88,9 @@ type CollectionCRUD<
 		TSelect,
 		CollectionInsert<TCollection>,
 		CollectionUpdate<TCollection>,
-		TRelations
+		TRelations,
+		ExtractIdType<TSelect>,
+		CollectionOptionsOf<TCollection>
 	>,
 	"find" | "findOne" | "count" | "purgeById"
 > & {

@@ -114,6 +114,11 @@ import {
 	hasManyToManyRelations,
 } from "../../utils/detect-relations";
 import { shouldHandleAdminShortcut } from "../../utils/keyboard-shortcuts";
+import {
+	optimisticActionInput,
+	optimisticIdInput,
+	optimisticUpdateInput,
+} from "../../utils/optimistic-lock";
 import { AdminViewHeader } from "../layout/admin-view-layout";
 import { AutoFormFields } from "./auto-form-fields";
 import { FormViewSkeleton } from "./view-skeletons";
@@ -1132,6 +1137,7 @@ export default function FormView({
 		isDirtyRef: formIsDirtyRef,
 		isSubmittingRef: formIsSubmittingRef,
 		updateMutation,
+		optimisticLock: schema?.options?.optimisticLock,
 		onPreviewCommit: commitPreviewSnapshot,
 		onPreviewRefresh: triggerPreviewRefresh,
 		onSavingChange: setIsSaving,
@@ -1256,10 +1262,9 @@ export default function FormView({
 	const onSubmit = async (data: any) => {
 		const savePromise = async () => {
 			if (isEditMode && id) {
-				return await updateMutation.mutateAsync({
-					id,
-					data,
-				});
+				return await updateMutation.mutateAsync(
+					optimisticUpdateInput(id, data, schema?.options?.optimisticLock),
+				);
 			} else {
 				return await createMutation.mutateAsync(data);
 			}
@@ -1592,9 +1597,17 @@ export default function FormView({
 
 					setActionLoading(true);
 					toast.promise(
-						restoreMutation.mutateAsync({ id: itemId }).finally(() => {
-							setActionLoading(false);
-						}),
+						restoreMutation
+							.mutateAsync(
+								optimisticIdInput(
+									itemId,
+									transformedItem,
+									schema?.options?.optimisticLock,
+								),
+							)
+							.finally(() => {
+								setActionLoading(false);
+							}),
 						{
 							loading: t("collection.restoring"),
 							success: t("collection.restoreSuccess"),
@@ -1614,9 +1627,17 @@ export default function FormView({
 
 					setActionLoading(true);
 					toast.promise(
-						deleteMutation.mutateAsync({ id: itemId }).finally(() => {
-							setActionLoading(false);
-						}),
+						deleteMutation
+							.mutateAsync(
+								optimisticIdInput(
+									itemId,
+									transformedItem,
+									schema?.options?.optimisticLock,
+								),
+							)
+							.finally(() => {
+								setActionLoading(false);
+							}),
 						{
 							loading: t("toast.deleting"),
 							success: () => {
@@ -1723,6 +1744,11 @@ export default function FormView({
 						collection: serverHandler.collection,
 						actionId: serverHandler.actionId,
 						itemId: transformedItem?.id || id,
+						...optimisticActionInput(
+							transformedItem,
+							undefined,
+							schema?.options?.optimisticLock,
+						),
 					});
 					if (!response?.success || response.result?.type === "error") {
 						throw new Error(
@@ -1777,8 +1803,15 @@ export default function FormView({
 	const confirmRevertVersion = async () => {
 		if (!pendingRevertVersion || !id) return;
 
-		const payload: { id: string; version?: number; versionId?: string } = {
+		const payload = optimisticIdInput(
 			id,
+			transformedItem,
+			schema?.options?.optimisticLock,
+		) as {
+			id: string;
+			version?: number;
+			versionId?: string;
+			expectedVersion?: number;
 		};
 		if (typeof pendingRevertVersion.versionId === "string") {
 			payload.versionId = pendingRevertVersion.versionId;

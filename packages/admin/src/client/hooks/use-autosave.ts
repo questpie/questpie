@@ -20,6 +20,10 @@ import type { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { useTranslation } from "../i18n/hooks";
+import {
+	type OptimisticLockConfig,
+	optimisticUpdateInput,
+} from "../utils/optimistic-lock";
 
 export interface UseAutosaveOptions {
 	/** The react-hook-form instance to autosave. */
@@ -35,7 +39,15 @@ export interface UseAutosaveOptions {
 	/** Mirror of the form's `isSubmitting` state. */
 	isSubmittingRef: React.MutableRefObject<boolean>;
 	/** Update mutation used to persist the record. */
-	updateMutation: { mutateAsync: (args: { id: string; data: unknown }) => Promise<unknown> };
+	updateMutation: {
+		mutateAsync: (args: {
+			id: string;
+			data: unknown;
+			expectedVersion?: number;
+		}) => Promise<unknown>;
+	};
+	/** Introspected generated-CRUD locking contract. */
+	optimisticLock?: OptimisticLockConfig;
 	/** Optional: commit the saved snapshot to the live preview. */
 	onPreviewCommit?: (data: unknown) => void;
 	/** Optional: trigger a live-preview refresh after save. */
@@ -58,6 +70,7 @@ export function useAutosave({
 	isDirtyRef,
 	isSubmittingRef,
 	updateMutation,
+	optimisticLock,
 	onPreviewCommit,
 	onPreviewRefresh,
 	onSavingChange,
@@ -76,10 +89,13 @@ export function useAutosave({
 
 			await form.handleSubmit(
 				async (data) => {
-					const result = await updateMutation.mutateAsync({
-						id,
-						data,
-					});
+					const result = await updateMutation.mutateAsync(
+						optimisticUpdateInput(
+							id,
+							data as Record<string, any>,
+							optimisticLock,
+						),
+					);
 
 					form.reset(result as any, { keepTouched: true });
 
@@ -111,6 +127,7 @@ export function useAutosave({
 		onPreviewRefresh,
 		t,
 		updateMutation,
+		optimisticLock,
 	]);
 
 	React.useEffect(() => {

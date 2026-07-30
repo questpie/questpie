@@ -14,6 +14,11 @@ function toUrl(input: RequestInfo | URL): URL {
 	return new URL(input.url);
 }
 
+function parseJsonBody(call: CapturedCall | undefined): unknown {
+	const wire = JSON.parse(call?.body ?? "");
+	return wire && typeof wire === "object" && "json" in wire ? wire.json : wire;
+}
+
 describe("client by-id aliases (canonical CRUD vocabulary)", () => {
 	let calls: CapturedCall[];
 	let client: ReturnType<typeof createClient<any>>;
@@ -99,5 +104,64 @@ describe("client by-id aliases (canonical CRUD vocabulary)", () => {
 		expect(calls[0]?.method).toBe("PATCH");
 		expect(calls[1]?.url.pathname).toBe("/posts/delete-many");
 		expect(calls[1]?.method).toBe("POST");
+	});
+
+	it("serializes optimistic-lock inputs on every mutation surface", async () => {
+		await client.collections.posts.updateById({
+			id: "post-1",
+			expectedVersion: 1,
+			data: { title: "Updated" },
+		});
+		await client.collections.posts.deleteById({
+			id: "post-1",
+			expectedVersion: 2,
+		});
+		await client.collections.posts.restoreById({
+			id: "post-1",
+			expectedVersion: 3,
+		});
+		await client.collections.posts.updateMany({
+			where: { status: "draft" },
+			expectedVersions: [{ id: "post-1", expectedVersion: 3 }],
+			data: { status: "review" },
+		});
+		await client.collections.posts.updateBatch({
+			updates: [
+				{
+					id: "post-1",
+					expectedVersion: 4,
+					data: { title: "Batch" },
+				},
+			],
+		});
+		await client.collections.posts.deleteMany({
+			where: { status: "archived" },
+			expectedVersions: [{ id: "post-1", expectedVersion: 5 }],
+		});
+		await client.collections.posts.revertToVersion({
+			id: "post-1",
+			version: 1,
+			expectedVersion: 6,
+		});
+
+		expect(parseJsonBody(calls[0])).toEqual({
+			data: { title: "Updated" },
+			expectedVersion: 1,
+		});
+		expect(parseJsonBody(calls[1])).toEqual({ expectedVersion: 2 });
+		expect(parseJsonBody(calls[2])).toEqual({ expectedVersion: 3 });
+		expect(parseJsonBody(calls[3])).toMatchObject({
+			expectedVersions: [{ id: "post-1", expectedVersion: 3 }],
+		});
+		expect(parseJsonBody(calls[4])).toMatchObject({
+			updates: [{ id: "post-1", expectedVersion: 4 }],
+		});
+		expect(parseJsonBody(calls[5])).toMatchObject({
+			expectedVersions: [{ id: "post-1", expectedVersion: 5 }],
+		});
+		expect(parseJsonBody(calls[6])).toMatchObject({
+			version: 1,
+			expectedVersion: 6,
+		});
 	});
 });

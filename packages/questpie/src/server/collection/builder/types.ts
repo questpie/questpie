@@ -148,6 +148,16 @@ export interface CollectionOptions {
 	 */
 	softDelete?: boolean;
 	/**
+	 * Require generated CRUD mutations to compare a caller-supplied version
+	 * against the freshly locked row before writing.
+	 */
+	optimisticLock?: {
+		/** Numeric collection field owned and incremented by generated CRUD. */
+		field: string;
+		/** Mandatory optimistic-lock input is the only supported policy. */
+		required: true;
+	};
+	/**
 	 * Versioning configuration.
 	 *
 	 * - `true` — enable versioning with defaults

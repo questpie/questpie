@@ -44,6 +44,7 @@ import {
 } from "../../hooks/use-collection";
 import { useCollectionFields } from "../../hooks/use-collection-fields";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
+import { optimisticUpdateInput } from "../../utils/optimistic-lock";
 import { AdminViewHeader, AdminViewLayout } from "../layout/admin-view-layout";
 import { FieldRenderer } from "./field-renderer";
 import { FormViewSkeleton } from "./view-skeletons";
@@ -466,6 +467,7 @@ function DocumentEditor({
 		isDirtyRef: formIsDirtyRef,
 		isSubmittingRef: formIsSubmittingRef,
 		updateMutation,
+		optimisticLock: schema?.options?.optimisticLock,
 		onSavingChange: setIsSaving,
 		onSaved: setLastSaved,
 	});
@@ -473,7 +475,9 @@ function DocumentEditor({
 	const onManualSubmit = form.handleSubmit(async (data) => {
 		if (!id) return;
 		try {
-			const result = await updateMutation.mutateAsync({ id, data });
+			const result = await updateMutation.mutateAsync(
+				optimisticUpdateInput(id, data, schema?.options?.optimisticLock),
+			);
 			form.reset(result as any, { keepTouched: true });
 			setLastSaved(new Date());
 			toast.success(t("toast.saveSuccess"));

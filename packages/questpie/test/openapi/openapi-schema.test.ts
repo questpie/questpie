@@ -81,6 +81,58 @@ describe("OpenAPI schema generation", () => {
 			expect(baseSchema.properties?.updatedAt).toBeDefined();
 		});
 
+		it("documents required optimistic-lock inputs on every CRUD mutation", async () => {
+			const tags = collection("tags")
+				.fields(({ f }) => ({
+					name: f.text().required(),
+					version: f.number().required().default(1),
+				}))
+				.options({
+					softDelete: true,
+					optimisticLock: { field: "version", required: true },
+				});
+			const mockCms = {
+				getCollections: () => ({ tags }),
+				getGlobals: () => ({}),
+			};
+
+			const spec = await generateOpenApiSpec(mockCms as any, undefined, {
+				info: { title: "Test API", version: "1.0.0" },
+				basePath: "/",
+			});
+			const updateSchema = spec.components?.schemas?.TagsUpdate as any;
+			expect(updateSchema.properties.version).toBeUndefined();
+
+			const byId = spec.paths?.["//tags/{id}"] as any;
+			const updateBody =
+				byId.patch.requestBody.content["application/json"].schema;
+			expect(updateBody.required).toEqual(["data", "expectedVersion"]);
+			expect(
+				byId.delete.requestBody.content["application/json"].schema.required,
+			).toEqual(["expectedVersion"]);
+			expect(byId.patch.responses["409"]).toBeDefined();
+
+			const bulkUpdate = spec.paths?.["//tags"]?.patch as any;
+			expect(
+				bulkUpdate.requestBody.content["application/json"].schema.required,
+			).toEqual(["where", "data", "expectedVersions"]);
+			const updateBatch = spec.paths?.["//tags/update-batch"]?.post as any;
+			expect(updateBatch).toBeDefined();
+			const deleteMany = spec.paths?.["//tags/delete-many"]?.post as any;
+			expect(
+				deleteMany.requestBody.content["application/json"].schema.required,
+			).toEqual(["where", "expectedVersions"]);
+			const restore = spec.paths?.["//tags/{id}/restore"]?.post as any;
+			expect(
+				restore.requestBody.content["application/json"].schema.required,
+			).toEqual(["expectedVersion"]);
+			const revert = spec.paths?.["//tags/{id}/revert"]?.post as any;
+			expect(
+				revert.requestBody.content["application/json"].schema.required,
+			).toEqual(["expectedVersion"]);
+			expect(revert.responses["409"]).toBeDefined();
+		});
+
 		it("handles relation fields", async () => {
 			const authors = collection("authors").fields(({ f }) => ({
 				name: f.text().required(),

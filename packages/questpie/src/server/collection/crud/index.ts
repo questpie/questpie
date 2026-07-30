@@ -13,6 +13,7 @@ export type {
 	CreateInputWithRelations,
 	DeleteParams,
 	Extras,
+	ExtractIdType,
 	FindManyOptions,
 	FindManyOptionsBase,
 	FindOneOptions,

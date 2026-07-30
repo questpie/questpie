@@ -42,6 +42,10 @@ function txidHeaders(result: unknown): HeadersInit | undefined {
 	return txid ? { [QUESTPIE_TXID_HEADER]: txid } : undefined;
 }
 
+function hasOptimisticLock(crud: any): boolean {
+	return Boolean(crud?.["~internalState"]?.options?.optimisticLock);
+}
+
 // ============================================================================
 // Standalone Handlers
 // ============================================================================
@@ -218,8 +222,18 @@ export async function collectionUpdate(
 	}
 
 	try {
+		const payload =
+			hasOptimisticLock(crud) && typeof body === "object" && body !== null
+				? (body as { data?: unknown; expectedVersion?: number })
+				: undefined;
 		const result = await crud.updateById(
-			{ id: params.id as any, data: body },
+			{
+				id: params.id as any,
+				data: payload && Object.hasOwn(payload, "data") ? payload.data : body,
+				...(payload?.expectedVersion === undefined
+					? {}
+					: { expectedVersion: payload.expectedVersion }),
+			},
 			resolved.appContext,
 		);
 		return smartResponse(result, request, 200, txidHeaders(result));
@@ -248,8 +262,18 @@ export async function collectionRemove(
 	}
 
 	try {
+		const body = hasOptimisticLock(crud)
+			? await parseRouteBody(request)
+			: undefined;
+		const expectedVersion =
+			typeof body === "object" && body !== null
+				? (body as { expectedVersion?: number }).expectedVersion
+				: undefined;
 		const result = await crud.deleteById(
-			{ id: params.id as any },
+			{
+				id: params.id as any,
+				...(expectedVersion === undefined ? {} : { expectedVersion }),
+			},
 			resolved.appContext,
 		);
 		return smartResponse({ success: true }, request, 200, txidHeaders(result));
@@ -339,7 +363,11 @@ export async function collectionRevert(
 	}
 
 	try {
-		const payload = body as { version?: number; versionId?: string };
+		const payload = body as {
+			version?: number;
+			versionId?: string;
+			expectedVersion?: number;
+		};
 		const result = await crud.revertToVersion(
 			{
 				id: params.id as any,
@@ -348,6 +376,9 @@ export async function collectionRevert(
 					: {}),
 				...(typeof payload.versionId === "string"
 					? { versionId: payload.versionId }
+					: {}),
+				...(typeof payload.expectedVersion === "number"
+					? { expectedVersion: payload.expectedVersion }
 					: {}),
 			},
 			resolved.appContext,
@@ -448,8 +479,18 @@ export async function collectionRestore(
 	}
 
 	try {
+		const body = hasOptimisticLock(crud)
+			? await parseRouteBody(request)
+			: undefined;
+		const expectedVersion =
+			typeof body === "object" && body !== null
+				? (body as { expectedVersion?: number }).expectedVersion
+				: undefined;
 		const result = await crud.restoreById(
-			{ id: params.id as any },
+			{
+				id: params.id as any,
+				...(expectedVersion === undefined ? {} : { expectedVersion }),
+			},
 			resolved.appContext,
 		);
 		return smartResponse(result, request, 200, txidHeaders(result));
@@ -523,8 +564,19 @@ export async function collectionUpdateMany(
 	}
 
 	try {
-		const { where, data } = body as { where: any; data: any };
-		const result = await crud.updateMany({ where, data }, resolved.appContext);
+		const { where, data, expectedVersions } = body as {
+			where: any;
+			data: any;
+			expectedVersions?: Array<{ id: any; expectedVersion: number }>;
+		};
+		const result = await crud.updateMany(
+			{
+				where,
+				data,
+				...(expectedVersions === undefined ? {} : { expectedVersions }),
+			},
+			resolved.appContext,
+		);
 		return smartResponse(result, request, 200, txidHeaders(result));
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
@@ -609,8 +661,17 @@ export async function collectionDeleteMany(
 	}
 
 	try {
-		const { where } = body as { where: any };
-		const result = await crud.deleteMany({ where }, resolved.appContext);
+		const { where, expectedVersions } = body as {
+			where: any;
+			expectedVersions?: Array<{ id: any; expectedVersion: number }>;
+		};
+		const result = await crud.deleteMany(
+			{
+				where,
+				...(expectedVersions === undefined ? {} : { expectedVersions }),
+			},
+			resolved.appContext,
+		);
 		return smartResponse(result, request, 200, txidHeaders(result));
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);

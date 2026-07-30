@@ -49,6 +49,10 @@ export interface ExecuteActionRequest {
 	itemId?: string;
 	/** Multiple item IDs (for bulk actions) */
 	itemIds?: string[];
+	/** Expected version for an optimistic-lock protected single-item action */
+	expectedVersion?: number;
+	/** Exact per-item versions for an optimistic-lock protected bulk action */
+	expectedVersions?: Array<{ id: string; expectedVersion: number }>;
 	/** Form data (for actions with forms) */
 	data?: Record<string, unknown>;
 	/** Current locale */
@@ -189,6 +193,8 @@ export async function executeAction(
 		actionId,
 		itemId,
 		itemIds,
+		expectedVersion,
+		expectedVersions,
 		data,
 		locale,
 	} = request;
@@ -226,6 +232,8 @@ export async function executeAction(
 			actionId,
 			itemId,
 			itemIds,
+			expectedVersion,
+			expectedVersions,
 			data,
 			locale,
 			session,
@@ -282,6 +290,8 @@ export async function executeAction(
 			data: data || {},
 			itemId,
 			itemIds,
+			expectedVersion,
+			expectedVersions,
 			auth: appRec.auth,
 			collections: getCollectionCruds(app),
 			globals: getGlobalCruds(app),
@@ -334,15 +344,35 @@ async function executeBuiltinAction(
 		actionId: string;
 		itemId?: string;
 		itemIds?: string[];
+		expectedVersion?: number;
+		expectedVersions?: Array<{ id: string; expectedVersion: number }>;
 		data?: Record<string, unknown>;
 		locale?: string;
 		session?: unknown;
 	},
 ): Promise<ExecuteActionResponse> {
-	const { collectionSlug, actionId, itemId, itemIds, data, locale } = params;
+	const {
+		collectionSlug,
+		actionId,
+		itemId,
+		itemIds,
+		expectedVersion,
+		expectedVersions,
+		data,
+		locale,
+	} = params;
 	const t = (key: string, messageParams?: Record<string, unknown>) =>
 		translateAdminMessage(locale, key, messageParams);
 	const appRec = app as Record<string, any>;
+	const collection = getCollection(app, collectionSlug);
+	const collectionState = (collection?.state ?? collection) as
+		| {
+				options?: {
+					optimisticLock?: { field: string; required: true };
+				};
+		  }
+		| undefined;
+	const optimisticLock = collectionState?.options?.optimisticLock;
 	const collectionCrud = getCollectionCrud(app, collectionSlug);
 	const crudContext = {
 		db: appRec.db,
@@ -382,10 +412,15 @@ async function executeBuiltinAction(
 				}
 				if (collectionCrud?.updateById) {
 					await collectionCrud.updateById(
-						{ id: itemId, data: data || {} },
+						{ id: itemId, data: data || {}, expectedVersion },
 						crudContext,
 					);
 				} else {
+					if (optimisticLock) {
+						throw new Error(
+							`Collection "${collectionSlug}" requires generated CRUD for optimistic locking`,
+						);
+					}
 					await appRec.update(collectionSlug, itemId, data || {});
 				}
 				return {
@@ -409,8 +444,16 @@ async function executeBuiltinAction(
 					};
 				}
 				if (collectionCrud?.deleteById) {
-					await collectionCrud.deleteById({ id: itemId }, crudContext);
+					await collectionCrud.deleteById(
+						{ id: itemId, expectedVersion },
+						crudContext,
+					);
 				} else {
+					if (optimisticLock) {
+						throw new Error(
+							`Collection "${collectionSlug}" requires generated CRUD for optimistic locking`,
+						);
+					}
 					await appRec.delete(collectionSlug, itemId);
 				}
 				return {
@@ -438,12 +481,35 @@ async function executeBuiltinAction(
 						},
 					};
 				}
-				// Delete items in parallel
-				if (collectionCrud?.deleteById) {
+				if (optimisticLock && collectionCrud?.deleteMany) {
+					await collectionCrud.deleteMany(
+						{
+							where: { id: { in: itemIds } },
+							expectedVersions,
+						},
+						crudContext,
+					);
+				} else if (collectionCrud?.deleteById) {
+					const versionsById = new Map(
+						expectedVersions?.map((entry) => [
+							entry.id,
+							entry.expectedVersion,
+						]) ?? [],
+					);
 					await Promise.all(
-						itemIds.map((id) => collectionCrud.deleteById({ id }, crudContext)),
+						itemIds.map((id) =>
+							collectionCrud.deleteById(
+								{ id, expectedVersion: versionsById.get(id) },
+								crudContext,
+							),
+						),
 					);
 				} else {
+					if (optimisticLock) {
+						throw new Error(
+							`Collection "${collectionSlug}" requires generated CRUD for optimistic locking`,
+						);
+					}
 					await Promise.all(
 						itemIds.map((id) => appRec.delete(collectionSlug, id)),
 					);
@@ -471,10 +537,13 @@ async function executeBuiltinAction(
 					};
 				}
 
-				if (typeof appRec.restore === "function") {
+				if (collectionCrud?.restoreById) {
+					await collectionCrud.restoreById(
+						{ id: itemId, expectedVersion },
+						crudContext,
+					);
+				} else if (typeof appRec.restore === "function" && !optimisticLock) {
 					await appRec.restore(collectionSlug, itemId);
-				} else if (collectionCrud?.restoreById) {
-					await collectionCrud.restoreById({ id: itemId }, crudContext);
 				} else {
 					return {
 						success: false,
@@ -513,15 +582,24 @@ async function executeBuiltinAction(
 					};
 				}
 
-				if (typeof appRec.restore === "function") {
-					await Promise.all(
-						itemIds.map((id) => appRec.restore(collectionSlug, id)),
+				if (collectionCrud?.restoreById) {
+					const versionsById = new Map(
+						expectedVersions?.map((entry) => [
+							entry.id,
+							entry.expectedVersion,
+						]) ?? [],
 					);
-				} else if (collectionCrud?.restoreById) {
 					await Promise.all(
 						itemIds.map((id) =>
-							collectionCrud.restoreById({ id }, crudContext),
+							collectionCrud.restoreById(
+								{ id, expectedVersion: versionsById.get(id) },
+								crudContext,
+							),
 						),
+					);
+				} else if (typeof appRec.restore === "function" && !optimisticLock) {
+					await Promise.all(
+						itemIds.map((id) => appRec.restore(collectionSlug, id)),
 					);
 				} else {
 					return {
@@ -744,6 +822,15 @@ const executeActionRequestSchema = z.object({
 	actionId: z.string(),
 	itemId: z.string().optional(),
 	itemIds: z.array(z.string()).optional(),
+	expectedVersion: z.number().finite().optional(),
+	expectedVersions: z
+		.array(
+			z.object({
+				id: z.string(),
+				expectedVersion: z.number().finite(),
+			}),
+		)
+		.optional(),
 	data: z.record(z.string(), z.unknown()).optional(),
 	locale: z.string().optional(),
 });

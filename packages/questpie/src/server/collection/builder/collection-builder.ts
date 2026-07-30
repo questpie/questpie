@@ -630,7 +630,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 *   })
 	 * ```
 	 */
-	options<TNewOptions extends CollectionOptions>(
+	options<const TNewOptions extends CollectionOptions>(
 		options: TNewOptions,
 	): CollectionBuilder<Override<TState, { options: TNewOptions }>> {
 		const newState = {

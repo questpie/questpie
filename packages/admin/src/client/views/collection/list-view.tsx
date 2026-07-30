@@ -51,6 +51,7 @@ import {
 import { useActions } from "../../hooks/use-action";
 import {
 	useCollectionDelete,
+	useCollectionDeleteMany,
 	useCollectionList,
 	useCollectionRestore,
 } from "../../hooks/use-collection";
@@ -89,6 +90,10 @@ import {
 	autoExpandFields,
 	hasFieldsToExpand,
 } from "../../utils/auto-expand-fields";
+import {
+	optimisticIdInput,
+	runAdminBulkDelete,
+} from "../../utils/optimistic-lock";
 import { AdminViewHeader, AdminViewLayout } from "../layout/admin-view-layout";
 import { BulkActionToolbar } from "./bulk-action-toolbar";
 import {
@@ -980,6 +985,7 @@ function ListViewInner({
 		return map;
 	}, [table]);
 	const deleteMutation = useCollectionDelete(collectionKey);
+	const deleteManyMutation = useCollectionDeleteMany(collectionKey);
 	const restoreMutation = useCollectionRestore(collectionKey);
 	const { data: savedViewsData, isLoading: savedViewsLoading } = useSavedViews(
 		collection,
@@ -1024,21 +1030,46 @@ function ListViewInner({
 	);
 	const handleBulkDelete = React.useCallback(
 		async (ids: string[]) => {
-			await Promise.allSettled(
-				ids.map((id) => deleteMutation.mutateAsync({ id })),
-			);
+			await runAdminBulkDelete({
+				ids,
+				records: ids.map((id) => rowsById.get(id)?.original),
+				config: collectionMeta.optimisticLock,
+				deleteById: deleteMutation.mutateAsync,
+				deleteMany: deleteManyMutation.mutateAsync,
+			});
 			actionHelpers.invalidateCollection(collection);
 		},
-		[deleteMutation, actionHelpers, collection],
+		[
+			deleteMutation,
+			deleteManyMutation,
+			actionHelpers,
+			collection,
+			rowsById,
+			collectionMeta.optimisticLock,
+		],
 	);
 	const handleBulkRestore = React.useCallback(
 		async (ids: string[]) => {
 			await Promise.allSettled(
-				ids.map((id) => restoreMutation.mutateAsync({ id })),
+				ids.map((id) =>
+					restoreMutation.mutateAsync(
+						optimisticIdInput(
+							id,
+							rowsById.get(id)?.original,
+							collectionMeta.optimisticLock,
+						),
+					),
+				),
 			);
 			actionHelpers.invalidateCollection(collection);
 		},
-		[restoreMutation, actionHelpers, collection],
+		[
+			restoreMutation,
+			actionHelpers,
+			collection,
+			rowsById,
+			collectionMeta.optimisticLock,
+		],
 	);
 	const toggleOutlineKey = React.useCallback((key: string) => {
 		setToggledOutlineKeys((current) => {

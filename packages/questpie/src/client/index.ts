@@ -15,6 +15,7 @@ import type {
 	CollectionHasSoftDelete,
 	CollectionInsert,
 	CollectionRelations,
+	CollectionState,
 	CollectionUpdate,
 	GetCollection,
 	GlobalRelations,
@@ -33,11 +34,18 @@ import type {
 	CollectionSelect as CollectionSelectFromApp,
 	CreateInputBase,
 	CreateInputWithRelations,
+	DeleteManyParams,
+	DeleteParams,
 	FindResult,
 	FindManyOptions,
 	FindOneOptionsBase,
 	OrderBy,
+	RevertVersionOptions,
+	RestoreParams,
+	UpdateBatchParams,
 	UpdateInput,
+	UpdateManyParams,
+	UpdateParams,
 	Where,
 	With,
 } from "../server/collection/crud/types.js";
@@ -417,6 +425,14 @@ type ClientRow<
 	TCollections extends Record<string, AnyCollectionOrBuilder>,
 > = CollectionSelectFromApp<TCollection, { collections: TCollections }>;
 
+type ClientCollectionOptions<TCollection> =
+	CollectionState<TCollection> extends {
+		options: infer TOptions extends
+			import("#questpie/server/collection/builder/types.js").CollectionOptions;
+	}
+		? TOptions
+		: import("#questpie/server/collection/builder/types.js").CollectionOptions;
+
 type CollectionPurgeAPI<TCollection> =
 	CollectionHasSoftDelete<TCollection> extends true
 		? {
@@ -557,13 +573,12 @@ type CollectionAPI<
 	 * Canonical name — same vocabulary as server CRUD.
 	 */
 	updateById: (
-		params: {
-			id: string;
-			data: UpdateInput<
-				CollectionUpdate<TCollection>,
-				ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>
-			>;
-		},
+		params: UpdateParams<
+			CollectionUpdate<TCollection>,
+			ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>,
+			string,
+			ClientCollectionOptions<TDefinition>
+		>,
 		options?: LocaleOptions,
 	) => Promise<ClientRow<TCollection, TCollections>>;
 
@@ -572,13 +587,12 @@ type CollectionAPI<
 	 * Alias of {@link updateById} (note: server CRUD `update` is bulk-by-where).
 	 */
 	update: (
-		params: {
-			id: string;
-			data: UpdateInput<
-				CollectionUpdate<TCollection>,
-				ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>
-			>;
-		},
+		params: UpdateParams<
+			CollectionUpdate<TCollection>,
+			ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>,
+			string,
+			ClientCollectionOptions<TDefinition>
+		>,
 		options?: LocaleOptions,
 	) => Promise<ClientRow<TCollection, TCollections>>;
 
@@ -587,7 +601,7 @@ type CollectionAPI<
 	 * Canonical name — same vocabulary as server CRUD.
 	 */
 	deleteById: (
-		params: { id: string },
+		params: DeleteParams<string, ClientCollectionOptions<TDefinition>>,
 		options?: LocaleOptions,
 	) => Promise<{ success: boolean }>;
 
@@ -596,7 +610,7 @@ type CollectionAPI<
 	 * Alias of {@link deleteById} (note: server CRUD `delete` is bulk-by-where).
 	 */
 	delete: (
-		params: { id: string },
+		params: DeleteParams<string, ClientCollectionOptions<TDefinition>>,
 		options?: LocaleOptions,
 	) => Promise<{ success: boolean }>;
 
@@ -605,7 +619,7 @@ type CollectionAPI<
 	 * Canonical name — same vocabulary as server CRUD.
 	 */
 	restoreById: (
-		params: { id: string },
+		params: RestoreParams<string, ClientCollectionOptions<TDefinition>>,
 		options?: LocaleOptions,
 	) => Promise<ClientRow<TCollection, TCollections>>;
 
@@ -614,7 +628,7 @@ type CollectionAPI<
 	 * Alias of {@link restoreById}.
 	 */
 	restore: (
-		params: { id: string },
+		params: RestoreParams<string, ClientCollectionOptions<TDefinition>>,
 		options?: LocaleOptions,
 	) => Promise<ClientRow<TCollection, TCollections>>;
 
@@ -640,7 +654,7 @@ type CollectionAPI<
 	 * Revert a record to a specific version
 	 */
 	revertToVersion: (
-		params: { id: string; version?: number; versionId?: string },
+		params: RevertVersionOptions<string, ClientCollectionOptions<TDefinition>>,
 		options?: LocaleOptions,
 	) => Promise<ClientRow<TCollection, TCollections>>;
 
@@ -656,16 +670,12 @@ type CollectionAPI<
 	 * Update multiple records matching a where clause
 	 */
 	updateMany: (
-		params: {
-			where: Where<
-				ClientRow<TCollection, TCollections>,
-				ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>
-			>;
-			data: UpdateInput<
-				CollectionUpdate<TCollection>,
-				ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>
-			>;
-		},
+		params: UpdateManyParams<
+			CollectionUpdate<TCollection>,
+			ClientRow<TCollection, TCollections>,
+			ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>,
+			ClientCollectionOptions<TDefinition>
+		>,
 		options?: LocaleOptions,
 	) => Promise<ClientRow<TCollection, TCollections>[]>;
 
@@ -673,15 +683,12 @@ type CollectionAPI<
 	 * Update multiple records with distinct data per record
 	 */
 	updateBatch: (
-		params: {
-			updates: Array<{
-				id: string;
-				data: UpdateInput<
-					CollectionUpdate<TCollection>,
-					ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>
-				>;
-			}>;
-		},
+		params: UpdateBatchParams<
+			CollectionUpdate<TCollection>,
+			ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>,
+			string,
+			ClientCollectionOptions<TDefinition>
+		>,
 		options?: LocaleOptions,
 	) => Promise<ClientRow<TCollection, TCollections>[]>;
 
@@ -689,12 +696,11 @@ type CollectionAPI<
 	 * Delete multiple records matching a where clause
 	 */
 	deleteMany: (
-		params: {
-			where: Where<
-				ClientRow<TCollection, TCollections>,
-				ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>
-			>;
-		},
+		params: DeleteManyParams<
+			ClientRow<TCollection, TCollections>,
+			ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>,
+			ClientCollectionOptions<TDefinition>
+		>,
 		options?: LocaleOptions,
 	) => Promise<{ success: boolean; count: number }>;
 
@@ -1374,7 +1380,11 @@ export function createClient<TApp extends QuestpieApp>(
 				},
 
 				update: async (
-					{ id, data }: { id: string; data: any },
+					{
+						id,
+						data,
+						expectedVersion,
+					}: { id: string; data: any; expectedVersion?: number },
 					options: LocaleOptions = {},
 				) => {
 					const queryString = qs.stringify(options, {
@@ -1384,11 +1394,15 @@ export function createClient<TApp extends QuestpieApp>(
 					const path = `${apiBasePath}/${collectionName}/${id}${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "PATCH",
-						json: data,
+						json:
+							expectedVersion === undefined ? data : { data, expectedVersion },
 					});
 				},
 
-				delete: async ({ id }: { id: string }, options: LocaleOptions = {}) => {
+				delete: async (
+					{ id, expectedVersion }: { id: string; expectedVersion?: number },
+					options: LocaleOptions = {},
+				) => {
 					const queryString = qs.stringify(options, {
 						skipNulls: true,
 						arrayFormat: "brackets",
@@ -1396,11 +1410,14 @@ export function createClient<TApp extends QuestpieApp>(
 					const path = `${apiBasePath}/${collectionName}/${id}${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "DELETE",
+						...(expectedVersion === undefined
+							? {}
+							: { json: { expectedVersion } }),
 					});
 				},
 
 				restore: async (
-					{ id }: { id: string },
+					{ id, expectedVersion }: { id: string; expectedVersion?: number },
 					options: LocaleOptions = {},
 				) => {
 					const queryString = qs.stringify(options, {
@@ -1410,6 +1427,9 @@ export function createClient<TApp extends QuestpieApp>(
 					const path = `${apiBasePath}/${collectionName}/${id}/restore${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
+						...(expectedVersion === undefined
+							? {}
+							: { json: { expectedVersion } }),
 					});
 				},
 
@@ -1455,7 +1475,13 @@ export function createClient<TApp extends QuestpieApp>(
 						id,
 						version,
 						versionId,
-					}: { id: string; version?: number; versionId?: string },
+						expectedVersion,
+					}: {
+						id: string;
+						version?: number;
+						versionId?: string;
+						expectedVersion?: number;
+					},
 					options: LocaleOptions = {},
 				) => {
 					const queryString = qs.stringify(options, {
@@ -1465,7 +1491,7 @@ export function createClient<TApp extends QuestpieApp>(
 					const path = `${apiBasePath}/${collectionName}/${id}/revert${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
-						json: { version, versionId },
+						json: { version, versionId, expectedVersion },
 					});
 				},
 
@@ -1496,7 +1522,11 @@ export function createClient<TApp extends QuestpieApp>(
 				},
 
 				updateMany: async (
-					{ where, data }: { where: any; data: any },
+					{
+						where,
+						data,
+						expectedVersions,
+					}: { where: any; data: any; expectedVersions?: any[] },
 					options: LocaleOptions = {},
 				) => {
 					const queryString = qs.stringify(options, {
@@ -1506,7 +1536,11 @@ export function createClient<TApp extends QuestpieApp>(
 					const path = `${apiBasePath}/${collectionName}${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "PATCH",
-						json: { where, data },
+						json: {
+							where,
+							data,
+							...(expectedVersions === undefined ? {} : { expectedVersions }),
+						},
 					});
 				},
 
@@ -1526,7 +1560,7 @@ export function createClient<TApp extends QuestpieApp>(
 				},
 
 				deleteMany: async (
-					{ where }: { where: any },
+					{ where, expectedVersions }: { where: any; expectedVersions?: any[] },
 					options: LocaleOptions = {},
 				) => {
 					const queryString = qs.stringify(options, {
@@ -1536,7 +1570,10 @@ export function createClient<TApp extends QuestpieApp>(
 					const path = `${apiBasePath}/${collectionName}/delete-many${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
-						json: { where },
+						json: {
+							where,
+							...(expectedVersions === undefined ? {} : { expectedVersions }),
+						},
 					});
 				},
 
@@ -1659,21 +1696,21 @@ export function createClient<TApp extends QuestpieApp>(
 				// Canonical by-id aliases — one CRUD vocabulary across server
 				// and client (server `update`/`delete` are bulk-by-where).
 				updateById: async (
-					params: { id: string; data: any },
+					params: { id: string; data: any; expectedVersion?: number },
 					options: LocaleOptions = {},
 				) => {
 					return base.update(params, options);
 				},
 
 				deleteById: async (
-					params: { id: string },
+					params: { id: string; expectedVersion?: number },
 					options: LocaleOptions = {},
 				) => {
 					return base.delete(params, options);
 				},
 
 				restoreById: async (
-					params: { id: string },
+					params: { id: string; expectedVersion?: number },
 					options: LocaleOptions = {},
 				) => {
 					return base.restore(params, options);

@@ -1320,48 +1320,96 @@ export type UpdateInput<TUpdate = any, TRelations = any> = Prettify<
 /**
  * Extract ID type from select type (defaults to string for UUID)
  */
-export type ExtractIdType<T> = T extends { id: infer I } ? I : string;
+export type ExtractIdType<T> =
+	IsAny<T> extends true ? any : T extends { id: infer I } ? I : string;
+
+export interface ExpectedVersion<TId = string> {
+	id: TId;
+	expectedVersion: number;
+}
+
+type OptimisticLockField<TOptions extends CollectionOptions> =
+	TOptions extends {
+		optimisticLock: { field: infer TField extends PropertyKey; required: true };
+	}
+		? TField
+		: never;
+
+type ExpectedVersionRequirement<TOptions extends CollectionOptions> =
+	TOptions extends { optimisticLock: { field: string; required: true } }
+		? { expectedVersion: number }
+		: { expectedVersion?: number };
+
+type ExpectedVersionsRequirement<
+	TOptions extends CollectionOptions,
+	TId,
+> = TOptions extends {
+	optimisticLock: { field: string; required: true };
+}
+	? { expectedVersions: Array<ExpectedVersion<TId>> }
+	: { expectedVersions?: Array<ExpectedVersion<TId>> };
+
+export type OptimisticLockUpdateInput<
+	TUpdate,
+	TRelations,
+	TOptions extends CollectionOptions,
+> = Omit<
+	UpdateInput<TUpdate, TRelations>,
+	Extract<OptimisticLockField<TOptions>, keyof UpdateInput<TUpdate, TRelations>>
+>;
 
 /**
  * Update single record params
  */
-export interface UpdateParams<TUpdate = any, TRelations = any, TId = string> {
+export type UpdateParams<
+	TUpdate = any,
+	TRelations = any,
+	TId = string,
+	TOptions extends CollectionOptions = CollectionOptions,
+> = {
 	id: TId;
-	data: UpdateInput<TUpdate, TRelations>;
-}
+	data: OptimisticLockUpdateInput<TUpdate, TRelations, TOptions>;
+} & ExpectedVersionRequirement<TOptions>;
 
 /**
  * Update many records params
  */
-export interface UpdateManyParams<
-	in out TUpdate = any,
-	in out TFields = any,
-	in out TRelations = any,
-> {
+export type UpdateManyParams<
+	TUpdate = any,
+	TFields = any,
+	TRelations = any,
+	TOptions extends CollectionOptions = CollectionOptions,
+> = {
 	where: Where<TFields, TRelations>;
-	data: UpdateInput<TUpdate, TRelations>;
-}
+	data: OptimisticLockUpdateInput<TUpdate, TRelations, TOptions>;
+} & ExpectedVersionsRequirement<TOptions, ExtractIdType<TFields>>;
 
 /**
  * Update multiple records with distinct data per record.
  */
-export interface UpdateBatchParams<
+export type UpdateBatchParams<
 	in out TUpdate = any,
 	in out TRelations = any,
 	TId = string,
-> {
-	updates: Array<{
-		id: TId;
-		data: UpdateInput<TUpdate, TRelations>;
-	}>;
-}
+	TOptions extends CollectionOptions = CollectionOptions,
+> = {
+	updates: Array<
+		{
+			id: TId;
+			data: OptimisticLockUpdateInput<TUpdate, TRelations, TOptions>;
+		} & ExpectedVersionRequirement<TOptions>
+	>;
+};
 
 /**
  * Delete single record params
  */
-export interface DeleteParams<TId = string> {
+export type DeleteParams<
+	TId = string,
+	TOptions extends CollectionOptions = CollectionOptions,
+> = {
 	id: TId;
-}
+} & ExpectedVersionRequirement<TOptions>;
 
 /**
  * Permanently purge one already soft-deleted record.
@@ -1373,19 +1421,23 @@ export interface PurgeParams<TId = string> {
 /**
  * Restore soft-deleted record params
  */
-export interface RestoreParams<TId = string> {
+export type RestoreParams<
+	TId = string,
+	TOptions extends CollectionOptions = CollectionOptions,
+> = {
 	id: TId;
-}
+} & ExpectedVersionRequirement<TOptions>;
 
 /**
  * Delete many records params
  */
-export interface DeleteManyParams<
-	in out TFields = any,
-	in out TRelations = any,
-> {
+export type DeleteManyParams<
+	TFields = any,
+	TRelations = any,
+	TOptions extends CollectionOptions = CollectionOptions,
+> = {
 	where: Where<TFields, TRelations>;
-}
+} & ExpectedVersionsRequirement<TOptions, ExtractIdType<TFields>>;
 
 /**
  * Bounded server-side row lock request.
@@ -1418,11 +1470,14 @@ export interface FindVersionsOptions<TId = string> {
 	offset?: number;
 }
 
-export interface RevertVersionOptions<TId = string> {
+export type RevertVersionOptions<
+	TId = string,
+	TOptions extends CollectionOptions = CollectionOptions,
+> = {
 	id: TId;
 	version?: number;
 	versionId?: string;
-}
+} & ExpectedVersionRequirement<TOptions>;
 
 export interface VersionRecord<TId = string> {
 	id: TId;
@@ -1638,6 +1693,7 @@ export interface CRUD<
 	in out TUpdate = any,
 	in out TRelations = any,
 	TId = ExtractIdType<TSelect>,
+	in out TOptions extends CollectionOptions = CollectionOptions,
 > {
 	/**
 	 * Find many records (paginated)
@@ -1686,7 +1742,7 @@ export interface CRUD<
 	 * Update a single record by ID
 	 */
 	updateById(
-		params: UpdateParams<TUpdate, TRelations, TId>,
+		params: UpdateParams<TUpdate, TRelations, TId, TOptions>,
 		context?: CRUDContext,
 	): Promise<TSelect>;
 
@@ -1711,7 +1767,7 @@ export interface CRUD<
 	 * ```
 	 */
 	updateMany(
-		params: UpdateManyParams<TUpdate, TSelect, TRelations>,
+		params: UpdateManyParams<TUpdate, TSelect, TRelations, TOptions>,
 		context?: CRUDContext,
 	): Promise<TSelect[]>;
 
@@ -1721,7 +1777,7 @@ export interface CRUD<
 	 * {@link CRUD.updateById} (single). Will be removed in v4.
 	 */
 	update(
-		params: UpdateManyParams<TUpdate, TSelect, TRelations>,
+		params: UpdateManyParams<TUpdate, TSelect, TRelations, TOptions>,
 		context?: CRUDContext,
 	): Promise<TSelect[]>;
 
@@ -1730,7 +1786,7 @@ export interface CRUD<
 	 * Runs each update through the normal update pipeline in one transaction.
 	 */
 	updateBatch(
-		params: UpdateBatchParams<TUpdate, TRelations, TId>,
+		params: UpdateBatchParams<TUpdate, TRelations, TId, TOptions>,
 		context?: CRUDContext,
 	): Promise<TSelect[]>;
 
@@ -1738,7 +1794,7 @@ export interface CRUD<
 	 * Delete a single record by ID (supports soft delete)
 	 */
 	deleteById(
-		params: DeleteParams<TId>,
+		params: DeleteParams<TId, TOptions>,
 		context?: CRUDContext,
 	): Promise<{ success: boolean }>;
 
@@ -1758,7 +1814,7 @@ export interface CRUD<
 	 * Restore a single soft-deleted record by ID
 	 */
 	restoreById(
-		params: RestoreParams<TId>,
+		params: RestoreParams<TId, TOptions>,
 		context?: CRUDContext,
 	): Promise<TSelect>;
 
@@ -1771,7 +1827,7 @@ export interface CRUD<
 	 * rows that still matched at delete time.
 	 */
 	deleteMany(
-		params: DeleteManyParams<TSelect, TRelations>,
+		params: DeleteManyParams<TSelect, TRelations, TOptions>,
 		context?: CRUDContext,
 	): Promise<{ success: boolean; count: number }>;
 
@@ -1781,7 +1837,7 @@ export interface CRUD<
 	 * {@link CRUD.deleteById} (single). Will be removed in v4.
 	 */
 	delete(
-		params: DeleteManyParams<TSelect, TRelations>,
+		params: DeleteManyParams<TSelect, TRelations, TOptions>,
 		context?: CRUDContext,
 	): Promise<{ success: boolean; count: number }>;
 
@@ -1797,7 +1853,7 @@ export interface CRUD<
 	 * Revert to a specific version
 	 */
 	revertToVersion(
-		options: RevertVersionOptions<TId>,
+		options: RevertVersionOptions<TId, TOptions>,
 		context?: CRUDContext,
 	): Promise<TSelect>;
 

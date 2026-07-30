@@ -104,6 +104,10 @@ export interface ServerActionContext<TData = Record<string, unknown>>
 	itemId?: string;
 	/** Item IDs (for bulk actions) */
 	itemIds?: string[];
+	/** Expected version for an optimistic-lock protected single-item action */
+	expectedVersion?: number;
+	/** Exact per-item versions for an optimistic-lock protected bulk action */
+	expectedVersions?: Array<{ id: string; expectedVersion: number }>;
 	/** Auth instance (Better Auth API) */
 	auth: any;
 	/** Collection CRUD APIs */

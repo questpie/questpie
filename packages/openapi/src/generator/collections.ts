@@ -43,6 +43,9 @@ export function generateCollectionPaths(
 
 		const state = (collection as any).state;
 		if (!state) continue;
+		const optimisticLock = state.options?.optimisticLock as
+			| { field: string; required: true }
+			| undefined;
 
 		const tag = `Collections: ${name}`;
 		tags.push({ name: tag, description: `CRUD operations for ${name}` });
@@ -101,6 +104,9 @@ export function generateCollectionPaths(
 				description: `Update schema for ${name}`,
 			};
 		}
+		if (optimisticLock) {
+			omitObjectProperty(schemas[updateSchemaName], optimisticLock.field);
+		}
 
 		// Document schema — the response shape, includes id + timestamps
 		schemas[documentSchemaName] = buildDocumentSchema(
@@ -136,6 +142,39 @@ export function generateCollectionPaths(
 					`Created ${name} record`,
 				),
 			},
+			patch: {
+				operationId: `${name}_updateMany`,
+				summary: `Update many ${name}`,
+				tags: [tag],
+				parameters: [stageQueryParameter()],
+				requestBody: jsonRequestBody({
+					type: "object",
+					required: [
+						"where",
+						"data",
+						...(optimisticLock ? ["expectedVersions"] : []),
+					],
+					properties: {
+						where: {
+							type: "object",
+							description: "Filter conditions for records to update",
+						},
+						data: ref(updateSchemaName),
+						...(optimisticLock
+							? {
+									expectedVersions: expectedVersionsSchema(),
+								}
+							: {}),
+					},
+				}),
+				responses: withOptimisticLockConflict(
+					jsonResponse(
+						{ type: "array", items: ref(documentSchemaName) },
+						`Updated ${name} records`,
+					),
+					Boolean(optimisticLock),
+				),
+			},
 		};
 
 		// GET /{collection}/count
@@ -164,16 +203,65 @@ export function generateCollectionPaths(
 				tags: [tag],
 				requestBody: jsonRequestBody({
 					type: "object",
+					required: ["where", ...(optimisticLock ? ["expectedVersions"] : [])],
 					properties: {
 						where: {
 							type: "object",
 							description: "Filter conditions for records to delete",
 						},
+						...(optimisticLock
+							? {
+									expectedVersions: expectedVersionsSchema(),
+								}
+							: {}),
 					},
 				}),
-				responses: jsonResponse(
-					ref("DeleteManyResponse"),
-					`Delete multiple ${name} records`,
+				responses: withOptimisticLockConflict(
+					jsonResponse(
+						ref("DeleteManyResponse"),
+						`Delete multiple ${name} records`,
+					),
+					Boolean(optimisticLock),
+				),
+			},
+		};
+
+		// POST /{collection}/update-batch
+		paths[`${prefix}/update-batch`] = {
+			post: {
+				operationId: `${name}_updateBatch`,
+				summary: `Update a batch of ${name}`,
+				tags: [tag],
+				requestBody: jsonRequestBody({
+					type: "object",
+					required: ["updates"],
+					properties: {
+						updates: {
+							type: "array",
+							items: {
+								type: "object",
+								required: [
+									"id",
+									"data",
+									...(optimisticLock ? ["expectedVersion"] : []),
+								],
+								properties: {
+									id: { type: "string" },
+									data: ref(updateSchemaName),
+									...(optimisticLock
+										? { expectedVersion: expectedVersionSchema() }
+										: {}),
+								},
+							},
+						},
+					},
+				}),
+				responses: withOptimisticLockConflict(
+					jsonResponse(
+						{ type: "array", items: ref(documentSchemaName) },
+						`Updated ${name} batch`,
+					),
+					Boolean(optimisticLock),
 				),
 			},
 		};
@@ -260,10 +348,21 @@ export function generateCollectionPaths(
 				summary: `Update ${name}`,
 				tags: [tag],
 				parameters: [idParam, stageQueryParameter()],
-				requestBody: jsonRequestBody(ref(updateSchemaName)),
-				responses: jsonResponse(
-					ref(documentSchemaName),
-					`Updated ${name} record`,
+				requestBody: jsonRequestBody(
+					optimisticLock
+						? {
+								type: "object",
+								required: ["data", "expectedVersion"],
+								properties: {
+									data: ref(updateSchemaName),
+									expectedVersion: expectedVersionSchema(),
+								},
+							}
+						: ref(updateSchemaName),
+				),
+				responses: withOptimisticLockConflict(
+					jsonResponse(ref(documentSchemaName), `Updated ${name} record`),
+					Boolean(optimisticLock),
 				),
 			},
 			delete: {
@@ -271,9 +370,20 @@ export function generateCollectionPaths(
 				summary: `Delete ${name}`,
 				tags: [tag],
 				parameters: [idParam, stageQueryParameter()],
-				responses: jsonResponse(
-					ref("SuccessResponse"),
-					`Deleted ${name} record`,
+				...(optimisticLock
+					? {
+							requestBody: jsonRequestBody({
+								type: "object",
+								required: ["expectedVersion"],
+								properties: {
+									expectedVersion: expectedVersionSchema(),
+								},
+							}),
+						}
+					: {}),
+				responses: withOptimisticLockConflict(
+					jsonResponse(ref("SuccessResponse"), `Deleted ${name} record`),
+					Boolean(optimisticLock),
 				),
 			},
 		};
@@ -286,9 +396,20 @@ export function generateCollectionPaths(
 					summary: `Restore deleted ${name}`,
 					tags: [tag],
 					parameters: [idParam, stageQueryParameter()],
-					responses: jsonResponse(
-						ref(documentSchemaName),
-						`Restored ${name} record`,
+					...(optimisticLock
+						? {
+								requestBody: jsonRequestBody({
+									type: "object",
+									required: ["expectedVersion"],
+									properties: {
+										expectedVersion: expectedVersionSchema(),
+									},
+								}),
+							}
+						: {}),
+					responses: withOptimisticLockConflict(
+						jsonResponse(ref(documentSchemaName), `Restored ${name} record`),
+						Boolean(optimisticLock),
 					),
 				},
 			};
@@ -356,14 +477,18 @@ export function generateCollectionPaths(
 				parameters: [idParam, stageQueryParameter()],
 				requestBody: jsonRequestBody({
 					type: "object",
+					...(optimisticLock ? { required: ["expectedVersion"] } : {}),
 					properties: {
 						version: { type: "number" },
 						versionId: { type: "string" },
+						...(optimisticLock
+							? { expectedVersion: expectedVersionSchema() }
+							: {}),
 					},
 				}),
-				responses: jsonResponse(
-					ref(documentSchemaName),
-					`Reverted ${name} record`,
+				responses: withOptimisticLockConflict(
+					jsonResponse(ref(documentSchemaName), `Reverted ${name} record`),
+					Boolean(optimisticLock),
 				),
 			},
 		};
@@ -436,6 +561,60 @@ function buildDocumentSchema(
 		],
 		description: `${name} document`,
 	};
+}
+
+function expectedVersionSchema() {
+	return {
+		type: "number",
+		description: "Version read before starting the mutation",
+	};
+}
+
+function expectedVersionsSchema() {
+	return {
+		type: "array",
+		description: "Exact expected-version coverage for every selected record",
+		items: {
+			type: "object",
+			required: ["id", "expectedVersion"],
+			properties: {
+				id: { type: "string" },
+				expectedVersion: expectedVersionSchema(),
+			},
+		},
+	};
+}
+
+function withOptimisticLockConflict(
+	responses: Record<string, unknown>,
+	enabled: boolean,
+) {
+	if (!enabled) return responses;
+	return {
+		...responses,
+		"409": {
+			description: "Optimistic lock conflict",
+			content: {
+				"application/json": { schema: ref("ErrorResponse") },
+			},
+		},
+	};
+}
+
+function omitObjectProperty(schema: unknown, field: string): void {
+	if (!schema || typeof schema !== "object") return;
+	const objectSchema = schema as {
+		properties?: Record<string, unknown>;
+		required?: string[];
+	};
+	if (objectSchema.properties) {
+		delete objectSchema.properties[field];
+	}
+	if (objectSchema.required) {
+		objectSchema.required = objectSchema.required.filter(
+			(requiredField) => requiredField !== field,
+		);
+	}
 }
 
 function toPascalCase(str: string): string {
