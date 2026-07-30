@@ -141,11 +141,10 @@ describe("collection transitionStage", () => {
 			ctx,
 		);
 
-		const result =
-			await setup.app.collections.workflow_posts.transitionStage(
-				{ id: created.id, stage: "published" },
-				ctx,
-			);
+		const result = await setup.app.collections.workflow_posts.transitionStage(
+			{ id: created.id, stage: "published" },
+			ctx,
+		);
 
 		expect(result.id).toBe(created.id);
 
@@ -262,11 +261,10 @@ describe("collection transitionStage", () => {
 	it("uses access.transition rule (not access.update) when defined", async () => {
 		const systemCtx = createTestContext({ accessMode: "system" });
 
-		const created =
-			await setup.app.collections.transition_access_posts.create(
-				{ id: crypto.randomUUID(), title: "My Post" },
-				systemCtx,
-			);
+		const created = await setup.app.collections.transition_access_posts.create(
+			{ id: crypto.randomUUID(), title: "My Post" },
+			systemCtx,
+		);
 
 		// Non-admin user should be denied transition (access.transition checks role)
 		const nonAdminCtx = createTestContext({
@@ -304,11 +302,10 @@ describe("collection transitionStage", () => {
 		);
 
 		const userCtx = createTestContext({ accessMode: "user", role: "user" });
-		const result =
-			await setup.app.collections.workflow_posts.transitionStage(
-				{ id: created.id, stage: "published" },
-				userCtx,
-			);
+		const result = await setup.app.collections.workflow_posts.transitionStage(
+			{ id: created.id, stage: "published" },
+			userCtx,
+		);
 		expect(result.id).toBe(created.id);
 	});
 
@@ -392,11 +389,10 @@ describe("collection transitionStage", () => {
 
 		const pastDate = new Date(Date.now() - 60_000);
 
-		const result =
-			await setup.app.collections.workflow_posts.transitionStage(
-				{ id: created.id, stage: "published", scheduledAt: pastDate },
-				ctx,
-			);
+		const result = await setup.app.collections.workflow_posts.transitionStage(
+			{ id: created.id, stage: "published", scheduledAt: pastDate },
+			ctx,
+		);
 
 		expect(result.id).toBe(created.id);
 

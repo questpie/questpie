@@ -90,10 +90,7 @@ import type { Migration } from "../migration/types.js";
 import type { MailerConfig } from "../modules/core/integrated/mailer/types.js";
 import type { QueueConfig as BaseQueueConfig } from "../modules/core/integrated/queue/types.js";
 import type { RealtimeConfig } from "../modules/core/integrated/realtime/types.js";
-import type {
-	SearchAdapter,
-	SearchConfig,
-} from "../modules/core/integrated/search/types.js";
+import type { SearchAdapter } from "../modules/core/integrated/search/types.js";
 import type { SeedCategory, SeedsConfig } from "../seed/types.js";
 
 export type DrizzleSchemaFromCollections<
@@ -583,11 +580,6 @@ export interface QuestpieConfig {
 	search?: SearchAdapter;
 
 	/**
-	 * @deprecated Use search adapter instead
-	 */
-	searchConfig?: SearchConfig;
-
-	/**
 	 * Realtime configuration (outbox + SSE/WS adapters)
 	 */
 	realtime?: RealtimeConfig;
@@ -604,6 +596,12 @@ export interface QuestpieConfig {
 	 * KV store configuration
 	 */
 	kv?: import("../modules/core/integrated/kv/types.js").KVConfig;
+
+	/**
+	 * Tracing and metrics. Unconfigured = a zero-cost no-op: framework seams
+	 * still call `observability.span(...)`, which calls straight through.
+	 */
+	observability?: import("../modules/core/integrated/observability/types.js").ObservabilityConfig;
 
 	/**
 	 * Executor configuration (sandboxed / trusted code execution).

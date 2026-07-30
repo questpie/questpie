@@ -8,7 +8,7 @@ declared with millisecond precision — `timestamp(3)` instead of the Postgres
 default `timestamp` (microseconds).
 
 **Why:** JS `Date` has millisecond resolution. With microsecond storage, a
-`Date` read through the API was silently *less* than the stored value, so
+`Date` read through the API was silently _less_ than the stored value, so
 equality and keyset-cursor comparisons on round-tripped timestamps
 (`eq`/`lt`/`gt` with a previously returned `createdAt`) skipped or duplicated
 rows. With `timestamp(3)`, a `Date` you read is exactly the value stored.

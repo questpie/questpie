@@ -47,6 +47,7 @@ import _route_globals_name_schema from "../routes/globals/[name]/schema";
 import _route_globals_name_transition from "../routes/globals/[name]/transition";
 import _route_globals_name_versions from "../routes/globals/[name]/versions";
 import _route_health from "../routes/health";
+import _route_health_live from "../routes/health/live";
 import _route_jwks from "../routes/jwks";
 import _route_realtime from "../routes/realtime";
 import _route_realtime_auth_POST from "../routes/realtime/auth.post";
@@ -69,6 +70,7 @@ import _svc_globalsApi from "../services/globals-api";
 import _svc_i18n from "../services/i18n";
 import _svc_kv from "../services/kv";
 import _svc_logger from "../services/logger";
+import _svc_observability from "../services/observability";
 import _svc_queue from "../services/queue";
 import _svc_realtime from "../services/realtime";
 import _svc_search from "../services/search";
@@ -152,6 +154,7 @@ export type CoreRoutes = {
 	"globals/[name]/transition": typeof _route_globals_name_transition extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]/transition">> : typeof _route_globals_name_transition;
 	"globals/[name]/versions": typeof _route_globals_name_versions extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]/versions">> : typeof _route_globals_name_versions;
 	health: typeof _route_health extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"health">> : typeof _route_health;
+	"health/live": typeof _route_health_live extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"health/live">> : typeof _route_health_live;
 	jwks: typeof _route_jwks extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"jwks">> : typeof _route_jwks;
 	realtime: typeof _route_realtime extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime">> : typeof _route_realtime;
 	"realtime/auth:POST": typeof _route_realtime_auth_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime/auth:POST">> : typeof _route_realtime_auth_POST;
@@ -193,6 +196,7 @@ export type CoreServices = {
 	i18n: typeof _svc_i18n;
 	kv: typeof _svc_kv;
 	logger: typeof _svc_logger;
+	observability: typeof _svc_observability;
 	queue: typeof _svc_queue;
 	realtime: typeof _svc_realtime;
 	search: typeof _svc_search;
@@ -268,6 +272,7 @@ const _module: CoreModule = {
 		"globals/[name]/transition": _route_globals_name_transition,
 		"globals/[name]/versions": _route_globals_name_versions,
 		health: _route_health,
+		"health/live": _route_health_live,
 		jwks: _route_jwks,
 		realtime: _route_realtime,
 		"realtime/auth:POST": _route_realtime_auth_POST,
@@ -290,6 +295,7 @@ const _module: CoreModule = {
 		i18n: _svc_i18n,
 		kv: _svc_kv,
 		logger: _svc_logger,
+		observability: _svc_observability,
 		queue: _svc_queue,
 		realtime: _svc_realtime,
 		search: _svc_search,

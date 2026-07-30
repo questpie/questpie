@@ -4,6 +4,7 @@
  * Validation messages and Zod error mapping shared between FE and BE.
  */
 
+export { interpolate } from "./interpolate.js";
 export {
 	type I18nLocaleMap,
 	type I18nText,

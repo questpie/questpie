@@ -150,7 +150,7 @@ describe("adapter route config", () => {
 					body: JSON.stringify({}),
 				}),
 			);
-			expect((await fromResolver?.json()).locale).toBe("sk");
+			expect((await fromResolver?.json())?.locale).toBe("sk");
 
 			const fromQuery = await handler(
 				new Request("http://localhost/echo-options?locale=de", {
@@ -158,7 +158,7 @@ describe("adapter route config", () => {
 					body: JSON.stringify({}),
 				}),
 			);
-			expect((await fromQuery?.json()).locale).toBe("de");
+			expect((await fromQuery?.json())?.locale).toBe("de");
 		});
 
 		it("uses getSession result in handler context", async () => {
@@ -536,5 +536,4 @@ describe("adapter route config", () => {
 			void reindexedCollections;
 		});
 	});
-
 });

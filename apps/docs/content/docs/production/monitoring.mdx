@@ -1,0 +1,140 @@
+---
+title: Monitoring
+description: Health probes that mean what they say, traces and metrics over OTLP, and structured logs correlated to both.
+---
+
+## Probes
+
+Two endpoints, and pointing them at the wrong thing is a classic way to make an
+outage worse.
+
+| Endpoint       | Use for                         | Touches              |
+| -------------- | ------------------------------- | -------------------- |
+| `/health/live` | `livenessProbe`                 | Nothing              |
+| `/health`      | `readinessProbe`, load balancer | Database, KV, Search |
+
+**Liveness must not depend on your database.** If it does, a brief database blip
+fails the probe on every replica at once and the orchestrator restarts all of
+them, turning a recoverable outage into a cold start under load. `/health/live`
+answers from the process alone.
+
+**Readiness may.** A replica that cannot reach the database should be taken out
+of rotation, which is exactly what a failed readiness probe does.
+
+```yaml title="Kubernetes"
+livenessProbe:
+  httpGet: { path: /health/live, port: 3000 }
+  periodSeconds: 10
+readinessProbe:
+  httpGet: { path: /health, port: 3000 }
+  periodSeconds: 5
+```
+
+`/health` returns 200 for `ok` and `degraded`, 503 for `unhealthy`. `degraded`
+means something non-essential is impaired (Search still warming, for instance)
+and the replica can still serve. Each check is bounded at 2 seconds so a hung
+dependency cannot hang the probe.
+
+Read the body, not just the code:
+
+```json
+{
+	"status": "ok",
+	"checks": {
+		"database": { "status": "ok", "latency_ms": 3 },
+		"kv": { "status": "ok", "latency_ms": 1 },
+		"search": { "status": "ok" },
+		"storage": { "status": "ok", "detail": "configured (not probed)" },
+		"queue": { "status": "ok", "detail": "configured (not probed)" }
+	}
+}
+```
+
+Note `configured (not probed)`. Storage and queue are **not** contacted: a real
+probe would cost an object-storage request or enqueue a job on every health
+check, at load-balancer frequency. The status says what was verified rather than
+implying more. If storage reachability matters to you, check it from a scheduled
+job, not from the readiness path.
+
+`not_configured` is not a failure. An app without Search is not unhealthy.
+
+## Traces and metrics
+
+Install `@questpie/observability` and point it at any OTLP collector. HTTP
+requests, CRUD operations, database queries and transactions, jobs, KV and
+Search are instrumented, and an inbound `traceparent` is continued so a
+distributed trace stays connected across services. See
+[Observability](/docs/adapters/observability) for the full seam table and for
+what is deliberately not recorded, or
+[Trace a slow request](/docs/recipes/trace-a-slow-request) to go from install to
+reading a waterfall.
+
+Database queries are traced on every `db` config variant, including the ones
+where you supply your own Drizzle client.
+
+```ts title="questpie.config.ts"
+observability: {
+	adapter: otelObservability({
+		serviceName: "my-app",
+		otlpEndpoint: process.env.OTLP_ENDPOINT,
+		environment: process.env.NODE_ENV,
+		samplingRatio: 0.1,
+	}),
+}
+```
+
+Requests also record `http.server.request.duration` (seconds, OTel semantic
+conventions). That one histogram is the whole RED triple: rate is its count,
+errors are that count sliced by `http.response.status_code`, duration is the
+histogram. Do not add parallel counters; they duplicate the same series and
+drift apart from it.
+
+Flush on shutdown, or spans still in the batch are lost:
+
+```ts
+process.on("SIGTERM", async () => {
+	await app.observability.shutdown();
+});
+```
+
+## Logs
+
+Logs are structured JSON via Pino. Every request line carries `requestId` and
+`traceId`, and those same values are stamped on the corresponding span, so a
+trace and its log lines join on either.
+
+With an observability adapter configured, records additionally carry `trace_id`
+and `span_id` from the span that was open when they were written. Those are the
+OTel log conventions and are what a backend joins on; the camelCase `traceId`
+beside them is the framework's own correlation id from the inbound
+`traceparent`, which is a different value once an adapter owns propagation. With
+an `otlpEndpoint` set the records are exported on the OTel logs signal too,
+alongside the existing Pino output rather than instead of it.
+
+```ts title="questpie.config.ts"
+logger: {
+	requests: {
+		slowThresholdMs: 1000,
+		logSuccessfulRequests: false, // your platform probably logs these already
+		ignorePaths: ["/health", "/health/live"],
+	},
+}
+```
+
+Ignoring the probe paths matters more than it looks: a readiness probe every 5
+seconds across 10 replicas is 172,800 log lines a day that tell you nothing.
+
+Errors and slow requests are logged regardless of `logSuccessfulRequests`.
+
+## What to alert on
+
+- **Readiness failing** on more than one replica at once: a shared dependency.
+- **5xx rate**, not 4xx. A 404 is a client asking for something that is not
+  there; a 500 is you.
+- **Job failure rate**, and separately **queue depth**. A queue that is draining
+  slowly is a different problem from one that is failing, and only the second is
+  urgent at 3am.
+- **p99 request duration**, not the mean. The mean hides exactly the requests
+  users complain about.
+- **Database connection saturation**, usually the first hard limit you hit. See
+  [Scaling](/docs/production/scaling).

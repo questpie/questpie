@@ -173,7 +173,7 @@ describe("global many-to-many relations", () => {
 
 		expect(settingsWithImages?.images).toBeDefined();
 		expect(settingsWithImages?.images).toHaveLength(1);
-		expect((settingsWithImages?.images as any[])[0].filename).toBe(
+		expect((settingsWithImages?.images as any[])?.[0].filename).toBe(
 			"special.jpg",
 		);
 	});
@@ -219,7 +219,7 @@ describe("global many-to-many relations", () => {
 
 			expect(settingsWithImages?.images).toHaveLength(2);
 			const filenames = (settingsWithImages?.images as any[])
-				.map((img: any) => img.filename)
+				?.map((img: any) => img.filename)
 				.sort();
 			expect(filenames).toEqual(["connected1.jpg", "connected2.jpg"]);
 		});
@@ -249,7 +249,7 @@ describe("global many-to-many relations", () => {
 
 			expect(settingsWithImages?.images).toHaveLength(2);
 			const filenames = (settingsWithImages?.images as any[])
-				.map((img: any) => img.filename)
+				?.map((img: any) => img.filename)
 				.sort();
 			expect(filenames).toEqual(["created1.png", "created2.png"]);
 		});
@@ -295,7 +295,7 @@ describe("global many-to-many relations", () => {
 
 			expect(settingsWithImages?.images).toHaveLength(2);
 			const filenames = (settingsWithImages?.images as any[])
-				.map((img: any) => img.filename)
+				?.map((img: any) => img.filename)
 				.sort();
 			expect(filenames).toEqual(["existing.jpg", "new-asset.jpg"]);
 
@@ -342,7 +342,7 @@ describe("global many-to-many relations", () => {
 
 			expect(settingsWithImages?.images).toHaveLength(2);
 			const filenames = (settingsWithImages?.images as any[])
-				.map((img: any) => img.filename)
+				?.map((img: any) => img.filename)
 				.sort();
 			expect(filenames).toEqual(["plain1.jpg", "plain2.jpg"]);
 		});
@@ -401,7 +401,7 @@ describe("global many-to-many relations", () => {
 			);
 
 			expect(settingsWithImages?.images).toHaveLength(1);
-			expect((settingsWithImages?.images as any[])[0].filename).toBe(
+			expect((settingsWithImages?.images as any[])?.[0].filename).toBe(
 				"new1.jpg",
 			);
 		});

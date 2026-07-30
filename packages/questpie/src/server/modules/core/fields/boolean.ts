@@ -40,19 +40,23 @@ export type BooleanFieldState = Omit<DefaultFieldState, "operators"> & {
  * ```
  */
 export function boolean(): Field<BooleanFieldState> {
-	return wrapFieldComplete(field<BooleanFieldState>({
-		type: "boolean",
-		columnFactory: (name) => pgBoolean(name),
-		schemaFactory: () => z.boolean(),
-		operatorSet: booleanOps,
-		notNull: false,
-		hasDefault: false,
-		localized: false,
-		virtual: false,
-		input: true,
-		output: true,
-		isArray: false,
-	}), booleanFieldType.methods, {}) as any;
+	return wrapFieldComplete(
+		field<BooleanFieldState>({
+			type: "boolean",
+			columnFactory: (name) => pgBoolean(name),
+			schemaFactory: () => z.boolean(),
+			operatorSet: booleanOps,
+			notNull: false,
+			hasDefault: false,
+			localized: false,
+			virtual: false,
+			input: true,
+			output: true,
+			isArray: false,
+		}),
+		booleanFieldType.methods,
+		{},
+	) as any;
 }
 
 import type { Field } from "../../../fields/field-class.js";

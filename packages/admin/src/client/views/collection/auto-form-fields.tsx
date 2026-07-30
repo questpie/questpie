@@ -914,7 +914,7 @@ export function AutoFormFields<T extends QuestpieApp, K extends string>({
 	const { data: collectionMeta } = useCollectionMeta(
 		adminCollectionKey(collection),
 		{
-		enabled: mode === "collection" && !isActionForm,
+			enabled: mode === "collection" && !isActionForm,
 		},
 	);
 	const { data: globalMeta } = useGlobalMeta(adminCollectionKey(collection), {

@@ -26,16 +26,16 @@ import { service } from "questpie/services";
 const WORDS_PER_MINUTE = 200;
 
 export default service({
-  lifecycle: "singleton",
-  create: () => ({
-    computeReadingTime(content: string): number {
-      const words = content
-        .replace(/<[^>]*>/g, " ")
-        .trim()
-        .split(/\s+/).length;
-      return Math.max(1, Math.ceil(words / WORDS_PER_MINUTE));
-    },
-  }),
+	lifecycle: "singleton",
+	create: () => ({
+		computeReadingTime(content: string): number {
+			const words = content
+				.replace(/<[^>]*>/g, " ")
+				.trim()
+				.split(/\s+/).length;
+			return Math.max(1, Math.ceil(words / WORDS_PER_MINUTE));
+		},
+	}),
 });
 ```
 
@@ -51,17 +51,18 @@ Consume it by destructuring it off any handler context, here in a collection hoo
 import { collection } from "#questpie/factories";
 
 export const posts = collection("posts")
-  .fields(({ f }) => ({
-    title: f.text().required(),
-    content: f.richText(),
-    readingTime: f.number(),
-  }))
-  .hooks({
-    beforeChange: ({ data, services }) => {
-      // `services.blog` is fully typed, computeReadingTime returns number.
-      if (data.content) data.readingTime = services.blog.computeReadingTime(data.content);
-    },
-  });
+	.fields(({ f }) => ({
+		title: f.text().required(),
+		content: f.richText(),
+		readingTime: f.number(),
+	}))
+	.hooks({
+		beforeChange: ({ data, services }) => {
+			// `services.blog` is fully typed, computeReadingTime returns number.
+			if (data.content)
+				data.readingTime = services.blog.computeReadingTime(data.content);
+		},
+	});
 ```
 
 That's the whole loop: one file to register, `ctx.services.blog` to consume, in any hook, route, job, or email handler. The [Full API](#full-api) covers `dispose`, the `request` lifecycle, and namespaces below.
@@ -78,21 +79,21 @@ There is **no** `deps` option. A service reaches everything it needs through the
 import { service } from "questpie/services";
 
 export default service({
-  lifecycle: "singleton",
-  // `ctx` exposes db, collections, email, other services, app, etc.
-  create: (ctx) => ({
-    async sendWeekly(userId: string) {
-      const { docs } = await ctx.collections.posts.find({
-        where: { authorId: userId },
-        limit: 10,
-      });
-      await ctx.email.sendTemplate({
-        template: "weeklyDigest",
-        to: userId,
-        input: { count: docs.length },
-      });
-    },
-  }),
+	lifecycle: "singleton",
+	// `ctx` exposes db, collections, email, other services, app, etc.
+	create: (ctx) => ({
+		async sendWeekly(userId: string) {
+			const { docs } = await ctx.collections.posts.find({
+				where: { authorId: userId },
+				limit: 10,
+			});
+			await ctx.email.sendTemplate({
+				template: "weeklyDigest",
+				to: userId,
+				input: { count: docs.length },
+			});
+		},
+	}),
 });
 ```
 
@@ -110,9 +111,9 @@ The object form and the chained form are **equivalent**, the chained methods jus
 import { service } from "questpie/services";
 
 export default service({
-  lifecycle: "singleton",
-  create: (ctx) => new CacheClient(ctx),
-  dispose: (cache) => cache.disconnect(),
+	lifecycle: "singleton",
+	create: (ctx) => new CacheClient(ctx),
+	dispose: (cache) => cache.disconnect(),
 });
 ```
 
@@ -120,15 +121,21 @@ export default service({
 import { service } from "questpie/services";
 
 export default service()
-  .lifecycle("singleton")
-  .create((ctx) => new CacheClient(ctx))
-  .dispose((cache) => cache.disconnect());
+	.lifecycle("singleton")
+	.create((ctx) => new CacheClient(ctx))
+	.dispose((cache) => cache.disconnect());
 ```
 
 Each chained method (`create`, `lifecycle`, `namespace`, `dispose`) spreads `this.state` into a **brand-new** `ServiceBuilder` and never mutates in place, the builder is immutable. The builder itself resolves nothing; the app's service container interprets the resulting `state` at registration time.
 
-<Callout type="warn" title="`namespace()` takes `string | null`, not `undefined`">
-  The chained `.namespace()` method only accepts `string | null`. To put a service in the default `ctx.services` bucket, **omit** `namespace` entirely, don't pass `undefined`. (The object form's type allows `undefined`, but omitting is the idiom.)
+<Callout
+	type="warn"
+	title="`namespace()` takes `string | null`, not `undefined`"
+>
+	The chained `.namespace()` method only accepts `string | null`. To put a
+	service in the default `ctx.services` bucket, **omit** `namespace` entirely,
+	don't pass `undefined`. (The object form's type allows `undefined`, but
+	omitting is the idiom.)
 </Callout>
 
 ## Lifecycle: singleton vs request
@@ -145,20 +152,27 @@ import { service } from "questpie/services";
 
 // A throwaway cache scoped to one request, never shared across requests.
 export default service({
-  lifecycle: "request",
-  create: () => new Map<string, unknown>(),
+	lifecycle: "request",
+	create: () => new Map<string, unknown>(),
 });
 ```
 
 When `lifecycle` is omitted, the container decides; the framework's built-in core services, including email, set `"singleton"` explicitly.
 
-<Callout type="warn" title="Singletons outlive every request, don't store request state on them">
-  A `"singleton"` is shared across all requests for the life of the process. Never cache the current user, a request's locale, or a per-request transaction on a singleton, it leaks across requests and corrupts data. Put per-request state on a `"request"` service, or read `ctx.session` / `ctx.locale` fresh inside the
-  method that needs it.
+<Callout
+	type="warn"
+	title="Singletons outlive every request, don't store request state on them"
+>
+	A `"singleton"` is shared across all requests for the life of the process.
+	Never cache the current user, a request's locale, or a per-request transaction
+	on a singleton, it leaks across requests and corrupts data. Put per-request
+	state on a `"request"` service, or read `ctx.session` / `ctx.locale` fresh
+	inside the method that needs it.
 </Callout>
 
 <Callout type="info" title="Service lifecycle values">
-  Use `"singleton"` for one process-wide instance and `"request"` for one instance per request.
+	Use `"singleton"` for one process-wide instance and `"request"` for one
+	instance per request.
 </Callout>
 
 ## Consuming a service
@@ -170,12 +184,12 @@ import { route } from "questpie/services";
 import { z } from "zod";
 
 export default route()
-  .post()
-  .schema(z.object({ userId: z.string() }))
-  .handler(async ({ input, services }) => {
-    await services.digest.sendWeekly(input.userId);
-    return { queued: true };
-  });
+	.post()
+	.schema(z.object({ userId: z.string() }))
+	.handler(async ({ input, services }) => {
+		await services.digest.sendWeekly(input.userId);
+		return { queued: true };
+	});
 ```
 
 ```ts title="In a job"
@@ -183,27 +197,34 @@ import { job } from "questpie/services";
 import { z } from "zod";
 
 export default job({
-  name: "reindex",
-  schema: z.object({ collection: z.string() }),
-  handler: async ({ payload, services }) => {
-    await services.searchSync.reindex(payload.collection);
-  },
+	name: "reindex",
+	schema: z.object({ collection: z.string() }),
+	handler: async ({ payload, services }) => {
+		await services.searchSync.reindex(payload.collection);
+	},
 });
 ```
 
 ```ts title="In a hook, defer side effects to commit"
 collection("posts").hooks({
-  afterChange: ({ data, operation, services, onAfterCommit }) => {
-    if (operation !== "create") return;
-    // Run the side effect only after the row is durably committed.
-    onAfterCommit(() => services.digest.sendWeekly(data.authorId));
-  },
+	afterChange: ({ data, operation, services, onAfterCommit }) => {
+		if (operation !== "create") return;
+		// Run the side effect only after the row is durably committed.
+		onAfterCommit(() => services.digest.sendWeekly(data.authorId));
+	},
 });
 ```
 
-<Callout type="info" title="Read `ctx` inside the method, not just at construction">
-  A singleton's `create(ctx)` runs once, so the `ctx` it captures is **not** request-specific, `ctx.session` / `ctx.locale` captured there reflect the resolution moment, not the current caller. If a singleton method needs the current request's session or locale, accept it as an argument from the caller (which has the
-  live request `ctx`) rather than closing over the construction-time `ctx`.
+<Callout
+	type="info"
+	title="Read `ctx` inside the method, not just at construction"
+>
+	A singleton's `create(ctx)` runs once, so the `ctx` it captures is **not**
+	request-specific, `ctx.session` / `ctx.locale` captured there reflect the
+	resolution moment, not the current caller. If a singleton method needs the
+	current request's session or locale, accept it as an argument from the caller
+	(which has the live request `ctx`) rather than closing over the
+	construction-time `ctx`.
 </Callout>
 
 ## Full API
@@ -245,13 +266,13 @@ import { service } from "questpie/services";
 import { createClient } from "redis";
 
 export default service({
-  lifecycle: "singleton",
-  create: async () => {
-    const client = createClient({ url: process.env.REDIS_URL });
-    await client.connect();
-    return client;
-  },
-  dispose: (client) => client.quit(),
+	lifecycle: "singleton",
+	create: async () => {
+		const client = createClient({ url: process.env.REDIS_URL });
+		await client.connect();
+		return client;
+	},
+	dispose: (client) => client.quit(),
 });
 ```
 
@@ -269,16 +290,22 @@ Controls **where** the resolved instance lands on `ctx`. It accepts `string | nu
 import { service } from "questpie/services";
 
 export default service({
-  namespace: "integrations",
-  lifecycle: "singleton",
-  create: () => new BillingClient(),
+	namespace: "integrations",
+	lifecycle: "singleton",
+	create: () => new BillingClient(),
 });
 // → consume as ctx.integrations.billing
 ```
 
-<Callout type="warn" title="A `null`-namespace service won't override a built-in `ctx` key">
-  Top-level keys like `db`, `session`, `email`, `collections`, `globals`, `queue`, `storage`, `kv`, `logger` are populated directly by the context builder. A `namespace: null` service whose key collides with one of these is **silently skipped** and the existing built-in wins. Pick a unique key, or leave it in the
-  default `ctx.services` bucket where collisions can't happen.
+<Callout
+	type="warn"
+	title="A `null`-namespace service won't override a built-in `ctx` key"
+>
+	Top-level keys like `db`, `session`, `email`, `collections`, `globals`,
+	`queue`, `storage`, `kv`, `logger` are populated directly by the context
+	builder. A `namespace: null` service whose key collides with one of these is
+	**silently skipped** and the existing built-in wins. Pick a unique key, or
+	leave it in the default `ctx.services` bucket where collisions can't happen.
 </Callout>
 
 ## Built-in services
@@ -289,12 +316,13 @@ The clearest example is the **email** (mailer) service. It is a plain `service({
 
 ```ts title="packages/questpie/src/server/modules/core/services/email.ts (built-in)"
 export default service({
-  namespace: null,
-  lifecycle: "singleton",
-  create: ({ app }) => {
-    if (!app.config.email?.adapter) throw new Error("'email.adapter' is required…");
-    return new MailerService(app.config.email);
-  },
+	namespace: null,
+	lifecycle: "singleton",
+	create: ({ app }) => {
+		if (!app.config.email?.adapter)
+			throw new Error("'email.adapter' is required…");
+		return new MailerService(app.config.email);
+	},
 });
 ```
 
@@ -332,8 +360,14 @@ type BlogNs = ServiceNamespaceOf<typeof blog>; // undefined
 - **`ServiceNamespaceOf<T>`** computes the namespace placement (falls back through the builder generic → `state.namespace` → `namespace` → `undefined`).
 
 <Callout type="info" title="`ctx` types only fill in after codegen">
-  Before you run `questpie generate`, `ServiceCreateContext` falls back to the base app context plus `{app}`, so a brand-new service file may show a thinner `ctx`. This fallback is deliberate: two augmentable markers back it, `Questpie.ServiceCreateContext` (the real interface codegen fills with the typed app surface)
-  and `Questpie.ServiceCreateContextGenerated` (a names-only marker the conditional probes to avoid a self-reference cycle). Run `questpie generate` after adding a service to pick up the full typed surface and have it appear on `ctx.services`.
+	Before you run `questpie generate`, `ServiceCreateContext` falls back to the
+	base app context plus `{app}`, so a brand-new service file may show a thinner
+	`ctx`. This fallback is deliberate: two augmentable markers back it,
+	`Questpie.ServiceCreateContext` (the real interface codegen fills with the
+	typed app surface) and `Questpie.ServiceCreateContextGenerated` (a names-only
+	marker the conditional probes to avoid a self-reference cycle). Run `questpie
+	generate` after adding a service to pick up the full typed surface and have it
+	appear on `ctx.services`.
 </Callout>
 
 ## Related

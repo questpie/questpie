@@ -44,13 +44,15 @@ type InferObjectData<TFields extends Record<string, Field<any>>> = {
 	? { [K in keyof M as M[K] extends never ? never : K]: M[K] }
 	: never;
 
-export type ObjectFieldState<TData = Record<string, unknown>> =
-	Omit<DefaultFieldState, "operators"> & {
-		type: "object";
-		data: TData;
-		column: PgJsonbBuilder;
-		operators: typeof objectOps;
-	};
+export type ObjectFieldState<TData = Record<string, unknown>> = Omit<
+	DefaultFieldState,
+	"operators"
+> & {
+	type: "object";
+	data: TData;
+	column: PgJsonbBuilder;
+	operators: typeof objectOps;
+};
 
 /**
  * Create a structured object field (stored as JSONB).
@@ -69,52 +71,56 @@ export type ObjectFieldState<TData = Record<string, unknown>> =
 export function object<TFields extends Record<string, Field<any>>>(
 	fields: TFields,
 ): Field<ObjectFieldState<InferObjectData<TFields>>> {
-	return wrapFieldComplete(field<ObjectFieldState<InferObjectData<TFields>>>({
-		type: "object",
-		columnFactory: (name) => jsonb(name),
-		schemaFactory: () => {
-			const shape: Record<string, z.ZodTypeAny> = {};
-			for (const [key, field] of Object.entries(fields)) {
-				shape[key] = (field as Field<any>).toZodSchema();
-			}
-			return z.object(shape);
-		},
-		operatorSet: objectOps,
-		notNull: false,
-		hasDefault: false,
-		localized: false,
-		virtual: false,
-		input: true,
-		output: true,
-		isArray: false,
-		nestedFields: fields,
-		metadataFactory: (state) => {
-			const nested = state.nestedFields as
-				| Record<string, Field<any>>
-				| undefined;
-			const nestedMetadata: Record<string, any> = {};
-			if (nested) {
-				for (const [key, field] of Object.entries(nested)) {
-					nestedMetadata[key] = (field as Field<any>).getMetadata();
+	return wrapFieldComplete(
+		field<ObjectFieldState<InferObjectData<TFields>>>({
+			type: "object",
+			columnFactory: (name) => jsonb(name),
+			schemaFactory: () => {
+				const shape: Record<string, z.ZodTypeAny> = {};
+				for (const [key, field] of Object.entries(fields)) {
+					shape[key] = (field as Field<any>).toZodSchema();
 				}
-			}
-			const result: NestedFieldMetadata = {
-				type: "object",
-				label: state.label,
-				description: state.description,
-				required: state.notNull ?? false,
-				localized: state.localized ?? false,
-				readOnly: state.input === false,
-				writeOnly: state.output === false,
-				nestedFields: nestedMetadata,
-				meta: state.extensions?.admin as any,
-			};
-			if (state.extensions?.form) {
-				(result as any).form = state.extensions.form;
-			}
-			return result;
-		},
-	}), objectFieldType.methods, {}) as any;
+				return z.object(shape);
+			},
+			operatorSet: objectOps,
+			notNull: false,
+			hasDefault: false,
+			localized: false,
+			virtual: false,
+			input: true,
+			output: true,
+			isArray: false,
+			nestedFields: fields,
+			metadataFactory: (state) => {
+				const nested = state.nestedFields as
+					| Record<string, Field<any>>
+					| undefined;
+				const nestedMetadata: Record<string, any> = {};
+				if (nested) {
+					for (const [key, field] of Object.entries(nested)) {
+						nestedMetadata[key] = (field as Field<any>).getMetadata();
+					}
+				}
+				const result: NestedFieldMetadata = {
+					type: "object",
+					label: state.label,
+					description: state.description,
+					required: state.notNull ?? false,
+					localized: state.localized ?? false,
+					readOnly: state.input === false,
+					writeOnly: state.output === false,
+					nestedFields: nestedMetadata,
+					meta: state.extensions?.admin as any,
+				};
+				if (state.extensions?.form) {
+					(result as any).form = state.extensions.form;
+				}
+				return result;
+			},
+		}),
+		objectFieldType.methods,
+		{},
+	) as any;
 }
 
 import type { Field } from "../../../fields/field-class.js";

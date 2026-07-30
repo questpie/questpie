@@ -7,18 +7,18 @@
 
 import { describe, expect, it } from "bun:test";
 
-import { z } from "zod";
 import { varchar } from "drizzle-orm/pg-core";
+import { z } from "zod";
 
 import type { DefaultFieldState } from "#questpie/server/fields/field-class-types.js";
 import { Field, field } from "#questpie/server/fields/field-class.js";
 import { stringOps } from "#questpie/server/fields/operators/builtin.js";
-import { wrapBuilderWithExtensions } from "#questpie/server/utils/builder-extensions.js";
-import { text } from "#questpie/server/modules/core/fields/text.js";
 import { object } from "#questpie/server/modules/core/fields/object.js";
-import { select } from "#questpie/server/modules/core/fields/select.js";
 import { relation } from "#questpie/server/modules/core/fields/relation.js";
+import { select } from "#questpie/server/modules/core/fields/select.js";
+import { text } from "#questpie/server/modules/core/fields/text.js";
 import { upload } from "#questpie/server/modules/core/fields/upload.js";
+import { wrapBuilderWithExtensions } from "#questpie/server/utils/builder-extensions.js";
 
 // ============================================================================
 // Helpers
@@ -50,7 +50,9 @@ const fieldExtRegistry: Record<
 	form: {
 		stateKey: "form",
 		resolve: (configOrFn: any) =>
-			typeof configOrFn === "function" ? configOrFn({ f: new Proxy({}, { get: (_, p) => String(p) }) }) : configOrFn,
+			typeof configOrFn === "function"
+				? configOrFn({ f: new Proxy({}, { get: (_, p) => String(p) }) })
+				: configOrFn,
 	},
 };
 
@@ -163,10 +165,12 @@ describe("Field extension proxy", () => {
 		const wrappedText = wrapFieldFactory(text);
 		const wrappedObj = wrapFieldFactory(object);
 
-		const obj = (wrappedObj({
-			street: wrappedText(255),
-			city: wrappedText(255),
-		}) as any).form(({ f }: any) => ({
+		const obj = (
+			wrappedObj({
+				street: wrappedText(255),
+				city: wrappedText(255),
+			}) as any
+		).form(({ f }: any) => ({
 			fields: [f.street, f.city],
 		}));
 
@@ -179,9 +183,11 @@ describe("Field extension proxy", () => {
 		const wrappedText = wrapFieldFactory(text);
 		const wrappedObj = wrapFieldFactory(object);
 
-		const obj = (wrappedObj({
-			name: wrappedText(255),
-		}) as any)
+		const obj = (
+			wrappedObj({
+				name: wrappedText(255),
+			}) as any
+		)
 			.admin({ wrapper: "flat" })
 			.form(({ f }: any) => ({ fields: [f.name] }));
 

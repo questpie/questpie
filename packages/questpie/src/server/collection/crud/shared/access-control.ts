@@ -126,7 +126,13 @@ export async function executeAccessRule(
 		return result;
 	}
 
-	return true;
+	// Not undefined, not a boolean, not a function — unreachable for a typed
+	// app, since AccessRule is `boolean | function`. Reachable from untyped JS
+	// or a cast, and this is the enforcement path, so it denies. It returned
+	// `true` before, which made the one branch nobody can type-check the one
+	// branch that granted access. Globals were made fail-closed in af34e638;
+	// this is the same call on the collection side.
+	return false;
 }
 
 /**

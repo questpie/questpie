@@ -40,9 +40,12 @@ infrastructure tables.
 ## 4. Connect and edit
 
 ```ts
+import { createCrdtClient } from "questpie/crdt";
+
 import { client } from "@/lib/client";
 
-const article = client.crdt.collections.articles.document({ id: articleId });
+const crdt = createCrdtClient(client);
+const article = crdt.collections.articles.document({ id: articleId });
 const stop = article.subscribe((state) => renderConnectionState(state));
 
 await article.connect({ mode: "edit", fallback: "view" });

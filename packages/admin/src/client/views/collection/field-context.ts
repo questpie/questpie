@@ -87,6 +87,46 @@ function getFieldComponent(
 	return fieldDef.component as React.ComponentType<any>;
 }
 
+/**
+ * Resolve a per-field component slot (`.admin({ components: { … } })`) against
+ * the component registry.
+ *
+ * A slot is a registry KEY, not a component: `.admin()` is serialized from the
+ * server through field introspection, so it cannot carry a function. The string
+ * form is shorthand for `{ type: name }`.
+ *
+ * Returns undefined when there is no slot or the key is not registered, which
+ * makes the caller fall back to the by-type component — an unknown key must not
+ * blank the field out.
+ *
+ * Pure and exported so the precedence is testable without rendering.
+ */
+export function resolveComponentSlot(
+	slot: unknown,
+	registry:
+		| {
+				custom?: Record<string, unknown>;
+				fields?: Record<string, unknown>;
+		  }
+		| undefined,
+): React.ComponentType<any> | undefined {
+	if (!slot || !registry) return undefined;
+
+	const key =
+		typeof slot === "string"
+			? slot
+			: typeof (slot as { type?: unknown }).type === "string"
+				? ((slot as { type: string }).type as string)
+				: undefined;
+	if (!key) return undefined;
+
+	// `custom` is the documented home for named components addressed by a field;
+	// `fields` is checked second so a slot can also point at a registered field
+	// type's component.
+	const found = registry.custom?.[key] ?? registry.fields?.[key];
+	return (found as React.ComponentType<any> | undefined) ?? undefined;
+}
+
 // ============================================================================
 // Helper Functions - Value Resolution
 // ============================================================================

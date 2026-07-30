@@ -1,9 +1,6 @@
 {
 	"js/ts.experimental.useTsgo": false,
-	"cSpell.words": [
-		"QCMS",
-		"questpie"
-	],
+	"cSpell.words": ["QCMS", "questpie"],
 	"editor.codeActionsOnSave": {
 		"source.fixAll.oxc": "always"
 	},

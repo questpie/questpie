@@ -1,6 +1,7 @@
 {
 	"name": "@questpie/tanstack-db",
 	"version": "3.18.0",
+	"description": "Typed TanStack DB collections backed by a QUESTPIE client",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/questpie/questpie.git",

@@ -21,7 +21,9 @@ function readStoredTheme(): Theme | null {
 function readThemeSnapshot(): Theme {
 	const stored = readStoredTheme();
 	if (stored) return stored;
-	return document.documentElement.classList.contains("light") ? "light" : "dark";
+	return document.documentElement.classList.contains("light")
+		? "light"
+		: "dark";
 }
 
 function subscribe(onChange: () => void) {
@@ -56,7 +58,11 @@ function applyTheme(theme: Theme) {
 }
 
 export function ThemeToggle() {
-	const theme = useSyncExternalStore(subscribe, readThemeSnapshot, () => "dark");
+	const theme = useSyncExternalStore(
+		subscribe,
+		readThemeSnapshot,
+		() => "dark",
+	);
 
 	useEffect(() => {
 		applyTheme(readThemeSnapshot());

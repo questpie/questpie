@@ -82,7 +82,9 @@ export function assertPushStatementsSafe(
 		}
 
 		// 3. DROP SCHEMA outside the app's schemas
-		const dropSchema = s.match(/drop\s+schema\s+(?:if\s+exists\s+)?"?([\w$]+)"?/);
+		const dropSchema = s.match(
+			/drop\s+schema\s+(?:if\s+exists\s+)?"?([\w$]+)"?/,
+		);
 		if (dropSchema && !schemaSet.has(dropSchema[1])) {
 			offending.push(stmt);
 		}

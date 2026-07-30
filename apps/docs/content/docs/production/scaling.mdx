@@ -1,0 +1,93 @@
+---
+title: Scaling
+description: Running multiple app replicas and workers, what each adapter requires once you leave a single process, and where the real limits are.
+---
+
+A single app process and a single worker will carry a surprising amount of load.
+Most of what follows only matters once you leave one of each.
+
+## App replicas
+
+The app process is stateless: session state lives in the database, and nothing is
+cached in memory that another replica needs. Adding replicas needs no
+configuration.
+
+Two things stop being free:
+
+**KV must be shared.** The default adapter is in-memory, which means each replica
+gets its own cache. That is not a correctness problem for a cache, but it is one
+for anything you store in KV expecting other replicas to see it. Use the Redis or
+Cloudflare KV adapter.
+
+**Realtime must be shared.** See below.
+
+## Workers
+
+Workers scale independently of the app, which is the reason they are a separate
+process.
+
+```ts
+await app.queue.listen({
+	teamSize: 5, // concurrent jobs in this worker
+	batchSize: 3, // jobs fetched per poll
+});
+```
+
+`teamSize` is per worker, so total concurrency is `teamSize` x replicas. Size it
+against what the jobs actually contend for, usually database connections rather
+than CPU. Ten workers at `teamSize: 10` is 100 concurrent jobs and, if each opens
+a connection, 100 connections before the app has asked for any.
+
+`singletonKey` prevents two jobs with the same key running at once, across all
+workers. `idempotencyKey` is separate and portable: it deduplicates dispatch, so
+a retry that already succeeded is not run twice.
+
+**Cloudflare Queues need a configured `dead_letter_queue`.** The adapter keeps
+poison and exhausted messages visible by retrying toward a DLQ; it cannot invent
+one for you. Without it, those messages are lost silently.
+
+## Realtime
+
+The default realtime transport is per-process. With more than one app replica, a
+client connected to replica A will not see an event published on replica B unless
+the transport is shared.
+
+Choose one:
+
+- **PostgreSQL LISTEN/NOTIFY** (`pg-notify`): no extra infrastructure, since you
+  already have PostgreSQL. Good to a moderate fan-out.
+- **Redis Streams**: for higher fan-out, at the cost of running Redis.
+- **Pusher / Soketi**: offloads connection handling entirely. The client only
+  downloads the Pusher library when this transport is actually selected.
+
+Realtime correctness and realtime scalability are different problems. A
+personalised live query that re-runs per subscriber is correct and can still be
+the wrong model at 100,000 subscribers. Read
+[Scalable realtime modeling](/docs/concepts/scalable-realtime) before assuming a
+bigger transport is the answer.
+
+## Database connections
+
+This is the limit you will hit first, and it is usually arithmetic rather than
+load: app replicas x pool size, plus worker replicas x `teamSize`, against
+`max_connections`.
+
+Put a pooler (PgBouncer, or your provider's) in front once that product
+approaches the server limit. In transaction pooling mode, be aware that
+session-level features do not survive, `LISTEN/NOTIFY` among them. If you use the
+`pg-notify` realtime adapter, it needs a session-mode connection.
+
+## Graceful shutdown
+
+On `SIGTERM`, stop accepting new work before the process exits, or in-flight jobs
+are lost and in-flight requests are cut:
+
+```ts
+process.on("SIGTERM", async () => {
+	await app.queue.stop(); // finish in-flight jobs
+	await app.observability.shutdown(); // flush buffered spans
+	process.exit(0);
+});
+```
+
+Give the platform a termination grace period longer than your slowest job.

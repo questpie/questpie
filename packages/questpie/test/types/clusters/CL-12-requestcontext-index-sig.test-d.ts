@@ -52,6 +52,14 @@
  *     builder (a raw builder hits a `never`-fallback and passes vacuously).
  */
 
+import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
+import type {
+	BaseRequestContext,
+	RequestContext,
+	StoredContext,
+} from "#questpie/server/config/context.js";
+import type { AccessMode } from "#questpie/server/config/types.js";
+
 import type {
 	AssertUnknown,
 	Equal,
@@ -62,14 +70,6 @@ import type {
 	NoUnknown,
 } from "../_assert.js";
 import type { App, QuestpieApp } from "../_fixtures.js";
-
-import type {
-	BaseRequestContext,
-	RequestContext,
-	StoredContext,
-} from "#questpie/server/config/context.js";
-import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
-import type { AccessMode } from "#questpie/server/config/types.js";
 
 // ----------------------------------------------------------------------------
 // Local helper: resolve key K on T, falling back to a sentinel when K is NOT a
@@ -126,9 +126,9 @@ type _ctxTypoKeyAbsent = Expect<Equal<HasKey<CRUDContext, "accesMode">, false>>;
  *
  * `NoUnknown` runs `IsUnknown` on the raw value (never `NonNullable`), per §4.1.
  */
-type _ctxUndeclaredNotUnknown = Expect<NoUnknown<
-	IndexedOrAbsent<CRUDContext, "made_up_key">
->>;
+type _ctxUndeclaredNotUnknown = Expect<
+	NoUnknown<IndexedOrAbsent<CRUDContext, "made_up_key">>
+>;
 
 // ---- Declared members KEEP their precise types (positive controls) ----------
 //
@@ -146,7 +146,9 @@ type _ctxAccessModePrecise = Expect<
 type _ctxStagePrecise = Expect<Equal<CRUDContext["stage"], string | undefined>>;
 
 /** `locale` stays `string | undefined`. */
-type _ctxLocalePrecise = Expect<Equal<CRUDContext["locale"], string | undefined>>;
+type _ctxLocalePrecise = Expect<
+	Equal<CRUDContext["locale"], string | undefined>
+>;
 
 /** `localeFallback` stays `boolean | undefined` (another swallowed access/i18n key). */
 type _ctxLocaleFallbackPrecise = Expect<
@@ -211,10 +213,9 @@ async function _crudCtxCallSites() {
 
 	// --- create -------------------------------------------------------------
 	// POSITIVE: valid `locale` ctx compiles on a write op.
-	await articles.create(
-		{ title: "t", slug: "s", author: "a1" } as never,
-		{ locale: "en" },
-	);
+	await articles.create({ title: "t", slug: "s", author: "a1" } as never, {
+		locale: "en",
+	});
 
 	// BURNDOWN: typo of `locale` must ERROR on the write path too.
 	await articles.create(
@@ -280,7 +281,10 @@ type CreateContextInput = Parameters<QuestpieApp["createContext"]>[0];
  * (`[key: string]: any`) — passes once the input is closed to known keys + `request`.
  */
 type _createCtxNoStringIndex = Expect<
-	Equal<string extends keyof NonNullable<CreateContextInput> ? true : false, false>
+	Equal<
+		string extends keyof NonNullable<CreateContextInput> ? true : false,
+		false
+	>
 >;
 
 /**
@@ -335,9 +339,9 @@ type _requestContextKeepsIndex = Expect<
  * index sig). Confirms the two roles are genuinely distinct: `CRUDContext` tightens
  * while `RequestContext` keeps its `unknown` index. Already passes; must stay.
  */
-type _requestContextUndeclaredIsUnknown = Expect<AssertUnknown<
-	RequestContext["any_random_key"]
->>;
+type _requestContextUndeclaredIsUnknown = Expect<
+	AssertUnknown<RequestContext["any_random_key"]>
+>;
 
 /**
  * `StoredContext` (returned by `tryGetContext()`) is ALREADY index-sig-free and

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 
-import { createAdapterRoutes } from "../../src/server/adapters/http.js";
+import { realtimeSubscribe } from "../../src/server/adapters/routes/realtime.js";
 import { CrdtRealtimeBindingRejectedError } from "../../src/server/modules/core/integrated/crdt/realtime-binding.js";
 import {
 	PusherClientTransport,
@@ -45,9 +45,9 @@ describe("realtime CRDT edge bindings", () => {
 				};
 			},
 		};
-		const routes = createAdapterRoutes(setup.app);
 		const controller = new AbortController();
-		const opened = await routes.realtime.subscribe(
+		const opened = await realtimeSubscribe(
+			setup.app,
 			new Request("http://localhost/realtime", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
@@ -65,13 +65,15 @@ describe("realtime CRDT edge bindings", () => {
 		const reader = sseReader(opened.body!);
 		const session = await reader.read("session");
 
-		const provisional = await routes.realtime.subscribe(
+		const provisional = await realtimeSubscribe(
+			setup.app,
 			topologyRequest(session, 1),
 			{},
 			undefined,
 		);
 		expect(provisional.status).toBe(202);
-		const applied = await routes.realtime.subscribe(
+		const applied = await realtimeSubscribe(
+			setup.app,
 			topologyRequest(session, 2, "00000000-0000-4000-8000-000000000001"),
 			{},
 			undefined,
@@ -84,7 +86,8 @@ describe("realtime CRDT edge bindings", () => {
 			topologyEntryId: "document-one",
 		});
 
-		const forged = await routes.realtime.subscribe(
+		const forged = await realtimeSubscribe(
+			setup.app,
 			topologyRequest(session, 3, "00000000-0000-4000-8000-000000000002"),
 			{},
 			undefined,
@@ -138,9 +141,9 @@ describe("realtime CRDT edge bindings", () => {
 				};
 			},
 		};
-		const routes = createAdapterRoutes(setup.app);
 		const controller = new AbortController();
-		const opened = await routes.realtime.subscribe(
+		const opened = await realtimeSubscribe(
+			setup.app,
 			new Request("http://localhost/realtime", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
@@ -158,7 +161,8 @@ describe("realtime CRDT edge bindings", () => {
 		const session = await reader.read("session");
 		const firstBinding = "00000000-0000-4000-8000-000000000001";
 		const secondBinding = "00000000-0000-4000-8000-000000000002";
-		const applied = await routes.realtime.subscribe(
+		const applied = await realtimeSubscribe(
+			setup.app,
 			topologyRequestWithBindings(session, 1, [
 				{ id: "document-one", bindingId: firstBinding },
 				{ id: "document-two", bindingId: secondBinding },
@@ -251,8 +255,8 @@ describe("realtime CRDT edge bindings", () => {
 				};
 			},
 		};
-		const routes = createAdapterRoutes(setup.app);
-		const opened = await routes.realtime.subscribe(
+		const opened = await realtimeSubscribe(
+			setup.app,
 			new Request("http://localhost/realtime", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
@@ -273,7 +277,8 @@ describe("realtime CRDT edge bindings", () => {
 			channel: string;
 		};
 
-		const provisional = await routes.realtime.subscribe(
+		const provisional = await realtimeSubscribe(
+			setup.app,
 			topologyRequest(session, 1),
 			{},
 			undefined,
@@ -287,7 +292,8 @@ describe("realtime CRDT edge bindings", () => {
 			}),
 		).resolves.toBeDefined();
 
-		const applied = await routes.realtime.subscribe(
+		const applied = await realtimeSubscribe(
+			setup.app,
 			topologyRequest(session, 2, "00000000-0000-4000-8000-000000000001"),
 			{},
 			undefined,
@@ -312,7 +318,8 @@ describe("realtime CRDT edge bindings", () => {
 			},
 		]);
 
-		const forged = await routes.realtime.subscribe(
+		const forged = await realtimeSubscribe(
+			setup.app,
 			topologyRequest(session, 3, "00000000-0000-4000-8000-000000000002"),
 			{},
 			undefined,
@@ -337,7 +344,8 @@ describe("realtime CRDT edge bindings", () => {
 					.length === 2,
 		);
 
-		const removed = await routes.realtime.subscribe(
+		const removed = await realtimeSubscribe(
+			setup.app,
 			topologyRequest(session, 4),
 			{},
 			undefined,

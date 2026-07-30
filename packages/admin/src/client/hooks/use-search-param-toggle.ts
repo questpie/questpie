@@ -5,11 +5,24 @@ import { SEARCH_PARAMS_EVENT } from "../lib/events.js";
 interface UseSearchParamToggleOptions {
 	defaultValue?: boolean;
 	trueValue?: string;
+	/**
+	 * Must keep a stable identity across renders (module constant or `useMemo`)
+	 * — it is an effect/callback dependency below. Omitting it is always safe.
+	 */
 	legacyKeys?: Array<{
 		key: string;
 		trueValue?: string;
 	}>;
 }
+
+/**
+ * Stable identity for "no legacy keys". An inline `?? []` mints a new array on
+ * every render, which is what made the effect and the callback below re-run
+ * every render — the caller-supplied array is already memoised at its one call
+ * site.
+ */
+const NO_LEGACY_KEYS: NonNullable<UseSearchParamToggleOptions["legacyKeys"]> =
+	[];
 
 function isTruthyParam(value: string | null, trueValue: string): boolean {
 	if (value === null) return false;
@@ -71,7 +84,7 @@ export function useSearchParamToggle(
 ) {
 	const defaultValue = options.defaultValue ?? false;
 	const trueValue = options.trueValue ?? "true";
-	const legacyKeys = options.legacyKeys ?? [];
+	const legacyKeys = options.legacyKeys ?? NO_LEGACY_KEYS;
 
 	const [value, setValue] = React.useState<boolean>(() =>
 		readToggleFromUrl(key, defaultValue, trueValue, legacyKeys),

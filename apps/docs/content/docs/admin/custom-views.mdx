@@ -7,13 +7,13 @@ Admin extensions are registry-driven. Server files declare serializable referenc
 
 ## File conventions
 
-| Server file | Client file | Purpose |
-|---|---|---|
-| `src/questpie/server/views/*.ts` | `src/questpie/admin/views/*.tsx` | Collection list, collection form, global form, or document views. |
+| Server file                           | Client file                           | Purpose                                                                                           |
+| ------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `src/questpie/server/views/*.ts`      | `src/questpie/admin/views/*.tsx`      | Collection list, collection form, global form, or document views.                                 |
 | `src/questpie/server/components/*.ts` | `src/questpie/admin/components/*.tsx` | Reusable component references for icons, badges, cells, actions, dashboard config, and custom UI. |
-| `src/questpie/server/blocks/*.ts` | `src/questpie/admin/blocks/*.tsx` | Visual block definitions and block editor renderers. |
-| `src/questpie/admin/widgets/*.tsx` | Same client target | Custom dashboard widget renderers. |
-| `src/questpie/admin/pages/*.tsx` | Same client target | Custom admin pages addressable from sidebar `page` items. |
+| `src/questpie/server/blocks/*.ts`     | `src/questpie/admin/blocks/*.tsx`     | Visual block definitions and block editor renderers.                                              |
+| `src/questpie/admin/widgets/*.tsx`    | Same client target                    | Custom dashboard widget renderers.                                                                |
+| `src/questpie/admin/pages/*.tsx`      | Same client target                    | Custom admin pages addressable from sidebar `page` items.                                         |
 
 Use the same stable name on the server and client. For example, a server `view("kanban", ...)` pairs with a client `view("kanban", ...)`.
 

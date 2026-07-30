@@ -1,6 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import {
+	BuilderSection,
+	IntegrationsSection,
+	OpenSourceSection,
+	PacksSection,
+	QapCockpit,
+	RuntimeMCPSection,
+} from "@/components/landing/autopilot-extras";
+import {
 	APFaq,
 	APFinalCta,
 	APHero,
@@ -10,18 +18,7 @@ import {
 	SchedulesSection,
 	WorkflowsSection,
 } from "@/components/landing/autopilot-sections";
-import {
-	BuilderSection,
-	IntegrationsSection,
-	OpenSourceSection,
-	PacksSection,
-	QapCockpit,
-	RuntimeMCPSection,
-} from "@/components/landing/autopilot-extras";
-import {
-	StarBanner,
-	useRevealOnScroll,
-} from "@/components/landing/primitives";
+import { StarBanner, useRevealOnScroll } from "@/components/landing/primitives";
 import { SharedFooter } from "@/components/landing/shared-footer";
 import { SharedNav } from "@/components/landing/shared-nav";
 import { generateLinks, generateMeta, siteConfig } from "@/lib/seo";

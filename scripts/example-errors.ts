@@ -110,7 +110,9 @@ for (const target of EXAMPLES) {
 	}
 	const got = current[target];
 	if (got > allowed) {
-		console.error(`✗ ${target}: errors went ${allowed} → ${got} (ratchet only goes down)`);
+		console.error(
+			`✗ ${target}: errors went ${allowed} → ${got} (ratchet only goes down)`,
+		);
 		failed = true;
 	} else if (got < allowed) {
 		console.log(`✓ ${target}: errors dropped ${allowed} → ${got}`);

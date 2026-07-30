@@ -34,6 +34,16 @@
 			"rules": {
 				"typescript/no-explicit-any": "error"
 			}
+		},
+		{
+			// Type-level tests (`.test-d.ts`) assert types, not values. A bare
+			// expression statement under `// @ts-expect-error` IS the assertion —
+			// it exists to make tsc raise an error, and has no runtime purpose.
+			// `no-unused-expressions` cannot see that and flags every one.
+			"files": ["**/*.test-d.ts"],
+			"rules": {
+				"eslint/no-unused-expressions": "off"
+			}
 		}
 	]
 }

@@ -1,32 +1,20 @@
 {
-	"$comment": "any-census baseline (per-package type-escape counts, non-test src). Regenerate with `bun run scripts/any-census.ts --update` — only commit decreases unless the increase was explicitly approved. CI fails on any increase.",
+	"$comment": "any-census baseline (per-package type-escape counts, non-test src). Packages are DISCOVERED from packages/*/src — a new package appears here automatically and fails the gate until baselined, so never hand-edit the package list. Regenerate with `bun run scripts/any-census.ts --update` — only commit decreases unless the increase was explicitly approved. CI fails on any increase.",
 	"packages": {
-		"questpie": {
-			": any": 560,
-			"as any": 482,
-			"as unknown as": 49,
-			"@ts-expect-error": 0
-		},
 		"admin": {
-			": any": 454,
+			": any": 453,
 			"as any": 458,
 			"as unknown as": 27,
 			"@ts-expect-error": 0
 		},
-		"tanstack-query": {
-			": any": 27,
-			"as any": 3,
-			"as unknown as": 0,
-			"@ts-expect-error": 0
-		},
-		"workflows": {
+		"crdt-yjs": {
 			": any": 0,
 			"as any": 0,
 			"as unknown as": 0,
 			"@ts-expect-error": 0
 		},
-		"hono": {
-			": any": 2,
+		"create-questpie": {
+			": any": 0,
 			"as any": 0,
 			"as unknown as": 0,
 			"@ts-expect-error": 0
@@ -37,7 +25,67 @@
 			"as unknown as": 0,
 			"@ts-expect-error": 0
 		},
+		"hono": {
+			": any": 2,
+			"as any": 0,
+			"as unknown as": 0,
+			"@ts-expect-error": 0
+		},
+		"mcp": {
+			": any": 10,
+			"as any": 1,
+			"as unknown as": 17,
+			"@ts-expect-error": 0
+		},
 		"next": {
+			": any": 0,
+			"as any": 0,
+			"as unknown as": 0,
+			"@ts-expect-error": 0
+		},
+		"observability": {
+			": any": 0,
+			"as any": 0,
+			"as unknown as": 0,
+			"@ts-expect-error": 0
+		},
+		"openapi": {
+			": any": 2,
+			"as any": 9,
+			"as unknown as": 0,
+			"@ts-expect-error": 0
+		},
+		"questpie": {
+			": any": 542,
+			"as any": 463,
+			"as unknown as": 49,
+			"@ts-expect-error": 0
+		},
+		"sandbox": {
+			": any": 0,
+			"as any": 11,
+			"as unknown as": 3,
+			"@ts-expect-error": 0
+		},
+		"tanstack-db": {
+			": any": 0,
+			"as any": 0,
+			"as unknown as": 1,
+			"@ts-expect-error": 0
+		},
+		"tanstack-query": {
+			": any": 27,
+			"as any": 3,
+			"as unknown as": 0,
+			"@ts-expect-error": 0
+		},
+		"vite-plugin-iconify": {
+			": any": 0,
+			"as any": 0,
+			"as unknown as": 1,
+			"@ts-expect-error": 0
+		},
+		"workflows": {
 			": any": 0,
 			"as any": 0,
 			"as unknown as": 0,

@@ -9,6 +9,7 @@ import {
 	introspectCollection,
 } from "#questpie/server/collection/introspection.js";
 import { select } from "#questpie/server/modules/core/fields/select.js";
+
 import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 import { createTestContext } from "../utils/test-context.js";
 import { runTestDbMigrations } from "../utils/test-db.js";
@@ -73,9 +74,9 @@ describe("dynamic field options introspection", () => {
 		expect(city.reactive?.options?.watch).toEqual(["country"]);
 
 		const country = schema.fields.country;
-		expect((country.metadata as { options?: { value: string }[] }).options).toHaveLength(
-			2,
-		);
+		expect(
+			(country.metadata as { options?: { value: string }[] }).options,
+		).toHaveLength(2);
 		expect(country.reactive).toBeUndefined();
 	});
 

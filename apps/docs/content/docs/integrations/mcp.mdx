@@ -15,7 +15,11 @@ On an admin-enabled app the HTTP `/api/mcp` route requires a verified principal 
 </Callout>
 
 <Callout type="info" title="Prerequisites">
-  Read [Routes](/docs/concepts/routes) and [Access control](/docs/concepts/access-control) first, routes opt into MCP via `meta.mcp`, and every HTTP tool call runs through your collection/global access rules. The module registers like any other (see [Modules](/docs/extend/modules)).
+	Read [Routes](/docs/concepts/routes) and [Access
+	control](/docs/concepts/access-control) first, routes opt into MCP via
+	`meta.mcp`, and every HTTP tool call runs through your collection/global
+	access rules. The module registers like any other (see
+	[Modules](/docs/extend/modules)).
 </Callout>
 
 ## What it does
@@ -35,8 +39,8 @@ Add `mcpModule` to your app's modules. The module carries its codegen plugin and
 import { mcpModule } from "@questpie/mcp";
 
 export default [
-  // ...your other modules
-  mcpModule,
+	// ...your other modules
+	mcpModule,
 ];
 ```
 
@@ -48,8 +52,14 @@ questpie generate
 
 That is the whole setup. With no `config/mcp.ts`, every collection and global is exposed **read-only over HTTP** (writes and deletes off), and every read still passes the connecting user's access rules. Point an MCP client at `https://your-app/api/mcp` and it can list your tools.
 
-<Callout type="info" title="Re-run codegen after adding the module or a tool file">
-  Adding `mcpModule` to `modules.ts` and adding files under `mcp-tools/` both change what codegen discovers, so run `questpie generate` (or keep `questpie dev` running). Editing a tool's handler body does not need a regen. See [Codegen](/docs/extend/codegen).
+<Callout
+	type="info"
+	title="Re-run codegen after adding the module or a tool file"
+>
+	Adding `mcpModule` to `modules.ts` and adding files under `mcp-tools/` both
+	change what codegen discovers, so run `questpie generate` (or keep `questpie
+	dev` running). Editing a tool's handler body does not need a regen. See
+	[Codegen](/docs/extend/codegen).
 </Callout>
 
 ## The HTTP endpoint
@@ -57,7 +67,10 @@ That is the whole setup. With no `config/mcp.ts`, every collection and global is
 `mcpModule` contributes one raw route at the key `mcp`, which resolves to **`/api/mcp`** by file convention. It accepts `POST`, `GET`, `DELETE`, and `OPTIONS`, and boots a stateless Streamable-HTTP MCP transport per request (`sessionIdGenerator` is `undefined`). CORS is added to every response and reflects the request `Origin`.
 
 <Callout type="warn" title='HTTP is always `accessMode: "user"`'>
-  The bundled HTTP route hardcodes `accessMode: "user"`, it always runs under the request's session, and access rules are always evaluated. The `http.accessMode` config field is therefore ignored for this route; it only matters if you mount MCP on your own transport via `createMcpServer`.
+	The bundled HTTP route hardcodes `accessMode: "user"`, it always runs under
+	the request's session, and access rules are always evaluated. The
+	`http.accessMode` config field is therefore ignored for this route; it only
+	matters if you mount MCP on your own transport via `createMcpServer`.
 </Callout>
 
 The route requires a **verified principal** before it dispatches anything: the framework resolves identity onto the request first, and without one, the route answers `401` with a `WWW-Authenticate` header pointing at the OAuth discovery metadata (so an MCP client auto-discovers the authorization server and starts the flow). A principal comes from either a first-party admin cookie/bearer session (`kind: "user"`) or a valid OAuth access token (`kind: "oauth"`). The CORS allow-list already permits `Authorization`, `x-api-key`, and `Mcp-Session-Id` headers. For the full external-agent OAuth flow - registration, consent, scopes - see [MCP over OAuth 2.1](/docs/integrations/mcp-oauth).
@@ -94,26 +107,29 @@ import { route } from "questpie";
 import { z } from "zod";
 
 export default route()
-  .post()
-  .schema(z.object({ startDate: z.string(), endDate: z.string() }))
-  .meta({
-    mcp: {
-      expose: true, // required, without this the route is not an MCP tool
-      name: "reports.revenue", // optional tool name
-      title: "Get revenue stats",
-      description: "Revenue for a date range.",
-      annotations: { readOnlyHint: true },
-    },
-  })
-  .handler(async ({ input, collections }) => {
-    /* ... */
-  });
+	.post()
+	.schema(z.object({ startDate: z.string(), endDate: z.string() }))
+	.meta({
+		mcp: {
+			expose: true, // required, without this the route is not an MCP tool
+			name: "reports.revenue", // optional tool name
+			title: "Get revenue stats",
+			description: "Revenue for a date range.",
+			annotations: { readOnlyHint: true },
+		},
+	})
+	.handler(async ({ input, collections }) => {
+		/* ... */
+	});
 ```
 
 The generated tool name is `meta.mcp.name` if set, otherwise `routes.<sanitized-route-key>` (path separators and brackets collapse to dots). `title` and `description` fall back to the top-level `meta.*`; `annotations` come only from `meta.mcp.annotations`. The tool's input schema is the route's `.schema()`; for routes with path params, the input becomes `{ params: { … }, input: <schema> }`.
 
 <Callout type="info" title="`meta.mcp` is declared on the route, not here">
-  The route exposure shape (`RouteMcpMeta`: `expose`, `name`, `title`, `description`, `annotations`) lives in core and is documented on the [Routes](/docs/concepts/routes) page. It is kept structural so the framework carries no MCP SDK dependency.
+	The route exposure shape (`RouteMcpMeta`: `expose`, `name`, `title`,
+	`description`, `annotations`) lives in core and is documented on the
+	[Routes](/docs/concepts/routes) page. It is kept structural so the framework
+	carries no MCP SDK dependency.
 </Callout>
 
 ### Schema resources
@@ -128,29 +144,29 @@ Create `config/mcp.ts` and default-export `mcpConfig(...)` to tune the surface. 
 import { mcpConfig } from "@questpie/mcp";
 
 export default mcpConfig({
-  name: "acme-cms",
-  version: "1.0.0",
-  crud: {
-    maxLimit: 100,
-    defaults: {
-      collections: { read: true, write: false, delete: false },
-    },
-    collections: {
-      posts: { read: true, write: true }, // allow writes for posts
-      secrets: false, // hide this collection entirely
-      users: {
-        read: true,
-        operations: { delete: false }, // expose reads/writes, never delete
-        fields: { exclude: ["passwordHash"] }, // drop sensitive columns
-      },
-    },
-    globals: {
-      siteSettings: { read: true, write: true },
-    },
-  },
-  routes: {
-    exposeAnnotated: true, // master switch for route tools
-  },
+	name: "acme-cms",
+	version: "1.0.0",
+	crud: {
+		maxLimit: 100,
+		defaults: {
+			collections: { read: true, write: false, delete: false },
+		},
+		collections: {
+			posts: { read: true, write: true }, // allow writes for posts
+			secrets: false, // hide this collection entirely
+			users: {
+				read: true,
+				operations: { delete: false }, // expose reads/writes, never delete
+				fields: { exclude: ["passwordHash"] }, // drop sensitive columns
+			},
+		},
+		globals: {
+			siteSettings: { read: true, write: true },
+		},
+	},
+	routes: {
+		exposeAnnotated: true, // master switch for route tools
+	},
 });
 ```
 
@@ -160,13 +176,13 @@ The full `McpConfig` interface:
 
 ```ts
 interface McpConfig {
-  name?: string; // MCP server name (default "questpie")
-  version?: string; // MCP server version (default "0.0.0")
-  crud?: McpCrudConfig; // collection & global exposure
-  routes?: McpRoutesConfig;
-  resources?: McpResourcesConfig;
-  http?: McpHttpConfig;
-  stdio?: McpStdioConfig;
+	name?: string; // MCP server name (default "questpie")
+	version?: string; // MCP server version (default "0.0.0")
+	crud?: McpCrudConfig; // collection & global exposure
+	routes?: McpRoutesConfig;
+	resources?: McpResourcesConfig;
+	http?: McpHttpConfig;
+	stdio?: McpStdioConfig;
 }
 ```
 
@@ -199,16 +215,16 @@ A collection/global/route entry is either a boolean or an object:
 
 ```ts
 type McpEntityPolicy =
-  | boolean // false = fully hidden; true = use defaults
-  | {
-      expose?: boolean; // false fully hides the entity
-      read?: boolean | McpAccessRule; // read ops (list/count/get)
-      write?: boolean | McpAccessRule; // write ops (create/update)
-      delete?: boolean | McpAccessRule; // delete op
-      operations?: Record<string, boolean | McpAccessRule>; // per-operation override
-      fields?: { include?: string[]; exclude?: string[] }; // column allow/deny list
-      description?: string; // overrides the default tool description
-    };
+	| boolean // false = fully hidden; true = use defaults
+	| {
+			expose?: boolean; // false fully hides the entity
+			read?: boolean | McpAccessRule; // read ops (list/count/get)
+			write?: boolean | McpAccessRule; // write ops (create/update)
+			delete?: boolean | McpAccessRule; // delete op
+			operations?: Record<string, boolean | McpAccessRule>; // per-operation override
+			fields?: { include?: string[]; exclude?: string[] }; // column allow/deny list
+			description?: string; // overrides the default tool description
+	  };
 ```
 
 - Setting the entry to `false` hides the entity completely.
@@ -216,7 +232,10 @@ type McpEntityPolicy =
 - `fields.include` / `fields.exclude` is applied to the CRUD tool's input/output schemas, so excluded columns never appear in tool args or results.
 
 <Callout type="info" title="HTTP defaults are read-only; stdio is full-trust">
-  Per-transport CRUD defaults differ on purpose. Over **HTTP**, collections default to `read: true, write: false, delete: false` and globals to `read: true, write: false`. Over **stdio**, everything defaults `true` (local stdio is trusted). Override per-entity to open writes where you want them.
+	Per-transport CRUD defaults differ on purpose. Over **HTTP**, collections
+	default to `read: true, write: false, delete: false` and globals to `read:
+	true, write: false`. Over **stdio**, everything defaults `true` (local stdio
+	is trusted). Override per-entity to open writes where you want them.
 </Callout>
 
 ### Access rules on tools
@@ -224,13 +243,15 @@ type McpEntityPolicy =
 Anywhere a policy field accepts a rule, you can pass an `McpAccessRule` function:
 
 ```ts
-type McpAccessRule = boolean | ((ctx: McpAccessRuleContext) => boolean | Promise<boolean>);
+type McpAccessRule =
+	| boolean
+	| ((ctx: McpAccessRuleContext) => boolean | Promise<boolean>);
 
 interface McpAccessRuleContext {
-  transport: "http" | "stdio";
-  accessMode: "user" | "system";
-  session?: RequestContext["session"]; // the resolved request session, when present
-  ctx: AppContext & Partial<RequestContext>;
+	transport: "http" | "stdio";
+	accessMode: "user" | "system";
+	session?: RequestContext["session"]; // the resolved request session, when present
+	ctx: AppContext & Partial<RequestContext>;
 }
 ```
 
@@ -245,9 +266,17 @@ collections: {
 }
 ```
 
-<Callout type="info" title="MCP rules layer on top of `.access()`, they don't replace it">
-  An undefined rule evaluates to `true` at the MCP layer, but the collection/global `.access()` rules still run for the connecting user (unless `accessMode` is `"system"`). The MCP policy decides *what is reachable via MCP at all*; your access rules decide *what this user may do*. For OAuth callers, a per-user
-  **scope** gate narrows further still (`scopes ∩ RBAC`) - see [MCP over OAuth 2.1](/docs/integrations/mcp-oauth). See [Access control](/docs/concepts/access-control).
+<Callout
+	type="info"
+	title="MCP rules layer on top of `.access()`, they don't replace it"
+>
+	An undefined rule evaluates to `true` at the MCP layer, but the
+	collection/global `.access()` rules still run for the connecting user (unless
+	`accessMode` is `"system"`). The MCP policy decides *what is reachable via MCP
+	at all*; your access rules decide *what this user may do*. For OAuth callers,
+	a per-user **scope** gate narrows further still (`scopes ∩ RBAC`) - see [MCP
+	over OAuth 2.1](/docs/integrations/mcp-oauth). See [Access
+	control](/docs/concepts/access-control).
 </Callout>
 
 ## Custom tools
@@ -259,17 +288,17 @@ import { mcpTool } from "@questpie/mcp";
 import { z } from "zod";
 
 export default mcpTool("recalculate-stats", {
-  description: "Recompute cached site statistics.",
-  inputSchema: z.object({ since: z.string().optional() }),
-  outputSchema: z.object({ updated: z.number() }),
-  annotations: { idempotentHint: true },
-  access: ({ session }) => session?.user?.role === "admin",
+	description: "Recompute cached site statistics.",
+	inputSchema: z.object({ since: z.string().optional() }),
+	outputSchema: z.object({ updated: z.number() }),
+	annotations: { idempotentHint: true },
+	access: ({ session }) => session?.user?.role === "admin",
 }).handler(async ({ input, ctx, transport }) => {
-  const updated = await ctx.services.stats.recompute(input.since);
-  return {
-    structuredContent: { updated },
-    content: [{ type: "text", text: `Updated ${updated} rows.` }],
-  };
+	const updated = await ctx.services.stats.recompute(input.since);
+	return {
+		structuredContent: { updated },
+		content: [{ type: "text", text: `Updated ${updated} rows.` }],
+	};
 });
 ```
 
@@ -337,15 +366,15 @@ Import the config and tool types from the package root:
 
 ```ts
 import type {
-  McpConfig,
-  McpEntityPolicy,
-  McpAccessRule,
-  McpAccessRuleContext,
-  McpToolConfig,
-  McpToolHandlerArgs,
-  McpToolDefinition,
-  McpTransportKind, // "http" | "stdio"
-  McpAccessMode, // "user" | "system"
+	McpConfig,
+	McpEntityPolicy,
+	McpAccessRule,
+	McpAccessRuleContext,
+	McpToolConfig,
+	McpToolHandlerArgs,
+	McpToolDefinition,
+	McpTransportKind, // "http" | "stdio"
+	McpAccessMode, // "user" | "system"
 } from "@questpie/mcp";
 ```
 
@@ -353,21 +382,38 @@ import type {
 
 ## Gotchas & footguns
 
-<Callout type="warn" title="A collection is exposed read-only over HTTP until you opt into writes">
-  The HTTP default is `read: true, write: false, delete: false`. If a client can't create or update a record, that is the default, open `write`/`delete` per collection in `config/mcp.ts`.
+<Callout
+	type="warn"
+	title="A collection is exposed read-only over HTTP until you opt into writes"
+>
+	The HTTP default is `read: true, write: false, delete: false`. If a client
+	can't create or update a record, that is the default, open `write`/`delete`
+	per collection in `config/mcp.ts`.
 </Callout>
 
-<Callout type="warn" title="A route is never an MCP tool unless `meta.mcp.expose === true`">
-  `routes.exposeAnnotated: true` permits route exposure, and each route opts in through its own metadata. Set `exposeAnnotated: false` to disable route tools entirely.
+<Callout
+	type="warn"
+	title="A route is never an MCP tool unless `meta.mcp.expose === true`"
+>
+	`routes.exposeAnnotated: true` permits route exposure, and each route opts in
+	through its own metadata. Set `exposeAnnotated: false` to disable route tools
+	entirely.
 </Callout>
 
 <Callout type="info" title="`fields.exclude` is the way to hide sensitive columns">
 CRUD tools mirror your collection's columns. Use `fields: { exclude: [...] }` (or `include`) on the entity policy to keep secrets out of tool args and results, relying on the model not to ask for a column is not protection.
 </Callout>
 
-<Callout type="warn" title="stdio's default `system` mode bypasses your `.access()` RBAC">
-  `startStdioServer` runs as `"system"` by default, so the collection/global `.access()` RBAC rules are skipped. The MCP policy gate (`expose`, config rules, custom-tool `access`) still applies, but with no `config/mcp.ts` the policy defaults are all-permissive, so effectively every operation is reachable. Only run it
-  as a trusted local process, or set `stdio.accessMode: "user"`.
+<Callout
+	type="warn"
+	title="stdio's default `system` mode bypasses your `.access()` RBAC"
+>
+	`startStdioServer` runs as `"system"` by default, so the collection/global
+	`.access()` RBAC rules are skipped. The MCP policy gate (`expose`, config
+	rules, custom-tool `access`) still applies, but with no `config/mcp.ts` the
+	policy defaults are all-permissive, so effectively every operation is
+	reachable. Only run it as a trusted local process, or set `stdio.accessMode:
+	"user"`.
 </Callout>
 
 ## Related

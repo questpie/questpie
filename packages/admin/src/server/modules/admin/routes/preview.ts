@@ -10,14 +10,10 @@
 import { ApiError, route } from "questpie";
 import { z } from "zod";
 
-import type { PreviewConfig } from "../../../augmentation.js";
+import type { PreviewConfig } from "../../../augmentation/index.js";
 import { hasAdminRole } from "../auth-helpers.js";
 import { translateAdminMessage } from "./i18n-helpers.js";
-import {
-	getApp,
-	getCollectionState,
-	getLocale,
-} from "./route-helpers.js";
+import { getApp, getCollectionState, getLocale } from "./route-helpers.js";
 
 // ============================================================================
 // Token Utilities

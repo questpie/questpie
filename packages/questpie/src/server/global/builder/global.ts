@@ -373,6 +373,7 @@ export class Global<TState extends GlobalBuilderState> {
 				state.name,
 				mainFields,
 				localizedFields,
+				{ fieldDefinitions: state.fieldDefinitions },
 			) as any;
 		}
 

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
-import { ApiError } from "../../src/server/errors/index.js";
 import { collection } from "../../src/exports/index.js";
+import { ApiError } from "../../src/server/errors/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";

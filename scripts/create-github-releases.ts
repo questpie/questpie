@@ -52,7 +52,10 @@ function extractReleaseNotes(
 		}
 	}
 
-	const notes = lines.slice(start + 1, end).join("\n").trim();
+	const notes = lines
+		.slice(start + 1, end)
+		.join("\n")
+		.trim();
 	return notes || fallback;
 }
 

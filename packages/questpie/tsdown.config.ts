@@ -4,7 +4,11 @@ export default defineConfig({
 	// Public package entrypoints are declared here. Keep optional/heavy adapter
 	// entrypoints under src/exports/adapters/* so they compile to
 	// questpie/adapters/<name> instead of expanding the root barrel.
-	entry: ["src/exports/*.ts", "src/exports/adapters/*.ts", "src/exports/modules/*.ts"],
+	entry: [
+		"src/exports/*.ts",
+		"src/exports/adapters/*.ts",
+		"src/exports/modules/*.ts",
+	],
 	outDir: "dist",
 	format: ["esm"],
 	clean: true,

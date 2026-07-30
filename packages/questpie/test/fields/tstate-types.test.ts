@@ -12,11 +12,11 @@ import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
 import { createFieldBuilder } from "#questpie/server/fields/builder.js";
-import { builtinFields } from "#questpie/server/modules/core/fields/index.js";
 import type {
 	ExtractInputType,
 	ExtractSelectType,
 } from "#questpie/server/fields/field-class-types.js";
+import { builtinFields } from "#questpie/server/modules/core/fields/index.js";
 
 // Create callable proxy from plain field defs
 const f = createFieldBuilder(builtinFields);

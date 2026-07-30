@@ -8,10 +8,6 @@
  */
 
 const KNOWN = new Map<string, string>([
-	// h3 middleware bypass — still present via @tanstack/start-server-core's
-	// h3-v2@2.0.0-beta.4 (aliased import). Clears when react-start is bumped
-	// from 1.136.x to 1.167.42+ across the monorepo (planned follow-up PR).
-	["GHSA-3vj8-jmxq-cgj5", "TODO: @tanstack/react-start bump PR"],
 	// esbuild RCE via missing binary integrity check on the *Deno* module's
 	// NPM_CONFIG_REGISTRY download path — unused here (Bun/Node monorepo, no Deno
 	// install). Fixed in esbuild 0.28.1, but a global override is blocked by
@@ -20,20 +16,6 @@ const KNOWN = new Map<string, string>([
 	[
 		"GHSA-gv7w-rqvm-qjhr",
 		"TODO: override esbuild>=0.28.1 once drizzle-kit/tsx/fumadocs/vite7 widen ranges",
-	],
-	// hono CORS middleware reflects any Origin with credentials when `origin`
-	// defaults to the wildcard. @questpie/hono does NOT use hono's cors()
-	// middleware, so this is not exploitable via the adapter. Clears when hono
-	// is bumped >=4.12.25 (dep-hygiene follow-up PR).
-	[
-		"GHSA-88fw-hqm2-52qc",
-		"TODO: bump hono>=4.12.25 (dep-hygiene PR; @questpie/hono doesn't use hono cors())",
-	],
-	// vite `server.fs.deny` bypass via Windows alternate paths — dev-server-only,
-	// Windows-only. Clears when vite is bumped >=7.3.5 / >=8.0.16 (dep-hygiene PR).
-	[
-		"GHSA-fx2h-pf6j-xcff",
-		"TODO: bump vite>=8.0.16 / >=7.3.5 (dep-hygiene PR; dev-server-only, Windows-only)",
 	],
 ]);
 

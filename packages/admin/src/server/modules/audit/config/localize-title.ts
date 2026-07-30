@@ -1,5 +1,6 @@
 import {
 	type I18nText,
+	interpolate,
 	isI18nTranslationKey,
 	resolveI18nText,
 } from "questpie/shared";
@@ -52,13 +53,6 @@ function resolveLabel(
 	return resolveI18nText(label, locale, t);
 }
 
-function interpolate(template: string, values: Record<string, string>): string {
-	return template.replace(
-		/\{\{\s*(\w+)\s*\}\}/g,
-		(_m, k) => values[k] ?? `{{${k}}}`,
-	);
-}
-
 /**
  * Recompute the audit log title in the viewer's locale.
  * Returns null when no locale is provided so the caller can keep the stored value.
@@ -78,7 +72,8 @@ export function localizeAuditTitle(
 	const resource = String(data.resource ?? "");
 	const userName = String(data.userName ?? "");
 
-	const actionText = lookupMessage(messages, `audit.action.${action}`) ?? action;
+	const actionText =
+		lookupMessage(messages, `audit.action.${action}`) ?? action;
 	const resourceTypeText =
 		lookupMessage(messages, `audit.resourceType.${resourceType}`) ??
 		resourceType;

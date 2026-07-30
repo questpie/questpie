@@ -12,11 +12,11 @@ import { describe, expect, test } from "bun:test";
 import {
 	block,
 	BlockBuilder,
-} from "#questpie/admin/server/block/block-builder.js";
+} from "#questpie/admin/server/modules/admin/block/block-builder.js";
 import {
 	introspectBlock,
 	introspectBlocks,
-} from "#questpie/admin/server/block/introspection.js";
+} from "#questpie/admin/server/modules/admin/block/introspection.js";
 
 // ============================================================================
 // BlockBuilder.form()
@@ -180,8 +180,8 @@ describe("Block introspection — form layout", () => {
 		expect(schema.name).toBe("hero");
 		expect(schema.form).toBeDefined();
 		expect(schema.form?.fields).toHaveLength(1);
-		expect((schema.form?.fields[0] as any).type).toBe("section");
-		expect((schema.form?.fields[0] as any).fields).toEqual([
+		expect((schema.form?.fields?.[0] as any)?.type).toBe("section");
+		expect((schema.form?.fields?.[0] as any)?.fields).toEqual([
 			"title",
 			"subtitle",
 		]);

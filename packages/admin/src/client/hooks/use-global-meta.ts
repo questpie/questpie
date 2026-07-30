@@ -13,14 +13,11 @@ import {
 	useQuery,
 	useSuspenseQuery,
 } from "@tanstack/react-query";
-import type { Questpie } from "questpie";
 import type { GlobalMeta } from "questpie/client";
 
-import type { RegisteredCMS, RegisteredGlobalNames } from "../builder/registry";
 import { selectClient, useAdminStore } from "../runtime";
 
-type ResolvedGlobalNames =
-	RegisteredCMS extends Questpie<any> ? RegisteredGlobalNames : string;
+type ResolvedGlobalNames = string;
 
 /**
  * Hook to fetch global metadata from the backend

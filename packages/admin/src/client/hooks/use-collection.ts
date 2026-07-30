@@ -4,16 +4,11 @@ import {
 	useMutation,
 	useQuery,
 } from "@tanstack/react-query";
-import type { Questpie } from "questpie";
 import { useEffect } from "react";
 
 import { buildCollectionTopic } from "@questpie/tanstack-query";
 
 import type { AnyQuestpieClient } from "../builder";
-import type {
-	RegisteredCMS,
-	RegisteredCollectionNames,
-} from "../builder/registry";
 import { subscribeAdminCollectionRealtime } from "./realtime-subscription";
 import { useQuestpieQueryOptions } from "./use-questpie-query-options";
 
@@ -61,13 +56,11 @@ function useCollectionRealtimeInvalidation({
 /**
  * Resolved app type (Questpie<any> if not registered)
  */
-type ResolvedCMS = RegisteredCMS extends Questpie<any> ? RegisteredCMS : any;
 
 /**
  * Resolved collection names (string if not registered)
  */
-type ResolvedCollectionNames =
-	RegisteredCMS extends Questpie<any> ? RegisteredCollectionNames : string;
+type ResolvedCollectionNames = string;
 
 type CollectionDeleteMany<K extends string> =
 	AnyQuestpieClient["collections"][K]["deleteMany"];
@@ -93,7 +86,8 @@ type CollectionDeleteManyOptions<K extends string> = Omit<
 /**
  * Hook to fetch collection list with filters, sorting, pagination
  *
- * Uses RegisteredCMS from module augmentation for automatic type inference.
+ * Collection and global names are plain strings — the module-augmentation
+ * registry that once narrowed them was never reachable by users.
  *
  * @example
  * ```tsx
@@ -200,7 +194,8 @@ export function useCollectionCount<K extends ResolvedCollectionNames>(
 /**
  * Hook to fetch single collection item
  *
- * Uses RegisteredCMS from module augmentation for automatic type inference.
+ * Collection and global names are plain strings — the module-augmentation
+ * registry that once narrowed them was never reachable by users.
  *
  * @example
  * ```tsx
@@ -243,7 +238,8 @@ export function useCollectionItem<K extends ResolvedCollectionNames>(
 /**
  * Hook to create collection item
  *
- * Uses RegisteredCMS from module augmentation for automatic type inference.
+ * Collection and global names are plain strings — the module-augmentation
+ * registry that once narrowed them was never reachable by users.
  *
  * @example
  * ```tsx
@@ -295,7 +291,8 @@ export function useCollectionCreate<K extends ResolvedCollectionNames>(
 /**
  * Hook to update collection item
  *
- * Uses RegisteredCMS from module augmentation for automatic type inference.
+ * Collection and global names are plain strings — the module-augmentation
+ * registry that once narrowed them was never reachable by users.
  *
  * @example
  * ```tsx
@@ -402,7 +399,8 @@ export function useCollectionUpdateBatch<K extends ResolvedCollectionNames>(
 /**
  * Hook to delete collection item
  *
- * Uses RegisteredCMS from module augmentation for automatic type inference.
+ * Collection and global names are plain strings — the module-augmentation
+ * registry that once narrowed them was never reachable by users.
  *
  * @example
  * ```tsx

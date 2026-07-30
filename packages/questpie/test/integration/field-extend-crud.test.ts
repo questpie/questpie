@@ -112,7 +112,9 @@ describe("field extension through CRUD", () => {
 			{ where: { id: w.id }, data: { settings: { theme: "dark" } } },
 			ctx,
 		);
-		expect((updated as any)[0]?.settings?.theme ?? (updated as any).settings?.theme).toBe("dark");
+		expect(
+			(updated as any)[0]?.settings?.theme ?? (updated as any).settings?.theme,
+		).toBe("dark");
 	});
 
 	it("replaced field schema validates (admin/OpenAPI surface)", () => {

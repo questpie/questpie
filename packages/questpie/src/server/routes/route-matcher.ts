@@ -53,9 +53,7 @@ function createNode<T>(): TrieNode<T> {
 }
 
 /** Parse a segment into its kind and name. */
-function parseSegment(
-	seg: string,
-): { kind: SegmentKind; name: string } {
+function parseSegment(seg: string): { kind: SegmentKind; name: string } {
 	if (seg.startsWith(":")) {
 		return { kind: SegmentKind.Param, name: seg.slice(1) };
 	}
@@ -162,10 +160,7 @@ export class RouteCollisionError extends Error {
  * @throws RouteCollisionError if two patterns with the same method are ambiguous
  */
 export function compileMatcher<T>(
-	routes:
-		| Map<string, T>
-		| [string, T][]
-		| [string, string, T][],
+	routes: Map<string, T> | [string, T][] | [string, string, T][],
 ): RouteMatcher<T> {
 	const root = createNode<T>();
 
@@ -240,11 +235,7 @@ export function compileMatcher<T>(
 					node.wildcard = { name, methods: new Map(), pattern };
 				}
 				if (node.wildcard.methods.has(method)) {
-					throw new RouteCollisionError(
-						node.wildcard.pattern,
-						pattern,
-						method,
-					);
+					throw new RouteCollisionError(node.wildcard.pattern, pattern, method);
 				}
 				node.wildcard.methods.set(method, handler);
 				break; // Wildcard consumes rest
@@ -271,11 +262,7 @@ export function compileMatcher<T>(
 					node.terminal = { methods: new Map(), pattern };
 				}
 				if (node.terminal.methods.has(method)) {
-					throw new RouteCollisionError(
-						node.terminal.pattern,
-						pattern,
-						method,
-					);
+					throw new RouteCollisionError(node.terminal.pattern, pattern, method);
 				}
 				node.terminal.methods.set(method, handler);
 			}
@@ -336,12 +323,10 @@ export class RouteMatcher<T> {
 
 		// 2. Try param child
 		if (node.param) {
-			const result = this._match(
-				node.param.child,
-				segments,
-				idx + 1,
-				{ ...params, [node.param.name]: seg },
-			);
+			const result = this._match(node.param.child, segments, idx + 1, {
+				...params,
+				[node.param.name]: seg,
+			});
 			if (result) return result;
 		}
 

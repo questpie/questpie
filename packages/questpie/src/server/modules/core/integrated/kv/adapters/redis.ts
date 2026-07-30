@@ -145,9 +145,7 @@ export class RedisKVAdapter implements KVAdapter {
 		value: unknown,
 		ttl?: number,
 	): Promise<void> {
-		await client.set(storageKey, this.serialize(value), {
-			...(ttl ? { EX: ttl } : {}),
-		});
+		await client.set(storageKey, this.serialize(value), ttl ? { EX: ttl } : {});
 	}
 
 	private serialize(value: unknown): string {

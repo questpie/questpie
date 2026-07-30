@@ -17,12 +17,12 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { collection, isReactivePropPlaceholder } from "questpie";
 
-import { reactiveFunctions } from "../../src/server/modules/admin/routes/reactive.js";
-import { buildServerContext } from "../../src/server/modules/admin/routes/route-helpers.js";
 import { introspectCollection } from "../../../questpie/src/server/collection/introspection.js";
 import { buildMockApp } from "../../../questpie/test/utils/mocks/mock-app-builder.js";
 import { createTestContext } from "../../../questpie/test/utils/test-context.js";
 import { runTestDbMigrations } from "../../../questpie/test/utils/test-db.js";
+import { reactiveFunctions } from "../../src/server/modules/admin/routes/reactive.js";
+import { buildServerContext } from "../../src/server/modules/admin/routes/route-helpers.js";
 
 const users = collection("users").fields(({ f }) => ({
 	name: f.text().required(),
@@ -40,14 +40,12 @@ const advice_threads = collection("advice_threads")
 		// Field-level admin meta — filter as a function. Should be picked
 		// up by the introspection walker AND by the reactive endpoint when
 		// no layout-level override exists.
-		counselorId: f
-			.relation("users")
-			.set("admin", {
-				filter: ({ data }: any) => ({
-					team: data.team,
-					role: "field-default",
-				}),
+		counselorId: f.relation("users").set("admin", {
+			filter: ({ data }: any) => ({
+				team: data.team,
+				role: "field-default",
 			}),
+		}),
 		mentorId: f.relation("users"),
 		// A field with NO admin filter — used to verify the layout override
 		// path independently of any field-level config.
@@ -125,9 +123,7 @@ describe("/admin/reactive — prop type", () => {
 				collection: "advice_threads",
 				type: "collection",
 				formData: { team: "blue" },
-				requests: [
-					{ field: "counselorId", type: "prop", propPath: "filter" },
-				],
+				requests: [{ field: "counselorId", type: "prop", propPath: "filter" }],
 			}),
 		);
 
@@ -153,11 +149,9 @@ describe("/admin/reactive — prop type", () => {
 			role: f.text(),
 		}));
 		const fieldOnlyThreads = collection("threads").fields(({ f }) => ({
-			authorId: f
-				.relation("users")
-				.set("admin", {
-					filter: ({ data }: any) => ({ scope: data.subject ?? "default" }),
-				}),
+			authorId: f.relation("users").set("admin", {
+				filter: ({ data }: any) => ({ scope: data.subject ?? "default" }),
+			}),
 			subject: f.text(),
 		}));
 
@@ -189,9 +183,7 @@ describe("/admin/reactive — prop type", () => {
 				collection: "advice_threads",
 				type: "collection",
 				formData: { team: "purple" },
-				requests: [
-					{ field: "counselorId", type: "prop", propPath: "filter" },
-				],
+				requests: [{ field: "counselorId", type: "prop", propPath: "filter" }],
 			}),
 		);
 
@@ -208,9 +200,7 @@ describe("/admin/reactive — prop type", () => {
 				collection: "advice_threads",
 				type: "collection",
 				formData: {},
-				requests: [
-					{ field: "reviewerId", type: "prop", propPath: "filter" },
-				],
+				requests: [{ field: "reviewerId", type: "prop", propPath: "filter" }],
 			}),
 		);
 
@@ -225,9 +215,7 @@ describe("/admin/reactive — prop type", () => {
 				collection: "advice_threads",
 				type: "collection",
 				formData: { team: "red" },
-				requests: [
-					{ field: "mentorId", type: "prop", propPath: "filter" },
-				],
+				requests: [{ field: "mentorId", type: "prop", propPath: "filter" }],
 			}),
 		);
 
@@ -274,8 +262,7 @@ describe("/admin/reactive — prop type", () => {
 
 	it("introspection emits ReactivePropPlaceholder in place of function-valued layout props", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
-		const collectionDef = (setup.app as any).getCollections()
-			.advice_threads;
+		const collectionDef = (setup.app as any).getCollections().advice_threads;
 		const schema = await introspectCollection(
 			collectionDef,
 			{ session: ctx.session, db: setup.app.db, locale: "en" },
@@ -305,8 +292,7 @@ describe("/admin/reactive — prop type", () => {
 
 	it("introspection emits ReactivePropPlaceholder in place of function-valued field-level admin meta", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
-		const collectionDef = (setup.app as any).getCollections()
-			.advice_threads;
+		const collectionDef = (setup.app as any).getCollections().advice_threads;
 		const schema = await introspectCollection(
 			collectionDef,
 			{ session: ctx.session, db: setup.app.db, locale: "en" },
@@ -315,8 +301,7 @@ describe("/admin/reactive — prop type", () => {
 
 		// Field-level `.set("admin", { filter: fn })` lands on
 		// `metadata.meta.filter` — should now be a placeholder.
-		const counselorMeta = (schema as any).fields?.counselorId?.metadata
-			?.meta;
+		const counselorMeta = (schema as any).fields?.counselorId?.metadata?.meta;
 		expect(counselorMeta).toBeDefined();
 		expect(isReactivePropPlaceholder(counselorMeta.filter)).toBe(true);
 		expect(counselorMeta.filter.watch).toContain("team");
@@ -340,9 +325,7 @@ describe("/admin/reactive — prop type", () => {
 
 		expect(result.results).toHaveLength(2);
 		const propResult = result.results.find((r: any) => r.type === "prop");
-		const computeResult = result.results.find(
-			(r: any) => r.type === "compute",
-		);
+		const computeResult = result.results.find((r: any) => r.type === "compute");
 		expect(propResult?.value).toEqual({ team: "green", role: "admin" });
 		expect(computeResult?.error).toContain("compute handler");
 	});

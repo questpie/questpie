@@ -4,7 +4,7 @@
  * POST /search/reindex/:collection
  */
 
-import { createSearchRoutes } from "#questpie/server/adapters/routes/search.js";
+import { searchReindex } from "#questpie/server/adapters/routes/search.js";
 import { route } from "#questpie/server/routes/define-route.js";
 import { routeApp } from "#questpie/server/routes/route-app.js";
 
@@ -14,8 +14,13 @@ export default route()
 	.handler(async (ctx) => {
 		const { request, params } = ctx;
 		const app = routeApp(ctx);
-		const routes = createSearchRoutes(app, (app as any)._adapterConfig);
-		return routes.reindex(request, {
-			collection: params.collection,
-		});
+		// This route is the only one that fed the factory a config, so the
+		// config has to be threaded explicitly rather than left to default.
+		return searchReindex(
+			app,
+			request,
+			{ collection: params.collection },
+			undefined,
+			(app as any)._adapterConfig,
+		);
 	});

@@ -48,10 +48,15 @@
  * `GlobalSelect/Insert/Update` helpers (the exact surface the findings reference).
  */
 
-import type { Equal, Expect, ExpectArray, NoAny, NoNever } from "../_assert.js";
-import { articles, siteGlobal, tickets } from "../_fixtures.js";
-
 import { collection } from "#questpie/server/collection/builder/collection-builder.js";
+// Cross-check the underlying field-state extractors directly so the failure is
+// pinned to the `ArrayFieldState` carry-over, not only to the downstream
+// collection/global composition.
+import type {
+	ExtractInputType,
+	ExtractSelectType,
+	FieldState,
+} from "#questpie/server/fields/field-class-types.js";
 import type {
 	CollectionInsert,
 	CollectionSelect,
@@ -61,14 +66,8 @@ import type {
 	GlobalUpdate,
 } from "#questpie/shared/type-utils.js";
 
-// Cross-check the underlying field-state extractors directly so the failure is
-// pinned to the `ArrayFieldState` carry-over, not only to the downstream
-// collection/global composition.
-import type {
-	ExtractInputType,
-	ExtractSelectType,
-	FieldState,
-} from "#questpie/server/fields/field-class-types.js";
+import type { Equal, Expect, ExpectArray, NoAny, NoNever } from "../_assert.js";
+import { articles, siteGlobal, tickets } from "../_fixtures.js";
 
 // ============================================================================
 // Resolved fixture I/O shapes (1-arg public helpers — the findings' surface).
@@ -155,7 +154,9 @@ type _defTagsInsertElem = Expect<
 // The fix must NOT over-correct optional arrays into non-null.
 // ============================================================================
 
-type _optTagsSelectExact = Expect<Equal<ArticlesSelect["optTags"], string[] | null>>;
+type _optTagsSelectExact = Expect<
+	Equal<ArticlesSelect["optTags"], string[] | null>
+>;
 type _optTagsInsertOptional = Expect<
 	Equal<undefined extends ArticlesInsert["optTags"] ? true : false, true>
 >;
@@ -195,9 +196,13 @@ type OrderInsert = CollectionInsert<typeof orderProbe>;
 
 // Order-independence: both required orderings produce the SAME type, and it is
 // the non-null `string[]` (not `string[] | null`).
-type _orderSelectSame = Expect<Equal<OrderSelect["reqThenArr"], OrderSelect["arrThenReq"]>>;
+type _orderSelectSame = Expect<
+	Equal<OrderSelect["reqThenArr"], OrderSelect["arrThenReq"]>
+>;
 type _orderSelectNonNull = Expect<Equal<OrderSelect["reqThenArr"], string[]>>;
-type _orderArrThenReqNonNull = Expect<Equal<OrderSelect["arrThenReq"], string[]>>;
+type _orderArrThenReqNonNull = Expect<
+	Equal<OrderSelect["arrThenReq"], string[]>
+>;
 
 // Both required orderings are REQUIRED on insert, identically.
 type _orderInsertReqThenArr = Expect<
@@ -221,7 +226,9 @@ type _defThenArrInsertOptional = Expect<
 // just the downstream collection composition.
 // ============================================================================
 
-type StateOf<F> = F extends { readonly _: infer S extends FieldState } ? S : never;
+type StateOf<F> = F extends { readonly _: infer S extends FieldState }
+	? S
+	: never;
 
 // `.fields()` stores the raw `Field<TState>` defs under `state.fieldDefinitions`
 // (NOT `state.fields`, which holds the column-extracted shapes, and there is no
@@ -243,8 +250,12 @@ type _defTagsStateHasDefault = Expect<
 >;
 
 // Extractors over those states yield the corrected I/O directly.
-type _tagListExtractSelect = Expect<Equal<ExtractSelectType<TagListState>, string[]>>;
-type _tagListExtractInput = Expect<Equal<ExtractInputType<TagListState>, string[]>>;
+type _tagListExtractSelect = Expect<
+	Equal<ExtractSelectType<TagListState>, string[]>
+>;
+type _tagListExtractInput = Expect<
+	Equal<ExtractInputType<TagListState>, string[]>
+>;
 // Optional-array control through the extractor: select stays nullable.
 type _optTagsExtractSelect = Expect<
 	Equal<ExtractSelectType<OptTagsState>, string[] | null>
@@ -259,7 +270,9 @@ type _optTagsExtractSelect = Expect<
 
 type _featureFlagsSelectNoAny = Expect<NoAny<SiteSelect["featureFlags"]>>;
 type _featureFlagsSelectNoNever = Expect<NoNever<SiteSelect["featureFlags"]>>;
-type _featureFlagsSelectExact = Expect<Equal<SiteSelect["featureFlags"], string[]>>;
+type _featureFlagsSelectExact = Expect<
+	Equal<SiteSelect["featureFlags"], string[]>
+>;
 
 // ============================================================================
 // CL-08.I — GLOBALS WRITE: INSERT/UPDATE target (caveat 1+2 — DE-SCOPED, RED).
@@ -274,7 +287,9 @@ type _featureFlagsInsertRequired = Expect<
 	Equal<undefined extends SiteInsert["featureFlags"] ? true : false, false>
 >;
 // EXACT write target: non-null `string[]`.
-type _featureFlagsInsertExact = Expect<Equal<SiteInsert["featureFlags"], string[]>>;
+type _featureFlagsInsertExact = Expect<
+	Equal<SiteInsert["featureFlags"], string[]>
+>;
 type _featureFlagsInsertNoAny = Expect<NoAny<SiteInsert["featureFlags"]>>;
 
 // UPDATE is `Partial`, so the key is optional — but, once present, its value

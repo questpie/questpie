@@ -10,7 +10,11 @@
 import { Icon } from "@iconify/react";
 import { Controller } from "react-hook-form";
 
-import { field, FieldWrapper, useResolvedControl } from "@questpie/admin/client";
+import {
+	field,
+	FieldWrapper,
+	useResolvedControl,
+} from "@questpie/admin/client";
 
 /** A small, pleasant default palette; the native picker covers everything else. */
 const PRESETS = [
@@ -73,8 +77,7 @@ function ColorSwatchField({
 					>
 						<div className="flex flex-wrap items-center gap-1.5">
 							{PRESETS.map((preset) => {
-								const isSelected =
-									value.toLowerCase() === preset.toLowerCase();
+								const isSelected = value.toLowerCase() === preset.toLowerCase();
 								return (
 									<button
 										key={preset}
@@ -119,7 +122,7 @@ function ColorSwatchField({
 							</label>
 
 							{value && (
-								<span className="text-muted-foreground font-chrome ml-1 text-xs tabular-nums uppercase">
+								<span className="text-muted-foreground font-chrome ml-1 text-xs uppercase tabular-nums">
 									{value}
 								</span>
 							)}
@@ -141,7 +144,9 @@ function ColorSwatchCell({ value }: { value: unknown }) {
 				className="border-border size-3.5 shrink-0 rounded-full border"
 				style={{ backgroundColor: value }}
 			/>
-			<span className="font-chrome text-xs tabular-nums uppercase">{value}</span>
+			<span className="font-chrome text-xs uppercase tabular-nums">
+				{value}
+			</span>
 		</span>
 	);
 }

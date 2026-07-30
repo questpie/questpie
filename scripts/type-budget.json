@@ -1,22 +1,22 @@
 {
-	"$comment": "Type-perf budget (deterministic tsc metrics). Regenerate with `bun run scripts/type-budget.ts --update` and review the diff — never hand-edit. Gate: instantiations >10% over budget fails CI.",
+	"$comment": "Type-perf budget (deterministic tsc metrics). Regenerate with `bun run scripts/type-budget.ts --update` and review the diff \u2014 never hand-edit. Gate: instantiations >3% over budget fails CI. NOTE: a package target measures its OWN tsconfig, which includes its type tests \u2014 packages/questpie jumped +7.9% on 2026-07-29 purely from adding test/types/field-inference.test-d.ts (286,129 instantiations for that one file; removing it returns the number to baseline exactly). Test cost is not framework cost and users never typecheck our tests, so when this target moves, check whether a test file was added before hunting a regression. The three example targets are the user-facing signal.",
 	"tsVersion": "5.9.2",
 	"targets": {
 		"packages/questpie": {
-			"types": 837864,
-			"instantiations": 4686879
+			"types": 491764,
+			"instantiations": 1754033
 		},
 		"examples/toy-factory-backend": {
-			"types": 1229669,
-			"instantiations": 6871879
+			"types": 771500,
+			"instantiations": 2792488
 		},
 		"examples/tanstack-barbershop": {
-			"types": 1540569,
-			"instantiations": 8681707
+			"types": 1016832,
+			"instantiations": 3580243
 		},
 		"examples/city-portal": {
-			"types": 1337838,
-			"instantiations": 7631854
+			"types": 853126,
+			"instantiations": 2943876
 		}
 	}
 }

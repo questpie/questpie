@@ -1,5 +1,5 @@
-import { service } from "#questpie/server/services/define-service.js";
 import { LoggerService } from "#questpie/server/modules/core/integrated/logger/service.js";
+import { service } from "#questpie/server/services/define-service.js";
 
 /**
  * Logger service — creates the LoggerService from app config.

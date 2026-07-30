@@ -38,6 +38,19 @@ export interface BuildColumnsOptions {
 	 * When provided, uses title.fieldName instead of _title
 	 */
 	meta?: CollectionMeta;
+
+	/**
+	 * Component registry, used to resolve a field's
+	 * `.admin({ components: { cell } })` slot to a component.
+	 *
+	 * Optional: without it the cell falls back to the by-type component from
+	 * the field registry, which is what happens everywhere that has no registry
+	 * in scope.
+	 */
+	registry?: {
+		custom?: Record<string, unknown>;
+		fields?: Record<string, unknown>;
+	};
 }
 
 /**

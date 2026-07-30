@@ -69,37 +69,23 @@ files (blocks, views, components, etc.) and exports a plain config object.
 ```typescript
 // admin/admin.ts — re-exports the generated config
 export { default as admin } from "./.generated/client";
-
-// admin/hooks.ts — typed hooks with module augmentation
-import type { App } from "#questpie";
-import type { admin } from "./admin";
-
-declare module "@questpie/admin/client" {
-	interface AdminTypeRegistry {
-		app: App;
-		admin: typeof admin;
-	}
-}
 ```
 
-## Benefits
+## Admin hook typing
 
-### Before (explicit generics)
-
-```typescript
-// Every hook needed explicit type parameters
-const { data } = useCollectionList<App, "barbers">("barbers");
-const { client } = useAdminContext<App>();
-```
-
-### After (module augmentation)
+Admin hooks are not app-type-aware. `useCollectionList("barbers")` takes a
+plain `string` and returns `any`:
 
 ```typescript
-// Types are automatically inferred!
 const { data } = useCollectionList("barbers");
-const { client } = useAdminContext();
-// client.collections.barbers.find() - fully typed!
+// data is `any` — annotate at the call site if you want checking
 ```
+
+This file used to show an `AdminTypeRegistry` module augmentation and claim the
+types were "automatically inferred". They were not: the interface was never
+exported from `@questpie/admin`, so the `declare module` block above resolved
+to nothing and every hook stayed loosely typed. The registry has since been
+removed. See `packages/admin/src/client/hooks/README.md` for the full account.
 
 ## Server vs Admin
 

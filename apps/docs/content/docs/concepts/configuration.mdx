@@ -26,10 +26,10 @@ import env from "./env"; // declared + validated in env.ts, see Environment
 
 // Runtime infrastructure + codegen plugins only, no entities here.
 export default runtimeConfig({
-  app: { url: env.APP_URL },
-  db: { url: env.DATABASE_URL },
-  secret: env.BETTER_AUTH_SECRET,
-  email: { adapter: new ConsoleAdapter() },
+	app: { url: env.APP_URL },
+	db: { url: env.DATABASE_URL },
+	secret: env.BETTER_AUTH_SECRET,
+	email: { adapter: new ConsoleAdapter() },
 });
 ```
 
@@ -38,13 +38,13 @@ import { appConfig } from "questpie/app";
 
 // Discovered as config/app.ts → AppStateConfig.app.
 export default appConfig({
-  locale: {
-    locales: [
-      { code: "en", label: "English", fallback: true },
-      { code: "sk", label: "Slovenčina" },
-    ],
-    defaultLocale: "en",
-  },
+	locale: {
+		locales: [
+			{ code: "en", label: "English", fallback: true },
+			{ code: "sk", label: "Slovenčina" },
+		],
+		defaultLocale: "en",
+	},
 });
 ```
 
@@ -53,7 +53,7 @@ import { authConfig } from "questpie/app";
 
 // Discovered as config/auth.ts → AppStateConfig.auth (Better Auth options).
 export default authConfig({
-  emailAndPassword: { enabled: true, requireEmailVerification: false },
+	emailAndPassword: { enabled: true, requireEmailVerification: false },
 });
 ```
 
@@ -72,8 +72,14 @@ Then regenerate the typed app:
 questpie generate   # discovers every config file, merges modules, emits .generated/index.ts
 ```
 
-<Callout type="info" title="Import the factories from `questpie/app` (or `questpie`)">
-  `runtimeConfig`, `module`, `appConfig`, and `authConfig` are all exported from both `questpie` and the lighter `questpie/app` barrel. The starter templates and examples use `questpie/app`. The CLI factories, `config()` and `packageConfig()`, live in `questpie/cli` instead.
+<Callout
+	type="info"
+	title="Import the factories from `questpie/app` (or `questpie`)"
+>
+	`runtimeConfig`, `module`, `appConfig`, and `authConfig` are all exported from
+	both `questpie` and the lighter `questpie/app` barrel. The starter templates
+	and examples use `questpie/app`. The CLI factories, `config()` and
+	`packageConfig()`, live in `questpie/cli` instead.
 </Callout>
 
 ## How the files connect
@@ -96,8 +102,15 @@ questpie generate   # one shot: pre-pass modules.ts, discover all files, emit .g
 questpie dev        # the same, in watch mode, regenerates on file add/remove
 ```
 
-<Callout type="warn" title="`questpie.config.ts` needs `.generated/index.ts` to exist">
-  The CLI's `questpie.config.ts` is in the "new format", it carries `app.url` but is **not** itself a built app. On a CLI command it auto-resolves `.generated/index.ts` for the real app instance, and errors with *"Run `questpie generate` first"* if that file is missing. Generate before you migrate, seed, or push.
+<Callout
+	type="warn"
+	title="`questpie.config.ts` needs `.generated/index.ts` to exist"
+>
+	The CLI's `questpie.config.ts` is in the "new format", it carries `app.url`
+	but is **not** itself a built app. On a CLI command it auto-resolves
+	`.generated/index.ts` for the real app instance, and errors with *"Run
+	`questpie generate` first"* if that file is missing. Generate before you
+	migrate, seed, or push.
 </Callout>
 
 ## `runtimeConfig`, runtime infrastructure
@@ -113,13 +126,13 @@ import { messages } from "@/questpie/server/i18n";
 import env from "./env";
 
 export default runtimeConfig({
-  app: { url: env.APP_URL },
-  db: { url: env.DATABASE_URL },
-  secret: env.BETTER_AUTH_SECRET,
-  storage: { basePath: "/api" },
-  translations: { messages },
-  email: { adapter: new ConsoleAdapter({ logHtml: false }) },
-  queue: { adapter: pgBossAdapter({ connectionString: env.DATABASE_URL }) },
+	app: { url: env.APP_URL },
+	db: { url: env.DATABASE_URL },
+	secret: env.BETTER_AUTH_SECRET,
+	storage: { basePath: "/api" },
+	translations: { messages },
+	email: { adapter: new ConsoleAdapter({ logHtml: false }) },
+	queue: { adapter: pgBossAdapter({ connectionString: env.DATABASE_URL }) },
 });
 ```
 
@@ -138,14 +151,16 @@ So on QUESTPIE Cloud the whole file can collapse to just your plugins:
 
 ```ts
 export default runtimeConfig({
-  plugins: [], // app/db/secret/storage all auto-resolved from QUESTPIE_* env
+	plugins: [], // app/db/secret/storage all auto-resolved from QUESTPIE_* env
 });
 ```
 
 When `QUESTPIE_STORAGE_ENDPOINT`, `QUESTPIE_STORAGE_BUCKET`, `QUESTPIE_STORAGE_ACCESS_KEY`, and `QUESTPIE_STORAGE_SECRET_KEY` are all set, an S3-compatible Files SDK adapter is auto-configured. The adapter is lazy, the AWS SDK import is deferred to the first storage operation, so you must install all four peer deps: `@aws-sdk/client-s3`, `@aws-sdk/lib-storage`, `@aws-sdk/s3-presigned-post`, and `@aws-sdk/s3-request-presigner`.
 
 <Callout type="warn" title="`db` must resolve from somewhere">
-  `app.url` falls back to `http://localhost:3000`, but `db.url` has no default, if it can't be resolved from your value, `QUESTPIE_DB`, or `DATABASE_URL`, `runtimeConfig()` throws at construction. Always provide a database.
+	`app.url` falls back to `http://localhost:3000`, but `db.url` has no default,
+	if it can't be resolved from your value, `QUESTPIE_DB`, or `DATABASE_URL`,
+	`runtimeConfig()` throws at construction. Always provide a database.
 </Callout>
 
 ### Options reference
@@ -174,8 +189,11 @@ Everything below `app`/`db` is optional. The full `RuntimeConfigInput` shape:
 The input type is `RuntimeConfigInput`, defined as `Partial<Pick<RuntimeConfig, "app" | "db">> & Omit<RuntimeConfig, "app" | "db">`: the resolved `RuntimeConfig` interface with `app` and `db` made optional. `DbConfig` itself is a union, `{ url }`, `{ pglite }`, `{ drizzle }` (a pre-built client, for Neon / Vercel Postgres / Hyperdrive), or `{ create }` (a lazy factory, preferred for Cloudflare Workers).
 
 <Callout type="info" title="`plugins` is for codegen plugins, not modules">
-  `runtimeConfig({plugins})` registers **codegen plugins** (the thing that adds file-convention discovery and generated output). Module *dependencies* go in `modules.ts` instead, and a module can carry its own codegen plugin, so most apps never touch `plugins` directly. The adapters (queue, search, KV, …) each have
-  their own page under Infrastructure.
+	`runtimeConfig({plugins})` registers **codegen plugins** (the thing that adds
+	file-convention discovery and generated output). Module *dependencies* go in
+	`modules.ts` instead, and a module can carry its own codegen plugin, so most
+	apps never touch `plugins` directly. The adapters (queue, search, KV, …) each
+	have their own page under Infrastructure.
 </Callout>
 
 The adapter and storage wiring (`StorageConfig`, the queue/search/realtime/kv/executor adapters) each have a dedicated page; this page covers the config _file_, not every adapter.
@@ -188,17 +206,17 @@ The adapter and storage wiring (`StorageConfig`, the queue/search/realtime/kv/ex
 import { appConfig } from "questpie/app";
 
 export default appConfig({
-  locale: {
-    locales: [
-      { code: "en", label: "English", fallback: true, flagCountryCode: "us" },
-      { code: "sk", label: "Slovenčina" },
-    ],
-    defaultLocale: "en",
-  },
-  access: { read: true }, // app-wide default; collections can override
-  context: async ({ request, session }) => ({
-    role: session?.user?.role ?? "guest",
-  }),
+	locale: {
+		locales: [
+			{ code: "en", label: "English", fallback: true, flagCountryCode: "us" },
+			{ code: "sk", label: "Slovenčina" },
+		],
+		defaultLocale: "en",
+	},
+	access: { read: true }, // app-wide default; collections can override
+	context: async ({ request, session }) => ({
+		role: session?.user?.role ?? "guest",
+	}),
 });
 ```
 
@@ -233,8 +251,12 @@ access: {
 ```
 
 <Callout type="warn" title="The app-level access context is a leaner seam">
-  The function context here is `ResolvedAppDefaultAccessContext` (db, session, collections, …), **not** the fully augmented `AccessContext` that per-collection `.access()` rules get. This is deliberate: routing app-level rules through the full augmented context would create a type cycle in the generated app. Use
-  collection-level `.access()` when you need the richest typed context.
+	The function context here is `ResolvedAppDefaultAccessContext` (db, session,
+	collections, …), **not** the fully augmented `AccessContext` that
+	per-collection `.access()` rules get. This is deliberate: routing app-level
+	rules through the full augmented context would create a type cycle in the
+	generated app. Use collection-level `.access()` when you need the richest
+	typed context.
 </Callout>
 
 ### `hooks`, global hooks
@@ -284,9 +306,16 @@ The resolver receives `{ request, session, db }` plus the full system-mode servi
 The resolver's **return type** is what drives the typed context extension downstream, so it must resolve to an object. `appConfig()` rejects a resolver that returns *only* a primitive (`async () => "x"`) or *only* `null` (`async () => null`) at the call site. The common `session ? { role } : null` shape passes because it has an object arm. Because the return type is load-bearing, prefer returning an explicit object literal over an inferred-then-narrowed value.
 </Callout>
 
-<Callout type="info" title="Why `access` and `hooks` vanish from `appConfig()`'s return type">
-  `appConfig()` is identity at runtime, but its **return type** erases `access` and `hooks` to opaque storage and keeps only `locale` and `context`. That's intentional: their function parameter types embed the merged `AppContext`, and riding them back into the generated index would collapse the whole augmentation
-  (TS2456). Both are still fully typed *at the call site*, you just can't read them back off `typeof appConfigFile`.
+<Callout
+	type="info"
+	title="Why `access` and `hooks` vanish from `appConfig()`'s return type"
+>
+	`appConfig()` is identity at runtime, but its **return type** erases `access`
+	and `hooks` to opaque storage and keeps only `locale` and `context`. That's
+	intentional: their function parameter types embed the merged `AppContext`, and
+	riding them back into the generated index would collapse the whole
+	augmentation (TS2456). Both are still fully typed *at the call site*, you just
+	can't read them back off `typeof appConfigFile`.
 </Callout>
 
 ## `config/auth.ts`, authentication
@@ -297,13 +326,13 @@ The resolver's **return type** is what drives the typed context extension downst
 import { authConfig } from "questpie/app";
 
 export default authConfig({
-  emailAndPassword: { enabled: true, requireEmailVerification: false },
-  socialProviders: {
-    google: {
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    },
-  },
+	emailAndPassword: { enabled: true, requireEmailVerification: false },
+	socialProviders: {
+		google: {
+			clientId: process.env.GOOGLE_CLIENT_ID!,
+			clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+		},
+	},
 });
 ```
 
@@ -328,8 +357,8 @@ import { admin, bearer } from "better-auth/plugins";
 import { authConfig } from "questpie/app";
 
 export default authConfig({
-  plugins: [admin(), bearer()],
-  emailAndPassword: { enabled: true, requireEmailVerification: false },
+	plugins: [admin(), bearer()],
+	emailAndPassword: { enabled: true, requireEmailVerification: false },
 });
 ```
 
@@ -354,16 +383,17 @@ discover: {
 ```ts
 // in your plugin's types, make the key typed and discoverable
 declare module "questpie" {
-  interface AppStateConfig {
-    myPlugin?: MyPluginConfig;
-  }
+	interface AppStateConfig {
+		myPlugin?: MyPluginConfig;
+	}
 }
 ```
 
 Now users add `config/my-plugin.ts` (default-exporting your config), codegen folds it into `config.myPlugin`, and modules contributing the same key are merged per sub-key. `AppStateConfig` is `{ app?, auth? }` at the core; everything else is augmentation.
 
 <Callout type="info" title="Use `configKey` for config files">
-  A discover pattern's `configKey` emits the **whole file** as one entry under the config bucket: one file maps to one config key.
+	A discover pattern's `configKey` emits the **whole file** as one entry under
+	the config bucket: one file maps to one config key.
 </Callout>
 
 ## `modules.ts`, module dependencies
@@ -393,8 +423,14 @@ export const blogModule = module({
 });
 ```
 
-<Callout type="info" title="A module's `plugin` is codegen-only, never merged at runtime">
-  The `plugin` key on a module is extracted by codegen and **excluded** from the runtime module merge. That's how a module package (`@questpie/admin`, `@questpie/openapi`) ships its file conventions without you registering anything in `questpie.config.ts`, adding the module to `modules.ts` is enough.
+<Callout
+	type="info"
+	title="A module's `plugin` is codegen-only, never merged at runtime"
+>
+	The `plugin` key on a module is extracted by codegen and **excluded** from the
+	runtime module merge. That's how a module package (`@questpie/admin`,
+	`@questpie/openapi`) ships its file conventions without you registering
+	anything in `questpie.config.ts`, adding the module to `modules.ts` is enough.
 </Callout>
 
 The full module surface (`ModuleDefinition`), how modules contribute each category, and the depth-first merge are covered in [Extend → Modules](/docs/extend/modules).
@@ -411,7 +447,10 @@ export { default } from "./src/questpie/server/questpie.config";
 `create-questpie` scaffolds this shape. CLI settings such as migration and [seed](/docs/concepts/seeds) directories live in the server config when you need to override the defaults.
 
 <Callout type="warn" title="Importing `questpie/cli` must not run a command">
-  The CLI program is side-effect-free on import, command parsing is guarded by `import.meta.main`. This matters because package config files import `questpie/cli` for `packageConfig`, and a stray src-vs-dist double instance running a command could corrupt `.generated/`.
+	The CLI program is side-effect-free on import, command parsing is guarded by
+	`import.meta.main`. This matters because package config files import
+	`questpie/cli` for `packageConfig`, and a stray src-vs-dist double instance
+	running a command could corrupt `.generated/`.
 </Callout>
 
 ## The static-module pattern (`packageConfig`)
@@ -423,9 +462,9 @@ import { packageConfig } from "questpie/cli";
 import { myPlugin } from "./src/server/plugin.js";
 
 export default packageConfig({
-  modulesDir: "src/server/modules", // each subdir → one module
-  modulePrefix: "questpie", // dir "admin" → module "questpie-admin"
-  plugins: [myPlugin()], // codegen plugins shared across all modules
+	modulesDir: "src/server/modules", // each subdir → one module
+	modulePrefix: "questpie", // dir "admin" → module "questpie-admin"
+	plugins: [myPlugin()], // codegen plugins shared across all modules
 });
 ```
 
@@ -445,14 +484,20 @@ The configuration files only do something once codegen reads them. The relevant 
 | `questpie migrate:create` | Generate a migration from the current schema (production path).                                                    |
 
 <Callout type="warn" title="Production uses migrations, never push">
-  `questpie push` and `bun run db:push` are local-development tools. Never run them against production or in deployment automation, even with `--force`. Production changes must use a reviewed, committed `questpie migrate:create` output followed by `questpie migrate` during deployment.
+	`questpie push` and `bun run db:push` are local-development tools. Never run
+	them against production or in deployment automation, even with `--force`.
+	Production changes must use a reviewed, committed `questpie migrate:create`
+	output followed by `questpie migrate` during deployment.
 </Callout>
 
 `questpie generate` auto-detects the config mode from the file shape (root-app vs module vs `packageConfig`) and sets `QUESTPIE_SKIP_ENV_VALIDATION=1` while it imports your code (codegen must run without a populated env).
 
 <Callout type="idea" title="Watch mode regenerates on structural change only">
-  `questpie dev` only re-runs codegen when a file is **added or removed** (or a config file changes), editing the *contents* of an existing collection/config file is skipped, because the generated app references it by `typeof import(...)`, which is stable. If a change isn't picked up, it's structural: add/rename/delete
-  is what triggers a regen.
+	`questpie dev` only re-runs codegen when a file is **added or removed** (or a
+	config file changes), editing the *contents* of an existing collection/config
+	file is skipped, because the generated app references it by `typeof
+	import(...)`, which is stable. If a change isn't picked up, it's structural:
+	add/rename/delete is what triggers a regen.
 </Callout>
 
 ## TypeScript
@@ -461,13 +506,13 @@ The config factories give you typed access to every config shape, import them fr
 
 ```ts
 import type {
-  RuntimeConfig, // resolved questpie.config.ts shape
-  RuntimeConfigInput, // its input (app/db optional)
-  AppConfigInput, // config/app.ts input ({ locale, access, hooks, context })
-  AppStateConfig, // the plugin-extensible config bucket
-  ContextResolver, // the appConfig({ context }) function type
-  LocaleConfig,
-  ModuleDefinition,
+	RuntimeConfig, // resolved questpie.config.ts shape
+	RuntimeConfigInput, // its input (app/db optional)
+	AppConfigInput, // config/app.ts input ({ locale, access, hooks, context })
+	AppStateConfig, // the plugin-extensible config bucket
+	ContextResolver, // the appConfig({ context }) function type
+	LocaleConfig,
+	ModuleDefinition,
 } from "questpie";
 
 import type { TypedAuthConfig } from "questpie/app"; // authConfig() return

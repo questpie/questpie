@@ -48,7 +48,7 @@ import type {
 	AdminBlockConfig,
 	AdminConfigContext,
 	FieldLayoutItem,
-} from "../../../augmentation.js";
+} from "../../../augmentation/index.js";
 import { adminFields } from "../../../fields/index.js";
 
 /**
@@ -322,11 +322,16 @@ export class BlockBuilder<
 	 * pass the merged+wrapped field map so that field extension methods
 	 * (`.admin()`, `.form()`) are available inside `.fields()` callbacks.
 	 */
-	static create<TName extends string, TFieldTypes extends Record<string, any> = AdminBlockFields>(
+	static create<
+		TName extends string,
+		TFieldTypes extends Record<string, any> = AdminBlockFields,
+	>(
 		name: TName,
 		fieldDefs?: Record<string, any>,
 	): BlockBuilder<{ name: TName }, TFieldTypes> {
-		const builder = new BlockBuilder<{ name: TName }, TFieldTypes>({ name } as any);
+		const builder = new BlockBuilder<{ name: TName }, TFieldTypes>({
+			name,
+		} as any);
 		if (fieldDefs) {
 			builder._fieldDefs = fieldDefs;
 		}
@@ -444,7 +449,11 @@ export class BlockBuilder<
 		configFn: (ctx: { f: Record<string, string> }) => {
 			fields: FieldLayoutItem[];
 		},
-	): BlockBuilder<TState & { form: { fields: FieldLayoutItem[] } }, TFieldMap, TData> {
+	): BlockBuilder<
+		TState & { form: { fields: FieldLayoutItem[] } },
+		TFieldMap,
+		TData
+	> {
 		const resolved = configFn({ f: createFieldNameProxy() });
 		return this._child({
 			...this._state,

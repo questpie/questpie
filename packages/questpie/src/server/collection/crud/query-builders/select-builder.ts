@@ -26,6 +26,7 @@ import {
 	I18N_CURRENT_PREFIX,
 	I18N_FALLBACK_PREFIX,
 } from "#questpie/server/collection/crud/shared/i18n-merge.js";
+import { LOCALIZED_COLUMN } from "#questpie/server/collection/crud/shared/localization.js";
 import type {
 	Columns,
 	CRUDContext,
@@ -145,13 +146,14 @@ export function buildSelectObject(
 	// Select _localized column from i18n tables for nested localized values
 	if (i18nCurrentTable && locale) {
 		const i18nCurrentTbl = i18nCurrentTable as any;
-		if (i18nCurrentTbl._localized) {
-			select[`${I18N_CURRENT_PREFIX}_localized`] = i18nCurrentTbl._localized;
+		if (i18nCurrentTbl[LOCALIZED_COLUMN]) {
+			select[`${I18N_CURRENT_PREFIX}${LOCALIZED_COLUMN}`] =
+				i18nCurrentTbl[LOCALIZED_COLUMN];
 
 			if (hasFallback) {
 				const i18nFallbackTbl = i18nFallbackTable as any;
-				select[`${I18N_FALLBACK_PREFIX}_localized`] =
-					i18nFallbackTbl._localized;
+				select[`${I18N_FALLBACK_PREFIX}${LOCALIZED_COLUMN}`] =
+					i18nFallbackTbl[LOCALIZED_COLUMN];
 			}
 		}
 	}
@@ -339,14 +341,14 @@ export function buildVersionsSelectObject(
 	// Select _localized column from i18n versions tables
 	if (i18nVersionsCurrentTable && locale) {
 		const i18nVersionsCurrentTbl = i18nVersionsCurrentTable as any;
-		if (i18nVersionsCurrentTbl._localized) {
-			select[`${I18N_CURRENT_PREFIX}_localized`] =
-				i18nVersionsCurrentTbl._localized;
+		if (i18nVersionsCurrentTbl[LOCALIZED_COLUMN]) {
+			select[`${I18N_CURRENT_PREFIX}${LOCALIZED_COLUMN}`] =
+				i18nVersionsCurrentTbl[LOCALIZED_COLUMN];
 
 			if (hasFallback) {
 				const i18nVersionsFallbackTbl = i18nVersionsFallbackTable as any;
-				select[`${I18N_FALLBACK_PREFIX}_localized`] =
-					i18nVersionsFallbackTbl._localized;
+				select[`${I18N_FALLBACK_PREFIX}${LOCALIZED_COLUMN}`] =
+					i18nVersionsFallbackTbl[LOCALIZED_COLUMN];
 			}
 		}
 	}

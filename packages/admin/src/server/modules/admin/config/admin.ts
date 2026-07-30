@@ -1,4 +1,4 @@
-import { adminConfig } from "../../../augmentation.js";
+import { adminConfig } from "../../../augmentation/index.js";
 
 /**
  * Default admin config from the admin module.

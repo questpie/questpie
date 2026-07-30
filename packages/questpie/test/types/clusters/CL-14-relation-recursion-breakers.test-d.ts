@@ -321,9 +321,14 @@ type _w3LeafHasName = Expect<
 	Equal<HasKey<Cat3DeepWith["parent"]["parent"]["parent"], "name">, true>
 >;
 type _w3LeafNotString = Expect<
-	Equal<Cat3DeepWith["parent"]["parent"]["parent"] extends string ? true : false, false>
+	Equal<
+		Cat3DeepWith["parent"]["parent"]["parent"] extends string ? true : false,
+		false
+	>
 >;
-type _w3LeafNotNever = Expect<NoNever<Cat3DeepWith["parent"]["parent"]["parent"]>>;
+type _w3LeafNotNever = Expect<
+	NoNever<Cat3DeepWith["parent"]["parent"]["parent"]>
+>;
 
 // ============================================================================
 // §4 — SAME SENTINEL ACROSS RESOLVERS (proposal regression test #3; STEP C
@@ -357,9 +362,8 @@ type _sentinelsEqual = Expect<Equal<ColSentinel, GlobSentinel>>;
 // still bites if STEP C is re-introduced: a real `{ __depthExhausted: … }`
 // object is not `never`, so it falls through to the `HasKey === false` check
 // and fails loudly.
-type NotDepthBranded<T> = IsNever<T> extends true
-	? true
-	: Equal<HasKey<T, "__depthExhausted">, false>;
+type NotDepthBranded<T> =
+	IsNever<T> extends true ? true : Equal<HasKey<T, "__depthExhausted">, false>;
 type _colSentinelNotBranded = Expect<NotDepthBranded<ColSentinel>>;
 type _globSentinelNotBranded = Expect<NotDepthBranded<GlobSentinel>>;
 
@@ -397,7 +401,9 @@ type _apiMapNeverPositive = Expect<IsNever<ApiMapGetArticles>>;
 type RawGetArticles = GetCollection<Collections, "articles">;
 type _rawNotNever = Expect<NoNever<RawGetArticles>>;
 // A real built Collection exposes its state — probe a stable structural key.
-type _rawIsCollectionShape = Expect<Equal<HasKey<RawGetArticles, "state">, true>>;
+type _rawIsCollectionShape = Expect<
+	Equal<HasKey<RawGetArticles, "state">, true>
+>;
 
 // And `CollectionDoc` over the raw map yields the row (the documented redirect
 // target): it must carry `id` + `title`, NOT collapse to `never`/`{}`.

@@ -759,6 +759,11 @@ export class Collection<TState extends CollectionBuilderState> {
 				mainFields,
 				localizedFields,
 				{
+					// `.validation({ exclude, refine })` records its options rather
+					// than building schemas itself, so they are applied here — the
+					// single place that also contributes the id, timestamp and
+					// soft-delete columns above.
+					...state.validationOptions,
 					// Pass field definitions for relation field name normalization
 					// This allows users to use `author` instead of `authorId` in input
 					fieldDefinitions: state.fieldDefinitions as any,
@@ -776,21 +781,30 @@ export class Collection<TState extends CollectionBuilderState> {
 	}
 
 	/**
-	 * Get virtual fields with specific context
-	 * This allows regenerating virtual field SQL with runtime context
+	 * The SQL registered by `f.<type>().virtual(sql`…`)`, keyed by field name.
+	 *
+	 * All four of these return `state.virtuals` verbatim and ignore every
+	 * argument. That is the honest description; the parameters are kept because
+	 * six call sites in CRUDGenerator and GlobalCRUDGenerator pass them, and
+	 * removing them is a signature change across both generators.
+	 *
+	 * The two `WithAliases` variants used to claim they "create COALESCE
+	 * expressions using the aliased tables instead of subqueries". They do not,
+	 * and never have. Verified end to end (test/collection/virtual-fields.test.ts,
+	 * plus a localized probe): the SQL an author writes is passed through
+	 * untouched, so a virtual field that reads a localized column has to do its
+	 * own correlated subquery and its own locale filtering. It works — it just
+	 * gets no help from the query's aliased i18n joins, and no fallback COALESCE.
+	 *
+	 * So this is either an unimplemented optimization or three redundant names
+	 * for one getter. Do not "fix" the doc back without implementing it, and do
+	 * not assume a localized virtual is locale-aware for free.
 	 */
 	public getVirtuals(_context: any): TState["virtuals"] {
 		return this.state.virtuals || ({} as TState["virtuals"]);
 	}
 
-	/**
-	 * Get virtual fields with aliased i18n tables for use in queries.
-	 * This creates COALESCE expressions using the aliased tables instead of subqueries.
-	 *
-	 * @param _context - CRUD context
-	 * @param _i18nCurrentTable - Aliased i18n table for current locale
-	 * @param _i18nFallbackTable - Aliased i18n table for fallback locale (null if no fallback)
-	 */
+	/** @see getVirtuals — the alias arguments are accepted and ignored. */
 	public getVirtualsWithAliases(
 		_context: any,
 		_i18nCurrentTable: any | null,
@@ -799,18 +813,12 @@ export class Collection<TState extends CollectionBuilderState> {
 		return this.state.virtuals || ({} as TState["virtuals"]);
 	}
 
+	/** @see getVirtuals */
 	public getVirtualsForVersions(_context: any): TState["virtuals"] {
 		return this.state.virtuals || ({} as TState["virtuals"]);
 	}
 
-	/**
-	 * Get virtual fields for versions with aliased i18n tables.
-	 * Creates COALESCE expressions using the aliased tables instead of subqueries.
-	 *
-	 * @param _context - CRUD context
-	 * @param _i18nVersionsCurrentTable - Aliased i18n versions table for current locale
-	 * @param _i18nVersionsFallbackTable - Aliased i18n versions table for fallback locale
-	 */
+	/** @see getVirtuals — the alias arguments are accepted and ignored. */
 	public getVirtualsForVersionsWithAliases(
 		_context: any,
 		_i18nVersionsCurrentTable: any | null,
@@ -887,37 +895,6 @@ export class Collection<TState extends CollectionBuilderState> {
 
 		// Check if it's a virtual field
 		const virtuals = this.getVirtualsForVersions(context);
-		if (virtuals && titleField in virtuals) {
-			return (virtuals as any)[titleField];
-		}
-
-		return null;
-	}
-
-	/**
-	 * Get raw title expression (for UPDATE queries) without COALESCE
-	 */
-	public getRawTitleExpression(context: any): SQL | Column | null {
-		const titleField = this.state.title;
-		if (!titleField) return null;
-
-		// Check if it's a regular field
-		if (titleField in this.state.fields) {
-			// Check if it's a localized field (need to parse field names)
-			const mode = getLocalizedFieldMode(
-				this.state.localized as readonly string[],
-				titleField,
-			);
-			if (mode !== null) {
-				const i18nAccessor = this.createRawI18nAccessor();
-				return (i18nAccessor as any)[titleField];
-			}
-			// Non-localized field - get from table
-			return (this.table as any)[titleField];
-		}
-
-		// Check if it's a virtual field
-		const virtuals = this.getVirtuals(context);
 		if (virtuals && titleField in virtuals) {
 			return (virtuals as any)[titleField];
 		}
@@ -1272,27 +1249,6 @@ export class Collection<TState extends CollectionBuilderState> {
 		return accessor;
 	}
 
-	/**
-	 * Create raw i18n accessor object (direct column references)
-	 */
-	private createRawI18nAccessorFor(
-		i18nTable: any | null,
-	): I18nFieldAccessor<TState["fields"], TState["localized"]> {
-		const accessor: any = {};
-
-		if (!i18nTable) return accessor;
-
-		for (const localizedField of this.state.localized) {
-			// Parse field name (remove :nested suffix if present)
-			const parsed = parseLocalizedField(localizedField as string);
-			const fieldName = parsed.name;
-
-			accessor[fieldName] = (i18nTable as any)[fieldName];
-		}
-
-		return accessor;
-	}
-
 	private createI18nAccessor(
 		context: any,
 	): I18nFieldAccessor<TState["fields"], TState["localized"]> {
@@ -1374,13 +1330,6 @@ export class Collection<TState extends CollectionBuilderState> {
 		return accessor;
 	}
 
-	private createRawI18nAccessor(): I18nFieldAccessor<
-		TState["fields"],
-		TState["localized"]
-	> {
-		return this.createRawI18nAccessorFor(this.i18nTable);
-	}
-
 	/**
 	 * Generate CRUD operations (Drizzle RQB v2-like)
 	 */
@@ -1392,13 +1341,10 @@ export class Collection<TState extends CollectionBuilderState> {
 			this.versionsTable,
 			this.i18nVersionsTable,
 			db,
-			this.getVirtuals.bind(this),
 			this.getVirtualsWithAliases.bind(this),
 			this.getTitleExpression.bind(this),
-			this.getVirtualsForVersions.bind(this),
 			this.getVirtualsForVersionsWithAliases.bind(this),
 			this.getTitleExpressionForVersions.bind(this),
-			this.getRawTitleExpression.bind(this),
 			app,
 		);
 

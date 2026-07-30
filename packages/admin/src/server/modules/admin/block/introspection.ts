@@ -12,7 +12,7 @@ import type {
 	BlockCategoryConfig,
 	ComponentReference,
 	FieldLayoutItem,
-} from "../../../augmentation.js";
+} from "../../../augmentation/index.js";
 import {
 	serializeFormLayoutProps,
 	serializeReactivePropsRecord,

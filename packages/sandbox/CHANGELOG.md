@@ -13,7 +13,6 @@
 ### Minor Changes
 
 - [#186](https://github.com/questpie/questpie/pull/186) [`d6931de`](https://github.com/questpie/questpie/commit/d6931defd2705525091dd0cace56c516a8f9d5c3) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Fail-closed remote workload authority across sandbox and MCP.
-
   - **sandbox**: add a generic, consumer-authorized workload admission path with
     signed single-use transport binding, strict resource limits, canonical broker
     routing, safe audit events, and no product-specific principal model. Sandboxed

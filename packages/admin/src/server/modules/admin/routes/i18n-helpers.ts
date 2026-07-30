@@ -1,3 +1,5 @@
+import { interpolate } from "questpie/shared";
+
 import {
 	getAdminMessagesForLocale,
 	type MessageValue,
@@ -25,16 +27,6 @@ function selectMessage(
 	} catch {
 		return count === 1 ? value.one : value.other;
 	}
-}
-
-function interpolate(
-	template: string,
-	params?: Record<string, unknown>,
-): string {
-	if (!params) return template;
-	return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key) =>
-		params[key] === undefined ? `{{${key}}}` : String(params[key]),
-	);
 }
 
 export function translateAdminMessage(

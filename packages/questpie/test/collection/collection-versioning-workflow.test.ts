@@ -128,11 +128,10 @@ describe("collection versioning + workflow", () => {
 				ctx,
 			);
 
-			const versions =
-				await setup.app.collections.workflow_posts.findVersions(
-					{ id: created.id },
-					ctx,
-				);
+			const versions = await setup.app.collections.workflow_posts.findVersions(
+				{ id: created.id },
+				ctx,
+			);
 
 			expect(versions.length).toBeGreaterThanOrEqual(2);
 
@@ -159,11 +158,10 @@ describe("collection versioning + workflow", () => {
 				ctx,
 			);
 
-			const versions =
-				await setup.app.collections.workflow_posts.findVersions(
-					{ id: created.id },
-					ctx,
-				);
+			const versions = await setup.app.collections.workflow_posts.findVersions(
+				{ id: created.id },
+				ctx,
+			);
 
 			// Should have at least 2 versions (create + transition)
 			expect(versions.length).toBeGreaterThanOrEqual(2);
@@ -181,11 +179,10 @@ describe("collection versioning + workflow", () => {
 				ctx,
 			);
 
-			const versions =
-				await setup.app.collections.plain_versioned.findVersions(
-					{ id: created.id },
-					ctx,
-				);
+			const versions = await setup.app.collections.plain_versioned.findVersions(
+				{ id: created.id },
+				ctx,
+			);
 
 			expect(versions.length).toBeGreaterThanOrEqual(1);
 			// Non-workflow versions should have versionStage as null

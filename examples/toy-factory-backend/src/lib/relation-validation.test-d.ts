@@ -34,9 +34,11 @@ const validRelations = collection("audit_probe").fields(({ f }) => ({
 	// VALID strict key for an app that pulls the admin/starter modules.
 	createdBy: f.relation("user"),
 	// manyToMany junction via a real USER collection name (REL-STR-04).
-	materials: f
-		.relation("materials")
-		.manyToMany({ through: "toyMaterials", sourceField: "a", targetField: "b" }),
+	materials: f.relation("materials").manyToMany({
+		through: "toyMaterials",
+		sourceField: "a",
+		targetField: "b",
+	}),
 }));
 
 type ProbeFields = (typeof validRelations)["state"]["fieldDefinitions"];

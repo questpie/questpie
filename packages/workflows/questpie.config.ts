@@ -8,8 +8,9 @@
  * files are published with the npm package.
  */
 
-import { adminPlugin } from "@questpie/admin/plugin";
 import { packageConfig } from "questpie/cli";
+
+import { adminPlugin } from "@questpie/admin/plugin";
 
 export default packageConfig({
 	modulesDir: "src/server/modules",

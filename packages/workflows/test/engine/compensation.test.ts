@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+
 import type { CompensationEntry } from "../../src/server/engine/compensation.js";
 import {
 	createCompletedStepsMap,

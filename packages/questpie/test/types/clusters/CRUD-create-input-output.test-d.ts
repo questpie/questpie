@@ -42,12 +42,8 @@ import type {
 import type { CollectionAPI } from "#questpie/server/config/integrated/questpie-api.js";
 import type { CollectionInsert } from "#questpie/shared/type-utils.js";
 
+import type { NoNever, NotEmptyObject, IsEmptyObject } from "../_assert.js";
 import type { Expect, Equal, HasKey } from "../type-test-utils.js";
-import type {
-	NoNever,
-	NotEmptyObject,
-	IsEmptyObject,
-} from "../_assert.js";
 
 // ============================================================================
 // §0  Fixtures — a "starter" base collection and an "admin" re-declaration that
@@ -212,10 +208,9 @@ type _RED_userIsNever = Expect<Equal<NoNever<_RED_AdditiveUser>, false>>;
 // And its CRUD select degrades to the empty object `{}`.
 type _RED_AdditiveUserReturn = Awaited<
 	ReturnType<
-		CollectionAPI<
-			_RED_AdditiveUser,
-			_RED_AdditiveModuleCollections
-		>["create"]
+		CollectionAPI<_RED_AdditiveUser, _RED_AdditiveModuleCollections>["create"]
 	>
 >;
-type _RED_userReturnEmpty = Expect<Equal<IsEmptyObject<_RED_AdditiveUserReturn>, true>>;
+type _RED_userReturnEmpty = Expect<
+	Equal<IsEmptyObject<_RED_AdditiveUserReturn>, true>
+>;

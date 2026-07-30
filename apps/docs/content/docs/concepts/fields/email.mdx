@@ -23,8 +23,8 @@ Use `f.email()` inside a `.fields()` callback. The positional argument is the ma
 import { collection } from "#questpie/factories";
 
 export const users = collection("users").fields(({ f }) => ({
-  email: f.email().required(),          // varchar(255), NOT NULL, validated
-  backupEmail: f.email(320),            // sized varchar(320), optional
+	email: f.email().required(), // varchar(255), NOT NULL, validated
+	backupEmail: f.email(320), // sized varchar(320), optional
 }));
 ```
 
@@ -34,62 +34,74 @@ That gives `users` an `email` column typed `string` on read, required on insert,
 
 `f.email()` takes a single optional `maxLength`.
 
-| Call | Column | Notes |
-|---|---|---|
-| `f.email()` | `varchar(255)` | Default. `maxLength` defaults to **255**. |
-| `f.email(n)` | `varchar(n)` | Sized varchar; `n` is also applied as a Zod `.max(n)`. |
+| Call         | Column         | Notes                                                  |
+| ------------ | -------------- | ------------------------------------------------------ |
+| `f.email()`  | `varchar(255)` | Default. `maxLength` defaults to **255**.              |
+| `f.email(n)` | `varchar(n)`   | Sized varchar; `n` is also applied as a Zod `.max(n)`. |
 
 The field data is always `string`. The derived Zod schema is `z.string().email().max(maxLength)`, the `.email()` refinement is always present, and the `.max()` uses the `255` default or your `n`.
 
-<Callout type="info" title="Need a longer column? 320 is the practical email max">
-The default `varchar(255)` holds nearly every real address, but the RFC upper bound is 320 characters. If you must accept the longest legal addresses, pass `f.email(320)`.
+<Callout
+	type="info"
+	title="Need a longer column? 320 is the practical email max"
+>
+	The default `varchar(255)` holds nearly every real address, but the RFC upper
+	bound is 320 characters. If you must accept the longest legal addresses, pass
+	`f.email(320)`.
 </Callout>
 
 ## Chained methods
 
 These methods are specific to `email` (on top of the [shared modifiers](/docs/concepts/fields) every field has). Each returns a new immutable field, so they chain in any order.
 
-| Method | Effect |
-|---|---|
+| Method    | Effect                                           |
+| --------- | ------------------------------------------------ |
 | `.min(n)` | Minimum **string length** (maps to `minLength`). |
 | `.max(n)` | Maximum **string length** (maps to `maxLength`). |
 
 ```ts
 collection("contacts").fields(({ f }) => ({
-  email: f.email().required().max(254), // valid email, capped at 254 chars
+	email: f.email().required().max(254), // valid email, capped at 254 chars
 }));
 ```
 
-<Callout type="warn" title="`.min()` / `.max()` here are STRING LENGTH, not value bounds">
-On an email field, `.min(n)` / `.max(n)` constrain the **number of characters** (they map to `minLength` / `maxLength`, the same as [`f.text()`](/docs/concepts/fields/text)). On `f.number()` the same method names constrain the numeric **value**. Same names, different meaning, sized by the field's type.
+<Callout
+	type="warn"
+	title="`.min()` / `.max()` here are STRING LENGTH, not value bounds"
+>
+	On an email field, `.min(n)` / `.max(n)` constrain the **number of
+	characters** (they map to `minLength` / `maxLength`, the same as
+	[`f.text()`](/docs/concepts/fields/text)). On `f.number()` the same method
+	names constrain the numeric **value**. Same names, different meaning, sized by
+	the field's type.
 </Callout>
 
 ## Filtering, operators
 
-`email` uses the **email operator set** (`emailOps`), which extends the string set with two domain matchers. So every email field is filterable with all the string operators *and* `domain` / `domainIn`. The operand is typed `string` (or `string[]` for the list operators).
+`email` uses the **email operator set** (`emailOps`), which extends the string set with two domain matchers. So every email field is filterable with all the string operators _and_ `domain` / `domainIn`. The operand is typed `string` (or `string[]` for the list operators).
 
-| Operator | Operand | Matches |
-|---|---|---|
-| `eq` / `ne` | `string` | Exact equal / not equal. |
-| `in` / `notIn` | `string[]` | Value is (not) in the list. |
-| `like` / `notLike` | `string` | SQL `LIKE` (case-sensitive, your own `%`). |
-| `ilike` / `notIlike` | `string` | Case-insensitive `LIKE`. |
-| `contains` | `string` | Substring (`LIKE '%value%'`). |
-| `startsWith` | `string` | Prefix (`LIKE 'value%'`). |
-| `endsWith` | `string` | Suffix (`LIKE '%value'`). |
-| `isNull` / `isNotNull` | `boolean` | Column is (not) null. |
-| `domain` | `string` | Email's domain matches (case-insensitive `ILIKE '%@value'`). |
-| `domainIn` | `string[]` | Email's domain is one of the listed domains. |
+| Operator               | Operand    | Matches                                                      |
+| ---------------------- | ---------- | ------------------------------------------------------------ |
+| `eq` / `ne`            | `string`   | Exact equal / not equal.                                     |
+| `in` / `notIn`         | `string[]` | Value is (not) in the list.                                  |
+| `like` / `notLike`     | `string`   | SQL `LIKE` (case-sensitive, your own `%`).                   |
+| `ilike` / `notIlike`   | `string`   | Case-insensitive `LIKE`.                                     |
+| `contains`             | `string`   | Substring (`LIKE '%value%'`).                                |
+| `startsWith`           | `string`   | Prefix (`LIKE 'value%'`).                                    |
+| `endsWith`             | `string`   | Suffix (`LIKE '%value'`).                                    |
+| `isNull` / `isNotNull` | `boolean`  | Column is (not) null.                                        |
+| `domain`               | `string`   | Email's domain matches (case-insensitive `ILIKE '%@value'`). |
+| `domainIn`             | `string[]` | Email's domain is one of the listed domains.                 |
 
 ```ts
 // Everyone on the acme.com domain
 const { docs } = await app.collections.users.find({
-  where: { email: { domain: "acme.com" } },
+	where: { email: { domain: "acme.com" } },
 });
 
 // Internal staff: any of two domains
 const staff = await app.collections.users.find({
-  where: { email: { domainIn: ["acme.com", "acme.io"] } },
+	where: { email: { domainIn: ["acme.com", "acme.io"] } },
 });
 ```
 
@@ -106,7 +118,9 @@ For the full query language, combining field filters with `AND` / `OR` / `NOT`, 
 - For a website or link, use [`f.url()`](/docs/concepts/fields/url), the same idea (a validated string), but with `z.string().url()` and host/protocol filter operators.
 
 <Callout type="warn" title="Format-valid is not the same as deliverable">
-`z.string().email()` checks syntax only. It does not verify the mailbox exists or the domain accepts mail. Treat a passing value as well-formed, not reachable.
+	`z.string().email()` checks syntax only. It does not verify the mailbox exists
+	or the domain accepts mail. Treat a passing value as well-formed, not
+	reachable.
 </Callout>
 
 ## Multiple values

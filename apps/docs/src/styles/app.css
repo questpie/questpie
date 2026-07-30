@@ -515,7 +515,10 @@
  * hairline border. */
 
 /* 4a — primary button depth */
-:root, .dark, .light, :root.light {
+:root,
+.dark,
+.light,
+:root.light {
 	--btn-primary-shadow:
 		inset 0 1px 0 0 color-mix(in srgb, white 22%, transparent),
 		inset 0 -1px 0 0 color-mix(in srgb, black 18%, transparent),
@@ -534,10 +537,9 @@
 	--btn-secondary-shadow:
 		inset 0 1px 0 0 color-mix(in srgb, white 6%, transparent),
 		inset 0 -1px 0 0 color-mix(in srgb, black 8%, transparent),
-		0 1px 2px -1px rgba(0, 0, 0, 0.15),
-		0 2px 4px -2px rgba(0, 0, 0, 0.18);
-	--btn-secondary-shadow-pressed:
-		inset 0 1px 2px 0 color-mix(in srgb, black 10%, transparent);
+		0 1px 2px -1px rgba(0, 0, 0, 0.15), 0 2px 4px -2px rgba(0, 0, 0, 0.18);
+	--btn-secondary-shadow-pressed: inset 0 1px 2px 0
+		color-mix(in srgb, black 10%, transparent);
 	--btn-secondary-gradient: linear-gradient(
 		to bottom,
 		color-mix(in srgb, var(--card) 100%, white 6%),
@@ -549,13 +551,13 @@
 		inset 0 1px 2px 0 color-mix(in srgb, black 14%, transparent),
 		inset 0 0 0 1px color-mix(in srgb, var(--foreground) 2%, transparent);
 }
-.light, :root.light {
+.light,
+:root.light {
 	/* Light mode wants weaker drops + lighter highlights */
 	--btn-secondary-shadow:
 		inset 0 1px 0 0 color-mix(in srgb, white 50%, transparent),
 		inset 0 -1px 0 0 color-mix(in srgb, black 4%, transparent),
-		0 1px 2px -1px rgba(0, 0, 0, 0.06),
-		0 2px 4px -2px rgba(0, 0, 0, 0.08);
+		0 1px 2px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.08);
 	--control-depth-shadow:
 		inset 0 1px 2px 0 color-mix(in srgb, black 7%, transparent),
 		inset 0 0 0 1px color-mix(in srgb, var(--foreground) 1%, transparent);
@@ -563,11 +565,8 @@
 
 /* Hairline grid overlay used in hero */
 .landing-grid-bg {
-	background-image: linear-gradient(
-			to right,
-			var(--border-subtle) 1px,
-			transparent 1px
-		),
+	background-image:
+		linear-gradient(to right, var(--border-subtle) 1px, transparent 1px),
 		linear-gradient(to bottom, var(--border-subtle) 1px, transparent 1px);
 	background-size: 56px 56px;
 	background-position: -1px -1px;

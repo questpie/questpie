@@ -24,19 +24,22 @@ A relation connects one collection to another. You declare it with a single fiel
 import { collection } from "#questpie/factories";
 
 export const appointments = collection("appointments").fields(({ f }) => ({
-  // belongsTo: this row owns a varchar(36) FK to `user`
-  customer: f.relation("user").required().label("Customer"),
-  barber: f.relation("barbers").required().label("Barber"),
-  service: f.relation("services").required().label("Service"),
-  scheduledAt: f.datetime().required(),
-  // Full target forms + transition methods are documented below.
+	// belongsTo: this row owns a varchar(36) FK to `user`
+	customer: f.relation("user").required().label("Customer"),
+	barber: f.relation("barbers").required().label("Barber"),
+	service: f.relation("services").required().label("Service"),
+	scheduledAt: f.datetime().required(),
+	// Full target forms + transition methods are documented below.
 }));
 ```
 
 That gives the `appointments` table a `customer`, `barber`, and `service` foreign-key column, a typed id on every read, and a relation picker in the admin form, no junction table to wire, no relation graph to declare.
 
 <Callout type="info">
-  The `target` name is checked against your collection registry **once codegen runs**, so a typo'd target fails to type-check. Before the first `questpie generate` it falls back to plain `string` so source still compiles. The check reads `StrictCollectionKey`, a names-only, acyclic registry seam.
+	The `target` name is checked against your collection registry **once codegen
+	runs**, so a typo'd target fails to type-check. Before the first `questpie
+	generate` it falls back to plain `string` so source still compiles. The check
+	reads `StrictCollectionKey`, a names-only, acyclic registry seam.
 </Callout>
 
 ## Example → real output
@@ -46,7 +49,7 @@ By default a relation reads back as the related **id**, not the related row. Hyd
 ```ts
 // Without `with`, relations are ids:
 const appt = await client.collections.appointments.findOne({
-  where: { id: "…" },
+	where: { id: "…" },
 });
 // {
 //   id: string;
@@ -59,8 +62,8 @@ const appt = await client.collections.appointments.findOne({
 
 // With `with`, the relation is replaced by the full row:
 const hydrated = await client.collections.appointments.findOne({
-  where: { id: "…" },
-  with: { customer: true, barber: true },
+	where: { id: "…" },
+	with: { customer: true, barber: true },
 });
 // {
 //   id: string;
@@ -133,14 +136,14 @@ The junction itself is a normal collection of two belongsTo relations:
 
 ```ts title="src/questpie/server/collections/barber-services.ts"
 export const barberServices = collection("barber_services").fields(({ f }) => ({
-  barber: f
-    .relation(() => barbers)
-    .required()
-    .onDelete("cascade"),
-  service: f
-    .relation(() => services)
-    .required()
-    .onDelete("cascade"),
+	barber: f
+		.relation(() => barbers)
+		.required()
+		.onDelete("cascade"),
+	service: f
+		.relation(() => services)
+		.required()
+		.onDelete("cascade"),
 }));
 ```
 
@@ -180,8 +183,11 @@ barber: f.relation(() => barbers).required().onDelete("cascade"),
 ```
 
 <Callout type="info">
-  The action flows into the relation graph and is **enforced on the QUESTPIE CRUD path**: `cascade` / `hasMany` cascade-deletes run through `deleteById`, and `restrict` throws a `409 Conflict` ("Cannot delete: related records exist…") when dependents remain. It needs a `relationName` (or an inferred reverse relation)
-  to find the dependents.
+	The action flows into the relation graph and is **enforced on the QUESTPIE
+	CRUD path**: `cascade` / `hasMany` cascade-deletes run through `deleteById`,
+	and `restrict` throws a `409 Conflict` ("Cannot delete: related records
+	exist…") when dependents remain. It needs a `relationName` (or an inferred
+	reverse relation) to find the dependents.
 </Callout>
 
 ### `.relationName(name)`
@@ -200,23 +206,23 @@ recipient: f.relation("user").required().relationName("receivedMessages"),
 ```ts
 // to-one (belongsTo), populate, optionally with a partial select:
 const review = await client.collections.reviews.findOne({
-  where: { id: "…" },
-  with: {
-    customer: { columns: { id: true, email: true } }, // partial select on the related row
-    barber: true, // whole row
-  },
+	where: { id: "…" },
+	with: {
+		customer: { columns: { id: true, email: true } }, // partial select on the related row
+		barber: true, // whole row
+	},
 });
 
 // to-many (m2m), populate, scoped with where / orderBy / limit:
 const barber = await client.collections.barbers.findOne({
-  where: { id: "…" },
-  with: {
-    services: {
-      where: { isActive: { eq: true } },
-      orderBy: { order: "asc" },
-      limit: 5,
-    },
-  },
+	where: { id: "…" },
+	with: {
+		services: {
+			where: { isActive: { eq: true } },
+			orderBy: { order: "asc" },
+			limit: 5,
+		},
+	},
 });
 ```
 
@@ -228,15 +234,20 @@ The option set is **gated by cardinality**, the types only let you pass what mak
 ```ts
 // Count related rows instead of fetching them (to-many only):
 const barber = await client.collections.barbers.findOne({
-  where: { id: "…" },
-  with: { services: { _count: true } },
+	where: { id: "…" },
+	with: { services: { _count: true } },
 });
 // barber.services → { _count: number }
 ```
 
 <Callout type="info">
-  Relations are **not** hydrated unless you ask. A field you didn't list in `with` comes back as its id (belongsTo → a single `string`; `multiple` → the raw `string[]` array stored in its column) or is absent entirely (hasMany / manyToMany have no column here). This keeps the default read one query and one row, opt
-  into joins only where you need them. Hydration depth is capped by the type system to keep inference finite, so very deep nested `with` chains stop resolving past the cap.
+	Relations are **not** hydrated unless you ask. A field you didn't list in
+	`with` comes back as its id (belongsTo → a single `string`; `multiple` → the
+	raw `string[]` array stored in its column) or is absent entirely (hasMany /
+	manyToMany have no column here). This keeps the default read one query and one
+	row, opt into joins only where you need them. Hydration depth is capped by the
+	type system to keep inference finite, so very deep nested `with` chains stop
+	resolving past the cap.
 </Callout>
 
 ## Filtering by relation
@@ -250,7 +261,7 @@ A belongsTo field accepts three forms in `where`:
 ```ts
 // 1. Match the FK directly (eq / ne / in / notIn / isNull / isNotNull)
 await client.collections.appointments.find({
-  where: { barber: { eq: barberId } },
+	where: { barber: { eq: barberId } },
 });
 
 // 2. Bare FK shorthand, pass the id value directly
@@ -258,12 +269,12 @@ await client.collections.appointments.find({ where: { barber: barberId } });
 
 // 3. `is` / `isNot`, filter on the TARGET row's fields
 await client.collections.appointments.find({
-  where: { barber: { is: { isActive: { eq: true } } } },
+	where: { barber: { is: { isActive: { eq: true } } } },
 });
 
 // 3b. Target-where shorthand, same as `is`, without the wrapper key
 await client.collections.appointments.find({
-  where: { barber: { isActive: { eq: true } } },
+	where: { barber: { isActive: { eq: true } } },
 });
 ```
 
@@ -274,12 +285,12 @@ A to-many field accepts the quantifiers `some` / `none` / `every`, each a `where
 ```ts
 // Barbers who offer at least one active service:
 await client.collections.barbers.find({
-  where: { services: { some: { isActive: { eq: true } } } },
+	where: { services: { some: { isActive: { eq: true } } } },
 });
 
 // Barbers that offer no service at all:
 await client.collections.barbers.find({
-  where: { services: { none: {} } },
+	where: { services: { none: {} } },
 });
 ```
 
@@ -290,7 +301,7 @@ A `.multiple()` field is a real `jsonb` column, so it filters on the array itsel
 ```ts
 // Barbers whose inline `featuredServices` array contains a given service id:
 await client.collections.barbers.find({
-  where: { featuredServices: { contains: serviceId } },
+	where: { featuredServices: { contains: serviceId } },
 });
 ```
 
@@ -307,18 +318,18 @@ For a **belongsTo** field, pass either the raw FK string or a nested mutation:
 ```ts
 // Raw FK, the simplest form:
 await client.collections.appointments.create({
-  customer: customerId,
-  barber: barberId,
-  service: serviceId,
-  scheduledAt: new Date(),
+	customer: customerId,
+	barber: barberId,
+	service: serviceId,
+	scheduledAt: new Date(),
 });
 
 // Nested connect, link an existing row by id:
 await client.collections.appointments.create({
-  customer: { connect: { id: customerId } },
-  barber: barberId,
-  service: serviceId,
-  scheduledAt: new Date(),
+	customer: { connect: { id: customerId } },
+	barber: barberId,
+	service: serviceId,
+	scheduledAt: new Date(),
 });
 ```
 
@@ -326,19 +337,19 @@ For **to-many** fields (hasMany / manyToMany, no FK on this row), pass a mutatio
 
 ```ts
 await client.collections.barbers.create({
-  name: "Sam",
-  email: "sam@shop.test",
-  // link existing services, create a new one, or replace the whole set
-  services: {
-    connect: [{ id: cutId }, { id: shaveId }],
-    create: [{ name: "Beard trim", duration: 15, price: 1500 }],
-  },
+	name: "Sam",
+	email: "sam@shop.test",
+	// link existing services, create a new one, or replace the whole set
+	services: {
+		connect: [{ id: cutId }, { id: shaveId }],
+		create: [{ name: "Beard trim", duration: 15, price: 1500 }],
+	},
 });
 
 // Replace the entire many-to-many set on update:
 await client.collections.barbers.updateById({
-  id: barberId,
-  data: { services: { set: [cutId, shaveId] } },
+	id: barberId,
+	data: { services: { set: [cutId, shaveId] } },
 });
 ```
 
@@ -351,21 +362,37 @@ The nested mutation supports `connect` (link existing), `create` (insert new), `
 ## Gotchas
 
 <Callout type="warning">
-  **Transition methods reset the chain, order matters.** Put `.hasMany()` / `.manyToMany()` / `.multiple()` first, then refine. They flip the field from the belongsTo type-state to a to-many one; the state-preserving modifiers (`.required()`, `.onDelete()`, `.onUpdate()`, `.relationName()`) carry forward, but a
-  transition applied *after* them is the one that defines the final kind.
+	**Transition methods reset the chain, order matters.** Put `.hasMany()` /
+	`.manyToMany()` / `.multiple()` first, then refine. They flip the field from
+	the belongsTo type-state to a to-many one; the state-preserving modifiers
+	(`.required()`, `.onDelete()`, `.onUpdate()`, `.relationName()`) carry
+	forward, but a transition applied *after* them is the one that defines the
+	final kind.
 </Callout>
 
 <Callout type="warning">
-  **`hasMany` / `manyToMany` are virtual, no column here.** The FK lives on the target table (`hasMany`) or the junction (`manyToMany`), so these fields never appear in this collection's base read shape or insert type, and you never write them by setting a column on this row, you write them with a nested mutation
-  (`connect` / `create` / `set`). `.multiple()` is the exception: it owns a real `jsonb` array column on this table.
+	**`hasMany` / `manyToMany` are virtual, no column here.** The FK lives on the
+	target table (`hasMany`) or the junction (`manyToMany`), so these fields never
+	appear in this collection's base read shape or insert type, and you never
+	write them by setting a column on this row, you write them with a nested
+	mutation (`connect` / `create` / `set`). `.multiple()` is the exception: it
+	owns a real `jsonb` array column on this table.
 </Callout>
 
 <Callout type="warning">
-  **`upload` is the file relation, use it for assets.** `f.upload(...)` is a relation specialised for files: it owns a `varchar(36)` FK to the `assets` collection and the admin renders an upload widget instead of a relation picker. Don't model file links with a raw `f.relation("assets")`, reach for `f.upload()`. See
-  [Fields](/docs/concepts/fields).
+	**`upload` is the file relation, use it for assets.** `f.upload(...)` is a
+	relation specialised for files: it owns a `varchar(36)` FK to the `assets`
+	collection and the admin renders an upload widget instead of a relation
+	picker. Don't model file links with a raw `f.relation("assets")`, reach for
+	`f.upload()`. See [Fields](/docs/concepts/fields).
 </Callout>
 
-<Callout type="info">**`onDelete` / `restrict` enforcement needs a resolvable reverse relation.** Cascade and restrict run on the QUESTPIE CRUD path and walk the relation graph to find dependents; when two relations target the same collection, set `.relationName(...)` so the reverse relation resolves.</Callout>
+<Callout type="info">
+	**`onDelete` / `restrict` enforcement needs a resolvable reverse relation.**
+	Cascade and restrict run on the QUESTPIE CRUD path and walk the relation graph
+	to find dependents; when two relations target the same collection, set
+	`.relationName(...)` so the reverse relation resolves.
+</Callout>
 
 ## TypeScript
 

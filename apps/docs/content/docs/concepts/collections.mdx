@@ -188,6 +188,34 @@ collection("pages").options({
 Workflow stages create version snapshots, so workflow lives **under** `versioning`. Setting `workflow` auto-enables versioning. Setting `versioning: { enabled: false }` together with a `workflow` **throws at construction**, the two are contradictory.
 </Callout>
 
+### Which of these four jobs do you need
+
+These names all sound alike and do different things. Adopting the wrong one is
+silent: nothing errors, you just do not get the guarantee you assumed.
+
+| You need                                        | Use                   | Provided         |
+| ----------------------------------------------- | --------------------- | ---------------- |
+| When a row was created or changed               | `timestamps`          | Yes              |
+| Recover a deleted row, keep referential history | `softDelete`          | Yes              |
+| History of past states, and revert to one       | `versioning`          | Yes              |
+| Legal stage transitions                         | `versioning.workflow` | Yes              |
+| Reject a write made against a stale read        | optimistic locking    | **No**           |
+| Who did what, for accountability                | audit                 | Separate concern |
+
+**Versioning is not optimistic locking.** There is no `expectedVersion`
+parameter anywhere in the API. The server never compares a client-supplied
+version against the stored one and never rejects a stale write: two concurrent
+updates both succeed, both write a version row, and the second silently wins.
+`versionNumber` is history recorded after the fact. If you need compare-and-set
+you build it yourself, today with a column of your own plus
+`updateMany({ where: { id, version: expected } })` and a `count !== 1` check.
+
+**Stage transitions carry no condition.** `WorkflowStageOptions` is
+`{ label, description, transitions }`, so the table is static shape only, with
+no guard or predicate. Put a conditional rule in a `beforeTransition` hook,
+which aborts when it throws, or in `access.transition` when the rule is about
+who may move the record rather than about its data.
+
 ### `schema`
 
 `string`. The Postgres schema all four tables (main, i18n, versions, i18n_versions) are created under; generated migrations emit `CREATE SCHEMA IF NOT EXISTS`. Defaults to `public`. Cross-schema relations render fully-qualified (`REFERENCES "other_schema"."table"("id")`).

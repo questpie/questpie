@@ -23,9 +23,9 @@ Use `f.time()` inside a `.fields()` callback. Call it with no argument for a sec
 import { collection } from "#questpie/factories";
 
 export const businesses = collection("businesses").fields(({ f }) => ({
-  name: f.text().required(),
-  opensAt: f.time().required(), // time column, NOT NULL, "HH:MM:SS"
-  closesAt: f.time().required(),
+	name: f.text().required(),
+	opensAt: f.time().required(), // time column, NOT NULL, "HH:MM:SS"
+	closesAt: f.time().required(),
 }));
 ```
 
@@ -33,9 +33,9 @@ That gives `businesses` two `time` columns, required on insert, validated agains
 
 ```ts
 await app.collections.businesses.create({
-  name: "Cafe",
-  opensAt: "08:00:00",
-  closesAt: "17:30:00",
+	name: "Cafe",
+	opensAt: "08:00:00",
+	closesAt: "17:30:00",
 });
 ```
 
@@ -61,7 +61,10 @@ The resulting field data is always a `string`. The derived Zod schema is a `z.st
 </Callout>
 
 <Callout type="warn" title="The value is a STRING, not a Date">
-  A time field stores an `"HH:MM:SS"` string representing time of day. Pass a formatted string such as `"09:30:00"`. Use [`f.datetime()`](/docs/concepts/fields/datetime) when the value needs a calendar date or instant.
+	A time field stores an `"HH:MM:SS"` string representing time of day. Pass a
+	formatted string such as `"09:30:00"`. Use
+	[`f.datetime()`](/docs/concepts/fields/datetime) when the value needs a
+	calendar date or instant.
 </Callout>
 
 ## Chained methods
@@ -70,14 +73,17 @@ The resulting field data is always a `string`. The derived Zod schema is a `z.st
 
 ```ts
 collection("schedules").fields(({ f }) => ({
-  startTime: f.time().required().label("Start"),
-  endTime: f.time().required().label("End"),
-  reminders: f.time().array(), // string[] stored as jsonb
+	startTime: f.time().required().label("Start"),
+	endTime: f.time().required().label("End"),
+	reminders: f.time().array(), // string[] stored as jsonb
 }));
 ```
 
 <Callout type="info" title="No `autoNow()` on time fields">
-  `.autoNow()` and `.autoNowUpdate()` are [`f.datetime()`](/docs/concepts/fields/datetime) methods (they set the column to the current `Date`). They do **not** exist on `f.time()`. For a literal default time use the shared `.default("09:00:00")` modifier.
+	`.autoNow()` and `.autoNowUpdate()` are
+	[`f.datetime()`](/docs/concepts/fields/datetime) methods (they set the column
+	to the current `Date`). They do **not** exist on `f.time()`. For a literal
+	default time use the shared `.default("09:00:00")` modifier.
 </Callout>
 
 ## Filtering, operators
@@ -95,9 +101,9 @@ collection("schedules").fields(({ f }) => ({
 ```ts
 // Businesses open at or before noon:
 const { docs } = await app.collections.businesses.find({
-  where: {
-    opensAt: { lte: "12:00:00" },
-  },
+	where: {
+		opensAt: { lte: "12:00:00" },
+	},
 });
 ```
 

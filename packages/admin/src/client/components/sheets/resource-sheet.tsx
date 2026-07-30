@@ -31,8 +31,7 @@
 import { Icon } from "@iconify/react";
 import * as React from "react";
 
-import type { ComponentReference } from "#questpie/admin/server/augmentation.js";
-
+import type { ComponentReference } from "../../../server/augmentation/index.js";
 import { useAdminConfig } from "../../hooks/use-admin-config";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import type { I18nText } from "../../i18n/types";

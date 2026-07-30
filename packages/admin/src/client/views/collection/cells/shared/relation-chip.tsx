@@ -100,6 +100,9 @@ export function RelationChip({
 				render={
 					<a
 						href={href}
+						// The visible text lives in the Badge's children, which the
+						// rule cannot see through the `render` composition.
+						aria-label={label}
 						onClick={handleClick}
 						onPointerDown={(e) => e.stopPropagation()}
 					/>

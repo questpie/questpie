@@ -1037,12 +1037,12 @@ type _numberMetaNotEmpty = Expect<Not<Equal<keyof NumberFieldMeta, never>>>;
 // Q) Standalone Field Operator Inference — concrete types from field
 // ============================================================================
 
-import type {
-	dateColumnOperators,
-	numberColumnOperators,
-	stringColumnOperators,
-} from "#questpie/server/fields/common-operators.js";
 import type { FieldWhere } from "#questpie/server/fields/field-types.js";
+import type {
+	dateOps,
+	numberOps,
+	stringOps,
+} from "#questpie/server/fields/operators/builtin.js";
 // --- OperatorsToWhereInput works with concrete operator maps ---
 import type { OperatorsToWhereInput } from "#questpie/server/fields/types.js";
 import { datetime } from "#questpie/server/modules/core/fields/datetime.js";
@@ -1050,7 +1050,7 @@ import { number } from "#questpie/server/modules/core/fields/number.js";
 import { text } from "#questpie/server/modules/core/fields/text.js";
 import type { DateInput } from "#questpie/shared/type-utils.js";
 
-type StringOpsWhere = OperatorsToWhereInput<typeof stringColumnOperators>;
+type StringOpsWhere = OperatorsToWhereInput<typeof stringOps.column>;
 type _stringOpsWhereEq = Expect<
 	Equal<StringOpsWhere["eq"], string | undefined>
 >;
@@ -1067,7 +1067,7 @@ type _stringOpsWhereIsNull = Expect<
 	Equal<StringOpsWhere["isNull"], boolean | undefined>
 >;
 
-type NumberOpsWhere = OperatorsToWhereInput<typeof numberColumnOperators>;
+type NumberOpsWhere = OperatorsToWhereInput<typeof numberOps.column>;
 type _numberOpsWhereEq = Expect<
 	Equal<NumberOpsWhere["eq"], number | undefined>
 >;
@@ -1078,7 +1078,7 @@ type _numberOpsWhereLte = Expect<
 	Equal<NumberOpsWhere["lte"], number | undefined>
 >;
 
-type DateOpsWhere = OperatorsToWhereInput<typeof dateColumnOperators>;
+type DateOpsWhere = OperatorsToWhereInput<typeof dateOps.column>;
 type _dateOpsWhereEq = Expect<Equal<DateOpsWhere["eq"], DateInput | undefined>>;
 type _dateOpsWhereGt = Expect<Equal<DateOpsWhere["gt"], DateInput | undefined>>;
 

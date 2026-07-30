@@ -1,7 +1,10 @@
 import type { Adapter, Files } from "files-sdk";
 import { memory } from "files-sdk/memory";
 
-import { createApp, runtimeConfig } from "#questpie/server/config/create-app.js";
+import {
+	createApp,
+	runtimeConfig,
+} from "#questpie/server/config/create-app.js";
 import type {
 	CodegenPlugin,
 	ResolvedRuntimeConfig,

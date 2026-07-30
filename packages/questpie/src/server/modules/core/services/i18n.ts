@@ -1,5 +1,5 @@
-import { service } from "#questpie/server/services/define-service.js";
 import { createTranslator } from "#questpie/server/i18n/translator.js";
+import { service } from "#questpie/server/services/define-service.js";
 
 /**
  * i18n translator service — creates the `t()` function from app config.

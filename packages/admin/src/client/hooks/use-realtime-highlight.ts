@@ -67,10 +67,15 @@ export function useRealtimeHighlight<T extends DocWithId>(
 	const initializedAtRef = useRef<number>(0);
 	const timersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
-	// Cleanup timers on unmount
+	// Cleanup timers on unmount. The Set is captured here rather than read as
+	// `timersRef.current` inside the cleanup: the ref holds one Set instance
+	// for the component's lifetime (only ever `.add`/`.delete`, never
+	// reassigned), so this is equivalent — and it is the form React's
+	// ref-in-cleanup rule asks for.
 	useEffect(() => {
+		const timers = timersRef.current;
 		return () => {
-			for (const timer of timersRef.current) {
+			for (const timer of timers) {
 				clearTimeout(timer);
 			}
 		};

@@ -1,4 +1,4 @@
-export { adminConfig } from "../server/augmentation.js";
+export { adminConfig } from "../server/augmentation/index.js";
 export type {
 	ActionReference,
 	ActionsConfigContext,
@@ -96,7 +96,7 @@ export type {
 	ViewKindRegistry,
 	WidgetAccessRule,
 	WidgetFetchContext,
-} from "../server/augmentation.js";
+} from "../server/augmentation/index.js";
 
 export {
 	component,
@@ -146,7 +146,7 @@ export {
 	introspectBlocks,
 	processBlocksDocument,
 	processDocumentBlocksPrefetch,
-} from "../server/block/index.js";
+} from "../server/modules/admin/block/index.js";
 
 export {
 	type AuthSession,
@@ -155,6 +155,6 @@ export {
 	isAdminUser,
 	type RequireAdminAuthOptions,
 	requireAdminAuth,
-} from "../server/auth-helpers.js";
+} from "../server/modules/admin/auth-helpers.js";
 
 export * from "../server/adapters/index.js";

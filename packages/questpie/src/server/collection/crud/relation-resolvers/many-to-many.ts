@@ -77,7 +77,9 @@ export async function resolveManyToManyRelation(
 	const junctionOptions: Record<string, any> = {
 		where: { [sourceField]: { in: Array.from(sourceIds) } },
 	};
-	if ((nestedOptions as Record<PropertyKey, unknown>)[INHERIT_ACCESS] === true) {
+	if (
+		(nestedOptions as Record<PropertyKey, unknown>)[INHERIT_ACCESS] === true
+	) {
 		(junctionOptions as Record<PropertyKey, unknown>)[INHERIT_ACCESS] = true;
 	}
 	const { docs: junctionRows } = await junctionCrud.find(

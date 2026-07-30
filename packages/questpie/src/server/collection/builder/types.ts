@@ -9,7 +9,10 @@ import type {
 import type { PgColumn, PgTableWithColumns } from "drizzle-orm/pg-core";
 
 import type { Collection } from "#questpie/server/collection/builder/collection.js";
-import type { ValidationSchemas } from "#questpie/server/collection/builder/validation-helpers.js";
+import type {
+	ValidationBuilderOptions,
+	ValidationSchemas,
+} from "#questpie/server/collection/builder/validation-helpers.js";
 import type { AppContext } from "#questpie/server/config/app-context.js";
 import type { AccessMode } from "#questpie/server/config/types.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
@@ -1246,6 +1249,18 @@ export interface CollectionBuilderState {
 	 */
 	searchable: SearchableConfig | false | undefined;
 	validation: ValidationSchemas | undefined;
+	/**
+	 * Options captured by `.validation()`, applied when the Collection
+	 * constructor builds `validation`.
+	 *
+	 * The builder deliberately does NOT build schemas itself. It used to, and
+	 * the two paths drifted: the constructor adds the id, timestamp and
+	 * soft-delete columns so a custom id can be supplied on create and restore
+	 * can write `deletedAt`, while the builder copy added none of them. Since
+	 * both produce a stripping Zod object, calling `.validation()` silently
+	 * narrowed what a collection accepted.
+	 */
+	validationOptions: ValidationBuilderOptions | undefined;
 	/**
 	 * Output type extensions - fields that are computed/populated in hooks
 	 * but should appear in the select type. These are type-only and don't

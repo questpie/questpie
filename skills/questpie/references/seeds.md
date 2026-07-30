@@ -1,6 +1,7 @@
 ---
 name: questpie-core/seeds
-description: QUESTPIE seeds seed() seed.steps() idempotent atomic transaction checkpointed step questpie_seeds questpie_seed_steps category required dev test dependsOn undo SeedContext createContext log autoSeed seed:status seed:undo seed:reset --force --validate --category --only module seeds system mode
+description:
+  QUESTPIE seeds seed() seed.steps() idempotent atomic transaction checkpointed step questpie_seeds questpie_seed_steps category required dev test dependsOn undo SeedContext createContext log autoSeed seed:status seed:undo seed:reset --force --validate --category --only module seeds system mode
   - questpie-core
 ---
 
@@ -14,11 +15,11 @@ Seeds run in **system mode** by default (bypass access rules, so bootstrap data 
 
 ## `seed()` vs `seed.steps()`
 
-| | `seed({...})` | `seed.steps({...})` |
-| --- | --- | --- |
-| Transaction | one seed-wide tx; throw → all DB writes + tracking row roll back together | **no** seed-wide tx; each `step(name, fn)` runs in its own tx |
-| Resume | re-runs from the top | completed steps skip; checkpoints stored in `questpie_seed_steps` |
-| Use for | normal bootstrap/demo data | uploads, slow imports, external API calls, large datasets |
+|             | `seed({...})`                                                             | `seed.steps({...})`                                               |
+| ----------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Transaction | one seed-wide tx; throw → all DB writes + tracking row roll back together | **no** seed-wide tx; each `step(name, fn)` runs in its own tx     |
+| Resume      | re-runs from the top                                                      | completed steps skip; checkpoints stored in `questpie_seed_steps` |
+| Use for     | normal bootstrap/demo data                                                | uploads, slow imports, external API calls, large datasets         |
 
 ```ts title="seeds/site-settings.ts"
 import { seed } from "questpie";
@@ -48,7 +49,9 @@ export default seed.steps({
 	id: "demoContent",
 	category: "dev",
 	async run({ step }) {
-		const fixture = await step("prepare", async () => ({ posts: [{ slug: "demo" }] }));
+		const fixture = await step("prepare", async () => ({
+			posts: [{ slug: "demo" }],
+		}));
 		await step("create", async ({ collections }) => {
 			for (const p of fixture.posts) await collections.posts.create(p);
 		});
@@ -75,12 +78,12 @@ Every seed has one `category`: `required` (bootstrap data for every env), `dev` 
 
 ## CLI
 
-| Command | Effect |
-| --- | --- |
-| `questpie seed` | Run pending seeds |
-| `questpie seed:status` | List pending + executed seeds |
-| `questpie seed:undo` | Run `undo` handlers for executed seeds, then remove tracking rows |
-| `questpie seed:reset` | Clear tracking rows + step checkpoints (NOT an undo - leaves data, marks seeds pending) |
+| Command                | Effect                                                                                  |
+| ---------------------- | --------------------------------------------------------------------------------------- |
+| `questpie seed`        | Run pending seeds                                                                       |
+| `questpie seed:status` | List pending + executed seeds                                                           |
+| `questpie seed:undo`   | Run `undo` handlers for executed seeds, then remove tracking rows                       |
+| `questpie seed:reset`  | Clear tracking rows + step checkpoints (NOT an undo - leaves data, marks seeds pending) |
 
 Options: `--category <required,dev,test>` (`seed`, `seed:undo`), `--only <ids>` (`seed`, `seed:undo`, `seed:reset`), `-f, --force` (re-run despite tracking), `--validate` (run inside a transaction and roll back).
 

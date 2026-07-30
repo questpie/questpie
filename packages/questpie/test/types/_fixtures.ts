@@ -45,9 +45,9 @@
  */
 
 import { collection } from "#questpie/server/collection/builder/collection-builder.js";
-import { global } from "#questpie/server/global/builder/global-builder.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
 import type { QuestpieConfig } from "#questpie/server/config/types.js";
+import { global } from "#questpie/server/global/builder/global-builder.js";
 
 // ============================================================================
 // §RichText/Blocks phantom states
@@ -214,17 +214,21 @@ export const articles = collection("articles")
  * article_comments — to-one relations back to articles + authors. Used for
  * reverse/circular where nesting (CL-02 where) and depth (CL-14).
  */
-export const articleComments = collection("article_comments").fields(({ f }) => ({
-	content: f.textarea().required(),
-	article: f.relation("articles").required().relationName("articleComment"),
-	author: f.relation("authors").required().relationName("commentAuthor"),
-}));
+export const articleComments = collection("article_comments").fields(
+	({ f }) => ({
+		content: f.textarea().required(),
+		article: f.relation("articles").required().relationName("articleComment"),
+		author: f.relation("authors").required().relationName("commentAuthor"),
+	}),
+);
 
 /** article_categories — junction collection for the manyToMany above. */
-export const articleCategories = collection("article_categories").fields(({ f }) => ({
-	article: f.relation("articles").required().onDelete("cascade"),
-	category: f.relation("categories").required().onDelete("cascade"),
-}));
+export const articleCategories = collection("article_categories").fields(
+	({ f }) => ({
+		article: f.relation("articles").required().onDelete("cascade"),
+		category: f.relation("categories").required().onDelete("cascade"),
+	}),
+);
 
 /** media — upload collection; to-many `multiple()` target (articles.gallery). */
 export const media = collection("media")
@@ -268,32 +272,31 @@ export const tickets = collection("tickets").fields(({ f }) => ({
  * Covers CL-03 (write-input parity), CL-08-globals (required array select),
  * CL-02 (global m2m relation → array `with`).
  */
-export const siteGlobal = global("site")
-	.fields(({ f }) => ({
-		siteName: f.text(255).required(),
-		tagline: f.text(),
-		// CL-03 select-union on a global.
-		theme: f.select([
-			{ value: "light", label: "Light" },
-			{ value: "dark", label: "Dark" },
-			{ value: "system", label: "System" },
-		] as const),
-		// CL-08-globals: required array (SELECT fixed for free; INSERT tracked by CL-03).
-		featureFlags: f.text().required().array(),
-		// CL-03 object field on a global.
-		contact: f.object({
-			email: f.text().required(),
-			phone: f.text(),
-		}),
-		// CL-02 global m2m relation → array `with`-population.
-		partners: f.relation("authors").manyToMany({
-			through: "site_partners",
-			sourceField: "site",
-			targetField: "author",
-		}),
-		// CL-02 global to-one relation.
-		owner: f.relation("authors").relationName("siteOwner"),
-	}));
+export const siteGlobal = global("site").fields(({ f }) => ({
+	siteName: f.text(255).required(),
+	tagline: f.text(),
+	// CL-03 select-union on a global.
+	theme: f.select([
+		{ value: "light", label: "Light" },
+		{ value: "dark", label: "Dark" },
+		{ value: "system", label: "System" },
+	] as const),
+	// CL-08-globals: required array (SELECT fixed for free; INSERT tracked by CL-03).
+	featureFlags: f.text().required().array(),
+	// CL-03 object field on a global.
+	contact: f.object({
+		email: f.text().required(),
+		phone: f.text(),
+	}),
+	// CL-02 global m2m relation → array `with`-population.
+	partners: f.relation("authors").manyToMany({
+		through: "site_partners",
+		sourceField: "site",
+		targetField: "author",
+	}),
+	// CL-02 global to-one relation.
+	owner: f.relation("authors").relationName("siteOwner"),
+}));
 
 /**
  * alertsGlobal — the city-portal `alertType` select-union global (CL-03's
@@ -315,29 +318,28 @@ export const alertsGlobal = global("alerts").fields(({ f }) => ({
  * collection-side equivalent. Platform union mirrors the real fixture:
  * instagram | facebook | twitter | tiktok | youtube.
  */
-export const socialGlobal = global("social")
-	.fields(({ f }) => ({
-		navigation: f
-			.object({
-				label: f.text().required(),
-				href: f.text().required(),
-			})
-			.array(),
-		socialLinks: f
-			.object({
-				platform: f
-					.select([
-						{ value: "instagram", label: "Instagram" },
-						{ value: "facebook", label: "Facebook" },
-						{ value: "twitter", label: "Twitter/X" },
-						{ value: "tiktok", label: "TikTok" },
-						{ value: "youtube", label: "YouTube" },
-					] as const)
-					.required(),
-				url: f.text().required(),
-			})
-			.array(),
-	}));
+export const socialGlobal = global("social").fields(({ f }) => ({
+	navigation: f
+		.object({
+			label: f.text().required(),
+			href: f.text().required(),
+		})
+		.array(),
+	socialLinks: f
+		.object({
+			platform: f
+				.select([
+					{ value: "instagram", label: "Instagram" },
+					{ value: "facebook", label: "Facebook" },
+					{ value: "twitter", label: "Twitter/X" },
+					{ value: "tiktok", label: "TikTok" },
+					{ value: "youtube", label: "YouTube" },
+				] as const)
+				.required(),
+			url: f.text().required(),
+		})
+		.array(),
+}));
 
 /**
  * treeGlobal — SELF-RELATING global (relation target is a collection that

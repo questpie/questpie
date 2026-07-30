@@ -35,4 +35,7 @@ export {
 	introspectGlobals,
 } from "#questpie/server/global/introspection.js";
 
-export { introspectRoutes, type IntrospectedRoute } from "#questpie/server/routes/introspection.js";
+export {
+	introspectRoutes,
+	type IntrospectedRoute,
+} from "#questpie/server/routes/introspection.js";

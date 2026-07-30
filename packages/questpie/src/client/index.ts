@@ -1,5 +1,3 @@
-import qs from "qs";
-
 import type { GlobalSchema } from "#questpie/server/global/introspection.js";
 import type {
 	HttpMethod,
@@ -8,6 +6,7 @@ import type {
 	JsonRouteDefinition,
 	RawRouteDefinition,
 } from "#questpie/server/routes/types.js";
+import { stringifyQuery } from "#questpie/shared/query-string.js";
 import { attachTxid, QUESTPIE_TXID_HEADER } from "#questpie/shared/txid.js";
 import type {
 	AnyCollection,
@@ -58,7 +57,10 @@ import type {
 } from "../server/modules/core/integrated/crdt/types.js";
 import type { GetAuthHeaders } from "./auth.js";
 import { createChannelsAPI, type ChannelsClient } from "./channels/index.js";
-import { createCrdtClientAPI } from "./crdt/index.js";
+// NOTE: deliberately a type-only import. A value import of ./crdt/index.js
+// pulls the whole 164 KB client CRDT implementation into every bundle — see
+// ./crdt-host.ts for the measurement.
+import { CRDT_CLIENT_HOST, type CrdtClientHostHandle } from "./crdt-host.js";
 import type { CrdtClientRuntimeConfig } from "./crdt/types.js";
 import {
 	buildCollectionTopic,
@@ -1058,6 +1060,25 @@ type RouteCallOptions = Omit<RequestInit, "method"> & {
 export type QuestpieClient<in out TApp extends QuestpieApp> = {
 	collections: CollectionsAPI<TApp>;
 	channels: ChannelsClient<AppChannelDefinitions<TApp>>;
+	/**
+	 * @deprecated Removed as a client member. Build it explicitly instead:
+	 *
+	 * ```ts
+	 * import { createCrdtClient } from "questpie/crdt";
+	 * const crdt = createCrdtClient(client);
+	 * ```
+	 *
+	 * `createClient()` used to construct the CRDT API eagerly, which put the
+	 * whole 164 KB client-side CRDT implementation into every browser bundle —
+	 * including the majority of apps that never open a collaborative document.
+	 * It is not tree-shakeable away, because the coupling was a real call
+	 * inside `createClient()` rather than a dangling re-export.
+	 *
+	 * `createCrdtClient` takes the client you already have and reuses its
+	 * realtime session, so there is still exactly one connection.
+	 *
+	 * Accessing this property throws with the same guidance.
+	 */
 	crdt: CrdtClientAPI<
 		NonNullable<TApp["crdt"]> extends CrdtRegistryShape
 			? NonNullable<TApp["crdt"]>
@@ -1070,6 +1091,8 @@ export type QuestpieClient<in out TApp extends QuestpieApp> = {
 	setLocale?: (locale?: string) => void;
 	getLocale?: () => string | undefined;
 	getBasePath?: () => string;
+	/** @internal Consumed by `createCrdtClient()`; see ./crdt-host.ts. */
+	[CRDT_CLIENT_HOST]?: CrdtClientHostHandle;
 };
 
 /**
@@ -1228,43 +1251,41 @@ export function createClient<TApp extends QuestpieApp>(
 	): Promise<unknown> => {
 		if (topic.resourceType === "collection") {
 			if (topic.operation === "count") {
-				const queryString = qs.stringify(
-					{ where: topic.where, locale: topic.locale },
-					{ skipNulls: true, arrayFormat: "brackets" },
-				);
+				const queryString = stringifyQuery({
+					where: topic.where,
+					locale: topic.locale,
+				});
 				const result = await request(
 					`${apiBasePath}/${topic.resource}/count${queryString ? `?${queryString}` : ""}`,
 				);
 				return result.count;
 			}
 			if (topic.operation === "get") {
-				const queryString = qs.stringify(
-					{ with: topic.with, locale: topic.locale },
-					{ skipNulls: true, arrayFormat: "brackets" },
-				);
+				const queryString = stringifyQuery({
+					with: topic.with,
+					locale: topic.locale,
+				});
 				return request(
 					`${apiBasePath}/${topic.resource}/${topic.id}${queryString ? `?${queryString}` : ""}`,
 				);
 			}
-			const queryString = qs.stringify(
-				{
-					where: topic.where,
-					with: topic.with,
-					limit: topic.limit,
-					offset: topic.offset,
-					orderBy: topic.orderBy,
-					locale: topic.locale,
-				},
-				{ skipNulls: true, arrayFormat: "brackets" },
-			);
+			const queryString = stringifyQuery({
+				where: topic.where,
+				with: topic.with,
+				limit: topic.limit,
+				offset: topic.offset,
+				orderBy: topic.orderBy,
+				locale: topic.locale,
+			});
 			return request(
 				`${apiBasePath}/${topic.resource}${queryString ? `?${queryString}` : ""}`,
 			);
 		}
-		const queryString = qs.stringify(
-			{ where: topic.where, with: topic.with, locale: topic.locale },
-			{ skipNulls: true, arrayFormat: "brackets" },
-		);
+		const queryString = stringifyQuery({
+			where: topic.where,
+			with: topic.with,
+			locale: topic.locale,
+		});
 		return request(
 			`${apiBasePath}/globals/${topic.resource}${queryString ? `?${queryString}` : ""}`,
 		);
@@ -1307,15 +1328,18 @@ export function createClient<TApp extends QuestpieApp>(
 		pusherConnection,
 		sseConnection,
 	});
-	const crdtApi = createCrdtClientAPI({
+	// The CRDT API is NOT constructed here — see ./crdt-host.ts. Only the
+	// ingredients are captured, so `createCrdtClient(client)` can build it on
+	// demand while reusing this client's single realtime session.
+	const crdtHost = {
 		baseURL: config.baseURL,
 		basePath: apiBasePath,
 		fetcher,
 		defaultHeaders,
 		getAuthHeaders: config.getAuthHeaders,
-		runtime: config.crdt,
 		realtimeSession,
-	});
+		runtime: config.crdt,
+	} as const;
 
 	/**
 	 * Collections API
@@ -1325,10 +1349,7 @@ export function createClient<TApp extends QuestpieApp>(
 			const base = {
 				find: async (options: any = {}) => {
 					// Use qs for cleaner query strings with nested objects
-					const queryString = qs.stringify(options, {
-						skipNulls: true,
-						arrayFormat: "brackets",
-					});
+					const queryString = stringifyQuery(options);
 
 					const path = `${apiBasePath}/${collectionName}${queryString ? `?${queryString}` : ""}`;
 
@@ -1357,10 +1378,7 @@ export function createClient<TApp extends QuestpieApp>(
 				},
 
 				count: async (options: any = {}) => {
-					const queryString = qs.stringify(options, {
-						skipNulls: true,
-						arrayFormat: "brackets",
-					});
+					const queryString = stringifyQuery(options);
 
 					const path = `${apiBasePath}/${collectionName}/count${queryString ? `?${queryString}` : ""}`;
 					const result = await request(path);
@@ -1372,33 +1390,21 @@ export function createClient<TApp extends QuestpieApp>(
 
 					// Optimization: if only id is provided in where, use the /:id endpoint
 					if (where?.id && Object.keys(where).length === 1) {
-						const queryString = qs.stringify(
-							{
-								with: options.with,
-								columns: options.columns,
-								includeDeleted: options.includeDeleted,
-								locale: options.locale,
-								localeFallback: options.localeFallback,
-								stage: options.stage,
-							},
-							{
-								skipNulls: true,
-								arrayFormat: "brackets",
-							},
-						);
+						const queryString = stringifyQuery({
+							with: options.with,
+							columns: options.columns,
+							includeDeleted: options.includeDeleted,
+							locale: options.locale,
+							localeFallback: options.localeFallback,
+							stage: options.stage,
+						});
 
 						const path = `${apiBasePath}/${collectionName}/${where.id}${queryString ? `?${queryString}` : ""}`;
 						return request(path);
 					}
 
 					// Otherwise use find with limit=1
-					const queryString = qs.stringify(
-						{ ...options, limit: 1 },
-						{
-							skipNulls: true,
-							arrayFormat: "brackets",
-						},
-					);
+					const queryString = stringifyQuery({ ...options, limit: 1 });
 
 					const path = `${apiBasePath}/${collectionName}${queryString ? `?${queryString}` : ""}`;
 					const result = await request(path);
@@ -1406,10 +1412,7 @@ export function createClient<TApp extends QuestpieApp>(
 				},
 
 				create: async (data: any, options: LocaleOptions = {}) => {
-					const queryString = qs.stringify(options, {
-						skipNulls: true,
-						arrayFormat: "brackets",
-					});
+					const queryString = stringifyQuery(options);
 					const path = `${apiBasePath}/${collectionName}${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
@@ -1425,10 +1428,7 @@ export function createClient<TApp extends QuestpieApp>(
 					}: { id: string; data: unknown; expectedRevision?: number },
 					options: LocaleOptions = {},
 				) => {
-					const queryString = qs.stringify(options, {
-						skipNulls: true,
-						arrayFormat: "brackets",
-					});
+					const queryString = stringifyQuery(options);
 					const path = `${apiBasePath}/${collectionName}/${id}${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "PATCH",
@@ -1443,10 +1443,7 @@ export function createClient<TApp extends QuestpieApp>(
 					{ id, expectedRevision }: { id: string; expectedRevision?: number },
 					options: LocaleOptions = {},
 				) => {
-					const queryString = qs.stringify(options, {
-						skipNulls: true,
-						arrayFormat: "brackets",
-					});
+					const queryString = stringifyQuery(options);
 					const path = `${apiBasePath}/${collectionName}/${id}${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "DELETE",
@@ -1460,10 +1457,7 @@ export function createClient<TApp extends QuestpieApp>(
 					{ id, expectedRevision }: { id: string; expectedRevision?: number },
 					options: LocaleOptions = {},
 				) => {
-					const queryString = qs.stringify(options, {
-						skipNulls: true,
-						arrayFormat: "brackets",
-					});
+					const queryString = stringifyQuery(options);
 					const path = `${apiBasePath}/${collectionName}/${id}/restore${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
@@ -1477,10 +1471,7 @@ export function createClient<TApp extends QuestpieApp>(
 					{ id, expectedRevision }: { id: string; expectedRevision?: number },
 					options: LocaleOptions = {},
 				) => {
-					const queryString = qs.stringify(options, {
-						skipNulls: true,
-						arrayFormat: "brackets",
-					});
+					const queryString = stringifyQuery(options);
 					const path = `${apiBasePath}/${collectionName}/${id}/purge${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
@@ -1498,17 +1489,11 @@ export function createClient<TApp extends QuestpieApp>(
 					}: { id: string; limit?: number; offset?: number },
 					options: LocaleOptions = {},
 				) => {
-					const queryString = qs.stringify(
-						{
-							limit,
-							offset,
-							...options,
-						},
-						{
-							skipNulls: true,
-							arrayFormat: "brackets",
-						},
-					);
+					const queryString = stringifyQuery({
+						limit,
+						offset,
+						...options,
+					});
 					const path = `${apiBasePath}/${collectionName}/${id}/versions${queryString ? `?${queryString}` : ""}`;
 					return request(path);
 				},
@@ -1527,10 +1512,7 @@ export function createClient<TApp extends QuestpieApp>(
 					},
 					options: LocaleOptions = {},
 				) => {
-					const queryString = qs.stringify(options, {
-						skipNulls: true,
-						arrayFormat: "brackets",
-					});
+					const queryString = stringifyQuery(options);
 					const path = `${apiBasePath}/${collectionName}/${id}/revert${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
@@ -1547,10 +1529,7 @@ export function createClient<TApp extends QuestpieApp>(
 					}: CollectionTransitionStageInput,
 					options: LocaleOptions = {},
 				) => {
-					const queryString = qs.stringify(options, {
-						skipNulls: true,
-						arrayFormat: "brackets",
-					});
+					const queryString = stringifyQuery(options);
 					const path = `${apiBasePath}/${collectionName}/${id}/transition${queryString ? `?${queryString}` : ""}`;
 					const body = {
 						stage,
@@ -1582,10 +1561,7 @@ export function createClient<TApp extends QuestpieApp>(
 					},
 					options: LocaleOptions = {},
 				) => {
-					const queryString = qs.stringify(options, {
-						skipNulls: true,
-						arrayFormat: "brackets",
-					});
+					const queryString = stringifyQuery(options);
 					const path = `${apiBasePath}/${collectionName}${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "PATCH",
@@ -1601,10 +1577,7 @@ export function createClient<TApp extends QuestpieApp>(
 					{ updates }: { updates: Array<{ id: string; data: unknown }> },
 					options: LocaleOptions = {},
 				) => {
-					const queryString = qs.stringify(options, {
-						skipNulls: true,
-						arrayFormat: "brackets",
-					});
+					const queryString = stringifyQuery(options);
 					const path = `${apiBasePath}/${collectionName}/update-batch${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
@@ -1622,10 +1595,7 @@ export function createClient<TApp extends QuestpieApp>(
 					},
 					options: LocaleOptions = {},
 				) => {
-					const queryString = qs.stringify(options, {
-						skipNulls: true,
-						arrayFormat: "brackets",
-					});
+					const queryString = stringifyQuery(options);
 					const path = `${apiBasePath}/${collectionName}/delete-many${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
@@ -1835,16 +1805,13 @@ export function createClient<TApp extends QuestpieApp>(
 						stage?: string;
 					} = {},
 				) => {
-					const queryString = qs.stringify(
-						{
-							with: options.with,
-							columns: options.columns,
-							locale: options.locale,
-							localeFallback: options.localeFallback,
-							stage: options.stage,
-						},
-						{ skipNulls: true, arrayFormat: "brackets" },
-					);
+					const queryString = stringifyQuery({
+						with: options.with,
+						columns: options.columns,
+						locale: options.locale,
+						localeFallback: options.localeFallback,
+						stage: options.stage,
+					});
 					const path = `${apiBasePath}/globals/${globalName}${queryString ? `?${queryString}` : ""}`;
 					return request(path);
 				},
@@ -1879,15 +1846,12 @@ export function createClient<TApp extends QuestpieApp>(
 						stage?: string;
 					} = {},
 				) => {
-					const queryString = qs.stringify(
-						{
-							with: options.with,
-							locale: options.locale,
-							localeFallback: options.localeFallback,
-							stage: options.stage,
-						},
-						{ skipNulls: true, arrayFormat: "brackets" },
-					);
+					const queryString = stringifyQuery({
+						with: options.with,
+						locale: options.locale,
+						localeFallback: options.localeFallback,
+						stage: options.stage,
+					});
 					return mutationRequest(
 						`${apiBasePath}/globals/${globalName}${queryString ? `?${queryString}` : ""}`,
 						{
@@ -1915,17 +1879,14 @@ export function createClient<TApp extends QuestpieApp>(
 						stage?: string;
 					} = {},
 				) => {
-					const queryString = qs.stringify(
-						{
-							id: options.id,
-							limit: options.limit,
-							offset: options.offset,
-							locale: options.locale,
-							localeFallback: options.localeFallback,
-							stage: options.stage,
-						},
-						{ skipNulls: true, arrayFormat: "brackets" },
-					);
+					const queryString = stringifyQuery({
+						id: options.id,
+						limit: options.limit,
+						offset: options.offset,
+						locale: options.locale,
+						localeFallback: options.localeFallback,
+						stage: options.stage,
+					});
 					const path = `${apiBasePath}/globals/${globalName}/versions${queryString ? `?${queryString}` : ""}`;
 					return request(path);
 				},
@@ -1938,14 +1899,11 @@ export function createClient<TApp extends QuestpieApp>(
 						stage?: string;
 					} = {},
 				) => {
-					const queryString = qs.stringify(
-						{
-							locale: options.locale,
-							localeFallback: options.localeFallback,
-							stage: options.stage,
-						},
-						{ skipNulls: true, arrayFormat: "brackets" },
-					);
+					const queryString = stringifyQuery({
+						locale: options.locale,
+						localeFallback: options.localeFallback,
+						stage: options.stage,
+					});
 					return mutationRequest(
 						`${apiBasePath}/globals/${globalName}/revert${queryString ? `?${queryString}` : ""}`,
 						{
@@ -1962,13 +1920,10 @@ export function createClient<TApp extends QuestpieApp>(
 						localeFallback?: boolean;
 					} = {},
 				) => {
-					const queryString = qs.stringify(
-						{
-							locale: options.locale,
-							localeFallback: options.localeFallback,
-						},
-						{ skipNulls: true, arrayFormat: "brackets" },
-					);
+					const queryString = stringifyQuery({
+						locale: options.locale,
+						localeFallback: options.localeFallback,
+					});
 					return request(
 						`${apiBasePath}/globals/${globalName}/transition${queryString ? `?${queryString}` : ""}`,
 						{
@@ -2051,10 +2006,7 @@ export function createClient<TApp extends QuestpieApp>(
 					return async (input?: any) => {
 						const path = segments.map(camelToKebab).join("/");
 						if (methodUpper === "GET" && input) {
-							const queryString = qs.stringify(input, {
-								skipNulls: true,
-								arrayFormat: "brackets",
-							});
+							const queryString = stringifyQuery(input);
 							return request(
 								`${apiBasePath}/${path}${queryString ? `?${queryString}` : ""}`,
 								{ method: "GET" },
@@ -2091,7 +2043,24 @@ export function createClient<TApp extends QuestpieApp>(
 	return {
 		collections,
 		channels: channelsApi,
-		crdt: crdtApi,
+		[CRDT_CLIENT_HOST]: crdtHost,
+		// A throwing getter rather than a removed property: reading a missing
+		// `.crdt` would surface later as "Cannot read properties of undefined",
+		// pointing at the wrong place. This fails at the access site with the
+		// migration. It holds no reference to CRDT code, so nothing is bundled.
+		get crdt(): never {
+			throw new Error(
+				"client.crdt was removed. Build it explicitly:\n\n" +
+					'  import { createCrdtClient } from "questpie/crdt";\n' +
+					"  const crdt = createCrdtClient(client);\n" +
+					"  const doc = crdt.collections.articles.document({ id });\n\n" +
+					"createClient() constructed the CRDT API eagerly, which put the whole " +
+					"client-side CRDT implementation (~164 KB) into every browser bundle, " +
+					"including apps that never open a collaborative document. " +
+					"createCrdtClient() reuses this client's realtime session, so there is " +
+					"still exactly one connection.",
+			);
+		},
 		globals,
 		routes: routesProxy,
 		search,

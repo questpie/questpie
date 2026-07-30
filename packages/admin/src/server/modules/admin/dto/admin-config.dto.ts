@@ -1,13 +1,22 @@
 /**
- * Admin Config DTO Types
+ * Admin Config DTO — the wire format returned by the getAdminConfig route.
  *
- * Typed interfaces for the admin config response shapes returned by
- * the getAdminConfig route. These define the discriminated/unified
- * shape that the admin client consumes.
+ * `adminConfigDTOSchema` below IS the contract. It is the only thing that
+ * leaves this file, and it is what the route validates against.
  *
- * These types are the "wire format" — what the client receives.
- * They mirror the server augmentation types but are pure data
- * (no functions, no callbacks, no non-serializable fields).
+ * This file used to carry a parallel set of 26 hand-written interfaces
+ * describing the same shape, with nothing checking the two agreed — a
+ * three-way mirror (server augmentation types -> hand DTOs -> Zod) where only
+ * one of the 26 pairs was actually tied together. None of them had a consumer,
+ * so they were removed. The handful of interfaces still here exist for exactly
+ * one reason: `sidebarSectionSchema` is recursive, so `z.lazy` needs a named
+ * type annotation to break the inference cycle. Nothing else should be added
+ * here — derive from the schema with `z.infer` instead.
+ *
+ * They must stay `export`ed even though nothing imports them. The annotation
+ * puts `SidebarSectionDTO` into the inferred type of `adminConfigDTOSchema`,
+ * so declaration emit has to be able to name it — dropping the keyword fails
+ * the build with TS4023 on admin-config.ts.
  */
 
 import { z } from "zod";
@@ -68,155 +77,6 @@ export interface SidebarSectionDTO {
 	sections?: SidebarSectionDTO[];
 }
 
-export interface SidebarConfigDTO {
-	sections: SidebarSectionDTO[];
-}
-
-// ============================================================================
-// Shell DTO
-// ============================================================================
-
-export interface AdminShellRouteRulesDTO {
-	include?: string[];
-	exclude?: string[];
-	match?: "prefix" | "exact";
-}
-
-export interface AdminShellRailDTO {
-	component: ComponentReferenceDTO;
-	placement?: "left" | "right";
-	width?: number | string;
-	minWidth?: number | string;
-	maxWidth?: number | string;
-	hiddenOnMobile?: boolean;
-	routes?: AdminShellRouteRulesDTO;
-	className?: string;
-}
-
-export interface AdminShellConfigDTO {
-	secondaryRail?: AdminShellRailDTO;
-}
-
-// ============================================================================
-// Dashboard DTO
-// ============================================================================
-
-/**
- * Serialized dashboard widget — discriminated union by `type`.
- * Non-serializable fields (loader, access, filterFn) are stripped.
- * `hasLoader: true` signals that the client should call fetchWidgetData.
- */
-export interface DashboardWidgetDTO {
-	type: string;
-	id?: string;
-	title?: Record<string, string>;
-	description?: Record<string, string>;
-	hasLoader?: boolean;
-	collection?: string;
-	/** Remaining widget-specific properties */
-	[key: string]: unknown;
-}
-
-export interface DashboardSectionDTO {
-	type: "section";
-	label?: Record<string, string>;
-	layout?: string;
-	columns?: number;
-	rowHeight?: number | string;
-	gap?: number;
-	items: DashboardWidgetDTO[];
-}
-
-export interface DashboardTabDTO {
-	id: string;
-	label: Record<string, string>;
-	columns?: number;
-	rowHeight?: number | string;
-	gap?: number;
-	items: DashboardWidgetDTO[];
-}
-
-export interface DashboardTabsDTO {
-	type: "tabs";
-	tabs: DashboardTabDTO[];
-	defaultTab?: string;
-}
-
-export type DashboardItemDTO =
-	| DashboardWidgetDTO
-	| DashboardSectionDTO
-	| DashboardTabsDTO;
-
-export interface DashboardConfigDTO {
-	title?: Record<string, string>;
-	description?: Record<string, string>;
-	columns?: number;
-	rowHeight?: number | string;
-	gap?: number;
-	realtime?: boolean;
-	actions?: unknown[];
-	items?: DashboardItemDTO[];
-}
-
-// ============================================================================
-// Branding DTO
-// ============================================================================
-
-export type BrandLogoDTO =
-	| string
-	| {
-			src: string;
-			srcDark?: string;
-			alt?: string;
-			width?: number;
-			height?: number;
-	  }
-	| ComponentReferenceDTO;
-
-export type I18nTextDTO = string | Record<string, string>;
-
-export interface BrandingConfigDTO {
-	name?: I18nTextDTO;
-	logo?: BrandLogoDTO;
-	tagline?: I18nTextDTO;
-	favicon?: string;
-}
-
-// ============================================================================
-// Collection/Global Metadata DTO
-// ============================================================================
-
-export interface WorkflowMetaDTO {
-	enabled: boolean;
-	initialStage: string;
-	stages: Array<{
-		name: string;
-		label?: string;
-		description?: string;
-		transitions?: string[];
-	}>;
-}
-
-export interface CollectionMetaDTO {
-	label?: Record<string, string>;
-	description?: Record<string, string>;
-	icon?: ComponentReferenceDTO;
-	hidden?: boolean;
-	group?: string;
-	order?: number;
-	workflow?: WorkflowMetaDTO;
-}
-
-export interface GlobalMetaDTO {
-	label?: Record<string, string>;
-	description?: Record<string, string>;
-	icon?: ComponentReferenceDTO;
-	hidden?: boolean;
-	group?: string;
-	order?: number;
-	workflow?: WorkflowMetaDTO;
-}
-
 // ============================================================================
 // Component Reference DTO
 // ============================================================================
@@ -224,55 +84,6 @@ export interface GlobalMetaDTO {
 export interface ComponentReferenceDTO {
 	type: string;
 	props?: Record<string, unknown>;
-}
-
-// ============================================================================
-// Uploads DTO
-// ============================================================================
-
-export interface UploadsConfigDTO {
-	collections: string[];
-	defaultCollection?: string;
-}
-
-// ============================================================================
-// Top-Level Admin Config DTO
-// ============================================================================
-
-/**
- * The complete admin config response shape returned by getAdminConfig.
- * This is the single source of truth for what the admin client receives.
- */
-export interface AdminConfigDTO {
-	dashboard?: DashboardConfigDTO;
-	sidebar?: SidebarConfigDTO;
-	shell?: AdminShellConfigDTO;
-	branding?: BrandingConfigDTO;
-	blocks?: Record<string, BlockSchemaDTO>;
-	collections?: Record<string, CollectionMetaDTO>;
-	globals?: Record<string, GlobalMetaDTO>;
-	uploads?: UploadsConfigDTO;
-}
-
-export interface BlockSchemaDTO {
-	name: string;
-	admin?: {
-		label?: unknown;
-		description?: unknown;
-		icon?: ComponentReferenceDTO;
-		category?: {
-			label: unknown;
-			icon?: ComponentReferenceDTO;
-			order?: number;
-		};
-		order?: number;
-		hidden?: boolean;
-	};
-	allowChildren?: boolean;
-	maxChildren?: number;
-	hasPrefetch: boolean;
-	fields: Record<string, unknown>;
-	form?: { fields: unknown[] };
 }
 
 // ============================================================================

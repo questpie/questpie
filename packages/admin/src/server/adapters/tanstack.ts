@@ -16,7 +16,7 @@
 
 import type { Questpie } from "questpie";
 
-import { requireAdminAuth } from "../auth-helpers.js";
+import { requireAdminAuth } from "../modules/admin/auth-helpers.js";
 
 /**
  * Options for TanStack auth guard

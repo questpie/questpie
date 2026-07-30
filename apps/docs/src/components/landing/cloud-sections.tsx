@@ -192,9 +192,7 @@ export function CloudHero() {
 										style={{
 											padding: "14px 14px 14px 0",
 											borderRight:
-												i < 2
-													? "1px solid var(--border-subtle)"
-													: undefined,
+												i < 2 ? "1px solid var(--border-subtle)" : undefined,
 											paddingLeft: i === 0 ? 0 : 14,
 										}}
 									>
@@ -620,11 +618,7 @@ export function CloudJourney() {
 							>
 								STEP {s.n}
 							</span>
-							<LIcon
-								name={s.icon}
-								size={16}
-								style={{ color: CLOUD_ACCENT }}
-							/>
+							<LIcon name={s.icon} size={16} style={{ color: CLOUD_ACCENT }} />
 						</div>
 						<h3
 							style={{
@@ -936,9 +930,7 @@ export function DeployConsole() {
 											gap: 12,
 											padding: "10px 0",
 											borderTop:
-												i === 0
-													? "none"
-													: "1px dashed var(--border-subtle)",
+												i === 0 ? "none" : "1px dashed var(--border-subtle)",
 											alignItems: "center",
 										}}
 									>
@@ -1002,14 +994,18 @@ export function DeployConsole() {
 							}}
 						>
 							<span
-								className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+								className={cn(
+									buttonVariants({ variant: "outline", size: "sm" }),
+								)}
 								style={{ pointerEvents: "none" }}
 							>
 								<LIcon name="arrow-down" size={12} />
 								Rollback
 							</span>
 							<span
-								className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+								className={cn(
+									buttonVariants({ variant: "outline", size: "sm" }),
+								)}
 								style={{ pointerEvents: "none" }}
 							>
 								Redeploy
@@ -1060,9 +1056,7 @@ export function DeployConsole() {
 								size={15}
 								style={{ color: CLOUD_ACCENT, marginBottom: 10 }}
 							/>
-							<div
-								style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}
-							>
+							<div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>
 								{f.title}
 							</div>
 							<div
@@ -1279,7 +1273,8 @@ function TemplateCard({ t }: { t: (typeof TEMPLATES)[number] }) {
 						padding: "3px 7px",
 						borderRadius: 4,
 						color: CLOUD_ACCENT,
-						background: "color-mix(in srgb, var(--pillar-cloud) 10%, transparent)",
+						background:
+							"color-mix(in srgb, var(--pillar-cloud) 10%, transparent)",
 						border:
 							"1px solid color-mix(in srgb, var(--pillar-cloud) 28%, transparent)",
 						letterSpacing: "0.04em",
@@ -1297,9 +1292,7 @@ function TemplateCard({ t }: { t: (typeof TEMPLATES)[number] }) {
 /* ============================================================
  * MANAGED INFRA MATRIX
  * ============================================================ */
-const INFRA_ROWS: Array<
-	[string, string, boolean, boolean, string]
-> = [
+const INFRA_ROWS: Array<[string, string, boolean, boolean, string]> = [
 	[
 		"Hosting & deploys",
 		"globe",
@@ -1314,13 +1307,7 @@ const INFRA_ROWS: Array<
 		true,
 		"Provisioned, scaled, backed up daily",
 	],
-	[
-		"Object storage",
-		"database",
-		false,
-		true,
-		"S3-compatible, served via CDN",
-	],
+	["Object storage", "database", false, true, "S3-compatible, served via CDN"],
 	[
 		"Custom domains + SSL",
 		"globe",
@@ -1336,20 +1323,8 @@ const INFRA_ROWS: Array<
 		"Transactional mail, deliverability tuned",
 	],
 	["Backups + restore", "shield", false, true, "PITR up to 30 days"],
-	[
-		"Monitoring",
-		"chart-bar",
-		false,
-		true,
-		"p95, errors, alerts in dashboard",
-	],
-	[
-		"Autopilot agents",
-		"robot",
-		false,
-		true,
-		"Hosted runtime, auto-scaled",
-	],
+	["Monitoring", "chart-bar", false, true, "p95, errors, alerts in dashboard"],
+	["Autopilot agents", "robot", false, true, "Hosted runtime, auto-scaled"],
 	[
 		"Your code & schema",
 		"code",
@@ -1425,16 +1400,12 @@ export function ManagedInfra() {
 									name={icon}
 									size={15}
 									style={{
-										color: theirs
-											? CLOUD_ACCENT
-											: "var(--foreground-muted)",
+										color: theirs ? CLOUD_ACCENT : "var(--foreground-muted)",
 										flexShrink: 0,
 									}}
 								/>
 								<div style={{ minWidth: 0 }}>
-									<div
-										style={{ fontSize: 14, color: "var(--foreground)" }}
-									>
+									<div style={{ fontSize: 14, color: "var(--foreground)" }}>
 										{name}
 									</div>
 									<div
@@ -1458,13 +1429,7 @@ export function ManagedInfra() {
 	);
 }
 
-function CellMark({
-	on,
-	tone,
-}: {
-	on: boolean;
-	tone: "foreground" | "cloud";
-}) {
+function CellMark({ on, tone }: { on: boolean; tone: "foreground" | "cloud" }) {
 	const color = tone === "cloud" ? CLOUD_ACCENT : "var(--foreground)";
 	return (
 		<span style={{ display: "flex", justifyContent: "center" }}>
@@ -1583,7 +1548,9 @@ export function HostedAutopilotSection() {
 							}}
 						>
 							<Link
-								className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+								className={cn(
+									buttonVariants({ variant: "outline", size: "sm" }),
+								)}
 								to="/autopilot"
 							>
 								See Autopilot
@@ -1631,9 +1598,7 @@ export function HostedAutopilotSection() {
 								>
 									Cloud account
 								</div>
-								<div
-									style={{ marginTop: 4, fontSize: 13, fontWeight: 500 }}
-								>
+								<div style={{ marginTop: 4, fontSize: 13, fontWeight: 500 }}>
 									acme.questpie.cloud
 								</div>
 								<div
@@ -1646,8 +1611,7 @@ export function HostedAutopilotSection() {
 									}}
 								>
 									• project: marketing-site
-									<br />
-									• project: blog
+									<br />• project: blog
 									<br />• project: internal-tools
 								</div>
 							</div>
@@ -1675,9 +1639,7 @@ export function HostedAutopilotSection() {
 								>
 									Managed Autopilot
 								</div>
-								<div
-									style={{ marginTop: 4, fontSize: 13, fontWeight: 500 }}
-								>
+								<div style={{ marginTop: 4, fontSize: 13, fontWeight: 500 }}>
 									acme.autopilot
 								</div>
 								<div
@@ -1690,8 +1652,7 @@ export function HostedAutopilotSection() {
 									}}
 								>
 									• mapped: marketing-site
-									<br />
-									• mapped: blog
+									<br />• mapped: blog
 									<br />• mapped: internal-tools
 								</div>
 							</div>
@@ -1719,8 +1680,10 @@ export function HostedAutopilotSection() {
 							</span>
 							) →<br />
 							<span style={{ color: CLOUD_ACCENT }}>cloud</span>.projects.
-							<span style={{ color: "var(--syntax-function)" }}>build</span>(...).
-							<span style={{ color: "var(--syntax-function)" }}>deploy</span>(env:{" "}
+							<span style={{ color: "var(--syntax-function)" }}>build</span>
+							(...).
+							<span style={{ color: "var(--syntax-function)" }}>deploy</span>
+							(env:{" "}
 							<span style={{ color: "var(--syntax-string)" }}>"prod"</span>)
 						</div>
 						<div style={{ fontSize: 11.5, color: "var(--foreground-subtle)" }}>
@@ -1952,8 +1915,7 @@ function CloudTierCard({ tier }: { tier: Tier }) {
 					width: "100%",
 					marginBottom: 18,
 					background: tier.cta.tone === "primary" ? accent : "var(--card)",
-					color:
-						tier.cta.tone === "primary" ? "#0a0a0a" : "var(--foreground)",
+					color: tier.cta.tone === "primary" ? "#0a0a0a" : "var(--foreground)",
 					border:
 						tier.cta.tone === "primary"
 							? "none"
@@ -1984,9 +1946,7 @@ function CloudTierCard({ tier }: { tier: Tier }) {
 							gap: 9,
 							alignItems: "flex-start",
 							fontSize: 12.5,
-							color: on
-								? "var(--foreground)"
-								: "var(--foreground-disabled)",
+							color: on ? "var(--foreground)" : "var(--foreground-disabled)",
 						}}
 					>
 						<LIcon
@@ -2053,8 +2013,8 @@ export function MigrationSection() {
 							}}
 						>
 							Cloud is just QUESTPIE code plus a Postgres database. No
-							proprietary runtime, no walled garden. Migrate in either
-							direction with two commands. Your project is your project.
+							proprietary runtime, no walled garden. Migrate in either direction
+							with two commands. Your project is your project.
 						</p>
 						<div
 							style={{
@@ -2065,7 +2025,9 @@ export function MigrationSection() {
 							}}
 						>
 							<a
-								className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+								className={cn(
+									buttonVariants({ variant: "outline", size: "sm" }),
+								)}
 								href="https://github.com/questpie/questpie"
 								target="_blank"
 								rel="noreferrer"
@@ -2104,9 +2066,7 @@ export function MigrationSection() {
 							questpie pull{" "}
 							<span style={{ color: "var(--syntax-string)" }}>my-project</span>
 						</div>
-						<div
-							style={{ marginTop: 14, color: "var(--foreground-subtle)" }}
-						>
+						<div style={{ marginTop: 14, color: "var(--foreground-subtle)" }}>
 							{`# Or push your local project to Cloud`}
 						</div>
 						<div>

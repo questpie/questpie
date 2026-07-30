@@ -7,6 +7,7 @@
  */
 
 import { selectBasePath, useAdminStore } from "@questpie/admin/client";
+
 import { WorkflowDetailPage } from "./workflow-detail-page.js";
 import { WorkflowListPage } from "./workflow-list-page.js";
 

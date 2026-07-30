@@ -10,15 +10,29 @@ export {
 	type BooleanFieldState,
 	boolean,
 } from "./boolean.js";
-export { type DateFieldMeta, type DateFieldMethods, type DateFieldState, date } from "./date.js";
+export {
+	type DateFieldMeta,
+	type DateFieldMethods,
+	type DateFieldState,
+	date,
+} from "./date.js";
 export {
 	type DatetimeFieldMeta,
 	type DatetimeFieldMethods,
 	type DatetimeFieldState,
 	datetime,
 } from "./datetime.js";
-export { type EmailFieldMeta, type EmailFieldMethods, type EmailFieldState, email } from "./email.js";
-export { type CustomFieldState, type CustomFieldMethods, from } from "./from.js";
+export {
+	type EmailFieldMeta,
+	type EmailFieldMethods,
+	type EmailFieldState,
+	email,
+} from "./email.js";
+export {
+	type CustomFieldState,
+	type CustomFieldMethods,
+	from,
+} from "./from.js";
 export {
 	type JsonFieldMeta,
 	type JsonFieldState,
@@ -50,7 +64,12 @@ export {
 	select,
 } from "./select.js";
 // Named re-exports (factories + state types + meta augmentation interfaces)
-export { type TextFieldMeta, type TextFieldMethods, type TextFieldState, text } from "./text.js";
+export {
+	type TextFieldMeta,
+	type TextFieldMethods,
+	type TextFieldState,
+	text,
+} from "./text.js";
 export {
 	type TextareaFieldMeta,
 	type TextareaFieldMethods,
@@ -64,7 +83,12 @@ export {
 	type UploadFieldState,
 	upload,
 } from "./upload.js";
-export { type UrlFieldMeta, type UrlFieldMethods, type UrlFieldState, url } from "./url.js";
+export {
+	type UrlFieldMeta,
+	type UrlFieldMethods,
+	type UrlFieldState,
+	url,
+} from "./url.js";
 
 // ============================================================================
 // Builtin Fields Map

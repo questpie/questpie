@@ -23,17 +23,24 @@ Use `f.upload()` inside a `.fields()` callback. The single optional argument is 
 import { collection } from "#questpie/factories";
 
 export const posts = collection("posts").fields(({ f }) => ({
-  title: f.text().required(),
-  coverImage: f.upload(), // FK to "assets", optional
-  attachment: f.upload({ to: "documents" }), // FK to a "documents" upload collection
+	title: f.text().required(),
+	coverImage: f.upload(), // FK to "assets", optional
+	attachment: f.upload({ to: "documents" }), // FK to a "documents" upload collection
 }));
 ```
 
 That gives `posts` a `coverImage` column typed `string` on read (the asset ID), nullable until you add `.required()`, rendered as a file picker in the admin form, and filterable with the belongsTo operators, no junction table or relation wiring written by hand.
 
-<Callout type="info" title="`f.upload()` references a collection, it isn't the byte store">
-  The `f.upload()` *field* is a relation **to** an upload collection; the bytes live in that target collection (default `"assets"`). Turning a collection *itself* into the byte store (storage adapter, URL generation, signed URLs, direct-to-storage uploads) is a different concern with the same name. See [Storage
-  adapters](/docs/adapters/storage) for where bytes are persisted and served.
+<Callout
+	type="info"
+	title="`f.upload()` references a collection, it isn't the byte store"
+>
+	The `f.upload()` *field* is a relation **to** an upload collection; the bytes
+	live in that target collection (default `"assets"`). Turning a collection
+	*itself* into the byte store (storage adapter, URL generation, signed URLs,
+	direct-to-storage uploads) is a different concern with the same name. See
+	[Storage adapters](/docs/adapters/storage) for where bytes are persisted and
+	served.
 </Callout>
 
 ## Constructor argument
@@ -83,9 +90,16 @@ Several assets stored _inline_ as a JSONB array of IDs on this row (no junction)
 images: f.upload().multiple(),   // string[] of asset IDs, stored inline as jsonb
 ```
 
-<Callout type="info" title="M2M vs `.multiple()`, junction table or inline array">
-  Both hold many assets. **`through`** stores the links in a separate junction collection (queryable, supports the `some` / `none` / `every` quantifiers). **`.multiple()`** stores the IDs inline as a JSONB array on the row (no extra table, queried with array operators like `contains`). Use `through` when the
-  relationship itself needs rows (ordering, pivot data); use `.multiple()` for a simple ordered list of files.
+<Callout
+	type="info"
+	title="M2M vs `.multiple()`, junction table or inline array"
+>
+	Both hold many assets. **`through`** stores the links in a separate junction
+	collection (queryable, supports the `some` / `none` / `every` quantifiers).
+	**`.multiple()`** stores the IDs inline as a JSONB array on the row (no extra
+	table, queried with array operators like `contains`). Use `through` when the
+	relationship itself needs rows (ordering, pivot data); use `.multiple()` for a
+	simple ordered list of files.
 </Callout>
 
 ## Chained methods
@@ -116,12 +130,12 @@ Which operators a `where: { <field>: { … } }` accepts depends on the variant. 
 ```ts
 // Posts whose cover image is a specific asset
 const { docs } = await app.collections.posts.find({
-  where: { coverImage: { eq: assetId } },
+	where: { coverImage: { eq: assetId } },
 });
 
 // Posts that have no cover image
 const missing = await app.collections.posts.find({
-  where: { coverImage: { isNull: true } },
+	where: { coverImage: { isNull: true } },
 });
 ```
 
@@ -148,7 +162,7 @@ const missing = await app.collections.posts.find({
 ```ts
 // Posts whose inline image list includes a given asset
 const { docs } = await app.collections.posts.find({
-  where: { images: { contains: assetId } },
+	where: { images: { contains: assetId } },
 });
 ```
 

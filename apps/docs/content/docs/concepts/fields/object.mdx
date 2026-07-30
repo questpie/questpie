@@ -22,12 +22,12 @@ Use `f.object()` inside a `.fields()` callback. The single argument is a record 
 import { collection } from "#questpie/factories";
 
 export const users = collection("users").fields(({ f }) => ({
-  email: f.email().required(),
-  address: f.object({
-    street: f.text().required(),
-    city: f.text().required(),
-    zip: f.text(10),
-  }),
+	email: f.email().required(),
+	address: f.object({
+		street: f.text().required(),
+		city: f.text().required(),
+		zip: f.text(10),
+	}),
 }));
 ```
 
@@ -86,19 +86,23 @@ The two shared modifiers worth calling out for objects:
 ```ts
 // Find users in a given city using a nested-path match:
 const { docs } = await app.collections.users.find({
-  where: {
-    address: { pathEquals: { path: ["city"], val: "Berlin" } },
-  },
+	where: {
+		address: { pathEquals: { path: ["city"], val: "Berlin" } },
+	},
 });
 
 // Or: the address object must contain this subtree (city + zip):
 await app.collections.users.find({
-  where: { address: { contains: { city: "Berlin", zip: "10115" } } },
+	where: { address: { contains: { city: "Berlin", zip: "10115" } } },
 });
 ```
 
 <Callout type="info" title="`pathEquals` / `contains` over per-field columns">
-  An object is one `jsonb` value. Use `pathEquals` for an exact nested value or `contains` for a required subtree. Data that needs relational filters, frequent deep queries, or independent lifecycle belongs in its own [collection](/docs/concepts/collections) with a [relation](/docs/concepts/relations).
+	An object is one `jsonb` value. Use `pathEquals` for an exact nested value or
+	`contains` for a required subtree. Data that needs relational filters,
+	frequent deep queries, or independent lifecycle belongs in its own
+	[collection](/docs/concepts/collections) with a
+	[relation](/docs/concepts/relations).
 </Callout>
 
 For the full query language, combining filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/concepts/relations).
@@ -126,19 +130,33 @@ links: f
 ```
 
 <Callout type="info" title="Object array vs blocks">
-  `f.object().array()` is for a **homogeneous** list, every item has the same shape. When items can be *different* types chosen from a palette (a page builder), use [`f.blocks()`](/docs/concepts/blocks) instead. (For arranging an object's keys into sections/tabs in the admin form, an object field also accepts a
-  field-level `.form()` layout config, contributed by the admin module.)
+	`f.object().array()` is for a **homogeneous** list, every item has the same
+	shape. When items can be *different* types chosen from a palette (a page
+	builder), use [`f.blocks()`](/docs/concepts/blocks) instead. (For arranging an
+	object's keys into sections/tabs in the admin form, an object field also
+	accepts a field-level `.form()` layout config, contributed by the admin
+	module.)
 </Callout>
 
 ## Gotchas
 
-<Callout type="warn" title="Nested write-only fields drop out of the object shape">
-  A nested field marked `.outputFalse()` (write-only) resolves to `never` and is **dropped from the inferred object data type**, mirroring how the same field is dropped from a top-level row. The key still validates on input (its Zod schema is in the composed `z.object`), but it won't appear in the read shape. A
-  *virtual* nested field is different: it keeps its data type in the read shape (a nested to-many `f.relation()`, for instance, infers as `string[] | null`).
+<Callout
+	type="warn"
+	title="Nested write-only fields drop out of the object shape"
+>
+	A nested field marked `.outputFalse()` (write-only) resolves to `never` and is
+	**dropped from the inferred object data type**, mirroring how the same field
+	is dropped from a top-level row. The key still validates on input (its Zod
+	schema is in the composed `z.object`), but it won't appear in the read shape.
+	A *virtual* nested field is different: it keeps its data type in the read
+	shape (a nested to-many `f.relation()`, for instance, infers as `string[] |
+	null`).
 </Callout>
 
 <Callout type="warn" title="The object is stored as one JSONB value">
-  The whole object is stored in one `jsonb` column. Nested keys do not create independent columns, indexes, or foreign keys, and they are not hydrated through `with`. Model query-first relationships as their own collections.
+	The whole object is stored in one `jsonb` column. Nested keys do not create
+	independent columns, indexes, or foreign keys, and they are not hydrated
+	through `with`. Model query-first relationships as their own collections.
 </Callout>
 
 ## TypeScript

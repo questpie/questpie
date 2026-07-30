@@ -12,8 +12,7 @@
 import { Icon } from "@iconify/react";
 import * as React from "react";
 
-import type { ServerAdminShellRailConfig } from "#questpie/admin/server/augmentation.js";
-
+import type { ServerAdminShellRailConfig } from "../../../server/augmentation/index.js";
 import { ComponentRenderer } from "../../components/component-renderer";
 import { SidebarInset, SidebarProvider } from "../../components/ui/sidebar";
 import { type AdminToasterProps, Toaster } from "../../components/ui/sonner";

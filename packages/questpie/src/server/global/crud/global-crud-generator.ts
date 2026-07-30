@@ -503,9 +503,14 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			context: CRUDContext = {},
 		) => {
 			const db = this.getDb(context);
+			// locale/localeFallback are declared on GlobalGetOptions and
+			// documented as a per-request override; lift them or the option is
+			// silently dropped. See the same fix in crud-generator.ts.
 			const normalized = this.normalizeContext({
 				...context,
 				stage: options.stage ?? context.stage,
+				locale: options.locale ?? context.locale,
+				localeFallback: options.localeFallback ?? context.localeFallback,
 			});
 			const isScoped = this.state.options.scoped !== undefined;
 			const scopeId = isScoped ? this.resolveScopeId(normalized) : undefined;
@@ -793,9 +798,12 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			});
 
 			const db = this.getDb(context);
+			// Same as createGet — GlobalUpdateOptions declares these too.
 			const normalized = this.normalizeContext({
 				...context,
 				stage: options.stage ?? context.stage,
+				locale: options.locale ?? context.locale,
+				localeFallback: options.localeFallback ?? context.localeFallback,
 			});
 			const workflowStage = this.getWriteStage(normalized, options.stage);
 			const workflowContext = workflowStage

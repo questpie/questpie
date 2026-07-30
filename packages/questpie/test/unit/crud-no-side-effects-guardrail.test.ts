@@ -9,10 +9,7 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const CRUD_DIR = resolve(
-	import.meta.dir,
-	"../../src/server/collection/crud",
-);
+const CRUD_DIR = resolve(import.meta.dir, "../../src/server/collection/crud");
 const GLOBAL_CRUD_DIR = resolve(
 	import.meta.dir,
 	"../../src/server/global/crud",

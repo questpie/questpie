@@ -43,15 +43,17 @@ export interface RelationFieldMeta extends Questpie.RelationFieldMeta {
 // Types
 // ============================================================================
 
-export type RelationFieldState<TTo extends string = string> =
-	Omit<DefaultFieldState, "operators"> & {
-		type: "relation";
-		data: string;
-		column: PgVarcharBuilder<[string, ...string[]]>;
-		operators: typeof belongsToOps;
-		relationTo: TTo;
-		relationKind: "one";
-	};
+export type RelationFieldState<TTo extends string = string> = Omit<
+	DefaultFieldState,
+	"operators"
+> & {
+	type: "relation";
+	data: string;
+	column: PgVarcharBuilder<[string, ...string[]]>;
+	operators: typeof belongsToOps;
+	relationTo: TTo;
+	relationKind: "one";
+};
 
 export interface RelationFieldMethods<TTo extends string = string> {
 	// Transitioning modifiers — flip the field type-state to a to-many shape.
@@ -98,14 +100,16 @@ export type MorphToFieldState = Omit<DefaultFieldState, "operators"> & {
 	operators: typeof belongsToOps;
 };
 
-export type MultipleRelationFieldState<TTo extends string = string> =
-	Omit<DefaultFieldState, "operators"> & {
-		type: "relation";
-		data: string[];
-		operators: typeof multipleOps;
-		relationTo: TTo;
-		relationKind: "one";
-	};
+export type MultipleRelationFieldState<TTo extends string = string> = Omit<
+	DefaultFieldState,
+	"operators"
+> & {
+	type: "relation";
+	data: string[];
+	operators: typeof multipleOps;
+	relationTo: TTo;
+	relationKind: "one";
+};
 
 /**
  * Relation target — accepts collection name, factory function, or polymorphic map.

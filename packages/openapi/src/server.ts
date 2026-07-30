@@ -27,8 +27,8 @@
 import type { Questpie, RawRouteDefinition } from "questpie";
 import { module, route } from "questpie";
 
-import { openApiPlugin } from "./plugin.js";
 import { generateOpenApiSpec as generate } from "./generator/index.js";
+import { openApiPlugin } from "./plugin.js";
 import { serveScalarUI } from "./scalar.js";
 import type {
 	OpenApiConfig,
@@ -126,9 +126,7 @@ function resolveOpenApiConfig(
 	explicitConfig?: OpenApiConfig,
 ): OpenApiModuleConfig | undefined {
 	if (explicitConfig) return explicitConfig;
-	return (app.state?.config as any)?.openapi as
-		| OpenApiModuleConfig
-		| undefined;
+	return (app.state?.config as any)?.openapi as OpenApiModuleConfig | undefined;
 }
 
 // ============================================================================
@@ -150,9 +148,7 @@ function resolveOpenApiConfig(
  * export default openApiRoute();
  * ```
  */
-export function openApiRoute(
-	config?: OpenApiConfig,
-): RawRouteDefinition {
+export function openApiRoute(config?: OpenApiConfig): RawRouteDefinition {
 	return route()
 		.get()
 		.raw()
@@ -168,8 +164,7 @@ export function openApiRoute(
 			return new Response(json, {
 				headers: {
 					"Content-Type": "application/json",
-					"Cache-Control":
-						"public, max-age=3600, stale-while-revalidate=43200",
+					"Cache-Control": "public, max-age=3600, stale-while-revalidate=43200",
 					ETag: etag,
 					"Access-Control-Allow-Origin": "*",
 				},

@@ -5,12 +5,10 @@ import {
 	useQuery,
 	useQueryClient,
 } from "@tanstack/react-query";
-import type { Questpie } from "questpie";
 import * as React from "react";
 
 import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
 
-import type { RegisteredCMS, RegisteredGlobalNames } from "../builder/registry";
 import { selectClient, selectContentLocale, useAdminStore } from "../runtime";
 
 type GlobalRealtimeOptions = {
@@ -26,8 +24,7 @@ const GLOBAL_QUERY_KEY_PREFIX = ["questpie", "globals"] as const;
 /**
  * Resolved global names (string if not registered)
  */
-type ResolvedGlobalNames =
-	RegisteredCMS extends Questpie<any> ? RegisteredGlobalNames : string;
+type ResolvedGlobalNames = string;
 
 // ============================================================================
 // Global Hooks
@@ -36,7 +33,8 @@ type ResolvedGlobalNames =
 /**
  * Hook to fetch global settings
  *
- * Uses RegisteredCMS from module augmentation for automatic type inference.
+ * Collection and global names are plain strings — the module-augmentation
+ * registry that once narrowed them was never reachable by users.
  *
  * @example
  * ```tsx
@@ -81,7 +79,8 @@ export function useGlobal<K extends ResolvedGlobalNames>(
 /**
  * Hook to update global settings
  *
- * Uses RegisteredCMS from module augmentation for automatic type inference.
+ * Collection and global names are plain strings — the module-augmentation
+ * registry that once narrowed them was never reachable by users.
  *
  * @example
  * ```tsx

@@ -30,7 +30,7 @@ import type {
 	ServerActionFormField,
 	ServerActionResult,
 	ServerActionsConfig,
-} from "../../../augmentation.js";
+} from "../../../augmentation/index.js";
 import { translateAdminMessage } from "./i18n-helpers.js";
 import {
 	type App,

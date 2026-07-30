@@ -1372,7 +1372,9 @@ async function evaluateAccessRule(
 		}
 	}
 
-	return { allowed: true };
+	// Unreachable for a typed app — AccessRule is `boolean | function`. Denies
+	// rather than allows so the probe matches what enforcement now does.
+	return { allowed: false };
 }
 
 /**
