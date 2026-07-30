@@ -115,19 +115,13 @@ export function getRelationItemId(item: unknown): string | null {
 }
 
 /**
- * Format a field key as a readable label (camelCase -> Title Case)
- * @deprecated Use `formatLabel` from `@/lib/utils` instead
- */
-export const formatFieldLabel = formatLabel;
-
-/**
  * Get label for a field from field definition or format from key
  */
 export function getFieldLabel(key: string, fieldDef?: FieldInstance): string {
 	if (fieldDef?.["~options"]?.label) {
 		return fieldDef["~options"].label as string;
 	}
-	return formatFieldLabel(key);
+	return formatLabel(key);
 }
 
 /**

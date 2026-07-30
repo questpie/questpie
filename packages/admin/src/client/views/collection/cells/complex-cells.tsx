@@ -22,10 +22,9 @@ import {
 } from "../../../components/ui/tooltip";
 import { useAdminConfig } from "../../../hooks/use-admin-config";
 import { useResolveText, useTranslation } from "../../../i18n/hooks";
-import { cn } from "../../../lib/utils";
+import { cn, formatLabel } from "../../../lib/utils";
 import { selectAdmin, useAdminStore } from "../../../runtime";
 import {
-	formatFieldLabel,
 	formatPrimitiveValue,
 	getFieldLabel,
 	getItemLabel,
@@ -142,7 +141,7 @@ export function ObjectCell({
 												className="flex justify-between gap-2 text-[11px]"
 											>
 												<span className="text-muted-foreground">
-													{formatFieldLabel(k)}
+													{formatLabel(k)}
 												</span>
 												<span className="max-w-[120px] truncate">
 													{formatPrimitiveValue(v)}
