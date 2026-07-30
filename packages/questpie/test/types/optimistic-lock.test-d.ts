@@ -10,9 +10,11 @@ const locked = collection("locked")
 		softDelete: true,
 		optimisticLock: { field: "version", required: true },
 	});
-const unlocked = collection("unlocked").fields(({ f }) => ({
-	name: f.text().required(),
-}));
+const unlocked = collection("unlocked")
+	.fields(({ f }) => ({
+		name: f.text().required(),
+	}))
+	.options({ softDelete: true });
 
 const lockedCollection = locked.build();
 const unlockedCollection = unlocked.build();
@@ -44,6 +46,7 @@ lockedCrud.deleteMany({
 	expectedVersions: [{ id: "record-1", expectedVersion: 1 }],
 });
 lockedCrud.restoreById({ id: "record-1", expectedVersion: 2 });
+lockedCrud.purgeById({ id: "record-1", expectedVersion: 2 });
 lockedCrud.revertToVersion({
 	id: "record-1",
 	version: 1,
@@ -73,6 +76,8 @@ lockedCrud.deleteById({ id: "record-1" });
 lockedCrud.deleteMany({ where: { id: "record-1" } });
 // @ts-expect-error restore requires the expected version
 lockedCrud.restoreById({ id: "record-1" });
+// @ts-expect-error purge requires the current tombstone version
+lockedCrud.purgeById({ id: "record-1" });
 // @ts-expect-error revert requires the expected version
 lockedCrud.revertToVersion({ id: "record-1", version: 1 });
 
@@ -86,6 +91,7 @@ unlockedCrud.updateBatch({
 });
 unlockedCrud.deleteById({ id: "record-1" });
 unlockedCrud.deleteMany({ where: { id: "record-1" } });
+unlockedCrud.purgeById({ id: "record-1" });
 
 type App = {
 	collections: {
@@ -108,6 +114,10 @@ client.collections.locked.restoreById({
 	id: "record-1",
 	expectedVersion: 2,
 });
+client.collections.locked.purgeById({
+	id: "record-1",
+	expectedVersion: 2,
+});
 client.collections.locked.revertToVersion({
 	id: "record-1",
 	version: 1,
@@ -122,6 +132,8 @@ client.collections.locked.updateById({
 client.collections.locked.deleteById({ id: "record-1" });
 // @ts-expect-error client restore inherits required optimistic locking
 client.collections.locked.restoreById({ id: "record-1" });
+// @ts-expect-error client purge inherits required optimistic locking
+client.collections.locked.purgeById({ id: "record-1" });
 // @ts-expect-error client revert inherits required optimistic locking
 client.collections.locked.revertToVersion({ id: "record-1", version: 1 });
 
@@ -130,3 +142,4 @@ client.collections.unlocked.updateById({
 	data: { name: "Legacy" },
 });
 client.collections.unlocked.deleteById({ id: "record-1" });
+client.collections.unlocked.purgeById({ id: "record-1" });

@@ -519,8 +519,18 @@ export async function collectionPurge(
 	}
 
 	try {
+		const body = hasOptimisticLock(crud)
+			? await parseRouteBody(request)
+			: undefined;
+		const expectedVersion =
+			typeof body === "object" && body !== null
+				? (body as { expectedVersion?: number }).expectedVersion
+				: undefined;
 		const result = await crud.purgeById(
-			{ id: params.id as any },
+			{
+				id: params.id as any,
+				...(expectedVersion === undefined ? {} : { expectedVersion }),
+			},
 			resolved.appContext,
 		);
 		return smartResponse(result, request, 200, txidHeaders(result));

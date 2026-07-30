@@ -2902,6 +2902,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					if (!locked) {
 						throw ApiError.notFound("Record", String(id));
 					}
+					this.assertExpectedVersion(params as { expectedVersion?: number }, [
+						locked,
+					]);
 
 					const preimageResult = await findPreimage();
 					if (!preimageResult) {

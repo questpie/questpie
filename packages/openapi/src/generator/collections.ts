@@ -419,9 +419,23 @@ export function generateCollectionPaths(
 					summary: `Permanently purge deleted ${name}`,
 					tags: [tag],
 					parameters: [idParam, ...singleQueryParameters()],
-					responses: jsonResponse(
-						ref("SuccessResponse"),
-						`Permanently purged ${name} record`,
+					...(optimisticLock
+						? {
+								requestBody: jsonRequestBody({
+									type: "object",
+									required: ["expectedVersion"],
+									properties: {
+										expectedVersion: expectedVersionSchema(),
+									},
+								}),
+							}
+						: {}),
+					responses: withOptimisticLockConflict(
+						jsonResponse(
+							ref("SuccessResponse"),
+							`Permanently purged ${name} record`,
+						),
+						Boolean(optimisticLock),
 					),
 				},
 			};

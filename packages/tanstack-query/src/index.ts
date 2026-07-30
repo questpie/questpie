@@ -877,7 +877,7 @@ export function createQuestpieQueryOptions<
 								stage,
 							]),
 							mutationFn: wrapMutationFn(
-								(variables: any) =>
+								(variables: Parameters<typeof collection.purgeById>[0]) =>
 									collection.purgeById(
 										variables,
 										locale || stage

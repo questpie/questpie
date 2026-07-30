@@ -82,10 +82,17 @@ describe("client by-id aliases (canonical CRUD vocabulary)", () => {
 
 	it("purgeById uses the dedicated irreversible endpoint", async () => {
 		await client.collections.posts.purgeById({ id: "post-1" });
+		await client.collections.posts.purgeById({
+			id: "post-2",
+			expectedVersion: 4,
+		});
 
-		expect(calls).toHaveLength(1);
+		expect(calls).toHaveLength(2);
 		expect(calls[0]?.url.pathname).toBe("/posts/post-1/purge");
 		expect(calls[0]?.method).toBe("POST");
+		expect(calls[0]?.body).toBeUndefined();
+		expect(calls[1]?.url.pathname).toBe("/posts/post-2/purge");
+		expect(parseJsonBody(calls[1])).toEqual({ expectedVersion: 4 });
 		expect(
 			"purge" in (client.collections.posts as Record<string, unknown>),
 		).toBe(false);

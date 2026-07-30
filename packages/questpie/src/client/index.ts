@@ -40,6 +40,7 @@ import type {
 	FindManyOptions,
 	FindOneOptionsBase,
 	OrderBy,
+	PurgeParams,
 	RevertVersionOptions,
 	RestoreParams,
 	UpdateBatchParams,
@@ -443,7 +444,7 @@ type CollectionPurgeAPI<TCollection> =
 				 * active records. It intentionally has no alias.
 				 */
 				purgeById: (
-					params: { id: string },
+					params: PurgeParams<string, ClientCollectionOptions<TCollection>>,
 					options?: LocaleOptions,
 				) => Promise<{ success: true }>;
 			}
@@ -1434,7 +1435,7 @@ export function createClient<TApp extends QuestpieApp>(
 				},
 
 				purgeById: async (
-					{ id }: { id: string },
+					{ id, expectedVersion }: { id: string; expectedVersion?: number },
 					options: LocaleOptions = {},
 				) => {
 					const queryString = qs.stringify(options, {
@@ -1444,6 +1445,9 @@ export function createClient<TApp extends QuestpieApp>(
 					const path = `${apiBasePath}/${collectionName}/${id}/purge${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
+						...(expectedVersion === undefined
+							? {}
+							: { json: { expectedVersion } }),
 					});
 				},
 

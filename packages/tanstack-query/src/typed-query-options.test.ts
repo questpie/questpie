@@ -36,6 +36,7 @@ const locked = collection("locked")
 		version: f.number().required().default(1),
 	}))
 	.options({
+		softDelete: true,
 		optimisticLock: { field: "version", required: true },
 	});
 
@@ -97,6 +98,20 @@ describe("typed query options proxy", () => {
 				false
 			>
 		>;
+		const lockedPurge = () => q.collections.locked.purgeById();
+		type LockedPurgeVariables =
+			NonNullable<ReturnType<typeof lockedPurge>["mutationFn"]> extends (
+				variables: infer TVariables,
+				...args: any[]
+			) => any
+				? TVariables
+				: never;
+		const safeLockedPurge: LockedPurgeVariables = {
+			id: "record-1",
+			expectedVersion: 2,
+		};
+		// @ts-expect-error TanStack purge requires the current tombstone version
+		const unsafeLockedPurge: LockedPurgeVariables = { id: "record-1" };
 
 		type LockedUpdate = ReturnType<(typeof q.collections.locked)["update"]>;
 		type LockedUpdateVariables =
@@ -170,6 +185,8 @@ describe("typed query options proxy", () => {
 			badColumns,
 			badCollection,
 			() => purge,
+			() => safeLockedPurge,
+			() => unsafeLockedPurge,
 			() => lockedUpdate,
 			() => unsafeLockedUpdate,
 			() => lockedBulk,
@@ -177,7 +194,8 @@ describe("typed query options proxy", () => {
 			() => unsafeLockedRevert,
 			lockedMany,
 			lockedRevert,
+			lockedPurge,
 		];
-		expect(builders.length).toBe(15);
+		expect(builders.length).toBe(18);
 	});
 });

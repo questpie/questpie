@@ -126,6 +126,11 @@ describe("OpenAPI schema generation", () => {
 			expect(
 				restore.requestBody.content["application/json"].schema.required,
 			).toEqual(["expectedVersion"]);
+			const purge = spec.paths?.["//tags/{id}/purge"]?.post as any;
+			expect(
+				purge.requestBody.content["application/json"].schema.required,
+			).toEqual(["expectedVersion"]);
+			expect(purge.responses["409"]).toBeDefined();
 			const revert = spec.paths?.["//tags/{id}/revert"]?.post as any;
 			expect(
 				revert.requestBody.content["application/json"].schema.required,

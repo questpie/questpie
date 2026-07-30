@@ -1340,6 +1340,11 @@ type ExpectedVersionRequirement<TOptions extends CollectionOptions> =
 		? { expectedVersion: number }
 		: { expectedVersion?: number };
 
+type PurgeExpectedVersionRequirement<TOptions extends CollectionOptions> =
+	TOptions extends { optimisticLock: { field: string; required: true } }
+		? { expectedVersion: number }
+		: {};
+
 type ExpectedVersionsRequirement<
 	TOptions extends CollectionOptions,
 	TId,
@@ -1414,9 +1419,12 @@ export type DeleteParams<
 /**
  * Permanently purge one already soft-deleted record.
  */
-export interface PurgeParams<TId = string> {
+export type PurgeParams<
+	TId = string,
+	TOptions extends CollectionOptions = CollectionOptions,
+> = {
 	id: TId;
-}
+} & PurgeExpectedVersionRequirement<TOptions>;
 
 /**
  * Restore soft-deleted record params
@@ -1806,7 +1814,7 @@ export interface CRUD<
 	 * operation at runtime.
 	 */
 	purgeById(
-		params: PurgeParams<TId>,
+		params: PurgeParams<TId, TOptions>,
 		context?: CRUDContext,
 	): Promise<{ success: true }>;
 

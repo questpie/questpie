@@ -321,6 +321,42 @@ describe("generated CRUD optimistic locking", () => {
 		expect(activeNoOp.version).toBe(3);
 	});
 
+	it("requires the current tombstone version before physical purge", async () => {
+		const tag = await setup.app.collections.optimisticTags.create(
+			{ name: "Expired" },
+			context,
+		);
+		await setup.app.collections.optimisticTags.deleteById(
+			{ id: tag.id, expectedVersion: 1 },
+			context,
+		);
+
+		for (const params of [{ id: tag.id }, { id: tag.id, expectedVersion: 1 }]) {
+			await expect(
+				setup.app.collections.optimisticTags.purgeById(params, context),
+			).rejects.toMatchObject({ code: "CONFLICT" });
+		}
+		const retained = await setup.app.collections.optimisticTags.findOne(
+			{ where: { id: tag.id }, includeDeleted: true },
+			context,
+		);
+		expect(retained).toMatchObject({ version: 2 });
+		expect(retained?.deletedAt).toBeInstanceOf(Date);
+
+		await expect(
+			setup.app.collections.optimisticTags.purgeById(
+				{ id: tag.id, expectedVersion: 2 },
+				context,
+			),
+		).resolves.toEqual({ success: true });
+		expect(
+			await setup.app.collections.optimisticTags.findOne(
+				{ where: { id: tag.id }, includeDeleted: true },
+				context,
+			),
+		).toBeNull();
+	});
+
 	it("updates heterogeneous bulk versions atomically from an exact per-id list", async () => {
 		const first = await setup.app.collections.optimisticTags.create(
 			{ name: "First" },
@@ -576,6 +612,21 @@ describe("generated CRUD optimistic locking", () => {
 			name: "Platform",
 			version: 5,
 		});
+
+		const deletedAgain = await request(`optimisticTags/${tag.id}`, "DELETE", {
+			expectedVersion: 5,
+		});
+		expect(deletedAgain?.status).toBe(200);
+		const omittedPurge = await request(
+			`optimisticTags/${tag.id}/purge`,
+			"POST",
+		);
+		expect(omittedPurge?.status).toBe(409);
+		const purged = await request(`optimisticTags/${tag.id}/purge`, "POST", {
+			expectedVersion: 6,
+		});
+		expect(purged?.status).toBe(200);
+		expect(await purged?.json()).toEqual({ success: true });
 	});
 
 	it("preserves last-write-wins CRUD for collections without the option", async () => {
@@ -595,5 +646,9 @@ describe("generated CRUD optimistic locking", () => {
 			context,
 		);
 		expect(restored).toMatchObject({ name: "Still supported", version: 7 });
+		await setup.app.collections.legacyTags.deleteById({ id: tag.id }, context);
+		await expect(
+			setup.app.collections.legacyTags.purgeById({ id: tag.id }, context),
+		).resolves.toEqual({ success: true });
 	});
 });
