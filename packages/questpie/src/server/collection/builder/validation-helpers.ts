@@ -23,7 +23,7 @@ import {
  * const mainFields = { name: varchar('name', { length: 255 }), price: integer('price') }
  * const localizedFields = { title: varchar('title', { length: 255 }), description: text('description') }
  *
- * const merged = mergeFi eldsForValidation('products', mainFields, localizedFields)
+ * const merged = mergeFieldsForValidation('products', mainFields, localizedFields)
  * // Result: pgTable with all fields: { name, price, title, description }
  * ```
  */
@@ -125,6 +125,18 @@ function createRelationFieldPreprocessor(
 }
 
 /**
+ * What a caller may pass to `.validation()`. Named because the builder now
+ * stores these on state and the Collection constructor applies them, so the
+ * shape travels between two files.
+ */
+export type ValidationBuilderOptions = {
+	/** Fields to exclude from validation (e.g., id, createdAt, updatedAt) */
+	exclude?: Record<string, true>;
+	/** Custom refinements per field */
+	refine?: Record<string, (schema: z.ZodTypeAny) => z.ZodTypeAny>;
+};
+
+/**
  * Create validation schemas for a collection
  *
  * @param tableName - Name of the collection
@@ -139,11 +151,7 @@ export function createCollectionValidationSchemas<
 	tableName: string,
 	mainFields: TMainFields,
 	localizedFields: TLocalizedFields,
-	options?: {
-		/** Fields to exclude from validation (e.g., id, createdAt, updatedAt) */
-		exclude?: Record<string, true>;
-		/** Custom refinements per field */
-		refine?: Record<string, (schema: z.ZodTypeAny) => z.ZodTypeAny>;
+	options?: ValidationBuilderOptions & {
 		/** Field definitions for relation field name normalization */
 		fieldDefinitions?: Record<string, Field<FieldState>>;
 	},

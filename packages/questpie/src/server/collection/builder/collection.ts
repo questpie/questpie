@@ -729,6 +729,11 @@ export class Collection<TState extends CollectionBuilderState> {
 				mainFields,
 				localizedFields,
 				{
+					// `.validation({ exclude, refine })` records its options rather
+					// than building schemas itself, so they are applied here — the
+					// single place that also contributes the id, timestamp and
+					// soft-delete columns above.
+					...state.validationOptions,
 					// Pass field definitions for relation field name normalization
 					// This allows users to use `author` instead of `authorId` in input
 					fieldDefinitions: state.fieldDefinitions as any,

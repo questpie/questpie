@@ -4,46 +4,14 @@
  */
 
 import type { PgColumn } from "drizzle-orm/pg-core";
-import { pgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
+import { mergeFieldsForValidation } from "#questpie/server/collection/builder/validation-helpers.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { Field } from "#questpie/server/fields/field-class.js";
 import { createUpdateSchema } from "#questpie/server/utils/drizzle-to-zod.js";
 
 import type { GlobalValidationSchemas } from "./types.js";
-
-/**
- * Merge main table fields with localized fields into a single flat structure
- * This is used for validation where we receive all fields together in the input
- */
-export function mergeFieldsForValidation<
-	TMainFields extends Record<string, PgColumn>,
-	TLocalizedFields extends Record<string, PgColumn>,
->(
-	tableName: string,
-	mainFields: TMainFields,
-	localizedFields: TLocalizedFields,
-): ReturnType<
-	typeof pgTable<
-		string,
-		TMainFields & TLocalizedFields extends infer R
-			? R extends Record<string, PgColumn>
-				? R
-				: never
-			: never
-	>
-> {
-	// Merge fields into single object
-	const mergedFields = {
-		...mainFields,
-		...localizedFields,
-	} as TMainFields & TLocalizedFields;
-
-	// Create a virtual table for validation purposes
-	// This table is never actually used in the database
-	return pgTable(`${tableName}_validation`, mergedFields) as any;
-}
 
 /**
  * Create validation schema for a global
