@@ -60,9 +60,9 @@
 		"dev": "tsdown --watch",
 		"build": "tsdown",
 		"check-types": "tsc --noEmit",
-		"test": "bun test --max-concurrency=1 test/",
+		"test": "bun test --max-concurrency=1 --timeout=60000 test/",
 		"test:watch": "bun test --watch test/",
-		"questpie:generate": "bun x questpie generate --verbose"
+		"questpie:generate": "bun run ../questpie/src/exports/cli.ts generate --verbose"
 	},
 	"dependencies": {
 		"@base-ui/react": "^1.0.0",

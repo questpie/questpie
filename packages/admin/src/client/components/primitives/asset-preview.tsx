@@ -310,7 +310,13 @@ export function AssetPreview({
 								variant="secondary"
 								size="icon-xs"
 								nativeButton={false}
-								render={<a href={href} onClick={(e) => e.stopPropagation()} />}
+								render={
+									<a
+										href={href}
+										aria-label="Open asset in a new tab"
+										onClick={(e) => e.stopPropagation()}
+									/>
+								}
 							>
 								<Icon icon="ph:arrow-square-out-bold" />
 							</Button>
@@ -448,7 +454,13 @@ export function AssetPreview({
 								variant="ghost"
 								size="icon-xs"
 								nativeButton={false}
-								render={<a href={href} onClick={(e) => e.stopPropagation()} />}
+								render={
+									<a
+										href={href}
+										aria-label="Open asset in a new tab"
+										onClick={(e) => e.stopPropagation()}
+									/>
+								}
 							>
 								<Icon icon="ph:arrow-square-out-bold" />
 							</Button>
@@ -620,8 +632,11 @@ export function AssetPreview({
 								size="icon-sm"
 								nativeButton={false}
 								render={
-									// oxlint-disable-next-line jsx-a11y/anchor-has-content -- TODO: improve accessibility
-									<a href={href} onClick={(e) => e.stopPropagation()} />
+									<a
+										href={href}
+										aria-label="Open asset in a new tab"
+										onClick={(e) => e.stopPropagation()}
+									/>
 								}
 							>
 								<Icon icon="ph:arrow-square-out-bold" />

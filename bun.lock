@@ -342,7 +342,7 @@
       "name": "@questpie/hono",
       "version": "3.18.0",
       "dependencies": {
-        "hono": "^4.6.14",
+        "hono": "^4.12.25",
         "qs": "^6.13.1",
         "questpie": "workspace:*",
       },

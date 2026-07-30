@@ -349,8 +349,12 @@ export function AssetThumbnail({
 						size="icon-sm"
 						nativeButton={false}
 						render={
-							// oxlint-disable-next-line jsx-a11y/anchor-has-content -- Button provides the visible content.
-							<a href={url} target="_blank" rel="noopener noreferrer" />
+							<a
+								href={url}
+								target="_blank"
+								rel="noopener noreferrer"
+								aria-label="Open asset in a new tab"
+							/>
 						}
 					>
 						<Icon icon="ph:arrow-square-out-bold" />

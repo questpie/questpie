@@ -132,7 +132,7 @@
 		"bench:realtime": "QUESTPIE_MIGRATIONS_SILENT=1 bun run bench/realtime-baseline.ts",
 		"bench:realtime:routing": "bun run bench/realtime-candidate-routing.ts",
 		"build": "tsdown",
-		"test": "QUESTPIE_MIGRATIONS_SILENT=1 bun test --max-concurrency=1",
+		"test": "QUESTPIE_MIGRATIONS_SILENT=1 bun test --max-concurrency=1 --timeout=60000",
 		"test:watch": "bun test --watch",
 		"check-types": "tsc --noEmit && tsc --noEmit -p tsconfig.fullapp.json",
 		"questpie:generate": "bun run ./src/exports/cli.ts generate --verbose",
