@@ -7,7 +7,7 @@
 import { parseRfc3339Instant } from "#questpie/shared/temporal.js";
 import { getTxid, QUESTPIE_TXID_HEADER } from "#questpie/shared/txid.js";
 
-import type { ExpectedRevision } from "../../collection/crud/types.js";
+import type { ExpectedRevision, Where } from "../../collection/crud/types.js";
 import {
 	introspectCollection,
 	resolveIntrospectionAccess,
@@ -301,7 +301,7 @@ export async function collectionUpdate(
 		);
 		const result = await crud.updateById(
 			{
-				id: params.id as any,
+				id: params.id,
 				data: payload && Object.hasOwn(payload, "data") ? payload.data : body,
 				...(expectedRevision === undefined ? {} : { expectedRevision }),
 			},
@@ -351,7 +351,7 @@ export async function collectionRemove(
 		);
 		const result = await crud.deleteById(
 			{
-				id: params.id as any,
+				id: params.id,
 				...(expectedRevision === undefined ? {} : { expectedRevision }),
 			},
 			resolved.appContext,
@@ -397,7 +397,7 @@ export async function collectionVersions(
 
 		const result = await crud.findVersions(
 			{
-				id: params.id as any,
+				id: params.id,
 				...(Number.isFinite(limit) && limit !== undefined
 					? { limit: Math.floor(limit) }
 					: {}),
@@ -461,7 +461,7 @@ export async function collectionRevert(
 		);
 		const result = await crud.revertToVersion(
 			{
-				id: params.id as any,
+				id: params.id,
 				...(typeof payload.version === "number"
 					? { version: payload.version }
 					: {}),
@@ -606,7 +606,7 @@ export async function collectionRestore(
 		);
 		const result = await crud.restoreById(
 			{
-				id: params.id as any,
+				id: params.id,
 				...(expectedRevision === undefined ? {} : { expectedRevision }),
 			},
 			resolved.appContext,
@@ -655,7 +655,7 @@ export async function collectionPurge(
 		);
 		const result = await crud.purgeById(
 			{
-				id: params.id as any,
+				id: params.id,
 				...(expectedRevision === undefined ? {} : { expectedRevision }),
 			},
 			resolved.appContext,
@@ -702,8 +702,8 @@ export async function collectionUpdateMany(
 
 	try {
 		const { where, data, expectedRevisions } = body as {
-			where: any;
-			data: any;
+			where: Where;
+			data: Record<string, unknown>;
 			expectedRevisions?: Array<ExpectedRevision<string>>;
 		};
 		const result = await crud.updateMany(
@@ -799,7 +799,7 @@ export async function collectionDeleteMany(
 
 	try {
 		const { where, expectedRevisions } = body as {
-			where: any;
+			where: Where;
 			expectedRevisions?: Array<ExpectedRevision<string>>;
 		};
 		const result = await crud.deleteMany(

@@ -1422,7 +1422,7 @@ export function createClient<TApp extends QuestpieApp>(
 						id,
 						data,
 						expectedRevision,
-					}: { id: string; data: any; expectedRevision?: number },
+					}: { id: string; data: unknown; expectedRevision?: number },
 					options: LocaleOptions = {},
 				) => {
 					const queryString = qs.stringify(options, {
@@ -1576,8 +1576,8 @@ export function createClient<TApp extends QuestpieApp>(
 						data,
 						expectedRevisions,
 					}: {
-						where: any;
-						data: any;
+						where: unknown;
+						data: unknown;
 						expectedRevisions?: Array<ExpectedRevision<string | number>>;
 					},
 					options: LocaleOptions = {},
@@ -1598,7 +1598,7 @@ export function createClient<TApp extends QuestpieApp>(
 				},
 
 				updateBatch: async (
-					{ updates }: { updates: Array<{ id: string; data: any }> },
+					{ updates }: { updates: Array<{ id: string; data: unknown }> },
 					options: LocaleOptions = {},
 				) => {
 					const queryString = qs.stringify(options, {
@@ -1617,7 +1617,7 @@ export function createClient<TApp extends QuestpieApp>(
 						where,
 						expectedRevisions,
 					}: {
-						where: any;
+						where: unknown;
 						expectedRevisions?: Array<ExpectedRevision<string | number>>;
 					},
 					options: LocaleOptions = {},
@@ -1755,7 +1755,7 @@ export function createClient<TApp extends QuestpieApp>(
 				// Canonical by-id aliases — one CRUD vocabulary across server
 				// and client (server `update`/`delete` are bulk-by-where).
 				updateById: async (
-					params: { id: string; data: any; expectedRevision?: number },
+					params: { id: string; data: unknown; expectedRevision?: number },
 					options: LocaleOptions = {},
 				) => {
 					return base.update(params, options);

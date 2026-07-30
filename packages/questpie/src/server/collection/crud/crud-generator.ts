@@ -60,6 +60,7 @@ import {
 } from "#questpie/server/collection/crud/relation-resolvers/index.js";
 import {
 	executeAccessRule,
+	getRequestFromContext,
 	getRestrictedReadFields,
 	matchesAccessConditions,
 	matchesStrictAccessConditions,
@@ -1756,7 +1757,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							: undefined;
 					let record: any;
 					try {
-						record = await withTransaction(db, async (tx: any) => {
+						record = await withTransaction(db, async (tx) => {
 							await lockRelationSourceForWrite({
 								tx,
 								app: this.app,
@@ -2129,7 +2130,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		const isBatch = "where" in params;
 		const data = params.data;
 		if (this.getOptimisticConcurrency() && !internal?.revisionPrelocked) {
-			return withTransaction(db, async (tx: any) => {
+			return withTransaction(db, async (tx) => {
 				const txContext = { ...normalized, db: tx };
 				const findOptions: FindManyOptions = isBatch
 					? { where: (params as { where: Where }).where }
@@ -2145,7 +2146,15 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				)) as PaginatedResult<any>;
 				if (result.docs.length === 0) {
 					if (isBatch) {
-						this.assertExpectedRevisions(params as any, []);
+						this.assertExpectedRevisions(
+							params as {
+								expectedRevisions?: Array<{
+									id: string | number;
+									expectedRevision: number;
+								}>;
+							},
+							[],
+						);
 						return [];
 					}
 					throw ApiError.notFound(
@@ -2162,14 +2171,22 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				const claimedIds = await this.claimRecords({
 					tx,
 					txContext,
-					candidateIds: result.docs.map((row: any) => row.id),
+					candidateIds: result.docs.map((row) => row.id),
 					where: isBatch ? (params as { where: Where }).where : undefined,
 					includeDeleted: true,
 					stage: this.workflowConfig?.initialStage,
 				});
 				if (claimedIds.length === 0) {
 					if (isBatch) {
-						this.assertExpectedRevisions(params as any, []);
+						this.assertExpectedRevisions(
+							params as {
+								expectedRevisions?: Array<{
+									id: string | number;
+									expectedRevision: number;
+								}>;
+							},
+							[],
+						);
 						return [];
 					}
 					throw ApiError.notFound(
@@ -2183,9 +2200,20 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					.where(inArray(getColumn(this.table, "id")!, claimedIds))
 					.for("update");
 				if (isBatch) {
-					this.assertExpectedRevisions(params as any, lockedRows);
+					this.assertExpectedRevisions(
+						params as {
+							expectedRevisions?: Array<{
+								id: string | number;
+								expectedRevision: number;
+							}>;
+						},
+						lockedRows,
+					);
 				} else {
-					this.assertExpectedRevision(params as any, lockedRows);
+					this.assertExpectedRevision(
+						params as { expectedRevision?: number },
+						lockedRows,
+					);
 				}
 				return this._executeUpdate(params, txContext, {
 					...internal,
@@ -2373,7 +2401,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		let updatedRecords: any[];
 
 		try {
-			updatedRecords = await withTransaction(db, async (tx: any) => {
+			updatedRecords = await withTransaction(db, async (tx) => {
 				const txContext = { ...normalized, db: tx };
 				await lockRelationSourceForWrite({
 					tx,
@@ -2691,10 +2719,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const db = this.getDb(normalized);
 			const { id } = params;
 
-			let existing: any;
+			let existing: OptimisticConcurrencyRecord | undefined;
 
 			// Use transaction for delete + version
-			await withTransaction(db, async (tx: any) => {
+			await withTransaction(db, async (tx) => {
 				const txContext = { ...normalized, db: tx };
 				const [lockedBeforeDelete] = await tx
 					.select()
@@ -2768,13 +2796,16 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					throw ApiError.conflict("Canonical row changed during delete hooks");
 				}
 				this.assertExpectedRevision(params, [revalidated]);
-				existing = revalidated;
-				const stagedCrdtOwner = await this.stageCrdtOwner(existing);
+				const currentExisting = revalidated as OptimisticConcurrencyRecord & {
+					revision: number;
+				};
+				existing = currentExisting;
+				const stagedCrdtOwner = await this.stageCrdtOwner(currentExisting);
 
-				await this.handleCascadeDeleteInternal(id, existing, txContext);
+				await this.handleCascadeDeleteInternal(id, currentExisting, txContext);
 
 				// Soft delete or hard delete
-				let deletionSnapshot = existing;
+				let deletionSnapshot = currentExisting;
 				if (this.state.options.softDelete) {
 					const optimisticConcurrency = this.getOptimisticConcurrency();
 					const [deleted] = await tx
@@ -2789,12 +2820,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						})
 						.where(eq(getColumn(this.table, "id")!, id))
 						.returning();
-					deletionSnapshot = deleted ?? existing;
+					deletionSnapshot = deleted ?? currentExisting;
 				} else {
 					if (this.getOptimisticConcurrency()) {
 						deletionSnapshot = {
-							...existing,
-							revision: existing.revision + 1,
+							...currentExisting,
+							revision: currentExisting.revision + 1,
 						};
 					}
 					await tx
@@ -2810,7 +2841,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						this.state.hooks?.afterDelete,
 						this.createHookContext({
 							data: deletionSnapshot,
-							original: existing,
+							original: currentExisting,
 							operation: "delete",
 							context: txContext,
 							db: tx,
@@ -2857,6 +2888,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				attachCurrentTransactionTxid(existing);
 			});
 
+			if (!existing) {
+				throw new Error("Delete transaction completed without a canonical row");
+			}
 			const result = attachTxid(
 				{ success: true, data: existing },
 				getTxid(existing),
@@ -2897,7 +2931,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const { id } = params;
 
 			try {
-				return await withTransaction(db, async (tx: any) => {
+				return await withTransaction(db, async (tx) => {
 					const txContext = { ...normalized, db: tx };
 					const findPreimage = async () =>
 						(await this._executeFind<Record<string, unknown>>(
@@ -3246,7 +3280,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const normalized = this.normalizeContext(context);
 			const db = this.getDb(normalized);
 
-			return withTransaction(db, async (tx: any) => {
+			return withTransaction(db, async (tx) => {
 				const txContext = { ...normalized, db: tx };
 				const updatedRecords: any[] = [];
 				const optimisticConcurrency = this.getOptimisticConcurrency();
@@ -3344,7 +3378,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			// 3. Batched DELETE query
 			// Claim check inside the tx: only rows that STILL match the caller's
 			// where at delete time are deleted ("winners").
-			const winners: any[] = await withTransaction(db, async (tx: any) => {
+			const winners = await withTransaction(db, async (tx) => {
 				const txContext = { ...normalized, db: tx };
 
 				let winnerIdList = await this.claimRecords({
@@ -3397,7 +3431,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				const claimedRecords = records.filter((r: any) => winnerIds.has(r.id));
 				const deleteBulkMeta = {
 					isBatch: true as const,
-					recordIds: claimedRecords.map((record: any) => record.id),
+					recordIds: claimedRecords.map((record) => record.id),
 					records: claimedRecords,
 					count: claimedRecords.length,
 				};
@@ -3451,7 +3485,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					lockedBeforeDelete.length !== winnerIdList.length ||
 					(this.state.options.softDelete &&
 						lockedBeforeDelete.some(
-							(record: any) => record.deletedAt != null,
+							(record: { deletedAt?: unknown }) => record.deletedAt != null,
 						)) ||
 					(expectedRevisions &&
 						lockedBeforeDelete.some(
@@ -3878,7 +3912,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 			}
 
-			const updated = await withTransaction(db, async (tx: any) => {
+			const updated = await withTransaction(db, async (tx) => {
 				const [lockedExisting] = await tx
 					.select()
 					.from(this.table)
@@ -4026,7 +4060,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				);
 			}
 
-			const transitioned = await withTransaction(db, async (tx: any) => {
+			const transitioned = await withTransaction(db, async (tx) => {
 				const existingRows = await tx
 					.select()
 					.from(this.table)
@@ -4054,9 +4088,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						actor: normalized.actor,
 						locale: normalized.locale,
 						row: existing,
-						request:
-							((context as any).req as Request | undefined) ??
-							((context as any).request as Request | undefined),
+						request: getRequestFromContext(context),
 						contextExtensions: normalized["~contextExtensions"],
 					});
 					if (canTransition === false) {

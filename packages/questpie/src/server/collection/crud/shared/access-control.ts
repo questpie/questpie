@@ -332,7 +332,9 @@ export function mergeFieldAccessRules(
 	);
 }
 
-function getRequestFromContext(context: CRUDContext): Request | undefined {
+export function getRequestFromContext(
+	context: CRUDContext,
+): Request | undefined {
 	const ctx = context as Record<string, unknown>;
 	const req = ctx.req ?? ctx.request;
 	return typeof Request !== "undefined" && req instanceof Request

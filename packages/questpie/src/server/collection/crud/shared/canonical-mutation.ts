@@ -1,8 +1,16 @@
 import type { SQL } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import { ApiError } from "#questpie/server/errors/index.js";
 
+import { getColumn } from "./field-resolver.js";
+import type { withTransaction } from "./transaction.js";
+
 export const CANONICAL_REVISION_FIELD = "revision";
+
+type CanonicalMutationTransaction = Parameters<
+	Parameters<typeof withTransaction>[1]
+>[0];
 
 export type LockedCanonicalRow = Record<string, unknown> & {
 	revision?: number;
@@ -34,8 +42,8 @@ export function assertExpectedRevision(input: {
  * the owner lock.
  */
 export async function mutateCanonicalRow(input: {
-	transaction: any;
-	table: any;
+	transaction: CanonicalMutationTransaction;
+	table: PgTable;
 	where: SQL | undefined;
 	lockedRow: LockedCanonicalRow;
 	values: Record<string, unknown>;
@@ -49,7 +57,7 @@ export async function mutateCanonicalRow(input: {
 			row: input.lockedRow,
 		});
 	}
-	const revisionColumn = input.table[CANONICAL_REVISION_FIELD];
+	const revisionColumn = getColumn(input.table, CANONICAL_REVISION_FIELD);
 	if (input.optimisticConcurrency && !revisionColumn) {
 		throw new Error("Canonical revision column is unavailable");
 	}

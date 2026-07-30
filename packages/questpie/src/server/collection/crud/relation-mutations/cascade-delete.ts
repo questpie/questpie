@@ -207,7 +207,7 @@ async function cascadeDeleteHasMany(
 				data: { [foreignKeyField]: null },
 				...(relatedCrud["~internalState"].options.optimisticConcurrency === true
 					? {
-							expectedRevisions: relatedRecords.map((relatedRecord: any) => ({
+							expectedRevisions: relatedRecords.map((relatedRecord) => ({
 								id: relatedRecord.id,
 								expectedRevision: relatedRecord.revision,
 							})),

@@ -21,6 +21,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { CollectionBuilderState } from "#questpie/server/collection/builder/types.js";
 import { buildLocalizedFieldRef } from "#questpie/server/collection/crud/query-builders/where-builder.js";
+import { getColumn } from "#questpie/server/collection/crud/shared/field-resolver.js";
 import {
 	I18N_CURRENT_PREFIX,
 	I18N_FALLBACK_PREFIX,
@@ -222,9 +223,9 @@ export function buildSelectObject(
 	if (
 		state.options.optimisticConcurrency &&
 		includedFields.has("revision") &&
-		(table as any).revision
+		getColumn(table, "revision")
 	) {
-		select.revision = (table as any).revision;
+		select.revision = getColumn(table, "revision");
 	}
 
 	// Extras (custom SQL fields)

@@ -110,7 +110,7 @@ export async function globalGet(
 
 	try {
 		const options = parseGlobalGetOptions(new URL(request.url));
-		const globalInstance = app.getGlobalConfig(params.global as any);
+		const globalInstance = app.getGlobalConfig(params.global);
 		const crud = globalInstance.generateCRUD(resolved.appContext.db, app);
 		const result = await crud.get(options, resolved.appContext);
 		return smartResponse(
@@ -146,7 +146,7 @@ export async function globalVersions(
 		const offset =
 			offsetRaw !== null && offsetRaw !== "" ? Number(offsetRaw) : undefined;
 
-		const globalInstance = app.getGlobalConfig(params.global as any);
+		const globalInstance = app.getGlobalConfig(params.global);
 		const crud = globalInstance.generateCRUD(resolved.appContext.db, app);
 		const result = await crud.findVersions(
 			{

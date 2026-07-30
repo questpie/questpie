@@ -26,7 +26,9 @@ import {
 import {
 	executeAccessRule,
 	extractNestedLocalizationSchemas,
+	getColumn,
 	getDb,
+	getRequestFromContext,
 	getTransactionTxid,
 	getRestrictedReadFields,
 	mergeFieldAccessRules,
@@ -211,7 +213,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 		const owner = await this.getCurrentRow(db, context);
 		if (!owner) return;
 		const staged = await this.stageCrdtActivation(owner);
-		await withTransaction(db, async (tx: any) => {
+		await withTransaction(db, async (tx) => {
 			await this.activateLockedCrdtGlobal(tx, owner.id, staged, "ensure");
 		});
 	}
@@ -541,7 +543,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 
 				if (!baseRow) {
 					const stagedCreate = await this.stageCrdtActivation({});
-					baseRow = await withTransaction(db, async (tx: any) => {
+					baseRow = await withTransaction(db, async (tx) => {
 						// Serialize concurrent auto-creates: take the lock first, then
 						// re-check existence inside the locked transaction. Without this
 						// two boot-time fetches can both see "0 rows" and both INSERT.
@@ -632,7 +634,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 
 				if (!row) {
 					const stagedCreate = await this.stageCrdtActivation({});
-					row = await withTransaction(db, async (tx: any) => {
+					row = await withTransaction(db, async (tx) => {
 						// Serialize concurrent auto-creates: take the lock first, then
 						// re-check existence inside the locked transaction. Without this
 						// two boot-time fetches can both see "0 rows" and both INSERT.
@@ -755,19 +757,27 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 
 	private createUpdate() {
 		return async (
-			input: any,
+			input: Record<string, unknown>,
 			context: CRUDContext = {},
 			options: GlobalUpdateOptions = {},
 		) => {
+			const expectedRevisionInput = input.expectedRevision;
 			const expectedRevision = this.state.options.optimisticConcurrency
-				? input?.expectedRevision
+				? typeof expectedRevisionInput === "number"
+					? expectedRevisionInput
+					: undefined
 				: undefined;
-			const data = this.state.options.optimisticConcurrency
-				? input?.data
+			const dataInput = this.state.options.optimisticConcurrency
+				? input.data
 				: input;
-			if (!data || typeof data !== "object" || Array.isArray(data)) {
+			if (
+				!dataInput ||
+				typeof dataInput !== "object" ||
+				Array.isArray(dataInput)
+			) {
 				throw ApiError.badRequest("Global update data must be an object");
 			}
+			const data = dataInput as Record<string, unknown>;
 			if (
 				this.state.options.optimisticConcurrency &&
 				Object.hasOwn(data, "revision")
@@ -896,7 +906,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 						await mutateCanonicalRow({
 							transaction: tx,
 							table: this.table,
-							where: eq((this.table as any).id, currentExisting.id),
+							where: eq(getColumn(this.table, "id")!, currentExisting.id),
 							lockedRow: currentExisting,
 							values: {
 								...nonLocalized,
@@ -1045,7 +1055,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				return attachTxid(updatedRecord, getTransactionTxid());
 			};
 
-			const updatedRecord = await withTransaction(db, async (tx: any) => {
+			const updatedRecord = await withTransaction(db, async (tx) => {
 				await lockRelationSourceForWrite({
 					tx,
 					app: this.app,
@@ -1056,7 +1066,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					const [locked] = await tx
 						.select()
 						.from(this.table)
-						.where(eq((this.table as any).id, existing.id))
+						.where(eq(getColumn(this.table, "id")!, existing.id))
 						.for("update");
 					if (!locked) {
 						throw ApiError.notFound("Global", this.state.name);
@@ -1265,11 +1275,11 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 
 			const restoreData = { ...nonLocalized, ...localizedForContext };
 
-			return withTransaction(db, async (tx: any) => {
+			return withTransaction(db, async (tx) => {
 				const [lockedExisting] = await tx
 					.select()
 					.from(this.table)
-					.where(eq((this.table as any).id, parentId))
+					.where(eq(getColumn(this.table, "id")!, parentId))
 					.for("update");
 				if (!lockedExisting) {
 					throw ApiError.notFound("Global record", "");
@@ -1326,7 +1336,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					await mutateCanonicalRow({
 						transaction: tx,
 						table: this.table,
-						where: eq((this.table as any).id, parentId),
+						where: eq(getColumn(this.table, "id")!, parentId),
 						lockedRow: lockedExisting,
 						values: {
 							...restoreNonLocalized,
@@ -1501,7 +1511,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				);
 			}
 
-			const transitioned = await withTransaction(db, async (tx: any) => {
+			const transitioned = await withTransaction(db, async (tx) => {
 				const current = await this.getCurrentRow(tx, normalized);
 				if (!current) {
 					throw ApiError.notFound("Global", this.state.name);
@@ -1509,7 +1519,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				const [existing] = await tx
 					.select()
 					.from(this.table)
-					.where(eq((this.table as any).id, current.id))
+					.where(eq(getColumn(this.table, "id")!, current.id))
 					.for("update");
 				if (!existing) {
 					throw ApiError.notFound("Global", this.state.name);
@@ -1530,9 +1540,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 						actor: normalized.actor,
 						locale: normalized.locale,
 						row: existing,
-						request:
-							((context as any).req as Request | undefined) ??
-							((context as any).request as Request | undefined),
+						request: getRequestFromContext(context),
 						contextExtensions: normalized["~contextExtensions"],
 					});
 					// Globals only support boolean access rules
@@ -1554,7 +1562,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				if (scheduledAt && scheduledAt.getTime() > Date.now()) {
 					const { scheduleGlobalTransition } =
 						await import("#questpie/server/modules/core/workflow/schedule-transition.js");
-					await scheduleGlobalTransition((this.app as any)?.queue, {
+					await scheduleGlobalTransition(this.app?.queue, {
 						global: this.state.name,
 						stage: toStage,
 						scheduledAt,
@@ -1591,7 +1599,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					? await mutateCanonicalRow({
 							transaction: tx,
 							table: this.table,
-							where: eq((this.table as any).id, existing.id),
+							where: eq(getColumn(this.table, "id")!, existing.id),
 							lockedRow: existing,
 							values:
 								this.state.options.timestamps !== false
@@ -1740,11 +1748,13 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				select.updatedAt = (this.table as any).updatedAt;
 			}
 		}
+		const revisionColumn = getColumn(this.table, "revision");
 		if (
 			this.state.options.optimisticConcurrency &&
-			(includeAllFields || columns?.revision)
+			(includeAllFields || columns?.revision) &&
+			revisionColumn
 		) {
-			select.revision = (this.table as any).revision;
+			select.revision = revisionColumn;
 		}
 
 		return select;
