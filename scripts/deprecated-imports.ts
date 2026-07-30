@@ -65,7 +65,11 @@ function deprecatedExportsOf(src: string): {
 
 	const blocks = [...src.matchAll(/\/\*\*[\s\S]*?\*\//g)];
 	for (const block of blocks) {
-		if (!block[0].includes("@deprecated")) continue;
+		// The tag must open a line. A bare `includes("@deprecated")` counts prose
+		// ABOUT deprecation as a deprecation — it fired on a comment reading
+		// "Tagged `@internal` rather than `@deprecated`" and kept nine imports in
+		// the total after the thing had been un-deprecated.
+		if (!/^\s*\*\s*@deprecated\b/m.test(block[0])) continue;
 		const after = src.slice((block.index ?? 0) + block[0].length);
 		const decl = after.match(
 			/^\s*export\s+(?:declare\s+)?(?:const|let|var|function|async function|class|type|interface|enum)\s+([A-Za-z_$][\w$]*)/,

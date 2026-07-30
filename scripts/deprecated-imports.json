@@ -3,9 +3,9 @@
 	"packages": {
 		"next": 0,
 		"tanstack-query": 0,
-		"admin": 20,
+		"admin": 19,
 		"workflows": 0,
-		"questpie": 14,
+		"questpie": 0,
 		"tanstack-db": 0,
 		"mcp": 0,
 		"observability": 0,
