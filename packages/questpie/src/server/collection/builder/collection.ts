@@ -746,21 +746,30 @@ export class Collection<TState extends CollectionBuilderState> {
 	}
 
 	/**
-	 * Get virtual fields with specific context
-	 * This allows regenerating virtual field SQL with runtime context
+	 * The SQL registered by `f.<type>().virtual(sql`…`)`, keyed by field name.
+	 *
+	 * All four of these return `state.virtuals` verbatim and ignore every
+	 * argument. That is the honest description; the parameters are kept because
+	 * six call sites in CRUDGenerator and GlobalCRUDGenerator pass them, and
+	 * removing them is a signature change across both generators.
+	 *
+	 * The two `WithAliases` variants used to claim they "create COALESCE
+	 * expressions using the aliased tables instead of subqueries". They do not,
+	 * and never have. Verified end to end (test/collection/virtual-fields.test.ts,
+	 * plus a localized probe): the SQL an author writes is passed through
+	 * untouched, so a virtual field that reads a localized column has to do its
+	 * own correlated subquery and its own locale filtering. It works — it just
+	 * gets no help from the query's aliased i18n joins, and no fallback COALESCE.
+	 *
+	 * So this is either an unimplemented optimization or three redundant names
+	 * for one getter. Do not "fix" the doc back without implementing it, and do
+	 * not assume a localized virtual is locale-aware for free.
 	 */
 	public getVirtuals(_context: any): TState["virtuals"] {
 		return this.state.virtuals || ({} as TState["virtuals"]);
 	}
 
-	/**
-	 * Get virtual fields with aliased i18n tables for use in queries.
-	 * This creates COALESCE expressions using the aliased tables instead of subqueries.
-	 *
-	 * @param _context - CRUD context
-	 * @param _i18nCurrentTable - Aliased i18n table for current locale
-	 * @param _i18nFallbackTable - Aliased i18n table for fallback locale (null if no fallback)
-	 */
+	/** @see getVirtuals — the alias arguments are accepted and ignored. */
 	public getVirtualsWithAliases(
 		_context: any,
 		_i18nCurrentTable: any | null,
@@ -769,18 +778,12 @@ export class Collection<TState extends CollectionBuilderState> {
 		return this.state.virtuals || ({} as TState["virtuals"]);
 	}
 
+	/** @see getVirtuals */
 	public getVirtualsForVersions(_context: any): TState["virtuals"] {
 		return this.state.virtuals || ({} as TState["virtuals"]);
 	}
 
-	/**
-	 * Get virtual fields for versions with aliased i18n tables.
-	 * Creates COALESCE expressions using the aliased tables instead of subqueries.
-	 *
-	 * @param _context - CRUD context
-	 * @param _i18nVersionsCurrentTable - Aliased i18n versions table for current locale
-	 * @param _i18nVersionsFallbackTable - Aliased i18n versions table for fallback locale
-	 */
+	/** @see getVirtuals — the alias arguments are accepted and ignored. */
 	public getVirtualsForVersionsWithAliases(
 		_context: any,
 		_i18nVersionsCurrentTable: any | null,

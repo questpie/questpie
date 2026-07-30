@@ -33,12 +33,26 @@ const products = collection("products")
 	}))
 	.options({ timestamps: true });
 
+const posts = collection("posts")
+	.fields(({ f }) => ({
+		slug: f.text().required(),
+		title: f.text().required().localized(),
+		// Reaches into the i18n table. Note the correlated subquery: the author
+		// writes it, because the aliased i18n joins the query already builds are
+		// NOT offered to virtual SQL. See the note on Collection.getVirtuals.
+		titleUpper: f.text().virtual(sql<string>`(
+			SELECT UPPER(t.title) FROM posts_i18n t
+			WHERE t.parent_id = posts.id LIMIT 1
+		)`),
+	}))
+	.options({ timestamps: true });
+
 describe("SQL virtual fields", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 	let ctx: ReturnType<typeof createTestContext>;
 
 	beforeEach(async () => {
-		setup = await buildMockApp({ collections: { products } });
+		setup = await buildMockApp({ collections: { products, posts } });
 		await runTestDbMigrations(setup.app);
 		ctx = createTestContext();
 	});
@@ -94,5 +108,25 @@ describe("SQL virtual fields", () => {
 			(d) => (d as Record<string, unknown>).priceDoubled,
 		);
 		expect(doubled).toEqual([100, 1800]);
+	});
+
+	it("can read a localized column, via the author's own subquery", async () => {
+		const created = await setup.app.collections.posts.create(
+			{ slug: "hello", title: "hello" },
+			ctx,
+		);
+
+		expect((created as Record<string, unknown>).titleUpper).toBe("HELLO");
+
+		const row = await setup.app.collections.posts.findOne(
+			{ where: { id: created.id } },
+			ctx,
+		);
+		expect((row as Record<string, unknown>).titleUpper).toBe("HELLO");
+
+		// This works because the field's SQL correlates to posts_i18n itself.
+		// getVirtualsWithAliases receives the query's aliased i18n tables and
+		// discards them, so locale selection and fallback are entirely on the
+		// author of the expression — the framework contributes nothing here.
 	});
 });
