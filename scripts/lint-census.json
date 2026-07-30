@@ -2,7 +2,7 @@
 	"$comment": "oxlint WARNING counts per package per rule. Errors are gated separately by the Lint & Format job. Regenerate with `bun run scripts/lint-census.ts --update` and review the diff. Ratchet: any per-rule increase fails CI. NOTE: no-underscore-dangle dominates this baseline and is largely a house convention (_state, _pendingRelations) rather than debt — configuring or dropping that rule is a better fix than burning it down. See the script header.",
 	"packages": {
 		"admin": {
-			"eslint(no-unused-vars)": 152,
+			"eslint(no-unused-vars)": 151,
 			"jsx-a11y(no-static-element-interactions)": 1,
 			"react(iframe-missing-sandbox)": 1,
 			"react(no-unstable-nested-components)": 6

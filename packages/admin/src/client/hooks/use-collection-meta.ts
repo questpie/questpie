@@ -14,13 +14,8 @@ import {
 	useQuery,
 	useSuspenseQuery,
 } from "@tanstack/react-query";
-import type { Questpie } from "questpie";
 import type { CollectionMeta } from "questpie/client";
 
-import type {
-	RegisteredCMS,
-	RegisteredCollectionNames,
-} from "../builder/registry";
 import { selectClient, useAdminStore } from "../runtime";
 
 // ============================================================================
@@ -30,8 +25,7 @@ import { selectClient, useAdminStore } from "../runtime";
 /**
  * Resolved collection names (string if not registered)
  */
-type ResolvedCollectionNames =
-	RegisteredCMS extends Questpie<any> ? RegisteredCollectionNames : string;
+type ResolvedCollectionNames = string;
 
 // ============================================================================
 // Hook

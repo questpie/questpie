@@ -2,11 +2,10 @@ import type { QuestpieApp, QuestpieClient } from "questpie/client";
 
 import type { QuestpieQueryOptionsProxy } from "@questpie/tanstack-query";
 
-import type { RegisteredCollectionNames } from "../builder/registry";
 import { selectClient, useAdminStore } from "../runtime";
 
 /** Runtime collection name narrowed for typed admin hooks. */
-export type AdminCollectionKey = RegisteredCollectionNames;
+export type AdminCollectionKey = string;
 
 /** Single intentional cast site for dynamic collection names in views. */
 export function adminCollectionKey(name: string): AdminCollectionKey {

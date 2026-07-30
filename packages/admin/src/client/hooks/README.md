@@ -355,32 +355,29 @@ const href = getAdminLinkHref(
 // => "/admin/collections/posts/123"
 ```
 
-## Type Safety with Module Augmentation
+## Typing
 
-For full type inference, register your app types:
-
-```typescript
-// admin.ts
-import type { App } from "#questpie";
-
-declare module "@questpie/admin/builder" {
-	interface AdminTypeRegistry {
-		app: App;
-		admin: typeof admin;
-	}
-}
-```
-
-Now all hooks have full type inference:
+These hooks are **not** app-type-aware. The collection name is `string`, and the
+result is `any`:
 
 ```tsx
-// Types inferred automatically!
 const { data } = useCollectionList("posts");
-// data?.docs is typed as Post[]
-
-const { data: post } = useCollectionItem("posts", id);
-// post is typed as Post | undefined
+// data is `any` — annotate at the call site if you want checking
 ```
+
+This section used to document an `AdminTypeRegistry` module augmentation that
+promised `data?.docs is typed as Post[]`. That never worked. The interface was
+not exported from `src/exports/`, so no user code could reach it to augment;
+with it left empty, every type derived from it resolved to a constant — the app
+and admin types to `unknown`, the collection- and global-name unions to plain
+`string` — so the inference the docs advertised could not happen even in
+principle. Two copies of the instructions had drifted onto different module
+specifiers (`@questpie/admin/client` here, `@questpie/admin/builder` in the
+example app), which is the usual sign that neither was ever executed.
+
+The registry has been removed rather than left as a promise the package cannot
+keep. Inferring collection types from the app is still worth having; it needs a
+seam that is genuinely public, and that is not built yet.
 
 ## API Reference
 

@@ -5,9 +5,8 @@
  */
 
 import { type UseQueryOptions, useQuery } from "@tanstack/react-query";
-import type { GlobalSchema, Questpie } from "questpie";
+import type { GlobalSchema } from "questpie";
 
-import type { RegisteredCMS, RegisteredGlobalNames } from "../builder/registry";
 import { selectClient, useAdminStore } from "../runtime";
 
 // ==========================================================================
@@ -17,8 +16,7 @@ import { selectClient, useAdminStore } from "../runtime";
 /**
  * Resolved global names (string if not registered)
  */
-type ResolvedGlobalNames =
-	RegisteredCMS extends Questpie<any> ? RegisteredGlobalNames : string;
+type ResolvedGlobalNames = string;
 
 // ==========================================================================
 // Hook
