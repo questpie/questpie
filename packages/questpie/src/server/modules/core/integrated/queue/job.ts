@@ -31,13 +31,6 @@ export function job<TName extends string, TPayload, TResult = void>(
 	definition: JobDefinition<TPayload, TResult, TName>,
 ): JobDefinition<TPayload, TResult, TName>;
 
-/**
- * @deprecated TApp generic removed; use flat context properties (db, queue, email, ...) instead.
- */
-export function job(): <TName extends string, TPayload, TResult = void>(
-	definition: JobDefinition<TPayload, TResult, TName>,
-) => JobDefinition<TPayload, TResult, TName>;
-
 export function job<
 	TNameOrApp extends string | unknown,
 	TPayload = any,

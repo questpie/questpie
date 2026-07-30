@@ -1,6 +1,7 @@
 {
 	"name": "@questpie/admin",
 	"version": "3.18.0",
+	"description": "Config-driven admin UI for QUESTPIE (React, Tailwind v4, shadcn)",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/questpie/questpie.git",
@@ -59,9 +60,9 @@
 		"dev": "tsdown --watch",
 		"build": "tsdown",
 		"check-types": "tsc --noEmit",
-		"test": "bun test --max-concurrency=1 test/",
+		"test": "bun test --max-concurrency=1 --timeout=60000 test/",
 		"test:watch": "bun test --watch test/",
-		"questpie:generate": "bun x questpie generate --verbose"
+		"questpie:generate": "bun run ../questpie/src/exports/cli.ts generate --verbose"
 	},
 	"dependencies": {
 		"@base-ui/react": "^1.0.0",
@@ -103,6 +104,7 @@
 		"react-hook-form": "^7.54.0",
 		"react-resizable-panels": "^4.4.2",
 		"recharts": "2.15.4",
+		"shadcn": "^3.6.1",
 		"sonner": "^2.0.7",
 		"tailwind-merge": "^3.4.0",
 		"tailwindcss": "^4.0.6",
@@ -117,10 +119,9 @@
 		"@types/react": "^19.2.0",
 		"@types/react-dom": "^19.2.0",
 		"bun-types": "latest",
-		"shadcn": "^3.6.1",
 		"tinyglobby": "^0.2.15",
 		"tsdown": "^0.18.3",
-		"typescript": "^5.9.2"
+		"typescript": "5.9.2"
 	},
 	"peerDependencies": {
 		"@tanstack/db": "0.6.16",

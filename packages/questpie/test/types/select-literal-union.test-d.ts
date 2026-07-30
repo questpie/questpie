@@ -16,7 +16,9 @@ const statusOptions = [
 const statusField = select(statusOptions);
 
 type StatusFieldState =
-	typeof statusField extends Field<infer S extends SelectFieldState> ? S : never;
+	typeof statusField extends Field<infer S extends SelectFieldState>
+		? S
+		: never;
 
 type StatusValue = StatusFieldState["data"];
 
@@ -33,7 +35,9 @@ const priorityOptions = [
 const priorityField = select(priorityOptions);
 
 type PriorityFieldState =
-	typeof priorityField extends Field<infer S extends SelectFieldState> ? S : never;
+	typeof priorityField extends Field<infer S extends SelectFieldState>
+		? S
+		: never;
 
 type PriorityValue = PriorityFieldState["data"];
 

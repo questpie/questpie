@@ -1,7 +1,7 @@
 import type { Prettify } from "better-auth";
 import type { SQL } from "drizzle-orm";
 import type { AnyPgColumn, PgTableExtraConfigValue } from "drizzle-orm/pg-core";
-import type { ZodType, z } from "zod";
+import type { ZodType } from "zod";
 
 import type {
 	CollectionInsert,
@@ -23,9 +23,9 @@ import type {
 	TitleExpression,
 	UploadOptions,
 } from "#questpie/server/collection/builder/types.js";
-import {
-	createCollectionValidationSchemas,
-	type ValidationSchemas,
+import type {
+	ValidationBuilderOptions,
+	ValidationSchemas,
 } from "#questpie/server/collection/builder/validation-helpers.js";
 import { isInTransaction } from "#questpie/server/collection/crud/shared/transaction.js";
 import { ApiError } from "#questpie/server/errors/base.js";
@@ -163,6 +163,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			access: {},
 			searchable: undefined,
 			validation: undefined,
+			validationOptions: undefined,
 			output: undefined,
 			upload: undefined,
 			collaborative: undefined,
@@ -784,46 +785,19 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 *   })
 	 * ```
 	 */
-	validation(options?: {
-		/** Fields to exclude from validation (e.g., id, timestamps) */
-		exclude?: Record<string, true>;
-		/** Custom refinements per field */
-		refine?: Record<string, (schema: z.ZodTypeAny) => z.ZodTypeAny>;
-	}): CollectionBuilder<Override<TState, { validation: ValidationSchemas }>> {
-		// Extract main and localized fields from field definitions
-		const mainFields: Record<string, any> = {};
-		const localizedFields: Record<string, any> = {};
-
-		if (this.state.fieldDefinitions) {
-			for (const [key, fieldDef] of Object.entries(
-				this.state.fieldDefinitions,
-			)) {
-				const column = this.state.fields[key];
-				if (!column) continue;
-
-				if (fieldDef.getLocation?.() === "i18n") {
-					localizedFields[key] = column;
-				} else {
-					mainFields[key] = column;
-				}
-			}
-		}
-
-		// Generate validation schemas (field definitions drive the per-field
-		// schema overlay — see createCollectionValidationSchemas)
-		const validationSchemas = createCollectionValidationSchemas(
-			this.state.name,
-			mainFields,
-			localizedFields,
-			{
-				...options,
-				fieldDefinitions: this.state.fieldDefinitions as any,
-			},
-		);
-
+	validation(
+		options?: ValidationBuilderOptions,
+	): CollectionBuilder<Override<TState, { validation: ValidationSchemas }>> {
+		// Record the options and let the Collection constructor build the
+		// schemas. Building them here as well is what let the two paths drift:
+		// the constructor adds the id, timestamp and soft-delete columns, this
+		// one added none, and a stripping Zod object made the difference
+		// invisible — `.validation()` quietly removed the ability to pass a
+		// custom id on create and to write `deletedAt` on restore. One builder,
+		// one place. See test/collection/validation-builder-parity.test.ts.
 		const newState = {
 			...this.state,
-			validation: validationSchemas,
+			validationOptions: options ?? {},
 		} as any;
 
 		const newBuilder = new CollectionBuilder(newState);
@@ -1294,6 +1268,8 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				...(other.state.localized || []),
 			],
 			validation: other.state.validation ?? this.state.validation,
+			validationOptions:
+				other.state.validationOptions ?? this.state.validationOptions,
 			_pendingRelations: mergedPendingRelations,
 		} as any;
 
@@ -1369,6 +1345,7 @@ export function collection<TName extends string>(
 		access: {},
 		searchable: undefined,
 		validation: undefined,
+		validationOptions: undefined,
 		output: undefined,
 		upload: undefined,
 		collaborative: undefined,

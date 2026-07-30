@@ -7,9 +7,4 @@ import { auditModule } from "@questpie/admin/modules/audit";
 import mcpModule from "@questpie/mcp";
 import { openApiModule } from "@questpie/openapi";
 
-export default [
-	adminModule,
-	auditModule,
-	mcpModule,
-	openApiModule,
-] as const;
+export default [adminModule, auditModule, mcpModule, openApiModule] as const;

@@ -40,17 +40,19 @@ export type SelectValuesFromOptions<T extends readonly SelectOption[]> =
 				: string
 		: string;
 
-export type SelectFieldState<TValue extends string = string> =
-	Omit<DefaultFieldState, "operators"> & {
-		type: "select";
-		data: TValue;
-		column: PgVarcharBuilder<[string, ...string[]]>;
-		operators: typeof selectSingleOps;
-		// WHERE-input value tracks the literal union (eq/ne = TValue, in/notIn =
-		// TValue[]) — decoupled from the runtime `selectSingleOps` singleton, whose
-		// hardcoded `string` value types only drive SQL (CL-07).
-		whereInput: ScalarWhereInput<TValue>;
-	};
+export type SelectFieldState<TValue extends string = string> = Omit<
+	DefaultFieldState,
+	"operators"
+> & {
+	type: "select";
+	data: TValue;
+	column: PgVarcharBuilder<[string, ...string[]]>;
+	operators: typeof selectSingleOps;
+	// WHERE-input value tracks the literal union (eq/ne = TValue, in/notIn =
+	// TValue[]) — decoupled from the runtime `selectSingleOps` singleton, whose
+	// hardcoded `string` value types only drive SQL (CL-07).
+	whereInput: ScalarWhereInput<TValue>;
+};
 
 export interface SelectFieldMethods {
 	enum(enumName: string): any;

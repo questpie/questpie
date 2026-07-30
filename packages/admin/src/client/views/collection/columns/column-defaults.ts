@@ -6,7 +6,7 @@
  */
 
 import type { FieldInstance } from "../../../builder/field/field";
-import { formatFieldLabel } from "../cells/shared/cell-helpers";
+import { formatLabel } from "../../../lib/utils";
 import type { ColumnField, ComputeDefaultColumnsOptions } from "./types";
 
 // ============================================================================
@@ -156,8 +156,7 @@ export function getAllAvailableFields(
 				string,
 				any
 			>;
-			const titleLabel =
-				titleFieldOptions.label ?? formatFieldLabel(titleFieldName);
+			const titleLabel = titleFieldOptions.label ?? formatLabel(titleFieldName);
 			availableFields.push({
 				name: "_title",
 				label: titleLabel,
@@ -186,7 +185,7 @@ export function getAllAvailableFields(
 
 		const fieldType = fieldDef?.name ?? "text";
 		const fieldOptions = (fieldDef?.["~options"] ?? {}) as Record<string, any>;
-		const label = fieldOptions.label ?? formatFieldLabel(key);
+		const label = fieldOptions.label ?? formatLabel(key);
 		const isSystem = SYSTEM_FIELDS.has(key);
 
 		availableFields.push({
@@ -227,5 +226,5 @@ export function getAllAvailableFields(
  * Format field name as header (camelCase to Title Case)
  */
 export function formatHeader(fieldName: string): string {
-	return formatFieldLabel(fieldName);
+	return formatLabel(fieldName);
 }

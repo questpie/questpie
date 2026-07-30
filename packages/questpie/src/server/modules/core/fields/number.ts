@@ -70,11 +70,16 @@ interface DecimalConfig {
  * rating: f.number("real")
  * ```
  */
-export function number(): FieldWithMethods<NumberFieldState, NumberFieldMethods>;
+export function number(): FieldWithMethods<
+	NumberFieldState,
+	NumberFieldMethods
+>;
 export function number(
 	mode: Exclude<NumberMode, "decimal">,
 ): FieldWithMethods<NumberFieldState, NumberFieldMethods>;
-export function number(config: DecimalConfig): FieldWithMethods<NumberFieldState, NumberFieldMethods>;
+export function number(
+	config: DecimalConfig,
+): FieldWithMethods<NumberFieldState, NumberFieldMethods>;
 export function number(
 	arg?: NumberMode | DecimalConfig,
 ): FieldWithMethods<NumberFieldState, NumberFieldMethods> {
@@ -111,24 +116,28 @@ export function number(
 
 	const isInt = mode === "integer" || mode === "smallint";
 
-	return wrapFieldComplete(field<NumberFieldState>({
-		type: "number",
-		columnFactory,
-		schemaFactory: () => {
-			let s = z.number();
-			if (isInt) s = s.int();
-			return s;
-		},
-		operatorSet: numberOps,
-		notNull: false,
-		hasDefault: false,
-		localized: false,
-		virtual: false,
-		input: true,
-		output: true,
-		isArray: false,
-		int: isInt,
-	}), numberFieldType.methods, {}) as any;
+	return wrapFieldComplete(
+		field<NumberFieldState>({
+			type: "number",
+			columnFactory,
+			schemaFactory: () => {
+				let s = z.number();
+				if (isInt) s = s.int();
+				return s;
+			},
+			operatorSet: numberOps,
+			notNull: false,
+			hasDefault: false,
+			localized: false,
+			virtual: false,
+			input: true,
+			output: true,
+			isArray: false,
+			int: isInt,
+		}),
+		numberFieldType.methods,
+		{},
+	) as any;
 }
 
 // NOTE: .min() and .max() are also declared in text.ts for string fields.

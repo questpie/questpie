@@ -24,14 +24,14 @@ Use `f.select()` inside a `.fields()` callback. The argument is the options list
 import { collection } from "#questpie/factories";
 
 export const posts = collection("posts").fields(({ f }) => ({
-  status: f
-    .select([
-      { value: "draft", label: "Draft" },
-      { value: "published", label: "Published" },
-      { value: "archived", label: "Archived" },
-    ])
-    .required()
-    .default("draft"),
+	status: f
+		.select([
+			{ value: "draft", label: "Draft" },
+			{ value: "published", label: "Published" },
+			{ value: "archived", label: "Archived" },
+		])
+		.required()
+		.default("draft"),
 }));
 ```
 
@@ -71,19 +71,19 @@ Each option is a `SelectOption`. Only `value` and `label` are required; the rest
 import { collection } from "#questpie/factories";
 
 export const deployments = collection("deployments").fields(({ f, c }) => ({
-  // `c` (the component proxy) comes from the same .fields() callback as `f`.
-  health: f
-    .select([
-      {
-        value: "ready",
-        label: { en: "Ready", sk: "Pripravené" },
-        description: "Runtime is healthy",
-        icon: c.icon("ph:check-circle"),
-        className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700",
-      },
-      { value: "degraded", label: "Degraded", icon: c.icon("ph:warning") },
-    ])
-    .required(),
+	// `c` (the component proxy) comes from the same .fields() callback as `f`.
+	health: f
+		.select([
+			{
+				value: "ready",
+				label: { en: "Ready", sk: "Pripravené" },
+				description: "Runtime is healthy",
+				icon: c.icon("ph:check-circle"),
+				className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700",
+			},
+			{ value: "degraded", label: "Degraded", icon: c.icon("ph:warning") },
+		])
+		.required(),
 }));
 ```
 
@@ -107,8 +107,15 @@ status: f
   .required(),
 ```
 
-<Callout type="warn" title="`.enum()` builds a fresh `pgEnum` from the *static* values">
-  `.enum(name)` creates a new `pgEnum(name, values)` from the static values available at call time. Call it after defining the options and use each enum name for one definition. Dynamic `OptionsConfig` selects remain `varchar` because their values are resolved at runtime. Changing a Postgres enum requires a migration.
+<Callout
+	type="warn"
+	title="`.enum()` builds a fresh `pgEnum` from the *static* values"
+>
+	`.enum(name)` creates a new `pgEnum(name, values)` from the static values
+	available at call time. Call it after defining the options and use each enum
+	name for one definition. Dynamic `OptionsConfig` selects remain `varchar`
+	because their values are resolved at runtime. Changing a Postgres enum
+	requires a migration.
 </Callout>
 
 ## Multi-select
@@ -140,7 +147,7 @@ A single (non-array) select uses the **single-select operator set** (`selectSing
 ```ts
 // Published or archived posts:
 const { docs } = await app.collections.posts.find({
-  where: { status: { in: ["published", "archived"] } },
+	where: { status: { in: ["published", "archived"] } },
 });
 ```
 
@@ -158,7 +165,7 @@ A **multi-select** (`.array()`) uses `selectMultiOps` instead, the value is a `j
 ```ts
 // Posts tagged with both "news" and "release":
 const { docs } = await app.collections.posts.find({
-  where: { tags: { containsAll: ["news", "release"] } },
+	where: { tags: { containsAll: ["news", "release"] } },
 });
 ```
 
@@ -172,29 +179,29 @@ When the choices depend on other field values or come from a runtime source rath
 import { collection } from "#questpie/factories";
 
 export const addresses = collection("addresses").fields(({ f }) => ({
-  country: f
-    .select([
-      { value: "us", label: "United States" },
-      { value: "uk", label: "United Kingdom" },
-    ])
-    .required(),
-  // City options depend on the selected country:
-  city: f.select({
-    handler: async (ctx) => {
-      const country = String(ctx.data.country ?? "");
-      const cities =
-        country === "us"
-          ? [
-              { value: "nyc", label: "New York" },
-              { value: "la", label: "Los Angeles" },
-            ]
-          : country === "uk"
-            ? [{ value: "london", label: "London" }]
-            : [];
-      return { options: cities };
-    },
-    deps: (ctx) => [ctx.data.country], // refetch when `country` changes
-  }),
+	country: f
+		.select([
+			{ value: "us", label: "United States" },
+			{ value: "uk", label: "United Kingdom" },
+		])
+		.required(),
+	// City options depend on the selected country:
+	city: f.select({
+		handler: async (ctx) => {
+			const country = String(ctx.data.country ?? "");
+			const cities =
+				country === "us"
+					? [
+							{ value: "nyc", label: "New York" },
+							{ value: "la", label: "Los Angeles" },
+						]
+					: country === "uk"
+						? [{ value: "london", label: "London" }]
+						: [];
+			return { options: cities };
+		},
+		deps: (ctx) => [ctx.data.country], // refetch when `country` changes
+	}),
 }));
 ```
 
@@ -208,13 +215,22 @@ export const addresses = collection("addresses").fields(({ f }) => ({
 The handler's `ctx` (`OptionsContext`) carries `{ data, sibling, search, page, limit, ctx }`, the current form `data`, the `sibling` field values, the `search` string the user typed, the `page`/`limit` for pagination, and the server `ctx` (`{ db, user, req, locale }`). It returns an `OptionsResult`: `{ options: { value, label }[]; hasMore?; total? }`.
 
 <Callout type="info" title="The server `ctx.db` is untyped here">
-  Inside an options handler the server context `ctx.ctx.db` is typed `unknown` (`ReactiveServerContext`), so it carries no per-collection autocomplete. To load options from your own tables, query through a typed handle you bring into scope (e.g. an imported `app`), not `ctx.ctx.db.collections.*`. If what you want is a
-  typed reference to another collection's rows, use [`f.relation()`](/docs/concepts/relations) instead.
+	Inside an options handler the server context `ctx.ctx.db` is typed `unknown`
+	(`ReactiveServerContext`), so it carries no per-collection autocomplete. To
+	load options from your own tables, query through a typed handle you bring into
+	scope (e.g. an imported `app`), not `ctx.ctx.db.collections.*`. If what you
+	want is a typed reference to another collection's rows, use
+	[`f.relation()`](/docs/concepts/relations) instead.
 </Callout>
 
 <Callout type="info" title="Dynamic select stores a plain `string`">
-  With an `OptionsConfig`, the value isn't known at compile time, so the field's read type is `string` (not a literal union) and the schema is `z.string()`. Use a static options array whenever the set is fixed and known, you get the narrowed type and `z.enum` validation for free. For a typed reference to another
-  collection's rows, reach for [`f.relation()`](/docs/concepts/relations) instead, which gives a real FK and `with:` hydration.
+	With an `OptionsConfig`, the value isn't known at compile time, so the field's
+	read type is `string` (not a literal union) and the schema is `z.string()`.
+	Use a static options array whenever the set is fixed and known, you get the
+	narrowed type and `z.enum` validation for free. For a typed reference to
+	another collection's rows, reach for
+	[`f.relation()`](/docs/concepts/relations) instead, which gives a real FK and
+	`with:` hydration.
 </Callout>
 
 ## When to use it

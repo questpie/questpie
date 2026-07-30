@@ -66,9 +66,9 @@ declare module "questpie" {
 		admin(configFn: AdminGlobalConfig | ((ctx: AdminConfigContext<_ComponentsRecord>) => AdminGlobalConfig)): GlobalBuilder<TState>;
 		form(configFn: (ctx: FormViewConfigContext<TState extends { fieldDefinitions: infer F extends Record<string, any> } ? F : Record<string, any>, FilterViewsByKind<_ViewsRecord, "form">>) => FormViewConfig): GlobalBuilder<TState>;
 	}
-	interface Field<TState> {
-		admin(config: unknown): Field<TState>;
-		form(configFn: (ctx: { f: Record<string, string> }) => { fields: import('@questpie/admin/factories').FieldLayoutItem[] }): Field<TState>;
+	interface Field<TState extends FieldState = FieldState, TMethods = {}> {
+		admin(config: unknown): FieldWithMethods<TState, TMethods>;
+		form(configFn: (ctx: { f: Record<string, string> }) => { fields: import('@questpie/admin/factories').FieldLayoutItem[] }): FieldWithMethods<TState, TMethods>;
 	}
 }
 

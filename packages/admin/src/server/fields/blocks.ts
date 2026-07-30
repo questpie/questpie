@@ -27,7 +27,7 @@ import {
 import type { PgJsonbBuilder } from "questpie/drizzle-pg-core";
 import { z } from "zod";
 
-import { processBlocksDocument } from "../block/prefetch.js";
+import { processBlocksDocument } from "../modules/admin/block/prefetch.js";
 
 // ============================================================================
 // Blocks Data Schema

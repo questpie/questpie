@@ -21,18 +21,21 @@ const ROOT = join(import.meta.dirname, "..");
 const ASSERTIONS: Array<{ file: string; mustContain: string; why: string }> = [
 	{
 		file: "packages/questpie/dist/server/collection/builder/collection-builder.d.mts",
-		mustContain: "declare class CollectionBuilder<TState extends CollectionBuilderState>",
+		mustContain:
+			"declare class CollectionBuilder<TState extends CollectionBuilderState>",
 		why: "generated augmentations declare `interface CollectionBuilder<TState extends CollectionBuilderState>` — a renamed param (TState$1) breaks declaration merging for every consumer",
 	},
 	{
 		file: "packages/questpie/dist/server/global/builder/global-builder.d.mts",
-		mustContain: "declare class GlobalBuilder<TState extends GlobalBuilderState>",
+		mustContain:
+			"declare class GlobalBuilder<TState extends GlobalBuilderState>",
 		why: "same merging contract for GlobalBuilder augmentations",
 	},
 	{
 		file: "packages/questpie/dist/server/fields/field-class.d.mts",
-		mustContain: "declare class Field<TState extends FieldState = FieldState>",
-		why: "same merging contract for Field augmentations",
+		mustContain:
+			"declare class Field<out TState extends FieldState = FieldState, in out TMethods = {}>",
+		why: "same merging contract for Field augmentations. The generated extension proxies still declare a ONE-parameter `interface Field<TState extends FieldState = FieldState>`, which merges fine with the two-parameter class — but a renamed or dropped param would break every consumer. The variance annotations are load-bearing too: `out TState` is what keeps `Field<BooleanFieldState>` assignable to `Field<FieldState>`, and losing it degrades inference without any error here",
 	},
 ];
 
@@ -55,7 +58,9 @@ for (const a of ASSERTIONS) {
 
 // 2. Consumer-fidelity typecheck: barbershop against dist .d.mts only.
 const proj = join(ROOT, "examples/tanstack-barbershop/tsconfig.dist.json");
-console.log("→ tsc against dist types (examples/tanstack-barbershop/tsconfig.dist.json)");
+console.log(
+	"→ tsc against dist types (examples/tanstack-barbershop/tsconfig.dist.json)",
+);
 const res = spawnSync("bunx", ["tsc", "--noEmit", "-p", proj], {
 	cwd: join(ROOT, "examples/tanstack-barbershop"),
 	encoding: "utf8",
@@ -73,9 +78,13 @@ const srcErrors = (srcRes.stdout + srcRes.stderr)
 	.split("\n")
 	.filter((l) => l.includes("error TS"));
 
-console.log(`dist errors: ${distErrors.length}, source baseline: ${srcErrors.length}`);
+console.log(
+	`dist errors: ${distErrors.length}, source baseline: ${srcErrors.length}`,
+);
 if (distErrors.length > srcErrors.length) {
-	console.error("✗ dist types produce MORE errors than source types — dts emit regressed:");
+	console.error(
+		"✗ dist types produce MORE errors than source types — dts emit regressed:",
+	);
 	for (const l of distErrors.slice(0, 20)) console.error("  " + l);
 	failed = true;
 } else {

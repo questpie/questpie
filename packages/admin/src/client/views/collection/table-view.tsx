@@ -133,6 +133,7 @@ import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import {
 	selectRealtime,
+	selectAdmin,
 	useAdminStore,
 	useSafeContentLocales,
 	useScopedLocale,
@@ -1267,6 +1268,12 @@ function TableViewInner({
 	const isMobile = useIsMobile();
 	const collectionKey = adminCollectionKey(collection);
 	const globalRealtimeConfig = useAdminStore(selectRealtime);
+	// Component registry for per-field `.admin({ components: { cell } })` slots.
+	const adminConfig = useAdminStore(selectAdmin);
+	const componentRegistry = React.useMemo(
+		() => ({ custom: adminConfig?.getComponents() as Record<string, unknown> }),
+		[adminConfig],
+	);
 	const { fields: resolvedFields, schema } = useCollectionFields(collection, {
 		fallbackFields: (config as any)?.fields,
 	});
@@ -1347,8 +1354,9 @@ function TableViewInner({
 				fallbackColumns: ["id"],
 				buildAllColumns: true, // Build all columns so user can toggle any field
 				meta: collectionMeta, // Use meta to determine title field
+				registry: componentRegistry,
 			}),
-		[resolvedFields, resolvedListConfig, collectionMeta],
+		[resolvedFields, resolvedListConfig, collectionMeta, componentRegistry],
 	);
 
 	// Filter builder sheet state

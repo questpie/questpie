@@ -6,7 +6,9 @@ description: A typed key-value store on your app context, ctx.kv.get/set/delete/
 The **KV adapter** supplies the backend for the [Key-value storage](/docs/concepts/kv) service on `app.kv` and `ctx.kv`. Choose in-memory, Redis, or Cloudflare KV while application calls keep the same typed contract.
 
 <Callout type="info" title="Prerequisites">
-  Start with [Key-value storage](/docs/concepts/kv) for use cases, the core API, namespaces, tags, and consistency. This page covers backend configuration and adapter-specific behavior.
+	Start with [Key-value storage](/docs/concepts/kv) for use cases, the core API,
+	namespaces, tags, and consistency. This page covers backend configuration and
+	adapter-specific behavior.
 </Callout>
 
 ## What it does
@@ -25,18 +27,18 @@ The KV store works out of the box with **zero config**, `ctx.kv` is always prese
 import { route } from "questpie/services";
 
 export default route()
-  .get()
-  .handler(async ({ kv, collections }) => {
-    // Try the cache first
-    const cached = await kv.get<{ total: number }>("stats:posts");
-    if (cached) return cached;
+	.get()
+	.handler(async ({ kv, collections }) => {
+		// Try the cache first
+		const cached = await kv.get<{ total: number }>("stats:posts");
+		if (cached) return cached;
 
-    // Miss, compute, then cache for 60 seconds
-    const total = await collections.posts.count();
-    const stats = { total };
-    await kv.set("stats:posts", stats, 60); // ttl in SECONDS
-    return stats;
-  });
+		// Miss, compute, then cache for 60 seconds
+		const total = await collections.posts.count();
+		const stats = { total };
+		await kv.set("stats:posts", stats, 60); // ttl in SECONDS
+		return stats;
+	});
 ```
 
 That's it, no adapter to install for local development. To use a real backend in production, wire one adapter in `questpie.config.ts` (full options [below](#configuration)):
@@ -50,16 +52,19 @@ const redis = createClient({ url: process.env.REDIS_URL });
 await redis.connect();
 
 export default runtimeConfig({
-  kv: {
-    adapter: redisKVAdapter({ client: redis }),
-    defaultTtl: 3600, // optional: seconds, applied when set() omits a ttl
-  },
+	kv: {
+		adapter: redisKVAdapter({ client: redis }),
+		defaultTtl: 3600, // optional: seconds, applied when set() omits a ttl
+	},
 });
 ```
 
 <Callout type="info" title="The default adapter is in-process and not shared">
-  With no `kv.adapter` configured, `KVService` uses [`MemoryKVAdapter`](#in-memory-default), a plain `Map` local to **one** process. It is wiped on restart and **not shared** across server instances or workers. Fine for dev and single-process apps; for anything horizontally scaled, configure Redis or Cloudflare KV so
-  all instances see the same data.
+	With no `kv.adapter` configured, `KVService` uses
+	[`MemoryKVAdapter`](#in-memory-default), a plain `Map` local to **one**
+	process. It is wiped on restart and **not shared** across server instances or
+	workers. Fine for dev and single-process apps; for anything horizontally
+	scaled, configure Redis or Cloudflare KV so all instances see the same data.
 </Callout>
 
 ## Using the store
@@ -76,7 +81,7 @@ await ctx.kv.set("otp:42", "839201", 300); // expires in 5 minutes
 
 // Existence check (respects TTL, an expired key reports false)
 if (await ctx.kv.has("otp:42")) {
-  /* ... */
+	/* ... */
 }
 
 // Delete one key
@@ -86,9 +91,16 @@ await ctx.kv.delete("otp:42");
 await ctx.kv.clear();
 ```
 
-<Callout type="info" title="Values must be JSON-serializable on Redis & Cloudflare KV">
-  The in-memory adapter stores your value by reference (any JS value works). The Redis and Cloudflare adapters `JSON.stringify` it on write and `JSON.parse` on read, and **throw** a `TypeError` if the value can't be serialized (e.g. a `function`, a `BigInt`, or a circular structure). Read back is best-effort: a stored
-  string that isn't valid JSON is returned as the raw string. Keep KV values to plain data.
+<Callout
+	type="info"
+	title="Values must be JSON-serializable on Redis & Cloudflare KV"
+>
+	The in-memory adapter stores your value by reference (any JS value works). The
+	Redis and Cloudflare adapters `JSON.stringify` it on write and `JSON.parse` on
+	read, and **throw** a `TypeError` if the value can't be serialized (e.g. a
+	`function`, a `BigInt`, or a circular structure). Read back is best-effort: a
+	stored string that isn't valid JSON is returned as the raw string. Keep KV
+	values to plain data.
 </Callout>
 
 ### Tag-based invalidation
@@ -108,15 +120,27 @@ await adapter?.invalidateByTag?.("post:123");
 await adapter?.invalidateByTags?.(["post:123", "post:124"]);
 ```
 
-<Callout type="warn" title="On the zero-config default, `app.config.kv?.adapter` is `undefined`">
-  `app.config` is your *raw* config object. When you omit `kv.adapter`, the default `MemoryKVAdapter` is constructed **inside** `KVService` and never written back to `app.config`, so on the default setup `app.config.kv?.adapter` is `undefined` and the `?.` calls above **silently do nothing**, even though
-  `MemoryKVAdapter` fully implements `setWithTags` / `invalidateByTag`. Tag invalidation is only reachable when you construct an adapter explicitly: either set `kv.adapter` in config and read it back via `app.config.kv?.adapter`, or, cleaner, keep your own reference to the adapter you built and call its tag methods
-  directly.
+<Callout
+	type="warn"
+	title="On the zero-config default, `app.config.kv?.adapter` is `undefined`"
+>
+	`app.config` is your *raw* config object. When you omit `kv.adapter`, the
+	default `MemoryKVAdapter` is constructed **inside** `KVService` and never
+	written back to `app.config`, so on the default setup `app.config.kv?.adapter`
+	is `undefined` and the `?.` calls above **silently do nothing**, even though
+	`MemoryKVAdapter` fully implements `setWithTags` / `invalidateByTag`. Tag
+	invalidation is only reachable when you construct an adapter explicitly:
+	either set `kv.adapter` in config and read it back via
+	`app.config.kv?.adapter`, or, cleaner, keep your own reference to the adapter
+	you built and call its tag methods directly.
 </Callout>
 
 <Callout type="info" title="Tag methods live on the adapter, not the service">
-  `get` / `set` / `delete` / `has` / `clear` are the only methods on `KVService`. `setWithTags`, `invalidateByTag`, and `invalidateByTags` are **optional** members of the `KVAdapter` interface, every built-in adapter implements them, but a custom adapter may not. That's why they're typed as optional (`?.`) when you
-  reach them off the config.
+	`get` / `set` / `delete` / `has` / `clear` are the only methods on
+	`KVService`. `setWithTags`, `invalidateByTag`, and `invalidateByTags` are
+	**optional** members of the `KVAdapter` interface, every built-in adapter
+	implements them, but a custom adapter may not. That's why they're typed as
+	optional (`?.`) when you reach them off the config.
 </Callout>
 
 ## Configuration
@@ -125,10 +149,10 @@ KV is configured under the `kv` key of your `questpie.config.ts`. The shape is `
 
 ```ts
 interface KVConfig {
-  /** Custom adapter instance. Defaults to MemoryKVAdapter. */
-  adapter?: KVAdapter;
-  /** Default TTL in seconds, applied by set() when no per-call ttl is given. */
-  defaultTtl?: number;
+	/** Custom adapter instance. Defaults to MemoryKVAdapter. */
+	adapter?: KVAdapter;
+	/** Default TTL in seconds, applied by set() when no per-call ttl is given. */
+	defaultTtl?: number;
 }
 ```
 
@@ -158,8 +182,8 @@ import { runtimeConfig } from "questpie/app";
 import { MemoryKVAdapter } from "questpie/adapters/memory-kv";
 
 export default runtimeConfig({
-  // Equivalent to omitting `kv` entirely, shown only to be explicit
-  kv: { adapter: new MemoryKVAdapter() },
+	// Equivalent to omitting `kv` entirely, shown only to be explicit
+	kv: { adapter: new MemoryKVAdapter() },
 });
 ```
 
@@ -178,12 +202,12 @@ const redis = createClient({ url: process.env.REDIS_URL });
 await redis.connect();
 
 export default runtimeConfig({
-  kv: {
-    adapter: redisKVAdapter({
-      client: redis,
-      keyPrefix: "myapp:", // namespace this app's keys in a shared Redis db
-    }),
-  },
+	kv: {
+		adapter: redisKVAdapter({
+			client: redis,
+			keyPrefix: "myapp:", // namespace this app's keys in a shared Redis db
+		}),
+	},
 });
 ```
 
@@ -199,9 +223,16 @@ export default runtimeConfig({
 
 Tags are stored as Redis SETs; TTL maps to the `EX` option on `SET`. `delete()` and `clear()` scan the keyspace (`SCAN`, not `KEYS`) to keep the tag index consistent.
 
-<Callout type="warn" title="`clear()` will not FLUSHDB a shared database by default">
-  `ctx.kv.clear()` on Redis deletes only keys matching your `keyPrefix` (via `SCAN` + `DEL`). It calls `FLUSHDB` **only** when you have *no* `keyPrefix` **and** explicitly set `allowFlushDb: true`, a guard so a `clear()` can't wipe a Redis database shared with other apps. If you rely on `clear()` to be cheap and total,
-  give the adapter its own database and opt in with `allowFlushDb: true`.
+<Callout
+	type="warn"
+	title="`clear()` will not FLUSHDB a shared database by default"
+>
+	`ctx.kv.clear()` on Redis deletes only keys matching your `keyPrefix` (via
+	`SCAN` + `DEL`). It calls `FLUSHDB` **only** when you have *no* `keyPrefix`
+	**and** explicitly set `allowFlushDb: true`, a guard so a `clear()` can't wipe
+	a Redis database shared with other apps. If you rely on `clear()` to be cheap
+	and total, give the adapter its own database and opt in with `allowFlushDb:
+	true`.
 </Callout>
 
 The `RedisKVClient` interface (`get` / `set` / `del` / `exists` / `sAdd` / `sMembers` / `sRem` / `scanIterator` / optional `flushDb`) is a structural subset of node-redis, any client matching that shape works.
@@ -215,10 +246,10 @@ import { runtimeConfig } from "questpie/app";
 import { cloudflareKVAdapter } from "questpie/adapters/cloudflare-kv";
 
 export default runtimeConfig({
-  kv: {
-    // MY_KV is a KV namespace binding from your wrangler config
-    adapter: cloudflareKVAdapter({ namespace: () => env.MY_KV }),
-  },
+	kv: {
+		// MY_KV is a KV namespace binding from your wrangler config
+		adapter: cloudflareKVAdapter({ namespace: () => env.MY_KV }),
+	},
 });
 ```
 
@@ -234,8 +265,12 @@ export default runtimeConfig({
 TTL maps to Cloudflare's `expirationTtl`. Because Cloudflare KV has no SET type, tags are stored as JSON arrays under tag-index keys, and `clear()` / invalidation paginate with `list()` + `cursor`. The adapter also exposes `runtime = "cloudflare"`, the discriminator the Cloudflare fetch/queue handlers use to detect Cloudflare-backed adapters.
 
 <Callout type="warn" title="Cloudflare KV is eventually consistent">
-  Cloudflare KV reads can lag writes by a short window, a value you just `set` may not be visible to the next `get` on a different edge location immediately. This is a property of the platform, not the adapter. Don't use it for read-after-write guarantees (e.g. one-time tokens you verify milliseconds later); use it for
-  caches and config that tolerate brief staleness. See Cloudflare's KV consistency docs.
+	Cloudflare KV reads can lag writes by a short window, a value you just `set`
+	may not be visible to the next `get` on a different edge location immediately.
+	This is a property of the platform, not the adapter. Don't use it for
+	read-after-write guarantees (e.g. one-time tokens you verify milliseconds
+	later); use it for caches and config that tolerate brief staleness. See
+	Cloudflare's KV consistency docs.
 </Callout>
 
 The `cloudflareKVAdapter` factory and its `CloudflareKVNamespace` type are also re-exported from `questpie/adapters/cloudflare` alongside the other Cloudflare-runtime adapters, if you prefer a single import.
@@ -248,23 +283,23 @@ The KV store is just an interface, implement `KVAdapter` to back it with any sto
 import type { KVAdapter } from "questpie/kv";
 
 export class MyKVAdapter implements KVAdapter {
-  async get<T>(key: string): Promise<T | null> {
-    /* ... */
-  }
-  async set(key: string, value: unknown, ttl?: number): Promise<void> {
-    /* ... */
-  }
-  async delete(key: string): Promise<void> {
-    /* ... */
-  }
-  async has(key: string): Promise<boolean> {
-    /* ... */
-  }
-  async clear(): Promise<void> {
-    /* ... */
-  }
-  // Optional, implement to support tag invalidation:
-  // setWithTags, invalidateByTag, invalidateByTags
+	async get<T>(key: string): Promise<T | null> {
+		/* ... */
+	}
+	async set(key: string, value: unknown, ttl?: number): Promise<void> {
+		/* ... */
+	}
+	async delete(key: string): Promise<void> {
+		/* ... */
+	}
+	async has(key: string): Promise<boolean> {
+		/* ... */
+	}
+	async clear(): Promise<void> {
+		/* ... */
+	}
+	// Optional, implement to support tag invalidation:
+	// setWithTags, invalidateByTag, invalidateByTags
 }
 ```
 

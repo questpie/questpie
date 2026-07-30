@@ -35,21 +35,22 @@ packages/<name>/
 
 ### Naming Convention
 
-| Concept | Export path | Example |
-|---------|------------|---------|
-| Core API (server) | `.` (root) | `import { collection } from "questpie"` |
-| Server module | `./modules/<name>` | `import { adminModule } from "@questpie/admin/modules/admin"` |
-| Client module | `./client/modules/<name>` | `import { adminClientModule } from "@questpie/admin/client/modules/admin"` |
-| Factories | `./factories` | `import { view, block } from "@questpie/admin/factories"` |
-| Adapters | `./adapters/<name>` | `import { resendMailer } from "questpie/adapters/resend"` |
-| Client UI | `./client` | `import { AdminLayout } from "@questpie/admin/client"` |
-| Types only | `./types` | `import type { AppContext } from "questpie/types"` |
-| Plugin | `./plugin` | `import { adminPlugin } from "@questpie/admin/plugin"` |
-| Shared (universal) | `./shared` | `import { resolveI18nText } from "questpie/shared"` |
+| Concept            | Export path               | Example                                                                    |
+| ------------------ | ------------------------- | -------------------------------------------------------------------------- |
+| Core API (server)  | `.` (root)                | `import { collection } from "questpie"`                                    |
+| Server module      | `./modules/<name>`        | `import { adminModule } from "@questpie/admin/modules/admin"`              |
+| Client module      | `./client/modules/<name>` | `import { adminClientModule } from "@questpie/admin/client/modules/admin"` |
+| Factories          | `./factories`             | `import { view, block } from "@questpie/admin/factories"`                  |
+| Adapters           | `./adapters/<name>`       | `import { resendMailer } from "questpie/adapters/resend"`                  |
+| Client UI          | `./client`                | `import { AdminLayout } from "@questpie/admin/client"`                     |
+| Types only         | `./types`                 | `import type { AppContext } from "questpie/types"`                         |
+| Plugin             | `./plugin`                | `import { adminPlugin } from "@questpie/admin/plugin"`                     |
+| Shared (universal) | `./shared`                | `import { resolveI18nText } from "questpie/shared"`                        |
 
 ### Rules
 
 **DO:**
+
 ```ts
 // Focused, named re-exports
 export { adminModule } from "../../server/modules/admin/index.js";
@@ -57,6 +58,7 @@ export type { AdminModule } from "../../server/modules/admin/index.js";
 ```
 
 **DON'T:**
+
 ```ts
 // Mega barrel with export *
 export * from "../server/modules/admin/index.js";
@@ -73,15 +75,15 @@ export * from "../server/fields/index.js";
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: [
-    "src/exports/*.ts",
-    "src/exports/modules/*.ts",
-    "src/exports/client/modules/*.ts",  // if package has client modules
-    "src/exports/adapters/*.ts",         // if package has adapters
-  ],
-  format: ["esm"],
-  unbundle: true,
-  exports: { all: true, devExports: true },
+	entry: [
+		"src/exports/*.ts",
+		"src/exports/modules/*.ts",
+		"src/exports/client/modules/*.ts", // if package has client modules
+		"src/exports/adapters/*.ts", // if package has adapters
+	],
+	format: ["esm"],
+	unbundle: true,
+	exports: { all: true, devExports: true },
 });
 ```
 
@@ -122,13 +124,18 @@ packages/<pkg>/src/server/modules/<name>/
 ```
 
 **Export from package:**
+
 ```ts
 // src/exports/modules/admin.ts
 export { adminModule } from "../../server/modules/admin/index.js";
-export type { AdminModule, AdminCollections } from "../../server/modules/admin/index.js";
+export type {
+	AdminModule,
+	AdminCollections,
+} from "../../server/modules/admin/index.js";
 ```
 
 **Use in app:**
+
 ```ts
 // app/server/modules.ts
 import { adminModule } from "@questpie/admin/modules/admin";
@@ -155,6 +162,7 @@ packages/<pkg>/src/server/modules/<name>/client/
 ```
 
 **Export from package:**
+
 ```ts
 // src/exports/client/modules/admin.ts
 export { default as adminClientModule } from "../../../server/modules/admin/client/index.js";
@@ -162,6 +170,7 @@ export type { AdminModule as AdminClientModule } from "../../../server/modules/a
 ```
 
 **Use in app (array pattern, codegen merges):**
+
 ```ts
 // app/admin/modules.ts
 import { adminClientModule } from "@questpie/admin/client/modules/admin";
@@ -179,6 +188,7 @@ Codegen automatically generates the merge logic, no manual spreading.
 ### Internal (within a package)
 
 Always use the package's internal alias:
+
 ```ts
 // Inside packages/questpie/src/
 import { something } from "#questpie/server/some/module.js";
@@ -188,9 +198,10 @@ import { something } from "#questpie/admin/server/some/module.js";
 ```
 
 Never import from the package's own public exports:
+
 ```ts
 // BAD, circular, breaks build
-import { collection } from "questpie";  // inside questpie package!
+import { collection } from "questpie"; // inside questpie package!
 
 // GOOD
 import { collection } from "#questpie/server/collection/builder/collection-builder.js";
@@ -199,6 +210,7 @@ import { collection } from "#questpie/server/collection/builder/collection-build
 ### External (cross-package)
 
 Always import from public export paths:
+
 ```ts
 // GOOD, uses public API
 import { adminModule } from "@questpie/admin/modules/admin";
@@ -212,6 +224,7 @@ import type { AppContext } from "questpie/types";
 ### Import Organization
 
 Order imports by distance:
+
 ```ts
 // 1. Node/runtime builtins
 import { readFile } from "node:fs/promises";
@@ -243,19 +256,21 @@ One collection per file in `collections/` directory. Named export matching the c
 import { collection } from "questpie";
 
 export const projects = collection("projects")
-  .fields(({ f }) => ({
-    name: f.text().required().label({ en: "Name" }),
-    slug: f.text().required(),
-  }))
-  .title(({ f }) => f.name)
-  .admin(({ c }) => ({
-    label: { en: "Projects" },
-    icon: c.icon("ph:folder-notch"),
-  }))
-  .list(({ v }) => v.collectionTable({}))
-  .form(({ v, f }) => v.collectionForm({
-    fields: [f.name, f.slug],
-  }));
+	.fields(({ f }) => ({
+		name: f.text().required().label({ en: "Name" }),
+		slug: f.text().required(),
+	}))
+	.title(({ f }) => f.name)
+	.admin(({ c }) => ({
+		label: { en: "Projects" },
+		icon: c.icon("ph:folder-notch"),
+	}))
+	.list(({ v }) => v.collectionTable({}))
+	.form(({ v, f }) =>
+		v.collectionForm({
+			fields: [f.name, f.slug],
+		}),
+	);
 ```
 
 ### Rules
@@ -271,6 +286,7 @@ export const projects = collection("projects")
 ### Never Edit `.generated/` Files
 
 All files in `.generated/` directories are auto-generated by `questpie generate`. They are:
+
 - Regenerated on every codegen run
 - Committed to git (source of truth for types)
 - Never manually edited
@@ -278,6 +294,7 @@ All files in `.generated/` directories are auto-generated by `questpie generate`
 ### Exposing Generated Code
 
 To make generated code importable, create a barrel in `src/exports/`:
+
 ```ts
 // src/exports/client-module.ts
 export { default as adminClientModule } from "../server/modules/admin/client/index.js";

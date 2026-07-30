@@ -27,14 +27,23 @@ QUESTPIE derives them automatically from your backend schema.
 
 ## Packages
 
-| Package                                                 | Description                                              |
-| ------------------------------------------------------- | -------------------------------------------------------- |
-| [`questpie`](./packages/questpie)                       | Core backend engine with collections, globals, and hooks |
-| [`@questpie/admin`](./packages/admin)                   | Config-driven admin UI (React + Tailwind v4 + shadcn)    |
-| [`@questpie/hono`](./packages/hono)                     | Hono framework adapter with unified client               |
-| [`@questpie/elysia`](./packages/elysia)                 | Elysia framework adapter with Eden Treaty support        |
-| [`@questpie/next`](./packages/next)                     | Next.js App Router adapter                               |
-| [`@questpie/tanstack-query`](./packages/tanstack-query) | TanStack Query integration with query options factory    |
+| Package                                                           | Description                                                            |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| [`questpie`](./packages/questpie)                                 | Core engine: collections, globals, hooks, jobs, end-to-end type safety |
+| [`@questpie/admin`](./packages/admin)                             | Config-driven admin UI (React + Tailwind v4 + shadcn)                  |
+| [`@questpie/hono`](./packages/hono)                               | Hono adapter with unified typed client                                 |
+| [`@questpie/elysia`](./packages/elysia)                           | Elysia adapter with Eden Treaty support                                |
+| [`@questpie/next`](./packages/next)                               | Next.js App Router adapter                                             |
+| [`@questpie/tanstack-query`](./packages/tanstack-query)           | TanStack Query integration with query-options factory                  |
+| [`@questpie/tanstack-db`](./packages/tanstack-db)                 | Typed TanStack DB collections backed by a QUESTPIE client              |
+| [`@questpie/crdt-yjs`](./packages/crdt-yjs)                       | Yjs text engines for collaborative aggregates                          |
+| [`@questpie/workflows`](./packages/workflows)                     | Durable, replay-based workflow engine                                  |
+| [`@questpie/observability`](./packages/observability)             | OpenTelemetry adapter: traces, metrics and log export                  |
+| [`@questpie/openapi`](./packages/openapi)                         | OpenAPI document generation and Scalar reference UI                    |
+| [`@questpie/mcp`](./packages/mcp)                                 | Model Context Protocol server under the app's own access rules         |
+| [`@questpie/sandbox`](./packages/sandbox)                         | Hardened isolated-script execution                                     |
+| [`@questpie/vite-plugin-iconify`](./packages/vite-plugin-iconify) | Bundles only the Iconify icons actually used                           |
+| [`create-questpie`](./packages/create-questpie)                   | Project scaffolder                                                     |
 
 ## Quick Start
 
@@ -467,6 +476,14 @@ bun run dev --filter=docs
 - **Email**: [Nodemailer](https://nodemailer.com) + [React Email](https://react.email)
 - **Logging**: [Pino](https://getpino.io)
 - **Admin UI**: React + [Tailwind CSS v4](https://tailwindcss.com) + [shadcn/ui](https://ui.shadcn.com)
+
+## Contributing
+
+- [CONTRIBUTING.md](./CONTRIBUTING.md) — setup, the checks CI runs, PR size policy,
+  and how the ratchet baselines work
+- [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)
+- [SECURITY.md](./SECURITY.md) — **report vulnerabilities privately**, never in a
+  public issue
 
 ## License
 

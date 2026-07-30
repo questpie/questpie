@@ -9,12 +9,12 @@ is the human-readable companion.
 
 ## The layers
 
-| Layer | File | Role | May import |
-| ----- | ---- | ---- | ---------- |
-| **L3** | `index.ts` | Runtime tail (`createApp`) + public re-exports | L2, L1, L0 |
-| **L2** | `context.gen.ts` | The **only** `AppContext` builder; owns the cycle-head carriers + the composition `declare global` | L1, L0 |
-| **L1** | `entities.gen.ts` | Flat category maps (`AppCollections`/`AppGlobals`/…) + `AppServices` | L0 |
-| **L0** | `names.gen.ts` | Module entity-NAME key registries (leaf) | *(nothing)* |
+| Layer  | File              | Role                                                                                               | May import  |
+| ------ | ----------------- | -------------------------------------------------------------------------------------------------- | ----------- |
+| **L3** | `index.ts`        | Runtime tail (`createApp`) + public re-exports                                                     | L2, L1, L0  |
+| **L2** | `context.gen.ts`  | The **only** `AppContext` builder; owns the cycle-head carriers + the composition `declare global` | L1, L0      |
+| **L1** | `entities.gen.ts` | Flat category maps (`AppCollections`/`AppGlobals`/…) + `AppServices`                               | L0          |
+| **L0** | `names.gen.ts`    | Module entity-NAME key registries (leaf)                                                           | _(nothing)_ |
 
 Imports point **DOWNWARD only**. Every edge below goes from a higher layer to a
 strictly lower one; there is **no upward edge and no cycle**.

@@ -1,0 +1,26 @@
+{
+	"$comment": "Unreachable source files per package. Regenerate with `bun run scripts/dead-modules.ts --update` and review the diff. Ratchet: any increase fails CI. `allow` holds files reachable only by a mechanism the resolver cannot see (string keys, runtime paths) — each needs a reason, not just a path. An allowed file is treated as an ENTRY, so whatever it imports is reachable too.",
+	"packages": {
+		"next": 0,
+		"tanstack-query": 0,
+		"admin": 2,
+		"workflows": 0,
+		"questpie": 4,
+		"tanstack-db": 0,
+		"mcp": 0,
+		"observability": 0,
+		"openapi": 0,
+		"elysia": 0,
+		"hono": 0,
+		"create-questpie": 0,
+		"sandbox": 0,
+		"crdt-yjs": 0,
+		"vite-plugin-iconify": 0
+	},
+	"allow": {
+		"packages/crdt-yjs/src/worker-entry.ts": "tsdown entry (tsdown.config.ts:7), loaded by string path at src/worker-engine.ts:151",
+		"packages/sandbox/src/guest-entry.ts": "shipped as source via package.json `files`, executed by Deno through a string path; deliberately outside tsc",
+		"packages/sandbox/src/sandbox-server.ts": "same as guest-entry — Deno executes it by path, not by import",
+		"packages/tanstack-db/src/tanstack-contract.smoke.ts": "no importers by design; tsconfig `include` picks it up so `check-types` compiles it as a contract check"
+	}
+}

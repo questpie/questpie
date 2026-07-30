@@ -12,10 +12,7 @@ import {
 	StackSection,
 	UseCasesSection,
 } from "@/components/landing/index-sections";
-import {
-	StarBanner,
-	useRevealOnScroll,
-} from "@/components/landing/primitives";
+import { StarBanner, useRevealOnScroll } from "@/components/landing/primitives";
 import { SharedFooter } from "@/components/landing/shared-footer";
 import { SharedNav } from "@/components/landing/shared-nav";
 import {

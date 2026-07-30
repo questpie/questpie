@@ -8,6 +8,7 @@
 
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 
+import type { ObservabilityService } from "../observability/service.js";
 import { createPostgresSearchAdapter } from "./adapters/postgres.js";
 import type {
 	AdapterLogger,
@@ -48,6 +49,7 @@ export class SearchServiceWrapper implements SearchService {
 		private adapter: SearchAdapter,
 		private db: PostgresJsDatabase<any>,
 		private logger: AdapterLogger,
+		private observability?: ObservabilityService,
 	) {}
 
 	/**
@@ -85,7 +87,23 @@ export class SearchServiceWrapper implements SearchService {
 	 */
 	async search(options: SearchOptions): Promise<SearchResponse> {
 		this.ensureInitialized();
-		return this.adapter.search(options);
+		if (!this.observability?.enabled) return this.adapter.search(options);
+		return this.observability.span(
+			"search.query",
+			async (span) => {
+				const response = await this.adapter.search(options);
+				span.setAttributes({
+					// The QUERY TEXT is deliberately not recorded — it is user
+					// input and routinely contains names, emails and worse.
+					"questpie.search.collections": options.collections?.join(",") ?? "*",
+					"questpie.search.limit": options.limit ?? 0,
+					"questpie.search.result_count": response.results?.length ?? 0,
+					"questpie.search.total": response.total ?? 0,
+				});
+				return response;
+			},
+			{ kind: "client" },
+		);
 	}
 
 	/**
@@ -247,6 +265,7 @@ export function createSearchService(
 	adapter: SearchAdapter | undefined,
 	db: PostgresJsDatabase<any>,
 	logger?: AdapterLogger,
+	observability?: ObservabilityService,
 ): SearchServiceWrapper {
 	// Use provided adapter or create default PostgresSearchAdapter
 	const resolvedAdapter = adapter ?? createPostgresSearchAdapter();
@@ -259,22 +278,10 @@ export function createSearchService(
 		error: (...args) => console.error("[Search]", ...args),
 	};
 
-	return new SearchServiceWrapper(resolvedAdapter, db, resolvedLogger);
-}
-
-// ============================================================================
-// Legacy exports (backwards compatibility)
-// ============================================================================
-
-/**
- * @deprecated Use createSearchService with adapter instead
- */
-export function createSearchServiceLegacy(
-	db: PostgresJsDatabase<any>,
-	_config: any = {},
-): SearchService {
-	// Create with default PostgresSearchAdapter for backwards compatibility
-	const service = createSearchService(undefined, db);
-	// Note: service needs to be initialized before use
-	return service;
+	return new SearchServiceWrapper(
+		resolvedAdapter,
+		db,
+		resolvedLogger,
+		observability,
+	);
 }

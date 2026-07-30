@@ -21,9 +21,10 @@ import { openApiConfig } from "@questpie/openapi/server";
 export default openApiConfig({
 	info: { title: "My API", version: "1.0.0" },
 	servers: [{ url: "https://api.example.com" }],
-	basePath: "/api",           // MUST match the fetch handler's base path
+	basePath: "/api", // MUST match the fetch handler's base path
 	scalar: { theme: "purple" },
-	auth: true, search: true,   // set false to omit those paths
+	auth: true,
+	search: true, // set false to omit those paths
 });
 ```
 

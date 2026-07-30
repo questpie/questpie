@@ -39,7 +39,13 @@ export type {
 	TipTapDocument,
 	TipTapNode,
 } from "./rich-text.js";
-export { type RichTextFieldState, type RichTextMode, type RichTextOptions, richText, richTextFieldType } from "./rich-text.js";
+export {
+	type RichTextFieldState,
+	type RichTextMode,
+	type RichTextOptions,
+	richText,
+	richTextFieldType,
+} from "./rich-text.js";
 
 // Import V2 factories for adminFields record
 import { blocks } from "./blocks.js";

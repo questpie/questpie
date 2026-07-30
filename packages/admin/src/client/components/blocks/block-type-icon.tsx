@@ -8,11 +8,10 @@
 
 import * as React from "react";
 
-import type { ComponentReference } from "#questpie/admin/server/augmentation.js";
-
+import type { ComponentReference } from "../../../server/augmentation/index.js";
 import { ComponentRenderer } from "../../components/component-renderer";
 import { cn } from "../../lib/utils.js";
-import { useBlockDefinition } from "./block-editor-context.js";
+import { useBlockSchema } from "./block-editor-context.js";
 
 // ============================================================================
 // Types
@@ -41,7 +40,7 @@ export const BlockTypeIcon = React.memo(function BlockTypeIcon({
 	className,
 	size = 16,
 }: BlockTypeIconProps) {
-	const blockDef = useBlockDefinition(type);
+	const blockDef = useBlockSchema(type);
 	const iconRef = blockDef?.admin?.icon;
 
 	// Use BlockIcon which provides default cube icon

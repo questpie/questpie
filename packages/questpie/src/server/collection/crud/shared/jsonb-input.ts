@@ -27,12 +27,7 @@ import type { Field } from "#questpie/server/fields/field-class.js";
  * `json` defaults to `mode: "jsonb"` (the `mode: "json"` variant is mapped
  * the same way by Drizzle, so the same normalization applies).
  */
-const JSONB_FIELD_TYPES = new Set([
-	"array",
-	"object",
-	"json",
-	"blocks",
-]);
+const JSONB_FIELD_TYPES = new Set(["array", "object", "json", "blocks"]);
 
 /**
  * True if `fieldDef` is stored as a jsonb column.

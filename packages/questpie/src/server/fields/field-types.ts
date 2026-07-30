@@ -52,16 +52,17 @@ type _IsAny<T> = 0 extends 1 & T ? true : false;
  * to `unknown | null` — internal CRUD operates on erased `Field<FieldState>`
  * definitions and relies on that shape; only the `any`-state leak is sealed.
  */
-type V2FieldSelect<TState extends FieldState> = _IsAny<TState> extends true
-	? never
-	: // Virtual relation/upload fields have no FK column
-		TState extends { virtual: true; type: "relation" | "upload" }
+type V2FieldSelect<TState extends FieldState> =
+	_IsAny<TState> extends true
 		? never
-		: TState extends { output: false }
+		: // Virtual relation/upload fields have no FK column
+			TState extends { virtual: true; type: "relation" | "upload" }
 			? never
-			: TState extends { notNull: true }
-				? TState["data"]
-				: TState["data"] | null;
+			: TState extends { output: false }
+				? never
+				: TState extends { notNull: true }
+					? TState["data"]
+					: TState["data"] | null;
 
 /**
  * Extract where clause type from Field<TState>.
@@ -87,13 +88,13 @@ type V2FieldWhere<TState extends FieldState> = TState extends {
 	? { [K in keyof TWhere]?: TWhere[K] }
 	: TState extends { isArray: true; innerState: infer TInner }
 		? {
-				[K in keyof ArrayWhereInput<ElementWhereValueOf<TInner>>]?: ArrayWhereInput<
+				[K in keyof ArrayWhereInput<
 					ElementWhereValueOf<TInner>
-				>[K];
+				>]?: ArrayWhereInput<ElementWhereValueOf<TInner>>[K];
 			}
 		: TState extends {
 					operators: { column: infer TColumnOps extends OperatorMap };
-				}
+			  }
 			? OperatorsToWhereInput<TColumnOps>
 			: never;
 

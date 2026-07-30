@@ -1,5 +1,5 @@
-import { service } from "#questpie/server/services/define-service.js";
 import { KVService } from "#questpie/server/modules/core/integrated/kv/service.js";
+import { service } from "#questpie/server/services/define-service.js";
 
 /**
  * Key-value store service — creates the KVService from app config.
@@ -9,5 +9,5 @@ import { KVService } from "#questpie/server/modules/core/integrated/kv/service.j
 export default service({
 	namespace: null,
 	lifecycle: "singleton",
-	create: ({ app }) => new KVService(app.config.kv),
+	create: ({ app }) => new KVService(app.config.kv, app.observability),
 });

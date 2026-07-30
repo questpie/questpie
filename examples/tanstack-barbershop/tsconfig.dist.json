@@ -14,8 +14,12 @@
 			"@questpie/mcp/*": ["../../packages/mcp/dist/*.d.mts"],
 			"@questpie/workflows": ["../../packages/workflows/dist/index.d.mts"],
 			"@questpie/workflows/*": ["../../packages/workflows/dist/*.d.mts"],
-			"@questpie/tanstack-query": ["../../packages/tanstack-query/dist/index.d.mts"],
-			"@questpie/tanstack-query/*": ["../../packages/tanstack-query/dist/*.d.mts"]
+			"@questpie/tanstack-query": [
+				"../../packages/tanstack-query/dist/index.d.mts"
+			],
+			"@questpie/tanstack-query/*": [
+				"../../packages/tanstack-query/dist/*.d.mts"
+			]
 		}
 	}
 }

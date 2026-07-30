@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/questpie/questpie/security/advisories/new
+    about: Report privately — never in a public issue. See SECURITY.md.
+  - name: Question or idea
+    url: https://github.com/questpie/questpie/discussions
+    about: Usage questions and open-ended design discussion belong here.
+  - name: Documentation
+    url: https://questpie.com/docs
+    about: Check the docs before filing — many "bugs" are documented behaviour.

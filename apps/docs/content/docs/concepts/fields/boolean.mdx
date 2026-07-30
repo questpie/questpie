@@ -22,8 +22,8 @@ Use `f.boolean()` inside a `.fields()` callback, then chain shared modifiers to 
 import { collection } from "#questpie/factories";
 
 export const posts = collection("posts").fields(({ f }) => ({
-  published: f.boolean().label("Published").default(false).required(), // NOT NULL, defaults to false
-  featured: f.boolean(), // nullable boolean
+	published: f.boolean().label("Published").default(false).required(), // NOT NULL, defaults to false
+	featured: f.boolean(), // nullable boolean
 }));
 ```
 
@@ -43,8 +43,12 @@ That gives `posts` a `published` column typed `boolean` on read, required on ins
 
 ```ts
 collection("settings").fields(({ f }) => ({
-  // Common pattern: a non-null flag with an explicit default.
-  emailNotifications: f.boolean().label("Email notifications").default(true).required(),
+	// Common pattern: a non-null flag with an explicit default.
+	emailNotifications: f
+		.boolean()
+		.label("Email notifications")
+		.default(true)
+		.required(),
 }));
 ```
 
@@ -64,12 +68,12 @@ collection("settings").fields(({ f }) => ({
 ```ts
 // Only published rows
 const { docs } = await app.collections.posts.find({
-  where: { published: { eq: true } },
+	where: { published: { eq: true } },
 });
 
 // Rows where `featured` was never set
 const { docs: unset } = await app.collections.posts.find({
-  where: { featured: { isNull: true } },
+	where: { featured: { isNull: true } },
 });
 ```
 

@@ -24,7 +24,10 @@
 
 import type { Questpie } from "questpie";
 
-import { getAdminSession, requireAdminAuth } from "../auth-helpers.js";
+import {
+	getAdminSession,
+	requireAdminAuth,
+} from "../modules/admin/auth-helpers.js";
 
 /**
  * Options for Next.js auth middleware

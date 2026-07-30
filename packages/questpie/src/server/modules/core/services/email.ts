@@ -1,5 +1,5 @@
-import { service } from "#questpie/server/services/define-service.js";
 import { MailerService } from "#questpie/server/modules/core/integrated/mailer/service.js";
+import { service } from "#questpie/server/services/define-service.js";
 
 /**
  * Email service — creates the MailerService from app config.

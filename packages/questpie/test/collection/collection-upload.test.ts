@@ -4,10 +4,7 @@ import { Files, type Adapter, type Body, type UploadOptions } from "files-sdk";
 import { memory } from "files-sdk/memory";
 
 import { collection } from "../../src/exports/index.js";
-import {
-	createAdapterRoutes,
-	createFetchHandler,
-} from "../../src/server/adapters/http.js";
+import { createFetchHandler } from "../../src/server/adapters/http.js";
 import { storageCollectionServe } from "../../src/server/adapters/routes/storage.js";
 import { questpieStorageObjectKeyTable } from "../../src/server/modules/core/integrated/storage/cleanup-table.js";
 import { generateSignedUrlToken } from "../../src/server/modules/core/integrated/storage/signed-url.js";
@@ -1089,7 +1086,7 @@ describe("collection storage route streaming", () => {
 		expect(contextStorage.calls.download).toBe(1);
 	});
 
-	it("serves files through createAdapterRoutes compatibility when context is omitted", async () => {
+	it("serves a file when no adapter context is supplied", async () => {
 		const fileBody = textEncoder.encode("standalone route");
 		const storage = createInstrumentedStorageAdapter({
 			"standalone-file.txt": fileBody,
@@ -1114,12 +1111,13 @@ describe("collection storage route streaming", () => {
 		);
 		storage.calls.exists = 0;
 
-		const routes = createAdapterRoutes(app, {
-			getSession: async () => null,
-		});
-		const response = await routes.collectionServe(
+		// Context deliberately omitted — that is what this test covers.
+		const response = await storageCollectionServe(
+			app,
 			new Request("http://localhost/assets/files/standalone-file.txt"),
 			{ collection: "assets", key: "standalone-file.txt" },
+			undefined,
+			{ getSession: async () => null },
 		);
 
 		expect(response.status).toBe(200);

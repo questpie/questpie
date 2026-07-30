@@ -37,19 +37,27 @@ function resolveUploadCollection(
 	return undefined;
 }
 
+/**
+ * Stable identity for the "no upload collections" case. Inlining `?? []` would
+ * mint a new array every render and defeat the memo below — that fallback, not
+ * the query data, was the only unstable input here: `useAdminConfig` is backed
+ * by React Query, so `adminConfig.uploads` keeps its identity between renders.
+ */
+const NO_COLLECTIONS: string[] = [];
+
 export function useUploadCollection(
 	preferred?: string,
 ): UploadCollectionResolution {
 	const { data: adminConfig } = useAdminConfig();
 
-	const collections = adminConfig?.uploads?.collections ?? [];
-	const collectionsKey = collections.join("|");
+	const uploads = adminConfig?.uploads;
+	const collections = uploads?.collections ?? NO_COLLECTIONS;
 
 	return useMemo(
 		() => ({
-			collection: resolveUploadCollection(preferred, adminConfig?.uploads),
+			collection: resolveUploadCollection(preferred, uploads),
 			collections,
 		}),
-		[preferred, collectionsKey, adminConfig?.uploads?.defaultCollection],
+		[preferred, uploads, collections],
 	);
 }

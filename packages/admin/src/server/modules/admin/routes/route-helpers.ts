@@ -178,10 +178,9 @@ export function getAdminConfig(
 /**
  * Get registered collection definitions from the current or legacy app shape.
  */
-export function getCollections(app: App): Record<
-	string,
-	{ state: AdminCollectionState; [key: string]: unknown }
-> {
+export function getCollections(
+	app: App,
+): Record<string, { state: AdminCollectionState; [key: string]: unknown }> {
 	const appRec = app as Record<string, any>;
 	if (typeof appRec.getCollections === "function") {
 		return appRec.getCollections();
@@ -192,10 +191,9 @@ export function getCollections(app: App): Record<
 /**
  * Get registered global definitions from the current or legacy app shape.
  */
-export function getGlobals(app: App): Record<
-	string,
-	{ state: AdminGlobalState; [key: string]: unknown }
-> {
+export function getGlobals(
+	app: App,
+): Record<string, { state: AdminGlobalState; [key: string]: unknown }> {
 	const appRec = app as Record<string, any>;
 	if (typeof appRec.getGlobals === "function") {
 		return appRec.getGlobals();

@@ -466,9 +466,15 @@ describe("generateFactoryTemplate — builder module augmentation", () => {
 		expect(code).toContain(
 			"interface GlobalBuilder<TState extends GlobalBuilderState>",
 		);
+		// TWO parameters. A one-parameter interface merges with the two-parameter
+		// class without any TS error, so nothing here would go red — but every
+		// merged proxy would then return `Field<TState, {}>` and silently drop
+		// the field type's own methods.
 		expect(code).toContain(
-			"interface Field<TState extends FieldState = FieldState>",
+			"interface Field<TState extends FieldState = FieldState, TMethods = {}>",
 		);
+		// …and the proxies must hand the methods back, not truncate the chain.
+		expect(code).toContain("): FieldWithMethods<TState, TMethods>;");
 	});
 });
 
@@ -612,7 +618,16 @@ describe("generateTemplate — collections", () => {
 		expect(code).toContain("posts: typeof _coll_posts;");
 	});
 
-	it("maps job handler APIs over local and module collections", () => {
+	// REGRESSION GUARD — do NOT "simplify" this back into one mapped type over
+	// `_JobHandlerCollections`. That form is what shipped in #167 and it made
+	// `collections.<local>` unresolvable (TS2339) inside any job handler that
+	// returns a value, in any app whose collection hooks bind `queue`.
+	// `resolveMappedTypeMembers` evaluates the template against an EMPTY member
+	// table; the template reaches `AppJobs` → `typeof _job_*` → return-type
+	// inference → `collections.<local>` against that empty table. The
+	// intersection form is resolved by `getPropertyOfType` walking constituents,
+	// which finds the local key without evaluating the mapped half at all.
+	it("emits job handler collection APIs as module-mapped ∩ explicit local", () => {
 		const result = minimalResult();
 		cat(result, "collections").set(
 			"posts",
@@ -630,11 +645,18 @@ describe("generateTemplate — collections", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
+		// Module collections stay mapped — they come from `typeof _modules`, not
+		// from the user job path, so they never re-enter the empty window.
 		expect(code).toContain(
-			"type _JobHandlerCollectionsAPI = { [K in keyof _JobHandlerCollections]: CollectionAPI<_JobHandlerCollections[K], _JobHandlerCollections> };",
+			"type _JobHandlerCollectionsAPI = { [K in keyof _ModuleCollections]: CollectionAPI<_ModuleCollections[K], _JobHandlerCollections> } & {",
+		);
+		// Local collections must be explicit members. This assertion is the whole
+		// point of the test — see the comment above it.
+		expect(code).toContain(
+			"posts: CollectionAPI<typeof _coll_posts, _JobHandlerCollections>;",
 		);
 		expect(code).not.toContain(
-			"posts: CollectionAPI<typeof _coll_posts, _JobHandlerCollections>;",
+			"[K in keyof _JobHandlerCollections]: CollectionAPI<_JobHandlerCollections[K]",
 		);
 	});
 

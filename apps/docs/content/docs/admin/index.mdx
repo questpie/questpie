@@ -32,12 +32,12 @@ export default [adminClientModule] as const;
 
 Admin setup is split across server and client files so codegen can type both sides:
 
-| File | Purpose |
-|---|---|
-| `src/questpie/server/modules.ts` | Registers `adminModule`, which contributes server routes, collections, fields, views, components, and codegen extensions. |
-| `src/questpie/admin/modules.ts` | Registers `adminClientModule`, which resolves server-emitted references into React renderers. |
-| `src/questpie/server/config/admin.ts` | Configures sidebar, dashboard, branding, locale, and shell options through `adminConfig()`. |
-| `src/questpie/admin/admin.ts` | Exports the generated admin client config consumed by the app's `/admin` route. |
+| File                                  | Purpose                                                                                                                   |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `src/questpie/server/modules.ts`      | Registers `adminModule`, which contributes server routes, collections, fields, views, components, and codegen extensions. |
+| `src/questpie/admin/modules.ts`       | Registers `adminClientModule`, which resolves server-emitted references into React renderers.                             |
+| `src/questpie/server/config/admin.ts` | Configures sidebar, dashboard, branding, locale, and shell options through `adminConfig()`.                               |
+| `src/questpie/admin/admin.ts`         | Exports the generated admin client config consumed by the app's `/admin` route.                                           |
 
 ## Extension surfaces
 

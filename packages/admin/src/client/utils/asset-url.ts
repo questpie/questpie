@@ -11,7 +11,9 @@ function currentOrigin(): string | null {
 	return window.location.origin;
 }
 
-export function resolveAssetUrl(url: string | null | undefined): string | undefined {
+export function resolveAssetUrl(
+	url: string | null | undefined,
+): string | undefined {
 	if (typeof url !== "string") return undefined;
 	const trimmed = url.trim();
 	if (!trimmed) return undefined;

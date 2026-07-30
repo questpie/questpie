@@ -2,10 +2,10 @@ import { expect, test } from "bun:test";
 
 import {
 	collection,
-	createAdapterRoutes,
 	type ChangeBroker,
 	type ChangeWake,
 } from "../../src/exports/index.js";
+import { realtimeSubscribe } from "../../src/server/adapters/routes/realtime.js";
 import { channel } from "../../src/server/channels/channel-builder.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 import { createTestDb, runTestDbMigrations } from "../utils/test-db.js";
@@ -169,11 +169,14 @@ test("applies topic additions and removals through a different app instance", as
 
 	try {
 		await runTestDbMigrations(first.app);
-		const firstRoutes = createAdapterRoutes(first.app, { accessMode: "user" });
-		const secondRoutes = createAdapterRoutes(second.app, {
-			accessMode: "user",
-		});
-		const initial = await firstRoutes.realtime.subscribe(
+		// Bound locally rather than through the deleted createAdapterRoutes shim.
+		// accessMode must stay — it drives the access check under test.
+		const asUser = { accessMode: "user" } as const;
+		const firstSubscribe = (...a: [Request, Record<string, string>, any?]) =>
+			realtimeSubscribe(first.app, a[0], a[1], a[2], asUser);
+		const secondSubscribe = (...a: [Request, Record<string, string>, any?]) =>
+			realtimeSubscribe(second.app, a[0], a[1], a[2], asUser);
+		const initial = await firstSubscribe(
 			new Request("http://localhost/realtime", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -203,7 +206,7 @@ test("applies topic additions and removals through a different app instance", as
 		);
 		expect(first.app.realtime.listeners.size).toBe(1);
 
-		const add = await secondRoutes.realtime.subscribe(
+		const add = await secondSubscribe(
 			desiredRequest(session, 1, [
 				{
 					id: "items-base",
@@ -230,7 +233,7 @@ test("applies topic additions and removals through a different app instance", as
 				`Cross-instance add was rejected (${add.status}): ${await add.text()}`,
 			);
 		}
-		const duplicate = await secondRoutes.realtime.subscribe(
+		const duplicate = await secondSubscribe(
 			desiredRequest(session, 1, [
 				{
 					id: "items-base",
@@ -259,7 +262,7 @@ test("applies topic additions and removals through a different app instance", as
 		);
 		await waitFor(() => first.app.realtime.listeners.size === 2);
 
-		const remove = await secondRoutes.realtime.subscribe(
+		const remove = await secondSubscribe(
 			desiredRequest(session, 2, [
 				{
 					id: "items-base",
@@ -280,7 +283,7 @@ test("applies topic additions and removals through a different app instance", as
 		}
 		await waitFor(() => first.app.realtime.listeners.size === 1);
 
-		const swap = await secondRoutes.realtime.subscribe(
+		const swap = await secondSubscribe(
 			desiredRequest(session, 3, [
 				{
 					id: "items-replacement",
@@ -301,7 +304,7 @@ test("applies topic additions and removals through a different app instance", as
 		);
 		await waitFor(() => first.app.realtime.listeners.size === 1);
 
-		const addChannel = await secondRoutes.realtime.subscribe(
+		const addChannel = await secondSubscribe(
 			new Request("http://localhost/realtime", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -356,7 +359,7 @@ test("applies topic additions and removals through a different app instance", as
 			await withTimeout(reader.read("channel_event"), "typed channel event"),
 		).toMatchObject({ data: { text: "cross-instance" } });
 
-		const removeChannel = await secondRoutes.realtime.subscribe(
+		const removeChannel = await secondSubscribe(
 			desiredRequest(session, 5, [
 				{
 					id: "items-replacement",
@@ -377,7 +380,7 @@ test("applies topic additions and removals through a different app instance", as
 					.size === 0,
 		);
 
-		const ownerApplyFailure = await secondRoutes.realtime.subscribe(
+		const ownerApplyFailure = await secondSubscribe(
 			desiredRequest(session, 6, [
 				{
 					id: "items-replacement",

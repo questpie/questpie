@@ -1,6 +1,7 @@
 ---
 name: questpie-core/app-context
-description: QUESTPIE AppContext runtime interface ctx hooks routes jobs services db session collections globals queue email storage kv logger search realtime t translator getContext tryGetContext createContext accessMode partial context override system user scope
+description:
+  QUESTPIE AppContext runtime interface ctx hooks routes jobs services db session collections globals queue email storage kv logger search realtime t translator getContext tryGetContext createContext accessMode partial context override system user scope
   - questpie-core
 ---
 
@@ -36,7 +37,7 @@ interface AppContext {
 | Collection hooks                                                                        | First argument: `async (ctx) => { ... }`                                                                                                      |
 | Route handlers                                                                          | Destructure: `async ({ db, session, collections }) => { ... }`                                                                                |
 | Job handlers                                                                            | Destructure: `async ({ payload, queue, email }) => { ... }`                                                                                   |
-| Email templates                                                                         | Destructure: `async ({ input, collections }) => { ... }`                                                                                       |
+| Email templates                                                                         | Destructure: `async ({ input, collections }) => { ... }`                                                                                      |
 | Access rules                                                                            | Destructure: `({ session, data }) => boolean`                                                                                                 |
 | Seeds                                                                                   | `async ({ collections, log }) => { ... }`                                                                                                     |
 | Services                                                                                | `create: ({ app }) => ...` (app instance only, not full context)                                                                              |

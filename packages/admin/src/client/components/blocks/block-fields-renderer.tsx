@@ -9,8 +9,7 @@
 
 import * as React from "react";
 
-import type { BlockSchema } from "#questpie/admin/server/block/index.js";
-
+import type { BlockSchema } from "../../../server/modules/admin/block/index.js";
 import type { FieldInstance } from "../../builder/field/field.js";
 import { useResolveText, useTranslation } from "../../i18n/hooks.js";
 import { selectAdmin, useAdminStore } from "../../runtime/provider.js";

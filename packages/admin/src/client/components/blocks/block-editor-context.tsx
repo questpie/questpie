@@ -10,8 +10,7 @@ import * as React from "react";
 import type { StoreApi } from "zustand";
 import { useStore } from "zustand";
 
-import type { BlockSchema } from "#questpie/admin/server/block/index.js";
-
+import type { BlockSchema } from "../../../server/modules/admin/block/index.js";
 import type { BlockContent, BlockNode } from "../../blocks/types.js";
 import type { InsertPosition } from "./utils/tree-utils.js";
 
@@ -205,14 +204,6 @@ export function useBlockSchema(blockType: string): BlockSchema | undefined {
 }
 
 /**
- * Hook to get a block schema by type.
- * @deprecated Use useBlockSchema instead
- */
-export function useBlockDefinition(blockType: string): BlockSchema | undefined {
-	return useBlockSchema(blockType);
-}
-
-/**
  * Hook to get the selected block's schema.
  */
 function useSelectedBlockSchema(): BlockSchema | undefined {
@@ -227,14 +218,6 @@ function useSelectedBlockSchema(): BlockSchema | undefined {
 
 		return state.blocks[blockNode.type];
 	});
-}
-
-/**
- * Hook to get the selected block's definition.
- * @deprecated Use useSelectedBlockSchema instead
- */
-function useSelectedBlockDefinition(): BlockSchema | undefined {
-	return useSelectedBlockSchema();
 }
 
 /**

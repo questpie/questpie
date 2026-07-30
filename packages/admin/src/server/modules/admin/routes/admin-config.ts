@@ -30,7 +30,7 @@ import type {
 	ServerSidebarSection,
 	SidebarContribution,
 	SidebarItemDef,
-} from "../../../augmentation.js";
+} from "../../../augmentation/index.js";
 import {
 	resolveDashboardCallback,
 	resolveSidebarCallback,
@@ -109,7 +109,10 @@ export function stripUndefinedDeep<T>(value: T): T {
  * Falls back to app `defaultAccess.read` when no explicit read rule is defined.
  * If neither exists, requires session (secure by default).
  *
- * Fail-open on errors: returns true to avoid hiding content due to rule bugs.
+ * Fail-CLOSED on errors: a rule that throws denies. The line above used to
+ * claim the opposite ("returns true to avoid hiding content due to rule bugs")
+ * while the catch below returned false — the code was right and the comment
+ * was wrong.
  */
 async function hasReadAccess(
 	readRule: unknown,

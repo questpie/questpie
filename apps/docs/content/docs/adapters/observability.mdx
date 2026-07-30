@@ -1,0 +1,238 @@
+---
+title: Observability
+description: Traces and metrics over OTLP, what QUESTPIE instruments, what it deliberately does not record, and how to point it at Grafana, Datadog, Honeycomb or any OTLP collector.
+---
+
+QUESTPIE emits OpenTelemetry traces and metrics through an optional adapter. With
+no adapter configured the instrumentation is a no-op: the framework still calls
+`span()` at every seam, and every call goes straight through to its callback
+without allocating anything.
+
+## Setup
+
+```bash
+bun add @questpie/observability
+```
+
+```ts title="questpie.config.ts"
+import { otelObservability } from "@questpie/observability";
+import { runtimeConfig } from "questpie/app";
+
+export default runtimeConfig({
+	observability: {
+		adapter: otelObservability({
+			serviceName: "my-app",
+			otlpEndpoint: "http://localhost:4318",
+		}),
+	},
+});
+```
+
+That is the whole wiring. Observability is a **runtime adapter**, not a module -
+it contributes no collections, routes or jobs, so there is nothing for codegen to
+discover and nothing to add to `modules.ts`. It sits next to `queue`, `kv` and
+`search` in `runtimeConfig`.
+
+The OpenTelemetry SDK lives entirely in `@questpie/observability`. The `questpie`
+package has no `@opentelemetry/*` dependency, so apps that do not use tracing do
+not install it.
+
+## Configuration
+
+| Option               | Type                     | Notes                                                                                                                                      |
+| -------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `serviceName`        | `string`                 | **Required.** Becomes `service.name`. An unnamed service is unusable in any backend.                                                       |
+| `serviceVersion`     | `string`                 | Becomes `service.version`. Wire your build's version here to correlate a regression with a deploy.                                         |
+| `environment`        | `string`                 | Becomes `deployment.environment.name`.                                                                                                     |
+| `otlpEndpoint`       | `string`                 | OTLP/HTTP base URL, e.g. `http://localhost:4318`. Traces go to `/v1/traces`, metrics to `/v1/metrics`. Omit to skip the exporter entirely. |
+| `otlpHeaders`        | `Record<string, string>` | Sent with every export; this is where a vendor API key goes.                                                                               |
+| `samplingRatio`      | `number`                 | `0` to `1`. Omit for always-on.                                                                                                            |
+| `console`            | `boolean`                | Also print spans to stdout. Development only; it is very noisy.                                                                            |
+| `metricIntervalMs`   | `number`                 | Metric export interval. Default `60000`.                                                                                                   |
+| `resourceAttributes` | `Attributes`             | Merged last, so it can override anything above.                                                                                            |
+
+### Sampling
+
+`samplingRatio` is wrapped in a parent-based sampler. A request that was already
+sampled upstream stays sampled here regardless of the ratio.
+
+That detail matters: a bare ratio sampler drops spans whose parent was sampled,
+producing traces with holes in them that look like bugs in the caller. If you set
+`samplingRatio: 0.1`, you get 10% of traces _whole_, not 10% of every trace's
+spans.
+
+```ts
+otelObservability({
+	serviceName: "my-app",
+	otlpEndpoint: process.env.OTLP_ENDPOINT,
+	samplingRatio: 0.1,
+	environment: process.env.NODE_ENV,
+});
+```
+
+## What is instrumented
+
+| Seam            | Span                 | Kind       | Attributes                                                                               |
+| --------------- | -------------------- | ---------- | ---------------------------------------------------------------------------------------- |
+| HTTP request    | `GET /posts`         | `server`   | `http.request.method`, `url.path`, `http.route`, `http.response.status_code`             |
+| Collection CRUD | `collection.findOne` | `internal` | `db.collection.name`, `db.operation.name`                                                |
+| Job execution   | `job send-email`     | `consumer` | `messaging.destination.name`, `questpie.job.dispatch_id`, `questpie.job.idempotency_key` |
+| KV              | `kv.get`             | `client`   | `db.operation.name`, `questpie.kv.key_length`                                            |
+| Search          | `search.query`       | `client`   | collections, limit, result count, total                                                  |
+| Database query  | `db.select`          | `client`   | `db.system`, `db.operation`, `db.statement`, `db.sql.table`                              |
+| Transaction     | `db.transaction`     | `client`   | `db.system`                                                                              |
+
+Every span also carries `questpie.request_id` and `questpie.trace_id`, so a trace
+lines up with the request's log lines.
+
+**Inbound `traceparent` is continued, not replaced.** A request arriving with W3C
+trace headers joins the caller's trace, with the remote span as the parent, so a
+distributed waterfall stays connected across services. Only the root span reads
+the headers; everything below nests through the active context.
+
+**Jobs are trace roots, not children.** A job runs outside any request, so its
+span starts a new trace. That is deliberate. Background work that fails would
+otherwise be invisible, because nothing upstream ever knew about it.
+`questpie.job.dispatch_id` is stable across retries and across queue adapters, so
+it is what correlates a failed attempt with the one that eventually succeeded.
+
+**Database queries are instrumented on every `db` config variant**, including
+`{ drizzle }` and `{ create }` where you build the client yourself. The
+instrumentation attaches to Drizzle's session rather than to the driver: the
+driver looks like the obvious seam and is unavailable in exactly the
+configurations that matter most (Hyperdrive, Neon, Vercel Postgres), which would
+have left a trace that silently omits queries on serverless deployments. A
+waterfall with the database missing reads as "the database was fast".
+
+Statements inside a `db.transaction()` are traced too. If you build a Drizzle
+client outside the framework and want it traced, `instrumentDbClient` is
+exported from `questpie/observability`, though the `db` service already does
+this for every variant.
+
+**Not yet instrumented:** email sending, uploads and block rendering.
+
+## Metrics
+
+One histogram, recorded on every request:
+
+| Metric                         | Unit | Attributes                                                       |
+| ------------------------------ | ---- | ---------------------------------------------------------------- |
+| `http.server.request.duration` | `s`  | `http.request.method`, `http.route`, `http.response.status_code` |
+
+That single instrument is the whole RED triple: **rate** is its count, **errors**
+are that count filtered by `http.response.status_code`, and **duration** is the
+histogram itself. Separate request and error counters would duplicate the same
+series and eventually disagree with it. The name, attributes and the seconds unit
+follow OTel HTTP semantic conventions, so a stock dashboard works without
+remapping. Note the log line beside it stays in milliseconds, which is for
+humans rather than for querying.
+
+## Logs
+
+Logs keep going wherever they already go. Pino's output is untouched, so an app
+that ships logs by scraping stdout keeps working exactly as before.
+
+Two things are added on top:
+
+**Correlation.** Every record carries `trace_id` and `span_id` from the span that
+was open when it was written, in snake*case, because those are the keys a backend
+joins logs to traces on. The existing camelCase `traceId` stays beside them: it
+is the framework's own correlation id, derived from the inbound `traceparent`
+with an `x-request-id` fallback, and it is \_not* the same value once an adapter
+owns propagation. Both are emitted because they answer different questions.
+
+**Export.** With `otlpEndpoint` set, records are also emitted on the OTel logs
+signal, so the collector receives them directly rather than only via whatever is
+tailing stdout. A collector being unreachable never turns a log line into a
+thrown error.
+
+## What is deliberately not recorded
+
+Tracing backends are searchable, long-lived and widely accessible inside a
+company. QUESTPIE therefore omits some things you might expect:
+
+- **Search query text.** Raw user input; in a CMS it is routinely someone's name
+  or email address. You get the collections searched, the limit and the result
+  counts.
+- **KV keys.** Cache keys routinely embed record ids and occasionally session
+  tokens. You get `questpie.kv.key_length`.
+- **Record contents and CRUD inputs.** You get the collection and the operation.
+
+If you need any of these for a specific investigation, add them yourself on a
+userland span, where the decision is explicit and scoped.
+
+## Your own spans
+
+```ts
+export default route()
+	.post()
+	.handler(async ({ observability, input }) => {
+		return observability.span(
+			"import.csv",
+			async (span) => {
+				const rows = await parse(input.file);
+				span.setAttributes({ "import.row_count": rows.length });
+				return process(rows);
+			},
+			{ kind: "internal" },
+		);
+	});
+```
+
+`span()` nests under whatever span is active, so this appears as a child of the
+HTTP span automatically. It works whether or not an adapter is configured; with
+none, it calls the callback and returns.
+
+Async is handled correctly: the span stays open until the promise settles. An
+error is recorded on the span, the span is closed, and the error is rethrown -
+nothing is swallowed.
+
+## Backends
+
+Everything goes over standard OTLP/HTTP, so any collector works.
+
+```ts title="Grafana / Tempo (via the OTel Collector)"
+otelObservability({
+	serviceName: "my-app",
+	otlpEndpoint: "http://otel-collector:4318",
+});
+```
+
+```ts title="Honeycomb"
+otelObservability({
+	serviceName: "my-app",
+	otlpEndpoint: "https://api.honeycomb.io",
+	otlpHeaders: { "x-honeycomb-team": process.env.HONEYCOMB_API_KEY! },
+});
+```
+
+```ts title="Datadog (via the Datadog Agent's OTLP intake)"
+otelObservability({
+	serviceName: "my-app",
+	otlpEndpoint: "http://datadog-agent:4318",
+});
+```
+
+## Shutting down
+
+Call `shutdown()` on the adapter when the process is terminating, or spans still
+in the batch are lost:
+
+```ts
+process.on("SIGTERM", async () => {
+	await app.observability.shutdown();
+	process.exit(0);
+});
+```
+
+## A note on Bun
+
+The adapter composes the OpenTelemetry SDK by hand instead of using
+`@opentelemetry/sdk-node` or `auto-instrumentations-node`. Auto-instrumentation
+works by monkey-patching Node built-ins at load time, usually via a `--require`
+preload, which is fragile off Node.
+
+The trade-off is that **only the seams listed above produce spans**. You will not
+get automatic spans for arbitrary `fetch` calls or third-party libraries. In
+exchange, setup is a config object with no preload flag, and it behaves the same
+under `bun run`, `bun build` and Node.

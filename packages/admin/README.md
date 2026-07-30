@@ -273,7 +273,7 @@ Import the admin base stylesheet and scan the admin package:
 @import "tailwindcss";
 @import "@questpie/admin/client/styles/index.css";
 
-@source "../node_modules/@questpie/admin/dist";
+@source "../node_modules/@questpie/admin/";
 ```
 
 `index.css` is an alias for `base.css`; import `base.css` directly when you want explicit control.
@@ -282,11 +282,11 @@ Import the admin base stylesheet and scan the admin package:
 
 There are two layers, deliberately separated:
 
-| Layer        | Configured in                                   | Covers                                       |
-| ------------ | ----------------------------------------------- | -------------------------------------------- |
-| **Content**  | `config/admin.ts` → `branding`                  | Name, logo, tagline, favicon                 |
-| **Theme**    | Your app's `admin.css`                          | Colors, fonts, radii, shadows, motion        |
-| **Chrome**   | Files in `questpie/admin/components/` (see below) | Sidebar brand, nav item, auth layout       |
+| Layer       | Configured in                                     | Covers                                |
+| ----------- | ------------------------------------------------- | ------------------------------------- |
+| **Content** | `config/admin.ts` → `branding`                    | Name, logo, tagline, favicon          |
+| **Theme**   | Your app's `admin.css`                            | Colors, fonts, radii, shadows, motion |
+| **Chrome**  | Files in `questpie/admin/components/` (see below) | Sidebar brand, nav item, auth layout  |
 
 ### Branding (config-driven)
 
@@ -312,8 +312,14 @@ and the same locale-map / translation-key shape used elsewhere in the admin.
 ### Theming (CSS override)
 
 The admin exposes every visual token as a CSS custom property in `base.css`. To
-rebrand colors, fonts, or shape, override them in your app's `admin.css`
-**after** the base import — source order ensures your overrides win:
+rebrand colors, fonts, or shape, override them in your app's `admin.css` **after**
+the base import, and **mirror the base.css selectors exactly**: dark values on
+`:root, .dark`, light values on `.light, :root.light`. Source order alone is not
+enough in light mode — `base.css` declares light tokens on `:root.light`
+(specificity 0-2-0), which beats a plain `.light` or `:root` no matter where your
+rule sits. That bump is deliberate: in embedded setups the host app's global
+stylesheet often defines its own `:root` tokens, and the extra specificity stops
+them leaking into the admin.
 
 ```css
 /* admin.css */
@@ -324,16 +330,17 @@ rebrand colors, fonts, or shape, override them in your app's `admin.css`
 @import url("https://fonts.googleapis.com/css2?family=Caveat+Brush&display=swap");
 
 :root,
-.light {
-	--primary: oklch(0.65 0.2 25);
-	--ring: oklch(0.65 0.2 25);
+.dark {
+	--primary: oklch(0.78 0.18 25); /* lifted L for dark surfaces */
+	--ring: oklch(0.78 0.18 25);
 	--font-heading: "Caveat Brush", system-ui, sans-serif;
 	--surface-radius: 0.5rem;
 }
 
-.dark {
-	--primary: oklch(0.78 0.18 25); /* lifted L for dark surfaces */
-	--ring: oklch(0.78 0.18 25);
+.light,
+:root.light {
+	--primary: oklch(0.65 0.2 25);
+	--ring: oklch(0.65 0.2 25);
 }
 ```
 
@@ -357,7 +364,9 @@ yourself:
 ```tsx
 // routes/admin.tsx
 export const Route = createFileRoute("/admin")({
-	loader: async ({ context }) => ({ config: await context.client.routes.getAdminConfig.post({}) }),
+	loader: async ({ context }) => ({
+		config: await context.client.routes.getAdminConfig.post({}),
+	}),
 	head: ({ loaderData }) => ({
 		links: [
 			{ rel: "stylesheet", href: adminCss },

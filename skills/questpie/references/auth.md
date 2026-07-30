@@ -1,6 +1,7 @@
 ---
 name: questpie-core-auth
-description: QUESTPIE authentication Better Auth authConfig emailAndPassword requireEmailVerification socialProviders OAuth google plugins anonymous admin role banned session user collection authClient signIn signUp signOut useSession createAdminAuthClient getContext auth callbacks
+description:
+  QUESTPIE authentication Better Auth authConfig emailAndPassword requireEmailVerification socialProviders OAuth google plugins anonymous admin role banned session user collection authClient signIn signUp signOut useSession createAdminAuthClient getContext auth callbacks
   - questpie-core
 ---
 
@@ -48,9 +49,9 @@ Effective defaults below are what the `starterModule` ships (your config merges 
 | ------------------------------------------- | --------- | ------------- | ----------------------------------------------------------- |
 | `emailAndPassword.enabled`                  | `boolean` | `true`        | Enable email/password authentication                        |
 | `emailAndPassword.requireEmailVerification` | `boolean` | `true`        | Require email verification before login                     |
-| `baseURL`                                   | `string`  | none | Application public URL (used for OAuth callbacks)           |
+| `baseURL`                                   | `string`  | none          | Application public URL (used for OAuth callbacks)           |
 | `basePath`                                  | `string`  | `"/api/auth"` | Auth API route prefix                                       |
-| `secret`                                    | `string`  | none | Session signing secret. **Must be 32+ chars in production** |
+| `secret`                                    | `string`  | none          | Session signing secret. **Must be 32+ chars in production** |
 
 ## Social Providers (OAuth)
 

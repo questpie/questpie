@@ -9,11 +9,11 @@ export default job({
 	handler: async ({ payload, collections }) => {
 		const orders = payload.orderId
 			? {
-					docs: await Promise.all([
-						collections.productionOrders.findOne({
+					docs: [
+						await collections.productionOrders.findOne({
 							where: { id: payload.orderId },
 						}),
-					]),
+					],
 				}
 			: await collections.productionOrders.find({
 					where: {

@@ -4,29 +4,29 @@ The schema is the single source of types. If you are hand-writing a type that re
 
 ## The Map, "I Need Type X"
 
-| # | You need | Write exactly this | Notes |
-| --- | --- | --- | --- |
-| 1 | Row of **another** collection | `import type { CollectionDoc } from "#questpie"` → `CollectionDoc<"toys">` | Type-only import. See cycle rules below |
-| 2 | Own row inside `.access()` / `.hooks()` | Nothing, `ctx.data` / `ctx.input` are already typed by the builder | Never name your own doc type inside the defining collection |
-| 3 | Shared access-helper parameter | Collection-imported helper: `AccessContext` from `"questpie"`. Anywhere else: `AccessRuleContext<"posts">` from `#questpie` (narrows `ctx.data`) | See cycle rules below |
-| 4 | Shared hook-helper parameter | `HookContext` from `"questpie"` (collection-imported) or `HookRuleContext<"posts">` from `#questpie` | Same rules as #3 |
-| 5 | App/services in a function without a ctx param | `getContext<App>()` with `import type { App } from "#questpie"` | Type-only `App` import, no runtime cycle |
-| 6 | Global doc | `import type { GlobalDoc } from "#questpie"` → `GlobalDoc<"siteSettings">` | Same cycle rules as `CollectionDoc` |
-| 7 | Session / user shape | In handlers: `ctx.session?.user` is typed. Standalone: `import type { AppSession, AppSessionUser } from "#questpie"` | Generated from the app auth config |
-| 8 | Route input/output in the handler | Nothing, inferred from `.schema()` / return type | |
-| 9 | Route input/output standalone | `InferRouteInput<typeof def>` / `InferRouteOutput<typeof def>` / `InferRouteParams<typeof def>` from `questpie/types` | tRPC-style; `def` is the route file's default export |
-| 10 | Client-side types | `createClient<AppConfig>()`, everything flows from the generic | See `references/tanstack-query.md` |
-| 11 | Job payload in the handler | Nothing, `payload` is typed from `schema` | |
-| 12 | Job payload standalone | `InferJobPayload<typeof jobDef>` from `questpie/queue` (or `z.infer<typeof jobDef.schema>`) | |
-| 13 | `db` / `session` inside job/workflow handlers | Honest gap: generated job context types them `unknown` today | Use `collections` (typed) or narrow explicitly; do not restate schemas |
-| 14 | Publishing jobs outside job files | `ctx.queue.<name>.publish(payload)`, payload typed | |
-| 15 | Relation target autocomplete | Nothing, codegen populates `Questpie.CollectionKeys` from discovered files; `f.relation("…")` autocompletes after `questpie generate` | Plain strings always compile |
-| 16 | Realtime payloads | `live()` / `liveIter()` snapshots are typed; raw `client.realtime.subscribe` data is untyped, annotate with `CollectionDoc<"posts">` | Typed realtime contract is planned |
-| 17 | Env vars | `env.ts` / `env.client.ts` with `env()`, see `references/env.md` | Never `process.env.X!` |
-| 18 | Field-level rule ctx (`.access({ fields })`) | `doc` is typed as the row, `user` is typed from the generated session, destructure, don't annotate | |
-| 19 | Derived request context (tenant, role) | `appConfig({ context })` result is inferred and arrives flat on rules, **annotate the resolver return with a self-contained DTO** (inferring it from `.find().docs` re-enters the generated index) | App-level `access` rules get the base ctx (`session`/`db`), not extensions, by design, cycle-free |
-| 20 | Select-option unions | `CollectionDoc<"events">["type"]` (server-side) | No client-safe union export yet; clients infer from SDK responses |
-| 21 | `where` filter for a collection (esp. one built up dynamically) | `import type { CollectionWhere } from "#questpie"` → `CollectionWhere<"appointments">` | Field keys are mutable, so `const where: CollectionWhere<"appointments"> = {}; if (x) where.status = "…"` type-checks. Same cycle rules as `CollectionDoc`. Inline `find({ where: { … } })` is already typed, reach for this only for a standalone/dynamic variable |
+| #   | You need                                                        | Write exactly this                                                                                                                                                                                 | Notes                                                                                                                                                                                                                                                               |
+| --- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Row of **another** collection                                   | `import type { CollectionDoc } from "#questpie"` → `CollectionDoc<"toys">`                                                                                                                         | Type-only import. See cycle rules below                                                                                                                                                                                                                             |
+| 2   | Own row inside `.access()` / `.hooks()`                         | Nothing, `ctx.data` / `ctx.input` are already typed by the builder                                                                                                                                 | Never name your own doc type inside the defining collection                                                                                                                                                                                                         |
+| 3   | Shared access-helper parameter                                  | Collection-imported helper: `AccessContext` from `"questpie"`. Anywhere else: `AccessRuleContext<"posts">` from `#questpie` (narrows `ctx.data`)                                                   | See cycle rules below                                                                                                                                                                                                                                               |
+| 4   | Shared hook-helper parameter                                    | `HookContext` from `"questpie"` (collection-imported) or `HookRuleContext<"posts">` from `#questpie`                                                                                               | Same rules as #3                                                                                                                                                                                                                                                    |
+| 5   | App/services in a function without a ctx param                  | `getContext<App>()` with `import type { App } from "#questpie"`                                                                                                                                    | Type-only `App` import, no runtime cycle                                                                                                                                                                                                                            |
+| 6   | Global doc                                                      | `import type { GlobalDoc } from "#questpie"` → `GlobalDoc<"siteSettings">`                                                                                                                         | Same cycle rules as `CollectionDoc`                                                                                                                                                                                                                                 |
+| 7   | Session / user shape                                            | In handlers: `ctx.session?.user` is typed. Standalone: `import type { AppSession, AppSessionUser } from "#questpie"`                                                                               | Generated from the app auth config                                                                                                                                                                                                                                  |
+| 8   | Route input/output in the handler                               | Nothing, inferred from `.schema()` / return type                                                                                                                                                   |                                                                                                                                                                                                                                                                     |
+| 9   | Route input/output standalone                                   | `InferRouteInput<typeof def>` / `InferRouteOutput<typeof def>` / `InferRouteParams<typeof def>` from `questpie/types`                                                                              | tRPC-style; `def` is the route file's default export                                                                                                                                                                                                                |
+| 10  | Client-side types                                               | `createClient<AppConfig>()`, everything flows from the generic                                                                                                                                     | See `references/tanstack-query.md`                                                                                                                                                                                                                                  |
+| 11  | Job payload in the handler                                      | Nothing, `payload` is typed from `schema`                                                                                                                                                          |                                                                                                                                                                                                                                                                     |
+| 12  | Job payload standalone                                          | `InferJobPayload<typeof jobDef>` from `questpie/queue` (or `z.infer<typeof jobDef.schema>`)                                                                                                        |                                                                                                                                                                                                                                                                     |
+| 13  | `db` / `session` inside job/workflow handlers                   | Honest gap: generated job context types them `unknown` today                                                                                                                                       | Use `collections` (typed) or narrow explicitly; do not restate schemas                                                                                                                                                                                              |
+| 14  | Publishing jobs outside job files                               | `ctx.queue.<name>.publish(payload)`, payload typed                                                                                                                                                 |                                                                                                                                                                                                                                                                     |
+| 15  | Relation target autocomplete                                    | Nothing, codegen populates `Questpie.CollectionKeys` from discovered files; `f.relation("…")` autocompletes after `questpie generate`                                                              | Plain strings always compile                                                                                                                                                                                                                                        |
+| 16  | Realtime payloads                                               | `live()` / `liveIter()` snapshots are typed; raw `client.realtime.subscribe` data is untyped, annotate with `CollectionDoc<"posts">`                                                               | Typed realtime contract is planned                                                                                                                                                                                                                                  |
+| 17  | Env vars                                                        | `env.ts` / `env.client.ts` with `env()`, see `references/env.md`                                                                                                                                   | Never `process.env.X!`                                                                                                                                                                                                                                              |
+| 18  | Field-level rule ctx (`.access({ fields })`)                    | `doc` is typed as the row, `user` is typed from the generated session, destructure, don't annotate                                                                                                 |                                                                                                                                                                                                                                                                     |
+| 19  | Derived request context (tenant, role)                          | `appConfig({ context })` result is inferred and arrives flat on rules, **annotate the resolver return with a self-contained DTO** (inferring it from `.find().docs` re-enters the generated index) | App-level `access` rules get the base ctx (`session`/`db`), not extensions, by design, cycle-free                                                                                                                                                                   |
+| 20  | Select-option unions                                            | `CollectionDoc<"events">["type"]` (server-side)                                                                                                                                                    | No client-safe union export yet; clients infer from SDK responses                                                                                                                                                                                                   |
+| 21  | `where` filter for a collection (esp. one built up dynamically) | `import type { CollectionWhere } from "#questpie"` → `CollectionWhere<"appointments">`                                                                                                             | Field keys are mutable, so `const where: CollectionWhere<"appointments"> = {}; if (x) where.status = "…"` type-checks. Same cycle rules as `CollectionDoc`. Inline `find({ where: { … } })` is already typed, reach for this only for a standalone/dynamic variable |
 
 ## The Two Cycle Rules
 
@@ -58,7 +58,9 @@ export async function resolveOrderToy(
 }
 
 /** Narrow `data` structurally when the helper only reads a few fields. */
-export function canCancelOrder(ctx: AccessContext<{ priority?: string | null }>) {
+export function canCancelOrder(
+	ctx: AccessContext<{ priority?: string | null }>,
+) {
 	if (ctx.data?.priority === "rush") return !!ctx.session?.user;
 	return true;
 }
@@ -72,13 +74,13 @@ Helpers **not** imported by any collection (scripts, routes, services, jobs) may
 
 `.access()` rules are typed per operation by the builder, no annotations, no casts:
 
-| Rule | `ctx.data` | `ctx.input` |
-| --- | --- | --- |
-| `read` | not loaded (return `AccessWhere` to filter) | none |
-| `create` | none (no row exists yet) | typed insert shape (pre-validation) |
-| `update` | the existing row, **non-optional** | typed update patch |
-| `delete` | the existing row, **non-optional** | none |
-| `transition` / `serve` | the existing row, non-optional | none |
+| Rule                   | `ctx.data`                                  | `ctx.input`                         |
+| ---------------------- | ------------------------------------------- | ----------------------------------- |
+| `read`                 | not loaded (return `AccessWhere` to filter) | none                                |
+| `create`               | none (no row exists yet)                    | typed insert shape (pre-validation) |
+| `update`               | the existing row, **non-optional**          | typed update patch                  |
+| `delete`               | the existing row, **non-optional**          | none                                |
+| `transition` / `serve` | the existing row, non-optional              | none                                |
 
 ```ts
 export default collection("production_orders")
@@ -89,7 +91,7 @@ export default collection("production_orders")
 	.access({
 		create: ({ session, input }) => !!session && input?.priority !== "rush",
 		update: async (ctx) => {
-			ctx.data;  // typed row, non-optional, no `as` cast, no isRecord() dance
+			ctx.data; // typed row, non-optional, no `as` cast, no isRecord() dance
 			ctx.input; // typed patch
 			return (await resolveOrderToy(ctx, ctx.data.toy)).userId !== null;
 		},
@@ -139,9 +141,16 @@ Names-only registries give `f.relation()` target autocomplete without entering t
 // types/questpie-keys.d.ts (any ambient file)
 declare global {
 	namespace Questpie {
-		interface CollectionKeys { toys: unknown; production_orders: unknown }
-		interface GlobalKeys { factorySettings: unknown }
-		interface JobKeys { sendReminder: unknown }
+		interface CollectionKeys {
+			toys: unknown;
+			production_orders: unknown;
+		}
+		interface GlobalKeys {
+			factorySettings: unknown;
+		}
+		interface JobKeys {
+			sendReminder: unknown;
+		}
 	}
 }
 export {};
@@ -159,11 +168,11 @@ For columns whose value type the field cannot infer, stay declarative, see `refe
 
 ## Never Do
 
-| Anti-pattern | Why | Instead |
-| --- | --- | --- |
-| Hand-rolled `EventDoc = { id: string; ownerUser?: string }` | Silent nullability drift vs the real schema | `CollectionDoc<"events">` (row 1) |
-| `ctx.data as MemberDoc` inside own `.access()` | Builder already types it; self-key casts can cycle (TS2456) | Trust `ctx.data` (row 2) |
-| Hand-rolled `CollectionsLike` / `AccessRuleCtx` ctx mirrors | Structural matching of CRUD generics → deep error walls, tsc 5.9 crashes | `AccessContext` param (row 3) |
-| Module-level `app` singleton for callbacks | Import cycles; stale instance in tests | `getContext<App>()` (row 5) |
-| Collection-imported helper returning unannotated `ctx.collections` results | TS7022/TS2502 self-reference | Explicit return annotation (Rule 2) |
-| `const where: Record<string, unknown>` built by hand | No field/operator checking; silent drift from the schema | `CollectionWhere<"posts">` (row 21) |
+| Anti-pattern                                                               | Why                                                                      | Instead                             |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------- |
+| Hand-rolled `EventDoc = { id: string; ownerUser?: string }`                | Silent nullability drift vs the real schema                              | `CollectionDoc<"events">` (row 1)   |
+| `ctx.data as MemberDoc` inside own `.access()`                             | Builder already types it; self-key casts can cycle (TS2456)              | Trust `ctx.data` (row 2)            |
+| Hand-rolled `CollectionsLike` / `AccessRuleCtx` ctx mirrors                | Structural matching of CRUD generics → deep error walls, tsc 5.9 crashes | `AccessContext` param (row 3)       |
+| Module-level `app` singleton for callbacks                                 | Import cycles; stale instance in tests                                   | `getContext<App>()` (row 5)         |
+| Collection-imported helper returning unannotated `ctx.collections` results | TS7022/TS2502 self-reference                                             | Explicit return annotation (Rule 2) |
+| `const where: Record<string, unknown>` built by hand                       | No field/operator checking; silent drift from the schema                 | `CollectionWhere<"posts">` (row 21) |

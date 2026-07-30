@@ -107,13 +107,13 @@ export default adminConfig({
 
 The sidebar has named sections and typed items. Use `collection` and `global` items for resources that should use generated admin routes. Use `link` for external pages or custom app routes. Use `page` for admin client pages registered under `src/questpie/admin/pages/`.
 
-| Item type | Target |
-|---|---|
-| `collection` | A registered collection slug. |
-| `global` | A registered global slug. |
-| `link` | A URL or app route. |
-| `page` | A client admin page id. |
-| `divider` | A visual divider within a section. |
+| Item type    | Target                             |
+| ------------ | ---------------------------------- |
+| `collection` | A registered collection slug.      |
+| `global`     | A registered global slug.          |
+| `link`       | A URL or app route.                |
+| `page`       | A client admin page id.            |
+| `divider`    | A visual divider within a section. |
 
 Module sidebar contributions and app sidebar config merge by section id. Later section metadata can replace the title or icon, while items are appended or prepended with `position`.
 
@@ -176,7 +176,7 @@ Import the admin stylesheet from your admin CSS entry. Put brand overrides after
 @import "tailwindcss";
 @import "@questpie/admin/client/styles/base.css";
 
-@source "../node_modules/@questpie/admin/dist";
+@source "../node_modules/@questpie/admin/";
 
 :root,
 .dark {
@@ -217,11 +217,11 @@ Never wrap the admin in `<div className="dark">`. Dialogs, popovers, selects, an
 
 For chrome-level replacement, add client component files under `src/questpie/admin/components/`:
 
-| File | Replaces |
-|---|---|
-| `admin-sidebar-brand.tsx` | Sidebar brand area. |
-| `admin-sidebar-nav-item.tsx` | Sidebar navigation item renderer. |
-| `admin-auth-layout.tsx` | Login, setup, reset password, and invitation shell. |
+| File                         | Replaces                                            |
+| ---------------------------- | --------------------------------------------------- |
+| `admin-sidebar-brand.tsx`    | Sidebar brand area.                                 |
+| `admin-sidebar-nav-item.tsx` | Sidebar navigation item renderer.                   |
+| `admin-auth-layout.tsx`      | Login, setup, reset password, and invitation shell. |
 
 ## Locale
 

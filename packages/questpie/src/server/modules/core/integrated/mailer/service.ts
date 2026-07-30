@@ -73,20 +73,32 @@ export class MailerService<
 	 * `hasContext` is false only when NEITHER is available. Every user-code
 	 * entry point now establishes ambient context — HTTP, CRUD, jobs (queue
 	 * wrap), admin actions — so a false here is a genuinely contextless call.
+	 *
+	 * `services` is typed `object`, not `Record<string, unknown>`, and the
+	 * laundering spread is gone. The value is spread into the handler args and
+	 * handed to a per-template handler, so nothing reads it structurally; the
+	 * index signature only forced tsc to prove every member of the very wide
+	 * concrete AppContext assignable to `unknown`, property by property.
+	 *
+	 * Measured, and read this before "optimizing" a hot comparison elsewhere:
+	 * this pair WAS the two most expensive comparisons in the typecheck
+	 * (2 x 2,990 ms). Removing them saved ~0.7% of total relation time, not
+	 * 12%, because tsc caches relation results — whoever compares that shape
+	 * FIRST pays, everyone after is free. The bill simply moved to the next
+	 * caller (config/questpie.ts, 8.9 ms -> 2,907 ms). Per-comparison rankings
+	 * measure cache-warming order, not where the work lives.
 	 */
 	private resolveHandlerContext(ctx?: {
 		app?: unknown;
 		db?: unknown;
 		session?: unknown;
-	}): { services: Record<string, unknown>; hasContext: boolean } {
+	}): { services: object; hasContext: boolean } {
 		if (ctx?.app) {
 			return {
-				services: {
-					...extractAppServices(ctx.app, {
-						db: ctx.db,
-						session: ctx.session,
-					}),
-				},
+				services: extractAppServices(ctx.app, {
+					db: ctx.db,
+					session: ctx.session,
+				}),
 				hasContext: true,
 			};
 		}
@@ -95,12 +107,10 @@ export class MailerService<
 			return { services: {}, hasContext: false };
 		}
 		return {
-			services: {
-				...extractAppServices(stored.app, {
-					db: stored.db,
-					session: stored.session,
-				}),
-			},
+			services: extractAppServices(stored.app, {
+				db: stored.db,
+				session: stored.session,
+			}),
 			hasContext: true,
 		};
 	}

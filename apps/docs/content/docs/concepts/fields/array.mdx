@@ -8,7 +8,10 @@ description: .array() wraps any field type into a list stored as a single jsonb 
 > **Prerequisites:** read [Fields](/docs/concepts/fields) first, this page covers only the `.array()` modifier. The `f` proxy, the chain-modifier model, and the other shared modifiers (`.required()` / `.default()` / `.localized()`) are taught there.
 
 <Callout type="info" title="Arrays start from the element field">
-  Build the element field, then wrap it with the `.array()` chain modifier: `f.text(40).array()`. It is one of the [shared modifiers](/docs/concepts/fields#shared-methods) available on field definitions.
+	Build the element field, then wrap it with the `.array()` chain modifier:
+	`f.text(40).array()`. It is one of the [shared
+	modifiers](/docs/concepts/fields#shared-methods) available on field
+	definitions.
 </Callout>
 
 ## What it does
@@ -28,11 +31,11 @@ Build the element field, then chain `.array()`. Bound the length with `.minItems
 import { collection } from "#questpie/factories";
 
 export const posts = collection("posts").fields(({ f }) => ({
-  // string[], a list of free-text tags, capped at 10
-  tags: f.text(40).array().maxItems(10),
+	// string[], a list of free-text tags, capped at 10
+	tags: f.text(40).array().maxItems(10),
 
-  // number[], required, must contain at least one value
-  ratings: f.number().array().minItems(1).required(),
+	// number[], required, must contain at least one value
+	ratings: f.number().array().minItems(1).required(),
 }));
 ```
 
@@ -52,8 +55,13 @@ That gives `posts` a `tags` column typed `string[] | null` on read and a non-nul
 
 Per-element validation remains active: `f.text(40).array()` rejects strings longer than 40 characters, and `f.email().array()` validates every email. The array is stored as one JSONB value. Use a related collection when items need independent rows or lifecycle.
 
-<Callout type="info" title="Order doesn't matter for length, but `.minItems()` / `.maxItems()` only apply after `.array()`">
-  `.minItems(n)` and `.maxItems(n)` are no-ops unless the field is an array, they refine the `z.array(...)` schema (`arraySchema.min(n)` / `.max(n)`). On a non-array field they set state that nothing reads.
+<Callout
+	type="info"
+	title="Order doesn't matter for length, but `.minItems()` / `.maxItems()` only apply after `.array()`"
+>
+	`.minItems(n)` and `.maxItems(n)` are no-ops unless the field is an array,
+	they refine the `z.array(...)` schema (`arraySchema.min(n)` / `.max(n)`). On a
+	non-array field they set state that nothing reads.
 </Callout>
 
 ## Chained methods
@@ -74,8 +82,8 @@ Everything else is a [shared modifier](/docs/concepts/fields#shared-methods) and
 
 ```ts
 collection("recipes").fields(({ f }) => ({
-  // Up to 12 steps, defaults to an empty list, never null
-  steps: f.text({ mode: "text" }).array().maxItems(12).default([]).required(),
+	// Up to 12 steps, defaults to an empty list, never null
+	steps: f.text({ mode: "text" }).array().maxItems(12).default([]).required(),
 }));
 ```
 
@@ -96,17 +104,17 @@ An array field uses the **multi-value operator set** (`selectMultiOps`). Every o
 ```ts
 // Posts tagged with BOTH "ts" and "cms"
 const { docs } = await app.collections.posts.find({
-  where: { tags: { containsAll: ["ts", "cms"] } },
+	where: { tags: { containsAll: ["ts", "cms"] } },
 });
 
 // Posts tagged with EITHER "ts" or "go"
 const { docs: anyMatch } = await app.collections.posts.find({
-  where: { tags: { containsAny: ["ts", "go"] } },
+	where: { tags: { containsAny: ["ts", "go"] } },
 });
 
 // Posts with no tags yet
 const { docs: untagged } = await app.collections.posts.find({
-  where: { tags: { isEmpty: true } },
+	where: { tags: { isEmpty: true } },
 });
 ```
 

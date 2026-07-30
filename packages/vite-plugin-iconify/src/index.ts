@@ -19,6 +19,7 @@
 import { existsSync, globSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
+
 import { type Plugin, type ResolvedConfig, createFilter } from "vite";
 
 const require = createRequire(import.meta.url);
@@ -107,7 +108,8 @@ export function iconifyPreload(options: IconifyPreloadOptions = {}): Plugin {
 		for (const pattern of scan) {
 			const matches = globSync(pattern, {
 				cwd: config.root,
-				exclude: (name: string) => name === "node_modules" || name === ".generated",
+				exclude: (name: string) =>
+					name === "node_modules" || name === ".generated",
 			});
 			for (const f of matches) {
 				files.push(resolve(config.root, f as unknown as string));
@@ -138,9 +140,7 @@ export function iconifyPreload(options: IconifyPreloadOptions = {}): Plugin {
 
 	function generateModule(): string {
 		const byPrefix = scanSources();
-		const parts: string[] = [
-			'import { addCollection } from "@iconify/react";',
-		];
+		const parts: string[] = ['import { addCollection } from "@iconify/react";'];
 
 		let totalIcons = 0;
 

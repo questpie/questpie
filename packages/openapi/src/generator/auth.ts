@@ -126,7 +126,9 @@ function mapBetterAuthDoc(
 		paths,
 		schemas,
 		securitySchemes: source.components?.securitySchemes ?? {},
-		tags: [{ name: AUTH_TAG, description: "Authentication endpoints (Better Auth)" }],
+		tags: [
+			{ name: AUTH_TAG, description: "Authentication endpoints (Better Auth)" },
+		],
 	};
 }
 
@@ -266,6 +268,8 @@ function fallbackAuthPaths(config: OpenApiConfig): {
 		paths,
 		schemas: {},
 		securitySchemes: {},
-		tags: [{ name: tag, description: "Authentication endpoints (Better Auth)" }],
+		tags: [
+			{ name: tag, description: "Authentication endpoints (Better Auth)" },
+		],
 	};
 }

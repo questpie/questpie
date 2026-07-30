@@ -7,8 +7,19 @@ Codegen exposes only the owners and fields that opted into collaboration. A
 document handle is inert during construction and SSR; network and IndexedDB
 work starts at `connect()`.
 
+Build the CRDT API explicitly from the client you already have. It reuses that
+client's realtime session, so a collaborative app still holds exactly one
+connection. Apps that never call `createCrdtClient` do not bundle the CRDT
+implementation at all.
+
 ```ts
-const article = client.crdt.collections.articles.document({
+import { createClient } from "questpie/client";
+import { createCrdtClient } from "questpie/crdt";
+
+const client = createClient({ baseURL });
+const crdt = createCrdtClient(client);
+
+const article = crdt.collections.articles.document({
 	id: "article-1",
 });
 

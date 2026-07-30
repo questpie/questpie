@@ -6,7 +6,10 @@ description: Add one module and your whole API documents itself, an OpenAPI 3.1 
 The **`@questpie/openapi`** module turns your running app into self-documenting API. Register one module and QUESTPIE introspects everything it already knows, your [collections](/docs/concepts/collections), [globals](/docs/concepts/globals), [routes](/docs/concepts/routes), auth endpoints, and [search](/docs/adapters/search), and emits a complete **OpenAPI 3.1** spec at `GET /api/openapi.json`, plus an interactive [Scalar](https://scalar.com) API reference at `GET /api/docs`. No decorators, no hand-written spec, no separate build step: the spec is generated from the same runtime metadata that powers your typed client and admin panel.
 
 <Callout type="info" title="Prerequisites">
-  Read [Routes](/docs/concepts/routes) and [Collections](/docs/concepts/collections) first, the spec is projected from your route definitions and CRUD surface. The module registers like any other (see [Configuration → modules.ts](/docs/concepts/configuration)).
+	Read [Routes](/docs/concepts/routes) and
+	[Collections](/docs/concepts/collections) first, the spec is projected from
+	your route definitions and CRUD surface. The module registers like any other
+	(see [Configuration → modules.ts](/docs/concepts/configuration)).
 </Callout>
 
 ## What it does
@@ -18,9 +21,17 @@ The **`@questpie/openapi`** module turns your running app into self-documenting 
 - **Cacheable spec.** The JSON spec is generated once per app instance and served with an `ETag` and `Cache-Control`, so repeat fetches are cheap.
 
 <Callout type="warn" title="Generator quality is in active rework">
-  The endpoints and Scalar UI are stable and shipping today. The **schema-generation quality** is being hardened under the `openapi-quality-v1` effort, more accurate Zod→JSON-Schema conversion (transforms/refinements currently fall back to a permissive object), **per-operation security** (today security is declared
-  once at the spec root, not per path), richer **path-parameter** typing, and wiring **route [`.meta()`](/docs/concepts/routes#metadata-openapi-and-mcp)** (`title`/`description`/`tags`) into the generated route operations. This page documents the **current** behavior; the gaps below are called out inline so you know
-  what to expect. None of the in-flight improvements are documented here as if they already work.
+	The endpoints and Scalar UI are stable and shipping today. The
+	**schema-generation quality** is being hardened under the `openapi-quality-v1`
+	effort, more accurate Zod→JSON-Schema conversion (transforms/refinements
+	currently fall back to a permissive object), **per-operation security** (today
+	security is declared once at the spec root, not per path), richer
+	**path-parameter** typing, and wiring **route
+	[`.meta()`](/docs/concepts/routes#metadata-openapi-and-mcp)**
+	(`title`/`description`/`tags`) into the generated route operations. This page
+	documents the **current** behavior; the gaps below are called out inline so
+	you know what to expect. None of the in-flight improvements are documented
+	here as if they already work.
 </Callout>
 
 ## Quick start
@@ -61,14 +72,14 @@ Set the spec metadata and Scalar options in `config/openapi.ts`. Codegen discove
 import { openApiConfig } from "@questpie/openapi/server";
 
 export default openApiConfig({
-  info: {
-    title: "My API",
-    version: "1.0.0",
-    description: "Public API for my app.",
-  },
-  servers: [{ url: "https://api.example.com", description: "Production" }],
-  basePath: "/api",
-  scalar: { theme: "purple" },
+	info: {
+		title: "My API",
+		version: "1.0.0",
+		description: "Public API for my app.",
+	},
+	servers: [{ url: "https://api.example.com", description: "Production" }],
+	basePath: "/api",
+	scalar: { theme: "purple" },
 });
 ```
 
@@ -92,8 +103,11 @@ The config object accepts every field below. All are optional; the defaults prod
 | `scalar`              | `ScalarConfig`                 | none              | Scalar UI options (see below).                                                                                                                                   |
 
 <Callout type="warn" title="`specPath` / `docsPath` are not yet honored">
-  `OpenApiModuleConfig` declares `specPath` and `docsPath` fields, but the `openApiModule` mounts its routes under the **fixed** keys `openapi.json` and `docs`, these two options have no effect today. To serve the docs at a different path, mount the route factories yourself (see [Custom
-  mounting](#custom-mounting-and-standalone-generation)).
+	`OpenApiModuleConfig` declares `specPath` and `docsPath` fields, but the
+	`openApiModule` mounts its routes under the **fixed** keys `openapi.json` and
+	`docs`, these two options have no effect today. To serve the docs at a
+	different path, mount the route factories yourself (see [Custom
+	mounting](#custom-mounting-and-standalone-generation)).
 </Callout>
 
 ### `ScalarConfig`
@@ -133,55 +147,55 @@ import { route } from "questpie";
 import { z } from "zod";
 
 export default route()
-  .get()
-  .schema(z.object({ format: z.enum(["json", "csv"]) }))
-  .outputSchema(z.object({ revenue: z.number(), year: z.number() }))
-  .handler(async ({ input, params }) => ({
-    revenue: 42_000,
-    year: Number(params.year),
-  }));
+	.get()
+	.schema(z.object({ format: z.enum(["json", "csv"]) }))
+	.outputSchema(z.object({ revenue: z.number(), year: z.number() }))
+	.handler(async ({ input, params }) => ({
+		revenue: 42_000,
+		year: Number(params.year),
+	}));
 ```
 
 projects to roughly:
 
 ```json
 {
-  "/api/reports/{year}": {
-    "get": {
-      "operationId": "route_reports_[year]",
-      "summary": "reports/[year]",
-      "tags": ["Routes: reports"],
-      "parameters": [
-        {
-          "name": "year",
-          "in": "path",
-          "required": true,
-          "schema": { "type": "string" }
-        }
-      ],
-      "requestBody": {
-        "required": true,
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/route_reports_[year]_Input"
-            }
-          }
-        }
-      },
-      "responses": {
-        "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/route_reports_[year]_Output"
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+	"/api/reports/{year}": {
+		"get": {
+			"operationId": "route_reports_[year]",
+			"summary": "reports/[year]",
+			"tags": ["Routes: reports"],
+			"parameters": [
+				{
+					"name": "year",
+					"in": "path",
+					"required": true,
+					"schema": { "type": "string" }
+				}
+			],
+			"requestBody": {
+				"required": true,
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/route_reports_[year]_Input"
+						}
+					}
+				}
+			},
+			"responses": {
+				"200": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/route_reports_[year]_Output"
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 }
 ```
 
@@ -226,8 +240,8 @@ import { generateOpenApiSpec } from "@questpie/openapi/server";
 import { app } from "#questpie";
 
 const spec = generateOpenApiSpec(app, {
-  basePath: "/api",
-  info: { title: "My API", version: "1.0.0" },
+	basePath: "/api",
+	info: { title: "My API", version: "1.0.0" },
 });
 // spec.openapi === "3.1.0"; routes are read from app.config.routes automatically.
 ```
@@ -238,8 +252,15 @@ The spec and docs routes are ordinary QUESTPIE routes, so they are **public by d
 
 To restrict who can see the docs, mount the factories yourself (see [Custom mounting](#custom-mounting-and-standalone-generation)) and add an access rule, but note that `openApiRoute()` / `docsRoute()` return a finished raw route definition, so you wrap them at a higher level (e.g. gate the path in your HTTP layer or a reverse proxy) rather than chaining `.access()` onto the factory result. Most teams leave the spec public and protect the **endpoints** it documents via each collection's and route's own access rules, the spec describes the surface; [access control](/docs/concepts/access-control) governs who can actually call it.
 
-<Callout type="info" title="The spec documents endpoints; it does not bypass access">
-  Listing an endpoint in the spec does not make it callable. Every documented collection/global/route is still gated by its own [access rules](/docs/concepts/access-control) at request time. The two declared security schemes (`bearerAuth`, `cookieAuth`) advertise *how* to authenticate, not *what* is allowed.
+<Callout
+	type="info"
+	title="The spec documents endpoints; it does not bypass access"
+>
+	Listing an endpoint in the spec does not make it callable. Every documented
+	collection/global/route is still gated by its own [access
+	rules](/docs/concepts/access-control) at request time. The two declared
+	security schemes (`bearerAuth`, `cookieAuth`) advertise *how* to authenticate,
+	not *what* is allowed.
 </Callout>
 
 ## Gotchas
@@ -255,9 +276,20 @@ To restrict who can see the docs, mount the factories yourself (see [Custom moun
 Types and factories are exported from `@questpie/openapi/server` (re-exported from the package root):
 
 ```ts
-import { openApiConfig, generateOpenApiSpec, openApiRoute, docsRoute, openApiModule } from "@questpie/openapi/server";
+import {
+	openApiConfig,
+	generateOpenApiSpec,
+	openApiRoute,
+	docsRoute,
+	openApiModule,
+} from "@questpie/openapi/server";
 
-import type { OpenApiConfig, OpenApiModuleConfig, OpenApiSpec, ScalarConfig } from "@questpie/openapi/server";
+import type {
+	OpenApiConfig,
+	OpenApiModuleConfig,
+	OpenApiSpec,
+	ScalarConfig,
+} from "@questpie/openapi/server";
 ```
 
 The codegen plugin (which discovers `config/openapi.ts` and emits an `AppRouteKeys` type) is exported separately as `openApiPlugin` from `@questpie/openapi/plugin`; you only need it if you wire the plugin manually instead of using `openApiModule` (the module bundles it).

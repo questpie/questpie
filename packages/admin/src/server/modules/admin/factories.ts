@@ -28,7 +28,7 @@ import type {
 	ListViewConfigContext,
 	PreviewConfig,
 	ServerActionsConfig,
-} from "../../augmentation.js";
+} from "../../augmentation/index.js";
 import {
 	createActionCallbackProxy,
 	createActionFieldBuilderProxy,
@@ -265,6 +265,7 @@ export function collection<TName extends string>(
 	access: Record<string, never>;
 	searchable: undefined;
 	validation: undefined;
+	validationOptions: undefined;
 	output: undefined;
 	upload: undefined;
 	collaborative: undefined;
@@ -285,6 +286,7 @@ export function collection<TName extends string>(
 			access: {},
 			searchable: undefined,
 			validation: undefined,
+			validationOptions: undefined,
 			output: undefined,
 			upload: undefined,
 			collaborative: undefined,

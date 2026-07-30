@@ -56,9 +56,10 @@ import type { RouteParamsFromKey, RouteWithParams } from "questpie/types";
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
-import type { ExtractModulePropArr, ExtractModulePropArrOverride, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";
+import type { ExtractModulePropArr, ExtractModulePropArrOverride, Override, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";
 type _RouteDefinitionWithoutHandler<T> = T extends { mode: "raw" } ? Omit<T, "handler"> & { handler: (args: unknown) => Response | Promise<Response> } : Omit<T, "handler"> & { handler: (args: unknown) => unknown | Promise<unknown> };
 export type _ModuleCollections = ExtractModulePropArrOverride<typeof _modules, "collections">;
+export type _ModuleChannels = ExtractModulePropArr<typeof _modules, "channels">;
 export type _ModuleGlobals = ExtractModulePropArr<typeof _modules, "globals">;
 export type _ModuleJobs = ExtractModulePropArr<typeof _modules, "jobs">;
 export type _ModuleRoutes = ExtractModulePropArr<typeof _modules, "routes">;
@@ -70,6 +71,7 @@ export type _ModuleBlocks = ExtractModulePropArr<typeof _modules, "blocks">;
 export type _ModuleWorkflows = ExtractModulePropArr<typeof _modules, "workflows">;
 // Registry category extraction from modules
 export type _Registry_Collections = ExtractModulePropArrOverride<typeof _modules, "collections">;
+export type _Registry_Channels = ExtractModulePropArr<typeof _modules, "channels">;
 export type _Registry_Globals = ExtractModulePropArr<typeof _modules, "globals">;
 export type _Registry_Jobs = ExtractModulePropArr<typeof _modules, "jobs">;
 export type _Registry_Routes = ExtractModulePropArr<typeof _modules, "routes">;
@@ -87,7 +89,7 @@ import type { ExtractModuleProp } from "questpie/types";
 export type _AllModuleFields = ExtractModuleProp<{ modules: typeof _modules }, "fields">;
 
 /** All collections in the app (modules + user, user overrides) */
-export type AppCollections = _ModuleCollections & {
+export type AppCollections = Override<_ModuleCollections, {
 	inventoryMovements: typeof _coll_inventoryMovements;
 	machines: typeof _coll_machines;
 	materials: typeof _coll_materials;
@@ -95,7 +97,10 @@ export type AppCollections = _ModuleCollections & {
 	productionOrders: typeof _coll_productionOrders;
 	toyMaterials: typeof _coll_toyMaterials;
 	toys: typeof _coll_toys;
-};
+}>;
+
+/** All channels in the app (modules + user, user overrides) */
+export type AppChannels = _ModuleChannels;
 
 /** All globals in the app (modules + user, user overrides) */
 export type AppGlobals = _ModuleGlobals & {

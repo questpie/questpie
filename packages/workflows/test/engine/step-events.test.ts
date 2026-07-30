@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+
 import { StepSuspendError } from "../../src/server/engine/errors.js";
 import {
 	createMockEventPersistence,

@@ -14,10 +14,10 @@ const buttonVariants = cva(
 				 * inset bottom shade + outer tinted glow. Pressed swaps to
 				 * inset shadow. */
 				default:
-					"text-primary-foreground bg-[image:var(--btn-primary-gradient,none)] bg-primary shadow-[var(--btn-primary-shadow,none)] hover:brightness-105 active:shadow-[var(--btn-primary-shadow-pressed,none)]",
+					"text-primary-foreground bg-primary bg-[image:var(--btn-primary-gradient,none)] shadow-[var(--btn-primary-shadow,none)] hover:brightness-105 active:shadow-[var(--btn-primary-shadow-pressed,none)]",
 				/* §4a low-intensity */
 				outline:
-					"border-input bg-[image:var(--btn-secondary-gradient,none)] bg-card text-foreground shadow-[var(--btn-secondary-shadow,none)] hover:bg-muted active:shadow-[var(--btn-secondary-shadow-pressed,none)] aria-expanded:bg-muted aria-expanded:text-foreground",
+					"border-input bg-card text-foreground hover:bg-muted aria-expanded:bg-muted aria-expanded:text-foreground bg-[image:var(--btn-secondary-gradient,none)] shadow-[var(--btn-secondary-shadow,none)] active:shadow-[var(--btn-secondary-shadow-pressed,none)]",
 				secondary:
 					"bg-secondary text-secondary-foreground hover:bg-accent aria-expanded:bg-accent aria-expanded:text-secondary-foreground",
 				/* Ghost stays flat per §5 */

@@ -24,7 +24,10 @@ export type OutputMode = "json" | "markdown";
 /**
  * Get editor output in the configured format.
  */
-export function getOutput(editor: Editor, mode: OutputMode = "json"): OutputValue | string {
+export function getOutput(
+	editor: Editor,
+	mode: OutputMode = "json",
+): OutputValue | string {
 	if (mode === "markdown") {
 		return (editor.storage as any).markdown?.getMarkdown?.() ?? "";
 	}

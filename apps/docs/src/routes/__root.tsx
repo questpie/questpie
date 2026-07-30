@@ -43,8 +43,8 @@ export const Route = createRootRoute({
 					href: "/rss.xml",
 				},
 			],
-			scripts: [
-				...(umamiUrl && umamiWebsiteId
+			scripts:
+				umamiUrl && umamiWebsiteId
 					? [
 							{
 								defer: true,
@@ -52,8 +52,7 @@ export const Route = createRootRoute({
 								"data-website-id": umamiWebsiteId,
 							},
 						]
-					: []),
-			],
+					: [],
 		};
 	},
 	component: RootComponent,

@@ -54,19 +54,23 @@ export function from<TData = unknown>(
 		? (column as (name: string) => unknown)
 		: (_name: string) => column;
 
-	return wrapFieldComplete(field<CustomFieldState<TData>>({
-		type: "custom",
-		columnFactory,
-		schemaFactory: zodSchema ? () => zodSchema : () => z.unknown(),
-		operatorSet: basicOps,
-		notNull: false,
-		hasDefault: false,
-		localized: false,
-		virtual: false,
-		input: true,
-		output: true,
-		isArray: false,
-	}), fromFieldType.methods, {}) as any;
+	return wrapFieldComplete(
+		field<CustomFieldState<TData>>({
+			type: "custom",
+			columnFactory,
+			schemaFactory: zodSchema ? () => zodSchema : () => z.unknown(),
+			operatorSet: basicOps,
+			notNull: false,
+			hasDefault: false,
+			localized: false,
+			virtual: false,
+			input: true,
+			output: true,
+			isArray: false,
+		}),
+		fromFieldType.methods,
+		{},
+	) as any;
 }
 
 import { Field } from "../../../fields/field-class.js";

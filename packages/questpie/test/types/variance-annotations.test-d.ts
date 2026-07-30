@@ -13,9 +13,10 @@
  *    default TId to `unknown`/`string`, and method bivariance only bridges
  *    `string` vs `unknown` through the structural fallback that an
  *    annotation would forbid.
- * 3. The FieldWithMethods alias split (FieldCommonMethodsWrapped /
- *    FieldTypeMethodsWrapped) preserves chain-order semantics: type-specific
- *    methods survive common-method calls and vice versa.
+ * 3. FieldWithMethods preserves chain-order semantics: type-specific methods
+ *    survive common-method calls and vice versa. This was two separate wrapper
+ *    maps until 2026-07-29 and is now one (`FieldAllMethodsWrapped`) — the
+ *    assertions below are what proves the merge kept common keys winning.
  *
  * Compile-time only — run with: tsc --noEmit
  */
@@ -116,7 +117,9 @@ type _globalBareToSpecific = Expect<Extends<GlobalCRUD, SpecificGlobalCRUD>>;
 
 type Rels = { author: unknown; comments: unknown };
 
-type _withKeysPreserved = Expect<Equal<keyof With<Rels>, "author" | "comments">>;
+type _withKeysPreserved = Expect<
+	Equal<keyof With<Rels>, "author" | "comments">
+>;
 
 // ============================================================================
 // FieldWithMethods split — chain-order semantics preserved
@@ -124,7 +127,9 @@ type _withKeysPreserved = Expect<Equal<keyof With<Rels>, "author" | "comments">>
 
 // Type-specific methods survive a common-method call...
 const requiredFirst = text(255).required().trim();
-type _trimAfterRequired = Expect<Equal<HasKey<typeof requiredFirst, "trim">, true>>;
+type _trimAfterRequired = Expect<
+	Equal<HasKey<typeof requiredFirst, "trim">, true>
+>;
 type _commonAfterRequired = Expect<
 	Equal<HasKey<typeof requiredFirst, "required">, true>
 >;
@@ -132,7 +137,9 @@ type _commonAfterRequired = Expect<
 // ...and common methods survive a type-specific call (override maps stay
 // ahead of Field<TState> in the intersection).
 const typeFirst = text(255).trim().required();
-type _patternAfterChain = Expect<Equal<HasKey<typeof typeFirst, "pattern">, true>>;
+type _patternAfterChain = Expect<
+	Equal<HasKey<typeof typeFirst, "pattern">, true>
+>;
 
 // State accumulation still flows through the wrapped common methods
 type RequiredValue = (typeof requiredFirst)["$types"]["value"];

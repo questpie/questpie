@@ -19,6 +19,7 @@
 import { z } from "zod";
 
 import { ApiError } from "#questpie/server/errors/base.js";
+
 import { job } from "../integrated/queue/job.js";
 
 /**
@@ -41,9 +42,7 @@ const scheduledTransitionSchema = z.discriminatedUnion("type", [
 	}),
 ]);
 
-type ScheduledTransitionPayload = z.infer<
-	typeof scheduledTransitionSchema
->;
+type ScheduledTransitionPayload = z.infer<typeof scheduledTransitionSchema>;
 
 /**
  * Scheduled transition job definition

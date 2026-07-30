@@ -18,6 +18,7 @@ import { useResolveText } from "../../../i18n/hooks";
 import type { I18nText } from "../../../i18n/types";
 import { useSafeContentLocales, useScopedLocale } from "../../../runtime";
 import { DateCell, DateTimeCell, DefaultCell, TextCell } from "../cells";
+import { resolveComponentSlot } from "../field-context";
 import { computeDefaultColumns, formatHeader } from "./column-defaults";
 import type { BuildColumnsOptions } from "./types";
 
@@ -147,6 +148,7 @@ export function buildColumns<TData extends Record<string, unknown>>(
 		fallbackColumns = ["id"],
 		buildAllColumns = false,
 		meta,
+		registry,
 	} = options;
 	const fields = config?.fields ?? {};
 	const listConfig = config?.list;
@@ -236,6 +238,14 @@ export function buildColumns<TData extends Record<string, unknown>>(
 			fieldDef?: FieldInstance;
 		}>;
 
+		// A field's own `.admin({ components: { cell } })` slot, resolved against
+		// the registry. Sits below the `.list()` cell — that one is declared on
+		// the view and is more local — and above the by-type registry cell.
+		const slottedCell = resolveComponentSlot(
+			(fieldOptions.components as { cell?: unknown } | undefined)?.cell,
+			registry,
+		);
+
 		if (normalized.cell) {
 			// 1. Custom cell from .list() config
 			CellComponent = normalized.cell as React.ComponentType<{
@@ -243,8 +253,15 @@ export function buildColumns<TData extends Record<string, unknown>>(
 				row?: unknown;
 				fieldDef?: FieldInstance;
 			}>;
+		} else if (slottedCell) {
+			// 2. Per-field slot from .admin({ components: { cell } })
+			CellComponent = slottedCell as React.ComponentType<{
+				value: unknown;
+				row?: unknown;
+				fieldDef?: FieldInstance;
+			}>;
 		} else if (fieldDef?.cell) {
-			// 2. Cell from field registry (most common)
+			// 3. Cell from field registry (most common)
 			CellComponent = fieldDef.cell as React.ComponentType<{
 				value: unknown;
 				row?: unknown;

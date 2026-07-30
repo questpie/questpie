@@ -44,21 +44,27 @@ export interface UrlFieldMethods {
  * link: f.url(500)
  * ```
  */
-export function url(maxLength = 2048): FieldWithMethods<UrlFieldState, UrlFieldMethods> {
-	return wrapFieldComplete(field<UrlFieldState>({
-		type: "url",
-		columnFactory: (name) => varchar(name, { length: maxLength }),
-		schemaFactory: () => z.string().url().max(maxLength),
-		operatorSet: urlOps,
-		notNull: false,
-		hasDefault: false,
-		localized: false,
-		virtual: false,
-		input: true,
-		output: true,
-		isArray: false,
-		maxLength,
-	}), urlFieldType.methods, {}) as any;
+export function url(
+	maxLength = 2048,
+): FieldWithMethods<UrlFieldState, UrlFieldMethods> {
+	return wrapFieldComplete(
+		field<UrlFieldState>({
+			type: "url",
+			columnFactory: (name) => varchar(name, { length: maxLength }),
+			schemaFactory: () => z.string().url().max(maxLength),
+			operatorSet: urlOps,
+			notNull: false,
+			hasDefault: false,
+			localized: false,
+			virtual: false,
+			input: true,
+			output: true,
+			isArray: false,
+			maxLength,
+		}),
+		urlFieldType.methods,
+		{},
+	) as any;
 }
 
 import type { Field } from "../../../fields/field-class.js";

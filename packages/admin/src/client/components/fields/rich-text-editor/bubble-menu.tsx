@@ -230,6 +230,10 @@ export function RichTextBubbleMenu({
 			className="qp-rich-text-editor__bubble floating-surface text-popover-foreground"
 		>
 			{linkOpen ? (
+				// The keydown handler catches Escape for the WHOLE form; moving it
+				// onto the input stops working the moment focus sits anywhere else
+				// inside it, which is the case whenever the submit button is focused.
+				// oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
 				<form
 					className="qp-rich-text-editor__link-form"
 					onSubmit={(event) => {

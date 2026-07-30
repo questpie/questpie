@@ -170,7 +170,10 @@ describe("openApiRoute — ETag / 304 caching", () => {
 	function invoke(routeDef: any, app: object, ifNoneMatch?: string) {
 		const headers = new Headers();
 		if (ifNoneMatch) headers.set("if-none-match", ifNoneMatch);
-		const ctx = { app, request: new Request("http://x/api/openapi.json", { headers }) };
+		const ctx = {
+			app,
+			request: new Request("http://x/api/openapi.json", { headers }),
+		};
 		return routeDef.handler(ctx) as Promise<Response>;
 	}
 
@@ -281,10 +284,14 @@ describe("openApiPlugin", () => {
 		plugin.targets.server.transform!(ctx as any);
 
 		expect(declarations).toHaveLength(1);
-		expect(declarations[0]).toContain("export type AppRouteKeys");
-		expect(declarations[0]).toContain('"health"');
-		expect(declarations[0]).toContain('"webhooks/stripe"');
-		expect(declarations[0]).toContain('"webhooks/github"');
+		// EXACT, not three `toContain`s. Those pass under any ordering, which is
+		// how this shipped emitting the union in directory-read order — stable on
+		// one machine, different on another, so committed `.generated` output
+		// could not match a fresh generation on CI. The map below is deliberately
+		// inserted out of order; the emitted union must come back sorted.
+		expect(declarations[0]).toBe(
+			'export type AppRouteKeys = "health" | "webhooks/github" | "webhooks/stripe";',
+		);
 	});
 });
 

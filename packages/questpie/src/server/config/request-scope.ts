@@ -80,10 +80,7 @@ export class RequestScope {
 					try {
 						await dispose(instance);
 					} catch (err) {
-						console.error(
-							`[RequestScope] Failed to dispose "${name}":`,
-							err,
-						);
+						console.error(`[RequestScope] Failed to dispose "${name}":`, err);
 					}
 				}
 			}

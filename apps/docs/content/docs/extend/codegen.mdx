@@ -43,7 +43,10 @@ questpie dev        # same pipeline, in watch mode (100ms debounce)
 ```
 
 <Callout type="info" title="Codegen is what wires the `#questpie/*` imports">
-  The `#questpie/factories` and `#questpie` imports your app code uses resolve to codegen's output. Until you run `questpie generate` they don't exist, which is why a fresh checkout or a CI build starts with `questpie generate`. Mode is auto-detected from the config file shape (root app vs. module vs. package).
+	The `#questpie/factories` and `#questpie` imports your app code uses resolve
+	to codegen's output. Until you run `questpie generate` they don't exist, which
+	is why a fresh checkout or a CI build starts with `questpie generate`. Mode is
+	auto-detected from the config file shape (root app vs. module vs. package).
 </Callout>
 
 ## The pipeline
@@ -69,9 +72,17 @@ flowchart TD
   Src --> Discover --> Files --> Transform --> Template --> Write --> Out
 ```
 
-<Callout type="info" title="`coreCodegenPlugin()` is the canonical category map">
-  Every built-in category and scaffold lives in one place: `coreCodegenPlugin()`. It declares `collections` (factory `collection`), `globals` (factory `global`), `jobs`, `routes` (dirs `routes` + `functions`, recursive, `/`-separated keys), `messages`, `services`, `emails` (emitted as `emailTemplates`), `migrations` +
-  `seeds` (array emit), and `fieldTypes` (factory `fieldType`). It is prepended automatically, you never register it. Reading it is the fastest way to see exactly which dirs are scanned.
+<Callout
+	type="info"
+	title="`coreCodegenPlugin()` is the canonical category map"
+>
+	Every built-in category and scaffold lives in one place:
+	`coreCodegenPlugin()`. It declares `collections` (factory `collection`),
+	`globals` (factory `global`), `jobs`, `routes` (dirs `routes` + `functions`,
+	recursive, `/`-separated keys), `messages`, `services`, `emails` (emitted as
+	`emailTemplates`), `migrations` + `seeds` (array emit), and `fieldTypes`
+	(factory `fieldType`). It is prepended automatically, you never register it.
+	Reading it is the fastest way to see exactly which dirs are scanned.
 </Callout>
 
 ## By-feature folders
@@ -81,7 +92,9 @@ layout when the app is small; use `features/<feature>/...` when a domain slice
 owns several kinds of files.
 
 <Callout type="info" title="Requires the file-convention codegen line">
-  This is a `questpie@3.0.2+` convention. Older 1.x / 2.x projects do not have the `features/` discovery contract; migrate them to the v3 file-convention codegen before using this layout.
+	This is a `questpie@3.0.2+` convention. Older 1.x / 2.x projects do not have
+	the `features/` discovery contract; migrate them to the v3 file-convention
+	codegen before using this layout.
 </Callout>
 
 ```txt
@@ -151,9 +164,18 @@ export const posts = collection("posts"); // named
 export default collection("posts"); // default
 ```
 
-<Callout type="info" title="Multi-export files are allowed for factory categories">
-  Categories with `factoryFunctions` use a two-pass scan that finds *every* matching factory call in a file, so one factory-category file can hold several `collection()`, `global()`, `block()`, or `fieldType()` definitions. Routes, jobs, services, emails, migrations, and seeds do not use this mode; keep those as one
-  entity per file. Files with **zero** matching factory calls are skipped entirely, that's how utility and type-only files in a scanned dir are ignored. Entity key still comes from the factory's first string argument when present, else the export name.
+<Callout
+	type="info"
+	title="Multi-export files are allowed for factory categories"
+>
+	Categories with `factoryFunctions` use a two-pass scan that finds *every*
+	matching factory call in a file, so one factory-category file can hold several
+	`collection()`, `global()`, `block()`, or `fieldType()` definitions. Routes,
+	jobs, services, emails, migrations, and seeds do not use this mode; keep those
+	as one entity per file. Files with **zero** matching factory calls are skipped
+	entirely, that's how utility and type-only files in a scanned dir are ignored.
+	Entity key still comes from the factory's first string argument when present,
+	else the export name.
 </Callout>
 
 ### What codegen skips
@@ -189,8 +211,11 @@ The generated files are the ground truth for the app surface. If an agent or dev
 Convention files starting with `_`, `index.ts`, tests, and declaration files do not appear here by design. If a collection, route, custom field, or auth role is missing from the generated ground truth, fix discovery/module/config first and rerun `questpie generate`; do not patch the call site with casts or duplicate registries.
 
 <Callout type="warn" title="Regenerate before you migrate, seed, or push">
-  `questpie.config.ts` carries `app.url` but is not itself the built app, on a CLI command it auto-resolves `.generated/index.ts` for the real instance and errors with *"Run `questpie generate` first"* if that file is missing. A stale or absent `.generated/` is the most common cause of "my new collection isn't on
-  `app.collections`". Generate first.
+	`questpie.config.ts` carries `app.url` but is not itself the built app, on a
+	CLI command it auto-resolves `.generated/index.ts` for the real instance and
+	errors with *"Run `questpie generate` first"* if that file is missing. A stale
+	or absent `.generated/` is the most common cause of "my new collection isn't
+	on `app.collections`". Generate first.
 </Callout>
 
 ## The `#questpie` type barrel
@@ -198,7 +223,13 @@ Convention files starting with `_`, `index.ts`, tests, and declaration files do 
 `index.ts` re-exports a small, stable public type surface off the `#questpie` package root. These are the aliases you reach for instead of `Record<string, any>`:
 
 ```ts
-import type { CollectionDoc, CollectionWhere, GlobalDoc, App, AppConfig } from "#questpie";
+import type {
+	CollectionDoc,
+	CollectionWhere,
+	GlobalDoc,
+	App,
+	AppConfig,
+} from "#questpie";
 
 type Post = CollectionDoc<"posts">; // full selected row for app.collections.posts
 type PostFilter = CollectionWhere<"posts">; // typed `where` clause for posts
@@ -277,7 +308,10 @@ export const myModule = module({
 The `plugin` key is **auto-extracted at codegen time and excluded from the runtime module merge**, it exists purely so a package ships its file conventions without you editing `questpie.config.ts`. Extraction is a depth-first walk (sub-modules before self), deduped by plugin `name` (first occurrence wins); config-registered plugins win over module-extracted ones on a name collision.
 
 <Callout type="info" title="`module()` is type-only">
-  `module(def)` is an identity function, it returns the definition unchanged and has no runtime behavior. It exists so TypeScript captures the literal module shape. Modules are static data composed from arrays, records, and nested modules.
+	`module(def)` is an identity function, it returns the definition unchanged and
+	has no runtime behavior. It exists so TypeScript captures the literal module
+	shape. Modules are static data composed from arrays, records, and nested
+	modules.
 </Callout>
 
 ## Extending codegen: the `CodegenPlugin` API
@@ -288,44 +322,52 @@ This is the part that makes "core = module = userland" literal. A `CodegenPlugin
 import type { CodegenPlugin } from "questpie/codegen";
 
 export function billingPlugin(): CodegenPlugin {
-  return {
-    name: "questpie-billing", // unique; dedup key
-    targets: {
-      server: {
-        root: ".",
-        outputFile: "index.ts",
-        // Scan a new conventional directory:
-        categories: {
-          webhooks: {
-            dirs: ["webhooks"],
-            prefix: "wh",
-            factoryFunctions: ["webhook"],
-          },
-        },
-        // Claim a composite config file:
-        discover: {
-          billingConfig: { pattern: "config/billing.ts", configKey: "billing" },
-        },
-      },
-    },
-  };
+	return {
+		name: "questpie-billing", // unique; dedup key
+		targets: {
+			server: {
+				root: ".",
+				outputFile: "index.ts",
+				// Scan a new conventional directory:
+				categories: {
+					webhooks: {
+						dirs: ["webhooks"],
+						prefix: "wh",
+						factoryFunctions: ["webhook"],
+					},
+				},
+				// Claim a composite config file:
+				discover: {
+					billingConfig: { pattern: "config/billing.ts", configKey: "billing" },
+				},
+			},
+		},
+	};
 }
 ```
 
 Register it on `runtimeConfig({ plugins: [...] })` **or** ship it from a module's `plugin` key, both reach the same merge.
 
-<Callout type="info" title="`questpie/codegen` is the plugin-author entry point">
-  `questpie/codegen` re-exports the full surface: every codegen type (`CodegenPlugin`, `CodegenTargetContribution`, `CategoryDeclaration`, `DiscoverPattern`, `RegistryExtension`, `SingletonFactory`, `BuilderFactory`, `ScaffoldConfig`, …) plus the emit helpers (`categoryRecordEntry`, `categoryTypeEntry`,
-  `importStatement`, `safeKey`, `sortedValues`, `sourceBasename`). This is the only entry point that exposes the codegen types, `questpie/types` does **not** re-export any of them.
+<Callout
+	type="info"
+	title="`questpie/codegen` is the plugin-author entry point"
+>
+	`questpie/codegen` re-exports the full surface: every codegen type
+	(`CodegenPlugin`, `CodegenTargetContribution`, `CategoryDeclaration`,
+	`DiscoverPattern`, `RegistryExtension`, `SingletonFactory`, `BuilderFactory`,
+	`ScaffoldConfig`, …) plus the emit helpers (`categoryRecordEntry`,
+	`categoryTypeEntry`, `importStatement`, `safeKey`, `sortedValues`,
+	`sourceBasename`). This is the only entry point that exposes the codegen
+	types, `questpie/types` does **not** re-export any of them.
 </Callout>
 
 ### `CodegenPlugin` shape
 
 ```ts
 interface CodegenPlugin {
-  name: string; // unique; dedup key
-  targets: Record<string, CodegenTargetContribution>;
-  validators?: CrossTargetValidator[]; // run after ALL targets generate
+	name: string; // unique; dedup key
+	targets: Record<string, CodegenTargetContribution>;
+	validators?: CrossTargetValidator[]; // run after ALL targets generate
 }
 ```
 
@@ -349,9 +391,15 @@ One plugin's contribution to one target. Multiple plugins' contributions to the 
 | `generate`       | `(ctx) => CodegenTargetOutput \| Promise<…>`                                                        | Custom generator that _replaces_ the default template for this target.                     |
 | `scaffolds`      | `Record<string, ScaffoldConfig>`                                                                    | `questpie add` templates this target provides.                                             |
 
-<Callout type="warn" title="`root` / `outDir` / `outputFile` / `moduleRoot` must agree across contributors">
-  When several plugins contribute to the same target ID, `resolveTargetGraph()` merges them, but a conflict in `root`, `outDir`, `outputFile`, or `moduleRoot` **throws**, and a second `generate` per target **throws**. Categories are shallow-merged per key (with one exception: `factoryImports` arrays are
-  *concatenated*), and `transforms` run in plugin order.
+<Callout
+	type="warn"
+	title="`root` / `outDir` / `outputFile` / `moduleRoot` must agree across contributors"
+>
+	When several plugins contribute to the same target ID, `resolveTargetGraph()`
+	merges them, but a conflict in `root`, `outDir`, `outputFile`, or `moduleRoot`
+	**throws**, and a second `generate` per target **throws**. Categories are
+	shallow-merged per key (with one exception: `factoryImports` arrays are
+	*concatenated*), and `transforms` run in plugin order.
 </Callout>
 
 ### `CategoryDeclaration`
@@ -360,19 +408,19 @@ The primary unit of the plugin system, one declaration scans a directory and emi
 
 ```ts
 interface CategoryDeclaration {
-  dirs: string[]; // scanned as dir/ AND features/{name}/dir/
-  prefix: string; // generated var prefix (varName = _<prefix>_<key>)
-  recursive?: boolean; // descend subdirs (routes)
-  keySeparator?: "." | "/"; // for recursive keys (routes: "webhooks/stripe")
-  emit?: "record" | "array"; // "record" (default) | flat array (migrations/seeds)
-  typeEmit?: "standard" | "services" | "emails" | "messages" | "none";
-  registryKey?: string | boolean; // include in Registry; string overrides the key
-  factoryFunctions?: string[]; // enable multi-export factory discovery
-  keyFromProperty?: string; // use a runtime prop as the key (views → "name")
-  keyFromSource?: "basename"; // use the source filename as the key
-  createAppKey?: string; // emit under a different createApp key (emails → emailTemplates)
-  factoryImports?: Array<{ name: string; from: string }>; // spread runtime values into factories.ts
-  // …includeInAppState, extractFromModules, placeholder, recordPlaceholder, typeRegistry…
+	dirs: string[]; // scanned as dir/ AND features/{name}/dir/
+	prefix: string; // generated var prefix (varName = _<prefix>_<key>)
+	recursive?: boolean; // descend subdirs (routes)
+	keySeparator?: "." | "/"; // for recursive keys (routes: "webhooks/stripe")
+	emit?: "record" | "array"; // "record" (default) | flat array (migrations/seeds)
+	typeEmit?: "standard" | "services" | "emails" | "messages" | "none";
+	registryKey?: string | boolean; // include in Registry; string overrides the key
+	factoryFunctions?: string[]; // enable multi-export factory discovery
+	keyFromProperty?: string; // use a runtime prop as the key (views → "name")
+	keyFromSource?: "basename"; // use the source filename as the key
+	createAppKey?: string; // emit under a different createApp key (emails → emailTemplates)
+	factoryImports?: Array<{ name: string; from: string }>; // spread runtime values into factories.ts
+	// …includeInAppState, extractFromModules, placeholder, recordPlaceholder, typeRegistry…
 }
 ```
 
@@ -391,16 +439,16 @@ For single files and spreads rather than directory categories:
 
 ```ts
 type DiscoverPattern =
-  | string // shorthand
-  | {
-      pattern: string;
-      resolve?: "default" | "named" | "all" | "auto"; // default "auto"
-      keyFrom?: "filename" | "exportName";
-      cardinality?: "single" | "map";
-      mergeStrategy?: "spread"; // collect root + every features/*/pattern
-      registryKey?: string; // augment Registry with typeof the single
-      configKey?: string; // emit the whole file as config.<key>
-    };
+	| string // shorthand
+	| {
+			pattern: string;
+			resolve?: "default" | "named" | "all" | "auto"; // default "auto"
+			keyFrom?: "filename" | "exportName";
+			cardinality?: "single" | "map";
+			mergeStrategy?: "spread"; // collect root + every features/*/pattern
+			registryKey?: string; // augment Registry with typeof the single
+			configKey?: string; // emit the whole file as config.<key>
+	  };
 ```
 
 The string shorthand: a pattern containing `*` (or with no file extension) is a **map / directory** pattern; a single file with an extension (`"config/auth.ts"`, `"sidebar.ts"`) is a **single**. `mergeStrategy: "spread"` collects the root file plus every `features/*/pattern` into an ordered array, that's how sidebar entries and dashboard widgets accumulate from many feature modules. `configKey` emits the whole file as one entry in the config bucket, the modern way to add a composite `config/<name>.ts` file.
@@ -425,10 +473,10 @@ A `ScaffoldConfig` powers `questpie add <type>`:
 
 ```ts
 interface ScaffoldConfig {
-  dir: string; // relative to the target root
-  extension?: string; // default ".ts"
-  description?: string; // shown in `questpie add --list`
-  template: (ctx: ScaffoldContext) => string;
+	dir: string; // relative to the target root
+	extension?: string; // default ".ts"
+	description?: string; // shown in `questpie add --list`
+	template: (ctx: ScaffoldContext) => string;
 }
 // ScaffoldContext = { kebab, camel, pascal, title, targetId }
 ```
@@ -459,15 +507,18 @@ A package that ships file conventions (its own collections, routes, etc.) uses `
 import { packageConfig } from "questpie/cli";
 
 export default packageConfig({
-  modulesDir: "src/server/modules",
-  modulePrefix: "questpie", // module "admin" → name "questpie-admin"
+	modulesDir: "src/server/modules",
+	modulePrefix: "questpie", // module "admin" → name "questpie-admin"
 });
 ```
 
 QUESTPIE's own core uses exactly this (`modulesDir: "src/server/modules"`, `modulePrefix: "questpie"`). `importRewriteMap` (on the module options) rewrites self-package specifiers so generated imports resolve to source rather than stale `dist/` types. `packageConfig` and `config` are exported from `questpie/cli`.
 
 <Callout type="warn" title="Importing `questpie/cli` must not start a command">
-  The CLI is side-effect-free on import, command parsing is guarded by `import.meta.main`. Importing `questpie/cli` just to grab `packageConfig` will **not** kick off a command run, which matters in a workspace where a src-vs-dist double-instance could otherwise corrupt `.generated/`.
+	The CLI is side-effect-free on import, command parsing is guarded by
+	`import.meta.main`. Importing `questpie/cli` just to grab `packageConfig` will
+	**not** kick off a command run, which matters in a workspace where a
+	src-vs-dist double-instance could otherwise corrupt `.generated/`.
 </Callout>
 
 ## TypeScript
@@ -475,9 +526,26 @@ QUESTPIE's own core uses exactly this (`modulesDir: "src/server/modules"`, `modu
 The plugin-author types all come from `questpie/codegen`:
 
 ```ts
-import type { CodegenPlugin, CodegenTargetContribution, CategoryDeclaration, DiscoverPattern, RegistryExtension, SingletonFactory, BuilderFactory, ScaffoldConfig, ScaffoldContext, CodegenContext, CrossTargetValidator, ProjectionError } from "questpie/codegen";
+import type {
+	CodegenPlugin,
+	CodegenTargetContribution,
+	CategoryDeclaration,
+	DiscoverPattern,
+	RegistryExtension,
+	SingletonFactory,
+	BuilderFactory,
+	ScaffoldConfig,
+	ScaffoldContext,
+	CodegenContext,
+	CrossTargetValidator,
+	ProjectionError,
+} from "questpie/codegen";
 
-import { categoryRecordEntry, importStatement, safeKey } from "questpie/codegen";
+import {
+	categoryRecordEntry,
+	importStatement,
+	safeKey,
+} from "questpie/codegen";
 ```
 
 App-level generated types, `CollectionDoc<K>`, `CollectionWhere<K>`, `GlobalDoc<K>`, `App`, `AppConfig`, come from `#questpie` (above). The codegen types are exposed **only** via `questpie/codegen`; `questpie/types` does not re-export them.

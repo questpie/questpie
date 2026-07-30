@@ -1,0 +1,65 @@
+name: Feature request
+description: Propose a capability QUESTPIE does not have
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: |
+        What are you trying to build, and where does the framework get in the way?
+        Describe the situation, not the solution — the best API often is not the
+        one either of us thought of first.
+    validations:
+      required: true
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: What you do today
+      description: |
+        How you work around it now, and what that costs you. "Impossible" is a
+        valid answer; so is "possible but I have to reach past the public API".
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed shape
+      description: |
+        Optional. If you have an API in mind, show the code you would want to
+        write. Concrete beats abstract.
+      render: typescript
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Collections / globals / fields
+        - Access control
+        - Realtime / channels
+        - Collaborative documents (CRDT)
+        - Queue / jobs
+        - Search
+        - Storage / uploads
+        - Auth / OAuth / MCP
+        - Admin UI
+        - Client SDK / TanStack integration
+        - CLI / codegen / migrations
+        - Docs
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and discussions
+          required: true
+        - label: I checked the docs for an existing way to do this
+          required: true

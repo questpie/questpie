@@ -15,8 +15,7 @@ import { Icon } from "@iconify/react";
 import * as React from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 
-import type { ComponentReference } from "#questpie/admin/server/augmentation.js";
-
+import type { ComponentReference } from "../../../server/augmentation/index.js";
 import { resolveIconElement } from "../../components/component-renderer";
 import {
 	InputGroup,

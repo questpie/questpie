@@ -49,9 +49,7 @@ export interface ServiceBuilderState<
 	TLifecycle extends ServiceLifecycle | undefined = undefined,
 > {
 	lifecycle?: TLifecycle;
-	create?: (
-		ctx: ServiceCreateContext,
-	) => TInstance | Promise<TInstance>;
+	create?: (ctx: ServiceCreateContext) => TInstance | Promise<TInstance>;
 	dispose?: (instance: TInstance) => void | Promise<void>;
 	namespace?: TNamespace;
 }
@@ -116,17 +114,13 @@ export function service<
 	TNamespace extends ServiceNamespace = undefined,
 	TLifecycle extends ServiceLifecycle = ServiceLifecycle,
 >(state: {
-	create: (
-		ctx: ServiceCreateContext,
-	) => TInstance | Promise<TInstance>;
+	create: (ctx: ServiceCreateContext) => TInstance | Promise<TInstance>;
 	lifecycle?: TLifecycle;
 	dispose?: (instance: TInstance) => void | Promise<void>;
 	namespace?: TNamespace;
 }): ServiceBuilder<TInstance, TNamespace, TLifecycle>;
 export function service<TInstance>(state?: {
-	create?: (
-		ctx: ServiceCreateContext,
-	) => TInstance | Promise<TInstance>;
+	create?: (ctx: ServiceCreateContext) => TInstance | Promise<TInstance>;
 	lifecycle?: ServiceLifecycle;
 	dispose?: (instance: TInstance) => void | Promise<void>;
 	namespace?: ServiceNamespace;

@@ -45,7 +45,13 @@ export function openApiPlugin(): CodegenPlugin {
 					const routes = ctx.categories.get("routes");
 					if (!routes?.size) return;
 
-					const keys = [...routes.keys()];
+					// SORTED, not insertion order. The category map is filled in
+					// directory-read order, which differs between machines — this
+					// emitted the same union in a different sequence on macOS and on
+					// CI's Linux runner, so committed `.generated` output could never
+					// match a fresh generation there. Generating twice on one machine
+					// does not catch it; both runs see the same readdir order.
+					const keys = [...routes.keys()].sort();
 					const union = keys.map((k) => `"${k}"`).join(" | ");
 					ctx.addTypeDeclaration(`export type AppRouteKeys = ${union};`);
 				},

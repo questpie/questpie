@@ -22,10 +22,10 @@ bun add -d @questpie/vite-plugin-iconify @iconify/json
 import { iconifyPreload } from "@questpie/vite-plugin-iconify";
 
 export default defineConfig({
-  plugins: [
-    iconifyPreload(),
-    // ... other plugins
-  ],
+	plugins: [
+		iconifyPreload(),
+		// ... other plugins
+	],
 });
 ```
 
@@ -48,12 +48,12 @@ import { Icon } from "@iconify/react";
 
 ```ts
 iconifyPreload({
-  // Glob patterns for files to scan (default: src/**/*.{ts,tsx,js,jsx})
-  scan: ["src/**/*.{ts,tsx}", "packages/admin/src/**/*.{ts,tsx}"],
+	// Glob patterns for files to scan (default: src/**/*.{ts,tsx,js,jsx})
+	scan: ["src/**/*.{ts,tsx}", "packages/admin/src/**/*.{ts,tsx}"],
 
-  // Always include these icons (for truly dynamic icon names)
-  include: ["ph:spinner", "ph:spinner-gap"],
-})
+	// Always include these icons (for truly dynamic icon names)
+	include: ["ph:spinner", "ph:spinner-gap"],
+});
 ```
 
 ## How icon detection works
@@ -74,7 +74,7 @@ The plugin scans for string literals matching the pattern `"prefix:icon-name"` i
 ```tsx
 // unplugin-icons — requires import per icon
 import IconCheck from "~icons/ph/check";
-<IconCheck />
+<IconCheck />;
 ```
 
 This plugin keeps the standard `@iconify/react` string-based API:

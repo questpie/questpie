@@ -10,5 +10,10 @@
 		"types": ["bun-types"]
 	},
 	"include": ["src/**/*", "test/**/*"],
-	"exclude": ["node_modules", "dist"]
+	// two-client-convergence.test.ts imports the CRDT harness from packages/questpie/test.
+	// This project is `composite`, which forbids files outside its own file list, so the
+	// test is excluded from typechecking (it still runs under bun). The structural fix is
+	// to make the harness an importable test utility rather than a file under another
+	// package's test tree - see the board task on the harness relay gap.
+	"exclude": ["node_modules", "dist", "test/two-client-convergence.test.ts"]
 }

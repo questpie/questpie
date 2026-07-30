@@ -25,11 +25,11 @@ Reach for it when you have free-form prose that has no real length limit: a bio,
 import { collection } from "#questpie/factories";
 
 export const posts = collection("posts").fields(({ f }) => ({
-  title: f.text(255).required(),
-  excerpt: f.textarea(),                       // unbounded text, multiline editor
-  notes: f.textarea().label({ en: "Internal notes" }),
-  // Shared modifiers (.required, .default, .localized, .admin, …) are documented
-  // on the Fields page; the textarea-specific methods are below.
+	title: f.text(255).required(),
+	excerpt: f.textarea(), // unbounded text, multiline editor
+	notes: f.textarea().label({ en: "Internal notes" }),
+	// Shared modifiers (.required, .default, .localized, .admin, …) are documented
+	// on the Fields page; the textarea-specific methods are below.
 }));
 ```
 
@@ -39,9 +39,9 @@ After `questpie generate`, `excerpt` and `notes` are `string` on the row type, a
 
 ```ts
 const posts = collection("posts").fields(({ f }) => ({
-  title: f.text(255).required(),
-  excerpt: f.textarea(),               // optional string column
-  summary: f.textarea().required(),    // NOT NULL, required on insert
+	title: f.text(255).required(),
+	excerpt: f.textarea(), // optional string column
+	summary: f.textarea().required(), // NOT NULL, required on insert
 }));
 
 // After `questpie generate`, rows read back as:
@@ -60,8 +60,8 @@ Like every field, `textarea` is optional and nullable by default; `.required()` 
 
 `f.textarea()` takes no arguments. It has two type-specific chain methods, both of which constrain **string length**:
 
-| Method | Effect | Maps to |
-|---|---|---|
+| Method    | Effect                                                                       | Maps to     |
+| --------- | ---------------------------------------------------------------------------- | ----------- |
 | `.min(n)` | Minimum character length, adds `z.string().min(n)` to the validation schema. | `minLength` |
 | `.max(n)` | Maximum character length, adds `z.string().max(n)` to the validation schema. | `maxLength` |
 
@@ -81,32 +81,36 @@ Everything else comes from the [shared field modifiers](/docs/concepts/fields#sh
 
 `textarea` ships the `stringOps` operator set, identical to `f.text()`, so its `where` clause supports:
 
-| Operator | Meaning |
-|---|---|
-| `eq` / `ne` | Exact equality / inequality. |
-| `in` / `notIn` | Membership in a list of strings. |
-| `like` / `notLike` | Case-**sensitive** SQL `LIKE` (you supply `%` wildcards). |
-| `ilike` / `notIlike` | Case-**insensitive** `LIKE`. |
-| `contains` | Substring match (`LIKE '%value%'`). |
-| `startsWith` / `endsWith` | Prefix / suffix match. |
-| `isNull` / `isNotNull` | Boolean null checks. |
+| Operator                  | Meaning                                                   |
+| ------------------------- | --------------------------------------------------------- |
+| `eq` / `ne`               | Exact equality / inequality.                              |
+| `in` / `notIn`            | Membership in a list of strings.                          |
+| `like` / `notLike`        | Case-**sensitive** SQL `LIKE` (you supply `%` wildcards). |
+| `ilike` / `notIlike`      | Case-**insensitive** `LIKE`.                              |
+| `contains`                | Substring match (`LIKE '%value%'`).                       |
+| `startsWith` / `endsWith` | Prefix / suffix match.                                    |
+| `isNull` / `isNotNull`    | Boolean null checks.                                      |
 
 ```ts
 // Posts whose excerpt mentions "release" (case-insensitive substring):
 await app.collections.posts.find({
-  where: { excerpt: { contains: "release" } },
+	where: { excerpt: { contains: "release" } },
 });
 
 // Posts with a non-empty internal note:
 await app.collections.posts.find({
-  where: { notes: { isNotNull: true } },
+	where: { notes: { isNotNull: true } },
 });
 ```
 
 These same string operators type the `where` clause on the server (`app.collections.*`) and on the typed client.
 
 <Callout type="warn" title="No full-text search">
-`contains` / `ilike` are SQL `LIKE` scans, not full-text search, fine for filtering, but not built for ranked search over large prose. For relevance-ranked search across long text, mark the collection `.searchable()` and use the search adapter (pg_trgm / pgvector) rather than a `contains` filter.
+	`contains` / `ilike` are SQL `LIKE` scans, not full-text search, fine for
+	filtering, but not built for ranked search over large prose. For
+	relevance-ranked search across long text, mark the collection `.searchable()`
+	and use the search adapter (pg_trgm / pgvector) rather than a `contains`
+	filter.
 </Callout>
 
 ## Localization
@@ -126,8 +130,8 @@ You rarely touch the field type directly, `textarea` flows into the generated co
 ```ts
 import type { CollectionDoc, CollectionWhere } from "#questpie/types";
 
-type Post = CollectionDoc<"posts">;          // { excerpt: string | null; ... }
-type PostFilter = CollectionWhere<"posts">;  // { excerpt?: { contains?: string; ... } }
+type Post = CollectionDoc<"posts">; // { excerpt: string | null; ... }
+type PostFilter = CollectionWhere<"posts">; // { excerpt?: { contains?: string; ... } }
 ```
 
 The field primitives (`TextareaFieldState`, `TextareaFieldMethods`) are exported from `questpie` for plugin/library authors; app code reaches the value through the generated collection types above.

@@ -65,12 +65,7 @@ export type {
 	IsRequired,
 } from "./type-test-utils.js";
 
-import type {
-	Equal,
-	IsAny,
-	IsNever,
-	IsUnknown,
-} from "./type-test-utils.js";
+import type { Equal, IsAny, IsNever, IsUnknown } from "./type-test-utils.js";
 
 // ============================================================================
 // ExactType — bidirectional identity, named for intent at degradation sites.
@@ -189,7 +184,8 @@ export type AssertAny<T> = IsAny<T> extends true ? true : false;
 export type AssertUnknown<T> = IsUnknown<T> extends true ? true : false;
 
 /** True iff T is a tuple/array (element-aware; CL-02 to-many `with`-population is an array). */
-export type IsArrayType<T> = NonNullable<T> extends readonly any[] ? true : false;
+export type IsArrayType<T> =
+	NonNullable<T> extends readonly any[] ? true : false;
 
 /** True iff T is an array. Wrap in `Expect<…>` (CL-02 to-many `with` result). */
 export type ExpectArray<T> = IsArrayType<T> extends true ? true : false;

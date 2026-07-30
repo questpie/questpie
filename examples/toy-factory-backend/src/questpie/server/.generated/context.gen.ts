@@ -49,18 +49,21 @@ import _authConfig from "../config/auth";
 import _adminConfig from "../config/admin";
 import _openapi from "../config/openapi";
 
-import type { AppCollections, AppGlobals, AppJobs, _ModuleCollections, _AppDefaultServices, _AppServicesSeam, _AppTopLevelServices, _AppCustomServiceNamespaces, AppEmailTemplates, AppWorkflows, _Registry_Collections, _Registry_Globals, _Registry_Jobs, _Registry_Routes, _Registry_Services, _Registry_Emails, _Registry_FieldTypes, _Registry_Views, _Registry_Components, _Registry_Blocks, _Registry_Workflows, _AllModuleFields } from "./entities.gen";
-import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";
+import type { AppCollections, AppChannels, AppGlobals, AppJobs, _ModuleCollections, _AppDefaultServices, _AppServicesSeam, _AppTopLevelServices, _AppCustomServiceNamespaces, AppEmailTemplates, AppWorkflows, _Registry_Collections, _Registry_Channels, _Registry_Globals, _Registry_Jobs, _Registry_Routes, _Registry_Services, _Registry_Emails, _Registry_FieldTypes, _Registry_Views, _Registry_Components, _Registry_Blocks, _Registry_Workflows, _AllModuleFields } from "./entities.gen";
+import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AuthorityActor, CollectionAPI, CrdtClientAPI, CrdtRegistryFromApp, CrdtServerAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Principal, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";
+import type { ChannelsService } from "questpie/channels";
 
 import type { WorkflowClient } from "@questpie/workflows/server";
-type _MPConfigSub<A extends readonly any[], K extends string> = A extends readonly [infer H, ...infer T extends readonly any[]] ? (H extends { config: infer C } ? (C extends Record<K, infer V> ? V : {}) : {}) & _MPConfigSub<T, K> : {};
+type _MPSubModules<M> = M extends { modules: infer S extends readonly any[] } ? S : readonly [];
+type _MPConfigValue<M, K extends string> = M extends { config: infer C } ? (C extends Record<K, infer V> ? V : {}) : {};
+type _MPConfigSub<A extends readonly any[], K extends string> = A extends readonly [infer H, ...infer T extends readonly any[]] ? _MPConfigSub<_MPSubModules<H>, K> & _MPConfigValue<H, K> & _MPConfigSub<T, K> : {};
 type _AppAppConfig = typeof _appConfig;
 type _AppContextExtensions = Partial<InferContextExtensionsFromAppConfig<_AppAppConfig>>;
 type _AppAuthConfig = _MPConfigSub<typeof _modules, "auth"> & typeof _authConfig;
 type _AppSessionAuthConfig = _AppAuthConfig;
 type _AppSession = NonNullable<InferSessionFromAuthConfig<_AppSessionAuthConfig>> | null;
 
-export type AppRouteKeys = "rpc/planning/startProduction" | "rpc/planning/receiveMaterials" | "rpc/planning/capacitySummary";
+export type AppRouteKeys = "rpc/planning/capacitySummary" | "rpc/planning/receiveMaterials" | "rpc/planning/startProduction";
 
 type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };
 type _JobHandlerCollections = _ModuleCollections & {
@@ -72,7 +75,7 @@ type _JobHandlerCollections = _ModuleCollections & {
 	toyMaterials: typeof _coll_toyMaterials;
 	toys: typeof _coll_toys;
 };
-type _JobHandlerCollectionsAPI = {
+type _JobHandlerCollectionsAPI = { [K in keyof _ModuleCollections]: CollectionAPI<_ModuleCollections[K], _JobHandlerCollections> } & {
 	inventoryMovements: CollectionAPI<typeof _coll_inventoryMovements, _JobHandlerCollections>;
 	machines: CollectionAPI<typeof _coll_machines, _JobHandlerCollections>;
 	materials: CollectionAPI<typeof _coll_materials, _JobHandlerCollections>;
@@ -91,10 +94,11 @@ type _ExecutionContextServiceDefinitions = {
 type _ExecutionContextDefaultServices = ServiceInstancesInNamespace<_ExecutionContextServiceDefinitions, "services">;
 type _AppCollectionDefinitions = AppCollections & Record<string, AnyCollectionOrBuilder>;
 type _AppGlobalDefinitions = AppGlobals & Record<string, AnyGlobalOrBuilder>;
-type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "globals" | "auth" | "~contextExtensions"> & {
+type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "channels" | "globals" | "auth" | "~contextExtensions"> & {
 	app: (typeof _runtime)["app"];
 	db: (typeof _runtime)["db"];
 	collections: _AppCollectionDefinitions;
+	channels: AppChannels;
 	globals: _AppGlobalDefinitions;
 	auth: _AppAuthConfig;
 	storage: (typeof _runtime)["storage"];
@@ -110,6 +114,10 @@ export type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals"> & {
 	globals: _AppGlobalsAPI;
 };
 
+export type AppCrdt = CrdtRegistryFromApp<{ collections: AppCollections; globals: AppGlobals }>;
+export type AppCrdtClient = CrdtClientAPI<AppCrdt>;
+export type AppCrdtServer = CrdtServerAPI<AppCrdt>;
+
 // ── AppContext augmentation — auto-types ALL handlers ──────
 type _AppInfraRecord = {
 	// Infrastructure
@@ -122,6 +130,8 @@ type _AppInfraRecord = {
 	logger: _AppQuestpie["logger"];
 	search: _AppQuestpie["search"];
 	realtime: _AppQuestpie["realtime"];
+	channels: ChannelsService<AppChannels>;
+	crdt: AppCrdtServer;
 
 	// Entity APIs
 	collections: _CollectionsAPI;
@@ -130,6 +140,8 @@ type _AppInfraRecord = {
 
 	// Request-scoped
 	session: _AppSession;
+	principal?: Principal;
+	actor?: AuthorityActor;
 	t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
 
 	// User services
@@ -155,6 +167,7 @@ declare global {
 			logger: _AppQuestpie["logger"];
 			search: _AppQuestpie["search"];
 			realtime: _AppQuestpie["realtime"];
+			channels: ChannelsService<AppChannels>;
 
 			// Entity APIs
 			collections: _JobHandlerCollectionsAPI;
@@ -182,6 +195,7 @@ declare global {
 			logger: _AppQuestpie["logger"];
 			search: _AppQuestpie["search"];
 			realtime: _AppQuestpie["realtime"];
+			channels: ChannelsService<AppChannels>;
 
 			// Entity APIs
 			collections: _JobHandlerCollectionsAPI;
@@ -233,6 +247,7 @@ declare global {
 
 		interface Registry {
 			collections: _Registry_Collections;
+			channels: _Registry_Channels;
 			globals: _Registry_Globals;
 			jobs: _Registry_Jobs;
 			routes: _Registry_Routes;
@@ -248,6 +263,8 @@ declare global {
 }
 
 /** Resolved auth session for this app (`{ user, session } | null`). */
+export type AppAuthConfig = _AppAuthConfig;
+
 export type AppSession = _AppSession;
 
 /** Authenticated user shape from the app session. */

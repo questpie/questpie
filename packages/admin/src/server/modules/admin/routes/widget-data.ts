@@ -8,7 +8,7 @@
 import { ApiError, route, runWithContext, tryGetContext } from "questpie";
 import { z } from "zod";
 
-import type { ServerDashboardItem } from "../../../augmentation.js";
+import type { ServerDashboardItem } from "../../../augmentation/index.js";
 
 // ============================================================================
 // Helpers
@@ -101,7 +101,7 @@ export const fetchWidgetData = route()
 		// ctx (FunctionHandlerArgs) extends AppContext which is the same
 		// base that WidgetFetchContext extends — pass it directly.
 		const widgetCtx =
-			ctx as unknown as import("../../../augmentation.js").WidgetFetchContext;
+			ctx as unknown as import("../../../augmentation/index.js").WidgetFetchContext;
 
 		// Evaluate per-widget access (if defined)
 		if (widget.access !== undefined) {

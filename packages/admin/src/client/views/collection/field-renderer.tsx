@@ -31,6 +31,7 @@ import {
 	getFieldContext,
 	getFieldOptions,
 	getFullFieldName,
+	resolveComponentSlot,
 } from "./field-context";
 
 // ============================================================================
@@ -370,9 +371,18 @@ export function FieldRenderer({
 		reactiveFieldState,
 	);
 
+	// A per-field `.admin({ components: { field } })` slot wins over the
+	// by-type component from the registry. Without this, changing one field's
+	// input meant registering a whole new field type. An unknown key resolves
+	// to undefined and falls back rather than blanking the field.
+	const slottedComponent = resolveComponentSlot(
+		(fieldOptions.components as { field?: unknown } | undefined)?.field,
+		registry,
+	);
+
 	// Resolve lazy component (supports () => import(...) loaders)
 	const { Component: resolvedComponent, loading: componentLoading } =
-		useLazyComponent(context.component);
+		useLazyComponent(slottedComponent ?? context.component);
 
 	// Check if compute is client-side (function) vs server-side (object with handler)
 	// Server-side compute is handled by useReactiveFields in form-view.tsx

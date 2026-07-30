@@ -5,6 +5,7 @@
  */
 
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
+import { interpolate } from "#questpie/shared/i18n/interpolate.js";
 
 import type { PluralMessages } from "./messages.js";
 import { getBackendMessages } from "./messages.js";
@@ -66,17 +67,6 @@ function getPluralForm(
 		default:
 			return forms.other;
 	}
-}
-
-/**
- * Interpolate values into string
- */
-function interpolate(str: string, params?: Record<string, unknown>): string {
-	if (!params) return str;
-	return str.replace(/\{\{(\w+)\}\}/g, (_, key) => {
-		const value = params[key];
-		return value !== undefined ? String(value) : `{{${key}}}`;
-	});
 }
 
 // ============================================================================

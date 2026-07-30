@@ -52,7 +52,10 @@ describe("assertPushStatementsSafe", () => {
 	it("refuses to touch pgboss-owned state", () => {
 		expect(() =>
 			assertPushStatementsSafe(
-				['DROP TABLE "pgboss"."job"', 'ALTER TABLE pgboss.schedule DROP COLUMN x'],
+				[
+					'DROP TABLE "pgboss"."job"',
+					"ALTER TABLE pgboss.schedule DROP COLUMN x",
+				],
 				appSchemas,
 			),
 		).toThrow(/pgboss/i);
@@ -63,11 +66,14 @@ describe("assertPushStatementsSafe", () => {
 			assertPushStatementsSafe(["DROP SCHEMA pgboss"], appSchemas),
 		).toThrow();
 		expect(() =>
-			assertPushStatementsSafe(['DROP SCHEMA IF EXISTS "analytics"'], appSchemas),
+			assertPushStatementsSafe(
+				['DROP SCHEMA IF EXISTS "analytics"'],
+				appSchemas,
+			),
 		).toThrow();
 		// app-owned schema drop is allowed (renames during dev)
-		expect(assertPushStatementsSafe(['DROP SCHEMA "web"'], appSchemas)).toEqual([
-			'DROP SCHEMA "web"',
-		]);
+		expect(assertPushStatementsSafe(['DROP SCHEMA "web"'], appSchemas)).toEqual(
+			['DROP SCHEMA "web"'],
+		);
 	});
 });

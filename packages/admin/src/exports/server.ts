@@ -116,7 +116,7 @@ export type {
 	ViewKindRegistry,
 	WidgetAccessRule,
 	WidgetFetchContext,
-} from "../server/augmentation.js";
+} from "../server/augmentation/index.js";
 // Auth helpers for SSR
 export {
 	type AuthSession,
@@ -125,7 +125,7 @@ export {
 	isAdminUser,
 	type RequireAdminAuthOptions,
 	requireAdminAuth,
-} from "../server/auth-helpers.js";
+} from "../server/modules/admin/auth-helpers.js";
 // Block builder for visual block editor
 export {
 	type AnyBlockBuilder,
@@ -150,7 +150,7 @@ export {
 	introspectBlocks,
 	processBlocksDocument,
 	processDocumentBlocksPrefetch,
-} from "../server/block/index.js";
+} from "../server/modules/admin/block/index.js";
 // Admin field types (richText, blocks)
 export {
 	adminFields,
@@ -215,7 +215,7 @@ export {
 // Codegen plugin — register in questpie.config.ts
 export { adminPlugin } from "../server/plugin.js";
 // Admin config factory (runtime identity function for typed admin config)
-export { adminConfig } from "../server/augmentation.js";
+export { adminConfig } from "../server/augmentation/index.js";
 // Proxy factories (runtime helpers for admin config callbacks)
 export {
 	createActionCallbackProxy,

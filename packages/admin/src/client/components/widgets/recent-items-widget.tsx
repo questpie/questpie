@@ -147,6 +147,9 @@ export default function RecentItemsWidget({ config }: RecentItemsWidgetProps) {
 						<button
 							type="button"
 							key={item.id}
+							// Without this a screen reader announces the title, subtitle
+							// and date run together as one string.
+							aria-label={getTitleValue(item)}
 							onClick={() => handleItemClick(item)}
 							className="hover:bg-muted flex w-full cursor-pointer items-center gap-3 p-2 text-left transition-colors"
 						>

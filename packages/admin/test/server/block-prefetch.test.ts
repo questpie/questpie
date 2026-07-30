@@ -13,13 +13,13 @@ import { describe, expect, mock, test } from "bun:test";
 
 import { runWithContext, tryGetContext } from "questpie";
 
+import type { BlocksDocument } from "#questpie/admin/server/fields/blocks.js";
 import {
 	BlockBuilder,
 	block,
-} from "#questpie/admin/server/block/block-builder.js";
-import { introspectBlock } from "#questpie/admin/server/block/introspection.js";
-import { processBlocksDocument } from "#questpie/admin/server/block/prefetch.js";
-import type { BlocksDocument } from "#questpie/admin/server/fields/blocks.js";
+} from "#questpie/admin/server/modules/admin/block/block-builder.js";
+import { introspectBlock } from "#questpie/admin/server/modules/admin/block/introspection.js";
+import { processBlocksDocument } from "#questpie/admin/server/modules/admin/block/prefetch.js";
 import { adminConfigDTOSchema } from "#questpie/admin/server/modules/admin/dto/admin-config.dto.js";
 
 // ============================================================================

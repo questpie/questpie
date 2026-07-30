@@ -12,10 +12,25 @@
  * Bun/Node (manifest validation in the adapter) and Deno (the sandbox server).
  * It defaults to `node:dns/promises`, which both Bun and Deno implement.
  *
- * SCOPE (M2): manifest-time rejection of private-IP hosts is implemented and
- * enforced here. Full connect-time DNS-rebind PINNING (re-resolving and
- * re-checking the exact IP the socket connects to, including across redirects)
- * is NOT yet implemented — see `TODO(security)` in `sandbox-server.ts`.
+ * SCOPE: this module is the MANIFEST-TIME check — it rejects a host whose
+ * records already point somewhere private before the run is admitted.
+ *
+ * It is NOT the rebinding defense, and does not need to be. Connect-time
+ * pinning lives on the trusted host in the core executor's brokered fetch
+ * (`questpie/src/server/modules/core/integrated/executor/bindings/host-fetch.ts`):
+ * the guest runs with `--allow-net=[]` and cannot open a socket at all, so every
+ * request is relayed to the broker, which resolves the host itself, validates
+ * every A and AAAA record, pins the socket to a validated IP literal while
+ * keeping the hostname for SNI and the Host header, and re-resolves and
+ * re-validates each redirect hop with auto-follow disabled.
+ *
+ * On Linux there is additionally a kernel-level egress drop
+ * (`egress-firewall.ts`) as a second, independent boundary.
+ *
+ * An earlier version of this comment said pinning was unimplemented and pointed
+ * at a `TODO(security)` in `sandbox-server.ts`. Both the TODO and the gap are
+ * gone; `test/unit/services/host-fetch-ssrf.test.ts` covers redirect re-pinning,
+ * open-redirect egress, metadata addresses and non-decimal IPv4 encodings.
  */
 
 /** A single parsed `host[:port]` allowlist entry. */

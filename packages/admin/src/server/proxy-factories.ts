@@ -27,7 +27,7 @@ import type {
 	SidebarItemDef,
 	SidebarProxy,
 	SidebarSectionDef,
-} from "./augmentation.js";
+} from "./augmentation/index.js";
 
 // ============================================================================
 // Internal Helpers

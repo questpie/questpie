@@ -48,16 +48,16 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "../../components/ui/tooltip";
+import {
+	adminCollectionKey,
+	getCollectionQueryApi,
+} from "../../hooks/query-access";
 import { useActions } from "../../hooks/use-action";
 import {
 	useCollectionDelete,
 	useCollectionList,
 	useCollectionRestore,
 } from "../../hooks/use-collection";
-import {
-	adminCollectionKey,
-	getCollectionQueryApi,
-} from "../../hooks/query-access";
 import { useCollectionFields } from "../../hooks/use-collection-fields";
 import { useSuspenseCollectionMeta } from "../../hooks/use-collection-meta";
 import { useSessionState } from "../../hooks/use-current-user";
@@ -81,6 +81,7 @@ import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import {
 	selectRealtime,
+	selectAdmin,
 	useAdminStore,
 	useSafeContentLocales,
 	useScopedLocale,
@@ -389,6 +390,12 @@ function ListViewInner({
 	"use no memo";
 	const collectionKey = adminCollectionKey(collection);
 	const globalRealtimeConfig = useAdminStore(selectRealtime);
+	// Component registry for per-field `.admin({ components: { cell } })` slots.
+	const adminConfig = useAdminStore(selectAdmin);
+	const componentRegistry = React.useMemo(
+		() => ({ custom: adminConfig?.getComponents() as Record<string, unknown> }),
+		[adminConfig],
+	);
 	const { fields: resolvedFields, schema } = useCollectionFields(collection, {
 		fallbackFields: (config as any)?.fields,
 	});
@@ -449,8 +456,9 @@ function ListViewInner({
 				fallbackColumns: ["id"],
 				buildAllColumns: true,
 				meta: collectionMeta,
+				registry: componentRegistry,
 			}),
-		[resolvedFields, resolvedListConfig, collectionMeta],
+		[resolvedFields, resolvedListConfig, collectionMeta, componentRegistry],
 	);
 	const columnsByKey = React.useMemo(() => {
 		const map = new Map<string, ColumnDef<any>>();
@@ -824,10 +832,8 @@ function ListViewInner({
 	const edgeQueries = useQueries({
 		queries: edgeLevels.map((level) => {
 			return (
-				getCollectionQueryApi(
-					queryOpts,
-					adminCollectionKey(level.collection),
-				).find as any
+				getCollectionQueryApi(queryOpts, adminCollectionKey(level.collection))
+					.find as any
 			)({
 				where: level.where,
 				with: {

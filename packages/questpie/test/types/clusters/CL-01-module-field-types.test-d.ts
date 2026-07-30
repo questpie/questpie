@@ -43,12 +43,12 @@ import type {
 } from "#questpie/server/collection/builder/collection.js";
 import type { EmptyCollectionState } from "#questpie/server/collection/builder/types.js";
 import type { BuiltinFields } from "#questpie/server/fields/builder.js";
-import { Field } from "#questpie/server/fields/field-class.js";
 import type {
 	ExtractInputType,
 	ExtractSelectType,
 	FieldState,
 } from "#questpie/server/fields/field-class-types.js";
+import { Field } from "#questpie/server/fields/field-class.js";
 import type { FieldSelect } from "#questpie/server/fields/field-types.js";
 import type { JsonValue } from "#questpie/server/modules/core/fields/json.js";
 
@@ -79,7 +79,9 @@ import type {
 // ===========================================================================
 
 type _rtDataConcrete = Expect<NoAny<RichTextLikeState["data"]>>;
-type _rtDataIsDoc = Expect<Equal<RichTextLikeState["data"], TipTapDocumentLike>>;
+type _rtDataIsDoc = Expect<
+	Equal<RichTextLikeState["data"], TipTapDocumentLike>
+>;
 type _blDataConcrete = Expect<NoAny<BlocksLikeState["data"]>>;
 type _blDataIsDoc = Expect<Equal<BlocksLikeState["data"], BlocksDocumentLike>>;
 
@@ -122,15 +124,11 @@ type _blExtractSel = Expect<
 type RtInput = ExtractInputType<RichTextLikeState>;
 type _rtInNotUnknown = Expect<NoUnknown<RtInput>>;
 type _rtInNotAny = Expect<NoAny<RtInput>>;
-type _rtInExact = Expect<
-	Equal<RtInput, TipTapDocumentLike | null | undefined>
->;
+type _rtInExact = Expect<Equal<RtInput, TipTapDocumentLike | null | undefined>>;
 
 type BlInput = ExtractInputType<BlocksLikeState>;
 type _blInNotUnknown = Expect<NoUnknown<BlInput>>;
-type _blInExact = Expect<
-	Equal<BlInput, BlocksDocumentLike | null | undefined>
->;
+type _blInExact = Expect<Equal<BlInput, BlocksDocumentLike | null | undefined>>;
 
 // ===========================================================================
 // 2. THE LIVE BUG — codegen degradation path (FI-1/FI-2/CR-1/crudin-1).
@@ -158,11 +156,13 @@ type _degAnyInNotAny = Expect<NoAny<ExtractInputType<any>>>;
 // concrete state; post-fix neither select nor input is `unknown`.
 type DegradedBareDef = Field<FieldState>;
 // FAILS today: bare FieldState has data: unknown ⇒ select is `unknown | null`.
-type _degBareSelNotUnknown = Expect<NoUnknown<NonNullable<FieldSelect<DegradedBareDef>>>>;
+type _degBareSelNotUnknown = Expect<
+	NoUnknown<NonNullable<FieldSelect<DegradedBareDef>>>
+>;
 // FAILS today: ExtractInputType<FieldState> → `unknown | null | undefined`.
-type _degBareInNotUnknown = Expect<NoUnknown<
-	Exclude<ExtractInputType<FieldState>, null | undefined>
->>;
+type _degBareInNotUnknown = Expect<
+	NoUnknown<Exclude<ExtractInputType<FieldState>, null | undefined>>
+>;
 
 // ===========================================================================
 // 3. IN-PACKAGE STAND-INS through the REAL CRUD pipeline.
@@ -199,7 +199,9 @@ type _metaSelHasKey = Expect<HasKey<MetaSel, "seoTitle">>;
 // nested-field shaping (json-3 class): the nested required array survives.
 type _metaKeywords = Expect<Equal<MetaSel["keywords"], string[]>>;
 // output-false field is dropped from the row (NOT present as unknown).
-type _metaNoInternalScore = Expect<Equal<HasKey<MetaSel, "internalScore">, false>>;
+type _metaNoInternalScore = Expect<
+	Equal<HasKey<MetaSel, "internalScore">, false>
+>;
 
 // --- object field (`meta`) — INPUT survives shaping, not unknown/any.
 type MetaIn = ArtInsert extends { meta?: infer M } ? M : never;

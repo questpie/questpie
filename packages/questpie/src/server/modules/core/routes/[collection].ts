@@ -4,7 +4,7 @@
  * GET /[collection] — find (list)
  */
 
-import { createCollectionRoutes } from "#questpie/server/adapters/routes/collections.js";
+import { collectionFind } from "#questpie/server/adapters/routes/collections.js";
 import { route } from "#questpie/server/routes/define-route.js";
 import { routeApp } from "#questpie/server/routes/route-app.js";
 
@@ -14,6 +14,5 @@ export default route()
 	.handler(async (ctx) => {
 		const { request, params } = ctx;
 		const app = routeApp(ctx);
-		const routes = createCollectionRoutes(app);
-		return routes.find(request, { collection: params.collection });
+		return collectionFind(app, request, { collection: params.collection });
 	});

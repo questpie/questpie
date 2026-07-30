@@ -150,10 +150,11 @@ Files starting with `_`, `index.ts`, declaration files, tests, and specs are int
 
 ### Client
 
-| Topic          | File                           | Covers                                                                                    |
-| -------------- | ------------------------------ | ----------------------------------------------------------------------------------------- |
-| TanStack Query | `references/tanstack-query.md` | `q.collections.*`, `q.globals.*`, `q.routes.*`, realtime snapshots, channel subscriptions |
-| Reactive Apps  | `references/reactive-apps.md`  | React update isolation, query sizing, selectors, bounded channels, presence, diagnostics  |
+| Topic          | File                           | Covers                                                                                                 |
+| -------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| TanStack Query | `references/tanstack-query.md` | `q.collections.*`, `q.globals.*`, `q.routes.*`, realtime snapshots, channel subscriptions              |
+| Reactive Apps  | `references/reactive-apps.md`  | React update isolation, query sizing, selectors, bounded channels, presence, diagnostics               |
+| Client i18n    | `references/client-i18n.md`    | `createSimpleI18n`, `I18nProvider`, `useTranslation`/`useI18n`/`useSafeI18n`, plurals, custom adapters |
 
 ## Key Patterns, Quick Reference
 
@@ -1017,6 +1018,27 @@ export default [mcpModule] as const;
 ```
 
 To add a route to the module: create `routes/my-endpoint.ts` exporting `route()…`, then `questpie generate`. Do **not** add it by editing `module.ts`.
+
+### Generating from a build script instead of the CLI
+
+A package that would rather run codegen from its own build than shell out to the
+CLI can call `generateModule` from `questpie/codegen`:
+
+```ts
+import { generateModule } from "questpie/codegen";
+
+await generateModule({
+	moduleName: "questpie-starter",
+	rootDir: "./src/server/modules/starter",
+	// outDir defaults to `${rootDir}/.generated`, outputFile to "module.ts"
+	// plugins: [...], dryRun: true to get the code back without writing
+});
+```
+
+Same discovery, same output as `questpie generate --module` - it is the CLI's
+work behind a function call, for packages whose build is already a script. It
+does **not** change the rule: the file is still generated, and still never
+hand-written.
 
 ## Anti-pattern (do NOT do this)
 
@@ -2002,7 +2024,7 @@ The form remains authoritative. Save, autosave, Cmd+S, history, workflow, locks,
 ## Contents
 
 - [Imports](#imports)
-- [Collections](#collections)
+- [Collections](#collections), including [Record Lifecycle](#record-lifecycle): timestamps, softDelete, versioning, workflow
 - [Globals](#globals)
 - [Fields](#fields)
 - [Relations](#relations)
@@ -2087,13 +2109,135 @@ export default collection("user")
 
 Fields/options/extension keys combine by key (merged-in side wins), hooks concatenate, and `.fields()` after `.merge()` is cumulative, it never wipes merged fields. The result stays fully typed.
 
-### Collection Options
+### Record Lifecycle
+
+Four options that all sound alike and do different jobs. Pick by the job, not by
+the name, because adopting the wrong one is silent: nothing errors, you simply
+do not get the guarantee you assumed.
+
+| You need                                          | Use                   | QUESTPIE provides it |
+| ------------------------------------------------- | --------------------- | -------------------- |
+| When a row was created/changed                    | `timestamps: true`    | Yes                  |
+| Recover a deleted row / keep referential history  | `softDelete: true`    | Yes                  |
+| The history of past states, and revert to one     | `versioning: true`    | Yes                  |
+| Legal stage transitions (draft to review to live) | `versioning.workflow` | Yes                  |
+| Reject a write made against a stale read          | optimistic locking    | **No, build it**     |
+| Who did what, for accountability                  | audit                 | Separate concern     |
 
 ```ts
 .options({
-  timestamps: true,   // adds createdAt, updatedAt
-  versioning: true,   // track content versions
-  softDelete: true,   // mark as deleted instead of removing
+  timestamps: true,
+  softDelete: true,
+  versioning: { maxVersions: 50, workflow: { stages: ["draft", "published"] } },
+})
+```
+
+#### timestamps
+
+Adds `createdAt` and `updatedAt`, maintained by the framework.
+
+#### softDelete
+
+`delete()` marks the row instead of removing it. Reads exclude soft-deleted rows
+unless you pass `includeDeleted: true`.
+
+#### versioning
+
+`versioning: true` (or `{ maxVersions }`) creates a `<collection>_versions`
+table alongside the collection, and a `<collection>_i18n_versions` table when the
+collection is localized.
+
+Columns: `versionId` (uuid primary key), `id` (the record, typed to match the
+parent id column), `versionNumber`, `versionOperation` (`create` / `update` /
+`delete`), `versionStage`, `versionFromStage`, `versionUserId`,
+`versionCreatedAt`.
+
+A row is written on **create, update and delete** (both soft and hard). History
+is **per record**: `versionNumber` counts up per `id`, and pruning to
+`maxVersions` (default 50) applies per record, not per collection.
+
+Read it back with:
+
+```ts
+const history = await ctx.collections.posts.findVersions({ id, limit: 20 });
+const restored = await ctx.collections.posts.revertToVersion({
+	id,
+	versionNumber: 3,
+});
+```
+
+**What versioning does NOT do: it is not optimistic locking.** There is no
+`expectedVersion` parameter anywhere in the API. The server never compares a
+client-supplied version against the stored one and never rejects a stale write.
+Two concurrent updates both succeed, both write a version row, and the second
+silently wins. If you need compare-and-set, you build it yourself, and today that
+means a column of your own plus `updateMany({ where: { id, version: expected } })`
+with a `count !== 1` check. `versionNumber` is history, written after the fact.
+
+#### Workflow stages
+
+Workflow lives **under** versioning because stage transitions are stored as
+version snapshots. Enabling workflow with versioning disabled throws at build
+time: `"Collection X enables workflow but versioning is disabled"`.
+
+```ts
+.options({
+  versioning: {
+    workflow: {
+      stages: {
+        draft:     { transitions: ["review"] },
+        review:    { transitions: ["draft", "published"] },
+        published: { transitions: ["draft"] },
+      },
+      initialStage: "draft",
+    },
+  },
+})
+```
+
+`workflow: true` is shorthand for stages `["draft", "published"]`. `stages` also
+accepts a plain `string[]`. A stage with no `transitions` key is unrestricted:
+any configured stage may be targeted from it. `initialStage` defaults to the
+first configured stage.
+
+Transition through the CRUD API, not by writing a field:
+
+```ts
+await ctx.collections.posts.transitionStage({ id, stage: "published" });
+// or schedule it
+await ctx.collections.posts.transitionStage({
+	id,
+	stage: "published",
+	scheduledAt: futureDate,
+});
+```
+
+`transitionStage` performs **no data mutation**. It creates a version snapshot at
+the target stage. Read a specific stage back with `find({ stage: "published" })`.
+
+Validated at **config time**: stage names, `initialStage` existing, and every
+transition target naming a configured stage. Validated at **call time**: that the
+transition from the record's current stage to the requested one is in the table.
+
+Enabling workflow also adds `versionStage` / `versionFromStage` columns,
+`beforeTransition` / `afterTransition` hooks, and an `access.transition` rule.
+
+**What workflow does NOT do: the stage table carries no condition.** A stage
+option is `{ label, description, transitions }` and nothing else, so the table
+is static shape only. There is no guard or predicate on a transition, and no way
+to express "legal only when `reviewRequired` is false" in the config.
+
+Put the condition in a `beforeTransition` hook, which aborts the transition when
+it throws, or in `access.transition` when the rule is about who may move the
+record rather than about its data:
+
+```ts
+.hooks({
+  beforeTransition: async ({ data, to }) => {
+    if (to === "published" && data.reviewRequired) {
+      throw new Error("cannot publish while review is pending");
+    }
+  },
 })
 ```
 
@@ -2976,6 +3120,40 @@ slug: f.text().admin({
 ```
 
 All reactive handlers run server-side with access to `ctx.db`, `ctx.user`, `ctx.req`.
+
+## Per-field components
+
+A component is normally chosen by field **type**: the admin registry maps `text`
+to one form component and one table cell, shared by every `f.text()`. To give a
+single field its own components without declaring a new field type, name them in
+`.admin({ components })`:
+
+```ts
+status: f.select(STATUSES).admin({
+  components: { cell: "status-pill" },
+}),
+notes: f.textarea().admin({
+  components: { field: "markdown-editor", cell: "truncated-text" },
+}),
+```
+
+| Slot    | Replaces                      |
+| ------- | ----------------------------- |
+| `field` | the form input for this field |
+| `cell`  | the table cell for this field |
+
+The value is a **registry key**, not a component. `.admin()` is serialized from
+the server through field introspection, so it cannot carry a function — the key
+is resolved on the client against the admin component registry (`custom` first,
+then registered field types). The object form `{ type: "status-pill", props: {} }`
+is also accepted.
+
+An unrecognised key falls back to the by-type component rather than rendering
+nothing, so a typo degrades to the default instead of blanking the field.
+
+Precedence for a cell, highest first: a `.list()` column `cell` (declared on the
+view, most local) → this `components.cell` slot → the field type's registered
+cell → the built-in default.
 
 ---
 
@@ -6131,8 +6309,16 @@ work. That is private runtime machinery, not another deployable worker service.
 
 ## Generated client
 
+Build the CRDT API from an existing client with `createCrdtClient` — it reuses
+that client's realtime session (still one connection), and keeps the CRDT
+implementation out of the bundle of every app that never calls it.
+
 ```ts
-const article = client.crdt.collections.articles.document({ id });
+import { createCrdtClient } from "questpie/crdt";
+
+const crdt = createCrdtClient(client);
+
+const article = crdt.collections.articles.document({ id });
 await article.connect({ mode: "edit", fallback: "view" });
 
 article.transaction(({ fields }) => {
@@ -6235,6 +6421,7 @@ For normative soundness details, inspect
 - [Realtime & SSE Keepalive](#realtime--sse-keepalive)
 - [Deployment](#deployment), Docker, env vars, checklist, health check
 - [Realtime and Live Preview](#realtime-and-live-preview)
+- [Observability](#observability), tracing, metrics, log correlation
 - [Common Mistakes](#common-mistakes)
 
 ## Overview
@@ -6462,6 +6649,65 @@ export default route()
 		await db.execute(sql`SELECT 1`);
 		return Response.json({ status: "ok" });
 	});
+```
+
+## Observability
+
+Opt-in. With no adapter configured every seam calls through and allocates
+nothing, so the framework wraps unconditionally without an unused-feature cost.
+
+```ts title="questpie.config.ts"
+import { otelObservability } from "@questpie/observability";
+
+export default runtimeConfig({
+	observability: {
+		adapter: otelObservability({
+			serviceName: "my-app",
+			otlpEndpoint: process.env.OTLP_ENDPOINT,
+			environment: process.env.NODE_ENV,
+			samplingRatio: 0.1, // parent-based; a sampled upstream trace stays sampled
+		}),
+	},
+});
+```
+
+**Instrumented seams**, all nested under the request that caused them:
+`GET /posts` (server) → `collection.find` → `db.select` / `db.transaction`,
+plus `kv.*`, `search.*`, and `job <name>` as a trace ROOT with `kind: consumer`
+(a job runs outside any request; making it a child would bury it).
+
+Database queries are traced on **every** `db` config variant, including
+`{ drizzle }` and `{ create }` where the app supplies its own client: the
+instrumentation attaches to Drizzle's session, not the driver, because the
+driver is invisible in exactly those variants (Hyperdrive, Neon, Vercel).
+`instrumentDbClient` is exported for a client built entirely outside the
+framework.
+
+**Metrics:** one histogram, `http.server.request.duration` (seconds, OTel
+semconv attributes). Rate is its count, errors are that count sliced by
+`http.response.status_code`. Do not add parallel counters; they duplicate the
+same series and drift.
+
+**Logs:** Pino output is untouched; records gain `trace_id`/`span_id` from the
+active span (snake_case — those are the keys backends join on) and, with an
+`otlpEndpoint`, are exported on the OTel logs signal too. The existing camelCase
+`traceId` is a different value: the framework's correlation id from the inbound
+`traceparent`/`x-request-id`, not the span's.
+
+**Propagation:** an inbound `traceparent` is continued with the remote span as
+parent, so a distributed waterfall stays connected. Only the root reads headers.
+
+**Never recorded, by design:** search query text, KV keys (length only), record
+contents and CRUD inputs, and SQL parameters. Tracing backends are searchable,
+long-lived and widely readable inside a company. Add what a specific
+investigation needs on a userland `span()`, where the decision is explicit.
+
+Shut down on SIGTERM or the last batch of spans never leaves the process:
+
+```ts
+process.on("SIGTERM", async () => {
+	await app.observability.shutdown();
+});
 ```
 
 ## Common Mistakes
@@ -9752,3 +9998,136 @@ Equivalent server refresh work is shared per principal by default. Never share a
 6. Clean up every direct subscription.
 7. Treat replay and presence as bounded delivery features, not durable history.
 8. Measure query cost, snapshot bytes, topics, subscribers, and React commits at realistic event rates.
+
+---
+
+# Client i18n
+
+UI message translation in the browser. Distinct from two other things that share
+the word "localization":
+
+| Concern                        | Where it lives                     | Surface                       |
+| ------------------------------ | ---------------------------------- | ----------------------------- |
+| Localized **content** per row  | `f.text().localized()`, i18n table | `references/data-modeling.md` |
+| **Server** message translation | `ctx.t(key, params, locale)`       | `references/app-context.md`   |
+| **Client** UI messages         | this file                          | `questpie/client-react`       |
+
+## Build an adapter, put it in a provider
+
+```tsx
+import { createSimpleI18n } from "questpie/client";
+import { I18nProvider, useTranslation } from "questpie/client-react";
+
+const i18n = createSimpleI18n({
+	locales: ["en", "sk"],
+	locale: "en",
+	fallbackLocale: "en",
+	messages: {
+		en: {
+			greeting: "Hello {{name}}",
+			items: { one: "1 item", other: "{{count}} items" },
+		},
+		sk: {
+			greeting: "Ahoj {{name}}",
+			items: { one: "1 položka", other: "{{count}} položiek" },
+		},
+	},
+});
+
+<I18nProvider adapter={i18n}>
+	<App />
+</I18nProvider>;
+```
+
+```tsx
+function Greeting() {
+	const { t, locale, setLocale, formatDate, isRTL } = useTranslation();
+	return <p dir={isRTL ? "rtl" : "ltr"}>{t("greeting", { name: "Ada" })}</p>;
+}
+```
+
+## Catalogs are checked at compile time
+
+`createSimpleI18n` rejects catalogs whose locales disagree on their key set,
+**as a type error, before it is a runtime error**. Adding `checkout.title` to
+`en` and forgetting `sk` fails the build rather than shipping an English string
+into a Slovak page. The same check runs at construction time and throws.
+
+It also rejects a `locale` or `fallbackLocale` that is not in `locales`, and
+duplicate entries in `locales`.
+
+`t()` is typed to the union of keys across the catalogs, so a typo'd key is a
+type error too.
+
+## Placeholders and plurals
+
+`{{param}}` is substituted from the second argument; `{{ param }}` with spaces
+works identically. A placeholder with no matching param is echoed back as
+`{{key}}` rather than becoming `undefined`, so a missing value is visible
+instead of corrupting the sentence.
+
+A message may be a plural object instead of a string. Selection uses
+`Intl.PluralRules` for the active locale, so a locale with `few`/`many`
+categories gets them:
+
+```ts
+items: { one: "1 item", few: "{{count}} items", other: "{{count}} items" }
+```
+
+`one` and `other` are required; `zero`, `two`, `few`, `many` are optional and
+fall back to `other`. Pass the count as a param - `t("items", { count: 5 })`.
+
+## The three hooks
+
+| Hook               | Returns                                                                             | Outside a provider |
+| ------------------ | ----------------------------------------------------------------------------------- | ------------------ |
+| `useTranslation()` | `{ locale, locales, t, setLocale, formatDate, formatNumber, getLocaleName, isRTL }` | throws             |
+| `useI18n()`        | the raw `I18nAdapter`                                                               | throws             |
+| `useSafeI18n()`    | the raw `I18nAdapter` or `null`                                                     | returns `null`     |
+
+`useTranslation` is the one to reach for. `isRTL` is already resolved to a
+boolean there, where the adapter exposes it as a method.
+
+Use `useSafeI18n` in a component that must render both inside and outside the
+provider - a shared design-system component, or one mounted during boot before
+the provider exists. Everywhere else the throw is what you want: it turns a
+silently untranslated screen into a stack trace.
+
+## Locale changes re-render
+
+The provider subscribes through `useSyncExternalStore`, so `setLocale()`
+re-renders consumers without any extra wiring, and SSR gets a stable initial
+snapshot. `setLocale` may be async - an adapter that lazy-loads catalogs
+returns a promise.
+
+## Bring your own adapter
+
+`I18nProvider` takes any `I18nAdapter`; `createSimpleI18n` is one
+implementation, not the only one. Implement the interface to wrap
+`react-i18next`, `next-intl`, or a server-driven catalog:
+
+```ts
+interface I18nAdapter<TLocale extends string, TMessageKey extends string> {
+	readonly locale: TLocale;
+	readonly locales: readonly TLocale[];
+	t(key: TMessageKey, params?: Readonly<Record<string, unknown>>): string;
+	setLocale(locale: TLocale): void | Promise<void>;
+	onLocaleChange(callback: (locale: TLocale) => void): () => void;
+	formatDate(date: Date | number, options?: Intl.DateTimeFormatOptions): string;
+	formatNumber(value: number, options?: Intl.NumberFormatOptions): string;
+	formatRelative?(date: Date | number): string;
+	getLocaleName(locale: string): string;
+	isRTL(): boolean;
+}
+```
+
+`onLocaleChange` must return an unsubscribe function - the provider calls it on
+unmount.
+
+## Checklist
+
+- Catalogs share one key set, enforced by the type checker; do not silence it with a cast
+- Count goes in as a param (`{ count }`), not baked into the key
+- `useTranslation` unless the component must survive having no provider
+- Content localization is a field concern (`.localized()`), not this
+- Server-side messages go through `ctx.t`, which shares the same `{{param}}` substitution

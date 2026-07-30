@@ -33,6 +33,20 @@
  */
 
 import type {
+	ApplyQuery,
+	CollectionRelationsFromApp,
+	CollectionSelect as CollectionSelectFromApp,
+} from "#questpie/server/collection/crud/types.js";
+import type { GlobalSelectFromApp } from "#questpie/server/global/crud/types.js";
+import type {
+	CollectionRelations,
+	GetGlobal,
+	GlobalRelations,
+	GlobalState,
+	ResolveRelationsDeep,
+} from "#questpie/shared/type-utils.js";
+
+import type {
 	Equal,
 	ExactType,
 	Expect,
@@ -46,33 +60,13 @@ import type {
 	Not,
 	NotEmptyObject,
 } from "../_assert.js";
-
 // Fixtures are imported as TYPES and probed through the typed maps
 // (`Globals["site"]` ≡ `typeof siteGlobal`, etc.). We deliberately avoid
 // `typeof <fixture>` on an `import type` binding — that is a TS1361 *structural*
 // error, which would make this file fail for the wrong reason (only the target
 // ASSERTIONS may fail). `Globals["site"]` resolves to the raw `GlobalBuilder`
 // type, which is exactly the builder surface GWR-1 must probe.
-import type {
-	App,
-	Collections,
-	Globals,
-	QuestpieApp,
-} from "../_fixtures.js";
-
-import type {
-	CollectionRelations,
-	GetGlobal,
-	GlobalRelations,
-	GlobalState,
-	ResolveRelationsDeep,
-} from "#questpie/shared/type-utils.js";
-import type {
-	ApplyQuery,
-	CollectionRelationsFromApp,
-	CollectionSelect as CollectionSelectFromApp,
-} from "#questpie/server/collection/crud/types.js";
-import type { GlobalSelectFromApp } from "#questpie/server/global/crud/types.js";
+import type { App, Collections, Globals, QuestpieApp } from "../_fixtures.js";
 
 // ============================================================================
 // §0a  Faithful reconstruction of the populated-relation surfaces.
@@ -152,7 +146,10 @@ type ArticleCreate = Parameters<
 // site.contact — a plain f.object() on a global.
 type _contactNotUnknown = Expect<NoUnknown<SiteUpd["contact"]>>;
 type _contactNotNever = Expect<NoNever<SiteUpd["contact"]>>;
-type _contactEmail = ExactType<NonNullable<SiteUpd["contact"]>["email"], string>;
+type _contactEmail = ExactType<
+	NonNullable<SiteUpd["contact"]>["email"],
+	string
+>;
 
 // social.navigation — object().array() ⇒ must be an ARRAY of typed objects.
 type _navNotUnknown = Expect<NoUnknown<SocialUpd["navigation"]>>;
@@ -265,7 +262,9 @@ type _readSocialNoPhantomIndex = Expect<NoStringIndex<SocialGet>>;
 
 // READ object-array fields are typed arrays, not `unknown`.
 type _readNavNotUnknown = Expect<NoUnknown<SocialGet["navigation"]>>;
-type _readNavIsArray = Expect<Equal<IsArrayType<SocialGet["navigation"]>, true>>;
+type _readNavIsArray = Expect<
+	Equal<IsArrayType<SocialGet["navigation"]>, true>
+>;
 type _readSocialLinksPlatform = ExactType<
 	NonNullable<SocialGet["socialLinks"]>[number]["platform"],
 	"instagram" | "facebook" | "twitter" | "tiktok" | "youtube"
@@ -373,9 +372,9 @@ type _partnersIsArray = Expect<
 type _partnersElemHasName = Expect<
 	HasKey<NonNullable<SitePartnersPop["partners"]>[number], "name">
 >;
-type _partnersElemNotUnknown = Expect<NoUnknown<
-	NonNullable<SitePartnersPop["partners"]>[number]
->>;
+type _partnersElemNotUnknown = Expect<
+	NoUnknown<NonNullable<SitePartnersPop["partners"]>[number]>
+>;
 
 // Mirror against a collection m2m so both relation paths are guarded (parity).
 type ArticleCatsPop = ApplyQuery<

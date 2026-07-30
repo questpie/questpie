@@ -8,7 +8,6 @@
 import { DEFAULT_LOCALE, DEFAULT_LOCALE_CONFIG } from "questpie/shared";
 
 import type { AdminState } from "./admin-types";
-import type { RegisteredAdmin } from "./registry";
 import type { ViewKind } from "./view/view";
 
 /**
@@ -226,9 +225,11 @@ export type InferAdminCMS<TAdmin> =
 		: unknown;
 
 /**
- * Get the registered Admin type (from module augmentation)
+ * The Admin type.
+ *
+ * Was `RegisteredAdmin extends Admin<infer TState> ? … : Admin<AdminState>`.
+ * RegisteredAdmin resolved to `unknown` because the registry interface it read
+ * was never exported and so could not be augmented — the conditional only ever
+ * produced this branch.
  */
-export type AppAdmin =
-	RegisteredAdmin extends Admin<infer TState>
-		? Admin<TState>
-		: Admin<AdminState>;
+export type AppAdmin = Admin<AdminState>;

@@ -7,8 +7,9 @@
  * the value as an array.
  */
 
-import { sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+
+import { sql } from "drizzle-orm";
 
 import { global } from "../../src/exports/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";

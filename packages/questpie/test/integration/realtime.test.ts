@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import { lt } from "drizzle-orm";
 
 import {
-	createAdapterRoutes,
 	collection,
 	global,
 	questpieRealtimeLogTable,
@@ -12,6 +11,7 @@ import {
 	type ChangeWake,
 	type RealtimeChangeEvent,
 } from "../../src/exports/index.js";
+import { realtimeSubscribe } from "../../src/server/adapters/routes/realtime.js";
 import { sharedSseKeepAliveTicker } from "../../src/server/modules/core/integrated/realtime/sse-keep-alive.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createMockSession, createTestContext } from "../utils/test-context";
@@ -228,8 +228,9 @@ describe("realtime matrix", () => {
 				{ realtime: { changeBroker: adapter } },
 			);
 			await runTestDbMigrations(setup.app);
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const response = await routes.realtime.subscribe(
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const response = await subscribe(
 				createRealtimeRequest([collectionTopic("posts", { mode: "delta" })]),
 				{},
 				undefined,
@@ -255,8 +256,9 @@ describe("realtime matrix", () => {
 				{ realtime: { changeBroker: adapter, nativeDeltas: true } },
 			);
 			await runTestDbMigrations(setup.app);
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const response = await routes.realtime.subscribe(
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const response = await subscribe(
 				createRealtimeRequest([collectionTopic("posts", { mode: "delta" })]),
 				{},
 				undefined,
@@ -330,9 +332,10 @@ describe("realtime matrix", () => {
 				{ title: "One" },
 				context,
 			);
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
 			const topic = collectionTopic("posts", { mode: "delta" });
-			const firstResponse = await routes.realtime.subscribe(
+			const firstResponse = await subscribe(
 				createRealtimeRequest([topic]),
 				{},
 				undefined,
@@ -352,7 +355,7 @@ describe("realtime matrix", () => {
 			});
 			expect((await firstReader.readSnapshot()).event).toBe("up-to-date");
 
-			const secondResponse = await routes.realtime.subscribe(
+			const secondResponse = await subscribe(
 				createRealtimeRequest([topic]),
 				{},
 				undefined,
@@ -391,8 +394,9 @@ describe("realtime matrix", () => {
 				{ realtime: { changeBroker: adapter, nativeDeltas: true } },
 			);
 			await runTestDbMigrations(setup.app);
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const response = await routes.realtime.subscribe(
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const response = await subscribe(
 				createRealtimeRequest([
 					collectionTopic("posts", { mode: "delta", limit: 10 }),
 				]),
@@ -426,8 +430,9 @@ describe("realtime matrix", () => {
 				{ title: "One", archived: false },
 				createTestContext(),
 			);
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const response = await routes.realtime.subscribe(
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const response = await subscribe(
 				createRealtimeRequest([
 					collectionTopic("posts", {
 						mode: "delta",
@@ -488,8 +493,9 @@ describe("realtime matrix", () => {
 				system,
 			);
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const response = await routes.realtime.subscribe(
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const response = await subscribe(
 				createRealtimeRequest([
 					collectionTopic("documents", { mode: "delta" }),
 				]),
@@ -541,8 +547,9 @@ describe("realtime matrix", () => {
 				{ title: "One" },
 				context,
 			);
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const response = await routes.realtime.subscribe(
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const response = await subscribe(
 				createRealtimeRequest([collectionTopic("posts", { mode: "delta" })]),
 				{},
 				undefined,
@@ -577,8 +584,9 @@ describe("realtime matrix", () => {
 				{ title: "One", internal: "first" },
 				context,
 			);
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const response = await routes.realtime.subscribe(
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const response = await subscribe(
 				createRealtimeRequest([collectionTopic("posts", { mode: "delta" })]),
 				{},
 				undefined,
@@ -620,9 +628,10 @@ describe("realtime matrix", () => {
 				createTestContext({ locale: "en", defaultLocale: "en" }),
 			);
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
 			const open = async (locale: string) => {
-				const response = await routes.realtime.subscribe(
+				const response = await subscribe(
 					createRealtimeRequest([
 						collectionTopic("posts", { mode: "delta", locale }),
 					]),
@@ -687,9 +696,10 @@ describe("realtime matrix", () => {
 				system,
 			);
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
 			const open = async (id: string, role: string) => {
-				const response = await routes.realtime.subscribe(
+				const response = await subscribe(
 					createRealtimeRequest([
 						collectionTopic("documents", { mode: "delta" }),
 					]),
@@ -785,8 +795,9 @@ describe("realtime matrix", () => {
 				createTestContext(),
 			);
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const response = await routes.realtime.subscribe(
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const response = await subscribe(
 				createRealtimeRequest([collectionTopic("posts", { mode: "delta" })]),
 				{},
 				undefined,
@@ -838,8 +849,9 @@ describe("realtime matrix", () => {
 				{ title: "Readable" },
 				createTestContext(),
 			);
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const response = await routes.realtime.subscribe(
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const response = await subscribe(
 				createRealtimeRequest([collectionTopic("posts", { mode: "delta" })]),
 				{},
 				undefined,
@@ -898,8 +910,9 @@ describe("realtime matrix", () => {
 				{ title: "Initially readable" },
 				createTestContext(),
 			);
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const response = await routes.realtime.subscribe(
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const response = await subscribe(
 				createRealtimeRequest([collectionTopic("posts", { mode: "delta" })]),
 				{},
 				undefined,
@@ -948,8 +961,9 @@ describe("realtime matrix", () => {
 				);
 			}
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const response = await routes.realtime.subscribe(
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const response = await subscribe(
 				createRealtimeRequest([
 					collectionTopic("posts", { operation: "count" }),
 				]),
@@ -979,9 +993,10 @@ describe("realtime matrix", () => {
 				{ realtime: true },
 			);
 			await runTestDbMigrations(setup.app);
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
 
-			const countWithFindLimit = await routes.realtime.subscribe(
+			const countWithFindLimit = await subscribe(
 				createRealtimeRequest([
 					collectionTopic("posts", { operation: "count", limit: 1 }),
 				]),
@@ -990,7 +1005,7 @@ describe("realtime matrix", () => {
 			);
 			expect(countWithFindLimit.status).toBe(400);
 
-			const unknownOperation = await routes.realtime.subscribe(
+			const unknownOperation = await subscribe(
 				createRealtimeRequest([
 					collectionTopic("posts", { operation: "delete" as any }),
 				]),
@@ -1650,13 +1665,14 @@ describe("realtime matrix", () => {
 			});
 			await runTestDbMigrations(setup.app);
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
 			const controller = new AbortController();
 			const request = createRealtimeRequest(
 				[collectionTopic("messages", { with: { user: true } })],
 				controller.signal,
 			);
-			const response = await routes.realtime.subscribe(request, {}, undefined);
+			const response = await subscribe(request, {}, undefined);
 			expect(response.ok).toBe(true);
 			const reader = createSSEReader(response.body!);
 			const initial = await reader.readSnapshot();
@@ -1868,9 +1884,10 @@ describe("realtime matrix", () => {
 				"generateCRUD",
 			);
 			const controller = new AbortController();
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
 			const firstTopic = globalTopic("settings");
-			const response = await routes.realtime.subscribe(
+			const response = await subscribe(
 				createRealtimeRequest(
 					[firstTopic, { ...firstTopic, id: "global-settings-second" }],
 					controller.signal,
@@ -1907,13 +1924,14 @@ describe("realtime matrix", () => {
 			});
 			await runTestDbMigrations(setup.app);
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
 			const controller = new AbortController();
 			const request = createRealtimeRequest(
 				[globalTopic("settings")],
 				controller.signal,
 			);
-			const response = await routes.realtime.subscribe(request, {}, undefined);
+			const response = await subscribe(request, {}, undefined);
 
 			expect(response.ok).toBe(true);
 			const reader = createSSEReader(response.body!);
@@ -1958,13 +1976,14 @@ describe("realtime matrix", () => {
 			});
 			await runTestDbMigrations(setup.app);
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
 			const controller = new AbortController();
 			const request = createRealtimeRequest(
 				[globalTopic("settings", { with: { defaultCategory: true } })],
 				controller.signal,
 			);
-			const response = await routes.realtime.subscribe(request, {}, undefined);
+			const response = await subscribe(request, {}, undefined);
 			expect(response.ok).toBe(true);
 			const reader = createSSEReader(response.body!);
 			const initial = await reader.readSnapshot();
@@ -2458,10 +2477,11 @@ describe("realtime matrix", () => {
 			});
 			await runTestDbMigrations(setup.app);
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
 			const request = createRealtimeRequest([collectionTopic("secrets")]);
 
-			const response = await routes.realtime.subscribe(
+			const response = await subscribe(
 				request,
 				{},
 				{
@@ -2502,7 +2522,8 @@ describe("realtime matrix", () => {
 			});
 			await runTestDbMigrations(setup.app);
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
 			const controller = new AbortController();
 
 			// Admin should get successful snapshot
@@ -2511,7 +2532,7 @@ describe("realtime matrix", () => {
 				controller.signal,
 			);
 
-			const response = await routes.realtime.subscribe(
+			const response = await subscribe(
 				request,
 				{},
 				{
@@ -2546,8 +2567,9 @@ describe("realtime matrix", () => {
 			);
 			await runTestDbMigrations(setup.app);
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const response = await routes.realtime.subscribe(
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const response = await subscribe(
 				createRealtimeRequest([
 					collectionTopic("secrets"),
 					collectionTopic("posts"),
@@ -2667,10 +2689,11 @@ describe("realtime matrix", () => {
 			});
 			await runTestDbMigrations(setup.app);
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
 			const request = createRealtimeRequest([globalTopic("config")]);
 
-			const response = await routes.realtime.subscribe(
+			const response = await subscribe(
 				request,
 				{},
 				{
@@ -2728,8 +2751,9 @@ describe("realtime matrix", () => {
 				},
 			};
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const response = await routes.realtime.subscribe(
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const response = await subscribe(
 				createRealtimeRequest(topics),
 				{},
 				undefined,
@@ -2795,8 +2819,9 @@ describe("realtime matrix", () => {
 			);
 			await runTestDbMigrations(setup.app);
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const response = await routes.realtime.subscribe(
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const response = await subscribe(
 				createRealtimeRequest([
 					{
 						...collectionTopic("items"),
@@ -2844,8 +2869,9 @@ describe("realtime matrix", () => {
 			);
 			await runTestDbMigrations(setup.app);
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const response = await routes.realtime.subscribe(
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const response = await subscribe(
 				createRealtimeRequest([collectionTopic("items")]),
 				{},
 				undefined,
@@ -2876,8 +2902,9 @@ describe("realtime matrix", () => {
 			);
 			await runTestDbMigrations(setup.app);
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const response = await routes.realtime.subscribe(
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const response = await subscribe(
 				createRealtimeRequest([collectionTopic("items")]),
 				{},
 				undefined,
@@ -2930,8 +2957,9 @@ describe("realtime matrix", () => {
 				system,
 			);
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const response = await routes.realtime.subscribe(
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const response = await subscribe(
 				createRealtimeRequest([
 					collectionTopic("documents", { where: { status: "published" } }),
 				]),
@@ -2980,8 +3008,9 @@ describe("realtime matrix", () => {
 				accessMode: "user",
 				session: session as any,
 			});
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const oversized = await routes.realtime.subscribe(
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const oversized = await subscribe(
 				createRealtimeRequest([collectionTopic("largeItems")]),
 				{},
 				{ appContext },
@@ -2996,7 +3025,7 @@ describe("realtime matrix", () => {
 
 			const replacements = await Promise.all(
 				Array.from({ length: 5 }, () =>
-					routes.realtime.subscribe(
+					subscribe(
 						createRealtimeRequest([collectionTopic("smallItems")]),
 						{},
 						{ appContext },
@@ -3032,8 +3061,9 @@ describe("realtime matrix", () => {
 				{ realtime: { changeBroker: adapter } },
 			);
 			await runTestDbMigrations(setup.app);
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const response = await routes.realtime.subscribe(
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const response = await subscribe(
 				createRealtimeRequest([collectionTopic("items")]),
 				{},
 				undefined,
@@ -3043,7 +3073,7 @@ describe("realtime matrix", () => {
 			expect(session.event).toBe("session");
 			await reader.readSnapshot(2000, "col-items");
 
-			const desiredRejected = await routes.realtime.subscribe(
+			const desiredRejected = await subscribe(
 				new Request("http://localhost/realtime", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
@@ -3103,7 +3133,7 @@ describe("realtime matrix", () => {
 			});
 			expect(JSON.stringify(desiredError)).not.toContain("must-not-leak");
 
-			const unsupportedVersion = await routes.realtime.subscribe(
+			const unsupportedVersion = await subscribe(
 				new Request("http://localhost/realtime", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
@@ -3129,7 +3159,7 @@ describe("realtime matrix", () => {
 				},
 			});
 
-			const invalidTopology = await routes.realtime.subscribe(
+			const invalidTopology = await subscribe(
 				new Request("http://localhost/realtime", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
@@ -3172,7 +3202,7 @@ describe("realtime matrix", () => {
 				},
 			});
 
-			const removedDeltaProtocol = await routes.realtime.subscribe(
+			const removedDeltaProtocol = await subscribe(
 				new Request("http://localhost/realtime", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
@@ -3195,7 +3225,7 @@ describe("realtime matrix", () => {
 
 			let revision = 0;
 			const control = (desiredTopics: unknown[]) =>
-				routes.realtime.subscribe(
+				subscribe(
 					new Request("http://localhost/realtime", {
 						method: "POST",
 						headers: { "Content-Type": "application/json" },
@@ -3320,8 +3350,9 @@ describe("realtime matrix", () => {
 			await setup.app.collections.items.create({ name: "before" }, context);
 			const sinceSeq = await setup.app.realtime.getLatestSeq();
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const response = await routes.realtime.subscribe(
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const response = await subscribe(
 				createRealtimeRequest([collectionTopic("items", { sinceSeq })]),
 				{},
 				undefined,
@@ -3357,8 +3388,9 @@ describe("realtime matrix", () => {
 				.delete(questpieRealtimeLogTable)
 				.where(lt(questpieRealtimeLogTable.seq, latestSeq));
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const response = await routes.realtime.subscribe(
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const response = await subscribe(
 				createRealtimeRequest([collectionTopic("items", { sinceSeq: 0 })]),
 				{},
 				undefined,
@@ -3388,10 +3420,11 @@ describe("realtime matrix", () => {
 				session: session as any,
 				accessMode: "user",
 			});
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
 			const responses = await Promise.all(
 				Array.from({ length: 5 }, () =>
-					routes.realtime.subscribe(
+					subscribe(
 						createRealtimeRequest([collectionTopic("items")]),
 						{},
 						{
@@ -3404,7 +3437,7 @@ describe("realtime matrix", () => {
 				createSSEReader(response.body!),
 			);
 			await Promise.all(readers.map((reader) => reader.readSnapshot()));
-			const rejected = await routes.realtime.subscribe(
+			const rejected = await subscribe(
 				createRealtimeRequest([collectionTopic("items")]),
 				{},
 				{ appContext },
@@ -3415,7 +3448,7 @@ describe("realtime matrix", () => {
 			expect(setup.app.realtime.listeners.size).toBe(1);
 
 			await readers[0].close();
-			const replacement = await routes.realtime.subscribe(
+			const replacement = await subscribe(
 				createRealtimeRequest([collectionTopic("items")]),
 				{},
 				{ appContext },
@@ -3451,7 +3484,8 @@ describe("realtime matrix", () => {
 			);
 			await runTestDbMigrations(setup.app);
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
 			const contexts = ["alice", "bob"].map((id) => ({
 				appContext: createTestContext({
 					session: createMockSession({ id }) as any,
@@ -3459,7 +3493,7 @@ describe("realtime matrix", () => {
 				}),
 			}));
 			const open = async (resource: string, context: any) => {
-				const response = await routes.realtime.subscribe(
+				const response = await subscribe(
 					createRealtimeRequest([collectionTopic(resource)]),
 					{},
 					context,
@@ -3520,9 +3554,10 @@ describe("realtime matrix", () => {
 				system,
 			);
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
 			const readFor = async (id: string, role: string) => {
-				const response = await routes.realtime.subscribe(
+				const response = await subscribe(
 					createRealtimeRequest([collectionTopic("documents")]),
 					{},
 					{
@@ -3574,13 +3609,14 @@ describe("realtime matrix", () => {
 			);
 			await runTestDbMigrations(setup.app);
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
 			const controller = new AbortController();
 			const request = createRealtimeRequest(
 				[collectionTopic("items")],
 				controller.signal,
 			);
-			const response = await routes.realtime.subscribe(request, {}, undefined);
+			const response = await subscribe(request, {}, undefined);
 			expect(response.ok).toBe(true);
 
 			const reader = createSSEReader(response.body!);
@@ -3632,8 +3668,11 @@ describe("realtime matrix", () => {
 			});
 			let response: Response | undefined;
 			try {
-				const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-				response = await routes.realtime.subscribe(
+				const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+					realtimeSubscribe(setup.app, a[0], a[1], a[2], {
+						accessMode: "user",
+					});
+				response = await subscribe(
 					createRealtimeRequest([collectionTopic("items")]),
 					{},
 					undefined,
@@ -3675,8 +3714,9 @@ describe("realtime matrix", () => {
 			);
 			await runTestDbMigrations(setup.app);
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const response = await routes.realtime.subscribe(
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const response = await subscribe(
 				createRealtimeRequest([collectionTopic("items")]),
 				{},
 				undefined,
@@ -3728,7 +3768,8 @@ describe("realtime matrix", () => {
 			});
 			await runTestDbMigrations(setup.app);
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
 			const controller = new AbortController();
 
 			const request = createRealtimeRequest(
@@ -3736,7 +3777,7 @@ describe("realtime matrix", () => {
 				controller.signal,
 			);
 
-			const response = await routes.realtime.subscribe(request, {}, undefined);
+			const response = await subscribe(request, {}, undefined);
 
 			expect(response.ok).toBe(true);
 			expect(response.headers.get("content-type")).toContain(
@@ -3784,7 +3825,8 @@ describe("realtime matrix", () => {
 			});
 			await runTestDbMigrations(setup.app);
 
-			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
 			const controller = new AbortController();
 
 			const request = createRealtimeRequest(
@@ -3792,7 +3834,7 @@ describe("realtime matrix", () => {
 				controller.signal,
 			);
 
-			const response = await routes.realtime.subscribe(request, {}, undefined);
+			const response = await subscribe(request, {}, undefined);
 
 			expect(response.ok).toBe(true);
 

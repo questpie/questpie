@@ -18,12 +18,7 @@ import type {
 	SerializedOptionsConfig,
 	SerializedReactiveConfig,
 } from "questpie";
-
-import {
-	extractDependencies,
-	getDebounce,
-	trackDepsFunction,
-} from "questpie";
+import { extractDependencies, getDebounce, trackDepsFunction } from "questpie";
 
 /**
  * Get handler function from ReactiveConfig.

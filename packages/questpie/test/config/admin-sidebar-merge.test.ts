@@ -11,7 +11,9 @@ describe("admin sidebar merge", () => {
 	it("detects authoritative app sidebars with nested section items", () => {
 		expect(
 			isAuthoritativeSidebar({
-				sections: [{ id: "product", items: [{ type: "link", href: "/admin" }] }],
+				sections: [
+					{ id: "product", items: [{ type: "link", href: "/admin" }] },
+				],
 			}),
 		).toBe(true);
 		expect(
@@ -101,7 +103,9 @@ describe("admin sidebar merge", () => {
 			{
 				sidebarMode: "replace",
 				sidebar: {
-					sections: [{ id: "product", items: [{ type: "link", href: "/admin" }] }],
+					sections: [
+						{ id: "product", items: [{ type: "link", href: "/admin" }] },
+					],
 				},
 			},
 		);
@@ -120,10 +124,13 @@ describe("admin sidebar merge", () => {
 			shouldAutoAppendUnlistedSidebar({ sidebarMode: "append" }, authoritative),
 		).toBe(false);
 		expect(
-			shouldAutoAppendUnlistedSidebar({ sidebarMode: "replace" }, {
-				sections: [{ id: "overview" }],
-				items: [],
-			}),
+			shouldAutoAppendUnlistedSidebar(
+				{ sidebarMode: "replace" },
+				{
+					sections: [{ id: "overview" }],
+					items: [],
+				},
+			),
 		).toBe(false);
 		expect(
 			shouldAutoAppendUnlistedSidebar(undefined, {

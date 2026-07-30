@@ -1,5 +1,5 @@
-import { appConfig } from "#questpie/server/config/factories.js";
 import type { InferContextExtensionsFromAppConfig } from "#questpie/server/config/context.js";
+import { appConfig } from "#questpie/server/config/factories.js";
 
 import type { Equal, Expect, HasKey } from "./type-test-utils.js";
 

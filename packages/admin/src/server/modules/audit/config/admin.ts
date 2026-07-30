@@ -1,8 +1,8 @@
 import type {
 	ComponentReference,
 	WidgetFetchContext,
-} from "../../../augmentation.js";
-import { adminConfig } from "../../../augmentation.js";
+} from "../../../augmentation/index.js";
+import { adminConfig } from "../../../augmentation/index.js";
 import { AUDIT_LOG_COLLECTION } from "../collections/audit-log.js";
 
 // ============================================================================

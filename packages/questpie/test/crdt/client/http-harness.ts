@@ -23,6 +23,12 @@ export type TestField = Readonly<{
 	format: "text" | "set";
 	value: string | readonly string[];
 	grant?: "view" | "edit";
+	/**
+	 * Initial snapshot in the ENGINE's own format. Required when driving the
+	 * harness with a real CRDT engine; the default toy engine derives it from
+	 * `value`.
+	 */
+	snapshot?: Uint8Array;
 	fieldEpoch?: bigint;
 	fieldCursor?: bigint;
 }>;
@@ -100,6 +106,7 @@ export class CrdtExchangeHarness {
 					value: "Draft",
 				},
 			] satisfies readonly TestField[]);
+		const textEngineForManifest = options.textEngine ?? testTextEngine();
 		const manifestFields: Record<
 			string,
 			CrdtClientOpenedSession["manifest"]["fields"][string]
@@ -110,17 +117,26 @@ export class CrdtExchangeHarness {
 			manifestFields[field.key] = Object.freeze({
 				fieldSlot: field.fieldSlot,
 				format: field.format,
-				formatVersion: 1,
+				// Derived from the configured engine, not hardcoded: the client
+				// rejects a manifest whose engineId/formatVersion do not match its
+				// own engine, so a harness that always claims "test-text" can only
+				// ever be driven by the toy engine.
+				formatVersion:
+					field.format === "text" ? textEngineForManifest.formatVersion : 1,
 				engineId:
 					field.format === "text"
-						? "test-text"
+						? textEngineForManifest.engineId
 						: "questpie.deterministic-add-wins-set/v1",
 				grant: field.grant ?? "edit",
 			});
+			// The initial snapshot must be in the ENGINE's format. The toy engine
+			// treats a text snapshot as raw UTF-8; a real CRDT engine expects its
+			// own encoded state, so build it through the engine when one is given.
 			this.snapshots.set(
 				field.fieldSlot,
 				field.format === "text"
-					? new TextEncoder().encode(field.value as string)
+					? (field.snapshot ??
+							textSnapshotFor(textEngineForManifest, field.value as string))
 					: createClientSetSnapshot(field.value as readonly string[]),
 			);
 			this.cursors.set(field.fieldSlot, field.fieldCursor ?? 0n);
@@ -240,6 +256,27 @@ export class CrdtExchangeHarness {
 		}
 	}
 
+	/**
+	 * Merge one appended update into the stored snapshot, using the same engine
+	 * the clients use.
+	 *
+	 * Only text fields are merged: set fields have their own snapshot encoding
+	 * and no test needs cross-client set convergence yet. A set append still
+	 * bumps its cursor, exactly as before.
+	 */
+	private commitPart(fieldSlot: number, update: Uint8Array): void {
+		const contract = Object.values(this.activeManifest.fields).find(
+			(field) => field.fieldSlot === fieldSlot,
+		);
+		if (!contract || contract.format !== "text") return;
+
+		const engine = this.options.textEngine ?? testTextEngine();
+		const current = this.snapshots.get(fieldSlot);
+		if (!current) return;
+		const merged = engine.applyUpdate(engine.restore(current), update);
+		this.snapshots.set(fieldSlot, engine.snapshot(merged));
+	}
+
 	setText(fieldSlot: number, value: string, fieldCursor?: bigint): void {
 		this.snapshots.set(fieldSlot, new TextEncoder().encode(value));
 		if (fieldCursor !== undefined) this.cursors.set(fieldSlot, fieldCursor);
@@ -315,6 +352,11 @@ export class CrdtExchangeHarness {
 				const cursors = frame.payload.parts.map((part) => {
 					const cursor = (this.cursors.get(part.fieldSlot) ?? 0n) + 1n;
 					this.cursors.set(part.fieldSlot, cursor);
+					// Actually COMMIT the update into the stored snapshot. Without
+					// this the harness acknowledged writes and threw them away, so a
+					// second client pulling afterwards still saw the original text
+					// and two clients could never converge.
+					this.commitPart(part.fieldSlot, part.bytes);
 					return { fieldSlot: part.fieldSlot, fieldCursor: cursor };
 				});
 				const receipt = Object.freeze({
@@ -393,6 +435,22 @@ export class CrdtExchangeHarness {
 			chunks,
 		});
 	}
+}
+
+/**
+ * Initial text snapshot for the DEFAULT toy engine, which stores text as raw
+ * UTF-8 and reads it back directly in restore().
+ *
+ * A real CRDT engine has no such shortcut — an empty byte array is not a valid
+ * Yjs update, for instance. Tests driving a real engine pass `snapshot` on the
+ * field instead, built with that engine, so this harness stays engine-agnostic
+ * rather than importing one.
+ */
+function textSnapshotFor(
+	_engine: CrdtClientTextEngine<any>,
+	value: string,
+): Uint8Array {
+	return new TextEncoder().encode(value);
 }
 
 export function testTextEngine(): CrdtClientTextEngine<string> {

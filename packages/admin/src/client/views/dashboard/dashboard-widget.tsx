@@ -249,6 +249,27 @@ function CustomWidgetRenderer({
 // ============================================================================
 
 /**
+ * The registry key a widget config resolves to.
+ *
+ * `ServerCustomWidget` (server/augmentation/dashboard.ts:182-199) is
+ * `{ type: "custom", widgetType, props }`, and `widgetType` is documented there
+ * as "resolved by client registry". So for a custom widget the key is
+ * `widgetType`, not the literal `"custom"` — the type discriminates the shape,
+ * the widgetType names the component.
+ *
+ * Exported and pure so the resolution can be tested without a renderer; the
+ * bug this replaced was invisible to every server-side test because it lived
+ * entirely in the render path.
+ */
+export function resolveWidgetKey(config: {
+	type: string;
+	widgetType?: string;
+}): string {
+	if (config.type === "custom" && config.widgetType) return config.widgetType;
+	return config.type;
+}
+
+/**
  * DashboardWidget - Renders a single widget based on its configuration.
  *
  * Resolves widgets from the admin store's widget registry (populated by
@@ -266,8 +287,13 @@ export function DashboardWidget({
 
 	let widgetElement: React.ReactElement;
 
-	if (config.type === "custom") {
-		// Handle custom widget type (inline component, not from registry)
+	const widgetKey = resolveWidgetKey(config);
+
+	// A custom widget that resolved to nothing else is the legacy inline form.
+	if (config.type === "custom" && widgetKey === "custom") {
+		// Legacy inline form: a component carried on the config itself. The
+		// declared ServerCustomWidget has no `component`/`config` fields, so this
+		// only fires for configs built outside that contract.
 		widgetElement = (
 			<CustomWidgetRenderer
 				loader={config.component}
@@ -275,13 +301,13 @@ export function DashboardWidget({
 				span={config.span}
 			/>
 		);
-	} else if (widgetRegistry?.[config.type]) {
+	} else if (widgetRegistry?.[widgetKey]) {
 		// Check prop-based registry for overrides first
-		const CustomWidget = widgetRegistry[config.type];
+		const CustomWidget = widgetRegistry[widgetKey];
 		widgetElement = <CustomWidget config={config as any} span={config.span} />;
 	} else {
 		// Look up widget in the admin store registry (built-in + user-registered)
-		const widgetDef = registeredWidgets[config.type];
+		const widgetDef = registeredWidgets[widgetKey];
 		const component = widgetDef?.component ?? widgetDef?.state?.component;
 		if (component) {
 			widgetElement = (
@@ -293,7 +319,9 @@ export function DashboardWidget({
 				/>
 			);
 		} else {
-			widgetElement = <UnknownWidget type={config.type} />;
+			// The key, not the discriminant — a missing custom widget should name
+			// the widgetType the app registered under, not the word "custom".
+			widgetElement = <UnknownWidget type={widgetKey} />;
 		}
 	}
 

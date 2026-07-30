@@ -43,6 +43,7 @@ import type { ExecutorService } from "#questpie/server/modules/core/integrated/e
 import type { KVService } from "#questpie/server/modules/core/integrated/kv/service.js";
 import type { LoggerService } from "#questpie/server/modules/core/integrated/logger/service.js";
 import type { MailerService } from "#questpie/server/modules/core/integrated/mailer/service.js";
+import type { ObservabilityService } from "#questpie/server/modules/core/integrated/observability/service.js";
 import { questpieQueueDispatchTable } from "#questpie/server/modules/core/integrated/queue/dispatch-table.js";
 import type { QueueClient } from "#questpie/server/modules/core/integrated/queue/types.js";
 import {
@@ -224,6 +225,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	public kv!: KVService;
 	public executor!: ExecutorService;
 	public logger!: LoggerService;
+	public observability!: ObservabilityService;
 	public search!: SearchService;
 	public realtime!: RealtimeService;
 	/** @internal App-owned CRDT operational coordinator; request APIs resolve through the service container. */
@@ -480,6 +482,9 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		// Tier 0: no dependencies (config only)
 		["i18n", "t"],
 		["logger", "logger"],
+		// Tier 0 on purpose: the HTTP adapter opens the root span before any
+		// other service is touched, so observability must exist by then.
+		["observability", "observability"],
 		["kv", "kv"],
 		["executor", "executor"],
 		["db", "db"],
@@ -592,6 +597,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			kv: this.kv,
 			executor: this.executor,
 			logger: this.logger,
+			observability: this.observability,
 			search: this.search,
 			realtime: this.realtime,
 			email: this.email,

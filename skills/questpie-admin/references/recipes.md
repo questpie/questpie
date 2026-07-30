@@ -13,15 +13,15 @@ Task-oriented recipes for extending the admin. Every recipe is **declarative**: 
 
 A custom field has **two independent halves** that connect by name:
 
-| | BE field (server) | FE field (admin client) |
-| --- | --- | --- |
-| What | the **field type** - adds `f.color()` to the builder | the **renderer** - how that type looks in the admin |
-| Owns | storage column, Zod validation, operators, options/metadata | the edit control + the table cell |
-| Factory | `from()` / `field()` / `fieldType()` (from `questpie/builders`) | `field("color", { component, cell })` (from `@questpie/admin/client`) |
-| Lives in | a module's `fields` (questpie skill `references/extend.md`) | `src/questpie/admin/fields/color.tsx` |
-| Without the other | works headless, no admin needed | a default control is used if you ship none |
+|                   | BE field (server)                                               | FE field (admin client)                                               |
+| ----------------- | --------------------------------------------------------------- | --------------------------------------------------------------------- |
+| What              | the **field type** - adds `f.color()` to the builder            | the **renderer** - how that type looks in the admin                   |
+| Owns              | storage column, Zod validation, operators, options/metadata     | the edit control + the table cell                                     |
+| Factory           | `from()` / `field()` / `fieldType()` (from `questpie/builders`) | `field("color", { component, cell })` (from `@questpie/admin/client`) |
+| Lives in          | a module's `fields` (questpie skill `references/extend.md`)     | `src/questpie/admin/fields/color.tsx`                                 |
+| Without the other | works headless, no admin needed                                 | a default control is used if you ship none                            |
 
-They never import each other. The server type emits introspection metadata under its type name; the admin looks up the renderer by the **same name** and feeds it the resolved options as props. So options are declared once (server) and *read* off props (client) - never duplicated.
+They never import each other. The server type emits introspection metadata under its type name; the admin looks up the renderer by the **same name** and feeds it the resolved options as props. So options are declared once (server) and _read_ off props (client) - never duplicated.
 
 ## Recipe: a custom field, end to end
 
@@ -35,7 +35,10 @@ import { varchar } from "questpie/drizzle-pg-core";
 import { z } from "zod";
 
 export const color = (def = "#000000") =>
-	from(varchar("", { length: 7 }), z.string().regex(/^#[0-9a-fA-F]{6}$/)).default(def);
+	from(
+		varchar("", { length: 7 }),
+		z.string().regex(/^#[0-9a-fA-F]{6}$/),
+	).default(def);
 ```
 
 Register it on a module so it appears on `f`, then use it (options live here, on the server):
@@ -56,7 +59,13 @@ export default [module({ name: "app-fields", fields: { color } })] as const;
 ```tsx title="src/questpie/admin/fields/color.tsx"
 import { field, type FieldComponentProps } from "@questpie/admin/client";
 
-function ColorField({ value, onChange, onBlur, disabled, error }: FieldComponentProps<string>) {
+function ColorField({
+	value,
+	onChange,
+	onBlur,
+	disabled,
+	error,
+}: FieldComponentProps<string>) {
 	return (
 		<input
 			type="color"
@@ -88,7 +97,9 @@ import { useState } from "react";
 import { client } from "@/lib/client"; // the app's typed client SDK
 
 function ChatPage() {
-	const [messages, setMessages] = useState<{ role: string; text: string }[]>([]);
+	const [messages, setMessages] = useState<{ role: string; text: string }[]>(
+		[],
+	);
 
 	async function send(text: string) {
 		setMessages((m) => [...m, { role: "user", text }]);
@@ -123,7 +134,11 @@ import { view, type CollectionListViewProps } from "@questpie/admin/client";
 
 function KanbanView(props: CollectionListViewProps) {
 	// props carries the list context: rows, columns, sort, selection, pagination
-	return <div className="flex gap-4">{/* group props.data by a status column */}</div>;
+	return (
+		<div className="flex gap-4">
+			{/* group props.data by a status column */}
+		</div>
+	);
 }
 
 export default view("kanban", { kind: "list", component: KanbanView });

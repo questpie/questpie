@@ -35,7 +35,9 @@ export interface UseAutosaveOptions {
 	/** Mirror of the form's `isSubmitting` state. */
 	isSubmittingRef: React.MutableRefObject<boolean>;
 	/** Update mutation used to persist the record. */
-	updateMutation: { mutateAsync: (args: { id: string; data: unknown }) => Promise<unknown> };
+	updateMutation: {
+		mutateAsync: (args: { id: string; data: unknown }) => Promise<unknown>;
+	};
 	/** Optional: commit the saved snapshot to the live preview. */
 	onPreviewCommit?: (data: unknown) => void;
 	/** Optional: trigger a live-preview refresh after save. */

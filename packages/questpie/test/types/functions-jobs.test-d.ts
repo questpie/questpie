@@ -165,13 +165,12 @@ const rawRouteWithTypedParams = route()
 
 type RawRouteWithTypedParamsType = typeof rawRouteWithTypedParams;
 type _rawRouteParams = Expect<
-	Equal<
-		InferRouteParams<RawRouteWithTypedParamsType>,
-		{ appId: string }
-	>
+	Equal<InferRouteParams<RawRouteWithTypedParamsType>, { appId: string }>
 >;
 
-const jsonRouteWithRequestAndParams = route<RouteParamsFromKey<"pairing/[tokenId]">>()
+const jsonRouteWithRequestAndParams = route<
+	RouteParamsFromKey<"pairing/[tokenId]">
+>()
 	.post()
 	.schema(z.object({ ok: z.boolean() }))
 	.handler(async ({ input, request, params }) => {
@@ -191,7 +190,10 @@ type _jsonRouteParams = Expect<
 type _wrappedRouteParams = Expect<
 	Equal<
 		InferRouteParams<
-			RouteWithParams<typeof rawRoute, RouteParamsFromKey<"apps/[appId]/install">>
+			RouteWithParams<
+				typeof rawRoute,
+				RouteParamsFromKey<"apps/[appId]/install">
+			>
 		>,
 		{ appId: string }
 	>

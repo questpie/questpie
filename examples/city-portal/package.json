@@ -9,7 +9,7 @@
 	},
 	"scripts": {
 		"dev": "bun --bun vite dev --port 3001",
-		"generate": "bun questpie generate -c src/questpie/server/questpie.config.ts",
+		"questpie:generate": "bun run node_modules/questpie/src/exports/cli.ts generate -c src/questpie/server/questpie.config.ts",
 		"seed": "bun run seed.ts",
 		"build": "vite build",
 		"preview": "vite preview",
@@ -24,8 +24,8 @@
 		"@questpie/tanstack-query": "workspace:*",
 		"@tailwindcss/vite": "^4.0.6",
 		"@tanstack/react-query": "^5.62.11",
-		"@tanstack/react-router": "^1.132.0",
-		"@tanstack/react-start": "^1.132.0",
+		"@tanstack/react-router": "^1.170.18",
+		"@tanstack/react-start": "^1.167.42",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
 		"date-fns": "^4.1.0",
@@ -41,7 +41,6 @@
 		"zod": "^4.2.1"
 	},
 	"devDependencies": {
-		"bun-types": "latest",
 		"@iconify/json": ">=2",
 		"@questpie/vite-plugin-iconify": "workspace:*",
 		"@tanstack/devtools-vite": "^0.3.11",
@@ -49,8 +48,9 @@
 		"@types/react": "^19.2.0",
 		"@types/react-dom": "^19.2.0",
 		"@vitejs/plugin-react": "^5.0.4",
-		"typescript": "^5.7.2",
-		"vite": "^7.1.7",
+		"bun-types": "latest",
+		"typescript": "5.9.2",
+		"vite": "^8.0.16",
 		"vite-tsconfig-paths": "^5.1.4"
 	}
 }

@@ -44,10 +44,6 @@
  *       production alias is bound to the target formula.
  */
 
-import { relation } from "#questpie/server/modules/core/fields/relation.js";
-import type {
-	RelationFieldMethods,
-} from "#questpie/server/modules/core/fields/relation.js";
 // KnownCollectionKey (loose, exists) is the baseline; StrictCollectionKey is the
 // TARGET export that does not exist yet — this import is RED until Part B lands.
 import type {
@@ -55,6 +51,8 @@ import type {
 	StrictCollectionKey,
 } from "#questpie/server/config/app-context.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
+import { relation } from "#questpie/server/modules/core/fields/relation.js";
+import type { RelationFieldMethods } from "#questpie/server/modules/core/fields/relation.js";
 
 import type {
 	Equal,
@@ -66,7 +64,6 @@ import type {
 	NoUnknown,
 	Not,
 } from "../_assert.js";
-
 // Fixtures: every f.relation("...") in the graph targets a real Collections key.
 // `Collections` enumerates the in-package collection names that a populated
 // `Questpie.CollectionKeys` would mirror.
@@ -121,12 +118,14 @@ type _sck_populated_rejects_string = Expect<
 >;
 
 // Populated → FINITE: no string index signature survived (no `(string & {})` arm).
-type _sck_populated_finite = Expect<NoStringIndex<
-	Record<StrictOver<FakeRegistry>, 0>
->>;
+type _sck_populated_finite = Expect<
+	NoStringIndex<Record<StrictOver<FakeRegistry>, 0>>
+>;
 
 // Empty registry → plain `string` escape hatch (pre-codegen still compiles).
-type _sck_empty_is_string = Expect<Equal<StrictOver<FakeRegistryEmpty>, string>>;
+type _sck_empty_is_string = Expect<
+	Equal<StrictOver<FakeRegistryEmpty>, string>
+>;
 
 // --- The REAL exported alias must equal the target formula over the real registry.
 // RED: `StrictCollectionKey` does not exist yet (unresolved import above), and once
@@ -137,7 +136,9 @@ type _real_sck_matches_formula = Expect<
 
 // In the questpie package build the registry is empty, so the REAL alias must
 // resolve to `string` (the fallback) — and must NOT be `any`/`unknown`.
-type _real_sck_empty_build_is_string = Expect<Equal<StrictCollectionKey, string>>;
+type _real_sck_empty_build_is_string = Expect<
+	Equal<StrictCollectionKey, string>
+>;
 type _real_sck_not_any = Expect<NoAny<StrictCollectionKey>>;
 type _real_sck_not_unknown = Expect<NoUnknown<StrictCollectionKey>>;
 
@@ -158,10 +159,9 @@ type _known_is_loose_now = Expect<
 // The strict alias and the loose alias must DIVERGE on the populated lens:
 // strict rejects bare `string`, loose accepts it. (Encodes "they are different
 // types and the constraint must use the strict one".)
-type LooseOver<R> =
-	[keyof R] extends [never]
-		? string & {}
-		: (keyof R & string) | (string & {});
+type LooseOver<R> = [keyof R] extends [never]
+	? string & {}
+	: (keyof R & string) | (string & {});
 type _strict_and_loose_diverge = Expect<
 	Equal<
 		[
@@ -192,7 +192,9 @@ type RelStringArm = Extract<RelParam, string>;
 
 // TARGET: the string arm of relation()'s parameter is exactly StrictCollectionKey.
 // RED now — it is `KnownCollectionKey & string` (the loose, `string & {}`-bearing form).
-type _rel_constraint_is_strict = Expect<Equal<RelStringArm, StrictCollectionKey>>;
+type _rel_constraint_is_strict = Expect<
+	Equal<RelStringArm, StrictCollectionKey>
+>;
 
 // TARGET: that constraint must NOT admit bare `string` once the registry is
 // populated. We can only state today's empty-build value here; the populated
@@ -235,7 +237,12 @@ type _through_rejects_string_when_populated = Expect<
 // Typo rejection over the populated lens via a target-shaped mirror.
 declare function m2mStrict(cfg: { through: StrictOver<FakeRegistry> }): void;
 m2mStrict({ through: "materials" });
-type _m2m_ok = Expect<Equal<Parameters<typeof m2mStrict>[0]["through"], "toys" | "materials" | "machines">>;
+type _m2m_ok = Expect<
+	Equal<
+		Parameters<typeof m2mStrict>[0]["through"],
+		"toys" | "materials" | "machines"
+	>
+>;
 // @ts-expect-error — typo'd junction name must be rejected.
 m2mStrict({ through: "junction_typo_does_not_exist" });
 
@@ -280,8 +287,16 @@ type PolyTargetMap = {
 type _poly_target_finite = Expect<NoStringIndex<PolyTargetMap>>;
 
 // A correct polymorphic value must satisfy the target map…
-const _polyGood = { toys: "machines", materials: "toys" } as const satisfies PolyTargetMap;
-type _polyGood_ok = Expect<Equal<typeof _polyGood, { readonly toys: "machines"; readonly materials: "toys" }>>;
+const _polyGood = {
+	toys: "machines",
+	materials: "toys",
+} as const satisfies PolyTargetMap;
+type _polyGood_ok = Expect<
+	Equal<
+		typeof _polyGood,
+		{ readonly toys: "machines"; readonly materials: "toys" }
+	>
+>;
 
 // …a typo KEY must NOT (REL-STR-05).
 type _poly_bad_key_rejected = Expect<
@@ -289,7 +304,10 @@ type _poly_bad_key_rejected = Expect<
 >;
 // …a typo VALUE must NOT.
 type _poly_bad_value_rejected = Expect<
-	Equal<{ toys: "machinezzz_typo_value" } extends PolyTargetMap ? true : false, false>
+	Equal<
+		{ toys: "machinezzz_typo_value" } extends PolyTargetMap ? true : false,
+		false
+	>
 >;
 
 // @ts-expect-error — typo'd polymorphic KEY rejected by the target map.
@@ -358,8 +376,12 @@ type _localreg_strict_rejects_string = Expect<
 
 // The loose `KnownCollectionKey` DOES carry a string index over a populated lens
 // (the bug); the strict formula does NOT. Direct contrast, no `any` hiding.
-type _loose_has_index = Expect<HasStringIndex<Record<LooseOver<FakeRegistry>, 0>>>;
-type _strict_no_index = Expect<Not<HasStringIndex<Record<StrictOver<FakeRegistry>, 0>>>>;
+type _loose_has_index = Expect<
+	HasStringIndex<Record<LooseOver<FakeRegistry>, 0>>
+>;
+type _strict_no_index = Expect<
+	Not<HasStringIndex<Record<StrictOver<FakeRegistry>, 0>>>
+>;
 
 // The real exported strict alias, recovered through the formula, is never `never`
 // (an over-eager `& string` intersection that wiped the union would be a regression).

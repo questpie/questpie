@@ -30,3 +30,7 @@ export {
 	sortedValues,
 	sourceBasename,
 } from "#questpie/cli/codegen/category-emit.js";
+export {
+	generateModule,
+	type GenerateModuleOptions,
+} from "#questpie/cli/codegen/generate-module.js";

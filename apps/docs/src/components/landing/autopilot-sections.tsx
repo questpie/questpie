@@ -208,9 +208,7 @@ export function APHero() {
 										style={{
 											padding: "14px 14px 14px 0",
 											borderRight:
-												i < 2
-													? "1px solid var(--border-subtle)"
-													: undefined,
+												i < 2 ? "1px solid var(--border-subtle)" : undefined,
 											paddingLeft: i === 0 ? 0 : 14,
 										}}
 									>
@@ -374,9 +372,7 @@ function IssueDetailMock() {
 								overflow: "hidden",
 								whiteSpace: "nowrap",
 								textOverflow: "ellipsis",
-								fontFamily: p.mono
-									? "var(--font-mono)"
-									: "var(--font-sans)",
+								fontFamily: p.mono ? "var(--font-mono)" : "var(--font-sans)",
 							}}
 						>
 							{p.icon && (
@@ -410,8 +406,7 @@ function IssueDetailMock() {
 							gridTemplateColumns: "44px 1fr",
 							gap: 12,
 							padding: "8px 0",
-							borderTop:
-								i === 0 ? "none" : "1px dashed var(--border-subtle)",
+							borderTop: i === 0 ? "none" : "1px dashed var(--border-subtle)",
 							fontSize: 12.5,
 							alignItems: "baseline",
 						}}
@@ -501,13 +496,7 @@ type StatusName =
 	| "done"
 	| "cancelled";
 
-function StatusIcon({
-	name,
-	size = 12,
-}: {
-	name: StatusName;
-	size?: number;
-}) {
+function StatusIcon({ name, size = 12 }: { name: StatusName; size?: number }) {
 	if (name === "backlog")
 		return (
 			<svg
@@ -700,9 +689,7 @@ export function APPillars() {
 						<a
 							key={p.key}
 							href={`#${p.key}`}
-							onClick={(e) =>
-								smoothScrollNavigate(`/autopilot#${p.key}`, e)
-							}
+							onClick={(e) => smoothScrollNavigate(`/autopilot#${p.key}`, e)}
 							className="landing-ap-pillar-cell"
 							style={{
 								padding: "22px 18px",
@@ -796,9 +783,7 @@ export function APPillars() {
 						<a
 							key={p.key}
 							href={`#${p.key}`}
-							onClick={(e) =>
-								smoothScrollNavigate(`/autopilot#${p.key}`, e)
-							}
+							onClick={(e) => smoothScrollNavigate(`/autopilot#${p.key}`, e)}
 							className="landing-ap-plus-cell"
 							style={{
 								padding: "14px 16px",
@@ -1032,31 +1017,32 @@ export function IssuesSection() {
 							/admin/issues
 						</span>
 						<div style={{ display: "flex", gap: 4, marginLeft: 10 }}>
-							{["Open", "Needs review", "Needs attention", "Done", "Scheduled"].map(
-								(q, i) => (
-									<span
-										key={q}
-										className="landing-mono"
-										style={{
-											fontSize: 11,
-											padding: "3px 9px",
-											borderRadius: 6,
-											background:
-												i === 0 ? "var(--surface-high)" : "transparent",
-											color:
-												i === 0
-													? "var(--foreground)"
-													: "var(--foreground-muted)",
-											border:
-												i === 0
-													? "1px solid var(--border)"
-													: "1px solid transparent",
-										}}
-									>
-										{q}
-									</span>
-								),
-							)}
+							{[
+								"Open",
+								"Needs review",
+								"Needs attention",
+								"Done",
+								"Scheduled",
+							].map((q, i) => (
+								<span
+									key={q}
+									className="landing-mono"
+									style={{
+										fontSize: 11,
+										padding: "3px 9px",
+										borderRadius: 6,
+										background: i === 0 ? "var(--surface-high)" : "transparent",
+										color:
+											i === 0 ? "var(--foreground)" : "var(--foreground-muted)",
+										border:
+											i === 0
+												? "1px solid var(--border)"
+												: "1px solid transparent",
+									}}
+								>
+									{q}
+								</span>
+							))}
 						</div>
 						<span
 							className="landing-mono"
@@ -1272,11 +1258,7 @@ export function WorkflowsSection() {
 		["  schema: z.", FN("object"), "({ issueId: z.", FN("string"), "() }),"],
 		["  handler: ", KW("async"), " ({ input, step, ctx }) => {"],
 		["    ", KW("const"), " issue = ", KW("await"), " step.", FN("run"), "("],
-		[
-			"      ",
-			STR('"load"'),
-			", () => ctx.collections.tasks.findOne({",
-		],
+		["      ", STR('"load"'), ", () => ctx.collections.tasks.findOne({"],
 		["        where: { id: input.issueId },"],
 		["      })"],
 		["    );"],
@@ -1329,11 +1311,7 @@ export function WorkflowsSection() {
 			STR('"publish"'),
 			", () => ctx.collections.tasks.updateById({",
 		],
-		[
-			"      id: input.issueId, data: { status: ",
-			STR('"done"'),
-			" },",
-		],
+		["      id: input.issueId, data: { status: ", STR('"done"'), " },"],
 		["    }));"],
 		["  },"],
 		["});"],
@@ -1577,7 +1555,9 @@ export function SchedulesSection() {
 									{s.name}
 								</span>
 							</span>
-							<code style={{ fontSize: 11.5, color: "var(--foreground-muted)" }}>
+							<code
+								style={{ fontSize: 11.5, color: "var(--foreground-muted)" }}
+							>
 								{s.cron}
 							</code>
 							<span
@@ -1586,8 +1566,7 @@ export function SchedulesSection() {
 									alignItems: "center",
 									gap: 6,
 									fontSize: 11.5,
-									color:
-										s.mode === "task" ? "var(--foreground)" : AP_ACCENT,
+									color: s.mode === "task" ? "var(--foreground)" : AP_ACCENT,
 								}}
 							>
 								<span
@@ -1596,9 +1575,7 @@ export function SchedulesSection() {
 										height: 6,
 										borderRadius: 2,
 										background:
-											s.mode === "task"
-												? "var(--foreground-muted)"
-												: AP_ACCENT,
+											s.mode === "task" ? "var(--foreground-muted)" : AP_ACCENT,
 									}}
 								/>
 								{s.action}
@@ -1660,9 +1637,7 @@ export function KnowledgeProjectsSection() {
 							height: "100%",
 						}}
 					>
-						<div
-							style={{ display: "flex", alignItems: "center", gap: 10 }}
-						>
+						<div style={{ display: "flex", alignItems: "center", gap: 10 }}>
 							<span
 								style={{
 									width: 28,
@@ -1736,9 +1711,7 @@ export function KnowledgeProjectsSection() {
 							height: "100%",
 						}}
 					>
-						<div
-							style={{ display: "flex", alignItems: "center", gap: 10 }}
-						>
+						<div style={{ display: "flex", alignItems: "center", gap: 10 }}>
 							<span
 								style={{
 									width: 28,

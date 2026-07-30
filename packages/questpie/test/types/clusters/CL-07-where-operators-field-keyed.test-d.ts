@@ -46,7 +46,14 @@ import { datetime } from "#questpie/server/modules/core/fields/datetime.js";
 import type { JsonValue } from "#questpie/server/modules/core/fields/json.js";
 import type { DateInput } from "#questpie/shared/type-utils.js";
 
-import type { Equal, ExactType, Expect, NoAny, NoUnknown, Ops } from "../_assert.js";
+import type {
+	Equal,
+	ExactType,
+	Expect,
+	NoAny,
+	NoUnknown,
+	Ops,
+} from "../_assert.js";
 import type { App, articles, QuestpieApp, tickets } from "../_fixtures.js";
 
 // ============================================================================
@@ -81,7 +88,9 @@ type _statusIn = ExactType<StatusOps["in"], StatusUnion[] | undefined>;
 // notIn — RED today.
 type _statusNotIn = ExactType<StatusOps["notIn"], StatusUnion[] | undefined>;
 // The value must not silently widen to bare `string` even structurally.
-type _statusEqNotString = Expect<Equal<Equal<StatusOps["eq"], string | undefined>, false>>;
+type _statusEqNotString = Expect<
+	Equal<Equal<StatusOps["eq"], string | undefined>, false>
+>;
 
 // Second select field on a DIFFERENT collection — proves it is the whole CLASS,
 // not one hardcoded example.
@@ -115,12 +124,20 @@ type ScoresOps = FieldOps<TicketWhere, "scores">; // tickets.scores = f.number()
 // per-element `contains` on arrays) resolves to `never` — a clean `Equal`
 // mismatch (RED) — rather than a TS2339 "property does not exist" error.
 // Once the op-set gains the key it yields the real value type (GREEN).
-type ArrOpVal<O, K extends string> = O extends { [P in K]?: infer V } ? V : never;
+type ArrOpVal<O, K extends string> = O extends { [P in K]?: infer V }
+	? V
+	: never;
 
 // containsAll — RED today (resolves to `string[] | undefined`).
-type _scoresContainsAll = ExactType<ScoresOps["containsAll"], number[] | undefined>;
+type _scoresContainsAll = ExactType<
+	ScoresOps["containsAll"],
+	number[] | undefined
+>;
 // containsAny — RED today.
-type _scoresContainsAny = ExactType<ScoresOps["containsAny"], number[] | undefined>;
+type _scoresContainsAny = ExactType<
+	ScoresOps["containsAny"],
+	number[] | undefined
+>;
 // eq (whole-array equality) — RED today (`string[] | undefined`).
 type _scoresEq = ExactType<ScoresOps["eq"], number[] | undefined>;
 // `contains` (single-element membership) — RED today: `selectMultiOps` has NO
@@ -139,7 +156,10 @@ type _scoresContainsAllNotString = Expect<
 // here (`string[]` ops over a string array), so `containsAll` stays GREEN before
 // AND after the fix — proving the fix is element-keyed, not a blanket rewrite.
 type TagListOps = FieldOps<ArticleWhere, "tagList">; // articles.tagList = f.text().required().array()
-type _tagListContainsAll = ExactType<TagListOps["containsAll"], string[] | undefined>;
+type _tagListContainsAll = ExactType<
+	TagListOps["containsAll"],
+	string[] | undefined
+>;
 // Per-element `contains` on a text array → `string`. RED today (no `contains` key
 // on `selectMultiOps`), GREEN once the array op-set gains `contains`.
 type _tagListContains = ExactType<ArrOpVal<TagListOps, "contains">, string>;
@@ -151,9 +171,15 @@ const _datetimeArrayField = datetime().array();
 type DatetimeArrayWhere = FieldWhere<typeof _datetimeArrayField, unknown>;
 // RED today (`string[] | undefined`); after fix `DateInput[] | undefined`, NOT `Date[] | undefined`.
 type _dtArrayEq = ExactType<DatetimeArrayWhere["eq"], DateInput[] | undefined>;
-type _dtArrayContainsAll = ExactType<DatetimeArrayWhere["containsAll"], DateInput[] | undefined>;
+type _dtArrayContainsAll = ExactType<
+	DatetimeArrayWhere["containsAll"],
+	DateInput[] | undefined
+>;
 // length stays numeric on a date array too.
-type _dtArrayLength = ExactType<DatetimeArrayWhere["length"], number | undefined>;
+type _dtArrayLength = ExactType<
+	DatetimeArrayWhere["length"],
+	number | undefined
+>;
 
 // ============================================================================
 // WO-4 / json-4 — JSON where operators must NOT be `unknown`
@@ -190,7 +216,9 @@ type _configNeNotUnknown = Expect<NoUnknown<ConfigOps["ne"]>>;
 // scalar select and contradicted this cluster's own narrowing assertions above — see
 // CL-07 batch-6 research notes.) The real guarantee (Ops isolates the operator object)
 // is asserted by `_wo3OpsCleanNotUnknown` below.
-type _bareUnionEqVal = ArticleWhere["status"] extends { eq?: infer V } ? V : never;
+type _bareUnionEqVal = ArticleWhere["status"] extends { eq?: infer V }
+	? V
+	: never;
 type _wo3BareUnionNotPolluted = Expect<NoUnknown<_bareUnionEqVal>>;
 // Ops-guarded extraction (RIGHT approach) — clean, no `unknown` pollution.
 type _wo3OpsCleanNotUnknown = Expect<NoUnknown<StatusOps["eq"]>>;
@@ -226,7 +254,9 @@ type _publishedAtEqNotDate = Expect<
 type AuthorRelWhere = ArticleWhere["author"];
 // `is` accepts a nested author where (to-one relation predicate) — stays present.
 const _authorIs: ArticleWhere = { author: { is: { name: { eq: "Ada" } } } };
-const _authorIsNot: ArticleWhere = { author: { isNot: { name: { eq: "Ada" } } } };
+const _authorIsNot: ArticleWhere = {
+	author: { isNot: { name: { eq: "Ada" } } },
+};
 // The FK direct-value shorthand stays a `string` (assignable), proving eq is not re-keyed.
 const _authorFkString: ArticleWhere = { author: "author-id-123" };
 // Guard: the relation where union is not degraded to any/unknown.
@@ -260,7 +290,9 @@ type _avgIsNumber = ExactType<Agg["_avg"]["rating"], number>;
 // `Where<>` helper. Probe the field-where reached through the real CRUD method.
 // ============================================================================
 
-type FindArg = NonNullable<Parameters<QuestpieApp["collections"]["articles"]["find"]>[0]>;
+type FindArg = NonNullable<
+	Parameters<QuestpieApp["collections"]["articles"]["find"]>[0]
+>;
 type FindWhere = NonNullable<FindArg["where"]>;
 type FindStatusOps = Ops<FindWhere["status"]>;
 // RED today through the real public API too.

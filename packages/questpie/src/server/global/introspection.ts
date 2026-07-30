@@ -560,7 +560,18 @@ async function evaluateAccessRule(
 	if (typeof rule === "function") {
 		try {
 			const result = await rule(context);
-			return result ? { allowed: true } : { allowed: false };
+
+			if (typeof result === "boolean") {
+				return result ? { allowed: true } : { allowed: false };
+			}
+
+			// Anything else fails closed. GlobalAccessRule is typed
+			// `boolean | Promise<boolean>`, so a non-boolean can only arrive from
+			// untyped JS or a cast — and unlike a collection rule, a global has no
+			// "filtered" mode to fall back to, since it is a single row with no
+			// where clause to apply. Treating an unexpected object as truthy would
+			// turn a rule the author meant as a filter into an unconditional allow.
+			return { allowed: false };
 		} catch (error) {
 			return {
 				allowed: false,

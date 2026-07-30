@@ -872,38 +872,3 @@ export interface SearchService {
 // ============================================================================
 // Legacy types (kept for backwards compatibility, will be removed)
 // ============================================================================
-
-/**
- * @deprecated Use SearchMode instead
- */
-export type SearchStrategy = "bm25" | "trigram" | "semantic" | "hybrid";
-
-/**
- * @deprecated BM25 is no longer a core feature
- */
-export type BM25Config = {
-	k1?: number;
-	b?: number;
-};
-
-/**
- * @deprecated Use EmbeddingProvider interface instead
- */
-export type EmbeddingsConfig = {
-	provider: "openai" | "custom";
-	model?: string;
-	dimensions?: number;
-	apiKey?: string;
-	generate?: (text: string) => Promise<number[]>;
-};
-
-/**
- * @deprecated Use SearchAdapter in QuestpieConfig.search instead
- */
-export type SearchConfig = {
-	enabled?: boolean;
-	bm25?: BM25Config;
-	similarity?: number;
-	embeddings?: EmbeddingsConfig;
-	defaultStrategy?: SearchStrategy;
-};

@@ -7,7 +7,6 @@
 ### Minor Changes
 
 - [#188](https://github.com/questpie/questpie/pull/188) [`f534369`](https://github.com/questpie/questpie/commit/f53436930137368000294877b5f02ced55b2dbf4) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add collection-wide collaborative aggregates with typed text and set fields.
-
   - Declare collaborative owners and fields with `.collaborative()` and `.crdt()`, then consume their generated, fully typed client and server APIs.
   - Synchronize CRDT bytes through bounded Fetch routes while reusing the existing SSE or Pusher realtime session for opaque dirty hints, with no adapter-specific host or second provider connection.
   - Preserve aggregate-wide atomic transactions, fresh field-level authorization, lifecycle fencing, idempotent retry, offline IndexedDB recovery, and bounded awareness rosters.

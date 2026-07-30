@@ -171,7 +171,11 @@ export class CloudCliError extends Error {
 	exitCode: number;
 	silent: boolean;
 
-	constructor(message: string, exitCode: number, options?: { silent?: boolean }) {
+	constructor(
+		message: string,
+		exitCode: number,
+		options?: { silent?: boolean },
+	) {
 		super(message);
 		this.name = "CloudCliError";
 		this.exitCode = exitCode;
@@ -490,7 +494,9 @@ function normalizeThinConfig(loaded: LoadedCloudConfig): ThinCloudConfig {
 		(isRecord(data.project) ? asString(data.project.slug) : undefined);
 	const environment =
 		asString(data.environment) ??
-		(isRecord(data.environment) ? asString(data.environment.slug) : undefined) ??
+		(isRecord(data.environment)
+			? asString(data.environment.slug)
+			: undefined) ??
 		DEFAULT_ENVIRONMENT;
 	const build = isRecord(data.build) ? data.build : {};
 	const dockerfile =
@@ -498,28 +504,30 @@ function normalizeThinConfig(loaded: LoadedCloudConfig): ThinCloudConfig {
 		asString(build.dockerfile) ??
 		"Dockerfile";
 	const context = asString(build.contextPath) ?? asString(build.context) ?? ".";
-	const services = records(data.services).map((service): ThinService => ({
-		name: slugify(asString(service.name), "web"),
-		processType:
-			asString(service.processType) === "worker" ||
-			asString(service.processType) === "cron" ||
-			asString(service.processType) === "job" ||
-			asString(service.processType) === "release"
-				? (asString(service.processType) as ThinService["processType"])
-				: "web",
-		port:
-			asNumber(service.port) ??
-			asNumber(service.containerPort) ??
-			DEFAULT_PORT,
-		readinessMode:
-			asString(service.readinessMode) === "tcp" ||
-			asString(service.readinessMode) === "none"
-				? (asString(service.readinessMode) as ThinService["readinessMode"])
-				: "http",
-		readinessPath:
-			asString(service.readinessPath) ?? asString(service.readiness),
-		command: asString(service.command),
-	}));
+	const services = records(data.services).map(
+		(service): ThinService => ({
+			name: slugify(asString(service.name), "web"),
+			processType:
+				asString(service.processType) === "worker" ||
+				asString(service.processType) === "cron" ||
+				asString(service.processType) === "job" ||
+				asString(service.processType) === "release"
+					? (asString(service.processType) as ThinService["processType"])
+					: "web",
+			port:
+				asNumber(service.port) ??
+				asNumber(service.containerPort) ??
+				DEFAULT_PORT,
+			readinessMode:
+				asString(service.readinessMode) === "tcp" ||
+				asString(service.readinessMode) === "none"
+					? (asString(service.readinessMode) as ThinService["readinessMode"])
+					: "http",
+			readinessPath:
+				asString(service.readinessPath) ?? asString(service.readiness),
+			command: asString(service.command),
+		}),
+	);
 	const resources = isRecord(data.resources) ? data.resources : {};
 
 	if (!project) throw localError(`${loaded.path} is missing project`);
@@ -673,13 +681,22 @@ function printWhoami(result: AnyRecord) {
 	console.log(`Cloud URL: ${String(result.cloudUrl ?? DEFAULT_CLOUD_URL)}`);
 }
 
-function printInitResult(result: AnyRecord, configPath: string, envImport?: AnyRecord) {
+function printInitResult(
+	result: AnyRecord,
+	configPath: string,
+	envImport?: AnyRecord,
+) {
 	const project = isRecord(result.project) ? result.project : {};
 	const environment = isRecord(result.environment) ? result.environment : {};
-	console.log(result.dryRun ? "Initialization validated" : `Created ${configPath}`);
+	console.log(
+		result.dryRun ? "Initialization validated" : `Created ${configPath}`,
+	);
 	console.log(`Project:     ${String(project.slug ?? "unknown")}`);
-	console.log(`Environment: ${String(environment.slug ?? DEFAULT_ENVIRONMENT)}`);
-	if (environment.appUrl) console.log(`URL:         ${String(environment.appUrl)}`);
+	console.log(
+		`Environment: ${String(environment.slug ?? DEFAULT_ENVIRONMENT)}`,
+	);
+	if (environment.appUrl)
+		console.log(`URL:         ${String(environment.appUrl)}`);
 	if (envImport) {
 		const created = Array.isArray(envImport.created) ? envImport.created : [];
 		const updated = Array.isArray(envImport.updated) ? envImport.updated : [];
@@ -692,9 +709,15 @@ function printInitResult(result: AnyRecord, configPath: string, envImport?: AnyR
 }
 
 function printEnvImportResult(result: AnyRecord, parserWarnings: string[]) {
-	const created = Array.isArray(result.created) ? result.created.map(String) : [];
-	const updated = Array.isArray(result.updated) ? result.updated.map(String) : [];
-	const skipped = Array.isArray(result.skipped) ? result.skipped.map(String) : [];
+	const created = Array.isArray(result.created)
+		? result.created.map(String)
+		: [];
+	const updated = Array.isArray(result.updated)
+		? result.updated.map(String)
+		: [];
+	const skipped = Array.isArray(result.skipped)
+		? result.skipped.map(String)
+		: [];
 	const warnings = [
 		...parserWarnings,
 		...(Array.isArray(result.warnings) ? result.warnings.map(String) : []),
@@ -713,7 +736,9 @@ function printDeployResult(result: AnyRecord, dryRun?: boolean) {
 	console.log(`Deployment: ${String(result.deploymentId ?? "unknown")}`);
 	console.log(`Status:     ${statusLabel(result.status, dryRun)}`);
 
-	const hostnames = Array.isArray(result.hostnames) ? result.hostnames.map(String) : [];
+	const hostnames = Array.isArray(result.hostnames)
+		? result.hostnames.map(String)
+		: [];
 	if (hostnames.length > 0) {
 		console.log(`URL:        https://${hostnames[0]}`);
 	}
@@ -728,7 +753,9 @@ function printRollbackResult(result: AnyRecord) {
 }
 
 function printFollowEvents(status: AnyRecord, seenEventIds: Set<string>) {
-	const events = Array.isArray(status.events) ? status.events.filter(isRecord) : [];
+	const events = Array.isArray(status.events)
+		? status.events.filter(isRecord)
+		: [];
 	for (const event of events) {
 		const id = asString(event.id);
 		if (!id || seenEventIds.has(id)) continue;
@@ -783,7 +810,10 @@ async function importEnvFileForConfig(input: {
 export async function cloudLoginCommand(options: CloudLoginOptions) {
 	const profile = await readCloudProfile();
 	const cloudUrl = profileCloudUrl(profile, options.cloudUrl);
-	const token = options.token ?? process.env.QUESTPIE_CLOUD_TOKEN ?? (await promptForToken());
+	const token =
+		options.token ??
+		process.env.QUESTPIE_CLOUD_TOKEN ??
+		(await promptForToken());
 	const whoami = await requestCloud<AnyRecord>({
 		cloudUrl,
 		token,
@@ -822,7 +852,9 @@ export async function cloudWhoamiCommand(options: CloudWhoamiOptions) {
 	const cloudUrl = profileCloudUrl(profile, options.cloudUrl);
 	const token = profileToken(profile, options.token);
 	if (!token) {
-		throw authError("Questpie Cloud login is required. Run questpie cloud login.");
+		throw authError(
+			"Questpie Cloud login is required. Run questpie cloud login.",
+		);
 	}
 
 	const whoami = await requestCloud<AnyRecord>({
@@ -845,7 +877,9 @@ export async function cloudInitCommand(options: CloudInitOptions) {
 	const cloudUrl = profileCloudUrl(profile, options.cloudUrl);
 	const token = profileToken(profile, options.token);
 	if (!token) {
-		throw authError("Questpie Cloud login is required. Run questpie cloud login.");
+		throw authError(
+			"Questpie Cloud login is required. Run questpie cloud login.",
+		);
 	}
 	const account = profileAccountSlug(profile, options.account);
 	if (!account) {
@@ -855,7 +889,12 @@ export async function cloudInitCommand(options: CloudInitOptions) {
 	}
 
 	const configPath = resolveCliPath(options.config ?? DEFAULT_CONFIG_PATH);
-	if (!options.dryRun && !options.force && !options.yes && (await pathExists(configPath))) {
+	if (
+		!options.dryRun &&
+		!options.force &&
+		!options.yes &&
+		(await pathExists(configPath))
+	) {
 		throw localError(
 			`${options.config} already exists. Pass --yes or --force to overwrite it.`,
 		);
@@ -868,7 +907,10 @@ export async function cloudInitCommand(options: CloudInitOptions) {
 	});
 	const inferredName = inferProjectName(pkg, gitMetadata);
 	const projectSlug = slugify(options.project ?? inferredName);
-	const environment = slugify(options.environment ?? DEFAULT_ENVIRONMENT, DEFAULT_ENVIRONMENT);
+	const environment = slugify(
+		options.environment ?? DEFAULT_ENVIRONMENT,
+		DEFAULT_ENVIRONMENT,
+	);
 	const dockerfile = normalizePath(await inferDockerfile(options));
 	const context = normalizePath(options.context ?? ".");
 	const serviceName = slugify(options.service ?? "web", "web");
@@ -938,13 +980,13 @@ export async function cloudInitCommand(options: CloudInitOptions) {
 					parserWarnings: parsed.warnings,
 				}))
 			: await importEnvFileForConfig({
-				configPath,
-				envFile: options.envFile,
-				cloudUrl,
-				token,
-				account: slugify(account),
-				dryRun: false,
-			});
+					configPath,
+					envFile: options.envFile,
+					cloudUrl,
+					token,
+					account: slugify(account),
+					dryRun: false,
+				});
 		envImport = imported.result;
 		parserWarnings = imported.parserWarnings;
 	}
@@ -973,7 +1015,9 @@ export async function cloudEnvImportCommand(
 	const cloudUrl = profileCloudUrl(profile, options.cloudUrl);
 	const token = profileToken(profile, options.token);
 	if (!token) {
-		throw authError("Questpie Cloud login is required. Run questpie cloud login.");
+		throw authError(
+			"Questpie Cloud login is required. Run questpie cloud login.",
+		);
 	}
 	const account = profileAccountSlug(profile, options.account);
 
@@ -1109,13 +1153,17 @@ export async function cloudDeployCommand(options: CloudDeployOptions) {
 
 	if (options.noRequest) return;
 	if (payload.git.dirty && !options.yes && !process.env.CI) {
-		throw localError("Working tree has uncommitted changes. Pass --yes to deploy anyway.");
+		throw localError(
+			"Working tree has uncommitted changes. Pass --yes to deploy anyway.",
+		);
 	}
 
 	const cloudUrl = profileCloudUrl(profile, options.cloudUrl);
 	const token = profileToken(profile, options.token);
 	if (!token) {
-		throw authError("Questpie Cloud login is required. Run questpie cloud login.");
+		throw authError(
+			"Questpie Cloud login is required. Run questpie cloud login.",
+		);
 	}
 
 	const result = await requestCloud<AnyRecord>({
@@ -1133,8 +1181,7 @@ export async function cloudDeployCommand(options: CloudDeployOptions) {
 			token,
 			deploymentId,
 			json: Boolean(options.json),
-			timeoutSeconds:
-				options.timeoutSeconds ?? DEFAULT_FOLLOW_TIMEOUT_SECONDS,
+			timeoutSeconds: options.timeoutSeconds ?? DEFAULT_FOLLOW_TIMEOUT_SECONDS,
 			pollIntervalSeconds:
 				options.pollIntervalSeconds ?? DEFAULT_POLL_INTERVAL_SECONDS,
 		});
@@ -1163,11 +1210,14 @@ export async function cloudDeployCommand(options: CloudDeployOptions) {
 		const deployment = isRecord(followStatus.deployment)
 			? followStatus.deployment
 			: {};
-		console.log(`Final status: ${statusLabel(deployment.status, Boolean(deployment.dryRun))}`);
+		console.log(
+			`Final status: ${statusLabel(deployment.status, Boolean(deployment.dryRun))}`,
+		);
 		const environment = isRecord(followStatus.environment)
 			? followStatus.environment
 			: {};
-		if (environment.appUrl) console.log(`URL:          ${String(environment.appUrl)}`);
+		if (environment.appUrl)
+			console.log(`URL:          ${String(environment.appUrl)}`);
 	}
 
 	if (failed) {
@@ -1186,7 +1236,9 @@ export async function cloudRollbackCommand(
 	const cloudUrl = profileCloudUrl(profile, options.cloudUrl);
 	const token = profileToken(profile, options.token);
 	if (!token) {
-		throw authError("Questpie Cloud login is required. Run questpie cloud login.");
+		throw authError(
+			"Questpie Cloud login is required. Run questpie cloud login.",
+		);
 	}
 
 	const result = await requestCloud<AnyRecord>({
@@ -1203,8 +1255,7 @@ export async function cloudRollbackCommand(
 			token,
 			deploymentId: rollbackDeploymentId,
 			json: Boolean(options.json),
-			timeoutSeconds:
-				options.timeoutSeconds ?? DEFAULT_FOLLOW_TIMEOUT_SECONDS,
+			timeoutSeconds: options.timeoutSeconds ?? DEFAULT_FOLLOW_TIMEOUT_SECONDS,
 			pollIntervalSeconds:
 				options.pollIntervalSeconds ?? DEFAULT_POLL_INTERVAL_SECONDS,
 		});
@@ -1243,7 +1294,8 @@ export async function cloudRollbackCommand(
 		const environment = isRecord(followStatus.environment)
 			? followStatus.environment
 			: {};
-		if (environment.appUrl) console.log(`URL:          ${String(environment.appUrl)}`);
+		if (environment.appUrl)
+			console.log(`URL:          ${String(environment.appUrl)}`);
 	}
 
 	if (failed) {

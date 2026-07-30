@@ -10,7 +10,6 @@
 
 import { ajvResolver } from "@hookform/resolvers/ajv";
 import type { Options as AjvOptions, JSONSchemaType } from "ajv";
-import type { Questpie } from "questpie";
 import type { CollectionSchema } from "questpie/client";
 import type { ValidationTranslateFn } from "questpie/shared";
 import { useMemo } from "react";
@@ -21,10 +20,6 @@ import type {
 	Resolver,
 } from "react-hook-form";
 
-import type {
-	RegisteredCMS,
-	RegisteredCollectionNames,
-} from "../builder/registry";
 import { useCollectionSchema } from "./use-collection-schema";
 import { useGlobalSchema } from "./use-global-schema";
 import { useValidationTranslator } from "./use-validation-error-map";
@@ -255,8 +250,7 @@ function withTranslatedResolver<TFieldValues extends FieldValues>(
 /**
  * Resolved collection names (string if not registered)
  */
-type ResolvedCollectionNames =
-	RegisteredCMS extends Questpie<any> ? RegisteredCollectionNames : string;
+type ResolvedCollectionNames = string;
 
 /**
  * Validation mode for the hook

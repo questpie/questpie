@@ -113,7 +113,9 @@ type _commentsStateExact = ExactType<
 
 // --- manyToMany: articles.categories → ToManyRelationFieldState<"categories"> ---
 type CategoriesState = ArticleFields["categories"]["_"];
-type _categoriesKindMany = Expect<Equal<CategoriesState["relationKind"], "many">>;
+type _categoriesKindMany = Expect<
+	Equal<CategoriesState["relationKind"], "many">
+>;
 type _categoriesVirtualTrue = Expect<Equal<CategoriesState["virtual"], true>>;
 type _categoriesDataArray = Expect<Equal<CategoriesState["data"], string[]>>;
 type _categoriesStateExact = ExactType<
@@ -183,7 +185,9 @@ type _categoriesAbsent = Expect<Equal<HasKey<ArticleSel, "categories">, false>>;
 
 // multiple() — owns a column → present, and is `string[] | null` (NOT `string | null`).
 type _galleryPresent = Expect<Equal<HasKey<ArticleSel, "gallery">, true>>;
-type _gallerySelectArray = Expect<Equal<ArticleSel["gallery"], string[] | null>>;
+type _gallerySelectArray = Expect<
+	Equal<ArticleSel["gallery"], string[] | null>
+>;
 
 // to-one belongsTo keeps its FK column as `string` (negative control — PASSES now).
 type _authorFkString = Expect<Equal<ArticleSel["author"], string>>;
@@ -212,7 +216,10 @@ type _metaHasSeoTitle = Expect<HasKey<MetaSel, "seoTitle">>;
 // query. To-many must populate as `Elem[]`; to-one stays a single object.
 // ============================================================================
 
-type ArticleRelations = CollectionRelationsFromApp<Collections["articles"], App>;
+type ArticleRelations = CollectionRelationsFromApp<
+	Collections["articles"],
+	App
+>;
 type ArticleSelForApply = CollectionSelect<Collections["articles"], App>;
 
 // --- hasMany comments → array of comment rows ---
@@ -223,9 +230,8 @@ type WithComments = ApplyQuery<
 >;
 type CommentsPop = WithComments["comments"];
 type _commentsPopArray = Expect<ExpectArray<CommentsPop>>;
-type CommentElem = NonNullable<CommentsPop> extends readonly (infer E)[]
-	? E
-	: never;
+type CommentElem =
+	NonNullable<CommentsPop> extends readonly (infer E)[] ? E : never;
 type _commentElemHasContent = Expect<HasKey<CommentElem, "content">>;
 type _commentElemNoAny = Expect<NoAny<CommentElem>>;
 type _commentElemNoUnknown = Expect<NoUnknown<CommentElem>>;
@@ -239,9 +245,8 @@ type WithCategories = ApplyQuery<
 >;
 type CategoriesPop = WithCategories["categories"];
 type _categoriesPopArray = Expect<ExpectArray<CategoriesPop>>;
-type CategoryElem = NonNullable<CategoriesPop> extends readonly (infer E)[]
-	? E
-	: never;
+type CategoryElem =
+	NonNullable<CategoriesPop> extends readonly (infer E)[] ? E : never;
 type _categoryElemHasName = Expect<HasKey<CategoryElem, "name">>;
 type _categoryElemNameString = Expect<Equal<CategoryElem["name"], string>>;
 
@@ -260,7 +265,9 @@ type WithAuthor = ApplyQuery<
 	{ with: { author: true } }
 >;
 type _authorPopNotArray = Expect<ExpectNotArray<WithAuthor["author"]>>;
-type _authorPopHasName = Expect<HasKey<NonNullable<WithAuthor["author"]>, "name">>;
+type _authorPopHasName = Expect<
+	HasKey<NonNullable<WithAuthor["author"]>, "name">
+>;
 
 // --- Nested to-many: comments → author (depth 2), comments still an array. ---
 type WithNestedComments = ApplyQuery<
@@ -316,7 +323,9 @@ type _catWhereNoCount = Expect<Not<UnionHasKey<CategoriesWhere, "count">>>;
 // possible result: `Extends<true, UnionHasKey<…>>`.
 type AuthorWhere = NonNullable<ArticleWhere["author"]>;
 type _authorWhereIs = Expect<Extends<true, UnionHasKey<AuthorWhere, "is">>>;
-type _authorWhereIsNot = Expect<Extends<true, UnionHasKey<AuthorWhere, "isNot">>>;
+type _authorWhereIsNot = Expect<
+	Extends<true, UnionHasKey<AuthorWhere, "isNot">>
+>;
 type _authorWhereNoSome = Expect<Not<UnionHasKey<AuthorWhere, "some">>>;
 type _authorWhereNoNone = Expect<Not<UnionHasKey<AuthorWhere, "none">>>;
 type _authorWhereNoEvery = Expect<Not<UnionHasKey<AuthorWhere, "every">>>;
@@ -371,7 +380,11 @@ type ArticleFindOpts = FindOptions<Collections["articles"], App>;
 // POSITIVE: to-many comments accepts where + limit + _count.
 const _withCommentsOpts: ArticleFindOpts = {
 	with: {
-		comments: { where: { content: { contains: "x" } }, limit: 10, _count: true },
+		comments: {
+			where: { content: { contains: "x" } },
+			limit: 10,
+			_count: true,
+		},
 	},
 };
 void _withCommentsOpts;
@@ -494,7 +507,10 @@ type _commentsNotBelongsTo = Expect<
 // multiple() (data: string[], kind "one") must DIFFER from to-many (kind "many", virtual).
 type _multipleNotToMany = Expect<
 	Not<
-		Equal<MultipleRelationFieldState<"media">, ToManyRelationFieldState<"media">>
+		Equal<
+			MultipleRelationFieldState<"media">,
+			ToManyRelationFieldState<"media">
+		>
 	>
 >;
 // multiple() (array data) must DIFFER from belongsTo (single FK).
@@ -506,7 +522,9 @@ type _multipleNotBelongsTo = Expect<
 type _toManyVirtualAnchor = Expect<
 	Equal<ToManyRelationFieldState["virtual"], true>
 >;
-type _belongsToVirtualAnchor = Expect<Equal<RelationFieldState["virtual"], false>>;
+type _belongsToVirtualAnchor = Expect<
+	Equal<RelationFieldState["virtual"], false>
+>;
 
 // Unused-import / array-helper touch so every imported symbol is referenced even
 // if a future edit drops a section (keeps the file honest under noUnusedLocals).

@@ -49,9 +49,8 @@ const seedNoteJob = job({
 	name: "seed-note",
 	schema: z.object({ body: z.string() }),
 	handler: async ({ collections, payload }: any) => {
-		const { tryGetContext } = await import(
-			"../../src/server/config/context.js"
-		);
+		const { tryGetContext } =
+			await import("../../src/server/config/context.js");
 		trace.jobRan = true;
 		trace.jobAccessMode = tryGetContext()?.accessMode;
 		// ctx-less create from inside the job — resolves session/locale/accessMode
@@ -83,9 +82,8 @@ const sendEmailJob = job({
 	name: "send-repro-email",
 	schema: z.object({}).passthrough(),
 	handler: async () => {
-		const { MailerService } = await import(
-			"../../src/server/modules/core/integrated/mailer/service.js"
-		);
+		const { MailerService } =
+			await import("../../src/server/modules/core/integrated/mailer/service.js");
 		const mailer = new MailerService({
 			adapter: {
 				send: async (options: any) => {

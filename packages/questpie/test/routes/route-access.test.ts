@@ -75,8 +75,8 @@ describe("evaluateRouteAccess", () => {
 		};
 
 		expect(await evaluateRouteAccess(access, { session: null })).toBe(false);
-		expect(
-			await evaluateRouteAccess(access, { session: { id: "u1" } }),
-		).toBe(true);
+		expect(await evaluateRouteAccess(access, { session: { id: "u1" } })).toBe(
+			true,
+		);
 	});
 });

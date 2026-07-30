@@ -67,6 +67,7 @@ import type { ExecutorConfig } from "#questpie/server/modules/core/integrated/ex
 import type { KVConfig } from "#questpie/server/modules/core/integrated/kv/types.js";
 import type { LoggerConfig } from "#questpie/server/modules/core/integrated/logger/types.js";
 import type { MailerConfig } from "#questpie/server/modules/core/integrated/mailer/types.js";
+import type { ObservabilityConfig } from "#questpie/server/modules/core/integrated/observability/types.js";
 import type {
 	JobDefinition,
 	QueueAdapter,
@@ -373,6 +374,9 @@ export interface RuntimeConfig<
 	/** KV store configuration. */
 	kv?: KVConfig;
 
+	/** Tracing and metrics. Omit for a zero-cost no-op. */
+	observability?: ObservabilityConfig;
+
 	/** Executor configuration (sandboxed / trusted code execution). */
 	executor?: ExecutorConfig;
 
@@ -636,6 +640,9 @@ export interface AppConfig {
 
 	/** KV store configuration. */
 	kv?: KVConfig;
+
+	/** Tracing and metrics. Omit for a zero-cost no-op. */
+	observability?: ObservabilityConfig;
 
 	/** Executor configuration (sandboxed / trusted code execution). */
 	executor?: ExecutorConfig;

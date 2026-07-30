@@ -6,6 +6,7 @@ import {
 } from "#questpie/server/collection/crud/shared/transaction.js";
 import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
 
+import type { ObservabilityService } from "../observability/service.js";
 import type {
 	QueueAdapter,
 	QueueAdapterCapabilities,
@@ -179,22 +180,55 @@ export function createQueueClient<
 				// existing parent; a top-level job has none, so no double-count.
 				const { runWithContext } =
 					await import("#questpie/server/config/context.js");
-				await runWithContext(
-					{
-						app: appInstance,
-						db: context.db,
-						session: context.session,
-						locale: context.locale,
-						accessMode: "system",
-					},
-					() =>
-						jobDef.handler({
-							...services,
-							payload: validated,
+				// A job runs OUTSIDE any request, so this span is a trace root
+				// rather than a child. kind=consumer marks it as work pulled off a
+				// queue, which is how backends separate it from inbound traffic.
+				const observability = appInstance.observability as
+					| ObservabilityService
+					| undefined;
+				const runHandler = () =>
+					runWithContext(
+						{
+							app: appInstance,
+							db: context.db,
+							session: context.session,
 							locale: context.locale,
-							dispatchId: job.dispatchId,
-							idempotencyKey: job.idempotencyKey,
-						} as any),
+							accessMode: "system",
+						},
+						() =>
+							jobDef.handler({
+								...services,
+								payload: validated,
+								locale: context.locale,
+								dispatchId: job.dispatchId,
+								idempotencyKey: job.idempotencyKey,
+							} as any),
+					);
+
+				if (!observability?.enabled) {
+					await runHandler();
+					return;
+				}
+
+				await observability.span(
+					`job ${jobDef.name}`,
+					(span) => {
+						span.setAttributes({
+							"messaging.operation.name": "process",
+							"messaging.destination.name": jobDef.name,
+							// dispatchId is the stable logical id across retries and
+							// across adapters, so it is what correlates a failed
+							// attempt with the one that eventually succeeded.
+							...(job.dispatchId
+								? { "questpie.job.dispatch_id": job.dispatchId }
+								: {}),
+							...(job.idempotencyKey
+								? { "questpie.job.idempotency_key": job.idempotencyKey }
+								: {}),
+						});
+						return runHandler();
+					},
+					{ kind: "consumer" },
 				);
 			};
 		}
