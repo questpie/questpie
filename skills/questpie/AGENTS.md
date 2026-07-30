@@ -9993,7 +9993,7 @@ function Greeting() {
 
 ## Catalogs are checked at compile time
 
-`createSimpleI18n` rejects catalogs whose locales disagree on their key set —
+`createSimpleI18n` rejects catalogs whose locales disagree on their key set,
 **as a type error, before it is a runtime error**. Adding `checkout.title` to
 `en` and forgetting `sk` fails the build rather than shipping an English string
 into a Slovak page. The same check runs at construction time and throws.
@@ -10020,7 +10020,7 @@ items: { one: "1 item", few: "{{count}} items", other: "{{count}} items" }
 ```
 
 `one` and `other` are required; `zero`, `two`, `few`, `many` are optional and
-fall back to `other`. Pass the count as a param — `t("items", { count: 5 })`.
+fall back to `other`. Pass the count as a param - `t("items", { count: 5 })`.
 
 ## The three hooks
 
@@ -10034,7 +10034,7 @@ fall back to `other`. Pass the count as a param — `t("items", { count: 5 })`.
 boolean there, where the adapter exposes it as a method.
 
 Use `useSafeI18n` in a component that must render both inside and outside the
-provider — a shared design-system component, or one mounted during boot before
+provider - a shared design-system component, or one mounted during boot before
 the provider exists. Everywhere else the throw is what you want: it turns a
 silently untranslated screen into a stack trace.
 
@@ -10042,7 +10042,7 @@ silently untranslated screen into a stack trace.
 
 The provider subscribes through `useSyncExternalStore`, so `setLocale()`
 re-renders consumers without any extra wiring, and SSR gets a stable initial
-snapshot. `setLocale` may be async — an adapter that lazy-loads catalogs
+snapshot. `setLocale` may be async - an adapter that lazy-loads catalogs
 returns a promise.
 
 ## Bring your own adapter
@@ -10066,7 +10066,7 @@ interface I18nAdapter<TLocale extends string, TMessageKey extends string> {
 }
 ```
 
-`onLocaleChange` must return an unsubscribe function — the provider calls it on
+`onLocaleChange` must return an unsubscribe function - the provider calls it on
 unmount.
 
 ## Checklist

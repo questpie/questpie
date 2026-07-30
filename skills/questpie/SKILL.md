@@ -153,10 +153,10 @@ Files starting with `_`, `index.ts`, declaration files, tests, and specs are int
 
 ### Client
 
-| Topic          | File                           | Covers                                                                                    |
-| -------------- | ------------------------------ | ----------------------------------------------------------------------------------------- |
-| TanStack Query | `references/tanstack-query.md` | `q.collections.*`, `q.globals.*`, `q.routes.*`, realtime snapshots, channel subscriptions |
-| Reactive Apps  | `references/reactive-apps.md`  | React update isolation, query sizing, selectors, bounded channels, presence, diagnostics  |
+| Topic          | File                           | Covers                                                                                                 |
+| -------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| TanStack Query | `references/tanstack-query.md` | `q.collections.*`, `q.globals.*`, `q.routes.*`, realtime snapshots, channel subscriptions              |
+| Reactive Apps  | `references/reactive-apps.md`  | React update isolation, query sizing, selectors, bounded channels, presence, diagnostics               |
 | Client i18n    | `references/client-i18n.md`    | `createSimpleI18n`, `I18nProvider`, `useTranslation`/`useI18n`/`useSafeI18n`, plurals, custom adapters |
 
 ## Key Patterns, Quick Reference
