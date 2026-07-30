@@ -84,6 +84,27 @@ export default [mcpModule] as const;
 
 To add a route to the module: create `routes/my-endpoint.ts` exporting `route()…`, then `questpie generate`. Do **not** add it by editing `module.ts`.
 
+### Generating from a build script instead of the CLI
+
+A package that would rather run codegen from its own build than shell out to the
+CLI can call `generateModule` from `questpie/codegen`:
+
+```ts
+import { generateModule } from "questpie/codegen";
+
+await generateModule({
+	moduleName: "questpie-starter",
+	rootDir: "./src/server/modules/starter",
+	// outDir defaults to `${rootDir}/.generated`, outputFile to "module.ts"
+	// plugins: [...], dryRun: true to get the code back without writing
+});
+```
+
+Same discovery, same output as `questpie generate --module` - it is the CLI's
+work behind a function call, for packages whose build is already a script. It
+does **not** change the rule: the file is still generated, and still never
+hand-written.
+
 ## Anti-pattern (do NOT do this)
 
 ```ts
