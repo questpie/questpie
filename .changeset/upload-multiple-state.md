@@ -10,8 +10,8 @@ the spread contributed nothing and the returned field kept only the five keys
 `multiple` sets inline. Everything else was gone:
 
 ```ts
-upload()            // getType() === "upload", metadata.targetCollection === "assets"
-upload().multiple() // getType() === undefined, metadata === {}
+upload(); // getType() === "upload", metadata.targetCollection === "assets"
+upload().multiple(); // getType() === undefined, metadata === {}
 ```
 
 That means no field type, no upload metadata, no target collection, and none of
