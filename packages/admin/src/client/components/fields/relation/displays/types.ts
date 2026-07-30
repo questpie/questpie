@@ -4,8 +4,7 @@
 
 import type * as React from "react";
 
-import type { ComponentReference } from "#questpie/admin/server/augmentation.js";
-
+import type { ComponentReference } from "../../../../../server/augmentation/index.js";
 import type { FieldInstance } from "../../../../builder/field/field";
 import { formatLabel } from "../../../../lib/utils";
 import { resolveAssetUrl } from "../../../../utils/asset-url";

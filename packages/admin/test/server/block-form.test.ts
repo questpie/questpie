@@ -12,11 +12,11 @@ import { describe, expect, test } from "bun:test";
 import {
 	block,
 	BlockBuilder,
-} from "#questpie/admin/server/block/block-builder.js";
+} from "#questpie/admin/server/modules/admin/block/block-builder.js";
 import {
 	introspectBlock,
 	introspectBlocks,
-} from "#questpie/admin/server/block/introspection.js";
+} from "#questpie/admin/server/modules/admin/block/introspection.js";
 
 // ============================================================================
 // BlockBuilder.form()

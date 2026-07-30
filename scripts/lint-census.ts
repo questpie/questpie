@@ -168,10 +168,24 @@ if (unattributed > 0) {
 }
 
 if (wantUpdate) {
+	/**
+	 * Sorted before writing. Rule keys arrive in diagnostic order, which follows
+	 * the file walk and therefore differs between machines — a regeneration on
+	 * one box produced a diff that only REORDERED identical values, and the same
+	 * mechanism would eventually show up as a macOS-versus-CI mismatch.
+	 */
+	const sorted: Record<string, Record<string, number>> = {};
+	for (const owner of Object.keys(current).sort()) {
+		const bucket = current[owner] as Record<string, number>;
+		sorted[owner] = Object.fromEntries(
+			Object.entries(bucket).sort(([a], [b]) => a.localeCompare(b)),
+		);
+	}
+
 	const next: Baseline = {
 		$comment:
 			"oxlint WARNING counts per package per rule. Errors are gated separately by the Lint & Format job. Regenerate with `bun run scripts/lint-census.ts --update` and review the diff. Ratchet: any per-rule increase fails CI. NOTE: no-underscore-dangle dominates this baseline and is largely a house convention (_state, _pendingRelations) rather than debt — configuring or dropping that rule is a better fix than burning it down. See the script header.",
-		packages: current,
+		packages: sorted,
 	};
 	writeFileSync(BASELINE_PATH, `${JSON.stringify(next, null, "\t")}\n`);
 	console.log(`\n✓ wrote ${relative(ROOT, BASELINE_PATH)}`);

@@ -5,7 +5,7 @@ import type {
 	AdminCollectionConfig,
 	FormViewConfig,
 	ListViewConfig,
-} from "../../../augmentation.js";
+} from "../../../augmentation/index.js";
 import { localizeAuditTitle } from "../config/localize-title.js";
 
 /**

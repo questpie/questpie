@@ -33,7 +33,7 @@ import type {
 	ListViewDefinition,
 	ViewDefinition,
 	ViewKind,
-} from "./augmentation.js";
+} from "./augmentation/index.js";
 
 // ============================================================================
 // View Factory

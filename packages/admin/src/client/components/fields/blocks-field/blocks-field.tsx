@@ -10,8 +10,7 @@
 import * as React from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 
-import type { BlockSchema } from "#questpie/admin/server/block/index.js";
-
+import type { BlockSchema } from "../../../../server/modules/admin/block/index.js";
 import type { BlockContent } from "../../../blocks/types.js";
 import { EMPTY_BLOCK_CONTENT, isBlockContent } from "../../../blocks/types.js";
 import type { BaseFieldProps } from "../../../builder/types/common.js";

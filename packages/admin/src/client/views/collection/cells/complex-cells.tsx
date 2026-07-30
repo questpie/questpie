@@ -10,8 +10,7 @@
 
 import * as React from "react";
 
-import type { BlockSchema } from "#questpie/admin/server/block/index.js";
-
+import type { BlockSchema } from "../../../../server/modules/admin/block/index.js";
 import type { BlockContent, BlockNode } from "../../../blocks/types";
 import { isBlockContent } from "../../../blocks/types";
 import type { FieldInstance } from "../../../builder/field/field";

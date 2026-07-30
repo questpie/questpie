@@ -3,9 +3,9 @@
 	"packages": {
 		"admin": {
 			"eslint(no-unused-vars)": 152,
+			"jsx-a11y(no-static-element-interactions)": 1,
 			"react(iframe-missing-sandbox)": 1,
-			"react(no-unstable-nested-components)": 6,
-			"jsx-a11y(no-static-element-interactions)": 1
+			"react(no-unstable-nested-components)": 6
 		},
 		"crdt-yjs": {},
 		"create-questpie": {},
@@ -20,12 +20,15 @@
 		"questpie": {
 			"eslint(no-unused-vars)": 151,
 			"eslint(no-useless-concat)": 3,
-			"unicorn(no-array-reverse)": 2,
+			"eslint(preserve-caught-error)": 1,
 			"typescript(no-confusing-non-null-assertion)": 1,
-			"eslint(preserve-caught-error)": 1
+			"unicorn(no-array-reverse)": 2
 		},
 		"sandbox": {
 			"eslint(preserve-caught-error)": 2
+		},
+		"scripts": {
+			"eslint(no-unused-vars)": 1
 		},
 		"tanstack-db": {},
 		"tanstack-query": {},
@@ -34,9 +37,6 @@
 			"eslint(no-unmodified-loop-condition)": 2,
 			"eslint(no-unused-vars)": 4,
 			"unicorn(no-array-reverse)": 1
-		},
-		"scripts": {
-			"eslint(no-unused-vars)": 1
 		}
 	}
 }

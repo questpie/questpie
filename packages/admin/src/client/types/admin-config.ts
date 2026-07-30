@@ -2,9 +2,8 @@ import type {
 	ServerAdminShellConfig,
 	ServerDashboardConfig,
 	ServerSidebarConfig,
-} from "#questpie/admin/server/augmentation.js";
-import type { BlockSchema } from "#questpie/admin/server/block/index.js";
-
+} from "../../server/augmentation/index.js";
+import type { BlockSchema } from "../../server/modules/admin/block/index.js";
 import type { I18nText } from "../i18n/types";
 
 export type AdminConfigItemMeta = {

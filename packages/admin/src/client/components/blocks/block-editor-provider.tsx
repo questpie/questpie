@@ -10,8 +10,7 @@ import * as React from "react";
 import type { StoreApi } from "zustand";
 import { createStore } from "zustand";
 
-import type { BlockSchema } from "#questpie/admin/server/block/index.js";
-
+import type { BlockSchema } from "../../../server/modules/admin/block/index.js";
 import type { BlockContent, BlockNode } from "../../blocks/types.js";
 import { useFocusOptional } from "../../contexts/focus-context.js";
 import {

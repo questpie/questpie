@@ -48,7 +48,7 @@ import type {
 	AdminBlockConfig,
 	AdminConfigContext,
 	FieldLayoutItem,
-} from "../../../augmentation.js";
+} from "../../../augmentation/index.js";
 import { adminFields } from "../../../fields/index.js";
 
 /**

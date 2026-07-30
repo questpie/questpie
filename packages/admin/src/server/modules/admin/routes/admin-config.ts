@@ -30,7 +30,7 @@ import type {
 	ServerSidebarSection,
 	SidebarContribution,
 	SidebarItemDef,
-} from "../../../augmentation.js";
+} from "../../../augmentation/index.js";
 import {
 	resolveDashboardCallback,
 	resolveSidebarCallback,

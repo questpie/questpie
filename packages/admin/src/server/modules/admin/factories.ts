@@ -28,7 +28,7 @@ import type {
 	ListViewConfigContext,
 	PreviewConfig,
 	ServerActionsConfig,
-} from "../../augmentation.js";
+} from "../../augmentation/index.js";
 import {
 	createActionCallbackProxy,
 	createActionFieldBuilderProxy,

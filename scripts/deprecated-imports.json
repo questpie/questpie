@@ -3,7 +3,7 @@
 	"packages": {
 		"next": 0,
 		"tanstack-query": 0,
-		"admin": 125,
+		"admin": 20,
 		"workflows": 0,
 		"questpie": 41,
 		"tanstack-db": 0,
