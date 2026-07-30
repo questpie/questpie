@@ -140,7 +140,6 @@
 	},
 	"dependencies": {
 		"@better-auth/oauth-provider": "^1.6.23",
-		"@drepkovsky/tinydi": "^2.3.0",
 		"better-auth": "^1.6.23",
 		"commander": "^14.0.2",
 		"drizzle-orm": "1.0.0-beta.6-4414a19",

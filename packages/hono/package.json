@@ -30,7 +30,6 @@
 	},
 	"dependencies": {
 		"hono": "^4.12.25",
-		"qs": "^6.13.1",
 		"questpie": "workspace:*"
 	},
 	"devDependencies": {
