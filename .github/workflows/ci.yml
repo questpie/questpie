@@ -319,3 +319,15 @@ jobs:
 
       - name: Verify canonical skill install parity
         run: bun run verify:skills-install
+
+      # AGENTS.md is generated from SKILL.md + references/. Editing a reference
+      # without regenerating leaves the file agents actually read out of date,
+      # and nothing else in CI notices.
+      - name: Verify generated skill docs are current
+        run: bun run scripts/build-skill-docs.ts --check
+
+      # Every public value export must be mentioned in the skill or classified
+      # in skills/questpie/coverage.json. Catches shipping API that the
+      # AI-facing docs never learned about.
+      - name: Verify skill coverage of the public API
+        run: bun run scripts/skill-coverage.ts --strict

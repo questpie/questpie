@@ -1,3 +1,5 @@
+import { interpolate } from "#questpie/shared/i18n/interpolate.js";
+
 import { IntlFormatterCache } from "./intl-cache.js";
 import type {
 	I18nAdapter,
@@ -158,15 +160,6 @@ export function createSimpleI18n<
 	const numberFormats = new IntlFormatterCache<Intl.NumberFormat>();
 	const pluralRules = new IntlFormatterCache<Intl.PluralRules>();
 	const relativeTimeFormats = new IntlFormatterCache<Intl.RelativeTimeFormat>();
-
-	const interpolate = (
-		message: string,
-		params?: Readonly<Record<string, unknown>>,
-	): string =>
-		message.replace(/\{\{(\w+)\}\}/g, (_, key: string) => {
-			const value = params?.[key];
-			return value === undefined ? `{{${key}}}` : String(value);
-		});
 
 	const plural = (
 		message: PluralMessages,
