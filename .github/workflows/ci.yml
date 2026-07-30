@@ -59,6 +59,16 @@ jobs:
       - name: lint-census ratchet
         run: bun run scripts/lint-census.ts
 
+      # Imports of @deprecated symbols from the framework's own source. A rising
+      # number means the tag is undeliverable — the deprecated code can never be
+      # removed, and a user following its advice lands on a path the framework
+      # does not itself use. 166 today (admin 125, questpie 41), dominated by
+      # admin importing its own compat barrel and modules/core/routes using
+      # createCollectionRoutes. Tests are excluded; exercising a deprecated path
+      # is what a compatibility test is for.
+      - name: deprecated-imports ratchet
+        run: bun run scripts/deprecated-imports.ts
+
       # `--list-different` rather than `--check`: identical pass/fail signal,
       # measured at 1m04s vs 6m11s on this tree (`--check` additionally computes
       # and prints per-file statistics). Cost is dominated by large markdown,
