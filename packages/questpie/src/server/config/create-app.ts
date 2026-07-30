@@ -369,6 +369,18 @@ const STRUCTURAL_KEYS = new Set(["name", "modules", "plugin"]);
  *
  * @see RuntimeConfig in module-types.ts for the full list.
  */
+/**
+ * Every RuntimeConfig key create-app reads must be listed here.
+ *
+ * A key that is read but unlisted is classified as an unknown plugin extension
+ * and copied into `instance.state`, which breaks twice over: it becomes a ghost
+ * duplicate of infrastructure config that nothing reads, and
+ * `buildExtensionState` duck-types `.build()` one level into every extension
+ * record — so a config member that happens to expose `build()` is silently
+ * replaced by its return value. `crdt`, `observability` and `executor` were all
+ * missing here while being consumed below; see
+ * test/config/runtime-consumed-keys.test.ts.
+ */
 const RUNTIME_CONSUMED_KEYS = new Set([
 	"plugins",
 	"app",
@@ -385,6 +397,9 @@ const RUNTIME_CONSUMED_KEYS = new Set([
 	"autoMigrate",
 	"autoSeed",
 	"cli",
+	"crdt",
+	"observability",
+	"executor",
 ]);
 
 /**
