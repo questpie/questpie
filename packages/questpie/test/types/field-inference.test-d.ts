@@ -320,6 +320,11 @@ const _twinAnyTextarea: StateOf<typeof anyTextarea>["notNull"] =
 // @ts-expect-error select().enum() must not poison state.
 const _twinAnySelect: StateOf<typeof anySelect>["notNull"] = false as boolean;
 // @ts-expect-error upload().multiple() is `(): any` — it PRESERVES state.
+// NOTE: this asserts the INTENT, and cannot check it. Because the method is
+// declared `(): any`, the runtime was free to disagree — and it did, spreading
+// the type-only `f._` phantom instead of `f._state` and losing the whole state
+// object while this line stayed green. The runtime half lives in
+// test/fields/chain-preserves-state.test.ts; do not treat this as coverage.
 const _twinAnyUpload: StateOf<typeof anyUpload>["data"] = [] as string[];
 // @ts-expect-error relation().relationName() must not poison state.
 const _twinAnyRelation: StateOf<typeof anyRelation>["notNull"] =

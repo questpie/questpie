@@ -153,7 +153,11 @@ export const uploadFieldType = fieldType("upload", {
 		 */
 		multiple: (f: Field<any>) =>
 			field({
-				...f._,
+				// `_state`, not `_`. `Field._` is `declare readonly _: TState` — a
+				// type-only phantom with no runtime property — so spreading it
+				// yields nothing and the returned field loses its type, metadata
+				// and target collection. See relation.ts, which spreads `_state`.
+				...f._state,
 				multiple: true,
 				virtual: true,
 				columnFactory: null as any,
