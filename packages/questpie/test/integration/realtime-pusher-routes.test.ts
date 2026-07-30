@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import {
-	createAdapterRoutes,
-	createFetchHandler,
-} from "../../src/server/adapters/http.js";
+import { createFetchHandler } from "../../src/server/adapters/http.js";
+import { realtimeSubscribe } from "../../src/server/adapters/routes/realtime.js";
 import { collection } from "../../src/server/collection/builder/collection-builder.js";
 import {
 	PusherClientTransport,
@@ -317,13 +315,12 @@ describe("pusher channel matrix module routes", () => {
 		);
 		try {
 			await runTestDbMigrations(first.app);
-			const firstRoutes = createAdapterRoutes(first.app, {
-				accessMode: "user",
-			});
-			const secondRoutes = createAdapterRoutes(second.app, {
-				accessMode: "user",
-			});
-			const opened = await firstRoutes.realtime.subscribe(
+			const asUser = { accessMode: "user" } as const;
+			const firstSubscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(first.app, a[0], a[1], a[2], asUser);
+			const secondSubscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(second.app, a[0], a[1], a[2], asUser);
+			const opened = await firstSubscribe(
 				new Request("http://localhost/realtime", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
@@ -353,7 +350,7 @@ describe("pusher channel matrix module routes", () => {
 			await waitFor(() => first.app.realtime.listeners.size === 1);
 
 			const control = (revision: number, topics: unknown[]) =>
-				secondRoutes.realtime.subscribe(
+				secondSubscribe(
 					new Request("http://localhost/realtime", {
 						method: "POST",
 						headers: { "Content-Type": "application/json" },

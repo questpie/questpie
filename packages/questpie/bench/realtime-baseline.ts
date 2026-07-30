@@ -5,11 +5,11 @@ import { sql } from "drizzle-orm";
 
 import {
 	collection,
-	createAdapterRoutes,
 	questpieRealtimeLogTable,
 	type ChangeBroker,
 	type ChangeWake,
 } from "../src/exports/index.js";
+import { realtimeSubscribe } from "../src/server/adapters/routes/realtime.js";
 import type {
 	RealtimeObservation,
 	RealtimeObserver,
@@ -336,7 +336,10 @@ async function main() {
 		}
 		await setup.app.db.delete(questpieRealtimeLogTable);
 
-		const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+		// Bound locally; createAdapterRoutes is gone.
+		const asUser = { accessMode: "user" } as const;
+		const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+			realtimeSubscribe(setup.app, a[0], a[1], a[2], asUser);
 
 		const openConnection = async (
 			connectionId: string,
@@ -362,11 +365,7 @@ async function main() {
 				signal: controller.signal,
 			});
 			const startedAt = performance.now();
-			const response = await routes.realtime.subscribe(
-				request,
-				{},
-				{ appContext },
-			);
+			const response = await subscribe(request, {}, { appContext });
 			if (!response.ok || !response.body) {
 				throw new Error(`Realtime connection failed: ${response.status}`);
 			}
@@ -514,7 +513,7 @@ async function main() {
 							channels: [],
 						},
 					});
-					const response = await routes.realtime.subscribe(
+					const response = await subscribe(
 						new Request("http://localhost/realtime", {
 							method: "POST",
 							headers: { "Content-Type": "application/json" },
@@ -577,7 +576,7 @@ async function main() {
 								? connection.reader.readSnapshots(1)
 								: null;
 						const startedAt = performance.now();
-						const response = await routes.realtime.subscribe(
+						const response = await subscribe(
 							new Request("http://localhost/realtime", {
 								method: "POST",
 								headers: { "Content-Type": "application/json" },
