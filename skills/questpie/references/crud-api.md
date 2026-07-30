@@ -131,7 +131,7 @@ const updated = await collections.posts.updateMany({
 
 `updateMany` is claim-checked: inside the write transaction the matched rows are locked and `where` is re-evaluated, so rows changed by a concurrent writer are skipped instead of silently overwritten. The returned array reports exactly the winners.
 
-#### Atomic conditional updates (claims, optimistic locking)
+#### Atomic claims and generated optimistic concurrency
 
 Use a conditional `where` + the array length as the win/lose signal:
 
@@ -148,18 +148,36 @@ if (claimed.length === 0) {
 	// Lost the race (or row vanished), handle explicitly
 }
 
-// Optimistic concurrency: write only if the revision is unchanged
-const bumped = await collections.documents.updateMany(
+// Generated optimistic concurrency: revision is framework-owned.
+const updated = await collections.documents.updateById(
 	{
-		where: { id, revision: doc.revision },
-		data: { body, revision: doc.revision + 1 },
+		id,
+		data: { body },
+		expectedRevision: doc.revision,
 	},
 	ctx,
 );
-if (bumped.length === 0) throw new Error("Conflict, reload and retry");
 ```
 
-Hook timing: `beforeValidate`/`beforeChange` run before the transaction on candidates (intent, may fire for losers); `afterChange`, versioning, and the return value are winners-only (fact).
+Enable this with `.options({ optimisticConcurrency: true })`. Do not declare
+or mutate `revision`. Create starts at `1`; every canonical update,
+localized/relation-only update, soft delete, restore, revert, and publishing
+stage transition advances once. Existing-row mutations use
+`expectedRevision`. `updateMany`/`deleteMany` require exact
+`expectedRevisions: [{ id, expectedRevision }]` coverage, and every
+`updateBatch` entry carries `expectedRevision`. Missing or stale coverage
+conflicts before mutation hooks or durable facts and the whole batch remains
+atomic.
+
+Globals use `{ data, expectedRevision }`; creating an absent global expects
+revision `0`. History `versionNumber`/`versionId` is independent and each
+snapshot exposes `sourceRevision`. HTTP responses expose `ETag: "<revision>"`
+and mutations may use the same quoted value in `If-Match`; when both forms are
+present they must agree.
+
+`.collaborative()` enables canonical revisions automatically. CRDT commit
+sequences, cursors, epochs, and field revisions remain separate; one applied
+aggregate projection cut advances the owner revision once.
 
 ### `updateBatch(options)`
 

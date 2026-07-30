@@ -207,6 +207,16 @@ const update = useMutation(q.collections.posts.update());
 update.mutate({ id: "post-id", data: { status: "published" } });
 ```
 
+With generated optimistic concurrency, include the revision read by the query:
+
+```tsx
+update.mutate({
+	id: post.id,
+	data: { status: "published" },
+	expectedRevision: post.revision,
+});
+```
+
 ### Delete
 
 ```tsx
@@ -226,6 +236,10 @@ updateMany.mutate({ where: { status: "draft" }, data: { status: "archived" } });
 const deleteMany = useMutation(q.collections.posts.deleteMany());
 deleteMany.mutate({ where: { status: "archived" } });
 ```
+
+Optimistic collections add exact `expectedRevisions` to both bulk shapes and
+`expectedRevision` to every batch entry. Revert and stage-transition params use
+the same precondition.
 
 ### Versioning and Workflow Stages
 
@@ -258,6 +272,19 @@ function SiteSettings() {
 ```
 
 The globals `update` mutation takes `{ data: {...} }`, its `mutationFn` unwraps `variables.data`. This differs from the direct client (`client.globals.siteSettings.update({ shopName: "New Name" })`), which takes the data object directly.
+
+For an optimistic global, the direct-client input is
+`{ data: fields, expectedRevision }`, so the TanStack variable has one
+additional envelope:
+
+```tsx
+update.mutate({
+	data: {
+		data: { shopName: "New Name" },
+		expectedRevision: settings.revision,
+	},
+});
+```
 
 ### Globals with Realtime
 
