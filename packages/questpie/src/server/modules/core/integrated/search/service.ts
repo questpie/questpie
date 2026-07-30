@@ -285,20 +285,3 @@ export function createSearchService(
 		observability,
 	);
 }
-
-// ============================================================================
-// Legacy exports (backwards compatibility)
-// ============================================================================
-
-/**
- * @deprecated Use createSearchService with adapter instead
- */
-export function createSearchServiceLegacy(
-	db: PostgresJsDatabase<any>,
-	_config: any = {},
-): SearchService {
-	// Create with default PostgresSearchAdapter for backwards compatibility
-	const service = createSearchService(undefined, db);
-	// Note: service needs to be initialized before use
-	return service;
-}
