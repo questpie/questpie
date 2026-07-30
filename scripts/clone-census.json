@@ -1,0 +1,20 @@
+{
+	"$comment": "Redundant copies of top-level functions sharing a name AND a byte-identical body across files, per package: a function in N files counts N-1. Regenerate with `bun run scripts/clone-census.ts --update` and review the diff. Ratchet: any increase fails CI. Only exact copies count — once a copy drifts it is two functions and only a human can say whether the difference was meant, which is why this gate stops the copy being MADE.",
+	"packages": {
+		"next": 0,
+		"tanstack-query": 0,
+		"admin": 3,
+		"workflows": 2,
+		"questpie": 27,
+		"tanstack-db": 0,
+		"mcp": 0,
+		"observability": 0,
+		"openapi": 0,
+		"elysia": 0,
+		"hono": 0,
+		"create-questpie": 0,
+		"sandbox": 1,
+		"crdt-yjs": 1,
+		"vite-plugin-iconify": 0
+	}
+}

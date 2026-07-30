@@ -69,6 +69,16 @@ jobs:
       - name: deprecated-imports ratchet
         run: bun run scripts/deprecated-imports.ts
 
+      # Functions copy-pasted rather than shared: same name AND byte-identical
+      # body in 2+ files, counted as redundant copies (N files contribute N-1).
+      # Name alone would be noise — handleClick appears in six admin components.
+      # This is the copy-then-drift defect that produced interpolate x6 in two
+      # behaviours and toPascalCase x4 in three algorithms. It also finds
+      # equalBytes existing as three different implementations in the CRDT
+      # layer, only one of which is constant-time.
+      - name: clone-census ratchet
+        run: bun run scripts/clone-census.ts
+
       # `--list-different` rather than `--check`: identical pass/fail signal,
       # measured at 1m04s vs 6m11s on this tree (`--check` additionally computes
       # and prints per-file statistics). Cost is dominated by large markdown,
