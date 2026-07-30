@@ -16,7 +16,20 @@ import { splitByNestedSchema } from "./nested-i18n-split.js";
 import { isPlainObject } from "./path-utils.js";
 
 /**
- * Constant for the _localized column name in i18n table
+ * Name of the JSONB column on an i18n table that holds nested localized values.
+ *
+ * Everything in the crud layer goes through this constant: select-builder
+ * composes the aliased select keys from it, i18n-merge reads those same keys
+ * back. Those two must agree or localized values come back empty with no error,
+ * which is exactly what happened while select-builder had the name inlined.
+ *
+ * It is NOT the whole story. The columns themselves are declared in the builder
+ * layer, which does not import from crud/shared and should not start:
+ * `collection.ts` writes `_localized: jsonb("_localized")` at three places
+ * (i18nCols, generateI18nTable, generateI18nVersionsTable). Renaming this
+ * constant without renaming those keys breaks the read path silently again.
+ * If this ever needs to change, move it to `#questpie/shared/constants.js`
+ * first so both layers can own it.
  */
 export const LOCALIZED_COLUMN = "_localized";
 
