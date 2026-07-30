@@ -1,4 +1,6 @@
-@import "tailwindcss";
+/* Importing `tailwindcss` is the consumer's job, and every documented recipe
+   already starts with it. Importing it here too emitted preflight twice in
+   every admin app: +4 KB of duplicated reset, and two `box-sizing` rules. */
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
