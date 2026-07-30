@@ -527,8 +527,22 @@ export async function devCommand(options: DevOptions): Promise<void> {
 	}
 
 	// Root app mode — multi-target watch
+	//
+	// Run the same modules.ts pre-pass generateCommand does. Scaffolded apps
+	// declare no `plugins` in runtimeConfig, so module-contributed codegen
+	// plugins reach codegen ONLY through modules.ts. Without this the watch
+	// graph misses their target directories and, worse, every regeneration
+	// below runs core-only — and writeGeneratedFiles does `rm -rf outDir`
+	// first, so the rewrite drops the views/components/blocks categories and
+	// the collection extensions the initial generate had produced.
+	const modulePlugins = await extractModulePlugins(
+		rootDir,
+		userPlugins ?? [],
+		options,
+	);
+
 	// Resolve target graph to know all roots and directories to watch
-	const allPlugins = [coreCodegenPlugin(), ...(userPlugins ?? [])];
+	const allPlugins = [coreCodegenPlugin(), ...modulePlugins];
 	const targetGraph = resolveTargetGraph(allPlugins);
 
 	// Collect all watch directories across all targets
@@ -601,7 +615,10 @@ export async function devCommand(options: DevOptions): Promise<void> {
 				const multiResult = await runAllTargets({
 					rootDir,
 					configPath,
-					plugins: userPlugins,
+					// modulePlugins, not userPlugins — runAllTargets prepends the
+					// core plugin itself, so this is the same list generateCommand
+					// passes.
+					plugins: modulePlugins,
 				});
 
 				for (const [targetId, result] of multiResult.targets) {
