@@ -287,9 +287,10 @@ export function DashboardWidget({
 
 	let widgetElement: React.ReactElement;
 
-	const widgetKey = resolveWidgetKey(config as any);
+	const widgetKey = resolveWidgetKey(config);
 
-	if (config.type === "custom" && !(config as any).widgetType) {
+	// A custom widget that resolved to nothing else is the legacy inline form.
+	if (config.type === "custom" && widgetKey === "custom") {
 		// Legacy inline form: a component carried on the config itself. The
 		// declared ServerCustomWidget has no `component`/`config` fields, so this
 		// only fires for configs built outside that contract.
