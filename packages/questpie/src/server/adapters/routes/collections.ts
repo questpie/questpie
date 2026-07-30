@@ -343,7 +343,12 @@ export async function collectionRemove(
 			},
 			resolved.appContext,
 		);
-		return smartResponse({ success: true }, request, 200, txidHeaders(result));
+		return smartResponse(
+			result,
+			request,
+			200,
+			revisionHeaders(result.data, hasOptimisticConcurrency(crud)),
+		);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}

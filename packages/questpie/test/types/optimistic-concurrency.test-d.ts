@@ -94,7 +94,7 @@ unlockedCrud.purgeById({ id: "record-1" });
 
 type App = {
 	collections: {
-		locked: typeof locked;
+		locked: typeof revisioned;
 		unlocked: typeof unlocked;
 	};
 };
@@ -105,6 +105,15 @@ client.collections.locked.updateById({
 	expectedRevision: 1,
 	data: { name: "Updated" },
 });
+client.collections.locked
+	.deleteById({
+		id: "record-1",
+		expectedRevision: 1,
+	})
+	.then((result) => {
+		const revision: number = result.data.revision;
+		return revision;
+	});
 client.collections.locked.deleteById({
 	id: "record-1",
 	expectedRevision: 1,

@@ -393,7 +393,20 @@ export function generateCollectionPaths(
 						}
 					: {}),
 				responses: withOptimisticConcurrencyConflict(
-					jsonResponse(ref("SuccessResponse"), `Deleted ${name} record`),
+					withRevisionEtag(
+						jsonResponse(
+							{
+								type: "object",
+								required: ["success", "data"],
+								properties: {
+									success: { type: "boolean" },
+									data: ref(documentSchemaName),
+								},
+							},
+							`Deleted ${name} record`,
+						),
+						Boolean(optimisticConcurrency),
+					),
 					Boolean(optimisticConcurrency),
 				),
 			},
@@ -668,6 +681,27 @@ function withOptimisticConcurrencyConflict(
 			description: "Optimistic concurrency conflict",
 			content: {
 				"application/json": { schema: ref("ErrorResponse") },
+			},
+		},
+	};
+}
+
+function withRevisionEtag(
+	responses: Record<string, unknown>,
+	enabled: boolean,
+) {
+	if (!enabled) return responses;
+	const success = responses["200"] as Record<string, unknown> | undefined;
+	if (!success) return responses;
+	return {
+		...responses,
+		"200": {
+			...success,
+			headers: {
+				ETag: {
+					description: "Quoted canonical revision of the deleted row",
+					schema: { type: "string", pattern: '^"[0-9]+"$' },
+				},
 			},
 		},
 	};

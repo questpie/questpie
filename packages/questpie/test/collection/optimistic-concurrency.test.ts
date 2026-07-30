@@ -695,9 +695,15 @@ describe("generated CRUD optimistic concurrency", () => {
 			expectedRevision: 2,
 		});
 		expect(deleted?.status).toBe(200);
+		expect(deleted?.headers.get("etag")).toBe('"3"');
+		const deletion = await deleted?.json();
+		expect(deletion).toMatchObject({
+			success: true,
+			data: { id: tag.id, revision: 3 },
+		});
 
 		const restored = await request(`optimisticTags/${tag.id}/restore`, "POST", {
-			expectedRevision: 3,
+			expectedRevision: deletion.data.revision,
 		});
 		expect(restored?.status).toBe(200);
 		expect(await restored?.json()).toMatchObject({

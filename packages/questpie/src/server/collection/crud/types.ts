@@ -1801,7 +1801,7 @@ export interface CRUD<
 	deleteById(
 		params: DeleteParams<TId, TOptions>,
 		context?: CRUDContext,
-	): Promise<{ success: boolean }>;
+	): Promise<{ success: boolean; data: TSelect }>;
 
 	/**
 	 * Permanently remove an already soft-deleted record.

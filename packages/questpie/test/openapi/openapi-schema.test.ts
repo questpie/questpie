@@ -112,6 +112,11 @@ describe("OpenAPI schema generation", () => {
 				byId.patch.requestBody.content["application/json"].schema;
 			expect(updateBody.required).toEqual(["data"]);
 			expect(byId.delete.requestBody.required).toBe(false);
+			expect(
+				byId.delete.responses["200"].content["application/json"].schema
+					.properties.data.$ref,
+			).toBe("#/components/schemas/TagsDocument");
+			expect(byId.delete.responses["200"].headers.ETag).toBeDefined();
 			expect(byId.patch.responses["409"]).toBeDefined();
 
 			const bulkUpdate = spec.paths?.["//tags"]?.patch as any;

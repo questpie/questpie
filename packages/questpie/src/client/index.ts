@@ -616,7 +616,10 @@ type CollectionAPI<
 	deleteById: (
 		params: DeleteParams<string, ClientCollectionOptions<TDefinition>>,
 		options?: LocaleOptions,
-	) => Promise<{ success: boolean }>;
+	) => Promise<{
+		success: boolean;
+		data: ClientRow<TCollection, TCollections>;
+	}>;
 
 	/**
 	 * Delete a single record by ID
@@ -625,7 +628,10 @@ type CollectionAPI<
 	delete: (
 		params: DeleteParams<string, ClientCollectionOptions<TDefinition>>,
 		options?: LocaleOptions,
-	) => Promise<{ success: boolean }>;
+	) => Promise<{
+		success: boolean;
+		data: ClientRow<TCollection, TCollections>;
+	}>;
 
 	/**
 	 * Restore a soft-deleted record by ID
