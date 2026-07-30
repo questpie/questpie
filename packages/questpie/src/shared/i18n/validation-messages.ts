@@ -7,6 +7,7 @@
 
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 
+import { interpolate } from "./interpolate.js";
 import { validationMessagesCS } from "./messages/cs.js";
 import { validationMessagesDE } from "./messages/de.js";
 import { validationMessagesEN } from "./messages/en.js";
@@ -129,21 +130,6 @@ function selectPluralForm(
 		// Fallback if Intl.PluralRules fails
 		return count === 1 ? message.one : message.other;
 	}
-}
-
-/**
- * Interpolate params into message string
- */
-function interpolate(
-	template: string,
-	params?: Record<string, unknown>,
-): string {
-	if (!params) return template;
-
-	return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
-		const value = params[key];
-		return value !== undefined ? String(value) : `{{${key}}}`;
-	});
 }
 
 function getLocaleMessages(

@@ -1,5 +1,6 @@
 import {
 	type I18nText,
+	interpolate,
 	isI18nTranslationKey,
 	resolveI18nText,
 } from "questpie/shared";
@@ -50,13 +51,6 @@ function resolveLabel(
 		return resolved === label.key ? (label.fallback ?? null) : resolved;
 	}
 	return resolveI18nText(label, locale, t);
-}
-
-function interpolate(template: string, values: Record<string, string>): string {
-	return template.replace(
-		/\{\{\s*(\w+)\s*\}\}/g,
-		(_m, k) => values[k] ?? `{{${k}}}`,
-	);
 }
 
 /**
