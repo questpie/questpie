@@ -104,6 +104,7 @@
 		"react-hook-form": "^7.54.0",
 		"react-resizable-panels": "^4.4.2",
 		"recharts": "2.15.4",
+		"shadcn": "^3.6.1",
 		"sonner": "^2.0.7",
 		"tailwind-merge": "^3.4.0",
 		"tailwindcss": "^4.0.6",
@@ -118,7 +119,6 @@
 		"@types/react": "^19.2.0",
 		"@types/react-dom": "^19.2.0",
 		"bun-types": "latest",
-		"shadcn": "^3.6.1",
 		"tinyglobby": "^0.2.15",
 		"tsdown": "^0.18.3",
 		"typescript": "5.9.2"
