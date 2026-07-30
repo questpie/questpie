@@ -388,7 +388,7 @@ describe("Workflow scheduled-transition equivalence (QUE-250)", () => {
 			recordId: article.id,
 			stage: "published",
 		});
-		expect(jobs[0].options?.startAfter).toEqual(futureDate);
+		expect(jobs[0].options?.startAfter).toBe(futureDate.toISOString());
 	});
 
 	it("no scheduling happens for collections without workflow config", async () => {

@@ -2720,40 +2720,27 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const { id } = params;
 
 			let existing: OptimisticConcurrencyRecord | undefined;
+			let stagedCrdtOwner: StagedCrdtOwnerActivation | undefined;
+			const optimisticConcurrency = this.getOptimisticConcurrency();
 
-			// Use transaction for delete + version
-			await withTransaction(db, async (tx) => {
-				const txContext = { ...normalized, db: tx };
-				const [lockedBeforeDelete] = await tx
-					.select()
-					.from(this.table)
-					.where(eq(getColumn(this.table, "id")!, id))
-					.for("update");
-				if (!lockedBeforeDelete) {
-					throw ApiError.notFound("Record", id);
-				}
-				if (
-					this.state.options.softDelete &&
-					lockedBeforeDelete.deletedAt != null
-				) {
-					throw ApiError.notFound("Record", id);
-				}
-				this.assertExpectedRevision(params, [lockedBeforeDelete]);
-				existing = lockedBeforeDelete;
-
+			const runDeleteGuardsAndHooks = async (
+				row: OptimisticConcurrencyRecord,
+				hookContext: CRUDContext,
+				hookDb: any,
+			) => {
 				await this.executeHooks(
 					this.state.hooks?.beforeOperation,
 					this.createHookContext({
 						data: params,
 						operation: "delete",
-						context: txContext,
-						db: tx,
+						context: hookContext,
+						db: hookDb,
 					}),
 				);
 				const canDelete = await this.enforceAccessControl(
 					"delete",
-					txContext,
-					existing,
+					hookContext,
+					row,
 					params,
 				);
 				if (canDelete === false) {
@@ -2765,7 +2752,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 				if (
 					typeof canDelete === "object" &&
-					!(await this.checkAccessConditions(canDelete, existing))
+					!(await this.checkAccessConditions(canDelete, row))
 				) {
 					throw ApiError.forbidden({
 						operation: "delete",
@@ -2777,37 +2764,93 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					"beforeDelete",
 					this.state.hooks?.beforeDelete,
 					this.createHookContext({
-						data: existing,
-						original: existing,
+						data: row,
+						original: row,
 						operation: "delete",
-						context: txContext,
-						db: tx,
+						context: hookContext,
+						db: hookDb,
 					}),
 				);
-				const [revalidated] = await tx
+			};
+
+			// Legacy collections retain intent-hook semantics: hooks run before
+			// the write-time claim and may observe a concurrent winner. Running
+			// these hooks under a row lock would deadlock hooks that deliberately
+			// exercise the TOCTOU window through the application database.
+			if (!optimisticConcurrency) {
+				const [preimage] = await db
 					.select()
 					.from(this.table)
 					.where(eq(getColumn(this.table, "id")!, id))
-					.for("update");
+					.limit(1);
 				if (
-					!revalidated ||
-					(this.state.options.softDelete && revalidated.deletedAt != null)
+					!preimage ||
+					(this.state.options.softDelete && preimage.deletedAt != null)
 				) {
-					throw ApiError.conflict("Canonical row changed during delete hooks");
+					throw ApiError.notFound("Record", id);
 				}
-				this.assertExpectedRevision(params, [revalidated]);
-				const currentExisting = revalidated as OptimisticConcurrencyRecord & {
-					revision: number;
-				};
+				existing = preimage;
+				await runDeleteGuardsAndHooks(preimage, normalized, db);
+				stagedCrdtOwner = await this.stageCrdtOwner(preimage);
+			}
+
+			// Use transaction for delete + version
+			await withTransaction(db, async (tx) => {
+				const txContext = { ...normalized, db: tx };
+				let currentExisting: OptimisticConcurrencyRecord;
+				let crdtFallbackOwner: OptimisticConcurrencyRecord;
+
+				if (optimisticConcurrency) {
+					const [lockedBeforeDelete] = await tx
+						.select()
+						.from(this.table)
+						.where(eq(getColumn(this.table, "id")!, id))
+						.for("update");
+					if (
+						!lockedBeforeDelete ||
+						(this.state.options.softDelete &&
+							lockedBeforeDelete.deletedAt != null)
+					) {
+						throw ApiError.notFound("Record", id);
+					}
+					this.assertExpectedRevision(params, [lockedBeforeDelete]);
+					await runDeleteGuardsAndHooks(lockedBeforeDelete, txContext, tx);
+					const [revalidated] = await tx
+						.select()
+						.from(this.table)
+						.where(eq(getColumn(this.table, "id")!, id))
+						.for("update");
+					if (
+						!revalidated ||
+						(this.state.options.softDelete && revalidated.deletedAt != null)
+					) {
+						throw ApiError.conflict(
+							"Canonical row changed during delete hooks",
+						);
+					}
+					this.assertExpectedRevision(params, [revalidated]);
+					currentExisting = revalidated;
+					crdtFallbackOwner = lockedBeforeDelete;
+					stagedCrdtOwner = await this.stageCrdtOwner(revalidated);
+				} else {
+					const claimed = await this.claimRecords({
+						tx,
+						txContext,
+						candidateIds: [id],
+					});
+					if (claimed.length === 0 || !existing) {
+						throw ApiError.notFound("Record", id);
+					}
+					currentExisting = existing;
+					crdtFallbackOwner = existing;
+				}
 				existing = currentExisting;
-				const stagedCrdtOwner = await this.stageCrdtOwner(currentExisting);
 
 				await this.handleCascadeDeleteInternal(id, currentExisting, txContext);
 
 				// Soft delete or hard delete
 				let deletionSnapshot = currentExisting;
 				if (this.state.options.softDelete) {
-					const optimisticConcurrency = this.getOptimisticConcurrency();
 					const [deleted] = await tx
 						.update(this.table)
 						.set({
@@ -2822,10 +2865,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						.returning();
 					deletionSnapshot = deleted ?? currentExisting;
 				} else {
-					if (this.getOptimisticConcurrency()) {
+					if (optimisticConcurrency) {
 						deletionSnapshot = {
 							...currentExisting,
-							revision: currentExisting.revision + 1,
+							revision: (currentExisting.revision as number) + 1,
 						};
 					}
 					await tx
@@ -2871,7 +2914,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							"Collaborative owner is not terminally deleted after delete hooks",
 						);
 					}
-					const crdtOwner = terminalOwner ?? lockedBeforeDelete;
+					const crdtOwner = terminalOwner ?? crdtFallbackOwner;
 					const lifecycle = new CrdtOwnerLifecycleTransaction(tx);
 					const locator = canonicalCrdtCollectionLocator(id);
 					await lifecycle.activate({
@@ -3374,6 +3417,57 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				return { success: true, count: 0 };
 			}
 			const expectedRevisions = this.assertExpectedRevisions(params, records);
+			const optimisticConcurrency = this.getOptimisticConcurrency();
+			const stagedCrdtOwners = new Map<
+				string | number,
+				StagedCrdtOwnerActivation
+			>();
+
+			if (!optimisticConcurrency) {
+				const deleteBulkMeta = {
+					isBatch: true as const,
+					recordIds: records.map((record) => record.id),
+					records,
+					count: records.length,
+				};
+				for (const record of records) {
+					const canDelete = await this.enforceAccessControl(
+						"delete",
+						normalized,
+						record,
+						params,
+					);
+					if (
+						canDelete === false ||
+						(typeof canDelete === "object" &&
+							!(await this.checkAccessConditions(canDelete, record)))
+					) {
+						throw ApiError.forbidden({
+							operation: "delete",
+							resource: this.state.name,
+							reason: `User does not have permission to delete record ${record.id}`,
+						});
+					}
+					await this.executeCollectionHooksWithGlobal(
+						"beforeDelete",
+						this.state.hooks?.beforeDelete,
+						this.createHookContext({
+							data: record,
+							original: record,
+							operation: "delete",
+							context: normalized,
+							db,
+							bulk: deleteBulkMeta,
+						}),
+					);
+				}
+				await Promise.all(
+					records.map(async (record) => {
+						const staged = await this.stageCrdtOwner(record);
+						if (staged) stagedCrdtOwners.set(record.id, staged);
+					}),
+				);
+			}
 
 			// 3. Batched DELETE query
 			// Claim check inside the tx: only rows that STILL match the caller's
@@ -3416,7 +3510,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						return [];
 					}
 				}
-				const optimisticConcurrency = this.getOptimisticConcurrency();
 				if (
 					expectedRevisions &&
 					(lockedBeforeDelete.length !== expectedRevisions.size ||
@@ -3429,71 +3522,71 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 				const winnerIds = new Set(winnerIdList);
 				const claimedRecords = records.filter((r: any) => winnerIds.has(r.id));
-				const deleteBulkMeta = {
-					isBatch: true as const,
-					recordIds: claimedRecords.map((record) => record.id),
-					records: claimedRecords,
-					count: claimedRecords.length,
-				};
-				for (const record of claimedRecords) {
-					const canDelete = await this.enforceAccessControl(
-						"delete",
-						txContext,
-						record,
-						params,
-					);
-					if (
-						canDelete === false ||
-						(typeof canDelete === "object" &&
-							!(await this.checkAccessConditions(canDelete, record)))
-					) {
-						throw ApiError.forbidden({
-							operation: "delete",
-							resource: this.state.name,
-							reason: `User does not have permission to delete record ${record.id}`,
-						});
+				if (optimisticConcurrency) {
+					const deleteBulkMeta = {
+						isBatch: true as const,
+						recordIds: claimedRecords.map((record) => record.id),
+						records: claimedRecords,
+						count: claimedRecords.length,
+					};
+					for (const record of claimedRecords) {
+						const canDelete = await this.enforceAccessControl(
+							"delete",
+							txContext,
+							record,
+							params,
+						);
+						if (
+							canDelete === false ||
+							(typeof canDelete === "object" &&
+								!(await this.checkAccessConditions(canDelete, record)))
+						) {
+							throw ApiError.forbidden({
+								operation: "delete",
+								resource: this.state.name,
+								reason: `User does not have permission to delete record ${record.id}`,
+							});
+						}
+						await this.executeCollectionHooksWithGlobal(
+							"beforeDelete",
+							this.state.hooks?.beforeDelete,
+							this.createHookContext({
+								data: record,
+								original: record,
+								operation: "delete",
+								context: txContext,
+								db: tx,
+								bulk: deleteBulkMeta,
+							}),
+						);
 					}
-					await this.executeCollectionHooksWithGlobal(
-						"beforeDelete",
-						this.state.hooks?.beforeDelete,
-						this.createHookContext({
-							data: record,
-							original: record,
-							operation: "delete",
-							context: txContext,
-							db: tx,
-							bulk: deleteBulkMeta,
+					await Promise.all(
+						claimedRecords.map(async (record) => {
+							const staged = await this.stageCrdtOwner(record);
+							if (staged) stagedCrdtOwners.set(record.id, staged);
 						}),
 					);
-				}
-				const stagedCrdtOwners = new Map<
-					string | number,
-					StagedCrdtOwnerActivation
-				>();
-				await Promise.all(
-					claimedRecords.map(async (record) => {
-						const staged = await this.stageCrdtOwner(record);
-						if (staged) stagedCrdtOwners.set(record.id, staged);
-					}),
-				);
-				lockedBeforeDelete = await tx
-					.select()
-					.from(this.table)
-					.where(inArray(getColumn(this.table, "id")!, winnerIdList))
-					.for("update");
-				if (
-					lockedBeforeDelete.length !== winnerIdList.length ||
-					(this.state.options.softDelete &&
-						lockedBeforeDelete.some(
-							(record: { deletedAt?: unknown }) => record.deletedAt != null,
-						)) ||
-					(expectedRevisions &&
-						lockedBeforeDelete.some(
-							(record: OptimisticConcurrencyRecord) =>
-								record.revision !== expectedRevisions.get(record.id),
-						))
-				) {
-					throw ApiError.conflict("Canonical rows changed during delete hooks");
+					lockedBeforeDelete = await tx
+						.select()
+						.from(this.table)
+						.where(inArray(getColumn(this.table, "id")!, winnerIdList))
+						.for("update");
+					if (
+						lockedBeforeDelete.length !== winnerIdList.length ||
+						(this.state.options.softDelete &&
+							lockedBeforeDelete.some(
+								(record: { deletedAt?: unknown }) => record.deletedAt != null,
+							)) ||
+						(expectedRevisions &&
+							lockedBeforeDelete.some(
+								(record: OptimisticConcurrencyRecord) =>
+									record.revision !== expectedRevisions.get(record.id),
+							))
+					) {
+						throw ApiError.conflict(
+							"Canonical rows changed during delete hooks",
+						);
+					}
 				}
 				const lockedById = new Map(
 					lockedBeforeDelete.map((record: any) => [record.id, record]),
