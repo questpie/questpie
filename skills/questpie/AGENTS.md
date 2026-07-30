@@ -3121,6 +3121,40 @@ slug: f.text().admin({
 
 All reactive handlers run server-side with access to `ctx.db`, `ctx.user`, `ctx.req`.
 
+## Per-field components
+
+A component is normally chosen by field **type**: the admin registry maps `text`
+to one form component and one table cell, shared by every `f.text()`. To give a
+single field its own components without declaring a new field type, name them in
+`.admin({ components })`:
+
+```ts
+status: f.select(STATUSES).admin({
+  components: { cell: "status-pill" },
+}),
+notes: f.textarea().admin({
+  components: { field: "markdown-editor", cell: "truncated-text" },
+}),
+```
+
+| Slot    | Replaces                      |
+| ------- | ----------------------------- |
+| `field` | the form input for this field |
+| `cell`  | the table cell for this field |
+
+The value is a **registry key**, not a component. `.admin()` is serialized from
+the server through field introspection, so it cannot carry a function — the key
+is resolved on the client against the admin component registry (`custom` first,
+then registered field types). The object form `{ type: "status-pill", props: {} }`
+is also accepted.
+
+An unrecognised key falls back to the by-type component rather than rendering
+nothing, so a typo degrades to the default instead of blanking the field.
+
+Precedence for a cell, highest first: a `.list()` column `cell` (declared on the
+view, most local) → this `components.cell` slot → the field type's registered
+cell → the built-in default.
+
 ---
 
 # Type Inference Reference

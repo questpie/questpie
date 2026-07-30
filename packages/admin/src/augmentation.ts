@@ -66,7 +66,46 @@ import type { ReactiveConfig } from "questpie";
  * - `hidden`, `readOnly`, `disabled` can be boolean or reactive function
  * - `compute` can auto-generate field values based on other fields
  */
+/**
+ * A component slot value: either a registry key, or a full reference carrying
+ * props.
+ *
+ * The string form is shorthand for `{ type: name, props: {} }`. Both cross the
+ * server→client boundary inside field introspection, which is why a slot is a
+ * NAME and not a component: `.admin()` is serialized, so it cannot carry a
+ * function.
+ */
+export type FieldComponentSlot =
+	| string
+	| { type: string; props?: Record<string, unknown> };
+
+/**
+ * Per-field component overrides, resolved against the admin component registry.
+ *
+ * Without these, a component is chosen by field TYPE — the client registry maps
+ * "text" to one form component and one cell. Overriding a single field's cell
+ * therefore meant registering a whole new field type. These slots let one field
+ * instance point at its own components while every other `f.text()` keeps the
+ * default.
+ */
+export interface FieldComponentSlots {
+	/** Replaces the form input for this field. */
+	field?: FieldComponentSlot;
+	/** Replaces the table cell for this field. */
+	cell?: FieldComponentSlot;
+}
+
 export interface BaseAdminMeta {
+	/**
+	 * Per-field component overrides, by registry key.
+	 *
+	 * @example
+	 * ```ts
+	 * f.text().admin({ components: { cell: "status-pill" } })
+	 * ```
+	 */
+	components?: FieldComponentSlots;
+
 	/**
 	 * Field width in form (CSS value or number for pixels).
 	 * @example "100%" | 400 | "50%"
