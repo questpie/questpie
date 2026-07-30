@@ -89,6 +89,15 @@ describe("CRDT ordinary CRUD guard", () => {
 		await setup.cleanup();
 	});
 
+	it("normalizes collaborative version history to checkpoint policy", () => {
+		expect(articles.build().state.options.versioning).toMatchObject({
+			collaborativeSnapshots: "checkpoint",
+		});
+		expect(siteSettings.build().state.options.versioning).toMatchObject({
+			collaborativeSnapshots: "checkpoint",
+		});
+	});
+
 	it("allows collection create seeding and unrelated updates", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
 		const created = await setup.app.collections.articles.create(
@@ -97,7 +106,7 @@ describe("CRDT ordinary CRUD guard", () => {
 		);
 
 		await setup.app.collections.articles.updateById(
-			{ id: created.id, data: { title: "Published" } },
+			{ id: created.id, expectedRevision: 1, data: { title: "Published" } },
 			ctx,
 		);
 
@@ -153,7 +162,13 @@ describe("CRDT ordinary CRUD guard", () => {
 		await expect(
 			setup.app.collections.articles.updateBatch(
 				{
-					updates: [{ id: created.id, data: { content: "batch" } as never }],
+					updates: [
+						{
+							id: created.id,
+							expectedRevision: 1,
+							data: { content: "batch" } as never,
+						},
+					],
 				},
 				ctx,
 			),
@@ -162,11 +177,17 @@ describe("CRDT ordinary CRUD guard", () => {
 
 	it("rejects global CRDT writes but permits unrelated fields", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
-		await setup.app.globals.siteSettings.update({ title: "New title" }, ctx);
+		await setup.app.globals.siteSettings.update(
+			{ data: { title: "New title" }, expectedRevision: 0 },
+			ctx,
+		);
 
 		await expect(
 			setup.app.globals.siteSettings.update(
-				{ content: "replace" } as never,
+				{
+					data: { content: "replace" },
+					expectedRevision: 1,
+				} as never,
 				ctx,
 			),
 		).rejects.toThrow(
@@ -204,7 +225,7 @@ describe("CRDT ordinary CRUD guard", () => {
 			ctx,
 		);
 		await setup.app.collections.articles.updateById(
-			{ id: created.id, data: { title: "v2" } },
+			{ id: created.id, expectedRevision: 1, data: { title: "v2" } },
 			ctx,
 		);
 		const [version] = await setup.app.collections.articles.findVersions(
@@ -232,7 +253,10 @@ describe("CRDT ordinary CRUD guard", () => {
 			.select()
 			.from(questpieCrdtResourceTable);
 
-		await setup.app.collections.articles.deleteById({ id: created.id }, ctx);
+		await setup.app.collections.articles.deleteById(
+			{ id: created.id, expectedRevision: 1 },
+			ctx,
+		);
 		const [retired] = await setup.app.db
 			.select()
 			.from(questpieCrdtResourceTable);
@@ -250,7 +274,10 @@ describe("CRDT ordinary CRUD guard", () => {
 			'Collaborative owner "articles" can only be undeleted through restoreById',
 		);
 
-		await setup.app.collections.articles.restoreById({ id: created.id }, ctx);
+		await setup.app.collections.articles.restoreById(
+			{ id: created.id, expectedRevision: 2 },
+			ctx,
+		);
 		const [restored] = await setup.app.db
 			.select()
 			.from(questpieCrdtResourceTable);
@@ -269,17 +296,23 @@ describe("CRDT ordinary CRUD guard", () => {
 
 	it("retires every collaborative owner in a bulk delete", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
-		await setup.app.collections.articles.create(
+		const first = await setup.app.collections.articles.create(
 			{ title: "First", content: "One" },
 			ctx,
 		);
-		await setup.app.collections.articles.create(
+		const second = await setup.app.collections.articles.create(
 			{ title: "Second", content: "Two" },
 			ctx,
 		);
 
 		const result = await setup.app.collections.articles.deleteMany(
-			{ where: {} },
+			{
+				where: {},
+				expectedRevisions: [
+					{ id: first.id, expectedRevision: 1 },
+					{ id: second.id, expectedRevision: 1 },
+				],
+			},
 			ctx,
 		);
 
@@ -308,7 +341,10 @@ describe("CRDT ordinary CRUD guard", () => {
 		};
 
 		await expect(
-			setup.app.collections.articles.deleteById({ id: created.id }, ctx),
+			setup.app.collections.articles.deleteById(
+				{ id: created.id, expectedRevision: 1 },
+				ctx,
+			),
 		).rejects.toThrow(
 			"Collaborative owner is not terminally deleted after delete hooks",
 		);
@@ -331,7 +367,10 @@ describe("CRDT ordinary CRUD guard", () => {
 			{ title: "Draft", content: "Shared" },
 			ctx,
 		);
-		await setup.app.collections.articles.deleteById({ id: created.id }, ctx);
+		await setup.app.collections.articles.deleteById(
+			{ id: created.id, expectedRevision: 1 },
+			ctx,
+		);
 		const table = setup.app.collections.articles[
 			"~internalRelatedTable"
 		] as any;
@@ -345,7 +384,10 @@ describe("CRDT ordinary CRUD guard", () => {
 		};
 
 		await expect(
-			setup.app.collections.articles.restoreById({ id: created.id }, ctx),
+			setup.app.collections.articles.restoreById(
+				{ id: created.id, expectedRevision: 2 },
+				ctx,
+			),
 		).rejects.toThrow(
 			"Collaborative owner remained deleted after restore hooks",
 		);
@@ -363,8 +405,14 @@ describe("CRDT ordinary CRUD guard", () => {
 		);
 
 		const outcomes = await Promise.allSettled([
-			setup.app.collections.articles.deleteById({ id: created.id }, ctx),
-			setup.app.collections.articles.deleteById({ id: created.id }, ctx),
+			setup.app.collections.articles.deleteById(
+				{ id: created.id, expectedRevision: 1 },
+				ctx,
+			),
+			setup.app.collections.articles.deleteById(
+				{ id: created.id, expectedRevision: 1 },
+				ctx,
+			),
 		]);
 
 		expect(

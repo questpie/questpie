@@ -118,7 +118,7 @@ import {
 	optimisticActionInput,
 	optimisticIdInput,
 	optimisticUpdateInput,
-} from "../../utils/optimistic-lock";
+} from "../../utils/optimistic-concurrency";
 import { AdminViewHeader } from "../layout/admin-view-layout";
 import { AutoFormFields } from "./auto-form-fields";
 import { FormViewSkeleton } from "./view-skeletons";
@@ -1137,7 +1137,7 @@ export default function FormView({
 		isDirtyRef: formIsDirtyRef,
 		isSubmittingRef: formIsSubmittingRef,
 		updateMutation,
-		optimisticLock: schema?.options?.optimisticLock,
+		optimisticConcurrency: schema?.options?.optimisticConcurrency,
 		onPreviewCommit: commitPreviewSnapshot,
 		onPreviewRefresh: triggerPreviewRefresh,
 		onSavingChange: setIsSaving,
@@ -1263,7 +1263,11 @@ export default function FormView({
 		const savePromise = async () => {
 			if (isEditMode && id) {
 				return await updateMutation.mutateAsync(
-					optimisticUpdateInput(id, data, schema?.options?.optimisticLock),
+					optimisticUpdateInput(
+						id,
+						data,
+						schema?.options?.optimisticConcurrency,
+					),
 				);
 			} else {
 				return await createMutation.mutateAsync(data);
@@ -1602,7 +1606,7 @@ export default function FormView({
 								optimisticIdInput(
 									itemId,
 									transformedItem,
-									schema?.options?.optimisticLock,
+									schema?.options?.optimisticConcurrency,
 								),
 							)
 							.finally(() => {
@@ -1632,7 +1636,7 @@ export default function FormView({
 								optimisticIdInput(
 									itemId,
 									transformedItem,
-									schema?.options?.optimisticLock,
+									schema?.options?.optimisticConcurrency,
 								),
 							)
 							.finally(() => {
@@ -1747,7 +1751,7 @@ export default function FormView({
 						...optimisticActionInput(
 							transformedItem,
 							undefined,
-							schema?.options?.optimisticLock,
+							schema?.options?.optimisticConcurrency,
 						),
 					});
 					if (!response?.success || response.result?.type === "error") {
@@ -1806,12 +1810,12 @@ export default function FormView({
 		const payload = optimisticIdInput(
 			id,
 			transformedItem,
-			schema?.options?.optimisticLock,
+			schema?.options?.optimisticConcurrency,
 		) as {
 			id: string;
 			version?: number;
 			versionId?: string;
-			expectedVersion?: number;
+			expectedRevision?: number;
 		};
 		if (typeof pendingRevertVersion.versionId === "string") {
 			payload.versionId = pendingRevertVersion.versionId;

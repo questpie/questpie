@@ -178,18 +178,41 @@ async function cascadeDeleteHasMany(
 		if (relatedRecords.length > 0) {
 			// CASCADE: Delete related records (triggers hooks)
 			for (const relatedRecord of relatedRecords) {
-				await relatedCrud.deleteById({ id: relatedRecord.id }, context);
+				await relatedCrud.deleteById(
+					{
+						id: relatedRecord.id,
+						...(relatedCrud["~internalState"].options.optimisticConcurrency ===
+						true
+							? { expectedRevision: relatedRecord.revision }
+							: {}),
+					},
+					context,
+				);
 			}
 		}
 	}
 	// SET NULL
 	else if (relation.onDelete === "set null") {
+		const { docs: relatedRecords } = await relatedCrud.find(
+			{
+				where: { [foreignKeyField]: { eq: record[primaryKeyField] } },
+			},
+			context,
+		);
 		// Update related records to set FK to null
 		// We use updateMany which triggers hooks
 		await relatedCrud.updateMany(
 			{
 				where: { [foreignKeyField]: { eq: record[primaryKeyField] } },
 				data: { [foreignKeyField]: null },
+				...(relatedCrud["~internalState"].options.optimisticConcurrency === true
+					? {
+							expectedRevisions: relatedRecords.map((relatedRecord: any) => ({
+								id: relatedRecord.id,
+								expectedRevision: relatedRecord.revision,
+							})),
+						}
+					: {}),
 			},
 			context,
 		);
@@ -223,7 +246,16 @@ async function cascadeDeleteManyToMany(
 	if (junctionRecords.length > 0) {
 		// CASCADE: Delete junction records
 		for (const junctionRecord of junctionRecords) {
-			await junctionCrud.deleteById({ id: junctionRecord.id }, context);
+			await junctionCrud.deleteById(
+				{
+					id: junctionRecord.id,
+					...(junctionCrud["~internalState"].options.optimisticConcurrency ===
+					true
+						? { expectedRevision: junctionRecord.revision }
+						: {}),
+				},
+				context,
+			);
 		}
 	}
 }

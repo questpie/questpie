@@ -535,6 +535,10 @@ export class Collection<TState extends CollectionBuilderState> {
 		deletedAt: systemTimestamp("deleted_at"),
 	});
 
+	static readonly revisionCols = () => ({
+		revision: integer("revision").default(1).notNull(),
+	});
+
 	/**
 	 * Creates version table columns with ID type matching the parent table
 	 * @param parentIdColumn - The ID column from the parent table to match type
@@ -549,6 +553,7 @@ export class Collection<TState extends CollectionBuilderState> {
 			? cloneColumnType(parentIdColumn, "id").notNull()
 			: text("id").notNull(),
 		versionNumber: integer("version_number").notNull(),
+		sourceRevision: integer("source_revision"),
 		versionOperation: text("version_operation").notNull(), // 'create' | 'update' | 'delete'
 		versionStage: text("version_stage"),
 		versionFromStage: text("version_from_stage"),
@@ -689,9 +694,22 @@ export class Collection<TState extends CollectionBuilderState> {
 			}
 		}
 
+		if (
+			state.options.optimisticConcurrency &&
+			Object.hasOwn(state.fields, "revision")
+		) {
+			throw new Error(
+				`Collection "${state.name}" cannot declare framework-owned field "revision"`,
+			);
+		}
+		if (state.collaborative && !state.options.optimisticConcurrency) {
+			throw new Error(
+				`Collaborative collection "${state.name}" must enable optimisticConcurrency`,
+			);
+		}
+
 		// Build the main table
 		this.table = this.generateMainTable(indexesFn) as any;
-		this.validateOptimisticLockField();
 
 		// Build the i18n table if there are localized fields
 		this.i18nTable = this.generateI18nTable() as any;
@@ -732,6 +750,9 @@ export class Collection<TState extends CollectionBuilderState> {
 			if (state.options.softDelete) {
 				Object.assign(mainFields, Collection.softDeleteCols());
 			}
+			if (state.options.optimisticConcurrency) {
+				Object.assign(mainFields, Collection.revisionCols());
+			}
 
 			state.validation = createCollectionValidationSchemas(
 				state.name,
@@ -752,50 +773,6 @@ export class Collection<TState extends CollectionBuilderState> {
 
 		// Type inference helper (empty runtime object, types only)
 		this.$infer = {} as any;
-	}
-
-	private validateOptimisticLockField(): void {
-		const config = this.state.options.optimisticLock;
-		if (!config) return;
-
-		const field = config.field;
-		const fieldDefinition = (
-			this.state.fieldDefinitions as Record<
-				string,
-				{
-					getLocation?: () => string;
-					getType?: () => string;
-				}
-			>
-		)[field];
-		const location = fieldDefinition?.getLocation?.();
-
-		if (location && location !== "main") {
-			throw new Error(
-				`Optimistic lock field "${field}" on collection "${this.state.name}" must be a persisted, non-localized main-table field`,
-			);
-		}
-
-		const column = getColumn(this.table, field);
-		if (!column) {
-			throw new Error(
-				`Optimistic lock field "${field}" does not exist on collection "${this.state.name}"`,
-			);
-		}
-		if (!column.notNull) {
-			throw new Error(
-				`Optimistic lock field "${field}" on collection "${this.state.name}" must be non-nullable`,
-			);
-		}
-
-		if (
-			(fieldDefinition && fieldDefinition.getType?.() !== "number") ||
-			!column.dataType.startsWith("number")
-		) {
-			throw new Error(
-				`Optimistic lock field "${field}" on collection "${this.state.name}" must be numeric`,
-			);
-		}
 	}
 
 	/**
@@ -1007,6 +984,9 @@ export class Collection<TState extends CollectionBuilderState> {
 		// Add soft delete
 		if (this.state.options.softDelete) {
 			Object.assign(columns, Collection.softDeleteCols());
+		}
+		if (this.state.options.optimisticConcurrency) {
+			Object.assign(columns, Collection.revisionCols());
 		}
 
 		// Create final table with constraints
@@ -1468,7 +1448,7 @@ export class Collection<TState extends CollectionBuilderState> {
 			title: titleMeta,
 			timestamps: this.state.options.timestamps !== false,
 			softDelete: this.state.options.softDelete || false,
-			optimisticLock: this.state.options.optimisticLock,
+			optimisticConcurrency: this.state.options.optimisticConcurrency,
 			virtualFields: this.state.virtuals
 				? Object.keys(this.state.virtuals)
 				: [],

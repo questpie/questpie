@@ -81,15 +81,14 @@ describe("OpenAPI schema generation", () => {
 			expect(baseSchema.properties?.updatedAt).toBeDefined();
 		});
 
-		it("documents required optimistic-lock inputs on every CRUD mutation", async () => {
+		it("documents required optimistic-concurrency inputs on every CRUD mutation", async () => {
 			const tags = collection("tags")
 				.fields(({ f }) => ({
 					name: f.text().required(),
-					version: f.number().required().default(1),
 				}))
 				.options({
 					softDelete: true,
-					optimisticLock: { field: "version", required: true },
+					optimisticConcurrency: true,
 				});
 			const mockCms = {
 				getCollections: () => ({ tags }),
@@ -101,40 +100,39 @@ describe("OpenAPI schema generation", () => {
 				basePath: "/",
 			});
 			const updateSchema = spec.components?.schemas?.TagsUpdate as any;
-			expect(updateSchema.properties.version).toBeUndefined();
+			expect(updateSchema.properties.revision).toBeUndefined();
+			const documentSchema = spec.components?.schemas?.TagsDocument as any;
+			expect(documentSchema.allOf[0].properties.revision).toMatchObject({
+				type: "integer",
+				minimum: 1,
+			});
 
 			const byId = spec.paths?.["//tags/{id}"] as any;
 			const updateBody =
 				byId.patch.requestBody.content["application/json"].schema;
-			expect(updateBody.required).toEqual(["data", "expectedVersion"]);
-			expect(
-				byId.delete.requestBody.content["application/json"].schema.required,
-			).toEqual(["expectedVersion"]);
+			expect(updateBody.required).toEqual(["data"]);
+			expect(byId.delete.requestBody.required).toBe(false);
 			expect(byId.patch.responses["409"]).toBeDefined();
 
 			const bulkUpdate = spec.paths?.["//tags"]?.patch as any;
 			expect(
 				bulkUpdate.requestBody.content["application/json"].schema.required,
-			).toEqual(["where", "data", "expectedVersions"]);
+			).toEqual(["where", "data", "expectedRevisions"]);
 			const updateBatch = spec.paths?.["//tags/update-batch"]?.post as any;
 			expect(updateBatch).toBeDefined();
 			const deleteMany = spec.paths?.["//tags/delete-many"]?.post as any;
 			expect(
 				deleteMany.requestBody.content["application/json"].schema.required,
-			).toEqual(["where", "expectedVersions"]);
+			).toEqual(["where", "expectedRevisions"]);
 			const restore = spec.paths?.["//tags/{id}/restore"]?.post as any;
-			expect(
-				restore.requestBody.content["application/json"].schema.required,
-			).toEqual(["expectedVersion"]);
+			expect(restore.requestBody.required).toBe(false);
 			const purge = spec.paths?.["//tags/{id}/purge"]?.post as any;
-			expect(
-				purge.requestBody.content["application/json"].schema.required,
-			).toEqual(["expectedVersion"]);
+			expect(purge.requestBody.required).toBe(false);
 			expect(purge.responses["409"]).toBeDefined();
 			const revert = spec.paths?.["//tags/{id}/revert"]?.post as any;
 			expect(
 				revert.requestBody.content["application/json"].schema.required,
-			).toEqual(["expectedVersion"]);
+			).toBeUndefined();
 			expect(revert.responses["409"]).toBeDefined();
 		});
 

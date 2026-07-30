@@ -7,47 +7,47 @@ import {
 	optimisticManyInput,
 	optimisticUpdateInput,
 	runAdminBulkDelete,
-} from "#questpie/admin/client/utils/optimistic-lock";
+} from "#questpie/admin/client/utils/optimistic-concurrency";
 
-const lock = { field: "revision", required: true } as const;
+const lock = true as const;
 
-describe("admin optimistic-lock inputs", () => {
-	it("keeps the version out of update data and carries it separately", () => {
+describe("admin optimistic-concurrency inputs", () => {
+	it("keeps the revision out of update data and carries it separately", () => {
 		expect(
 			optimisticUpdateInput("post-1", { title: "Updated", revision: 4 }, lock),
 		).toEqual({
 			id: "post-1",
 			data: { title: "Updated" },
-			expectedVersion: 4,
+			expectedRevision: 4,
 		});
 		expect(
 			optimisticIdInput("post-1", { id: "post-1", revision: 4 }, lock),
-		).toEqual({ id: "post-1", expectedVersion: 4 });
+		).toEqual({ id: "post-1", expectedRevision: 4 });
 	});
 
-	it("builds exact per-record versions for batch and bulk calls", () => {
+	it("builds exact per-record revisions for batch and bulk calls", () => {
 		const first = { id: "post-1", revision: 2 };
 		const second = { id: "post-2", revision: 8 };
 
 		expect(optimisticBatchEntry("post-1", { rank: 1 }, first, lock)).toEqual({
 			id: "post-1",
 			data: { rank: 1 },
-			expectedVersion: 2,
+			expectedRevision: 2,
 		});
 		expect(
 			optimisticManyInput(["post-2", "post-1"], [first, second], lock),
 		).toEqual({
 			where: { id: { in: ["post-2", "post-1"] } },
-			expectedVersions: [
-				{ id: "post-2", expectedVersion: 8 },
-				{ id: "post-1", expectedVersion: 2 },
+			expectedRevisions: [
+				{ id: "post-2", expectedRevision: 8 },
+				{ id: "post-1", expectedRevision: 2 },
 			],
 		});
 		expect(optimisticActionInput(first, [first, second], lock)).toEqual({
-			expectedVersion: 2,
-			expectedVersions: [
-				{ id: "post-1", expectedVersion: 2 },
-				{ id: "post-2", expectedVersion: 8 },
+			expectedRevision: 2,
+			expectedRevisions: [
+				{ id: "post-1", expectedRevision: 2 },
+				{ id: "post-2", expectedRevision: 8 },
 			],
 		});
 	});
@@ -110,9 +110,9 @@ describe("admin optimistic-lock inputs", () => {
 		expect(bulkCalls).toEqual([
 			{
 				where: { id: { in: ["post-1", "post-2"] } },
-				expectedVersions: [
-					{ id: "post-1", expectedVersion: 1 },
-					{ id: "post-2", expectedVersion: 2 },
+				expectedRevisions: [
+					{ id: "post-1", expectedRevision: 1 },
+					{ id: "post-2", expectedRevision: 2 },
 				],
 			},
 		]);

@@ -56,6 +56,20 @@ import {
 } from "#questpie/server/modules/core/integrated/storage/signed-url.js";
 import type { Override } from "#questpie/shared/type-utils.js";
 
+function withCollaborativeSnapshotPolicy<T extends CollectionOptions>(
+	options: T,
+): T {
+	if (!options.versioning) return options;
+	const versioning = options.versioning === true ? {} : options.versioning;
+	return {
+		...options,
+		versioning: {
+			...versioning,
+			collaborativeSnapshots: "checkpoint",
+		},
+	} as T;
+}
+
 /**
  * Extract Drizzle column types from field definitions.
  * Maps each field definition to its column type, excluding virtual fields.
@@ -568,10 +582,20 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	collaborative<TAwarenessSchema extends ZodType | undefined = undefined>(
 		config?: CrdtOwnerConfig<TAwarenessSchema>,
 	): CollectionBuilder<
-		Override<TState, { collaborative: CrdtOwnerCapability<TAwarenessSchema> }>
+		Override<
+			TState,
+			{
+				collaborative: CrdtOwnerCapability<TAwarenessSchema>;
+				options: TState["options"] & { optimisticConcurrency: true };
+			}
+		>
 	> {
 		const newState = {
 			...this.state,
+			options: withCollaborativeSnapshotPolicy({
+				...this.state.options,
+				optimisticConcurrency: true,
+			}),
 			collaborative: {
 				awarenessSchema: config?.awareness,
 			},
@@ -632,10 +656,24 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 */
 	options<const TNewOptions extends CollectionOptions>(
 		options: TNewOptions,
-	): CollectionBuilder<Override<TState, { options: TNewOptions }>> {
+	): CollectionBuilder<
+		Override<
+			TState,
+			{
+				options: TState["collaborative"] extends CrdtOwnerCapability<any>
+					? TNewOptions & { optimisticConcurrency: true }
+					: TNewOptions;
+			}
+		>
+	> {
 		const newState = {
 			...this.state,
-			options,
+			options: this.state.collaborative
+				? withCollaborativeSnapshotPolicy({
+						...options,
+						optimisticConcurrency: true,
+					})
+				: options,
 		} as any;
 
 		const newBuilder = new CollectionBuilder(newState);

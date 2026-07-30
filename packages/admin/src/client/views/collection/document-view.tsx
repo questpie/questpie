@@ -44,7 +44,7 @@ import {
 } from "../../hooks/use-collection";
 import { useCollectionFields } from "../../hooks/use-collection-fields";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
-import { optimisticUpdateInput } from "../../utils/optimistic-lock";
+import { optimisticUpdateInput } from "../../utils/optimistic-concurrency";
 import { AdminViewHeader, AdminViewLayout } from "../layout/admin-view-layout";
 import { FieldRenderer } from "./field-renderer";
 import { FormViewSkeleton } from "./view-skeletons";
@@ -155,7 +155,12 @@ const DocumentSaveButton = React.memo(function DocumentSaveButton({
 	const busy = isPending || isSubmitting;
 
 	return (
-		<Button type="submit" size="sm" disabled={busy || !isDirty} className="gap-2">
+		<Button
+			type="submit"
+			size="sm"
+			disabled={busy || !isDirty}
+			className="gap-2"
+		>
 			{busy ? (
 				<>
 					<Icon icon="ph:spinner-gap" className="size-4 animate-spin" />
@@ -175,62 +180,64 @@ const DocumentSaveButton = React.memo(function DocumentSaveButton({
 // Autosave indicator
 // ============================================================================
 
-const DocumentAutosaveIndicator = React.memo(function DocumentAutosaveIndicator({
-	isSaving,
-	lastSaved,
-}: {
-	isSaving: boolean;
-	lastSaved: Date | null;
-}) {
-	const { t } = useTranslation();
-	const { isDirty } = useFormState();
-	const [, forceUpdate] = React.useReducer((x) => x + 1, 0);
+const DocumentAutosaveIndicator = React.memo(
+	function DocumentAutosaveIndicator({
+		isSaving,
+		lastSaved,
+	}: {
+		isSaving: boolean;
+		lastSaved: Date | null;
+	}) {
+		const { t } = useTranslation();
+		const { isDirty } = useFormState();
+		const [, forceUpdate] = React.useReducer((x) => x + 1, 0);
 
-	React.useEffect(() => {
-		if (!lastSaved) return;
-		const interval = setInterval(forceUpdate, 10000);
-		return () => clearInterval(interval);
-	}, [lastSaved]);
+		React.useEffect(() => {
+			if (!lastSaved) return;
+			const interval = setInterval(forceUpdate, 10000);
+			return () => clearInterval(interval);
+		}, [lastSaved]);
 
-	const formatTimeAgo = (date: Date) => {
-		const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-		if (seconds < 10) return t("autosave.justNow");
-		if (seconds < 60) return t("autosave.secondsAgo", { count: seconds });
-		const minutes = Math.floor(seconds / 60);
-		if (minutes < 60) return t("autosave.minutesAgo", { count: minutes });
-		const hours = Math.floor(minutes / 60);
-		return t("autosave.hoursAgo", { count: hours });
-	};
+		const formatTimeAgo = (date: Date) => {
+			const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+			if (seconds < 10) return t("autosave.justNow");
+			if (seconds < 60) return t("autosave.secondsAgo", { count: seconds });
+			const minutes = Math.floor(seconds / 60);
+			if (minutes < 60) return t("autosave.minutesAgo", { count: minutes });
+			const hours = Math.floor(minutes / 60);
+			return t("autosave.hoursAgo", { count: hours });
+		};
 
-	if (isSaving) {
-		return (
-			<Badge variant="secondary" className="gap-1.5">
-				<Icon icon="ph:spinner-gap" className="size-3 animate-spin" />
-				{t("autosave.saving")}
-			</Badge>
-		);
-	}
+		if (isSaving) {
+			return (
+				<Badge variant="secondary" className="gap-1.5">
+					<Icon icon="ph:spinner-gap" className="size-3 animate-spin" />
+					{t("autosave.saving")}
+				</Badge>
+			);
+		}
 
-	if (isDirty) {
-		return (
-			<Badge variant="outline" className="gap-1.5">
-				<Icon icon="ph:clock-counter-clockwise" className="size-3" />
-				{t("autosave.unsavedChanges")}
-			</Badge>
-		);
-	}
+		if (isDirty) {
+			return (
+				<Badge variant="outline" className="gap-1.5">
+					<Icon icon="ph:clock-counter-clockwise" className="size-3" />
+					{t("autosave.unsavedChanges")}
+				</Badge>
+			);
+		}
 
-	if (lastSaved) {
-		return (
-			<Badge variant="secondary" className="text-muted-foreground gap-1.5">
-				<Icon icon="ph:check" className="size-3" />
-				{t("autosave.saved")} {formatTimeAgo(lastSaved)}
-			</Badge>
-		);
-	}
+		if (lastSaved) {
+			return (
+				<Badge variant="secondary" className="text-muted-foreground gap-1.5">
+					<Icon icon="ph:check" className="size-3" />
+					{t("autosave.saved")} {formatTimeAgo(lastSaved)}
+				</Badge>
+			);
+		}
 
-	return null;
-});
+		return null;
+	},
+);
 
 // ============================================================================
 // Helpers
@@ -446,9 +453,11 @@ function DocumentEditor({
 	// Mirror dirty/submitting into refs for the autosave guard.
 	const formIsDirtyRef = React.useRef(false);
 	const formIsSubmittingRef = React.useRef(false);
-	const { isDirty: formIsDirty, isSubmitting: formIsSubmitting } = useFormState({
-		control: form.control,
-	});
+	const { isDirty: formIsDirty, isSubmitting: formIsSubmitting } = useFormState(
+		{
+			control: form.control,
+		},
+	);
 	React.useEffect(() => {
 		formIsDirtyRef.current = formIsDirty;
 	}, [formIsDirty]);
@@ -467,7 +476,7 @@ function DocumentEditor({
 		isDirtyRef: formIsDirtyRef,
 		isSubmittingRef: formIsSubmittingRef,
 		updateMutation,
-		optimisticLock: schema?.options?.optimisticLock,
+		optimisticConcurrency: schema?.options?.optimisticConcurrency,
 		onSavingChange: setIsSaving,
 		onSaved: setLastSaved,
 	});
@@ -476,7 +485,7 @@ function DocumentEditor({
 		if (!id) return;
 		try {
 			const result = await updateMutation.mutateAsync(
-				optimisticUpdateInput(id, data, schema?.options?.optimisticLock),
+				optimisticUpdateInput(id, data, schema?.options?.optimisticConcurrency),
 			);
 			form.reset(result as any, { keepTouched: true });
 			setLastSaved(new Date());
@@ -632,9 +641,9 @@ export default function DocumentView({
 		return <FormViewSkeleton />;
 	}
 
-	const initialValues = (isEditMode
-		? item
-		: (defaultValuesProp ?? {})) as Record<string, any>;
+	const initialValues = (
+		isEditMode ? item : (defaultValuesProp ?? {})
+	) as Record<string, any>;
 
 	// Prefer the title field, then an explicit `title` prop (e.g. a filename),
 	// then the record id. Treat empty/whitespace title-field values as absent so

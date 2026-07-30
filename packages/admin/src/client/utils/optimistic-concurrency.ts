@@ -1,48 +1,45 @@
-export interface OptimisticLockConfig {
-	field: string;
-	required: true;
-}
+export type OptimisticConcurrencyConfig = true;
 
 export function optimisticUpdateInput(
 	id: string,
 	data: Record<string, any>,
-	config?: OptimisticLockConfig,
+	config?: OptimisticConcurrencyConfig,
 ) {
 	if (!config) return { id, data };
 
 	const nextData = { ...data };
-	const expectedVersion = nextData[config.field];
-	delete nextData[config.field];
-	return { id, data: nextData, expectedVersion };
+	const expectedRevision = nextData.revision;
+	delete nextData.revision;
+	return { id, data: nextData, expectedRevision };
 }
 
 export function optimisticIdInput(
 	id: string,
 	record: Record<string, any> | undefined,
-	config?: OptimisticLockConfig,
+	config?: OptimisticConcurrencyConfig,
 ) {
 	if (!config) return { id };
-	return { id, expectedVersion: record?.[config.field] };
+	return { id, expectedRevision: record?.revision };
 }
 
 export function optimisticBatchEntry(
 	id: string,
 	data: Record<string, any>,
 	record: Record<string, any>,
-	config?: OptimisticLockConfig,
+	config?: OptimisticConcurrencyConfig,
 ) {
 	if (!config) return { id, data };
 	return {
 		id,
 		data,
-		expectedVersion: record[config.field],
+		expectedRevision: record.revision,
 	};
 }
 
 export function optimisticManyInput(
 	ids: string[],
 	records: Array<Record<string, any> | undefined>,
-	config?: OptimisticLockConfig,
+	config?: OptimisticConcurrencyConfig,
 ) {
 	const where = { id: { in: ids } };
 	if (!config) return { where };
@@ -54,9 +51,9 @@ export function optimisticManyInput(
 	);
 	return {
 		where,
-		expectedVersions: ids.map((id) => ({
+		expectedRevisions: ids.map((id) => ({
 			id,
-			expectedVersion: recordsById.get(id)?.[config.field],
+			expectedRevision: recordsById.get(id)?.revision,
 		})),
 	};
 }
@@ -64,17 +61,17 @@ export function optimisticManyInput(
 export function optimisticActionInput(
 	record: Record<string, any> | undefined,
 	records: Array<Record<string, any>> | undefined,
-	config?: OptimisticLockConfig,
+	config?: OptimisticConcurrencyConfig,
 ) {
 	if (!config) return {};
 
 	return {
-		...(record ? { expectedVersion: record[config.field] } : {}),
+		...(record ? { expectedRevision: record.revision } : {}),
 		...(records
 			? {
-					expectedVersions: records.map((item) => ({
+					expectedRevisions: records.map((item) => ({
 						id: String(item.id),
-						expectedVersion: item[config.field],
+						expectedRevision: item.revision,
 					})),
 				}
 			: {}),
@@ -84,7 +81,7 @@ export function optimisticActionInput(
 export async function runAdminBulkDelete<TResult>(options: {
 	ids: string[];
 	records: Array<Record<string, any> | undefined>;
-	config?: OptimisticLockConfig;
+	config?: OptimisticConcurrencyConfig;
 	deleteById: (input: { id: string }) => Promise<TResult>;
 	deleteMany: (
 		input: ReturnType<typeof optimisticManyInput>,

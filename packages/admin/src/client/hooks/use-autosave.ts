@@ -21,9 +21,9 @@ import { toast } from "sonner";
 
 import { useTranslation } from "../i18n/hooks";
 import {
-	type OptimisticLockConfig,
+	type OptimisticConcurrencyConfig,
 	optimisticUpdateInput,
-} from "../utils/optimistic-lock";
+} from "../utils/optimistic-concurrency";
 
 export interface UseAutosaveOptions {
 	/** The react-hook-form instance to autosave. */
@@ -43,11 +43,11 @@ export interface UseAutosaveOptions {
 		mutateAsync: (args: {
 			id: string;
 			data: unknown;
-			expectedVersion?: number;
+			expectedRevision?: number;
 		}) => Promise<unknown>;
 	};
 	/** Introspected generated-CRUD locking contract. */
-	optimisticLock?: OptimisticLockConfig;
+	optimisticConcurrency?: OptimisticConcurrencyConfig;
 	/** Optional: commit the saved snapshot to the live preview. */
 	onPreviewCommit?: (data: unknown) => void;
 	/** Optional: trigger a live-preview refresh after save. */
@@ -70,7 +70,7 @@ export function useAutosave({
 	isDirtyRef,
 	isSubmittingRef,
 	updateMutation,
-	optimisticLock,
+	optimisticConcurrency,
 	onPreviewCommit,
 	onPreviewRefresh,
 	onSavingChange,
@@ -93,7 +93,7 @@ export function useAutosave({
 						optimisticUpdateInput(
 							id,
 							data as Record<string, any>,
-							optimisticLock,
+							optimisticConcurrency,
 						),
 					);
 
@@ -127,7 +127,7 @@ export function useAutosave({
 		onPreviewRefresh,
 		t,
 		updateMutation,
-		optimisticLock,
+		optimisticConcurrency,
 	]);
 
 	React.useEffect(() => {

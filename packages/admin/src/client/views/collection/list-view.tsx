@@ -48,6 +48,10 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "../../components/ui/tooltip";
+import {
+	adminCollectionKey,
+	getCollectionQueryApi,
+} from "../../hooks/query-access";
 import { useActions } from "../../hooks/use-action";
 import {
 	useCollectionDelete,
@@ -55,10 +59,6 @@ import {
 	useCollectionList,
 	useCollectionRestore,
 } from "../../hooks/use-collection";
-import {
-	adminCollectionKey,
-	getCollectionQueryApi,
-} from "../../hooks/query-access";
 import { useCollectionFields } from "../../hooks/use-collection-fields";
 import { useSuspenseCollectionMeta } from "../../hooks/use-collection-meta";
 import { useSessionState } from "../../hooks/use-current-user";
@@ -93,7 +93,7 @@ import {
 import {
 	optimisticIdInput,
 	runAdminBulkDelete,
-} from "../../utils/optimistic-lock";
+} from "../../utils/optimistic-concurrency";
 import { AdminViewHeader, AdminViewLayout } from "../layout/admin-view-layout";
 import { BulkActionToolbar } from "./bulk-action-toolbar";
 import {
@@ -829,10 +829,8 @@ function ListViewInner({
 	const edgeQueries = useQueries({
 		queries: edgeLevels.map((level) => {
 			return (
-				getCollectionQueryApi(
-					queryOpts,
-					adminCollectionKey(level.collection),
-				).find as any
+				getCollectionQueryApi(queryOpts, adminCollectionKey(level.collection))
+					.find as any
 			)({
 				where: level.where,
 				with: {
@@ -1033,7 +1031,7 @@ function ListViewInner({
 			await runAdminBulkDelete({
 				ids,
 				records: ids.map((id) => rowsById.get(id)?.original),
-				config: collectionMeta.optimisticLock,
+				config: collectionMeta.optimisticConcurrency,
 				deleteById: deleteMutation.mutateAsync,
 				deleteMany: deleteManyMutation.mutateAsync,
 			});
@@ -1045,7 +1043,7 @@ function ListViewInner({
 			actionHelpers,
 			collection,
 			rowsById,
-			collectionMeta.optimisticLock,
+			collectionMeta.optimisticConcurrency,
 		],
 	);
 	const handleBulkRestore = React.useCallback(
@@ -1056,7 +1054,7 @@ function ListViewInner({
 						optimisticIdInput(
 							id,
 							rowsById.get(id)?.original,
-							collectionMeta.optimisticLock,
+							collectionMeta.optimisticConcurrency,
 						),
 					),
 				),
@@ -1068,7 +1066,7 @@ function ListViewInner({
 			actionHelpers,
 			collection,
 			rowsById,
-			collectionMeta.optimisticLock,
+			collectionMeta.optimisticConcurrency,
 		],
 	);
 	const toggleOutlineKey = React.useCallback((key: string) => {

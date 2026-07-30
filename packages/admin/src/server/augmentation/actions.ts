@@ -96,18 +96,19 @@ export interface ServerActionEffects {
  * `queue`, `email`, `storage`, `kv`, `services`, … — directly from `ctx`,
  * just like a route handler. The action-specific fields below layer on top.
  */
-export interface ServerActionContext<TData = Record<string, unknown>>
-	extends AppContextBase {
+export interface ServerActionContext<
+	TData = Record<string, unknown>,
+> extends AppContextBase {
 	/** Form data submitted */
 	data: TData;
 	/** Item ID (for single-item actions) */
 	itemId?: string;
 	/** Item IDs (for bulk actions) */
 	itemIds?: string[];
-	/** Expected version for an optimistic-lock protected single-item action */
-	expectedVersion?: number;
-	/** Exact per-item versions for an optimistic-lock protected bulk action */
-	expectedVersions?: Array<{ id: string; expectedVersion: number }>;
+	/** Expected revision for an optimistic-concurrency protected single-item action */
+	expectedRevision?: number;
+	/** Exact per-item revisions for an optimistic-concurrency protected bulk action */
+	expectedRevisions?: Array<{ id: string; expectedRevision: number }>;
 	/** Auth instance (Better Auth API) */
 	auth: any;
 	/** Collection CRUD APIs */

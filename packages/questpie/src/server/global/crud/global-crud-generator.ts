@@ -16,6 +16,10 @@ import {
 	lockRelationTargetsForWrite,
 } from "#questpie/server/collection/crud/relation-mutations/purge-relations.js";
 import {
+	assertExpectedRevision,
+	mutateCanonicalRow,
+} from "#questpie/server/collection/crud/shared/canonical-mutation.js";
+import {
 	executeGlobalGlobalHooks,
 	executeGlobalGlobalTransitionHooks,
 } from "#questpie/server/collection/crud/shared/global-hooks.js";
@@ -126,6 +130,17 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 
 	private getDb(context?: CRUDContext) {
 		return getDb(this.db, context);
+	}
+
+	private assertExpectedRevision(
+		expectedRevision: number | undefined,
+		row: Record<string, unknown> | null,
+	): void {
+		assertExpectedRevision({
+			enabled: this.state.options.optimisticConcurrency === true,
+			expectedRevision,
+			row,
+		});
 	}
 
 	private getCrdtManifest() {
@@ -740,10 +755,27 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 
 	private createUpdate() {
 		return async (
-			data: any,
+			input: any,
 			context: CRUDContext = {},
 			options: GlobalUpdateOptions = {},
 		) => {
+			const expectedRevision = this.state.options.optimisticConcurrency
+				? input?.expectedRevision
+				: undefined;
+			const data = this.state.options.optimisticConcurrency
+				? input?.data
+				: input;
+			if (!data || typeof data !== "object" || Array.isArray(data)) {
+				throw ApiError.badRequest("Global update data must be an object");
+			}
+			if (
+				this.state.options.optimisticConcurrency &&
+				Object.hasOwn(data, "revision")
+			) {
+				throw ApiError.badRequest(
+					'Framework-owned field "revision" cannot be supplied',
+				);
+			}
 			assertNoCrdtFieldsInOrdinaryMutation({
 				ownerName: this.state.name,
 				fieldDefinitions: this.state.fieldDefinitions,
@@ -856,18 +888,29 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				let updatedId = currentExisting?.id;
 
 				if (currentExisting) {
-					if (Object.keys(nonLocalized).length > 0) {
-						await tx
-							.update(this.table)
-							.set({
+					if (
+						Object.keys(nonLocalized).length > 0 ||
+						this.state.options.timestamps !== false ||
+						this.state.options.optimisticConcurrency
+					) {
+						await mutateCanonicalRow({
+							transaction: tx,
+							table: this.table,
+							where: eq((this.table as any).id, currentExisting.id),
+							lockedRow: currentExisting,
+							values: {
 								...nonLocalized,
 								...(this.state.options.timestamps !== false
 									? { updatedAt: new Date() }
 									: {}),
-							})
-							.where(eq((this.table as any).id, currentExisting.id));
+							},
+							optimisticConcurrency:
+								this.state.options.optimisticConcurrency === true,
+							expectedRevision,
+						});
 					}
 				} else {
+					this.assertExpectedRevision(expectedRevision, null);
 					// Include scope_id when creating new record for scoped globals
 					const insertValues = {
 						...nonLocalized,
@@ -1009,13 +1052,24 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					sourceState: this.state as any,
 					sourceTable: this.table,
 				});
-				if (!existing) {
+				if (existing) {
+					const [locked] = await tx
+						.select()
+						.from(this.table)
+						.where(eq((this.table as any).id, existing.id))
+						.for("update");
+					if (!locked) {
+						throw ApiError.notFound("Global", this.state.name);
+					}
+					existing = locked;
+				} else {
 					// Serialize concurrent update auto-creates the same way get()
 					// does: take the lock first, then re-check inside the locked
 					// transaction before deciding between INSERT and UPDATE.
 					await this.acquireAutoCreateLock(tx);
 					existing = await this.getCurrentRow(tx, normalized);
 				}
+				this.assertExpectedRevision(expectedRevision, existing);
 
 				const preparedFields = await prepareWrite(existing, tx);
 				if (this.app) {
@@ -1061,10 +1115,19 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			const normalized = this.normalizeContext(context);
 			if (!this.versionsTable) return [];
 
+			const owner = await this.getCurrentRow(db, normalized);
+			const parentId = owner?.id;
+			if (!owner || (options.id !== undefined && options.id !== parentId)) {
+				throw ApiError.forbidden({
+					operation: "read",
+					resource: `${this.state.name} versions`,
+					reason: "User does not have permission to read version history",
+				});
+			}
 			const canRead = await this.enforceAccessControl(
 				"read",
 				normalized,
-				null,
+				owner,
 				options,
 			);
 			if (!canRead)
@@ -1073,9 +1136,6 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					resource: `${this.state.name} versions`,
 					reason: "User does not have permission to read version history",
 				});
-
-			const parentId = options.id ?? (await this.getCurrentRow(db))?.id;
-			if (!parentId) return [];
 
 			let query = db
 				.select(this.buildVersionsSelectObject(normalized))
@@ -1139,9 +1199,14 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				);
 			}
 
-			const parentId = options.id ?? (await this.getCurrentRow(db))?.id;
-			if (!parentId) {
-				throw ApiError.notFound("Global record", "");
+			const existing = await this.getCurrentRow(db, normalized);
+			const parentId = existing?.id;
+			if (!existing || (options.id !== undefined && options.id !== parentId)) {
+				throw ApiError.forbidden({
+					operation: "update",
+					resource: this.state.name,
+					reason: "User does not have permission to revert this global",
+				});
 			}
 
 			const versionRows = await db
@@ -1166,9 +1231,6 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					"Version",
 					options.versionId || String(options.version),
 				);
-
-			const existing = await this.getCurrentRow(db);
-			if (!existing) throw ApiError.notFound("Global record", "");
 
 			const nonLocalized: Record<string, any> = {};
 			for (const [name] of Object.entries(this.state.fields)) {
@@ -1202,61 +1264,80 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			}
 
 			const restoreData = { ...nonLocalized, ...localizedForContext };
-			const restoreWithFieldHooks = await this.runFieldInputHooks(
-				restoreData,
-				"update",
-				normalized,
-				db,
-				existing,
-			);
-			const { localized: restoreLocalized, nonLocalized: restoreNonLocalized } =
-				this.splitLocalizedFields(restoreWithFieldHooks);
-
-			const canUpdate = await this.enforceAccessControl(
-				"update",
-				normalized,
-				existing,
-				restoreWithFieldHooks,
-			);
-			if (!canUpdate)
-				throw ApiError.forbidden({
-					operation: "update",
-					resource: this.state.name,
-					reason: "User does not have permission to revert to this version",
-				});
-
-			await this.executeHooks(
-				this.state.hooks?.beforeUpdate,
-				this.createHookContext({
-					data: existing,
-					input: restoreWithFieldHooks,
-					context: normalized,
-					db,
-				}),
-			);
-
-			await this.executeHooksWithGlobal(
-				"beforeChange",
-				this.state.hooks?.beforeChange,
-				this.createHookContext({
-					data: existing,
-					input: restoreWithFieldHooks,
-					context: normalized,
-					db,
-				}),
-			);
 
 			return withTransaction(db, async (tx: any) => {
-				if (Object.keys(restoreNonLocalized).length > 0) {
-					await tx
-						.update(this.table)
-						.set({
+				const [lockedExisting] = await tx
+					.select()
+					.from(this.table)
+					.where(eq((this.table as any).id, parentId))
+					.for("update");
+				if (!lockedExisting) {
+					throw ApiError.notFound("Global record", "");
+				}
+				this.assertExpectedRevision(options.expectedRevision, lockedExisting);
+				const txContext = { ...normalized, db: tx };
+				const restoreWithFieldHooks = await this.runFieldInputHooks(
+					restoreData,
+					"update",
+					txContext,
+					tx,
+					lockedExisting,
+				);
+				const {
+					localized: restoreLocalized,
+					nonLocalized: restoreNonLocalized,
+				} = this.splitLocalizedFields(restoreWithFieldHooks);
+				const canUpdate = await this.enforceAccessControl(
+					"update",
+					txContext,
+					lockedExisting,
+					restoreWithFieldHooks,
+				);
+				if (!canUpdate)
+					throw ApiError.forbidden({
+						operation: "update",
+						resource: this.state.name,
+						reason: "User does not have permission to revert to this version",
+					});
+				await this.executeHooks(
+					this.state.hooks?.beforeUpdate,
+					this.createHookContext({
+						data: lockedExisting,
+						input: restoreWithFieldHooks,
+						context: txContext,
+						db: tx,
+					}),
+				);
+				await this.executeHooksWithGlobal(
+					"beforeChange",
+					this.state.hooks?.beforeChange,
+					this.createHookContext({
+						data: lockedExisting,
+						input: restoreWithFieldHooks,
+						context: txContext,
+						db: tx,
+					}),
+				);
+				if (
+					Object.keys(restoreNonLocalized).length > 0 ||
+					this.state.options.timestamps !== false ||
+					this.state.options.optimisticConcurrency
+				) {
+					await mutateCanonicalRow({
+						transaction: tx,
+						table: this.table,
+						where: eq((this.table as any).id, parentId),
+						lockedRow: lockedExisting,
+						values: {
 							...restoreNonLocalized,
 							...(this.state.options.timestamps !== false
 								? { updatedAt: new Date() }
 								: {}),
-						})
-						.where(eq((this.table as any).id, parentId));
+						},
+						optimisticConcurrency:
+							this.state.options.optimisticConcurrency === true,
+						expectedRevision: options.expectedRevision,
+					});
 				}
 
 				if (this.i18nTable && this.i18nVersionsTable) {
@@ -1420,90 +1501,109 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				);
 			}
 
-			// Load existing global record
-			const existing = await this.getCurrentRow(db, normalized);
-			if (!existing) {
-				throw ApiError.notFound("Global", this.state.name);
-			}
+			const transitioned = await withTransaction(db, async (tx: any) => {
+				const current = await this.getCurrentRow(tx, normalized);
+				if (!current) {
+					throw ApiError.notFound("Global", this.state.name);
+				}
+				const [existing] = await tx
+					.select()
+					.from(this.table)
+					.where(eq((this.table as any).id, current.id))
+					.for("update");
+				if (!existing) {
+					throw ApiError.notFound("Global", this.state.name);
+				}
+				this.assertExpectedRevision(params.expectedRevision, existing);
 
-			// Enforce access control: access.transition with fallback to access.update
-			if (normalized.accessMode !== "system") {
-				const accessRule =
-					this.state.access?.transition ??
-					this.state.access?.update ??
-					this.app?.defaultAccess?.update;
-				const result = await executeAccessRule(accessRule, {
-					app: this.app,
-					db,
+				// Enforce access control: access.transition with fallback to access.update
+				if (normalized.accessMode !== "system") {
+					const accessRule =
+						this.state.access?.transition ??
+						this.state.access?.update ??
+						this.app?.defaultAccess?.update;
+					const result = await executeAccessRule(accessRule, {
+						app: this.app,
+						db: tx,
+						session: normalized.session,
+						principal: normalized.principal,
+						actor: normalized.actor,
+						locale: normalized.locale,
+						row: existing,
+						request:
+							((context as any).req as Request | undefined) ??
+							((context as any).request as Request | undefined),
+						contextExtensions: normalized["~contextExtensions"],
+					});
+					// Globals only support boolean access rules
+					if (result !== true) {
+						throw ApiError.forbidden({
+							operation: "update",
+							resource: this.state.name,
+							reason: "User does not have permission to transition this global",
+						});
+					}
+				}
+
+				// Get current stage and assert transition allowed
+				const fromStage = await this.getCurrentWorkflowStage(tx, existing.id);
+				this.assertTransitionAllowed(fromStage, toStage);
+
+				// If scheduledAt is in the future, schedule only after validating the
+				// target stage, current record, access, and transition graph.
+				if (scheduledAt && scheduledAt.getTime() > Date.now()) {
+					const { scheduleGlobalTransition } =
+						await import("#questpie/server/modules/core/workflow/schedule-transition.js");
+					await scheduleGlobalTransition((this.app as any)?.queue, {
+						global: this.state.name,
+						stage: toStage,
+						scheduledAt,
+						expectedRevision: params.expectedRevision,
+					});
+					return existing;
+				}
+
+				// Build transition hook context
+				const transitionServices = extractAppServices(this.app, {
+					db: tx,
 					session: normalized.session,
 					principal: normalized.principal,
 					actor: normalized.actor,
+				});
+				const transitionCtx: GlobalTransitionHookContext = {
+					...transitionServices,
+					...(normalized["~contextExtensions"] ?? {}),
+					data: existing,
+					fromStage,
+					toStage,
+					expectedRevision: params.expectedRevision,
 					locale: normalized.locale,
-					row: existing,
-					request:
-						((context as any).req as Request | undefined) ??
-						((context as any).request as Request | undefined),
-					contextExtensions: normalized["~contextExtensions"],
-				});
-				// Globals only support boolean access rules
-				if (result !== true) {
-					throw ApiError.forbidden({
-						operation: "update",
-						resource: this.state.name,
-						reason: "User does not have permission to transition this global",
-					});
-				}
-			}
+					accessMode: normalized.accessMode,
+				} as GlobalTransitionHookContext;
+				// Execute beforeTransition hooks (throw to abort)
+				await this.executeTransitionHooksWithGlobal(
+					"beforeTransition",
+					this.state.hooks?.beforeTransition,
+					transitionCtx,
+				);
 
-			// Get current stage and assert transition allowed
-			const fromStage = await this.getCurrentWorkflowStage(db, existing.id);
-			this.assertTransitionAllowed(fromStage, toStage);
-
-			// If scheduledAt is in the future, schedule only after validating the
-			// target stage, current record, access, and transition graph.
-			if (scheduledAt && scheduledAt.getTime() > Date.now()) {
-				const { scheduleGlobalTransition } =
-					await import("#questpie/server/modules/core/workflow/schedule-transition.js");
-				await scheduleGlobalTransition((this.app as any)?.queue, {
-					global: this.state.name,
-					stage: toStage,
-					scheduledAt,
-				});
-				return existing;
-			}
-
-			// Build transition hook context
-			const transitionServices = extractAppServices(this.app, {
-				db,
-				session: normalized.session,
-				principal: normalized.principal,
-				actor: normalized.actor,
-			});
-			const transitionCtx: GlobalTransitionHookContext = {
-				...transitionServices,
-				...(normalized["~contextExtensions"] ?? {}),
-				data: existing,
-				fromStage,
-				toStage,
-				locale: normalized.locale,
-				accessMode: normalized.accessMode,
-			} as GlobalTransitionHookContext;
-
-			// Execute beforeTransition hooks (throw to abort)
-			await this.executeTransitionHooksWithGlobal(
-				"beforeTransition",
-				this.state.hooks?.beforeTransition,
-				transitionCtx,
-			);
-
-			// Create version snapshot at target stage (no data mutation)
-			await withTransaction(db, async (tx: any) => {
+				const row = this.state.options.optimisticConcurrency
+					? await mutateCanonicalRow({
+							transaction: tx,
+							table: this.table,
+							where: eq((this.table as any).id, existing.id),
+							lockedRow: existing,
+							values:
+								this.state.options.timestamps !== false
+									? { updatedAt: new Date() }
+									: {},
+							optimisticConcurrency: true,
+							expectedRevision: params.expectedRevision,
+						})
+					: existing;
 				await createVersionRecord({
 					tx,
-					row: expandPolymorphicRelationValues(
-						existing,
-						this.state.relations ?? {},
-					),
+					row: expandPolymorphicRelationValues(row, this.state.relations ?? {}),
 					operation: "update",
 					versionsTable: this.versionsTable!,
 					i18nVersionsTable: this.i18nVersionsTable,
@@ -1513,16 +1613,22 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					workflowStage: toStage,
 					workflowFromStage: fromStage,
 				});
+				try {
+					await this.executeTransitionHooksWithGlobal(
+						"afterTransition",
+						this.state.hooks?.afterTransition,
+						transitionCtx,
+					);
+				} catch (err) {
+					console.error(
+						`[QUESTPIE] afterTransition hook error for global "${this.state.name}":`,
+						err,
+					);
+				}
+				return row;
 			});
 
-			// Execute afterTransition hooks
-			await this.executeTransitionHooksWithGlobal(
-				"afterTransition",
-				this.state.hooks?.afterTransition,
-				transitionCtx,
-			);
-
-			return existing;
+			return transitioned;
 		};
 	}
 
@@ -1634,6 +1740,12 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				select.updatedAt = (this.table as any).updatedAt;
 			}
 		}
+		if (
+			this.state.options.optimisticConcurrency &&
+			(includeAllFields || columns?.revision)
+		) {
+			select.revision = (this.table as any).revision;
+		}
 
 		return select;
 	}
@@ -1646,6 +1758,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			versionId: versionsTable.versionId,
 			id: versionsTable.id,
 			versionNumber: versionsTable.versionNumber,
+			sourceRevision: versionsTable.sourceRevision,
 			versionOperation: versionsTable.versionOperation,
 			versionUserId: versionsTable.versionUserId,
 			versionCreatedAt: versionsTable.versionCreatedAt,

@@ -59,6 +59,23 @@ export type CrdtProjectionOwnerPort<TOwner> = Readonly<{
 		owner: TOwner,
 		values: ReadonlyMap<string, string | readonly string[]>,
 	): Promise<void>;
+	/**
+	 * Consumer seam for validating a complete aggregate cut and writing derived
+	 * application facts in the projection transaction. Throwing rejects the cut
+	 * before canonical data, cursors, receipt, or realtime state are
+	 * acknowledged. Returning transformed values is deliberately deferred until
+	 * CRDT manifest-transition semantics can preserve their distinct hashes.
+	 */
+	prepareAcknowledgement?(
+		transaction: CrdtDatabase,
+		owner: TOwner,
+		input: {
+			values: ReadonlyMap<string, string | readonly string[]>;
+			resourceId: string;
+			resourceEpochId: string;
+			commitSeq: bigint;
+		},
+	): Promise<void>;
 	appendRealtimeChange(
 		transaction: CrdtDatabase,
 		owner: TOwner,
@@ -492,8 +509,17 @@ async function commitProjection<TOwner>(
 			values.set(binding.sourcePath, field.value);
 		}
 	}
-	if (values.size > 0) {
-		await ownerPort.writeCanonical(db, owner, values);
+	if (values.size > 0 && ownerPort.prepareAcknowledgement) {
+		await ownerPort.prepareAcknowledgement(db, owner, {
+			values,
+			resourceId: claim.resourceId,
+			resourceEpochId: claim.resourceEpochId,
+			commitSeq: claim.targetCommitSeq,
+		});
+	}
+	const canonicalValues = values;
+	if (canonicalValues.size > 0) {
+		await ownerPort.writeCanonical(db, owner, canonicalValues);
 	}
 	for (const binding of bindings) {
 		const field = fields.get(binding.id)!;
@@ -515,7 +541,7 @@ async function commitProjection<TOwner>(
 			updatedAt: sql`now()`,
 		})
 		.where(eq(questpieCrdtResourceEpochTable.id, claim.resourceEpochId));
-	if (values.size > 0) {
+	if (canonicalValues.size > 0) {
 		const outboxChanges = await ownerPort.appendRealtimeChange(db, owner, {
 			origin: "crdt_projection",
 			resourceId: claim.resourceId,

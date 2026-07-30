@@ -1,14 +1,13 @@
 import type { QuestpieClient } from "#questpie/client/index.js";
 import { collection } from "#questpie/server/collection/builder/collection-builder.js";
 
-const locked = collection("locked")
+const revisioned = collection("revisioned")
 	.fields(({ f }) => ({
 		name: f.text().required(),
-		version: f.number().required().default(1),
 	}))
 	.options({
 		softDelete: true,
-		optimisticLock: { field: "version", required: true },
+		optimisticConcurrency: true,
 	});
 const unlocked = collection("unlocked")
 	.fields(({ f }) => ({
@@ -16,50 +15,50 @@ const unlocked = collection("unlocked")
 	}))
 	.options({ softDelete: true });
 
-const lockedCollection = locked.build();
+const lockedCollection = revisioned.build();
 const unlockedCollection = unlocked.build();
 declare const lockedCrud: ReturnType<typeof lockedCollection.generateCRUD>;
 declare const unlockedCrud: ReturnType<typeof unlockedCollection.generateCRUD>;
 
 lockedCrud.updateById({
 	id: "record-1",
-	expectedVersion: 1,
+	expectedRevision: 1,
 	data: { name: "Updated" },
 });
 lockedCrud.updateMany({
 	where: { id: "record-1" },
-	expectedVersions: [{ id: "record-1", expectedVersion: 1 }],
+	expectedRevisions: [{ id: "record-1", expectedRevision: 1 }],
 	data: { name: "Updated" },
 });
 lockedCrud.updateBatch({
 	updates: [
 		{
 			id: "record-1",
-			expectedVersion: 1,
+			expectedRevision: 1,
 			data: { name: "Updated" },
 		},
 	],
 });
-lockedCrud.deleteById({ id: "record-1", expectedVersion: 1 });
+lockedCrud.deleteById({ id: "record-1", expectedRevision: 1 });
 lockedCrud.deleteMany({
 	where: { id: "record-1" },
-	expectedVersions: [{ id: "record-1", expectedVersion: 1 }],
+	expectedRevisions: [{ id: "record-1", expectedRevision: 1 }],
 });
-lockedCrud.restoreById({ id: "record-1", expectedVersion: 2 });
-lockedCrud.purgeById({ id: "record-1", expectedVersion: 2 });
+lockedCrud.restoreById({ id: "record-1", expectedRevision: 2 });
+lockedCrud.purgeById({ id: "record-1", expectedRevision: 2 });
 lockedCrud.revertToVersion({
 	id: "record-1",
 	version: 1,
-	expectedVersion: 2,
+	expectedRevision: 2,
 });
 
 // @ts-expect-error required optimistic locking forbids an unversioned by-id update
 lockedCrud.updateById({ id: "record-1", data: { name: "Unsafe" } });
 lockedCrud.updateById({
 	id: "record-1",
-	expectedVersion: 1,
-	// @ts-expect-error the configured version field is framework-owned
-	data: { version: 2 },
+	expectedRevision: 1,
+	// @ts-expect-error the canonical revision is framework-owned
+	data: { revision: 2 },
 });
 // @ts-expect-error bulk updates require exact per-id version inputs
 lockedCrud.updateMany({
@@ -103,25 +102,25 @@ declare const client: QuestpieClient<App>;
 
 client.collections.locked.updateById({
 	id: "record-1",
-	expectedVersion: 1,
+	expectedRevision: 1,
 	data: { name: "Updated" },
 });
 client.collections.locked.deleteById({
 	id: "record-1",
-	expectedVersion: 1,
+	expectedRevision: 1,
 });
 client.collections.locked.restoreById({
 	id: "record-1",
-	expectedVersion: 2,
+	expectedRevision: 2,
 });
 client.collections.locked.purgeById({
 	id: "record-1",
-	expectedVersion: 2,
+	expectedRevision: 2,
 });
 client.collections.locked.revertToVersion({
 	id: "record-1",
 	version: 1,
-	expectedVersion: 2,
+	expectedRevision: 2,
 });
 // @ts-expect-error client by-id update inherits required optimistic locking
 client.collections.locked.updateById({

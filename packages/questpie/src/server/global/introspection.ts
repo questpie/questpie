@@ -72,6 +72,7 @@ export interface GlobalSchema {
 	options: {
 		timestamps: boolean;
 		versioning: boolean;
+		optimisticConcurrency: boolean;
 		workflow?: {
 			enabled: boolean;
 			initialStage: string;
@@ -376,6 +377,7 @@ export async function introspectGlobal(
 		options: {
 			timestamps: state.options?.timestamps !== false,
 			versioning: !!state.options?.versioning,
+			optimisticConcurrency: state.options?.optimisticConcurrency === true,
 			workflow: resolveWorkflowConfig(
 				extractWorkflowFromVersioning(state.options?.versioning),
 			),

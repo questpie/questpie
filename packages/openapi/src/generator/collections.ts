@@ -43,9 +43,7 @@ export function generateCollectionPaths(
 
 		const state = (collection as any).state;
 		if (!state) continue;
-		const optimisticLock = state.options?.optimisticLock as
-			| { field: string; required: true }
-			| undefined;
+		const optimisticConcurrency = state.options?.optimisticConcurrency === true;
 
 		const tag = `Collections: ${name}`;
 		tags.push({ name: tag, description: `CRUD operations for ${name}` });
@@ -104,8 +102,8 @@ export function generateCollectionPaths(
 				description: `Update schema for ${name}`,
 			};
 		}
-		if (optimisticLock) {
-			omitObjectProperty(schemas[updateSchemaName], optimisticLock.field);
+		if (optimisticConcurrency) {
+			omitObjectProperty(schemas[updateSchemaName], "revision");
 		}
 
 		// Document schema — the response shape, includes id + timestamps
@@ -152,7 +150,7 @@ export function generateCollectionPaths(
 					required: [
 						"where",
 						"data",
-						...(optimisticLock ? ["expectedVersions"] : []),
+						...(optimisticConcurrency ? ["expectedRevisions"] : []),
 					],
 					properties: {
 						where: {
@@ -160,19 +158,19 @@ export function generateCollectionPaths(
 							description: "Filter conditions for records to update",
 						},
 						data: ref(updateSchemaName),
-						...(optimisticLock
+						...(optimisticConcurrency
 							? {
-									expectedVersions: expectedVersionsSchema(),
+									expectedRevisions: expectedRevisionsSchema(),
 								}
 							: {}),
 					},
 				}),
-				responses: withOptimisticLockConflict(
+				responses: withOptimisticConcurrencyConflict(
 					jsonResponse(
 						{ type: "array", items: ref(documentSchemaName) },
 						`Updated ${name} records`,
 					),
-					Boolean(optimisticLock),
+					Boolean(optimisticConcurrency),
 				),
 			},
 		};
@@ -203,25 +201,28 @@ export function generateCollectionPaths(
 				tags: [tag],
 				requestBody: jsonRequestBody({
 					type: "object",
-					required: ["where", ...(optimisticLock ? ["expectedVersions"] : [])],
+					required: [
+						"where",
+						...(optimisticConcurrency ? ["expectedRevisions"] : []),
+					],
 					properties: {
 						where: {
 							type: "object",
 							description: "Filter conditions for records to delete",
 						},
-						...(optimisticLock
+						...(optimisticConcurrency
 							? {
-									expectedVersions: expectedVersionsSchema(),
+									expectedRevisions: expectedRevisionsSchema(),
 								}
 							: {}),
 					},
 				}),
-				responses: withOptimisticLockConflict(
+				responses: withOptimisticConcurrencyConflict(
 					jsonResponse(
 						ref("DeleteManyResponse"),
 						`Delete multiple ${name} records`,
 					),
-					Boolean(optimisticLock),
+					Boolean(optimisticConcurrency),
 				),
 			},
 		};
@@ -243,25 +244,25 @@ export function generateCollectionPaths(
 								required: [
 									"id",
 									"data",
-									...(optimisticLock ? ["expectedVersion"] : []),
+									...(optimisticConcurrency ? ["expectedRevision"] : []),
 								],
 								properties: {
 									id: { type: "string" },
 									data: ref(updateSchemaName),
-									...(optimisticLock
-										? { expectedVersion: expectedVersionSchema() }
+									...(optimisticConcurrency
+										? { expectedRevision: expectedRevisionSchema() }
 										: {}),
 								},
 							},
 						},
 					},
 				}),
-				responses: withOptimisticLockConflict(
+				responses: withOptimisticConcurrencyConflict(
 					jsonResponse(
 						{ type: "array", items: ref(documentSchemaName) },
 						`Updated ${name} batch`,
 					),
-					Boolean(optimisticLock),
+					Boolean(optimisticConcurrency),
 				),
 			},
 		};
@@ -347,43 +348,53 @@ export function generateCollectionPaths(
 				operationId: `${name}_update`,
 				summary: `Update ${name}`,
 				tags: [tag],
-				parameters: [idParam, stageQueryParameter()],
+				parameters: [
+					idParam,
+					stageQueryParameter(),
+					...(optimisticConcurrency ? [ifMatchParameter()] : []),
+				],
 				requestBody: jsonRequestBody(
-					optimisticLock
+					optimisticConcurrency
 						? {
 								type: "object",
-								required: ["data", "expectedVersion"],
+								required: ["data"],
 								properties: {
 									data: ref(updateSchemaName),
-									expectedVersion: expectedVersionSchema(),
+									expectedRevision: expectedRevisionSchema(),
 								},
 							}
 						: ref(updateSchemaName),
 				),
-				responses: withOptimisticLockConflict(
+				responses: withOptimisticConcurrencyConflict(
 					jsonResponse(ref(documentSchemaName), `Updated ${name} record`),
-					Boolean(optimisticLock),
+					Boolean(optimisticConcurrency),
 				),
 			},
 			delete: {
 				operationId: `${name}_delete`,
 				summary: `Delete ${name}`,
 				tags: [tag],
-				parameters: [idParam, stageQueryParameter()],
-				...(optimisticLock
+				parameters: [
+					idParam,
+					stageQueryParameter(),
+					...(optimisticConcurrency ? [ifMatchParameter()] : []),
+				],
+				...(optimisticConcurrency
 					? {
-							requestBody: jsonRequestBody({
-								type: "object",
-								required: ["expectedVersion"],
-								properties: {
-									expectedVersion: expectedVersionSchema(),
-								},
-							}),
+							requestBody: {
+								...jsonRequestBody({
+									type: "object",
+									properties: {
+										expectedRevision: expectedRevisionSchema(),
+									},
+								}),
+								required: false,
+							},
 						}
 					: {}),
-				responses: withOptimisticLockConflict(
+				responses: withOptimisticConcurrencyConflict(
 					jsonResponse(ref("SuccessResponse"), `Deleted ${name} record`),
-					Boolean(optimisticLock),
+					Boolean(optimisticConcurrency),
 				),
 			},
 		};
@@ -395,21 +406,27 @@ export function generateCollectionPaths(
 					operationId: `${name}_restore`,
 					summary: `Restore deleted ${name}`,
 					tags: [tag],
-					parameters: [idParam, stageQueryParameter()],
-					...(optimisticLock
+					parameters: [
+						idParam,
+						stageQueryParameter(),
+						...(optimisticConcurrency ? [ifMatchParameter()] : []),
+					],
+					...(optimisticConcurrency
 						? {
-								requestBody: jsonRequestBody({
-									type: "object",
-									required: ["expectedVersion"],
-									properties: {
-										expectedVersion: expectedVersionSchema(),
-									},
-								}),
+								requestBody: {
+									...jsonRequestBody({
+										type: "object",
+										properties: {
+											expectedRevision: expectedRevisionSchema(),
+										},
+									}),
+									required: false,
+								},
 							}
 						: {}),
-					responses: withOptimisticLockConflict(
+					responses: withOptimisticConcurrencyConflict(
 						jsonResponse(ref(documentSchemaName), `Restored ${name} record`),
-						Boolean(optimisticLock),
+						Boolean(optimisticConcurrency),
 					),
 				},
 			};
@@ -418,24 +435,30 @@ export function generateCollectionPaths(
 					operationId: `${name}_purge`,
 					summary: `Permanently purge deleted ${name}`,
 					tags: [tag],
-					parameters: [idParam, ...singleQueryParameters()],
-					...(optimisticLock
+					parameters: [
+						idParam,
+						...singleQueryParameters(),
+						...(optimisticConcurrency ? [ifMatchParameter()] : []),
+					],
+					...(optimisticConcurrency
 						? {
-								requestBody: jsonRequestBody({
-									type: "object",
-									required: ["expectedVersion"],
-									properties: {
-										expectedVersion: expectedVersionSchema(),
-									},
-								}),
+								requestBody: {
+									...jsonRequestBody({
+										type: "object",
+										properties: {
+											expectedRevision: expectedRevisionSchema(),
+										},
+									}),
+									required: false,
+								},
 							}
 						: {}),
-					responses: withOptimisticLockConflict(
+					responses: withOptimisticConcurrencyConflict(
 						jsonResponse(
 							ref("SuccessResponse"),
 							`Permanently purged ${name} record`,
 						),
-						Boolean(optimisticLock),
+						Boolean(optimisticConcurrency),
 					),
 				},
 			};
@@ -471,6 +494,7 @@ export function generateCollectionPaths(
 								id: { type: "string" },
 								versionId: { type: "string" },
 								versionNumber: { type: "number" },
+								sourceRevision: { type: ["number", "null"] },
 								versionOperation: { type: "string" },
 								versionUserId: { type: ["string", "null"] },
 								versionCreatedAt: { type: "string", format: "date-time" },
@@ -488,21 +512,24 @@ export function generateCollectionPaths(
 				operationId: `${name}_revertToVersion`,
 				summary: `Revert ${name} to a version`,
 				tags: [tag],
-				parameters: [idParam, stageQueryParameter()],
+				parameters: [
+					idParam,
+					stageQueryParameter(),
+					...(optimisticConcurrency ? [ifMatchParameter()] : []),
+				],
 				requestBody: jsonRequestBody({
 					type: "object",
-					...(optimisticLock ? { required: ["expectedVersion"] } : {}),
 					properties: {
 						version: { type: "number" },
 						versionId: { type: "string" },
-						...(optimisticLock
-							? { expectedVersion: expectedVersionSchema() }
+						...(optimisticConcurrency
+							? { expectedRevision: expectedRevisionSchema() }
 							: {}),
 					},
 				}),
-				responses: withOptimisticLockConflict(
+				responses: withOptimisticConcurrencyConflict(
 					jsonResponse(ref(documentSchemaName), `Reverted ${name} record`),
-					Boolean(optimisticLock),
+					Boolean(optimisticConcurrency),
 				),
 			},
 		};
@@ -519,7 +546,10 @@ export function generateCollectionPaths(
 					operationId: `${name}_transition`,
 					summary: `Transition ${name} workflow stage`,
 					tags: [tag],
-					parameters: [idParam],
+					parameters: [
+						idParam,
+						...(optimisticConcurrency ? [ifMatchParameter()] : []),
+					],
 					requestBody: jsonRequestBody({
 						type: "object",
 						required: ["stage"],
@@ -528,11 +558,17 @@ export function generateCollectionPaths(
 								type: "string",
 								description: "Target workflow stage",
 							},
+							...(optimisticConcurrency
+								? { expectedRevision: expectedRevisionSchema() }
+								: {}),
 						},
 					}),
-					responses: jsonResponse(
-						ref(documentSchemaName),
-						`Transitioned ${name} record`,
+					responses: withOptimisticConcurrencyConflict(
+						jsonResponse(
+							ref(documentSchemaName),
+							`Transitioned ${name} record`,
+						),
+						optimisticConcurrency,
 					),
 				},
 			};
@@ -567,39 +603,61 @@ function buildDocumentSchema(
 			format: "date-time",
 		};
 	}
+	if (state.options?.optimisticConcurrency) {
+		properties.revision = { type: "integer", minimum: 1 };
+	}
 
 	return {
 		allOf: [
-			{ type: "object", properties, required: ["id"] },
+			{
+				type: "object",
+				properties,
+				required: [
+					"id",
+					...(state.options?.optimisticConcurrency ? ["revision"] : []),
+				],
+			},
 			documentFieldsSchema ?? ref(insertSchemaName),
 		],
 		description: `${name} document`,
 	};
 }
 
-function expectedVersionSchema() {
+function expectedRevisionSchema() {
 	return {
-		type: "number",
-		description: "Version read before starting the mutation",
+		type: "integer",
+		minimum: 0,
+		description: "Canonical row revision read before starting the mutation",
 	};
 }
 
-function expectedVersionsSchema() {
+function ifMatchParameter() {
+	return {
+		name: "If-Match",
+		in: "header",
+		required: false,
+		schema: { type: "string", pattern: '^"[0-9]+"$' },
+		description:
+			"Quoted canonical revision. Equivalent to expectedRevision in the JSON body.",
+	};
+}
+
+function expectedRevisionsSchema() {
 	return {
 		type: "array",
-		description: "Exact expected-version coverage for every selected record",
+		description: "Exact expected-revision coverage for every selected record",
 		items: {
 			type: "object",
-			required: ["id", "expectedVersion"],
+			required: ["id", "expectedRevision"],
 			properties: {
 				id: { type: "string" },
-				expectedVersion: expectedVersionSchema(),
+				expectedRevision: expectedRevisionSchema(),
 			},
 		},
 	};
 }
 
-function withOptimisticLockConflict(
+function withOptimisticConcurrencyConflict(
 	responses: Record<string, unknown>,
 	enabled: boolean,
 ) {
@@ -607,7 +665,7 @@ function withOptimisticLockConflict(
 	return {
 		...responses,
 		"409": {
-			description: "Optimistic lock conflict",
+			description: "Optimistic concurrency conflict",
 			content: {
 				"application/json": { schema: ref("ErrorResponse") },
 			},

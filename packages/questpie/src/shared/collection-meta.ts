@@ -91,12 +91,9 @@ export interface CollectionMeta {
 	softDelete: boolean;
 
 	/**
-	 * Generated CRUD optimistic-lock contract, when enabled.
+	 * Generated CRUD optimistic-concurrency contract, when enabled.
 	 */
-	optimisticLock?: {
-		field: string;
-		required: true;
-	};
+	optimisticConcurrency?: true;
 
 	/**
 	 * Names of virtual/computed fields

@@ -52,16 +52,17 @@ type _IsAny<T> = 0 extends 1 & T ? true : false;
  * to `unknown | null` — internal CRUD operates on erased `Field<FieldState>`
  * definitions and relies on that shape; only the `any`-state leak is sealed.
  */
-type V2FieldSelect<TState extends FieldState> = _IsAny<TState> extends true
-	? never
-	: // Virtual relation/upload fields have no FK column
-		TState extends { virtual: true; type: "relation" | "upload" }
+type V2FieldSelect<TState extends FieldState> =
+	_IsAny<TState> extends true
 		? never
-		: TState extends { output: false }
+		: // Virtual relation/upload fields have no FK column
+			TState extends { virtual: true; type: "relation" | "upload" }
 			? never
-			: TState extends { notNull: true }
-				? TState["data"]
-				: TState["data"] | null;
+			: TState extends { output: false }
+				? never
+				: TState extends { notNull: true }
+					? TState["data"]
+					: TState["data"] | null;
 
 /**
  * Extract where clause type from Field<TState>.
@@ -87,13 +88,13 @@ type V2FieldWhere<TState extends FieldState> = TState extends {
 	? { [K in keyof TWhere]?: TWhere[K] }
 	: TState extends { isArray: true; innerState: infer TInner }
 		? {
-				[K in keyof ArrayWhereInput<ElementWhereValueOf<TInner>>]?: ArrayWhereInput<
+				[K in keyof ArrayWhereInput<
 					ElementWhereValueOf<TInner>
-				>[K];
+				>]?: ArrayWhereInput<ElementWhereValueOf<TInner>>[K];
 			}
 		: TState extends {
 					operators: { column: infer TColumnOps extends OperatorMap };
-				}
+			  }
 			? OperatorsToWhereInput<TColumnOps>
 			: never;
 
@@ -158,6 +159,9 @@ const _systemUploadTextField = text().required();
 /** Upload size field: number, required */
 const _systemUploadNumberField = number().required();
 
+/** revision: framework-owned canonical row revision */
+const _systemRevisionField = number().required().default(1);
+
 /** Upload visibility field: text, required, default "public" */
 const _systemUploadVisibilityField = text()
 	.required()
@@ -170,6 +174,7 @@ type TimestampField = typeof _systemTimestampField;
 type NullableTimestampField = typeof _systemNullableTimestampField;
 type UploadTextField = typeof _systemUploadTextField;
 type UploadNumberField = typeof _systemUploadNumberField;
+type RevisionField = typeof _systemRevisionField;
 type UploadVisibilityField = typeof _systemUploadVisibilityField;
 
 // ============================================================================
@@ -217,6 +222,9 @@ type AllSystemFields<
 > = BaseSystemFields &
 	TimestampSystemFields<TOptions> &
 	SoftDeleteSystemFields<TOptions> &
+	(TOptions extends { optimisticConcurrency: true }
+		? { readonly revision: RevisionField }
+		: {}) &
 	UploadSystemFields<TUpload>;
 
 export type AutoInsertedFields<
@@ -248,7 +256,7 @@ export type FieldDefinitionsWithSystem<
 
 type GlobalAutoInsertedFields<
 	TUserFields extends Record<string, any>,
-	TOptions extends { timestamps?: boolean },
+	TOptions extends { timestamps?: boolean; optimisticConcurrency?: true },
 > = ("id" extends keyof TUserFields ? {} : { readonly id: IdField }) &
 	(TOptions extends { timestamps: false }
 		? {}
@@ -257,9 +265,12 @@ type GlobalAutoInsertedFields<
 				: { readonly createdAt: TimestampField }) &
 				("updatedAt" extends keyof TUserFields
 					? {}
-					: { readonly updatedAt: TimestampField }));
+					: { readonly updatedAt: TimestampField })) &
+	(TOptions extends { optimisticConcurrency: true }
+		? { readonly revision: RevisionField }
+		: {});
 
 export type GlobalFieldDefinitionsWithSystem<
 	TUserFields extends Record<string, any>,
-	TOptions extends { timestamps?: boolean },
+	TOptions extends { timestamps?: boolean; optimisticConcurrency?: true },
 > = GlobalAutoInsertedFields<TUserFields, TOptions> & TUserFields;

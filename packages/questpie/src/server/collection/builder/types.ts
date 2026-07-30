@@ -32,6 +32,14 @@ export interface CollectionVersioningOptions {
 	enabled?: boolean;
 	maxVersions?: number; // default: 50
 	/**
+	 * Snapshot policy for CRDT projection cuts.
+	 * Ordinary canonical mutations, including an intentional empty generated
+	 * update, are explicit checkpoints; projection cuts do not snapshot
+	 * automatically.
+	 * @default "checkpoint"
+	 */
+	collaborativeSnapshots?: "checkpoint";
+	/**
 	 * Publishing workflow configuration.
 	 * Workflow uses the versions table for stage snapshots, so it lives
 	 * under versioning to make the dependency explicit in the type system.
@@ -148,15 +156,10 @@ export interface CollectionOptions {
 	 */
 	softDelete?: boolean;
 	/**
-	 * Require generated CRUD mutations to compare a caller-supplied version
-	 * against the freshly locked row before writing.
+	 * Generate a framework-owned canonical `revision` and require
+	 * `expectedRevision` for mutations of existing records.
 	 */
-	optimisticLock?: {
-		/** Numeric collection field owned and incremented by generated CRUD. */
-		field: string;
-		/** Mandatory optimistic-lock input is the only supported policy. */
-		required: true;
-	};
+	optimisticConcurrency?: true;
 	/**
 	 * Versioning configuration.
 	 *
@@ -691,6 +694,7 @@ export type TransitionHookContext<TData = any> = AppContext & {
 	toStage: string;
 	/** When set, the transition should be scheduled for this future date instead of executing immediately */
 	scheduledAt?: Date;
+	expectedRevision?: number;
 	/** Current locale */
 	locale?: string;
 	/** Current access mode */
@@ -1389,6 +1393,9 @@ export type InferColumnsFromFields<
 		: ReturnType<typeof Collection.timestampsCols>) &
 	(TOptions["softDelete"] extends true
 		? ReturnType<typeof Collection.softDeleteCols>
+		: {}) &
+	(TOptions["optimisticConcurrency"] extends true
+		? ReturnType<typeof Collection.revisionCols>
 		: {});
 
 export type InferVersionColumnFromFields<
@@ -1427,6 +1434,9 @@ export type InferMainColumnsFromFields<
 		: ReturnType<typeof Collection.timestampsCols>) &
 	(TOptions["softDelete"] extends true
 		? ReturnType<typeof Collection.softDeleteCols>
+		: {}) &
+	(TOptions["optimisticConcurrency"] extends true
+		? ReturnType<typeof Collection.revisionCols>
 		: {}) &
 	(TUpload extends UploadOptions
 		? ReturnType<typeof Collection.uploadCols>

@@ -84,7 +84,7 @@ describe("client by-id aliases (canonical CRUD vocabulary)", () => {
 		await client.collections.posts.purgeById({ id: "post-1" });
 		await client.collections.posts.purgeById({
 			id: "post-2",
-			expectedVersion: 4,
+			expectedRevision: 4,
 		});
 
 		expect(calls).toHaveLength(2);
@@ -92,7 +92,7 @@ describe("client by-id aliases (canonical CRUD vocabulary)", () => {
 		expect(calls[0]?.method).toBe("POST");
 		expect(calls[0]?.body).toBeUndefined();
 		expect(calls[1]?.url.pathname).toBe("/posts/post-2/purge");
-		expect(parseJsonBody(calls[1])).toEqual({ expectedVersion: 4 });
+		expect(parseJsonBody(calls[1])).toEqual({ expectedRevision: 4 });
 		expect(
 			"purge" in (client.collections.posts as Record<string, unknown>),
 		).toBe(false);
@@ -113,62 +113,62 @@ describe("client by-id aliases (canonical CRUD vocabulary)", () => {
 		expect(calls[1]?.method).toBe("POST");
 	});
 
-	it("serializes optimistic-lock inputs on every mutation surface", async () => {
+	it("serializes optimistic-concurrency inputs on every mutation surface", async () => {
 		await client.collections.posts.updateById({
 			id: "post-1",
-			expectedVersion: 1,
+			expectedRevision: 1,
 			data: { title: "Updated" },
 		});
 		await client.collections.posts.deleteById({
 			id: "post-1",
-			expectedVersion: 2,
+			expectedRevision: 2,
 		});
 		await client.collections.posts.restoreById({
 			id: "post-1",
-			expectedVersion: 3,
+			expectedRevision: 3,
 		});
 		await client.collections.posts.updateMany({
 			where: { status: "draft" },
-			expectedVersions: [{ id: "post-1", expectedVersion: 3 }],
+			expectedRevisions: [{ id: "post-1", expectedRevision: 3 }],
 			data: { status: "review" },
 		});
 		await client.collections.posts.updateBatch({
 			updates: [
 				{
 					id: "post-1",
-					expectedVersion: 4,
+					expectedRevision: 4,
 					data: { title: "Batch" },
 				},
 			],
 		});
 		await client.collections.posts.deleteMany({
 			where: { status: "archived" },
-			expectedVersions: [{ id: "post-1", expectedVersion: 5 }],
+			expectedRevisions: [{ id: "post-1", expectedRevision: 5 }],
 		});
 		await client.collections.posts.revertToVersion({
 			id: "post-1",
 			version: 1,
-			expectedVersion: 6,
+			expectedRevision: 6,
 		});
 
 		expect(parseJsonBody(calls[0])).toEqual({
 			data: { title: "Updated" },
-			expectedVersion: 1,
+			expectedRevision: 1,
 		});
-		expect(parseJsonBody(calls[1])).toEqual({ expectedVersion: 2 });
-		expect(parseJsonBody(calls[2])).toEqual({ expectedVersion: 3 });
+		expect(parseJsonBody(calls[1])).toEqual({ expectedRevision: 2 });
+		expect(parseJsonBody(calls[2])).toEqual({ expectedRevision: 3 });
 		expect(parseJsonBody(calls[3])).toMatchObject({
-			expectedVersions: [{ id: "post-1", expectedVersion: 3 }],
+			expectedRevisions: [{ id: "post-1", expectedRevision: 3 }],
 		});
 		expect(parseJsonBody(calls[4])).toMatchObject({
-			updates: [{ id: "post-1", expectedVersion: 4 }],
+			updates: [{ id: "post-1", expectedRevision: 4 }],
 		});
 		expect(parseJsonBody(calls[5])).toMatchObject({
-			expectedVersions: [{ id: "post-1", expectedVersion: 5 }],
+			expectedRevisions: [{ id: "post-1", expectedRevision: 5 }],
 		});
 		expect(parseJsonBody(calls[6])).toMatchObject({
 			version: 1,
-			expectedVersion: 6,
+			expectedRevision: 6,
 		});
 	});
 });

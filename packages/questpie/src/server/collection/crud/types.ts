@@ -1323,44 +1323,37 @@ export type UpdateInput<TUpdate = any, TRelations = any> = Prettify<
 export type ExtractIdType<T> =
 	IsAny<T> extends true ? any : T extends { id: infer I } ? I : string;
 
-export interface ExpectedVersion<TId = string> {
+export interface ExpectedRevision<TId = string> {
 	id: TId;
-	expectedVersion: number;
+	expectedRevision: number;
 }
 
-type OptimisticLockField<TOptions extends CollectionOptions> =
-	TOptions extends {
-		optimisticLock: { field: infer TField extends PropertyKey; required: true };
-	}
-		? TField
-		: never;
+type ExpectedRevisionRequirement<TOptions extends CollectionOptions> =
+	TOptions extends { optimisticConcurrency: true }
+		? { expectedRevision: number }
+		: { expectedRevision?: number };
 
-type ExpectedVersionRequirement<TOptions extends CollectionOptions> =
-	TOptions extends { optimisticLock: { field: string; required: true } }
-		? { expectedVersion: number }
-		: { expectedVersion?: number };
-
-type PurgeExpectedVersionRequirement<TOptions extends CollectionOptions> =
-	TOptions extends { optimisticLock: { field: string; required: true } }
-		? { expectedVersion: number }
+type PurgeExpectedRevisionRequirement<TOptions extends CollectionOptions> =
+	TOptions extends { optimisticConcurrency: true }
+		? { expectedRevision: number }
 		: {};
 
-type ExpectedVersionsRequirement<
+type ExpectedRevisionsRequirement<
 	TOptions extends CollectionOptions,
 	TId,
-> = TOptions extends {
-	optimisticLock: { field: string; required: true };
-}
-	? { expectedVersions: Array<ExpectedVersion<TId>> }
-	: { expectedVersions?: Array<ExpectedVersion<TId>> };
+> = TOptions extends { optimisticConcurrency: true }
+	? { expectedRevisions: Array<ExpectedRevision<TId>> }
+	: { expectedRevisions?: Array<ExpectedRevision<TId>> };
 
-export type OptimisticLockUpdateInput<
+export type OptimisticConcurrencyUpdateInput<
 	TUpdate,
 	TRelations,
 	TOptions extends CollectionOptions,
 > = Omit<
 	UpdateInput<TUpdate, TRelations>,
-	Extract<OptimisticLockField<TOptions>, keyof UpdateInput<TUpdate, TRelations>>
+	TOptions extends { optimisticConcurrency: true }
+		? Extract<"revision", keyof UpdateInput<TUpdate, TRelations>>
+		: never
 >;
 
 /**
@@ -1373,8 +1366,8 @@ export type UpdateParams<
 	TOptions extends CollectionOptions = CollectionOptions,
 > = {
 	id: TId;
-	data: OptimisticLockUpdateInput<TUpdate, TRelations, TOptions>;
-} & ExpectedVersionRequirement<TOptions>;
+	data: OptimisticConcurrencyUpdateInput<TUpdate, TRelations, TOptions>;
+} & ExpectedRevisionRequirement<TOptions>;
 
 /**
  * Update many records params
@@ -1386,8 +1379,8 @@ export type UpdateManyParams<
 	TOptions extends CollectionOptions = CollectionOptions,
 > = {
 	where: Where<TFields, TRelations>;
-	data: OptimisticLockUpdateInput<TUpdate, TRelations, TOptions>;
-} & ExpectedVersionsRequirement<TOptions, ExtractIdType<TFields>>;
+	data: OptimisticConcurrencyUpdateInput<TUpdate, TRelations, TOptions>;
+} & ExpectedRevisionsRequirement<TOptions, ExtractIdType<TFields>>;
 
 /**
  * Update multiple records with distinct data per record.
@@ -1401,8 +1394,8 @@ export type UpdateBatchParams<
 	updates: Array<
 		{
 			id: TId;
-			data: OptimisticLockUpdateInput<TUpdate, TRelations, TOptions>;
-		} & ExpectedVersionRequirement<TOptions>
+			data: OptimisticConcurrencyUpdateInput<TUpdate, TRelations, TOptions>;
+		} & ExpectedRevisionRequirement<TOptions>
 	>;
 };
 
@@ -1414,7 +1407,7 @@ export type DeleteParams<
 	TOptions extends CollectionOptions = CollectionOptions,
 > = {
 	id: TId;
-} & ExpectedVersionRequirement<TOptions>;
+} & ExpectedRevisionRequirement<TOptions>;
 
 /**
  * Permanently purge one already soft-deleted record.
@@ -1424,7 +1417,7 @@ export type PurgeParams<
 	TOptions extends CollectionOptions = CollectionOptions,
 > = {
 	id: TId;
-} & PurgeExpectedVersionRequirement<TOptions>;
+} & PurgeExpectedRevisionRequirement<TOptions>;
 
 /**
  * Restore soft-deleted record params
@@ -1434,7 +1427,7 @@ export type RestoreParams<
 	TOptions extends CollectionOptions = CollectionOptions,
 > = {
 	id: TId;
-} & ExpectedVersionRequirement<TOptions>;
+} & ExpectedRevisionRequirement<TOptions>;
 
 /**
  * Delete many records params
@@ -1445,7 +1438,7 @@ export type DeleteManyParams<
 	TOptions extends CollectionOptions = CollectionOptions,
 > = {
 	where: Where<TFields, TRelations>;
-} & ExpectedVersionsRequirement<TOptions, ExtractIdType<TFields>>;
+} & ExpectedRevisionsRequirement<TOptions, ExtractIdType<TFields>>;
 
 /**
  * Bounded server-side row lock request.
@@ -1463,14 +1456,17 @@ export interface LockManyParams<TId = string> {
  * Params for transitioning a record to a different workflow stage.
  * No data mutation — only stage change + version snapshot.
  */
-export interface TransitionStageParams<TId = string> {
+export type TransitionStageParams<
+	TId = string,
+	TOptions extends CollectionOptions = CollectionOptions,
+> = {
 	/** Record ID to transition */
 	id: TId;
 	/** Target workflow stage name */
 	stage: string;
 	/** If set to a future date, schedule the transition instead of executing immediately */
 	scheduledAt?: Date;
-}
+} & ExpectedRevisionRequirement<TOptions>;
 
 export interface FindVersionsOptions<TId = string> {
 	id: TId;
@@ -1485,12 +1481,13 @@ export type RevertVersionOptions<
 	id: TId;
 	version?: number;
 	versionId?: string;
-} & ExpectedVersionRequirement<TOptions>;
+} & ExpectedRevisionRequirement<TOptions>;
 
 export interface VersionRecord<TId = string> {
 	id: TId;
 	versionId: string;
 	versionNumber: number;
+	sourceRevision: number | null;
 	versionOperation: string;
 	versionUserId: string | null;
 	versionCreatedAt: Date;
@@ -1871,7 +1868,7 @@ export interface CRUD<
 	 * No data mutation — creates a version snapshot at the target stage.
 	 */
 	transitionStage(
-		params: TransitionStageParams<TId>,
+		params: TransitionStageParams<TId, TOptions>,
 		context?: CRUDContext,
 	): Promise<TSelect>;
 

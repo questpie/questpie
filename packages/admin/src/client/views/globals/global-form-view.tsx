@@ -413,8 +413,15 @@ export default function GlobalFormView({
 	const confirmTransition = React.useCallback(() => {
 		if (!transitionTarget) return;
 
-		const params: { stage: string; scheduledAt?: Date } = {
+		const params: {
+			stage: string;
+			scheduledAt?: Date;
+			expectedRevision?: number;
+		} = {
 			stage: transitionTarget.name,
+			...(globalSchema?.options?.optimisticConcurrency
+				? { expectedRevision: Number(globalData?.revision ?? 0) }
+				: {}),
 		};
 		if (transitionSchedule) {
 			if (transitionScheduledAt) {
@@ -482,6 +489,8 @@ export default function GlobalFormView({
 		transitionSchedule,
 		transitionScheduledAt,
 		transitionMutation,
+		globalData?.revision,
+		globalSchema?.options?.optimisticConcurrency,
 		form,
 		t,
 	]);
@@ -580,7 +589,14 @@ export default function GlobalFormView({
 		async (data: any) => {
 			try {
 				const result = await updateMutation.mutateAsync({
-					data,
+					data: globalSchema?.options?.optimisticConcurrency
+						? {
+								data: Object.fromEntries(
+									Object.entries(data).filter(([key]) => key !== "revision"),
+								),
+								expectedRevision: Number(globalData?.revision ?? 0),
+							}
+						: data,
 				});
 				if (result) {
 					form.reset(result as any);
@@ -615,7 +631,7 @@ export default function GlobalFormView({
 				);
 			}
 		},
-		[updateMutation, form, t],
+		[updateMutation, form, globalData?.revision, globalSchema, t],
 	);
 
 	// Keyboard shortcut: Cmd+S to save
@@ -638,7 +654,12 @@ export default function GlobalFormView({
 	const confirmRevertVersion = React.useCallback(async () => {
 		if (!pendingRevertVersion) return;
 
-		const payload: { id?: string; version?: number; versionId?: string } = {};
+		const payload: {
+			id?: string;
+			version?: number;
+			versionId?: string;
+			expectedRevision?: number;
+		} = {};
 		if (typeof globalData?.id === "string") {
 			payload.id = globalData.id;
 		}
@@ -647,12 +668,22 @@ export default function GlobalFormView({
 		} else if (typeof pendingRevertVersion.versionNumber === "number") {
 			payload.version = pendingRevertVersion.versionNumber;
 		}
+		if (globalSchema?.options?.optimisticConcurrency) {
+			payload.expectedRevision = Number(globalData?.revision ?? 0);
+		}
 
 		const result = await revertVersionMutation.mutateAsync(payload);
 		form.reset(result as any);
 		toast.success(t("version.revertSuccess"));
 		setPendingRevertVersion(null);
-	}, [pendingRevertVersion, globalData, revertVersionMutation, form, t]);
+	}, [
+		pendingRevertVersion,
+		globalData,
+		globalSchema,
+		revertVersionMutation,
+		form,
+		t,
+	]);
 
 	// Format date helper
 	const formatDate = (date: string | Date) => {

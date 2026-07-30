@@ -19,6 +19,7 @@
 import { z } from "zod";
 
 import { ApiError } from "#questpie/server/errors/base.js";
+
 import { job } from "../integrated/queue/job.js";
 
 /**
@@ -33,17 +34,17 @@ const scheduledTransitionSchema = z.discriminatedUnion("type", [
 		collection: z.string(),
 		recordId: z.string(),
 		stage: z.string(),
+		expectedRevision: z.number().int().nonnegative().optional(),
 	}),
 	z.object({
 		type: z.literal("global"),
 		global: z.string(),
 		stage: z.string(),
+		expectedRevision: z.number().int().nonnegative().optional(),
 	}),
 ]);
 
-type ScheduledTransitionPayload = z.infer<
-	typeof scheduledTransitionSchema
->;
+type ScheduledTransitionPayload = z.infer<typeof scheduledTransitionSchema>;
 
 /**
  * Scheduled transition job definition
@@ -73,7 +74,13 @@ const scheduledTransitionJob = job({
 				throw ApiError.notFound("Collection", payload.collection);
 			}
 			await crud.transitionStage(
-				{ id: payload.recordId, stage: payload.stage },
+				{
+					id: payload.recordId,
+					stage: payload.stage,
+					...(payload.expectedRevision === undefined
+						? {}
+						: { expectedRevision: payload.expectedRevision }),
+				},
 				{ accessMode: "system" },
 			);
 		} else {
@@ -82,7 +89,12 @@ const scheduledTransitionJob = job({
 				throw ApiError.notFound("Global", payload.global);
 			}
 			await globalCrud.transitionStage(
-				{ stage: payload.stage },
+				{
+					stage: payload.stage,
+					...(payload.expectedRevision === undefined
+						? {}
+						: { expectedRevision: payload.expectedRevision }),
+				},
 				{ accessMode: "system" },
 			);
 		}

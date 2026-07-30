@@ -146,7 +146,7 @@ import {
 	optimisticBatchEntry,
 	optimisticIdInput,
 	runAdminBulkDelete,
-} from "../../utils/optimistic-lock";
+} from "../../utils/optimistic-concurrency";
 import { AdminViewHeader, AdminViewLayout } from "../layout/admin-view-layout";
 import { BulkActionToolbar } from "./bulk-action-toolbar";
 import {
@@ -2247,7 +2247,7 @@ function TableViewInner({
 							String(row.id),
 							{ [orderField]: (index + 1) * orderStep },
 							row.original,
-							collectionMeta.optimisticLock,
+							collectionMeta.optimisticConcurrency,
 						),
 					),
 				});
@@ -2271,7 +2271,7 @@ function TableViewInner({
 			t,
 			actionHelpers.toast,
 			clearReorderOverlay,
-			collectionMeta.optimisticLock,
+			collectionMeta.optimisticConcurrency,
 		],
 	);
 
@@ -2303,7 +2303,7 @@ function TableViewInner({
 							String(row.id),
 							{ [orderField]: (index + 1) * orderStep },
 							row.original,
-							collectionMeta.optimisticLock,
+							collectionMeta.optimisticConcurrency,
 						),
 					),
 				});
@@ -2325,7 +2325,7 @@ function TableViewInner({
 			orderStep,
 			t,
 			actionHelpers.toast,
-			collectionMeta.optimisticLock,
+			collectionMeta.optimisticConcurrency,
 		],
 	);
 
@@ -2504,7 +2504,7 @@ function TableViewInner({
 				records: ids.map(
 					(id) => tableRows.find((row) => String(row.id) === id)?.original,
 				),
-				config: collectionMeta.optimisticLock,
+				config: collectionMeta.optimisticConcurrency,
 				deleteById: deleteMutation.mutateAsync,
 				deleteMany: deleteManyMutation.mutateAsync,
 			});
@@ -2538,7 +2538,7 @@ function TableViewInner({
 			actionHelpers,
 			t,
 			tableRows,
-			collectionMeta.optimisticLock,
+			collectionMeta.optimisticConcurrency,
 		],
 	);
 
@@ -2551,7 +2551,7 @@ function TableViewInner({
 						(row) => String(row.id) === id,
 					)?.original;
 					return restoreMutation.mutateAsync(
-						optimisticIdInput(id, record, collectionMeta.optimisticLock),
+						optimisticIdInput(id, record, collectionMeta.optimisticConcurrency),
 					);
 				}),
 			);
@@ -2581,7 +2581,7 @@ function TableViewInner({
 			actionHelpers,
 			t,
 			tableRows,
-			collectionMeta.optimisticLock,
+			collectionMeta.optimisticConcurrency,
 		],
 	);
 

@@ -24,9 +24,9 @@ import type {
 import { useTranslation } from "../i18n/hooks";
 import { selectAdmin, selectClient, useAdminStore } from "../runtime";
 import {
-	type OptimisticLockConfig,
+	type OptimisticConcurrencyConfig,
 	optimisticActionInput,
-} from "../utils/optimistic-lock";
+} from "../utils/optimistic-concurrency";
 import { useCollectionSchema } from "./use-collection-schema";
 
 type ServerExecuteActionResponse = {
@@ -178,7 +178,7 @@ function mapServerAction(
 	client: any,
 	locale: string,
 	t: (key: string, params?: Record<string, unknown>) => string,
-	optimisticLock?: OptimisticLockConfig,
+	optimisticConcurrency?: OptimisticConcurrencyConfig,
 ): ActionDefinition & { scope?: string } {
 	const action: ActionDefinition & { scope?: string } = {
 		id: serverAction.id,
@@ -260,7 +260,7 @@ function mapServerAction(
 								: Array.isArray(ctx.item)
 									? (ctx.item as Array<Record<string, any>>)
 									: undefined,
-							optimisticLock,
+							optimisticConcurrency,
 						),
 						data,
 						locale,
@@ -344,12 +344,12 @@ export function useServerActions({
 				client,
 				locale,
 				t,
-				schema?.options?.optimisticLock,
+				schema?.options?.optimisticConcurrency,
 			),
 		);
 	}, [
 		schema?.admin?.actions,
-		schema?.options?.optimisticLock,
+		schema?.options?.optimisticConcurrency,
 		collection,
 		admin,
 		client,

@@ -25,6 +25,20 @@ import type {
 } from "#questpie/server/modules/core/integrated/crdt/capability.js";
 import type { Override, Prettify } from "#questpie/shared/type-utils.js";
 
+function withCollaborativeSnapshotPolicy<T extends GlobalOptions>(
+	options: T,
+): T {
+	if (!options.versioning) return options;
+	const versioning = options.versioning === true ? {} : options.versioning;
+	return {
+		...options,
+		versioning: {
+			...versioning,
+			collaborativeSnapshots: "checkpoint",
+		},
+	} as T;
+}
+
 /**
  * Extract Drizzle column types from field definitions.
  */
@@ -296,10 +310,20 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 	collaborative<TAwarenessSchema extends ZodType | undefined = undefined>(
 		config?: CrdtOwnerConfig<TAwarenessSchema>,
 	): GlobalBuilder<
-		Override<TState, { collaborative: CrdtOwnerCapability<TAwarenessSchema> }>
+		Override<
+			TState,
+			{
+				collaborative: CrdtOwnerCapability<TAwarenessSchema>;
+				options: TState["options"] & { optimisticConcurrency: true };
+			}
+		>
 	> {
 		const newState = {
 			...this.state,
+			options: withCollaborativeSnapshotPolicy({
+				...this.state.options,
+				optimisticConcurrency: true,
+			}),
 			collaborative: {
 				awarenessSchema: config?.awareness,
 			},
@@ -312,10 +336,24 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 	 */
 	options<TNewOptions extends GlobalOptions>(
 		options: TNewOptions,
-	): GlobalBuilder<Override<TState, { options: TNewOptions }>> {
+	): GlobalBuilder<
+		Override<
+			TState,
+			{
+				options: TState["collaborative"] extends CrdtOwnerCapability<any>
+					? TNewOptions & { optimisticConcurrency: true }
+					: TNewOptions;
+			}
+		>
+	> {
 		const newState = {
 			...this.state,
-			options,
+			options: this.state.collaborative
+				? withCollaborativeSnapshotPolicy({
+						...options,
+						optimisticConcurrency: true,
+					})
+				: options,
 		} as any;
 
 		const newBuilder = new GlobalBuilder(newState);

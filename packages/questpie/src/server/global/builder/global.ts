@@ -309,6 +309,19 @@ export class Global<TState extends GlobalBuilderState> {
 	constructor(state: TState) {
 		this.state = state;
 		this.name = state.name;
+		if (
+			state.options.optimisticConcurrency &&
+			Object.hasOwn(state.fields, "revision")
+		) {
+			throw new Error(
+				`Global "${state.name}" cannot declare framework-owned field "revision"`,
+			);
+		}
+		if (state.collaborative && !state.options.optimisticConcurrency) {
+			throw new Error(
+				`Collaborative global "${state.name}" must enable optimisticConcurrency`,
+			);
+		}
 
 		// Auto-enable versioning when workflow is configured
 		const workflowRaw = extractWorkflowFromVersioning(state.options.versioning);
@@ -351,6 +364,9 @@ export class Global<TState extends GlobalBuilderState> {
 			// Include system fields in validation schema
 			if (state.options.timestamps !== false) {
 				Object.assign(mainFields, Collection.timestampsCols());
+			}
+			if (state.options.optimisticConcurrency) {
+				Object.assign(mainFields, Collection.revisionCols());
 			}
 
 			state.validation = createGlobalValidationSchema(
@@ -400,7 +416,8 @@ export class Global<TState extends GlobalBuilderState> {
 			TState["fieldDefinitions"],
 			TState["options"]
 		>,
-		TState["relations"]
+		TState["relations"],
+		TState["options"]
 	> {
 		const crud = new GlobalCRUDGenerator(
 			this.state,
@@ -451,6 +468,9 @@ export class Global<TState extends GlobalBuilderState> {
 
 		if (this.state.options.timestamps !== false) {
 			Object.assign(columns, Collection.timestampsCols());
+		}
+		if (this.state.options.optimisticConcurrency) {
+			Object.assign(columns, Collection.revisionCols());
 		}
 
 		const tableBuilder = this.getTableBuilder();
@@ -514,6 +534,7 @@ export class Global<TState extends GlobalBuilderState> {
 				.default(sql`gen_random_uuid()`),
 			id: cloneColumnType(parentIdColumn, "id").notNull(),
 			versionNumber: integer("version_number").notNull(),
+			sourceRevision: integer("source_revision"),
 			versionOperation: text("version_operation").notNull(),
 			versionStage: text("version_stage"),
 			versionFromStage: text("version_from_stage"),
@@ -659,6 +680,7 @@ export class Global<TState extends GlobalBuilderState> {
 			fields,
 			timestamps: this.state.options.timestamps !== false,
 			versioning: hasVersioning,
+			optimisticConcurrency: this.state.options.optimisticConcurrency === true,
 			virtualFields: Object.keys(this.state.virtuals),
 			localizedFields: Array.from(this.state.localized),
 			workflow: resolveWorkflowConfig(

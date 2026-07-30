@@ -33,11 +33,10 @@ const news = collection("news")
 const locked = collection("locked")
 	.fields(({ f }) => ({
 		title: f.text(255).required(),
-		version: f.number().required().default(1),
 	}))
 	.options({
 		softDelete: true,
-		optimisticLock: { field: "version", required: true },
+		optimisticConcurrency: true,
 	});
 
 const settings = global("settings").fields(({ f }) => ({
@@ -108,7 +107,7 @@ describe("typed query options proxy", () => {
 				: never;
 		const safeLockedPurge: LockedPurgeVariables = {
 			id: "record-1",
-			expectedVersion: 2,
+			expectedRevision: 2,
 		};
 		// @ts-expect-error TanStack purge requires the current tombstone version
 		const unsafeLockedPurge: LockedPurgeVariables = { id: "record-1" };
@@ -123,7 +122,7 @@ describe("typed query options proxy", () => {
 				: never;
 		const lockedUpdate: LockedUpdateVariables = {
 			id: "record-1",
-			expectedVersion: 1,
+			expectedRevision: 1,
 			data: { title: "Updated" },
 		};
 		// @ts-expect-error TanStack mutations require the configured version
@@ -141,7 +140,7 @@ describe("typed query options proxy", () => {
 				: never;
 		const lockedBulk: LockedManyVariables = {
 			where: { id: "record-1" },
-			expectedVersions: [{ id: "record-1", expectedVersion: 1 }],
+			expectedRevisions: [{ id: "record-1", expectedRevision: 1 }],
 			data: { title: "Updated" },
 		};
 		const lockedRevert = () => q.collections.locked.revertToVersion();
@@ -155,7 +154,7 @@ describe("typed query options proxy", () => {
 		const safeLockedRevert: LockedRevertVariables = {
 			id: "record-1",
 			version: 1,
-			expectedVersion: 2,
+			expectedRevision: 2,
 		};
 		// @ts-expect-error TanStack revert requires the configured version
 		const unsafeLockedRevert: LockedRevertVariables = {

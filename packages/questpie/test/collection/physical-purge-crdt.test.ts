@@ -69,17 +69,21 @@ describe("physical purge CRDT retention boundary", () => {
 			ctx,
 		);
 
-		await setup.app.collections.collabArticles.deleteById(
-			{ id: article.id },
-			ctx,
-		);
+		const deletedArticle =
+			await setup.app.collections.collabArticles.deleteById(
+				{ id: article.id, expectedRevision: article.revision },
+				ctx,
+			);
 		await setup.app.collections.collabArticles.purgeById(
-			{ id: article.id },
+			{ id: article.id, expectedRevision: deletedArticle.data.revision },
 			ctx,
 		);
 
 		await expect(
-			setup.app.collections.collabArticles.restoreById({ id: article.id }, ctx),
+			setup.app.collections.collabArticles.restoreById(
+				{ id: article.id, expectedRevision: deletedArticle.data.revision },
+				ctx,
+			),
 		).rejects.toMatchObject({ code: "NOT_FOUND" });
 
 		const [resource] = await setup.app.db

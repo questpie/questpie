@@ -7,7 +7,7 @@
 import { parseRfc3339Instant } from "#questpie/shared/temporal.js";
 import { getTxid, QUESTPIE_TXID_HEADER } from "#questpie/shared/txid.js";
 
-import type { ExpectedVersion } from "../../collection/crud/types.js";
+import type { ExpectedRevision } from "../../collection/crud/types.js";
 import {
 	introspectCollection,
 	resolveIntrospectionAccess,
@@ -43,14 +43,49 @@ function txidHeaders(result: unknown): HeadersInit | undefined {
 	return txid ? { [QUESTPIE_TXID_HEADER]: txid } : undefined;
 }
 
-function hasOptimisticLock(crud: {
+function revisionHeaders(
+	result: unknown,
+	optimisticConcurrency: boolean,
+): HeadersInit | undefined {
+	if (
+		!optimisticConcurrency ||
+		!result ||
+		typeof result !== "object" ||
+		typeof (result as { revision?: unknown }).revision !== "number"
+	) {
+		return txidHeaders(result);
+	}
+	return {
+		...(txidHeaders(result) ?? {}),
+		ETag: `"${(result as { revision: number }).revision}"`,
+	};
+}
+
+function expectedRevisionFromRequest(
+	request: Request,
+	bodyRevision: number | undefined,
+): number | undefined {
+	const ifMatch = request.headers.get("if-match");
+	if (!ifMatch) return bodyRevision;
+	const match = /^"([0-9]+)"$/.exec(ifMatch.trim());
+	const headerRevision = match ? Number(match[1]) : undefined;
+	if (
+		headerRevision === undefined ||
+		(bodyRevision !== undefined && bodyRevision !== headerRevision)
+	) {
+		throw ApiError.conflict("Optimistic concurrency conflict");
+	}
+	return headerRevision;
+}
+
+function hasOptimisticConcurrency(crud: {
 	"~internalState"?: {
 		options?: {
-			optimisticLock?: unknown;
+			optimisticConcurrency?: unknown;
 		};
 	};
 }): boolean {
-	return Boolean(crud?.["~internalState"]?.options?.optimisticLock);
+	return Boolean(crud?.["~internalState"]?.options?.optimisticConcurrency);
 }
 
 // ============================================================================
@@ -152,7 +187,12 @@ export async function collectionCreate(
 
 	try {
 		const result = await crud.create(body, resolved.appContext);
-		return smartResponse(result, request, 200, txidHeaders(result));
+		return smartResponse(
+			result,
+			request,
+			200,
+			revisionHeaders(result, hasOptimisticConcurrency(crud)),
+		);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -188,7 +228,12 @@ export async function collectionFindOne(
 				resolved.appContext.locale,
 			);
 		}
-		return smartResponse(result, request);
+		return smartResponse(
+			result,
+			request,
+			200,
+			revisionHeaders(result, hasOptimisticConcurrency(crud)),
+		);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -230,20 +275,33 @@ export async function collectionUpdate(
 
 	try {
 		const payload =
-			hasOptimisticLock(crud) && typeof body === "object" && body !== null
-				? (body as { data?: unknown; expectedVersion?: number })
+			hasOptimisticConcurrency(crud) &&
+			typeof body === "object" &&
+			body !== null
+				? (body as { data?: unknown; expectedRevision?: number })
 				: undefined;
 		const result = await crud.updateById(
 			{
 				id: params.id as any,
 				data: payload && Object.hasOwn(payload, "data") ? payload.data : body,
-				...(payload?.expectedVersion === undefined
+				...(expectedRevisionFromRequest(request, payload?.expectedRevision) ===
+				undefined
 					? {}
-					: { expectedVersion: payload.expectedVersion }),
+					: {
+							expectedRevision: expectedRevisionFromRequest(
+								request,
+								payload?.expectedRevision,
+							),
+						}),
 			},
 			resolved.appContext,
 		);
-		return smartResponse(result, request, 200, txidHeaders(result));
+		return smartResponse(
+			result,
+			request,
+			200,
+			revisionHeaders(result, hasOptimisticConcurrency(crud)),
+		);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -269,17 +327,19 @@ export async function collectionRemove(
 	}
 
 	try {
-		const body = hasOptimisticLock(crud)
+		const body = hasOptimisticConcurrency(crud)
 			? await parseRouteBody(request)
 			: undefined;
-		const expectedVersion =
+		const expectedRevision = expectedRevisionFromRequest(
+			request,
 			typeof body === "object" && body !== null
-				? (body as { expectedVersion?: number }).expectedVersion
-				: undefined;
+				? (body as { expectedRevision?: number }).expectedRevision
+				: undefined,
+		);
 		const result = await crud.deleteById(
 			{
 				id: params.id as any,
-				...(expectedVersion === undefined ? {} : { expectedVersion }),
+				...(expectedRevision === undefined ? {} : { expectedRevision }),
 			},
 			resolved.appContext,
 		);
@@ -373,7 +433,7 @@ export async function collectionRevert(
 		const payload = body as {
 			version?: number;
 			versionId?: string;
-			expectedVersion?: number;
+			expectedRevision?: number;
 		};
 		const result = await crud.revertToVersion(
 			{
@@ -384,13 +444,24 @@ export async function collectionRevert(
 				...(typeof payload.versionId === "string"
 					? { versionId: payload.versionId }
 					: {}),
-				...(typeof payload.expectedVersion === "number"
-					? { expectedVersion: payload.expectedVersion }
+				...(expectedRevisionFromRequest(request, payload.expectedRevision) !==
+				undefined
+					? {
+							expectedRevision: expectedRevisionFromRequest(
+								request,
+								payload.expectedRevision,
+							),
+						}
 					: {}),
 			},
 			resolved.appContext,
 		);
-		return smartResponse(result, request, 200, txidHeaders(result));
+		return smartResponse(
+			result,
+			request,
+			200,
+			revisionHeaders(result, hasOptimisticConcurrency(crud)),
+		);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -431,7 +502,11 @@ export async function collectionTransition(
 	}
 
 	try {
-		const payload = body as { stage?: unknown; scheduledAt?: unknown };
+		const payload = body as {
+			stage?: unknown;
+			scheduledAt?: unknown;
+			expectedRevision?: number;
+		};
 		if (!payload.stage || typeof payload.stage !== "string") {
 			throw ApiError.badRequest(
 				"Missing required field: stage",
@@ -441,9 +516,23 @@ export async function collectionTransition(
 			);
 		}
 
-		const opts: { id: string; stage: string; scheduledAt?: Date } = {
+		const opts: {
+			id: string;
+			stage: string;
+			scheduledAt?: Date;
+			expectedRevision?: number;
+		} = {
 			id: params.id,
 			stage: payload.stage,
+			...(expectedRevisionFromRequest(request, payload.expectedRevision) ===
+			undefined
+				? {}
+				: {
+						expectedRevision: expectedRevisionFromRequest(
+							request,
+							payload.expectedRevision,
+						),
+					}),
 		};
 
 		if (payload.scheduledAt !== undefined) {
@@ -460,7 +549,12 @@ export async function collectionTransition(
 		}
 
 		const result = await crud.transitionStage(opts, resolved.appContext);
-		return smartResponse(result, request);
+		return smartResponse(
+			result,
+			request,
+			200,
+			revisionHeaders(result, hasOptimisticConcurrency(crud)),
+		);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -486,21 +580,28 @@ export async function collectionRestore(
 	}
 
 	try {
-		const body = hasOptimisticLock(crud)
+		const body = hasOptimisticConcurrency(crud)
 			? await parseRouteBody(request)
 			: undefined;
-		const expectedVersion =
+		const expectedRevision = expectedRevisionFromRequest(
+			request,
 			typeof body === "object" && body !== null
-				? (body as { expectedVersion?: number }).expectedVersion
-				: undefined;
+				? (body as { expectedRevision?: number }).expectedRevision
+				: undefined,
+		);
 		const result = await crud.restoreById(
 			{
 				id: params.id as any,
-				...(expectedVersion === undefined ? {} : { expectedVersion }),
+				...(expectedRevision === undefined ? {} : { expectedRevision }),
 			},
 			resolved.appContext,
 		);
-		return smartResponse(result, request, 200, txidHeaders(result));
+		return smartResponse(
+			result,
+			request,
+			200,
+			revisionHeaders(result, hasOptimisticConcurrency(crud)),
+		);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -526,17 +627,19 @@ export async function collectionPurge(
 	}
 
 	try {
-		const body = hasOptimisticLock(crud)
+		const body = hasOptimisticConcurrency(crud)
 			? await parseRouteBody(request)
 			: undefined;
-		const expectedVersion =
+		const expectedRevision = expectedRevisionFromRequest(
+			request,
 			typeof body === "object" && body !== null
-				? (body as { expectedVersion?: number }).expectedVersion
-				: undefined;
+				? (body as { expectedRevision?: number }).expectedRevision
+				: undefined,
+		);
 		const result = await crud.purgeById(
 			{
 				id: params.id as any,
-				...(expectedVersion === undefined ? {} : { expectedVersion }),
+				...(expectedRevision === undefined ? {} : { expectedRevision }),
 			},
 			resolved.appContext,
 		);
@@ -581,16 +684,16 @@ export async function collectionUpdateMany(
 	}
 
 	try {
-		const { where, data, expectedVersions } = body as {
+		const { where, data, expectedRevisions } = body as {
 			where: any;
 			data: any;
-			expectedVersions?: Array<ExpectedVersion<string>>;
+			expectedRevisions?: Array<ExpectedRevision<string>>;
 		};
 		const result = await crud.updateMany(
 			{
 				where,
 				data,
-				...(expectedVersions === undefined ? {} : { expectedVersions }),
+				...(expectedRevisions === undefined ? {} : { expectedRevisions }),
 			},
 			resolved.appContext,
 		);
@@ -678,14 +781,14 @@ export async function collectionDeleteMany(
 	}
 
 	try {
-		const { where, expectedVersions } = body as {
+		const { where, expectedRevisions } = body as {
 			where: any;
-			expectedVersions?: Array<ExpectedVersion<string>>;
+			expectedRevisions?: Array<ExpectedRevision<string>>;
 		};
 		const result = await crud.deleteMany(
 			{
 				where,
-				...(expectedVersions === undefined ? {} : { expectedVersions }),
+				...(expectedRevisions === undefined ? {} : { expectedRevisions }),
 			},
 			resolved.appContext,
 		);

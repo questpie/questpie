@@ -45,6 +45,41 @@ function txidHeaders(result: unknown): HeadersInit | undefined {
 	return txid ? { [QUESTPIE_TXID_HEADER]: txid } : undefined;
 }
 
+function revisionHeaders(
+	result: unknown,
+	optimisticConcurrency: boolean,
+): HeadersInit | undefined {
+	if (
+		!optimisticConcurrency ||
+		!result ||
+		typeof result !== "object" ||
+		typeof (result as { revision?: unknown }).revision !== "number"
+	) {
+		return txidHeaders(result);
+	}
+	return {
+		...(txidHeaders(result) ?? {}),
+		ETag: `"${(result as { revision: number }).revision}"`,
+	};
+}
+
+function expectedRevisionFromRequest(
+	request: Request,
+	bodyRevision: number | undefined,
+): number | undefined {
+	const ifMatch = request.headers.get("if-match");
+	if (!ifMatch) return bodyRevision;
+	const match = /^"([0-9]+)"$/.exec(ifMatch.trim());
+	const headerRevision = match ? Number(match[1]) : undefined;
+	if (
+		headerRevision === undefined ||
+		(bodyRevision !== undefined && bodyRevision !== headerRevision)
+	) {
+		throw ApiError.conflict("Optimistic concurrency conflict");
+	}
+	return headerRevision;
+}
+
 // ============================================================================
 // Standalone Handlers
 // ============================================================================
@@ -63,7 +98,15 @@ export async function globalGet(
 		const globalInstance = app.getGlobalConfig(params.global as any);
 		const crud = globalInstance.generateCRUD(resolved.appContext.db, app);
 		const result = await crud.get(options, resolved.appContext);
-		return smartResponse(result, request);
+		return smartResponse(
+			result,
+			request,
+			200,
+			revisionHeaders(
+				result,
+				globalInstance.state.options.optimisticConcurrency === true,
+			),
+		);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -137,6 +180,7 @@ export async function globalRevert(
 			id?: string;
 			version?: number;
 			versionId?: string;
+			expectedRevision?: number;
 		};
 		const globalInstance = app.getGlobalConfig(params.global as any);
 		const crud = globalInstance.generateCRUD(resolved.appContext.db, app);
@@ -149,10 +193,27 @@ export async function globalRevert(
 				...(typeof payload.versionId === "string"
 					? { versionId: payload.versionId }
 					: {}),
+				...(expectedRevisionFromRequest(request, payload.expectedRevision) ===
+				undefined
+					? {}
+					: {
+							expectedRevision: expectedRevisionFromRequest(
+								request,
+								payload.expectedRevision,
+							),
+						}),
 			},
 			resolved.appContext,
 		);
-		return smartResponse(result, request, 200, txidHeaders(result));
+		return smartResponse(
+			result,
+			request,
+			200,
+			revisionHeaders(
+				result,
+				globalInstance.state.options.optimisticConcurrency === true,
+			),
+		);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -183,7 +244,11 @@ export async function globalTransition(
 	}
 
 	try {
-		const payload = body as { stage?: unknown; scheduledAt?: unknown };
+		const payload = body as {
+			stage?: unknown;
+			scheduledAt?: unknown;
+			expectedRevision?: number;
+		};
 		if (!payload.stage || typeof payload.stage !== "string") {
 			throw ApiError.badRequest(
 				"Missing required field: stage",
@@ -193,8 +258,21 @@ export async function globalTransition(
 			);
 		}
 
-		const opts: { stage: string; scheduledAt?: Date } = {
+		const opts: {
+			stage: string;
+			scheduledAt?: Date;
+			expectedRevision?: number;
+		} = {
 			stage: payload.stage,
+			...(expectedRevisionFromRequest(request, payload.expectedRevision) ===
+			undefined
+				? {}
+				: {
+						expectedRevision: expectedRevisionFromRequest(
+							request,
+							payload.expectedRevision,
+						),
+					}),
 		};
 
 		if (payload.scheduledAt !== undefined) {
@@ -213,7 +291,15 @@ export async function globalTransition(
 		const globalInstance = app.getGlobalConfig(params.global as any);
 		const crud = globalInstance.generateCRUD(resolved.appContext.db, app);
 		const result = await crud.transitionStage(opts, resolved.appContext);
-		return smartResponse(result, request);
+		return smartResponse(
+			result,
+			request,
+			200,
+			revisionHeaders(
+				result,
+				globalInstance.state.options.optimisticConcurrency === true,
+			),
+		);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -289,8 +375,36 @@ export async function globalUpdate(
 		const options = parseGlobalUpdateOptions(new URL(request.url));
 		const globalInstance = app.getGlobalConfig(params.global as any);
 		const crud = globalInstance.generateCRUD(resolved.appContext.db, app);
-		const result = await crud.update(body, resolved.appContext, options);
-		return smartResponse(result, request, 200, txidHeaders(result));
+		const optimisticConcurrency =
+			globalInstance.state.options.optimisticConcurrency === true;
+		const payload =
+			optimisticConcurrency && typeof body === "object" && body !== null
+				? (body as { data?: unknown; expectedRevision?: number })
+				: undefined;
+		const expectedRevision = expectedRevisionFromRequest(
+			request,
+			payload?.expectedRevision,
+		);
+		const result = await crud.update(
+			optimisticConcurrency
+				? {
+						data:
+							payload && Object.hasOwn(payload, "data") ? payload.data : body,
+						...(expectedRevision === undefined ? {} : { expectedRevision }),
+					}
+				: body,
+			resolved.appContext,
+			options,
+		);
+		return smartResponse(
+			result,
+			request,
+			200,
+			revisionHeaders(
+				result,
+				globalInstance.state.options.optimisticConcurrency === true,
+			),
+		);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}

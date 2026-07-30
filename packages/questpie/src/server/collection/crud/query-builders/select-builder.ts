@@ -219,6 +219,13 @@ export function buildSelectObject(
 	) {
 		select.deletedAt = (table as any).deletedAt;
 	}
+	if (
+		state.options.optimisticConcurrency &&
+		includedFields.has("revision") &&
+		(table as any).revision
+	) {
+		select.revision = (table as any).revision;
+	}
 
 	// Extras (custom SQL fields)
 	if (extras) {
@@ -284,6 +291,7 @@ export function buildVersionsSelectObject(
 		versionId: versionsTbl.versionId,
 		id: versionsTbl.id,
 		versionNumber: versionsTbl.versionNumber,
+		sourceRevision: versionsTbl.sourceRevision,
 		versionOperation: versionsTbl.versionOperation,
 		versionUserId: versionsTbl.versionUserId,
 		versionCreatedAt: versionsTbl.versionCreatedAt,
@@ -411,6 +419,7 @@ export function getIncludedFields(
 		"createdAt",
 		"updatedAt",
 		"deletedAt",
+		"revision",
 	];
 
 	if (!columns) {

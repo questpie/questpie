@@ -16,7 +16,12 @@
  * ```
  */
 
-import { extractAppServices, route, runWithContext } from "questpie";
+import {
+	extractAppServices,
+	route,
+	runWithContext,
+	withTransaction,
+} from "questpie";
 import { z } from "zod";
 
 import type {
@@ -49,10 +54,10 @@ export interface ExecuteActionRequest {
 	itemId?: string;
 	/** Multiple item IDs (for bulk actions) */
 	itemIds?: string[];
-	/** Expected version for an optimistic-lock protected single-item action */
-	expectedVersion?: number;
-	/** Exact per-item versions for an optimistic-lock protected bulk action */
-	expectedVersions?: Array<{ id: string; expectedVersion: number }>;
+	/** Expected revision for an optimistic-concurrency protected single-item action */
+	expectedRevision?: number;
+	/** Exact per-item revisions for an optimistic-concurrency protected bulk action */
+	expectedRevisions?: Array<{ id: string; expectedRevision: number }>;
 	/** Form data (for actions with forms) */
 	data?: Record<string, unknown>;
 	/** Current locale */
@@ -193,8 +198,8 @@ export async function executeAction(
 		actionId,
 		itemId,
 		itemIds,
-		expectedVersion,
-		expectedVersions,
+		expectedRevision,
+		expectedRevisions,
 		data,
 		locale,
 	} = request;
@@ -232,8 +237,8 @@ export async function executeAction(
 			actionId,
 			itemId,
 			itemIds,
-			expectedVersion,
-			expectedVersions,
+			expectedRevision,
+			expectedRevisions,
 			data,
 			locale,
 			session,
@@ -290,8 +295,8 @@ export async function executeAction(
 			data: data || {},
 			itemId,
 			itemIds,
-			expectedVersion,
-			expectedVersions,
+			expectedRevision,
+			expectedRevisions,
 			auth: appRec.auth,
 			collections: getCollectionCruds(app),
 			globals: getGlobalCruds(app),
@@ -344,8 +349,8 @@ async function executeBuiltinAction(
 		actionId: string;
 		itemId?: string;
 		itemIds?: string[];
-		expectedVersion?: number;
-		expectedVersions?: Array<{ id: string; expectedVersion: number }>;
+		expectedRevision?: number;
+		expectedRevisions?: Array<{ id: string; expectedRevision: number }>;
 		data?: Record<string, unknown>;
 		locale?: string;
 		session?: unknown;
@@ -356,8 +361,8 @@ async function executeBuiltinAction(
 		actionId,
 		itemId,
 		itemIds,
-		expectedVersion,
-		expectedVersions,
+		expectedRevision,
+		expectedRevisions,
 		data,
 		locale,
 	} = params;
@@ -368,11 +373,11 @@ async function executeBuiltinAction(
 	const collectionState = (collection?.state ?? collection) as
 		| {
 				options?: {
-					optimisticLock?: { field: string; required: true };
+					optimisticConcurrency?: true;
 				};
 		  }
 		| undefined;
-	const optimisticLock = collectionState?.options?.optimisticLock;
+	const optimisticConcurrency = collectionState?.options?.optimisticConcurrency;
 	const collectionCrud = getCollectionCrud(app, collectionSlug);
 	const crudContext = {
 		db: appRec.db,
@@ -412,13 +417,13 @@ async function executeBuiltinAction(
 				}
 				if (collectionCrud?.updateById) {
 					await collectionCrud.updateById(
-						{ id: itemId, data: data || {}, expectedVersion },
+						{ id: itemId, data: data || {}, expectedRevision },
 						crudContext,
 					);
 				} else {
-					if (optimisticLock) {
+					if (optimisticConcurrency) {
 						throw new Error(
-							`Collection "${collectionSlug}" requires generated CRUD for optimistic locking`,
+							`Collection "${collectionSlug}" requires generated CRUD for optimistic concurrency`,
 						);
 					}
 					await appRec.update(collectionSlug, itemId, data || {});
@@ -445,13 +450,13 @@ async function executeBuiltinAction(
 				}
 				if (collectionCrud?.deleteById) {
 					await collectionCrud.deleteById(
-						{ id: itemId, expectedVersion },
+						{ id: itemId, expectedRevision },
 						crudContext,
 					);
 				} else {
-					if (optimisticLock) {
+					if (optimisticConcurrency) {
 						throw new Error(
-							`Collection "${collectionSlug}" requires generated CRUD for optimistic locking`,
+							`Collection "${collectionSlug}" requires generated CRUD for optimistic concurrency`,
 						);
 					}
 					await appRec.delete(collectionSlug, itemId);
@@ -481,33 +486,33 @@ async function executeBuiltinAction(
 						},
 					};
 				}
-				if (optimisticLock && collectionCrud?.deleteMany) {
+				if (optimisticConcurrency && collectionCrud?.deleteMany) {
 					await collectionCrud.deleteMany(
 						{
 							where: { id: { in: itemIds } },
-							expectedVersions,
+							expectedRevisions,
 						},
 						crudContext,
 					);
 				} else if (collectionCrud?.deleteById) {
 					const versionsById = new Map(
-						expectedVersions?.map((entry) => [
+						expectedRevisions?.map((entry) => [
 							entry.id,
-							entry.expectedVersion,
+							entry.expectedRevision,
 						]) ?? [],
 					);
 					await Promise.all(
 						itemIds.map((id) =>
 							collectionCrud.deleteById(
-								{ id, expectedVersion: versionsById.get(id) },
+								{ id, expectedRevision: versionsById.get(id) },
 								crudContext,
 							),
 						),
 					);
 				} else {
-					if (optimisticLock) {
+					if (optimisticConcurrency) {
 						throw new Error(
-							`Collection "${collectionSlug}" requires generated CRUD for optimistic locking`,
+							`Collection "${collectionSlug}" requires generated CRUD for optimistic concurrency`,
 						);
 					}
 					await Promise.all(
@@ -539,10 +544,13 @@ async function executeBuiltinAction(
 
 				if (collectionCrud?.restoreById) {
 					await collectionCrud.restoreById(
-						{ id: itemId, expectedVersion },
+						{ id: itemId, expectedRevision },
 						crudContext,
 					);
-				} else if (typeof appRec.restore === "function" && !optimisticLock) {
+				} else if (
+					typeof appRec.restore === "function" &&
+					!optimisticConcurrency
+				) {
 					await appRec.restore(collectionSlug, itemId);
 				} else {
 					return {
@@ -584,20 +592,30 @@ async function executeBuiltinAction(
 
 				if (collectionCrud?.restoreById) {
 					const versionsById = new Map(
-						expectedVersions?.map((entry) => [
+						expectedRevisions?.map((entry) => [
 							entry.id,
-							entry.expectedVersion,
+							entry.expectedRevision,
 						]) ?? [],
 					);
-					await Promise.all(
-						itemIds.map((id) =>
-							collectionCrud.restoreById(
-								{ id, expectedVersion: versionsById.get(id) },
-								crudContext,
-							),
-						),
-					);
-				} else if (typeof appRec.restore === "function" && !optimisticLock) {
+					if (
+						optimisticConcurrency &&
+						(versionsById.size !== itemIds.length ||
+							itemIds.some((id) => !versionsById.has(id)))
+					) {
+						throw new Error("Optimistic concurrency conflict");
+					}
+					await withTransaction(appRec.db, async (tx) => {
+						for (const id of [...itemIds].sort()) {
+							await collectionCrud.restoreById(
+								{ id, expectedRevision: versionsById.get(id) },
+								{ ...crudContext, db: tx },
+							);
+						}
+					});
+				} else if (
+					typeof appRec.restore === "function" &&
+					!optimisticConcurrency
+				) {
 					await Promise.all(
 						itemIds.map((id) => appRec.restore(collectionSlug, id)),
 					);
@@ -647,8 +665,15 @@ async function executeBuiltinAction(
 						},
 					};
 				}
-				// Remove id and timestamps for duplication
-				const { id, createdAt, updatedAt, ...duplicateData } = original;
+				// Remove generated fields before duplication.
+				const { id, createdAt, updatedAt, ...copyableData } = original;
+				const duplicateData = optimisticConcurrency
+					? Object.fromEntries(
+							Object.entries(copyableData).filter(
+								([key]) => key !== "revision",
+							),
+						)
+					: copyableData;
 				const duplicated = collectionCrud?.create
 					? await collectionCrud.create(duplicateData, crudContext)
 					: await appRec.create(collectionSlug, duplicateData);
@@ -693,9 +718,11 @@ async function executeBuiltinAction(
 						id: string;
 						stage: string;
 						scheduledAt?: Date;
+						expectedRevision?: number;
 					} = {
 						id: itemId,
 						stage,
+						...(optimisticConcurrency ? { expectedRevision } : {}),
 					};
 					if (scheduledAt) {
 						transitionParams.scheduledAt = new Date(scheduledAt);
@@ -822,12 +849,12 @@ const executeActionRequestSchema = z.object({
 	actionId: z.string(),
 	itemId: z.string().optional(),
 	itemIds: z.array(z.string()).optional(),
-	expectedVersion: z.number().finite().optional(),
-	expectedVersions: z
+	expectedRevision: z.number().finite().optional(),
+	expectedRevisions: z
 		.array(
 			z.object({
 				id: z.string(),
-				expectedVersion: z.number().finite(),
+				expectedRevision: z.number().finite(),
 			}),
 		)
 		.optional(),

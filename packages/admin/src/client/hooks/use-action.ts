@@ -34,7 +34,7 @@ import {
 import {
 	optimisticActionInput,
 	optimisticIdInput,
-} from "../utils/optimistic-lock";
+} from "../utils/optimistic-concurrency";
 import { useCollectionSchema } from "./use-collection-schema";
 
 // ============================================================================
@@ -423,7 +423,7 @@ function useActionExecution<TItem = any>({
 									optimisticIdInput(
 										(item as any)?.id,
 										item as Record<string, any> | undefined,
-										collectionSchema?.options?.optimisticLock,
+										collectionSchema?.options?.optimisticConcurrency,
 									),
 								);
 								helpers.toast.success(helpers.t("toast.deleteSuccess"));
@@ -472,7 +472,7 @@ function useActionExecution<TItem = any>({
 										...optimisticActionInput(
 											item as Record<string, any> | undefined,
 											items as Array<Record<string, any>> | undefined,
-											collectionSchema?.options?.optimisticLock,
+											collectionSchema?.options?.optimisticConcurrency,
 										),
 									},
 								);
@@ -530,7 +530,7 @@ function useActionExecution<TItem = any>({
 		},
 		[
 			collection,
-			collectionSchema?.options?.optimisticLock,
+			collectionSchema?.options?.optimisticConcurrency,
 			helpers,
 			client,
 			authClient,

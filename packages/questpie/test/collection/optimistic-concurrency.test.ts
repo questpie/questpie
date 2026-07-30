@@ -3,72 +3,105 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { collection } from "../../src/exports/index.js";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
-import { createTestContext } from "../utils/test-context";
+import { createMockSession, createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
 
-let observedOriginalVersion: number | undefined;
+let observedOriginalRevision: number | undefined;
 let onBeforeChange: (() => Promise<void>) | undefined;
 let onBeforeDelete: (() => Promise<void>) | undefined;
+let beforeTransitionFacts = 0;
 
 const optimisticTags = collection("optimistic_tags")
 	.fields(({ f }) => ({
 		name: f.text().required(),
 		localizedName: f.text().localized(),
-		version: f.number().required().default(1),
 		groups: f.relation("optimisticGroups").manyToMany({
 			through: "optimisticTagGroups",
 			sourceField: "tag",
 			targetField: "group",
 		}),
+		tagGroups: f.relation("optimisticTagGroups").hasMany({
+			foreignKey: "tag",
+			onDelete: "cascade",
+			relationName: "tag",
+		}),
 	}))
 	.options({
 		softDelete: true,
 		timestamps: false,
-		versioning: true,
-		optimisticLock: { field: "version", required: true },
+		versioning: {
+			maxVersions: 10,
+			workflow: {
+				stages: ["draft", "published"],
+				initialStage: "draft",
+			},
+		},
+		optimisticConcurrency: true,
 	})
 	.access({ introspect: true })
 	.hooks({
 		beforeChange: async ({ original, operation }) => {
 			if (operation === "update") {
-				observedOriginalVersion = original?.version;
+				observedOriginalRevision = original?.revision;
 				await onBeforeChange?.();
 			}
 		},
 		beforeDelete: async () => {
 			await onBeforeDelete?.();
 		},
+		beforeTransition: () => {
+			beforeTransitionFacts++;
+		},
 	});
 const optimisticGroups = collection("optimistic_groups").fields(({ f }) => ({
 	name: f.text().required(),
 }));
-const optimisticTagGroups = collection("optimistic_tag_groups").fields(
-	({ f }) => ({
+const optimisticTagGroups = collection("optimistic_tag_groups")
+	.fields(({ f }) => ({
 		tag: f.relation("optimisticTags").required().onDelete("cascade"),
 		group: f.relation("optimisticGroups").required().onDelete("cascade"),
-	}),
-);
+	}))
+	.options({ optimisticConcurrency: true });
 const legacyTags = collection("legacy_tags")
 	.fields(({ f }) => ({
 		name: f.text().required(),
-		version: f.number().required().default(1),
+		revision: f.number().required().default(1),
 	}))
 	.options({ softDelete: true });
+const tenantDocuments = collection("tenant_documents")
+	.fields(({ f }) => ({
+		tenantId: f.text().required(),
+		title: f.text().required(),
+	}))
+	.options({ versioning: true })
+	.access({
+		read: ({ session }) => ({ tenantId: session?.user.id ?? "__anonymous__" }),
+	});
+const retainedTags = collection("retained_tags")
+	.fields(({ f }) => ({ name: f.text().required() }))
+	.options({
+		timestamps: false,
+		versioning: { maxVersions: 2 },
+		optimisticConcurrency: true,
+	});
 
-describe("generated CRUD optimistic locking", () => {
+describe("generated CRUD optimistic concurrency", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 	const context = createTestContext();
 
 	beforeEach(async () => {
-		observedOriginalVersion = undefined;
+		observedOriginalRevision = undefined;
 		onBeforeChange = undefined;
 		onBeforeDelete = undefined;
+		beforeTransitionFacts = 0;
 		setup = await buildMockApp({
 			collections: {
 				optimisticTags,
 				optimisticGroups,
 				optimisticTagGroups,
 				legacyTags,
+				tenantDocuments,
+				retainedTags,
 			},
 		});
 		await runTestDbMigrations(setup.app);
@@ -78,62 +111,41 @@ describe("generated CRUD optimistic locking", () => {
 		await setup.cleanup();
 	});
 
-	it("rejects invalid lock fields when the collection is built", () => {
-		const missing = collection("missing_lock_field")
-			.fields(({ f }) => ({ title: f.text() }))
-			.options({
-				optimisticLock: { field: "version", required: true },
-			});
-		const localized = collection("localized_lock_field")
-			.fields(({ f }) => ({ version: f.number().localized() }))
-			.options({
-				optimisticLock: { field: "version", required: true },
-			});
-		const virtual = collection("virtual_lock_field")
-			.fields(({ f }) => ({ version: f.number().virtual() }))
-			.options({
-				optimisticLock: { field: "version", required: true },
-			});
-		const textVersion = collection("text_lock_field")
-			.fields(({ f }) => ({ version: f.text().required() }))
-			.options({
-				optimisticLock: { field: "version", required: true },
-			});
-		const nullableVersion = collection("nullable_lock_field")
-			.fields(({ f }) => ({ version: f.number() }))
-			.options({
-				optimisticLock: { field: "version", required: true },
-			});
+	it("rejects an application-declared canonical revision field", () => {
+		const invalid = collection("declared_revision")
+			.fields(({ f }) => ({ revision: f.number().required().default(1) }))
+			.options({ optimisticConcurrency: true });
 
-		expect(() => missing.build()).toThrow('field "version" does not exist');
-		expect(() => localized.build()).toThrow(
-			"must be a persisted, non-localized main-table field",
+		expect(() => invalid.build()).toThrow(
+			'cannot declare framework-owned field "revision"',
 		);
-		expect(() => virtual.build()).toThrow(
-			"must be a persisted, non-localized main-table field",
-		);
-		expect(() => textVersion.build()).toThrow("must be numeric");
-		expect(() => nullableVersion.build()).toThrow("must be non-nullable");
 	});
 
-	it("updates from the expected version and increments under the same write", async () => {
+	it("creates revision 1 and advances it once from the expected revision", async () => {
+		await expect(
+			setup.app.collections.optimisticTags.create(
+				{ name: "Forged", revision: 41 } as never,
+				context,
+			),
+		).rejects.toThrow('Framework-owned field "revision" cannot be supplied');
 		const tag = await setup.app.collections.optimisticTags.create(
 			{ name: "Platform" },
 			context,
 		);
+		expect(tag.revision).toBe(1);
 
 		const updated = await setup.app.collections.optimisticTags.updateById(
 			{
 				id: tag.id,
-				expectedVersion: 1,
+				expectedRevision: 1,
 				data: { name: "Infrastructure" },
 			},
 			context,
 		);
 
 		expect(updated.name).toBe("Infrastructure");
-		expect(updated.version).toBe(2);
-		expect(observedOriginalVersion).toBe(1);
+		expect(updated.revision).toBe(2);
+		expect(observedOriginalRevision).toBe(1);
 	});
 
 	it("increments when timestamps are disabled and only localized or relation data changes", async () => {
@@ -144,14 +156,14 @@ describe("generated CRUD optimistic locking", () => {
 		const localized = await setup.app.collections.optimisticTags.updateById(
 			{
 				id: tag.id,
-				expectedVersion: 1,
+				expectedRevision: 1,
 				data: { localizedName: "Platforma" },
 			},
 			context,
 		);
 		expect(localized).toMatchObject({
 			localizedName: "Platforma",
-			version: 2,
+			revision: 2,
 		});
 
 		const group = await setup.app.collections.optimisticGroups.create(
@@ -161,20 +173,27 @@ describe("generated CRUD optimistic locking", () => {
 		const related = await setup.app.collections.optimisticTags.updateById(
 			{
 				id: tag.id,
-				expectedVersion: 2,
+				expectedRevision: 2,
 				data: { groups: { set: [group.id] } },
 			},
 			context,
 		);
-		expect(related.version).toBe(3);
+		expect(related.revision).toBe(3);
 		const populated = await setup.app.collections.optimisticTags.findOne(
 			{ where: { id: tag.id }, with: { groups: true } },
 			context,
 		);
 		expect(populated?.groups).toHaveLength(1);
+		await setup.app.collections.optimisticTags.deleteById(
+			{ id: tag.id, expectedRevision: 3 },
+			context,
+		);
+		expect(
+			await setup.app.collections.optimisticTagGroups.count({}, context),
+		).toBe(0);
 	});
 
-	it("requires a fresh expected version when reverting and increments monotonically", async () => {
+	it("requires a fresh expected revision when reverting and increments monotonically", async () => {
 		const tag = await setup.app.collections.optimisticTags.create(
 			{ name: "Original" },
 			context,
@@ -182,11 +201,15 @@ describe("generated CRUD optimistic locking", () => {
 		await setup.app.collections.optimisticTags.updateById(
 			{
 				id: tag.id,
-				expectedVersion: 1,
+				expectedRevision: 1,
 				data: { name: "Current" },
 			},
 			context,
 		);
+		let revertHookFacts = 0;
+		onBeforeChange = async () => {
+			revertHookFacts++;
+		};
 
 		await expect(
 			setup.app.collections.optimisticTags.revertToVersion(
@@ -196,19 +219,110 @@ describe("generated CRUD optimistic locking", () => {
 		).rejects.toMatchObject({ code: "CONFLICT" });
 		await expect(
 			setup.app.collections.optimisticTags.revertToVersion(
-				{ id: tag.id, version: 1, expectedVersion: 1 },
+				{ id: tag.id, version: 1, expectedRevision: 1 },
 				context,
 			),
 		).rejects.toMatchObject({ code: "CONFLICT" });
+		expect(revertHookFacts).toBe(0);
 
 		const reverted = await setup.app.collections.optimisticTags.revertToVersion(
-			{ id: tag.id, version: 1, expectedVersion: 2 },
+			{ id: tag.id, version: 1, expectedRevision: 2 },
 			context,
 		);
-		expect(reverted).toMatchObject({ name: "Original", version: 3 });
+		expect(reverted).toMatchObject({ name: "Original", revision: 3 });
+		expect(revertHookFacts).toBe(1);
 	});
 
-	it("rejects omitted and stale versions without mutating the row", async () => {
+	it("workflow transitions require the current revision and advance once", async () => {
+		const tag = await setup.app.collections.optimisticTags.create(
+			{ name: "Draft" },
+			context,
+		);
+		beforeTransitionFacts = 0;
+		await expect(
+			setup.app.collections.optimisticTags.transitionStage(
+				{ id: tag.id, stage: "published", expectedRevision: 0 },
+				context,
+			),
+		).rejects.toMatchObject({ code: "CONFLICT" });
+		expect(beforeTransitionFacts).toBe(0);
+
+		const transitioned =
+			await setup.app.collections.optimisticTags.transitionStage(
+				{ id: tag.id, stage: "published", expectedRevision: 1 },
+				context,
+			);
+		expect(transitioned).toMatchObject({ revision: 2 });
+		expect(beforeTransitionFacts).toBe(1);
+	});
+
+	it("retention removes snapshots without resetting the canonical revision", async () => {
+		const tag = await setup.app.collections.retainedTags.create(
+			{ name: "Revision 1" },
+			context,
+		);
+		for (let revision = 1; revision < 5; revision++) {
+			await setup.app.collections.retainedTags.updateById(
+				{
+					id: tag.id,
+					expectedRevision: revision,
+					data: { name: `Revision ${revision + 1}` },
+				},
+				context,
+			);
+		}
+
+		const current = await setup.app.collections.retainedTags.findOne(
+			{ where: { id: tag.id } },
+			context,
+		);
+		const versions = await setup.app.collections.retainedTags.findVersions(
+			{ id: tag.id },
+			context,
+		);
+		expect(current).toMatchObject({ name: "Revision 5", revision: 5 });
+		expect(versions).toHaveLength(2);
+		expect(versions.map(({ sourceRevision }) => sourceRevision)).toEqual([
+			4, 5,
+		]);
+		expect(versions.map(({ versionNumber }) => versionNumber)).toEqual([4, 5]);
+	});
+
+	it("derives history access from the authorized owner row", async () => {
+		const created = await setup.app.collections.tenantDocuments.create(
+			{ tenantId: "tenant-a", title: "Private" },
+			context,
+		);
+		const ownerContext = createTestContext({
+			accessMode: "user",
+			session: createMockSession({ id: "tenant-a" }),
+		});
+		const otherContext = createTestContext({
+			accessMode: "user",
+			session: createMockSession({ id: "tenant-b" }),
+		});
+
+		await expect(
+			setup.app.collections.tenantDocuments.findVersions(
+				{ id: created.id },
+				otherContext,
+			),
+		).rejects.toMatchObject({ code: "FORBIDDEN" });
+		await expect(
+			setup.app.collections.tenantDocuments.revertToVersion(
+				{ id: created.id, version: 1 },
+				otherContext,
+			),
+		).rejects.toMatchObject({ code: "FORBIDDEN" });
+		await expect(
+			setup.app.collections.tenantDocuments.findVersions(
+				{ id: created.id },
+				ownerContext,
+			),
+		).resolves.toHaveLength(1);
+	});
+
+	it("rejects omitted and stale revisions without mutating the row", async () => {
 		const tag = await setup.app.collections.optimisticTags.create(
 			{ name: "Platform" },
 			context,
@@ -216,7 +330,7 @@ describe("generated CRUD optimistic locking", () => {
 
 		for (const params of [
 			{ id: tag.id, data: { name: "Omitted" } },
-			{ id: tag.id, expectedVersion: 0, data: { name: "Stale" } },
+			{ id: tag.id, expectedRevision: 0, data: { name: "Stale" } },
 		]) {
 			await expect(
 				setup.app.collections.optimisticTags.updateById(params, context),
@@ -228,30 +342,20 @@ describe("generated CRUD optimistic locking", () => {
 			context,
 		);
 		expect(unchanged?.name).toBe("Platform");
-		expect(unchanged?.version).toBe(1);
+		expect(unchanged?.revision).toBe(1);
 	});
 
-	it("allows exactly one of two barrier-controlled writers to commit", async () => {
+	it("allows exactly one of two concurrent writers to commit", async () => {
 		const tag = await setup.app.collections.optimisticTags.create(
 			{ name: "Platform" },
 			context,
 		);
-		let waiting = 0;
-		let release!: () => void;
-		const bothReady = new Promise<void>((resolve) => {
-			release = resolve;
-		});
-		onBeforeChange = async () => {
-			waiting++;
-			if (waiting === 2) release();
-			await bothReady;
-		};
 
 		const outcomes = await Promise.allSettled([
 			setup.app.collections.optimisticTags.updateById(
 				{
 					id: tag.id,
-					expectedVersion: 1,
+					expectedRevision: 1,
 					data: { name: "Writer A" },
 				},
 				context,
@@ -259,7 +363,7 @@ describe("generated CRUD optimistic locking", () => {
 			setup.app.collections.optimisticTags.updateById(
 				{
 					id: tag.id,
-					expectedVersion: 1,
+					expectedRevision: 1,
 					data: { name: "Writer B" },
 				},
 				context,
@@ -280,7 +384,7 @@ describe("generated CRUD optimistic locking", () => {
 			context,
 		);
 		expect(["Writer A", "Writer B"]).toContain(winner?.name);
-		expect(winner?.version).toBe(2);
+		expect(winner?.revision).toBe(2);
 	});
 
 	it("guards soft delete and restore and advances the version for both", async () => {
@@ -289,36 +393,37 @@ describe("generated CRUD optimistic locking", () => {
 			context,
 		);
 
-		await setup.app.collections.optimisticTags.deleteById(
-			{ id: tag.id, expectedVersion: 1 },
+		const deletion = await setup.app.collections.optimisticTags.deleteById(
+			{ id: tag.id, expectedRevision: 1 },
 			context,
 		);
+		expect(deletion.data.revision).toBe(2);
 		const deleted = await setup.app.collections.optimisticTags.findOne(
 			{ where: { id: tag.id }, includeDeleted: true },
 			context,
 		);
 		expect(deleted?.deletedAt).toBeInstanceOf(Date);
-		expect(deleted?.version).toBe(2);
+		expect(deleted?.revision).toBe(2);
 
 		const restored = await setup.app.collections.optimisticTags.restoreById(
-			{ id: tag.id, expectedVersion: 2 },
+			{ id: tag.id, expectedRevision: 2 },
 			context,
 		);
 		expect(restored.deletedAt).toBeNull();
-		expect(restored.version).toBe(3);
+		expect(restored.revision).toBe(3);
 
 		await expect(
 			setup.app.collections.optimisticTags.restoreById(
-				{ id: tag.id, expectedVersion: 2 },
+				{ id: tag.id, expectedRevision: 2 },
 				context,
 			),
 		).rejects.toMatchObject({ code: "CONFLICT" });
-		const activeNoOp = await setup.app.collections.optimisticTags.restoreById(
-			{ id: tag.id, expectedVersion: 3 },
-			context,
-		);
-		expect(activeNoOp.deletedAt).toBeNull();
-		expect(activeNoOp.version).toBe(3);
+		await expect(
+			setup.app.collections.optimisticTags.restoreById(
+				{ id: tag.id, expectedRevision: 3 },
+				context,
+			),
+		).rejects.toMatchObject({ code: "CONFLICT" });
 	});
 
 	it("requires the current tombstone version before physical purge", async () => {
@@ -327,11 +432,14 @@ describe("generated CRUD optimistic locking", () => {
 			context,
 		);
 		await setup.app.collections.optimisticTags.deleteById(
-			{ id: tag.id, expectedVersion: 1 },
+			{ id: tag.id, expectedRevision: 1 },
 			context,
 		);
 
-		for (const params of [{ id: tag.id }, { id: tag.id, expectedVersion: 1 }]) {
+		for (const params of [
+			{ id: tag.id },
+			{ id: tag.id, expectedRevision: 1 },
+		]) {
 			await expect(
 				setup.app.collections.optimisticTags.purgeById(params, context),
 			).rejects.toMatchObject({ code: "CONFLICT" });
@@ -340,12 +448,12 @@ describe("generated CRUD optimistic locking", () => {
 			{ where: { id: tag.id }, includeDeleted: true },
 			context,
 		);
-		expect(retained).toMatchObject({ version: 2 });
+		expect(retained).toMatchObject({ revision: 2 });
 		expect(retained?.deletedAt).toBeInstanceOf(Date);
 
 		await expect(
 			setup.app.collections.optimisticTags.purgeById(
-				{ id: tag.id, expectedVersion: 2 },
+				{ id: tag.id, expectedRevision: 2 },
 				context,
 			),
 		).resolves.toEqual({ success: true });
@@ -357,7 +465,7 @@ describe("generated CRUD optimistic locking", () => {
 		).toBeNull();
 	});
 
-	it("updates heterogeneous bulk versions atomically from an exact per-id list", async () => {
+	it("updates heterogeneous bulk revisions atomically from an exact per-id list", async () => {
 		const first = await setup.app.collections.optimisticTags.create(
 			{ name: "First" },
 			context,
@@ -369,7 +477,7 @@ describe("generated CRUD optimistic locking", () => {
 		await setup.app.collections.optimisticTags.updateById(
 			{
 				id: second.id,
-				expectedVersion: 1,
+				expectedRevision: 1,
 				data: { name: "Second v2" },
 			},
 			context,
@@ -378,23 +486,23 @@ describe("generated CRUD optimistic locking", () => {
 		const updated = await setup.app.collections.optimisticTags.updateMany(
 			{
 				where: { id: { in: [first.id, second.id] } },
-				expectedVersions: [
-					{ id: first.id, expectedVersion: 1 },
-					{ id: second.id, expectedVersion: 2 },
+				expectedRevisions: [
+					{ id: first.id, expectedRevision: 1 },
+					{ id: second.id, expectedRevision: 2 },
 				],
 				data: { name: "Bulk" },
 			},
 			context,
 		);
-		expect(updated.map(({ version }) => version).sort()).toEqual([2, 3]);
+		expect(updated.map(({ revision }) => revision).sort()).toEqual([2, 3]);
 
 		await expect(
 			setup.app.collections.optimisticTags.updateMany(
 				{
 					where: { id: { in: [first.id, second.id] } },
-					expectedVersions: [
-						{ id: first.id, expectedVersion: 2 },
-						{ id: second.id, expectedVersion: 2 },
+					expectedRevisions: [
+						{ id: first.id, expectedRevision: 2 },
+						{ id: second.id, expectedRevision: 2 },
 					],
 					data: { name: "Stale bulk" },
 				},
@@ -405,15 +513,15 @@ describe("generated CRUD optimistic locking", () => {
 		const unchanged = await setup.app.collections.optimisticTags.find(
 			{
 				where: { id: { in: [first.id, second.id] } },
-				sort: { version: "asc" },
+				sort: { revision: "asc" },
 			},
 			context,
 		);
 		expect(unchanged.docs.map(({ name }) => name)).toEqual(["Bulk", "Bulk"]);
-		expect(unchanged.docs.map(({ version }) => version)).toEqual([2, 3]);
+		expect(unchanged.docs.map(({ revision }) => revision)).toEqual([2, 3]);
 	});
 
-	it("soft-deletes a bulk selection only with exact per-id versions", async () => {
+	it("soft-deletes a bulk selection only with exact per-id revisions", async () => {
 		const first = await setup.app.collections.optimisticTags.create(
 			{ name: "First" },
 			context,
@@ -426,9 +534,9 @@ describe("generated CRUD optimistic locking", () => {
 		const result = await setup.app.collections.optimisticTags.deleteMany(
 			{
 				where: { id: { in: [first.id, second.id] } },
-				expectedVersions: [
-					{ id: first.id, expectedVersion: 1 },
-					{ id: second.id, expectedVersion: 1 },
+				expectedRevisions: [
+					{ id: first.id, expectedRevision: 1 },
+					{ id: second.id, expectedRevision: 1 },
 				],
 			},
 			context,
@@ -446,10 +554,10 @@ describe("generated CRUD optimistic locking", () => {
 		expect(
 			deleted.docs.every(({ deletedAt }) => deletedAt instanceof Date),
 		).toBe(true);
-		expect(deleted.docs.map(({ version }) => version)).toEqual([2, 2]);
+		expect(deleted.docs.map(({ revision }) => revision)).toEqual([2, 2]);
 	});
 
-	it("conflicts when every deleteMany candidate loses its write claim", async () => {
+	it("rolls back delete hook writes when deleteMany loses its revision claim", async () => {
 		const tag = await setup.app.collections.optimisticTags.create(
 			{ name: "Raced" },
 			context,
@@ -457,7 +565,7 @@ describe("generated CRUD optimistic locking", () => {
 		onBeforeDelete = async () => {
 			onBeforeDelete = undefined;
 			await setup.app.collections.optimisticTags.deleteById(
-				{ id: tag.id, expectedVersion: 1 },
+				{ id: tag.id, expectedRevision: 1 },
 				context,
 			);
 		};
@@ -466,7 +574,7 @@ describe("generated CRUD optimistic locking", () => {
 			setup.app.collections.optimisticTags.deleteMany(
 				{
 					where: { id: tag.id },
-					expectedVersions: [{ id: tag.id, expectedVersion: 1 }],
+					expectedRevisions: [{ id: tag.id, expectedRevision: 1 }],
 				},
 				context,
 			),
@@ -476,11 +584,10 @@ describe("generated CRUD optimistic locking", () => {
 			{ where: { id: tag.id }, includeDeleted: true },
 			context,
 		);
-		expect(deleted).toMatchObject({ version: 2 });
-		expect(deleted?.deletedAt).toBeInstanceOf(Date);
+		expect(deleted).toMatchObject({ revision: 1, deletedAt: null });
 	});
 
-	it("applies updateBatch per-entry versions atomically", async () => {
+	it("applies updateBatch per-entry revisions atomically", async () => {
 		const first = await setup.app.collections.optimisticTags.create(
 			{ name: "First" },
 			context,
@@ -496,12 +603,12 @@ describe("generated CRUD optimistic locking", () => {
 					updates: [
 						{
 							id: first.id,
-							expectedVersion: 1,
+							expectedRevision: 1,
 							data: { name: "First updated" },
 						},
 						{
 							id: second.id,
-							expectedVersion: 0,
+							expectedRevision: 0,
 							data: { name: "Second stale" },
 						},
 					],
@@ -515,26 +622,26 @@ describe("generated CRUD optimistic locking", () => {
 			context,
 		);
 		expect(unchanged.docs.map(({ name }) => name)).toEqual(["First", "Second"]);
-		expect(unchanged.docs.map(({ version }) => version)).toEqual([1, 1]);
+		expect(unchanged.docs.map(({ revision }) => revision)).toEqual([1, 1]);
 
 		const updated = await setup.app.collections.optimisticTags.updateBatch(
 			{
 				updates: [
 					{
 						id: first.id,
-						expectedVersion: 1,
+						expectedRevision: 1,
 						data: { name: "First updated" },
 					},
 					{
 						id: second.id,
-						expectedVersion: 1,
+						expectedRevision: 1,
 						data: { name: "Second updated" },
 					},
 				],
 			},
 			context,
 		);
-		expect(updated.map(({ version }) => version)).toEqual([2, 2]);
+		expect(updated.map(({ revision }) => revision)).toEqual([2, 2]);
 	});
 
 	it("enforces the same contract through generated REST routes", async () => {
@@ -559,13 +666,13 @@ describe("generated CRUD optimistic locking", () => {
 		expect(schema?.status).toBe(200);
 		expect(await schema?.json()).toMatchObject({
 			options: {
-				optimisticLock: { field: "version", required: true },
+				optimisticConcurrency: true,
 			},
 		});
 		const meta = await request("optimisticTags/meta", "GET");
 		expect(meta?.status).toBe(200);
 		expect(await meta?.json()).toMatchObject({
-			optimisticLock: { field: "version", required: true },
+			optimisticConcurrency: true,
 		});
 
 		const omitted = await request(`optimisticTags/${tag.id}`, "PATCH", {
@@ -578,23 +685,24 @@ describe("generated CRUD optimistic locking", () => {
 
 		const updated = await request(`optimisticTags/${tag.id}`, "PATCH", {
 			data: { name: "REST" },
-			expectedVersion: 1,
+			expectedRevision: 1,
 		});
 		expect(updated?.status).toBe(200);
-		expect(await updated?.json()).toMatchObject({ name: "REST", version: 2 });
+		expect(updated?.headers.get("etag")).toBe('"2"');
+		expect(await updated?.json()).toMatchObject({ name: "REST", revision: 2 });
 
 		const deleted = await request(`optimisticTags/${tag.id}`, "DELETE", {
-			expectedVersion: 2,
+			expectedRevision: 2,
 		});
 		expect(deleted?.status).toBe(200);
 
 		const restored = await request(`optimisticTags/${tag.id}/restore`, "POST", {
-			expectedVersion: 3,
+			expectedRevision: 3,
 		});
 		expect(restored?.status).toBe(200);
 		expect(await restored?.json()).toMatchObject({
 			deletedAt: null,
-			version: 4,
+			revision: 4,
 		});
 
 		const omittedRevert = await request(
@@ -605,16 +713,16 @@ describe("generated CRUD optimistic locking", () => {
 		expect(omittedRevert?.status).toBe(409);
 		const reverted = await request(`optimisticTags/${tag.id}/revert`, "POST", {
 			version: 1,
-			expectedVersion: 4,
+			expectedRevision: 4,
 		});
 		expect(reverted?.status).toBe(200);
 		expect(await reverted?.json()).toMatchObject({
 			name: "Platform",
-			version: 5,
+			revision: 5,
 		});
 
 		const deletedAgain = await request(`optimisticTags/${tag.id}`, "DELETE", {
-			expectedVersion: 5,
+			expectedRevision: 5,
 		});
 		expect(deletedAgain?.status).toBe(200);
 		const omittedPurge = await request(
@@ -623,7 +731,7 @@ describe("generated CRUD optimistic locking", () => {
 		);
 		expect(omittedPurge?.status).toBe(409);
 		const purged = await request(`optimisticTags/${tag.id}/purge`, "POST", {
-			expectedVersion: 6,
+			expectedRevision: 6,
 		});
 		expect(purged?.status).toBe(200);
 		expect(await purged?.json()).toEqual({ success: true });
@@ -635,17 +743,22 @@ describe("generated CRUD optimistic locking", () => {
 			context,
 		);
 		const updated = await setup.app.collections.legacyTags.updateById(
-			{ id: tag.id, data: { name: "Still supported", version: 7 } },
+			{ id: tag.id, data: { name: "Still supported", revision: 7 } },
 			context,
 		);
-		expect(updated).toMatchObject({ name: "Still supported", version: 7 });
+		expect(updated).toMatchObject({ name: "Still supported", revision: 7 });
+		const handler = createFetchHandler(setup.app, { accessMode: "system" });
+		const response = await handler(
+			new Request(`http://localhost/legacyTags/${tag.id}`),
+		);
+		expect(response?.headers.get("etag")).toBeNull();
 
 		await setup.app.collections.legacyTags.deleteById({ id: tag.id }, context);
 		const restored = await setup.app.collections.legacyTags.restoreById(
 			{ id: tag.id },
 			context,
 		);
-		expect(restored).toMatchObject({ name: "Still supported", version: 7 });
+		expect(restored).toMatchObject({ name: "Still supported", revision: 7 });
 		await setup.app.collections.legacyTags.deleteById({ id: tag.id }, context);
 		await expect(
 			setup.app.collections.legacyTags.purgeById({ id: tag.id }, context),

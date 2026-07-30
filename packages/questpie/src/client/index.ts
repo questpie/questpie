@@ -20,6 +20,7 @@ import type {
 	GetCollection,
 	GlobalRelations,
 	GlobalSelect,
+	GlobalState,
 	GlobalUpdate,
 	ResolveRelationsDeep,
 } from "#questpie/shared/type-utils.js";
@@ -36,7 +37,7 @@ import type {
 	CreateInputWithRelations,
 	DeleteManyParams,
 	DeleteParams,
-	ExpectedVersion,
+	ExpectedRevision,
 	FindResult,
 	FindManyOptions,
 	FindOneOptionsBase,
@@ -50,7 +51,7 @@ import type {
 	Where,
 	With,
 } from "../server/collection/crud/types.js";
-import type { GlobalUpdateInput } from "../server/global/crud/types.js";
+import type { GlobalUpdateParams } from "../server/global/crud/types.js";
 import type {
 	CrdtClientAPI,
 	CrdtRegistryShape,
@@ -114,16 +115,27 @@ type LocaleOptions = {
 	stage?: string;
 };
 
-export type CollectionTransitionStageInput = {
+export type CollectionTransitionStageInput<
+	TOptions extends
+		import("../server/collection/builder/types.js").CollectionOptions =
+		import("../server/collection/builder/types.js").CollectionOptions,
+> = {
 	id: string;
 	stage: string;
 	scheduledAt?: string | Date;
-};
+} & (TOptions extends { optimisticConcurrency: true }
+	? { expectedRevision: number }
+	: { expectedRevision?: number });
 
-export type GlobalTransitionStageInput = {
+export type GlobalTransitionStageInput<
+	TOptions extends import("../server/global/builder/types.js").GlobalOptions =
+		import("../server/global/builder/types.js").GlobalOptions,
+> = {
 	stage: string;
 	scheduledAt?: string | Date;
-};
+} & (TOptions extends { optimisticConcurrency: true }
+	? { expectedRevision: number }
+	: { expectedRevision?: number });
 
 /**
  * Upload error with additional context
@@ -644,6 +656,7 @@ type CollectionAPI<
 			ClientRow<TCollection, TCollections> & {
 				versionId: string;
 				versionNumber: number;
+				sourceRevision: number | null;
 				versionOperation: string;
 				versionUserId: string | null;
 				versionCreatedAt: Date;
@@ -663,7 +676,9 @@ type CollectionAPI<
 	 * Transition a record to a different workflow stage (no data mutation)
 	 */
 	transitionStage: (
-		params: CollectionTransitionStageInput,
+		params: CollectionTransitionStageInput<
+			ClientCollectionOptions<TDefinition>
+		>,
 		options?: LocaleOptions,
 	) => Promise<ClientRow<TCollection, TCollections>>;
 
@@ -740,6 +755,14 @@ type CollectionsAPI<T extends QuestpieApp> = {
 		T["collections"][K]
 	>;
 };
+
+type ClientGlobalOptions<TGlobal> =
+	GlobalState<TGlobal> extends {
+		options: infer TOptions extends
+			import("../server/global/builder/types.js").GlobalOptions;
+	}
+		? TOptions
+		: import("../server/global/builder/types.js").GlobalOptions;
 
 /**
  * Type-safe global API for a single global
@@ -828,9 +851,10 @@ type GlobalAPI<
 			stage?: string;
 		},
 	>(
-		data: GlobalUpdateInput<
+		data: GlobalUpdateParams<
 			GlobalUpdate<TGlobal>,
-			ResolveRelationsDeep<GlobalRelations<TGlobal>, TCollections>
+			ResolveRelationsDeep<GlobalRelations<TGlobal>, TCollections>,
+			ClientGlobalOptions<TGlobal>
 		>,
 		options?: TQuery,
 	) => Promise<
@@ -866,6 +890,7 @@ type GlobalAPI<
 			GlobalSelect<TGlobal> & {
 				versionId: string;
 				versionNumber: number;
+				sourceRevision: number | null;
 				versionOperation: string;
 				versionUserId: string | null;
 				versionCreatedAt: Date;
@@ -877,7 +902,13 @@ type GlobalAPI<
 	 * Revert global to a specific version
 	 */
 	revertToVersion: (
-		params: { id?: string; version?: number; versionId?: string },
+		params: {
+			id?: string;
+			version?: number;
+			versionId?: string;
+		} & (ClientGlobalOptions<TGlobal> extends { optimisticConcurrency: true }
+			? { expectedRevision: number }
+			: { expectedRevision?: number }),
 		options?: {
 			locale?: string;
 			localeFallback?: boolean;
@@ -889,7 +920,7 @@ type GlobalAPI<
 	 * Transition global to a different workflow stage (no data mutation)
 	 */
 	transitionStage: (
-		params: GlobalTransitionStageInput,
+		params: GlobalTransitionStageInput<ClientGlobalOptions<TGlobal>>,
 		options?: {
 			locale?: string;
 			localeFallback?: boolean;
@@ -1384,8 +1415,8 @@ export function createClient<TApp extends QuestpieApp>(
 					{
 						id,
 						data,
-						expectedVersion,
-					}: { id: string; data: any; expectedVersion?: number },
+						expectedRevision,
+					}: { id: string; data: any; expectedRevision?: number },
 					options: LocaleOptions = {},
 				) => {
 					const queryString = qs.stringify(options, {
@@ -1396,12 +1427,14 @@ export function createClient<TApp extends QuestpieApp>(
 					return mutationRequest(path, {
 						method: "PATCH",
 						json:
-							expectedVersion === undefined ? data : { data, expectedVersion },
+							expectedRevision === undefined
+								? data
+								: { data, expectedRevision },
 					});
 				},
 
 				delete: async (
-					{ id, expectedVersion }: { id: string; expectedVersion?: number },
+					{ id, expectedRevision }: { id: string; expectedRevision?: number },
 					options: LocaleOptions = {},
 				) => {
 					const queryString = qs.stringify(options, {
@@ -1411,14 +1444,14 @@ export function createClient<TApp extends QuestpieApp>(
 					const path = `${apiBasePath}/${collectionName}/${id}${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "DELETE",
-						...(expectedVersion === undefined
+						...(expectedRevision === undefined
 							? {}
-							: { json: { expectedVersion } }),
+							: { json: { expectedRevision } }),
 					});
 				},
 
 				restore: async (
-					{ id, expectedVersion }: { id: string; expectedVersion?: number },
+					{ id, expectedRevision }: { id: string; expectedRevision?: number },
 					options: LocaleOptions = {},
 				) => {
 					const queryString = qs.stringify(options, {
@@ -1428,14 +1461,14 @@ export function createClient<TApp extends QuestpieApp>(
 					const path = `${apiBasePath}/${collectionName}/${id}/restore${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
-						...(expectedVersion === undefined
+						...(expectedRevision === undefined
 							? {}
-							: { json: { expectedVersion } }),
+							: { json: { expectedRevision } }),
 					});
 				},
 
 				purgeById: async (
-					{ id, expectedVersion }: { id: string; expectedVersion?: number },
+					{ id, expectedRevision }: { id: string; expectedRevision?: number },
 					options: LocaleOptions = {},
 				) => {
 					const queryString = qs.stringify(options, {
@@ -1445,9 +1478,9 @@ export function createClient<TApp extends QuestpieApp>(
 					const path = `${apiBasePath}/${collectionName}/${id}/purge${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
-						...(expectedVersion === undefined
+						...(expectedRevision === undefined
 							? {}
-							: { json: { expectedVersion } }),
+							: { json: { expectedRevision } }),
 					});
 				},
 
@@ -1479,12 +1512,12 @@ export function createClient<TApp extends QuestpieApp>(
 						id,
 						version,
 						versionId,
-						expectedVersion,
+						expectedRevision,
 					}: {
 						id: string;
 						version?: number;
 						versionId?: string;
-						expectedVersion?: number;
+						expectedRevision?: number;
 					},
 					options: LocaleOptions = {},
 				) => {
@@ -1495,12 +1528,17 @@ export function createClient<TApp extends QuestpieApp>(
 					const path = `${apiBasePath}/${collectionName}/${id}/revert${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
-						json: { version, versionId, expectedVersion },
+						json: { version, versionId, expectedRevision },
 					});
 				},
 
 				transitionStage: async (
-					{ id, stage, scheduledAt }: CollectionTransitionStageInput,
+					{
+						id,
+						stage,
+						scheduledAt,
+						expectedRevision,
+					}: CollectionTransitionStageInput,
 					options: LocaleOptions = {},
 				) => {
 					const queryString = qs.stringify(options, {
@@ -1510,6 +1548,7 @@ export function createClient<TApp extends QuestpieApp>(
 					const path = `${apiBasePath}/${collectionName}/${id}/transition${queryString ? `?${queryString}` : ""}`;
 					const body = {
 						stage,
+						...(expectedRevision === undefined ? {} : { expectedRevision }),
 						...(scheduledAt !== undefined
 							? {
 									scheduledAt:
@@ -1529,11 +1568,11 @@ export function createClient<TApp extends QuestpieApp>(
 					{
 						where,
 						data,
-						expectedVersions,
+						expectedRevisions,
 					}: {
 						where: any;
 						data: any;
-						expectedVersions?: Array<ExpectedVersion<string | number>>;
+						expectedRevisions?: Array<ExpectedRevision<string | number>>;
 					},
 					options: LocaleOptions = {},
 				) => {
@@ -1547,7 +1586,7 @@ export function createClient<TApp extends QuestpieApp>(
 						json: {
 							where,
 							data,
-							...(expectedVersions === undefined ? {} : { expectedVersions }),
+							...(expectedRevisions === undefined ? {} : { expectedRevisions }),
 						},
 					});
 				},
@@ -1570,10 +1609,10 @@ export function createClient<TApp extends QuestpieApp>(
 				deleteMany: async (
 					{
 						where,
-						expectedVersions,
+						expectedRevisions,
 					}: {
 						where: any;
-						expectedVersions?: Array<ExpectedVersion<string | number>>;
+						expectedRevisions?: Array<ExpectedRevision<string | number>>;
 					},
 					options: LocaleOptions = {},
 				) => {
@@ -1586,7 +1625,7 @@ export function createClient<TApp extends QuestpieApp>(
 						method: "POST",
 						json: {
 							where,
-							...(expectedVersions === undefined ? {} : { expectedVersions }),
+							...(expectedRevisions === undefined ? {} : { expectedRevisions }),
 						},
 					});
 				},
@@ -1710,21 +1749,21 @@ export function createClient<TApp extends QuestpieApp>(
 				// Canonical by-id aliases — one CRUD vocabulary across server
 				// and client (server `update`/`delete` are bulk-by-where).
 				updateById: async (
-					params: { id: string; data: any; expectedVersion?: number },
+					params: { id: string; data: any; expectedRevision?: number },
 					options: LocaleOptions = {},
 				) => {
 					return base.update(params, options);
 				},
 
 				deleteById: async (
-					params: { id: string; expectedVersion?: number },
+					params: { id: string; expectedRevision?: number },
 					options: LocaleOptions = {},
 				) => {
 					return base.delete(params, options);
 				},
 
 				restoreById: async (
-					params: { id: string; expectedVersion?: number },
+					params: { id: string; expectedRevision?: number },
 					options: LocaleOptions = {},
 				) => {
 					return base.restore(params, options);
@@ -1930,6 +1969,9 @@ export function createClient<TApp extends QuestpieApp>(
 							method: "POST",
 							json: {
 								stage: params.stage,
+								...(params.expectedRevision === undefined
+									? {}
+									: { expectedRevision: params.expectedRevision }),
 								...(params.scheduledAt !== undefined
 									? {
 											scheduledAt:

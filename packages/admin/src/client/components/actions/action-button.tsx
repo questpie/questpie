@@ -28,7 +28,7 @@ import {
 import {
 	optimisticActionInput,
 	optimisticIdInput,
-} from "../../utils/optimistic-lock";
+} from "../../utils/optimistic-concurrency";
 import { Button } from "../ui/button";
 import { ConfirmationDialog } from "./confirmation-dialog";
 
@@ -164,7 +164,7 @@ export function ActionButton<TItem = any>({
 							optimisticIdInput(
 								itemId,
 								itemAny,
-								collectionSchema?.options?.optimisticLock,
+								collectionSchema?.options?.optimisticConcurrency,
 							),
 						);
 						helpers.toast.success(t("toast.deleteSuccess"));
@@ -233,7 +233,7 @@ export function ActionButton<TItem = any>({
 								? (item as Record<string, any>)
 								: undefined,
 							items as Array<Record<string, any>> | undefined,
-							collectionSchema?.options?.optimisticLock,
+							collectionSchema?.options?.optimisticConcurrency,
 						),
 					});
 
