@@ -657,10 +657,18 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			skipReadLifecycle?: boolean;
 		},
 	): Promise<PaginatedResult<T> | GroupedPaginatedResult<T> | T | null> {
-		// Normalize context FIRST to ensure locale defaults are applied
+		// Normalize context FIRST to ensure locale defaults are applied.
+		// `locale`/`localeFallback` are declared on the options as well as the
+		// context (crud/types.ts) and documented as "override locale for this
+		// request"; they have to be lifted here or the option is silently
+		// ignored and the caller gets the context's locale back.
+		// normalizeContext resolves explicit param > ALS > default, so passing
+		// them here is what makes the option win.
 		const normalized = this.normalizeContext({
 			...context,
 			stage: options.stage ?? context.stage,
+			locale: options.locale ?? context.locale,
+			localeFallback: options.localeFallback ?? context.localeFallback,
 		});
 		const db = this.getDb(normalized);
 
