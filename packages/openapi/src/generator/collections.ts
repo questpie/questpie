@@ -3,6 +3,7 @@
  */
 
 import type { Questpie } from "questpie";
+import { toPascalCase } from "questpie/shared";
 import { z } from "zod";
 
 import type { OpenApiConfig, PathOperation } from "../types.js";
@@ -436,10 +437,4 @@ function buildDocumentSchema(
 		],
 		description: `${name} document`,
 	};
-}
-
-function toPascalCase(str: string): string {
-	return str
-		.replace(/[-_](.)/g, (_, c) => c.toUpperCase())
-		.replace(/^(.)/, (_, c) => c.toUpperCase());
 }
