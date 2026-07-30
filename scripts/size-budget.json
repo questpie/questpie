@@ -10,8 +10,8 @@
 			"entryCount": 10
 		},
 		"create-questpie": {
-			"unpackedSize": 224306,
-			"entryCount": 148
+			"unpackedSize": 257991,
+			"entryCount": 149
 		},
 		"elysia": {
 			"unpackedSize": 10437,
@@ -30,8 +30,8 @@
 			"entryCount": 4
 		},
 		"observability": {
-			"unpackedSize": 1829,
-			"entryCount": 1
+			"unpackedSize": 11581,
+			"entryCount": 3
 		},
 		"openapi": {
 			"unpackedSize": 66865,
@@ -42,7 +42,7 @@
 			"entryCount": 770
 		},
 		"sandbox": {
-			"unpackedSize": 244434,
+			"unpackedSize": 245337,
 			"entryCount": 23
 		},
 		"tanstack-db": {
@@ -54,7 +54,7 @@
 			"entryCount": 4
 		},
 		"vite-plugin-iconify": {
-			"unpackedSize": 18831,
+			"unpackedSize": 18832,
 			"entryCount": 6
 		},
 		"workflows": {
