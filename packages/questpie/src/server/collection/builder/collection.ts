@@ -44,6 +44,7 @@ import type {
 } from "#questpie/server/collection/builder/types.js";
 import { createCollectionValidationSchemas } from "#questpie/server/collection/builder/validation-helpers.js";
 import { CRUDGenerator } from "#questpie/server/collection/crud/index.js";
+import { getColumn } from "#questpie/server/collection/crud/shared/field-resolver.js";
 import type {
 	CRUD,
 	ExtractIdType,
@@ -775,9 +776,7 @@ export class Collection<TState extends CollectionBuilderState> {
 			);
 		}
 
-		const column = (
-			this.table as unknown as Record<string, PgColumn | undefined>
-		)[field];
+		const column = getColumn(this.table, field);
 		if (!column) {
 			throw new Error(
 				`Optimistic lock field "${field}" does not exist on collection "${this.state.name}"`,

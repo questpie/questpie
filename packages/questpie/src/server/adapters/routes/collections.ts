@@ -7,6 +7,7 @@
 import { parseRfc3339Instant } from "#questpie/shared/temporal.js";
 import { getTxid, QUESTPIE_TXID_HEADER } from "#questpie/shared/txid.js";
 
+import type { ExpectedVersion } from "../../collection/crud/types.js";
 import {
 	introspectCollection,
 	resolveIntrospectionAccess,
@@ -42,7 +43,13 @@ function txidHeaders(result: unknown): HeadersInit | undefined {
 	return txid ? { [QUESTPIE_TXID_HEADER]: txid } : undefined;
 }
 
-function hasOptimisticLock(crud: any): boolean {
+function hasOptimisticLock(crud: {
+	"~internalState"?: {
+		options?: {
+			optimisticLock?: unknown;
+		};
+	};
+}): boolean {
 	return Boolean(crud?.["~internalState"]?.options?.optimisticLock);
 }
 
@@ -577,7 +584,7 @@ export async function collectionUpdateMany(
 		const { where, data, expectedVersions } = body as {
 			where: any;
 			data: any;
-			expectedVersions?: Array<{ id: any; expectedVersion: number }>;
+			expectedVersions?: Array<ExpectedVersion<string>>;
 		};
 		const result = await crud.updateMany(
 			{
@@ -673,7 +680,7 @@ export async function collectionDeleteMany(
 	try {
 		const { where, expectedVersions } = body as {
 			where: any;
-			expectedVersions?: Array<{ id: any; expectedVersion: number }>;
+			expectedVersions?: Array<ExpectedVersion<string>>;
 		};
 		const result = await crud.deleteMany(
 			{

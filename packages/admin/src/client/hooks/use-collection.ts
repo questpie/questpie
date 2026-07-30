@@ -69,6 +69,23 @@ type ResolvedCMS = RegisteredCMS extends Questpie<any> ? RegisteredCMS : any;
 type ResolvedCollectionNames =
 	RegisteredCMS extends Questpie<any> ? RegisteredCollectionNames : string;
 
+type CollectionDeleteMany<K extends string> =
+	AnyQuestpieClient["collections"][K]["deleteMany"];
+type CollectionDeleteManyVariables<K extends string> = Parameters<
+	CollectionDeleteMany<K>
+>[0];
+type CollectionDeleteManyData<K extends string> = Awaited<
+	ReturnType<CollectionDeleteMany<K>>
+>;
+type CollectionDeleteManyOptions<K extends string> = Omit<
+	UseMutationOptions<
+		CollectionDeleteManyData<K>,
+		Error,
+		CollectionDeleteManyVariables<K>
+	>,
+	"mutationFn"
+>;
+
 // ============================================================================
 // Collection Hooks
 // ============================================================================
@@ -448,13 +465,12 @@ export function useCollectionDelete<K extends ResolvedCollectionNames>(
  */
 export function useCollectionDeleteMany<K extends ResolvedCollectionNames>(
 	collection: K,
-	mutationOptions?: Omit<UseMutationOptions, "mutationFn">,
-): any {
+	mutationOptions?: CollectionDeleteManyOptions<K & string>,
+) {
 	const { queryOpts, queryClient, locale } = useQuestpieQueryOptions();
 
-	const baseOptions = (queryOpts.collections as any)[
-		collection as string
-	].deleteMany();
+	const baseOptions =
+		queryOpts.collections[collection as K & string].deleteMany();
 	const listQueryKey = queryOpts.key([
 		"collections",
 		collection as string,
@@ -474,19 +490,34 @@ export function useCollectionDeleteMany<K extends ResolvedCollectionNames>(
 		locale,
 	]);
 
-	return useMutation({
+	return useMutation<
+		CollectionDeleteManyData<K & string>,
+		Error,
+		CollectionDeleteManyVariables<K & string>
+	>({
 		...baseOptions,
-		onSuccess: (data: any, variables: any, context: any) => {
-			(mutationOptions?.onSuccess as any)?.(data, variables, context);
+		onSuccess: (data, variables, onMutateResult, context) => {
+			return mutationOptions?.onSuccess?.(
+				data,
+				variables,
+				onMutateResult,
+				context,
+			);
 		},
-		onSettled: (data: any, error: any, variables: any, context: any) => {
+		onSettled: (data, error, variables, onMutateResult, context) => {
 			queryClient.invalidateQueries({ queryKey: listQueryKey });
 			queryClient.invalidateQueries({ queryKey: countQueryKey });
 			queryClient.removeQueries({ queryKey: itemQueryKey });
-			(mutationOptions?.onSettled as any)?.(data, error, variables, context);
+			return mutationOptions?.onSettled?.(
+				data,
+				error,
+				variables,
+				onMutateResult,
+				context,
+			);
 		},
 		...mutationOptions,
-	} as any);
+	});
 }
 
 /**

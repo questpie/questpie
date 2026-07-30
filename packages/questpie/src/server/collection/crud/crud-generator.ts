@@ -24,6 +24,9 @@ import type {
 
 /** Title expression for SQL queries - resolved column or SQL expression */
 type TitleExpressionSQL = SQL | Column | null;
+type OptimisticLockRecord = Record<string, unknown> & {
+	id: string | number;
+};
 
 // Search/realtime integrations removed (Phase 3 — QUE-251).
 // Side effects now come from core module global hooks.
@@ -2019,7 +2022,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 	private assertExpectedVersion(
 		params: { expectedVersion?: number },
-		records: Array<Record<string, any>>,
+		records: OptimisticLockRecord[],
 	): void {
 		const optimisticLock = this.getOptimisticLock();
 		if (!optimisticLock) return;
@@ -2042,7 +2045,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				expectedVersion: number;
 			}>;
 		},
-		records: Array<Record<string, any>>,
+		records: OptimisticLockRecord[],
 	): Map<string | number, number> | undefined {
 		if (!this.getOptimisticLock()) return undefined;
 		if (
@@ -2342,7 +2345,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						if (
 							lockedRecords.length !== expectedVersions.size ||
 							lockedRecords.some(
-								(record: any) =>
+								(record: OptimisticLockRecord) =>
 									record[optimisticLock.field] !==
 									expectedVersions.get(record.id),
 							)
@@ -3087,7 +3090,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			}
 
 			if (!existing.deletedAt) {
-				return withTransaction(db, async (tx: any) => {
+				return withTransaction(db, async (tx) => {
 					const [locked] = await tx
 						.select()
 						.from(this.table)
@@ -3339,7 +3342,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					expectedVersions &&
 					(lockedBeforeDelete.length !== expectedVersions.size ||
 						lockedBeforeDelete.some(
-							(record: any) =>
+							(record: OptimisticLockRecord) =>
 								record[optimisticLock!.field] !==
 								expectedVersions.get(record.id),
 						))

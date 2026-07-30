@@ -36,6 +36,7 @@ import type {
 	CreateInputWithRelations,
 	DeleteManyParams,
 	DeleteParams,
+	ExpectedVersion,
 	FindResult,
 	FindManyOptions,
 	FindOneOptionsBase,
@@ -44,7 +45,6 @@ import type {
 	RevertVersionOptions,
 	RestoreParams,
 	UpdateBatchParams,
-	UpdateInput,
 	UpdateManyParams,
 	UpdateParams,
 	Where,
@@ -1530,7 +1530,11 @@ export function createClient<TApp extends QuestpieApp>(
 						where,
 						data,
 						expectedVersions,
-					}: { where: any; data: any; expectedVersions?: any[] },
+					}: {
+						where: any;
+						data: any;
+						expectedVersions?: Array<ExpectedVersion<string | number>>;
+					},
 					options: LocaleOptions = {},
 				) => {
 					const queryString = qs.stringify(options, {
@@ -1564,7 +1568,13 @@ export function createClient<TApp extends QuestpieApp>(
 				},
 
 				deleteMany: async (
-					{ where, expectedVersions }: { where: any; expectedVersions?: any[] },
+					{
+						where,
+						expectedVersions,
+					}: {
+						where: any;
+						expectedVersions?: Array<ExpectedVersion<string | number>>;
+					},
 					options: LocaleOptions = {},
 				) => {
 					const queryString = qs.stringify(options, {
