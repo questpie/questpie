@@ -7,10 +7,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
-import type {
-	CollectionBuilderState,
-	CollectionOptions,
-} from "#questpie/server/collection/builder/types.js";
+import type { CollectionOptions } from "#questpie/server/collection/builder/types.js";
 import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
 
 /**

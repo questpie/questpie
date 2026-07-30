@@ -84,7 +84,7 @@ so that typed public registration is the follow-up described below.
 | create                                | initialize to `1`                       | optional snapshot at `sourceRevision: 1`     |
 | update, localized-only, relation-only | `+1` once                               | ordinary policy snapshot                     |
 | soft delete / restore                 | `+1` once                               | ordinary policy snapshot                     |
-| hard delete                           | expected revision required; row removed | optional final delete snapshot                |
+| hard delete                           | expected revision required; row removed | optional final delete snapshot               |
 | purge                                 | expected revision required; row removed | owner history and locale satellites removed  |
 | revert                                | restore old content, `+1` once          | new snapshot with the new `sourceRevision`   |
 | workflow transition                   | `+1` once                               | stage snapshot with the new `sourceRevision` |

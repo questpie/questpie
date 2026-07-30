@@ -5,7 +5,6 @@
  */
 
 import { parseRfc3339Instant } from "#questpie/shared/temporal.js";
-import { getTxid, QUESTPIE_TXID_HEADER } from "#questpie/shared/txid.js";
 
 import type { ExpectedRevision, Where } from "../../collection/crud/types.js";
 import {
@@ -18,79 +17,17 @@ import type { AdapterConfig, AdapterContext } from "../types.js";
 import { resolveContext } from "../utils/context.js";
 import { parseFindOneOptions, parseFindOptions } from "../utils/parsers.js";
 import { parseRouteBody } from "../utils/request.js";
+import { introspectionDeniedError, smartResponse } from "../utils/response.js";
 import {
-	handleError,
-	introspectionDeniedError,
-	smartResponse,
-} from "../utils/response.js";
+	expectedRevisionFromRequest,
+	optimisticErrorResponse as errorResponse,
+	revisionHeaders,
+	txidHeaders,
+} from "./optimistic-concurrency.js";
 
 // ============================================================================
 // Helper
 // ============================================================================
-
-function errorResponse(
-	app: Questpie<any>,
-	error: unknown,
-	request: Request,
-	locale?: string,
-): Response {
-	const responseError =
-		request.headers.has("if-match") &&
-		error instanceof ApiError &&
-		error.code === "CONFLICT"
-			? ApiError.preconditionFailed(error.message)
-			: error;
-	return handleError(responseError, { request, app, locale });
-}
-
-function txidHeaders(result: unknown): HeadersInit | undefined {
-	const txid = getTxid(result);
-	return txid ? { [QUESTPIE_TXID_HEADER]: txid } : undefined;
-}
-
-function revisionHeaders(
-	result: unknown,
-	optimisticConcurrency: boolean,
-): HeadersInit | undefined {
-	if (
-		!optimisticConcurrency ||
-		!result ||
-		typeof result !== "object" ||
-		typeof (result as { revision?: unknown }).revision !== "number"
-	) {
-		return txidHeaders(result);
-	}
-	return {
-		...(txidHeaders(result) ?? {}),
-		ETag: `"${(result as { revision: number }).revision}"`,
-	};
-}
-
-function expectedRevisionFromRequest(
-	request: Request,
-	bodyRevision: number | undefined,
-	optimisticConcurrency: boolean,
-): number | undefined {
-	const ifMatch = request.headers.get("if-match");
-	if (!optimisticConcurrency) {
-		if (ifMatch) {
-			throw ApiError.badRequest("If-Match requires optimistic concurrency");
-		}
-		return undefined;
-	}
-	if (!ifMatch) return bodyRevision;
-	const match = /^"([0-9]+)"$/.exec(ifMatch.trim());
-	const headerRevision = match ? Number(match[1]) : undefined;
-	if (
-		headerRevision === undefined ||
-		(bodyRevision !== undefined && bodyRevision !== headerRevision)
-	) {
-		throw ApiError.preconditionFailed(
-			"Optimistic concurrency precondition failed",
-		);
-	}
-	return headerRevision;
-}
 
 function hasOptimisticConcurrency(crud: {
 	"~internalState"?: {
