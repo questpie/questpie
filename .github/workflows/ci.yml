@@ -40,18 +40,24 @@ jobs:
           bun install
           git diff --exit-code bun.lock
 
-      # Gates ERRORS only. ~25s over 1994 files.
-      #
-      # WARNINGS ARE DELIBERATELY NOT GATED YET: there are 1454 of them, and
-      # failing on that today would just mean disabling this job again — which
-      # is exactly how the 85 errors accumulated while the job sat commented
-      # out behind "TODO: Enable when lint errors are fixed". The follow-up is a
-      # `lint-census` ratchet in the shape of scripts/any-census.ts (freeze the
-      # per-rule counts, fail on an increase, burn down over time). Until that
-      # lands the warning count is unbounded — do not read this job's green as
-      # "the lint backlog is under control".
+      # Gates ERRORS only. ~25s over 1994 files. Warnings are held by the
+      # lint-census ratchet in the next step rather than failed on here —
+      # failing on 1443 at once would just mean disabling this job again, which
+      # is exactly how the 85 errors accumulated while it sat commented out
+      # behind "TODO: Enable when lint errors are fixed".
       - name: Run Oxlint
         run: bun run lint
+
+      # Per-package, per-rule WARNING counts; any increase fails. This is the
+      # follow-up the comment above used to promise.
+      #
+      # no-underscore-dangle is counted but NOT ratcheted: 1114 of the 1443
+      # warnings are that rule, and a leading underscore is this codebase's
+      # convention for internal members (_state, _pendingRelations). Gating it
+      # would fail CI for following the house style. 329 warnings remain
+      # governed. See the script header before adding to IGNORED_RULES.
+      - name: lint-census ratchet
+        run: bun run scripts/lint-census.ts
 
       # `--list-different` rather than `--check`: identical pass/fail signal,
       # measured at 1m04s vs 6m11s on this tree (`--check` additionally computes
