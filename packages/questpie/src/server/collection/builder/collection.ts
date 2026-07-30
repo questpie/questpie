@@ -865,37 +865,6 @@ export class Collection<TState extends CollectionBuilderState> {
 	}
 
 	/**
-	 * Get raw title expression (for UPDATE queries) without COALESCE
-	 */
-	public getRawTitleExpression(context: any): SQL | Column | null {
-		const titleField = this.state.title;
-		if (!titleField) return null;
-
-		// Check if it's a regular field
-		if (titleField in this.state.fields) {
-			// Check if it's a localized field (need to parse field names)
-			const mode = getLocalizedFieldMode(
-				this.state.localized as readonly string[],
-				titleField,
-			);
-			if (mode !== null) {
-				const i18nAccessor = this.createRawI18nAccessor();
-				return (i18nAccessor as any)[titleField];
-			}
-			// Non-localized field - get from table
-			return (this.table as any)[titleField];
-		}
-
-		// Check if it's a virtual field
-		const virtuals = this.getVirtuals(context);
-		if (virtuals && titleField in virtuals) {
-			return (virtuals as any)[titleField];
-		}
-
-		return null;
-	}
-
-	/**
 	 * Resolve the table builder for this collection.
 	 * When `options.schema` is set, returns `pgSchema(name).table`; otherwise `pgTable`.
 	 *
@@ -1239,27 +1208,6 @@ export class Collection<TState extends CollectionBuilderState> {
 		return accessor;
 	}
 
-	/**
-	 * Create raw i18n accessor object (direct column references)
-	 */
-	private createRawI18nAccessorFor(
-		i18nTable: any | null,
-	): I18nFieldAccessor<TState["fields"], TState["localized"]> {
-		const accessor: any = {};
-
-		if (!i18nTable) return accessor;
-
-		for (const localizedField of this.state.localized) {
-			// Parse field name (remove :nested suffix if present)
-			const parsed = parseLocalizedField(localizedField as string);
-			const fieldName = parsed.name;
-
-			accessor[fieldName] = (i18nTable as any)[fieldName];
-		}
-
-		return accessor;
-	}
-
 	private createI18nAccessor(
 		context: any,
 	): I18nFieldAccessor<TState["fields"], TState["localized"]> {
@@ -1341,13 +1289,6 @@ export class Collection<TState extends CollectionBuilderState> {
 		return accessor;
 	}
 
-	private createRawI18nAccessor(): I18nFieldAccessor<
-		TState["fields"],
-		TState["localized"]
-	> {
-		return this.createRawI18nAccessorFor(this.i18nTable);
-	}
-
 	/**
 	 * Generate CRUD operations (Drizzle RQB v2-like)
 	 */
@@ -1359,13 +1300,10 @@ export class Collection<TState extends CollectionBuilderState> {
 			this.versionsTable,
 			this.i18nVersionsTable,
 			db,
-			this.getVirtuals.bind(this),
 			this.getVirtualsWithAliases.bind(this),
 			this.getTitleExpression.bind(this),
-			this.getVirtualsForVersions.bind(this),
 			this.getVirtualsForVersionsWithAliases.bind(this),
 			this.getTitleExpressionForVersions.bind(this),
-			this.getRawTitleExpression.bind(this),
 			app,
 		);
 

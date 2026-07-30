@@ -203,14 +203,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		private versionsTable: PgTable | null,
 		private i18nVersionsTable: PgTable | null,
 		private db: any,
-		_getVirtuals?: (context: any) => TState["virtuals"],
 		private getVirtualsWithAliases?: (
 			context: any,
 			i18nCurrentTable: PgTable | null,
 			i18nFallbackTable: PgTable | null,
 		) => TState["virtuals"],
 		private getTitleExpression?: (context: any) => TitleExpressionSQL,
-		_getVirtualsForVersions?: (context: any) => TState["virtuals"],
 		private getVirtualsForVersionsWithAliases?: (
 			context: any,
 			i18nVersionsCurrentTable: PgTable | null,
@@ -219,7 +217,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		private getTitleExpressionForVersions?: (
 			context: any,
 		) => TitleExpressionSQL,
-		_getRawTitleExpression?: (context: any) => TitleExpressionSQL,
 		private app?: Questpie<any>,
 	) {
 		this.workflowConfig = resolveWorkflowConfig(
