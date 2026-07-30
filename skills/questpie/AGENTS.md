@@ -4983,7 +4983,9 @@ Globals use `{ data, expectedRevision }`; creating an absent global expects
 revision `0`. History `versionNumber`/`versionId` is independent and each
 snapshot exposes `sourceRevision`. HTTP responses expose `ETag: "<revision>"`
 and mutations may use the same quoted value in `If-Match`; when both forms are
-present they must agree.
+present they must agree. JSON revision conflicts return `409`; failed
+`If-Match` preconditions return `412`, and `If-Match` on an unconfigured
+resource returns `400`.
 
 `.collaborative()` enables canonical revisions automatically. CRDT commit
 sequences, cursors, epochs, and field revisions remain separate; one applied

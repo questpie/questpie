@@ -13,6 +13,39 @@ export function optimisticUpdateInput(
 	return { id, data: nextData, expectedRevision };
 }
 
+export function optimisticGlobalUpdateInput(
+	data: Record<string, any>,
+	config?: OptimisticConcurrencyConfig,
+) {
+	if (!config) return data;
+
+	const nextData = { ...data };
+	const expectedRevision = nextData.revision;
+	delete nextData.revision;
+	return { data: nextData, expectedRevision };
+}
+
+export function transitionStageBody(params: {
+	stage: string;
+	scheduledAt?: string | Date;
+	expectedRevision?: number;
+}) {
+	return {
+		stage: params.stage,
+		...(params.scheduledAt === undefined
+			? {}
+			: {
+					scheduledAt:
+						params.scheduledAt instanceof Date
+							? params.scheduledAt.toISOString()
+							: params.scheduledAt,
+				}),
+		...(params.expectedRevision === undefined
+			? {}
+			: { expectedRevision: params.expectedRevision }),
+	};
+}
+
 export function optimisticIdInput(
 	id: string,
 	record: Record<string, any> | undefined,

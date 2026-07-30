@@ -120,9 +120,9 @@ export function generateGlobalPaths(
 					},
 					stageQueryParameter(),
 				],
-				responses: jsonResponse(
-					ref(valueSchemaName),
-					`Current value of ${name} global`,
+				responses: withRevisionEtag(
+					jsonResponse(ref(valueSchemaName), `Current value of ${name} global`),
+					optimisticConcurrency,
 				),
 			},
 			patch: {
@@ -146,8 +146,12 @@ export function generateGlobalPaths(
 						: ref(updateSchemaName),
 				),
 				responses: withOptimisticConcurrencyConflict(
-					jsonResponse(ref(valueSchemaName), `Updated ${name} global`),
+					withRevisionEtag(
+						jsonResponse(ref(valueSchemaName), `Updated ${name} global`),
+						optimisticConcurrency,
+					),
 					optimisticConcurrency,
+					true,
 				),
 			},
 		};
@@ -234,8 +238,12 @@ export function generateGlobalPaths(
 					},
 				}),
 				responses: withOptimisticConcurrencyConflict(
-					jsonResponse(ref(valueSchemaName), `Reverted ${name} global value`),
+					withRevisionEtag(
+						jsonResponse(ref(valueSchemaName), `Reverted ${name} global value`),
+						optimisticConcurrency,
+					),
 					optimisticConcurrency,
+					true,
 				),
 			},
 		};
@@ -267,11 +275,15 @@ export function generateGlobalPaths(
 						},
 					}),
 					responses: withOptimisticConcurrencyConflict(
-						jsonResponse(
-							ref(valueSchemaName),
-							`Transitioned ${name} global value`,
+						withRevisionEtag(
+							jsonResponse(
+								ref(valueSchemaName),
+								`Transitioned ${name} global value`,
+							),
+							optimisticConcurrency,
 						),
 						optimisticConcurrency,
+						true,
 					),
 				},
 			};
@@ -304,6 +316,7 @@ function ifMatchParameter() {
 function withOptimisticConcurrencyConflict(
 	responses: Record<string, unknown>,
 	enabled: boolean,
+	ifMatch = false,
 ) {
 	if (!enabled) return responses;
 	return {
@@ -312,6 +325,37 @@ function withOptimisticConcurrencyConflict(
 			description: "Missing or stale canonical revision",
 			content: {
 				"application/json": { schema: ref("ErrorResponse") },
+			},
+		},
+		...(ifMatch
+			? {
+					"412": {
+						description: "If-Match precondition failed",
+						content: {
+							"application/json": { schema: ref("ErrorResponse") },
+						},
+					},
+				}
+			: {}),
+	};
+}
+
+function withRevisionEtag(
+	responses: Record<string, unknown>,
+	enabled: boolean,
+) {
+	if (!enabled) return responses;
+	const success = responses["200"] as Record<string, unknown> | undefined;
+	if (!success) return responses;
+	return {
+		...responses,
+		"200": {
+			...success,
+			headers: {
+				ETag: {
+					description: "Quoted canonical revision of the returned resource",
+					schema: { type: "string", pattern: '^"[0-9]+"$' },
+				},
 			},
 		},
 	};

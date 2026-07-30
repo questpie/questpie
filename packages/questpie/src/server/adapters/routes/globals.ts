@@ -37,7 +37,13 @@ function errorResponse(
 	request: Request,
 	locale?: string,
 ): Response {
-	return handleError(error, { request, app, locale });
+	const responseError =
+		request.headers.has("if-match") &&
+		error instanceof ApiError &&
+		error.code === "CONFLICT"
+			? ApiError.preconditionFailed(error.message)
+			: error;
+	return handleError(responseError, { request, app, locale });
 }
 
 function txidHeaders(result: unknown): HeadersInit | undefined {
@@ -66,8 +72,15 @@ function revisionHeaders(
 function expectedRevisionFromRequest(
 	request: Request,
 	bodyRevision: number | undefined,
+	optimisticConcurrency: boolean,
 ): number | undefined {
 	const ifMatch = request.headers.get("if-match");
+	if (!optimisticConcurrency) {
+		if (ifMatch) {
+			throw ApiError.badRequest("If-Match requires optimistic concurrency");
+		}
+		return undefined;
+	}
 	if (!ifMatch) return bodyRevision;
 	const match = /^"([0-9]+)"$/.exec(ifMatch.trim());
 	const headerRevision = match ? Number(match[1]) : undefined;
@@ -75,7 +88,9 @@ function expectedRevisionFromRequest(
 		headerRevision === undefined ||
 		(bodyRevision !== undefined && bodyRevision !== headerRevision)
 	) {
-		throw ApiError.conflict("Optimistic concurrency conflict");
+		throw ApiError.preconditionFailed(
+			"Optimistic concurrency precondition failed",
+		);
 	}
 	return headerRevision;
 }
@@ -184,6 +199,13 @@ export async function globalRevert(
 		};
 		const globalInstance = app.getGlobalConfig(params.global as any);
 		const crud = globalInstance.generateCRUD(resolved.appContext.db, app);
+		const optimisticConcurrency =
+			globalInstance.state.options.optimisticConcurrency === true;
+		const expectedRevision = expectedRevisionFromRequest(
+			request,
+			payload.expectedRevision,
+			optimisticConcurrency,
+		);
 		const result = await crud.revertToVersion(
 			{
 				...(typeof payload.id === "string" ? { id: payload.id } : {}),
@@ -193,15 +215,7 @@ export async function globalRevert(
 				...(typeof payload.versionId === "string"
 					? { versionId: payload.versionId }
 					: {}),
-				...(expectedRevisionFromRequest(request, payload.expectedRevision) ===
-				undefined
-					? {}
-					: {
-							expectedRevision: expectedRevisionFromRequest(
-								request,
-								payload.expectedRevision,
-							),
-						}),
+				...(expectedRevision === undefined ? {} : { expectedRevision }),
 			},
 			resolved.appContext,
 		);
@@ -257,6 +271,14 @@ export async function globalTransition(
 				{ field: "stage" },
 			);
 		}
+		const globalInstance = app.getGlobalConfig(params.global as any);
+		const optimisticConcurrency =
+			globalInstance.state.options.optimisticConcurrency === true;
+		const expectedRevision = expectedRevisionFromRequest(
+			request,
+			payload.expectedRevision,
+			optimisticConcurrency,
+		);
 
 		const opts: {
 			stage: string;
@@ -264,15 +286,7 @@ export async function globalTransition(
 			expectedRevision?: number;
 		} = {
 			stage: payload.stage,
-			...(expectedRevisionFromRequest(request, payload.expectedRevision) ===
-			undefined
-				? {}
-				: {
-						expectedRevision: expectedRevisionFromRequest(
-							request,
-							payload.expectedRevision,
-						),
-					}),
+			...(expectedRevision === undefined ? {} : { expectedRevision }),
 		};
 
 		if (payload.scheduledAt !== undefined) {
@@ -288,7 +302,6 @@ export async function globalTransition(
 			opts.scheduledAt = date;
 		}
 
-		const globalInstance = app.getGlobalConfig(params.global as any);
 		const crud = globalInstance.generateCRUD(resolved.appContext.db, app);
 		const result = await crud.transitionStage(opts, resolved.appContext);
 		return smartResponse(
@@ -384,6 +397,7 @@ export async function globalUpdate(
 		const expectedRevision = expectedRevisionFromRequest(
 			request,
 			payload?.expectedRevision,
+			optimisticConcurrency,
 		);
 		const result = await crud.update(
 			optimisticConcurrency

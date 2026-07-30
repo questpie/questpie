@@ -48,7 +48,9 @@ realtime events, or partial batch effects.
 
 Single-record and global responses include `ETag: "<revision>"`. JSON mutation
 inputs may use `expectedRevision`, or HTTP callers may send the same quoted
-number in `If-Match`. Missing or stale preconditions return HTTP `409`.
+number in `If-Match`. Missing or stale JSON `expectedRevision` values return
+HTTP `409`; a failed `If-Match` precondition returns HTTP `412`. Sending
+`If-Match` to a resource without optimistic concurrency returns HTTP `400`.
 If both forms are supplied, they must agree.
 
 ## Three clocks, three meanings

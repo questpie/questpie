@@ -62,6 +62,7 @@ import {
 	hasManyToManyRelations,
 } from "../../utils/detect-relations";
 import { shouldHandleAdminShortcut } from "../../utils/keyboard-shortcuts";
+import { optimisticGlobalUpdateInput } from "../../utils/optimistic-concurrency";
 import { AutoFormFields } from "../collection/auto-form-fields";
 import { AdminViewHeader } from "../layout/admin-view-layout";
 
@@ -420,7 +421,11 @@ export default function GlobalFormView({
 		} = {
 			stage: transitionTarget.name,
 			...(globalSchema?.options?.optimisticConcurrency
-				? { expectedRevision: Number(globalData?.revision ?? 0) }
+				? {
+						expectedRevision: Number(
+							(form.getValues() as Record<string, unknown>).revision ?? 0,
+						),
+					}
 				: {}),
 		};
 		if (transitionSchedule) {
@@ -489,7 +494,6 @@ export default function GlobalFormView({
 		transitionSchedule,
 		transitionScheduledAt,
 		transitionMutation,
-		globalData?.revision,
 		globalSchema?.options?.optimisticConcurrency,
 		form,
 		t,
@@ -589,14 +593,10 @@ export default function GlobalFormView({
 		async (data: any) => {
 			try {
 				const result = await updateMutation.mutateAsync({
-					data: globalSchema?.options?.optimisticConcurrency
-						? {
-								data: Object.fromEntries(
-									Object.entries(data).filter(([key]) => key !== "revision"),
-								),
-								expectedRevision: Number(globalData?.revision ?? 0),
-							}
-						: data,
+					data: optimisticGlobalUpdateInput(
+						data,
+						globalSchema?.options?.optimisticConcurrency || undefined,
+					),
 				});
 				if (result) {
 					form.reset(result as any);
@@ -631,7 +631,7 @@ export default function GlobalFormView({
 				);
 			}
 		},
-		[updateMutation, form, globalData?.revision, globalSchema, t],
+		[updateMutation, form, globalSchema, t],
 	);
 
 	// Keyboard shortcut: Cmd+S to save
@@ -669,7 +669,9 @@ export default function GlobalFormView({
 			payload.version = pendingRevertVersion.versionNumber;
 		}
 		if (globalSchema?.options?.optimisticConcurrency) {
-			payload.expectedRevision = Number(globalData?.revision ?? 0);
+			payload.expectedRevision = Number(
+				(form.getValues() as Record<string, unknown>).revision ?? 0,
+			);
 		}
 
 		const result = await revertVersionMutation.mutateAsync(payload);

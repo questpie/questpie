@@ -1,5 +1,6 @@
 import type { QuestpieClient } from "#questpie/client/index.js";
 import { collection } from "#questpie/server/collection/builder/collection-builder.js";
+import { global } from "#questpie/server/global/builder/global-builder.js";
 
 const revisioned = collection("revisioned")
 	.fields(({ f }) => ({
@@ -19,6 +20,36 @@ const lockedCollection = revisioned.build();
 const unlockedCollection = unlocked.build();
 declare const lockedCrud: ReturnType<typeof lockedCollection.generateCRUD>;
 declare const unlockedCrud: ReturnType<typeof unlockedCollection.generateCRUD>;
+
+const revisionedGlobal = global("revisioned-global")
+	.fields(({ f }) => ({ title: f.text().required() }))
+	.options({
+		optimisticConcurrency: true,
+		versioning: { workflow: true },
+	});
+const revisionedGlobalDefinition = revisionedGlobal.build();
+declare const revisionedGlobalCrud: ReturnType<
+	typeof revisionedGlobalDefinition.generateCRUD
+>;
+
+revisionedGlobalCrud.update({
+	data: { title: "Updated" },
+	expectedRevision: 1,
+});
+revisionedGlobalCrud.transitionStage({
+	stage: "published",
+	expectedRevision: 2,
+});
+revisionedGlobalCrud.revertToVersion({
+	version: 1,
+	expectedRevision: 3,
+});
+// @ts-expect-error global update requires the expected revision
+revisionedGlobalCrud.update({ data: { title: "Unsafe" } });
+// @ts-expect-error global transition requires the expected revision
+revisionedGlobalCrud.transitionStage({ stage: "published" });
+// @ts-expect-error global revert requires the expected revision
+revisionedGlobalCrud.revertToVersion({ version: 1 });
 
 lockedCrud.updateById({
 	id: "record-1",

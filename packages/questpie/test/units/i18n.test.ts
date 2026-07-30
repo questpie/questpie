@@ -650,6 +650,13 @@ describe("i18n", () => {
 				);
 				expect(error.toJSON(false, t, "sk").message).toBe("Konflikt zdroja");
 			});
+
+			test("uses a distinct translation key for failed preconditions", () => {
+				const error = ApiError.preconditionFailed("Revision did not match");
+
+				expect(error.code).toBe("PRECONDITION_FAILED");
+				expect(error.messageKey).toBe("error.preconditionFailed");
+			});
 		});
 
 		describe("notFound", () => {

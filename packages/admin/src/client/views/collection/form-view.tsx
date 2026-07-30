@@ -1031,9 +1031,21 @@ export default function FormView({
 	const confirmTransition = () => {
 		if (!transitionTarget || !id) return;
 
-		const params: { id: string; stage: string; scheduledAt?: Date } = {
+		const params: {
+			id: string;
+			stage: string;
+			scheduledAt?: Date;
+			expectedRevision?: number;
+		} = {
 			id,
 			stage: transitionTarget.name,
+			...(schema?.options?.optimisticConcurrency
+				? {
+						expectedRevision: Number(
+							(form.getValues() as Record<string, unknown>).revision ?? 0,
+						),
+					}
+				: {}),
 		};
 		if (transitionSchedule) {
 			if (transitionScheduledAt) {

@@ -2809,7 +2809,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						"afterDelete",
 						this.state.hooks?.afterDelete,
 						this.createHookContext({
-							data: existing,
+							data: deletionSnapshot,
 							original: existing,
 							operation: "delete",
 							context: txContext,
@@ -3498,12 +3498,15 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				for (const record of deletionSnapshots) {
 					await this.createVersion(tx, record, "delete", txContext);
 				}
+				const deletionSnapshotById = new Map(
+					deletionSnapshots.map((record) => [record.id, record]),
+				);
 
 				// Bulk metadata for afterDelete: winners only (fact hooks)
 				const afterDeleteBulkMeta = {
 					isBatch: true as const,
 					recordIds: claimedRecords.map((record) => record.id),
-					records: claimedRecords,
+					records: deletionSnapshots,
 					count: claimedRecords.length,
 				};
 
@@ -3515,7 +3518,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							"afterDelete",
 							this.state.hooks?.afterDelete,
 							this.createHookContext({
-								data: record,
+								data: deletionSnapshotById.get(record.id) ?? record,
 								original: record,
 								operation: "delete",
 								context: txContext,

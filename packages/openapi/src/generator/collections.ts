@@ -135,9 +135,9 @@ export function generateCollectionPaths(
 				tags: [tag],
 				parameters: [stageQueryParameter()],
 				requestBody: jsonRequestBody(ref(insertSchemaName)),
-				responses: jsonResponse(
-					ref(documentSchemaName),
-					`Created ${name} record`,
+				responses: withRevisionEtag(
+					jsonResponse(ref(documentSchemaName), `Created ${name} record`),
+					Boolean(optimisticConcurrency),
 				),
 			},
 			patch: {
@@ -339,9 +339,9 @@ export function generateCollectionPaths(
 				summary: `Get ${name} by ID`,
 				tags: [tag],
 				parameters: [idParam, ...singleQueryParameters()],
-				responses: jsonResponse(
-					ref(documentSchemaName),
-					`Single ${name} record`,
+				responses: withRevisionEtag(
+					jsonResponse(ref(documentSchemaName), `Single ${name} record`),
+					Boolean(optimisticConcurrency),
 				),
 			},
 			patch: {
@@ -366,8 +366,12 @@ export function generateCollectionPaths(
 						: ref(updateSchemaName),
 				),
 				responses: withOptimisticConcurrencyConflict(
-					jsonResponse(ref(documentSchemaName), `Updated ${name} record`),
+					withRevisionEtag(
+						jsonResponse(ref(documentSchemaName), `Updated ${name} record`),
+						Boolean(optimisticConcurrency),
+					),
 					Boolean(optimisticConcurrency),
+					true,
 				),
 			},
 			delete: {
@@ -408,6 +412,7 @@ export function generateCollectionPaths(
 						Boolean(optimisticConcurrency),
 					),
 					Boolean(optimisticConcurrency),
+					true,
 				),
 			},
 		};
@@ -438,8 +443,12 @@ export function generateCollectionPaths(
 							}
 						: {}),
 					responses: withOptimisticConcurrencyConflict(
-						jsonResponse(ref(documentSchemaName), `Restored ${name} record`),
+						withRevisionEtag(
+							jsonResponse(ref(documentSchemaName), `Restored ${name} record`),
+							Boolean(optimisticConcurrency),
+						),
 						Boolean(optimisticConcurrency),
+						true,
 					),
 				},
 			};
@@ -472,6 +481,7 @@ export function generateCollectionPaths(
 							`Permanently purged ${name} record`,
 						),
 						Boolean(optimisticConcurrency),
+						true,
 					),
 				},
 			};
@@ -541,8 +551,12 @@ export function generateCollectionPaths(
 					},
 				}),
 				responses: withOptimisticConcurrencyConflict(
-					jsonResponse(ref(documentSchemaName), `Reverted ${name} record`),
+					withRevisionEtag(
+						jsonResponse(ref(documentSchemaName), `Reverted ${name} record`),
+						Boolean(optimisticConcurrency),
+					),
 					Boolean(optimisticConcurrency),
+					true,
 				),
 			},
 		};
@@ -577,11 +591,15 @@ export function generateCollectionPaths(
 						},
 					}),
 					responses: withOptimisticConcurrencyConflict(
-						jsonResponse(
-							ref(documentSchemaName),
-							`Transitioned ${name} record`,
+						withRevisionEtag(
+							jsonResponse(
+								ref(documentSchemaName),
+								`Transitioned ${name} record`,
+							),
+							Boolean(optimisticConcurrency),
 						),
 						optimisticConcurrency,
+						true,
 					),
 				},
 			};
@@ -673,6 +691,7 @@ function expectedRevisionsSchema() {
 function withOptimisticConcurrencyConflict(
 	responses: Record<string, unknown>,
 	enabled: boolean,
+	ifMatch = false,
 ) {
 	if (!enabled) return responses;
 	return {
@@ -683,6 +702,16 @@ function withOptimisticConcurrencyConflict(
 				"application/json": { schema: ref("ErrorResponse") },
 			},
 		},
+		...(ifMatch
+			? {
+					"412": {
+						description: "If-Match precondition failed",
+						content: {
+							"application/json": { schema: ref("ErrorResponse") },
+						},
+					},
+				}
+			: {}),
 	};
 }
 
@@ -699,7 +728,7 @@ function withRevisionEtag(
 			...success,
 			headers: {
 				ETag: {
-					description: "Quoted canonical revision of the deleted row",
+					description: "Quoted canonical revision of the returned resource",
 					schema: { type: "string", pattern: '^"[0-9]+"$' },
 				},
 			},

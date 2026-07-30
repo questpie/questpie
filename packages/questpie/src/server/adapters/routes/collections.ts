@@ -35,7 +35,13 @@ function errorResponse(
 	request: Request,
 	locale?: string,
 ): Response {
-	return handleError(error, { request, app, locale });
+	const responseError =
+		request.headers.has("if-match") &&
+		error instanceof ApiError &&
+		error.code === "CONFLICT"
+			? ApiError.preconditionFailed(error.message)
+			: error;
+	return handleError(responseError, { request, app, locale });
 }
 
 function txidHeaders(result: unknown): HeadersInit | undefined {
@@ -64,8 +70,15 @@ function revisionHeaders(
 function expectedRevisionFromRequest(
 	request: Request,
 	bodyRevision: number | undefined,
+	optimisticConcurrency: boolean,
 ): number | undefined {
 	const ifMatch = request.headers.get("if-match");
+	if (!optimisticConcurrency) {
+		if (ifMatch) {
+			throw ApiError.badRequest("If-Match requires optimistic concurrency");
+		}
+		return undefined;
+	}
 	if (!ifMatch) return bodyRevision;
 	const match = /^"([0-9]+)"$/.exec(ifMatch.trim());
 	const headerRevision = match ? Number(match[1]) : undefined;
@@ -73,7 +86,9 @@ function expectedRevisionFromRequest(
 		headerRevision === undefined ||
 		(bodyRevision !== undefined && bodyRevision !== headerRevision)
 	) {
-		throw ApiError.conflict("Optimistic concurrency conflict");
+		throw ApiError.preconditionFailed(
+			"Optimistic concurrency precondition failed",
+		);
 	}
 	return headerRevision;
 }
@@ -274,25 +289,21 @@ export async function collectionUpdate(
 	}
 
 	try {
+		const optimisticConcurrency = hasOptimisticConcurrency(crud);
 		const payload =
-			hasOptimisticConcurrency(crud) &&
-			typeof body === "object" &&
-			body !== null
+			optimisticConcurrency && typeof body === "object" && body !== null
 				? (body as { data?: unknown; expectedRevision?: number })
 				: undefined;
+		const expectedRevision = expectedRevisionFromRequest(
+			request,
+			payload?.expectedRevision,
+			optimisticConcurrency,
+		);
 		const result = await crud.updateById(
 			{
 				id: params.id as any,
 				data: payload && Object.hasOwn(payload, "data") ? payload.data : body,
-				...(expectedRevisionFromRequest(request, payload?.expectedRevision) ===
-				undefined
-					? {}
-					: {
-							expectedRevision: expectedRevisionFromRequest(
-								request,
-								payload?.expectedRevision,
-							),
-						}),
+				...(expectedRevision === undefined ? {} : { expectedRevision }),
 			},
 			resolved.appContext,
 		);
@@ -327,7 +338,8 @@ export async function collectionRemove(
 	}
 
 	try {
-		const body = hasOptimisticConcurrency(crud)
+		const optimisticConcurrency = hasOptimisticConcurrency(crud);
+		const body = optimisticConcurrency
 			? await parseRouteBody(request)
 			: undefined;
 		const expectedRevision = expectedRevisionFromRequest(
@@ -335,6 +347,7 @@ export async function collectionRemove(
 			typeof body === "object" && body !== null
 				? (body as { expectedRevision?: number }).expectedRevision
 				: undefined,
+			optimisticConcurrency,
 		);
 		const result = await crud.deleteById(
 			{
@@ -440,6 +453,12 @@ export async function collectionRevert(
 			versionId?: string;
 			expectedRevision?: number;
 		};
+		const optimisticConcurrency = hasOptimisticConcurrency(crud);
+		const expectedRevision = expectedRevisionFromRequest(
+			request,
+			payload.expectedRevision,
+			optimisticConcurrency,
+		);
 		const result = await crud.revertToVersion(
 			{
 				id: params.id as any,
@@ -449,15 +468,7 @@ export async function collectionRevert(
 				...(typeof payload.versionId === "string"
 					? { versionId: payload.versionId }
 					: {}),
-				...(expectedRevisionFromRequest(request, payload.expectedRevision) !==
-				undefined
-					? {
-							expectedRevision: expectedRevisionFromRequest(
-								request,
-								payload.expectedRevision,
-							),
-						}
-					: {}),
+				...(expectedRevision === undefined ? {} : { expectedRevision }),
 			},
 			resolved.appContext,
 		);
@@ -520,6 +531,11 @@ export async function collectionTransition(
 				{ field: "stage" },
 			);
 		}
+		const expectedRevision = expectedRevisionFromRequest(
+			request,
+			payload.expectedRevision,
+			hasOptimisticConcurrency(crud),
+		);
 
 		const opts: {
 			id: string;
@@ -529,15 +545,7 @@ export async function collectionTransition(
 		} = {
 			id: params.id,
 			stage: payload.stage,
-			...(expectedRevisionFromRequest(request, payload.expectedRevision) ===
-			undefined
-				? {}
-				: {
-						expectedRevision: expectedRevisionFromRequest(
-							request,
-							payload.expectedRevision,
-						),
-					}),
+			...(expectedRevision === undefined ? {} : { expectedRevision }),
 		};
 
 		if (payload.scheduledAt !== undefined) {
@@ -585,7 +593,8 @@ export async function collectionRestore(
 	}
 
 	try {
-		const body = hasOptimisticConcurrency(crud)
+		const optimisticConcurrency = hasOptimisticConcurrency(crud);
+		const body = optimisticConcurrency
 			? await parseRouteBody(request)
 			: undefined;
 		const expectedRevision = expectedRevisionFromRequest(
@@ -593,6 +602,7 @@ export async function collectionRestore(
 			typeof body === "object" && body !== null
 				? (body as { expectedRevision?: number }).expectedRevision
 				: undefined,
+			optimisticConcurrency,
 		);
 		const result = await crud.restoreById(
 			{
@@ -632,7 +642,8 @@ export async function collectionPurge(
 	}
 
 	try {
-		const body = hasOptimisticConcurrency(crud)
+		const optimisticConcurrency = hasOptimisticConcurrency(crud);
+		const body = optimisticConcurrency
 			? await parseRouteBody(request)
 			: undefined;
 		const expectedRevision = expectedRevisionFromRequest(
@@ -640,6 +651,7 @@ export async function collectionPurge(
 			typeof body === "object" && body !== null
 				? (body as { expectedRevision?: number }).expectedRevision
 				: undefined,
+			optimisticConcurrency,
 		);
 		const result = await crud.purgeById(
 			{

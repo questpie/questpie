@@ -89,10 +89,17 @@ describe("OpenAPI schema generation", () => {
 				.options({
 					softDelete: true,
 					optimisticConcurrency: true,
+					versioning: { workflow: true },
+				});
+			const settings = global("settings")
+				.fields(({ f }) => ({ title: f.text().required() }))
+				.options({
+					optimisticConcurrency: true,
+					versioning: { workflow: true },
 				});
 			const mockCms = {
 				getCollections: () => ({ tags }),
-				getGlobals: () => ({}),
+				getGlobals: () => ({ settings }),
 			};
 
 			const spec = await generateOpenApiSpec(mockCms as any, undefined, {
@@ -107,7 +114,9 @@ describe("OpenAPI schema generation", () => {
 				minimum: 1,
 			});
 
+			const collectionPath = spec.paths?.["//tags"] as any;
 			const byId = spec.paths?.["//tags/{id}"] as any;
+			expect(collectionPath.post.responses["200"].headers.ETag).toBeDefined();
 			const updateBody =
 				byId.patch.requestBody.content["application/json"].schema;
 			expect(updateBody.required).toEqual(["data"]);
@@ -117,6 +126,9 @@ describe("OpenAPI schema generation", () => {
 					.properties.data.$ref,
 			).toBe("#/components/schemas/TagsDocument");
 			expect(byId.delete.responses["200"].headers.ETag).toBeDefined();
+			expect(byId.get.responses["200"].headers.ETag).toBeDefined();
+			expect(byId.patch.responses["200"].headers.ETag).toBeDefined();
+			expect(byId.patch.responses["412"]).toBeDefined();
 			expect(byId.patch.responses["409"]).toBeDefined();
 
 			const bulkUpdate = spec.paths?.["//tags"]?.patch as any;
@@ -131,6 +143,7 @@ describe("OpenAPI schema generation", () => {
 			).toEqual(["where", "expectedRevisions"]);
 			const restore = spec.paths?.["//tags/{id}/restore"]?.post as any;
 			expect(restore.requestBody.required).toBe(false);
+			expect(restore.responses["200"].headers.ETag).toBeDefined();
 			const purge = spec.paths?.["//tags/{id}/purge"]?.post as any;
 			expect(purge.requestBody.required).toBe(false);
 			expect(purge.responses["409"]).toBeDefined();
@@ -139,6 +152,20 @@ describe("OpenAPI schema generation", () => {
 				revert.requestBody.content["application/json"].schema.required,
 			).toBeUndefined();
 			expect(revert.responses["409"]).toBeDefined();
+			expect(revert.responses["200"].headers.ETag).toBeDefined();
+			const transition = spec.paths?.["//tags/{id}/transition"]?.post as any;
+			expect(transition.responses["200"].headers.ETag).toBeDefined();
+
+			const globalPath = spec.paths?.["//globals/settings"] as any;
+			expect(globalPath.get.responses["200"].headers.ETag).toBeDefined();
+			expect(globalPath.patch.responses["200"].headers.ETag).toBeDefined();
+			expect(globalPath.patch.responses["412"]).toBeDefined();
+			const globalRevert = spec.paths?.["//globals/settings/revert"] as any;
+			expect(globalRevert.post.responses["200"].headers.ETag).toBeDefined();
+			const globalTransition = spec.paths?.[
+				"//globals/settings/transition"
+			] as any;
+			expect(globalTransition.post.responses["200"].headers.ETag).toBeDefined();
 		});
 
 		it("handles relation fields", async () => {

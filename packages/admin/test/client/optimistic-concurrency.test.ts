@@ -3,8 +3,10 @@ import { describe, expect, it } from "bun:test";
 import {
 	optimisticActionInput,
 	optimisticBatchEntry,
+	optimisticGlobalUpdateInput,
 	optimisticIdInput,
 	optimisticManyInput,
+	transitionStageBody,
 	optimisticUpdateInput,
 	runAdminBulkDelete,
 } from "#questpie/admin/client/utils/optimistic-concurrency";
@@ -23,6 +25,26 @@ describe("admin optimistic-concurrency inputs", () => {
 		expect(
 			optimisticIdInput("post-1", { id: "post-1", revision: 4 }, lock),
 		).toEqual({ id: "post-1", expectedRevision: 4 });
+	});
+
+	it("uses current form revisions for global saves and workflow transitions", () => {
+		expect(
+			optimisticGlobalUpdateInput({ title: "Second save", revision: 7 }, lock),
+		).toEqual({
+			data: { title: "Second save" },
+			expectedRevision: 7,
+		});
+		expect(
+			transitionStageBody({
+				stage: "published",
+				expectedRevision: 7,
+				scheduledAt: new Date("2026-01-02T03:04:05.000Z"),
+			}),
+		).toEqual({
+			stage: "published",
+			expectedRevision: 7,
+			scheduledAt: "2026-01-02T03:04:05.000Z",
+		});
 	});
 
 	it("builds exact per-record revisions for batch and bulk calls", () => {

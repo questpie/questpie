@@ -10,6 +10,7 @@ let observedOriginalRevision: number | undefined;
 let onBeforeChange: (() => Promise<void>) | undefined;
 let onBeforeDelete: (() => Promise<void>) | undefined;
 let beforeTransitionFacts = 0;
+let observedDeleteRevision: number | undefined;
 
 const optimisticTags = collection("optimistic_tags")
 	.fields(({ f }) => ({
@@ -48,6 +49,9 @@ const optimisticTags = collection("optimistic_tags")
 		},
 		beforeDelete: async () => {
 			await onBeforeDelete?.();
+		},
+		afterDelete: ({ data }) => {
+			observedDeleteRevision = data.revision;
 		},
 		beforeTransition: () => {
 			beforeTransitionFacts++;
@@ -94,6 +98,7 @@ describe("generated CRUD optimistic concurrency", () => {
 		onBeforeChange = undefined;
 		onBeforeDelete = undefined;
 		beforeTransitionFacts = 0;
+		observedDeleteRevision = undefined;
 		setup = await buildMockApp({
 			collections: {
 				optimisticTags,
@@ -398,6 +403,7 @@ describe("generated CRUD optimistic concurrency", () => {
 			context,
 		);
 		expect(deletion.data.revision).toBe(2);
+		expect(observedDeleteRevision).toBe(2);
 		const deleted = await setup.app.collections.optimisticTags.findOne(
 			{ where: { id: tag.id }, includeDeleted: true },
 			context,
@@ -650,14 +656,21 @@ describe("generated CRUD optimistic concurrency", () => {
 			context,
 		);
 		const handler = createFetchHandler(setup.app, { accessMode: "system" });
-		const request = (path: string, method: string, body?: unknown) =>
+		const request = (
+			path: string,
+			method: string,
+			body?: unknown,
+			headers?: Record<string, string>,
+		) =>
 			handler(
 				new Request(`http://localhost/${path}`, {
 					method,
-					headers:
-						body === undefined
-							? undefined
-							: { "content-type": "application/json" },
+					headers: {
+						...(body === undefined
+							? {}
+							: { "content-type": "application/json" }),
+						...headers,
+					},
 					body: body === undefined ? undefined : JSON.stringify(body),
 				}),
 			);
@@ -690,6 +703,13 @@ describe("generated CRUD optimistic concurrency", () => {
 		expect(updated?.status).toBe(200);
 		expect(updated?.headers.get("etag")).toBe('"2"');
 		expect(await updated?.json()).toMatchObject({ name: "REST", revision: 2 });
+		const staleHeader = await request(
+			`optimisticTags/${tag.id}`,
+			"PATCH",
+			{ data: { name: "Stale header" } },
+			{ "if-match": '"1"' },
+		);
+		expect(staleHeader?.status).toBe(412);
 
 		const deleted = await request(`optimisticTags/${tag.id}`, "DELETE", {
 			expectedRevision: 2,
@@ -758,6 +778,13 @@ describe("generated CRUD optimistic concurrency", () => {
 			new Request(`http://localhost/legacyTags/${tag.id}`),
 		);
 		expect(response?.headers.get("etag")).toBeNull();
+		const unsupportedIfMatch = await handler(
+			new Request(`http://localhost/legacyTags/${tag.id}`, {
+				method: "DELETE",
+				headers: { "if-match": '"7"' },
+			}),
+		);
+		expect(unsupportedIfMatch?.status).toBe(400);
 
 		await setup.app.collections.legacyTags.deleteById({ id: tag.id }, context);
 		const restored = await setup.app.collections.legacyTags.restoreById(

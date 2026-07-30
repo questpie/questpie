@@ -236,7 +236,7 @@ describe("global optimistic concurrency", () => {
 			{ data: { siteName: "Ambiguous" }, expectedRevision: 0 },
 			'"1"',
 		);
-		expect(disagreeing?.status).toBe(409);
+		expect(disagreeing?.status).toBe(412);
 
 		const updated = await call({ data: { siteName: "HTTP CAS" } }, '"1"');
 		expect(updated?.status).toBe(200);
@@ -245,5 +245,7 @@ describe("global optimistic concurrency", () => {
 			siteName: "HTTP CAS",
 			revision: 2,
 		});
+		const stale = await call({ data: { siteName: "Stale" } }, '"1"');
+		expect(stale?.status).toBe(412);
 	});
 });
