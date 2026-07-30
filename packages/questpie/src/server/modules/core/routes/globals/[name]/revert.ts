@@ -4,7 +4,7 @@
  * POST /globals/:name/revert
  */
 
-import { createGlobalRoutes } from "#questpie/server/adapters/routes/globals.js";
+import { globalRevert } from "#questpie/server/adapters/routes/globals.js";
 import { route } from "#questpie/server/routes/define-route.js";
 import { routeApp } from "#questpie/server/routes/route-app.js";
 
@@ -14,6 +14,5 @@ export default route()
 	.handler(async (ctx) => {
 		const { request, params } = ctx;
 		const app = routeApp(ctx);
-		const routes = createGlobalRoutes(app);
-		return routes.revert(request, { global: params.name });
+		return globalRevert(app, request, { global: params.name });
 	});

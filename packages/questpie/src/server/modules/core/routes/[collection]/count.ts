@@ -4,7 +4,7 @@
  * GET /[collection]/count
  */
 
-import { createCollectionRoutes } from "#questpie/server/adapters/routes/collections.js";
+import { collectionCount } from "#questpie/server/adapters/routes/collections.js";
 import { route } from "#questpie/server/routes/define-route.js";
 import { routeApp } from "#questpie/server/routes/route-app.js";
 
@@ -14,6 +14,5 @@ export default route()
 	.handler(async (ctx) => {
 		const { request, params } = ctx;
 		const app = routeApp(ctx);
-		const routes = createCollectionRoutes(app);
-		return routes.count(request, { collection: params.collection });
+		return collectionCount(app, request, { collection: params.collection });
 	});

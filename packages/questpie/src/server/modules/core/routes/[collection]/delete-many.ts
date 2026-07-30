@@ -4,7 +4,7 @@
  * POST /[collection]/delete-many
  */
 
-import { createCollectionRoutes } from "#questpie/server/adapters/routes/collections.js";
+import { collectionDeleteMany } from "#questpie/server/adapters/routes/collections.js";
 import { route } from "#questpie/server/routes/define-route.js";
 import { routeApp } from "#questpie/server/routes/route-app.js";
 
@@ -14,6 +14,7 @@ export default route()
 	.handler(async (ctx) => {
 		const { request, params } = ctx;
 		const app = routeApp(ctx);
-		const routes = createCollectionRoutes(app);
-		return routes.deleteMany(request, { collection: params.collection });
+		return collectionDeleteMany(app, request, {
+			collection: params.collection,
+		});
 	});

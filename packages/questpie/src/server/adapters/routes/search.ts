@@ -11,7 +11,6 @@
 
 import { executeAccessRule } from "../../collection/crud/shared/access-control.js";
 import type { Questpie } from "../../config/questpie.js";
-import type { QuestpieConfig } from "../../config/types.js";
 import { ApiError } from "../../errors/index.js";
 import { isSearchableConfigEnabled } from "../../modules/core/integrated/search/index-params.js";
 import { reindexCollection } from "../../modules/core/integrated/search/reindex.js";
@@ -422,35 +421,3 @@ export async function searchReindex(
 		return errorResponse(error, request, resolved.appContext.locale);
 	}
 }
-
-// ============================================================================
-// Legacy closure factory (deprecated)
-// ============================================================================
-
-/**
- * @deprecated Use standalone `searchSearch` and `searchReindex` instead.
- */
-export const createSearchRoutes = <
-	TConfig extends QuestpieConfig = QuestpieConfig,
->(
-	app: Questpie<TConfig>,
-	config: AdapterConfig<TConfig> = {},
-) => {
-	return {
-		search: async (
-			request: Request,
-			_params: Record<string, never>,
-			context?: AdapterContext,
-		): Promise<Response> => {
-			return searchSearch(app, request, _params, context, config);
-		},
-
-		reindex: async (
-			request: Request,
-			params: { collection: string },
-			context?: AdapterContext,
-		): Promise<Response> => {
-			return searchReindex(app, request, params, context, config);
-		},
-	};
-};
