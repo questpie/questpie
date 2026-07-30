@@ -237,10 +237,11 @@ jobs:
         run: bun run scripts/check-dist-types.ts
 
       # What npm would actually publish (`npm pack --dry-run`, so `files` and
-      # .npmignore are honoured) vs the committed budget. Fails on >5% growth
-      # in any package's unpacked size — tighter than the type budget's 10%,
-      # because build output is near-deterministic for a fixed toolchain, so a
-      # jump is a real change in what ships rather than measurement noise.
+      # .npmignore are honoured) vs the committed budget. Fails on >5% AND
+      # >1 KB growth in any package's unpacked size — both conditions, because a
+      # bare percentage is unusable on the 6 KB and 9 KB packages where one
+      # JSDoc block clears 5%. Build output is near-deterministic for a fixed
+      # toolchain, so a jump clearing both is a real change in what ships.
       # Re-baseline with --update. Must run after the build above.
       - name: Package size budget
         run: bun run scripts/size-budget.ts
@@ -256,7 +257,7 @@ jobs:
         run: bun run scripts/bundle-budget.ts
 
       # Deterministic tsc metrics (Types/Instantiations) vs committed budget —
-      # fails on >10% instantiation regression. Re-baseline with --update.
+      # fails on >3% instantiation regression. Re-baseline with --update.
       - name: Type budget gate
         run: bun run scripts/type-budget.ts
 

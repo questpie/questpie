@@ -26,9 +26,9 @@
  *   costs disk, install time, and cold-start file reads.
  * - `entryCount` is recorded and reported but NOT gated: splitting one module
  *   into three is not a regression.
- * - TOLERANCE is deliberately tighter than the type budget's 10%. Build output
- *   is near-deterministic for a fixed toolchain, so a >5% jump is a real change
- *   in what ships, not measurement noise.
+ * - TOLERANCE is 5%, paired with MIN_GROWTH_BYTES below — both conditions must
+ *   hold. Build output is near-deterministic for a fixed toolchain, so a jump
+ *   that clears both is a real change in what ships, not measurement noise.
  */
 
 import { execFile } from "node:child_process";
