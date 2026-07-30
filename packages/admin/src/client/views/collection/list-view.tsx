@@ -458,7 +458,7 @@ function ListViewInner({
 				meta: collectionMeta,
 				registry: componentRegistry,
 			}),
-		[resolvedFields, resolvedListConfig, collectionMeta],
+		[resolvedFields, resolvedListConfig, collectionMeta, componentRegistry],
 	);
 	const columnsByKey = React.useMemo(() => {
 		const map = new Map<string, ColumnDef<any>>();

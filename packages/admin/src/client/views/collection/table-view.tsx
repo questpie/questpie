@@ -1356,7 +1356,7 @@ function TableViewInner({
 				meta: collectionMeta, // Use meta to determine title field
 				registry: componentRegistry,
 			}),
-		[resolvedFields, resolvedListConfig, collectionMeta],
+		[resolvedFields, resolvedListConfig, collectionMeta, componentRegistry],
 	);
 
 	// Filter builder sheet state
