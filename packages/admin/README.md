@@ -273,7 +273,7 @@ Import the admin base stylesheet and scan the admin package:
 @import "tailwindcss";
 @import "@questpie/admin/client/styles/index.css";
 
-@source "../node_modules/@questpie/admin/dist";
+@source "../node_modules/@questpie/admin/";
 ```
 
 `index.css` is an alias for `base.css`; import `base.css` directly when you want explicit control.

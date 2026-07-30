@@ -6,7 +6,11 @@
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/jetbrains-mono";
 
-@source "../**/*.{js,jsx,ts,tsx}";
+/* Relative to this stylesheet, so it has to match both layouts: `src/client/**`
+   in the workspace (.ts/.tsx) and `dist/client/**` once published (.mjs/.mts).
+   The previous glob listed only js/jsx/ts/tsx and therefore matched nothing at
+   all in the published package. */
+@source "../**/*.{js,jsx,ts,tsx,mjs,mts}";
 
 /* ================================================================
    QUESTPIE ADMIN THEME — Base
