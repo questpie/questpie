@@ -19,6 +19,16 @@ import {
 import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 import { runTestDbMigrations } from "../utils/test-db.js";
 
+function requireRecord(
+	value: unknown,
+	label: string,
+): Record<PropertyKey, unknown> {
+	if (!value || typeof value !== "object") {
+		throw new Error(`${label} must be an object`);
+	}
+	return value as Record<PropertyKey, unknown>;
+}
+
 function channelRequest(
 	path: string,
 	body: Record<string, unknown>,
@@ -417,8 +427,19 @@ describe("channel module routes", () => {
 				},
 				config: {
 					app: {
-						context: async ({ services }: any) => {
-							seenPolicyIds.push(services.policy.id);
+						context: async (context) => {
+							const services = requireRecord(
+								requireRecord(context, "context").services,
+								"context.services",
+							);
+							const policy = requireRecord(
+								services.policy,
+								"context.services.policy",
+							);
+							if (typeof policy.id !== "number") {
+								throw new Error("context.services.policy.id must be a number");
+							}
+							seenPolicyIds.push(policy.id);
 							return { tenantId: "tenant-a" };
 						},
 					},

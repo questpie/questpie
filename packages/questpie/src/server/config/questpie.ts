@@ -1165,7 +1165,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		// type is the USER-facing contract (augmented per-app by codegen); the
 		// framework passes the full runtime service surface regardless.
 		const resolver = this.state?.config?.app?.context as
-			| ((params: Record<string, unknown>) => unknown)
+			| ((params: object) => unknown)
 			| undefined;
 		if (typeof resolver !== "function") return undefined;
 
@@ -1186,9 +1186,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			lazyServices: true,
 		});
 
-		const result = await resolver(
-			services as unknown as Record<string, unknown>,
-		);
+		const result = await resolver(services);
 		const resolvedExtensions = (result ?? {}) as Record<string, unknown>;
 		const extensions: Record<string, unknown> = {};
 

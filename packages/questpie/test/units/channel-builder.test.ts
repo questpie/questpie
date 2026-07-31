@@ -323,6 +323,28 @@ describe("channel ChannelsService", () => {
 		});
 	});
 
+	test("keeps channels as a real own property when an authorizer freezes its context", async () => {
+		let observedKeys: string[] = [];
+		const service = new ChannelsService(
+			{
+				room: channel("room-[roomId]").authorize((context) => {
+					Object.freeze(context);
+					observedKeys = Object.keys(context);
+					return Object.isFrozen(context);
+				}),
+			},
+			{
+				appendChannelEvent: async () => ({ eventId: "event-1" }),
+			},
+			userContext,
+		);
+
+		expect(
+			await service.authorize("room", { roomId: "one" }, "subscribe"),
+		).toBe(true);
+		expect(observedKeys).toContain("channels");
+	});
+
 	test("uses subscribe as the omitted publish rule and resolves presence", async () => {
 		const definitions = {
 			room: channel("room-[roomId]")

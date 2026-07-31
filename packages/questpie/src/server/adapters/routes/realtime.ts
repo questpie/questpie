@@ -199,6 +199,10 @@ type RequestChannelsLease = {
 	dispose: () => Promise<void>;
 };
 
+function readUnknownProperty(source: object, property: PropertyKey): unknown {
+	return (source as Readonly<Record<PropertyKey, unknown>>)[property];
+}
+
 async function createRequestChannelsLease(
 	app: Questpie<any>,
 	context: RealtimeRequestContext,
@@ -231,9 +235,13 @@ async function createRequestChannelsLease(
 			actor: context.actor,
 			contextExtensions: context["~contextExtensions"],
 			scope,
-		}) as unknown as { channels: ChannelsService };
+		});
+		const channels = readUnknownProperty(services, "channels");
+		if (!(channels instanceof ChannelsService)) {
+			throw new Error("Request ChannelsService is unavailable");
+		}
 		return {
-			channels: services.channels,
+			channels,
 			dispose: ownsScope
 				? () => disposeAppServiceScope(app, scope)
 				: async () => {},
@@ -1055,9 +1063,9 @@ async function realtimeSubscribeInternal(
 				rejection?: RealtimeTopicRejectedPayload;
 			}> = [];
 			const crdtSubscriptions: RealtimeTopologyCrdt[] = [];
-			const suppliedTopologyChannels = (
-				requestServices as unknown as { channels?: unknown } | undefined
-			)?.channels;
+			const suppliedTopologyChannels = requestServices
+				? readUnknownProperty(requestServices, "channels")
+				: undefined;
 			const topologyChannelLease = body.topology.subscriptions.some(
 				({ kind }) => kind === "channel",
 			)
@@ -1468,9 +1476,9 @@ async function realtimeSubscribeInternal(
 
 	const validatedChannelsById = new Map<string, ValidatedChannelSubscription>();
 	const channelErrors: Array<{ id: string; message: string }> = [];
-	const suppliedChannels = (
-		requestServices as unknown as { channels?: unknown } | undefined
-	)?.channels;
+	const suppliedChannels = requestServices
+		? readUnknownProperty(requestServices, "channels")
+		: undefined;
 	const channelLease =
 		(channelInputs?.length ?? 0) > 0
 			? await createRequestChannelsLease(

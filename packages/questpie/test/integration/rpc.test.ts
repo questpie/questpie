@@ -6,6 +6,16 @@ import { collection, global, route, service } from "../../src/exports/index.js";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 
+function requireRecord(
+	value: unknown,
+	label: string,
+): Record<PropertyKey, unknown> {
+	if (!value || typeof value !== "object") {
+		throw new Error(`${label} must be an object`);
+	}
+	return value as Record<PropertyKey, unknown>;
+}
+
 const createDefinition = () => {
 	const ping = route()
 		.post()
@@ -193,8 +203,12 @@ describe("route execution", () => {
 			},
 			config: {
 				app: {
-					context: async ({ services }: any) => {
-						void services.probe;
+					context: async (context) => {
+						const services = requireRecord(
+							requireRecord(context, "context").services,
+							"context.services",
+						);
+						requireRecord(services.probe, "context.services.probe");
 						return { tenantId: "tenant-a" };
 					},
 				},

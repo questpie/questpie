@@ -230,6 +230,12 @@ export type { AppContextBase } from "#questpie/server/config/app-context-base.js
  */
 export interface AppContext extends Questpie.AppContext {}
 
+function isAppServiceDisposer(
+	value: unknown,
+): value is (instance: unknown) => void | Promise<void> {
+	return typeof value === "function";
+}
+
 /**
  * Registry — the app-wide type catalogue.
  * Augment via `declare global { namespace Questpie { interface Registry { ... } } }`
@@ -599,27 +605,36 @@ export function extractAppServices(
  * boundary; `extractAppServices()` never creates an ownerless scope.
  */
 export async function disposeAppServiceScope(
-	app: any,
+	app: object,
 	scope: RequestScope,
 ): Promise<void> {
 	const disposers = new Map<
 		string,
 		(instance: unknown) => void | Promise<void>
 	>();
+	const definitions = (
+		app as {
+			readonly _serviceDefs?: unknown;
+		}
+	)._serviceDefs;
+	if (!definitions || typeof definitions !== "object") {
+		await scope.dispose();
+		return;
+	}
 	for (const [name, definition] of Object.entries(
-		(app?._serviceDefs ?? {}) as Record<
-			string,
-			{
-				lifecycle?: string;
-				dispose?: (instance: unknown) => void | Promise<void>;
-			}
-		>,
+		definitions as Readonly<Record<string, unknown>>,
 	)) {
+		if (!definition || typeof definition !== "object") continue;
+		const candidate = definition as {
+			readonly lifecycle?: unknown;
+			readonly dispose?: unknown;
+		};
 		if (
-			definition.lifecycle === "request" &&
-			typeof definition.dispose === "function"
+			candidate.lifecycle === "request" &&
+			isAppServiceDisposer(candidate.dispose)
 		) {
-			disposers.set(name, definition.dispose);
+			const dispose = candidate.dispose;
+			disposers.set(name, (instance) => dispose(instance));
 		}
 	}
 	await scope.dispose(disposers);

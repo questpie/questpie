@@ -417,14 +417,19 @@ export class ChannelsService<
 		params: Record<string, string>,
 	): ChannelServiceContext & { params: Record<string, string> } {
 		const source = this.context;
-		const snapshot: Record<PropertyKey, unknown> = {
+		const snapshot = {
 			...this.context,
 			session: cloneAuthorityValue(this.context.session),
 			principal: cloneAuthorityValue(this.context.principal),
 			actor: cloneAuthorityValue(this.context.actor),
-			channels: this,
 			params,
 		};
+		Object.defineProperty(snapshot, "channels", {
+			configurable: true,
+			enumerable: true,
+			value: this,
+			writable: false,
+		});
 		const virtualKeys = this.virtualContextKeys;
 		return new Proxy(snapshot, {
 			get(target, property, receiver) {
@@ -452,8 +457,6 @@ export class ChannelsService<
 				}
 				return undefined;
 			},
-		}) as unknown as ChannelServiceContext & {
-			params: Record<string, string>;
-		};
+		});
 	}
 }
