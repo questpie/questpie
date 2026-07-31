@@ -105,6 +105,10 @@ export interface ServerActionContext<
 	itemId?: string;
 	/** Item IDs (for bulk actions) */
 	itemIds?: string[];
+	/** Expected revision for an optimistic-concurrency protected single-item action */
+	expectedRevision?: number;
+	/** Exact per-item revisions for an optimistic-concurrency protected bulk action */
+	expectedRevisions?: Array<{ id: string; expectedRevision: number }>;
 	/** Auth instance (Better Auth API) */
 	auth: any;
 	/** Collection CRUD APIs */

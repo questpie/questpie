@@ -31,6 +31,11 @@ import {
 	selectNavigate,
 	useAdminStore,
 } from "../runtime/provider";
+import {
+	optimisticActionInput,
+	optimisticIdInput,
+} from "../utils/optimistic-concurrency";
+import { useCollectionSchema } from "./use-collection-schema";
 
 // ============================================================================
 // Constants
@@ -355,6 +360,7 @@ function useActionExecution<TItem = any>({
 	const client = useAdminStore(selectClient);
 	const authClient = useAdminStore(selectAuthClient);
 	const queryClient = useQueryClient();
+	const { data: collectionSchema } = useCollectionSchema(collection);
 	const [isExecuting, setIsExecuting] = React.useState(false);
 
 	// Wrapped query client for action context
@@ -413,7 +419,13 @@ function useActionExecution<TItem = any>({
 
 						if (collectionClient) {
 							if (method === "delete" && collectionClient.delete) {
-								await collectionClient.delete({ id: (item as any)?.id });
+								await collectionClient.delete(
+									optimisticIdInput(
+										(item as any)?.id,
+										item as Record<string, any> | undefined,
+										collectionSchema?.options?.optimisticConcurrency,
+									),
+								);
 								helpers.toast.success(helpers.t("toast.deleteSuccess"));
 							} else {
 								// For other methods, show info (actual implementation would call the API)
@@ -457,6 +469,11 @@ function useActionExecution<TItem = any>({
 									{
 										itemId: (item as any)?.id,
 										itemIds: items?.map((i: any) => i?.id).filter(Boolean),
+										...optimisticActionInput(
+											item as Record<string, any> | undefined,
+											items as Array<Record<string, any>> | undefined,
+											collectionSchema?.options?.optimisticConcurrency,
+										),
 									},
 								);
 								if (result?.toast) {
@@ -511,7 +528,14 @@ function useActionExecution<TItem = any>({
 				setIsExecuting(false);
 			}
 		},
-		[collection, helpers, client, authClient, actionQueryClient],
+		[
+			collection,
+			collectionSchema?.options?.optimisticConcurrency,
+			helpers,
+			client,
+			authClient,
+			actionQueryClient,
+		],
 	);
 
 	return {

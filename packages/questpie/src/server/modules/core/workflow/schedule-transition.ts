@@ -28,12 +28,14 @@ export interface ScheduleCollectionTransitionParams {
 	recordId: string;
 	stage: string;
 	scheduledAt: Date;
+	expectedRevision?: number;
 }
 
 export interface ScheduleGlobalTransitionParams {
 	global: string;
 	stage: string;
 	scheduledAt: Date;
+	expectedRevision?: number;
 }
 
 function getScheduledTransitionPublish(
@@ -66,6 +68,9 @@ export async function scheduleCollectionTransition(
 			collection: params.collection,
 			recordId: params.recordId,
 			stage: params.stage,
+			...(params.expectedRevision === undefined
+				? {}
+				: { expectedRevision: params.expectedRevision }),
 		},
 		{ startAfter: params.scheduledAt },
 	);
@@ -90,6 +95,9 @@ export async function scheduleGlobalTransition(
 			type: "global" as const,
 			global: params.global,
 			stage: params.stage,
+			...(params.expectedRevision === undefined
+				? {}
+				: { expectedRevision: params.expectedRevision }),
 		},
 		{ startAfter: params.scheduledAt },
 	);

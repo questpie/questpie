@@ -7,10 +7,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
-import type {
-	CollectionBuilderState,
-	CollectionOptions,
-} from "#questpie/server/collection/builder/types.js";
+import type { CollectionOptions } from "#questpie/server/collection/builder/types.js";
 import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
 
 /**
@@ -66,28 +63,27 @@ export async function createVersionRecord(
 		workflowFromStage,
 	} = options;
 
-	// Lock existing version rows for this record to prevent concurrent version number races.
-	// SELECT FOR UPDATE acquires row-level locks; the subsequent MAX is computed on locked rows.
+	// The owner row is already locked by every existing-row mutation. Lock
+	// retained history rows as well so the first/create and subsequent sequence
+	// allocation paths share one serial boundary.
 	await tx
 		.select({ versionNumber: (versionsTable as any).versionNumber })
 		.from(versionsTable)
 		.where(eq((versionsTable as any).id, row.id))
 		.for("update");
-
 	const maxVersionQuery = await tx
 		.select({
 			max: sql<number>`MAX(${(versionsTable as any).versionNumber})`,
 		})
 		.from(versionsTable)
 		.where(eq((versionsTable as any).id, row.id));
-
-	const currentVersion = maxVersionQuery[0]?.max || 0;
-	const newVersion = Number(currentVersion) + 1;
+	const newVersion = Number(maxVersionQuery[0]?.max ?? 0) + 1;
 
 	// Insert new version
 	const versionValues: Record<string, unknown> = {
 		...row,
 		versionNumber: newVersion,
+		sourceRevision: typeof row.revision === "number" ? row.revision : null,
 		versionOperation: operation,
 		versionUserId: context.session?.user?.id
 			? String(context.session.user.id)

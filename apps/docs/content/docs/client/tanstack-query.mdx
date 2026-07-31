@@ -178,6 +178,14 @@ remove.mutate({ id: postId }); // { id } -> { success: boolean }
 `update()` and `delete()` wrap the single-record **by-id** client methods, their variables are `{ id, data }` and `{ id }`, never a `where` clause. For bulk operations use `updateMany({ where, data })` / `deleteMany({ where })`. Two caveats on the bulk pair: their `where`/`data` variables are typed `any` (no schema-level checking of the filter, unlike `find`'s typed `where`), and `updateMany`'s **declared** return type is a single row while the runtime actually returns an array of written rows, the static type is narrower than reality.
 </Callout>
 
+For generated optimistic concurrency, the mutation builders preserve the
+client preconditions: by-id variables include `expectedRevision`, batch
+entries include `expectedRevision`, and bulk mutations include exact
+`expectedRevisions`. A global update uses
+`{ data: { data: fields, expectedRevision } }` because the outer `data` is the
+TanStack mutation-variable envelope. Revert and workflow params also carry
+`expectedRevision`.
+
 ## Globals
 
 A global is a singleton. `q.globals.<name>` exposes `get`, `update`, `findVersions`, `revertToVersion`, and `transitionStage`.

@@ -62,6 +62,23 @@ function useCollectionRealtimeInvalidation({
  */
 type ResolvedCollectionNames = string;
 
+type CollectionDeleteMany<K extends string> =
+	AnyQuestpieClient["collections"][K]["deleteMany"];
+type CollectionDeleteManyVariables<K extends string> = Parameters<
+	CollectionDeleteMany<K>
+>[0];
+type CollectionDeleteManyData<K extends string> = Awaited<
+	ReturnType<CollectionDeleteMany<K>>
+>;
+type CollectionDeleteManyOptions<K extends string> = Omit<
+	UseMutationOptions<
+		CollectionDeleteManyData<K>,
+		Error,
+		CollectionDeleteManyVariables<K>
+	>,
+	"mutationFn"
+>;
+
 // ============================================================================
 // Collection Hooks
 // ============================================================================
@@ -439,6 +456,66 @@ export function useCollectionDelete<K extends ResolvedCollectionNames>(
 		},
 		...mutationOptions,
 	} as any);
+}
+
+/**
+ * Hook to atomically delete every record matching a collection filter.
+ */
+export function useCollectionDeleteMany<K extends ResolvedCollectionNames>(
+	collection: K,
+	mutationOptions?: CollectionDeleteManyOptions<K & string>,
+) {
+	const { queryOpts, queryClient, locale } = useQuestpieQueryOptions();
+
+	const baseOptions =
+		queryOpts.collections[collection as K & string].deleteMany();
+	const listQueryKey = queryOpts.key([
+		"collections",
+		collection as string,
+		"find",
+		locale,
+	]);
+	const countQueryKey = queryOpts.key([
+		"collections",
+		collection as string,
+		"count",
+		locale,
+	]);
+	const itemQueryKey = queryOpts.key([
+		"collections",
+		collection as string,
+		"findOne",
+		locale,
+	]);
+
+	return useMutation<
+		CollectionDeleteManyData<K & string>,
+		Error,
+		CollectionDeleteManyVariables<K & string>
+	>({
+		...baseOptions,
+		onSuccess: (data, variables, onMutateResult, context) => {
+			return mutationOptions?.onSuccess?.(
+				data,
+				variables,
+				onMutateResult,
+				context,
+			);
+		},
+		onSettled: (data, error, variables, onMutateResult, context) => {
+			queryClient.invalidateQueries({ queryKey: listQueryKey });
+			queryClient.invalidateQueries({ queryKey: countQueryKey });
+			queryClient.removeQueries({ queryKey: itemQueryKey });
+			return mutationOptions?.onSettled?.(
+				data,
+				error,
+				variables,
+				onMutateResult,
+				context,
+			);
+		},
+		...mutationOptions,
+	});
 }
 
 /**

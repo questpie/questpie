@@ -1,0 +1,76 @@
+---
+title: Optimistic concurrency
+description: Protect generated collection and global mutations with framework-owned canonical revisions.
+---
+
+QUESTPIE can reject a mutation when the canonical row changed after it was
+read. Enable the generated contract on a collection or global:
+
+```ts
+export const posts = collection("posts")
+	.fields(({ f }) => ({ title: f.text().required() }))
+	.options({
+		optimisticConcurrency: true,
+		versioning: true,
+	});
+```
+
+The framework generates a read-only `revision` field. Applications must not
+declare it in `.fields()` or send it as create/update data. A collection create
+starts at revision `1`. Creating a previously absent global uses
+`expectedRevision: 0` and returns revision `1`. Every successful canonical
+update, localized-only or relation-only update, soft delete, restore, revert,
+and workflow transition advances it exactly once.
+
+Mutations of existing data carry the revision that was read:
+
+```ts
+const post = await app.collections.posts.findOne({
+	where: { id: postId },
+});
+
+const updated = await app.collections.posts.updateById({
+	id: postId,
+	data: { title: "Revised" },
+	expectedRevision: post!.revision,
+});
+```
+
+`deleteById`, `restoreById`, `purgeById`, `revertToVersion`, and
+`transitionStage` use the same `expectedRevision`. `updateMany` and
+`deleteMany` require exact, unique `expectedRevisions` coverage for every
+selected id; each `updateBatch` entry carries its own `expectedRevision`. The
+whole bulk mutation is atomic. Missing, duplicate, omitted, or stale coverage
+returns a typed `CONFLICT` without writes, history snapshots, mutation hooks,
+realtime events, or partial batch effects.
+
+## HTTP and ETags
+
+Single-record and global responses include `ETag: "<revision>"`. JSON mutation
+inputs may use `expectedRevision`, or HTTP callers may send the same quoted
+number in `If-Match`. Missing or stale JSON `expectedRevision` values return
+HTTP `409`; a failed `If-Match` precondition returns HTTP `412`. Sending
+`If-Match` to a resource without optimistic concurrency returns HTTP `400`.
+If both forms are supplied, they must agree.
+
+## Three clocks, three meanings
+
+- `revision` is the canonical live-row concurrency clock.
+- `versionNumber` and `versionId` identify history snapshots.
+  `sourceRevision` says which canonical revision a snapshot captured.
+- CRDT commit sequences, field cursors, epochs, state vectors, and
+  canonical-field revisions belong to collaborative transport and recovery.
+
+History retention can delete snapshots without changing `revision`. Reverting
+old content never moves the row clock backward: it writes a new canonical
+revision and a new snapshot. CRDT projection keeps its own clocks; one applied
+aggregate cut advances the owner `revision` once. Calling `.collaborative()`
+therefore enables generated optimistic concurrency automatically.
+
+Collaborative versioning uses
+`versioning: { collaborativeSnapshots: "checkpoint" }`: projection cuts do not
+create unbounded history. Ordinary canonical mutations are checkpoints; when
+only collaborative content changed, an empty update with the current
+`expectedRevision` deliberately advances the row and records its current
+snapshot. The collaborative builder normalizes enabled versioning to this
+policy.

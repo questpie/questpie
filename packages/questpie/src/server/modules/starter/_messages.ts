@@ -19,6 +19,7 @@ export const coreBackendMessages = {
 		"error.internal": "Internal server error",
 		"error.badRequest": "Bad request",
 		"error.conflict": "Resource conflict",
+		"error.preconditionFailed": "Precondition failed",
 		"error.notImplemented": "Not implemented",
 		"error.timeout": "Request timeout",
 

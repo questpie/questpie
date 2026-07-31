@@ -105,6 +105,7 @@ import { adminCollectionKey } from "../../hooks/query-access";
 import { useActions } from "../../hooks/use-action";
 import {
 	useCollectionDelete,
+	useCollectionDeleteMany,
 	useCollectionList,
 	useCollectionRestore,
 	useCollectionUpdateBatch,
@@ -142,6 +143,11 @@ import {
 	autoExpandFields,
 	hasFieldsToExpand,
 } from "../../utils/auto-expand-fields";
+import {
+	optimisticBatchEntry,
+	optimisticIdInput,
+	runAdminBulkDelete,
+} from "../../utils/optimistic-concurrency";
 import { AdminViewHeader, AdminViewLayout } from "../layout/admin-view-layout";
 import { BulkActionToolbar } from "./bulk-action-toolbar";
 import {
@@ -1788,6 +1794,7 @@ function TableViewInner({
 
 	// Delete mutation for bulk actions
 	const deleteMutation = useCollectionDelete(collectionKey);
+	const deleteManyMutation = useCollectionDeleteMany(collectionKey);
 	const restoreMutation = useCollectionRestore(collectionKey);
 	const updateBatchMutation = useCollectionUpdateBatch(collectionKey);
 
@@ -2243,10 +2250,14 @@ function TableViewInner({
 
 			try {
 				await updateBatchMutation.mutateAsync({
-					updates: reorderedRows.map((row, index) => ({
-						id: String(row.id),
-						data: { [orderField]: (index + 1) * orderStep },
-					})),
+					updates: reorderedRows.map((row, index) =>
+						optimisticBatchEntry(
+							String(row.id),
+							{ [orderField]: (index + 1) * orderStep },
+							row.original,
+							collectionMeta.optimisticConcurrency,
+						),
+					),
 				});
 				actionHelpers.toast.success(t("collection.orderSaved"));
 			} catch (error) {
@@ -2268,6 +2279,7 @@ function TableViewInner({
 			t,
 			actionHelpers.toast,
 			clearReorderOverlay,
+			collectionMeta.optimisticConcurrency,
 		],
 	);
 
@@ -2294,10 +2306,14 @@ function TableViewInner({
 
 			try {
 				await updateBatchMutation.mutateAsync({
-					updates: reorderedRows.map((row, index) => ({
-						id: String(row.id),
-						data: { [orderField]: (index + 1) * orderStep },
-					})),
+					updates: reorderedRows.map((row, index) =>
+						optimisticBatchEntry(
+							String(row.id),
+							{ [orderField]: (index + 1) * orderStep },
+							row.original,
+							collectionMeta.optimisticConcurrency,
+						),
+					),
 				});
 				actionHelpers.toast.success(t("collection.orderSaved"));
 			} catch (error) {
@@ -2317,6 +2333,7 @@ function TableViewInner({
 			orderStep,
 			t,
 			actionHelpers.toast,
+			collectionMeta.optimisticConcurrency,
 		],
 	);
 
@@ -2490,15 +2507,23 @@ function TableViewInner({
 	// Bulk delete handler
 	const handleBulkDelete = React.useCallback(
 		async (ids: string[]) => {
-			// Delete items in parallel
-			const results = await Promise.allSettled(
-				ids.map((id) => deleteMutation.mutateAsync({ id })),
-			);
-
-			const successCount = results.filter(
-				(r) => r.status === "fulfilled",
-			).length;
-			const failCount = results.filter((r) => r.status === "rejected").length;
+			const results = await runAdminBulkDelete({
+				ids,
+				records: ids.map(
+					(id) => tableRows.find((row) => String(row.id) === id)?.original,
+				),
+				config: collectionMeta.optimisticConcurrency,
+				deleteById: deleteMutation.mutateAsync,
+				deleteMany: deleteManyMutation.mutateAsync,
+			});
+			const successCount =
+				results === null
+					? ids.length
+					: results.filter((result) => result.status === "fulfilled").length;
+			const failCount =
+				results === null
+					? 0
+					: results.filter((result) => result.status === "rejected").length;
 
 			if (failCount === 0) {
 				actionHelpers.toast.success(
@@ -2515,14 +2540,28 @@ function TableViewInner({
 				);
 			}
 		},
-		[deleteMutation, actionHelpers, t],
+		[
+			deleteMutation,
+			deleteManyMutation,
+			actionHelpers,
+			t,
+			tableRows,
+			collectionMeta.optimisticConcurrency,
+		],
 	);
 
 	// Bulk restore handler
 	const handleBulkRestore = React.useCallback(
 		async (ids: string[]) => {
 			const results = await Promise.allSettled(
-				ids.map((id) => restoreMutation.mutateAsync({ id })),
+				ids.map((id) => {
+					const record = tableRows.find(
+						(row) => String(row.id) === id,
+					)?.original;
+					return restoreMutation.mutateAsync(
+						optimisticIdInput(id, record, collectionMeta.optimisticConcurrency),
+					);
+				}),
 			);
 
 			const successCount = results.filter(
@@ -2545,7 +2584,13 @@ function TableViewInner({
 				);
 			}
 		},
-		[restoreMutation, actionHelpers, t],
+		[
+			restoreMutation,
+			actionHelpers,
+			t,
+			tableRows,
+			collectionMeta.optimisticConcurrency,
+		],
 	);
 
 	if (listError && !isSearching) {

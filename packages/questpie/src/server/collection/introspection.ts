@@ -80,6 +80,7 @@ export interface CollectionSchema {
 		timestamps: boolean;
 		softDelete: boolean;
 		versioning: boolean;
+		optimisticConcurrency?: true;
 		workflow?: {
 			enabled: boolean;
 			initialStage: string;
@@ -890,6 +891,7 @@ export async function introspectCollection(
 			timestamps: state.options?.timestamps !== false,
 			softDelete: state.options?.softDelete ?? false,
 			versioning: !!state.options?.versioning,
+			optimisticConcurrency: state.options?.optimisticConcurrency,
 			workflow: resolveWorkflowConfig(
 				extractWorkflowFromVersioning(state.options?.versioning),
 			),

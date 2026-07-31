@@ -19,6 +19,7 @@ export default {
 	"error.updatesMustBeArray": "updates musí být pole",
 	"error.versionRequired": "Vyžaduje se version nebo versionId",
 	"error.conflict": "Konflikt zdrojů",
+	"error.preconditionFailed": "Podmínka požadavku selhala",
 	"error.notImplemented": "{{feature}} není implementováno",
 	"error.timeout": "Vypršel čas požadavku",
 

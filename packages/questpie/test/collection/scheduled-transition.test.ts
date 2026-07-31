@@ -75,7 +75,7 @@ describe("scheduled transitions", () => {
 				recordId: created.id,
 				stage: "published",
 			});
-			expect(jobs[0].options?.startAfter).toEqual(futureDate);
+			expect(jobs[0].options?.startAfter).toBe(futureDate.toISOString());
 		});
 
 		it("executes immediately when scheduledAt is in the past", async () => {
@@ -166,7 +166,7 @@ describe("scheduled transitions", () => {
 				global: "workflow_settings",
 				stage: "published",
 			});
-			expect(jobs[0].options?.startAfter).toEqual(futureDate);
+			expect(jobs[0].options?.startAfter).toBe(futureDate.toISOString());
 		});
 
 		it("processes scheduled job for global transitions", async () => {

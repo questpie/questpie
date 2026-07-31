@@ -1,5 +1,6 @@
 import { eq, getTableColumns } from "drizzle-orm";
 
+import { mutateCanonicalRow } from "#questpie/server/collection/crud/shared/canonical-mutation.js";
 import { onAfterCommit } from "#questpie/server/collection/crud/shared/transaction.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
 
@@ -52,6 +53,21 @@ export function createQuestpieReplaceOwnerPort(
 			);
 			if (!ownerEntry) throw new Error("CRDT replace owner is not registered");
 			const [key, crud] = ownerEntry;
+			if (crud["~internalState"]?.options?.optimisticConcurrency !== true) {
+				throw new Error(
+					"CRDT replace owner requires canonical optimistic concurrency",
+				);
+			}
+			const versioning = crud["~internalState"].options.versioning;
+			if (
+				versioning &&
+				(versioning === true ||
+					versioning.collaborativeSnapshots !== "checkpoint")
+			) {
+				throw new Error(
+					"CRDT version history requires checkpoint snapshot policy",
+				);
+			}
 			const table = crud["~internalRelatedTable"];
 			const columns = getTableColumns(table) as Record<string, any>;
 			if (kind === "global") {
@@ -108,13 +124,15 @@ export function createQuestpieReplaceOwnerPort(
 				}
 				update[sourcePath] = value;
 			}
-			const [written] = await transaction
-				.update(owner.table)
-				.set(update)
-				.where(owner.where)
-				.returning();
-			if (!written) throw new Error("CRDT replace canonical write failed");
-			owner.row = written as Record<string, unknown>;
+			owner.row = await mutateCanonicalRow({
+				transaction,
+				table: owner.table,
+				where: owner.where,
+				lockedRow: owner.row,
+				values: update,
+				optimisticConcurrency: true,
+				expectedRevision: "internal",
+			});
 		},
 		async appendRealtimeChange(_transaction, owner, input) {
 			const event = await app.realtime.appendChange({

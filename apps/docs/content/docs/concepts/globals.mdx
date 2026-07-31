@@ -137,7 +137,7 @@ When you enable `versioning` (see [Builder API → .options()](#options)), three
 
 ```ts
 const versions = await app.globals.siteSettings.findVersions({ limit: 10 });
-//    ^? GlobalVersionRecord[]  ({ id, versionId, versionNumber,
+//    ^? GlobalVersionRecord[]  ({ id, versionId, versionNumber, sourceRevision,
 //                                 versionOperation, versionUserId, versionCreatedAt })
 
 await app.globals.siteSettings.revertToVersion({ version: 3 });
@@ -147,6 +147,12 @@ await app.globals.siteSettings.transitionStage({ stage: "published" });
 ```
 
 `transitionStage()` exists only on workflow-enabled globals; its `scheduledAt` param schedules the transition for a future date instead of running it now (`GlobalTransitionStageParams`). `revertToVersion()` accepts `{ version }`, `{ versionId }`, or `{ id }` (`GlobalRevertVersionOptions`).
+
+With `optimisticConcurrency: true`, the first update of an absent global uses
+`{ data, expectedRevision: 0 }`; later updates, reverts, and transitions use
+the current `revision`. `versionNumber` remains a history sequence and
+`sourceRevision` records the canonical revision captured by a snapshot. See
+[Optimistic concurrency](/docs/concepts/optimistic-concurrency).
 
 <Callout type="info" title="`GlobalVersionRecord` has no `versionStage`">
 	A collection's version record carries the workflow stage; a global's does not,
