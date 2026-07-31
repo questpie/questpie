@@ -29,6 +29,12 @@ export type RedisStreamsClient = {
 		streams: Array<{ key: string; id: string }>,
 		options?: { COUNT?: number; BLOCK?: number },
 	) => Promise<unknown>;
+	/**
+	 * Used to resolve the subscribe position at `start()` time. Optional: a
+	 * client without it falls back to `$`, which reopens the delivery gap
+	 * described on `resolveStartId`.
+	 */
+	xInfoStream?: (stream: string) => Promise<unknown>;
 	duplicate?: () => RedisStreamsClient;
 	connect?: () => Promise<unknown>;
 	close?: () => Promise<void>;
@@ -85,10 +91,52 @@ class RedisStreamsDriver {
 		if (this.running) return;
 
 		await this.ensureReader();
+		// Resolve the subscribe position BEFORE returning, so `start()` means
+		// "subscribed from here" rather than "reader connected". See
+		// resolveStartId for why `$` alone loses messages.
+		const startId = await this.resolveStartId();
 		this.running = true;
-		this.readLoopPromise = this.runReadLoop().catch((error) => {
+		this.readLoopPromise = this.runReadLoop(startId).catch((error) => {
 			this.reportError("[Realtime] Redis Streams read loop stopped", error);
 		});
+	}
+
+	/**
+	 * The concrete stream id the read loop should start after.
+	 *
+	 * `XREAD` with `$` means "messages that arrive after THIS call is issued" —
+	 * and `start()` used to launch the read loop without awaiting it, so
+	 * anything published between `start()` resolving and the loop's first
+	 * `xRead` reaching the server was silently dropped. The window is small but
+	 * real, and it is exactly the shape a caller hits when it starts a broker
+	 * and immediately publishes:
+	 *
+	 *     await broker.start({ onWake });
+	 *     await broker.publish(wake);   // could never arrive
+	 *
+	 * Resolving the id here closes it: whatever is added after this point has
+	 * an id greater than the one we captured, so the loop picks it up no matter
+	 * how late it starts. `pg-notify` already had this property because its
+	 * `start()` awaits `LISTEN`; this brings the two implementations of the
+	 * same interface back to the same guarantee.
+	 *
+	 * Falls back to `$` when the client cannot report stream info, which is no
+	 * worse than the previous behaviour.
+	 */
+	private async resolveStartId(): Promise<string> {
+		const reader = this.reader;
+		if (!reader?.xInfoStream) return "$";
+		try {
+			const info = (await reader.xInfoStream(this.stream)) as
+				| Record<string, unknown>
+				| undefined;
+			const lastId = info?.["last-generated-id"] ?? info?.lastGeneratedId;
+			return typeof lastId === "string" && lastId.length > 0 ? lastId : "$";
+		} catch {
+			// A stream that does not exist yet has nothing to miss; start from the
+			// beginning so the first publish is still delivered.
+			return "0-0";
+		}
 	}
 
 	async startPublisher(): Promise<void> {}
@@ -157,11 +205,11 @@ class RedisStreamsDriver {
 		);
 	}
 
-	private async readLoop(): Promise<void> {
+	private async readLoop(startId: string): Promise<void> {
 		const reader = this.reader;
 		if (!reader) throw new Error("Redis Streams reader is not initialized");
 
-		let lastId = "$";
+		let lastId = startId;
 		while (this.running) {
 			try {
 				const response = await reader.xRead(
@@ -238,9 +286,9 @@ class RedisStreamsDriver {
 		this.reader.on("error", this.readerErrorHandler);
 	}
 
-	private async runReadLoop(): Promise<void> {
+	private async runReadLoop(startId: string): Promise<void> {
 		try {
-			await this.readLoop();
+			await this.readLoop(startId);
 		} finally {
 			this.running = false;
 			this.readLoopPromise = null;
