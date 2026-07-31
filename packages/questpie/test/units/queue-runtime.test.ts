@@ -522,4 +522,59 @@ describe("queue runtime api", () => {
 			"has cron schedule but schema does not accept an empty payload",
 		);
 	});
+
+	test("secret payloads fail closed without idempotency, root key, or terminal adapter metadata", async () => {
+		const jobs = {
+			notify: {
+				name: "notify",
+				schema: z.object({ secret: z.string() }),
+				handler: async () => {},
+			},
+		};
+		const mockAdapter = new MockQueueAdapter();
+		const withoutRootKey = createQueueClient(jobs, mockAdapter, {
+			getDatabase: () => ({}) as any,
+		});
+
+		await expect(
+			withoutRootKey.notify.publish(
+				{ secret: "value" },
+				{ secretPayload: true },
+			),
+		).rejects.toThrow("require idempotencyKey");
+		await expect(
+			withoutRootKey.notify.publish(
+				{ secret: "value" },
+				{
+					idempotencyKey: "notify:secret",
+					secretPayload: true,
+				},
+			),
+		).rejects.toThrow("runtimeConfig.secret with at least 32 bytes");
+		expect(mockAdapter.getJobs()).toEqual([]);
+
+		const published: unknown[] = [];
+		const cloudflare = cloudflareQueuesAdapter({
+			enqueue: async (message) => {
+				published.push(message);
+				return null;
+			},
+		});
+		const withoutTerminalMetadata = createQueueClient(jobs, cloudflare, {
+			getDatabase: () => ({}) as any,
+			secret: "queue-secret-root-key-at-least-32-bytes",
+		});
+		await expect(
+			withoutTerminalMetadata.notify.publish(
+				{ secret: "value" },
+				{
+					idempotencyKey: "notify:cloudflare-secret",
+					secretPayload: true,
+				},
+			),
+		).rejects.toThrow(
+			"cannot reconcile durable broker terminal execution state",
+		);
+		expect(published).toEqual([]);
+	});
 });

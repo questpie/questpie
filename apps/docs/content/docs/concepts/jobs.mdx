@@ -94,7 +94,7 @@ That's the whole loop: define → wire an adapter → publish. A worker drains t
 </Callout>
 
 <Callout type="info" title="`publish()` joins the ambient transaction">
-  Call and `await` `queue.x.publish(...)` directly from transactional hooks. With pg-boss, QUESTPIE inserts the job through the current Drizzle transaction. With BullMQ, Cloudflare Queues, and custom external adapters, it writes an internal dispatch intent in that transaction and relays it after commit. A rollback therefore creates neither a job nor a dispatch intent. Existing `onAfterCommit(() => queue.x.publish(...))` call sites still work, but moving the call outside the transaction gives up the atomic handoff.
+  Call and `await` `queue.x.publish(...)` directly from transactional hooks. With pg-boss pointed at the same PostgreSQL database and `useApplicationTransaction: true`, QUESTPIE inserts the job and ledger row through the current Drizzle transaction. With pg-boss configured for separate storage (`useApplicationTransaction: false`), BullMQ, Cloudflare Queues, and custom external adapters, it writes an internal dispatch intent in that transaction and relays it after commit. A rollback therefore creates neither a job nor a dispatch intent. Existing `onAfterCommit(() => queue.x.publish(...))` call sites still work, but moving the call outside the transaction gives up the atomic handoff.
 </Callout>
 
 ## Example → what you get
@@ -191,9 +191,9 @@ const dispatchId = await queue.sendWelcomeEmail.publish(
 );
 ```
 
-The optional second argument is [`PublishOptions`](#publishoptions), spread-merged **over** the job's own `options` (`{ ...jobDef.options, ...publishOptions }`, so call-time wins). It throws if the payload fails the schema, `idempotencyKey` is empty or longer than 512 characters, or `idempotencyKey` and `singletonKey` are combined. Native singleton suppression cannot safely prove that a new logical dispatch was accepted, so that ambiguous combination fails closed.
+The optional second argument is [`PublishOptions`](#publishoptions), spread-merged **over** the job's own `options` (`{ ...jobDef.options, ...publishOptions }`, so call-time wins). It throws if the payload fails the schema, `idempotencyKey` is empty or longer than 512 characters, or `idempotencyKey` and `singletonKey` are combined. Native singleton suppression cannot safely prove that a new logical dispatch was accepted, so that ambiguous combination fails closed. A secret-bearing publish also fails closed unless it has a non-secret idempotency key, a stable `runtimeConfig.secret` of at least 32 bytes, and an adapter with `executionTerminalState`.
 
-Inside a QUESTPIE transaction, `publish()` is atomic with the business write. pg-boss inserts through the same Drizzle transaction. External adapters persist an internal `questpie_queue_dispatch` row in that transaction and relay it after commit with leased, retryable recovery. Outside a transaction, a call without `idempotencyKey` keeps the low-latency behavior and waits for adapter acceptance; a call with `idempotencyKey` uses the durable dispatch ledger so retries can resolve to one logical dispatch.
+Inside a QUESTPIE transaction, `publish()` is atomic with the business write. pg-boss inserts through the same Drizzle transaction only when it points at that PostgreSQL database and `useApplicationTransaction` is enabled. External adapters and a separate pg-boss database persist an internal `questpie_queue_dispatch` row in the transaction and relay it after commit with leased, retryable recovery. Outside a transaction, a call without `idempotencyKey` keeps the low-latency behavior and waits for adapter acceptance; a call with `idempotencyKey` uses the durable dispatch ledger so retries can resolve to one logical dispatch.
 
 ### `schedule(payload, cron, options?)`
 
@@ -206,7 +206,7 @@ await queue.generateReport.schedule(
 );
 ```
 
-`options` here is `Omit<PublishOptions, "idempotencyKey" | "startAfter">`. `startAfter` is meaningless for a recurring schedule, and one idempotency identity cannot describe recurring occurrences. This is the **imperative** scheduling path; the declarative one is [`options.cron`](#recurring-jobs) on the job itself. Throws on adapters without scheduling support (Cloudflare Queues).
+`options` here is `Omit<PublishOptions, "idempotencyKey" | "startAfter" | "secretPayload">`. `startAfter` is meaningless for a recurring schedule, one idempotency identity cannot describe recurring occurrences, and secret-bearing work requires a durable one-off dispatch ledger. This is the **imperative** scheduling path; the declarative one is [`options.cron`](#recurring-jobs) on the job itself. Throws on adapters without scheduling support (Cloudflare Queues).
 
 ### `unschedule()`
 
@@ -274,6 +274,7 @@ The per-call override surface for `publish()`. It's a superset of `options` minu
 
 ```ts
 interface PublishOptions {
+	secretPayload?: boolean; // per-dispatch envelope encryption + crypto-erasure
 	idempotencyKey?: string; // 1..512 chars; one logical dispatch per job name + key
 	priority?: number;
 	startAfter?: number | string | Date;
@@ -285,7 +286,39 @@ interface PublishOptions {
 }
 ```
 
-`idempotencyKey` is portable and scoped to the durable job name. Reusing it returns the same `dispatchId`; the first accepted payload/options win, even after pg-boss Job retention or an adapter switch. Accepted idempotent dispatches retain only their identity receipt, not their payload, with no automatic expiry: keep the key non-secret and remove a receipt only when your application can prove the key will never be retried. `singletonKey` is different: it controls adapter-native scheduling/concurrency deduplication while work is queued or active. It is supported by pg-boss queue policies and BullMQ deduplication and ignored by Cloudflare Queues. Combining both keys is rejected because a singleton-suppressed publish has no new logical Job identity. `schedule()` accepts `Omit<PublishOptions, "idempotencyKey" | "startAfter">`.
+`idempotencyKey` is portable and scoped to the durable job name. Reusing it returns the same `dispatchId`; the first accepted payload/options win, even after pg-boss Job retention or an adapter switch. Put the application payload version in this key when a later version must create new work. Accepted idempotent dispatches retain only their identity receipt, not their payload, with no automatic expiry: keep the key non-secret and remove a receipt only when your application can prove the key will never be retried. `singletonKey` is different: it controls adapter-native scheduling/concurrency deduplication while work is queued or active. It is supported by pg-boss queue policies and BullMQ deduplication and ignored by Cloudflare Queues. Combining both keys is rejected because a singleton-suppressed publish has no new logical Job identity. `schedule()` accepts `Omit<PublishOptions, "idempotencyKey" | "startAfter" | "secretPayload">`.
+
+### Secret-bearing payloads and safe receipts
+
+Use `secretPayload: true` only when the job must carry a short-lived bearer secret that cannot be resolved from durable application state:
+
+```ts
+const dispatchId = await queue.deliverOneTimeLink.publish(
+	{ recipientId, rawLink },
+	{
+		idempotencyKey: `one-time-link:${recipientId}:v1`,
+		secretPayload: true,
+	},
+);
+
+const receipt = await queue.getReceipt(dispatchId!);
+```
+
+QUESTPIE validates the plaintext first, creates a random AES-256-GCM data key, sends only ciphertext to Queue persistence and the broker, and keeps only the root-key-wrapped data key in `questpie_queue_dispatch`. The worker resolves that key by stable `dispatchId` only after acquiring a leased execution claim. The claim fences concurrent physical deliveries and is heartbeated while the handler runs. Handler completion is monotonic and erases the key. A durable broker failure, cancellation, timeout, heartbeat expiry, or missing job erases it only when no live execution claim remains. A duplicate delivery after erasure is acknowledged without running user code again.
+
+`getReceipt()` returns only `{ dispatchId, jobName, idempotencyKey?, status, createdAt, queuedAt, handledAt }`:
+
+- `queued` includes a committed relay intent and broker-accepted work. `queuedAt` is non-null only after broker acceptance.
+- `completed` means the job handler returned successfully. For a handler whose final action is `email.sendTemplate()`, an application may project this as `sent`, meaning only that the configured mail adapter accepted the request, not inbox delivery.
+- `failed` means broker publication exhausted recovery or durable broker state no longer proves a successful handler completion. A provider may already have accepted an external effect in the crash gap; use `dispatchId` for provider idempotency.
+
+The receipt contains no payload, wrapped key, adapter job id, provider response, or provider error. `getReceipt()` returns `null` for ordinary, non-secret dispatch rows so it cannot become a broad ledger-read API. It is still a server-side infrastructure query and applies no product authorization; authorize any route that projects a secret receipt.
+
+Framework-owned validation errors, handler failures, broker receipts,
+observability spans, and Queue logger calls use generic payload-free messages for
+secret dispatches. This boundary cannot prevent trusted application schema
+refinements, handlers, provider SDKs, or custom logging from recording plaintext
+before they throw. Do not log the payload or embed it in application telemetry.
 
 <Callout type="warn" title="Delivery is at-least-once">
 	Crash recovery can republish after an adapter accepted a message but before
@@ -400,7 +433,7 @@ export default {
 
 `createPushConsumer()` throws on pg-boss / BullMQ (they're poll-based, not push).
 
-For crash recovery when no new push batch arrives, invoke `await app.queue.drain()` from a Cloudflare Cron Trigger. `drain({ batchSize, concurrency, maxBatches })` claims up to 1000 rows per batch and up to 100 consecutive batches, then returns `{ claimed, accepted, failed, terminal }`. Defaults are one 100-row batch at concurrency eight. It is a bounded operational recovery seam, not another application dispatch API.
+For crash recovery when no new push batch arrives, invoke `await app.queue.drain()` from a Cloudflare Cron Trigger. `drain({ batchSize, concurrency, maxBatches })` claims up to 1000 relay rows per batch and up to 100 consecutive relay batches, then returns `{ claimed, accepted, failed, terminal }`. Defaults are one 100-row relay batch at concurrency eight. For adapters qualified for secret dispatch, the same call captures the current accepted-secret high-water row and reconciles that finite snapshot in `batchSize` keyset pages to exhaustion. This prevents older active work from hiding later broker-terminal work; `batchSize` bounds each reconciliation page rather than the whole snapshot. `drain()` is an operational recovery seam, not another application dispatch API.
 
 The relay retries adapter publication at most 25 times with exponential backoff capped at one hour. The 25th failure remains in `questpie_queue_dispatch` with `status = "failed"`, increments `terminal`, and emits a structured error containing only `dispatchId`, job name, attempt count, and the generic `"Adapter publication failed"` category. QUESTPIE deliberately does not persist or automatically log the foreign adapter's `Error.message`, because it may contain a serialized payload or bearer secret. After fixing the adapter, remediate through the existing application API by publishing a new logical attempt with a new `idempotencyKey`; reusing the terminal key deliberately returns the same terminal receipt.
 
@@ -410,8 +443,9 @@ The relay retries adapter publication at most 25 times with exponential backoff 
 >
 	Each adapter advertises what it supports via `app.queue.capabilities`,
 	`longRunningConsumer`, `runOnceConsumer`, `pushConsumer`, `scheduling`,
-	`singleton`. If you target multiple runtimes from one codebase, check the
-	relevant flag before calling a method; that's cheaper than catching the throw.
+	`singleton`, and `executionTerminalState`. If you target multiple runtimes
+	from one codebase, check the relevant flag before calling a method; that's
+	cheaper than catching the throw.
 </Callout>
 
 ## Adapters
@@ -436,7 +470,7 @@ import { pgBossAdapter } from "questpie/adapters/pg-boss";
 });
 ```
 
-`PgBossAdapterOptions` extends pg-boss's `ConstructorOptions` with `useApplicationTransaction`; all other options pass straight through to `new PgBoss(...)` (`connectionString`, `db`, `schema`, `max`, …). Queues are created on demand. When pg-boss and the application share PostgreSQL, the default `useApplicationTransaction: true` uses `fromDrizzle(tx, sql)` so the business write, durable idempotency receipt, and Job commit together. If pg-boss points at a separate database, set `useApplicationTransaction: false`; QUESTPIE then uses the application-database dispatch relay. Supports long-running workers, `runOnce`, scheduling, and native `singletonKey`.
+`PgBossAdapterOptions` extends pg-boss's `ConstructorOptions` with `useApplicationTransaction`; all other options pass straight through to `new PgBoss(...)` (`connectionString`, `db`, `schema`, `max`, …). Queues are created on demand. When pg-boss and the application share PostgreSQL, the default `useApplicationTransaction: true` uses `fromDrizzle(tx, sql)` so the business write, durable idempotency receipt, and Job commit together. If pg-boss points at a separate database, set `useApplicationTransaction: false`; QUESTPIE then uses the application-database dispatch relay. A lost publication receipt is recovered by replaying the stable `dispatchId` and querying for that exact physical Job before acceptance. A `null` result caused by a different queue-policy conflict is a publication failure, not a duplicate receipt. Supports long-running workers, `runOnce`, scheduling, and native `singletonKey`.
 
 ### BullMQ (Redis)
 
@@ -495,13 +529,17 @@ await queue.sendWelcomeEmail.publish(
 
 This is the complete composition: typed `send-welcome-email` Job → `email.sendTemplate()` → configured mail adapter. QUESTPIE does not expose `email.enqueueTemplate()` or a mail-specific outbox.
 
-<Callout type="warn" title="Do not place long-lived secrets in Queue payloads">
-	External-adapter payloads can remain in `questpie_queue_dispatch` until
-	acceptance and remain there after terminal failure, and then enter the broker.
-	Generic encryption for secret-bearing Queue payloads is a separate security
-	capability; pass durable record identifiers and resolve sensitive values
-	inside the handler. Failed rows are deliberately retained for operator
-	inspection and have no automatic payload-retention deadline in this release.
+<Callout
+	type="warn"
+	title="Prefer durable identifiers; protect unavoidable bearer secrets"
+>
+	Pass durable record identifiers and resolve sensitive values inside the
+	handler whenever possible. If a short-lived bearer value must cross Queue, use
+	`secretPayload: true`. Only pg-boss is qualified in this release. BullMQ and
+	Cloudflare Queues fail closed because their current adapters do not expose all
+	durable broker-owned terminal paths for recovery. Keep `runtimeConfig.secret`
+	stable until all such work is terminal; this release does not provide a
+	historical root-key ring.
 </Callout>
 
 <Callout type="warn" title="An adapter is required once any job exists">
@@ -522,6 +560,7 @@ class MyAdapter implements QueueAdapter {
 		pushConsumer: false,
 		scheduling: false,
 		singleton: false,
+		executionTerminalState: false,
 	};
 
 	async start() {
@@ -556,7 +595,7 @@ class MyAdapter implements QueueAdapter {
 }
 ```
 
-`start` / `stop` / `publish` / `schedule` / `unschedule` / `on` are **required**; `listen` / `runOnce` / `createPushConsumer` are **optional** and drive their capability flags when `capabilities` leaves them unset. QUESTPIE passes the stable logical `dispatchId` as the fourth `publish` argument; custom adapters should use it as their physical dedupe identity. Each `QueueHandlerMap` entry is keyed by the durable job name and receives `{ id, data, dispatchId?, idempotencyKey? }`; QUESTPIE validates `data` against the job's Zod schema before the handler runs.
+`start` / `stop` / `publish` / `schedule` / `unschedule` / `on` are **required**; `listen` / `runOnce` / `createPushConsumer` are **optional** and drive their capability flags when `capabilities` leaves them unset. QUESTPIE passes the stable logical `dispatchId` as the fourth `publish` argument; custom adapters should use it as their physical dedupe identity. Each `QueueHandlerMap` entry is keyed by the durable job name and receives `{ id, data, dispatchId?, idempotencyKey?, secretPayload?, finalAttempt? }`; QUESTPIE validates `data` against the job's Zod schema before the handler runs. A custom adapter may set `executionTerminalState: true` only when it preserves the outer secret marker and implements durable `inspectExecutionState()` coverage for every handler and broker-owned terminal path; otherwise secret-bearing publish fails closed.
 
 ## Built-in job: `index-records`
 

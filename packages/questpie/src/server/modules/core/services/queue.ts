@@ -28,6 +28,7 @@ export default service({
 			getDatabase: () => app.db,
 			getApp: () => app,
 			logger: app.logger,
+			secret: app.config.secret,
 		});
 	},
 	dispose: (instance) => (instance as any)?.stop?.(),

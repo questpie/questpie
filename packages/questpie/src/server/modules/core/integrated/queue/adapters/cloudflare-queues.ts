@@ -134,6 +134,7 @@ export class CloudflareQueuesAdapter implements QueueAdapter {
 		pushConsumer: true,
 		scheduling: false,
 		singleton: false,
+		executionTerminalState: false,
 	} as const;
 
 	private readonly enqueue: (

@@ -168,6 +168,13 @@ export type InferJobResult<T> =
  */
 export interface PublishOptions {
 	/**
+	 * Encrypt the job payload with a per-dispatch data key before it reaches
+	 * Queue persistence or an adapter. Requires a non-secret idempotency key and
+	 * runtimeConfig.secret with at least 32 bytes.
+	 */
+	secretPayload?: boolean;
+
+	/**
 	 * Portable logical idempotency identity.
 	 *
 	 * Reusing the same key for one job name resolves to the same dispatch.
@@ -201,8 +208,9 @@ export interface PublishOptions {
 	 * - `singleton` — 1 active job per key (unlimited queued)
 	 * - `stately` — 1 job per key across queued AND active (typical "singleton")
 	 *
-	 * Only affects keyed jobs. Adapters that don't support policies ignore it.
-	 * (Standard queues stay full-throughput for non-keyed jobs.)
+	 * pg-boss coalesces an omitted singleton key to the empty key for policy
+	 * indexes, so a non-standard policy can also suppress otherwise unkeyed
+	 * jobs. Adapters that don't support policies ignore it.
 	 */
 	queuePolicy?: "standard" | "short" | "singleton" | "stately" | "exclusive";
 
@@ -299,6 +307,26 @@ export interface QueueDrainResult {
 	terminal: number;
 }
 
+export type QueueDispatchReceiptStatus = "queued" | "completed" | "failed";
+
+/**
+ * Secret-free lifecycle projection for one stable logical dispatch.
+ *
+ * `queuedAt` means the Queue adapter accepted publication. `completed` means
+ * the job handler returned successfully. Applications may map completed work
+ * to a domain term such as "sent" only when their handler's terminal action
+ * has that meaning.
+ */
+export interface QueueDispatchReceipt {
+	dispatchId: string;
+	jobName: string;
+	idempotencyKey?: string;
+	status: QueueDispatchReceiptStatus;
+	createdAt: Date;
+	queuedAt: Date | null;
+	handledAt: Date | null;
+}
+
 export interface QueueListenHandle {
 	stop: () => Promise<void>;
 }
@@ -318,7 +346,10 @@ export type QueueJobClient<TJob> = {
 	schedule: (
 		payload: InferJobPayload<TJob>,
 		cron: string,
-		options?: Omit<PublishOptions, "idempotencyKey" | "startAfter">,
+		options?: Omit<
+			PublishOptions,
+			"idempotencyKey" | "startAfter" | "secretPayload"
+		>,
 	) => Promise<void>;
 
 	/**
@@ -388,6 +419,14 @@ export type QueueClient<TJobs extends Record<string, any>> = {
 	 * invoke it from a platform cron trigger for crash recovery.
 	 */
 	drain: (options?: QueueDrainOptions) => Promise<QueueDrainResult>;
+
+	/**
+	 * Read a secret-free receipt for a logical dispatch.
+	 *
+	 * This server-side infrastructure method does not apply product
+	 * authorization. Applications must authorize any route that projects it.
+	 */
+	getReceipt: (dispatchId: string) => Promise<QueueDispatchReceipt | null>;
 
 	/**
 	 * Register recurring cron schedules declared in job options.

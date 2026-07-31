@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+	boolean,
 	customType,
 	index,
 	integer,
@@ -41,6 +42,8 @@ export const questpieQueueDispatchTable = pgTable(
 		jobName: text("job_name").notNull(),
 		idempotencyKey: text("idempotency_key"),
 		payload: jsonbSafe("payload"),
+		secretPayload: boolean("secret_payload").default(false).notNull(),
+		wrappedSecretKey: jsonbSafe("wrapped_secret_key"),
 		options: jsonbSafe("options"),
 		status: text("status").default("pending").notNull(),
 		attempts: integer("attempts").default(0).notNull(),
@@ -58,6 +61,19 @@ export const questpieQueueDispatchTable = pgTable(
 		adapterJobId: text("adapter_job_id"),
 		lastError: text("last_error"),
 		acceptedAt: timestamp("accepted_at", {
+			withTimezone: true,
+			mode: "date",
+		}),
+		completedAt: timestamp("completed_at", {
+			withTimezone: true,
+			mode: "date",
+		}),
+		failedAt: timestamp("failed_at", {
+			withTimezone: true,
+			mode: "date",
+		}),
+		executionClaimToken: uuid("execution_claim_token"),
+		executionClaimedUntil: timestamp("execution_claimed_until", {
 			withTimezone: true,
 			mode: "date",
 		}),

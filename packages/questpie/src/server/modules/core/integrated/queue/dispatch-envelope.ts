@@ -5,6 +5,7 @@ interface QueueDispatchEnvelope {
 		version: typeof QUESTPIE_QUEUE_DISPATCH_ENVELOPE_VERSION;
 		dispatchId: string;
 		idempotencyKey?: string;
+		secretPayload?: true;
 	};
 	payload: unknown;
 }
@@ -13,12 +14,14 @@ export function encodeQueueDispatchEnvelope(
 	payload: unknown,
 	dispatchId: string,
 	idempotencyKey?: string,
+	secretPayload?: boolean,
 ): QueueDispatchEnvelope {
 	return {
 		__questpieQueue: {
 			version: QUESTPIE_QUEUE_DISPATCH_ENVELOPE_VERSION,
 			dispatchId,
 			...(idempotencyKey ? { idempotencyKey } : {}),
+			...(secretPayload ? { secretPayload: true as const } : {}),
 		},
 		payload,
 	};
@@ -31,6 +34,7 @@ export function decodeQueueDispatchEnvelope(
 	data: unknown;
 	dispatchId?: string;
 	idempotencyKey?: string;
+	secretPayload?: boolean;
 };
 export function decodeQueueDispatchEnvelope(
 	value: unknown,
@@ -39,6 +43,7 @@ export function decodeQueueDispatchEnvelope(
 	data: unknown;
 	dispatchId?: string;
 	idempotencyKey?: string;
+	secretPayload?: boolean;
 } {
 	if (!value || typeof value !== "object" || Array.isArray(value)) {
 		return { data: value };
@@ -61,6 +66,7 @@ export function decodeQueueDispatchEnvelope(
 		...(typeof metadata.idempotencyKey === "string"
 			? { idempotencyKey: metadata.idempotencyKey }
 			: {}),
+		...(metadata.secretPayload === true ? { secretPayload: true } : {}),
 	};
 }
 

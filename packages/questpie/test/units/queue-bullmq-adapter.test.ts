@@ -3,6 +3,30 @@ import { describe, expect, test } from "bun:test";
 import { BullMQAdapter } from "../../src/server/modules/core/integrated/queue/adapters/bullmq.js";
 
 describe("BullMQAdapter logical dispatch", () => {
+	test("fails closed for secret dispatch even though ordinary attempts still expose final-attempt metadata", () => {
+		const adapter = new BullMQAdapter({
+			connection: { host: "127.0.0.1", port: 6379 },
+		});
+
+		expect(adapter.capabilities.executionTerminalState).toBe(false);
+		expect(
+			(adapter as any).toQueueJobRecord({
+				id: "retrying",
+				data: { value: "one" },
+				attemptsMade: 0,
+				opts: { attempts: 2 },
+			}).finalAttempt,
+		).toBe(false);
+		expect(
+			(adapter as any).toQueueJobRecord({
+				id: "terminal",
+				data: { value: "two" },
+				attemptsMade: 1,
+				opts: { attempts: 2 },
+			}).finalAttempt,
+		).toBe(true);
+	});
+
 	test("maps dispatch idempotency and singleton scheduling independently", async () => {
 		const adapter = new BullMQAdapter({
 			connection: { host: "127.0.0.1", port: 6379 },

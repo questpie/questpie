@@ -37,7 +37,16 @@ class FakePgBoss {
 		options: Record<string, unknown>;
 	}> = [];
 	public fetchedJobs: any[] = [];
+	public inspectedJobs = new Map<string, any>();
+	public inspectionCalls: Array<{
+		name: string;
+		id: string;
+		options?: Record<string, unknown>;
+	}> = [];
 	public workCallbacks = new Map<string, WorkCallback>();
+	public workOptions = new Map<string, Record<string, unknown>>();
+	public fetchOptions: Record<string, unknown> | undefined;
+	public sendResult: string | null | undefined;
 
 	async start(): Promise<void> {
 		this.started = true;
@@ -52,15 +61,18 @@ class FakePgBoss {
 		name: string,
 		data: unknown,
 		options: Record<string, unknown>,
-	): Promise<string> {
+	): Promise<string | null> {
 		this.sendCalls.push({ name, data, options });
-		return String(options.id ?? "fake-id");
+		return this.sendResult === undefined
+			? String(options.id ?? "fake-id")
+			: this.sendResult;
 	}
 	async work(
 		name: string,
-		_options: unknown,
+		options: Record<string, unknown>,
 		callback: WorkCallback,
 	): Promise<string> {
+		this.workOptions.set(name, options);
 		this.workCallbacks.set(name, callback);
 		return `worker-${name}`;
 	}
@@ -70,8 +82,20 @@ class FakePgBoss {
 	async complete(name: string, id: string): Promise<void> {
 		this.completeCalls.push({ name, id });
 	}
-	async fetch(): Promise<any[]> {
+	async fetch(
+		_name?: string,
+		options?: Record<string, unknown>,
+	): Promise<any[]> {
+		this.fetchOptions = options;
 		return this.fetchedJobs.splice(0);
+	}
+	async getJobById(
+		name: string,
+		id: string,
+		options?: Record<string, unknown>,
+	): Promise<any> {
+		this.inspectionCalls.push({ name, id, options });
+		return this.inspectedJobs.get(`${name}:${id}`) ?? null;
 	}
 }
 
@@ -130,6 +154,95 @@ describe("PgBossAdapter — v10+ work() callback receives Job[]", () => {
 		} as any);
 
 		expect(adapter.transactionalPublishing).toBe(false);
+	});
+
+	it("recovers the caller-supplied physical identity when stable-id replay conflicts", async () => {
+		const { adapter, fake } = makeAdapter();
+		const dispatchId = "0e79a7d5-da2f-55e7-ae4c-3e95c5633071";
+		fake.sendResult = null;
+		fake.inspectedJobs.set(`notify:${dispatchId}`, { id: dispatchId });
+
+		await expect(
+			adapter.publish(
+				"notify",
+				{ value: "replayed" },
+				{ idempotencyKey: "notify:replayed" },
+				dispatchId,
+			),
+		).resolves.toBe(dispatchId);
+		expect(fake.inspectionCalls).toEqual([
+			{ name: "notify", id: dispatchId, options: undefined },
+		]);
+	});
+
+	it("fails publication when null is caused by a different queue-policy conflict", async () => {
+		const { adapter, fake } = makeAdapter();
+		const dispatchId = "0e79a7d5-da2f-55e7-ae4c-3e95c5633071";
+		fake.sendResult = null;
+
+		await expect(
+			adapter.publish(
+				"notify",
+				{ value: "suppressed-by-another-job" },
+				{ idempotencyKey: "notify:distinct", queuePolicy: "short" },
+				dispatchId,
+			),
+		).rejects.toThrow("QUESTPIE pg-boss publication was not accepted");
+		expect(fake.inspectionCalls).toEqual([
+			{ name: "notify", id: dispatchId, options: undefined },
+		]);
+	});
+
+	it("proves transactional replay through the same transaction connection", async () => {
+		const { adapter, fake } = makeAdapter();
+		const dispatchId = "0e79a7d5-da2f-55e7-ae4c-3e95c5633071";
+		const tx = {
+			execute: async () => ({ rows: [] }),
+		};
+		fake.sendResult = null;
+		fake.inspectedJobs.set(`notify:${dispatchId}`, { id: dispatchId });
+
+		await expect(
+			adapter.publishInTransaction(
+				tx,
+				"notify",
+				{ value: "transactional-replay" },
+				{ idempotencyKey: "notify:transactional-replay" },
+				dispatchId,
+			),
+		).resolves.toBe(dispatchId);
+
+		const transactionDb = fake.sendCalls[0]?.options.db;
+		expect(transactionDb).toBeDefined();
+		expect(fake.inspectionCalls).toEqual([
+			{
+				name: "notify",
+				id: dispatchId,
+				options: { db: transactionDb },
+			},
+		]);
+	});
+
+	it("fails transactional publication when the exact physical id is absent", async () => {
+		const { adapter, fake } = makeAdapter();
+		const dispatchId = "0e79a7d5-da2f-55e7-ae4c-3e95c5633071";
+		const tx = {
+			execute: async () => ({ rows: [] }),
+		};
+		fake.sendResult = null;
+
+		await expect(
+			adapter.publishInTransaction(
+				tx,
+				"notify",
+				{ value: "suppressed-by-another-job" },
+				{
+					idempotencyKey: "notify:transactional-distinct",
+					queuePolicy: "short",
+				},
+				dispatchId,
+			),
+		).rejects.toThrow("QUESTPIE pg-boss publication was not accepted");
 	});
 
 	it("completes successful runOnce jobs and fails handler errors", async () => {
@@ -281,5 +394,93 @@ describe("PgBossAdapter — v10+ work() callback receives Job[]", () => {
 		expect((failed.data as { message: string }).message).toBe(
 			"handler exploded on bad-2",
 		);
+	});
+
+	it("reports terminal-attempt metadata from long-running pg-boss work", async () => {
+		const { adapter, fake } = makeAdapter();
+		const attempts: boolean[] = [];
+		await adapter.listen({
+			echo: async ({ finalAttempt }) => {
+				attempts.push(finalAttempt === true);
+			},
+		});
+
+		expect(fake.workOptions.get("echo")).toMatchObject({
+			includeMetadata: true,
+		});
+		await fake.workCallbacks.get("echo")!([
+			{
+				id: "retrying",
+				data: {},
+				retryCount: 0,
+				retryLimit: 1,
+			},
+			{
+				id: "terminal",
+				data: {},
+				retryCount: 1,
+				retryLimit: 1,
+			},
+		]);
+
+		expect(attempts).toEqual([false, true]);
+	});
+
+	it("requests and reports terminal-attempt metadata in runOnce", async () => {
+		const { adapter, fake } = makeAdapter();
+		const attempts: boolean[] = [];
+		fake.fetchedJobs.push(
+			{
+				id: "retrying",
+				data: {},
+				retryCount: 0,
+				retryLimit: 1,
+			},
+			{
+				id: "terminal",
+				data: {},
+				retryCount: 1,
+				retryLimit: 1,
+			},
+		);
+
+		await adapter.runOnce({
+			echo: async ({ finalAttempt }) => {
+				attempts.push(finalAttempt === true);
+			},
+		});
+
+		expect(fake.fetchOptions).toMatchObject({
+			includeMetadata: true,
+		});
+		expect(attempts).toEqual([false, true]);
+	});
+
+	it("source-qualifies broker terminal states for crash-recovery reconciliation", async () => {
+		const { adapter, fake } = makeAdapter();
+		fake.inspectedJobs.set("echo:completed", { state: "completed" });
+		fake.inspectedJobs.set("echo:failed", { state: "failed" });
+		fake.inspectedJobs.set("echo:cancelled", { state: "cancelled" });
+		fake.inspectedJobs.set("echo:active", { state: "active" });
+		fake.inspectedJobs.set("echo:retry", { state: "retry" });
+
+		await expect(
+			adapter.inspectExecutionState!("echo", "completed"),
+		).resolves.toBe("completed");
+		await expect(
+			adapter.inspectExecutionState!("echo", "failed"),
+		).resolves.toBe("failed");
+		await expect(
+			adapter.inspectExecutionState!("echo", "cancelled"),
+		).resolves.toBe("failed");
+		await expect(
+			adapter.inspectExecutionState!("echo", "active"),
+		).resolves.toBe("active");
+		await expect(adapter.inspectExecutionState!("echo", "retry")).resolves.toBe(
+			"pending",
+		);
+		await expect(
+			adapter.inspectExecutionState!("echo", "retained-record-missing"),
+		).resolves.toBe("missing");
 	});
 });

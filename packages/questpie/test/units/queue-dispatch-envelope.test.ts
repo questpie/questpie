@@ -44,4 +44,37 @@ describe("Queue dispatch envelope", () => {
 			},
 		);
 	});
+
+	test("distinguishes framework-encrypted payloads from user data with the reserved shape", () => {
+		const userPayload = {
+			__questpieQueueSecret: {
+				version: 1,
+				iv: "user-owned",
+				ciphertext: "user-owned",
+			},
+		};
+		const ordinary = encodeQueueDispatchEnvelope(
+			userPayload,
+			dispatchId,
+			"notify:ordinary",
+		);
+		const encrypted = encodeQueueDispatchEnvelope(
+			userPayload,
+			dispatchId,
+			"notify:secret",
+			true,
+		);
+
+		expect(decodeQueueDispatchEnvelope(ordinary, dispatchId)).toEqual({
+			data: userPayload,
+			dispatchId,
+			idempotencyKey: "notify:ordinary",
+		});
+		expect(decodeQueueDispatchEnvelope(encrypted, dispatchId)).toEqual({
+			data: userPayload,
+			dispatchId,
+			idempotencyKey: "notify:secret",
+			secretPayload: true,
+		});
+	});
 });
