@@ -1,0 +1,164 @@
+/* ============================================================================
+   QUESTPIE — syntax.css
+   Warm syntax ladder for code surfaces.
+
+   TWO LAWS:
+   1. **Coral is never a syntax role.** Coral means action or agent provenance;
+      if it appeared on a keyword, every code block would look clickable.
+      Code carries meaning through warm ink steps and weight instead.
+   2. **Every role that paints text clears 4.5:1 on `--surface`** at 13px
+      (WCAG 1.4.3). The dim end of the ladder is punctuation and comments only —
+      never an identifier you have to read.
+
+   Roles, loudest → quietest:
+     keyword   full-strength ink, weight 600   (import, const, await)
+     fn        pale amber                      (collection, fields, text)
+     type      tan                             (App, Collection, Promise)
+     string    sage                            ("news")
+     number    gold                            (255, 3.18)
+     prop      dim ink                         (title:, content:)
+     punct     subtle                          ( ) { } . , ;
+     comment   warm grey, italic
+   ============================================================================ */
+
+:root,
+.dark {
+	--syntax-keyword: oklch(95.96% 0.0131 82.4); /* #f6f1e8 */
+	--syntax-fn: oklch(90.2% 0.0756 71.1); /* #ffd7a8 */
+	--syntax-type: oklch(82.95% 0.0547 76.1); /* #dcc3a0 */
+	--syntax-string: oklch(82.03% 0.0971 123.1); /* #b8cf88 */
+	--syntax-number: oklch(80% 0.1231 79.2); /* #e8b45a */
+	--syntax-prop: oklch(83% 0.0217 79.1); /* #cfc6b8 */
+	--syntax-punct: oklch(66.16% 0.0223 74.6); /* #9b9184 */
+	--syntax-comment: oklch(56.3% 0.0237 79); /* #7d7466 */
+	--syntax-line: color-mix(in srgb, var(--foreground) 4%, transparent);
+	--syntax-line-number: oklch(46.11% 0.0202 75.9); /* #5f574c */
+	--syntax-highlight: color-mix(in srgb, var(--coral) 10%, transparent);
+	--syntax-added: color-mix(in srgb, var(--success) 14%, transparent);
+	--syntax-removed: color-mix(in srgb, var(--warning) 14%, transparent);
+}
+
+.light {
+	--syntax-keyword: oklch(21.89% 0.0065 78.2); /* #1c1a17 */
+	--syntax-fn: oklch(49.87% 0.1035 65.9); /* #8a5512 */
+	--syntax-type: oklch(45.96% 0.0546 72); /* #6b5335 */
+	--syntax-string: oklch(47.74% 0.112 130.8); /* #46691c */
+	--syntax-number: oklch(54.25% 0.0995 84.8); /* #8a6a1d */
+	--syntax-prop: oklch(38.4% 0.0197 73.3); /* #4a4238 */
+	--syntax-punct: oklch(45.05% 0.019 73.4); /* #5c544a */
+	--syntax-comment: oklch(63.75% 0.0218 77.2); /* #938a7d */
+	--syntax-line: color-mix(in srgb, var(--foreground) 3%, transparent);
+	--syntax-line-number: oklch(79.27% 0.0207 77.3); /* #c3baad */
+	--syntax-highlight: oklch(95.69% 0.0198 45.3); /* #fdede6 */
+	--syntax-added: oklch(95.32% 0.0157 160.6); /* #e7f3ec */
+	--syntax-removed: oklch(96.14% 0.0249 81.1); /* #fbf1e0 */
+}
+
+/* ── the code surface ─────────────────────────────────────────────────────── */
+.qp-code {
+	margin: 0;
+	padding: var(--spacing-panel);
+	background: var(--surface);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-object);
+	font-family: var(--font-mono);
+	font-size: 13px;
+	line-height: 1.62;
+	color: var(--foreground);
+	overflow-x: auto;
+	tab-size: 2;
+}
+
+.qp-code code {
+	font-family: inherit;
+	font-size: inherit;
+}
+
+/* ── tokens ───────────────────────────────────────────────────────────────── */
+.qp-tok-keyword {
+	color: var(--syntax-keyword);
+	font-weight: 600;
+}
+.qp-tok-fn {
+	color: var(--syntax-fn);
+}
+.qp-tok-type {
+	color: var(--syntax-type);
+}
+.qp-tok-string {
+	color: var(--syntax-string);
+}
+.qp-tok-number {
+	color: var(--syntax-number);
+}
+.qp-tok-prop {
+	color: var(--syntax-prop);
+}
+.qp-tok-punct {
+	color: var(--syntax-punct);
+}
+.qp-tok-comment {
+	color: var(--syntax-comment);
+	font-style: italic;
+}
+
+/* ── line treatments ──────────────────────────────────────────────────────── */
+.qp-line {
+	display: block;
+	padding-inline: var(--space-3);
+	margin-inline: calc(var(--space-3) * -1);
+	/* the marked band is a full-bleed strip, not a pill: a radius here reads as a
+	   chip and fights the code grid */
+	border-radius: 0;
+}
+.qp-line[data-mark="on"] {
+	background: var(--syntax-highlight);
+	border-left: 2px solid var(--primary);
+	padding-left: calc(var(--space-3) - 2px);
+}
+.qp-line[data-mark="add"],
+.qp-line[data-mark="del"] {
+	padding-left: calc(var(--space-3) - 2px);
+}
+.qp-line[data-mark="add"] {
+	background: var(--syntax-added);
+	border-left: 2px solid var(--success);
+}
+.qp-line[data-mark="del"] {
+	background: var(--syntax-removed);
+	border-left: 2px solid var(--warning);
+}
+.qp-line[data-dim="on"] {
+	opacity: 0.46;
+}
+
+.qp-code[data-numbers] {
+	counter-reset: qp-line;
+}
+.qp-code[data-numbers] .qp-line {
+	counter-increment: qp-line;
+	padding-left: 2.75rem;
+	position: relative;
+}
+.qp-code[data-numbers] .qp-line[data-mark] {
+	padding-left: calc(2.75rem - 2px);
+}
+.qp-code[data-numbers] .qp-line::before {
+	content: counter(qp-line);
+	position: absolute;
+	left: 0;
+	width: 1.75rem;
+	text-align: right;
+	color: var(--syntax-line-number);
+	font-variant-numeric: tabular-nums;
+}
+
+/* ── inline code, in prose ────────────────────────────────────────────────── */
+.qp-code-inline {
+	padding: 0.1em 0.36em;
+	border-radius: var(--radius-inner);
+	background: var(--surface-mid);
+	color: var(--foreground);
+	font-family: var(--font-mono);
+	font-size: 0.92em;
+}

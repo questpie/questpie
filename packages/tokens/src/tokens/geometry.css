@@ -1,0 +1,85 @@
+/* ============================================================================
+   QUESTPIE — geometry.css
+   Radii, spacing, control sizes, layout rhythm.
+
+   SOFT GEOMETRY IS THE POINT. Radii step 10 / 14 / 18 / 22 / 28: every value
+   is one notch rounder than the old neutral system, which is most of what
+   "softer" means here. Nested radii are concentric — inner < outer by roughly
+   the padding between them. Never equal radii on nested surfaces.
+
+   DENSITY: comfortable. Controls are 44px, product body is 15px. The product
+   is allowed to breathe; density is earned per surface, not assumed.
+   ============================================================================ */
+
+:root {
+	/* ── radii ─────────────────────────────────────────────────────────────── */
+	--radius-inner: 0.625rem; /* 10 — chip inside a control, kbd, tab segment */
+	--radius-control: 0.875rem; /* 14 — buttons, inputs, selects */
+	--radius-object: 1.125rem; /* 18 — rows, code frames, small panels */
+	--radius-panel: 1.375rem; /* 22 — cards, devices, product panels */
+	--radius-sheet: 1.75rem; /* 28 — CTA blocks, hero mockups, mobile sheets */
+	--radius-round: 999rem;
+	--radius: var(--radius-panel);
+	/* whitelabel knobs the two apps already read */
+	--control-radius: var(--radius-control);
+	--control-radius-inner: var(--radius-inner);
+	--surface-radius: var(--radius-panel);
+	--floating-radius: var(--radius-object);
+
+	/* ── spacing — 4px scale ───────────────────────────────────────────────── */
+	--space-1: 0.25rem;
+	--space-2: 0.5rem;
+	--space-3: 0.75rem;
+	--space-4: 1rem;
+	--space-5: 1.25rem;
+	--space-6: 1.5rem;
+	--space-7: 1.75rem;
+	--space-8: 2rem;
+	--space-10: 2.5rem;
+	--space-12: 3rem;
+	--space-16: 4rem;
+	--space-20: 5rem;
+	--space-24: 6rem;
+
+	/* semantic spacing */
+	--spacing-input: var(--space-4);
+	--spacing-card: var(--space-5);
+	--spacing-panel: var(--space-6);
+	--spacing-section: var(--space-8);
+	--spacing-gap-rows: 0.5625rem; /* 9 — the row gap inside a work list */
+
+	/* ── controls — comfortable ────────────────────────────────────────────── */
+	--control-compact: 2.25rem; /* 36 — toolbar, chip */
+	--control-default: 2.75rem; /* 44 — the default. Also the touch target. */
+	--control-large: 3.25rem; /* 52 — marketing CTA */
+	--control-height: var(--control-default);
+	--control-pad-x: 1.375rem; /* 22 */
+	--control-pad-x-compact: 1rem;
+	--chip-height: 2rem; /* 32 */
+	--touch-target: 2.75rem;
+	--icon-inline: 0.875rem;
+	--icon-base: 1.125rem;
+	--icon-control: 1.25rem;
+	--icon-lead: 1.375rem;
+
+	/* ── layout rhythm ─────────────────────────────────────────────────────── */
+	--content-max: 75rem; /* 1200 — marketing page width */
+	--content-narrow: 46rem; /* 736 — a single column of prose */
+	--app-max: 84rem; /* 1344 — product shell */
+	--section-pad-y: 6rem; /* 96 */
+	--section-pad-y-lg: 6.5rem; /* 104 — bands with a glow */
+	--section-pad-y-mobile: 3.5rem;
+	--section-pad-x: 2.5rem; /* 40 */
+	--section-pad-x-mobile: 1.25rem;
+	--nav-height: 4.75rem; /* 76 */
+	--sidebar-width: 15.5rem; /* 248 */
+	--sidebar-width-collapsed: 4.25rem;
+}
+
+@media (max-width: 45rem) {
+	:root {
+		--section-pad-y: var(--section-pad-y-mobile);
+		--section-pad-x: var(--section-pad-x-mobile);
+		--nav-height: 3.75rem;
+	}
+}

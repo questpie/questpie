@@ -1,0 +1,100 @@
+/* ============================================================================
+   QUESTPIE — typography.css
+   Four faces, four jobs. Nothing else gets to speak.
+
+     Space Grotesk 700 DISPLAY + WORDMARK. Marketing heroes and section heads,
+                       uppercase and tight. Chosen for its Q: the tail is a
+                       straight stroke fired out of the bowl, which rhymes with
+                       the right-angled geometry of the mark. Never in product UI.
+     Hanken Grotesk    Everything readable: product UI, body, labels, nav.
+     JetBrains Mono    Code, IDs, metadata, eyebrows, statuses, numbers.
+     Cormorant italic  One human aside per marketing section (eyebrow, pull
+                       quote). NEVER in the product, never twice in a section.
+
+   Webfonts come from Google Fonts (no binaries were provided with the source
+   material — see readme.md § Typography if you want them self-hosted).
+   ============================================================================ */
+
+/* THREE families, and only the weights the system sets:
+     Bricolage Grotesque 700/800  logotype (800, caps) and display headings (700)
+     Hanken Grotesk 450-700 + italic  everything readable, plus the warm aside
+     JetBrains Mono 500/600  code, IDs, eyebrows, numbers
+   Space Grotesk was dropped: one family for the mark and the headings, separated
+   by weight, holds together better than two grotesques that nearly rhyme.
+   Cormorant was dropped: a whole webfont for one italic line per section is not a
+   trade worth making, and Hanken italic carries the same warmth. */
+@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700..800&family=Hanken+Grotesk:ital,wght@0,450;0,500;0,600;0,700;1,450;1,500&family=JetBrains+Mono:wght@500;600&display=swap");
+
+:root {
+	--font-display: "Bricolage Grotesque", system-ui, sans-serif;
+	/* the logotype is the same family one weight up: 800, caps, tight */
+	--font-wordmark: var(--font-display);
+	--wordmark-weight: 800;
+	--wordmark-track: -0.022em;
+	--font-sans: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
+	--font-mono: "JetBrains Mono", ui-monospace, monospace;
+	/* the aside: Hanken italic, not a serif — one family fewer */
+	--font-accent: "Hanken Grotesk", system-ui, sans-serif;
+	/* aliases the two existing apps already write against */
+	--font-heading: var(--font-sans);
+	--font-chrome: var(--font-sans);
+
+	/* ── display scale — MARKETING ONLY (Space Grotesk 700, uppercase) ─────── */
+	--display-xl: clamp(3rem, 2.2rem + 3.6vw, 5.125rem); /* → 82px hero */
+	--display-xl-line: 0.94;
+	--display-xl-track: -0.035em;
+	--display-l: clamp(2.25rem, 1.9rem + 1.8vw, 3.25rem); /* → 52px CTA head */
+	--display-l-line: 0.98;
+	--display-l-track: -0.035em;
+	--display-m: clamp(1.75rem, 1.55rem + 1.1vw, 2.75rem); /* → 44px section */
+	--display-m-line: 1.02;
+	--display-m-track: -0.03em;
+	--display-s: 1.625rem; /* 26px card head */
+	--display-s-line: 1.08;
+	--display-s-track: -0.02em;
+	--display-weight: 700;
+	--display-case: none;
+
+	/* ── product scale (Hanken Grotesk). Comfortable, not dense. ───────────── */
+	--type-2xs: 0.6875rem; /* 11 — mono metadata */
+	--type-xs: 0.75rem; /* 12 */
+	--type-sm: 0.8125rem; /* 13 — table cells, dense rows */
+	--type-base: 0.9375rem; /* 15 — product body. The default. */
+	--type-md: 1rem; /* 16 — buttons, inputs */
+	--type-lg: 1.125rem; /* 18 — panel titles */
+	--type-xl: 1.3125rem; /* 21 — card heads */
+	--type-2xl: 1.5rem; /* 24 — page titles */
+	--type-3xl: 1.75rem; /* 28 — product display ceiling */
+
+	--line-tight: 1.15;
+	--line-snug: 1.35;
+	--line-body: 1.55;
+	--line-relaxed: 1.62;
+
+	--weight-body: 450;
+	--weight-medium: 500;
+	--weight-semibold: 600;
+	--weight-strong: 700;
+	--weight-heavy: 800;
+
+	/* ── marketing lead ────────────────────────────────────────────────────── */
+	--lead-size: 1.09375rem; /* 17.5 */
+	--lead-line: 1.62;
+	--lead-weight: 450;
+	--lead-measure: 38rem; /* 608 — a lead runs 2-3 lines, never a paragraph */
+
+	/* ── eyebrow (mono, caps) ──────────────────────────────────────────────── */
+	--eyebrow-size: 0.6875rem;
+	--eyebrow-weight: 600;
+	--eyebrow-track: 0.12em;
+	--eyebrow-case: uppercase;
+
+	/* ── accent aside (Cormorant italic) ───────────────────────────────────── */
+	--accent-size: 1.25rem; /* 20 — a sans italic needs less size than a serif */
+	--accent-style: italic;
+	--accent-weight: 500;
+
+	/* ── measures ──────────────────────────────────────────────────────────── */
+	--measure-prose: 68ch;
+	--measure-lead: 46ch;
+}

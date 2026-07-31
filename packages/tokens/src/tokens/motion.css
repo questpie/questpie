@@ -1,0 +1,73 @@
+/* ============================================================================
+   QUESTPIE — motion.css
+   Short, productive, property-specific. Never `transition: all`.
+
+   Buttons press with translateY(1px). Floating content enters with opacity +
+   a 0.98 scale. The hero glow drifts on a >30s loop so there is no visible
+   loop point. Everything respects prefers-reduced-motion.
+   ============================================================================ */
+
+:root {
+	--duration-fast: 120ms;
+	--duration-base: 180ms;
+	--duration-slow: 260ms;
+	--duration-drift-1: 31s;
+	--duration-drift-2: 41s;
+
+	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
+	--ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
+	--ease-move: cubic-bezier(0.25, 1, 0.5, 1);
+	--ease-drift: cubic-bezier(0.45, 0, 0.55, 1);
+
+	--motion-scale-enter: 0.98;
+	--motion-press-y: 1px;
+
+	/* aliases the existing apps read */
+	--motion-duration-fast: var(--duration-fast);
+	--motion-duration-base: var(--duration-base);
+	--motion-duration-slow: var(--duration-slow);
+	--motion-ease-standard: var(--ease-standard);
+	--motion-ease-enter: var(--ease-enter);
+	--motion-ease-move: var(--ease-move);
+}
+
+@keyframes qp-drift-1 {
+	0%,
+	100% {
+		transform: translate3d(0, 0, 0) scale(1);
+	}
+	50% {
+		transform: translate3d(6%, -4%, 0) scale(1.18);
+	}
+}
+
+@keyframes qp-drift-2 {
+	0%,
+	100% {
+		transform: translate3d(0, 0, 0) scale(1.1);
+	}
+	50% {
+		transform: translate3d(-7%, 5%, 0) scale(0.92);
+	}
+}
+
+@keyframes qp-enter {
+	from {
+		opacity: 0;
+		transform: translateY(4px) scale(var(--motion-scale-enter));
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+}

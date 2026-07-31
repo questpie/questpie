@@ -1,0 +1,231 @@
+/* ============================================================================
+   QUESTPIE — base.css
+   The minimum reset every surface shares, plus the small set of utility
+   classes that encode recipes too awkward to restate inline (the glow, the
+   display roles, the eyebrow, the action button).
+
+   Nothing here paints a colour that is not a token.
+   ============================================================================ */
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	background: var(--background);
+	color: var(--foreground);
+	font-family: var(--font-sans);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+body {
+	margin: 0;
+	background: var(--background);
+	color: var(--foreground);
+	font-family: var(--font-sans);
+	font-size: var(--type-base);
+	font-weight: var(--weight-body);
+	line-height: var(--line-body);
+	text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	margin: 0;
+	font-weight: var(--weight-heavy);
+	letter-spacing: -0.015em;
+	text-wrap: balance;
+}
+
+p {
+	margin: 0;
+	text-wrap: pretty;
+}
+
+a {
+	color: var(--primary-text);
+	text-decoration: none;
+	transition: color var(--duration-base) var(--ease-standard);
+}
+
+a:hover {
+	color: var(--foreground);
+}
+
+button,
+input,
+textarea,
+select {
+	font: inherit;
+	color: inherit;
+}
+
+code,
+pre,
+kbd,
+.qp-mono {
+	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
+}
+
+::selection {
+	background: var(--selection);
+	color: var(--foreground);
+}
+
+:where(a, button, [tabindex], input, select, textarea):focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 2px;
+	border-radius: var(--radius-inner);
+}
+
+/* ── display roles — MARKETING ONLY ───────────────────────────────────────── */
+.qp-display-xl,
+.qp-display-l,
+.qp-display-m,
+.qp-display-s {
+	font-family: var(--font-display);
+	font-weight: var(--display-weight);
+	text-transform: var(--display-case);
+	color: var(--foreground);
+	text-wrap: balance;
+	margin: 0;
+}
+.qp-display-xl {
+	font-size: var(--display-xl);
+	line-height: var(--display-xl-line);
+	letter-spacing: -0.028em;
+}
+.qp-display-l {
+	font-size: var(--display-l);
+	line-height: var(--display-l-line);
+	letter-spacing: -0.026em;
+}
+.qp-display-m {
+	font-size: var(--display-m);
+	line-height: var(--display-m-line);
+	letter-spacing: -0.024em;
+}
+.qp-display-s {
+	font-size: var(--display-s);
+	line-height: var(--display-s-line);
+	letter-spacing: var(--display-s-track);
+}
+
+/* ── lead, eyebrow, accent aside ──────────────────────────────────────────── */
+.qp-lead {
+	font-size: var(--lead-size);
+	line-height: var(--lead-line);
+	font-weight: var(--lead-weight);
+	color: var(--foreground-muted);
+	max-width: var(--lead-measure);
+	text-wrap: pretty;
+	margin: 0;
+}
+
+.qp-eyebrow {
+	font-family: var(--font-mono);
+	font-size: var(--eyebrow-size);
+	font-weight: var(--eyebrow-weight);
+	letter-spacing: var(--eyebrow-track);
+	text-transform: var(--eyebrow-case);
+	color: var(--foreground-subtle);
+	margin: 0;
+}
+
+/* One per section, marketing only. The single warm human aside in a system
+   otherwise made of blocks. */
+.qp-aside {
+	font-family: var(--font-accent);
+	font-style: var(--accent-style);
+	font-weight: var(--accent-weight);
+	font-size: var(--accent-size);
+	color: var(--primary-text);
+	margin: 0;
+}
+
+/* ── the glow ─────────────────────────────────────────────────────────────── */
+/* Put .qp-glow-host on the section, then one or two .qp-glow children. */
+.qp-glow-host {
+	position: relative;
+	isolation: isolate;
+	overflow: hidden;
+}
+
+.qp-glow {
+	position: absolute;
+	z-index: 0;
+	border-radius: var(--radius-round);
+	background: var(--glow-color);
+	filter: blur(var(--glow-blur));
+	opacity: var(--glow-opacity);
+	pointer-events: none;
+	animation: qp-drift-1 var(--duration-drift-1) var(--ease-drift) infinite;
+}
+
+.qp-glow-2 {
+	background: var(--glow-secondary);
+	opacity: var(--glow-secondary-opacity);
+	animation: qp-drift-2 var(--duration-drift-2) var(--ease-drift) infinite;
+}
+
+.qp-glow-host > :not(.qp-glow) {
+	position: relative;
+	z-index: 1;
+}
+
+/* ── section rule ─────────────────────────────────────────────────────────────
+   A hairline that runs edge to edge cuts a marketing page into slabs. This one
+   fades out at both ends, so a band change reads as a breath rather than a wall.
+   Product chrome still uses a real 1px border — there the edge is the point. */
+.qp-rule {
+	height: 1px;
+	border: 0;
+	margin: 0;
+	background: linear-gradient(
+		to right,
+		transparent,
+		var(--border-subtle) 12%,
+		var(--border-subtle) 88%,
+		transparent
+	);
+}
+
+/* ── surfaces ─────────────────────────────────────────────────────────────── */
+.qp-card {
+	background: var(--card);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-panel);
+}
+
+.qp-card-floating {
+	background: var(--card);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-panel);
+	box-shadow: var(--elevation-soft);
+}
+
+.qp-row {
+	background: var(--surface-mid);
+	border-radius: var(--radius-object);
+}
+
+/* ── heading highlight ────────────────────────────────────────────────────────
+   The one word a display heading leans on. Coral alone is a colour cue and dies
+   in print or for a colour-blind reader, so the highlight is coral AND italic. */
+.qp-hl {
+	color: var(--primary);
+	font-style: italic;
+	font-weight: inherit;
+}
+
+.light .qp-hl {
+	color: var(--primary-text);
+}

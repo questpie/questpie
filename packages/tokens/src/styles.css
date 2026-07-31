@@ -1,0 +1,14 @@
+/* QUESTPIE design system — global entry point.
+   Consumers link THIS file. Import order is load-bearing: colors before
+   elevation (glow reads --coral), typography before base. */
+
+@import "./tokens/colors.css";
+@import "./tokens/typography.css";
+@import "./tokens/geometry.css";
+@import "./tokens/elevation.css";
+@import "./tokens/syntax.css";
+@import "./tokens/motion.css";
+@import "./tokens/base.css";
+/* Tailwind v4 / shadcn bridge. Harmless without Tailwind: @theme inline is inert
+   until a utility uses it. */
+@import "./tokens/shadcn.css";

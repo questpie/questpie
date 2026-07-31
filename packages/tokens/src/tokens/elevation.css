@@ -1,0 +1,66 @@
+/* ============================================================================
+   QUESTPIE — elevation.css
+   Light, glow and shadow.
+
+   Shadow colours are oklch as well: a warm shadow is a low-lightness warm hue at
+   low alpha, never neutral black.
+
+   THREE JOBS ONLY:
+     1. Warm soft shadow on cards that float above the canvas (marketing,
+        hero mockups, dialogs). Warm, never neutral black: rgb(40 20 10) in
+        light, deep warm black in dark.
+     2. Coral GLOW behind heroes and CTAs. This is the signature of the system —
+        a 110px-blurred coral circle at low opacity, never a linear gradient
+        sprayed over a section.
+     3. Inset top highlight + tinted drop on the solid action button.
+
+   Persistent product chrome (sidebars, toolbars, table headers) is FLAT and
+   separated by hairlines. If you are reaching for a shadow on a panel that
+   never moves, use --border-subtle instead.
+   ============================================================================ */
+
+:root,
+.dark {
+	--elevation-flat: none;
+	/* card that floats above the canvas */
+	--elevation-soft:
+		0 1px 2px oklch(0% 0 0 / 0.3), 0 12px 30px oklch(0% 0 0 / 0.45);
+	--elevation-raised: 0 30px 70px oklch(0% 0 0 / 0.55);
+	--elevation-floating: 0 24px 60px -22px oklch(0% 0 0 / 0.78);
+	--elevation-sheet: 0 -16px 48px -20px oklch(0% 0 0 / 0.78);
+	/* the action button */
+	--elevation-action: 0 10px 28px oklch(68.55% 0.1759 36.1 / 0.3);
+	--elevation-action-hover: 0 12px 34px oklch(68.55% 0.1759 36.1 / 0.38);
+	/* inner light on a raised dark surface */
+	--elevation-inset-top: inset 0 1px 0 0 oklch(95.96% 0.0131 82.4 / 0.05);
+
+	/* ── the glow ──────────────────────────────────────────────────────────── */
+	--glow-blur: 110px;
+	--glow-color: var(--coral);
+	--glow-opacity: 0.22;
+	--glow-opacity-strong: 0.26;
+	--glow-secondary: #e0a33c;
+	--glow-secondary-opacity: 0.14;
+}
+
+.light {
+	--elevation-flat: none;
+	--elevation-soft:
+		0 1px 2px oklch(21.69% 0.0376 46.7 / 0.04),
+		0 12px 30px oklch(21.69% 0.0376 46.7 / 0.07);
+	--elevation-raised:
+		0 1px 2px oklch(21.69% 0.0376 46.7 / 0.04),
+		0 24px 50px oklch(21.69% 0.0376 46.7 / 0.12);
+	--elevation-floating: 0 24px 60px -22px oklch(21.89% 0.0065 78.2 / 0.24);
+	--elevation-sheet: 0 -16px 48px -20px oklch(21.89% 0.0065 78.2 / 0.28);
+	--elevation-action: 0 6px 16px oklch(68.55% 0.1759 36.1 / 0.22);
+	--elevation-action-hover: 0 8px 20px oklch(68.55% 0.1759 36.1 / 0.28);
+	--elevation-inset-top: inset 0 1px 0 0 oklch(100% 0 0 / 0.4);
+
+	--glow-blur: 110px;
+	--glow-color: var(--coral);
+	--glow-opacity: 0.16;
+	--glow-opacity-strong: 0.18;
+	--glow-secondary: #e0a33c;
+	--glow-secondary-opacity: 0.12;
+}

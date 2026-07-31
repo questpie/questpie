@@ -1,0 +1,300 @@
+/* ============================================================================
+   QUESTPIE — mesh.css
+   The living mesh: the one atmospheric surface.
+
+   WHERE IT IS ALLOWED: behind a marketing hero, behind a final CTA, and behind
+   the empty state of a brand-new workspace. Nowhere else — never under body
+   prose, never inside a product list, never on /docs.
+
+   HOW IT WORKS: three warm blobs drifting on independent periods (31 s / 41 s /
+   53 s — all prime-ish, so there is no visible loop point). The CSS below paints
+   the STATIC composition, which is correct on its own; `questpie-mesh.js`
+   upgrades it to a live canvas when JS and motion are both available. That order
+   matters: the page never waits for the mesh to look right.
+   ============================================================================ */
+
+:root,
+.dark {
+	--mesh-base: var(--background);
+	--mesh-1: var(--coral);
+	--mesh-2: #e0a33c; /* warm gold — the counterweight, never a third brand hue */
+	--mesh-3: #b8543a; /* deep clay, the shadow side of coral */
+	/* Black ground, three tints you notice only when they move. Half of what read as
+	   "faint" still read as a gradient; this is the floor. */
+	--mesh-1-alpha: 0.055;
+	--mesh-2-alpha: 0.03;
+	--mesh-3-alpha: 0.035;
+	--mesh-blur: 180px;
+	/* how far the blobs spread. >1 makes the atmosphere fill a tall hero instead
+	   of sitting in its corner. */
+	--mesh-scale: 1.35;
+	--grain-opacity: 0.05;
+	/* how far the field leans toward the pointer, as a share of the viewport */
+	--mesh-follow: 0.035;
+}
+
+.light {
+	--mesh-base: var(--background);
+	--mesh-1: var(--coral);
+	--mesh-2: #e0a33c;
+	--mesh-3: #d98a63;
+	/* On paper a warm wash goes pink and muddy fast, and a blurred canvas shows its
+	   rings against a light ground. One warm corner, and that is all. */
+	--mesh-1-alpha: 0.04;
+	--mesh-2-alpha: 0.022;
+	--mesh-3-alpha: 0;
+	--mesh-blur: 160px;
+	--mesh-follow: 0; /* paper: no follow, the wash is too low to move cleanly */
+	--mesh-scale: 1.35;
+	--grain-opacity: 0.045;
+}
+
+:root {
+	--mesh-period-1: 47s;
+	--mesh-period-2: 61s;
+	--mesh-period-3: 79s;
+}
+
+/* ── host ─────────────────────────────────────────────────────────────────── */
+.qp-mesh {
+	position: relative;
+	isolation: isolate;
+	overflow: hidden;
+	background-color: var(--mesh-base);
+}
+
+.qp-mesh > *:not(.qp-mesh-layer):not(questpie-mesh) {
+	position: relative;
+	z-index: 1;
+}
+
+/* ── static composition (no JS, reduced motion, print) ────────────────────── */
+.qp-mesh::before {
+	content: "";
+	position: absolute;
+	inset: -10%;
+	z-index: 0;
+	pointer-events: none;
+	background-image:
+		radial-gradient(
+			62% 66% at 16% 8%,
+			color-mix(
+				in oklab,
+				var(--mesh-1) calc(var(--mesh-1-alpha) * 100%),
+				transparent
+			),
+			transparent 70%
+		),
+		radial-gradient(
+			54% 58% at 86% 18%,
+			color-mix(
+				in oklab,
+				var(--mesh-2) calc(var(--mesh-2-alpha) * 100%),
+				transparent
+			),
+			transparent 68%
+		),
+		radial-gradient(
+			72% 64% at 56% 100%,
+			color-mix(
+				in oklab,
+				var(--mesh-3) calc(var(--mesh-3-alpha) * 100%),
+				transparent
+			),
+			transparent 72%
+		);
+	background-repeat: no-repeat;
+}
+
+/* Once the canvas paints, it owns the atmosphere and the static layer steps back
+   over one slow fade — so the upgrade is never a visible pop. */
+.qp-mesh[data-mesh="live"]::before {
+	opacity: 0;
+	transition: opacity 1.2s var(--ease-enter);
+}
+
+.qp-mesh > canvas.qp-mesh-layer,
+.qp-mesh-page > canvas.qp-mesh-layer {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	width: 100%;
+	height: 100%;
+	display: block;
+	pointer-events: none;
+	filter: blur(var(--mesh-blur)) saturate(1.05);
+	transform: scale(1.15); /* hides the soft edge of the blur at the bounds */
+	opacity: 0;
+	transition: opacity 1.2s var(--ease-enter);
+}
+
+.qp-mesh[data-mesh="live"] > canvas.qp-mesh-layer,
+.qp-mesh-page[data-mesh="live"] > canvas.qp-mesh-layer {
+	opacity: 1;
+}
+
+/* A scrim for the one case where type would otherwise drop below AA. */
+.qp-mesh-scrim {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	pointer-events: none;
+	background: linear-gradient(
+		to bottom,
+		color-mix(in oklab, var(--background) 55%, transparent),
+		transparent 60%
+	);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.qp-mesh > canvas.qp-mesh-layer,
+	.qp-mesh-page > canvas.qp-mesh-layer {
+		display: none;
+	}
+	.qp-mesh[data-mesh="live"]::before {
+		opacity: 1;
+	}
+}
+
+@media print {
+	.qp-mesh > canvas.qp-mesh-layer,
+	.qp-mesh-page > canvas.qp-mesh-layer {
+		display: none;
+	}
+}
+
+/* ── grain ────────────────────────────────────────────────────────────────────
+   A single tile of fractal noise over the mesh. It does two jobs: it hides the
+   banding a 6× upscaled blur leaves behind, and it gives the warm atmosphere the
+   tooth of paper instead of the plastic of a CSS gradient. Blend mode, not alpha,
+   so it darkens and lightens rather than greying the hue.
+   Cheap on purpose: one 180px tile, repeated, no animation. */
+.qp-grain::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	pointer-events: none;
+	opacity: var(--grain-opacity);
+	mix-blend-mode: overlay;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+	background-size: 180px 180px;
+}
+
+/* ── frosted glass ────────────────────────────────────────────────────────────
+   The ONE place transparency is allowed: a card floating over the mesh. It reads
+   as glass because three things agree — a translucent warm fill, a blur of what
+   is behind it, and a one-pixel highlight along the top edge where light would
+   catch. Never over prose, never on product chrome, never two panes deep. */
+.qp-glass {
+	background: color-mix(in oklab, var(--card) 62%, transparent);
+	backdrop-filter: blur(20px) saturate(1.12);
+	-webkit-backdrop-filter: blur(20px) saturate(1.12);
+	border: 1px solid color-mix(in oklab, var(--foreground) 10%, transparent);
+	box-shadow:
+		inset 0 1px 0 0 color-mix(in oklab, var(--foreground) 12%, transparent),
+		var(--elevation-raised);
+}
+
+.light .qp-glass {
+	background: color-mix(in oklab, var(--card) 72%, transparent);
+	border-color: color-mix(in oklab, var(--foreground) 8%, transparent);
+	box-shadow:
+		inset 0 1px 0 0 rgb(255 255 255 / 70%),
+		var(--elevation-raised);
+}
+
+/* A quiet glass strip for sticky chrome over a mesh hero. */
+.qp-glass-bar {
+	background: color-mix(in oklab, var(--background) 72%, transparent);
+	backdrop-filter: blur(16px) saturate(1.08);
+	-webkit-backdrop-filter: blur(16px) saturate(1.08);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+	.qp-glass,
+	.qp-glass-bar {
+		background: var(--card);
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+	}
+}
+
+/* ── page-wide mesh ───────────────────────────────────────────────────────────
+   Per-section meshes were the mistake: each one clipped at its own band edge, so
+   the page read as three cut-off gradients instead of one atmosphere. This host is
+   FIXED behind everything, spans the viewport, and every band above it is
+   transparent — the fade between sections then comes for free.
+
+     <body>
+       <div class="qp-mesh-page"><questpie-mesh></questpie-mesh></div>
+       …bands…
+*/
+/* A page that hosts the mesh must not paint its own body fill: a fixed child at
+   z-index -1 sits behind the parent background, which is what turned the whole
+   page flat black. html keeps the ground colour. */
+body:has(> .qp-mesh-page) {
+	background: transparent;
+}
+
+.qp-mesh-page {
+	position: fixed;
+	inset: 0;
+	z-index: -1;
+	pointer-events: none;
+	background-color: var(--mesh-base);
+	overflow: hidden;
+}
+
+.qp-mesh-page::before {
+	content: "";
+	position: absolute;
+	inset: -20%;
+	background-image:
+		radial-gradient(
+			58% 46% at 14% 6%,
+			color-mix(
+				in oklab,
+				var(--mesh-1) calc(var(--mesh-1-alpha) * 100%),
+				transparent
+			),
+			transparent 72%
+		),
+		radial-gradient(
+			52% 42% at 88% 16%,
+			color-mix(
+				in oklab,
+				var(--mesh-2) calc(var(--mesh-2-alpha) * 100%),
+				transparent
+			),
+			transparent 70%
+		),
+		radial-gradient(
+			66% 52% at 52% 92%,
+			color-mix(
+				in oklab,
+				var(--mesh-3) calc(var(--mesh-3-alpha) * 100%),
+				transparent
+			),
+			transparent 74%
+		);
+	background-repeat: no-repeat;
+}
+
+.qp-mesh-page[data-mesh="live"]::before {
+	opacity: 0;
+	transition: opacity 1.2s var(--ease-enter);
+}
+
+/* grain over the whole page, same reason */
+.qp-grain-page::after {
+	content: "";
+	position: fixed;
+	inset: 0;
+	z-index: -1;
+	pointer-events: none;
+	opacity: var(--grain-opacity);
+	mix-blend-mode: overlay;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+	background-size: 180px 180px;
+}
