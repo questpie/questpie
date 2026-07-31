@@ -169,7 +169,11 @@ export type CollectionInsert<T> =
 	CollectionInfer<T> extends {
 		insert: infer Insert;
 	}
-		? Insert
+		? CollectionState<T> extends {
+				options: { optimisticConcurrency: true };
+			}
+			? Omit<Insert, "revision">
+			: Insert
 		: never;
 
 /**

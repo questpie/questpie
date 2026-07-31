@@ -20,6 +20,10 @@ import type { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { useTranslation } from "../i18n/hooks";
+import {
+	type OptimisticConcurrencyConfig,
+	optimisticUpdateInput,
+} from "../utils/optimistic-concurrency";
 
 export interface UseAutosaveOptions {
 	/** The react-hook-form instance to autosave. */
@@ -36,8 +40,14 @@ export interface UseAutosaveOptions {
 	isSubmittingRef: React.MutableRefObject<boolean>;
 	/** Update mutation used to persist the record. */
 	updateMutation: {
-		mutateAsync: (args: { id: string; data: unknown }) => Promise<unknown>;
+		mutateAsync: (args: {
+			id: string;
+			data: unknown;
+			expectedRevision?: number;
+		}) => Promise<unknown>;
 	};
+	/** Introspected generated-CRUD locking contract. */
+	optimisticConcurrency?: OptimisticConcurrencyConfig;
 	/** Optional: commit the saved snapshot to the live preview. */
 	onPreviewCommit?: (data: unknown) => void;
 	/** Optional: trigger a live-preview refresh after save. */
@@ -60,6 +70,7 @@ export function useAutosave({
 	isDirtyRef,
 	isSubmittingRef,
 	updateMutation,
+	optimisticConcurrency,
 	onPreviewCommit,
 	onPreviewRefresh,
 	onSavingChange,
@@ -78,10 +89,13 @@ export function useAutosave({
 
 			await form.handleSubmit(
 				async (data) => {
-					const result = await updateMutation.mutateAsync({
-						id,
-						data,
-					});
+					const result = await updateMutation.mutateAsync(
+						optimisticUpdateInput(
+							id,
+							data as Record<string, any>,
+							optimisticConcurrency,
+						),
+					);
 
 					form.reset(result as any, { keepTouched: true });
 
@@ -113,6 +127,7 @@ export function useAutosave({
 		onPreviewRefresh,
 		t,
 		updateMutation,
+		optimisticConcurrency,
 	]);
 
 	React.useEffect(() => {

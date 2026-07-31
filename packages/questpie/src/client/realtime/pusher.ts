@@ -351,6 +351,12 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 			lane: "edge",
 			authorize: (socketId, channelName) =>
 				this.authorize(authEndpoint, socketId, channelName),
+			...(config.userAuthentication === true
+				? {
+						authenticateUser: (socketId: string) =>
+							this.authenticateUser(authEndpoint, socketId),
+					}
+				: {}),
 		});
 		if (this.destroyed || this.session !== session) {
 			subscription.release();
@@ -427,6 +433,33 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 				? { shared_secret: auth.shared_secret }
 				: {}),
 		};
+	}
+
+	private async authenticateUser(
+		authEndpoint: string,
+		socketId: string,
+	): Promise<{ auth: string; user_data: string }> {
+		const authHeaders = await this.options.getAuthHeaders?.();
+		const response = await this.options.fetcher(authEndpoint, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/x-www-form-urlencoded",
+				...authHeaders,
+			},
+			body: new URLSearchParams({ socket_id: socketId }),
+			credentials: "include",
+		});
+		if (!response.ok) {
+			throw new Error(`Realtime user auth failed: ${response.status}`);
+		}
+		const auth = (await response.json()) as {
+			auth?: unknown;
+			user_data?: unknown;
+		};
+		if (typeof auth.auth !== "string" || typeof auth.user_data !== "string") {
+			throw new Error("Invalid realtime user auth response");
+		}
+		return { auth: auth.auth, user_data: auth.user_data };
 	}
 
 	private sendDesiredTopology(): Promise<void> {

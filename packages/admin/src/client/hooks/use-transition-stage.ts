@@ -33,6 +33,7 @@ import {
 } from "@tanstack/react-query";
 
 import { selectClient, useAdminStore } from "../runtime";
+import { transitionStageBody } from "../utils/optimistic-concurrency";
 
 // ============================================================================
 // Types
@@ -45,6 +46,8 @@ interface TransitionStageParams {
 	stage: string;
 	/** Optional ISO date string or Date for scheduled transitions */
 	scheduledAt?: string | Date;
+	/** Canonical revision required by optimistic-concurrency resources */
+	expectedRevision?: number;
 }
 
 interface TransitionStageResult {
@@ -88,14 +91,7 @@ export function useTransitionStage(
 
 	return useMutation<TransitionStageResult, Error, TransitionStageParams>({
 		mutationFn: async (params) => {
-			const body: Record<string, unknown> = { stage: params.stage };
-
-			if (params.scheduledAt !== undefined) {
-				body.scheduledAt =
-					params.scheduledAt instanceof Date
-						? params.scheduledAt.toISOString()
-						: params.scheduledAt;
-			}
+			const body = transitionStageBody(params);
 
 			const url =
 				mode === "global"

@@ -149,6 +149,8 @@
 		"questpieRealtimeHeadTable": "durable realtime commit-order cursor infrastructure table",
 		"questpieRealtimeTopologyTable": "durable realtime infrastructure table managed by realtime migrations",
 		"questpieChannelDispatchTable": "ordered channel infrastructure table managed by realtime migrations",
+		"questpieChannelAuthorityFenceTable": "channel authority infrastructure table managed by realtime migrations",
+		"questpieChannelAuthorityRevocationTable": "channel authority idempotency infrastructure table managed by realtime migrations",
 		"questpieChannelEventTable": "ordered channel infrastructure table managed by realtime migrations",
 		"questpieChannelHeadTable": "ordered channel infrastructure table managed by realtime migrations",
 		"questpieChannelPresenceTable": "channel presence infrastructure table managed by realtime migrations",

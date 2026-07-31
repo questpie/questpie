@@ -7,6 +7,7 @@ import {
 	ChannelSecurityError,
 } from "#questpie/server/channels/security.js";
 import {
+	getCurrentTransaction,
 	onAfterCommit,
 	withTransactionOrExisting,
 } from "#questpie/server/collection/crud/shared/transaction.js";
@@ -17,6 +18,7 @@ import {
 	stringifyCompatibleTypedEventWire,
 } from "#questpie/shared/typed-wire.js";
 
+import { ChannelAuthorityFenceStore } from "./channel-authority-fence.js";
 import {
 	questpieChannelDispatchTable,
 	questpieChannelEventTable,
@@ -26,10 +28,12 @@ import type { RealtimeObservation, RealtimeObserver } from "./observer.js";
 import type {
 	ChannelGapFrame,
 	ChangePublisher,
+	ClientAuthoritySubject,
 	ClientSink,
 	ClientTransport,
 	OrderedChannelDelivery,
 	OrderedChannelEventFrame,
+	SinkWriteResult,
 } from "./transport.js";
 
 const DEFAULT_RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -39,6 +43,7 @@ const DEFAULT_MAX_BUFFERED_BYTES = 1024 * 1024;
 const DEFAULT_LEASE_MS = 30_000;
 const DEFAULT_RETRY_MS = 25;
 const DEFAULT_BATCH_SIZE = 500;
+const PROVIDER_REVOCATION_TIMEOUT_MS = 5_000;
 
 export type ChannelEventLedgerConfig = {
 	/** Maximum age of replayable events. Set to 0 to disable time cleanup. */
@@ -88,10 +93,53 @@ export type ChannelReplayPage =
 			oldestEventId: string | null;
 	  }>;
 
+export type LocalChannelBindingLifecycle = {
+	/** Starts timers and client-visible snapshots after the publication commits. */
+	activate(): Promise<void>;
+	/** Removes every durable and local artifact. Must be idempotent. */
+	deactivate(): Promise<void>;
+	/** Installs a short expected-generation guard for owned heartbeat SQL. */
+	setRenewalGuard?(
+		guard: (
+			operation: (tx: AnyDrizzleClient<any>) => Promise<void>,
+		) => Promise<boolean>,
+	): void;
+};
+
+export type LocalChannelBindingStage = {
+	/** Owned SQL which establishes the lock ordered before authority fences. */
+	beforeFence?(tx: AnyDrizzleClient<any>): Promise<void>;
+	/** Owned SQL publication; no policy, sink, provider, or timer callbacks. */
+	publish(
+		tx: AnyDrizzleClient<any>,
+		authorization?: LocalChannelAuthorization,
+	): Promise<LocalChannelBindingLifecycle>;
+};
+
+export type LocalChannelAuthorization =
+	| boolean
+	| Readonly<{
+			authorized: boolean;
+			presence?: Record<string, unknown>;
+	  }>;
+
 export type LocalChannelSubscriptionInput = {
 	subscriptionId: string;
 	channel: string;
+	/** Opaque stable subject. Raw user/session identifiers are not accepted here. */
+	subject?: string;
+	/** Resolve a fresh request and application context before reauthorizing. */
+	reauthorize?: () => Promise<LocalChannelAuthorization>;
+	/**
+	 * Framework-owned state staged in the same short authority publication.
+	 * @internal
+	 */
+	stage?: LocalChannelBindingStage;
 	sink: ClientSink;
+	/** Close only this logical binding when supplied by a multiplexed session. */
+	close?: (reason: "access_revoked") => Promise<void>;
+	/** @internal Runs exactly once for caller release or an internal close. */
+	onRelease?: () => Promise<void>;
 	lastEventId?: string | null;
 	encodeFrame?: (
 		frame: OrderedChannelEventFrame | ChannelGapFrame,
@@ -113,7 +161,14 @@ type LocalSubscription = {
 	drainPending: boolean;
 	closed: boolean;
 	retryTimer: ReturnType<typeof setTimeout> | null;
+	subject?: string;
+	authorityGeneration?: number;
+	reauthorize?: () => Promise<LocalChannelAuthorization>;
+	close?: LocalChannelSubscriptionInput["close"];
+	onRelease?: LocalChannelSubscriptionInput["onRelease"];
 	encodeFrame?: LocalChannelSubscriptionInput["encodeFrame"];
+	active: boolean;
+	lifecycle?: LocalChannelBindingLifecycle;
 };
 
 export function hashResolvedChannel(channel: string): string {
@@ -164,6 +219,33 @@ function canonicalChannelEnvelope(
 	return { wireJson, sizeBytes };
 }
 
+function isAuthorized(authorization: LocalChannelAuthorization): boolean {
+	return (
+		authorization === true ||
+		(typeof authorization === "object" && authorization.authorized === true)
+	);
+}
+
+async function withProviderRevocationTimeout<T>(
+	operation: Promise<T>,
+): Promise<T> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			operation,
+			new Promise<never>((_, reject) => {
+				timer = setTimeout(
+					() =>
+						reject(new Error("Shared provider authority revocation timed out")),
+					PROVIDER_REVOCATION_TIMEOUT_MS,
+				);
+			}),
+		]);
+	} finally {
+		if (timer) clearTimeout(timer);
+	}
+}
+
 function hasPostgresErrorCode(error: unknown, code: string): boolean {
 	let current = error;
 	const seen = new Set<object>();
@@ -185,6 +267,7 @@ export class ChannelEventLedger {
 	private readonly config: ChannelEventLedgerConfig;
 	private readonly instanceId = crypto.randomUUID();
 	private readonly encoder = new TextEncoder();
+	private readonly authorityFences: ChannelAuthorityFenceStore;
 	private readonly localSubscriptions = new Map<string, LocalSubscription>();
 	private readonly subscriptionsByChannel = new Map<
 		string,
@@ -203,6 +286,7 @@ export class ChannelEventLedger {
 		private readonly ensureDeliveryStarted?: () => Promise<void>,
 		private readonly observer?: RealtimeObserver,
 	) {
+		this.authorityFences = new ChannelAuthorityFenceStore(this.db);
 		this.config = {
 			retentionMs: config.retentionMs ?? DEFAULT_RETENTION_MS,
 			retentionBytes: config.retentionBytes ?? DEFAULT_RETENTION_BYTES,
@@ -271,6 +355,7 @@ export class ChannelEventLedger {
 				.insert(questpieChannelDispatchTable)
 				.values({ channelHash })
 				.onConflictDoNothing();
+			await this.authorityFences.ensureChannel(channelHash, tx);
 
 			onAfterCommit(async () => {
 				void this.notifyAfterCommit(channelHash, eventId).catch((error) => {
@@ -303,7 +388,7 @@ export class ChannelEventLedger {
 
 	async subscribeLocal(
 		input: LocalChannelSubscriptionInput,
-	): Promise<() => void> {
+	): Promise<() => Promise<void>> {
 		if (
 			this.clientTransport &&
 			this.clientTransport.channelDeliveryScope !== "local-sessions"
@@ -312,6 +397,14 @@ export class ChannelEventLedger {
 		}
 		if (this.localSubscriptions.has(input.subscriptionId)) {
 			throw new Error(`Channel subscription "${input.subscriptionId}" exists`);
+		}
+		if (Boolean(input.subject) !== Boolean(input.reauthorize)) {
+			throw new Error(
+				"Channel authority subject and reauthorizer must be provided together",
+			);
+		}
+		if (input.stage && !input.subject) {
+			throw new Error("Channel binding staging requires an authority subject");
 		}
 
 		const channelHash = hashResolvedChannel(input.channel);
@@ -343,7 +436,7 @@ export class ChannelEventLedger {
 			if (outsideRetention) {
 				this.observe({ type: "resume", outcome: "gap" });
 				await this.writeGap(input, oldest?.eventId ?? null);
-				return () => {};
+				return async () => {};
 			}
 			cursor = parsed.seq;
 			this.observe({
@@ -365,16 +458,258 @@ export class ChannelEventLedger {
 			drainPending: false,
 			closed: false,
 			retryTimer: null,
+			subject: input.subject,
+			authorityGeneration: undefined,
+			reauthorize: input.reauthorize,
+			close: input.close,
+			onRelease: input.onRelease,
 			encodeFrame: input.encodeFrame,
+			active: false,
 		};
-		this.localSubscriptions.set(subscription.id, subscription);
-		const channelSubscriptions =
-			this.subscriptionsByChannel.get(channelHash) ?? new Set();
-		channelSubscriptions.add(subscription);
-		this.subscriptionsByChannel.set(channelHash, channelSubscriptions);
+		const register = (
+			generation?: number,
+			lifecycle?: LocalChannelBindingLifecycle,
+		) => {
+			if (this.localSubscriptions.has(subscription.id)) {
+				throw new Error(`Channel subscription "${subscription.id}" exists`);
+			}
+			subscription.authorityGeneration = generation;
+			subscription.lifecycle = lifecycle;
+			this.localSubscriptions.set(subscription.id, subscription);
+			const channelSubscriptions =
+				this.subscriptionsByChannel.get(channelHash) ?? new Set();
+			channelSubscriptions.add(subscription);
+			this.subscriptionsByChannel.set(channelHash, channelSubscriptions);
+		};
+
+		try {
+			if (input.subject && input.reauthorize) {
+				await this.authorityFences.ensure({
+					channelHash,
+					subject: input.subject,
+				});
+				while (!subscription.closed && !subscription.active) {
+					const generation = await this.authorityFences.read({
+						channelHash,
+						subject: input.subject,
+					});
+					let authorization: LocalChannelAuthorization = false;
+					try {
+						authorization = await input.reauthorize();
+					} catch {
+						authorization = false;
+					}
+					if (!isAuthorized(authorization)) {
+						if (input.close) await input.close("access_revoked");
+						else await input.sink.close("access_revoked");
+						return async () => {};
+					}
+					const admission = await this.authorityFences.admitExpected(
+						{
+							channelHash,
+							subject: input.subject,
+							expectedGeneration: generation,
+						},
+						{
+							beforeFence: input.stage?.beforeFence,
+							publish: async (tx) => {
+								const lifecycle = await input.stage?.publish(tx, authorization);
+								register(generation, lifecycle);
+								lifecycle?.setRenewalGuard?.(async (operation) => {
+									if (
+										subscription.closed ||
+										subscription.authorityGeneration === undefined
+									) {
+										return false;
+									}
+									const renewal = await this.authorityFences.admitExpected(
+										{
+											channelHash,
+											subject: input.subject!,
+											expectedGeneration: subscription.authorityGeneration,
+										},
+										{
+											beforeFence: input.stage?.beforeFence,
+											publish: operation,
+										},
+									);
+									return renewal.admitted;
+								});
+								return lifecycle;
+							},
+						},
+					);
+					if (!admission.admitted) continue;
+					if (subscription.closed) {
+						await admission.value?.deactivate();
+						break;
+					}
+					subscription.active = true;
+					await admission.value?.activate();
+				}
+			} else {
+				register();
+				subscription.active = true;
+			}
+		} catch (error) {
+			await this.releaseLocalSubscription(subscription);
+			throw error;
+		}
+		if (subscription.closed) return async () => {};
 		await this.drainLocalSubscription(subscription);
 
-		return () => this.removeLocalSubscription(subscription);
+		return () => this.releaseLocalSubscription(subscription);
+	}
+
+	/** @internal Whether a successful admission installed the local binding. */
+	hasLocalSubscription(subscriptionId: string): boolean {
+		return this.localSubscriptions.has(subscriptionId);
+	}
+
+	/**
+	 * Apply one durable authority cut, then reconcile every exact local binding.
+	 *
+	 * Duplicate calls are safe: a closed binding is removed before another cut
+	 * can find it, and notice payloads carry only the resolved channel hash.
+	 */
+	async revokeAuthority(
+		input: {
+			channel: string;
+			subject: string;
+			transportSubject?: ClientAuthoritySubject;
+			idempotencyKey: string;
+		},
+		options: AppendChannelEventOptions = {},
+	): Promise<
+		Readonly<{
+			generation: number;
+			scope: "exact-subscription" | "principal-connections";
+		}>
+	> {
+		const channelHash = hashResolvedChannel(input.channel);
+		const db = options.db ?? this.db;
+		const managedCallerTransaction = Boolean(getCurrentTransaction());
+		const sharedProvider =
+			this.clientTransport?.channelDeliveryScope === "shared-provider"
+				? this.clientTransport
+				: undefined;
+		if (sharedProvider) {
+			if (!input.transportSubject) {
+				throw new Error(
+					"Shared-provider channel authority revocation is unavailable",
+				);
+			}
+			sharedProvider.validateAuthorityRevocation?.(input.transportSubject);
+		}
+		const receipt = await this.authorityFences.advance(
+			{
+				channelHash,
+				subject: input.subject,
+				idempotencyKey: input.idempotencyKey,
+			},
+			db,
+		);
+		const scope = sharedProvider
+			? sharedProvider.authorityRevocationScope
+			: "exact-subscription";
+		if (sharedProvider && (!scope || !sharedProvider.revokeAuthority)) {
+			// Keep the newly advanced fence pending. Shared dispatch remains
+			// blocked until a transport with an explicit capability applies it.
+			throw new Error(
+				"Shared provider channel authority revocation capability is unavailable",
+			);
+		}
+		const reconcileLocal = async () => {
+			const subscriptions = [
+				...(this.subscriptionsByChannel.get(channelHash) ?? []),
+			].filter((subscription) => subscription.subject === input.subject);
+			await Promise.all(
+				subscriptions.map((subscription) =>
+					this.reconcileLocalAuthority(subscription),
+				),
+			);
+		};
+		const publishWake = async () => {
+			await this.changeBroker?.publish({
+				kind: "channel-authority-maybe-advanced",
+				channelHash,
+				reason: "revoke",
+			});
+		};
+
+		if (sharedProvider) {
+			if (!receipt.applied) {
+				if (!input.transportSubject) {
+					throw new Error(
+						"Shared-provider channel authority revocation is unavailable",
+					);
+				}
+				const applyProviderCut = async () => {
+					await withProviderRevocationTimeout(
+						sharedProvider.revokeAuthority!({
+							channel: input.channel,
+							subject: input.transportSubject!,
+						}),
+					);
+					await this.authorityFences.acknowledge(
+						{
+							channelHash,
+							subject: input.subject,
+							idempotencyKey: input.idempotencyKey,
+							generation: receipt.generation,
+						},
+						managedCallerTransaction ? db : undefined,
+					);
+				};
+				if (managedCallerTransaction) {
+					// A conservative disconnect may survive a later database rollback.
+					// That is safer than returning success for an unapplied generation.
+					await applyProviderCut();
+				} else if (
+					"rollback" in db &&
+					typeof (db as { transaction?: unknown }).transaction !== "function"
+				) {
+					throw new Error(
+						"Shared-provider revocation requires a managed transaction",
+					);
+				} else await applyProviderCut();
+			}
+		} else if (!receipt.applied) {
+			// The committed generation is the exact-session enforcement boundary.
+			await this.authorityFences.acknowledge(
+				{
+					channelHash,
+					subject: input.subject,
+					idempotencyKey: input.idempotencyKey,
+					generation: receipt.generation,
+				},
+				db,
+			);
+		}
+
+		const afterDurableCut = async () => {
+			if (scope === "exact-subscription") await reconcileLocal();
+			await publishWake().catch((error) => {
+				this.logger?.warn("[Realtime] Channel authority wake failed", error);
+			});
+		};
+		if (getCurrentTransaction()) {
+			onAfterCommit(afterDurableCut);
+		} else if (db !== this.db) {
+			// An externally managed raw transaction has no framework after-commit
+			// queue. Start reconciliation without awaiting its conflicting read:
+			// the durable generation still blocks the next protected write, and
+			// this operation resumes as soon as the external caller commits.
+			void afterDurableCut().catch((error) => {
+				this.logger?.warn(
+					"[Realtime] Channel authority reconciliation failed",
+					error,
+				);
+			});
+		} else {
+			await afterDurableCut();
+		}
+		return { generation: receipt.generation, scope: scope! };
 	}
 
 	/** Read one bounded replay page for an already-authorized channel identity. */
@@ -459,6 +794,7 @@ export class ChannelEventLedger {
 
 	async drain(channelHash?: string): Promise<void> {
 		try {
+			await this.reconcileLocalAuthorities(channelHash);
 			if (this.clientTransport?.channelDeliveryScope === "shared-provider") {
 				await this.drainShared(channelHash);
 				return;
@@ -477,6 +813,17 @@ export class ChannelEventLedger {
 			if (hasPostgresErrorCode(error, "42P01")) return;
 			throw error;
 		}
+	}
+
+	private async reconcileLocalAuthorities(channelHash?: string): Promise<void> {
+		const subscriptions = channelHash
+			? [...(this.subscriptionsByChannel.get(channelHash) ?? [])]
+			: [...this.localSubscriptions.values()];
+		await Promise.all(
+			subscriptions.map((subscription) =>
+				this.reconcileLocalAuthority(subscription),
+			),
+		);
 	}
 
 	async cleanup(): Promise<void> {
@@ -525,10 +872,12 @@ export class ChannelEventLedger {
 		}
 	}
 
-	destroy(): void {
-		for (const subscription of this.localSubscriptions.values()) {
-			this.removeLocalSubscription(subscription);
-		}
+	async destroy(): Promise<void> {
+		await Promise.all(
+			[...this.localSubscriptions.values()].map((subscription) =>
+				this.releaseLocalSubscription(subscription),
+			),
+		);
 	}
 
 	private async writeGap(
@@ -567,7 +916,7 @@ export class ChannelEventLedger {
 	private async drainLocalSubscription(
 		subscription: LocalSubscription,
 	): Promise<void> {
-		if (subscription.closed) return;
+		if (subscription.closed || !subscription.active) return;
 		if (subscription.drainPromise) {
 			subscription.drainPending = true;
 			return subscription.drainPromise;
@@ -660,10 +1009,11 @@ export class ChannelEventLedger {
 				this.toLocalFrame(row),
 				subscription.encodeFrame,
 			);
-			const result = await subscription.sink.write(
+			const result = await this.writeAuthorizedLocalFrame(
+				subscription,
 				encodedFrame,
-				"ordered-channel-event",
 			);
+			if (!result) return false;
 			if (result.status === "busy") {
 				if (
 					result.bufferedBytes + subscription.pendingBytes >
@@ -721,6 +1071,8 @@ export class ChannelEventLedger {
 		if (subscription.closed) return;
 		subscription.closed = true;
 		if (subscription.retryTimer) clearTimeout(subscription.retryTimer);
+		subscription.pending = [];
+		subscription.pendingBytes = 0;
 		this.localSubscriptions.delete(subscription.id);
 		const channelSubscriptions = this.subscriptionsByChannel.get(
 			subscription.channelHash,
@@ -731,13 +1083,123 @@ export class ChannelEventLedger {
 		}
 	}
 
-	private async closeLocalSubscription(
+	private async releaseLocalSubscription(
 		subscription: LocalSubscription,
-		reason: "slow_consumer" | "write_failed",
 	): Promise<void> {
 		if (subscription.closed) return;
 		this.removeLocalSubscription(subscription);
+		const lifecycle = subscription.lifecycle;
+		subscription.lifecycle = undefined;
+		try {
+			await lifecycle?.deactivate();
+		} finally {
+			await subscription.onRelease?.();
+		}
+	}
+
+	private async closeLocalSubscription(
+		subscription: LocalSubscription,
+		reason: "slow_consumer" | "write_failed" | "access_revoked",
+	): Promise<void> {
+		if (subscription.closed) return;
+		await this.releaseLocalSubscription(subscription);
+		if (reason === "access_revoked" && subscription.close) {
+			await subscription.close(reason);
+			return;
+		}
 		await subscription.sink.close(reason);
+	}
+
+	private async writeAuthorizedLocalFrame(
+		subscription: LocalSubscription,
+		frame: Uint8Array,
+	): Promise<SinkWriteResult | null> {
+		if (
+			!subscription.subject ||
+			subscription.authorityGeneration === undefined ||
+			!subscription.reauthorize
+		) {
+			return subscription.sink.write(frame, "ordered-channel-event");
+		}
+		while (!subscription.closed && subscription.active) {
+			const generation = await this.authorityFences.read({
+				channelHash: subscription.channelHash,
+				subject: subscription.subject,
+			});
+			if (generation !== subscription.authorityGeneration) {
+				let authorization: LocalChannelAuthorization = false;
+				try {
+					authorization = await subscription.reauthorize();
+				} catch {
+					authorization = false;
+				}
+				if (!isAuthorized(authorization)) {
+					await this.closeLocalSubscription(subscription, "access_revoked");
+					return null;
+				}
+			}
+			const admission = await this.authorityFences.admitExpected(
+				{
+					channelHash: subscription.channelHash,
+					subject: subscription.subject,
+					expectedGeneration: generation,
+				},
+				{
+					publish: () => {
+						subscription.authorityGeneration = generation;
+					},
+				},
+			);
+			if (!admission.admitted) continue;
+			if (subscription.closed || !subscription.active) return null;
+			// The frame was logically admitted at this generation. The sink is
+			// deliberately outside the fence so revocation never waits on I/O.
+			return subscription.sink.write(frame, "ordered-channel-event");
+		}
+		return null;
+	}
+
+	private async reconcileLocalAuthority(
+		subscription: LocalSubscription,
+	): Promise<void> {
+		if (
+			subscription.closed ||
+			!subscription.subject ||
+			subscription.authorityGeneration === undefined ||
+			!subscription.reauthorize
+		) {
+			return;
+		}
+		while (!subscription.closed) {
+			const generation = await this.authorityFences.read({
+				channelHash: subscription.channelHash,
+				subject: subscription.subject,
+			});
+			if (generation === subscription.authorityGeneration) return;
+			let authorization: LocalChannelAuthorization = false;
+			try {
+				authorization = await subscription.reauthorize();
+			} catch {
+				// Refresh failures fail closed without exposing access details.
+			}
+			if (!isAuthorized(authorization)) {
+				await this.closeLocalSubscription(subscription, "access_revoked");
+				return;
+			}
+			const admission = await this.authorityFences.admitExpected(
+				{
+					channelHash: subscription.channelHash,
+					subject: subscription.subject,
+					expectedGeneration: generation,
+				},
+				{
+					publish: () => {
+						subscription.authorityGeneration = generation;
+					},
+				},
+			);
+			if (admission.admitted) return;
+		}
 	}
 
 	private async drainShared(channelHash?: string): Promise<void> {
@@ -788,6 +1250,7 @@ export class ChannelEventLedger {
 		) {
 			return;
 		}
+		const clientTransport = this.clientTransport;
 		const now = new Date();
 		const leaseExpiresAt = new Date(
 			now.getTime() + this.config.coordinatorLeaseMs,
@@ -825,7 +1288,10 @@ export class ChannelEventLedger {
 						eventId: row.eventId,
 						frame: this.encoder.encode(row.wireJson),
 					};
-					const result = await this.clientTransport.publishChannel(delivery);
+					if (!(await this.authorityFences.admitSharedDispatch(channelHash))) {
+						return;
+					}
+					const result = await clientTransport.publishChannel(delivery);
 					if (result.status === "busy") return;
 					cursor = Number(row.seq);
 					const [advanced] = await this.db

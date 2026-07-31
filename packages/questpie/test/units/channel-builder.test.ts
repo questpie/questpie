@@ -194,6 +194,59 @@ describe("channel ChannelsService", () => {
 		).toEqual({ id: "user-1", roomId: "allowed" });
 	});
 
+	test("revokes resolved channel authority through the generic publisher and awaits acknowledgement", async () => {
+		const definitions = {
+			room: channel("room-[roomId]").authorize(() => true),
+		};
+		const revocations: unknown[] = [];
+		let acknowledge: (() => void) | undefined;
+		const acknowledged = new Promise<void>((resolve) => {
+			acknowledge = resolve;
+		});
+		const service = new ChannelsService(
+			definitions,
+			{
+				appendChannelEvent: async () => ({ eventId: "event-1" }),
+				revokeChannelAuthority: async (input) => {
+					revocations.push(input);
+					await acknowledged;
+					return {
+						scope: "principal-connections" as const,
+						generation: 1,
+					};
+				},
+			},
+			userContext,
+		);
+		let settled = false;
+
+		const revocation = service
+			.revokeAuthority("room", {
+				params: { roomId: "one" },
+				subject: { kind: "user", id: "user-2" },
+				idempotencyKey: "room-one:user-2:membership-v2",
+			})
+			.then((receipt) => {
+				settled = true;
+				return receipt;
+			});
+		await Promise.resolve();
+
+		expect(revocations).toEqual([
+			{
+				channel: "private-room-one",
+				subject: { kind: "user", id: "user-2" },
+				idempotencyKey: "room-one:user-2:membership-v2",
+			},
+		]);
+		expect(settled).toBe(false);
+		acknowledge?.();
+		await expect(revocation).resolves.toEqual({
+			scope: "principal-connections",
+			generation: 1,
+		});
+	});
+
 	test("publishes a batch in input order", async () => {
 		const definitions = {
 			news: channel("news").events({ updated: z.object({ id: z.string() }) }),

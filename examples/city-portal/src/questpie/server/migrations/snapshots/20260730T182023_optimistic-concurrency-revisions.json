@@ -1,0 +1,28 @@
+{
+	"operations": [
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__source_revision",
+			"value": {
+				"type": "integer",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "source_revision",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "site_settings_versions"
+			},
+			"timestamp": "2026-07-30T18:20:24.024Z",
+			"migrationId": "optimisticConcurrencyRevisions20260730T182023"
+		}
+	],
+	"metadata": {
+		"migrationId": "optimisticConcurrencyRevisions20260730T182023",
+		"timestamp": "2026-07-30T18:20:24.202Z",
+		"prevId": "00000000-0000-0000-0000-000000000000"
+	}
+}

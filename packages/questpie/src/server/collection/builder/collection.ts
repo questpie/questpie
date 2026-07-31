@@ -44,7 +44,11 @@ import type {
 } from "#questpie/server/collection/builder/types.js";
 import { createCollectionValidationSchemas } from "#questpie/server/collection/builder/validation-helpers.js";
 import { CRUDGenerator } from "#questpie/server/collection/crud/index.js";
-import type { CRUD } from "#questpie/server/collection/crud/types.js";
+import { getColumn } from "#questpie/server/collection/crud/shared/field-resolver.js";
+import type {
+	CRUD,
+	ExtractIdType,
+} from "#questpie/server/collection/crud/types.js";
 import { systemTimestamp } from "#questpie/server/db/system-columns.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { FieldSelect } from "#questpie/server/fields/field-types.js";
@@ -489,7 +493,9 @@ type GeneratedCollectionCRUD<TState extends CollectionBuilderState> = Omit<
 		CollectionSelect<TState>,
 		CollectionInsert<TState>,
 		CollectionUpdate<TState>,
-		TState["relations"]
+		TState["relations"],
+		ExtractIdType<CollectionSelect<TState>>,
+		TState["options"]
 	>,
 	"purgeById"
 > &
@@ -499,7 +505,9 @@ type GeneratedCollectionCRUD<TState extends CollectionBuilderState> = Omit<
 					CollectionSelect<TState>,
 					CollectionInsert<TState>,
 					CollectionUpdate<TState>,
-					TState["relations"]
+					TState["relations"],
+					ExtractIdType<CollectionSelect<TState>>,
+					TState["options"]
 				>,
 				"purgeById"
 			>
@@ -527,6 +535,10 @@ export class Collection<TState extends CollectionBuilderState> {
 		deletedAt: systemTimestamp("deleted_at"),
 	});
 
+	static readonly revisionCols = () => ({
+		revision: integer("revision").default(1).notNull(),
+	});
+
 	/**
 	 * Creates version table columns with ID type matching the parent table
 	 * @param parentIdColumn - The ID column from the parent table to match type
@@ -541,6 +553,7 @@ export class Collection<TState extends CollectionBuilderState> {
 			? cloneColumnType(parentIdColumn, "id").notNull()
 			: text("id").notNull(),
 		versionNumber: integer("version_number").notNull(),
+		sourceRevision: integer("source_revision"),
 		versionOperation: text("version_operation").notNull(), // 'create' | 'update' | 'delete'
 		versionStage: text("version_stage"),
 		versionFromStage: text("version_from_stage"),
@@ -681,6 +694,20 @@ export class Collection<TState extends CollectionBuilderState> {
 			}
 		}
 
+		if (
+			state.options.optimisticConcurrency &&
+			Object.hasOwn(state.fields, "revision")
+		) {
+			throw new Error(
+				`Collection "${state.name}" cannot declare framework-owned field "revision"`,
+			);
+		}
+		if (state.collaborative && !state.options.optimisticConcurrency) {
+			throw new Error(
+				`Collaborative collection "${state.name}" must enable optimisticConcurrency`,
+			);
+		}
+
 		// Build the main table
 		this.table = this.generateMainTable(indexesFn) as any;
 
@@ -722,6 +749,9 @@ export class Collection<TState extends CollectionBuilderState> {
 			}
 			if (state.options.softDelete) {
 				Object.assign(mainFields, Collection.softDeleteCols());
+			}
+			if (state.options.optimisticConcurrency) {
+				Object.assign(mainFields, Collection.revisionCols());
 			}
 
 			state.validation = createCollectionValidationSchemas(
@@ -931,6 +961,9 @@ export class Collection<TState extends CollectionBuilderState> {
 		// Add soft delete
 		if (this.state.options.softDelete) {
 			Object.assign(columns, Collection.softDeleteCols());
+		}
+		if (this.state.options.optimisticConcurrency) {
+			Object.assign(columns, Collection.revisionCols());
 		}
 
 		// Create final table with constraints
@@ -1361,6 +1394,7 @@ export class Collection<TState extends CollectionBuilderState> {
 			title: titleMeta,
 			timestamps: this.state.options.timestamps !== false,
 			softDelete: this.state.options.softDelete || false,
+			optimisticConcurrency: this.state.options.optimisticConcurrency,
 			virtualFields: this.state.virtuals
 				? Object.keys(this.state.virtuals)
 				: [],

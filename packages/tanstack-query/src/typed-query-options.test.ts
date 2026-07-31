@@ -30,13 +30,25 @@ const news = collection("news")
 		author: f.relation("authors").required().relationName("author"),
 	}))
 	.options({ softDelete: true });
+const locked = collection("locked")
+	.fields(({ f }) => ({
+		title: f.text(255).required(),
+	}))
+	.options({
+		softDelete: true,
+		optimisticConcurrency: true,
+	});
 
 const settings = global("settings").fields(({ f }) => ({
 	siteName: f.text(255).required(),
 }));
 
 type App = {
-	collections: { authors: typeof authors; news: typeof news };
+	collections: {
+		authors: typeof authors;
+		news: typeof news;
+		locked: typeof locked;
+	};
 	globals: { settings: typeof settings };
 };
 
@@ -85,6 +97,70 @@ describe("typed query options proxy", () => {
 				false
 			>
 		>;
+		const lockedPurge = () => q.collections.locked.purgeById();
+		type LockedPurgeVariables =
+			NonNullable<ReturnType<typeof lockedPurge>["mutationFn"]> extends (
+				variables: infer TVariables,
+				...args: any[]
+			) => any
+				? TVariables
+				: never;
+		const safeLockedPurge: LockedPurgeVariables = {
+			id: "record-1",
+			expectedRevision: 2,
+		};
+		// @ts-expect-error TanStack purge requires the current tombstone version
+		const unsafeLockedPurge: LockedPurgeVariables = { id: "record-1" };
+
+		type LockedUpdate = ReturnType<(typeof q.collections.locked)["update"]>;
+		type LockedUpdateVariables =
+			NonNullable<LockedUpdate["mutationFn"]> extends (
+				variables: infer TVariables,
+				...args: any[]
+			) => any
+				? TVariables
+				: never;
+		const lockedUpdate: LockedUpdateVariables = {
+			id: "record-1",
+			expectedRevision: 1,
+			data: { title: "Updated" },
+		};
+		// @ts-expect-error TanStack mutations require the configured version
+		const unsafeLockedUpdate: LockedUpdateVariables = {
+			id: "record-1",
+			data: { title: "Unsafe" },
+		};
+		const lockedMany = () => q.collections.locked.updateMany();
+		type LockedManyVariables =
+			NonNullable<ReturnType<typeof lockedMany>["mutationFn"]> extends (
+				variables: infer TVariables,
+				...args: any[]
+			) => any
+				? TVariables
+				: never;
+		const lockedBulk: LockedManyVariables = {
+			where: { id: "record-1" },
+			expectedRevisions: [{ id: "record-1", expectedRevision: 1 }],
+			data: { title: "Updated" },
+		};
+		const lockedRevert = () => q.collections.locked.revertToVersion();
+		type LockedRevertVariables =
+			NonNullable<ReturnType<typeof lockedRevert>["mutationFn"]> extends (
+				variables: infer TVariables,
+				...args: any[]
+			) => any
+				? TVariables
+				: never;
+		const safeLockedRevert: LockedRevertVariables = {
+			id: "record-1",
+			version: 1,
+			expectedRevision: 2,
+		};
+		// @ts-expect-error TanStack revert requires the configured version
+		const unsafeLockedRevert: LockedRevertVariables = {
+			id: "record-1",
+			version: 1,
+		};
 
 		// relation typos in `with` are compile errors (direct-client parity)
 		// @ts-expect-error unknown relation in with must not typecheck
@@ -108,7 +184,17 @@ describe("typed query options proxy", () => {
 			badColumns,
 			badCollection,
 			() => purge,
+			() => safeLockedPurge,
+			() => unsafeLockedPurge,
+			() => lockedUpdate,
+			() => unsafeLockedUpdate,
+			() => lockedBulk,
+			() => safeLockedRevert,
+			() => unsafeLockedRevert,
+			lockedMany,
+			lockedRevert,
+			lockedPurge,
 		];
-		expect(builders.length).toBe(8);
+		expect(builders.length).toBe(18);
 	});
 });

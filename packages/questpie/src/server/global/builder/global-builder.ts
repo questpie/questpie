@@ -25,6 +25,20 @@ import type {
 } from "#questpie/server/modules/core/integrated/crdt/capability.js";
 import type { Override, Prettify } from "#questpie/shared/type-utils.js";
 
+function withCollaborativeSnapshotPolicy<T extends GlobalOptions>(
+	options: T,
+): T {
+	if (!options.versioning) return options;
+	const versioning = options.versioning === true ? {} : options.versioning;
+	return {
+		...options,
+		versioning: {
+			...versioning,
+			collaborativeSnapshots: "checkpoint",
+		},
+	} as T;
+}
+
 /**
  * Extract Drizzle column types from field definitions.
  */
@@ -117,6 +131,25 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 
 	constructor(state: TState) {
 		this.state = state;
+	}
+
+	/**
+	 * Build the next builder in an immutable chain, carrying private state
+	 * forward.
+	 *
+	 * `_fieldDefs` — the app's field-factory map, holding module-contributed
+	 * types like `richText` — was assigned once in `create()` and carried by
+	 * none of the derivations, so the first `.set()` or `.options()` dropped it
+	 * and `.fields()` silently fell back to `builtinFields` while the type still
+	 * advertised the full map. Same defect as CollectionBuilder had; one place
+	 * to fix it, and one place to extend when a private field is added.
+	 */
+	private _derive<TNext extends GlobalBuilderState>(
+		state: TNext,
+	): GlobalBuilder<TNext> {
+		const next = new GlobalBuilder(state);
+		next._fieldDefs = this._fieldDefs;
+		return next;
 	}
 
 	/**
@@ -288,23 +321,32 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 			_pendingRelations: [...prevPendingRelations, ...pendingRelations],
 		} as any;
 
-		const newBuilder = new GlobalBuilder(newState);
-		return newBuilder;
+		return this._derive(newState);
 	}
 
 	/** Enable one collaborative aggregate for this global singleton/scope. */
 	collaborative<TAwarenessSchema extends ZodType | undefined = undefined>(
 		config?: CrdtOwnerConfig<TAwarenessSchema>,
 	): GlobalBuilder<
-		Override<TState, { collaborative: CrdtOwnerCapability<TAwarenessSchema> }>
+		Override<
+			TState,
+			{
+				collaborative: CrdtOwnerCapability<TAwarenessSchema>;
+				options: TState["options"] & { optimisticConcurrency: true };
+			}
+		>
 	> {
 		const newState = {
 			...this.state,
+			options: withCollaborativeSnapshotPolicy({
+				...this.state.options,
+				optimisticConcurrency: true,
+			}),
 			collaborative: {
 				awarenessSchema: config?.awareness,
 			},
 		} as any;
-		return new GlobalBuilder(newState);
+		return this._derive(newState);
 	}
 
 	/**
@@ -312,14 +354,27 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 	 */
 	options<TNewOptions extends GlobalOptions>(
 		options: TNewOptions,
-	): GlobalBuilder<Override<TState, { options: TNewOptions }>> {
+	): GlobalBuilder<
+		Override<
+			TState,
+			{
+				options: TState["collaborative"] extends CrdtOwnerCapability<any>
+					? TNewOptions & { optimisticConcurrency: true }
+					: TNewOptions;
+			}
+		>
+	> {
 		const newState = {
 			...this.state,
-			options,
+			options: this.state.collaborative
+				? withCollaborativeSnapshotPolicy({
+						...options,
+						optimisticConcurrency: true,
+					})
+				: options,
 		} as any;
 
-		const newBuilder = new GlobalBuilder(newState);
-		return newBuilder;
+		return this._derive(newState);
 	}
 
 	/**
@@ -333,8 +388,7 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 			hooks,
 		} as any;
 
-		const newBuilder = new GlobalBuilder(newState);
-		return newBuilder;
+		return this._derive(newState);
 	}
 
 	/**
@@ -353,8 +407,7 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 			access,
 		} as any;
 
-		const newBuilder = new GlobalBuilder(newState);
-		return newBuilder;
+		return this._derive(newState);
 	}
 
 	/**
@@ -471,7 +524,7 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 		value: V,
 	): GlobalBuilder<TState & Record<TKey, V>> {
 		const newState = { ...this.state, [key]: value } as any;
-		return new GlobalBuilder(newState);
+		return this._derive(newState);
 	}
 
 	/**

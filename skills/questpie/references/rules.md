@@ -295,6 +295,34 @@ Each hook accepts a single function **or an array of functions** (executed in or
 })
 ```
 
+### Transaction-bound Hooks
+
+`afterChange`, `afterDelete`, and `afterPurge` run inside the owning mutation
+transaction. Their `db` and injected services share that scope. A thrown error
+propagates and rolls back the mutation plus transaction-joined work:
+
+```ts
+.hooks({
+	afterChange: async ({ data, channels }) => {
+		await channels.publish("postActivity", {
+			params: { postId: data.id },
+			event: "changed",
+			data: { id: data.id },
+		});
+	},
+})
+```
+
+`afterChange` covers create/update, including restore and version revert;
+`afterDelete` covers soft and hard delete; `afterPurge` runs after physical
+removal and before commit. `updateMany` and `deleteMany` run once per winning
+row, sequentially in deterministic order, with bulk metadata. `updateBatch`
+runs once per successful item. An already-active no-op restore runs nothing.
+
+Use these hooks for transaction-aware database, Queue/outbox, or typed-channel
+work. Direct email/HTTP work cannot join the transaction and belongs in a
+durable job or `onAfterCommit`.
+
 ### Hook Context Properties
 
 | Property        | Available in                                                         | Description                                                                  |

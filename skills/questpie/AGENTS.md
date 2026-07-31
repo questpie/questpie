@@ -2075,6 +2075,29 @@ export default collection("posts")
 	.options({ timestamps: true, versioning: true });
 ```
 
+Add `optimisticConcurrency: true` when generated mutations must reject stale
+writes. QUESTPIE adds a framework-owned, read-only `revision`; never declare it
+as a field. Collaborative owners enable this automatically. Version history is
+a separate snapshot log: `versionNumber` is the history sequence and
+`sourceRevision` records the canonical row revision captured by the snapshot.
+
+```ts
+.options({
+	optimisticConcurrency: true,
+	versioning: {
+		maxVersions: 50,
+		collaborativeSnapshots: "checkpoint",
+	},
+})
+```
+
+Retention never resets the live `revision`. Reverting an old snapshot writes a
+new canonical revision rather than restoring the old clock. Collaborative
+builders normalize enabled versioning to checkpoint policy: CRDT projection
+and replace cuts do not snapshot automatically. Use an intentional empty
+generated update with the current `expectedRevision` when a projected content
+cut should become a version snapshot.
+
 ### Builder Chain Methods
 
 | Method                                          | Purpose                                 |
@@ -3628,6 +3651,34 @@ Each hook accepts a single function **or an array of functions** (executed in or
 })
 ```
 
+### Transaction-bound Hooks
+
+`afterChange`, `afterDelete`, and `afterPurge` run inside the owning mutation
+transaction. Their `db` and injected services share that scope. A thrown error
+propagates and rolls back the mutation plus transaction-joined work:
+
+```ts
+.hooks({
+	afterChange: async ({ data, channels }) => {
+		await channels.publish("postActivity", {
+			params: { postId: data.id },
+			event: "changed",
+			data: { id: data.id },
+		});
+	},
+})
+```
+
+`afterChange` covers create/update, including restore and version revert;
+`afterDelete` covers soft and hard delete; `afterPurge` runs after physical
+removal and before commit. `updateMany` and `deleteMany` run once per winning
+row, sequentially in deterministic order, with bulk metadata. `updateBatch`
+runs once per successful item. An already-active no-op restore runs nothing.
+
+Use these hooks for transaction-aware database, Queue/outbox, or typed-channel
+work. Direct email/HTTP work cannot join the transaction and belongs in a
+durable job or `onAfterCommit`.
+
 ### Hook Context Properties
 
 | Property        | Available in                                                         | Description                                                                  |
@@ -5096,7 +5147,7 @@ const updated = await collections.posts.updateMany({
 
 `updateMany` is claim-checked: inside the write transaction the matched rows are locked and `where` is re-evaluated, so rows changed by a concurrent writer are skipped instead of silently overwritten. The returned array reports exactly the winners.
 
-#### Atomic conditional updates (claims, optimistic locking)
+#### Atomic claims and generated optimistic concurrency
 
 Use a conditional `where` + the array length as the win/lose signal:
 
@@ -5113,18 +5164,38 @@ if (claimed.length === 0) {
 	// Lost the race (or row vanished), handle explicitly
 }
 
-// Optimistic concurrency: write only if the revision is unchanged
-const bumped = await collections.documents.updateMany(
+// Generated optimistic concurrency: revision is framework-owned.
+const updated = await collections.documents.updateById(
 	{
-		where: { id, revision: doc.revision },
-		data: { body, revision: doc.revision + 1 },
+		id,
+		data: { body },
+		expectedRevision: doc.revision,
 	},
 	ctx,
 );
-if (bumped.length === 0) throw new Error("Conflict, reload and retry");
 ```
 
-Hook timing: `beforeValidate`/`beforeChange` run before the transaction on candidates (intent, may fire for losers); `afterChange`, versioning, and the return value are winners-only (fact).
+Enable this with `.options({ optimisticConcurrency: true })`. Do not declare
+or mutate `revision`. Create starts at `1`; every canonical update,
+localized/relation-only update, soft delete, restore, revert, and publishing
+stage transition advances once. Existing-row mutations use
+`expectedRevision`. `updateMany`/`deleteMany` require exact
+`expectedRevisions: [{ id, expectedRevision }]` coverage, and every
+`updateBatch` entry carries `expectedRevision`. Missing or stale coverage
+conflicts before mutation hooks or durable facts and the whole batch remains
+atomic.
+
+Globals use `{ data, expectedRevision }`; creating an absent global expects
+revision `0`. History `versionNumber`/`versionId` is independent and each
+snapshot exposes `sourceRevision`. HTTP responses expose `ETag: "<revision>"`
+and mutations may use the same quoted value in `If-Match`; when both forms are
+present they must agree. JSON revision conflicts return `409`; failed
+`If-Match` preconditions return `412`, and `If-Match` on an unconfigured
+resource returns `400`.
+
+`.collaborative()` enables canonical revisions automatically. CRDT commit
+sequences, cursors, epochs, and field revisions remain separate; one applied
+aggregate projection cut advances the owner revision once.
 
 ### `updateBatch(options)`
 
@@ -6022,6 +6093,24 @@ malformed targeting collapses to one generic reconcile. Channel application
 events use the exact 10,000-byte QUESTPIE cap while remaining below the
 provider's <10 kB ceiling.
 
+Managed Pusher clients use the SDK's signed-user protocol with an opaque,
+HMAC-derived user id. User authentication posts only `socket_id` to the
+authenticated, `no-store` realtime auth route; channel authentication remains
+bound to both `socket_id` and the final channel name. The SDK requests fresh
+user authentication after reconnect; channel authorization waits for that
+sign-in and rechecks the current socket and owner before succeeding. On an
+application login/logout transition that keeps the same browser socket, destroy
+both `client.realtime` and
+`client.channels` (or recreate the client) so the shared physical connection is
+also recreated under the new identity.
+
+Channel-scoped authority cuts use the generic `channels.revokeAuthority()` seam.
+SSE closes only the denied logical binding. Pusher's honest capability is
+`principal-connections`: it terminates all current connections for that user,
+then fresh user/channel authentication allows still-authorized bindings to
+return. See `references/channels.md` for the transaction and in-flight-frame
+contract.
+
 ## Admission and lifecycle
 
 Default SSE limits are 20 topics per connection, 5 connections per authenticated principal, `find` limit 100, nested `with` depth 3, 4 concurrent initial snapshots, and 1 MiB buffered snapshot bytes per edge session. Slow consumers are bounded and disconnected rather than allowed unbounded memory growth.
@@ -6177,7 +6266,56 @@ Framework handlers and hooks receive a generated `channels` service:
 });
 ```
 
-In collection/global/hook files, use the injected `{ channels }`. Never import the generated `app` or defer lookup through ambient `getContext()`; the injected service is generated-type-safe and mutation-context aware.
+In collection/global/hook files, use the injected `{ channels }`. Hooks run in
+the owning mutation transaction, so a publish failure rolls back both the
+mutation and ordered channel-ledger append. Never import the generated `app` or
+defer lookup through ambient `getContext()`; the injected service is
+generated-type-safe and mutation-context aware.
+
+## Revoke current delivery authority
+
+When a membership or authorization mutation removes access, cut the affected
+resolved channel in the same transaction:
+
+```ts
+await channels.revokeAuthority("chatRoom", {
+	params: { roomId },
+	subject: { kind: "user", id: removedUserId },
+	idempotencyKey: `chat-room:${roomId}:${removedUserId}:membership-v2`,
+});
+```
+
+The idempotency key identifies the domain authorization transition. QUESTPIE
+advances a durable per-channel/subject generation and returns
+`{ generation, scope }`. `scope: "exact-subscription"` means the local SSE
+binding is cut without closing unrelated channel bindings.
+`scope: "principal-connections"` means the provider can only conservatively
+terminate every current connection for the signed-in user. Pusher supports the
+`user` subject for that capability.
+
+Fresh request context, subscribe authorization, and the presence resolver (for
+presence channels) run outside database locks. A short expected-generation
+publication installs the binding, latest fresh member payload, and optional
+presence lease together; a stale result and stale payload publish nothing and
+retry fresh. Internal revocation of the last SSE binding also stops its
+demand-driven authority reconciliation. A Pusher client signs in with an opaque
+provider user id before channel authorization, reconnects after termination,
+then obtains fresh user and per-channel authorization. Its channel grant is
+side-effect-free local signing guarded by an optimistic generation check, so a
+post-cut blob is discarded before reaching the client. Thus removing Space A
+may disconnect Space B briefly, but Space B can reconnect while Space A remains
+denied.
+
+In a managed caller transaction, Pusher termination and authority
+acknowledgement run inline under a bounded call. Provider failure throws and
+rolls back the database transaction; a conservative disconnect may survive a
+later caller rollback. Standalone provider failure leaves the durable cut
+pending for an idempotent retry.
+
+Pusher does not provide zero-frame atomicity: a frame already accepted by the
+physical provider connection may arrive while termination is in flight. The
+durable fence prevents new ordered provider dispatch from crossing a pending
+cut; reconnect and replay reauthorize against current application state.
 
 ## Client, presence, and TanStack Query
 
@@ -9543,6 +9681,16 @@ const update = useMutation(q.collections.posts.update());
 update.mutate({ id: "post-id", data: { status: "published" } });
 ```
 
+With generated optimistic concurrency, include the revision read by the query:
+
+```tsx
+update.mutate({
+	id: post.id,
+	data: { status: "published" },
+	expectedRevision: post.revision,
+});
+```
+
 ### Delete
 
 ```tsx
@@ -9562,6 +9710,10 @@ updateMany.mutate({ where: { status: "draft" }, data: { status: "archived" } });
 const deleteMany = useMutation(q.collections.posts.deleteMany());
 deleteMany.mutate({ where: { status: "archived" } });
 ```
+
+Optimistic collections add exact `expectedRevisions` to both bulk shapes and
+`expectedRevision` to every batch entry. Revert and stage-transition params use
+the same precondition.
 
 ### Versioning and Workflow Stages
 
@@ -9594,6 +9746,19 @@ function SiteSettings() {
 ```
 
 The globals `update` mutation takes `{ data: {...} }`, its `mutationFn` unwraps `variables.data`. This differs from the direct client (`client.globals.siteSettings.update({ shopName: "New Name" })`), which takes the data object directly.
+
+For an optimistic global, the direct-client input is
+`{ data: fields, expectedRevision }`, so the TanStack variable has one
+additional envelope:
+
+```tsx
+update.mutate({
+	data: {
+		data: { shopName: "New Name" },
+		expectedRevision: settings.revision,
+	},
+});
+```
 
 ### Globals with Realtime
 

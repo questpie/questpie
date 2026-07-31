@@ -63,6 +63,11 @@ export interface GlobalMeta {
 	versioning: boolean;
 
 	/**
+	 * Whether generated canonical revision concurrency is enabled.
+	 */
+	optimisticConcurrency: boolean;
+
+	/**
 	 * Names of virtual/computed fields
 	 */
 	virtualFields: string[];

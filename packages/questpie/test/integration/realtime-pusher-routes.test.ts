@@ -138,6 +138,54 @@ describe("pusher channel matrix module routes", () => {
 		expect(response.headers.get("cache-control")).toBe("no-store");
 	});
 
+	test("authenticates a signed-in Pusher user with only an opaque identity", async () => {
+		const transport = new PusherClientTransport({
+			provider,
+			key: "public-key",
+			identityKey: "test-secret",
+		});
+		setup = await buildMockApp(
+			{},
+			{ realtime: { clientTransport: transport, retentionDays: 0 } },
+		);
+		const authenticated = createFetchHandler(setup.app, {
+			getSession: async () => ({
+				user: { id: "raw-user-id" },
+				session: { id: "raw-session-id" },
+			}),
+		});
+		const input = new URLSearchParams({ socket_id: "123.456" });
+		const response = await authenticated(
+			new Request("http://localhost/realtime/auth", {
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: input,
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get("cache-control")).toBe("no-store");
+		const auth = (await response.json()) as {
+			auth: string;
+			user_data: string;
+		};
+		expect(auth.auth).toContain("123.456:");
+		const user = JSON.parse(auth.user_data) as { id: string };
+		expect(user.id).toHaveLength(64);
+		expect(JSON.stringify(auth)).not.toContain("raw-user-id");
+		expect(JSON.stringify(auth)).not.toContain("raw-session-id");
+
+		const anonymous = await createFetchHandler(setup.app)(
+			new Request("http://localhost/realtime/auth", {
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({ socket_id: "123.456" }),
+			}),
+		);
+		expect(anonymous.status).toBe(403);
+		expect(anonymous.headers.get("cache-control")).toBe("no-store");
+	});
+
 	test("releases principal admission when provider config loading fails", async () => {
 		setup = await buildMockApp(
 			{},

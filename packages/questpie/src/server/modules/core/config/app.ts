@@ -388,6 +388,7 @@ const scheduledTransitionHook = {
 			recordId: String(ctx.recordId),
 			stage: ctx.toStage,
 			scheduledAt: ctx.scheduledAt,
+			expectedRevision: ctx.expectedRevision,
 		});
 
 		throw new TransitionScheduledError();

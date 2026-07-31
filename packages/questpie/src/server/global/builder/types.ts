@@ -60,6 +60,11 @@ export interface GlobalOptions {
 	 */
 	timestamps?: boolean;
 	/**
+	 * Generate a framework-owned canonical `revision` and require
+	 * `expectedRevision` for mutations of an existing global.
+	 */
+	optimisticConcurrency?: true;
+	/**
 	 * Versioning configuration.
 	 *
 	 * - `true` — enable versioning with defaults
@@ -190,6 +195,8 @@ export type GlobalTransitionHookContext<TData = any> = AppContext & {
 	fromStage: string;
 	/** Stage the global is transitioning to */
 	toStage: string;
+	/** Canonical revision on which this transition is conditioned. */
+	expectedRevision?: number;
 	/** Current locale */
 	locale?: string;
 	/** Current access mode */
@@ -352,7 +359,10 @@ export type InferGlobalColumnsFromFields<
 	[K in keyof TFields]: BuildColumn<TName, TFields[K], "pg">;
 } & (TOptions["timestamps"] extends false
 	? {}
-	: ReturnType<typeof Collection.timestampsCols>);
+	: ReturnType<typeof Collection.timestampsCols>) &
+	(TOptions["optimisticConcurrency"] extends true
+		? ReturnType<typeof Collection.revisionCols>
+		: {});
 
 export type InferGlobalTableWithColumns<
 	TName extends string,

@@ -7,6 +7,7 @@ export type PusherRealtimeConfig = {
 	wssPort?: number;
 	forceTLS?: boolean;
 	authEndpoint?: string;
+	userAuthentication?: boolean;
 };
 
 export type PusherModule = typeof import("pusher-js");
@@ -26,8 +27,14 @@ type ChannelAuthorizer = (
 	channelName: string,
 ) => Promise<PusherAuthResponse>;
 
+type UserAuthenticator = (socketId: string) => Promise<{
+	auth: string;
+	user_data: string;
+}>;
+
 type ChannelOwner = {
 	authorize: ChannelAuthorizer;
+	authenticateUser?: UserAuthenticator;
 	channel?: PusherChannel;
 };
 
@@ -48,6 +55,7 @@ function connectionSignature(config: PusherRealtimeConfig): string {
 		wsPort: config.wsPort ?? null,
 		wssPort: config.wssPort ?? null,
 		forceTLS: config.forceTLS ?? true,
+		userAuthentication: config.userAuthentication === true,
 	});
 }
 
@@ -75,6 +83,7 @@ export class PusherConnectionManager {
 		channelName: string;
 		lane: "edge" | "channel";
 		authorize: ChannelAuthorizer;
+		authenticateUser?: UserAuthenticator;
 	}): Promise<ManagedPusherSubscription> {
 		if (
 			options.lane === "channel" &&
@@ -86,7 +95,10 @@ export class PusherConnectionManager {
 			throw new Error(`Pusher channel already owned: ${options.channelName}`);
 		}
 
-		const owner: ChannelOwner = { authorize: options.authorize };
+		const owner: ChannelOwner = {
+			authorize: options.authorize,
+			authenticateUser: options.authenticateUser,
+		};
 		this.owners.set(options.channelName, owner);
 		try {
 			const pusher = await this.getPusher(options.config);
@@ -141,13 +153,78 @@ export class PusherConnectionManager {
 								);
 								return;
 							}
-							void owner
-								.authorize(request.socketId, request.channelName)
+							void (async () => {
+								if (config.userAuthentication === true) {
+									const assertCurrentSignedInConnection = () => {
+										if (this.owners.get(request.channelName) !== owner) {
+											throw new Error(
+												"Realtime channel authorization owner was released",
+											);
+										}
+										if (
+											pusher.connection.state !== "connected" ||
+											pusher.connection.socket_id !== request.socketId
+										) {
+											throw new Error(
+												"Realtime channel authorization socket is stale",
+											);
+										}
+										if (
+											typeof pusher.user.user_data?.id !== "string" ||
+											pusher.user.user_data.id.length === 0
+										) {
+											throw new Error(
+												"Realtime user authentication did not complete",
+											);
+										}
+									};
+									const signinDone = pusher.user.signinDonePromise;
+									if (!signinDone) {
+										throw new Error(
+											"Realtime user authentication has not started",
+										);
+									}
+									await signinDone;
+									assertCurrentSignedInConnection();
+									const auth = await owner.authorize(
+										request.socketId,
+										request.channelName,
+									);
+									assertCurrentSignedInConnection();
+									return auth;
+								}
+								return owner.authorize(request.socketId, request.channelName);
+							})()
 								.then((auth) => callback(null, auth))
 								.catch((error) => callback(normalizedError(error), null));
 						},
 					},
+					...(config.userAuthentication === true
+						? {
+								userAuthentication: {
+									customHandler: (request, callback) => {
+										const owner = [...this.owners.values()].find(
+											(candidate) => candidate.authenticateUser,
+										);
+										if (!owner?.authenticateUser) {
+											callback(
+												new Error(
+													"Realtime user authentication is unavailable",
+												),
+												null,
+											);
+											return;
+										}
+										void owner
+											.authenticateUser(request.socketId)
+											.then((auth) => callback(null, auth))
+											.catch((error) => callback(normalizedError(error), null));
+									},
+								},
+							}
+						: {}),
 				});
+				if (config.userAuthentication === true) pusher.signin();
 				this.pusher = pusher;
 				return pusher;
 			})().catch((error) => {

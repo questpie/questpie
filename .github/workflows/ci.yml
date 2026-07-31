@@ -159,6 +159,7 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -175,7 +176,7 @@ jobs:
           git diff --exit-code bun.lock
 
       - name: Run tests
-        run: bunx turbo run test --filter='./packages/*' --concurrency=1
+        run: bunx turbo run test --filter='./packages/*' --concurrency=1 --ui=stream --log-order=stream
         env:
           QUESTPIE_MIGRATIONS_SILENT: "1"
 

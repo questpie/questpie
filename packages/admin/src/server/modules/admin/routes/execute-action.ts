@@ -16,7 +16,12 @@
  * ```
  */
 
-import { extractAppServices, route, runWithContext } from "questpie";
+import {
+	extractAppServices,
+	route,
+	runWithContext,
+	withTransaction,
+} from "questpie";
 import { z } from "zod";
 
 import type {
@@ -49,6 +54,10 @@ export interface ExecuteActionRequest {
 	itemId?: string;
 	/** Multiple item IDs (for bulk actions) */
 	itemIds?: string[];
+	/** Expected revision for an optimistic-concurrency protected single-item action */
+	expectedRevision?: number;
+	/** Exact per-item revisions for an optimistic-concurrency protected bulk action */
+	expectedRevisions?: Array<{ id: string; expectedRevision: number }>;
 	/** Form data (for actions with forms) */
 	data?: Record<string, unknown>;
 	/** Current locale */
@@ -189,6 +198,8 @@ export async function executeAction(
 		actionId,
 		itemId,
 		itemIds,
+		expectedRevision,
+		expectedRevisions,
 		data,
 		locale,
 	} = request;
@@ -226,6 +237,8 @@ export async function executeAction(
 			actionId,
 			itemId,
 			itemIds,
+			expectedRevision,
+			expectedRevisions,
 			data,
 			locale,
 			session,
@@ -282,6 +295,8 @@ export async function executeAction(
 			data: data || {},
 			itemId,
 			itemIds,
+			expectedRevision,
+			expectedRevisions,
 			auth: appRec.auth,
 			collections: getCollectionCruds(app),
 			globals: getGlobalCruds(app),
@@ -334,15 +349,35 @@ async function executeBuiltinAction(
 		actionId: string;
 		itemId?: string;
 		itemIds?: string[];
+		expectedRevision?: number;
+		expectedRevisions?: Array<{ id: string; expectedRevision: number }>;
 		data?: Record<string, unknown>;
 		locale?: string;
 		session?: unknown;
 	},
 ): Promise<ExecuteActionResponse> {
-	const { collectionSlug, actionId, itemId, itemIds, data, locale } = params;
+	const {
+		collectionSlug,
+		actionId,
+		itemId,
+		itemIds,
+		expectedRevision,
+		expectedRevisions,
+		data,
+		locale,
+	} = params;
 	const t = (key: string, messageParams?: Record<string, unknown>) =>
 		translateAdminMessage(locale, key, messageParams);
 	const appRec = app as Record<string, any>;
+	const collection = getCollection(app, collectionSlug);
+	const collectionState = (collection?.state ?? collection) as
+		| {
+				options?: {
+					optimisticConcurrency?: true;
+				};
+		  }
+		| undefined;
+	const optimisticConcurrency = collectionState?.options?.optimisticConcurrency;
 	const collectionCrud = getCollectionCrud(app, collectionSlug);
 	const crudContext = {
 		db: appRec.db,
@@ -382,10 +417,15 @@ async function executeBuiltinAction(
 				}
 				if (collectionCrud?.updateById) {
 					await collectionCrud.updateById(
-						{ id: itemId, data: data || {} },
+						{ id: itemId, data: data || {}, expectedRevision },
 						crudContext,
 					);
 				} else {
+					if (optimisticConcurrency) {
+						throw new Error(
+							`Collection "${collectionSlug}" requires generated CRUD for optimistic concurrency`,
+						);
+					}
 					await appRec.update(collectionSlug, itemId, data || {});
 				}
 				return {
@@ -409,8 +449,16 @@ async function executeBuiltinAction(
 					};
 				}
 				if (collectionCrud?.deleteById) {
-					await collectionCrud.deleteById({ id: itemId }, crudContext);
+					await collectionCrud.deleteById(
+						{ id: itemId, expectedRevision },
+						crudContext,
+					);
 				} else {
+					if (optimisticConcurrency) {
+						throw new Error(
+							`Collection "${collectionSlug}" requires generated CRUD for optimistic concurrency`,
+						);
+					}
 					await appRec.delete(collectionSlug, itemId);
 				}
 				return {
@@ -438,12 +486,35 @@ async function executeBuiltinAction(
 						},
 					};
 				}
-				// Delete items in parallel
-				if (collectionCrud?.deleteById) {
+				if (optimisticConcurrency && collectionCrud?.deleteMany) {
+					await collectionCrud.deleteMany(
+						{
+							where: { id: { in: itemIds } },
+							expectedRevisions,
+						},
+						crudContext,
+					);
+				} else if (collectionCrud?.deleteById) {
+					const versionsById = new Map(
+						expectedRevisions?.map((entry) => [
+							entry.id,
+							entry.expectedRevision,
+						]) ?? [],
+					);
 					await Promise.all(
-						itemIds.map((id) => collectionCrud.deleteById({ id }, crudContext)),
+						itemIds.map((id) =>
+							collectionCrud.deleteById(
+								{ id, expectedRevision: versionsById.get(id) },
+								crudContext,
+							),
+						),
 					);
 				} else {
+					if (optimisticConcurrency) {
+						throw new Error(
+							`Collection "${collectionSlug}" requires generated CRUD for optimistic concurrency`,
+						);
+					}
 					await Promise.all(
 						itemIds.map((id) => appRec.delete(collectionSlug, id)),
 					);
@@ -471,10 +542,16 @@ async function executeBuiltinAction(
 					};
 				}
 
-				if (typeof appRec.restore === "function") {
+				if (collectionCrud?.restoreById) {
+					await collectionCrud.restoreById(
+						{ id: itemId, expectedRevision },
+						crudContext,
+					);
+				} else if (
+					typeof appRec.restore === "function" &&
+					!optimisticConcurrency
+				) {
 					await appRec.restore(collectionSlug, itemId);
-				} else if (collectionCrud?.restoreById) {
-					await collectionCrud.restoreById({ id: itemId }, crudContext);
 				} else {
 					return {
 						success: false,
@@ -513,15 +590,34 @@ async function executeBuiltinAction(
 					};
 				}
 
-				if (typeof appRec.restore === "function") {
+				if (collectionCrud?.restoreById) {
+					const versionsById = new Map(
+						expectedRevisions?.map((entry) => [
+							entry.id,
+							entry.expectedRevision,
+						]) ?? [],
+					);
+					if (
+						optimisticConcurrency &&
+						(versionsById.size !== itemIds.length ||
+							itemIds.some((id) => !versionsById.has(id)))
+					) {
+						throw new Error("Optimistic concurrency conflict");
+					}
+					await withTransaction(appRec.db, async (tx) => {
+						for (const id of [...itemIds].sort()) {
+							await collectionCrud.restoreById(
+								{ id, expectedRevision: versionsById.get(id) },
+								{ ...crudContext, db: tx },
+							);
+						}
+					});
+				} else if (
+					typeof appRec.restore === "function" &&
+					!optimisticConcurrency
+				) {
 					await Promise.all(
 						itemIds.map((id) => appRec.restore(collectionSlug, id)),
-					);
-				} else if (collectionCrud?.restoreById) {
-					await Promise.all(
-						itemIds.map((id) =>
-							collectionCrud.restoreById({ id }, crudContext),
-						),
 					);
 				} else {
 					return {
@@ -569,8 +665,15 @@ async function executeBuiltinAction(
 						},
 					};
 				}
-				// Remove id and timestamps for duplication
-				const { id, createdAt, updatedAt, ...duplicateData } = original;
+				// Remove generated fields before duplication.
+				const { id, createdAt, updatedAt, ...copyableData } = original;
+				const duplicateData = optimisticConcurrency
+					? Object.fromEntries(
+							Object.entries(copyableData).filter(
+								([key]) => key !== "revision",
+							),
+						)
+					: copyableData;
 				const duplicated = collectionCrud?.create
 					? await collectionCrud.create(duplicateData, crudContext)
 					: await appRec.create(collectionSlug, duplicateData);
@@ -615,9 +718,11 @@ async function executeBuiltinAction(
 						id: string;
 						stage: string;
 						scheduledAt?: Date;
+						expectedRevision?: number;
 					} = {
 						id: itemId,
 						stage,
+						...(optimisticConcurrency ? { expectedRevision } : {}),
 					};
 					if (scheduledAt) {
 						transitionParams.scheduledAt = new Date(scheduledAt);
@@ -744,6 +849,15 @@ const executeActionRequestSchema = z.object({
 	actionId: z.string(),
 	itemId: z.string().optional(),
 	itemIds: z.array(z.string()).optional(),
+	expectedRevision: z.number().finite().optional(),
+	expectedRevisions: z
+		.array(
+			z.object({
+				id: z.string(),
+				expectedRevision: z.number().finite(),
+			}),
+		)
+		.optional(),
 	data: z.record(z.string(), z.unknown()).optional(),
 	locale: z.string().optional(),
 });

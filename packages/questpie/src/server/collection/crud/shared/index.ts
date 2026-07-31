@@ -10,6 +10,7 @@ export {
 	deriveFieldAccessFromDefinitions,
 	executeAccessRule,
 	type FilterFieldsForReadOptions,
+	getRequestFromContext,
 	getRestrictedReadFields,
 	matchesAccessConditions,
 	mergeFieldAccessRules,

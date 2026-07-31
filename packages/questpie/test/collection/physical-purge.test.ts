@@ -264,12 +264,12 @@ describe("physical purge core contract", () => {
 		expect(
 			await setup.app.db.select().from(documents.i18nVersionsTable as any),
 		).toHaveLength(0);
-		expect(
-			await setup.app.collections.documents.findVersions(
+		await expect(
+			setup.app.collections.documents.findVersions(
 				{ id: created.id },
 				createTestContext(),
 			),
-		).toEqual([]);
+		).rejects.toMatchObject({ code: "FORBIDDEN" });
 	});
 
 	it("evaluates purge access against the full localized preimage", async () => {
@@ -422,7 +422,7 @@ describe("physical purge core contract", () => {
 		await expect(
 			setup.app.collections.documents.purgeById({ id: created.id }, ctx),
 		).rejects.toMatchObject({ code: "CONFLICT" });
-		expect(purgeHookCalls).toEqual(["attempt"]);
+		expect(purgeHookCalls).toEqual([]);
 
 		const retained = await setup.app.collections.documents.findOne(
 			{ where: { id: created.id } },

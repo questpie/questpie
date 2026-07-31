@@ -14,6 +14,11 @@ function toUrl(input: RequestInfo | URL): URL {
 	return new URL(input.url);
 }
 
+function parseJsonBody(call: CapturedCall | undefined): unknown {
+	const wire = JSON.parse(call?.body ?? "");
+	return wire && typeof wire === "object" && "json" in wire ? wire.json : wire;
+}
+
 describe("client by-id aliases (canonical CRUD vocabulary)", () => {
 	let calls: CapturedCall[];
 	let client: ReturnType<typeof createClient<any>>;
@@ -77,10 +82,17 @@ describe("client by-id aliases (canonical CRUD vocabulary)", () => {
 
 	it("purgeById uses the dedicated irreversible endpoint", async () => {
 		await client.collections.posts.purgeById({ id: "post-1" });
+		await client.collections.posts.purgeById({
+			id: "post-2",
+			expectedRevision: 4,
+		});
 
-		expect(calls).toHaveLength(1);
+		expect(calls).toHaveLength(2);
 		expect(calls[0]?.url.pathname).toBe("/posts/post-1/purge");
 		expect(calls[0]?.method).toBe("POST");
+		expect(calls[0]?.body).toBeUndefined();
+		expect(calls[1]?.url.pathname).toBe("/posts/post-2/purge");
+		expect(parseJsonBody(calls[1])).toEqual({ expectedRevision: 4 });
 		expect(
 			"purge" in (client.collections.posts as Record<string, unknown>),
 		).toBe(false);
@@ -99,5 +111,64 @@ describe("client by-id aliases (canonical CRUD vocabulary)", () => {
 		expect(calls[0]?.method).toBe("PATCH");
 		expect(calls[1]?.url.pathname).toBe("/posts/delete-many");
 		expect(calls[1]?.method).toBe("POST");
+	});
+
+	it("serializes optimistic-concurrency inputs on every mutation surface", async () => {
+		await client.collections.posts.updateById({
+			id: "post-1",
+			expectedRevision: 1,
+			data: { title: "Updated" },
+		});
+		await client.collections.posts.deleteById({
+			id: "post-1",
+			expectedRevision: 2,
+		});
+		await client.collections.posts.restoreById({
+			id: "post-1",
+			expectedRevision: 3,
+		});
+		await client.collections.posts.updateMany({
+			where: { status: "draft" },
+			expectedRevisions: [{ id: "post-1", expectedRevision: 3 }],
+			data: { status: "review" },
+		});
+		await client.collections.posts.updateBatch({
+			updates: [
+				{
+					id: "post-1",
+					expectedRevision: 4,
+					data: { title: "Batch" },
+				},
+			],
+		});
+		await client.collections.posts.deleteMany({
+			where: { status: "archived" },
+			expectedRevisions: [{ id: "post-1", expectedRevision: 5 }],
+		});
+		await client.collections.posts.revertToVersion({
+			id: "post-1",
+			version: 1,
+			expectedRevision: 6,
+		});
+
+		expect(parseJsonBody(calls[0])).toEqual({
+			data: { title: "Updated" },
+			expectedRevision: 1,
+		});
+		expect(parseJsonBody(calls[1])).toEqual({ expectedRevision: 2 });
+		expect(parseJsonBody(calls[2])).toEqual({ expectedRevision: 3 });
+		expect(parseJsonBody(calls[3])).toMatchObject({
+			expectedRevisions: [{ id: "post-1", expectedRevision: 3 }],
+		});
+		expect(parseJsonBody(calls[4])).toMatchObject({
+			updates: [{ id: "post-1", expectedRevision: 4 }],
+		});
+		expect(parseJsonBody(calls[5])).toMatchObject({
+			expectedRevisions: [{ id: "post-1", expectedRevision: 5 }],
+		});
+		expect(parseJsonBody(calls[6])).toMatchObject({
+			version: 1,
+			expectedRevision: 6,
+		});
 	});
 });
