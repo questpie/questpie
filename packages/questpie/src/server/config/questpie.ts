@@ -40,6 +40,7 @@ import type {
 } from "#questpie/server/config/types.js";
 import { GlobalBuilder } from "#questpie/server/global/builder/global-builder.js";
 import type { Global } from "#questpie/server/global/builder/global.js";
+import type { AuthorityActor } from "#questpie/server/modules/core/integrated/crdt/authority.js";
 import type { CrdtRuntimeManifests } from "#questpie/server/modules/core/integrated/crdt/manifest-runtime.js";
 import {
 	createCrdtRegistry,
@@ -115,6 +116,22 @@ function principalFromLegacy(
 		return { kind: "user", user: session.user, session: session.session };
 	}
 	return undefined;
+}
+
+function isDerivedHumanActor(
+	value: unknown,
+): value is Extract<AuthorityActor, { kind: "human" }> {
+	if (!value || typeof value !== "object") return false;
+	const candidate = value as {
+		readonly kind?: unknown;
+		readonly subjectId?: unknown;
+	};
+	return (
+		candidate.kind === "human" &&
+		typeof candidate.subjectId === "string" &&
+		candidate.subjectId.length > 0 &&
+		candidate.subjectId.length <= 255
+	);
 }
 
 export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
@@ -1126,7 +1143,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			}
 		}
 
-		return {
+		const context: RequestContext = {
 			...userCtx,
 			// Flat merge for handler/ctx reads — never shadows base keys below.
 			...(extensions ?? {}),
@@ -1137,9 +1154,17 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			defaultLocale,
 			accessMode,
 			db: userCtx.db ?? this.db,
-			...(serviceScope ? { [APP_SERVICE_SCOPE]: serviceScope } : {}),
 			...(extensions !== undefined ? { "~contextExtensions": extensions } : {}),
 		};
+		if (serviceScope) {
+			Object.defineProperty(context, APP_SERVICE_SCOPE, {
+				configurable: false,
+				enumerable: false,
+				value: serviceScope,
+				writable: false,
+			});
+		}
+		return context;
 	}
 
 	/**
@@ -1191,12 +1216,16 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		const extensions: Record<string, unknown> = {};
 
 		for (const [key, value] of Object.entries(resolvedExtensions)) {
+			const trustedDerivedActor =
+				key === "actor" &&
+				params.actor === undefined &&
+				isDerivedHumanActor(value);
 			const serviceDefinition = this._serviceDefs[key];
 			const reserved =
 				FRAMEWORK_CONTEXT_KEYS.has(key) ||
 				serviceDefinition?.namespace === null ||
 				this._customServiceNamespaces.has(key);
-			if (!reserved) {
+			if (!reserved || trustedDerivedActor) {
 				extensions[key] = value;
 				continue;
 			}
