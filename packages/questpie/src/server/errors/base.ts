@@ -325,4 +325,15 @@ export class ApiError extends Error {
 			messageParams,
 		});
 	}
+
+	/**
+	 * Create PRECONDITION_FAILED
+	 */
+	static preconditionFailed(message: string): ApiError {
+		return new ApiError({
+			code: "PRECONDITION_FAILED",
+			message,
+			messageKey: "error.preconditionFailed",
+		});
+	}
 }

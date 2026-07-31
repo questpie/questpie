@@ -5,7 +5,6 @@
  */
 
 import { parseRfc3339Instant } from "#questpie/shared/temporal.js";
-import { getTxid, QUESTPIE_TXID_HEADER } from "#questpie/shared/txid.js";
 
 import type { Questpie } from "../../config/questpie.js";
 import { ApiError } from "../../errors/index.js";
@@ -20,29 +19,16 @@ import {
 	parseGlobalUpdateOptions,
 } from "../utils/parsers.js";
 import { parseRouteBody } from "../utils/request.js";
+import { introspectionDeniedError, smartResponse } from "../utils/response.js";
 import {
-	handleError,
-	introspectionDeniedError,
-	smartResponse,
-} from "../utils/response.js";
+	expectedRevisionFromRequest,
+	optimisticErrorResponse as errorResponse,
+	revisionHeaders,
+} from "./optimistic-concurrency.js";
 
 // ============================================================================
 // Helper
 // ============================================================================
-
-function errorResponse(
-	app: Questpie<any>,
-	error: unknown,
-	request: Request,
-	locale?: string,
-): Response {
-	return handleError(error, { request, app, locale });
-}
-
-function txidHeaders(result: unknown): HeadersInit | undefined {
-	const txid = getTxid(result);
-	return txid ? { [QUESTPIE_TXID_HEADER]: txid } : undefined;
-}
 
 // ============================================================================
 // Standalone Handlers
@@ -59,10 +45,18 @@ export async function globalGet(
 
 	try {
 		const options = parseGlobalGetOptions(new URL(request.url));
-		const globalInstance = app.getGlobalConfig(params.global as any);
+		const globalInstance = app.getGlobalConfig(params.global);
 		const crud = globalInstance.generateCRUD(resolved.appContext.db, app);
 		const result = await crud.get(options, resolved.appContext);
-		return smartResponse(result, request);
+		return smartResponse(
+			result,
+			request,
+			200,
+			revisionHeaders(
+				result,
+				globalInstance.state.options.optimisticConcurrency === true,
+			),
+		);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -87,7 +81,7 @@ export async function globalVersions(
 		const offset =
 			offsetRaw !== null && offsetRaw !== "" ? Number(offsetRaw) : undefined;
 
-		const globalInstance = app.getGlobalConfig(params.global as any);
+		const globalInstance = app.getGlobalConfig(params.global);
 		const crud = globalInstance.generateCRUD(resolved.appContext.db, app);
 		const result = await crud.findVersions(
 			{
@@ -136,9 +130,17 @@ export async function globalRevert(
 			id?: string;
 			version?: number;
 			versionId?: string;
+			expectedRevision?: number;
 		};
 		const globalInstance = app.getGlobalConfig(params.global as any);
 		const crud = globalInstance.generateCRUD(resolved.appContext.db, app);
+		const optimisticConcurrency =
+			globalInstance.state.options.optimisticConcurrency === true;
+		const expectedRevision = expectedRevisionFromRequest(
+			request,
+			payload.expectedRevision,
+			optimisticConcurrency,
+		);
 		const result = await crud.revertToVersion(
 			{
 				...(typeof payload.id === "string" ? { id: payload.id } : {}),
@@ -148,10 +150,19 @@ export async function globalRevert(
 				...(typeof payload.versionId === "string"
 					? { versionId: payload.versionId }
 					: {}),
+				...(expectedRevision === undefined ? {} : { expectedRevision }),
 			},
 			resolved.appContext,
 		);
-		return smartResponse(result, request, 200, txidHeaders(result));
+		return smartResponse(
+			result,
+			request,
+			200,
+			revisionHeaders(
+				result,
+				globalInstance.state.options.optimisticConcurrency === true,
+			),
+		);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -182,7 +193,11 @@ export async function globalTransition(
 	}
 
 	try {
-		const payload = body as { stage?: unknown; scheduledAt?: unknown };
+		const payload = body as {
+			stage?: unknown;
+			scheduledAt?: unknown;
+			expectedRevision?: number;
+		};
 		if (!payload.stage || typeof payload.stage !== "string") {
 			throw ApiError.badRequest(
 				"Missing required field: stage",
@@ -191,9 +206,22 @@ export async function globalTransition(
 				{ field: "stage" },
 			);
 		}
+		const globalInstance = app.getGlobalConfig(params.global as any);
+		const optimisticConcurrency =
+			globalInstance.state.options.optimisticConcurrency === true;
+		const expectedRevision = expectedRevisionFromRequest(
+			request,
+			payload.expectedRevision,
+			optimisticConcurrency,
+		);
 
-		const opts: { stage: string; scheduledAt?: Date } = {
+		const opts: {
+			stage: string;
+			scheduledAt?: Date;
+			expectedRevision?: number;
+		} = {
 			stage: payload.stage,
+			...(expectedRevision === undefined ? {} : { expectedRevision }),
 		};
 
 		if (payload.scheduledAt !== undefined) {
@@ -209,10 +237,17 @@ export async function globalTransition(
 			opts.scheduledAt = date;
 		}
 
-		const globalInstance = app.getGlobalConfig(params.global as any);
 		const crud = globalInstance.generateCRUD(resolved.appContext.db, app);
 		const result = await crud.transitionStage(opts, resolved.appContext);
-		return smartResponse(result, request);
+		return smartResponse(
+			result,
+			request,
+			200,
+			revisionHeaders(
+				result,
+				globalInstance.state.options.optimisticConcurrency === true,
+			),
+		);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -288,8 +323,37 @@ export async function globalUpdate(
 		const options = parseGlobalUpdateOptions(new URL(request.url));
 		const globalInstance = app.getGlobalConfig(params.global as any);
 		const crud = globalInstance.generateCRUD(resolved.appContext.db, app);
-		const result = await crud.update(body, resolved.appContext, options);
-		return smartResponse(result, request, 200, txidHeaders(result));
+		const optimisticConcurrency =
+			globalInstance.state.options.optimisticConcurrency === true;
+		const payload =
+			optimisticConcurrency && typeof body === "object" && body !== null
+				? (body as { data?: unknown; expectedRevision?: number })
+				: undefined;
+		const expectedRevision = expectedRevisionFromRequest(
+			request,
+			payload?.expectedRevision,
+			optimisticConcurrency,
+		);
+		const result = await crud.update(
+			optimisticConcurrency
+				? {
+						data:
+							payload && Object.hasOwn(payload, "data") ? payload.data : body,
+						...(expectedRevision === undefined ? {} : { expectedRevision }),
+					}
+				: body,
+			resolved.appContext,
+			options,
+		);
+		return smartResponse(
+			result,
+			request,
+			200,
+			revisionHeaders(
+				result,
+				globalInstance.state.options.optimisticConcurrency === true,
+			),
+		);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}

@@ -248,6 +248,12 @@ await client.collections.posts.transitionStage({ id, stage: "published" });
 
 A `Date` `scheduledAt` is serialized via `.toISOString()`; omit it entirely to transition now.
 
+When `optimisticConcurrency: true`, client rows include `revision`. Pass it as
+`expectedRevision` to by-id mutations, revert, and workflow transition. Bulk
+mutations use exact `expectedRevisions`; history rows include
+`sourceRevision`. HTTP conflicts surface as typed client errors. See
+[Optimistic concurrency](/docs/concepts/optimistic-concurrency).
+
 ### Uploads
 
 `upload` / `uploadMany` exist only on collections that called `.upload()` server-side. They post multipart via `XMLHttpRequest` (not `fetch`) so you get progress and cancellation:

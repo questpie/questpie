@@ -141,6 +141,21 @@ mutate CRDT-managed fields. Soft delete retires the active resource epoch;
 restore creates a new epoch. Purge physically removes the retired
 collaboration state in the same transaction as the owner.
 
+`.collaborative()` also enables the framework-owned canonical `revision`.
+CRDT commit sequences, field cursors, epochs, and state vectors remain
+independent. One acknowledged aggregate projection cut updates all projected
+owner fields and advances `revision` once in the same transaction. Rejected
+hash, authority, or consumer acknowledgement checks advance neither owner
+data, revision, projection cursors, receipt, nor realtime state. Ordinary
+metadata mutations serialize on the same row and require `expectedRevision`.
+
+Use `versioning: { collaborativeSnapshots: "checkpoint" }` for collaborative
+history. Projection cuts do not create an unbounded history row each time;
+ordinary metadata mutations, revert/workflow operations, or an intentional
+empty generated update are explicit checkpoints whose snapshots record
+`sourceRevision`. The collaborative builder normalizes enabled versioning to
+this policy and the projection/replace ports reject any unsafe policy.
+
 Sessions and field grants are durable and fenced. Policy changes, session
 generation changes, owner lifecycle transitions, or field downgrades cannot
 silently replay stale offline edits under new authority.

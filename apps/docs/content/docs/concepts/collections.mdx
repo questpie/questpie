@@ -436,6 +436,14 @@ Every method takes a `CRUDContext` as its **second** argument, pass `{ accessMod
 Bulk operations lock the matching rows and re-evaluate the `where` inside the transaction, returning only the rows that won the race. `updateMany` returns the written rows (an empty array means you lost a concurrent claim); `deleteMany` returns `{ success, count }`.
 </Callout>
 
+### Generated optimistic concurrency
+
+Set `optimisticConcurrency: true` to generate the framework-owned `revision`
+field. Existing-row mutations require `expectedRevision`; bulk mutations
+require exact per-id `expectedRevisions`. Localized-only, relation-only,
+workflow, restore, and revert writes advance the same canonical revision once.
+See [Optimistic concurrency](/docs/concepts/optimistic-concurrency).
+
 ### Server-only aggregate locks
 
 For a business invariant that spans several collections, use `lockMany({ ids })` on the aggregate-root collection inside `withTransaction`. This keeps row locking inside QUESTPIE instead of leaking Drizzle or raw `SELECT ... FOR UPDATE` into application services:

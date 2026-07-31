@@ -56,8 +56,8 @@
 			"@ts-expect-error": 0
 		},
 		"questpie": {
-			": any": 567,
-			"as any": 478,
+			": any": 542,
+			"as any": 463,
 			"as unknown as": 49,
 			"@ts-expect-error": 0
 		},
@@ -74,7 +74,7 @@
 			"@ts-expect-error": 0
 		},
 		"tanstack-query": {
-			": any": 28,
+			": any": 27,
 			"as any": 3,
 			"as unknown as": 0,
 			"@ts-expect-error": 0
