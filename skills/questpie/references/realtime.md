@@ -103,6 +103,24 @@ malformed targeting collapses to one generic reconcile. Channel application
 events use the exact 10,000-byte QUESTPIE cap while remaining below the
 provider's <10 kB ceiling.
 
+Managed Pusher clients use the SDK's signed-user protocol with an opaque,
+HMAC-derived user id. User authentication posts only `socket_id` to the
+authenticated, `no-store` realtime auth route; channel authentication remains
+bound to both `socket_id` and the final channel name. The SDK requests fresh
+user authentication after reconnect; channel authorization waits for that
+sign-in and rechecks the current socket and owner before succeeding. On an
+application login/logout transition that keeps the same browser socket, destroy
+both `client.realtime` and
+`client.channels` (or recreate the client) so the shared physical connection is
+also recreated under the new identity.
+
+Channel-scoped authority cuts use the generic `channels.revokeAuthority()` seam.
+SSE closes only the denied logical binding. Pusher's honest capability is
+`principal-connections`: it terminates all current connections for that user,
+then fresh user/channel authentication allows still-authorized bindings to
+return. See `references/channels.md` for the transaction and in-flight-frame
+contract.
+
 ## Admission and lifecycle
 
 Default SSE limits are 20 topics per connection, 5 connections per authenticated principal, `find` limit 100, nested `with` depth 3, 4 concurrent initial snapshots, and 1 MiB buffered snapshot bytes per edge session. Slow consumers are bounded and disconnected rather than allowed unbounded memory growth.

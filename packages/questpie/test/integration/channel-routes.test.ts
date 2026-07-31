@@ -8,9 +8,14 @@ import { realtimeSubscribe } from "../../src/server/adapters/routes/realtime.js"
 import { channel } from "../../src/server/channels/channel-builder.js";
 import { ChannelTokenBucketLimiter } from "../../src/server/channels/security.js";
 import { ChannelsService } from "../../src/server/channels/service.js";
+import { questpieChannelAuthorityRevocationTable } from "../../src/server/modules/core/integrated/realtime/collection.js";
 import type { RealtimeObservation } from "../../src/server/modules/core/integrated/realtime/observer.js";
 import type { PusherProvider } from "../../src/server/modules/core/integrated/realtime/pusher-transport.js";
 import { PusherClientTransport } from "../../src/server/modules/core/integrated/realtime/pusher-transport.js";
+import type {
+	ClientSink,
+	SharedProviderClientTransport,
+} from "../../src/server/modules/core/integrated/realtime/transport.js";
 import { setChannelPublishLimiterForTests } from "../../src/server/modules/core/routes/channels/_shared.js";
 import {
 	parseCompatibleTypedEventWire,
@@ -149,6 +154,9 @@ describe("channel module routes", () => {
 			type: "channel_presence",
 			channel: "presence-room-one",
 			members: [{ id: "member-1", roomId: "one" }],
+		});
+		expect(await readSseEvent(reader, state, "channel_ready")).toEqual({
+			channelSubscriptionId: "room-subscription",
 		});
 
 		const publishResponse = await handler(
@@ -473,6 +481,155 @@ describe("channel module routes", () => {
 		expect(policyDisposals).toBe(1);
 	});
 
+	test("a held-open SSE stream reruns presence policy and revokes only the exact channel binding", async () => {
+		const allowedSpaces = new Set(["a", "b"]);
+		let sessionResolutions = 0;
+		let policyCreations = 0;
+		const policyDisposals: number[] = [];
+		const channelServices = new Set<ChannelsService>();
+		let appRef: Awaited<ReturnType<typeof buildMockApp>>["app"];
+		const setup = await buildMockApp(
+			{
+				collections: {
+					actors: collection("actors").fields(({ f }) => ({
+						name: f.text().required(),
+					})),
+				},
+				services: {
+					policy: service()
+						.lifecycle("request")
+						.create(() => ({ id: ++policyCreations }))
+						.dispose(({ id }) => {
+							policyDisposals.push(id);
+						}),
+				},
+				channels: {
+					space: channel("space-[spaceId]")
+						.events({ message: z.object({ id: z.string() }) })
+						.authorize((ctx: any) => {
+							channelServices.add(ctx.channels);
+							expect(ctx.app).toBe(appRef);
+							expect(ctx.db).toBe(appRef.db);
+							expect(ctx.tables.actors).toBe(appRef.tables.actors);
+							expect(typeof ctx.collections.actors.find).toBe("function");
+							expect(ctx.queue).toBe(appRef.queue);
+							expect(ctx.services.policy.id).toBeGreaterThan(0);
+							expect(ctx.allowedSpaces).toBeInstanceOf(Set);
+							expect(ctx.request).toBeInstanceOf(Request);
+							return ctx.session?.user.id === "user-1";
+						})
+						.presence(({ params, allowedSpaces }: any) => {
+							if (!allowedSpaces.has(params.spaceId)) {
+								throw new Error("Space membership is unavailable");
+							}
+							return { id: `member-${params.spaceId}` };
+						}),
+				},
+				config: {
+					app: {
+						context: async () => ({
+							allowedSpaces: new Set(allowedSpaces),
+						}),
+					},
+				},
+			},
+			{
+				app: { url: "https://app.example.com" },
+				realtime: { retentionDays: 0, rowLiveQueries: false },
+			},
+		);
+		appRef = setup.app;
+		cleanup = setup.cleanup;
+		await runTestDbMigrations(setup.app);
+		const handler = createFetchHandler(setup.app, {
+			getSession: async () => {
+				sessionResolutions += 1;
+				return {
+					user: { id: "user-1" },
+					session: { id: "session-1" },
+				};
+			},
+		});
+		const response = await handler(
+			channelRequest("realtime", {
+				channels: [
+					{
+						id: "space-a",
+						channel: "space",
+						params: { spaceId: "a" },
+					},
+					{
+						id: "space-b",
+						channel: "space",
+						params: { spaceId: "b" },
+					},
+				],
+			}),
+		);
+		const reader = response.body!.getReader();
+		const state = { buffer: "" };
+		await readSseEvent(reader, state, "session");
+		for (let attempt = 0; attempt < 100; attempt++) {
+			if (sessionResolutions >= 3) break;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		expect(sessionResolutions).toBeGreaterThanOrEqual(3);
+		expect(channelServices.size).toBe(3);
+		expect(policyCreations).toBe(3);
+		expect(policyDisposals).toHaveLength(2);
+		expect(new Set(policyDisposals).size).toBe(2);
+		await new Promise((resolve) => setTimeout(resolve, 25));
+		await setup.app.realtime!.appendChannelEvent({
+			channel: "presence-space-b",
+			event: "message",
+			schemaIdentity: "space:message",
+			data: { id: "binding-ready" },
+		});
+		expect(await readSseEvent(reader, state, "channel_event")).toMatchObject({
+			channel: "presence-space-b",
+			data: { id: "binding-ready" },
+		});
+
+		allowedSpaces.delete("a");
+		await expect(
+			setup.app.realtime!.revokeChannelAuthority({
+				channel: "presence-space-a",
+				subject: { kind: "user", id: "user-1" },
+				idempotencyKey: "space-a:user-1:membership-v2",
+			}),
+		).resolves.toEqual({ generation: 1, scope: "exact-subscription" });
+		expect(sessionResolutions).toBeGreaterThanOrEqual(2);
+		expect(channelServices.size).toBe(4);
+		expect(policyCreations).toBe(4);
+		expect(policyDisposals).toHaveLength(3);
+		expect(new Set(policyDisposals).size).toBe(3);
+		expect(await readSseEvent(reader, state, "error")).toEqual({
+			channelSubscriptionId: "space-a",
+			message: "Channel access was revoked",
+		});
+
+		await setup.app.realtime!.appendChannelEvent({
+			channel: "presence-space-a",
+			event: "message",
+			schemaIdentity: "space:message",
+			data: { id: "must-not-arrive" },
+		});
+		await setup.app.realtime!.appendChannelEvent({
+			channel: "presence-space-b",
+			event: "message",
+			schemaIdentity: "space:message",
+			data: { id: "still-authorized-binding" },
+		});
+
+		expect(await readSseEvent(reader, state, "channel_event")).toMatchObject({
+			channel: "presence-space-b",
+			data: { id: "still-authorized-binding" },
+		});
+		await reader.cancel();
+		expect(policyDisposals).toHaveLength(4);
+		expect(new Set(policyDisposals).size).toBe(4);
+	});
+
 	test("preserves typed instants from publish validation through SSE delivery", async () => {
 		const instant = new Date("2025-03-30T00:30:00.123Z");
 		const setup = await buildMockApp(
@@ -625,6 +782,290 @@ describe("channel module routes", () => {
 		expect(configResponse.status).toBe(200);
 		expect(configText).toContain("public-key");
 		expect(configText).not.toContain("provider-secret");
+	});
+
+	test("rejects an unqualified shared-provider grant before policy or provider signing", async () => {
+		let policyCalls = 0;
+		let grantCalls = 0;
+		const transport: SharedProviderClientTransport = {
+			channelDeliveryScope: "shared-provider",
+			authorityRevocationScope: "principal-connections",
+			async start() {},
+			async openSession(): Promise<ClientSink> {
+				throw new Error("not used");
+			},
+			async getClientConfig() {
+				return { transport: "shared-provider", config: {} };
+			},
+			async generateAuth() {
+				grantCalls += 1;
+				return { auth: "must-not-be-issued" };
+			},
+			async publishChannel() {
+				return { status: "accepted", bufferedBytes: null };
+			},
+			async revokeAuthority() {},
+			async stop() {},
+		};
+		const setup = await buildMockApp(
+			{
+				channels: {
+					room: channel("room-[id]").authorize(() => {
+						policyCalls += 1;
+						return true;
+					}),
+				},
+			},
+			{
+				app: { url: "https://app.example.com" },
+				realtime: { clientTransport: transport, retentionDays: 0 },
+			},
+		);
+		cleanup = setup.cleanup;
+		await runTestDbMigrations(setup.app);
+		const handler = createFetchHandler(setup.app);
+
+		const response = await handler(
+			channelRequest(
+				"channels/auth",
+				{
+					socket_id: "123.456",
+					channel_name: "private-room-one",
+					channel: "room",
+					params: { id: "one" },
+				},
+				{ origin: "https://app.example.com", cookie: true },
+			),
+		);
+
+		expect(response.status).toBe(403);
+		expect(policyCalls).toBe(0);
+		expect(grantCalls).toBe(0);
+	});
+
+	test("rejects unsupported Pusher authority subjects before advancing a durable generation", async () => {
+		const provider: PusherProvider = {
+			trigger: async () => {},
+			authorizeChannel: () => ({ auth: "channel" }),
+			authenticateUser: () => ({ auth: "user", user_data: "{}" }),
+			terminateUserConnections: async () => {},
+			getPresenceMemberCount: async () => 0,
+		};
+		const setup = await buildMockApp(
+			{},
+			{
+				realtime: {
+					clientTransport: new PusherClientTransport({
+						provider,
+						key: "public-key",
+						identityKey: "provider-secret",
+					}),
+					retentionDays: 0,
+				},
+			},
+		);
+		cleanup = setup.cleanup;
+		await runTestDbMigrations(setup.app);
+
+		await expect(
+			setup.app.realtime!.revokeChannelAuthority({
+				channel: "private-room-one",
+				subject: { kind: "oauth", id: "token-1" },
+				idempotencyKey: "room-one:token-1:unsupported",
+			}),
+		).rejects.toThrow("requires a user subject");
+		expect(
+			await setup.app.db.select().from(questpieChannelAuthorityRevocationTable),
+		).toEqual([]);
+	});
+
+	test("Pusher authority revocation reconnects with fresh channel policy", async () => {
+		const terminated: string[] = [];
+		const provider: PusherProvider = {
+			trigger: async () => {},
+			authorizeChannel: (_socket, channelName) => ({
+				auth: `signed:${channelName}`,
+			}),
+			authenticateUser: (socketId, user) => ({
+				auth: `${socketId}:${user.id}`,
+				user_data: JSON.stringify(user),
+			}),
+			terminateUserConnections: async (userId) => {
+				terminated.push(userId);
+			},
+			getPresenceMemberCount: async () => 0,
+		};
+		const transport = new PusherClientTransport({
+			provider,
+			key: "public-key",
+			identityKey: "provider-secret",
+		});
+		const allowedSpaces = new Set(["a", "b"]);
+		const setup = await buildMockApp(
+			{
+				channels: {
+					space: channel("space-[spaceId]").authorize(
+						({ params, allowedSpaces: current }: any) =>
+							current.has(params.spaceId),
+					),
+				},
+				config: {
+					app: {
+						context: async () => ({
+							allowedSpaces: new Set(allowedSpaces),
+						}),
+					},
+				},
+			},
+			{
+				app: { url: "https://app.example.com" },
+				realtime: {
+					clientTransport: transport,
+					retentionDays: 0,
+				},
+			},
+		);
+		cleanup = setup.cleanup;
+		await runTestDbMigrations(setup.app);
+		const handler = createFetchHandler(setup.app, {
+			getSession: async () => ({
+				user: { id: "user-1" },
+				session: { id: "session-1" },
+			}),
+		});
+
+		allowedSpaces.delete("a");
+		await setup.app.realtime!.revokeChannelAuthority({
+			channel: "private-space-a",
+			subject: { kind: "user", id: "user-1" },
+			idempotencyKey: "space-a:user-1:membership-v3",
+		});
+		expect(terminated).toHaveLength(1);
+
+		const userAuth = await handler(
+			new Request("https://app.example.com/realtime/auth", {
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({ socket_id: "123.456" }),
+			}),
+		);
+		expect(userAuth.status).toBe(200);
+
+		const authorize = (spaceId: string) =>
+			handler(
+				channelRequest(
+					"channels/auth",
+					{
+						socket_id: "123.456",
+						channel_name: `private-space-${spaceId}`,
+						channel: "space",
+						params: { spaceId },
+					},
+					{ origin: "https://app.example.com", cookie: true },
+				),
+			);
+		expect((await authorize("a")).status).toBe(403);
+		expect((await authorize("b")).status).toBe(200);
+		expect(terminated).toHaveLength(1);
+	});
+
+	test("Pusher channel grants fail closed when a concurrent authority cut wins", async () => {
+		let grantStarted!: () => void;
+		let releaseGrant!: () => void;
+		const grantEntered = new Promise<void>((resolve) => {
+			grantStarted = resolve;
+		});
+		const grantRelease = new Promise<void>((resolve) => {
+			releaseGrant = resolve;
+		});
+		const terminated: string[] = [];
+		const provider: PusherProvider = {
+			trigger: async () => {},
+			authorizeChannel: (_socket, channelName) => {
+				grantStarted();
+				return grantRelease.then(() => ({
+					auth: `signed:${channelName}`,
+				})) as unknown as ReturnType<PusherProvider["authorizeChannel"]>;
+			},
+			authenticateUser: (socketId, user) => ({
+				auth: `${socketId}:${user.id}`,
+				user_data: JSON.stringify(user),
+			}),
+			terminateUserConnections: async (userId) => {
+				terminated.push(userId);
+			},
+			getPresenceMemberCount: async () => 0,
+		};
+		const allowedSpaces = new Set(["a"]);
+		const setup = await buildMockApp(
+			{
+				channels: {
+					space: channel("space-[spaceId]").authorize(
+						({ params, allowedSpaces: current }: any) =>
+							current.has(params.spaceId),
+					),
+				},
+				config: {
+					app: {
+						context: async () => ({
+							allowedSpaces: new Set(allowedSpaces),
+						}),
+					},
+				},
+			},
+			{
+				app: { url: "https://app.example.com" },
+				realtime: {
+					clientTransport: new PusherClientTransport({
+						provider,
+						key: "public-key",
+						identityKey: "provider-secret",
+					}),
+					retentionDays: 0,
+				},
+			},
+		);
+		cleanup = setup.cleanup;
+		await runTestDbMigrations(setup.app);
+		const handler = createFetchHandler(setup.app, {
+			getSession: async () => ({
+				user: { id: "user-1" },
+				session: { id: "session-1" },
+			}),
+		});
+
+		const grant = handler(
+			channelRequest(
+				"channels/auth",
+				{
+					socket_id: "123.456",
+					channel_name: "private-space-a",
+					channel: "space",
+					params: { spaceId: "a" },
+				},
+				{ origin: "https://app.example.com", cookie: true },
+			),
+		);
+		await grantEntered;
+
+		allowedSpaces.delete("a");
+		let revocationFinished = false;
+		const revocation = setup.app
+			.realtime!.revokeChannelAuthority({
+				channel: "private-space-a",
+				subject: { kind: "user", id: "user-1" },
+				idempotencyKey: "space-a:user-1:grant-race",
+			})
+			.then(() => {
+				revocationFinished = true;
+			});
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(revocationFinished).toBe(true);
+
+		releaseGrant();
+		expect((await grant).status).toBe(403);
+		await revocation;
+		expect(terminated).toHaveLength(1);
 	});
 
 	test("replays a bounded channel page only after fresh subscribe authorization", async () => {

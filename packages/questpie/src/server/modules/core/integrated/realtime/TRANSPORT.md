@@ -135,6 +135,13 @@ export interface LocalSessionClientTransport extends ClientTransportBase {
 
 export interface SharedProviderClientTransport extends ClientTransportBase {
 	readonly channelDeliveryScope: "shared-provider";
+	readonly authorityRevocationScope?:
+		| "exact-subscription"
+		| "principal-connections";
+	generateUserAuth?(
+		input: ClientUserAuthInput,
+	): Promise<ClientUserAuthResponse>;
+	revokeAuthority?(input: ClientAuthorityRevocationInput): Promise<void>;
 	publishChannel(input: OrderedChannelDelivery): Promise<SinkWriteResult>;
 }
 
@@ -220,6 +227,11 @@ the ordered ledger or client dedupe contract.
   an event and silently continues.
 - Reconnect supplies the last applied event id. Events still inside replay
   retention are resent in order.
+- Each accepted logical channel binding emits one payload-free readiness control
+  frame after authorization and initial ledger catch-up. The frame is ordered
+  after replay and before later live output, but does not consume application
+  event-count or byte quotas. It carries only the client-chosen bounded binding
+  id, never authorization facts or event content.
 - If the requested event id is older than replay retention, the server sends an
   explicit `channel_gap` frame and closes that channel subscription. There is no
   invented snapshot for an arbitrary event stream. The application recovers
@@ -230,10 +242,71 @@ and size. Applications needing durable chat/message history use collections.
 Implementation ownership is RT3.1b; RT3.3 publish routes and the cross-driver
 matrix cannot land without it.
 
+Client subscription readiness is an epoch boundary, not physical connection
+state. SSE exposes the server control frame; Pusher/Soketi waits for provider
+subscription success and the authorized replay drain. Each logical registration
+is notified exactly once per admitted epoch, including registrations multiplexed
+over one transport entry. Denial, gap, aborted setup, or release before
+admission emits no readiness. A transport error ends the epoch; reconnect must
+freshly authorize and catch up before a second readiness notification. Live
+events racing with consumer reconciliation remain ordinary event callbacks so a
+consumer can schedule a trailing authoritative read.
+
 Direct Pusher client events are outside this QoS class. They are disabled by
 default and, when explicitly enabled by the channel security model, are
 best-effort, unvalidated, non-replayable, and use a distinct event namespace.
 They must never masquerade as framework-validated channel events.
+
+### Channel authority generation fence
+
+A domain membership or authorization command calls the provider-neutral
+`channels.revokeAuthority()` seam with a resolved channel, opaque subject, and
+domain idempotency key. The framework advances
+`questpie_channel_authority_fence` and records the idempotent command in
+`questpie_channel_authority_revocation`. That write uses the caller's database
+transaction.
+
+For `local-sessions`, the committed generation is the enforcement boundary.
+Fresh request-context and subscribe/presence policy run outside database locks.
+A short publication transaction then compares the observed generation, locks
+the channel head before the coordinator and exact subject rows where presence
+is involved, and publishes the tagged binding plus optional freshly resolved
+presence payload and lease. A stale true result and its stale member payload
+publish nothing; the retry resolves both again. Sink writes, snapshots, timers,
+and heartbeats never run under the authority lock. An already-admitted frame
+may finish while a cut closes the binding. Cross-instance wakes are redacted
+hints; a demand-driven ledger poll runs only while local channel bindings exist,
+stops on internal revocation of the last binding, and heals a dropped wake
+without starting topology.
+
+For `shared-provider`, a pending authority cut conflicts with the channel
+dispatch admission, so its durable cursor cannot advance across an unapplied
+cut. Provider I/O happens only after the short admission lock is released.
+Pusher's capability is `principal-connections`: the client signs in with an
+opaque user id before channel authorization. In a framework-managed caller
+transaction, bounded provider termination and generation acknowledgement run
+inline: failure throws and rolls the transaction back instead of returning a
+false success. A conservative provider disconnect may survive a later database
+rollback. For a standalone command, provider failure leaves the already durable
+cut pending and dispatch fail-closed; an idempotent retry may apply it. A custom
+shared transport must explicitly declare `authorityRevocationScope` and
+implement `revokeAuthority`; omission never defaults to exact revocation or
+acknowledges the fence.
+
+Pusher explicitly qualifies channel auth as `stateless-signed-grant`:
+`generateAuth` performs only side-effect-free local grant encoding and never
+mutates provider authorization. Channel policy and encoding run without database
+locks. A short expected-generation admission accepts the response; a concurrent
+cut discards the signed blob before it reaches the client. Unqualified shared
+adapters fail before policy or signing. The browser authorizer waits for
+signed-user completion and checks the owner, socket, connection state, and
+opaque user again before returning auth to `pusher-js`.
+
+Pusher cannot terminate one logical channel binding and does not guarantee that
+a frame already accepted by the physical connection disappears. Therefore the
+contract explicitly allows one in-flight physical frame during termination; it
+does not claim zero-frame atomic revocation. After reconnect, still-authorized
+channels replay from their cursor while the revoked channel is denied.
 
 ## Live-query topic contract
 
@@ -704,8 +777,9 @@ Revocation has three mandatory layers:
 1. revoked/expired sessions receive no new auth or publish grant;
 2. local-session transports close the affected edge sessions immediately;
 3. managed-WS transports user-authenticate with an opaque provider user id and
-   terminate that user's active provider connections on session revocation or
-   expiry, then require full subscribe authorization on reconnect.
+   terminate that user's active provider connections on session revocation,
+   expiry, or a channel-scoped authority cut, then require fresh signed-user and
+   per-channel authorization on reconnect.
 
 A provider driver that cannot terminate established user connections must
 report that capability honestly and cannot advertise immediate revocation. Its

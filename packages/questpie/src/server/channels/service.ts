@@ -13,6 +13,7 @@ import type {
 	ChannelEventReceipt,
 } from "#questpie/server/modules/core/integrated/realtime/channel-event-ledger.js";
 
+import type { ChannelAuthoritySubject } from "./authority.js";
 import {
 	type AnyChannelDefinition,
 	type ChannelAuthorizationRule,
@@ -26,6 +27,8 @@ import {
 	assertUniqueResolvedChannelName,
 	type ChannelSecurityConfig,
 } from "./security.js";
+
+export type { ChannelAuthoritySubject } from "./authority.js";
 
 export type ChannelRuntimeErrorCode =
 	| "channel_not_found"
@@ -51,7 +54,22 @@ export interface ChannelPublisher {
 		input: AppendChannelEventInput,
 		options?: AppendChannelEventOptions,
 	): Promise<ChannelEventReceipt>;
+	revokeChannelAuthority?(
+		input: ChannelAuthorityRevocation,
+		options?: AppendChannelEventOptions,
+	): Promise<ChannelAuthorityRevocationReceipt>;
 }
+
+export type ChannelAuthorityRevocation = Readonly<{
+	channel: string;
+	subject: ChannelAuthoritySubject;
+	idempotencyKey: string;
+}>;
+
+export type ChannelAuthorityRevocationReceipt = Readonly<{
+	scope: "exact-subscription" | "principal-connections";
+	generation: number;
+}>;
 
 export type ChannelServiceContext = AppContext & {
 	accessMode?: string;
@@ -87,6 +105,14 @@ type ParamsInput<TDefinition extends AnyChannelDefinition> =
 
 export type ChannelPublishInput<TDefinition extends AnyChannelDefinition> =
 	EventInput<TDefinition> & ParamsInput<TDefinition>;
+
+export type ChannelAuthorityRevocationInput<
+	TDefinition extends AnyChannelDefinition,
+> = Readonly<{
+	subject: ChannelAuthoritySubject;
+	idempotencyKey: string;
+}> &
+	ParamsInput<TDefinition>;
 
 export type ChannelPublishRequest<TChannels extends ChannelDefinitions> = {
 	[TChannel in keyof TChannels & string]: {
@@ -303,6 +329,35 @@ export class ChannelsService<
 	): Promise<ChannelPublishReceipt> {
 		const prepared = await this.preparePublish(channel, input);
 		return this.publishPrepared(prepared);
+	}
+
+	/**
+	 * Revoke current delivery authority for one subject on one channel identity.
+	 *
+	 * The provider-neutral receipt documents whether the configured transport
+	 * closed the exact logical subscription or conservatively terminated all
+	 * physical connections for that principal.
+	 */
+	revokeAuthority<TChannel extends keyof TChannels & string>(
+		channel: TChannel,
+		input: ChannelAuthorityRevocationInput<TChannels[TChannel]>,
+	): Promise<ChannelAuthorityRevocationReceipt> {
+		if (!input.subject.id || input.subject.id.length > 256) {
+			throw new Error("Channel authority subject is invalid");
+		}
+		const params = (input.params ?? {}) as ChannelParamsOf<TChannels[TChannel]>;
+		const resolvedName = this.resolveName(channel, params);
+		if (!this.publisher.revokeChannelAuthority) {
+			throw new Error("Channel authority revocation is unavailable");
+		}
+		return this.publisher.revokeChannelAuthority(
+			{
+				channel: resolvedName,
+				subject: input.subject,
+				idempotencyKey: input.idempotencyKey,
+			},
+			{ db: this.context.db },
+		);
 	}
 
 	/** Validate a client publish completely without allocating a ledger event id. */

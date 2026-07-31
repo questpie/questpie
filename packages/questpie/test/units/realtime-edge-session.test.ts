@@ -291,3 +291,37 @@ test("binding output gate bounds staged ordered output and discards rollback", a
 
 	expect(writes).toEqual([]);
 });
+
+test("binding output gate orders one control frame without consuming application quotas", async () => {
+	const writes: string[] = [];
+	const sink: ClientSink = {
+		sessionId: "session",
+		write: async (frame) => {
+			writes.push(new TextDecoder().decode(frame));
+			return { status: "accepted", bufferedBytes: 0 };
+		},
+		close: async () => {},
+	};
+	const gate = new RealtimeBindingOutputGate(sink, {
+		maximumOrderedEvents: 1,
+		maximumBufferedBytes: 6,
+		onError: () => {},
+	});
+	const encode = (value: string) => new TextEncoder().encode(value);
+
+	await gate.write(encode("replay"), "ordered-channel-event");
+	await expect(gate.writeControl(encode("channel-ready"))).resolves.toEqual({
+		status: "accepted",
+		bufferedBytes: 6,
+	});
+	await expect(gate.writeControl(encode("duplicate"))).rejects.toThrow(
+		"control frame duplicated",
+	);
+	await expect(
+		gate.write(encode("live"), "ordered-channel-event"),
+	).rejects.toThrow("event buffer overflow");
+
+	gate.activate();
+	await Bun.sleep(0);
+	expect(writes).toEqual(["replay", "channel-ready"]);
+});

@@ -303,6 +303,9 @@ describe("realtime matrix reconciliation", () => {
 		await flushMicrotasks();
 
 		expect(delivered).toEqual([change]);
+		await publisher.notify(change);
+		await flushMicrotasks();
+		expect(delivered).toEqual([change]);
 		expect(publisherAdapter.startCalls).toBe(1);
 	});
 

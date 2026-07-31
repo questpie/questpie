@@ -75,12 +75,64 @@ Framework handlers and hooks receive a generated `channels` service:
 
 In collection/global/hook files, use the injected `{ channels }`. Never import the generated `app` or defer lookup through ambient `getContext()`; the injected service is generated-type-safe and mutation-context aware.
 
+## Revoke current delivery authority
+
+When a membership or authorization mutation removes access, cut the affected
+resolved channel in the same transaction:
+
+```ts
+await channels.revokeAuthority("chatRoom", {
+	params: { roomId },
+	subject: { kind: "user", id: removedUserId },
+	idempotencyKey: `chat-room:${roomId}:${removedUserId}:membership-v2`,
+});
+```
+
+The idempotency key identifies the domain authorization transition. QUESTPIE
+advances a durable per-channel/subject generation and returns
+`{ generation, scope }`. `scope: "exact-subscription"` means the local SSE
+binding is cut without closing unrelated channel bindings.
+`scope: "principal-connections"` means the provider can only conservatively
+terminate every current connection for the signed-in user. Pusher supports the
+`user` subject for that capability.
+
+Fresh request context, subscribe authorization, and the presence resolver (for
+presence channels) run outside database locks. A short expected-generation
+publication installs the binding, latest fresh member payload, and optional
+presence lease together; a stale result and stale payload publish nothing and
+retry fresh. Internal revocation of the last SSE binding also stops its
+demand-driven authority reconciliation. A Pusher client signs in with an opaque
+provider user id before channel authorization, reconnects after termination,
+then obtains fresh user and per-channel authorization. Its channel grant is
+side-effect-free local signing guarded by an optimistic generation check, so a
+post-cut blob is discarded before reaching the client. Thus removing Space A
+may disconnect Space B briefly, but Space B can reconnect while Space A remains
+denied.
+
+In a managed caller transaction, Pusher termination and authority
+acknowledgement run inline under a bounded call. Provider failure throws and
+rolls back the database transaction; a conservative disconnect may survive a
+later caller rollback. Standalone provider failure leaves the durable cut
+pending for an idempotent retry.
+
+Pusher does not provide zero-frame atomicity: a frame already accepted by the
+physical provider connection may arrive while termination is in flight. The
+durable fence prevents new ordered provider dispatch from crossing a pending
+cut; reconnect and replay reauthorize against current application state.
+
 ## Client, presence, and TanStack Query
 
 ```ts
-const stop = client.channels.chatRoom.subscribe({ roomId }, (message) => {
-	if (message.event === "message") console.log(message.data.text);
-});
+const stop = client.channels.chatRoom.subscribe(
+	{ roomId },
+	(message) => {
+		if (message.event === "message") console.log(message.data.text);
+	},
+	{
+		onReady: reconcileAuthoritativeRoom,
+		onError: markRoomReadOnly,
+	},
+);
 
 await client.channels.chatRoom.publish({
 	params: { roomId },
@@ -96,6 +148,15 @@ const stopPresence = client.channels.chatRoom.subscribePresence(
 stop();
 stopPresence();
 ```
+
+`onReady` is provider-neutral and payload-free. It fires once per successful
+subscription epoch only after current authorization and replay/catch-up: replay
+events precede it and later live events use the normal callback. Reconnect
+freshly authorizes and replays before firing it again. Socket open alone is not
+readiness, and denial, replay gap, aborted setup, or stopping before admission
+does not fire it. Keep protected state fenced after `onError`; use `onReady` to
+start an authoritative read, and make the event callback schedule a trailing
+read when an invalidation races with that reconciliation.
 
 `presence()` returns one typed snapshot. `subscribePresence()` emits the initial and later rosters, and `presenceIter(params, { signal })` provides the async-generator form. Pusher/Soketi uses native membership; SSE uses Postgres leases across instances and deduplicates multiple connections by authenticated principal. Crash leave converges after the lease TTL.
 

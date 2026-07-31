@@ -22,6 +22,40 @@ type BetterAuthSessionApi = {
 	}): Promise<{ user: any; session: any } | null | undefined>;
 };
 
+const FRESH_ADAPTER_CONTEXT = Symbol.for(
+	"questpie.internal.freshAdapterContext",
+);
+
+type RefreshableAdapterContext = AdapterContext & {
+	[FRESH_ADAPTER_CONTEXT]?: () => Promise<AdapterContext>;
+};
+
+function attachFreshAdapterContext(
+	context: AdapterContext,
+	resolveFresh: () => Promise<AdapterContext>,
+): AdapterContext {
+	Object.defineProperty(context, FRESH_ADAPTER_CONTEXT, {
+		value: resolveFresh,
+		enumerable: false,
+		configurable: false,
+		writable: false,
+	});
+	return context;
+}
+
+/** @internal Re-run session resolution and app context derivation for a route. */
+export function refreshAdapterContext(
+	context: AdapterContext,
+): Promise<AdapterContext> {
+	const resolveFresh = (context as RefreshableAdapterContext)[
+		FRESH_ADAPTER_CONTEXT
+	];
+	if (!resolveFresh) {
+		throw new Error("Fresh adapter context is unavailable");
+	}
+	return resolveFresh();
+}
+
 export const resolveSession = async <
 	TConfig extends QuestpieConfig = QuestpieConfig,
 >(
@@ -141,19 +175,29 @@ const createAdapterContextInternal = async <
 		request,
 	});
 
-	return {
-		session: sessionData,
-		locale: appContext.locale,
-		localeFallback: appContext.localeFallback,
-		stage: appContext.stage,
-		appContext,
-		...(typeof appContext.requestId === "string"
-			? { requestId: appContext.requestId }
-			: {}),
-		...(typeof appContext.traceId === "string"
-			? { traceId: appContext.traceId }
-			: {}),
-	};
+	return attachFreshAdapterContext(
+		{
+			session: sessionData,
+			locale: appContext.locale,
+			localeFallback: appContext.localeFallback,
+			stage: appContext.stage,
+			appContext,
+			...(typeof appContext.requestId === "string"
+				? { requestId: appContext.requestId }
+				: {}),
+			...(typeof appContext.traceId === "string"
+				? { traceId: appContext.traceId }
+				: {}),
+		},
+		() =>
+			createAdapterContextInternal(
+				app,
+				request,
+				config,
+				observability,
+				oauthAudience,
+			),
+	);
 };
 
 export const createAdapterContext = <
@@ -226,7 +270,7 @@ function withObservability(
 		return context;
 	}
 
-	return {
+	const refreshed = {
 		...context,
 		...(requestId ? { requestId } : {}),
 		...(traceId ? { traceId } : {}),
@@ -236,4 +280,10 @@ function withObservability(
 			...(traceId ? { traceId } : {}),
 		},
 	};
+	const resolveFresh = (context as RefreshableAdapterContext)[
+		FRESH_ADAPTER_CONTEXT
+	];
+	return resolveFresh
+		? attachFreshAdapterContext(refreshed, resolveFresh)
+		: refreshed;
 }

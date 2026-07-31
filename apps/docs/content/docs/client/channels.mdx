@@ -102,6 +102,47 @@ Use the hook's injected `{ channels }` argument. It carries the same generated t
 
 Do not import the generated `app` into a collection/hook file, and do not resolve channels later through ambient `getContext()`. Contextless update/delete calls do not guarantee an ambient scope; the injected hook argument is the reliable and transaction-aware path.
 
+## Revoke delivery authority after a domain change
+
+When a membership or authorization write removes access, call the request-bound
+service in the same transaction:
+
+```ts
+await channels.revokeAuthority("chatRoom", {
+	params: { roomId },
+	subject: { kind: "user", id: removedUserId },
+	idempotencyKey: `chat-room:${roomId}:${removedUserId}:membership-v2`,
+});
+```
+
+The command advances a durable generation for the exact resolved
+channel/subject and returns `{ generation, scope }`. With SSE,
+`scope: "exact-subscription"` closes only that logical binding with
+`access_revoked`; other channel bindings on the multiplexed stream remain
+active. Fresh request context, subscribe authorization, and the presence
+resolver are evaluated outside database locks, then a short generation check
+publishes the binding, latest freshly resolved presence payload, and optional
+presence lease atomically. A stale result and stale member payload publish
+nothing. Dropped authority notices heal through a demand-driven ledger poll
+that also stops when internal revocation closes the last local binding.
+
+Pusher/Soketi reports `scope: "principal-connections"` because its termination
+API is user-wide. QUESTPIE signs the browser into Pusher with an opaque user id,
+terminates every current connection for that user, and lets reconnect obtain
+fresh user and per-channel authorization. Channel authorization waits for
+signed-user completion and rejects stale sockets or owners. An unrelated
+still-authorized binding can reconnect; the removed binding cannot.
+Provider channel auth is explicitly side-effect-free signed-blob encoding; a
+concurrent authority cut discards the blob before it can reach the browser.
+
+<Callout type="warn" title="Managed providers have an in-flight frame window">
+	Pusher cannot guarantee that a frame already accepted by the physical
+	connection will not arrive while termination is in flight. QUESTPIE's durable
+	fence blocks new ordered provider dispatch across a pending cut, and reconnect
+	plus replay reauthorize against current application state. This is
+	intentionally not described as zero-frame atomic revocation.
+</Callout>
+
 ## Subscribe and publish on the client
 
 `createClient<AppConfig>()` exposes one handle per generated channel:
@@ -116,7 +157,13 @@ const stop = client.channels.chatRoom.subscribe(
 			console.log(message.data.active);
 		}
 	},
-	{ onError: console.error },
+	{
+		onReady: () => reconcileAuthoritativeRoom(roomId),
+		onError: (error) => {
+			markRoomReadOnly(roomId);
+			console.error(error);
+		},
+	},
 );
 
 const receipt = await client.channels.chatRoom.publish({
@@ -127,6 +174,22 @@ const receipt = await client.channels.chatRoom.publish({
 
 stop();
 ```
+
+`onReady` is a payload-free admission boundary, not a socket-open callback. It
+fires once for each successful subscription epoch, after current subscribe
+authorization and retained replay/catch-up complete. Replay events therefore
+arrive before `onReady`; later live events arrive through the normal message
+callback. A reconnect starts a new epoch and calls `onReady` again only after
+fresh authorization and replay. Denied admission, a replay gap, aborted setup,
+or calling `stop()` before admission never calls it.
+
+For protected cached data, keep the cache fenced after `onError`, then start an
+authoritative read from `onReady`. If a channel event arrives while that read is
+running, the message callback must schedule a trailing read; do not treat
+`onReady` as proof that no later invalidation can race with application I/O.
+Callback payloads intentionally expose neither authorization facts nor event
+content. Callback exceptions are isolated from other logical subscribers on the
+same physical connection.
 
 Client publish is server-mediated even on Pusher/Soketi: the request uses the same dynamic auth headers as other client calls, re-evaluates `publish` authorization, validates the event with Zod, enforces payload/origin/rate limits, and only then appends the ordered event.
 
@@ -209,6 +272,18 @@ export default runtimeConfig({
 ```
 
 The client discovers the selected transport from `/channels/config`; `client.channels.*` call sites do not change. After a managed-provider reconnect, the established subscription reauthorizes a bounded `/channels/replay` drain from its last applied event id. Live provider events arriving during that drain are buffered behind the replay cursor, then deduplicated and released in order.
+
+Both built-in transports implement the same `onReady` boundary. SSE receives a
+bounded, payload-free routing control frame only after server admission and
+ledger catch-up. Pusher/Soketi derives readiness from successful provider
+subscription plus the authorized replay drain. Provider connection state alone
+is never readiness.
+
+Pusher signed-user authentication uses the current dynamic auth headers and
+cookies. If login or logout changes identity without replacing the browser
+socket, call both `client.realtime.destroy()` and `client.channels.destroy()`
+(or recreate the client) before subscribing again so the shared provider
+connection is recreated under the new identity.
 
 <Callout type="warn" title="Direct Pusher client events are a separate unsafe capability">
 Provider client events bypass QUESTPIE's publish route, per-verb authorization, Zod schemas, ordered ledger, replay, and rate limits. They are off by default. Enabling `clientEvents` requires `acknowledgeProviderWideRisk: true`; its `allowedChannels` list is only an SDK affordance and a raw provider client can bypass it. Prefer `client.channels.<name>.publish()`.

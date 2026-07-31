@@ -9,6 +9,10 @@ import { Buffer } from "node:buffer";
 
 import type { RealtimeTopicRejectedPayload } from "#questpie/shared/realtime-error.js";
 
+import {
+	opaqueChannelAuthoritySubject,
+	resolveChannelAuthoritySubject,
+} from "../../channels/authority.js";
 import { ChannelsService } from "../../channels/service.js";
 import { executeAccessRule } from "../../collection/crud/shared/access-control.js";
 import {
@@ -73,7 +77,7 @@ import {
 } from "../../modules/core/integrated/realtime/topology-coordinator.js";
 import type { ClientSink } from "../../modules/core/integrated/realtime/transport.js";
 import type { AdapterConfig, AdapterContext } from "../types.js";
-import { resolveContext } from "../utils/context.js";
+import { refreshAdapterContext, resolveContext } from "../utils/context.js";
 import { handleError, sseHeaders } from "../utils/response.js";
 
 // ============================================================================
@@ -190,6 +194,8 @@ type ValidatedChannelSubscription = {
 	channel: string;
 	params: Record<string, string>;
 	resolvedName: string;
+	presenceChannel: boolean;
+	subject?: string;
 	lastEventId?: string;
 	presence?: Record<string, unknown>;
 };
@@ -207,6 +213,7 @@ async function createRequestChannelsLease(
 	app: Questpie<any>,
 	context: RealtimeRequestContext,
 	supplied?: unknown,
+	disposeCarriedScope = false,
 ): Promise<RequestChannelsLease> {
 	if (supplied instanceof ChannelsService) {
 		return { channels: supplied, dispose: async () => {} };
@@ -218,7 +225,7 @@ async function createRequestChannelsLease(
 	)[APP_SERVICE_SCOPE];
 	const scope =
 		carriedScope instanceof RequestScope ? carriedScope : new RequestScope();
-	const ownsScope = carriedScope === undefined;
+	const ownsScope = carriedScope === undefined || disposeCarriedScope;
 	try {
 		const services = extractAppServices(app, {
 			db: context.db ?? app.db,
@@ -804,7 +811,7 @@ async function resolveChannelSubscription(
 	context: RealtimeRequestContext,
 	requestChannels?: ChannelsService,
 ): Promise<ValidatedChannelSubscription> {
-	if (!input.id || typeof input.id !== "string") {
+	if (!input.id || typeof input.id !== "string" || input.id.length > 256) {
 		throw new Error("Channel subscription id is required");
 	}
 	if (!input.channel || typeof input.channel !== "string") {
@@ -832,6 +839,7 @@ async function resolveChannelSubscription(
 	try {
 		const definition = channels.getDefinition(input.channel);
 		const resolvedName = channels.resolveName(input.channel, params);
+		const authoritySubject = resolveChannelAuthoritySubject(context);
 		let presence: Record<string, unknown> | undefined;
 		if (definition.visibility === "presence") {
 			const value = await channels.resolvePresence(input.channel, params);
@@ -848,6 +856,10 @@ async function resolveChannelSubscription(
 			channel: input.channel,
 			params,
 			resolvedName,
+			presenceChannel: definition.visibility === "presence",
+			...(authoritySubject
+				? { subject: opaqueChannelAuthoritySubject(authoritySubject) }
+				: {}),
 			...(input.lastEventId ? { lastEventId: input.lastEventId } : {}),
 			...(presence ? { presence } : {}),
 		};
@@ -987,6 +999,7 @@ async function realtimeSubscribeInternal(
 	// Resolve context (auth, locale, etc.)
 	const resolved = await resolveContext(app, request, config, context);
 	onResolved(resolved);
+	const resolveFreshRouteContext = () => refreshAdapterContext(resolved);
 	let frozenSubscriptionScope: Promise<string | null> | undefined;
 	const getFrozenSubscriptionScope = () =>
 		(frozenSubscriptionScope ??= resolveRealtimeSubscriptionScope(
@@ -2123,8 +2136,8 @@ async function realtimeSubscribeInternal(
 					if (!ownerIsActive(bindingGeneration)) {
 						throw new Error("Realtime owner is fenced");
 					}
-					let unsubscribeLedger: (() => void) | undefined;
-					let unsubscribePresence: (() => Promise<void>) | undefined;
+					let unsubscribeLedger: (() => Promise<void>) | undefined;
+					let revocationRequested = false;
 					const bindingInstanceId = globalThis.crypto.randomUUID();
 					const fencedSink = createFencedClientSink(sink, () =>
 						ownerIsActive(bindingGeneration),
@@ -2138,43 +2151,103 @@ async function realtimeSubscribeInternal(
 						unsubscribeLedger = await app.realtime!.subscribeChannel({
 							subscriptionId: `${edgeSessionId}:${channel.id}:${bindingInstanceId}`,
 							channel: channel.resolvedName,
+							...(channel.subject
+								? {
+										subject: channel.subject,
+										reauthorize: async () => {
+											const fresh = await resolveFreshRouteContext();
+											const lease = await createRequestChannelsLease(
+												app,
+												fresh.appContext,
+												undefined,
+												true,
+											);
+											try {
+												if (channel.presenceChannel) {
+													const presence = await lease.channels.resolvePresence(
+														channel.channel,
+														channel.params,
+													);
+													return {
+														authorized: true,
+														...(presence && typeof presence === "object"
+															? {
+																	presence: presence as Record<string, unknown>,
+																}
+															: {}),
+													};
+												}
+												return await lease.channels.authorize(
+													channel.channel,
+													channel.params,
+													"subscribe",
+												);
+											} finally {
+												await lease.dispose();
+											}
+										},
+										close: async () => {
+											if (edge?.has(channel.id)) {
+												await subscriptionSink.write(
+													encodeSseEvent("error", {
+														channelSubscriptionId: channel.id,
+														message: "Channel access was revoked",
+													}),
+													"ordered-channel-event",
+												);
+												await edge.drop(channel.id);
+												closeIfEmpty();
+												return;
+											}
+											revocationRequested = true;
+										},
+									}
+								: {}),
 							sink: subscriptionSink,
+							onReady: async () => {
+								await subscriptionSink.writeControl(
+									encodeSseEvent("channel_ready", {
+										channelSubscriptionId: channel.id,
+									}),
+								);
+							},
 							lastEventId: channel.lastEventId,
 							encodeFrame: (frame) => transport!.encodeChannelFrame(frame),
+							...(channel.presence
+								? {
+										presence: {
+											channel: channel.resolvedName,
+											connectionId: `${edgeSessionId}:${channel.id}:${bindingInstanceId}`,
+											principalId:
+												realtimePrincipalKey(resolved.appContext) ??
+												(() => {
+													throw new Error(
+														"Presence channel subscription requires a principal",
+													);
+												})(),
+											sink: subscriptionSink,
+											data: channel.presence!,
+										},
+									}
+								: {}),
 						});
-						if (channel.presence) {
-							const principalId = realtimePrincipalKey(resolved.appContext);
-							if (!principalId) {
-								throw new Error(
-									"Presence channel subscription requires a principal",
-								);
-							}
-							unsubscribePresence = await app.realtime!.registerChannelPresence(
-								{
-									channel: channel.resolvedName,
-									connectionId: `${edgeSessionId}:${channel.id}:${bindingInstanceId}`,
-									principalId,
-									sink: subscriptionSink,
-									data: channel.presence,
-								},
-							);
-						}
 						if (!ownerIsActive(bindingGeneration)) {
 							throw new Error("Realtime owner is fenced");
+						}
+						if (revocationRequested) {
+							throw new Error("Channel access was revoked");
 						}
 						if (subscriptionSink.error) throw subscriptionSink.error;
 						return {
 							activate: () => subscriptionSink.activate(),
 							assertReady: () => subscriptionSink.assertReady(),
 							close: async () => {
-								await unsubscribePresence?.().catch(requestClose);
-								unsubscribeLedger?.();
+								await unsubscribeLedger?.().catch(requestClose);
 								await subscriptionSink.dispose();
 							},
 						};
 					} catch (error) {
-						await unsubscribePresence?.();
-						unsubscribeLedger?.();
+						await unsubscribeLedger?.();
 						await subscriptionSink.dispose();
 						throw error;
 					}
