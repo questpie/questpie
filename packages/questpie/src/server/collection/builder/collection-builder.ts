@@ -715,14 +715,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		TNewEffects extends CollectionTransactionalEffects<
 			CollectionSelect<TState>
 		>,
-	>(
-		effects: TNewEffects,
-	): CollectionBuilder<
-		Override<
-			TState,
-			{ transactionalEffects: CollectionTransactionalEffectsStorage }
-		>
-	> {
+	>(effects: TNewEffects): CollectionBuilder<TState> {
 		const existingEffects = this.state.transactionalEffects;
 		const mergedEffects: CollectionTransactionalEffectsStorage = {
 			...(existingEffects || {}),
@@ -742,10 +735,11 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			mergedEffects[effectName] = [...currentArray, ...nextArray];
 		}
 
-		const newBuilder = new CollectionBuilder({
+		const newState: TState = {
 			...this.state,
 			transactionalEffects: mergedEffects,
-		} as any);
+		};
+		const newBuilder = new CollectionBuilder(newState);
 		newBuilder._indexesFn = this._indexesFn;
 
 		return newBuilder;
@@ -1378,29 +1372,32 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		effects1: CollectionTransactionalEffects,
 		effects2: CollectionTransactionalEffects,
 	): CollectionTransactionalEffects {
-		const merged: CollectionTransactionalEffects = {};
-		const effectKeys = Array.from(
-			new Set([...Object.keys(effects1 || {}), ...Object.keys(effects2 || {})]),
-		) as (keyof CollectionTransactionalEffects)[];
+		return {
+			afterChange: this.mergeTransactionalEffectHandlers(
+				effects1.afterChange,
+				effects2.afterChange,
+			),
+			afterDelete: this.mergeTransactionalEffectHandlers(
+				effects1.afterDelete,
+				effects2.afterDelete,
+			),
+			afterPurge: this.mergeTransactionalEffectHandlers(
+				effects1.afterPurge,
+				effects2.afterPurge,
+			),
+		};
+	}
 
-		for (const key of effectKeys) {
-			const effect1 = effects1?.[key];
-			const effect2 = effects2?.[key];
-			if (!effect1 && !effect2) continue;
-			if (!effect1) {
-				merged[key] = effect2 as any;
-				continue;
-			}
-			if (!effect2) {
-				merged[key] = effect1 as any;
-				continue;
-			}
-			const first = Array.isArray(effect1) ? effect1 : [effect1];
-			const second = Array.isArray(effect2) ? effect2 : [effect2];
-			merged[key] = [...first, ...second] as any;
-		}
+	private mergeTransactionalEffectHandlers<TEffect>(
+		effect1: TEffect[] | TEffect | undefined,
+		effect2: TEffect[] | TEffect | undefined,
+	): TEffect[] | TEffect | undefined {
+		if (effect1 === undefined) return effect2;
+		if (effect2 === undefined) return effect1;
 
-		return merged;
+		const first = Array.isArray(effect1) ? effect1 : [effect1];
+		const second = Array.isArray(effect2) ? effect2 : [effect2];
+		return [...first, ...second];
 	}
 }
 
