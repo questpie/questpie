@@ -70,7 +70,11 @@ Framework handlers and hooks receive a generated `channels` service:
 });
 ```
 
-In collection/global/hook files, use the injected `{ channels }`. Never import the generated `app` or defer lookup through ambient `getContext()`; the injected service is generated-type-safe and mutation-context aware.
+In collection/global/hook files, use the injected `{ channels }`. Hooks run in
+the owning mutation transaction, so a publish failure rolls back both the
+mutation and ordered channel-ledger append. Never import the generated `app` or
+defer lookup through ambient `getContext()`; the injected service is
+generated-type-safe and mutation-context aware.
 
 ## Revoke current delivery authority
 

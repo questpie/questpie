@@ -18,6 +18,7 @@ export default {
 	"error.updatesMustBeArray": "updates musi być tablicą",
 	"error.versionRequired": "Wymagane jest version lub versionId",
 	"error.conflict": "Konflikt zasobów",
+	"error.preconditionFailed": "Warunek wstępny nie został spełniony",
 	"error.notImplemented": "{{feature}} nie jest zaimplementowane",
 	"error.timeout": "Przekroczono czas żądania",
 

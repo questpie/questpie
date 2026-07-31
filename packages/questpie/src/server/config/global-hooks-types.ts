@@ -63,6 +63,7 @@ export type GlobalCollectionTransitionHookContextFields<TData = any> = {
 	toStage: string;
 	/** When set, the transition should be scheduled for this future date instead of executing immediately */
 	scheduledAt?: Date;
+	expectedRevision?: number;
 	locale?: string;
 	accessMode?: AccessMode;
 };
@@ -149,6 +150,7 @@ export type GlobalGlobalTransitionHookContextFields<TData = any> = {
 	toStage: string;
 	/** When set, the transition should be scheduled for this future date instead of executing immediately */
 	scheduledAt?: Date;
+	expectedRevision?: number;
 	locale?: string;
 	accessMode?: AccessMode;
 };

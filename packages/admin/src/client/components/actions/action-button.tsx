@@ -17,6 +17,7 @@ import type {
 	ActionQueryClient,
 } from "../../builder/types/action-types";
 import { resolveIconElement } from "../../components/component-renderer";
+import { useCollectionSchema } from "../../hooks/use-collection-schema";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import {
@@ -24,6 +25,10 @@ import {
 	selectClient,
 	useAdminStore,
 } from "../../runtime/provider";
+import {
+	optimisticActionInput,
+	optimisticIdInput,
+} from "../../utils/optimistic-concurrency";
 import { Button } from "../ui/button";
 import { ConfirmationDialog } from "./confirmation-dialog";
 
@@ -80,6 +85,7 @@ export function ActionButton<TItem = any>({
 	const authClient = useAdminStore(selectAuthClient);
 	const client = useAdminStore(selectClient);
 	const queryClient = useQueryClient();
+	const { data: collectionSchema } = useCollectionSchema(collection);
 	const [showConfirm, setShowConfirm] = React.useState(false);
 	const [isLoading, setIsLoading] = React.useState(false);
 
@@ -154,7 +160,13 @@ export function ActionButton<TItem = any>({
 					if (method === "DELETE" && collectionClient?.delete) {
 						if (!itemId) throw new Error(t("toast.deleteFailed"));
 
-						await collectionClient.delete({ id: itemId });
+						await collectionClient.delete(
+							optimisticIdInput(
+								itemId,
+								itemAny,
+								collectionSchema?.options?.optimisticConcurrency,
+							),
+						);
 						helpers.toast.success(t("toast.deleteSuccess"));
 						await helpers.invalidateCollection(collection);
 					} else {
@@ -216,6 +228,13 @@ export function ActionButton<TItem = any>({
 						actionId: serverHandler.actionId,
 						itemId,
 						itemIds: itemIds?.length ? itemIds : undefined,
+						...optimisticActionInput(
+							item && !Array.isArray(item)
+								? (item as Record<string, any>)
+								: undefined,
+							items as Array<Record<string, any>> | undefined,
+							collectionSchema?.options?.optimisticConcurrency,
+						),
 					});
 
 					if (!response?.success || response.result?.type === "error") {

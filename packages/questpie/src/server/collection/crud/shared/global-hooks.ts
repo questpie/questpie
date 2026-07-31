@@ -70,10 +70,9 @@ function matchesFilter(
 /**
  * Execute global collection hooks.
  *
- * - `before*` hooks propagate errors (allow blocking operations).
- * - Ordinary `after*` hooks swallow errors and log.
- * - `afterPurge` is fatal because it is part of the irreversible purge
- *   transaction; external work belongs in `onAfterCommit`.
+ * All of these hooks run inside the owning CRUD transaction. A thrown error
+ * therefore propagates and rolls back the operation. Best-effort work must be
+ * handled explicitly inside the hook; external work belongs in a durable job.
  */
 export async function executeGlobalCollectionHooks(
 	entries: GlobalCollectionHookEntry[] | undefined,
@@ -89,8 +88,6 @@ export async function executeGlobalCollectionHooks(
 ): Promise<void> {
 	if (!entries || entries.length === 0) return;
 
-	const isFatal = hookName.startsWith("before") || hookName === "afterPurge";
-
 	// Enrich context with collection name for global hooks
 	const enrichedCtx: GlobalCollectionHookContext = {
 		...ctx,
@@ -101,19 +98,7 @@ export async function executeGlobalCollectionHooks(
 		const hookFn = entry[hookName];
 		if (!hookFn || !matchesFilter(entry, collectionName)) continue;
 
-		if (isFatal) {
-			await hookFn(enrichedCtx);
-		} else {
-			try {
-				await hookFn(enrichedCtx);
-			} catch (err) {
-				rethrowFatalGlobalHookError(err);
-				getContextLogger(enrichedCtx)?.error(
-					`[QUESTPIE] Global collection hook "${hookName}" error for "${collectionName}":`,
-					err,
-				);
-			}
-		}
+		await hookFn(enrichedCtx);
 	}
 }
 
@@ -166,8 +151,8 @@ export async function executeGlobalCollectionTransitionHooks(
 /**
  * Execute global global hooks (beforeChange, afterChange).
  *
- * - `beforeChange` propagates errors (allow blocking).
- * - `afterChange` swallows errors and logs.
+ * Both hooks run inside the owning Global transaction. A thrown error
+ * propagates and rolls back the update.
  */
 export async function executeGlobalGlobalHooks(
 	entries: GlobalGlobalHookEntry[] | undefined,
@@ -177,8 +162,6 @@ export async function executeGlobalGlobalHooks(
 ): Promise<void> {
 	if (!entries || entries.length === 0) return;
 
-	const isBefore = hookName === "beforeChange";
-
 	// Enrich context with global name for global hooks
 	const enrichedCtx: GlobalGlobalHookContext = { ...ctx, global: globalName };
 
@@ -186,19 +169,7 @@ export async function executeGlobalGlobalHooks(
 		const hookFn = entry[hookName];
 		if (!hookFn || !matchesFilter(entry, globalName)) continue;
 
-		if (isBefore) {
-			await hookFn(enrichedCtx);
-		} else {
-			try {
-				await hookFn(enrichedCtx);
-			} catch (err) {
-				rethrowFatalGlobalHookError(err);
-				getContextLogger(enrichedCtx)?.error(
-					`[QUESTPIE] Global global hook "${hookName}" error for "${globalName}":`,
-					err,
-				);
-			}
-		}
+		await hookFn(enrichedCtx);
 	}
 }
 

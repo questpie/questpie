@@ -57,6 +57,17 @@ export type GlobalUpdateInput<TUpdate = any, TRelations = any> = Prettify<
 	Partial<TUpdate> & GlobalRelationMutations<TRelations>
 >;
 
+export type GlobalUpdateParams<
+	TUpdate = any,
+	TRelations = any,
+	TOptions extends GlobalOptions = GlobalOptions,
+> = TOptions extends { optimisticConcurrency: true }
+	? {
+			data: Omit<GlobalUpdateInput<TUpdate, TRelations>, "revision">;
+			expectedRevision: number;
+		}
+	: GlobalUpdateInput<TUpdate, TRelations>;
+
 /**
  * Options for getting a global record
  * Type-safe with support for partial selection and relation loading
@@ -118,12 +129,16 @@ export interface GlobalUpdateOptions<TRelations = any> {
  * Params for transitioning a global to a different workflow stage.
  * No data mutation — only stage change + version snapshot.
  */
-export interface GlobalTransitionStageParams {
+export type GlobalTransitionStageParams<
+	TOptions extends GlobalOptions = GlobalOptions,
+> = {
 	/** Target workflow stage name */
 	stage: string;
 	/** If set to a future date, schedule the transition instead of executing immediately */
 	scheduledAt?: Date;
-}
+} & (TOptions extends { optimisticConcurrency: true }
+	? { expectedRevision: number }
+	: { expectedRevision?: number });
 
 export interface GlobalFindVersionsOptions {
 	id?: string;
@@ -131,16 +146,21 @@ export interface GlobalFindVersionsOptions {
 	offset?: number;
 }
 
-export interface GlobalRevertVersionOptions {
+export type GlobalRevertVersionOptions<
+	TOptions extends GlobalOptions = GlobalOptions,
+> = {
 	id?: string;
 	version?: number;
 	versionId?: string;
-}
+} & (TOptions extends { optimisticConcurrency: true }
+	? { expectedRevision: number }
+	: { expectedRevision?: number });
 
 export interface GlobalVersionRecord {
 	id: string;
 	versionId: string;
 	versionNumber: number;
+	sourceRevision: number | null;
 	versionOperation: string;
 	versionUserId: string | null;
 	versionCreatedAt: Date;
@@ -212,6 +232,7 @@ export interface GlobalCRUD<
 	in out _TInsert = any,
 	in out TUpdate = any,
 	in out TRelations = any,
+	in out TOptions extends GlobalOptions = GlobalOptions,
 > {
 	/**
 	 * Get the global record (singleton)
@@ -227,7 +248,7 @@ export interface GlobalCRUD<
 	 * Supports loading relations in response and nested relation mutations
 	 */
 	update<TQuery extends GlobalUpdateOptions<TRelations>>(
-		data: GlobalUpdateInput<TUpdate, TRelations>,
+		params: GlobalUpdateParams<TUpdate, TRelations, TOptions>,
 		context?: CRUDContext,
 		options?: TQuery,
 	): Promise<ApplyQuery<TSelect, TRelations, TQuery>>;
@@ -238,7 +259,7 @@ export interface GlobalCRUD<
 	): Promise<GlobalVersionRecord[]>;
 
 	revertToVersion(
-		options: GlobalRevertVersionOptions,
+		options: GlobalRevertVersionOptions<TOptions>,
 		context?: CRUDContext,
 	): Promise<TSelect>;
 
@@ -248,7 +269,7 @@ export interface GlobalCRUD<
 	 * No data mutation — creates a version snapshot at the target stage.
 	 */
 	transitionStage(
-		params: GlobalTransitionStageParams,
+		params: GlobalTransitionStageParams<TOptions>,
 		context?: CRUDContext,
 	): Promise<TSelect>;
 

@@ -18,6 +18,7 @@ export default {
 	"error.updatesMustBeArray": "updates debe ser un arreglo",
 	"error.versionRequired": "Se requiere version o versionId",
 	"error.conflict": "Conflicto de recursos",
+	"error.preconditionFailed": "Error de precondición",
 	"error.notImplemented": "{{feature}} no está implementado",
 	"error.timeout": "Tiempo de solicitud agotado",
 

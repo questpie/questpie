@@ -5,8 +5,8 @@
  */
 
 import { parseRfc3339Instant } from "#questpie/shared/temporal.js";
-import { getTxid, QUESTPIE_TXID_HEADER } from "#questpie/shared/txid.js";
 
+import type { ExpectedRevision, Where } from "../../collection/crud/types.js";
 import {
 	introspectCollection,
 	resolveIntrospectionAccess,
@@ -17,28 +17,26 @@ import type { AdapterConfig, AdapterContext } from "../types.js";
 import { resolveContext } from "../utils/context.js";
 import { parseFindOneOptions, parseFindOptions } from "../utils/parsers.js";
 import { parseRouteBody } from "../utils/request.js";
+import { introspectionDeniedError, smartResponse } from "../utils/response.js";
 import {
-	handleError,
-	introspectionDeniedError,
-	smartResponse,
-} from "../utils/response.js";
+	expectedRevisionFromRequest,
+	optimisticErrorResponse as errorResponse,
+	revisionHeaders,
+	txidHeaders,
+} from "./optimistic-concurrency.js";
 
 // ============================================================================
 // Helper
 // ============================================================================
 
-function errorResponse(
-	app: Questpie<any>,
-	error: unknown,
-	request: Request,
-	locale?: string,
-): Response {
-	return handleError(error, { request, app, locale });
-}
-
-function txidHeaders(result: unknown): HeadersInit | undefined {
-	const txid = getTxid(result);
-	return txid ? { [QUESTPIE_TXID_HEADER]: txid } : undefined;
+function hasOptimisticConcurrency(crud: {
+	"~internalState"?: {
+		options?: {
+			optimisticConcurrency?: unknown;
+		};
+	};
+}): boolean {
+	return Boolean(crud?.["~internalState"]?.options?.optimisticConcurrency);
 }
 
 // ============================================================================
@@ -140,7 +138,12 @@ export async function collectionCreate(
 
 	try {
 		const result = await crud.create(body, resolved.appContext);
-		return smartResponse(result, request, 200, txidHeaders(result));
+		return smartResponse(
+			result,
+			request,
+			200,
+			revisionHeaders(result, hasOptimisticConcurrency(crud)),
+		);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -176,7 +179,12 @@ export async function collectionFindOne(
 				resolved.appContext.locale,
 			);
 		}
-		return smartResponse(result, request);
+		return smartResponse(
+			result,
+			request,
+			200,
+			revisionHeaders(result, hasOptimisticConcurrency(crud)),
+		);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -217,11 +225,30 @@ export async function collectionUpdate(
 	}
 
 	try {
+		const optimisticConcurrency = hasOptimisticConcurrency(crud);
+		const payload =
+			optimisticConcurrency && typeof body === "object" && body !== null
+				? (body as { data?: unknown; expectedRevision?: number })
+				: undefined;
+		const expectedRevision = expectedRevisionFromRequest(
+			request,
+			payload?.expectedRevision,
+			optimisticConcurrency,
+		);
 		const result = await crud.updateById(
-			{ id: params.id as any, data: body },
+			{
+				id: params.id,
+				data: payload && Object.hasOwn(payload, "data") ? payload.data : body,
+				...(expectedRevision === undefined ? {} : { expectedRevision }),
+			},
 			resolved.appContext,
 		);
-		return smartResponse(result, request, 200, txidHeaders(result));
+		return smartResponse(
+			result,
+			request,
+			200,
+			revisionHeaders(result, hasOptimisticConcurrency(crud)),
+		);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -247,11 +274,30 @@ export async function collectionRemove(
 	}
 
 	try {
+		const optimisticConcurrency = hasOptimisticConcurrency(crud);
+		const body = optimisticConcurrency
+			? await parseRouteBody(request)
+			: undefined;
+		const expectedRevision = expectedRevisionFromRequest(
+			request,
+			typeof body === "object" && body !== null
+				? (body as { expectedRevision?: number }).expectedRevision
+				: undefined,
+			optimisticConcurrency,
+		);
 		const result = await crud.deleteById(
-			{ id: params.id as any },
+			{
+				id: params.id,
+				...(expectedRevision === undefined ? {} : { expectedRevision }),
+			},
 			resolved.appContext,
 		);
-		return smartResponse({ success: true }, request, 200, txidHeaders(result));
+		return smartResponse(
+			result,
+			request,
+			200,
+			revisionHeaders(result.data, hasOptimisticConcurrency(crud)),
+		);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -287,7 +333,7 @@ export async function collectionVersions(
 
 		const result = await crud.findVersions(
 			{
-				id: params.id as any,
+				id: params.id,
 				...(Number.isFinite(limit) && limit !== undefined
 					? { limit: Math.floor(limit) }
 					: {}),
@@ -338,20 +384,36 @@ export async function collectionRevert(
 	}
 
 	try {
-		const payload = body as { version?: number; versionId?: string };
+		const payload = body as {
+			version?: number;
+			versionId?: string;
+			expectedRevision?: number;
+		};
+		const optimisticConcurrency = hasOptimisticConcurrency(crud);
+		const expectedRevision = expectedRevisionFromRequest(
+			request,
+			payload.expectedRevision,
+			optimisticConcurrency,
+		);
 		const result = await crud.revertToVersion(
 			{
-				id: params.id as any,
+				id: params.id,
 				...(typeof payload.version === "number"
 					? { version: payload.version }
 					: {}),
 				...(typeof payload.versionId === "string"
 					? { versionId: payload.versionId }
 					: {}),
+				...(expectedRevision === undefined ? {} : { expectedRevision }),
 			},
 			resolved.appContext,
 		);
-		return smartResponse(result, request, 200, txidHeaders(result));
+		return smartResponse(
+			result,
+			request,
+			200,
+			revisionHeaders(result, hasOptimisticConcurrency(crud)),
+		);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -392,7 +454,11 @@ export async function collectionTransition(
 	}
 
 	try {
-		const payload = body as { stage?: unknown; scheduledAt?: unknown };
+		const payload = body as {
+			stage?: unknown;
+			scheduledAt?: unknown;
+			expectedRevision?: number;
+		};
 		if (!payload.stage || typeof payload.stage !== "string") {
 			throw ApiError.badRequest(
 				"Missing required field: stage",
@@ -401,10 +467,21 @@ export async function collectionTransition(
 				{ field: "stage" },
 			);
 		}
+		const expectedRevision = expectedRevisionFromRequest(
+			request,
+			payload.expectedRevision,
+			hasOptimisticConcurrency(crud),
+		);
 
-		const opts: { id: string; stage: string; scheduledAt?: Date } = {
+		const opts: {
+			id: string;
+			stage: string;
+			scheduledAt?: Date;
+			expectedRevision?: number;
+		} = {
 			id: params.id,
 			stage: payload.stage,
+			...(expectedRevision === undefined ? {} : { expectedRevision }),
 		};
 
 		if (payload.scheduledAt !== undefined) {
@@ -421,7 +498,12 @@ export async function collectionTransition(
 		}
 
 		const result = await crud.transitionStage(opts, resolved.appContext);
-		return smartResponse(result, request);
+		return smartResponse(
+			result,
+			request,
+			200,
+			revisionHeaders(result, hasOptimisticConcurrency(crud)),
+		);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -447,11 +529,30 @@ export async function collectionRestore(
 	}
 
 	try {
+		const optimisticConcurrency = hasOptimisticConcurrency(crud);
+		const body = optimisticConcurrency
+			? await parseRouteBody(request)
+			: undefined;
+		const expectedRevision = expectedRevisionFromRequest(
+			request,
+			typeof body === "object" && body !== null
+				? (body as { expectedRevision?: number }).expectedRevision
+				: undefined,
+			optimisticConcurrency,
+		);
 		const result = await crud.restoreById(
-			{ id: params.id as any },
+			{
+				id: params.id,
+				...(expectedRevision === undefined ? {} : { expectedRevision }),
+			},
 			resolved.appContext,
 		);
-		return smartResponse(result, request, 200, txidHeaders(result));
+		return smartResponse(
+			result,
+			request,
+			200,
+			revisionHeaders(result, hasOptimisticConcurrency(crud)),
+		);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
 	}
@@ -477,8 +578,22 @@ export async function collectionPurge(
 	}
 
 	try {
+		const optimisticConcurrency = hasOptimisticConcurrency(crud);
+		const body = optimisticConcurrency
+			? await parseRouteBody(request)
+			: undefined;
+		const expectedRevision = expectedRevisionFromRequest(
+			request,
+			typeof body === "object" && body !== null
+				? (body as { expectedRevision?: number }).expectedRevision
+				: undefined,
+			optimisticConcurrency,
+		);
 		const result = await crud.purgeById(
-			{ id: params.id as any },
+			{
+				id: params.id,
+				...(expectedRevision === undefined ? {} : { expectedRevision }),
+			},
 			resolved.appContext,
 		);
 		return smartResponse(result, request, 200, txidHeaders(result));
@@ -522,8 +637,19 @@ export async function collectionUpdateMany(
 	}
 
 	try {
-		const { where, data } = body as { where: any; data: any };
-		const result = await crud.updateMany({ where, data }, resolved.appContext);
+		const { where, data, expectedRevisions } = body as {
+			where: Where;
+			data: Record<string, unknown>;
+			expectedRevisions?: Array<ExpectedRevision<string>>;
+		};
+		const result = await crud.updateMany(
+			{
+				where,
+				data,
+				...(expectedRevisions === undefined ? {} : { expectedRevisions }),
+			},
+			resolved.appContext,
+		);
 		return smartResponse(result, request, 200, txidHeaders(result));
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
@@ -608,8 +734,17 @@ export async function collectionDeleteMany(
 	}
 
 	try {
-		const { where } = body as { where: any };
-		const result = await crud.deleteMany({ where }, resolved.appContext);
+		const { where, expectedRevisions } = body as {
+			where: Where;
+			expectedRevisions?: Array<ExpectedRevision<string>>;
+		};
+		const result = await crud.deleteMany(
+			{
+				where,
+				...(expectedRevisions === undefined ? {} : { expectedRevisions }),
+			},
+			resolved.appContext,
+		);
 		return smartResponse(result, request, 200, txidHeaders(result));
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);

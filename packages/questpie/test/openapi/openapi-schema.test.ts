@@ -81,6 +81,93 @@ describe("OpenAPI schema generation", () => {
 			expect(baseSchema.properties?.updatedAt).toBeDefined();
 		});
 
+		it("documents required optimistic-concurrency inputs on every CRUD mutation", async () => {
+			const tags = collection("tags")
+				.fields(({ f }) => ({
+					name: f.text().required(),
+				}))
+				.options({
+					softDelete: true,
+					optimisticConcurrency: true,
+					versioning: { workflow: true },
+				});
+			const settings = global("settings")
+				.fields(({ f }) => ({ title: f.text().required() }))
+				.options({
+					optimisticConcurrency: true,
+					versioning: { workflow: true },
+				});
+			const mockCms = {
+				getCollections: () => ({ tags }),
+				getGlobals: () => ({ settings }),
+			};
+
+			const spec = await generateOpenApiSpec(mockCms as any, undefined, {
+				info: { title: "Test API", version: "1.0.0" },
+				basePath: "/",
+			});
+			const updateSchema = spec.components?.schemas?.TagsUpdate as any;
+			expect(updateSchema.properties.revision).toBeUndefined();
+			const documentSchema = spec.components?.schemas?.TagsDocument as any;
+			expect(documentSchema.allOf[0].properties.revision).toMatchObject({
+				type: "integer",
+				minimum: 1,
+			});
+
+			const collectionPath = spec.paths?.["//tags"] as any;
+			const byId = spec.paths?.["//tags/{id}"] as any;
+			expect(collectionPath.post.responses["200"].headers.ETag).toBeDefined();
+			const updateBody =
+				byId.patch.requestBody.content["application/json"].schema;
+			expect(updateBody.required).toEqual(["data"]);
+			expect(byId.delete.requestBody.required).toBe(false);
+			expect(
+				byId.delete.responses["200"].content["application/json"].schema
+					.properties.data.$ref,
+			).toBe("#/components/schemas/TagsDocument");
+			expect(byId.delete.responses["200"].headers.ETag).toBeDefined();
+			expect(byId.get.responses["200"].headers.ETag).toBeDefined();
+			expect(byId.patch.responses["200"].headers.ETag).toBeDefined();
+			expect(byId.patch.responses["412"]).toBeDefined();
+			expect(byId.patch.responses["409"]).toBeDefined();
+
+			const bulkUpdate = spec.paths?.["//tags"]?.patch as any;
+			expect(
+				bulkUpdate.requestBody.content["application/json"].schema.required,
+			).toEqual(["where", "data", "expectedRevisions"]);
+			const updateBatch = spec.paths?.["//tags/update-batch"]?.post as any;
+			expect(updateBatch).toBeDefined();
+			const deleteMany = spec.paths?.["//tags/delete-many"]?.post as any;
+			expect(
+				deleteMany.requestBody.content["application/json"].schema.required,
+			).toEqual(["where", "expectedRevisions"]);
+			const restore = spec.paths?.["//tags/{id}/restore"]?.post as any;
+			expect(restore.requestBody.required).toBe(false);
+			expect(restore.responses["200"].headers.ETag).toBeDefined();
+			const purge = spec.paths?.["//tags/{id}/purge"]?.post as any;
+			expect(purge.requestBody.required).toBe(false);
+			expect(purge.responses["409"]).toBeDefined();
+			const revert = spec.paths?.["//tags/{id}/revert"]?.post as any;
+			expect(
+				revert.requestBody.content["application/json"].schema.required,
+			).toBeUndefined();
+			expect(revert.responses["409"]).toBeDefined();
+			expect(revert.responses["200"].headers.ETag).toBeDefined();
+			const transition = spec.paths?.["//tags/{id}/transition"]?.post as any;
+			expect(transition.responses["200"].headers.ETag).toBeDefined();
+
+			const globalPath = spec.paths?.["//globals/settings"] as any;
+			expect(globalPath.get.responses["200"].headers.ETag).toBeDefined();
+			expect(globalPath.patch.responses["200"].headers.ETag).toBeDefined();
+			expect(globalPath.patch.responses["412"]).toBeDefined();
+			const globalRevert = spec.paths?.["//globals/settings/revert"] as any;
+			expect(globalRevert.post.responses["200"].headers.ETag).toBeDefined();
+			const globalTransition = spec.paths?.[
+				"//globals/settings/transition"
+			] as any;
+			expect(globalTransition.post.responses["200"].headers.ETag).toBeDefined();
+		});
+
 		it("handles relation fields", async () => {
 			const authors = collection("authors").fields(({ f }) => ({
 				name: f.text().required(),

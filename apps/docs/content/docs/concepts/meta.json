@@ -2,6 +2,7 @@
 	"title": "Concepts",
 	"pages": [
 		"collections",
+		"optimistic-concurrency",
 		"soft-delete-retention",
 		"globals",
 		"fields",

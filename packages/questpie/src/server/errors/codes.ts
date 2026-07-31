@@ -9,6 +9,7 @@ export const CMS_ERROR_CODES = {
 	FORBIDDEN: "FORBIDDEN", // 403 - No permission
 	NOT_FOUND: "NOT_FOUND", // 404 - Resource not found
 	CONFLICT: "CONFLICT", // 409 - Resource conflict
+	PRECONDITION_FAILED: "PRECONDITION_FAILED", // 412 - Conditional request failed
 	UNPROCESSABLE_CONTENT: "UNPROCESSABLE_CONTENT", // 422 - Valid but can't process
 
 	// Server errors (5xx)
@@ -32,6 +33,7 @@ export const ERROR_CODE_TO_HTTP_STATUS: Record<ApiErrorCode, number> = {
 	FORBIDDEN: 403,
 	NOT_FOUND: 404,
 	CONFLICT: 409,
+	PRECONDITION_FAILED: 412,
 	UNPROCESSABLE_CONTENT: 422,
 	INTERNAL_SERVER_ERROR: 500,
 	NOT_IMPLEMENTED: 501,

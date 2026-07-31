@@ -18,6 +18,7 @@ export default {
 	"error.updatesMustBeArray": "updates must be an array",
 	"error.versionRequired": "Version or versionId required",
 	"error.conflict": "Resource conflict",
+	"error.preconditionFailed": "Precondition failed",
 	"error.notImplemented": "{{feature}} is not implemented",
 	"error.timeout": "Request timeout",
 

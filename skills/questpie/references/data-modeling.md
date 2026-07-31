@@ -58,6 +58,29 @@ export default collection("posts")
 	.options({ timestamps: true, versioning: true });
 ```
 
+Add `optimisticConcurrency: true` when generated mutations must reject stale
+writes. QUESTPIE adds a framework-owned, read-only `revision`; never declare it
+as a field. Collaborative owners enable this automatically. Version history is
+a separate snapshot log: `versionNumber` is the history sequence and
+`sourceRevision` records the canonical row revision captured by the snapshot.
+
+```ts
+.options({
+	optimisticConcurrency: true,
+	versioning: {
+		maxVersions: 50,
+		collaborativeSnapshots: "checkpoint",
+	},
+})
+```
+
+Retention never resets the live `revision`. Reverting an old snapshot writes a
+new canonical revision rather than restoring the old clock. Collaborative
+builders normalize enabled versioning to checkpoint policy: CRDT projection
+and replace cuts do not snapshot automatically. Use an intentional empty
+generated update with the current `expectedRevision` when a projected content
+cut should become a version snapshot.
+
 ### Builder Chain Methods
 
 | Method                                          | Purpose                                 |

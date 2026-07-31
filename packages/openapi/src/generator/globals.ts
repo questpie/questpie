@@ -12,6 +12,10 @@ import {
 	buildFieldDefinitionSchemas,
 } from "./field-schema-flags.js";
 import {
+	ifMatchParameter,
+	withRevisionEtag,
+} from "./optimistic-concurrency.js";
+import {
 	jsonRequestBody,
 	jsonResponse,
 	ref,
@@ -41,6 +45,7 @@ export function generateGlobalPaths(
 
 		const state = (global as any).state;
 		if (!state) continue;
+		const optimisticConcurrency = state.options?.optimisticConcurrency === true;
 
 		const tag = `Globals: ${name}`;
 		tags.push({ name: tag, description: `Operations for ${name} global` });
@@ -75,6 +80,9 @@ export function generateGlobalPaths(
 				description: `Update schema for ${name} global`,
 			};
 		}
+		if (optimisticConcurrency) {
+			omitObjectProperty(schemas[updateSchemaName], "revision");
+		}
 
 		// Value schema (response) — includes id + timestamps
 		const properties: Record<string, unknown> = {
@@ -84,9 +92,16 @@ export function generateGlobalPaths(
 			properties.createdAt = { type: "string", format: "date-time" };
 			properties.updatedAt = { type: "string", format: "date-time" };
 		}
+		if (optimisticConcurrency) {
+			properties.revision = { type: "integer", minimum: 1 };
+		}
 		schemas[valueSchemaName] = {
 			allOf: [
-				{ type: "object", properties, required: ["id"] },
+				{
+					type: "object",
+					properties,
+					required: ["id", ...(optimisticConcurrency ? ["revision"] : [])],
+				},
 				fieldDefinitionSchema?.response ?? ref(updateSchemaName),
 			],
 			description: `${name} global value`,
@@ -110,18 +125,39 @@ export function generateGlobalPaths(
 					},
 					stageQueryParameter(),
 				],
-				responses: jsonResponse(
-					ref(valueSchemaName),
-					`Current value of ${name} global`,
+				responses: withRevisionEtag(
+					jsonResponse(ref(valueSchemaName), `Current value of ${name} global`),
+					optimisticConcurrency,
 				),
 			},
 			patch: {
 				operationId: `global_${name}_update`,
 				summary: `Update ${name} global`,
 				tags: [tag],
-				parameters: [stageQueryParameter()],
-				requestBody: jsonRequestBody(ref(updateSchemaName)),
-				responses: jsonResponse(ref(valueSchemaName), `Updated ${name} global`),
+				parameters: [
+					stageQueryParameter(),
+					...(optimisticConcurrency ? [ifMatchParameter()] : []),
+				],
+				requestBody: jsonRequestBody(
+					optimisticConcurrency
+						? {
+								type: "object",
+								required: ["data"],
+								properties: {
+									data: ref(updateSchemaName),
+									expectedRevision: expectedRevisionSchema(),
+								},
+							}
+						: ref(updateSchemaName),
+				),
+				responses: withOptimisticConcurrencyConflict(
+					withRevisionEtag(
+						jsonResponse(ref(valueSchemaName), `Updated ${name} global`),
+						optimisticConcurrency,
+					),
+					optimisticConcurrency,
+					true,
+				),
 			},
 		};
 
@@ -173,6 +209,7 @@ export function generateGlobalPaths(
 								id: { type: "string" },
 								versionId: { type: "string" },
 								versionNumber: { type: "number" },
+								sourceRevision: { type: ["number", "null"] },
 								versionOperation: { type: "string" },
 								versionUserId: { type: ["string", "null"] },
 								versionCreatedAt: { type: "string", format: "date-time" },
@@ -190,18 +227,28 @@ export function generateGlobalPaths(
 				operationId: `global_${name}_revertToVersion`,
 				summary: `Revert ${name} global to a version`,
 				tags: [tag],
-				parameters: [stageQueryParameter()],
+				parameters: [
+					stageQueryParameter(),
+					...(optimisticConcurrency ? [ifMatchParameter()] : []),
+				],
 				requestBody: jsonRequestBody({
 					type: "object",
 					properties: {
 						id: { type: "string" },
 						version: { type: "number" },
 						versionId: { type: "string" },
+						...(optimisticConcurrency
+							? { expectedRevision: expectedRevisionSchema() }
+							: {}),
 					},
 				}),
-				responses: jsonResponse(
-					ref(valueSchemaName),
-					`Reverted ${name} global value`,
+				responses: withOptimisticConcurrencyConflict(
+					withRevisionEtag(
+						jsonResponse(ref(valueSchemaName), `Reverted ${name} global value`),
+						optimisticConcurrency,
+					),
+					optimisticConcurrency,
+					true,
 				),
 			},
 		};
@@ -218,6 +265,7 @@ export function generateGlobalPaths(
 					operationId: `global_${name}_transition`,
 					summary: `Transition ${name} global workflow stage`,
 					tags: [tag],
+					parameters: optimisticConcurrency ? [ifMatchParameter()] : [],
 					requestBody: jsonRequestBody({
 						type: "object",
 						required: ["stage"],
@@ -226,11 +274,21 @@ export function generateGlobalPaths(
 								type: "string",
 								description: "Target workflow stage",
 							},
+							...(optimisticConcurrency
+								? { expectedRevision: expectedRevisionSchema() }
+								: {}),
 						},
 					}),
-					responses: jsonResponse(
-						ref(valueSchemaName),
-						`Transitioned ${name} global value`,
+					responses: withOptimisticConcurrencyConflict(
+						withRevisionEtag(
+							jsonResponse(
+								ref(valueSchemaName),
+								`Transitioned ${name} global value`,
+							),
+							optimisticConcurrency,
+						),
+						optimisticConcurrency,
+						true,
 					),
 				},
 			};
@@ -238,4 +296,54 @@ export function generateGlobalPaths(
 	}
 
 	return { paths, schemas, tags };
+}
+
+function expectedRevisionSchema() {
+	return {
+		type: "integer",
+		minimum: 0,
+		description:
+			"Canonical revision read before the mutation; may instead be supplied as If-Match",
+	};
+}
+
+function withOptimisticConcurrencyConflict(
+	responses: Record<string, unknown>,
+	enabled: boolean,
+	ifMatch = false,
+) {
+	if (!enabled) return responses;
+	return {
+		...responses,
+		"409": {
+			description: "Missing or stale canonical revision",
+			content: {
+				"application/json": { schema: ref("ErrorResponse") },
+			},
+		},
+		...(ifMatch
+			? {
+					"412": {
+						description: "If-Match precondition failed",
+						content: {
+							"application/json": { schema: ref("ErrorResponse") },
+						},
+					},
+				}
+			: {}),
+	};
+}
+
+function omitObjectProperty(schema: unknown, field: string): void {
+	if (!schema || typeof schema !== "object") return;
+	const objectSchema = schema as {
+		properties?: Record<string, unknown>;
+		required?: string[];
+	};
+	if (objectSchema.properties) delete objectSchema.properties[field];
+	if (objectSchema.required) {
+		objectSchema.required = objectSchema.required.filter(
+			(requiredField) => requiredField !== field,
+		);
+	}
 }

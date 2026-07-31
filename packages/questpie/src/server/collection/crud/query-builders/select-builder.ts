@@ -21,6 +21,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { CollectionBuilderState } from "#questpie/server/collection/builder/types.js";
 import { buildLocalizedFieldRef } from "#questpie/server/collection/crud/query-builders/where-builder.js";
+import { getColumn } from "#questpie/server/collection/crud/shared/field-resolver.js";
 import {
 	I18N_CURRENT_PREFIX,
 	I18N_FALLBACK_PREFIX,
@@ -221,6 +222,13 @@ export function buildSelectObject(
 	) {
 		select.deletedAt = (table as any).deletedAt;
 	}
+	if (
+		state.options.optimisticConcurrency &&
+		includedFields.has("revision") &&
+		getColumn(table, "revision")
+	) {
+		select.revision = getColumn(table, "revision");
+	}
 
 	// Extras (custom SQL fields)
 	if (extras) {
@@ -286,6 +294,7 @@ export function buildVersionsSelectObject(
 		versionId: versionsTbl.versionId,
 		id: versionsTbl.id,
 		versionNumber: versionsTbl.versionNumber,
+		sourceRevision: versionsTbl.sourceRevision,
 		versionOperation: versionsTbl.versionOperation,
 		versionUserId: versionsTbl.versionUserId,
 		versionCreatedAt: versionsTbl.versionCreatedAt,
@@ -413,6 +422,7 @@ export function getIncludedFields(
 		"createdAt",
 		"updatedAt",
 		"deletedAt",
+		"revision",
 	];
 
 	if (!columns) {
