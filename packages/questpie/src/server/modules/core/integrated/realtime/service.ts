@@ -1,6 +1,14 @@
 import { asc, desc, eq, gt, lt, sql } from "drizzle-orm";
 
 import {
+	opaqueChannelAuthoritySubject,
+	resolveChannelAuthoritySubject,
+} from "#questpie/server/channels/authority.js";
+import type {
+	ChannelAuthorityRevocation,
+	ChannelAuthorityRevocationReceipt,
+} from "#questpie/server/channels/service.js";
+import {
 	getCurrentTransaction,
 	withTransaction,
 } from "#questpie/server/collection/crud/shared/transaction.js";
@@ -9,12 +17,14 @@ import type { LoggerAdapter } from "#questpie/server/modules/core/integrated/log
 
 import { CoreNoticeRouter } from "../collaboration/notice-router.js";
 import { PgNotifyChangeBroker } from "./adapters/pg-notify.js";
+import { ChannelAuthorityFenceStore } from "./channel-authority-fence.js";
 import {
 	type AppendChannelEventInput,
 	type AppendChannelEventOptions,
 	ChannelEventLedger,
 	type ChannelEventReceipt,
 	type ChannelReplayPage,
+	hashResolvedChannel,
 	type LocalChannelSubscriptionInput,
 } from "./channel-event-ledger.js";
 import {
@@ -50,6 +60,8 @@ import type {
 	ClientSink,
 	ClientTransport,
 	ClientTransportConfig,
+	ClientUserAuthInput,
+	ClientUserAuthResponse,
 	EdgeSessionInput,
 	OrderedChannelDelivery,
 	SinkWriteResult,
@@ -120,9 +132,13 @@ export class RealtimeService {
 	private nextRetentionCleanupAt = 0;
 	private retentionCleanupInProgress = false;
 	private readonly channelEventLedger: ChannelEventLedger;
+	private readonly authorityFences: ChannelAuthorityFenceStore;
 	private readonly channelPresenceRegistry: SseChannelPresenceRegistry;
 	private readonly topologyCoordinator: RealtimeTopologyCoordinator;
 	private channelPollTimer: ReturnType<typeof setInterval> | null = null;
+	private localChannelSubscriptionCount = 0;
+	private unsubscribeChannelNotices?: () => Promise<void>;
+	private channelNoticeStartPromise: Promise<void> | null = null;
 	private nextChannelCleanupAt = 0;
 	private readonly observability: RealtimeObservability;
 
@@ -179,9 +195,10 @@ export class RealtimeService {
 			this.clientTransport,
 			config.channelEvents,
 			this.logger,
-			() => this.initialize(),
+			() => (this.clientTransport ? this.initialize() : Promise.resolve()),
 			this.observability,
 		);
+		this.authorityFences = new ChannelAuthorityFenceStore(this.db);
 		this.channelPresenceRegistry = new SseChannelPresenceRegistry(
 			this.db,
 			config.channelPresence,
@@ -423,6 +440,17 @@ export class RealtimeService {
 							);
 						return;
 					}
+					if (wake.kind === "channel-authority-maybe-advanced") {
+						void this.channelEventLedger
+							.drain(wake.channelHash)
+							.catch((error) =>
+								this.reportTransportFailure(
+									"[Realtime] Channel authority reconciliation failed",
+									error,
+								),
+							);
+						return;
+					}
 					this.drainOrDeferUntilStarted(
 						wake.reason === "reconnect" ? "reconnect" : "broker",
 					);
@@ -529,8 +557,8 @@ export class RealtimeService {
 	async getClientTransportConfig(
 		input: ClientConfigInput,
 	): Promise<ClientTransportConfig> {
-		await this.initialize();
 		if (!this.clientTransport) return { transport: "sse" };
+		await this.initialize();
 		return this.clientTransport.getClientConfig(input);
 	}
 
@@ -609,6 +637,115 @@ export class RealtimeService {
 		}
 	}
 
+	/**
+	 * Optimistically evaluate policy and encode one side-effect-free provider
+	 * grant, then publish it only when the expected subject generation still
+	 * matches. Provider I/O is never serialized under a database lock.
+	 */
+	async generateAuthorizedClientAuth(
+		input: Omit<ClientAuthInput, "presence"> & { scope: "channel" },
+		authorize: () => Promise<{
+			presence?: ClientAuthInput["presence"];
+		}>,
+	): Promise<ClientAuthResponse> {
+		await this.initialize();
+		if (
+			!this.clientTransport ||
+			this.clientTransport.channelDeliveryScope !== "shared-provider"
+		) {
+			throw new Error("Realtime provider auth is not configured");
+		}
+		const clientTransport = this.clientTransport;
+		if (clientTransport.channelGrantMode !== "stateless-signed-grant") {
+			throw new Error(
+				"Shared provider does not support stateless signed channel grants",
+			);
+		}
+		const grant = async () => {
+			const authorization = await authorize();
+			return clientTransport.generateAuth({
+				...input,
+				...(authorization.presence ? { presence: authorization.presence } : {}),
+			});
+		};
+		try {
+			const authoritySubject = resolveChannelAuthoritySubject({
+				principal: input.principal,
+			});
+			if (!authoritySubject) {
+				const auth = await grant();
+				this.observe({
+					type: "channel.security",
+					verb: "grant",
+					outcome: "allowed",
+					reason: "allowed",
+				});
+				return auth;
+			}
+			const subject = opaqueChannelAuthoritySubject(authoritySubject);
+			const channelHash = hashResolvedChannel(input.channel);
+			await this.authorityFences.ensure({ channelHash, subject });
+			const generation = await this.authorityFences.read({
+				channelHash,
+				subject,
+			});
+			const auth = await grant();
+			const admission = await this.authorityFences.admitExpected(
+				{ channelHash, subject, expectedGeneration: generation },
+				{ publish: () => undefined },
+			);
+			if (!admission.admitted) {
+				throw new Error("Channel authority changed during provider grant");
+			}
+			this.observe({
+				type: "channel.security",
+				verb: "grant",
+				outcome: "allowed",
+				reason: "allowed",
+			});
+			return auth;
+		} catch (error) {
+			this.observe({
+				type: "channel.security",
+				verb: "grant",
+				outcome: "denied",
+				reason: "access_denied",
+			});
+			throw error;
+		}
+	}
+
+	async generateClientUserAuth(
+		input: ClientUserAuthInput,
+	): Promise<ClientUserAuthResponse> {
+		await this.initialize();
+		if (
+			!this.clientTransport ||
+			this.clientTransport.channelDeliveryScope !== "shared-provider" ||
+			!this.clientTransport.generateUserAuth
+		) {
+			throw new Error("Realtime provider user auth is not configured");
+		}
+		try {
+			const auth = await this.clientTransport.generateUserAuth(input);
+			this.observe({
+				type: "channel.security",
+				verb: "grant",
+				outcome: "allowed",
+				reason: "allowed",
+			});
+			return auth;
+		} catch (error) {
+			this.observe({
+				type: "channel.security",
+				verb: "grant",
+				outcome: "denied",
+				reason: "access_denied",
+			});
+			throw error;
+		}
+	}
+
 	async publishChannel(
 		input: OrderedChannelDelivery,
 	): Promise<SinkWriteResult> {
@@ -631,11 +768,68 @@ export class RealtimeService {
 		return receipt;
 	}
 
+	async revokeChannelAuthority(
+		input: ChannelAuthorityRevocation,
+		options: AppendChannelEventOptions = {},
+	): Promise<ChannelAuthorityRevocationReceipt> {
+		if (this.clientTransport) await this.initialize();
+		const subject = opaqueChannelAuthoritySubject(input.subject);
+		return this.channelEventLedger.revokeAuthority(
+			{
+				channel: input.channel,
+				subject,
+				transportSubject: input.subject,
+				idempotencyKey: input.idempotencyKey,
+			},
+			options,
+		);
+	}
+
 	async subscribeChannel(
-		input: LocalChannelSubscriptionInput,
-	): Promise<() => void> {
-		await this.initialize();
-		return this.channelEventLedger.subscribeLocal(input);
+		input: Omit<LocalChannelSubscriptionInput, "stage"> & {
+			presence?: RegisterChannelPresenceInput;
+		},
+	): Promise<() => Promise<void>> {
+		if (this.clientTransport) await this.initialize();
+		const { presence, ...subscription } = input;
+		let counted = false;
+		let finalized = false;
+		const finalizeLocalSubscription = async () => {
+			if (finalized) return;
+			finalized = true;
+			if (counted) {
+				this.localChannelSubscriptionCount = Math.max(
+					0,
+					this.localChannelSubscriptionCount - 1,
+				);
+			}
+			await this.stopIdleLocalChannelReconciliation();
+		};
+		const release = await this.channelEventLedger.subscribeLocal({
+			...subscription,
+			onRelease: finalizeLocalSubscription,
+			...(presence
+				? { stage: this.channelPresenceRegistry.stage(presence) }
+				: {}),
+		});
+		if (this.clientTransport) return release;
+		if (
+			!this.channelEventLedger.hasLocalSubscription(subscription.subscriptionId)
+		) {
+			return release;
+		}
+		counted = true;
+		this.localChannelSubscriptionCount += 1;
+		try {
+			await this.ensureLocalChannelReconciliation();
+		} catch (error) {
+			await release();
+			throw error;
+		}
+		return async () => {
+			await release();
+			await finalizeLocalSubscription();
+		};
 	}
 
 	/** Read a bounded page after route-level channel authorization. */
@@ -649,7 +843,7 @@ export class RealtimeService {
 	async registerChannelPresence(
 		input: RegisterChannelPresenceInput,
 	): Promise<() => Promise<void>> {
-		await this.initialize();
+		if (this.clientTransport) await this.initialize();
 		return this.channelPresenceRegistry.register(input);
 	}
 
@@ -679,9 +873,9 @@ export class RealtimeService {
 
 	private startChannelPollTimer(): void {
 		if (
-			!this.clientTransport ||
 			this.pollIntervalMs <= 0 ||
-			this.channelPollTimer
+			this.channelPollTimer ||
+			(!this.clientTransport && this.localChannelSubscriptionCount === 0)
 		) {
 			return;
 		}
@@ -694,6 +888,78 @@ export class RealtimeService {
 			});
 			this.cleanupChannelEventsSafely();
 		}, this.pollIntervalMs);
+	}
+
+	private async ensureLocalChannelReconciliation(): Promise<void> {
+		if (this.clientTransport) return;
+		if (this.unsubscribeChannelNotices) {
+			this.startChannelPollTimer();
+			return;
+		}
+		if (!this.channelNoticeStartPromise) {
+			this.channelNoticeStartPromise = (async () => {
+				this.unsubscribeChannelNotices = await this.noticeRouter.subscribe({
+					kind: "realtime",
+					onNotice: ({ wake }) => {
+						if (
+							wake.kind !== "channel-events-maybe-advanced" &&
+							wake.kind !== "channel-authority-maybe-advanced"
+						) {
+							return;
+						}
+						void this.channelEventLedger
+							.drain(wake.channelHash)
+							.catch((error) =>
+								this.reportTransportFailure(
+									"[Realtime] Local channel reconciliation failed",
+									error,
+								),
+							);
+					},
+					onError: (error) =>
+						this.reportTransportFailure(
+							"[Realtime] Local channel notice failed",
+							error,
+						),
+					onStateChange: (state) => {
+						if (state !== "connected") return;
+						void this.channelEventLedger
+							.drain()
+							.catch((error) =>
+								this.reportTransportFailure(
+									"[Realtime] Local channel reconnect failed",
+									error,
+								),
+							);
+					},
+					onOverflow: () => {
+						void this.channelEventLedger
+							.drain()
+							.catch((error) =>
+								this.reportTransportFailure(
+									"[Realtime] Local channel overflow failed",
+									error,
+								),
+							);
+					},
+				});
+			})().finally(() => {
+				this.channelNoticeStartPromise = null;
+			});
+		}
+		await this.channelNoticeStartPromise;
+		this.startChannelPollTimer();
+	}
+
+	private async stopIdleLocalChannelReconciliation(): Promise<void> {
+		if (this.clientTransport || this.localChannelSubscriptionCount > 0) return;
+		if (this.channelPollTimer) {
+			clearInterval(this.channelPollTimer);
+			this.channelPollTimer = null;
+		}
+		if (this.channelNoticeStartPromise) await this.channelNoticeStartPromise;
+		await this.unsubscribeChannelNotices?.();
+		this.unsubscribeChannelNotices = undefined;
 	}
 
 	private cleanupChannelEventsSafely(force = false): void {
@@ -924,17 +1190,19 @@ export class RealtimeService {
 			.orderBy(asc(questpieRealtimeLogTable.seq))
 			.limit(this.batchSize);
 
-		return rows.map((row: any) => ({
-			seq: Number(row.seq),
-			...(row.txid == null ? {} : { txid: String(row.txid) }),
-			resourceType: row.resourceType as RealtimeResourceType,
-			resource: row.resource,
-			operation: row.operation as RealtimeOperation,
-			recordId: row.recordId ?? null,
-			locale: row.locale ?? null,
-			payload: (row.payload ?? {}) as RealtimeChangePayload,
-			createdAt: row.createdAt,
-		}));
+		return rows
+			.map((row: any) => ({
+				seq: Number(row.seq),
+				...(row.txid == null ? {} : { txid: String(row.txid) }),
+				resourceType: row.resourceType as RealtimeResourceType,
+				resource: row.resource,
+				operation: row.operation as RealtimeOperation,
+				recordId: row.recordId ?? null,
+				locale: row.locale ?? null,
+				payload: (row.payload ?? {}) as RealtimeChangePayload,
+				createdAt: row.createdAt,
+			}))
+			.filter((event) => event.seq > seq);
 	}
 
 	private async ensureStarted(): Promise<void> {
@@ -986,7 +1254,11 @@ export class RealtimeService {
 			!this.startPromise &&
 			!this.publisherStarted &&
 			!this.publisherStartPromise &&
-			!this.unsubscribeNotices
+			!this.unsubscribeNotices &&
+			!this.unsubscribeChannelNotices &&
+			!this.channelNoticeStartPromise &&
+			!this.channelPollTimer &&
+			this.localChannelSubscriptionCount === 0
 		) {
 			return;
 		}
@@ -1009,6 +1281,13 @@ export class RealtimeService {
 				);
 			}
 		}
+		if (this.channelNoticeStartPromise) {
+			try {
+				await this.channelNoticeStartPromise;
+			} catch {
+				// channel-only notice startup already failed, continue cleanup
+			}
+		}
 
 		this.started = false;
 
@@ -1021,7 +1300,10 @@ export class RealtimeService {
 			this.channelPollTimer = null;
 		}
 
-		this.channelEventLedger.destroy();
+		await this.channelEventLedger.destroy();
+		await this.unsubscribeChannelNotices?.();
+		this.unsubscribeChannelNotices = undefined;
+		this.localChannelSubscriptionCount = 0;
 		await this.unsubscribeNotices?.();
 		this.unsubscribeNotices = undefined;
 		await this.clientTransport?.stop();

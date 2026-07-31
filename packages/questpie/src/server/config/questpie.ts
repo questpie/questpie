@@ -47,6 +47,8 @@ import type { ObservabilityService } from "#questpie/server/modules/core/integra
 import { questpieQueueDispatchTable } from "#questpie/server/modules/core/integrated/queue/dispatch-table.js";
 import type { QueueClient } from "#questpie/server/modules/core/integrated/queue/types.js";
 import {
+	questpieChannelAuthorityFenceTable,
+	questpieChannelAuthorityRevocationTable,
 	questpieChannelDispatchTable,
 	questpieChannelEventTable,
 	questpieChannelHeadTable,
@@ -1232,6 +1234,10 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		schema.questpie_channel_head = questpieChannelHeadTable;
 		schema.questpie_channel_event = questpieChannelEventTable;
 		schema.questpie_channel_dispatch = questpieChannelDispatchTable;
+		schema.questpie_channel_authority_fence =
+			questpieChannelAuthorityFenceTable;
+		schema.questpie_channel_authority_revocation =
+			questpieChannelAuthorityRevocationTable;
 		schema.questpie_channel_presence = questpieChannelPresenceTable;
 		schema.questpie_realtime_topology = questpieRealtimeTopologyTable;
 

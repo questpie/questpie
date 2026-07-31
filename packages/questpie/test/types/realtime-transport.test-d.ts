@@ -26,6 +26,15 @@ type _sharedTransportCanPublishSharedChannels = Expect<
 	>
 >;
 
+type _sharedUserAuthenticationRemainsAnOptionalCapability = Expect<
+	Equal<
+		{} extends Pick<SharedProviderClientTransport, "generateUserAuth">
+			? true
+			: false,
+		true
+	>
+>;
+
 declare const sink: ClientSink;
 declare const wake: ChangeWake;
 

@@ -8,6 +8,7 @@ import {
 	type ChangeBroker,
 	type ChangeBrokerState,
 	type ChangeWake,
+	type ClientAuthorityRevocationInput,
 	type ClientConfigInput,
 	type ClientSink,
 	type ClientTransportConfig,
@@ -116,8 +117,13 @@ function principalIdentity(principal: Principal | null): string {
 
 function stableUserIdentity(principal: Principal): string {
 	if (principal.kind === "system") return "system";
-	if (principal.kind === "oauth") return `oauth:${principal.user.id}`;
 	return `user:${principal.user.id}`;
+}
+
+function authoritySubjectIdentity(
+	subject: ClientAuthorityRevocationInput["subject"],
+): string {
+	return `${subject.kind}:${subject.id}`;
 }
 
 function byteLength(value: unknown): number {
@@ -127,6 +133,9 @@ function byteLength(value: unknown): number {
 function wakeKey(wake: ChangeWake): string {
 	if (wake.kind === "outbox-maybe-advanced") return wake.kind;
 	if (wake.kind === "channel-events-maybe-advanced") {
+		return `${wake.kind}:${wake.channelHash ?? "*"}`;
+	}
+	if (wake.kind === "channel-authority-maybe-advanced") {
 		return `${wake.kind}:${wake.channelHash ?? "*"}`;
 	}
 	if (wake.kind === "crdt") {
@@ -357,6 +366,8 @@ class PusherSessionSink implements ClientSink {
 /** Managed-Pusher edge transport. Live-query writes become private refetch wakes. */
 export class PusherClientTransport implements SharedProviderClientTransport {
 	readonly channelDeliveryScope = "shared-provider" as const;
+	readonly channelGrantMode = "stateless-signed-grant" as const;
+	readonly authorityRevocationScope = "principal-connections" as const;
 
 	private onError: (error: unknown) => void = () => {};
 	private readonly sessions = new Map<string, PusherSession>();
@@ -508,9 +519,12 @@ export class PusherClientTransport implements SharedProviderClientTransport {
 
 	async generateUserAuth(input: {
 		socketId: string;
-		principal: Principal;
+		principal: Principal | null;
 	}): Promise<PusherUserAuthResponse> {
 		assertSocketId(input.socketId);
+		if (!input.principal || input.principal.kind === "system") {
+			throw new Error("Realtime user authentication requires a principal");
+		}
 		const id = this.opaquePrincipalId(input.principal);
 		if (this.revokedPrincipalIds.has(id)) {
 			throw new Error("Realtime principal is revoked");
@@ -571,8 +585,33 @@ export class PusherClientTransport implements SharedProviderClientTransport {
 	}
 
 	async revokePrincipal(principal: Principal): Promise<void> {
-		const id = this.opaquePrincipalId(principal);
+		await this.revokeOpaquePrincipal(this.opaquePrincipalId(principal));
+	}
+
+	async revokeAuthority(input: ClientAuthorityRevocationInput): Promise<void> {
+		this.validateAuthorityRevocation(input.subject);
+		const id = createHmac("sha256", this.options.identityKey)
+			.update(authoritySubjectIdentity(input.subject))
+			.digest("hex");
+		await this.terminateOpaquePrincipal(id);
+	}
+
+	validateAuthorityRevocation(
+		subject: ClientAuthorityRevocationInput["subject"],
+	): void {
+		if (subject.kind !== "user") {
+			throw new Error(
+				"Pusher channel authority revocation requires a user subject",
+			);
+		}
+	}
+
+	private async revokeOpaquePrincipal(id: string): Promise<void> {
 		this.revokedPrincipalIds.add(id);
+		await this.terminateOpaquePrincipal(id);
+	}
+
+	private async terminateOpaquePrincipal(id: string): Promise<void> {
 		const sessions = [...this.sessions.entries()]
 			.filter(([, session]) => session.opaquePrincipalId === id)
 			.map(([, session]) => this.sinks.get(session.sessionId))

@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
 	bigint,
 	bigserial,
+	boolean,
 	customType,
 	index,
 	integer,
@@ -118,6 +119,49 @@ export const questpieChannelDispatchTable = pgTable(
 		}),
 		updatedAt: systemTimestamp("updated_at").defaultNow().notNull(),
 	},
+);
+
+/**
+ * Durable authority cut for one opaque subject on one resolved channel.
+ *
+ * This generation is deliberately separate from the public channel event
+ * sequence. Notice brokers may wake reconciliation, but delivery checks this
+ * row while holding a database lock before writing a protected frame.
+ */
+export const questpieChannelAuthorityFenceTable = pgTable(
+	"questpie_channel_authority_fence",
+	{
+		channelHash: text("channel_hash").notNull(),
+		subject: text("subject").notNull(),
+		generation: bigint("generation", { mode: "number" }).default(0).notNull(),
+		appliedGeneration: bigint("applied_generation", { mode: "number" })
+			.default(0)
+			.notNull(),
+		updatedAt: systemTimestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => [
+		primaryKey({ columns: [table.channelHash, table.subject] }),
+		index("idx_channel_authority_fence_updated").on(table.updatedAt),
+	],
+);
+
+/** Durable command identity that makes retried revocations idempotent. */
+export const questpieChannelAuthorityRevocationTable = pgTable(
+	"questpie_channel_authority_revocation",
+	{
+		idempotencyHash: text("idempotency_hash").primaryKey(),
+		channelHash: text("channel_hash").notNull(),
+		subject: text("subject").notNull(),
+		generation: bigint("generation", { mode: "number" }).default(0).notNull(),
+		applied: boolean("applied").default(false).notNull(),
+		createdAt: systemTimestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("idx_channel_authority_revocation_target").on(
+			table.channelHash,
+			table.subject,
+		),
+	],
 );
 
 /** Connection leases for zero-infrastructure, cross-instance channel presence. */
