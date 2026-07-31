@@ -11,7 +11,13 @@ import type {
 	AnyCollectionState,
 	RelationConfig,
 } from "#questpie/server/collection/builder/types.js";
-import { extractAppServices } from "#questpie/server/config/app-context.js";
+import {
+	APP_SERVICE_SCOPE,
+	disposeAppServiceScope,
+	extractAppServices,
+	FRAMEWORK_CONTEXT_KEYS,
+	SERVICE_CONTEXT_VIRTUAL_KEYS,
+} from "#questpie/server/config/app-context.js";
 import { accessModeForPrincipal } from "#questpie/server/config/context.js";
 import type {
 	Principal,
@@ -23,6 +29,7 @@ import {
 	type QuestpieApi,
 } from "#questpie/server/config/integrated/questpie-api.js";
 import { QuestpieSeedsAPI } from "#questpie/server/config/integrated/seeds-api.js";
+import { RequestScope } from "#questpie/server/config/request-scope.js";
 import type {
 	AccessMode,
 	DbCloseFn,
@@ -85,37 +92,6 @@ interface ResolvedServiceDefinition {
 	dispose?: (instance: unknown) => void | Promise<void>;
 	namespace: string | null;
 }
-
-/**
- * Context keys a `appConfig({ context })` resolver should not return.
- * Base request keys (`session`, `db`, …) and per-operation keys (`data`,
- * `input`, …) are set by the framework after the extension merge — a
- * resolver-returned value never lands. `collections`/`globals` would shadow
- * the typed entity APIs in rule/hook contexts — almost certainly a mistake.
- */
-const RESERVED_CONTEXT_KEYS = new Set([
-	"session",
-	"principal",
-	"actor",
-	"db",
-	"locale",
-	"defaultLocale",
-	"localeFallback",
-	"accessMode",
-	"stage",
-	"request",
-	"requestId",
-	"traceId",
-	"data",
-	"input",
-	"original",
-	"operation",
-	"params",
-	"app",
-	"collections",
-	"globals",
-	"~contextExtensions",
-]);
 
 /**
  * Reconstruct a {@link Principal} from the legacy `session` + `accessMode`
@@ -553,16 +529,25 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	private _createServiceContext(options: {
 		requestDeps?: Record<string, any>;
 		stack: string[];
+		scope?: import("#questpie/server/config/request-scope.js").RequestScope;
 	}): ServiceCreateContext {
 		const namespaceProxyCache = new Map<string, Record<string, unknown>>();
-		const { requestDeps, stack } = options;
+		const { requestDeps, scope, stack } = options;
 
 		const resolveFromProxy = (serviceName: string): unknown => {
 			return this._resolveServiceFromProxy(serviceName, {
 				requestDeps,
+				scope,
 				stack,
 			});
 		};
+		const serviceNamesInNamespace = (namespace: string): string[] =>
+			Object.entries(this._serviceDefs)
+				.filter(
+					([name, definition]) =>
+						definition.namespace === namespace && !stack.includes(name),
+				)
+				.map(([name]) => name);
 
 		const getNamespaceProxy = (namespace: string): Record<string, unknown> => {
 			const existing = namespaceProxyCache.get(namespace);
@@ -581,6 +566,21 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 						if (typeof prop !== "string") return false;
 						const def = this._serviceDefs[prop];
 						return !!def && def.namespace === namespace;
+					},
+					ownKeys: () => serviceNamesInNamespace(namespace),
+					getOwnPropertyDescriptor: (_target, prop) => {
+						if (
+							typeof prop !== "string" ||
+							!serviceNamesInNamespace(namespace).includes(prop)
+						) {
+							return undefined;
+						}
+						return {
+							configurable: true,
+							enumerable: true,
+							writable: false,
+							value: undefined,
+						};
 					},
 				},
 			);
@@ -605,11 +605,21 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			app: this,
 			collections: this.collections,
 			globals: this.globals,
+			tables: this.tables,
 			t: this.t,
 		} as Record<string, unknown>;
 
 		return new Proxy(context, {
 			get: (target, prop, receiver) => {
+				if (prop === SERVICE_CONTEXT_VIRTUAL_KEYS) {
+					return [
+						"services",
+						...this._customServiceNamespaces,
+						...Object.entries(this._serviceDefs)
+							.filter(([, definition]) => definition.namespace === null)
+							.map(([name]) => name),
+					];
+				}
 				if (typeof prop !== "string") {
 					return Reflect.get(target, prop, receiver);
 				}
@@ -634,6 +644,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 				return undefined;
 			},
 			has: (target, prop) => {
+				if (prop === SERVICE_CONTEXT_VIRTUAL_KEYS) return true;
 				if (typeof prop !== "string") return false;
 				if (Object.hasOwn(target, prop)) return true;
 				if (prop === "services") return true;
@@ -646,7 +657,11 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 	private _resolveServiceFromProxy(
 		name: string,
-		options: { requestDeps?: Record<string, any>; stack: string[] },
+		options: {
+			requestDeps?: Record<string, any>;
+			scope?: import("#questpie/server/config/request-scope.js").RequestScope;
+			stack: string[];
+		},
 	): unknown {
 		const def = this._serviceDefs[name];
 		if (!def) return undefined;
@@ -660,19 +675,23 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			});
 		}
 
-		return this._createServiceInstance(name, def, {
-			requestDeps: options.requestDeps,
-			stack: options.stack,
-			cacheSingleton: false,
-			lazyTriggered: true,
-			allowAsync: false,
-		});
+		const create = () =>
+			this._createServiceInstance(name, def, {
+				requestDeps: options.requestDeps,
+				scope: options.scope,
+				stack: options.stack,
+				cacheSingleton: false,
+				lazyTriggered: true,
+				allowAsync: false,
+			});
+		return options.scope ? options.scope.getOrCreate(name, create) : create();
 	}
 
 	private _resolveSingletonService(
 		name: string,
 		options: {
 			requestDeps?: Record<string, any>;
+			scope?: import("#questpie/server/config/request-scope.js").RequestScope;
 			stack: string[];
 			lazyTriggered: boolean;
 			allowAsync: boolean;
@@ -699,6 +718,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		def: ResolvedServiceDefinition,
 		options: {
 			requestDeps?: Record<string, any>;
+			scope?: import("#questpie/server/config/request-scope.js").RequestScope;
 			stack: string[];
 			cacheSingleton: boolean;
 			lazyTriggered: boolean;
@@ -717,6 +737,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		try {
 			const context = this._createServiceContext({
 				requestDeps: options.requestDeps,
+				scope: options.scope,
 				stack: options.stack,
 			});
 			const created = def.create(context);
@@ -798,6 +819,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			return scope.getOrCreate(name, () =>
 				this._createServiceInstance(name, def, {
 					requestDeps,
+					scope,
 					stack: [],
 					cacheSingleton: false,
 					lazyTriggered: false,
@@ -808,6 +830,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 		return this._createServiceInstance(name, def, {
 			requestDeps,
+			scope,
 			stack: [],
 			cacheSingleton: false,
 			lazyTriggered: false,
@@ -1012,7 +1035,11 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			principal?: Principal;
 			actor?: import("#questpie/server/modules/core/integrated/crdt/authority.js").AuthorityActor;
 			locale?: string;
+			localeFallback?: boolean;
 			accessMode?: AccessMode;
+			stage?: string;
+			requestId?: string;
+			traceId?: string;
 			db?: any;
 			/** Incoming request (if in HTTP scope) */
 			request?: Request;
@@ -1022,8 +1049,14 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			 * @internal
 			 */
 			"~contextExtensions"?: Record<string, unknown>;
+			[APP_SERVICE_SCOPE]?: RequestScope;
 		} = {},
 	): Promise<RequestContext> {
+		const serviceScope =
+			userCtx[APP_SERVICE_SCOPE] ??
+			(userCtx.request ? new RequestScope() : undefined);
+		const ownsServiceScope =
+			serviceScope !== undefined && userCtx[APP_SERVICE_SCOPE] === undefined;
 		const defaultLocale = this.config.locale?.defaultLocale || DEFAULT_LOCALE;
 		let locale = userCtx.locale || defaultLocale;
 
@@ -1069,11 +1102,28 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			| Record<string, unknown>
 			| undefined;
 		if (extensions === undefined && userCtx.request) {
-			extensions = await this.resolveContextExtensions({
-				request: userCtx.request,
-				session: userCtx.session,
-				db: userCtx.db ?? this.db,
-			});
+			try {
+				extensions = await this.resolveContextExtensions({
+					request: userCtx.request,
+					session: userCtx.session,
+					db: userCtx.db ?? this.db,
+					scope: serviceScope,
+					locale,
+					defaultLocale,
+					localeFallback: userCtx.localeFallback,
+					accessMode,
+					stage: userCtx.stage,
+					requestId: userCtx.requestId,
+					traceId: userCtx.traceId,
+					principal,
+					actor: userCtx.actor,
+				});
+			} catch (error) {
+				if (ownsServiceScope && serviceScope) {
+					await disposeAppServiceScope(this, serviceScope);
+				}
+				throw error;
+			}
 		}
 
 		return {
@@ -1087,6 +1137,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			defaultLocale,
 			accessMode,
 			db: userCtx.db ?? this.db,
+			...(serviceScope ? { [APP_SERVICE_SCOPE]: serviceScope } : {}),
 			...(extensions !== undefined ? { "~contextExtensions": extensions } : {}),
 		};
 	}
@@ -1099,6 +1150,16 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		request: Request;
 		session: { user: User; session: Session } | null | undefined;
 		db: any;
+		scope?: RequestScope;
+		locale?: string;
+		defaultLocale?: string;
+		localeFallback?: boolean;
+		accessMode?: AccessMode;
+		stage?: string;
+		requestId?: string;
+		traceId?: string;
+		principal?: Principal;
+		actor?: import("#questpie/server/modules/core/integrated/crdt/authority.js").AuthorityActor;
 	}): Promise<Record<string, unknown> | undefined> {
 		// Loose call signature on purpose: the static `ContextResolver` params
 		// type is the USER-facing contract (augmented per-app by codegen); the
@@ -1111,20 +1172,40 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		const services = extractAppServices(this, {
 			db: params.db,
 			session: params.session,
-		});
-
-		const result = await resolver({
-			...services,
 			request: params.request,
-			session: params.session,
-			db: params.db,
+			locale: params.locale,
+			defaultLocale: params.defaultLocale,
+			localeFallback: params.localeFallback,
+			accessMode: params.accessMode,
+			stage: params.stage,
+			requestId: params.requestId,
+			traceId: params.traceId,
+			principal: params.principal,
+			actor: params.actor,
+			scope: params.scope,
+			lazyServices: true,
 		});
-		const extensions = (result ?? {}) as Record<string, unknown>;
 
-		if (getNodeEnv() !== "production") {
-			for (const key of Object.keys(extensions)) {
-				if (!RESERVED_CONTEXT_KEYS.has(key)) continue;
-				if (this._warnedContextExtensionKeys.has(key)) continue;
+		const result = await resolver(
+			services as unknown as Record<string, unknown>,
+		);
+		const resolvedExtensions = (result ?? {}) as Record<string, unknown>;
+		const extensions: Record<string, unknown> = {};
+
+		for (const [key, value] of Object.entries(resolvedExtensions)) {
+			const serviceDefinition = this._serviceDefs[key];
+			const reserved =
+				FRAMEWORK_CONTEXT_KEYS.has(key) ||
+				serviceDefinition?.namespace === null ||
+				this._customServiceNamespaces.has(key);
+			if (!reserved) {
+				extensions[key] = value;
+				continue;
+			}
+			if (
+				getNodeEnv() !== "production" &&
+				!this._warnedContextExtensionKeys.has(key)
+			) {
 				this._warnedContextExtensionKeys.add(key);
 				this.logger.warn(
 					`[QUESTPIE] appConfig({ context }) returned reserved key "${key}" — framework-set context keys cannot be shadowed by resolver results.`,

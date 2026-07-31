@@ -4472,6 +4472,7 @@ interface AppContext {
 | Job handlers                                                                            | Destructure: `async ({ payload, queue, email }) => { ... }`                                                                                   |
 | Email templates                                                                         | Destructure: `async ({ input, collections }) => { ... }`                                                                                      |
 | Access rules                                                                            | Destructure: `({ session, data }) => boolean`                                                                                                 |
+| Channel authorization and presence                                                      | Destructure: `({ params, session, collections, services }) => boolean`                                                                        |
 | Seeds                                                                                   | `async ({ collections, log }) => { ... }`                                                                                                     |
 | Services                                                                                | `create: ({ app }) => ...` (app instance only, not full context)                                                                              |
 | Better Auth callbacks (`onLinkAccount`, `databaseHooks`, `sendMagicLink`, plugin hooks) | `getContext<App>()`, `/auth/*` is a raw route executed inside `runWithContext`, so the request scope is live there (see `references/auth.md`) |
@@ -6152,6 +6153,9 @@ Authorization rules:
 - `.authorize(rule)` uses the rule for subscribe and as the publish fallback.
 - `.authorize({ subscribe, publish })` separates both permissions; omitted publish falls back to subscribe.
 - Server/system contexts may publish; browser publish always uses the framework route, authorization, rate limits, and Zod parsing.
+- Authorization and presence resolvers receive the full request-scoped `AppContext`,
+  including collections, services, application context extensions, and the caller's
+  database handle. Framework-owned context keys cannot be shadowed by an extension.
 
 ## Publish on the server
 
@@ -9046,7 +9050,10 @@ The resolver receives the base request params plus the full system-mode service 
 - **No request → no resolver.** Jobs, workflows, seeds, and `createContext()` without a `request` skip it, so extension types are `Partial<…>` (see [narrowing](#high-not-narrowing-optional-extensions)).
 - **Collections inside the resolver run system mode**, the resolver IS trusted derivation. If you explicitly pass `accessMode: "user"` to a CRUD call inside the resolver, rules evaluated from there see no extensions (they don't exist yet), rules must already tolerate absence.
 - **Throwing fails the request** before any rule or handler runs. Throw `ApiError.*` for structured error responses (the tenant-validation case).
-- **Reserved keys warn in dev.** Returning `session`, `db`, `locale`, `accessMode`, `collections`, … from the resolver logs a warning, framework keys cannot be shadowed.
+- **Reserved keys are dropped and warn in dev.** Returning `session`, `db`,
+  `locale`, `accessMode`, `collections`, `channels`, `services`, or another
+  framework/service namespace key logs a warning in development and the
+  extension value is not projected. Framework keys cannot be shadowed.
 
 ## Step 3: Filter Data with Access Rules
 

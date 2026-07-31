@@ -14,5 +14,5 @@ export default route()
 	.handler(async (ctx) => {
 		const { request } = ctx;
 		const app = routeApp(ctx);
-		return realtimeSubscribe(app, request, {});
+		return realtimeSubscribe(app, request, {}, undefined, {}, ctx);
 	});

@@ -45,6 +45,9 @@ Authorization rules:
 - `.authorize(rule)` uses the rule for subscribe and as the publish fallback.
 - `.authorize({ subscribe, publish })` separates both permissions; omitted publish falls back to subscribe.
 - Server/system contexts may publish; browser publish always uses the framework route, authorization, rate limits, and Zod parsing.
+- Authorization and presence resolvers receive the full request-scoped `AppContext`,
+  including collections, services, application context extensions, and the caller's
+  database handle. Framework-owned context keys cannot be shadowed by an extension.
 
 ## Publish on the server
 

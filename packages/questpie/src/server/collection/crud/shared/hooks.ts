@@ -85,6 +85,7 @@ export function createHookContext(
 		principal: normalized.principal,
 		actor: normalized.actor,
 		accessMode: normalized.accessMode,
+		contextExtensions: normalized["~contextExtensions"],
 	});
 
 	const ctx: HookContext<any, any, any> = {

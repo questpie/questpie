@@ -60,7 +60,7 @@ bunx questpie generate
 | `.authorize({ subscribe, publish })`  | private    | explicit rule      | explicit rule, or `subscribe` when omitted |
 | `.presence(resolver)` after authorize | presence   | authorize first    | authorize first                            |
 
-Authorization receives the generated `AppContext` plus typed `params`. Use `session`, `collections`, `db`, and services directly. A false result, thrown error, or authorization timeout denies the operation. Server/system contexts may publish without a client publish grant; browser publishes still go through the framework route, authorization, rate limits, and Zod parsing.
+Authorization and presence receive the generated, request-scoped `AppContext` plus typed `params`. Use `session`, `collections`, `db`, and services directly. Application context extensions are present too, while framework-owned service keys cannot be replaced by an extension. Server publishing preserves the caller's database handle, including a hook transaction. A false result, thrown error, or authorization timeout denies the operation. Server/system contexts may publish without a client publish grant; browser publishes still go through the framework route, authorization, rate limits, and Zod parsing.
 
 ## Publish on the server
 

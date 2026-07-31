@@ -8,6 +8,8 @@ import {
 } from "../../src/server/channels/channel-builder.js";
 import { ChannelsService } from "../../src/server/channels/service.js";
 import { extractAppServices } from "../../src/server/config/app-context.js";
+import { RequestScope } from "../../src/server/config/request-scope.js";
+import { service } from "../../src/server/services/define-service.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 
 const userContext = {
@@ -68,6 +70,111 @@ describe("channel ChannelsService", () => {
 				"subscribe",
 			),
 		).toBe(true);
+		await setup.cleanup();
+	});
+
+	test("keeps server publish authorization on the transaction and extension context", async () => {
+		const transactionDb = { marker: "transaction-db" };
+		let authorizationContext: Record<string, any> | undefined;
+		const setup = await buildMockApp({});
+		(setup.app.config as any).channels = {
+			room: channel("room-[roomId]")
+				.events({ message: z.object({ text: z.string() }) })
+				.authorize({
+					subscribe: true,
+					publish: (ctx) => {
+						authorizationContext = ctx;
+						return true;
+					},
+				}),
+		};
+		const ctx = extractAppServices(setup.app, {
+			db: transactionDb,
+			accessMode: "user",
+			session: {
+				user: { id: "user-1" },
+				session: { id: "session-1" },
+			},
+			contextExtensions: {
+				tenantId: "tenant-a",
+				collections: "shadow-collections",
+				services: "shadow-services",
+			},
+		});
+
+		await (ctx.channels as ChannelsService<any>).preparePublish("room", {
+			params: { roomId: "one" },
+			event: "message",
+			data: { text: "hello" },
+		});
+
+		expect(authorizationContext?.db).toBe(transactionDb);
+		expect(authorizationContext?.session?.user?.id).toBe("user-1");
+		expect(authorizationContext?.tenantId).toBe("tenant-a");
+		expect(typeof authorizationContext?.collections).toBe("object");
+		expect(typeof authorizationContext?.services).toBe("object");
+		expect(authorizationContext?.channels).toBeInstanceOf(ChannelsService);
+		await setup.cleanup();
+	});
+
+	test("keeps projected request services stable and service namespaces flat-enumerable", async () => {
+		let policyCreations = 0;
+		const observations: Array<Record<string, any>> = [];
+		const setup = await buildMockApp({
+			services: {
+				policy: service()
+					.lifecycle("request")
+					.create(() => ({ id: ++policyCreations })),
+				workflows: service()
+					.lifecycle("singleton")
+					.namespace(null)
+					.create(() => ({ marker: "workflows" })),
+				tracker: service()
+					.lifecycle("singleton")
+					.namespace("analytics")
+					.create(() => ({ marker: "tracker" })),
+			},
+		});
+		(setup.app.config as any).channels = {
+			room: channel("room-[roomId]").authorize((operation) => {
+				const context = operation as any;
+				observations.push({
+					policy: context.services.policy,
+					top: { ...context },
+					services: { ...context.services },
+					analytics: { ...context.analytics },
+				});
+				return true;
+			}),
+		};
+		const scope = new RequestScope();
+		const context = extractAppServices(setup.app, {
+			accessMode: "user",
+			session: { user: { id: "user-1" } },
+			scope,
+		});
+		const projectedPolicy = (context.services as any).policy;
+		const channels = context.channels as ChannelsService<any>;
+
+		expect(
+			await channels.authorize("room", { roomId: "one" }, "subscribe"),
+		).toBe(true);
+		expect(
+			await channels.authorize("room", { roomId: "two" }, "subscribe"),
+		).toBe(true);
+		expect(policyCreations).toBe(1);
+		expect(observations.map(({ policy }) => policy)).toEqual([
+			projectedPolicy,
+			projectedPolicy,
+		]);
+		for (const observation of observations) {
+			expect(observation.top.workflows).toEqual({ marker: "workflows" });
+			expect(observation.top.analytics.tracker).toEqual({ marker: "tracker" });
+			expect(observation.services.policy).toBe(projectedPolicy);
+			expect(observation.analytics.tracker).toEqual({ marker: "tracker" });
+		}
+
+		await scope.dispose();
 		await setup.cleanup();
 	});
 
@@ -163,6 +270,57 @@ describe("channel ChannelsService", () => {
 			data: { id: "1" },
 		});
 		expect(publishes).toBe(1);
+	});
+
+	test("snapshots authority fields and keeps authorization context flat-enumerable", async () => {
+		let spreadContext: Record<string, unknown> | undefined;
+		const mutableContext = {
+			accessMode: "user",
+			session: { user: { id: "user-1" } },
+			services: { policy: { marker: "policy-service" } },
+			tables: { actors: { marker: "actors-table" } },
+		} as any;
+		const service = new ChannelsService(
+			{
+				news: channel("news").events({ updated: z.object({ id: z.string() }) }),
+				identity: channel("identity").authorize(
+					(ctx) => ctx.session?.user.id === "admin",
+				),
+				room: channel("room-[roomId]")
+					.events({ updated: z.object({ id: z.string() }) })
+					.authorize({
+						subscribe: false,
+						publish: (ctx) => {
+							spreadContext = { ...ctx };
+							return false;
+						},
+					}),
+			},
+			{
+				appendChannelEvent: async () => ({ eventId: "event-1" }),
+			},
+			mutableContext,
+		);
+
+		mutableContext.accessMode = "system";
+		mutableContext.session.user.id = "admin";
+		await expect(
+			service.publish("news", {
+				event: "updated",
+				data: { id: "one" },
+			}),
+		).rejects.toMatchObject({ code: "channel_publish_denied" });
+
+		expect(await service.authorize("room", { roomId: "one" }, "publish")).toBe(
+			false,
+		);
+		expect(await service.authorize("identity", {}, "subscribe")).toBe(false);
+		expect(spreadContext).toMatchObject({
+			session: { user: { id: "user-1" } },
+			services: { policy: { marker: "policy-service" } },
+			tables: { actors: { marker: "actors-table" } },
+			params: { roomId: "one" },
+		});
 	});
 
 	test("uses subscribe as the omitted publish rule and resolves presence", async () => {

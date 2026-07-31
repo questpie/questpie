@@ -6,13 +6,18 @@
  * @see QUE-158 (Unified route() builder + URL flattening)
  */
 
-import { extractAppServices } from "#questpie/server/config/app-context.js";
+import {
+	APP_SERVICE_SCOPE,
+	disposeAppServiceScope,
+	extractAppServices,
+} from "#questpie/server/config/app-context.js";
 import {
 	type RequestContext,
 	runWithContext,
 } from "#questpie/server/config/context.js";
 import { attachInternalAdapterContext } from "#questpie/server/config/internal-context.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
+import { RequestScope } from "#questpie/server/config/request-scope.js";
 import { ApiError } from "#questpie/server/errors/index.js";
 
 import type {
@@ -34,6 +39,72 @@ type RouteAdapterContext = {
 };
 
 type RouteExecutionContext = RequestContext | RouteAdapterContext;
+
+async function withServiceScope<T>(
+	app: Questpie<any>,
+	context: RequestContext,
+	run: (scope: RequestScope) => Promise<T>,
+): Promise<T> {
+	const carriedScope = (
+		context as RequestContext & { [APP_SERVICE_SCOPE]?: RequestScope }
+	)[APP_SERVICE_SCOPE];
+	const scope =
+		carriedScope instanceof RequestScope ? carriedScope : new RequestScope();
+	let cleanupTransferred = false;
+	const cleanup = () => disposeAppServiceScope(app, scope);
+	try {
+		const result = await run(scope);
+		if (result instanceof Response && result.body) {
+			const wrapped = responseWithCleanup(result, cleanup);
+			cleanupTransferred = true;
+			return wrapped as T;
+		}
+		return result;
+	} finally {
+		if (!cleanupTransferred) await cleanup();
+	}
+}
+
+function responseWithCleanup(
+	response: Response,
+	cleanup: () => Promise<void>,
+): Response {
+	const reader = response.body!.getReader();
+	let cleaned = false;
+	const cleanupOnce = async () => {
+		if (cleaned) return;
+		cleaned = true;
+		await cleanup();
+	};
+	const body = new ReadableStream<Uint8Array>({
+		async pull(controller) {
+			try {
+				const chunk = await reader.read();
+				if (chunk.done) {
+					await cleanupOnce();
+					controller.close();
+					return;
+				}
+				controller.enqueue(chunk.value);
+			} catch (error) {
+				await cleanupOnce();
+				controller.error(error);
+			}
+		},
+		async cancel(reason) {
+			try {
+				await reader.cancel(reason);
+			} finally {
+				await cleanupOnce();
+			}
+		},
+	});
+	return new Response(body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers: response.headers,
+	});
+}
 
 function isRouteAdapterContext(
 	context: RouteExecutionContext | undefined,
@@ -167,7 +238,6 @@ export async function executeJsonRouteInternal<
 	// Output-only routes (`.outputSchema()` with no `.schema()`) are valid JSON
 	// routes with `unknown` input (route-builder.ts) — their `schema` is undefined,
 	// so pass the raw input through rather than crashing on `.parse`.
-	const parsed = definition.schema ? definition.schema.parse(input) : input;
 	const requestContext = unwrapRequestContext(context);
 	const resolvedContext =
 		requestContext ?? (await app.createContext({ accessMode: "system" }));
@@ -175,48 +245,60 @@ export async function executeJsonRouteInternal<
 		? context
 		: toRouteAdapterContext(resolvedContext);
 
-	const services = extractAppServices(app, {
-		db: resolvedContext.db ?? app.db,
-		session: resolvedContext.session,
-		locale: resolvedContext.locale,
-		accessMode: resolvedContext.accessMode,
-		principal: resolvedContext.principal,
-	});
-
-	// Access control — reject before handler runs
-	const allowed = await evaluateRouteAccess(definition.access, {
-		...services,
-		...(resolvedContext["~contextExtensions"] ?? {}),
-		locale: resolvedContext.locale,
-		request,
-		params,
-	});
-	if (!allowed) {
-		throw ApiError.forbidden({
-			operation: "read",
-			resource: "route",
-			reason: "Access denied",
+	return withServiceScope(app, resolvedContext, async (scope) => {
+		const parsed = definition.schema ? definition.schema.parse(input) : input;
+		const services = extractAppServices(app, {
+			db: resolvedContext.db ?? app.db,
+			session: resolvedContext.session,
+			...(request ? { request } : {}),
+			locale: resolvedContext.locale,
+			defaultLocale: resolvedContext.defaultLocale,
+			localeFallback: resolvedContext.localeFallback,
+			accessMode: resolvedContext.accessMode,
+			stage: resolvedContext.stage,
+			requestId: resolvedContext.requestId,
+			traceId: resolvedContext.traceId,
+			principal: resolvedContext.principal,
+			actor: resolvedContext.actor,
+			contextExtensions: resolvedContext["~contextExtensions"],
+			scope,
 		});
-	}
 
-	const result = await runWithContext(
-		createRouteStoreContext(app, resolvedContext, adapterContext),
-		() =>
-			definition.handler({
-				...services,
-				...resolvedContext,
-				app,
-				input: parsed as TInput,
-				...(request ? { request } : {}),
-				locale: resolvedContext.locale,
-				params: (params ?? {}) as TParams,
-			} as any),
-	);
+		// Access control — reject before handler runs
+		const allowed = await evaluateRouteAccess(definition.access, {
+			...services,
+			...(resolvedContext["~contextExtensions"] ?? {}),
+			locale: resolvedContext.locale,
+			request,
+			params,
+		});
+		if (!allowed) {
+			throw ApiError.forbidden({
+				operation: "read",
+				resource: "route",
+				reason: "Access denied",
+			});
+		}
 
-	if (definition.outputSchema) {
-		return definition.outputSchema.parse(result) as TOutput;
-	}
-	return result as TOutput;
+		const result = await runWithContext(
+			createRouteStoreContext(app, resolvedContext, adapterContext),
+			() =>
+				definition.handler({
+					...services,
+					...resolvedContext,
+					app,
+					input: parsed as TInput,
+					...(request ? { request } : {}),
+					locale: resolvedContext.locale,
+					params: (params ?? {}) as TParams,
+				} as any),
+		);
+
+		if (definition.outputSchema) {
+			return definition.outputSchema.parse(result) as TOutput;
+		}
+		return result as TOutput;
+	});
 }
 
 // ============================================================================
@@ -257,40 +339,51 @@ export async function executeRawRouteInternal(
 		? context
 		: toRouteAdapterContext(resolvedContext);
 
-	const services = extractAppServices(app, {
-		db: resolvedContext.db ?? app.db,
-		session: resolvedContext.session,
-		locale: resolvedContext.locale,
-		accessMode: resolvedContext.accessMode,
-		principal: resolvedContext.principal,
-	});
-
-	// Access control — reject before handler runs
-	const allowed = await evaluateRouteAccess(definition.access, {
-		...services,
-		...(resolvedContext["~contextExtensions"] ?? {}),
-		locale: resolvedContext.locale,
-		request,
-		params,
-	});
-	if (!allowed) {
-		throw ApiError.forbidden({
-			operation: "read",
-			resource: "route",
-			reason: "Access denied",
+	return withServiceScope(app, resolvedContext, async (scope) => {
+		const services = extractAppServices(app, {
+			db: resolvedContext.db ?? app.db,
+			session: resolvedContext.session,
+			request,
+			locale: resolvedContext.locale,
+			defaultLocale: resolvedContext.defaultLocale,
+			localeFallback: resolvedContext.localeFallback,
+			accessMode: resolvedContext.accessMode,
+			stage: resolvedContext.stage,
+			requestId: resolvedContext.requestId,
+			traceId: resolvedContext.traceId,
+			principal: resolvedContext.principal,
+			actor: resolvedContext.actor,
+			contextExtensions: resolvedContext["~contextExtensions"],
+			scope,
 		});
-	}
 
-	return runWithContext(
-		createRouteStoreContext(app, resolvedContext, adapterContext),
-		() =>
-			definition.handler({
-				...services,
-				...resolvedContext,
-				app,
-				request,
-				locale: resolvedContext.locale,
-				params: params ?? {},
-			} as any),
-	);
+		// Access control — reject before handler runs
+		const allowed = await evaluateRouteAccess(definition.access, {
+			...services,
+			...(resolvedContext["~contextExtensions"] ?? {}),
+			locale: resolvedContext.locale,
+			request,
+			params,
+		});
+		if (!allowed) {
+			throw ApiError.forbidden({
+				operation: "read",
+				resource: "route",
+				reason: "Access denied",
+			});
+		}
+
+		return runWithContext(
+			createRouteStoreContext(app, resolvedContext, adapterContext),
+			() =>
+				definition.handler({
+					...services,
+					...resolvedContext,
+					app,
+					request,
+					locale: resolvedContext.locale,
+					params: params ?? {},
+				} as any),
+		);
+	});
 }

@@ -430,6 +430,10 @@ describe("request context extensions — reserved keys", () => {
 					context: async () => ({
 						session: "shadow-attempt",
 						db: "shadow-attempt",
+						collections: "shadow-attempt",
+						queue: "shadow-attempt",
+						services: "shadow-attempt",
+						channels: "shadow-attempt",
 						tenantId: "ok",
 					}),
 				},
@@ -453,6 +457,11 @@ describe("request context extensions — reserved keys", () => {
 		// Framework keys win — resolver cannot shadow them
 		expect(ctx.session).not.toBe("shadow-attempt");
 		expect(ctx.db).toBe(setup.app.db);
+		expect((ctx as any).collections).toBeUndefined();
+		expect((ctx as any).queue).toBeUndefined();
+		expect((ctx as any).services).toBeUndefined();
+		expect((ctx as any).channels).toBeUndefined();
+		expect(ctx["~contextExtensions"]).toEqual({ tenantId: "ok" });
 		// Non-reserved keys still land
 		expect((ctx as any).tenantId).toBe("ok");
 

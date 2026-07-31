@@ -107,7 +107,10 @@ The resolver receives the base request params plus the full system-mode service 
 - **No request → no resolver.** Jobs, workflows, seeds, and `createContext()` without a `request` skip it, so extension types are `Partial<…>` (see [narrowing](#high-not-narrowing-optional-extensions)).
 - **Collections inside the resolver run system mode**, the resolver IS trusted derivation. If you explicitly pass `accessMode: "user"` to a CRUD call inside the resolver, rules evaluated from there see no extensions (they don't exist yet), rules must already tolerate absence.
 - **Throwing fails the request** before any rule or handler runs. Throw `ApiError.*` for structured error responses (the tenant-validation case).
-- **Reserved keys warn in dev.** Returning `session`, `db`, `locale`, `accessMode`, `collections`, … from the resolver logs a warning, framework keys cannot be shadowed.
+- **Reserved keys are dropped and warn in dev.** Returning `session`, `db`,
+  `locale`, `accessMode`, `collections`, `channels`, `services`, or another
+  framework/service namespace key logs a warning in development and the
+  extension value is not projected. Framework keys cannot be shadowed.
 
 ## Step 3: Filter Data with Access Rules
 

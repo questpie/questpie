@@ -22,6 +22,8 @@
  *
  * @see RFC-CONTEXT-FIRST.md §2
  */
+import { RequestScope } from "#questpie/server/config/request-scope.js";
+
 /**
  * Global augmentation namespace.
  * Uses `declare global` so augmentations work correctly with workspace symlinks
@@ -323,6 +325,64 @@ export type KnownJobKey = [keyof Questpie.JobKeys] extends [never]
 	? string & {}
 	: (keyof Questpie.JobKeys & string) | (string & {});
 
+/**
+ * Framework-owned context keys that an application context extension cannot
+ * replace. Keep this list aligned with the flat runtime surface emitted by
+ * {@link extractAppServices} plus request/operation-owned keys.
+ *
+ * @internal Shared by request-context resolution and service projection.
+ */
+export const FRAMEWORK_CONTEXT_KEYS = new Set([
+	"session",
+	"principal",
+	"actor",
+	"db",
+	"locale",
+	"defaultLocale",
+	"localeFallback",
+	"accessMode",
+	"stage",
+	"request",
+	"requestId",
+	"traceId",
+	"data",
+	"input",
+	"original",
+	"operation",
+	"params",
+	"app",
+	"collections",
+	"globals",
+	"queue",
+	"email",
+	"storage",
+	"kv",
+	"executor",
+	"logger",
+	"observability",
+	"search",
+	"realtime",
+	"channels",
+	"tables",
+	"t",
+	"services",
+	"workflows",
+	"~contextExtensions",
+]);
+
+/**
+ * Lazy top-level service projections exposed by a ServiceCreateContext proxy.
+ *
+ * @internal Lets framework consumers preserve lazy service resolution while
+ * still presenting a truthful flat-enumerable AppContext at operation time.
+ */
+export const SERVICE_CONTEXT_VIRTUAL_KEYS = Symbol(
+	"questpie.serviceContextVirtualKeys",
+);
+
+/** @internal Request-owned service scope carried across context derivation. */
+export const APP_SERVICE_SCOPE = Symbol("questpie.appServiceScope");
+
 /** Known runtime fields populated by extractAppServices before namespace projection. */
 type ExtractAppServicesBase = {
 	app: unknown;
@@ -330,6 +390,14 @@ type ExtractAppServicesBase = {
 	session: unknown;
 	principal?: import("#questpie/server/config/context.js").Principal;
 	actor?: import("#questpie/server/modules/core/integrated/crdt/authority.js").AuthorityActor;
+	request?: Request;
+	locale?: string;
+	defaultLocale?: string;
+	localeFallback?: boolean;
+	accessMode?: string;
+	stage?: string;
+	requestId?: string;
+	traceId?: string;
 	services: Record<string, unknown>;
 	queue: unknown;
 	email: unknown;
@@ -369,27 +437,71 @@ export function extractAppServices(
 	overrides?: {
 		db?: any;
 		session?: any;
+		request?: Request;
 		locale?: string;
+		defaultLocale?: string;
+		localeFallback?: boolean;
 		accessMode?: string;
+		stage?: string;
+		requestId?: string;
+		traceId?: string;
+		/** Resolve service properties on first access instead of eagerly. */
+		lazyServices?: boolean;
 		principal?: import("#questpie/server/config/context.js").Principal;
 		actor?: import("#questpie/server/modules/core/integrated/crdt/authority.js").AuthorityActor;
 		scope?: import("#questpie/server/config/request-scope.js").RequestScope;
+		/**
+		 * Sanitized values from `appConfig({ context })`. They are projected
+		 * into request-scoped service factories before framework-owned values.
+		 */
+		contextExtensions?: Record<string, unknown>;
 	},
 ): AppContext {
+	const contextExtensions = Object.fromEntries(
+		Object.entries(overrides?.contextExtensions ?? {}).filter(
+			([key]) => !FRAMEWORK_CONTEXT_KEYS.has(key),
+		),
+	);
 	if (!app) {
 		return {
+			...contextExtensions,
 			db: overrides?.db,
 			session: overrides?.session ?? null,
 			...(overrides?.principal ? { principal: overrides.principal } : {}),
 			...(overrides?.actor ? { actor: overrides.actor } : {}),
+			...(overrides?.request ? { request: overrides.request } : {}),
+			...(overrides?.locale ? { locale: overrides.locale } : {}),
+			...(overrides?.defaultLocale
+				? { defaultLocale: overrides.defaultLocale }
+				: {}),
+			...(overrides?.localeFallback !== undefined
+				? { localeFallback: overrides.localeFallback }
+				: {}),
+			...(overrides?.accessMode ? { accessMode: overrides.accessMode } : {}),
+			...(overrides?.stage ? { stage: overrides.stage } : {}),
+			...(overrides?.requestId ? { requestId: overrides.requestId } : {}),
+			...(overrides?.traceId ? { traceId: overrides.traceId } : {}),
 		} as AppContext;
 	}
 	const result: ExtractAppServicesBase & Record<string, unknown> = {
+		...contextExtensions,
 		app,
 		db: overrides?.db ?? app.db,
 		session: overrides?.session ?? null,
 		...(overrides?.principal ? { principal: overrides.principal } : {}),
 		...(overrides?.actor ? { actor: overrides.actor } : {}),
+		...(overrides?.request ? { request: overrides.request } : {}),
+		...(overrides?.locale ? { locale: overrides.locale } : {}),
+		...(overrides?.defaultLocale
+			? { defaultLocale: overrides.defaultLocale }
+			: {}),
+		...(overrides?.localeFallback !== undefined
+			? { localeFallback: overrides.localeFallback }
+			: {}),
+		...(overrides?.accessMode ? { accessMode: overrides.accessMode } : {}),
+		...(overrides?.stage ? { stage: overrides.stage } : {}),
+		...(overrides?.requestId ? { requestId: overrides.requestId } : {}),
+		...(overrides?.traceId ? { traceId: overrides.traceId } : {}),
 		services: {},
 		queue: app.queue,
 		email: app.email,
@@ -402,6 +514,7 @@ export function extractAppServices(
 		realtime: app.realtime,
 		collections: app.collections,
 		globals: app.globals,
+		tables: app.tables,
 		t: app.t,
 	};
 
@@ -412,27 +525,48 @@ export function extractAppServices(
 		for (const [name, input] of Object.entries(
 			serviceDefs as Record<string, any>,
 		)) {
-			const instance = app.resolveService(
-				name,
-				{
-					db: result.db,
-					session: result.session,
-					locale: overrides?.locale,
-					accessMode: overrides?.accessMode,
-					principal: overrides?.principal,
-					actor: overrides?.actor,
-				},
-				overrides?.scope,
-			);
-
 			const state =
 				input && typeof input === "object" && "state" in input
 					? (input.state as Record<string, unknown>)
 					: (input as Record<string, unknown>);
 			const namespace = state?.namespace as string | null | undefined;
+			const resolveInstance = () =>
+				app.resolveService(
+					name,
+					{
+						...contextExtensions,
+						...(overrides?.contextExtensions
+							? { "~contextExtensions": contextExtensions }
+							: {}),
+						db: result.db,
+						session: result.session,
+						request: overrides?.request,
+						locale: overrides?.locale,
+						defaultLocale: overrides?.defaultLocale,
+						localeFallback: overrides?.localeFallback,
+						accessMode: overrides?.accessMode,
+						stage: overrides?.stage,
+						requestId: overrides?.requestId,
+						traceId: overrides?.traceId,
+						principal: overrides?.principal,
+						actor: overrides?.actor,
+					},
+					overrides?.scope,
+				);
+			const project = (target: Record<string, unknown>, key: string): void => {
+				if (!overrides?.lazyServices) {
+					target[key] = resolveInstance();
+					return;
+				}
+				Object.defineProperty(target, key, {
+					configurable: true,
+					enumerable: true,
+					get: resolveInstance,
+				});
+			};
 
 			if (namespace === undefined || namespace === "services") {
-				services[name] = instance;
+				project(services, name);
 				continue;
 			}
 
@@ -440,7 +574,7 @@ export function extractAppServices(
 				// Don't override already-set context values (db, session, locale, etc.)
 				// These are managed by createContext() / extractAppServices() directly.
 				if (!(name in result)) {
-					result[name] = instance;
+					project(result, name);
 				}
 				continue;
 			}
@@ -449,11 +583,44 @@ export function extractAppServices(
 				result[namespace] = {};
 			}
 
-			(result[namespace] as Record<string, unknown>)[name] = instance;
+			project(result[namespace] as Record<string, unknown>, name);
 		}
 
 		result.services = services;
 	}
 
 	return result as unknown as AppContext;
+}
+
+/**
+ * Dispose request-lifecycle services resolved through an explicit scope.
+ *
+ * @internal Scope owners call this at the end of their request/operation
+ * boundary; `extractAppServices()` never creates an ownerless scope.
+ */
+export async function disposeAppServiceScope(
+	app: any,
+	scope: RequestScope,
+): Promise<void> {
+	const disposers = new Map<
+		string,
+		(instance: unknown) => void | Promise<void>
+	>();
+	for (const [name, definition] of Object.entries(
+		(app?._serviceDefs ?? {}) as Record<
+			string,
+			{
+				lifecycle?: string;
+				dispose?: (instance: unknown) => void | Promise<void>;
+			}
+		>,
+	)) {
+		if (
+			definition.lifecycle === "request" &&
+			typeof definition.dispose === "function"
+		) {
+			disposers.set(name, definition.dispose);
+		}
+	}
+	await scope.dispose(disposers);
 }
