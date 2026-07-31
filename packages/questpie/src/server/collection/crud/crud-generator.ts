@@ -1930,16 +1930,23 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 								);
 							}
 
-							// Execute afterChange hooks
+							const afterChangeContext = this.createHookContext({
+								data: createdRecord,
+								operation: "create",
+								context,
+								db: tx,
+							});
+
+							// Execute ordinary compatibility hooks first.
 							await this.executeCollectionHooksWithGlobal(
 								"afterChange",
 								this.state.hooks?.afterChange,
-								this.createHookContext({
-									data: createdRecord,
-									operation: "create",
-									context,
-									db: tx,
-								}),
+								afterChangeContext,
+							);
+							// Mandatory effects are always awaited and fatal.
+							await this.executeHooks(
+								this.state.transactionalEffects?.afterChange,
+								afterChangeContext,
 							);
 
 							// Final lock-acquiring framework step: no application hook may
@@ -2406,24 +2413,27 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					: undefined;
 
 				const afterChangePromises: Promise<void>[] = [];
+				const afterChangeContexts: HookContext<any, any, any>[] = [];
 				for (const updated of refetchedRecords) {
 					const original = records.find((r) => r.id === updated.id);
 
 					await this.createVersion(tx, updated, "update", txContext);
+					const afterChangeContext = this.createHookContext({
+						data: updated,
+						original,
+						operation: "update",
+						context: txContext,
+						db: tx,
+						bulk: afterBulkMeta,
+					});
+					afterChangeContexts.push(afterChangeContext);
 
 					// Collect afterChange hooks for parallel execution in bulk
 					afterChangePromises.push(
 						this.executeCollectionHooksWithGlobal(
 							"afterChange",
 							this.state.hooks?.afterChange,
-							this.createHookContext({
-								data: updated,
-								original,
-								operation: "update",
-								context: txContext,
-								db: tx,
-								bulk: afterBulkMeta,
-							}),
+							afterChangeContext,
 						).catch((err) => {
 							rethrowFatalGlobalHookError(err);
 							console.error(
@@ -2436,6 +2446,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// Execute all afterChange hooks in parallel. Ordinary hook errors were
 				// handled above; fatal infrastructure errors still abort the transaction.
 				await Promise.all(afterChangePromises);
+				// Mandatory effects run once per winner in deterministic result order.
+				for (const effectContext of afterChangeContexts) {
+					await this.executeHooks(
+						this.state.transactionalEffects?.afterChange,
+						effectContext,
+					);
+				}
 
 				const crdtManifest = this.getCrdtManifest();
 				if (crdtManifest && !internal) {
@@ -2657,18 +2674,20 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						.where(eq(getColumn(this.table, "id")!, id));
 				}
 
+				const afterDeleteContext = this.createHookContext({
+					data: existing,
+					original: existing,
+					operation: "delete",
+					context: txContext,
+					db: tx,
+				});
+
 				// Execute afterDelete hooks inside transaction (non-fatal)
 				try {
 					await this.executeCollectionHooksWithGlobal(
 						"afterDelete",
 						this.state.hooks?.afterDelete,
-						this.createHookContext({
-							data: existing,
-							original: existing,
-							operation: "delete",
-							context: txContext,
-							db: tx,
-						}),
+						afterDeleteContext,
 					);
 				} catch (err) {
 					rethrowFatalGlobalHookError(err);
@@ -2678,6 +2697,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						err,
 					);
 				}
+				await this.executeHooks(
+					this.state.transactionalEffects?.afterDelete,
+					afterDeleteContext,
+				);
 				if (stagedCrdtOwner) {
 					const terminalRows = await tx
 						.select()
@@ -2895,6 +2918,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					await this.executeCollectionHooksWithGlobal(
 						"afterPurge",
 						this.state.hooks?.afterPurge,
+						hookContext,
+					);
+					await this.executeHooks(
+						this.state.transactionalEffects?.afterPurge,
 						hookContext,
 					);
 					const ownerRows = await tx
@@ -3230,19 +3257,22 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 				// Execute afterDelete hooks inside the mutation transaction so
 				// transactional side effects share the business commit boundary.
+				const afterDeleteContexts: HookContext<any, any, any>[] = [];
 				for (const record of claimedRecords) {
+					const afterDeleteContext = this.createHookContext({
+						data: record,
+						original: record,
+						operation: "delete",
+						context: txContext,
+						db: tx,
+						bulk: afterDeleteBulkMeta,
+					});
+					afterDeleteContexts.push(afterDeleteContext);
 					try {
 						await this.executeCollectionHooksWithGlobal(
 							"afterDelete",
 							this.state.hooks?.afterDelete,
-							this.createHookContext({
-								data: record,
-								original: record,
-								operation: "delete",
-								context: txContext,
-								db: tx,
-								bulk: afterDeleteBulkMeta,
-							}),
+							afterDeleteContext,
 						);
 					} catch (err) {
 						rethrowFatalGlobalHookError(err);
@@ -3252,6 +3282,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							err,
 						);
 					}
+				}
+				for (const effectContext of afterDeleteContexts) {
+					await this.executeHooks(
+						this.state.transactionalEffects?.afterDelete,
+						effectContext,
+					);
 				}
 				if (stagedCrdtOwners.size > 0) {
 					const terminalRows = await tx
@@ -3658,16 +3694,21 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					version.versionStage,
 				);
 
+				const afterChangeContext = this.createHookContext({
+					data: result,
+					original: existing,
+					operation: "update",
+					context: normalized,
+					db: tx,
+				});
 				await this.executeCollectionHooksWithGlobal(
 					"afterChange",
 					this.state.hooks?.afterChange,
-					this.createHookContext({
-						data: result,
-						original: existing,
-						operation: "update",
-						context: normalized,
-						db: tx,
-					}),
+					afterChangeContext,
+				);
+				await this.executeHooks(
+					this.state.transactionalEffects?.afterChange,
+					afterChangeContext,
 				);
 
 				// Queue search indexing to run after transaction commits (fire-and-forget)

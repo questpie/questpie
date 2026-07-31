@@ -3628,6 +3628,39 @@ Each hook accepts a single function **or an array of functions** (executed in or
 })
 ```
 
+### Mandatory Transactional Effects
+
+Use `.transactionalEffects()` when an application-side database effect must
+commit atomically with the collection mutation. Unlike ordinary
+`afterChange`/`afterDelete` compatibility hooks, a thrown effect always
+propagates and rolls back the mutation:
+
+```ts
+.transactionalEffects({
+	afterChange: async ({ data, channels }) => {
+		await channels.publish("postActivity", {
+			params: { postId: data.id },
+			event: "changed",
+			data: { id: data.id },
+		});
+	},
+})
+```
+
+The public stages are `afterChange`, `afterDelete`, and `afterPurge`. They
+receive the same typed, transaction-bound context as their hook counterpart and
+merge across repeated builder calls. `afterChange` covers create/update,
+including restore and version revert through the update lifecycle;
+`afterDelete` covers soft and hard delete; `afterPurge` runs after physical
+removal and before commit. `updateMany` and `deleteMany` run once per winning
+row with bulk metadata. `updateBatch` runs once per successful item without
+bulk metadata because each item invokes the single-record update lifecycle. An
+already-active no-op restore runs nothing.
+
+Use this seam for transaction-aware database, queue/outbox, or typed-channel
+work. Direct email/HTTP work cannot join the transaction and belongs in
+`onAfterCommit`.
+
 ### Hook Context Properties
 
 | Property        | Available in                                                         | Description                                                                  |
@@ -6166,7 +6199,7 @@ Framework handlers and hooks receive a generated `channels` service:
 	});
 });
 
-.hooks({
+.transactionalEffects({
 	afterChange: [async ({ data, channels }) => {
 		await channels.publish("chatRoom", {
 			params: { roomId: data.roomId },
@@ -6177,7 +6210,12 @@ Framework handlers and hooks receive a generated `channels` service:
 });
 ```
 
-In collection/global/hook files, use the injected `{ channels }`. Never import the generated `app` or defer lookup through ambient `getContext()`; the injected service is generated-type-safe and mutation-context aware.
+In collection files, use the injected `{ channels }`. A transactional effect
+is the correct seam when channel publication is mandatory: a publish failure
+rolls back both the collection mutation and ordered channel-ledger append.
+Never import the generated `app` or defer lookup through ambient
+`getContext()`; the injected service is generated-type-safe and
+mutation-context aware.
 
 ## Client, presence, and TanStack Query
 

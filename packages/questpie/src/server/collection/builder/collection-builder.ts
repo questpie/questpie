@@ -18,6 +18,8 @@ import type {
 	CollectionHooks,
 	CollectionHooksStorage,
 	CollectionOptions,
+	CollectionTransactionalEffects,
+	CollectionTransactionalEffectsStorage,
 	EmptyCollectionState,
 	RelationConfig,
 	TitleExpression,
@@ -160,6 +162,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			title: undefined,
 			options: {},
 			hooks: {},
+			transactionalEffects: {},
 			access: {},
 			searchable: undefined,
 			validation: undefined,
@@ -701,6 +704,54 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	}
 
 	/**
+	 * Define mandatory application effects that must commit atomically with
+	 * the collection mutation.
+	 *
+	 * Handlers run after the row mutation while the outer transaction remains
+	 * open. Any thrown or rejected error propagates and rolls back the row plus
+	 * transaction-joined work performed through injected services.
+	 */
+	transactionalEffects<
+		TNewEffects extends CollectionTransactionalEffects<
+			CollectionSelect<TState>
+		>,
+	>(
+		effects: TNewEffects,
+	): CollectionBuilder<
+		Override<
+			TState,
+			{ transactionalEffects: CollectionTransactionalEffectsStorage }
+		>
+	> {
+		const existingEffects = this.state.transactionalEffects;
+		const mergedEffects: CollectionTransactionalEffectsStorage = {
+			...(existingEffects || {}),
+		};
+
+		for (const [effectName, effectValue] of Object.entries(effects)) {
+			const current = mergedEffects[effectName];
+			if (!current) {
+				mergedEffects[effectName] = effectValue;
+				continue;
+			}
+
+			const currentArray = Array.isArray(current) ? current : [current];
+			const nextArray = Array.isArray(effectValue)
+				? effectValue
+				: [effectValue];
+			mergedEffects[effectName] = [...currentArray, ...nextArray];
+		}
+
+		const newBuilder = new CollectionBuilder({
+			...this.state,
+			transactionalEffects: mergedEffects,
+		} as any);
+		newBuilder._indexesFn = this._indexesFn;
+
+		return newBuilder;
+	}
+
+	/**
 	 * Set access control rules.
 	 *
 	 * @example
@@ -1173,6 +1224,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 					: TOtherState["title"];
 				options: TState["options"] & TOtherState["options"];
 				hooks: CollectionHooksStorage;
+				transactionalEffects: CollectionTransactionalEffectsStorage;
 				access: CollectionAccessStorage;
 				searchable: TState["searchable"] | TOtherState["searchable"];
 				fieldDefinitions: MergeFieldDefinitions<
@@ -1200,6 +1252,10 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			CollectionInsert<TState> | CollectionInsert<TOtherState>,
 			CollectionUpdate<TState> | CollectionUpdate<TOtherState>
 		>(this.state.hooks as any, other.state.hooks as any);
+		const mergedTransactionalEffects = this.mergeTransactionalEffects(
+			this.state.transactionalEffects as CollectionTransactionalEffects,
+			other.state.transactionalEffects as CollectionTransactionalEffects,
+		);
 
 		// Merge access control - other's access overrides this
 		const mergedAccess = {
@@ -1251,6 +1307,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				other.state.title !== undefined ? other.state.title : this.state.title,
 			options: { ...this.state.options, ...other.state.options },
 			hooks: mergedHooks,
+			transactionalEffects: mergedTransactionalEffects,
 			access: mergedAccess,
 			searchable: other.state.searchable ?? this.state.searchable,
 			fieldDefinitions: {
@@ -1316,6 +1373,35 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 
 		return merged;
 	}
+
+	private mergeTransactionalEffects(
+		effects1: CollectionTransactionalEffects,
+		effects2: CollectionTransactionalEffects,
+	): CollectionTransactionalEffects {
+		const merged: CollectionTransactionalEffects = {};
+		const effectKeys = Array.from(
+			new Set([...Object.keys(effects1 || {}), ...Object.keys(effects2 || {})]),
+		) as (keyof CollectionTransactionalEffects)[];
+
+		for (const key of effectKeys) {
+			const effect1 = effects1?.[key];
+			const effect2 = effects2?.[key];
+			if (!effect1 && !effect2) continue;
+			if (!effect1) {
+				merged[key] = effect2 as any;
+				continue;
+			}
+			if (!effect2) {
+				merged[key] = effect1 as any;
+				continue;
+			}
+			const first = Array.isArray(effect1) ? effect1 : [effect1];
+			const second = Array.isArray(effect2) ? effect2 : [effect2];
+			merged[key] = [...first, ...second] as any;
+		}
+
+		return merged;
+	}
 }
 
 /**
@@ -1342,6 +1428,7 @@ export function collection<TName extends string>(
 		title: undefined,
 		options: {},
 		hooks: {},
+		transactionalEffects: {},
 		access: {},
 		searchable: undefined,
 		validation: undefined,

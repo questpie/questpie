@@ -49,6 +49,7 @@ export type {
 	CollectionBuilderState,
 	CollectionHooks,
 	CollectionOptions,
+	CollectionTransactionalEffects,
 	EmptyCollectionState,
 	// TState-based field extraction (new approach)
 	ExtractFieldsByLocation,
