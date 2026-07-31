@@ -18,8 +18,6 @@ import type {
 	CollectionHooks,
 	CollectionHooksStorage,
 	CollectionOptions,
-	CollectionTransactionalEffects,
-	CollectionTransactionalEffectsStorage,
 	EmptyCollectionState,
 	RelationConfig,
 	TitleExpression,
@@ -162,7 +160,6 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			title: undefined,
 			options: {},
 			hooks: {},
-			transactionalEffects: {},
 			access: {},
 			searchable: undefined,
 			validation: undefined,
@@ -704,48 +701,6 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	}
 
 	/**
-	 * Define mandatory application effects that must commit atomically with
-	 * the collection mutation.
-	 *
-	 * Handlers run after the row mutation while the outer transaction remains
-	 * open. Any thrown or rejected error propagates and rolls back the row plus
-	 * transaction-joined work performed through injected services.
-	 */
-	transactionalEffects<
-		TNewEffects extends CollectionTransactionalEffects<
-			CollectionSelect<TState>
-		>,
-	>(effects: TNewEffects): CollectionBuilder<TState> {
-		const existingEffects = this.state.transactionalEffects;
-		const mergedEffects: CollectionTransactionalEffectsStorage = {
-			...(existingEffects || {}),
-		};
-
-		for (const [effectName, effectValue] of Object.entries(effects)) {
-			const current = mergedEffects[effectName];
-			if (!current) {
-				mergedEffects[effectName] = effectValue;
-				continue;
-			}
-
-			const currentArray = Array.isArray(current) ? current : [current];
-			const nextArray = Array.isArray(effectValue)
-				? effectValue
-				: [effectValue];
-			mergedEffects[effectName] = [...currentArray, ...nextArray];
-		}
-
-		const newState: TState = {
-			...this.state,
-			transactionalEffects: mergedEffects,
-		};
-		const newBuilder = new CollectionBuilder(newState);
-		newBuilder._indexesFn = this._indexesFn;
-
-		return newBuilder;
-	}
-
-	/**
 	 * Set access control rules.
 	 *
 	 * @example
@@ -1218,7 +1173,6 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 					: TOtherState["title"];
 				options: TState["options"] & TOtherState["options"];
 				hooks: CollectionHooksStorage;
-				transactionalEffects: CollectionTransactionalEffectsStorage;
 				access: CollectionAccessStorage;
 				searchable: TState["searchable"] | TOtherState["searchable"];
 				fieldDefinitions: MergeFieldDefinitions<
@@ -1246,10 +1200,6 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			CollectionInsert<TState> | CollectionInsert<TOtherState>,
 			CollectionUpdate<TState> | CollectionUpdate<TOtherState>
 		>(this.state.hooks as any, other.state.hooks as any);
-		const mergedTransactionalEffects = this.mergeTransactionalEffects(
-			this.state.transactionalEffects as CollectionTransactionalEffects,
-			other.state.transactionalEffects as CollectionTransactionalEffects,
-		);
 
 		// Merge access control - other's access overrides this
 		const mergedAccess = {
@@ -1301,7 +1251,6 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				other.state.title !== undefined ? other.state.title : this.state.title,
 			options: { ...this.state.options, ...other.state.options },
 			hooks: mergedHooks,
-			transactionalEffects: mergedTransactionalEffects,
 			access: mergedAccess,
 			searchable: other.state.searchable ?? this.state.searchable,
 			fieldDefinitions: {
@@ -1367,38 +1316,6 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 
 		return merged;
 	}
-
-	private mergeTransactionalEffects(
-		effects1: CollectionTransactionalEffects,
-		effects2: CollectionTransactionalEffects,
-	): CollectionTransactionalEffects {
-		return {
-			afterChange: this.mergeTransactionalEffectHandlers(
-				effects1.afterChange,
-				effects2.afterChange,
-			),
-			afterDelete: this.mergeTransactionalEffectHandlers(
-				effects1.afterDelete,
-				effects2.afterDelete,
-			),
-			afterPurge: this.mergeTransactionalEffectHandlers(
-				effects1.afterPurge,
-				effects2.afterPurge,
-			),
-		};
-	}
-
-	private mergeTransactionalEffectHandlers<TEffect>(
-		effect1: TEffect[] | TEffect | undefined,
-		effect2: TEffect[] | TEffect | undefined,
-	): TEffect[] | TEffect | undefined {
-		if (effect1 === undefined) return effect2;
-		if (effect2 === undefined) return effect1;
-
-		const first = Array.isArray(effect1) ? effect1 : [effect1];
-		const second = Array.isArray(effect2) ? effect2 : [effect2];
-		return [...first, ...second];
-	}
 }
 
 /**
@@ -1425,7 +1342,6 @@ export function collection<TName extends string>(
 		title: undefined,
 		options: {},
 		hooks: {},
-		transactionalEffects: {},
 		access: {},
 		searchable: undefined,
 		validation: undefined,

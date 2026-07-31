@@ -41,7 +41,7 @@ const postgresEffectLogs = collection("postgres_effect_logs").fields(
 
 const postgresEffectTargets = collection("postgres_effect_targets")
 	.fields(({ f }) => ({ name: f.text().required() }))
-	.transactionalEffects({
+	.hooks({
 		afterChange: async ({ channels, collections, data, operation }) => {
 			await collections.postgresEffectLogs.create({
 				targetId: data.id,
@@ -53,13 +53,13 @@ const postgresEffectTargets = collection("postgres_effect_targets")
 				data: { targetId: data.id, kind: operation },
 			});
 			if (operation === "update" && failUpdateEffect) {
-				throw new Error("postgres mandatory update effect failure");
+				throw new Error("postgres transaction-bound update effect failure");
 			}
 		},
 	});
 
 describe.skipIf(!runPostgresContract)(
-	"mandatory transactional effects on PostgreSQL",
+	"transaction-bound hooks on PostgreSQL",
 	() => {
 		let setup: Awaited<ReturnType<typeof buildMockApp>>;
 		const context = createTestContext();
@@ -134,7 +134,7 @@ describe.skipIf(!runPostgresContract)(
 					{ id: target.id, data: { name: "Rolled back" } },
 					context,
 				),
-			).rejects.toThrow("postgres mandatory update effect failure");
+			).rejects.toThrow("postgres transaction-bound update effect failure");
 
 			const afterRollback =
 				await setup.app.collections.postgresEffectTargets.findOne(

@@ -2,6 +2,7 @@
 "questpie": minor
 ---
 
-Add typed collection `transactionalEffects` for mandatory after-change,
-after-delete, and after-purge work that must commit or roll back with the
-collection mutation.
+Make transaction-bound collection and Global hooks fail atomically by default.
+Errors from `afterChange`, `afterDelete`, and purge hooks now propagate and roll
+back the owning mutation together with nested CRUD, Queue, Channels, and
+realtime ledger work.

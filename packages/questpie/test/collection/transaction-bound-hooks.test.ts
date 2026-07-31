@@ -10,7 +10,7 @@ import {
 import { z } from "zod";
 
 import { channel } from "../../src/exports/channels.js";
-import { collection } from "../../src/exports/index.js";
+import { collection, global } from "../../src/exports/index.js";
 import {
 	questpieChannelEventTable,
 	questpieRealtimeLogTable,
@@ -39,13 +39,15 @@ type EffectObservation = {
 
 let failEffect: EffectKind | undefined;
 let failOrdinaryUpdateHook = false;
+let failAppAfterChangeHook = false;
+let failAppGlobalAfterChangeHook = false;
 let failHardDeleteEffect = false;
 const mergedEffectOrder: string[] = [];
 const moduleMergedEffectOrder: string[] = [];
 const effectObservations: EffectObservation[] = [];
 
-const transactionalEffectsChannel = channel(
-	"transactional-effects-[targetId]",
+const transactionBoundHooksChannel = channel(
+	"transaction-bound-hooks-[targetId]",
 ).events({
 	applied: z.object({
 		targetId: z.string(),
@@ -60,14 +62,20 @@ const transactionalEffectsChannel = channel(
 	}),
 });
 
-const transactionalEffectLogs = collection("transactional_effect_logs").fields(
+const transactionalEffectLogs = collection(
+	"transaction_bound_hook_logs",
+).fields(({ f }) => ({
+	targetId: f.text().required(),
+	kind: f.text().required(),
+}));
+
+const transactionBoundSettings = global("transaction_bound_settings").fields(
 	({ f }) => ({
-		targetId: f.text().required(),
-		kind: f.text().required(),
+		name: f.text().required(),
 	}),
 );
 
-const transactionalEffectTargets = collection("transactional_effect_targets")
+const transactionalEffectTargets = collection("transaction_bound_hook_targets")
 	.fields(({ f }) => ({
 		name: f.text().required(),
 	}))
@@ -80,7 +88,7 @@ const transactionalEffectTargets = collection("transactional_effect_targets")
 			}
 		},
 	})
-	.transactionalEffects({
+	.hooks({
 		afterChange: async ({
 			channels,
 			collections,
@@ -101,7 +109,7 @@ const transactionalEffectTargets = collection("transactional_effect_targets")
 				targetId: data.id,
 				kind,
 			});
-			await channels.publish("transactionalEffects", {
+			await channels.publish("transactionBoundHooks", {
 				params: { targetId: data.id },
 				event: "applied",
 				data: { targetId: data.id, kind },
@@ -116,7 +124,7 @@ const transactionalEffectTargets = collection("transactional_effect_targets")
 				count,
 			});
 			if (failEffect === kind) {
-				throw new Error(`mandatory ${kind} effect failure`);
+				throw new Error(`transaction-bound ${kind} effect failure`);
 			}
 		},
 		afterDelete: async ({
@@ -131,7 +139,7 @@ const transactionalEffectTargets = collection("transactional_effect_targets")
 				targetId: data.id,
 				kind: "delete",
 			});
-			await channels.publish("transactionalEffects", {
+			await channels.publish("transactionBoundHooks", {
 				params: { targetId: data.id },
 				event: "applied",
 				data: { targetId: data.id, kind: "delete" },
@@ -146,7 +154,7 @@ const transactionalEffectTargets = collection("transactional_effect_targets")
 				count,
 			});
 			if (failEffect === "delete") {
-				throw new Error("mandatory delete effect failure");
+				throw new Error("transaction-bound delete effect failure");
 			}
 		},
 		afterPurge: async ({ channels, collections, data }) => {
@@ -154,7 +162,7 @@ const transactionalEffectTargets = collection("transactional_effect_targets")
 				targetId: data.id,
 				kind: "purge",
 			});
-			await channels.publish("transactionalEffects", {
+			await channels.publish("transactionBoundHooks", {
 				params: { targetId: data.id },
 				event: "applied",
 				data: { targetId: data.id, kind: "purge" },
@@ -166,7 +174,7 @@ const transactionalEffectTargets = collection("transactional_effect_targets")
 				originalName: data.name,
 			});
 			if (failEffect === "purge") {
-				throw new Error("mandatory purge effect failure");
+				throw new Error("transaction-bound purge effect failure");
 			}
 		},
 	});
@@ -175,13 +183,13 @@ const hardDeleteEffectTargets = collection("hard_delete_effect_targets")
 	.fields(({ f }) => ({
 		name: f.text().required(),
 	}))
-	.transactionalEffects({
+	.hooks({
 		afterDelete: async ({ channels, collections, data }) => {
 			await collections.transactionalEffectLogs.create({
 				targetId: data.id,
 				kind: "hard-delete",
 			});
-			await channels.publish("transactionalEffects", {
+			await channels.publish("transactionBoundHooks", {
 				params: { targetId: data.id },
 				event: "applied",
 				data: { targetId: data.id, kind: "hard-delete" },
@@ -193,19 +201,19 @@ const hardDeleteEffectTargets = collection("hard_delete_effect_targets")
 				originalName: data.name,
 			});
 			if (failHardDeleteEffect) {
-				throw new Error("mandatory hard-delete effect failure");
+				throw new Error("transaction-bound hard-delete effect failure");
 			}
 		},
 	});
 
 const mergedEffectTargets = collection("merged_effect_targets")
 	.fields(({ f }) => ({ name: f.text().required() }))
-	.transactionalEffects({
+	.hooks({
 		afterChange: () => {
 			mergedEffectOrder.push("first");
 		},
 	})
-	.transactionalEffects({
+	.hooks({
 		afterChange: () => {
 			mergedEffectOrder.push("second");
 		},
@@ -213,27 +221,45 @@ const mergedEffectTargets = collection("merged_effect_targets")
 
 const moduleMergedEffectTargets = collection("module_merged_effect_targets")
 	.fields(({ f }) => ({ name: f.text().required() }))
-	.transactionalEffects({
+	.hooks({
 		afterChange: () => {
 			moduleMergedEffectOrder.push("base");
 		},
 	})
 	.merge(
-		collection("module_merged_effect_targets").transactionalEffects({
+		collection("module_merged_effect_targets").hooks({
 			afterChange: () => {
 				moduleMergedEffectOrder.push("extension");
 			},
 		}),
 	);
 
-describe("mandatory transactional collection effects", () => {
+describe("transaction-bound collection hooks", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 	const context = createTestContext();
 
 	beforeAll(async () => {
 		setup = await buildMockApp({
+			hooks: {
+				collections: {
+					include: ["transactionalEffectTargets"],
+					afterChange: ({ operation }) => {
+						if (operation === "update" && failAppAfterChangeHook) {
+							throw new Error("app afterChange failure");
+						}
+					},
+				},
+				globals: {
+					include: ["transaction_bound_settings"],
+					afterChange: () => {
+						if (failAppGlobalAfterChangeHook) {
+							throw new Error("app global afterChange failure");
+						}
+					},
+				},
+			},
 			channels: {
-				transactionalEffects: transactionalEffectsChannel,
+				transactionBoundHooks: transactionBoundHooksChannel,
 			},
 			collections: {
 				hardDeleteEffectTargets,
@@ -242,6 +268,7 @@ describe("mandatory transactional collection effects", () => {
 				transactionalEffectLogs,
 				transactionalEffectTargets,
 			},
+			globals: { transactionBoundSettings },
 		});
 		await runTestDbMigrations(setup.app);
 	});
@@ -253,6 +280,8 @@ describe("mandatory transactional collection effects", () => {
 	beforeEach(() => {
 		failEffect = undefined;
 		failOrdinaryUpdateHook = false;
+		failAppAfterChangeHook = false;
+		failAppGlobalAfterChangeHook = false;
 		failHardDeleteEffect = false;
 		mergedEffectOrder.length = 0;
 		moduleMergedEffectOrder.length = 0;
@@ -287,7 +316,7 @@ describe("mandatory transactional collection effects", () => {
 				| { targetId?: unknown; kind?: unknown }
 				| undefined;
 			return (
-				row.channel === `transactional-effects-${targetId}` &&
+				row.channel === `transaction-bound-hooks-${targetId}` &&
 				row.event === "applied" &&
 				payload?.targetId === targetId &&
 				payload.kind === kind
@@ -319,7 +348,7 @@ describe("mandatory transactional collection effects", () => {
 				{ id, name: "Create rollback" },
 				context,
 			),
-		).rejects.toThrow("mandatory create effect failure");
+		).rejects.toThrow("transaction-bound create effect failure");
 
 		expect(await findTarget(id)).toBeNull();
 		expect(await effectCount(id, "create")).toBe(0);
@@ -329,7 +358,7 @@ describe("mandatory transactional collection effects", () => {
 		).toBe(0);
 	});
 
-	it("preserves ordinary update-hook isolation while committing the mandatory effect", async () => {
+	it("rolls back update when afterChange throws", async () => {
 		const target =
 			await setup.app.collections.transactionalEffectTargets.create(
 				{ name: "Ordinary isolation" },
@@ -337,15 +366,53 @@ describe("mandatory transactional collection effects", () => {
 			);
 		failOrdinaryUpdateHook = true;
 
-		const updated =
-			await setup.app.collections.transactionalEffectTargets.updateById(
+		await expect(
+			setup.app.collections.transactionalEffectTargets.updateById(
 				{ id: target.id, data: { name: "Still committed" } },
 				context,
-			);
+			),
+		).rejects.toThrow("ordinary afterChange failure");
 
-		expect(updated.name).toBe("Still committed");
-		expect(await effectCount(target.id, "update")).toBe(1);
-		expect(await channelEffectRows(target.id, "update")).toHaveLength(1);
+		expect((await findTarget(target.id))?.name).toBe("Ordinary isolation");
+		expect(await effectCount(target.id, "update")).toBe(0);
+		expect(await channelEffectRows(target.id, "update")).toHaveLength(0);
+	});
+
+	it("rolls back update when an app-level afterChange hook throws", async () => {
+		const target =
+			await setup.app.collections.transactionalEffectTargets.create(
+				{ name: "App hook before" },
+				context,
+			);
+		failAppAfterChangeHook = true;
+
+		await expect(
+			setup.app.collections.transactionalEffectTargets.updateById(
+				{ id: target.id, data: { name: "App hook after" } },
+				context,
+			),
+		).rejects.toThrow("app afterChange failure");
+
+		expect((await findTarget(target.id))?.name).toBe("App hook before");
+	});
+
+	it("rolls back a Global update when an app-level afterChange hook throws", async () => {
+		await setup.app.globals.transactionBoundSettings.update(
+			{ name: "Global before" },
+			context,
+		);
+		failAppGlobalAfterChangeHook = true;
+
+		await expect(
+			setup.app.globals.transactionBoundSettings.update(
+				{ name: "Global after" },
+				context,
+			),
+		).rejects.toThrow("app global afterChange failure");
+
+		expect(
+			await setup.app.globals.transactionBoundSettings.get({}, context),
+		).toMatchObject({ name: "Global before" });
 	});
 
 	it("rolls back update and every transaction-joined ledger", async () => {
@@ -361,7 +428,7 @@ describe("mandatory transactional collection effects", () => {
 				{ id: target.id, data: { name: "Must roll back" } },
 				context,
 			),
-		).rejects.toThrow("mandatory update effect failure");
+		).rejects.toThrow("transaction-bound update effect failure");
 
 		expect((await findTarget(target.id))?.name).toBe("Before update");
 		expect(await effectCount(target.id, "update")).toBe(0);
@@ -388,7 +455,7 @@ describe("mandatory transactional collection effects", () => {
 				{ id: deleteTarget.id },
 				context,
 			),
-		).rejects.toThrow("mandatory delete effect failure");
+		).rejects.toThrow("transaction-bound delete effect failure");
 
 		expect((await findTarget(deleteTarget.id))?.deletedAt).toBeNull();
 		expect(await effectCount(deleteTarget.id, "delete")).toBe(0);
@@ -418,7 +485,7 @@ describe("mandatory transactional collection effects", () => {
 				{ id: restoreTarget.id },
 				context,
 			),
-		).rejects.toThrow("mandatory restore effect failure");
+		).rejects.toThrow("transaction-bound restore effect failure");
 
 		expect((await findTarget(restoreTarget.id))?.deletedAt).not.toBeNull();
 		expect(await effectCount(restoreTarget.id, "restore")).toBe(0);
@@ -456,7 +523,7 @@ describe("mandatory transactional collection effects", () => {
 				{ id: target.id },
 				context,
 			),
-		).rejects.toThrow("mandatory purge effect failure");
+		).rejects.toThrow("transaction-bound purge effect failure");
 
 		expect((await findTarget(target.id))?.deletedAt).not.toBeNull();
 		expect(await effectCount(target.id, "purge")).toBe(0);
@@ -547,7 +614,7 @@ describe("mandatory transactional collection effects", () => {
 				{ where: { name: batchName }, data: { name: "Must roll back" } },
 				context,
 			),
-		).rejects.toThrow("mandatory update effect failure");
+		).rejects.toThrow("transaction-bound update effect failure");
 
 		expect((await findTarget(first.id))?.name).toBe(batchName);
 		expect((await findTarget(second.id))?.name).toBe(batchName);
@@ -619,7 +686,7 @@ describe("mandatory transactional collection effects", () => {
 				{ where: { name: batchName } },
 				context,
 			),
-		).rejects.toThrow("mandatory delete effect failure");
+		).rejects.toThrow("transaction-bound delete effect failure");
 
 		expect((await findTarget(first.id))?.deletedAt).toBeNull();
 		expect((await findTarget(second.id))?.deletedAt).toBeNull();
@@ -682,7 +749,7 @@ describe("mandatory transactional collection effects", () => {
 				{ id: target.id },
 				context,
 			),
-		).rejects.toThrow("mandatory hard-delete effect failure");
+		).rejects.toThrow("transaction-bound hard-delete effect failure");
 
 		expect((await findHardDeleteTarget(target.id))?.name).toBe("Hard delete");
 		expect(await effectCount(target.id, "hard-delete")).toBe(0);
@@ -744,7 +811,7 @@ describe("mandatory transactional collection effects", () => {
 				},
 				context,
 			),
-		).rejects.toThrow("mandatory update effect failure");
+		).rejects.toThrow("transaction-bound update effect failure");
 
 		expect((await findTarget(target.id))?.name).toBe("Version current");
 		expect(await effectCount(target.id, "update")).toBe(effectBefore);

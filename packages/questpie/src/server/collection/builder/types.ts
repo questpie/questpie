@@ -670,32 +670,6 @@ export type AfterPurgeHook<TSelect = any> = (
 ) => Promise<void> | void;
 
 /**
- * Mandatory application effects that join the collection write transaction.
- *
- * Unlike ordinary `afterChange` / `afterDelete` hooks, failures from these
- * handlers always propagate and roll back the surrounding mutation. Use them
- * only for database-backed effects that must commit atomically with the row,
- * such as a transactional outbox or typed-channel ledger append.
- */
-export interface CollectionTransactionalEffects<TSelect = any> {
-	/**
-	 * Runs once per successfully inserted or updated row, including
-	 * `restoreById` and version reverts (both use the update lifecycle).
-	 */
-	afterChange?: AfterChangeHook<TSelect>[] | AfterChangeHook<TSelect>;
-
-	/**
-	 * Runs once per successfully deleted row after either soft or hard delete.
-	 */
-	afterDelete?: AfterDeleteHook<TSelect>[] | AfterDeleteHook<TSelect>;
-
-	/**
-	 * Runs after physical purge while the purge transaction is still open.
-	 */
-	afterPurge?: AfterPurgeHook<TSelect>[] | AfterPurgeHook<TSelect>;
-}
-
-/**
  * Context passed to workflow transition hooks.
  * Includes the stage transition info alongside standard hook fields.
  */
@@ -1204,7 +1178,6 @@ export interface FormBuilderContext<TState extends CollectionBuilderState> {
 }
 
 declare const __collectionHooksStorageBrand: unique symbol;
-declare const __collectionTransactionalEffectsStorageBrand: unique symbol;
 declare const __collectionAccessStorageBrand: unique symbol;
 
 /**
@@ -1214,15 +1187,6 @@ declare const __collectionAccessStorageBrand: unique symbol;
  */
 export type CollectionHooksStorage = Record<string, unknown> & {
 	readonly [__collectionHooksStorageBrand]?: never;
-};
-
-/**
- * Opaque transactional-effect storage on builder state.
- * `.transactionalEffects()` enforces `CollectionTransactionalEffects<…>` at
- * the call site while avoiding recursive AppContext expansion in the state.
- */
-export type CollectionTransactionalEffectsStorage = Record<string, unknown> & {
-	readonly [__collectionTransactionalEffectsStorageBrand]?: never;
 };
 
 /**
@@ -1259,11 +1223,6 @@ export interface CollectionBuilderState {
 	 * Lifecycle hooks — opaque storage; see `CollectionHooksStorage`.
 	 */
 	hooks: CollectionHooksStorage;
-	/**
-	 * Mandatory in-transaction effects — opaque storage; see
-	 * `CollectionTransactionalEffectsStorage`.
-	 */
-	transactionalEffects: CollectionTransactionalEffectsStorage;
 	/**
 	 * Access control — opaque storage; see `CollectionAccessStorage`.
 	 */
@@ -1342,8 +1301,6 @@ export type ExtractOptions<TState extends CollectionBuilderState> =
 	TState["options"];
 export type ExtractHooks<TState extends CollectionBuilderState> =
 	TState["hooks"];
-export type ExtractTransactionalEffects<TState extends CollectionBuilderState> =
-	TState["transactionalEffects"];
 export type ExtractAccess<TState extends CollectionBuilderState> =
 	TState["access"];
 
@@ -1367,7 +1324,6 @@ export type EmptyCollectionState<
 	title: undefined;
 	options: {};
 	hooks: CollectionHooksStorage;
-	transactionalEffects: CollectionTransactionalEffectsStorage;
 	access: CollectionAccessStorage;
 	searchable: undefined;
 	validation: undefined;

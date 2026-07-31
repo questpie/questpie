@@ -59,7 +59,7 @@ Framework handlers and hooks receive a generated `channels` service:
 	});
 });
 
-.transactionalEffects({
+.hooks({
 	afterChange: [async ({ data, channels }) => {
 		await channels.publish("chatRoom", {
 			params: { roomId: data.roomId },
@@ -70,12 +70,11 @@ Framework handlers and hooks receive a generated `channels` service:
 });
 ```
 
-In collection files, use the injected `{ channels }`. A transactional effect
-is the correct seam when channel publication is mandatory: a publish failure
-rolls back both the collection mutation and ordered channel-ledger append.
-Never import the generated `app` or defer lookup through ambient
-`getContext()`; the injected service is generated-type-safe and
-mutation-context aware.
+In collection/global/hook files, use the injected `{ channels }`. Hooks run in
+the owning mutation transaction, so a publish failure rolls back both the
+mutation and ordered channel-ledger append. Never import the generated `app` or
+defer lookup through ambient `getContext()`; the injected service is
+generated-type-safe and mutation-context aware.
 
 ## Client, presence, and TanStack Query
 

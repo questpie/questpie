@@ -262,7 +262,6 @@ export function collection<TName extends string>(
 	title: undefined;
 	options: Record<string, never>;
 	hooks: Record<string, never>;
-	transactionalEffects: Record<string, never>;
 	access: Record<string, never>;
 	searchable: undefined;
 	validation: undefined;
@@ -284,7 +283,6 @@ export function collection<TName extends string>(
 			title: undefined,
 			options: {},
 			hooks: {},
-			transactionalEffects: {},
 			access: {},
 			searchable: undefined,
 			validation: undefined,

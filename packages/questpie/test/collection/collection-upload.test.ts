@@ -765,7 +765,7 @@ describe("collection storage route streaming", () => {
 		expect(await app.storage.exists("new.txt")).toBe(true);
 	});
 
-	it("durably removes the previous stored object when a user afterChange hook throws", async () => {
+	it("rolls back an upload row key update when a user afterChange hook throws", async () => {
 		const oldBody = textEncoder.encode("old");
 		const newBody = textEncoder.encode("new");
 		const storage = createInstrumentedStorageAdapter({
@@ -791,30 +791,34 @@ describe("collection storage route streaming", () => {
 			createTestContext(),
 		);
 
-		const updated = await app.collections.assets.updateById(
-			{
-				id: asset.id,
-				data: {
-					key: "new-throwing-after-change.txt",
-					filename: "new-throwing-after-change.txt",
-					size: newBody.byteLength,
+		await expect(
+			app.collections.assets.updateById(
+				{
+					id: asset.id,
+					data: {
+						key: "new-throwing-after-change.txt",
+						filename: "new-throwing-after-change.txt",
+						size: newBody.byteLength,
+					},
 				},
-			},
+				createTestContext(),
+			),
+		).rejects.toThrow("afterChange failed");
+
+		const unchanged = await app.collections.assets.findOne(
+			{ where: { id: asset.id } },
 			createTestContext(),
 		);
-
-		expect(updated.key).toBe("new-throwing-after-change.txt");
+		expect(unchanged?.key).toBe("old-throwing-after-change.txt");
 		expect(storage.calls.deletedKeys).toEqual([]);
 		expect(await app.storage.exists("old-throwing-after-change.txt")).toBe(
 			true,
 		);
 
 		await app.queue.runOnce({ jobs: ["storageCleanup"] });
-		expect(storage.calls.deletedKeys).toEqual([
-			"old-throwing-after-change.txt",
-		]);
+		expect(storage.calls.deletedKeys).toEqual([]);
 		expect(await app.storage.exists("old-throwing-after-change.txt")).toBe(
-			false,
+			true,
 		);
 		expect(await app.storage.exists("new-throwing-after-change.txt")).toBe(
 			true,
@@ -863,7 +867,7 @@ describe("collection storage route streaming", () => {
 		expect(deleted).toBeNull();
 	});
 
-	it("removes the stored object when a user afterDelete hook throws", async () => {
+	it("rolls back the row and storage deletion when a user afterDelete hook throws", async () => {
 		const body = textEncoder.encode("delete me");
 		const storage = createInstrumentedStorageAdapter({
 			"delete-throwing-after-delete.txt": body,
@@ -887,26 +891,22 @@ describe("collection storage route streaming", () => {
 			createTestContext(),
 		);
 
-		const result = await app.collections.assets.deleteById(
-			{ id: asset.id },
-			createTestContext(),
-		);
+		await expect(
+			app.collections.assets.deleteById({ id: asset.id }, createTestContext()),
+		).rejects.toThrow("afterDelete failed");
 
-		expect(result.success).toBe(true);
-		expect(storage.calls.deletedKeys).toEqual([
-			"delete-throwing-after-delete.txt",
-		]);
+		expect(storage.calls.deletedKeys).toEqual([]);
 		expect(await app.storage.exists("delete-throwing-after-delete.txt")).toBe(
-			false,
+			true,
 		);
-		const deleted = await app.collections.assets.findOne(
+		const unchanged = await app.collections.assets.findOne(
 			{ where: { id: asset.id } },
 			createTestContext(),
 		);
-		expect(deleted).toBeNull();
+		expect(unchanged?.id).toBe(asset.id);
 	});
 
-	it("removes stored objects for later bulk delete rows when a user afterDelete hook throws", async () => {
+	it("rolls back every row and storage deletion when a bulk afterDelete hook throws", async () => {
 		const bodyA = textEncoder.encode("delete me a");
 		const bodyB = textEncoder.encode("delete me b");
 		const storage = createInstrumentedStorageAdapter({
@@ -943,27 +943,25 @@ describe("collection storage route streaming", () => {
 			createTestContext(),
 		);
 
-		const result = await app.collections.assets.delete(
-			{ where: { id: { in: [first.id, second.id] } } },
-			createTestContext(),
-		);
+		await expect(
+			app.collections.assets.delete(
+				{ where: { id: { in: [first.id, second.id] } } },
+				createTestContext(),
+			),
+		).rejects.toThrow("afterDelete failed");
 
-		expect(result).toEqual({ success: true, count: 2 });
-		expect([...storage.calls.deletedKeys].sort()).toEqual([
-			"bulk-delete-throwing-after-delete-a.txt",
-			"bulk-delete-throwing-after-delete-b.txt",
-		]);
+		expect(storage.calls.deletedKeys).toEqual([]);
 		expect(
 			await app.storage.exists("bulk-delete-throwing-after-delete-a.txt"),
-		).toBe(false);
+		).toBe(true);
 		expect(
 			await app.storage.exists("bulk-delete-throwing-after-delete-b.txt"),
-		).toBe(false);
+		).toBe(true);
 		const remaining = await app.collections.assets.find(
 			{ where: { id: { in: [first.id, second.id] } } },
 			createTestContext(),
 		);
-		expect(remaining.docs).toHaveLength(0);
+		expect(remaining.docs).toHaveLength(2);
 	});
 
 	it("serves full files and ranges from storage streams", async () => {
