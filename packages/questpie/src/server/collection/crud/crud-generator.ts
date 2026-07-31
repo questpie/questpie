@@ -76,7 +76,6 @@ import { getColumn } from "#questpie/server/collection/crud/shared/field-resolve
 import {
 	executeGlobalCollectionHooks,
 	executeGlobalCollectionTransitionHooks,
-	rethrowFatalGlobalHookError,
 } from "#questpie/server/collection/crud/shared/global-hooks.js";
 import {
 	createHookContext,
