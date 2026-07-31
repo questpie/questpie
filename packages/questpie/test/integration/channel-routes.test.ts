@@ -221,7 +221,8 @@ describe("channel module routes", () => {
 		const reader = response.body!.getReader();
 		const state = { buffer: "" };
 		await readSseEvent(reader, state, "session");
-		for (let attempt = 0; sessionResolutions < 3 && attempt < 100; attempt++) {
+		for (let attempt = 0; attempt < 100; attempt++) {
+			if (sessionResolutions >= 3) break;
 			await new Promise((resolve) => setTimeout(resolve, 5));
 		}
 		expect(sessionResolutions).toBeGreaterThanOrEqual(3);
