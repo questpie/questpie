@@ -180,6 +180,38 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	}
 
 	/**
+	 * Build the next builder in an immutable chain, carrying every piece of
+	 * private state forward.
+	 *
+	 * Each method used to construct `new CollectionBuilder(...)` itself and then
+	 * hand-copy what it remembered to copy. `_indexesFn` was copied at all
+	 * thirteen sites; `_fieldDefs` at none, so the app's field-factory map — the
+	 * one holding module-contributed types like `richText` — was dropped by the
+	 * first derivation and `.fields()` silently fell back to `builtinFields`.
+	 * The type did not fall back with it, because `~fieldTypes` travels on the
+	 * state, so the promise and the runtime disagreed depending on call order.
+	 *
+	 * Adding a fourteenth hand-copy is how that recurs. This is the one place
+	 * that knows what a derived builder must carry; a new private field is added
+	 * here once. Callers that mean to CHANGE one of these (`indexes()`,
+	 * `merge()`) override it on the result.
+	 */
+	private _derive<TNext extends CollectionBuilderState>(
+		state: TNext,
+	): CollectionBuilder<TNext> {
+		const next = new CollectionBuilder(state);
+		next._fieldDefs = this._fieldDefs;
+		// `_indexesFn` is parameterised by the builder's own state, so carrying
+		// it to a builder with different state needs the conversion spelled out.
+		// The function itself is unchanged — only the state type it is indexed by.
+		next._indexesFn = this._indexesFn as CollectionBuilderIndexesFn<
+			TNext,
+			TNext["indexes"]
+		>;
+		return next;
+	}
+
+	/**
 	 * Define fields using Field Builder.
 	 * Provides type-safe field definitions with validation, metadata, and operators.
 	 *
@@ -350,12 +382,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				_pendingRelations: [...prevPendingRelations, ...pendingRelations],
 			} as any;
 
-			const newBuilder = new CollectionBuilder(newState);
-
-			// Copy callback functions
-			newBuilder._indexesFn = this._indexesFn;
-
-			return newBuilder;
+			return this._derive(newState);
 		}
 
 		// Legacy pattern: raw Drizzle columns object
@@ -384,12 +411,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			).filter((rel) => !(rel.name in columns)),
 		} as any;
 
-		const newBuilder = new CollectionBuilder(newState);
-
-		// Copy callback functions
-		newBuilder._indexesFn = this._indexesFn;
-
-		return newBuilder;
+		return this._derive(newState);
 	}
 
 	/**
@@ -557,9 +579,9 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			indexes: {} as TNewIndexes,
 		} as any;
 
-		const newBuilder = new CollectionBuilder(newState);
-
-		// Copy existing callback functions and set new indexesFn
+		// Derives normally, then overrides the one thing this method exists to
+		// change.
+		const newBuilder = this._derive(newState);
 		newBuilder._indexesFn = fn;
 
 		return newBuilder;
@@ -577,9 +599,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				awarenessSchema: config?.awareness,
 			},
 		} as any;
-		const newBuilder = new CollectionBuilder(newState);
-		newBuilder._indexesFn = this._indexesFn;
-		return newBuilder;
+		return this._derive(newState);
 	}
 
 	/**
@@ -609,12 +629,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			title: titleFieldName,
 		} as any;
 
-		const newBuilder = new CollectionBuilder(newState);
-
-		// Copy existing callback functions
-		newBuilder._indexesFn = this._indexesFn;
-
-		return newBuilder;
+		return this._derive(newState);
 	}
 
 	/**
@@ -639,12 +654,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			options,
 		} as any;
 
-		const newBuilder = new CollectionBuilder(newState);
-
-		// Copy callback functions
-		newBuilder._indexesFn = this._indexesFn;
-
-		return newBuilder;
+		return this._derive(newState);
 	}
 
 	/**
@@ -692,12 +702,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			hooks: mergedHooks,
 		} as any;
 
-		const newBuilder = new CollectionBuilder(newState);
-
-		// Copy callback functions
-		newBuilder._indexesFn = this._indexesFn;
-
-		return newBuilder;
+		return this._derive(newState);
 	}
 
 	/**
@@ -729,12 +734,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			access,
 		} as any;
 
-		const newBuilder = new CollectionBuilder(newState);
-
-		// Copy callback functions
-		newBuilder._indexesFn = this._indexesFn;
-
-		return newBuilder;
+		return this._derive(newState);
 	}
 
 	/**
@@ -760,12 +760,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			searchable,
 		} as any;
 
-		const newBuilder = new CollectionBuilder(newState);
-
-		// Copy callback functions
-		newBuilder._indexesFn = this._indexesFn;
-
-		return newBuilder;
+		return this._derive(newState);
 	}
 
 	/**
@@ -800,12 +795,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			validationOptions: options ?? {},
 		} as any;
 
-		const newBuilder = new CollectionBuilder(newState);
-
-		// Copy callback functions
-		newBuilder._indexesFn = this._indexesFn;
-
-		return newBuilder;
+		return this._derive(newState);
 	}
 
 	/**
@@ -1039,12 +1029,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			upload: options,
 		} as any;
 
-		const newBuilder = new CollectionBuilder(newState);
-
-		// Copy callback functions
-		newBuilder._indexesFn = this._indexesFn;
-
-		return newBuilder;
+		return this._derive(newState);
 	}
 
 	/**
@@ -1067,9 +1052,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		value: V,
 	): CollectionBuilder<TState & Record<TKey, V>> {
 		const newState = { ...this.state, [key]: value } as any;
-		const newBuilder = new CollectionBuilder(newState);
-		newBuilder._indexesFn = this._indexesFn;
-		return newBuilder;
+		return this._derive(newState);
 	}
 
 	/**
@@ -1273,10 +1256,11 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			_pendingRelations: mergedPendingRelations,
 		} as any;
 
-		const newBuilder = new CollectionBuilder(mergedState);
-
-		// Merge callback functions - prefer other's if exists, otherwise use this
-		newBuilder._indexesFn = other._indexesFn || this._indexesFn;
+		// Derives from `this`, then lets the merged-in builder win where it has
+		// something to contribute.
+		const newBuilder = this._derive(mergedState);
+		newBuilder._indexesFn = (other._indexesFn ||
+			this._indexesFn) as typeof newBuilder._indexesFn;
 
 		return newBuilder;
 	}
