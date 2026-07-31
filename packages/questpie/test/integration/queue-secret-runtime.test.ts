@@ -228,6 +228,7 @@ describe("secret-bearing Queue runtime", () => {
 		expect((captured as Error).message).toBe(
 			"QUESTPIE Queue secret payload validation failed",
 		);
+		expect((captured as Error & { cause?: unknown }).cause).toBeUndefined();
 		expect(JSON.stringify(captured)).not.toContain(rawSecret);
 		expect(JSON.stringify(logLines)).not.toContain(rawSecret);
 		expect(setup.app.mocks.queue.getJobsByName("secret-refinement")).toEqual(

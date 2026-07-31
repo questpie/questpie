@@ -69,6 +69,17 @@ const defaultLogger: QueueLogger = {
 	error: (msg, ...args) => console.error(msg, ...args),
 };
 
+/**
+ * Create a deliberately cause-free error at the secret boundary.
+ *
+ * Validation, provider, and handler errors may contain the original payload.
+ * Keeping construction outside the catch blocks makes the intentional
+ * redaction explicit without attaching a secret-bearing `cause`.
+ */
+function redactedSecretQueueError(message: string): Error {
+	return new Error(message);
+}
+
 function resolveCapabilities(adapter: QueueAdapter): QueueAdapterCapabilities {
 	return {
 		longRunningConsumer:
@@ -256,7 +267,7 @@ export function createQueueClient<
 									} as any);
 								} catch (error) {
 									if (secretPayload) {
-										throw new Error(
+										throw redactedSecretQueueError(
 											"QUESTPIE Queue secret job handling failed",
 										);
 									}
@@ -296,7 +307,9 @@ export function createQueueClient<
 					}
 				} catch (error) {
 					if (secretPayload) {
-						throw new Error("QUESTPIE Queue secret job handling failed");
+						throw redactedSecretQueueError(
+							"QUESTPIE Queue secret job handling failed",
+						);
 					}
 					throw error;
 				} finally {
@@ -632,7 +645,9 @@ export function createQueueClient<
 					validated = jobDef.schema.parse(payload);
 				} catch (error) {
 					if (options.secretPayload) {
-						throw new Error("QUESTPIE Queue secret payload validation failed");
+						throw redactedSecretQueueError(
+							"QUESTPIE Queue secret payload validation failed",
+						);
 					}
 					throw error;
 				}
