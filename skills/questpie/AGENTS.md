@@ -3651,6 +3651,34 @@ Each hook accepts a single function **or an array of functions** (executed in or
 })
 ```
 
+### Transaction-bound Hooks
+
+`afterChange`, `afterDelete`, and `afterPurge` run inside the owning mutation
+transaction. Their `db` and injected services share that scope. A thrown error
+propagates and rolls back the mutation plus transaction-joined work:
+
+```ts
+.hooks({
+	afterChange: async ({ data, channels }) => {
+		await channels.publish("postActivity", {
+			params: { postId: data.id },
+			event: "changed",
+			data: { id: data.id },
+		});
+	},
+})
+```
+
+`afterChange` covers create/update, including restore and version revert;
+`afterDelete` covers soft and hard delete; `afterPurge` runs after physical
+removal and before commit. `updateMany` and `deleteMany` run once per winning
+row, sequentially in deterministic order, with bulk metadata. `updateBatch`
+runs once per successful item. An already-active no-op restore runs nothing.
+
+Use these hooks for transaction-aware database, Queue/outbox, or typed-channel
+work. Direct email/HTTP work cannot join the transaction and belongs in a
+durable job or `onAfterCommit`.
+
 ### Hook Context Properties
 
 | Property        | Available in                                                         | Description                                                                  |
@@ -6220,7 +6248,11 @@ Framework handlers and hooks receive a generated `channels` service:
 });
 ```
 
-In collection/global/hook files, use the injected `{ channels }`. Never import the generated `app` or defer lookup through ambient `getContext()`; the injected service is generated-type-safe and mutation-context aware.
+In collection/global/hook files, use the injected `{ channels }`. Hooks run in
+the owning mutation transaction, so a publish failure rolls back both the
+mutation and ordered channel-ledger append. Never import the generated `app` or
+defer lookup through ambient `getContext()`; the injected service is
+generated-type-safe and mutation-context aware.
 
 ## Client, presence, and TanStack Query
 

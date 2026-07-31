@@ -14,7 +14,7 @@ Hooks run logic at precise points in a collection lifecycle: transform input bef
 - **Guard and clean up deletes** with `beforeDelete` (block, cascade, back up) and `afterDelete` (cleanup, notify).
 - **Guard irreversible purge** with dedicated, fatal `beforePurge` and `afterPurge` hooks.
 - **Fire side effects only after the transaction commits** with `ctx.onAfterCommit`, jobs, emails, webhooks, search indexing.
-- **Abort an operation** by throwing in any `before*` hook.
+- **Abort an operation** by throwing in a transaction-bound hook.
 
 ## Quick start
 
@@ -117,22 +117,22 @@ Written **inline** on `.hooks({ ... })`, `data` / `original` / `operation` are a
 
 Declare any subset of these on `.hooks({ ... })`. Each value is a **single function or an array of functions**, see [Arrays and composition](#arrays-and-composition).
 
-| Stage              | Fires on                            | `ctx.data`                 | `ctx.original`       | Throw aborts?                                                               |
-| ------------------ | ----------------------------------- | -------------------------- | -------------------- | --------------------------------------------------------------------------- |
-| `beforeOperation`  | create, update, read, delete, purge | input (type depends on op) | none                 | yes                                                                         |
-| `beforeValidate`   | create, update                      | **mutable** input          | none                 | yes                                                                         |
-| `beforeChange`     | create, update                      | **validated** input        | none                 | yes                                                                         |
-| `afterChange`      | create, update                      | the saved record           | record (update only) | **on create only**, propagates + rolls back; on update it's caught + logged |
-| `beforeRead`       | read                                | query options              | none                 | yes                                                                         |
-| `afterRead`        | create, update, read, delete        | the record                 | record (update only) | **yes**, propagates to the caller                                           |
-| `beforeDelete`     | delete                              | record to be deleted       | none                 | yes                                                                         |
-| `afterDelete`      | delete                              | the deleted record         | same deleted record  | no, caught + logged                                                         |
-| `beforePurge`      | purge                               | locked deleted preimage    | same preimage        | **yes**, propagates + rolls back                                            |
-| `afterPurge`       | purge                               | locked deleted preimage    | same preimage        | **yes**, propagates + rolls back                                            |
-| `beforeTransition` | workflow transition                 | the record                 | none                 | yes                                                                         |
-| `afterTransition`  | workflow transition                 | the record                 | none                 | no, caught + logged                                                         |
+| Stage              | Fires on                            | `ctx.data`                 | `ctx.original`       | Throw aborts?                     |
+| ------------------ | ----------------------------------- | -------------------------- | -------------------- | --------------------------------- |
+| `beforeOperation`  | create, update, read, delete, purge | input (type depends on op) | none                 | yes                               |
+| `beforeValidate`   | create, update                      | **mutable** input          | none                 | yes                               |
+| `beforeChange`     | create, update                      | **validated** input        | none                 | yes                               |
+| `afterChange`      | create, update                      | the saved record           | record (update only) | **yes**, propagates + rolls back  |
+| `beforeRead`       | read                                | query options              | none                 | yes                               |
+| `afterRead`        | create, update, read, delete        | the record                 | record (update only) | **yes**, propagates to the caller |
+| `beforeDelete`     | delete                              | record to be deleted       | none                 | yes                               |
+| `afterDelete`      | delete                              | the deleted record         | same deleted record  | **yes**, propagates + rolls back  |
+| `beforePurge`      | purge                               | locked deleted preimage    | same preimage        | **yes**, propagates + rolls back  |
+| `afterPurge`       | purge                               | locked deleted preimage    | same preimage        | **yes**, propagates + rolls back  |
+| `beforeTransition` | workflow transition                 | the record                 | none                 | yes                               |
+| `afterTransition`  | workflow transition                 | the record                 | none                 | no, caught + logged               |
 
-`beforeTransition` / `afterTransition` fire only on workflow stage transitions and carry a different context, see [Transition hooks](#transition-hooks). The "Throw aborts?" column is subtle for the `after*` hooks, see [Aborting an operation](#aborting-an-operation) for exactly which ones swallow errors and which propagate.
+`beforeTransition` / `afterTransition` fire only on workflow stage transitions and carry a different context, see [Transition hooks](#transition-hooks). See [Aborting an operation](#aborting-an-operation) for the transaction boundary of each stage.
 
 **Execution order**, per operation:
 
@@ -152,6 +152,51 @@ Read    →  beforeOperation → beforeRead     → [SELECT] → afterRead
 	`beforeUpdate` and `afterUpdate`. See [Globals](#related).
 </Callout>
 
+### Transaction-bound hooks
+
+`afterChange`, `afterDelete`, and `afterPurge` run inside the owning CRUD
+transaction. Their `ctx.db` is that active transaction, and injected services
+such as `collections`, `queue`, and `channels` join the same scope. A thrown or
+rejected error fails the CRUD call and rolls back the row plus all
+transaction-joined work:
+
+```ts title="src/questpie/server/collections/posts.ts"
+export const posts = collection("posts")
+	.fields(({ f }) => ({
+		title: f.text().required(),
+	}))
+	.hooks({
+		afterChange: async ({ data, operation, channels }) => {
+			await channels.publish("postActivity", {
+				params: { postId: data.id },
+				event: operation === "create" ? "created" : "updated",
+				data: { id: data.id },
+			});
+		},
+	});
+```
+
+Exact coverage:
+
+- `afterChange`: once per successful create or update winner. `restoreById`
+  and version reverts use the update lifecycle; an already-active no-op restore
+  does not run an effect.
+- `afterDelete`: once per successful soft or hard delete winner.
+- `afterPurge`: after physical removal and before commit.
+- `updateMany` and `deleteMany`: once per winning row, with the normal bulk
+  metadata.
+- `updateBatch`: once per successful item, without bulk metadata. Each item
+  invokes the ordinary single-record update lifecycle inside the shared
+  transaction.
+
+A nested managed transaction does not run a hook a second time. Bulk hook
+chains execute sequentially in deterministic winner order so one rejection is
+fully settled before the transaction rolls back.
+
+`afterRead` still runs after the transaction closes. Do not perform direct
+email, HTTP, or other work that cannot join the database transaction in an
+`after*` hook; use `onAfterCommit` or a transaction-aware queue/outbox instead.
+
 ### What each stage is for
 
 - **`beforeOperation`**, runs first for **every** operation, including read, delete, and purge. Use for logging, rate limiting, or early checks. `ctx.data` is the input (type depends on the operation), `ctx.original` is not available.
@@ -161,9 +206,9 @@ Read    →  beforeOperation → beforeRead     → [SELECT] → afterRead
 - **`beforeRead`**, modify query options / add filters. Here `ctx.data` is the query context, not a row.
 - **`afterRead`**, transform output, add computed fields, format values. Fires after create, update, delete, and read.
 - **`beforeDelete`**, block deletion (throw), cascade, or back up. `ctx.data` is the record about to be deleted.
-- **`afterDelete`**, cleanup, logging, notifications. `ctx.data` is the deleted record.
+- **`afterDelete`**, transaction-bound cleanup and durable facts. `ctx.data` is the deleted record; throwing rolls back soft or hard delete.
 - **`beforePurge`**, guard permanent removal of an already soft-deleted record. `data` and `original` are the same locked, localized persisted preimage before field-output/`afterRead` hooks. Throwing rolls back the purge.
-- **`afterPurge`**, record transactional cleanup intents or facts. It receives the same preimage even though the owner row has been removed inside the transaction. Unlike `afterDelete`, throwing is fatal and rolls back the purge. Use `onAfterCommit` only for non-transactional side effects; durable external cleanup needs a transactional outbox. See [Soft delete and durable retention](/docs/concepts/soft-delete-retention).
+- **`afterPurge`**, record transactional cleanup intents or facts. It receives the same preimage even though the owner row has been removed inside the transaction. Throwing rolls back the purge. Use `onAfterCommit` only for non-transactional side effects; durable external cleanup needs a transactional outbox. See [Soft delete and durable retention](/docs/concepts/soft-delete-retention).
 
 ### The hook context (`ctx`)
 
@@ -211,7 +256,14 @@ type HookContext = AppContext & {
 
 ### Side effects (`onAfterCommit`)
 
-`afterChange`, `afterDelete`, and `afterTransition` run **inside** the CRUD transaction. `queue.<job>.publish()` is transaction-aware: call and await it directly so pg-boss joins the transaction or the framework commits an external-adapter dispatch intent with the data. Direct email, HTTP calls, and other non-transactional effects must still wait until commit. (`afterRead` runs _after_ the transaction closes.)
+`afterChange`, `afterDelete`, `afterPurge`, and `afterTransition` run **inside**
+the CRUD transaction.
+`queue.<job>.publish()` is transaction-aware: call and await it directly so
+pg-boss joins the transaction or the framework commits an external-adapter
+dispatch intent with the data. Direct email, HTTP calls, and other
+non-transactional effects must still wait until commit. (`afterRead` runs
+_after_ the transaction closes.) `afterTransition` retains its existing
+non-fatal compatibility behavior; use `beforeTransition` to veto a transition.
 
 Use `ctx.onAfterCommit(cb)` to defer only those non-transactional side effects until the **outermost** transaction commits:
 
@@ -242,17 +294,19 @@ Use `ctx.onAfterCommit(cb)` to defer only those non-transactional side effects u
 This is exactly how the framework's own realtime and search hooks are written, both subscribe to `afterChange` / `afterDelete` and wrap their broadcast/indexing in `ctx.onAfterCommit`, so events fire only on durable data.
 
 <Callout type="warn">
-	**Keep external effects out of an `after*` hook.** Transactional database
-	writes through `ctx.db` are allowed when they intentionally commit or roll
-	back with the operation; the core purge upload hook uses this for its durable
-	cleanup outbox. Dispatching a job, calling `realtime.notify`, or using an
-	independent database connection directly can escape the transaction or
-	deadlock against it. Put non-transactional effects in `onAfterCommit`.
+	**Keep direct external effects out of an `after*` hook.** Transactional
+	database writes through `ctx.db`, transaction-aware Queue publication, and
+	typed Channels ledger writes intentionally commit or roll back with the
+	operation. Direct email, HTTP, `realtime.notify`, or an independent database
+	connection cannot join that transaction; put them in a durable job or
+	`onAfterCommit`.
 </Callout>
 
 ### Aborting an operation
 
-Throw inside any `before*` hook to abort. `before*` errors **propagate** and roll the operation back:
+Throw inside a rollback-capable mutation hook to abort. `before*`,
+`afterChange`, `afterDelete`, and purge-hook errors **propagate** and roll the
+operation back:
 
 ```ts title="src/questpie/server/collections/posts.ts"
 import { ApiError } from "questpie/errors";
@@ -269,25 +323,11 @@ import { ApiError } from "questpie/errors";
 `ApiError` gives you a typed, status-mapped failure (`badRequest` → 400, `forbidden` → 403, `notFound` → 404, …) that serializes cleanly to the client. A plain `throw new Error(...)` also aborts, but is reported as a generic internal error (HTTP 500) rather than a typed one, so prefer `ApiError`. See [Validation](#related) for the full `ApiError` surface.
 
 <Callout type="warn">
-	**Not every `after*` hook swallows its errors, know which ones do.** A throw
-	is caught and logged (`[QUESTPIE] … hook error: …`), not propagated, in only
-	three places: **`afterChange` on update** (single and bulk), **`afterDelete`**,
-	and **`afterTransition`**. The operation still succeeds there.
-
-    But two cases **do propagate** a thrown error, and they will surface to the
-    caller:
-
-    - **`afterChange` on *create*** runs inside the create transaction with no
-      catch, a throw **rolls the insert back** and fails the request.
-    - **`afterRead` on *every* operation** (create, update, delete, read) runs with
-      no catch, a throw propagates to the caller, even though the write itself
-      already committed (so you can get a failed response for data that landed).
-
-    If you need a hook that can never affect the response, use one of the three
-    non-fatal `after*` cases, or, better, do the veto-able work in a `before*`
-    stage and defer everything else with [`onAfterCommit`](#side-effects-onaftercommit),
-    whose callbacks are always non-fatal.
-
+	**`afterRead` is not a rollback hook.** It runs after a write transaction has
+	committed. A thrown error still rejects the caller's response, but it cannot
+	undo data that already landed. Work that must never affect the response
+	belongs in a durable job or [`onAfterCommit`](#side-effects-onaftercommit),
+	whose callbacks are non-fatal because the commit is already final.
 </Callout>
 
 ### Bulk operations
@@ -311,6 +351,7 @@ import { ApiError } from "questpie/errors";
 
 - `isBatch` is `true` when the hook runs as part of `updateMany` / `deleteMany`.
 - `recordIds` / `records` / `count` describe the whole batch. `records` semantics: **post-image** on update, **pre-image** on delete.
+- Transaction-bound hook chains run sequentially in winner order. Any failure rolls back the complete bulk mutation.
 
 <Callout type="warn">
 	**Bulk `before*` hooks are *intent*, bulk `afterChange` is *fact*.** In a

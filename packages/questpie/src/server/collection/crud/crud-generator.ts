@@ -84,7 +84,6 @@ import { getColumn } from "#questpie/server/collection/crud/shared/field-resolve
 import {
 	executeGlobalCollectionHooks,
 	executeGlobalCollectionTransitionHooks,
-	rethrowFatalGlobalHookError,
 } from "#questpie/server/collection/crud/shared/global-hooks.js";
 import {
 	createHookContext,
@@ -2642,37 +2641,27 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						}
 					: undefined;
 
-				const afterChangePromises: Promise<void>[] = [];
 				for (const updated of refetchedRecords) {
 					const original = records.find((r) => r.id === updated.id);
 
 					await this.createVersion(tx, updated, "update", txContext);
-
-					// Collect afterChange hooks for parallel execution in bulk
-					afterChangePromises.push(
-						this.executeCollectionHooksWithGlobal(
-							"afterChange",
-							this.state.hooks?.afterChange,
-							this.createHookContext({
-								data: updated,
-								original,
-								operation: "update",
-								context: txContext,
-								db: tx,
-								bulk: afterBulkMeta,
-							}),
-						).catch((err) => {
-							rethrowFatalGlobalHookError(err);
-							console.error(
-								`[QUESTPIE] afterChange hook error in bulk update:`,
-								err,
-							);
-						}),
+					const afterChangeContext = this.createHookContext({
+						data: updated,
+						original,
+						operation: "update",
+						context: txContext,
+						db: tx,
+						bulk: afterBulkMeta,
+					});
+					// One transaction-bound hook chain at a time. Promise.all rejects
+					// before sibling chains settle, which can let work continue while
+					// the owning transaction is already rolling back.
+					await this.executeCollectionHooksWithGlobal(
+						"afterChange",
+						this.state.hooks?.afterChange,
+						afterChangeContext,
 					);
 				}
-				// Execute all afterChange hooks in parallel. Ordinary hook errors were
-				// handled above; fatal infrastructure errors still abort the transaction.
-				await Promise.all(afterChangePromises);
 
 				const crdtManifest = this.getCrdtManifest();
 				if (crdtManifest && !internal) {
@@ -2936,27 +2925,24 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 				await this.createVersion(tx, deletionSnapshot, "delete", txContext);
 
-				// Execute afterDelete hooks inside transaction (non-fatal)
-				try {
-					await this.executeCollectionHooksWithGlobal(
-						"afterDelete",
-						this.state.hooks?.afterDelete,
-						this.createHookContext({
-							data: deletionSnapshot,
-							original: currentExisting,
-							operation: "delete",
-							context: txContext,
-							db: tx,
-						}),
-					);
-				} catch (err) {
-					rethrowFatalGlobalHookError(err);
-					// afterDelete hook errors are non-fatal — log and continue
-					console.error(
-						`[QUESTPIE] afterDelete hook error for "${this.state.name}":`,
-						err,
-					);
-				}
+				const afterDeleteContext = this.createHookContext({
+					// Snapshot/original come from the canonical-revision work: `data` is
+					// what was actually written, `original` the pre-delete record.
+					data: deletionSnapshot,
+					original: currentExisting,
+					operation: "delete",
+					context: txContext,
+					db: tx,
+				});
+
+				// Fatal by design: hook failures roll back both soft and hard deletes.
+				// The try/catch that logged and continued is deliberately gone — that
+				// is the change this branch exists to make.
+				await this.executeCollectionHooksWithGlobal(
+					"afterDelete",
+					this.state.hooks?.afterDelete,
+					afterDeleteContext,
+				);
 				if (stagedCrdtOwner) {
 					const terminalRows = await tx
 						.select()
@@ -3699,27 +3685,22 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// Execute afterDelete hooks inside the mutation transaction so
 				// transactional side effects share the business commit boundary.
 				for (const record of claimedRecords) {
-					try {
-						await this.executeCollectionHooksWithGlobal(
-							"afterDelete",
-							this.state.hooks?.afterDelete,
-							this.createHookContext({
-								data: deletionSnapshotById.get(record.id) ?? record,
-								original: record,
-								operation: "delete",
-								context: txContext,
-								db: tx,
-								bulk: afterDeleteBulkMeta,
-							}),
-						);
-					} catch (err) {
-						rethrowFatalGlobalHookError(err);
-						// afterDelete hook errors are non-fatal — log and continue
-						console.error(
-							`[QUESTPIE] afterDelete hook error for "${this.state.name}":`,
-							err,
-						);
-					}
+					const afterDeleteContext = this.createHookContext({
+						// Snapshot from the canonical-revision work; falls back to the
+						// claimed record when this id produced no snapshot.
+						data: deletionSnapshotById.get(record.id) ?? record,
+						original: record,
+						operation: "delete",
+						context: txContext,
+						db: tx,
+						bulk: afterDeleteBulkMeta,
+					});
+					// Fatal by design — see the single-delete path above.
+					await this.executeCollectionHooksWithGlobal(
+						"afterDelete",
+						this.state.hooks?.afterDelete,
+						afterDeleteContext,
+					);
 				}
 				if (stagedCrdtOwners.size > 0) {
 					const terminalRows = await tx
