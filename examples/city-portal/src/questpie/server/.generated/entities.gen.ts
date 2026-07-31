@@ -25,6 +25,7 @@ import _glob_site_settings from "../globals/site-settings";
 // ── Migrations ─────────────────────────────────────────────
 import _mig_20260725T184252_realtimeV3Umbrella from "../migrations/20260725T184252_realtime-v3-umbrella";
 import _mig_20260726T163039_queueTransactionalDispatch from "../migrations/20260726T163039_queue-transactional-dispatch";
+import _mig_20260731T084648_realtimeIdempotency1 from "../migrations/20260731T084648_realtime-idempotency-1";
 
 // ── Blocks ─────────────────────────────────────────────────
 import { accordionBlock as _bloc_accordion } from "../blocks/accordion";

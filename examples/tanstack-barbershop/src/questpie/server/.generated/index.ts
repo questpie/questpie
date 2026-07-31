@@ -65,6 +65,7 @@ import _mig_20260712T094709_bold_red_griffin from "../migrations/20260712T094709
 import _mig_20260712T195414_eager_red_tiger from "../migrations/20260712T195414_eager_red_tiger";
 import _mig_20260725T184252_realtimeV3Umbrella from "../migrations/20260725T184252_realtime-v3-umbrella";
 import _mig_20260726T163042_queueTransactionalDispatch from "../migrations/20260726T163042_queue-transactional-dispatch";
+import _mig_20260731T084650_realtimeIdempotency1 from "../migrations/20260731T084650_realtime-idempotency-1";
 
 // ── Seeds ──────────────────────────────────────────────────
 import _seed_blogPosts from "../seeds/blog-posts";
@@ -203,7 +204,7 @@ var _appLease = acquireGeneratedApp("tanstack-barbershop-example:src/questpie/se
 			appointmentConfirmation: _email_appointmentConfirmation,
 			newBlogPost: _email_newBlogPost,
 		},
-		migrations: [_mig_20260206T174642_gentle_azure_eagle, _mig_20260206T180920_fancy_green_tiger, _mig_20260211T100836_calm_blue_phoenix, _mig_20260218T195452_calm_blue_dragon, _mig_20260218T223923_fancy_blue_panda, _mig_20260218T235924_kind_crimson_falcon, _mig_20260307T122102_eager_red_eagle, _mig_20260307T135142_fancy_orange_tiger, _mig_20260424T221327_bold_yellow_phoenix, _mig_20260427T093217_eager_blue_phoenix, _mig_20260429T170546_kind_yellow_eagle, _mig_20260615T084209_swift_orange_eagle, _mig_20260712T094709_bold_red_griffin, _mig_20260712T195414_eager_red_tiger, _mig_20260725T184252_realtimeV3Umbrella, _mig_20260726T163042_queueTransactionalDispatch],
+		migrations: [_mig_20260206T174642_gentle_azure_eagle, _mig_20260206T180920_fancy_green_tiger, _mig_20260211T100836_calm_blue_phoenix, _mig_20260218T195452_calm_blue_dragon, _mig_20260218T223923_fancy_blue_panda, _mig_20260218T235924_kind_crimson_falcon, _mig_20260307T122102_eager_red_eagle, _mig_20260307T135142_fancy_orange_tiger, _mig_20260424T221327_bold_yellow_phoenix, _mig_20260427T093217_eager_blue_phoenix, _mig_20260429T170546_kind_yellow_eagle, _mig_20260615T084209_swift_orange_eagle, _mig_20260712T094709_bold_red_griffin, _mig_20260712T195414_eager_red_tiger, _mig_20260725T184252_realtimeV3Umbrella, _mig_20260726T163042_queueTransactionalDispatch, _mig_20260731T084650_realtimeIdempotency1],
 		seeds: [_seed_blogPosts, _seed_demoData, _seed_siteSettings],
 		fieldTypes: {
 			color: _ftype_color,
