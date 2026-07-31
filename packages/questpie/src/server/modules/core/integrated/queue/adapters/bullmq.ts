@@ -32,6 +32,10 @@ export class BullMQAdapter implements QueueAdapter {
 		pushConsumer: false,
 		scheduling: true,
 		singleton: true,
+		// BullMQ can terminalize outside the processor through stalls,
+		// maxStartedAttempts, and custom backoff failures. This release has no
+		// source-qualified reconciliation for all of those paths.
+		executionTerminalState: false,
 	} as const;
 
 	private readonly connection: ConnectionOptions;
@@ -141,6 +145,20 @@ export class BullMQAdapter implements QueueAdapter {
 		return opts;
 	}
 
+	private toQueueJobRecord(job: {
+		id?: string | number;
+		data: unknown;
+		attemptsMade: number;
+		opts: { attempts?: number };
+	}) {
+		const id = String(job.id);
+		return {
+			id,
+			...decodeQueueDispatchEnvelope(job.data, id),
+			finalAttempt: job.attemptsMade + 1 >= (job.opts.attempts ?? 1),
+		};
+	}
+
 	async publish(
 		jobName: string,
 		payload: any,
@@ -155,6 +173,7 @@ export class BullMQAdapter implements QueueAdapter {
 						payload,
 						dispatchId,
 						options?.idempotencyKey,
+						options?.secretPayload,
 					)
 				: payload,
 			this.mapPublishOptions(options, dispatchId),
@@ -166,7 +185,10 @@ export class BullMQAdapter implements QueueAdapter {
 		jobName: string,
 		cron: string,
 		payload: any,
-		options?: Omit<PublishOptions, "idempotencyKey" | "startAfter">,
+		options?: Omit<
+			PublishOptions,
+			"idempotencyKey" | "startAfter" | "secretPayload"
+		>,
 	): Promise<void> {
 		const queue = this.getQueue(jobName);
 		// Use a deterministic repeat key keyed by jobName so unschedule() can
@@ -202,10 +224,7 @@ export class BullMQAdapter implements QueueAdapter {
 			const worker = new Worker(
 				jobName,
 				async (job) => {
-					await handler({
-						id: String(job.id),
-						...decodeQueueDispatchEnvelope(job.data, String(job.id)),
-					});
+					await handler(this.toQueueJobRecord(job));
 				},
 				{
 					connection: this.connection,
@@ -243,10 +262,7 @@ export class BullMQAdapter implements QueueAdapter {
 			const worker = new Worker(
 				jobName,
 				async (job) => {
-					await handler({
-						id: String(job.id),
-						...decodeQueueDispatchEnvelope(job.data, String(job.id)),
-					});
+					await handler(this.toQueueJobRecord(job));
 				},
 				{
 					connection: this.connection,

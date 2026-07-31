@@ -6,7 +6,19 @@ export interface QueueAdapterCapabilities {
 	pushConsumer: boolean;
 	scheduling: boolean;
 	singleton: boolean;
+	/**
+	 * Adapter can inspect durable broker execution state after process crashes,
+	 * worker timeouts, and broker-owned terminalization.
+	 */
+	executionTerminalState: boolean;
 }
+
+export type QueueExecutionState =
+	| "pending"
+	| "active"
+	| "completed"
+	| "failed"
+	| "missing";
 
 export interface QueueJobRecord {
 	id: string;
@@ -15,6 +27,10 @@ export interface QueueJobRecord {
 	dispatchId?: string;
 	/** Portable caller-supplied idempotency identity. */
 	idempotencyKey?: string;
+	/** True only when a handler failure cannot be retried by the adapter. */
+	finalAttempt?: boolean;
+	/** Framework-authored marker that the adapter payload is encrypted. */
+	secretPayload?: boolean;
 }
 
 export interface QueueListenOptions {
@@ -108,13 +124,27 @@ export interface QueueAdapter {
 	transactionalPublishing?: boolean;
 
 	/**
+	 * Inspect the durable broker state for crash-recovery reconciliation.
+	 *
+	 * Adapters must not advertise executionTerminalState without implementing
+	 * this method for every broker-owned terminal path.
+	 */
+	inspectExecutionState?(
+		jobName: string,
+		adapterJobId: string,
+	): Promise<QueueExecutionState>;
+
+	/**
 	 * Schedule a recurring job with cron
 	 */
 	schedule(
 		jobName: string,
 		cron: string,
 		payload: any,
-		options?: Omit<PublishOptions, "idempotencyKey" | "startAfter">,
+		options?: Omit<
+			PublishOptions,
+			"idempotencyKey" | "startAfter" | "secretPayload"
+		>,
 	): Promise<void>;
 
 	/**

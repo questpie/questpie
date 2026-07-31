@@ -15,13 +15,17 @@ export interface MockJob {
 	dispatchId?: string;
 	idempotencyKey?: string;
 	publishedAt: Date;
+	state: "pending" | "active" | "completed" | "failed";
 }
 
 export interface MockScheduledJob {
 	name: string;
 	cron: string;
 	payload: any;
-	options?: Omit<PublishOptions, "idempotencyKey" | "startAfter">;
+	options?: Omit<
+		PublishOptions,
+		"idempotencyKey" | "startAfter" | "secretPayload"
+	>;
 }
 
 export interface MockWorker {
@@ -40,6 +44,7 @@ export class MockQueueAdapter implements QueueAdapter {
 		pushConsumer: false,
 		scheduling: true,
 		singleton: false,
+		executionTerminalState: true,
 	} as const;
 
 	private jobs: MockJob[] = [];
@@ -110,12 +115,21 @@ export class MockQueueAdapter implements QueueAdapter {
 			throw new Error(`No worker registered for job: ${job.name}`);
 		}
 
-		await handler({
-			id: job.id,
-			data: job.payload,
-			dispatchId: job.dispatchId,
-			idempotencyKey: job.idempotencyKey,
-		});
+		job.state = "active";
+		try {
+			await handler({
+				id: job.id,
+				data: job.payload,
+				dispatchId: job.dispatchId,
+				idempotencyKey: job.idempotencyKey,
+				finalAttempt: true,
+				secretPayload: job.options?.secretPayload,
+			});
+			job.state = "completed";
+		} catch (error) {
+			job.state = "failed";
+			throw error;
+		}
 	}
 
 	/**
@@ -126,14 +140,19 @@ export class MockQueueAdapter implements QueueAdapter {
 			const worker = this.workers.find((w) => !!w.handlers[job.name]);
 			const handler = worker?.handlers[job.name];
 			if (handler) {
+				job.state = "active";
 				try {
 					await handler({
 						id: job.id,
 						data: job.payload,
 						dispatchId: job.dispatchId,
 						idempotencyKey: job.idempotencyKey,
+						finalAttempt: true,
+						secretPayload: job.options?.secretPayload,
 					});
+					job.state = "completed";
 				} catch (error) {
+					job.state = "failed";
 					for (const handler of this.errorHandlers) {
 						handler(error as Error);
 					}
@@ -172,17 +191,32 @@ export class MockQueueAdapter implements QueueAdapter {
 			dispatchId,
 			idempotencyKey: options?.idempotencyKey,
 			publishedAt: new Date(),
+			state: "pending",
 		};
 
 		this.jobs.push(job);
 		return job.id;
 	}
 
+	async inspectExecutionState(
+		jobName: string,
+		adapterJobId: string,
+	): Promise<"pending" | "active" | "completed" | "failed" | "missing"> {
+		const job = this.jobs.find(
+			(candidate) =>
+				candidate.name === jobName && candidate.id === adapterJobId,
+		);
+		return job?.state ?? "missing";
+	}
+
 	async schedule(
 		jobName: string,
 		cron: string,
 		payload: any,
-		options?: Omit<PublishOptions, "idempotencyKey" | "startAfter">,
+		options?: Omit<
+			PublishOptions,
+			"idempotencyKey" | "startAfter" | "secretPayload"
+		>,
 	): Promise<void> {
 		// Remove existing scheduled job with same name
 		this.scheduledJobs = this.scheduledJobs.filter(
@@ -229,13 +263,22 @@ export class MockQueueAdapter implements QueueAdapter {
 			const handler = handlers[job.name];
 			if (!handler) continue;
 
-			await handler({
-				id: job.id,
-				data: job.payload,
-				dispatchId: job.dispatchId,
-				idempotencyKey: job.idempotencyKey,
-			});
-			processed += 1;
+			job.state = "active";
+			try {
+				await handler({
+					id: job.id,
+					data: job.payload,
+					dispatchId: job.dispatchId,
+					idempotencyKey: job.idempotencyKey,
+					finalAttempt: true,
+					secretPayload: job.options?.secretPayload,
+				});
+				job.state = "completed";
+				processed += 1;
+			} catch (error) {
+				job.state = "failed";
+				throw error;
+			}
 		}
 
 		return { processed };

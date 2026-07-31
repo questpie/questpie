@@ -57,6 +57,7 @@ Each adapter advertises what it can do through capability flags. These gate whic
 | `pushConsumer` (`queue.createPushConsumer()`)         | no      | no     | yes               |
 | `scheduling` (`options.cron`, `queue.<n>.schedule()`) | yes     | yes    | no                |
 | `singleton` (`singletonKey` dedup)                    | yes     | yes    | no                |
+| `executionTerminalState` (`secretPayload`)            | yes     | no     | no                |
 
 <Callout
 	type="info"
@@ -64,12 +65,14 @@ Each adapter advertises what it can do through capability flags. These gate whic
 >
 	The resolved flags are exposed on `app.queue.capabilities`,
 	`longRunningConsumer`, `runOnceConsumer`, `pushConsumer`, `scheduling`,
-	`singleton`. If one codebase targets multiple runtimes, check the relevant
-	flag before calling `listen` / `runOnce` / `schedule` rather than catching the
-	throw. When an adapter omits `capabilities`, the runtime infers them:
+	`singleton`, and `executionTerminalState`. If one codebase targets multiple
+	runtimes, check the relevant flag before calling `listen` / `runOnce` /
+	`schedule` or publishing a secret payload rather than catching the throw. When
+	an adapter omits `capabilities`, the runtime infers them:
 	`longRunningConsumer`/`runOnceConsumer`/`pushConsumer` default to *"is the
 	matching method implemented?"*, `scheduling` to *"are both `schedule` and
-	`unschedule` functions?"*, and `singleton` to `false`.
+	`unschedule` functions?"*, and `singleton`/`executionTerminalState` to
+	`false`.
 </Callout>
 
 ## The consumer models
@@ -98,10 +101,42 @@ The adapter's capabilities decide _how_ a worker drains the queue. The mechanics
 - A crash after broker acceptance but before the receipt is recorded can cause another physical delivery. Every attempt keeps the same `dispatchId`; handlers must be idempotent.
 - Outside a transaction, a publish without `idempotencyKey` continues to await adapter acceptance directly. Supplying `idempotencyKey` uses the durable ledger so repeated calls resolve to one logical dispatch.
 - `idempotencyKey` and `singletonKey` cannot be combined. Native singleton suppression cannot produce a trustworthy receipt for a newly accepted logical dispatch.
+- `secretPayload: true` encrypts the validated payload before either the dispatch ledger or broker sees it. It requires a non-secret `idempotencyKey`, a stable `runtimeConfig.secret` of at least 32 bytes, and an adapter that can inspect durable broker execution state after process recovery. Only pg-boss is qualified in this release; BullMQ, Cloudflare Queues, and custom adapters without that proof fail closed before publication.
 
-The ledger is Queue-owned and is intentionally separate from the realtime outbox. It is always part of `app.getSchema()` so adapter changes do not accidentally drop recovery state; deploy the generated migration before running the new framework version. Accepted idempotent rows retain only identity and adapter-receipt metadata with no automatic expiry, while non-idempotent accepted rows are removed. Keep idempotency keys non-secret.
+The ledger is Queue-owned and is intentionally separate from the realtime outbox. It is always part of `app.getSchema()` so adapter changes do not accidentally drop recovery state. Before running this framework version, generate and deploy the additive migration for `wrapped_secret_key`, `completed_at`, `failed_at`, `secret_payload`, `execution_claim_token`, and `execution_claimed_until`. Existing populated rows remain ordinary, non-secret dispatches (`secret_payload = false`). Accepted idempotent rows retain only identity and safe receipt metadata with no automatic expiry, while non-idempotent accepted rows are removed. Keep idempotency keys non-secret.
 
-Adapter-publication recovery is bounded: 25 attempts, exponential backoff capped at one hour. A terminal row remains `failed`; `queue.drain()` reports it in `{ terminal }` and emits a payload-free structured error. Fix the adapter and publish a new logical attempt with a new `idempotencyKey`; the original key remains bound to its terminal receipt. Failed rows retain their payload for diagnosis, so use opaque identifiers rather than bearer secrets until the separate generic Queue payload-encryption capability exists.
+Adapter-publication recovery is bounded: 25 attempts, exponential backoff capped at one hour. A terminal row remains `failed`; `queue.drain()` reports it in `{ terminal }` and emits a payload-free structured error. Fix the adapter and publish a new logical attempt with a new `idempotencyKey`; the original key remains bound to its terminal receipt. Ordinary failed rows retain their payload for diagnosis. Secret-bearing rows erase their wrapped per-dispatch data key on relay failure, handler success, or a durable unclaimed broker-terminal outcome, so retained broker ciphertext is no longer decryptable.
+
+<Callout type="warn" title="Secret dispatch is at-least-once, not exactly-once">
+	The stable `dispatchId` and `idempotencyKey` identify retries; they do not
+	make an external side effect exactly-once. A crash after a provider accepted
+	an effect but before QUESTPIE stored handler completion can run the handler
+	again. Pass `dispatchId` to the provider's idempotency facility or keep a
+	consumer-owned processed-dispatch record. Put the domain payload version in
+	the idempotency key; replaying the same key always keeps the first encrypted
+	payload.
+</Callout>
+
+<Callout type="warn" title="Crypto-erasure cannot retract an accepted effect">
+	A secret execution holds a leased database claim while the handler runs.
+	Broker reconciliation waits for that live claim, completion wins over a
+	concurrent failure transition, and terminal state erases the wrapped data key.
+	If a process loses its lease after the provider accepted an effect but before
+	the completion row commits, another attempt can still run. Use the stable
+	`dispatchId` as the provider idempotency key. A `failed` receipt means
+	QUESTPIE cannot prove durable handler completion; it does not prove the
+	provider did nothing.
+</Callout>
+
+<Callout
+	type="warn"
+	title="Keep the Queue root secret stable while work is pending"
+>
+	Each dispatch uses a random data key wrapped by `runtimeConfig.secret`.
+	QUESTPIE does not keep a historical root-key ring. Drain or terminally fail
+	all secret-bearing work before rotating that runtime secret; otherwise old
+	payloads fail closed and cannot be recovered.
+</Callout>
 
 <Callout type="warn" title="Recovery requires an execution opportunity">
 	Node/Bun `listen()` runs a five-second recovery tick. Serverless and push-only
@@ -140,8 +175,9 @@ Behavior worth knowing:
 - **Queues are created on demand.** The adapter calls `createQueue(jobName)` the first time it touches a job and caches it, you never declare queues yourself.
 - **Ambient transactions stay atomic.** pg-boss receives `db: fromDrizzle(tx, sql)`, so the Job insert commits or rolls back with the current QUESTPIE transaction.
 - **The application and pg-boss must share PostgreSQL.** Same-transaction insertion is enabled by default. If pg-boss points at a separate database, set `useApplicationTransaction: false`; QUESTPIE then commits an application-database dispatch intent and relays it to pg-boss after commit.
-- **Logical identity is portable.** The stable `dispatchId` becomes pg-boss's Job `id`; the framework identity receipt survives pg-boss Job retention and adapter changes. `idempotencyKey` is not forwarded as a scheduling option.
+- **Logical identity is portable and recoverable.** The stable `dispatchId` becomes pg-boss's Job `id`; the framework identity receipt survives pg-boss Job retention and adapter changes. If a separate-database relay loses the publication receipt, QUESTPIE replays the stable ID and records acceptance only after querying the broker for that exact physical UUID. pg-boss also returns `null` when a different Job wins a queue-policy conflict; if the exact UUID is absent, QUESTPIE treats publication as failed and retries the relay (or rolls back a same-database transaction). `idempotencyKey` is not forwarded as a scheduling option.
 - **Other `PublishOptions` map ~1:1** to pg-boss send options (`priority`, `startAfter`, `singletonKey`, `retryLimit`, `retryDelay`, `expireInSeconds`).
+- **Non-standard policies also constrain missing keys.** pg-boss indexes `COALESCE(singleton_key, '')`, so `short`, `stately`, and `exclusive` queues can suppress otherwise unkeyed Jobs. Use a non-standard `queuePolicy` on an unkeyed queue only when that shared empty-key serialization is intentional.
 - **Batches are processed serially.** pg-boss always hands an array to its `work()` callback; the adapter iterates items one at a time and reports per-item failures via `boss.fail(...)` so a sibling failure doesn't sink the rest of the batch.
 - **`runOnce` explicitly settles fetched work.** Successful jobs call `boss.complete(...)`; handler failures call `boss.fail(...)` before the first batch error is surfaced. It throws _"PgBossAdapter.runOnce requires pg-boss fetch() support."_ if the installed pg-boss version doesn't expose it.
 
@@ -189,6 +225,12 @@ Behavior worth knowing:
 </Callout>
 
 Supports long-running workers, `runOnce`, cron scheduling, and `singletonKey` through BullMQ deduplication.
+
+`secretPayload: true` is intentionally rejected by BullMQ in this release.
+BullMQ can terminalize work through stalled-job limits and custom backoff paths
+outside the QUESTPIE handler. Preserving `finalAttempt` on handler deliveries is
+therefore insufficient to prove crash-safe key erasure. Ordinary BullMQ jobs are
+unchanged.
 
 ## Cloudflare Queues (push)
 
@@ -266,11 +308,18 @@ interface QueueAdapter {
 		dispatchId: string,
 	): Promise<string | null>;
 	transactionalPublishing?: boolean;
+	inspectExecutionState?(
+		jobName: string,
+		adapterJobId: string,
+	): Promise<"pending" | "active" | "completed" | "failed" | "missing">;
 	schedule(
 		jobName: string,
 		cron: string,
 		payload: any,
-		options?: Omit<PublishOptions, "idempotencyKey" | "startAfter">,
+		options?: Omit<
+			PublishOptions,
+			"idempotencyKey" | "startAfter" | "secretPayload"
+		>,
 	): Promise<void>;
 	unschedule(jobName: string): Promise<void>;
 	on(event: "error", handler: (error: Error) => void): void;
@@ -295,8 +344,11 @@ interface QueueAdapter {
 Three contract details adapter authors rely on:
 
 - **`dispatchId` is stable logical identity.** QUESTPIE passes it as the fourth `publish` argument; use it for the broker's physical dedupe id and carry it back to handlers. Implement `publishInTransaction` only when the adapter can insert through the supplied application Drizzle transaction. Set `transactionalPublishing: false` when a conditionally transactional adapter uses separate storage; the runtime then uses the framework dispatch ledger.
-- **Handlers are keyed by the durable job name.** The framework builds a `QueueHandlerMap` (`Record<jobName, handler>`) and passes it to `listen` / `runOnce` / `createPushConsumer`. Each handler receives a `QueueJobRecord`, `{ id, data, dispatchId?, idempotencyKey? }`.
+- **Handlers are keyed by the durable job name.** The framework builds a `QueueHandlerMap` (`Record<jobName, handler>`) and passes it to `listen` / `runOnce` / `createPushConsumer`. Each handler receives a `QueueJobRecord`, `{ id, data, dispatchId?, idempotencyKey?, secretPayload?, finalAttempt? }`.
 - **`data` is raw, the framework re-validates it.** Adapters store and replay the raw payload; QUESTPIE re-parses `data` against the job's Zod schema before invoking the user handler. Your adapter never needs to validate. (See [Jobs](/docs/concepts/jobs#the-handler) for the dispatch- and handler-time validation passes.)
+- **Secret payload support is explicit.** Set `executionTerminalState: true` only when the adapter preserves `options.secretPayload` on every physical attempt and implements `inspectExecutionState()` from durable broker truth, including timeout, heartbeat, stall, cancellation, and retry-exhaustion paths that happen outside the handler. QUESTPIE uses the outer framework marker, not a user-payload shape, to decide whether to decrypt. A database claim fences concurrent decryptions; its heartbeat protects active work from reconciliation. Handler completion is monotonic and erases the wrapped key. A broker terminal or missing state erases it only after the claim is absent or expired. `finalAttempt` remains useful delivery metadata but is not the security capability.
+- **Secret reconciliation exhausts a finite snapshot.** Each `queue.drain()` captures the current high-water accepted secret dispatch and inspects that snapshot in `batchSize` keyset pages until it reaches the high-water row. The page size bounds each database and broker-inspection batch; older active work cannot indefinitely hide a later terminal dispatch.
+- **The outer envelope namespace is reserved.** A payload whose top-level `__questpieQueue` metadata exactly matches the framework protocol and physical Job identity is decoded as a QUESTPIE envelope. The inner `__questpieQueueSecret` shape alone is not reserved user behavior and never triggers decryption; only the framework-authored outer `secretPayload` marker does.
 
 ## Extending: a custom adapter
 
@@ -312,6 +364,7 @@ class MyAdapter implements QueueAdapter {
 		pushConsumer: false,
 		scheduling: false,
 		singleton: false,
+		executionTerminalState: false,
 	};
 
 	async start() {
