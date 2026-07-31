@@ -134,6 +134,25 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 	}
 
 	/**
+	 * Build the next builder in an immutable chain, carrying private state
+	 * forward.
+	 *
+	 * `_fieldDefs` — the app's field-factory map, holding module-contributed
+	 * types like `richText` — was assigned once in `create()` and carried by
+	 * none of the derivations, so the first `.set()` or `.options()` dropped it
+	 * and `.fields()` silently fell back to `builtinFields` while the type still
+	 * advertised the full map. Same defect as CollectionBuilder had; one place
+	 * to fix it, and one place to extend when a private field is added.
+	 */
+	private _derive<TNext extends GlobalBuilderState>(
+		state: TNext,
+	): GlobalBuilder<TNext> {
+		const next = new GlobalBuilder(state);
+		next._fieldDefs = this._fieldDefs;
+		return next;
+	}
+
+	/**
 	 * Define fields using Field Builder.
 	 *
 	 * Cumulative: fields add to whatever the builder already has from earlier
@@ -302,8 +321,7 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 			_pendingRelations: [...prevPendingRelations, ...pendingRelations],
 		} as any;
 
-		const newBuilder = new GlobalBuilder(newState);
-		return newBuilder;
+		return this._derive(newState);
 	}
 
 	/** Enable one collaborative aggregate for this global singleton/scope. */
@@ -328,7 +346,7 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 				awarenessSchema: config?.awareness,
 			},
 		} as any;
-		return new GlobalBuilder(newState);
+		return this._derive(newState);
 	}
 
 	/**
@@ -356,8 +374,7 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 				: options,
 		} as any;
 
-		const newBuilder = new GlobalBuilder(newState);
-		return newBuilder;
+		return this._derive(newState);
 	}
 
 	/**
@@ -371,8 +388,7 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 			hooks,
 		} as any;
 
-		const newBuilder = new GlobalBuilder(newState);
-		return newBuilder;
+		return this._derive(newState);
 	}
 
 	/**
@@ -391,8 +407,7 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 			access,
 		} as any;
 
-		const newBuilder = new GlobalBuilder(newState);
-		return newBuilder;
+		return this._derive(newState);
 	}
 
 	/**
@@ -509,7 +524,7 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 		value: V,
 	): GlobalBuilder<TState & Record<TKey, V>> {
 		const newState = { ...this.state, [key]: value } as any;
-		return new GlobalBuilder(newState);
+		return this._derive(newState);
 	}
 
 	/**
