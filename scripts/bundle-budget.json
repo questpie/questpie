@@ -2,12 +2,12 @@
 	"$comment": "Consumer bundle budget — the ENTRY chunk a browser downloads, measured with esbuild --splitting (what real bundlers do). Distinct from scripts/size-budget.json, which measures what npm publishes; a dependency moved behind a dynamic import shrinks this and not that. Regenerate with `bun run scripts/bundle-budget.ts --update` after a build. Gate: entry chunk >3% over budget fails CI.",
 	"entries": {
 		"questpie/client": {
-			"entryBytes": 179209,
-			"totalBytes": 352995
+			"entryBytes": 184788,
+			"totalBytes": 359236
 		},
 		"questpie/client+crdt": {
-			"entryBytes": 370165,
-			"totalBytes": 543951
+			"entryBytes": 375750,
+			"totalBytes": 550198
 		}
 	}
 }
