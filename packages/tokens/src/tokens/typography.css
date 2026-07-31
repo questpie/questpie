@@ -1,45 +1,55 @@
 /* ============================================================================
    QUESTPIE — typography.css
-   Four faces, four jobs. Nothing else gets to speak.
+   Three faces, four jobs. Nothing else gets to speak.
 
-     Space Grotesk 700 DISPLAY + WORDMARK. Marketing heroes and section heads,
-                       uppercase and tight. Chosen for its Q: the tail is a
-                       straight stroke fired out of the bowl, which rhymes with
-                       the right-angled geometry of the mark. Never in product UI.
-     Hanken Grotesk    Everything readable: product UI, body, labels, nav.
-     JetBrains Mono    Code, IDs, metadata, eyebrows, statuses, numbers.
-     Cormorant italic  One human aside per marketing section (eyebrow, pull
-                       quote). NEVER in the product, never twice in a section.
+     Bricolage Grotesque  DISPLAY + WORDMARK. Marketing heroes and section heads
+                          at 700; the logotype is the same family at 800, caps,
+                          tight. Never in product UI.
+     Hanken Grotesk       Everything readable: product UI, body, labels, nav.
+                          Its italic also carries the one aside per marketing
+                          section — never in the product, never twice in a section.
+     JetBrains Mono       Code, IDs, metadata, eyebrows, statuses, numbers.
 
-   Webfonts come from Google Fonts (no binaries were provided with the source
-   material — see readme.md § Typography if you want them self-hosted).
+   Two families from earlier drafts are gone. Space Grotesk: one family for the
+   mark and the headings, separated by weight, holds together better than two
+   grotesques that nearly rhyme. Cormorant: a whole webfont for one italic line
+   per section is not a trade worth making, and Hanken italic carries the same
+   warmth.
+
+   The handoff README still names Space Grotesk as the wordmark. It is wrong —
+   every lockup SVG carries `font-family="Bricolage Grotesque"`, and so does this
+   file. The assets are the truth.
    ============================================================================ */
+/* Self-hosted, not Google Fonts. A remote font request is a third-party
+   dependency on every page load and the product forbids it outright.
 
-/* THREE families, and only the weights the system sets:
-     Bricolage Grotesque 700/800  logotype (800, caps) and display headings (700)
-     Hanken Grotesk 450-700 + italic  everything readable, plus the warm aside
-     JetBrains Mono 500/600  code, IDs, eyebrows, numbers
-   Space Grotesk was dropped: one family for the mark and the headings, separated
-   by weight, holds together better than two grotesques that nearly rhyme.
-   Cormorant was dropped: a whole webfont for one italic line per section is not a
-   trade worth making, and Hanken italic carries the same warmth. */
-@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700..800&family=Hanken+Grotesk:ital,wght@0,450;0,500;0,600;0,700;1,450;1,500&family=JetBrains+Mono:wght@500;600&display=swap");
+   Only the weight axis is pulled. The original request also asked Bricolage for
+   `opsz` 12..96, but nothing in this file sets `font-variation-settings` or an
+   optical size, so that axis would have shipped bytes nobody reads.
+
+   Fontsource names its variable families with a `Variable` suffix, which is why
+   the declarations below do too — drop the suffix and the face silently falls
+   back to system-ui. */
+@import "@fontsource-variable/bricolage-grotesque/wght.css";
+@import "@fontsource-variable/hanken-grotesk/wght.css";
+@import "@fontsource-variable/hanken-grotesk/wght-italic.css";
+@import "@fontsource-variable/jetbrains-mono/wght.css";
 
 :root {
-	--font-display: "Bricolage Grotesque", system-ui, sans-serif;
+	--font-display: "Bricolage Grotesque Variable", system-ui, sans-serif;
 	/* the logotype is the same family one weight up: 800, caps, tight */
 	--font-wordmark: var(--font-display);
 	--wordmark-weight: 800;
 	--wordmark-track: -0.022em;
-	--font-sans: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
-	--font-mono: "JetBrains Mono", ui-monospace, monospace;
+	--font-sans: "Hanken Grotesk Variable", system-ui, -apple-system, sans-serif;
+	--font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
 	/* the aside: Hanken italic, not a serif — one family fewer */
-	--font-accent: "Hanken Grotesk", system-ui, sans-serif;
+	--font-accent: "Hanken Grotesk Variable", system-ui, sans-serif;
 	/* aliases the two existing apps already write against */
 	--font-heading: var(--font-sans);
 	--font-chrome: var(--font-sans);
 
-	/* ── display scale — MARKETING ONLY (Space Grotesk 700, uppercase) ─────── */
+	/* ── display scale — MARKETING ONLY (Bricolage Grotesque 700) ─────── */
 	--display-xl: clamp(3rem, 2.2rem + 3.6vw, 5.125rem); /* → 82px hero */
 	--display-xl-line: 0.94;
 	--display-xl-track: -0.035em;
@@ -89,7 +99,7 @@
 	--eyebrow-track: 0.12em;
 	--eyebrow-case: uppercase;
 
-	/* ── accent aside (Cormorant italic) ───────────────────────────────────── */
+	/* ── accent aside (Hanken italic) ───────────────────────────────────── */
 	--accent-size: 1.25rem; /* 20 — a sans italic needs less size than a serif */
 	--accent-style: italic;
 	--accent-weight: 500;

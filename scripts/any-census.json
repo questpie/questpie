@@ -79,6 +79,12 @@
 			"as unknown as": 0,
 			"@ts-expect-error": 0
 		},
+		"tokens": {
+			": any": 0,
+			"as any": 0,
+			"as unknown as": 0,
+			"@ts-expect-error": 0
+		},
 		"vite-plugin-iconify": {
 			": any": 0,
 			"as any": 0,

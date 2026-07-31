@@ -5,7 +5,7 @@
    app inherits this system with no component edits.
 
        @import "tailwindcss";
-       @import "@questpie/design/styles.css";   /* includes this file */
+       @import "@questpie/tokens/styles.css";   — that entry includes this file
 
 WHY EVERY ENTRY IS `var(--x)` AND NOT A LITERAL
    `@theme inline` resolves at the USE SITE, so a consumer override in any later

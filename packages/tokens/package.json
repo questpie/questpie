@@ -1,0 +1,46 @@
+{
+	"name": "@questpie/tokens",
+	"version": "3.19.0",
+	"description": "QUESTPIE design tokens — one palette, type scale, geometry, elevation and motion canon for marketing, docs, the admin UI and the product",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/questpie/questpie.git",
+		"directory": "packages/tokens"
+	},
+	"files": [
+		"dist"
+	],
+	"type": "module",
+	"sideEffects": [
+		"**/*.css"
+	],
+	"exports": {
+		"./styles.css": "./src/styles.css",
+		"./tokens/*.css": "./src/tokens/*.css",
+		"./package.json": "./package.json"
+	},
+	"publishConfig": {
+		"access": "public",
+		"exports": {
+			"./styles.css": "./dist/styles.css",
+			"./tokens/*.css": "./dist/tokens/*.css",
+			"./package.json": "./package.json"
+		}
+	},
+	"scripts": {
+		"build": "rm -rf dist && mkdir -p dist && cp -R src/. dist/"
+	},
+	"dependencies": {
+		"@fontsource-variable/bricolage-grotesque": "5.3.0",
+		"@fontsource-variable/hanken-grotesk": "5.3.0",
+		"@fontsource-variable/jetbrains-mono": "5.3.0"
+	},
+	"peerDependencies": {
+		"tailwindcss": "^4.0.6"
+	},
+	"peerDependenciesMeta": {
+		"tailwindcss": {
+			"optional": true
+		}
+	}
+}
