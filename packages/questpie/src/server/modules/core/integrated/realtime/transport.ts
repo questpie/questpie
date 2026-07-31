@@ -14,6 +14,11 @@ export type ChangeWake =
 			reason: "publish" | "reconnect" | "reconcile";
 	  }
 	| {
+			kind: "channel-authority-maybe-advanced";
+			channelHash?: string;
+			reason: "revoke" | "reconnect" | "reconcile";
+	  }
+	| {
 			kind: "topology-maybe-advanced";
 			sessionKey: string;
 			ownerId: string;
@@ -88,6 +93,29 @@ export function normalizeChangeWake(value: unknown): ChangeWake | null {
 			...(wake.highWaterEventId === undefined
 				? {}
 				: { highWaterEventId: wake.highWaterEventId }),
+		};
+	}
+
+	if (wake.kind === "channel-authority-maybe-advanced") {
+		if (
+			wake.reason !== "revoke" &&
+			wake.reason !== "reconnect" &&
+			wake.reason !== "reconcile"
+		) {
+			return null;
+		}
+		if (
+			wake.channelHash !== undefined &&
+			typeof wake.channelHash !== "string"
+		) {
+			return null;
+		}
+		return {
+			kind: wake.kind,
+			reason: wake.reason,
+			...(wake.channelHash === undefined
+				? {}
+				: { channelHash: wake.channelHash }),
 		};
 	}
 
@@ -180,7 +208,8 @@ export type ClientCloseReason =
 	| "no_topics"
 	| "transport_error"
 	| "write_failed"
-	| "slow_consumer";
+	| "slow_consumer"
+	| "access_revoked";
 
 export interface ClientSink {
 	readonly sessionId: string;
@@ -218,6 +247,16 @@ export type ClientAuthResponse = {
 	shared_secret?: string;
 };
 
+export type ClientUserAuthInput = {
+	socketId: string;
+	principal: Principal | null;
+};
+
+export type ClientUserAuthResponse = {
+	auth: string;
+	user_data: string;
+};
+
 export type ClientTransportConfig =
 	| { transport: "sse" }
 	| {
@@ -230,6 +269,22 @@ export type OrderedChannelDelivery = {
 	frame: Uint8Array;
 	eventId: string;
 };
+
+export type ClientAuthoritySubject = Readonly<{
+	kind: "user" | "oauth" | "session";
+	id: string;
+}>;
+
+export type ClientAuthorityRevocationInput = Readonly<{
+	channel: string;
+	subject: ClientAuthoritySubject;
+}>;
+
+export type AuthorityRevocationScope =
+	| "exact-subscription"
+	| "principal-connections";
+
+export type ChannelGrantMode = "stateless-signed-grant";
 
 export type OrderedChannelEventFrame = {
 	type: "channel_event";
@@ -250,6 +305,10 @@ interface ClientTransportBase {
 	start(input: { onError: (error: unknown) => void }): Promise<void>;
 	openSession(input: EdgeSessionInput): Promise<ClientSink>;
 	getClientConfig(input: ClientConfigInput): Promise<ClientTransportConfig>;
+	readonly authorityRevocationScope?: AuthorityRevocationScope;
+	/** Synchronous, side-effect-free validation before a durable generation cut. */
+	validateAuthorityRevocation?(subject: ClientAuthoritySubject): void;
+	revokeAuthority?(input: ClientAuthorityRevocationInput): Promise<void>;
 	stop(): Promise<void>;
 }
 
@@ -262,7 +321,16 @@ export interface LocalSessionClientTransport extends ClientTransportBase {
 
 export interface SharedProviderClientTransport extends ClientTransportBase {
 	readonly channelDeliveryScope: "shared-provider";
+	/**
+	 * Qualifies `generateAuth` as local, side-effect-free grant encoding.
+	 * The returned blob is safe to discard when the optimistic generation CAS
+	 * loses; no provider-side grant may have been mutated.
+	 */
+	readonly channelGrantMode?: ChannelGrantMode;
 	generateAuth(input: ClientAuthInput): Promise<ClientAuthResponse>;
+	generateUserAuth?(
+		input: ClientUserAuthInput,
+	): Promise<ClientUserAuthResponse>;
 	publishChannel(input: OrderedChannelDelivery): Promise<SinkWriteResult>;
 }
 

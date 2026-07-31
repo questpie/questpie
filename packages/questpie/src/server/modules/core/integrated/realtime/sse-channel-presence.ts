@@ -3,7 +3,11 @@ import { and, asc, desc, eq, gt, lte } from "drizzle-orm";
 import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
 import type { LoggerAdapter } from "#questpie/server/modules/core/integrated/logger/types.js";
 
-import { hashResolvedChannel } from "./channel-event-ledger.js";
+import {
+	hashResolvedChannel,
+	type LocalChannelAuthorization,
+	type LocalChannelBindingStage,
+} from "./channel-event-ledger.js";
 import {
 	questpieChannelHeadTable,
 	questpieChannelPresenceTable,
@@ -41,6 +45,9 @@ type LocalPresenceMember = {
 	sink: ClientSink;
 	data: Record<string, unknown>;
 	lastSnapshot?: string;
+	renew?: (
+		operation: (tx: AnyDrizzleClient<any>) => Promise<void>,
+	) => Promise<boolean>;
 };
 
 type PresenceRow = typeof questpieChannelPresenceTable.$inferSelect;
@@ -103,6 +110,23 @@ export class SseChannelPresenceRegistry {
 	async register(
 		input: RegisterChannelPresenceInput,
 	): Promise<() => Promise<void>> {
+		const stage = this.stage(input);
+		let lifecycle:
+			| Awaited<ReturnType<LocalChannelBindingStage["publish"]>>
+			| undefined;
+		await this.db.transaction(async (tx) => {
+			await stage.beforeFence?.(tx);
+			lifecycle = await stage.publish(tx);
+		});
+		await lifecycle!.activate();
+		return () => lifecycle!.deactivate();
+	}
+
+	/**
+	 * Stage one presence row for an authority-linearized channel binding.
+	 * Timers and snapshots remain inactive until the enclosing tx commits.
+	 */
+	stage(input: RegisterChannelPresenceInput): LocalChannelBindingStage {
 		if (this.destroyed)
 			throw new Error("Channel presence registry is destroyed");
 		if (!input.principalId) {
@@ -119,79 +143,126 @@ export class SseChannelPresenceRegistry {
 		}
 
 		const channelHash = hashResolvedChannel(input.channel);
-		const now = new Date();
 		const member: LocalPresenceMember = { ...input, channelHash };
-		await this.db.transaction(async (tx) => {
-			await tx
-				.insert(questpieChannelHeadTable)
-				.values({ channelHash, channel: input.channel })
-				.onConflictDoNothing();
-			await tx
-				.update(questpieChannelHeadTable)
-				.set({ updatedAt: now })
-				.where(eq(questpieChannelHeadTable.channelHash, channelHash));
-
-			const activeRows = await tx
-				.select({ principalId: questpieChannelPresenceTable.principalId })
-				.from(questpieChannelPresenceTable)
+		let published = false;
+		let activated = false;
+		let stopped = false;
+		const deleteRow = async () => {
+			await this.db
+				.delete(questpieChannelPresenceTable)
 				.where(
 					and(
 						eq(questpieChannelPresenceTable.channelHash, channelHash),
-						gt(questpieChannelPresenceTable.expiresAt, now),
+						eq(questpieChannelPresenceTable.connectionId, input.connectionId),
 					),
 				);
-			const principals = new Set(activeRows.map((row) => row.principalId));
-			if (
-				!principals.has(input.principalId) &&
-				principals.size >= this.config.maxMembers
-			) {
-				throw new Error("Presence channel member limit exceeded");
-			}
+		};
+		const lifecycle = {
+			activate: async () => {
+				if (stopped) {
+					await deleteRow();
+					return;
+				}
+				if (this.destroyed) {
+					await deleteRow();
+					throw new Error("Channel presence registry is destroyed");
+				}
+				this.localConnections.set(input.connectionId, member);
+				const channelMembers =
+					this.connectionsByChannel.get(channelHash) ?? new Set();
+				channelMembers.add(member);
+				this.connectionsByChannel.set(channelHash, channelMembers);
+				activated = true;
+				this.ensureTimers();
+				try {
+					await this.reconcile(channelHash);
+				} catch (error) {
+					await this.unregister(member, false);
+					throw error;
+				}
+			},
+			deactivate: async () => {
+				if (stopped) return;
+				stopped = true;
+				if (activated) {
+					await this.unregister(member);
+					return;
+				}
+				if (published) await deleteRow();
+			},
+			setRenewalGuard: (
+				guard: (
+					operation: (tx: AnyDrizzleClient<any>) => Promise<void>,
+				) => Promise<boolean>,
+			) => {
+				member.renew = guard;
+			},
+		};
+		return {
+			beforeFence: async (tx) => {
+				const now = new Date();
+				await tx
+					.insert(questpieChannelHeadTable)
+					.values({ channelHash, channel: input.channel })
+					.onConflictDoNothing();
+				await tx
+					.update(questpieChannelHeadTable)
+					.set({ updatedAt: now })
+					.where(eq(questpieChannelHeadTable.channelHash, channelHash));
+			},
+			publish: async (tx, authorization?: LocalChannelAuthorization) => {
+				const now = new Date();
+				const freshPresence =
+					authorization &&
+					typeof authorization === "object" &&
+					authorization.presence
+						? authorization.presence
+						: input.data;
+				member.data = freshPresence;
+				const activeRows = await tx
+					.select({ principalId: questpieChannelPresenceTable.principalId })
+					.from(questpieChannelPresenceTable)
+					.where(
+						and(
+							eq(questpieChannelPresenceTable.channelHash, channelHash),
+							gt(questpieChannelPresenceTable.expiresAt, now),
+						),
+					);
+				const principals = new Set(activeRows.map((row) => row.principalId));
+				if (
+					!principals.has(input.principalId) &&
+					principals.size >= this.config.maxMembers
+				) {
+					throw new Error("Presence channel member limit exceeded");
+				}
 
-			await tx
-				.insert(questpieChannelPresenceTable)
-				.values({
-					channelHash,
-					connectionId: input.connectionId,
-					principalId: input.principalId,
-					channel: input.channel,
-					data: input.data,
-					expiresAt: new Date(now.getTime() + this.config.leaseMs),
-					updatedAt: now,
-				})
-				.onConflictDoUpdate({
-					target: [
-						questpieChannelPresenceTable.channelHash,
-						questpieChannelPresenceTable.connectionId,
-					],
-					set: {
+				await tx
+					.insert(questpieChannelPresenceTable)
+					.values({
+						channelHash,
+						connectionId: input.connectionId,
 						principalId: input.principalId,
 						channel: input.channel,
-						data: input.data,
+						data: freshPresence,
 						expiresAt: new Date(now.getTime() + this.config.leaseMs),
 						updatedAt: now,
-					},
-				});
-		});
-
-		this.localConnections.set(input.connectionId, member);
-		const channelMembers =
-			this.connectionsByChannel.get(channelHash) ?? new Set();
-		channelMembers.add(member);
-		this.connectionsByChannel.set(channelHash, channelMembers);
-		this.ensureTimers();
-		try {
-			await this.reconcile(channelHash);
-		} catch (error) {
-			await this.unregister(member, false);
-			throw error;
-		}
-
-		let stopped = false;
-		return async () => {
-			if (stopped) return;
-			stopped = true;
-			await this.unregister(member);
+					})
+					.onConflictDoUpdate({
+						target: [
+							questpieChannelPresenceTable.channelHash,
+							questpieChannelPresenceTable.connectionId,
+						],
+						set: {
+							principalId: input.principalId,
+							channel: input.channel,
+							data: freshPresence,
+							expiresAt: new Date(now.getTime() + this.config.leaseMs),
+							updatedAt: now,
+						},
+					});
+				published = true;
+				return lifecycle;
+			},
 		};
 	}
 
@@ -264,20 +335,29 @@ export class SseChannelPresenceRegistry {
 		const now = new Date();
 		const expiresAt = new Date(now.getTime() + this.config.leaseMs);
 		await Promise.all(
-			[...this.localConnections.values()].map((member) =>
-				this.db
-					.update(questpieChannelPresenceTable)
-					.set({ expiresAt })
-					.where(
-						and(
-							eq(questpieChannelPresenceTable.channelHash, member.channelHash),
-							eq(
-								questpieChannelPresenceTable.connectionId,
-								member.connectionId,
+			[...this.localConnections.values()].map(async (member) => {
+				const renew = (db: AnyDrizzleClient<any>) =>
+					db
+						.update(questpieChannelPresenceTable)
+						.set({ expiresAt })
+						.where(
+							and(
+								eq(
+									questpieChannelPresenceTable.channelHash,
+									member.channelHash,
+								),
+								eq(
+									questpieChannelPresenceTable.connectionId,
+									member.connectionId,
+								),
 							),
-						),
-					),
-			),
+						);
+				if (member.renew) {
+					await member.renew(renew);
+					return;
+				}
+				await renew(this.db);
+			}),
 		);
 	}
 

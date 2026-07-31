@@ -590,23 +590,28 @@ describe("pusher channel matrix client delivery", () => {
 		expect(member.startsAt.getTime()).toBe(instant.getTime());
 		expect(member.isoLookingString).not.toBeInstanceOf(Date);
 
-		await transport.revokePrincipal(principal);
+		expect(transport.authorityRevocationScope).toBe("principal-connections");
+		await transport.revokeAuthority({
+			channel: "private-chat-room-1",
+			subject: { kind: "user", id: "user-1" },
+		});
 		expect(terminated).toEqual([channelData.user_id]);
 		expect(closedSessions).toBe(1);
 		await expect(
 			transport.generateUserAuth({ socketId: "123.456", principal }),
-		).rejects.toThrow("revoked");
+		).resolves.toMatchObject({ auth: expect.any(String) });
 		await expect(
 			transport.generatePresenceAuth({
 				socketId: "123.456",
 				channel: "presence-chat-room-1",
 				principal,
 			}),
-		).rejects.toThrow("revoked");
+		).resolves.toMatchObject({ auth: expect.any(String) });
 
-		transport.restorePrincipal(principal);
+		await transport.revokePrincipal(principal);
+		expect(terminated).toEqual([channelData.user_id, channelData.user_id]);
 		await expect(
 			transport.generateUserAuth({ socketId: "123.456", principal }),
-		).resolves.toMatchObject({ auth: expect.any(String) });
+		).rejects.toThrow("revoked");
 	});
 });

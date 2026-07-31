@@ -60,6 +60,7 @@ import _mig_20260712T195414_eager_red_tiger from "../migrations/20260712T195414_
 import _mig_20260725T184252_realtimeV3Umbrella from "../migrations/20260725T184252_realtime-v3-umbrella";
 import _mig_20260726T163042_queueTransactionalDispatch from "../migrations/20260726T163042_queue-transactional-dispatch";
 import _mig_20260730T182023_optimisticConcurrencyRevisions from "../migrations/20260730T182023_optimistic-concurrency-revisions";
+import _mig_20260731T000041_realtimeIdempotency1 from "../migrations/20260731T000041_realtime-idempotency-1";
 
 // ── Seeds ──────────────────────────────────────────────────
 import _seed_blogPosts from "../seeds/blog-posts";

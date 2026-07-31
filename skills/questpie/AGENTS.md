@@ -6093,6 +6093,24 @@ malformed targeting collapses to one generic reconcile. Channel application
 events use the exact 10,000-byte QUESTPIE cap while remaining below the
 provider's <10 kB ceiling.
 
+Managed Pusher clients use the SDK's signed-user protocol with an opaque,
+HMAC-derived user id. User authentication posts only `socket_id` to the
+authenticated, `no-store` realtime auth route; channel authentication remains
+bound to both `socket_id` and the final channel name. The SDK requests fresh
+user authentication after reconnect; channel authorization waits for that
+sign-in and rechecks the current socket and owner before succeeding. On an
+application login/logout transition that keeps the same browser socket, destroy
+both `client.realtime` and
+`client.channels` (or recreate the client) so the shared physical connection is
+also recreated under the new identity.
+
+Channel-scoped authority cuts use the generic `channels.revokeAuthority()` seam.
+SSE closes only the denied logical binding. Pusher's honest capability is
+`principal-connections`: it terminates all current connections for that user,
+then fresh user/channel authentication allows still-authorized bindings to
+return. See `references/channels.md` for the transaction and in-flight-frame
+contract.
+
 ## Admission and lifecycle
 
 Default SSE limits are 20 topics per connection, 5 connections per authenticated principal, `find` limit 100, nested `with` depth 3, 4 concurrent initial snapshots, and 1 MiB buffered snapshot bytes per edge session. Slow consumers are bounded and disconnected rather than allowed unbounded memory growth.
@@ -6253,6 +6271,51 @@ the owning mutation transaction, so a publish failure rolls back both the
 mutation and ordered channel-ledger append. Never import the generated `app` or
 defer lookup through ambient `getContext()`; the injected service is
 generated-type-safe and mutation-context aware.
+
+## Revoke current delivery authority
+
+When a membership or authorization mutation removes access, cut the affected
+resolved channel in the same transaction:
+
+```ts
+await channels.revokeAuthority("chatRoom", {
+	params: { roomId },
+	subject: { kind: "user", id: removedUserId },
+	idempotencyKey: `chat-room:${roomId}:${removedUserId}:membership-v2`,
+});
+```
+
+The idempotency key identifies the domain authorization transition. QUESTPIE
+advances a durable per-channel/subject generation and returns
+`{ generation, scope }`. `scope: "exact-subscription"` means the local SSE
+binding is cut without closing unrelated channel bindings.
+`scope: "principal-connections"` means the provider can only conservatively
+terminate every current connection for the signed-in user. Pusher supports the
+`user` subject for that capability.
+
+Fresh request context, subscribe authorization, and the presence resolver (for
+presence channels) run outside database locks. A short expected-generation
+publication installs the binding, latest fresh member payload, and optional
+presence lease together; a stale result and stale payload publish nothing and
+retry fresh. Internal revocation of the last SSE binding also stops its
+demand-driven authority reconciliation. A Pusher client signs in with an opaque
+provider user id before channel authorization, reconnects after termination,
+then obtains fresh user and per-channel authorization. Its channel grant is
+side-effect-free local signing guarded by an optimistic generation check, so a
+post-cut blob is discarded before reaching the client. Thus removing Space A
+may disconnect Space B briefly, but Space B can reconnect while Space A remains
+denied.
+
+In a managed caller transaction, Pusher termination and authority
+acknowledgement run inline under a bounded call. Provider failure throws and
+rolls back the database transaction; a conservative disconnect may survive a
+later caller rollback. Standalone provider failure leaves the durable cut
+pending for an idempotent retry.
+
+Pusher does not provide zero-frame atomicity: a frame already accepted by the
+physical provider connection may arrive while termination is in flight. The
+durable fence prevents new ordered provider dispatch from crossing a pending
+cut; reconnect and replay reauthorize against current application state.
 
 ## Client, presence, and TanStack Query
 

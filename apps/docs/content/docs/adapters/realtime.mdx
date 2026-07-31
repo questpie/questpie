@@ -253,6 +253,36 @@ The isolated `questpie/adapters/pusher` export is the only entry that loads the 
 
 Live-query snapshots remain private per edge session because each snapshot has already passed that principal's row/field access and `afterRead` hooks. The shared provider broker carries only wakes. Framework channel events may use provider multicast after subscribe/publish authorization and Zod validation.
 
+Pusher clients also use signed-user authentication. QUESTPIE posts only the
+current `socket_id` to the authenticated `Cache-Control: no-store` realtime auth
+route, signs an opaque HMAC-derived user id, and lets `pusher-js` request fresh
+user authentication after reconnect. Channel authorization waits for that
+sign-in and rejects a released owner or stale socket before returning auth. This
+enables the transport's honest
+channel-authority capability: Pusher can terminate all current connections for
+one user, but it cannot terminate only one logical channel subscription. After
+termination, fresh per-channel authorization admits still-valid bindings and
+denies the revoked one.
+
+`channels.revokeAuthority()` persists the authorization generation in the
+caller's database transaction. For a managed caller transaction, bounded
+provider termination and generation acknowledgement run inline; failure throws
+and rolls the transaction back. A conservative disconnect may survive a later
+database rollback. For a standalone command, failure leaves the already durable
+cut pending and ordered provider dispatch fail-closed so an idempotent retry can
+finish it. A physical frame already accepted by Pusher can arrive during
+termination, so this transport does not claim zero-frame atomic revocation.
+Custom shared transports must declare an explicit revocation scope and
+implementation; QUESTPIE never silently treats an unknown provider as exact
+revocation.
+
+Pusher also qualifies channel authorization as a
+`stateless-signed-grant`: provider `generateAuth` is side-effect-free local
+encoding. QUESTPIE evaluates policy and encoding outside database locks, then
+uses an optimistic generation check before returning the blob. A concurrent cut
+discards it before it reaches the browser. Shared adapters without this explicit
+capability are rejected before policy or provider signing.
+
 Direct provider client events are **off by default** and are not equivalent to `client.channels.*.publish()`. Enabling them requires:
 
 ```ts

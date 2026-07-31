@@ -31,6 +31,7 @@ import _glob_site_settings from "../globals/site-settings";
 import _mig_20260725T184252_realtimeV3Umbrella from "../migrations/20260725T184252_realtime-v3-umbrella";
 import _mig_20260726T163039_queueTransactionalDispatch from "../migrations/20260726T163039_queue-transactional-dispatch";
 import _mig_20260730T182023_optimisticConcurrencyRevisions from "../migrations/20260730T182023_optimistic-concurrency-revisions";
+import _mig_20260731T000040_realtimeIdempotency1 from "../migrations/20260731T000040_realtime-idempotency-1";
 
 // ── Blocks ─────────────────────────────────────────────────
 import { accordionBlock as _bloc_accordion } from "../blocks/accordion";
@@ -137,7 +138,7 @@ var _appLease = acquireGeneratedApp("city-portal-example:src/questpie/server:src
 		globals: {
 			site_settings: _glob_site_settings,
 		},
-		migrations: [_mig_20260725T184252_realtimeV3Umbrella, _mig_20260726T163039_queueTransactionalDispatch, _mig_20260730T182023_optimisticConcurrencyRevisions],
+		migrations: [_mig_20260725T184252_realtimeV3Umbrella, _mig_20260726T163039_queueTransactionalDispatch, _mig_20260730T182023_optimisticConcurrencyRevisions, _mig_20260731T000040_realtimeIdempotency1],
 		blocks: {
 			[_bloc_accordion.state.name]: _bloc_accordion,
 			[_bloc_announcementBanner.state.name]: _bloc_announcementBanner,

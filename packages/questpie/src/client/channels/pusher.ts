@@ -250,6 +250,36 @@ export class PusherChannelTransport implements ChannelClientTransport {
 		};
 	}
 
+	private async authenticateUser(
+		socketId: string,
+	): Promise<{ auth: string; user_data: string }> {
+		const authHeaders = await this.options.getAuthHeaders?.();
+		const path = this.options.config.authEndpoint ?? "realtime/auth";
+		const authEndpoint = /^https?:\/\//.test(path)
+			? path
+			: `${this.options.baseUrl.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
+		const response = await this.options.fetcher(authEndpoint, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/x-www-form-urlencoded",
+				...authHeaders,
+			},
+			body: new URLSearchParams({ socket_id: socketId }),
+			credentials: "include",
+		});
+		if (!response.ok) {
+			throw new Error(`Realtime user auth failed: ${response.status}`);
+		}
+		const auth = (await response.json()) as {
+			auth?: unknown;
+			user_data?: unknown;
+		};
+		if (typeof auth.auth !== "string" || typeof auth.user_data !== "string") {
+			throw new Error("Invalid realtime user auth response");
+		}
+		return { auth: auth.auth, user_data: auth.user_data };
+	}
+
 	private async mount(entry: Entry): Promise<void> {
 		try {
 			const subscription = await this.connection.subscribe({
@@ -258,6 +288,12 @@ export class PusherChannelTransport implements ChannelClientTransport {
 				lane: "channel",
 				authorize: (socketId, channelName) =>
 					this.authorize(socketId, channelName),
+				...(this.options.config.userAuthentication === true
+					? {
+							authenticateUser: (socketId: string) =>
+								this.authenticateUser(socketId),
+						}
+					: {}),
 			});
 			if (
 				this.destroyed ||

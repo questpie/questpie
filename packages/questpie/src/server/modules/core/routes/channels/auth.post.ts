@@ -28,29 +28,6 @@ export default route()
 				throw new Error("Channel name does not match generated identity");
 			}
 			const definition = channels.getDefinition(input.channel);
-			let presence: { user_info?: Record<string, unknown> } | undefined;
-			if (definition.visibility === "presence") {
-				const resolved = await channels.resolvePresence(
-					input.channel,
-					input.params,
-				);
-				if (resolved && typeof resolved === "object") {
-					presence = { user_info: resolved as Record<string, unknown> };
-				}
-			} else if (
-				!(await channels.authorize(input.channel, input.params, "subscribe"))
-			) {
-				observeChannelSecurity(ctx, {
-					verb: "subscribe",
-					outcome: "denied",
-					reason: "access_denied",
-				});
-				return channelRouteResponse(
-					{ error: "channel_subscribe_denied" },
-					403,
-					origin,
-				);
-			}
 			const realtime = routeApp(ctx).realtime;
 			if (!realtime) {
 				observeChannelSecurity(ctx, {
@@ -64,13 +41,44 @@ export default route()
 					origin,
 				);
 			}
-			const auth = await realtime.generateClientAuth({
-				socketId: input.socketId,
-				channel: resolvedName,
-				principal: principalOf(ctx),
-				scope: "channel",
-				presence,
-			});
+			const auth = await realtime.generateAuthorizedClientAuth(
+				{
+					socketId: input.socketId,
+					channel: resolvedName,
+					principal: principalOf(ctx),
+					scope: "channel",
+				},
+				async () => {
+					if (definition.visibility === "presence") {
+						const resolved = await channels.resolvePresence(
+							input.channel,
+							input.params,
+						);
+						return resolved && typeof resolved === "object"
+							? {
+									presence: {
+										user_info: resolved as Record<string, unknown>,
+									},
+								}
+							: {};
+					}
+					if (
+						!(await channels.authorize(
+							input.channel,
+							input.params,
+							"subscribe",
+						))
+					) {
+						observeChannelSecurity(ctx, {
+							verb: "subscribe",
+							outcome: "denied",
+							reason: "access_denied",
+						});
+						throw new Error("Channel subscription is not authorized");
+					}
+					return {};
+				},
+			);
 			observeChannelSecurity(ctx, {
 				verb: definition.visibility === "presence" ? "presence" : "subscribe",
 				outcome: "allowed",
