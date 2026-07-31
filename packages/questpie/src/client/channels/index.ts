@@ -12,8 +12,6 @@ import {
 	BoundedChannelQueue,
 	channelSlowConsumerError,
 } from "./ordered-events.js";
-import { PusherChannelTransport } from "./pusher.js";
-import { SseChannelTransport } from "./sse.js";
 import {
 	resolveChannelClientName,
 	type ChannelClientDescriptor,
@@ -141,6 +139,7 @@ export function createChannelsAPI<
 					selected.config.provider === "pusher" &&
 					typeof selected.config.key === "string"
 				) {
+					const { PusherChannelTransport } = await import("./pusher.js");
 					return new PusherChannelTransport({
 						baseUrl: options.baseUrl,
 						fetcher: options.fetcher,
@@ -152,6 +151,7 @@ export function createChannelsAPI<
 				if (selected.transport !== "sse") {
 					throw new Error("Unsupported channel client transport");
 				}
+				const { SseChannelTransport } = await import("./sse.js");
 				return new SseChannelTransport({
 					...options,
 					connection: options.sseConnection,
