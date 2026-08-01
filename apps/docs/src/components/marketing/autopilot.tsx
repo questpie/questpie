@@ -71,6 +71,9 @@ function ApprovalCard() {
 				style={{
 					alignItems: "center",
 					display: "flex",
+					/* .btn is nowrap, so on a phone the two of them plus the question
+					   ran off the card; they drop to a second line instead. */
+					flexWrap: "wrap",
 					gap: "var(--space-3)",
 					padding: "var(--space-2)",
 				}}
@@ -234,10 +237,7 @@ export function AutopilotPageContent() {
 			</section>
 
 			<section className="band raised">
-				<div
-					className="wrap split"
-					style={{ gridTemplateColumns: "0.86fr 1.14fr" }}
-				>
+				<div className="wrap split lean">
 					<div className="head">
 						<p className="qp-aside">one list, two kinds of teammate</p>
 						<h2 className="qp-display-m">People and agents, same table</h2>

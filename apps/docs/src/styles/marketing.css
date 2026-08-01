@@ -106,6 +106,82 @@ body.qp-grain-page {
 		}
 	}
 
+	/* ── the nav below 52rem ──────────────────────────────────────────────────────
+	   Not in the kit: every one of its @dsCards is annotated 1280, and its header
+	   is one flex row at every width, so all three pages scrolled sideways on a
+	   phone.
+
+	   52rem is measured, not picked. The row's intrinsic width is 713px — lockup
+	   142, links 231, buttons 276, plus two 32px gaps — and .wrap adds 80px of
+	   padding, so it needs 793px before it overflows. 832px collapses it with
+	   enough slack that it never looks jammed on the way there.
+
+	   What survives the collapse: the lockup and the one primary action. The three
+	   links move into the panel rather than disappearing — this site is two doors
+	   and a docs link, so a phone reader with no route to them has no site. */
+	.nav-actions {
+		margin-left: auto;
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+	}
+	.nav-toggle {
+		display: none;
+		align-items: center;
+		justify-content: center;
+		width: var(--control-default);
+		height: var(--control-default);
+		padding: 0;
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-control);
+		background: transparent;
+		color: var(--foreground-muted);
+		cursor: pointer;
+	}
+	.nav-toggle:hover {
+		color: var(--foreground);
+	}
+	.nav-menu {
+		display: none;
+	}
+
+	@media (max-width: 52rem) {
+		.nav-links,
+		.nav-actions .btn.g {
+			display: none;
+		}
+		/* The mark keeps the corner; the wordmark costs 114 of the 142px the lockup
+		   takes, and at 390px that was the difference between fitting and not. The
+		   footer keeps its wordmark — it has the room. */
+		.nav .lockup span {
+			display: none;
+		}
+		.nav-toggle {
+			display: inline-flex;
+		}
+		.nav-menu[data-open="true"] {
+			display: flex;
+			flex-direction: column;
+			gap: var(--space-1);
+			padding: var(--space-3) var(--space-5) var(--space-5);
+			background: color-mix(in oklab, var(--background) 92%, transparent);
+			backdrop-filter: blur(18px) saturate(1.1);
+			-webkit-backdrop-filter: blur(18px) saturate(1.1);
+			border-bottom: 1px solid var(--border-subtle);
+		}
+		.nav-menu a {
+			display: flex;
+			align-items: center;
+			min-height: 2.75rem;
+			font-size: var(--type-lg);
+			color: var(--foreground-muted);
+		}
+		.nav-menu a[aria-current="page"] {
+			color: var(--foreground);
+			font-weight: var(--weight-semibold);
+		}
+	}
+
 	/* ── controls ─────────────────────────────────────────────────────────────── */
 	.btn {
 		display: inline-flex;
@@ -240,6 +316,10 @@ body.qp-grain-page {
 		display: flex;
 		align-items: baseline;
 		justify-content: space-between;
+		/* space-between with nothing to give: at 310px the label and the meta ran
+		   into each other with no space at all between them. */
+		flex-wrap: wrap;
+		gap: var(--space-2);
 		padding: var(--space-2) var(--space-2) 0;
 	}
 	/* the one hairline left, and only between the doors and the CTA */
@@ -311,10 +391,22 @@ body.qp-grain-page {
 		gap: var(--space-12);
 		align-items: center;
 	}
+	/* A copy-narrow, figure-wide split. This lives here rather than as an inline
+	   style — which is how the kit wrote it — because an inline grid-template
+	   beats every stylesheet rule, so the collapse below never fired and the band
+	   stayed two columns at 390px, running 148px off the side of the page. */
+	.split.lean {
+		grid-template-columns: 0.86fr 1.14fr;
+	}
+
 	@media (max-width: 62rem) {
 		.grid2,
 		.grid3,
 		.split {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		/* 0-3-0 in the rule above, so it needs its own line here to lose */
+		.split.lean {
 			grid-template-columns: minmax(0, 1fr);
 		}
 		/* same specificity as the base hero rule, or it loses */
@@ -382,6 +474,11 @@ body.qp-grain-page {
 	.row {
 		display: flex;
 		align-items: center;
+		/* The chip is flex:none and .rb has a 128px floor, so on a phone the two of
+		   them plus an avatar are wider than the card and the chip hung off the
+		   page. Wrapping drops it to its own line; at any width with room, nothing
+		   moves. */
+		flex-wrap: wrap;
 		gap: var(--space-3);
 		padding: var(--space-4);
 		background: var(--surface-mid);
