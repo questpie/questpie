@@ -556,13 +556,29 @@ article h6 {
 	line-height: 1.35;
 }
 
-/* The measure, per canon §4. Measured before this landed: 680px of 16px text is
+/* The measure, per canon §4. Measured before it landed: 680px of 16px text is
    about 86 characters a line, well past the 45-75 a reader tracks comfortably —
-   which is what "the docs read badly" meant. 68ch of Hanken is ~647px, ~77
-   characters. On .prose and not on article: fumadocs' page container IS an
-   <article>, so narrowing that would take the whole layout with it. */
-.prose {
-	max-width: 68ch;
+   which is what "the docs read badly" meant. 609px is 73.
+
+   38rem, not 68ch, and the unit is the whole point: `ch` resolves against the
+   font-size of the element it is written on, so a cap of 68ch on .prose gives
+   609px but the same 68ch on an h2 at 24px gives ~900 and caps nothing. 38rem is
+   608px everywhere.
+
+   The cap sits on the children rather than the container so that wide blocks can
+   opt out — a container cap cannot be escaped without negative margins. */
+.prose > * {
+	max-width: 38rem;
+}
+
+/* Text keeps the measure; things that are not sentences do not. The eight-column
+   adapter table wants 727px and was scrolling inside a 609px box while 744px of
+   page sat unused beside it, and a mermaid diagram with a natural width of
+   1135px was rendering at 51%. Code figures gain the same room, which is fewer
+   scrolled lines. Callouts are deliberately NOT here: they hold prose. */
+.prose > figure,
+.prose > div:has(> table) {
+	max-width: none;
 }
 
 /* Lists are running text too. Left at 16px they sat a step under the paragraphs
