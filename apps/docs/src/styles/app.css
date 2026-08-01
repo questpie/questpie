@@ -176,10 +176,13 @@
 		text-wrap: balance;
 	}
 
-	p,
-	li,
-	dd,
-	dt {
+	/* `text-wrap` is a longhand of `white-space`, so a blanket `pretty` here
+	   cancels the `nowrap` inside Tailwind's `truncate` and nothing that asks for
+	   one line plus an ellipsis gets it. That is why the prev/next cards in the
+	   page footer ran to fifteen lines of the page description. Excluding the
+	   class drops the conflicting declaration instead of racing it up the
+	   cascade, and `:where()` keeps this at zero specificity. */
+	:where(p, li, dd, dt):not(.truncate) {
 		text-wrap: pretty;
 	}
 

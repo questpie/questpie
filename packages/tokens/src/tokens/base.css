@@ -46,6 +46,13 @@ h6 {
 
 p {
 	margin: 0;
+}
+
+/* `text-wrap` is a longhand of `white-space`, so setting it on every paragraph
+   cancels the `nowrap` that one-line utilities set. This reset is unlayered and
+   therefore outranks anything in `@layer utilities` no matter its specificity,
+   which is how `truncate` on a paragraph quietly stopped truncating. */
+p:not(.truncate) {
 	text-wrap: pretty;
 }
 
