@@ -3,7 +3,7 @@
    every admin app: +4 KB of duplicated reset, and two `box-sizing` rules. */
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
+@import "@fontsource-variable/hanken-grotesk";
 @import "@fontsource-variable/jetbrains-mono";
 
 /* Relative to this stylesheet, so it has to match both layouts: `src/client/**`
@@ -81,42 +81,51 @@
 /* Dark-first Autopilot base. :root is dark; .light opt-in mirrors hierarchy. */
 :root,
 .dark {
-	--background: #121212;
-	--foreground: #ececec;
-	--foreground-muted: #a0a0a0;
-	--foreground-subtle: #737373;
-	--foreground-disabled: #5a5a5a;
-	--surface: #161616;
-	--surface-low: #1b1b1b;
-	--surface-mid: #222222;
-	--surface-high: #2a2a2a;
-	--surface-highest: #333333;
-	--card: #1b1b1b;
-	--card-foreground: #ececec;
-	--popover: #1b1b1b;
-	--popover-foreground: #ececec;
-	--input: #343434;
-	--muted: #222222;
-	--muted-foreground: #a0a0a0;
-	--accent: #2a2a2a;
-	--accent-foreground: #ececec;
-	--secondary: #222222;
-	--secondary-foreground: #ececec;
-	--primary: #b700ff;
-	--primary-foreground: #ffffff;
-	--destructive: #ff5f6d;
-	--destructive-foreground: #1c0b0f;
-	--success: #4ade80;
-	--success-foreground: #062d16;
-	--warning: #222222;
-	--warning-foreground: #ececec;
-	--info: #222222;
-	--info-foreground: #ececec;
-	--border-subtle: #262626;
-	--border: #343434;
-	--border-strong: #4a4a4a;
-	--ring: #737373;
-	--selection: #333333;
+	--background: oklch(17.43% 0.0069 78.1);
+	--foreground: oklch(95.96% 0.0131 82.4);
+	--foreground-muted: var(--muted-foreground);
+	--foreground-subtle: oklch(59.37% 0.0234 79);
+	--foreground-faint: oklch(46.11% 0.0202 75.9);
+	--foreground-disabled: var(--foreground-faint);
+	--surface: oklch(19.01% 0.0102 67.1);
+	--surface-low: oklch(21.14% 0.0075 67.4);
+	--surface-mid: oklch(22.96% 0.0098 67.3);
+	--surface-high: oklch(26.79% 0.0131 72.3);
+	--surface-highest: oklch(29.73% 0.0151 71.5);
+	--card: oklch(21.14% 0.0075 67.4);
+	--card-foreground: var(--foreground);
+	--popover: var(--surface-mid);
+	--popover-foreground: var(--foreground);
+	--input: var(--border-subtle);
+	--muted: var(--surface-mid);
+	--muted-foreground: oklch(74.83% 0.0252 79.7);
+	--accent: var(--surface-high);
+	--accent-foreground: var(--foreground);
+	--secondary: var(--surface-mid);
+	--secondary-foreground: var(--foreground);
+	/* The brand hue as a fill, and the lightened one that is legible AS TEXT.
+	   Coral on a dark ground reads at 2.88:1 and fails; --primary-text is the
+	   value the canon reserves for coloured words, and they are not
+	   interchangeable. */
+	--coral: oklch(68.55% 0.1759 36.1);
+	--primary: var(--coral);
+	--primary-text: oklch(77.53% 0.126 42.9);
+	--primary-foreground: oklch(100% 0 0);
+	--destructive: oklch(83.97% 0.1147 81.7);
+	--destructive-foreground: oklch(22.96% 0.0098 67.3);
+	--success: oklch(78.76% 0.1269 147.5);
+	--success-foreground: oklch(17.43% 0.0069 78.1);
+	--warning: oklch(80% 0.1231 79.2);
+	--warning-foreground: oklch(17.43% 0.0069 78.1);
+	/* The canon has no informational hue. These two were frozen copies of the
+	   old surface-mid and foreground, so they become the variables they were. */
+	--info: var(--surface-mid);
+	--info-foreground: var(--foreground);
+	--border-subtle: oklch(24.32% 0.012 67.2);
+	--border: oklch(26.79% 0.0131 72.3);
+	--border-strong: oklch(38.01% 0.0151 67.3);
+	--ring: oklch(68.55% 0.1759 36.1);
+	--selection: color-mix(in srgb, var(--coral) 26%, transparent);
 	--radius: 0.75rem;
 	--control-height: 2.5rem;
 	--control-radius: 0.75rem;
@@ -137,14 +146,14 @@
 	--motion-scale-enter: 0.98;
 
 	/* Neutral charts/statuses: color is not primary communication. */
-	--chart-1: #ececec;
-	--chart-2: #a0a0a0;
-	--chart-3: #737373;
-	--chart-4: #5a5a5a;
-	--chart-5: #4a4a4a;
+	--chart-1: var(--primary);
+	--chart-2: var(--primary-text);
+	--chart-3: var(--warning);
+	--chart-4: var(--success);
+	--chart-5: var(--foreground-subtle);
 
 	/* Typography */
-	--font-sans: "Geist Variable", "Inter", sans-serif;
+	--font-sans: "Hanken Grotesk Variable", system-ui, -apple-system, sans-serif;
 	--font-mono:
 		"JetBrains Mono Variable", "JetBrains Mono", ui-monospace, monospace;
 	--font-chrome: var(--font-sans);
@@ -159,18 +168,18 @@
 	--spacing-panel: 1.25rem;
 
 	/* Sidebar / left rail: neutral active states, no purple navigation. */
-	--sidebar: #161616;
-	--sidebar-foreground: #ececec;
-	--sidebar-primary: #ececec;
-	--sidebar-primary-foreground: #121212;
-	--sidebar-accent: #2a2a2a;
-	--sidebar-accent-foreground: #ececec;
-	--sidebar-border: #262626;
+	--sidebar: oklch(19.01% 0.0102 67.1);
+	--sidebar-foreground: var(--foreground);
+	--sidebar-primary: var(--primary);
+	--sidebar-primary-foreground: var(--primary-foreground);
+	--sidebar-accent: var(--surface-mid);
+	--sidebar-accent-foreground: var(--foreground);
+	--sidebar-border: var(--border-subtle);
 	--sidebar-ring: var(--ring);
 	--sidebar-active-background: var(--surface-high);
 	--sidebar-active-foreground: var(--foreground);
 	--sidebar-active-indicator: var(--border-strong);
-	--sidebar-submenu: color-mix(in srgb, var(--surface-high) 48%, transparent);
+	--sidebar-submenu: color-mix(in oklab, var(--surface-mid) 55%, transparent);
 
 	--chrome-text-transform: none;
 	--chrome-letter-spacing: normal;
@@ -178,61 +187,65 @@
 
 .light,
 :root.light {
-	--background: #fafafa;
-	--foreground: #1c1c1c;
-	--foreground-muted: #616161;
-	--foreground-subtle: #858585;
-	--foreground-disabled: #a0a0a0;
-	--surface: #f7f7f7;
-	--surface-low: #ffffff;
-	--surface-mid: #f0f0f0;
-	--surface-high: #e8e8e8;
-	--surface-highest: #dedede;
-	--card: #ffffff;
-	--card-foreground: #1c1c1c;
-	--popover: #ffffff;
-	--popover-foreground: #1c1c1c;
-	--input: #e2e2e2;
-	--muted: #f0f0f0;
-	--muted-foreground: #616161;
-	--accent: #e8e8e8;
-	--accent-foreground: #1c1c1c;
-	--secondary: #f0f0f0;
-	--secondary-foreground: #1c1c1c;
-	--primary: #b700ff;
-	--primary-foreground: #ffffff;
-	--destructive: #d92d3a;
-	--destructive-foreground: #ffffff;
-	--success: #16a34a;
-	--success-foreground: #ffffff;
-	--warning: #f0f0f0;
-	--warning-foreground: #1c1c1c;
-	--info: #f0f0f0;
-	--info-foreground: #1c1c1c;
-	--border-subtle: #ebebeb;
-	--border: #e2e2e2;
-	--border-strong: #c9c9c9;
-	--ring: #858585;
-	--selection: #e8e8e8;
+	--background: oklch(98.25% 0.0057 84.6);
+	--foreground: oklch(21.89% 0.0065 78.2);
+	--foreground-muted: var(--muted-foreground);
+	--foreground-subtle: oklch(63.75% 0.0218 77.2);
+	--foreground-faint: oklch(79.27% 0.0207 77.3);
+	--foreground-disabled: var(--foreground-faint);
+	--surface: oklch(100% 0 0);
+	--surface-low: oklch(96.53% 0.0102 81.8);
+	--surface-mid: oklch(95.03% 0.0103 81.8);
+	--surface-high: oklch(92.69% 0.0149 80.7);
+	--surface-highest: oklch(89.7% 0.0208 81.8);
+	--card: oklch(100% 0 0);
+	--card-foreground: var(--foreground);
+	--popover: var(--surface-mid);
+	--popover-foreground: var(--foreground);
+	--input: var(--border-subtle);
+	--muted: var(--surface-mid);
+	--muted-foreground: oklch(45.05% 0.019 73.4);
+	--accent: var(--surface-high);
+	--accent-foreground: var(--foreground);
+	--secondary: var(--surface-mid);
+	--secondary-foreground: var(--foreground);
+	--coral: oklch(68.55% 0.1759 36.1);
+	--primary: var(--coral);
+	/* darker here: coral text on paper is 2.88:1 and fails */
+	--primary-text: oklch(53.62% 0.1626 36.9);
+	--primary-foreground: oklch(100% 0 0);
+	--destructive: oklch(47.61% 0.0891 74.2);
+	--destructive-foreground: oklch(100% 0 0);
+	--success: oklch(52.17% 0.0957 159.1);
+	--success-foreground: oklch(100% 0 0);
+	--warning: oklch(60.33% 0.1179 76.1);
+	--warning-foreground: oklch(100% 0 0);
+	--info: var(--surface-mid);
+	--info-foreground: var(--foreground);
+	--border-subtle: oklch(93.27% 0.0161 82.8);
+	--border: oklch(89.7% 0.0208 81.8);
+	--border-strong: oklch(83.71% 0.0262 78.9);
+	--ring: oklch(68.55% 0.1759 36.1);
+	--selection: oklch(92.69% 0.0149 80.7);
 	--control-background: var(--card);
 	--control-border: var(--border);
 	--control-shadow: none;
 	--surface-shadow: none;
 	--floating-shadow: 0 16px 36px -30px rgba(0, 0, 0, 0.38);
 
-	--chart-1: #1c1c1c;
-	--chart-2: #616161;
-	--chart-3: #858585;
-	--chart-4: #a0a0a0;
-	--chart-5: #c9c9c9;
+	--chart-1: var(--primary);
+	--chart-2: var(--primary-text);
+	--chart-3: var(--warning);
+	--chart-4: var(--success);
+	--chart-5: var(--foreground-subtle);
 
-	--sidebar: #f7f7f7;
-	--sidebar-foreground: #1c1c1c;
-	--sidebar-primary: #1c1c1c;
-	--sidebar-primary-foreground: #ffffff;
-	--sidebar-accent: #e8e8e8;
-	--sidebar-accent-foreground: #1c1c1c;
-	--sidebar-border: #ebebeb;
+	--sidebar: oklch(96.53% 0.0102 81.8);
+	--sidebar-foreground: var(--foreground);
+	--sidebar-primary: var(--primary);
+	--sidebar-primary-foreground: var(--primary-foreground);
+	--sidebar-accent: var(--surface-mid);
+	--sidebar-accent-foreground: var(--foreground);
+	--sidebar-border: var(--border-subtle);
 	--sidebar-ring: var(--ring);
 	--sidebar-active-background: var(--surface-high);
 	--sidebar-active-foreground: var(--foreground);
@@ -241,11 +254,14 @@
 }
 
 @theme inline {
-	/* Typography */
-	--font-sans: "Geist Variable", "Inter", sans-serif;
-	--font-mono:
-		"JetBrains Mono Variable", "JetBrains Mono", ui-monospace, monospace;
-	--font-chrome: var(--font-sans);
+	/* Typography — forwarded, not restated. Every other entry in this block reads
+	   its runtime variable; these three did not, so `font-sans` and `font-chrome`
+	   utilities were pinned to whatever this file said and a consumer overriding
+	   --font-sans got a changed --font-heading and an unchanged font-sans. That is
+	   the half-re-themeable hazard the canon names. */
+	--font-sans: var(--font-sans);
+	--font-mono: var(--font-mono);
+	--font-chrome: var(--font-chrome);
 	--font-heading: var(--font-heading);
 
 	/* Radius: Autopilot neutral-soft ladder */

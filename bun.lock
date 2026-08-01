@@ -217,7 +217,7 @@
         "@dnd-kit/core": "^6.3.1",
         "@dnd-kit/sortable": "^10.0.0",
         "@dnd-kit/utilities": "^3.2.2",
-        "@fontsource-variable/geist": "^5.2.8",
+        "@fontsource-variable/hanken-grotesk": "5.3.0",
         "@fontsource-variable/jetbrains-mono": "^5.2.8",
         "@hookform/resolvers": "^5.1.0",
         "@iconify/react": "^6.0.2",
@@ -903,8 +903,6 @@
     "@floating-ui/utils": ["@floating-ui/utils@0.2.12", "", {}, "sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww=="],
 
     "@fontsource-variable/bricolage-grotesque": ["@fontsource-variable/bricolage-grotesque@5.3.0", "", {}, "sha512-TLi9Q4hJjS2UvoTMRSS2nHu6c4R56lAw60NR9QYtVRCHn0XtsFpiEhNffZ8Glsoxu6wEEwLKBP8lb94J52PNBA=="],
-
-    "@fontsource-variable/geist": ["@fontsource-variable/geist@5.3.0", "", {}, "sha512-j0m+vLQuG5XAYoHtGCVu0spvlGreR3EzpECUVzkFmI1mTVnAO38l/NEPDCFgZ177JxzYJCLSmTQibIiYPilGrA=="],
 
     "@fontsource-variable/hanken-grotesk": ["@fontsource-variable/hanken-grotesk@5.3.0", "", {}, "sha512-DOd0FqL+3cH2dfNy0JtSq9tUfxBz5mLmHMjTU0DOr3E9Zo6wxuatCl53DIPNrSPgCsnuKyM739BTIG5glCLirw=="],
 
