@@ -35,11 +35,13 @@ type UserAuthenticator = (socketId: string) => Promise<{
 type ChannelOwner = {
 	authorize: ChannelAuthorizer;
 	authenticateUser?: UserAuthenticator;
+	onConnectionEpochEnd?: () => void;
 	channel?: PusherChannel;
 };
 
 export type ManagedPusherSubscription = {
 	channel: PusherChannel;
+	isConnectionActive(): boolean;
 	release(): void;
 };
 
@@ -84,6 +86,7 @@ export class PusherConnectionManager {
 		lane: "edge" | "channel";
 		authorize: ChannelAuthorizer;
 		authenticateUser?: UserAuthenticator;
+		onConnectionEpochEnd?: () => void;
 	}): Promise<ManagedPusherSubscription> {
 		if (
 			options.lane === "channel" &&
@@ -98,6 +101,7 @@ export class PusherConnectionManager {
 		const owner: ChannelOwner = {
 			authorize: options.authorize,
 			authenticateUser: options.authenticateUser,
+			onConnectionEpochEnd: options.onConnectionEpochEnd,
 		};
 		this.owners.set(options.channelName, owner);
 		try {
@@ -110,6 +114,7 @@ export class PusherConnectionManager {
 			let released = false;
 			return {
 				channel,
+				isConnectionActive: () => pusher.connection.state === "connected",
 				release: () => {
 					if (released) return;
 					released = true;
@@ -224,6 +229,17 @@ export class PusherConnectionManager {
 							}
 						: {}),
 				});
+				pusher.connection.bind("state_change", (change: unknown) => {
+					if (this.pusher !== pusher) return;
+					if (!isConnectionEpochEnd(change)) return;
+					for (const owner of this.owners.values()) {
+						try {
+							owner.onConnectionEpochEnd?.();
+						} catch {
+							// One transport owner cannot suppress the epoch fence for siblings.
+						}
+					}
+				});
 				if (config.userAuthentication === true) pusher.signin();
 				this.pusher = pusher;
 				return pusher;
@@ -247,4 +263,10 @@ export class PusherConnectionManager {
 		this.pusherPromise = null;
 		this.signature = null;
 	}
+}
+
+function isConnectionEpochEnd(value: unknown): boolean {
+	if (!value || typeof value !== "object") return false;
+	const change = value as { previous?: unknown; current?: unknown };
+	return change.previous === "connected" && change.current !== "connected";
 }

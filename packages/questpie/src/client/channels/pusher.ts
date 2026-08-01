@@ -49,6 +49,7 @@ type Entry = {
 		resolve: (members: readonly unknown[]) => void;
 		reject: (error: Error) => void;
 	}>;
+	providerEpochActive: boolean;
 };
 
 type AuthResponse = {
@@ -235,6 +236,7 @@ export class PusherChannelTransport implements ChannelClientTransport {
 			replayGeneration: 0,
 			pendingLive: new BoundedChannelQueue(),
 			presenceWaiters: new Set(),
+			providerEpochActive: false,
 		};
 		this.entries.set(input.resolvedName, entry);
 		void this.mount(entry);
@@ -317,6 +319,7 @@ export class PusherChannelTransport implements ChannelClientTransport {
 				lane: "channel",
 				authorize: (socketId, channelName) =>
 					this.authorize(socketId, channelName),
+				onConnectionEpochEnd: () => this.endConnectionEpoch(entry),
 				...(this.options.config.userAuthentication === true
 					? {
 							authenticateUser: (socketId: string) =>
@@ -337,15 +340,19 @@ export class PusherChannelTransport implements ChannelClientTransport {
 			channel.bind("questpie:channel", (payload) =>
 				this.handleMessage(entry, payload),
 			);
-			channel.bind("pusher:subscription_error", (error) =>
-				this.failEntry(entry, normalizedError(error)),
-			);
+			channel.bind("pusher:subscription_error", (error) => {
+				if (!subscription.isConnectionActive()) return;
+				this.failEntry(entry, normalizedError(error));
+			});
 			channel.bind("pusher:subscription_succeeded", (members) => {
 				try {
+					if (!subscription.isConnectionActive()) return;
 					if (entry.readiness.isReady) {
 						this.notify(entry, new Error("Channel subscription epoch ended"));
 					}
 					entry.readiness.end();
+					entry.providerEpochActive = true;
+					entry.pendingLive.clear();
 					if (entry.input.visibility === "presence") {
 						this.setPresence(entry, collectMembers(members, channel));
 					}
@@ -356,6 +363,12 @@ export class PusherChannelTransport implements ChannelClientTransport {
 			});
 			const refreshPresence = () => {
 				try {
+					if (
+						!entry.providerEpochActive ||
+						!subscription.isConnectionActive()
+					) {
+						return;
+					}
 					if (entry.input.visibility === "presence") {
 						this.setPresence(entry, collectMembers(undefined, channel));
 					}
@@ -372,6 +385,7 @@ export class PusherChannelTransport implements ChannelClientTransport {
 
 	private handleMessage(entry: Entry, payload: unknown): void {
 		try {
+			if (!entry.providerEpochActive) return;
 			const envelope = deserializeCompatibleTypedEventWire<{
 				eventId?: unknown;
 				event?: unknown;
@@ -470,9 +484,24 @@ export class PusherChannelTransport implements ChannelClientTransport {
 	private isReplayCurrent(entry: Entry, generation: number): boolean {
 		return (
 			!this.destroyed &&
+			entry.providerEpochActive &&
 			entry.replayGeneration === generation &&
 			this.entries.get(entry.input.resolvedName) === entry
 		);
+	}
+
+	private endConnectionEpoch(entry: Entry): void {
+		if (
+			this.entries.get(entry.input.resolvedName) !== entry ||
+			!entry.providerEpochActive
+		) {
+			return;
+		}
+		entry.providerEpochActive = false;
+		entry.replayGeneration += 1;
+		entry.replaying = false;
+		entry.pendingLive.clear();
+		this.notify(entry, new Error("Channel connection epoch ended"));
 	}
 
 	private parseReplayMessage(value: unknown): ChannelTransportMessage {
@@ -536,6 +565,7 @@ export class PusherChannelTransport implements ChannelClientTransport {
 	}
 
 	private unmount(name: string, entry: Entry): void {
+		entry.providerEpochActive = false;
 		entry.replayGeneration += 1;
 		entry.replaying = false;
 		entry.pendingLive.clear();
