@@ -12,7 +12,10 @@ import type {
 	RelationConfig,
 } from "#questpie/server/collection/builder/types.js";
 import { extractAppServices } from "#questpie/server/config/app-context.js";
-import { accessModeForPrincipal } from "#questpie/server/config/context.js";
+import {
+	accessModeForPrincipal,
+	runWithContext,
+} from "#questpie/server/config/context.js";
 import type {
 	Principal,
 	RequestContext,
@@ -1015,6 +1018,9 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			actor?: import("#questpie/server/modules/core/integrated/crdt/authority.js").AuthorityActor;
 			locale?: string;
 			accessMode?: AccessMode;
+			stage?: string;
+			requestId?: string;
+			traceId?: string;
 			db?: any;
 			/** Incoming request (if in HTTP scope) */
 			request?: Request;
@@ -1074,7 +1080,12 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			extensions = await this.resolveContextExtensions({
 				request: userCtx.request,
 				session: userCtx.session,
+				actor: userCtx.actor,
 				db: userCtx.db ?? this.db,
+				locale,
+				stage: userCtx.stage,
+				requestId: userCtx.requestId,
+				traceId: userCtx.traceId,
 			});
 		}
 
@@ -1100,7 +1111,12 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	private async resolveContextExtensions(params: {
 		request: Request;
 		session: { user: User; session: Session } | null | undefined;
+		actor?: import("#questpie/server/modules/core/integrated/crdt/authority.js").AuthorityActor;
 		db: any;
+		locale: string;
+		stage?: string;
+		requestId?: string;
+		traceId?: string;
 	}): Promise<Record<string, unknown> | undefined> {
 		// Loose call signature on purpose: the static `ContextResolver` params
 		// type is the USER-facing contract (augmented per-app by codegen); the
@@ -1110,17 +1126,37 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			| undefined;
 		if (typeof resolver !== "function") return undefined;
 
-		const services = extractAppServices(this, {
-			db: params.db,
-			session: params.session,
-		});
+		const result = await runWithContext(
+			{
+				app: this,
+				db: params.db,
+				session: params.session,
+				principal: { kind: "system" },
+				actor: params.actor,
+				locale: params.locale,
+				accessMode: "system",
+				stage: params.stage,
+				requestId: params.requestId,
+				traceId: params.traceId,
+			},
+			async () => {
+				const services = extractAppServices(this, {
+					db: params.db,
+					session: params.session,
+					locale: params.locale,
+					accessMode: "system",
+					principal: { kind: "system" },
+					actor: params.actor,
+				});
 
-		const result = await resolver({
-			...services,
-			request: params.request,
-			session: params.session,
-			db: params.db,
-		});
+				return resolver({
+					...services,
+					request: params.request,
+					session: params.session,
+					db: params.db,
+				});
+			},
+		);
 		const extensions = (result ?? {}) as Record<string, unknown>;
 
 		if (getNodeEnv() !== "production") {

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { z } from "zod";
 
+import { collection } from "../../src/exports/index.js";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
 import { channel } from "../../src/server/channels/channel-builder.js";
 import { ChannelTokenBucketLimiter } from "../../src/server/channels/security.js";
@@ -67,6 +68,28 @@ async function readSseEvent(
 		const next = await reader.read();
 		if (next.done) throw new Error(`SSE ended before ${eventType}`);
 		state.buffer += decoder.decode(next.value, { stream: true });
+	}
+}
+
+async function readSseEventWithin(
+	reader: ReadableStreamDefaultReader<Uint8Array>,
+	state: { buffer: string },
+	eventType: string,
+	timeoutMs = 2_000,
+): Promise<Record<string, unknown>> {
+	let timeout: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			readSseEvent(reader, state, eventType),
+			new Promise<never>((_, reject) => {
+				timeout = setTimeout(
+					() => reject(new Error(`Timed out waiting for SSE ${eventType}`)),
+					timeoutMs,
+				);
+			}),
+		]);
+	} finally {
+		if (timeout) clearTimeout(timeout);
 	}
 }
 
@@ -164,6 +187,91 @@ describe("channel module routes", () => {
 			data: { text: "hello" },
 		});
 		await reader.cancel();
+	});
+
+	test("keeps app context resolver reads system-scoped during fresh channel reauthorization", async () => {
+		let contextResolutions = 0;
+		const memberships = collection("memberships")
+			.fields(({ f }) => ({
+				userId: f.text().required(),
+			}))
+			.access({ read: false, create: false, update: false, delete: false });
+		const setup = await buildMockApp(
+			{
+				collections: { memberships },
+				channels: {
+					workspace: channel("workspace-[workspaceId]")
+						.events({ message: z.object({ text: z.string() }) })
+						.authorize(
+							({ session, hasMembership }: any) =>
+								session?.user.id === "user-1" && hasMembership === true,
+						),
+				},
+				config: {
+					app: {
+						context: async ({ collections, session }: any) => {
+							contextResolutions += 1;
+							const membershipCount = await collections.memberships.count({
+								where: { userId: session?.user.id },
+							});
+							return { hasMembership: membershipCount === 1 };
+						},
+					},
+				},
+			},
+			{
+				app: { url: "https://app.example.com" },
+				realtime: { retentionDays: 0, rowLiveQueries: false },
+			},
+		);
+		cleanup = setup.cleanup;
+		await runTestDbMigrations(setup.app);
+		await setup.app.collections.memberships.create({ userId: "user-1" });
+
+		const handler = createFetchHandler(setup.app, {
+			getSession: async () => ({
+				user: { id: "user-1" },
+				session: { id: "session-1" },
+			}),
+		});
+		const response = await handler(
+			channelRequest("realtime", {
+				channels: [
+					{
+						id: "workspace-one",
+						channel: "workspace",
+						params: { workspaceId: "one" },
+					},
+				],
+			}),
+		);
+		expect(response.status).toBe(200);
+		const reader = response.body!.getReader();
+		const state = { buffer: "" };
+		try {
+			await readSseEventWithin(reader, state, "session");
+
+			for (let attempt = 0; attempt < 100; attempt++) {
+				if (contextResolutions >= 2) break;
+				await new Promise((resolve) => setTimeout(resolve, 5));
+			}
+			expect(contextResolutions).toBeGreaterThanOrEqual(2);
+
+			await setup.app.realtime!.appendChannelEvent({
+				channel: "private-workspace-one",
+				event: "message",
+				schemaIdentity: "workspace:message",
+				data: { text: "still-authorized" },
+			});
+			expect(
+				await readSseEventWithin(reader, state, "channel_event"),
+			).toMatchObject({
+				channel: "private-workspace-one",
+				data: { text: "still-authorized" },
+			});
+		} finally {
+			await reader.cancel().catch(() => {});
+		}
 	});
 
 	test("a held-open SSE stream reruns presence policy and revokes only the exact channel binding", async () => {
