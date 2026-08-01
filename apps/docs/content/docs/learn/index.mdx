@@ -24,7 +24,7 @@ import { collection } from "#questpie/factories";
 export const news = collection("news")
 	.fields(({ f }) => ({
 		title: f.text(255).label("Title").required(),
-		content: f.richText(),
+		content: f.textarea(),
 		isPublished: f.boolean().default(false),
 	}))
 	.title(({ f }) => f.title);
@@ -105,7 +105,12 @@ enable them, and each one is a package you can read and replace.
 ### The admin, from `@questpie/admin`
 
 A list that uses your labels, and a form that picks each control from the field
-type. `text` gets an input, `richText` gets an editor, `boolean` gets a switch.
+type. `text` gets an input, `textarea` gets a multi-line box, `boolean` gets a
+switch.
+
+The module also contributes two field types of its own, so they appear on `f`
+only when it is enabled: `richText` for a WYSIWYG document, and `blocks` for
+stacked content.
 
 It is generic over your schema rather than built for one kind of content. Its job
 is to let the people who own the data work with it in a normal interface, instead
