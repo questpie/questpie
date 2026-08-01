@@ -1,0 +1,746 @@
+/* ============================================================================
+   QUESTPIE — marketing.css
+   The marketing page grammar, from the accepted handoff kit, scoped.
+
+   Every selector below is nested under .qp-marketing. The kit was written as
+   standalone pages where bare names like .card, .btn, .row, .nav, .toc and
+   .callout are safe; in this app they share a document with fumadocs and with
+   the docs shell, where they are not. The wrapper costs one class on the page
+   root and makes the collision impossible rather than unlikely.
+
+   Depends on @questpie/tokens (styles.css) and tokens/mesh.css.
+   ============================================================================ */
+
+/* Targets the document body, so it stays outside the scope. */
+body.qp-grain-page {
+	background: transparent;
+}
+
+.qp-marketing {
+	/* ============================================================================
+	   QUESTPIE — marketing.css
+	   The marketing page grammar, in ONE place. Every marketing page links this file
+	   and writes no page-level CSS of its own; four pages each carrying their own copy
+	   of the nav, band and head rules is exactly how headings stopped matching.
+
+	   Depends on styles.css (tokens) + tokens/mesh.css (mesh, grain, glass).
+	   ============================================================================ */
+
+	/* 1200 was too tight for a two-column hero: the display column landed at ~590px
+	   and an 88px heading broke into single words. The page runs wide; only prose is
+	   narrow. */
+
+	.wrap {
+		max-width: 84rem;
+		margin: 0 auto;
+		padding: 0 var(--space-10);
+	}
+	.wrap.narrow {
+		max-width: var(--content-narrow);
+	}
+
+	/* ── header: floats at rest, glass once content passes under it ───────────── */
+	.nav {
+		position: sticky;
+		top: 0;
+		z-index: 20;
+		height: var(--nav-height);
+		background: transparent;
+		transition: background-color var(--duration-slow) var(--ease-standard);
+	}
+	.nav[data-scrolled="true"] {
+		background: color-mix(in oklab, var(--background) 58%, transparent);
+		backdrop-filter: blur(18px) saturate(1.1);
+		-webkit-backdrop-filter: blur(18px) saturate(1.1);
+	}
+	.nav::after {
+		content: "";
+		position: absolute;
+		inset: auto 0 0;
+		height: 1px;
+		opacity: 0;
+		background: linear-gradient(
+			to right,
+			transparent,
+			var(--border-subtle) 12%,
+			var(--border-subtle) 88%,
+			transparent
+		);
+		transition: opacity var(--duration-slow) var(--ease-standard);
+	}
+	.nav[data-scrolled="true"]::after {
+		opacity: 1;
+	}
+	.nav-inner {
+		height: 100%;
+		display: flex;
+		align-items: center;
+		gap: var(--space-8);
+	}
+	.lockup {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+	.lockup span {
+		font-family: var(--font-wordmark);
+		font-size: 21px;
+		font-weight: var(--wordmark-weight);
+		letter-spacing: var(--wordmark-track);
+		text-transform: uppercase;
+		color: var(--foreground);
+	}
+	.nav-links {
+		display: flex;
+		align-items: center;
+		gap: var(--space-6);
+		font-size: var(--type-md);
+	}
+	.nav-links a {
+		color: var(--foreground-muted);
+	}
+	.nav-links a:hover,
+	.nav-links a[aria-current="page"] {
+		color: var(--foreground);
+	}
+	@media (prefers-reduced-transparency: reduce) {
+		.nav[data-scrolled="true"] {
+			background: var(--background);
+			backdrop-filter: none;
+		}
+	}
+
+	/* ── controls ─────────────────────────────────────────────────────────────── */
+	.btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-2);
+		height: var(--control-default);
+		padding: 0 var(--control-pad-x);
+		border: 1px solid transparent;
+		border-radius: var(--radius-control);
+		font-family: var(--font-sans);
+		font-size: var(--type-md);
+		font-weight: var(--weight-strong);
+		white-space: nowrap;
+		cursor: pointer;
+	}
+	.btn:active {
+		transform: translateY(var(--motion-press-y));
+	}
+	.btn.p {
+		background: var(--primary);
+		color: var(--primary-foreground);
+		box-shadow: var(--elevation-action);
+	}
+	.btn.p:hover {
+		background: var(--primary-hover);
+		box-shadow: var(--elevation-action-hover);
+	}
+	.btn.s {
+		background: var(--surface-mid);
+		color: var(--foreground);
+	}
+	.btn.s:hover {
+		background: var(--surface-high);
+	}
+	.btn.o {
+		background: transparent;
+		border-color: var(--border);
+		color: var(--foreground);
+	}
+	.btn.g {
+		background: transparent;
+		color: var(--foreground-muted);
+	}
+	.btn.g:hover {
+		color: var(--foreground);
+	}
+	.btn.lg {
+		height: var(--control-large);
+		padding: 0 24px;
+	}
+	.btn.sm {
+		height: var(--control-compact);
+		padding: 0 var(--control-pad-x-compact);
+		font-size: var(--type-base);
+	}
+
+	/* ── bands: canvas → one raised step → canvas → bounded CTA ──────────────── */
+	.band {
+		padding: var(--section-pad-y) 0;
+	}
+	.band + .band {
+		padding-top: var(--space-16);
+	}
+	/* ── background system (after 5a) ──────────────────────────────────────────────
+	   One page-wide mesh under everything, then THREE ways a band can sit on it:
+
+	     (default)   nothing — the mesh shows through
+	     .raised     a translucent warm step, edges faded top and bottom so it never
+	                 draws a line across the page
+	     .inset      a bounded object: rounded, hairlined, glassy — for a CTA or a
+	                 single figure that should feel picked up off the page
+
+	   No band ever paints an opaque background, and no band ever ends in a hard
+	   border: the ground changes, and that is the whole transition. */
+	/* No band paints anything. A masked slab still reads as a slab — the section change
+	   is spacing, the section head, and the drifting tint behind everything. */
+	.band.raised {
+		position: relative;
+		padding-top: var(--section-pad-y);
+	}
+	.band.inset > .wrap > * {
+		position: relative;
+	}
+	/* Hero: ONE structure for every page. .band.hero owns the band, .wrap.split the
+	   ratio, h1 the only display-xl, .hero-card the glass device on the right.
+	   A hero never caps its h1 in ch: the column is the constraint, so balance gets
+	   two lines instead of three. Every hero has a card — a hero without one is the
+	   shape that kept looking broken. */
+	.band.hero {
+		min-height: 84vh;
+		display: flex;
+		align-items: center;
+		padding-top: var(--space-20);
+		padding-bottom: var(--space-20);
+	}
+	/* a flex child sizes to its content: without this the hero wrap was narrower than
+	   every other band on the page */
+	.band.hero > .wrap {
+		width: 100%;
+	}
+	.band.hero > .wrap.split {
+		grid-template-columns: 1.12fr 0.88fr;
+		gap: var(--space-16);
+	}
+	/* Two lines, always. The cap is in ch ON THE H1, so it scales with the type and
+	   text-wrap: balance splits the sentence evenly. 12ch ≈ "Software you". */
+	.band.hero h1 {
+		font-size: clamp(2.75rem, 1.8rem + 3.2vw, 5rem);
+		line-height: 0.98;
+		max-width: 12ch;
+		text-wrap: balance;
+	}
+	.band.hero .qp-lead {
+		font-size: 1.1875rem;
+	}
+	/* the hero card is the same card as everywhere else — solid --card, hairline,
+	   lifted by shadow. Glass was a second ground for one object and it showed. */
+	.hero-card {
+		background: var(--card);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-sheet);
+		box-shadow: var(--elevation-raised);
+		padding: var(--space-5);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+	}
+	.hero-card-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		padding: var(--space-2) var(--space-2) 0;
+	}
+	/* the one hairline left, and only between the doors and the CTA */
+	.rule {
+		height: 1px;
+		border: 0;
+		margin: 0 auto;
+		max-width: 84rem;
+		background: linear-gradient(
+			to right,
+			transparent,
+			var(--border-subtle) 12%,
+			var(--border-subtle) 88%,
+			transparent
+		);
+	}
+
+	/* ── section head: aside, heading, one line of lead. Same everywhere. ─────── */
+	.head {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		max-width: 46rem;
+	}
+	.head > h1,
+	.head > h2 {
+		text-wrap: balance;
+	}
+	.head > p:not(.qp-aside):not(.qp-eyebrow) {
+		max-width: 34rem;
+		font-size: var(--type-md);
+		line-height: var(--line-relaxed);
+		color: var(--foreground-muted);
+	}
+	.head-center {
+		align-items: center;
+		text-align: center;
+		margin: 0 auto;
+	}
+
+	/* ── surfaces ─────────────────────────────────────────────────────────────── */
+	.card {
+		background: var(--card);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-panel);
+		padding: var(--spacing-panel);
+	}
+	.card > p:last-child {
+		margin-top: auto;
+	}
+	.grid2 {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--space-5);
+	}
+	.grid3 {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: var(--space-5);
+	}
+	.split {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: var(--space-12);
+		align-items: center;
+	}
+	@media (max-width: 62rem) {
+		.grid2,
+		.grid3,
+		.split {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		/* same specificity as the base hero rule, or it loses */
+		.band.hero > .wrap.split {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.band.hero {
+			min-height: 0;
+			padding-top: var(--space-16);
+		}
+	}
+	.frame {
+		border-radius: var(--radius-object);
+		background: var(--surface-mid);
+		min-height: 200px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.cta-block {
+		position: relative;
+		isolation: isolate;
+		overflow: hidden;
+		border-radius: var(--radius-sheet);
+		border: 1px solid var(--border-subtle);
+		background: var(--card);
+		padding: var(--space-20) var(--space-8);
+		text-align: center;
+	}
+	/* 5a's move: one coral pool rising from the bottom edge of the CTA object */
+	.cta-block::after {
+		content: "";
+		position: absolute;
+		z-index: -1;
+		left: 50%;
+		bottom: -60%;
+		width: 68%;
+		aspect-ratio: 1;
+		transform: translateX(-50%);
+		border-radius: var(--radius-round);
+		background: var(--coral);
+		opacity: 0.22;
+		filter: blur(90px);
+	}
+
+	/* ── product objects reused from the app ─────────────────────────────────── */
+	.chip {
+		display: inline-flex;
+		align-items: center;
+		height: var(--chip-height);
+		padding: 0 12px;
+		border-radius: var(--radius-inner);
+		background: var(--surface-high);
+		color: var(--foreground-muted);
+		font-family: var(--font-mono);
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+	.chip.ok {
+		background: var(--success-surface);
+		color: var(--success);
+	}
+	.row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		padding: var(--space-4);
+		background: var(--surface-mid);
+		border-radius: var(--radius-object);
+	}
+	.row.pin {
+		background: var(--surface);
+		border: 1px solid var(--border-strong);
+	}
+	/* a floor for the row body: a wide chip must not squeeze the title into three lines */
+	.rb {
+		min-width: 8rem;
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+	.row > .chip {
+		flex: none;
+	}
+	.rt {
+		font-size: var(--type-base);
+		font-weight: var(--weight-medium);
+		color: var(--foreground);
+	}
+	.rm {
+		font-size: var(--type-sm);
+		color: var(--foreground-subtle);
+	}
+	.av {
+		width: 30px;
+		height: 30px;
+		flex: none;
+		border-radius: var(--radius-inner);
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		font-family: var(--font-mono);
+		font-size: 11px;
+		font-weight: 700;
+	}
+	.av.agent {
+		background: var(--primary);
+		color: var(--primary-foreground);
+	}
+	.av.i2 {
+		background: var(--identity-2);
+		color: var(--identity-ink);
+	}
+	.meter {
+		position: relative;
+		flex: 1;
+		height: 3px;
+		border-radius: 2px;
+		background: var(--surface-highest);
+		overflow: hidden;
+	}
+	.meter > span {
+		position: absolute;
+		inset: 0 auto 0 0;
+		border-radius: 2px;
+		background: var(--primary);
+	}
+	.count {
+		font-family: var(--font-mono);
+		font-size: var(--type-sm);
+		font-variant-numeric: tabular-nums;
+		color: var(--foreground-muted);
+	}
+
+	/* ── step card ────────────────────────────────────────────────────────────── */
+	.step-num {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 44px;
+		height: 44px;
+		border-radius: var(--radius-control);
+		background: var(--primary-tint);
+		color: var(--primary-text);
+		font-family: var(--font-mono);
+		font-size: var(--type-md);
+		font-weight: 600;
+	}
+	.card h3 {
+		font-size: var(--type-xl);
+		font-weight: var(--weight-strong);
+		letter-spacing: -0.016em;
+	}
+	.card h3 + p {
+		margin-top: var(--space-3);
+		font-size: var(--type-base);
+		color: var(--foreground-muted);
+		line-height: var(--line-relaxed);
+	}
+
+	/* ── door ─────────────────────────────────────────────────────────────────── */
+	.door {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-5);
+		background: var(--card);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-sheet);
+		padding: var(--space-7);
+		color: inherit;
+		transition: border-color var(--duration-base) var(--ease-standard);
+	}
+	.door:hover {
+		border-color: var(--border);
+	}
+	.door h3 {
+		font-size: var(--type-2xl);
+		font-weight: var(--weight-strong);
+		letter-spacing: -0.02em;
+	}
+
+	/* ── footer ───────────────────────────────────────────────────────────────── */
+	.site-footer {
+		padding: var(--space-8) 0;
+	}
+	.site-footer .wrap {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-5);
+		font-size: var(--type-base);
+		color: var(--foreground-muted);
+	}
+	.site-footer nav {
+		margin-left: auto;
+		display: flex;
+		gap: var(--space-5);
+	}
+
+	/* ── docs shell ───────────────────────────────────────────────────────────── */
+	.docs {
+		display: grid;
+		grid-template-columns: 260px minmax(0, 1fr) 220px;
+		gap: var(--space-10);
+		max-width: 84rem;
+		margin: 0 auto;
+		padding: var(--space-8) var(--space-10) var(--space-16);
+	}
+	@media (max-width: 68rem) {
+		.docs {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.docs aside {
+			display: none;
+		}
+	}
+	.dnav {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		position: sticky;
+		top: calc(var(--nav-height) + var(--space-6));
+		align-self: start;
+	}
+	.dgroup {
+		padding: var(--space-4) var(--space-2) var(--space-2);
+		font-family: var(--font-mono);
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: var(--eyebrow-track);
+		text-transform: uppercase;
+		color: var(--foreground-subtle);
+	}
+	.dlink {
+		display: flex;
+		align-items: center;
+		min-height: 2rem;
+		padding: 0 var(--space-3);
+		border-radius: var(--radius-inner);
+		font-size: var(--type-base);
+		color: var(--foreground-muted);
+	}
+	.dlink:hover {
+		background: var(--surface-mid);
+		color: var(--foreground);
+	}
+	.dlink[aria-current="page"] {
+		background: var(--surface-mid);
+		color: var(--foreground);
+		font-weight: var(--weight-semibold);
+	}
+	/* prose stays readable even though the page is wide */
+	article {
+		max-width: 48rem;
+	}
+	article h1 {
+		font-size: var(--type-3xl);
+		letter-spacing: -0.022em;
+	}
+	article h2 {
+		margin-top: var(--space-10);
+		font-size: var(--type-2xl);
+		letter-spacing: -0.018em;
+	}
+	article p,
+	article li {
+		font-size: var(--type-md);
+		line-height: var(--line-relaxed);
+		color: var(--foreground-muted);
+	}
+	article p {
+		margin-top: var(--space-4);
+	}
+	article ul {
+		margin: var(--space-4) 0 0;
+		padding-left: var(--space-5);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+	article pre {
+		margin-top: var(--space-5);
+	}
+	.callout {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-3);
+		margin-top: var(--space-6);
+		padding: var(--space-4) var(--space-5);
+		background: var(--surface-mid);
+		border-radius: var(--radius-object);
+	}
+	/* centre the mark on the FIRST LINE of the paragraph, not on the box:
+	   (line-height − icon height) / 2 */
+	.callout > img {
+		flex: none;
+		margin-top: calc((var(--type-md) * var(--line-relaxed) - 20px) / 2);
+	}
+	.callout > p {
+		margin: 0;
+	}
+	.toc {
+		position: sticky;
+		top: calc(var(--nav-height) + var(--space-6));
+		align-self: start;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		font-size: var(--type-sm);
+		color: var(--foreground-muted);
+	}
+	.breadcrumb {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		font-size: var(--type-sm);
+		color: var(--foreground-subtle);
+	}
+
+	/* ── utilities the pages use instead of inline styles ─────────────────────── */
+	.actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-3);
+		margin-top: var(--space-4);
+	}
+	.rows {
+		display: flex;
+		flex-direction: column;
+		gap: var(--spacing-gap-rows);
+	}
+	.progress {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		margin-top: var(--space-3);
+	}
+	.card {
+		display: flex;
+		flex-direction: column;
+	}
+	.card.stack {
+		gap: var(--space-4);
+	}
+	.card-note {
+		margin-top: auto;
+		font-size: var(--type-base);
+		color: var(--foreground-muted);
+	}
+	.ticks {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		font-size: var(--type-base);
+	}
+	.ticks span {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+	}
+	.ticks i {
+		width: 6px;
+		height: 6px;
+		flex: none;
+		border-radius: 2px;
+		background: var(--primary);
+	}
+	.placeholder {
+		background: var(--background);
+		border-radius: var(--radius-inner);
+		padding: 10px 14px;
+	}
+	.frame.code {
+		align-items: flex-start;
+		padding: var(--space-5);
+	}
+	.door-line {
+		margin-top: var(--space-3);
+		font-size: var(--type-base);
+		color: var(--foreground-muted);
+		line-height: var(--line-relaxed);
+	}
+	.door-cta {
+		display: inline-block;
+		margin-top: var(--space-4);
+		font-size: var(--type-md);
+		font-weight: var(--weight-semibold);
+		color: var(--foreground);
+	}
+	/* a code block sitting directly on a card: one surface per cell */
+	.qp-code.bare {
+		border: 0;
+		padding: 0;
+		margin: 0;
+		background: transparent;
+	}
+
+	/* Marketing is dark-only — the site is one continuous atmosphere. The product
+	   (admin, Autopilot) keeps both themes; that is where people work all day. */
+
+	/* ── docs search + breadcrumb ─────────────────────────────────────────────── */
+	.dsearch {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		height: 2rem;
+		padding: 0 var(--space-3);
+		border: 1px solid var(--input);
+		border-radius: var(--radius-inner);
+		background: var(--surface-mid);
+		color: var(--foreground-subtle);
+		font-size: var(--type-base);
+	}
+	.dsearch .qp-eyebrow {
+		margin-left: auto;
+		letter-spacing: 0.04em;
+	}
+	.breadcrumb > span + span::before {
+		content: "/";
+		margin-right: var(--space-2);
+		color: var(--foreground-faint);
+	}
+	.breadcrumb > span + span {
+		display: inline-flex;
+		gap: var(--space-2);
+	}
+}
