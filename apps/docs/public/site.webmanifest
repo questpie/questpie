@@ -1,14 +1,22 @@
 {
 	"name": "QUESTPIE",
 	"short_name": "QUESTPIE",
-	"description": "Server-first TypeScript framework. One backend. Ship everywhere.",
+	"description": "Software you can staff. An agent joins the way a person does — a role, permissions, and its own name on the work it finishes.",
 	"start_url": "/",
 	"display": "standalone",
-	"background_color": "#0a0a0a",
-	"theme_color": "#B700FF",
+	"background_color": "#12100d",
+	"theme_color": "#12100d",
 	"icons": [
-		{ "src": "/favicon-192.png", "sizes": "192x192", "type": "image/png" },
-		{ "src": "/favicon-512.png", "sizes": "512x512", "type": "image/png" },
+		{
+			"src": "/favicon-192.png",
+			"sizes": "192x192",
+			"type": "image/png"
+		},
+		{
+			"src": "/favicon-512.png",
+			"sizes": "512x512",
+			"type": "image/png"
+		},
 		{
 			"src": "/favicon-512.png",
 			"sizes": "512x512",

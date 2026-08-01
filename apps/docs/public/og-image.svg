@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
   <!-- Canon dark canvas, full bleed. A social preview gets cropped and rounded
        differently by every platform, so a card inside a card only ever loses. -->
-  <rect width="1200" height="630" fill="#141210"/>
+  <rect width="1200" height="630" fill="#12100d"/>
 
   <!-- The atmosphere, flattened to a still. The living mesh belongs on the page;
        an image only needs its warmth. -->

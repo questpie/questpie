@@ -96,14 +96,14 @@ export function generateMeta(props: SeoProps = {}) {
 		{
 			name: "theme-color",
 			media: "(prefers-color-scheme: light)",
-			content: "#fafafa",
+			content: "#fbf9f5",
 		},
 		{
 			name: "theme-color",
 			media: "(prefers-color-scheme: dark)",
-			content: "#121212",
+			content: "#12100d",
 		},
-		{ name: "color-scheme", content: "light dark" },
+		{ name: "color-scheme", content: "dark light" },
 
 		{ property: "og:type", content: type },
 		{ property: "og:site_name", content: siteConfig.name },
@@ -206,7 +206,7 @@ export function generateLinks(
 					{
 						rel: "mask-icon",
 						href: "/favicon.svg",
-						color: "#b700ff",
+						color: "#f26a45",
 					},
 					{
 						rel: "manifest",

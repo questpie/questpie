@@ -22,16 +22,18 @@ export const Route = createRootRoute({
 				{ charSet: "utf-8" },
 				{ name: "viewport", content: "width=device-width, initial-scale=1" },
 				{ name: "format-detection", content: "telephone=no" },
-				{ name: "color-scheme", content: "light dark" },
+				/* Dark first, matching the canon: `.dark` is the default block in
+				   tokens/colors.css and `.light` is the override. */
+				{ name: "color-scheme", content: "dark light" },
 				{
 					name: "theme-color",
 					media: "(prefers-color-scheme: light)",
-					content: "#fafafa",
+					content: "#fbf9f5",
 				},
 				{
 					name: "theme-color",
 					media: "(prefers-color-scheme: dark)",
-					content: "#121212",
+					content: "#12100d",
 				},
 			],
 			links: [
