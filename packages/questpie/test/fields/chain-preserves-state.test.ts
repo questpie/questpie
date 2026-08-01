@@ -41,8 +41,33 @@ describe("upload().multiple() preserves field state", () => {
 
 		// These are what `multiple` is FOR — they must win over the base state.
 		expect(multi._state.multiple).toBe(true);
-		expect(multi._state.virtual).toBe(true);
-		expect(multi._state.columnFactory).toBeNull();
+		expect(multi._state.columnFactory).toBeTypeOf("function");
+	});
+
+	it("owns a jsonb column rather than going virtual", () => {
+		const multi = (upload() as any).multiple();
+
+		// The array has to live somewhere. `through` is the form with no column
+		// of its own, and this is not it. relation().multiple() does the same.
+		expect(multi._state.virtual).toBe(false);
+		expect(multi._state.columnFactory("gallery").config.columnType).toBe(
+			"PgJsonb",
+		);
+	});
+
+	it("stays virtual when the upload goes through a junction", () => {
+		const m2m = (upload({ through: "post_assets" }) as any).multiple();
+
+		expect(m2m._state.virtual).toBe(true);
+	});
+
+	it("can be localized, which virtual fields cannot", () => {
+		// _inferLocation() tests `virtual` before `localized`, so while this was
+		// virtual, .localized() parsed, typechecked and did nothing.
+		const multi = (upload() as any).multiple().localized();
+
+		expect(multi._state.localized).toBe(true);
+		expect(multi._state.virtual).toBe(false);
 	});
 
 	it("carries modifiers applied before it", () => {

@@ -5,7 +5,7 @@
  * Supports single uploads (belongsTo) and many-to-many via junction table.
  */
 
-import { type PgVarcharBuilder, varchar } from "drizzle-orm/pg-core";
+import { jsonb, type PgVarcharBuilder, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { DefaultFieldState } from "../../../fields/field-class-types.js";
@@ -55,9 +55,20 @@ export interface UploadFieldMethods {
 interface UploadConfig {
 	/** Target upload collection. @default "assets" */
 	to?: string;
-	/** Allowed MIME types. */
+	/**
+	 * MIME types this field's picker offers, e.g. `["image/*"]`.
+	 *
+	 * This narrows the admin file picker for one field. The hard limit that the
+	 * server enforces on upload belongs to the target collection, as
+	 * `.upload({ allowedTypes })`, and a field cannot widen past it.
+	 */
 	mimeTypes?: string[];
-	/** Max file size in bytes. */
+	/**
+	 * Largest file in bytes this field's picker offers.
+	 *
+	 * Same boundary as `mimeTypes`. The server-enforced limit is the target
+	 * collection's `.upload({ maxSize })`.
+	 */
 	maxSize?: number;
 	/** Junction collection for M2M uploads. */
 	through?: string;
@@ -120,6 +131,8 @@ export function upload<TTo extends string = "assets">(
 			through,
 			sourceField,
 			targetField,
+			mimeTypes,
+			maxSize,
 			metadataFactory: (state) =>
 				({
 					type: "relation",
@@ -135,7 +148,17 @@ export function upload<TTo extends string = "assets">(
 					sourceField: state.sourceField,
 					targetField: state.targetField,
 					isUpload: true,
-					meta: state.extensions?.admin,
+					/* `mimeTypes` and `maxSize` used to be destructured and dropped
+					   here, so every restriction written with them did nothing at
+					   all. They reach the admin control as its `accept` and
+					   `maxSize` props, which is what narrows the file picker. An
+					   explicit `.set("admin", { ... })` still wins, because it is
+					   the more specific instruction. */
+					meta: {
+						...(state.mimeTypes ? { accept: state.mimeTypes } : {}),
+						...(state.maxSize ? { maxSize: state.maxSize } : {}),
+						...state.extensions?.admin,
+					},
 				}) as RelationFieldMetadata,
 		}),
 		uploadFieldType.methods,
@@ -150,6 +173,14 @@ export const uploadFieldType = fieldType("upload", {
 		/**
 		 * Switch this upload to an inline-array (multiple) relationship.
 		 * Stores an array of asset IDs as JSONB instead of a single FK.
+		 *
+		 * This owns a column, so it is not virtual. Pass `through` to `upload()`
+		 * for the junction-table form, which is the one with no column of its
+		 * own. `relation().multiple()` and `relation().hasMany()` draw the same
+		 * line, and this used to sit on the wrong side of it: it declared
+		 * `virtual: true, columnFactory: null`, so the array had nowhere to go
+		 * and `.localized()` silently did nothing, because `_inferLocation()`
+		 * tests `virtual` before `localized`.
 		 */
 		multiple: (f: Field<any>) =>
 			field({
@@ -159,8 +190,7 @@ export const uploadFieldType = fieldType("upload", {
 				// and target collection. See relation.ts, which spreads `_state`.
 				...f._state,
 				multiple: true,
-				virtual: true,
-				columnFactory: null as any,
+				columnFactory: (name: string) => jsonb(name),
 				schemaFactory: () => z.array(z.string().uuid()),
 				operatorSet: multipleOps,
 			}),
@@ -196,6 +226,8 @@ export const uploadFieldType = fieldType("upload", {
 			through,
 			sourceField,
 			targetField,
+			mimeTypes,
+			maxSize,
 			metadataFactory: (state: any) =>
 				({
 					type: "relation",
@@ -211,7 +243,12 @@ export const uploadFieldType = fieldType("upload", {
 					sourceField: state.sourceField,
 					targetField: state.targetField,
 					isUpload: true,
-					meta: state.extensions?.admin,
+					// Same wiring as the factory above. Keep the two in step.
+					meta: {
+						...(state.mimeTypes ? { accept: state.mimeTypes } : {}),
+						...(state.maxSize ? { maxSize: state.maxSize } : {}),
+						...state.extensions?.admin,
+					},
 				}) as RelationFieldMetadata,
 		};
 	},
