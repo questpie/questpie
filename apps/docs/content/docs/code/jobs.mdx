@@ -655,6 +655,6 @@ The public queue types, `JobDefinition`, `JobHandlerArgs`, `PublishOptions`, `Qu
 - [Hooks](/docs/schema/hooks), where `publish()` joins the hook's ambient transaction automatically.
 - [Collections](/docs/schema/collections), the data your jobs read and write via `ctx.collections`.
 - [Validation](/docs/schema/validation), the same Zod you use for a job `schema` powers collection validation.
-- [Emails](/docs/concepts/emails), the `email` service a job uses to send mail off the request path.
+- [Emails](/docs/code/emails), the `email` service a job uses to send mail off the request path.
 - [Getting started](/docs/getting-started), wire an adapter and run codegen in a fresh app.
 - Runnable example: [`examples/tanstack-barbershop`](https://github.com/questpie/questpie/tree/main/examples/tanstack-barbershop), appointment reminders + a `src/worker.ts` long-running worker.

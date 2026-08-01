@@ -18,7 +18,7 @@ The **storage adapter** supplies the byte backend for the [Storage](/docs/concep
 
 ## Quick start
 
-Storage is the `storage` key of your [runtime config](/docs/concepts/configuration). The default, **omit it entirely**, stores files on the local disk under `./uploads`, which is all you need in development:
+Storage is the `storage` key of your [runtime config](/docs/ship/configuration). The default, **omit it entirely**, stores files on the local disk under `./uploads`, which is all you need in development:
 
 ```ts title="questpie.config.ts"
 import { runtimeConfig } from "questpie/app";
@@ -244,7 +244,7 @@ effect on the next request.
 
 ## Direct-to-storage (client) uploads
 
-For large files, route the **bytes** straight from the browser to S3/R2 instead of through your server. Mint a presigned upload from a [route](/docs/concepts/routes), hand it to the client, and have the client PUT/POST the file to the provider directly:
+For large files, route the **bytes** straight from the browser to S3/R2 instead of through your server. Mint a presigned upload from a [route](/docs/code/routes), hand it to the client, and have the client PUT/POST the file to the provider directly:
 
 ```ts title="src/questpie/server/routes/sign-upload.post.ts"
 import { route } from "questpie/services";
@@ -353,6 +353,6 @@ The `Adapter` type is re-exported from `questpie/storage` so you can type your i
 - [`f.upload()` field](/docs/schema/fields#upload), a typed relation from a row to an upload collection.
 - [Client SDK, uploads](/docs/client/sdk#uploads), `client.collections.media.upload(file, { onProgress })` with XHR progress.
 - [Access control](/docs/schema/access-control), the `serve` rule that gates who may fetch file bytes.
-- [Configuration](/docs/concepts/configuration), where the `storage` block lives in `runtimeConfig()`.
-- [Environment](/docs/concepts/environment), typed `env()` for bucket names, endpoints, and credentials.
+- [Configuration](/docs/ship/configuration), where the `storage` block lives in `runtimeConfig()`.
+- [Environment](/docs/ship/environment), typed `env()` for bucket names, endpoints, and credentials.
 - [Files SDK](https://www.npmjs.com/package/files-sdk), the full driver catalog and adapter API.

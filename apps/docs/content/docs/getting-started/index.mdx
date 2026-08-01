@@ -79,7 +79,7 @@ export const posts = collection("posts")
 	types (`f.richText()`, `f.blocks()` from the admin module) appear on `f`. A
 	bare `import {collection} from "questpie"` only sees the 15 built-in field
 	types. Always import from `#questpie/factories`. See
-	[Codegen](/docs/extend/codegen) for how the generated factory is wired.
+	[Codegen](/docs/code/codegen) for how the generated factory is wired.
 </Callout>
 
 **2. Run codegen.** This discovers your files and writes the typed runtime to `src/questpie/server/.generated/`.
@@ -169,7 +169,7 @@ collection("posts").access({
 	An `undefined` access rule on a collection requires a session, it does not
 	default to public. Routes are the opposite: a route with no `.access()` is
 	**public** until you add one. Be deliberate about both. See [Access
-	control](/docs/schema/access-control) and [Routes](/docs/concepts/routes).
+	control](/docs/schema/access-control) and [Routes](/docs/code/routes).
 </Callout>
 
 **[Hooks](/docs/schema/hooks)**, lifecycle callbacks on `.hooks({ ... })`: `beforeChange`, `afterChange`, `beforeDelete`, and more. Each receives the full app context. Queue `publish()` joins the ambient transaction automatically; use `onAfterCommit(cb)` for non-transactional effects such as direct email or HTTP calls.
@@ -195,7 +195,7 @@ collection("posts").hooks({
 
 ### Business logic
 
-**[Routes](/docs/concepts/routes)**, custom HTTP endpoints as files in `src/questpie/server/routes/`. Chain `.post().schema(...).handler(...)`; the handler gets a typed `input` plus the full context (`collections`, `queue`, `db`, `session`). No imports, no singletons, everything arrives through context.
+**[Routes](/docs/code/routes)**, custom HTTP endpoints as files in `src/questpie/server/routes/`. Chain `.post().schema(...).handler(...)`; the handler gets a typed `input` plus the full context (`collections`, `queue`, `db`, `session`). No imports, no singletons, everything arrives through context.
 
 ```ts
 import { route } from "questpie/services";
@@ -209,7 +209,7 @@ export default route()
 	});
 ```
 
-**[Jobs](/docs/concepts/jobs)**, background work as files in `jobs/`. Define a payload schema and handler; dispatch with `queue.<name>.publish(payload)`. Add `options.cron` for a recurring schedule. Adapters: pg-boss, BullMQ, Cloudflare Queues.
+**[Jobs](/docs/code/jobs)**, background work as files in `jobs/`. Define a payload schema and handler; dispatch with `queue.<name>.publish(payload)`. Add `options.cron` for a recurring schedule. Adapters: pg-boss, BullMQ, Cloudflare Queues.
 
 ```ts
 import { job } from "questpie";
@@ -227,10 +227,10 @@ export default job({
 <Callout type="info" title="Workers start from application entrypoints">
 	Import the built app and call `app.queue.listen()` for a long-running worker
 	or `app.queue.runOnce()` for one serverless batch. See
-	[Jobs](/docs/concepts/jobs).
+	[Jobs](/docs/code/jobs).
 </Callout>
 
-**[Services](/docs/concepts/services)**, reusable singletons (a Stripe client, a third-party SDK) injected into context. Resolve dependencies from the `create(ctx)` argument.
+**[Services](/docs/code/services)**, reusable singletons (a Stripe client, a third-party SDK) injected into context. Resolve dependencies from the `create(ctx)` argument.
 
 ```ts
 import { service } from "questpie/services";
@@ -240,7 +240,7 @@ export default service({
 });
 ```
 
-**[Emails](/docs/concepts/emails)**, typed templates as `emails/*.ts`. A template returns `{ subject, html }`; send it with `email.sendTemplate({ template, to, input })`. Adapters: SMTP, Resend, Plunk, or a dev console logger.
+**[Emails](/docs/code/emails)**, typed templates as `emails/*.ts`. A template returns `{ subject, html }`; send it with `email.sendTemplate({ template, to, input })`. Adapters: SMTP, Resend, Plunk, or a dev console logger.
 
 ```ts
 import { email } from "questpie/services";
@@ -305,9 +305,9 @@ export default runtimeConfig({
 
 ### Extending the framework
 
-**[Modules and plugins](/docs/extend/modules)**, a module is plain data (`collections`, `routes`, `jobs`, `services`, a codegen `plugin`) you add to `src/questpie/server/modules.ts`. Admin, OpenAPI, MCP, and workflows all use this path. [Build your own](/docs/extend/build-a-plugin) to package reusable schema + behavior.
+**[Modules and plugins](/docs/code/modules)**, a module is plain data (`collections`, `routes`, `jobs`, `services`, a codegen `plugin`) you add to `src/questpie/server/modules.ts`. Admin, OpenAPI, MCP, and workflows all use this path. [Build your own](/docs/extend/build-a-plugin) to package reusable schema + behavior.
 
-**[Codegen](/docs/extend/codegen)**, the engine that turns your files into the typed runtime. `questpie generate` runs it once; `questpie dev` watches and regenerates on file add/remove. Codegen output is committed to git. A module's codegen `plugin` lets a package contribute its own file conventions without you editing config.
+**[Codegen](/docs/code/codegen)**, the engine that turns your files into the typed runtime. `questpie generate` runs it once; `questpie dev` watches and regenerates on file add/remove. Codegen output is committed to git. A module's codegen `plugin` lets a package contribute its own file conventions without you editing config.
 
 <Callout type="warn" title="Re-run codegen after adding or removing files">
 	New collections, routes, and jobs only enter the typed runtime once `questpie
@@ -321,14 +321,14 @@ export default runtimeConfig({
 - **[Collections](/docs/schema/collections)**, the deep dive on the unit you'll use most.
 - **[Fields](/docs/schema/fields)**, every built-in field type and the chain-modifier model.
 - **[Client SDK](/docs/client/sdk)**, the typed client and how every call is inferred from your schema.
-- **[Codegen](/docs/extend/codegen)**, the engine that turns your files into the typed runtime.
+- **[Codegen](/docs/code/codegen)**, the engine that turns your files into the typed runtime.
 
 ### Suggested learning paths
 
 Pick the on-ramp that matches what you're here to do. Each is an ordered path through the canonical pages, read them in sequence and every step builds on the last.
 
-- **New dev (build something)**, [TanStack Start](/docs/getting-started/tanstack-start) → [Collections](/docs/schema/collections) → [Fields](/docs/schema/fields) → [Relations](/docs/schema/relations) → [Access control](/docs/schema/access-control) → [Client SDK](/docs/client/sdk) → [TanStack Query](/docs/client/tanstack-query). Add [Hooks](/docs/schema/hooks), [Jobs](/docs/concepts/jobs), and [Routes](/docs/concepts/routes) when you need behavior.
+- **New dev (build something)**, [TanStack Start](/docs/getting-started/tanstack-start) → [Collections](/docs/schema/collections) → [Fields](/docs/schema/fields) → [Relations](/docs/schema/relations) → [Access control](/docs/schema/access-control) → [Client SDK](/docs/client/sdk) → [TanStack Query](/docs/client/tanstack-query). Add [Hooks](/docs/schema/hooks), [Jobs](/docs/code/jobs), and [Routes](/docs/code/routes) when you need behavior.
 - **Backend / data modeler**, [Collections](/docs/schema/collections) → [Fields](/docs/schema/fields) → [Relations](/docs/schema/relations) → [Validation](/docs/schema/validation) → [Access control](/docs/schema/access-control) → [Hooks](/docs/schema/hooks).
 - **Frontend integrator**, [Client SDK](/docs/client/sdk) → [TanStack Query](/docs/client/tanstack-query) → [Realtime](/docs/client/realtime).
-- **Extender / plugin author**, [Codegen](/docs/extend/codegen) → [Modules](/docs/extend/modules) → [Build a plugin](/docs/extend/build-a-plugin).
+- **Extender / plugin author**, [Codegen](/docs/code/codegen) → [Modules](/docs/code/modules) → [Build a plugin](/docs/extend/build-a-plugin).
 - **AI agent**, the QUESTPIE skills (by name) plus `llms.txt`/`llms-full.txt` are the agent on-ramp.

@@ -104,7 +104,7 @@ export interface ModuleDefinition {
 | `fields`      | Custom field types that appear on the `f` proxy.              | override by key                           |
 | `services`    | Services, keyed by name.                                      | override by key                           |
 | `migrations`  | Migrations.                                                   | **concatenated**                          |
-| `seeds`       | [Seeds](/docs/schema/seeds).                                | **concatenated**                          |
+| `seeds`       | [Seeds](/docs/schema/seeds).                                  | **concatenated**                          |
 | `messages`    | Backend messages keyed by locale.                             | **deep-merged** per locale                |
 | `config`      | The config bucket, each `config/<name>.ts` file as one key.   | merged per sub-key                        |
 | `plugin`      | Codegen plugin(s) the module ships.                           | **codegen-only**, never merged at runtime |
@@ -120,7 +120,7 @@ The trailing `[key: string]: unknown` index signature is what lets module **pack
 
 ## How modules merge into your app
 
-You declare the modules you depend on in `modules.ts` (covered in [Configuration → `modules.ts`](/docs/concepts/configuration)). Codegen reads that file in a dedicated **pre-pass** before the rest of discovery, and folds every module's contributions into one flat app.
+You declare the modules you depend on in `modules.ts` (covered in [Configuration → `modules.ts`](/docs/ship/configuration)). Codegen reads that file in a dedicated **pre-pass** before the rest of discovery, and folds every module's contributions into one flat app.
 
 The traversal is **depth-first, dependencies first**. A module names its own dependencies in its `modules` key, and those are flattened ahead of it:
 
@@ -205,7 +205,7 @@ At codegen time, `extractPluginsFromModules` walks the module tree **depth-first
 	`plugins: [...]` list to keep in sync.
 </Callout>
 
-The plugin itself, what categories and discovery it declares, and how you write one, is covered in its own pages: see [Building a plugin](/docs/extend/build-a-plugin) for the authoring loop and [Codegen](/docs/extend/codegen) for the full `CodegenPlugin` API. A short treatment of how a module _ships_ one is [below](#shipping-a-codegen-plugin).
+The plugin itself, what categories and discovery it declares, and how you write one, is covered in its own pages: see [Building a plugin](/docs/extend/build-a-plugin) for the authoring loop and [Codegen](/docs/code/codegen) for the full `CodegenPlugin` API. A short treatment of how a module _ships_ one is [below](#shipping-a-codegen-plugin).
 
 ## The static-module pattern (`packageConfig`)
 
@@ -279,7 +279,7 @@ A module's `plugin` is a `CodegenPlugin`, the object that teaches codegen new **
 Authoring a `CodegenPlugin` is documented in full on its own pages; this page only covers how a module _attaches_ one (the inline-vs-`Object.assign` patterns [above](#the-plugin-key--how-a-module-ships-its-file-conventions)) and how extraction merges them (`extractPluginsFromModules`, first-occurrence-wins). For the contract itself, go to:
 
 - **[Building a plugin](/docs/extend/build-a-plugin#the-codegen-plugin-contract)**, the build-your-own loop: the `CodegenPlugin` contract, targets, categories, discover patterns, builder extensions, scaffolds, and validators, plus the smaller per-feature seams (custom field type, operator, adapter, block) you'll reach for far more often.
-- **[Codegen → the `CodegenPlugin` API](/docs/extend/codegen#extending-codegen-the-codegenplugin-api)**, the reference for every type: `CodegenTargetContribution`, `CategoryDeclaration`, `DiscoverPattern`, and the registry/scaffold surfaces.
+- **[Codegen → the `CodegenPlugin` API](/docs/code/codegen#extending-codegen-the-codegenplugin-api)**, the reference for every type: `CodegenTargetContribution`, `CategoryDeclaration`, `DiscoverPattern`, and the registry/scaffold surfaces.
 
 All of these types are exported from **`questpie/codegen`**, the public entry for plugin authors.
 
@@ -316,12 +316,12 @@ import type {
 
 ## Related
 
-- [Configuration](/docs/concepts/configuration), `modules.ts`, the `config/*.ts` convention, `runtimeConfig` / `appConfig` / `authConfig`, and `packageConfig` in context.
+- [Configuration](/docs/ship/configuration), `modules.ts`, the `config/*.ts` convention, `runtimeConfig` / `appConfig` / `authConfig`, and `packageConfig` in context.
 - [Collections](/docs/schema/collections), what modules most often contribute, and how `.merge()` extends a module-provided collection.
 - [Globals](/docs/schema/globals), the singleton counterpart, also contributable by modules.
 - [Fields](/docs/schema/fields), custom field types a module adds to the `f` proxy.
-- [Routes](/docs/concepts/routes) and [Jobs](/docs/concepts/jobs), other categories a module contributes.
+- [Routes](/docs/code/routes) and [Jobs](/docs/code/jobs), other categories a module contributes.
 - [Seeds](/docs/schema/seeds), bootstrap and demo data a module can contribute.
 - [Building a plugin](/docs/extend/build-a-plugin), author the `CodegenPlugin` a module ships, plus the smaller per-feature seams (custom field type, operator, adapter, block).
-- [Codegen](/docs/extend/codegen), the pipeline that reads `modules.ts`, merges modules, and the full `CodegenPlugin` API reference.
+- [Codegen](/docs/code/codegen), the pipeline that reads `modules.ts`, merges modules, and the full `CodegenPlugin` API reference.
 - Runnable example: [`examples/toy-factory-backend`](https://github.com/questpie/questpie/tree/main/examples/toy-factory-backend), a project whose `modules.ts` depends on `adminModule`, `openApiModule`, and `workflowsModule`.

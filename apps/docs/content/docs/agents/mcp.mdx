@@ -8,18 +8,18 @@ The **Model Context Protocol (MCP)** integration turns your QUESTPIE app into an
 You also get custom tools: drop an `mcpTool()` file under `mcp-tools/` to expose bespoke logic with a typed Zod input and full app context.
 
 <Callout type="info" title="Authenticating external agents? Use OAuth 2.1">
-This page covers the MCP surface itself - tools, policy, transports. For letting **external** AI agents (Claude, IDEs) connect over HTTP, QUESTPIE ships a real **OAuth 2.1 authorization-code + PKCE flow**: dynamic client registration, a human consent screen, per-user delegation, and least-privilege **scopes** layered on top of RBAC as `scopes ∩ RBAC`, plus a first-class `principal` (`user` / `oauth` / `system`). See **[MCP over OAuth 2.1](/docs/integrations/mcp-oauth)**.
+This page covers the MCP surface itself - tools, policy, transports. For letting **external** AI agents (Claude, IDEs) connect over HTTP, QUESTPIE ships a real **OAuth 2.1 authorization-code + PKCE flow**: dynamic client registration, a human consent screen, per-user delegation, and least-privilege **scopes** layered on top of RBAC as `scopes ∩ RBAC`, plus a first-class `principal` (`user` / `oauth` / `system`). See **[MCP over OAuth 2.1](/docs/agents/mcp-oauth)**.
 
 On an admin-enabled app the HTTP `/api/mcp` route requires a verified principal - a first-party admin session (`user`) or a valid OAuth access token (`oauth`); an unauthenticated request gets a `401` pointing at the OAuth discovery metadata. A trusted local [stdio](#stdio-transport) worker runs as `system` and needs no OAuth.
 
 </Callout>
 
 <Callout type="info" title="Prerequisites">
-	Read [Routes](/docs/concepts/routes) and [Access
+	Read [Routes](/docs/code/routes) and [Access
 	control](/docs/schema/access-control) first, routes opt into MCP via
 	`meta.mcp`, and every HTTP tool call runs through your collection/global
 	access rules. The module registers like any other (see
-	[Modules](/docs/extend/modules)).
+	[Modules](/docs/code/modules)).
 </Callout>
 
 ## What it does
@@ -59,7 +59,7 @@ That is the whole setup. With no `config/mcp.ts`, every collection and global is
 	Adding `mcpModule` to `modules.ts` and adding files under `mcp-tools/` both
 	change what codegen discovers, so run `questpie generate` (or keep `questpie
 	dev` running). Editing a tool's handler body does not need a regen. See
-	[Codegen](/docs/extend/codegen).
+	[Codegen](/docs/code/codegen).
 </Callout>
 
 ## The HTTP endpoint
@@ -73,7 +73,7 @@ That is the whole setup. With no `config/mcp.ts`, every collection and global is
 	matters if you mount MCP on your own transport via `createMcpServer`.
 </Callout>
 
-The route requires a **verified principal** before it dispatches anything: the framework resolves identity onto the request first, and without one, the route answers `401` with a `WWW-Authenticate` header pointing at the OAuth discovery metadata (so an MCP client auto-discovers the authorization server and starts the flow). A principal comes from either a first-party admin cookie/bearer session (`kind: "user"`) or a valid OAuth access token (`kind: "oauth"`). The CORS allow-list already permits `Authorization`, `x-api-key`, and `Mcp-Session-Id` headers. For the full external-agent OAuth flow - registration, consent, scopes - see [MCP over OAuth 2.1](/docs/integrations/mcp-oauth).
+The route requires a **verified principal** before it dispatches anything: the framework resolves identity onto the request first, and without one, the route answers `401` with a `WWW-Authenticate` header pointing at the OAuth discovery metadata (so an MCP client auto-discovers the authorization server and starts the flow). A principal comes from either a first-party admin cookie/bearer session (`kind: "user"`) or a valid OAuth access token (`kind: "oauth"`). The CORS allow-list already permits `Authorization`, `x-api-key`, and `Mcp-Session-Id` headers. For the full external-agent OAuth flow - registration, consent, scopes - see [MCP over OAuth 2.1](/docs/agents/mcp-oauth).
 
 ## How entities become tools
 
@@ -100,7 +100,7 @@ Tools carry MCP annotations automatically: read operations get `readOnlyHint: tr
 
 ### Route tools
 
-A route is exposed as a tool only when its metadata opts in. Set `meta.mcp.expose = true` on a JSON route (see [Routes → Metadata: OpenAPI and MCP](/docs/concepts/routes)):
+A route is exposed as a tool only when its metadata opts in. Set `meta.mcp.expose = true` on a JSON route (see [Routes → Metadata: OpenAPI and MCP](/docs/code/routes)):
 
 ```ts title="src/questpie/server/routes/get-revenue-stats.post.ts"
 import { route } from "questpie";
@@ -128,7 +128,7 @@ The generated tool name is `meta.mcp.name` if set, otherwise `routes.<sanitized-
 <Callout type="info" title="`meta.mcp` is declared on the route, not here">
 	The route exposure shape (`RouteMcpMeta`: `expose`, `name`, `title`,
 	`description`, `annotations`) lives in core and is documented on the
-	[Routes](/docs/concepts/routes) page. It is kept structural so the framework
+	[Routes](/docs/code/routes) page. It is kept structural so the framework
 	carries no MCP SDK dependency.
 </Callout>
 
@@ -275,7 +275,7 @@ collections: {
 	`accessMode` is `"system"`). The MCP policy decides *what is reachable via MCP
 	at all*; your access rules decide *what this user may do*. For OAuth callers,
 	a per-user **scope** gate narrows further still (`scopes ∩ RBAC`) - see [MCP
-	over OAuth 2.1](/docs/integrations/mcp-oauth). See [Access
+	over OAuth 2.1](/docs/agents/mcp-oauth). See [Access
 	control](/docs/schema/access-control).
 </Callout>
 
@@ -419,10 +419,10 @@ CRUD tools mirror your collection's columns. Use `fields: { exclude: [...] }` (o
 ## Related
 
 - [Connect an AI agent with MCP and OAuth](/docs/getting-started/mcp-ai-agent), a complete scaffold-to-Claude-and-VS-Code tutorial.
-- [Routes](/docs/concepts/routes), where `meta.mcp.expose` is declared to turn a route into an MCP tool; routes are public-by-default, the inverse of collections.
+- [Routes](/docs/code/routes), where `meta.mcp.expose` is declared to turn a route into an MCP tool; routes are public-by-default, the inverse of collections.
 - [Access control](/docs/schema/access-control), the `.access()` rules and `session` typing that every HTTP MCP tool call runs through; the MCP policy layers on top.
 - [Collections](/docs/schema/collections), the entities whose `list`/`get`/`create`/`update`/`delete` become MCP tools.
 - [Globals](/docs/schema/globals), singletons exposed as `get`/`update` tools.
-- [Modules](/docs/extend/modules), `mcpModule` is a module you add; it carries its own codegen plugin.
-- [Codegen](/docs/extend/codegen), file-convention discovery of `mcp-tools/` and `config/mcp.ts`, and `questpie add mcp-tool`.
-- [OpenAPI and Scalar](/docs/integrations/openapi), the other integration that reads route `meta` and your CRUD surface, generating a documented API.
+- [Modules](/docs/code/modules), `mcpModule` is a module you add; it carries its own codegen plugin.
+- [Codegen](/docs/code/codegen), file-convention discovery of `mcp-tools/` and `config/mcp.ts`, and `questpie add mcp-tool`.
+- [OpenAPI and Scalar](/docs/agents/openapi), the other integration that reads route `meta` and your CRUD surface, generating a documented API.

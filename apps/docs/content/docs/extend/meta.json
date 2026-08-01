@@ -1,4 +1,4 @@
 {
 	"title": "Extend",
-	"pages": ["index", "modules", "build-a-plugin", "codegen", "multi-tenancy"]
+	"pages": ["index", "build-a-plugin", "multi-tenancy"]
 }

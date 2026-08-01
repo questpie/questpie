@@ -250,7 +250,7 @@ The barrel also emits `createContext()`, a typed `AppContext` factory for script
 
 ## CLI reference
 
-Codegen is driven by three commands. The broader migrate / seed / push surface is covered by [Configuration](/docs/concepts/configuration) and [Seeds](/docs/schema/seeds).
+Codegen is driven by three commands. The broader migrate / seed / push surface is covered by [Configuration](/docs/ship/configuration) and [Seeds](/docs/schema/seeds).
 
 ### `questpie generate`
 
@@ -552,8 +552,8 @@ App-level generated types, `CollectionDoc<K>`, `CollectionWhere<K>`, `GlobalDoc<
 
 ## Related
 
-- [Configuration](/docs/concepts/configuration), the convention files codegen discovers (`questpie.config.ts`, `config/app.ts`, `config/auth.ts`, `modules.ts`) and how `runtimeConfig` registers `plugins`.
-- [Environment](/docs/concepts/environment), `env.ts` / `env.client.ts`, also discovered by codegen, and boot-time validation.
+- [Configuration](/docs/ship/configuration), the convention files codegen discovers (`questpie.config.ts`, `config/app.ts`, `config/auth.ts`, `modules.ts`) and how `runtimeConfig` registers `plugins`.
+- [Environment](/docs/ship/environment), `env.ts` / `env.client.ts`, also discovered by codegen, and boot-time validation.
 - [Collections](/docs/schema/collections), the export/discovery rules in practice and the `#questpie/factories` builder.
 - [Blocks](/docs/schema/blocks), a category contributed by the admin module's codegen plugin (the `block()` builder factory).
 - [Get started](/docs/getting-started), where `questpie generate` first appears in the workflow.

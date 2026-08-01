@@ -490,7 +490,7 @@ declare module "questpie" {
 }
 ```
 
-A user then drops `config/my-plugin.ts` exporting your config, and it lands at `app.config.myPlugin`. This is exactly how `config/admin.ts` and `config/openapi.ts` work, they're not special-cased, just instances of this pattern. The [Configuration](/docs/concepts/configuration) page covers the config bucket from the app author's side.
+A user then drops `config/my-plugin.ts` exporting your config, and it lands at `app.config.myPlugin`. This is exactly how `config/admin.ts` and `config/openapi.ts` work, they're not special-cased, just instances of this pattern. The [Configuration](/docs/ship/configuration) page covers the config bucket from the app author's side.
 
 <Callout type="info" title="Why non-destructive matters">
 	A QUESTPIE app composes N plugins (admin, audit, OpenAPI, yours) and its own
@@ -588,7 +588,7 @@ import type { ModuleDefinition } from "questpie/types";
 
 ## Related
 
-- [Configuration](/docs/concepts/configuration), `runtimeConfig({ plugins })`, `modules.ts`, the `config/<name>.ts` pattern, and the config bucket from the app author's side.
+- [Configuration](/docs/ship/configuration), `runtimeConfig({ plugins })`, `modules.ts`, the `config/<name>.ts` pattern, and the config bucket from the app author's side.
 - [Fields](/docs/schema/fields), every `f.*` type, the full field-builder surface, and the field-definition contract your custom type implements.
 - [Collections](/docs/schema/collections), `.merge()` and how a module-provided collection is extended non-destructively.
 - [Relations](/docs/schema/relations), the query/operator surface your custom operators extend.

@@ -54,6 +54,25 @@ const docsCompatRedirects = new Map<string, string>([
 		(page) =>
 			[`concepts/fields/${page}`, `/docs/schema/fields/${page}`] as const,
 	),
+	// what you author moved to Code
+	["concepts/routes", "/docs/code/routes"],
+	["concepts/services", "/docs/code/services"],
+	["concepts/jobs", "/docs/code/jobs"],
+	["concepts/emails", "/docs/code/emails"],
+	["extend/modules", "/docs/code/modules"],
+	["extend/codegen", "/docs/code/codegen"],
+	// production/ became Ship, and took two config pages with it
+	["production", "/docs/ship"],
+	["production/migrations", "/docs/ship/migrations"],
+	["production/scaling", "/docs/ship/scaling"],
+	["production/monitoring", "/docs/ship/monitoring"],
+	["concepts/configuration", "/docs/ship/configuration"],
+	["concepts/environment", "/docs/ship/environment"],
+	// integrations/ became Agents, since these are machine-readable surfaces
+	["integrations", "/docs/agents"],
+	["integrations/mcp", "/docs/agents/mcp"],
+	["integrations/mcp-oauth", "/docs/agents/mcp-oauth"],
+	["integrations/openapi", "/docs/agents/openapi"],
 ]);
 
 export const Route = createFileRoute("/docs/$")({

@@ -1,4 +1,0 @@
-{
-	"title": "Production",
-	"pages": ["index", "migrations", "scaling", "monitoring"]
-}

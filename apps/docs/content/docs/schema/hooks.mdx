@@ -449,4 +449,4 @@ import type { HookContext, HookFunction } from "questpie";
 - **[Validation](/docs/schema/validation)**, the Zod schema that runs between `beforeValidate` and `beforeChange`; `exclude` / `refine` and field-level `.zod()`; the full `ApiError` surface you throw from `before*` hooks.
 - **[Collections](/docs/schema/collections)**, where `.hooks()` lives, alongside fields, indexes, access, and admin config.
 - **[Globals](/docs/schema/globals)**, singletons with their own `beforeUpdate` / `afterUpdate` hook stages.
-- **[Jobs](/docs/concepts/jobs)**, whose typed `queue.*.publish()` joins the ambient hook transaction.
+- **[Jobs](/docs/code/jobs)**, whose typed `queue.*.publish()` joins the ambient hook transaction.

@@ -1,0 +1,11 @@
+{
+	"title": "Ship",
+	"pages": [
+		"index",
+		"configuration",
+		"environment",
+		"migrations",
+		"scaling",
+		"monitoring"
+	]
+}

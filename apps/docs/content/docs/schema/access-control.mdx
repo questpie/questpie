@@ -71,7 +71,7 @@ short-circuits ahead of all three. That is the chain for `read`, `create`,
 	An omitted rule requires a session. To open an operation to anonymous callers
 	you have to say so: `read: true`. Routes work the other way round, so a route
 	with no `.access()` is public until you add one. See
-	[Routes](/docs/concepts/routes).
+	[Routes](/docs/code/routes).
 </Callout>
 
 Calling `.access()` twice replaces the whole object rather than merging into it,

@@ -326,10 +326,10 @@ export default service({
 });
 ```
 
-Because the context builder pre-populates `ctx.email` directly, this `namespace: null` registration does **not** overwrite it, the same `if (!(name in result))` guard above applies. You consume it as `ctx.email` (it is **not** `ctx.mailer`). Its full surface, `send`, `sendTemplate`, `renderTemplate`, the `email()` template factory, and the SMTP / Resend / Plunk / Console adapters, lives on the [Emails](/docs/concepts/emails) page.
+Because the context builder pre-populates `ctx.email` directly, this `namespace: null` registration does **not** overwrite it, the same `if (!(name in result))` guard above applies. You consume it as `ctx.email` (it is **not** `ctx.mailer`). Its full surface, `send`, `sendTemplate`, `renderTemplate`, the `email()` template factory, and the SMTP / Resend / Plunk / Console adapters, lives on the [Emails](/docs/code/emails) page.
 
 <Callout type="info" title="Two unrelated `email` symbols">
-`questpie/services` exports an `email` that is the **email-template factory** (`email({ name, schema, handler })`), documented under [Emails](/docs/concepts/emails). There is also a separate `f.email()` **field** factory used inside `.fields()`. They share a name but are unrelated, don't conflate them.
+`questpie/services` exports an `email` that is the **email-template factory** (`email({ name, schema, handler })`), documented under [Emails](/docs/code/emails). There is also a separate `f.email()` **field** factory used inside `.fields()`. They share a name but are unrelated, don't conflate them.
 </Callout>
 
 ## TypeScript
@@ -372,9 +372,9 @@ type BlogNs = ServiceNamespaceOf<typeof blog>; // undefined
 
 ## Related
 
-- [Routes](/docs/concepts/routes), custom endpoints whose `handler({ services })` consume your services.
+- [Routes](/docs/code/routes), custom endpoints whose `handler({ services })` consume your services.
 - [Hooks](/docs/schema/hooks), lifecycle callbacks that reach services the same way (`ctx.services`), and the `onAfterCommit` deferral.
-- [Jobs](/docs/concepts/jobs), background work that resolves services in its handler.
-- [Emails](/docs/concepts/emails), the built-in `email` (mailer) service (`ctx.email`), the `email()` template factory, and the mail adapters, the canonical built-in service, documented in full.
+- [Jobs](/docs/code/jobs), background work that resolves services in its handler.
+- [Emails](/docs/code/emails), the built-in `email` (mailer) service (`ctx.email`), the `email()` template factory, and the mail adapters, the canonical built-in service, documented in full.
 - [Collections](/docs/schema/collections), the typed `ctx.collections` API your services read and write through.
 - Runnable example: [`examples/tanstack-barbershop`](https://github.com/questpie/questpie/tree/main/examples/tanstack-barbershop), see `src/questpie/server/services/blog.ts` consumed from a collection hook.

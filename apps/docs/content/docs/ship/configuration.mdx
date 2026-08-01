@@ -86,14 +86,14 @@ questpie generate   # discovers every config file, merges modules, emits .genera
 
 There is one runtime file and a set of discovered convention files. Codegen reads them all and emits `.generated/index.ts`, which is what actually boots.
 
-| File                 | Owns                                                       | Discovered as              | Factory                                                |
-| -------------------- | ---------------------------------------------------------- | -------------------------- | ------------------------------------------------------ |
-| `questpie.config.ts` | db, adapters, secret, storage, **codegen plugins**         | the runtime config (root)  | `runtimeConfig()`                                      |
-| `config/app.ts`      | locale, default access, global hooks, **context resolver** | single → `config.app`      | `appConfig()`                                          |
-| `config/auth.ts`     | Better Auth options                                        | single → `config.auth`     | `authConfig()`                                         |
-| `config/<name>.ts`   | any plugin's composite config                              | single → `config.<name>`   | plugin's factory                                       |
-| `modules.ts`         | pre-built module dependencies                              | the module list (pre-pass) | none (plain array)                                     |
-| `env.ts`             | env var schema + validation                                | the env definition         | `env()`, see [Environment](/docs/concepts/environment) |
+| File                 | Owns                                                       | Discovered as              | Factory                                            |
+| -------------------- | ---------------------------------------------------------- | -------------------------- | -------------------------------------------------- |
+| `questpie.config.ts` | db, adapters, secret, storage, **codegen plugins**         | the runtime config (root)  | `runtimeConfig()`                                  |
+| `config/app.ts`      | locale, default access, global hooks, **context resolver** | single → `config.app`      | `appConfig()`                                      |
+| `config/auth.ts`     | Better Auth options                                        | single → `config.auth`     | `authConfig()`                                     |
+| `config/<name>.ts`   | any plugin's composite config                              | single → `config.<name>`   | plugin's factory                                   |
+| `modules.ts`         | pre-built module dependencies                              | the module list (pre-pass) | none (plain array)                                 |
+| `env.ts`             | env var schema + validation                                | the env definition         | `env()`, see [Environment](/docs/ship/environment) |
 
 `questpie.config.ts` carries **only** the runtime half. The `config/*.ts` files are file-convention singles: codegen discovers each one and drops the whole file under a key in the **config bucket** (`AppStateConfig`), merging that key across every module before it reaches the app. `modules.ts` is read first, in a dedicated pre-pass, so the modules' own files and codegen plugins are folded in before the rest of discovery runs.
 
@@ -433,7 +433,7 @@ export const blogModule = module({
 	anything in `questpie.config.ts`, adding the module to `modules.ts` is enough.
 </Callout>
 
-The full module surface (`ModuleDefinition`), how modules contribute each category, and the depth-first merge are covered in [Extend → Modules](/docs/extend/modules).
+The full module surface (`ModuleDefinition`), how modules contribute each category, and the depth-first merge are covered in [Extend → Modules](/docs/code/modules).
 
 ## CLI config
 
@@ -526,5 +526,5 @@ import type { TypedAuthConfig } from "questpie/app"; // authConfig() return
 - [Collections](/docs/schema/collections), the entities `runtimeConfig` deliberately keeps out of `questpie.config.ts`.
 - [Access control](/docs/schema/access-control), how `config/app.ts`'s `access` defaults sit at the bottom of the per-collection rule chain.
 - [Hooks](/docs/schema/hooks), per-entity hooks; `config/app.ts`'s `hooks` are the global counterpart.
-- [Environment](/docs/concepts/environment), `env.ts` / `env()`, boot validation, and server-vs-client vars that feed `runtimeConfig`.
+- [Environment](/docs/ship/environment), `env.ts` / `env()`, boot validation, and server-vs-client vars that feed `runtimeConfig`.
 - Runnable example: [`examples/toy-factory-backend`](https://github.com/questpie/questpie/tree/main/examples/toy-factory-backend), a complete `questpie.config.ts` + `config/app.ts` + `config/auth.ts` + `modules.ts` set.

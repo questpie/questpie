@@ -13,17 +13,17 @@ QUESTPIE ships seven infrastructure adapter slots. Learn the feature contract on
 
 | Feature           | Concept                                         | Adapter                                     | Default                  |
 | ----------------- | ----------------------------------------------- | ------------------------------------------- | ------------------------ |
-| Background work   | [Jobs](/docs/concepts/jobs)                     | [Queue](/docs/adapters/queue)               | pg-boss (Postgres)       |
+| Background work   | [Jobs](/docs/code/jobs)                         | [Queue](/docs/adapters/queue)               | pg-boss (Postgres)       |
 | Search            | [Search](/docs/concepts/search)                 | [Search adapter](/docs/adapters/search)     | Postgres (FTS + trigram) |
 | Realtime          | [Realtime](/docs/concepts/realtime)             | [Realtime adapter](/docs/adapters/realtime) | poll-based               |
 | File storage      | [Storage](/docs/concepts/storage)               | [Storage adapter](/docs/adapters/storage)   | local filesystem         |
-| Email             | [Emails](/docs/concepts/emails)                 | [Email adapter](/docs/adapters/email)       | console (dev)            |
+| Email             | [Emails](/docs/code/emails)                     | [Email adapter](/docs/adapters/email)       | console (dev)            |
 | Key-value storage | [KV](/docs/concepts/kv)                         | [KV adapter](/docs/adapters/kv)             | in-memory                |
 | Dynamic code      | [Sandboxed code](/docs/concepts/sandboxed-code) | [Sandbox adapter](/docs/adapters/sandbox)   | trusted only             |
 
 ## How they wire in
 
-You select an adapter once, in `questpie.config.ts` (or the `.build({ ... })` call), and the rest of your code is untouched. See [Configuration](/docs/concepts/configuration) for where each slot lives and how the runtime resolves it.
+You select an adapter once, in `questpie.config.ts` (or the `.build({ ... })` call), and the rest of your code is untouched. See [Configuration](/docs/ship/configuration) for where each slot lives and how the runtime resolves it.
 
 <Callout type="info">
 	Each adapter declares its own capabilities, so the runtime can fail fast or
@@ -38,6 +38,6 @@ Every adapter is defined by a public contract, including `QueueAdapter`, `Search
 
 ## Related
 
-- [Configuration](/docs/concepts/configuration), where every adapter slot lives and how it's wired.
+- [Configuration](/docs/ship/configuration), where every adapter slot lives and how it's wired.
 - [Building a plugin](/docs/extend/build-a-plugin), implement any adapter contract for a custom backend.
-- [Jobs](/docs/concepts/jobs) · [Search](/docs/concepts/search) · [Realtime](/docs/concepts/realtime) · [Storage](/docs/concepts/storage) · [Emails](/docs/concepts/emails) · [KV](/docs/concepts/kv) · [Sandboxed code](/docs/concepts/sandboxed-code), the concepts each adapter implements.
+- [Jobs](/docs/code/jobs) · [Search](/docs/concepts/search) · [Realtime](/docs/concepts/realtime) · [Storage](/docs/concepts/storage) · [Emails](/docs/code/emails) · [KV](/docs/concepts/kv) · [Sandboxed code](/docs/concepts/sandboxed-code), the concepts each adapter implements.

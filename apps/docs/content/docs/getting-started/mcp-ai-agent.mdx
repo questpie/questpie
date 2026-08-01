@@ -132,7 +132,7 @@ export default mcpTool("posts.countPublished", {
 
 Custom tool results include both `structuredContent` for the model and an MCP `content` block. The public handler type requires `content`; do not return only `structuredContent`.
 
-This example does not declare an extra custom-tool scope. The HTTP endpoint still requires an authenticated principal, and the `ctx.collections.posts.count()` call still runs the user's collection access rules. Add `scopes` or `access` to the tool when it needs a narrower rule; see [custom tool scopes](/docs/integrations/mcp-oauth#custom-tool-scopes).
+This example does not declare an extra custom-tool scope. The HTTP endpoint still requires an authenticated principal, and the `ctx.collections.posts.count()` call still runs the user's collection access rules. Add `scopes` or `access` to the tool when it needs a narrower rule; see [custom tool scopes](/docs/agents/mcp-oauth#custom-tool-scopes).
 
 Regenerate and type-check both new files:
 
@@ -261,7 +261,7 @@ Delete remains unavailable because the server policy set `delete: false`, regard
 
 ## What to read next
 
-- [MCP integration](/docs/integrations/mcp) is the complete tool, resource, policy, transport, and custom-tool reference.
-- [MCP over OAuth 2.1](/docs/integrations/mcp-oauth) covers DCR, PKCE, consent, scopes, token verification, and `scopes ∩ RBAC` in depth.
+- [MCP integration](/docs/agents/mcp) is the complete tool, resource, policy, transport, and custom-tool reference.
+- [MCP over OAuth 2.1](/docs/agents/mcp-oauth) covers DCR, PKCE, consent, scopes, token verification, and `scopes ∩ RBAC` in depth.
 - [Sandboxed code](/docs/concepts/sandboxed-code) covers isolated execution for application-owned workloads. You do not need a framework-owned agent runtime to expose MCP to Claude or an IDE.
 - [Access control](/docs/schema/access-control) is the security boundary beneath MCP policy and OAuth scopes.

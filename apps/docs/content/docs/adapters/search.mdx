@@ -17,7 +17,7 @@ The **search adapter** is the backend behind the [Search](/docs/concepts/search)
 - **Lexical by default.** The default Postgres adapter does Postgres full-text search (FTS) plus trigram fuzzy matching, with no extra services, just one extension.
 - **Semantic when you need it.** Swap in the pgvector adapter with an embedding provider (OpenAI or your own) to rank by meaning, not just keyword overlap.
 - **Faceted + filtered.** Return facet aggregations (counts, ranges, hierarchies) and filter by collection, locale, or indexed metadata.
-- **Indexing handled for you.** Searchable collections are re-indexed automatically after writes (debounced via the `index-records` [job](/docs/concepts/jobs)); you rarely call `index()` by hand.
+- **Indexing handled for you.** Searchable collections are re-indexed automatically after writes (debounced via the `index-records` [job](/docs/code/jobs)); you rarely call `index()` by hand.
 - **Pluggable.** Both built-in adapters implement the `SearchAdapter` contract, so you can point search at Meilisearch, Elasticsearch, or anything else without touching call sites.
 
 ## Quick start
@@ -341,7 +341,7 @@ How to provide them:
 
 ## Indexing
 
-You almost never index by hand. Searchable collections are re-indexed automatically after a write: the search service batches changed records over a 100 ms debounce window and dispatches the core `index-records` [job](/docs/concepts/jobs) (when a [queue adapter](/docs/concepts/configuration) is configured), falling back to synchronous indexing otherwise.
+You almost never index by hand. Searchable collections are re-indexed automatically after a write: the search service batches changed records over a 100 ms debounce window and dispatches the core `index-records` [job](/docs/code/jobs) (when a [queue adapter](/docs/ship/configuration) is configured), falling back to synchronous indexing otherwise.
 
 When you do need manual control, `app.search` exposes the service surface:
 
@@ -415,7 +415,7 @@ Adapter and provider factories and their option types come from their own entry 
 ## Related
 
 - [Collections → Searchable](/docs/schema/collections#searchable), the `.searchable()` config that controls what each collection indexes.
-- [Configuration](/docs/concepts/configuration), the `runtimeConfig` / `questpie.config.ts` pattern that wires the `search` adapter.
+- [Configuration](/docs/ship/configuration), the `runtimeConfig` / `questpie.config.ts` pattern that wires the `search` adapter.
 - [Access control](/docs/schema/access-control), how search results respect row-level access rules, and how `reindexAccess` gates the reindex route.
-- [Jobs](/docs/concepts/jobs), the `index-records` job behind automatic re-indexing.
+- [Jobs](/docs/code/jobs), the `index-records` job behind automatic re-indexing.
 - [Typed client SDK](/docs/client/sdk), calling `client.search.search(...)` from the frontend.

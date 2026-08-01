@@ -216,7 +216,7 @@ Under the hood this runs `questpie push`, drizzle-native schema push, for **deve
 	questpie:generate`, or `bun run scaffold:verify` to also type-check), then
 	`bun run db:push` again. Editing a definition's body doesn't need a regen. The
 	`questpie add` CLI runs codegen for you automatically, see
-	[Codegen](/docs/extend/codegen).
+	[Codegen](/docs/code/codegen).
 </Callout>
 
 ## 5. Run the dev server
@@ -340,6 +340,6 @@ The starter ships `CLAUDE.md` / `AGENTS.md` that point AI assistants at the QUES
 - [Collections](/docs/schema/collections), fields, relations, hooks, access, and the admin views they generate.
 - [Client SDK](/docs/client/sdk), the typed client in depth: `createClient<AppConfig>()`, every CRUD method, and the query options.
 - [TanStack Query](/docs/client/tanstack-query), the React hooks layer: `q.collections.*` / `q.globals.*` / `q.routes.*`.
-- [Codegen](/docs/extend/codegen), what `questpie generate` / `questpie add` do and when to re-run them.
-- [Configuration](/docs/concepts/configuration), `runtimeConfig()`, modules, and adapter wiring in `questpie.config.ts`.
-- [Environment](/docs/concepts/environment), the typed `env` module and boot-time validation.
+- [Codegen](/docs/code/codegen), what `questpie generate` / `questpie add` do and when to re-run them.
+- [Configuration](/docs/ship/configuration), `runtimeConfig()`, modules, and adapter wiring in `questpie.config.ts`.
+- [Environment](/docs/ship/environment), the typed `env` module and boot-time validation.

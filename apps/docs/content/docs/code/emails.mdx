@@ -473,7 +473,7 @@ The union of all registered template keys is available as `KnownEmailNames` (fro
 ## Related
 
 - [Hooks](/docs/schema/hooks), fire transactional emails from `onAfterCommit` after a write commits.
-- [Jobs](/docs/concepts/jobs), send mail off the request path in a background job.
-- [Services](/docs/concepts/services), how `ctx.email` and other context services are resolved, and how to add your own.
+- [Jobs](/docs/code/jobs), send mail off the request path in a background job.
+- [Services](/docs/code/services), how `ctx.email` and other context services are resolved, and how to add your own.
 - [Validation](/docs/schema/validation), the Zod schema on a template is the same validation primitive used across the framework.
 - A runnable example lives in [`examples/tanstack-barbershop`](https://github.com/questpie/questpie/tree/main/examples/tanstack-barbershop), see `src/questpie/server/emails/` (`appointment-confirmation.ts`, `new-blog-post.ts`) and the `email` block in `src/questpie/server/questpie.config.ts`.

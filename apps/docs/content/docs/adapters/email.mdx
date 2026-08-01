@@ -5,7 +5,7 @@ description: The email adapter is the delivery backend for outgoing mail, set on
 
 The **email adapter** is the one piece of config that decides _how_ your mail is delivered. QUESTPIE ships four, `ConsoleAdapter`, `SmtpAdapter`, `ResendAdapter`, `PlunkAdapter`, and you pick exactly one. Your templates and your `ctx.email.send(...)` / `ctx.email.sendTemplate(...)` calls never change when you swap providers; only the `adapter` in `runtimeConfig` does.
 
-> **Prerequisites:** read [Emails](/docs/concepts/emails) first, it owns templates, `EmailResult`, and the `ctx.email` send service. This page owns the adapter slot: which provider delivers the mail, and how to configure each one.
+> **Prerequisites:** read [Emails](/docs/code/emails) first, it owns templates, `EmailResult`, and the `ctx.email` send service. This page owns the adapter slot: which provider delivers the mail, and how to configure each one.
 
 ## What it does
 
@@ -40,7 +40,7 @@ export default runtimeConfig({
 });
 ```
 
-That `email` block is a `MailerConfig`. `adapter` is the only field you must set; `defaults.from` fills in the `From` address when a send call omits one. (Templates are populated by codegen from `emails/*.ts`, see [Emails](/docs/concepts/emails); you don't list them here.)
+That `email` block is a `MailerConfig`. `adapter` is the only field you must set; `defaults.from` fills in the `From` address when a send call omits one. (Templates are populated by codegen from `emails/*.ts`, see [Emails](/docs/code/emails); you don't list them here.)
 
 <Callout type="warn" title="You must set an adapter, even in dev">
 The core email service throws at app build if `email.adapter` is missing: `"QUESTPIE: 'email.adapter' is required. Provide adapter in .build({ email: { adapter: ... } })"`. The mailer *does* have a `ConsoleAdapter` fallback for the no-adapter case, but the core service never reaches it, it constructs `MailerService` only after asserting your adapter exists. So always set `adapter`; use `new ConsoleAdapter()` explicitly for local development rather than relying on a fallback.
@@ -204,7 +204,7 @@ A common setup branches on `NODE_ENV` (see the Quick start) so dev logs to the c
 - **The adapter is required even in dev**, the core email service asserts it at app build. See the Quick-start callout.
 - **`defaults.from` is the only fallback sender.** If a send call omits `from` and you set no `defaults.from`, mail goes out as `noreply@example.com`. Set `defaults.from` in config.
 - **`adapter` may be a `Promise`.** `MailerConfig.adapter` accepts `MailAdapter | Promise<MailAdapter>`; the promise is awaited lazily on the first send (how `createEtherealSmtpAdapter()` plugs in).
-- **HTTP adapters surface provider errors as thrown `Error`s**, wrap sends you can't afford to lose, or dispatch them from a [job](/docs/concepts/jobs) so failures retry. Resend throws on non-2xx; Plunk throws on non-2xx _or_ `success: false`.
+- **HTTP adapters surface provider errors as thrown `Error`s**, wrap sends you can't afford to lose, or dispatch them from a [job](/docs/code/jobs) so failures retry. Resend throws on non-2xx; Plunk throws on non-2xx _or_ `success: false`.
 - **Plunk drops CC/BCC**, it throws rather than silently dropping them. See the Plunk callout.
 
 ## Custom adapter
@@ -283,7 +283,7 @@ import {
 
 ## Related
 
-- [Emails](/docs/concepts/emails), templates, `EmailResult`, and the `ctx.email.send` / `sendTemplate` service this adapter delivers for.
-- [Configuration](/docs/concepts/configuration), where `runtimeConfig({ email })` lives and how adapters are wired.
-- [Environment](/docs/concepts/environment), typed `env()` for API keys and SMTP credentials.
-- [Jobs](/docs/concepts/jobs), dispatch sends from a job so provider failures retry.
+- [Emails](/docs/code/emails), templates, `EmailResult`, and the `ctx.email.send` / `sendTemplate` service this adapter delivers for.
+- [Configuration](/docs/ship/configuration), where `runtimeConfig({ email })` lives and how adapters are wired.
+- [Environment](/docs/ship/environment), typed `env()` for API keys and SMTP credentials.
+- [Jobs](/docs/code/jobs), dispatch sends from a job so provider failures retry.

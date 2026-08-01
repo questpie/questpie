@@ -1,0 +1,4 @@
+{
+	"title": "Code",
+	"pages": ["routes", "services", "jobs", "emails", "modules", "codegen"]
+}

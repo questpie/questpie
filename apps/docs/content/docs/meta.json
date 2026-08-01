@@ -5,13 +5,14 @@
 		"learn",
 		"getting-started",
 		"schema",
+		"code",
 		"concepts",
+		"ship",
 		"client",
 		"recipes",
 		"adapters",
-		"production",
 		"admin",
-		"extend",
-		"integrations"
+		"agents",
+		"extend"
 	]
 }

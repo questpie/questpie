@@ -2,17 +2,11 @@
 	"title": "Concepts",
 	"pages": [
 		"optimistic-concurrency",
-		"routes",
-		"jobs",
-		"services",
-		"emails",
 		"search",
 		"realtime",
 		"scalable-realtime",
 		"storage",
 		"kv",
-		"sandboxed-code",
-		"configuration",
-		"environment"
+		"sandboxed-code"
 	]
 }

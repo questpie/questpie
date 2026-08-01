@@ -1,0 +1,27 @@
+---
+title: Overview
+description: External-facing modules that expose your QUESTPIE app to tools and API consumers through MCP and OpenAPI.
+---
+
+Integrations are modules you add to surface what your app already knows to external consumers. Register one, run codegen, and the integration introspects your existing collections, globals, and routes, no decorators, no hand-written spec, no separate build step. These pages cover external protocols and API documentation surfaces. For framework modules such as admin and workflows, use [Admin](/docs/admin) and [Extend](/docs/code/modules).
+
+## Available integrations
+
+| Integration                                      | What it does                                                                                                                                                                    |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **[MCP](/docs/agents/mcp)**                      | Add `mcpModule` and your app becomes a Model Context Protocol server, collections, globals, and opted-in routes become tools an AI client can call, gated by your access rules. |
+| **[MCP over OAuth 2.1](/docs/agents/mcp-oauth)** | Let external AI agents authenticate to your MCP endpoint through a real OAuth 2.1 + PKCE flow, acting as a real user and bounded by `scopes ∩ RBAC`.                            |
+| **[OpenAPI and Scalar](/docs/agents/openapi)**   | Add `@questpie/openapi` and your whole API documents itself, an OpenAPI 3.1 spec at `/api/openapi.json` plus interactive [Scalar](https://scalar.com) docs at `/api/docs`.      |
+
+## Agent execution ownership
+
+Agent execution, durable runs, provider selection, approvals, and product
+effects belong to the application that owns those concepts. QUESTPIE provides
+the reusable framework pieces: explicit MCP capabilities, isolated sandbox
+execution, jobs, queues, and workflows.
+
+## Related
+
+- [Routes](/docs/code/routes), how routes opt into MCP tool exposure and shape their OpenAPI metadata.
+- [Collections](/docs/schema/collections) · [Globals](/docs/schema/globals), the surfaces both integrations introspect.
+- [Access control](/docs/schema/access-control), the rules that gate every exposed operation.

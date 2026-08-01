@@ -1,4 +1,4 @@
 {
-	"title": "Integrations",
+	"title": "Agents",
 	"pages": ["index", "mcp", "mcp-oauth", "openapi"]
 }

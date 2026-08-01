@@ -3,16 +3,16 @@ title: MCP over OAuth 2.1
 description: Let external AI agents (Claude, IDEs) connect to your MCP endpoint through a real OAuth 2.1 authorization-code + PKCE flow, acting as a real user and bounded by scopes ∩ that user's RBAC.
 ---
 
-Your [MCP endpoint](/docs/integrations/mcp) at `/api/mcp` is not meant to be open. When an external AI agent (Claude, an IDE, an autonomous agent on someone else's machine) connects, it should act **as a specific person**, with exactly the permissions that person has, and only the slice of them they explicitly granted. QUESTPIE does this with a standard **OAuth 2.1** authorization-code + PKCE flow: the agent registers itself, the user signs in and approves a consent screen, and the app issues a short-lived access token bound to your MCP endpoint. Every tool call then runs as that user, gated by `scopes ∩ RBAC` - the consented scopes AND the user's own `.access()` rules, never more than either.
+Your [MCP endpoint](/docs/agents/mcp) at `/api/mcp` is not meant to be open. When an external AI agent (Claude, an IDE, an autonomous agent on someone else's machine) connects, it should act **as a specific person**, with exactly the permissions that person has, and only the slice of them they explicitly granted. QUESTPIE does this with a standard **OAuth 2.1** authorization-code + PKCE flow: the agent registers itself, the user signs in and approves a consent screen, and the app issues a short-lived access token bound to your MCP endpoint. Every tool call then runs as that user, gated by `scopes ∩ RBAC` - the consented scopes AND the user's own `.access()` rules, never more than either.
 
-This is the remote, network-facing story. Local, trusted clients (a CLI on your own machine) use the [stdio transport](/docs/integrations/mcp#stdio-transport) and are unaffected - they run as a `system` principal with no OAuth.
+This is the remote, network-facing story. Local, trusted clients (a CLI on your own machine) use the [stdio transport](/docs/agents/mcp#stdio-transport) and are unaffected - they run as a `system` principal with no OAuth.
 
 <Callout type="info" title="Prerequisites">
-	Read the [MCP integration](/docs/integrations/mcp) page first - it covers
+	Read the [MCP integration](/docs/agents/mcp) page first - it covers
 	`mcpModule`, how collections/globals/routes become tools, and the
 	`config/mcp.ts` policy surface. This page adds the OAuth 2.1 auth layer on
-	top. Familiarity with [Access control](/docs/schema/access-control) helps
-	too, since scopes layer on top of your existing RBAC.
+	top. Familiarity with [Access control](/docs/schema/access-control) helps too,
+	since scopes layer on top of your existing RBAC.
 </Callout>
 
 ## What you get
@@ -70,8 +70,7 @@ That is the whole setup on an admin-enabled app: `adminModule` provides the OAut
 	HTTP MCP then works there too. (This shipped in 3.3.0, it is no longer a
 	hand-wire-it-yourself follow-up.) With no provider at all, `/api/mcp` still
 	mounts but stays `401` with nothing to discover. Local
-	[stdio](/docs/integrations/mcp#stdio-transport) needs no OAuth and works
-	everywhere.
+	[stdio](/docs/agents/mcp#stdio-transport) needs no OAuth and works everywhere.
 </Callout>
 
 ## The flow
@@ -183,9 +182,9 @@ Out-of-scope (and out-of-RBAC) tools are **absent from `tools/list`** _and_ reje
 <Callout type="info" title="`user` and `system` principals are unchanged">
 	The scope gate only applies to the `oauth` principal. A first-party admin
 	cookie/bearer session is a `user` principal - no scopes, RBAC as today. A
-	trusted local [stdio](/docs/integrations/mcp#stdio-transport) worker is a
-	`system` principal - it bypasses both the RBAC and scope gates entirely (full
-	access). Only the network-facing OAuth path is scope-gated.
+	trusted local [stdio](/docs/agents/mcp#stdio-transport) worker is a `system`
+	principal - it bypasses both the RBAC and scope gates entirely (full access).
+	Only the network-facing OAuth path is scope-gated.
 </Callout>
 
 ### What the user sees on the consent screen
@@ -212,7 +211,7 @@ Unknown scopes fall back to a readable rendering of the raw string rather than a
 
 ## Custom tool scopes
 
-Custom tools defined with [`mcpTool`](/docs/integrations/mcp#custom-tools) participate in the same gate. Declare the scopes a tool requires via its `scopes` config, and the gate enforces them for OAuth callers alongside the tool's `access` rule:
+Custom tools defined with [`mcpTool`](/docs/agents/mcp#custom-tools) participate in the same gate. Declare the scopes a tool requires via its `scopes` config, and the gate enforces them for OAuth callers alongside the tool's `access` rule:
 
 ```ts title="src/questpie/server/mcp-tools/recalculate-stats.ts"
 import { mcpTool } from "@questpie/mcp";
@@ -252,8 +251,8 @@ As always, `scopes` is an OAuth-only narrowing on top of `access` - a `user` or 
 ## Related
 
 - [Connect an AI agent with MCP and OAuth](/docs/getting-started/mcp-ai-agent) - scaffold, configure, deploy, and connect Claude plus VS Code end to end.
-- [MCP integration](/docs/integrations/mcp) - the base MCP module: how collections/globals/routes become tools, `config/mcp.ts`, custom tools, and the stdio transport.
+- [MCP integration](/docs/agents/mcp) - the base MCP module: how collections/globals/routes become tools, `config/mcp.ts`, custom tools, and the stdio transport.
 - [Access control](/docs/schema/access-control) - the `.access()` RBAC rules that every OAuth tool call runs through first; scopes narrow, never widen, what they allow.
 - [Admin auth](/docs/admin/auth) - the auth config the OAuth provider ships in, and the `/admin/login` page the flow redirects to.
-- [Modules](/docs/extend/modules) - `mcpModule` and `adminModule` are modules you add; admin bundles the starter that carries the OAuth provider.
-- [Routes](/docs/concepts/routes) - how a route opts into MCP tool exposure via `meta.mcp.expose`, gaining a `routes:<key>:invoke` scope.
+- [Modules](/docs/code/modules) - `mcpModule` and `adminModule` are modules you add; admin bundles the starter that carries the OAuth provider.
+- [Routes](/docs/code/routes) - how a route opts into MCP tool exposure via `meta.mcp.expose`, gaining a `routes:<key>:invoke` scope.
