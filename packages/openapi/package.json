@@ -1,6 +1,6 @@
 {
 	"name": "@questpie/openapi",
-	"version": "3.19.1",
+	"version": "3.19.2",
 	"description": "OpenAPI document generation and Scalar reference UI for QUESTPIE routes",
 	"repository": {
 		"type": "git",

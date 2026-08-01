@@ -1,5 +1,13 @@
 # @questpie/admin
 
+## 3.19.2
+
+### Patch Changes
+
+- Updated dependencies [[`8114e59`](https://github.com/questpie/questpie/commit/8114e5966ffce9ecc2dd1c3be844dfff065b8af3)]:
+  - questpie@3.19.2
+  - @questpie/tanstack-query@3.19.2
+
 ## 3.19.1
 
 ### Patch Changes
