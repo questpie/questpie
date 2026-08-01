@@ -28,9 +28,8 @@ export const posts = collection("posts").fields(({ f }) => ({
 ```
 
 `posts.status` reads back as `"draft" | "published"`, and `.default("archived")`
-does not compile. Drop the `.required()` and the read type picks up `null`, the
-same as on any other field. The column is `varchar(50)`, because 50 is the floor
-and no value is longer.
+does not compile. Drop the `.required()` and the read type picks up `null`. The
+column is `varchar(50)`, because 50 is the floor and no value is longer.
 
 ## The option object
 
@@ -40,11 +39,11 @@ serializes all six into the introspection payload.
 | Key           | Type                 | What reads it                                       |
 | ------------- | -------------------- | --------------------------------------------------- |
 | `value`       | `string \| number`   | The stored value. A number is written as its string |
-| `label`       | `I18nText`           | The dropdown row and the list cell                   |
-| `description` | `I18nText`           | A second line under the label in the dropdown        |
-| `disabled`    | `boolean`            | The dropdown row, which stops responding             |
-| `icon`        | `ComponentReference` | Leads the dropdown row and the list cell             |
-| `className`   | `string`             | Classes on the dropdown row and on the list cell     |
+| `label`       | `I18nText`           | The dropdown row and the list cell                  |
+| `description` | `I18nText`           | A second line under the label in the dropdown       |
+| `disabled`    | `boolean`            | The dropdown row, which stops responding            |
+| `icon`        | `ComponentReference` | Leads the dropdown row and the list cell            |
+| `className`   | `string`             | Classes on the dropdown row and on the list cell    |
 
 `I18nText` is a plain string, a locale map such as `{ en: "Ready" }`, or a
 `{ key }` reference your i18n adapter resolves. Icons come from the `c` proxy
@@ -76,9 +75,8 @@ export const deployments = collection("deployments").fields(({ f, c }) => ({
 ## `.enum(name)`
 
 The one method `select` adds. It builds a fresh `pgEnum(name, values)` from the
-static values and swaps the column to it, so Postgres rejects an off-list value
-instead of trusting the Zod schema alone. Nothing else about the field changes,
-including the read type. Widening the set later is a migration.
+static values and swaps the column factory to it. Nothing else moves, not the
+read type, not the derived schema, not the operators.
 
 ```ts
 status: f
@@ -89,10 +87,11 @@ status: f
 	.enum("post_status"),
 ```
 
-<Callout type="warn" title="Nothing to build an enum from is not an error">
-	Call `.enum(name)` on a static list. With `f.select([])` or a handler there are
-	no values to declare the type from, so the call is a silent no-op and the
-	column stays `varchar(255)`.
+<Callout type="warn" title="`.enum()` can end up declaring nothing">
+	On `f.select([])` or a handler there are no values, so the call is a silent
+	no-op and the column stays `varchar(255)`. Even on a static list,
+	`app.getSchema()` hands `questpie push` the tables only, and the `pgEnum`
+	stays closed over inside the column factory. Read the generated SQL.
 </Callout>
 
 ## Filtering
@@ -102,7 +101,7 @@ these six.
 
 | Operator               | Operand          | SQL                                            |
 | ---------------------- | ---------------- | ---------------------------------------------- |
-| `eq` / `ne`            | one value        | `=` / `!=`                                     |
+| `eq` / `ne`            | one value        | `=` / `<>`                                     |
 | `in` / `notIn`         | a list of values | `IN` / `NOT IN`                                |
 | `isNull` / `isNotNull` | `boolean`        | `IS NULL` / `IS NOT NULL`, inverted by `false` |
 
@@ -116,8 +115,7 @@ const { docs } = await app.collections.posts.find({
 
 `.array()` is the shared modifier, not something `select` defines. On a select it
 turns the column into `jsonb`, wraps the schema as `z.array(z.enum(values))`, and
-takes `.minItems()` and `.maxItems()`. The admin renders the array control with
-the options attached, one dropdown per row.
+takes `.minItems()` and `.maxItems()`. The admin renders one dropdown per row.
 
 ```ts
 tags: f
@@ -129,28 +127,33 @@ tags: f
 	.maxItems(5),
 ```
 
-<Callout type="warn" title="Filtering an arrayed select is unsettled">
-	The runtime swaps to the array operator set while the typed `where` map keeps
-	the single-value one it inherited. So `eq` compiles against one value and runs
-	against a whole array. Filter these in a query you have tested.
+<Callout type="warn" title="An arrayed select keeps the single-value `where`">
+	`.array()` swaps the runtime set for `selectMultiOps`, but the select carries
+	its own `whereInput` through the wrapping. So the typed map stays `eq` / `ne`
+	/ `in` / `notIn` on one value, `eq` runs against the whole array, and the
+	membership operators are unreachable from the typed clause.
 </Callout>
 
 ## A handler instead of a list
 
 Pass `{ handler, deps }` when the choices are not known at build time. The field
-then stores a plain `string`, and the introspection payload ships an empty option
-list plus a descriptor saying which sibling values to watch.
+then stores a plain `string`, and introspection ships an empty option list plus
+the form paths to watch.
 
-| Key       | Type                                   | Default                  |
-| --------- | -------------------------------------- | ------------------------ |
-| `handler` | `(ctx) => OptionsResult \| Promise<…>` | Required                 |
-| `deps`    | `string[]` or `(ctx) => any[]`         | Tracked from the handler |
+| Key       | Type                                   | Default                       |
+| --------- | -------------------------------------- | ----------------------------- |
+| `handler` | `(ctx) => OptionsResult \| Promise<…>` | Required                      |
+| `deps`    | `string[]` or `(ctx) => any[]`         | None, the watch list is empty |
+
+Name the fields you read. Introspection tracks a `deps` function, never the
+handler, so omitting `deps` ships an empty watch list and nothing refetches as
+the form changes.
 
 The handler receives `{ data, sibling, search, page, limit, ctx }`. `data` is the
 current form, `page` counts from 0, `limit` defaults to 20 and caps at 100, and
-`ctx` is `{ db, user, req, locale }` with `db` typed `unknown`. Return
-`{ options, hasMore?, total? }`. Each option is a `value` and a `label`, and
-that pair is all that crosses the wire.
+`ctx` is `{ db, user, locale }` plus an optional `req`, with `db` typed
+`unknown`. Return `{ options, hasMore?, total? }`. Each option is a `value` and a
+`label`, and that pair is all that crosses the wire.
 
 ```ts
 city: f.select({
@@ -174,12 +177,14 @@ city: f.select({
 The form renders a dropdown, with a search box once the list passes eight
 options. The list cell renders a badge carrying the option's icon, label and
 `className`. Four keys sit on `.admin()` for a select, on top of the ones every
-field shares.
+field shares. Only the first reaches the control.
 
-| Key                                    | Effect                                              |
-| -------------------------------------- | --------------------------------------------------- |
-| `clearable`                            | Adds the control that clears the value              |
-| `displayAs`, `searchable`, `creatable` | Accepted by the types, ignored by the control today |
+| Key          | Type                                               | Effect                                    |
+| ------------ | -------------------------------------------------- | ----------------------------------------- |
+| `clearable`  | `boolean`, default `true`                          | The clear button, and Backspace or Delete |
+| `displayAs`  | `"dropdown" \| "radio" \| "checkbox" \| "buttons"` | Accepted by the type, read by nothing     |
+| `searchable` | `boolean`                                          | Accepted by the type, read by nothing     |
+| `creatable`  | `boolean`                                          | Accepted by the type, read by nothing     |
 
 ## Related
 

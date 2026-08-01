@@ -5,16 +5,16 @@ kind: reference
 package: questpie
 ---
 
-| Surface               | Detail                                                     |
-| --------------------- | ---------------------------------------------------------- |
-| Signature             | `f.object(fields)`                                         |
-| Argument              | `Record<string, Field>`, one entry per key, required       |
-| Column                | `jsonb`                                                    |
-| Schema                | `z.object()` composed from each nested field's own schema  |
-| Filter operators      | the object set, eleven entries, [below](#filtering)        |
-| Admin form            | a collapsible panel holding the nested controls            |
-| Admin cell            | the first two keys inline, up to twelve behind a tooltip   |
-| Type-specific methods | none, the shared chain is the whole surface                |
+| Surface               | Detail                                                    |
+| --------------------- | --------------------------------------------------------- |
+| Signature             | `f.object(fields)`                                        |
+| Argument              | `Record<string, Field>`, one entry per key, required      |
+| Column                | `jsonb`                                                   |
+| Schema                | `z.object()` composed from each nested field's own schema |
+| Filter operators      | the object set, eleven entries, [below](#filtering)       |
+| Admin form            | a collapsible panel holding the nested controls           |
+| Admin cell            | the first two keys inline, up to twelve behind a tooltip  |
+| Type-specific methods | none, the shared chain is the whole surface               |
 
 ```ts title="src/questpie/server/collections/users.ts"
 import { collection } from "#questpie/factories";
@@ -38,22 +38,22 @@ Each value in the record is a field built from the same `f`, so it takes the
 same chain. Another `f.object()` nests, to any depth. What a modifier on a
 nested key actually changes:
 
-| On a nested key            | What it does                                                        |
-| -------------------------- | ------------------------------------------------------------------- |
-| `.required()`              | Required in the composed schema, non-null in the read type          |
-| `.default(v)`              | Marks the key optional on input. No column exists to hold `v`       |
-| `.label()`, `.description()` | Labels that key's control inside the panel                        |
-| `.localized()`             | Moves that one key to the i18n table, [below](#localization)        |
-| `.access(rules)`           | Evaluated at the dot path, `address.zip`                            |
-| `.outputFalse()`           | Key leaves the read type and is deleted from every response         |
-| `.inputFalse()`            | Writing the key is rejected with a 403                              |
-| `.array()`                 | That key holds a list, composed as `z.array()`                      |
-| Type refinements           | Fold into the composed schema, `f.text(10)` caps that key at ten    |
+| On a nested key              | What it does                                                     |
+| ---------------------------- | ---------------------------------------------------------------- |
+| `.required()`                | Required in the composed schema, non-null in the read type       |
+| `.default(v)`                | Marks the key optional on input. No column exists to hold `v`    |
+| `.label()`, `.description()` | Labels that key's control inside the panel                       |
+| `.localized()`               | Moves that one key to the i18n table, [below](#localization)     |
+| `.access(rules)`             | Evaluated at the dot path, `address.zip`                         |
+| `.outputFalse()`             | Key leaves the read type and is stripped from reads              |
+| `.inputFalse()`              | Writing the key is rejected with a 403                           |
+| `.array()`                   | That key holds a list, composed as `z.array()`                   |
+| Type refinements             | Fold into the composed schema, `f.text(10)` caps that key at ten |
 
 <Callout type="info" title="Undeclared keys are dropped">
-	The composed `z.object()` strips keys you did not declare. A client that
-	posts an extra key gets it removed before the write, with no error. Declare
-	every key you intend to store.
+	The composed `z.object()` strips keys you did not declare. A client that posts
+	an extra key gets it removed before the write, with no error. Declare every
+	key you intend to store.
 </Callout>
 
 ## Filtering
@@ -61,19 +61,19 @@ nested key actually changes:
 The typed `where` clause carries the object operator set. Every entry is
 structural, and all of them run against the whole `jsonb` value.
 
-| Operator     | Operand                   | SQL                                    |
-| ------------ | ------------------------- | -------------------------------------- |
-| `contains`   | a partial object          | `col @> $1::jsonb`                     |
-| `containedBy`| an object                 | `col <@ $1::jsonb`                     |
-| `hasKey`     | `string`                  | `col ? $1`                             |
-| `hasKeys`    | `string[]`                | `col ?& $1::text[]`                    |
-| `hasAnyKeys` | `string[]`                | `col ?\| $1::text[]`                   |
-| `pathEquals` | `{ path: string[]; val }` | `col #>> path = $val`                  |
-| `jsonPath`   | `string`                  | `col @@ $1::jsonpath`                  |
-| `isEmpty`    | `boolean`                 | `col = '{}' OR col IS NULL`            |
-| `isNotEmpty` | `boolean`                 | `col != '{}' AND col IS NOT NULL`      |
-| `isNull`     | `boolean`                 | `col IS NULL`, inverted on `false`     |
-| `isNotNull`  | `boolean`                 | `col IS NOT NULL`, inverted on `false` |
+| Operator      | Operand                   | SQL                                      |
+| ------------- | ------------------------- | ---------------------------------------- |
+| `contains`    | a partial object          | `col @> $1::jsonb`                       |
+| `containedBy` | an object                 | `col <@ $1::jsonb`                       |
+| `hasKey`      | `string`                  | `col ? $1`                               |
+| `hasKeys`     | `string[]`                | `col ?& ARRAY[keys]::text[]`             |
+| `hasAnyKeys`  | `string[]`                | `col ?\| ARRAY[keys]::text[]`            |
+| `pathEquals`  | `{ path: string[]; val }` | `col #>> ARRAY[path]::text[] = $val`     |
+| `jsonPath`    | `string`                  | `col @@ $1::jsonpath`                    |
+| `isEmpty`     | `boolean`                 | `col = '{}'::jsonb OR col IS NULL`       |
+| `isNotEmpty`  | `boolean`                 | `col != '{}'::jsonb AND col IS NOT NULL` |
+| `isNull`      | `boolean`                 | `col IS NULL`, inverted on `false`       |
+| `isNotNull`   | `boolean`                 | `col IS NOT NULL`, inverted on `false`   |
 
 ```ts
 const { docs } = await app.collections.users.find({
@@ -114,8 +114,9 @@ links: f
 
 The operator set changes with it. The eleven object operators are gone and the
 array set takes over: `containsAll`, `containsAny`, `eq`, `length`, `isEmpty`,
-`isNotEmpty`, `isNull`, `isNotNull`. See
-[Arrays](/docs/schema/fields/array).
+`isNotEmpty`, `isNull`, `isNotNull`. The types offer a ninth, `contains`, with
+no operator behind it. It falls through to an `ILIKE` against the `jsonb`
+column, which Postgres rejects. See [Arrays](/docs/schema/fields/array).
 
 ## Localization
 
@@ -135,8 +136,8 @@ profile: f.object({
 ```
 
 <Callout type="warn" title="The outer call wins">
-	Mark the object `.localized()` and the per-key split is skipped entirely, so
-	a nested `.localized()` below it does nothing. Pick one level.
+	Mark the object `.localized()` and the per-key split is skipped entirely, so a
+	nested `.localized()` below it does nothing. Pick one level.
 </Callout>
 
 ## Access on nested keys
@@ -144,33 +145,41 @@ profile: f.object({
 A nested `.access()` rule registers under its dot path, `address.zip`. Reads
 evaluate the rule and delete the key from the response. Writes evaluate it per
 key present in the payload, and a denied key throws instead of being ignored.
-Both recurse into deeper objects and into array items. See
+Both recurse into deeper objects and into array items. Both are skipped for a
+system-mode call, which is how seeds and internal code still see the key. See
 [Access control](/docs/schema/access-control).
 
 ## Admin
 
-Both methods below come from `@questpie/admin` and appear on `f` only when that
-module is enabled. See [Collections and Globals](/docs/admin/collections).
+Both methods below come from `@questpie/admin`, which registers them as field
+extensions. They sit on the chain of every field, and only when that module is
+enabled. See [Collections and Globals](/docs/admin/collections).
 
 `.admin(config)` sets the panel's shape:
 
-| Option             | Values                            | Default         |
-| ------------------ | --------------------------------- | --------------- |
-| `wrapper`          | `"flat"`, `"collapsible"`         | `"collapsible"` |
-| `layout`           | `"stack"`, `"inline"`, `"grid"`   | `"stack"`       |
-| `columns`          | number, read by `grid` only       | `2`             |
-| `defaultCollapsed` | boolean, read by `collapsible`    | `true`          |
+| Option             | Values                          | Default         |
+| ------------------ | ------------------------------- | --------------- |
+| `wrapper`          | `"flat"`, `"collapsible"`       | `"collapsible"` |
+| `layout`           | `"stack"`, `"inline"`, `"grid"` | `"stack"`       |
+| `columns`          | number, read by `grid` only     | `2`             |
+| `defaultCollapsed` | boolean, read by `collapsible`  | `true`          |
 
 `.form(({ f }) => ({ fields }))` orders the keys instead, and accepts the same
 `section` and `tabs` containers the collection form takes. Here `f` is a name
 proxy, so `f.street` is the string `"street"`.
 
+With a form set, `layout` and `columns` are never read. Each `section` carries
+its own pair, defaulting to `"stack"` and `2`. `wrapper` and `defaultCollapsed`
+still apply.
+
 ```ts
 address: f
 	.object({ street: f.text(), city: f.text(), zip: f.text(10) })
-	.admin({ layout: "grid", columns: 2 })
+	.admin({ defaultCollapsed: false })
 	.form(({ f }) => ({
-		fields: [{ type: "section", label: "Postal", fields: [f.zip, f.city] }],
+		fields: [
+			{ type: "section", label: "Postal", layout: "grid", fields: [f.zip, f.city] },
+		],
 	})),
 ```
 

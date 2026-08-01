@@ -52,10 +52,13 @@ username: f.text(32).required().min(3).pattern(/^[a-z0-9_]+$/),
 	check, so `.max(n)` is the only cap.
 </Callout>
 
-<Callout type="warn" title="`.trim()`, `.lowercase()` and `.uppercase()` do not touch the value">
-	Each sets a flag. No code transforms the stored string, so `.trim()` writes
-	`"  hi  "` unchanged. Their one reader is the CRDT eligibility check, which
-	counts them as refinements and rejects the field. Normalize with `.zod()` or a
+<Callout
+	type="warn"
+	title="`.trim()`, `.lowercase()` and `.uppercase()` do not touch the value"
+>
+	Each sets a flag. No code transforms the stored string, so `.trim()` writes `"
+	hi "` unchanged. Their one reader is the CRDT eligibility check, which counts
+	them as refinements and rejects the field. Normalize with `.zod()` or a
 	`beforeValidate` hook, which runs before the schema.
 </Callout>
 
@@ -100,9 +103,10 @@ What crosses to the browser:
 - `pattern` crosses as `RegExp.source`, which drops the flags. `/^a/i` is
   case-insensitive on the server and case-sensitive in the form.
 
-A `.max(n)` above the constructor width reaches the attribute and the browser
-schema, but neither the server schema nor the column. The form then accepts what
-the write rejects.
+A `.max(n)` above the constructor width is the number that crosses, so the
+attribute and the browser schema both take it. The server schema keeps both
+checks and the column keeps its width, so the form accepts what the write
+rejects.
 
 ## Lists
 

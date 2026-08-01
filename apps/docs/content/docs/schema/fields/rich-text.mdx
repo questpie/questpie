@@ -33,37 +33,38 @@ export const posts = collection("posts").fields(({ f }) => ({
 
 ## Chain
 
-`richText` declares no methods of its own. Everything below is a base field
-method that works on any type.
+`richText` declares no methods of its own. The first four rows are base field
+methods that work on any type. `.admin()` is not one of them. The admin plugin
+registers it as a field extension and codegen wraps every factory with it.
 
-| Method                                | Effect here                                              |
-| ------------------------------------- | -------------------------------------------------------- |
-| `.required()`                         | `NOT NULL`, and required on insert                       |
-| `.default(value)`                     | A `TipTapDocument` in json mode, a `string` in markdown   |
-| `.localized()`                        | One document per locale                                  |
-| `.label(text)` / `.description(text)` | Label and helper text on the admin form                  |
-| `.admin(config)`                      | Editor options, listed below                             |
+| Method                                | Effect here                                                                                  |
+| ------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `.required()`                         | `NOT NULL`, and required on insert                                                           |
+| `.default(value)`                     | A `TipTapDocument` in json mode, a `string` in markdown. A factory or a raw `SQL` also works |
+| `.localized()`                        | One document per locale                                                                      |
+| `.label(text)` / `.description(text)` | Label and helper text on the admin form, each an `I18nText`                                  |
+| `.admin(config)`                      | Editor options, listed below                                                                 |
 
 ## Editor options
 
 `.admin()` config travels to the browser with the collection schema, so the
 editor reads plain data. These are the keys it acts on.
 
-| Option               | Type                                                | Default                     | Effect                                                        |
-| -------------------- | --------------------------------------------------- | --------------------------- | ------------------------------------------------------------- |
-| `preset`             | `"minimal" \| "simple" \| "standard" \| "advanced"` | none                        | Picks a feature set                                           |
-| `features`           | booleans keyed by feature                            | the preset, or the defaults | Overrides single features on top of the preset                |
-| `placeholder`        | `string`                                             | the editor's own text       | Shown while the document is empty                             |
-| `showCharacterCount` | `boolean`                                            | `false`                     | Prints the word and character readout under the editor        |
-| `maxCharacters`      | `number`                                             | none                        | Hard limit in the editor, needs the `characterCount` feature  |
-| `enableImages`       | `boolean`                                            | `true`                      | Turns image insertion off without dropping the whole feature  |
-| `imageCollection`    | `string`                                             | none                        | Which upload collection inline images go to                   |
-| `enableMediaLibrary` | `boolean`                                            | `true`                      | Adds the media picker beside the upload and URL tabs          |
+| Option               | Type                                                | Default            | Effect                                                                    |
+| -------------------- | --------------------------------------------------- | ------------------ | ------------------------------------------------------------------------- |
+| `preset`             | `"minimal" \| "simple" \| "standard" \| "advanced"` | none               | Picks a feature set                                                       |
+| `features`           | booleans keyed by feature                           | none               | Overrides single features on top of the preset, or of the defaults        |
+| `placeholder`        | `string`                                            | `Start writing...` | Shown while the document is empty                                         |
+| `showCharacterCount` | `boolean`                                           | `false`            | Prints the word and character readout, needs the `characterCount` feature |
+| `maxCharacters`      | `number`                                            | none               | Hard limit in the editor, needs the `characterCount` feature              |
+| `enableImages`       | `boolean`                                           | `true`             | Set `false` to hide image insertion, the extension stays on               |
+| `imageCollection`    | `string`                                            | none               | Which upload collection inline images go to                               |
+| `enableMediaLibrary` | `boolean`                                           | `true`             | Set `false` to drop the media picker from the image popover               |
 
 ```ts
 content: f.richText().label("Content").admin({
-	preset: "standard",
-	features: { table: false },
+	preset: "simple",
+	features: { image: true },
 	showCharacterCount: true,
 	maxCharacters: 5000,
 	imageCollection: "media",
@@ -77,39 +78,43 @@ raises an error naming them.
 
 <Callout type="warn" title="Field `.admin()` takes `unknown`">
 	The generated `.admin()` on a field is typed `unknown`, so a misspelled key
-	compiles and then does nothing. Collection-level `.admin()` is typed. Read
-	the table above as the contract for this field.
+	compiles and then does nothing. Collection-level `.admin()` is typed. Read the
+	table above as the contract for this field.
 </Callout>
 
 ### Presets
 
-| Preset      | What it enables                                                      |
-| ----------- | -------------------------------------------------------------------- |
-| no preset   | Every feature except `toolbar`                                       |
-| `minimal`   | `bubbleMenu`, `history`, `bold`, `italic`, `underline`, `link`, only |
-| `simple`    | Everything except `codeBlock`, `align`, `image`, `table`, `tableControls` |
-| `standard`  | Every feature                                                        |
-| `advanced`  | The same set as `standard`                                           |
-
-Set no preset and the toolbar stays hidden, leaving the bubble menu and slash
-commands to drive formatting. Pass `preset: "standard"` to get the toolbar.
+| Preset     | What it enables                                                           |
+| ---------- | ------------------------------------------------------------------------- |
+| no preset  | Every feature except `toolbar`                                            |
+| `minimal`  | Only `bubbleMenu`, `history`, `bold`, `italic`, `underline` and `link`    |
+| `simple`   | Everything except `codeBlock`, `align`, `image`, `table`, `tableControls` |
+| `standard` | Every feature                                                             |
+| `advanced` | The same set as `standard`                                                |
 
 The feature keys are `toolbar`, `bubbleMenu`, `slashCommands`, `history`,
 `heading`, `bold`, `italic`, `underline`, `strike`, `code`, `codeBlock`,
 `blockquote`, `bulletList`, `orderedList`, `horizontalRule`, `align`, `link`,
 `image`, `table`, `tableControls`, `characterCount`.
 
+<Callout type="warn" title="`toolbar` is inert">
+	Twenty of those twenty-one keys reach the editor. Nothing reads `toolbar`, so
+	no preset renders one. Formatting runs through the bubble menu and slash
+	commands. `toolbar` is also the only key separating no preset from `standard`,
+	which leaves those two identical.
+</Callout>
+
 ## Filtering
 
 A json-mode field defines five operators of its own.
 
-| Operator     | Operand   | Matches                                                      |
-| ------------ | --------- | ------------------------------------------------------------ |
-| `contains`   | `string`  | Any `text` node in the document, case-insensitive            |
-| `isEmpty`    | `boolean` | Null, a doc with no content, or no non-whitespace text       |
-| `isNotEmpty` | `boolean` | A document with non-whitespace text                          |
-| `isNull`     | `boolean` | The column is `NULL`                                         |
-| `isNotNull`  | `boolean` | The column is not `NULL`                                     |
+| Operator     | Operand   | Matches                                                |
+| ------------ | --------- | ------------------------------------------------------ |
+| `contains`   | `string`  | Any `text` node in the document, case-insensitive      |
+| `isEmpty`    | `boolean` | Null, a doc with no content, or no non-whitespace text |
+| `isNotEmpty` | `boolean` | A document with non-whitespace text                    |
+| `isNull`     | `boolean` | The column is `NULL`                                   |
+| `isNotNull`  | `boolean` | The column is not `NULL`                               |
 
 ```ts
 const { docs } = await app.collections.posts.find({
@@ -118,12 +123,12 @@ const { docs } = await app.collections.posts.find({
 ```
 
 `contains` reads the words an editor typed, not node types or attribute values.
-To filter on which section types a page holds, that is
+For which section types a page holds, reach for
 [`f.blocks()`](/docs/schema/blocks) and its `hasBlockType` operator.
 
-The four flag operators ignore their operand. `{ isEmpty: false }` asserts the
-same condition as `{ isEmpty: true }`, so negate by moving the filter into a
-`NOT` group or by using its opposite.
+In json mode the four flag operators ignore their operand. `{ isEmpty: false }`
+asserts the same condition as `{ isEmpty: true }`, so negate by using the
+opposite operator or a `NOT` group.
 
 A markdown-mode field stores plain text, so it filters with the standard string
 operators instead: `eq`, `ne`, `contains`, `startsWith`, `endsWith`, `like`,
@@ -131,10 +136,10 @@ operators instead: `eq`, `ne`, `contains`, `startsWith`, `endsWith`, `like`,
 the raw markdown. `isEmpty` and `isNotEmpty` belong to json mode.
 
 <Callout type="warn" title="The `where` slot is not narrowed">
-	A rich text column's generated `where` type is a broad record, so TypeScript
-	accepts an operator name this field does not have and an operand of the wrong
-	shape. An unrecognised operator is dropped from the query rather than
-	rejected. Check names against the table.
+	A text column rejects a bad operator name at compile time. A rich text column
+	does not, because its generated `where` type is a broad record. An operator
+	this field lacks is dropped from the query rather than rejected, so check
+	names against the table.
 </Callout>
 
 ## Types
@@ -164,8 +169,9 @@ type Post = typeof posts.$infer.select;
 ```
 
 That subpath also exports the `richText` factory itself, `richTextFieldType`,
-`RichTextFieldState`, `RichTextMode`, `RichTextOptions` and the augmentable
-`RichTextFieldMeta`.
+`RichTextFieldState`, the augmentable `RichTextFieldMeta` and `RichTextFeature`.
+Ignore that last one, it is a stale union nothing reads and it is not the
+feature list above. `RichTextMode` and `RichTextOptions` never leave the package.
 
 ## Related
 

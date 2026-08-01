@@ -1,20 +1,20 @@
 ---
 title: Number field
-description: One factory over six Postgres numeric types. The mode you pass picks the column and decides whether the schema demands a whole number. Every mode reads back as a plain JS number.
+description: One factory over six Postgres numeric types. The mode you pass picks the column and decides whether the derived schema demands a whole number.
 kind: reference
 package: questpie
 ---
 
 ## Signature
 
-| Call                                                | Column                          | Derived schema     |
-| --------------------------------------------------- | ------------------------------- | ------------------ |
-| `f.number()`, `f.number("integer")`                 | `integer`                       | `z.number().int()` |
-| `f.number("smallint")`                              | `smallint`                      | `z.number().int()` |
-| `f.number("bigint")`                                | `bigint`                        | `z.number()`       |
-| `f.number("real")`                                  | `real`                          | `z.number()`       |
-| `f.number("double")`                                | `double precision`              | `z.number()`       |
-| `f.number({ mode: "decimal", precision?, scale? })` | `numeric(precision, scale)`     | `z.number()`       |
+| Call                                                | Column                      | Derived schema     |
+| --------------------------------------------------- | --------------------------- | ------------------ |
+| `f.number()`, `f.number("integer")`                 | `integer`                   | `z.number().int()` |
+| `f.number("smallint")`                              | `smallint`                  | `z.number().int()` |
+| `f.number("bigint")`                                | `bigint`                    | `z.number()`       |
+| `f.number("real")`                                  | `real`                      | `z.number()`       |
+| `f.number("double")`                                | `double precision`          | `z.number()`       |
+| `f.number({ mode: "decimal", precision?, scale? })` | `numeric(precision, scale)` | `z.number()`       |
 
 `precision` and `scale` fall back separately, to 10 and to 2, so
 `f.number({ mode: "decimal", precision: 18 })` gives you `numeric(18, 2)`.
@@ -23,9 +23,9 @@ package: questpie
 in that pair, so a fractional value passes validation there. Chain `.int()`
 yourself on any mode where you want whole numbers.
 
-Every mode reads and writes a plain JS `number`. `bigint` and `decimal` get
-there through Drizzle's `mode: "number"`, the other four are already numeric in
-the driver.
+Every mode reads and writes a plain JS `number`. `bigint` and `decimal` are the
+two Drizzle column builders that could hand you something else, so QUESTPIE
+passes them `mode: "number"`. The other four take no such option.
 
 ```ts title="src/questpie/server/collections/products.ts"
 import { collection } from "#questpie/factories";
@@ -80,8 +80,8 @@ collection("orders").fields(({ f }) => ({
 
 ## Filtering
 
-A number field carries the number operator set, so its `where` clause types to
-exactly these eleven keys.
+A number field carries the number operator set, so the operator object in its
+`where` entry types to exactly these eleven keys.
 
 | Operator              | Operand          | Matches                                          |
 | --------------------- | ---------------- | ------------------------------------------------ |
@@ -91,6 +91,9 @@ exactly these eleven keys.
 | `lt`, `lte`           | `number`         | Below, at or below                               |
 | `in`, `notIn`         | `number[]`       | In the list, not in the list                     |
 | `isNull`, `isNotNull` | `boolean`        | Null check, inverted when you pass `false`       |
+
+A bare value is the shorthand and types alongside that object. `{ stock: 5 }`
+compiles to `eq`, `{ stock: null }` to `IS NULL`.
 
 ```ts
 const { docs } = await app.collections.products.find({
@@ -113,11 +116,11 @@ what you type back into range before the form sees it.
 `@questpie/admin` is enabled, and its generated signature takes `unknown`, so
 nothing type-checks the keys you pass.
 
-| Key           | Effect                                                             |
-| ------------- | ------------------------------------------------------------------ |
-| `placeholder` | Placeholder text                                                   |
-| `showButtons` | Wraps the input in minus and plus buttons                          |
-| `step`        | The input's `step`, and how far those buttons move. Defaults to `1` |
+| Key           | Type      | Default | Effect                                         |
+| ------------- | --------- | ------- | ---------------------------------------------- |
+| `placeholder` | `string`  | none    | Placeholder text                               |
+| `showButtons` | `boolean` | `false` | Wraps the input in minus and plus buttons      |
+| `step`        | `number`  | `1`     | The input's `step`, and how far a button moves |
 
 `.step(n)` on the field is validation only and never reaches the control, so set
 `step` here as well when you want the two to agree.
@@ -127,16 +130,18 @@ the base admin config that every field type shares.
 
 ## Lists of numbers
 
-`.array()` turns the column into `jsonb` and swaps the operator set, so `gt`,
-`lte` and the rest of the table above leave the `where` clause. `.minItems(n)`
-and `.maxItems(n)` bound the list, and the admin renders a repeatable row of
-number inputs.
+`.array()` turns the column into `jsonb` and swaps the operator set. Every
+comparison above goes, `gt` and `lte` and `in` with them, and the `eq` that
+survives takes the whole list. `.minItems(n)` and `.maxItems(n)` bound it. The
+admin drops the number control for a numbered list of plain number inputs, so
+the clamping and the buttons go too.
 
 ```ts
 scores: f.number().array().maxItems(10),
 ```
 
-[Arrays](/docs/schema/fields/array) has the operators that replace them.
+[Arrays](/docs/schema/fields/array) has the operator table that replaces this
+one.
 
 ## Types
 
@@ -150,7 +155,7 @@ type Product = typeof products.$infer.select;
 ```
 
 ```ts
-import type { CollectionDoc, CollectionWhere } from "#questpie/types";
+import type { CollectionDoc, CollectionWhere } from "#questpie";
 
 type Product = CollectionDoc<"products">;
 type ProductFilter = CollectionWhere<"products">;

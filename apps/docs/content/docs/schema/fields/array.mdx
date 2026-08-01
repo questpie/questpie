@@ -5,14 +5,14 @@ kind: reference
 package: questpie
 ---
 
-| Aspect         | Before `.array()`        | After                             |
-| -------------- | ------------------------ | --------------------------------- |
-| Column         | the inner field's column | `jsonb`, whatever the inner type  |
-| Row value      | `T`                      | `T[]`                             |
-| Derived schema | the inner schema         | `z.array(inner)`                  |
-| Operator set   | the inner set            | `selectMultiOps`, membership      |
-| `getType()`    | `"text"`, `"number"`, …  | `"array"`                         |
-| Admin control  | the inner control        | `ArrayField`, a repeatable list   |
+| Aspect         | Before `.array()`        | After                            |
+| -------------- | ------------------------ | -------------------------------- |
+| Column         | the inner field's column | `jsonb`, whatever the inner type |
+| Row value      | `T`                      | `T[]`                            |
+| Derived schema | the inner schema         | `z.array(inner)`                 |
+| Operator set   | the inner set            | `selectMultiOps`, membership     |
+| `getType()`    | `"text"`, `"number"`, …  | `"array"`                        |
+| Admin control  | the inner control        | `ArrayField`, a repeatable list  |
 
 It takes no arguments and adds no state past the wrapping. `.required()` and
 `.minItems()` land the same on either side of it, so
@@ -37,13 +37,13 @@ Two methods only mean something on an array. Both sit on the base field class,
 so they are callable before `.array()` and on a scalar field, where nothing
 reads them.
 
-| Method         | Effect                                                                     |
-| -------------- | -------------------------------------------------------------------------- |
+| Method         | Effect                                                                        |
+| -------------- | ----------------------------------------------------------------------------- |
 | `.minItems(n)` | `z.array(…).min(n)` on writes, and the floor the admin remove button stops at |
-| `.maxItems(n)` | `z.array(…).max(n)` on writes, and the cap the admin add button stops at   |
+| `.maxItems(n)` | `z.array(…).max(n)` on writes, and the cap the admin add button stops at      |
 
-Every [shared modifier](/docs/schema/fields) applies to the list as a whole.
-`.required()` makes the column `NOT NULL` and the key required on insert.
+Shared modifiers apply to the list as a whole. `.required()` makes the column
+`NOT NULL` and the key required on insert.
 `.localized()` moves the jsonb column into the `<collection>_i18n` table, so
 each locale holds its own list. Per-element validation survives the wrapping,
 and `f.text(40).array()` still rejects a 41-character element.
@@ -57,27 +57,27 @@ and `f.text(40).array()` still rejects a 41-character element.
 
 ## Item types
 
-Any field can be wrapped. Storage and validation behave the same for all of
-them, since `.array()` replaces the column factory outright. What differs is the
-control the admin picks for one item.
+Wrapping a field that has a column always gives the same `jsonb` column and the
+same `z.array(inner)`. What differs is the control the admin picks for one item.
 
-| Inner field                             | Item control                                 |
-| --------------------------------------- | -------------------------------------------- |
-| `f.text()`, `f.textarea()`, `f.email()` | The matching input                           |
-| `f.number()`                            | A number input                               |
-| `f.select(options)`                     | One dropdown per item, carrying the options  |
-| `f.object(fields)`                      | A repeatable nested form, one per item       |
-| anything else                           | A plain text input                           |
+| Inner field                             | Item control                                |
+| --------------------------------------- | ------------------------------------------- |
+| `f.text()`, `f.textarea()`, `f.email()` | The matching input                          |
+| `f.number()`                            | A number input                              |
+| `f.select(options)`                     | One dropdown per item, carrying the options |
+| `f.object(fields)`                      | A repeatable nested form, one per item      |
+| anything else                           | A plain text input                          |
 
 That allowlist is five names plus the object branch above it. A type outside it
 never sets `itemType`, and `ArrayField` defaults that to `"text"`. So
-`f.boolean().array()` stores real booleans and edits them as free text.
+`f.boolean().array()` gets a text input, and the strings it produces are what
+`z.array(z.boolean())` rejects on save.
 
 <Callout type="warn" title="Not for relations or uploads">
 	QUESTPIE registers a relation by reading `getMetadata().type`, and `.array()`
-	rewrites that to `"array"`. A wrapped `f.relation()` or `f.upload()` loses its
-	foreign key, its hydration and its picker, and keeps only a bare jsonb column.
-	Reach for `f.relation().multiple()` or `f.upload({ through })` instead.
+	rewrites that to `"array"`. A wrapped `f.relation(to)` or `f.upload()` loses
+	its foreign key, its hydration and its picker, and keeps a bare jsonb column.
+	Reach for `f.relation(to).multiple()` or `f.upload({through})` instead.
 </Callout>
 
 ## Reads and writes
@@ -90,8 +90,8 @@ migration leaving a scalar in the column breaks every read of that row.
 On write, the field's own Zod schema overlays the column-derived one. That is
 what makes `z.array(inner)` and the length bounds enforced rather than
 decorative. A value that arrives as a string but parses as a JSON array is
-decoded before it reaches the driver, so a client that stringified its list
-twice still stores an array.
+decoded before it reaches the driver, so a list that was already stringified
+once is stored as an array instead of being encoded a second time.
 
 ## Filtering
 
@@ -99,15 +99,15 @@ An array carries `selectMultiOps`. Element operands are typed off the inner
 field, so `f.number().array()` filters on `number` and `f.datetime().array()` on
 the datetime input type.
 
-| Operator               | Operand   | Compiles to                                        |
-| ---------------------- | --------- | -------------------------------------------------- |
-| `containsAll`          | `Item[]`  | `col @> '[…]'::jsonb`, holds every listed value    |
-| `containsAny`          | `Item[]`  | `col ?\| ARRAY[…]::text[]`, holds at least one     |
-| `eq`                   | `Item[]`  | `col = '[…]'::jsonb`, the whole list in order      |
-| `length`               | `number`  | `jsonb_array_length(col) = n`                      |
-| `isEmpty`              | `boolean` | `col = '[]'::jsonb OR col IS NULL`                 |
-| `isNotEmpty`           | `boolean` | `col != '[]'::jsonb AND col IS NOT NULL`           |
-| `isNull` / `isNotNull` | `boolean` | Pass `false` and each inverts                      |
+| Operator               | Operand   | Compiles to                                     |
+| ---------------------- | --------- | ----------------------------------------------- |
+| `containsAll`          | `Item[]`  | `col @> '[…]'::jsonb`, holds every listed value |
+| `containsAny`          | `Item[]`  | `col ?\| ARRAY[…]::text[]`, holds at least one  |
+| `eq`                   | `Item[]`  | `col = '[…]'::jsonb`, the whole list in order   |
+| `length`               | `number`  | `jsonb_array_length(col) = n`                   |
+| `isEmpty`              | `boolean` | `col = '[]'::jsonb OR col IS NULL`              |
+| `isNotEmpty`           | `boolean` | `col != '[]'::jsonb AND col IS NOT NULL`        |
+| `isNull` / `isNotNull` | `boolean` | Pass `false` and each inverts                   |
 
 ```ts
 const { docs } = await app.collections.posts.find({
@@ -125,11 +125,11 @@ const { docs } = await app.collections.posts.find({
 	one element.
 </Callout>
 
-<Callout type="warn" title="`isEmpty` ignores its operand">
-	`isEmpty: false` compiles to the same SQL as `isEmpty: true`, the value is
-	never read. That condition is also unparenthesized, and the builder brackets
-	only the whole `AND` group, so beside another filter the `IS NULL` arm escapes
-	it. Use `isNotEmpty` for the opposite.
+<Callout type="warn" title="`isEmpty` and `isNotEmpty` ignore their operand">
+	Both take the column and never read the value, so `isEmpty: false` compiles to
+	the same SQL as `isEmpty: true`. Pass `isNotEmpty: true` for the opposite.
+	`isEmpty` is also unparenthesized, and the builder brackets only the whole
+	`AND` group, so beside another filter its `IS NULL` arm escapes.
 </Callout>
 
 <Callout type="warn" title="Two inner types lose the array filter type">
@@ -148,15 +148,15 @@ badge beside the first item, with up to ten items in a hover tooltip.
 
 Configure the rest with `.admin()`, the field extension that module registers.
 
-| Key         | Type                              | Default    | Effect                                  |
-| ----------- | --------------------------------- | ---------- | --------------------------------------- |
-| `orderable` | `boolean`                         | `false`    | Adds the move up and move down buttons  |
-| `minItems`  | `number`                          | none       | Same floor, set from the admin side     |
-| `maxItems`  | `number`                          | none       | Same cap, set from the admin side       |
-| `mode`      | `"inline" \| "modal" \| "drawer"` | `"inline"` | Where an item is edited, object items only |
+| Key         | Type                              | Default    | Effect                                      |
+| ----------- | --------------------------------- | ---------- | ------------------------------------------- |
+| `orderable` | `boolean`                         | `false`    | Adds the move up and move down buttons      |
+| `minItems`  | `number`                          | none       | Same floor, set from the admin side         |
+| `maxItems`  | `number`                          | none       | Same cap, set from the admin side           |
+| `mode`      | `"inline" \| "modal" \| "drawer"` | `"inline"` | Where an item is edited, object items only  |
 | `layout`    | `"stack" \| "inline" \| "grid"`   | `"stack"`  | How an item's fields sit, object items only |
-| `columns`   | `number`                          | `2`        | Grid width, object items only           |
-| `itemLabel` | `string`                          | none       | The item header, object items only      |
+| `columns`   | `number`                          | `2`        | Grid width, object items only               |
+| `itemLabel` | `string`                          | none       | The item header, object items only          |
 
 ```ts
 steps: f.object({ label: f.text() }).array().admin({ orderable: true }),
@@ -181,8 +181,7 @@ runtime validation and have no type-level effect.
 
 ## Related
 
-[Fields](/docs/schema/fields) has the shared modifiers and the table of every
-type you can wrap.
+[Fields](/docs/schema/fields) has the table of every type you can wrap.
 
 [Object](/docs/schema/fields/object) is the inner field for a list of structured
 items, and the only one the admin gives a real nested form.
@@ -190,7 +189,8 @@ items, and the only one the admin gives a real nested form.
 [Relations](/docs/schema/relations) is where a list of other rows belongs.
 
 [Collaborative documents](/docs/schema/collaborative-documents) covers
-`.crdt({ format: "set" })`, which takes an array of `f.text({ mode: "text" })`
-that is required, defaults to `[]`, and carries no length bounds.
+`.crdt({ format: "set", conflict: "add-wins" })`, which takes an array of
+`f.text({ mode: "text" })` that is required, defaults to `[]`, and carries no
+length bounds.
 
 [Validation](/docs/schema/validation) covers the derived schema and `.zod()`.
