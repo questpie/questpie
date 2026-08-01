@@ -1,5 +1,12 @@
 # @questpie/elysia
 
+## 3.21.1
+
+### Patch Changes
+
+- Updated dependencies [[`5c5f5b6`](https://github.com/questpie/questpie/commit/5c5f5b672acfeca55cf7ffd6db97dec535997bfe)]:
+  - questpie@3.21.1
+
 ## 3.21.0
 
 ### Patch Changes

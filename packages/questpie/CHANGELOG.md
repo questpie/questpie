@@ -1,5 +1,11 @@
 # questpie
 
+## 3.21.1
+
+### Patch Changes
+
+- [#220](https://github.com/questpie/questpie/pull/220) [`5c5f5b6`](https://github.com/questpie/questpie/commit/5c5f5b672acfeca55cf7ffd6db97dec535997bfe) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Reconnect retryable SSE transport failures without terminating channel consumers, while preserving fail-closed authorization, protocol, and replay-gap errors.
+
 ## 3.21.0
 
 ### Minor Changes
