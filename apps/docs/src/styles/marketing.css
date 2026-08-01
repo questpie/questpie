@@ -30,10 +30,19 @@ body.qp-grain-page {
 	   and an 88px heading broke into single words. The page runs wide; only prose is
 	   narrow. */
 
+	/* Both values read the rhythm tokens instead of restating them. The padding one
+	   is not cosmetic: geometry.css drops --section-pad-x from 40px to 20px below
+	   45rem, and a hardcoded --space-10 ignored that, so a 390px phone spent 80 of
+	   its 390 pixels on gutters — 21% of the screen. Reading the token gives the
+	   content 350px instead of 310.
+
+	   --app-max, not --content-max. The 75rem one is labelled "marketing page
+	   width" but the kit deliberately runs wider: 1200 left the display column at
+	   ~590px and broke an 88px heading into single words. */
 	.wrap {
-		max-width: 84rem;
+		max-width: var(--app-max);
 		margin: 0 auto;
-		padding: 0 var(--space-10);
+		padding: 0 var(--section-pad-x);
 	}
 	/* ── header: floats at rest, glass once content passes under it ───────────── */
 	.nav {
@@ -327,7 +336,8 @@ body.qp-grain-page {
 		height: 1px;
 		border: 0;
 		margin: 0 auto;
-		max-width: 84rem;
+		/* same width as .wrap, so the rule ends where the content does */
+		max-width: var(--app-max);
 		background: linear-gradient(
 			to right,
 			transparent,
