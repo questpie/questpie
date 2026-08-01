@@ -47,15 +47,28 @@ In `collections/`, `globals/`, `channels/` and `fields/` the generator matches o
 the factory call, so a helper file with none is skipped and a file with two
 `collection()` exports produces two collections.
 
-<Callout type="info" title="The name is the key, not the filename">
-	Collections and globals are keyed by the string you pass to the factory.
-	`collection("blog_posts")` inside `collections/posts.ts` is
-	`app.collections.blog_posts`. Jobs, services and emails take no such argument,
-	so their key is the filename in camelCase, and `jobs/send-invoice.ts` becomes
-	`sendInvoice`. A channel keys on its export name, or on the filename when it
-	is the default export, because the string it takes is the wire pattern. Routes
-	key on the path below `routes/` or `functions/`, so
-	`routes/webhooks/stripe.ts` is `webhooks/stripe`.
+## How a declaration is named
+
+You reach every declaration by a key, and one rule decides it. **The string you
+pass to the factory is the key, unless that string already means something
+else.**
+
+| You declare                               | The key is                | Example                                                |
+| ----------------------------------------- | ------------------------- | ------------------------------------------------------ |
+| `collection()`, `global()`, `fieldType()` | the string you pass       | `collection("blog_posts")` → `blog_posts`              |
+| `channel()`                               | the export name           | `export const orders = channel("orders.*")` → `orders` |
+| jobs, services, emails                    | the filename in camelCase | `jobs/send-invoice.ts` → `sendInvoice`                 |
+| routes, functions                         | the path below it         | `routes/webhooks/stripe.ts` → `webhooks/stripe`        |
+
+A channel is the one exception, because the string it takes is the wire pattern
+clients subscribe to. Patterns hold dots and wildcards, so they cannot double as
+property names. Jobs, services and emails take no string at all, which leaves the
+filename as the only name they have.
+
+<Callout type="warn" title="The filename is not the key">
+	`collection("blog_posts")` in `collections/posts.ts` is
+	`app.collections.blog_posts`. Name the file after the collection and you never
+	have to remember which one won.
 </Callout>
 
 ## Generating the app
