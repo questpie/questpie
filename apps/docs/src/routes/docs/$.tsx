@@ -78,6 +78,13 @@ const docsCompatRedirects = new Map<string, string>([
 	["integrations/mcp", "/docs/agents/mcp"],
 	["integrations/mcp-oauth", "/docs/agents/mcp-oauth"],
 	["integrations/openapi", "/docs/agents/openapi"],
+	// recipes/ and extend/ dissolved into Guides
+	["recipes", "/docs/guides"],
+	["recipes/collaborative-article", "/docs/guides/collaborative-docs"],
+	["recipes/trace-a-slow-request", "/docs/guides/debug-a-slow-request"],
+	["extend", "/docs/guides"],
+	["extend/build-a-plugin", "/docs/guides/build-a-plugin"],
+	["extend/multi-tenancy", "/docs/guides/multi-tenancy"],
 ]);
 
 export const Route = createFileRoute("/docs/$")({

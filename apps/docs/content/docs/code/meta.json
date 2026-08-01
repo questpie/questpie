@@ -1,4 +1,12 @@
 {
 	"title": "Code",
-	"pages": ["routes", "services", "jobs", "emails", "modules", "codegen"]
+	"pages": [
+		"index",
+		"routes",
+		"services",
+		"jobs",
+		"emails",
+		"modules",
+		"codegen"
+	]
 }

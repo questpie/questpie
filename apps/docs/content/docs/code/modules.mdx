@@ -205,7 +205,7 @@ At codegen time, `extractPluginsFromModules` walks the module tree **depth-first
 	`plugins: [...]` list to keep in sync.
 </Callout>
 
-The plugin itself, what categories and discovery it declares, and how you write one, is covered in its own pages: see [Building a plugin](/docs/extend/build-a-plugin) for the authoring loop and [Codegen](/docs/code/codegen) for the full `CodegenPlugin` API. A short treatment of how a module _ships_ one is [below](#shipping-a-codegen-plugin).
+The plugin itself, what categories and discovery it declares, and how you write one, is covered in its own pages: see [Building a plugin](/docs/guides/build-a-plugin) for the authoring loop and [Codegen](/docs/code/codegen) for the full `CodegenPlugin` API. A short treatment of how a module _ships_ one is [below](#shipping-a-codegen-plugin).
 
 ## The static-module pattern (`packageConfig`)
 
@@ -278,7 +278,7 @@ A module's `plugin` is a `CodegenPlugin`, the object that teaches codegen new **
 
 Authoring a `CodegenPlugin` is documented in full on its own pages; this page only covers how a module _attaches_ one (the inline-vs-`Object.assign` patterns [above](#the-plugin-key--how-a-module-ships-its-file-conventions)) and how extraction merges them (`extractPluginsFromModules`, first-occurrence-wins). For the contract itself, go to:
 
-- **[Building a plugin](/docs/extend/build-a-plugin#the-codegen-plugin-contract)**, the build-your-own loop: the `CodegenPlugin` contract, targets, categories, discover patterns, builder extensions, scaffolds, and validators, plus the smaller per-feature seams (custom field type, operator, adapter, block) you'll reach for far more often.
+- **[Building a plugin](/docs/guides/build-a-plugin#the-codegen-plugin-contract)**, the build-your-own loop: the `CodegenPlugin` contract, targets, categories, discover patterns, builder extensions, scaffolds, and validators, plus the smaller per-feature seams (custom field type, operator, adapter, block) you'll reach for far more often.
 - **[Codegen → the `CodegenPlugin` API](/docs/code/codegen#extending-codegen-the-codegenplugin-api)**, the reference for every type: `CodegenTargetContribution`, `CategoryDeclaration`, `DiscoverPattern`, and the registry/scaffold surfaces.
 
 All of these types are exported from **`questpie/codegen`**, the public entry for plugin authors.
@@ -322,6 +322,6 @@ import type {
 - [Fields](/docs/schema/fields), custom field types a module adds to the `f` proxy.
 - [Routes](/docs/code/routes) and [Jobs](/docs/code/jobs), other categories a module contributes.
 - [Seeds](/docs/schema/seeds), bootstrap and demo data a module can contribute.
-- [Building a plugin](/docs/extend/build-a-plugin), author the `CodegenPlugin` a module ships, plus the smaller per-feature seams (custom field type, operator, adapter, block).
+- [Building a plugin](/docs/guides/build-a-plugin), author the `CodegenPlugin` a module ships, plus the smaller per-feature seams (custom field type, operator, adapter, block).
 - [Codegen](/docs/code/codegen), the pipeline that reads `modules.ts`, merges modules, and the full `CodegenPlugin` API reference.
 - Runnable example: [`examples/toy-factory-backend`](https://github.com/questpie/questpie/tree/main/examples/toy-factory-backend), a project whose `modules.ts` depends on `adminModule`, `openApiModule`, and `workflowsModule`.

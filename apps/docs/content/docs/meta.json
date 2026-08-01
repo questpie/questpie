@@ -9,10 +9,8 @@
 		"concepts",
 		"ship",
 		"client",
-		"recipes",
 		"adapters",
 		"admin",
-		"agents",
-		"extend"
+		"agents"
 	]
 }

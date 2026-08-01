@@ -1,1 +1,11 @@
-{ "title": "Guides", "pages": ["connect-an-agent"] }
+{
+	"title": "Guides",
+	"pages": [
+		"index",
+		"connect-an-agent",
+		"collaborative-docs",
+		"debug-a-slow-request",
+		"build-a-plugin",
+		"multi-tenancy"
+	]
+}

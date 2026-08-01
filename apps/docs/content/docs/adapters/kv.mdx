@@ -303,7 +303,7 @@ export class MyKVAdapter implements KVAdapter {
 }
 ```
 
-Wire it under `kv.adapter` exactly like the built-ins. The five core methods are required; the three tag methods are optional. `ttl` is always in **seconds**. For the full pattern that applies to every adapter kind, see [Building a plugin](/docs/extend/build-a-plugin).
+Wire it under `kv.adapter` exactly like the built-ins. The five core methods are required; the three tag methods are optional. `ttl` is always in **seconds**. For the full pattern that applies to every adapter kind, see [Building a plugin](/docs/guides/build-a-plugin).
 
 ## TypeScript
 
@@ -319,5 +319,5 @@ import type { KVAdapter, KVConfig } from "questpie/kv";
 
 - [Configuration](/docs/ship/configuration), where `kv` is wired into `questpie.config.ts` (`runtimeConfig`).
 - [Adapters overview](/docs/adapters), what an adapter is and the full list of swappable backends.
-- [Building a plugin](/docs/extend/build-a-plugin), the general pattern for implementing any adapter contract.
+- [Building a plugin](/docs/guides/build-a-plugin), the general pattern for implementing any adapter contract.
 - [Services](/docs/code/services), `ctx.kv` is a core service; how the service context is assembled.

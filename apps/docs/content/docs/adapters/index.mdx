@@ -34,10 +34,10 @@ You select an adapter once, in `questpie.config.ts` (or the `.build({ ... })` ca
 
 ## Custom adapters
 
-Every adapter is defined by a public contract, including `QueueAdapter`, `SearchAdapter`, realtime `ChangeBroker`, `StorageConfig`, `MailAdapter`, and `KVAdapter`; the built-ins are implementations of those contracts. To back a concern with infrastructure the built-ins don't cover, implement the matching contract and wire it into its config slot. The full build-your-own loop lives in [Building a plugin](/docs/extend/build-a-plugin).
+Every adapter is defined by a public contract, including `QueueAdapter`, `SearchAdapter`, realtime `ChangeBroker`, `StorageConfig`, `MailAdapter`, and `KVAdapter`; the built-ins are implementations of those contracts. To back a concern with infrastructure the built-ins don't cover, implement the matching contract and wire it into its config slot. The full build-your-own loop lives in [Building a plugin](/docs/guides/build-a-plugin).
 
 ## Related
 
 - [Configuration](/docs/ship/configuration), where every adapter slot lives and how it's wired.
-- [Building a plugin](/docs/extend/build-a-plugin), implement any adapter contract for a custom backend.
+- [Building a plugin](/docs/guides/build-a-plugin), implement any adapter contract for a custom backend.
 - [Jobs](/docs/code/jobs) · [Search](/docs/concepts/search) · [Realtime](/docs/concepts/realtime) · [Storage](/docs/concepts/storage) · [Emails](/docs/code/emails) · [KV](/docs/concepts/kv) · [Sandboxed code](/docs/concepts/sandboxed-code), the concepts each adapter implements.

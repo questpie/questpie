@@ -403,7 +403,7 @@ class MyAdapter implements QueueAdapter {
 // .build({ queue: { adapter: new MyAdapter() } })
 ```
 
-This is the QUESTPIE principle in action: **core, modules, and your own code reach the queue through one contract**. The full "build your own adapter" loop, across every adapter kind, lives in [Building a plugin](/docs/extend/build-a-plugin).
+This is the QUESTPIE principle in action: **core, modules, and your own code reach the queue through one contract**. The full "build your own adapter" loop, across every adapter kind, lives in [Building a plugin](/docs/guides/build-a-plugin).
 
 ## TypeScript
 
@@ -432,5 +432,5 @@ import type {
 
 - [Jobs](/docs/code/jobs), the feature this adapter serves: `job()`, dispatch, the handler context, and the worker entrypoints. Start here.
 - [Configuration](/docs/ship/configuration), the `.build({ ... })` model and runtime-compatibility checks that read the adapter.
-- [Building a plugin](/docs/extend/build-a-plugin), implement `QueueAdapter` (and the other adapter contracts) for any backend.
+- [Building a plugin](/docs/guides/build-a-plugin), implement `QueueAdapter` (and the other adapter contracts) for any backend.
 - [Adapters](/docs/adapters), the full list of swappable backends (queue, search, realtime, storage, email, KV).
