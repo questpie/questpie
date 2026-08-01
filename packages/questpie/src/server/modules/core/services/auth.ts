@@ -30,11 +30,13 @@ export default service({
 			secret: app.config.secret,
 			...authOptions,
 			plugins: [
-				...(authOptions.plugins ?? []),
+				// Better Auth initializes plugins in array order. Bind only the
+				// framework adapter so a later user replacement fails closed.
 				createAuthTransactionalQueuePlugin({
 					jobs,
 					getQueue: () => app.queue,
 				}),
+				...(authOptions.plugins ?? []),
 			],
 			database: drizzleAdapter(createAuthTransactionalDatabase(app.db), {
 				provider: "pg",

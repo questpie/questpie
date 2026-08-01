@@ -82,16 +82,17 @@ function createAuthTransactionalQueuePublish(options: {
 			);
 		}
 
-		const registered = Object.values(options.jobs).find(
-			(job) => job.name === definition.name,
+		const registered = Object.entries(options.jobs).find(
+			([, job]) => job === definition,
 		);
-		if (registered !== definition) {
+		if (!registered) {
 			throw new Error(
 				`QUESTPIE: Auth transactional Queue job "${definition.name}" is not registered by this app`,
 			);
 		}
 
-		const client = options.getQueue()[definition.name];
+		const [registrationKey] = registered;
+		const client = options.getQueue()[registrationKey];
 		if (!client) {
 			throw new Error(
 				`QUESTPIE: Auth transactional Queue job "${definition.name}" has no Queue client`,

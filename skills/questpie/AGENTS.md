@@ -4113,7 +4113,7 @@ Job handlers receive the base `AppContext` (see [Handler Context](#handler-conte
 
 Jobs require a queue adapter in `questpie.config.ts` (`runtimeConfig({ queue: { adapter } })`). Adapter shapes (pg-boss, BullMQ, Cloudflare Queues) and connection options: `references/infrastructure-adapters.md`.
 
-Email delivery is an application recipe, not a second subsystem: define a typed send-mail Job, call `email.sendTemplate()` in its handler, and dispatch it with `queue.<job>.publish()`. There is no `email.enqueueTemplate()` or mail-specific outbox. Avoid secret-bearing Queue payloads; generic payload encryption is a separate Queue security follow-up.
+Email delivery is an application recipe, not a second subsystem: define a typed send-mail Job, call `email.sendTemplate()` in its handler, and dispatch it with `queue.<job>.publish()`. There is no `email.enqueueTemplate()` or mail-specific outbox.
 
 When a Better Auth mutation and its verification dispatch must commit atomically,
 use `withAuthTransactionalQueue()` from `questpie/auth` inside a Better Auth

@@ -7,6 +7,7 @@ import {
 	test,
 } from "bun:test";
 
+import type { BetterAuthPlugin } from "better-auth";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -19,6 +20,12 @@ import { runTestDbMigrations } from "../utils/test-db.js";
 
 const sendVerificationJob = job({
 	name: "send-auth-verification",
+	schema: z.object({ verificationId: z.string(), token: z.string() }),
+	handler: async () => {},
+});
+
+const collidingRegistrationJob = job({
+	name: "different-auth-job",
 	schema: z.object({ verificationId: z.string(), token: z.string() }),
 	handler: async () => {},
 });
@@ -349,5 +356,101 @@ describe("Auth transactional Queue bridge", () => {
 		expect(Reflect.ownKeys(context).map((key) => String(key))).not.toContain(
 			"Symbol(questpie.authTransactionalQueueRuntime)",
 		);
+	});
+
+	test("fails closed when a user plugin replaces the framework-owned Auth adapter", async () => {
+		await setup.cleanup();
+		const replaceAdapterPlugin = {
+			id: "replace-framework-auth-adapter",
+			init(context) {
+				const frameworkAdapter = context.adapter;
+				return {
+					context: {
+						adapter: {
+							...frameworkAdapter,
+							transaction: async (callback) => callback(frameworkAdapter),
+						},
+					},
+				};
+			},
+		} satisfies BetterAuthPlugin;
+		setup = await buildMockApp(
+			{
+				collections: { verification },
+				jobs: { sendVerification: sendVerificationJob },
+				auth: { plugins: [replaceAdapterPlugin] },
+			},
+			{ secret: "test-auth-queue-secret-at-least-32-bytes" },
+		);
+		await runTestDbMigrations(setup.app);
+		const context = await setup.app.auth.$context;
+
+		await expect(
+			withAuthTransactionalQueue({ context }, async ({ auth, publish }) => {
+				await auth.create({
+					model: "verification",
+					data: verificationData("verification-replaced-adapter"),
+					forceAllowId: true,
+				});
+				await publish(
+					sendVerificationJob,
+					{
+						verificationId: "verification-replaced-adapter",
+						token: "raw-secret-token",
+					},
+					{ idempotencyKey: "auth-verification:replaced-adapter" },
+				);
+				throw new Error("hostile adapter bypassed the framework transaction");
+			}),
+		).rejects.toThrow(
+			"Auth transactional Queue bridge is unavailable on this Auth context",
+		);
+
+		expect(
+			await context.adapter.findOne({
+				model: "verification",
+				where: [{ field: "id", value: "verification-replaced-adapter" }],
+			}),
+		).toBeNull();
+		expect(
+			await setup.app.db.select().from(questpieQueueDispatchTable),
+		).toEqual([]);
+		expect(setup.app.mocks.queue.getJobs()).toEqual([]);
+	});
+
+	test("publishes through the matched registration key when a job name collides", async () => {
+		await setup.cleanup();
+		setup = await buildMockApp(
+			{
+				collections: { verification },
+				jobs: {
+					safeVerification: sendVerificationJob,
+					"send-auth-verification": collidingRegistrationJob,
+				},
+			},
+			{ secret: "test-auth-queue-secret-at-least-32-bytes" },
+		);
+		await runTestDbMigrations(setup.app);
+		const context = await setup.app.auth.$context;
+
+		await withAuthTransactionalQueue({ context }, async ({ publish }) =>
+			publish(
+				sendVerificationJob,
+				{
+					verificationId: "verification-registration-collision",
+					token: "raw-secret-token",
+				},
+				{ idempotencyKey: "auth-verification:registration-collision" },
+			),
+		);
+
+		expect(setup.app.mocks.queue.getJobs()).toMatchObject([
+			{ name: "send-auth-verification" },
+		]);
+		expect(
+			await setup.app.db
+				.select({ jobName: questpieQueueDispatchTable.jobName })
+				.from(questpieQueueDispatchTable),
+		).toEqual([{ jobName: "send-auth-verification" }]);
 	});
 });
