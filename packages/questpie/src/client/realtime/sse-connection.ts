@@ -16,6 +16,7 @@ type TopologyResource = {
 	desiredPayload(): Record<string, unknown>;
 	onEvent(event: RealtimeSseEvent): void;
 	onError(error: Error): void;
+	onEpochEnd?(error: Error): void;
 };
 
 type ControlSession = {
@@ -96,6 +97,7 @@ export class SseConnectionManager {
 		desiredPayload(): Record<string, unknown>;
 		onEvent(event: RealtimeSseEvent): void;
 		onError(error: Error): void;
+		onEpochEnd?(error: Error): void;
 	}): () => void {
 		return this.register(options.id, { kind: "channel", ...options });
 	}
@@ -325,20 +327,30 @@ export class SseConnectionManager {
 			await this.readStream(response.body);
 			throw new Error("Realtime stream closed");
 		} catch (error) {
-			if (!this.hasDemand()) return;
 			const normalized = normalizedError(error);
+			if (!this.hasDemand()) return;
 			if (normalized instanceof PermanentInitialSseError) {
 				this.rejectSessionWaiters(normalized);
 				this.notifyAll(normalized);
 				this.reconnectPending = false;
 				return;
 			}
-			if (normalized.name === "AbortError" && !this.watchdogTriggered) return;
+			if (normalized.name === "AbortError" && !this.watchdogTriggered) {
+				if (this.reconnectPending) {
+					for (const resource of this.resources.values()) {
+						resource.onEpochEnd?.(normalized);
+					}
+				}
+				return;
+			}
 			if (
 				!this.watchdogTriggered &&
 				normalized.message !== "Realtime stream closed"
 			) {
 				this.notifyAll(normalized);
+			}
+			for (const resource of this.resources.values()) {
+				resource.onEpochEnd?.(normalized);
 			}
 			const retryBaseMs = this.options.retryBaseMs ?? 1000;
 			const maxRetryMs = this.options.maxRetryMs ?? 30_000;

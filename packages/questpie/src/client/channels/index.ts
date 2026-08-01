@@ -7,6 +7,7 @@ import {
 	type PusherRealtimeConfig,
 } from "../realtime/pusher-connection.js";
 import type { SseConnectionManager } from "../realtime/sse-connection.js";
+import { notifyChannelConsumer } from "./consumer-callback.js";
 import {
 	BoundedChannelQueue,
 	channelSlowConsumerError,
@@ -21,6 +22,7 @@ import {
 	type ChannelConnectionInput,
 	type ChannelPublishReceipt,
 	type ChannelsClient,
+	type ChannelPresenceOptions,
 	type ChannelSubscribeOptions,
 	type ChannelTransportMessage,
 } from "./types.js";
@@ -32,6 +34,7 @@ export type {
 	ChannelPublishInput,
 	ChannelPublishReceipt,
 	ChannelsClient,
+	ChannelPresenceOptions,
 	ChannelSubscribeOptions,
 } from "./types.js";
 
@@ -199,6 +202,7 @@ export function createChannelsAPI<
 				) => void;
 				const subscribeOptions = (hasParams ? args[2] : args[1]) as
 					| ChannelSubscribeOptions
+					| ChannelPresenceOptions
 					| undefined;
 				const marker = {};
 				const subscriptionGeneration = generation;
@@ -218,7 +222,10 @@ export function createChannelsAPI<
 					})
 					.catch((error) => {
 						pending.delete(marker);
-						subscribeOptions?.onError?.(normalizedError(error));
+						notifyChannelConsumer(
+							subscribeOptions?.onError,
+							normalizedError(error),
+						);
 					});
 				return () => {
 					stopped = true;
@@ -275,6 +282,7 @@ export function createChannelsAPI<
 						const params = (hasParams ? args[0] : {}) as Record<string, string>;
 						const iterOptions = (hasParams ? args[1] : args[0]) as
 							| ChannelSubscribeOptions
+							| ChannelPresenceOptions
 							| undefined;
 						return (
 							handle as { subscribe: (...args: unknown[]) => () => void }
@@ -293,6 +301,7 @@ export function createChannelsAPI<
 				const params = (hasParams ? args[0] : {}) as Record<string, string>;
 				const presenceOptions = (hasParams ? args[1] : args[0]) as
 					| ChannelSubscribeOptions
+					| ChannelPresenceOptions
 					| undefined;
 				return selected.presence(
 					connectionInput(registryKey, descriptor, params),
@@ -307,6 +316,7 @@ export function createChannelsAPI<
 				) => void;
 				const subscribeOptions = (hasParams ? args[2] : args[1]) as
 					| ChannelSubscribeOptions
+					| ChannelPresenceOptions
 					| undefined;
 				const marker = {};
 				const subscriptionGeneration = generation;
@@ -326,7 +336,10 @@ export function createChannelsAPI<
 					})
 					.catch((error) => {
 						pending.delete(marker);
-						subscribeOptions?.onError?.(normalizedError(error));
+						notifyChannelConsumer(
+							subscribeOptions?.onError,
+							normalizedError(error),
+						);
 					});
 				return () => {
 					stopped = true;
@@ -347,6 +360,7 @@ export function createChannelsAPI<
 						const params = (hasParams ? args[0] : {}) as Record<string, string>;
 						const iterOptions = (hasParams ? args[1] : args[0]) as
 							| ChannelSubscribeOptions
+							| ChannelPresenceOptions
 							| undefined;
 						return (
 							handle as {

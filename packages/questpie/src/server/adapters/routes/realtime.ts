@@ -1988,6 +1988,13 @@ export async function realtimeSubscribe(
 									}
 								: {}),
 							sink: subscriptionSink,
+							onReady: async () => {
+								await subscriptionSink.writeControl(
+									encodeSseEvent("channel_ready", {
+										channelSubscriptionId: channel.id,
+									}),
+								);
+							},
 							lastEventId: channel.lastEventId,
 							encodeFrame: (frame) => transport!.encodeChannelFrame(frame),
 							...(channel.presence

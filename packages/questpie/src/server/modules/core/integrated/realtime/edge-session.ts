@@ -70,9 +70,11 @@ export class RealtimeBindingOutputGate implements ClientSink {
 	private state: "pending" | "active" | "closed" = "pending";
 	private latest: Uint8Array | null = null;
 	private ordered: PendingOutput[] = [];
+	private bufferedOrderedEvents = 0;
 	private bufferedBytes = 0;
 	private operation: Promise<void> = Promise.resolve();
 	private failure: unknown;
+	private controlWritten = false;
 
 	constructor(
 		private readonly sink: ClientSink,
@@ -118,6 +120,35 @@ export class RealtimeBindingOutputGate implements ClientSink {
 		}
 	}
 
+	/** Queue one routing-only control frame without consuming application quotas. */
+	writeControl(frame: Uint8Array): Promise<SinkWriteResult> {
+		if (this.controlWritten) {
+			return Promise.reject(
+				new Error("Realtime binding control frame duplicated"),
+			);
+		}
+		if (frame.byteLength > 1024) {
+			return Promise.reject(
+				new Error("Realtime binding control frame too large"),
+			);
+		}
+		this.controlWritten = true;
+		if (this.state === "closed") {
+			return Promise.resolve({ status: "accepted", bufferedBytes: null });
+		}
+		if (this.state === "active") {
+			return this.run(() => this.sink.write(frame, "ordered-channel-event"));
+		}
+		this.ordered.push({
+			frame,
+			delivery: "ordered-channel-event",
+		});
+		return Promise.resolve({
+			status: "accepted",
+			bufferedBytes: this.bufferedBytes,
+		});
+	}
+
 	close(reason: ClientCloseReason): Promise<void> {
 		if (this.state === "pending") {
 			const error = new Error(
@@ -139,6 +170,7 @@ export class RealtimeBindingOutputGate implements ClientSink {
 		const ordered = this.ordered;
 		this.latest = null;
 		this.ordered = [];
+		this.bufferedOrderedEvents = 0;
 		this.bufferedBytes = 0;
 		void this.run(async () => {
 			if (latest) await this.sink.write(latest, "latest-snapshot");
@@ -153,6 +185,7 @@ export class RealtimeBindingOutputGate implements ClientSink {
 		this.state = "closed";
 		this.latest = null;
 		this.ordered = [];
+		this.bufferedOrderedEvents = 0;
 		this.bufferedBytes = 0;
 		await this.operation.catch(() => {});
 	}
@@ -163,10 +196,11 @@ export class RealtimeBindingOutputGate implements ClientSink {
 			this.latest = frame;
 			this.bufferedBytes += frame.byteLength;
 		} else {
-			if (this.ordered.length >= this.options.maximumOrderedEvents) {
+			if (this.bufferedOrderedEvents >= this.options.maximumOrderedEvents) {
 				throw new Error("Staged realtime binding event buffer overflow");
 			}
 			this.ordered.push({ frame, delivery });
+			this.bufferedOrderedEvents += 1;
 			this.bufferedBytes += frame.byteLength;
 		}
 		if (this.bufferedBytes > this.options.maximumBufferedBytes) {
