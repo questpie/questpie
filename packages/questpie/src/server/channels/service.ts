@@ -1,7 +1,12 @@
 import type { z } from "zod";
 
-import type { AppContext } from "#questpie/server/config/app-context.js";
+import {
+	FRAMEWORK_CONTEXT_KEYS,
+	SERVICE_CONTEXT_VIRTUAL_KEYS,
+	type AppContext,
+} from "#questpie/server/config/app-context.js";
 import type { Principal } from "#questpie/server/config/context.js";
+import type { AuthorityActor } from "#questpie/server/modules/core/integrated/crdt/authority.js";
 import type {
 	AppendChannelEventInput,
 	AppendChannelEventOptions,
@@ -68,16 +73,23 @@ export type ChannelAuthorityRevocationReceipt = Readonly<{
 
 export type ChannelServiceContext = AppContext & {
 	accessMode?: string;
+	actor?: AuthorityActor;
 	db?: AppendChannelEventOptions["db"];
 	principal?: Principal;
 };
 
 type StoredChannelServiceContext = AppContext & {
 	accessMode?: string;
+	actor?: AuthorityActor;
 	db?: AppendChannelEventOptions["db"];
 	principal?: Principal;
 	session?: unknown;
 };
+
+type ChannelContextSnapshot = Readonly<{
+	context: StoredChannelServiceContext;
+	virtualKeys: readonly string[];
+}>;
 
 type EventInput<TDefinition extends AnyChannelDefinition> = {
 	[TEvent in keyof ChannelEventsOf<TDefinition> & string]: {
@@ -127,6 +139,96 @@ function isSystemContext(context: StoredChannelServiceContext): boolean {
 	return !context.session && !context.principal;
 }
 
+function cloneAuthorityValue<T>(
+	value: T,
+	seen: WeakMap<object, unknown> = new WeakMap(),
+): T {
+	if (value instanceof Date) return new Date(value.getTime()) as T;
+	if (Array.isArray(value)) {
+		const cached = seen.get(value);
+		if (cached) return cached as T;
+		const clone: unknown[] = [];
+		seen.set(value, clone);
+		for (const item of value) clone.push(cloneAuthorityValue(item, seen));
+		return Object.freeze(clone) as T;
+	}
+	if (!value || typeof value !== "object") return value;
+	const prototype = Object.getPrototypeOf(value);
+	if (prototype !== Object.prototype && prototype !== null) return value;
+	const cached = seen.get(value);
+	if (cached) return cached as T;
+	const clone = Object.create(prototype) as Record<PropertyKey, unknown>;
+	seen.set(value, clone);
+	for (const property of Reflect.ownKeys(value)) {
+		const descriptor = Object.getOwnPropertyDescriptor(value, property);
+		if (!descriptor) continue;
+		Object.defineProperty(clone, property, {
+			...descriptor,
+			...("value" in descriptor
+				? { value: cloneAuthorityValue(descriptor.value, seen) }
+				: {}),
+		});
+	}
+	return Object.freeze(clone) as T;
+}
+
+function snapshotChannelContext(
+	context: ChannelServiceContext,
+): ChannelContextSnapshot {
+	const source = context;
+	const snapshot = { ...context } as StoredChannelServiceContext &
+		Record<PropertyKey, unknown>;
+	for (const key of FRAMEWORK_CONTEXT_KEYS) {
+		// Resolving the service currently under construction would recurse.
+		// It is injected as `channels: this` in each operation context below.
+		if (key === "channels" || Object.hasOwn(snapshot, key)) continue;
+		const value = Reflect.get(source, key);
+		if (value !== undefined) snapshot[key] = value;
+	}
+	snapshot.session = cloneAuthorityValue(snapshot.session);
+	snapshot.principal = cloneAuthorityValue(snapshot.principal);
+	snapshot.actor = cloneAuthorityValue(snapshot.actor);
+	const virtualKeys = Reflect.get(
+		source,
+		SERVICE_CONTEXT_VIRTUAL_KEYS,
+	) as unknown;
+
+	/*
+	 * Authority-bearing framework fields must be fixed for the lifetime of this
+	 * request-bound facade. Unknown application namespaces may remain lazy, but
+	 * must never become a back door for later mutation of session/principal/db.
+	 */
+	return {
+		context: new Proxy(snapshot, {
+			get(target, property, receiver) {
+				if (Reflect.has(target, property)) {
+					return Reflect.get(target, property, receiver);
+				}
+				if (
+					typeof property === "string" &&
+					FRAMEWORK_CONTEXT_KEYS.has(property)
+				) {
+					return undefined;
+				}
+				return Reflect.get(source, property);
+			},
+			has(target, property) {
+				if (Reflect.has(target, property)) return true;
+				if (
+					typeof property === "string" &&
+					FRAMEWORK_CONTEXT_KEYS.has(property)
+				) {
+					return false;
+				}
+				return Reflect.has(source, property);
+			},
+		}),
+		virtualKeys: Array.isArray(virtualKeys)
+			? virtualKeys.filter((key): key is string => typeof key === "string")
+			: [],
+	};
+}
+
 /** Request-bound typed facade over the shared realtime client transport. */
 export class ChannelsService<
 	TChannels extends ChannelDefinitions = ChannelDefinitions,
@@ -137,10 +239,13 @@ export class ChannelsService<
 		context: ChannelServiceContext,
 		private readonly security: ChannelSecurityConfig = {},
 	) {
-		this.context = { ...context };
+		const snapshot = snapshotChannelContext(context);
+		this.context = snapshot.context;
+		this.virtualContextKeys = snapshot.virtualKeys;
 	}
 
 	private readonly context: StoredChannelServiceContext;
+	private readonly virtualContextKeys: readonly string[];
 
 	getDefinition<TChannel extends keyof TChannels & string>(
 		channel: TChannel,
@@ -206,10 +311,9 @@ export class ChannelsService<
 				`Subscription to channel "${channel}" is denied`,
 			);
 		}
-		return definition.presenceResolver({
-			...this.context,
-			params,
-		}) as ChannelPresenceOf<TChannels[TChannel]>;
+		return definition.presenceResolver(
+			this.operationContext(params),
+		) as ChannelPresenceOf<TChannels[TChannel]>;
 	}
 
 	/**
@@ -351,7 +455,7 @@ export class ChannelsService<
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		try {
 			const result = await Promise.race([
-				Promise.resolve(rule({ ...this.context, params })),
+				Promise.resolve(rule(this.operationContext(params))),
 				new Promise<false>((resolve) => {
 					timer = setTimeout(() => resolve(false), timeoutMs);
 				}),
@@ -362,5 +466,44 @@ export class ChannelsService<
 		} finally {
 			if (timer) clearTimeout(timer);
 		}
+	}
+
+	private operationContext(
+		params: Record<string, string>,
+	): ChannelServiceContext & { params: Record<string, string> } {
+		const source = this.context;
+		const snapshot = {
+			...this.context,
+			session: cloneAuthorityValue(this.context.session),
+			principal: cloneAuthorityValue(this.context.principal),
+			actor: cloneAuthorityValue(this.context.actor),
+			params,
+		};
+		Object.defineProperty(snapshot, "channels", {
+			configurable: true,
+			enumerable: true,
+			value: this,
+			writable: false,
+		});
+		const virtualKeys = this.virtualContextKeys;
+		for (const key of virtualKeys) {
+			if (Object.hasOwn(snapshot, key)) continue;
+			Object.defineProperty(snapshot, key, {
+				configurable: true,
+				enumerable: true,
+				get: () => Reflect.get(source, key),
+			});
+		}
+		return new Proxy(snapshot, {
+			get(target, property, receiver) {
+				if (Reflect.has(target, property)) {
+					return Reflect.get(target, property, receiver);
+				}
+				return Reflect.get(source, property);
+			},
+			has(target, property) {
+				return Reflect.has(target, property) || Reflect.has(source, property);
+			},
+		});
 	}
 }

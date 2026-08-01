@@ -60,7 +60,7 @@ bunx questpie generate
 | `.authorize({ subscribe, publish })`  | private    | explicit rule      | explicit rule, or `subscribe` when omitted |
 | `.presence(resolver)` after authorize | presence   | authorize first    | authorize first                            |
 
-Authorization receives the generated `AppContext` plus typed `params`. Use `session`, `collections`, `db`, and services directly. A false result, thrown error, or authorization timeout denies the operation. Server/system contexts may publish without a client publish grant; browser publishes still go through the framework route, authorization, rate limits, and Zod parsing.
+Authorization and presence receive the generated, request-scoped `AppContext` plus typed `params`. Use `session`, `collections`, `db`, and services directly. Application context extensions are present too, while framework-owned service keys cannot be replaced by an extension. Server publishing preserves the caller's database handle, including a hook transaction. A false result, thrown error, or authorization timeout denies the operation. Server/system contexts may publish without a client publish grant; browser publishes still go through the framework route, authorization, rate limits, and Zod parsing.
 
 ## Publish on the server
 
@@ -157,7 +157,13 @@ const stop = client.channels.chatRoom.subscribe(
 			console.log(message.data.active);
 		}
 	},
-	{ onError: console.error },
+	{
+		onReady: () => reconcileAuthoritativeRoom(roomId),
+		onError: (error) => {
+			markRoomReadOnly(roomId);
+			console.error(error);
+		},
+	},
 );
 
 const receipt = await client.channels.chatRoom.publish({
@@ -168,6 +174,22 @@ const receipt = await client.channels.chatRoom.publish({
 
 stop();
 ```
+
+`onReady` is a payload-free admission boundary, not a socket-open callback. It
+fires once for each successful subscription epoch, after current subscribe
+authorization and retained replay/catch-up complete. Replay events therefore
+arrive before `onReady`; later live events arrive through the normal message
+callback. A reconnect starts a new epoch and calls `onReady` again only after
+fresh authorization and replay. Denied admission, a replay gap, aborted setup,
+or calling `stop()` before admission never calls it.
+
+For protected cached data, keep the cache fenced after `onError`, then start an
+authoritative read from `onReady`. If a channel event arrives while that read is
+running, the message callback must schedule a trailing read; do not treat
+`onReady` as proof that no later invalidation can race with application I/O.
+Callback payloads intentionally expose neither authorization facts nor event
+content. Callback exceptions are isolated from other logical subscribers on the
+same physical connection.
 
 Client publish is server-mediated even on Pusher/Soketi: the request uses the same dynamic auth headers as other client calls, re-evaluates `publish` authorization, validates the event with Zod, enforces payload/origin/rate limits, and only then appends the ordered event.
 
@@ -250,6 +272,14 @@ export default runtimeConfig({
 ```
 
 The client discovers the selected transport from `/channels/config`; `client.channels.*` call sites do not change. After a managed-provider reconnect, the established subscription reauthorizes a bounded `/channels/replay` drain from its last applied event id. Live provider events arriving during that drain are buffered behind the replay cursor, then deduplicated and released in order.
+
+Both built-in transports implement the same `onReady` boundary. SSE receives a
+bounded, payload-free routing control frame only after server admission and
+ledger catch-up. Pusher/Soketi derives readiness from successful provider
+subscription plus the authorized replay drain. Provider connection state alone
+is never readiness. Leaving the provider's connected state ends the current
+epoch immediately and invalidates any pending replay; only a later successful
+subscription and fresh replay can admit the next epoch.
 
 Pusher signed-user authentication uses the current dynamic auth headers and
 cookies. If login or logout changes identity without replacing the browser

@@ -45,6 +45,9 @@ Authorization rules:
 - `.authorize(rule)` uses the rule for subscribe and as the publish fallback.
 - `.authorize({ subscribe, publish })` separates both permissions; omitted publish falls back to subscribe.
 - Server/system contexts may publish; browser publish always uses the framework route, authorization, rate limits, and Zod parsing.
+- Authorization and presence resolvers receive the full request-scoped `AppContext`,
+  including collections, services, application context extensions, and the caller's
+  database handle. Framework-owned context keys cannot be shadowed by an extension.
 
 ## Publish on the server
 
@@ -124,9 +127,16 @@ cut; reconnect and replay reauthorize against current application state.
 ## Client, presence, and TanStack Query
 
 ```ts
-const stop = client.channels.chatRoom.subscribe({ roomId }, (message) => {
-	if (message.event === "message") console.log(message.data.text);
-});
+const stop = client.channels.chatRoom.subscribe(
+	{ roomId },
+	(message) => {
+		if (message.event === "message") console.log(message.data.text);
+	},
+	{
+		onReady: reconcileAuthoritativeRoom,
+		onError: markRoomReadOnly,
+	},
+);
 
 await client.channels.chatRoom.publish({
 	params: { roomId },
@@ -142,6 +152,17 @@ const stopPresence = client.channels.chatRoom.subscribePresence(
 stop();
 stopPresence();
 ```
+
+`onReady` is provider-neutral and payload-free. It fires once per successful
+subscription epoch only after current authorization and replay/catch-up: replay
+events precede it and later live events use the normal callback. Reconnect
+freshly authorizes and replays before firing it again. Socket open alone is not
+readiness, and denial, replay gap, aborted setup, or stopping before admission
+does not fire it. Leaving Pusher/Soketi's connected state ends the epoch and
+invalidates any pending replay until fresh provider subscription and catch-up.
+Keep protected state fenced after `onError`; use `onReady` to
+start an authoritative read, and make the event callback schedule a trailing
+read when an invalidation races with that reconciliation.
 
 `presence()` returns one typed snapshot. `subscribePresence()` emits the initial and later rosters, and `presenceIter(params, { signal })` provides the async-generator form. Pusher/Soketi uses native membership; SSE uses Postgres leases across instances and deduplicates multiple connections by authenticated principal. Crash leave converges after the lease TTL.
 

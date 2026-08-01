@@ -7,15 +7,18 @@ import {
 	type PusherModule,
 	type PusherRealtimeConfig,
 } from "../realtime/pusher-connection.js";
+import { notifyChannelConsumer } from "./consumer-callback.js";
 import {
 	BoundedChannelQueue,
 	channelGapError,
 	channelSlowConsumerError,
 	OrderedChannelCursor,
 } from "./ordered-events.js";
+import { ChannelReadiness, ChannelReadyDelivery } from "./readiness.js";
 import type {
 	ChannelClientTransport,
 	ChannelConnectionInput,
+	ChannelPresenceOptions,
 	ChannelSubscribeOptions,
 	ChannelTransportMessage,
 } from "./types.js";
@@ -35,6 +38,7 @@ type Entry = {
 	subscribers: Set<(message: ChannelTransportMessage) => void>;
 	presenceSubscribers: Set<(members: readonly unknown[]) => void>;
 	errorCallbacks: Set<(error: Error) => void>;
+	readiness: ChannelReadiness;
 	cursor: OrderedChannelCursor;
 	replaying: boolean;
 	replayGeneration: number;
@@ -45,6 +49,7 @@ type Entry = {
 		resolve: (members: readonly unknown[]) => void;
 		reject: (error: Error) => void;
 	}>;
+	providerEpochActive: boolean;
 };
 
 type AuthResponse = {
@@ -96,18 +101,28 @@ export class PusherChannelTransport implements ChannelClientTransport {
 		options: ChannelSubscribeOptions = {},
 	): () => void {
 		const entry = this.ensureEntry(input);
-		entry.subscribers.add(callback);
-		if (options.onError) entry.errorCallbacks.add(options.onError);
+		const delivery = new ChannelReadyDelivery(
+			entry.readiness,
+			callback,
+			options.onReady,
+			() => this.failEntry(entry, channelSlowConsumerError()),
+		);
+		entry.subscribers.add(delivery.accept);
+		const errorCallback = options.onError
+			? (error: Error) => notifyChannelConsumer(options.onError, error)
+			: undefined;
+		if (errorCallback) entry.errorCallbacks.add(errorCallback);
 
 		let stopped = false;
 		const stop = () => {
 			if (stopped) return;
 			stopped = true;
 			options.signal?.removeEventListener("abort", stop);
+			delivery.stop();
 			const current = this.entries.get(input.resolvedName);
 			if (!current) return;
-			current.subscribers.delete(callback);
-			if (options.onError) current.errorCallbacks.delete(options.onError);
+			current.subscribers.delete(delivery.accept);
+			if (errorCallback) current.errorCallbacks.delete(errorCallback);
 			if (
 				current.subscribers.size > 0 ||
 				current.presenceSubscribers.size > 0 ||
@@ -130,19 +145,30 @@ export class PusherChannelTransport implements ChannelClientTransport {
 			throw new Error("Channel does not expose presence");
 		}
 		const entry = this.ensureEntry(input);
-		entry.presenceSubscribers.add(callback);
-		if (options.onError) entry.errorCallbacks.add(options.onError);
-		if (entry.presence) callback(entry.presence);
+		const delivery = new ChannelReadyDelivery(
+			entry.readiness,
+			callback,
+			options.onReady,
+			() => this.failEntry(entry, channelSlowConsumerError()),
+			true,
+		);
+		entry.presenceSubscribers.add(delivery.accept);
+		const errorCallback = options.onError
+			? (error: Error) => notifyChannelConsumer(options.onError, error)
+			: undefined;
+		if (errorCallback) entry.errorCallbacks.add(errorCallback);
+		if (entry.presence) delivery.accept(entry.presence);
 
 		let stopped = false;
 		const stop = () => {
 			if (stopped) return;
 			stopped = true;
 			options.signal?.removeEventListener("abort", stop);
+			delivery.stop();
 			const current = this.entries.get(input.resolvedName);
 			if (!current) return;
-			current.presenceSubscribers.delete(callback);
-			if (options.onError) current.errorCallbacks.delete(options.onError);
+			current.presenceSubscribers.delete(delivery.accept);
+			if (errorCallback) current.errorCallbacks.delete(errorCallback);
 			if (
 				current.subscribers.size > 0 ||
 				current.presenceSubscribers.size > 0 ||
@@ -158,7 +184,7 @@ export class PusherChannelTransport implements ChannelClientTransport {
 
 	async presence(
 		input: ChannelConnectionInput,
-		options: ChannelSubscribeOptions = {},
+		options: ChannelPresenceOptions = {},
 	): Promise<readonly unknown[]> {
 		if (options.signal?.aborted) {
 			throw new Error("Channel presence aborted");
@@ -166,7 +192,10 @@ export class PusherChannelTransport implements ChannelClientTransport {
 		if (input.visibility !== "presence") {
 			throw new Error("Channel does not expose presence");
 		}
-		const stop = this.subscribe(input, () => {}, options);
+		const stop = this.subscribe(input, () => {}, {
+			signal: options.signal,
+			onError: options.onError,
+		});
 		const entry = this.entries.get(input.resolvedName)!;
 		if (entry.presence) {
 			stop();
@@ -201,11 +230,13 @@ export class PusherChannelTransport implements ChannelClientTransport {
 			subscribers: new Set(),
 			presenceSubscribers: new Set(),
 			errorCallbacks: new Set(),
+			readiness: new ChannelReadiness(),
 			cursor: new OrderedChannelCursor(),
 			replaying: true,
 			replayGeneration: 0,
 			pendingLive: new BoundedChannelQueue(),
 			presenceWaiters: new Set(),
+			providerEpochActive: false,
 		};
 		this.entries.set(input.resolvedName, entry);
 		void this.mount(entry);
@@ -288,6 +319,7 @@ export class PusherChannelTransport implements ChannelClientTransport {
 				lane: "channel",
 				authorize: (socketId, channelName) =>
 					this.authorize(socketId, channelName),
+				onConnectionEpochEnd: () => this.endConnectionEpoch(entry),
 				...(this.options.config.userAuthentication === true
 					? {
 							authenticateUser: (socketId: string) =>
@@ -309,10 +341,16 @@ export class PusherChannelTransport implements ChannelClientTransport {
 				this.handleMessage(entry, payload),
 			);
 			channel.bind("pusher:subscription_error", (error) =>
-				this.notify(entry, normalizedError(error)),
+				this.failEntry(entry, normalizedError(error)),
 			);
 			channel.bind("pusher:subscription_succeeded", (members) => {
 				try {
+					if (entry.readiness.isReady) {
+						this.notify(entry, new Error("Channel subscription epoch ended"));
+					}
+					entry.readiness.end();
+					entry.providerEpochActive = true;
+					entry.pendingLive.clear();
 					if (entry.input.visibility === "presence") {
 						this.setPresence(entry, collectMembers(members, channel));
 					}
@@ -339,6 +377,7 @@ export class PusherChannelTransport implements ChannelClientTransport {
 
 	private handleMessage(entry: Entry, payload: unknown): void {
 		try {
+			if (!entry.providerEpochActive) return;
 			const envelope = deserializeCompatibleTypedEventWire<{
 				eventId?: unknown;
 				event?: unknown;
@@ -420,6 +459,8 @@ export class PusherChannelTransport implements ChannelClientTransport {
 			) {
 				return;
 			}
+			entry.readiness.admit();
+			if (!this.isReplayCurrent(entry, generation)) return;
 			entry.replaying = false;
 			while (entry.pendingLive.length > 0) {
 				if (!this.isReplayCurrent(entry, generation)) return;
@@ -435,9 +476,24 @@ export class PusherChannelTransport implements ChannelClientTransport {
 	private isReplayCurrent(entry: Entry, generation: number): boolean {
 		return (
 			!this.destroyed &&
+			entry.providerEpochActive &&
 			entry.replayGeneration === generation &&
 			this.entries.get(entry.input.resolvedName) === entry
 		);
+	}
+
+	private endConnectionEpoch(entry: Entry): void {
+		if (
+			this.entries.get(entry.input.resolvedName) !== entry ||
+			!entry.providerEpochActive
+		) {
+			return;
+		}
+		entry.providerEpochActive = false;
+		entry.replayGeneration += 1;
+		entry.replaying = false;
+		entry.pendingLive.clear();
+		this.notify(entry, new Error("Channel connection epoch ended"));
 	}
 
 	private parseReplayMessage(value: unknown): ChannelTransportMessage {
@@ -490,16 +546,22 @@ export class PusherChannelTransport implements ChannelClientTransport {
 	}
 
 	private notify(entry: Entry, error: Error): void {
-		for (const callback of entry.errorCallbacks) callback(error);
+		entry.readiness.end();
+		const errorCallbacks = Array.from(entry.errorCallbacks);
+		for (const callback of errorCallbacks) {
+			notifyChannelConsumer(callback, error);
+		}
 		const waiters = [...entry.presenceWaiters];
 		entry.presenceWaiters.clear();
 		for (const waiter of waiters) waiter.reject(error);
 	}
 
 	private unmount(name: string, entry: Entry): void {
+		entry.providerEpochActive = false;
 		entry.replayGeneration += 1;
 		entry.replaying = false;
 		entry.pendingLive.clear();
+		entry.readiness.destroy();
 		entry.subscription?.release();
 		entry.subscription = null;
 		entry.channel = null;

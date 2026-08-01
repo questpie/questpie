@@ -2,10 +2,12 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { z } from "zod";
 
-import { collection } from "../../src/exports/index.js";
+import { collection, service } from "../../src/exports/index.js";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
+import { realtimeSubscribe } from "../../src/server/adapters/routes/realtime.js";
 import { channel } from "../../src/server/channels/channel-builder.js";
 import { ChannelTokenBucketLimiter } from "../../src/server/channels/security.js";
+import { ChannelsService } from "../../src/server/channels/service.js";
 import { questpieChannelAuthorityRevocationTable } from "../../src/server/modules/core/integrated/realtime/collection.js";
 import type { RealtimeObservation } from "../../src/server/modules/core/integrated/realtime/observer.js";
 import type { PusherProvider } from "../../src/server/modules/core/integrated/realtime/pusher-transport.js";
@@ -21,6 +23,16 @@ import {
 } from "../../src/shared/typed-wire.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 import { runTestDbMigrations } from "../utils/test-db.js";
+
+function requireRecord(
+	value: unknown,
+	label: string,
+): Record<PropertyKey, unknown> {
+	if (!value || typeof value !== "object") {
+		throw new Error(`${label} must be an object`);
+	}
+	return value as Record<PropertyKey, unknown>;
+}
 
 function channelRequest(
 	path: string,
@@ -165,6 +177,9 @@ describe("channel module routes", () => {
 			channel: "presence-room-one",
 			members: [{ id: "member-1", roomId: "one" }],
 		});
+		expect(await readSseEvent(reader, state, "channel_ready")).toEqual({
+			channelSubscriptionId: "room-subscription",
+		});
 
 		const publishResponse = await handler(
 			channelRequest(
@@ -187,6 +202,310 @@ describe("channel module routes", () => {
 			data: { text: "hello" },
 		});
 		await reader.cancel();
+	});
+
+	test("gives subscribe, publish, and presence authorizers the full protected AppContext", async () => {
+		type Observation = {
+			phase: "subscribe" | "publish" | "presence";
+			full: boolean;
+			userId?: string;
+			policyId?: number;
+			facts?: Record<string, boolean>;
+		};
+		const observations: Observation[] = [];
+		let policyCreations = 0;
+		let policyDisposals = 0;
+		let appRef: Awaited<ReturnType<typeof buildMockApp>>["app"];
+		const observe = (phase: Observation["phase"], value: object) => {
+			const ctx = requireRecord(value, "channel context");
+			const collections = requireRecord(ctx.collections, "ctx.collections");
+			const actors = requireRecord(
+				collections.actors,
+				"ctx.collections.actors",
+			);
+			const services = requireRecord(ctx.services, "ctx.services");
+			const policy = requireRecord(services.policy, "ctx.services.policy");
+			const session = requireRecord(ctx.session, "ctx.session");
+			const user = requireRecord(session.user, "ctx.session.user");
+			const facts = {
+				app: ctx.app === appRef,
+				db: ctx.db === appRef.db,
+				collections: typeof actors.find === "function",
+				tables:
+					requireRecord(ctx.tables, "ctx.tables").actors ===
+					appRef.tables.actors,
+				queue: ctx.queue === appRef.queue,
+				services: policy.marker === "policy-service",
+				channels: ctx.channels instanceof ChannelsService,
+				extension: ctx.tenantId === "tenant-a",
+				request:
+					ctx.request instanceof Request &&
+					ctx.request.headers.get("x-channel-token") === "channel-token",
+				defaultLocale: ctx.defaultLocale === "en",
+				localeFallback: ctx.localeFallback === false,
+				stage: ctx.stage === "draft",
+				requestId:
+					ctx.requestId ===
+					(phase === "publish" ? "publish-request" : "stream-request"),
+				traceId:
+					ctx.traceId ===
+					(phase === "publish" ? "publish-trace" : "stream-trace"),
+			};
+			const full = Object.values(facts).every(Boolean);
+			observations.push({
+				phase,
+				full,
+				...(typeof user.id === "string" ? { userId: user.id } : {}),
+				...(typeof policy.id === "number" ? { policyId: policy.id } : {}),
+				...(!full ? { facts } : {}),
+			});
+			return full && user.id === "member-1";
+		};
+		const setup = await buildMockApp(
+			{
+				collections: {
+					actors: collection("actors").fields(({ f }) => ({
+						name: f.text().required(),
+					})),
+				},
+				services: {
+					policy: service()
+						.lifecycle("request")
+						.create(() => ({
+							marker: "policy-service",
+							id: ++policyCreations,
+						}))
+						.dispose(() => {
+							policyDisposals += 1;
+						}),
+				},
+				channels: {
+					room: channel("room-[roomId]")
+						.events({ message: z.object({ text: z.string() }) })
+						.authorize({
+							subscribe: (ctx) => observe("subscribe", ctx),
+							publish: (ctx) => observe("publish", ctx),
+						})
+						.presence((ctx) => {
+							if (!observe("presence", ctx)) {
+								throw new Error("Presence context is incomplete");
+							}
+							const context = requireRecord(ctx, "presence context");
+							const session = requireRecord(context.session, "ctx.session");
+							const user = requireRecord(session.user, "ctx.session.user");
+							return { id: String(user.id), roomId: ctx.params.roomId };
+						}),
+				},
+				config: {
+					app: {
+						context: async () => ({
+							tenantId: "tenant-a",
+							app: "shadow-app",
+							collections: "shadow-collections",
+							queue: "shadow-queue",
+							services: "shadow-services",
+							channels: "shadow-channels",
+						}),
+					},
+				},
+			},
+			{
+				app: { url: "https://app.example.com" },
+				realtime: { retentionDays: 0, rowLiveQueries: false },
+			},
+		);
+		appRef = setup.app;
+		cleanup = setup.cleanup;
+		await runTestDbMigrations(setup.app);
+		const handler = createFetchHandler(setup.app, {
+			getSession: async (request) =>
+				request.headers.get("x-user") === "member-1"
+					? {
+							user: { id: "member-1" },
+							session: { id: "session-1" },
+						}
+					: null,
+		});
+
+		const streamResponse = await handler(
+			channelRequest(
+				"realtime?stage=draft&localeFallback=false",
+				{
+					channels: [
+						{
+							id: "room-subscription",
+							channel: "room",
+							params: { roomId: "one" },
+						},
+						{
+							id: "second-room-subscription",
+							channel: "room",
+							params: { roomId: "two" },
+						},
+					],
+				},
+				{
+					headers: {
+						"x-user": "member-1",
+						"x-channel-token": "channel-token",
+						"x-request-id": "stream-request",
+						"x-trace-id": "stream-trace",
+					},
+				},
+			),
+		);
+		if (streamResponse.status !== 200) {
+			throw new Error(
+				`Authenticated realtime rejected: ${await streamResponse.text()} ${JSON.stringify(observations)}`,
+			);
+		}
+		await streamResponse.body?.cancel();
+		expect(
+			new Set(
+				observations
+					.filter(({ phase }) => phase !== "publish")
+					.map(({ policyId }) => policyId),
+			).size,
+		).toBe(1);
+		expect(policyCreations).toBe(1);
+		expect(policyDisposals).toBe(1);
+
+		const publishResponse = await handler(
+			channelRequest(
+				"channels/publish?stage=draft&localeFallback=false",
+				{
+					channel: "room",
+					params: { roomId: "one" },
+					event: "message",
+					data: { text: "hello" },
+				},
+				{
+					origin: "https://app.example.com",
+					cookie: true,
+					headers: {
+						"x-user": "member-1",
+						"x-channel-token": "channel-token",
+						"x-request-id": "publish-request",
+						"x-trace-id": "publish-trace",
+					},
+				},
+			),
+		);
+		expect(publishResponse.status).toBe(200);
+		expect(policyCreations).toBe(2);
+		expect(policyDisposals).toBe(1);
+		await publishResponse.json();
+		expect(policyDisposals).toBe(2);
+		expect(observations).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ phase: "subscribe", full: true }),
+				expect.objectContaining({ phase: "presence", full: true }),
+				expect.objectContaining({ phase: "publish", full: true }),
+			]),
+		);
+
+		const anonymousStream = await handler(
+			channelRequest("realtime", {
+				channels: [
+					{
+						id: "anonymous-room",
+						channel: "room",
+						params: { roomId: "one" },
+					},
+				],
+			}),
+		);
+		expect(anonymousStream.status).toBe(400);
+		const anonymousPublish = await handler(
+			channelRequest(
+				"channels/publish",
+				{
+					channel: "room",
+					params: { roomId: "one" },
+					event: "message",
+					data: { text: "denied" },
+				},
+				{ origin: "https://app.example.com", cookie: true },
+			),
+		);
+		expect(anonymousPublish.status).toBe(403);
+	});
+
+	test("shares and disposes the context-resolver request scope in direct realtimeSubscribe", async () => {
+		let policyCreations = 0;
+		let policyDisposals = 0;
+		const seenPolicyIds: number[] = [];
+		const setup = await buildMockApp(
+			{
+				services: {
+					policy: service()
+						.lifecycle("request")
+						.create(() => ({ id: ++policyCreations }))
+						.dispose(() => {
+							policyDisposals += 1;
+						}),
+				},
+				channels: {
+					room: channel("room-[roomId]")
+						.events({ message: z.object({ text: z.string() }) })
+						.authorize({
+							subscribe: (context) => {
+								const ctx = requireRecord(context, "channel context");
+								const services = requireRecord(ctx.services, "ctx.services");
+								const policy = requireRecord(
+									services.policy,
+									"ctx.services.policy",
+								);
+								if (typeof policy.id === "number")
+									seenPolicyIds.push(policy.id);
+								return true;
+							},
+						}),
+				},
+				config: {
+					app: {
+						context: async (context) => {
+							const ctx = requireRecord(context, "context");
+							const services = requireRecord(ctx.services, "context.services");
+							const policy = requireRecord(
+								services.policy,
+								"context.services.policy",
+							);
+							if (typeof policy.id !== "number") {
+								throw new Error("context.services.policy.id must be a number");
+							}
+							seenPolicyIds.push(policy.id);
+							return { tenantId: "tenant-a" };
+						},
+					},
+				},
+			},
+			{
+				app: { url: "https://app.example.com" },
+				realtime: { retentionDays: 0, rowLiveQueries: false },
+			},
+		);
+		cleanup = setup.cleanup;
+		await runTestDbMigrations(setup.app);
+
+		const response = await realtimeSubscribe(
+			setup.app,
+			channelRequest("realtime", {
+				channels: [
+					{
+						id: "room-subscription",
+						channel: "room",
+						params: { roomId: "one" },
+					},
+				],
+			}),
+			{},
+		);
+		expect(response.status).toBe(200);
+		await response.body?.cancel();
+		expect(new Set(seenPolicyIds)).toEqual(new Set([1]));
+		expect(policyCreations).toBe(1);
+		expect(policyDisposals).toBe(1);
 	});
 
 	test("keeps app context resolver reads system-scoped during fresh channel reauthorization", async () => {
@@ -290,6 +609,13 @@ describe("channel module routes", () => {
 							return { id: `member-${params.spaceId}` };
 						}),
 				},
+				config: {
+					app: {
+						context: async () => ({
+							allowedSpaces: new Set(allowedSpaces),
+						}),
+					},
+				},
 			},
 			{
 				app: { url: "https://app.example.com" },
@@ -306,9 +632,6 @@ describe("channel module routes", () => {
 					session: { id: "session-1" },
 				};
 			},
-			extendContext: async () => ({
-				allowedSpaces: new Set(allowedSpaces),
-			}),
 		});
 		const response = await handler(
 			channelRequest("realtime", {
@@ -655,6 +978,13 @@ describe("channel module routes", () => {
 							current.has(params.spaceId),
 					),
 				},
+				config: {
+					app: {
+						context: async () => ({
+							allowedSpaces: new Set(allowedSpaces),
+						}),
+					},
+				},
 			},
 			{
 				app: { url: "https://app.example.com" },
@@ -670,9 +1000,6 @@ describe("channel module routes", () => {
 			getSession: async () => ({
 				user: { id: "user-1" },
 				session: { id: "session-1" },
-			}),
-			extendContext: async () => ({
-				allowedSpaces: new Set(allowedSpaces),
 			}),
 		});
 
@@ -747,6 +1074,13 @@ describe("channel module routes", () => {
 							current.has(params.spaceId),
 					),
 				},
+				config: {
+					app: {
+						context: async () => ({
+							allowedSpaces: new Set(allowedSpaces),
+						}),
+					},
+				},
 			},
 			{
 				app: { url: "https://app.example.com" },
@@ -766,9 +1100,6 @@ describe("channel module routes", () => {
 			getSession: async () => ({
 				user: { id: "user-1" },
 				session: { id: "session-1" },
-			}),
-			extendContext: async () => ({
-				allowedSpaces: new Set(allowedSpaces),
 			}),
 		});
 

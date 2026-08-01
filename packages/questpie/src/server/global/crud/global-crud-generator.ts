@@ -1585,6 +1585,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					session: normalized.session,
 					principal: normalized.principal,
 					actor: normalized.actor,
+					contextExtensions: normalized["~contextExtensions"],
 				});
 				const transitionCtx: GlobalTransitionHookContext = {
 					...transitionServices,
@@ -1875,6 +1876,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			session: normalized.session,
 			principal: normalized.principal,
 			actor: normalized.actor,
+			contextExtensions: normalized["~contextExtensions"],
 		});
 		return {
 			...services,

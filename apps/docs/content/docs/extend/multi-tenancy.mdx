@@ -207,12 +207,18 @@ The framework tracks a set of reserved context keys, the ones it sets itself:
 ```text
 session, db, locale, defaultLocale, localeFallback, accessMode, stage,
 request, requestId, traceId, data, input, original, operation, params,
-app, collections, globals, "~contextExtensions"
+app, collections, globals, queue, email, storage, kv, executor, logger,
+observability, search, realtime, channels, tables, t, services, workflows,
+"~contextExtensions"
 ```
 
-Returning one of these from your resolver does **not** throw, in development it logs a one-time warning, and in production it is silent. So watch your console: name your scope key something domain-specific (`tenantId`, `organizationId`, `propertyId`, `cityId`) and you'll never hit it.
-
-The protection itself is partial. Your resolver's result is merged **flat** into the context, then five base keys, `session`, `locale`, `defaultLocale`, `accessMode`, `db`, are re-set on top, so those genuinely can't be shadowed. The other reserved keys (`request`, `requestId`, `data`, `operation`, `collections`, `globals`, …) are **not** re-set, so a resolver that returns one of those names _would_ overwrite it in the flat context. Treat the warning as a real signal, not a guardrail.
+Returning one of these from your resolver does **not** throw. QUESTPIE removes
+the reserved value before projecting the extension, logs a one-time warning in
+development, and stays silent in production. Namespace-null service names and
+custom service namespace names receive the same protection. Name your scope key
+something domain-specific (`tenantId`, `organizationId`, `propertyId`,
+`cityId`) and it will remain available without competing with the framework
+surface.
 
 <Callout type="info" title="The resolver must return an object">
 `ValidateContextResolver` rejects a resolver that resolves to only a primitive (`async () => "x"`) or only `null`, extensions are an object bundle. The common `session ? { tenantId } : null` shape passes because it has an object arm; returning `{ tenantId: id || null }` is the clean form.

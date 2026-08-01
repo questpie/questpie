@@ -227,6 +227,11 @@ the ordered ledger or client dedupe contract.
   an event and silently continues.
 - Reconnect supplies the last applied event id. Events still inside replay
   retention are resent in order.
+- Each accepted logical channel binding emits one payload-free readiness control
+  frame after authorization and initial ledger catch-up. The frame is ordered
+  after replay and before later live output, but does not consume application
+  event-count or byte quotas. It carries only the client-chosen bounded binding
+  id, never authorization facts or event content.
 - If the requested event id is older than replay retention, the server sends an
   explicit `channel_gap` frame and closes that channel subscription. There is no
   invented snapshot for an arbitrary event stream. The application recovers
@@ -236,6 +241,19 @@ The replay log is not exposed for history queries and has a bounded retention
 and size. Applications needing durable chat/message history use collections.
 Implementation ownership is RT3.1b; RT3.3 publish routes and the cross-driver
 matrix cannot land without it.
+
+Client subscription readiness is an epoch boundary, not physical connection
+state. SSE exposes the server control frame; Pusher/Soketi waits for provider
+subscription success and the authorized replay drain. Each logical registration
+is notified exactly once per admitted epoch, including registrations multiplexed
+over one transport entry. Denial, gap, aborted setup, or release before
+admission emits no readiness. A transport error ends the epoch; reconnect must
+freshly authorize and catch up before a second readiness notification. Live
+events racing with consumer reconciliation remain ordinary event callbacks so a
+consumer can schedule a trailing authoritative read. For Pusher/Soketi, leaving
+the physical `connected` state immediately ends the logical epoch and invalidates
+an in-flight replay; provider resubscription plus fresh replay is required before
+readiness can fire again.
 
 Direct Pusher client events are outside this QoS class. They are disabled by
 default and, when explicitly enabled by the channel security model, are

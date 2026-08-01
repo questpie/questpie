@@ -630,14 +630,71 @@ describe("ordered channel event ledger", () => {
 			});
 		}
 		const sink = createSink("resume");
+		const order: string[] = [];
 		await events.subscribeLocal({
 			subscriptionId: "resume-room",
 			channel: "private-room-1",
-			sink,
+			sink: {
+				...sink,
+				write: async (frame, delivery) => {
+					const result = await sink.write(frame, delivery);
+					order.push(`event:${String(sink.frames.at(-1)?.data.id)}`);
+					return result;
+				},
+			},
+			onReady: () => order.push("ready"),
 			lastEventId: first.eventId,
 		});
 
 		expect(sink.frames.map((frame) => frame.data.id)).toEqual([2, 3]);
+		expect(order).toEqual(["event:2", "event:3", "ready"]);
+	});
+
+	test("orders a racing post-admission event after readiness delivery", async () => {
+		const events = ledger();
+		const sink = createSink("admission-race");
+		const order: string[] = [];
+		let markReadyStarted!: () => void;
+		const readyStarted = new Promise<void>((resolve) => {
+			markReadyStarted = resolve;
+		});
+		let releaseReady!: () => void;
+		const readyRelease = new Promise<void>((resolve) => {
+			releaseReady = resolve;
+		});
+		const subscribing = events.subscribeLocal({
+			subscriptionId: "admission-race-room",
+			channel: "private-room-1",
+			sink: {
+				...sink,
+				write: async (frame, delivery) => {
+					const result = await sink.write(frame, delivery);
+					order.push(`event:${String(sink.frames.at(-1)?.data.id)}`);
+					return result;
+				},
+			},
+			onReady: async () => {
+				markReadyStarted();
+				await readyRelease;
+				order.push("ready");
+			},
+		});
+
+		await readyStarted;
+		await events.append({
+			channel: "private-room-1",
+			event: "message",
+			schemaIdentity: "room:message",
+			data: { id: 1 },
+		});
+		const racingDrain = events.drain();
+		releaseReady();
+		const unsubscribe = await subscribing;
+		await racingDrain;
+		await waitFor(() => sink.frames.length === 1);
+
+		expect(order).toEqual(["ready", "event:1"]);
+		await unsubscribe();
 	});
 
 	test("expired resume cursor emits channel_gap and closes only that subscription", async () => {
@@ -658,16 +715,21 @@ describe("ordered channel event ledger", () => {
 		}
 		await events.cleanup();
 		const sink = createSink("expired");
+		let ready = 0;
 		await events.subscribeLocal({
 			subscriptionId: "expired-room",
 			channel: "private-room-1",
 			sink,
+			onReady: () => {
+				ready += 1;
+			},
 			lastEventId: first.eventId,
 		});
 
 		expect(sink.frames).toEqual([
 			expect.objectContaining({ type: "channel_gap" }),
 		]);
+		expect(ready).toBe(0);
 		await events.append({
 			channel: "private-room-1",
 			event: "message",

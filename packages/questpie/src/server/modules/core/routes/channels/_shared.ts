@@ -6,10 +6,7 @@ import {
 	ChannelTokenBucketLimiter,
 	resolveChannelRequestOrigin,
 } from "#questpie/server/channels/security.js";
-import {
-	ChannelsService,
-	type ChannelServiceContext,
-} from "#questpie/server/channels/service.js";
+import { ChannelsService } from "#questpie/server/channels/service.js";
 import type { Principal } from "#questpie/server/config/context.js";
 import type { ChannelSecurityObservationReason } from "#questpie/server/modules/core/integrated/realtime/observer.js";
 import { routeApp } from "#questpie/server/routes/route-app.js";
@@ -17,6 +14,7 @@ import { parseTypedWire } from "#questpie/shared/typed-wire.js";
 
 type ChannelRouteContext = object & {
 	db?: unknown;
+	channels?: ChannelsService;
 	session?: {
 		user?: { id?: string };
 		session?: { id?: string };
@@ -292,13 +290,10 @@ export async function parseChannelReplayRequest(
 }
 
 export function requestChannels(ctx: ChannelRouteContext): ChannelsService {
-	const app = routeApp(ctx);
-	return new ChannelsService(
-		app.config.channels ?? {},
-		app.realtime,
-		{ ...ctx, accessMode: "user" } as ChannelServiceContext,
-		app.config.realtime?.channelSecurity,
-	);
+	if (!(ctx.channels instanceof ChannelsService)) {
+		throw new Error("Request channel service is unavailable");
+	}
+	return ctx.channels;
 }
 
 const publishLimiters = new WeakMap<object, ChannelTokenBucketLimiter>();

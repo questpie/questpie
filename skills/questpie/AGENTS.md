@@ -4523,6 +4523,7 @@ interface AppContext {
 | Job handlers                                                                            | Destructure: `async ({ payload, queue, email }) => { ... }`                                                                                   |
 | Email templates                                                                         | Destructure: `async ({ input, collections }) => { ... }`                                                                                      |
 | Access rules                                                                            | Destructure: `({ session, data }) => boolean`                                                                                                 |
+| Channel authorization and presence                                                      | Destructure: `({ params, session, collections, services }) => boolean`                                                                        |
 | Seeds                                                                                   | `async ({ collections, log }) => { ... }`                                                                                                     |
 | Services                                                                                | `create: ({ app }) => ...` (app instance only, not full context)                                                                              |
 | Better Auth callbacks (`onLinkAccount`, `databaseHooks`, `sendMagicLink`, plugin hooks) | `getContext<App>()`, `/auth/*` is a raw route executed inside `runWithContext`, so the request scope is live there (see `references/auth.md`) |
@@ -6241,6 +6242,9 @@ Authorization rules:
 - `.authorize(rule)` uses the rule for subscribe and as the publish fallback.
 - `.authorize({ subscribe, publish })` separates both permissions; omitted publish falls back to subscribe.
 - Server/system contexts may publish; browser publish always uses the framework route, authorization, rate limits, and Zod parsing.
+- Authorization and presence resolvers receive the full request-scoped `AppContext`,
+  including collections, services, application context extensions, and the caller's
+  database handle. Framework-owned context keys cannot be shadowed by an extension.
 
 ## Publish on the server
 
@@ -6320,9 +6324,16 @@ cut; reconnect and replay reauthorize against current application state.
 ## Client, presence, and TanStack Query
 
 ```ts
-const stop = client.channels.chatRoom.subscribe({ roomId }, (message) => {
-	if (message.event === "message") console.log(message.data.text);
-});
+const stop = client.channels.chatRoom.subscribe(
+	{ roomId },
+	(message) => {
+		if (message.event === "message") console.log(message.data.text);
+	},
+	{
+		onReady: reconcileAuthoritativeRoom,
+		onError: markRoomReadOnly,
+	},
+);
 
 await client.channels.chatRoom.publish({
 	params: { roomId },
@@ -6338,6 +6349,17 @@ const stopPresence = client.channels.chatRoom.subscribePresence(
 stop();
 stopPresence();
 ```
+
+`onReady` is provider-neutral and payload-free. It fires once per successful
+subscription epoch only after current authorization and replay/catch-up: replay
+events precede it and later live events use the normal callback. Reconnect
+freshly authorizes and replays before firing it again. Socket open alone is not
+readiness, and denial, replay gap, aborted setup, or stopping before admission
+does not fire it. Leaving Pusher/Soketi's connected state ends the epoch and
+invalidates any pending replay until fresh provider subscription and catch-up.
+Keep protected state fenced after `onError`; use `onReady` to
+start an authoritative read, and make the event callback schedule a trailing
+read when an invalidation races with that reconciliation.
 
 `presence()` returns one typed snapshot. `subscribePresence()` emits the initial and later rosters, and `presenceIter(params, { signal })` provides the async-generator form. Pusher/Soketi uses native membership; SSE uses Postgres leases across instances and deduplicates multiple connections by authenticated principal. Crash leave converges after the lease TTL.
 
@@ -9184,7 +9206,10 @@ The resolver receives the base request params plus the full system-mode service 
 - **No request → no resolver.** Jobs, workflows, seeds, and `createContext()` without a `request` skip it, so extension types are `Partial<…>` (see [narrowing](#high-not-narrowing-optional-extensions)).
 - **Collections inside the resolver run system mode**, the resolver IS trusted derivation. If you explicitly pass `accessMode: "user"` to a CRUD call inside the resolver, rules evaluated from there see no extensions (they don't exist yet), rules must already tolerate absence.
 - **Throwing fails the request** before any rule or handler runs. Throw `ApiError.*` for structured error responses (the tenant-validation case).
-- **Reserved keys warn in dev.** Returning `session`, `db`, `locale`, `accessMode`, `collections`, … from the resolver logs a warning, framework keys cannot be shadowed.
+- **Reserved keys are dropped and warn in dev.** Returning `session`, `db`,
+  `locale`, `accessMode`, `collections`, `channels`, `services`, or another
+  framework/service namespace key logs a warning in development and the
+  extension value is not projected. Framework keys cannot be shadowed.
 
 ## Step 3: Filter Data with Access Rules
 

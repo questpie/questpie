@@ -584,7 +584,16 @@ describe("request context extensions — reserved keys", () => {
 				app: {
 					context: async () => ({
 						session: "shadow-attempt",
+						principal: "shadow-attempt",
 						db: "shadow-attempt",
+						collections: "shadow-attempt",
+						queue: "shadow-attempt",
+						services: "shadow-attempt",
+						channels: "shadow-attempt",
+						actor: {
+							kind: "human" as const,
+							subjectId: "derived-user",
+						},
 						tenantId: "ok",
 					}),
 				},
@@ -602,14 +611,37 @@ describe("request context extensions — reserved keys", () => {
 			request: new Request("http://localhost/"),
 		});
 
-		const warnings = setup.app.mocks.logger.getLogsContaining("reserved key");
-		expect(warnings.length).toBeGreaterThanOrEqual(2);
-
 		// Framework keys win — resolver cannot shadow them
 		expect(ctx.session).not.toBe("shadow-attempt");
+		expect(ctx.principal).toBeUndefined();
 		expect(ctx.db).toBe(setup.app.db);
+		expect((ctx as any).collections).toBeUndefined();
+		expect((ctx as any).queue).toBeUndefined();
+		expect((ctx as any).services).toBeUndefined();
+		expect((ctx as any).channels).toBeUndefined();
+		expect(ctx.actor).toEqual({
+			kind: "human",
+			subjectId: "derived-user",
+		});
+		expect(ctx["~contextExtensions"]).toEqual({
+			actor: { kind: "human", subjectId: "derived-user" },
+			tenantId: "ok",
+		});
 		// Non-reserved keys still land
 		expect((ctx as any).tenantId).toBe("ok");
+
+		const explicitActor = await setup.app.createContext({
+			actor: { kind: "human", subjectId: "framework-user" },
+			request: new Request("http://localhost/"),
+		});
+		expect(explicitActor.actor).toEqual({
+			kind: "human",
+			subjectId: "framework-user",
+		});
+		expect(explicitActor["~contextExtensions"]).toEqual({ tenantId: "ok" });
+
+		const warnings = setup.app.mocks.logger.getLogsContaining("reserved key");
+		expect(warnings.length).toBeGreaterThanOrEqual(2);
 
 		// Warning fires once per key per app instance
 		await setup.app.createContext({
@@ -619,6 +651,66 @@ describe("request context extensions — reserved keys", () => {
 			setup.app.mocks.logger.getLogsContaining("reserved key").length,
 		).toBe(warnings.length);
 	});
+});
+
+describe("request context extensions — derived actor boundary", () => {
+	const invalidActors: ReadonlyArray<{
+		readonly label: string;
+		readonly value: unknown;
+	}> = [
+		{
+			label: "agent actor",
+			value: {
+				kind: "agent",
+				subjectId: "agent-1",
+				credentialId: "credential-1",
+				issuer: "https://agents.example.com",
+				scopes: ["crdt:read"],
+				expiresAt: new Date("2099-01-01T00:00:00.000Z"),
+			},
+		},
+		{
+			label: "unknown actor kind",
+			value: { kind: "service", subjectId: "service-1" },
+		},
+		{ label: "non-object actor", value: "user-1" },
+		{ label: "empty subject id", value: { kind: "human", subjectId: "" } },
+		{
+			label: "oversized subject id",
+			value: { kind: "human", subjectId: "x".repeat(256) },
+		},
+	];
+
+	for (const invalidActor of invalidActors) {
+		it(`rejects ${invalidActor.label} from the app context resolver`, async () => {
+			const setup = await buildMockApp({
+				collections: {
+					items: collection("items").fields(({ f }) => ({
+						name: f.text().required(),
+					})),
+				},
+				config: {
+					app: {
+						context: async () => ({ actor: invalidActor.value }),
+					},
+				},
+			});
+
+			try {
+				const ctx = await setup.app.createContext({
+					request: new Request("http://localhost/"),
+				});
+
+				expect(ctx.actor).toBeUndefined();
+				expect(ctx["~contextExtensions"]).toEqual({});
+				expect(
+					setup.app.mocks.logger.getLogsContaining("reserved key").length,
+				).toBeGreaterThan(0);
+			} finally {
+				await setup.cleanup();
+			}
+		});
+	}
 });
 
 describe("request context extensions — failing resolver", () => {

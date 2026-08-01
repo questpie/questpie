@@ -4256,6 +4256,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					session: normalized.session,
 					principal: normalized.principal,
 					actor: normalized.actor,
+					contextExtensions: normalized["~contextExtensions"],
 				});
 				const transitionCtx: TransitionHookContext = {
 					...transitionServices,

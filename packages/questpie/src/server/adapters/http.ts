@@ -9,7 +9,12 @@
  * @see QUE-158 (Unified route() builder + URL flattening)
  */
 
+import {
+	APP_SERVICE_SCOPE,
+	disposeAppServiceScope,
+} from "../config/app-context.js";
 import type { Questpie } from "../config/questpie.js";
+import type { RequestScope } from "../config/request-scope.js";
 import { ApiError } from "../errors/index.js";
 import type {
 	RequestLoggingConfig,
@@ -41,6 +46,18 @@ import { resolveContext } from "./utils/context.js";
 import { handleError, normalizeBasePath } from "./utils/index.js";
 import { parseRouteBody } from "./utils/request.js";
 import { smartResponse } from "./utils/response.js";
+
+async function disposeResolvedRequestScope(
+	app: Questpie<any>,
+	resolved: AdapterContext,
+): Promise<void> {
+	const scope = (
+		resolved.appContext as typeof resolved.appContext & {
+			[APP_SERVICE_SCOPE]?: RequestScope;
+		}
+	)[APP_SERVICE_SCOPE];
+	if (scope) await disposeAppServiceScope(app, scope);
+}
 
 // ============================================================================
 // Route compilation
@@ -365,21 +382,25 @@ export const createFetchHandler = (
 									context,
 									{ requestId, traceId },
 								);
-								return complete(
-									new Response(
-										appInstance.t(
-											"error.methodNotAllowed",
-											undefined,
-											resolved.appContext.locale,
-										),
-										{
-											status: 405,
-											headers: {
-												Allow: Array.from(match.methods.keys()).join(", "),
+								try {
+									return complete(
+										new Response(
+											appInstance.t(
+												"error.methodNotAllowed",
+												undefined,
+												resolved.appContext.locale,
+											),
+											{
+												status: 405,
+												headers: {
+													Allow: Array.from(match.methods.keys()).join(", "),
+												},
 											},
-										},
-									),
-								);
+										),
+									);
+								} finally {
+									await disposeResolvedRequestScope(appInstance, resolved);
+								}
 							}
 
 							// Resolve session, locale, and create app context
@@ -391,6 +412,7 @@ export const createFetchHandler = (
 								{ requestId, traceId },
 							);
 
+							let routeExecutionOwnsScope = false;
 							try {
 								if (isJsonRoute(def)) {
 									const body = await parseRouteBody(request);
@@ -410,6 +432,7 @@ export const createFetchHandler = (
 											),
 										);
 									}
+									routeExecutionOwnsScope = true;
 									const result = await executeJsonRouteInternal(
 										appInstance,
 										def,
@@ -422,6 +445,7 @@ export const createFetchHandler = (
 								}
 
 								// Raw route — pass matched params through
+								routeExecutionOwnsScope = true;
 								return complete(
 									await executeRawRouteInternal(
 										appInstance,
@@ -440,6 +464,10 @@ export const createFetchHandler = (
 									}),
 									error,
 								);
+							} finally {
+								if (!routeExecutionOwnsScope) {
+									await disposeResolvedRequestScope(appInstance, resolved);
+								}
 							}
 						}
 					}

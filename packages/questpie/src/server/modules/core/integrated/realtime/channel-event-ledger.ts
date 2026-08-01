@@ -140,6 +140,8 @@ export type LocalChannelSubscriptionInput = {
 	close?: (reason: "access_revoked") => Promise<void>;
 	/** @internal Runs exactly once for caller release or an internal close. */
 	onRelease?: () => Promise<void>;
+	/** Called after authorization and initial replay/catch-up complete. */
+	onReady?: () => void | Promise<void>;
 	lastEventId?: string | null;
 	encodeFrame?: (
 		frame: OrderedChannelEventFrame | ChannelGapFrame,
@@ -166,6 +168,8 @@ type LocalSubscription = {
 	reauthorize?: () => Promise<LocalChannelAuthorization>;
 	close?: LocalChannelSubscriptionInput["close"];
 	onRelease?: LocalChannelSubscriptionInput["onRelease"];
+	onReady?: LocalChannelSubscriptionInput["onReady"];
+	readySignaled: boolean;
 	encodeFrame?: LocalChannelSubscriptionInput["encodeFrame"];
 	active: boolean;
 	lifecycle?: LocalChannelBindingLifecycle;
@@ -463,6 +467,8 @@ export class ChannelEventLedger {
 			reauthorize: input.reauthorize,
 			close: input.close,
 			onRelease: input.onRelease,
+			onReady: input.onReady,
+			readySignaled: false,
 			encodeFrame: input.encodeFrame,
 			active: false,
 		};
@@ -556,7 +562,12 @@ export class ChannelEventLedger {
 			throw error;
 		}
 		if (subscription.closed) return async () => {};
-		await this.drainLocalSubscription(subscription);
+		try {
+			await this.drainLocalSubscription(subscription);
+		} catch (error) {
+			await this.releaseLocalSubscription(subscription);
+			throw error;
+		}
 
 		return () => this.releaseLocalSubscription(subscription);
 	}
@@ -923,13 +934,17 @@ export class ChannelEventLedger {
 		}
 		const operation = this.runLocalDrain(subscription);
 		subscription.drainPromise = operation;
+		let drainAgain = false;
 		try {
 			await operation;
 		} finally {
 			if (subscription.drainPromise === operation) {
 				subscription.drainPromise = null;
+				drainAgain = subscription.drainPending && !subscription.closed;
+				subscription.drainPending = false;
 			}
 		}
+		if (drainAgain) await this.drainLocalSubscription(subscription);
 	}
 
 	private async runLocalDrain(subscription: LocalSubscription): Promise<void> {
@@ -960,6 +975,21 @@ export class ChannelEventLedger {
 		} catch (error) {
 			this.logger?.error("[Realtime] Ordered channel delivery failed", error);
 			await this.closeLocalSubscription(subscription, "write_failed");
+			return;
+		}
+		if (
+			!subscription.closed &&
+			!subscription.readySignaled &&
+			subscription.pending.length === 0 &&
+			subscription.cursor === subscription.readSeq
+		) {
+			subscription.readySignaled = true;
+			try {
+				await subscription.onReady?.();
+			} catch (error) {
+				await this.closeLocalSubscription(subscription, "write_failed");
+				throw error;
+			}
 		}
 	}
 
@@ -1051,7 +1081,12 @@ export class ChannelEventLedger {
 		if (subscription.retryTimer || subscription.closed) return;
 		subscription.retryTimer = setTimeout(() => {
 			subscription.retryTimer = null;
-			void this.drainLocalSubscription(subscription);
+			void this.drainLocalSubscription(subscription).catch((error) => {
+				this.logger?.error(
+					"[Realtime] Channel readiness delivery failed",
+					error,
+				);
+			});
 		}, this.config.busyRetryMs);
 	}
 

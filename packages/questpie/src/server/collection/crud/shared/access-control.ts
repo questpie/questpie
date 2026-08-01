@@ -111,6 +111,7 @@ export async function executeAccessRule(
 			session: context.session,
 			principal: context.principal,
 			actor: context.actor,
+			contextExtensions: context.contextExtensions,
 		});
 		// data is non-optional for RowAccessRule callers (they always pass the
 		// loaded row); plain rules tolerate undefined — widen via the cast.

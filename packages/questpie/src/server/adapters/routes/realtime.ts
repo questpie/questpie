@@ -13,13 +13,17 @@ import {
 	opaqueChannelAuthoritySubject,
 	resolveChannelAuthoritySubject,
 } from "../../channels/authority.js";
-import {
-	ChannelsService,
-	type ChannelServiceContext,
-} from "../../channels/service.js";
+import { ChannelsService } from "../../channels/service.js";
 import { executeAccessRule } from "../../collection/crud/shared/access-control.js";
+import {
+	APP_SERVICE_SCOPE,
+	disposeAppServiceScope,
+	extractAppServices,
+	type AppContext,
+} from "../../config/app-context.js";
 import type { RequestContext } from "../../config/context.js";
 import type { Questpie } from "../../config/questpie.js";
+import { RequestScope } from "../../config/request-scope.js";
 import { ApiError } from "../../errors/index.js";
 import { CrdtRealtimeBindingRejectedError } from "../../modules/core/integrated/crdt/realtime-binding.js";
 import {
@@ -196,6 +200,106 @@ type ValidatedChannelSubscription = {
 	presence?: Record<string, unknown>;
 };
 
+type RequestChannelsLease = {
+	channels: ChannelsService;
+	dispose: () => Promise<void>;
+};
+
+function readUnknownProperty(source: object, property: PropertyKey): unknown {
+	return (source as Readonly<Record<PropertyKey, unknown>>)[property];
+}
+
+async function createRequestChannelsLease(
+	app: Questpie<any>,
+	context: RealtimeRequestContext,
+	supplied?: unknown,
+	disposeCarriedScope = false,
+): Promise<RequestChannelsLease> {
+	if (supplied instanceof ChannelsService) {
+		return { channels: supplied, dispose: async () => {} };
+	}
+	const carriedScope = (
+		context as RealtimeRequestContext & {
+			[APP_SERVICE_SCOPE]?: RequestScope;
+		}
+	)[APP_SERVICE_SCOPE];
+	const scope =
+		carriedScope instanceof RequestScope ? carriedScope : new RequestScope();
+	const ownsScope = carriedScope === undefined || disposeCarriedScope;
+	try {
+		const services = extractAppServices(app, {
+			db: context.db ?? app.db,
+			session: context.session,
+			request: context.request ?? context.req,
+			locale: context.locale,
+			defaultLocale: context.defaultLocale,
+			localeFallback: context.localeFallback,
+			accessMode: "user",
+			stage: context.stage,
+			requestId: context.requestId,
+			traceId: context.traceId,
+			principal: context.principal,
+			actor: context.actor,
+			contextExtensions: context["~contextExtensions"],
+			scope,
+		});
+		const channels = readUnknownProperty(services, "channels");
+		if (!(channels instanceof ChannelsService)) {
+			throw new Error("Request ChannelsService is unavailable");
+		}
+		return {
+			channels,
+			dispose: ownsScope
+				? () => disposeAppServiceScope(app, scope)
+				: async () => {},
+		};
+	} catch (error) {
+		if (ownsScope) await disposeAppServiceScope(app, scope);
+		throw error;
+	}
+}
+
+function responseWithRequestScopeCleanup(
+	response: Response,
+	cleanup: () => Promise<void>,
+): Response {
+	const reader = response.body!.getReader();
+	let cleaned = false;
+	const cleanupOnce = async () => {
+		if (cleaned) return;
+		cleaned = true;
+		await cleanup();
+	};
+	const body = new ReadableStream<Uint8Array>({
+		async pull(controller) {
+			try {
+				const chunk = await reader.read();
+				if (chunk.done) {
+					await cleanupOnce();
+					controller.close();
+					return;
+				}
+				controller.enqueue(chunk.value);
+			} catch (error) {
+				await cleanupOnce();
+				controller.error(error);
+			}
+		},
+		async cancel(reason) {
+			try {
+				await reader.cancel(reason);
+			} finally {
+				await cleanupOnce();
+			}
+		},
+	});
+	return new Response(body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers: response.headers,
+	});
+}
+
 function createInitialTopology(
 	topics: TopicInput[],
 	channels: ChannelSubscriptionInput[],
@@ -346,30 +450,42 @@ async function resolveRealtimeTopologyCandidate(
 			});
 		}
 	}
-	for (const desired of topologyChannels(topology)) {
-		try {
-			candidate.channels.set(desired.id, {
-				desired,
-				channel: await resolveChannelSubscription(
-					app,
-					{
-						id: desired.id,
-						channel: desired.channel,
-						params: desired.params,
-						lastEventId: desired.lastEventId,
-					},
-					baseContext,
-				),
-			});
-		} catch (error) {
-			errors.push({
-				id: desired.id,
-				kind: desired.kind,
-				code: "REALTIME_SUBSCRIPTION_REJECTED",
-				message:
-					error instanceof Error ? error.message : "Realtime channel rejected",
-			});
+	const desiredChannels = topologyChannels(topology);
+	const channelLease =
+		desiredChannels.length > 0
+			? await createRequestChannelsLease(app, baseContext)
+			: undefined;
+	try {
+		for (const desired of desiredChannels) {
+			try {
+				candidate.channels.set(desired.id, {
+					desired,
+					channel: await resolveChannelSubscription(
+						app,
+						{
+							id: desired.id,
+							channel: desired.channel,
+							params: desired.params,
+							lastEventId: desired.lastEventId,
+						},
+						baseContext,
+						channelLease!.channels,
+					),
+				});
+			} catch (error) {
+				errors.push({
+					id: desired.id,
+					kind: desired.kind,
+					code: "REALTIME_SUBSCRIPTION_REJECTED",
+					message:
+						error instanceof Error
+							? error.message
+							: "Realtime channel rejected",
+				});
+			}
 		}
+	} finally {
+		await channelLease?.dispose();
 	}
 	if (errors.length > 0) {
 		throw new RealtimeTopologyApplyRejectedError(errors);
@@ -693,8 +809,9 @@ async function resolveChannelSubscription(
 	app: Questpie<any>,
 	input: ChannelSubscriptionInput,
 	context: RealtimeRequestContext,
+	requestChannels?: ChannelsService,
 ): Promise<ValidatedChannelSubscription> {
-	if (!input.id || typeof input.id !== "string") {
+	if (!input.id || typeof input.id !== "string" || input.id.length > 256) {
 		throw new Error("Channel subscription id is required");
 	}
 	if (!input.channel || typeof input.channel !== "string") {
@@ -715,36 +832,40 @@ async function resolveChannelSubscription(
 	) {
 		throw new Error("Channel params must be a string record");
 	}
-	const channels = new ChannelsService(
-		app.config.channels ?? {},
-		app.realtime,
-		{ ...context, accessMode: "user" } as ChannelServiceContext,
-		app.config.realtime?.channelSecurity,
-	);
-	const definition = channels.getDefinition(input.channel);
-	const resolvedName = channels.resolveName(input.channel, params);
-	const authoritySubject = resolveChannelAuthoritySubject(context);
-	let presence: Record<string, unknown> | undefined;
-	if (definition.visibility === "presence") {
-		const value = await channels.resolvePresence(input.channel, params);
-		if (value && typeof value === "object") {
-			presence = value as Record<string, unknown>;
+	const ownedLease = requestChannels
+		? undefined
+		: await createRequestChannelsLease(app, context);
+	const channels = requestChannels ?? ownedLease!.channels;
+	try {
+		const definition = channels.getDefinition(input.channel);
+		const resolvedName = channels.resolveName(input.channel, params);
+		const authoritySubject = resolveChannelAuthoritySubject(context);
+		let presence: Record<string, unknown> | undefined;
+		if (definition.visibility === "presence") {
+			const value = await channels.resolvePresence(input.channel, params);
+			if (value && typeof value === "object") {
+				presence = value as Record<string, unknown>;
+			}
+		} else if (
+			!(await channels.authorize(input.channel, params, "subscribe"))
+		) {
+			throw new Error("Channel subscription is denied");
 		}
-	} else if (!(await channels.authorize(input.channel, params, "subscribe"))) {
-		throw new Error("Channel subscription is denied");
+		return {
+			id: input.id,
+			channel: input.channel,
+			params,
+			resolvedName,
+			presenceChannel: definition.visibility === "presence",
+			...(authoritySubject
+				? { subject: opaqueChannelAuthoritySubject(authoritySubject) }
+				: {}),
+			...(input.lastEventId ? { lastEventId: input.lastEventId } : {}),
+			...(presence ? { presence } : {}),
+		};
+	} finally {
+		await ownedLease?.dispose();
 	}
-	return {
-		id: input.id,
-		channel: input.channel,
-		params,
-		resolvedName,
-		presenceChannel: definition.visibility === "presence",
-		...(authoritySubject
-			? { subject: opaqueChannelAuthoritySubject(authoritySubject) }
-			: {}),
-		...(input.lastEventId ? { lastEventId: input.lastEventId } : {}),
-		...(presence ? { presence } : {}),
-	};
 }
 
 // ============================================================================
@@ -770,6 +891,55 @@ export async function realtimeSubscribe(
 	_params: Record<string, string>,
 	context?: AdapterContext,
 	config: AdapterConfig<any> = {},
+	requestServices?: AppContext,
+): Promise<Response> {
+	let carriedScope: RequestScope | undefined;
+	let cleanupTransferred = false;
+	try {
+		const response = await realtimeSubscribeInternal(
+			app,
+			request,
+			_params,
+			context,
+			config,
+			requestServices,
+			(resolved) => {
+				if (requestServices !== undefined) return;
+				const scope = (
+					resolved.appContext as RealtimeRequestContext & {
+						[APP_SERVICE_SCOPE]?: RequestScope;
+					}
+				)[APP_SERVICE_SCOPE];
+				if (scope instanceof RequestScope) carriedScope = scope;
+			},
+		);
+		if (
+			carriedScope &&
+			response.body &&
+			response.headers.get("content-type")?.includes("text/event-stream")
+		) {
+			const wrapped = responseWithRequestScopeCleanup(response, () =>
+				disposeAppServiceScope(app, carriedScope!),
+			);
+			cleanupTransferred = true;
+			return wrapped;
+		}
+		return response;
+	} finally {
+		if (carriedScope && !cleanupTransferred) {
+			await disposeAppServiceScope(app, carriedScope);
+		}
+	}
+}
+
+async function realtimeSubscribeInternal(
+	app: Questpie<any>,
+	request: Request,
+	_params: Record<string, string>,
+	context: AdapterContext | undefined,
+	config: AdapterConfig<any>,
+	requestServices: AppContext | undefined,
+	onResolved: (context: AdapterContext) => void,
 ): Promise<Response> {
 	const errorResponse = (
 		error: unknown,
@@ -828,6 +998,7 @@ export async function realtimeSubscribe(
 
 	// Resolve context (auth, locale, etc.)
 	const resolved = await resolveContext(app, request, config, context);
+	onResolved(resolved);
 	const resolveFreshRouteContext = () => refreshAdapterContext(resolved);
 	let frozenSubscriptionScope: Promise<string | null> | undefined;
 	const getFrozenSubscriptionScope = () =>
@@ -905,56 +1076,73 @@ export async function realtimeSubscribe(
 				rejection?: RealtimeTopicRejectedPayload;
 			}> = [];
 			const crdtSubscriptions: RealtimeTopologyCrdt[] = [];
-			for (const desired of body.topology.subscriptions) {
-				try {
-					if (desired.kind === "query") {
-						await resolveIncrementalTopic(
-							app,
-							{
-								...desired.topic,
-								id: desired.id,
-								sinceSeq: desired.sinceSeq,
-							} as TopicInput,
-							resolved.appContext,
-							admission,
-						);
-					} else if (desired.kind === "channel") {
-						await resolveChannelSubscription(
-							app,
-							{
-								id: desired.id,
-								channel: desired.channel,
-								params: desired.params,
-								lastEventId: desired.lastEventId,
-							},
-							resolved.appContext,
-						);
-					} else if (
-						desired.kind !== "crdt" ||
-						typeof desired.bindingId !== "string" ||
-						desired.bindingId.length === 0
-					) {
-						throw new Error("Invalid realtime subscription");
-					} else {
-						crdtSubscriptions.push(desired);
+			const suppliedTopologyChannels = requestServices
+				? readUnknownProperty(requestServices, "channels")
+				: undefined;
+			const topologyChannelLease = body.topology.subscriptions.some(
+				({ kind }) => kind === "channel",
+			)
+				? await createRequestChannelsLease(
+						app,
+						resolved.appContext,
+						suppliedTopologyChannels,
+					)
+				: undefined;
+			try {
+				for (const desired of body.topology.subscriptions) {
+					try {
+						if (desired.kind === "query") {
+							await resolveIncrementalTopic(
+								app,
+								{
+									...desired.topic,
+									id: desired.id,
+									sinceSeq: desired.sinceSeq,
+								} as TopicInput,
+								resolved.appContext,
+								admission,
+							);
+						} else if (desired.kind === "channel") {
+							await resolveChannelSubscription(
+								app,
+								{
+									id: desired.id,
+									channel: desired.channel,
+									params: desired.params,
+									lastEventId: desired.lastEventId,
+								},
+								resolved.appContext,
+								topologyChannelLease!.channels,
+							);
+						} else if (
+							desired.kind !== "crdt" ||
+							typeof desired.bindingId !== "string" ||
+							desired.bindingId.length === 0
+						) {
+							throw new Error("Invalid realtime subscription");
+						} else {
+							crdtSubscriptions.push(desired);
+						}
+					} catch (error) {
+						entryErrors.push({
+							id: typeof desired.id === "string" ? desired.id : "unknown",
+							kind: typeof desired.kind === "string" ? desired.kind : "unknown",
+							code:
+								error instanceof RealtimeTopicAdmissionError
+									? error.payload.code
+									: "REALTIME_SUBSCRIPTION_REJECTED",
+							message:
+								error instanceof Error
+									? error.message
+									: "Realtime subscription rejected",
+							...(error instanceof RealtimeTopicAdmissionError
+								? { rejection: error.payload }
+								: {}),
+						});
 					}
-				} catch (error) {
-					entryErrors.push({
-						id: typeof desired.id === "string" ? desired.id : "unknown",
-						kind: typeof desired.kind === "string" ? desired.kind : "unknown",
-						code:
-							error instanceof RealtimeTopicAdmissionError
-								? error.payload.code
-								: "REALTIME_SUBSCRIPTION_REJECTED",
-						message:
-							error instanceof Error
-								? error.message
-								: "Realtime subscription rejected",
-						...(error instanceof RealtimeTopicAdmissionError
-							? { rejection: error.payload }
-							: {}),
-					});
 				}
+			} finally {
+				await topologyChannelLease?.dispose();
 			}
 			if (entryErrors.length === 0 && crdtSubscriptions.length > 0) {
 				let capability;
@@ -1149,7 +1337,10 @@ export async function realtimeSubscribe(
 
 	for (const [topicIndex, rawTopic] of (topics ?? []).entries()) {
 		if (!rawTopic || typeof rawTopic !== "object" || Array.isArray(rawTopic)) {
-			topicErrors.push({ id: "unknown", message: "Topic must be an object" });
+			topicErrors.push({
+				id: "unknown",
+				message: "Topic must be an object",
+			});
 			continue;
 		}
 		let topic: NormalizedTopicInput;
@@ -1298,32 +1489,49 @@ export async function realtimeSubscribe(
 
 	const validatedChannelsById = new Map<string, ValidatedChannelSubscription>();
 	const channelErrors: Array<{ id: string; message: string }> = [];
-	for (const [index, input] of (channelInputs ?? []).entries()) {
-		const id = input?.id ?? "unknown";
-		if (index + validatedTopics.length >= admission.maxTopicsPerConnection) {
-			observeAdmission("subscription_limit");
-			channelErrors.push({
-				id,
-				message: `Connection accepts at most ${admission.maxTopicsPerConnection} subscriptions`,
-			});
-			continue;
-		}
-		try {
-			const channel = await resolveChannelSubscription(
-				app,
-				input,
-				resolved.appContext,
-			);
-			if (validatedChannelsById.has(channel.id)) {
-				throw new Error("Channel subscription id is already used");
+	const suppliedChannels = requestServices
+		? readUnknownProperty(requestServices, "channels")
+		: undefined;
+	const channelLease =
+		(channelInputs?.length ?? 0) > 0
+			? await createRequestChannelsLease(
+					app,
+					resolved.appContext,
+					suppliedChannels,
+				)
+			: undefined;
+	const requestChannels = channelLease?.channels;
+	try {
+		for (const [index, input] of (channelInputs ?? []).entries()) {
+			const id = input?.id ?? "unknown";
+			if (index + validatedTopics.length >= admission.maxTopicsPerConnection) {
+				observeAdmission("subscription_limit");
+				channelErrors.push({
+					id,
+					message: `Connection accepts at most ${admission.maxTopicsPerConnection} subscriptions`,
+				});
+				continue;
 			}
-			validatedChannelsById.set(channel.id, channel);
-		} catch (error) {
-			channelErrors.push({
-				id,
-				message: error instanceof Error ? error.message : "Channel rejected",
-			});
+			try {
+				const channel = await resolveChannelSubscription(
+					app,
+					input,
+					resolved.appContext,
+					requestChannels,
+				);
+				if (validatedChannelsById.has(channel.id)) {
+					throw new Error("Channel subscription id is already used");
+				}
+				validatedChannelsById.set(channel.id, channel);
+			} catch (error) {
+				channelErrors.push({
+					id,
+					message: error instanceof Error ? error.message : "Channel rejected",
+				});
+			}
 		}
+	} finally {
+		await channelLease?.dispose();
 	}
 
 	const accessValidatedTopics: ValidatedTopic[] = [];
@@ -1948,37 +2156,45 @@ export async function realtimeSubscribe(
 										subject: channel.subject,
 										reauthorize: async () => {
 											const fresh = await resolveFreshRouteContext();
-											const channels = new ChannelsService(
-												app.config.channels ?? {},
-												app.realtime!,
-												{
-													...fresh.appContext,
-													accessMode: "user",
-												} as ChannelServiceContext,
-												app.config.realtime?.channelSecurity,
+											const lease = await createRequestChannelsLease(
+												app,
+												fresh.appContext,
+												undefined,
+												true,
 											);
-											if (channel.presenceChannel) {
-												const presence = await channels.resolvePresence(
+											try {
+												if (channel.presenceChannel) {
+													const presence = await lease.channels.resolvePresence(
+														channel.channel,
+														channel.params,
+													);
+													return {
+														authorized: true,
+														...(presence && typeof presence === "object"
+															? {
+																	presence: presence as Record<string, unknown>,
+																}
+															: {}),
+													};
+												}
+												return await lease.channels.authorize(
 													channel.channel,
 													channel.params,
+													"subscribe",
 												);
-												return {
-													authorized: true,
-													...(presence && typeof presence === "object"
-														? {
-																presence: presence as Record<string, unknown>,
-															}
-														: {}),
-												};
+											} finally {
+												await lease.dispose();
 											}
-											return channels.authorize(
-												channel.channel,
-												channel.params,
-												"subscribe",
-											);
 										},
 										close: async () => {
 											if (edge?.has(channel.id)) {
+												await subscriptionSink.write(
+													encodeSseEvent("error", {
+														channelSubscriptionId: channel.id,
+														message: "Channel access was revoked",
+													}),
+													"ordered-channel-event",
+												);
 												await edge.drop(channel.id);
 												closeIfEmpty();
 												return;
@@ -1988,6 +2204,13 @@ export async function realtimeSubscribe(
 									}
 								: {}),
 							sink: subscriptionSink,
+							onReady: async () => {
+								await subscriptionSink.writeControl(
+									encodeSseEvent("channel_ready", {
+										channelSubscriptionId: channel.id,
+									}),
+								);
+							},
 							lastEventId: channel.lastEventId,
 							encodeFrame: (frame) => transport!.encodeChannelFrame(frame),
 							...(channel.presence

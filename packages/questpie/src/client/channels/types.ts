@@ -40,7 +40,11 @@ export type ChannelPublishReceipt = Readonly<{ eventId: string }>;
 export type ChannelSubscribeOptions = {
 	signal?: AbortSignal;
 	onError?: (error: Error) => void;
+	/** Authorized and caught up for the current transport subscription epoch. */
+	onReady?: () => void;
 };
+
+export type ChannelPresenceOptions = Omit<ChannelSubscribeOptions, "onReady">;
 
 type SubscribeMethod<TDefinition extends AnyChannelDefinition> =
 	keyof ChannelParamsOf<TDefinition> extends never
@@ -70,11 +74,11 @@ type PresenceMethod<TDefinition extends AnyChannelDefinition> = [
 	? never
 	: keyof ChannelParamsOf<TDefinition> extends never
 		? (
-				options?: ChannelSubscribeOptions,
+				options?: ChannelPresenceOptions,
 			) => Promise<readonly ChannelPresenceOf<TDefinition>[]>
 		: (
 				params: ChannelParamsOf<TDefinition>,
-				options?: ChannelSubscribeOptions,
+				options?: ChannelPresenceOptions,
 			) => Promise<readonly ChannelPresenceOf<TDefinition>[]>;
 
 type SubscribePresenceMethod<TDefinition extends AnyChannelDefinition> = [
@@ -169,7 +173,7 @@ export interface ChannelClientTransport {
 	): () => void;
 	presence(
 		input: ChannelConnectionInput,
-		options?: ChannelSubscribeOptions,
+		options?: ChannelPresenceOptions,
 	): Promise<readonly unknown[]>;
 	subscribePresence(
 		input: ChannelConnectionInput,

@@ -1,4 +1,8 @@
 import type {
+	ChannelPresenceOptions,
+	ChannelSubscribeOptions,
+} from "../../src/exports/client.js";
+import type {
 	ChangeBroker,
 	ChangeWake,
 	ClientSink,
@@ -33,6 +37,14 @@ type _sharedUserAuthenticationRemainsAnOptionalCapability = Expect<
 			: false,
 		true
 	>
+>;
+
+type _channelReadinessIsOptionalAndPayloadFree = Expect<
+	Equal<NonNullable<ChannelSubscribeOptions["onReady"]>, () => void>
+>;
+
+type _oneShotPresenceDoesNotExposeContinuingAdmission = Expect<
+	Equal<"onReady" extends keyof ChannelPresenceOptions ? true : false, false>
 >;
 
 declare const sink: ClientSink;

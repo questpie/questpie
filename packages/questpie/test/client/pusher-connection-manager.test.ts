@@ -41,6 +41,7 @@ class FakePusher {
 	readonly connection = {
 		state: "connected",
 		socket_id: "1.2",
+		bind: () => this.connection,
 	};
 	disconnected = false;
 	signinCalls = 0;

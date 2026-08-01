@@ -2145,6 +2145,7 @@ export {
 export type {
 	ChannelClient,
 	ChannelMessage,
+	ChannelPresenceOptions,
 	ChannelPublishInput,
 	ChannelPublishReceipt,
 	ChannelsClient,
