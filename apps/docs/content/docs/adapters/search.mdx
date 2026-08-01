@@ -3,7 +3,7 @@ title: Search adapter
 description: Add full-text and semantic search to your collections with one adapter in questpie.config.ts, pg_trgm lexical search out of the box, pgvector + embeddings when you want meaning-based recall.
 ---
 
-The **search adapter** is the backend behind the [Search](/docs/concepts/search) lifecycle. It powers `app.search`, the client `search` API, and [`.searchable()`](/docs/concepts/collections#searchable) indexing. Swap the adapter and the application contract stays unchanged.
+The **search adapter** is the backend behind the [Search](/docs/concepts/search) lifecycle. It powers `app.search`, the client `search` API, and [`.searchable()`](/docs/schema/collections#searchable) indexing. Swap the adapter and the application contract stays unchanged.
 
 <Callout type="info" title="Prerequisites">
 	Start with the [Search concept](/docs/concepts/search) for projection,
@@ -157,7 +157,7 @@ await app.search.search({
 
 ## Configuring the index: `.searchable()`
 
-`.searchable()` on a collection is the single source of truth for **what** gets indexed, the `title`, `content`, `metadata`, and `facets` you pass are taught in full on [Collections → Searchable](/docs/concepts/collections#searchable). This page only covers the two keys that are search-adapter-specific: `embeddings` (override the vector the [pgvector adapter](#the-pgvector-adapter-semantic-search) generates) and `manual`.
+`.searchable()` on a collection is the single source of truth for **what** gets indexed, the `title`, `content`, `metadata`, and `facets` you pass are taught in full on [Collections → Searchable](/docs/schema/collections#searchable). This page only covers the two keys that are search-adapter-specific: `embeddings` (override the vector the [pgvector adapter](#the-pgvector-adapter-semantic-search) generates) and `manual`.
 
 `SearchableConfig` is `{ disabled?, title?, content?, embeddings?, metadata?, facets?, manual? }`. `.searchable({})` explicitly enables a **title-only** default projection. Content, metadata, and facets are indexed only when you declare them. `undefined`, `.searchable(false)`, and `{ disabled: true }` are not indexed. `manual: true` means the collection is searchable but you index it yourself; automatic write hooks and bulk reindex skip it.
 
@@ -367,7 +367,7 @@ await app.search.clear(); // wipe the whole index
 	- requires app context"` on the Postgres and pgvector adapters. To rebuild the
 	index today, re-save the records (or call `index()` / `indexBatch()` yourself)
 	rather than relying on `reindex()`. The reindex route's
-	[access](/docs/concepts/access-control) is governed by the `reindexAccess`
+	[access](/docs/schema/access-control) is governed by the `reindexAccess`
 	adapter option (default = the collection's `update` rule), relevant once you
 	wire a custom adapter that implements `reindex()`.
 </Callout>
@@ -414,8 +414,8 @@ Adapter and provider factories and their option types come from their own entry 
 
 ## Related
 
-- [Collections → Searchable](/docs/concepts/collections#searchable), the `.searchable()` config that controls what each collection indexes.
+- [Collections → Searchable](/docs/schema/collections#searchable), the `.searchable()` config that controls what each collection indexes.
 - [Configuration](/docs/concepts/configuration), the `runtimeConfig` / `questpie.config.ts` pattern that wires the `search` adapter.
-- [Access control](/docs/concepts/access-control), how search results respect row-level access rules, and how `reindexAccess` gates the reindex route.
+- [Access control](/docs/schema/access-control), how search results respect row-level access rules, and how `reindexAccess` gates the reindex route.
 - [Jobs](/docs/concepts/jobs), the `index-records` job behind automatic re-indexing.
 - [Typed client SDK](/docs/client/sdk), calling `client.search.search(...)` from the frontend.

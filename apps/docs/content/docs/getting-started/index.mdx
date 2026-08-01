@@ -114,13 +114,13 @@ A one-line map of the whole framework. Each entry links to its dedicated page.
 
 ### Data modeling
 
-**[Collections](/docs/concepts/collections)**, typed, versioned database tables with hooks, access rules, relations, and (with the admin module) an automatic admin UI. The `collection(name)` builder is the unit you compose everything else onto.
+**[Collections](/docs/schema/collections)**, typed, versioned database tables with hooks, access rules, relations, and (with the admin module) an automatic admin UI. The `collection(name)` builder is the unit you compose everything else onto.
 
 ```ts
 collection("posts").fields(({ f }) => ({ title: f.text().required() }));
 ```
 
-**[Globals](/docs/concepts/globals)**, singletons (site settings, a homepage). Same field API as collections, but `get`/`update` only, no create/delete, no `where`.
+**[Globals](/docs/schema/globals)**, singletons (site settings, a homepage). Same field API as collections, but `get`/`update` only, no create/delete, no `where`.
 
 ```ts
 global("settings").fields(({ f }) => ({ siteName: f.text().required() }));
@@ -141,7 +141,7 @@ global("settings").fields(({ f }) => ({ siteName: f.text().required() }));
 | `f.object({...})` / `f.json()`           | nested JSONB (typed or schema-less)                    |
 | `f.richText()` / `f.blocks()`            | admin-module rich content                              |
 
-**[Relations](/docs/concepts/relations)**, typed foreign keys. `f.relation("user")` is a belongs-to; `.hasMany({ foreignKey })` and `.manyToMany({ through })` give you the other directions. Load them with `with: { author: true }`.
+**[Relations](/docs/schema/relations)**, typed foreign keys. `f.relation("user")` is a belongs-to; `.hasMany({ foreignKey })` and `.manyToMany({ through })` give you the other directions. Load them with `with: { author: true }`.
 
 ```ts
 author: f.relation("user");
@@ -156,7 +156,7 @@ comments: f.relation("comment").hasMany({ foreignKey: "postId" });
 
 ### Rules and lifecycle
 
-**[Access control](/docs/concepts/access-control)**, per-operation rules on `.access({ read, create, update, delete })`. Return a boolean to allow/deny, or a `where`-shaped object to filter rows (row-level security). Rules run with the full request context (`session`, `db`, …).
+**[Access control](/docs/schema/access-control)**, per-operation rules on `.access({ read, create, update, delete })`. Return a boolean to allow/deny, or a `where`-shaped object to filter rows (row-level security). Rules run with the full request context (`session`, `db`, …).
 
 ```ts
 collection("posts").access({
@@ -169,10 +169,10 @@ collection("posts").access({
 	An `undefined` access rule on a collection requires a session, it does not
 	default to public. Routes are the opposite: a route with no `.access()` is
 	**public** until you add one. Be deliberate about both. See [Access
-	control](/docs/concepts/access-control) and [Routes](/docs/concepts/routes).
+	control](/docs/schema/access-control) and [Routes](/docs/concepts/routes).
 </Callout>
 
-**[Hooks](/docs/concepts/hooks)**, lifecycle callbacks on `.hooks({ ... })`: `beforeChange`, `afterChange`, `beforeDelete`, and more. Each receives the full app context. Queue `publish()` joins the ambient transaction automatically; use `onAfterCommit(cb)` for non-transactional effects such as direct email or HTTP calls.
+**[Hooks](/docs/schema/hooks)**, lifecycle callbacks on `.hooks({ ... })`: `beforeChange`, `afterChange`, `beforeDelete`, and more. Each receives the full app context. Queue `publish()` joins the ambient transaction automatically; use `onAfterCommit(cb)` for non-transactional effects such as direct email or HTTP calls.
 
 ```ts
 collection("posts").hooks({
@@ -188,10 +188,10 @@ collection("posts").hooks({
 <Callout type="warn" title="Don't run output hooks inside an open transaction">
 	Block/upload `afterRead` work re-entering an open tx can deadlock the database
 	driver. Schedule durable-data side effects with `onAfterCommit` instead. See
-	[Hooks](/docs/concepts/hooks).
+	[Hooks](/docs/schema/hooks).
 </Callout>
 
-**[Validation](/docs/concepts/validation)**, Zod schemas for create and update are generated automatically from your field definitions. Use `.validation({ refine, exclude })` only when you need to tighten or drop a specific field.
+**[Validation](/docs/schema/validation)**, Zod schemas for create and update are generated automatically from your field definitions. Use `.validation({ refine, exclude })` only when you need to tighten or drop a specific field.
 
 ### Business logic
 
@@ -253,7 +253,7 @@ export default email({
 });
 ```
 
-**[Blocks](/docs/concepts/blocks)**, composable content blocks for page-builder fields (admin module). Declare a block with `block(name).fields(...)`, then store a tree of them in a `f.blocks()` field.
+**[Blocks](/docs/schema/blocks)**, composable content blocks for page-builder fields (admin module). Declare a block with `block(name).fields(...)`, then store a tree of them in a `f.blocks()` field.
 
 ### The client
 
@@ -318,7 +318,7 @@ export default runtimeConfig({
 ## Where to next
 
 - **[Getting started: TanStack Start](/docs/getting-started/tanstack-start)**, scaffold → `docker compose up` → `db:push` → a booting app.
-- **[Collections](/docs/concepts/collections)**, the deep dive on the unit you'll use most.
+- **[Collections](/docs/schema/collections)**, the deep dive on the unit you'll use most.
 - **[Fields](/docs/concepts/fields)**, every built-in field type and the chain-modifier model.
 - **[Client SDK](/docs/client/sdk)**, the typed client and how every call is inferred from your schema.
 - **[Codegen](/docs/extend/codegen)**, the engine that turns your files into the typed runtime.
@@ -327,8 +327,8 @@ export default runtimeConfig({
 
 Pick the on-ramp that matches what you're here to do. Each is an ordered path through the canonical pages, read them in sequence and every step builds on the last.
 
-- **New dev (build something)**, [TanStack Start](/docs/getting-started/tanstack-start) → [Collections](/docs/concepts/collections) → [Fields](/docs/concepts/fields) → [Relations](/docs/concepts/relations) → [Access control](/docs/concepts/access-control) → [Client SDK](/docs/client/sdk) → [TanStack Query](/docs/client/tanstack-query). Add [Hooks](/docs/concepts/hooks), [Jobs](/docs/concepts/jobs), and [Routes](/docs/concepts/routes) when you need behavior.
-- **Backend / data modeler**, [Collections](/docs/concepts/collections) → [Fields](/docs/concepts/fields) → [Relations](/docs/concepts/relations) → [Validation](/docs/concepts/validation) → [Access control](/docs/concepts/access-control) → [Hooks](/docs/concepts/hooks).
+- **New dev (build something)**, [TanStack Start](/docs/getting-started/tanstack-start) → [Collections](/docs/schema/collections) → [Fields](/docs/concepts/fields) → [Relations](/docs/schema/relations) → [Access control](/docs/schema/access-control) → [Client SDK](/docs/client/sdk) → [TanStack Query](/docs/client/tanstack-query). Add [Hooks](/docs/schema/hooks), [Jobs](/docs/concepts/jobs), and [Routes](/docs/concepts/routes) when you need behavior.
+- **Backend / data modeler**, [Collections](/docs/schema/collections) → [Fields](/docs/concepts/fields) → [Relations](/docs/schema/relations) → [Validation](/docs/schema/validation) → [Access control](/docs/schema/access-control) → [Hooks](/docs/schema/hooks).
 - **Frontend integrator**, [Client SDK](/docs/client/sdk) → [TanStack Query](/docs/client/tanstack-query) → [Realtime](/docs/client/realtime).
 - **Extender / plugin author**, [Codegen](/docs/extend/codegen) → [Modules](/docs/extend/modules) → [Build a plugin](/docs/extend/build-a-plugin).
 - **AI agent**, the QUESTPIE skills (by name) plus `llms.txt`/`llms-full.txt` are the agent on-ramp.

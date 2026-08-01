@@ -362,8 +362,8 @@ import { RealtimeTopicRejectedError } from "questpie/client";
 - [Reactive Apps & Performance](/docs/client/reactive-apps), choose live queries versus channels, isolate React updates, and bound client state.
 - [Realtime adapter](/docs/adapters/realtime), the server-side transport this client API rides: `RealtimeConfig`, the outbox/poll model, and the `pg_notify` / Redis / Cloudflare adapters.
 - [Channels](/docs/client/channels), typed ordered application events over the same runtime.
-- [Collections](/docs/concepts/collections), `find()`, the paginated envelope, and access rules that every snapshot is re-run through.
-- [Globals](/docs/concepts/globals), the singleton `get()` whose shape `globals.<name>.live()` mirrors.
-- [Relations](/docs/concepts/relations), `with` hydration, which `live()` carries into the snapshot.
+- [Collections](/docs/schema/collections), `find()`, the paginated envelope, and access rules that every snapshot is re-run through.
+- [Globals](/docs/schema/globals), the singleton `get()` whose shape `globals.<name>.live()` mirrors.
+- [Relations](/docs/schema/relations), `with` hydration, which `live()` carries into the snapshot.
 - [Configuration](/docs/concepts/configuration), where `realtime` lives in `QuestpieConfig`, alongside the other adapters.
 - [Getting started](/docs/getting-started), sets up `client` and the `q` query-options proxy used in the examples above.

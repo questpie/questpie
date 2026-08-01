@@ -109,7 +109,7 @@ const staff = await app.collections.users.find({
 `domain` compiles to `ILIKE '%@value'`, so `{ domain: "acme.com" }` matches `a@acme.com` but **not** `a@mail.acme.com` (the stored domain is `mail.acme.com`, not `acme.com`). For broader matching use a string operator, e.g. `{ ilike: "%@%acme.com" }`.
 </Callout>
 
-For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see [Fields → filtering](/docs/concepts/fields). Relation filters and hydration are covered in [Relations](/docs/concepts/relations).
+For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see [Fields → filtering](/docs/concepts/fields). Relation filters and hydration are covered in [Relations](/docs/schema/relations).
 
 ## When to use it
 
@@ -146,4 +146,4 @@ type User = typeof users.$infer.select;
 
 - [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.default()`, `.array()`, …).
 - [Text field](/docs/concepts/fields/text), the unvalidated single-line string sibling.
-- [Validation](/docs/concepts/validation), the auto-derived Zod schema and the `.zod()` escape hatch for custom rules.
+- [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch for custom rules.

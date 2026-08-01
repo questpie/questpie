@@ -1,0 +1,15 @@
+{
+	"title": "Schema",
+	"pages": [
+		"collections",
+		"globals",
+		"relations",
+		"blocks",
+		"access-control",
+		"hooks",
+		"validation",
+		"soft-delete",
+		"seeds",
+		"collaborative-documents"
+	]
+}

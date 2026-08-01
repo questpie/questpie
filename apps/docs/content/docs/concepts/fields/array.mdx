@@ -122,19 +122,19 @@ const { docs: untagged } = await app.collections.posts.find({
 The generated `where` type lists a single-item `contains: Item` operator, but the runtime `selectMultiOps` set has **no** `contains`, only `containsAll` and `containsAny`. Using `{ tags: { contains: "ts" } }` type-checks but is silently ignored at query time. Use `containsAny: ["ts"]` to match a single element.
 </Callout>
 
-For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/concepts/relations).
+For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/schema/relations).
 
 ## When to use it
 
 - **`.array()`**, any homogeneous list of one field type: tags (`f.text().array()`), scores (`f.number().array()`), checked options, a fixed set of attachments-by-id.
 - **Multi-select**, `f.select([...]).array()` is the canonical multi-value select. The inner `select` keeps its literal-union typing and option list; `.array()` makes it multiple. See [`f.select()`](/docs/concepts/fields#field-types).
 - **Bound the size**, pair with `.minItems()` / `.maxItems()` whenever there's a real cap (a top-5 list, "at least one"), so the array is validated at the edge.
-- **Reach for [Relations](/docs/concepts/relations) instead** when the elements are rows in another collection, a list of FKs you want to query, join, and hydrate with `with:`. `.array()` is for inline values, not normalized references.
+- **Reach for [Relations](/docs/schema/relations) instead** when the elements are rows in another collection, a list of FKs you want to query, join, and hydrate with `with:`. `.array()` is for inline values, not normalized references.
 - **Reach for [`f.object()`](/docs/concepts/fields#field-types) (then `.array()`)** when each element needs multiple sub-fields, `f.object({ ... }).array()` gives a list of structured items.
 
 ## TypeScript
 
-An array field contributes `Item[]` to the generated row and insert types, and an [`ArrayWhereInput`](/docs/concepts/relations) shape to the `where` type. The element filter value is derived from the inner field, not the stored data, a `f.datetime().array()` filters on the inner field's date input, not `Date[]`.
+An array field contributes `Item[]` to the generated row and insert types, and an [`ArrayWhereInput`](/docs/schema/relations) shape to the `where` type. The element filter value is derived from the inner field, not the stored data, a `f.datetime().array()` filters on the inner field's date input, not `Date[]`.
 
 ```ts
 type Post = typeof posts.$infer.select;
@@ -155,5 +155,5 @@ type PostFilter = CollectionWhere<"posts">; // { tags?: { containsAll?: string[]
 - [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the other shared modifiers (`.required()`, `.default()`, `.localized()`, …).
 - [`f.select()`](/docs/concepts/fields#field-types), multi-select is `f.select([...]).array()`.
 - [`f.object()`](/docs/concepts/fields#field-types), for a list of structured items, wrap an object: `f.object({ ... }).array()`.
-- [Relations](/docs/concepts/relations), when the list elements are rows in another collection (and the full query language for the operators above).
-- [Validation](/docs/concepts/validation), the auto-derived `z.array(...)` schema and the `.zod()` escape hatch.
+- [Relations](/docs/schema/relations), when the list elements are rows in another collection (and the full query language for the operators above).
+- [Validation](/docs/schema/validation), the auto-derived `z.array(...)` schema and the `.zod()` escape hatch.

@@ -12,8 +12,21 @@ import {
 	siteConfig,
 } from "@/lib/seo";
 
+/* Docs URLs are indexed, so a page that moves keeps its old path working. Exact
+   match on the slug, oldest entries first. */
 const docsCompatRedirects = new Map<string, string>([
-	["getting-started/your-first-app", "/docs/start-here/first-app"],
+	["getting-started/your-first-app", "/docs/learn/first-app"],
+	// concepts/ split into Schema, Code, Infrastructure and Ship
+	["concepts/collections", "/docs/schema/collections"],
+	["concepts/globals", "/docs/schema/globals"],
+	["concepts/relations", "/docs/schema/relations"],
+	["concepts/blocks", "/docs/schema/blocks"],
+	["concepts/access-control", "/docs/schema/access-control"],
+	["concepts/hooks", "/docs/schema/hooks"],
+	["concepts/validation", "/docs/schema/validation"],
+	["concepts/seeds", "/docs/schema/seeds"],
+	["concepts/collaborative-documents", "/docs/schema/collaborative-documents"],
+	["concepts/soft-delete-retention", "/docs/schema/soft-delete"],
 ]);
 
 export const Route = createFileRoute("/docs/$")({
@@ -23,7 +36,9 @@ export const Route = createFileRoute("/docs/$")({
 		const redirectTarget = docsCompatRedirects.get(slugs.join("/"));
 
 		if (redirectTarget) {
-			throw redirect({ href: redirectTarget });
+			/* 301, not the 307 default. These pages moved for good, and a permanent
+			   redirect is what passes the old URL's ranking to the new one. */
+			throw redirect({ href: redirectTarget, statusCode: 301 });
 		}
 
 		return serverLoader({ data: slugs });

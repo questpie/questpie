@@ -11,7 +11,7 @@ A **collection** is one database table you define in code. You declare its field
 - **Typed end to end.** Field declarations drive the row type, the insert/update inputs, the `where` filters, relation hydration, and the client SDK. A typo in a field name is a compile error, not a runtime surprise.
 - **Lifecycle built in.** Opt into `timestamps`, `softDelete`, and `versioning` (with an optional draft → published `workflow`) per collection through one `.options()` call.
 - **Rules co-located.** Attach `.access()` (row-level rules that can return a `where` to filter) and `.hooks()` (functions around each operation) right on the definition.
-- **Relations and uploads as fields.** `f.relation("author")` adds a typed FK, admin picker, and `with: { author: true }` hydration; `.upload()` turns the collection into a media store. Covered in [Relations](/docs/concepts/relations) and below.
+- **Relations and uploads as fields.** `f.relation("author")` adds a typed FK, admin picker, and `with: { author: true }` hydration; `.upload()` turns the collection into a media store. Covered in [Relations](/docs/schema/relations) and below.
 - **Auto-discovered.** Add a file to `collections/`, run codegen, and it joins the generated registry.
 
 ## Quick start
@@ -134,7 +134,7 @@ collection("posts").options({
 });
 ```
 
-`CollectionOptions` is `{ schema?, timestamps?, softDelete?, versioning? }`. Model singleton data with [Globals](/docs/concepts/globals).
+`CollectionOptions` is `{ schema?, timestamps?, softDelete?, versioning? }`. Model singleton data with [Globals](/docs/schema/globals).
 
 ### `timestamps`
 
@@ -151,7 +151,7 @@ collection("posts").options({
 
 For uniqueness that should free up again after a soft-delete (e.g. a unique email that another row may reclaim), use `softDeleteUniqueIndex()` inside `.indexes()`, it scopes the constraint to `WHERE deleted_at IS NULL`.
 
-Physical purge is intentionally stricter than delete: an active row is rejected, delete permission never grants purge, and retained references block the transaction. See [Soft delete and durable retention](/docs/concepts/soft-delete-retention) for hooks, client/HTTP examples, relation semantics, and a bounded worker recipe.
+Physical purge is intentionally stricter than delete: an active row is rejected, delete permission never grants purge, and retained references block the transaction. See [Soft delete and durable retention](/docs/schema/soft-delete) for hooks, client/HTTP examples, relation semantics, and a bounded worker recipe.
 
 ### `versioning`
 
@@ -257,7 +257,7 @@ A rule that returns an `AccessWhere` object grants _filtered_ access, rows are n
 	access objects are shallow-merged with the *other* builder winning per key.
 </Callout>
 
-Access is enforced only when you ask for it. CRUD calls default to `accessMode: "system"` (backend; rules bypassed). Pass `{ accessMode: "user", session }` as the **second argument** to run the rules. The full model, `AccessWhere` shape, the `serve`/`introspect` chains, field-level rules, is in [Access control](/docs/concepts/access-control).
+Access is enforced only when you ask for it. CRUD calls default to `accessMode: "system"` (backend; rules bypassed). Pass `{ accessMode: "user", session }` as the **second argument** to run the rules. The full model, `AccessWhere` shape, the `serve`/`introspect` chains, field-level rules, is in [Access control](/docs/schema/access-control).
 
 ## Hooks
 
@@ -299,7 +299,7 @@ The fire order per operation:
 	data.
 </Callout>
 
-Hooks **merge** (collections accumulate; globals replace, a deliberate asymmetry). See [Hooks](/docs/concepts/hooks) for each stage's exact signature and the transaction lifecycle.
+Hooks **merge** (collections accumulate; globals replace, a deliberate asymmetry). See [Hooks](/docs/schema/hooks) for each stage's exact signature and the transaction lifecycle.
 
 ## Uploads
 
@@ -465,7 +465,7 @@ The call accepts at most 100 ids, deduplicates and locks them in database id ord
 
 `lockMany` is a server-only coordination primitive. It does not run hooks, return rows, mutate data, or emit realtime events, and it is not exposed through REST, the client SDK, TanStack Query, MCP CRUD, OpenAPI, or introspection. Prefer claim-checked `updateMany` for a conditional write on one collection; reach for `lockMany` only when the invariant spans records or collections.
 
-`find()` options include `where`, `with` (relation hydration), `columns`, `orderBy`, `limit`, `offset`, `extras`, `search` (case-insensitive ILIKE against `_title`), `locale`, `localeFallback`, `includeDeleted` (soft-delete only), `stage`, and `groupBy`. The full query language, `where` operators, relation filters (`some`/`none`/`every`, `is`/`isNot`), `with` aggregations, is covered under [Relations](/docs/concepts/relations) and the query reference.
+`find()` options include `where`, `with` (relation hydration), `columns`, `orderBy`, `limit`, `offset`, `extras`, `search` (case-insensitive ILIKE against `_title`), `locale`, `localeFallback`, `includeDeleted` (soft-delete only), `stage`, and `groupBy`. The full query language, `where` operators, relation filters (`some`/`none`/`every`, `is`/`isNot`), `with` aggregations, is covered under [Relations](/docs/schema/relations) and the query reference.
 
 ## REST API
 
@@ -527,10 +527,10 @@ The collection-builder types, `CollectionBuilder`, `CollectionBuilderState`, `Co
 
 ## Related
 
-- [Globals](/docs/concepts/globals), the singleton counterpart: one row, `get` / `update` only.
+- [Globals](/docs/schema/globals), the singleton counterpart: one row, `get` / `update` only.
 - [Fields](/docs/concepts/fields), every `f.*` type, its options, validation, localization, and how to add your own.
-- [Relations](/docs/concepts/relations), `f.relation()`, `with` hydration, the query language, and nested mutations.
-- [Access control](/docs/concepts/access-control), the full rule model and `where`-returning rules.
-- [Hooks](/docs/concepts/hooks), each hook's signature and the transaction lifecycle.
-- [Validation](/docs/concepts/validation), the generated Zod schemas and how to tune them.
+- [Relations](/docs/schema/relations), `f.relation()`, `with` hydration, the query language, and nested mutations.
+- [Access control](/docs/schema/access-control), the full rule model and `where`-returning rules.
+- [Hooks](/docs/schema/hooks), each hook's signature and the transaction lifecycle.
+- [Validation](/docs/schema/validation), the generated Zod schemas and how to tune them.
 - Runnable example: [`examples/toy-factory-backend`](https://github.com/questpie/questpie/tree/main/examples/toy-factory-backend), a multi-collection app with relations, versioning, and jobs.

@@ -11,7 +11,7 @@ This is the remote, network-facing story. Local, trusted clients (a CLI on your 
 	Read the [MCP integration](/docs/integrations/mcp) page first - it covers
 	`mcpModule`, how collections/globals/routes become tools, and the
 	`config/mcp.ts` policy surface. This page adds the OAuth 2.1 auth layer on
-	top. Familiarity with [Access control](/docs/concepts/access-control) helps
+	top. Familiarity with [Access control](/docs/schema/access-control) helps
 	too, since scopes layer on top of your existing RBAC.
 </Callout>
 
@@ -253,7 +253,7 @@ As always, `scopes` is an OAuth-only narrowing on top of `access` - a `user` or 
 
 - [Connect an AI agent with MCP and OAuth](/docs/getting-started/mcp-ai-agent) - scaffold, configure, deploy, and connect Claude plus VS Code end to end.
 - [MCP integration](/docs/integrations/mcp) - the base MCP module: how collections/globals/routes become tools, `config/mcp.ts`, custom tools, and the stdio transport.
-- [Access control](/docs/concepts/access-control) - the `.access()` RBAC rules that every OAuth tool call runs through first; scopes narrow, never widen, what they allow.
+- [Access control](/docs/schema/access-control) - the `.access()` RBAC rules that every OAuth tool call runs through first; scopes narrow, never widen, what they allow.
 - [Admin auth](/docs/admin/auth) - the auth config the OAuth provider ships in, and the `/admin/login` page the flow redirects to.
 - [Modules](/docs/extend/modules) - `mcpModule` and `adminModule` are modules you add; admin bundles the starter that carries the OAuth provider.
 - [Routes](/docs/concepts/routes) - how a route opts into MCP tool exposure via `meta.mcp.expose`, gaining a `routes:<key>:invoke` scope.

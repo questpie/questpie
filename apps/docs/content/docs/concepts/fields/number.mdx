@@ -108,7 +108,7 @@ const { docs } = await app.collections.products.find({
 });
 ```
 
-For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/concepts/relations).
+For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/schema/relations).
 
 ## When to use it
 
@@ -148,5 +148,5 @@ type ProductFilter = CollectionWhere<"products">; // { stock?: { gt?: number; ..
 
 - [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.array()`, `.localized()`, …).
 - [`f.text()`](/docs/concepts/fields/text), strings, where `.min()` / `.max()` mean length instead of value.
-- [Validation](/docs/concepts/validation), the auto-derived Zod schema and the `.zod()` escape hatch for custom numeric rules.
-- [Relations](/docs/concepts/relations), the full query language for combining the operators above.
+- [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch for custom numeric rules.
+- [Relations](/docs/schema/relations), the full query language for combining the operators above.

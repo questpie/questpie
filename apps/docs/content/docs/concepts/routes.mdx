@@ -399,11 +399,11 @@ The runtime types and guards live on two entries. From **`questpie/types`**: `In
 
 ## Related
 
-- [Access control](/docs/concepts/access-control), the rule shapes and `session` typing that `.access()` reuses; note routes are **public-by-default**, the inverse of collections.
-- [Validation](/docs/concepts/validation), Zod schemas across the framework; `.schema()` parses input the same way before your handler runs.
+- [Access control](/docs/schema/access-control), the rule shapes and `session` typing that `.access()` reuses; note routes are **public-by-default**, the inverse of collections.
+- [Validation](/docs/schema/validation), Zod schemas across the framework; `.schema()` parses input the same way before your handler runs.
 - [Services](/docs/concepts/services), reusable, typed server objects to resolve from a route's context (and from jobs, hooks, and emails).
 - [Jobs](/docs/concepts/jobs), offload slow work from a route handler with `queue.<name>.publish(payload)`.
-- [Collections](/docs/concepts/collections), every collection also ships its own file-convention REST routes under `/api/:collection`.
+- [Collections](/docs/schema/collections), every collection also ships its own file-convention REST routes under `/api/:collection`.
 - [Client SDK](/docs/client/sdk), call your routes from the typed client; `client.routes.*` infers each route's input, params, and output from the same `AppConfig`.
 - [Framework 101](/docs/getting-started), the one-schema mental model: how codegen projects your routes (and everything else) across the runtime, admin, REST, and client.
 - Runnable example: [`examples/tanstack-barbershop`](https://github.com/questpie/questpie/tree/main/examples/tanstack-barbershop), real routes (`create-booking`, `get-revenue-stats`, `get-active-barbers`) called from a typed client.

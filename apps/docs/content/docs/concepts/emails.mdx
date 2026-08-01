@@ -295,7 +295,7 @@ afterChange: ({ data, operation, onAfterCommit, email }) => {
 	Send from `onAfterCommit`, not directly in `beforeChange`/`afterChange`. A
 	template handler that reads the database while a write transaction is still
 	open can deadlock, and mail sent before commit will be wrong if the
-	transaction rolls back. See [Hooks](/docs/concepts/hooks) for the commit
+	transaction rolls back. See [Hooks](/docs/schema/hooks) for the commit
 	lifecycle.
 </Callout>
 
@@ -472,8 +472,8 @@ The union of all registered template keys is available as `KnownEmailNames` (fro
 
 ## Related
 
-- [Hooks](/docs/concepts/hooks), fire transactional emails from `onAfterCommit` after a write commits.
+- [Hooks](/docs/schema/hooks), fire transactional emails from `onAfterCommit` after a write commits.
 - [Jobs](/docs/concepts/jobs), send mail off the request path in a background job.
 - [Services](/docs/concepts/services), how `ctx.email` and other context services are resolved, and how to add your own.
-- [Validation](/docs/concepts/validation), the Zod schema on a template is the same validation primitive used across the framework.
+- [Validation](/docs/schema/validation), the Zod schema on a template is the same validation primitive used across the framework.
 - A runnable example lives in [`examples/tanstack-barbershop`](https://github.com/questpie/questpie/tree/main/examples/tanstack-barbershop), see `src/questpie/server/emails/` (`appointment-confirmation.ts`, `new-blog-post.ts`) and the `email` block in `src/questpie/server/questpie.config.ts`.

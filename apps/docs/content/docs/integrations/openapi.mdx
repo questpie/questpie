@@ -3,11 +3,11 @@ title: OpenAPI and Scalar
 description: Add one module and your whole API documents itself, an OpenAPI 3.1 spec generated from your collections, globals, routes, auth, and search, served as interactive docs through Scalar UI at /api/docs.
 ---
 
-The **`@questpie/openapi`** module turns your running app into self-documenting API. Register one module and QUESTPIE introspects everything it already knows, your [collections](/docs/concepts/collections), [globals](/docs/concepts/globals), [routes](/docs/concepts/routes), auth endpoints, and [search](/docs/adapters/search), and emits a complete **OpenAPI 3.1** spec at `GET /api/openapi.json`, plus an interactive [Scalar](https://scalar.com) API reference at `GET /api/docs`. No decorators, no hand-written spec, no separate build step: the spec is generated from the same runtime metadata that powers your typed client and admin panel.
+The **`@questpie/openapi`** module turns your running app into self-documenting API. Register one module and QUESTPIE introspects everything it already knows, your [collections](/docs/schema/collections), [globals](/docs/schema/globals), [routes](/docs/concepts/routes), auth endpoints, and [search](/docs/adapters/search), and emits a complete **OpenAPI 3.1** spec at `GET /api/openapi.json`, plus an interactive [Scalar](https://scalar.com) API reference at `GET /api/docs`. No decorators, no hand-written spec, no separate build step: the spec is generated from the same runtime metadata that powers your typed client and admin panel.
 
 <Callout type="info" title="Prerequisites">
 	Read [Routes](/docs/concepts/routes) and
-	[Collections](/docs/concepts/collections) first, the spec is projected from
+	[Collections](/docs/schema/collections) first, the spec is projected from
 	your route definitions and CRUD surface. The module registers like any other
 	(see [Configuration → modules.ts](/docs/concepts/configuration)).
 </Callout>
@@ -215,7 +215,7 @@ Route input/output schemas are converted with Zod's `z.toJSONSchema`. When a sch
 
 ## Custom mounting and standalone generation
 
-The module is a thin wrapper over two exported [route](/docs/concepts/routes) factories. Drop either into your own `routes/` directory if you want a different path or want to apply your own [access](/docs/concepts/access-control) rule:
+The module is a thin wrapper over two exported [route](/docs/concepts/routes) factories. Drop either into your own `routes/` directory if you want a different path or want to apply your own [access](/docs/schema/access-control) rule:
 
 ```ts title="src/questpie/server/routes/openapi-spec.get.ts"
 import { openApiRoute } from "@questpie/openapi/server";
@@ -250,7 +250,7 @@ const spec = generateOpenApiSpec(app, {
 
 The spec and docs routes are ordinary QUESTPIE routes, so they are **public by default**, anyone who can reach `/api/docs` and `/api/openapi.json` can read your full API shape. This mirrors how all [routes](/docs/concepts/routes#access-control) behave: public unless you add an `.access()` rule.
 
-To restrict who can see the docs, mount the factories yourself (see [Custom mounting](#custom-mounting-and-standalone-generation)) and add an access rule, but note that `openApiRoute()` / `docsRoute()` return a finished raw route definition, so you wrap them at a higher level (e.g. gate the path in your HTTP layer or a reverse proxy) rather than chaining `.access()` onto the factory result. Most teams leave the spec public and protect the **endpoints** it documents via each collection's and route's own access rules, the spec describes the surface; [access control](/docs/concepts/access-control) governs who can actually call it.
+To restrict who can see the docs, mount the factories yourself (see [Custom mounting](#custom-mounting-and-standalone-generation)) and add an access rule, but note that `openApiRoute()` / `docsRoute()` return a finished raw route definition, so you wrap them at a higher level (e.g. gate the path in your HTTP layer or a reverse proxy) rather than chaining `.access()` onto the factory result. Most teams leave the spec public and protect the **endpoints** it documents via each collection's and route's own access rules, the spec describes the surface; [access control](/docs/schema/access-control) governs who can actually call it.
 
 <Callout
 	type="info"
@@ -258,7 +258,7 @@ To restrict who can see the docs, mount the factories yourself (see [Custom moun
 >
 	Listing an endpoint in the spec does not make it callable. Every documented
 	collection/global/route is still gated by its own [access
-	rules](/docs/concepts/access-control) at request time. The two declared
+	rules](/docs/schema/access-control) at request time. The two declared
 	security schemes (`bearerAuth`, `cookieAuth`) advertise *how* to authenticate,
 	not *what* is allowed.
 </Callout>
@@ -297,7 +297,7 @@ The codegen plugin (which discovers `config/openapi.ts` and emits an `AppRouteKe
 ## Related
 
 - [Routes](/docs/concepts/routes), how `route()` definitions, `.schema()`/`.outputSchema()`, and `.meta()` produce the operations the spec documents.
-- [Collections](/docs/concepts/collections), the CRUD surface that becomes per-collection paths and component schemas.
+- [Collections](/docs/schema/collections), the CRUD surface that becomes per-collection paths and component schemas.
 - [Configuration](/docs/concepts/configuration), registering `openApiModule` in `modules.ts` and how the fetch handler's `basePath` is wired.
-- [Access control](/docs/concepts/access-control), gating the endpoints the spec describes.
+- [Access control](/docs/schema/access-control), gating the endpoints the spec describes.
 - [Getting started](/docs/getting-started), scaffold an app, then open `/api/docs`.

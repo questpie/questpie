@@ -104,7 +104,7 @@ export interface ModuleDefinition {
 | `fields`      | Custom field types that appear on the `f` proxy.              | override by key                           |
 | `services`    | Services, keyed by name.                                      | override by key                           |
 | `migrations`  | Migrations.                                                   | **concatenated**                          |
-| `seeds`       | [Seeds](/docs/concepts/seeds).                                | **concatenated**                          |
+| `seeds`       | [Seeds](/docs/schema/seeds).                                | **concatenated**                          |
 | `messages`    | Backend messages keyed by locale.                             | **deep-merged** per locale                |
 | `config`      | The config bucket, each `config/<name>.ts` file as one key.   | merged per sub-key                        |
 | `plugin`      | Codegen plugin(s) the module ships.                           | **codegen-only**, never merged at runtime |
@@ -136,7 +136,7 @@ So if your `modules.ts` is `[adminModule, openApiModule]`, the effective resolve
 - **Override by key, last wins.** For keyed categories (`collections`, `globals`, `jobs`, `routes`, `services`, `fields`, `config` sub-keys), a later contributor replaces an earlier one under the same key. Your app files come last, so they always win, that's how you extend a module-provided collection (e.g. `collection("user").merge(starter.collections.user)`).
 - **De-dup by `name`, last occurrence wins.** If the same module appears twice in the resolved tree (e.g. two modules both depend on `starterModule`), it's included once.
 
-A few categories don't override, they **accumulate**: `migrations` and [seeds](/docs/concepts/seeds) are concatenated across all modules, and `messages` are deep-merged per locale (a later module overrides individual keys, not the whole locale).
+A few categories don't override, they **accumulate**: `migrations` and [seeds](/docs/schema/seeds) are concatenated across all modules, and `messages` are deep-merged per locale (a later module overrides individual keys, not the whole locale).
 
 `config` is keyed by config file name and merged per sub-key across the whole resolved module tree. This includes nested modules. For auth, the generated type fold reads every `config.auth` contribution from dependencies first, then the app's `config/auth.ts` on top. In an admin app, `adminModule` depends on `starterModule`, and the starter auth config contributes Better Auth's `admin()` plugin. That plugin is what makes `session.user.role` part of `AppSessionUser`.
 
@@ -159,7 +159,7 @@ If a module contributes auth, fields, services, routes, or config that affects g
 	as a module **overrides** the module's version. This is the mechanism behind
 	extending a module-provided collection: import its builder, `.merge()` it, add
 	your fields, and re-export under the same key. See [Collections → merging
-	builders](/docs/concepts/collections).
+	builders](/docs/schema/collections).
 </Callout>
 
 ## The `plugin` key, how a module ships its file conventions
@@ -287,7 +287,7 @@ All of these types are exported from **`questpie/codegen`**, the public entry fo
 
 The footguns most likely to bite when working with modules:
 
-- **The bare `collection()` from `questpie` only sees builtin fields.** Inside a module, use the same `#questpie/factories` import your app does so module-contributed field types (`richText`, `blocks`) appear on `f`. See [Collections → quick start](/docs/concepts/collections).
+- **The bare `collection()` from `questpie` only sees builtin fields.** Inside a module, use the same `#questpie/factories` import your app does so module-contributed field types (`richText`, `blocks`) appear on `f`. See [Collections → quick start](/docs/schema/collections).
 - **`migrations` / `seeds` concatenate; everything keyed overrides.** If two modules both contribute a migration or seed, you get both. Keep seed ids globally unique. If two contribute a `posts` collection, the later one wins outright, there's no automatic merge of keyed entries (that's what `.merge()` on the builder is for).
 - **De-dup is by `name`, not by reference.** Two different module objects with the same `name` collapse to one (last occurrence wins). Give every module a unique, stable `name`.
 - **A module's `plugin` runs at codegen, its entities at runtime.** If a module's entities appear but its file conventions don't (or vice-versa), check that the package both ships the entities _and_ attaches the `plugin`, they travel together but are processed in different phases.
@@ -317,11 +317,11 @@ import type {
 ## Related
 
 - [Configuration](/docs/concepts/configuration), `modules.ts`, the `config/*.ts` convention, `runtimeConfig` / `appConfig` / `authConfig`, and `packageConfig` in context.
-- [Collections](/docs/concepts/collections), what modules most often contribute, and how `.merge()` extends a module-provided collection.
-- [Globals](/docs/concepts/globals), the singleton counterpart, also contributable by modules.
+- [Collections](/docs/schema/collections), what modules most often contribute, and how `.merge()` extends a module-provided collection.
+- [Globals](/docs/schema/globals), the singleton counterpart, also contributable by modules.
 - [Fields](/docs/concepts/fields), custom field types a module adds to the `f` proxy.
 - [Routes](/docs/concepts/routes) and [Jobs](/docs/concepts/jobs), other categories a module contributes.
-- [Seeds](/docs/concepts/seeds), bootstrap and demo data a module can contribute.
+- [Seeds](/docs/schema/seeds), bootstrap and demo data a module can contribute.
 - [Building a plugin](/docs/extend/build-a-plugin), author the `CodegenPlugin` a module ships, plus the smaller per-feature seams (custom field type, operator, adapter, block).
 - [Codegen](/docs/extend/codegen), the pipeline that reads `modules.ts`, merges modules, and the full `CodegenPlugin` API reference.
 - Runnable example: [`examples/toy-factory-backend`](https://github.com/questpie/questpie/tree/main/examples/toy-factory-backend), a project whose `modules.ts` depends on `adminModule`, `openApiModule`, and `workflowsModule`.

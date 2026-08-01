@@ -255,7 +255,7 @@ export default collection("article")
 });
 ```
 
-For everything `beforeValidate` and `beforeChange` can do, `ctx` shape, execution order, the full hook list, see [Hooks](/docs/concepts/hooks).
+For everything `beforeValidate` and `beforeChange` can do, `ctx` shape, execution order, the full hook list, see [Hooks](/docs/schema/hooks).
 
 ## Create vs. update schema
 
@@ -366,7 +366,7 @@ The Zod-facing primitives are exported from the package when you build or inspec
 ## Related
 
 - **[Fields](/docs/concepts/fields)**, the field types whose defaults seed every schema, and the full `.zod()` / `.required()` / `.input()` / `$type()` modifier surface.
-- **[Hooks](/docs/concepts/hooks)**, `beforeValidate` (transform input) and `beforeChange` (cross-field checks on validated data); full lifecycle order and `ctx` shape.
-- **[Access control](/docs/concepts/access-control)**, the other gate on writes; field write-access runs just before the schema on create (and just after it on update, see the diagram above), and `ApiError.forbidden` is its denial.
-- **[Globals](/docs/concepts/globals)**, singletons that enforce field shape through input hooks rather than a parsed schema (see the callout above).
+- **[Hooks](/docs/schema/hooks)**, `beforeValidate` (transform input) and `beforeChange` (cross-field checks on validated data); full lifecycle order and `ctx` shape.
+- **[Access control](/docs/schema/access-control)**, the other gate on writes; field write-access runs just before the schema on create (and just after it on update, see the diagram above), and `ApiError.forbidden` is its denial.
+- **[Globals](/docs/schema/globals)**, singletons that enforce field shape through input hooks rather than a parsed schema (see the callout above).
 - **Example**, [`examples/tanstack-barbershop`](https://github.com/questpie/questpie/tree/main/examples/tanstack-barbershop): `collections/barbers.ts` shows `.required()` + `.inputOptional()` fields and a `beforeValidate` slug derivation.

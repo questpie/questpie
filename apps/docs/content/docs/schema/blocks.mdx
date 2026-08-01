@@ -407,8 +407,8 @@ If you build blocks programmatically (a plugin), `block`, `BlockBuilder`, `Admin
 ## Related
 
 - [Fields](/docs/concepts/fields), every field type and chain method you use inside `block().fields()`, plus `f.blocks()` in the field reference and how to build your own field type.
-- [Collections](/docs/concepts/collections), where the `f.blocks()` field lives and how the document is read and stored.
-- [Relations](/docs/concepts/relations), what `.prefetch({ with })` expands, and the `with` hydration it reuses.
-- [Hooks](/docs/concepts/hooks), the `afterRead` lifecycle that prefetch runs in (and the open-transaction caveat).
-- [Access control](/docs/concepts/access-control), the read rules that apply to expanded relations (and the upload-inherits-parent-row exception).
+- [Collections](/docs/schema/collections), where the `f.blocks()` field lives and how the document is read and stored.
+- [Relations](/docs/schema/relations), what `.prefetch({ with })` expands, and the `with` hydration it reuses.
+- [Hooks](/docs/schema/hooks), the `afterRead` lifecycle that prefetch runs in (and the open-transaction caveat).
+- [Access control](/docs/schema/access-control), the read rules that apply to expanded relations (and the upload-inherits-parent-row exception).
 - Example: `examples/tanstack-barbershop/src/questpie/server/blocks/` paired with `src/questpie/admin/blocks/`, a full page builder, server blocks paired with frontend renderers. `examples/city-portal/src/questpie/server/blocks/` shows shared categories, `allowChildren`, and a loader prefetch.

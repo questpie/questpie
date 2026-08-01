@@ -16,7 +16,7 @@ On an admin-enabled app the HTTP `/api/mcp` route requires a verified principal 
 
 <Callout type="info" title="Prerequisites">
 	Read [Routes](/docs/concepts/routes) and [Access
-	control](/docs/concepts/access-control) first, routes opt into MCP via
+	control](/docs/schema/access-control) first, routes opt into MCP via
 	`meta.mcp`, and every HTTP tool call runs through your collection/global
 	access rules. The module registers like any other (see
 	[Modules](/docs/extend/modules)).
@@ -276,7 +276,7 @@ collections: {
 	at all*; your access rules decide *what this user may do*. For OAuth callers,
 	a per-user **scope** gate narrows further still (`scopes ∩ RBAC`) - see [MCP
 	over OAuth 2.1](/docs/integrations/mcp-oauth). See [Access
-	control](/docs/concepts/access-control).
+	control](/docs/schema/access-control).
 </Callout>
 
 ## Custom tools
@@ -420,9 +420,9 @@ CRUD tools mirror your collection's columns. Use `fields: { exclude: [...] }` (o
 
 - [Connect an AI agent with MCP and OAuth](/docs/getting-started/mcp-ai-agent), a complete scaffold-to-Claude-and-VS-Code tutorial.
 - [Routes](/docs/concepts/routes), where `meta.mcp.expose` is declared to turn a route into an MCP tool; routes are public-by-default, the inverse of collections.
-- [Access control](/docs/concepts/access-control), the `.access()` rules and `session` typing that every HTTP MCP tool call runs through; the MCP policy layers on top.
-- [Collections](/docs/concepts/collections), the entities whose `list`/`get`/`create`/`update`/`delete` become MCP tools.
-- [Globals](/docs/concepts/globals), singletons exposed as `get`/`update` tools.
+- [Access control](/docs/schema/access-control), the `.access()` rules and `session` typing that every HTTP MCP tool call runs through; the MCP policy layers on top.
+- [Collections](/docs/schema/collections), the entities whose `list`/`get`/`create`/`update`/`delete` become MCP tools.
+- [Globals](/docs/schema/globals), singletons exposed as `get`/`update` tools.
 - [Modules](/docs/extend/modules), `mcpModule` is a module you add; it carries its own codegen plugin.
 - [Codegen](/docs/extend/codegen), file-convention discovery of `mcp-tools/` and `config/mcp.ts`, and `questpie add mcp-tool`.
 - [OpenAPI and Scalar](/docs/integrations/openapi), the other integration that reads route `meta` and your CRUD surface, generating a documented API.

@@ -416,6 +416,6 @@ Plugin authors can import the `relation` factory, `RelationFieldState`, `Relatio
 ## Related
 
 - [Fields](/docs/concepts/fields), every field type and the shared chain methods; `f.relation()` is one of them.
-- [Collections](/docs/concepts/collections), where relations are declared, and the `find` / `findOne` / `with` / `where` query surface that hydrates and filters them.
-- [Access control](/docs/concepts/access-control), relation reads inherit and respect the target collection's access rules.
+- [Collections](/docs/schema/collections), where relations are declared, and the `find` / `findOne` / `with` / `where` query surface that hydrates and filters them.
+- [Access control](/docs/schema/access-control), relation reads inherit and respect the target collection's access rules.
 - Example: `examples/tanstack-barbershop/src/questpie/server/collections/`, real `belongsTo` (`appointments`), `manyToMany` (barbers ↔ services through `barber_services`), lazy refs, and `onDelete("cascade")`.

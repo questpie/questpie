@@ -145,7 +145,7 @@ Unlike text / number / select fields, a `richText` field's `where` slot is **not
 	In json mode, `contains` walks the document with `jsonb_path_query_array(col,
 	'$..text')` and matches inside the extracted text nodes, so it searches the
 	words an editor sees, not node types or attribute values. To filter on whether
-	a *block type* exists, that's the [`f.blocks()`](/docs/concepts/blocks) field,
+	a *block type* exists, that's the [`f.blocks()`](/docs/schema/blocks) field,
 	which has `hasBlockType` / `blockCount` operators.
 </Callout>
 
@@ -155,7 +155,7 @@ For the full query language, combining field filters with `AND` / `OR` / `NOT`, 
 
 - **`f.richText()` (json)**, editor-authored formatted prose where you keep the structure: article bodies, page copy, descriptions with headings/links/images. This is the default and the right choice for almost all rich content.
 - **`f.richText({ mode: "markdown" })`**, when the body must round-trip as portable markdown text (external rendering, migration, plain-text storage). You trade the structured JSON for a `string`.
-- **Need stackable, reorderable, nested content sections instead of one prose blob?** That's [`f.blocks()`](/docs/concepts/blocks), a page-builder field, not a single editor.
+- **Need stackable, reorderable, nested content sections instead of one prose blob?** That's [`f.blocks()`](/docs/schema/blocks), a page-builder field, not a single editor.
 - **Just a plain multi-line string with no formatting?** Use [`f.textarea()`](/docs/concepts/fields/textarea).
 
 ## Configuring the editor (`.admin()`)
@@ -206,6 +206,6 @@ type Post = typeof posts.$infer.select;
 ## Related
 
 - [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.label()`, `.default()`, …).
-- [Blocks](/docs/concepts/blocks), the page-builder sibling: stackable, reorderable, nested content sections instead of one prose document.
+- [Blocks](/docs/schema/blocks), the page-builder sibling: stackable, reorderable, nested content sections instead of one prose document.
 - [Textarea field](/docs/concepts/fields/textarea), a plain multi-line string with no formatting.
 - Admin, the module that supplies this field, and the full editor/admin-config model.

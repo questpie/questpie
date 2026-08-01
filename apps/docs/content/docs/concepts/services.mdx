@@ -373,8 +373,8 @@ type BlogNs = ServiceNamespaceOf<typeof blog>; // undefined
 ## Related
 
 - [Routes](/docs/concepts/routes), custom endpoints whose `handler({ services })` consume your services.
-- [Hooks](/docs/concepts/hooks), lifecycle callbacks that reach services the same way (`ctx.services`), and the `onAfterCommit` deferral.
+- [Hooks](/docs/schema/hooks), lifecycle callbacks that reach services the same way (`ctx.services`), and the `onAfterCommit` deferral.
 - [Jobs](/docs/concepts/jobs), background work that resolves services in its handler.
 - [Emails](/docs/concepts/emails), the built-in `email` (mailer) service (`ctx.email`), the `email()` template factory, and the mail adapters, the canonical built-in service, documented in full.
-- [Collections](/docs/concepts/collections), the typed `ctx.collections` API your services read and write through.
+- [Collections](/docs/schema/collections), the typed `ctx.collections` API your services read and write through.
 - Runnable example: [`examples/tanstack-barbershop`](https://github.com/questpie/questpie/tree/main/examples/tanstack-barbershop), see `src/questpie/server/services/blog.ts` consumed from a collection hook.

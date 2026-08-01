@@ -79,7 +79,7 @@ const { docs: unset } = await app.collections.posts.find({
 
 Boolean filters use `eq`, `ne`, `isNull`, and `isNotNull`. Keep the column nullable to model a tri-state value of true, false, or unknown.
 
-For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/concepts/relations).
+For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/schema/relations).
 
 ## When to use it
 
@@ -118,5 +118,5 @@ type PostFilter = CollectionWhere<"posts">; // { published?: { eq?: boolean; ...
 
 - [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.array()`, `.localized()`, …).
 - [`f.select()`](/docs/concepts/fields/select), when a flag grows into a fixed set of more than two states.
-- [Validation](/docs/concepts/validation), the auto-derived Zod schema and the `.zod()` escape hatch.
-- [Relations](/docs/concepts/relations), the full query language for combining the operators above.
+- [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch.
+- [Relations](/docs/schema/relations), the full query language for combining the operators above.

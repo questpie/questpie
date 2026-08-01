@@ -15,7 +15,7 @@ A global is a **singleton**. Use it for data your app has exactly one of: site s
 - **Scopes per tenant with `scoped`**, one row per city, property, or tenant from the same definition.
 
 <Callout type="info" title="Global or collection">
-	Use a [collection](/docs/concepts/collections) for a set of records. Use a
+	Use a [collection](/docs/schema/collections) for a set of records. Use a
 	global for one settings document, homepage, footer, or other singleton.
 </Callout>
 
@@ -205,7 +205,7 @@ global("site_settings").fields(({ f }) => ({
 }));
 ```
 
-See [Fields](/docs/concepts/fields) for the full field catalog and [Relations](/docs/concepts/relations) for `f.upload()` / `f.relation()`.
+See [Fields](/docs/concepts/fields) for the full field catalog and [Relations](/docs/schema/relations) for `f.upload()` / `f.relation()`.
 
 <Callout type="info" title="Localized fields work on globals">
 Mark a field `.localized()` and QUESTPIE generates a `<name>_i18n` table behind the global. At the type level `localized` stays `[]` (a known limitation of the field-builder overload), but the runtime fully supports it, read and write per locale via the `locale` option shown above.
@@ -381,9 +381,9 @@ export type SiteSettingsData = Awaited<ReturnType<typeof getSiteSettings>>;
 
 ## Related
 
-- [Collections](/docs/concepts/collections), multi-row tables with full CRUD and list views.
+- [Collections](/docs/schema/collections), multi-row tables with full CRUD and list views.
 - [Fields](/docs/concepts/fields), the field catalog used by `.fields()`.
-- [Relations](/docs/concepts/relations), `f.relation()` / `f.upload()` and relation hydration with `with`.
-- [Access control](/docs/concepts/access-control), the access-rule model shared with collections.
-- [Hooks](/docs/concepts/hooks), the lifecycle-hook model.
+- [Relations](/docs/schema/relations), `f.relation()` / `f.upload()` and relation hydration with `with`.
+- [Access control](/docs/schema/access-control), the access-rule model shared with collections.
+- [Hooks](/docs/schema/hooks), the lifecycle-hook model.
 - Runnable examples: `examples/tanstack-barbershop/src/questpie/server/globals/site-settings.ts` (versioned, localized) and `examples/city-portal/src/questpie/server/globals/site-settings.ts` (`scoped` per city).

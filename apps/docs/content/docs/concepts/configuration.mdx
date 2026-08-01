@@ -183,8 +183,8 @@ Everything below `app`/`db` is optional. The full `RuntimeConfigInput` shape:
 | `logger`       | `LoggerConfig`                              | Logger configuration.                                                          |
 | `translations` | `TranslationsConfig`                        | Backend i18n messages (`{ messages }`).                                        |
 | `autoMigrate`  | `boolean`                                   | Run migrations on startup.                                                     |
-| `autoSeed`     | `boolean \| SeedCategory \| SeedCategory[]` | Run [seeds](/docs/concepts/seeds) on startup.                                  |
-| `cli`          | `{ migrations?, seeds? }`                   | Override generated-migration / [seed](/docs/concepts/seeds) directories.       |
+| `autoSeed`     | `boolean \| SeedCategory \| SeedCategory[]` | Run [seeds](/docs/schema/seeds) on startup.                                    |
+| `cli`          | `{ migrations?, seeds? }`                   | Override generated-migration / [seed](/docs/schema/seeds) directories.         |
 
 The input type is `RuntimeConfigInput`, defined as `Partial<Pick<RuntimeConfig, "app" | "db">> & Omit<RuntimeConfig, "app" | "db">`: the resolved `RuntimeConfig` interface with `app` and `db` made optional. `DbConfig` itself is a union, `{ url }`, `{ pglite }`, `{ drizzle }` (a pre-built client, for Neon / Vercel Postgres / Hyperdrive), or `{ create }` (a lazy factory, preferred for Cloudflare Workers).
 
@@ -241,7 +241,7 @@ locale: {
 
 ### `access`, app-wide default rules
 
-`access` is the fallback access map applied when a collection or global doesn't declare its own rule for an operation. It mirrors collection access, `read`, `create`, `update`, `delete`, `transition`, `serve`, `introspect`, each a `boolean` or a function of the request context that may return a `where` object to filter. The per-collection [Access control](/docs/concepts/access-control) chain resolves to these defaults last.
+`access` is the fallback access map applied when a collection or global doesn't declare its own rule for an operation. It mirrors collection access, `read`, `create`, `update`, `delete`, `transition`, `serve`, `introspect`, each a `boolean` or a function of the request context that may return a `where` object to filter. The per-collection [Access control](/docs/schema/access-control) chain resolves to these defaults last.
 
 ```ts
 access: {
@@ -275,7 +275,7 @@ hooks: {
 }
 ```
 
-The shape is `GlobalHooksInput`, `{ collections?: GlobalCollectionHookEntry; globals?: GlobalGlobalHookEntry }`. Each value is one hook-entry object. `GlobalCollectionHookEntry` contains `include`, `exclude`, and lifecycle callbacks; `include` and `exclude` scope it to specific slugs. Per-entity hooks live on collection and global builders; see [Hooks](/docs/concepts/hooks).
+The shape is `GlobalHooksInput`, `{ collections?: GlobalCollectionHookEntry; globals?: GlobalGlobalHookEntry }`. Each value is one hook-entry object. `GlobalCollectionHookEntry` contains `include`, `exclude`, and lifecycle callbacks; `include` and `exclude` scope it to specific slugs. Per-entity hooks live on collection and global builders; see [Hooks](/docs/schema/hooks).
 
 <Callout type="info" title="Group lifecycle callbacks in one entry">
 `collections` and `globals` each accept one hook-entry object. Put several lifecycle callbacks on that object, such as `{ beforeChange, afterChange, afterDelete }`.
@@ -444,7 +444,7 @@ The root `questpie.config.ts` the CLI loads is normally just a re-export of your
 export { default } from "./src/questpie/server/questpie.config";
 ```
 
-`create-questpie` scaffolds this shape. CLI settings such as migration and [seed](/docs/concepts/seeds) directories live in the server config when you need to override the defaults.
+`create-questpie` scaffolds this shape. CLI settings such as migration and [seed](/docs/schema/seeds) directories live in the server config when you need to override the defaults.
 
 <Callout type="warn" title="Importing `questpie/cli` must not run a command">
 	The CLI program is side-effect-free on import, command parsing is guarded by
@@ -523,8 +523,8 @@ import type { TypedAuthConfig } from "questpie/app"; // authConfig() return
 ## Related
 
 - [Getting started](/docs/getting-started), scaffold a project where these files are wired for you.
-- [Collections](/docs/concepts/collections), the entities `runtimeConfig` deliberately keeps out of `questpie.config.ts`.
-- [Access control](/docs/concepts/access-control), how `config/app.ts`'s `access` defaults sit at the bottom of the per-collection rule chain.
-- [Hooks](/docs/concepts/hooks), per-entity hooks; `config/app.ts`'s `hooks` are the global counterpart.
+- [Collections](/docs/schema/collections), the entities `runtimeConfig` deliberately keeps out of `questpie.config.ts`.
+- [Access control](/docs/schema/access-control), how `config/app.ts`'s `access` defaults sit at the bottom of the per-collection rule chain.
+- [Hooks](/docs/schema/hooks), per-entity hooks; `config/app.ts`'s `hooks` are the global counterpart.
 - [Environment](/docs/concepts/environment), `env.ts` / `env()`, boot validation, and server-vs-client vars that feed `runtimeConfig`.
 - Runnable example: [`examples/toy-factory-backend`](https://github.com/questpie/questpie/tree/main/examples/toy-factory-backend), a complete `questpie.config.ts` + `config/app.ts` + `config/auth.ts` + `modules.ts` set.

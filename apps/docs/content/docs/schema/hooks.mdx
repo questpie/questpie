@@ -208,7 +208,7 @@ email, HTTP, or other work that cannot join the database transaction in an
 - **`beforeDelete`**, block deletion (throw), cascade, or back up. `ctx.data` is the record about to be deleted.
 - **`afterDelete`**, transaction-bound cleanup and durable facts. `ctx.data` is the deleted record; throwing rolls back soft or hard delete.
 - **`beforePurge`**, guard permanent removal of an already soft-deleted record. `data` and `original` are the same locked, localized persisted preimage before field-output/`afterRead` hooks. Throwing rolls back the purge.
-- **`afterPurge`**, record transactional cleanup intents or facts. It receives the same preimage even though the owner row has been removed inside the transaction. Throwing rolls back the purge. Use `onAfterCommit` only for non-transactional side effects; durable external cleanup needs a transactional outbox. See [Soft delete and durable retention](/docs/concepts/soft-delete-retention).
+- **`afterPurge`**, record transactional cleanup intents or facts. It receives the same preimage even though the owner row has been removed inside the transaction. Throwing rolls back the purge. Use `onAfterCommit` only for non-transactional side effects; durable external cleanup needs a transactional outbox. See [Soft delete and durable retention](/docs/schema/soft-delete).
 
 ### The hook context (`ctx`)
 
@@ -445,8 +445,8 @@ import type { HookContext, HookFunction } from "questpie";
 
 ## Related
 
-- **[Access control](/docs/concepts/access-control)**, authorize reads/writes and filter rows; field-level access for hiding columns. Use access for _who_, hooks for _what happens_.
-- **[Validation](/docs/concepts/validation)**, the Zod schema that runs between `beforeValidate` and `beforeChange`; `exclude` / `refine` and field-level `.zod()`; the full `ApiError` surface you throw from `before*` hooks.
-- **[Collections](/docs/concepts/collections)**, where `.hooks()` lives, alongside fields, indexes, access, and admin config.
-- **[Globals](/docs/concepts/globals)**, singletons with their own `beforeUpdate` / `afterUpdate` hook stages.
+- **[Access control](/docs/schema/access-control)**, authorize reads/writes and filter rows; field-level access for hiding columns. Use access for _who_, hooks for _what happens_.
+- **[Validation](/docs/schema/validation)**, the Zod schema that runs between `beforeValidate` and `beforeChange`; `exclude` / `refine` and field-level `.zod()`; the full `ApiError` surface you throw from `before*` hooks.
+- **[Collections](/docs/schema/collections)**, where `.hooks()` lives, alongside fields, indexes, access, and admin config.
+- **[Globals](/docs/schema/globals)**, singletons with their own `beforeUpdate` / `afterUpdate` hook stages.
 - **[Jobs](/docs/concepts/jobs)**, whose typed `queue.*.publish()` joins the ambient hook transaction.

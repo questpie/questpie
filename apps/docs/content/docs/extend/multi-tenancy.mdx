@@ -223,7 +223,7 @@ The protection itself is partial. Your resolver's result is merged **flat** into
 Collections have **no `scoped` option**, collection isolation is access rules, and that is deliberate: it composes with everything else access already does (row filtering, field rules, `serve`). The pattern is three parts:
 
 1. **A scope-FK field**, `f.relation("tenants")` (or a plain `f.text()` if the tenant id is external). This is the column the filter keys on.
-2. **An access `where` filter**, `read`/`update`/`delete` rules that return `{ tenant: tenantId }`. A rule that returns a `where` object grants _filtered_ access: rows are narrowed, not denied. (See [Access control](/docs/concepts/access-control) for the full `where`-returning model.)
+2. **An access `where` filter**, `read`/`update`/`delete` rules that return `{ tenant: tenantId }`. A rule that returns a `where` object grants _filtered_ access: rows are narrowed, not denied. (See [Access control](/docs/schema/access-control) for the full `where`-returning model.)
 3. **A `beforeChange` stamp**, set the FK from the resolved scope on `create` so a row cannot be written into the wrong tenant.
 
 ```ts
@@ -500,10 +500,10 @@ function currentTenant() {
 
 ## Related
 
-- [Access control](/docs/concepts/access-control), the `where`-returning rule model that does collection-level scoping, plus field-level rules and the `serve`/`introspect` chains.
+- [Access control](/docs/schema/access-control), the `where`-returning rule model that does collection-level scoping, plus field-level rules and the `serve`/`introspect` chains.
 - [Configuration](/docs/concepts/configuration), `appConfig()` in full (`locale`, `access`, `hooks`, `context`) and the `config/*.ts` convention.
-- [Globals](/docs/concepts/globals), the singleton model that `.options({ scoped })` extends.
-- [Collections](/docs/concepts/collections), fields, access, hooks, and the `schema` option used for hard isolation.
-- [Hooks](/docs/concepts/hooks), where `beforeChange` stamps the scope FK, and the transaction lifecycle.
-- [Relations](/docs/concepts/relations), `with:` hydration, whose access behavior drives the cross-scope leakage gotcha above.
+- [Globals](/docs/schema/globals), the singleton model that `.options({ scoped })` extends.
+- [Collections](/docs/schema/collections), fields, access, hooks, and the `schema` option used for hard isolation.
+- [Hooks](/docs/schema/hooks), where `beforeChange` stamps the scope FK, and the transaction lifecycle.
+- [Relations](/docs/schema/relations), `with:` hydration, whose access behavior drives the cross-scope leakage gotcha above.
 - Runnable example: [`examples/city-portal`](https://github.com/questpie/questpie/tree/main/examples/city-portal), multi-city portal with a `x-selected-city` resolver, a `ScopePicker` in the sidebar, a scoped `siteSettings` global, and a `cityMembers` join collection. Its content collections carry a `city` relation FK; the public site isolates by the `$citySlug` route param rather than access rules, so the access-rule pattern on this page is the recommended extension of it.

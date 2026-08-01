@@ -107,7 +107,7 @@ const { docs } = await app.collections.businesses.find({
 });
 ```
 
-For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/concepts/relations).
+For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/schema/relations).
 
 ## When to use it
 
@@ -147,5 +147,5 @@ type BusinessFilter = CollectionWhere<"businesses">; // { opensAt?: { gt?: Date 
 - [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.array()`, `.localized()`, …).
 - [`f.datetime()`](/docs/concepts/fields/datetime), a full timestamp (date + time) stored as a `Date`, with `.autoNow()` / `.autoNowUpdate()`. Shares the `dateOps` operator set.
 - [`f.date()`](/docs/concepts/fields/date), a calendar date only (ISO date string).
-- [Validation](/docs/concepts/validation), the auto-derived Zod schema and the `.zod()` escape hatch for custom rules.
-- [Relations](/docs/concepts/relations), the full query language for combining the operators above.
+- [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch for custom rules.
+- [Relations](/docs/schema/relations), the full query language for combining the operators above.

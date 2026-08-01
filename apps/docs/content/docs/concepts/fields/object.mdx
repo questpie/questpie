@@ -101,17 +101,17 @@ await app.collections.users.find({
 	An object is one `jsonb` value. Use `pathEquals` for an exact nested value or
 	`contains` for a required subtree. Data that needs relational filters,
 	frequent deep queries, or independent lifecycle belongs in its own
-	[collection](/docs/concepts/collections) with a
-	[relation](/docs/concepts/relations).
+	[collection](/docs/schema/collections) with a
+	[relation](/docs/schema/relations).
 </Callout>
 
-For the full query language, combining filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/concepts/relations).
+For the full query language, combining filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/schema/relations).
 
 ## When to use it
 
 - **`f.object()`**, a **fixed, known** nested shape you want validated key by key: an address, an SEO block, a coordinate pair, a settings group. The keys and their types are part of your schema.
 - **[`f.json()`](/docs/concepts/fields/json)**, **free-form** or externally-shaped data with no fixed keys (a raw webhook payload, arbitrary metadata). It is schema-less; narrow the type with `.$type<T>()` and add runtime validation with `.zod()` only if you want it.
-- **A separate [collection](/docs/concepts/collections) + [relation](/docs/concepts/relations)**, when the nested data needs its own rows, its own queries, or its own access rules. An object is the right call only while the data is genuinely _owned by and embedded in_ the parent row.
+- **A separate [collection](/docs/schema/collections) + [relation](/docs/schema/relations)**, when the nested data needs its own rows, its own queries, or its own access rules. An object is the right call only while the data is genuinely _owned by and embedded in_ the parent row.
 
 ## Repeated objects
 
@@ -132,7 +132,7 @@ links: f
 <Callout type="info" title="Object array vs blocks">
 	`f.object().array()` is for a **homogeneous** list, every item has the same
 	shape. When items can be *different* types chosen from a palette (a page
-	builder), use [`f.blocks()`](/docs/concepts/blocks) instead. (For arranging an
+	builder), use [`f.blocks()`](/docs/schema/blocks) instead. (For arranging an
 	object's keys into sections/tabs in the admin form, an object field also
 	accepts a field-level `.form()` layout config, contributed by the admin
 	module.)
@@ -175,6 +175,6 @@ type User = typeof users.$infer.select;
 
 - [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.array()`, `.localized()`, `.default()`, …).
 - [`f.json()`](/docs/concepts/fields/json), the schema-less sibling for free-form data with no fixed keys.
-- [Blocks](/docs/concepts/blocks), for _heterogeneous_ repeatable content (a page builder) rather than a homogeneous object array.
-- [Collections](/docs/concepts/collections) / [Relations](/docs/concepts/relations), when nested data should be its own rows with real queries and relationships.
-- [Validation](/docs/concepts/validation), the auto-derived Zod schema and the `.zod()` escape hatch.
+- [Blocks](/docs/schema/blocks), for _heterogeneous_ repeatable content (a page builder) rather than a homogeneous object array.
+- [Collections](/docs/schema/collections) / [Relations](/docs/schema/relations), when nested data should be its own rows with real queries and relationships.
+- [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch.

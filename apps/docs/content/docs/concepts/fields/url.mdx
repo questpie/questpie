@@ -117,14 +117,14 @@ const secure = await app.collections.links.find({
 	strict URL parser.
 </Callout>
 
-For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see [Fields → filtering](/docs/concepts/fields). Relation filters and hydration are covered in [Relations](/docs/concepts/relations).
+For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see [Fields → filtering](/docs/concepts/fields). Relation filters and hydration are covered in [Relations](/docs/schema/relations).
 
 ## When to use it
 
 - **`f.url()`**, any field that holds a web address you want format-checked: a site URL, a webhook endpoint, a canonical link, an avatar URL, an external profile.
 - For a **plain string** with no URL validation (a path, a slug, an arbitrary identifier), use [`f.text()`](/docs/concepts/fields/text).
 - For an **email address**, use `f.email()`, the same string shape with `z.string().email()` validation and `domain` operators instead (see [Email field](/docs/concepts/fields/email)).
-- To **upload a file** and store a link to it, reach for the [Upload field](/docs/concepts/fields/upload) (`f.upload()`), or the collection-level [`.upload()`](/docs/concepts/collections#uploads) builder, not a `url` field.
+- To **upload a file** and store a link to it, reach for the [Upload field](/docs/concepts/fields/upload) (`f.upload()`), or the collection-level [`.upload()`](/docs/schema/collections#uploads) builder, not a `url` field.
 
 ## Multiple values
 
@@ -151,4 +151,4 @@ type Link = typeof links.$infer.select;
 
 - [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.default()`, `.array()`, …).
 - [Text field](/docs/concepts/fields/text), the plain-string sibling and the `stringOps` operator set `url` extends.
-- [Validation](/docs/concepts/validation), the auto-derived Zod schema and the `.zod()` escape hatch for stricter URL rules.
+- [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch for stricter URL rules.

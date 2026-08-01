@@ -93,7 +93,7 @@ const { docs } = await app.collections.announcements.find({
 });
 ```
 
-ISO date strings sort lexicographically the same way they sort chronologically, so range filters (`gte` / `lte`) and `orderBy` behave as you expect. The runtime comparison is identical to [`f.datetime()`](/docs/concepts/fields/datetime)'s; only the operand _type_ differs, `date` narrows it to `string`. To combine a date filter with a [relation filter](/docs/concepts/relations) (e.g. only announcements whose `author` is active), nest both in the same `where` clause.
+ISO date strings sort lexicographically the same way they sort chronologically, so range filters (`gte` / `lte`) and `orderBy` behave as you expect. The runtime comparison is identical to [`f.datetime()`](/docs/concepts/fields/datetime)'s; only the operand _type_ differs, `date` narrows it to `string`. To combine a date filter with a [relation filter](/docs/schema/relations) (e.g. only announcements whose `author` is active), nest both in the same `where` clause.
 
 ## When to use it
 
@@ -133,5 +133,5 @@ type AnnouncementFilter = CollectionWhere<"announcements">; // { validFrom?: { g
 - [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.array()`, `.localized()`, …).
 - [`f.datetime()`](/docs/concepts/fields/datetime), a timestamp (moment in time, with timezone) read back as a `Date`.
 - [`f.time()`](/docs/concepts/fields/time), a time of day with no date.
-- [Validation](/docs/concepts/validation), the auto-derived Zod schema and the `.zod()` escape hatch for custom date rules.
-- [Relations](/docs/concepts/relations), hydrating related records with `with` and filtering by a relation alongside a date filter.
+- [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch for custom date rules.
+- [Relations](/docs/schema/relations), hydrating related records with `with` and filtering by a relation alongside a date filter.

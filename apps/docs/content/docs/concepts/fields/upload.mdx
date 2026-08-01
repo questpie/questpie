@@ -166,16 +166,16 @@ const { docs } = await app.collections.posts.find({
 });
 ```
 
-For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see [Fields → filtering](/docs/concepts/fields). Relation filters (`some` / `none` / `every`, `is` / `isNot`) and hydrating the linked asset with `with:` are covered in [Relations](/docs/concepts/relations).
+For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see [Fields → filtering](/docs/concepts/fields). Relation filters (`some` / `none` / `every`, `is` / `isNot`) and hydrating the linked asset with `with:` are covered in [Relations](/docs/schema/relations).
 
 ## When to use it
 
 - **`f.upload()`**, any field that references an uploaded file: a cover image, an avatar, a downloadable attachment. You get a typed asset-ID FK and a file picker in the admin, instead of a free-form string.
 - **`f.upload({ through })` / `f.upload().multiple()`**, when a row holds _several_ files: a gallery, a set of attachments. Choose `through` for a junction-backed relation, `.multiple()` for a simple inline list.
-- For a relation to a _non-upload_ collection (an author, a category), use [`f.relation()`](/docs/concepts/relations) instead, same FK mechanics, but the admin renders a record picker, not an upload control.
+- For a relation to a _non-upload_ collection (an author, a category), use [`f.relation()`](/docs/schema/relations) instead, same FK mechanics, but the admin renders a record picker, not an upload control.
 
 <Callout type="info" title="Hydrate the asset with `with:`">
-A single upload stores only the asset **ID**. To read the asset record itself (its `url`, filename, metadata) alongside the row, hydrate the relation with `with: { coverImage: true }`, exactly like any belongsTo relation (see [Relations → hydration with `with`](/docs/concepts/relations)). The resolved `url` and serving the bytes are covered in [Storage adapters](/docs/adapters/storage).
+A single upload stores only the asset **ID**. To read the asset record itself (its `url`, filename, metadata) alongside the row, hydrate the relation with `with: { coverImage: true }`, exactly like any belongsTo relation (see [Relations → hydration with `with`](/docs/schema/relations)). The resolved `url` and serving the bytes are covered in [Storage adapters](/docs/adapters/storage).
 </Callout>
 
 ## TypeScript
@@ -190,11 +190,11 @@ type Post = typeof posts.$infer.select;
 `.required()` makes the FK non-null and required on insert; without it the column is nullable and the insert field optional. See [Fields → inferred types](/docs/concepts/fields) for how modifiers flow into the generated types.
 
 <Callout type="warn" title="The many forms keep `string` at the type level, only the runtime value is `string[]`">
-`through` and `.multiple()` change the **runtime** schema to `z.array(z.string().uuid())`, but they do **not** transition the field's static type-state: `UploadFieldState` always pins `data: string`, the M2M branch still returns `FieldWithMethods<UploadFieldState<TTo>, …>`, and `.multiple()` is typed `(): any`. So a many-upload field's generated row/insert/`where` types stay `string`, not `string[]`, unlike [`f.relation().manyToMany()` / `.multiple()`](/docs/concepts/relations), which *do* transition the type-state to a to-many shape with `data: string[]`.
+`through` and `.multiple()` change the **runtime** schema to `z.array(z.string().uuid())`, but they do **not** transition the field's static type-state: `UploadFieldState` always pins `data: string`, the M2M branch still returns `FieldWithMethods<UploadFieldState<TTo>, …>`, and `.multiple()` is typed `(): any`. So a many-upload field's generated row/insert/`where` types stay `string`, not `string[]`, unlike [`f.relation().manyToMany()` / `.multiple()`](/docs/schema/relations), which *do* transition the type-state to a to-many shape with `data: string[]`.
 </Callout>
 
 ## Related
 
 - [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.label()`, …).
 - [Storage adapters](/docs/adapters/storage), where the bytes are persisted (local vs files-sdk), the resolved `url`, signed URLs, and visibility for the target upload collection.
-- [Relations](/docs/concepts/relations), belongsTo / hasMany / manyToMany hydration and relation filters that the upload variants share.
+- [Relations](/docs/schema/relations), belongsTo / hasMany / manyToMany hydration and relation filters that the upload variants share.

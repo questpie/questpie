@@ -38,7 +38,7 @@ That gives `events` a `startsAt` column typed `Date` on read, required on insert
 	title="`timestamps: true` already gives you createdAt / updatedAt"
 >
 	You rarely hand-write `createdAt` / `updatedAt`. A collection's [`timestamps`
-	option](/docs/concepts/collections#timestamps) (on by default) adds both for
+	option](/docs/schema/collections#timestamps) (on by default) adds both for
 	you. Declare your own `f.datetime().autoNow()` columns only when you want
 	extra managed timestamps (e.g. `publishedAt`, `archivedAt`) or different
 	names.
@@ -126,7 +126,7 @@ const { docs } = await app.collections.events.find({
 });
 ```
 
-For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/concepts/relations).
+For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/schema/relations).
 
 ## When to use it
 
@@ -160,6 +160,6 @@ The insert type is `Date` (the value you pass is type-checked as a `Date`), not 
 - [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.inputFalse()`, `.localized()`, …).
 - [`f.date()`](/docs/concepts/fields/date), date-only values, stored as an ISO `string` with its own string operand.
 - [`f.time()`](/docs/concepts/fields/time), time-of-day values; shares the same `dateOps` operator set.
-- [Collections → `timestamps`](/docs/concepts/collections#timestamps), the built-in `createdAt` / `updatedAt` you usually rely on instead of hand-rolling these.
-- [Validation](/docs/concepts/validation), the auto-derived Zod schema and the `.zod()` escape hatch for custom date rules.
-- [Relations](/docs/concepts/relations), the full query language for combining the operators above.
+- [Collections → `timestamps`](/docs/schema/collections#timestamps), the built-in `createdAt` / `updatedAt` you usually rely on instead of hand-rolling these.
+- [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch for custom date rules.
+- [Relations](/docs/schema/relations), the full query language for combining the operators above.

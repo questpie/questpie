@@ -150,7 +150,7 @@ export const posts = collection("posts")
 	Definition files import the builders (`collection`, `global`) from
 	`#questpie/factories`, the generated, app-typed factory module. `f` isn't
 	imported; it arrives as the `.fields()` callback argument. See
-	[Collections](/docs/concepts/collections) for the full builder.
+	[Collections](/docs/schema/collections) for the full builder.
 </Callout>
 
 ## 2. Move into the project
@@ -337,7 +337,7 @@ The starter ships `CLAUDE.md` / `AGENTS.md` that point AI assistants at the QUES
 
 ## Related
 
-- [Collections](/docs/concepts/collections), fields, relations, hooks, access, and the admin views they generate.
+- [Collections](/docs/schema/collections), fields, relations, hooks, access, and the admin views they generate.
 - [Client SDK](/docs/client/sdk), the typed client in depth: `createClient<AppConfig>()`, every CRUD method, and the query options.
 - [TanStack Query](/docs/client/tanstack-query), the React hooks layer: `q.collections.*` / `q.globals.*` / `q.routes.*`.
 - [Codegen](/docs/extend/codegen), what `questpie generate` / `questpie add` do and when to re-run them.

@@ -101,7 +101,7 @@ const { docs: unset } = await app.collections.posts.find({
 
 The built-in operators compare the JSON value as a whole. For nested-key queries, model known keys with `f.object()` or top-level columns, or add a custom operator set with `.operators()` (see [Fields → custom operator sets](/docs/concepts/fields#custom-operator-sets)).
 
-For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see [Fields → filtering](/docs/concepts/fields). Relation filters and hydration are covered in [Relations](/docs/concepts/relations).
+For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see [Fields → filtering](/docs/concepts/fields). Relation filters and hydration are covered in [Relations](/docs/schema/relations).
 
 ## When to use it
 
@@ -148,5 +148,5 @@ type PostFilter = CollectionWhere<"posts">; // { settings?: { eq?: { theme: "lig
 
 - [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.$type()`, `.zod()`, `.required()`, `.localized()`, …).
 - [`f.object()`](/docs/concepts/fields#structured), the typed, per-key sibling for fixed nested shapes.
-- [Validation](/docs/concepts/validation), the auto-derived Zod schema and the `.zod()` escape hatch (the way to actually validate a JSON shape).
-- [Relations](/docs/concepts/relations), filtering by a relation and hydrating related rows with `with`.
+- [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch (the way to actually validate a JSON shape).
+- [Relations](/docs/schema/relations), filtering by a relation and hydrating related rows with `with`.

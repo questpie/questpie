@@ -169,7 +169,7 @@ const { docs } = await app.collections.posts.find({
 });
 ```
 
-For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/concepts/relations).
+For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/schema/relations).
 
 ## Dynamic options
 
@@ -220,7 +220,7 @@ The handler's `ctx` (`OptionsContext`) carries `{ data, sibling, search, page, l
 	load options from your own tables, query through a typed handle you bring into
 	scope (e.g. an imported `app`), not `ctx.ctx.db.collections.*`. If what you
 	want is a typed reference to another collection's rows, use
-	[`f.relation()`](/docs/concepts/relations) instead.
+	[`f.relation()`](/docs/schema/relations) instead.
 </Callout>
 
 <Callout type="info" title="Dynamic select stores a plain `string`">
@@ -228,9 +228,8 @@ The handler's `ctx` (`OptionsContext`) carries `{ data, sibling, search, page, l
 	read type is `string` (not a literal union) and the schema is `z.string()`.
 	Use a static options array whenever the set is fixed and known, you get the
 	narrowed type and `z.enum` validation for free. For a typed reference to
-	another collection's rows, reach for
-	[`f.relation()`](/docs/concepts/relations) instead, which gives a real FK and
-	`with:` hydration.
+	another collection's rows, reach for [`f.relation()`](/docs/schema/relations)
+	instead, which gives a real FK and `with:` hydration.
 </Callout>
 
 ## When to use it
@@ -238,7 +237,7 @@ The handler's `ctx` (`OptionsContext`) carries `{ data, sibling, search, page, l
 - **Static `f.select([...])`**, a small, fixed set of values: a status, a priority, a category, a role. This is the common case; you get the literal union type and `z.enum` validation.
 - **`.enum(name)`**, add it when you want the database to enforce the value set too (a real Postgres `enum`), accepting that changing the set later is an enum migration.
 - **`.array()`**, pick several from the set: tags, feature flags, days of the week.
-- **Dynamic `OptionsConfig`**, the choices are data-driven _but the field still stores a plain string_ (e.g. a value pulled from another table you don't want a hard FK to). If you want a typed foreign key with hydration, use [`f.relation()`](/docs/concepts/relations) instead.
+- **Dynamic `OptionsConfig`**, the choices are data-driven _but the field still stores a plain string_ (e.g. a value pulled from another table you don't want a hard FK to). If you want a typed foreign key with hydration, use [`f.relation()`](/docs/schema/relations) instead.
 
 ## TypeScript
 
@@ -262,6 +261,6 @@ type PostFilter = CollectionWhere<"posts">; // { status?: { eq?: "draft" | "publ
 
 - [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.array()`, `.localized()`, …).
 - [Array](/docs/concepts/fields/array), how `.array()` turns a select (or any field) into a multi-value list, with the full `selectMultiOps` membership operators.
-- [`f.relation()`](/docs/concepts/relations), when the choices are rows in another collection and you want a typed FK + hydration instead of a stored string.
-- [Validation](/docs/concepts/validation), the auto-derived `z.enum` schema and the `.zod()` escape hatch for custom rules.
-- [Relations](/docs/concepts/relations), the full query language for combining the operators above.
+- [`f.relation()`](/docs/schema/relations), when the choices are rows in another collection and you want a typed FK + hydration instead of a stored string.
+- [Validation](/docs/schema/validation), the auto-derived `z.enum` schema and the `.zod()` escape hatch for custom rules.
+- [Relations](/docs/schema/relations), the full query language for combining the operators above.

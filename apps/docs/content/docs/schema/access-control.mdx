@@ -104,13 +104,13 @@ So the resolution for each ordinary CRUD operation is: **collection's own `acces
 	resolution is `collection access.purge` → `defaultAccess.purge` → `false`.
 	Missing, denied, already purged, and row-filter-mismatched targets all return
 	not-found so callers cannot probe protected records. See [Soft delete and
-	durable retention](/docs/concepts/soft-delete-retention).
+	durable retention](/docs/schema/soft-delete).
 </Callout>
 
 <Callout type="info">
 	**`.access()` replaces; `.hooks()` merges.** Calling `.access()` again
 	**overwrites** the whole access object, the last call wins. (Contrast
-	[`.hooks()`](/docs/concepts/hooks), which concatenates handlers per stage.)
+	[`.hooks()`](/docs/schema/hooks), which concatenates handlers per stage.)
 	Set every operation you care about in one `.access({ ... })` call. Across
 	modules, `.merge()` lets a later module's `access` override an earlier one
 	key-by-key.
@@ -283,8 +283,8 @@ For an **update** it's the same shape, with `access.update` first (plus the `Acc
 	Row-level access and field-level *write* access both gate the input **before**
 	the Zod schema sees it, so a denied write never reaches validation.
 	Field-level *read* filtering runs on the way out, after the row is loaded. See
-	[Hooks](/docs/concepts/hooks) for the full lifecycle and
-	[Validation](/docs/concepts/validation) for the schema step.
+	[Hooks](/docs/schema/hooks) for the full lifecycle and
+	[Validation](/docs/schema/validation) for the schema step.
 </Callout>
 
 ## Beyond CRUD: `transition`, `serve`, `introspect`
@@ -316,7 +316,7 @@ Three more operations have their own rules, each with a deliberate fallback chai
 
 Seed scripts, jobs, and internal server code need to read and write everything without tripping access rules. That's `accessMode: "system"`: it makes the access engine return `true` immediately, skips field read **and** write filtering, and bypasses the `transition` / `serve` checks.
 
-You set it on the **context**, then pass that context to CRUD calls. Inside a seed, `createContext` is handed to you. See [Seeds](/docs/concepts/seeds) for the full seed lifecycle:
+You set it on the **context**, then pass that context to CRUD calls. Inside a seed, `createContext` is handed to you. See [Seeds](/docs/schema/seeds) for the full seed lifecycle:
 
 ```ts title="src/questpie/server/seeds/posts.ts"
 import { seed } from "questpie";
@@ -468,9 +468,9 @@ import type {
 
 ## Related
 
-- [Hooks](/docs/concepts/hooks), lifecycle callbacks that run alongside access checks; use `beforeChange` to stamp ownership on write and `afterChange` (via `onAfterCommit`) for side effects.
-- [Validation](/docs/concepts/validation), Zod schemas generated from your fields; access runs **before** validation on writes.
-- [Collections](/docs/concepts/collections), the builder you attach `.access()` to.
-- [Globals](/docs/concepts/globals), singletons with the same access model, minus create/delete/serve.
+- [Hooks](/docs/schema/hooks), lifecycle callbacks that run alongside access checks; use `beforeChange` to stamp ownership on write and `afterChange` (via `onAfterCommit`) for side effects.
+- [Validation](/docs/schema/validation), Zod schemas generated from your fields; access runs **before** validation on writes.
+- [Collections](/docs/schema/collections), the builder you attach `.access()` to.
+- [Globals](/docs/schema/globals), singletons with the same access model, minus create/delete/serve.
 - [Routes](/docs/concepts/routes), custom endpoints with their own `.access()` (public by default, the inverse of collections).
 - Runnable example: [`examples/toy-factory-backend`](https://github.com/questpie/questpie/tree/main/examples/toy-factory-backend), collections with real `.access({ ... })` rules and a cycle-safe shared helper in `lib/access.ts`.

@@ -30,7 +30,7 @@ export default runtimeConfig({
 });
 ```
 
-That's enough to make an [upload collection](/docs/concepts/collections#uploads) work end to end. To go to S3 or R2 in production, add a `storage.adapter` built from a [Files SDK](https://www.npmjs.com/package/files-sdk) driver:
+That's enough to make an [upload collection](/docs/schema/collections#uploads) work end to end. To go to S3 or R2 in production, add a `storage.adapter` built from a [Files SDK](https://www.npmjs.com/package/files-sdk) driver:
 
 ```ts title="questpie.config.ts"
 import { runtimeConfig } from "questpie/app";
@@ -191,7 +191,7 @@ const { items } = await app.storage.list({ prefix: "avatars/" });
 
 <Callout type="info" title="Upload collections call `app.storage` for you">
 	You rarely touch `app.storage` directly for normal uploads. When you build an
-	[upload collection](/docs/concepts/collections#uploads) with `.upload()`, its
+	[upload collection](/docs/schema/collections#uploads) with `.upload()`, its
 	`upload()` / `uploadMany()` CRUD methods write through `app.storage`, generate
 	the `key`, and clean up bytes on replace/delete. Reach for `app.storage`
 	directly only for storage operations *outside* a collection (e.g. exporting a
@@ -201,7 +201,7 @@ const { items } = await app.storage.list({ prefix: "avatars/" });
 
 ## Visibility and signed URLs
 
-An upload collection's `visibility` (set via [`.upload({ visibility })`](/docs/concepts/collections#uploads)) controls how its **file bytes** are served, it does _not_ gate the upload rows, which always go through the collection's [access rules](/docs/concepts/access-control).
+An upload collection's `visibility` (set via [`.upload({ visibility })`](/docs/schema/collections#uploads)) controls how its **file bytes** are served, it does _not_ gate the upload rows, which always go through the collection's [access rules](/docs/schema/access-control).
 
 - **`public`** (default), the file `url` is a plain, unsigned URL (the provider's public/CDN URL, or QUESTPIE's `/:collection/files/:key` route for local storage).
 - **`private`**, on read, QUESTPIE's `afterRead` hook builds a **signed URL**: it generates an HMAC-SHA256 token (`key` + `expires` + `collection`), appends it as `?token=`, and the file route verifies it before serving the bytes. The token TTL is `storage.signedUrlExpiration` (default 3600s).
@@ -227,7 +227,7 @@ The signing/verification helpers are exported from `questpie/storage` if you nee
 </Callout>
 
 <Callout type="info" title="To change *who* may fetch private bytes, use `access.serve`">
-Signed URLs answer *how* bytes are served; the `serve` access rule answers *who* may. `serve` falls back to the collection's read rule, then **falls open to allow** if neither is set, so override it with `.access({ serve: … })` on the collection when public bytes shouldn't be world-readable. The full resolution chain is taught in [Access control](/docs/concepts/access-control). Storage only owns the URL/signing mechanism.
+Signed URLs answer *how* bytes are served; the `serve` access rule answers *who* may. `serve` falls back to the collection's read rule, then **falls open to allow** if neither is set, so override it with `.access({ serve: … })` on the collection when public bytes shouldn't be world-readable. The full resolution chain is taught in [Access control](/docs/schema/access-control). Storage only owns the URL/signing mechanism.
 </Callout>
 
 Every QUESTPIE-served request reloads the upload row and evaluates `serve`
@@ -349,10 +349,10 @@ The `Adapter` type is re-exported from `questpie/storage` so you can type your i
 
 ## Related
 
-- [Upload collections](/docs/concepts/collections#uploads), `.upload()` makes a collection a byte store; the storage adapter is _where_ those bytes go.
+- [Upload collections](/docs/schema/collections#uploads), `.upload()` makes a collection a byte store; the storage adapter is _where_ those bytes go.
 - [`f.upload()` field](/docs/concepts/fields#upload), a typed relation from a row to an upload collection.
 - [Client SDK, uploads](/docs/client/sdk#uploads), `client.collections.media.upload(file, { onProgress })` with XHR progress.
-- [Access control](/docs/concepts/access-control), the `serve` rule that gates who may fetch file bytes.
+- [Access control](/docs/schema/access-control), the `serve` rule that gates who may fetch file bytes.
 - [Configuration](/docs/concepts/configuration), where the `storage` block lives in `runtimeConfig()`.
 - [Environment](/docs/concepts/environment), typed `env()` for bucket names, endpoints, and credentials.
 - [Files SDK](https://www.npmjs.com/package/files-sdk), the full driver catalog and adapter API.
