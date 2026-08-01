@@ -1,4 +1,8 @@
-import { remarkMdxMermaid } from "fumadocs-core/mdx-plugins";
+import { transformerNotationErrorLevel } from "@shikijs/transformers";
+import {
+	rehypeCodeDefaultOptions,
+	remarkMdxMermaid,
+} from "fumadocs-core/mdx-plugins";
 import { defineConfig, defineDocs } from "fumadocs-mdx/config";
 
 export const docs = defineDocs({
@@ -99,6 +103,13 @@ export default defineConfig({
 				dark: questpieSyntax("questpie-dark", "dark"),
 				light: questpieSyntax("questpie-light", "light"),
 			},
+			/* fumadocs enables highlight, word-highlight, diff and focus but not
+			   error level. Spreading its defaults keeps those four, because passing
+			   `transformers` replaces the array rather than adding to it. */
+			transformers: [
+				...(rehypeCodeDefaultOptions.transformers ?? []),
+				transformerNotationErrorLevel(),
+			],
 		},
 		remarkPlugins: [remarkMdxMermaid],
 	},

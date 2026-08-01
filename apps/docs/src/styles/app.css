@@ -477,23 +477,12 @@
 	line-height: 1.65 !important;
 }
 
+/* Fourteen --tw-prose-* declarations used to sit here. @tailwindcss/typography
+   is not installed — `.prose` is fumadocs' own class name, not the plugin — so
+   they configured something that was never reading them. Their real effect was
+   to make the docs look themed while every rule below did the actual work. */
 .prose,
 article {
-	--tw-prose-body: var(--foreground);
-	--tw-prose-headings: var(--foreground);
-	--tw-prose-lead: var(--foreground-muted);
-	--tw-prose-links: var(--primary);
-	--tw-prose-bold: var(--foreground);
-	--tw-prose-counters: var(--foreground-subtle);
-	--tw-prose-bullets: var(--foreground-subtle);
-	--tw-prose-hr: var(--border-subtle);
-	--tw-prose-quotes: var(--foreground);
-	--tw-prose-quote-borders: var(--border-strong);
-	--tw-prose-captions: var(--foreground-muted);
-	/* was var(--primary) — same reason as the inline-code rule below */
-	--tw-prose-code: var(--foreground);
-	--tw-prose-pre-code: var(--foreground);
-	--tw-prose-pre-bg: var(--card);
 	color: var(--foreground);
 	line-height: 1.72;
 }
@@ -593,10 +582,32 @@ article li {
 	line-height: 1.72;
 }
 
+/* Vertical rhythm, which the docs had none of. Preflight zeroes every margin and
+   the typography plugin that would restore them is not installed, so two
+   paragraphs sat 0px apart and the page read as one block of text.
+
+   1.5rem, derived rather than picked: the leading inside a paragraph is
+   29.24 − 17 = 12.24px, so the gap between paragraphs has to clear that by
+   enough to read as a break. 24px is about four fifths of a line box, which
+   separates without airiness. In rem so it does not drift with element size. */
+.prose > p,
+.prose > ul,
+.prose > ol,
+.prose > blockquote,
+.prose > table,
+article > p {
+	margin-bottom: 1.5rem;
+}
+
+/* A heading owns the text under it, so the space below is much smaller than the
+   space above. h2 already carries a rule and 1.25rem of padding on top. */
+.prose :where(h1, h2, h3, h4, h5, h6) {
+	margin-bottom: 0.75rem;
+}
+
 .prose :where(ul, ol),
 article :where(ul, ol) {
 	margin-top: 0.75rem;
-	margin-bottom: 0.75rem;
 }
 
 .prose li,
@@ -670,6 +681,47 @@ article :where(pre, figure[data-rehype-pretty-code-figure] pre) {
 figure.shiki,
 figure[data-rehype-pretty-code-figure] {
 	overflow: hidden;
+}
+
+/* ── line annotations ─────────────────────────────────────────────────────────
+   shiki's transformers mark lines with these classes. The colours come from the
+   syntax ladder, which already has an added/removed/highlight set, so a marked
+   line sits inside the canon instead of introducing a second red. */
+.prose .line.highlighted {
+	display: inline-block;
+	width: 100%;
+	background: var(--syntax-highlight);
+	box-shadow: inset 2px 0 0 var(--primary);
+}
+
+.prose .line.highlighted.error {
+	background: var(--syntax-removed);
+	box-shadow: inset 2px 0 0 var(--destructive);
+}
+
+.prose .line.highlighted.warning {
+	background: var(--syntax-added);
+	box-shadow: inset 2px 0 0 var(--warning);
+}
+
+.prose .line.diff.add {
+	background: var(--syntax-added);
+	box-shadow: inset 2px 0 0 var(--success);
+}
+
+.prose .line.diff.remove {
+	background: var(--syntax-removed);
+	box-shadow: inset 2px 0 0 var(--warning);
+	opacity: 0.72;
+}
+
+/* The word the error is about, underlined where a compiler would squiggle. */
+.prose .highlighted-word {
+	border-radius: 2px;
+	padding: 0.1em 0.2em;
+	background: var(--syntax-removed);
+	text-decoration: underline wavy var(--destructive);
+	text-underline-offset: 3px;
 }
 
 figure.shiki > div:first-child,
