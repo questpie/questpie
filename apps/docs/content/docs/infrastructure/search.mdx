@@ -1,0 +1,203 @@
+---
+title: Search
+description: One shared index behind every collection you mark searchable. Postgres full-text search with no configuration at all, pgvector when you want ranking by meaning, and one config line to swap either for a service of your own.
+kind: guide
+package: questpie
+---
+
+The collection decides what goes in. `app.search` is the query API. The adapter
+owns storage and ranking, and it is the only one of the three that moves when
+you change backends. Because the index is derived and never authoritative, it
+can be thrown away and rebuilt from the rows at any time.
+
+## The default
+
+Leave `search` out of your config and QUESTPIE builds
+`createPostgresSearchAdapter()` for you. That is Postgres full-text search over
+a generated `tsvector`, every word queried as a `:*` prefix, with trigram
+similarity on the title for typos. No service beyond the database you run.
+
+Nothing is indexed until a collection asks for it.
+
+```ts title="src/questpie/server/collections/posts.ts"
+import { collection } from "#questpie/factories";
+
+export const posts = collection("posts")
+	.fields(({ f }) => ({ title: f.text(255).required(), excerpt: f.text() }))
+	.title(({ f }) => f.title)
+	.searchable({ content: (record) => record.excerpt });
+```
+
+The index lives in `questpie_search` and `questpie_search_facets`. Both come
+back from `getTableSchemas()`, so Drizzle owns their DDL and `questpie push`
+creates them with the rest of your schema.
+
+<Callout type="warn" title="The default needs the `pg_trgm` extension">
+	The `gin_trgm_ops` index is part of the Drizzle table, so the extension has to
+	exist before `questpie push` or `questpie migrate` runs that DDL. The
+	`create-questpie` starters provision it from `docker/init-extensions.sql` on
+	first container init. On managed Postgres, enable it yourself.
+</Callout>
+
+## Available adapters
+
+| Adapter    | Factory                                                                       | Needs                                          | Pick it when                                                          |
+| ---------- | ----------------------------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------- |
+| `postgres` | `createPostgresSearchAdapter()` from `questpie/adapters/postgres-search`      | `pg_trgm`                                      | Always, until keyword matching stops being enough. It is the default. |
+| `pgvector` | `createPgVectorSearchAdapter({ … })` from `questpie/adapters/pgvector-search` | `pg_trgm`, `vector`, and an embedding provider | You want recall by meaning, not just by keyword overlap.              |
+| yours      | anything implementing `SearchAdapter`                                         | whatever the service needs                     | You already run Meilisearch, Elasticsearch or Typesense.              |
+
+## Swapping the adapter
+
+`search` in `runtimeConfig` takes a `SearchAdapter` instance and nothing else,
+so a swap is one import and one key. Here is pgvector, which composes the
+Postgres adapter for lexical work and adds an embedding column beside it.
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { createPgVectorSearchAdapter } from "questpie/adapters/pgvector-search";
+import { runtimeConfig } from "questpie/app";
+import { createOpenAIEmbeddingProvider } from "questpie/search";
+
+export default runtimeConfig({
+	app: { url: process.env.APP_URL! },
+	db: { url: process.env.DATABASE_URL! },
+	search: createPgVectorSearchAdapter({
+		embeddingProvider: createOpenAIEmbeddingProvider({
+			apiKey: process.env.OPENAI_API_KEY!,
+		}),
+		indexType: "ivfflat",
+	}),
+});
+```
+
+Every call site stays as it was. `app.search.search(...)`, the client `search`
+method and your `.searchable()` declarations all target the interface.
+
+### Adapter options
+
+| Option              | Adapter    | Default            | What it does                                                      |
+| ------------------- | ---------- | ------------------ | ----------------------------------------------------------------- |
+| `trigramThreshold`  | both       | `0.3`              | Minimum trigram similarity, 0 to 1, for a fuzzy title match.      |
+| `ftsWeight`         | both       | `0.7`              | FTS share of the lexical score. Trigram gets `1 - ftsWeight`.     |
+| `embeddingProvider` | `pgvector` | none, **required** | Turns query and record text into vectors.                         |
+| `indexType`         | `pgvector` | `"ivfflat"`        | `ivfflat` builds with `lists = 100`, `hnsw` builds an HNSW graph. |
+
+<Callout
+	type="warn"
+	title="The pgvector column is not part of the Drizzle schema"
+>
+	`embedding vector(N)` and its index come from `getMigrations()`, which
+	`app.migrations.search()` applies at the end of every `questpie migrate`.
+	`questpie push` syncs only the Drizzle schema, so a push-only database never
+	gets the column. `N` is fixed from the provider's `dimensions`.
+</Callout>
+
+## Ranking modes
+
+`mode` picks the ranking strategy. An adapter that cannot serve one throws.
+
+| Mode               | `postgres`                  | `pgvector`                                 |
+| ------------------ | --------------------------- | ------------------------------------------ |
+| `lexical`, default | FTS rank plus trigram score | forwarded to the Postgres lexical path     |
+| `semantic`         | rejected                    | embeds the query, ranks by cosine distance |
+| `hybrid`           | rejected                    | rejected                                   |
+
+Both built-in adapters advertise `hybrid: false`, which is reserved for real
+fusion of the two. Semantic ranking skips rows whose `embedding` is `NULL`.
+
+## Querying
+
+```ts
+const { results, total, facets } = await app.search.search({
+	query: "release notes",
+	collections: ["posts"],
+	filters: { status: "published" },
+});
+```
+
+| Option        | Default            | Notes                                                                      |
+| ------------- | ------------------ | -------------------------------------------------------------------------- |
+| `query`       | none, required     | The search text. `""` is browse mode, newest first, no ranking.            |
+| `collections` | every collection   | Restrict to these names.                                                   |
+| `locale`      | the default locale | Which locale's projection to search.                                       |
+| `limit`       | `10`               | Page size.                                                                 |
+| `offset`      | `0`                | Page offset.                                                               |
+| `mode`        | `"lexical"`        | See the table above.                                                       |
+| `filters`     | none               | Matched against indexed `metadata`. Array is OR, across keys AND.          |
+| `highlights`  | `true`             | Wraps matches in `<mark>`. Server calls only.                              |
+| `facets`      | none               | Aggregations to compute. See [Facets](/docs/infrastructure/search/facets). |
+
+### Server and client return different things
+
+`app.search.search(...)` hands back `{ results, total, facets? }`, and each
+result is the raw index row, including `title`, `content`, `highlights` and
+`score`. It is trusted server code, so it sees the projection as stored.
+
+`client.search.search(...)` hands back `{ docs, total, facets? }`. Each doc is
+the live collection row, hydrated through CRUD so hooks and field access run,
+plus `_collection` and `_search: { score }`. Index snapshots are left out on
+purpose, because they were projected before request-time field access existed.
+
+### Access is applied at the route
+
+The HTTP route compiles each collection's
+[read rule](/docs/schema/access-control) with the same fail-closed WHERE
+compiler CRUD uses, skips collections you cannot read, and hands one
+authorized candidate set to hits, totals, facets and vector ordering alike. A
+ranked row that can no longer be hydrated rejects the whole response rather than
+shortening the page under a total that disagrees with it. `app.search.search()`
+called from your own code is trusted and filters nothing.
+
+## What lands in the index
+
+`.searchable({})` indexes the title only, from your `.title()` field, falling
+back to `id`. `content`, `metadata`, `facets` and `embeddings` are each opt-in.
+`undefined`, `.searchable(false)` and `{ disabled: true }` index nothing, and an
+unindexed collection is invisible to the HTTP route.
+
+<Callout type="warn" title="A projection is an access boundary">
+	Row-level rules scope which candidates a search may return, but a shared index
+	cannot apply field-level access inside a value you projected. Anything you put
+	in `content`, `metadata`, `facets` or an embedding must be safe for every
+	actor allowed to read that row.
+</Callout>
+
+## Writing your own adapter
+
+The `search` slot accepts any `SearchAdapter`, and framework, module and
+application code all go through this same contract.
+
+```ts
+interface SearchAdapter {
+	readonly name: string;
+	readonly capabilities: AdapterCapabilities;
+	initialize(ctx: AdapterInitContext): Promise<void>;
+	getMigrations(): AdapterMigration[];
+	search(options: SearchOptions): Promise<SearchResponse>;
+	index(params: IndexParams): Promise<void>;
+	remove(params: RemoveParams): Promise<void>;
+	reindex(collection: string): Promise<void>;
+	clear(): Promise<void>;
+	indexBatch?(params: IndexParams[]): Promise<void>;
+	getTableSchemas?(): Record<string, any>;
+}
+```
+
+`capabilities` is `{ lexical, trigram, semantic, hybrid, facets }`, readable at
+`app.search.getAdapter()`. `initialize()` must not create tables. Return Drizzle
+tables from `getTableSchemas()` if the backend is local and migrations should
+own the DDL, or leave the method off for an external service, which then needs
+no tables and no Postgres extensions at all.
+
+Types live in `questpie/search`, re-exported from `questpie`. Each factory and
+its options ship from its own entry point.
+
+## Where each topic lives
+
+| Topic                                             | Page                                                 |
+| ------------------------------------------------- | ---------------------------------------------------- |
+| When writes reach the index, and indexing by hand | [Indexing](/docs/infrastructure/search/indexing)     |
+| Counts, ranges and hierarchies over metadata      | [Facets](/docs/infrastructure/search/facets)         |
+| Embedding providers, OpenAI and your own          | [Embeddings](/docs/infrastructure/search/embeddings) |
+| The full `.searchable()` config                   | [Collections](/docs/schema/collections#searchable)   |
+| Calling `search` from the frontend                | [Typed client SDK](/docs/client/sdk)                 |

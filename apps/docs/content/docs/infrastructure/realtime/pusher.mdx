@@ -1,0 +1,113 @@
+---
+title: Pusher and Soketi
+description: The managed WebSocket preset, its authorization model, and the honest limits of what terminating a connection can revoke.
+kind: guide
+package: questpie
+---
+
+Pick this when you want provider-managed WebSockets, provider-native presence
+and shared multicast for channel events. `pusherRealtime()` fills both realtime
+seams at once, so `live()`, `{ realtime: true }` and `client.channels.*` stay
+exactly as they were.
+
+## Wiring it
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { pusherRealtime } from "questpie/adapters/pusher";
+import { runtimeConfig } from "questpie/app";
+
+export default runtimeConfig({
+	db: { url: env.DATABASE_URL },
+	realtime: pusherRealtime({
+		appId: env.PUSHER_APP_ID,
+		key: env.PUSHER_KEY,
+		secret: env.PUSHER_SECRET,
+		cluster: env.PUSHER_CLUSTER,
+	}),
+});
+```
+
+| Option                        | Notes                                                         |
+| ----------------------------- | ------------------------------------------------------------- |
+| `appId`, `key`, `secret`      | Required provider credentials                                 |
+| `cluster`                     | Defaults to `mt1` when no `host` is given                     |
+| `host`, `port`, `useTLS`      | Self-hosted Soketi. `useTLS` defaults to `true`               |
+| `wsHost`, `wsPort`, `wssPort` | Browser-side socket endpoint, falls back to `host` and `port` |
+| `brokerChannel`               | Defaults to a hash of `appId` and `key`                       |
+| `authEndpoint`                | Where the browser asks for channel auth                       |
+| `clientEvents`                | Direct provider client events, off unless configured          |
+
+`questpie/adapters/pusher` is the only entry that loads the optional `pusher`
+and `pusher-js` peers, so an app that never imports it never pays for them.
+
+## What travels over the provider
+
+Live-query snapshots stay private to one edge session, because each snapshot
+has already passed that principal's row access, field access and `afterRead`
+hooks before it is written. The shared broker channel carries only wakes.
+Framework channel events may use provider multicast, but only after
+subscribe and publish authorization and Zod validation have both run.
+
+## Authorization
+
+QUESTPIE posts the current `socket_id`, plus the channel name when it is
+authorizing a channel, to the authenticated realtime auth route, which answers
+with `Cache-Control: no-store`. The signed user id is an
+HMAC of a stable principal identity keyed by your `secret`, so the provider
+never learns your user ids. After a reconnect `pusher-js` asks for fresh user
+authentication, and channel authorization waits for that sign-in before it
+returns anything, rejecting a released owner or a stale socket.
+
+The transport declares `channelGrantMode: "stateless-signed-grant"`, meaning
+`generateAuth` is side-effect-free local encoding. QUESTPIE evaluates policy and
+signs outside any database lock, then runs an optimistic generation check before
+handing the blob over. A concurrent revocation discards it before it reaches the
+browser. A shared transport that does not declare this capability is rejected
+before policy runs at all.
+
+## Revocation, honestly
+
+`channels.revokeAuthority(channel, { subject })` persists the authorization
+generation in the caller's database transaction. Pusher declares
+`authorityRevocationScope: "principal-connections"`, which is the honest claim:
+it can terminate every current connection for one user, but it cannot terminate
+one logical channel subscription. After termination, fresh per-channel
+authorization readmits the still-valid bindings and denies the revoked one. The
+subject must be a `user`.
+
+| Caller                       | Failure behavior                                                                             |
+| ---------------------------- | -------------------------------------------------------------------------------------------- |
+| Inside a managed transaction | Termination and acknowledgement run inline. A failure throws and rolls back                  |
+| Standalone command           | The durable cut stands, provider dispatch stays fail-closed, an idempotent retry finishes it |
+
+<Callout type="warn" title="Revocation is not frame-atomic">
+	A frame Pusher already accepted can still arrive during termination, and a
+	conservative disconnect can outlive a later database rollback. A custom shared
+	transport must declare its own revocation scope. QUESTPIE never assumes an
+	unknown provider revokes exactly.
+</Callout>
+
+## Direct client events
+
+Off by default, and not equivalent to `client.channels.*.publish()`. Turning
+them on takes three deliberate keys.
+
+```ts
+clientEvents: {
+	enabled: true,
+	acknowledgeProviderWideRisk: true,
+	allowedChannels: ["presence-chat-room-one"],
+}
+```
+
+The second key is required because Pusher enables client events for the whole
+provider app, not per channel. The allowlist constrains the QUESTPIE SDK only. A
+raw provider client can bypass it, and anything it sends skips framework
+schemas, publish authorization, rate limits, ordered replay and delivery
+guarantees.
+
+## Related
+
+- [Realtime](/docs/infrastructure/realtime), the two seams and the other adapters.
+- [Tuning](/docs/infrastructure/realtime/tuning), every option and limit.
+- [Channels](/docs/client/channels), the API this transport carries.

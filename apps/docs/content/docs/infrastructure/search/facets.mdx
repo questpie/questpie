@@ -1,0 +1,86 @@
+---
+title: Facets
+description: Counts, buckets and hierarchies over the metadata a collection indexes. Declare the shape once on the collection, then ask for the aggregations you want per query.
+kind: guide
+package: questpie
+---
+
+A facet is an aggregation over one indexed metadata field, the thing that turns
+a result list into a filter sidebar reading "Published (42), Draft (15)". Both
+built-in adapters support them. Values land in their own table at index time,
+one row each, so a count is a `GROUP BY` and never a parse of your metadata.
+
+## Declare the fields
+
+Facets read from `metadata`, so a field has to be in the projection before it
+can be faceted. Facet keys should match your metadata keys.
+
+```ts
+collection("products").searchable({
+	metadata: (r) => ({ category: r.category, price: r.price, tags: r.tags }),
+	facets: {
+		category: true,
+		tags: { type: "array" },
+		price: {
+			type: "range",
+			buckets: [
+				{ label: "Under $10", max: 10 },
+				{ label: "$10 to $50", min: 10, max: 50 },
+			],
+		},
+	},
+});
+```
+
+| Config                             | What it indexes                                                   |
+| ---------------------------------- | ----------------------------------------------------------------- |
+| `true`                             | One row per record, the value as a string.                        |
+| `{ type: "array" }`                | One row per item. Skips the field if the value is not an array.   |
+| `{ type: "range", buckets }`       | One row carrying the matching bucket label and the number itself. |
+| `{ type: "hierarchy", separator }` | One row per level of the path. `separator` defaults to `" > "`.   |
+
+A hierarchy value of `"Electronics > Phones > iPhone"` indexes three rows, one
+for each prefix, so a count exists at every depth. A range value that matches no
+bucket is dropped, and so is any field whose value is `null` or `undefined`.
+
+## Ask for them
+
+```ts
+const { facets } = await app.search.search({
+	query: "shoes",
+	facets: [{ field: "category", limit: 10, sortBy: "count" }],
+});
+// [{ field: "category", values: [{ value: "sneakers", count: 12 }, …], stats }]
+```
+
+Each requested facet is `{ field, limit?, sortBy? }`. `limit` defaults to `10`
+and `sortBy` to `"count"`, descending. Pass `"alpha"` for alphabetical instead.
+
+A range facet also comes back with `stats`, the `min` and `max` of the numeric
+values behind it, which is what you need to place a price slider. Any other
+facet type leaves `stats` undefined, because only a range indexes a number.
+
+<Callout type="info" title="Facets are scoped by the same query">
+	They are computed over the rows the current query matched, after the
+	`collections`, `locale` and `filters` narrowing, and over authorized rows only
+	when the request came through HTTP. Change the query and the counts change.
+</Callout>
+
+## Browsing without a query
+
+`query: ""` skips ranking entirely and orders by `updatedAt` descending, which
+makes a facets-only request cheap. Pair it with `limit: 0` when you want the
+counts for an empty filter state and no documents.
+
+```ts
+const { facets } = await app.search.search({
+	query: "",
+	limit: 0,
+	facets: [{ field: "status" }],
+});
+```
+
+## Related
+
+- [Search](/docs/infrastructure/search), the query options facets ride along with.
+- [Collections](/docs/schema/collections#searchable), the `.searchable()` config.

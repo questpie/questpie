@@ -1,0 +1,84 @@
+---
+title: Running the supervisor
+description: The Deno process that actually spawns guest subprocesses, the command to start it, the environment it reads, and the shared secret without which it refuses every run your app sends.
+kind: guide
+package: "@questpie/sandbox"
+---
+
+`httpSandboxAdapter` never executes anything. It validates, authenticates and
+forwards. Everything after that, the subprocess and the clamps and the
+permission flags, belongs to a second process you deploy yourself.
+
+## The command
+
+It runs under Deno only, which is why it ships as source rather than as part of
+your bundle. Start it as a sidecar beside the app.
+
+```bash
+export SANDBOX_HOST_ADMISSION_SECRET='at-least-32-random-bytes'
+export SANDBOX_BROKER_URL='https://app.internal/api/sandbox/rpc'
+
+deno run --allow-net --allow-env --allow-run --allow-read \
+  --allow-write=$TMPDIR \
+  node_modules/@questpie/sandbox/src/sandbox-server.ts
+```
+
+It listens on `PORT`, default `8787`, and exposes exactly two endpoints,
+`GET /health` and `POST /run`. Point the app's `SANDBOX_URL` at its origin, with
+no path or query, or the adapter rejects the URL before it sends anything.
+
+## Environment
+
+| Variable                         | What it does                                                                    |
+| -------------------------------- | ------------------------------------------------------------------------------- |
+| `PORT`                           | Listen port, default `8787`                                                     |
+| `SANDBOX_HOST_ADMISSION_SECRET`  | Shared with the adapter, at least 32 bytes. Without a match, `/run` returns 403 |
+| `SANDBOX_BROKER_URL`             | The one broker URL it will relay guest app calls to                             |
+| `DENO_BIN`                       | Deno binary for guest subprocesses, defaults to the supervisor's own executable |
+| `SANDBOX_DISABLE_NETNS_FIREWALL` | Set to `1` to skip the Linux network namespace layer                            |
+
+<Callout type="warn" title="No secret means no runs, not unauthenticated runs">
+	Every `ctx.executor.run()` arrives as a host-mode `/run`. One carrying no
+	credential, or a secret under 32 bytes, or one that does not match byte for
+	byte, is refused before a subprocess is spawned. Set the same value on both
+	sides or the sandbox is inert.
+</Callout>
+
+### The broker URL is checked, not trusted
+
+Any run that carries bindings is compared against `SANDBOX_BROKER_URL` before the
+spawn. A mismatch in protocol, host, effective port, path or query is a denial,
+and userinfo and fragments are forbidden outright. This is what stops a spoofed
+caller from redirecting the supervisor, carrying the per-run token, to a host it
+chose. Point it at your app's own internal address.
+
+## The Linux egress layer
+
+On Linux with `unshare`, `nft` and `ip` present and the capabilities to use them,
+each run also gets its own network namespace with a default-drop nftables ruleset
+that drops private ranges and accepts only the validated public allowlist. Off
+Linux, or when a tool or capability is missing, it logs a one-line notice and the
+run proceeds without it.
+
+Treat it as a second layer. The subprocess permission flags are the boundary that
+is always there, and the ruleset logic is unit-tested while the actual kernel drop
+is only verified on a real Linux worker.
+
+## Remote workloads
+
+`httpSandboxAdapter` also exposes `runWorkload({ envelope })`, a separate path
+where the source, input and capabilities come from a consumer-supplied authorizer
+rather than from your call site. It is authenticated by its own signed admission
+rather than by the host secret, and it reads three more variables:
+`SANDBOX_WORKLOAD_ADMISSION_SECRET`, `SANDBOX_WORKLOAD_ADMISSION_KEY_ID` and
+`SANDBOX_INSTANCE_ID`.
+
+`SANDBOX_INSTANCE_ID` is a process incarnation, not a deployment or replica name.
+Generate a new one for every supervisor process and every restart, and address
+that process directly, because the admission is bound to it and its replay state
+is process-local.
+
+## Next
+
+**[Sandbox](/docs/infrastructure/sandbox)** is the adapter side, the capability
+manifest and the run result.
