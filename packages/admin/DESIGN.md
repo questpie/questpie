@@ -15,9 +15,12 @@ information, strong light/dark support, and restrained brand color.
   overrides.
 - Interfaces are built from flat surfaces, not decorative cards, heavy shadows,
   gradients, or ornamental backgrounds.
-- Purple `#b700ff` is a brand accent reserved for solid primary CTAs, brand
+- Coral `#f26a45` is a brand accent reserved for solid primary CTAs, brand
   marks, links in prose, and rare active emphasis. Navigation, focus rings,
   selected rows, table states, form focus, tabs, and badges are neutral.
+- Coral fills, `--primary-text` writes. Coral text on either ground measures
+  2.88:1 and fails AA, so `--primary` is for solid areas and `--primary-text`
+  is the value that carries a coloured word. They are not interchangeable.
 - Light mode should feel flat and crisp. Do not add persistent drop shadows to
   normal inputs, table rows, toolbar containers, cards, field shells, docs
   callouts, or landing sections.
@@ -30,9 +33,9 @@ information, strong light/dark support, and restrained brand color.
   primitives or shared token families.
 - Information density is a feature. Prefer compact, scannable UI over marketing
   whitespace in work surfaces.
-- Typography should be calm. Use Geist for UI and prose. Use JetBrains Mono only
-  for code, file paths, keyboard shortcuts, IDs, and compact metadata where a
-  technical label is intentional.
+- Keep typography calm. Use Hanken Grotesk for UI and prose. Use JetBrains Mono
+  only for code, file paths, keyboard shortcuts, IDs, and compact metadata where
+  a technical label is intentional.
 
 ## Token Model
 
@@ -59,7 +62,8 @@ QUESTPIE uses semantic CSS variables, mapped into Tailwind through
 | `--input`               | Input/control edge or filled control surface.                    |
 | `--muted`               | Subtle backgrounds such as table headers and secondary controls. |
 | `--accent`              | Interactive hover background.                                    |
-| `--primary`             | QUESTPIE brand CTA and prose links.                              |
+| `--primary`             | QUESTPIE brand CTA fills.                                        |
+| `--primary-text`        | The brand hue where it has to be legible as text.                |
 | `--border-subtle`       | Hairline structure and quiet panel boundaries.                   |
 | `--border`              | Default structural border.                                       |
 | `--border-strong`       | Active neutral edge, keyboard focus edge, selected edge.         |
@@ -69,26 +73,30 @@ QUESTPIE uses semantic CSS variables, mapped into Tailwind through
 
 Dark is the default system baseline. Light mode mirrors the same hierarchy.
 
+Values are `oklch()` in `base.css`; the hex below is the same colour written for
+reading.
+
 | Role          | Dark      | Light     |
 | ------------- | --------- | --------- |
-| Background    | `#121212` | `#fafafa` |
-| Foreground    | `#ececec` | `#1c1c1c` |
-| Card          | `#1b1b1b` | `#ffffff` |
-| Surface high  | `#2a2a2a` | `#e8e8e8` |
-| Border        | `#343434` | `#e2e2e2` |
-| Border subtle | `#262626` | `#ebebeb` |
-| Brand primary | `#b700ff` | `#b700ff` |
+| Background    | `#12100d` | `#fbf9f5` |
+| Foreground    | `#f6f1e8` | `#1c1a17` |
+| Card          | `#1b1815` | `#ffffff` |
+| Surface high  | `#2a251f` | `#ece6dc` |
+| Border        | `#2a251f` | `#e4dcce` |
+| Border subtle | `#241f1a` | `#eee8dd` |
+| Brand primary | `#f26a45` | `#f26a45` |
+| Brand text    | `#f99a73` | `#b8401a` |
 
 ### Brand Color Usage
 
-Use primary purple for:
+Use the brand coral for:
 
 - Primary CTA buttons.
 - QUESTPIE marks and brand identity.
-- Prose links and docs links.
+- Prose links and docs links, through `--primary-text`.
 - Rare semantic emphasis where the user is being directed to a primary action.
 
-Do not use primary purple for:
+Do not use the brand coral for:
 
 - Form focus rings.
 - Sidebar active items.
@@ -207,7 +215,7 @@ Rules:
   selects, and buttons use the same control token family.
 - Default control height is `40px`; compact variants may be `32px` only when a
   primitive explicitly documents that density.
-- Focus uses `--border-strong` and neutral `--ring`, never primary purple.
+- Focus uses `--border-strong` and neutral `--ring`, never the brand coral.
 - Select, datepicker, and popover-backed controls keep the same focus treatment
   while open.
 - Normal controls do not cast shadows in light mode.
@@ -232,7 +240,7 @@ Rules:
 - Table rows remain dense by default.
 - Headers use muted/chrome treatment, not heavy fills.
 - Row hover is neutral and subtle.
-- Selected rows use neutral `surface-high`, not primary purple.
+- Selected rows use neutral `surface-high`, not the brand coral.
 - Relationship and block cells must not force row height growth; chips truncate
   horizontally before wrapping.
 - Pagination and bulk action controls use standard controls and tabular
@@ -272,7 +280,7 @@ on top.
 - Fumadocs tokens must be bridged to QUESTPIE semantic tokens instead of
   hardcoded one-off colors.
 - Docs sidebars use neutral active items.
-- Prose links may use primary purple.
+- Prose links may use `--primary-text`, never `--primary`.
 - Code blocks use `bg-card`, `border-border-subtle`, and `--surface-radius`.
 - Callouts are flat panels with subtle borders or a small semantic edge. Avoid
   heavy colored fills.
@@ -365,5 +373,5 @@ QUESTPIE Neutral.
 - Are dynamic numbers tabular?
 - Are transitions property-specific and reduced-motion aware?
 - Are interactive hit areas large enough?
-- Is primary purple reserved for brand/CTA/prose-link emphasis?
+- Is the brand coral reserved for brand/CTA/prose-link emphasis?
 - Does the component work in admin density and public docs/landing contexts?

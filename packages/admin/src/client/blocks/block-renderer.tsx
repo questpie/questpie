@@ -185,7 +185,7 @@ function PreviewBlockInsertControl({
 	referenceBlockId: string;
 }) {
 	const [isHovered, setIsHovered] = React.useState(false);
-	const previewRingColor = "var(--ring, var(--highlight, #b700ff))";
+	const previewRingColor = "var(--ring, currentColor)";
 	const softRingColor = `color-mix(in srgb, ${previewRingColor} 34%, transparent)`;
 	const mutedRingColor = `color-mix(in srgb, ${previewRingColor} 12%, transparent)`;
 
@@ -312,7 +312,7 @@ function PreviewBlockWrapper({
 	const [isHovered, setIsHovered] = React.useState(false);
 	const [hasDomFocus, setHasDomFocus] = React.useState(false);
 	const shouldShowAffordance = isHovered || hasDomFocus || isSelected;
-	const previewRingColor = "var(--ring, var(--highlight, #b700ff))";
+	const previewRingColor = "var(--ring, currentColor)";
 
 	const previewStyle = React.useMemo<React.CSSProperties>(
 		() => ({

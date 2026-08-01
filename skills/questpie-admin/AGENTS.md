@@ -188,15 +188,22 @@ when overriding (see Custom Theme below).
 
 ### Key Defaults
 
+Values are `oklch()` in `base.css`; the hex below is the same colour written for
+reading.
+
 | Role          | Dark      | Light     |
 | ------------- | --------- | --------- |
-| Background    | `#121212` | `#fafafa` |
-| Foreground    | `#ececec` | `#1c1c1c` |
-| Card          | `#1b1b1b` | `#ffffff` |
-| Surface high  | `#2a2a2a` | `#e8e8e8` |
-| Border        | `#343434` | `#e2e2e2` |
-| Border subtle | `#262626` | `#ebebeb` |
-| Brand primary | `#b700ff` | `#b700ff` |
+| Background    | `#12100d` | `#fbf9f5` |
+| Foreground    | `#f6f1e8` | `#1c1a17` |
+| Card          | `#1b1815` | `#ffffff` |
+| Surface high  | `#2a251f` | `#ece6dc` |
+| Border        | `#2a251f` | `#e4dcce` |
+| Border subtle | `#241f1a` | `#eee8dd` |
+| Brand primary | `#f26a45` | `#f26a45` |
+| Brand text    | `#f99a73` | `#b8401a` |
+
+`--primary` fills, `--primary-text` writes. Coral text measures 2.88:1 and fails
+AA, so a coloured word takes `--primary-text`. They are not interchangeable.
 
 | Token                    | Default | Use                                         |
 | ------------------------ | ------- | ------------------------------------------- |
@@ -209,7 +216,7 @@ when overriding (see Custom Theme below).
 
 | Variable      | Value                                                        |
 | ------------- | ------------------------------------------------------------ |
-| `--font-sans` | `"Geist Variable"`, UI, prose, headings, labels, navigation  |
+| `--font-sans` | `"Hanken Grotesk Variable"`, UI, prose, headings, labels     |
 | `--font-mono` | `"JetBrains Mono Variable"`, code, file paths, commands, IDs |
 
 ### Sidebar Variables
