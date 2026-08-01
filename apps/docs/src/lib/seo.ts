@@ -8,7 +8,7 @@ export const siteConfig = {
 	   What it replaces — "Open-source TypeScript application framework" — is a
 	   category any competitor could paste unchanged, and it sold only the
 	   framework while the page's first screen is about staffing agents. */
-	title: "QUESTPIE — software you can staff",
+	title: "QUESTPIE: software you can staff",
 	description:
 		"An AI agent joins the way a person does: a role, permissions, its own name on the work. On an open-source TypeScript framework you run yourself.",
 	url: "https://questpie.com",

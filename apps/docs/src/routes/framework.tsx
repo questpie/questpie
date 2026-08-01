@@ -4,9 +4,9 @@ import { MarketingChrome } from "@/components/marketing/chrome";
 import { FrameworkPage } from "@/components/marketing/framework";
 import { generateLinks, generateMeta, siteConfig } from "@/lib/seo";
 
-const TITLE = "Framework — one schema, everything else derived";
+const TITLE = "Framework: one schema, everything else derived";
 const DESCRIPTION =
-	"QUESTPIE derives the typed API, the admin, the jobs and the client from one definition — in your codebase, on your servers.";
+	"QUESTPIE derives the typed API, the admin, the jobs and the client from one definition. In your codebase, on your servers.";
 
 export const Route = createFileRoute("/framework")({
 	component: Framework,

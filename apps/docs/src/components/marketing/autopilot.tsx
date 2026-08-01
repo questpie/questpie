@@ -57,7 +57,7 @@ function ApprovalCard() {
 			<div className="row" style={{ alignItems: "flex-start" }}>
 				<span className="av agent">AI</span>
 				<div className="rb">
-					<span className="rt">Amount matches Stripe — 1 248,00 €</span>
+					<span className="rt">Amount matches Stripe: 1 248,00 €</span>
 					<span className="rm">
 						agent Ada read the order and the charge. Difference 0,00 €.
 					</span>

@@ -75,7 +75,7 @@ export function FrameworkPage() {
 						</h1>
 						<p className="qp-lead">
 							QUESTPIE derives the typed API, the admin, the jobs and the client
-							from one definition — in your codebase, on your servers.
+							from one definition. In your codebase, on your servers.
 						</p>
 						<div className="actions">
 							<a className="btn p lg" href="/docs">
