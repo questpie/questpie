@@ -51,33 +51,69 @@ function subscribeTheme(onStoreChange: () => void) {
 	return () => observer.disconnect();
 }
 
-function getThemeVariables(theme: MermaidTheme) {
-	if (theme === "dark") {
-		return {
-			background: "#1b1b1b",
-			fontFamily: "Geist Variable, Inter, sans-serif",
-			lineColor: "#737373",
-			mainBkg: "#1b1b1b",
-			nodeBorder: "#343434",
-			primaryBorderColor: "#343434",
-			primaryColor: "#1b1b1b",
-			primaryTextColor: "#ececec",
-			secondaryColor: "#222222",
-			tertiaryColor: "#161616",
-		};
-	}
+/* Mermaid needs literal colours: it derives contrast and stroke shades from what
+ * you give it, so a `var(--card)` string reaches its colour maths as nonsense.
+ *
+ * The tokens are oklch, and neither `ctx.fillStyle` round-tripping nor
+ * getComputedStyle converts that to sRGB — both hand the oklch string straight
+ * back. Painting one pixel and reading it does convert, because the canvas has
+ * already rasterised to bytes by then. Verified against known values: `white`
+ * gives #ffffff, `--coral` gives #f26a45, `--background` gives #12100d, which is
+ * exactly what the canon documents in the token comments. */
+/* No hardcoded fallback, deliberately. A second copy of the palette here is
+ * exactly what drifts, and both readers below are reached only from inside an
+ * effect, so there is no server pass to defend against. If a token ever went
+ * missing the value comes back empty and mermaid uses its own base theme — the
+ * behaviour this file had before tokens existed. */
+function readToken(name: string): string {
+	return getComputedStyle(document.documentElement)
+		.getPropertyValue(name)
+		.trim();
+}
+
+function readColor(name: string): string {
+	const value = readToken(name);
+	if (!value) return value;
+
+	const canvas = document.createElement("canvas");
+	canvas.width = 1;
+	canvas.height = 1;
+	const ctx = canvas.getContext("2d", { willReadFrequently: true });
+	if (!ctx) return value;
+
+	ctx.fillStyle = value;
+	ctx.fillRect(0, 0, 1, 1);
+	const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+	return `#${[r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/* One palette, read live, instead of two hardcoded ones. The light and dark
+ * branches this replaces were a neutral grey ramp that belonged to no design
+ * system in this repo, and their font was Geist, which the brand no longer uses.
+ * Reading tokens means a theme flip needs no second table — the caller already
+ * re-runs this when the class on <html> changes. */
+function getThemeVariables() {
+	const ink = readColor("--foreground");
+	const surface = readColor("--card");
 
 	return {
-		background: "#ffffff",
-		fontFamily: "Geist Variable, Inter, sans-serif",
-		lineColor: "#858585",
-		mainBkg: "#ffffff",
-		nodeBorder: "#e2e2e2",
-		primaryBorderColor: "#e2e2e2",
-		primaryColor: "#ffffff",
-		primaryTextColor: "#1c1c1c",
-		secondaryColor: "#f0f0f0",
-		tertiaryColor: "#fafafa",
+		background: surface,
+		/* primaryTextColor alone does not reach label text — measured, node labels
+		   came out at mermaid's own #cccccc in dark and #333333 in light. textColor
+		   and nodeTextColor are the ones that land. */
+		edgeLabelBackground: surface,
+		fontFamily: readToken("--font-sans"),
+		lineColor: readColor("--foreground-subtle"),
+		mainBkg: surface,
+		nodeBorder: readColor("--border"),
+		nodeTextColor: ink,
+		primaryBorderColor: readColor("--border"),
+		primaryColor: surface,
+		primaryTextColor: ink,
+		secondaryColor: readColor("--surface-mid"),
+		tertiaryColor: readColor("--surface-low"),
+		textColor: ink,
+		titleColor: ink,
 	};
 }
 
@@ -113,10 +149,12 @@ export function Mermaid({
 				mermaid.initialize({
 					startOnLoad: false,
 					securityLevel: "strict",
-					fontFamily: "Geist Variable, Inter, sans-serif",
+					fontFamily: readToken("--font-sans"),
+					/* still the base theme mermaid derives everything else from —
+					   themeVariables only override what this file names */
 					theme,
 					themeCSS: "font-family: var(--font-sans);",
-					themeVariables: getThemeVariables(theme),
+					themeVariables: getThemeVariables(),
 				});
 
 				const result = await mermaid.render(diagramId, normalizedChart);
