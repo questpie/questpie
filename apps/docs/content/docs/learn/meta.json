@@ -1,4 +1,11 @@
 {
 	"title": "Learn",
-	"pages": ["index"]
+	"pages": [
+		"index",
+		"one-schema",
+		"first-app",
+		"first-collection",
+		"first-job",
+		"deploy"
+	]
 }

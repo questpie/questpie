@@ -107,10 +107,14 @@ enable them, and each one is a package you can read and replace.
 A list that uses your labels, and a form that picks each control from the field
 type. `text` gets an input, `richText` gets an editor, `boolean` gets a switch.
 
-It is deliberately generic. It is not a page builder and not a website CMS. Its
-job is to let the people who own the data work with it in a normal interface,
-instead of opening a database client or keeping the real numbers in a
-spreadsheet.
+It is generic over your schema rather than built for one kind of content. Its job
+is to let the people who own the data work with it in a normal interface, instead
+of opening a database client or keeping the real numbers in a spreadsheet.
+
+Where a collection has a `blocks` field, that includes a visual canvas for
+stacking and nesting content, and live preview streamed into your own frontend.
+QUESTPIE never renders your site. Your app renders it, and the admin sends it
+patches as the editor types.
 
 <Callout type="warn" title="The admin needs a runtime that renders">
 	`create-questpie` turns it on by default for TanStack Start and Next. Hono and
@@ -132,20 +136,20 @@ the access rules you already wrote rather than a second set.
 
 Every package does one job, and the seams are where you would expect them.
 
-| Package | What it is for |
-| --- | --- |
-| `questpie` | The core. Collections, globals, fields, hooks, jobs, access rules, REST, the typed client. |
-| `create-questpie` | Scaffolds a project and picks the runtime and modules for you. |
-| `@questpie/admin` | The generated data workspace. |
-| `@questpie/openapi` | OpenAPI document and Scalar reference UI. |
-| `@questpie/mcp` | MCP server, under the app's own access rules. |
-| `@questpie/hono` · `elysia` · `next` | Runtime adapters. TanStack Start ships as a template rather than an adapter. |
-| `@questpie/tanstack-query` | Typed query-options factory for the client. |
-| `@questpie/tanstack-db` | Typed TanStack DB collections backed by the client. |
-| `@questpie/workflows` | Durable, replay-based workflow engine. |
-| `@questpie/crdt-yjs` | Yjs text engines for collaborative documents. |
-| `@questpie/sandbox` | Hardened isolated execution for untrusted scripts. |
-| `@questpie/observability` | OpenTelemetry traces and metrics over OTLP. |
+| Package                              | What it is for                                                                             |
+| ------------------------------------ | ------------------------------------------------------------------------------------------ |
+| `questpie`                           | The core. Collections, globals, fields, hooks, jobs, access rules, REST, the typed client. |
+| `create-questpie`                    | Scaffolds a project and picks the runtime and modules for you.                             |
+| `@questpie/admin`                    | The generated data workspace.                                                              |
+| `@questpie/openapi`                  | OpenAPI document and Scalar reference UI.                                                  |
+| `@questpie/mcp`                      | MCP server, under the app's own access rules.                                              |
+| `@questpie/hono` · `elysia` · `next` | Runtime adapters. TanStack Start ships as a template rather than an adapter.               |
+| `@questpie/tanstack-query`           | Typed query-options factory for the client.                                                |
+| `@questpie/tanstack-db`              | Typed TanStack DB collections backed by the client.                                        |
+| `@questpie/workflows`                | Durable, replay-based workflow engine.                                                     |
+| `@questpie/crdt-yjs`                 | Yjs text engines for collaborative documents.                                              |
+| `@questpie/sandbox`                  | Hardened isolated execution for untrusted scripts.                                         |
+| `@questpie/observability`            | OpenTelemetry traces and metrics over OTLP.                                                |
 
 ## What you still write yourself
 
@@ -158,13 +162,13 @@ QUESTPIE derives the plumbing around your data. It does not write your product.
 
 ## What it runs on
 
-| Requirement | Version | Why |
-| --- | --- | --- |
-| Bun | 1.3+ | The runtime the starter template targets. |
-| PostgreSQL | 15+ | The minimum database version QUESTPIE supports. |
-| Licence | MIT | Your servers. There is no hosted tier to graduate to. |
+| Requirement | Version | Why                                                   |
+| ----------- | ------- | ----------------------------------------------------- |
+| Bun         | 1.3+    | The runtime the starter template targets.             |
+| PostgreSQL  | 15+     | The minimum database version QUESTPIE supports.       |
+| Licence     | MIT     | Your servers. There is no hosted tier to graduate to. |
 
 ## Next
 
-**[Build your first app](/docs/getting-started/tanstack-start)** scaffolds a
-project, starts a database, and puts the admin screen in front of you.
+**[The one-schema model](/docs/learn/one-schema)** goes one level down: what a
+declaration is, what the generator writes, and when you have to run it again.

@@ -1,0 +1,188 @@
+---
+title: Deploying
+description: QUESTPIE runs on your servers. Getting there is a migration you commit, three environment variables, a runtime choice, and two health endpoints to point your probes at.
+kind: learn
+package: questpie
+---
+
+Everything below assumes a project scaffolded by `create-questpie` and a
+PostgreSQL you run yourself.
+
+## Choosing push or a migration
+
+**Push** applies your schema to the database directly. It diffs what the app
+declares against what the database has, runs the statements, and records nothing.
+
+To push, run the script every template ships:
+
+```bash
+bun run db:push
+```
+
+That script is `questpie push`, from the `questpie` core. It bypasses migration
+history, so a later `questpie migrate` has no record of what it changed.
+
+<Callout type="warn" title="push must never touch production">
+	The `--force` flag only acknowledges the warning the command prints. It adds
+	no safety check. Point `db:push` at a local database and nothing else.
+</Callout>
+
+**A migration** is a TypeScript file with an `up` step and a `down` step, beside
+a snapshot JSON in `snapshots/` that it imports. Commit both. QUESTPIE records
+each migration it applies in a `questpie_migrations` table, so every environment
+converges on the same schema by the same steps.
+
+## Generating a migration
+
+To generate one, change your collections, then run:
+
+```bash
+bun run migrate:create
+```
+
+The command diffs the current schema against the snapshot chain and writes a
+timestamped file into the directory named by `cli.migrations.directory`. When
+nothing changed it prints `No schema changes detected` and writes no file.
+
+The migration is not live yet. Codegen discovers migration files and emits them
+into the generated app, and `migrate` reads its list from there. Regenerate, then
+check what the app now sees:
+
+```bash
+bun run scaffold:generate
+bun run migrate:status
+```
+
+`migrate:status` should list your new migration as pending. If it does not, the
+file never reached the generated app and applying it will do nothing.
+
+## Applying it in production
+
+To apply every pending migration, run:
+
+```bash
+bun run migrate
+```
+
+That is `questpie migrate:up` under an alias. Run it as its own deploy step,
+before the new version serves. A failed schema change is then one failed step you
+can read, rather than a replica that crash-loops.
+
+`build({ autoMigrate: true })` runs the same thing during app startup. It suits
+development. In production it moves the failure into the boot path of every
+replica at once. `migrate`, `migrate:down`, `migrate:reset` and `migrate:fresh`
+take `--dry-run`, which prints the action and exits without running it. To
+reverse the last batch, run `bun run migrate:down`.
+
+<Callout type="warn" title="A down migration does not restore data">
+	`migrate:down` runs the generated `down` step. If the `up` dropped a column,
+	rolling back recreates it empty. For anything destructive, take a backup first
+	and treat restore as the recovery path.
+</Callout>
+
+## Setting the environment
+
+QUESTPIE resolves three variables. Only one has no usable default.
+
+| Variable             | Default                                          |
+| -------------------- | ------------------------------------------------ |
+| `DATABASE_URL`       | None. The app throws without it.                 |
+| `APP_URL`            | `http://localhost:3000`                          |
+| `BETTER_AUTH_SECRET` | Undefined. Set a distinct value per environment. |
+
+Each also has a `QUESTPIE_`-prefixed name that wins when both are set:
+`QUESTPIE_DB`, `QUESTPIE_APP_URL` and `QUESTPIE_SECRET`. The templates re-declare
+these in `src/lib/env.ts`, where only `DATABASE_URL` is required.
+`BETTER_AUTH_SECRET` falls back to `change-me-in-production` there, so a deploy
+that forgets it boots anyway.
+
+<Callout type="warn" title="File storage defaults to local disk">
+	With no storage configured, uploads land in `./uploads` inside the container.
+	That does not survive a redeploy and is not shared between replicas. Set the
+	four `QUESTPIE_STORAGE_*` variables for endpoint, bucket, access key and
+	secret key to get an S3-compatible adapter, and install `@aws-sdk/client-s3`,
+	`@aws-sdk/lib-storage`, `@aws-sdk/s3-presigned-post` and
+	`@aws-sdk/s3-request-presigner`.
+</Callout>
+
+## Choosing a runtime
+
+Four templates ship, and `create-questpie` scaffolds any of them: TanStack Start,
+Next, Hono and Elysia. Pick by whether you need the admin.
+
+The admin is `@questpie/admin`, a module you enable. It needs a runtime that
+renders, so the scaffolder allows it on TanStack Start and Next and rejects it on
+Hono and Elysia. Those two are headless. You get the API and the typed client.
+OpenAPI is `@questpie/openapi`, and the scaffolder pre-selects it on all four.
+Every template mounts `createFetchHandler` from `questpie/http` itself, so none
+of them installs a runtime adapter. The `@questpie/next`, `@questpie/hono` and
+`@questpie/elysia` packages exist for wiring QUESTPIE into an app you already
+have. All four templates ship a Dockerfile, and all four build on
+`oven/bun:1.3-alpine`.
+
+| Requirement | Version | How it is enforced                                                                                                    |
+| ----------- | ------- | --------------------------------------------------------------------------------------------------------------------- |
+| Bun         | 1.3     | Nothing checks the version. The `questpie` CLI runs on Bun, and every template Dockerfile pins `oven/bun:1.3-alpine`. |
+| PostgreSQL  | 15+     | A startup check. Below 15 the app throws and names the version it found.                                              |
+
+<Callout type="info" title="Extensions are yours to create">
+	QUESTPIE is drizzle-native and never issues `CREATE EXTENSION`. The starter's
+	full-text search needs `pg_trgm`. Local Docker provisions it on first boot. On
+	managed Postgres, enable it through your provider before the first deploy.
+</Callout>
+
+## Watching it once it is running
+
+Two routes come from the `questpie` core with no module to enable. Both are
+public, and both sit under the base path your handler mounts, which is `/api` in
+every template. Point each probe at its own:
+
+```bash
+GET /api/health/live   # liveness: 200 while the process runs
+GET /api/health        # readiness: 200 when ok or degraded, 503 when unhealthy
+```
+
+`/api/health` runs a real query against the database and a real read against KV,
+and reports whether search has initialised. Storage and queue are reported as
+configured rather than probed. `/api/health/live` touches nothing at all.
+
+<Callout type="warn" title="Do not point liveness at /api/health">
+	A liveness probe that depends on the database turns a brief database blip into
+	a restart loop across every replica at once. That is what `/api/health/live`
+	exists to avoid.
+</Callout>
+
+For traces, metrics and logs, `@questpie/observability` is an adapter you pass
+into your runtime config. It exports over OTLP/HTTP:
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { otelObservability } from "@questpie/observability";
+import { runtimeConfig } from "questpie/app";
+
+import { env } from "@/lib/env";
+
+export default runtimeConfig({
+	db: { url: env.DATABASE_URL },
+	observability: {
+		adapter: otelObservability({
+			serviceName: "my-app",
+			otlpEndpoint: "http://collector:4318",
+		}),
+	},
+});
+```
+
+## Running it yourself
+
+QUESTPIE is MIT-licensed and ships as packages you install. This page covers the
+self-hosted path. The `questpie cloud` command group deploys to Questpie Cloud
+instead.
+
+- **The database.** PostgreSQL 15 or newer, its extensions, and its backups.
+- **The host.** A container runtime, TLS in front, and a restart policy.
+- **The deploy step.** Nothing applies your migrations unless you run `migrate`.
+
+## Next
+
+**[The full concept reference](/docs/concepts/collections)** documents every
+piece of a collection, from field types to access rules.

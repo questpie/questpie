@@ -1,0 +1,176 @@
+---
+title: The one-schema model
+description: A declaration is a file, the generator reads the directories and writes a typed app object, and that generated output is code you commit.
+kind: learn
+package: questpie
+---
+
+This page walks you through the file layout, the import name you reach the result
+by, and the changes that force a re-run.
+
+## Writing a declaration
+
+A **declaration** is a file that exports a factory call. The directory it sits in
+decides what kind of entity it is. The file is the registration, so there is no
+central array to append to.
+
+Every template keeps them under `src/questpie/server/`. The core `questpie`
+package reads these directories:
+
+| Directory                | What goes in it                                       |
+| ------------------------ | ----------------------------------------------------- |
+| `collections/`           | `collection()` calls. One database table each.        |
+| `globals/`               | `global()` calls. A single row instead of a list.     |
+| `fields/`                | `fieldType()` calls. Field types you define yourself. |
+| `channels/`              | `channel()` calls. Realtime wire patterns.            |
+| `routes/` · `functions/` | Custom endpoints. Both scanned recursively.           |
+| `jobs/`                  | Background jobs.                                      |
+| `services/`              | Singletons injected into handler context.             |
+| `emails/`                | Email templates.                                      |
+| `messages/`              | Translation messages, one file per locale.            |
+| `migrations/`            | Schema migrations.                                    |
+| `seeds/`                 | Seed scripts.                                         |
+
+To declare a collection, create a file under `collections/` and export a
+`collection()` call. For example, to declare a `news` table:
+
+```ts title="src/questpie/server/collections/news.ts"
+import { collection } from "#questpie/factories";
+
+export const news = collection("news").fields(({ f }) => ({
+	title: f.text(255).label("Title").required(),
+	isPublished: f.boolean().default(false),
+}));
+```
+
+In `collections/`, `globals/`, `channels/` and `fields/` the generator matches on
+the factory call, so a helper file with none is skipped and a file with two
+`collection()` exports produces two collections.
+
+<Callout type="info" title="The name is the key, not the filename">
+	Collections and globals are keyed by the string you pass to the factory.
+	`collection("blog_posts")` inside `collections/posts.ts` is
+	`app.collections.blog_posts`. Jobs, services and emails take no such argument,
+	so their key is the filename in camelCase, and `jobs/send-invoice.ts` becomes
+	`sendInvoice`. A channel keys on its export name, or on the filename when it
+	is the default export, because the string it takes is the wire pattern. Routes
+	key on the path below `routes/` or `functions/`, so
+	`routes/webhooks/stripe.ts` is `webhooks/stripe`.
+</Callout>
+
+## Generating the app
+
+The core reads those directories and writes one folder. To run it once:
+
+```bash
+questpie generate -c src/questpie/server/questpie.config.ts
+```
+
+Every template ships that line as its `questpie:generate` script. `-c` defaults
+to `questpie.config.ts` in the current directory. `--dry-run` prints the output
+without writing it, `--verbose` lists every file it found.
+
+The core writes into `src/questpie/server/.generated/`:
+
+| File                                                  | What it holds                                                                                                         |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `index.ts`                                            | The `app` object and `createContext()`. Add an `env.ts` next to the config and it re-exports the validated `env` too. |
+| `factories.ts`                                        | `collection()` and `global()`, typed with the field types in scope.                                                   |
+| `names.gen.ts` · `entities.gen.ts` · `context.gen.ts` | The type layers `index.ts` builds on.                                                                                 |
+
+`@questpie/admin` is a module, and it contributes a second codegen target. When
+it is listed in `modules.ts`, the same command also reads `src/questpie/admin/`
+and writes `src/questpie/admin/.generated/client.ts`. No module, no second
+target, no admin.
+
+<Callout type="warn" title="Never edit a generated file">
+	Each run deletes the `.generated` directory and writes it again. Anything you
+	put there by hand is gone after the next generate.
+</Callout>
+
+## Using the generated app
+
+Every template maps the subpath import `#questpie` to `.generated/index.ts`, so
+you reach the app by that name from anywhere in the project.
+`app.collections.<name>` and `app.globals.<name>` carry the fields you declared:
+
+```ts title="src/lib/get-news.ts"
+import { app } from "#questpie";
+
+const { docs } = await app.collections.news.find({
+	where: { isPublished: true },
+});
+```
+
+The same object is what you mount. `createFetchHandler` from `questpie/http`
+turns it into a fetch handler your runtime serves:
+
+```ts title="src/routes/api/$.ts"
+import { createFetchHandler } from "questpie/http";
+
+import { app } from "#questpie";
+
+const handler = createFetchHandler(app, { basePath: "/api" });
+```
+
+## Re-running the generator
+
+The generated file imports your declaration files by path and by export name.
+That is what decides when a re-run is needed. Run it again when the file set
+changes, or when a name changes:
+
+- You add or delete a file in one of those directories.
+- You rename the export, or change the string passed to `collection()`.
+- You change `questpie.config.ts`.
+
+You do not need to run it after editing the body of a file that already exists.
+A new field or a tighter access rule reaches your editor through TypeScript,
+because the generated file points at your file.
+
+`questpie dev` does the watching for you:
+
+```bash
+questpie dev -c src/questpie/server/questpie.config.ts
+```
+
+It generates once, then watches. A file added or removed regenerates every
+target, a config change regenerates everything, and an edit to a file body is
+ignored on purpose. It takes `-c` and `--verbose`, and no `--dry-run`.
+
+<Callout type="warn" title="Watch mode does not start your server">
+	`questpie dev` only regenerates. The `dev` script in each template runs the
+	runtime server. Run both if you want the watcher.
+</Callout>
+
+`questpie add` covers the common case in one step. It writes the file from a
+template, then runs codegen:
+
+```bash
+questpie add collection news
+questpie add --list
+```
+
+<Callout type="warn" title="Codegen does not touch the database">
+	A new field is a schema change. Run `questpie push` against a local database
+	in development, or `questpie migrate:create` and then `questpie migrate` for
+	anything you cannot drop.
+</Callout>
+
+## Committing the generated output
+
+`.generated` is absent from the template `.gitignore` on purpose. It is source,
+and you commit it. Two reasons.
+
+Your editor resolves `#questpie` to those files, so a fresh clone that has not
+run codegen fails to type-check. And the Next and TanStack Start `Dockerfile`
+copies the tree and runs `build` with no generate step in between, so a missing
+`.generated` breaks the image. The Hono and Elysia one runs
+`scaffold:generate` first, which regenerates from the same sources anyway.
+
+Reading the diff is the point. Adding a collection shows up as one import and one
+registry entry, reviewable like any hand-written route.
+
+## Next
+
+**[Build your first app](/docs/learn/first-app)** runs this loop for real, from
+`create-questpie` to a row in the database.

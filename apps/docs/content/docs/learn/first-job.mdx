@@ -1,0 +1,190 @@
+---
+title: Running work in the background
+description: A job is one typed background task. You declare it in a file, the generator puts it on app.queue, and a worker drains the queue off the request path.
+kind: learn
+package: questpie
+---
+
+This page walks you through one job file, the adapter that stores the work, and
+the two calls that dispatch it and run it.
+
+## Defining a job
+
+A **job** pairs a durable name with a payload schema and a handler. The file is
+the registration, the same as a collection.
+
+To define a job, create a file in `src/questpie/server/jobs/` and default-export
+a `job()` call. The argument is a plain object. There is no builder chain. For
+example, to email an article when it goes live:
+
+```ts title="src/questpie/server/jobs/notify-subscribers.ts"
+import { job } from "questpie/services";
+import { z } from "zod";
+
+export default job({
+	name: "notify-subscribers",
+	schema: z.object({ newsId: z.string(), to: z.string() }),
+	handler: async ({ payload, collections, email }) => {
+		const article = await collections.news.findOne({
+			where: { id: payload.newsId },
+		});
+		if (!article) return;
+
+		await email.send({
+			to: payload.to,
+			subject: article.title,
+			html: `<p>${article.title} is live.</p>`,
+		});
+	},
+	options: { retryLimit: 3, retryDelay: 30, retryBackoff: true },
+});
+```
+
+`name` is the name the adapter files the work under. `schema` is required.
+`options` is optional, and beyond the retry settings it carries `priority`,
+`expireInSeconds`, `startAfter`, `cron` and `queuePolicy`. `job()` comes from
+the `questpie` core package, so there is no module to enable.
+
+## Reading the handler context
+
+The handler takes one argument: the **app context** with the payload merged in.
+`payload` is the parsed result of your schema, so it is typed and already
+validated when the handler starts. Everything else is the context a route or a
+hook gets. `db`, `collections`, `globals`, `email`, `storage`, `kv`, `search`,
+`realtime`, `logger`, your services, and `queue` so one job can dispatch
+another. You also get `locale`, `dispatchId` and `idempotencyKey`.
+
+<Callout type="warn" title="Handlers run with system access">
+	The context is created in system access mode, so collection access rules do
+	not apply inside a handler. Decide who is allowed to trigger the work before
+	you publish, not inside the job.
+</Callout>
+
+## Supplying a queue adapter
+
+The **queue adapter** decides where queued work lives. `questpie` ships adapters
+for pg-boss on PostgreSQL, BullMQ on Redis, and Cloudflare Queues.
+
+To supply one, add a `queue` block to `runtimeConfig()`:
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { runtimeConfig } from "questpie/app";
+import { pgBossAdapter } from "questpie/adapters/pg-boss";
+
+import { env } from "@/lib/env";
+
+export default runtimeConfig({
+	app: { url: env.APP_URL },
+	db: { url: env.DATABASE_URL },
+	queue: {
+		adapter: pgBossAdapter({ connectionString: env.DATABASE_URL }),
+	},
+});
+```
+
+`create-questpie --queue pg-boss` writes exactly that `queue` block, and it is
+the default.
+`--queue bullmq` writes `bullMQAdapter({ connection: { url: env.REDIS_URL } })`
+and adds the `bullmq` and `redis` packages. `--queue none` leaves the block out.
+
+<Callout type="warn" title="No adapter, no queue">
+	Jobs only reach `app.queue` when `questpie.config.ts` has a `queue` block.
+	Without one the queue client comes up empty and dispatching throws.
+</Callout>
+
+## Generating the typed method
+
+To turn the file into a method, run the generator:
+
+```bash
+questpie generate
+```
+
+The filename becomes the key. `jobs/notify-subscribers.ts` becomes
+`app.queue.notifySubscribers`, carrying the payload type from the schema. The
+`name` you declared is also a bracket alias, `app.queue["notify-subscribers"]`.
+
+## Dispatching it
+
+To dispatch, call `publish()` with the payload. It parses the payload against
+the schema, hands it to the adapter, and returns. It does not wait for the
+handler and it never returns the handler's result.
+
+For example, to fire the job from a hook on the collection it reads:
+
+```ts title="src/questpie/server/collections/news.ts"
+export const news = collection("news")
+	.fields(({ f }) => ({
+		title: f.text(),
+		isPublished: f.boolean().default(false),
+	}))
+	.hooks({
+		afterChange: async ({ data, operation, queue }) => {
+			if (operation !== "create" || !data.isPublished) return;
+			await queue.notifySubscribers.publish({
+				newsId: data.id,
+				to: "editors@example.com",
+			});
+		},
+	});
+```
+
+The payload type comes from the schema, so a wrong shape stops at compile time:
+
+```ts
+// [!code word:newsId]
+await app.queue.notifySubscribers.publish({ newsId: 42, to: "a@b.com" }); // [!code error]
+
+// TS2322: Type 'number' is not assignable to type 'string'.
+```
+
+`publish()` returns the logical dispatch id as `string | null`. Pass
+`idempotencyKey` in the second argument to make repeated calls resolve to the
+same dispatch.
+
+## Scheduling recurring work
+
+To run a job on a schedule, put a cron expression in `options.cron`:
+
+```ts title="src/questpie/server/jobs/purge-expired-sessions.ts"
+export default job({
+	name: "purge-expired-sessions",
+	schema: z.object({}),
+	handler: async ({ logger }) => {
+		logger.info("Purged expired sessions");
+	},
+	options: { cron: "0 3 * * *" },
+});
+```
+
+<Callout type="warn" title="A cron run carries no payload">
+	Registration parses `{}` against your schema. If the schema requires a field,
+	it throws. Use `z.object({})`, or make every field optional or defaulted.
+</Callout>
+
+pg-boss and BullMQ support scheduling. Cloudflare Queues does not, so `cron` has
+no effect there.
+
+## Running a worker
+
+Publishing only enqueues. A **worker** is the process that pulls queued work and
+runs its handlers. To start one, write an entrypoint that imports the generated
+app and calls `listen()`:
+
+```ts title="src/worker.ts"
+import { app } from "#questpie";
+
+await app.queue.listen({ teamSize: 5, batchSize: 3 });
+```
+
+Run it as its own process. `listen()` registers every `options.cron` schedule
+before it starts consuming, and installs SIGINT and SIGTERM handlers by default.
+It throws on push-only adapters such as Cloudflare Queues, which run handlers
+through `app.queue.createPushConsumer()` instead. On pg-boss and BullMQ,
+`app.queue.runOnce()` drains one bounded batch and returns, which fits a
+scheduled serverless tick.
+
+## Next
+
+**[Deploy it](/docs/learn/deploy)** takes the app, the worker and the database
+from your machine to a server.
