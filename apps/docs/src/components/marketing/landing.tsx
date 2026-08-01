@@ -222,8 +222,6 @@ export function Landing() {
 								</span>
 							</div>
 						</a>
-						{/* /framework lands in the next step; a typed Link would not
-						    compile until its route exists. */}
 						<a className="door" href="/framework">
 							<span className="chip" style={{ alignSelf: "flex-start" }}>
 								Framework
