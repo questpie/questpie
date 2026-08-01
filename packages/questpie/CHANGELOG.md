@@ -1,5 +1,11 @@
 # questpie
 
+## 3.20.1
+
+### Patch Changes
+
+- [#215](https://github.com/questpie/questpie/pull/215) [`4e4ea31`](https://github.com/questpie/questpie/commit/4e4ea3174bce830b1a8efa95faf381aa36b88b24) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Fence Channel replay, live delivery, presence, and stale subscription callbacks when a shared Pusher connection leaves its connected epoch, then re-admit mounted subscribers only after the fresh subscription replay completes.
+
 ## 3.20.0
 
 ### Minor Changes
