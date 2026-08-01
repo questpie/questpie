@@ -1,5 +1,11 @@
 # questpie
 
+## 3.19.2
+
+### Patch Changes
+
+- [#208](https://github.com/questpie/questpie/pull/208) [`8114e59`](https://github.com/questpie/questpie/commit/8114e5966ffce9ecc2dd1c3be844dfff065b8af3) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Keep app context resolver services isolated in a system context, including when resolution starts inside an ambient user request such as fresh realtime authorization.
+
 ## 3.19.1
 
 ### Patch Changes
