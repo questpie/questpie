@@ -5,7 +5,7 @@ description: f.date() stores a calendar date (no time) as an ISO date string, ba
 
 `f.date()` stores a **calendar date**, year-month-day, no time of day. It maps to a Postgres `date` column in string mode, so the value you read, write, and filter on is an ISO date `string` like `"2024-01-31"` (never a JS `Date`). The derived schema is `z.string().date()`, and the field exposes comparison operators (`eq`, `gt`, `lte`, `in`, …) on the typed `where` clause. Reach for it when you care about the day but not the clock, a publish date, a due date, a birthday.
 
-> **Prerequisites:** read [Fields](/docs/concepts/fields) first, this page covers only the `date` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.default()` / `.localized()` are taught there.
+> **Prerequisites:** read [Fields](/docs/schema/fields) first, this page covers only the `date` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.default()` / `.localized()` are taught there.
 
 ## What it does
 
@@ -34,7 +34,7 @@ That gives `announcements` two `date` columns typed `string` on read, one requir
 
 `f.date()` produces a calendar-date column in Drizzle's `mode: "string"`. Field data is a `YYYY-MM-DD` string validated by `z.string().date()`.
 
-If you need a timestamp (a moment in time, with timezone) use [`f.datetime()`](/docs/concepts/fields/datetime); for a time of day with no date use [`f.time()`](/docs/concepts/fields/time).
+If you need a timestamp (a moment in time, with timezone) use [`f.datetime()`](/docs/schema/fields/datetime); for a time of day with no date use [`f.time()`](/docs/schema/fields/time).
 
 <Callout type="info" title="The value is a string, not a `Date`">
 	A `date` field's data type is `string`, an ISO date like `"2024-01-31"`. Its
@@ -46,14 +46,14 @@ If you need a timestamp (a moment in time, with timezone) use [`f.datetime()`](/
 
 ## Chained methods
 
-These two methods are specific to `date` (on top of the [shared modifiers](/docs/concepts/fields#shared-methods) every field has). Each returns a new immutable field, so they chain in any order.
+These two methods are specific to `date` (on top of the [shared modifiers](/docs/schema/fields#shared-methods) every field has). Each returns a new immutable field, so they chain in any order.
 
 | Method             | Effect                                                                                                                                       |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `.autoNow()`       | Sets a default of the current UTC `YYYY-MM-DD` on **create**. Makes the input optional.                                                      |
 | `.autoNowUpdate()` | Adds a `beforeChange` hook that returns the current UTC `YYYY-MM-DD` on **every write** (create and update), merged with any existing hooks. |
 
-The common pattern is to pair either method with [`.inputFalse()`](/docs/concepts/fields#input-output-shaping) so the field is system-managed and never accepted from the client:
+The common pattern is to pair either method with [`.inputFalse()`](/docs/schema/fields#input-output-shaping) so the field is system-managed and never accepted from the client:
 
 ```ts
 collection("posts").fields(({ f }) => ({
@@ -67,7 +67,7 @@ collection("posts").fields(({ f }) => ({
 	field's exact string type. If “today” means a tenant or business timezone
 	rather than UTC, compute that calendar date in application policy and write
 	the explicit `YYYY-MM-DD` string. For an exact instant, use
-	[`f.datetime().autoNow()`](/docs/concepts/fields/datetime).
+	[`f.datetime().autoNow()`](/docs/schema/fields/datetime).
 </Callout>
 
 ## Filtering, operators
@@ -93,17 +93,17 @@ const { docs } = await app.collections.announcements.find({
 });
 ```
 
-ISO date strings sort lexicographically the same way they sort chronologically, so range filters (`gte` / `lte`) and `orderBy` behave as you expect. The runtime comparison is identical to [`f.datetime()`](/docs/concepts/fields/datetime)'s; only the operand _type_ differs, `date` narrows it to `string`. To combine a date filter with a [relation filter](/docs/schema/relations) (e.g. only announcements whose `author` is active), nest both in the same `where` clause.
+ISO date strings sort lexicographically the same way they sort chronologically, so range filters (`gte` / `lte`) and `orderBy` behave as you expect. The runtime comparison is identical to [`f.datetime()`](/docs/schema/fields/datetime)'s; only the operand _type_ differs, `date` narrows it to `string`. To combine a date filter with a [relation filter](/docs/schema/relations) (e.g. only announcements whose `author` is active), nest both in the same `where` clause.
 
 ## When to use it
 
 - **`f.date()`**, a calendar day with no time-of-day or timezone: publish dates, due dates, valid-from / valid-to ranges, birthdays, deadlines.
-- **[`f.datetime()`](/docs/concepts/fields/datetime)**, a precise moment in time (with timezone), read back as a JS `Date`: `createdAt`, event start times, anything where the clock matters.
-- **[`f.time()`](/docs/concepts/fields/time)**, a time of day with no date: opening hours, a daily reminder time.
+- **[`f.datetime()`](/docs/schema/fields/datetime)**, a precise moment in time (with timezone), read back as a JS `Date`: `createdAt`, event start times, anything where the clock matters.
+- **[`f.time()`](/docs/schema/fields/time)**, a time of day with no date: opening hours, a daily reminder time.
 
 ## Multiple values
 
-Chain `.array()` to store a list of dates in a single `jsonb` column, and bound the list length with `.minItems(n)` / `.maxItems(n)`. This is a [shared modifier](/docs/concepts/fields#shared-methods), not date-specific:
+Chain `.array()` to store a list of dates in a single `jsonb` column, and bound the list length with `.minItems(n)` / `.maxItems(n)`. This is a [shared modifier](/docs/schema/fields#shared-methods), not date-specific:
 
 ```ts
 blackoutDates: f.date().array().maxItems(20), // string[] stored as jsonb
@@ -125,13 +125,13 @@ type Announcement = CollectionDoc<"announcements">; // { validFrom: string; ... 
 type AnnouncementFilter = CollectionWhere<"announcements">; // { validFrom?: { gte?: string; ... } }
 ```
 
-`.required()` makes the field non-null and required on insert; without it the column is nullable and the insert field optional. `.default("2024-01-01")` (or `.autoNow()`) makes the input optional and is type-checked against `string`. See [Fields → inferred types](/docs/concepts/fields#example--inferred-types) for how modifiers flow into the generated types.
+`.required()` makes the field non-null and required on insert; without it the column is nullable and the insert field optional. `.default("2024-01-01")` (or `.autoNow()`) makes the input optional and is type-checked against `string`. See [Fields → inferred types](/docs/schema/fields#example--inferred-types) for how modifiers flow into the generated types.
 
 ## Related
 
-- [Temporal values](/docs/concepts/temporal-values), the authoritative typed-wire, external JSON, realtime, Channels, and SSR contract.
-- [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.array()`, `.localized()`, …).
-- [`f.datetime()`](/docs/concepts/fields/datetime), a timestamp (moment in time, with timezone) read back as a `Date`.
-- [`f.time()`](/docs/concepts/fields/time), a time of day with no date.
+- [Temporal values](/docs/schema/fields/temporal-values), the authoritative typed-wire, external JSON, realtime, Channels, and SSR contract.
+- [Fields](/docs/schema/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.array()`, `.localized()`, …).
+- [`f.datetime()`](/docs/schema/fields/datetime), a timestamp (moment in time, with timezone) read back as a `Date`.
+- [`f.time()`](/docs/schema/fields/time), a time of day with no date.
 - [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch for custom date rules.
 - [Relations](/docs/schema/relations), hydrating related records with `with` and filtering by a relation alongside a date filter.

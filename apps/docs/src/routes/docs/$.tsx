@@ -12,6 +12,26 @@ import {
 	siteConfig,
 } from "@/lib/seo";
 
+/* Every field type kept its own page through the move, so the old and new paths
+   differ only in the group. Listing them is what the exact-match map needs. */
+const FIELD_TYPE_PAGES = [
+	"text",
+	"textarea",
+	"email",
+	"url",
+	"number",
+	"boolean",
+	"date",
+	"datetime",
+	"time",
+	"select",
+	"object",
+	"array",
+	"json",
+	"rich-text",
+	"upload",
+];
+
 /* Docs URLs are indexed, so a page that moves keeps its old path working. Exact
    match on the slug, oldest entries first. */
 const docsCompatRedirects = new Map<string, string>([
@@ -27,6 +47,13 @@ const docsCompatRedirects = new Map<string, string>([
 	["concepts/seeds", "/docs/schema/seeds"],
 	["concepts/collaborative-documents", "/docs/schema/collaborative-documents"],
 	["concepts/soft-delete-retention", "/docs/schema/soft-delete"],
+	["concepts/fields", "/docs/schema/fields"],
+	// temporal-values was a sibling of fields and is now nested under it
+	["concepts/temporal-values", "/docs/schema/fields/temporal-values"],
+	...FIELD_TYPE_PAGES.map(
+		(page) =>
+			[`concepts/fields/${page}`, `/docs/schema/fields/${page}`] as const,
+	),
 ]);
 
 export const Route = createFileRoute("/docs/$")({

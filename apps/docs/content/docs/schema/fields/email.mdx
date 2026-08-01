@@ -5,7 +5,7 @@ description: f.email() is a string field backed by a Postgres varchar that valid
 
 `f.email()` stores an email address. It produces a `varchar(255)` column, derives a Zod schema that enforces a valid email format and the column length, and exposes the full string operator set **plus** email-specific `domain` / `domainIn` filters on the typed `where` clause. Reach for it instead of `f.text()` whenever a field must hold a valid email, you get the format check and the domain filters for free.
 
-> **Prerequisites:** read [Fields](/docs/concepts/fields) first, this page covers only the `email` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.localized()` / `.default()` are taught there.
+> **Prerequisites:** read [Fields](/docs/schema/fields) first, this page covers only the `email` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.localized()` / `.default()` are taught there.
 
 ## What it does
 
@@ -52,7 +52,7 @@ The field data is always `string`. The derived Zod schema is `z.string().email()
 
 ## Chained methods
 
-These methods are specific to `email` (on top of the [shared modifiers](/docs/concepts/fields) every field has). Each returns a new immutable field, so they chain in any order.
+These methods are specific to `email` (on top of the [shared modifiers](/docs/schema/fields) every field has). Each returns a new immutable field, so they chain in any order.
 
 | Method    | Effect                                           |
 | --------- | ------------------------------------------------ |
@@ -71,9 +71,9 @@ collection("contacts").fields(({ f }) => ({
 >
 	On an email field, `.min(n)` / `.max(n)` constrain the **number of
 	characters** (they map to `minLength` / `maxLength`, the same as
-	[`f.text()`](/docs/concepts/fields/text)). On `f.number()` the same method
-	names constrain the numeric **value**. Same names, different meaning, sized by
-	the field's type.
+	[`f.text()`](/docs/schema/fields/text)). On `f.number()` the same method names
+	constrain the numeric **value**. Same names, different meaning, sized by the
+	field's type.
 </Callout>
 
 ## Filtering, operators
@@ -109,13 +109,13 @@ const staff = await app.collections.users.find({
 `domain` compiles to `ILIKE '%@value'`, so `{ domain: "acme.com" }` matches `a@acme.com` but **not** `a@mail.acme.com` (the stored domain is `mail.acme.com`, not `acme.com`). For broader matching use a string operator, e.g. `{ ilike: "%@%acme.com" }`.
 </Callout>
 
-For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see [Fields → filtering](/docs/concepts/fields). Relation filters and hydration are covered in [Relations](/docs/schema/relations).
+For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see [Fields → filtering](/docs/schema/fields). Relation filters and hydration are covered in [Relations](/docs/schema/relations).
 
 ## When to use it
 
 - **`f.email()`**, any field that must hold a valid email address: a user's login email, a contact address, a notification recipient. You get format validation and domain filters that a plain string field lacks.
-- For a free-form short string with no format constraint, use [`f.text()`](/docs/concepts/fields/text) instead.
-- For a website or link, use [`f.url()`](/docs/concepts/fields/url), the same idea (a validated string), but with `z.string().url()` and host/protocol filter operators.
+- For a free-form short string with no format constraint, use [`f.text()`](/docs/schema/fields/text) instead.
+- For a website or link, use [`f.url()`](/docs/schema/fields/url), the same idea (a validated string), but with `z.string().url()` and host/protocol filter operators.
 
 <Callout type="warn" title="Format-valid is not the same as deliverable">
 	`z.string().email()` checks syntax only. It does not verify the mailbox exists
@@ -125,7 +125,7 @@ For the full query language, combining field filters with `AND` / `OR` / `NOT`, 
 
 ## Multiple values
 
-Chain `.array()` to store a list of email strings in a single `jsonb` column, and bound it with `.minItems(n)` / `.maxItems(n)`. This is a [shared modifier](/docs/concepts/fields), not email-specific:
+Chain `.array()` to store a list of email strings in a single `jsonb` column, and bound it with `.minItems(n)` / `.maxItems(n)`. This is a [shared modifier](/docs/schema/fields), not email-specific:
 
 ```ts
 ccList: f.email().array().maxItems(20), // string[] of validated emails, stored as jsonb
@@ -140,10 +140,10 @@ type User = typeof users.$infer.select;
 //   ^? { id: string; email: string; backupEmail: string | null; ... }
 ```
 
-`.required()` makes the field non-null and required on insert; without it the column is nullable and the insert field optional. See [Fields → inferred types](/docs/concepts/fields) for how modifiers flow into the generated types.
+`.required()` makes the field non-null and required on insert; without it the column is nullable and the insert field optional. See [Fields → inferred types](/docs/schema/fields) for how modifiers flow into the generated types.
 
 ## Related
 
-- [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.default()`, `.array()`, …).
-- [Text field](/docs/concepts/fields/text), the unvalidated single-line string sibling.
+- [Fields](/docs/schema/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.default()`, `.array()`, …).
+- [Text field](/docs/schema/fields/text), the unvalidated single-line string sibling.
 - [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch for custom rules.

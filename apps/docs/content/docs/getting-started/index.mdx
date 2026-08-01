@@ -126,7 +126,7 @@ collection("posts").fields(({ f }) => ({ title: f.text().required() }));
 global("settings").fields(({ f }) => ({ siteName: f.text().required() }));
 ```
 
-**[Fields](/docs/concepts/fields)**, the building blocks of a row. 15 built-ins cover the common cases; chain modifiers like `.required()`, `.default()`, `.localized()`, and `.array()` on any of them.
+**[Fields](/docs/schema/fields)**, the building blocks of a row. 15 built-ins cover the common cases; chain modifiers like `.required()`, `.default()`, `.localized()`, and `.array()` on any of them.
 
 | Field                                    | What it stores                                         |
 | ---------------------------------------- | ------------------------------------------------------ |
@@ -319,7 +319,7 @@ export default runtimeConfig({
 
 - **[Getting started: TanStack Start](/docs/getting-started/tanstack-start)**, scaffold → `docker compose up` → `db:push` → a booting app.
 - **[Collections](/docs/schema/collections)**, the deep dive on the unit you'll use most.
-- **[Fields](/docs/concepts/fields)**, every built-in field type and the chain-modifier model.
+- **[Fields](/docs/schema/fields)**, every built-in field type and the chain-modifier model.
 - **[Client SDK](/docs/client/sdk)**, the typed client and how every call is inferred from your schema.
 - **[Codegen](/docs/extend/codegen)**, the engine that turns your files into the typed runtime.
 
@@ -327,8 +327,8 @@ export default runtimeConfig({
 
 Pick the on-ramp that matches what you're here to do. Each is an ordered path through the canonical pages, read them in sequence and every step builds on the last.
 
-- **New dev (build something)**, [TanStack Start](/docs/getting-started/tanstack-start) → [Collections](/docs/schema/collections) → [Fields](/docs/concepts/fields) → [Relations](/docs/schema/relations) → [Access control](/docs/schema/access-control) → [Client SDK](/docs/client/sdk) → [TanStack Query](/docs/client/tanstack-query). Add [Hooks](/docs/schema/hooks), [Jobs](/docs/concepts/jobs), and [Routes](/docs/concepts/routes) when you need behavior.
-- **Backend / data modeler**, [Collections](/docs/schema/collections) → [Fields](/docs/concepts/fields) → [Relations](/docs/schema/relations) → [Validation](/docs/schema/validation) → [Access control](/docs/schema/access-control) → [Hooks](/docs/schema/hooks).
+- **New dev (build something)**, [TanStack Start](/docs/getting-started/tanstack-start) → [Collections](/docs/schema/collections) → [Fields](/docs/schema/fields) → [Relations](/docs/schema/relations) → [Access control](/docs/schema/access-control) → [Client SDK](/docs/client/sdk) → [TanStack Query](/docs/client/tanstack-query). Add [Hooks](/docs/schema/hooks), [Jobs](/docs/concepts/jobs), and [Routes](/docs/concepts/routes) when you need behavior.
+- **Backend / data modeler**, [Collections](/docs/schema/collections) → [Fields](/docs/schema/fields) → [Relations](/docs/schema/relations) → [Validation](/docs/schema/validation) → [Access control](/docs/schema/access-control) → [Hooks](/docs/schema/hooks).
 - **Frontend integrator**, [Client SDK](/docs/client/sdk) → [TanStack Query](/docs/client/tanstack-query) → [Realtime](/docs/client/realtime).
 - **Extender / plugin author**, [Codegen](/docs/extend/codegen) → [Modules](/docs/extend/modules) → [Build a plugin](/docs/extend/build-a-plugin).
 - **AI agent**, the QUESTPIE skills (by name) plus `llms.txt`/`llms-full.txt` are the agent on-ramp.

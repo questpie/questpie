@@ -15,6 +15,7 @@
 		"array",
 		"json",
 		"rich-text",
-		"upload"
+		"upload",
+		"temporal-values"
 	]
 }

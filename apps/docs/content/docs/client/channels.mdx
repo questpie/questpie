@@ -274,7 +274,7 @@ Provider client events bypass QUESTPIE's publish route, per-verb authorization, 
 - Ordered events, replay, and presence preserve nested `Date` values through
   SSE and Pusher/Soketi without heuristic ISO-string revival. The compatible
   versioned wire format and reserved metadata key are specified in
-  [Temporal values](/docs/concepts/temporal-values).
+  [Temporal values](/docs/schema/fields/temporal-values).
 - Cookie-authenticated authority routes require an exact trusted `Origin`. Additional origins belong in `realtime.channelSecurity.trustedOrigins`.
 - Client publishes use independent per-session and per-principal token buckets (defaults: 10/s, burst 20).
 

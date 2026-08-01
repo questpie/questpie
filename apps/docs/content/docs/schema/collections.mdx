@@ -108,7 +108,7 @@ collection("articles").fields(({ f }) => ({
 }));
 ```
 
-The full field catalog, every `f.*` type, its options, validation, and localization, lives in [Fields](/docs/concepts/fields). Two collection-level rules worth knowing now:
+The full field catalog, every `f.*` type, its options, validation, and localization, lives in [Fields](/docs/schema/fields). Two collection-level rules worth knowing now:
 
 - **`.fields()` is cumulative.** Calling it again (or `.merge()` then `.fields()`) keeps prior fields and overrides by key. Re-declaring a key replaces that field cleanly (dropping its stale localized/relation state). This is what makes the module-extension recipe safe: `collection("user").merge(starter.collections.user).fields(...)` keeps the starter's fields and adds yours.
 - **`.title(({ f }) => f.title)`** takes a field **name**, not an expression, `f` is a proxy that returns the accessed key as a string. It sets the source for the computed `_title` column.
@@ -509,7 +509,7 @@ After adding or renaming a file, run `questpie generate` (or `questpie dev`, whi
 
 ## Extending: custom field types
 
-`f.*` is extensible. A collection can use any field a module registers, including your own. A custom `field()` definition declares its column mapping, validation, metadata, and query operators; after module registration it appears in `.fields(({ f }) => …)` beside the built-ins. See [Fields → custom field types](/docs/concepts/fields) and the Extend section for the contract and publishing flow.
+`f.*` is extensible. A collection can use any field a module registers, including your own. A custom `field()` definition declares its column mapping, validation, metadata, and query operators; after module registration it appears in `.fields(({ f }) => …)` beside the built-ins. See [Fields → custom field types](/docs/schema/fields) and the Extend section for the contract and publishing flow.
 
 ## TypeScript
 
@@ -528,7 +528,7 @@ The collection-builder types, `CollectionBuilder`, `CollectionBuilderState`, `Co
 ## Related
 
 - [Globals](/docs/schema/globals), the singleton counterpart: one row, `get` / `update` only.
-- [Fields](/docs/concepts/fields), every `f.*` type, its options, validation, localization, and how to add your own.
+- [Fields](/docs/schema/fields), every `f.*` type, its options, validation, localization, and how to add your own.
 - [Relations](/docs/schema/relations), `f.relation()`, `with` hydration, the query language, and nested mutations.
 - [Access control](/docs/schema/access-control), the full rule model and `where`-returning rules.
 - [Hooks](/docs/schema/hooks), each hook's signature and the transaction lifecycle.

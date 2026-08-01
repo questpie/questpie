@@ -3,11 +3,11 @@ title: Textarea field
 description: f.textarea() is an unbounded multi-line string field, a Postgres text column that renders as a multiline editor in the admin, with the same string filters as text.
 ---
 
-`f.textarea()` declares a multi-line string. It stores an unbounded Postgres `text` column, reads back as a `string`, validates as a string (no length cap by default), and filters with the standard string operators, the same surface as [`f.text()`](/docs/concepts/fields/text), but it renders as a multiline textarea in the admin instead of a single-line input.
+`f.textarea()` declares a multi-line string. It stores an unbounded Postgres `text` column, reads back as a `string`, validates as a string (no length cap by default), and filters with the standard string operators, the same surface as [`f.text()`](/docs/schema/fields/text), but it renders as a multiline textarea in the admin instead of a single-line input.
 
-Reach for it when you have free-form prose that has no real length limit: a bio, an excerpt, an internal note, a description. For short, capped strings use `f.text(maxLength)`; for formatted/structured content use [`f.richText()`](/docs/concepts/fields/rich-text).
+Reach for it when you have free-form prose that has no real length limit: a bio, an excerpt, an internal note, a description. For short, capped strings use `f.text(maxLength)`; for formatted/structured content use [`f.richText()`](/docs/schema/fields/rich-text).
 
-> **Prerequisites:** [Fields](/docs/concepts/fields), the `f` proxy, how a field becomes a column + schema + filters + admin input, and the chain modifiers shared by every field type.
+> **Prerequisites:** [Fields](/docs/schema/fields), the `f` proxy, how a field becomes a column + schema + filters + admin input, and the chain modifiers shared by every field type.
 
 ## What it does
 
@@ -71,7 +71,7 @@ bio: f.textarea().min(10).max(2000),   // 10-2000 characters, validated on write
 
 `.min(n)` / `.max(n)` set length bounds only, they do **not** change the column type, which stays unbounded Postgres `text` regardless. The bounds are applied to the derived Zod schema during create and update validation.
 
-Everything else comes from the [shared field modifiers](/docs/concepts/fields#shared-methods), `.required()`, `.default()`, `.localized()`, `.label()`, `.description()`, `.hooks()`, `.access()`, `.admin()`, `.zod()`, and the rest. They behave identically on `textarea` as on any field.
+Everything else comes from the [shared field modifiers](/docs/schema/fields#shared-methods), `.required()`, `.default()`, `.localized()`, `.label()`, `.description()`, `.hooks()`, `.access()`, `.admin()`, `.zod()`, and the rest. They behave identically on `textarea` as on any field.
 
 <Callout type="info" title="textarea vs text">
 `f.textarea()` and `f.text({ mode: "text" })` both produce an unbounded Postgres `text` column with the same `string` type and the same string operators. The **only** difference is the type discriminator: `textarea` reports `type: "textarea"`, which drives the admin to a multiline editor; `text` reports `type: "text"` (a single-line input). Pick `textarea` when you want the multiline UI.
@@ -121,7 +121,7 @@ To store a per-locale value (one row of text per locale, in the i18n side-table)
 description: f.textarea().localized(),   // per-locale prose
 ```
 
-`.localized()` is a shared modifier with one home, see [Fields → shared methods](/docs/concepts/fields#shared-methods) for how localized fields move to the i18n table and how labels accept `I18nText`.
+`.localized()` is a shared modifier with one home, see [Fields → shared methods](/docs/schema/fields#shared-methods) for how localized fields move to the i18n table and how labels accept `I18nText`.
 
 ## TypeScript
 
@@ -138,7 +138,7 @@ The field primitives (`TextareaFieldState`, `TextareaFieldMethods`) are exported
 
 ## Related
 
-- [Fields](/docs/concepts/fields), the field model, the `f` proxy, and the chain modifiers shared by every type.
-- [`f.text()`](/docs/concepts/fields/text), single-line / length-capped strings; same operators, different admin UI.
-- [`f.richText()`](/docs/concepts/fields/rich-text), formatted content (TipTap JSON or markdown) when prose needs structure.
-- [`f.email()`](/docs/concepts/fields/email) / [`f.url()`](/docs/concepts/fields/url), string fields with built-in format validation.
+- [Fields](/docs/schema/fields), the field model, the `f` proxy, and the chain modifiers shared by every type.
+- [`f.text()`](/docs/schema/fields/text), single-line / length-capped strings; same operators, different admin UI.
+- [`f.richText()`](/docs/schema/fields/rich-text), formatted content (TipTap JSON or markdown) when prose needs structure.
+- [`f.email()`](/docs/schema/fields/email) / [`f.url()`](/docs/schema/fields/url), string fields with built-in format validation.

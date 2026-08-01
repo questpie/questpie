@@ -5,13 +5,12 @@ description: .array() wraps any field type into a list stored as a single jsonb 
 
 `.array()` is the shared modifier that turns any field into a **list** of that field's values. Chain it onto `f.text()`, `f.number()`, `f.select(...)`, and most other types: the column becomes a single Postgres `jsonb` array, the derived schema becomes `z.array(inner)`, and the `where` clause swaps to membership operators. The element type is whatever the inner field produced, `f.number().array()` is a `number[]`, `f.text().array()` is a `string[]`.
 
-> **Prerequisites:** read [Fields](/docs/concepts/fields) first, this page covers only the `.array()` modifier. The `f` proxy, the chain-modifier model, and the other shared modifiers (`.required()` / `.default()` / `.localized()`) are taught there.
+> **Prerequisites:** read [Fields](/docs/schema/fields) first, this page covers only the `.array()` modifier. The `f` proxy, the chain-modifier model, and the other shared modifiers (`.required()` / `.default()` / `.localized()`) are taught there.
 
 <Callout type="info" title="Arrays start from the element field">
 	Build the element field, then wrap it with the `.array()` chain modifier:
 	`f.text(40).array()`. It is one of the [shared
-	modifiers](/docs/concepts/fields#shared-methods) available on field
-	definitions.
+	modifiers](/docs/schema/fields#shared-methods) available on field definitions.
 </Callout>
 
 ## What it does
@@ -73,12 +72,12 @@ Per-element validation remains active: `f.text(40).array()` rejects strings long
 | `.minItems(n)` | Array must have **at least** `n` elements (`z.array(...).min(n)`). |
 | `.maxItems(n)` | Array may have **at most** `n` elements (`z.array(...).max(n)`).   |
 
-Everything else is a [shared modifier](/docs/concepts/fields#shared-methods) and applies to the array as a whole:
+Everything else is a [shared modifier](/docs/schema/fields#shared-methods) and applies to the array as a whole:
 
 - `.required()` makes the column `NOT NULL` and the array required on insert (the element count is still governed by `.minItems()`).
 - `.default([...])` seeds an initial array, type-checked against the element type, so `f.number().array().default(["x"])` won't compile.
 - `.label()` / `.description()` set the admin label and helper text.
-- `.localized()` stores a **per-locale array** in the i18n side-table (a [shared modifier](/docs/concepts/fields#shared-methods)).
+- `.localized()` stores a **per-locale array** in the i18n side-table (a [shared modifier](/docs/schema/fields#shared-methods)).
 
 ```ts
 collection("recipes").fields(({ f }) => ({
@@ -127,10 +126,10 @@ For the full query language, combining field filters with `AND` / `OR` / `NOT`, 
 ## When to use it
 
 - **`.array()`**, any homogeneous list of one field type: tags (`f.text().array()`), scores (`f.number().array()`), checked options, a fixed set of attachments-by-id.
-- **Multi-select**, `f.select([...]).array()` is the canonical multi-value select. The inner `select` keeps its literal-union typing and option list; `.array()` makes it multiple. See [`f.select()`](/docs/concepts/fields#field-types).
+- **Multi-select**, `f.select([...]).array()` is the canonical multi-value select. The inner `select` keeps its literal-union typing and option list; `.array()` makes it multiple. See [`f.select()`](/docs/schema/fields#field-types).
 - **Bound the size**, pair with `.minItems()` / `.maxItems()` whenever there's a real cap (a top-5 list, "at least one"), so the array is validated at the edge.
 - **Reach for [Relations](/docs/schema/relations) instead** when the elements are rows in another collection, a list of FKs you want to query, join, and hydrate with `with:`. `.array()` is for inline values, not normalized references.
-- **Reach for [`f.object()`](/docs/concepts/fields#field-types) (then `.array()`)** when each element needs multiple sub-fields, `f.object({ ... }).array()` gives a list of structured items.
+- **Reach for [`f.object()`](/docs/schema/fields#field-types) (then `.array()`)** when each element needs multiple sub-fields, `f.object({ ... }).array()` gives a list of structured items.
 
 ## TypeScript
 
@@ -148,12 +147,12 @@ type Post = CollectionDoc<"posts">; // { tags: string[] | null; ratings: number[
 type PostFilter = CollectionWhere<"posts">; // { tags?: { containsAll?: string[]; ... } }
 ```
 
-`.required()` makes the array non-null and required on insert; without it the column is nullable (`Item[] | null`) and the insert field optional. `.minItems()` / `.maxItems()` add length validation to the derived `z.array(...)` schema but have no type-level effect. See [Fields → inferred types](/docs/concepts/fields#example--inferred-types) for how modifiers flow into the generated types.
+`.required()` makes the array non-null and required on insert; without it the column is nullable (`Item[] | null`) and the insert field optional. `.minItems()` / `.maxItems()` add length validation to the derived `z.array(...)` schema but have no type-level effect. See [Fields → inferred types](/docs/schema/fields#example--inferred-types) for how modifiers flow into the generated types.
 
 ## Related
 
-- [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the other shared modifiers (`.required()`, `.default()`, `.localized()`, …).
-- [`f.select()`](/docs/concepts/fields#field-types), multi-select is `f.select([...]).array()`.
-- [`f.object()`](/docs/concepts/fields#field-types), for a list of structured items, wrap an object: `f.object({ ... }).array()`.
+- [Fields](/docs/schema/fields), the `f` proxy, the chain-modifier model, and the other shared modifiers (`.required()`, `.default()`, `.localized()`, …).
+- [`f.select()`](/docs/schema/fields#field-types), multi-select is `f.select([...]).array()`.
+- [`f.object()`](/docs/schema/fields#field-types), for a list of structured items, wrap an object: `f.object({ ... }).array()`.
 - [Relations](/docs/schema/relations), when the list elements are rows in another collection (and the full query language for the operators above).
 - [Validation](/docs/schema/validation), the auto-derived `z.array(...)` schema and the `.zod()` escape hatch.

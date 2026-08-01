@@ -5,7 +5,7 @@ description: f.upload() is a typed relation from a row to a separate upload coll
 
 `f.upload()` links a row to a file stored in a _separate_ upload collection, by default the built-in `"assets"` collection. In its single form it's a typed `varchar(36)` foreign key holding one asset ID; the admin renders it as a file picker (upload + browse the media library), not a relation dropdown. Switch it to many-to-many or an inline array when a row needs several files. Reach for it whenever a row references uploaded bytes, a cover image, an attachment, a gallery.
 
-> **Prerequisites:** read [Fields](/docs/concepts/fields) first, this page covers only the `upload` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.localized()` / `.label()` are taught there.
+> **Prerequisites:** read [Fields](/docs/schema/fields) first, this page covers only the `upload` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.localized()` / `.label()` are taught there.
 
 ## What it does
 
@@ -104,7 +104,7 @@ images: f.upload().multiple(),   // string[] of asset IDs, stored inline as json
 
 ## Chained methods
 
-This method is specific to `upload` (on top of the [shared modifiers](/docs/concepts/fields) every field has). It returns a new immutable field.
+This method is specific to `upload` (on top of the [shared modifiers](/docs/schema/fields) every field has). It returns a new immutable field.
 
 | Method        | Effect                                                                                  |
 | ------------- | --------------------------------------------------------------------------------------- |
@@ -166,7 +166,7 @@ const { docs } = await app.collections.posts.find({
 });
 ```
 
-For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see [Fields → filtering](/docs/concepts/fields). Relation filters (`some` / `none` / `every`, `is` / `isNot`) and hydrating the linked asset with `with:` are covered in [Relations](/docs/schema/relations).
+For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see [Fields → filtering](/docs/schema/fields). Relation filters (`some` / `none` / `every`, `is` / `isNot`) and hydrating the linked asset with `with:` are covered in [Relations](/docs/schema/relations).
 
 ## When to use it
 
@@ -187,7 +187,7 @@ type Post = typeof posts.$infer.select;
 //   ^? { id: string; title: string; coverImage: string | null; ... }
 ```
 
-`.required()` makes the FK non-null and required on insert; without it the column is nullable and the insert field optional. See [Fields → inferred types](/docs/concepts/fields) for how modifiers flow into the generated types.
+`.required()` makes the FK non-null and required on insert; without it the column is nullable and the insert field optional. See [Fields → inferred types](/docs/schema/fields) for how modifiers flow into the generated types.
 
 <Callout type="warn" title="The many forms keep `string` at the type level, only the runtime value is `string[]`">
 `through` and `.multiple()` change the **runtime** schema to `z.array(z.string().uuid())`, but they do **not** transition the field's static type-state: `UploadFieldState` always pins `data: string`, the M2M branch still returns `FieldWithMethods<UploadFieldState<TTo>, …>`, and `.multiple()` is typed `(): any`. So a many-upload field's generated row/insert/`where` types stay `string`, not `string[]`, unlike [`f.relation().manyToMany()` / `.multiple()`](/docs/schema/relations), which *do* transition the type-state to a to-many shape with `data: string[]`.
@@ -195,6 +195,6 @@ type Post = typeof posts.$infer.select;
 
 ## Related
 
-- [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.label()`, …).
+- [Fields](/docs/schema/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.label()`, …).
 - [Storage adapters](/docs/adapters/storage), where the bytes are persisted (local vs files-sdk), the resolved `url`, signed URLs, and visibility for the target upload collection.
 - [Relations](/docs/schema/relations), belongsTo / hasMany / manyToMany hydration and relation filters that the upload variants share.

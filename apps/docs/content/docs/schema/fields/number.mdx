@@ -5,7 +5,7 @@ description: f.number() is a numeric field that maps to any Postgres number colu
 
 `f.number()` stores a number. By default it produces an `integer` column, derives a `z.number().int()` schema, and exposes comparison operators (`eq`, `gt`, `lte`, `in`, …) on the typed `where` clause. Pass a mode to pick a different Postgres numeric type, `smallint`, `bigint`, `real`, `double`, or a fixed-precision `decimal`, and chain `.min()` / `.max()` / `.positive()` / `.step()` to bound and validate the value.
 
-> **Prerequisites:** read [Fields](/docs/concepts/fields) first, this page covers only the `number` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.default()` / `.localized()` are taught there.
+> **Prerequisites:** read [Fields](/docs/schema/fields) first, this page covers only the `number` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.default()` / `.localized()` are taught there.
 
 ## What it does
 
@@ -57,7 +57,7 @@ The resulting field data is always `number`. The derived Zod schema is `z.number
 
 ## Chained methods
 
-These methods are specific to `number` (on top of the [shared modifiers](/docs/concepts/fields#shared-methods) every field has). Each returns a new immutable field, so they chain in any order.
+These methods are specific to `number` (on top of the [shared modifiers](/docs/schema/fields#shared-methods) every field has). Each returns a new immutable field, so they chain in any order.
 
 | Method        | Effect                                                                    | Schema                      |
 | ------------- | ------------------------------------------------------------------------- | --------------------------- |
@@ -81,7 +81,7 @@ All five refinements are applied to the derived Zod schema during create and upd
 	title="`.min()` / `.max()` here are VALUE bounds, not string length"
 >
 	On a number field, `.min(n)` / `.max(n)` constrain the numeric **value**. On
-	[`f.text()`](/docs/concepts/fields/text) the same method names constrain
+	[`f.text()`](/docs/schema/fields/text) the same method names constrain
 	**string length** (they map to `minLength` / `maxLength`). Same names,
 	different meaning, sized by the field's type.
 </Callout>
@@ -120,7 +120,7 @@ For the full query language, combining field filters with `AND` / `OR` / `NOT`, 
 
 ## Multiple values
 
-Chain `.array()` to store a list of numbers in a single `jsonb` column, and bound the list length with `.minItems(n)` / `.maxItems(n)`. This is a [shared modifier](/docs/concepts/fields#shared-methods), not number-specific:
+Chain `.array()` to store a list of numbers in a single `jsonb` column, and bound the list length with `.minItems(n)` / `.maxItems(n)`. This is a [shared modifier](/docs/schema/fields#shared-methods), not number-specific:
 
 ```ts
 scores: f.number().array().maxItems(10), // number[] stored as jsonb
@@ -142,11 +142,11 @@ type Product = CollectionDoc<"products">; // { stock: number; ... }
 type ProductFilter = CollectionWhere<"products">; // { stock?: { gt?: number; ... } }
 ```
 
-`.required()` makes the field non-null and required on insert; without it the column is nullable and the insert field optional. `.default(0)` makes the input optional and is type-checked against `number`. See [Fields → inferred types](/docs/concepts/fields#example--inferred-types) for how modifiers flow into the generated types.
+`.required()` makes the field non-null and required on insert; without it the column is nullable and the insert field optional. `.default(0)` makes the input optional and is type-checked against `number`. See [Fields → inferred types](/docs/schema/fields#example--inferred-types) for how modifiers flow into the generated types.
 
 ## Related
 
-- [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.array()`, `.localized()`, …).
-- [`f.text()`](/docs/concepts/fields/text), strings, where `.min()` / `.max()` mean length instead of value.
+- [Fields](/docs/schema/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.array()`, `.localized()`, …).
+- [`f.text()`](/docs/schema/fields/text), strings, where `.min()` / `.max()` mean length instead of value.
 - [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch for custom numeric rules.
 - [Relations](/docs/schema/relations), the full query language for combining the operators above.

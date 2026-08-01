@@ -169,7 +169,7 @@ Then `category: sections(c)` in each block's `.admin()`.
 
 ### `.fields()`, the block's data
 
-`.fields()` is the same callback as collections and globals, `({ f }) => ({ ... })`, so [every field type and chain method](/docs/concepts/fields) is available, including `.required()`, `.localized()`, `.default()`, `.label()`, relations, and uploads. Each field's per-field admin config (e.g. reactive `hidden`) works exactly as it does on a collection.
+`.fields()` is the same callback as collections and globals, `({ f }) => ({ ... })`, so [every field type and chain method](/docs/schema/fields) is available, including `.required()`, `.localized()`, `.default()`, `.label()`, relations, and uploads. Each field's per-field admin config (e.g. reactive `hidden`) works exactly as it does on a collection.
 
 ```ts
 .fields(({ f }) => ({
@@ -406,7 +406,7 @@ If you build blocks programmatically (a plugin), `block`, `BlockBuilder`, `Admin
 
 ## Related
 
-- [Fields](/docs/concepts/fields), every field type and chain method you use inside `block().fields()`, plus `f.blocks()` in the field reference and how to build your own field type.
+- [Fields](/docs/schema/fields), every field type and chain method you use inside `block().fields()`, plus `f.blocks()` in the field reference and how to build your own field type.
 - [Collections](/docs/schema/collections), where the `f.blocks()` field lives and how the document is read and stored.
 - [Relations](/docs/schema/relations), what `.prefetch({ with })` expands, and the `with` hydration it reuses.
 - [Hooks](/docs/schema/hooks), the `afterRead` lifecycle that prefetch runs in (and the open-transaction caveat).

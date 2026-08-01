@@ -5,7 +5,7 @@ description: f.select() is an enumerated string field, pass a list of options an
 
 `f.select()` stores one value from a fixed set of options. Pass a static list and QUESTPIE narrows the field's read type to the **literal union** of those values, derives a `z.enum(...)` schema that rejects anything off the list, sizes a `varchar` column to fit, and renders a dropdown in the admin. Switch the same factory to a dynamic `OptionsConfig` when the choices come from the database (with search + pagination), or chain `.array()` for multi-select.
 
-> **Prerequisites:** read [Fields](/docs/concepts/fields) first, this page covers only the `select` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.default()` / `.localized()` / `.array()` are taught there.
+> **Prerequisites:** read [Fields](/docs/schema/fields) first, this page covers only the `select` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.default()` / `.localized()` / `.array()` are taught there.
 
 ## What it does
 
@@ -89,7 +89,7 @@ export const deployments = collection("deployments").fields(({ f, c }) => ({
 
 ## Chained methods
 
-`.enum(name)` is the only method specific to `select`, on top of the [shared modifiers](/docs/concepts/fields#shared-methods) every field has and `.array()` for multi-select (below).
+`.enum(name)` is the only method specific to `select`, on top of the [shared modifiers](/docs/schema/fields#shared-methods) every field has and `.array()` for multi-select (below).
 
 | Method        | Effect                                                                                   |
 | ------------- | ---------------------------------------------------------------------------------------- |
@@ -120,7 +120,7 @@ status: f
 
 ## Multi-select
 
-Chain the shared [`.array()`](/docs/concepts/fields/array) modifier for multi-select. The field stores option values in one `jsonb` column, returns the value union as an array (`("news" | "guide")[]`), and uses multi-select operators. Bound list length with `.minItems(n)` and `.maxItems(n)`:
+Chain the shared [`.array()`](/docs/schema/fields/array) modifier for multi-select. The field stores option values in one `jsonb` column, returns the value union as an array (`("news" | "guide")[]`), and uses multi-select operators. Bound list length with `.minItems(n)` and `.maxItems(n)`:
 
 ```ts
 tags: f
@@ -255,12 +255,12 @@ type Post = CollectionDoc<"posts">; // { status: "draft" | "published" | "archiv
 type PostFilter = CollectionWhere<"posts">; // { status?: { eq?: "draft" | "published" | "archived"; in?: (...)[]; ... } }
 ```
 
-`.required()` makes the field non-null and required on insert; `.default("draft")` makes the input optional and is type-checked against the value union (`f.select([...]).default("nope")` won't compile). A dynamic `OptionsConfig` widens the type to `string`. See [Fields → inferred types](/docs/concepts/fields#example--inferred-types) for how modifiers flow into the generated types.
+`.required()` makes the field non-null and required on insert; `.default("draft")` makes the input optional and is type-checked against the value union (`f.select([...]).default("nope")` won't compile). A dynamic `OptionsConfig` widens the type to `string`. See [Fields → inferred types](/docs/schema/fields#example--inferred-types) for how modifiers flow into the generated types.
 
 ## Related
 
-- [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.array()`, `.localized()`, …).
-- [Array](/docs/concepts/fields/array), how `.array()` turns a select (or any field) into a multi-value list, with the full `selectMultiOps` membership operators.
+- [Fields](/docs/schema/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.array()`, `.localized()`, …).
+- [Array](/docs/schema/fields/array), how `.array()` turns a select (or any field) into a multi-value list, with the full `selectMultiOps` membership operators.
 - [`f.relation()`](/docs/schema/relations), when the choices are rows in another collection and you want a typed FK + hydration instead of a stored string.
 - [Validation](/docs/schema/validation), the auto-derived `z.enum` schema and the `.zod()` escape hatch for custom rules.
 - [Relations](/docs/schema/relations), the full query language for combining the operators above.

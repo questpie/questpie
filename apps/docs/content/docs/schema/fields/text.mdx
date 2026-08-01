@@ -5,14 +5,14 @@ description: f.text() is a single-line string field backed by a Postgres varchar
 
 `f.text()` stores a single-line string. By default it produces a `varchar(255)` column, derives a Zod schema that enforces the length, and exposes the full set of string filter operators (`eq`, `contains`, `ilike`, …) on the typed `where` clause. Pass a length to size the column, or switch to an unbounded `text` column when you need it.
 
-> **Prerequisites:** read [Fields](/docs/concepts/fields) first, this page covers only the `text` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.localized()` / `.default()` are taught there.
+> **Prerequisites:** read [Fields](/docs/schema/fields) first, this page covers only the `text` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.localized()` / `.default()` are taught there.
 
 ## What it does
 
 - **Stores a single-line string**, default `varchar(255)`; pass a number to resize, or `{ mode: "text" }` for an unbounded Postgres `text` column.
 - **Validates length**, the column length becomes a Zod `.max()` automatically; add `.min(n)` / `.max(n)` for explicit bounds and `.pattern(re)` for a format check.
 - **Filters with string operators**, `eq`, `ne`, `in`, `like`, `ilike`, `contains`, `startsWith`, `endsWith`, `isNull`, and more, all typed against `string`.
-- **Renders a text input** in the admin form (a multiline editor is what [`f.textarea()`](/docs/concepts/fields/textarea) gives you instead).
+- **Renders a text input** in the admin form (a multiline editor is what [`f.textarea()`](/docs/schema/fields/textarea) gives you instead).
 
 ## Quick start
 
@@ -44,7 +44,7 @@ The resulting field data is always `string`. The derived Zod schema is `z.string
 
 ## Chained methods
 
-These methods are specific to `text` (on top of the [shared modifiers](/docs/concepts/fields) every field has). Each returns a new immutable field, so they chain in any order.
+These methods are specific to `text` (on top of the [shared modifiers](/docs/schema/fields) every field has). Each returns a new immutable field, so they chain in any order.
 
 | Method         | Effect                                                   |
 | -------------- | -------------------------------------------------------- |
@@ -71,9 +71,8 @@ collection("users").fields(({ f }) => ({
 >
 	On a text field, `.min(n)` / `.max(n)` constrain the **number of characters**
 	(they map to `minLength` / `maxLength`). On
-	[`f.number()`](/docs/concepts/fields/number) the same method names constrain
-	the numeric **value**. Same names, different meaning, sized by the field's
-	type.
+	[`f.number()`](/docs/schema/fields/number) the same method names constrain the
+	numeric **value**. Same names, different meaning, sized by the field's type.
 </Callout>
 
 <Callout type="warn" title="`.trim()` / `.lowercase()` / `.uppercase()` are no-ops today">
@@ -108,11 +107,11 @@ These operators are field-level filters; the full query language, combining them
 
 - **`f.text()`**, short, single-line strings: titles, slugs, names, SKUs, labels. Default `varchar(255)` is the right size for most of these.
 - **`f.text({ mode: "text" })`**, long single-value strings with no natural length cap (a raw description, a serialized token) that still render as a plain input.
-- For **multi-line** content with a textarea editor in the admin, reach for [`f.textarea()`](/docs/concepts/fields/textarea). For **formatted** content, use [`f.richText()`](/docs/concepts/fields/rich-text).
+- For **multi-line** content with a textarea editor in the admin, reach for [`f.textarea()`](/docs/schema/fields/textarea). For **formatted** content, use [`f.richText()`](/docs/schema/fields/rich-text).
 
 ## Multiple values
 
-Chain `.array()` to store a list of strings in a single `jsonb` column, and bound it with `.minItems(n)` / `.maxItems(n)`. This is a [shared modifier](/docs/concepts/fields), not text-specific:
+Chain `.array()` to store a list of strings in a single `jsonb` column, and bound it with `.minItems(n)` / `.maxItems(n)`. This is a [shared modifier](/docs/schema/fields), not text-specific:
 
 ```ts
 tags: f.text(40).array().maxItems(10), // string[] stored as jsonb
@@ -127,10 +126,10 @@ type Post = typeof posts.$infer.select;
 //   ^? { id: string; title: string; slug: string; summary: string | null; ... }
 ```
 
-`.required()` makes the field non-null and required on insert; without it the column is nullable and the insert field optional. See [Fields → inferred types](/docs/concepts/fields) for how modifiers flow into the generated types.
+`.required()` makes the field non-null and required on insert; without it the column is nullable and the insert field optional. See [Fields → inferred types](/docs/schema/fields) for how modifiers flow into the generated types.
 
 ## Related
 
-- [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.default()`, `.array()`, …).
-- [Textarea field](/docs/concepts/fields/textarea), the multi-line sibling.
+- [Fields](/docs/schema/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.default()`, `.array()`, …).
+- [Textarea field](/docs/schema/fields/textarea), the multi-line sibling.
 - [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch (the way to actually normalize a value).

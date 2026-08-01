@@ -169,7 +169,7 @@ In a **root app** (not a package), the same effect comes from a single `src/ques
 	`fields` record (packages) or the `fields.ts` bundle (root apps).
 </Callout>
 
-The full field surface, every common method (`.zod()`, `.drizzle()`, `.array()`, `.access()`, `.hooks()`, …), the `FieldRuntimeState` shape, and the per-type metadata, is in [Fields](/docs/concepts/fields). What's above is the minimum to add your own.
+The full field surface, every common method (`.zod()`, `.drizzle()`, `.array()`, `.access()`, `.hooks()`, …), the `FieldRuntimeState` shape, and the per-type metadata, is in [Fields](/docs/schema/fields). What's above is the minimum to add your own.
 
 ## Custom adapters
 
@@ -589,7 +589,7 @@ import type { ModuleDefinition } from "questpie/types";
 ## Related
 
 - [Configuration](/docs/concepts/configuration), `runtimeConfig({ plugins })`, `modules.ts`, the `config/<name>.ts` pattern, and the config bucket from the app author's side.
-- [Fields](/docs/concepts/fields), every `f.*` type, the full field-builder surface, and the field-definition contract your custom type implements.
+- [Fields](/docs/schema/fields), every `f.*` type, the full field-builder surface, and the field-definition contract your custom type implements.
 - [Collections](/docs/schema/collections), `.merge()` and how a module-provided collection is extended non-destructively.
 - [Relations](/docs/schema/relations), the query/operator surface your custom operators extend.
 - [Blocks](/docs/schema/blocks), the block content model your custom blocks plug into.

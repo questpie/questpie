@@ -5,11 +5,11 @@ description: f.time() stores a time of day (HH:MM:SS) in a Postgres time column,
 
 `f.time()` stores a **time of day**, no date, no timezone. It maps to a Postgres `time` column, reads back as a `string` like `"09:30:00"`, derives a regex-validated Zod schema, and exposes comparison operators (`eq`, `gt`, `lte`, `in`, …) on the typed `where` clause. Pass `{ precision }` for fractional seconds or `{ withSeconds: false }` for an `HH:MM` field.
 
-> **Prerequisites:** read [Fields](/docs/concepts/fields) first, this page covers only the `time` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.default()` / `.localized()` are taught there.
+> **Prerequisites:** read [Fields](/docs/schema/fields) first, this page covers only the `time` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.default()` / `.localized()` are taught there.
 
 ## What it does
 
-- **Stores a time of day, not a timestamp.** Maps to Postgres `time` (no date component, no timezone). For a full date + time use [`f.datetime()`](/docs/concepts/fields/datetime); for a calendar date only use [`f.date()`](/docs/concepts/fields/date).
+- **Stores a time of day, not a timestamp.** Maps to Postgres `time` (no date component, no timezone). For a full date + time use [`f.datetime()`](/docs/schema/fields/datetime); for a calendar date only use [`f.date()`](/docs/schema/fields/date).
 - **Reads back as a `string`.** The value is an `"HH:MM:SS"` string (e.g. `"14:00:00"`), never a `Date`.
 - **Validates the format with a regex.** By default the schema requires `HH:MM:SS` (with optional fractional seconds); set `withSeconds: false` to require `HH:MM`.
 - **Filters with comparison operators**, `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `notIn`, `isNull`, `isNotNull`, so you can query for rows before/after a time of day.
@@ -63,13 +63,13 @@ The resulting field data is always a `string`. The derived Zod schema is a `z.st
 <Callout type="warn" title="The value is a STRING, not a Date">
 	A time field stores an `"HH:MM:SS"` string representing time of day. Pass a
 	formatted string such as `"09:30:00"`. Use
-	[`f.datetime()`](/docs/concepts/fields/datetime) when the value needs a
-	calendar date or instant.
+	[`f.datetime()`](/docs/schema/fields/datetime) when the value needs a calendar
+	date or instant.
 </Callout>
 
 ## Chained methods
 
-`f.time()` has **no type-specific chain methods**, it returns a plain field, so only the [shared modifiers](/docs/concepts/fields#shared-methods) apply (`.required()`, `.default("09:00:00")`, `.label()`, `.localized()`, `.array()`, `.virtual()`, …).
+`f.time()` has **no type-specific chain methods**, it returns a plain field, so only the [shared modifiers](/docs/schema/fields#shared-methods) apply (`.required()`, `.default("09:00:00")`, `.label()`, `.localized()`, `.array()`, `.virtual()`, …).
 
 ```ts
 collection("schedules").fields(({ f }) => ({
@@ -81,14 +81,14 @@ collection("schedules").fields(({ f }) => ({
 
 <Callout type="info" title="No `autoNow()` on time fields">
 	`.autoNow()` and `.autoNowUpdate()` are
-	[`f.datetime()`](/docs/concepts/fields/datetime) methods (they set the column
-	to the current `Date`). They do **not** exist on `f.time()`. For a literal
+	[`f.datetime()`](/docs/schema/fields/datetime) methods (they set the column to
+	the current `Date`). They do **not** exist on `f.time()`. For a literal
 	default time use the shared `.default("09:00:00")` modifier.
 </Callout>
 
 ## Filtering, operators
 
-`time` uses the **date operator set** (`dateOps`), the same set as [`f.datetime()`](/docs/concepts/fields/datetime). Every time field is filterable with these in a `where` clause. The operand is typed `DateInput` (`Date | string`), pass the time string, e.g. `"12:00:00"`.
+`time` uses the **date operator set** (`dateOps`), the same set as [`f.datetime()`](/docs/schema/fields/datetime). Every time field is filterable with these in a `where` clause. The operand is typed `DateInput` (`Date | string`), pass the time string, e.g. `"12:00:00"`.
 
 | Operator               | Operand              | Matches                               |
 | ---------------------- | -------------------- | ------------------------------------- |
@@ -114,11 +114,11 @@ For the full query language, combining field filters with `AND` / `OR` / `NOT`, 
 - **`f.time()`**, a time of day with no date: opening/closing hours, a daily reminder time, a class start time, a shift slot. Use it whenever the calendar date is irrelevant and only the clock matters.
 - **`f.time({ precision: 3 })`**, when you need sub-second precision (e.g. a lap or split time).
 - **`f.time({ withSeconds: false })`**, when minutes are enough and you want to reject seconds in the input (`HH:MM`).
-- Need a date **and** a time together? Use [`f.datetime()`](/docs/concepts/fields/datetime). Need only a calendar date? Use [`f.date()`](/docs/concepts/fields/date).
+- Need a date **and** a time together? Use [`f.datetime()`](/docs/schema/fields/datetime). Need only a calendar date? Use [`f.date()`](/docs/schema/fields/date).
 
 ## Multiple values
 
-Chain `.array()` to store a list of times in a single `jsonb` column, and bound the list length with `.minItems(n)` / `.maxItems(n)`. This is a [shared modifier](/docs/concepts/fields#shared-methods), not time-specific:
+Chain `.array()` to store a list of times in a single `jsonb` column, and bound the list length with `.minItems(n)` / `.maxItems(n)`. This is a [shared modifier](/docs/schema/fields#shared-methods), not time-specific:
 
 ```ts
 slots: f.time().array().maxItems(24), // string[] stored as jsonb
@@ -140,12 +140,12 @@ type Business = CollectionDoc<"businesses">; // { opensAt: string; ... }
 type BusinessFilter = CollectionWhere<"businesses">; // { opensAt?: { gt?: Date | string; ... } }
 ```
 
-`.required()` makes the field non-null and required on insert; without it the column is nullable and the insert field optional. `.default("09:00:00")` makes the input optional and is type-checked against `string`. See [Fields → inferred types](/docs/concepts/fields#example--inferred-types) for how modifiers flow into the generated types.
+`.required()` makes the field non-null and required on insert; without it the column is nullable and the insert field optional. `.default("09:00:00")` makes the input optional and is type-checked against `string`. See [Fields → inferred types](/docs/schema/fields#example--inferred-types) for how modifiers flow into the generated types.
 
 ## Related
 
-- [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.array()`, `.localized()`, …).
-- [`f.datetime()`](/docs/concepts/fields/datetime), a full timestamp (date + time) stored as a `Date`, with `.autoNow()` / `.autoNowUpdate()`. Shares the `dateOps` operator set.
-- [`f.date()`](/docs/concepts/fields/date), a calendar date only (ISO date string).
+- [Fields](/docs/schema/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.array()`, `.localized()`, …).
+- [`f.datetime()`](/docs/schema/fields/datetime), a full timestamp (date + time) stored as a `Date`, with `.autoNow()` / `.autoNowUpdate()`. Shares the `dateOps` operator set.
+- [`f.date()`](/docs/schema/fields/date), a calendar date only (ISO date string).
 - [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch for custom rules.
 - [Relations](/docs/schema/relations), the full query language for combining the operators above.

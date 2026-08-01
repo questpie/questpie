@@ -72,23 +72,23 @@ Every type below is reached as `f.<type>(…)`. Each constructor has its documen
 
 Each type has its own page with the full constructor, type-specific methods, operator set, and gotchas. This hub is the overview; follow a link for the detail.
 
-| Field                                             | What it stores                                                                                    |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| [`f.text()`](/docs/concepts/fields/text)          | Single-line string, a `varchar` (or unbounded `text`) with length, pattern, and string filtering. |
-| [`f.textarea()`](/docs/concepts/fields/textarea)  | Unbounded multi-line string, a `text` column rendered as a multiline editor.                      |
-| [`f.email()`](/docs/concepts/fields/email)        | String validated as an email address, with domain-aware filters.                                  |
-| [`f.url()`](/docs/concepts/fields/url)            | Web address, a `varchar(2048)` with URL-format validation and host/protocol filters.              |
-| [`f.number()`](/docs/concepts/fields/number)      | Numeric, integer, smallint, bigint, real, double, or fixed-precision decimal, with value bounds.  |
-| [`f.boolean()`](/docs/concepts/fields/boolean)    | True/false, a `boolean` column with equality / null filtering.                                    |
-| [`f.date()`](/docs/concepts/fields/date)          | Calendar date (no time) as an ISO date string, with auto-now stamping.                            |
-| [`f.datetime()`](/docs/concepts/fields/datetime)  | Instant in time, a `timestamp` reading back as a JS `Date`, with precision and timezone.          |
-| [`f.time()`](/docs/concepts/fields/time)          | Time of day (`HH:MM:SS`) in a `time` column.                                                      |
-| [`f.select()`](/docs/concepts/fields/select)      | Enumerated string, read type narrows to the literal union of the option values.                   |
-| [`f.upload()`](/docs/concepts/fields/upload)      | Typed relation to an upload collection, single file, gallery, or inline asset IDs.                |
-| [`f.object()`](/docs/concepts/fields/object)      | Fixed, typed nested shape in one `jsonb` column.                                                  |
-| [`.array()`](/docs/concepts/fields/array)         | Wraps any field into a list stored as `jsonb`, with length bounds.                                |
-| [`f.json()`](/docs/concepts/fields/json)          | Schema-less `jsonb` (or `json`) for free-form data you narrow and validate yourself.              |
-| [`f.richText()`](/docs/concepts/fields/rich-text) | TipTap WYSIWYG stored as structured JSONB (or markdown). Admin module only.                       |
+| Field                                           | What it stores                                                                                    |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| [`f.text()`](/docs/schema/fields/text)          | Single-line string, a `varchar` (or unbounded `text`) with length, pattern, and string filtering. |
+| [`f.textarea()`](/docs/schema/fields/textarea)  | Unbounded multi-line string, a `text` column rendered as a multiline editor.                      |
+| [`f.email()`](/docs/schema/fields/email)        | String validated as an email address, with domain-aware filters.                                  |
+| [`f.url()`](/docs/schema/fields/url)            | Web address, a `varchar(2048)` with URL-format validation and host/protocol filters.              |
+| [`f.number()`](/docs/schema/fields/number)      | Numeric, integer, smallint, bigint, real, double, or fixed-precision decimal, with value bounds.  |
+| [`f.boolean()`](/docs/schema/fields/boolean)    | True/false, a `boolean` column with equality / null filtering.                                    |
+| [`f.date()`](/docs/schema/fields/date)          | Calendar date (no time) as an ISO date string, with auto-now stamping.                            |
+| [`f.datetime()`](/docs/schema/fields/datetime)  | Instant in time, a `timestamp` reading back as a JS `Date`, with precision and timezone.          |
+| [`f.time()`](/docs/schema/fields/time)          | Time of day (`HH:MM:SS`) in a `time` column.                                                      |
+| [`f.select()`](/docs/schema/fields/select)      | Enumerated string, read type narrows to the literal union of the option values.                   |
+| [`f.upload()`](/docs/schema/fields/upload)      | Typed relation to an upload collection, single file, gallery, or inline asset IDs.                |
+| [`f.object()`](/docs/schema/fields/object)      | Fixed, typed nested shape in one `jsonb` column.                                                  |
+| [`.array()`](/docs/schema/fields/array)         | Wraps any field into a list stored as `jsonb`, with length bounds.                                |
+| [`f.json()`](/docs/schema/fields/json)          | Schema-less `jsonb` (or `json`) for free-form data you narrow and validate yourself.              |
+| [`f.richText()`](/docs/schema/fields/rich-text) | TipTap WYSIWYG stored as structured JSONB (or markdown). Admin module only.                       |
 
 ### Text & string
 

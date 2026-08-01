@@ -3,6 +3,7 @@
 	"pages": [
 		"collections",
 		"globals",
+		"fields",
 		"relations",
 		"blocks",
 		"access-control",

@@ -205,7 +205,7 @@ global("site_settings").fields(({ f }) => ({
 }));
 ```
 
-See [Fields](/docs/concepts/fields) for the full field catalog and [Relations](/docs/schema/relations) for `f.upload()` / `f.relation()`.
+See [Fields](/docs/schema/fields) for the full field catalog and [Relations](/docs/schema/relations) for `f.upload()` / `f.relation()`.
 
 <Callout type="info" title="Localized fields work on globals">
 Mark a field `.localized()` and QUESTPIE generates a `<name>_i18n` table behind the global. At the type level `localized` stays `[]` (a known limitation of the field-builder overload), but the runtime fully supports it, read and write per locale via the `locale` option shown above.
@@ -382,7 +382,7 @@ export type SiteSettingsData = Awaited<ReturnType<typeof getSiteSettings>>;
 ## Related
 
 - [Collections](/docs/schema/collections), multi-row tables with full CRUD and list views.
-- [Fields](/docs/concepts/fields), the field catalog used by `.fields()`.
+- [Fields](/docs/schema/fields), the field catalog used by `.fields()`.
 - [Relations](/docs/schema/relations), `f.relation()` / `f.upload()` and relation hydration with `with`.
 - [Access control](/docs/schema/access-control), the access-rule model shared with collections.
 - [Hooks](/docs/schema/hooks), the lifecycle-hook model.

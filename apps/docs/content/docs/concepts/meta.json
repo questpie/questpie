@@ -2,8 +2,6 @@
 	"title": "Concepts",
 	"pages": [
 		"optimistic-concurrency",
-		"fields",
-		"temporal-values",
 		"routes",
 		"jobs",
 		"services",

@@ -3,9 +3,9 @@ title: Boolean field
 description: f.boolean() is a true/false field backed by a Postgres boolean column, with a z.boolean() schema and equality / null filtering built in.
 ---
 
-`f.boolean()` stores a `true` / `false` value. It produces a Postgres `boolean` column, derives a `z.boolean()` schema, and exposes equality and null filter operators on the typed `where` clause. It takes no arguments and has no type-specific methods, you shape it entirely with the [shared modifiers](/docs/concepts/fields#shared-methods) every field has.
+`f.boolean()` stores a `true` / `false` value. It produces a Postgres `boolean` column, derives a `z.boolean()` schema, and exposes equality and null filter operators on the typed `where` clause. It takes no arguments and has no type-specific methods, you shape it entirely with the [shared modifiers](/docs/schema/fields#shared-methods) every field has.
 
-> **Prerequisites:** read [Fields](/docs/concepts/fields) first, this page covers only the `boolean` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.default()` / `.localized()` are taught there.
+> **Prerequisites:** read [Fields](/docs/schema/fields) first, this page covers only the `boolean` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.default()` / `.localized()` are taught there.
 
 ## What it does
 
@@ -86,11 +86,11 @@ For the full query language, combining field filters with `AND` / `OR` / `NOT`, 
 - **`f.boolean()`**, any two-state flag: `published`, `featured`, `isActive`, `acceptedTerms`, feature toggles, opt-ins.
 - Pair it with **`.default(false)` / `.default(true)` + `.required()`** for a non-null flag that never reads back as `null`, usually what you want for a toggle.
 - Leave it **nullable** (no `.required()`) when "not yet decided" is a meaningful third state, then filter with `isNull` / `isNotNull`.
-- For a fixed set of more than two states (e.g. `draft` / `review` / `live`), reach for [`f.select()`](/docs/concepts/fields/select) instead of stacking booleans.
+- For a fixed set of more than two states (e.g. `draft` / `review` / `live`), reach for [`f.select()`](/docs/schema/fields/select) instead of stacking booleans.
 
 ## Multiple values
 
-Chain `.array()` to store a list of booleans in a single `jsonb` column, and bound the list length with `.minItems(n)` / `.maxItems(n)`. This is a [shared modifier](/docs/concepts/fields#shared-methods), not boolean-specific:
+Chain `.array()` to store a list of booleans in a single `jsonb` column, and bound the list length with `.minItems(n)` / `.maxItems(n)`. This is a [shared modifier](/docs/schema/fields#shared-methods), not boolean-specific:
 
 ```ts
 answers: f.boolean().array().maxItems(20), // boolean[] stored as jsonb
@@ -112,11 +112,11 @@ type Post = CollectionDoc<"posts">; // { published: boolean; ... }
 type PostFilter = CollectionWhere<"posts">; // { published?: { eq?: boolean; ... } }
 ```
 
-`.required()` makes the field non-null and required on insert; without it the column is nullable and the insert field optional. `.default(false)` makes the input optional and is type-checked against `boolean`. See [Fields → inferred types](/docs/concepts/fields#example--inferred-types) for how modifiers flow into the generated types.
+`.required()` makes the field non-null and required on insert; without it the column is nullable and the insert field optional. `.default(false)` makes the input optional and is type-checked against `boolean`. See [Fields → inferred types](/docs/schema/fields#example--inferred-types) for how modifiers flow into the generated types.
 
 ## Related
 
-- [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.array()`, `.localized()`, …).
-- [`f.select()`](/docs/concepts/fields/select), when a flag grows into a fixed set of more than two states.
+- [Fields](/docs/schema/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.array()`, `.localized()`, …).
+- [`f.select()`](/docs/schema/fields/select), when a flag grows into a fixed set of more than two states.
 - [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch.
 - [Relations](/docs/schema/relations), the full query language for combining the operators above.

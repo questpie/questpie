@@ -5,7 +5,7 @@ description: f.richText() is a TipTap-backed WYSIWYG field, stored as structured
 
 `f.richText()` gives an editor formatted prose: headings, bold, links, lists, tables, images. By default it stores a structured **TipTap document** in a `jsonb` column, renders a full WYSIWYG editor in the admin form, and adds JSON-aware filter operators (`contains`, `isEmpty`, …) you can use in a `where` clause. Switch to `markdown` mode and the same editor saves a plain markdown `string` instead.
 
-> **Prerequisites:** read [Fields](/docs/concepts/fields) first, this page covers only the `richText` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.localized()` / `.label()` are taught there.
+> **Prerequisites:** read [Fields](/docs/schema/fields) first, this page covers only the `richText` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.localized()` / `.label()` are taught there.
 
 <Callout
 	type="info"
@@ -24,7 +24,7 @@ description: f.richText() is a TipTap-backed WYSIWYG field, stored as structured
 - **Renders a WYSIWYG editor**, the admin form shows a full TipTap editor (toolbar / bubble menu / slash commands, headings, marks, links, images, tables).
 - **Switches to markdown**, pass `{ mode: "markdown" }` to store a plain markdown `string` in a `text` column instead of JSON.
 - **Filters on content**, both modes expose `contains` (full-text search inside the document), `isEmpty` / `isNotEmpty`, and `isNull` / `isNotNull` on the `where` clause.
-- **Localizes per locale**, chain `.localized()` to keep a separate document per locale (a [shared modifier](/docs/concepts/fields)).
+- **Localizes per locale**, chain `.localized()` to keep a separate document per locale (a [shared modifier](/docs/schema/fields)).
 
 ## Quick start
 
@@ -97,7 +97,7 @@ A stored value is the TipTap JSON tree:
 
 ## Chained methods
 
-`richText` adds **no type-specific chained methods**, its field-type definition declares only the state factory, no extra methods. You configure it entirely through the [shared modifiers](/docs/concepts/fields) every field has.
+`richText` adds **no type-specific chained methods**, its field-type definition declares only the state factory, no extra methods. You configure it entirely through the [shared modifiers](/docs/schema/fields) every field has.
 
 The ones you'll reach for most:
 
@@ -156,7 +156,7 @@ For the full query language, combining field filters with `AND` / `OR` / `NOT`, 
 - **`f.richText()` (json)**, editor-authored formatted prose where you keep the structure: article bodies, page copy, descriptions with headings/links/images. This is the default and the right choice for almost all rich content.
 - **`f.richText({ mode: "markdown" })`**, when the body must round-trip as portable markdown text (external rendering, migration, plain-text storage). You trade the structured JSON for a `string`.
 - **Need stackable, reorderable, nested content sections instead of one prose blob?** That's [`f.blocks()`](/docs/schema/blocks), a page-builder field, not a single editor.
-- **Just a plain multi-line string with no formatting?** Use [`f.textarea()`](/docs/concepts/fields/textarea).
+- **Just a plain multi-line string with no formatting?** Use [`f.textarea()`](/docs/schema/fields/textarea).
 
 ## Configuring the editor (`.admin()`)
 
@@ -201,11 +201,11 @@ type Post = typeof posts.$infer.select;
 //   ^? { ...; content: TipTapDocument }
 ```
 
-`@questpie/admin/fields` exports `richText`, `richTextFieldType`, `RichTextFieldState`, `RichTextFeature`, and the augmentable `RichTextFieldMeta`. See [Fields → inferred types](/docs/concepts/fields) for how modifiers flow into generated types.
+`@questpie/admin/fields` exports `richText`, `richTextFieldType`, `RichTextFieldState`, `RichTextFeature`, and the augmentable `RichTextFieldMeta`. See [Fields → inferred types](/docs/schema/fields) for how modifiers flow into generated types.
 
 ## Related
 
-- [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.label()`, `.default()`, …).
+- [Fields](/docs/schema/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.label()`, `.default()`, …).
 - [Blocks](/docs/schema/blocks), the page-builder sibling: stackable, reorderable, nested content sections instead of one prose document.
-- [Textarea field](/docs/concepts/fields/textarea), a plain multi-line string with no formatting.
+- [Textarea field](/docs/schema/fields/textarea), a plain multi-line string with no formatting.
 - Admin, the module that supplies this field, and the full editor/admin-config model.
