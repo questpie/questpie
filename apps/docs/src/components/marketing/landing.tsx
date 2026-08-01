@@ -247,7 +247,7 @@ export function Landing() {
 					<div className="cta-block">
 						<div className="head head-center">
 							<p className="qp-aside">we are our own first customer</p>
-							<h2 className="qp-display-l">Questpie runs on Questpie</h2>
+							<h2 className="qp-display-l">QUESTPIE runs on QUESTPIE</h2>
 							<p>
 								Every goal, task and message behind this page lives in
 								Autopilot.

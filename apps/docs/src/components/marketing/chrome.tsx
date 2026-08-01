@@ -48,7 +48,10 @@ function Lockup({ fontSize, size }: { fontSize: number; size: number }) {
 				src="/brand/questpie-mark-bare.svg"
 				width={size}
 			/>
-			<span style={{ fontSize }}>Questpie</span>
+			{/* Spelled out, not left to text-transform: the CSS uppercases it either
+			    way, but this is the string a screen reader announces and a reader
+			    copies. */}
+			<span style={{ fontSize }}>QUESTPIE</span>
 		</Link>
 	);
 }
