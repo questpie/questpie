@@ -1,27 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import {
-	BuilderSection,
-	IntegrationsSection,
-	OpenSourceSection,
-	PacksSection,
-	QapCockpit,
-	RuntimeMCPSection,
-} from "@/components/landing/autopilot-extras";
-import {
-	APFaq,
-	APFinalCta,
-	APHero,
-	APPillars,
-	IssuesSection,
-	KnowledgeProjectsSection,
-	SchedulesSection,
-	WorkflowsSection,
-} from "@/components/landing/autopilot-sections";
-import { StarBanner, useRevealOnScroll } from "@/components/landing/primitives";
-import { SharedFooter } from "@/components/landing/shared-footer";
-import { SharedNav } from "@/components/landing/shared-nav";
+import { AutopilotPageContent } from "@/components/marketing/autopilot";
+import { MarketingChrome } from "@/components/marketing/chrome";
 import { generateLinks, generateMeta, siteConfig } from "@/lib/seo";
+
+const TITLE = "Autopilot — agents on the team";
+/* The description this replaces promised "Q4 2026 early access". Nothing in the
+ * repo dates the pilot, so the page says what it can stand behind instead. */
+const DESCRIPTION =
+	"Autopilot holds the work: goals, tasks, messages. An agent picks something up, asks when it is unsure, and hands back a proposal you accept in one click.";
 
 export const Route = createFileRoute("/autopilot")({
 	component: AutopilotPage,
@@ -32,10 +19,8 @@ export const Route = createFileRoute("/autopilot")({
 			includePreconnect: false,
 		}),
 		meta: generateMeta({
-			title:
-				"QUESTPIE Autopilot — Run your company. Build your apps. Automate the rest.",
-			description:
-				"AI-native operating layer for QUESTPIE. Linear-style issues, durable workflows, schedules, knowledge, agents and an AI builder. MIT. Q4 2026 early access.",
+			title: TITLE,
+			description: DESCRIPTION,
 			url: `${siteConfig.url}/autopilot`,
 		}),
 	}),
@@ -43,31 +28,14 @@ export const Route = createFileRoute("/autopilot")({
 		"Cache-Control":
 			"public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800",
 	}),
+	staleTime: 60 * 60_000,
+	gcTime: 2 * 60 * 60_000,
 });
 
 function AutopilotPage() {
-	useRevealOnScroll();
 	return (
-		<div style={{ minHeight: "100vh", background: "var(--background)" }}>
-			<SharedNav activeKey="autopilot" />
-			<main>
-				<APHero />
-				<StarBanner accent="var(--pillar-autopilot)" />
-				<APPillars />
-				<IssuesSection />
-				<WorkflowsSection />
-				<SchedulesSection />
-				<KnowledgeProjectsSection />
-				<BuilderSection />
-				<IntegrationsSection />
-				<PacksSection />
-				<RuntimeMCPSection />
-				<QapCockpit />
-				<OpenSourceSection />
-				<APFaq />
-				<APFinalCta />
-			</main>
-			<SharedFooter />
-		</div>
+		<MarketingChrome page="autopilot">
+			<AutopilotPageContent />
+		</MarketingChrome>
 	);
 }
