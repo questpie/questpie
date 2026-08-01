@@ -291,7 +291,25 @@ Use `ctx.onAfterCommit(cb)` to defer only those non-transactional side effects u
   immediately as fire-and-forget work. Do not rely on either form to fail or
   roll back the request.
 
-This is exactly how the framework's own realtime and search hooks are written, both subscribe to `afterChange` / `afterDelete` and wrap their broadcast/indexing in `ctx.onAfterCommit`, so events fire only on durable data.
+<Callout type="warn" title="`onAfterCommit` is at-most-once">
+	The callback lives only in the memory of the process that ran the write.
+	Nothing records that it was supposed to run, so it is lost with no trace if
+	the callback throws (the error is logged, never retried) or the process dies
+	in the window between `COMMIT` and the callback finishing. That window is
+	small but it is not zero, and a lost callback looks exactly like one that
+	never needed to run.
+</Callout>
+
+Pick the mechanism by the guarantee the effect actually needs, not by
+convenience:
+
+| The effect                                                      | Use                                          | Guarantee                                                                       |
+| --------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------- |
+| Writes to the same database                                     | the hook body itself (`ctx.db`)              | Atomic with the write; rolls back with it                                       |
+| Must not be lost (verification email, payment capture, webhook) | `queue.<job>.publish()`, awaited in the hook | At-least-once; the dispatch commits with the data ([Jobs](/docs/concepts/jobs)) |
+| Nice to have, safe to lose (cache warm, metric, search reindex) | `ctx.onAfterCommit(cb)`                      | At-most-once; silently dropped on throw or crash                                |
+
+This is exactly how the framework's own realtime and search hooks are written, both subscribe to `afterChange` / `afterDelete` and wrap their broadcast/indexing in `ctx.onAfterCommit`, so events fire only on durable data. They sit in the third row deliberately: a missed reindex is repaired by the next write or a re-index job, so paying for durability would buy nothing.
 
 <Callout type="warn">
 	**Keep direct external effects out of an `after*` hook.** Transactional
