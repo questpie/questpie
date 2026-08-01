@@ -700,7 +700,8 @@ article {
 	--tw-prose-quotes: var(--foreground);
 	--tw-prose-quote-borders: var(--border-strong);
 	--tw-prose-captions: var(--foreground-muted);
-	--tw-prose-code: var(--primary);
+	/* was var(--primary) — same reason as the inline-code rule below */
+	--tw-prose-code: var(--foreground);
 	--tw-prose-pre-code: var(--foreground);
 	--tw-prose-pre-bg: var(--card);
 	color: var(--foreground);
@@ -765,10 +766,24 @@ article h6 {
 	line-height: 1.35;
 }
 
+/* The measure, per canon §4. Measured before this landed: 680px of 16px text is
+   about 86 characters a line, well past the 45-75 a reader tracks comfortably —
+   which is what "the docs read badly" meant. 68ch of Hanken is ~647px, ~77
+   characters. On .prose and not on article: fumadocs' page container IS an
+   <article>, so narrowing that would take the whole layout with it. */
+.prose {
+	max-width: 68ch;
+}
+
+/* Lists are running text too. Left at 16px they sat a step under the paragraphs
+   around them, and because inline code is sized in em, the same identifier came
+   out 14.1px in a bullet and 15.0px in a paragraph on one page. */
 .prose p,
-article p {
+article p,
+.prose li,
+article li {
 	color: var(--foreground);
-	font-size: 1rem;
+	font-size: 1.0625rem;
 	line-height: 1.72;
 }
 
@@ -812,15 +827,19 @@ article a:not(:has(> h1, > h2, > h3, > h4, > h5, > h6)):hover {
 	text-decoration-color: var(--primary);
 }
 
+/* Ink, not coral. Canon §4 is explicit about this one: coral inline code was the
+   loudest drift in the old CSS, because every identifier in a paragraph then
+   shouted as loudly as the page's one real call to action. 0.88em of 17px is the
+   15px the canon asks for. */
 .prose :not(pre) > code,
 article :not(pre) > code {
 	border: 1px solid var(--border-subtle);
 	border-radius: var(--control-radius-inner);
 	background: var(--surface-low);
-	color: var(--primary);
+	color: var(--foreground);
 	padding: 0.1rem 0.35rem;
 	font-family: var(--font-mono);
-	font-size: 0.86em;
+	font-size: 0.88em;
 }
 
 .prose :where(pre, figure[data-rehype-pretty-code-figure] pre),
@@ -831,6 +850,15 @@ figure[data-rehype-pretty-code-figure] {
 	border-radius: var(--surface-radius) !important;
 	background: var(--card) !important;
 	box-shadow: var(--surface-shadow) !important;
+}
+
+/* 14/1.6, per canon §4. fumadocs' preset lands on 13px, which is a whole step
+   below the prose it sits between and reads as a footnote. !important because
+   the preset uses it too. */
+.prose :where(pre, figure[data-rehype-pretty-code-figure] pre),
+article :where(pre, figure[data-rehype-pretty-code-figure] pre) {
+	font-size: 0.875rem !important;
+	line-height: 1.6 !important;
 }
 
 figure.shiki,
