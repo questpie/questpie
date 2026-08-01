@@ -35,10 +35,6 @@ body.qp-grain-page {
 		margin: 0 auto;
 		padding: 0 var(--space-10);
 	}
-	.wrap.narrow {
-		max-width: var(--content-narrow);
-	}
-
 	/* ── header: floats at rest, glass once content passes under it ───────────── */
 	.nav {
 		position: sticky;
@@ -521,126 +517,6 @@ body.qp-grain-page {
 		gap: var(--space-5);
 	}
 
-	/* ── docs shell ───────────────────────────────────────────────────────────── */
-	.docs {
-		display: grid;
-		grid-template-columns: 260px minmax(0, 1fr) 220px;
-		gap: var(--space-10);
-		max-width: 84rem;
-		margin: 0 auto;
-		padding: var(--space-8) var(--space-10) var(--space-16);
-	}
-	@media (max-width: 68rem) {
-		.docs {
-			grid-template-columns: minmax(0, 1fr);
-		}
-		.docs aside {
-			display: none;
-		}
-	}
-	.dnav {
-		display: flex;
-		flex-direction: column;
-		gap: 1px;
-		position: sticky;
-		top: calc(var(--nav-height) + var(--space-6));
-		align-self: start;
-	}
-	.dgroup {
-		padding: var(--space-4) var(--space-2) var(--space-2);
-		font-family: var(--font-mono);
-		font-size: 11px;
-		font-weight: 600;
-		letter-spacing: var(--eyebrow-track);
-		text-transform: uppercase;
-		color: var(--foreground-subtle);
-	}
-	.dlink {
-		display: flex;
-		align-items: center;
-		min-height: 2rem;
-		padding: 0 var(--space-3);
-		border-radius: var(--radius-inner);
-		font-size: var(--type-base);
-		color: var(--foreground-muted);
-	}
-	.dlink:hover {
-		background: var(--surface-mid);
-		color: var(--foreground);
-	}
-	.dlink[aria-current="page"] {
-		background: var(--surface-mid);
-		color: var(--foreground);
-		font-weight: var(--weight-semibold);
-	}
-	/* prose stays readable even though the page is wide */
-	article {
-		max-width: 48rem;
-	}
-	article h1 {
-		font-size: var(--type-3xl);
-		letter-spacing: -0.022em;
-	}
-	article h2 {
-		margin-top: var(--space-10);
-		font-size: var(--type-2xl);
-		letter-spacing: -0.018em;
-	}
-	article p,
-	article li {
-		font-size: var(--type-md);
-		line-height: var(--line-relaxed);
-		color: var(--foreground-muted);
-	}
-	article p {
-		margin-top: var(--space-4);
-	}
-	article ul {
-		margin: var(--space-4) 0 0;
-		padding-left: var(--space-5);
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-	}
-	article pre {
-		margin-top: var(--space-5);
-	}
-	.callout {
-		display: flex;
-		align-items: flex-start;
-		gap: var(--space-3);
-		margin-top: var(--space-6);
-		padding: var(--space-4) var(--space-5);
-		background: var(--surface-mid);
-		border-radius: var(--radius-object);
-	}
-	/* centre the mark on the FIRST LINE of the paragraph, not on the box:
-	   (line-height − icon height) / 2 */
-	.callout > img {
-		flex: none;
-		margin-top: calc((var(--type-md) * var(--line-relaxed) - 20px) / 2);
-	}
-	.callout > p {
-		margin: 0;
-	}
-	.toc {
-		position: sticky;
-		top: calc(var(--nav-height) + var(--space-6));
-		align-self: start;
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-		font-size: var(--type-sm);
-		color: var(--foreground-muted);
-	}
-	.breadcrumb {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		font-size: var(--type-sm);
-		color: var(--foreground-subtle);
-	}
-
 	/* ── utilities the pages use instead of inline styles ─────────────────────── */
 	.actions {
 		display: flex;
@@ -689,11 +565,6 @@ body.qp-grain-page {
 		border-radius: 2px;
 		background: var(--primary);
 	}
-	.placeholder {
-		background: var(--background);
-		border-radius: var(--radius-inner);
-		padding: 10px 14px;
-	}
 	.frame.code {
 		align-items: flex-start;
 		padding: var(--space-5);
@@ -727,31 +598,4 @@ body.qp-grain-page {
 
 	/* Marketing is dark-only — the site is one continuous atmosphere. The product
 	   (admin, Autopilot) keeps both themes; that is where people work all day. */
-
-	/* ── docs search + breadcrumb ─────────────────────────────────────────────── */
-	.dsearch {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		height: 2rem;
-		padding: 0 var(--space-3);
-		border: 1px solid var(--input);
-		border-radius: var(--radius-inner);
-		background: var(--surface-mid);
-		color: var(--foreground-subtle);
-		font-size: var(--type-base);
-	}
-	.dsearch .qp-eyebrow {
-		margin-left: auto;
-		letter-spacing: 0.04em;
-	}
-	.breadcrumb > span + span::before {
-		content: "/";
-		margin-right: var(--space-2);
-		color: var(--foreground-faint);
-	}
-	.breadcrumb > span + span {
-		display: inline-flex;
-		gap: var(--space-2);
-	}
 }
