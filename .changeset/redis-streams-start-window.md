@@ -26,7 +26,3 @@ report stream info fall back to `$`, which is no worse than before.
 This is what a flaky CI failure in the realtime driver matrix turned out to be —
 the test timed out on the full deadline rather than near it, which is the
 signature of a message that never arrives rather than a slow one.
-
-Also stops `oxfmt` from flagging generated `CHANGELOG.md` files, which the
-release tooling rewrites on every publish and which therefore turned the format
-gate red after each release.
