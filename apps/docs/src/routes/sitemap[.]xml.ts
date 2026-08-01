@@ -108,8 +108,8 @@ async function generateSitemap(
   </url>`);
 
 	const staticPages = [
-		{ path: "/cloud", priority: 0.9, changefreq: "weekly" },
 		{ path: "/autopilot", priority: 0.9, changefreq: "weekly" },
+		{ path: "/framework", priority: 0.9, changefreq: "weekly" },
 	];
 
 	for (const sp of staticPages) {

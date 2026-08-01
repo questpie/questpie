@@ -11,7 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AutopilotRouteImport } from './routes/autopilot'
-import { Route as CloudRouteImport } from './routes/cloud'
 import { Route as FrameworkRouteImport } from './routes/framework'
 import { Route as LlmsFullDottxtRouteImport } from './routes/llms-full[.]txt'
 import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
@@ -29,11 +28,6 @@ const IndexRoute = IndexRouteImport.update({
 const AutopilotRoute = AutopilotRouteImport.update({
   id: '/autopilot',
   path: '/autopilot',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CloudRoute = CloudRouteImport.update({
-  id: '/cloud',
-  path: '/cloud',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FrameworkRoute = FrameworkRouteImport.update({
@@ -80,7 +74,6 @@ const LlmsDotmdxDocsSplatRoute = LlmsDotmdxDocsSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/autopilot': typeof AutopilotRoute
-  '/cloud': typeof CloudRoute
   '/framework': typeof FrameworkRoute
   '/llms-full.txt': typeof LlmsFullDottxtRoute
   '/llms.txt': typeof LlmsDottxtRoute
@@ -93,7 +86,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/autopilot': typeof AutopilotRoute
-  '/cloud': typeof CloudRoute
   '/framework': typeof FrameworkRoute
   '/llms-full.txt': typeof LlmsFullDottxtRoute
   '/llms.txt': typeof LlmsDottxtRoute
@@ -107,7 +99,6 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/autopilot': typeof AutopilotRoute
-  '/cloud': typeof CloudRoute
   '/framework': typeof FrameworkRoute
   '/llms-full.txt': typeof LlmsFullDottxtRoute
   '/llms.txt': typeof LlmsDottxtRoute
@@ -122,7 +113,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/autopilot'
-    | '/cloud'
     | '/framework'
     | '/llms-full.txt'
     | '/llms.txt'
@@ -135,7 +125,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/autopilot'
-    | '/cloud'
     | '/framework'
     | '/llms-full.txt'
     | '/llms.txt'
@@ -148,7 +137,6 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/autopilot'
-    | '/cloud'
     | '/framework'
     | '/llms-full.txt'
     | '/llms.txt'
@@ -162,7 +150,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AutopilotRoute: typeof AutopilotRoute
-  CloudRoute: typeof CloudRoute
   FrameworkRoute: typeof FrameworkRoute
   LlmsFullDottxtRoute: typeof LlmsFullDottxtRoute
   LlmsDottxtRoute: typeof LlmsDottxtRoute
@@ -187,13 +174,6 @@ declare module '@tanstack/react-router' {
       path: '/autopilot'
       fullPath: '/autopilot'
       preLoaderRoute: typeof AutopilotRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cloud': {
-      id: '/cloud'
-      path: '/cloud'
-      fullPath: '/cloud'
-      preLoaderRoute: typeof CloudRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/framework': {
@@ -258,7 +238,6 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AutopilotRoute: AutopilotRoute,
-  CloudRoute: CloudRoute,
   FrameworkRoute: FrameworkRoute,
   LlmsFullDottxtRoute: LlmsFullDottxtRoute,
   LlmsDottxtRoute: LlmsDottxtRoute,

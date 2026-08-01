@@ -204,20 +204,6 @@
 	display: none;
 }
 
-/* ============================================================
- * Landing pages — design tokens + utilities
- * Used by /, /cloud, /autopilot pages and their section components
- * ============================================================ */
-
-:root,
-.dark,
-.light,
-:root.light {
-	--pillar-framework: #b700ff;
-	--pillar-cloud: #60a5fa;
-	--pillar-autopilot: #4ade80;
-}
-
 /* Design system tokens (design.md §4 shadow recipes). Three depth
  * levels: 4a button (raised, gradient + inset + outer glow), 4b input
  * (inset / pressed-in), 4c floating (popovers, dialogs only).
