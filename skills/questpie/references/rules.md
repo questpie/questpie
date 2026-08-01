@@ -206,6 +206,8 @@ Schema Validation -- Zod validation from field definitions
   |
 beforeChange     -- Transform data before database write
   |
+Primary claim + beforeWrite -- Lock and revalidate dependent durable facts
+  |
 Database Write   -- Insert or update
   |
 afterChange      -- Side effects after successful write
@@ -295,11 +297,49 @@ Each hook accepts a single function **or an array of functions** (executed in or
 })
 ```
 
+`beforeWrite` also accepts a two-phase guard descriptor. Declare every dependent
+row synchronously; QUESTPIE merges all declarations across the composed hook
+chain, locks the complete plan deterministically, and then runs each guard:
+
+```ts
+.hooks({
+	beforeWrite: {
+		locks: ({ data, method }) =>
+			method !== "updateBatch" && "account" in data && data.account
+				? [{ collection: "accounts", ids: [data.account] }]
+				: [],
+		run: async (ctx) => {
+			if (
+				ctx.method === "updateBatch" ||
+				!("account" in ctx.data) ||
+				!ctx.data.account
+			)
+				return;
+			const account = await ctx.collections.accounts.findOne(
+				{ where: { id: ctx.data.account }, includeDeleted: true },
+				ctx,
+			);
+			if (!account || account.status !== "active" || account.deletedAt) {
+				throw new Error("Account is unavailable");
+			}
+		},
+	},
+})
+```
+
+The `run` callback reads through the normal generated collection API, so the
+collection key, filter, and returned fields stay exact and access is rechecked
+after lock waits. Pass the complete hook `ctx` to nested CRUD so the read keeps
+the owning transaction, identity, locale, and access mode. Row-filtered reads
+remain absent and collection-level denial remains the normal `403`. Do not cast dependent rows to
+`Record<string, unknown>`.
+
 ### Transaction-bound Hooks
 
-`afterChange`, `afterDelete`, and `afterPurge` run inside the owning mutation
-transaction. Their `db` and injected services share that scope. A thrown error
-propagates and rolls back the mutation plus transaction-joined work:
+`beforeWrite`, `afterChange`, `afterDelete`, and `afterPurge` run inside the
+owning mutation transaction. Their `db` and injected services share that scope.
+A thrown error propagates and rolls back the mutation plus transaction-joined
+work:
 
 ```ts
 .hooks({
@@ -325,20 +365,20 @@ durable job or `onAfterCommit`.
 
 ### Hook Context Properties
 
-| Property        | Available in                                                         | Description                                                                  |
-| --------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `data`          | beforeValidate, beforeChange, afterChange, beforeDelete, afterDelete | Record being written (delete hooks: the record being deleted, use `data.id`) |
-| `operation`     | beforeChange, afterChange                                            | `"create"` or `"update"`                                                     |
-| `original`      | afterChange (update only)                                            | Previous record state                                                        |
-| `onAfterCommit` | All hooks                                                            | Queue a side effect (`(cb) => void`) to run after the tx commits             |
-| `collections`   | All hooks                                                            | Typed collection API                                                         |
-| `globals`       | All hooks                                                            | Typed globals API                                                            |
-| `queue`         | All hooks                                                            | Queue client for publishing jobs                                             |
-| `email`         | All hooks                                                            | Email service                                                                |
-| `db`            | All hooks                                                            | Database instance                                                            |
-| `session`       | All hooks                                                            | Current auth session                                                         |
-| `services`      | All hooks                                                            | Custom services from `services/`                                             |
-| _extensions_    | All hooks                                                            | `appConfig({ context })` result, flat (HTTP requests only)                   |
+| Property        | Available in                                                                      | Description                                                                  |
+| --------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `data`          | beforeValidate, beforeChange, beforeWrite, afterChange, beforeDelete, afterDelete | Record being written; deeply readonly in `beforeWrite`                       |
+| `operation`     | beforeChange, beforeWrite, afterChange                                            | Write operation; `beforeWrite` also distinguishes delete and restore         |
+| `original`      | beforeWrite, afterChange                                                          | Fresh locked preimage in `beforeWrite`; previous row on `afterChange` update |
+| `onAfterCommit` | All hooks                                                                         | Queue a side effect (`(cb) => void`) to run after the tx commits             |
+| `collections`   | All hooks                                                                         | Typed collection API                                                         |
+| `globals`       | All hooks                                                                         | Typed globals API                                                            |
+| `queue`         | All hooks                                                                         | Queue client for publishing jobs                                             |
+| `email`         | All hooks                                                                         | Email service                                                                |
+| `db`            | All hooks                                                                         | Database instance                                                            |
+| `session`       | All hooks                                                                         | Current auth session                                                         |
+| `services`      | All hooks                                                                         | Custom services from `services/`                                             |
+| _extensions_    | All hooks                                                                         | `appConfig({ context })` result, flat (HTTP requests only)                   |
 
 Derived request context also reaches hooks and any nested code via `getContext<App>()`, including CRUD calls a hook triggers (AsyncLocalStorage carries it):
 

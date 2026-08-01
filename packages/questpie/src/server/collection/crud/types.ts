@@ -1450,6 +1450,7 @@ export type DeleteManyParams<
  */
 export interface LockManyParams<TId = string> {
 	ids: readonly TId[];
+	includeDeleted?: boolean;
 }
 
 /**

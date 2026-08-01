@@ -17,7 +17,9 @@ import { alias, type PgTable } from "drizzle-orm/pg-core";
 
 import type {
 	AccessWhere,
+	BeforeWriteContext,
 	CollectionBuilderState,
+	DependentRowLockRequest,
 	HookContext,
 	TransitionHookContext,
 } from "#questpie/server/collection/builder/types.js";
@@ -27,6 +29,23 @@ type TitleExpressionSQL = SQL | Column | null;
 type OptimisticConcurrencyRecord = Record<string, unknown> & {
 	id: string | number;
 };
+const PREPARED_BATCH_UPDATE = Symbol("questpie.preparedBatchUpdate");
+type PreparedBatchUpdate = {
+	[PREPARED_BATCH_UPDATE]: true;
+	entry: {
+		id: string | number;
+		data: Readonly<Record<string, unknown>>;
+	};
+	originals: readonly Record<string, unknown>[];
+	performClaimedWrite: () => Promise<any>;
+};
+
+const isPreparedBatchUpdate = (value: unknown): value is PreparedBatchUpdate =>
+	Boolean(
+		value &&
+		typeof value === "object" &&
+		(value as Partial<PreparedBatchUpdate>)[PREPARED_BATCH_UPDATE] === true,
+	);
 
 // Search/realtime integrations removed (Phase 3 — QUE-251).
 // Side effects now come from core module global hooks.
@@ -75,6 +94,7 @@ import {
 	mutateCanonicalRow,
 } from "#questpie/server/collection/crud/shared/canonical-mutation.js";
 import { INHERIT_ACCESS } from "#questpie/server/collection/crud/shared/context.js";
+import { lockDependentRows } from "#questpie/server/collection/crud/shared/dependent-row-fact-guard.js";
 import {
 	extractLocalizedFieldNames,
 	extractNestedLocalizationSchemas,
@@ -522,7 +542,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			if (whereClause) whereClauses.push(whereClause);
 			if (this.state.options.softDelete) {
 				const deletedAtColumn = getColumn(this.table, "deletedAt");
-				if (deletedAtColumn) whereClauses.push(sql`${deletedAtColumn} IS NULL`);
+				if (deletedAtColumn && !params.includeDeleted) {
+					whereClauses.push(sql`${deletedAtColumn} IS NULL`);
+				}
 			}
 
 			const idColumn = getColumn(this.table, "id")!;
@@ -536,6 +558,108 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 			return lockedRows.map(({ id }) => id);
 		};
+	}
+
+	private async executeBeforeWrite(input: {
+		data: unknown;
+		originals: readonly Record<string, unknown>[];
+		operation: "create" | "update" | "delete" | "restore";
+		method:
+			| "create"
+			| "updateById"
+			| "updateMany"
+			| "updateBatch"
+			| "deleteById"
+			| "deleteMany"
+			| "restoreById";
+		context: CRUDContext;
+		tx: Parameters<typeof lockDependentRows>[0]["tx"];
+		bulk?: {
+			isBatch: true;
+			recordIds: (string | number)[];
+			records: Record<string, unknown>[];
+			count: number;
+		};
+	}): Promise<void> {
+		const hooks = this.state.hooks?.beforeWrite;
+		if (!hooks) return;
+
+		const base = this.createHookContext({
+			data: input.data,
+			original: input.originals.length === 1 ? input.originals[0] : undefined,
+			operation: input.operation === "restore" ? "update" : input.operation,
+			context: input.context,
+			db: input.tx,
+			bulk: input.bulk,
+		});
+		const beforeWriteContext: BeforeWriteContext =
+			input.method === "updateBatch"
+				? {
+						...base,
+						operation: "update",
+						method: "updateBatch",
+						originals: input.originals,
+						isBatch: true,
+						recordIds: input.bulk?.recordIds ?? [],
+						records: input.bulk?.records ?? [],
+						count: input.bulk?.count ?? 0,
+					}
+				: {
+						...base,
+						operation: input.operation,
+						method: input.method,
+						originals: input.originals,
+						isBatch: input.bulk?.isBatch,
+						recordIds: input.bulk?.recordIds,
+						records: input.bulk?.records,
+						count: input.bulk?.count,
+					};
+		const hookArray = Array.isArray(hooks) ? hooks : [hooks];
+		const requests: DependentRowLockRequest[] = [];
+		for (const hook of hookArray) {
+			if (typeof hook === "function") continue;
+			const declared = hook.locks(beforeWriteContext);
+			if (!Array.isArray(declared)) {
+				throw ApiError.badRequest(
+					"beforeWrite locks must return synchronously with an array",
+				);
+			}
+			requests.push(...declared);
+		}
+		await lockDependentRows({
+			collections: this.app!.collections,
+			tx: input.tx,
+			requests,
+		});
+		for (const hook of hookArray) {
+			await (typeof hook === "function" ? hook : hook.run)(beforeWriteContext);
+		}
+	}
+
+	private async readFreshCanonicalRows(
+		ids: readonly (string | number)[],
+		context: CRUDContext,
+	): Promise<Record<string, unknown>[]> {
+		if (ids.length === 0) return [];
+		const result = (await this._executeFind<Record<string, unknown>>(
+			{
+				where: { id: { in: [...ids] } },
+				includeDeleted: true,
+				stage: this.workflowConfig?.initialStage,
+			},
+			{ ...context, accessMode: "system" },
+			"many",
+			{
+				skipFieldFiltering: true,
+				skipOutputHooks: true,
+				skipReadLifecycle: true,
+			},
+		)) as PaginatedResult<Record<string, unknown>>;
+		const byId = new Map(result.docs.map((row) => [row.id, row]));
+		return ids.map((id) => byId.get(id)).filter(Boolean) as Record<
+			string,
+			unknown
+		>[];
 	}
 
 	/**
@@ -1799,8 +1923,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							db,
 						}),
 					);
+					const logicalWriteData = regularFields;
 					regularFields = expandPolymorphicRelationValues(
-						regularFields,
+						logicalWriteData,
 						this.state.relations ?? {},
 					);
 					const crdtManifest = this.getCrdtManifest();
@@ -1821,6 +1946,14 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 								app: this.app,
 								sourceState: this.state,
 								sourceTable: this.table,
+							});
+							await this.executeBeforeWrite({
+								data: logicalWriteData,
+								originals: [],
+								operation: "create",
+								method: "create",
+								context: { ...normalized, db: tx },
+								tx,
 							});
 							({ regularFields, nestedRelations } =
 								await this.applyBelongsToRelationsInternal(
@@ -2165,6 +2298,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		internal?: {
 			crdtRestore?: StagedCrdtOwnerActivation;
 			revisionPrelocked?: true;
+			writeMethod?: "updateById" | "updateMany" | "updateBatch" | "restoreById";
+			writeOperation?: "update" | "restore";
+			prepareBatchBeforeWrite?: true;
 		},
 	): Promise<any> {
 		if (
@@ -2452,14 +2588,15 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}),
 			);
 		}
+		const logicalWriteData = regularFields;
 		regularFields = expandPolymorphicRelationValues(
-			regularFields,
+			logicalWriteData,
 			this.state.relations ?? {},
 		);
-		let updatedRecords: any[];
+		let updateResult: any;
 
 		try {
-			updatedRecords = await withTransaction(db, async (tx) => {
+			updateResult = await withTransaction(db, async (tx) => {
 				const txContext = { ...normalized, db: tx };
 				await lockRelationSourceForWrite({
 					tx,
@@ -2499,18 +2636,27 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 
 				const winnerIds = new Set(recordIds);
-				const winners = records.filter((r: any) => winnerIds.has(r.id));
+				const logicalWinnerIds = records
+					.filter((record: { id: string | number }) => winnerIds.has(record.id))
+					.map((record: { id: string | number }) => record.id);
+				let winners = records.filter((record: { id: string | number }) =>
+					winnerIds.has(record.id),
+				);
 				const optimisticConcurrency = this.getOptimisticConcurrency();
-				if (optimisticConcurrency) {
-					const lockedRecords = await tx
+				let lockedRecords: OptimisticConcurrencyRecord[] | undefined;
+				if (optimisticConcurrency || this.state.hooks?.beforeWrite) {
+					lockedRecords = await tx
 						.select()
 						.from(this.table)
 						.where(inArray(getColumn(this.table, "id")!, recordIds))
+						.orderBy(asc(getColumn(this.table, "id")!))
 						.for("update");
+				}
+				if (optimisticConcurrency) {
 					if (expectedRevisions) {
 						if (
-							lockedRecords.length !== expectedRevisions.size ||
-							lockedRecords.some(
+							lockedRecords!.length !== expectedRevisions.size ||
+							lockedRecords!.some(
 								(record: OptimisticConcurrencyRecord) =>
 									record.revision !== expectedRevisions.get(record.id),
 							)
@@ -2520,200 +2666,247 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					} else {
 						this.assertExpectedRevision(
 							params as { expectedRevision?: number },
-							lockedRecords,
+							lockedRecords!,
 						);
 					}
 				}
-
-				// Apply belongsTo relations
-				({ regularFields, nestedRelations } =
-					await this.applyBelongsToRelationsInternal(
-						regularFields,
-						nestedRelations,
-						txContext,
-						tx,
-					));
-
-				// Split localized vs non-localized fields
-				const { localized, nonLocalized, nestedLocalized } =
-					this.splitLocalizedFields(regularFields);
-				if (this.app) {
-					await lockRelationTargetsForWrite({
-						tx,
-						app: this.app,
-						sourceState: this.state,
-						sourceTable: this.table,
-						values: nonLocalized,
-						originalRows: winners,
-					});
+				if (lockedRecords) {
+					const lockedById = new Map(lockedRecords.map((row) => [row.id, row]));
+					winners = logicalWinnerIds
+						.map((id) => lockedById.get(id)!)
+						.filter(Boolean);
 				}
+				const beforeWriteOriginals = this.state.hooks?.beforeWrite
+					? await this.readFreshCanonicalRows(logicalWinnerIds, txContext)
+					: winners;
+				const performClaimedWrite = async () => {
+					// Apply belongsTo relations
+					({ regularFields, nestedRelations } =
+						await this.applyBelongsToRelationsInternal(
+							regularFields,
+							nestedRelations,
+							txContext,
+							tx,
+						));
 
-				// Update main table
-				if (
-					Object.keys(nonLocalized).length > 0 ||
-					this.state.options.timestamps !== false ||
-					optimisticConcurrency
-				) {
-					await tx
-						.update(this.table)
-						.set({
-							...nonLocalized,
-							...(optimisticConcurrency
-								? {
-										revision: sql`${optimisticConcurrency.column} + 1`,
-									}
-								: {}),
-							...(this.state.options.timestamps !== false
-								? { updatedAt: new Date() }
-								: {}),
-						})
-						.where(inArray(getColumn(this.table, "id")!, recordIds));
-				}
-
-				// Upsert localized fields
-				const hasLocalizedData =
-					Object.keys(localized).length > 0 || nestedLocalized != null;
-				if (this.i18nTable && normalized.locale && hasLocalizedData) {
-					const i18nValues = {
-						...localized,
-						...(nestedLocalized != null ? { _localized: nestedLocalized } : {}),
-					};
-
-					// Batch upsert: single multi-row INSERT...ON CONFLICT
-					const allRows = recordIds.map((recordId) => ({
-						parentId: recordId,
-						locale: normalized.locale,
-						...i18nValues,
-					}));
-					if (allRows.length > 0) {
-						await tx
-							.insert(this.i18nTable)
-							.values(allRows)
-							.onConflictDoUpdate({
-								target: [
-									getColumn(this.i18nTable, "parentId")!,
-									getColumn(this.i18nTable, "locale")!,
-								],
-								set: i18nValues,
-							});
-					}
-				}
-
-				// Process nested relation operations (winners only)
-				for (const existing of winners) {
-					await this.processNestedRelationsInternal(
-						existing,
-						nestedRelations,
-						txContext,
-						tx,
-					);
-				}
-
-				// Re-fetch updated records WITHOUT field output hooks / afterRead.
-				// Field output hooks run AFTER the transaction commits — running
-				// them inside the tx caused inner CRUD calls (e.g. blocks prefetch
-				// hitting other collections) to inherit `db: tx` via context
-				// propagation, serializing every parallel inner query through the
-				// tx connection. Bun SQL can deadlock when many parallel queries
-				// queue behind an open tx, leaving the response un-read and the
-				// connection stuck `idle in transaction`.
-				const reFetchResult = (await this._executeFind(
-					{ where: { id: { in: recordIds } }, includeDeleted: true },
-					{
-						...txContext,
-						accessMode: "system",
-						stage: this.workflowConfig?.initialStage,
-					},
-					"many",
-					{ skipOutputHooks: true },
-				)) as PaginatedResult<any>;
-
-				const refetchedRecords = reFetchResult.docs;
-
-				// Create versions and run afterChange hooks
-				// Bulk metadata for afterChange: post-image records
-				const afterBulkMeta = isBatch
-					? {
-							isBatch: true as const,
-							recordIds: refetchedRecords.map((r: any) => r.id),
-							records: refetchedRecords,
-							count: refetchedRecords.length,
-						}
-					: undefined;
-
-				for (const updated of refetchedRecords) {
-					const original = records.find((r) => r.id === updated.id);
-
-					await this.createVersion(tx, updated, "update", txContext);
-					const afterChangeContext = this.createHookContext({
-						data: updated,
-						original,
-						operation: "update",
-						context: txContext,
-						db: tx,
-						bulk: afterBulkMeta,
-					});
-					// One transaction-bound hook chain at a time. Promise.all rejects
-					// before sibling chains settle, which can let work continue while
-					// the owning transaction is already rolling back.
-					await this.executeCollectionHooksWithGlobal(
-						"afterChange",
-						this.state.hooks?.afterChange,
-						afterChangeContext,
-					);
-				}
-
-				const crdtManifest = this.getCrdtManifest();
-				if (crdtManifest && !internal) {
-					const lifecycle = new CrdtOwnerLifecycleTransaction(tx);
-					const sortedOwners = [...refetchedRecords].sort((left, right) =>
-						Buffer.from(
-							canonicalCrdtCollectionLocator(left.id),
-							"utf8",
-						).compare(
-							Buffer.from(canonicalCrdtCollectionLocator(right.id), "utf8"),
-						),
-					);
-					for (const owner of sortedOwners) {
-						await lifecycle.advanceOwnerPolicyRevision({
-							manifest: crdtManifest,
-							locator: canonicalCrdtCollectionLocator(owner.id),
+					// Split localized vs non-localized fields
+					const { localized, nonLocalized, nestedLocalized } =
+						this.splitLocalizedFields(regularFields);
+					if (this.app) {
+						await lockRelationTargetsForWrite({
+							tx,
+							app: this.app,
+							sourceState: this.state,
+							sourceTable: this.table,
+							values: nonLocalized,
+							originalRows: winners,
 						});
 					}
-				}
 
-				if (internal?.crdtRestore) {
-					const restored = refetchedRecords[0];
-					if (!restored || refetchedRecords.length !== 1) {
-						throw new Error(
-							"Collaborative restore must resolve exactly one owner",
+					// Update main table
+					if (
+						Object.keys(nonLocalized).length > 0 ||
+						this.state.options.timestamps !== false ||
+						optimisticConcurrency
+					) {
+						await tx
+							.update(this.table)
+							.set({
+								...nonLocalized,
+								...(optimisticConcurrency
+									? {
+											revision: sql`${optimisticConcurrency.column} + 1`,
+										}
+									: {}),
+								...(this.state.options.timestamps !== false
+									? { updatedAt: new Date() }
+									: {}),
+							})
+							.where(inArray(getColumn(this.table, "id")!, recordIds));
+					}
+
+					// Upsert localized fields
+					const hasLocalizedData =
+						Object.keys(localized).length > 0 || nestedLocalized != null;
+					if (this.i18nTable && normalized.locale && hasLocalizedData) {
+						const i18nValues = {
+							...localized,
+							...(nestedLocalized != null
+								? { _localized: nestedLocalized }
+								: {}),
+						};
+
+						// Batch upsert: single multi-row INSERT...ON CONFLICT
+						const allRows = recordIds.map((recordId) => ({
+							parentId: recordId,
+							locale: normalized.locale,
+							...i18nValues,
+						}));
+						if (allRows.length > 0) {
+							await tx
+								.insert(this.i18nTable)
+								.values(allRows)
+								.onConflictDoUpdate({
+									target: [
+										getColumn(this.i18nTable, "parentId")!,
+										getColumn(this.i18nTable, "locale")!,
+									],
+									set: i18nValues,
+								});
+						}
+					}
+
+					// Process nested relation operations (winners only)
+					for (const existing of winners) {
+						await this.processNestedRelationsInternal(
+							existing,
+							nestedRelations,
+							txContext,
+							tx,
 						);
 					}
-					const [lockedOwner] = await tx
-						.select()
-						.from(this.table)
-						.where(eq(getColumn(this.table, "id")!, restored.id))
-						.for("update");
-					if (!lockedOwner) {
-						throw new Error(
-							"Restored owner disappeared before CRDT lifecycle restore",
-						);
-					}
-					if (lockedOwner.deletedAt != null) {
-						throw new Error(
-							"Collaborative owner remained deleted after restore hooks",
-						);
-					}
-					await new CrdtOwnerLifecycleTransaction(tx).restore({
-						staged: internal.crdtRestore,
-						owner: {
-							locator: canonicalCrdtCollectionLocator(restored.id),
-							values: lockedOwner,
+
+					// Re-fetch updated records WITHOUT field output hooks / afterRead.
+					// Field output hooks run AFTER the transaction commits — running
+					// them inside the tx caused inner CRUD calls (e.g. blocks prefetch
+					// hitting other collections) to inherit `db: tx` via context
+					// propagation, serializing every parallel inner query through the
+					// tx connection. Bun SQL can deadlock when many parallel queries
+					// queue behind an open tx, leaving the response un-read and the
+					// connection stuck `idle in transaction`.
+					const reFetchResult = (await this._executeFind(
+						{ where: { id: { in: recordIds } }, includeDeleted: true },
+						{
+							...txContext,
+							accessMode: "system",
+							stage: this.workflowConfig?.initialStage,
 						},
-					});
+						"many",
+						{ skipOutputHooks: true },
+					)) as PaginatedResult<any>;
+
+					const refetchedRecords = reFetchResult.docs;
+
+					// Create versions and run afterChange hooks
+					// Bulk metadata for afterChange: post-image records
+					const afterBulkMeta = isBatch
+						? {
+								isBatch: true as const,
+								recordIds: refetchedRecords.map((r: any) => r.id),
+								records: refetchedRecords,
+								count: refetchedRecords.length,
+							}
+						: undefined;
+
+					for (const updated of refetchedRecords) {
+						const original = records.find((r) => r.id === updated.id);
+
+						await this.createVersion(tx, updated, "update", txContext);
+						const afterChangeContext = this.createHookContext({
+							data: updated,
+							original,
+							operation: "update",
+							context: txContext,
+							db: tx,
+							bulk: afterBulkMeta,
+						});
+						// One transaction-bound hook chain at a time. Promise.all rejects
+						// before sibling chains settle, which can let work continue while
+						// the owning transaction is already rolling back.
+						await this.executeCollectionHooksWithGlobal(
+							"afterChange",
+							this.state.hooks?.afterChange,
+							afterChangeContext,
+						);
+					}
+
+					const crdtManifest = this.getCrdtManifest();
+					if (crdtManifest && !internal) {
+						const lifecycle = new CrdtOwnerLifecycleTransaction(tx);
+						const sortedOwners = [...refetchedRecords].sort((left, right) =>
+							Buffer.from(
+								canonicalCrdtCollectionLocator(left.id),
+								"utf8",
+							).compare(
+								Buffer.from(canonicalCrdtCollectionLocator(right.id), "utf8"),
+							),
+						);
+						for (const owner of sortedOwners) {
+							await lifecycle.advanceOwnerPolicyRevision({
+								manifest: crdtManifest,
+								locator: canonicalCrdtCollectionLocator(owner.id),
+							});
+						}
+					}
+
+					if (internal?.crdtRestore) {
+						const restored = refetchedRecords[0];
+						if (!restored || refetchedRecords.length !== 1) {
+							throw new Error(
+								"Collaborative restore must resolve exactly one owner",
+							);
+						}
+						const [lockedOwner] = await tx
+							.select()
+							.from(this.table)
+							.where(eq(getColumn(this.table, "id")!, restored.id))
+							.for("update");
+						if (!lockedOwner) {
+							throw new Error(
+								"Restored owner disappeared before CRDT lifecycle restore",
+							);
+						}
+						if (lockedOwner.deletedAt != null) {
+							throw new Error(
+								"Collaborative owner remained deleted after restore hooks",
+							);
+						}
+						await new CrdtOwnerLifecycleTransaction(tx).restore({
+							staged: internal.crdtRestore,
+							owner: {
+								locator: canonicalCrdtCollectionLocator(restored.id),
+								values: lockedOwner,
+							},
+						});
+					}
+
+					return attachCurrentTransactionTxid(refetchedRecords);
+				};
+
+				if (internal?.prepareBatchBeforeWrite) {
+					if (recordIds.length !== 1) {
+						throw new Error(
+							"Prepared updateBatch entry must claim one primary row",
+						);
+					}
+					return {
+						[PREPARED_BATCH_UPDATE]: true,
+						entry: { id: recordIds[0]!, data: logicalWriteData },
+						originals: beforeWriteOriginals,
+						performClaimedWrite,
+					} satisfies PreparedBatchUpdate;
 				}
 
-				return attachCurrentTransactionTxid(refetchedRecords);
+				await this.executeBeforeWrite({
+					data: logicalWriteData,
+					originals: beforeWriteOriginals,
+					operation: internal?.writeOperation ?? "update",
+					method:
+						internal?.writeMethod ?? (isBatch ? "updateMany" : "updateById"),
+					context: txContext,
+					tx,
+					bulk: isBatch
+						? {
+								isBatch: true,
+								recordIds: beforeWriteOriginals.map(
+									(row) => row.id as string | number,
+								),
+								records: beforeWriteOriginals,
+								count: beforeWriteOriginals.length,
+							}
+						: undefined,
+				});
+				return performClaimedWrite();
 			});
 		} catch (error: unknown) {
 			const dbError = parseDatabaseError(error);
@@ -2721,32 +2914,54 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			throw error;
 		}
 
-		// 6. afterRead hooks and notifications
-		for (const updated of updatedRecords) {
-			const original = records.find((r) => r.id === updated.id);
+		const finishUpdate = async (
+			updatedRecords: Array<Record<string, unknown>>,
+		) => {
+			// 6. afterRead hooks and notifications
+			for (const updated of updatedRecords) {
+				const original = records.find((r) => r.id === updated.id);
 
-			await this.runFieldOutputHooks(
-				updated,
-				"update",
-				normalized,
-				db,
-				original,
-			);
-
-			await this.executeHooks(
-				this.state.hooks?.afterRead,
-				this.createHookContext({
-					data: updated,
-					original,
-					operation: "update",
-					context: normalized,
+				await this.runFieldOutputHooks(
+					updated,
+					"update",
+					normalized,
 					db,
-				}),
-			);
-			await this.filterFieldsForRead(updated, normalized);
+					original,
+				);
+
+				await this.executeHooks(
+					this.state.hooks?.afterRead,
+					this.createHookContext({
+						data: updated,
+						original,
+						operation: "update",
+						context: normalized,
+						db,
+					}),
+				);
+				await this.filterFieldsForRead(updated, normalized);
+			}
+
+			return isBatch ? updatedRecords : updatedRecords[0];
+		};
+
+		if (isPreparedBatchUpdate(updateResult)) {
+			const prepared = updateResult;
+			return {
+				...prepared,
+				performClaimedWrite: async () => {
+					try {
+						return await finishUpdate(await prepared.performClaimedWrite());
+					} catch (error: unknown) {
+						const dbError = parseDatabaseError(error);
+						if (dbError) throw dbError;
+						throw error;
+					}
+				},
+			} satisfies PreparedBatchUpdate;
 		}
 
-		return isBatch ? updatedRecords : updatedRecords[0];
+		return finishUpdate(updateResult);
 	}
 
 	/**
@@ -2889,10 +3104,32 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					if (claimed.length === 0 || !existing) {
 						throw ApiError.notFound("Record", id);
 					}
-					currentExisting = existing;
+					if (this.state.hooks?.beforeWrite) {
+						const [fresh] = await tx
+							.select()
+							.from(this.table)
+							.where(eq(getColumn(this.table, "id")!, id))
+							.for("update");
+						if (!fresh) throw ApiError.notFound("Record", id);
+						currentExisting = fresh;
+					} else {
+						currentExisting = existing;
+					}
 					crdtFallbackOwner = existing;
 				}
 				existing = currentExisting;
+				const beforeWriteOriginal = this.state.hooks?.beforeWrite
+					? (await this.readFreshCanonicalRows([id], txContext))[0]
+					: currentExisting;
+				if (!beforeWriteOriginal) throw ApiError.notFound("Record", id);
+				await this.executeBeforeWrite({
+					data: beforeWriteOriginal,
+					originals: [beforeWriteOriginal],
+					operation: "delete",
+					method: "deleteById",
+					context: txContext,
+					tx,
+				});
 
 				await this.handleCascadeDeleteInternal(id, currentExisting, txContext);
 
@@ -3302,7 +3539,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							data: { deletedAt: null } as Record<string, unknown>,
 						},
 						{ ...normalized, db: tx },
-						stagedCrdtOwner ? { crdtRestore: stagedCrdtOwner } : undefined,
+						{
+							...(stagedCrdtOwner ? { crdtRestore: stagedCrdtOwner } : {}),
+							writeMethod: "restoreById",
+							writeOperation: "restore",
+						},
 					);
 				});
 			}
@@ -3315,7 +3556,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					data: { deletedAt: null } as Record<string, unknown>,
 				},
 				normalized,
-				stagedCrdtOwner ? { crdtRestore: stagedCrdtOwner } : undefined,
+				{
+					...(stagedCrdtOwner ? { crdtRestore: stagedCrdtOwner } : {}),
+					writeMethod: "restoreById",
+					writeOperation: "restore",
+				},
 			);
 		};
 	}
@@ -3372,17 +3617,23 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				const txContext = { ...normalized, db: tx };
 				const updatedRecords: any[] = [];
 				const optimisticConcurrency = this.getOptimisticConcurrency();
-				if (optimisticConcurrency) {
+				const requiresDeterministicPrimaryClaims =
+					Boolean(optimisticConcurrency) ||
+					Boolean(this.state.hooks?.beforeWrite);
+				if (requiresDeterministicPrimaryClaims) {
 					const ids = params.updates.map((update) => update.id);
 					if (
 						new Set(ids).size !== ids.length ||
-						params.updates.some(
-							(update) =>
-								typeof update.expectedRevision !== "number" ||
-								!Number.isFinite(update.expectedRevision),
-						)
+						(Boolean(optimisticConcurrency) &&
+							params.updates.some(
+								(update) =>
+									typeof update.expectedRevision !== "number" ||
+									!Number.isFinite(update.expectedRevision),
+							))
 					) {
-						throw ApiError.conflict("Optimistic concurrency conflict");
+						throw optimisticConcurrency
+							? ApiError.conflict("Optimistic concurrency conflict")
+							: ApiError.badRequest("updateBatch ids must be unique");
 					}
 					await lockRelationSourceForWrite({
 						tx,
@@ -3403,28 +3654,74 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						]),
 					);
 					if (
-						locked.length !== ids.length ||
-						locked.some(
-							(row: OptimisticConcurrencyRecord) =>
-								row.revision !== expectedById.get(row.id),
-						)
+						optimisticConcurrency &&
+						(locked.length !== ids.length ||
+							locked.some(
+								(row: OptimisticConcurrencyRecord) =>
+									row.revision !== expectedById.get(row.id),
+							))
 					) {
 						throw ApiError.conflict("Optimistic concurrency conflict");
 					}
 				}
 
-				for (const update of params.updates) {
-					updatedRecords.push(
-						await this._executeUpdate(
+				if (this.state.hooks?.beforeWrite) {
+					const preparedUpdates: PreparedBatchUpdate[] = [];
+					for (const update of params.updates) {
+						const prepared = await this._executeUpdate(
 							{
 								id: update.id,
 								expectedRevision: update.expectedRevision,
 								data: update.data,
 							},
 							txContext,
-							optimisticConcurrency ? { revisionPrelocked: true } : undefined,
-						),
-					);
+							{
+								revisionPrelocked: optimisticConcurrency ? true : undefined,
+								prepareBatchBeforeWrite: true,
+							},
+						);
+						if (!isPreparedBatchUpdate(prepared)) {
+							throw new Error(
+								"updateBatch preparation did not produce a write",
+							);
+						}
+						preparedUpdates.push(prepared);
+					}
+
+					const originals = preparedUpdates.flatMap((entry) => entry.originals);
+					const recordIds = preparedUpdates.map((entry) => entry.entry.id);
+					await this.executeBeforeWrite({
+						data: preparedUpdates.map((entry) => entry.entry),
+						originals,
+						operation: "update",
+						method: "updateBatch",
+						context: txContext,
+						tx,
+						bulk: {
+							isBatch: true,
+							recordIds,
+							records: originals,
+							count: originals.length,
+						},
+					});
+
+					for (const prepared of preparedUpdates) {
+						updatedRecords.push(await prepared.performClaimedWrite());
+					}
+				} else {
+					for (const update of params.updates) {
+						updatedRecords.push(
+							await this._executeUpdate(
+								{
+									id: update.id,
+									expectedRevision: update.expectedRevision,
+									data: update.data,
+								},
+								txContext,
+								optimisticConcurrency ? { revisionPrelocked: true } : undefined,
+							),
+						);
+					}
 				}
 
 				return attachCurrentTransactionTxid(updatedRecords);
@@ -3566,7 +3863,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					throw ApiError.conflict("Optimistic concurrency conflict");
 				}
 				const winnerIds = new Set(winnerIdList);
-				const claimedRecords = records.filter((r: any) => winnerIds.has(r.id));
+				const logicalWinnerIds = records
+					.filter((record: { id: string | number }) => winnerIds.has(record.id))
+					.map((record: { id: string | number }) => record.id);
+				let claimedRecords = records.filter((record: { id: string | number }) =>
+					winnerIds.has(record.id),
+				);
 				if (optimisticConcurrency) {
 					const deleteBulkMeta = {
 						isBatch: true as const,
@@ -3636,6 +3938,26 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				const lockedById = new Map(
 					lockedBeforeDelete.map((record: any) => [record.id, record]),
 				);
+				claimedRecords = logicalWinnerIds
+					.map((recordId) => lockedById.get(recordId))
+					.filter(Boolean);
+				const beforeWriteOriginals = this.state.hooks?.beforeWrite
+					? await this.readFreshCanonicalRows(logicalWinnerIds, txContext)
+					: claimedRecords;
+				await this.executeBeforeWrite({
+					data: beforeWriteOriginals,
+					originals: beforeWriteOriginals,
+					operation: "delete",
+					method: "deleteMany",
+					context: txContext,
+					tx,
+					bulk: {
+						isBatch: true,
+						recordIds: logicalWinnerIds,
+						records: beforeWriteOriginals,
+						count: beforeWriteOriginals.length,
+					},
+				});
 
 				for (const record of claimedRecords) {
 					await this.handleCascadeDeleteInternal(record.id, record, txContext);

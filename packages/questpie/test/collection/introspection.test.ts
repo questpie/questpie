@@ -184,6 +184,10 @@ const categories = collection("categories").fields(({ f }) => ({
 	name: f.text().required(),
 }));
 
+const server_guarded = collection("server_guarded")
+	.fields(({ f }) => ({ name: f.text().required() }))
+	.hooks({ beforeWrite: async () => {} });
+
 // ============================================================================
 // Test Suite
 // ============================================================================
@@ -208,6 +212,7 @@ describe("collection introspection", () => {
 				tags,
 				with_field_relations,
 				categories,
+				server_guarded,
 			},
 		});
 		await runTestDbMigrations(setup.app);
@@ -226,6 +231,18 @@ describe("collection introspection", () => {
 			const ctx = createTestContext();
 			const schema = await introspectCollection(posts as any, ctx, setup.app);
 			expect(schema.name).toBe("posts");
+		});
+
+		it("does not serialize server-only write guards or transactions", async () => {
+			const schema = await introspectCollection(
+				server_guarded as any,
+				createTestContext(),
+				setup.app,
+			);
+			const serialized = JSON.stringify(schema);
+			expect(serialized).not.toContain("beforeWrite");
+			expect(serialized).not.toContain("lockDependentRows");
+			expect(serialized).not.toContain("transaction");
 		});
 
 		it("includes all defined fields", async () => {

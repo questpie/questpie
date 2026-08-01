@@ -13,7 +13,10 @@ import type {
 	ValidationBuilderOptions,
 	ValidationSchemas,
 } from "#questpie/server/collection/builder/validation-helpers.js";
-import type { AppContext } from "#questpie/server/config/app-context.js";
+import type {
+	AppContext,
+	StrictCollectionKey,
+} from "#questpie/server/config/app-context.js";
 import type { AccessMode } from "#questpie/server/config/types.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { FieldLocation } from "#questpie/server/fields/types.js";
@@ -580,6 +583,80 @@ export type BeforeChangeHook<
 	TUpdate = any,
 > = HookFunction<TInsert | TUpdate, never, "create" | "update">;
 
+export type BeforeWriteMethod =
+	| "create"
+	| "updateById"
+	| "updateMany"
+	| "updateBatch"
+	| "deleteById"
+	| "deleteMany"
+	| "restoreById";
+
+/** One collection/id set claimed by a transactional fact guard. */
+export interface DependentRowLockRequest {
+	collection: StrictCollectionKey;
+	ids: readonly (string | number)[];
+}
+
+export type DeepReadonly<T> = T extends Date
+	? T
+	: T extends object
+		? { readonly [K in keyof T]: DeepReadonly<T[K]> }
+		: T;
+
+type BeforeWriteSharedContext<TSelect> = Omit<
+	HookContextBase<unknown>,
+	"data" | "isBatch" | "recordIds" | "records" | "count"
+> & {
+	/** Fresh locked primary row for singular existing-row writes. */
+	original: DeepReadonly<TSelect> | undefined;
+	/** Fresh locked primary rows, including every bulk winner. */
+	originals: readonly DeepReadonly<TSelect>[];
+	isBatch?: true;
+	recordIds?: readonly (string | number)[];
+	records?: readonly DeepReadonly<TSelect>[];
+	count?: number;
+};
+
+export type BeforeWriteBatchEntry<TUpdate> = DeepReadonly<{
+	id: string | number;
+	data: TUpdate;
+}>;
+
+export type BeforeWriteContext<TSelect = any, TInsert = any, TUpdate = any> =
+	| (BeforeWriteSharedContext<TSelect> & {
+			method: "updateBatch";
+			operation: "update";
+			/** Canonical heterogeneous validated update inputs in caller order. */
+			data: readonly BeforeWriteBatchEntry<TUpdate>[];
+			isBatch: true;
+			recordIds: readonly (string | number)[];
+			records: readonly Readonly<TSelect>[];
+			count: number;
+	  })
+	| (BeforeWriteSharedContext<TSelect> & {
+			operation: "create" | "update" | "delete" | "restore";
+			method: Exclude<BeforeWriteMethod, "updateBatch">;
+			data: DeepReadonly<TInsert | TUpdate | TSelect>;
+	  });
+
+export type BeforeWriteHook<TSelect = any, TInsert = any, TUpdate = any> = (
+	ctx: BeforeWriteContext<TSelect, TInsert, TUpdate>,
+) => Promise<void> | void;
+
+export type BeforeWriteGuard<TSelect = any, TInsert = any, TUpdate = any> = {
+	/** Declare every dependent row synchronously before any lock is acquired. */
+	locks: (
+		ctx: BeforeWriteContext<TSelect, TInsert, TUpdate>,
+	) => readonly DependentRowLockRequest[];
+	/** Decide whether the write proceeds after the complete lock plan is held. */
+	run: BeforeWriteHook<TSelect, TInsert, TUpdate>;
+};
+
+export type BeforeWriteEntry<TSelect = any, TInsert = any, TUpdate = any> =
+	| BeforeWriteHook<TSelect, TInsert, TUpdate>
+	| BeforeWriteGuard<TSelect, TInsert, TUpdate>;
+
 /**
  * AfterChange hook context — discriminated by `operation` so `original` is
  * typed per-operation: absent on `"create"`, the previous row on `"update"`.
@@ -787,6 +864,15 @@ export interface CollectionHooks<TSelect = any, TInsert = any, TUpdate = any> {
 	beforeChange?:
 		| BeforeChangeHook<TSelect, TInsert, TUpdate>[]
 		| BeforeChangeHook<TSelect, TInsert, TUpdate>;
+
+	/**
+	 * Runs inside the generated write transaction after fresh primary rows are
+	 * locked (and canonical revisions compared), but before any mutation DML or
+	 * transaction-bound effect. Throwing rolls the complete mutation back.
+	 */
+	beforeWrite?:
+		| BeforeWriteEntry<TSelect, TInsert, TUpdate>[]
+		| BeforeWriteEntry<TSelect, TInsert, TUpdate>;
 
 	/**
 	 * Runs after create/update operations

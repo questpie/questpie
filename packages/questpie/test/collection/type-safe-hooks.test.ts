@@ -238,6 +238,100 @@ describe("Type-Safe Hooks", () => {
 		expect(posts.name).toBe("posts");
 	});
 
+	test("beforeWrite exposes only typed server fact-guard inputs", () => {
+		const posts = collection("posts")
+			.fields(({ f }) => ({
+				title: f.textarea().required(),
+			}))
+			.hooks({
+				beforeWrite: {
+					locks: ({ data, method }) =>
+						method === "updateBatch"
+							? []
+							: [
+									{
+										collection: "posts",
+										ids: [data.id ?? "post-1"],
+									},
+								],
+					run: async ({ data, original, originals, operation, method }) => {
+						expectTypeOf(operation).toMatchTypeOf<
+							"create" | "update" | "delete" | "restore"
+						>();
+						expectTypeOf(method).toMatchTypeOf<
+							| "create"
+							| "updateById"
+							| "updateMany"
+							| "updateBatch"
+							| "deleteById"
+							| "deleteMany"
+							| "restoreById"
+						>();
+						expectTypeOf(original).toMatchTypeOf<
+							| Readonly<{
+									id: string;
+									title: string;
+									createdAt: string;
+									updatedAt: string;
+									_title: string;
+							  }>
+							| undefined
+						>();
+						expectTypeOf(originals).toMatchTypeOf<
+							readonly Readonly<{
+								id: string;
+								title: string;
+								createdAt: string;
+								updatedAt: string;
+								_title: string;
+							}>[]
+						>();
+						if (method === "updateBatch") {
+							expectTypeOf(operation).toEqualTypeOf<"update">();
+							expectTypeOf(data).toMatchTypeOf<
+								readonly Readonly<{
+									id: string | number;
+									data: Readonly<{ title?: string }>;
+								}>[]
+							>();
+							// @ts-expect-error batch entry data is immutable
+							data[0]!.data.title = "mutated";
+						}
+						// @ts-expect-error transactional fact input is immutable
+						data.title = "mutated";
+					},
+				},
+			});
+
+		expect(posts.name).toBe("posts");
+	});
+
+	test("beforeWrite keeps polymorphic inputs logical instead of exposing storage columns", () => {
+		const activities = collection("activities")
+			.fields(({ f }) => ({
+				subject: f.relation({ post: "posts", category: "categories" }),
+			}))
+			.hooks({
+				beforeWrite: (ctx) => {
+					if (ctx.method === "updateBatch") {
+						expectTypeOf(ctx.data[0]?.data.subject).toMatchTypeOf<
+							{ type: "post" | "category"; id: string } | null | undefined
+						>();
+						// @ts-expect-error physical morph columns are not hook input
+						void ctx.data[0]!.data.subjectType;
+					} else {
+						expectTypeOf(ctx.data.subject).toMatchTypeOf<
+							{ type: "post" | "category"; id: string } | null | undefined
+						>();
+						// @ts-expect-error physical morph columns are not hook input
+						void ctx.data.subjectId;
+					}
+				},
+			});
+
+		expect(activities.name).toBe("activities");
+	});
+
 	test("hooks with localized fields", () => {
 		const posts = collection("posts")
 			.fields(({ f }) => ({
