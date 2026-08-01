@@ -1,5 +1,11 @@
 # questpie
 
+## 3.21.0
+
+### Minor Changes
+
+- [#214](https://github.com/questpie/questpie/pull/214) [`fb6653a`](https://github.com/questpie/questpie/commit/fb6653a8b41d5c7e61bf4fa209b2ec86cf91ec7b) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add a typed Better Auth integration bridge that atomically commits Auth state and an encrypted, idempotent QUESTPIE Queue dispatch.
+
 ## 3.20.1
 
 ### Patch Changes
