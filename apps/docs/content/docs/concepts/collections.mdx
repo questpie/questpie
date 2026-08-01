@@ -282,8 +282,8 @@ collection("posts").hooks({
 
 The fire order per operation:
 
-- **create / update:** `beforeOperation` → `beforeValidate` → `beforeChange` → _[DB write]_ → `afterChange` → `afterRead`
-- **delete:** `beforeOperation` → `beforeDelete` → _[DB write]_ → `afterDelete` → `afterRead`
+- **create / update:** `beforeOperation` → `beforeValidate` → `beforeChange` → _[claim]_ → `beforeWrite` → _[DB write]_ → `afterChange` → `afterRead`
+- **delete:** `beforeOperation` → `beforeDelete` → _[claim]_ → `beforeWrite` → _[DB write]_ → `afterDelete` → `afterRead`
 - **read:** `beforeOperation` → `beforeRead` → _[DB read]_ → `afterRead`
 
 `beforeValidate` / `beforeChange` receive the mutable input (`TInsert` on create, `TUpdate` on update); `afterChange` / `afterRead` receive the full selected row plus `original` (only on update). Workflow adds `beforeTransition` / `afterTransition`, which use a `TransitionHookContext` (`{ data, recordId, fromStage, toStage, scheduledAt? }`), throw in `beforeTransition` to abort. Every hook context spreads the full `AppContext`.
@@ -464,6 +464,14 @@ await withTransaction(db, async (tx) => {
 The call accepts at most 100 ids, deduplicates and locks them in database id order, applies collection read access in the locking query, and returns only accessible ids. Missing and row-inaccessible ids are intentionally indistinguishable. The context must carry the exact active `withTransaction` connection.
 
 `lockMany` is a server-only coordination primitive. It does not run hooks, return rows, mutate data, or emit realtime events, and it is not exposed through REST, the client SDK, TanStack Query, MCP CRUD, OpenAPI, or introspection. Prefer claim-checked `updateMany` for a conditional write on one collection; reach for `lockMany` only when the invariant spans records or collections.
+
+Generated collection mutations can perform the same coordination without a
+hand-written transaction by declaring the server-only
+[`beforeWrite` fact guard](/docs/concepts/hooks#transactional-dependent-row-fact-guards).
+Its bounded helper locks and returns current dependent facts in deterministic
+physical-table/id order after the mutation's fresh primary claim and before any
+generated DML or effects. The hook and active transaction are not serialized by
+introspection and are not exposed to clients.
 
 `find()` options include `where`, `with` (relation hydration), `columns`, `orderBy`, `limit`, `offset`, `extras`, `search` (case-insensitive ILIKE against `_title`), `locale`, `localeFallback`, `includeDeleted` (soft-delete only), `stage`, and `groupBy`. The full query language, `where` operators, relation filters (`some`/`none`/`every`, `is`/`isNot`), `with` aggregations, is covered under [Relations](/docs/concepts/relations) and the query reference.
 

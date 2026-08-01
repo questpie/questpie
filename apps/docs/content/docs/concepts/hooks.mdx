@@ -9,6 +9,7 @@ Hooks run logic at precise points in a collection lifecycle: transform input bef
 
 - **Transform input before validation**, normalize, trim, and default values in `beforeValidate` by mutating `ctx.data` in place.
 - **Derive fields and run business logic** on validated input in `beforeChange`, slugs, computed columns, cross-field checks, the last chance to change what gets written.
+- **Revalidate related durable facts** in `beforeWrite`, after the mutation rows are claimed but before any write or transaction-bound effect.
 - **React to a completed write** in `afterChange` with the full saved record, plus `ctx.original` on update so you can diff old versus new.
 - **Shape query output** in `afterRead`, add computed fields, format values, redact.
 - **Guard and clean up deletes** with `beforeDelete` (block, cascade, back up) and `afterDelete` (cleanup, notify).
@@ -117,29 +118,30 @@ Written **inline** on `.hooks({ ... })`, `data` / `original` / `operation` are a
 
 Declare any subset of these on `.hooks({ ... })`. Each value is a **single function or an array of functions**, see [Arrays and composition](#arrays-and-composition).
 
-| Stage              | Fires on                            | `ctx.data`                 | `ctx.original`       | Throw aborts?                     |
-| ------------------ | ----------------------------------- | -------------------------- | -------------------- | --------------------------------- |
-| `beforeOperation`  | create, update, read, delete, purge | input (type depends on op) | none                 | yes                               |
-| `beforeValidate`   | create, update                      | **mutable** input          | none                 | yes                               |
-| `beforeChange`     | create, update                      | **validated** input        | none                 | yes                               |
-| `afterChange`      | create, update                      | the saved record           | record (update only) | **yes**, propagates + rolls back  |
-| `beforeRead`       | read                                | query options              | none                 | yes                               |
-| `afterRead`        | create, update, read, delete        | the record                 | record (update only) | **yes**, propagates to the caller |
-| `beforeDelete`     | delete                              | record to be deleted       | none                 | yes                               |
-| `afterDelete`      | delete                              | the deleted record         | same deleted record  | **yes**, propagates + rolls back  |
-| `beforePurge`      | purge                               | locked deleted preimage    | same preimage        | **yes**, propagates + rolls back  |
-| `afterPurge`       | purge                               | locked deleted preimage    | same preimage        | **yes**, propagates + rolls back  |
-| `beforeTransition` | workflow transition                 | the record                 | none                 | yes                               |
-| `afterTransition`  | workflow transition                 | the record                 | none                 | no, caught + logged               |
+| Stage              | Fires on                            | `ctx.data`                 | `ctx.original`         | Throw aborts?                     |
+| ------------------ | ----------------------------------- | -------------------------- | ---------------------- | --------------------------------- |
+| `beforeOperation`  | create, update, read, delete, purge | input (type depends on op) | none                   | yes                               |
+| `beforeValidate`   | create, update                      | **mutable** input          | none                   | yes                               |
+| `beforeChange`     | create, update                      | **validated** input        | none                   | yes                               |
+| `beforeWrite`      | create, update, delete, restore     | readonly validated input   | fresh locked record(s) | **yes**, propagates + rolls back  |
+| `afterChange`      | create, update                      | the saved record           | record (update only)   | **yes**, propagates + rolls back  |
+| `beforeRead`       | read                                | query options              | none                   | yes                               |
+| `afterRead`        | create, update, read, delete        | the record                 | record (update only)   | **yes**, propagates to the caller |
+| `beforeDelete`     | delete                              | record to be deleted       | none                   | yes                               |
+| `afterDelete`      | delete                              | the deleted record         | same deleted record    | **yes**, propagates + rolls back  |
+| `beforePurge`      | purge                               | locked deleted preimage    | same preimage          | **yes**, propagates + rolls back  |
+| `afterPurge`       | purge                               | locked deleted preimage    | same preimage          | **yes**, propagates + rolls back  |
+| `beforeTransition` | workflow transition                 | the record                 | none                   | yes                               |
+| `afterTransition`  | workflow transition                 | the record                 | none                   | no, caught + logged               |
 
 `beforeTransition` / `afterTransition` fire only on workflow stage transitions and carry a different context, see [Transition hooks](#transition-hooks). See [Aborting an operation](#aborting-an-operation) for the transaction boundary of each stage.
 
 **Execution order**, per operation:
 
 ```
-Create  →  beforeOperation → beforeValidate → beforeChange → [INSERT] → afterChange → afterRead
-Update  →  beforeOperation → beforeValidate → beforeChange → [UPDATE] → afterChange → afterRead
-Delete  →  beforeOperation → beforeDelete   → [DELETE] → afterDelete → afterRead
+Create  →  beforeOperation → beforeValidate → beforeChange → [claim] → beforeWrite → [INSERT] → afterChange → afterRead
+Update  →  beforeOperation → beforeValidate → beforeChange → [claim] → beforeWrite → [UPDATE] → afterChange → afterRead
+Delete  →  beforeOperation → beforeDelete   → [claim] → beforeWrite → [DELETE] → afterDelete → afterRead
 Purge   →  beforeOperation → beforePurge    → [PURGE]  → afterPurge
 Read    →  beforeOperation → beforeRead     → [SELECT] → afterRead
 ```
@@ -154,7 +156,7 @@ Read    →  beforeOperation → beforeRead     → [SELECT] → afterRead
 
 ### Transaction-bound hooks
 
-`afterChange`, `afterDelete`, and `afterPurge` run inside the owning CRUD
+`beforeWrite`, `afterChange`, `afterDelete`, and `afterPurge` run inside the owning CRUD
 transaction. Their `ctx.db` is that active transaction, and injected services
 such as `collections`, `queue`, and `channels` join the same scope. A thrown or
 rejected error fails the CRUD call and rolls back the row plus all
@@ -197,11 +199,87 @@ fully settled before the transaction rolls back.
 email, HTTP, or other work that cannot join the database transaction in an
 `after*` hook; use `onAfterCommit` or a transaction-aware queue/outbox instead.
 
+### Transactional dependent-row fact guards
+
+Use `beforeWrite` when a generated mutation depends on current facts in another
+collection. Unlike the legacy `beforeChange` and `beforeDelete` intent hooks,
+it runs after the mutation's primary rows have been claimed and freshly read,
+inside the exact write transaction, but before relation persistence, cascade,
+version, primary-row DML, or transaction-bound effects:
+
+```ts title="src/questpie/server/collections/memberships.ts"
+collection("memberships")
+	.fields(({ f }) => ({
+		account: f.relation("accounts").required(),
+		label: f.text().required(),
+	}))
+	.hooks({
+		beforeWrite: async ({ method, data, originals, lockDependentRows }) => {
+			const newAccountIds =
+				method === "updateBatch"
+					? data.flatMap((entry) =>
+							entry.data.account ? [entry.data.account] : [],
+						)
+					: "account" in data && data.account
+						? [data.account]
+						: [];
+			const accountIds = [
+				...newAccountIds,
+				...originals.flatMap((row) => (row.account ? [row.account] : [])),
+			];
+			const [locked] = await lockDependentRows([
+				{ collection: "accounts", ids: accountIds, includeDeleted: true },
+			]);
+
+			if (
+				locked?.rows.length !== new Set(accountIds).size ||
+				locked.rows.some((account) => account.status !== "active")
+			) {
+				throw new Error("Account is unavailable");
+			}
+		},
+	});
+```
+
+The context discriminates `operation` (`create | update | delete | restore`)
+and generated `method` (`create`, `updateById`, `updateMany`, `updateBatch`,
+`deleteById`, `deleteMany`, or `restoreById`). `original` is the singular fresh
+preimage when exactly one row was claimed; `originals` always contains all
+fresh canonical claimed documents, including localization, collapsed
+polymorphic values, virtual fields, and `_title`, without running output or
+`afterRead` hooks. Treat `data` and the preimages as readonly facts. An
+`updateBatch` invokes one batch-wide guard before any item writes; its
+method-narrowed `data` is the caller-ordered readonly `{ id, data }[]` of
+heterogeneous validated updates, and `originals`, `recordIds`, `records`, and
+`count` cover the complete batch. Hook data keeps public logical field shapes;
+for example, a polymorphic relation remains `{ type, id }`. Physical
+discriminator/id columns are generated only in the separate persistence copy.
+
+Call `lockDependentRows` at most once per hook chain with the complete request
+set. It accepts at most 100 unique physical row identities and coalesces logical
+collection aliases by physical `schema.table` and primary-key column. It first
+claims physical rows by UTF-8 bytes of that identity and each id's type tag and
+value, so aliases cannot create a second reversed id-lock phase. Only after all
+physical waits settle does it freshly evaluate every logical alias's read
+policy and compose canonical rows. The helper therefore ignores caller request
+order, and a missing id, fully denied collection, and row-denied id are
+intentionally indistinguishable in its result.
+
+Primary mutation rows are claimed before dependent rows. The helper removes
+deadlocks caused only by callers supplying dependent collections or ids in
+opposite orders. It cannot linearize a cyclic aggregate graph where one
+mutation owns a primary row in collection A and then locks B while another owns
+a primary row in B and then locks A; PostgreSQL aborts one participant and the
+complete mutation rolls back. Model cross-collection guard dependencies as an
+acyclic aggregate lock graph, and retry database deadlock/serialization errors
+at the command boundary when concurrent commands can still form a cycle.
+
 ### What each stage is for
 
 - **`beforeOperation`**, runs first for **every** operation, including read, delete, and purge. Use for logging, rate limiting, or early checks. `ctx.data` is the input (type depends on the operation), `ctx.original` is not available.
 - **`beforeValidate`**, transform, normalize, and default the **mutable** input before the Zod schema runs. Mutate `ctx.data` in place. Create and update only.
 - **`beforeChange`**, business logic on **validated** input: slug generation, derived fields, complex cross-field validation. The last point at which you can change what gets written. Create and update only; `ctx.original` is _not_ available here, diff in `afterChange` instead.
+- **`beforeWrite`**, revalidate related durable facts after fresh primary-row claims. Use its bounded `lockDependentRows` helper rather than raw SQL. The input is readonly and rejection rolls back the complete generated mutation.
 - **`afterChange`**, react to a completed write with the full record. Has `ctx.original` on update for diffing. Runs **inside** the transaction, defer durable side effects with [`onAfterCommit`](#side-effects-onaftercommit).
 - **`beforeRead`**, modify query options / add filters. Here `ctx.data` is the query context, not a row.
 - **`afterRead`**, transform output, add computed fields, format values. Fires after create, update, delete, and read.

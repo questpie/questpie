@@ -13,7 +13,10 @@ import type {
 	ValidationBuilderOptions,
 	ValidationSchemas,
 } from "#questpie/server/collection/builder/validation-helpers.js";
-import type { AppContext } from "#questpie/server/config/app-context.js";
+import type {
+	AppContext,
+	StrictCollectionKey,
+} from "#questpie/server/config/app-context.js";
 import type { AccessMode } from "#questpie/server/config/types.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { FieldLocation } from "#questpie/server/fields/types.js";
@@ -580,6 +583,78 @@ export type BeforeChangeHook<
 	TUpdate = any,
 > = HookFunction<TInsert | TUpdate, never, "create" | "update">;
 
+export type BeforeWriteMethod =
+	| "create"
+	| "updateById"
+	| "updateMany"
+	| "updateBatch"
+	| "deleteById"
+	| "deleteMany"
+	| "restoreById";
+
+/** One collection/id set claimed by a transactional fact guard. */
+export interface DependentRowLockRequest {
+	collection: StrictCollectionKey;
+	ids: readonly (string | number)[];
+	/** Include soft-deleted rows in the lock result. */
+	includeDeleted?: boolean;
+}
+
+export interface DependentRowLockResult {
+	collection: StrictCollectionKey;
+	/** Accessible existing ids, returned in deterministic type-tagged byte order. */
+	lockedIds: readonly (string | number)[];
+	/** Canonical current facts from the locked rows, in the same order as `lockedIds`. */
+	rows: readonly Readonly<Record<string, unknown>>[];
+}
+
+type BeforeWriteSharedContext<TSelect> = Omit<
+	HookContextBase<unknown>,
+	"data" | "isBatch" | "recordIds" | "records" | "count"
+> & {
+	/** Fresh locked primary row for singular existing-row writes. */
+	original: Readonly<TSelect> | undefined;
+	/** Fresh locked primary rows, including every bulk winner. */
+	originals: readonly Readonly<TSelect>[];
+	isBatch?: true;
+	recordIds?: readonly (string | number)[];
+	records?: readonly Readonly<TSelect>[];
+	count?: number;
+	/**
+	 * Claim all dependent facts in one bounded, globally deterministic request.
+	 * A second call from the same hook chain is rejected.
+	 */
+	lockDependentRows: (
+		requests: readonly DependentRowLockRequest[],
+	) => Promise<readonly DependentRowLockResult[]>;
+};
+
+export type BeforeWriteBatchEntry<TUpdate> = Readonly<{
+	id: string | number;
+	data: Readonly<TUpdate>;
+}>;
+
+export type BeforeWriteContext<TSelect = any, TInsert = any, TUpdate = any> =
+	| (BeforeWriteSharedContext<TSelect> & {
+			method: "updateBatch";
+			operation: "update";
+			/** Canonical heterogeneous validated update inputs in caller order. */
+			data: readonly BeforeWriteBatchEntry<TUpdate>[];
+			isBatch: true;
+			recordIds: readonly (string | number)[];
+			records: readonly Readonly<TSelect>[];
+			count: number;
+	  })
+	| (BeforeWriteSharedContext<TSelect> & {
+			operation: "create" | "update" | "delete" | "restore";
+			method: Exclude<BeforeWriteMethod, "updateBatch">;
+			data: Readonly<TInsert | TUpdate | TSelect>;
+	  });
+
+export type BeforeWriteHook<TSelect = any, TInsert = any, TUpdate = any> = (
+	ctx: BeforeWriteContext<TSelect, TInsert, TUpdate>,
+) => Promise<void> | void;
+
 /**
  * AfterChange hook context — discriminated by `operation` so `original` is
  * typed per-operation: absent on `"create"`, the previous row on `"update"`.
@@ -787,6 +862,15 @@ export interface CollectionHooks<TSelect = any, TInsert = any, TUpdate = any> {
 	beforeChange?:
 		| BeforeChangeHook<TSelect, TInsert, TUpdate>[]
 		| BeforeChangeHook<TSelect, TInsert, TUpdate>;
+
+	/**
+	 * Runs inside the generated write transaction after fresh primary rows are
+	 * locked (and canonical revisions compared), but before any mutation DML or
+	 * transaction-bound effect. Throwing rolls the complete mutation back.
+	 */
+	beforeWrite?:
+		| BeforeWriteHook<TSelect, TInsert, TUpdate>[]
+		| BeforeWriteHook<TSelect, TInsert, TUpdate>;
 
 	/**
 	 * Runs after create/update operations

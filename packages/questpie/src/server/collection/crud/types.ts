@@ -1450,6 +1450,7 @@ export type DeleteManyParams<
  */
 export interface LockManyParams<TId = string> {
 	ids: readonly TId[];
+	includeDeleted?: boolean;
 }
 
 /**
@@ -1909,4 +1910,8 @@ export interface CRUD<
 	"~internalState"?: any;
 	"~internalRelatedTable"?: any;
 	"~internalI18nTable"?: any;
+	"~internalReadCanonicalRows"?: (
+		ids: readonly (string | number)[],
+		context: CRUDContext,
+	) => Promise<readonly Record<string, unknown>[]>;
 }
