@@ -3,6 +3,7 @@ import { BoundedChannelQueue } from "./ordered-events.js";
 
 type ReadyRegistration = {
 	callback: () => void;
+	onEnd?: () => void;
 	active: boolean;
 	notifiedEpoch: number;
 };
@@ -17,10 +18,11 @@ export class ChannelReadiness {
 		return this.admitted;
 	}
 
-	register(callback: (() => void) | undefined): () => void {
-		if (!callback) return () => {};
+	register(callback: (() => void) | undefined, onEnd?: () => void): () => void {
+		if (!callback && !onEnd) return () => {};
 		const registration: ReadyRegistration = {
-			callback,
+			callback: callback ?? (() => {}),
+			onEnd,
 			active: true,
 			notifiedEpoch: 0,
 		};
@@ -47,6 +49,14 @@ export class ChannelReadiness {
 
 	end(): void {
 		this.admitted = false;
+		for (const registration of this.registrations) {
+			if (!registration.active) continue;
+			try {
+				registration.onEnd?.();
+			} catch {
+				// One subscriber cannot block epoch reset for its siblings.
+			}
+		}
 	}
 
 	destroy(): void {
@@ -120,7 +130,14 @@ export class ChannelReadyDelivery<T> {
 						}
 					}
 				: undefined,
+			() => this.endEpoch(),
 		);
+	}
+
+	private endEpoch(): void {
+		if (!this.active || !this.waitForAdmission) return;
+		this.pending.clear();
+		this.awaitingReady = true;
 	}
 
 	private drain(): void {

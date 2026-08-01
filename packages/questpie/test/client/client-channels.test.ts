@@ -175,6 +175,29 @@ describe("channels client", () => {
 		delivery.stop();
 	});
 
+	test("retains a late message buffered before its ready microtask across an epoch end", async () => {
+		const readiness = new ChannelReadiness();
+		readiness.admit();
+		const order: string[] = [];
+		const delivery = new ChannelReadyDelivery(
+			readiness,
+			(value: number) => order.push(`message:${value}`),
+			() => order.push("ready"),
+			() => {
+				throw new Error("unexpected overflow");
+			},
+		);
+
+		delivery.accept(1);
+		readiness.end();
+		await Promise.resolve();
+		expect(order).toEqual([]);
+
+		readiness.admit();
+		expect(order).toEqual(["ready", "message:1"]);
+		delivery.stop();
+	});
+
 	test("keeps explicit plain JSON channel publishing interoperable", async () => {
 		const instant = new Date("2026-03-29T00:30:00.000Z");
 		let publishRequest: RequestInit | undefined;
@@ -395,7 +418,7 @@ describe("channels client", () => {
 		client.channels.destroy();
 	});
 
-	test("orders SSE replay then readiness then live delivery for every logical subscriber", async () => {
+	test("orders SSE replay and readiness for every logical subscriber across a silent reconnect", async () => {
 		const streamControllers: ReadableStreamDefaultController<Uint8Array>[] = [];
 		const encoder = new TextEncoder();
 		const fetcher: typeof fetch = async (input) => {
@@ -508,11 +531,8 @@ describe("channels client", () => {
 			),
 		);
 		await waitFor(() => order.filter((item) => item === "ready").length === 4);
-		expect(order.slice(-3)).toEqual([
-			"error:Realtime stream closed",
-			"ready",
-			"ready",
-		]);
+		expect(order.slice(-2)).toEqual(["ready", "ready"]);
+		expect(order.some((item) => item.startsWith("error:"))).toBe(false);
 
 		stopActiveLate();
 		stopSecond();
@@ -573,10 +593,18 @@ describe("channels client", () => {
 		await waitFor(() => errors.length === 1);
 		expect(errors).toEqual(["Channel subscription is denied"]);
 		expect(ready).toBe(0);
+		expect(client.channels.channelCount).toBe(0);
+		streamController!.enqueue(
+			encoder.encode(
+				`event: channel_ready\ndata: ${JSON.stringify({ channelSubscriptionId: "channel:news" })}\n\n`,
+			),
+		);
+		await Bun.sleep(10);
+		expect(ready).toBe(0);
 		client.channels.destroy();
 	});
 
-	test("ends an admitted sibling epoch before reconnecting after a targeted SSE topology rejection", async () => {
+	test("silently ends an admitted sibling epoch before reconnecting after a targeted SSE topology rejection", async () => {
 		const streamControllers: ReadableStreamDefaultController<Uint8Array>[] = [];
 		const encoder = new TextEncoder();
 		let rejectRoom = true;
@@ -692,7 +720,7 @@ describe("channels client", () => {
 		);
 
 		await waitFor(() => newsMessages.length === 1);
-		expect(newsLifecycle).toEqual(["ready", "error:Aborted", "ready"]);
+		expect(newsLifecycle).toEqual(["ready", "ready"]);
 		expect(newsMessages).toEqual([`${hash}:1`]);
 		stopRoom();
 		stopNews();
@@ -861,6 +889,295 @@ describe("channels client", () => {
 
 		stopLate();
 		stopInitial();
+		transport.destroy();
+	});
+
+	test("drops presence buffered before a retryable SSE epoch ends", async () => {
+		let resource:
+			| {
+					onEvent(event: { type: string; data: string }): void;
+					onEpochEnd?(error: Error): void;
+			  }
+			| undefined;
+		const connection = {
+			registerChannel(options: typeof resource): () => void {
+				resource = options;
+				return () => {};
+			},
+		};
+		const transport = new SseChannelTransport({
+			baseUrl: "http://localhost:3000",
+			withCredentials: false,
+			fetcher: async () => {
+				throw new Error("The shared connection owns SSE fetching");
+			},
+			connection: connection as any,
+		});
+		const input = {
+			registryKey: "room",
+			params: { roomId: "one" },
+			resolvedName: "presence-room-one",
+			visibility: "presence" as const,
+		};
+		const rosters: string[] = [];
+		let ready = 0;
+		const stop = transport.subscribePresence(
+			input,
+			(members) => rosters.push((members[0] as { id: string }).id),
+			{ onReady: () => (ready += 1) },
+		);
+
+		resource!.onEvent({
+			type: "channel_presence",
+			data: JSON.stringify({
+				channel: "presence-room-one",
+				members: [{ id: "member-a" }],
+			}),
+		});
+		resource!.onEpochEnd?.(new Error("retryable socket failure"));
+		resource!.onEvent({
+			type: "channel_presence",
+			data: JSON.stringify({
+				channel: "presence-room-one",
+				members: [{ id: "member-b" }],
+			}),
+		});
+		resource!.onEvent({
+			type: "channel_ready",
+			data: JSON.stringify({
+				channelSubscriptionId: "channel:presence-room-one",
+			}),
+		});
+
+		expect(ready).toBe(1);
+		expect(rosters).toEqual(["member-b"]);
+
+		stop();
+		transport.destroy();
+	});
+
+	test("does not return a cached SSE presence roster after a terminal channel error", async () => {
+		let resource:
+			| {
+					onEvent(event: { type: string; data: string }): void;
+					onError(error: Error): void;
+			  }
+			| undefined;
+		const connection = {
+			registerChannel(options: typeof resource): () => void {
+				resource = options;
+				return () => {};
+			},
+		};
+		const transport = new SseChannelTransport({
+			baseUrl: "http://localhost:3000",
+			withCredentials: false,
+			fetcher: async () => {
+				throw new Error("The shared connection owns SSE fetching");
+			},
+			connection: connection as any,
+		});
+		const input = {
+			registryKey: "room",
+			params: { roomId: "one" },
+			resolvedName: "presence-room-one",
+			visibility: "presence" as const,
+		};
+		const rosters: (readonly unknown[])[] = [];
+		const errors: Error[] = [];
+		const stop = transport.subscribePresence(
+			input,
+			(members) => rosters.push(members),
+			{ onError: (error) => errors.push(error) },
+		);
+
+		resource!.onEvent({
+			type: "channel_presence",
+			data: JSON.stringify({
+				channel: "presence-room-one",
+				members: [{ id: "member-1" }],
+			}),
+		});
+		resource!.onEvent({
+			type: "channel_ready",
+			data: JSON.stringify({
+				channelSubscriptionId: "channel:presence-room-one",
+			}),
+		});
+		expect(rosters).toEqual([[{ id: "member-1" }]]);
+
+		resource!.onError(new Error("Channel authorization was revoked"));
+		expect(errors.map((error) => error.message)).toEqual([
+			"Channel authorization was revoked",
+		]);
+		let settled = false;
+		const freshPresence = transport.presence(input).then((members) => {
+			settled = true;
+			return members;
+		});
+		await Bun.sleep(10);
+		expect(settled).toBe(false);
+
+		resource!.onEvent({
+			type: "channel_presence",
+			data: JSON.stringify({
+				channel: "presence-room-one",
+				members: [{ id: "member-2" }],
+			}),
+		});
+		await expect(freshPresence).resolves.toEqual([{ id: "member-2" }]);
+
+		stop();
+		transport.destroy();
+	});
+
+	test("removes a shared SSE entry after a terminal resource error", () => {
+		let resource:
+			| {
+					onEvent(event: { type: string; data: string }): void;
+					onError(error: Error): void;
+			  }
+			| undefined;
+		let releases = 0;
+		const connection = {
+			registerChannel(options: typeof resource): () => void {
+				resource = options;
+				return () => {
+					releases += 1;
+				};
+			},
+		};
+		const transport = new SseChannelTransport({
+			baseUrl: "http://localhost:3000",
+			withCredentials: false,
+			fetcher: async () => {
+				throw new Error("The shared connection owns SSE fetching");
+			},
+			connection: connection as any,
+		});
+		const input = {
+			registryKey: "news",
+			params: {},
+			resolvedName: "news",
+			visibility: "public" as const,
+		};
+		const lifecycle: string[] = [];
+		const stop = transport.subscribe(
+			input,
+			(message) => lifecycle.push(`message:${message.eventId}`),
+			{
+				onReady: () => lifecycle.push("ready"),
+				onError: (error) => lifecycle.push(`error:${error.message}`),
+			},
+		);
+
+		resource!.onError(new Error("Channel authorization was revoked"));
+		expect(lifecycle).toEqual(["error:Channel authorization was revoked"]);
+		expect(releases).toBe(1);
+		expect(transport.channelCount).toBe(0);
+
+		resource!.onEvent({
+			type: "channel_ready",
+			data: JSON.stringify({ channelSubscriptionId: "channel:news" }),
+		});
+		resource!.onEvent({
+			type: "channel_event",
+			data: stringifyCompatibleTypedEventWire({
+				channel: "news",
+				event: "updated",
+				eventId: `${"7".repeat(64)}:1`,
+				data: {},
+			}),
+		});
+		expect(lifecycle).toEqual(["error:Channel authorization was revoked"]);
+		expect(releases).toBe(1);
+
+		stop();
+		transport.destroy();
+	});
+
+	test("preserves a re-entrant replacement after a terminal shared SSE error", () => {
+		type Resource = {
+			onEvent(event: { type: string; data: string }): void;
+			onError(error: Error): void;
+		};
+		const resources: Resource[] = [];
+		const releases: number[] = [];
+		const connection = {
+			registerChannel(options: Resource): () => void {
+				const index = resources.push(options) - 1;
+				return () => releases.push(index);
+			},
+		};
+		const transport = new SseChannelTransport({
+			baseUrl: "http://localhost:3000",
+			withCredentials: false,
+			fetcher: async () => {
+				throw new Error("The shared connection owns SSE fetching");
+			},
+			connection: connection as any,
+		});
+		const input = {
+			registryKey: "news",
+			params: {},
+			resolvedName: "news",
+			visibility: "public" as const,
+		};
+		const replacementLifecycle: string[] = [];
+		let stopReplacement = () => {};
+		const stopOld = transport.subscribe(input, () => {}, {
+			onError: () => {
+				stopOld();
+				stopReplacement = transport.subscribe(
+					input,
+					(message) => replacementLifecycle.push(`message:${message.eventId}`),
+					{ onReady: () => replacementLifecycle.push("ready") },
+				);
+			},
+		});
+
+		resources[0]!.onError(new Error("Channel authorization was revoked"));
+		expect(resources).toHaveLength(2);
+		expect(releases).toEqual([0]);
+		expect(transport.channelCount).toBe(1);
+
+		const eventId = `${"8".repeat(64)}:1`;
+		for (const oldFrame of [
+			{
+				type: "channel_ready",
+				data: JSON.stringify({ channelSubscriptionId: "channel:news" }),
+			},
+			{
+				type: "channel_event",
+				data: stringifyCompatibleTypedEventWire({
+					channel: "news",
+					event: "updated",
+					eventId,
+					data: {},
+				}),
+			},
+		]) {
+			resources[0]!.onEvent(oldFrame);
+		}
+		expect(replacementLifecycle).toEqual([]);
+
+		resources[1]!.onEvent({
+			type: "channel_ready",
+			data: JSON.stringify({ channelSubscriptionId: "channel:news" }),
+		});
+		resources[1]!.onEvent({
+			type: "channel_event",
+			data: stringifyCompatibleTypedEventWire({
+				channel: "news",
+				event: "updated",
+				eventId,
+				data: {},
+			}),
+		});
+		expect(replacementLifecycle).toEqual(["ready", `message:${eventId}`]);
+
+		stopReplacement();
+		expect(releases).toEqual([0, 1]);
 		transport.destroy();
 	});
 
@@ -1164,7 +1481,7 @@ describe("channels client", () => {
 		});
 
 		stopFirst();
-		resource!.onEpochEnd?.(new Error("subscription epoch ended"));
+		resource!.onError(new Error("subscription denied"));
 
 		expect(errorCalls).toBe(1);
 		transport.destroy();
