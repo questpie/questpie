@@ -85,6 +85,44 @@ Use Better Auth's dedicated identity flows for email, password, verification,
 session, and provider changes. Do not weaken these collection rules to make an
 identity screen work.
 
+### Atomic Auth verification dispatch
+
+When a Better Auth plugin must change Auth state and enqueue a verification
+message as one operation, use `withAuthTransactionalQueue()` from
+`questpie/auth`. The callback receives a transaction-scoped Better Auth adapter
+and a deliberately narrow publisher. Pass the concrete job definition; QUESTPIE
+accepts only a definition registered by the running app.
+
+```ts
+import { withAuthTransactionalQueue } from "questpie/auth";
+
+await withAuthTransactionalQueue(ctx, async ({ auth, publish }) => {
+	const claim = await auth.consumeOne({
+		model: "verification",
+		where: [{ field: "id", value: verificationId }],
+	});
+	if (!claim) return null;
+
+	return publish(
+		sendAuthVerificationJob,
+		{ verificationId, token },
+		{ idempotencyKey: `auth-verification:${verificationId}` },
+	);
+});
+```
+
+The Auth mutation and Queue-owned `questpie_queue_dispatch` reservation use the
+same database transaction. A throw before commit leaves neither state behind;
+retries with the same job name and idempotency key resolve to one logical
+dispatch. The bridge always encrypts the payload, so configure a stable runtime
+secret of at least 32 bytes and a Queue adapter qualified for secret-payload
+terminal-state recovery. Keep the idempotency key non-secret.
+
+Do not call an email or identity provider inside the callback. The registered
+job handler performs that external effect after commit. The bridge exposes no
+application context, raw database, general Queue client, scheduling, or
+singleton options.
+
 QUESTPIE also hardens Better Auth's session list/revoke wire contract. The
 `list-sessions` response never returns reusable bearer session tokens. For
 compatibility with Better Auth clients, its historical `token` property contains

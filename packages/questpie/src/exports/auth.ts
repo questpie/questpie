@@ -4,6 +4,13 @@ export {
 	type MergeAuthOptions,
 } from "#questpie/server/modules/core/integrated/auth/merge.js";
 export * from "#questpie/server/modules/core/integrated/auth/types.js";
+export {
+	type AuthTransactionalQueueContext,
+	type AuthTransactionalQueuePublish,
+	type AuthTransactionalQueuePublishOptions,
+	type AuthTransactionalQueueTransaction,
+	withAuthTransactionalQueue,
+} from "#questpie/server/modules/core/integrated/auth/transactional-queue.js";
 export type { AuthConfig } from "#questpie/server/config/module-types.js";
 export {
 	type AccessRuleEvaluationContext,
