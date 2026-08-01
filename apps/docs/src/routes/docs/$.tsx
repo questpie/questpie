@@ -35,7 +35,12 @@ const FIELD_TYPE_PAGES = [
 /* Docs URLs are indexed, so a page that moves keeps its old path working. Exact
    match on the slug, oldest entries first. */
 const docsCompatRedirects = new Map<string, string>([
+	// getting-started/ was replaced by Learn and is gone
+	["getting-started", "/docs/learn"],
+	["getting-started/index", "/docs/learn"],
 	["getting-started/your-first-app", "/docs/learn/first-app"],
+	["getting-started/tanstack-start", "/docs/learn/first-app"],
+	["getting-started/mcp-ai-agent", "/docs/guides/connect-an-agent"],
 	// concepts/ split into Schema, Code, Infrastructure and Ship
 	["concepts/collections", "/docs/schema/collections"],
 	["concepts/globals", "/docs/schema/globals"],

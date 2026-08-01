@@ -3,7 +3,7 @@ title: Environment
 description: Declare your environment variables once with a Standard Schema, and QUESTPIE validates them at boot, types `env.*` end to end, and splits server secrets from client-public vars across every bundler, so a misconfigured deploy fails before it starts, not at the first request.
 ---
 
-> **Prerequisites:** read [Framework 101](/docs/getting-started) first, it covers the one-schema mental model and the codegen step this page builds on.
+> **Prerequisites:** read [Framework 101](/docs/learn) first, it covers the one-schema mental model and the codegen step this page builds on.
 
 Your app needs `DATABASE_URL`, an auth secret, an app URL, and some of those values must also reach the browser, with the right prefix, on whatever bundler you ship. QUESTPIE turns that into two small files. `env.ts` declares your **server** environment with a Standard Schema validator; `env.client.ts` declares the **client-safe** vars. From those, you get a frozen, fully-typed `env` object, validation that runs at module evaluation (so a bad config fails boot, before adapters, auth, or the database initialize), and a generated per-bundler client module that inlines only the public vars under the correct prefix.
 
@@ -351,7 +351,7 @@ import type { ClientEnv } from "./.generated/env.client.vite";
 
 ## Related
 
-- [Getting started, TanStack Start](/docs/getting-started/tanstack-start), a full app that wires `env.ts` + `env.client.ts` end to end.
+- [Getting started, TanStack Start](/docs/learn/first-app), a full app that wires `env.ts` + `env.client.ts` end to end.
 - [Collections](/docs/schema/collections), what `env` ultimately powers: the DB, storage, and auth your collections run on.
 - [Services](/docs/code/services), register typed singletons that read your validated `env`.
 - Runnable example: [`examples/tanstack-barbershop`](https://github.com/questpie/questpie/tree/main/examples/tanstack-barbershop), its `src/questpie/server/env.ts` and `env.client.ts` are the source of the snippets above.
