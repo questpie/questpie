@@ -202,8 +202,7 @@ email, HTTP, or other work that cannot join the database transaction in an
 ### Transactional dependent-row fact guards
 
 Use `beforeWrite` when a generated mutation depends on current facts in another
-collection. Unlike the legacy `beforeChange` and `beforeDelete` intent hooks,
-it runs after the mutation's primary rows have been claimed and freshly read,
+collection. It runs after the mutation's primary rows have been claimed and freshly read,
 inside the exact write transaction, but before relation persistence, cascade,
 version, primary-row DML, or transaction-bound effects:
 

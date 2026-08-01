@@ -7,32 +7,35 @@ import type {
 	DependentRowLockRequest,
 	DependentRowLockResult,
 } from "#questpie/server/collection/builder/types.js";
-import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
+import type {
+	CRUD,
+	CRUDContext,
+} from "#questpie/server/collection/crud/types.js";
 import { ApiError } from "#questpie/server/errors/index.js";
 
 import { getColumn } from "./field-resolver.js";
 
 const MAX_DEPENDENT_ROW_LOCKS = 100;
 
-type CollectionServer = {
-	lockMany: (
-		params: {
-			ids: readonly (string | number)[];
-			includeDeleted?: boolean;
-		},
-		context: CRUDContext,
-	) => Promise<readonly (string | number)[]>;
-	"~internalRelatedTable": PgTable;
-	"~internalReadCanonicalRows": (
-		ids: readonly (string | number)[],
-		context: CRUDContext,
-	) => Promise<readonly Record<string, unknown>[]>;
+type CollectionServer = Pick<
+	CRUD,
+	"lockMany" | "~internalRelatedTable" | "~internalReadCanonicalRows"
+>;
+
+type DependentRowTransaction = {
+	select: (selection: { id: unknown }) => {
+		from: (table: PgTable) => {
+			where: (condition: unknown) => {
+				for: (strength: "update") => Promise<Array<{ id: string | number }>>;
+			};
+		};
+	};
 };
 
 type DependentRowLockerInput = {
 	collections: Record<string, CollectionServer>;
 	context: CRUDContext;
-	tx: any;
+	tx: DependentRowTransaction;
 };
 
 const compareUtf8 = (left: string, right: string) =>
@@ -91,7 +94,12 @@ export function createDependentRowLocker(input: DependentRowLockerInput) {
 			if (!Array.isArray(request.ids)) {
 				throw ApiError.badRequest("Dependent row ids must be an array");
 			}
-			const table = collection["~internalRelatedTable"];
+			const table = collection["~internalRelatedTable"] as PgTable | undefined;
+			if (!table) {
+				throw ApiError.badRequest(
+					`Collection "${request.collection}" cannot lock dependent rows`,
+				);
+			}
 			const idColumn = getColumn(table, "id")!;
 			const physicalLockKey = `${getTableUniqueName(table)}\0${String(
 				(idColumn as { name?: unknown }).name ?? "id",
@@ -185,9 +193,14 @@ export function createDependentRowLocker(input: DependentRowLockerInput) {
 			}
 
 			for (const [collectionName, logical] of logicalGroups) {
-				const rows = await input.collections[collectionName]![
-					"~internalReadCanonicalRows"
-				](logical.lockedIds, {
+				const readCanonicalRows =
+					input.collections[collectionName]!["~internalReadCanonicalRows"];
+				if (!readCanonicalRows) {
+					throw ApiError.badRequest(
+						`Collection "${collectionName}" cannot read canonical dependent rows`,
+					);
+				}
+				const rows = await readCanonicalRows(logical.lockedIds, {
 					...input.context,
 					db: input.tx,
 				});

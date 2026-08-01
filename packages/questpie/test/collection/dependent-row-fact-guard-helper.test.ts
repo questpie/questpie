@@ -41,7 +41,6 @@ function makeTx(physicalCalls: string[]) {
 							);
 							return [{ id: parameter.value }];
 						},
-						then: (resolve: (rows: unknown[]) => void) => resolve([]),
 					};
 				},
 			}),
@@ -64,7 +63,7 @@ describe("dependent-row fact guard lock normalization", () => {
 				second: makeCollection(secondTable, "second", calls),
 				firstAlias: makeCollection(firstTable, "firstAlias", calls),
 				first: makeCollection(firstTable, "first", calls),
-			} as any,
+			},
 			context: createTestContext(),
 			tx: makeTx(physicalCalls),
 		});
@@ -101,7 +100,7 @@ describe("dependent-row fact guard lock normalization", () => {
 			id: text("id").primaryKey(),
 		});
 		const lock = createDependentRowLocker({
-			collections: { targets: makeCollection(table, "targets", []) } as any,
+			collections: { targets: makeCollection(table, "targets", []) },
 			context: createTestContext(),
 			tx: makeTx([]),
 		});

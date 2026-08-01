@@ -17,6 +17,7 @@ import { alias, type PgTable } from "drizzle-orm/pg-core";
 
 import type {
 	AccessWhere,
+	BeforeWriteContext,
 	CollectionBuilderState,
 	HookContext,
 	TransitionHookContext,
@@ -573,18 +574,18 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			| "deleteMany"
 			| "restoreById";
 		context: CRUDContext;
-		tx: any;
+		tx: Parameters<typeof createDependentRowLocker>[0]["tx"];
 		bulk?: {
 			isBatch: true;
 			recordIds: (string | number)[];
-			records: any[];
+			records: Record<string, unknown>[];
 			count: number;
 		};
 	}): Promise<void> {
 		const hooks = this.state.hooks?.beforeWrite;
 		if (!hooks) return;
 		const lockDependentRows = createDependentRowLocker({
-			collections: this.app!.collections as any,
+			collections: this.app!.collections,
 			context: input.context,
 			tx: input.tx,
 		});
@@ -597,13 +598,34 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			db: input.tx,
 			bulk: input.bulk,
 		});
-		await this.executeHooks(hooks, {
-			...base,
-			operation: input.operation,
-			method: input.method,
-			originals: input.originals,
-			lockDependentRows,
-		} as any);
+		const beforeWriteContext: BeforeWriteContext =
+			input.method === "updateBatch"
+				? {
+						...base,
+						operation: "update",
+						method: "updateBatch",
+						originals: input.originals,
+						isBatch: true,
+						recordIds: input.bulk?.recordIds ?? [],
+						records: input.bulk?.records ?? [],
+						count: input.bulk?.count ?? 0,
+						lockDependentRows,
+					}
+				: {
+						...base,
+						operation: input.operation,
+						method: input.method,
+						originals: input.originals,
+						isBatch: input.bulk?.isBatch,
+						recordIds: input.bulk?.recordIds,
+						records: input.bulk?.records,
+						count: input.bulk?.count,
+						lockDependentRows,
+					};
+		const hookArray = Array.isArray(hooks) ? hooks : [hooks];
+		for (const hook of hookArray) {
+			await hook(beforeWriteContext);
+		}
 	}
 
 	private async readFreshCanonicalRows(
@@ -2606,7 +2628,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 
 				const winnerIds = new Set(recordIds);
-				let winners = records.filter((r: any) => winnerIds.has(r.id));
+				const logicalWinnerIds = records
+					.filter((record: { id: string | number }) => winnerIds.has(record.id))
+					.map((record: { id: string | number }) => record.id);
+				let winners = records.filter((record: { id: string | number }) =>
+					winnerIds.has(record.id),
+				);
 				const optimisticConcurrency = this.getOptimisticConcurrency();
 				let lockedRecords: OptimisticConcurrencyRecord[] | undefined;
 				if (optimisticConcurrency || this.state.hooks?.beforeWrite) {
@@ -2637,10 +2664,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 				if (lockedRecords) {
 					const lockedById = new Map(lockedRecords.map((row) => [row.id, row]));
-					winners = recordIds.map((id) => lockedById.get(id)!).filter(Boolean);
+					winners = logicalWinnerIds
+						.map((id) => lockedById.get(id)!)
+						.filter(Boolean);
 				}
 				const beforeWriteOriginals = this.state.hooks?.beforeWrite
-					? await this.readFreshCanonicalRows(recordIds, txContext)
+					? await this.readFreshCanonicalRows(logicalWinnerIds, txContext)
 					: winners;
 				const performClaimedWrite = async () => {
 					// Apply belongsTo relations
@@ -2877,7 +2906,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			throw error;
 		}
 
-		const finishUpdate = async (updatedRecords: any[]) => {
+		const finishUpdate = async (
+			updatedRecords: Array<Record<string, unknown>>,
+		) => {
 			// 6. afterRead hooks and notifications
 			for (const updated of updatedRecords) {
 				const original = records.find((r) => r.id === updated.id);
@@ -3637,9 +3668,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							},
 							txContext,
 							{
-								...(optimisticConcurrency
-									? { revisionPrelocked: true as const }
-									: {}),
+								revisionPrelocked: optimisticConcurrency ? true : undefined,
 								prepareBatchBeforeWrite: true,
 							},
 						);
@@ -3681,11 +3710,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 									data: update.data,
 								},
 								txContext,
-								{
-									...(optimisticConcurrency
-										? { revisionPrelocked: true as const }
-										: {}),
-								},
+								optimisticConcurrency ? { revisionPrelocked: true } : undefined,
 							),
 						);
 					}
@@ -3830,7 +3855,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					throw ApiError.conflict("Optimistic concurrency conflict");
 				}
 				const winnerIds = new Set(winnerIdList);
-				let claimedRecords = records.filter((r: any) => winnerIds.has(r.id));
+				const logicalWinnerIds = records
+					.filter((record: { id: string | number }) => winnerIds.has(record.id))
+					.map((record: { id: string | number }) => record.id);
+				let claimedRecords = records.filter((record: { id: string | number }) =>
+					winnerIds.has(record.id),
+				);
 				if (optimisticConcurrency) {
 					const deleteBulkMeta = {
 						isBatch: true as const,
@@ -3900,11 +3930,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				const lockedById = new Map(
 					lockedBeforeDelete.map((record: any) => [record.id, record]),
 				);
-				claimedRecords = winnerIdList
+				claimedRecords = logicalWinnerIds
 					.map((recordId) => lockedById.get(recordId))
 					.filter(Boolean);
 				const beforeWriteOriginals = this.state.hooks?.beforeWrite
-					? await this.readFreshCanonicalRows(winnerIdList, txContext)
+					? await this.readFreshCanonicalRows(logicalWinnerIds, txContext)
 					: claimedRecords;
 				await this.executeBeforeWrite({
 					data: beforeWriteOriginals,
@@ -3915,7 +3945,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					tx,
 					bulk: {
 						isBatch: true,
-						recordIds: winnerIdList,
+						recordIds: logicalWinnerIds,
 						records: beforeWriteOriginals,
 						count: beforeWriteOriginals.length,
 					},
