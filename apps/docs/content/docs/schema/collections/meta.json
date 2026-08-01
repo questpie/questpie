@@ -1,1 +1,8 @@
-{ "pages": ["crud", "options", "uploads"] }
+{
+	"pages": [
+		"crud",
+		"options",
+		"uploads",
+		"optimistic-concurrency"
+	]
+}

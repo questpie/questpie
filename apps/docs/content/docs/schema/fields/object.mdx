@@ -1,22 +1,20 @@
 ---
 title: Object field
-description: f.object() stores a fixed, typed nested shape in a single Postgres jsonb column, each nested key is itself a field with its own validation, and the whole object is filterable with JSONB operators.
+description: A fixed set of nested fields in one jsonb column, where every key carries its own schema, label, locale and access rule.
+kind: reference
+package: questpie
 ---
 
-`f.object()` groups a fixed set of nested fields into one structured value stored as a single `jsonb` column. You pass it a record of nested field definitions; QUESTPIE derives a `z.object({...})` schema from them, infers the object's read type from the nested fields, and exposes JSONB filter operators (`contains`, `hasKey`, `pathEquals`, …) on the typed `where` clause. Reach for it when the shape is known and you want per-key validation, for free-form data use [`f.json()`](/docs/schema/fields/json) instead.
-
-> **Prerequisites:** read [Fields](/docs/schema/fields) first, this page covers only the `object` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.localized()` / `.array()` are taught there.
-
-## What it does
-
-- **Stores a typed nested shape** in one `jsonb` column, no extra table, no join.
-- **Validates each key**, every nested field contributes its own Zod schema, composed into a `z.object({...})` for the whole value.
-- **Infers the object type** from the nested fields, so the read shape stays in sync with the keys you declare.
-- **Filters with JSONB operators**, `contains`, `containedBy`, `hasKey`, `pathEquals`, and more, evaluated against the stored JSON.
-
-## Quick start
-
-Use `f.object()` inside a `.fields()` callback. The single argument is a record of nested fields, each built from the same `f` proxy and refinable with the same chain methods.
+| Surface               | Detail                                                     |
+| --------------------- | ---------------------------------------------------------- |
+| Signature             | `f.object(fields)`                                         |
+| Argument              | `Record<string, Field>`, one entry per key, required       |
+| Column                | `jsonb`                                                    |
+| Schema                | `z.object()` composed from each nested field's own schema  |
+| Filter operators      | the object set, eleven entries, [below](#filtering)        |
+| Admin form            | a collapsible panel holding the nested controls            |
+| Admin cell            | the first two keys inline, up to twelve behind a tooltip   |
+| Type-specific methods | none, the shared chain is the whole surface                |
 
 ```ts title="src/questpie/server/collections/users.ts"
 import { collection } from "#questpie/factories";
@@ -31,150 +29,156 @@ export const users = collection("users").fields(({ f }) => ({
 }));
 ```
 
-That gives `users` an `address` column typed `{ street: string; city: string; zip: string | null }` on read, stored as one `jsonb` value, validated by a composed `z.object({...})` on create and update, no separate table, no schema written by hand.
+`address` reads back as `{ street: string; city: string; zip: string | null } | null`,
+one `jsonb` value, no second table and no join.
 
-## Constructor argument
+## Nested keys
 
-`f.object(fields)` takes one positional argument: a `Record<string, Field>` of nested field definitions.
+Each value in the record is a field built from the same `f`, so it takes the
+same chain. Another `f.object()` nests, to any depth. What a modifier on a
+nested key actually changes:
 
-| Argument | Type                    | Notes                                                                                |
-| -------- | ----------------------- | ------------------------------------------------------------------------------------ |
-| `fields` | `Record<string, Field>` | The nested shape. Each value is a field built from `f` (and chained like any other). |
+| On a nested key            | What it does                                                        |
+| -------------------------- | ------------------------------------------------------------------- |
+| `.required()`              | Required in the composed schema, non-null in the read type          |
+| `.default(v)`              | Marks the key optional on input. No column exists to hold `v`       |
+| `.label()`, `.description()` | Labels that key's control inside the panel                        |
+| `.localized()`             | Moves that one key to the i18n table, [below](#localization)        |
+| `.access(rules)`           | Evaluated at the dot path, `address.zip`                            |
+| `.outputFalse()`           | Key leaves the read type and is deleted from every response         |
+| `.inputFalse()`            | Writing the key is rejected with a 403                              |
+| `.array()`                 | That key holds a list, composed as `z.array()`                      |
+| Type refinements           | Fold into the composed schema, `f.text(10)` caps that key at ten    |
 
-The column is always `jsonb`. The schema is built by calling `.toZodSchema()` on each nested field and wrapping the result in `z.object({...})`, so each key validates with its own field's rules. The object's read type is **inferred** from the nested fields' select types, declare `f.text().required()` and that key is `string`; leave it optional and it is `string | null`.
-
-<Callout type="info" title="Nested fields are real fields">
-Each value is a full field: chain `.required()`, `.default()`, `.label()`, or nest another `f.object({...})`. Nested Zod schemas and nullability flow into the parent schema and inferred type through the same `f.*` factories.
+<Callout type="info" title="Undeclared keys are dropped">
+	The composed `z.object()` strips keys you did not declare. A client that
+	posts an extra key gets it removed before the write, with no error. Declare
+	every key you intend to store.
 </Callout>
 
-## Chained methods
+## Filtering
 
-`f.object()` has **no type-specific chain methods**, it is refined entirely with the [shared modifiers](/docs/schema/fields) every field has (`.required()`, `.default()`, `.label()`, `.localized()`, `.array()`, `.access()`, …).
+The typed `where` clause carries the object operator set. Every entry is
+structural, and all of them run against the whole `jsonb` value.
 
-```ts
-// A required object with a default and a label:
-seo: f
-  .object({
-    title: f.text(60),
-    description: f.text(160),
-  })
-  .label("SEO")
-  .default({ title: "", description: "" }),
-```
-
-The two shared modifiers worth calling out for objects:
-
-- **`.array()`**, turns the field into a _list of objects_ (`T[]`), still stored as one `jsonb` column. Bound the length with `.minItems(n)` / `.maxItems(n)`. See [Repeated objects](#repeated-objects) below.
-- **`.required()`**, makes the column `NOT NULL` and the whole object required on insert. Without it the object is nullable (`T | null`) and optional on input.
-
-## Filtering, operators
-
-`object` uses the **object operator set** (`objectOps`), built on structural JSONB operations. The whole set is JSONB-path aware: the same operators work on a top-level object field and on a key _inside_ a nested object.
-
-| Operator                 | Operand                   | Matches (Postgres)                                               |
-| ------------------------ | ------------------------- | ---------------------------------------------------------------- |
-| `contains`               | a partial object          | JSON contains (`@>`), the stored value contains this subtree.    |
-| `containedBy`            | an object                 | JSON contained by (`<@`), the stored value is a subtree of this. |
-| `hasKey`                 | `string`                  | The object has this top-level key (`?`).                         |
-| `hasKeys`                | `string[]`                | The object has **all** of these keys (`?&`).                     |
-| `hasAnyKeys`             | `string[]`                | The object has **any** of these keys (`?\|`).                    |
-| `pathEquals`             | `{ path: string[]; val }` | The value at `path` equals `val` (JSONB path navigation).        |
-| `jsonPath`               | `string`                  | Matches a Postgres `jsonpath` expression (`@@`).                 |
-| `isEmpty` / `isNotEmpty` | `boolean`                 | The object is (not) `{}` / null.                                 |
-| `isNull` / `isNotNull`   | `boolean`                 | The column is (not) `null`.                                      |
+| Operator     | Operand                   | SQL                                    |
+| ------------ | ------------------------- | -------------------------------------- |
+| `contains`   | a partial object          | `col @> $1::jsonb`                     |
+| `containedBy`| an object                 | `col <@ $1::jsonb`                     |
+| `hasKey`     | `string`                  | `col ? $1`                             |
+| `hasKeys`    | `string[]`                | `col ?& $1::text[]`                    |
+| `hasAnyKeys` | `string[]`                | `col ?\| $1::text[]`                   |
+| `pathEquals` | `{ path: string[]; val }` | `col #>> path = $val`                  |
+| `jsonPath`   | `string`                  | `col @@ $1::jsonpath`                  |
+| `isEmpty`    | `boolean`                 | `col = '{}' OR col IS NULL`            |
+| `isNotEmpty` | `boolean`                 | `col != '{}' AND col IS NOT NULL`      |
+| `isNull`     | `boolean`                 | `col IS NULL`, inverted on `false`     |
+| `isNotNull`  | `boolean`                 | `col IS NOT NULL`, inverted on `false` |
 
 ```ts
-// Find users in a given city using a nested-path match:
 const { docs } = await app.collections.users.find({
-	where: {
-		address: { pathEquals: { path: ["city"], val: "Berlin" } },
-	},
+	where: { address: { pathEquals: { path: ["city"], val: "Berlin" } } },
 });
 
-// Or: the address object must contain this subtree (city + zip):
 await app.collections.users.find({
 	where: { address: { contains: { city: "Berlin", zip: "10115" } } },
 });
 ```
 
-<Callout type="info" title="`pathEquals` / `contains` over per-field columns">
-	An object is one `jsonb` value. Use `pathEquals` for an exact nested value or
-	`contains` for a required subtree. Data that needs relational filters,
-	frequent deep queries, or independent lifecycle belongs in its own
-	[collection](/docs/schema/collections) with a
-	[relation](/docs/schema/relations).
+Three sharp edges in that table. `pathEquals` extracts with `#>>`, so `val` is
+compared as text and a number has to be written the way Postgres prints it.
+`hasKey` and its two siblings see top-level keys only, never a key one level
+down. `isEmpty` and `isNotEmpty` ignore their operand, so passing `false` runs
+the same SQL as passing `true`.
+
+<Callout type="warn" title="There is no per-key operator">
+	`where: { address: { city: { eq: "Berlin" } } }` compiles to nothing. The
+	condition is dropped and the query returns rows as though you had not
+	filtered. Use `pathEquals` or `contains`.
 </Callout>
 
-For the full query language, combining filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/schema/relations).
+## After `.array()`
 
-## When to use it
-
-- **`f.object()`**, a **fixed, known** nested shape you want validated key by key: an address, an SEO block, a coordinate pair, a settings group. The keys and their types are part of your schema.
-- **[`f.json()`](/docs/schema/fields/json)**, **free-form** or externally-shaped data with no fixed keys (a raw webhook payload, arbitrary metadata). It is schema-less; narrow the type with `.$type<T>()` and add runtime validation with `.zod()` only if you want it.
-- **A separate [collection](/docs/schema/collections) + [relation](/docs/schema/relations)**, when the nested data needs its own rows, its own queries, or its own access rules. An object is the right call only while the data is genuinely _owned by and embedded in_ the parent row.
-
-## Repeated objects
-
-Chain `.array()` to store a **list** of objects in the single `jsonb` column, and bound it with `.minItems(n)` / `.maxItems(n)`. The inner object shape is validated per item. `.array()` is a [shared modifier](/docs/schema/fields), not object-specific:
+`.array()` keeps the single `jsonb` column and stores a list of the object.
+`.minItems(n)` and `.maxItems(n)` become real here, as `z.array().min()` and
+`.max()`, and are inert on a bare object. The admin swaps the panel for a
+repeatable item list.
 
 ```ts
-// A list of typed link objects:
 links: f
-  .object({
-    label: f.text().required(),
-    url: f.url().required(),
-  })
-  .array()
-  .maxItems(5),
-//  ^ read type: { label: string; url: string }[]
+	.object({ label: f.text().required(), url: f.url().required() })
+	.array()
+	.maxItems(5),
+//  read type: { label: string; url: string }[] | null
 ```
 
-<Callout type="info" title="Object array vs blocks">
-	`f.object().array()` is for a **homogeneous** list, every item has the same
-	shape. When items can be *different* types chosen from a palette (a page
-	builder), use [`f.blocks()`](/docs/schema/blocks) instead. (For arranging an
-	object's keys into sections/tabs in the admin form, an object field also
-	accepts a field-level `.form()` layout config, contributed by the admin
-	module.)
-</Callout>
+The operator set changes with it. The eleven object operators are gone and the
+array set takes over: `containsAll`, `containsAny`, `eq`, `length`, `isEmpty`,
+`isNotEmpty`, `isNull`, `isNotNull`. See
+[Arrays](/docs/schema/fields/array).
 
-## Gotchas
+## Localization
 
-<Callout
-	type="warn"
-	title="Nested write-only fields drop out of the object shape"
->
-	A nested field marked `.outputFalse()` (write-only) resolves to `never` and is
-	**dropped from the inferred object data type**, mirroring how the same field
-	is dropped from a top-level row. The key still validates on input (its Zod
-	schema is in the composed `z.object`), but it won't appear in the read shape.
-	A *virtual* nested field is different: it keeps its data type in the read
-	shape (a nested to-many `f.relation()`, for instance, infers as `string[] |
-	null`).
-</Callout>
+`.localized()` on the object itself moves the whole `jsonb` value into the i18n
+table, one stored object per locale.
 
-<Callout type="warn" title="The object is stored as one JSONB value">
-	The whole object is stored in one `jsonb` column. Nested keys do not create
-	independent columns, indexes, or foreign keys, and they are not hydrated
-	through `with`. Model query-first relationships as their own collections.
-</Callout>
-
-## TypeScript
-
-An object field contributes its inferred shape to the generated row, insert, and `where` types, no annotation needed. After `questpie generate`, pull the shapes off the collection or the app types:
+`.localized()` on a single nested key splits instead. QUESTPIE walks the nested
+fields, leaves a marker at that path in the structure column, and stores the
+value per locale. It recurses through nested objects and through `.array()`,
+where every item is split at the same path.
 
 ```ts
-type User = typeof users.$infer.select;
-//   ^? { id: string; email: string;
-//        address: { street: string; city: string; zip: string | null } | null; ... }
+profile: f.object({
+	name: f.text().required(),        // one value for every locale
+	bio: f.textarea().localized(),    // one value per locale
+}),
 ```
 
-`.required()` makes the whole object non-null and required on insert; nested `.required()` does the same per key inside the object. See [Fields → inferred types](/docs/schema/fields) for how modifiers flow into the generated types.
+<Callout type="warn" title="The outer call wins">
+	Mark the object `.localized()` and the per-key split is skipped entirely, so
+	a nested `.localized()` below it does nothing. Pick one level.
+</Callout>
+
+## Access on nested keys
+
+A nested `.access()` rule registers under its dot path, `address.zip`. Reads
+evaluate the rule and delete the key from the response. Writes evaluate it per
+key present in the payload, and a denied key throws instead of being ignored.
+Both recurse into deeper objects and into array items. See
+[Access control](/docs/schema/access-control).
+
+## Admin
+
+Both methods below come from `@questpie/admin` and appear on `f` only when that
+module is enabled. See [Collections and Globals](/docs/admin/collections).
+
+`.admin(config)` sets the panel's shape:
+
+| Option             | Values                            | Default         |
+| ------------------ | --------------------------------- | --------------- |
+| `wrapper`          | `"flat"`, `"collapsible"`         | `"collapsible"` |
+| `layout`           | `"stack"`, `"inline"`, `"grid"`   | `"stack"`       |
+| `columns`          | number, read by `grid` only       | `2`             |
+| `defaultCollapsed` | boolean, read by `collapsible`    | `true`          |
+
+`.form(({ f }) => ({ fields }))` orders the keys instead, and accepts the same
+`section` and `tabs` containers the collection form takes. Here `f` is a name
+proxy, so `f.street` is the string `"street"`.
+
+```ts
+address: f
+	.object({ street: f.text(), city: f.text(), zip: f.text(10) })
+	.admin({ layout: "grid", columns: 2 })
+	.form(({ f }) => ({
+		fields: [{ type: "section", label: "Postal", fields: [f.zip, f.city] }],
+	})),
+```
 
 ## Related
 
-- [Fields](/docs/schema/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.array()`, `.localized()`, `.default()`, …).
-- [`f.json()`](/docs/schema/fields/json), the schema-less sibling for free-form data with no fixed keys.
-- [Blocks](/docs/schema/blocks), for _heterogeneous_ repeatable content (a page builder) rather than a homogeneous object array.
-- [Collections](/docs/schema/collections) / [Relations](/docs/schema/relations), when nested data should be its own rows with real queries and relationships.
-- [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch.
+- [Fields](/docs/schema/fields), the type table and the shared chain.
+- [`f.json()`](/docs/schema/fields/json), the same column with no declared keys.
+- [Arrays](/docs/schema/fields/array), what `.array()` does to reads and filters.
+- [Blocks](/docs/schema/blocks), when items are different shapes, not one shape.
+- [Relations](/docs/schema/relations), when nested data wants its own rows.
+- [Validation](/docs/schema/validation), the derived schema and the `.zod()` hatch.

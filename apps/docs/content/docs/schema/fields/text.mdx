@@ -1,22 +1,19 @@
 ---
 title: Text field
-description: f.text() is a single-line string field backed by a Postgres varchar (or unbounded text), with length, pattern, and string-operator filtering built in.
+description: "`f.text()` is the single-line string. The call picks the varchar width, the width becomes the Zod cap, and the field filters with the full string operator set."
+kind: reference
+package: questpie
 ---
 
-`f.text()` stores a single-line string. By default it produces a `varchar(255)` column, derives a Zod schema that enforces the length, and exposes the full set of string filter operators (`eq`, `contains`, `ilike`, …) on the typed `where` clause. Pass a length to size the column, or switch to an unbounded `text` column when you need it.
+| Call                       | Column         | Derived schema        |
+| -------------------------- | -------------- | --------------------- |
+| `f.text()`                 | `varchar(255)` | `z.string().max(255)` |
+| `f.text(n)`                | `varchar(n)`   | `z.string().max(n)`   |
+| `f.text({ mode: "text" })` | `text`         | `z.string()`, no cap  |
 
-> **Prerequisites:** read [Fields](/docs/schema/fields) first, this page covers only the `text` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.localized()` / `.default()` are taught there.
-
-## What it does
-
-- **Stores a single-line string**, default `varchar(255)`; pass a number to resize, or `{ mode: "text" }` for an unbounded Postgres `text` column.
-- **Validates length**, the column length becomes a Zod `.max()` automatically; add `.min(n)` / `.max(n)` for explicit bounds and `.pattern(re)` for a format check.
-- **Filters with string operators**, `eq`, `ne`, `in`, `like`, `ilike`, `contains`, `startsWith`, `endsWith`, `isNull`, and more, all typed against `string`.
-- **Renders a text input** in the admin form (a multiline editor is what [`f.textarea()`](/docs/schema/fields/textarea) gives you instead).
-
-## Quick start
-
-Use `f.text()` inside a `.fields()` callback. The positional argument is the max character length; chain modifiers to refine it.
+Text mode is not a textarea. All three render the same single-line control, so
+the argument moves the column and not the form. No method on the type reopens
+the width. Only `.array()` and the `.drizzle()` escape hatch replace the column.
 
 ```ts title="src/questpie/server/collections/posts.ts"
 import { collection } from "#questpie/factories";
@@ -24,112 +21,112 @@ import { collection } from "#questpie/factories";
 export const posts = collection("posts").fields(({ f }) => ({
 	title: f.text().required(), // varchar(255), NOT NULL
 	slug: f.text(120).required(), // varchar(120)
-	summary: f.text({ mode: "text" }), // unbounded `text` column
+	summary: f.text({ mode: "text" }), // text, no length cap
 }));
 ```
 
-That gives `posts` a `title` column typed `string` on read, required on insert, validated at `≤ 255` chars, and filterable with the string operators below, no schema or migration written by hand.
+Without `.required()` the field selects as `string | null`. With it, `string`.
 
-## Constructor argument
+## Methods
 
-`f.text()` has two call signatures.
+Six methods come with the type. `.required()`, `.default()`, `.label()`,
+`.localized()` and the rest of the base chain work here as on any field.
 
-| Call                       | Column         | Notes                                                   |
-| -------------------------- | -------------- | ------------------------------------------------------- |
-| `f.text()`                 | `varchar(255)` | Default. `maxLength` defaults to **255**.               |
-| `f.text(n)`                | `varchar(n)`   | Sized varchar; `n` is also applied as a Zod `.max(n)`.  |
-| `f.text({ mode: "text" })` | `text`         | Unbounded Postgres `text`. No length cap on the schema. |
-
-The resulting field data is always `string`. The derived Zod schema is `z.string()`, with a `.max()` added whenever a length is known (the `255` default or your `n`); `{ mode: "text" }` drops the cap.
-
-## Chained methods
-
-These methods are specific to `text` (on top of the [shared modifiers](/docs/schema/fields) every field has). Each returns a new immutable field, so they chain in any order.
-
-| Method         | Effect                                                   |
-| -------------- | -------------------------------------------------------- |
-| `.min(n)`      | Minimum **string length** (Zod `.min(n)`).               |
-| `.max(n)`      | Maximum **string length** (Zod `.max(n)`).               |
-| `.pattern(re)` | Validate against a `RegExp` (Zod `.regex(re)`).          |
-| `.trim()`      | Marks the field as trimmed, **see the gotcha below**.    |
-| `.lowercase()` | Marks the field as lowercased, **see the gotcha below**. |
-| `.uppercase()` | Marks the field as uppercased, **see the gotcha below**. |
+| Method         | Effect                                      |
+| -------------- | ------------------------------------------- |
+| `.min(n)`      | Adds `z.string().min(n)`, a character count |
+| `.max(n)`      | Adds `z.string().max(n)`, a character count |
+| `.pattern(re)` | Adds `z.string().regex(re)`                 |
+| `.trim()`      | Sets a `trim` flag                          |
+| `.lowercase()` | Sets a `lowercase` flag                     |
+| `.uppercase()` | Sets an `uppercase` flag                    |
 
 ```ts
-collection("users").fields(({ f }) => ({
-	username: f
-		.text(32)
-		.required()
-		.min(3) // length 3..32
-		.pattern(/^[a-z0-9_]+$/), // lowercase letters, digits, underscore
-}));
+username: f.text(32).required().min(3).pattern(/^[a-z0-9_]+$/),
 ```
 
-<Callout
-	type="warn"
-	title="`.min()` / `.max()` here are STRING LENGTH, not value bounds"
->
-	On a text field, `.min(n)` / `.max(n)` constrain the **number of characters**
-	(they map to `minLength` / `maxLength`). On
-	[`f.number()`](/docs/schema/fields/number) the same method names constrain the
-	numeric **value**. Same names, different meaning, sized by the field's type.
+<Callout type="warn" title="`.max()` tightens, it never widens">
+	The constructor bakes its width into the schema and `.max(n)` adds a second
+	check beside it. `f.text(255).max(500)` still rejects 300 characters. Widen by
+	changing the constructor argument. Under `{ mode: "text" }` there is no first
+	check, so `.max(n)` is the only cap.
 </Callout>
 
-<Callout type="warn" title="`.trim()` / `.lowercase()` / `.uppercase()` are no-ops today">
-These three methods set runtime state but are **not** wired into the Zod schema. `applyRefinements` only applies `maxLength`, `minLength`, and `pattern` for string types, so `.trim()` / `.lowercase()` / `.uppercase()` neither transform nor validate the stored value. If you need the value normalized, do it explicitly with `.zod()` (e.g. `f.text().zod((s) => s.trim().toLowerCase())`) or a `beforeChange` hook.
+<Callout type="warn" title="`.trim()`, `.lowercase()` and `.uppercase()` do not touch the value">
+	Each sets a flag. No code transforms the stored string, so `.trim()` writes
+	`"  hi  "` unchanged. Their one reader is the CRDT eligibility check, which
+	counts them as refinements and rejects the field. Normalize with `.zod()` or a
+	`beforeValidate` hook, which runs before the schema.
 </Callout>
 
-## Filtering, operators
+## Filtering
 
-`text` uses the **string operator set** (`stringOps`), so every text field is filterable with these in a `where` clause. The operand is typed `string` (or `string[]` for `in` / `notIn`).
+Text carries the `stringOps` set, fourteen operators.
 
-| Operator               | Operand    | Matches                                    |
-| ---------------------- | ---------- | ------------------------------------------ |
-| `eq` / `ne`            | `string`   | Exact equal / not equal.                   |
-| `in` / `notIn`         | `string[]` | Value is (not) in the list.                |
-| `like` / `notLike`     | `string`   | SQL `LIKE` (case-sensitive, your own `%`). |
-| `ilike` / `notIlike`   | `string`   | Case-insensitive `LIKE`.                   |
-| `contains`             | `string`   | Substring (`LIKE '%value%'`).              |
-| `startsWith`           | `string`   | Prefix (`LIKE 'value%'`).                  |
-| `endsWith`             | `string`   | Suffix (`LIKE '%value'`).                  |
-| `isNull` / `isNotNull` | `boolean`  | Column is (not) null.                      |
+| Operator               | Operand             | Matches                                     |
+| ---------------------- | ------------------- | ------------------------------------------- |
+| `eq` / `ne`            | `string`            | Equal, not equal                            |
+| `not`                  | `string`, or `null` | Not equal, or `IS NOT NULL` when given null |
+| `in` / `notIn`         | `string[]`          | In the list, not in the list                |
+| `like` / `notLike`     | `string`            | `LIKE`, case-sensitive, you write the `%`   |
+| `ilike` / `notIlike`   | `string`            | The same, case-insensitive                  |
+| `contains`             | `string`            | Substring, the `%` are added for you        |
+| `startsWith`           | `string`            | Prefix                                      |
+| `endsWith`             | `string`            | Suffix                                      |
+| `isNull` / `isNotNull` | `boolean`           | Pass `false` and each inverts               |
 
 ```ts
-// Case-insensitive title search + an exact-slug lookup
 const { docs } = await app.collections.posts.find({
 	where: { title: { contains: "guide" }, slug: { eq: "my-first-post" } },
 });
 ```
 
-These operators are field-level filters; the full query language, combining them with `AND` / `OR` / `NOT`, pagination, and `orderBy`, is covered in the querying reference (page forthcoming).
+`contains`, `startsWith` and `endsWith` build the pattern around a bound
+parameter. The value is parameterized, but a `%` or `_` inside it still reads as
+a wildcard.
 
-## When to use it
+## In the admin
 
-- **`f.text()`**, short, single-line strings: titles, slugs, names, SKUs, labels. Default `varchar(255)` is the right size for most of these.
-- **`f.text({ mode: "text" })`**, long single-value strings with no natural length cap (a raw description, a serialized token) that still render as a plain input.
-- For **multi-line** content with a textarea editor in the admin, reach for [`f.textarea()`](/docs/schema/fields/textarea). For **formatted** content, use [`f.richText()`](/docs/schema/fields/rich-text).
+The form control is `TextField`. The list cell is `TextCell`, which truncates
+and puts the full value in a `title` attribute.
 
-## Multiple values
+What crosses to the browser:
 
-Chain `.array()` to store a list of strings in a single `jsonb` column, and bound it with `.minItems(n)` / `.maxItems(n)`. This is a [shared modifier](/docs/schema/fields), not text-specific:
+- `maxLength` becomes the input's `maxLength` attribute, so typing stops at the
+  width. `{ mode: "text" }` sends no `maxLength` until you call `.max(n)`, so
+  until then there is no attribute and no stop.
+- The admin rebuilds a Zod schema from `minLength`, `maxLength` and `pattern`,
+  so the form checks before it posts.
+- `pattern` crosses as `RegExp.source`, which drops the flags. `/^a/i` is
+  case-insensitive on the server and case-sensitive in the form.
+
+A `.max(n)` above the constructor width reaches the attribute and the browser
+schema, but neither the server schema nor the column. The form then accepts what
+the write rejects.
+
+## Lists
+
+`.array()` replaces the column with `jsonb` and swaps the string operators for
+the multi-value set. The per-item length still applies, and `.minItems(n)` /
+`.maxItems(n)` bound the list.
 
 ```ts
-tags: f.text(40).array().maxItems(10), // string[] stored as jsonb
+tags: f.text(40).array().maxItems(10),
 ```
-
-## TypeScript
-
-A text field contributes a `string` to the generated row, insert, and `where` types, no annotation needed. After `questpie generate`, pull the shapes off the collection or the app types:
-
-```ts
-type Post = typeof posts.$infer.select;
-//   ^? { id: string; title: string; slug: string; summary: string | null; ... }
-```
-
-`.required()` makes the field non-null and required on insert; without it the column is nullable and the insert field optional. See [Fields → inferred types](/docs/schema/fields) for how modifiers flow into the generated types.
 
 ## Related
 
-- [Fields](/docs/schema/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.default()`, `.array()`, …).
-- [Textarea field](/docs/schema/fields/textarea), the multi-line sibling.
-- [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch (the way to actually normalize a value).
+[Textarea](/docs/schema/fields/textarea) is the multi-line sibling, an unbounded
+`text` column with the same operators.
+
+[Email](/docs/schema/fields/email) and [URL](/docs/schema/fields/url) wrap a
+varchar in a format check and extend `stringOps` with their own operators.
+
+[Arrays](/docs/schema/fields/array) covers what `.array()` does to reads, writes
+and filters.
+
+[Validation](/docs/schema/validation) covers the derived schema and `.zod()`,
+the way to normalize a value.
+
+[Eligible fields](/docs/schema/collaborative-documents/eligible-fields) covers
+why `.crdt()` takes `f.text({ mode: "text" })` and never a varchar one.

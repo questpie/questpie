@@ -1,105 +1,98 @@
 ---
 title: Number field
-description: f.number() is a numeric field that maps to any Postgres number column, integer, smallint, bigint, real, double, or fixed-precision decimal, with value bounds, integer/step validation, and comparison operators built in.
+description: One factory over six Postgres numeric types. The mode you pass picks the column and decides whether the schema demands a whole number. Every mode reads back as a plain JS number.
+kind: reference
+package: questpie
 ---
 
-`f.number()` stores a number. By default it produces an `integer` column, derives a `z.number().int()` schema, and exposes comparison operators (`eq`, `gt`, `lte`, `in`, …) on the typed `where` clause. Pass a mode to pick a different Postgres numeric type, `smallint`, `bigint`, `real`, `double`, or a fixed-precision `decimal`, and chain `.min()` / `.max()` / `.positive()` / `.step()` to bound and validate the value.
+## Signature
 
-> **Prerequisites:** read [Fields](/docs/schema/fields) first, this page covers only the `number` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.default()` / `.localized()` are taught there.
+| Call                                                | Column                          | Derived schema     |
+| --------------------------------------------------- | ------------------------------- | ------------------ |
+| `f.number()`, `f.number("integer")`                 | `integer`                       | `z.number().int()` |
+| `f.number("smallint")`                              | `smallint`                      | `z.number().int()` |
+| `f.number("bigint")`                                | `bigint`                        | `z.number()`       |
+| `f.number("real")`                                  | `real`                          | `z.number()`       |
+| `f.number("double")`                                | `double precision`              | `z.number()`       |
+| `f.number({ mode: "decimal", precision?, scale? })` | `numeric(precision, scale)`     | `z.number()`       |
 
-## What it does
+`precision` and `scale` fall back separately, to 10 and to 2, so
+`f.number({ mode: "decimal", precision: 18 })` gives you `numeric(18, 2)`.
 
-- **Stores a number in any Postgres numeric type**, `integer` by default; switch to `smallint`, `bigint`, `real`, `double`, or fixed-precision `decimal` with one argument.
-- **Reads back as a JS `number`**, every mode (including `bigint` and `decimal`) uses Drizzle's `mode: "number"`, so you never deal with `bigint`/string values on read.
-- **Validates the value**, integer modes auto-enforce `z.number().int()`; add `.min(n)` / `.max(n)` for range bounds, `.positive()` for `> 0`, and `.step(n)` for a "multiple of n" check. Unlike text's no-op modifiers, every number method _is_ wired into the schema.
-- **Filters with comparison operators**, `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `notIn`, `isNull`, `isNotNull`, all typed against `number`.
-- **Renders a number input** in the admin form.
+`.int()` reaches the schema for `integer` and `smallint` only. `bigint` is not
+in that pair, so a fractional value passes validation there. Chain `.int()`
+yourself on any mode where you want whole numbers.
 
-## Quick start
-
-Use `f.number()` inside a `.fields()` callback. The optional argument selects the storage mode; chain modifiers to bound and validate the value.
+Every mode reads and writes a plain JS `number`. `bigint` and `decimal` get
+there through Drizzle's `mode: "number"`, the other four are already numeric in
+the driver.
 
 ```ts title="src/questpie/server/collections/products.ts"
 import { collection } from "#questpie/factories";
 
 export const products = collection("products").fields(({ f }) => ({
-	stock: f.number().required(), // integer, NOT NULL
-	rating: f.number("smallint").min(1).max(5), // smallint, 1..5
-	price: f.number({ mode: "decimal", precision: 10, scale: 2 }), // numeric(10,2)
+	stock: f.number().required(),
+	rating: f.number("smallint").min(1).max(5),
+	price: f.number({ mode: "decimal", precision: 10, scale: 2 }),
 }));
 ```
 
-That gives `products` a `stock` column typed `number` on read, required on insert, validated as an integer, and filterable with the comparison operators below, no schema or migration written by hand.
-
-## Constructor argument
-
-`f.number()` has three call signatures. Its positional argument selects the storage mode.
-
-| Call                                                | Column                                         | Read type | Notes                                                                         |
-| --------------------------------------------------- | ---------------------------------------------- | --------- | ----------------------------------------------------------------------------- |
-| `f.number()`                                        | `integer`                                      | `number`  | Default. Mode is `"integer"`; schema is `z.number().int()`.                   |
-| `f.number("smallint")`                              | `smallint`                                     | `number`  | 16-bit integer; also `z.number().int()`.                                      |
-| `f.number("bigint")`                                | `bigint` (`mode: "number"`)                    | `number`  | 64-bit; reads as JS `number`, **not** `bigint`.                               |
-| `f.number("real")`                                  | `real`                                         | `number`  | 32-bit float. No `.int()`.                                                    |
-| `f.number("double")`                                | `doublePrecision`                              | `number`  | 64-bit float. No `.int()`.                                                    |
-| `f.number({ mode: "decimal", precision?, scale? })` | `numeric(precision, scale)` (`mode: "number"`) | `number`  | Fixed precision. Defaults: `precision: 10`, `scale: 2`. Reads as JS `number`. |
-
-The resulting field data is always `number`. The derived Zod schema is `z.number()`, with `.int()` added automatically for the **integer** and **smallint** modes (`isInt` flag). The float modes (`real`, `double`) and `decimal` accept fractional values.
-
-<Callout type="info" title="`bigint` and `decimal` read back as JS `number`">
-	Both use Drizzle's `mode: "number"`, so the value type on read/insert/update
-	is a plain JS `number`. That keeps the API uniform, but a `number` only holds
-	integers exactly up to `Number.MAX_SAFE_INTEGER` (2^53 − 1) and `decimal`
-	arithmetic goes through floating point. For money or IDs beyond that range,
-	store an exact string value with `f.text()` and validate the format with
-	`.zod()`, or create a dedicated custom field type.
+<Callout type="warn" title="`bigint` mode is a 53-bit number">
+	Drizzle maps it to its int53 column builder, so a value past
+	`Number.MAX_SAFE_INTEGER` loses precision on read. `decimal` comes back
+	through `Number()` too, so arithmetic on it is floating point.
 </Callout>
 
-## Chained methods
+## Value refinements
 
-These methods are specific to `number` (on top of the [shared modifiers](/docs/schema/fields#shared-methods) every field has). Each returns a new immutable field, so they chain in any order.
+Five methods on top of the modifiers every field has. Each returns a new field,
+so they chain in any order.
 
-| Method        | Effect                                                                    | Schema                      |
-| ------------- | ------------------------------------------------------------------------- | --------------------------- |
-| `.min(n)`     | Minimum **value** (inclusive).                                            | `z.number().min(n)`         |
-| `.max(n)`     | Maximum **value** (inclusive).                                            | `z.number().max(n)`         |
-| `.positive()` | Value must be `> 0`.                                                      | `z.number().positive()`     |
-| `.int()`      | Value must be an integer (already implied by `integer`/`smallint` modes). | `z.number().int()`          |
-| `.step(n)`    | Value must be a multiple of `n`, adds a `value % n === 0` refinement.     | `.refine(v => v % n === 0)` |
+| Method        | Schema                             | Admin             |
+| ------------- | ---------------------------------- | ----------------- |
+| `.min(n)`     | `.min(n)`, inclusive               | the input's `min` |
+| `.max(n)`     | `.max(n)`, inclusive               | the input's `max` |
+| `.positive()` | `.positive()`, strictly above zero | nothing           |
+| `.int()`      | `.int()`                           | nothing           |
+| `.step(n)`    | refines `value % n === 0`          | nothing           |
+
+All five apply to the derived schema on create and update. Only `.min()` and
+`.max()` carry on to the admin control.
 
 ```ts
 collection("orders").fields(({ f }) => ({
-	quantity: f.number().required().min(1).step(1), // ≥ 1, whole units
-	discount: f.number("real").min(0).max(100), // percentage 0..100
+	quantity: f.number().required().min(1),
+	discount: f.number("real").min(0).max(100),
 }));
 ```
 
-All five refinements are applied to the derived Zod schema during create and update validation.
-
-<Callout
-	type="info"
-	title="`.min()` / `.max()` here are VALUE bounds, not string length"
->
-	On a number field, `.min(n)` / `.max(n)` constrain the numeric **value**. On
-	[`f.text()`](/docs/schema/fields/text) the same method names constrain
-	**string length** (they map to `minLength` / `maxLength`). Same names,
-	different meaning, sized by the field's type.
+<Callout type="info" title="`.min()` and `.max()` bound the value here">
+	The same two names on [`f.text()`](/docs/schema/fields/text) bound string
+	length instead. One pair of names, two pieces of state, picked by the type of
+	field you put them on.
 </Callout>
 
-## Filtering, operators
+<Callout type="warn" title="`.step()` is a JS remainder">
+	The check is `value % n === 0`, so a fractional step inherits float error.
+	`.step(0.1)` rejects `0.3`, because `0.3 % 0.1` is `0.09999999999999998`.
+	Whole steps are exact.
+</Callout>
 
-`number` uses the **number operator set** (`numberOps`), so every number field is filterable with these in a `where` clause. The operand is typed `number` (or `number[]` for `in` / `notIn`).
+## Filtering
 
-| Operator               | Operand    | Matches                          |
-| ---------------------- | ---------- | -------------------------------- |
-| `eq` / `ne`            | `number`   | Exact equal / not equal.         |
-| `gt` / `gte`           | `number`   | Greater than / greater-or-equal. |
-| `lt` / `lte`           | `number`   | Less than / less-or-equal.       |
-| `in` / `notIn`         | `number[]` | Value is (not) in the list.      |
-| `isNull` / `isNotNull` | `boolean`  | Column is (not) null.            |
+A number field carries the number operator set, so its `where` clause types to
+exactly these eleven keys.
+
+| Operator              | Operand          | Matches                                          |
+| --------------------- | ---------------- | ------------------------------------------------ |
+| `eq`, `ne`            | `number`         | Equal, not equal                                 |
+| `not`                 | `number \| null` | Not equal, or `IS NOT NULL` when you pass `null` |
+| `gt`, `gte`           | `number`         | Above, at or above                               |
+| `lt`, `lte`           | `number`         | Below, at or below                               |
+| `in`, `notIn`         | `number[]`       | In the list, not in the list                     |
+| `isNull`, `isNotNull` | `boolean`        | Null check, inverted when you pass `false`       |
 
 ```ts
-// In-stock products priced between 10 and 50:
 const { docs } = await app.collections.products.find({
 	where: {
 		stock: { gt: 0 },
@@ -108,45 +101,73 @@ const { docs } = await app.collections.products.find({
 });
 ```
 
-For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/schema/relations).
+## In the admin
 
-## When to use it
+The control is an `<input type="number">`. List cells print through
+`toLocaleString()` in tabular figures, and a null shows as `-`.
 
-- **`f.number()`** (integer), counts, quantities, view counters, ages, anything whole. The default mode is right for the vast majority of cases.
-- **`f.number("smallint")`**, small bounded integers (a 1-5 rating, a day of week) where the 16-bit range is plenty.
-- **`f.number("bigint")`**, large whole numbers (byte sizes, large counters) that exceed the 32-bit `integer` range but stay within JS safe-integer range.
-- **`f.number("real")` / `f.number("double")`**, floating-point measurements where small rounding is acceptable: weights, sensor readings, percentages.
-- **`f.number({ mode: "decimal" })`**, fixed-precision values like prices and money, where you control `precision`/`scale`. (Mind the JS-`number` rounding note above for high-stakes math.)
+`.min()` and `.max()` arrive as the input's own bounds, and the control clamps
+what you type back into range before the form sees it.
 
-## Multiple values
+`.admin(config)` sets the rest of the control. It appears on the field once
+`@questpie/admin` is enabled, and its generated signature takes `unknown`, so
+nothing type-checks the keys you pass.
 
-Chain `.array()` to store a list of numbers in a single `jsonb` column, and bound the list length with `.minItems(n)` / `.maxItems(n)`. This is a [shared modifier](/docs/schema/fields#shared-methods), not number-specific:
+| Key           | Effect                                                             |
+| ------------- | ------------------------------------------------------------------ |
+| `placeholder` | Placeholder text                                                   |
+| `showButtons` | Wraps the input in minus and plus buttons                          |
+| `step`        | The input's `step`, and how far those buttons move. Defaults to `1` |
+
+`.step(n)` on the field is validation only and never reaches the control, so set
+`step` here as well when you want the two to agree.
+
+Keys such as `showInList`, `listWidth`, `sortable` and `filterable` come from
+the base admin config that every field type shares.
+
+## Lists of numbers
+
+`.array()` turns the column into `jsonb` and swaps the operator set, so `gt`,
+`lte` and the rest of the table above leave the `where` clause. `.minItems(n)`
+and `.maxItems(n)` bound the list, and the admin renders a repeatable row of
+number inputs.
 
 ```ts
-scores: f.number().array().maxItems(10), // number[] stored as jsonb
+scores: f.number().array().maxItems(10),
 ```
 
-## TypeScript
+[Arrays](/docs/schema/fields/array) has the operators that replace them.
 
-A number field contributes a `number` to the generated row, insert, and `where` types, no annotation needed. After `questpie generate`, pull the shapes off the collection or the app types:
+## Types
+
+A number field contributes `number` to the row, the insert and the `where`.
+`.required()` makes it non-null and mandatory on insert. `.default(0)` makes the
+input optional and type-checks the literal against `number`.
 
 ```ts
 type Product = typeof products.$infer.select;
-//   ^? { id: string; stock: number; rating: number | null; price: number | null; ... }
+//   ^? { id: string; stock: number; rating: number | null; ... }
 ```
 
 ```ts
 import type { CollectionDoc, CollectionWhere } from "#questpie/types";
 
-type Product = CollectionDoc<"products">; // { stock: number; ... }
-type ProductFilter = CollectionWhere<"products">; // { stock?: { gt?: number; ... } }
+type Product = CollectionDoc<"products">;
+type ProductFilter = CollectionWhere<"products">;
 ```
-
-`.required()` makes the field non-null and required on insert; without it the column is nullable and the insert field optional. `.default(0)` makes the input optional and is type-checked against `number`. See [Fields → inferred types](/docs/schema/fields#example--inferred-types) for how modifiers flow into the generated types.
 
 ## Related
 
-- [Fields](/docs/schema/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.array()`, `.localized()`, …).
-- [`f.text()`](/docs/schema/fields/text), strings, where `.min()` / `.max()` mean length instead of value.
-- [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch for custom numeric rules.
-- [Relations](/docs/schema/relations), the full query language for combining the operators above.
+[Fields](/docs/schema/fields) is the table of every type and the modifiers they
+all share.
+
+[`f.text()`](/docs/schema/fields/text) is the string field, where `.min()` and
+`.max()` mean length.
+
+[Arrays](/docs/schema/fields/array) covers `.array()` on any field.
+
+[Validation](/docs/schema/validation) covers the derived schema and the `.zod()`
+escape hatch.
+
+[Reading and writing](/docs/schema/collections/crud) covers the rest of the
+query surface around `where`.

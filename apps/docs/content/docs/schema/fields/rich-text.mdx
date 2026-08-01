@@ -1,211 +1,176 @@
 ---
-title: Rich-text field
-description: f.richText() is a TipTap-backed WYSIWYG field, stored as structured JSONB (or plain markdown), with a full editor in the admin and JSON-aware filter operators.
+title: Rich text field
+description: "The TipTap editor field. It stores a structured document in jsonb, or a markdown string in text, and renders a configurable WYSIWYG editor in the admin."
+kind: reference
+package: "@questpie/admin"
 ---
 
-`f.richText()` gives an editor formatted prose: headings, bold, links, lists, tables, images. By default it stores a structured **TipTap document** in a `jsonb` column, renders a full WYSIWYG editor in the admin form, and adds JSON-aware filter operators (`contains`, `isEmpty`, …) you can use in a `where` clause. Switch to `markdown` mode and the same editor saves a plain markdown `string` instead.
+| Call                               | Column  | Value            | Validation                                  |
+| ---------------------------------- | ------- | ---------------- | ------------------------------------------- |
+| `f.richText()`                     | `jsonb` | `TipTapDocument` | recursive node schema rooted at `type: doc` |
+| `f.richText({ mode: "json" })`     | `jsonb` | `TipTapDocument` | the same                                    |
+| `f.richText({ mode: "markdown" })` | `text`  | `string`         | `z.string()`                                |
 
-> **Prerequisites:** read [Fields](/docs/schema/fields) first, this page covers only the `richText` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.localized()` / `.label()` are taught there.
-
-<Callout
-	type="info"
-	title="Admin-only field, needs the `@questpie/admin` module"
->
-	`f.richText()` is contributed by `@questpie/admin`, not by the core builtins.
-	It appears on `f` (alongside `f.blocks()`) only when the admin module is
-	enabled and you import `collection` from `#questpie/factories`. Without the
-	admin module, `f.richText` is not a registered type and `f.richText()` throws
-	`Unknown field type`.
-</Callout>
-
-## What it does
-
-- **Stores structured rich text**, a TipTap document (`{ type: "doc", content: [...] }`) in a `jsonb` column by default, so formatting survives round-trips losslessly.
-- **Renders a WYSIWYG editor**, the admin form shows a full TipTap editor (toolbar / bubble menu / slash commands, headings, marks, links, images, tables).
-- **Switches to markdown**, pass `{ mode: "markdown" }` to store a plain markdown `string` in a `text` column instead of JSON.
-- **Filters on content**, both modes expose `contains` (full-text search inside the document), `isEmpty` / `isNotEmpty`, and `isNull` / `isNotNull` on the `where` clause.
-- **Localizes per locale**, chain `.localized()` to keep a separate document per locale (a [shared modifier](/docs/schema/fields)).
-
-## Quick start
-
-Use `f.richText()` inside a `.fields()` callback. It takes no required argument (an optional `{ mode }` object is the only one, see [Constructor argument](#constructor-argument)), chain the common modifiers to refine it.
+`mode` is the only option the factory takes, and it defaults to `"json"`. The
+mode is recorded on the field metadata as `outputMode`, which is how the editor
+knows whether to emit a document or a string.
 
 ```ts title="src/questpie/server/collections/posts.ts"
 import { collection } from "#questpie/factories";
 
 export const posts = collection("posts").fields(({ f }) => ({
 	title: f.text(255).required(),
-	content: f.richText().label("Content").required(),
-}));
-```
-
-That gives `posts` a `content` column typed as a `TipTapDocument`, required on insert, editable through the rich-text editor in the admin form, and queryable with the content operators below, no schema or migration written by hand.
-
-## Example → inferred type
-
-A `richText` field contributes a `TipTapDocument` to the generated row type (json mode), or a `string` (markdown mode). `.required()` makes it non-null:
-
-```ts
-type Post = typeof posts.$infer.select;
-//   ^? { id: string; title: string; content: TipTapDocument; ... }
-```
-
-A stored value is the TipTap JSON tree:
-
-```jsonc
-{
-	"type": "doc",
-	"content": [
-		{
-			"type": "heading",
-			"attrs": { "level": 2 },
-			"content": [{ "type": "text", "text": "Hello" }],
-		},
-		{
-			"type": "paragraph",
-			"content": [
-				{ "type": "text", "text": "A " },
-				{ "type": "text", "marks": [{ "type": "bold" }], "text": "formatted" },
-				{ "type": "text", "text": " paragraph." },
-			],
-		},
-	],
-}
-```
-
-`TipTapDocument` and `TipTapNode` are exported types, see [TypeScript](#typescript).
-
-## Constructor argument
-
-`f.richText()` has two call signatures. The only option is the storage `mode`.
-
-| Call                               | Column  | Data type        | Schema                           |
-| ---------------------------------- | ------- | ---------------- | -------------------------------- |
-| `f.richText()`                     | `jsonb` | `TipTapDocument` | recursive TipTap-node Zod schema |
-| `f.richText({ mode: "json" })`     | `jsonb` | `TipTapDocument` | recursive TipTap-node Zod schema |
-| `f.richText({ mode: "markdown" })` | `text`  | `string`         | `z.string()`                     |
-
-`mode` defaults to `"json"`. In json mode the derived Zod schema validates the `{ type: "doc", content?: TipTapNode[] }` shape recursively; in markdown mode it is a plain `z.string()`. The chosen mode is recorded on the field metadata as `outputMode`, which the editor reads to decide whether to emit JSON or a markdown string.
-
-<Callout type="info" title="Pick `json` unless you specifically need markdown">
-	The default `json` mode preserves the full document structure (marks, nodes,
-	attributes) and is what the editor, the JSON operators, and any structured
-	rendering expect. Reach for `markdown` only when you need a portable
-	plain-text representation, e.g. feeding the body to an external markdown
-	renderer or a system that doesn't understand TipTap JSON.
-</Callout>
-
-## Chained methods
-
-`richText` adds **no type-specific chained methods**, its field-type definition declares only the state factory, no extra methods. You configure it entirely through the [shared modifiers](/docs/schema/fields) every field has.
-
-The ones you'll reach for most:
-
-| Modifier                              | Effect                                                                                          |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `.required()`                         | `NOT NULL` column; required on insert.                                                          |
-| `.localized()`                        | Stores a separate document per locale (moves to the i18n side-table).                           |
-| `.label(text)` / `.description(text)` | Admin form label / helper text.                                                                 |
-| `.default(doc)`                       | Default document (json) or string (markdown).                                                   |
-| `.admin(config)`                      | Tune the editor, toolbar, preset, features (see [Admin config](#configuring-the-editor-admin)). |
-
-```ts
-collection("articles").fields(({ f }) => ({
-	body: f.richText().label("Body").required().localized(),
+	body: f.richText().label("Body").required(),
 	notes: f.richText({ mode: "markdown" }).label("Internal notes"),
 }));
 ```
 
-## Filtering, operators
-
-`richText` ships a small, content-aware operator set. The operators are the same names in both modes, but the implementation differs: json mode searches the text inside the JSON tree; markdown mode runs `ILIKE` on the text column.
-
-| Operator     | Operand   | Matches                                                                     |
-| ------------ | --------- | --------------------------------------------------------------------------- |
-| `contains`   | `string`  | Substring match against the document's **text content** (case-insensitive). |
-| `isEmpty`    | `boolean` | Document is null, an empty `doc`, or only whitespace.                       |
-| `isNotEmpty` | `boolean` | Document has non-whitespace text.                                           |
-| `isNull`     | `boolean` | Column is `NULL`.                                                           |
-| `isNotNull`  | `boolean` | Column is not `NULL`.                                                       |
-
-```ts
-// Posts whose body mentions "changelog", excluding empty drafts
-const { docs } = await app.collections.posts.find({
-	where: {
-		content: { contains: "changelog", isNotEmpty: true },
-	},
-});
-```
-
-<Callout type="warn" title="These operators run at runtime, they are not type-checked on `where`">
-Unlike text / number / select fields, a `richText` field's `where` slot is **not** narrowed to these operators. The operators are wired and enforced at runtime, but the generated `where` type for a richText column resolves to `Record<string, any>`, so TypeScript will *not* reject a bogus key or a wrong operand (e.g. `{ contains: 123 }` or `{ notAnOperator: true }` both compile). Use the table above as the contract; don't rely on autocomplete or the compiler to catch a typo.
+<Callout type="warn" title="`f.richText` needs the admin module">
+	`@questpie/admin` contributes this type, so it appears on `f` only when that
+	module is enabled and you import `collection` from `#questpie/factories`.
+	Reading `f.richText` without it throws `Unknown field type: "richText"`.
 </Callout>
 
-<Callout type="info" title="`contains` matches rendered text, not JSON keys">
-	In json mode, `contains` walks the document with `jsonb_path_query_array(col,
-	'$..text')` and matches inside the extracted text nodes, so it searches the
-	words an editor sees, not node types or attribute values. To filter on whether
-	a *block type* exists, that's the [`f.blocks()`](/docs/schema/blocks) field,
-	which has `hasBlockType` / `blockCount` operators.
-</Callout>
+## Chain
 
-For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the querying reference (the canonical home of the query language).
+`richText` declares no methods of its own. Everything below is a base field
+method that works on any type.
 
-## When to use it
+| Method                                | Effect here                                              |
+| ------------------------------------- | -------------------------------------------------------- |
+| `.required()`                         | `NOT NULL`, and required on insert                       |
+| `.default(value)`                     | A `TipTapDocument` in json mode, a `string` in markdown   |
+| `.localized()`                        | One document per locale                                  |
+| `.label(text)` / `.description(text)` | Label and helper text on the admin form                  |
+| `.admin(config)`                      | Editor options, listed below                             |
 
-- **`f.richText()` (json)**, editor-authored formatted prose where you keep the structure: article bodies, page copy, descriptions with headings/links/images. This is the default and the right choice for almost all rich content.
-- **`f.richText({ mode: "markdown" })`**, when the body must round-trip as portable markdown text (external rendering, migration, plain-text storage). You trade the structured JSON for a `string`.
-- **Need stackable, reorderable, nested content sections instead of one prose blob?** That's [`f.blocks()`](/docs/schema/blocks), a page-builder field, not a single editor.
-- **Just a plain multi-line string with no formatting?** Use [`f.textarea()`](/docs/schema/fields/textarea).
+## Editor options
 
-## Configuring the editor (`.admin()`)
+`.admin()` config travels to the browser with the collection schema, so the
+editor reads plain data. These are the keys it acts on.
 
-The admin renders `f.richText()` with a TipTap editor whose toolbar and feature set are configurable through the field's `.admin()` config. You can pick a `preset` (`"minimal" | "simple" | "standard" | "advanced"`), toggle individual `features` (headings, links, images, tables, slash commands, character count, …), or enable image uploads to a collection.
+| Option               | Type                                                | Default                     | Effect                                                        |
+| -------------------- | --------------------------------------------------- | --------------------------- | ------------------------------------------------------------- |
+| `preset`             | `"minimal" \| "simple" \| "standard" \| "advanced"` | none                        | Picks a feature set                                           |
+| `features`           | booleans keyed by feature                            | the preset, or the defaults | Overrides single features on top of the preset                |
+| `placeholder`        | `string`                                             | the editor's own text       | Shown while the document is empty                             |
+| `showCharacterCount` | `boolean`                                            | `false`                     | Prints the word and character readout under the editor        |
+| `maxCharacters`      | `number`                                             | none                        | Hard limit in the editor, needs the `characterCount` feature  |
+| `enableImages`       | `boolean`                                            | `true`                      | Turns image insertion off without dropping the whole feature  |
+| `imageCollection`    | `string`                                             | none                        | Which upload collection inline images go to                   |
+| `enableMediaLibrary` | `boolean`                                            | `true`                      | Adds the media picker beside the upload and URL tabs          |
 
 ```ts
 content: f.richText().label("Content").admin({
-  preset: "standard",
-  features: { table: false, image: true },
-  showCharacterCount: true,
-  maxCharacters: 5000,
+	preset: "standard",
+	features: { table: false },
+	showCharacterCount: true,
+	maxCharacters: 5000,
+	imageCollection: "media",
 }),
 ```
 
-<Callout type="warn" title="Field `.admin()` config is loosely typed">
-	The field-level `.admin()` accepts `unknown`, it does not type-check the
-	editor props for you, so a misspelled key is silent. Cross-check the available
-	toggles against `RichTextFeatures` / `RichTextEditorProps`. The full
-	admin-config model (how `.admin()` flows into component props, and the
-	`RichTextFieldMeta` augmentation point) is covered in the admin docs.
+Inline image uploads go through the collection you name. Without
+`imageCollection` the editor falls back to the admin's default upload
+collection, or to the only one your app has. Several collections and no default
+raises an error naming them.
+
+<Callout type="warn" title="Field `.admin()` takes `unknown`">
+	The generated `.admin()` on a field is typed `unknown`, so a misspelled key
+	compiles and then does nothing. Collection-level `.admin()` is typed. Read
+	the table above as the contract for this field.
 </Callout>
 
-<Callout
-	type="warn"
-	title="Markdown mode round-trips through the markdown extension"
->
-	A `markdown`-mode field stores a plain markdown string. The editor loads and
-	saves it via the `tiptap-markdown` extension, which is wired up from the
-	field's `outputMode`. If you author a custom editor or drop the extension, the
-	body can render empty and autosave an empty string over your content. Stick
-	with the built-in editor for markdown fields.
-</Callout>
+### Presets
 
-## TypeScript
+| Preset      | What it enables                                                      |
+| ----------- | -------------------------------------------------------------------- |
+| no preset   | Every feature except `toolbar`                                       |
+| `minimal`   | `bubbleMenu`, `history`, `bold`, `italic`, `underline`, `link`, only |
+| `simple`    | Everything except `codeBlock`, `align`, `image`, `table`, `tableControls` |
+| `standard`  | Every feature                                                        |
+| `advanced`  | The same set as `standard`                                           |
 
-A `richText` field contributes a `TipTapDocument` (json) or `string` (markdown) to the generated row, insert, and `where` types, no annotation needed. The document and node types are exported from `@questpie/admin/fields`:
+Set no preset and the toolbar stays hidden, leaving the bubble menu and slash
+commands to drive formatting. Pass `preset: "standard"` to get the toolbar.
+
+The feature keys are `toolbar`, `bubbleMenu`, `slashCommands`, `history`,
+`heading`, `bold`, `italic`, `underline`, `strike`, `code`, `codeBlock`,
+`blockquote`, `bulletList`, `orderedList`, `horizontalRule`, `align`, `link`,
+`image`, `table`, `tableControls`, `characterCount`.
+
+## Filtering
+
+A json-mode field defines five operators of its own.
+
+| Operator     | Operand   | Matches                                                      |
+| ------------ | --------- | ------------------------------------------------------------ |
+| `contains`   | `string`  | Any `text` node in the document, case-insensitive            |
+| `isEmpty`    | `boolean` | Null, a doc with no content, or no non-whitespace text       |
+| `isNotEmpty` | `boolean` | A document with non-whitespace text                          |
+| `isNull`     | `boolean` | The column is `NULL`                                         |
+| `isNotNull`  | `boolean` | The column is not `NULL`                                     |
 
 ```ts
-import type { TipTapDocument, TipTapNode } from "@questpie/admin/fields";
-
-type Post = typeof posts.$infer.select;
-//   ^? { ...; content: TipTapDocument }
+const { docs } = await app.collections.posts.find({
+	where: { body: { contains: "changelog", isNotEmpty: true } },
+});
 ```
 
-`@questpie/admin/fields` exports `richText`, `richTextFieldType`, `RichTextFieldState`, `RichTextFeature`, and the augmentable `RichTextFieldMeta`. See [Fields → inferred types](/docs/schema/fields) for how modifiers flow into generated types.
+`contains` reads the words an editor typed, not node types or attribute values.
+To filter on which section types a page holds, that is
+[`f.blocks()`](/docs/schema/blocks) and its `hasBlockType` operator.
+
+The four flag operators ignore their operand. `{ isEmpty: false }` asserts the
+same condition as `{ isEmpty: true }`, so negate by moving the filter into a
+`NOT` group or by using its opposite.
+
+A markdown-mode field stores plain text, so it filters with the standard string
+operators instead: `eq`, `ne`, `contains`, `startsWith`, `endsWith`, `like`,
+`ilike`, `in`, `isNull`, `isNotNull` and the rest of that set, matching against
+the raw markdown. `isEmpty` and `isNotEmpty` belong to json mode.
+
+<Callout type="warn" title="The `where` slot is not narrowed">
+	A rich text column's generated `where` type is a broad record, so TypeScript
+	accepts an operator name this field does not have and an operand of the wrong
+	shape. An unrecognised operator is dropped from the query rather than
+	rejected. Check names against the table.
+</Callout>
+
+## Types
+
+The document types ship from `@questpie/admin/fields`.
+
+```ts
+interface TipTapDocument {
+	type: "doc";
+	content?: TipTapNode[];
+}
+
+interface TipTapNode {
+	type: string;
+	attrs?: Record<string, any>;
+	content?: TipTapNode[];
+	marks?: Array<{ type: string; attrs?: Record<string, any> }>;
+	text?: string;
+}
+```
+
+```ts
+import type { TipTapDocument } from "@questpie/admin/fields";
+
+type Post = typeof posts.$infer.select;
+//   ^? { ...; body: TipTapDocument; notes: string | null }
+```
+
+That subpath also exports the `richText` factory itself, `richTextFieldType`,
+`RichTextFieldState`, `RichTextMode`, `RichTextOptions` and the augmentable
+`RichTextFieldMeta`.
 
 ## Related
 
-- [Fields](/docs/schema/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.label()`, `.default()`, …).
-- [Blocks](/docs/schema/blocks), the page-builder sibling: stackable, reorderable, nested content sections instead of one prose document.
-- [Textarea field](/docs/schema/fields/textarea), a plain multi-line string with no formatting.
-- Admin, the module that supplies this field, and the full editor/admin-config model.
+- [Fields](/docs/schema/fields), every type and the column it produces
+- [Blocks](/docs/schema/blocks), stacked and reorderable sections rather than
+  one prose document
+- [Textarea field](/docs/schema/fields/textarea), a plain multi-line string
+- [Validation](/docs/schema/validation), tuning the generated Zod schemas

@@ -52,6 +52,10 @@ const docsCompatRedirects = new Map<string, string>([
 	["concepts/seeds", "/docs/schema/seeds"],
 	["concepts/collaborative-documents", "/docs/schema/collaborative-documents"],
 	["concepts/soft-delete-retention", "/docs/schema/soft-delete"],
+	[
+		"concepts/optimistic-concurrency",
+		"/docs/schema/collections/optimistic-concurrency",
+	],
 	["concepts/fields", "/docs/schema/fields"],
 	// temporal-values was a sibling of fields and is now nested under it
 	["concepts/temporal-values", "/docs/schema/fields/temporal-values"],

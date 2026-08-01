@@ -1,7 +1,6 @@
 {
 	"title": "Concepts",
 	"pages": [
-		"optimistic-concurrency",
 		"search",
 		"realtime",
 		"scalable-realtime",
