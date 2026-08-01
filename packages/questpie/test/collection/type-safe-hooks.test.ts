@@ -317,13 +317,13 @@ describe("Type-Safe Hooks", () => {
 							{ type: "post" | "category"; id: string } | null | undefined
 						>();
 						// @ts-expect-error physical morph columns are not hook input
-						expectTypeOf(ctx.data[0]!.data.subjectType).toBeNever();
+						void ctx.data[0]!.data.subjectType;
 					} else {
 						expectTypeOf(ctx.data.subject).toMatchTypeOf<
 							{ type: "post" | "category"; id: string } | null | undefined
 						>();
 						// @ts-expect-error physical morph columns are not hook input
-						expectTypeOf(ctx.data.subjectId).toBeNever();
+						void ctx.data.subjectId;
 					}
 				},
 			});
