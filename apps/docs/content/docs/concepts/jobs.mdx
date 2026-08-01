@@ -288,6 +288,26 @@ interface PublishOptions {
 
 `idempotencyKey` is portable and scoped to the durable job name. Reusing it returns the same `dispatchId`; the first accepted payload/options win, even after pg-boss Job retention or an adapter switch. Put the application payload version in this key when a later version must create new work. Accepted idempotent dispatches retain only their identity receipt, not their payload, with no automatic expiry: keep the key non-secret and remove a receipt only when your application can prove the key will never be retried. `singletonKey` is different: it controls adapter-native scheduling/concurrency deduplication while work is queued or active. It is supported by pg-boss queue policies and BullMQ deduplication and ignored by Cloudflare Queues. Combining both keys is rejected because a singleton-suppressed publish has no new logical Job identity. `schedule()` accepts `Omit<PublishOptions, "idempotencyKey" | "startAfter" | "secretPayload">`.
 
+#### Why a dispatch ledger when brokers already deduplicate
+
+QUESTPIE does not reimplement broker deduplication. `dispatchId` is derived
+deterministically from `SHA-256(jobName + idempotencyKey)`, and the adapter
+publishes with that value as the broker's own Job id, so pg-boss and BullMQ
+reject the duplicate themselves.
+
+What a broker cannot offer is a **window**. pg-boss archives and then deletes
+completed jobs; BullMQ drops them under `removeOnComplete`; Cloudflare Queues has
+no deduplication at all. Once the Job row is gone the id is free again, so broker
+deduplication silently means "not twice _while I still remember_". An
+`idempotencyKey` like `charge-invoice:${invoiceId}` is written expecting the
+stronger reading, and the difference surfaces as a duplicate side effect long
+after deployment rather than as an error.
+
+The `questpie_queue_dispatch` receipt keeps that identity after the broker has
+forgotten it, which is also what makes the key portable across an adapter switch.
+It is opt-in: a `publish()` without `idempotencyKey` never touches the table and
+keeps the direct low-latency path.
+
 ### Secret-bearing payloads and safe receipts
 
 Use `secretPayload: true` only when the job must carry a short-lived bearer secret that cannot be resolved from durable application state:
