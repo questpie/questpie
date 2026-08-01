@@ -1,0 +1,106 @@
+---
+title: Writing relations
+description: create and update take a nested mutation under the relation's own key, so one call can link an existing row, insert a new one, or replace a whole set.
+kind: guide
+package: questpie
+---
+
+Adding a barber and the services they offer is two writes plus a junction row
+you have to remember. A nested mutation makes it one call.
+
+## The four operations
+
+Under a relation key, `create` and `update` accept a mutation object.
+
+| Operation         | What it does                                          |
+| ----------------- | ----------------------------------------------------- |
+| `connect`         | Link a row that already exists, by id.                |
+| `create`          | Insert the related row and link it.                   |
+| `connectOrCreate` | Look for a match first, insert only if there is none. |
+| `set`             | Replace the whole set on a `manyToMany`.              |
+
+All of them run inside the same transaction as the parent write, and every row
+they touch goes through that collection's own CRUD, so its hooks, validation and
+access rules apply. A belongsTo `connect` is the exception: it writes the id
+straight into the column, after a check that the row is there.
+
+## Pointing at one row
+
+A belongsTo key takes either the raw id or a mutation, because the key and the
+column are the same name.
+
+```ts
+// The id, when you already have it.
+await client.collections.appointments.create({
+	customer: customerId,
+	barber: barberId,
+	service: serviceId,
+	scheduledAt: new Date(),
+});
+
+// A mutation, in the same call.
+await client.collections.appointments.create({
+	customer: { connect: { id: customerId } },
+	barber: barberId,
+	service: serviceId,
+	scheduledAt: new Date(),
+});
+```
+
+`connect` is read out before the payload is validated, so it satisfies a
+`.required()` relation exactly as a raw id does. `create` and `connectOrCreate`
+resolve inside the transaction instead, just before the parent row is written,
+which suits a relation that is allowed to be empty. Give a belongsTo key one
+operation per call.
+
+## Pointing at many rows
+
+A to-many key takes the same operations, and `connect`, `create` and
+`connectOrCreate` each accept a single value or an array. More than one of them
+in a call is fine here.
+
+```ts
+await client.collections.barbers.create({
+	name: "Sam",
+	email: "sam@shop.test",
+	services: {
+		connect: [{ id: cutId }, { id: shaveId }],
+		create: [{ name: "Beard trim", duration: 15, price: 1500 }],
+	},
+});
+```
+
+For a `hasMany`, `connect` writes this row's id into the key column on the
+target, so connecting a row moves it from whatever parent it had before. For a
+`manyToMany`, each operation adds a junction row.
+
+## Replacing a set
+
+`set` belongs to `manyToMany`. It reads the junction rows, adds what is missing
+and deletes what is no longer listed. The types offer it on a `hasMany` too,
+where nothing reads it.
+
+```ts
+await client.collections.barbers.updateById({
+	id: barberId,
+	data: { services: { set: [cutId, shaveId] } },
+});
+```
+
+Ids may be bare strings or `{ id }` objects. A bare array under the key is read
+as a `set` too. The types do not offer that form, but it is what the admin's
+relation table sends.
+
+<Callout type="info" title="Ids follow the target's primary key">
+	`connect.id`, `connectOrCreate.where.id` and every element of `set` are typed
+	to the primary key of the collection being linked, so a target with a numeric
+	id takes numbers here rather than strings.
+</Callout>
+
+## Related
+
+- **[Relations](/docs/schema/relations)** for declaring the link.
+- **[One row, many rows](/docs/schema/relations/to-many)** for the kinds that
+  take arrays.
+- **[Hooks](/docs/schema/hooks)** for the code a nested write runs on the way
+  through.

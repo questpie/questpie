@@ -1,421 +1,162 @@
 ---
 title: Relations
-description: Relations link collections with a single typed field, f.relation(target) gives you a foreign key, an admin picker, on-demand `with` hydration, typed relation filters, and nested connect/create writes, with belongsTo, hasMany, many-to-many, multiple, and polymorphic all reached from one factory.
+description: One field declares the link between two collections. The column, the query filters, the nested writes and the admin control all follow from it.
+kind: guide
+package: questpie
 ---
 
-A relation connects one collection to another. You declare it with a single field, `f.relation("author")`, and from that one line QUESTPIE gives you the foreign-key column, a typed id on the read shape, an admin relation picker, `with: { author: true }` hydration that returns the full related row, typed relation filters in `where`, and nested `connect` / `create` writes. The default is **belongsTo** (this table owns the FK); chain one transition method to turn it into hasMany, many-to-many, or an inline multi-id field, and pass a polymorphic map when one field must point at several collections.
+An appointment has to know which barber it is for. This page starts from that
+one link and ends with the barber's row loaded next to the appointment.
 
-## What it does
+## Declaring the link
 
-- **Adds a typed foreign key**, `f.relation("author")` stores a `varchar(36)` FK column that reads back as the related id (a `string`), checked against your collection registry at build time.
-- **Hydrates on demand**, pass `with: { author: true }` to a query and the related row comes back fully typed; without it you just get the id, so reads stay one row, one query by default.
-- **Filters by relation**, `where: { author: { is: { role: { eq: "admin" } } } }` for belongsTo, `where: { tags: { some: { ... } } }` for to-many, typed against the target collection.
-- **Writes relations inline**, `author: { connect: { id } }`, `tags: { create: [...], set: [...] }`, create or link related rows in the same `create` / `update` call.
-- **Covers every cardinality from one factory**, `.hasMany()`, `.manyToMany()`, and `.multiple()` transition the same field to one-to-many, many-to-many, or an inline array of ids.
-- **Models polymorphic links**, pass a map like `{ users: "users", posts: "posts" }` and the field stores a `type` + `id` pair so it can point at any of those collections.
-- **Controls referential actions**, `.onDelete("cascade")` / `.onUpdate(...)` set what happens to this row when the target is deleted or changes.
-- **Renders an admin picker**, the admin UI shows a searchable relation selector wired to the target collection, no extra config.
-
-## Quick start
-
-`f` is the field builder, you never import it; it is the first argument of the `.fields()` callback. `f.relation(target)` takes the **target collection name** as its positional argument and returns a **belongsTo** field. Chain `.required()`, `.label()`, and the rest just like any other field.
+`f.relation()` takes the name of the collection you are pointing at. Nothing
+else is required.
 
 ```ts title="src/questpie/server/collections/appointments.ts"
 import { collection } from "#questpie/factories";
 
 export const appointments = collection("appointments").fields(({ f }) => ({
-	// belongsTo: this row owns a varchar(36) FK to `user`
-	customer: f.relation("user").required().label("Customer"),
-	barber: f.relation("barbers").required().label("Barber"),
-	service: f.relation("services").required().label("Service"),
+	customer: f.relation("user").label("Customer").required(),
+	barber: f.relation("barbers").label("Barber").required(),
+	service: f.relation("services").label("Service").required(),
 	scheduledAt: f.datetime().required(),
-	// Full target forms + transition methods are documented below.
 }));
 ```
 
-That gives the `appointments` table a `customer`, `barber`, and `service` foreign-key column, a typed id on every read, and a relation picker in the admin form, no junction table to wire, no relation graph to declare.
+Each of those three is a `varchar(36)` column named after the field, holding the
+id of a row in the other collection. Without `.required()` the column is
+nullable. `@questpie/admin` renders the field as a picker that searches the
+target collection by its title.
 
-<Callout type="info">
-	The `target` name is checked against your collection registry **once codegen
-	runs**, so a typo'd target fails to type-check. Before the first `questpie
-	generate` it falls back to plain `string` so source still compiles. The check
-	reads `StrictCollectionKey`, a names-only, acyclic registry seam.
-</Callout>
+The target name is checked against the collection registry codegen writes, so
+`f.relation("barbre")` does not compile. Before the first `questpie generate`
+that registry is empty and the argument falls back to plain `string`, which is
+why a fresh checkout still builds.
 
-## Example → real output
+## The id, and the row behind it
 
-By default a relation reads back as the related **id**, not the related row. Hydrate it with `with` to get the full target document.
+A relation reads back as the id it stores. Pass `with` to get the row instead.
 
 ```ts
-// Without `with`, relations are ids:
 const appt = await client.collections.appointments.findOne({
-	where: { id: "…" },
-});
-// {
-//   id: string;
-//   customer: string;   // the related user id
-//   barber: string;     // the related barbers id
-//   service: string;    // the related services id
-//   scheduledAt: Date;
-//   createdAt: Date; updatedAt: Date;   // auto-inserted system fields
-// }
-
-// With `with`, the relation is replaced by the full row:
-const hydrated = await client.collections.appointments.findOne({
-	where: { id: "…" },
-	with: { customer: true, barber: true },
-});
-// {
-//   id: string;
-//   customer: { id: string; email: string; /* …all user fields */ };
-//   barber:   { id: string; name: string;  /* …all barbers fields */ };
-//   service: string;   // not in `with` → still just the id
-//   scheduledAt: Date;
-//   createdAt: Date; updatedAt: Date;
-// }
-```
-
-A belongsTo FK is a single `string` in the read shape; under `with` the FK key is **replaced** by the target document (not merged alongside it). `hasMany` / `manyToMany` fields have **no column on this table**, so they are absent from the base read shape entirely and only appear when you populate them through `with` (as an array).
-
-## Target forms
-
-The positional argument to `f.relation(...)` takes three shapes.
-
-| Form                         | Example                                          | Result                                                                                                                                                                                    |
-| ---------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Collection name** (string) | `f.relation("user")`                             | belongsTo to the `user` collection, the common case.                                                                                                                                      |
-| **Lazy ref** (function)      | `f.relation(() => barbers)`                      | Same as the string form, but defers the reference, use it to dodge circular imports between two collection files. The function returns the collection (the factory reads `.name` off it). |
-| **Polymorphic map** (object) | `f.relation({ users: "users", posts: "posts" })` | morphTo, stores a `type` + `id` pair so the field can point at _any_ listed collection.                                                                                                   |
-
-```ts
-// Collection name (default belongsTo)
-author: f.relation("user").required(),
-
-// Lazy ref, avoids a circular import when the two collections reference each other.
-// (This is how the barbershop junction names its targets.)
-barber: f.relation(() => barbers).required().onDelete("cascade"),
-
-// Polymorphic, `subject` can be a user OR a post
-subject: f.relation({ users: "users", posts: "posts" }).required(),
-```
-
-<Callout type="info">
-  The polymorphic (morphTo) form creates **two columns**, `${name}Type` and `${name}Id` (a `varchar(36)` uuid), and its read shape is `{ type: string; id: string }`, not a single id. The `${name}Type` column is a **`varchar`** sized to the longest key (min 50 chars), **not** a Postgres enum, only the runtime Zod schema constrains it to the listed keys via `z.enum`. Use morphTo when one field genuinely points at multiple collection types; for a fixed single target prefer the plain name.
-</Callout>
-
-## Relation kinds
-
-The default form is **belongsTo**: it owns a `varchar(36)` foreign-key column on this table and reads back as a single id string. Three transition methods change the kind.
-
-### `.hasMany({ foreignKey, onDelete?, relationName? })`
-
-One-to-many. The field becomes **virtual**, it owns no column on this table; the FK lives on the _target_ table, named by `foreignKey`. It is absent from the base read shape and populated (as `string[]`, or full rows under `with`) only when queried.
-
-```ts
-// On `barbers`: a barber has many appointments.
-// The FK `barber` lives on the `appointments` table (its own belongsTo back to barbers).
-appointments: f.relation("appointments").hasMany({ foreignKey: "barber" }),
-```
-
-### `.manyToMany({ through, sourceField?, targetField?, relationName? })`
-
-Many-to-many through a **junction collection**. Also virtual (no column on this table). `through` is the junction collection name; `sourceField` / `targetField` name the two FK fields on that junction. Reads back as `string[]` (or full rows under `with`).
-
-```ts
-// On `barbers`: each barber offers many services, joined through `barber_services`.
-services: f
-  .relation("services")
-  .manyToMany({
-    through: "barber_services",
-    sourceField: "barber",
-    targetField: "service",
-  }),
-```
-
-The junction itself is a normal collection of two belongsTo relations:
-
-```ts title="src/questpie/server/collections/barber-services.ts"
-export const barberServices = collection("barber_services").fields(({ f }) => ({
-	barber: f
-		.relation(() => barbers)
-		.required()
-		.onDelete("cascade"),
-	service: f
-		.relation(() => services)
-		.required()
-		.onDelete("cascade"),
-}));
-```
-
-### `.multiple()`
-
-An inline list of ids. **Unlike `hasMany` / `manyToMany`, this is not virtual**, it owns a single `jsonb` column holding an array of FK uuids on _this_ row. Reads back as `string[]`. Reach for it when the set is small and you want it stored on the record itself rather than via a junction table.
-
-```ts
-// A small inline set of ids stored on this row, here a barber's handful of
-// "featured" services, kept on the record instead of via a junction table.
-// (For file links reach for `f.upload(...).multiple()`, not a raw relation, see Gotchas.)
-featuredServices: f.relation("services").multiple(),
-```
-
-<Callout type="warning">
-  `.hasMany()`, `.manyToMany()`, and `.multiple()` are **transition** methods, they re-shape the field's type-state from belongsTo to a to-many shape. Apply the transition **first**, then refine. The state-preserving modifiers (`.required()`, `.onDelete()`, `.onUpdate()`, `.relationName()`) carry forward whatever state you have already accumulated, so the order is: `f.relation("appointments").hasMany({ foreignKey: "barber" }).relationName("barberAppointments")`. A transition applied *after* a modifier is the one that defines the final kind.
-</Callout>
-
-## Referential actions & naming
-
-These modifiers preserve the field's accumulated state, so they compose in any order after a transition.
-
-### `.onDelete(action)` / `.onUpdate(action)`
-
-Set the referential action for the relation. `action` is one of:
-
-| Action        | Effect when the referenced row is deleted/updated       |
-| ------------- | ------------------------------------------------------- |
-| `"cascade"`   | Delete/update this row too.                             |
-| `"set null"`  | Null out the FK on this row.                            |
-| `"restrict"`  | Block the operation while this row still references it. |
-| `"no action"` | Defer the check (Postgres default).                     |
-
-```ts
-// When the parent barber is deleted, delete its barber_services rows too.
-barber: f.relation(() => barbers).required().onDelete("cascade"),
-```
-
-<Callout type="info">
-	The action flows into the relation graph and is **enforced on the QUESTPIE
-	CRUD path**: `cascade` / `hasMany` cascade-deletes run through `deleteById`,
-	and `restrict` throws a `409 Conflict` ("Cannot delete: related records
-	exist…") when dependents remain. It needs a `relationName` (or an inferred
-	reverse relation) to find the dependents.
-</Callout>
-
-### `.relationName(name)`
-
-Disambiguates when **two relations point at the same pair of collections** (e.g. a message with both a `sender` and a `recipient` pointing at `user`). Give each a distinct `relationName` so the relation graph can tell them apart, and so the reverse relation (used by `with` hydration and cascade handling) resolves.
-
-```ts
-sender: f.relation("user").required().relationName("sentMessages"),
-recipient: f.relation("user").required().relationName("receivedMessages"),
-```
-
-## Hydration with `with`
-
-`with` populates relations on a query. Each relation key takes `true` (populate with defaults) or an options object to scope the populated rows.
-
-```ts
-// to-one (belongsTo), populate, optionally with a partial select:
-const review = await client.collections.reviews.findOne({
-	where: { id: "…" },
-	with: {
-		customer: { columns: { id: true, email: true } }, // partial select on the related row
-		barber: true, // whole row
-	},
+	where: { id },
+	with: { barber: true },
 });
 
-// to-many (m2m), populate, scoped with where / orderBy / limit:
-const barber = await client.collections.barbers.findOne({
-	where: { id: "…" },
-	with: {
-		services: {
-			where: { isActive: { eq: true } },
-			orderBy: { order: "asc" },
-			limit: 5,
-		},
-	},
-});
+// appt.scheduledAt → Date
+// appt.customer    → "0d9a…"   still the id, it was not in `with`
+// appt.barber      → { id: "3a0e…", name: "Sam", email: "sam@shop.test", … }
 ```
 
-The option set is **gated by cardinality**, the types only let you pass what makes sense:
-
-- **to-one** relations (belongsTo) accept `columns`, `where`, and a nested `with`. List options are meaningless for a single row, so `orderBy` / `limit` / `_count` are not offered.
-- **to-many** relations (hasMany / manyToMany / `multiple`) additionally accept `orderBy`, `limit`, `offset`, `with`, plus `_count` and `_aggregate` for counts and numeric aggregates instead of the rows. `.multiple()` populates as an **array** of ids (or rows), so it gets the full to-many `with` option set even though its `where` operators differ (see below).
+`with` replaces the key rather than adding one. The default read stays a single
+query against a single table, and each key you name adds one more, so you pay
+only where you ask. Each key takes `true` or an options object scoped to the
+target collection.
 
 ```ts
-// Count related rows instead of fetching them (to-many only):
-const barber = await client.collections.barbers.findOne({
-	where: { id: "…" },
-	with: { services: { _count: true } },
-});
-// barber.services → { _count: number }
+with: { barber: { columns: { id: true, name: true } } }
 ```
 
-<Callout type="info">
-	Relations are **not** hydrated unless you ask. A field you didn't list in
-	`with` comes back as its id (belongsTo → a single `string`; `multiple` → the
-	raw `string[]` array stored in its column) or is absent entirely (hasMany /
-	manyToMany have no column here). This keeps the default read one query and one
-	row, opt into joins only where you need them. Hydration depth is capped by the
-	type system to keep inference finite, so very deep nested `with` chains stop
-	resolving past the cap.
-</Callout>
+**[Loading related rows](/docs/schema/relations/loading)** covers the rest of
+that options object, and what each relation kind costs.
 
-## Filtering by relation
+## Five kinds of link
 
-Relations are filterable in `where`, typed against the **target** collection. The available operators depend on cardinality.
+The plain call above is a **belongsTo**. Three chained methods turn it into a
+to-many kind, and each declares a whole new field rather than adding to this
+one, so chain it first and refine afterwards. The fifth kind comes from the
+argument instead: pass a map of collections and you get a **morphTo**.
 
-### to-one (belongsTo)
+| Kind       | Reach for it when                        | Written as                                           |
+| ---------- | ---------------------------------------- | ---------------------------------------------------- |
+| belongsTo  | this row points at one other row         | `f.relation("barbers")`                              |
+| hasMany    | the other table holds the key            | `.hasMany({ foreignKey, relationName })`             |
+| manyToMany | a junction collection joins the two      | `.manyToMany({ through, sourceField, targetField })` |
+| multiple   | a read-only list of ids sits on this row | `.multiple()`                                        |
+| morphTo    | one field points at several collections  | `f.relation({ posts: "posts", pages: "pages" })`     |
 
-A belongsTo field accepts three forms in `where`:
+**[One row, many rows](/docs/schema/relations/to-many)** builds the middle three.
+**[One field, several targets](/docs/schema/relations/polymorphic)** builds the
+last.
+
+## Filtering by a relation
+
+A belongsTo field is filterable four ways, all typed against the target
+collection.
 
 ```ts
-// 1. Match the FK directly (eq / ne / in / notIn / isNull / isNotNull)
-await client.collections.appointments.find({
-	where: { barber: { eq: barberId } },
-});
+// 1. The id, bare.
+where: { barber: barberId }
 
-// 2. Bare FK shorthand, pass the id value directly
-await client.collections.appointments.find({ where: { barber: barberId } });
+// 2. The id, with an operator: eq, ne, not, in, notIn, isNull, isNotNull.
+where: { barber: { in: [barberId, otherId] } }
 
-// 3. `is` / `isNot`, filter on the TARGET row's fields
-await client.collections.appointments.find({
-	where: { barber: { is: { isActive: { eq: true } } } },
-});
+// 3. Fields of the row it points at.
+where: { barber: { is: { isActive: { eq: true } } } }
 
-// 3b. Target-where shorthand, same as `is`, without the wrapper key
-await client.collections.appointments.find({
-	where: { barber: { isActive: { eq: true } } },
-});
+// 4. The same, without the `is` wrapper.
+where: { barber: { isActive: { eq: true } } }
 ```
 
-### to-many (hasMany / manyToMany)
+Forms 3 and 4 compile to an `EXISTS` subquery against the target table, and
+`isNot` negates it. To-many fields take `some`, `none` and `every` instead.
 
-A to-many field accepts the quantifiers `some` / `none` / `every`, each a `where` against the target:
+## Linking rows on write
 
-```ts
-// Barbers who offer at least one active service:
-await client.collections.barbers.find({
-	where: { services: { some: { isActive: { eq: true } } } },
-});
-
-// Barbers that offer no service at all:
-await client.collections.barbers.find({
-	where: { services: { none: {} } },
-});
-```
-
-### `multiple` (inline jsonb array)
-
-A `.multiple()` field is a real `jsonb` column, so it filters on the array itself rather than joining: `contains` (one id), `containsAll` / `containsAny` (id lists), `isEmpty` / `isNotEmpty`, and `count`.
+`create` and `update` take either the id or a nested mutation under the same
+key.
 
 ```ts
-// Barbers whose inline `featuredServices` array contains a given service id:
-await client.collections.barbers.find({
-	where: { featuredServices: { contains: serviceId } },
-});
-```
-
-<Callout type="warning">
-  Use `some`, `none`, and `every` to filter to-many relations. Request related counts with `with: { rel: { _count: true } }`.
-</Callout>
-
-## Writing relations (nested create / update)
-
-`create` and `update` accept relation writes inline, so you can link or create related rows in the same call.
-
-For a **belongsTo** field, pass either the raw FK string or a nested mutation:
-
-```ts
-// Raw FK, the simplest form:
 await client.collections.appointments.create({
 	customer: customerId,
-	barber: barberId,
-	service: serviceId,
-	scheduledAt: new Date(),
-});
-
-// Nested connect, link an existing row by id:
-await client.collections.appointments.create({
-	customer: { connect: { id: customerId } },
-	barber: barberId,
+	barber: { connect: { id: barberId } },
 	service: serviceId,
 	scheduledAt: new Date(),
 });
 ```
 
-For **to-many** fields (hasMany / manyToMany, no FK on this row), pass a mutation object:
+`connect` links an existing row, `create` inserts one and links it, and
+`connectOrCreate` looks first and inserts only on a miss. Give a belongsTo key
+one of the three. **[Writing relations](/docs/schema/relations/writing)** adds
+the to-many forms, including `set`.
+
+Whichever form you use, the id is checked before the parent row is written. A
+write that names a row that is not there is a `400 Bad Request`, and the row it
+does name is locked until the transaction ends.
+
+## What a delete does
+
+`.onDelete(action)` takes `"cascade"`, `"set null"`, `"restrict"` or
+`"no action"`, and it belongs on the side that declares the to-many relation.
+QUESTPIE runs the action itself, on the delete path, so your hooks fire for
+every cascaded row. No database foreign key is involved.
 
 ```ts
-await client.collections.barbers.create({
-	name: "Sam",
-	email: "sam@shop.test",
-	// link existing services, create a new one, or replace the whole set
-	services: {
-		connect: [{ id: cutId }, { id: shaveId }],
-		create: [{ name: "Beard trim", duration: 15, price: 1500 }],
-	},
-});
-
-// Replace the entire many-to-many set on update:
-await client.collections.barbers.updateById({
-	id: barberId,
-	data: { services: { set: [cutId, shaveId] } },
-});
+// On `barbers`: deleting a barber deletes that barber's appointments.
+appointments: f
+	.relation("appointments")
+	.hasMany({ foreignKey: "barber", onDelete: "cascade", relationName: "barber" }),
 ```
 
-The nested mutation supports `connect` (link existing), `create` (insert new), `connectOrCreate` (link if a match exists, else create), and `set` (replace the whole to-many set). Each accepts a single value or an array; `connect.id` and `set` are typed to the **target's** primary-key type.
+A `hasMany` honours all four. `cascade` deletes the children one by one,
+`set null` clears their key, and `restrict` returns `409 Conflict` while any
+child is left. A `manyToMany` honours only `cascade`, which deletes the junction
+rows. On a belongsTo the setting is stored and never read, and so is
+`.onUpdate()` on every kind.
 
-<Callout type="info">
-  A belongsTo field key overlaps with its FK column name, so the write type accepts **either** the raw id **or** the nested mutation under the same key (`barber: barberId` or `barber: { connect: { id } }`). On `create`, when a belongsTo FK is `notNull` (`.required()`) you must satisfy it with one of the two, a raw id or a `connect`, or the call won't type-check.
+<Callout type="warn" title="`relationName` names a field, not a pair">
+	A `hasMany` loads, filters and cascades through the reverse belongsTo, found
+	by looking its `relationName` up among the target's field names. Point it at
+	that field, not at a label you invent, or the list comes back empty and its
+	filters drop out.
 </Callout>
-
-## Gotchas
-
-<Callout type="warning">
-	**Transition methods reset the chain, order matters.** Put `.hasMany()` /
-	`.manyToMany()` / `.multiple()` first, then refine. They flip the field from
-	the belongsTo type-state to a to-many one; the state-preserving modifiers
-	(`.required()`, `.onDelete()`, `.onUpdate()`, `.relationName()`) carry
-	forward, but a transition applied *after* them is the one that defines the
-	final kind.
-</Callout>
-
-<Callout type="warning">
-	**`hasMany` / `manyToMany` are virtual, no column here.** The FK lives on the
-	target table (`hasMany`) or the junction (`manyToMany`), so these fields never
-	appear in this collection's base read shape or insert type, and you never
-	write them by setting a column on this row, you write them with a nested
-	mutation (`connect` / `create` / `set`). `.multiple()` is the exception: it
-	owns a real `jsonb` array column on this table.
-</Callout>
-
-<Callout type="warning">
-	**`upload` is the file relation, use it for assets.** `f.upload(...)` is a
-	relation specialised for files: it owns a `varchar(36)` FK to the `assets`
-	collection and the admin renders an upload widget instead of a relation
-	picker. Don't model file links with a raw `f.relation("assets")`, reach for
-	`f.upload()`. See [Fields](/docs/schema/fields).
-</Callout>
-
-<Callout type="info">
-	**`onDelete` / `restrict` enforcement needs a resolvable reverse relation.**
-	Cascade and restrict run on the QUESTPIE CRUD path and walk the relation graph
-	to find dependents; when two relations target the same collection, set
-	`.relationName(...)` so the reverse relation resolves.
-</Callout>
-
-## TypeScript
-
-You rarely touch relation types directly, they flow into the generated collection types. After `questpie generate`, the related id and the hydrated shape are both inferred from the `CollectionDoc` type for the collection:
-
-```ts
-import type { CollectionDoc, CollectionWhere } from "#questpie";
-
-type Appointment = CollectionDoc<"appointments">; // `barber`/`customer` are `string` ids
-type ApptFilter = CollectionWhere<"appointments">; // typed where, incl. relation filters
-```
-
-`CollectionDoc<"appointments">` resolves the belongsTo fields to ids; passing `with` to a query widens the result to include the populated rows (this happens at the call site, you don't annotate it). `CollectionWhere<"appointments">` types the relation filters above (`is`/`isNot`, `some`/`none`/`every`).
-
-Plugin authors can import the `relation` factory, `RelationFieldState`, `RelationFieldMethods`, and `RelationFieldMetadata` from `questpie`. Generated application types remain the preferred surface for ordinary collection code.
-
-## Extending
-
-`relation` uses the public `fieldType()` declaration API, and its transition methods such as `.hasMany()` and `.multiple()` are field-type methods. See [Fields → custom field types](/docs/schema/fields) for the `fieldType()` recipe.
 
 ## Related
 
-- [Fields](/docs/schema/fields), every field type and the shared chain methods; `f.relation()` is one of them.
-- [Collections](/docs/schema/collections), where relations are declared, and the `find` / `findOne` / `with` / `where` query surface that hydrates and filters them.
-- [Access control](/docs/schema/access-control), relation reads inherit and respect the target collection's access rules.
-- Example: `examples/tanstack-barbershop/src/questpie/server/collections/`, real `belongsTo` (`appointments`), `manyToMany` (barbers ↔ services through `barber_services`), lazy refs, and `onDelete("cascade")`.
+- **[Fields](/docs/schema/fields)** for the modifiers every field shares, and
+  for `f.upload()`, the relation to a file that renders as an upload control.
+- **[Collections](/docs/schema/collections)** for the `find` and `findOne`
+  surface these options belong to.
+- **[Access control](/docs/schema/access-control)** for who may read the rows a
+  relation pulls in.

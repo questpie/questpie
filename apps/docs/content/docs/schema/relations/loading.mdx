@@ -1,0 +1,98 @@
+---
+title: Loading related rows
+description: The with clause decides which relations come back and what shape they arrive in. The options it accepts follow the relation's cardinality.
+kind: guide
+package: questpie
+---
+
+A read gives you the row you asked for and nothing hanging off it. `with` is
+where you ask for more, one relation at a time.
+
+## Naming what to load
+
+Each key in `with` takes `true` or an options object.
+
+```ts
+const barber = await client.collections.barbers.findOne({
+	where: { id },
+	with: {
+		appointments: { orderBy: { scheduledAt: "asc" }, limit: 10 },
+		services: { where: { isActive: { eq: true } } },
+		avatar: true,
+	},
+});
+```
+
+A to-one relation arrives as the row, replacing the id that was under that key.
+A to-many relation arrives as an array. A relation you leave out costs nothing:
+a to-one keeps its id, and a `hasMany` or `manyToMany` is not on the row at all,
+because it has no column here.
+
+## What each cardinality accepts
+
+The types offer only the options that mean something for the shape you asked
+for. List options on a single row are not offered at all.
+
+| Option            | to-one | to-many | What it does                                        |
+| ----------------- | ------ | ------- | --------------------------------------------------- |
+| `columns`         | yes    | yes     | Partial select on the related rows.                 |
+| `where`           | yes    | yes     | Filter, typed against the target.                   |
+| `with`            | yes    | yes     | Go one relation deeper.                             |
+| `limit`, `offset` | no     | yes     | Cap and page them.                                  |
+| `orderBy`         | no     | yes     | Sort the related rows. `hasMany` only.              |
+| `_count`          | no     | yes     | A count in place of the rows. `hasMany` only.       |
+| `_aggregate`      | no     | yes     | `_sum`, `_avg`, `_min`, `_max` too. `hasMany` only. |
+
+The last three are offered on a `manyToMany` and ignored there. It rebuilds each
+parent's array from the junction rows after the fact, so what comes back is the
+rows themselves, in junction order.
+
+The types follow a nested `with` three levels deep, which is the cap that keeps
+inference finite. The client and the server use the same number.
+
+## Counting instead of fetching
+
+```ts
+const barber = await client.collections.barbers.findOne({
+	where: { id },
+	with: { appointments: { _count: true } },
+});
+// barber.appointments → { _count: 12 }
+```
+
+`_aggregate` returns the same shape with more in it. On a relation whose rows
+carry a numeric `price`, `{ _aggregate: { _sum: { price: true } } }` gives back
+`{ _sum: { price: 4500 } }`, and a field the target does not have is dropped
+without an error. Both forms are computed for a `hasMany` only, in one grouped
+query. A `manyToMany` returns its rows, so scope it with `where` and measure the
+array.
+
+## What it costs
+
+Relations are resolved after the main query, in a batch. Each relation you name
+costs one extra read for the whole page of results rather than one per row, and
+a `manyToMany` costs two, one for the junction and one for the rows. Nesting
+adds a read per level, still not per row.
+
+<Callout type="warn" title="`limit` inside `with` caps the batch">
+	The related rows for every parent on the page are fetched together, so a
+	`limit` applies to that whole set rather than to each parent. On `findOne`
+	there is only one parent and the two are the same.
+</Callout>
+
+## Access rules still apply
+
+Loading a relation runs a real read against the target collection, so that
+collection's own access rules decide what comes back. A relation is not a
+back door into a table the caller may not read. `f.upload()` is the exception:
+file relations are read through the parent row's decision, because the parent's
+rule already authorized that content.
+
+## Related
+
+- **[Relations](/docs/schema/relations)** for declaring the link in the first
+  place.
+- **[One row, many rows](/docs/schema/relations/to-many)** for the kinds that
+  arrive as arrays.
+- **[Access control](/docs/schema/access-control)** for the rules a related read
+  obeys.

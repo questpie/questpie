@@ -1,0 +1,90 @@
+---
+title: Beyond CRUD
+description: Four more operations carry their own access rule, and each one falls back somewhere different when you leave it out.
+kind: guide
+package: questpie
+---
+
+Moving a document to the next stage, downloading a file, asking what a
+collection looks like and destroying a row for good are four different
+permissions. QUESTPIE gives each its own key inside the same `.access({ ... })`
+object, and the fallback chains are not the same.
+
+## `transition`
+
+Guards a workflow stage change through `transitionStage`, which the REST adapter
+exposes as `POST /api/:collection/:id/transition`. It needs versioning and a
+workflow on the collection. `ctx.data` is the existing row.
+
+```ts
+.access({
+	update: ({ session }) => !!session?.user,
+	// Editors write. Only an editor-in-chief publishes.
+	transition: ({ session }) => session?.user?.role === "editor-in-chief",
+})
+```
+
+The chain is `access.transition`, then the collection's own `access.update`,
+then the app-wide `update` default. It falls back to `update` rather than to an
+app-wide `transition` default, and a denial is reported as an `update` denial.
+
+## `serve`
+
+Guards the bytes of an upload, at `GET /api/:collection/files/:key`. `ctx.data`
+is the upload row.
+
+The chain is `access.serve`, then the collection's `access.read`, then the
+app-wide `serve` default, then **allow**. The app-wide `read` default is
+deliberately not in that chain, because listing rows and fetching one file by
+key are different permissions.
+
+<Callout type="warn" title="Public bytes fall open">
+	With no `serve` rule, no collection `read` rule and no app-wide `serve`
+	default, byte serving is allowed. Uploads marked `visibility: "private"`
+	always need a valid signed token as well. Public ones do not, so set `serve`
+	when they should not be world-readable.
+</Callout>
+
+## `introspect`
+
+Guards `GET /api/:collection/schema` and `GET /api/:collection/meta`, the
+endpoints the admin reads to draw its screens. The typed client exposes them as
+`client.collections.posts.schema()` and `.meta()`.
+
+The chain is `access.introspect`, then the app-wide `introspect` default, then a
+computed default: the collection is visible when at least one operation is
+allowed for the caller. Writing an explicit rule replaces that computation.
+
+```ts
+.access({
+	read: true,
+	// The rows are public. The shape is not.
+	introspect: ({ session }) => session?.user?.role === "admin",
+})
+```
+
+## `purge`
+
+Guards the irreversible removal of an already soft-deleted row, at
+`POST /api/:collection/:id/purge`. Its chain is `access.purge`, then the
+app-wide `purge` default, then **deny**. It never inherits from `delete`, and
+delete permission never implies purge permission.
+
+Denied, missing, already purged and filtered-out rows all come back as the same
+not-found error, so a caller cannot probe for protected records.
+
+The app-wide slot sits in that chain at runtime, but `appConfig({ access })`
+has no `purge` key, so set `purge` on the collection that owns the data.
+[Soft delete and durable retention](/docs/schema/soft-delete) covers the whole
+purge protocol.
+
+## Globals
+
+A global has `transition` and `introspect` with the same chains, and neither
+`serve` nor `purge`.
+
+## Related
+
+- [Access control](/docs/schema/access-control) for the CRUD rules and the
+  resolution order they share.
+- [Storage](/docs/concepts/storage) for upload visibility and signed tokens.

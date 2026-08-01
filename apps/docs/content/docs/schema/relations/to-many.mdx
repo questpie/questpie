@@ -1,0 +1,169 @@
+---
+title: One row, many rows
+description: hasMany reads the key off the other table, manyToMany goes through a junction collection, and multiple keeps a list of ids on the row itself.
+kind: guide
+package: questpie
+---
+
+A barber takes many appointments and offers many services. Neither list fits in
+a column on the barber's row, so one of these three methods holds it instead.
+
+## hasMany, when the other table holds the key
+
+An appointment already points at a barber. `hasMany` is the same link read from
+the other end.
+
+```ts title="src/questpie/server/collections/appointments.ts"
+barber: f.relation("barbers").required(),
+```
+
+```ts title="src/questpie/server/collections/barbers.ts"
+appointments: f.relation("appointments").hasMany({
+	foreignKey: "barber",
+	relationName: "barber",
+}),
+```
+
+Both options name that same `barber` field. Only `foreignKey` is required by the
+signature, but `relationName` is the one that does the work: loading, filtering
+and cascading each look it up among the target's field names, find the
+belongsTo, and read the key column off it. Leave it out or name a field that is
+not there, and the list comes back empty, its filters drop out and its cascade
+is skipped. Nothing has to be declared on the belongsTo side for any of this.
+`.hasMany()` also takes `onDelete`.
+
+The field owns no column here. It is absent from the row until
+[`with`](/docs/schema/relations/loading) populates it as an array.
+
+## manyToMany, through a junction collection
+
+A junction is an ordinary collection holding one belongsTo per side.
+
+```ts title="src/questpie/server/collections/barber-services.ts"
+export const barberServices = collection("barber_services").fields(({ f }) => ({
+	barber: f.relation(() => barbers).required(),
+	service: f.relation(() => services).required(),
+}));
+```
+
+`() => barbers` is the lazy form of the target. Use it when two collection files
+import each other, and the plain string name otherwise.
+
+Each side then declares the same junction from its own point of view.
+
+```ts title="src/questpie/server/collections/barbers.ts"
+services: f.relation("services").manyToMany({
+	through: "barber_services",
+	sourceField: "barber",
+	targetField: "service",
+}),
+```
+
+```ts title="src/questpie/server/collections/services.ts"
+barbers: f.relation("barbers").manyToMany({
+	through: "barber_services",
+	sourceField: "service",
+	targetField: "barber",
+}),
+```
+
+`through` names the junction collection. `sourceField` is the junction field
+pointing back at this collection and `targetField` the one pointing at the
+other. Both read as optional in the signature and both are needed at runtime.
+Leave either out and the relation neither loads nor writes.
+
+Like `hasMany`, neither side owns a column for this. The junction rows hold both
+keys, and `with` is what turns them into an array of rows.
+
+## multiple, a list of ids on the row
+
+`.multiple()` replaces the single foreign key with one `jsonb` column holding an
+array of ids. It is the only to-many form that keeps the link on this row, so
+the ids are the value and no second query expands them.
+
+```ts
+featured: f.relation("services").multiple(),
+```
+
+<Callout type="warn" title="`.multiple()` takes no writes">
+	An array under a relation key is routed to the nested-mutation path, and that
+	path has no branch for this kind, so the column is never written. `with` skips
+	it in the same way. Use `manyToMany` for any set the API maintains.
+</Callout>
+
+## Filtering the many side
+
+`hasMany` and `manyToMany` take three quantifiers, each a `where` against the
+target collection.
+
+```ts
+// At least one active service.
+where: {
+	services: {
+		some: {
+			isActive: {
+				eq: true;
+			}
+		}
+	}
+}
+
+// No services at all.
+where: {
+	services: {
+		none: {
+		}
+	}
+}
+
+// Every service active.
+where: {
+	services: {
+		every: {
+			isActive: {
+				eq: true;
+			}
+		}
+	}
+}
+```
+
+`some` compiles to `EXISTS`, `none` to its negation, and `every` to "no related
+row fails this test".
+
+A `.multiple()` field is a `jsonb` array, so it filters as an array rather than
+by joining: `contains`, `containsAll`, `containsAny`, `isEmpty`, `isNotEmpty`,
+`count`, `isNull` and `isNotNull`.
+
+```ts
+where: {
+	featured: {
+		contains: serviceId;
+	}
+}
+```
+
+## Order in the chain
+
+These three methods declare a whole field rather than adding to one, so the
+inferred type keeps only what is chained after them. The runtime keeps
+everything, and that gap is what bites.
+
+```ts
+// The type says nullable. The column is emitted NOT NULL.
+f.relation("services").required().multiple();
+
+// The two agree.
+f.relation("services").multiple().required();
+```
+
+Settle the kind first, then refine. `.required()`, `.label()`, `.localized()`,
+`.onDelete()` and `.relationName()` all carry state forward, so once the kind is
+settled they compose in any order.
+
+## Related
+
+- **[Relations](/docs/schema/relations)** for the belongsTo this page builds on.
+- **[Loading related rows](/docs/schema/relations/loading)** for `with`.
+- **[Writing relations](/docs/schema/relations/writing)** for `connect`,
+  `create` and `set`.

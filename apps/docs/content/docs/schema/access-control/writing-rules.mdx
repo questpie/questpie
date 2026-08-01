@@ -1,0 +1,124 @@
+---
+title: Writing rules
+description: Return your own error instead of a bare 403, and lift a rule out of the collection file without breaking codegen.
+kind: guide
+package: questpie
+---
+
+Two things you will want once the first `.access({ ... })` is in place: telling
+the caller why they were turned away, and writing one rule that several
+collections share.
+
+## Your own error
+
+Returning `false` produces a generic 403 with no explanation. Throwing from the
+rule body lets you pick the status and the message.
+
+```ts
+import { ApiError } from "questpie/errors";
+
+.access({
+	update: ({ session, data }) => {
+		if (!session?.user) throw ApiError.unauthorized();
+		if (data.locked && session.user.role !== "admin") {
+			throw ApiError.forbidden({
+				operation: "update",
+				resource: "posts",
+				reason: "This post is locked",
+			});
+		}
+		return true;
+	},
+})
+```
+
+Reach for `unauthorized` when nobody is signed in and `forbidden` when someone
+is signed in and still not allowed.
+
+| Factory                            | Code           | HTTP |
+| ---------------------------------- | -------------- | ---- |
+| `ApiError.unauthorized(message?)`  | `UNAUTHORIZED` | 401  |
+| `ApiError.forbidden(context)`      | `FORBIDDEN`    | 403  |
+| `ApiError.notFound(resource, id?)` | `NOT_FOUND`    | 404  |
+| `ApiError.conflict(message)`       | `CONFLICT`     | 409  |
+
+The context object `forbidden` takes is
+`{ operation, resource, reason, requiredRole?, userRole?, fieldPath? }`. Its
+`reason` reaches the client verbatim, unless it is the exact string
+`"Access denied"`, which selects the built-in localized message instead.
+
+Each of the four also accepts a trailing `messageKey` and `messageParams`, so
+the error arrives translated for the requesting user rather than in whatever
+language you typed. The full code set and the serialized shape live in
+`questpie/errors`.
+
+## Sharing a rule
+
+Inline rules are typed for you. A helper in another file has to declare what it
+takes, and which type that is depends on where the helper lives.
+
+### A helper a collection imports
+
+Take the package-level `AccessContext` from `questpie`. `ctx.app`,
+`ctx.collections` and `ctx.session` stay fully typed through it.
+
+```ts title="src/questpie/server/lib/access.ts"
+import type { AccessContext } from "questpie";
+
+/** Rush orders may only be cancelled by an authenticated user. */
+export function canCancelOrder(
+	ctx: AccessContext<{ priority?: string | null }>,
+) {
+	if (ctx.data?.priority === "rush") return !!ctx.session?.user;
+	return true;
+}
+```
+
+A helper that reaches back through `ctx.collections` needs an explicit return
+annotation on top of that, and so does the rule that calls it.
+
+### A helper a collection does not import
+
+Routes, services, jobs and scripts can use the generated `AccessRuleContext<K>`
+alias instead, where `K` narrows `ctx.data` to that collection's row.
+
+```ts title="src/questpie/server/routes/moderate.ts"
+import type { AccessRuleContext } from "#questpie";
+
+export function isOwner(ctx: AccessRuleContext<"posts">) {
+	return ctx.data?.authorId === ctx.session?.user?.id;
+}
+```
+
+<Callout type="warn" title="Do not cross the two">
+	Importing `AccessRuleContext<K>` into a file that a collection imports sends
+	the generated index back through itself and codegen fails with a type cycle.
+	The package-level `AccessContext` is the cycle-safe one.
+</Callout>
+
+## The types
+
+`questpie/types` exports the whole set, so you can annotate a rule map or a
+factory that builds one.
+
+```ts
+import type {
+	AccessMode,
+	AccessRule,
+	AccessWhere,
+	CollectionAccess,
+	FieldAccess,
+	GlobalAccess,
+	RowAccessRule,
+} from "questpie/types";
+```
+
+`AccessRule` is the plain form. `RowAccessRule` is the one used by `update`,
+`delete`, `transition`, `serve` and `purge`, where the row is always loaded and
+`ctx.data` is therefore not optional. `AccessMode` is `"user" | "system"`.
+
+## Related
+
+- [Access control](/docs/schema/access-control) for the rules themselves.
+- [Validation](/docs/schema/validation) for the errors a schema produces, which
+  travel the same way.

@@ -1,0 +1,91 @@
+---
+title: One row per tenant
+description: A scoped global keeps one row per city, property or customer behind a single definition, and picks the right one from the request context rather than from an argument you pass.
+kind: guide
+package: questpie
+---
+
+You run twelve city portals off one deployment. Each needs its own site name,
+its own logo, its own alert banner, and none of it belongs in a collection with
+a list view. One definition, twelve rows.
+
+## The resolver
+
+Give `.options()` a `scoped` function. It receives the request context and
+returns the scope id.
+
+```ts title="src/questpie/server/globals/site-settings.ts"
+import { global } from "#questpie/factories";
+
+export const siteSettings = global("site_settings")
+	.fields(({ f }) => ({
+		siteName: f.text().required().default("City Council"),
+		alertMessage: f.textarea(),
+	}))
+	.access({ read: true })
+	.options({
+		scoped: (ctx) => (ctx as typeof ctx & { cityId: string | null }).cityId,
+	});
+```
+
+`ctx.cityId` is a context extension. You return it from `context` in the app
+config, and it is on every request thereafter:
+
+```ts title="src/questpie/server/config/app.ts"
+import { appConfig } from "questpie/app";
+
+export default appConfig({
+	context: async ({ request }) => ({
+		cityId: request.headers.get("x-selected-city") || null,
+	}),
+});
+```
+
+Whatever identifies the tenant, a header, a subdomain, a session claim, is the
+same thing that selects the row.
+
+## Reading and writing it
+
+Nothing about the call changes.
+
+```ts
+const ctx = await app.createContext({ request });
+const settings = await app.globals.site_settings.get({}, ctx);
+
+console.log(settings?.siteName); // whichever city the request resolved to
+```
+
+`createContext()` merges what your `context` resolver returned onto the context
+it hands out, which is how `ctx.cityId` reaches the `scoped` function. It only
+runs that resolver when you pass a `request`, so a context built without one
+resolves to no scope. The scope is never an argument you pass. A request that
+resolves to Bristol reads and writes the Bristol row and cannot reach the Leeds
+one, because every query is filtered on `scope_id` before it runs.
+
+Passing a `request` also puts the call in `user` mode, which is why the
+definition above sets `read: true`. Without a rule the global asks for a
+session.
+
+<Callout type="info" title="A null scope selects the shared row">
+	When the resolver returns `null` or `undefined`, the global resolves the row
+	whose `scope_id` is `NULL`. Use it for a default that unrecognised tenants
+	fall back to.
+</Callout>
+
+## What changes in the database
+
+The main table gains a nullable `scope_id` column and a unique index named
+`<name>_scope_idx` on it, which is what keeps one row per named scope. Postgres
+counts nulls as distinct, so the shared row is held to one by the advisory lock
+instead. Turn versioning on and its table carries `scope_id` too, so history
+stays partitioned by tenant.
+
+Each scope's row is created on its first read, the same way an unscoped global's
+is: an advisory lock, an empty insert, the column defaults. Twelve cities means
+twelve rows, appearing as each one is first visited.
+
+## Related
+
+- **[Globals](/docs/schema/globals)** covers the builder these options sit on.
+- **[Versions and stages](/docs/schema/globals/versions)** works per scope.
+- Runnable example: `examples/city-portal/src/questpie/server/globals/site-settings.ts`.
