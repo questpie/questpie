@@ -272,7 +272,12 @@ body.qp-grain-page {
 	.head > h2 {
 		text-wrap: balance;
 	}
-	.head > p:not(.qp-aside):not(.qp-eyebrow) {
+	/* :not(.qp-lead) is a fix, not a port. A type selector puts this rule at 0-4-1,
+	   one above `.band.hero .qp-lead` at 0-4-0 — so the kit's own hero-lead size
+	   never applied, in the kit either, and the lead rendered at --type-md instead
+	   of the 19px it declares. A paragraph that already carries a display role
+	   should not be claimed by the fallback for plain ones. */
+	.head > p:not(.qp-aside):not(.qp-eyebrow):not(.qp-lead) {
 		max-width: 34rem;
 		font-size: var(--type-md);
 		line-height: var(--line-relaxed);
@@ -691,6 +696,12 @@ body.qp-grain-page {
 	}
 	.frame.code {
 		align-items: flex-start;
+		padding: var(--space-5);
+	}
+	/* Same treatment for a frame holding a live preview instead of a code block.
+	   Not in the kit: it drew a grey placeholder here and left the shot to us. */
+	.frame.preview {
+		align-items: stretch;
 		padding: var(--space-5);
 	}
 	.door-line {

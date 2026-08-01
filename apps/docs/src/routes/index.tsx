@@ -1,20 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import {
-	AutopilotSection,
-	CloudSection,
-	FaqSection,
-	FinalCta,
-	FrameworkSection,
-	Hero,
-	PillarsSection,
-	PricingSection,
-	StackSection,
-	UseCasesSection,
-} from "@/components/landing/index-sections";
-import { StarBanner, useRevealOnScroll } from "@/components/landing/primitives";
-import { SharedFooter } from "@/components/landing/shared-footer";
-import { SharedNav } from "@/components/landing/shared-nav";
+import { MarketingChrome } from "@/components/marketing/chrome";
+import { Landing } from "@/components/marketing/landing";
 import {
 	generateJsonLd,
 	generateLinks,
@@ -51,24 +38,9 @@ export const Route = createFileRoute("/")({
 });
 
 function LandingPage() {
-	useRevealOnScroll();
 	return (
-		<div style={{ minHeight: "100vh", background: "var(--background)" }}>
-			<SharedNav />
-			<main>
-				<Hero />
-				<StarBanner />
-				<PillarsSection />
-				<FrameworkSection />
-				<CloudSection />
-				<AutopilotSection />
-				<UseCasesSection />
-				<StackSection />
-				<PricingSection />
-				<FaqSection />
-				<FinalCta />
-			</main>
-			<SharedFooter />
-		</div>
+		<MarketingChrome page="home">
+			<Landing />
+		</MarketingChrome>
 	);
 }
