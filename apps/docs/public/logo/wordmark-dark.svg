@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 110 24">
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&amp;display=swap');
-    text { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 20px; letter-spacing: -0.05em; }
-  </style>
-  <text x="50%" y="18.5" text-anchor="middle" fill="#ffffff">QUESTPIE</text>
-</svg>
