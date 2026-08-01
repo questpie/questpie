@@ -3,7 +3,8 @@
 ---
 
 Add a server-only `beforeWrite` collection hook for revalidating dependent
-durable facts inside generated CRUD transactions. The hook receives fresh
-primary preimages and a bounded, access-aware helper that claims dependent rows
-in deterministic physical-table and type-tagged id order before any mutation
-DML or transaction-bound effects.
+durable facts inside generated CRUD transactions. Composed guards synchronously
+declare one bounded lock plan before any guard runs, then read exact generated
+collection types through the ordinary transaction-bound `ctx.collections` API.
+Dependent rows are claimed per physical table in the same deterministic order
+as relation targets before mutation DML or transaction-bound effects.

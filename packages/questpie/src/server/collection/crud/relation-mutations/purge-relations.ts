@@ -10,6 +10,11 @@ import type {
 	RelationConfig,
 } from "#questpie/server/collection/builder/types.js";
 import {
+	compareLockParts,
+	lockPartsKey,
+	lockValueParts,
+} from "#questpie/server/collection/crud/shared/deterministic-lock-order.js";
+import {
 	getColumn,
 	resolveFieldKey,
 } from "#questpie/server/collection/crud/shared/field-resolver.js";
@@ -721,33 +726,30 @@ export async function lockRelationTargetsForWrite(options: {
 	}
 	const uniqueTargets = new Map<string, (typeof resolvedTargets)[number]>();
 	for (const target of resolvedTargets) {
-		uniqueTargets.set(
-			[
-				target.identity.schema,
-				target.identity.name,
-				target.targetColumn.name,
-				String(target.value),
-			].join(":"),
-			target,
-		);
+		const parts = [
+			target.identity.schema,
+			target.identity.name,
+			target.targetColumn.name,
+			...lockValueParts(target.value),
+		];
+		uniqueTargets.set(lockPartsKey(parts), target);
 	}
 
 	for (const target of [...uniqueTargets.values()].sort((left, right) =>
-		[
-			left.identity.schema,
-			left.identity.name,
-			left.targetColumn.name,
-			String(left.value),
-		]
-			.join(":")
-			.localeCompare(
-				[
-					right.identity.schema,
-					right.identity.name,
-					right.targetColumn.name,
-					String(right.value),
-				].join(":"),
-			),
+		compareLockParts(
+			[
+				left.identity.schema,
+				left.identity.name,
+				left.targetColumn.name,
+				...lockValueParts(left.value),
+			],
+			[
+				right.identity.schema,
+				right.identity.name,
+				right.targetColumn.name,
+				...lockValueParts(right.value),
+			],
+		),
 	)) {
 		const rows = await tx
 			.select({ value: target.targetColumn })

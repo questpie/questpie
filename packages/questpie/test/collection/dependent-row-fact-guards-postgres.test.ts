@@ -10,6 +10,7 @@ import {
 import pg from "pg";
 
 import { collection } from "../../src/exports/index.js";
+import { getCurrentTransaction } from "../../src/server/collection/crud/shared/transaction.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -46,7 +47,9 @@ const factSubjects = collection("postgres_fact_subjects")
 		read: ({ session }) => {
 			const role = (session?.user as { role?: string } | undefined)?.role;
 			if (role === "admin") return true;
-			return allowMemberFactRead ? { visibility: "public" } : false;
+			return {
+				visibility: allowMemberFactRead ? "public" : "__denied__",
+			};
 		},
 	})
 	.hooks({
@@ -67,19 +70,30 @@ const factLinks = collection("postgres_fact_links")
 	}))
 	.access({ create: true, read: true })
 	.hooks({
-		beforeWrite: async ({ data, lockDependentRows }) => {
-			if (!("subject" in data) || !data.subject) return;
-			const [locked] = await lockDependentRows([
-				{ collection: "factSubjects", ids: [data.subject] },
-			]);
-			const subject = locked?.rows[0] as
-				| { id: string; status: string }
-				| undefined;
-			if (!subject) throw new Error("dependent subject missing");
-			await pauseLinkGuard?.(subject);
-			if (subject.status !== "active") {
-				throw new Error("dependent subject inactive");
-			}
+		beforeWrite: {
+			locks: ({ data, method }) =>
+				method === "updateBatch" || !("subject" in data) || !data.subject
+					? []
+					: [{ collection: "factSubjects", ids: [data.subject] }],
+			run: async (ctx) => {
+				if (
+					ctx.method === "updateBatch" ||
+					!("subject" in ctx.data) ||
+					!ctx.data.subject
+				)
+					return;
+				const subject = await ctx.collections.factSubjects.findOne(
+					{
+						where: { id: ctx.data.subject },
+					},
+					ctx,
+				);
+				if (!subject) throw new Error("dependent subject missing");
+				await pauseLinkGuard?.(subject);
+				if (subject.status !== "active") {
+					throw new Error("dependent subject inactive");
+				}
+			},
 		},
 	});
 
@@ -97,13 +111,49 @@ const orderWrites = collection("postgres_guard_order_writes")
 		reverse: f.boolean().required(),
 	}))
 	.hooks({
-		beforeWrite: async ({ data, lockDependentRows }) => {
-			if (!("alphaId" in data) || !("omegaId" in data)) return;
-			const requests = [
-				{ collection: "orderAlpha" as const, ids: [data.alphaId] },
-				{ collection: "orderOmega" as const, ids: [data.omegaId] },
-			];
-			await lockDependentRows(data.reverse ? requests.toReversed() : requests);
+		beforeWrite: {
+			locks: ({ data, method }) => {
+				if (
+					method === "updateBatch" ||
+					!("alphaId" in data) ||
+					!("omegaId" in data)
+				)
+					return [];
+				const requests = [
+					{ collection: "orderAlpha" as const, ids: [data.alphaId] },
+					{ collection: "orderOmega" as const, ids: [data.omegaId] },
+				];
+				return data.reverse ? requests.toReversed() : requests;
+			},
+			run: () => {},
+		},
+	});
+
+const mixedFactLinks = collection("postgres_guard_mixed_fact_links")
+	.fields(({ f }) => ({
+		name: f.text().required(),
+		firstSubject: f.relation("factSubjects").required(),
+		secondSubject: f.relation("factSubjects").required(),
+		reverse: f.boolean().required(),
+	}))
+	.hooks({
+		beforeWrite: {
+			locks: ({ data, method }) => {
+				if (
+					method === "updateBatch" ||
+					!("firstSubject" in data) ||
+					!("secondSubject" in data)
+				)
+					return [];
+				const ids = [data.firstSubject, data.secondSubject];
+				return [
+					{
+						collection: "factSubjects",
+						ids: data.reverse ? ids.toReversed() : ids,
+					},
+				];
+			},
+			run: () => {},
 		},
 	});
 
@@ -112,13 +162,19 @@ const crossAlpha = collection("postgres_guard_cross_alpha")
 		name: f.text().required(),
 		dependentId: f.text().required(),
 	}))
+	.access({
+		update: async () => {
+			if (getCurrentTransaction()) await pauseCrossGuard?.();
+			return true;
+		},
+	})
 	.hooks({
-		beforeWrite: async ({ operation, original, lockDependentRows }) => {
-			if (operation !== "update" || !original) return;
-			await pauseCrossGuard?.();
-			await lockDependentRows([
-				{ collection: "crossOmega", ids: [original.dependentId] },
-			]);
+		beforeWrite: {
+			locks: ({ operation, original }) =>
+				operation === "update" && original
+					? [{ collection: "crossOmega", ids: [original.dependentId] }]
+					: [],
+			run: () => {},
 		},
 	});
 
@@ -127,13 +183,19 @@ const crossOmega = collection("postgres_guard_cross_omega")
 		name: f.text().required(),
 		dependentId: f.text().required(),
 	}))
+	.access({
+		update: async () => {
+			if (getCurrentTransaction()) await pauseCrossGuard?.();
+			return true;
+		},
+	})
 	.hooks({
-		beforeWrite: async ({ operation, original, lockDependentRows }) => {
-			if (operation !== "update" || !original) return;
-			await pauseCrossGuard?.();
-			await lockDependentRows([
-				{ collection: "crossAlpha", ids: [original.dependentId] },
-			]);
+		beforeWrite: {
+			locks: ({ operation, original }) =>
+				operation === "update" && original
+					? [{ collection: "crossAlpha", ids: [original.dependentId] }]
+					: [],
+			run: () => {},
 		},
 	});
 
@@ -158,6 +220,7 @@ describe.skipIf(!runPostgresContract)(
 						orderAlpha,
 						orderOmega,
 						orderWrites,
+						mixedFactLinks,
 						crossAlpha,
 						crossOmega,
 					},
@@ -355,6 +418,51 @@ describe.skipIf(!runPostgresContract)(
 			expect(outcomes.map(({ name }) => name).sort()).toEqual([
 				"Forward",
 				"Reverse",
+			]);
+		});
+
+		it("shares one lock order across dependent guards and relation targets", async () => {
+			const first = await setup.app.collections.factSubjects.create(
+				{ name: "Mixed first", status: "active", visibility: "public" },
+				context,
+			);
+			const second = await setup.app.collections.factSubjects.create(
+				{ name: "Mixed second", status: "active", visibility: "public" },
+				context,
+			);
+
+			const outcomes = await Promise.race([
+				Promise.all([
+					setup.app.collections.mixedFactLinks.create(
+						{
+							name: "Mixed forward",
+							firstSubject: first.id,
+							secondSubject: second.id,
+							reverse: false,
+						},
+						context,
+					),
+					setup.app.collections.mixedFactLinks.create(
+						{
+							name: "Mixed reverse",
+							firstSubject: second.id,
+							secondSubject: first.id,
+							reverse: true,
+						},
+						context,
+					),
+				]),
+				new Promise<never>((_, reject) =>
+					setTimeout(
+						() => reject(new Error("mixed lock protocol deadlock timeout")),
+						3_000,
+					),
+				),
+			]);
+
+			expect(outcomes.map(({ name }) => name).sort()).toEqual([
+				"Mixed forward",
+				"Mixed reverse",
 			]);
 		});
 

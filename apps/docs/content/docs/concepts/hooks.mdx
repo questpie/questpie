@@ -213,29 +213,29 @@ collection("memberships")
 		label: f.text().required(),
 	}))
 	.hooks({
-		beforeWrite: async ({ method, data, originals, lockDependentRows }) => {
-			const newAccountIds =
-				method === "updateBatch"
-					? data.flatMap((entry) =>
-							entry.data.account ? [entry.data.account] : [],
-						)
-					: "account" in data && data.account
-						? [data.account]
-						: [];
-			const accountIds = [
-				...newAccountIds,
-				...originals.flatMap((row) => (row.account ? [row.account] : [])),
-			];
-			const [locked] = await lockDependentRows([
-				{ collection: "accounts", ids: accountIds, includeDeleted: true },
-			]);
-
-			if (
-				locked?.rows.length !== new Set(accountIds).size ||
-				locked.rows.some((account) => account.status !== "active")
-			) {
-				throw new Error("Account is unavailable");
-			}
+		beforeWrite: {
+			locks: ({ method, data }) =>
+				method !== "updateBatch" && "account" in data && data.account
+					? [{ collection: "accounts", ids: [data.account] }]
+					: [],
+			run: async (ctx) => {
+				if (
+					ctx.method === "updateBatch" ||
+					!("account" in ctx.data) ||
+					!ctx.data.account
+				)
+					return;
+				const account = await ctx.collections.accounts.findOne(
+					{
+						where: { id: ctx.data.account },
+						includeDeleted: true,
+					},
+					ctx,
+				);
+				if (!account || account.status !== "active" || account.deletedAt) {
+					throw new Error("Account is unavailable");
+				}
+			},
 		},
 	});
 ```
@@ -254,15 +254,24 @@ heterogeneous validated updates, and `originals`, `recordIds`, `records`, and
 for example, a polymorphic relation remains `{ type, id }`. Physical
 discriminator/id columns are generated only in the separate persistence copy.
 
-Call `lockDependentRows` at most once per hook chain with the complete request
-set. It accepts at most 100 unique physical row identities and coalesces logical
-collection aliases by physical `schema.table` and primary-key column. It first
-claims physical rows by UTF-8 bytes of that identity and each id's type tag and
-value, so aliases cannot create a second reversed id-lock phase. Only after all
-physical waits settle does it freshly evaluate every logical alias's read
-policy and compose canonical rows. The helper therefore ignores caller request
-order, and a missing id, fully denied collection, and row-denied id are
-intentionally indistinguishable in its result.
+The object form separates declaration from decision. Every `locks` selector is
+synchronous and receives the same typed readonly context as `run`. QUESTPIE
+collects requests from the complete composed hook chain, coalesces aliases,
+deduplicates at most 100 physical row identities, and claims each physical table
+once in one shared UTF-8/type-tagged order. Only then does it execute every
+`run` callback in hook-chain order. A guard needing no dependent rows may keep
+the plain function form: `beforeWrite: ({ data }) => { ... }`.
+
+Read dependent facts in `run` through the normal generated
+`collections.<name>` API. Those reads inherit the exact transaction, stay
+collection-key and field typed, and re-evaluate normal read access after any
+lock wait. Pass the complete hook `ctx` to nested CRUD so the read keeps the
+owning transaction, identity, locale, and access mode; do not open a sibling
+connection while the guard holds row locks. A
+missing, soft-deleted, or row-filtered document remains the ordinary
+`null`/absent read result. A collection-level denial remains the ordinary `403`,
+independent of whether a requested row exists. There is no parallel untyped
+`facts` result or consumer cast.
 
 Primary mutation rows are claimed before dependent rows. The helper removes
 deadlocks caused only by callers supplying dependent collections or ids in
@@ -278,7 +287,7 @@ at the command boundary when concurrent commands can still form a cycle.
 - **`beforeOperation`**, runs first for **every** operation, including read, delete, and purge. Use for logging, rate limiting, or early checks. `ctx.data` is the input (type depends on the operation), `ctx.original` is not available.
 - **`beforeValidate`**, transform, normalize, and default the **mutable** input before the Zod schema runs. Mutate `ctx.data` in place. Create and update only.
 - **`beforeChange`**, business logic on **validated** input: slug generation, derived fields, complex cross-field validation. The last point at which you can change what gets written. Create and update only; `ctx.original` is _not_ available here, diff in `afterChange` instead.
-- **`beforeWrite`**, revalidate related durable facts after fresh primary-row claims. Use its bounded `lockDependentRows` helper rather than raw SQL. The input is readonly and rejection rolls back the complete generated mutation.
+- **`beforeWrite`**, revalidate related durable facts after fresh primary-row claims. Declare dependent ids synchronously in `locks`, then read exact typed facts through `ctx.collections` in `run`. The input is deeply readonly and rejection rolls back the complete generated mutation.
 - **`afterChange`**, react to a completed write with the full record. Has `ctx.original` on update for diffing. Runs **inside** the transaction, defer durable side effects with [`onAfterCommit`](#side-effects-onaftercommit).
 - **`beforeRead`**, modify query options / add filters. Here `ctx.data` is the query context, not a row.
 - **`afterRead`**, transform output, add computed fields, format values. Fires after create, update, delete, and read.

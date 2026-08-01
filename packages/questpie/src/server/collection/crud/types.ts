@@ -1910,8 +1910,4 @@ export interface CRUD<
 	"~internalState"?: any;
 	"~internalRelatedTable"?: any;
 	"~internalI18nTable"?: any;
-	"~internalReadCanonicalRows"?: (
-		ids: readonly (string | number)[],
-		context: CRUDContext,
-	) => Promise<readonly Record<string, unknown>[]>;
 }

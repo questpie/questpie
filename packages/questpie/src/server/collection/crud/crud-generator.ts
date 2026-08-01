@@ -19,6 +19,7 @@ import type {
 	AccessWhere,
 	BeforeWriteContext,
 	CollectionBuilderState,
+	DependentRowLockRequest,
 	HookContext,
 	TransitionHookContext,
 } from "#questpie/server/collection/builder/types.js";
@@ -93,7 +94,7 @@ import {
 	mutateCanonicalRow,
 } from "#questpie/server/collection/crud/shared/canonical-mutation.js";
 import { INHERIT_ACCESS } from "#questpie/server/collection/crud/shared/context.js";
-import { createDependentRowLocker } from "#questpie/server/collection/crud/shared/dependent-row-fact-guard.js";
+import { lockDependentRows } from "#questpie/server/collection/crud/shared/dependent-row-fact-guard.js";
 import {
 	extractLocalizedFieldNames,
 	extractNestedLocalizationSchemas,
@@ -483,8 +484,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		crud["~internalState"] = this.state;
 		crud["~internalRelatedTable"] = this.table;
 		crud["~internalI18nTable"] = this.i18nTable;
-		crud["~internalReadCanonicalRows"] = (ids, context) =>
-			this.readFreshCanonicalRows(ids, context);
 
 		// Fail loud on unknown method access (e.g. typos in untyped glue code)
 		return guardCrudMethods(crud, this.state.name);
@@ -574,7 +573,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			| "deleteMany"
 			| "restoreById";
 		context: CRUDContext;
-		tx: Parameters<typeof createDependentRowLocker>[0]["tx"];
+		tx: Parameters<typeof lockDependentRows>[0]["tx"];
 		bulk?: {
 			isBatch: true;
 			recordIds: (string | number)[];
@@ -584,11 +583,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	}): Promise<void> {
 		const hooks = this.state.hooks?.beforeWrite;
 		if (!hooks) return;
-		const lockDependentRows = createDependentRowLocker({
-			collections: this.app!.collections,
-			context: input.context,
-			tx: input.tx,
-		});
 
 		const base = this.createHookContext({
 			data: input.data,
@@ -609,7 +603,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						recordIds: input.bulk?.recordIds ?? [],
 						records: input.bulk?.records ?? [],
 						count: input.bulk?.count ?? 0,
-						lockDependentRows,
 					}
 				: {
 						...base,
@@ -620,11 +613,26 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						recordIds: input.bulk?.recordIds,
 						records: input.bulk?.records,
 						count: input.bulk?.count,
-						lockDependentRows,
 					};
 		const hookArray = Array.isArray(hooks) ? hooks : [hooks];
+		const requests: DependentRowLockRequest[] = [];
 		for (const hook of hookArray) {
-			await hook(beforeWriteContext);
+			if (typeof hook === "function") continue;
+			const declared = hook.locks(beforeWriteContext);
+			if (!Array.isArray(declared)) {
+				throw ApiError.badRequest(
+					"beforeWrite locks must return synchronously with an array",
+				);
+			}
+			requests.push(...declared);
+		}
+		await lockDependentRows({
+			collections: this.app!.collections,
+			tx: input.tx,
+			requests,
+		});
+		for (const hook of hookArray) {
+			await (typeof hook === "function" ? hook : hook.run)(beforeWriteContext);
 		}
 	}
 

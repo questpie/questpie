@@ -244,61 +244,62 @@ describe("Type-Safe Hooks", () => {
 				title: f.textarea().required(),
 			}))
 			.hooks({
-				beforeWrite: async ({
-					data,
-					original,
-					originals,
-					operation,
-					method,
-					lockDependentRows,
-				}) => {
-					expectTypeOf(operation).toMatchTypeOf<
-						"create" | "update" | "delete" | "restore"
-					>();
-					expectTypeOf(method).toMatchTypeOf<
-						| "create"
-						| "updateById"
-						| "updateMany"
-						| "updateBatch"
-						| "deleteById"
-						| "deleteMany"
-						| "restoreById"
-					>();
-					expectTypeOf(original).toMatchTypeOf<
-						| Readonly<{
+				beforeWrite: {
+					locks: ({ data, method }) =>
+						method === "updateBatch"
+							? []
+							: [
+									{
+										collection: "posts",
+										ids: [data.id ?? "post-1"],
+									},
+								],
+					run: async ({ data, original, originals, operation, method }) => {
+						expectTypeOf(operation).toMatchTypeOf<
+							"create" | "update" | "delete" | "restore"
+						>();
+						expectTypeOf(method).toMatchTypeOf<
+							| "create"
+							| "updateById"
+							| "updateMany"
+							| "updateBatch"
+							| "deleteById"
+							| "deleteMany"
+							| "restoreById"
+						>();
+						expectTypeOf(original).toMatchTypeOf<
+							| Readonly<{
+									id: string;
+									title: string;
+									createdAt: string;
+									updatedAt: string;
+									_title: string;
+							  }>
+							| undefined
+						>();
+						expectTypeOf(originals).toMatchTypeOf<
+							readonly Readonly<{
 								id: string;
 								title: string;
 								createdAt: string;
 								updatedAt: string;
 								_title: string;
-						  }>
-						| undefined
-					>();
-					expectTypeOf(originals).toMatchTypeOf<
-						readonly Readonly<{
-							id: string;
-							title: string;
-							createdAt: string;
-							updatedAt: string;
-							_title: string;
-						}>[]
-					>();
-					await lockDependentRows([
-						{ collection: "posts", ids: ["post-1"], includeDeleted: true },
-					]);
-					if (method === "updateBatch") {
-						expectTypeOf(operation).toEqualTypeOf<"update">();
-						expectTypeOf(data).toMatchTypeOf<
-							readonly Readonly<{
-								id: string | number;
-								data: Readonly<{ title?: string }>;
 							}>[]
 						>();
-						// @ts-expect-error batch entry data is immutable
-						data[0]!.data.title = "mutated";
-					}
-					// @ts-expect-error transactional fact input is immutable
-					data.title = "mutated";
+						if (method === "updateBatch") {
+							expectTypeOf(operation).toEqualTypeOf<"update">();
+							expectTypeOf(data).toMatchTypeOf<
+								readonly Readonly<{
+									id: string | number;
+									data: Readonly<{ title?: string }>;
+								}>[]
+							>();
+							// @ts-expect-error batch entry data is immutable
+							data[0]!.data.title = "mutated";
+						}
+						// @ts-expect-error transactional fact input is immutable
+						data.title = "mutated";
+					},
 				},
 			});
 

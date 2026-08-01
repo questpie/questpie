@@ -3,54 +3,30 @@ import { describe, expect, it } from "bun:test";
 import { getTableUniqueName } from "drizzle-orm";
 import { pgSchema, text, type PgTable } from "drizzle-orm/pg-core";
 
-import { createDependentRowLocker } from "../../src/server/collection/crud/shared/dependent-row-fact-guard.js";
-import { createTestContext } from "../utils/test-context";
+import { lockDependentRows } from "../../src/server/collection/crud/shared/dependent-row-fact-guard.js";
 
-function makeCollection(table: PgTable, name: string, calls: string[]) {
-	return {
-		"~internalRelatedTable": table,
-		"~internalReadCanonicalRows": async (ids: readonly (string | number)[]) =>
-			ids.map((id) => ({ id })),
-		lockMany: async ({ ids }: { ids: readonly (string | number)[] }) => {
-			calls.push(`${name}:${typeof ids[0]}:${String(ids[0])}`);
-			return ids;
-		},
-	};
-}
+const makeCollection = (table: PgTable) => ({
+	"~internalRelatedTable": table,
+});
 
 function makeTx(physicalCalls: string[]) {
 	return {
 		select: () => ({
 			from: (table: PgTable) => ({
-				where: (condition: { queryChunks?: unknown[] }) => {
-					const parameter = condition.queryChunks?.find(
-						(chunk): chunk is { value: string | number } =>
-							Boolean(
-								chunk &&
-								typeof chunk === "object" &&
-								"value" in chunk &&
-								(typeof chunk.value === "string" ||
-									typeof chunk.value === "number"),
-							),
-					);
-					return {
+				where: () => ({
+					orderBy: () => ({
 						for: async () => {
-							if (!parameter) return [];
-							physicalCalls.push(
-								`${getTableUniqueName(table)}:${typeof parameter.value}:${String(parameter.value)}`,
-							);
-							return [{ id: parameter.value }];
+							physicalCalls.push(getTableUniqueName(table));
 						},
-					};
-				},
+					}),
+				}),
 			}),
 		}),
 	};
 }
 
 describe("dependent-row fact guard lock normalization", () => {
-	it("orders physical tables, primary-key columns, and type-tagged ids independently of request order", async () => {
-		const calls: string[] = [];
+	it("coalesces aliases and locks each physical table once in deterministic order", async () => {
 		const physicalCalls: string[] = [];
 		const firstTable = pgSchema("alpha").table("targets", {
 			id: text("alpha_pk").primaryKey(),
@@ -58,61 +34,40 @@ describe("dependent-row fact guard lock normalization", () => {
 		const secondTable = pgSchema("omega").table("targets", {
 			id: text("omega_pk").primaryKey(),
 		});
-		const lock = createDependentRowLocker({
+
+		await lockDependentRows({
 			collections: {
-				second: makeCollection(secondTable, "second", calls),
-				firstAlias: makeCollection(firstTable, "firstAlias", calls),
-				first: makeCollection(firstTable, "first", calls),
+				second: makeCollection(secondTable),
+				firstAlias: makeCollection(firstTable),
+				first: makeCollection(firstTable),
 			},
-			context: createTestContext(),
 			tx: makeTx(physicalCalls),
+			requests: [
+				{ collection: "second", ids: ["2", 10, "1"] },
+				{ collection: "firstAlias", ids: ["2", 10, "1"] },
+				{ collection: "first", ids: ["2", 10, "1"] },
+			],
 		});
 
-		await lock([
-			{ collection: "second", ids: ["2", 10, "1"] },
-			{ collection: "firstAlias", ids: ["2", 10, "1"] },
-			{ collection: "first", ids: ["2", 10, "1"] },
-		]);
-
-		expect(physicalCalls).toEqual([
-			"alpha.targets:number:10",
-			"alpha.targets:string:1",
-			"alpha.targets:string:2",
-			"omega.targets:number:10",
-			"omega.targets:string:1",
-			"omega.targets:string:2",
-		]);
-		expect(calls).toEqual([
-			"first:number:10",
-			"first:string:1",
-			"first:string:2",
-			"firstAlias:number:10",
-			"firstAlias:string:1",
-			"firstAlias:string:2",
-			"second:number:10",
-			"second:string:1",
-			"second:string:2",
-		]);
+		expect(physicalCalls).toEqual(["alpha.targets", "omega.targets"]);
 	});
 
-	it("allows one bounded request set per hook chain", async () => {
+	it("rejects a plan above the bounded physical id limit", async () => {
 		const table = pgSchema("public_guard_test").table("targets", {
 			id: text("id").primaryKey(),
 		});
-		const lock = createDependentRowLocker({
-			collections: { targets: makeCollection(table, "targets", []) },
-			context: createTestContext(),
-			tx: makeTx([]),
-		});
 
 		await expect(
-			lock([
-				{
-					collection: "targets",
-					ids: Array.from({ length: 101 }, (_, i) => `${i}`),
-				},
-			]),
-		).rejects.toThrow("at most 100 unique ids");
-		await expect(lock([])).rejects.toThrow("one request set");
+			lockDependentRows({
+				collections: { targets: makeCollection(table) },
+				tx: makeTx([]),
+				requests: [
+					{
+						collection: "targets",
+						ids: Array.from({ length: 101 }, (_, index) => `${index}`),
+					},
+				],
+			}),
+		).rejects.toThrow("at most 100 unique dependent ids");
 	});
 });

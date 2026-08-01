@@ -23,6 +23,7 @@ const rejectedMethods = new Set<string>();
 const beforeChangeNames: string[] = [];
 const observedDependentRows: Record<string, unknown>[] = [];
 const observedLogicalPayloads: unknown[] = [];
+const composedGuardPhases: string[] = [];
 
 const factTargets = collection("fact_targets")
 	.fields(({ f }) => ({
@@ -54,55 +55,71 @@ const guardedRecords = collection("guarded_records")
 			if (operation === "update" && data.name)
 				beforeChangeNames.push(data.name);
 		},
-		beforeWrite: async (ctx: any) => {
-			observedLogicalPayloads.push(ctx.data);
-			const newTargetIds =
-				ctx.method === "updateBatch"
-					? ctx.data.flatMap((entry: { data: { target?: string | null } }) =>
-							entry.data.target ? [entry.data.target] : [],
-						)
-					: ctx.data.target
-						? [ctx.data.target]
-						: [];
-			const targetIds = [
-				...newTargetIds,
-				...ctx.originals.flatMap((row: { target?: string | null }) =>
-					row.target ? [row.target] : [],
-				),
-			];
-			const locks = await ctx.lockDependentRows(
-				targetIds.length > 0
-					? [
-							{
-								collection: "factTargets",
-								ids: targetIds,
-								includeDeleted: true,
-							},
-						]
-					: [],
-			);
-			observedDependentRows.push(...(locks[0]?.rows ?? []));
-			observedWrites.push({
-				method: ctx.method,
-				operation: ctx.operation,
-				original: ctx.original,
-				exactTransaction: ctx.db === getCurrentTransaction(),
-				...(ctx.originals.length > 0 ? { originals: ctx.originals } : {}),
-				...(ctx.method === "updateBatch"
-					? {
-							batchEntryNames: ctx.data.map(
-								(entry: { data: { name: string } }) => entry.data.name,
-							),
-							count: ctx.count,
-						}
-					: {}),
-			});
-			if (targetIds.length > 0) {
+		beforeWrite: {
+			locks: (ctx: any) => {
+				const newTargetIds =
+					ctx.method === "updateBatch"
+						? ctx.data.flatMap((entry: { data: { target?: string | null } }) =>
+								entry.data.target ? [entry.data.target] : [],
+							)
+						: ctx.data.target
+							? [ctx.data.target]
+							: [];
+				const targetIds = [
+					...newTargetIds,
+					...ctx.originals.flatMap((row: { target?: string | null }) =>
+						row.target ? [row.target] : [],
+					),
+				];
+				return targetIds.length > 0
+					? [{ collection: "factTargets", ids: targetIds }]
+					: [];
+			},
+			run: async (ctx: any) => {
+				observedLogicalPayloads.push(ctx.data);
+				const newTargetIds =
+					ctx.method === "updateBatch"
+						? ctx.data.flatMap((entry: { data: { target?: string | null } }) =>
+								entry.data.target ? [entry.data.target] : [],
+							)
+						: ctx.data.target
+							? [ctx.data.target]
+							: [];
+				const targetIds = [
+					...newTargetIds,
+					...ctx.originals.flatMap((row: { target?: string | null }) =>
+						row.target ? [row.target] : [],
+					),
+				];
 				const uniqueTargetIds = [...new Set(targetIds)];
-				if (locks[0]?.lockedIds.length !== uniqueTargetIds.length) {
-					throw new Error("dependent target unavailable");
-				}
-				const targets = locks[0].rows;
+				const targets =
+					uniqueTargetIds.length === 0
+						? []
+						: (
+								await ctx.collections.factTargets.find(
+									{
+										where: { id: { in: uniqueTargetIds } },
+										includeDeleted: true,
+									},
+									ctx,
+								)
+							).docs;
+				observedDependentRows.push(...targets);
+				observedWrites.push({
+					method: ctx.method,
+					operation: ctx.operation,
+					original: ctx.original,
+					exactTransaction: ctx.db === getCurrentTransaction(),
+					...(ctx.originals.length > 0 ? { originals: ctx.originals } : {}),
+					...(ctx.method === "updateBatch"
+						? {
+								batchEntryNames: ctx.data.map(
+									(entry: { data: { name: string } }) => entry.data.name,
+								),
+								count: ctx.count,
+							}
+						: {}),
+				});
 				if (
 					targets.length !== uniqueTargetIds.length ||
 					targets.some(
@@ -112,13 +129,13 @@ const guardedRecords = collection("guarded_records")
 				) {
 					throw new Error("dependent target inactive");
 				}
-			}
-			if (ctx.data.name === "Reject") {
-				throw new Error("dependent facts rejected");
-			}
-			if (rejectedMethods.has(ctx.method)) {
-				throw new Error(`dependent facts rejected ${ctx.method}`);
-			}
+				if (ctx.data.name === "Reject") {
+					throw new Error("dependent facts rejected");
+				}
+				if (rejectedMethods.has(ctx.method)) {
+					throw new Error(`dependent facts rejected ${ctx.method}`);
+				}
+			},
 		},
 		afterChange: async ({ data, operation, collections }) => {
 			if (operation !== "update") return;
@@ -126,6 +143,39 @@ const guardedRecords = collection("guarded_records")
 				recordId: data.id,
 				name: data.name,
 			});
+		},
+	});
+
+const composedGuardedRecords = collection("composed_guarded_records")
+	.fields(({ f }) => ({
+		name: f.text().required(),
+		firstTarget: f.relation("factTargets").required(),
+		secondTarget: f.relation("factTargets").required(),
+	}))
+	.hooks({
+		beforeWrite: {
+			locks: ({ data, method }) => {
+				composedGuardPhases.push("locks:first");
+				return method === "updateBatch" || !("firstTarget" in data)
+					? []
+					: [{ collection: "factTargets", ids: [data.firstTarget] }];
+			},
+			run: () => {
+				composedGuardPhases.push("run:first");
+			},
+		},
+	})
+	.hooks({
+		beforeWrite: {
+			locks: ({ data, method }) => {
+				composedGuardPhases.push("locks:second");
+				return method === "updateBatch" || !("secondTarget" in data)
+					? []
+					: [{ collection: "factTargets", ids: [data.secondTarget] }];
+			},
+			run: () => {
+				composedGuardPhases.push("run:second");
+			},
 		},
 	});
 
@@ -139,8 +189,14 @@ describe("transactional dependent-row fact guards", () => {
 		beforeChangeNames.length = 0;
 		observedDependentRows.length = 0;
 		observedLogicalPayloads.length = 0;
+		composedGuardPhases.length = 0;
 		setup = await buildMockApp({
-			collections: { factTargets, guardEffects, guardedRecords },
+			collections: {
+				factTargets,
+				guardEffects,
+				guardedRecords,
+				composedGuardedRecords,
+			},
 		});
 		await runTestDbMigrations(setup.app);
 	});
@@ -173,6 +229,33 @@ describe("transactional dependent-row fact guards", () => {
 				context,
 			),
 		).toBe(0);
+	});
+
+	it("collects every composed guard lock before any guard runs", async () => {
+		const first = await setup.app.collections.factTargets.create(
+			{ name: "First", status: "active" },
+			context,
+		);
+		const second = await setup.app.collections.factTargets.create(
+			{ name: "Second", status: "active" },
+			context,
+		);
+
+		await setup.app.collections.composedGuardedRecords.create(
+			{
+				name: "Composed",
+				firstTarget: first.id,
+				secondTarget: second.id,
+			},
+			context,
+		);
+
+		expect(composedGuardPhases).toEqual([
+			"locks:first",
+			"locks:second",
+			"run:first",
+			"run:second",
+		]);
 	});
 
 	it("runs update guards after the fresh canonical revision claim and before DML", async () => {

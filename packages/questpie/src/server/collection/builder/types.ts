@@ -596,42 +596,31 @@ export type BeforeWriteMethod =
 export interface DependentRowLockRequest {
 	collection: StrictCollectionKey;
 	ids: readonly (string | number)[];
-	/** Include soft-deleted rows in the lock result. */
-	includeDeleted?: boolean;
 }
 
-export interface DependentRowLockResult {
-	collection: StrictCollectionKey;
-	/** Accessible existing ids, returned in deterministic type-tagged byte order. */
-	lockedIds: readonly (string | number)[];
-	/** Canonical current facts from the locked rows, in the same order as `lockedIds`. */
-	rows: readonly Readonly<Record<string, unknown>>[];
-}
+export type DeepReadonly<T> = T extends Date
+	? T
+	: T extends object
+		? { readonly [K in keyof T]: DeepReadonly<T[K]> }
+		: T;
 
 type BeforeWriteSharedContext<TSelect> = Omit<
 	HookContextBase<unknown>,
 	"data" | "isBatch" | "recordIds" | "records" | "count"
 > & {
 	/** Fresh locked primary row for singular existing-row writes. */
-	original: Readonly<TSelect> | undefined;
+	original: DeepReadonly<TSelect> | undefined;
 	/** Fresh locked primary rows, including every bulk winner. */
-	originals: readonly Readonly<TSelect>[];
+	originals: readonly DeepReadonly<TSelect>[];
 	isBatch?: true;
 	recordIds?: readonly (string | number)[];
-	records?: readonly Readonly<TSelect>[];
+	records?: readonly DeepReadonly<TSelect>[];
 	count?: number;
-	/**
-	 * Claim all dependent facts in one bounded, globally deterministic request.
-	 * A second call from the same hook chain is rejected.
-	 */
-	lockDependentRows: (
-		requests: readonly DependentRowLockRequest[],
-	) => Promise<readonly DependentRowLockResult[]>;
 };
 
-export type BeforeWriteBatchEntry<TUpdate> = Readonly<{
+export type BeforeWriteBatchEntry<TUpdate> = DeepReadonly<{
 	id: string | number;
-	data: Readonly<TUpdate>;
+	data: TUpdate;
 }>;
 
 export type BeforeWriteContext<TSelect = any, TInsert = any, TUpdate = any> =
@@ -648,12 +637,25 @@ export type BeforeWriteContext<TSelect = any, TInsert = any, TUpdate = any> =
 	| (BeforeWriteSharedContext<TSelect> & {
 			operation: "create" | "update" | "delete" | "restore";
 			method: Exclude<BeforeWriteMethod, "updateBatch">;
-			data: Readonly<TInsert | TUpdate | TSelect>;
+			data: DeepReadonly<TInsert | TUpdate | TSelect>;
 	  });
 
 export type BeforeWriteHook<TSelect = any, TInsert = any, TUpdate = any> = (
 	ctx: BeforeWriteContext<TSelect, TInsert, TUpdate>,
 ) => Promise<void> | void;
+
+export type BeforeWriteGuard<TSelect = any, TInsert = any, TUpdate = any> = {
+	/** Declare every dependent row synchronously before any lock is acquired. */
+	locks: (
+		ctx: BeforeWriteContext<TSelect, TInsert, TUpdate>,
+	) => readonly DependentRowLockRequest[];
+	/** Decide whether the write proceeds after the complete lock plan is held. */
+	run: BeforeWriteHook<TSelect, TInsert, TUpdate>;
+};
+
+export type BeforeWriteEntry<TSelect = any, TInsert = any, TUpdate = any> =
+	| BeforeWriteHook<TSelect, TInsert, TUpdate>
+	| BeforeWriteGuard<TSelect, TInsert, TUpdate>;
 
 /**
  * AfterChange hook context — discriminated by `operation` so `original` is
@@ -869,8 +871,8 @@ export interface CollectionHooks<TSelect = any, TInsert = any, TUpdate = any> {
 	 * transaction-bound effect. Throwing rolls the complete mutation back.
 	 */
 	beforeWrite?:
-		| BeforeWriteHook<TSelect, TInsert, TUpdate>[]
-		| BeforeWriteHook<TSelect, TInsert, TUpdate>;
+		| BeforeWriteEntry<TSelect, TInsert, TUpdate>[]
+		| BeforeWriteEntry<TSelect, TInsert, TUpdate>;
 
 	/**
 	 * Runs after create/update operations
