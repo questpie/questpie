@@ -31,9 +31,23 @@ class FakeChannel {
 	}
 }
 
+class FakePusherConnection {
+	readonly state = "connected";
+	readonly socket_id = "123.456";
+	private readonly listeners = new Map<string, Set<(data: unknown) => void>>();
+
+	bind(event: string, callback: (data: unknown) => void): this {
+		const listeners = this.listeners.get(event) ?? new Set();
+		listeners.add(callback);
+		this.listeners.set(event, listeners);
+		return this;
+	}
+}
+
 class FakePusher {
 	static instances: FakePusher[] = [];
 	readonly channel = new FakeChannel();
+	readonly connection = new FakePusherConnection();
 	disconnected = false;
 
 	constructor(

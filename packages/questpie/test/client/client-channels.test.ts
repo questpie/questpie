@@ -35,9 +35,27 @@ class FakeChannel {
 	}
 }
 
+class FakePusherConnection {
+	private readonly listeners = new Set<(change: unknown) => void>();
+	state = "connected";
+	readonly socket_id = "123.456";
+
+	bind(event: string, callback: (change: unknown) => void): this {
+		if (event === "state_change") this.listeners.add(callback);
+		return this;
+	}
+
+	transition(current: string): void {
+		const previous = this.state;
+		this.state = current;
+		for (const callback of this.listeners) callback({ previous, current });
+	}
+}
+
 class FakePusher {
 	static instances: FakePusher[] = [];
 	readonly channel = new FakeChannel();
+	readonly connection = new FakePusherConnection();
 	disconnected = false;
 
 	constructor(
@@ -889,12 +907,20 @@ describe("channels client", () => {
 		await Promise.resolve();
 		expect(order.slice(-2)).toEqual(["late:ready", "late:members"]);
 
-		provider.channel.memberInfos = [{ id: "member-2" }];
+		const admittedLength = order.length;
+		provider.connection.transition("disconnected");
+		provider.channel.memberInfos = [{ id: "stale-member" }];
+		provider.channel.emit("pusher:member_added", {});
+		expect(order).toHaveLength(admittedLength);
+
+		provider.connection.transition("connected");
+		provider.channel.memberInfos = [{ id: "fresh-member" }];
 		provider.channel.emit(
 			"pusher:subscription_succeeded",
 			provider.channel.members,
 		);
-		expect(order.slice(-4)).toEqual([
+		await waitFor(() => order.length > admittedLength);
+		expect(order.slice(admittedLength)).toEqual([
 			"initial:ready",
 			"initial:members",
 			"late:ready",
@@ -1788,6 +1814,141 @@ describe("channels client", () => {
 		]);
 
 		stop();
+		client.channels.destroy();
+	});
+
+	test("fences a disconnected Pusher replay and re-admits only after fresh recovery", async () => {
+		FakePusher.instances = [];
+		const channelHash = "e".repeat(64);
+		const replayRequests: Record<string, unknown>[] = [];
+		const replayResolvers: Array<(response: Response) => void> = [];
+		const fetcher: typeof fetch = async (input, init) => {
+			const url = String(input);
+			if (url.endsWith("/channels/config")) {
+				return Response.json({
+					transport: "shared-provider",
+					config: { provider: "pusher", key: "public-key" },
+					channels: {
+						news: { pattern: "news", visibility: "public" },
+					},
+				});
+			}
+			if (url.endsWith("/channels/replay")) {
+				replayRequests.push(JSON.parse(String(init?.body)));
+				return new Promise<Response>((resolve) =>
+					replayResolvers.push(resolve),
+				);
+			}
+			throw new Error(`Unexpected request: ${url}`);
+		};
+		const client = createClient<any>({
+			baseURL: "http://localhost:3000",
+			fetch: fetcher,
+		});
+		const lifecycle: string[] = [];
+		const stop = client.channels.news.subscribe(
+			(message: { eventId: string }) =>
+				lifecycle.push(`event:${message.eventId}`),
+			{
+				onReady: () => lifecycle.push("ready"),
+				onError: (error: Error) => lifecycle.push(`error:${error.message}`),
+			},
+		);
+
+		await waitFor(() => FakePusher.instances.length === 1);
+		const provider = FakePusher.instances[0]!;
+		provider.channel.emit("pusher:subscription_succeeded", {});
+		await waitFor(() => lifecycle[0] === "ready");
+		provider.channel.emit("questpie:channel", {
+			eventId: `${channelHash}:1`,
+			event: "updated",
+			data: { value: 1 },
+		});
+		await waitFor(() => lifecycle.includes(`event:${channelHash}:1`));
+
+		provider.channel.emit("pusher:subscription_succeeded", {});
+		await waitFor(() => replayRequests.length === 1);
+		provider.connection.transition("disconnected");
+		provider.connection.transition("connecting");
+		await waitFor(
+			() =>
+				lifecycle.filter(
+					(value) => value === "error:Channel connection epoch ended",
+				).length === 1,
+		);
+		provider.channel.emit("pusher:subscription_succeeded", {});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(replayRequests).toHaveLength(1);
+		provider.channel.emit(
+			"pusher:subscription_error",
+			new Error("stale subscription error"),
+		);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(lifecycle).toEqual([
+			"ready",
+			`event:${channelHash}:1`,
+			"error:Channel subscription epoch ended",
+			"error:Channel connection epoch ended",
+		]);
+		provider.channel.emit("questpie:channel", {
+			eventId: `${channelHash}:3`,
+			event: "updated",
+			data: { value: 3 },
+		});
+		replayResolvers[0]?.(
+			Response.json({
+				status: "events",
+				events: [
+					{
+						eventId: `${channelHash}:2`,
+						event: "updated",
+						data: { value: 2 },
+					},
+				],
+				hasMore: false,
+			}),
+		);
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(lifecycle).toEqual([
+			"ready",
+			`event:${channelHash}:1`,
+			"error:Channel subscription epoch ended",
+			"error:Channel connection epoch ended",
+		]);
+
+		provider.connection.transition("connected");
+		provider.channel.emit("pusher:subscription_succeeded", {});
+		await waitFor(() => replayRequests.length === 2);
+		replayResolvers[1]?.(
+			Response.json({
+				status: "events",
+				events: [
+					{
+						eventId: `${channelHash}:2`,
+						event: "updated",
+						data: { value: 2 },
+					},
+				],
+				hasMore: false,
+			}),
+		);
+		await waitFor(
+			() => lifecycle.filter((value) => value === "ready").length === 2,
+		);
+		expect(lifecycle).toEqual([
+			"ready",
+			`event:${channelHash}:1`,
+			"error:Channel subscription epoch ended",
+			"error:Channel connection epoch ended",
+			`event:${channelHash}:2`,
+			"ready",
+		]);
+
+		const finalLifecycle = [...lifecycle];
+		stop();
+		provider.connection.transition("disconnected");
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(lifecycle).toEqual(finalLifecycle);
 		client.channels.destroy();
 	});
 
