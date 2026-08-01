@@ -2148,6 +2148,7 @@ export type {
 	ChannelPublishInput,
 	ChannelPublishReceipt,
 	ChannelsClient,
+	ChannelPresenceOptions,
 	ChannelSubscribeOptions,
 } from "./channels/index.js";
 export * from "./crdt/index.js";

@@ -7,12 +7,11 @@ import {
 	type PusherRealtimeConfig,
 } from "../realtime/pusher-connection.js";
 import type { SseConnectionManager } from "../realtime/sse-connection.js";
+import { notifyChannelConsumer } from "./consumer-callback.js";
 import {
 	BoundedChannelQueue,
 	channelSlowConsumerError,
 } from "./ordered-events.js";
-import { PusherChannelTransport } from "./pusher.js";
-import { SseChannelTransport } from "./sse.js";
 import {
 	resolveChannelClientName,
 	type ChannelClientDescriptor,
@@ -21,6 +20,7 @@ import {
 	type ChannelConnectionInput,
 	type ChannelPublishReceipt,
 	type ChannelsClient,
+	type ChannelPresenceOptions,
 	type ChannelSubscribeOptions,
 	type ChannelTransportMessage,
 } from "./types.js";
@@ -32,6 +32,7 @@ export type {
 	ChannelPublishInput,
 	ChannelPublishReceipt,
 	ChannelsClient,
+	ChannelPresenceOptions,
 	ChannelSubscribeOptions,
 } from "./types.js";
 
@@ -138,6 +139,7 @@ export function createChannelsAPI<
 					selected.config.provider === "pusher" &&
 					typeof selected.config.key === "string"
 				) {
+					const { PusherChannelTransport } = await import("./pusher.js");
 					return new PusherChannelTransport({
 						baseUrl: options.baseUrl,
 						fetcher: options.fetcher,
@@ -149,6 +151,7 @@ export function createChannelsAPI<
 				if (selected.transport !== "sse") {
 					throw new Error("Unsupported channel client transport");
 				}
+				const { SseChannelTransport } = await import("./sse.js");
 				return new SseChannelTransport({
 					...options,
 					connection: options.sseConnection,
@@ -199,6 +202,7 @@ export function createChannelsAPI<
 				) => void;
 				const subscribeOptions = (hasParams ? args[2] : args[1]) as
 					| ChannelSubscribeOptions
+					| ChannelPresenceOptions
 					| undefined;
 				const marker = {};
 				const subscriptionGeneration = generation;
@@ -218,7 +222,10 @@ export function createChannelsAPI<
 					})
 					.catch((error) => {
 						pending.delete(marker);
-						subscribeOptions?.onError?.(normalizedError(error));
+						notifyChannelConsumer(
+							subscribeOptions?.onError,
+							normalizedError(error),
+						);
 					});
 				return () => {
 					stopped = true;
@@ -275,6 +282,7 @@ export function createChannelsAPI<
 						const params = (hasParams ? args[0] : {}) as Record<string, string>;
 						const iterOptions = (hasParams ? args[1] : args[0]) as
 							| ChannelSubscribeOptions
+							| ChannelPresenceOptions
 							| undefined;
 						return (
 							handle as { subscribe: (...args: unknown[]) => () => void }
@@ -293,6 +301,7 @@ export function createChannelsAPI<
 				const params = (hasParams ? args[0] : {}) as Record<string, string>;
 				const presenceOptions = (hasParams ? args[1] : args[0]) as
 					| ChannelSubscribeOptions
+					| ChannelPresenceOptions
 					| undefined;
 				return selected.presence(
 					connectionInput(registryKey, descriptor, params),
@@ -307,6 +316,7 @@ export function createChannelsAPI<
 				) => void;
 				const subscribeOptions = (hasParams ? args[2] : args[1]) as
 					| ChannelSubscribeOptions
+					| ChannelPresenceOptions
 					| undefined;
 				const marker = {};
 				const subscriptionGeneration = generation;
@@ -326,7 +336,10 @@ export function createChannelsAPI<
 					})
 					.catch((error) => {
 						pending.delete(marker);
-						subscribeOptions?.onError?.(normalizedError(error));
+						notifyChannelConsumer(
+							subscribeOptions?.onError,
+							normalizedError(error),
+						);
 					});
 				return () => {
 					stopped = true;
@@ -347,6 +360,7 @@ export function createChannelsAPI<
 						const params = (hasParams ? args[0] : {}) as Record<string, string>;
 						const iterOptions = (hasParams ? args[1] : args[0]) as
 							| ChannelSubscribeOptions
+							| ChannelPresenceOptions
 							| undefined;
 						return (
 							handle as {
