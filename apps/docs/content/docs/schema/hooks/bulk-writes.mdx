@@ -1,0 +1,79 @@
+---
+title: Bulk writes
+description: "`updateMany` and `deleteMany` run the write hooks once per row and hand each call the shape of the whole batch, but a `before*` hook and an `after*` hook do not see the same set of rows."
+kind: guide
+package: questpie
+---
+
+A conditional write picks its rows twice: once when it selects candidates, and
+again inside the transaction when it locks them and rechecks the predicate. Your
+hooks run on both sides of that gap, so they see different sets.
+
+## Per row, with the batch attached
+
+`updateMany({ where, data })` and `deleteMany({ where })` run the write stages
+once per row, and hand each call four extra keys describing the batch around it.
+
+```ts title="src/questpie/server/collections/posts.ts"
+.hooks({
+	afterChange: async ({ data, isBatch, count, queue }) => {
+		if (isBatch && count && count > 100) return; // reindex the whole table instead
+		await queue.reindexPost.publish(
+			{ id: data.id },
+			{ idempotencyKey: `reindex-post:${data.id}` },
+		);
+	},
+})
+```
+
+| Key         | What it holds                                             |
+| ----------- | --------------------------------------------------------- |
+| `isBatch`   | `true` when this call is part of a bulk operation.        |
+| `recordIds` | The ids in the batch.                                     |
+| `records`   | The rows. As loaded in `before*`, as written in `after*`. |
+| `count`     | How many.                                                 |
+
+They ride on `beforeChange`, `afterChange`, `beforeDelete` and `afterDelete`,
+and nowhere else. `beforeValidate` still runs once per candidate, but with no
+view of the batch. Branch on `isBatch` before reading any of them.
+
+The two calls also skip stages. `updateMany` fires `beforeOperation` once for
+the whole call, not once per row. `deleteMany` never fires `beforeOperation` or
+`afterRead` for the delete, so anything that has to see every removed row
+belongs on `beforeDelete` or `afterDelete`. Both load their candidates through
+an ordinary find, so those two stages do fire for that scan, with
+`operation: "read"`.
+
+## Intent and fact
+
+`beforeValidate`, `beforeChange` and `beforeDelete` run on the candidates the
+`where` matched. A candidate can still lose the write-time claim to a concurrent
+writer and never be touched, so treat these hooks as intent and keep them safe
+to run speculatively.
+
+`afterChange` and `afterDelete` run only for rows that were actually written.
+Their `recordIds`, `records` and `count` describe the winners, not the
+candidates, so the same batch can report a smaller number after the write than
+before it.
+
+Anything that must reflect a real committed change belongs in an `after*` hook.
+
+<Callout type="warn" title="One rejection stops the batch">
+	The chains run one at a time, never in parallel. A throw from a `before*` hook
+	cancels the write before it starts. A throw from an `after*` hook rolls back
+	every row, not just its own.
+</Callout>
+
+## updateBatch is not a batch
+
+`updateBatch({ updates: [...] })` applies a different patch to each id. It runs
+the ordinary single-row update lifecycle once per item inside one shared
+transaction, so the batch keys stay undefined throughout. A failure on the third
+item still rolls back the first two.
+
+## Related
+
+- [Hooks](/docs/schema/hooks) for the stages themselves.
+- [Side effects](/docs/schema/hooks/side-effects) for the transaction these
+  hooks run in.
+- [CRUD](/docs/schema/collections/crud) for the bulk methods.

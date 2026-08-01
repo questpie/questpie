@@ -1,0 +1,68 @@
+---
+title: The manifest
+description: A collaborative field's identity outlives its name. `crdt.manifest.json` holds that identity, which is why renaming one is a generated migration rather than an edit.
+kind: guide
+package: questpie
+---
+
+Every stored update in a collaborative field points at a slot, not at
+`content`. Rename the field in your collection file and nothing in the database
+knows. `crdt.manifest.json` is the record that connects the two, and QUESTPIE
+would rather fail your build than guess at it.
+
+## What the file holds
+
+`questpie crdt:manifest` writes it next to your config. Each collaborative owner
+gets one entry per marked field: a stable UUID, a numbered slot, the format, and
+the engine and codec that produced its bytes. Change a declaration and the
+command appends a new schema version. It never rewrites an old one.
+
+```bash
+questpie generate
+questpie crdt:manifest
+questpie generate
+questpie migrate:generate
+```
+
+Two `generate` calls, because `crdt:manifest` needs the collection registered
+before it can see the fields, and the app needs the manifest baked into the
+generated entities before it will start. Run the sequence twice and the second
+pass must produce no diff. Commit the manifest and the migration together, and
+edit neither by hand.
+
+## What fails closed
+
+`crdt:manifest` refuses to write an identity it cannot preserve, and the app
+refuses to construct once the file and the declaration have drifted apart.
+Between them, no slot is ever silently reassigned.
+
+| Change                                             | Result                                                                            |
+| -------------------------------------------------- | --------------------------------------------------------------------------------- |
+| a field added                                      | a new slot, appended, no migration argument needed                                |
+| a field renamed with no mapping                    | `CRDT field removal or rename requires an explicit generated migration`           |
+| a field removed                                    | the same error, for the same reason                                               |
+| a collaborative owner removed                      | `CRDT owner removal requires an explicit manifest migration`                      |
+| `format` changed, or a different engine swapped in | `CRDT field contract change requires an explicit incompatible manifest migration` |
+| `namespace` changed                                | `CRDT manifest namespace cannot change`                                           |
+| declaration edited, manifest not regenerated       | `CRDT manifest is stale for owner articles`                                       |
+
+## Renaming a field
+
+Tell the generator which old slot the new name inherits:
+
+```bash
+questpie crdt:manifest --rename collection:articles:body=content
+```
+
+The mapping reads `<kind>:<owner>:<newPath>=<oldPath>`, where kind is
+`collection` or `global`. Pass the flag more than once for several renames in
+one pass. The new name inherits the old slot and its stable id, so the stored
+history follows the rename instead of being orphaned by it.
+
+## Namespace
+
+`crdt: { namespace }` is at most 64 printable ASCII characters, and the
+database stores it once. The manifest refuses a different value on the next
+generation, and the running server refuses to start when its configured
+namespace disagrees with the file. Pick it when you first enable
+collaboration and leave it alone.

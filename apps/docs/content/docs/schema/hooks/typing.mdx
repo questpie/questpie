@@ -1,0 +1,86 @@
+---
+title: Typing a hook
+description: An inline hook is typed from the collection above it. A handler in its own file has to declare what it takes, and which type that is depends on where the file sits.
+kind: guide
+package: questpie
+---
+
+Three collections that all stamp `updatedBy` should share one function. The
+moment you lift that function out of the collection file, the compiler stops
+inferring its argument for you.
+
+## Inline needs nothing
+
+Written on `.hooks({ ... })`, `data`, `original` and `operation` are already
+narrowed to this collection and this stage.
+
+```ts
+// inside collection("posts").hooks({ afterChange: (ctx) => { ... } })
+// ctx.data      CollectionDoc<"posts">, the saved row
+// ctx.original  CollectionDoc<"posts">, on update only
+// ctx.operation "create" | "update"
+```
+
+## A file the collection imports
+
+Take the package-level `HookContext`. It is cycle-safe, which is the whole
+reason it exists.
+
+```ts title="src/questpie/server/lib/post-hooks.ts"
+import type { HookContext } from "questpie";
+
+export function stampSlug(ctx: HookContext<{ title?: string; slug?: string }>) {
+	if (ctx.operation === "create" && ctx.data.title && !ctx.data.slug) {
+		ctx.data.slug = ctx.data.title.toLowerCase().replace(/\s+/g, "-");
+	}
+}
+```
+
+`HookContext<TData, TOriginal, TOperation>` takes the row type, the preimage
+type and the operation union, in that order. Give it only the first and
+`operation` stays the full five-way union, so branch on it.
+
+## A file the collection does not import
+
+Routes, services, jobs and scripts can use the generated `HookRuleContext<K>`
+instead, where `K` is a collection key. It resolves `data` to that collection's
+row and types `session` and `collections` through your own app.
+
+```ts title="src/questpie/server/routes/moderate.ts"
+import type { HookRuleContext } from "#questpie";
+
+export function isFirstPublish(ctx: HookRuleContext<"posts">) {
+	return ctx.operation === "update" && ctx.data.status === "published";
+}
+```
+
+<Callout type="warn" title="Do not cross the two">
+	Importing `HookRuleContext` into a file that a collection imports sends the
+	generated barrel back through itself, and codegen fails with a type cycle. A
+	handler you register on `.hooks()` is imported by that collection, so it takes
+	the package-level `HookContext`. `AccessRuleContext` follows the same rule.
+</Callout>
+
+## Composing them
+
+Any stage takes an array, and the handlers run in order.
+
+```ts
+.hooks({
+	beforeChange: [normalizeTitle, computeSlug, stampUpdatedBy],
+})
+```
+
+Because a second `.hooks()` call appends rather than replaces, splitting them
+across calls does the same thing. Both forms are how a module contributes a
+handler to a collection it did not declare.
+
+`questpie` also exports `HookFunction<TData, TOriginal, TOperation>`, the
+function type itself, for annotating a factory that builds handlers.
+
+## Related
+
+- [Hooks](/docs/schema/hooks) for the stages.
+- [Writing rules](/docs/schema/access-control/writing-rules) for the same split
+  on the access side.
+- [Codegen](/docs/code/codegen) for what `#questpie` contains.

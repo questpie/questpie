@@ -1,51 +1,37 @@
 ---
 title: Hooks
-description: Run your code at each stage of a collection's create, update, read, delete, and purge lifecycle, to transform input, derive fields, enforce rules, and fire side effects only after the write commits.
+description: A `.hooks({ ... })` block attaches your code to the stages of a write, and it runs the same for the REST route, the typed client, the admin panel and your own server calls.
+kind: guide
+package: questpie
 ---
 
-Hooks run logic at precise points in a collection lifecycle: transform input before validation, compute fields before a write, react to the saved record, and schedule side effects after commit. One `.hooks({ ... })` declaration governs REST, typed client, admin, and internal operations.
+Where does the code that has to run on every write live? Not in a route
+handler, because the admin and the typed client never call yours. It lives on
+the collection, next to the fields it touches.
 
-## What it does
+## Two stages cover most collections
 
-- **Transform input before validation**, normalize, trim, and default values in `beforeValidate` by mutating `ctx.data` in place.
-- **Derive fields and run business logic** on validated input in `beforeChange`, slugs, computed columns, cross-field checks, the last chance to change what gets written.
-- **React to a completed write** in `afterChange` with the full saved record, plus `ctx.original` on update so you can diff old versus new.
-- **Shape query output** in `afterRead`, add computed fields, format values, redact.
-- **Guard and clean up deletes** with `beforeDelete` (block, cascade, back up) and `afterDelete` (cleanup, notify).
-- **Guard irreversible purge** with dedicated, fatal `beforePurge` and `afterPurge` hooks.
-- **Fire side effects only after the transaction commits** with `ctx.onAfterCommit`, jobs, emails, webhooks, search indexing.
-- **Abort an operation** by throwing in a transaction-bound hook.
-
-## Quick start
-
-Add a `.hooks({ ... })` block to any collection. This one generates a slug before the write, then dispatches a notification job, but only once the row is committed:
+`beforeChange` shapes what gets written. `afterChange` reacts to what was
+written.
 
 ```ts title="src/questpie/server/collections/posts.ts"
 import { collection } from "#questpie/factories";
-
-function slugify(input: string): string {
-	return input
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/^-|-$/g, "");
-}
 
 export const posts = collection("posts")
 	.fields(({ f }) => ({
 		title: f.text(255).required(),
 		slug: f.text(255),
-		body: f.richText(),
+		body: f.textarea(),
 	}))
 	.hooks({
-		// Runs after validation, before the INSERT/UPDATE. Mutate `data` in place.
+		// Runs after validation, before the INSERT. Mutate `data` in place.
 		beforeChange: ({ data, operation }) => {
 			if (operation === "create" && data.title && !data.slug) {
-				data.slug = slugify(data.title);
+				data.slug = data.title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 			}
 		},
 
-		// Runs after the write, INSIDE the CRUD transaction.
-		// Queue publish joins that transaction automatically.
+		// Runs after the write, still inside the transaction.
 		afterChange: async ({ data, operation, queue }) => {
 			if (operation !== "create") return;
 			await queue.notifyPost.publish(
@@ -56,257 +42,100 @@ export const posts = collection("posts")
 	});
 ```
 
-That's the whole surface for most collections: one or two `before*` hooks to shape data, one `afterChange` to react. Every stage and every `ctx` property is in [Full API](#full-api) below.
-
-<Callout type="info">
-	**Hooks merge across calls.** Each call to `.hooks()` *appends* to the
-	existing handlers per stage, it never replaces them. Calling `.hooks()` twice,
-	or composing a collection from modules, accumulates handlers for each stage
-	and runs them in registration order. (Contrast with `.access()`, which
-	overwrites the whole access object on each call.)
-</Callout>
-
-## Example: what each hook receives
-
-On an update, `afterChange` receives both the saved record (`ctx.data`) and the pre-update record (`ctx.original`), so you can diff and act only on a real change:
-
-```ts title="src/questpie/server/collections/posts.ts"
-.hooks({
-	afterChange: ({ data, original, operation, onAfterCommit, email }) => {
-		if (operation === "update" && original && data.status !== original.status) {
-			onAfterCommit(async () => {
-				await email.sendTemplate({
-					template: "postStatusChanged",
-					input: { title: data.title, status: data.status },
-					to: data.authorEmail,
-				});
-			});
-		}
-	},
-})
-```
-
-Written **inline** on `.hooks({ ... })`, `data` / `original` / `operation` are already narrowed to the `posts` row with no annotations:
+Create a post through any surface and the slug is there, though no caller sent
+one:
 
 ```ts
-// data:      CollectionDoc<"posts">              (the saved record)
-// original:  CollectionDoc<"posts"> | undefined   (set only on update)
-// operation: "create" | "update"
+const post = await app.collections.posts.create({ title: "Hello there" });
+post.slug; // "hello-there"
 ```
 
-<Callout type="warn">
-	**`ctx.original` holds the previous record only on update.** It is exposed at
-	all only on `afterChange` and `afterRead`, and is populated (non-`undefined`)
-	*only* for the `update` operation. On those two hooks its type is
-	`CollectionDoc<K> | undefined` on **every** branch (including create / delete /
-	read), so it's not `never`-typed there, it's simply `undefined` at runtime on
-	the non-update operations. Always branch on `ctx.operation === "update"` before
-	reading it.
+The job is published inside the same transaction as the row, so nothing is
+queued for a post that failed to save.
 
-    `afterDelete` exposes the deleted row as both `data` and `original`.
-    `beforePurge` and `afterPurge` expose the same locked, localized persisted
-    preimage as both values. Purge deliberately skips field-output and
-    `afterRead` hooks, so derived output such as an upload URL is not present.
-    On the remaining hook stages, `original` is `never`-typed.
+## Every stage
 
-</Callout>
+Each key takes one function or an array of them.
 
-## Full API
-
-### Lifecycle stages
-
-Declare any subset of these on `.hooks({ ... })`. Each value is a **single function or an array of functions**, see [Arrays and composition](#arrays-and-composition).
-
-| Stage              | Fires on                            | `ctx.data`                 | `ctx.original`       | Throw aborts?                     |
-| ------------------ | ----------------------------------- | -------------------------- | -------------------- | --------------------------------- |
-| `beforeOperation`  | create, update, read, delete, purge | input (type depends on op) | none                 | yes                               |
-| `beforeValidate`   | create, update                      | **mutable** input          | none                 | yes                               |
-| `beforeChange`     | create, update                      | **validated** input        | none                 | yes                               |
-| `afterChange`      | create, update                      | the saved record           | record (update only) | **yes**, propagates + rolls back  |
-| `beforeRead`       | read                                | query options              | none                 | yes                               |
-| `afterRead`        | create, update, read, delete        | the record                 | record (update only) | **yes**, propagates to the caller |
-| `beforeDelete`     | delete                              | record to be deleted       | none                 | yes                               |
-| `afterDelete`      | delete                              | the deleted record         | same deleted record  | **yes**, propagates + rolls back  |
-| `beforePurge`      | purge                               | locked deleted preimage    | same preimage        | **yes**, propagates + rolls back  |
-| `afterPurge`       | purge                               | locked deleted preimage    | same preimage        | **yes**, propagates + rolls back  |
-| `beforeTransition` | workflow transition                 | the record                 | none                 | yes                               |
-| `afterTransition`  | workflow transition                 | the record                 | none                 | no, caught + logged               |
-
-`beforeTransition` / `afterTransition` fire only on workflow stage transitions and carry a different context, see [Transition hooks](#transition-hooks). See [Aborting an operation](#aborting-an-operation) for the transaction boundary of each stage.
-
-**Execution order**, per operation:
+| Stage                                 | Fires on                         | `ctx.data` is            |
+| ------------------------------------- | -------------------------------- | ------------------------ |
+| `beforeOperation`                     | every operation but `deleteMany` | the call input           |
+| `beforeValidate`                      | create, update                   | the raw input, mutable   |
+| `beforeChange`                        | create, update                   | the validated input      |
+| `afterChange`                         | create, update                   | the saved row            |
+| `beforeRead`                          | read                             | the find options         |
+| `afterRead`                           | create, update, delete, read     | the row on its way out   |
+| `beforeDelete`                        | delete                           | the row about to go      |
+| `afterDelete`                         | delete                           | the deleted row          |
+| `beforePurge`, `afterPurge`           | purge                            | a frozen copy of the row |
+| `beforeTransition`, `afterTransition` | a workflow stage move            | the record               |
 
 ```
-Create  →  beforeOperation → beforeValidate → beforeChange → [INSERT] → afterChange → afterRead
-Update  →  beforeOperation → beforeValidate → beforeChange → [UPDATE] → afterChange → afterRead
-Delete  →  beforeOperation → beforeDelete   → [DELETE] → afterDelete → afterRead
-Purge   →  beforeOperation → beforePurge    → [PURGE]  → afterPurge
-Read    →  beforeOperation → beforeRead     → [SELECT] → afterRead
+create   beforeOperation → beforeValidate → beforeChange → INSERT → afterChange → afterRead
+update   beforeOperation → beforeValidate → beforeChange → UPDATE → afterChange → afterRead
+delete   beforeOperation → beforeDelete   → DELETE → afterDelete → afterRead
+purge    beforeOperation → beforePurge    → PURGE  → afterPurge
+read     beforeOperation → beforeRead     → SELECT → afterRead
 ```
 
-`afterRead` is the output hook for create, update, delete, and read; purge returns only `{ success: true }` and does not expose the removed record through `afterRead`. Branch on `ctx.operation` to discriminate inside it. (The upload feature auto-injects an `afterRead` hook to generate file URLs, an `afterDelete` hook for committed hard deletes, and an `afterPurge` hook that transactionally records durable provider cleanup; your hooks run alongside these.)
+### Before the write
 
-<Callout type="info" title="Create and update share change hooks">
-	Use `beforeValidate`, `beforeChange`, and `afterChange` for both operations,
-	then branch on `ctx.operation === "create"` when behavior differs. Globals use
-	`beforeUpdate` and `afterUpdate`. See [Globals](#related).
-</Callout>
+`beforeValidate` sees the raw input and runs before the generated schema, so it
+is where you trim, lowercase and default. `beforeChange` sees the validated
+input and is the last point where you can change what lands in the row. Mutate
+`ctx.data` in place in both.
 
-### Transaction-bound hooks
+### After the write
 
-`afterChange`, `afterDelete`, and `afterPurge` run inside the owning CRUD
-transaction. Their `ctx.db` is that active transaction, and injected services
-such as `collections`, `queue`, and `channels` join the same scope. A thrown or
-rejected error fails the CRUD call and rolls back the row plus all
-transaction-joined work:
+`afterChange` receives the saved row, and `ctx.original` carries the previous
+one on an update. It runs inside the write transaction, which decides what you
+may safely do in it. **[Side effects](/docs/schema/hooks/side-effects)** is that
+whole story.
 
-```ts title="src/questpie/server/collections/posts.ts"
-export const posts = collection("posts")
-	.fields(({ f }) => ({
-		title: f.text().required(),
-	}))
-	.hooks({
-		afterChange: async ({ data, operation, channels }) => {
-			await channels.publish("postActivity", {
-				params: { postId: data.id },
-				event: operation === "create" ? "created" : "updated",
-				data: { id: data.id },
-			});
-		},
-	});
-```
+### On the way out
 
-Exact coverage:
+`afterRead` runs on create, update, delete and read, after the transaction has
+closed. Add a computed field, format a value, drop something. Branch on
+`ctx.operation` to tell the four apart. `beforeRead` runs earlier, and its
+`ctx.data` is the find options rather than a row.
 
-- `afterChange`: once per successful create or update winner. `restoreById`
-  and version reverts use the update lifecycle; an already-active no-op restore
-  does not run an effect.
-- `afterDelete`: once per successful soft or hard delete winner.
-- `afterPurge`: after physical removal and before commit.
-- `updateMany` and `deleteMany`: once per winning row, with the normal bulk
-  metadata.
-- `updateBatch`: once per successful item, without bulk metadata. Each item
-  invokes the ordinary single-record update lifecycle inside the shared
-  transaction.
+### Around a delete
 
-A nested managed transaction does not run a hook a second time. Bulk hook
-chains execute sequentially in deterministic winner order so one rejection is
-fully settled before the transaction rolls back.
+`beforeDelete` can refuse a delete, cascade it, or take a backup. `afterDelete`
+cleans up, and runs inside the transaction. `beforePurge` and `afterPurge`
+belong to the separate irreversible purge lifecycle that
+[Soft delete](/docs/schema/soft-delete) owns. Purge returns `{ success: true }`
+and never reaches `afterRead`.
 
-`afterRead` still runs after the transaction closes. Do not perform direct
-email, HTTP, or other work that cannot join the database transaction in an
-`after*` hook; use `onAfterCommit` or a transaction-aware queue/outbox instead.
+## What a hook receives
 
-### What each stage is for
+One argument: your app context, the same flat set of services that access
+rules, routes and jobs get, plus the lifecycle keys.
 
-- **`beforeOperation`**, runs first for **every** operation, including read, delete, and purge. Use for logging, rate limiting, or early checks. `ctx.data` is the input (type depends on the operation), `ctx.original` is not available.
-- **`beforeValidate`**, transform, normalize, and default the **mutable** input before the Zod schema runs. Mutate `ctx.data` in place. Create and update only.
-- **`beforeChange`**, business logic on **validated** input: slug generation, derived fields, complex cross-field validation. The last point at which you can change what gets written. Create and update only; `ctx.original` is _not_ available here, diff in `afterChange` instead.
-- **`afterChange`**, react to a completed write with the full record. Has `ctx.original` on update for diffing. Runs **inside** the transaction, defer durable side effects with [`onAfterCommit`](#side-effects-onaftercommit).
-- **`beforeRead`**, modify query options / add filters. Here `ctx.data` is the query context, not a row.
-- **`afterRead`**, transform output, add computed fields, format values. Fires after create, update, delete, and read.
-- **`beforeDelete`**, block deletion (throw), cascade, or back up. `ctx.data` is the record about to be deleted.
-- **`afterDelete`**, transaction-bound cleanup and durable facts. `ctx.data` is the deleted record; throwing rolls back soft or hard delete.
-- **`beforePurge`**, guard permanent removal of an already soft-deleted record. `data` and `original` are the same locked, localized persisted preimage before field-output/`afterRead` hooks. Throwing rolls back the purge.
-- **`afterPurge`**, record transactional cleanup intents or facts. It receives the same preimage even though the owner row has been removed inside the transaction. Throwing rolls back the purge. Use `onAfterCommit` only for non-transactional side effects; durable external cleanup needs a transactional outbox. See [Soft delete and durable retention](/docs/schema/soft-delete).
+| Key                                                | What you get                                                                                                                    |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `data`                                             | The payload for this stage, per the table above.                                                                                |
+| `original`                                         | The previous row on `afterChange` and `afterRead` for an update, the pre-delete row on `afterDelete`, the frozen copy on purge. |
+| `operation`                                        | `"create"`, `"update"`, `"read"`, `"delete"` or `"purge"`, narrowed per stage.                                                  |
+| `locale`, `accessMode`                             | The active locale, and `"user"` or `"system"`.                                                                                  |
+| `onAfterCommit`                                    | Hold a side effect back until the write is durable.                                                                             |
+| `db`, `collections`, `globals`                     | The database handle, and typed access to your other tables.                                                                     |
+| `queue`, `email`, `search`, `realtime`, `channels` | Adapter services, alongside `kv` and `storage`.                                                                                 |
+| `session`, `services`, `logger`, `t`               | The caller, your own services, the logger, translations.                                                                        |
+| `isBatch`, `recordIds`, `records`, `count`         | Batch metadata. Only in `updateMany` and `deleteMany`, see [Bulk writes](/docs/schema/hooks/bulk-writes).                       |
 
-### The hook context (`ctx`)
+Whatever `appConfig({ context })` returns is merged in flat as well, so a tenant
+id resolved once per request reaches every hook.
 
-Every hook receives one argument, the `HookContext`. It is your `AppContext` (all framework services) plus the per-operation lifecycle fields. Destructure what you need:
+Written inline on `.hooks({ ... })`, `data`, `original` and `operation` are
+already narrowed to this collection with no annotations. A helper in another
+file needs to say what it takes, and
+**[Typing a hook](/docs/schema/hooks/typing)** covers which type that is.
 
-```ts
-type HookContext = AppContext & {
-	data: TData; // see the stage table for what this is
-	original: TOriginal; // update preimage, deleted row, or purge preimage depending on the stage
-	operation: "create" | "update" | "delete" | "purge" | "read";
-	locale?: string;
-	accessMode?: "user" | "system";
-	onAfterCommit: (callback: () => Promise<void>) => void;
+## Aborting
 
-	// Bulk metadata, present only inside updateMany / deleteMany:
-	isBatch?: boolean;
-	recordIds?: (string | number)[];
-	records?: TData[];
-	count?: number;
-};
-```
-
-| `ctx` property                                          | What you get                                                                                                                                                       |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `data`                                                  | The lifecycle payload for this stage (input for `before*`; the record for `afterChange` / `afterRead` / delete hooks).                                             |
-| `original`                                              | Update preimage on `afterChange` / `afterRead`; the same deleted row on `afterDelete`; the same locked persisted preimage on purge hooks; `never` on other stages. |
-| `operation`                                             | `"create"` \| `"update"` \| `"delete"` \| `"purge"` \| `"read"`, narrowed per stage.                                                                               |
-| `locale`                                                | The active locale for this operation, when set.                                                                                                                    |
-| `accessMode`                                            | `"user"` (normal) or `"system"` (internal/seed/job code, bypasses access control).                                                                                 |
-| `onAfterCommit`                                         | Queue a callback to run after the outermost transaction commits. See [Side effects](#side-effects-onaftercommit).                                                  |
-| `db`, `collections`, `globals`                          | Database handle and typed access to other collections/globals.                                                                                                     |
-| `queue`, `email`, `search`, `realtime`, `kv`, `storage` | Adapter services: queue jobs, email, search index, realtime, KV, file storage.                                                                                     |
-| `session`, `services`, `logger`                         | The current session, your registered services, and the logger.                                                                                                     |
-| `isBatch`, `recordIds`, `records`, `count`              | Bulk metadata, present only in `updateMany` / `deleteMany`. See [Bulk operations](#bulk-operations).                                                               |
-
-`AppContext` is assembled from your registered adapters and services, so `ctx.session` and `ctx.services` are typed by your app's codegen. The same flat service surface is injected into access rules, routes, and jobs, once you know it in a hook, you know it everywhere.
-
-<Callout type="info">
-	**The email service is `ctx.email`, and you send with `sendTemplate`.** Reach
-	for `ctx.email.sendTemplate({ template, input, to })`; `template` is one of
-	your generated email keys and `input` is its typed props.
-</Callout>
-
-## Advanced
-
-### Side effects (`onAfterCommit`)
-
-`afterChange`, `afterDelete`, `afterPurge`, and `afterTransition` run **inside**
-the CRUD transaction.
-`queue.<job>.publish()` is transaction-aware: call and await it directly so
-pg-boss joins the transaction or the framework commits an external-adapter
-dispatch intent with the data. Direct email, HTTP calls, and other
-non-transactional effects must still wait until commit. (`afterRead` runs
-_after_ the transaction closes.) `afterTransition` retains its existing
-non-fatal compatibility behavior; use `beforeTransition` to veto a transition.
-
-Use `ctx.onAfterCommit(cb)` to defer only those non-transactional side effects until the **outermost** transaction commits:
-
-```ts title="src/questpie/server/collections/posts.ts"
-.hooks({
-	afterChange: async ({ data, operation, onAfterCommit, queue, search }) => {
-		if (operation === "create") {
-			await queue.welcomePost.publish(
-				{ postId: data.id },
-				{ idempotencyKey: `welcome-post:${data.id}` },
-			);
-		}
-		onAfterCommit(async () => {
-			await search.scheduleIndex("posts", String(data.id));
-		});
-	},
-})
-```
-
-- The callback runs **only after** the data is durably committed.
-- If you call `onAfterCommit` **outside** any transaction, the callback runs **immediately** (fire-and-forget).
-- Inside a managed transaction, callbacks run sequentially after commit and the
-  operation waits for them, but their errors are logged and never propagated
-  because the database commit is already final. Outside a transaction they run
-  immediately as fire-and-forget work. Do not rely on either form to fail or
-  roll back the request.
-
-This is exactly how the framework's own realtime and search hooks are written, both subscribe to `afterChange` / `afterDelete` and wrap their broadcast/indexing in `ctx.onAfterCommit`, so events fire only on durable data.
-
-<Callout type="warn">
-	**Keep direct external effects out of an `after*` hook.** Transactional
-	database writes through `ctx.db`, transaction-aware Queue publication, and
-	typed Channels ledger writes intentionally commit or roll back with the
-	operation. Direct email, HTTP, `realtime.notify`, or an independent database
-	connection cannot join that transaction; put them in a durable job or
-	`onAfterCommit`.
-</Callout>
-
-### Aborting an operation
-
-Throw inside a rollback-capable mutation hook to abort. `before*`,
-`afterChange`, `afterDelete`, and purge-hook errors **propagate** and roll the
-operation back:
+Throw. Every stage except `afterTransition` propagates to the caller, and any
+stage that runs before the transaction closes takes the write back with it.
 
 ```ts title="src/questpie/server/collections/posts.ts"
 import { ApiError } from "questpie/errors";
@@ -320,133 +149,46 @@ import { ApiError } from "questpie/errors";
 })
 ```
 
-`ApiError` gives you a typed, status-mapped failure (`badRequest` → 400, `forbidden` → 403, `notFound` → 404, …) that serializes cleanly to the client. A plain `throw new Error(...)` also aborts, but is reported as a generic internal error (HTTP 500) rather than a typed one, so prefer `ApiError`. See [Validation](#related) for the full `ApiError` surface.
+`ApiError` maps to a status the client can act on: `badRequest` to 400,
+`forbidden` to 403, `notFound` to 404. A plain `Error` aborts too, but arrives
+as an unexplained 500.
 
-<Callout type="warn">
-	**`afterRead` is not a rollback hook.** It runs after a write transaction has
-	committed. A thrown error still rejects the caller's response, but it cannot
-	undo data that already landed. Work that must never affect the response
-	belongs in a durable job or [`onAfterCommit`](#side-effects-onaftercommit),
-	whose callbacks are non-fatal because the commit is already final.
+<Callout type="warn" title="`afterRead` cannot undo a write">
+	It runs once the transaction has committed. Throwing there rejects the
+	caller's response and leaves the row in the database.
 </Callout>
 
-### Bulk operations
+## Hooks add up
 
-`updateMany` and `deleteMany` run hooks **per record** and attach batch metadata to `ctx`, so you can short-circuit expensive per-row work and reason about the whole batch:
-
-```ts title="src/questpie/server/collections/posts.ts"
-.hooks({
-	afterChange: async ({ data, isBatch, recordIds, count, queue }) => {
-		if (isBatch) {
-			// This hook still fires once per affected record;
-			// recordIds / count describe the whole batch.
-		}
-		await queue.reindexPost.publish(
-			{ id: data.id },
-			{ idempotencyKey: `reindex-post:${data.id}` },
-		);
-	},
-})
-```
-
-- `isBatch` is `true` when the hook runs as part of `updateMany` / `deleteMany`.
-- `recordIds` / `records` / `count` describe the whole batch. `records` semantics: **post-image** on update, **pre-image** on delete.
-- Transaction-bound hook chains run sequentially in winner order. Any failure rolls back the complete bulk mutation.
-
-<Callout type="warn">
-	**Bulk `before*` hooks are *intent*, bulk `afterChange` is *fact*.** In a
-	conditional (`where`-based) `updateMany`, `beforeValidate` and `beforeChange`
-	run on the *pre-image* of every candidate row, they may fire for rows that
-	then lose a concurrent write-time claim and are never actually written.
-	`afterChange` (and the returned records) fire for the **winners only**. So put
-	validation/transform that's safe to run speculatively in `before*`, and
-	anything that must reflect a real committed change in `afterChange`.
-</Callout>
-
-### Transition hooks
-
-With versioning and workflow enabled, `beforeTransition` and `afterTransition` fire around `transitionStage`. Their context describes the stage move with transition-specific fields:
-
-```ts title="src/questpie/server/collections/posts.ts"
-.hooks({
-	beforeTransition: ({ data, fromStage, toStage, recordId }) => {
-		if (toStage === "published" && !data.publishedAt) {
-			throw new Error("Set publishedAt before publishing.");
-		}
-	},
-	afterTransition: async ({ data, fromStage, toStage, queue }) => {
-		await queue.announce.publish(
-			{ postId: data.id, stage: toStage },
-			{ idempotencyKey: `announce:${data.id}:${toStage}` },
-		);
-	},
-})
-```
-
-The transition context carries `data` (the record), `recordId`, `fromStage`, `toStage`, an optional `scheduledAt` (set when the transition is scheduled for a future date instead of running now), `locale`, and `accessMode`, plus the usual `AppContext` services and `onAfterCommit`. Throw in `beforeTransition` to abort the transition.
-
-### Arrays and composition
-
-Any stage accepts a **single function or an array**, both are valid:
-
-```ts
-.hooks({
-	beforeChange: [normalizeTitle, computeSlug, stampUpdatedBy],
-})
-```
-
-Because `.hooks()` **merges** per stage, you can split hooks across calls or contribute them from modules, and they all run in registration order:
+Each call to `.hooks()` appends to the handlers already registered for a stage
+rather than replacing them, and they run in registration order.
 
 ```ts
 collection("posts")
-	.hooks({ beforeChange: normalizeTitle }) // e.g. module A
-	.hooks({ beforeChange: computeSlug }); // e.g. module B
-// → both run on every change, in order
+	.hooks({ beforeChange: normalizeTitle })
+	.hooks({ beforeChange: computeSlug });
+// both run, in that order
 ```
 
-### Field access vs hooks
+That is what lets `a.merge(b)` and a module contribute handlers to a collection
+someone else declared. It is the opposite of `.access()`, which replaces its
+whole object on every call. `.upload()` registers hooks of its own on
+`afterRead`, `afterChange`, `afterDelete` and `afterPurge`, and yours run
+alongside them.
 
-To strip or hide a single field by permission, prefer **field access rules** (`access.fields`) or `f.text().inputFalse()` (read-only, drop it from input) / `f.text().outputFalse()` (write-only, drop it from output) over writing a hook that deletes keys, they fold into the same authorization layer and run automatically. Use **hooks for logic** (deriving, reacting, side effects); use **access for authorization**. See [Access control](#related).
+## Next
 
-## TypeScript
-
-Hooks are fully typed from your collection definition, `ctx.data`, `ctx.original`, and `ctx.operation` narrow per stage with **no annotations** when you write the hook **inline** on `.hooks({ ... })`.
-
-For **shared helpers** in separate files, import the generated `HookRuleContext<K>` alias from `#questpie`, which narrows `data` to that collection's row:
-
-```ts title="src/questpie/server/lib/post-hooks.ts"
-import type { HookRuleContext } from "#questpie";
-
-export function stampSlug(ctx: HookRuleContext<"posts">) {
-	if (ctx.operation === "create" && ctx.data.title && !ctx.data.slug) {
-		ctx.data.slug = ctx.data.title.toLowerCase().replace(/\s+/g, "-");
-	}
-}
-```
-
-`HookRuleContext<K>` is generated into `src/questpie/server/.generated/index.ts` and aliases the package-level `HookContext`, resolving `data` to `CollectionDoc<K>` and typing `ctx.session` / `ctx.collections` through your app's `AppContext`.
-
-<Callout type="warn">
-	**Cycle rule for the generated context aliases.** Import `HookRuleContext` /
-	`AccessRuleContext` **only** from files that are *not* imported by a
-	collection (routes, services, jobs, scripts). A helper that a collection
-	imports must take the package-level `HookContext` / `AccessContext` from
-	`questpie` instead, importing the generated `#questpie` barrel from a
-	collection creates a codegen cycle.
-</Callout>
-
-The raw types live in the `questpie` package if you need them directly:
-
-```ts
-import type { HookContext, HookFunction } from "questpie";
-// HookContext<TData, TOriginal, TOperation>
-// HookFunction<TData, TOriginal, TOperation> = (ctx) => Promise<void> | void
-```
-
-## Related
-
-- **[Access control](/docs/schema/access-control)**, authorize reads/writes and filter rows; field-level access for hiding columns. Use access for _who_, hooks for _what happens_.
-- **[Validation](/docs/schema/validation)**, the Zod schema that runs between `beforeValidate` and `beforeChange`; `exclude` / `refine` and field-level `.zod()`; the full `ApiError` surface you throw from `before*` hooks.
-- **[Collections](/docs/schema/collections)**, where `.hooks()` lives, alongside fields, indexes, access, and admin config.
-- **[Globals](/docs/schema/globals)**, singletons with their own `beforeUpdate` / `afterUpdate` hook stages.
-- **[Jobs](/docs/code/jobs)**, whose typed `queue.*.publish()` joins the ambient hook transaction.
+- **[Side effects](/docs/schema/hooks/side-effects)**, which hooks sit inside
+  the transaction, what can join it, and what has to wait for the commit.
+- **[Bulk writes](/docs/schema/hooks/bulk-writes)**, what `updateMany` and
+  `deleteMany` fire, and which rows they fire for.
+- **[Transition hooks](/docs/schema/hooks/transitions)**, the pair around a
+  workflow stage move, which carry a different context.
+- **[Typing a hook](/docs/schema/hooks/typing)**, sharing one handler between
+  collections without breaking codegen.
+- [Access control](/docs/schema/access-control) decides who may write. Hooks
+  decide what happens when they do.
+- [Validation](/docs/schema/validation) is the schema that runs between
+  `beforeValidate` and `beforeChange`.
+- [Configuration](/docs/ship/configuration) has `appConfig({ hooks })`, one
+  handler across every collection.

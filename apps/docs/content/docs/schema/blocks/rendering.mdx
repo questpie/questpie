@@ -1,0 +1,106 @@
+---
+title: Rendering a page
+description: BlockRenderer walks the saved tree and calls one of your components per node. QUESTPIE never renders your site, it hands you the values and gets out of the way.
+kind: guide
+package: "@questpie/admin"
+---
+
+The document comes back from the API as a tree of ids and values. This page
+covers the lookup rule, the props one component gets, and the preview wiring.
+
+## The renderers map
+
+Every file in `src/questpie/admin/blocks/` is collected by the generator into
+`admin.blocks`, keyed by filename. The component can be the default export or
+the first named one, both are picked up.
+
+```tsx title="src/routes/pages.$slug.tsx"
+import admin from "@/questpie/admin/.generated/client";
+import { type BlockContent, BlockRenderer } from "@questpie/admin/client";
+
+<BlockRenderer
+	content={page.content as BlockContent}
+	renderers={admin.blocks}
+	data={page.content._data}
+/>;
+```
+
+`BlockRenderer` walks `content._tree` in order and looks each node up by its
+`type`, then by the camelCase form of it. A type with no renderer draws nothing
+and warns in development, so a half-shipped block cannot break the page.
+
+| Prop                                               | Type                                   | What it is                       |
+| -------------------------------------------------- | -------------------------------------- | -------------------------------- |
+| `content`                                          | `BlockContent`                         | The stored `{ _tree, _values }`. |
+| `renderers`                                        | `Record<string, (props) => ReactNode>` | Block type to component.         |
+| `data`                                             | `Record<string, unknown>`              | The `_data` from the same read.  |
+| `className`                                        | `string`                               | Class on the container element.  |
+| `selectedBlockId`, `onBlockClick`, `onBlockInsert` | see below                              | Live-preview wiring.             |
+
+## What one renderer receives
+
+`BlockProps<"hero">` resolves from the block file: `values` from `.fields()`,
+`data` from `.prefetch()`. The key you pass is the filename, the same key the
+map uses.
+
+```tsx title="src/questpie/admin/blocks/columns.tsx"
+import type { BlockProps } from "../.generated/client";
+
+export function ColumnsRenderer({ values, children }: BlockProps<"columns">) {
+	return <div data-columns={values.columns}>{children}</div>;
+}
+```
+
+A block that called `.allowChildren()` gets its nested blocks through
+`children`, already rendered. Place them where you want them and the nesting an
+editor built is the nesting on screen. Every renderer also receives the block's
+`id`, and its `type` as an extra the props type does not declare.
+
+<Callout type="warn" title="`isSelected` and `isPreview` are never passed">
+	The props type lists both, and `BlockRenderer` sets neither. They are always
+	`undefined`. Build on `values`, `data` and `children` only. Selection lives on
+	the wrapper, not in your component.
+</Callout>
+
+## Live preview
+
+The same components serve the admin's preview pane. Forward the three editor
+props from `useCollectionPreview()` and `BlockRenderer` adds click-to-select
+outlines and insert affordances between blocks, while production renders the
+same markup with none of it.
+
+```tsx
+const preview = useCollectionPreview({ initialData: page, onRefresh });
+
+<BlockRenderer
+	content={preview.data.content as BlockContent}
+	renderers={admin.blocks}
+	data={preview.data.content._data}
+	selectedBlockId={preview.selectedBlockId}
+	onBlockClick={preview.isPreviewMode ? preview.handleBlockClick : undefined}
+	onBlockInsert={preview.isPreviewMode ? preview.handleBlockInsert : undefined}
+/>;
+```
+
+Wrap a value in `PreviewField` to make it editable in place. Everything lives
+in `@questpie/admin/client` alongside `PreviewProvider`.
+
+## Types worth knowing
+
+| Type                          | From                     | For                                  |
+| ----------------------------- | ------------------------ | ------------------------------------ |
+| `BlockProps<"name">`          | your generated client    | Props of one renderer, fully typed.  |
+| `BlockContent`                | `@questpie/admin/client` | The document a renderer map is fed.  |
+| `isBlockContent(value)`       | `@questpie/admin/client` | A guard for an untyped payload.      |
+| `BlocksDocument`, `BlockNode` | `@questpie/admin/fields` | The server-side shape of the column. |
+
+The two shapes match apart from `{}` against `unknown` in the value maps. Reach
+for `as BlockContent` when a loader hands the row over widened.
+
+## Related
+
+- **[Blocks](/docs/schema/blocks)** for the block file behind each renderer.
+- **[Loading data for a block](/docs/schema/blocks/prefetch)** for what fills
+  the `data` prop.
+- **[Admin collections](/docs/admin/collections)** for `.preview()`, which
+  points the preview pane at your route.

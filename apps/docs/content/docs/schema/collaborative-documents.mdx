@@ -1,33 +1,26 @@
 ---
 title: Collaborative documents
-description: Model one collection record or global as an access-controlled collaborative aggregate with typed CRDT fields.
+description: One record becomes one collaborative aggregate. The fields you mark keep independent CRDT replicas, so several people can type into them at once and no edit is lost.
+kind: guide
+package: questpie
 ---
 
-QUESTPIE collaboration is a framework data primitive, not an editor or
-WebSocket integration. One collection record or one global is one
-**collaborative aggregate**. Explicitly marked text and set fields keep
-independent CRDT replicas, while sharing identity, authorization, lifecycle,
-commit order, presence, and atomic multi-field transactions.
+Two people open the same article and type into the same paragraph. Under
+ordinary CRUD the second save wins and the first sentence disappears. This page
+marks the fields where that is unacceptable, then covers what the marking costs
+the rest of the collection.
 
-That means three people can edit a title, add tags, and write body text at the
-same time. A single client transaction can also change all three atomically.
-Non-collaborative fields continue through normal CRUD.
+## Mark the owner, then the fields
 
-## Declare an aggregate
-
-Install the Yjs engine:
-
-```bash
-bun add @questpie/crdt-yjs
-```
-
-Mark the owner and each collaborative field:
+Both calls are required. `.collaborative()` on the builder declares that one
+record is one aggregate. `.crdt()` on a field declares that field a replica
+inside it.
 
 ```ts title="src/questpie/server/collections/articles.ts"
 import { collection } from "#questpie/factories";
 import { z } from "zod";
 
-export default collection("articles")
+export const articles = collection("articles")
 	.fields(({ f }) => ({
 		title: f
 			.text({ mode: "text" })
@@ -53,25 +46,46 @@ export default collection("articles")
 	});
 ```
 
-The owner opt-in and field markers are both required. Codegen fails closed for
-orphan markers, an aggregate with no CRDT fields, or an ineligible field.
+`status` stays an ordinary column. Only the three marked fields merge.
 
-V1 supports:
+Half a declaration stops the app from constructing. A marked field on a
+collection that never called `.collaborative()`, a collaborative collection with
+no marked fields, and a marked field that does not qualify each throw with the
+offending path named. A collaborative global works the same way, except it may
+not be scoped.
 
-- required, unbounded, non-localized text with an empty default and identity
-  encoding;
-- required string arrays using the add-wins set strategy.
+`awareness` is optional. Give it a Zod schema and each participant may publish
+one value matching it, for a name tag or a cursor colour. Leave it out and the
+aggregate carries no presence.
 
-Relations, uploads, localized fields, bounded varchar, ordered lists,
-object/map values, transforms, and custom codecs are not silently coerced into
-CRDTs.
+## Two formats
 
-## Configure both text-engine halves
+There are two, and the field type you reach for decides which one is legal.
 
-The server validates and merges untrusted Yjs bytes in a bounded in-process
-worker-thread pool. It uses Node.js `worker_threads` on Node 18+ and the
-Web Worker-compatible runtime on Bun. The browser engine creates local updates
-and maintains the offline replica.
+| `format` | Declare the field as                         | Merge rule                                              |
+| -------- | -------------------------------------------- | ------------------------------------------------------- |
+| `"text"` | `f.textarea()` or `f.text({ mode: "text" })` | character-level, both edits survive                     |
+| `"set"`  | `f.text({ mode: "text" }).array()`           | `conflict: "add-wins"`, a concurrent add beats a remove |
+
+A set holds unique strings, at most 10,000 of them and 4 KiB each. It has no
+order you control, so it fits tags and labels rather than an arranged list.
+
+Every marked field must be `.required()` with an empty default, and must carry
+no length rule, transform, hook, localization, custom type or `.virtual()`.
+[Eligible fields](/docs/schema/collaborative-documents/eligible-fields) has the
+full list and the error each violation produces.
+
+## Turn the runtime on
+
+A `set` field merges inside `questpie` itself. A `text` field needs an engine,
+and the one QUESTPIE ships wraps Yjs:
+
+```bash
+bun add @questpie/crdt-yjs
+```
+
+Wire it on both sides. The server merges untrusted bytes in a worker pool, and
+the browser produces the local updates and keeps the offline replica.
 
 ```ts title="src/questpie/server/questpie.config.ts"
 import { yjsServerEngine } from "@questpie/crdt-yjs/server";
@@ -82,7 +96,6 @@ export default runtimeConfig({
 	realtime: true,
 	crdt: {
 		namespace: "my-app",
-		allowedOrigins: ["https://app.example.com"],
 		engines: { text: yjsServerEngine() },
 	},
 });
@@ -103,83 +116,66 @@ export const client = createClient<AppConfig>({
 });
 ```
 
-Run codegen, `bunx questpie crdt:manifest`, and
-`bunx questpie migrate:generate`. Run the manifest and migration generation
-commands a second time and require no diff. Commit the generated artifacts,
-then apply the committed migration with `bunx questpie migrate:up`. Do not
-hand-edit the manifest or migration SQL.
+`namespace` is at most 64 printable ASCII characters and can never change once
+generated. The engine and the transport are covered in
+[Runtime and limits](/docs/schema/collaborative-documents/runtime).
 
-## Transport: one realtime connection, normal Fetch
+## Generate, then commit what it wrote
 
-CRDT data uses two routes already mounted by `createFetchHandler()`:
-
-```text
-POST /api/realtime/crdt/open
-POST /api/realtime/crdt/exchange
+```bash
+questpie generate        # registers the collection
+questpie crdt:manifest   # writes crdt.manifest.json
+questpie generate        # bakes the manifest into the generated app
+questpie migrate:generate
+questpie migrate:up
 ```
 
-The generated client reuses its one lazy SSE or Pusher connection for opaque
-visible-dirty and awareness-dirty hints. Updates, locators, fields, cursors,
-grants, and credentials never ride the channel payload. A missed or duplicate
-hint is harmless because the client reconciles through the database-backed
-Fetch exchange.
+`crdt.manifest.json` lands next to your config. It holds the stable identity of
+every collaborative field, it is append-only, and the app refuses to start when
+your declaration disagrees with it. Commit it with the migration and never
+hand-edit either. Running the generators a second time must produce no diff.
 
-You do not add an Elysia host, WebSocket route, second provider connection,
-sidecar, or dedicated service. The ordinary TanStack Start catch-all API route
-already serves collaboration.
+Renaming or removing a marked field is a migration, not an edit.
+[The manifest](/docs/schema/collaborative-documents/manifest) covers both.
 
-## Authority and lifecycle
+## What the marking changes
 
-Open and every exchange rebuild fresh request authority. Normal owner and
-field access rules decide read/edit grants. Cookie requests require an exact
-configured HTTP(S) Origin. OAuth actors retain their stable credential
-identity. Verified agents require the explicit agent authentication seam and
-`crdt:edit` for edits.
+`.collaborative()` turns on optimistic concurrency, which is why most of this
+table exists.
 
-Ordinary update, bulk update, system mode, hooks, and version restore cannot
-mutate CRDT-managed fields. Soft delete retires the active resource epoch;
-restore creates a new epoch. Purge physically removes the retired
-collaboration state in the same transaction as the owner.
+| Operation                    | After marking                                                               |
+| ---------------------------- | --------------------------------------------------------------------------- |
+| `find`                       | unchanged, the column carries the latest merged value                       |
+| `create`                     | seeds the initial value, or falls back to the declared empty default        |
+| `updateById`                 | throws if the data contains a marked field                                  |
+| any write to an existing row | now takes `expectedRevision`, checked against a generated `revision` column |
+| `revertToVersion`            | rejected while any marked field exists                                      |
+| undelete                     | goes through `restoreById`, not an update that clears `deletedAt`           |
 
-`.collaborative()` also enables the framework-owned canonical `revision`.
-CRDT commit sequences, field cursors, epochs, and state vectors remain
-independent. One acknowledged aggregate projection cut updates all projected
-owner fields and advances `revision` once in the same transaction. Rejected
-hash, authority, or consumer acknowledgement checks advance neither owner
-data, revision, projection cursors, receipt, nor realtime state. Ordinary
-metadata mutations serialize on the same row and require `expectedRevision`.
+`updateMany`, `updateBatch` and system mode all run the same guard, so they
+cannot reach a marked field either. After the seed at `create`, the collaborative
+client is the only writer.
 
-Use `versioning: { collaborativeSnapshots: "checkpoint" }` for collaborative
-history. Projection cuts do not create an unbounded history row each time;
-ordinary metadata mutations, revert/workflow operations, or an intentional
-empty generated update are explicit checkpoints whose snapshots record
-`sourceRevision`. The collaborative builder normalizes enabled versioning to
-this policy and the projection/replace ports reject any unsafe policy.
+<Callout type="warn" title="`revision` is now framework-owned">
+	Declaring your own field named `revision` on a collaborative collection is an
+	error. Read it, do not write it.
+</Callout>
 
-Sessions and field grants are durable and fenced. Policy changes, session
-generation changes, owner lifecycle transitions, or field downgrades cannot
-silently replay stale offline edits under new authority.
+If the collection also has `versioning` enabled, the builder rewrites it to
+`collaborativeSnapshots: "checkpoint"` for you. The merge writes the column
+directly, so keystrokes never become history rows. An ordinary write to an
+unmarked field still does.
 
-## Limits and operational model
+## The working result
 
-The binary exchange accepts at most 256 KiB per field update, 32 field parts,
-and 1 MiB per request payload. A verified bootstrap artifact may total at most
-64 MiB. Awareness input is capped at 1 KiB and coalesced to 20 writes per
-second. These are CRDT data-plane limits. Pusher documents event data as
-limited to 10 KB; QUESTPIE measures the canonical JSON envelope in UTF-8 and
-enforces an exact 10,000-byte cap. That does not cap documents because channels
-carry only tiny dirty hints.
+Three people open the same article. One types in the title, one adds a tag, one
+writes the body, and all three see each other's work land. A single client
+transaction can change all three at once, and the marked columns keep whatever
+the merge produced, readable by every ordinary query you already wrote.
 
-QUESTPIE requires PostgreSQL 15+. Collaborative state, idempotency receipts,
-fences, sessions, snapshots, pulls, and presence are durable database state.
-Broker delivery improves latency but is not the source of truth.
+## Next
 
-The server engine's worker threads are bounded CPU-isolation machinery inside
-the API or queue process that already uses the app. They do not require another
-deployable process. Lifecycle shutdown is registered once per generated app
-and drains during the existing Nitro/TanStack Start shutdown.
-
-See [Client collaborative documents](/docs/client/collaborative-documents) for
-the generated API and
-[the collaborative article recipe](/docs/recipes/collaborative-article) for an
-end-to-end flow.
+**[Collaborative documents in the client](/docs/client/collaborative-documents)**
+is the other half: connecting, editing, transacting and recovering. **[The
+collaborative article recipe](/docs/recipes/collaborative-article)** builds one
+end to end.

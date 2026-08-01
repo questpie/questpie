@@ -1,0 +1,76 @@
+---
+title: Eligible fields
+description: A merge has to produce a value the field would have accepted anyway. That rules out most of the field builder, and the app names every reason it rejected yours.
+kind: guide
+package: questpie
+---
+
+A maximum length or a `trim()` can be true of both inputs and false of what the
+merge produces. Nothing gets to reject that value once it exists, because two
+replicas merge without asking your server. So QUESTPIE refuses the field up
+front, before a single replica is written.
+
+## The two shapes that pass
+
+```ts
+// text
+body: f.textarea().default("").required().crdt({ format: "text" }),
+title: f.text({ mode: "text" }).default("").required().crdt({ format: "text" }),
+
+// set
+tags: f
+	.text({ mode: "text" })
+	.array()
+	.default([])
+	.required()
+	.crdt({ format: "set", conflict: "add-wins" }),
+```
+
+`f.text(255)` does not qualify. The number is a maximum length, and it also
+stores the column as `varchar` rather than `text`. `{ mode: "text" }` is the
+unbounded form. An array field stores as `jsonb`, so the set is one column
+rather than a join table.
+
+## Why each rejection happens
+
+The app refuses to construct, naming the path and every reason at once. You see
+it the moment a CLI command or your server loads the generated app:
+
+```text
+Invalid QUESTPIE CRDT field "collections.articles.title": nullable, missing-empty-default
+```
+
+| Reason                   | What you wrote                                                                                               |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `nullable`               | no `.required()`, so a merge could have to invent a null                                                     |
+| `missing-empty-default`  | no `.default("")` or `.default([])`, so a new row has no replica to start from                               |
+| `unsupported-field-type` | a type the format will not take: `textarea` or unbounded `text` for text, unbounded `text` for set           |
+| `array`                  | `format: "text"` on an `.array()` field                                                                      |
+| `scalar`                 | `format: "set"` on a field that is not an `.array()`                                                         |
+| `text-refinement`        | `min`, `max`, `pattern`, `trim`, `lowercase` or `uppercase`, including the implicit maximum in `f.text(255)` |
+| `array-refinement`       | `.minItems()` or `.maxItems()`                                                                               |
+| `localized`              | `.localized()`, which would mean one replica per locale                                                      |
+| `virtual`                | `.virtual()`, so there is no column to project into                                                          |
+| `input-mode`             | `.inputFalse()` or `.inputOptional()`                                                                        |
+| `output-mode`            | `.outputFalse()`                                                                                             |
+| `hooks`                  | `.hooks()`, which could rewrite a merged value                                                               |
+| `drizzle-transform`      | `.drizzle()`                                                                                                 |
+| `zod-transform`          | `.zod()`                                                                                                     |
+| `from-db-transform`      | `.fromDb()`                                                                                                  |
+| `to-db-transform`        | `.toDb()`                                                                                                    |
+| `custom-type`            | `.type()` on an `f.from()` field, which names a custom column type                                           |
+| `unsupported-format`     | a `format` that is neither `"text"` nor `"set"`                                                              |
+
+## What a set can hold
+
+Unique strings, at most 10,000 of them, at most 4 KiB each. Byte order decides
+how they come back, so there is no position you control. `add-wins` is the only
+conflict rule: when one participant adds a value while another removes it, the
+add survives.
+
+## Not yet qualified
+
+Relations, uploads, ordered lists, object and map values, bounded `varchar`,
+localized fields and custom codecs are not silently coerced into replicas. They
+are rejected, and each would need its own merge semantics before it could be
+allowed.

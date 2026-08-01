@@ -1,0 +1,127 @@
+---
+title: Retention
+description: A retention job is application code you write around purgeById. QUESTPIE supplies the index it pages through and the irreversible unit it calls, and nothing else.
+kind: guide
+package: questpie
+---
+
+Tombstones older than thirty days have to go. QUESTPIE has no retention setting
+to switch on, so this is a job you write, and the shape of it decides whether
+it finishes.
+
+## Keep the unit small
+
+`purgeById` takes one id and runs one transaction. Do not load a hundred
+thousand ids into memory, and do not wrap the whole sweep in a single
+transaction. Page through them and let each page produce durable work.
+
+```ts title="src/questpie/server/jobs/purge-documents.ts"
+import { job } from "questpie";
+import { z } from "zod";
+
+export default job({
+	name: "purge-documents",
+	schema: z.object({ pageSize: z.number().optional() }),
+	options: { cron: "0 3 * * *" },
+	handler: async ({ payload, collections }) => {
+		const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+		const { docs } = await collections.documents.find({
+			where: { deletedAt: { lte: cutoff } },
+			orderBy: [{ deletedAt: "asc" }, { id: "asc" }],
+			includeDeleted: true,
+			limit: payload.pageSize ?? 100,
+		});
+
+		for (const doc of docs) {
+			await collections.documents.purgeById({ id: doc.id });
+		}
+	},
+});
+```
+
+A job handler runs under a system context, so it purges regardless of the
+`purge` rule. See [Jobs](/docs/code/jobs) for the runner and the schedule.
+
+## The index it reads through
+
+Soft delete generates `<table>_deleted_at_retention_idx` on `(deletedAt, id)`,
+limited to `WHERE deleted_at IS NOT NULL`. Ordering by that pair is the one
+scan that stays cheap as the live table grows, so page by it rather than by
+offset.
+
+A purged row is gone, so the next run reads the next batch with no cursor to
+keep. A row that came back with a conflict is still there, at the head of the
+queue, and every run reads it again. Clear what references it or exclude it by
+id, or the page stops moving.
+
+Generate the migration for that index with `questpie migrate:generate`, review
+it, and deploy it with `questpie migrate:up`. Never hand-write an `ALTER` to
+approximate it.
+
+## Read the outcome of each id
+
+Each id ends one of four ways, and the run has to tell them apart.
+
+| Answer    | What it means for the run                                       |
+| --------- | --------------------------------------------------------------- |
+| `success` | Gone. Count it and move on.                                     |
+| `404`     | Under a system context, treat it as success. The commit landed. |
+| `409`     | A retained reference, or a table lock that timed out.           |
+| Transport | Retry with bounded backoff, then dead-letter.                   |
+
+Read the conflict before reacting to it. A lock timeout earns one retry. A
+retained reference does not: either the referring rows go first under their own
+rules, or that row stays. Looping on it burns locks and changes nothing.
+
+<Callout type="warn" title="A 404 in user mode is ambiguous">
+	Purge returns the same not found for a denied row as for a missing one. Only a
+	system context can read it as success. A job running under user access should
+	re-check the row before counting it as purged.
+</Callout>
+
+One purge is one transaction, so a crash halfway through a page leaves the
+earlier ids purged and the rest still eligible. The next run carries on. Keep
+that property by never batching several ids into one transaction of your own.
+
+## Do not parallelize one collection
+
+Purge locks the collection's own table in a mode that conflicts with itself, so
+two purges of the same collection queue behind each other by design. Adding
+workers to one collection measures lock contention. Run independent collections
+side by side instead, and start at one purge at a time per collection so the
+database pool keeps headroom for the rest of the app.
+
+Purge bounds its wait for those table locks at three seconds and returns a
+retryable conflict, so a run does not sit indefinitely behind a relation writer.
+The owner row lock it takes next carries no such bound.
+
+## Files leave on a second job
+
+Purging a row from an upload collection does not delete the object. It writes a
+cleanup intent in the same transaction, and the built-in `storage-cleanup` job
+removes the object after commit. A provider outage or a crash leaves durable
+retry work rather than an orphaned file.
+
+That job is registered with the core module and runs on its own schedule, so a
+worker already calling `app.queue.listen()` picks it up. In an API-only
+deployment, have your platform scheduler call
+`app.queue.runOnce({ jobs: ["storage-cleanup"] })`. The low-latency wake purge
+publishes is throttled, so a hundred thousand purges do not become a hundred
+thousand queue messages.
+
+Cleanup checks every upload-enabled collection before deleting, so a key still
+held by another row survives.
+
+## Measure before you promise a window
+
+Hook cost, reference scans, version and locale fan-out, search and realtime
+work, pool size and concurrent restores all move the throughput of one purge.
+Numbers from another deployment do not carry. Record purged, conflicted and
+dead-lettered counts, the age of the oldest eligible tombstone and how long one
+page takes, then set your batch window from what you captured.
+
+## Related
+
+- [Purge](/docs/schema/soft-delete/purge) for the access rule, the hooks and the
+  reference checks these counts come from.
+- [Jobs](/docs/code/jobs) for schedules, retries and dead letters.
