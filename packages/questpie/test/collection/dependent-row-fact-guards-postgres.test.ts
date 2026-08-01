@@ -103,7 +103,7 @@ const orderWrites = collection("postgres_guard_order_writes")
 				{ collection: "orderAlpha" as const, ids: [data.alphaId] },
 				{ collection: "orderOmega" as const, ids: [data.omegaId] },
 			];
-			await lockDependentRows(data.reverse ? requests.reverse() : requests);
+			await lockDependentRows(data.reverse ? requests.toReversed() : requests);
 		},
 	});
 
