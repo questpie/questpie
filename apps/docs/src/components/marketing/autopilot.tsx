@@ -12,13 +12,12 @@ import { type FormEvent, useState } from "react";
 
 import { CodeSample } from "./code";
 
-/* CONFIRM BEFORE LAUNCH. There is no early-access capture anywhere in this repo
- * — no endpoint, no form service, no address — so this is the conventional inbox
- * for the domain and nothing more. The page it replaces held the address in
- * React state and dropped it on submit, showing a thank-you for a message nobody
- * received; a composer that opens against the wrong address at least fails where
- * the sender can see it. Replace with a real destination and this becomes a POST. */
-const EARLY_ACCESS_EMAIL = "hello@questpie.com";
+/* Confirmed by the owner. The form opens a mail composer rather than posting,
+ * because the repo has no capture endpoint; when one exists, `submit` below is
+ * the only thing that changes. The page this replaces held the address in React
+ * state and dropped it on submit while showing a thank-you, so every lead was
+ * lost silently. */
+const EARLY_ACCESS_EMAIL = "info@questpie.com";
 
 /* The kit wrote `orders.update(4412, { … })`. The documented accessor is
  * `collections.<name>.updateById({ id, data })` (docs/concepts/collections.mdx,
