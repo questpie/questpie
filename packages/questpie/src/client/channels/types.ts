@@ -42,9 +42,14 @@ export type ChannelSubscribeOptions = {
 	onError?: (error: Error) => void;
 	/** Authorized and caught up for the current transport subscription epoch. */
 	onReady?: () => void;
+	/** The admitted epoch ended; a reconnect may later call `onReady` again. */
+	onNotReady?: () => void;
 };
 
-export type ChannelPresenceOptions = Omit<ChannelSubscribeOptions, "onReady">;
+export type ChannelPresenceOptions = Omit<
+	ChannelSubscribeOptions,
+	"onReady" | "onNotReady"
+>;
 
 type SubscribeMethod<TDefinition extends AnyChannelDefinition> =
 	keyof ChannelParamsOf<TDefinition> extends never

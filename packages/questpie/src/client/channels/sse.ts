@@ -86,6 +86,8 @@ export class SseChannelTransport implements ChannelClientTransport {
 			callback,
 			options.onReady,
 			() => this.failEntry(entry, channelSlowConsumerError()),
+			false,
+			options.onNotReady,
 		);
 		entry.subscribers.add(delivery.accept);
 		const errorCallback = options.onError
@@ -131,6 +133,7 @@ export class SseChannelTransport implements ChannelClientTransport {
 			options.onReady,
 			() => this.failEntry(entry, channelSlowConsumerError()),
 			true,
+			options.onNotReady,
 		);
 		entry.presenceSubscribers.add(delivery.accept);
 		const errorCallback = options.onError
@@ -594,8 +597,8 @@ export class SseChannelTransport implements ChannelClientTransport {
 	}
 
 	private notifyEntry(entry: Entry, error: Error): void {
-		this.resetEntryEpoch(entry);
 		const errorCallbacks = Array.from(entry.errorCallbacks);
+		this.resetEntryEpoch(entry);
 		for (const callback of errorCallbacks) {
 			notifyChannelConsumer(callback, error);
 		}

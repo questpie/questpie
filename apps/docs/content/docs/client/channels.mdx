@@ -157,7 +157,11 @@ const stop = client.channels.chatRoom.subscribe(
 			console.log(message.data.active);
 		}
 	},
-	{ onError: console.error },
+	{
+		onReady: () => setMutationEnabled(true),
+		onNotReady: () => setMutationEnabled(false),
+		onError: console.error,
+	},
 );
 
 const receipt = await client.channels.chatRoom.publish({
@@ -168,6 +172,19 @@ const receipt = await client.channels.chatRoom.publish({
 
 stop();
 ```
+
+`onReady` starts one admitted subscription epoch after authorization and replay
+catch-up complete. If that epoch ends, `onNotReady` runs exactly once for the
+same logical subscriber. A successful reconnect completes fresh authorization
+and catch-up, then calls `onReady` again for the next epoch. A subscriber that
+never reached `onReady` does not receive `onNotReady`, and explicitly calling
+`stop()` or aborting the subscription removes the callbacks without reporting an
+epoch end.
+
+Ordinary reconnects report the readiness transition through `onNotReady`, not
+`onError`. A terminal failure after admission calls `onNotReady` before the
+existing `onError` callback. Exceptions thrown by any lifecycle callback are
+isolated from sibling subscribers, transport cleanup, and later reconnects.
 
 Client publish is server-mediated even on Pusher/Soketi: the request uses the same dynamic auth headers as other client calls, re-evaluates `publish` authorization, validates the event with Zod, enforces payload/origin/rate limits, and only then appends the ordered event.
 

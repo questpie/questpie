@@ -106,6 +106,8 @@ export class PusherChannelTransport implements ChannelClientTransport {
 			callback,
 			options.onReady,
 			() => this.failEntry(entry, channelSlowConsumerError()),
+			false,
+			options.onNotReady,
 		);
 		entry.subscribers.add(delivery.accept);
 		const errorCallback = options.onError
@@ -151,6 +153,7 @@ export class PusherChannelTransport implements ChannelClientTransport {
 			options.onReady,
 			() => this.failEntry(entry, channelSlowConsumerError()),
 			true,
+			options.onNotReady,
 		);
 		entry.presenceSubscribers.add(delivery.accept);
 		const errorCallback = options.onError
@@ -347,9 +350,6 @@ export class PusherChannelTransport implements ChannelClientTransport {
 			channel.bind("pusher:subscription_succeeded", (members) => {
 				try {
 					if (!subscription.isConnectionActive()) return;
-					if (entry.readiness.isReady) {
-						this.notify(entry, new Error("Channel subscription epoch ended"));
-					}
 					entry.readiness.end();
 					entry.providerEpochActive = true;
 					entry.pendingLive.clear();
@@ -501,7 +501,7 @@ export class PusherChannelTransport implements ChannelClientTransport {
 		entry.replayGeneration += 1;
 		entry.replaying = false;
 		entry.pendingLive.clear();
-		this.notify(entry, new Error("Channel connection epoch ended"));
+		entry.readiness.end();
 	}
 
 	private parseReplayMessage(value: unknown): ChannelTransportMessage {
@@ -554,8 +554,8 @@ export class PusherChannelTransport implements ChannelClientTransport {
 	}
 
 	private notify(entry: Entry, error: Error): void {
-		entry.readiness.end();
 		const errorCallbacks = Array.from(entry.errorCallbacks);
+		entry.readiness.end();
 		for (const callback of errorCallbacks) {
 			notifyChannelConsumer(callback, error);
 		}

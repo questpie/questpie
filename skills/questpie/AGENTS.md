@@ -6344,9 +6344,17 @@ cut; reconnect and replay reauthorize against current application state.
 ## Client, presence, and TanStack Query
 
 ```ts
-const stop = client.channels.chatRoom.subscribe({ roomId }, (message) => {
-	if (message.event === "message") console.log(message.data.text);
-});
+const stop = client.channels.chatRoom.subscribe(
+	{ roomId },
+	(message) => {
+		if (message.event === "message") console.log(message.data.text);
+	},
+	{
+		onReady: () => setMutationEnabled(true),
+		onNotReady: () => setMutationEnabled(false),
+		onError: console.error,
+	},
+);
 
 await client.channels.chatRoom.publish({
 	params: { roomId },
@@ -6362,6 +6370,15 @@ const stopPresence = client.channels.chatRoom.subscribePresence(
 stop();
 stopPresence();
 ```
+
+`onReady` begins an admitted logical subscription epoch after authorization and
+replay catch-up. `onNotReady` runs exactly once when that admitted epoch ends;
+successful reconnect calls `onReady` again for the next epoch. It is not called
+before the subscriber's first `onReady`, or when the subscriber explicitly
+stops or aborts. Ordinary reconnects use `onNotReady` without manufacturing an
+`onError`; a terminal failure after admission calls `onNotReady` before
+`onError`. Lifecycle callback exceptions are isolated from sibling subscribers,
+cleanup, and later reconnects.
 
 `presence()` returns one typed snapshot. `subscribePresence()` emits the initial and later rosters, and `presenceIter(params, { signal })` provides the async-generator form. Pusher/Soketi uses native membership; SSE uses Postgres leases across instances and deduplicates multiple connections by authenticated principal. Crash leave converges after the lease TTL.
 

@@ -198,6 +198,112 @@ describe("channels client", () => {
 		delivery.stop();
 	});
 
+	test("notifies every admitted logical SSE subscriber exactly once when its epoch ends", async () => {
+		let resource:
+			| {
+					onEvent(event: { type: string; data: string }): void;
+					onError(error: Error): void;
+					onEpochEnd?(error: Error): void;
+			  }
+			| undefined;
+		const connection = {
+			registerChannel(options: typeof resource): () => void {
+				resource = options;
+				return () => {};
+			},
+		};
+		const transport = new SseChannelTransport({
+			baseUrl: "http://localhost:3000",
+			withCredentials: false,
+			fetcher: async () => {
+				throw new Error("The shared connection owns SSE fetching");
+			},
+			connection: connection as any,
+		});
+		const input = {
+			registryKey: "news",
+			params: {},
+			resolvedName: "news",
+			visibility: "public" as const,
+		};
+		const lifecycle: string[] = [];
+		let stopDuringEpochEnd = false;
+		let stopFirst: () => void;
+		let stopSecond: () => void;
+		stopFirst = transport.subscribe(input, () => {}, {
+			onReady: () => lifecycle.push("first:ready"),
+			onNotReady: () => {
+				lifecycle.push("first:not-ready");
+				if (stopDuringEpochEnd) {
+					stopFirst();
+					stopSecond();
+				}
+				throw new Error("consumer lifecycle callback failed");
+			},
+			onError: (error) => lifecycle.push(`first:error:${error.message}`),
+		});
+		stopSecond = transport.subscribe(input, () => {}, {
+			onReady: () => lifecycle.push("second:ready"),
+			onNotReady: () => lifecycle.push("second:not-ready"),
+			onError: (error) => lifecycle.push(`second:error:${error.message}`),
+		});
+		const preAdmissionLifecycle: string[] = [];
+		const stopBeforeReady = transport.subscribe(input, () => {}, {
+			onReady: () => preAdmissionLifecycle.push("ready"),
+			onNotReady: () => preAdmissionLifecycle.push("not-ready"),
+		});
+
+		resource!.onEpochEnd?.(new Error("initial transport unavailable"));
+		expect(lifecycle).toEqual([]);
+		expect(preAdmissionLifecycle).toEqual([]);
+		stopBeforeReady();
+		resource!.onEvent({
+			type: "channel_ready",
+			data: JSON.stringify({ channelSubscriptionId: "channel:news" }),
+		});
+		expect(lifecycle).toEqual(["first:ready", "second:ready"]);
+
+		const stopAborted = transport.subscribe(input, () => {}, {
+			onReady: () => lifecycle.push("aborted:ready"),
+			onNotReady: () => lifecycle.push("aborted:not-ready"),
+		});
+		await Promise.resolve();
+		stopAborted();
+		resource!.onEpochEnd?.(new Error("ordinary reconnect"));
+		resource!.onEpochEnd?.(new Error("duplicate reconnect signal"));
+		expect(lifecycle).toEqual([
+			"first:ready",
+			"second:ready",
+			"aborted:ready",
+			"first:not-ready",
+			"second:not-ready",
+		]);
+
+		resource!.onEvent({
+			type: "channel_ready",
+			data: JSON.stringify({ channelSubscriptionId: "channel:news" }),
+		});
+		stopDuringEpochEnd = true;
+		resource!.onError(new Error("terminal channel failure"));
+		expect(lifecycle).toEqual([
+			"first:ready",
+			"second:ready",
+			"aborted:ready",
+			"first:not-ready",
+			"second:not-ready",
+			"first:ready",
+			"second:ready",
+			"first:not-ready",
+			"second:not-ready",
+			"first:error:terminal channel failure",
+			"second:error:terminal channel failure",
+		]);
+
+		stopSecond();
+		stopFirst();
+		transport.destroy();
+	});
+
 	test("keeps explicit plain JSON channel publishing interoperable", async () => {
 		const instant = new Date("2026-03-29T00:30:00.000Z");
 		let publishRequest: RequestInit | undefined;
@@ -2049,6 +2155,7 @@ describe("channels client", () => {
 			},
 			{
 				onReady: () => lifecycle.push("ready"),
+				onNotReady: () => lifecycle.push("not-ready"),
 				onError: (error: Error) => {
 					errors.push(error);
 					lifecycle.push(`error:${error.message}`);
@@ -2118,13 +2225,11 @@ describe("channels client", () => {
 			replayedInstant.getTime(),
 		);
 		expect(messages[1]?.data.isoLookingString).not.toBeInstanceOf(Date);
-		expect(errors.map((error) => error.message)).toEqual([
-			"Channel subscription epoch ended",
-		]);
+		expect(errors).toEqual([]);
 		expect(lifecycle).toEqual([
 			"ready",
 			`event:${channelHash}:1`,
-			"error:Channel subscription epoch ended",
+			"not-ready",
 			`event:${channelHash}:2`,
 			"ready",
 			`event:${channelHash}:3`,
@@ -2168,6 +2273,7 @@ describe("channels client", () => {
 				lifecycle.push(`event:${message.eventId}`),
 			{
 				onReady: () => lifecycle.push("ready"),
+				onNotReady: () => lifecycle.push("not-ready"),
 				onError: (error: Error) => lifecycle.push(`error:${error.message}`),
 			},
 		);
@@ -2188,10 +2294,7 @@ describe("channels client", () => {
 		provider.connection.transition("disconnected");
 		provider.connection.transition("connecting");
 		await waitFor(
-			() =>
-				lifecycle.filter(
-					(value) => value === "error:Channel connection epoch ended",
-				).length === 1,
+			() => lifecycle.filter((value) => value === "not-ready").length === 1,
 		);
 		provider.channel.emit("pusher:subscription_succeeded", {});
 		await new Promise((resolve) => setTimeout(resolve, 0));
@@ -2201,12 +2304,7 @@ describe("channels client", () => {
 			new Error("stale subscription error"),
 		);
 		await new Promise((resolve) => setTimeout(resolve, 0));
-		expect(lifecycle).toEqual([
-			"ready",
-			`event:${channelHash}:1`,
-			"error:Channel subscription epoch ended",
-			"error:Channel connection epoch ended",
-		]);
+		expect(lifecycle).toEqual(["ready", `event:${channelHash}:1`, "not-ready"]);
 		provider.channel.emit("questpie:channel", {
 			eventId: `${channelHash}:3`,
 			event: "updated",
@@ -2226,12 +2324,7 @@ describe("channels client", () => {
 			}),
 		);
 		await new Promise((resolve) => setTimeout(resolve, 10));
-		expect(lifecycle).toEqual([
-			"ready",
-			`event:${channelHash}:1`,
-			"error:Channel subscription epoch ended",
-			"error:Channel connection epoch ended",
-		]);
+		expect(lifecycle).toEqual(["ready", `event:${channelHash}:1`, "not-ready"]);
 
 		provider.connection.transition("connected");
 		provider.channel.emit("pusher:subscription_succeeded", {});
@@ -2255,8 +2348,7 @@ describe("channels client", () => {
 		expect(lifecycle).toEqual([
 			"ready",
 			`event:${channelHash}:1`,
-			"error:Channel subscription epoch ended",
-			"error:Channel connection epoch ended",
+			"not-ready",
 			`event:${channelHash}:2`,
 			"ready",
 		]);
@@ -2400,10 +2492,7 @@ describe("channels client", () => {
 		);
 		await new Promise((resolve) => setTimeout(resolve, 10));
 
-		expect(errors).toEqual([
-			"Channel subscription epoch ended",
-			"Channel client slow consumer",
-		]);
+		expect(errors).toEqual(["Channel client slow consumer"]);
 		expect(messages).toEqual([`${channelHash}:1`]);
 		expect(client.channels.channelCount).toBe(0);
 		client.channels.destroy();
@@ -2484,10 +2573,7 @@ describe("channels client", () => {
 		);
 		await new Promise((resolve) => setTimeout(resolve, 20));
 
-		expect(errors).toEqual([
-			"Channel subscription epoch ended",
-			"Provider rejected subscription",
-		]);
+		expect(errors).toEqual(["Provider rejected subscription"]);
 		expect(ready).toBe(1);
 		expect(messages).toEqual([`${channelHash}:1`]);
 		expect(client.channels.channelCount).toBe(0);
@@ -2545,7 +2631,6 @@ describe("channels client", () => {
 			errors.some((error) => error.message === "Channel event replay gap"),
 		);
 		expect(errors.map((error) => error.message)).toEqual([
-			"Channel subscription epoch ended",
 			"Channel event replay gap",
 		]);
 		expect(ready).toBe(1);
@@ -2714,7 +2799,6 @@ describe("channels client", () => {
 		);
 		expect(replay).toBe(1);
 		expect(errors.map((error) => error.message)).toEqual([
-			"Channel subscription epoch ended",
 			expect.stringContaining("Unsupported QUESTPIE typed event wire version"),
 		]);
 		expect(client.channels.channelCount).toBe(0);
