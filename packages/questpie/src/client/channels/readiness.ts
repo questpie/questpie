@@ -4,8 +4,10 @@ import { BoundedChannelQueue } from "./ordered-events.js";
 type ReadyRegistration = {
 	callback: () => void;
 	onEnd?: () => void;
+	onNotReady?: () => void;
 	active: boolean;
 	notifiedEpoch: number;
+	endedEpoch: number;
 };
 
 /** Per-logical-registration readiness over one shared channel transport entry. */
@@ -18,13 +20,19 @@ export class ChannelReadiness {
 		return this.admitted;
 	}
 
-	register(callback: (() => void) | undefined, onEnd?: () => void): () => void {
-		if (!callback && !onEnd) return () => {};
+	register(
+		callback: (() => void) | undefined,
+		onEnd?: () => void,
+		onNotReady?: () => void,
+	): () => void {
+		if (!callback && !onEnd && !onNotReady) return () => {};
 		const registration: ReadyRegistration = {
 			callback: callback ?? (() => {}),
 			onEnd,
+			onNotReady,
 			active: true,
 			notifiedEpoch: 0,
+			endedEpoch: 0,
 		};
 		this.registrations.add(registration);
 		if (this.admitted) {
@@ -48,13 +56,38 @@ export class ChannelReadiness {
 	}
 
 	end(): void {
+		const epoch = this.epoch;
+		const wasAdmitted = this.admitted;
+		const endCallbacks: Array<() => void> = [];
+		const notReadyCallbacks: Array<() => void> = [];
 		this.admitted = false;
-		for (const registration of this.registrations) {
+		for (const registration of Array.from(this.registrations)) {
 			if (!registration.active) continue;
+			if (registration.onEnd) endCallbacks.push(registration.onEnd);
+			if (
+				!wasAdmitted ||
+				registration.notifiedEpoch !== epoch ||
+				registration.endedEpoch === epoch
+			) {
+				continue;
+			}
+			registration.endedEpoch = epoch;
+			if (registration.onNotReady) {
+				notReadyCallbacks.push(registration.onNotReady);
+			}
+		}
+		for (const callback of endCallbacks) {
 			try {
-				registration.onEnd?.();
+				callback();
 			} catch {
 				// One subscriber cannot block epoch reset for its siblings.
+			}
+		}
+		for (const callback of notReadyCallbacks) {
+			try {
+				callback();
+			} catch {
+				// One subscriber cannot block lifecycle notification for its siblings.
 			}
 		}
 	}
@@ -115,6 +148,7 @@ export class ChannelReadyDelivery<T> {
 		onReady: (() => void) | undefined,
 		private readonly onOverflow: () => void,
 		private readonly waitForAdmission = false,
+		onNotReady?: () => void,
 	) {
 		this.awaitingReady = waitForAdmission || readiness.isReady;
 		this.releaseReady = readiness.register(
@@ -131,6 +165,7 @@ export class ChannelReadyDelivery<T> {
 					}
 				: undefined,
 			() => this.endEpoch(),
+			onNotReady,
 		);
 	}
 

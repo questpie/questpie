@@ -112,10 +112,18 @@ Contextless writes have no ambient scope.
 function that stops it.
 
 ```ts
-const stop = client.channels.chatRoom.subscribe({ roomId }, (message) => {
-	if (message.event === "message") console.log(message.data.text);
-	else console.log(message.data.active);
-});
+const stop = client.channels.chatRoom.subscribe(
+	{ roomId },
+	(message) => {
+		if (message.event === "message") console.log(message.data.text);
+		else console.log(message.data.active);
+	},
+	{
+		onReady: () => setMutationEnabled(true),
+		onNotReady: () => setMutationEnabled(false),
+		onError: console.error,
+	},
+);
 
 await client.channels.chatRoom.publish({
 	params: { roomId },
@@ -125,6 +133,19 @@ await client.channels.chatRoom.publish({
 
 stop();
 ```
+
+`onReady` starts one admitted subscription epoch after authorization and replay
+catch-up complete. If that epoch ends, `onNotReady` runs exactly once for the
+same logical subscriber. A successful reconnect completes fresh authorization
+and catch-up, then calls `onReady` again for the next epoch. A subscriber that
+never reached `onReady` does not receive `onNotReady`, and explicitly calling
+`stop()` or aborting the subscription removes the callbacks without reporting an
+epoch end.
+
+Ordinary reconnects report the readiness transition through `onNotReady`, not
+`onError`. A terminal failure after admission calls `onNotReady` before the
+existing `onError` callback. Exceptions thrown by any lifecycle callback are
+isolated from sibling subscribers, transport cleanup, and later reconnects.
 
 `message` is a union over your event names. Narrow on `message.event` and
 `message.data` narrows with it. Use `iter()` when an `AbortSignal` fits the

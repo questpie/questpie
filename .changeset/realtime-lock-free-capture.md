@@ -36,3 +36,6 @@ Restore compiled `RAW` predicates returned by collection read access rules.
 Strict access compilation still fails closed for missing fields, unresolved
 relations and unknown operators, while realtime snapshots can now reuse a
 prechecked SQL predicate without rejecting its `RAW` compiler callback.
+
+Expose `onNotReady` for typed channel subscriptions and notify each logical SSE
+or Pusher subscriber exactly once when an admitted transport epoch ends.

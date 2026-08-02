@@ -43,8 +43,16 @@ type _channelReadinessIsOptionalAndPayloadFree = Expect<
 	Equal<NonNullable<ChannelSubscribeOptions["onReady"]>, () => void>
 >;
 
+type _channelNotReadinessIsOptionalAndPayloadFree = Expect<
+	Equal<NonNullable<ChannelSubscribeOptions["onNotReady"]>, () => void>
+>;
+
 type _oneShotPresenceDoesNotExposeContinuingAdmission = Expect<
 	Equal<"onReady" extends keyof ChannelPresenceOptions ? true : false, false>
+>;
+
+type _oneShotPresenceDoesNotExposeContinuingEpochEnd = Expect<
+	Equal<"onNotReady" extends keyof ChannelPresenceOptions ? true : false, false>
 >;
 
 declare const sink: ClientSink;
