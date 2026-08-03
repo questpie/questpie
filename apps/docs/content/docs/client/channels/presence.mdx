@@ -1,0 +1,113 @@
+---
+title: Presence
+description: A presence channel keeps a live roster of who is currently subscribed. You write one resolver, the client reads a typed member list, and the transport keeps it accurate across app instances.
+kind: guide
+package: questpie
+---
+
+Who is in this room right now? A subscription cannot tell you, because it only
+carries events. A presence channel adds the roster beside them.
+
+## Add a resolver
+
+`.presence()` is only callable after `.authorize()`. Call it in the wrong order
+and TypeScript rejects it. The resolver runs per subscriber and returns that
+subscriber's member object.
+
+```ts title="src/questpie/server/channels/chat-room.ts"
+export default channel("chat-room-[roomId]")
+	.events({ message: z.object({ text: z.string() }) })
+	.authorize({ subscribe: async ({ session }) => Boolean(session?.user) })
+	.presence(({ params, session }) => ({
+		id: session!.user.id,
+		roomId: params.roomId,
+		name: session!.user.name,
+	}));
+```
+
+The resolver receives the same context as an authorization rule, `AppContext`
+plus typed `params`. Subscribe authorization runs first. A denied subscriber
+never reaches the resolver.
+
+Presence also needs an identity. A subscriber the server cannot resolve to a
+principal is refused, so gate the channel behind a session.
+
+## Read the roster
+
+Three methods appear on the client handle, and only on channels that declared
+`.presence()`. Calling them on a plain channel is a compile error.
+
+| Method                           | Shape                           |
+| -------------------------------- | ------------------------------- |
+| `presence(params)`               | `Promise<readonly Member[]>`    |
+| `subscribePresence(params, cb)`  | Returns the stop function       |
+| `presenceIter(params, options?)` | Async generator of full rosters |
+
+`params` is required on a channel with a `[param]`. A channel without one drops
+that argument.
+
+```ts
+const members = await client.channels.chatRoom.presence({ roomId });
+
+const stop = client.channels.chatRoom.subscribePresence({ roomId }, (members) =>
+	renderRoster(members),
+);
+
+for await (const members of client.channels.chatRoom.presenceIter(
+	{ roomId },
+	{ signal },
+)) {
+	renderRoster(members);
+}
+```
+
+Each update is a whole roster, not a diff. `Member` is the return type of your
+resolver, inferred, so renaming a field there breaks the render function here.
+
+With TanStack Query, `q.channels.chatRoom.presence({ roomId })` wraps
+`presenceIter()` and keeps only the latest snapshot in the cache.
+
+## How each transport keeps it accurate
+
+Pusher and Soketi use native provider presence. Nothing else is involved.
+
+SSE has no provider, so QUESTPIE uses a Postgres table as a lease register. Each
+connection writes a row with an expiry. Every app instance reads the same table,
+so a roster is correct across a whole cluster with no extra infrastructure.
+
+Two connections from one signed-in user collapse into one member. Rows are
+grouped by principal and the most recently updated one wins. Open two tabs and
+the room still shows you once.
+
+Leaving is not symmetric:
+
+- **Graceful.** The row is deleted and the roster republishes at once.
+- **Ungraceful.** A killed tab or dropped network waits for the lease to lapse,
+  30 seconds by default.
+
+## SSE presence settings
+
+These live under `realtime.channelPresence` and apply only to the SSE transport.
+
+| Option                 | Default | What it does                                |
+| ---------------------- | ------- | ------------------------------------------- |
+| `leaseMs`              | `30000` | Time after the last renewal before removal  |
+| `heartbeatMs`          | `10000` | How often one instance renews its own rows  |
+| `reconciliationMs`     | `1000`  | Database sweep that catches a missed notice |
+| `maxMembers`           | `100`   | Distinct principals in one resolved channel |
+| `maxMemberBytes`       | `1024`  | Serialized size of one member object        |
+| `maxPrincipalIdLength` | `128`   | Length of a stable principal identifier     |
+
+The caps match what a managed provider enforces, so a roster behaves the same
+after you switch transports. A subscriber that would push a channel past
+`maxMembers` is rejected rather than silently dropped from the list.
+
+<Callout type="warn" title="Presence is a roster, not an audit trail">
+	Members disappear when the connection does. Nothing here records that someone
+	was present earlier. Write a row if you need to answer that later.
+</Callout>
+
+## Next
+
+**[Transports](/docs/client/channels/transports)** covers the choice behind all
+of this, the default SSE path and the managed Pusher or Soketi one.

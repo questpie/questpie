@@ -1,465 +1,206 @@
 ---
 title: TanStack Query
-description: One factory turns your typed client into queryOptions() and mutationOptions() for collections, globals, routes, live snapshots, and typed channel subscriptions.
+description: One factory turns the typed client into finished queryOptions() and mutationOptions() objects, so a React component reads a collection in one line and never invents a cache key.
+kind: guide
+package: "@questpie/tanstack-query"
 ---
 
-`@questpie/tanstack-query` wraps your typed [client](/docs/client/sdk) in a single factory, `createQuestpieQueryOptions(client)`, that returns a proxy of **option builders**. Each builder hands you a finished `queryOptions()` or `mutationOptions()` object, query key, fetcher, and error mapping already assembled, so a React component is one line: `useQuery(q.collections.posts.find({ limit: 10 }))`. The types flow from your schema through the client into the hook, so collection names, `where` filters, and result shapes are all inferred. No hooks to write, no keys to invent.
-
-## What it does
-
-- **One builder per operation.** `q.collections.<name>.find()`, `.create()`, `.update()`; `q.globals.<name>.get()`, `.update()`; `q.routes.<path>.query()`, `.mutation()`, each returns a ready `queryOptions()` / `mutationOptions()` object for `useQuery` / `useMutation`.
-- **Typed end to end.** Every builder is derived from the client's own method signatures, so a `find()` here narrows its result exactly like a direct `client.collections.posts.find()` call. Variables, options, and return types are all inferred from your schema.
-- **Stable, structured query keys.** Keys are built and sanitized for you (`['questpie', 'collections', 'posts', 'find', locale, stage, options]`), so React Query's cache, refetch, and invalidation work without you hand-rolling keys.
-- **Opt-in realtime.** Pass `{ realtime: true }` to `find`, `count`, or `get` and the query consumes server-pushed snapshots over the selected SSE or managed-WS transport. Same builder, same hook.
-- **Typed channel streams.** `q.channels.<name>.subscription(params?)` accumulates generated channel messages through the same `useQuery` API.
-- **Live presence rosters.** `q.channels.<name>.presence(params?)` keeps only the newest typed member snapshot.
-- **One error shape.** Every fetcher and mutator is wrapped with an `errorMap`, so thrown non-`Error` values are coerced to `Error` before they reach React Query (override it once, globally).
-- **An escape hatch.** `q.custom.query` / `q.custom.mutation` wrap any async function with the same key-prefixing and error mapping, for anything the proxies don't cover.
+You have a typed client and a React app. This page is where the two meet:
+which builder to call, what it hands back, and what lands in the cache.
 
 ## Install
 
-The package ships with the TanStack Start template already. To add it to an existing app, install it alongside its peers:
+Every starter already depends on it. To add it to an app of your own:
 
 ```bash
 bun add @questpie/tanstack-query @tanstack/react-query
 ```
 
-Peer dependencies are `@tanstack/react-query` `^5.0.0` and `questpie`
-`^3.16.0`, this package builds on React Query v5 and your QUESTPIE client. It's
-ESM-only.
+The peers are `@tanstack/react-query` v5 and `questpie`. It is ESM only.
 
-## Quick start
+## Build the proxy once
 
-Create the option-builder proxy **once**, from your typed client, and export it. The scaffold does this for you in `src/lib/query.ts`:
+`createQuestpieQueryOptions(client)` returns an object of builder proxies.
+Create it at module scope. The starters put it in this file for you.
 
 ```ts title="src/lib/query.ts"
 import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
 
-import { client } from "@/lib/client.js"; // createClient<AppConfig>()
+import { client } from "@/lib/client";
 
-// `q.collections.*`, `q.globals.*`, `q.routes.*` are typed from your schema.
 export const q = createQuestpieQueryOptions(client);
 ```
 
-Now use it in any component. A builder returns the full options object, pass it straight into the hook:
+## One component
 
-```tsx title="A component"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+A builder returns the whole options object. Pass it straight to the hook.
 
-import { q } from "@/lib/query.js";
+```tsx title="src/components/posts.tsx"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-function Posts() {
+import { q } from "@/lib/query";
+
+export function Posts() {
 	const queryClient = useQueryClient();
-
-	// Read: q.collections.posts.find(...) returns queryOptions()
 	const { data } = useQuery(
 		q.collections.posts.find({ where: { published: true }, limit: 10 }),
 	);
 
-	// Write: q.collections.posts.create() returns mutationOptions()
 	const create = useMutation({
 		...q.collections.posts.create(),
-		onSuccess: () => {
-			// Invalidate every posts query with the top-level key helper.
+		onSuccess: () =>
 			queryClient.invalidateQueries({
 				queryKey: q.key(["collections", "posts"]),
-			});
-		},
+			}),
 	});
 
 	return (
-		<div>
-			<p>{data?.totalDocs ?? 0} published posts</p>
-			<button
-				onClick={() =>
-					create.mutate({ title: "Hello", slug: "hello", published: true })
-				}
-			>
+		<>
+			<ul>
+				{data?.docs.map((post) => (
+					<li key={post.id}>{post.title}</li>
+				))}
+			</ul>
+			<button onClick={() => create.mutate({ title: "Hello", slug: "hello" })}>
 				Add post
 			</button>
-		</div>
+		</>
 	);
 }
 ```
 
-`find()` resolves to the same **paginated envelope** the client returns, `{ docs, totalDocs, page, hasNextPage, … }`, so read your rows off `data.docs`. The mutation variables (`{ title, slug, published }`) are the collection's create input, inferred from your schema.
+That renders up to ten published posts, typed from your schema. The button
+writes a row and invalidates every posts query, so the list refetches itself.
+You wrote no hook and no key.
 
-<Callout type="info" title="Build the proxy once, not per render">
-	`createQuestpieQueryOptions(client)` is cheap, but the returned proxies are
-	stable identities, create it once at module scope (as the scaffold does) and
-	import `q` everywhere. The builders themselves are pure: calling
-	`q.collections.posts.find(opts)` only *builds* an options object; nothing
-	fetches until you hand it to `useQuery`.
-</Callout>
+## What hangs off `q`
 
-## Example → inferred types
+| Branch                     | What it builds                               |
+| -------------------------- | -------------------------------------------- |
+| `q.collections.<name>`     | Reads and writes for one collection          |
+| `q.globals.<name>`         | Reads and writes for one global              |
+| `q.channels.<name>`        | Message and presence streams                 |
+| `q.routes.<path>.<method>` | `query()`, `mutation()` and `key()`          |
+| `q.custom`                 | The same wrapping around a function of yours |
+| `q.key(parts)`             | A key with your prefix already on the front  |
 
-Each builder mirrors the client method it wraps, so the inferred result is identical to a direct client call, not a widened `{}`:
+Names are checked against your generated `AppConfig`. `q.collections.newz` is
+a compile error, and so is a relation or column typo inside `find()`.
 
-```ts
-const opts = q.collections.posts.find({
-	where: { published: true },
-	limit: 10,
-});
-//    ^? UseQueryOptions<FindResult<…, { docs: Post[]; totalDocs: number; … }>>
-
-const createOpts = q.collections.posts.create();
-//    ^? UseMutationOptions<Post, DefaultError, { title: string; slug: string; published?: boolean }>
-
-const settings = q.globals.siteSettings.get();
-//    ^? UseQueryOptions<{ id: string; siteName: string; … }>  (non-nullable, globals are singletons)
-```
-
-The selection generic is applied **per call**, `find<TQuery>(options?)` narrows `FindResult` from the exact `options` you pass, the same way `client.collections.posts.find(...)` does.
-
-## Collections
-
-`q.collections.<name>` exposes one builder per CRUD operation. Queries (reads) return `queryOptions()`; mutations (writes) return `mutationOptions()` whose variables are the operation's input.
-
-### Queries
+## Reads
 
 ```ts
-// List, paginated envelope. Optional second arg enables realtime (below).
 q.collections.posts.find({
 	where: { published: true },
 	with: { author: true },
-	orderBy: { createdAt: "desc" },
-	limit: 10,
 });
-
-// Count, number (or live total with { realtime: true }).
 q.collections.posts.count({ where: { published: true } });
-
-// Single row or null.
 q.collections.posts.findOne({ where: { slug: "hello" } });
-
-// Version history (versioning collections). `id` is required.
 q.collections.posts.findVersions({ id: postId, limit: 20 });
 ```
 
-| Builder                         | Returns (`data`)                               | Options                                                                                                         | Realtime                       |
-| ------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------ | --- |
-| `find(options?, queryConfig?)`  | `FindResult`, `{ docs, totalDocs, … }`         | `where`, `with`, `orderBy`, `limit`, `offset`, `columns`, `locale`, `stage`, `localeFallback`, `includeDeleted` | yes                            |
-| `count(options?, queryConfig?)` | `number`                                       | `where`, `includeDeleted`                                                                                       | yes                            |
-| `findOne(options?)`             | row `                                          | null`                                                                                                           | same as `find` (single result) | no  |
-| `findVersions(params)`          | `Array<row & { versionId, versionNumber, … }>` | `{ id, limit?, offset? }`, `id` **required**                                                                    | no                             |
+| Builder                                 | `data`                 | Option set                    |
+| --------------------------------------- | ---------------------- | ----------------------------- |
+| `find(options?, live?)`                 | the paginated envelope | the full `find()` set         |
+| `count(options?, live?)`                | `number`               | `where` and `includeDeleted`  |
+| `findOne(options?)`                     | the row, or `null`     | the `find()` set minus paging |
+| `findVersions({ id, limit?, offset? })` | the version rows       | `id` is required              |
 
-<Callout type="warn" title="`find()` returns an envelope; `findOne()` can be `null`">
-`find()` always resolves to `{ docs, totalDocs, totalPages, page, hasNextPage, … }`, your rows are on `data.docs`, never `data` directly. `findOne()` resolves to the row **or `null`** when nothing matches, so guard it (`data ?? fallback`). Only `find` and `count` take the realtime `queryConfig` second argument, `findOne` does not (passing `{ realtime: true }` to it is a type error).
+<Callout
+	type="info"
+	title="`find()` hands back a page, `findOne()` hands back `null`"
+>
+	Read your rows off `data.docs`, never off `data`. `findOne()` resolves to
+	`null` when nothing matches, so guard it.
 </Callout>
 
-### Mutations
+`find`, `count` and the global `get` take a second argument, and that is where
+[live data](/docs/client/tanstack-query/live-queries) lives.
 
-Each mutation builder takes no arguments and returns `mutationOptions()`; you call `mutate(variables)` with the shape below. Variables are inferred from the underlying client method.
+## Writes
+
+A mutation builder takes no arguments. It hands back `mutationOptions()`, and
+the variables go to `mutate()`.
 
 ```ts
-const create = useMutation(q.collections.posts.create());
-create.mutate({ title: "Hello", slug: "hello", published: true }); // the create data
-
 const update = useMutation(q.collections.posts.update());
-update.mutate({ id: postId, data: { published: true } }); // { id, data }
-
-const remove = useMutation(q.collections.posts.delete());
-remove.mutate({ id: postId }); // { id } -> { success: boolean }
+update.mutate({ id: postId, data: { published: true } });
 ```
 
-| Builder             | `mutate(variables)` shape                    | Returns (`data`)                           |
-| ------------------- | -------------------------------------------- | ------------------------------------------ |
-| `create()`          | the create `data` object                     | the created row                            |
-| `update()`          | `{ id, data }`                               | the updated row                            |
-| `delete()`          | `{ id }`                                     | `{ success: boolean }`                     |
-| `restore()`         | `{ id }`                                     | the restored row (soft-delete collections) |
-| `revertToVersion()` | `{ id, version }` **or** `{ id, versionId }` | the reverted row (versioning)              |
-| `transitionStage()` | `{ id, stage }`                              | the row at its new stage (workflow)        |
-| `updateMany()`      | `{ where, data }`                            | the written rows                           |
-| `deleteMany()`      | `{ where }`                                  | `{ success: boolean; count: number }`      |
+| Builder        | `mutate(variables)` | Resolves to         |
+| -------------- | ------------------- | ------------------- |
+| `create()`     | the create input    | the new row         |
+| `update()`     | `{ id, data }`      | the updated row     |
+| `delete()`     | `{ id }`            | `{ success, data }` |
+| `updateMany()` | `{ where, data }`   | the rows it wrote   |
 
-<Callout type="warn" title="`update`/`delete` are by id; use `updateMany`/`deleteMany` for filters">
-`update()` and `delete()` wrap the single-record **by-id** client methods, their variables are `{ id, data }` and `{ id }`, never a `where` clause. For bulk operations use `updateMany({ where, data })` / `deleteMany({ where })`. Two caveats on the bulk pair: their `where`/`data` variables are typed `any` (no schema-level checking of the filter, unlike `find`'s typed `where`), and `updateMany`'s **declared** return type is a single row while the runtime actually returns an array of written rows, the static type is narrower than reality.
-</Callout>
-
-For generated optimistic concurrency, the mutation builders preserve the
-client preconditions: by-id variables include `expectedRevision`, batch
-entries include `expectedRevision`, and bulk mutations include exact
-`expectedRevisions`. A global update uses
-`{ data: { data: fields, expectedRevision } }` because the outer `data` is the
-TanStack mutation-variable envelope. Revert and workflow params also carry
-`expectedRevision`.
+`update()` and `delete()` work by id, never by filter. The rest of the writes
+live on [Mutations](/docs/client/tanstack-query/mutations).
 
 ## Globals
 
-A global is a singleton. `q.globals.<name>` exposes `get`, `update`, `findVersions`, `revertToVersion`, and `transitionStage`.
+A global is a singleton, so `get()` resolves to the row and never to `null`.
 
 ```ts
-// Read the singleton. Non-nullable result. { realtime: true } supported.
-q.globals.siteSettings.get({ with: { logo: true } });
+const settings = useQuery(q.globals.siteSettings.get({ with: { logo: true } }));
 
-// Update, note the NESTED `data`.
-const update = useMutation(q.globals.siteSettings.update());
-update.mutate({ data: { siteName: "QUESTPIE" } });
+const save = useMutation(q.globals.siteSettings.update());
+save.mutate({ data: { siteName: "QUESTPIE" } });
 ```
 
-| Builder                       | `mutate(variables)` / options                           | Returns                          | Realtime |
-| ----------------------------- | ------------------------------------------------------- | -------------------------------- | -------- |
-| `get(options?, queryConfig?)` | `{ with?, columns?, locale?, localeFallback?, stage? }` | the singleton row (non-nullable) | yes      |
-| `update()`                    | `{ data, options? }`                                    | the updated global               | none     |
-| `findVersions(options?)`      | `{ id?, limit?, offset?, locale?, localeFallback? }`    | version array                    | none     |
-| `revertToVersion()`           | `{ params, options? }`                                  | the reverted global              | none     |
-| `transitionStage()`           | `{ params, options? }`                                  | the global at its new stage      | none     |
-
-<Callout type="warn" title="Global mutations nest their payload under `data` / `params`">
-This is the one spot that trips people up. `q.globals.siteSettings.update().mutate(...)` takes **`{ data: { … } }`**, *not* the fields directly, `mutate({ data: { siteName: "X" } })`, never `mutate({ siteName: "X" })`. Likewise `revertToVersion` and `transitionStage` take `{ params, options? }` (params nested), whereas the **collection** equivalents take the params object directly.
-</Callout>
-
-<Callout type="info" title="`get()` is non-nullable, unlike `collections.findOne()`">
-A global always exists (it's a singleton with defaults), so `q.globals.<name>.get()` resolves to the row, not `row | null`. You don't guard it the way you guard `findOne`.
+<Callout type="warn" title="Global writes nest their payload">
+	`update()` takes `{data}`, not the fields directly. `revertToVersion()` and
+	`transitionStage()` take `{params}`. The collection builders take the same
+	things unwrapped.
 </Callout>
 
 ## Routes
 
-`q.routes` mirrors your route tree. Traverse the dot-path to the HTTP method leaf, then call `.query(input?)`, `.mutation()`, or `.key(input?)`:
+The path mirrors your route file and ends in the HTTP method, lowercased. Same
+traversal as `client.routes`.
 
 ```ts
-// Read a route as a query.
 const stats = useQuery(
 	q.routes.dashboard.getStats.post.query({ period: "week" }),
 );
 
-// Call a route as a mutation.
 const send = useMutation(q.routes.notifications.send.post.mutation());
-send.mutate({ to: "user@example.com", subject: "Hi" });
-
-// Build the route's query key (for invalidation / prefetch).
-const key = q.routes.dashboard.getStats.post.key({ period: "week" });
+send.mutate({ to: "user@example.com" });
 ```
 
-- **`.query(input?)`** → `queryOptions()`. The `input` is the route's first argument, typed from your route signature.
-- **`.mutation()`** → `mutationOptions()`. `mutate(variables)` calls the route with `variables`; if the route takes no arguments, `mutate()` calls it with none.
-- **`.key(input?)`** → the route's **query** key, for `invalidateQueries` / prefetch.
+`.query(input?)` builds a query and `.mutation()` builds a mutation.
+`.key(input?)` rebuilds the query key, for invalidation or prefetch.
 
-<Callout type="info" title="Query keys and mutation keys">
-`q.routes.<path>.<method>.key()` builds the same query key as `.query()`, including the `"query"` segment. Use it to invalidate or prefetch route queries. Mutation options carry their mutation key directly on the returned options object.
-</Callout>
-
-<Callout type="warn" title="Unknown routes throw at fetch time, not build time">
-	The routes proxy is loose, `q.routes.a.b.c.post.query()` *builds* an options
-	object for any dot-path. The path is only resolved against `client.routes`
-	when the query runs; if it doesn't resolve to a function the fetcher throws
-	`Route not found at path: a.b.c.post`. There's no build-time check that the
-	route exists, so a typo'd path surfaces as a runtime query error, not a red
-	squiggle. The same lazy-resolution applies to unknown collection/global names.
-</Callout>
-
-## Realtime
-
-Three reads can become **live** by passing `{ realtime: true }` as their second argument: `collections.<name>.find`, `collections.<name>.count`, and `globals.<name>.get`. The server transport sends the initial result and every later snapshot; enabling realtime does not issue a duplicate one-shot REST read.
-
-```tsx
-function LivePosts() {
-	// Re-renders whenever a matching post changes, no manual invalidation.
-	const { data } = useQuery(
-		q.collections.posts.find(
-			{ where: { published: true } },
-			{ realtime: true },
-		),
-	);
-	return <p>{data?.totalDocs ?? 0} published posts (live)</p>;
-}
-```
-
-Under the hood a live query uses React Query's `experimental_streamedQuery` with `refetchMode: "append"` and replaces the cached value with each newest snapshot. `count` uses an operation-aware server topic and streams one scalar number, not the matching rows.
-
-Admission failures such as a `find` limit above the server's configured `maxFindLimit` enter the normal TanStack query `error` state. They are marked non-retryable and are not automatically retried, so the UI does not remain on a silent `undefined` placeholder. Inspect `error.code === "REALTIME_TOPIC_REJECTED"` to render a targeted fallback.
-
-<Callout type="warn" title="Realtime must be enabled on the server">
-`createClient()` always exposes `client.realtime`, so `{ realtime: true }` attempts a stream. If server runtime config does not enable realtime, the connection errors; it does not silently fall back to a one-shot read. `findOne`, `findVersions`, and all mutations never stream.
-</Callout>
-
-<Callout type="info" title="Realtime topic ignores some read options">
-	The live subscription's topic is derived from your read `options` via
-	`buildCollectionTopic` / `buildGlobalTopic`, which carry only `where` / `with`
-	/ `limit` / `offset` / `orderBy` / `locale` (globals: `where` / `with` /
-	`locale`). `columns`, `stage`, `includeDeleted`, and `localeFallback` are
-	**dropped from the topic**, and the config-level `locale`/`stage` are *not*
-	added to it, so live matching ignores those. Both builders are re-exported
-	from the package if you want to subscribe manually via
-	`client.realtime.subscribe`.
-</Callout>
-
-## Channel subscriptions
-
-Generated channels appear beside collections, globals, and routes:
+## Channels
 
 ```tsx
 const { data: messages = [] } = useQuery(
 	q.channels.chatRoom.subscription({ roomId }),
 );
-
 const { data: members = [] } = useQuery(
 	q.channels.chatRoom.presence({ roomId }),
 );
 ```
 
-No-param channels use `.subscription()` or `.presence()` with no argument. Parameterized channels require their exact generated params. The event query appends each typed `{ event, eventId, data }` message; the presence query replaces its value with each newest member roster. Aborting or unmounting closes the underlying iterator. See [Channels](/docs/client/channels) for definitions, authorization, publish, presence, and transport behavior.
+`subscription()` appends each typed message to an array. `presence()` replaces
+its value with the newest roster. Both close when the query aborts. A channel
+whose wire pattern declares params requires them, and `presence()` appears only
+on channels that declare presence.
 
-## Configuration
+## Where each topic lives
 
-`createQuestpieQueryOptions(client, config?)` takes an optional second argument. Every field has a default; `config` defaults to `{}`.
+| Topic                                        | Page                                                     |
+| -------------------------------------------- | -------------------------------------------------------- |
+| Every write builder and its variables        | [Mutations](/docs/client/tanstack-query/mutations)       |
+| `{ realtime: true }` on `find`/`count`/`get` | [Live queries](/docs/client/tanstack-query/live-queries) |
+| Key shapes and how to invalidate             | [Query keys](/docs/client/tanstack-query/keys)           |
+| `keyPrefix`, `errorMap`, `locale`, `stage`   | [Configuration](/docs/client/tanstack-query/config)      |
+| The client every builder wraps               | [SDK](/docs/client/sdk)                                  |
+| Channel definitions and authorization        | [Channels](/docs/client/channels)                        |
+| Keeping a live UI cheap                      | [Reactive apps](/docs/client/reactive-apps)              |
+| `Date` values through dehydration            | [Temporal values](/docs/schema/fields/temporal-values)   |
 
-```ts
-export const q = createQuestpieQueryOptions(client, {
-	keyPrefix: ["questpie"], // QueryKey prepended to every key. Default ['questpie'].
-	errorMap: defaultErrorMap, // (error: unknown) => unknown. Wraps every fetcher/mutator.
-	locale: undefined, // string, baked into keys AND threaded into every call.
-	stage: undefined, // string, same: keyed and threaded.
-});
-```
+## Next
 
-| Option      | Type                          | Default           | Effect                                                                                             |
-| ----------- | ----------------------------- | ----------------- | -------------------------------------------------------------------------------------------------- |
-| `keyPrefix` | `QueryKey`                    | `['questpie']`    | Prepended to **every** query/mutation key. Pass `[]` to emit keys with no prefix.                  |
-| `errorMap`  | `(error: unknown) => unknown` | `defaultErrorMap` | Runs in the `catch` of every fetcher/mutator; its return value is thrown instead of the raw error. |
-| `locale`    | `string`                      | `undefined`       | Pinned read/write locale, see the warning below.                                                   |
-| `stage`     | `string`                      | `undefined`       | Pinned workflow stage, see the warning below.                                                      |
-
-<Callout
-	type="warn"
-	title="`locale` and `stage` are global to the proxy and override per-call options for globals"
->
-	A `locale`/`stage` set in `config` is baked into **every** query key and
-	threaded into **every** read and mutation, for collections as the call's
-	options/`LocaleOptions` second argument, for globals **merged into the options
-	object**. Because they're spread *after* the caller's options, they
-	**override** any per-call `locale`/`stage` on `globals.update` /
-	`revertToVersion` / `findVersions`. If you need different locales in different
-	parts of the UI, create a second proxy with its own `config` rather than
-	fighting the override. (One asymmetry: `globals.transitionStage` merges only
-	`locale` from config, not `stage`.
-</Callout>
-
-### Custom error mapping
-
-The default `errorMap` coerces non-`Error` throws into `Error` (passes `Error` through, wraps a string as `new Error(string)`, else `new Error("Unknown error")`). Override it once to normalize errors app-wide:
-
-```ts
-export const q = createQuestpieQueryOptions(client, {
-	errorMap: (error) => {
-		if (error instanceof MyApiError) return error;
-		return new Error("Request failed", { cause: error });
-	},
-});
-```
-
-The map wraps every `queryFn` and `mutationFn`, including the initial fetch of a realtime stream, so whatever it returns is what your `onError` / error boundary receives.
-
-## Query keys & invalidation
-
-Keys are built and **sanitized** for you. The runtime shape always includes the `locale` and `stage` slots (even when `undefined`), so a partial-match prefix is the safe way to invalidate.
-
-```text
-Collections (reads):  [...keyPrefix, 'collections', <name>, 'find'|'findOne'|'count'|'findVersions', locale, stage, options]
-Collections (writes): [...keyPrefix, 'collections', <name>, 'create'|'update'|…, locale, stage]
-Globals (reads):      [...keyPrefix, 'globals', <name>, 'get'|'findVersions', locale, stage, options]
-Routes:               [...keyPrefix, 'routes', ...segments, 'query'|'mutation', locale, (input for query)]
-```
-
-Mutation keys never include the variables. Route keys carry `locale` but **not** `stage` (unlike collections/globals, which carry both).
-
-Build keys for invalidation with the top-level **`q.key(parts)`** helper, it prepends your `keyPrefix`:
-
-```ts
-// Invalidate every posts query (partial-match, all ops, all options).
-queryClient.invalidateQueries({ queryKey: q.key(["collections", "posts"]) });
-
-// Invalidate one route query exactly.
-queryClient.invalidateQueries({
-	queryKey: q.routes.dashboard.getStats.post.key({ period: "week" }),
-});
-
-// Or read the key straight off any builder result:
-const { queryKey } = q.collections.posts.find({ where: { published: true } });
-queryClient.invalidateQueries({ queryKey });
-```
-
-<Callout type="info" title="Collection and global query keys">
-	Use top-level `q.key([...])` for partial collection or global invalidation, or
-	read `.queryKey` from the options returned by a builder. Per-route builders
-	also provide `.key()`. Partial invalidation with `q.key(["collections",
-	"posts"])` covers every locale, stage, and option variant for that collection.
-</Callout>
-
-<Callout type="info" title="Functions in options are stripped from the key">
-	Key options are sanitized: function-valued properties are removed and
-	`undefined`-valued keys are dropped (`null` is kept) before they land in the
-	query key, so non-serializable values don't break React Query's structural key
-	equality. The footgun: two `find()` calls that differ **only** by a function
-	argument produce the **same** key and therefore share a cache entry. Don't
-	encode a discriminator as a function in your options.
-</Callout>
-
-## Custom queries & mutations
-
-For anything the proxies don't cover, a third-party endpoint, a composed call, a hand-rolled fetch, `q.custom` wraps your async function with the same `keyPrefix` and `errorMap`:
-
-```ts
-// Query
-const opts = q.custom.query<DashboardData>({
-	key: ["dashboard", "summary"], // suffix only, keyPrefix is prepended for you
-	queryFn: () => fetchDashboard(),
-});
-
-// Mutation
-const mut = q.custom.mutation<{ id: string }, void>({
-	key: ["dashboard", "refresh"],
-	mutationFn: (vars) => refreshDashboard(vars.id),
-});
-```
-
-You pass the key **suffix**; the factory prepends your `keyPrefix` (default `['questpie']`). The function is wrapped with `errorMap` like every other builder. No `locale`/`stage` interleaving happens for custom keys, you control the full suffix.
-
-## TypeScript
-
-The package re-exports the React Query types you'll reference, plus its own:
-
-```ts
-import type {
-	// Re-exported from @tanstack/react-query for convenience:
-	QueryKey,
-	DefaultError,
-	UseQueryOptions,
-	UseMutationOptions,
-	// This package's types:
-	QuestpieQueryOptionsProxy, // return type of createQuestpieQueryOptions
-	QuestpieQueryOptionsConfig, // the config argument
-	QuestpieQueryErrorMap, // (error: unknown) => unknown
-	RealtimeQueryConfig, // { realtime?: boolean }
-	// Realtime topic helpers (re-exported from questpie/client):
-	TopicConfig,
-	RealtimeAPI,
-} from "@questpie/tanstack-query";
-
-import {
-	buildCollectionTopic,
-	buildGlobalTopic,
-} from "@questpie/tanstack-query";
-```
-
-`QuestpieQueryOptionsProxy<TApp>` is the typed shape of `q`; you rarely name it directly because the scaffold exports `typeof q`. `buildCollectionTopic` / `buildGlobalTopic` are runtime values (re-exported from `questpie/client`) for building realtime topics manually.
-
-<Callout type="info" title="The proxies don't enumerate">
-	`q.collections`, `q.globals`, and `q.routes` are JS `Proxy` objects with a
-	get-trap only. `Object.keys(q.collections)`, spreading, or `for…in` over them
-	returns nothing useful, access builders by name (`q.collections.posts`).
-	`q.custom` and `q.key` are plain.
-</Callout>
-
-## Related
-
-- [Temporal values](/docs/schema/fields/temporal-values), including `Date` preservation through TanStack Query dehydration, TanStack Start Seroval hydration, realtime, and custom JSON boundaries.
-- [Reactive Apps & Performance](/docs/client/reactive-apps), selecting the smallest live result, isolating observers, and bounding channel streams.
-- [Getting started, TanStack Start](/docs/learn/first-app), scaffolds `client` + `q` and runs your first typed query.
-- [Collections](/docs/schema/collections), the CRUD surface (`find`, `create`, `updateMany`, …) these builders wrap, and the `find()` envelope shape.
-- [Globals](/docs/schema/globals), the singleton counterpart, and why `get()` is non-nullable.
-- [Routes](/docs/code/routes), custom server functions exposed as `q.routes.<path>.query()` / `.mutation()`.
-- [Channels](/docs/client/channels), typed application-event subscriptions exposed as `q.channels.<name>.subscription()`.
-- [Relations](/docs/schema/relations), the `with` hydration and `where` query language available inside `find()` options.
+**[Mutations](/docs/client/tanstack-query/mutations)** is the rest of the
+writes: bulk, versions, workflow stages and soft delete.

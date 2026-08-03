@@ -1,22 +1,18 @@
 ---
 title: Emails
-description: Define typed email templates as files, render them with full app context, and send transactional mail through SMTP, Resend, Plunk, or the console, all from one `ctx.email` service.
+description: An email template is a file that returns a subject and some HTML. QUESTPIE registers it, types its input from a Zod schema, and hands the result to whichever provider you configured.
+kind: guide
+package: questpie
 ---
 
-Emails in QUESTPIE are **typed templates** plus **one send service**. You declare a template in `emails/*.ts` with a Zod input schema and a handler that returns `{ subject, html }`, and codegen wires it into the app. From any handler, a hook, route, job, or service, you call `ctx.email.sendTemplate(...)` with type-checked input, or `ctx.email.send(...)` for a one-off message. Which provider actually delivers the mail (SMTP, Resend, Plunk, console) is a single `adapter` you set once in config, your templates and send calls never change.
+You need to send a confirmation. Where does the HTML live, and how does it
+reach an inbox? This page keeps the two apart. You write the first. You
+configure the second, and you can swap it without touching the first.
 
-## What it does
+## Declare it
 
-- **Define templates as files**, `email({ name, schema, handler })` in `emails/*.ts`; the filename becomes the template key, the Zod schema types the input.
-- **Render with full app context**, the handler receives the whole `AppContext` (`db`, `collections`, services) plus validated `input`, so you can fetch data while building the email.
-- **Send typed templates**, `ctx.email.sendTemplate({ template, input, to })` validates `input` against the template's schema at the type level and at runtime.
-- **Send one-off mail**, `ctx.email.send({ to, subject, html })` for messages that don't warrant a template, including attachments and custom headers.
-- **Preview without sending**, `ctx.email.renderTemplate({ template, input })` returns the rendered `{ subject, html, text }` (this is what the admin email preview calls).
-- **Swap providers in one line**, point `email.adapter` at SMTP, Resend, Plunk, or Console; nothing in your templates or send calls changes.
-
-## Quick start
-
-Two files: the template, and the adapter wiring.
+Put a file under your `emails/` directory. Import `email` from
+`questpie/services` and default-export the call.
 
 ```ts title="src/questpie/server/emails/welcome.ts"
 import { email } from "questpie/services";
@@ -26,454 +22,179 @@ export default email({
 	name: "welcome",
 	schema: z.object({
 		name: z.string(),
-		activationLink: z.string().url(),
+		activationUrl: z.string().url(),
 	}),
-	// `input` is typed from the schema; the rest of the args is the full AppContext.
 	handler: ({ input }) => ({
 		subject: `Welcome, ${input.name}!`,
 		html: `<h1>Welcome, ${input.name}!</h1>
-           <a href="${input.activationLink}">Activate your account</a>`,
-		// `text` is optional, auto-derived from html if omitted.
+<p>Your account is ready.</p>
+<a href="${input.activationUrl}">Activate your account</a>`,
 	}),
 });
 ```
 
-Wire an adapter once in your runtime config. In dev, log to the console instead of sending real mail:
+Three fields, and that is the whole definition.
 
-```ts title="src/questpie/server/questpie.config.ts"
-import { runtimeConfig } from "questpie/app";
-import { ConsoleAdapter } from "questpie/adapters/console";
-import { SmtpAdapter } from "questpie/adapters/smtp";
+| Field     | Type                                            | What it does                                       |
+| --------- | ----------------------------------------------- | -------------------------------------------------- |
+| `name`    | `string`                                        | A label. The registry key comes from the filename. |
+| `schema`  | `z.ZodSchema<TInput>`                           | Parses `input` on every render. It also types it.  |
+| `handler` | `(args) => EmailResult \| Promise<EmailResult>` | Builds the mail. Sync or async.                    |
 
-import env from "./env";
-
-export default runtimeConfig({
-	// ...app, db, secret, etc.
-	email: {
-		adapter:
-			env.NODE_ENV === "production"
-				? new SmtpAdapter({ transport: env.SMTP_URL })
-				: new ConsoleAdapter(),
-		defaults: { from: "QUESTPIE <noreply@example.com>" },
-	},
-});
-```
-
-Run codegen so the template is registered, then send it from any handler, `template`, `input`, and `to` are all type-checked:
+Then register it:
 
 ```bash
-questpie generate   # collects emails/*.ts into the templates registry
+questpie generate   # collects emails/ into the template registry
 ```
 
-```ts
-// inside a hook, route, job, or service, ctx.email is the MailerService
-await ctx.email.sendTemplate({
-	template: "welcome",
-	input: {
-		name: "Ada",
-		activationLink: "https://app.example.com/activate/abc",
+`questpie add email welcome` writes the file and runs codegen for you.
+
+## Set an adapter
+
+The adapter delivers. You set it once, in your runtime config.
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { ConsoleAdapter } from "questpie/adapters/console";
+import { runtimeConfig } from "questpie/app";
+
+export default runtimeConfig({
+	// ...app, db, secret
+	email: {
+		adapter: new ConsoleAdapter({ logHtml: false }),
+		defaults: { from: "Acme <hello@acme.test>" },
 	},
-	to: "ada@example.com",
 });
 ```
 
-<Callout type="info" title="The filename is the template key">
-A default-exported `email(...)` in `emails/welcome.ts` is registered under the camelCased filename, here `welcome`. A file named `emails/new-blog-post.ts` becomes the key `newBlogPost`. Codegen collects every `emails/*.ts` into the `templates` registry, keyed by that record key, so `sendTemplate({ template: "welcome" })` autocompletes and type-checks.
-</Callout>
+Every starter ships that block. Take it out and the app stops booting. The
+email service is built at startup and throws
+`QUESTPIE: 'email.adapter' is required.` when there is none.
 
-<Callout type="warn" title="You must set an adapter, even in dev">
-	The core email service throws at app build if `email.adapter` is missing:
-	`"QUESTPIE: 'email.adapter' is required."`. The mailer does have a
-	`ConsoleAdapter` fallback for when no adapter is configured, but the core
-	service never reaches it, it constructs `MailerService` only after asserting
-	your adapter exists. So always set `adapter`; use `new ConsoleAdapter()`
-	explicitly for local development rather than relying on a fallback.
-</Callout>
+[Adapters](/docs/code/emails/adapters) covers SMTP, Resend, Plunk and writing
+your own. Swapping one changes nothing in your templates or your send calls.
 
-## Example → real output
+## Send it
 
-The handler returns `{ subject, html }`; QUESTPIE serializes that into the full message every adapter receives. With the `welcome` template and a `ConsoleAdapter`, the send above logs:
+`ctx.email` is the mailer. It sits on every handler context: hooks, routes,
+jobs, services, and email handlers themselves. The key is `email`, not
+`mailer`.
+
+```ts title="src/questpie/server/jobs/send-welcome.ts"
+import { job } from "questpie/services";
+import { z } from "zod";
+
+export default job({
+	name: "send-welcome",
+	schema: z.object({
+		to: z.string().email(),
+		name: z.string(),
+		token: z.string(),
+	}),
+	handler: async ({ payload, email }) => {
+		await email.sendTemplate({
+			template: "welcome", // autocompletes
+			input: {
+				name: payload.name,
+				activationUrl: `https://acme.test/activate/${payload.token}`,
+			},
+			to: payload.to,
+		});
+	},
+});
+```
+
+`input` is inferred from that template's schema. Drop `activationUrl` and it is
+a compile error, not a runtime one.
+
+## What lands
+
+Run the job with the console adapter and you get this:
 
 ```text
 ============================================================
 📧 EMAIL (Console Adapter - Development Mode)
 ============================================================
-From: QUESTPIE <noreply@example.com>
+From: Acme <hello@acme.test>
 To: ada@example.com
 Subject: Welcome, Ada!
 ============================================================
 
 Text Content:
-WELCOME, ADA! Activate your account [https://app.example.com/activate/abc]
+WELCOME, ADA!
+
+Your account is ready.
+
+Activate your account [https://acme.test/activate/abc]
 
 (HTML content available but not logged. Set logHtml: true to see it)
 ============================================================
 ```
 
-Two things happened for free during serialization:
+Two fields were filled in on the way out. `from` fell back to `defaults.from`,
+and then to `noreply@example.com` if you set neither. `text` was derived from
+your `html` by `html-to-text`, because the handler returned none.
 
-- **`from` was filled** from `defaults.from`, you didn't pass one in the send call.
-- **`text` was derived** from your `html` via `html-to-text`, because the handler returned only `html`.
+## The filename is the key
 
-The `input` argument is inferred straight from the template's Zod schema, so a wrong shape is a compile error before it can ever be a runtime one:
+Codegen scans `emails/` and `features/*/emails/`, one template per file. The
+key is the filename in camelCase, so `emails/new-blog-post.ts` registers as
+`newBlogPost`. That key is what `sendTemplate` autocompletes.
 
-```ts
-await ctx.email.sendTemplate({
-	template: "welcome",
-	input: { name: "Ada" },
-	//      ~~~~~~~~~~~~~~  Error: missing 'activationLink'
-	to: "ada@example.com",
-});
-```
+`.ts`, `.tsx` and `.mts` are all read. Any `index`, `_`-prefixed, `.test.`,
+`.spec.` or `.d.ts` file is skipped. Subdirectories are not scanned.
 
-## Defining a template
-
-`email(definition)` is an identity function, it returns its argument unchanged and exists purely to carry type inference. Import it from `questpie/services` (also re-exported from `questpie` and `questpie/mailer`) and default-export the result from a file in `emails/`.
-
-```ts
-import { email } from "questpie/services";
-```
-
-The definition has exactly three fields:
-
-| Field     | Type                                            | Notes                                                                                                       |
-| --------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `name`    | `string`                                        | A stable identifier for the template. Convention is to match the filename.                                  |
-| `schema`  | `z.ZodSchema<TInput>`                           | Validates `input` on every render/send. The inferred input type flows into `sendTemplate`/`renderTemplate`. |
-| `handler` | `(args) => EmailResult \| Promise<EmailResult>` | Builds the email. Sync or async.                                                                            |
-
-The handler receives `EmailHandlerArgs<TInput>`, the **full `AppContext` spread in**, plus `input` and an optional `locale`. That means you can fetch from the database while rendering:
-
-```ts title="src/questpie/server/emails/order-receipt.ts"
-import { email } from "questpie/services";
-import { z } from "zod";
-
-export default email({
-	name: "order-receipt",
-	schema: z.object({ orderId: z.string() }),
-	// Async handler: fetch from the DB while rendering. `collections` comes from
-	// AppContext; `input` is validated; `locale` is whatever the caller passed.
-	handler: async ({ input, collections, locale }) => {
-		// `findOne` returns `Doc | null`, so guard before reading the row.
-		const order = await collections.orders.findOne({
-			where: { id: input.orderId },
-		});
-		if (!order) throw new Error(`Order ${input.orderId} not found`);
-		return {
-			subject: locale === "de" ? "Ihre Bestellung" : "Your order",
-			html: `<h1>Order ${order.id}</h1><p>Total: ${order.total}</p>`,
-		};
-	},
-});
-```
-
-The handler must return an `EmailResult`:
-
-```ts
-interface EmailResult {
-	subject: string; // required, render throws if falsy
-	html: string; // required, render throws if falsy
-	text?: string; // optional, auto-derived from html if omitted
-}
-```
-
-`renderTemplate` throws `Email handler for "X" must return a subject` / `... must return html` if either is falsy, so you can't accidentally ship a blank email.
-
-<Callout
-	type="warn"
-	title="App context is only populated inside a request or job scope"
->
-	The handler's `db`, `collections`, and other services are resolved from the
-	active request/job context (AsyncLocalStorage). When you render or send
-	**inside** a hook, route, job, or service, they're fully populated. If you
-	call `renderTemplate`/`sendTemplate` from a bare script with no surrounding
-	scope, those services resolve to an empty `{}`, only `input` and `locale` are
-	guaranteed. Send from within a handler, or wrap standalone calls in an app
-	context.
+<Callout type="warn" title="`name` is decorative">
+	The mailer keys its registry by the filename and never reads `name`. Renaming
+	the file renames the template. Changing `name` does nothing. Keep the two in
+	step anyway, so the file and the string agree.
 </Callout>
 
-## Sending: `send` vs `sendTemplate`
+## The handler runs inside your app
 
-`ctx.email` is a `MailerService`. It exposes three methods. Reach it as `ctx.email` (it is **not** `ctx.mailer`), and it's available on every handler context, hooks, routes, jobs, services, and email handlers themselves.
+A handler receives the whole app context, spread in, plus `input` and an
+optional `locale`. So it can read the database while it builds the mail.
 
-### `sendTemplate(options)`, typed, template-backed
-
-Use this for anything you've defined as a template. It renders the template (validating `input` against the schema), then calls `send()` with the rendered subject/html/text.
-
-```ts
-await ctx.email.sendTemplate({
-	template: "welcome", // a known template key (autocompletes)
-	input: { name: "Ada", activationLink: "…" }, // typed from that template's schema
-	to: "ada@example.com", // string | string[]
-	// subject?, defaults to the rendered subject if omitted
-	// from?, cc?, bcc?, locale?, all optional
-});
-```
-
-| Option       | Type                          | Notes                                                      |
-| ------------ | ----------------------------- | ---------------------------------------------------------- |
-| `template`   | `keyof TTemplates`            | Required. The template key (camelCased filename).          |
-| `input`      | inferred from template schema | Required. Validated by the template's Zod schema.          |
-| `to`         | `string \| string[]`          | Required.                                                  |
-| `subject`    | `string`                      | Optional. Falls back to the template's rendered `subject`. |
-| `from`       | `string`                      | Optional. Falls back to `defaults.from`.                   |
-| `cc` / `bcc` | `string \| string[]`          | Optional.                                                  |
-| `locale`     | `string`                      | Optional. Passed to the handler as `args.locale`.          |
-
-<Callout type="info" title="sendTemplate is the narrower surface">
-`sendTemplate` does **not** accept `attachments`, `headers`, or `replyTo`, only `send` does. If you need those alongside a template, call `renderTemplate` to get `{ subject, html, text }`, then pass it to `send` with your extras.
-</Callout>
-
-### `send(options)`, one-off raw mail
-
-Use this for messages that don't have a template, or when you need attachments, custom headers, or a reply-to address.
-
-```ts
-await ctx.email.send({
-	to: "ada@example.com",
-	subject: "Your export is ready", // required for send()
-	html: "<p>Download it <a href='…'>here</a>.</p>",
-	attachments: [
-		{ filename: "report.csv", content: csvBuffer, contentType: "text/csv" },
-	],
-});
-```
-
-`send` takes the full `MailOptions`:
-
-| Option        | Type                                                           | Notes                                                                  |
-| ------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `to`          | `string \| string[]`                                           | Required.                                                              |
-| `subject`     | `string`                                                       | Required (unlike `sendTemplate`, where it's optional).                 |
-| `html`        | `string`                                                       | At least one of `html` / `text` must be present.                       |
-| `text`        | `string`                                                       | Auto-derived from `html` if omitted.                                   |
-| `from`        | `string`                                                       | Optional. Falls back to `defaults.from`, then `"noreply@example.com"`. |
-| `cc` / `bcc`  | `string \| string[]`                                           | Optional.                                                              |
-| `replyTo`     | `string`                                                       | Optional.                                                              |
-| `attachments` | `Array<{ filename; content: Buffer \| string; contentType? }>` | Optional.                                                              |
-| `headers`     | `Record<string, string>`                                       | Optional.                                                              |
-
-<Callout type="warn" title="send needs a body and a subject">
-	`send` throws `"No text or html provided"` if both `html` and `text` are
-	empty, and `subject` is required on the type. For templates, prefer
-	`sendTemplate` so the rendered subject is your fallback.
-</Callout>
-
-### `renderTemplate(options)`, render without sending
-
-Returns the rendered `EmailResult` without touching the adapter. This is what the admin uses to preview an email.
-
-```ts
-const { subject, html, text } = await ctx.email.renderTemplate({
-	template: "welcome",
-	input: { name: "Ada", activationLink: "…" },
-	// locale?
-});
-```
-
-It validates `input` (throwing `ZodError` on a bad shape), throws `Template "X" not found.` for an unknown key, and throws if the handler returns no `subject` or no `html`.
-
-### Sending from inside a hook
-
-The common case: fire a transactional email as a side effect of a write. Defer it to `onAfterCommit` so it only sends once the row is durably committed.
-
-```ts title="src/questpie/server/collections/orders.ts"
-// inside .hooks({ ... })
-afterChange: ({ data, operation, onAfterCommit, email }) => {
-  if (operation !== "create") return;
-  onAfterCommit(async () => {
-    await email.sendTemplate({
-      template: "order-receipt",
-      input: { orderId: data.id },
-      to: data.customerEmail,
-    });
-  });
+```ts title="emails/order-receipt.ts, the handler"
+handler: async ({ input, collections, t, locale }) => {
+	const order = await collections.orders.findOne({
+		where: { id: input.orderId },
+	});
+	if (!order) throw new Error(`Order ${input.orderId} not found`);
+	return {
+		subject: t("order.receipt.subject", {}, locale),
+		html: `<h1>Order ${order.id}</h1><p>Total: ${order.total}</p>`,
+	};
 },
 ```
 
-<Callout type="warn" title="Don't send inside an open transaction">
-	Send from `onAfterCommit`, not directly in `beforeChange`/`afterChange`. A
-	template handler that reads the database while a write transaction is still
-	open can deadlock, and mail sent before commit will be wrong if the
-	transaction rolls back. See [Hooks](/docs/schema/hooks) for the commit
-	lifecycle.
+Those services come from the ambient context. Requests, CRUD calls, jobs and
+admin actions all establish one, so a handler called from any of them is fine.
+A bare script is not. A handler that then reaches for `collections` throws
+`email template 'welcome' handler needs app context`. Pass `ctx: { app }` to
+`sendTemplate` when you really are outside a scope.
+
+`locale` is passed through untouched. Nothing translates on its own. Reach for
+`t(key, params, locale)` when you want that.
+
+<Callout type="warn" title="Do not send inside an open transaction">
+	`afterChange` runs inside the write transaction. Mail sent there is wrong if
+	the write rolls back. Publish a job, or wrap the send in `onAfterCommit`. See
+	[Hooks](/docs/schema/hooks).
 </Callout>
 
-## Configuration
+## Where each topic lives
 
-The `email` key on `runtimeConfig({ ... })` is a `MailerConfig`:
+| Topic                                         | Page                                   |
+| --------------------------------------------- | -------------------------------------- |
+| Every option on the three mailer methods      | [Sending](/docs/code/emails/sending)   |
+| Console, SMTP, Resend, Plunk, and your own    | [Adapters](/docs/code/emails/adapters) |
+| Running the send off the request path         | [Jobs](/docs/code/jobs)                |
+| Firing one after a write commits              | [Hooks](/docs/schema/hooks)            |
+| How the generator finds `emails/`             | [Codegen](/docs/code/codegen)          |
+| The Zod schema the template validates against | [Validation](/docs/schema/validation)  |
 
-```ts
-interface MailerConfig {
-	adapter?: MailAdapter | Promise<MailAdapter>; // required in practice (see gotcha above)
-	defaults?: { from?: string }; // default 'from' for every message
-	templates?: Record<string, EmailTemplateDefinition>; // populated by codegen, don't hand-write
-}
-```
+## Next
 
-- **`adapter`**, the provider that delivers mail. May be a `Promise<MailAdapter>` (awaited lazily on first send), which is how `createEtherealSmtpAdapter()` plugs in. You always set this; the dev console fallback inside the mailer is unreachable through the core service (see the Quick-start gotcha).
-- **`defaults.from`**, used whenever a `send`/`sendTemplate` call omits `from`. If neither is set, the serializer falls back to `"noreply@example.com"`.
-- **`templates`**, collected automatically from `emails/*.ts` by codegen. You normally never write this by hand.
-
-## Adapters
-
-An adapter is the delivery backend. All four extend `MailAdapter` (one abstract method, `send(options: SerializableMailOptions)`) and each lives on its own import path. Pick one; your templates and send calls don't change.
-
-<Callout type="info" title="Adapters import from their own subpath">
-	The concrete adapters are **not** re-exported from the root `questpie` barrel,
-	only the abstract `MailAdapter` base and the mailer types are (via
-	`questpie/mailer`). Import each adapter from its dedicated subpath:
-	`questpie/adapters/console`, `questpie/adapters/smtp`,
-	`questpie/adapters/resend`, `questpie/adapters/plunk`.
-</Callout>
-
-### Console, `questpie/adapters/console`
-
-Logs the message to your logger instead of sending. Use it in development and tests.
-
-```ts
-import { ConsoleAdapter } from "questpie/adapters/console";
-
-new ConsoleAdapter({ logHtml: false }); // both options optional
-```
-
-| Option    | Type                        | Default       | Notes                                                                     |
-| --------- | --------------------------- | ------------- | ------------------------------------------------------------------------- |
-| `logHtml` | `boolean`                   | `false`       | When `false`, the HTML body is suppressed with a hint instead of printed. |
-| `logger`  | `(message: string) => void` | `console.log` | Where the formatted email is written.                                     |
-
-### SMTP, `questpie/adapters/smtp`
-
-Sends over SMTP via nodemailer. The `transport` is passed straight to `nodemailer.createTransport`, give it an options object, a nodemailer transport, or a connection-string URL.
-
-```ts
-import { SmtpAdapter } from "questpie/adapters/smtp";
-
-new SmtpAdapter({
-	transport: {
-		host: "smtp.example.com",
-		port: 587,
-		secure: false,
-		auth: { user: "…", pass: "…" },
-	},
-});
-// or: new SmtpAdapter({ transport: "smtp://user:pass@smtp.example.com:587" })
-```
-
-| Option              | Type                                               | Notes                                              |
-| ------------------- | -------------------------------------------------- | -------------------------------------------------- |
-| `transport`         | `SMTPTransport \| SMTPTransport.Options \| string` | Passed to `nodemailer.createTransport`.            |
-| `afterSendCallback` | `(info) => void \| Promise<void>`                  | Optional. Runs after each send, handy for logging. |
-
-`SmtpAdapter` also has `verify(): Promise<boolean>` (proxies the nodemailer connection check).
-
-<Callout type="info" title="Ethereal for zero-config dev mail">
-`createEtherealSmtpAdapter()` (from `questpie/adapters/smtp`) creates a throwaway [Ethereal](https://ethereal.email) test account and returns an `SmtpAdapter` pre-wired to log a preview URL after each send, no real inbox needed. It returns a `Promise<SmtpAdapter>`, which `MailerConfig.adapter` accepts directly. Dev/testing only (it makes a network call to create the account).
-</Callout>
-
-### Resend, `questpie/adapters/resend`
-
-Sends through the [Resend](https://resend.com) HTTP API. Prefer the `resendAdapter()` factory over `new ResendAdapter(...)`.
-
-```ts
-import { resendAdapter } from "questpie/adapters/resend";
-
-resendAdapter({ apiKey: process.env.RESEND_API_KEY! });
-```
-
-| Option              | Type                                           | Default                     | Notes                                                                 |
-| ------------------- | ---------------------------------------------- | --------------------------- | --------------------------------------------------------------------- |
-| `apiKey`            | `string`                                       | none                        | Required.                                                             |
-| `baseUrl`           | `string`                                       | `"https://api.resend.com"`  | Point at a Resend-compatible endpoint; trailing slashes are stripped. |
-| `idempotencyKey`    | `string \| (options) => string \| undefined`   | none                        | Sets the `Idempotency-Key` header, static or computed per email.      |
-| `fetch`             | `typeof fetch`                                 | global `fetch`              | Override for tests / non-standard runtimes.                           |
-| `userAgent`         | `string`                                       | `"questpie-resend-adapter"` | Resend requires this for direct HTTP calls.                           |
-| `afterSendCallback` | `(response, options) => void \| Promise<void>` | none                        | Receives the parsed Resend response (`{ id? }`).                      |
-
-Throws `Resend API error (status statusText): body` on a non-2xx response.
-
-### Plunk, `questpie/adapters/plunk`
-
-Sends through the [Plunk](https://useplunk.com) transactional API. Prefer the `plunkAdapter()` factory.
-
-```ts
-import { plunkAdapter } from "questpie/adapters/plunk";
-
-plunkAdapter({ apiKey: process.env.PLUNK_SECRET_KEY! });
-```
-
-| Option              | Type                                           | Default                           | Notes                                                                         |
-| ------------------- | ---------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------- |
-| `apiKey`            | `string`                                       | none                              | Required, must be a **secret** key (public keys only track events).           |
-| `baseUrl`           | `string`                                       | `"https://next-api.useplunk.com"` | Override for self-hosted Plunk.                                               |
-| `fromName`          | `string`                                       | none                              | Applied only when `from` is a bare email with no display name.                |
-| `subscribed`        | `boolean`                                      | none                              | Toggles Plunk's marketing-subscribe flag; leave unset for transactional mail. |
-| `fetch`             | `typeof fetch`                                 | global `fetch`                    | Override for tests.                                                           |
-| `afterSendCallback` | `(response, options) => void \| Promise<void>` | none                              | Receives the parsed Plunk response.                                           |
-
-<Callout type="warn" title="Plunk rejects cc/bcc">
-	The Plunk adapter throws if a message sets `cc` or `bcc`, Plunk's
-	transactional API doesn't document them. It also treats a `success: false`
-	body as an error even on an HTTP 2xx. If you need cc/bcc, use SMTP or Resend.
-</Callout>
-
-### Custom adapter
-
-Any class extending `MailAdapter` can provide delivery; built-in and custom adapters share this contract. Implement `send(options: SerializableMailOptions)`. The mailer passes non-empty `from`, `text`, and `html` strings, so the adapter can focus on provider delivery.
-
-```ts
-import { MailAdapter } from "questpie/mailer";
-import type { SerializableMailOptions } from "questpie/mailer";
-
-export class MyAdapter extends MailAdapter {
-	async send(options: SerializableMailOptions): Promise<void> {
-		// options.from, options.text, options.html are all non-empty here.
-		await fetch("https://my-provider/send", {
-			method: "POST",
-			body: JSON.stringify(options),
-		});
-	}
-}
-```
-
-Then set `email.adapter: new MyAdapter()` in config. That's the whole contract.
-
-## TypeScript
-
-`ctx.email` is typed as `MailerService` everywhere it appears (hooks, routes, jobs, services, email handlers); `app.email` carries the same type. The template keys and per-template input types are inferred from your `emails/*.ts` files through codegen, `sendTemplate` autocompletes `template` and type-checks `input` with no annotations.
-
-To derive a template's input type elsewhere (e.g. to type a function that builds the input), import `InferEmailTemplateInput` and your template:
-
-```ts
-import type { InferEmailTemplateInput } from "questpie";
-import type welcome from "@/questpie/server/emails/welcome";
-
-type WelcomeInput = InferEmailTemplateInput<typeof welcome>;
-// { name: string; activationLink: string }
-```
-
-The full set of exported types (all from `questpie/mailer`, most also from `questpie`):
-
-```ts
-import type {
-	EmailTemplateDefinition, // the { name, schema, handler } shape
-	EmailResult, // { subject, html, text? }
-	EmailHandlerArgs, // AppContext & { input; locale? }
-	EmailTemplateNames, // keyof a templates record
-	GetEmailTemplate, // index a templates record by name
-	MailOptions, // the argument to send()
-	SerializableMailOptions, // the post-serialize shape every adapter receives
-	MailerConfig, // the email config object
-	InferEmailTemplateInput, // extract a template's input type
-} from "questpie/mailer";
-```
-
-The union of all registered template keys is available as `KnownEmailNames` (from `questpie`), which falls back to `string & {}` when no templates are registered.
-
-## Related
-
-- [Hooks](/docs/schema/hooks), fire transactional emails from `onAfterCommit` after a write commits.
-- [Jobs](/docs/code/jobs), send mail off the request path in a background job.
-- [Services](/docs/code/services), how `ctx.email` and other context services are resolved, and how to add your own.
-- [Validation](/docs/schema/validation), the Zod schema on a template is the same validation primitive used across the framework.
-- A runnable example lives in [`examples/tanstack-barbershop`](https://github.com/questpie/questpie/tree/main/examples/tanstack-barbershop), see `src/questpie/server/emails/` (`appointment-confirmation.ts`, `new-blog-post.ts`) and the `email` block in `src/questpie/server/questpie.config.ts`.
+**[Sending](/docs/code/emails/sending)** is the other two methods. `send`
+takes one-off mail with attachments. `renderTemplate` gives you the HTML
+without the send.

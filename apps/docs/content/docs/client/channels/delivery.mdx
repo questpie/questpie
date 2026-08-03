@@ -1,0 +1,100 @@
+---
+title: Delivery
+description: What a channel promises about the events it carries. Ordering per resolved channel, replay after a reconnect, an explicit gap when replay cannot reach far enough, and hard caps on payload and buffer size.
+kind: guide
+package: questpie
+---
+
+Can you trust the order? Yes, per resolved channel, and the same on both
+transports. You cannot trust that every event survives an outage. The runtime
+says so out loud rather than guessing.
+
+## Event ids
+
+Every appended event gets an id built from the resolved channel name and a
+counter.
+
+```
+7f3a…c21b:42
+```
+
+The left half is a SHA-256 hash of the resolved channel. The right half is a
+sequence that starts at 1 and never skips. `chat-room-a` and `chat-room-b` count
+independently, because they resolve to different names.
+
+The client keeps a cursor per channel and compares each arrival against it.
+
+| Arrival           | What happens                                      |
+| ----------------- | ------------------------------------------------- |
+| Next in sequence  | Delivered to your callback                        |
+| Already seen      | Dropped silently. A reconnect may repeat an event |
+| Ahead of expected | The subscription errors and closes                |
+
+Events are never coalesced. A live query collapses to the latest snapshot. A
+channel does not, because two chat messages are not two versions of one thing.
+
+## Replay and gaps
+
+Appended events are kept so a reconnecting client can catch up from its last
+applied id. The window is bounded on both time and size. An event goes when
+either bound is crossed.
+
+| Option           | Default  | What it sets                           |
+| ---------------- | -------- | -------------------------------------- |
+| `retentionMs`    | 24 hours | Age of a replayable event              |
+| `retentionBytes` | 64 MB    | Total retained payload across channels |
+| `batchSize`      | `500`    | Rows read in one channel-local batch   |
+| `busyRetryMs`    | `25`     | Retry delay behind a busy local sink   |
+
+Set either retention bound to `0` to switch that half of the cleanup off. The
+options live under `realtime.channelEvents`.
+
+When a client asks to replay from an id older than the window, the server
+answers with a gap. The subscription fails with `Channel event replay gap`
+instead of resuming mid-stream. Recover by reading from a collection, or by
+subscribing again from now and accepting the hole.
+
+<Callout type="warn" title="A gap is a signal, not a failure to hide">
+	The runtime never invents the events it lost. Handle the error in `onError`,
+	decide what your screen should show, and resubscribe on purpose.
+</Callout>
+
+## Size limits
+
+The canonical `{ eventId, event, data }` envelope must fit 10,000 UTF-8 bytes.
+That is the whole frame. Your `data` budget is a little under 10,000. It shifts
+with the length of the event name. A publish over the limit is refused with
+`413`, and no event is stored.
+
+`data` must also be JSON-serializable. A value that cannot be stringified is
+refused with `403`.
+
+## Slow consumers
+
+Queues sit at two seams, one behind a local server sink and one in the client's
+async iterator. Both are bounded by count and by serialized bytes.
+
+| Seam            | Events | Bytes |
+| --------------- | ------ | ----- |
+| Server sink     | 100    | 1 MiB |
+| Client iterator | 100    | 1 MiB |
+
+Overflow terminates that consumer. The client iterator throws
+`Channel client slow consumer`. The server closes the subscription with reason
+`slow_consumer`. Ordered events are never dropped quietly to keep a slow reader
+alive. Tune the server side with `maxBufferedEvents` and `maxBufferedBytes`.
+
+If a `for await` loop is falling behind, the work inside it is too heavy. Push
+the message onto your own structure and process it elsewhere.
+
+## Dates survive the trip
+
+Ordered events, replay and presence all preserve nested `Date` values. The wire
+format carries an explicit list of the paths that hold a date and revives
+exactly those. No string that happens to look like a timestamp gets converted by
+accident. See [Temporal values](/docs/schema/fields/temporal-values).
+
+## Next
+
+**[Reactive apps](/docs/client/reactive-apps)** puts these limits in context.
+It covers which reactive primitive to reach for and how to size a channel.

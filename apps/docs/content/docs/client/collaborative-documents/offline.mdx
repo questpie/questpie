@@ -1,0 +1,116 @@
+---
+title: Offline and recovery
+description: Edits made with no network are kept in the browser and replayed on reconnect. When replaying them would be wrong, the document says so instead and hands you the bundle.
+kind: guide
+package: questpie
+---
+
+A handle in the `offline` state still reads and still accepts edits. It gets
+there when the transport drops, and also after the last `disconnect()`. The
+interesting part is what happens on the way back.
+
+## Where the queue lives
+
+`connect()` opens an IndexedDB database named `questpie-crdt-v2` and loads the
+partition for this document. Six values build the partition key. Three come from
+the server: the namespace, the deployment fingerprint and the subject. Three
+come from your own call: the owner kind, the owner key and the record id.
+
+Two documents never share a partition. A different user, a different deployment
+or a different record gets its own.
+
+In Node there is no `indexedDB`, so storage is inert and nothing persists. That
+is what makes a handle safe to construct during SSR.
+
+## Coming back
+
+Reconnect pulls the authoritative state first. An append that failed leaves its
+bundle marked. Reconnect asks the server whether each marked bundle already
+landed. Bundles the server already has are dropped. The rest are re-sent in
+order, so nothing is applied twice.
+
+## The queue has a ceiling
+
+| Option              | Default and ceiling |
+| ------------------- | ------------------- |
+| `maxPendingUpdates` | 64                  |
+| `maxPendingBytes`   | 4 MiB               |
+
+Set them on `createClient({ crdt })`. Ask for more than the ceiling and you get
+the ceiling. Both must be safe non-negative integers. Anything else makes
+`connect()` reject with `CRDT_UNAVAILABLE` before it sends a request.
+
+```ts
+createClient<AppConfig>({
+	baseURL,
+	crdt: {
+		engines: { text: yjsClientEngine() },
+		maxPendingUpdates: 32,
+		maxPendingBytes: 512 * 1024,
+	},
+});
+```
+
+`createCrdtClient(client, { runtime })` replaces this whole object rather than
+merging into it. A runtime you pass there needs its own `engines`.
+
+A single field update is capped at 256 KiB and a single bundle at 1 MiB,
+whatever you configure. Filling the queue throws `CrdtMutationError` with
+`QUEUE_LIMIT` and puts the document into recovery.
+
+## Queued edits expire after 30 days
+
+The offline horizon is 30 days from the moment a bundle is created. Past it the
+document freezes into recovery instead of replaying edits nobody remembers
+making. This is checked on connect, on write, and on a timer.
+
+## Recovery
+
+`recovery-required` is a stop. The document neither reads nor writes, and
+`connect()` on it rejects. The state carries a `reason` and a count of
+`pendingUpdates`.
+
+| `reason`                  | What happened                                               |
+| ------------------------- | ----------------------------------------------------------- |
+| `epoch_changed`           | The record moved to a new epoch while you held queued edits |
+| `field_contract_changed`  | The field manifest or the schema version changed under you  |
+| `pending_update_rejected` | A queued edit touches a field you may no longer edit        |
+| `owner_retired`           | The server issued a new incarnation of this record          |
+| `offline_horizon_expired` | A queued bundle is older than 30 days                       |
+| `queue_limit`             | The queue hit `maxPendingUpdates` or `maxPendingBytes`      |
+| `local_store_corrupt`     | IndexedDB returned something that did not check out         |
+
+Every one of these means the same thing. Replaying under the current identity
+would produce an edit the user did not make.
+
+## Offer the bundle, then let it go
+
+```ts
+const bundle = await article.export();
+download(new Blob([bundle]));
+
+await article.discard();
+```
+
+Both calls work only when the document is `recovery-required` or `closed`.
+Anywhere else they throw `CrdtConnectError` with `CRDT_PROTOCOL_REJECTED`.
+
+`export()` returns bytes: the tag `QUESTPIE_CRDT_RECOVERY_V1`, a NUL, then JSON
+holding the stored basis and every queued bundle. With nothing to export it
+throws `CRDT_RECOVERY_REQUIRED`.
+
+`discard()` deletes the partition and the queue. A handle that is not closed
+goes back to `idle` and can connect again. Call it only after the user has
+chosen to abandon that work.
+
+<Callout type="warn" title="`discard()` is not a retry">
+	It throws away edits. Offer `export()` first, and only call `discard()` on an
+	explicit choice by the person who made them.
+</Callout>
+
+## The working result
+
+A writer loses their connection mid-paragraph, keeps typing, and closes the
+laptop. They reopen it and the paragraph is still there. The server accepts what
+it has not already seen, and the document goes back to `ready`. When it cannot,
+they get a download rather than a silent loss.

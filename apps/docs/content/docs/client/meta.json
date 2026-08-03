@@ -3,11 +3,11 @@
 	"pages": [
 		"[Overview](/docs/client)",
 		"sdk",
-		"i18n",
 		"tanstack-query",
 		"realtime",
 		"channels",
 		"collaborative-documents",
-		"reactive-apps"
+		"reactive-apps",
+		"i18n"
 	]
 }

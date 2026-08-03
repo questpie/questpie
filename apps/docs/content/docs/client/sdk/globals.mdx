@@ -1,0 +1,83 @@
+---
+title: Global methods
+description: The singleton half of the client. Same vocabulary as a collection, with the id taken out and two signatures shifted.
+kind: guide
+package: questpie
+---
+
+A global is one row with no id. Take the id out of the collection methods and
+you have this page. Two of the signatures shift as a result, and that is where
+people trip.
+
+## Read and write
+
+```ts
+const settings = await client.globals.settings.get({ with: { logo: true } });
+
+const next = await client.globals.settings.update(
+	{ siteName: "QUESTPIE", logo: { connect: { id: assetId } } },
+	{ with: { logo: true } },
+);
+```
+
+`get` accepts `with`, `columns`, `locale`, `localeFallback` and `stage`. Nested
+relation writes work the same as on a collection.
+
+<Callout type="warn" title="`update` takes the data object directly">
+	A global has no id, so `update(data, options?)` puts the data first. There is
+	no `{ id, data }` wrapper. Pass one and you write a field called `id`. The
+	second argument is the query options.
+</Callout>
+
+Turn on `optimisticConcurrency` and that first argument changes shape. It
+becomes `{ data, expectedRevision }`, and the data moves inside it. That is the
+one case where a global's `update` takes a wrapper.
+
+<Callout
+	type="info"
+	title="`get()` is typed non-null, but a global can be empty"
+>
+	The client types `get()` as non-null so you are not guarding on every read.
+	The CRUD underneath can still answer `null` before the singleton has ever been
+	written. Guard the first read if nothing has called `update` yet.
+</Callout>
+
+## Versions and workflow
+
+Same three methods as a collection, minus the id.
+
+```ts
+const versions = await client.globals.settings.findVersions({ limit: 10 });
+
+await client.globals.settings.revertToVersion({ version: 3 });
+await client.globals.settings.transitionStage({ stage: "published" });
+```
+
+`findVersions` takes one options object holding `id`, `limit`, `offset` and the
+locale options together. Collections split those across two arguments, so this
+is the one place the two surfaces read differently.
+
+`revertToVersion` sends its parameters in the body and the locale options in
+the query string. Its `id` is optional. `transitionStage` takes only `locale`
+and `localeFallback` in its second argument, where a collection would also
+accept `stage`.
+
+## Introspection and live reads
+
+```ts
+const meta = await client.globals.settings.meta();
+const schema = await client.globals.settings.schema();
+
+const unsubscribe = client.globals.settings.live({}, (snapshot) => {
+	setSettings(snapshot);
+});
+```
+
+`meta()` and `schema()` mirror the collection versions. `live()` and
+`liveIter()` carry `with` and `locale` only, and the snapshot has the same type
+as `get()`. See [Realtime](/docs/client/realtime).
+
+## Next
+
+**[Errors](/docs/client/sdk/errors)** covers what a failed call throws and how
+to read a field error out of it.

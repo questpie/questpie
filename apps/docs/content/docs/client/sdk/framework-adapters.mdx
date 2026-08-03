@@ -1,0 +1,136 @@
+---
+title: Framework adapters
+description: Mount the handler the client calls. One fetch handler, three optional packages, and a base path that has to match on both ends.
+kind: guide
+package: questpie
+---
+
+The client sends HTTP. Something has to answer it. That something is one
+handler, and every runtime mounts the same one.
+
+## The handler
+
+`createFetchHandler` takes your app and gives you a function from a `Request`
+to a `Response` or `null`. All four starter templates use it directly, so this
+is the shape you already have if you scaffolded with `create-questpie`.
+
+```ts title="src/app/api/[...all]/route.ts"
+import { createFetchHandler } from "questpie/http";
+
+import { app } from "#questpie";
+
+const handler = createFetchHandler(app, { basePath: "/api" });
+
+const handle = async (request: Request) => {
+	const response = await handler(request);
+	return response ?? new Response("Not found", { status: 404 });
+};
+
+export const GET = handle;
+export const POST = handle;
+export const PATCH = handle;
+export const PUT = handle;
+export const DELETE = handle;
+```
+
+<Callout type="warn" title="The handler answers `null` outside its base path">
+	It does not throw and it does not 404 for you. A `null` means the request was
+	not yours, so your framework can carry on routing. Turn it into a response
+	yourself, as above, when the handler owns the whole prefix.
+</Callout>
+
+The `basePath` you pass here is the one the client needs. Use `"/api"` when the
+same app also serves a frontend, and `"/"` for a headless API. Get them out of
+step and every call 404s.
+
+```ts
+// server
+createFetchHandler(app, { basePath: "/api" });
+
+// client
+createClient<AppConfig>({ baseURL, basePath: "/api" });
+```
+
+## The runtime packages
+
+Three packages wrap the same handler for a framework you already have. None of
+the starters install one, because each template mounts the handler itself.
+
+| Package            | Import                          | Gives you                         |
+| ------------------ | ------------------------------- | --------------------------------- |
+| `@questpie/next`   | `questpieNextRouteHandlers`     | The seven App Router verb exports |
+| `@questpie/hono`   | `questpieHono` from `/server`   | A Hono app with a catch-all route |
+| `@questpie/elysia` | `questpieElysia` from `/server` | An Elysia plugin to `.use()`      |
+
+### Next
+
+```ts title="app/api/[[...slug]]/route.ts"
+import { questpieNextRouteHandlers } from "@questpie/next";
+import { app } from "#questpie";
+
+export const { GET, POST, PATCH, DELETE, PUT, OPTIONS, HEAD } =
+	questpieNextRouteHandlers(app, { basePath: "/api" });
+```
+
+All seven exports are the same function. `questpieNext(app, config?)` is the
+single-handler form if you want to wrap it yourself. Both turn an out-of-base
+request into a `404` with a JSON body. The package has one export path, so
+there is no `/server` subpath here.
+
+### Hono
+
+```ts title="src/server.ts"
+import { Hono } from "hono";
+import { questpieHono } from "@questpie/hono/server";
+import { app } from "#questpie";
+
+const server = new Hono();
+server.route("/", questpieHono(app, { basePath: "/api" }));
+
+export default server;
+```
+
+`questpieHono` returns a Hono app that answers `${basePath}/*`, so mount it at
+`"/"` and let the base path do the narrowing. It reads `appContext` and `user`
+off the Hono context when they are set. Add `questpieMiddleware(app)` to set
+them, and to get `app`, `appContext` and `user` on your own routes too.
+
+### Elysia
+
+```ts title="src/server.ts"
+import { Elysia } from "elysia";
+import { questpieElysia } from "@questpie/elysia/server";
+import { app } from "#questpie";
+
+const server = new Elysia().use(questpieElysia(app, { basePath: "/api" }));
+
+export default server;
+```
+
+`questpieElysia` returns a plugin with a `/*` route under `prefix: basePath`.
+Out-of-base requests come back as a `404` with a JSON body.
+
+## Typing custom routes through Hono RPC
+
+`@questpie/hono/client` ships `createClientFromHono`. It builds an `hc` client
+for your own Hono routes and copies `collections` and `globals` onto it.
+
+```ts
+import { createClientFromHono } from "@questpie/hono/client";
+
+const client = createClientFromHono<AppType, AppConfig>({
+	baseURL: "http://localhost:3000",
+	basePath: "/api",
+});
+```
+
+<Callout type="warn" title="It carries CRUD only">
+	`collections` and `globals` are the only members copied over. `routes`,
+	`search`, `realtime` and `channels` are not on the merged object, and its
+	config has no `getAuthHeaders`. Keep a normal `createClient` around if you
+	need any of that.
+</Callout>
+
+## Next
+
+**[Client SDK](/docs/client/sdk)** is the method list this handler answers.

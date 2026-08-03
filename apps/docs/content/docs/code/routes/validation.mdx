@@ -1,0 +1,117 @@
+---
+title: Input and output
+description: A route has two Zod seams. One parses what the caller sent before anything else runs, the other checks what your handler returned on the way out.
+kind: guide
+package: questpie
+---
+
+Which one runs first, and what does the caller see when it fails? The order is
+fixed and it is worth knowing, because the answer decides where you put a
+check.
+
+## The order
+
+Four steps. Steps 1 and 4 are skipped if you declared no schema for them.
+
+| Step | What runs                    | On failure                       |
+| ---- | ---------------------------- | -------------------------------- |
+| 1    | `schema.parse(input)`        | `400`, with per-field errors     |
+| 2    | The `.access()` rule         | `403`                            |
+| 3    | Your handler                 | Whatever your handler threw      |
+| 4    | `outputSchema.parse(result)` | `400`, and the result is dropped |
+
+A bad payload never reaches your access rule and never reaches your handler.
+That surprises people, because the rule looks like the outer gate. It is not.
+The rule never sees `input` either. Nothing else inspects the payload, so your
+input schema is the only check on what the caller sent.
+
+## Both schemas
+
+```ts title="src/questpie/server/routes/subscribe.post.ts"
+import { route } from "questpie/services";
+import { z } from "zod";
+
+export default route()
+	.post()
+	.schema(z.object({ email: z.string().email() }))
+	.outputSchema(z.object({ id: z.string(), status: z.literal("subscribed") }))
+	.handler(async ({ input, collections }) => {
+		const sub = await collections.subscribers.create({ email: input.email });
+		return { id: sub.id, status: "subscribed" as const };
+	});
+```
+
+`.schema()` types `input` and parses it. `.outputSchema()` does two jobs at
+once. It constrains what the handler may return, so a return that does not fit
+is a compile error. It also parses the result at runtime, so a Zod transform in
+the output schema really does rewrite what goes on the wire. The compile-time
+half needs `.schema()` as well. Without one, only the runtime parse is left.
+
+## You do not need an output schema
+
+Leave `.outputSchema()` off and the handler's inferred return becomes the
+route's output type anyway. It flows to `client.routes.*` the same way.
+
+```ts
+export default route()
+	.post()
+	.schema(z.object({ n: z.number() }))
+	.handler(({ input }) => ({ doubled: input.n * 2 }));
+// client output type: { doubled: number }
+```
+
+Reach for `.outputSchema()` when you want the runtime check on top of the type.
+It is the seam that catches a handler returning a field it should have
+stripped.
+
+## Where the input comes from
+
+The request body. Nothing else. The HTTP handler reads the body, parses it as
+JSON, and passes the result to your schema.
+
+<Callout type="warn" title="A `GET` route cannot have a required input schema">
+	A `GET` request carries no body, so your schema parses `undefined` and the
+	caller gets a `400`. Your handler never runs. Use `POST` when the route takes
+	input, or use `.raw()` and read the query string off the `Request` yourself.
+</Callout>
+
+The typed client will happily serialize a `GET` argument into a query string.
+The server does not read it. This is the one place where the client type checks
+and the request still fails.
+
+## A `GET` route that returns JSON
+
+Call `.outputSchema()` on its own, with no `.schema()`. That is still a JSON
+route, its `input` is `unknown`, and nothing parses it. So there is nothing to
+fail.
+
+```ts title="src/questpie/server/routes/revenue-stats.get.ts"
+export default route()
+	.get()
+	.outputSchema(z.object({ total: z.number(), currency: z.string() }))
+	.handler(async ({ collections }) => {
+		const { totalDocs } = await collections.appointments.find({ limit: 1 });
+		return { total: totalDocs, currency: "EUR" };
+	});
+```
+
+## Errors from your handler
+
+Throw `ApiError` and the caller gets the status you picked.
+
+```ts
+import { ApiError } from "questpie/errors";
+
+throw ApiError.notFound("Service");
+// 404 { code: "NOT_FOUND", message: "Resource not found" }
+```
+
+Throw anything else and the caller gets a `500` with a generic message. Your
+own message rides along as `cause`, so `throw new Error("no slots left")`
+reaches the client too. Do not put anything private in it.
+
+## Related
+
+- [Validation](/docs/schema/validation), the same Zod schemas across the rest
+  of the framework.
+- [Access control](/docs/code/routes/access), step 2 of the order above.

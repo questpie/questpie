@@ -1,0 +1,105 @@
+---
+title: High-frequency events
+description: A noisy channel will outrun the component reading it. Bound the state you keep on the client, and publish transitions instead of frames.
+kind: guide
+package: questpie
+---
+
+A channel delivers everything it is given, in order, as fast as it arrives.
+Nothing along the way decides that a frame has gone stale. Cursors, typing
+indicators and progress ticks all need that decision, so you make it.
+
+## The accumulating query is not a window
+
+`q.channels.<name>.subscription(params)` starts at `[]` and appends each message
+to a new array. Nothing trims it. The array grows for as long as the query stays
+in the cache.
+
+That is the right shape for a short-lived, low-rate stream. A room's chat log
+for the length of a visit is fine. A cursor feed is not.
+
+## Keep an explicit window
+
+Subscribe directly and hold only what you draw.
+
+```tsx
+const MAX_BURSTS = 50;
+
+function ReactionBursts({ reviewId }: { reviewId: string }) {
+	const [bursts, setBursts] = useState<
+		Array<{ eventId: string; emoji: string }>
+	>([]);
+
+	useEffect(() => {
+		return client.channels.reviewReactions.subscribe(
+			{ reviewId },
+			(message) => {
+				if (message.event !== "burst") return;
+				setBursts((current) => [
+					...current.slice(-(MAX_BURSTS - 1)),
+					{ eventId: message.eventId, emoji: message.data.emoji },
+				]);
+			},
+		);
+	}, [reviewId]);
+
+	return <ReactionOverlay bursts={bursts} />;
+}
+```
+
+`subscribe()` returns its stop function straight away, so returning it from the
+effect is enough. For a latest-value signal such as a cursor position, keep a
+map keyed by user instead of an array.
+
+## Two consumers, different backpressure
+
+| API                        | Client-side buffering                                    |
+| -------------------------- | -------------------------------------------------------- |
+| `subscribe(params, cb)`    | None. Your callback runs as each frame arrives.          |
+| `iter(params, { signal })` | Queues up to 100 messages or 1 MiB, then fails the loop. |
+
+`iter()` buffers because an async loop can be slower than the wire.
+When the queue overflows it throws `Channel client slow consumer` and stops.
+`q.channels.<name>.subscription()` is built on `iter()`, so it carries the same
+bound.
+
+`subscribe()` keeps no queue, so nothing piles up in the browser. It also gives
+you nowhere to hide slow work. Keep the callback cheap and let React batch the
+render.
+
+## A gap is an error, not a hole
+
+Every message carries an `eventId` of the form `<channelHash>:<sequence>`. The
+client tracks that sequence per channel.
+
+A repeated id after a reconnect is dropped silently. A skipped sequence is not.
+The client raises `Channel event replay gap` through `onError` and drops the
+subscription rather than inventing the missing state.
+
+Handle it by re-reading durable state from a collection, then subscribing again
+from now. Do not treat the replay window as history.
+
+## Publish transitions, not frames
+
+The publish route allows 10 publishes a second per session and per principal,
+with a burst of 20. One serialized `{ eventId, event, data }` envelope must fit
+10,000 UTF-8 bytes.
+
+So throttling belongs on the producer, before `publish()`. Send `typing: true`
+once and `typing: false` once, rather than one event per keystroke. Send a
+percentage, not a byte count.
+
+<Callout type="info" title="Presence is already the throttled form">
+	A presence roster is one snapshot that replaces the last one. Use
+	`subscribePresence()` for who is here. Publishing `joined` and `left` events
+	yourself gives you an unbounded stream and no reconnect story.
+</Callout>
+
+## Related
+
+- [Reactive Apps](/docs/client/reactive-apps), choosing between live queries and
+  channels in the first place.
+- [Channels](/docs/client/channels), definitions, authorization, publishing and
+  presence.
+- [Subscription cost](/docs/client/reactive-apps/subscription-cost), the server
+  side of the same limits.

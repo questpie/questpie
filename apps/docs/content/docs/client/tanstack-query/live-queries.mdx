@@ -1,0 +1,132 @@
+---
+title: Live queries
+description: Three reads take a second argument. Set realtime to true there and the same builder streams server snapshots into the same useQuery, instead of fetching once.
+kind: guide
+package: "@questpie/tanstack-query"
+---
+
+How do you make a list update itself? You do not swap the hook or write a
+subscription. You pass one flag to the builder you already use.
+
+## The flag
+
+```tsx title="src/components/live-posts.tsx"
+import { useQuery } from "@tanstack/react-query";
+
+import { q } from "@/lib/query";
+
+export function LivePosts() {
+	const { data } = useQuery(
+		q.collections.posts.find(
+			{ where: { published: true } },
+			{ realtime: true },
+		),
+	);
+
+	return <p>{data?.totalDocs ?? 0} published posts</p>;
+}
+```
+
+That count now changes on its own. Any write that lands in the filter reaches
+this component, and you invalidate nothing.
+
+## Which reads can be live
+
+| Builder                      | Live form | What streams           |
+| ---------------------------- | --------- | ---------------------- |
+| `collections.<name>.find`    | yes       | the paginated envelope |
+| `collections.<name>.count`   | yes       | one number             |
+| `globals.<name>.get`         | yes       | the singleton row      |
+| `collections.<name>.findOne` | no        | nothing                |
+| `findVersions`, every write  | no        | nothing                |
+
+`findOne` has no second argument at all. Passing one is a compile error.
+
+## What happens on the wire
+
+The flag swaps the fetcher for a stream. There is no REST call beside it, so
+the query issues one request and not two.
+
+The first frame is a full snapshot and becomes `data`. Later frames are keyed
+deltas. An insert splices a row in, an update replaces one, and a delete takes
+one out. A totals frame refreshes the envelope counts. Rows nobody touched
+keep their identity, so a memoized row component does not re-render.
+
+A live `count` reduces differently. It ignores the keyed deltas outright. Its
+value comes from the first snapshot, then from each totals frame.
+
+## What the topic carries
+
+Your read options do two jobs. They build the query key, and they build the
+subscription topic. The topic is the narrower of the two.
+
+| Read           | Fields the topic carries                                |
+| -------------- | ------------------------------------------------------- |
+| `find`         | `where`, `with`, `limit`, `offset`, `orderBy`, `locale` |
+| `count`        | `where`, `locale`                                       |
+| a global `get` | `with`, `locale`                                        |
+
+Everything else is dropped. `columns`, `stage`, `includeDeleted`,
+`localeFallback` and `search` never reach the server's matcher, so live
+matching ignores them. Both builders, `buildCollectionTopic` and
+`buildGlobalTopic`, are re-exported if you want to subscribe by hand.
+
+## Defaults you get
+
+A live query sets three options before your own, so a stream is never served
+from a stale cache entry.
+
+| Option           | Value      | Why                                      |
+| ---------------- | ---------- | ---------------------------------------- |
+| `staleTime`      | `0`        | the stream is the source of freshness    |
+| `refetchOnMount` | `"always"` | a remount reconnects                     |
+| `retry`          | a function | three retries, none for a hard rejection |
+
+The rest of the second argument is ordinary React Query options. Pass
+`placeholderData`, `select`, `enabled` or your own `staleTime` and they
+survive.
+
+A query that is not live takes its options the usual way. Spread the builder
+and add your own fields.
+
+```ts
+useQuery({ ...q.collections.posts.find({ limit: 10 }), staleTime: 5000 });
+```
+
+<Callout type="warn" title="The second argument only applies to live queries">
+	Without `realtime: true` the whole object is ignored. A plain
+	`find({}, { staleTime: 5000 })` type-checks and changes nothing. Spread the
+	builder instead, as above.
+</Callout>
+
+## When the server says no
+
+The server admits a topic before it streams. A `find` whose `limit` is above
+the configured `maxFindLimit`, 100 by default, is rejected outright.
+
+A rejection lands in the query's normal `error` state as a
+`RealtimeTopicRejectedError`, which `questpie/client` exports. It is marked
+non-retryable and is not retried, so the UI shows an error instead of sitting
+on `undefined` forever. Its `details.reason` says why.
+
+```tsx
+import { RealtimeTopicRejectedError } from "questpie/client";
+
+const { error } = useQuery(
+	q.collections.posts.find({ limit: 240 }, { realtime: true }),
+);
+
+if (error instanceof RealtimeTopicRejectedError) return <TooBroad />;
+```
+
+<Callout type="info" title="Realtime is opt-in on the server">
+	Set `realtime` in your app config first. See
+	[Realtime](/docs/infrastructure/realtime) for the transport and [Client
+	realtime](/docs/client/realtime) for the subscriptions underneath these
+	builders.
+</Callout>
+
+## Next
+
+**[Reactive apps](/docs/client/reactive-apps)** is how you keep a page full of
+live queries cheap: narrow the topic, isolate the observer, bound the stream.

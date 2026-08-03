@@ -1,0 +1,132 @@
+---
+title: Types and tooling
+description: The inference helpers, the two functions that run a route without an HTTP request, and the one that lists every route in the app.
+kind: reference
+package: questpie
+---
+
+## What exists
+
+| Name                                       | From                     | For                          |
+| ------------------------------------------ | ------------------------ | ---------------------------- |
+| `route`, `RouteBuilder`                    | `questpie/services`      | Writing a route              |
+| `executeJsonRoute`, `executeRawRoute`      | `questpie/services`      | Running one from code        |
+| `evaluateRouteAccess`                      | `questpie/services`      | Checking a rule on its own   |
+| `isJsonRoute`, `isRawRoute`                | `questpie/services`      | Narrowing a definition       |
+| `introspectRoutes`, `IntrospectedRoute`    | `questpie/introspection` | Listing every route          |
+| `InferRouteInput`, `InferRouteOutput`      | `questpie/types`         | Reading a route's types      |
+| `InferRouteParams`, `RouteParamsFromKey`   | `questpie/types`         | Reading a route's URL params |
+| `RouteMeta`, `RouteMcpMeta`, `RouteAccess` | `questpie/services`      | Typing what you pass in      |
+
+Everything on `questpie/services` is also on the bare `questpie` entry.
+
+## Inferring a route's types
+
+On a JSON route the helpers read the definition's schema members, not the
+handler. That matters. Codegen erases handler bodies, and these types still
+resolve afterwards.
+
+```ts
+import type {
+	InferRouteInput,
+	InferRouteOutput,
+	InferRouteParams,
+} from "questpie/types";
+
+import type createBooking from "@/questpie/server/routes/create-booking.post";
+
+type Input = InferRouteInput<typeof createBooking>;
+type Output = InferRouteOutput<typeof createBooking>;
+type Params = InferRouteParams<typeof createBooking>;
+```
+
+| Helper             | On a JSON route              | On a raw route |
+| ------------------ | ---------------------------- | -------------- |
+| `InferRouteInput`  | The `.schema()` type         | `never`        |
+| `InferRouteOutput` | The output or handler return | `Response`     |
+| `InferRouteParams` | Whatever `.params<…>()` said | Same           |
+
+`InferRouteOutput` falls back to `unknown` when it can recover nothing, never
+to `any`. So you have to narrow it, instead of quietly getting it wrong.
+
+### Params from the file name
+
+`RouteParamsFromKey` derives params from a route key, brackets and method
+suffix included. Codegen uses it so `client.routes.*` types a `[id]` route
+correctly, without your handler having declared anything.
+
+```ts
+type P = RouteParamsFromKey<"users/[id]/posts:GET">; // { id: string }
+type Q = RouteParamsFromKey<"auth/[...path]:POST">; // { path: string }
+```
+
+This types the generated surface, not your handler body. Inside the route file
+you still declare `.params<{ id: string }>()`.
+
+## Running a route without HTTP
+
+`executeJsonRoute` and `executeRawRoute` run the same pipeline the HTTP handler
+runs: parse, access check, handler inside the context scope, output check. Use
+them in a test, a script, or one route calling another.
+
+```ts title="In a test"
+import { executeJsonRoute } from "questpie/services";
+
+import subscribe from "@/questpie/server/routes/subscribe.post";
+
+const result = await executeJsonRoute(app, subscribe, {
+	email: "ada@example.com",
+});
+// result: { id: string; status: "subscribed" }
+```
+
+| Argument | `executeJsonRoute`   | `executeRawRoute`    |
+| -------- | -------------------- | -------------------- |
+| 1        | the app              | the app              |
+| 2        | the route definition | the route definition |
+| 3        | the input            | a `Request`          |
+| 4        | a `RequestContext`   | a `RequestContext`   |
+| 5        | a `Request`          | the URL params       |
+| 6        | the URL params       | none                 |
+
+Arguments 4 and up are optional. Pass no context and the call runs with
+`accessMode: "system"`, which is the right default for a script. Pass one from
+a real request and the route sees that caller's session.
+
+<Callout type="warn" title="Your access rule still runs">
+	These helpers are not a back door. `.access()` is evaluated exactly as it is
+	over HTTP, and a denial throws `ApiError.forbidden`. Only the access mode
+	differs, and only when you supply no context.
+</Callout>
+
+## Listing every route
+
+`introspectRoutes(source)` flattens the routes tree into an array sorted by key.
+`@questpie/mcp` reads it to build its tool list. It takes the app, a
+`{ routes }` object, or the bare tree.
+
+```ts
+import { introspectRoutes } from "questpie/introspection";
+
+const routes = introspectRoutes(app);
+```
+
+| Field        | Example               |
+| ------------ | --------------------- |
+| `key`        | `posts/[id]`          |
+| `pattern`    | `posts/:id`           |
+| `path`       | `/posts/:id`          |
+| `params`     | `["id"]`              |
+| `methods`    | `["GET"]`             |
+| `mode`       | `"json"` or `"raw"`   |
+| `meta`       | your `.meta()` object |
+| `definition` | the route itself      |
+
+`methods` is always an array, even for the single-method route that one file
+produces.
+
+## Related
+
+- [Client SDK](/docs/client/sdk), where these same types land for the caller.
+- [Codegen](/docs/code/codegen), what erases the handler and why the helpers
+  are built to survive it.

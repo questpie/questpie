@@ -1,0 +1,109 @@
+---
+title: Subscription cost
+description: The limits a live query hits with no configuration, who shares the work behind it, and the two switches that turn it off.
+kind: guide
+package: questpie
+---
+
+One live query is one server-side query re-run on every matching change. Before
+you tune anything, know what the untuned server already refuses.
+
+## The limits you get with no configuration
+
+| Limit                        | Default | What hits it                                     |
+| ---------------------------- | ------- | ------------------------------------------------ |
+| Subscriptions per connection | 20      | One browser tab, everything it opens at once.    |
+| Connections per principal    | 5       | Tabs, windows and devices for the same identity. |
+| Rows in one live `find()`    | 100     | `limit`, and the cap applied when you omit it.   |
+| Relation nesting in `with`   | 3       | Depth of the relation tree, not its width.       |
+| Bytes in one snapshot frame  | 1 MiB   | The serialized result of a single refresh.       |
+
+The first cap is not a live-query cap. Live queries and channel subscriptions on
+one connection are counted together against the 20.
+
+An oversized `limit` or a too-deep `with` is rejected as a topic error. Sibling
+topics on the same connection keep running. The error is not retryable. See
+[Errors and limits](/docs/client/realtime/errors) for its shape.
+
+On a new connection the subscriptions past the twentieth are refused one by one.
+The sixth connection for one principal is refused outright. A snapshot over
+1 MiB tears down that one topic and leaves the rest alone.
+
+The connection cap needs an identity to count against. A request carrying no
+user, no token and no session is not counted at all.
+
+Override any of these under `realtime.admission` in the server config. Measure
+the query's real cost, its serialized bytes and its fan-out first. A large
+paginated read model should not be one live query.
+
+## A slow client skips states, it does not queue them
+
+When an SSE stream applies backpressure, the server keeps one pending frame per
+topic. A newer snapshot replaces the older pending one. The client lands on the
+current state and never sees the ones it missed.
+
+A channel does the opposite. Ordered events are never coalesced, and a consumer
+that falls behind gets an explicit error. Live queries are for state. Channels
+are for events you must not lose.
+
+## Equivalent work is shared per principal
+
+The refresh scheduler groups by the topic plus an access key. The key is built
+from the identity, the server scope, the locale, the stage and the access mode.
+Identity is the signed-in user's id when there is one. Failing that it is an
+OAuth token id, and failing that the connection itself.
+
+So two tabs of the same user watching the same list run the query once per
+server instance. Two different users watching the same list run it twice.
+
+That default is deliberate. Row access, field access and `afterRead` can all
+read the session, so two principals may get different bytes from the same query.
+
+### Widening the sharing
+
+Return the same key from `accessCacheKey` and those principals share one
+refresh.
+
+```ts title="src/questpie/server/collections/public-posts.ts"
+collection("public-posts").options({
+	realtime: { accessCacheKey: () => "public" },
+});
+```
+
+Only do this where the result is identical for every principal that resolves to
+the key. There is no check. A key that is too broad serves one user's rows to
+another.
+
+## Turning it off
+
+`.options({ realtime: false })` on a collection rejects live subscriptions to it
+with `collection_realtime_disabled`. Normal CRUD is unaffected.
+
+`realtime: { rowLiveQueries: false }` in the server config does the same for
+every collection and global, with `row_live_queries_disabled`. Channels and
+collaborative documents keep working.
+
+## Channels and presence have their own budgets
+
+| Setting                  | Default      | Config key                 |
+| ------------------------ | ------------ | -------------------------- |
+| Replay retention         | 24 hours     | `realtime.channelEvents`   |
+| Retained payload bytes   | 64 MiB       | `realtime.channelEvents`   |
+| Events queued per sink   | 100 or 1 MiB | `realtime.channelEvents`   |
+| Presence lease           | 30 seconds   | `realtime.channelPresence` |
+| Presence heartbeat       | 10 seconds   | `realtime.channelPresence` |
+| Presence reconciliation  | 1 second     | `realtime.channelPresence` |
+| Members per channel      | 100          | `realtime.channelPresence` |
+| Bytes per member payload | 1 KiB        | `realtime.channelPresence` |
+
+The lease is why an abruptly disconnected member can linger for up to 30
+seconds. A graceful leave removes the row immediately.
+
+## Related
+
+- [Reactive Apps](/docs/client/reactive-apps), picking a mechanism per piece of
+  state.
+- [High-frequency events](/docs/client/reactive-apps/high-frequency-events), the
+  client side of the same limits.
+- [Realtime adapter](/docs/infrastructure/realtime), transport selection and
+  server wiring.

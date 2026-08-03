@@ -1,0 +1,105 @@
+---
+title: Merging
+description: Every module you list is flattened into one ordered list, then folded left to right into a single app. This is that order, and the rule each key follows when two modules touch it.
+kind: reference
+package: questpie
+---
+
+## The rule for each key
+
+Two modules can contribute the same key. What happens then depends on the key,
+not on the modules.
+
+| Key                         | Rule                                                                |
+| --------------------------- | ------------------------------------------------------------------- |
+| `collections`               | Spread merge. The later module's entry wins per key.                |
+| `globals`                   | Spread merge, per key.                                              |
+| `routes`                    | Spread merge, per key.                                              |
+| `jobs`                      | Spread merge, per key.                                              |
+| `services`                  | Spread merge, per key.                                              |
+| `channels`                  | Spread merge, per key.                                              |
+| `fields`                    | Spread merge, per key.                                              |
+| `migrations`                | Concatenated. Both run.                                             |
+| `seeds`                     | Concatenated. Both run.                                             |
+| `messages`                  | Merged per locale. A later key wins, not the whole locale.          |
+| `config`                    | Merged per config key. See below.                                   |
+| `name`, `modules`, `plugin` | Skipped. They are structure, not data.                              |
+| anything else               | Arrays concatenate, objects spread, otherwise the later value wins. |
+
+That last row is what carries a package's own keys. `@questpie/admin`
+contributes `views` and `components` as records, so they spread like the rows
+above them.
+
+## The order
+
+The list is built before anything merges.
+
+1. `questpie-core` goes first, unless you listed it yourself.
+2. Then your `modules.ts` array, in the order you wrote it.
+3. Then one implicit module holding everything codegen found in your own
+   directories.
+
+Each entry is expanded before it is added. A module's own `modules` array is
+flattened in front of it, recursively. So dependencies always sit to the left
+of the module that named them.
+
+For `export default [adminModule, openApiModule]` the resolved order is:
+
+```
+questpie-core → questpie-oauth → questpie-starter → questpie-admin
+              → questpie-openapi → your files
+```
+
+Those first three are not in your array. `adminModule` depends on
+`starterModule`. The starter depends on the OAuth module.
+
+The list is then folded left to right. Your files are last. On every key that
+overrides by key, yours is the version that survives.
+
+## Duplicates collapse by name
+
+A module that appears twice in the resolved list is kept once, at its **last**
+position. Two modules that both depend on the starter do not merge the starter
+twice.
+
+The key is the `name` string, not the object identity. Two different objects
+that both call themselves `blog` collapse into one, and the later one survives.
+Give every module a unique, stable name.
+
+## The config bucket
+
+`config` holds one key per `config/*.ts` file. Each key merges on its own.
+
+| Config key    | Rule                                                                                                 |
+| ------------- | ---------------------------------------------------------------------------------------------------- |
+| `auth`        | Deep merge. Plugins concatenate and de-dup by plugin `id`, incoming first. Social providers spread.  |
+| `admin`       | Sidebar items append across modules. `dashboard` deep-merges. Everything else takes the later value. |
+| `app`         | `locale`, `access` and `context` take the later value. `hooks` concatenate.                          |
+| any other key | The later value replaces the whole object.                                                           |
+
+Set `sidebarMode: "replace"` in your own `config/admin.ts` to keep only your
+sidebar and drop the module contributions.
+
+The auth rule is what makes `session.user.role` exist in an admin app. The
+starter's `config/auth.ts` contributes Better Auth's `admin()` plugin, and your
+own `config/auth.ts` merges on top without dropping it.
+
+```ts
+// After `questpie generate`, this compiles in handlers and access rules.
+({ session }) => session?.user.role === "admin";
+```
+
+## Codegen plugins are collected separately
+
+`plugin` never reaches the merge above. Codegen walks the same module tree in a
+pre-pass, depth-first. It collects every `plugin` and de-dups by the plugin's
+`name`. The **first** occurrence wins there, not the last.
+
+Plugins you passed to `runtimeConfig({ plugins })` are seen first. So a
+config-level plugin beats a module plugin with the same name.
+
+<Callout type="warn" title="Two phases, one package">
+	A module's entities merge at runtime. Its plugin runs at codegen. If the
+	entities show up but the file conventions do not, check that the package ships
+	both.
+</Callout>

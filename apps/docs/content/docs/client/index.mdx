@@ -1,22 +1,140 @@
 ---
-title: Overview
-description: Use your generated AppConfig from the browser or another service with the typed client, TanStack Query helpers, and realtime subscriptions.
+title: Client
+description: One typed client, created once, carrying the types your schema produced. Reads and writes, live queries, your own events, and ready-made query options for React.
+kind: guide
+package: questpie
 ---
 
-The client layer consumes the API that codegen derives from your server files. Create one typed client, pass it to the TanStack Query option builders when you use React, and turn on realtime when a screen should update as data changes.
+Your server code calls `app.collections.posts`. Your browser code calls
+`client.collections.posts`. The options go in the same shape. The rows come back
+in the same shape. Both were derived from the same collection file.
 
-## Pages
+The client talks to your app over its own API. So every call it makes runs
+through your access rules.
 
-| Page                                                          | What it covers                                                                                                     |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| **[Client SDK](/docs/client/sdk)**                            | `createClient<AppConfig>()`, collection/global CRUD, routes, uploads, search, errors, and adapter-specific mounts. |
-| **[TanStack Query](/docs/client/tanstack-query)**             | Query and mutation option builders for collections, globals, routes, and realtime-backed reads.                    |
-| **[Realtime](/docs/client/realtime)**                         | Live collection and global queries over one multiplexed connection.                                                |
-| **[Channels](/docs/client/channels)**                         | Typed application events, authorization, presence, client subscriptions, and TanStack channel streams.             |
-| **[Reactive Apps & Performance](/docs/client/reactive-apps)** | Choosing the right reactive primitive, isolating React updates, bounded streams, presence limits, and diagnostics. |
+## Create it once
 
-## Related
+Put the client in one file and export it. The starters write this file for you.
 
-- [Getting Started](/docs/learn) - create your first generated `AppConfig`.
-- [Adapters - Realtime](/docs/infrastructure/realtime) - configure the server-side transport behind live queries.
-- [Concepts - Collections](/docs/schema/collections) - define the data model the client consumes.
+```ts title="src/lib/client.ts"
+import { createClient } from "questpie/client";
+
+import type { AppConfig } from "#questpie";
+
+export const client = createClient<AppConfig>({
+	baseURL: "http://localhost:3000",
+	basePath: "/api",
+});
+```
+
+`AppConfig` is the type codegen writes. `#questpie` is the alias the starters
+point at your generated index. Pass that type and every call below is checked
+against your schema.
+
+```ts
+const { docs } = await client.collections.posts.find({
+	where: { published: true },
+	limit: 10,
+});
+```
+
+`docs` holds your rows, typed. Rename a field, run `questpie generate`, and that
+`where` stops compiling.
+
+<Callout type="warn" title="`basePath` defaults to `/`">
+	The starters mount the API handler at `/api` and pass `basePath: "/api"` to
+	match. Leave it out and requests go to `/posts` instead of `/api/posts`.
+</Callout>
+
+## What the client holds
+
+| Member                          | What it is                                                    |
+| ------------------------------- | ------------------------------------------------------------- |
+| `client.collections.<name>`     | Find, create, update, delete, versions, uploads.              |
+| `client.globals.<name>`         | `get`, `update`, versions and live reads on a one-row global. |
+| `client.routes.<path>.<method>` | Your own routes. One leaf per HTTP method.                    |
+| `client.search`                 | `search()` across indexed collections, and `reindex()`.       |
+| `client.channels.<name>`        | Publish and subscribe to your own typed events.               |
+| `client.realtime`               | The one multiplexed connection behind every `live()` call.    |
+| `client.setLocale(locale)`      | Sets the `accept-language` header on later requests.          |
+
+Collaborative documents are missing from that table on purpose. Build them with
+`createCrdtClient(client)` from `questpie/crdt`. It reuses this client's
+realtime connection. Reading `client.crdt` throws and points you at it.
+
+### Two names that mean two things
+
+`updateById`, `deleteById` and `restoreById` mean the same thing on the server
+and on the client. Prefer them. `update` and `delete` do not. On the client they
+take one id. On the server they take a `where` and hit every matching row.
+
+## The pages
+
+| Page                                                            | What it covers                                                    |
+| --------------------------------------------------------------- | ----------------------------------------------------------------- |
+| [Client SDK](/docs/client/sdk)                                  | Every method on the client, and the route each one calls.         |
+| [TanStack Query](/docs/client/tanstack-query)                   | Collections, globals, routes and channels as ready query options. |
+| [Realtime](/docs/client/realtime)                               | A read that keeps arriving. `live()` in place of `find()`.        |
+| [Channels](/docs/client/channels)                               | Your own events. Chat, progress, typing, presence.                |
+| [Collaborative documents](/docs/client/collaborative-documents) | Two people editing one field at the same time.                    |
+| [Reactive Apps](/docs/client/reactive-apps)                     | Which live primitive to pick, and what each one costs.            |
+| [Client internationalization](/docs/client/i18n)                | Locale strings, dates and numbers in your own UI.                 |
+
+## If you use React
+
+You do not have to call the client directly. `@questpie/tanstack-query` takes
+the client you already made. It returns builders for your collections, globals,
+routes and channels.
+
+```ts
+import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
+
+import { client } from "@/lib/client";
+
+export const q = createQuestpieQueryOptions(client);
+```
+
+Each builder hands back a finished options object, so a component is one line.
+
+```tsx
+const { data } = useQuery(q.collections.posts.find({ limit: 10 }));
+```
+
+Query keys, fetchers and error mapping are already in there. Pass
+`{ realtime: true }` as a second argument and the same query goes live. It uses
+the connection the client already holds.
+
+`client.search` is the one member with no builder. Wrap it yourself with
+`q.custom.query({ key, queryFn })`.
+
+## Three ways to stay current
+
+A live query is a `find()` that keeps arriving. Use it for rows that must still
+be right after a reconnect.
+
+A channel is your own event, validated on the way through. Use it for things you
+do not need to store. A progress bar, a typing indicator.
+
+A collaborative document is one field two people type into at once. It pulls in
+a client-side engine of about 164 KB, so use it only where you need it.
+
+[Reactive Apps](/docs/client/reactive-apps) works through that choice in full.
+
+## Where the line falls
+
+A call from a script or a job runs in **system mode** by default. Every access
+rule returns true.
+
+A call from the client runs as **user**. It carries the session cookie. Your
+rules are checked on every request. Add `getAuthHeaders` if you hold a bearer
+token rather than a cookie. It runs before each request, so a rotated token
+needs no new client.
+
+The client is not a way around access control. It is the thing access control
+was written for. [Access control](/docs/schema/access-control) covers the rules
+themselves.
+
+## Next
+
+**[Client SDK](/docs/client/sdk)** is the full method list, with the arguments
+each one takes and the route it calls.

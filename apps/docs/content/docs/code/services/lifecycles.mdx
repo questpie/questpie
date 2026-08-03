@@ -1,0 +1,192 @@
+---
+title: Lifecycles
+description: What "singleton" and "request" actually do, when each instance is built and thrown away, and the two ways an async create can fail on you.
+kind: reference
+package: questpie
+---
+
+`lifecycle` is the option that decides when your `create` runs. `namespace`
+only decides where the instance lands.
+
+| Value                   | Instances               | Sees the caller | `dispose` runs     |
+| ----------------------- | ----------------------- | --------------- | ------------------ |
+| `"singleton"` (default) | One per process         | No              | On `app.destroy()` |
+| `"request"`             | One per handler context | Yes             | Never              |
+
+## singleton
+
+Omit `lifecycle` and you get this. QUESTPIE builds the instance once while the
+app starts, then hands the same object to every caller forever.
+
+Infrastructure comes up first, in a fixed dependency order that ends with the
+queue. Your services are built after all of it, so `ctx.db`, `ctx.email` and
+`ctx.queue` are ready by the time your `create` runs.
+
+`create` runs before the first request arrives. The `ctx` it captured has no
+session on it. Do not close over one.
+
+```ts
+// Wrong. `ctx.session` is empty at startup and never changes.
+create: (ctx) => ({
+	currentUserId: () => ctx.session?.user?.id,
+});
+
+// Right. The caller has a live session, so let it pass one in.
+create: (ctx) => ({
+	async postsFor(userId: string) {
+		return ctx.collections.posts.find({ where: { authorId: userId } });
+	},
+});
+```
+
+The same applies to any state you keep on the instance. A singleton is shared
+by every request in the process, so a value you cache on it leaks to the next
+caller.
+
+## request
+
+A `"request"` service is rebuilt every time QUESTPIE assembles a handler
+context. Its `create` receives that context. So `ctx.session` is the caller's
+session, and `ctx.db` is the connection the current operation runs on, open
+transaction included.
+
+```ts title="src/questpie/server/services/audit.ts"
+import { service } from "questpie/services";
+
+export default service({
+	lifecycle: "request",
+	create: (ctx) => {
+		const actor = ctx.session?.user?.id ?? "anonymous";
+		return {
+			async record(action: string) {
+				await ctx.collections.auditLog.create({ action, actor });
+			},
+		};
+	},
+});
+```
+
+The core module ships two of these. `ctx.channels` and `ctx.crdt` are both
+`"request"` services that bind themselves to the calling context.
+
+<Callout type="warn" title="One request is not one instance">
+	QUESTPIE builds a fresh handler context for route execution, for each access
+	check and for each hook. A `"request"` service is rebuilt at every one of
+	them. Use it to read the caller, not to cache work across a request.
+</Callout>
+
+### Two restrictions
+
+A `"request"` service may only use `namespace: null` or the default
+`"services"` bucket. A custom namespace throws when the app starts:
+
+```
+[QUESTPIE] Service "tracker" uses namespace "analytics" but only singleton
+services may use custom namespaces. Use namespace: null or "services" for
+request-scoped services.
+```
+
+Its `create` must also be synchronous. The path that builds it cannot await, so
+returning a promise throws.
+
+### dispose does not run
+
+`dispose` fires for singletons when `app.destroy()` runs. Nothing calls it for
+a `"request"` instance. Release anything you open inside the method that opened
+it, or keep the resource on a singleton.
+
+## Async create
+
+`create` may return a promise. QUESTPIE awaits it while initializing
+singletons, so an `async create` that connects or authenticates is fine on its
+own.
+
+```ts
+export default service({
+	create: async () => {
+		const client = createClient({ url: process.env.REDIS_URL });
+		await client.connect();
+		return client;
+	},
+	dispose: async (client) => {
+		await client.quit();
+	},
+});
+```
+
+It stops being fine when another service reads it during its own `create`. If
+the async service has not initialized yet, QUESTPIE cannot await it there and
+throws:
+
+```
+[QUESTPIE] Service "redis" has async create() but was lazily triggered.
+Reorder services so "redis" initializes first.
+```
+
+Your services initialize in alphabetical order by key, because that is the
+order codegen writes them in. So `services/cache.ts` may read an async
+`services/broker.ts`, and `services/broker.ts` may not read an async
+`services/cache.ts`.
+
+Do not build your app on that ordering. Two fixes hold whatever the filenames
+are:
+
+### Keep `create` synchronous
+
+Return the object immediately and do the async work inside a method. This is
+the version that never breaks.
+
+```ts
+// One connection, opened on first use instead of at startup.
+const open = async () => {
+	const client = createClient({ url: process.env.REDIS_URL });
+	await client.connect();
+	return client;
+};
+
+export default service({
+	create: () => {
+		let ready: ReturnType<typeof open> | undefined;
+		return {
+			async get(key: string) {
+				const client = await (ready ??= open());
+				return client.get(key);
+			},
+		};
+	},
+});
+```
+
+### Reach for it later
+
+Read the dependency inside a method rather than in the factory body. By the
+time a handler calls the method, every singleton is up.
+
+```ts
+create: (ctx) => ({
+	async publish(payload: Payload) {
+		await ctx.services.broker.send(payload);
+	},
+});
+```
+
+## Circular dependencies
+
+Two factories that read each other are caught at startup, with the cycle in the
+message:
+
+```
+[QUESTPIE] Circular service dependency detected: billing -> invoices -> billing
+```
+
+Break it the same way as the async case. Move one of the reads out of the
+factory body and into a method.
+
+## Related
+
+- [Services](/docs/code/services), the file convention, `dispose` and
+  `namespace`.
+- [Infrastructure](/docs/infrastructure), the built-in singletons you configure
+  instead of writing.
+- [Hooks](/docs/schema/hooks), one of the places a fresh handler context gets
+  built.

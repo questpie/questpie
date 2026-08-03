@@ -1,0 +1,97 @@
+---
+title: Uploads
+description: upload() and uploadMany() send multipart over XMLHttpRequest, so you get progress events and a working cancel.
+kind: guide
+package: questpie
+---
+
+How do you show a progress bar? Not through `fetch`, which cannot report
+upload progress. So these two methods take a different path from every other
+method on the client.
+
+## Send one file
+
+```ts
+const asset = await client.collections.media.upload(file, {
+	onProgress: (percent) => setProgress(percent), // 0 to 100
+	signal: controller.signal, // abort to cancel
+	path: "uploads/2026", // optional, sets other fields on the row
+});
+
+console.log(asset.url);
+```
+
+`file` is a browser `File`. It is sent as multipart form-data under the key
+`file`, with `path` alongside it if you passed one. The server spreads `path`
+onto the row it creates, which is how a blob lands inside a folder.
+
+`onProgress` only fires while the browser can measure the body. Abort the
+signal and the request stops, and the promise rejects.
+
+## Send several
+
+```ts
+const assets = await client.collections.media.uploadMany(files, {
+	onProgress: (overall, fileIndex) => setProgress(overall),
+	signal: controller.signal,
+});
+```
+
+`uploadMany` sends the files one at a time, not in parallel. `onProgress`
+reports progress across the whole batch, with the index of the file being sent
+now. It checks the signal between files, so a cancel stops the next one
+starting. An empty array resolves to `[]` without touching the network.
+
+## What comes back
+
+The created row, the same shape a `create()` would give you. On an upload
+collection that includes `url`, resolved for you on read. These two methods are
+the untyped corner of the client: they resolve to `any`, so nothing checks what
+you read off the result.
+
+<Callout type="warn" title="The upload path skips SuperJSON">
+	Multipart carries no SuperJSON header, so the server replies in plain JSON and
+	the client parses it with `JSON.parse`. A `Date` column on the returned row
+	arrives as a string. Read the row back with `findOne` if you need the typed
+	value.
+</Callout>
+
+## What is thrown
+
+Uploads throw `UploadError`, not `QuestpieClientError`. It carries `status` and
+`response` when the server answered.
+
+| Message                        | When                                      |
+| ------------------------------ | ----------------------------------------- |
+| `Upload failed`                | Non-2xx. Replaced by the server's message |
+| `Invalid response from server` | A 2xx body that is not JSON               |
+| `Network error during upload`  | The request never completed               |
+| `Upload cancelled`             | You aborted the signal                    |
+
+```ts
+import { UploadError } from "questpie/client";
+
+try {
+	await client.collections.media.upload(file);
+} catch (err) {
+	if (err instanceof UploadError) {
+		console.error(err.status, err.message);
+	}
+}
+```
+
+## Two things that surprise people
+
+Every collection types `upload` and `uploadMany`, whether or not it stores
+files. The check is on the server. Call them on a plain collection and you get
+a `400` saying the collection does not support uploads. Add `.upload()` to the
+collection to fix it. See [Uploads](/docs/schema/collections/uploads).
+
+Cookies still travel, because the request sets `withCredentials`. If you
+configured `getAuthHeaders`, it runs here too and its headers go on the
+request.
+
+## Next
+
+**[Errors](/docs/client/sdk/errors)** covers `QuestpieClientError`, which every
+other method throws.

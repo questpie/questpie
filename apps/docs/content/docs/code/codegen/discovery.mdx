@@ -1,0 +1,158 @@
+---
+title: Discovery
+description: The rules that turn a file in a convention directory into an entry on the app object. What becomes the key, which exports count, what codegen ignores, and when it stops with an error.
+kind: reference
+package: questpie
+---
+
+## What sets the key
+
+| Category                                         | The key comes from                                     |
+| ------------------------------------------------ | ------------------------------------------------------ |
+| `collections`, `globals`, `fieldTypes`           | the first string you pass the factory                  |
+| `blocks`, `views`, `components` (from the admin) | the first string you pass the factory                  |
+| `channels`                                       | the export name, or the file name for a default export |
+| `routes`, `functions`                            | the path below the directory, plus an HTTP method      |
+| `jobs`, `services`, `emails`, `messages`         | the file name                                          |
+| `migrations`, `seeds`                            | nothing, these emit as arrays                          |
+
+Every key is camelCased from kebab-case. Hyphens turn into capitals.
+Underscores are left alone. Collection and global names follow the Postgres
+`snake_case` convention, and that name is the runtime identifier.
+
+## Factory categories
+
+A category with a factory scans each file for calls to that factory. Collections
+look for `collection()`, globals for `global()`, field types for `fieldType()`.
+
+```ts title="src/questpie/server/collections/barber-services.ts"
+import { collection } from "#questpie/factories";
+
+export const barberServices = collection("barber_services").fields(/* … */);
+```
+
+The file is `barber-services.ts`. The export is `barberServices`. The key is
+`barber_services`, because the factory argument wins over both.
+
+Four more rules follow from that.
+
+**One file can hold several entities.** Every exported factory call becomes its
+own entry. So a file with three exported `collection()` calls registers three
+collections. A call you assign but never export registers nothing.
+
+**Named exports win over a default.** When a file has both, only the named ones
+are read. The default factory call is ignored.
+
+**A file with no matching call is skipped.** That is how a helper or a
+types-only file sitting in `collections/` stays invisible.
+
+**A missing argument falls back.** A named export with no string argument keys
+off the export name. A default export with no string argument keys off the file
+name.
+
+### Channels are the exception
+
+`channel()` takes a wire pattern, not a key. The key is the export name, or the
+file name when the file uses `export default`.
+
+Codegen checks the pattern before it writes anything. It has to be a string
+literal. It cannot hold a slash or whitespace. Each `[param]` placeholder has to
+be a valid identifier, and it can appear only once. Two channels cannot share a
+pattern, not even across an installed module.
+
+## Plain categories
+
+Jobs, services, emails, messages, migrations and seeds have no factory. One file
+is one entity, and the key is always the file name.
+
+`jobs/send-newsletter.ts` is `sendNewsletter`. That holds whether you write
+`export default job(…)` or `export const sendNewsletter = job(…)`. The export
+name is only used as the import binding in the generated file.
+
+A default export is preferred here. Codegen accepts a named export and prints a
+warning suggesting you switch.
+
+For `messages/`, the file name is the locale. `messages/en.ts` default-exports
+the flat key-value map for English.
+
+## Route keys
+
+`routes/` and `functions/` are scanned into subdirectories. The key is the path
+below the directory, joined with slashes.
+
+| File                              | Key                     |
+| --------------------------------- | ----------------------- |
+| `routes/create-booking.ts`        | `createBooking`         |
+| `routes/webhooks/stripe.ts`       | `webhooks/stripe`       |
+| `routes/webhooks/stripe.post.ts`  | `webhooks/stripe:POST`  |
+| `routes/globals/[name].delete.ts` | `globals/[name]:DELETE` |
+
+A trailing `.get`, `.post`, `.put`, `.patch`, `.delete`, `.options` or `.head`
+is read as the method and moved after a colon. The two directories share one key
+space. The same name in both is an error, and the message names both files.
+
+## Feature folders
+
+Every category directory is scanned in two places. `collections/` at the root,
+and `features/<name>/collections/` under any feature.
+
+```txt
+src/questpie/server/
+  collections/posts.ts
+  routes/health.get.ts
+  features/blog/
+    collections/articles.ts
+    routes/webhooks/stripe.post.ts
+    jobs/publish-article.ts
+  features/shop/
+    collections/products.ts
+    services/catalog.ts
+```
+
+The feature name is a label for you. It never reaches the key.
+`features/blog/collections/articles.ts` gives you `app.collections.articles`,
+not `app.collections.blog.articles`. Route keys keep only the path below the
+category directory, so the file above keys as `webhooks/stripe:POST` either way.
+
+Single files are different. `modules.ts`, `env.ts`, `fields.ts`,
+`config/app.ts` and `config/auth.ts` are read from the root only. A plugin can
+opt one of its own single files out of that. It then collects the root copy plus
+every feature copy into one list. Root comes first, then features in
+alphabetical order. See
+[`mergeStrategy`](/docs/code/codegen/plugins#single-files-and-spreads).
+
+## Conflicts stop the run
+
+Keys are unique per category across both layouts. Two files that resolve to the
+same key do not override each other. Codegen throws and names both files. So
+`collection("posts")` at the root and `collection("posts")` under a feature is
+an error, even though the two files sit in different directories.
+
+## What codegen ignores
+
+Only `.ts`, `.tsx` and `.mts` files are considered. Out of those, discovery
+skips:
+
+- `index.ts`, `index.mts` and `index.tsx`
+- `*.d.ts` and `*.d.mts`
+- anything whose name starts with `_`, files and directories both
+- a `__tests__/` directory
+- `*.test.*` and `*.spec.*`
+
+So a `_helpers.ts` beside your collections, or a `features/_internal/` folder,
+never becomes an entity.
+
+## Reading the result
+
+The generated files are the ground truth for what exists. When something is
+missing, look there before you reach for a cast.
+
+| Question                                     | Where to look                |
+| -------------------------------------------- | ---------------------------- |
+| Which collections, globals and routes exist? | `.generated/entities.gen.ts` |
+| Which relation targets autocomplete?         | `.generated/names.gen.ts`    |
+| What shape is the handler context?           | `.generated/context.gen.ts`  |
+| Which builder methods and `f.*` types exist? | `.generated/factories.ts`    |
+
+If an entity is missing from those files, the fix is in discovery, the module
+list or the config. Rerun `questpie generate`. Do not patch the call site.

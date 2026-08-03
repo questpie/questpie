@@ -1,35 +1,56 @@
 ---
 title: Collaborative documents
-description: Connect, edit, transact, observe, and recover typed QUESTPIE collaborative aggregates from the generated client.
+description: A typed handle onto one collaborative record. Build it from the client you already have, connect it, and write into a field while somebody else writes into the same one.
+kind: guide
+package: questpie
 ---
 
-Codegen exposes only the owners and fields that opted into collaboration. A
-document handle is inert during construction and SSR; network and IndexedDB
-work starts at `connect()`.
+You marked the fields in the schema. Nothing in the browser uses them yet.
+Everything below runs there, and none of it starts until you call `connect()`.
 
-Build the CRDT API explicitly from the client you already have. It reuses that
-client's realtime session, so a collaborative app still holds exactly one
-connection. Apps that never call `createCrdtClient` do not bundle the CRDT
-implementation at all.
+## Build the CRDT client
+
+```ts title="src/lib/crdt.ts"
+import { createCrdtClient } from "questpie/crdt";
+import { client } from "./client";
+
+export const crdt = createCrdtClient(client);
+```
+
+`createCrdtClient` takes the client you already built and reuses its realtime
+session. A collaborative app still holds exactly one connection.
+`createClient()` does not build this API for you. There is no `client.crdt`
+either, and reading that property throws a message pointing you back here.
+
+Build it once and pass it around. Each call gets its own scheduler. That
+scheduler bounds pulls and awareness writes across every open document.
+
+## Open a document
 
 ```ts
-import { createClient } from "questpie/client";
-import { createCrdtClient } from "questpie/crdt";
-
-const client = createClient({ baseURL });
-const crdt = createCrdtClient(client);
-
-const article = crdt.collections.articles.document({
-	id: "article-1",
-});
+const article = crdt.collections.articles.document({ id: "article-1" });
 
 await article.connect({ mode: "edit", fallback: "view" });
 ```
 
-`fallback: "view"` permits an authorized read-only result when edit access is
-not available. Without it, edit denial fails the connection.
+A collection takes `{ id }`. A global takes nothing. Every call to `document()`
+builds a new handle. Keep the one you got. Do not build a fresh one per render.
 
-## Read and edit typed fields
+Constructing the handle does nothing. No request, no IndexedDB. Both start at
+`connect()`. That is what makes a handle safe to build during SSR.
+
+`mode` is `"view"` or `"edit"`. `fallback: "view"` accepts a read-only result
+when edit access is refused. Without it, a refused edit rejects the whole
+connection. `fallback` is legal only alongside `mode: "edit"`.
+
+<Callout type="warn" title="No engine means no connection">
+	`connect()` needs `crdt: { engines: { text: yjsClientEngine() } }` on
+	`createClient()`. Leave it out and the call rejects with `CRDT_UNAVAILABLE`
+	and the state goes to `denied`. The engine also has to match the one the
+	server registered.
+</Callout>
+
+## Read and edit a field
 
 ```ts
 const title = article.fields.title.text.value();
@@ -42,10 +63,33 @@ article.fields.tags.set.add("news");
 article.fields.tags.set.delete("draft");
 ```
 
-Text indices are UTF-16 code-unit offsets at Unicode scalar boundaries. Invalid
-or hidden fields fail explicitly. A view-only grant cannot mutate.
+Which port a field has depends on the format you declared for it.
 
-Use an aggregate transaction when fields must commit together:
+| Format | Call                      | What it does                   |
+| ------ | ------------------------- | ------------------------------ |
+| text   | `.text.value()`           | the current string             |
+| text   | `.text.apply(ops)`        | inserts and deletes            |
+| text   | `.anchors.create(input)`  | a position that survives edits |
+| text   | `.anchors.resolve(token)` | where that position is now     |
+| set    | `.set.values()`           | every member, in byte order    |
+| set    | `.set.has(value)`         | membership                     |
+| set    | `.set.add(value)`         | one add                        |
+| set    | `.set.delete(value)`      | one remove                     |
+| set    | `.set.apply(ops)`         | several at once                |
+| both   | `.format`                 | `"text"` or `"set"`            |
+
+A text operation is `{ type: "insert", index, value }` or
+`{ type: "delete", index, length }`. Indices are UTF-16 code units and may not
+split a surrogate pair. An insert value cannot be empty and cannot contain a
+NUL. Anything else throws `CrdtMutationError` with `INVALID_OPERATION`.
+
+Every field key hands back a port, whether or not that field exists. The call is
+what throws. Reading before the first sync finishes throws `CrdtReadError` with
+`NOT_READY`. Writing into a field you only hold `view` on throws
+`CrdtMutationError` with `FIELD_VIEW_ONLY`. A field the server did not grant you
+throws `FIELD_HIDDEN`.
+
+## Change several fields at once
 
 ```ts
 article.transaction(({ fields }) => {
@@ -57,93 +101,52 @@ article.transaction(({ fields }) => {
 });
 ```
 
-The callback is synchronous and cannot nest. Any invalid part rejects the
-whole local transaction; the server also authorizes and appends every part
-atomically.
+All three edits leave as one bundle. The server appends every part or none of
+them.
 
-## Durable text anchors
+The callback runs immediately and must return nothing. Return a promise and it
+throws `ASYNC_TRANSACTION`. Open a transaction inside a transaction and it
+throws `NESTED_TRANSACTION`. The outer one is dropped too. Anything invalid
+inside rejects the whole local bundle. One bundle carries at most 32 parts.
 
-Text fields can create opaque points or ranges that move with ordinary CRDT
-edits:
-
-```ts
-const anchor = article.fields.content.anchors.create({
-	kind: "range",
-	start: 12,
-	end: 20,
-});
-
-const current = article.fields.content.anchors.resolve(anchor);
-if (current.status === "resolved" && current.kind === "range") {
-	highlight(current.start, current.end);
-}
-```
-
-A point follows insertions at its boundary by default. A range uses inward
-affinity by default: its start follows and its end precedes boundary
-insertions. Pass explicit `affinity`, `startAffinity`, or `endAffinity` only
-when the product needs different semantics.
-
-Creation works with either a readable view or edit grant, but only from an
-acknowledged field basis. It throws `CrdtAnchorError` with
-`UNACKNOWLEDGED_STATE` while the field is syncing, has a pending local update,
-or is inside an aggregate transaction. Invalid offsets and ranges use
-`INVALID_INPUT`. Wait for the append receipt and create the anchor from the
-resulting ready state.
-
-Store the returned branded string as an opaque value. Do not parse it or use it
-as an access capability. Resolve returns `{ status: "detached" }` for malformed
-tokens, another field or owner, or a lifecycle that recreated the field. Normal
-edits and compaction preserve it; replace, import, restore, schema recreation,
-purge, and delete-then-recreate detach it.
-
-Server routes and hooks receive the request-scoped asynchronous equivalent:
-
-```ts
-import { route } from "questpie/services";
-import { z } from "zod";
-
-export default route()
-	.post()
-	.schema(z.object({ articleId: z.string(), anchor: z.string() }))
-	.handler(({ crdt, input }) =>
-		crdt.collections.articles
-			.document({ id: input.articleId })
-			.fields.content.anchors.resolve(input.anchor),
-	);
-```
-
-Every server create or resolve reloads current read authority and the
-authoritative CRDT head. Possessing a token never grants read access.
-
-## State and teardown
-
-Subscribe to lifecycle changes before connecting:
+## Watch the state
 
 ```ts
 const unsubscribe = article.subscribe((state) => {
-	if (state.status === "ready") renderReady(state.fieldGrants);
-	if (state.status === "recovery-required") showRecovery(state);
+	if (state.status === "ready") render(state.fieldGrants);
+	if (state.status === "recovery-required") showRecovery(state.reason);
 });
-
-// Later:
-await article.disconnect();
-unsubscribe();
 ```
 
-Offline updates are stored in IndexedDB under server-issued deployment,
-namespace, owner-incarnation, and subject partitions. Reconnect reconciles
-durable receipts before replay. Authority or epoch changes, corruption,
-retention expiry, and queue overflow enter explicit recovery instead of
-replaying under a different identity.
+The listener fires on lifecycle changes and on local edits. An edit publishes
+the same state object, so compare `article.replicaRevision` to tell the two
+apart. `getSnapshot()` reads the current state without subscribing.
 
-Call `discard()` only after the user chooses to abandon a recovery bundle. Use
-`export()` when offering a recovery download.
+| `status`                                     | Read | Write |
+| -------------------------------------------- | ---- | ----- |
+| `idle`                                       | no   | no    |
+| `authorizing`, `connecting`, `synchronizing` | no   | no    |
+| `ready`                                      | yes  | yes   |
+| `offline`                                    | yes  | yes   |
+| `suspended`                                  | yes  | no    |
+| `recovery-required`, `denied`, `failed`      | no   | no    |
+| `closed`                                     | no   | no    |
+
+`ready` carries `fieldGrants`, `fieldSyncing` and `pendingUpdates`. `offline`
+carries `fieldGrants` and `pendingUpdates`. `denied` and `failed` carry a
+`code`, and `failed` says whether it is `retryable`.
+
+## Disconnect and close
+
+`connect()` counts references. Two calls need two `await article.disconnect()`
+calls before the transport comes down. Call your own `unsubscribe()` alongside
+the last one.
+
+The last `disconnect()` leaves the handle at `offline` when it already read
+something. Otherwise it lands on `idle`. `close()` is terminal, and `connect()`
+after it rejects with `CLOSED`.
 
 ## Awareness
-
-An owner exposes awareness only when its `.collaborative({ awareness })`
-schema enables it:
 
 ```ts
 article.awareness.set(
@@ -156,16 +159,41 @@ const stopRoster = article.awareness.subscribe((participants) => {
 });
 ```
 
-The server validates awareness, assigns participant identity, filters the
-roster through shared readable field grants, and expires stale entries.
-Provider-native presence is not an authority or identity source.
+`awareness.enabled` is false unless the owner declared
+`.collaborative({ awareness })`. Calling `set` on an owner without it throws
+`INVALID_OPERATION`. Calling it before the document is ready throws `NOT_READY`.
 
-## Framework-agnostic UI
+The server parses your value with the Zod schema you declared. The browser caps
+it at 512 bytes of canonical JSON first. It also refuses the keys `activeField`,
+`cursor` and `selectionEnd`, because the protocol uses those itself.
 
-The API is plain TypeScript. React, Tiptap, ProseMirror, and TanStack Query are
-not required. In TanStack Start, keep the document handle in the component or
-route lifetime that owns it, subscribe with your preferred state adapter, and
-disconnect during cleanup. The same generated API works in any browser client.
+`activeField` must name a text field you can read. The roster hands back each
+participant, their sessions, and each session's `value`, `expiresAtMs` and
+`active`. Cursor positions come back as offsets into your own copy of the text.
+`clear()` removes your entry, and `getRoster()` reads the last roster without
+subscribing.
 
-See [Collaborative documents](/docs/schema/collaborative-documents) for
-server setup, transport, authorization, and limits.
+All of this is plain TypeScript. No React, no Tiptap, no ProseMirror, no
+TanStack Query. Keep the handle where its lifetime belongs. Subscribe with your
+own state adapter and disconnect during cleanup.
+
+## The working result
+
+Two people have the same article open. One types in the title while the other
+types in the body. Both see the other's characters arrive. Neither has to save.
+Neither overwrites the other. Every ordinary query you already wrote still reads
+the merged columns.
+
+## Where each topic lives
+
+| Topic                                       | Page                                                                 |
+| ------------------------------------------- | -------------------------------------------------------------------- |
+| Positions that survive other people's edits | [Text anchors](/docs/client/collaborative-documents/anchors)         |
+| Editing with no network, and coming back    | [Offline and recovery](/docs/client/collaborative-documents/offline) |
+| Marking the fields in the first place       | [Collaborative documents](/docs/schema/collaborative-documents)      |
+| Routes, engines and protocol limits         | [Runtime and limits](/docs/schema/collaborative-documents/runtime)   |
+
+## Next
+
+**[Collaborative article](/docs/guides/collaborative-docs)** builds one of these
+end to end, from the collection file to the connected editor.
