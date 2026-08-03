@@ -146,6 +146,9 @@ describe("createTestApp PGlite lifecycle", () => {
 		let destroyed = false;
 		const stalledFactory = async (_runtime: RuntimeConfig) => ({
 			migrations: { async up() {} },
+			async createContext() {
+				return {};
+			},
 			waitForInit: () => new Promise<void>(() => {}),
 			async destroy() {
 				destroyed = true;

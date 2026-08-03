@@ -12,7 +12,12 @@ export {
 	TestAppSetupError,
 	type PGliteTestDatabaseOptions,
 	type TestApp,
+	type TestActor,
+	type TestActorRunContext,
 	type TestAppLifecycle,
 	type TestAppOptions,
+	type TestOAuthActorInput,
 	type TestRuntimeOptions,
+	type TestUserActorInput,
+	type TestUserSeed,
 } from "./test-app.js";

@@ -4,7 +4,12 @@ import {
 	type PGliteOptions,
 } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
-import type { RuntimeConfig } from "questpie/types";
+import {
+	runWithContext,
+	type Principal,
+	type RequestContext,
+	type RuntimeConfig,
+} from "questpie/types";
 
 import type { GeneratedAppFactory } from "./index.js";
 import { SilentMailAdapter } from "./silent-mail-adapter.js";
@@ -44,8 +49,15 @@ export class TestAppCleanupError extends Error {
 
 export interface TestAppLifecycle {
 	readonly migrations: { up(): Promise<void> };
+	createContext(options?: TestContextInput): Promise<RequestContext>;
 	waitForInit(): Promise<void>;
 	destroy(): Promise<void>;
+}
+
+interface TestContextInput {
+	session?: unknown | null;
+	principal?: Principal;
+	accessMode?: "system" | "user";
 }
 
 export interface PGliteTestDatabaseOptions {
@@ -75,13 +87,110 @@ export type TestRuntimeOptions = Omit<
 	secret?: string;
 };
 
-type AppOf<TFactory> =
-	TFactory extends GeneratedAppFactory<infer TApp> ? TApp : never;
+type AppOf<TFactory extends GeneratedAppFactory<TestAppLifecycle>> = Awaited<
+	ReturnType<TFactory>
+>;
+
+type SessionOf<TFactory> =
+	TFactory extends GeneratedAppFactory<TestAppLifecycle, infer TSession>
+		? TSession
+		: never;
+
+type UserOf<TFactory> =
+	SessionOf<TFactory> extends { user: infer TUser } ? TUser : never;
+
+type SessionRecordOf<TFactory> =
+	SessionOf<TFactory> extends {
+		session: infer TSessionRecord;
+	}
+		? TSessionRecord
+		: never;
+
+type DefaultedUserKey = "emailVerified" | "createdAt" | "updatedAt";
+type StandardSessionKey =
+	| "id"
+	| "userId"
+	| "token"
+	| "expiresAt"
+	| "createdAt"
+	| "updatedAt"
+	| "ipAddress"
+	| "userAgent";
+
+type RequiredKeys<T> = {
+	[K in keyof T]-?: object extends Pick<T, K> ? never : K;
+}[keyof T];
+
+export type TestUserSeed<TFactory> =
+	UserOf<TFactory> extends infer TUser
+		? TUser extends object
+			? Omit<TUser, Extract<keyof TUser, DefaultedUserKey>> &
+					Partial<Pick<TUser, Extract<keyof TUser, DefaultedUserKey>>>
+			: never
+		: never;
+
+type CanBuildStandardSession<TFactory> =
+	Exclude<
+		RequiredKeys<SessionRecordOf<TFactory>>,
+		StandardSessionKey
+	> extends never
+		? true
+		: false;
+
+export type TestUserActorInput<TFactory> =
+	| { session: SessionOf<TFactory>; user?: never }
+	| (CanBuildStandardSession<TFactory> extends true
+			? { user: TestUserSeed<TFactory>; session?: never }
+			: never);
+
+export interface TestOAuthActorInput<TFactory> {
+	session: SessionOf<TFactory>;
+	clientId: string;
+	scopes: readonly string[];
+	tokenId: string;
+}
+
+type ActorKind = "anonymous" | "user" | "oauth" | "system";
+
+type ActorSession<TFactory, TKind extends ActorKind> = TKind extends
+	| "user"
+	| "oauth"
+	? SessionOf<TFactory>
+	: TKind extends "anonymous"
+		? null
+		: undefined;
+
+export interface TestActorRunContext<
+	TFactory extends GeneratedAppFactory<TestAppLifecycle>,
+	TKind extends ActorKind,
+> {
+	readonly app: AppOf<TFactory>;
+	readonly context: Omit<
+		Awaited<ReturnType<AppOf<TFactory>["createContext"]>>,
+		"session"
+	> & { session: ActorSession<TFactory, TKind> };
+}
+
+export interface TestActor<
+	TFactory extends GeneratedAppFactory<TestAppLifecycle>,
+	TKind extends ActorKind = ActorKind,
+> {
+	readonly kind: TKind;
+	run<TResult>(
+		callback: (
+			value: TestActorRunContext<TFactory, TKind>,
+		) => TResult | Promise<TResult>,
+	): Promise<TResult>;
+}
 
 export interface TestApp<
 	TFactory extends GeneratedAppFactory<TestAppLifecycle>,
 > {
 	readonly app: AppOf<TFactory>;
+	anonymous(): TestActor<TFactory, "anonymous">;
+	actor(input: TestUserActorInput<TFactory>): TestActor<TFactory, "user">;
+	oauth(input: TestOAuthActorInput<TFactory>): TestActor<TFactory, "oauth">;
+	system(): TestActor<TFactory, "system">;
 	dispose(): Promise<void>;
 }
 
@@ -141,6 +250,23 @@ export async function createTestApp<
 
 	return {
 		app: concreteApp,
+		anonymous: () =>
+			createActor(concreteApp, "anonymous", () => ({
+				session: null,
+				accessMode: "user",
+			})),
+		actor: (input) =>
+			createActor(concreteApp, "user", () => ({
+				session: "session" in input ? input.session : createSession(input.user),
+				accessMode: "user",
+			})),
+		oauth: (input) =>
+			createActor(concreteApp, "oauth", () => ({
+				session: input.session,
+				principal: createOAuthPrincipal(input),
+			})),
+		system: () =>
+			createActor(concreteApp, "system", () => ({ accessMode: "system" })),
 		dispose() {
 			disposePromise ??= disposeResources(
 				concreteApp,
@@ -149,6 +275,82 @@ export async function createTestApp<
 			);
 			return disposePromise;
 		},
+	};
+}
+
+function createActor<
+	TFactory extends GeneratedAppFactory<TestAppLifecycle>,
+	TKind extends TestActor<TFactory>["kind"],
+>(
+	app: AppOf<TFactory>,
+	kind: TKind,
+	contextInput: () => TestContextInput,
+): TestActor<TFactory, TKind> {
+	return {
+		kind,
+		async run(callback) {
+			const context = (await app.createContext(
+				contextInput(),
+			)) as TestActorRunContext<TFactory, TKind>["context"];
+			const requestContext = context as RequestContext;
+			return runWithContext(
+				{
+					app,
+					db: requestContext.db,
+					session: requestContext.session,
+					principal: requestContext.principal,
+					actor: requestContext.actor,
+					locale: requestContext.locale,
+					accessMode: requestContext.accessMode,
+					stage: requestContext.stage,
+					requestId: requestContext.requestId,
+					traceId: requestContext.traceId,
+					"~contextExtensions": requestContext["~contextExtensions"],
+				},
+				() => callback({ app, context }),
+			);
+		},
+	};
+}
+
+function createSession<TFactory>(
+	userSeed: TestUserSeed<TFactory>,
+): SessionOf<TFactory> {
+	const now = new Date("2020-01-01T00:00:00.000Z");
+	const seed = userSeed as Record<string, unknown>;
+	const user = {
+		...seed,
+		emailVerified: seed.emailVerified ?? true,
+		createdAt: seed.createdAt ?? now,
+		updatedAt: seed.updatedAt ?? now,
+	};
+	const userId = String(seed.id);
+
+	return {
+		user,
+		session: {
+			id: `${userId}-session`,
+			userId,
+			token: `${userId}-token`,
+			expiresAt: new Date("2100-01-01T00:00:00.000Z"),
+			createdAt: now,
+			updatedAt: now,
+		},
+	} as SessionOf<TFactory>;
+}
+
+function createOAuthPrincipal<TFactory>(
+	input: TestOAuthActorInput<TFactory>,
+): Principal {
+	const session = input.session as {
+		user: Extract<Principal, { kind: "oauth" }>["user"];
+	};
+	return {
+		kind: "oauth",
+		user: session.user,
+		clientId: input.clientId,
+		scopes: [...input.scopes],
+		tokenId: input.tokenId,
 	};
 }
 
