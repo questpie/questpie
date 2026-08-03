@@ -173,9 +173,35 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 		expect(code).toContain("DO NOT EDIT");
 	});
 
-	it("imports createApp from questpie/app", () => {
-		expect(code).toContain("acquireGeneratedApp, createApp");
+	it("imports singleton and fresh-app runtimes from questpie/app", () => {
+		expect(code).toContain("acquireGeneratedApp, createContextFactory");
+		expect(code).toContain('import { createApp } from "questpie/app"');
 		expect(code).toContain('from "questpie/app"');
+	});
+
+	it("emits a singleton-free app-factory entrypoint", () => {
+		const result = _generateTemplate({
+			configImportPath: "../questpie.config",
+			appInstanceId: "example:src/questpie/server",
+			discovered: minimalResult(),
+			categories: coreCategories(),
+			singletonFactories: coreSingletonFactories(),
+		});
+		const factory = result.extraFiles.find(
+			(file) => file.name === "app-factory.ts",
+		);
+
+		expect(factory).toBeDefined();
+		expect(factory!.code).toContain(
+			"export const createAppForRuntime = (async (runtime: RuntimeConfig)",
+		);
+		expect(factory!.code).not.toContain("acquireGeneratedApp");
+		expect(factory!.code).not.toContain(
+			'import _runtime from "../questpie.config"',
+		);
+		expect(result.code).toContain(
+			'export { createAppForRuntime } from "./app-factory";',
+		);
 	});
 
 	it("imports runtime config", () => {
@@ -266,7 +292,7 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 
 	it("emits createApp call with modules", () => {
 		expect(code).toContain(
-			'acquireGeneratedApp("example:src/questpie/server", () => createApp(',
+			'acquireGeneratedApp("example:src/questpie/server", () => createAppForRuntime(_runtime))',
 		);
 		expect(code).toContain(
 			"export const app = (await _appPromise) as unknown as _AppQuestpie;",
@@ -275,9 +301,19 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 		expect(code).not.toContain("ModuleDefinition[]");
 	});
 
+	it("exports a typed fresh-app factory over the generated definition", () => {
+		expect(code).toContain("const _appDefinition = ({");
+		expect(code).toContain(
+			"export const createAppForRuntime = (async (runtime: RuntimeConfig)",
+		);
+		expect(code).toContain("createApp(_appDefinition, runtime)");
+		expect(code).toContain('readonly "~types"?: { session: AppSession };');
+		expect(code).not.toContain("createAppForRuntime = acquireGeneratedApp");
+	});
+
 	it("shares one app instance across duplicated server bundle chunks", () => {
 		expect(code).toContain(
-			'acquireGeneratedApp("example:src/questpie/server", () => createApp(',
+			'acquireGeneratedApp("example:src/questpie/server", () => createAppForRuntime(_runtime))',
 		);
 		expect(code).toContain("var _appPromise = _appLease.promise;");
 		expect(code).toContain("await _appLease.shutdown();");

@@ -9,7 +9,7 @@ This page covers the pipeline (file convention → `.generated/`), the export-di
 
 ## What it does
 
-- **Compiles file convention into a typed app.** Scans your conventional dirs, derives a key per file, and emits `.generated/index.ts` (the `createApp()` call), `.generated/factories.ts` (the `collection()` / `global()` builders that know your modules), and the `#questpie` type barrel, all in one shot.
+- **Compiles file convention into a typed app.** Scans your conventional dirs, derives a key per file, and emits `.generated/index.ts` (the production singleton), `.generated/app-factory.ts` (fresh app creation), `.generated/factories.ts` (the `collection()` / `global()` builders that know your modules), and the `#questpie` type barrel, all in one shot.
 - **Discovers, never registers.** Add a file under `collections/`, run codegen, and it appears on `app.collections.*`, the admin, REST, OpenAPI, and the typed client. No import list, no manifest.
 - **Supports flat or by-feature source layout.** The same category can live at `collections/posts.ts` or `features/blog/collections/articles.ts`; both feed the same generated maps.
 - **Folds in modules and their plugins.** `modules.ts` is read in a pre-pass; each module can contribute collections, globals, jobs, and its _own_ codegen plugin, auto-wired before the rest of discovery runs.
@@ -29,7 +29,8 @@ That command reads `questpie.config.ts`, runs the `modules.ts` pre-pass, discove
 
 ```
 src/questpie/server/.generated/
-  index.ts         # the createApp() call + App / AppConfig / CollectionDoc / createContext
+  index.ts         # production singleton + App / AppConfig / CollectionDoc / createContext
+  app-factory.ts   # typed fresh app factory without singleton acquisition
   factories.ts     # collection() / global() builders pre-wired with your module fields
   entities.gen.ts  # flat category maps (AppCollections, AppGlobals, AppRoutes, AppServices)
   context.gen.ts   # the AppContext builder + session / route / block types
@@ -186,13 +187,14 @@ Discovery only considers `.ts` / `.tsx` / `.mts` files and skips: `index.ts` / `
 
 `.generated/` is **committed to git**, not gitignored. It is build output, but it's the typed contract the rest of your code imports, so it lives in version control: a clone, a CI job, or a teammate's editor all resolve `#questpie/*` immediately, and a diff in `.generated/` is a visible, reviewable consequence of a schema change.
 
-| File              | What it is                                                                                                                | You import it as              |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| `index.ts`        | The `createApp()` call + the public type barrel (`App`, `AppConfig`, `CollectionDoc`, `CollectionWhere`, `createContext`) | `#questpie` (the type barrel) |
-| `factories.ts`    | `collection()` / `global()` (and module factories like `block()`) pre-wired with your merged field defs                   | `#questpie/factories`         |
-| `entities.gen.ts` | Flat category maps (`AppCollections`, `AppGlobals`, `AppRoutes`, `AppServices`)                                           | (re-exported via `#questpie`) |
-| `context.gen.ts`  | The `AppContext` builder + session / route / block types                                                                  | (re-exported via `#questpie`) |
-| `names.gen.ts`    | The names-only entity-key registries that power relation-target autocomplete                                              | (ambient)                     |
+| File              | What it is                                                                                                              | You import it as              |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `index.ts`        | The production singleton + public type barrel (`App`, `AppConfig`, `CollectionDoc`, `CollectionWhere`, `createContext`) | `#questpie` (the type barrel) |
+| `app-factory.ts`  | `createAppForRuntime(runtime)`, a typed fresh-app factory that does not acquire the generated singleton                 | `#questpie/app-factory`       |
+| `factories.ts`    | `collection()` / `global()` (and module factories like `block()`) pre-wired with your merged field defs                 | `#questpie/factories`         |
+| `entities.gen.ts` | Flat category maps (`AppCollections`, `AppGlobals`, `AppRoutes`, `AppServices`)                                         | (re-exported via `#questpie`) |
+| `context.gen.ts`  | The `AppContext` builder + session / route / block types                                                                | (re-exported via `#questpie`) |
+| `names.gen.ts`    | The names-only entity-key registries that power relation-target autocomplete                                            | (ambient)                     |
 
 The rule of thumb: **import `collection` / `global` from `#questpie/factories`** (they know your enabled modules, so `f.richText()` and friends appear on `f`), and **import types from `#questpie`**. Run `questpie generate` after any schema change and commit the result alongside your source.
 
@@ -247,6 +249,29 @@ type Settings = GlobalDoc<"siteSettings">; // selected row for a global
 Two more, `AccessRuleContext<K>` and `HookRuleContext<K>`, narrow `ctx.data` to a collection's row inside shared access/hook helpers. They carry a **cycle rule**: import them only from files _not_ imported by a collection (routes, services, jobs, scripts); helpers a collection imports take the package-level `AccessContext` / `HookContext` from `questpie` instead.
 
 The barrel also emits `createContext()`, a typed `AppContext` factory for scripts, tests, and standalone code that resolves all services and gives flat access to infrastructure.
+
+## Fresh app instances for tests
+
+Import `createAppForRuntime` from the separate generated entrypoint when a test harness needs an isolated database or other runtime adapters:
+
+```ts
+import { createAppForRuntime } from "#questpie/app-factory";
+
+const app = await createAppForRuntime({
+	app: { url: "http://test.local" },
+	db: { pglite },
+	email: { adapter: testMailAdapter },
+	queue: { adapter: testQueueAdapter },
+});
+
+try {
+	// Each call returns a fresh, fully typed app.
+} finally {
+	await app.destroy();
+}
+```
+
+The factory reuses the same generated app definition as production but never calls `acquireGeneratedApp()` and never imports `questpie.config.ts`. Import it directly from `#questpie/app-factory`; importing `#questpie` evaluates the normal process-wide singleton by design. This entrypoint is intended for test infrastructure and other explicitly managed lifecycles, not request handlers.
 
 ## CLI reference
 

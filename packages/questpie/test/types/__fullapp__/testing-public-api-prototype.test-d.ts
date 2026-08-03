@@ -1,6 +1,7 @@
 import type { RequestContext, RuntimeConfig } from "questpie/types";
 
 import type { Equal, Expect, Extends } from "../type-test-utils.js";
+import { createAppForRuntime } from "./.generated/app-factory.js";
 import type { App, AppSession, AppSessionUser } from "./.generated/index.js";
 
 interface GeneratedAppFactory<TApp, TSession> {
@@ -54,7 +55,7 @@ declare function createTestApp<
 	runtime?: Partial<Omit<RuntimeConfig, "db">>;
 }): Promise<TestApp<TFactory>>;
 
-declare const createAppForRuntime: GeneratedAppFactory<App, AppSession>;
+createAppForRuntime satisfies GeneratedAppFactory<App, AppSession>;
 declare const session: NonNullable<AppSession>;
 
 async function proveGeneratedAppInference() {

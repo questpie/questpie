@@ -43,7 +43,11 @@ type _JobHandlerCollections = _ModuleCollections & {
 	categories: typeof _coll_categories;
 	user: typeof _coll_user;
 };
-type _JobHandlerCollectionsAPI = { [K in keyof _JobHandlerCollections]: CollectionAPI<_JobHandlerCollections[K], _JobHandlerCollections> };
+type _JobHandlerCollectionsAPI = { [K in keyof _ModuleCollections]: CollectionAPI<_ModuleCollections[K], _JobHandlerCollections> } & {
+	articles: CollectionAPI<typeof _coll_articles, _JobHandlerCollections>;
+	categories: CollectionAPI<typeof _coll_categories, _JobHandlerCollections>;
+	user: CollectionAPI<typeof _coll_user, _JobHandlerCollections>;
+};
 type _ExecutionContextJob<T> = T extends { name: infer TName extends string; schema: z.ZodSchema<infer TPayload> } ? QueueJobType<TPayload, TName> : never;
 type _ExecutionContextJobs = {};
 type _ExecutionContextServiceDefinitions = {
