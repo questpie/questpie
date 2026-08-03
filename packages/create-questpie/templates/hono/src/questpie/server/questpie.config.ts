@@ -18,7 +18,4 @@ export default runtimeConfig({
 	email: {
 		adapter: new ConsoleAdapter({ logHtml: false }),
 	},
-	cli: {
-		migrations: { directory: "./src/migrations" },
-	},
 });
