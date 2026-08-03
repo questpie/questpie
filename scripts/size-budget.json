@@ -53,6 +53,10 @@
 			"unpackedSize": 35854,
 			"entryCount": 4
 		},
+		"testing": {
+			"unpackedSize": 1724,
+			"entryCount": 5
+		},
 		"vite-plugin-iconify": {
 			"unpackedSize": 18832,
 			"entryCount": 6

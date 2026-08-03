@@ -542,6 +542,22 @@
         "questpie": "workspace:^",
       },
     },
+    "packages/testing": {
+      "name": "@questpie/testing",
+      "version": "3.21.1",
+      "dependencies": {
+        "@electric-sql/pglite": "^0.3.14",
+        "pg": "^8.13.1",
+      },
+      "devDependencies": {
+        "bun-types": "latest",
+        "questpie": "workspace:*",
+        "tsdown": "^0.18.3",
+      },
+      "peerDependencies": {
+        "questpie": "3.21.1",
+      },
+    },
     "packages/vite-plugin-iconify": {
       "name": "@questpie/vite-plugin-iconify",
       "version": "0.0.2",
@@ -1175,6 +1191,8 @@
     "@questpie/tanstack-db": ["@questpie/tanstack-db@workspace:packages/tanstack-db"],
 
     "@questpie/tanstack-query": ["@questpie/tanstack-query@workspace:packages/tanstack-query"],
+
+    "@questpie/testing": ["@questpie/testing@workspace:packages/testing"],
 
     "@questpie/vite-plugin-iconify": ["@questpie/vite-plugin-iconify@workspace:packages/vite-plugin-iconify"],
 
