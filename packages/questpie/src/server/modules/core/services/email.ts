@@ -10,14 +10,15 @@ export default service({
 	namespace: null,
 	lifecycle: "singleton",
 	create: ({ app }) => {
-		const config = app.config;
+		/* No throw here on a missing adapter. This service is resolved eagerly at
+		   boot, so throwing meant an app that never sends mail still could not
+		   start. Every other optional slot degrades instead: storage falls back to
+		   local disk, queue hands back an empty client.
 
-		if (!config.email?.adapter) {
-			throw new Error(
-				"QUESTPIE: 'email.adapter' is required. Provide adapter in .build({ email: { adapter: ... } })",
-			);
-		}
-
-		return new MailerService(config.email);
+		   MailerService already handles the missing adapter, and better, because
+		   it knows a send is actually being attempted. It uses ConsoleAdapter in
+		   development and throws in production. That branch was unreachable while
+		   this factory threw first. */
+		return new MailerService(app.config.email ?? {});
 	},
 });

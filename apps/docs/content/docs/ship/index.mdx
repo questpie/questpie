@@ -95,18 +95,19 @@ and nothing else.
 
 ## Defaults a second replica breaks
 
-`db.url` and `email.adapter` are the two slots with no fallback. Every other slot
-has one. Two of those fallbacks are local to a single process.
+`db.url` is the only slot with no fallback. Every other slot has one, and three
+of those fallbacks are local to a single process.
 
-| Slot      | With no configuration     | What breaks                                    |
-| --------- | ------------------------- | ---------------------------------------------- |
-| `storage` | Local disk at `./uploads` | A redeploy wipes it. Replica B cannot read it. |
-| `kv`      | A `Map` in this process   | Two replicas disagree about every key.         |
+| Slot      | With no configuration         | What breaks                                    |
+| --------- | ----------------------------- | ---------------------------------------------- |
+| `storage` | Local disk at `./uploads`     | A redeploy wipes it. Replica B cannot read it. |
+| `kv`      | A `Map` in this process       | Two replicas disagree about every key.         |
+| `email`   | `ConsoleAdapter`, in dev only | Nothing here. It throws in production instead. |
 
-Leave `email.adapter` out and the email service throws while the app starts. That
-happens in every environment. The templates set it to `ConsoleAdapter`, which is
-why a template app boots. That adapter prints your mail to stdout, in production
-too. Swap it before you ship.
+Email is the one that fails loudly rather than quietly. With no adapter, a send
+prints to stdout in development and throws in production. The app still starts
+either way, so an app that never sends mail needs no email config at all. The
+templates set `ConsoleAdapter` explicitly, so swap it before you ship.
 
 Realtime is the one that is already fine. The default change broker is
 PostgreSQL `LISTEN`/`NOTIFY` on your `db.url`. Two replicas see each other's

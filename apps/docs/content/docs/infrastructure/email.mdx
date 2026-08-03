@@ -12,16 +12,17 @@ point it somewhere else without touching a template.
 
 ## The default
 
-There is not one. `email.adapter` is required, and the core email service throws
-while the app boots when it is missing.
+`ConsoleAdapter`, and only outside production. Leave `email.adapter` out and the
+app still starts. The first send prints to stdout in development. In production
+the same send throws:
 
 ```
-QUESTPIE: 'email.adapter' is required. Provide adapter in .build({ email: { adapter: ... } })
+QUESTPIE: Email adapter is not configured. Provide adapter in .build({ email: { adapter: ... } })
 ```
 
-Email is an infrastructure service resolved eagerly inside `createApp()`, so a
-missing adapter fails at startup rather than on your first send. The closest
-thing to a default is what the starters write for you:
+The check sits on the send, not on the boot, so an app that never sends mail
+needs no email config at all. What the starters write for you is the adapter
+made explicit:
 
 ```ts title="src/questpie/server/questpie.config.ts"
 import { runtimeConfig } from "questpie/app";
@@ -36,10 +37,10 @@ export default runtimeConfig({
 and attachment filenames, then returns. No server, no key, no network. It is
 what `create-questpie` picks unless you ask for a different provider.
 
-<Callout type="info" title="`MailerService` has a fallback you never reach">
-	Built directly with no adapter it makes a `ConsoleAdapter` outside production
-	and throws inside it. The core service asserts your adapter before it ever
-	constructs the mailer, so that branch only surfaces in tests. Set `adapter`.
+<Callout type="warn" title="The console default is not a production default">
+	It prints your mail and returns. Nothing is sent. Development is the only
+	place it runs, and in production the same call throws instead. Set a real
+	adapter before you ship.
 </Callout>
 
 ## The adapters
