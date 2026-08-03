@@ -20,7 +20,6 @@
  *   ({ workflows }) => workflows.run(...)                    // namespace: null
  *   ({ analytics }) => analytics.tracker.track(...)          // namespace: "analytics"
  *
- * @see RFC-CONTEXT-FIRST.md §2
  */
 /**
  * Global augmentation namespace.

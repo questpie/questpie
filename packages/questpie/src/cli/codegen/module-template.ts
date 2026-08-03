@@ -16,7 +16,6 @@
  * All category-specific behavior is driven by `CategoryDeclaration` metadata
  * from plugins — no hardcoded category names.
  *
- * @see RFC-MODULE-ARCHITECTURE §9.2 (Module — .generated/module.ts)
  */
 
 import {
@@ -87,7 +86,6 @@ export interface ModuleTemplateResult {
 /**
  * Generate the .generated/module.ts file content for a package module.
  *
- * @see RFC-MODULE-ARCHITECTURE §9.2 (Module — .generated/module.ts)
  */
 export function generateModuleTemplate(
 	options: ModuleTemplateOptions,

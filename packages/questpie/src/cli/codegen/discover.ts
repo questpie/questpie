@@ -4,7 +4,6 @@
  * Scans the questpie root directory for entity files matching
  * the file convention patterns. Supports both by-type and by-feature layouts.
  *
- * @see RFC-MODULE-ARCHITECTURE §4 (Plugin Resolution Patterns)
  */
 
 import type { Dirent } from "node:fs";
@@ -33,7 +32,6 @@ import type {
  * and the name IS the canonical runtime identifier used by relation
  * references (through, f.relation target, sidebar config).
  *
- * @see RFC §2.4 (Key Derivation)
  */
 export function kebabToCamelCase(filename: string): string {
 	// Remove extension
@@ -1416,7 +1414,6 @@ function skipBlockComment(content: string, startIndex: number): number {
 
 /**
  * Check for duplicate key conflicts and throw an error if found.
- * @see RFC §2.4 — "Conflict resolution: duplicate key → error"
  */
 function checkConflict(
 	map: Map<string, DiscoveredFile>,

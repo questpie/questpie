@@ -15,7 +15,6 @@
  * });
  * ```
  *
- * @see RFC-MODULE-ARCHITECTURE §9.2 (Module — .generated/module.ts)
  */
 
 import { join } from "node:path";

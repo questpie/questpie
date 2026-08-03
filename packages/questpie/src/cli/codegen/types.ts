@@ -2,7 +2,6 @@
  * Codegen Types
  *
  * Types for the file convention codegen system.
- * @see RFC-MODULE-ARCHITECTURE §4 (Plugin Resolution Patterns)
  */
 
 // ============================================================================
@@ -89,7 +88,6 @@ export interface FactoryArgumentMetadata {
  * - If it's a single file (`"sidebar.ts"`): treated as single-file pattern with
  *   `resolve: "auto"`, `keyFrom: "filename"`, `cardinality: "single"`
  *
- * @see RFC-MODULE-ARCHITECTURE §4.6 (Plugin Discover API)
  */
 export type DiscoverPattern =
 	| string
@@ -207,7 +205,6 @@ export type DiscoverPattern =
  * Category metadata drives both discovery (what files to scan) and emission
  * (how to generate imports, types, and runtime code).
  *
- * @see RFC-PLUGIN-SYSTEM.md
  */
 export interface CategoryDeclaration {
 	/**
@@ -489,7 +486,6 @@ export interface CategoryDeclaration {
  * may contribute to the same target — their contributions are merged by
  * `resolveTargetGraph()`.
  *
- * @see PLAN-PLUGIN-CONSISTENCY.md §4 (New Plugin Contract)
  */
 export interface CodegenTargetContribution {
 	/**
@@ -551,7 +547,6 @@ export interface CodegenTargetContribution {
 	/**
 	 * Registry declarations for codegen-generated typed factories.
 	 *
-	 * @see RFC-CONTEXT-FIRST §6.4 (Third-Party Plugin Extensions)
 	 */
 	registries?: {
 		/** Extension methods for collection() factory. */
@@ -580,7 +575,6 @@ export interface CodegenTargetContribution {
 	 * When provided, replaces the default template generation.
 	 * Only one plugin may provide a generator per target.
 	 *
-	 * @see PLAN-PLUGIN-CONSISTENCY.md §4 (CodegenTargetContribution)
 	 */
 	generate?: (
 		ctx: CodegenTargetGenerateContext,
@@ -721,7 +715,6 @@ export interface ResolvedTarget {
  * }
  * ```
  *
- * @see PLAN-PLUGIN-CONSISTENCY.md §4 (New Plugin Contract)
  */
 export interface CodegenPlugin {
 	/** Unique plugin name. */
@@ -746,7 +739,6 @@ export interface CodegenPlugin {
 	 * references (views, components, blocks) have matching client-side
 	 * registrations.
 	 *
-	 * @see PLAN-PLUGIN-CONSISTENCY.md §9 (Projection Quality Gate)
 	 */
 	validators?: CrossTargetValidator[];
 }
@@ -978,7 +970,6 @@ export interface CodegenOptions {
 	 * When set, generates a `module.ts` file (static module definition)
 	 * instead of an `index.ts` file (root app with createApp).
 	 *
-	 * @see RFC-MODULE-ARCHITECTURE §9.2 (Module — .generated/module.ts)
 	 */
 	module?: {
 		/** Module name (e.g. "questpie-admin", "questpie-audit"). */
@@ -1038,7 +1029,6 @@ export interface MultiTargetCodegenResult {
  * Emitted when a server-side reference (view, component, block) does not
  * have a corresponding registration in the admin-client target.
  *
- * @see PLAN-PLUGIN-CONSISTENCY.md §9 (Projection Quality Gate)
  */
 export interface ProjectionError {
 	/** Error severity — "error" causes codegen to fail, "warning" is informational. */
@@ -1064,7 +1054,6 @@ export interface ProjectionError {
  *
  * Validators are registered on `CodegenPlugin.validators`.
  *
- * @see PLAN-PLUGIN-CONSISTENCY.md §9 (Projection Quality Gate)
  */
 export type CrossTargetValidator = (
 	targets: Map<string, CodegenResult>,

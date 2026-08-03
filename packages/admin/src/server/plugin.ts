@@ -14,7 +14,6 @@
  * });
  * ```
  *
- * @see RFC-PLUGIN-SYSTEM.md
  */
 
 import type { CodegenPlugin } from "questpie/codegen";

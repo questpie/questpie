@@ -8,7 +8,6 @@
  * Validation is constrained to Standard Schema (https://standardschema.dev) —
  * zod, valibot, arktype, and typia all implement it.
  *
- * @see RFC in agent-board spec p2-env-primitive
  */
 
 // ============================================================================

@@ -4,7 +4,6 @@
  * `questpie generate` — one-shot codegen
  * `questpie dev` — watch mode, regenerate on file add/remove
  *
- * @see RFC §16 (CLI Commands), §16.1 (Watch Mode Granularity)
  */
 
 import { watch } from "node:fs";
@@ -486,8 +485,6 @@ export interface DevOptions {
  * directories for all targets (including non-server targets with different
  * roots like `../admin`), and regenerates everything on change.
  *
- * @see RFC §16.1 (Watch Mode Granularity)
- * @see PLAN-PLUGIN-CONSISTENCY.md §5 (Codegen Orchestration Model)
  */
 export async function devCommand(options: DevOptions): Promise<void> {
 	// Codegen imports user code — it must never require a populated environment.

@@ -9,7 +9,6 @@
  * Extension methods are intercepted by `wrapBuilderWithExtensions()` which
  * delegates to `builder.set()`. Initial state is created by `Builder.create()`.
  *
- * @see RFC-CONTEXT-FIRST §6 (Extension System Without Monkey-Patching)
  * @see QUE-163 — Codegen Simplification
  */
 

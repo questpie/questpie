@@ -17,7 +17,6 @@
  * Discovers `workflows/*.ts` files and generates typed `AppWorkflows` in
  * the `.generated/index.ts` output.
  *
- * @see RFC-PLUGIN-SYSTEM.md
  */
 
 import type { CodegenPlugin } from "questpie/codegen";

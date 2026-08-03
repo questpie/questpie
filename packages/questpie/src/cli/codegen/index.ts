@@ -7,7 +7,6 @@
  * 3. Template generation (root app or module)
  * 4. File writing
  *
- * @see RFC-MODULE-ARCHITECTURE §9 (Generated Code)
  */
 
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
@@ -268,7 +267,6 @@ export function coreCodegenPlugin(): CodegenPlugin {
  *   for the same target ID. Any conflict is a codegen error.
  * - Only one `generate` function is allowed per target.
  *
- * @see PLAN-PLUGIN-CONSISTENCY.md §5 (Codegen Orchestration Model)
  */
 export function resolveTargetGraph(
 	plugins: CodegenPlugin[],
@@ -445,8 +443,6 @@ export function resolveTargetGraph(
  * When `options.module` is set, generates a `module.ts` file (static module
  * definition for npm packages). Otherwise generates `index.ts` (root app).
  *
- * @see RFC-MODULE-ARCHITECTURE §9.1 (Root App), §9.2 (Module)
- * @see PLAN-PLUGIN-CONSISTENCY.md §5 (Codegen Orchestration Model)
  */
 export async function runCodegen(
 	options: CodegenOptions,
@@ -829,7 +825,6 @@ export interface RunAllTargetsOptions {
  * Non-server targets resolve their `root` relative to `rootDir` (the server root).
  * e.g., `root: "../admin"` → `resolve(rootDir, "../admin")`.
  *
- * @see PLAN-PLUGIN-CONSISTENCY.md §5 (Codegen Orchestration Model)
  */
 export async function runAllTargets(
 	options: RunAllTargetsOptions,

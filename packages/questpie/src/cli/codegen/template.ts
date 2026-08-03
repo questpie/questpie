@@ -12,7 +12,6 @@
  * by CategoryDeclaration metadata from plugins. Categories without explicit
  * metadata get sensible defaults matching the standard record pattern.
  *
- * @see RFC-MODULE-ARCHITECTURE §9.1 (Root App — .generated/index.ts)
  */
 
 import {
@@ -83,7 +82,6 @@ const L2_FILE = "context.gen.ts";
 /**
  * Generate the .generated/index.ts file content + layer files.
  *
- * @see RFC-MODULE-ARCHITECTURE §9.1 (Root App — .generated/index.ts)
  */
 export function generateTemplate(options: TemplateOptions): TemplateResult {
 	// FOUR layer buffers — every push is routed to the buffer matching the layer
@@ -1492,7 +1490,6 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
  * Iterates over all discovered categories using CategoryDeclaration metadata
  * to determine how each category should be emitted (record, nested, array).
  *
- * @see RFC-MODULE-ARCHITECTURE §9.1
  */
 function emitNewArchitectureRuntime(
 	lines: string[],

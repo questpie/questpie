@@ -36,7 +36,6 @@
  *
  * The strategy is declared per-category in `CategoryDeclaration.keyFromProperty`.
  *
- * @see PLAN-PLUGIN-CONSISTENCY.md §6.2 (admin-client target)
  */
 
 import {

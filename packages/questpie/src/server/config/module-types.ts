@@ -25,7 +25,6 @@ import type { CollectionAccess } from "#questpie/server/collection/builder/types
  * } satisfies AuthConfig;
  * ```
  *
- * @see RFC §9 (Auth)
  */
 export type AuthConfig = BetterAuthOptions;
 
@@ -92,7 +91,6 @@ import type { Seed, SeedCategory } from "#questpie/server/seed/types.js";
  * sidebar, dashboard, branding, adminLocale) are added via declaration
  * merging by `@questpie/admin`.
  *
- * @see RFC-MODULE-ARCHITECTURE §2 (Core Concepts)
  */
 export interface ModuleDefinition {
 	/** Unique module name (e.g. "questpie-starter", "questpie-admin"). */
@@ -332,7 +330,6 @@ export interface RuntimeConfigExtensions {}
  * });
  * ```
  *
- * @see RFC-MODULE-ARCHITECTURE §3.1 (Functions), §8.1 (User Project)
  */
 export interface RuntimeConfig<
 	TDb extends DbConfig = DbConfig,
@@ -516,7 +513,6 @@ export type ResolvedRuntimeConfig<TInput extends RuntimeConfigInput<any, any>> =
  * ) as unknown as App;
  * ```
  *
- * @see RFC-MODULE-ARCHITECTURE §9.1 (Root App)
  */
 export interface AppDefinition {
 	/** Modules from `modules.ts` — static module imports. */
@@ -605,7 +601,6 @@ export interface AppDefinition {
  *
  * For new code, use `RuntimeConfig` with `runtimeConfig()` instead.
  *
- * @see RFC §12 (config() Full API), §12.1 (Config Shape)
  */
 export interface AppConfig {
 	/** Modules to compose — order matters, later overrides earlier. */
@@ -699,7 +694,6 @@ export interface AppConfig {
  *
  * For new code, use `AppDefinition` with `createApp(definition, runtime)`.
  *
- * @see RFC §15.1 (Complete .generated/index.ts Example)
  */
 export interface AppEntities {
 	/** Collections discovered from `collections/` directory. */
@@ -787,7 +781,6 @@ export type ExtractFromModuleArray<
  * type ModuleRoutes = ExtractModulesProperty<typeof _config, "routes">;
  * ```
  *
- * @see RFC §15.1 (Complete .generated/index.ts Example)
  */
 export type ExtractModulesProperty<Config, K extends string> = Config extends {
 	modules: infer M extends readonly any[];

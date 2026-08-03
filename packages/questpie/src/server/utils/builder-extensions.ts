@@ -9,7 +9,6 @@
  * Previously emitted inline in every generated factories.ts — now a single
  * importable utility.
  *
- * @see RFC-CONTEXT-FIRST §6 (Extension System Without Monkey-Patching)
  */
 
 /**
