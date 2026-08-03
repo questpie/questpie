@@ -66,8 +66,9 @@ export interface TemplateOptions {
 
 /**
  * Result of generating the root-app template — the `index.ts` content (`code`)
- * plus the layer files (`names.gen.ts`/`entities.gen.ts`/`context.gen.ts`) that
- * `index.ts` re-exports. Each extra file is written next to `index.ts` in outDir.
+ * plus the layer files (`names.gen.ts`/`entities.gen.ts`/`context.gen.ts`) and
+ * the singleton-free `app-factory.ts` entrypoint. Each extra file is written
+ * next to `index.ts` in outDir.
  *
  * The split enforces a STRICT one-way import header L3→L2→L1→L0 so the
  * AppContext⇄config cycle is impossible by construction (L1 never imports L2,
@@ -84,6 +85,7 @@ export interface TemplateResult {
 const L0_FILE = "names.gen.ts";
 const L1_FILE = "entities.gen.ts";
 const L2_FILE = "context.gen.ts";
+const APP_FACTORY_FILE = "app-factory.ts";
 
 /**
  * Generate the .generated/index.ts file content + layer files.
@@ -96,6 +98,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	const l0: string[] = []; // names.gen.ts — module entity-NAME key registries
 	const l1: string[] = []; // entities.gen.ts — flat category maps + AppServices
 	const l2: string[] = []; // context.gen.ts — the ONLY AppContext builder
+	const appFactory: string[] = []; // app-factory.ts — fresh app creation, no singleton lease
 	const l3: string[] = []; // index.ts — runtime tail + public re-exports
 	let lines: string[] = l3;
 	const {
@@ -142,7 +145,10 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	// Unused value imports are harmless (the .gen.ts files are type-only checked,
 	// noUnusedLocals is off). `createApp` + plugin value imports are emitted
 	// separately into the layer that actually runs/consumes them.
-	const pushValueImports = (buf: string[]): void => {
+	const pushValueImports = (
+		buf: string[],
+		options: { runtime?: boolean } = {},
+	): void => {
 		// Import env FIRST — env.ts validates at module evaluation, so importing
 		// it before the runtime config guarantees env validation fails boot before
 		// runtimeConfig() resolution, adapters, auth, and db init.
@@ -154,9 +160,13 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 			buf.push("");
 		}
 
-		buf.push("// ── Runtime ────────────────────────────────────────────────");
-		buf.push(`import _runtime from "${configImportPath}";`);
-		buf.push("");
+		if (options.runtime !== false) {
+			buf.push(
+				"// ── Runtime ────────────────────────────────────────────────",
+			);
+			buf.push(`import _runtime from "${configImportPath}";`);
+			buf.push("");
+		}
 
 		buf.push("// ── Modules ────────────────────────────────────────────────");
 		buf.push(importStatement(modulesFile));
@@ -316,10 +326,37 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	}
 	l2.push("");
 
-	// ── L3 index.ts — createApp + value preamble + lower-layer named types ──
+	// ── app-factory.ts — generated definition + fresh app factory ──────────
+	genHeader(appFactory);
+	appFactory.push('import { createApp } from "questpie/app";');
+	appFactory.push(
+		'import type { AppDefinition, RuntimeConfig } from "questpie/types";',
+	);
+	appFactory.push(
+		`import type { _AppQuestpie, AppSession } from "${layerImport(L2_FILE)}";`,
+	);
+	appFactory.push("");
+	pushValueImports(appFactory, { runtime: false });
+	if (extraImports && extraImports.length > 0) {
+		appFactory.push(
+			"// ── Plugin Imports ─────────────────────────────────────────",
+		);
+		for (const imp of extraImports) {
+			appFactory.push(`import ${imp.name} from "${imp.path}";`);
+		}
+		appFactory.push("");
+	}
+
+	// ── L3 index.ts — singleton runtime + public surface ─────────────────
 	genHeader(l3);
 	l3.push(
-		'import { acquireGeneratedApp, createApp, createContextFactory } from "questpie/app";',
+		'import { acquireGeneratedApp, createContextFactory } from "questpie/app";',
+	);
+	l3.push(
+		`import { createAppForRuntime } from "${layerImport(APP_FACTORY_FILE)}";`,
+	);
+	l3.push(
+		`export { createAppForRuntime } from "${layerImport(APP_FACTORY_FILE)}";`,
 	);
 	// Side-effect import of names.gen.ts — it lives in the `.generated` dot-folder
 	// (NOT matched by `src/**/*.ts` globs) and is imported by nothing else, so
@@ -328,7 +365,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	// `relation("user")` strict keys regress. A side-effect import is never elided.
 	l3.push(`import "${layerImport(L0_FILE)}";`);
 	l3.push(
-		'import type { AccessContext, AppDefinition, CollectionSelect, CrdtClientAPI, CrdtRegistryFromApp, CrdtServerAPI, GlobalSelect, HookContext, Where } from "questpie/types";',
+		'import type { AccessContext, CollectionSelect, CrdtClientAPI, CrdtRegistryFromApp, CrdtServerAPI, GlobalSelect, HookContext, Where } from "questpie/types";',
 	);
 	// CollectionDoc/GlobalDoc/AppConfig/createContext read these from L1; the
 	// runtime `as _AppQuestpie` cast + AppSession re-exports read from L2.
@@ -1423,13 +1460,8 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	lines.push("// ════════════════════════════════════════════════════════════");
 	lines.push("");
 
-	emitNewArchitectureRuntime(
-		lines,
-		discovered,
-		allDecls,
-		appInstanceId,
-		extraEntities,
-	);
+	emitAppFactory(appFactory, discovered, allDecls, extraEntities);
+	emitSingletonRuntime(lines, appInstanceId, envFile);
 
 	lines.push("/** Fully typed QUESTPIE app instance. */");
 	lines.push("export type App = typeof app;");
@@ -1482,6 +1514,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 			{ name: L0_FILE, code: l0.join("\n") },
 			{ name: L1_FILE, code: l1.join("\n") },
 			{ name: L2_FILE, code: l2.join("\n") },
+			{ name: APP_FACTORY_FILE, code: appFactory.join("\n") },
 		],
 	};
 }
@@ -1491,36 +1524,32 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 // ============================================================================
 
 /**
- * Emit the createApp(definition, _runtime) call for new architecture.
+ * Emit the singleton-free app definition and fresh-app factory.
  * Iterates over all discovered categories using CategoryDeclaration metadata
  * to determine how each category should be emitted (record, nested, array).
  *
  */
-function emitNewArchitectureRuntime(
+function emitAppFactory(
 	lines: string[],
 	discovered: DiscoveryResult,
 	allDecls: Map<string, CategoryDeclaration>,
-	appInstanceId: string,
 	extraEntities?: Map<string, string>,
 ): void {
 	const modulesFile = discovered.singles.get("modules");
 	if (!modulesFile) {
-		throw new Error("emitNewArchitectureRuntime called without modules.ts");
+		throw new Error("emitAppFactory called without modules.ts");
 	}
 	const envFile = discovered.singles.get("env") ?? null;
 	const coreSingles = getCategorizedSingles(discovered.singles, allDecls);
 
-	lines.push(
-		`var _appLease = acquireGeneratedApp(${JSON.stringify(appInstanceId)}, () => createApp(`,
-	);
-	lines.push("\t({");
+	lines.push("const _appDefinition = ({");
 
 	// Modules — preserve the concrete exported module types directly.
-	lines.push(`\t\tmodules: ${modulesFile.varName},`);
+	lines.push(`\tmodules: ${modulesFile.varName},`);
 
 	// Validated env (from env.ts) — stored on the instance as app.env.
 	if (envFile) {
-		lines.push(`\t\tenv: ${envFile.varName},`);
+		lines.push(`\tenv: ${envFile.varName},`);
 	}
 
 	// ── Emit all categories ──────────────────────────────────────
@@ -1533,18 +1562,18 @@ function emitNewArchitectureRuntime(
 
 		switch (emitMode) {
 			case "record": {
-				lines.push(`\t\t${safeKey(createAppKey)}: {`);
+				lines.push(`\t${safeKey(createAppKey)}: {`);
 				for (const file of sortedValues(fileMap)) {
-					lines.push(`\t\t\t${categoryRecordEntry(file, decl)},`);
+					lines.push(`\t\t${categoryRecordEntry(file, decl)},`);
 				}
-				lines.push("\t\t},");
+				lines.push("\t},");
 				break;
 			}
 			case "array": {
 				const vars = sortedValues(fileMap)
 					.map((f) => f.varName)
 					.join(", ");
-				lines.push(`\t\t${safeKey(createAppKey)}: [${vars}],`);
+				lines.push(`\t${safeKey(createAppKey)}: [${vars}],`);
 				break;
 			}
 		}
@@ -1565,16 +1594,16 @@ function emitNewArchitectureRuntime(
 
 	// Emit config bucket — each config file = one key
 	if (configEntries.length > 0) {
-		lines.push("\t\tconfig: {");
+		lines.push("\tconfig: {");
 		for (const { configKey, file } of configEntries) {
-			lines.push(`\t\t\t${safeKey(configKey)}: ${file.varName},`);
+			lines.push(`\t\t${safeKey(configKey)}: ${file.varName},`);
 		}
-		lines.push("\t\t},");
+		lines.push("\t},");
 	}
 
 	// Plain singles (fields, etc.) — NOT config files
 	for (const file of plainSingles) {
-		lines.push(`\t\t${safeKey(file.key)}: ${file.varName},`);
+		lines.push(`\t${safeKey(file.key)}: ${file.varName},`);
 	}
 
 	// Spread singles (sidebar, dashboard — mergeStrategy: "spread")
@@ -1583,20 +1612,40 @@ function emitNewArchitectureRuntime(
 	for (const [stateKey, files] of discovered.spreads) {
 		if (files.length > 0) {
 			const spread = files.map((f) => `...(${f.varName} ?? [])`).join(", ");
-			lines.push(`\t\t${safeKey(stateKey)}: [${spread}],`);
+			lines.push(`\t${safeKey(stateKey)}: [${spread}],`);
 		}
 	}
 
 	// Extra entities from plugins
 	if (extraEntities) {
 		for (const [key, value] of extraEntities) {
-			lines.push(`\t\t${safeKey(key)}: ${value},`);
+			lines.push(`\t${safeKey(key)}: ${value},`);
 		}
 	}
 
-	lines.push("\t}) satisfies AppDefinition,");
-	lines.push("\t_runtime,");
-	lines.push("));");
+	lines.push("}) satisfies AppDefinition;");
+	lines.push("");
+	lines.push(
+		"export const createAppForRuntime = (async (runtime: RuntimeConfig) =>",
+	);
+	lines.push(
+		"\t(await createApp(_appDefinition, runtime)) as unknown as _AppQuestpie) as ((",
+	);
+	lines.push("\truntime: RuntimeConfig,");
+	lines.push(") => Promise<_AppQuestpie>) & {");
+	lines.push('\treadonly "~types"?: { session: AppSession };');
+	lines.push("};");
+	lines.push("");
+}
+
+function emitSingletonRuntime(
+	lines: string[],
+	appInstanceId: string,
+	envFile: DiscoveredFile | null,
+): void {
+	lines.push(
+		`var _appLease = acquireGeneratedApp(${JSON.stringify(appInstanceId)}, () => createAppForRuntime(_runtime));`,
+	);
 	lines.push("var _appPromise = _appLease.promise;");
 	lines.push("");
 	lines.push(

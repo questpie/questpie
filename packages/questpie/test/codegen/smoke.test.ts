@@ -160,12 +160,15 @@ describe("codegen smoke", () => {
 			rootDir,
 			configPath: join(rootDir, "questpie.config.ts"),
 			outDir,
-			dryRun: true,
+			dryRun: false,
 		});
+		const { readFile } = await import("node:fs/promises");
+		const factory = await readFile(join(outDir, "app-factory.ts"), "utf-8");
 
-		expect(result.code).toContain("crdtManifest:");
-		expect(result.code).toContain('"namespace":"smoke"');
-		expect(result.code).toContain(
+		expect(result.code).toContain('from "./app-factory"');
+		expect(factory).toContain("crdtManifest:");
+		expect(factory).toContain('"namespace":"smoke"');
+		expect(factory).toContain(
 			'"stableFieldId":"00000000-0000-4000-8000-000000000001"',
 		);
 	});

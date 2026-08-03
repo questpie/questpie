@@ -28,6 +28,23 @@ class FakeChannel {
 	}
 }
 
+class FakePusherConnection {
+	private readonly listeners = new Set<(change: unknown) => void>();
+	state = "connected";
+	readonly socket_id = "1.2";
+
+	bind(event: string, callback: (change: unknown) => void): this {
+		if (event === "state_change") this.listeners.add(callback);
+		return this;
+	}
+
+	transition(current: string): void {
+		const previous = this.state;
+		this.state = current;
+		for (const callback of this.listeners) callback({ previous, current });
+	}
+}
+
 class FakePusher {
 	readonly channels = new Map<string, FakeChannel>();
 	readonly unsubscribed: string[] = [];
@@ -38,10 +55,7 @@ class FakePusher {
 		signinDonePromise: Promise.resolve(),
 		user_data: { id: "opaque-user" },
 	};
-	readonly connection = {
-		state: "connected",
-		socket_id: "1.2",
-	};
+	readonly connection = new FakePusherConnection();
 	disconnected = false;
 	signinCalls = 0;
 
@@ -118,6 +132,60 @@ function authenticateUser(
 }
 
 describe("PusherConnectionManager", () => {
+	test("isolates epoch callbacks and ignores disposed physical instances", async () => {
+		const fixture = managerFixture();
+		let throwingEnds = 0;
+		let siblingEnds = 0;
+		const first = await fixture.manager.subscribe({
+			config: { provider: "pusher", key: "key" },
+			channelName: "private-room-one",
+			lane: "channel",
+			authorize: async () => ({ auth: "first" }),
+			onConnectionEpochEnd: () => {
+				throwingEnds += 1;
+				throw new Error("consumer callback failed");
+			},
+		});
+		const second = await fixture.manager.subscribe({
+			config: { provider: "pusher", key: "key" },
+			channelName: "private-room-two",
+			lane: "channel",
+			authorize: async () => ({ auth: "second" }),
+			onConnectionEpochEnd: () => {
+				siblingEnds += 1;
+			},
+		});
+		const disposed = fixture.getPusher()!;
+
+		disposed.connection.transition("disconnected");
+		expect({ throwingEnds, siblingEnds }).toEqual({
+			throwingEnds: 1,
+			siblingEnds: 1,
+		});
+		first.release();
+		second.release();
+
+		let freshEnds = 0;
+		const fresh = await fixture.manager.subscribe({
+			config: { provider: "pusher", key: "key" },
+			channelName: "private-room-three",
+			lane: "channel",
+			authorize: async () => ({ auth: "fresh" }),
+			onConnectionEpochEnd: () => {
+				freshEnds += 1;
+			},
+		});
+		const active = fixture.getPusher()!;
+		expect(active).not.toBe(disposed);
+
+		disposed.connection.transition("connected");
+		disposed.connection.transition("unavailable");
+		expect(freshEnds).toBe(0);
+		active.connection.transition("unavailable");
+		expect(freshEnds).toBe(1);
+		fresh.release();
+	});
+
 	test("signs in once and resolves user auth through a currently live shared owner", async () => {
 		const fixture = managerFixture();
 		const first = await fixture.manager.subscribe({

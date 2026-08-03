@@ -2,10 +2,17 @@ import { parseCompatibleTypedEventWire } from "#questpie/shared/typed-wire.js";
 
 import type { GetAuthHeaders } from "../auth.js";
 import type { SseConnectionManager } from "../realtime/sse-connection.js";
-import { channelGapError, OrderedChannelCursor } from "./ordered-events.js";
+import { notifyChannelConsumer } from "./consumer-callback.js";
+import {
+	channelGapError,
+	channelSlowConsumerError,
+	OrderedChannelCursor,
+} from "./ordered-events.js";
+import { ChannelReadiness, ChannelReadyDelivery } from "./readiness.js";
 import type {
 	ChannelClientTransport,
 	ChannelConnectionInput,
+	ChannelPresenceOptions,
 	ChannelSubscribeOptions,
 	ChannelTransportMessage,
 } from "./types.js";
@@ -16,6 +23,7 @@ type Entry = {
 	subscribers: Set<(message: ChannelTransportMessage) => void>;
 	presenceSubscribers: Set<(members: readonly unknown[]) => void>;
 	errorCallbacks: Set<(error: Error) => void>;
+	readiness: ChannelReadiness;
 	cursor: OrderedChannelCursor;
 	presence?: readonly unknown[];
 	presenceSignature?: string;
@@ -73,25 +81,35 @@ export class SseChannelTransport implements ChannelClientTransport {
 		options: ChannelSubscribeOptions = {},
 	): () => void {
 		const entry = this.ensureEntry(input);
-		entry.subscribers.add(callback);
-		if (options.onError) entry.errorCallbacks.add(options.onError);
+		const delivery = new ChannelReadyDelivery(
+			entry.readiness,
+			callback,
+			options.onReady,
+			() => this.failEntry(entry, channelSlowConsumerError()),
+		);
+		entry.subscribers.add(delivery.accept);
+		const errorCallback = options.onError
+			? (error: Error) => notifyChannelConsumer(options.onError, error)
+			: undefined;
+		if (errorCallback) entry.errorCallbacks.add(errorCallback);
 
 		let stopped = false;
 		const stop = () => {
 			if (stopped) return;
 			stopped = true;
 			options.signal?.removeEventListener("abort", stop);
+			delivery.stop();
 			const current = this.entries.get(input.resolvedName);
 			if (!current) return;
-			current.subscribers.delete(callback);
-			if (options.onError) current.errorCallbacks.delete(options.onError);
+			current.subscribers.delete(delivery.accept);
+			if (errorCallback) current.errorCallbacks.delete(errorCallback);
 			if (
 				current.subscribers.size > 0 ||
 				current.presenceSubscribers.size > 0 ||
 				current.presenceWaiters.size > 0
 			)
 				return;
-			this.removeEntry(input.resolvedName);
+			this.removeEntry(input.resolvedName, current);
 		};
 		options.signal?.addEventListener("abort", stop, { once: true });
 		if (options.signal?.aborted) stop();
@@ -107,26 +125,37 @@ export class SseChannelTransport implements ChannelClientTransport {
 			throw new Error("Channel does not expose presence");
 		}
 		const entry = this.ensureEntry(input);
-		entry.presenceSubscribers.add(callback);
-		if (options.onError) entry.errorCallbacks.add(options.onError);
-		if (entry.presence) callback(entry.presence);
+		const delivery = new ChannelReadyDelivery(
+			entry.readiness,
+			callback,
+			options.onReady,
+			() => this.failEntry(entry, channelSlowConsumerError()),
+			true,
+		);
+		entry.presenceSubscribers.add(delivery.accept);
+		const errorCallback = options.onError
+			? (error: Error) => notifyChannelConsumer(options.onError, error)
+			: undefined;
+		if (errorCallback) entry.errorCallbacks.add(errorCallback);
+		if (entry.presence) delivery.accept(entry.presence);
 
 		let stopped = false;
 		const stop = () => {
 			if (stopped) return;
 			stopped = true;
 			options.signal?.removeEventListener("abort", stop);
+			delivery.stop();
 			const current = this.entries.get(input.resolvedName);
 			if (!current) return;
-			current.presenceSubscribers.delete(callback);
-			if (options.onError) current.errorCallbacks.delete(options.onError);
+			current.presenceSubscribers.delete(delivery.accept);
+			if (errorCallback) current.errorCallbacks.delete(errorCallback);
 			if (
 				current.subscribers.size > 0 ||
 				current.presenceSubscribers.size > 0 ||
 				current.presenceWaiters.size > 0
 			)
 				return;
-			this.removeEntry(input.resolvedName);
+			this.removeEntry(input.resolvedName, current);
 		};
 		options.signal?.addEventListener("abort", stop, { once: true });
 		if (options.signal?.aborted) stop();
@@ -135,7 +164,7 @@ export class SseChannelTransport implements ChannelClientTransport {
 
 	async presence(
 		input: ChannelConnectionInput,
-		options: ChannelSubscribeOptions = {},
+		options: ChannelPresenceOptions = {},
 	): Promise<readonly unknown[]> {
 		if (options.signal?.aborted) {
 			throw new Error("Channel presence aborted");
@@ -144,7 +173,10 @@ export class SseChannelTransport implements ChannelClientTransport {
 			throw new Error("Channel does not expose presence");
 		}
 		const noop = () => {};
-		const stop = this.subscribe(input, noop, options);
+		const stop = this.subscribe(input, noop, {
+			signal: options.signal,
+			onError: options.onError,
+		});
 		const entry = this.entries.get(input.resolvedName)!;
 		if (entry.presence) {
 			stop();
@@ -195,6 +227,7 @@ export class SseChannelTransport implements ChannelClientTransport {
 			subscribers: new Set(),
 			presenceSubscribers: new Set(),
 			errorCallbacks: new Set(),
+			readiness: new ChannelReadiness(),
 			cursor: new OrderedChannelCursor(),
 			presenceWaiters: new Set(),
 		};
@@ -220,12 +253,16 @@ export class SseChannelTransport implements ChannelClientTransport {
 							? { lastEventId: entry.cursor.eventId }
 							: {}),
 					}),
-					onEvent: (event) => this.handleEvent(event),
-					onError: (error) => this.notifyEntry(entry!, error),
+					onEvent: (event) => {
+						if (this.entries.get(input.resolvedName) !== entry) return;
+						this.handleEvent(event);
+					},
+					onError: (error) => this.failEntry(entry!, error),
+					onEpochEnd: () => this.endEntryEpoch(entry!),
 				});
 			} catch (error) {
 				queueMicrotask(() =>
-					this.notifyEntry(
+					this.failEntry(
 						entry!,
 						error instanceof Error ? error : new Error(String(error)),
 					),
@@ -237,16 +274,24 @@ export class SseChannelTransport implements ChannelClientTransport {
 		return entry;
 	}
 
-	private removeEntry(name: string): void {
+	private removeEntry(name: string, expected: Entry): void {
 		const entry = this.entries.get(name);
-		entry?.sharedRelease?.();
-		this.entries.delete(name);
+		if (entry !== expected) return;
+		entry.sharedRelease?.();
+		entry.readiness.destroy();
+		if (this.entries.get(name) === entry) this.entries.delete(name);
 		if (this.options.connection) return;
 		if (this.entries.size === 0) {
 			this.abortController?.abort();
 			return;
 		}
 		this.applyTopology();
+	}
+
+	private failEntry(entry: Entry, error: Error): void {
+		if (this.entries.get(entry.input.resolvedName) !== entry) return;
+		this.notifyEntry(entry, error);
+		this.removeEntry(entry.input.resolvedName, entry);
 	}
 
 	private scheduleConnect(delayMs: number): void {
@@ -292,11 +337,15 @@ export class SseChannelTransport implements ChannelClientTransport {
 			throw new Error("Channel SSE stream closed");
 		} catch (error) {
 			if (this.destroyed || this.entries.size === 0) return;
+			const normalized =
+				error instanceof Error ? error : new Error(String(error));
+			const admittedEntries = this.notifyAdmittedEpochs(normalized);
 			if ((error as Error).name !== "AbortError") {
-				const normalized =
-					error instanceof Error ? error : new Error(String(error));
 				if (![...this.entries.values()].some((entry) => entry.cursor.eventId)) {
-					this.notifyAll(normalized);
+					for (const entry of this.entries.values()) {
+						if (!admittedEntries.has(entry))
+							this.notifyEntry(entry, normalized);
+					}
 				}
 				const delay = Math.min(1000 * 2 ** this.retryAttempt++, 30_000);
 				this.scheduleConnect(delay * (0.5 + Math.random()));
@@ -458,13 +507,19 @@ export class SseChannelTransport implements ChannelClientTransport {
 				const decision = entry.cursor.accept(message);
 				if (decision.status === "duplicate") return;
 				if (decision.status === "gap") {
-					this.notifyEntry(entry, channelGapError());
-					this.removeEntry(entry.input.resolvedName);
+					this.failEntry(entry, channelGapError());
 					return;
 				}
 				this.retryAttempt = 0;
 				for (const callback of entry.subscribers) {
 					callback(message);
+				}
+			} else if (event.type === "channel_ready") {
+				const id = frame.channelSubscriptionId;
+				const entry = [...this.entries.values()].find((item) => item.id === id);
+				if (entry) {
+					this.retryAttempt = 0;
+					entry.readiness.admit();
 				}
 			} else if (event.type === "channel_presence") {
 				const entry = this.entryForFrame(frame);
@@ -473,14 +528,13 @@ export class SseChannelTransport implements ChannelClientTransport {
 			} else if (event.type === "channel_gap") {
 				const entry = this.entryForFrame(frame);
 				if (entry) {
-					this.notifyEntry(entry, channelGapError());
-					this.removeEntry(entry.input.resolvedName);
+					this.failEntry(entry, channelGapError());
 				}
 			} else if (event.type === "error") {
 				const id = frame.channelSubscriptionId;
 				const entry = [...this.entries.values()].find((item) => item.id === id);
 				if (entry) {
-					this.notifyEntry(
+					this.failEntry(
 						entry,
 						new Error(String(frame.message ?? "Channel error")),
 					);
@@ -512,14 +566,13 @@ export class SseChannelTransport implements ChannelClientTransport {
 		if (channel) {
 			const entry = this.entries.get(channel);
 			if (entry) {
-				this.notifyEntry(entry, error);
-				this.removeEntry(channel);
+				this.failEntry(entry, error);
 				return;
 			}
 		}
-		for (const entry of this.entries.values()) {
-			this.notifyEntry(entry, error);
-			this.removeEntry(entry.input.resolvedName);
+		const failedEntries = Array.from(this.entries.values());
+		for (const entry of failedEntries) {
+			this.failEntry(entry, error);
 		}
 	}
 
@@ -541,7 +594,11 @@ export class SseChannelTransport implements ChannelClientTransport {
 	}
 
 	private notifyEntry(entry: Entry, error: Error): void {
-		for (const callback of entry.errorCallbacks) callback(error);
+		this.resetEntryEpoch(entry);
+		const errorCallbacks = Array.from(entry.errorCallbacks);
+		for (const callback of errorCallbacks) {
+			notifyChannelConsumer(callback, error);
+		}
 		const waiters = [...entry.presenceWaiters];
 		entry.presenceWaiters.clear();
 		for (const waiter of waiters) waiter.reject(error);
@@ -551,6 +608,31 @@ export class SseChannelTransport implements ChannelClientTransport {
 		for (const entry of this.entries.values()) this.notifyEntry(entry, error);
 	}
 
+	private endEntryEpoch(entry: Entry): void {
+		if (this.entries.get(entry.input.resolvedName) !== entry) return;
+		this.resetEntryEpoch(entry);
+	}
+
+	private resetEntryEpoch(entry: Entry): void {
+		entry.readiness.end();
+		entry.presence = undefined;
+		entry.presenceSignature = undefined;
+	}
+
+	private notifyAdmittedEntry(entry: Entry, error: Error): void {
+		if (!entry.readiness.isReady) return;
+		this.notifyEntry(entry, error);
+	}
+
+	private notifyAdmittedEpochs(error: Error): Set<Entry> {
+		const admitted = new Set<Entry>();
+		for (const entry of this.entries.values()) {
+			if (entry.readiness.isReady) admitted.add(entry);
+			this.notifyAdmittedEntry(entry, error);
+		}
+		return admitted;
+	}
+
 	destroy(): void {
 		if (this.destroyed) return;
 		this.destroyed = true;
@@ -558,6 +640,7 @@ export class SseChannelTransport implements ChannelClientTransport {
 		this.abortController?.abort();
 		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
 		this.notifyAll(new Error("Channel transport destroyed"));
+		for (const entry of this.entries.values()) entry.readiness.destroy();
 		this.entries.clear();
 		this.controlSession = null;
 	}

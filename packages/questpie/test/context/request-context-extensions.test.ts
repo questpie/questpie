@@ -22,7 +22,11 @@ import { z } from "zod";
 
 import { collection, global, route } from "../../src/exports/index.js";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
-import { getContext } from "../../src/server/config/context.js";
+import {
+	getContext,
+	runWithContext,
+	tryGetContext,
+} from "../../src/server/config/context.js";
 import { ApiError } from "../../src/server/errors/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -412,6 +416,157 @@ describe("request context extensions (appConfig({ context }))", () => {
 		const reentered = await setup.app.createContext(ctx as any);
 		expect(spy.resolverRuns).toBe(1);
 		expect((reentered as any).tenantId).toBe("tenant-a");
+	});
+});
+
+describe("request context extensions — system resolver boundary", () => {
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
+	const observations: Array<{
+		accessMode: string | undefined;
+		principalKind: string | undefined;
+		session: unknown;
+		ambientDb: unknown;
+		resolverDb: unknown;
+		locale: string | undefined;
+		stage: string | undefined;
+		requestId: string | undefined;
+		traceId: string | undefined;
+		staleExtension: unknown;
+	}> = [];
+
+	beforeEach(async () => {
+		observations.length = 0;
+		const protectedMemberships = collection("protected_memberships")
+			.fields(({ f }) => ({ userId: f.text().required() }))
+			.access({ read: false, create: false, update: false, delete: false });
+		setup = await buildMockApp({
+			collections: { protectedMemberships },
+			locale: {
+				defaultLocale: "en",
+				locales: [{ code: "en" }, { code: "sk" }],
+			},
+			config: {
+				app: {
+					context: async ({ collections, db, request, session }: any) => {
+						const ambient = tryGetContext();
+						observations.push({
+							accessMode: ambient?.accessMode,
+							principalKind: ambient?.principal?.kind,
+							session: ambient?.session,
+							ambientDb: ambient?.db,
+							resolverDb: db,
+							locale: ambient?.locale,
+							stage: ambient?.stage,
+							requestId: ambient?.requestId,
+							traceId: ambient?.traceId,
+							staleExtension: ambient?.["~contextExtensions"]?.stale,
+						});
+						const count = await collections.protectedMemberships.count({});
+						if (request.headers.get("x-reject") === "yes") {
+							throw ApiError.unauthorized("Resolver rejected the request");
+						}
+						return {
+							hasMembership: count === 1 && session?.user.id === "user-1",
+						};
+					},
+				},
+			},
+		});
+		await runTestDbMigrations(setup.app);
+		await setup.app.collections.protectedMemberships.create({
+			userId: "user-1",
+		});
+	});
+
+	afterEach(async () => {
+		await setup.cleanup();
+	});
+
+	it("isolates resolver services from ambient user ALS and restores the caller", async () => {
+		const session = {
+			user: { id: "user-1" },
+			session: { id: "session-1" },
+		};
+		const principal = {
+			kind: "user" as const,
+			user: session.user,
+			session: session.session,
+		};
+		const outer = {
+			app: setup.app,
+			session,
+			principal: principal as any,
+			db: setup.app.db,
+			locale: "sk",
+			accessMode: "user",
+			stage: "review",
+			requestId: "request-1",
+			traceId: "trace-1",
+			"~contextExtensions": { stale: "must-not-leak" },
+		};
+
+		const resolved = await runWithContext(outer, async () => {
+			const context = await setup.app.createContext({
+				request: new Request("http://localhost/context"),
+				session,
+				principal: principal as any,
+				db: setup.app.db,
+				locale: "sk",
+				accessMode: "user",
+				stage: "review",
+				requestId: "request-1",
+				traceId: "trace-1",
+			});
+			expect(tryGetContext()?.principal).toBe(principal);
+			expect(tryGetContext()?.accessMode).toBe("user");
+			return context;
+		});
+
+		expect(observations[0]).toEqual({
+			accessMode: "system",
+			principalKind: "system",
+			session,
+			ambientDb: setup.app.db,
+			resolverDb: setup.app.db,
+			locale: "sk",
+			stage: "review",
+			requestId: "request-1",
+			traceId: "trace-1",
+			staleExtension: undefined,
+		});
+		expect(resolved).toMatchObject({
+			session,
+			principal,
+			accessMode: "user",
+			locale: "sk",
+			stage: "review",
+			requestId: "request-1",
+			traceId: "trace-1",
+			hasMembership: true,
+		});
+		expect(resolved["~contextExtensions"]).toEqual({
+			hasMembership: true,
+		});
+
+		await runWithContext(outer, async () => {
+			await expect(
+				setup.app.createContext({
+					request: new Request("http://localhost/context", {
+						headers: { "x-reject": "yes" },
+					}),
+					session,
+					principal: principal as any,
+					db: setup.app.db,
+					locale: "sk",
+					accessMode: "user",
+					stage: "review",
+					requestId: "request-1",
+					traceId: "trace-1",
+				}),
+			).rejects.toThrow("Resolver rejected the request");
+			expect(tryGetContext()?.principal).toBe(principal);
+			expect(tryGetContext()?.accessMode).toBe("user");
+		});
 	});
 });
 

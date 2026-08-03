@@ -1,5 +1,53 @@
 # @questpie/admin
 
+## 3.21.1
+
+### Patch Changes
+
+- Updated dependencies [[`5c5f5b6`](https://github.com/questpie/questpie/commit/5c5f5b672acfeca55cf7ffd6db97dec535997bfe)]:
+  - questpie@3.21.1
+  - @questpie/tanstack-query@3.21.1
+
+## 3.21.0
+
+### Patch Changes
+
+- Updated dependencies [[`fb6653a`](https://github.com/questpie/questpie/commit/fb6653a8b41d5c7e61bf4fa209b2ec86cf91ec7b)]:
+  - questpie@3.21.0
+  - @questpie/tanstack-query@3.21.0
+
+## 3.20.1
+
+### Patch Changes
+
+- Updated dependencies [[`4e4ea31`](https://github.com/questpie/questpie/commit/4e4ea3174bce830b1a8efa95faf381aa36b88b24)]:
+  - questpie@3.20.1
+  - @questpie/tanstack-query@3.20.1
+
+## 3.20.0
+
+### Patch Changes
+
+- Updated dependencies [[`030c5dd`](https://github.com/questpie/questpie/commit/030c5dd09be7798fcb696e4e47312c758e855930)]:
+  - questpie@3.20.0
+  - @questpie/tanstack-query@3.20.0
+
+## 3.19.2
+
+### Patch Changes
+
+- Updated dependencies [[`8114e59`](https://github.com/questpie/questpie/commit/8114e5966ffce9ecc2dd1c3be844dfff065b8af3)]:
+  - questpie@3.19.2
+  - @questpie/tanstack-query@3.19.2
+
+## 3.19.1
+
+### Patch Changes
+
+- Updated dependencies [[`15a9f47`](https://github.com/questpie/questpie/commit/15a9f4726fdd68402532f3d6683b657e02a65863)]:
+  - questpie@3.19.1
+  - @questpie/tanstack-query@3.19.1
+
 ## 3.19.0
 
 ### Minor Changes

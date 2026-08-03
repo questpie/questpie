@@ -54,9 +54,23 @@ class FakePusherChannel {
 	}
 }
 
+class FakePusherConnection {
+	readonly state = "connected";
+	readonly socket_id = "1.2";
+	private readonly listeners = new Map<string, Set<(value: unknown) => void>>();
+
+	bind(event: string, callback: (value: unknown) => void): this {
+		const listeners = this.listeners.get(event) ?? new Set();
+		listeners.add(callback);
+		this.listeners.set(event, listeners);
+		return this;
+	}
+}
+
 class FakePusher {
 	static instances: FakePusher[] = [];
 	readonly channel = new FakePusherChannel();
+	readonly connection = new FakePusherConnection();
 	disconnected = false;
 
 	constructor(
@@ -204,6 +218,170 @@ describe("internal CRDT realtime session", () => {
 		});
 		expect(requests).toBe(2);
 		capability.release();
+	});
+
+	test("reconnects an established SSE epoch after a retryable socket failure without a terminal resource error", async () => {
+		const opens: Record<string, unknown>[] = [];
+		const streamControllers: ReadableStreamDefaultController<Uint8Array>[] = [];
+		const delivered: number[] = [];
+		const errors: Error[] = [];
+		const epochEnds: Error[] = [];
+		let sinceSeq = 0;
+		const manager = new SseConnectionManager({
+			baseUrl: "http://localhost:3000",
+			withCredentials: true,
+			fetcher: async (_input, init) => {
+				opens.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+				const streamIndex = opens.length - 1;
+				return new Response(
+					new ReadableStream<Uint8Array>({
+						start(controller) {
+							streamControllers.push(controller);
+							controller.enqueue(
+								encoder.encode(
+									`event: session\ndata: ${JSON.stringify({
+										sessionId: `edge-${streamIndex + 1}`,
+										token: `control-${streamIndex + 1}`,
+										control: {
+											protocol: "questpie-realtime-topology",
+											versions: [2],
+										},
+									})}\n\n`,
+								),
+							);
+						},
+					}),
+					{ headers: { "content-type": "text/event-stream" } },
+				);
+			},
+			debounceMs: 0,
+			retryBaseMs: 1,
+			maxRetryMs: 1,
+			random: () => 0,
+		});
+		const release = manager.registerChannel({
+			id: "channel:news",
+			openPayload: () => ({
+				id: "channel:news",
+				channel: "news",
+				sinceSeq,
+			}),
+			desiredPayload: () => ({
+				kind: "channel",
+				id: "channel:news",
+				channel: "news",
+				sinceSeq,
+			}),
+			onEvent: (event) => {
+				const payload = JSON.parse(event.data) as { seq?: unknown };
+				if (typeof payload.seq !== "number") return;
+				sinceSeq = payload.seq;
+				delivered.push(payload.seq);
+			},
+			onError: (error) => errors.push(error),
+			onEpochEnd: (error) => epochEnds.push(error),
+		});
+
+		await waitFor(() => streamControllers.length === 1);
+		streamControllers[0]!.enqueue(
+			encoder.encode(
+				`event: channel_event\ndata: ${JSON.stringify({ topologyEntryId: "channel:news", seq: 1 })}\n\n`,
+			),
+		);
+		await waitFor(() => delivered.length === 1);
+		streamControllers[0]!.error(
+			new Error("The socket connection was closed unexpectedly"),
+		);
+
+		await waitFor(() => streamControllers.length === 2);
+		expect(opens).toEqual([
+			{
+				topics: [],
+				channels: [{ id: "channel:news", channel: "news", sinceSeq: 0 }],
+			},
+			{
+				topics: [],
+				channels: [{ id: "channel:news", channel: "news", sinceSeq: 1 }],
+			},
+		]);
+		streamControllers[1]!.enqueue(
+			encoder.encode(
+				[
+					`event: channel_event\ndata: ${JSON.stringify({ topologyEntryId: "channel:news", seq: 2 })}`,
+					`event: channel_event\ndata: ${JSON.stringify({ topologyEntryId: "channel:news", seq: 3 })}`,
+					"",
+				].join("\n\n"),
+			),
+		);
+		await waitFor(() => delivered.length === 3);
+
+		expect(delivered).toEqual([1, 2, 3]);
+		expect(epochEnds.map((error) => error.message)).toEqual([
+			"The socket connection was closed unexpectedly",
+		]);
+		expect(errors).toEqual([]);
+		release();
+	});
+
+	test("fails closed when an established SSE resource reconnect receives a permanent authorization response", async () => {
+		let requests = 0;
+		let streamController:
+			| ReadableStreamDefaultController<Uint8Array>
+			| undefined;
+		const errors: Error[] = [];
+		const manager = new SseConnectionManager({
+			baseUrl: "http://localhost:3000",
+			withCredentials: true,
+			fetcher: async () => {
+				requests += 1;
+				if (requests > 1) {
+					return Response.json({ error: "unauthorized" }, { status: 401 });
+				}
+				return new Response(
+					new ReadableStream<Uint8Array>({
+						start(controller) {
+							streamController = controller;
+							controller.enqueue(
+								encoder.encode(
+									`event: session\ndata: ${JSON.stringify({
+										sessionId: "authorized-edge",
+										token: "authorized-control",
+										control: {
+											protocol: "questpie-realtime-topology",
+											versions: [2],
+										},
+									})}\n\n`,
+								),
+							);
+						},
+					}),
+				);
+			},
+			debounceMs: 0,
+			retryBaseMs: 1,
+			maxRetryMs: 1,
+			random: () => 0,
+		});
+		const release = manager.registerChannel({
+			id: "channel:private",
+			openPayload: () => ({ id: "channel:private" }),
+			desiredPayload: () => ({ kind: "channel", id: "channel:private" }),
+			onEvent: () => {},
+			onError: (error) => errors.push(error),
+		});
+
+		try {
+			await waitFor(() => !!streamController);
+			streamController!.error(new Error("socket closed"));
+			await waitFor(() => requests >= 2);
+			await Bun.sleep(20);
+			expect(errors.map((error) => error.message)).toEqual([
+				"Realtime connection failed: 401",
+			]);
+			expect(requests).toBe(2);
+		} finally {
+			release();
+		}
 	});
 
 	test("opens one control-only SSE edge for CRDT and releases it after the final reference", async () => {
@@ -625,6 +803,94 @@ describe("internal CRDT realtime session", () => {
 		} catch {
 			// The failed control request may already have aborted the stream.
 		}
+	});
+
+	test("releases a CRDT binding after retryable SSE control failure so the caller can retry", async () => {
+		const opens: Record<string, unknown>[] = [];
+		let controls = 0;
+		const streamControllers: ReadableStreamDefaultController<Uint8Array>[] = [];
+		const fetcher: typeof fetch = async (input, init) => {
+			const url = String(input);
+			if (!url.endsWith("/realtime")) {
+				throw new Error(`Unexpected request: ${url}`);
+			}
+			const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+			if (body.sessionId) {
+				controls += 1;
+				return Response.json(
+					{ error: { code: "REALTIME_TOPOLOGY_STORAGE_UNAVAILABLE" } },
+					{ status: 503 },
+				);
+			}
+			opens.push(body);
+			const sequence = opens.length;
+			return new Response(
+				new ReadableStream<Uint8Array>({
+					start(controller) {
+						streamControllers.push(controller);
+						controller.enqueue(
+							encoder.encode(
+								`event: session\ndata: ${JSON.stringify({
+									sessionId: `retryable-edge-${sequence}`,
+									token: `retryable-control-${sequence}`,
+									control: {
+										protocol: "questpie-realtime-topology",
+										versions: [2],
+									},
+								})}\n\n`,
+							),
+						);
+						init?.signal?.addEventListener(
+							"abort",
+							() => controller.error(new DOMException("Aborted", "AbortError")),
+							{ once: true },
+						);
+					},
+				}),
+				{ headers: { "content-type": "text/event-stream" } },
+			);
+		};
+		const manager = new SseConnectionManager({
+			baseUrl: "http://localhost:3000",
+			withCredentials: true,
+			fetcher,
+			debounceMs: 0,
+			retryBaseMs: 1,
+			maxRetryMs: 1,
+			random: () => 0,
+		});
+		const capability = await manager.acquire();
+		let dirty = 0;
+		const errors: Error[] = [];
+
+		await expect(
+			capability.register({
+				kind: "crdt",
+				id: "crdt:retryable",
+				bindingId: "binding-retryable",
+				onDirty: () => {
+					dirty += 1;
+				},
+				onError: (error) => errors.push(error),
+			}),
+		).rejects.toThrow("Realtime CRDT topology registration failed");
+		await waitFor(() => streamControllers.length === 2);
+		expect(controls).toBe(1);
+		expect(opens).toEqual([
+			{ topics: [], channels: [], crdtHold: true },
+			{ topics: [], channels: [], crdtHold: true },
+		]);
+		expect(errors).toEqual([]);
+
+		streamControllers[1]!.enqueue(
+			encoder.encode(
+				`event: crdt_dirty\ndata: ${JSON.stringify({ topologyEntryId: "crdt:retryable" })}\n\n`,
+			),
+		);
+		await Bun.sleep(10);
+		expect(dirty).toBe(0);
+
+		capability.release();
 	});
 
 	test("holds a zero-query Pusher edge and coalesces targeted CRDT dirty notices", async () => {

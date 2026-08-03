@@ -16,6 +16,7 @@ type TopologyResource = {
 	desiredPayload(): Record<string, unknown>;
 	onEvent(event: RealtimeSseEvent): void;
 	onError(error: Error): void;
+	onEpochEnd?(error: Error): void;
 };
 
 type ControlSession = {
@@ -30,8 +31,8 @@ class DispatchedRealtimeControlError extends Error {
 	}
 }
 
-class PermanentInitialSseError extends Error {
-	override readonly name = "PermanentInitialSseError";
+class TerminalSseError extends Error {
+	override readonly name = "TerminalSseError";
 }
 
 function normalizedError(error: unknown): Error {
@@ -60,7 +61,6 @@ export class SseConnectionManager {
 	private desiredRevision = 0;
 	private flushPromise: Promise<void> | null = null;
 	private holdCount = 0;
-	private hasEstablishedSession = false;
 	private readonly sessionWaiters = new Set<{
 		resolve(session: ControlSession): void;
 		reject(error: Error): void;
@@ -96,6 +96,7 @@ export class SseConnectionManager {
 		desiredPayload(): Record<string, unknown>;
 		onEvent(event: RealtimeSseEvent): void;
 		onError(error: Error): void;
+		onEpochEnd?(error: Error): void;
 	}): () => void {
 		return this.register(options.id, { kind: "channel", ...options });
 	}
@@ -239,7 +240,6 @@ export class SseConnectionManager {
 
 	private applyTopologyChange(): void {
 		if (!this.hasDemand()) {
-			this.hasEstablishedSession = false;
 			if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
 			this.reconnectTimer = null;
 			this.abortController?.abort();
@@ -306,39 +306,36 @@ export class SseConnectionManager {
 				const error = new Error(
 					`Realtime connection failed: ${response.status}`,
 				);
-				if (
-					!this.hasEstablishedSession &&
-					isPermanentInitialStatus(response.status)
-				) {
-					throw new PermanentInitialSseError(error.message);
+				if (isTerminalHttpStatus(response.status)) {
+					throw new TerminalSseError(error.message);
 				}
 				throw error;
 			}
 			if (!response.body) {
-				const error = new Error("Realtime response has no body");
-				if (!this.hasEstablishedSession) {
-					throw new PermanentInitialSseError(error.message);
-				}
-				throw error;
+				throw new TerminalSseError("Realtime response has no body");
 			}
 			this.armWatchdog();
 			await this.readStream(response.body);
 			throw new Error("Realtime stream closed");
 		} catch (error) {
-			if (!this.hasDemand()) return;
 			const normalized = normalizedError(error);
-			if (normalized instanceof PermanentInitialSseError) {
+			if (!this.hasDemand()) return;
+			if (normalized instanceof TerminalSseError) {
 				this.rejectSessionWaiters(normalized);
 				this.notifyAll(normalized);
 				this.reconnectPending = false;
 				return;
 			}
-			if (normalized.name === "AbortError" && !this.watchdogTriggered) return;
-			if (
-				!this.watchdogTriggered &&
-				normalized.message !== "Realtime stream closed"
-			) {
-				this.notifyAll(normalized);
+			if (normalized.name === "AbortError" && !this.watchdogTriggered) {
+				if (this.reconnectPending) {
+					for (const resource of this.resources.values()) {
+						resource.onEpochEnd?.(normalized);
+					}
+				}
+				return;
+			}
+			for (const resource of this.resources.values()) {
+				resource.onEpochEnd?.(normalized);
 			}
 			const retryBaseMs = this.options.retryBaseMs ?? 1000;
 			const maxRetryMs = this.options.maxRetryMs ?? 30_000;
@@ -420,12 +417,21 @@ export class SseConnectionManager {
 							const payload = (await response.json().catch(() => null)) as {
 								error?: unknown;
 							} | null;
+							if (isExpiredControlSession(response.status, payload?.error)) {
+								throw new Error(`Realtime control failed: ${response.status}`);
+							}
 							if (payload?.error && this.dispatchControlError(payload.error)) {
 								throw new DispatchedRealtimeControlError(
 									new Error(`Realtime control failed: ${response.status}`),
 								);
 							}
-							throw new Error(`Realtime control failed: ${response.status}`);
+							const error = new Error(
+								`Realtime control failed: ${response.status}`,
+							);
+							if (isTerminalControlStatus(response.status)) {
+								throw new TerminalSseError(error.message);
+							}
+							throw error;
 						}
 					});
 				this.controlOperation = operation;
@@ -435,8 +441,15 @@ export class SseConnectionManager {
 			}
 		})()
 			.catch((error) => {
-				if (!(error instanceof DispatchedRealtimeControlError)) {
-					this.notifyAll(normalizedError(error));
+				const normalized = normalizedError(error);
+				if (normalized instanceof TerminalSseError) {
+					this.reconnectPending = false;
+					try {
+						this.notifyAll(normalized);
+					} finally {
+						this.abortController?.abort();
+					}
+					return;
 				}
 				this.reconnectPending = true;
 				this.abortController?.abort();
@@ -508,22 +521,16 @@ export class SseConnectionManager {
 					sessionId: session.sessionId,
 					token: session.token,
 				};
-				this.hasEstablishedSession = true;
 				for (const waiter of this.sessionWaiters) {
 					waiter.resolve(this.controlSession);
 				}
 				void this.flushDesiredTopology();
 			} catch (error) {
 				const normalized = normalizedError(error);
-				if (!this.hasEstablishedSession) {
-					const permanent = new PermanentInitialSseError(normalized.message);
-					this.rejectSessionWaiters(permanent);
-					this.notifyAll(permanent);
-					this.reconnectPending = false;
-				} else {
-					this.notifyAll(normalized);
-					this.reconnectPending = true;
-				}
+				const terminal = new TerminalSseError(normalized.message);
+				this.rejectSessionWaiters(terminal);
+				this.notifyAll(terminal);
+				this.reconnectPending = false;
 				this.abortController?.abort();
 			}
 			return;
@@ -625,7 +632,13 @@ export class SseConnectionManager {
 	}
 
 	private notifyAll(error: Error): void {
-		for (const resource of this.resources.values()) resource.onError(error);
+		for (const resource of this.resources.values()) {
+			try {
+				resource.onError(error);
+			} catch {
+				// One consumer callback cannot break terminal delivery to its siblings.
+			}
+		}
 	}
 
 	private rejectSessionWaiters(error: Error): void {
@@ -650,12 +663,23 @@ export class SseConnectionManager {
 	}
 }
 
-function isPermanentInitialStatus(status: number): boolean {
+function isTerminalHttpStatus(status: number): boolean {
 	return (
 		status >= 400 &&
 		status < 500 &&
 		status !== 408 &&
 		status !== 425 &&
 		status !== 429
+	);
+}
+
+function isTerminalControlStatus(status: number): boolean {
+	return isTerminalHttpStatus(status);
+}
+
+function isExpiredControlSession(status: number, value: unknown): boolean {
+	if (status !== 404 || !value || typeof value !== "object") return false;
+	return (
+		(value as Record<string, unknown>).code === "REALTIME_CONTROL_UNAVAILABLE"
 	);
 }

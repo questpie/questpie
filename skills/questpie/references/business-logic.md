@@ -267,7 +267,31 @@ Job handlers receive the base `AppContext` (see [Handler Context](#handler-conte
 
 Jobs require a queue adapter in `questpie.config.ts` (`runtimeConfig({ queue: { adapter } })`). Adapter shapes (pg-boss, BullMQ, Cloudflare Queues) and connection options: `references/infrastructure-adapters.md`.
 
-Email delivery is an application recipe, not a second subsystem: define a typed send-mail Job, call `email.sendTemplate()` in its handler, and dispatch it with `queue.<job>.publish()`. There is no `email.enqueueTemplate()` or mail-specific outbox. Avoid secret-bearing Queue payloads; generic payload encryption is a separate Queue security follow-up.
+Email delivery is an application recipe, not a second subsystem: define a typed send-mail Job, call `email.sendTemplate()` in its handler, and dispatch it with `queue.<job>.publish()`. There is no `email.enqueueTemplate()` or mail-specific outbox.
+
+When a Better Auth mutation and its verification dispatch must commit atomically,
+use `withAuthTransactionalQueue()` from `questpie/auth` inside a Better Auth
+plugin hook. The callback exposes only the transaction-scoped Auth adapter and a
+publisher for a concrete Job registered by the app:
+
+```ts
+import { withAuthTransactionalQueue } from "questpie/auth";
+
+await withAuthTransactionalQueue(ctx, async ({ auth, publish }) => {
+	await auth.create({ model: "verification", data: verification });
+	await publish(
+		sendVerificationJob,
+		{ verificationId: verification.id },
+		{
+			idempotencyKey: `auth-verification:${verification.id}`,
+		},
+	);
+});
+```
+
+The Queue intent joins the Auth database transaction and is encrypted at rest.
+Provider I/O still belongs in the Job handler after commit; the bridge does not
+expose the general Queue client to sibling Auth plugins.
 
 ## Raw Routes
 

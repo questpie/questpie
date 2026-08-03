@@ -1,5 +1,96 @@
 # questpie
 
+## 3.21.1
+
+### Patch Changes
+
+- [#220](https://github.com/questpie/questpie/pull/220) [`5c5f5b6`](https://github.com/questpie/questpie/commit/5c5f5b672acfeca55cf7ffd6db97dec535997bfe) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Reconnect retryable SSE transport failures without terminating channel consumers, while preserving fail-closed authorization, protocol, and replay-gap errors.
+
+## 3.21.0
+
+### Minor Changes
+
+- [#214](https://github.com/questpie/questpie/pull/214) [`fb6653a`](https://github.com/questpie/questpie/commit/fb6653a8b41d5c7e61bf4fa209b2ec86cf91ec7b) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add a typed Better Auth integration bridge that atomically commits Auth state and an encrypted, idempotent QUESTPIE Queue dispatch.
+
+## 3.20.1
+
+### Patch Changes
+
+- [#215](https://github.com/questpie/questpie/pull/215) [`4e4ea31`](https://github.com/questpie/questpie/commit/4e4ea3174bce830b1a8efa95faf381aa36b88b24) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Fence Channel replay, live delivery, presence, and stale subscription callbacks when a shared Pusher connection leaves its connected epoch, then re-admit mounted subscribers only after the fresh subscription replay completes.
+
+## 3.20.0
+
+### Minor Changes
+
+- [#212](https://github.com/questpie/questpie/pull/212) [`030c5dd`](https://github.com/questpie/questpie/commit/030c5dd09be7798fcb696e4e47312c758e855930) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add `onReady` to channel subscriptions — a provider-neutral signal that the
+  subscription is authorized **and** has finished replay catch-up.
+
+  ```ts
+  client.channels.subscribe("space", { spaceId }, handler, {
+    onReady: () => {
+      // authorized, caught up; everything from here is live and complete
+    },
+  });
+  ```
+
+  Until now a subscriber had no way to tell "still replaying history" from
+  "caught up and live". The only callback was `onError`, so applications either
+  guessed with a timer or treated the first frame as readiness — which is wrong
+  whenever replay has more than one frame to deliver.
+
+  The signal fires once per transport subscription epoch and works the same way on
+  SSE and Pusher. On SSE the server emits a `channel_ready` control frame after
+  authorization and catch-up; the client orders it against replay and live
+  delivery so a subscriber never sees a live frame before its readiness callback.
+  Reconnects end the epoch and re-signal.
+
+  Presence subscriptions deliberately do not expose it —
+  `ChannelPresenceOptions` is `ChannelSubscribeOptions` without `onReady` — because
+  a presence read is one-shot and has no catch-up to complete.
+
+  Consumer callbacks are also isolated from one another: a throwing `onReady` or
+  `onError` in one subscriber no longer takes down delivery for its siblings.
+
+  The channel transports are also loaded on demand now, so an application that
+  never opens a channel no longer pays for them at all. Together with the change
+  above the browser entry chunk drops from 180.5 KB to 115.6 KB — roughly 65 KB
+  less than before this feature was added.
+
+## 3.19.2
+
+### Patch Changes
+
+- [#208](https://github.com/questpie/questpie/pull/208) [`8114e59`](https://github.com/questpie/questpie/commit/8114e5966ffce9ecc2dd1c3be844dfff065b8af3) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Keep app context resolver services isolated in a system context, including when resolution starts inside an ambient user request such as fresh realtime authorization.
+
+## 3.19.1
+
+### Patch Changes
+
+- [#205](https://github.com/questpie/questpie/pull/205) [`15a9f47`](https://github.com/questpie/questpie/commit/15a9f4726fdd68402532f3d6683b657e02a65863) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Fix Redis Streams dropping wakes published right after `start()`.
+
+  `RedisStreamsChangeBroker.start()` connected its reader and then launched the
+  read loop **without awaiting it**, and the loop opened with `XREAD … id="$"`.
+  `$` means "messages that arrive after this call reaches the server", so anything
+  published between `start()` resolving and the loop's first read was silently
+  dropped and never redelivered:
+
+  ```ts
+  await broker.start({ onWake });
+  await broker.publish(wake); // could vanish
+  ```
+
+  `pg-notify` never had this problem — its `start()` awaits `LISTEN`, so the
+  subscription exists before it returns. Two implementations of one `ChangeBroker`
+  interface were giving different delivery guarantees.
+
+  `start()` now resolves the concrete stream id first and reads from there, so it
+  means "subscribed from here" rather than "reader connected". Clients that cannot
+  report stream info fall back to `$`, which is no worse than before.
+
+  This is what a flaky CI failure in the realtime driver matrix turned out to be —
+  the test timed out on the full deadline rather than near it, which is the
+  signature of a message that never arrives rather than a slow one.
+
 ## 3.19.0
 
 ### Minor Changes

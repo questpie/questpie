@@ -18,7 +18,7 @@
 			"@questpie/sandbox",
 			"@questpie/tanstack-db",
 			"@questpie/tanstack-query",
-			"@questpie/tokens",
+			"@questpie/testing",
 			"@questpie/workflows"
 		]
 	],
