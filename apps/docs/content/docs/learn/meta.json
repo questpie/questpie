@@ -1,7 +1,7 @@
 {
 	"title": "Learn",
 	"pages": [
-		"index",
+		"[Overview](/docs/learn)",
 		"one-schema",
 		"first-app",
 		"first-collection",

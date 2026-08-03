@@ -1,4 +1,4 @@
 {
 	"title": "Agents",
-	"pages": ["index", "mcp", "mcp-oauth", "openapi"]
+	"pages": ["[Overview](/docs/agents)", "mcp", "mcp-oauth", "openapi"]
 }

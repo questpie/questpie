@@ -1,7 +1,7 @@
 {
 	"title": "Admin",
 	"pages": [
-		"index",
+		"[Overview](/docs/admin)",
 		"collections",
 		"configuration",
 		"custom-views",

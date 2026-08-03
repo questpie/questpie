@@ -1,7 +1,7 @@
 {
 	"title": "Schema",
 	"pages": [
-		"index",
+		"[Overview](/docs/schema)",
 		"collections",
 		"globals",
 		"fields",

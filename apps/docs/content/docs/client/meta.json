@@ -1,7 +1,7 @@
 {
 	"title": "Client",
 	"pages": [
-		"index",
+		"[Overview](/docs/client)",
 		"sdk",
 		"i18n",
 		"tanstack-query",
