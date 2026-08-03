@@ -53,9 +53,20 @@ Reach for `starterModule` when you want auth tables and no admin UI.
 
 ## Write one
 
-A module is a plain object. `module()` is an identity function. It returns your
-object unchanged, so it costs nothing at runtime. It is there to check the shape
-and carry your object's type forward.
+A module is a plain object, and there are two ways to arrive at one.
+
+Write the object yourself, which the rest of this section shows. Or lay the
+module out as directories and let codegen build the object, which
+[Publishing](/docs/code/modules/publishing) covers. Both produce the same
+shape, so nothing downstream can tell them apart.
+
+Pick by size. The object form suits a module you can read in one screen. Every
+module QUESTPIE ships uses the directory form, because `core` alone carries
+three jobs and more than a dozen routes.
+
+`module()` is an identity function. It returns your object unchanged, so it
+costs nothing at runtime. It is there to check the shape and carry your
+object's type forward.
 
 ```ts title="src/questpie/server/blog-module.ts"
 import { module } from "questpie/app";
