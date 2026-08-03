@@ -322,9 +322,10 @@ Only hyphen-case is camelized; underscores are preserved. Use `global("siteSetti
 
 ### Runtime Merging (`create-app.ts`)
 
-- **`MERGE_FNS`**: `Map<string, MergeFn>` — per-key merge functions for module keys such as collections, routes, services, messages, migrations, seeds, and the `config` bucket. No string strategies, no switch statements.
+- **`MERGE_FNS`**: `Map<string, MergeFn>` — per-key merge functions for module keys such as collections, routes, services, messages, migrations, seeds, and the `config` bucket. Core-owned and module-private: nothing outside `create-app.ts` can add an entry. A module key that is not listed falls to the generic merge — array + array concatenates, object + object spreads, otherwise incoming wins. That generic branch is how every plugin key travels; it is the extension point, not `MERGE_FNS`.
+- **`CONFIG_KEY_MERGE`**: same shape, one level down, for sub-properties of a `config` key. Also core-owned, and it holds one entry (`app`). `auth` and `admin` are hardcoded branches above it. Every other config key is last-wins on the whole object.
 - **`CONFIG_CONSUMED_KEYS`**: Derived from `MERGE_FNS.keys()` plus structural/derived keys. Keys NOT in this set flow to `instance.state` for plugins.
-- **`mergeRecord`, `mergeConcat`, `lastWins`**: Exported reusable merge helpers for plugins.
+- **`mergeRecord`, `mergeConcat`, `lastWins`**: merge helpers exported from `questpie/app`. There is nothing to register them with, so they are only useful when editing the tables above.
 
 ## Codegen Output & Exports
 

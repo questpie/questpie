@@ -254,7 +254,10 @@ import {
 `questpie/codegen` is the entry point for plugin authors. It carries the types
 above and the emit helpers `categoryRecordEntry`, `categoryTypeEntry`,
 `importStatement`, `safeKey`, `sortedValues` and `sourceBasename`. It also
-exports `generateModule()`, for a package that builds its module at build time.
+exports `generateModuleTemplate()`, which a target with its own `generate` calls
+when `ctx.module` is set. To build a package's modules, put a
+`questpie.config.ts` at the package root with `packageConfig()` and run
+`questpie generate`. That is how the framework builds its own.
 
 ## Next
 

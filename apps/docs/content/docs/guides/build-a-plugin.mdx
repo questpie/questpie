@@ -30,7 +30,7 @@ plugin writes.
 ```
 src/questpie/server/
   webhook.ts           # the factory your files call
-  plugin.ts            # the plugin, codegen only
+  plugin.ts            # the plugin: build time here, also loaded at runtime once shipped in a module
   questpie.config.ts   # registers it
   webhooks/stripe.ts   # the new convention, in use
 ```
@@ -182,9 +182,13 @@ below the key.
 Move `plugin.ts` into a module directory in your package. Codegen puts it on
 that module's `plugin` key. The consuming app picks it up from `modules.ts` with
 no extra config. That is how `@questpie/admin` and `@questpie/mcp` install
-themselves. Give the plugin its own entry point, like `@acme/webhooks/plugin`.
-A config file importing it then does not pull in your runtime code.
-[Publishing](/docs/code/modules/publishing) has the layout.
+themselves. [Publishing](/docs/code/modules/publishing) has the layout.
+
+The `plugin` key holds a live value, not a specifier. On this path the plugin
+file and everything it imports load in the server process of every app that
+lists your module, so keep those imports light. Giving the plugin its own entry
+point, like `@acme/webhooks/plugin`, helps only on the other path, where an app
+registers it by hand in `questpie.config.ts`.
 
 ## Where each topic lives
 

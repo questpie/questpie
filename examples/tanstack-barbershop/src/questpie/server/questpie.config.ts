@@ -5,8 +5,6 @@
  * Entity definitions (collections, functions, etc.) are codegen-generated.
  * Sidebar, dashboard, branding, locale are file conventions.
  * Environment variables are declared + validated in `env.ts`.
- *
- * @see RFC-MODULE-ARCHITECTURE §8.1 (User Project)
  */
 
 import { ConsoleAdapter } from "questpie/adapters/console";
