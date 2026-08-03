@@ -150,8 +150,15 @@ taking work and finishes what it holds. It force-exits after
 `shutdownTimeoutMs`, which defaults to 10000. Pass `gracefulShutdown: false` to
 own that yourself.
 
-The app process is yours. Codegen writes `destroyApp()` beside `app`. The
-TanStack Start starter already calls it from a Nitro plugin on both signals.
+The app process is yours, because QUESTPIE ships no server.
+`createFetchHandler` hands you a handler and your template mounts it. A correct
+shutdown stops accepting, drains what is in flight, then releases resources.
+Only the server can do the first two, so QUESTPIE cannot trap the signal for
+you.
+
+Codegen writes `destroyApp()` beside `app`. The TanStack Start starter calls it
+from a Nitro plugin on both signals. The Hono, Elysia and Next starters do not,
+so add it yourself:
 
 ```ts
 import { destroyApp } from "#questpie";
