@@ -11,11 +11,13 @@ framework reads it.
 ## The model in one paragraph
 
 A **collection** is a database table. A **global** is a single row instead of a
-list, for the things a site has exactly one of. Both hold **fields**, and a field
-decides three things at once: the column in Postgres, the control in the admin,
-and the validation on the way in. The rest of this group changes what happens
-around that data rather than its shape. Who may read a row, what runs before a
-write, how two tables point at each other.
+list, for the things a site has exactly one of. Both hold **fields**. A field decides
+three things at once. The column in Postgres, the control in the admin, and the
+validation on the way in.
+
+The rest of this group changes what happens around your data, not its shape.
+Who may read a row. What runs before a write. How two tables point at each
+other.
 
 ## What is here
 

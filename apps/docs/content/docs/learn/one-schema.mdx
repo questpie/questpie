@@ -44,7 +44,7 @@ export const news = collection("news").fields(({ f }) => ({
 ```
 
 In `collections/`, `globals/`, `channels/` and `fields/` the generator matches on
-the factory call, so a helper file with none is skipped and a file with two
+the factory call. A helper file with no factory call is skipped. A file with two
 `collection()` exports produces two collections.
 
 ## How a declaration is named
@@ -174,11 +174,13 @@ questpie add --list
 `.generated` is absent from the template `.gitignore` on purpose. It is source,
 and you commit it. Two reasons.
 
-Your editor resolves `#questpie` to those files, so a fresh clone that has not
-run codegen fails to type-check. And the Next and TanStack Start `Dockerfile`
-copies the tree and runs `build` with no generate step in between, so a missing
-`.generated` breaks the image. The Hono and Elysia one runs
-`scaffold:generate` first, which regenerates from the same sources anyway.
+Your editor resolves `#questpie` to those files. A fresh clone that has not run
+codegen fails to type-check.
+
+The Next and TanStack Start `Dockerfile` copies the tree and runs `build`. There
+is no generate step in between, so a missing `.generated` breaks the image. The
+Hono and Elysia one runs `scaffold:generate` first, which regenerates from the
+same sources anyway.
 
 Reading the diff is the point. Adding a collection shows up as one import and one
 registry entry, reviewable like any hand-written route.
