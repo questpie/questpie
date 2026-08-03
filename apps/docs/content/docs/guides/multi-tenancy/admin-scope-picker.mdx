@@ -1,0 +1,144 @@
+---
+title: The admin scope picker
+description: Every export the scope system ships, the props each one takes, and the one wiring mistake that leaves the dropdown changing nothing.
+kind: reference
+package: "@questpie/admin"
+---
+
+Six exports, all from `@questpie/admin/client`.
+
+| Export              | What it is                                            |
+| ------------------- | ----------------------------------------------------- |
+| `ScopeProvider`     | React provider holding the selected scope id          |
+| `useScope`          | Reads and sets the scope. Throws outside the provider |
+| `useScopeSafe`      | Same, but returns `null` outside the provider         |
+| `useScopedFetch`    | A `fetch` wrapper that sets the scope header          |
+| `createScopedFetch` | The same wrapper, for code outside React              |
+| `ScopePicker`       | The dropdown                                          |
+
+## `ScopeProvider`
+
+Holds the selection and persists it. Wrap it above `AdminProvider` or
+`AdminLayoutProvider`.
+
+```tsx
+<ScopeProvider
+	headerName="x-tenant-id"
+	storageKey="admin-tenant"
+	defaultScope={null}
+>
+	<AdminProvider {...props}>{children}</AdminProvider>
+</ScopeProvider>
+```
+
+| Prop           | Type             | Default  | What it does                                               |
+| -------------- | ---------------- | -------- | ---------------------------------------------------------- |
+| `headerName`   | `string`         | required | The header carrying the scope id. Match your resolver.     |
+| `storageKey`   | `string`         | none     | `localStorage` key. Omit and the choice is lost on reload. |
+| `defaultScope` | `string \| null` | `null`   | Used when nothing is stored.                               |
+
+Selecting a scope writes to `localStorage`. Clearing it removes the entry. All
+`localStorage` errors are swallowed, so private browsing degrades to a
+non-persistent picker rather than a crash.
+
+## Reading the scope
+
+```tsx
+import { useScope } from "@questpie/admin/client";
+
+function TenantBadge() {
+	const { scopeId } = useScope();
+	return <span>Active tenant: {scopeId ?? "all"}</span>;
+}
+```
+
+`useScope()` returns `{ scopeId, setScope, clearScope, headerName, isLoading }`.
+It throws outside a `ScopeProvider`. `useScopeSafe()` returns `null` instead, so
+use it to test whether scoping is switched on at all.
+
+## Sending the scope
+
+The provider only holds a value. Something has to put it on the wire.
+
+```tsx
+const scopedFetch = useScopedFetch();
+const client = useMemo(
+	() =>
+		createClient<AppConfig>({
+			baseURL: window.location.origin,
+			basePath: "/api",
+			fetch: scopedFetch,
+		}),
+	[scopedFetch],
+);
+```
+
+The wrapper sets your `headerName` to `scopeId` on every request. It skips the
+header entirely when `scopeId` is null, so clearing the picker sends nothing.
+
+Outside React, use `createScopedFetch(headerName, () => currentScopeId)`. Same
+behaviour, no hook.
+
+<Callout type="warn" title="`AdminLayoutProvider` does not scope your client">
+	It passes the `client` you gave it straight to `AdminProvider`. It never wraps
+	it. Hand it a plain client and the picker changes `scopeId` while every
+	response stays the same.
+</Callout>
+
+## `ScopePicker`
+
+The dropdown. Options come from one of three sources, in this order: static
+`options`, then a `collection`, then an async `loadOptions`. The first one you
+supply wins.
+
+```tsx
+<ScopePicker
+	collection="tenants"
+	labelField="name"
+	valueField="id"
+	placeholder="Select tenant..."
+	allowClear
+	clearText="All tenants"
+	compact
+/>
+```
+
+| Prop          | Type                           | Default       | What it does                                          |
+| ------------- | ------------------------------ | ------------- | ----------------------------------------------------- |
+| `collection`  | `string`                       | none          | Collection to fetch options from.                     |
+| `labelField`  | `string`                       | `"name"`      | Field used as each option's label.                    |
+| `valueField`  | `string`                       | `"id"`        | Field used as each option's value, the scope id.      |
+| `options`     | `ScopeOption[]`                | none          | Static options. Beats `collection` and `loadOptions`. |
+| `loadOptions` | `() => Promise<ScopeOption[]>` | none          | Async loader.                                         |
+| `placeholder` | `string`                       | `"Select..."` | Shown when nothing is selected.                       |
+| `label`       | `string`                       | none          | Text above the picker. Hidden in `compact`.           |
+| `allowClear`  | `boolean`                      | `false`       | Adds an option that calls `setScope(null)`.           |
+| `clearText`   | `string`                       | `"All"`       | Text for that option.                                 |
+| `compact`     | `boolean`                      | `false`       | Smaller, no label. Fits a sidebar slot.               |
+| `className`   | `string`                       | none          | Extra classes on the wrapper.                         |
+
+`ScopeOption` is `{ value, label, description?, icon? }`.
+
+The `collection` source calls `find({ limit: 100, columns: { [valueField]: true,
+[labelField]: true } })` and maps each row to `{ value, label }`. Results are
+cached for a minute. A tenant list longer than 100 needs `loadOptions`.
+
+<Callout type="warn" title="The options collection must survive its own scope">
+	`ScopePicker` reads through the same scoped client. So the tenant list itself
+	must stay readable across scopes. Scope the content collections that hang off
+	it, not the directory collection.
+</Callout>
+
+## Placing it in the sidebar
+
+`sidebarProps.afterBrand` is the slot under the brand.
+
+```tsx
+sidebarProps={{ afterBrand: <ScopePicker collection="tenants" allowClear compact /> }}
+```
+
+The slot renders only when the sidebar is expanded. Collapse the sidebar and
+the picker is hidden, though the selection is untouched.
+
+`ScopeContextValue`, `ScopeOption`, `ScopeProviderProps` and `ScopePickerProps`
+are exported as types from the same entry point.

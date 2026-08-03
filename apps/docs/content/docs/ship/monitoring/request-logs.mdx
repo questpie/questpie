@@ -1,0 +1,133 @@
+---
+title: Request logs
+description: Every option under logger.requests, the order the filters run in, which level a request lands at, and the exact shape of the record.
+kind: reference
+package: questpie
+---
+
+## The options
+
+`logger.requests` takes `true`, `false`, or an object. Leaving it unset behaves
+like `true`, which behaves like `{}`. `false` turns access logging off entirely.
+
+| Key                     | Type                   | Default | What it does                                            |
+| ----------------------- | ---------------------- | ------- | ------------------------------------------------------- |
+| `enabled`               | `boolean`              | `true`  | Set `false` to stop the lines. Ids and metrics survive. |
+| `logSuccessfulRequests` | `boolean`              | `true`  | Set `false` to drop lines under 400 that are not slow.  |
+| `slowThresholdMs`       | `number`               | `1000`  | At or above this a request is marked slow.              |
+| `ignorePaths`           | `(string \| RegExp)[]` | `[]`    | Drop lines under 400 whose path matches.                |
+| `ignore`                | `(meta) => boolean`    | unset   | Your own filter. Return true to drop any line.          |
+
+```ts title="src/questpie/server/questpie.config.ts"
+logger: {
+	requests: {
+		slowThresholdMs: 1000,
+		logSuccessfulRequests: false,
+		ignorePaths: ["/api/health", "/api/health/live"],
+		ignore: (meta) => meta.path.startsWith("/api/internal/"),
+	},
+}
+```
+
+## The order the filters run in
+
+Four checks, in this order. The first one that matches drops the line.
+
+1. `enabled` is false.
+2. `ignore(meta)` returns true.
+3. The status is under 400 and `ignorePaths` matches.
+4. The status is under 400, the request was not slow, and
+   `logSuccessfulRequests` is false.
+
+The checks never interact. A line is dropped when any of the four matches. Order
+only decides how early the work stops. It does mean `ignore` runs on every
+request while logging is on.
+
+Two things follow from the conditions themselves.
+
+**`ignore` drops errors as well.** It is the only check without a status
+condition. A 500 matching your `ignore` function is never logged. The other
+three only ever suppress successes, so a failing health check still writes a
+line.
+
+**`ignorePaths` does not spare slow requests.** Check 3 never looks at `slow`,
+so a successful but slow request on an ignored path is dropped too. Use `ignore`
+with your own condition if you want slow probes visible.
+
+<Callout type="warn" title="ignorePaths matches the full pathname">
+	Including the base path. Under a handler mounted at `/api` the value is
+	`/api/health`, not `/health`. A string has to match exactly. Pass a `RegExp`
+	when it should not.
+</Callout>
+
+## Which level a request lands at
+
+| Status             | Level   |
+| ------------------ | ------- |
+| 500 and up         | `error` |
+| 400 to 499         | `warn`  |
+| Under 400 and slow | `warn`  |
+| Everything else    | `info`  |
+
+`slow` is set when `durationMs` is at or above `slowThresholdMs`. That duration
+covers the whole dispatch, from parsing the URL to holding a finished response.
+Route matching, session resolution and your handler are all inside it.
+
+## The record
+
+The message is always `HTTP request completed`. The fields sit beside it.
+
+| Field        | Type      | Present                     |
+| ------------ | --------- | --------------------------- |
+| `event`      | `string`  | Always, as `http.request`   |
+| `requestId`  | `string`  | Always                      |
+| `traceId`    | `string`  | Always                      |
+| `method`     | `string`  | Always                      |
+| `path`       | `string`  | Always, the full pathname   |
+| `status`     | `number`  | Always                      |
+| `durationMs` | `number`  | Always, rounded to 2 places |
+| `slow`       | `boolean` | Always                      |
+| `route`      | `string`  | When a route matched        |
+| `error`      | `object`  | When something threw        |
+
+`route` is the matched pattern with the base path stripped and no leading slash.
+It is absent when routing found nothing. A 404 raised inside a handler still
+carries it, because a route did match.
+
+Watch what that means for collections. Every collection is served by one
+parameterized route, so a request to `/api/posts/42` logs `path` as
+`/api/posts/42` and `route` as `:collection/:id`. All your collections share
+that pattern. Group on `path` when you need them apart.
+
+`error` carries `name` and `message`, and nothing else. It appears only when a
+handler threw. A handler that returns a 500 rather than raising still logs at
+`error` level, but with no `error` object beside it.
+
+Records written inside a request also pick up `trace_id` and `span_id` from the
+open span, once an observability adapter is wired. See
+[Instrumented seams](/docs/infrastructure/observability/seams).
+
+## Overriding per handler
+
+`createFetchHandler` takes the same shape under `requestLogging`. It replaces
+the config value outright rather than merging into it, so a partial object there
+drops back to defaults for everything you left out.
+
+```ts title="src/index.ts"
+const handler = createFetchHandler(questpie, {
+	basePath: "/api",
+	requestLogging: { logSuccessfulRequests: false },
+});
+```
+
+That is the seam to use when one process should log differently from another,
+such as a worker beside an app.
+
+## Turning it off without losing anything
+
+`enabled: false` stops the lines. It stops nothing else.
+
+The request id and trace id are still derived, still stamped on the span, and
+still returned as `x-request-id` and `x-trace-id`. The
+`http.server.request.duration` histogram is still recorded. So an app whose
+platform already writes access logs can drop QUESTPIE's without going blind.

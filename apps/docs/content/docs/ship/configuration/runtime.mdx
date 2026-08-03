@@ -1,0 +1,180 @@
+---
+title: Runtime options
+description: Every key runtimeConfig() accepts, the four shapes a database connection can take, what the storage object allows, and which QUESTPIE_* variables fill the gaps.
+kind: reference
+package: questpie
+---
+
+| Key             | Type                                        | Default                    |
+| --------------- | ------------------------------------------- | -------------------------- |
+| `app`           | `{ url: string }`                           | from env                   |
+| `db`            | `DbConfig`                                  | from env, else throws      |
+| `secret`        | `string`                                    | from env, else `undefined` |
+| `storage`       | `StorageConfig`                             | local `./uploads`          |
+| `email`         | `MailerConfig`                              | none, and boot throws      |
+| `queue`         | `{ adapter: QueueAdapter }`                 | none                       |
+| `search`        | `SearchAdapter`                             | Postgres full-text         |
+| `kv`            | `KVConfig`                                  | in-memory                  |
+| `realtime`      | `true \| RealtimeConfig`                    | the defaults               |
+| `crdt`          | `CrdtRuntimeConfig`                         | dormant, see below         |
+| `logger`        | `LoggerConfig`                              | built-in logger            |
+| `observability` | `ObservabilityConfig`                       | no-op                      |
+| `executor`      | `ExecutorConfig`                            | disabled                   |
+| `translations`  | `TranslationsConfig`                        | module messages only       |
+| `autoMigrate`   | `boolean`                                   | off                        |
+| `autoSeed`      | `boolean \| SeedCategory \| SeedCategory[]` | off                        |
+| `cli`           | `{ migrations?, seeds? }`                   | see below                  |
+| `plugins`       | `readonly CodegenPlugin[]`                  | none                       |
+
+Every key is optional at the call site. `RuntimeConfigInput` marks `app` and
+`db` optional so the environment can supply them. Only the resolved
+`RuntimeConfig` requires the pair. `crdt` stays dormant until some collection is
+collaborative, so most apps never set it.
+
+## Resolution from the environment
+
+Four keys are resolved when you leave them out. Your value wins, then the
+`QUESTPIE_*` name that QUESTPIE Cloud injects, then the standard name.
+
+| Field     | QUESTPIE Cloud       | Standard             | If neither              |
+| --------- | -------------------- | -------------------- | ----------------------- |
+| `app.url` | `QUESTPIE_APP_URL`   | `APP_URL`            | `http://localhost:3000` |
+| `db`      | `QUESTPIE_DB`        | `DATABASE_URL`       | throws                  |
+| `secret`  | `QUESTPIE_SECRET`    | `BETTER_AUTH_SECRET` | `undefined`             |
+| `storage` | `QUESTPIE_STORAGE_*` | none                 | local `./uploads`       |
+
+Resolution happens inside `runtimeConfig()`, at import time. A missing database
+fails there, not on the first query.
+
+### The storage variables
+
+Storage auto-configures an S3-compatible adapter when four variables are set:
+`QUESTPIE_STORAGE_ENDPOINT`, `QUESTPIE_STORAGE_BUCKET`,
+`QUESTPIE_STORAGE_ACCESS_KEY` and `QUESTPIE_STORAGE_SECRET_KEY`.
+`QUESTPIE_STORAGE_REGION` is optional and defaults to `auto`.
+
+Set the endpoint but miss one of the other three and you get a warning, then
+local storage. Nothing fails, so watch the logs on a first deploy.
+
+<Callout type="warn" title="The S3 adapter loads late">
+	The AWS SDK import waits for the first storage call. A missing package
+	surfaces on upload, not at boot. Install `@aws-sdk/client-s3`,
+	`@aws-sdk/lib-storage`, `@aws-sdk/s3-presigned-post` and
+	`@aws-sdk/s3-request-presigner`.
+</Callout>
+
+## `db`, four shapes
+
+`DbConfig` is a union. Pick the one that matches who owns the driver.
+
+| Shape              | Use it when                                       |
+| ------------------ | ------------------------------------------------- |
+| `{ url, pool? }`   | QUESTPIE opens the connection. The normal case.   |
+| `{ pglite }`       | You run Postgres in-process, usually in tests.    |
+| `{ drizzle, ... }` | You already built a Drizzle client. Neon, Vercel. |
+| `{ create }`       | The runtime owns the driver. Cloudflare Workers.  |
+
+`{ create }` receives the generated Drizzle schema and returns the client, so
+the binding stays outside the framework. It may also return
+`{ drizzle, connectionString, close }` when a feature needs a second session
+connection.
+
+### Pool tuning
+
+`pool` applies to `{ url }` only. All timeouts are milliseconds, and QUESTPIE
+converts to whatever unit the driver wants.
+
+| Key                   | Does                                         | Default                       |
+| --------------------- | -------------------------------------------- | ----------------------------- |
+| `max`                 | Connections in the pool                      | 10                            |
+| `connectionTimeoutMs` | How long to wait for a connection            | Bun 30000, node-postgres none |
+| `idleTimeoutMs`       | When to close an idle connection             | the driver's own              |
+| `maxLifetimeMs`       | Recycle a healthy connection after this long | `0`, no limit                 |
+| `prepare`             | Named prepared statements. Bun only.         | `true`                        |
+
+<Callout type="warn" title="node-postgres waits forever by default">
+	Its acquire timeout is unbounded. A Postgres at its connection cap will hang
+	the request instead of failing it. Set `connectionTimeoutMs` so you get an
+	error you can see.
+</Callout>
+
+Set `prepare: false` to route the pool through PgBouncer in transaction mode.
+
+## `storage`
+
+Pass an adapter or a location, never both. Three more keys apply either way.
+
+| Key                   | Does                                      | Default     |
+| --------------------- | ----------------------------------------- | ----------- |
+| `adapter`             | A Files SDK adapter, such as `s3(...)`    | none        |
+| `location`            | A local directory, relative or absolute   | `./uploads` |
+| `basePath`            | Path prefix for serving files             | `/`         |
+| `defaultVisibility`   | `"public"` or `"private"` for new uploads | `"public"`  |
+| `signedUrlExpiration` | Seconds a signed URL stays valid          | `3600`      |
+
+```ts
+import { s3 } from "files-sdk/s3";
+
+storage: { adapter: s3({ bucket: "uploads" }), basePath: "/api" }
+```
+
+The config is validated on the way in. An unknown key throws. `adapter` and
+`location` together throw. The removed `driver` and `files` keys throw too, with
+a message naming what replaced them.
+
+## `cli`
+
+Only CLI commands read this. It never reaches the running app.
+
+```ts
+cli: {
+	migrations: { directory: "./src/migrations" },
+}
+```
+
+Set the directory and it resolves from the working directory. Leave it out and
+`questpie migrate:generate` writes to `migrations/` next to your server config.
+`cli.seeds.directory` is on the type but no command reads it today.
+
+## Unknown keys reach the app
+
+A key `runtimeConfig()` does not recognise is not dropped. It lands on
+`app.state`, which is how a plugin reads its own runtime settings. Plugins type
+those keys by augmenting `RuntimeConfigExtensions`.
+
+```ts
+declare module "questpie" {
+	interface RuntimeConfigExtensions {
+		myPluginRuntime?: MyPluginRuntimeConfig;
+	}
+}
+```
+
+`@questpie/workflows` does exactly this with `workflowsRuntime`.
+
+## The root config file
+
+The CLI loads `questpie.config.ts` from the project root. In a scaffolded
+project it re-exports the real one.
+
+```ts title="questpie.config.ts"
+export { default } from "./src/questpie/server/questpie.config";
+```
+
+The CLI follows that re-export, then loads `.generated/index.ts` from beside the
+inner file to get the built app. Without that file the migrate, seed and push
+commands stop and tell you to run `questpie generate` first.
+
+## TypeScript
+
+```ts
+import type {
+	RuntimeConfig, // the resolved shape
+	RuntimeConfigInput, // what you pass in, app and db optional
+	RuntimeConfigExtensions, // the plugin augmentation point
+	DbConfig,
+	StorageConfig,
+} from "questpie";
+```
+
+`PackageConfig` and `QuestpieCliConfig` come from `questpie/cli` instead.

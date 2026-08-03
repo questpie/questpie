@@ -1,93 +1,182 @@
 ---
 title: Scaling
-description: Running multiple app replicas and workers, what each adapter requires once you leave a single process, and where the real limits are.
+description: What a second app replica gets for free, the two defaults that stay behind on one machine, and the arithmetic that decides your real ceiling.
+kind: guide
+package: questpie
 ---
 
-A single app process and a single worker will carry a surprising amount of load.
-Most of what follows only matters once you leave one of each.
+You have one app process and one worker. You want more of each. Most of that
+costs you nothing. This page is the part that does.
 
-## App replicas
+The app process keeps no request state. Sessions are rows in PostgreSQL, read
+through Better Auth's Drizzle adapter. Any replica can serve any request.
+Round-robin is fine, and you need no sticky sessions.
 
-The app process is stateless: session state lives in the database, and nothing is
-cached in memory that another replica needs. Adding replicas needs no
-configuration.
+## What a second replica already shares
 
-Two things stop being free:
+| Piece            | Where it lives                                   |
+| ---------------- | ------------------------------------------------ |
+| Sessions         | PostgreSQL, via the Better Auth tables           |
+| Realtime changes | The `questpie_realtime_log` outbox table         |
+| Search index     | PostgreSQL, on both search adapters              |
+| Jobs             | Whatever your queue adapter talks to             |
+| Upload records   | The upload collection's table, but not the bytes |
 
-**KV must be shared.** The default adapter is in-memory, which means each replica
-gets its own cache. That is not a correctness problem for a cache, but it is one
-for anything you store in KV expecting other replicas to see it. Use the Redis or
-Cloudflare KV adapter.
+Two things are missing from that list. They are the two you configure first.
 
-**Realtime must be shared.** See below.
+## KV and storage stay on one machine
 
-## Workers
+Leave `kv` out of your config and you get a `Map` in the current process. Leave
+`storage` out and file bytes go to `./uploads` on the current machine.
 
-Workers scale independently of the app, which is the reason they are a separate
-process.
+The two failures are not equal. An unshared cache is a slower cache. An unshared
+upload folder is worse. A file written by replica A is a 404 on replica B. The
+whole folder goes away on the next deploy anyway. Fix storage first.
 
-```ts
-await app.queue.listen({
-	teamSize: 5, // concurrent jobs in this worker
-	batchSize: 3, // jobs fetched per poll
+```ts title="src/questpie/server/questpie.config.ts"
+import { s3 } from "files-sdk/s3";
+import { redisKVAdapter } from "questpie/adapters/redis-kv";
+import { runtimeConfig } from "questpie/app";
+import { createClient } from "redis";
+
+import env from "./env";
+
+async function getRedis() {
+	const client = createClient({ url: env.REDIS_URL });
+	await client.connect();
+	return client;
+}
+
+export default runtimeConfig({
+	app: { url: env.APP_URL },
+	db: { url: env.DATABASE_URL },
+	storage: { adapter: s3({ bucket: env.S3_BUCKET }), basePath: "/api" },
+	kv: { adapter: redisKVAdapter({ client: getRedis, keyPrefix: "myapp:" }) },
 });
 ```
 
-`teamSize` is per worker, so total concurrency is `teamSize` x replicas. Size it
-against what the jobs actually contend for, usually database connections rather
-than CPU. Ten workers at `teamSize: 10` is 100 concurrent jobs and, if each opens
-a connection, 100 connections before the app has asked for any.
+Nothing else moves. `app.storage` and `ctx.kv` keep the same methods either way.
+See [Storage](/docs/infrastructure/storage) and
+[Key-value store](/docs/infrastructure/kv).
 
-`singletonKey` prevents two jobs with the same key running at once, across all
-workers. `idempotencyKey` is separate and portable: it deduplicates dispatch, so
-a retry that already succeeded is not run twice.
+## Realtime already crosses replicas
 
-**Cloudflare Queues need a configured `dead_letter_queue`.** The adapter keeps
-poison and exhausted messages visible by retrying toward a DLQ; it cannot invent
-one for you. Without it, those messages are lost silently.
+Every write appends one row to the outbox, inside the same transaction. An
+instance holding subscribers drains that table on a timer. It then pushes to the
+clients it holds. So a client on replica A sees a write from replica B with no
+configuration at all.
 
-## Realtime
+A change broker makes that fast, not correct. QUESTPIE wires
+`PgNotifyChangeBroker` for you on a `db: { url }` app. A notice cuts the delay
+from the 15000 ms reconciliation poll to milliseconds. Drop every notice and
+delivery still happens, one poll later. A broker that goes unavailable tightens
+the poll to at most 2000 ms by itself.
 
-The default realtime transport is per-process. With more than one app replica, a
-client connected to replica A will not see an event published on replica B unless
-the transport is shared.
+Swap that broker for Redis Streams when `LISTEN/NOTIFY` becomes the wrong shape
+for your instance count. It is one config key and it moves no `live()` call.
+[Realtime](/docs/infrastructure/realtime) has the adapter table.
 
-Choose one:
+<Callout
+	type="warn"
+	title="Transport size is a different problem from query cost"
+>
+	Every snapshot is recomputed per subscription group, under that subscriber's
+	own access rules. A bigger transport does not make that cheaper. Read
+	[Scalable realtime modeling](/docs/infrastructure/realtime/scaling) before you
+	reach for one.
+</Callout>
 
-- **PostgreSQL LISTEN/NOTIFY** (`pg-notify`): no extra infrastructure, since you
-  already have PostgreSQL. Good to a moderate fan-out.
-- **Redis Streams**: for higher fan-out, at the cost of running Redis.
-- **Pusher / Soketi**: offloads connection handling entirely. The client only
-  downloads the Pusher library when this transport is actually selected.
+## Workers scale by process, not by option
 
-Realtime correctness and realtime scalability are different problems. A
-personalised live query that re-runs per subscriber is correct and can still be
-the wrong model at 100,000 subscribers. Read
-[Scalable realtime modeling](/docs/infrastructure/realtime/scaling) before assuming a
-bigger transport is the answer.
+`app.queue.listen()` takes `teamSize` and `batchSize`. Which one does anything
+depends on the adapter. QUESTPIE ships no default queue adapter, so that choice
+is already yours.
 
-## Database connections
+| Option      | pg-boss                                 | BullMQ                             |
+| ----------- | --------------------------------------- | ---------------------------------- |
+| `teamSize`  | Ignored. pg-boss 12 has no such option. | Worker `concurrency`, per job name |
+| `batchSize` | Jobs fetched per poll                   | Ignored                            |
 
-This is the limit you will hit first, and it is usually arithmetic rather than
-load: app replicas x pool size, plus worker replicas x `teamSize`, against
-`max_connections`.
+QUESTPIE runs a fetched pg-boss batch one job at a time. So on pg-boss, more
+throughput means more worker processes. There is no knob for it.
 
-Put a pooler (PgBouncer, or your provider's) in front once that product
-approaches the server limit. In transaction pooling mode, be aware that
-session-level features do not survive, `LISTEN/NOTIFY` among them. If you use the
-`pg-notify` realtime adapter, it needs a session-mode connection.
+### `singletonKey` needs a queue policy
 
-## Graceful shutdown
+pg-boss fixes a queue's policy when the queue is first created. The default
+policy is `standard`. On that policy pg-boss stores your `singletonKey` and
+never dedupes it, so two workers can run the same key at once. Declare
+`queuePolicy: "stately"` in the job's options for the usual one-at-a-time
+behavior.
 
-On `SIGTERM`, stop accepting new work before the process exits, or in-flight jobs
-are lost and in-flight requests are cut:
+```ts title="src/questpie/server/jobs/send-digest.ts"
+import { job } from "questpie/services";
+import { z } from "zod";
 
-```ts
-process.on("SIGTERM", async () => {
-	await app.queue.stop(); // finish in-flight jobs
-	await app.observability.shutdown(); // flush buffered spans
-	process.exit(0);
+export default job({
+	name: "send-digest",
+	schema: z.object({ workspaceId: z.string() }),
+	handler: async ({ payload }) => {
+		/* ... */
+	},
+	options: { queuePolicy: "stately" },
 });
 ```
 
-Give the platform a termination grace period longer than your slowest job.
+The adapter warns once per queue when a key arrives without a policy.
+`idempotencyKey` is a different thing. It deduplicates dispatch and works on
+every adapter. Passing both keys on one publish throws.
+[Workers](/docs/code/jobs/workers) covers the three consumer models.
+
+## The two ceilings
+
+**Connections.** Count them per process, then multiply by replicas, then compare
+with `max_connections`. The Drizzle pool is `db.pool.max`, 10 by default. The
+pg-notify broker opens one more for `LISTEN`, and a second for `NOTIFY` after
+the first write. pg-boss opens its own on top. Workers pay the same bill,
+because they build the same app object.
+[The connection budget](/docs/ship/scaling/connections) does the arithmetic and
+covers PgBouncer.
+
+**The outbox head row.** Capture runs on every collection and global write. Each
+capture locks one shared row and holds it until the transaction commits. That is
+what makes outbox order commit order. It also serializes your writes against
+each other. Keep write transactions short. Prefer one bulk call over a loop,
+because a batch captures a single outbox row rather than one per record.
+
+## Shutting down
+
+`listen()` installs `SIGINT` and `SIGTERM` handlers for you. The worker stops
+taking work and finishes what it holds. It force-exits after
+`shutdownTimeoutMs`, which defaults to 10000. Pass `gracefulShutdown: false` to
+own that yourself.
+
+The app process is yours. Codegen writes `destroyApp()` beside `app`. The
+TanStack Start starter already calls it from a Nitro plugin on both signals.
+
+```ts
+import { destroyApp } from "#questpie";
+
+process.once("SIGTERM", () => void destroyApp());
+```
+
+`destroyApp()` disposes services in reverse dependency order. The queue stops
+first, then realtime and search. Observability flushes after them, so buffered
+spans survive. The database connection closes last. Give the platform a
+termination grace period longer than your slowest job.
+
+## Where each topic lives
+
+| Topic                                     | Page                                                       |
+| ----------------------------------------- | ---------------------------------------------------------- |
+| Counting connections, PgBouncer, LISTEN   | [The connection budget](/docs/ship/scaling/connections)    |
+| Every `db.pool` key and its default       | [Runtime configuration](/docs/ship/configuration/runtime)  |
+| Cost of one live query at 100,000 clients | [Realtime modeling](/docs/infrastructure/realtime/scaling) |
+| Admission caps and the outbox table       | [Realtime tuning](/docs/infrastructure/realtime/tuning)    |
+| Long-running, one-batch, pushed workers   | [Workers](/docs/code/jobs/workers)                         |
+| Schema changes while old replicas serve   | [Migrations in production](/docs/ship/migrations)          |
+| Probes, traces and what to alert on       | [Monitoring](/docs/ship/monitoring)                        |
+
+## Next
+
+**[Monitoring](/docs/ship/monitoring)** is how you find out which of these
+ceilings you actually hit.

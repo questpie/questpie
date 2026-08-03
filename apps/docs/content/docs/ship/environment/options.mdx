@@ -1,0 +1,171 @@
+---
+title: Options
+description: Every option env() takes, the twelve variables QUESTPIE merges under yours, and the flag that lets a build run with no environment at all.
+kind: reference
+package: questpie
+---
+
+| Option                   | Type                                   | Default                               |
+| ------------------------ | -------------------------------------- | ------------------------------------- |
+| `server`                 | `Record<string, StandardSchemaV1>`     | Required                              |
+| `client`                 | The default export of `env.client.ts`  | None                                  |
+| `refine`                 | `(env) => string \| undefined \| void` | None                                  |
+| `skipValidation`         | `boolean`                              | Set by `QUESTPIE_SKIP_ENV_VALIDATION` |
+| `emptyStringAsUndefined` | `boolean`                              | `true`                                |
+| `isServer`               | `boolean`                              | Detected                              |
+
+Import `env` from `questpie/env` and call it as the default export of `env.ts`.
+It validates at call time and hands back a frozen object.
+
+### server
+
+Your server-only vars, keyed by the exact name in `process.env`. Each value is a
+Standard Schema, and its output type becomes the property type on `env`.
+Coercion and defaults are the schema's job, not an option here.
+
+```ts
+server: {
+  DATABASE_URL: z.string(),
+  SMTP_PORT: z.coerce.number().default(1025),
+  MAIL_ADAPTER: z.enum(["console", "smtp"]).optional(),
+}
+```
+
+<Callout type="warn" title="A public prefix here is a compile error">
+	`EXPO_PUBLIC_`, `VITE_`, `NEXT_PUBLIC_` and `PUBLIC_` are rejected on a
+	`server` key. Such a name reads like a secret but gets inlined into client
+	bundles. Public vars belong in `env.client.ts`.
+</Callout>
+
+### client
+
+The default export of `env.client.ts`. Its `vars` are merged in and validated
+here as well. The server looks for the unprefixed name first, then each
+consumer's prefixed spelling. Its `consumers` drive the client module codegen.
+See [Client variables](/docs/ship/environment/client).
+
+Declare the same key in both blocks and the client wins. It is validated once,
+with the client schema, on the client read path. That path checks more names
+than the server one.
+
+### refine
+
+A cross-field guard. It runs after every var has validated, against the finished
+object. Return a non-empty string and boot fails with that message. Throw and
+the error propagates as it is.
+
+```ts
+env({
+	client,
+	server: { BETTER_AUTH_SECRET: z.string().min(32) },
+	refine: (e) => {
+		if (e.NODE_ENV === "production" && e.BETTER_AUTH_SECRET === "dev-secret")
+			return "BETTER_AUTH_SECRET must not be the dev default in production";
+	},
+});
+```
+
+Use it for rules one schema cannot see, such as "if A then B". It does not run
+when validation is skipped.
+
+### skipValidation
+
+Set it to `true` and no schema runs. Values are read raw and returned as they
+are. A missing var comes back as `undefined` instead of throwing. The default
+reads `QUESTPIE_SKIP_ENV_VALIDATION`, so you normally flip this with the
+variable rather than the option.
+
+Any non-empty value turns it on. `QUESTPIE_SKIP_ENV_VALIDATION=0` skips
+validation, same as `=1`. Unset the variable to turn it off.
+
+### emptyStringAsUndefined
+
+On by default. An empty var is skipped during the read. It then falls through to
+your schema's `.default()` or `.optional()`, rather than failing as a present
+but empty string. For a client var it also falls through to the next candidate
+name. Set it to `false` and `""` reaches the schema.
+
+### isServer
+
+Overrides the runtime check. `env()` throws when this is false, because browser
+code must import the generated client module instead. Detection treats Node and
+Bun as a server even under happy-dom or jsdom. So tests in a DOM environment
+still work. You rarely set it by hand.
+
+## The base variables
+
+These twelve are merged under your `server` block. Every one is optional, so
+none of them can fail boot on its own. Your keys win where the names collide,
+and the base version drops out of the result type.
+
+| Variable                      | Type                                               |
+| ----------------------------- | -------------------------------------------------- |
+| `NODE_ENV`                    | `"development" \| "test" \| "production"` optional |
+| `QUESTPIE_DB`                 | Optional string                                    |
+| `DATABASE_URL`                | Optional string                                    |
+| `QUESTPIE_APP_URL`            | Optional string                                    |
+| `APP_URL`                     | Optional string                                    |
+| `QUESTPIE_SECRET`             | Optional string                                    |
+| `BETTER_AUTH_SECRET`          | Optional string                                    |
+| `QUESTPIE_STORAGE_ENDPOINT`   | Optional string                                    |
+| `QUESTPIE_STORAGE_BUCKET`     | Optional string                                    |
+| `QUESTPIE_STORAGE_REGION`     | Optional string                                    |
+| `QUESTPIE_STORAGE_ACCESS_KEY` | Optional string                                    |
+| `QUESTPIE_STORAGE_SECRET_KEY` | Optional string                                    |
+
+The `QUESTPIE_` names are what Cloud injects. `DATABASE_URL`, `APP_URL` and
+`BETTER_AUTH_SECRET` are the self-host spellings of the first three.
+`runtimeConfig()` tries the `QUESTPIE_` name and falls back to the other.
+
+The storage group has no unprefixed twin. Leave `storage` out of
+`runtimeConfig()` and it looks at that group. It builds an S3 adapter when the
+endpoint, bucket, access key and secret key are all set. Set only the endpoint
+and it warns, then falls back to local storage.
+
+Re-declare one to tighten it. The base gives you
+`DATABASE_URL: string | undefined` for free. This makes it required and checked:
+
+```ts
+server: {
+  DATABASE_URL: z.string(),
+}
+```
+
+## Running with no environment
+
+Builds, codegen and CI steps have no populated environment. They must not need
+`DATABASE_URL` to exist. Set the flag and `env()` reads raw and skips every
+schema:
+
+```bash
+QUESTPIE_SKIP_ENV_VALIDATION=1 bun run build
+```
+
+`questpie generate` and `questpie dev` set it themselves, because both import
+your code. They only set it when it is unset, so your own value wins. Other
+commands leave it alone.
+
+<Callout type="warn" title="The flag never reaches the browser">
+	It is read when `env()` runs on the server. The generated client module
+	validates every time it is imported. A flag cannot be read after the bundler
+	has already inlined the values.
+</Callout>
+
+## Types
+
+`questpie/env` exports the types when you need to name one in a shared helper.
+
+```ts
+import type { EnvOptions, QuestpieBaseEnv, ResolvedEnv } from "questpie/env";
+
+// Most of the time you want your own env type, read off your own file.
+import type envDef from "./env";
+
+type Env = typeof envDef; // Readonly<{ DATABASE_URL: string, ... }>
+```
+
+`ResolvedEnv` is the base preset minus your overrides, plus your server outputs,
+plus your client outputs, all readonly. `QuestpieBaseEnv` is the output of the
+base preset alone. `ClientEnvDefinition`, `ClientConsumer`,
+`ClientConsumerConfig`, `ClientConsumerPreset`, `PublicVarPrefix`, `InferShape`
+and `StandardSchemaV1` come from the same entry.

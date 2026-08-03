@@ -1,82 +1,52 @@
 ---
-title: Connect an AI agent with MCP and OAuth
-description: Scaffold a QUESTPIE app with MCP, expose safe CRUD and a custom tool, then connect Claude and VS Code through per-user OAuth 2.1.
+title: Connect an AI agent
+description: An agent reaches your data over MCP. It signs in as a real user through OAuth. It sees only the operations you opened, and every call still runs your collection access rules.
+kind: guide
+package: "@questpie/mcp"
 ---
 
-This tutorial starts with a fresh TanStack Start app and ends with two AI clients calling your QUESTPIE data through the remote MCP endpoint:
+You want your editor, or Claude, to read and write real rows. Not a copy of your
+API pasted into a prompt. This page starts from an empty folder. It ends with an
+editor calling `collections.posts.create` as the account you signed in with.
 
-- Claude, through a remote custom connector.
-- VS Code, through a workspace `mcp.json` entry.
+## Scaffold the app
 
-Both clients authenticate as a real QUESTPIE user. They register through Dynamic Client Registration (DCR), use authorization code + PKCE, show the user a consent screen, and receive a token bound to this app's `/api/mcp` endpoint. Every tool call is then limited by all three gates:
-
-```text
-MCP policy ∩ consented OAuth scopes ∩ collection/access rules
-```
-
-You will expose read and write tools for the starter `posts` collection, keep delete disabled, and add a typed `posts.countPublished` custom tool.
-
-## Prerequisites
-
-- [Bun](https://bun.sh) 1.3 or newer.
-- [Docker](https://www.docker.com/) for the local Postgres database.
-- A public HTTPS deployment for Claude. Claude's remote connectors run from Anthropic's cloud, including when you use Claude Desktop, so they cannot reach a server that only exists on `localhost`. See [Anthropic's remote connector network requirements](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp).
-- VS Code with GitHub Copilot if you want to follow the IDE section. VS Code can connect to a local or remote HTTP MCP server.
-
-## 1. Scaffold the app with MCP
-
-Run the published scaffolder non-interactively:
-
-```bash title="Terminal"
+```bash
 bunx create-questpie@latest questpie-mcp-agent \
-  --template tanstack-start \
-  --modules admin,openapi,mcp \
-  --yes
+	--template tanstack-start \
+	--modules admin,openapi,mcp \
+	--yes
 cd questpie-mcp-agent
 ```
 
-Explicit module selection replaces the defaults, so include all three modules. The result contains:
+Naming modules replaces the defaults, so list all three. `mcp` mounts
+`POST /api/mcp`. `admin` pulls in `starterModule`, which pulls in `oauthModule`.
+That is where the OAuth provider, the login page and the consent screen live.
 
-- `adminModule`, which also brings the OAuth provider, account tables, login, and consent UI.
-- `openApiModule`, for the REST reference at `/api/docs`.
-- `mcpModule`, for the OAuth-protected Streamable HTTP endpoint at `/api/mcp`.
-
-Verify the generated app before changing it:
-
-```bash
-bun run scaffold:verify
-```
-
-This command regenerates the app and runs TypeScript. It does not mutate the database.
-
-## 2. Start the local database
-
-Start Postgres, then create the local development schema:
+## Start it
 
 ```bash
 docker compose up -d
 bun run db:push
-```
-
-<Callout type="warn" title="db:push is local development only">
-	`bun run db:push` calls `questpie push`. Never run it against production, in a
-	deployment job, or in an init container. `--force` does not make it
-	production-safe. For production, generate a migration with `bun run
-	migrate:create`, review and commit it, then apply it with `bun run migrate`
-	during deployment.
-</Callout>
-
-Start the app:
-
-```bash
 bun run dev
 ```
 
-Open [http://localhost:3000/admin](http://localhost:3000/admin). The first visit redirects to the one-time setup screen. Create the first admin account and keep those credentials for the OAuth sign-in later.
+Open [http://localhost:3000/admin](http://localhost:3000/admin). The first visit
+sends you to `/admin/setup`. Create the admin account there and keep it.
 
-## 3. Open only the MCP operations you need
+<Callout type="warn" title="`db:push` is for your laptop">
+	It runs `questpie push`, which writes the schema straight to the database.
+	Never point it at production, a deploy job or an init container. Production
+	uses `questpie migrate` against committed migration files.
+</Callout>
 
-HTTP MCP is read-only by default. Add `config/mcp.ts` to allow authenticated agents to read and create/update posts while keeping deletion closed:
+## Nothing is exposed yet
+
+A `POST` with no credential gets `401` and a `WWW-Authenticate` header. Sign a
+client in and it still lists zero tools. Every collection, global and route
+starts at `expose: false`. There is no read-only default.
+
+## Open the operations you need
 
 ```ts title="src/questpie/server/config/mcp.ts"
 import { mcpConfig } from "@questpie/mcp";
@@ -84,30 +54,46 @@ import { mcpConfig } from "@questpie/mcp";
 export default mcpConfig({
 	crud: {
 		collections: {
-			posts: { read: true, write: true, delete: false },
+			posts: {
+				operations: {
+					list: true,
+					count: true,
+					get: true,
+					create: true,
+					update: true,
+				},
+			},
 		},
 		globals: {
-			siteSettings: { read: true, write: false },
+			siteSettings: { operations: { get: true } },
 		},
 	},
 });
 ```
 
-This contributes these relevant tools:
+Codegen has to see that file. Run `bun run questpie:generate`, or let the
+`questpie add` below do it. Every operation is named one at a time. There is no
+`read: true` shorthand and no wildcard. `delete` is missing from that list, so
+`collections.posts.delete` is never built. Neither is
+`globals.siteSettings.update`.
 
-| Tool                                       | MCP policy | OAuth scope                                      |
-| ------------------------------------------ | ---------- | ------------------------------------------------ |
-| `collections.posts.list` / `count` / `get` | allowed    | `collections:posts:read` or `collections:read`   |
-| `collections.posts.create` / `update`      | allowed    | `collections:posts:write` or `collections:write` |
-| `collections.posts.delete`                 | hidden     | unavailable even if a token has a delete scope   |
-| `globals.siteSettings.get`                 | allowed    | `globals:siteSettings:read`                      |
-| `globals.siteSettings.update`              | hidden     | unavailable                                      |
+| Tool                                     | Scope an OAuth caller must hold                   |
+| ---------------------------------------- | ------------------------------------------------- |
+| `collections.posts.list` `.count` `.get` | `collections:posts:read`, or `collections:read`   |
+| `collections.posts.create` `.update`     | `collections:posts:write`, or `collections:write` |
+| `globals.siteSettings.get`               | `globals:siteSettings:read`, or `globals:read`    |
 
-The OAuth scope does not grant database access by itself. The signed-in user's normal collection `.access()` rules still run and can further narrow every operation.
+You do not write those names. They are derived as `<resource>:<name>:<verb>`
+from this same config, so the catalog and the gate cannot drift. The umbrella
+exists only for `read` and `write`. A `delete` needs the exact granular scope.
 
-## 4. Add a typed custom tool
+## Add a tool of your own
 
-Create a file-convention MCP tool that counts published posts:
+```bash
+bunx questpie add mcp-tool count-published-posts
+```
+
+That writes a stub under `mcp-tools/` and runs codegen. Replace its body:
 
 ```ts title="src/questpie/server/mcp-tools/count-published-posts.ts"
 import { mcpTool } from "@questpie/mcp";
@@ -115,6 +101,8 @@ import { z } from "zod";
 
 export default mcpTool("posts.countPublished", {
 	description: "Count published posts.",
+	access: ({ session }) => !!session,
+	scopes: "collections:posts:read",
 	inputSchema: z.object({}),
 	outputSchema: z.object({ count: z.number() }),
 	annotations: { readOnlyHint: true },
@@ -130,138 +118,83 @@ export default mcpTool("posts.countPublished", {
 });
 ```
 
-Custom tool results include both `structuredContent` for the model and an MCP `content` block. The public handler type requires `content`; do not return only `structuredContent`.
+`access` and `scopes` are both required fields, so TypeScript rejects a tool
+that omits one. The catalog also drops it at runtime, silently. A custom tool
+has no operation to derive a scope from. Write `scopes: false` to require none.
 
-This example does not declare an extra custom-tool scope. The HTTP endpoint still requires an authenticated principal, and the `ctx.collections.posts.count()` call still runs the user's collection access rules. Add `scopes` or `access` to the tool when it needs a narrower rule; see [custom tool scopes](/docs/agents/mcp-oauth#custom-tool-scopes).
-
-Regenerate and type-check both new files:
+Return `content` as well as `structuredContent`. The result type requires
+`content`. `outputSchema` validates `structuredContent`.
 
 ```bash
 bun run scaffold:verify
 ```
 
-Codegen should report one discovered `mcpTools` entry.
+That regenerates the app and type-checks it. It does not touch the database.
 
-## 5. Understand the OAuth flow
-
-Pointing a compliant client at `/api/mcp` is enough to start the flow:
-
-1. The unauthenticated MCP request receives `401` and a `WWW-Authenticate` challenge pointing to protected-resource metadata.
-2. The client reads `/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server`.
-3. DCR creates a public OAuth client at `/api/auth/oauth2/register`; no hand-created client secret is needed.
-4. The client opens `/api/auth/oauth2/authorize` with a PKCE challenge and the `/api/mcp` resource indicator.
-5. You sign in at `/admin/login` and approve the requested scopes at `/admin/oauth/consent`.
-6. The client exchanges the code at `/api/auth/oauth2/token`, then retries `/api/mcp` with the audience-bound access token.
-
-The access token expires after one hour. Its effective permission is the intersection of consented scopes and the signed-in user's RBAC; OAuth can narrow access but cannot elevate it.
-
-You can inspect discovery on a running deployment without obtaining a token:
-
-```bash
-curl https://cms.example.com/.well-known/oauth-protected-resource
-curl https://cms.example.com/.well-known/oauth-authorization-server
-curl -i https://cms.example.com/api/mcp
-```
-
-The final request should be unauthorized and include the discovery challenge. A public `200` from `/api/mcp` without a session or token is a security problem.
-
-## 6. Prepare the public deployment
-
-Set the deployed app origin exactly; OAuth uses it to bind tokens to the MCP audience:
-
-```bash title="Production environment"
-APP_URL=https://cms.example.com
-BETTER_AUTH_SECRET=<a-strong-production-secret>
-DATABASE_URL=<production-postgres-url>
-```
-
-Generate the migration in development, review it, and commit it:
-
-```bash
-bun run migrate:create
-git add src/questpie/server/migrations
-git commit -m "chore: add initial database migration"
-```
-
-During deployment, apply only committed migrations:
-
-```bash
-bun run migrate
-```
-
-<Callout type="warn" title="Never replace migrate with push">
-	Production uses `questpie migrate`, not `questpie push`. Do not put `push`,
-	`db:push`, or `push --force` in a container command, init container, CI deploy
-	step, or production runbook.
-</Callout>
-
-Before connecting a client, confirm that `/api/mcp`, both root `/.well-known/*` documents, `/api/auth/oauth2/register`, `/admin/login`, and `/admin/oauth/consent` all route to the same deployment.
-
-## 7. Connect Claude
-
-Claude remote custom connectors support Streamable HTTP, OAuth, and DCR. QUESTPIE therefore needs only the endpoint URL; leave the optional advanced client ID and secret empty.
-
-For an individual account:
-
-1. Open **Customize → Connectors**.
-2. Select **+ → Add custom connector**.
-3. Enter a name and `https://cms.example.com/api/mcp`.
-4. Leave advanced OAuth credentials empty and add the connector.
-5. Select **Connect**, sign in with the admin account you created, and review the consent screen before approving it.
-6. Enable the connector for a conversation from the **+ → Connectors** menu.
-
-Team and Enterprise plans require an Owner to add the connector under **Organization settings → Connectors** before members connect their own accounts. Anthropic documents both flows in [Get started with custom connectors using remote MCP](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp).
-
-Do not put this remote server in `claude_desktop_config.json`. That file is for local stdio servers; Claude's remote connectors are configured through Connectors and run from Anthropic's cloud.
-
-## 8. Connect VS Code
-
-Add a workspace MCP configuration:
+## Point an editor at it
 
 ```json title=".vscode/mcp.json"
 {
 	"servers": {
 		"questpie": {
 			"type": "http",
-			"url": "https://cms.example.com/api/mcp"
+			"url": "http://localhost:3000/api/mcp"
 		}
 	}
 }
 ```
 
-VS Code discovers the server, registers through DCR, then completes browser login and consent. See the official [VS Code MCP developer guide](https://code.visualstudio.com/api/extension-guides/ai/mcp) and [MCP server configuration guide](https://code.visualstudio.com/docs/agent-customization/mcp-servers).
+Leave `APP_URL=http://localhost:3000` in `.env`. Tokens carry
+`<APP_URL>/api/mcp` as their audience and verification compares the two exactly.
+Run **MCP: List Servers**, start `questpie`, then finish the login in the tab it
+opens. See the
+[VS Code MCP guide](https://code.visualstudio.com/docs/agent-customization/mcp-servers).
 
-Open the Command Palette and run **MCP: List Servers**. Start `questpie`, confirm that you trust the server, then complete the browser login and consent flow. VS Code lists the discovered tools in Chat's tool picker. If you need to discard a stale DCR registration, run **Authentication: Remove Dynamic Authentication Providers** and reconnect.
+## What the sign-in actually does
 
-For local-only testing, change the URL to `http://localhost:3000/api/mcp`. Keep `APP_URL=http://localhost:3000` so the issued token's audience matches the endpoint exactly.
+1. The first call has no credential, so it gets `401` plus `WWW-Authenticate`.
+2. That header names `/api/.well-known/oauth-protected-resource`. Both discovery
+   documents sit under the handler's base path, `/api` here, not the site root.
+3. The client registers itself at `/api/auth/oauth2/register`. Dynamic
+   registration, public client, no secret for you to copy anywhere.
+4. It opens `/api/auth/oauth2/authorize` with a PKCE challenge.
+5. You sign in at `/admin/login` and approve scopes at `/admin/oauth/consent`.
+6. It swaps the code at `/api/auth/oauth2/token` and retries. That access token
+   lasts one hour.
 
-## 9. Exercise CRUD and the custom tool
+## Make the calls
 
-Ask the connected client to make explicit calls while you learn the surface:
+Name the tools yourself the first few times.
 
 ```text
-Use collections.posts.list to show the titles and published state of my posts.
+Use collections.posts.list to show the titles of my posts.
+Use collections.posts.create to add a draft titled "MCP is connected".
+Call posts.countPublished.
 ```
 
-```text
-Use collections.posts.create to create a draft post titled "MCP is connected".
-```
+Open `/admin/collections/posts`. The draft is there, created by the account you
+signed in with. That is the working result.
 
-```text
-Call posts.countPublished and return the count.
-```
+## When a call is refused
 
-Then open `/admin/collections/posts` and confirm that the created draft exists. If the write tool is missing, check both sides of the gate:
+Three gates run on every call. All three must pass, and each one can only
+narrow. A scope never grants what `.access()` refuses.
 
-- `config/mcp.ts` must set `posts.write: true`.
-- The OAuth grant must include `collections:posts:write` or `collections:write`.
-- The signed-in user must pass the collection's normal create/update access rules.
+| Gate         | You set it in                 | What failing looks like                 |
+| ------------ | ----------------------------- | --------------------------------------- |
+| MCP policy   | `config/mcp.ts`               | the tool is never built, for anyone     |
+| OAuth scopes | the consent screen            | hidden from this caller, denied on call |
+| Access rules | `.access()` on the collection | hidden from this caller, denied on call |
 
-Delete remains unavailable because the server policy set `delete: false`, regardless of what the model asks for.
+The last two run per request. A tool one caller sees can be missing for another.
+A missing write tool has three suspects. `operations.create`, the granted scope,
+and the collection's own create rule.
 
-## What to read next
+## Next
 
-- [MCP integration](/docs/agents/mcp) is the complete tool, resource, policy, transport, and custom-tool reference.
-- [MCP over OAuth 2.1](/docs/agents/mcp-oauth) covers DCR, PKCE, consent, scopes, token verification, and `scopes ∩ RBAC` in depth.
-- [Sandboxed code](/docs/infrastructure/sandbox) covers isolated execution for application-owned workloads. You do not need a framework-owned agent runtime to expose MCP to Claude or an IDE.
-- [Access control](/docs/schema/access-control) is the security boundary beneath MCP policy and OAuth scopes.
+**[Deploy it and connect Claude](/docs/guides/connect-an-agent/deploy-for-claude)**
+takes this app to a public HTTPS origin.
+
+[MCP integration](/docs/agents/mcp) is the reference for tools, resources and
+transports. [MCP over OAuth 2.1](/docs/agents/mcp-oauth) covers the scope model.
+[Access control](/docs/schema/access-control) is the layer under both.

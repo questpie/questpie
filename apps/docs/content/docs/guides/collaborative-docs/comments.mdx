@@ -1,0 +1,125 @@
+---
+title: Comments
+description: A comment points at a sentence, not at character 412. This stores the pin beside an ordinary comment row and resolves it after everybody else has typed.
+kind: guide
+package: questpie
+---
+
+The article merges. A comment on it does not, because it is an ordinary row in
+an ordinary collection. An anchor ties the two together. It keeps pointing at
+the sentence while the text around it moves.
+
+## Store the pin beside the comment
+
+```ts title="src/questpie/server/collections/comments.ts"
+import { collection } from "#questpie/factories";
+
+export const comments = collection("comments").fields(({ f }) => ({
+	article: f.relation("articles").required(),
+	body: f.textarea().required(),
+	anchor: f.text(2048).required(),
+	quote: f.textarea().required(),
+}));
+```
+
+Nothing here is collaborative. `anchor` holds an opaque token that starts with
+`qpa1_` and never exceeds 2,048 characters. Store it as a value. Do not parse
+it, and do not treat it as permission to read anything.
+
+`quote` is the text the person selected. Keep it. It is what you show once the
+pin can no longer be placed.
+
+## Create the pin from settled text
+
+An anchor may only be made from state the server has already acknowledged.
+
+```ts title="src/lib/comments.ts"
+import { crdt } from "./article-editor";
+import { client } from "./client";
+
+type Article = ReturnType<typeof crdt.collections.articles.document>;
+
+export async function pinComment(
+	article: Article,
+	comment: { articleId: string; start: number; end: number; body: string },
+) {
+	const state = article.getSnapshot();
+	if (
+		state.status !== "ready" ||
+		state.pendingUpdates !== 0 ||
+		state.fieldSyncing.includes("content")
+	) {
+		return null; // The edit is still in flight. Call again on the next state.
+	}
+
+	const field = article.fields.content;
+	return client.collections.comments.create({
+		article: comment.articleId,
+		body: comment.body,
+		anchor: field.anchors.create({
+			kind: "range",
+			start: comment.start,
+			end: comment.end,
+		}),
+		quote: field.text.value().slice(comment.start, comment.end),
+	});
+}
+```
+
+Skip that check and `create` throws `CrdtAnchorError` with
+`UNACKNOWLEDGED_STATE`. So does calling it inside `transaction()`. A bad offset
+or a backwards range throws `INVALID_INPUT` instead. Those error classes have no
+public export, so match on `error.name` if you would rather catch than check.
+
+A range must be ordered and non-empty when you make it. Later edits may collapse
+it onto a single offset, and that still resolves.
+
+## Resolve it when you render
+
+```ts
+const current = article.fields.content.anchors.resolve(comment.anchor);
+
+if (current.status === "resolved" && current.kind === "range") {
+	highlight(current.start, current.end);
+} else {
+	showAsHistorical(comment.quote);
+}
+```
+
+`resolve` needs no settled state. It reads whatever your copy of the text says
+right now. Inside a transaction it sees that transaction's text. Every answer is
+one of three shapes.
+
+| Answer                                              | What it means                |
+| --------------------------------------------------- | ---------------------------- |
+| `{ status: "resolved", kind: "range", start, end }` | the selection is still there |
+| `{ status: "resolved", kind: "point", offset }`     | a point pin is still there   |
+| `{ status: "detached" }`                            | it cannot be placed          |
+
+Routes and hooks resolve the same token through `ctx.crdt`. Both calls are
+asynchronous there. [Text anchors](/docs/client/collaborative-documents/anchors)
+has that route and the affinity options.
+
+## What detaches a pin
+
+Six values are baked into the token. The namespace, the record's incarnation,
+the field slot, the field epoch, the engine id and the format version.
+Resolution compares all six, and one mismatch detaches.
+
+| Cause                            | Why it detaches               |
+| -------------------------------- | ----------------------------- |
+| a server-side `replace()`        | it raises the field epoch     |
+| restore, import or agent rewrite | each one is a `replace()`     |
+| deleting and recreating the row  | a new incarnation             |
+| a token from another field       | the field slot does not match |
+| a malformed or truncated token   | it does not decode            |
+
+Ordinary concurrent editing is not on that list. Detaching is the honest answer
+for a sentence that is gone. It is not a failure you forgot to handle.
+
+## The working result
+
+A comment thread survives a morning of other people's typing. It follows its
+sentence up and down the document, with no offsets stored anywhere. When the
+sentence is replaced wholesale, the thread says so and still shows the words it
+was written about.

@@ -1,0 +1,145 @@
+---
+title: The scope resolver
+description: appConfig({ context }) turns request data into per-request state. What it receives, where the result lands, which key names are taken, and why it does nothing at all in a job.
+kind: reference
+package: questpie
+---
+
+`context` is one key on the `appConfig()` object in `config/app.ts`. It is a
+function. QUESTPIE calls it, then carries what you return with the request.
+
+| Question                    | Answer                                                       |
+| --------------------------- | ------------------------------------------------------------ |
+| When does it run?           | Once per HTTP request, and only when a `request` is present. |
+| What does it receive?       | `request`, `session`, `db`, plus the whole service surface.  |
+| What must it return?        | An object, or something with an object arm.                  |
+| Where does the result land? | Flat on the request context, plus an internal bundle.        |
+| Does it filter anything?    | No.                                                          |
+
+## The signature
+
+```ts
+export type ContextResolver<
+	T extends Record<string, any> = Record<string, any>,
+> = (
+	params: ContextResolverParams & Questpie.ContextResolverContext,
+) => Promise<T> | T;
+```
+
+`ContextResolverParams` carries three members.
+
+| Member    | Type                              | Note                          |
+| --------- | --------------------------------- | ----------------------------- |
+| `request` | `Request`                         | The incoming HTTP request.    |
+| `session` | your session, `null`, `undefined` | `null` means unauthenticated. |
+| `db`      | your database client              | Typed once codegen has run.   |
+
+`ContextResolverContext` is the second half, and codegen fills it. It adds
+`collections`, `globals`, `logger`, `kv`, `queue`, `t`, and your services. So
+the resolver can load data before it decides what the scope is.
+
+```ts title="src/questpie/server/config/app.ts"
+import { appConfig } from "questpie/app";
+
+export default appConfig({
+	context: async ({ request, session, collections }) => {
+		const tenantId = request.headers.get("x-tenant-id");
+
+		if (tenantId && session?.user) {
+			const member = await collections.tenantMembers.findOne({
+				where: { tenant: tenantId, user: session.user.id },
+			});
+			if (!member) throw new Error("No access to this tenant");
+		}
+
+		return { tenantId };
+	},
+});
+```
+
+Collection calls here default to system mode, so they see every tenant. That is
+what lets the resolver establish the scope in the first place.
+
+## Where the result lands
+
+The object is merged flat into the request context. It is also carried as an
+internal `"~contextExtensions"` bundle, which is how it survives into nested
+calls. It reaches four places.
+
+| Surface        | How you read it                                            |
+| -------------- | ---------------------------------------------------------- |
+| Access rules   | `read: ({ tenantId }) => …`, on collections and globals    |
+| Hooks          | every collection and global hook context spreads it        |
+| Route handlers | `ctx.tenantId` inside `routes/`                            |
+| `getContext()` | `getContext<typeof app>().tenantId`, anywhere in the scope |
+
+```ts
+import { getContext } from "questpie";
+import type { app } from "@/questpie/server/.generated";
+
+function currentTenant() {
+	return getContext<typeof app>().tenantId;
+}
+```
+
+`getContext()` throws outside a request scope. `tryGetContext()` from the same
+module returns `undefined` instead, so reach for that when you are not sure.
+
+## The return must be an object
+
+`ValidateContextResolver` rejects a resolver that only ever resolves to a
+primitive or to `null`. Extensions are an object bundle.
+
+`session ? { tenantId } : null` passes, because it has an object arm.
+`{ tenantId: tenantId || null }` is the cleaner form and always passes.
+
+## Reserved keys
+
+The framework tracks a set of key names it sets itself.
+
+```text
+session, principal, actor, db, locale, defaultLocale, localeFallback,
+accessMode, stage, request, requestId, traceId, data, input, original,
+operation, params, app, collections, globals, "~contextExtensions"
+```
+
+Returning one of these does not throw. Outside production it logs a warning
+once per key. In production it is silent.
+
+The protection is partial, so read the warning as a real signal. Your result is
+merged flat first. Then `session`, `locale`, `defaultLocale`, `accessMode` and
+`db` are set on top. Those five genuinely cannot be shadowed. Most of the rest
+can. A resolver returning `collections` or `globals` shadows the typed entity
+APIs in every hook and access rule.
+
+Pick a domain name and the question never comes up. `tenantId`,
+`organizationId`, `propertyId`, `cityId` are all safe.
+
+## Off the request path there is no resolver
+
+The resolver runs only when a `request` exists. A CRUD call with no request
+defaults to `accessMode: "system"`, which skips access rules entirely. Your
+scope `where` never fires there.
+
+| Where you are         | `accessMode` | Your scope filter |
+| --------------------- | ------------ | ----------------- |
+| An HTTP request       | `user`       | applies           |
+| A job, seed or script | `system`     | ignored           |
+| Inside the resolver   | `system`     | ignored           |
+
+So inside a job, pass the tenant yourself.
+
+```ts
+// In a job handler. collections comes off the handler context.
+const { docs } = await collections.posts.find({ where: { tenant: tenantId } });
+```
+
+Or pass `{ accessMode: "user", session }` as the second argument and supply the
+context bundle yourself. The first form is simpler and harder to get wrong.
+
+## With no resolver at all
+
+Leave `context` off and nothing breaks. No bundle is attached, `getContext()`
+returns only the framework keys, and any access rule reading `tenantId` sees
+`undefined`. A scoped global then resolves to the single row whose `scope_id`
+is null, which is the same behaviour as an unscoped global.

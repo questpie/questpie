@@ -1,122 +1,142 @@
 ---
 title: Deploying
-description: The process model, environment, and a Dockerfile that works. What QUESTPIE needs to run in production and what it deliberately leaves to you.
+description: A QUESTPIE deploy is a PostgreSQL database, one process serving HTTP, a migration step in front of the rollout, and a worker if you wrote jobs. These pages cover each piece, and the parts you own yourself.
+kind: guide
+package: questpie
 ---
 
-A QUESTPIE deployment is one or two processes and a PostgreSQL database. Nothing
-else is required.
+The app you run on your laptop is the app you run in production. What changes is
+where the values come from, who applies the schema, and how many copies run.
 
-## The process model
+## What a deploy is made of
 
-| Process    | Command                        | Required             |
-| ---------- | ------------------------------ | -------------------- |
-| **App**    | your framework's start command | Yes                  |
-| **Worker** | `bun run worker`               | Only if you use jobs |
+| Piece            | What it is                               | Needed                      |
+| ---------------- | ---------------------------------------- | --------------------------- |
+| PostgreSQL       | Version 15 or newer                      | Always                      |
+| The app process  | Your template's own start command        | Always                      |
+| A migration step | `questpie migrate`, before the app rolls | Once you commit a migration |
+| A worker process | A file that calls `app.queue.listen()`   | Only if you wrote jobs      |
 
-The app serves HTTP. The worker runs background jobs. They are separate
-processes so a slow job cannot occupy a request handler, and so you can scale
-them independently.
+QUESTPIE ships no server. It gives you `createFetchHandler` from `questpie/http`.
+Every template mounts that behind a server QUESTPIE does not provide. So the
+start command is whatever your template's `package.json` says.
 
-Running the worker in the same process is possible but is not recommended past
-the smallest deployments: a job that saturates the CPU will slow every request
-on that instance.
+That version floor is checked, not just documented. The database service reads
+`server_version_num` on connect. Below 15 it throws and names the version it
+found.
 
-```ts title="src/worker.ts"
-import { app } from "#questpie";
+The worker is a separate process on purpose. A job that saturates the CPU would
+otherwise slow every request on that instance. You write the worker file
+yourself. [Workers](/docs/code/jobs/workers) covers it and its options.
 
-await app.queue.listen({
-	teamSize: 5, // concurrent jobs
-	batchSize: 3, // jobs fetched per poll
-});
-```
+## What it reads from the environment
 
-## Environment
+Leave `app`, `db` or `secret` out of `runtimeConfig()` and it resolves them for
+you. It reads the QUESTPIE name first, then the standard one.
 
-Environment variables are declared and validated in `src/lib/env.ts`. An invalid
-or missing variable fails at startup rather than at the first request that needs
-it, which is what you want in a rollout.
+| Config key | QUESTPIE name      | Standard name        | With neither            |
+| ---------- | ------------------ | -------------------- | ----------------------- |
+| `app.url`  | `QUESTPIE_APP_URL` | `APP_URL`            | `http://localhost:3000` |
+| `db.url`   | `QUESTPIE_DB`      | `DATABASE_URL`       | Throws                  |
+| `secret`   | `QUESTPIE_SECRET`  | `BETTER_AUTH_SECRET` | Undefined               |
 
-The minimum:
+An explicit value always wins. The database throw fires while
+`questpie.config.ts` is evaluated. A missing URL fails at boot, not at the first
+query.
+
+`storage` is read from the environment too. `QUESTPIE_STORAGE_ENDPOINT`,
+`QUESTPIE_STORAGE_BUCKET`, `QUESTPIE_STORAGE_ACCESS_KEY` and
+`QUESTPIE_STORAGE_SECRET_KEY` together give you an S3 adapter. Set the endpoint
+but miss one of the rest, and it warns, then falls back to local disk. The
+templates pass `storage` explicitly, so none of this fires for them.
+
+<Callout
+	type="warn"
+	title="Set the secret before you set `NODE_ENV=production`"
+>
+	With no secret at all, Better Auth falls back to its own published default.
+	Under `NODE_ENV=production` it refuses that value and throws at startup.
+	Generate one with `openssl rand -base64 32`. Use a different value per
+	environment.
+</Callout>
+
+The templates declare these again in `src/lib/env.ts`, with `@t3-oss/env-core`
+and a Zod schema. That file is where you add your own variables.
+[Environment](/docs/ship/environment) covers declaring them, and getting the
+public ones into the browser bundle.
+
+## Applying the schema
+
+Migrations are files you commit. Applying them is its own deploy step. Run it
+once, before the new version serves.
 
 ```bash
-DATABASE_URL=postgresql://user:pass@host:5432/db
-APP_URL=https://example.com
-BETTER_AUTH_SECRET=<32+ random bytes>
+questpie migrate   # apply pending migrations, then exit
+bun run start      # then roll the app
 ```
 
-`BETTER_AUTH_SECRET` **must be at least 32 characters**. A shorter value fails at
-startup. Generate one with `openssl rand -base64 32`, and use a different value
-per environment.
+`questpie migrate` is an alias for `questpie migrate:up`. It applies your pending
+migrations, then runs the search adapter's own index migrations. With no
+migration files at all it prints "No migrations found" and stops. The search step
+is skipped too. Keep it out of the boot path. A failed schema change is then one
+step you can read, not a replica that crash-loops.
 
-Anything the browser needs must be declared separately in `env.client.ts` and
-prefixed for your bundler (`VITE_` for Vite). Server variables are never exposed
-to the client bundle; that separation is enforced, not conventional.
+`questpie push` is the other command, and it is for development. It diffs your
+schema straight into the database and records nothing. It warns and runs either
+way. `--force` only drops two lines of that warning. Point it at a local database
+and nothing else.
 
-## PostgreSQL
+<Callout type="warn" title="`migrate` tries to create an extension">
+	The Postgres search adapter's migrations include `CREATE EXTENSION IF NOT
+	EXISTS "pg_trgm"`, and pgvector's include `"vector"`. A database user without
+	that privilege fails the step, and the error names the statement. Create the
+	extension once during provisioning.
+</Callout>
 
-**PostgreSQL 15 or newer is required** and checked at startup.
+## Defaults a second replica breaks
 
-Realtime additionally uses `xid8`, which needs PostgreSQL 13+; that has its own
-explicit capability preflight, so an unsupported server fails with a clear
-message rather than at the first subscription.
+`db.url` and `email.adapter` are the two slots with no fallback. Every other slot
+has one. Two of those fallbacks are local to a single process.
 
-Some features need extensions that the framework does **not** create for you,
-because doing so requires privileges a production database user should not have:
+| Slot      | With no configuration     | What breaks                                    |
+| --------- | ------------------------- | ---------------------------------------------- |
+| `storage` | Local disk at `./uploads` | A redeploy wipes it. Replica B cannot read it. |
+| `kv`      | A `Map` in this process   | Two replicas disagree about every key.         |
 
-```sql
-CREATE EXTENSION IF NOT EXISTS pg_trgm;   -- fuzzy search
-CREATE EXTENSION IF NOT EXISTS vector;    -- pgvector semantic search
-```
+Leave `email.adapter` out and the email service throws while the app starts. That
+happens in every environment. The templates set it to `ConsoleAdapter`, which is
+why a template app boots. That adapter prints your mail to stdout, in production
+too. Swap it before you ship.
 
-Run these once as a superuser during provisioning.
+Realtime is the one that is already fine. The default change broker is
+PostgreSQL `LISTEN`/`NOTIFY` on your `db.url`. Two replicas see each other's
+events. [Infrastructure](/docs/infrastructure) covers every slot and the
+adapters that ship for it.
 
-## Dockerfile
+## What you own
 
-```dockerfile
-FROM oven/bun:1.3.13-slim AS base
-WORKDIR /app
+QUESTPIE does none of the following. Check each one before your first deploy.
 
-FROM base AS deps
-COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile
+- **TLS.** Terminate it in front of the app.
+- **Rate limiting.** QUESTPIE throttles none of your routes. Better Auth
+  throttles its own `/auth/*` routes in production, counting in memory per
+  process. Put the rest at the edge.
+- **Process supervision.** Use your platform's restart policy.
+- **Secret storage.** The app reads its secrets from the environment. Filling
+  that environment is yours.
+- **Backups.** See your database provider.
 
-FROM base AS build
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-RUN bun run build
+## Where each topic lives
 
-FROM base AS release
-ENV NODE_ENV=production
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/package.json ./
-# Migrations are applied by a separate step, not on boot - see Migrations.
-CMD ["bun", "run", "start"]
-```
-
-The worker uses the same image with a different command:
-
-```yaml
-command: ["bun", "run", "worker"]
-```
-
-Build once, run both. A worker on a different image than the app will eventually
-run a job whose handler no longer matches the payload.
-
-## What QUESTPIE does not do for you
-
-Stated plainly, because assuming otherwise is how deployments get hurt:
-
-- **No rate limiting.** Put it at the edge (your CDN, load balancer or reverse
-  proxy). The framework does not throttle requests.
-- **No TLS termination.** Terminate it in front.
-- **No process supervision.** Use your platform's restart policy.
-- **No secret management.** `DATABASE_URL` and `BETTER_AUTH_SECRET` come from the
-  environment; where they come from before that is yours.
-- **No automatic backups.** See your database provider.
+| Topic                                                 | Page                                      |
+| ----------------------------------------------------- | ----------------------------------------- |
+| `runtimeConfig`, app config, auth config, modules     | [Configuration](/docs/ship/configuration) |
+| Declaring and validating variables, server and client | [Environment](/docs/ship/environment)     |
+| Writing a migration, and applying it without downtime | [Migrations](/docs/ship/migrations)       |
+| More than one app process, and more than one worker   | [Scaling](/docs/ship/scaling)             |
+| Probes, traces, metrics and logs                      | [Monitoring](/docs/ship/monitoring)       |
 
 ## Next
 
-- [Migrations](/docs/ship/migrations) - applying schema changes safely
-- [Scaling](/docs/ship/scaling) - replicas, workers and realtime
-- [Monitoring](/docs/ship/monitoring) - probes, traces and logs
+**[Configuration](/docs/ship/configuration)** covers `questpie.config.ts` and the
+files beside it. That is where every slot above gets set.

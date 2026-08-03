@@ -1,127 +1,199 @@
 ---
 title: Collaborative article
-description: Configure one article record so multiple users can edit title, tags, and body concurrently through TanStack Start.
+description: One article and two people typing into it at once. This builds it end to end, from an empty collection file to a textarea that merges both sets of keystrokes.
+kind: guide
+package: questpie
 ---
 
-This recipe creates one collaborative aggregate per article. Title and body use
-Yjs text replicas; tags use QUESTPIE's add-wins set. Status remains normal CRUD.
+Two people open the same article. Under ordinary CRUD the second save wins and
+the first person's paragraph is gone. Four steps fix that. Mark the fields, turn
+on the engine, generate the artifacts, bind an input to a field.
 
-## 1. Add the engine and schema
+## Mark the fields
+
+It takes two calls. `.crdt()` on a field makes that field a replica.
+`.collaborative()` on the builder makes one record one aggregate.
+
+```ts title="src/questpie/server/collections/articles.ts"
+import { collection } from "#questpie/factories";
+import { z } from "zod";
+
+export const articles = collection("articles")
+	.fields(({ f }) => ({
+		title: f
+			.text({ mode: "text" })
+			.default("")
+			.required()
+			.crdt({ format: "text" }),
+		tags: f
+			.text({ mode: "text" })
+			.array()
+			.default([])
+			.required()
+			.crdt({ format: "set", conflict: "add-wins" }),
+		content: f.textarea().default("").required().crdt({ format: "text" }),
+		published: f.boolean().default(false),
+	}))
+	.collaborative({
+		awareness: z.object({ name: z.string().max(64) }).strict(),
+	});
+```
+
+`published` stays an ordinary column. Only the three marked fields merge. Each
+marked one must be `.required()` with an empty default. It may carry no length
+rule, transform, hook or localization.
+[Eligible fields](/docs/schema/collaborative-documents/eligible-fields) has the
+full list. `awareness` is optional. It is how you show who else is here.
+
+## Turn on the engine
+
+A `set` field merges inside `questpie`. A `text` field needs an engine. The one
+QUESTPIE ships wraps Yjs. Install it, then wire it on both sides.
 
 ```bash
 bun add @questpie/crdt-yjs
 ```
 
-Use the collection definition from
-[Collaborative documents](/docs/schema/collaborative-documents), including
-the `title`, `tags`, and `content` CRDT fields plus `.collaborative()`. Normal
-collection and field access rules remain the authority source.
+```ts title="src/questpie/server/questpie.config.ts"
+import { yjsServerEngine } from "@questpie/crdt-yjs/server";
+import { runtimeConfig } from "questpie/app";
 
-## 2. Configure server and browser engines
+export default runtimeConfig({
+	db: { url: process.env.DATABASE_URL! },
+	crdt: {
+		namespace: "my-app",
+		engines: { text: yjsServerEngine() },
+	},
+});
+```
 
-Configure `yjsServerEngine()` under `runtimeConfig({ crdt })` and
-`yjsClientEngine()` under `createClient({ crdt })` as shown in the concept
-guide. The existing `src/routes/api/$.ts` Fetch handler serves the CRDT routes.
-Do not mount a separate WebSocket server.
+```ts title="src/lib/client.ts"
+import { yjsClientEngine } from "@questpie/crdt-yjs/client";
+import { createClient } from "questpie/client";
+import type { AppConfig } from "#questpie";
 
-## 3. Generate durable artifacts
+export const client = createClient<AppConfig>({
+	baseURL: window.location.origin,
+	basePath: "/api",
+	crdt: { engines: { text: yjsClientEngine() } },
+});
+```
+
+Pick `namespace` once, because changing it later is a hard error. The fetch
+handler you already mount serves the two collaborative routes. You add no
+routes and start no second process.
+
+## Generate what the runtime reads
 
 ```bash
-bun run questpie:generate
-bunx questpie crdt:manifest
-bunx questpie migrate:generate
-bunx questpie migrate:up
+questpie generate        # registers the collection
+questpie crdt:manifest   # writes crdt.manifest.json
+questpie generate        # bakes the manifest into the generated app
+questpie migrate:generate
+questpie migrate:up
 ```
 
-Run `crdt:manifest` and `migrate:generate` again. Both must report no diff.
-Commit the generated manifest and migration; never hand-write the
-infrastructure tables.
+That order matters. `crdt.manifest.json` holds the stable identity of every
+marked field. Only the second `generate` puts it inside the generated app.
+Commit it with the migration and hand-edit neither.
 
-## 4. Connect and edit
+<Callout type="warn" title="A missing manifest is silent">
+	Without the baked manifest the CRDT runtime reports itself unavailable.
+	Nothing on the server complains. `connect()` rejects with `CRDT_UNAVAILABLE`
+	and the document lands on `denied`. A `secret` under 16 characters does the
+	same thing.
+</Callout>
+
+## Create the row
 
 ```ts
-import { createCrdtClient } from "questpie/crdt";
-
-import { client } from "@/lib/client";
-
-const crdt = createCrdtClient(client);
-const article = crdt.collections.articles.document({ id: articleId });
-const stop = article.subscribe((state) => renderConnectionState(state));
-
-await article.connect({ mode: "edit", fallback: "view" });
-
-article.transaction(({ fields }) => {
-	fields.title.text.apply([
-		{ type: "insert", index: 0, value: "A shared title" },
-	]);
-	fields.tags.set.add("news");
-	fields.content.text.apply([
-		{ type: "insert", index: 0, value: "A shared opening." },
-	]);
+const { id } = await client.collections.articles.create({
+	title: "First draft",
 });
-
-article.awareness.set(
-	{ name: currentUser.name },
-	{ activeField: "content", cursor: 17 },
-);
-
-// Route/component cleanup:
-await article.disconnect();
-stop();
 ```
 
-Each participant may edit a different field concurrently. The transaction
-above is one aggregate commit, so other clients never observe only part of it.
+`create` is the one ordinary write allowed to set a marked field. It seeds the
+value. After that the collaborative client is the only writer, and `updateById`
+throws if the data touches a marked field.
 
-## 5. Attach a durable comment
+## Bind an input to a field
 
-Create an anchor only after the relevant text update is acknowledged:
+```ts title="src/lib/article-editor.ts"
+import { createCrdtClient, type CrdtTextOperation } from "questpie/crdt";
 
-```ts
-const state = article.getSnapshot();
-if (state.status !== "ready" || state.pendingUpdates !== 0) {
-	throw new Error("Wait for the collaborative update receipt");
+import { client } from "./client";
+
+export const crdt = createCrdtClient(client);
+
+export async function mountEditor(id: string, box: HTMLTextAreaElement) {
+	const article = crdt.collections.articles.document({ id });
+	await article.connect({ mode: "edit", fallback: "view" });
+	article.awareness.set({ name: "Ada" }, { activeField: "content" });
+
+	box.value = article.fields.content.text.value();
+
+	const stop = article.subscribe((state) => {
+		if (state.status !== "ready" && state.status !== "offline") return;
+		box.readOnly = state.fieldGrants.content !== "edit";
+		const merged = article.fields.content.text.value();
+		if (merged !== box.value) box.value = merged;
+	});
+
+	box.addEventListener("input", () => {
+		const ops = textDiff(article.fields.content.text.value(), box.value);
+		if (ops.length > 0) article.fields.content.text.apply(ops);
+	});
+
+	return async () => {
+		stop();
+		await article.disconnect();
+	};
 }
 
-const anchor = article.fields.content.anchors.create({
-	kind: "range",
-	start: selectionStart,
-	end: selectionEnd,
-});
-
-await saveComment({
-	articleId,
-	anchor,
-	quotedText: article.fields.content.text
-		.value()
-		.slice(selectionStart, selectionEnd),
-	body: commentBody,
-});
+function textDiff(previous: string, next: string): CrdtTextOperation[] {
+	let head = 0;
+	while (head < previous.length && previous[head] === next[head]) head++;
+	let tail = 0;
+	while (
+		tail < previous.length - head &&
+		tail < next.length - head &&
+		previous.at(-1 - tail) === next.at(-1 - tail)
+	) {
+		tail++;
+	}
+	const ops: CrdtTextOperation[] = [];
+	const removed = previous.length - head - tail;
+	const added = next.slice(head, next.length - tail);
+	if (removed > 0) ops.push({ type: "delete", index: head, length: removed });
+	if (added) ops.push({ type: "insert", index: head, value: added });
+	return ops;
+}
 ```
 
-`saveComment` is application code: store the opaque anchor with the comment or
-annotation record and keep the quote for product-specific fallback. To render,
-load the comment and call `fields.content.anchors.resolve(comment.anchor)`.
-Handle `detached` explicitly, for example by showing the retained quote as
-historical context.
+Building the handle does nothing. `connect()` starts the work and resolves only
+once the document is `ready`. `fallback: "view"` takes a read-only session
+instead of failing when edit is refused. `fieldGrants` says which one you got.
 
-The structural token survives ordinary concurrent edits and compaction. It
-intentionally detaches after replace/import/restore, incompatible schema
-recreation, purge, or delete-then-recreate. It carries no read authority.
+The diff is the point. `apply` takes inserts and deletes, not a new string.
+Sending the whole box as one delete plus one insert would wipe out what the
+other person typed. Indices are UTF-16 code units and may not split a surrogate
+pair. This diff can, next to an emoji, and `apply` throws `INVALID_OPERATION`.
+A real editor binding handles that for you.
 
-## 6. Test the lifecycle
+## The working result
 
-Cover at least:
+Sign in as two people in two windows and open the same article. Both type into
+the same paragraph. Both sets of characters survive, in order, with no save
+button and no lock. Both publish a name for a presence bar to read. Every
+ordinary `find` still reads the column, because the merge writes it.
 
-1. two authenticated clients concurrently edit different fields and converge;
-2. a view-only actor can read but cannot append;
-3. a field-hidden actor never sees its content or cursor;
-4. disconnect/reconnect reconciles a lost append response exactly once;
-5. soft delete retires the active resource and restore creates a fresh epoch;
-6. a browser-created text anchor resolves through a server route after
-   concurrent edits, but detaches after restore or recreation;
-7. process shutdown closes the generated app once and does not leak worker
-   threads.
+## Where each topic lives
 
-For transport and recovery details, see
-[Collaborative documents](/docs/schema/collaborative-documents).
+| Topic                                 | Page                                                            |
+| ------------------------------------- | --------------------------------------------------------------- |
+| Why a document opened read-only       | [Who may type](/docs/guides/collaborative-docs/access)          |
+| Comments that follow the sentence     | [Comments](/docs/guides/collaborative-docs/comments)            |
+| Every call on the handle              | [In the client](/docs/client/collaborative-documents)           |
+| Formats, and what marking costs a row | [Collaborative documents](/docs/schema/collaborative-documents) |
+| Offline edits, and recovery from them | [Offline](/docs/client/collaborative-documents/offline)         |
+| Routes, engine options, protocol caps | [Runtime](/docs/schema/collaborative-documents/runtime)         |

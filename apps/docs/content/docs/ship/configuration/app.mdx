@@ -1,0 +1,185 @@
+---
+title: App config
+description: config/app.ts holds four app-wide settings, locales, fallback access, global hooks and the per-request context resolver. Each one merges differently when a module already set it.
+kind: reference
+package: questpie
+---
+
+| Key       | Type               | Merged across modules by |
+| --------- | ------------------ | ------------------------ |
+| `locale`  | `LocaleConfig`     | last file wins           |
+| `access`  | `AppDefaultAccess` | last file wins           |
+| `hooks`   | `GlobalHooksInput` | concatenation            |
+| `context` | `ContextResolver`  | last file wins           |
+
+Every key is optional, and so is the file. The scaffolded starters ship no
+`config/app.ts` at all.
+
+## `locale`
+
+Configures the content-localization layer that backs localized fields.
+
+```ts title="src/questpie/server/config/app.ts"
+import { appConfig } from "questpie/app";
+
+export default appConfig({
+	locale: {
+		locales: [
+			{ code: "en", label: "English", fallback: true },
+			{ code: "sk", label: "Slovenčina" },
+		],
+		defaultLocale: "en",
+		fallbacks: { "en-GB": "en" },
+	},
+});
+```
+
+`locales` is an array, or a function returning one, sync or async. Each entry
+takes `code`, `label`, `fallback` and `flagCountryCode`. `defaultLocale` is used
+when a request names none. `fallbacks` maps one code to another.
+
+A request naming a locale that is not in the list is not rejected. It falls to
+`fallbacks`, then to `defaultLocale`.
+
+Write no `locale` at all and the app has one locale, `en`.
+
+## `access`
+
+The rule an operation falls back to when the collection or global declares none.
+Each entry is a boolean or a function. A function may return `true`, `false`, or
+a `where` object that filters rows.
+
+```ts
+access: {
+	read: true,
+	create: ({ session }) => Boolean(session),
+}
+```
+
+`AppDefaultAccess` takes seven keys, and the runtime reads six of them.
+
+| Key                                  | Chain                                                                 |
+| ------------------------------------ | --------------------------------------------------------------------- |
+| `read`, `create`, `update`, `delete` | Collection rule, then this map, then "require a session"              |
+| `serve`                              | Collection `serve`, then collection `read`, then this map, then allow |
+| `introspect`                         | Collection `introspect`, then this map, then "any CRUD allowed"       |
+| `transition`                         | Nothing reads it. A transition falls back to `update` instead.        |
+
+A CRUD operation nobody wrote is never public. `serve` is the one chain that
+ends in an allow. Files marked private still need a signed token on top of it.
+
+<Callout type="warn" title="This key replaces, it does not merge">
+	Your file's `access` overwrites the module's whole map, not the operations you
+	named. `adminModule` pulls in the starter, which requires a session for all
+	four CRUD operations. Write `{ read: true }` alone and the other three fall
+	through to the built-in session check.
+</Callout>
+
+The function receives `ResolvedAppDefaultAccessContext`. It carries `db`,
+`session` and the collections, plus `data`, `input`, `locale` and `request`. It
+is leaner than the context a collection's own `.access()` rule gets. Routing the
+full context through here would build a type cycle in the generated app.
+
+## `hooks`
+
+Callbacks that run across every collection or every global, so a cross-cutting
+concern lands once instead of in each file.
+
+```ts
+hooks: {
+	collections: {
+		include: ["posts", "pages"],
+		afterChange: ({ collection, data, operation }) => {},
+	},
+	globals: {
+		afterChange: ({ global, data }) => {},
+	},
+}
+```
+
+`collections` and `globals` each take one entry object. `include` and `exclude`
+scope it to named slugs, and `exclude` is applied after `include`. Omit both and
+the hook runs everywhere.
+
+| Target        | Stages available                                                                                                                 |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `collections` | `beforeChange`, `afterChange`, `beforeDelete`, `afterDelete`, `beforePurge`, `afterPurge`, `beforeTransition`, `afterTransition` |
+| `globals`     | `beforeChange`, `afterChange`, `beforeTransition`, `afterTransition`                                                             |
+
+Put several stages on the one entry object rather than reaching for a second
+entry. Hooks concatenate across modules, so yours never displaces theirs.
+
+<Callout type="info" title="You are not the first hook in the queue">
+	The core module registers global hooks of its own for realtime capture, search
+	indexing and scheduled transitions. Yours run alongside them.
+</Callout>
+
+## `context`
+
+Runs once per HTTP request. Its return is merged flat into the request context.
+From there it reaches every access rule, hook, route handler, field access rule
+and `getContext()` call. This is the seam for multi-tenancy.
+
+```ts
+context: async ({ request, session, collections }) => {
+	const tenantId = request.headers.get("x-tenant-id");
+
+	if (tenantId && session?.user) {
+		const member = await collections.tenant_members.findOne({
+			where: { tenant: tenantId, user: session.user.id },
+		});
+		if (!member) throw new Error("No access to this tenant");
+	}
+
+	return { tenantId };
+},
+```
+
+The resolver gets `request`, `session` and `db`. It also gets the whole
+system-mode service surface. That means `collections`, `globals`, `kv`, `queue`,
+`logger`, `t` and your own services, all typed by codegen.
+
+Calls inside it run in **system mode**, with access rules bypassed. The resolver
+is the trusted derivation step, so it is also the place to reject a request.
+
+It only runs when a request is present. Jobs, seeds and scripts build their
+context without one, so nothing the resolver returns is there.
+
+### Rules the return value has to follow
+
+The return type is what types the context downstream, so it has to be an object.
+`appConfig()` rejects a resolver returning only a primitive or only `null`.
+`session ? { role } : null` passes, because one arm is an object.
+
+Prefer an explicit object literal over a value you inferred and then narrowed.
+Downstream the keys arrive as optional, so read them with that in mind.
+
+<Callout type="warn" title="Some key names are taken">
+	Return a framework key such as `session`, `db`, `locale` or `request` and the
+	framework overwrites it downstream. Return `collections` or `globals` and you
+	shadow the typed entity APIs instead. Outside production each one logs a
+	warning naming the key.
+</Callout>
+
+## Why `access` and `hooks` vanish from the type
+
+`appConfig()` is identity at runtime, but its return type keeps only `locale`
+and `context`. `access` and `hooks` are erased to opaque storage.
+
+That is deliberate. Their function parameters embed the merged app context, and
+carrying that back into the generated index collapses the whole augmentation.
+Both are still fully typed where you write them. You just cannot read them back
+off `typeof appConfigFile`.
+
+## TypeScript
+
+```ts
+import type {
+	AppConfigInput, // { locale, access, hooks, context }
+	AppDefaultAccess,
+	LocaleConfig,
+	ContextResolver,
+} from "questpie";
+```
+
+`ContextResolver<T>` is generic over the object your resolver returns.

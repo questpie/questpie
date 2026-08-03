@@ -1,356 +1,141 @@
 ---
 title: Configuration
-description: Configuration is how you wire up a QUESTPIE app, runtime infrastructure in questpie.config.ts, app-level behavior in config/app.ts, auth in config/auth.ts, and the modules you depend on in modules.ts. Each is one declarative file codegen discovers and stitches together.
+description: A QUESTPIE app is configured by a handful of files, each owning one concern. Which file owns which setting, what resolves from the environment on its own, and what a setting you never write falls back to.
+kind: guide
+package: questpie
 ---
 
-A QUESTPIE app is configured by a handful of **convention files**, each owning one concern. `questpie.config.ts` declares runtime infrastructure (database, adapters, secret, codegen plugins). `config/app.ts` sets locale, default access, global hooks, and a per-request context resolver. `config/auth.ts` carries your Better Auth options. `modules.ts` lists the pre-built modules you depend on. You never assemble these by hand, codegen discovers each file, merges it across every module, and emits the typed `.generated/` app. Edit a file, run `questpie generate`, and the whole app moves with it.
+You have a database URL, a signing secret, an email adapter and a list of
+locales. Each one goes somewhere different. Here is the map.
 
-## What it does
+## The files
 
-- **Splits runtime from schema.** `questpie.config.ts` holds only infrastructure and plugins; your entities (collections, globals, routes, jobs) come from file convention. The two never tangle.
-- **Auto-resolves infra from the environment.** `runtimeConfig()` reads `app.url`, `db.url`, `secret`, and `storage` from `QUESTPIE_*` / standard env vars when you omit them, zero-config on QUESTPIE Cloud, explicit overrides anywhere else.
-- **One typed factory per concern.** `runtimeConfig()`, `appConfig()`, and `authConfig()` are identity factories that exist purely so TypeScript infers your config shape (and, for auth, your session type) end to end.
-- **A per-request context resolver.** `appConfig({ context })` runs once per request and its return travels flat into every access rule, hook, route, and `getContext()`, the seam for multi-tenancy and derived request state.
-- **Plugin-extensible config bucket.** Any plugin can claim its own `config/<name>.ts` file (admin → `config/admin.ts`, OpenAPI → `config/openapi.ts`) by declaring one discover pattern and augmenting `AppStateConfig`. No framework code changes.
-- **Modules are config you add.** `modules.ts` default-exports an array of pre-built modules; each can contribute collections, globals, jobs, messages, and even codegen plugins, auto-wired, nothing to register imperatively.
+They all sit under `src/questpie/server/`. Codegen reads them and writes
+`.generated/`, which is what actually boots.
 
-## Quick start
+| File                 | Owns                                                       | Factory             |
+| -------------------- | ---------------------------------------------------------- | ------------------- |
+| `questpie.config.ts` | Database, adapters, secret, storage                        | `runtimeConfig()`   |
+| `config/app.ts`      | Locales, default access, global hooks, per-request context | `appConfig()`       |
+| `config/auth.ts`     | Better Auth options                                        | `authConfig()`      |
+| `config/<name>.ts`   | One plugin's config, such as `config/admin.ts`             | the plugin's own    |
+| `modules.ts`         | Pre-built modules you depend on                            | none, a plain array |
+| `env.ts`             | Env var schema and validation                              | `env()`             |
 
-A new project ships these four files under `src/questpie/server/`. Together they are a complete, bootable configuration.
+Only `questpie.config.ts` is required. A scaffolded project ships that,
+`modules.ts`, and two or three files under `config/`. It ships no
+`config/app.ts` at all.
+
+## The one you must write
 
 ```ts title="src/questpie/server/questpie.config.ts"
-import { runtimeConfig } from "questpie/app";
 import { ConsoleAdapter } from "questpie/adapters/console";
+import { runtimeConfig } from "questpie/app";
 
-import env from "./env"; // declared + validated in env.ts, see Environment
+import env from "./env"; // declared and validated in env.ts
 
-// Runtime infrastructure + codegen plugins only, no entities here.
 export default runtimeConfig({
 	app: { url: env.APP_URL },
 	db: { url: env.DATABASE_URL },
-	secret: env.BETTER_AUTH_SECRET,
 	email: { adapter: new ConsoleAdapter() },
 });
 ```
 
-```ts title="src/questpie/server/config/app.ts"
-import { appConfig } from "questpie/app";
-
-// Discovered as config/app.ts → AppStateConfig.app.
-export default appConfig({
-	locale: {
-		locales: [
-			{ code: "en", label: "English", fallback: true },
-			{ code: "sk", label: "Slovenčina" },
-		],
-		defaultLocale: "en",
-	},
-});
-```
-
-```ts title="src/questpie/server/config/auth.ts"
-import { authConfig } from "questpie/app";
-
-// Discovered as config/auth.ts → AppStateConfig.auth (Better Auth options).
-export default authConfig({
-	emailAndPassword: { enabled: true, requireEmailVerification: false },
-});
-```
-
-```ts title="src/questpie/server/modules.ts"
-import { adminModule } from "@questpie/admin/modules/admin";
-import { openApiModule } from "@questpie/openapi";
-
-// Pre-built modules this project depends on.
-const modules = [adminModule, openApiModule] as const;
-export default modules;
-```
-
-Then regenerate the typed app:
+Then build the app surface.
 
 ```bash
-questpie generate   # discovers every config file, merges modules, emits .generated/index.ts
+questpie generate
 ```
 
-<Callout
-	type="info"
-	title="Import the factories from `questpie/app` (or `questpie`)"
->
-	`runtimeConfig`, `module`, `appConfig`, and `authConfig` are all exported from
-	both `questpie` and the lighter `questpie/app` barrel. The starter templates
-	and examples use `questpie/app`. The CLI factories, `config()` and
-	`packageConfig()`, live in `questpie/cli` instead.
+`runtimeConfig()` holds infrastructure and nothing else. Collections, globals,
+routes and jobs come from their own directories. There is no key here for them.
+
+<Callout type="warn" title="`email.adapter` is not optional">
+	The mailer starts with every app. Leave `email` out and startup throws
+	`QUESTPIE: 'email.adapter' is required` before the first request lands. Use
+	`ConsoleAdapter` in development.
 </Callout>
 
-## How the files connect
+## What resolves without you
 
-There is one runtime file and a set of discovered convention files. Codegen reads them all and emits `.generated/index.ts`, which is what actually boots.
+Leave out `app`, `db`, `secret` or `storage` and `runtimeConfig()` reads the
+environment. Your value wins, then the `QUESTPIE_*` name, then the standard one.
 
-| File                 | Owns                                                       | Discovered as              | Factory                                            |
-| -------------------- | ---------------------------------------------------------- | -------------------------- | -------------------------------------------------- |
-| `questpie.config.ts` | db, adapters, secret, storage, **codegen plugins**         | the runtime config (root)  | `runtimeConfig()`                                  |
-| `config/app.ts`      | locale, default access, global hooks, **context resolver** | single → `config.app`      | `appConfig()`                                      |
-| `config/auth.ts`     | Better Auth options                                        | single → `config.auth`     | `authConfig()`                                     |
-| `config/<name>.ts`   | any plugin's composite config                              | single → `config.<name>`   | plugin's factory                                   |
-| `modules.ts`         | pre-built module dependencies                              | the module list (pre-pass) | none (plain array)                                 |
-| `env.ts`             | env var schema + validation                                | the env definition         | `env()`, see [Environment](/docs/ship/environment) |
+| Field     | QUESTPIE Cloud       | Standard             | If neither              |
+| --------- | -------------------- | -------------------- | ----------------------- |
+| `app.url` | `QUESTPIE_APP_URL`   | `APP_URL`            | `http://localhost:3000` |
+| `db`      | `QUESTPIE_DB`        | `DATABASE_URL`       | throws                  |
+| `secret`  | `QUESTPIE_SECRET`    | `BETTER_AUTH_SECRET` | `undefined`             |
+| `storage` | `QUESTPIE_STORAGE_*` | none                 | local `./uploads`       |
 
-`questpie.config.ts` carries **only** the runtime half. The `config/*.ts` files are file-convention singles: codegen discovers each one and drops the whole file under a key in the **config bucket** (`AppStateConfig`), merging that key across every module before it reaches the app. `modules.ts` is read first, in a dedicated pre-pass, so the modules' own files and codegen plugins are folded in before the rest of discovery runs.
-
-```bash
-questpie generate   # one shot: pre-pass modules.ts, discover all files, emit .generated/
-questpie dev        # the same, in watch mode, regenerates on file add/remove
-```
-
-<Callout
-	type="warn"
-	title="`questpie.config.ts` needs `.generated/index.ts` to exist"
->
-	The CLI's `questpie.config.ts` is in the "new format", it carries `app.url`
-	but is **not** itself a built app. On a CLI command it auto-resolves
-	`.generated/index.ts` for the real app instance, and errors with *"Run
-	`questpie generate` first"* if that file is missing. Generate before you
-	migrate, seed, or push.
-</Callout>
-
-## `runtimeConfig`, runtime infrastructure
-
-`runtimeConfig()` is the default export of `questpie.config.ts`. It is an identity factory: it returns your config (after resolving `app`/`db`/`secret`/`storage` from the environment) so TypeScript keeps the exact shape. This is where you register **adapters** and **codegen plugins**, never entities.
-
-```ts title="src/questpie/server/questpie.config.ts"
-import { runtimeConfig } from "questpie/app";
-import { ConsoleAdapter } from "questpie/adapters/console";
-import { pgBossAdapter } from "questpie/adapters/pg-boss";
-
-import { messages } from "@/questpie/server/i18n";
-import env from "./env";
-
-export default runtimeConfig({
-	app: { url: env.APP_URL },
-	db: { url: env.DATABASE_URL },
-	secret: env.BETTER_AUTH_SECRET,
-	storage: { basePath: "/api" },
-	translations: { messages },
-	email: { adapter: new ConsoleAdapter({ logHtml: false }) },
-	queue: { adapter: pgBossAdapter({ connectionString: env.DATABASE_URL }) },
-});
-```
-
-### Auto-resolution from the environment
-
-`app` and `db` are **optional** in the input, when you omit a field, `runtimeConfig()` resolves it from env, in this order: your explicit value, then `QUESTPIE_*` (injected by QUESTPIE Cloud), then the standard fallback, then a default.
-
-| Field     | QUESTPIE Cloud env   | Standard fallback    | Default                    |
-| --------- | -------------------- | -------------------- | -------------------------- |
-| `app.url` | `QUESTPIE_APP_URL`   | `APP_URL`            | `http://localhost:3000`    |
-| `db.url`  | `QUESTPIE_DB`        | `DATABASE_URL`       | _(throws if unresolvable)_ |
-| `secret`  | `QUESTPIE_SECRET`    | `BETTER_AUTH_SECRET` | `undefined`                |
-| `storage` | `QUESTPIE_STORAGE_*` | none                 | local `./uploads`          |
-
-So on QUESTPIE Cloud the whole file can collapse to just your plugins:
+`db` is the one with no default. If none of the three has it, `runtimeConfig()`
+throws where you call it. On QUESTPIE Cloud the file collapses to what nothing
+can guess.
 
 ```ts
 export default runtimeConfig({
-	plugins: [], // app/db/secret/storage all auto-resolved from QUESTPIE_* env
+	email: { adapter: new ConsoleAdapter() },
 });
 ```
 
-When `QUESTPIE_STORAGE_ENDPOINT`, `QUESTPIE_STORAGE_BUCKET`, `QUESTPIE_STORAGE_ACCESS_KEY`, and `QUESTPIE_STORAGE_SECRET_KEY` are all set, an S3-compatible Files SDK adapter is auto-configured. The adapter is lazy, the AWS SDK import is deferred to the first storage operation, so you must install all four peer deps: `@aws-sdk/client-s3`, `@aws-sdk/lib-storage`, `@aws-sdk/s3-presigned-post`, and `@aws-sdk/s3-request-presigner`.
+## The rest of the slots
 
-<Callout type="warn" title="`db` must resolve from somewhere">
-	`app.url` falls back to `http://localhost:3000`, but `db.url` has no default,
-	if it can't be resolved from your value, `QUESTPIE_DB`, or `DATABASE_URL`,
-	`runtimeConfig()` throws at construction. Always provide a database.
-</Callout>
+Every other key picks an adapter or flips a switch. All of them are optional.
 
-### Options reference
+| Key                       | Picks                                             |
+| ------------------------- | ------------------------------------------------- |
+| `queue`                   | The job backend. Required once you declare a job. |
+| `search`                  | The index. Postgres full-text when you skip it.   |
+| `kv`                      | The key-value store. In-memory when you skip it.  |
+| `realtime`                | The live transport. Always on. This tunes it.     |
+| `storage`                 | Where uploaded bytes land.                        |
+| `logger`, `observability` | Log format, traces and metrics.                   |
+| `executor`                | Sandboxed code execution. Off unless you set it.  |
+| `autoMigrate`, `autoSeed` | Whether boot runs migrations and seeds.           |
 
-Everything below `app`/`db` is optional. The full `RuntimeConfigInput` shape:
+[Runtime options](/docs/ship/configuration/runtime) has the full table, the four
+shapes `db` accepts, and the storage keys.
 
-| Key            | Type                                        | Purpose                                                                        |
-| -------------- | ------------------------------------------- | ------------------------------------------------------------------------------ |
-| `app`          | `{ url: string }`                           | Public app URL (auto-resolved if omitted).                                     |
-| `db`           | `DbConfig`                                  | Database connection (auto-resolved if omitted).                                |
-| `secret`       | `string`                                    | Secret for signing tokens / signed file URLs.                                  |
-| `plugins`      | `CodegenPlugin[]`                           | **Codegen plugins**, extend file discovery + generated output.                 |
-| `storage`      | `StorageConfig`                             | File storage: `{ location }` (local) or `{ adapter }` (Files SDK).             |
-| `email`        | `MailerConfig`                              | `{ adapter }`, e.g. `ConsoleAdapter`, `SmtpAdapter`.                           |
-| `queue`        | `{ adapter: QueueAdapter }`                 | Background job queue (e.g. `pgBossAdapter`).                                   |
-| `search`       | `SearchAdapter`                             | Full-text / vector search (defaults to Postgres search).                       |
-| `realtime`     | `true \| RealtimeConfig`                    | Realtime transport. Use `true` for defaults, or an object for adapter/options. |
-| `kv`           | `KVConfig`                                  | Key-value store (defaults to in-memory).                                       |
-| `executor`     | `ExecutorConfig`                            | Sandboxed / trusted code execution (opt-in; disabled by default).              |
-| `logger`       | `LoggerConfig`                              | Logger configuration.                                                          |
-| `translations` | `TranslationsConfig`                        | Backend i18n messages (`{ messages }`).                                        |
-| `autoMigrate`  | `boolean`                                   | Run migrations on startup.                                                     |
-| `autoSeed`     | `boolean \| SeedCategory \| SeedCategory[]` | Run [seeds](/docs/schema/seeds) on startup.                                    |
-| `cli`          | `{ migrations?, seeds? }`                   | Override generated-migration / [seed](/docs/schema/seeds) directories.         |
+## `config/app.ts`
 
-The input type is `RuntimeConfigInput`, defined as `Partial<Pick<RuntimeConfig, "app" | "db">> & Omit<RuntimeConfig, "app" | "db">`: the resolved `RuntimeConfig` interface with `app` and `db` made optional. `DbConfig` itself is a union, `{ url }`, `{ pglite }`, `{ drizzle }` (a pre-built client, for Neon / Vercel Postgres / Hyperdrive), or `{ create }` (a lazy factory, preferred for Cloudflare Workers).
+One file, four app-wide concerns. Every key is optional and the file itself is
+optional.
 
-<Callout type="info" title="`plugins` is for codegen plugins, not modules">
-	`runtimeConfig({plugins})` registers **codegen plugins** (the thing that adds
-	file-convention discovery and generated output). Module *dependencies* go in
-	`modules.ts` instead, and a module can carry its own codegen plugin, so most
-	apps never touch `plugins` directly. The adapters (queue, search, KV, …) each
-	have their own page under Infrastructure.
-</Callout>
+| Key       | Decides                                                    |
+| --------- | ---------------------------------------------------------- |
+| `locale`  | Which content locales exist and which one is the default.  |
+| `access`  | The rule a collection falls back to when it declares none. |
+| `hooks`   | Callbacks that run across every collection or global.      |
+| `context` | What each request carries, resolved once, before anything. |
 
-The adapter and storage wiring (`StorageConfig`, the queue/search/realtime/kv/executor adapters) each have a dedicated page; this page covers the config _file_, not every adapter.
-
-## `config/app.ts`, app-level behavior
-
-`config/app.ts` default-exports `appConfig(...)`. It consolidates four app-wide concerns into one file: content **locale**, **default access** rules, global **hooks**, and a per-request **context resolver**. Codegen discovers it as a single and stores the whole file under `config.app`.
+`context` is the one worth learning first. It runs once per HTTP request and its
+return travels flat into every access rule, hook, route and `getContext()` call.
 
 ```ts title="src/questpie/server/config/app.ts"
 import { appConfig } from "questpie/app";
 
 export default appConfig({
-	locale: {
-		locales: [
-			{ code: "en", label: "English", fallback: true, flagCountryCode: "us" },
-			{ code: "sk", label: "Slovenčina" },
-		],
-		defaultLocale: "en",
-	},
-	access: { read: true }, // app-wide default; collections can override
-	context: async ({ request, session }) => ({
-		role: session?.user?.role ?? "guest",
+	access: { read: true },
+	context: async ({ request }) => ({
+		tenantId: request.headers.get("x-tenant-id"),
 	}),
 });
 ```
 
-`AppConfigInput` is `{ locale?, access?, hooks?, context? }`. Every key is optional.
+Calls inside the resolver run in system mode, so access rules are bypassed. The
+resolver is the trusted derivation step.
 
-### `locale`
-
-`LocaleConfig` configures the content-localization (i18n) layer that backs localized fields:
-
-```ts
-locale: {
-  locales: [
-    { code: "en", label: "English", fallback: true },
-    { code: "sk", label: "Slovenčina" },
-  ],
-  defaultLocale: "en",
-  fallbacks: { "en-GB": "en" }, // optional per-locale fallback mapping
-}
-```
-
-`locales` is a static array (or an async function returning one); `defaultLocale` is the code used when a request specifies none; `fallbacks` maps a locale to the code to fall back to.
-
-### `access`, app-wide default rules
-
-`access` is the fallback access map applied when a collection or global doesn't declare its own rule for an operation. It mirrors collection access, `read`, `create`, `update`, `delete`, `transition`, `serve`, `introspect`, each a `boolean` or a function of the request context that may return a `where` object to filter. The per-collection [Access control](/docs/schema/access-control) chain resolves to these defaults last.
-
-```ts
-access: {
-  read: true,                                   // public read by default
-  create: ({ session }) => Boolean(session),    // signed-in users can create
-}
-```
-
-<Callout type="warn" title="The app-level access context is a leaner seam">
-	The function context here is `ResolvedAppDefaultAccessContext` (db, session,
-	collections, …), **not** the fully augmented `AccessContext` that
-	per-collection `.access()` rules get. This is deliberate: routing app-level
-	rules through the full augmented context would create a type cycle in the
-	generated app. Use collection-level `.access()` when you need the richest
-	typed context.
+<Callout type="warn" title="`access` replaces, it does not merge">
+	Set the key and a module's whole map goes. Write `read: true` alone and
+	`create`, `update` and `delete` fall back to "require a session", not to what
+	the module wanted.
 </Callout>
 
-### `hooks`, global hooks
+[App config](/docs/ship/configuration/app) covers all four keys.
 
-`hooks` registers hooks that run across **every** collection or global, keyed by target. Use it to apply a cross-cutting concern (audit, search reindexing) without touching each definition:
+## `config/auth.ts`
 
-```ts
-hooks: {
-  collections: {
-    include: ["posts", "pages"],                          // optional, defaults to all collections
-    afterChange: ({ collection, data, operation }) => { /* runs across collections */ },
-  },
-  globals: {
-    afterChange: ({ global, data }) => { /* runs across globals */ },
-  },
-}
-```
-
-The shape is `GlobalHooksInput`, `{ collections?: GlobalCollectionHookEntry; globals?: GlobalGlobalHookEntry }`. Each value is one hook-entry object. `GlobalCollectionHookEntry` contains `include`, `exclude`, and lifecycle callbacks; `include` and `exclude` scope it to specific slugs. Per-entity hooks live on collection and global builders; see [Hooks](/docs/schema/hooks).
-
-<Callout type="info" title="Group lifecycle callbacks in one entry">
-`collections` and `globals` each accept one hook-entry object. Put several lifecycle callbacks on that object, such as `{ beforeChange, afterChange, afterDelete }`.
-</Callout>
-
-### `context`, the per-request context resolver
-
-This is the most powerful knob in `config/app.ts`. `context` runs **once per HTTP request**; the object it returns is merged flat into the request context and reaches **every** access rule, hook, route handler, field-access rule, and `getContext()` call. It's the canonical seam for multi-tenancy and derived request state.
-
-```ts
-context: async ({ request, session, collections }) => {
-  const tenantId = request.headers.get("x-tenant-id");
-
-  if (tenantId && session?.user) {
-    const member = await collections.tenant_members.findOne({
-      where: { tenant: tenantId, user: session.user.id },
-    });
-    if (!member) throw new Error("No access to this tenant");
-  }
-
-  return { tenantId }; // now available as ctx.tenantId everywhere downstream
-},
-```
-
-The resolver receives `{ request, session, db }` plus the full system-mode service surface (`collections`, `globals`, `kv`, `queue`, `logger`, `t`, your services), typed via the codegen-emitted `Questpie.ContextResolverContext`. Calls inside the resolver run in **system mode** (access rules bypassed): the resolver _is_ the trusted derivation step.
-
-<Callout type="warn" title="Annotate (or directly return) the resolver's object, don't return a bare primitive or only null">
-The resolver's **return type** is what drives the typed context extension downstream, so it must resolve to an object. `appConfig()` rejects a resolver that returns *only* a primitive (`async () => "x"`) or *only* `null` (`async () => null`) at the call site. The common `session ? { role } : null` shape passes because it has an object arm. Because the return type is load-bearing, prefer returning an explicit object literal over an inferred-then-narrowed value.
-</Callout>
-
-<Callout
-	type="info"
-	title="Why `access` and `hooks` vanish from `appConfig()`'s return type"
->
-	`appConfig()` is identity at runtime, but its **return type** erases `access`
-	and `hooks` to opaque storage and keeps only `locale` and `context`. That's
-	intentional: their function parameter types embed the merged `AppContext`, and
-	riding them back into the generated index would collapse the whole
-	augmentation (TS2456). Both are still fully typed *at the call site*, you just
-	can't read them back off `typeof appConfigFile`.
-</Callout>
-
-## `config/auth.ts`, authentication
-
-`config/auth.ts` default-exports `authConfig(...)`, wrapping your [Better Auth](https://www.better-auth.com) options. `AuthConfig` is exactly `BetterAuthOptions`, so anything Better Auth accepts goes here. Codegen discovers it as a single and stores it under `config.auth`.
-
-```ts title="src/questpie/server/config/auth.ts"
-import { authConfig } from "questpie/app";
-
-export default authConfig({
-	emailAndPassword: { enabled: true, requireEmailVerification: false },
-	socialProviders: {
-		google: {
-			clientId: process.env.GOOGLE_CLIENT_ID!,
-			clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-		},
-	},
-});
-```
-
-`authConfig()` does one extra thing beyond identity: it recovers the **inferred session shape** from your options and threads it through a type-only channel, so your session type flows into the rest of the app without you exporting an unnameable plugin-instantiated type. Runtime values like `secret` and `baseURL` come from `runtimeConfig()` / env, don't duplicate them here.
-
-### Session typing comes from merged auth
-
-The generated session type is derived from the full merged `config.auth`, not only from the local `config/auth.ts` file. Codegen folds auth config through the entire module tree, including nested modules such as `adminModule -> starterModule`, then intersects the app-local auth config on top.
-
-That means module-provided Better Auth plugins must surface in generated types. In an admin app, the starter module contributes `admin()` and `bearer()`, so `session.user.role` should be typed in routes, hooks, access rules, services, and `AppSessionUser`.
-
-```ts
-import type { AppSessionUser } from "#questpie";
-
-type Role = AppSessionUser["role"];
-```
-
-Keep admin apps explicit anyway:
+The whole file is Better Auth options. Anything Better Auth accepts goes here.
 
 ```ts title="src/questpie/server/config/auth.ts"
 import { admin, bearer } from "better-auth/plugins";
@@ -362,169 +147,48 @@ export default authConfig({
 });
 ```
 
-If `session.user.role` is not typed, do not cast it. Check `modules.ts`, `config/auth.ts`, and the generated `src/questpie/server/.generated/context.gen.ts`, then run `questpie generate`.
+`baseURL` comes from `app.url` and `secret` from `runtimeConfig()`, so you do not
+repeat them. Setting either here still wins, because your options are spread
+last.
 
-## The `config/*.ts` convention (extensibility)
+Your session type is built from the whole module tree's auth config intersected
+with this file. A module that adds a Better Auth plugin widens `AppSessionUser`
+for you. If a field is missing, run `questpie generate` before you cast.
 
-`config/app.ts` and `config/auth.ts` aren't special-cased, they're two instances of a general pattern: **each `config/<name>.ts` file maps to one key in the config bucket** (`AppStateConfig`). The whole file becomes `config.<name>`, and that key is merged per sub-key across every module. This is how plugins add composite config without forking the framework:
+## `modules.ts`
 
-- `@questpie/admin` claims `config/admin.ts` → `config.admin`
-- `@questpie/openapi` claims `config/openapi.ts` → `config.openapi`
-
-To add your own config file from a plugin, declare one discover pattern and augment the interface:
-
-```ts
-// in your codegen plugin's target contribution
-discover: {
-  myPluginConfig: { pattern: "config/my-plugin.ts", configKey: "myPlugin" },
-}
-```
-
-```ts
-// in your plugin's types, make the key typed and discoverable
-declare module "questpie" {
-	interface AppStateConfig {
-		myPlugin?: MyPluginConfig;
-	}
-}
-```
-
-Now users add `config/my-plugin.ts` (default-exporting your config), codegen folds it into `config.myPlugin`, and modules contributing the same key are merged per sub-key. `AppStateConfig` is `{ app?, auth? }` at the core; everything else is augmentation.
-
-<Callout type="info" title="Use `configKey` for config files">
-	A discover pattern's `configKey` emits the **whole file** as one entry under
-	the config bucket: one file maps to one config key.
-</Callout>
-
-## `modules.ts`, module dependencies
-
-`modules.ts` declares the pre-built modules your app depends on. It default-exports an array of module objects, conventionally `as const`:
+A plain array of the pre-built modules you depend on.
 
 ```ts title="src/questpie/server/modules.ts"
 import { adminModule } from "@questpie/admin/modules/admin";
-import { auditModule } from "@questpie/admin/modules/audit";
-import mcpModule from "@questpie/mcp";
 import { openApiModule } from "@questpie/openapi";
 
-export default [adminModule, auditModule, mcpModule, openApiModule] as const;
+export default [adminModule, openApiModule] as const;
 ```
 
-Codegen reads `modules.ts` in a dedicated **pre-pass** before the rest of discovery: it walks the tree depth-first (dependencies before dependents), extracts each module's codegen `plugin` (so the module's own file conventions get registered), and merges its contributed entities, collections, globals, jobs, routes, services, migrations, seeds, messages, and `config`, into your app. Duplicate modules (by `name`) are de-duplicated, last occurrence wins.
+Codegen reads this file first, in its own pass, so each module's file
+conventions are registered before discovery runs. The tree is walked
+dependencies first, and two modules with the same name collapse to the last one.
+See [Modules](/docs/code/modules).
 
-A module is a plain data object, no factory functions inside. You author one with the `module()` identity factory:
+## Plugins bring their own file
 
-```ts
-import { module, collection } from "questpie/app";
+`config/app.ts` and `config/auth.ts` are not special. Each `config/<name>.ts`
+becomes `config.<name>`, and a plugin claims one with a single discover pattern.
+That is how `@questpie/admin` gets `config/admin.ts`.
+[Plugin config files](/docs/ship/configuration/plugins) shows how to claim one.
 
-export const blogModule = module({
-  name: "blog",
-  collections: { posts: collection("posts")./* … */ },
-  messages: { en: { "blog.published": "Published" } },
-});
-```
+## Where each topic lives
 
-<Callout
-	type="info"
-	title="A module's `plugin` is codegen-only, never merged at runtime"
->
-	The `plugin` key on a module is extracted by codegen and **excluded** from the
-	runtime module merge. That's how a module package (`@questpie/admin`,
-	`@questpie/openapi`) ships its file conventions without you registering
-	anything in `questpie.config.ts`, adding the module to `modules.ts` is enough.
-</Callout>
+| Topic                                          | Page                                                    |
+| ---------------------------------------------- | ------------------------------------------------------- |
+| Every `runtimeConfig()` key, `db`, `storage`   | [Runtime options](/docs/ship/configuration/runtime)     |
+| Locales, default access, global hooks, context | [App config](/docs/ship/configuration/app)              |
+| Claiming a `config/<name>.ts` from a plugin    | [Plugin config files](/docs/ship/configuration/plugins) |
+| Declaring and validating env vars              | [Environment](/docs/ship/environment)                   |
+| What the generator reads and writes            | [Codegen](/docs/code/codegen)                           |
 
-The full module surface (`ModuleDefinition`), how modules contribute each category, and the depth-first merge are covered in [Extend → Modules](/docs/code/modules).
+## Next
 
-## CLI config
-
-The root `questpie.config.ts` the CLI loads is normally just a re-export of your server config. Codegen resolves the built app from `.generated/index.ts`:
-
-```ts title="questpie.config.ts (project root)"
-// Re-export the server config; the CLI resolves .generated/index.ts for the app.
-export { default } from "./src/questpie/server/questpie.config";
-```
-
-`create-questpie` scaffolds this shape. CLI settings such as migration and [seed](/docs/schema/seeds) directories live in the server config when you need to override the defaults.
-
-<Callout type="warn" title="Importing `questpie/cli` must not run a command">
-	The CLI program is side-effect-free on import, command parsing is guarded by
-	`import.meta.main`. This matters because package config files import
-	`questpie/cli` for `packageConfig`, and a stray src-vs-dist double instance
-	running a command could corrupt `.generated/`.
-</Callout>
-
-## The static-module pattern (`packageConfig`)
-
-If you're building an **npm package that ships modules** (the way `@questpie/admin` does), you don't hand-write a `.generated/module.ts`, you describe the package once with `packageConfig()` and let `questpie generate` build a static module per subdirectory. This is dev-only config: it never ships, only the generated `module.ts` files do.
-
-```ts title="questpie.config.ts (in a module package)"
-import { packageConfig } from "questpie/cli";
-import { myPlugin } from "./src/server/plugin.js";
-
-export default packageConfig({
-	modulesDir: "src/server/modules", // each subdir → one module
-	modulePrefix: "questpie", // dir "admin" → module "questpie-admin"
-	plugins: [myPlugin()], // codegen plugins shared across all modules
-});
-```
-
-In package mode, `questpie generate` scans `modulesDir/*`, derives each module's name as `${modulePrefix}-${dirName}`, and runs codegen in **module mode** per subdirectory (emitting `.generated/module.ts`, plus `registries.ts` when there are type augmentations). `PackageConfig` is `{ modulesDir, modulePrefix?, plugins? }` (`modulePrefix` defaults from `package.json` name).
-
-Built-in and published modules use the same `packageConfig` and `config/*.ts` conventions. Core uses `packageConfig({ modulesDir: "src/server/modules", modulePrefix: "questpie" })`. See Extend → Build a plugin to package your own module.
-
-## CLI commands
-
-The configuration files only do something once codegen reads them. The relevant commands:
-
-| Command                   | Does                                                                                                               |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `questpie generate`       | Discover all config files, run the `modules.ts` pre-pass, emit `.generated/`. Run after any config change.         |
-| `questpie dev`            | The same in watch mode, regenerates on file **add/remove** (content edits are skipped; `typeof import` is stable). |
-| `questpie push`           | Push the current schema to the dev database (no migration).                                                        |
-| `questpie migrate:create` | Generate a migration from the current schema (production path).                                                    |
-
-<Callout type="warn" title="Production uses migrations, never push">
-	`questpie push` and `bun run db:push` are local-development tools. Never run
-	them against production or in deployment automation, even with `--force`.
-	Production changes must use a reviewed, committed `questpie migrate:create`
-	output followed by `questpie migrate` during deployment.
-</Callout>
-
-`questpie generate` auto-detects the config mode from the file shape (root-app vs module vs `packageConfig`) and sets `QUESTPIE_SKIP_ENV_VALIDATION=1` while it imports your code (codegen must run without a populated env).
-
-<Callout type="idea" title="Watch mode regenerates on structural change only">
-	`questpie dev` only re-runs codegen when a file is **added or removed** (or a
-	config file changes), editing the *contents* of an existing collection/config
-	file is skipped, because the generated app references it by `typeof
-	import(...)`, which is stable. If a change isn't picked up, it's structural:
-	add/rename/delete is what triggers a regen.
-</Callout>
-
-## TypeScript
-
-The config factories give you typed access to every config shape, import them from `questpie`:
-
-```ts
-import type {
-	RuntimeConfig, // resolved questpie.config.ts shape
-	RuntimeConfigInput, // its input (app/db optional)
-	AppConfigInput, // config/app.ts input ({ locale, access, hooks, context })
-	AppStateConfig, // the plugin-extensible config bucket
-	ContextResolver, // the appConfig({ context }) function type
-	LocaleConfig,
-	ModuleDefinition,
-} from "questpie";
-
-import type { TypedAuthConfig } from "questpie/app"; // authConfig() return
-```
-
-`AppStateConfig` is the interface plugins augment to add their own `config/<name>.ts` keys; `ContextResolver<T>` is generic over the object your resolver returns. The CLI types (`QuestpieConfigFile`, `QuestpieCliConfig`, `PackageConfig`) come from `questpie/cli`. Codegen plugin types (`CodegenPlugin`, `CategoryDeclaration`, `DiscoverPattern`, …) come from `questpie/codegen`.
-
-## Related
-
-- [Getting started](/docs/learn), scaffold a project where these files are wired for you.
-- [Collections](/docs/schema/collections), the entities `runtimeConfig` deliberately keeps out of `questpie.config.ts`.
-- [Access control](/docs/schema/access-control), how `config/app.ts`'s `access` defaults sit at the bottom of the per-collection rule chain.
-- [Hooks](/docs/schema/hooks), per-entity hooks; `config/app.ts`'s `hooks` are the global counterpart.
-- [Environment](/docs/ship/environment), `env.ts` / `env()`, boot validation, and server-vs-client vars that feed `runtimeConfig`.
-- Runnable example: [`examples/toy-factory-backend`](https://github.com/questpie/questpie/tree/main/examples/toy-factory-backend), a complete `questpie.config.ts` + `config/app.ts` + `config/auth.ts` + `modules.ts` set.
+**[Environment](/docs/ship/environment)** is where `env.APP_URL` and
+`env.DATABASE_URL` in the example above come from.

@@ -1,0 +1,137 @@
+---
+title: Builder methods
+description: Add a typed method to collection(), global() or any field. You declare where the value lands and what type it takes. The generator writes the method into your app's own factories file.
+kind: guide
+package: questpie
+---
+
+Your plugin needs per-collection settings. You could ask for a config file
+listing collection names. A method on `collection()` is better, because it sits
+where the collection is declared and the compiler checks it.
+
+## Declare the method
+
+A registry extension is one small object. This one adds `.retention()`.
+
+```ts title="src/questpie/server/plugin.ts"
+registries: {
+	collectionExtensions: {
+		retention: {
+			stateKey: "retention",
+			imports: [{ name: "RetentionConfig", from: "@acme/retention" }],
+			configType: "RetentionConfig",
+		},
+	},
+},
+```
+
+| Field        | What it does                                                   |
+| ------------ | -------------------------------------------------------------- |
+| `stateKey`   | The key the value lands under on the builder                   |
+| `configType` | The parameter type. Leave it out and the method takes `any`    |
+| `imports`    | What `configType` needs, added to the generated factories file |
+| `defaults`   | Folded under the user's config as `{ ...defaults, ...config }` |
+
+## Use it
+
+Run `questpie generate`. The method is now on the `collection` you import from
+`#questpie/factories`, typed, with autocomplete.
+
+```ts title="src/questpie/server/collections/events.ts"
+import { collection } from "#questpie/factories";
+
+export const events = collection("events")
+	.fields(({ f }) => ({ name: f.text(120).required() }))
+	.retention({ days: 30 });
+```
+
+## Read it back
+
+`app.collections` is the CRUD API. The collection itself comes from
+`getCollectionConfig`, and your value sits on its state under your `stateKey`.
+
+```ts
+const events = app.getCollectionConfig("events");
+const config = (events.state as { retention?: RetentionConfig }).retention;
+```
+
+The cast is not optional. The generated method returns `CollectionBuilder<TState>`
+unchanged, so the state type never gains your key. The core reads `.list()` and
+`.form()` the same way.
+
+That is the whole contract. Your plugin declares the method, the app author
+calls it, and your runtime code reads one key. Nothing in the core knows what
+`retention` means.
+
+<Callout type="warn" title="One name, one owner">
+	Extensions merge by name across every plugin on a target. Two plugins
+	declaring `retention` means the later one wins and the earlier method is gone.
+	Prefix anything that is not obviously yours.
+</Callout>
+
+## Methods that take a callback
+
+`.list()` and `.form()` take a function instead of an object. That is how the
+app author reaches `f.title` rather than typing `"title"`. Set `isCallback` and
+name the parameters your callback receives.
+
+```ts
+acmeList: {
+	stateKey: "acmeList",
+	configType: "(ctx: { f: Record<string, string> }) => AcmeListConfig",
+	isCallback: true,
+	callbackContextParams: ["f"],
+},
+```
+
+Each name in `callbackContextParams` is looked up in `callbackParams`, on your
+extension first and then on the target. Every entry points at a real exported
+factory, never an inline string.
+
+```ts
+callbackParams: {
+	f: { factory: "createFieldNameProxy", from: "questpie/builders" },
+},
+```
+
+`createFieldNameProxy` is the core one, and it is why `f.title` resolves to
+`"title"` inside a callback. Declare your own factory when you need a different
+proxy.
+
+## The other registries
+
+`collectionExtensions` has four siblings on the same target.
+
+| Registry             | What it adds                                   |
+| -------------------- | ---------------------------------------------- |
+| `globalExtensions`   | The same method on `global()`                  |
+| `fieldExtensions`    | A method on every `f.*()` instance             |
+| `singletonFactories` | A typed identity wrapper for a convention file |
+| `builderFactories`   | A factory needing the merged field definitions |
+
+A field extension is declared the same way but stores its value elsewhere. It
+lands under `extensions` on the field state, keyed by your `stateKey`. A field
+type's own methods write to the top level, so the two never overwrite each
+other.
+
+A singleton factory is how `appConfig()` and `authConfig()` exist. It generates
+`export function myConfig<T extends MyConfig>(config: T): T`, so a convention
+file gets a type without importing one.
+
+A builder factory is how `block()` exists. Some builders need the app's merged
+field definitions at construction, and only the generated file has those. That
+is why you import `block` from `#questpie/factories` and not from a package.
+
+## Where each topic lives
+
+| Topic                                | Page                                                   |
+| ------------------------------------ | ------------------------------------------------------ |
+| Every field on a registry extension  | [Plugins](/docs/code/codegen/plugins)                  |
+| Your own `f.*` type                  | [Field types](/docs/guides/build-a-plugin/field-types) |
+| The `collection()` chain as it ships | [Collections](/docs/schema/collections)                |
+| What the generator writes and where  | [Codegen](/docs/code/codegen)                          |
+
+## Next
+
+**[Building a plugin](/docs/guides/build-a-plugin)** is the page these methods
+hang off. It builds the plugin object itself, then ships it.

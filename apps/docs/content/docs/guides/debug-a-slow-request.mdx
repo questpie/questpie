@@ -1,17 +1,22 @@
 ---
 title: Trace a slow request
 description: Wire OpenTelemetry into a QUESTPIE app, run a collector locally, and read the waterfall down to the SQL statement that was actually slow.
+kind: guide
+package: "@questpie/observability"
 ---
 
-The point of tracing is not that spans exist. It is that when someone says "the
-orders page is slow", you can answer with a query and a number instead of a
-guess. This recipe gets you from nothing to that answer.
+Someone says the orders page is slow. The usual next step is a guess. Do this
+instead. You end up holding the exact SQL statement to run `EXPLAIN` on.
 
-## 1. Install and configure
+## Turn it on
+
+Install the adapter:
 
 ```bash
 bun add @questpie/observability
 ```
+
+Then add one key to your runtime config:
 
 ```ts title="src/questpie/server/questpie.config.ts"
 import { otelObservability } from "@questpie/observability";
@@ -23,18 +28,24 @@ export default runtimeConfig({
 		adapter: otelObservability({
 			serviceName: "my-app",
 			environment: process.env.NODE_ENV,
-			otlpEndpoint: process.env.OTLP_ENDPOINT,
+			console: true,
 		}),
 	},
 });
 ```
 
-Without `otlpEndpoint` nothing is exported and every seam still calls straight
-through, so it is safe to leave this in place in development.
+That is enough to see something. `console: true` prints each span to stdout as
+it ends, unbatched. Start the app with `bun run dev` and hit a route.
 
-## 2. Run a collector
+No `otlpEndpoint` is set here, so nothing is exported over the network. Spans
+still open and still nest. That is why the adapter is safe to leave wired in
+development.
 
-Jaeger is the shortest path to a waterfall you can actually look at:
+## Run a collector
+
+Stdout is fine for one span and useless for thirty. You want a waterfall.
+
+Any OTLP/HTTP collector works. Jaeger's all-in-one image is the shortest path:
 
 ```bash
 docker run --rm -p 16686:16686 -p 4318:4318 jaegertracing/all-in-one:latest
@@ -44,93 +55,142 @@ docker run --rm -p 16686:16686 -p 4318:4318 jaegertracing/all-in-one:latest
 OTLP_ENDPOINT=http://localhost:4318
 ```
 
-Start the app, make a request, then open `http://localhost:16686` and pick your
-service.
+Point the adapter at it and drop `console`:
 
-## 3. Read the waterfall
+```ts
+otelObservability({
+	serviceName: "my-app",
+	environment: process.env.NODE_ENV,
+	otlpEndpoint: process.env.OTLP_ENDPOINT,
+});
+```
 
-A single `GET /orders` looks roughly like this:
+That is a base URL. Traces post to `/v1/traces` under it, metrics to
+`/v1/metrics`, logs to `/v1/logs`. Restart the app, make the slow request, then
+open `http://localhost:16686` and pick your service.
+
+## Read the waterfall
+
+A `GET /api/orders` comes back looking roughly like this:
 
 ```
-GET /orders                          142ms   server
+GET /api/orders                      142ms   server
 └─ collection.find                   138ms   internal   db.collection.name=orders
    ├─ db.select                        4ms   client     db.sql.table=orders
    └─ db.select                      131ms   client     db.sql.table=order_items
 ```
 
-That last line is the answer. The route is not slow, the collection operation is
-not slow. One query against `order_items` is, and `db.statement` on that span
-carries the SQL to take to `EXPLAIN`.
+Read it top down. The root span is the request. The `internal` span is one call
+to `app.collections.orders.find()`. The `client` spans are the statements that
+call ran.
 
-Nesting is what makes this readable, and it is real parent/child linkage rather
-than a shared trace id. Spans inside a `db.transaction()` appear under it, which
-is usually where the surprise is on writes.
+The last line is the answer. The route is not slow. The collection call is not
+slow. One query against `order_items` is.
 
-## 4. Correlate the logs
+<Callout type="info" title="The nesting is real parent linkage">
+	Child spans do not merely share a trace id. Each one names its parent. So a
+	statement inside `db.transaction()` appears under the transaction span. On
+	writes that is usually where the surprise lives.
+</Callout>
 
-Every log line written during that request carries `trace_id` and `span_id`. In
-any backend that ingests both, paste the trace id from Jaeger into your log
-query and you get exactly the lines from that request, including the ones from
-inside the slow query's span.
+## Take the statement to EXPLAIN
 
-```ts
+Open the slow `db.select` span. `db.statement` carries the SQL text QUESTPIE
+sent.
+
+The parameters are not on it. A tracing backend is searchable and widely
+readable inside a company. Parameters are user data. So put your own values in
+and run it yourself:
+
+```sql
+-- db.statement, with real values in place of $1
+EXPLAIN ANALYZE SELECT * FROM "order_items" WHERE "order_id" = 42;
+```
+
+Now you have a query and a number instead of a guess. The usual fix is an index
+you never declared. See [Indexes](/docs/schema/collections#indexes).
+
+## Time what QUESTPIE cannot see
+
+Seven seams open spans: HTTP requests, collection CRUD, database queries,
+transactions, job runs, KV calls and search queries. Everything else is yours.
+A route handler gets no span of its own. So a payment call inside one is
+invisible until you wrap it. An image pipeline is too.
+
+```ts title="src/questpie/server/routes/orders.get.ts"
+import { route } from "questpie/services";
+
 export default route()
 	.get()
-	.handler(async ({ logger, collections }) => {
+	.handler(async ({ observability, collections }) => {
 		const orders = await collections.orders.find({ limit: 50 });
-		// Carries trace_id/span_id automatically; nothing to thread through.
-		logger.info("orders listed", { count: orders.docs.length });
-		return orders;
+
+		const rates = await observability.span(
+			"rates.fetch",
+			() => fetch("https://rates.example.com/latest").then((r) => r.json()),
+			{ kind: "client", attributes: { "rates.provider": "example" } },
+		);
+
+		return { orders: orders.docs, rates };
 	});
 ```
 
-## 5. Add your own span where the framework cannot see
+`span(name, fn, options)` nests under whatever span is active, so this lands in
+the same waterfall with no wiring. It waits for the promise to settle before
+ending. It records the error and rethrows rather than swallowing. It works with
+no adapter configured too, at the cost of one function call.
 
-The framework instruments its own seams. Anything you call yourself, a payment
-provider or an image pipeline, is invisible until you say so:
+## Join the logs to the trace
+
+Every line logged inside that request already carries the span's ids. `logger`
+sits on the same handler context, and nothing gets threaded through.
 
 ```ts
-const rates = await ctx.app.observability.span(
-	"stripe.list_prices",
-	async () => stripe.prices.list({ limit: 100 }),
-	{ kind: "client", attributes: { "payment.provider": "stripe" } },
-);
+logger.info("orders listed", { count: orders.docs.length });
 ```
 
-It nests under whatever is active, so it lands in the same waterfall.
+The record picks up `trace_id` and `span_id` in snake case. Those are the keys a
+log backend joins traces on. Search that trace id and you get exactly the lines
+from this request. That includes the ones written inside the slow query's span.
 
-## 6. Before you ship it
+<Callout type="warn" title="Two ids, and they differ">
+	`trace_id` is the span's. That is the one your backend knows. The camelCase
+	`traceId` beside it is QUESTPIE's own. It reads `x-trace-id`, then the inbound
+	`traceparent`, then falls back to the request id. Join on `trace_id`.
+</Callout>
 
-**Sample.** Tracing every request in production is expensive and rarely more
-informative than tracing a tenth of them:
+## Before you ship it
+
+Two changes, one line each.
+
+**Sample.** Tracing every production request costs more than it tells you.
 
 ```ts
 otelObservability({ serviceName: "my-app", samplingRatio: 0.1 });
 ```
 
-The sampler is parent-based, so a request that arrived already sampled stays
-sampled regardless of the ratio. Otherwise you get partial traces that break at
-your service, which is worse than no trace.
+That keeps a tenth of traces whole. The sampler is parent-based, so a request
+that arrived already sampled stays sampled whatever the ratio says. A bare ratio
+sampler would cut traces off at your service. A trace with a hole in it reads as
+a bug in the caller.
 
-**Shut down.** Spans are batched. A process that exits without flushing loses
-the last batch, which is disproportionately the interesting one because it
-contains whatever happened just before the crash:
+**Flush.** Spans are batched. A process that exits without flushing loses the
+last batch. That batch is the interesting one more often than not.
 
 ```ts
 process.on("SIGTERM", async () => {
-	await app.observability.shutdown();
+	await app.destroy();
+	process.exit(0);
 });
 ```
 
-**Know what is missing.** Search query text, KV keys, record contents and SQL
-parameters are deliberately never attached: a tracing backend is searchable,
-long-lived and widely readable inside a company. If an investigation needs one
-of them, add it on your own span where the decision is explicit and scoped.
+`app.destroy()` tears services down in reverse order. The database, queue,
+search and realtime have all stopped emitting by the time observability flushes.
+Use `await app.observability.shutdown()` if you are tearing the rest down
+yourself.
 
-## Distributed setups
+## Related
 
-An inbound `traceparent` header is continued rather than replaced, so a request
-arriving from another service joins that trace with the caller's span as parent.
-You do not have to do anything for this; it is the default. What you _do_ have to
-do is propagate outward on calls you make yourself, if you want the far side to
-join too.
+- [Observability](/docs/infrastructure/observability), every adapter option and how to write your own.
+- [Instrumented seams](/docs/infrastructure/observability/seams), every span QUESTPIE opens and what it deliberately leaves out.
+- [Monitoring](/docs/ship/monitoring), health probes and what to alert on.

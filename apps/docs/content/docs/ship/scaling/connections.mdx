@@ -1,0 +1,120 @@
+---
+title: The connection budget
+description: PostgreSQL caps total connections and every process you run takes a slice. Who opens what, how to count it, and what a pooler in front changes.
+kind: guide
+package: questpie
+---
+
+You added replicas and PostgreSQL started refusing connections. The fix is
+arithmetic, not tuning. Count what one process opens, then multiply.
+
+## Who opens what
+
+| Opened by           | How many, per process        | Comes from                                       |
+| ------------------- | ---------------------------- | ------------------------------------------------ |
+| The Drizzle pool    | `db.pool.max`, 10 by default | `db: { url, pool }`                              |
+| pg-notify listener  | 1, at startup                | The realtime change broker                       |
+| pg-notify publisher | 1, after the first write     | The same broker, created lazily                  |
+| pg-boss             | Its own pool                 | The connection string you pass `pgBossAdapter()` |
+
+BullMQ opens Redis connections, not PostgreSQL ones. So do the Redis KV adapter
+and the Redis Streams broker.
+
+QUESTPIE builds the pg-notify broker for you only when it knows a connection
+string.
+`db: { url }` supplies one. So does `connectionString` on the `{ drizzle }` and
+`{ create }` shapes. A `changeBroker` you set yourself always wins. With neither
+you get no broker, and realtime falls back to a 2000 ms poll of the outbox.
+
+## Workers count too
+
+A worker imports the same built app. Realtime starts there as well, so a worker
+opens the same broker connections a replica does. Multiply by app replicas plus
+worker replicas, not by app replicas alone.
+
+Four app replicas and two workers, on pg-boss, with the default pool:
+
+| Line                                |  Count |
+| ----------------------------------- | -----: |
+| 6 processes x 10 pooled connections |     60 |
+| 6 processes x 2 broker connections  |     12 |
+| **Subtotal, before pg-boss**        | **72** |
+
+pg-boss adds its own on top of that. So does your migration job, your psql
+session, and whatever your platform runs for monitoring. A PostgreSQL still on
+its stock `max_connections` of 100 is already the thing stopping you.
+
+## Fail fast instead of hanging
+
+Leave `connectionTimeoutMs` unset and each driver picks its own. Bun waits 30
+seconds. node-postgres waits forever. A database at its cap then hangs the
+request instead of erroring. A hung request reads as a slow database rather than
+a full one. That sends you looking in the wrong place.
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { runtimeConfig } from "questpie/app";
+
+import env from "./env";
+
+export default runtimeConfig({
+	app: { url: env.APP_URL },
+	db: {
+		url: env.DATABASE_URL,
+		pool: { max: 5, connectionTimeoutMs: 5000 },
+	},
+});
+```
+
+Lowering `max` is usually the right first move. Ten connections per replica is a
+default, not a measurement. See
+[Runtime configuration](/docs/ship/configuration/runtime) for every pool key.
+
+## Behind a pooler
+
+Once the arithmetic passes `max_connections`, put PgBouncer or your provider's
+pooler in front. Transaction pooling mode gives the biggest win and takes two
+things away.
+
+**Named prepared statements.** Set `prepare: false` on the pool. Only the Bun
+driver reads that option. node-postgres creates a named statement only when a
+query asks for one.
+
+**Session state, `LISTEN` included.** The pg-notify broker holds a `LISTEN` for
+the life of the process. It needs a session-mode connection. It builds its own
+`pg` client from a connection string. Hand it a direct URL and leave the pool
+pointed at the pooler.
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { pgNotifyChangeBroker } from "questpie/adapters/pg-notify";
+import { runtimeConfig } from "questpie/app";
+
+import env from "./env";
+
+export default runtimeConfig({
+	app: { url: env.APP_URL },
+	db: { url: env.POOLER_DATABASE_URL, pool: { prepare: false } },
+	realtime: {
+		changeBroker: pgNotifyChangeBroker({
+			connectionString: env.DIRECT_DATABASE_URL,
+		}),
+	},
+});
+```
+
+Declare both URLs in `env.ts` so a missing one fails at startup rather than at
+the first subscription. See [Environment](/docs/ship/environment).
+
+`pgBossAdapter()` takes its own connection string as well. So you can move the
+queue's connections without touching the app pool.
+
+<Callout type="info" title="Losing the broker is not losing realtime">
+	An instance with subscribers drains the outbox on a timer, whatever the broker
+	is doing. A broker that cannot connect tightens that poll to 2000 ms. Delivery
+	keeps working, just later.
+</Callout>
+
+## Related
+
+- [Scaling](/docs/ship/scaling), what a second replica shares and what it does not.
+- [Realtime tuning](/docs/infrastructure/realtime/tuning), the poll and the outbox table.
+- [Monitoring](/docs/ship/monitoring), the probes that tell you a replica is out of connections.

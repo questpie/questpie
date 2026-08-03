@@ -1,0 +1,139 @@
+---
+title: Where isolation leaks
+description: Five places a scope filter silently does not apply, why each one behaves that way, and what to write instead.
+kind: reference
+package: questpie
+---
+
+Nothing on this page errors. You just see rows you did not expect. Each section
+is one path where the isolation you wrote was never in force.
+
+| Gap                              | What happens                                |
+| -------------------------------- | ------------------------------------------- |
+| A relation to an unscoped table  | The target's own rules run, and it has none |
+| The `user` collection            | Shared by design, and it must stay that way |
+| A backend call with no request   | System mode, so no access rule runs         |
+| A `null` scope                   | Filters to `IS NULL`, not to everything     |
+| A `where` returned from `create` | Ignored. Only `false` denies                |
+
+## A relation to an unscoped table
+
+Scope lives in each collection's own access rules. When you hydrate a relation
+with `with:`, QUESTPIE runs the related collection's own read, carrying the
+parent's access mode and session. So the target's rules apply, and only the
+target's. The parent's scope filter is not inherited.
+
+A child list keyed by a foreign key still stays inside the parents you loaded.
+The unscoped collection is the hole, because it is also readable on its own.
+
+```ts
+// comments has no scope rule of its own.
+// Any signed-in user reads every tenant's comments.
+await app.collections.comments.find({}, { accessMode: "user", session });
+```
+
+The fix is uniform. Scope every collection that holds tenant data, including
+ones you only reach through a relation.
+
+<Callout type="warn" title="Upload relations are the one exception">
+	An `f.upload()` relation carries an internal `inheritAccess` flag, so it
+	populates from the parent row's read decision. Field-level read rules still
+	apply. Every other relation type re-runs its own target's access.
+</Callout>
+
+The relation dispatcher carries that flag as a JavaScript symbol on the nested
+options. JSON cannot carry a symbol, so an HTTP `with` parameter can never opt
+a relation out of its scope rule.
+
+## The `user` collection
+
+`user` ships from the starter module. The admin module merges it to add the
+admin UI. It has no scope, and collections have no `scoped` option to add one.
+
+That is deliberate. A user is one account that may belong to many tenants. You
+do not fork the row per tenant. It already restricts itself sensibly: an admin
+reads every user, and anyone else reads only their own row.
+
+Model the relationship as its own collection and scope that instead.
+
+```ts title="src/questpie/server/collections/tenant-members.ts"
+import { type AnyPgColumn, uniqueIndex } from "questpie/drizzle-pg-core";
+
+import { collection } from "#questpie/factories";
+
+export default collection("tenantMembers")
+	.fields(({ f }) => ({
+		user: f.relation("user").required(),
+		tenant: f.relation("tenants").required(),
+		role: f
+			.select([
+				{ value: "admin", label: "Admin" },
+				{ value: "editor", label: "Editor" },
+				{ value: "viewer", label: "Viewer" },
+			])
+			.default("editor")
+			.required(),
+	}))
+	.indexes(({ table }) => [
+		uniqueIndex("tenant_members_unique").on(
+			table.user as AnyPgColumn,
+			table.tenant as AnyPgColumn,
+		),
+	]);
+```
+
+Then check membership in the resolver before you trust the header. See
+[the scope resolver](/docs/guides/multi-tenancy/scope-resolver).
+
+<Callout type="warn" title="Do not put a scope rule on `user`">
+	It filters the admin people list and every `f.relation("user")` picker, for
+	everyone. Login survives, because Better Auth reads the table through Drizzle
+	rather than through the collection. Put the boundary on membership instead.
+</Callout>
+
+## A backend call with no request
+
+Access rules run in user mode only. A CRUD call with no request defaults to
+system mode, which skips them. Your filter never fires.
+
+```ts
+// A script or seed. No request, so accessMode is "system".
+// This returns every tenant's posts.
+const { docs } = await app.collections.posts.find({});
+```
+
+That is correct for trusted code and dangerous when you forget which mode you
+are in. In a job, pass the tenant in the `where` yourself.
+
+## A `null` scope
+
+`{ tenant: null }` is not "match everything". The where builder turns a null
+value into `tenant IS NULL`, so it matches unassigned rows only.
+
+An access rule reading a scope that never arrived produces exactly that. Decide
+in the resolver what a missing header means. Reject it, or map it to a scope
+that matches nothing. Do not let `null` reach the rule.
+
+## A `where` returned from `create`
+
+`create` rules check for `false` and nothing else. An object return is not
+compared against the input, so it grants the create.
+
+```ts
+.access({
+	// Wrong. This allows every create.
+	create: ({ tenantId }) => ({ tenant: tenantId }),
+})
+```
+
+Stamp the field in a `beforeValidate` hook instead. Read and update still
+accept a filter object, and that is where the narrowing belongs.
+
+## What each operation does with a returned object
+
+| Operation | The object is                                      |
+| --------- | -------------------------------------------------- |
+| `read`    | ANDed into the query. Rows are narrowed.           |
+| `update`  | Matched against the loaded row. Mismatch is a 403. |
+| `delete`  | Matched against the loaded row. Mismatch is a 403. |
+| `create`  | Ignored.                                           |
