@@ -1,0 +1,169 @@
+---
+title: Discovery and tokens
+description: The three documents a client reads to find your authorization server, the one parameter that decides whether you get a usable token, and the checks the app runs before it trusts one.
+kind: reference
+package: "@questpie/mcp"
+---
+
+Three documents describe the auth layer. The core module mounts all three as
+ordinary routes, so they exist in every app.
+
+| Document                      | Path                                      | What it answers                              |
+| ----------------------------- | ----------------------------------------- | -------------------------------------------- |
+| Protected resource metadata   | `/.well-known/oauth-protected-resource`   | which server guards the MCP endpoint         |
+| Authorization server metadata | `/.well-known/oauth-authorization-server` | where to register, authorize and get a token |
+| Key set                       | `/jwks`                                   | the public keys a token is signed with       |
+
+## Where they mount
+
+They sit under your handler's base path, not the site root. The starters mount
+the handler at `/api`, so the real path is
+`/api/.well-known/oauth-protected-resource`. You never have to work this out.
+The `401` names the exact URL.
+
+## The 401 challenge
+
+A request to the MCP endpoint without a verified caller answers `401`. The body
+is empty. One header does the work.
+
+```http
+WWW-Authenticate: Bearer resource_metadata="https://your-app/api/.well-known/oauth-protected-resource"
+```
+
+The origin comes from `app.url` in your config, not from the request host. Any
+path on `app.url` is stripped. The path comes from the endpoint the client
+actually called, so a handler mounted under `/api` advertises a URL under
+`/api`.
+
+A CORS preflight is answered before this check, so `OPTIONS` never gets a
+challenge.
+
+## The endpoints a client calls
+
+These live under the better-auth base path, `/api/auth` by default.
+
+| Endpoint            | Purpose                                        |
+| ------------------- | ---------------------------------------------- |
+| `/oauth2/register`  | dynamic client registration, no session needed |
+| `/oauth2/authorize` | start the flow, carries the PKCE challenge     |
+| `/oauth2/consent`   | the decision the consent screen posts          |
+| `/oauth2/token`     | swap the code for an access token              |
+| `/oauth2/revoke`    | hand back a refresh token or a consent         |
+
+Registration creates a public client. It has no secret. The provider rejects a
+registration that asks to skip PKCE, and it accepts only the `S256` challenge
+method.
+
+## Ask for a resource or you get the wrong token
+
+The token request must carry `resource=<your MCP endpoint URL>`. That parameter
+is what makes the provider mint a signed JWT with your endpoint in `aud`.
+
+Leave it out and you get an opaque token instead. The MCP route cannot verify
+an opaque token, so it answers `401` and the client loops. A compliant MCP
+client sets `resource` for you. Set it yourself if you drive the flow by hand.
+
+The expected value is your `app.url` plus `/api/mcp`. That is fixed. It does not
+follow a handler mounted somewhere other than `/api`.
+
+<Callout type="warn" title="`APP_URL` and `app.url` must agree">
+	The provider reads `QUESTPIE_APP_URL`, then `APP_URL`, then falls back to
+	`http://localhost:3000`. Verification reads `app.url` from your config. The
+	two are compared as exact strings, so a mismatch rejects every token.
+</Callout>
+
+## What the token carries
+
+| Claim   | Value                                        |
+| ------- | -------------------------------------------- |
+| `sub`   | the user id the app loads the real user from |
+| `aud`   | your MCP endpoint URL                        |
+| `scope` | the approved scopes, space separated         |
+| `azp`   | the id of the client that asked              |
+| `iss`   | your app's auth issuer                       |
+| `exp`   | one hour after issue                         |
+
+## What the app checks
+
+Verification is local. There is no database round trip on the hot path.
+
+- The signature must match a key published at `/jwks`.
+- The algorithm must be `EdDSA`. Any other algorithm is rejected before the
+  signature is read.
+- `aud` must be your MCP endpoint. A token minted for another resource cannot be
+  replayed here.
+- `iss` and `exp` must both hold.
+- `sub` must still resolve to a user.
+
+Pass all five and the request carries an `oauth` principal: the real user plus
+the approved scopes.
+
+<Callout type="warn" title="The token is not MCP-only">
+	Verification runs on every request the handler serves. A valid token
+	authenticates any route in your app as that user. Only MCP tools apply the
+	scope gate, so other routes see the user and their `.access()` rules alone.
+</Callout>
+
+## A bad token never elevates
+
+A malformed, expired, wrong-audience, wrong-issuer or unsigned token resolves to
+no principal at all. The request then falls through to the normal session path,
+finds nothing, and the MCP route answers `401`. There is no path where a token
+failure produces more access than no token.
+
+System mode is set only by a trusted transport, never derived from a token.
+Requests already running in system mode skip token verification entirely, so a
+bearer can neither raise nor lower them.
+
+## When no provider is configured
+
+`mcpModule` on its own still mounts the endpoint. Without an OAuth provider
+there is simply nothing to discover.
+
+| Situation                       | What the documents answer         |
+| ------------------------------- | --------------------------------- |
+| No auth configured              | all three answer `501`            |
+| Auth without the OAuth provider | the server metadata answers `501` |
+
+They answer `501` rather than `404`, so a missing provider looks different from a
+broken route. The MCP endpoint keeps answering `401` in both cases. A first-party
+admin session still works, and so does a trusted local stdio worker, which uses
+no OAuth at all.
+
+## Changing the defaults
+
+The provider ships as a better-auth plugin in `oauthModule`. Auth configs merge
+and plugins dedupe by id, so your own `oauthProvider()` in `config/auth.ts`
+replaces the shipped one. That is how you move the login page, move the consent
+page, or change the one-hour token lifetime.
+
+```ts title="src/questpie/server/config/auth.ts"
+import { oauthProvider } from "@better-auth/oauth-provider";
+import { authConfig } from "questpie/app";
+
+export default authConfig({
+	plugins: [
+		oauthProvider({
+			loginPage: "/sign-in",
+			consentPage: "/consent",
+			accessTokenExpiresIn: 900,
+			validAudiences: ["https://your-app/api/mcp"],
+			allowDynamicClientRegistration: true,
+			allowUnauthenticatedClientRegistration: true,
+		}),
+	],
+});
+```
+
+Your plugin replaces every option on the shipped one, so the last four lines are
+not optional. Registration is off by default in the library, and an MCP client
+registers itself before anyone signs in. Set the audience to your `app.url` plus
+`/api/mcp` or tokens stop verifying.
+
+The derived scope catalog is merged in afterwards either way. That part you do
+not restate.
+
+## Next
+
+**[Scopes](/docs/agents/mcp-oauth/scopes)** covers what a token is allowed to
+carry, and how to change what each operation asks for.

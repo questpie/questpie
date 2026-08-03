@@ -1,0 +1,117 @@
+---
+title: Configuration
+description: Everything config/openapi.ts accepts, what each option defaults to when you leave it out, and the two fields that are declared but never read.
+kind: reference
+package: "@questpie/openapi"
+---
+
+| Option                | Type                           | Default          | What it sets                            |
+| --------------------- | ------------------------------ | ---------------- | --------------------------------------- |
+| `info.title`          | `string`                       | `"QUESTPIE API"` | The document title                      |
+| `info.version`        | `string`                       | `"1.0.0"`        | The document version                    |
+| `info.description`    | `string`                       | dropped          | The document description                |
+| `servers`             | `Array<{ url; description? }>` | dropped          | Scalar's environment switcher           |
+| `basePath`            | `string`                       | `"/"`            | The prefix on every generated path      |
+| `exclude.collections` | `string[]`                     | `[]`             | Collections to leave out                |
+| `exclude.globals`     | `string[]`                     | `[]`             | Globals to leave out                    |
+| `auth`                | `boolean`                      | included         | Set `false` to drop the auth paths      |
+| `search`              | `boolean`                      | included         | Set `false` to drop the search paths    |
+| `scalar`              | `ScalarConfig`                 | none             | The reference UI, see below             |
+| `specPath`            | `string`                       | ignored          | Declared in the type. Nothing reads it. |
+| `docsPath`            | `string`                       | ignored          | Declared in the type. Nothing reads it. |
+
+Every option is optional. Write the file with `openApiConfig()`, which returns
+its argument unchanged and exists only so the object is typed.
+
+```ts title="src/questpie/server/config/openapi.ts"
+import { openApiConfig } from "@questpie/openapi";
+
+export default openApiConfig({
+	info: { title: "My API", version: "2.0.0" },
+	servers: [{ url: "https://api.example.com", description: "Production" }],
+	basePath: "/api",
+	exclude: { collections: ["auditLog"] },
+	scalar: { theme: "purple", hideDownloadButton: true },
+});
+```
+
+## `basePath`
+
+The generator joins this to every path as `` `${basePath}/${rest}` ``. It is a
+plain string concatenation, so the exact value matters.
+
+| You write           | A collection called `posts` documents as |
+| ------------------- | ---------------------------------------- |
+| nothing             | `//posts`                                |
+| `basePath: "/"`     | `//posts`                                |
+| `basePath: ""`      | `/posts`                                 |
+| `basePath: "/api"`  | `/api/posts`                             |
+| `basePath: "/api/"` | `/api//posts`                            |
+
+Set it to the same value you pass `createFetchHandler`. If your handler sits at
+the root, write the empty string, not `"/"`.
+
+## `exclude`
+
+Both lists match on the registered name, the key you see on
+`app.collections.<name>` and `app.globals.<name>`. An excluded collection
+contributes no paths and no component schemas.
+
+Excluding something hides it from the document. It does not close the endpoint.
+The route is still mounted and still runs its own
+[access rules](/docs/schema/access-control).
+
+## `auth` and `search`
+
+Both are on unless you write the literal `false`. The generator only checks for
+`=== false`.
+
+`search: false` is worth knowing about. The two search paths are emitted
+whether or not you configured a search adapter, so an app with no search still
+documents `POST /search`.
+
+## `ScalarConfig`
+
+These go straight through to the reference UI. The page inlines them as JSON,
+next to the document itself.
+
+| Option               | Type                       | Default              | What it does                         |
+| -------------------- | -------------------------- | -------------------- | ------------------------------------ |
+| `theme`              | `string`                   | `"purple"`           | The Scalar theme name                |
+| `title`              | `string`                   | the document title   | The page `<title>`                   |
+| `customCss`          | `string`                   | none                 | CSS injected into the page           |
+| `hideDownloadButton` | `boolean`                  | Scalar's own default | Hides the download button            |
+| `defaultHttpClient`  | `{ targetKey; clientKey }` | Scalar's own default | Preselects a client for code samples |
+
+`defaultHttpClient` takes Scalar's own keys, for example
+`{ targetKey: "shell", clientKey: "curl" }`.
+
+The page itself is a few lines of HTML. It inlines the whole document as JSON
+and loads `@scalar/api-reference` from `cdn.jsdelivr.net`. The CDN URL carries
+no version, so the page tracks whatever Scalar published last.
+
+<Callout type="warn" title="`scalar` only applies when you mount the route">
+	`openApiModule` registers the docs route with no config argument. That makes
+	it skip `config/openapi.ts` entirely. Your theme and title never reach it. See
+	[Serving it yourself](/docs/agents/openapi/serving).
+</Callout>
+
+## `specPath` and `docsPath`
+
+`OpenApiModuleConfig` declares both. Nothing in the package reads either one.
+The module mounts its routes under the fixed keys `openapi.json` and `docs`,
+so setting these changes nothing.
+
+To serve the document somewhere else, mount the route factories yourself under
+the file name you want. [Serving it
+yourself](/docs/agents/openapi/serving) shows how.
+
+## Where the config comes from
+
+Codegen matches the file `config/openapi.ts` and stores its default export
+under `app.state.config.openapi`. The spec route reads it from there when it
+builds the document.
+
+Pass a config object to `openApiRoute()` or `docsRoute()` and that object
+replaces the file entirely. The two are not merged. Anything you leave out
+falls back to the defaults in the first table, not to what the file said.

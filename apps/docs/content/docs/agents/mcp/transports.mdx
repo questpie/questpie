@@ -1,0 +1,184 @@
+---
+title: Transports
+description: Four ways to serve the same catalog. The bundled HTTP route, a local stdio server, a server you mount yourself, and the workload boundary for a runtime that brings its own authorizer.
+kind: reference
+package: "@questpie/mcp"
+---
+
+Pick one by answering a single question. How much is the server allowed to
+assume about who is calling?
+
+| Transport | You call                       | Access mode          | Built for                                |
+| --------- | ------------------------------ | -------------------- | ---------------------------------------- |
+| HTTP      | nothing, `mcpModule` mounts it | always `user`        | a remote agent with an OAuth token       |
+| stdio     | `startStdioServer(app, opts)`  | you must choose      | a trusted process on the same machine    |
+| your own  | `createMcpServer(app, opts)`   | `user`, unless stdio | a transport the package does not bundle  |
+| workload  | `createWorkloadMcpServer(…)`   | always `user`        | a remote runtime with its own authorizer |
+
+`user` mode runs your `.access()` rules as the caller. `system` mode skips
+them. Only stdio can ever be `system`.
+
+## HTTP
+
+`mcpModule` contributes four route files on the key `mcp`, so the endpoint is
+`/api/mcp` under the starters' base path.
+
+| Method    | What it does                                          |
+| --------- | ----------------------------------------------------- |
+| `POST`    | Carries JSON-RPC messages. This is the real endpoint. |
+| `GET`     | `405`, with `Allow: POST, OPTIONS`.                   |
+| `DELETE`  | `405`, with `Allow: POST, OPTIONS`.                   |
+| `OPTIONS` | The CORS preflight.                                   |
+
+The transport is stateless. There is no session to resume and no SSE stream to
+reconnect to. That is why `GET` and `DELETE` refuse. A request carrying
+`Mcp-Session-Id` or `Last-Event-ID` gets `400`.
+
+### It needs a principal first
+
+The route checks identity before it dispatches anything. A first-party admin
+session gives a `user` principal, a valid OAuth access token gives an `oauth`
+one, and anything else gives none.
+
+With no principal the answer is `401` plus a `WWW-Authenticate` header pointing
+at your protected-resource metadata. An MCP client reads that, finds the
+authorization server, and starts the flow. See [MCP over OAuth
+2.1](/docs/agents/mcp-oauth).
+
+### Origin, host and size
+
+| Check                       | Failure                                                      |
+| --------------------------- | ------------------------------------------------------------ |
+| `Origin` header             | `403` unless it matches the app URL or `http.allowedOrigins` |
+| `Host` header               | `403` unless it matches the app URL or `http.allowedHosts`   |
+| `Content-Length` over 1 MiB | `413`                                                        |
+| Body over 1 MiB             | `413`                                                        |
+| More than 16 batched calls  | `400`                                                        |
+| Response over 4 MiB         | `500`                                                        |
+
+CORS replies allow `POST, OPTIONS` and the headers `Content-Type`,
+`Authorization`, `MCP-Protocol-Version` and `x-api-key`. A preflight asking for
+anything else is refused.
+
+`http.enableJsonResponse` defaults to `true`. `http.accessMode` is on the type
+and the route never reads it.
+
+## stdio
+
+stdio claims no authority on its own. You have to say who the process is.
+`startStdioServer(app)` with nothing else throws.
+
+**As a user.** Pass a context that is already in `user` mode. Tools then run
+under that user's access rules, exactly like HTTP.
+
+```ts
+import { startStdioServer } from "@questpie/mcp/stdio";
+
+await startStdioServer(app, { ctx: userContext });
+```
+
+**As trusted maintenance.** Opt in through the config, and the server runs as
+`system`.
+
+```ts title="src/questpie/server/config/mcp.ts"
+import { mcpConfig } from "@questpie/mcp";
+
+export default mcpConfig({
+	stdio: { trustedMaintenance: true },
+});
+```
+
+Then pass no `ctx`, no `request` and no `accessMode: "user"`. Combining
+maintenance authority with request authority throws instead of picking one.
+
+<Callout type="warn" title="`system` skips your access rules, not the catalog">
+	`trustedMaintenance` bypasses the collection and global `.access()` checks.
+	The catalog and its rules still apply, so an operation you never named in
+	`config/mcp.ts` stays unreachable. Only run it locally.
+</Callout>
+
+## Your own transport
+
+`createMcpServer(app, options)` returns an SDK `McpServer` you can connect to
+anything.
+
+| Option       | Default  | Notes                                                       |
+| ------------ | -------- | ----------------------------------------------------------- |
+| `transport`  | `"http"` | `"http"` or `"stdio"`. A workload has its own factory.      |
+| `accessMode` | `"user"` | Honoured for stdio only. Anything else is forced to `user`. |
+| `ctx`        | none     | The context every tool call runs under.                     |
+| `request`    | none     | Used to build a context when `ctx` is absent.               |
+| `config`     | none     | An isolated config for this server alone.                   |
+
+A `config` here builds its own snapshot. It never changes what the app-wide
+OAuth catalog advertises, and it replaces entity entries by name rather than
+merging into them. See [Configuration](/docs/agents/mcp/config).
+
+## Workload
+
+A remote workload is not a user. It has no cookie, no token and no session, so
+it brings its own authorizer instead. `createWorkloadMcpServer` takes no
+request, no context and no access mode.
+
+```ts
+import { createWorkloadMcpServer } from "@questpie/mcp";
+
+const server = await createWorkloadMcpServer(app, {
+	envelope, // opaque, passed straight to your authorizer
+	authorizer,
+	contextBinder,
+});
+```
+
+| Option           | Required | What it does                                              |
+| ---------------- | -------- | --------------------------------------------------------- |
+| `envelope`       | yes      | Opaque value handed to the authorizer. Never interpreted. |
+| `authorizer`     | yes      | Returns a context and attribution, or `null` to deny.     |
+| `contextBinder`  | yes      | Turns that opaque context into a real QUESTPIE context.   |
+| `config`         | no       | An isolated config, same as above.                        |
+| `audit`          | no       | Receives an allow or deny event per phase.                |
+| `handoff`        | no       | Wraps calls that declare a `handoff` capability.          |
+| `concurrencyKey` | no       | Shares one per-principal budget across boundaries.        |
+
+Discovery and every single call are authorized separately. The authorizer sees
+the envelope, the phase, and bounded facts about the tool: kind, name,
+operation, intent, capabilities and handoff. It sees no input and no output.
+
+The bound context must be in `user` mode. A `system` context fails closed. A
+workload can never reach the RBAC bypass.
+
+<Callout type="warn" title="A workload sees only tools that opt in">
+	A tool is visible here only when it declares `workload: { capabilities: [...] }`.
+	Resources are never published to a workload at all. Anything you forget stays
+	hidden rather than open.
+</Callout>
+
+### In-process port
+
+When a trusted subsystem in the same process needs your custom tools, skip the
+client and server loop.
+
+```ts
+import { createWorkloadMcpToolPort } from "@questpie/mcp";
+
+const tools = createWorkloadMcpToolPort(app, workloadOptions);
+const released = await tools.listCustomTools({ signal });
+const result = await tools.callCustomTool({
+	name: "messages.reply",
+	input: { body: "Hello" },
+	signal,
+	requestId: runId,
+});
+```
+
+The port carries custom tools only. Generated CRUD tools, route tools and
+resources are absent by construction. Everything else is the same: the release
+catalog, the authorizer, the context binder, input and output validation, the
+budgets and the error contract.
+
+## Access mode summary
+
+| Mode       | Reached by                              | Catalog and rules | `.access()` rules |
+| ---------- | --------------------------------------- | ----------------- | ----------------- |
+| `"user"`   | HTTP, workload, stdio with a user `ctx` | evaluated         | evaluated         |
+| `"system"` | stdio with `trustedMaintenance`         | evaluated         | skipped           |

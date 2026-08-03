@@ -1,0 +1,241 @@
+---
+title: Generated paths
+description: The exact operations a collection, a global, a route, Better Auth and search each contribute to the document, plus the component schemas and security schemes every document carries.
+kind: reference
+package: "@questpie/openapi"
+---
+
+| Source      | Comes from                            | Tag                   |
+| ----------- | ------------------------------------- | --------------------- |
+| Collections | `app.getCollections()`                | `Collections: <name>` |
+| Globals     | `app.getGlobals()`                    | `Globals: <name>`     |
+| Routes      | `app.config.routes`                   | `Routes: <segment>`   |
+| Auth        | Better Auth, through `app.auth.api`   | `Auth`                |
+| Search      | Nothing. The two paths are hardcoded. | `Search`              |
+
+Every path below is shown with `basePath: "/api"`. Swap in your own.
+
+Collection and global paths use the registered name verbatim, with no
+kebab-casing. A collection registered as `blogPosts` documents as
+`/api/blogPosts`, which is the URL the runtime actually answers.
+
+## Collections
+
+A collection called `posts` always produces these thirteen operations.
+
+| Method   | Path                       | `operationId`           |
+| -------- | -------------------------- | ----------------------- |
+| `GET`    | `/api/posts`               | `posts_find`            |
+| `POST`   | `/api/posts`               | `posts_create`          |
+| `PATCH`  | `/api/posts`               | `posts_updateMany`      |
+| `GET`    | `/api/posts/count`         | `posts_count`           |
+| `POST`   | `/api/posts/delete-many`   | `posts_deleteMany`      |
+| `POST`   | `/api/posts/update-batch`  | `posts_updateBatch`     |
+| `GET`    | `/api/posts/schema`        | `posts_schema`          |
+| `GET`    | `/api/posts/meta`          | `posts_meta`            |
+| `GET`    | `/api/posts/{id}`          | `posts_findOne`         |
+| `PATCH`  | `/api/posts/{id}`          | `posts_update`          |
+| `DELETE` | `/api/posts/{id}`          | `posts_delete`          |
+| `GET`    | `/api/posts/{id}/versions` | `posts_findVersions`    |
+| `POST`   | `/api/posts/{id}/revert`   | `posts_revertToVersion` |
+
+Four more appear only when the collection opted in.
+
+| Method | Path                         | Appears when                   |
+| ------ | ---------------------------- | ------------------------------ |
+| `POST` | `/api/posts/upload`          | the collection has `.upload()` |
+| `POST` | `/api/posts/{id}/restore`    | `options.softDelete` is on     |
+| `POST` | `/api/posts/{id}/purge`      | `options.softDelete` is on     |
+| `POST` | `/api/posts/{id}/transition` | `versioning.workflow` is set   |
+
+<Callout type="info" title="Versions and revert are always documented">
+	Both paths are emitted whether or not you turned
+	[versioning](/docs/schema/collections/options) on. The endpoints themselves
+	decide at request time. The document does not gate them.
+</Callout>
+
+### Query parameters
+
+`GET /api/posts` takes `limit` (default 10), `page` (default 1), `offset`,
+`where`, `orderBy`, `locale` and `stage`. `where` and `orderBy` are documented
+as strings holding JSON.
+
+`GET /api/posts/{id}` takes `locale` and `stage`. `GET /api/posts/count` takes
+only `where`.
+
+### Component schemas
+
+Three per collection, named from the PascalCase form of the collection name.
+So `blogPosts` gives `BlogPostsDocument`, `BlogPostsInsert` and
+`BlogPostsUpdate`.
+
+| Schema          | Built from                                                   |
+| --------------- | ------------------------------------------------------------ |
+| `PostsInsert`   | your `.validation()` insert schema, or the field definitions |
+| `PostsUpdate`   | the same, made partial                                       |
+| `PostsDocument` | `id` and timestamps, merged with the field schema            |
+
+`PostsDocument` carries `createdAt` and `updatedAt` unless `timestamps` is
+`false`, `deletedAt` when soft delete is on, and `revision` when optimistic
+concurrency is on.
+
+A field marked `.inputFalse()` is dropped from the request schemas and turns up
+as `readOnly` in the document schema. `.outputFalse()` is the mirror image:
+dropped from the document, marked `writeOnly` in requests. `date` and
+`datetime` fields are rewritten to a string with a `date` or `date-time`
+format.
+
+A collection with neither a validation schema nor usable field definitions gets
+three bare `{ "type": "object" }` schemas instead.
+
+### With optimistic concurrency on
+
+[Optimistic concurrency](/docs/schema/collections/optimistic-concurrency)
+changes six things at once.
+
+| Change                          | Where                                   |
+| ------------------------------- | --------------------------------------- |
+| `revision` added, required      | the document schema                     |
+| `revision` removed              | the update schema                       |
+| `If-Match` header parameter     | every mutation                          |
+| `ETag` response header on `200` | every read and write that returns a row |
+| `409` response                  | every mutation                          |
+| `412` response                  | mutations that accept `If-Match`        |
+
+The bodies change too. `PATCH /api/posts/{id}` stops taking the bare update
+schema and takes `{ data, expectedRevision }` instead. `PATCH /api/posts` and
+`POST /api/posts/delete-many` require an `expectedRevisions` array covering
+every selected row. Each entry of `update-batch` requires its own
+`expectedRevision`.
+
+## Globals
+
+A global called `settings` produces five operations, one of them conditional.
+
+| Method  | Path                             | `operationId`                     |
+| ------- | -------------------------------- | --------------------------------- |
+| `GET`   | `/api/globals/settings`          | `global_settings_get`             |
+| `PATCH` | `/api/globals/settings`          | `global_settings_update`          |
+| `GET`   | `/api/globals/settings/schema`   | `global_settings_schema`          |
+| `GET`   | `/api/globals/settings/versions` | `global_settings_findVersions`    |
+| `POST`  | `/api/globals/settings/revert`   | `global_settings_revertToVersion` |
+
+`POST /api/globals/settings/transition` joins them when the global has
+`versioning.workflow` set.
+
+Two component schemas per global: `SettingsGlobal` for the value and
+`SettingsGlobalUpdate` for the request. Optimistic concurrency changes the same
+six things it changes on a collection.
+
+## Routes
+
+The generator walks `app.config.routes` and builds each path from the route
+key. Literal segments are kebab-cased, `[param]` becomes `{param}`, and
+`[...slug]` becomes `{slug}`. That matches the URL the HTTP adapter serves. A
+key ending in `:METHOD` splits into a path and a method.
+
+| Route key            | Documented path       | Method              |
+| -------------------- | --------------------- | ------------------- |
+| `createBooking`      | `/api/create-booking` | from the builder    |
+| `posts/[id]`         | `/api/posts/{id}`     | from the builder    |
+| `files/[...key]`     | `/api/files/{key}`    | from the builder    |
+| `auth/[...path]:GET` | `/api/auth/{path}`    | `get`, from the key |
+
+The `operationId` is `route_` plus the key segments joined with underscores. A
+path serving more than one method gets the method appended, so sibling files on
+one path stay unique.
+
+### What each route contributes
+
+| The route has            | The operation gets                                     |
+| ------------------------ | ------------------------------------------------------ |
+| `.schema(z…)`            | A request body, `$ref` to `<operationId>_Input`        |
+| `.outputSchema(z…)`      | A `200` body, `$ref` to `<operationId>_Output`         |
+| no `.outputSchema()`     | A `200` body typed as a bare `{ "type": "object" }`    |
+| `.meta({ title })`       | That string as the `summary`, instead of the route key |
+| `.meta({ description })` | That string as the `description`                       |
+| `.meta({ tags })`        | Those tags, instead of `Routes: <first segment>`       |
+| `.access(true)`          | `security: []`, opting out of the document's scheme    |
+| `.raw()`                 | A permissive body, and `200` plus `401` responses      |
+
+A raw route accepts either `application/json` with no constraint or
+`application/octet-stream` as binary. It also gets a stock description saying
+so, unless your `.meta({ description })` already set one.
+
+Every JSON route documents `200`, `400`, `401` and `404`. See [Route
+metadata](/docs/code/routes/metadata) for the `.meta()` object in full.
+
+## Auth
+
+This section is built two different ways. Which one you get depends on your
+Better Auth setup.
+
+**With the `openAPI()` plugin on.** The generator calls
+`app.auth.api.generateOpenAPISchema()` and folds the whole result in. Every
+auth path is prefixed with `<basePath>/auth`. Every component schema is renamed
+with an `Auth` prefix, and every `$ref` to it is rewritten. So Better Auth's
+`User` cannot collide with yours. Every operation is retagged `Auth`, replacing
+the generic tags Better Auth emits. Its security schemes are merged in too.
+
+**Without it.** Four hardcoded paths, enough to sign in and check a session.
+
+| Method | Path                      |
+| ------ | ------------------------- |
+| `POST` | `/api/auth/sign-in/email` |
+| `POST` | `/api/auth/sign-up/email` |
+| `GET`  | `/api/auth/get-session`   |
+| `POST` | `/api/auth/sign-out`      |
+
+The fallback also covers the case where the plugin call throws. Generation
+never fails on auth.
+
+Set `auth: false` and none of this is emitted.
+
+## Search
+
+Two paths, always the same, emitted unless you set `search: false`.
+
+| Method | Path                               | Notes                                                                 |
+| ------ | ---------------------------------- | --------------------------------------------------------------------- |
+| `POST` | `/api/search`                      | Body takes `query`, plus optional `collections`, `limit` and `offset` |
+| `POST` | `/api/search/reindex/{collection}` | Documented as needing admin auth                                      |
+
+Neither path checks whether you configured a [search
+adapter](/docs/infrastructure/search). An app with no search still documents
+both.
+
+## In every document
+
+Four component schemas are always present: `ErrorResponse`, `SuccessResponse`,
+`CountResponse` and `DeleteManyResponse`.
+
+Two security schemes are always present, and both are declared at the document
+root as alternatives.
+
+| Scheme       | Type               | Carries                                |
+| ------------ | ------------------ | -------------------------------------- |
+| `bearerAuth` | HTTP bearer        | A token in the `Authorization` header  |
+| `cookieAuth` | API key, in cookie | The `better-auth.session_token` cookie |
+
+Schemes derived from Better Auth are merged alongside these two. On a name
+clash, QUESTPIE's own definition wins.
+
+## Zod conversion
+
+Route schemas go through `z.toJSONSchema`. Request bodies convert on Zod's
+input side so a transform keeps its pre-transform shape. Responses convert on
+the output side.
+
+| What happens            | What lands in the document                          |
+| ----------------------- | --------------------------------------------------- |
+| The schema converts     | The real JSON Schema                                |
+| An input schema throws  | A retry that renders unrepresentable parts as `any` |
+| That retry throws too   | A description-only schema, with no constraints      |
+| An output schema throws | A description-only schema, with no constraints      |
+
+The description-only fallback says outright that runtime validation is still
+authoritative. Nothing silently claims a shape it could not derive.
+
+Collection and global schemas take a shorter path. They convert with
+unrepresentable parts rendered as `any`, and fall back to a bare
+`{ "type": "object" }` if that throws.

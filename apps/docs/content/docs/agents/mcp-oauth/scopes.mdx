@@ -1,0 +1,163 @@
+---
+title: Scopes
+description: Every scope your app can grant, where each one comes from, how to change what an operation requires, and what the person approving them actually reads.
+kind: reference
+package: "@questpie/mcp"
+---
+
+A scope is one line on the consent screen and one check at call time. These are
+the kinds that exist.
+
+| Scope                       | Where it comes from                                 |
+| --------------------------- | --------------------------------------------------- |
+| `openid`                    | the base set, always offered                        |
+| `profile`                   | the base set, always offered                        |
+| `email`                     | the base set, always offered                        |
+| `offline_access`            | the base set, always offered                        |
+| `collections:<name>:read`   | a collection with `list`, `count` or `get` exposed  |
+| `collections:<name>:write`  | a collection with `create` or `update` exposed      |
+| `collections:<name>:delete` | a collection with `delete` exposed                  |
+| `globals:<name>:read`       | a global with `get` exposed                         |
+| `globals:<name>:write`      | a global with `update` exposed                      |
+| `routes:<key>:invoke`       | a route with `meta.mcp.expose` and a policy entry   |
+| `collections:read`          | derived, whenever any collection read scope exists  |
+| `collections:write`         | derived, whenever any collection write scope exists |
+| `globals:read`              | derived, whenever any global read scope exists      |
+| `globals:write`             | derived, whenever any global write scope exists     |
+| anything you name           | the `scopes` field on a custom tool                 |
+
+## The catalog is derived
+
+You never write the scope catalog. QUESTPIE builds it from the operations you
+exposed in `config/mcp.ts` and merges it into the OAuth provider when the auth
+instance is built. The scope gate reads the same mapping, so the list a client
+may request and the check it must pass cannot drift apart.
+
+Asking for a scope outside the catalog fails early. Registration answers `400`
+with `invalid_scope`, before any person sees a consent screen. So a collection
+you never exposed is not merely locked. Its scope does not exist.
+
+## Advertised is narrower than grantable
+
+The discovery document lists `openid`, `profile`, `email` and the coarse scopes.
+Everything else stays grantable but unlisted. So discovery does not publish your
+whole data model to anyone who asks for it.
+
+## Umbrellas
+
+A coarse scope satisfies every granular scope of the same resource kind and
+verb. `collections:read` covers `collections:posts:read` and every other
+collection read.
+
+The widening stops there.
+
+- Read and write are independent. `collections:write` never satisfies a read
+  requirement, and the reverse holds too.
+- Kinds never cross. `collections:read` never satisfies a `globals:` scope.
+- `delete` and `invoke` have no coarse scope at all. They always need the exact
+  granular name.
+
+## Change what an operation requires
+
+Two fields on an entity policy override the derived name. Both take one scope, a
+list where all are required, or `false` for no scope at all.
+
+```ts title="src/questpie/server/config/mcp.ts"
+import { mcpConfig } from "@questpie/mcp";
+
+export default mcpConfig({
+	crud: {
+		collections: {
+			posts: {
+				operations: { list: true, get: true, delete: true },
+				requiredScopes: "content:posts",
+				operationScopes: { delete: ["content:posts", "content:destructive"] },
+			},
+		},
+	},
+});
+```
+
+The most specific setting wins.
+
+1. `operationScopes[<operation>]`, for that one operation.
+2. `requiredScopes`, for every operation on the entity.
+3. The derived `<resource>:<name>:<verb>` name.
+
+Renaming a scope renames it in both places at once. The catalog offers your name
+and the gate requires your name, because both read this file.
+
+## Custom tools declare their own
+
+A custom tool has no operation to derive a scope from, so `scopes` is a required
+field. Write `false` when the tool should need none.
+
+```ts title="src/questpie/server/mcp-tools/count-drafts.ts"
+import { mcpTool } from "@questpie/mcp";
+import { z } from "zod";
+
+export default mcpTool("posts.countDrafts", {
+	description: "Count unpublished posts.",
+	inputSchema: z.object({}),
+	outputSchema: z.object({ count: z.number() }),
+	scopes: ["reports:read"],
+	access: ({ session }) => !!session,
+}).handler(async ({ ctx }) => {
+	const count = await ctx.collections.posts.count({
+		where: { published: false },
+	});
+	return {
+		structuredContent: { count },
+		content: [{ type: "text", text: `${count} drafts` }],
+	};
+});
+```
+
+The name is yours to pick. A custom tool's scopes join the catalog like any
+other, so `reports:read` becomes requestable the moment this file exists. It
+gains no coarse scope, because coarse scopes only come from the derived
+`<resource>:<name>:<verb>` shape.
+
+`access` runs for every caller. `scopes` narrows the OAuth caller further, and
+can never reach past what `access` allows.
+
+<Callout type="warn" title="A missing field drops the tool silently">
+	A tool without `scopes`, without `access`, or with `access: false` is left out
+	of the catalog. It never appears in `tools/list` for anyone. TypeScript
+	catches the first two. The third is your own instruction.
+</Callout>
+
+## Collaborative collections contribute too
+
+A collection or global marked with `.collaborative()` adds its own read and write
+scopes to the catalog, plus the matching coarse scopes. An OAuth caller needs the
+read scope to view a document and both scopes to edit it. See
+[Collaborative documents](/docs/schema/collaborative-documents).
+
+## What the person reads
+
+The consent screen turns each requested scope into one line of plain English.
+
+| Scope                           | Rendered as                            |
+| ------------------------------- | -------------------------------------- |
+| `openid`                        | Verify your identity                   |
+| `profile`                       | View your basic profile information    |
+| `email`                         | View your email address                |
+| `collections:posts:read`        | Read the Posts collection              |
+| `collections:posts:write`       | Create and update the Posts collection |
+| `globals:settings:read`         | Read the Settings global               |
+| `collections:read`              | Read all your collections              |
+| `routes:reports/revenue:invoke` | Run the Reports/revenue action         |
+
+A scope the screen does not recognise is printed as a readable version of the
+raw string. A new resource is never a blank row.
+
+The screen names the client above the list. That name comes from what the client
+registered, and falls back to its client id when it registered none. A client
+with `skipConsent` set in the `oauthClient` table never reaches the screen. The
+provider approves it server-side instead.
+
+## Next
+
+**[Access control](/docs/schema/access-control)** is the gate underneath. A scope
+can only take away what a rule there already allowed.

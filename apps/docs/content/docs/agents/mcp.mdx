@@ -1,144 +1,40 @@
 ---
 title: MCP
-description: Add the mcpModule and your QUESTPIE app exposes a Model Context Protocol server, collections, globals, and annotated routes become tools an AI client can call, gated by your existing access rules.
+description: mcpModule turns your app into a Model Context Protocol server. Collections, globals and opted-in routes become tools an agent calls, under the access rules you already wrote.
+kind: guide
+package: "@questpie/mcp"
 ---
 
-The **Model Context Protocol (MCP)** integration turns your QUESTPIE app into an MCP server. Add `@questpie/mcp`'s `mcpModule`, run codegen, and an AI client (Claude Desktop, an IDE, an agent) can connect over a single HTTP endpoint and call your collections, globals, and opted-in routes as tools, each call running under the connecting request's session and through the same `.access()` rules that protect the rest of your API. You choose declaratively, in `config/mcp.ts`, exactly what is reachable and whether each operation is read-only, writable, or deletable.
+An agent connects and asks what it can do. What should it see?
 
-You also get custom tools: drop an `mcpTool()` file under `mcp-tools/` to expose bespoke logic with a typed Zod input and full app context.
+You answer that in one file. Nothing is reachable until you name it there, so
+the empty answer is the safe one.
 
-<Callout type="info" title="Authenticating external agents? Use OAuth 2.1">
-This page covers the MCP surface itself - tools, policy, transports. For letting **external** AI agents (Claude, IDEs) connect over HTTP, QUESTPIE ships a real **OAuth 2.1 authorization-code + PKCE flow**: dynamic client registration, a human consent screen, per-user delegation, and least-privilege **scopes** layered on top of RBAC as `scopes ∩ RBAC`, plus a first-class `principal` (`user` / `oauth` / `system`). See **[MCP over OAuth 2.1](/docs/agents/mcp-oauth)**.
+## Add the module
 
-On an admin-enabled app the HTTP `/api/mcp` route requires a verified principal - a first-party admin session (`user`) or a valid OAuth access token (`oauth`); an unauthenticated request gets a `401` pointing at the OAuth discovery metadata. A trusted local [stdio](#stdio-transport) worker runs as `system` and needs no OAuth.
+```ts title="src/questpie/server/modules.ts"
+import { mcpModule } from "@questpie/mcp/modules/mcp";
 
-</Callout>
-
-<Callout type="info" title="Prerequisites">
-	Read [Routes](/docs/code/routes) and [Access
-	control](/docs/schema/access-control) first, routes opt into MCP via
-	`meta.mcp`, and every HTTP tool call runs through your collection/global
-	access rules. The module registers like any other (see
-	[Modules](/docs/code/modules)).
-</Callout>
-
-## What it does
-
-- **Exposes your data model as MCP tools.** Every collection gets `list` / `count` / `get` / `create` / `update` / `delete` tools and every global gets `get` / `update`, generated from introspection, no per-tool wiring.
-- **Exposes opted-in routes as tools.** Any route with `meta.mcp.expose === true` becomes a tool, with its Zod input schema and MCP annotations carried straight through.
-- **Runs under your access rules.** Over HTTP, a tool call resolves the request's session and runs the collection/global `.access()` rules as that user, out-of-reach data stays out of reach.
-- **Is declaratively scoped.** `config/mcp.ts` controls which entities and operations are exposed, with safe HTTP defaults (read-only) and full access over local stdio.
-- **Supports custom tools.** `mcpTool(name, config).handler(fn)` under `mcp-tools/` adds a tool with a typed input, output schema, annotations, and a per-call access rule.
-- **Speaks two transports.** A bundled HTTP endpoint for remote clients, plus a stdio server (`startStdioServer`) for trusted local/CLI clients.
-
-## Quick start
-
-Add `mcpModule` to your app's modules. The module carries its codegen plugin and registers the MCP file conventions automatically.
-
-```ts title="src/questpie/modules.ts"
-import { mcpModule } from "@questpie/mcp";
-
-export default [
-	// ...your other modules
-	mcpModule,
-];
+export default [mcpModule];
 ```
-
-Re-run codegen, and the endpoint is live at **`/api/mcp`**:
 
 ```bash
 questpie generate
 ```
 
-That is the whole setup. With no `config/mcp.ts`, every collection and global is exposed **read-only over HTTP** (writes and deletes off), and every read still passes the connecting user's access rules. Point an MCP client at `https://your-app/api/mcp` and it can list your tools.
+The endpoint is live at `/mcp`, under your handler's base path, so `/api/mcp`
+in the starters. It speaks Streamable HTTP and keeps no session between calls.
 
-<Callout
-	type="info"
-	title="Re-run codegen after adding the module or a tool file"
->
-	Adding `mcpModule` to `modules.ts` and adding files under `mcp-tools/` both
-	change what codegen discovers, so run `questpie generate` (or keep `questpie
-	dev` running). Editing a tool's handler body does not need a regen. See
-	[Codegen](/docs/code/codegen).
+<Callout type="warn" title="A fresh endpoint has no tools">
+	Ask it for a tool list and you get an empty array. Every collection, global
+	and route stays hidden until `config/mcp.ts` names it. Adding the module
+	exposes nothing on its own.
 </Callout>
 
-## The HTTP endpoint
+## Name what an agent may reach
 
-`mcpModule` contributes one raw route at the key `mcp`, which resolves to **`/api/mcp`** by file convention. It accepts `POST`, `GET`, `DELETE`, and `OPTIONS`, and boots a stateless Streamable-HTTP MCP transport per request (`sessionIdGenerator` is `undefined`). CORS is added to every response and reflects the request `Origin`.
-
-<Callout type="warn" title='HTTP is always `accessMode: "user"`'>
-	The bundled HTTP route hardcodes `accessMode: "user"`, it always runs under
-	the request's session, and access rules are always evaluated. The
-	`http.accessMode` config field is therefore ignored for this route; it only
-	matters if you mount MCP on your own transport via `createMcpServer`.
-</Callout>
-
-The route requires a **verified principal** before it dispatches anything: the framework resolves identity onto the request first, and without one, the route answers `401` with a `WWW-Authenticate` header pointing at the OAuth discovery metadata (so an MCP client auto-discovers the authorization server and starts the flow). A principal comes from either a first-party admin cookie/bearer session (`kind: "user"`) or a valid OAuth access token (`kind: "oauth"`). The CORS allow-list already permits `Authorization`, `x-api-key`, and `Mcp-Session-Id` headers. For the full external-agent OAuth flow - registration, consent, scopes - see [MCP over OAuth 2.1](/docs/agents/mcp-oauth).
-
-## How entities become tools
-
-When a client connects, the server registers tools from four sources (in this order): collection CRUD, route tools, schema resources, and custom tools.
-
-### Collection and global tools
-
-Each exposed collection registers up to six tools and each exposed global up to two. Tool names are `collections.<name>.<op>` and `globals.<name>.<op>`:
-
-| Entity     | Operations (tool name suffix) | Kind   |
-| ---------- | ----------------------------- | ------ |
-| Collection | `list`, `count`, `get`        | read   |
-| Collection | `create`, `update`            | write  |
-| Collection | `delete`                      | delete |
-| Global     | `get`                         | read   |
-| Global     | `update`                      | write  |
-
-A tool is registered for a given call only if **both** gates pass:
-
-1. **MCP policy**, the entity is `expose`d and the operation's policy rule (from `config/mcp.ts`) evaluates truthy.
-2. **Access rules**, the collection/global `.access()` introspection says the operation is `visible` and `allowed` for the connecting session (skipped entirely when `accessMode` is `"system"`).
-
-Tools carry MCP annotations automatically: read operations get `readOnlyHint: true`, `delete` gets `destructiveHint: true`, and `update`/`delete` get `idempotentHint: true`. The `list` tool clamps its `limit` to `crud.maxLimit` (default `100`).
-
-### Route tools
-
-A route is exposed as a tool only when its metadata opts in. Set `meta.mcp.expose = true` on a JSON route (see [Routes → Metadata: OpenAPI and MCP](/docs/code/routes)):
-
-```ts title="src/questpie/server/routes/get-revenue-stats.post.ts"
-import { route } from "questpie";
-import { z } from "zod";
-
-export default route()
-	.post()
-	.schema(z.object({ startDate: z.string(), endDate: z.string() }))
-	.meta({
-		mcp: {
-			expose: true, // required, without this the route is not an MCP tool
-			name: "reports.revenue", // optional tool name
-			title: "Get revenue stats",
-			description: "Revenue for a date range.",
-			annotations: { readOnlyHint: true },
-		},
-	})
-	.handler(async ({ input, collections }) => {
-		/* ... */
-	});
-```
-
-The generated tool name is `meta.mcp.name` if set, otherwise `routes.<sanitized-route-key>` (path separators and brackets collapse to dots). `title` and `description` fall back to the top-level `meta.*`; `annotations` come only from `meta.mcp.annotations`. The tool's input schema is the route's `.schema()`; for routes with path params, the input becomes `{ params: { … }, input: <schema> }`.
-
-<Callout type="info" title="`meta.mcp` is declared on the route, not here">
-	The route exposure shape (`RouteMcpMeta`: `expose`, `name`, `title`,
-	`description`, `annotations`) lives in core and is documented on the
-	[Routes](/docs/code/routes) page. It is kept structural so the framework
-	carries no MCP SDK dependency.
-</Callout>
-
-### Schema resources
-
-When `resources.schemas` and `resources.routes` are enabled (both default `true`), the server also publishes MCP **resources**: the JSON schemas of your collections and globals, and a catalog of exposed routes. This lets a client discover your data shapes without calling a tool.
-
-## Configuration
-
-Create `config/mcp.ts` and default-export `mcpConfig(...)` to tune the surface. The helper is an identity function for type-checking and codegen discovery (the file may also export a function returning the config).
+Create `config/mcp.ts` and default-export `mcpConfig(...)`. Name each entity,
+then name each operation on it.
 
 ```ts title="src/questpie/server/config/mcp.ts"
 import { mcpConfig } from "@questpie/mcp";
@@ -147,141 +43,95 @@ export default mcpConfig({
 	name: "acme-cms",
 	version: "1.0.0",
 	crud: {
-		maxLimit: 100,
-		defaults: {
-			collections: { read: true, write: false, delete: false },
-		},
 		collections: {
-			posts: { read: true, write: true }, // allow writes for posts
-			secrets: false, // hide this collection entirely
-			users: {
-				read: true,
-				operations: { delete: false }, // expose reads/writes, never delete
-				fields: { exclude: ["passwordHash"] }, // drop sensitive columns
+			posts: {
+				operations: { list: true, get: true, create: true, update: true },
+				fields: { exclude: ["internalNotes"] },
 			},
 		},
 		globals: {
-			siteSettings: { read: true, write: true },
+			siteSettings: { operations: { get: true } },
 		},
 	},
 	routes: {
-		exposeAnnotated: true, // master switch for route tools
+		routes: { "reports/generate": { operations: { execute: true } } },
+	},
+	resources: {
+		collections: { posts: true },
 	},
 });
 ```
 
-### `McpConfig` reference
+Re-run codegen and reconnect. The agent now sees six tools.
 
-The full `McpConfig` interface:
+| Tool                       | What it calls                               |
+| -------------------------- | ------------------------------------------- |
+| `collections.posts.list`   | `find()`, with `where`, `sort` and `limit`  |
+| `collections.posts.get`    | `findOne()` by id                           |
+| `collections.posts.create` | `create()`, input `{ data }`                |
+| `collections.posts.update` | `updateById()`, input `{ id, data }`        |
+| `globals.siteSettings.get` | `get()`                                     |
+| `routes.reports.generate`  | the route handler, input is its `.schema()` |
 
-```ts
-interface McpConfig {
-	name?: string; // MCP server name (default "questpie")
-	version?: string; // MCP server version (default "0.0.0")
-	crud?: McpCrudConfig; // collection & global exposure
-	routes?: McpRoutesConfig;
-	resources?: McpResourcesConfig;
-	http?: McpHttpConfig;
-	stdio?: McpStdioConfig;
-}
-```
+`count` and `delete` never appear, because the config did not ask for them.
+`internalNotes` is gone from every argument and every result. `posts` also gets
+a schema resource, readable at `questpie://schema/collections/posts`.
 
-**`crud`, collection & global exposure** (`McpCrudConfig`):
-
-| Field                  | Type                              | Default               | Notes                                                              |
-| ---------------------- | --------------------------------- | --------------------- | ------------------------------------------------------------------ |
-| `maxLimit`             | `number`                          | `100`                 | Upper bound the `list` tool clamps `limit` to.                     |
-| `defaults.collections` | `{ read?, write?, delete? }`      | per-transport (below) | Baseline for every collection. Each is `boolean \| McpAccessRule`. |
-| `defaults.globals`     | `{ read?, write? }`               | per-transport (below) | Baseline for every global.                                         |
-| `collections`          | `Record<string, McpEntityPolicy>` | `{}`                  | Per-collection override.                                           |
-| `globals`              | `Record<string, McpEntityPolicy>` | `{}`                  | Per-global override.                                               |
-
-**`routes`, route tool exposure** (`McpRoutesConfig`):
-
-| Field             | Type                              | Default | Notes                                                                                                            |
-| ----------------- | --------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------- |
-| `exposeAnnotated` | `boolean`                         | `true`  | Set `false` to disable **all** route tools globally. Even when `true`, a route needs `meta.mcp.expose === true`. |
-| `routes`          | `Record<string, McpEntityPolicy>` | `{}`    | Per-route override, keyed by route key.                                                                          |
-
-**`resources`** (`McpResourcesConfig`): `schemas?` (default `true`) and `routes?` (default `true`) toggle the published JSON-schema and route-catalog resources.
-
-**`http`** (`McpHttpConfig`): `allowedOrigins?`, `allowedHosts?`, `enableJsonResponse?` (default `true`) configure the Streamable-HTTP transport. `accessMode?` is **ignored** by the bundled route (always `"user"`).
-
-**`stdio`** (`McpStdioConfig`): `accessMode?` (default `"system"`) for a stdio server.
-
-### `McpEntityPolicy`, per-entity control
-
-A collection/global/route entry is either a boolean or an object:
-
-```ts
-type McpEntityPolicy =
-	| boolean // false = fully hidden; true = use defaults
-	| {
-			expose?: boolean; // false fully hides the entity
-			read?: boolean | McpAccessRule; // read ops (list/count/get)
-			write?: boolean | McpAccessRule; // write ops (create/update)
-			delete?: boolean | McpAccessRule; // delete op
-			operations?: Record<string, boolean | McpAccessRule>; // per-operation override
-			fields?: { include?: string[]; exclude?: string[] }; // column allow/deny list
-			description?: string; // overrides the default tool description
-	  };
-```
-
-- Setting the entry to `false` hides the entity completely.
-- `operations` overrides a specific tool. Resolution precedence per operation: `operations[op]` → then `delete` → `policy.delete`, `create`/`update` → `policy.write`, else → `policy.read`.
-- `fields.include` / `fields.exclude` is applied to the CRUD tool's input/output schemas, so excluded columns never appear in tool args or results.
-
-<Callout type="info" title="HTTP defaults are read-only; stdio is full-trust">
-	Per-transport CRUD defaults differ on purpose. Over **HTTP**, collections
-	default to `read: true, write: false, delete: false` and globals to `read:
-	true, write: false`. Over **stdio**, everything defaults `true` (local stdio
-	is trusted). Override per-entity to open writes where you want them.
-</Callout>
-
-### Access rules on tools
-
-Anywhere a policy field accepts a rule, you can pass an `McpAccessRule` function:
-
-```ts
-type McpAccessRule =
-	| boolean
-	| ((ctx: McpAccessRuleContext) => boolean | Promise<boolean>);
-
-interface McpAccessRuleContext {
-	transport: "http" | "stdio";
-	accessMode: "user" | "system";
-	session?: RequestContext["session"]; // the resolved request session, when present
-	ctx: AppContext & Partial<RequestContext>;
-}
-```
-
-This rule is the MCP-layer gate that runs **in addition to** your collection/global `.access()` rules. It receives the resolved `session`, so you can gate a tool on the connecting user's role:
-
-```ts
-collections: {
-  posts: {
-    read: true,
-    write: ({ session }) => session?.user?.role === "editor",
-  },
-}
-```
+The route needs a second opt-in. Naming it here is half of it, and the route
+file itself must carry `meta.mcp.expose: true`. See
+[Metadata](/docs/code/routes/metadata).
 
 <Callout
 	type="info"
-	title="MCP rules layer on top of `.access()`, they don't replace it"
+	title="Re-run codegen after the module or a tool file changes"
 >
-	An undefined rule evaluates to `true` at the MCP layer, but the
-	collection/global `.access()` rules still run for the connecting user (unless
-	`accessMode` is `"system"`). The MCP policy decides *what is reachable via MCP
-	at all*; your access rules decide *what this user may do*. For OAuth callers,
-	a per-user **scope** gate narrows further still (`scopes ∩ RBAC`) - see [MCP
-	over OAuth 2.1](/docs/agents/mcp-oauth). See [Access
-	control](/docs/schema/access-control).
+	`modules.ts` and files under `mcp-tools/` both change what codegen finds. Run
+	`questpie generate`, or keep `questpie dev` running. Editing `config/mcp.ts`
+	or a handler body needs no regen.
 </Callout>
 
-## Custom tools
+## Four gates, every call
 
-For logic that isn't plain CRUD, define a custom tool. Create a file under `mcp-tools/` whose **default export** is an `mcpTool(name, config).handler(fn)`:
+A collection or global tool is reachable only when all four of these pass.
+
+| Gate         | What it checks                                             | Where you set it              |
+| ------------ | ---------------------------------------------------------- | ----------------------------- |
+| Catalog      | the entity is named and the operation is not `false`       | `config/mcp.ts`               |
+| MCP rule     | the operation's value, when you wrote a function           | `config/mcp.ts`               |
+| OAuth scope  | an OAuth caller holds the scope this operation needs       | the user's consent screen     |
+| Access rules | the entity's own `.access()`, run as the connecting caller | the collection or global file |
+
+All four run twice. Once when the server builds its tool list, so a tool the
+caller cannot use never appears. Once again when the tool is called.
+
+A route tool swaps the fourth gate for the route's own `.access()` rule. A
+custom tool has no entity behind it, so its own `access` rule and the scope
+gate are the whole check.
+
+## Rules, not just booleans
+
+An operation takes a function as well as a boolean. The function is the MCP
+gate, and it runs before your access rules.
+
+```ts
+collections: {
+	posts: {
+		operations: {
+			list: true,
+			delete: ({ session }) => session?.user?.role === "admin",
+		},
+	},
+}
+```
+
+The MCP config decides what is reachable through MCP at all. [Access
+control](/docs/schema/access-control) decides what this caller may do. Neither
+one can widen the other.
+
+## Tools of your own
+
+CRUD is not everything. Put an `mcpTool()` under `mcp-tools/` and it becomes a
+tool with a typed input and the full app context.
 
 ```ts title="src/questpie/server/mcp-tools/recalculate-stats.ts"
 import { mcpTool } from "@questpie/mcp";
@@ -289,11 +139,10 @@ import { z } from "zod";
 
 export default mcpTool("recalculate-stats", {
 	description: "Recompute cached site statistics.",
-	inputSchema: z.object({ since: z.string().optional() }),
-	outputSchema: z.object({ updated: z.number() }),
-	annotations: { idempotentHint: true },
 	access: ({ session }) => session?.user?.role === "admin",
-}).handler(async ({ input, ctx, transport }) => {
+	scopes: false,
+	inputSchema: z.object({ since: z.string().optional() }),
+}).handler(async ({ input, ctx }) => {
 	const updated = await ctx.services.stats.recompute(input.since);
 	return {
 		structuredContent: { updated },
@@ -302,127 +151,26 @@ export default mcpTool("recalculate-stats", {
 });
 ```
 
-Scaffold one with `questpie add mcp-tool recalculate-stats`, which creates the file and re-runs codegen.
+`access` and `scopes` are both required. Leave either one out and the tool is
+dropped from the catalog rather than exposed.
 
-### `mcpTool` reference
+Run `questpie add mcp-tool recalculate-stats` to write the file and regenerate
+in one step.
 
-`mcpTool(name, config)` returns a builder; call `.handler(fn)` to get the frozen definition.
+## Where each topic lives
 
-**`config` (`McpToolConfig`)**, all optional:
+| Topic                                                 | Page                                                 |
+| ----------------------------------------------------- | ---------------------------------------------------- |
+| Every `McpConfig` field, and what each default is     | [Configuration](/docs/agents/mcp/config)             |
+| The `mcpTool` builder and its handler arguments       | [Custom tools](/docs/agents/mcp/custom-tools)        |
+| The HTTP route, stdio, and servers you mount yourself | [Transports](/docs/agents/mcp/transports)            |
+| Size caps, timeouts, concurrency and error codes      | [Limits and errors](/docs/agents/mcp/limits)         |
+| Turning one route into a tool with `meta.mcp`         | [Metadata](/docs/code/routes/metadata)               |
+| The rules the fourth gate runs                        | [Access control](/docs/schema/access-control)        |
+| Doing all of it end to end, against a real client     | [Connect an AI agent](/docs/guides/connect-an-agent) |
 
-| Field          | Type                      | Notes                                                                            |
-| -------------- | ------------------------- | -------------------------------------------------------------------------------- |
-| `title`        | `string`                  | Human-readable tool title.                                                       |
-| `description`  | `string`                  | Shown to the model.                                                              |
-| `inputSchema`  | Zod schema                | Parsed before your handler runs; types the handler's `input`.                    |
-| `outputSchema` | Zod schema                | Advertised output shape.                                                         |
-| `annotations`  | `ToolAnnotations`         | MCP hints: `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`. |
-| `access`       | `McpAccessRule`           | Evaluated per call; a falsy result hides the tool / denies the call.             |
-| `_meta`        | `Record<string, unknown>` | Arbitrary metadata passed through to the MCP tool.                               |
+## Next
 
-**Handler args (`McpToolHandlerArgs`)**:
-
-| Arg          | Type                                   | Notes                                                                      |
-| ------------ | -------------------------------------- | -------------------------------------------------------------------------- |
-| `input`      | `z.infer<inputSchema>`                 | The parsed, typed input.                                                   |
-| `ctx`        | `AppContext & Partial<RequestContext>` | Full app context: `collections`, `globals`, `db`, `services`, `session`, … |
-| `transport`  | `"http" \| "stdio"`                    | Which transport the call came in on.                                       |
-| `accessMode` | `"user" \| "system"`                   | The resolved access mode.                                                  |
-| `request`    | `Request \| undefined`                 | The underlying HTTP request, when available.                               |
-
-The handler returns a `CallToolResult`. Include an MCP `content` array; add `structuredContent` when the model should also receive a machine-readable result. The public handler type requires `content`, so a custom tool must not return only `structuredContent`.
-
-Modules can also contribute tools by declaring `mcpTools` on their `ModuleDefinition`, so an installed package can ship MCP tools.
-
-## stdio transport
-
-For trusted local clients (a CLI, a desktop agent on the same machine), run an MCP server over stdio instead of HTTP:
-
-```ts
-import { startStdioServer } from "@questpie/mcp/stdio";
-import { app } from "#questpie";
-
-await startStdioServer(app);
-```
-
-stdio defaults to `accessMode: "system"`, which **bypasses the `.access()` RBAC rules** (the RBAC introspection short-circuits to `allowed`). The **MCP policy gate still applies**, an explicit `expose: false`, a config rule, or a custom tool's `access` still gates a `system` caller, with no `config/mcp.ts` the policy defaults are all-permissive, so it _feels_ like full access. This is intended for a trusted, local process, not a network-exposed one. To run stdio under user-scoped access instead, set `stdio.accessMode: "user"` in `config/mcp.ts`.
-
-## Custom transports
-
-To mount MCP on a transport the package doesn't bundle, build the server yourself with `createMcpServer(app, options)`. It registers all the tools and resources and returns an SDK `McpServer` you can `.connect()` to any transport. `transport` defaults to `"http"`; when `"http"`, `accessMode` is forced to `"user"`, otherwise it comes from your options or the stdio config default.
-
-## Access mode summary
-
-| `accessMode` | When                               | MCP policy gate | `.access()` rules                  |
-| ------------ | ---------------------------------- | --------------- | ---------------------------------- |
-| `"user"`     | HTTP (always); stdio if you opt in | evaluated       | evaluated as the request's session |
-| `"system"`   | stdio (default)                    | evaluated       | **bypassed** (full access)         |
-
-`"system"` is the full-trust escape hatch for local stdio. HTTP is always `"user"`, so a remote client never gets the bypass.
-
-## TypeScript
-
-Import the config and tool types from the package root:
-
-```ts
-import type {
-	McpConfig,
-	McpEntityPolicy,
-	McpAccessRule,
-	McpAccessRuleContext,
-	McpToolConfig,
-	McpToolHandlerArgs,
-	McpToolDefinition,
-	McpTransportKind, // "http" | "stdio"
-	McpAccessMode, // "user" | "system"
-} from "@questpie/mcp";
-```
-
-`mcpConfig(...)` returns its argument unchanged, so the type of your `config/mcp.ts` default export is inferred from what you pass. Custom tool handlers infer their `input` type from the tool's `inputSchema`.
-
-## Gotchas & footguns
-
-<Callout
-	type="warn"
-	title="A collection is exposed read-only over HTTP until you opt into writes"
->
-	The HTTP default is `read: true, write: false, delete: false`. If a client
-	can't create or update a record, that is the default, open `write`/`delete`
-	per collection in `config/mcp.ts`.
-</Callout>
-
-<Callout
-	type="warn"
-	title="A route is never an MCP tool unless `meta.mcp.expose === true`"
->
-	`routes.exposeAnnotated: true` permits route exposure, and each route opts in
-	through its own metadata. Set `exposeAnnotated: false` to disable route tools
-	entirely.
-</Callout>
-
-<Callout type="info" title="`fields.exclude` is the way to hide sensitive columns">
-CRUD tools mirror your collection's columns. Use `fields: { exclude: [...] }` (or `include`) on the entity policy to keep secrets out of tool args and results, relying on the model not to ask for a column is not protection.
-</Callout>
-
-<Callout
-	type="warn"
-	title="stdio's default `system` mode bypasses your `.access()` RBAC"
->
-	`startStdioServer` runs as `"system"` by default, so the collection/global
-	`.access()` RBAC rules are skipped. The MCP policy gate (`expose`, config
-	rules, custom-tool `access`) still applies, but with no `config/mcp.ts` the
-	policy defaults are all-permissive, so effectively every operation is
-	reachable. Only run it as a trusted local process, or set `stdio.accessMode:
-	"user"`.
-</Callout>
-
-## Related
-
-- [Connect an AI agent with MCP and OAuth](/docs/guides/connect-an-agent), a complete scaffold-to-Claude-and-VS-Code tutorial.
-- [Routes](/docs/code/routes), where `meta.mcp.expose` is declared to turn a route into an MCP tool; routes are public-by-default, the inverse of collections.
-- [Access control](/docs/schema/access-control), the `.access()` rules and `session` typing that every HTTP MCP tool call runs through; the MCP policy layers on top.
-- [Collections](/docs/schema/collections), the entities whose `list`/`get`/`create`/`update`/`delete` become MCP tools.
-- [Globals](/docs/schema/globals), singletons exposed as `get`/`update` tools.
-- [Modules](/docs/code/modules), `mcpModule` is a module you add; it carries its own codegen plugin.
-- [Codegen](/docs/code/codegen), file-convention discovery of `mcp-tools/` and `config/mcp.ts`, and `questpie add mcp-tool`.
-- [OpenAPI and Scalar](/docs/agents/openapi), the other integration that reads route `meta` and your CRUD surface, generating a documented API.
+**[MCP over OAuth 2.1](/docs/agents/mcp-oauth)** is how an agent on someone
+else's machine gets a principal at all. Without one the HTTP endpoint answers
+`401` and points at your discovery metadata.

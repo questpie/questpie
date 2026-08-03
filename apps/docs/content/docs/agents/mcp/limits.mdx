@@ -1,0 +1,125 @@
+---
+title: Limits and errors
+description: Every tool call and resource read runs inside a budget for size, depth, time and concurrency. Every failure comes back as one of eight codes with a correlation id.
+kind: reference
+package: "@questpie/mcp"
+---
+
+An agent is a caller you do not control. So the boundary ships with limits
+already on, and `execution` in `config/mcp.ts` only narrows them.
+
+| Limit                        | Default | Ceiling | What it bounds                            |
+| ---------------------------- | ------- | ------- | ----------------------------------------- |
+| `maxInputBytes`              | 64 KiB  | 1 MiB   | The decoded input of one call.            |
+| `maxInputDepth`              | 16      | 64      | Object and array nesting in that input.   |
+| `maxOutputDepth`             | 64      | 64      | Nesting in the result.                    |
+| `maxValueNodes`              | 10 000  | 100 000 | Properties and entries visited per value. |
+| `maxOutputBytes`             | 1 MiB   | 4 MiB   | The serialized result of one call.        |
+| `timeoutMs`                  | 30 000  | 300 000 | Authorization plus execution, per call.   |
+| `maxConcurrency`             | 64      | 1 024   | In-flight calls for one app.              |
+| `maxConcurrencyPerPrincipal` | 8       | 1 024   | In-flight calls for one caller.           |
+| `maxTools`                   | 512     | 2 048   | Tools in the released catalog.            |
+| `maxResources`               | 512     | 2 048   | Resources in the released catalog.        |
+
+```ts title="src/questpie/server/config/mcp.ts"
+import { mcpConfig } from "@questpie/mcp";
+
+export default mcpConfig({
+	execution: {
+		timeoutMs: 10_000,
+		maxConcurrencyPerPrincipal: 4,
+		onDiagnostic(event) {
+			logger.info(event);
+		},
+	},
+});
+```
+
+A value above its ceiling throws `Invalid MCP execution limit: <name>` rather
+than being clamped. So does a `maxConcurrencyPerPrincipal` above
+`maxConcurrency`, and a value that is not a positive safe integer.
+
+<Callout type="info" title="One budget per app, not per request">
+	Every transport shares the same counters, including separate HTTP requests and
+	separately built workload ports. A busy stdio session and a busy agent draw on
+	the same `maxConcurrency`.
+</Callout>
+
+## How saturation behaves
+
+A call over the concurrency limit is rejected straight away. There is no queue
+and no wait, so a slow agent cannot pile up work behind itself.
+
+A timed-out or cancelled call keeps its slot until the underlying work actually
+settles. So code that ignores `signal` cannot get around the limit. It only
+holds the slot for longer. Honour `signal` in custom tool handlers.
+
+`maxTools` and `maxResources` are checked once, when the catalog is built.
+Cross either one and building it throws. A catalog the server cannot bound is
+never served at all.
+
+## Error codes
+
+A failed call returns `isError: true`. The text says only `MCP access denied`
+or `MCP operation failed`. The real code sits in the result's `_meta`, under
+the key `questpie/error`, next to a correlation id.
+
+| Code               | When                                             |
+| ------------------ | ------------------------------------------------ |
+| `access_denied`    | A gate refused the call.                         |
+| `invalid_input`    | The input failed its Zod schema.                 |
+| `input_too_large`  | The input broke a byte, depth or node limit.     |
+| `output_too_large` | The result broke one.                            |
+| `timeout`          | `timeoutMs` elapsed.                             |
+| `cancelled`        | The client aborted.                              |
+| `busy`             | A concurrency limit was already full.            |
+| `internal`         | Anything else, including a thrown handler error. |
+
+```json
+{
+	"isError": true,
+	"content": [{ "type": "text", "text": "MCP operation failed" }],
+	"_meta": {
+		"questpie/error": { "code": "timeout", "correlationId": "b0f6…" }
+	}
+}
+```
+
+<Callout type="warn" title="The caller never sees why">
+	No database message, no stack, no input, no output, no credential and no
+	authorization envelope crosses the boundary. Give the user the correlation id
+	and match it in your own logs.
+</Callout>
+
+`mcpPublicErrorCode(error)` reads the code off an error thrown by the list and
+cancellation paths, where there is no result object to inspect.
+
+```ts
+import { mcpPublicErrorCode } from "@questpie/mcp";
+
+try {
+	await tools.listCustomTools({ signal });
+} catch (error) {
+	if (mcpPublicErrorCode(error) === "busy") await retryLater();
+}
+```
+
+## Diagnostics
+
+`execution.onDiagnostic` is a server-side sink. It fires once per call, on both
+outcomes.
+
+| Field           | Notes                                                         |
+| --------------- | ------------------------------------------------------------- |
+| `correlationId` | The same id the caller received.                              |
+| `requestId`     | The MCP request id, when there is one.                        |
+| `transport`     | `"http"`, `"stdio"` or `"workload"`.                          |
+| `operation`     | The tool or resource name, truncated to 256 characters.       |
+| `durationMs`    | Wall clock for the whole call.                                |
+| `outcome`       | `"completed"` or `"rejected"`.                                |
+| `code`          | The public error code, on a rejection.                        |
+| `internalError` | `{ kind: "Error" \| "Unknown" }`, on an `internal` code only. |
+
+The sink is deliberately narrow. Only one unresolved callback is kept at a
+time, and events that arrive while it is still pending are dropped rather than
+buffered. Do slow work elsewhere.

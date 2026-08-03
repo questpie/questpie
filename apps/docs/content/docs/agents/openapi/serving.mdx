@@ -1,0 +1,161 @@
+---
+title: Serving it yourself
+description: The route factories behind openApiModule, how each one caches, why the Scalar route needs its config passed by hand, and how to build the document with no route at all.
+kind: reference
+package: "@questpie/openapi"
+---
+
+| Export                              | From                       | What it is                                       |
+| ----------------------------------- | -------------------------- | ------------------------------------------------ |
+| `openApiModule`                     | `@questpie/openapi`        | The module. Both routes plus the codegen plugin. |
+| `openApiConfig(config)`             | `@questpie/openapi`        | Identity factory for `config/openapi.ts`         |
+| `openApiRoute(config?)`             | `@questpie/openapi`        | A finished route serving the JSON document       |
+| `docsRoute(config?)`                | `@questpie/openapi`        | A finished route serving the Scalar page         |
+| `generateOpenApiSpec(app, config?)` | `@questpie/openapi`        | The document itself, as a promise                |
+| `openApiPlugin()`                   | `@questpie/openapi/plugin` | The codegen plugin, already inside the module    |
+
+`@questpie/openapi` and `@questpie/openapi/server` export the same things. The
+starters import from the short one.
+
+## `openApiModule`
+
+The module carries the codegen plugin and mounts the two factories under fixed
+keys.
+
+| Key            | Factory called   | URL, with a handler at `/api` |
+| -------------- | ---------------- | ----------------------------- |
+| `openapi.json` | `openApiRoute()` | `GET /api/openapi.json`       |
+| `docs`         | `docsRoute()`    | `GET /api/docs`               |
+
+Nothing in the module reads `specPath` or `docsPath`. To move either route,
+mount the factory yourself under the file name you want.
+
+## `openApiRoute(config?)`
+
+A `GET` route in raw mode. It builds the document on the first request and
+stores it against the app instance, so later requests are served from memory.
+A config change needs a restart.
+
+| Response detail               | Value                                                |
+| ----------------------------- | ---------------------------------------------------- |
+| `Content-Type`                | `application/json`                                   |
+| `Cache-Control`               | `public, max-age=3600, stale-while-revalidate=43200` |
+| `ETag`                        | A hash of the document body                          |
+| `Access-Control-Allow-Origin` | `*`                                                  |
+| `If-None-Match` hit           | `304`, with no body                                  |
+
+Called with no argument it reads `config/openapi.ts`. Pass an object and that
+object replaces the file completely.
+
+```ts title="src/questpie/server/routes/spec.get.ts"
+import { openApiRoute } from "@questpie/openapi";
+
+export default openApiRoute();
+```
+
+## `docsRoute(config?)`
+
+A `GET` route in raw mode serving the Scalar page. It rebuilds the document on
+every request. There is no cache here.
+
+<Callout type="warn" title="`docsRoute()` with no argument skips your config">
+	It reads `config/openapi.ts` only when you pass it nothing at all. An empty
+	object counts as something. So the bare call the module makes never reaches
+	the file. Pass the config in yourself.
+</Callout>
+
+That is why `/api/docs` shows the title `QUESTPIE API`, the `purple` theme, and
+paths under `/` no matter what your config file says. Mount your own route to
+fix it:
+
+```ts title="src/questpie/server/routes/reference.get.ts"
+import { docsRoute } from "@questpie/openapi";
+
+import openapi from "../config/openapi";
+
+export default docsRoute(openapi);
+```
+
+Your reference now lives at `GET /api/reference` with your title, your theme
+and your base path. The module's `/api/docs` is still there, still showing the
+defaults. Drop `openApiModule` from `modules.ts` and mount both factories by
+hand if you want only one of them.
+
+## `generateOpenApiSpec(app, config?)`
+
+Builds the document and resolves to it. No route, no server, no cache. Reach
+for it in a build step, a snapshot test, or a client generator.
+
+```ts
+import { writeFile } from "node:fs/promises";
+
+import { generateOpenApiSpec } from "@questpie/openapi";
+
+import { app } from "#questpie";
+
+const spec = await generateOpenApiSpec(app, {
+	basePath: "/api",
+	info: { title: "My API", version: "1.0.0" },
+});
+
+await writeFile("openapi.json", JSON.stringify(spec, null, 2));
+```
+
+It is async, so await it. Routes come off `app.config.routes` on their own, and
+you never pass them. Omit the config and every default applies, including the
+`/` base path that produces `//posts`.
+
+## Gating the document
+
+Neither factory can be gated by chaining. Both return a finished route
+definition. `.handler()` already ran, so there is no `.access()` left to call.
+
+Write your own route instead. The app is on the handler context, and
+`generateOpenApiSpec` takes it directly.
+
+```ts title="src/questpie/server/routes/private-spec.get.ts"
+import { generateOpenApiSpec } from "@questpie/openapi";
+import { route } from "questpie/services";
+
+export default route()
+	.get()
+	.access(({ session }) => !!session?.user)
+	.raw()
+	.handler(async ({ app }) => {
+		const spec = await generateOpenApiSpec(app, { basePath: "/api" });
+		return Response.json(spec);
+	});
+```
+
+Most teams do not bother. They leave the document public. Every collection and
+route still enforces its own [access
+rules](/docs/schema/access-control), and that is what decides who can call
+anything.
+
+## Types
+
+Four types come out of the same entry point.
+
+```ts
+import type {
+	OpenApiConfig,
+	OpenApiModuleConfig,
+	OpenApiSpec,
+	ScalarConfig,
+} from "@questpie/openapi";
+```
+
+`OpenApiModuleConfig` extends `OpenApiConfig` with `scalar`, `specPath` and
+`docsPath`. It is the shape `openApiConfig()` takes. `OpenApiSpec` is a
+loose description of the document, enough to reach `info`, `paths` and
+`components` without casting.
+
+## The codegen plugin
+
+`openApiModule` already carries `openApiPlugin()`. You only import it directly
+if you wire plugins by hand in `questpie.config.ts` instead of registering the
+module.
+
+The plugin does two things. It matches `config/openapi.ts` and files its
+default export under `app.state.config.openapi`. It also emits an
+`AppRouteKeys` type, a sorted union of every discovered route key.
