@@ -1,6 +1,8 @@
 ---
 title: Optimistic concurrency
-description: Protect generated collection and global mutations with framework-owned canonical revisions.
+description: Two people editing one row is a race. Turn this on and every write carries the revision it expects, so the second one is rejected rather than silently overwriting the first.
+kind: guide
+package: questpie
 ---
 
 QUESTPIE can reject a mutation when the canonical row changed after it was
