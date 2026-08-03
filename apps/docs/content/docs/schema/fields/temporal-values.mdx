@@ -5,17 +5,21 @@ kind: reference
 package: questpie
 ---
 
-| Field          | Postgres                      | Server and typed client      | Plain JSON                   | OpenAPI                       |
-| -------------- | ----------------------------- | ---------------------------- | ---------------------------- | ----------------------------- |
-| `f.datetime()` | `timestamp(3) with time zone` | `Date`                       | RFC 3339, `Z` on the way out | `string`, `format: date-time` |
-| `f.date()`     | `date`                        | `YYYY-MM-DD` string          | the same string              | `string`, `format: date`      |
-| `f.time()`     | `time(0)`                     | `HH:MM` or `HH:MM:SS` string | the same string              | `string`, no temporal format  |
+| Field          | Postgres                      | Server and typed client           | Plain JSON                   | OpenAPI                       |
+| -------------- | ----------------------------- | --------------------------------- | ---------------------------- | ----------------------------- |
+| `f.datetime()` | `timestamp(3) with time zone` | `Date`                            | RFC 3339, `Z` on the way out | `string`, `format: date-time` |
+| `f.date()`     | `date`                        | `YYYY-MM-DD` string               | the same string              | `string`, `format: date`      |
+| `f.time()`     | `time(0)`                     | `HH:MM` or `HH:MM:SS(.s…)` string | the same string              | `string`, no temporal format  |
 
-Only `f.datetime()` is an instant. Nothing turns a date or a time into a `Date`
-at any boundary, so every rule below is about datetime unless it names another
-type.
+A field stays nullable until you call `.required()`. OpenAPI widens the type of
+a nullable field to `["string", "null"]`. The format does not change.
+
+Every rule below is about `f.datetime()` unless it names another type. The other
+two need no wire handling, because a string survives a JSON hop unchanged.
 
 ```ts title="src/questpie/server/collections/events.ts"
+import { collection } from "#questpie/factories";
+
 export const events = collection("events").fields(({ f }) => ({
 	startsAt: f.datetime().required(),
 	dateOnly: f.date().required(),
@@ -25,9 +29,9 @@ export const events = collection("events").fields(({ f }) => ({
 
 ## Writing
 
-The datetime schema is a union of `z.date()` and an RFC 3339 string carrying a
-zone, and the string branch becomes a `Date` before the write. The date schema
-is `z.string().date()` and takes nothing else.
+The datetime schema is a union of `z.date()` and an RFC 3339 string. That string
+must carry a zone, and it becomes a `Date` before the write. The date schema is
+`z.string().date()`, which takes that one string shape and nothing else.
 
 | Value sent                        | `f.datetime()`                        | `f.date()`                   |
 | --------------------------------- | ------------------------------------- | ---------------------------- |
@@ -36,11 +40,11 @@ is `z.string().date()` and takes nothing else.
 | `"2026-10-25T02:30:00.456+02:00"` | Accepted, stored as `…T00:30:00.456Z` | Rejected                     |
 | `"2026-10-25T02:30:00.456"`       | Rejected, no zone                     | Rejected                     |
 | `"2026-10-25"`                    | Rejected, a day has no epoch          | Accepted                     |
-| `1761352200456`                   | Rejected                              | Rejected                     |
+| `1792888200456`                   | Rejected                              | Rejected                     |
 | `null`                            | Stored, unless `.required()`          | Stored, unless `.required()` |
 
-QUESTPIE never guesses a timezone. An offset-less string is a validation error
-rather than a local reading of whichever machine ran the write.
+QUESTPIE never guesses a timezone. An offset-less string is a validation error.
+It is never read as local time on whichever machine ran the write.
 
 <Callout type="warn" title="`withTimezone: false` opts out of this contract">
 	It builds a Postgres `timestamp without time zone`. Use it when you mean a
@@ -53,11 +57,11 @@ rather than a local reading of whichever machine ran the write.
 `eq`, `ne`, `not`, `gt`, `gte`, `lt`, `lte`, `in` and `notIn` normalize their
 operand before the query is built.
 
-| Field type     | Operand it takes                          | On anything else                                                                      |
-| -------------- | ----------------------------------------- | ------------------------------------------------------------------------------------- |
-| `f.datetime()` | `Date`, or RFC 3339 with `Z` or an offset | 400, `Datetime filters require a Date or RFC 3339 value with Z or an explicit offset` |
-| `f.date()`     | Exact `YYYY-MM-DD`                        | 400, `Date filters require an exact YYYY-MM-DD calendar date`                         |
-| `f.time()`     | Any string                                | Nothing is checked, the value reaches Postgres as written                             |
+| Field type     | Operand it takes                            | On anything else                                                                      |
+| -------------- | ------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `f.datetime()` | `Date`, or RFC 3339 with `Z` or an offset   | 400, `Datetime filters require a Date or RFC 3339 value with Z or an explicit offset` |
+| `f.date()`     | Exact `YYYY-MM-DD`                          | 400, `Date filters require an exact YYYY-MM-DD calendar date`                         |
+| `f.time()`     | `Date` or string, from the shared `dateOps` | Nothing is checked, the value reaches Postgres as written                             |
 
 `in` and `notIn` normalize each element. `not: null` passes through as a null
 check. `isNull` and `isNotNull` are outside the set. A field carrying `.array()`
@@ -65,16 +69,15 @@ skips normalization entirely.
 
 ## Reading
 
-Every read parses stored datetime values back into `Date`, including values
-nested in an `f.object()` and items inside `.array()`. A stored value that fails
-to parse throws a `TypeError` rather than reaching your code. Date and time
-values pass through untouched.
+Every read parses stored datetime values back into `Date`. That covers values
+nested in an `f.object()` and items inside `.array()`. A `null` passes straight
+through. A stored value that does not parse as an instant throws a `TypeError`
+before it reaches your code. Date and time values pass through untouched.
 
 ## Typed HTTP
 
-`createClient()` opts into the typed envelope by default, so nested `Date`
-values survive the hop and a string that merely looks like a timestamp stays a
-string.
+`createClient()` opts into the typed envelope by default. Nested `Date` values
+survive the hop, and a string that merely looks like a timestamp stays a string.
 
 | Step       | What happens                                                                                                             |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------ |
@@ -97,8 +100,8 @@ created.dateOnly; // "2026-10-25"
 
 `createClient({ useSuperJSON: false })` is the plain-JSON mode. Requests go out
 as `JSON.stringify` output and datetime values come back as RFC 3339 strings.
-Any caller that never asks for the envelope gets that same plain contract,
-including one built from your OpenAPI spec.
+Any caller that never asks for the envelope gets that same plain contract. A
+client built from your OpenAPI spec is one of them.
 
 For a JSON boundary your own code owns, `questpie/shared` exports
 `stringifyTypedWire()` and `parseTypedWire()`. Use the pair together.
@@ -106,37 +109,42 @@ For a JSON boundary your own code owns, `questpie/shared` exports
 ## Realtime and Channels
 
 SSE frames, ordered Channel events, Channel replay and Pusher presence member
-info share one codec. It leaves `JSON.stringify` output as it was and adds one
-reserved top-level key, `__questpieTypedWire`, holding a wire version and the
-exact paths that were `Date`.
+info share one codec. It leaves `JSON.stringify` output as it was. It then adds
+one reserved top-level key, `__questpieTypedWire`, holding a wire version and
+the exact paths that were `Date`.
 
 | Consumer               | What it sees                                                                       |
 | ---------------------- | ---------------------------------------------------------------------------------- |
 | `JSON.parse`, no codec | ISO strings at those paths, plus one extra property it can ignore                  |
 | Current typed client   | Only the marked paths restored to `Date`, and the key deleted before your callback |
 
-Wire version `1` is the only one accepted. The codec fails closed: a payload
-already carrying the reserved key throws on the way out, and an unknown version,
-a malformed or duplicated path, a marked value that is not its own
-`toISOString()`, or more than 16,384 marked paths throws on the way in. A normal
-string is never revived by appearance.
+Wire version `1` is the only one accepted. The codec fails closed. On the way
+out it throws when the payload already carries the reserved key. On the way in
+it throws on any of four faults.
+
+- an unknown version
+- a malformed or duplicated path
+- a marked value that is not its own `toISOString()`
+- more than 16,384 marked paths
+
+A normal string is never revived by appearance.
 
 The 10,000-byte Channel event limit is measured on the envelope with the
 metadata in it.
 
 Query realtime over Pusher or Soketi carries invalidation notices on
-`questpie:invalidate` rather than rows, so the `Date` arrives with the typed
-HTTP refetch that follows.
+`questpie:invalidate` rather than rows. The `Date` arrives with the typed HTTP
+refetch that follows.
 
 ## TanStack and SSR
 
-`@questpie/tanstack-query` receives the typed client's values, and `dehydrate()`
+`@questpie/tanstack-query` receives the typed client's values. `dehydrate()`
 keeps `Date` instances in JavaScript state. The package pins one hydration path
 with a test: dehydrate, Seroval round trip, hydrate. The `Date` survives and an
 ISO-looking string stays a string.
 
 `@questpie/tanstack-db` writes `find()` and live-snapshot docs straight into the
-collection, so no JSON clone stands between the row and your query.
+collection. No JSON clone stands between the row and your query.
 
 A JSON-only hop you add yourself is yours: a cookie, a script tag, your own
 cache. Use a serializer that keeps `Date`, such as the typed-wire pair.

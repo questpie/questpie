@@ -5,16 +5,16 @@ kind: reference
 package: questpie
 ---
 
-| Surface               | Detail                                                      |
-| --------------------- | ----------------------------------------------------------- |
-| Signature             | `f.json<T>(config?)`                                        |
-| Config                | `{ mode?: "jsonb" \| "json" }`, optional                    |
-| Column                | `jsonb`, or `json` under `{ mode: "json" }`                 |
-| Schema                | a recursive JSON union, not `z.any()`                       |
-| Filter operators      | six, every one against the whole value, [below](#filtering) |
-| Admin form            | a monospace textarea with a Format button                   |
-| Admin cell            | fifty characters, the whole value in a `title` attribute    |
-| Type-specific methods | none, the shared chain is the whole surface                 |
+| Surface               | Detail                                                   |
+| --------------------- | -------------------------------------------------------- |
+| Signature             | `f.json<T>(config?)`                                     |
+| Config                | `{ mode?: "jsonb" \| "json" }`, optional                 |
+| Column                | `jsonb`, or `json` under `{ mode: "json" }`              |
+| Schema                | a recursive JSON union, not `z.any()`                    |
+| Filter operators      | six, none reaching inside the value, [below](#filtering) |
+| Admin form            | a monospace textarea with a Format button                |
+| Admin cell            | fifty characters, the whole value in a `title` attribute |
+| Type-specific methods | none, the shared chain is the whole surface              |
 
 ```ts title="src/questpie/server/collections/posts.ts"
 import { collection } from "#questpie/factories";
@@ -25,14 +25,16 @@ export const posts = collection("posts").fields(({ f }) => ({
 }));
 ```
 
-`metadata` reads back as `JsonValue | null`, `settings` as
-`{ theme: "light" | "dark" } | null`. Both are one `jsonb` column, no second
-table and no join. `JsonValue` is exported from `questpie`.
+`metadata` reads back as `JsonValue`, `settings` as
+`{ theme: "light" | "dark" } | null`. `JsonValue` already includes `null`, so
+`.required()` does not change that read type. Each field is one `jsonb` column.
+There is no second table and no join. `JsonValue` is exported from `questpie`.
 
-Reach for it when the shape is genuinely open. When the keys are fixed,
-[`f.object()`](/docs/schema/fields/object) takes the same column and gives every
-key its own schema, label, locale and access rule, plus eleven structural filter
-operators this type does not have.
+Reach for it when the shape is genuinely open. Use
+[`f.object()`](/docs/schema/fields/object) when the keys are fixed. It takes the
+same column and gives every key its own schema, label, locale and access rule.
+It also swaps the operator set. You lose `eq`, `ne`, `in` and `notIn`. You gain
+nine structural operators this type does not have.
 
 ## The mode
 
@@ -47,19 +49,19 @@ moves the Postgres column type and nothing else.
 
 ## Typing the value
 
-The type argument, `.$type()` and `.zod()` all move the value type. Where they
-part company is the filter and the runtime check.
+The type argument, `.$type()` and `.zod()` all move the value type. They differ
+on the filter and on the runtime check.
 
-| Form          | Read type           | Filter operand | Runtime check  |
-| ------------- | ------------------- | -------------- | -------------- |
-| `f.json()`    | `JsonValue \| null` | `JsonValue`    | the JSON union |
-| `f.json<T>()` | `T \| null`         | `T`            | the JSON union |
-| `.$type<T>()` | `T \| null`         | unchanged      | the JSON union |
-| `.zod(fn)`    | the schema output   | unchanged      | the schema     |
+| Form          | Read type         | Filter operand | Runtime check  |
+| ------------- | ----------------- | -------------- | -------------- |
+| `f.json()`    | `JsonValue`       | `JsonValue`    | the JSON union |
+| `f.json<T>()` | `T \| null`       | `T`            | the JSON union |
+| `.$type<T>()` | `T \| null`       | unchanged      | the JSON union |
+| `.zod(fn)`    | the schema output | unchanged      | the schema     |
 
-The field fixes its filter operand when the factory runs, so unchanged means
-whatever the type argument said, `JsonValue` when you passed none. A later
-`.$type()` or `.zod()` cannot reopen it.
+The field fixes its filter operand when the factory runs. Unchanged means
+whatever the type argument said. That is `JsonValue` when you passed none. A
+later `.$type()` or `.zod()` cannot reopen it.
 
 `.zod()` narrows the read type only when the schema it returns has a real output
 type. Return a bare `ZodType` and the field keeps the type it had, with the new
@@ -80,20 +82,20 @@ preferences: f
 ```
 
 <Callout type="warn" title="A type argument alone accepts anything">
-	`f.json<{ theme: "light" | "dark" }>()` moves the TypeScript type and leaves the
-	schema as the loose JSON union, so a write of `{ theme: "blue" }` is stored. Add
-	`.zod()` to make the shape a rule.
+	`f.json<{ theme: "light" | "dark" }>()` moves the TypeScript type only. The
+	schema stays the loose JSON union, so a write of `{ theme: "blue" }` is stored.
+	Add `.zod()` to make the shape a rule.
 </Callout>
 
 Without `.required()` the column is nullable and the input optional. The derived
 schema is the recursive union of `string`, `number`, `boolean`, `null`, arrays
-and objects, so a `Date`, a `Map` or a function fails validation instead of
-passing through.
+and objects. A `Date`, a `Map` or a function fails validation instead of passing
+through.
 
 ## Filtering
 
-The JSON field carries the basic operator set. Every entry compares the stored
-value as a whole.
+The JSON field carries the basic operator set. No entry reaches inside the
+stored value.
 
 | Operator               | Operand               | Matches                       |
 | ---------------------- | --------------------- | ----------------------------- |
@@ -111,17 +113,19 @@ await app.collections.posts.find({
 });
 ```
 
-The set carries a seventh operator, `not`, which the field's declared filter
-input leaves out. It runs, and it does not type-check.
+The runtime set carries a seventh operator, `not`. The field's declared filter
+input leaves it out. It runs. It does not type-check.
 
-<Callout type="warn" title="A key filter is dropped, not rejected">
-	`where: { settings: { theme: "dark" } }` type-checks, because any JSON object is
-	also a valid whole-value shorthand. QUESTPIE finds no operator in it, compiles
-	nothing, and returns every row. Use `eq`, or model the key with `f.object()`.
+<Callout type="warn" title="Filter by key and the clause is dropped">
+	`where: { settings: { theme: "dark" } }` is a type error. If you cast past it,
+	QUESTPIE finds no operator, compiles nothing, and returns every row. Use `eq`,
+	or model the key with `f.object()`.
 </Callout>
 
-An operator object is recognized by its keys, so a stored object whose own top
-level key is called `eq`, `in` or `not` is ambiguous to the same check.
+An object under a field key is always read as an operator map. QUESTPIE never
+treats it as the stored value itself. Only a scalar survives as a bare
+shorthand. On an untyped field `where: { metadata: "ready" }` type-checks and
+compiles to equality.
 
 ## Lists
 
@@ -134,9 +138,9 @@ events: f.json<Array<{ at: string; type: string }>>(),
 ```
 
 <Callout type="warn" title="`.array()` splits the filters in two">
-	It swaps the runtime operator set for the array one, `containsAll`,
-	`containsAny`, `length` and the rest, while the field keeps the JSON filter
-	input it declared. What you can type and what runs stop agreeing.
+	It swaps the runtime operator set for the array one: `containsAll`,
+	`containsAny`, `length` and the rest. The field still declares the JSON filter
+	input. What you can type and what runs stop agreeing.
 </Callout>
 
 ## Localization
@@ -150,13 +154,13 @@ and never reads the `localized` prop. Storage is unaffected.
 
 ## In the admin
 
-The form control is `JsonField`. It prints the stored value with a two space
-indent into a monospace textarea and parses on every keystroke. A draft that
-does not parse is written to the form as the raw string and validation refuses
-it. Emptying the box writes `null`. The Format button reprints the value.
+The form control is `JsonField`. It prints the stored value into a monospace
+textarea with a two space indent. It parses on every keystroke. A draft that
+does not parse goes to the form as the raw string, and validation refuses it.
+Emptying the box writes `null`. The Format button reprints the value.
 
-The list cell is `JsonCell`. Compact JSON, cut at fifty characters, the whole
-value in a `title` attribute, a dash when null.
+The list cell is `JsonCell`. It prints compact JSON, cut at fifty characters,
+with the whole value in a `title` attribute. A null shows a dash.
 
 `.admin()` reaches the control:
 
@@ -167,11 +171,15 @@ value in a `title` attribute, a dash when null.
 | `defaultMode`     | `"code"`, `"form"`       | `"code"` |
 | `allowModeSwitch` | boolean                  | `true`   |
 
-The last two are inert on a declared field. Both feed a second editing mode that
-renders only when the control is also handed a `renderForm` render prop, and
-field metadata crosses to the browser as JSON, so a collection file has no way
-to send a function. `JsonFieldAdminMeta` also declares a `codeEditor` flag that
-nothing reads.
+The last two feed a second editing mode. That mode renders only when the control
+also gets a `renderForm` render prop. `renderForm` returns React nodes. Admin
+metadata crosses to the browser as JSON, so a collection file cannot send one.
+`allowModeSwitch` is therefore dead on a declared field. `defaultMode` is not
+quite dead. Setting it to `"form"` still shows the code editor. It also turns
+off the invalid-JSON form error, which only runs in code mode.
+
+`JsonFieldAdminMeta` types only `codeEditor`, a flag nothing reads. The other
+four still arrive, because `.admin()` takes `unknown` on every field.
 
 ## Related
 

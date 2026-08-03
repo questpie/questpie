@@ -11,7 +11,7 @@ package: questpie
 | `f.datetime({ precision: n })`        | `timestamp(n) with time zone` | `Date` |
 | `f.datetime({ withTimezone: false })` | `timestamp(3)`                | `Date` |
 
-Both keys are constructor-only. No method on the type reopens either.
+Both keys are constructor-only. No method changes them later.
 
 ```ts title="src/questpie/server/collections/events.ts"
 import { collection } from "#questpie/factories";
@@ -24,7 +24,7 @@ export const events = collection("events").fields(({ f }) => ({
 }));
 ```
 
-Without `.required()` the field selects as `Date | null`. With it, `Date`.
+The field selects as `Date | null`. Add `.required()` and it selects as `Date`.
 
 ## Options
 
@@ -35,8 +35,8 @@ Without `.required()` the field selects as `Date | null`. With it, `Date`.
 
 ## What it accepts
 
-The derived schema is a union of `z.date()` and `z.iso.datetime({ offset: true })`,
-and the string branch converts to a `Date` before the write.
+The derived schema is a union of `z.date()` and `z.iso.datetime({ offset: true })`.
+The string branch converts to a `Date` before the write.
 
 | Input                         | Result                                     |
 | ----------------------------- | ------------------------------------------ |
@@ -51,45 +51,45 @@ and the string branch converts to a `Date` before the write.
 No string appears in the generated insert type. The string branch is there for a
 plain JSON body.
 
-Reads run the other way. A stored value comes back as a `Date`, `null` passes
-through untouched, and a value that parses as neither throws a `TypeError`
-rather than reaching your code.
+Reads run the other way. A stored value comes back as a `Date`. A `null` passes
+through untouched. A value that parses as neither throws a `TypeError` before it
+reaches your code.
 
 ## Methods
 
-Two methods come with the type, on top of the base chain.
+The type adds two methods on top of the base chain.
 
 | Method             | Effect                                                  |
 | ------------------ | ------------------------------------------------------- |
 | `.autoNow()`       | Sets `hasDefault` and a `() => new Date()` factory      |
 | `.autoNowUpdate()` | Adds a `beforeChange` field hook returning `new Date()` |
 
-Neither changes the field's type, so `f.datetime().required().autoNow()` still
-demands the key in TypeScript while the runtime schema accepts it missing. Both
-methods exist on `f.date()` too, where they produce a `YYYY-MM-DD` string.
+Neither method changes the field's type. So `f.datetime().required().autoNow()`
+still demands the key in TypeScript. The runtime schema accepts it missing. Both
+methods exist on `f.date()` too. There they produce a `YYYY-MM-DD` string.
 
 <Callout type="warn" title="`.autoNow()` freezes one instant into the column">
-	The factory runs once, while the column is built, and its result becomes a
-	literal column `DEFAULT`. A row inserted without the field gets the moment that
-	DDL was generated, not the moment of the insert. `.default(() => …)` behaves
-	the same way.
+	The factory runs once, when the column is built. Its result becomes a literal
+	column `DEFAULT`. A row inserted without the field gets the moment the DDL was
+	generated, not the moment of the insert. `.default(() => …)` behaves the same
+	way.
 </Callout>
 
 <Callout type="warn" title="`.autoNowUpdate()` fires only on keys you send">
-	Field hooks run over the keys present in the payload, so omitting the field
-	skips the hook. `.inputFalse()` drops the field from both generated schemas,
-	which means the two together never fire at all.
+	Field hooks run over the keys present in the payload. Omit the field and the
+	hook never runs. `.inputFalse()` drops the field from both generated schemas.
+	So the two together never fire at all.
 </Callout>
 
-For a created and updated pair that works, leave the collection's `timestamps`
-option on. It adds `created_at` and `updated_at` as `timestamp(3)` without a
-zone, defaulting to `now()`, and the CRUD layer rewrites `updated_at` on every
-update. See [Options](/docs/schema/collections/options#timestamps).
+Leave the collection's `timestamps` option on for a created and updated pair
+that works. It adds `created_at` and `updated_at` as `timestamp(3)` columns
+without a zone. Both default to `now()`. The CRUD layer rewrites `updated_at` on
+every update. See [Options](/docs/schema/collections/options#timestamps).
 
 ## Filtering
 
-Datetime carries the `dateOps` set, eleven operators. Comparison operands are
-`Date | string`, the null checks take a boolean.
+The datetime field carries the `dateOps` set, eleven operators. Comparison
+operands are `Date | string`. The null checks take a boolean.
 
 | Operator               | Operand                     | Matches                                     |
 | ---------------------- | --------------------------- | ------------------------------------------- |
@@ -111,7 +111,7 @@ const { docs } = await app.collections.events.find({
 });
 ```
 
-`f.time()` carries this same set, though its stored values are strings.
+`f.time()` carries this same set. Its stored values are strings.
 
 ## In the admin
 
@@ -119,11 +119,11 @@ The form control is `DatetimeField`. The list cell is `DateTimeCell`.
 
 - On desktop the control is a popover holding a calendar plus a time input. On
   mobile it is a native `datetime-local` input.
-- The control's own `precision` prop is `"minute"` or `"second"` and defaults to
-  `"minute"`. It has nothing to do with the column's numeric `precision`, and
-  nothing carries one to the other.
-- `.admin()` on a datetime field takes the date field's meta, which adds only
-  `placeholder` to the shared keys. The control's `minDate`, `maxDate` and
+- The control's own `precision` prop is `"minute"` or `"second"`. It defaults to
+  `"minute"`. It has nothing to do with the column's numeric `precision`.
+  Nothing carries one to the other.
+- `.admin()` on a datetime field takes the date field's meta. That meta adds
+  only `placeholder` to the shared keys. The control's `minDate`, `maxDate` and
   `format` props are not in it.
 - The list cell prints the date and drops the time. It drops the year too when
   it matches the current one.
@@ -131,19 +131,20 @@ The form control is `DatetimeField`. The list cell is `DateTimeCell`.
 ## Related
 
 [Temporal values](/docs/schema/fields/temporal-values) covers the wire, the
-typed client, realtime and SSR, where an instant has to survive a JSON hop.
+typed client, realtime and SSR. An instant has to survive a JSON hop in each
+one.
 
-[`f.date()`](/docs/schema/fields/date) is the calendar day, a `date` column
-holding an exact `YYYY-MM-DD` string that never becomes a `Date`.
+[`f.date()`](/docs/schema/fields/date) is the calendar day. It stores an exact
+`YYYY-MM-DD` string in a `date` column. That string never becomes a `Date`.
 
-[`f.time()`](/docs/schema/fields/time) is the time of day, a `time` column
-holding a string.
+[`f.time()`](/docs/schema/fields/time) is the time of day. It stores a string in
+a `time` column.
 
 [Options](/docs/schema/collections/options) covers `timestamps` and the rest of
 the per-collection switches.
 
-[Arrays](/docs/schema/fields/array) covers `.array()`, which swaps the column
-for `jsonb` and the operators for the multi-value set.
+[Arrays](/docs/schema/fields/array) covers `.array()`. It swaps the column for
+`jsonb` and the operators for the multi-value set.
 
-[Validation](/docs/schema/validation) covers the derived schema and `.zod()`,
-the way to add a rule the constructor has no key for.
+[Validation](/docs/schema/validation) covers the derived schema and `.zod()`.
+Use `.zod()` for a rule the constructor has no key for.

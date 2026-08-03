@@ -10,10 +10,10 @@ package: questpie
 | `f.url()`  | `varchar(2048)` | `z.string().url().max(2048)` |
 | `f.url(n)` | `varchar(n)`    | `z.string().url().max(n)`    |
 
-The argument is a number and nothing else. There is no options object and no
-unbounded mode, so 2048 is the only default to move, and only from the
-constructor. `.array()` and the `.drizzle()` escape hatch are the only things
-that replace the column.
+The argument is a number and nothing else. There is no options object. There is
+no unbounded mode either. The constructor argument is the only thing that sets
+the column width. Only `.array()` and the `.drizzle()` escape hatch replace the
+column.
 
 ```ts title="src/questpie/server/collections/links.ts"
 import { collection } from "#questpie/factories";
@@ -28,9 +28,9 @@ Without `.required()` the field selects as `string | null`. With it, `string`.
 
 ## What passes
 
-The check hands the value to `new URL()` and accepts whatever parses. QUESTPIE
-passes no scheme or hostname constraint, so the field is not limited to http
-and https.
+The check hands the value to `new URL()`. Anything that parses passes. QUESTPIE
+adds no scheme or hostname constraint, so the field is not limited to http and
+https.
 
 | Value                     | Result                    |
 | ------------------------- | ------------------------- |
@@ -41,25 +41,26 @@ and https.
 | `//example.com`           | Rejected, no scheme       |
 | `" https://x.dev "`       | Passes, stored trimmed    |
 
-That last row is a write, not just a check. The parser trims and hands the
-trimmed string back, and `create()` and `update()` replace the input with what
-the schema returned. Nothing else is normalized, so case, port and trailing
-slash are stored as typed.
+That last row is a write, not just a check. The parser trims the value and hands
+the trimmed string back. `create()` and `update()` then store what the schema
+returned. Nothing else is normalized. Case, port and trailing slash are stored
+exactly as you typed them.
 
-To narrow the scheme, refine with `.zod()`. The type carries no protocol option.
+Refine with `.zod()` to narrow the scheme. The field type carries no protocol
+option.
 
 ```ts
 endpoint: f.url().zod((s) => s.refine((v) => String(v).startsWith("https://"))),
 ```
 
-`.zod()` receives the schema typed as `ZodType`, so the refinement's argument
-arrives as `unknown` and you narrow it yourself. It runs after the format and
-length checks, never instead of them.
+`.zod()` receives the schema typed as `ZodType`. So the refinement's argument
+arrives as `unknown`. Narrow it yourself. The refinement runs after the format
+and length checks, never instead of them.
 
 ## Methods
 
-Two methods come with the type. `.required()`, `.default()`, `.label()`,
-`.localized()` and the rest of the base chain work here as on any field.
+Two methods come with the type. The base chain works here as on any field, so
+`.required()`, `.default()`, `.label()` and `.localized()` all apply.
 
 | Method    | Effect                                      |
 | --------- | ------------------------------------------- |
@@ -70,10 +71,10 @@ Two methods come with the type. `.required()`, `.default()`, `.label()`,
 endpoint: f.url(500).required().min(12),
 ```
 
-<Callout type="warn" title="`.max()` tightens, it never widens">
-	The constructor bakes its width into the schema and `.max(n)` adds a second
-	check beside it. `f.url(500).max(2000)` still rejects 600 characters, and the
-	column stays `varchar(500)`. Widen by changing the constructor argument.
+<Callout type="warn" title="`.max()` only tightens">
+	The constructor bakes its width into the schema. `.max(n)` adds a second check
+	beside it. `f.url(500).max(2000)` still rejects 600 characters. The column
+	stays `varchar(500)`. To widen, change the constructor argument.
 </Callout>
 
 ## Filtering
@@ -110,30 +111,31 @@ const { docs } = await app.collections.links.find({
 	type="warn"
 	title="`host` and `protocol` are patterns, not a parsed URL"
 >
-	`host` looks for `://` followed by your value anywhere in the string, so
-	`example.com` also matches `https://example.com.evil.net` and a URL carrying
-	that text in its query. `protocol` needs the `//`, so `mailto` never matches.
-	An empty `hostIn` compiles to `FALSE`.
+	`host` looks for `://` plus your value anywhere in the string. So
+	`example.com` also matches `https://example.com.evil.net`. It matches any URL
+	carrying that text in its query too. `protocol` needs the `//`, so `mailto`
+	never matches. An empty `hostIn` compiles to `FALSE`.
 </Callout>
 
 ## In the admin
 
-The form control is `TextField`. The list cell is `TextCell`, which truncates
-and puts the full value in a `title` attribute. Neither renders a link.
+The form control is `TextField`. The list cell is `TextCell`. It truncates the
+text and puts the full value in a `title` attribute. Neither renders a link.
 
 What crosses to the browser:
 
 - The input is `type="text"`. The primitive does support `type="url"` and the
   URL touch keyboard that goes with it. The registration asks for neither.
-- `maxLength` becomes the input's `maxLength` attribute, so typing stops at the
-  width. A `.max(n)` above the constructor width is the number that crosses.
-- The admin rebuilds its own schema for the form from `z.url()` and `maxLength`.
-  It never reads `minLength`, so `.min(n)` is a server-side check only. That is
-  the one place URL differs from [text](/docs/schema/fields/text), which applies
-  both.
+- `maxLength` becomes the input's `maxLength` attribute. Typing stops there.
+  `.max(n)` overwrites that number, even when it sits above the constructor
+  width.
+- The admin rebuilds its own schema for the form. It uses `z.url()` and
+  `maxLength` only. It never reads `minLength`, so `.min(n)` is a server-side
+  check. [Text](/docs/schema/fields/text) takes the generic path instead, which
+  applies both bounds.
 
-Configure the rest with `.admin()`, the field extension `@questpie/admin`
-registers.
+Configure the rest with `.admin()`. `@questpie/admin` registers that field
+extension.
 
 | Key                    | Type                | Effect                  |
 | ---------------------- | ------------------- | ----------------------- |
@@ -141,30 +143,30 @@ registers.
 | `showProtocolDropdown` | `boolean`           | Nothing. Declared only  |
 | `defaultProtocol`      | `"http" \| "https"` | Nothing. Declared only  |
 
-The last two type-check and reach the component as props, and no component under
-`packages/` reads either one. The shared `.admin()` keys, `hidden`, `readOnly`,
-`group`, `colspan` and the rest, behave as they do on any field.
+The last two type-check and reach the component as props. No component under
+`packages/` reads either one. The shared `.admin()` keys behave as they do on
+any field. That covers `hidden`, `readOnly`, `group`, `colspan` and the rest.
 
 ## Lists
 
-`.array()` replaces the column with `jsonb` and swaps `urlOps` for the
-multi-value set, so `host` and `protocol` are gone from the filter. Each element
+`.array()` replaces the column with `jsonb`. It also swaps `urlOps` for the
+multi-value set. So `host` and `protocol` are gone from the filter. Each element
 is still parsed as a URL on write.
 
 ```ts
 mirrors: f.url().array().maxItems(5),
 ```
 
-The admin's item-type allowlist has no `url` in it, so items get a plain text
-input and the form runs no per-item check. A bad element is caught by the write.
+The admin's item-type allowlist has no `url` in it. Items get a plain text
+input. The form runs no per-item check. The write catches a bad element.
 
 ## Related
 
-[Text](/docs/schema/fields/text) is the plain string and the owner of the
-`stringOps` set URL extends.
+[Text](/docs/schema/fields/text) is the plain string. It owns the `stringOps`
+set that URL extends.
 
-[Email](/docs/schema/fields/email) is the other format-checked varchar, with
-`domain` and `domainIn` in place of `host` and `protocol`.
+[Email](/docs/schema/fields/email) is the other format-checked varchar. It has
+`domain` and `domainIn` in place of `host`, `hostIn` and `protocol`.
 
 [Arrays](/docs/schema/fields/array) covers what `.array()` does to reads, writes
 and filters.
