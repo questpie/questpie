@@ -87,9 +87,10 @@ written in that same transaction. A seed that writes three rows and then throws
 leaves nothing behind and stays pending. The run stops there, so the seeds after
 it do not run either.
 
-Write the body to survive a second entry anyway. `--force`, `seed:reset`, an
-undo and a fresh database all send the runner back through `run`. Look before
-you insert, or patch a singleton the way the example above does.
+Write the body to be idempotent anyway, so a second entry changes nothing.
+`--force`, `seed:reset`, an undo and a fresh database all send the runner back
+through `run`. Look before you insert, or patch a singleton the way the example
+above does.
 
 ## Categories
 

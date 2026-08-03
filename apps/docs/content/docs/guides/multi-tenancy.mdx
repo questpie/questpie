@@ -97,6 +97,13 @@ export default global("siteSettings")
 	});
 ```
 
+The cast is not style. `scoped` is typed `(ctx: BaseRequestContext) => ...`,
+and that interface carries no index signature and no augmentation seam. So a key
+you added to the context is invisible to it, and the cast is how you name it
+back. `RequestContext` elsewhere in the framework does allow extra keys, and
+`Questpie.AppContext` is the interface you augment, but `scoped` reaches
+neither.
+
 `scoped` adds a `scope_id` text column and a unique index named
 `siteSettings_scope_idx`. `get()` and `update()` then filter by the resolved id.
 

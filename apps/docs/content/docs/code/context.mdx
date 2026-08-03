@@ -1,0 +1,196 @@
+---
+title: Context
+description: One object reaches every handler you write. It carries the database, the entity APIs, the caller's identity and your own services, all typed by codegen.
+kind: guide
+package: questpie
+---
+
+Most pages in these docs destructure `ctx` and move on. This one says what the
+object is, what is on it, and why the shape shifts between call sites.
+
+## One object, every handler
+
+A hook, a route, a job, an access rule and a service factory each take a single
+argument. That argument is the context. QUESTPIE builds a fresh one per
+operation, so nothing on it is shared global state.
+
+```ts
+afterChange: async ({ data, db, queue, services }) => {
+	await queue.reindex.publish({ id: data.id });
+},
+```
+
+Codegen types it from your own app. `ctx.collections.posts` knows your fields.
+`ctx.services.blog` knows what your factory returned. A typo fails to compile.
+
+## What is on it
+
+One function, `extractAppServices`, sets this group. It runs for every context
+in every app, so these keys are always there.
+
+| Key           | What it is                                                     |
+| ------------- | -------------------------------------------------------------- |
+| `app`         | The built app instance.                                        |
+| `db`          | The Drizzle client. Inside a write it is the open transaction. |
+| `session`     | The Better Auth session, or `null`.                            |
+| `collections` | Typed CRUD, one entry per collection.                          |
+| `globals`     | Typed CRUD, one entry per global.                              |
+| `queue`       | Publish a job.                                                 |
+| `email`       | Send mail, or send a template.                                 |
+| `storage`     | The storage adapter.                                           |
+| `kv`          | The key-value adapter.                                         |
+| `search`      | The search adapter.                                            |
+| `realtime`    | The realtime service.                                          |
+| `logger`      | The app logger.                                                |
+| `t`           | Translate a message key.                                       |
+| `services`    | Your own services, default namespace.                          |
+
+Two more appear only once something resolves them. `principal` is the
+discriminated identity, `user`, `oauth` or `system`. Only its `oauth` variant
+carries scopes. `actor` is the Human or Agent authority for collaboration.
+
+### Keys a module adds
+
+A service declared with `namespace: null` lands top-level on the context. Two
+come from the core module, so they are typed in every app.
+
+| Key        | What it is               |
+| ---------- | ------------------------ |
+| `channels` | Typed realtime channels. |
+| `crdt`     | The CRDT server API.     |
+
+`workflows` works the same way but ships in `@questpie/workflows`. Install no
+module and the key is gone from both the type and the object.
+
+<Callout type="warn" title="Three keys exist only at runtime">
+	`extractAppServices` also sets `auth`, `executor` and `observability`. Codegen
+	leaves all three off `AppContext`, so destructuring one fails to compile.
+	Reach them through `ctx.app`.
+</Callout>
+
+<Callout type="info" title="`app` and `ctx` are not the same surface">
+	`app.collections` and `app.email` exist. `app.services` does not. Your own
+	services only ever reach you through a context.
+</Callout>
+
+## It changes shape by call site
+
+A route, a hook and a row access rule all start from the keys above. Each one
+then adds its own.
+
+| Call site       | Adds                                                                     |
+| --------------- | ------------------------------------------------------------------------ |
+| Route handler   | `input`, `params`, `request`, `locale`                                   |
+| Hook            | `data`, `original`, `operation`, `locale`, `accessMode`, `onAfterCommit` |
+| Row access rule | `data`, `input`, `locale`, `request`                                     |
+| Job handler     | `payload`, `locale`, `dispatchId`, `idempotencyKey`                      |
+| Service factory | Nothing                                                                  |
+
+A job handler starts from a smaller set. Codegen drops `app`, `crdt`,
+`principal` and `actor` from it.
+
+A hook in a bulk write also gets `isBatch`, `recordIds`, `records` and `count`.
+A service factory only gets `session` when its lifecycle is `"request"`. A
+singleton is built at app start, and there is no caller yet. Its `ctx.services`
+resolves only the default namespace, though the generated type is wider.
+
+A route's own `access` rule is the odd one out. It gets `locale`, `request` and
+`params` instead of `data` and `input`.
+
+### The field rule is a different object
+
+`access.fields` rules do not get the app context at all. The typed context is
+four keys: `user`, `doc`, `operation` and `req`. No `db`, no `collections`, no
+services. The runtime object also carries `principal`, `actor` and your
+`appConfig({ context })` keys, none of them typed. See
+[Field-level access](/docs/schema/access-control/fields).
+
+## Access mode
+
+`normalizeContext` resolves most context keys in the same order. What you
+passed wins. Then the ambient scope. Then the default.
+
+QUESTPIE keeps the ambient scope in AsyncLocalStorage. A route handler, a job
+handler and a seed each open one. On the CRUD side only `find`, `findOne` and
+`create` do. A nested call inherits what its caller had.
+
+```ts
+// inside a route handler serving a logged-in user
+const posts = await collections.posts.find({ where: { published: true } });
+// accessMode is "user" and session is the caller's. You passed neither.
+```
+
+<Callout type="warn" title="An omitted context is not system mode">
+	Inside a request an omitted `accessMode` inherits `"user"`, so your access
+	rules run. A job or a seed sits inside an explicit `"system"` scope. A bare
+	script inherits nothing and takes the `"system"` default. Both skip your
+	rules.
+</Callout>
+
+An HTTP request starts at `"user"`. The adapter builds the request context that
+way unless the transport is explicitly trusted. A job handler runs inside an
+explicit `"system"` scope, so it does not matter who published the job.
+
+Override one key and the rest still inherit:
+
+```ts
+// still inside the request: session comes from the ambient scope
+await collections.audit.create({ data }, { accessMode: "system" });
+```
+
+Outside a handler, `getContext()` reads the ambient scope and throws when there
+is none. `createContext()` from `#questpie` builds a fresh one for a script.
+
+## Adding your own keys
+
+Three seams, in rising order of scope.
+
+**Per request.** `appConfig({ context })` runs once per HTTP request and its
+return is merged flat onto the context. The keys arrive optional, because the
+resolver never runs for a job or a script. This is the multi-tenancy seam, and
+[App config](/docs/ship/configuration/app) covers it in full.
+
+**Per app.** Give a service a `namespace`. `null` puts it top-level. A string
+puts it under that name.
+
+```ts title="src/questpie/server/services/audit.ts"
+export default service({
+	namespace: null, // ctx.audit, not ctx.services.audit
+	create: (ctx) => ({
+		log: (event: string) => ctx.logger.info(event),
+	}),
+});
+```
+
+Custom namespaces are singleton only. A `"request"` lifecycle service with one
+throws at build time, and the message tells you to use `null` or `"services"`.
+
+**Per package.** A plugin augments the interface, and every handler picks the
+key up:
+
+```ts
+declare global {
+	namespace Questpie {
+		interface AppContext {
+			billing: BillingClient;
+		}
+	}
+}
+```
+
+<Callout type="warn" title="Framework key names are taken">
+	`session`, `db`, `locale` and `accessMode` are reserved. The framework sets
+	them after the merge, so a resolver value never lands. `collections` and
+	`globals` are reserved for the opposite reason. They would shadow the entity
+	APIs. Outside production a reserved key logs a warning.
+</Callout>
+
+## Related
+
+- [Reading and writing](/docs/schema/collections/crud) for the context argument
+  every CRUD method takes.
+- [Services](/docs/code/services) for what lands on `ctx.services` and when it
+  is built.
+- [Hooks](/docs/schema/hooks) for the lifecycle behind `data` and `operation`.
+- [Access control](/docs/schema/access-control) for what `accessMode: "user"`
+  turns on.
