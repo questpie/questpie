@@ -1,5 +1,10 @@
-/* oxlint-disable unicorn/no-empty-file */
-/**
- * Production-scenario helpers are exposed from this isolated entrypoint.
- * Implementations are added independently from the in-process test harness.
- */
+export {
+	createDisposablePostgres,
+	DisposablePostgresCleanupError,
+	DisposablePostgresSetupError,
+	sweepStalePostgresDatabases,
+	type DisposablePostgres,
+	type DisposablePostgresOptions,
+	type DisposablePostgresSetupPhase,
+	type SweepStalePostgresOptions,
+} from "./disposable-postgres.js";

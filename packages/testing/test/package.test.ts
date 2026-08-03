@@ -2,6 +2,11 @@ import { describe, expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import {
+	createDisposablePostgres,
+	sweepStalePostgresDatabases,
+} from "../src/scenario.js";
+
 const packageRoot = join(import.meta.dirname, "..");
 const manifest = JSON.parse(
 	readFileSync(join(packageRoot, "package.json"), "utf8"),
@@ -41,6 +46,11 @@ describe("@questpie/testing package", () => {
 		]) {
 			expect(existsSync(join(packageRoot, "dist", file))).toBe(true);
 		}
+	});
+
+	it("exports disposable PostgreSQL only from the scenario entrypoint", () => {
+		expect(createDisposablePostgres).toBeFunction();
+		expect(sweepStalePostgresDatabases).toBeFunction();
 	});
 
 	it("keeps the testing package out of the production questpie surface", () => {
