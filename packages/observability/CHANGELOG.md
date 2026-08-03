@@ -65,7 +65,6 @@
   falls back to the by-type component rather than rendering nothing.
 
   ## Removed
-
   - `createAdapterRoutes` and the legacy route closure factories — routes are
     defined with `route()`; the framework no longer ships two ways to mount a
     handler.
@@ -79,7 +78,6 @@
     imports of the framework's own deprecated API are now **zero**, down from 166.
 
   ## Fixed
-
   - **Builders lost the app field map on every derivation.** `_fieldDefs` was
     assigned once in `create()` and carried by none of the nineteen derivation
     sites, so `collection("posts").admin({…}).fields(({ f }) => f.richText())`
@@ -113,7 +111,6 @@
   - OpenAPI schema component names match the rest of the framework.
 
   ## Performance
-
   - Field builder chains typecheck **about twice as fast** — field methods moved
     onto the class instead of a 27-key mapped type.
   - The client no longer bundles `qs`: **−90 KB** from the browser bundle.

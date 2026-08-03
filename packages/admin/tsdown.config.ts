@@ -13,6 +13,10 @@ export default defineConfig({
 	clean: true,
 
 	treeshake: true,
+	// One output file per source file. Fifty-odd of them carry their own
+	// "use client" directive, and bundling would have to merge client and server
+	// modules into shared chunks, where a single directive cannot be right for
+	// both. The export map, not the file layout, is what keeps internals private.
 	unbundle: true,
 	dts: {
 		sourcemap: false,
@@ -29,9 +33,6 @@ export default defineConfig({
 	// where dev/prod gating and library-specific opt-outs are easier to manage.
 
 	exports: {
-		// Export all files including internal chunks so TypeScript can resolve
-		// type references from internal .d.mts files
-		all: true,
 		devExports: true,
 		customExports: async (exports, opts) => {
 			try {

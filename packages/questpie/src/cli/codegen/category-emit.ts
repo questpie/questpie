@@ -146,5 +146,11 @@ export function categoryTypeEntry(
 				: `typeof ${file.varName}`;
 	if (decl?.keyFromProperty)
 		return `[K in typeof ${file.varName}.${decl.keyFromProperty}]: ${valueType}`;
+	// Same key the record entry uses. A category keyed by basename produced
+	// `imageText` here and `"image-text"` there, and the module template casts
+	// the record to this type, so the two shapes had to overlap or the generated
+	// file did not compile.
+	if (decl?.keyFromSource === "basename")
+		return `${JSON.stringify(sourceBasename(file))}: ${valueType}`;
 	return `${safeKey(file.key)}: ${valueType}`;
 }

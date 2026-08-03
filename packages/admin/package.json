@@ -33,7 +33,7 @@
 		"./plugin": "./src/exports/plugin.ts",
 		"./server": "./src/exports/server.ts",
 		"./shared": "./src/exports/shared.ts",
-		"./*": "./*",
+		"./package.json": "./package.json",
 		"./client/styles/base.css": "./src/client/styles/base.css",
 		"./client/styles/index.css": "./src/client/styles/index.css"
 	},
@@ -51,7 +51,7 @@
 			"./plugin": "./dist/plugin.mjs",
 			"./server": "./dist/server.mjs",
 			"./shared": "./dist/shared.mjs",
-			"./*": "./*",
+			"./package.json": "./package.json",
 			"./client/styles/base.css": "./dist/client/styles/base.css",
 			"./client/styles/index.css": "./dist/client/styles/index.css"
 		}

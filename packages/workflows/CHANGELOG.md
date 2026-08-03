@@ -65,7 +65,6 @@
   falls back to the by-type component rather than rendering nothing.
 
   ## Removed
-
   - `createAdapterRoutes` and the legacy route closure factories — routes are
     defined with `route()`; the framework no longer ships two ways to mount a
     handler.
@@ -79,7 +78,6 @@
     imports of the framework's own deprecated API are now **zero**, down from 166.
 
   ## Fixed
-
   - **Builders lost the app field map on every derivation.** `_fieldDefs` was
     assigned once in `create()` and carried by none of the nineteen derivation
     sites, so `collection("posts").admin({…}).fields(({ f }) => f.richText())`
@@ -113,7 +111,6 @@
   - OpenAPI schema component names match the rest of the framework.
 
   ## Performance
-
   - Field builder chains typecheck **about twice as fast** — field methods moved
     onto the class instead of a 27-key mapped type.
   - The client no longer bundles `qs`: **−90 KB** from the browser bundle.
@@ -176,7 +173,6 @@
 ### Minor Changes
 
 - [#163](https://github.com/questpie/questpie/pull/163) [`018dfb5`](https://github.com/questpie/questpie/commit/018dfb5b77039d0148a59d371062d08d1b89b691) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Ship Realtime v2 and typed application channels as one transport-agnostic realtime system.
-
   - Add transaction-bound realtime capture, durable reconciliation, resumable live-query topics, per-session refresh sharing, snapshot suppression, admission and backpressure limits, structured observations, and hardened pg-notify, Redis, and Cloudflare broker paths.
   - Add file-convention `channel()` definitions, generated server and client types, per-verb subscribe/publish authorization, Zod-validated events, ordered replay with explicit gap handling, and typed TanStack Query channel subscriptions.
   - Add transport-independent live presence with `subscribePresence()`, `presenceIter()`, and TanStack latest-roster queries; SSE uses cross-instance Postgres leases with principal aggregation and crash expiry, while Pusher/Soketi uses native provider membership behind the same client API.
@@ -462,49 +458,42 @@
 - [#28](https://github.com/questpie/questpie/pull/28) [`652f6b7`](https://github.com/questpie/questpie/commit/652f6b79e9a70004bc7318464e4ca1d7a4a5bead) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add `@questpie/workflows` — durable workflow engine for QUESTPIE.
 
   **Core Engine**
-
   - `workflow()` identity factory for type-safe workflow definitions
   - Replay-based execution engine with step caching and non-determinism detection
   - Step primitives: `step.run()`, `step.sleep()`, `step.sleepUntil()`, `step.waitForEvent()`, `step.invoke()`, `step.sendEvent()`
   - Duration parser (s/m/h/d/w), 5 error types, structured workflow logger
 
   **System Collections**
-
   - `wf_instance` — workflow instance tracking with status, input/output, timeout
   - `wf_step` — step execution records with replay memoization and match_hash index
   - `wf_event` — event persistence for JSONB-containment matching
   - `wf_log` — structured log entries queryable in admin UI
 
   **Events & Compensation**
-
   - Event matching engine with JSONB containment semantics (forward + retroactive)
   - Saga-pattern compensation with reverse LIFO order
   - Child workflow invocation with cascading timeouts
   - `onFailure` handler with `completedSteps` inspection
 
   **Cron Triggers & Retention**
-
   - `cron` field on workflow definitions for recurring execution
   - `cronOverlap` policy: `skip` (default), `allow`, `cancel-previous`
   - `RetentionPolicy` for automatic cleanup of old instances/steps/events/logs
   - `match_hash` optimization for O(1) event matching via FNV-1a indexed column
 
   **Workflow Client**
-
   - `trigger()`, `cancel()`, `getInstance()`, `getHistory()`, `sendEvent()`
   - `cancelAll()`, `retryAll()` batch operations
   - Idempotency key support, delayed start, parent-child relationships
   - Typed collection/global `transitionStage()` client calls now accept `scheduledAt`
 
   **Admin UI**
-
   - Workflow list page with status filters, auto-refresh, trigger dialog
   - Workflow detail page with step timeline, action buttons, log viewer
   - Dashboard stats widget showing active/completed/failed counts
   - Sidebar contribution for navigation
 
   **Docs & Type Safety**
-
   - Full durable workflow documentation with typed route, event, cron, admin, and client examples
   - Documented durable workflow instance and step lifecycle transitions with Mermaid diagrams
   - Expanded versioning workflow transition references across CRUD, global, hooks, and HTTP route docs
@@ -512,7 +501,6 @@
   - Runtime workflow helpers and admin client routes are strongly typed without unsafe casts
 
   **Integration**
-
   - `workflowsPlugin()` codegen plugin for file-convention discovery
   - `workflowsModule` server module with collections, jobs, service, functions
   - `workflowsClientModule` for admin UI pages and widgets

@@ -30,7 +30,11 @@ export {
 	sortedValues,
 	sourceBasename,
 } from "#questpie/cli/codegen/category-emit.js";
+// A target that brings its own `generate` runs in module mode too, and there it
+// has to emit a module definition rather than app output. Without this export a
+// custom generator has no way to produce that shape.
 export {
-	generateModule,
-	type GenerateModuleOptions,
-} from "#questpie/cli/codegen/generate-module.js";
+	generateModuleTemplate,
+	type ModuleTemplateOptions,
+	type ModuleTemplateResult,
+} from "#questpie/cli/codegen/module-template.js";

@@ -40,6 +40,7 @@
 
 import {
 	categoryRecordEntry,
+	generateModuleTemplate,
 	importStatement,
 	sortedValues,
 } from "questpie/codegen";
@@ -51,15 +52,20 @@ import type {
 } from "questpie/codegen";
 
 /**
- * Generate the admin client config file.
+ * Generate the admin client output for one target run.
  *
- * Called by `runAllTargets()` for the `admin-client` target.
  * Iterates `ctx.discovered.categories` generically — no hardcoded category names.
  * Any plugin can add categories, any user can add files in any category.
+ *
+ * Two shapes come out of here, and `ctx.module` picks between them. A package
+ * module has to emit a module definition, because a hand-written `index.ts`
+ * re-exports it and consumers read `AdminModule` and per-category keys off it.
+ * An app emits the merged admin config instead.
  */
 export function generateAdminClientTemplate(
 	ctx: CodegenTargetGenerateContext,
 ): CodegenTargetOutput {
+	if (ctx.module) return generateAdminClientModule(ctx, ctx.module.name);
 	const lines: string[] = [];
 	const modulesFile = ctx.discovered.singles.get("modules") ?? null;
 
@@ -201,4 +207,43 @@ export function generateAdminClientTemplate(
 	lines.push("");
 
 	return { code: lines.join("\n") };
+}
+
+/**
+ * Module-mode output: the standard module definition.
+ *
+ * Delegating keeps package modules on one emitter. The admin client target only
+ * differs from the server target in what it discovers, not in the shape it has
+ * to produce for a package, and the shared template is what carries the named
+ * category types, the empty-category stubs and the registries file.
+ */
+function generateAdminClientModule(
+	ctx: CodegenTargetGenerateContext,
+	moduleName: string,
+): CodegenTargetOutput {
+	const categoryMeta = new Map<string, CategoryDeclaration>(
+		Object.entries(ctx.target.categories ?? {}),
+	);
+
+	const result = generateModuleTemplate({
+		moduleName,
+		discovered: ctx.discovered,
+		categoryMeta,
+		regenerateCommand: ctx.regenerateCommand,
+		discoverPatterns: ctx.target.discover,
+		extraImports: ctx.extraImports.length > 0 ? ctx.extraImports : undefined,
+		extraTypeDeclarations:
+			ctx.extraTypeDeclarations.length > 0
+				? ctx.extraTypeDeclarations
+				: undefined,
+		extraModuleProperties:
+			ctx.extraRuntimeCode.length > 0 ? ctx.extraRuntimeCode : undefined,
+	});
+
+	return {
+		code: result.code,
+		additionalFiles: result.registriesCode
+			? { "registries.ts": result.registriesCode }
+			: undefined,
+	};
 }

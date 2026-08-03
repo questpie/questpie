@@ -678,6 +678,52 @@ describe("generateModuleTemplate — keyFromProperty", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// keyFromSource — the type has to be keyed the same way the record is
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("generateModuleTemplate — keyFromSource", () => {
+	const meta = new Map<string, CategoryDeclaration>([
+		[
+			"blocks",
+			{
+				dirs: ["blocks"],
+				prefix: "block",
+				emit: "record",
+				registryKey: false,
+				keyFromSource: "basename",
+			},
+		],
+	]);
+
+	const result = emptyResult(["blocks"]);
+	cat(result, "blocks").set(
+		"imageText",
+		makeFile("imageText", {
+			varName: "_block_imageText",
+			source: "blocks/image-text.tsx",
+		}),
+	);
+
+	const { code: output } = generateModuleTemplate({
+		moduleName: "questpie-admin",
+		discovered: result,
+		categoryMeta: meta,
+	});
+
+	it("keys the runtime record by basename", () => {
+		expect(output).toContain('"image-text": _block_imageText,');
+	});
+
+	// The record is emitted as `{ ... } as AdminBlocks`. Keying the type off the
+	// file key while the record is keyed off the basename makes the two shapes
+	// disjoint, and TypeScript rejects the cast inside a file nobody may edit.
+	it("keys the named type the same way", () => {
+		expect(output).toContain('"image-text": typeof _block_imageText;');
+		expect(output).not.toContain("imageText: typeof _block_imageText;");
+	});
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Messages — typeEmit: "messages" skips named type
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -764,5 +810,216 @@ describe("generateModuleTemplate — channel factory argument metadata", () => {
 		expect(code).toContain('"source":"channels/chat-room.ts"');
 		expect(code).toContain("channels: {");
 		expect(code).toContain("chatRoom: _chatRoom");
+	});
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// createAppKey — the key a category takes on the module object
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("generateModuleTemplate — createAppKey", () => {
+	/** Mirrors the core plugin's emails declaration. */
+	const meta = new Map<string, CategoryDeclaration>([
+		[
+			"emails",
+			{
+				dirs: ["emails"],
+				prefix: "email",
+				emit: "record",
+				typeEmit: "emails",
+				createAppKey: "emailTemplates",
+				registryKey: "emails",
+			},
+		],
+	]);
+
+	const result = emptyResult(["emails"]);
+	cat(result, "emails").set(
+		"welcome",
+		makeFile("welcome", { varName: "_email_welcome" }),
+	);
+
+	const { code: output } = generateModuleTemplate({
+		moduleName: "questpie-test",
+		discovered: result,
+		categoryMeta: meta,
+	});
+
+	it("keys the runtime member by createAppKey", () => {
+		// create-app only ever reads `emailTemplates`. `emails` is not a consumed
+		// key, so templates emitted under it die on instance.state.
+		expect(output).toContain("emailTemplates: {");
+		expect(output).toContain("welcome: _email_welcome,");
+		expect(output).not.toContain("\temails: {");
+	});
+
+	it("keys the type member by createAppKey", () => {
+		expect(output).toContain("emailTemplates: TestEmails;");
+		expect(output).not.toContain("emails: TestEmails;");
+	});
+
+	it("keys the empty stub by createAppKey too", () => {
+		// This is the shape every module ships today — an emails/ directory that
+		// does not exist yet.
+		const { code } = generateModuleTemplate({
+			moduleName: "questpie-test",
+			discovered: emptyResult(),
+			categoryMeta: meta,
+		});
+		expect(code).toContain("emailTemplates: {},");
+		expect(code).toContain("emailTemplates: Record<never, never>;");
+		expect(code).not.toContain("emails:");
+	});
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Header
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("generateModuleTemplate — regenerate header", () => {
+	it("names a command that exists", () => {
+		const { code } = generateModuleTemplate({
+			moduleName: "questpie-test",
+			discovered: emptyResult(),
+			categoryMeta: new Map(),
+		});
+		expect(code).toContain("// Regenerate with: questpie generate");
+		// `questpie generate` registers no --module flag and commander is not in
+		// allowUnknownOption mode, so the old header errored out.
+		expect(code).not.toContain("--module");
+	});
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Spread singles (mergeStrategy: "spread")
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("generateModuleTemplate — spreads", () => {
+	const result = emptyResult();
+	result.spreads.set("sidebar", [
+		makeFile("sidebar", { varName: "_sidebar", importPath: "../sidebar" }),
+		makeFile("sidebarBilling", {
+			varName: "_sidebar_billing",
+			importPath: "../features/billing/sidebar",
+		}),
+	]);
+
+	const { code: output } = generateModuleTemplate({
+		moduleName: "questpie-test",
+		discovered: result,
+		categoryMeta: new Map(),
+	});
+
+	it("imports every spread file", () => {
+		expect(output).toContain('import _sidebar from "../sidebar";');
+		expect(output).toContain(
+			'import _sidebar_billing from "../features/billing/sidebar";',
+		);
+	});
+
+	it("emits the same concatenation the app template emits", () => {
+		expect(output).toContain(
+			"sidebar: [...(_sidebar ?? []), ...(_sidebar_billing ?? [])],",
+		);
+	});
+
+	it("declares the member on the module type", () => {
+		expect(output).toContain("sidebar: readonly unknown[];");
+	});
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// registries.ts
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("generateModuleTemplate — registries.ts imports", () => {
+	const meta = new Map<string, CategoryDeclaration>([
+		[
+			"views",
+			{
+				dirs: ["views"],
+				prefix: "view",
+				emit: "record",
+				registryKey: true,
+				recordPlaceholder: "$VIEWS_RECORD",
+			},
+		],
+	]);
+
+	const result = emptyResult(["views"]);
+	cat(result, "views").set(
+		"table",
+		makeFile("table", {
+			varName: "_view_table",
+			importPath: "../views/table",
+			exportType: "named",
+			namedExportName: "tableView",
+		}),
+	);
+
+	const { registriesCode } = generateModuleTemplate({
+		moduleName: "questpie-admin",
+		discovered: result,
+		categoryMeta: meta,
+	});
+
+	it("honours named exports, as module.ts does", () => {
+		// A hardcoded default import here resolved to nothing for every view or
+		// component whose entity is a named export — which factory discovery makes
+		// the common case.
+		expect(registriesCode).toContain(
+			'import type { tableView as _view_table } from "../views/table";',
+		);
+	});
+
+	it("keeps the imports type-only", () => {
+		// module.ts side-effect imports registries.ts. A value import would pull
+		// every view into the runtime graph ahead of the module that owns them.
+		expect(registriesCode).not.toContain("import _view_table from");
+	});
+
+	it("augments the registry from the rebuilt local type", () => {
+		expect(registriesCode).toContain("type _RegViews = {");
+		expect(registriesCode).toContain(
+			"interface ViewsRegistry extends _RegViews {}",
+		);
+	});
+});
+
+describe("generateModuleTemplate — registries.ts keyFromProperty", () => {
+	const meta = new Map<string, CategoryDeclaration>([
+		[
+			"views",
+			{
+				dirs: ["views"],
+				prefix: "view",
+				emit: "record",
+				registryKey: true,
+				recordPlaceholder: "$VIEWS_RECORD",
+				keyFromProperty: "name",
+			},
+		],
+	]);
+
+	const result = emptyResult(["views"]);
+	cat(result, "views").set(
+		"table",
+		makeFile("table", { varName: "_view_table", importPath: "../views/table" }),
+	);
+
+	const { code, registriesCode } = generateModuleTemplate({
+		moduleName: "questpie-admin",
+		discovered: result,
+		categoryMeta: meta,
+	});
+
+	it("keys the registry type by the runtime property, like the module type", () => {
+		// The module object keys by `_view_table.name`. The registry keying by the
+		// filename instead made autocomplete disagree with the runtime.
+		expect(code).toContain("[_view_table.name]: _view_table,");
+		expect(registriesCode).toContain(
+			"{ [K in typeof _view_table.name]: typeof _view_table };",
+		);
+		expect(registriesCode).not.toContain("table: typeof _view_table");
 	});
 });

@@ -71,7 +71,19 @@
 		"./shared": "./src/exports/shared.ts",
 		"./storage": "./src/exports/storage.ts",
 		"./types": "./src/exports/types.ts",
-		"./*": "./*"
+		"./package.json": "./package.json",
+		"./internal/server/collection/builder/types": {
+			"types": "./src/server/collection/builder/types.ts"
+		},
+		"./internal/server/collection/crud/types": {
+			"types": "./src/server/collection/crud/types.ts"
+		},
+		"./internal/server/modules/core/fields/index": {
+			"types": "./src/server/modules/core/fields/index.ts"
+		},
+		"./internal/server/modules/core/fields/json": {
+			"types": "./src/server/modules/core/fields/json.ts"
+		}
 	},
 	"publishConfig": {
 		"access": "public",
@@ -124,7 +136,19 @@
 			"./shared": "./dist/shared.mjs",
 			"./storage": "./dist/storage.mjs",
 			"./types": "./dist/types.mjs",
-			"./*": "./*"
+			"./package.json": "./package.json",
+			"./internal/server/collection/builder/types": {
+				"types": "./dist/server/collection/builder/types.d.mts"
+			},
+			"./internal/server/collection/crud/types": {
+				"types": "./dist/server/collection/crud/types.d.mts"
+			},
+			"./internal/server/modules/core/fields/index": {
+				"types": "./dist/server/modules/core/fields/index.d.mts"
+			},
+			"./internal/server/modules/core/fields/json": {
+				"types": "./dist/server/modules/core/fields/json.d.mts"
+			}
 		}
 	},
 	"scripts": {

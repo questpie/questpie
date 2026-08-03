@@ -486,16 +486,35 @@ export interface CategoryDeclaration {
  * may contribute to the same target — their contributions are merged by
  * `resolveTargetGraph()`.
  *
+ * Every target has exactly one owner. The owner decides where the target
+ * writes and how it is generated: `root`, `outDir`, `outputFile`, `moduleRoot`
+ * and `generate` are read from the owner and from nobody else. Plugins that
+ * only add categories, discover patterns, registries or transforms should omit
+ * those five fields. Then plugin order cannot change where a target writes.
  */
 export interface CodegenTargetContribution {
 	/**
+	 * Claims ownership of this target.
+	 *
+	 * A target with several contributors needs one of them to say `owner: true`,
+	 * otherwise resolution fails and names the candidates. A target with a single
+	 * contributor owns itself and does not need the flag.
+	 */
+	owner?: boolean;
+
+	/**
 	 * Root directory for discovery, relative to the resolved server root.
 	 * e.g. `"."` for server-side files, `"../admin"` for client admin files.
+	 *
+	 * Owner only. Required on the owner's contribution.
 	 */
-	root: string;
+	root?: string;
 
 	/**
 	 * Output directory within root for generated files.
+	 *
+	 * Owner only.
+	 *
 	 * @default ".generated"
 	 */
 	outDir?: string;
@@ -503,14 +522,20 @@ export interface CodegenTargetContribution {
 	/**
 	 * Primary output filename for this target.
 	 * e.g. `"index.ts"` for server, `"client.ts"` for admin client.
+	 *
+	 * Owner only. Required on the owner's contribution. Module codegen ignores
+	 * this and always writes `module.ts`, because a generated module is
+	 * re-exported by a hand-written `index.ts` next to it.
 	 */
-	outputFile: string;
+	outputFile?: string;
 
 	/**
 	 * Subdirectory within module directories where this target discovers files.
 	 *
 	 * In package mode, when iterating module subdirectories, the discovery root
 	 * for this target becomes `join(moduleDir, moduleRoot)` instead of `moduleDir`.
+	 *
+	 * Owner only.
 	 *
 	 * @example
 	 * ```ts
@@ -572,9 +597,10 @@ export interface CodegenTargetContribution {
 
 	/**
 	 * Optional custom generator for this target.
-	 * When provided, replaces the default template generation.
-	 * Only one plugin may provide a generator per target.
+	 * When provided, replaces the default template generation in both app mode
+	 * and module mode, so it must handle `ctx.module`.
 	 *
+	 * Owner only.
 	 */
 	generate?: (
 		ctx: CodegenTargetGenerateContext,
@@ -603,6 +629,22 @@ export interface CodegenTargetGenerateContext {
 	target: ResolvedTarget;
 	/** Discovery result for this target. */
 	discovered: DiscoveryResult;
+	/**
+	 * Set when generating a package module instead of an app.
+	 *
+	 * A generator that gets this must emit a static module definition. That is
+	 * the shape `generateModuleTemplate()` emits: a default-exported object
+	 * carrying `name` plus one key per category. The file is written as
+	 * `module.ts` and a hand-written `index.ts` re-exports it. When this is
+	 * undefined the generator is producing the app-level output instead.
+	 */
+	module?: { name: string };
+	/**
+	 * Command that regenerates this file, for its header comment. It already
+	 * names the config that produced the run, which is the part a reader cannot
+	 * guess in a repo with several of them.
+	 */
+	regenerateCommand: string;
 	/** Extra imports added by transforms. */
 	extraImports: Array<{ name: string; path: string }>;
 	/** Extra type declarations added by transforms. */
@@ -638,6 +680,9 @@ export interface ResolvedTarget {
 	/** Target identifier (e.g. "server", "admin-client"). */
 	id: string;
 
+	/** Name of the plugin that owns this target. Errors name it. */
+	owner: string;
+
 	/** Root directory for discovery, relative to the server root. */
 	root: string;
 
@@ -671,7 +716,7 @@ export interface ResolvedTarget {
 	/** All transform functions from contributing plugins, in plugin order. */
 	transforms: Array<(ctx: CodegenContext) => void>;
 
-	/** Custom generator (at most one per target). */
+	/** Custom generator, taken from the owner. */
 	generate?: (
 		ctx: CodegenTargetGenerateContext,
 	) => Promise<CodegenTargetOutput> | CodegenTargetOutput;

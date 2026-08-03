@@ -18,6 +18,7 @@ import {
 	coreCodegenPlugin,
 	resolveTargetGraph,
 	runAllTargets,
+	runCodegen,
 } from "../../src/cli/codegen/index.js";
 import { generateTemplate as _generateTemplate } from "../../src/cli/codegen/template.js";
 
@@ -32,6 +33,7 @@ function generateTemplate(
 	const { code, extraFiles } = _generateTemplate(opts);
 	return [code, ...extraFiles.map((f) => f.code)].join("\n");
 }
+
 import type {
 	CategoryDeclaration,
 	CodegenPlugin,
@@ -1473,6 +1475,9 @@ describe("runAllTargets", () => {
 			targets: {
 				"custom-target": {
 					root: ".",
+					// Its own directory. Sharing .generated with the server target
+					// would mean one erases the other.
+					outDir: ".generated-custom",
 					outputFile: "custom.ts",
 					generate: async ({ target, discovered }) => {
 						return {
@@ -1500,6 +1505,75 @@ describe("runAllTargets", () => {
 		expect(customResult.code).toContain("export const custom = true;");
 	});
 
+	it("runs the target generator in module mode too", async () => {
+		const { mkdtemp, writeFile } = await import("node:fs/promises");
+		const { tmpdir } = await import("node:os");
+		const { join } = await import("node:path");
+
+		const dir = await mkdtemp(join(tmpdir(), "codegen-custom-module-"));
+		const configPath = join(dir, "questpie.config.ts");
+		await writeFile(configPath, "export default {};");
+
+		let sawModuleName: string | undefined;
+		const customPlugin: CodegenPlugin = {
+			name: "test-custom",
+			targets: {
+				"custom-target": {
+					root: ".",
+					outDir: ".generated-custom",
+					outputFile: "custom.ts",
+					generate: ({ module }) => {
+						sawModuleName = module?.name;
+						return { code: `export const name = "${module?.name}";\n` };
+					},
+				},
+			},
+		};
+
+		const result = await runCodegen({
+			rootDir: dir,
+			configPath,
+			outDir: join(dir, ".generated-custom"),
+			plugins: [customPlugin],
+			targetId: "custom-target",
+			module: { name: "questpie-custom" },
+			dryRun: true,
+		});
+
+		expect(sawModuleName).toBe("questpie-custom");
+		expect(result.code).toContain('export const name = "questpie-custom";');
+		// A module is written as module.ts, not as the target's app output file.
+		expect(result.outputPath.endsWith("module.ts")).toBe(true);
+	});
+
+	it("names the config file in the regenerate header", async () => {
+		const { mkdtemp, writeFile, mkdir } = await import("node:fs/promises");
+		const { tmpdir } = await import("node:os");
+		const { join } = await import("node:path");
+
+		const dir = await mkdtemp(join(tmpdir(), "codegen-header-"));
+		await writeFile(join(dir, "package.json"), '{ "name": "header-fixture" }');
+		const serverDir = join(dir, "server");
+		await mkdir(serverDir, { recursive: true });
+		const configPath = join(serverDir, "questpie.config.ts");
+		await writeFile(
+			configPath,
+			'export default { app: { url: "http://localhost" }, db: { url: "sqlite://:memory:" } };',
+		);
+		await writeFile(join(serverDir, "modules.ts"), "export default [];");
+
+		const result = await runAllTargets({
+			rootDir: serverDir,
+			configPath,
+			plugins: [],
+			dryRun: true,
+		});
+
+		expect(result.targets.get("server")!.code).toContain(
+			"// Regenerate with: questpie generate -c server/questpie.config.ts",
+		);
+	});
+
 	it("reports errors per target without failing other targets", async () => {
 		const { mkdtemp, writeFile } = await import("node:fs/promises");
 		const { tmpdir } = await import("node:os");
@@ -1519,6 +1593,7 @@ describe("runAllTargets", () => {
 			targets: {
 				"failing-target": {
 					root: ".",
+					outDir: ".generated-fail",
 					outputFile: "fail.ts",
 					generate: async () => {
 						throw new Error("Intentional test failure");
@@ -2105,40 +2180,89 @@ describe("cross-target projection validators", () => {
 // 12. resolveTargetGraph — conflict detection
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("resolveTargetGraph — conflict detection", () => {
-	it("throws on root conflict for the same target", () => {
+describe("resolveTargetGraph — target ownership", () => {
+	it("takes root and outputFile from the owner whatever the plugin order", () => {
+		const owner: CodegenPlugin = {
+			name: "plugin-a",
+			targets: {
+				"my-target": { owner: true, root: "./src", outputFile: "index.ts" },
+			},
+		};
+		const contributor: CodegenPlugin = {
+			name: "plugin-b",
+			targets: { "my-target": { discover: { branding: "branding.ts" } } },
+		};
+
+		for (const plugins of [
+			[owner, contributor],
+			[contributor, owner],
+		]) {
+			const target = resolveTargetGraph(plugins).get("my-target")!;
+			expect(target.owner).toBe("plugin-a");
+			expect(target.root).toBe("./src");
+			expect(target.outputFile).toBe("index.ts");
+			expect(target.discover.branding).toBe("branding.ts");
+		}
+	});
+
+	it("throws when two plugins claim the same target", () => {
 		const plugin1: CodegenPlugin = {
 			name: "plugin-a",
 			targets: {
-				"my-target": {
-					root: "./src",
-					outputFile: "index.ts",
-				},
+				"my-target": { owner: true, root: ".", outputFile: "index.ts" },
 			},
 		};
 		const plugin2: CodegenPlugin = {
 			name: "plugin-b",
 			targets: {
-				"my-target": {
-					root: "./lib",
-					outputFile: "index.ts",
-				},
+				"my-target": { owner: true, root: ".", outputFile: "index.ts" },
 			},
 		};
 
 		expect(() => resolveTargetGraph([plugin1, plugin2])).toThrow(
-			/root conflict/,
-		);
-		expect(() => resolveTargetGraph([plugin1, plugin2])).toThrow(
-			/plugin "plugin-b"/,
+			/more than one owner/,
 		);
 	});
 
-	it("throws on outDir conflict for the same target", () => {
+	it("throws when several plugins contribute to an unowned target", () => {
+		const plugin1: CodegenPlugin = {
+			name: "plugin-a",
+			targets: { "my-target": { root: ".", outputFile: "index.ts" } },
+		};
+		const plugin2: CodegenPlugin = {
+			name: "plugin-b",
+			targets: { "my-target": { root: ".", outputFile: "index.ts" } },
+		};
+
+		expect(() => resolveTargetGraph([plugin1, plugin2])).toThrow(/no owner/);
+	});
+
+	it("throws on a root that disagrees with the owner", () => {
+		const plugin1: CodegenPlugin = {
+			name: "plugin-a",
+			targets: {
+				"my-target": { owner: true, root: "./src", outputFile: "index.ts" },
+			},
+		};
+		const plugin2: CodegenPlugin = {
+			name: "plugin-b",
+			targets: { "my-target": { root: "./lib" } },
+		};
+
+		expect(() => resolveTargetGraph([plugin1, plugin2])).toThrow(
+			/Only the owner decides/,
+		);
+		expect(() => resolveTargetGraph([plugin1, plugin2])).toThrow(
+			/Plugin "plugin-b"/,
+		);
+	});
+
+	it("throws on an outDir that disagrees with the owner", () => {
 		const plugin1: CodegenPlugin = {
 			name: "plugin-a",
 			targets: {
 				"my-target": {
+					owner: true,
 					root: ".",
 					outDir: ".generated",
 					outputFile: "index.ts",
@@ -2147,56 +2271,43 @@ describe("resolveTargetGraph — conflict detection", () => {
 		};
 		const plugin2: CodegenPlugin = {
 			name: "plugin-b",
-			targets: {
-				"my-target": {
-					root: ".",
-					outDir: ".codegen",
-					outputFile: "index.ts",
-				},
-			},
+			targets: { "my-target": { outDir: ".codegen" } },
 		};
 
 		expect(() => resolveTargetGraph([plugin1, plugin2])).toThrow(
-			/outDir conflict/,
+			/Only the owner decides/,
 		);
 		expect(() => resolveTargetGraph([plugin1, plugin2])).toThrow(
-			/plugin "plugin-b"/,
+			/Plugin "plugin-b"/,
 		);
 	});
 
-	it("throws on outputFile conflict for the same target", () => {
+	it("throws on an outputFile that disagrees with the owner", () => {
 		const plugin1: CodegenPlugin = {
 			name: "plugin-a",
 			targets: {
-				"my-target": {
-					root: ".",
-					outputFile: "index.ts",
-				},
+				"my-target": { owner: true, root: ".", outputFile: "index.ts" },
 			},
 		};
 		const plugin2: CodegenPlugin = {
 			name: "plugin-b",
-			targets: {
-				"my-target": {
-					root: ".",
-					outputFile: "main.ts",
-				},
-			},
+			targets: { "my-target": { outputFile: "main.ts" } },
 		};
 
 		expect(() => resolveTargetGraph([plugin1, plugin2])).toThrow(
-			/outputFile conflict/,
+			/Only the owner decides/,
 		);
 		expect(() => resolveTargetGraph([plugin1, plugin2])).toThrow(
-			/plugin "plugin-b"/,
+			/Plugin "plugin-b"/,
 		);
 	});
 
-	it("throws when two plugins provide a generator for the same target", () => {
+	it("throws when a plugin that is not the owner provides a generator", () => {
 		const plugin1: CodegenPlugin = {
 			name: "plugin-a",
 			targets: {
 				"my-target": {
+					owner: true,
 					root: ".",
 					outputFile: "index.ts",
 					generate: async () => ({ code: "// a" }),
@@ -2205,20 +2316,28 @@ describe("resolveTargetGraph — conflict detection", () => {
 		};
 		const plugin2: CodegenPlugin = {
 			name: "plugin-b",
-			targets: {
-				"my-target": {
-					root: ".",
-					outputFile: "index.ts",
-					generate: async () => ({ code: "// b" }),
-				},
-			},
+			targets: { "my-target": { generate: async () => ({ code: "// b" }) } },
 		};
 
 		expect(() => resolveTargetGraph([plugin1, plugin2])).toThrow(
-			/multiple generators/,
+			/cannot provide a generator/,
 		);
 		expect(() => resolveTargetGraph([plugin1, plugin2])).toThrow(
-			/Plugin "plugin-b"/,
+			/plugin "plugin-b"/,
+		);
+	});
+
+	it("throws when two targets write to the same directory", () => {
+		const plugin: CodegenPlugin = {
+			name: "plugin-a",
+			targets: {
+				one: { root: ".", outputFile: "one.ts" },
+				two: { root: ".", outputFile: "two.ts" },
+			},
+		};
+
+		expect(() => resolveTargetGraph([plugin])).toThrow(
+			/both write to "\.generated"/,
 		);
 	});
 
@@ -2227,6 +2346,7 @@ describe("resolveTargetGraph — conflict detection", () => {
 			name: "plugin-a",
 			targets: {
 				"my-target": {
+					owner: true,
 					root: ".",
 					outputFile: "index.ts",
 					categories: {
@@ -2272,11 +2392,12 @@ describe("resolveTargetGraph — conflict detection", () => {
 		expect(target.discover.branding).toBe("branding.ts");
 	});
 
-	it("allows omitting outDir (defaults to .generated) without conflict", () => {
+	it("allows omitting outDir (defaults to .generated)", () => {
 		const plugin1: CodegenPlugin = {
 			name: "plugin-a",
 			targets: {
 				"my-target": {
+					owner: true,
 					root: ".",
 					outputFile: "index.ts",
 					// no outDir — defaults to .generated
@@ -2287,9 +2408,7 @@ describe("resolveTargetGraph — conflict detection", () => {
 			name: "plugin-b",
 			targets: {
 				"my-target": {
-					root: ".",
-					outputFile: "index.ts",
-					// also no outDir — should not conflict
+					// a contributor leaves the output shape to the owner
 				},
 			},
 		};
@@ -2305,6 +2424,7 @@ describe("resolveTargetGraph — conflict detection", () => {
 			name: "plugin-a",
 			targets: {
 				"my-target": {
+					owner: true,
 					root: ".",
 					outputFile: "index.ts",
 					transform: () => {
@@ -2317,8 +2437,6 @@ describe("resolveTargetGraph — conflict detection", () => {
 			name: "plugin-b",
 			targets: {
 				"my-target": {
-					root: ".",
-					outputFile: "index.ts",
 					transform: () => {
 						order.push("b");
 					},

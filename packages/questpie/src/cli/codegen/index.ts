@@ -9,7 +9,7 @@
  *
  */
 
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 
 import {
@@ -30,6 +30,7 @@ import type {
 	CodegenOptions,
 	CodegenPlugin,
 	CodegenResult,
+	CodegenTargetContribution,
 	MultiTargetCodegenResult,
 	ProjectionError,
 	ResolvedTarget,
@@ -48,13 +49,16 @@ import type {
  *
  * Also provides singleton factory functions for core config files.
  *
- * Always prepended to the plugin list in runCodegen().
+ * Always prepended to the plugin list in runCodegen(), and the owner of the
+ * `server` target: it decides where that target writes, whatever else is
+ * plugged in.
  */
 export function coreCodegenPlugin(): CodegenPlugin {
 	return {
 		name: "questpie-core",
 		targets: {
 			server: {
+				owner: true,
 				root: ".",
 				outputFile: "index.ts",
 				categories: {
@@ -260,85 +264,91 @@ export function coreCodegenPlugin(): CodegenPlugin {
 /**
  * Merge all plugin target contributions into a resolved target graph.
  *
- * Rules:
- * - Multiple plugins may contribute categories/discover/registries/transforms
- *   to the same target — contributions are merged.
- * - `root`, `outDir`, `outputFile` must be consistent across all contributors
- *   for the same target ID. Any conflict is a codegen error.
- * - Only one `generate` function is allowed per target.
+ * Every target has one owner. The owner alone decides `root`, `outDir`,
+ * `outputFile`, `moduleRoot` and `generate`, so plugin order cannot change
+ * where a target writes. Every other plugin contributes categories, discover
+ * patterns, registries, callback params, transforms and scaffolds, which are
+ * merged in plugin order.
  *
+ * A contributor that is not the owner may still restate an owned field, but
+ * only with the owner's exact value. A different value is an error rather than
+ * a silent loss.
  */
 export function resolveTargetGraph(
 	plugins: CodegenPlugin[],
 ): Map<string, ResolvedTarget> {
 	const targets = new Map<string, ResolvedTarget>();
+	const owners = resolveTargetOwners(plugins);
+
+	for (const [targetId, owner] of owners) {
+		if (owner.contribution.root === undefined) {
+			throw new Error(
+				`[codegen] Target "${targetId}" has no root. ` +
+					`Its owner, plugin "${owner.pluginName}", must declare one.`,
+			);
+		}
+		if (owner.contribution.outputFile === undefined) {
+			throw new Error(
+				`[codegen] Target "${targetId}" has no outputFile. ` +
+					`Its owner, plugin "${owner.pluginName}", must declare one.`,
+			);
+		}
+		targets.set(targetId, {
+			id: targetId,
+			owner: owner.pluginName,
+			root: owner.contribution.root,
+			outDir: owner.contribution.outDir ?? ".generated",
+			outputFile: owner.contribution.outputFile,
+			moduleRoot: owner.contribution.moduleRoot,
+			categories: {},
+			discover: {},
+			registries: {
+				collectionExtensions: {},
+				globalExtensions: {},
+				fieldExtensions: {},
+				singletonFactories: {},
+				builderFactories: {},
+			},
+			callbackParams: {},
+			transforms: [],
+			scaffolds: {},
+			generate: owner.contribution.generate,
+		});
+	}
 
 	for (const plugin of plugins) {
 		for (const [targetId, contribution] of Object.entries(plugin.targets)) {
-			let target = targets.get(targetId);
+			// Every target id in `plugin.targets` was collected by
+			// resolveTargetOwners(), so both of these always resolve.
+			const target = targets.get(targetId) as ResolvedTarget;
+			const owner = owners.get(targetId) as TargetOwner;
 
-			if (!target) {
-				// First contribution for this target — initialize
-				target = {
-					id: targetId,
-					root: contribution.root,
-					outDir: contribution.outDir ?? ".generated",
-					outputFile: contribution.outputFile,
-					categories: {},
-					discover: {},
-					registries: {
-						collectionExtensions: {},
-						globalExtensions: {},
-						fieldExtensions: {},
-						singletonFactories: {},
-						builderFactories: {},
-					},
-					callbackParams: {},
-					transforms: [],
-					scaffolds: {},
-				};
-				targets.set(targetId, target);
-			} else {
-				// Validate consistency of root/outDir/outputFile
-				if (contribution.root !== target.root) {
+			if (contribution !== owner.contribution) {
+				assertOwnedFieldMatches(target, plugin.name, "root", contribution.root);
+				assertOwnedFieldMatches(
+					target,
+					plugin.name,
+					"outDir",
+					contribution.outDir,
+				);
+				assertOwnedFieldMatches(
+					target,
+					plugin.name,
+					"outputFile",
+					contribution.outputFile,
+				);
+				assertOwnedFieldMatches(
+					target,
+					plugin.name,
+					"moduleRoot",
+					contribution.moduleRoot,
+				);
+				if (contribution.generate) {
 					throw new Error(
-						`[codegen] Target "${targetId}" root conflict: ` +
-							`plugin "${plugin.name}" declares root "${contribution.root}" ` +
-							`but a previous plugin set root "${target.root}".`,
+						`[codegen] Target "${targetId}" is owned by plugin "${target.owner}", ` +
+							`so plugin "${plugin.name}" cannot provide a generator for it.`,
 					);
 				}
-				if (
-					contribution.outDir !== undefined &&
-					contribution.outDir !== target.outDir
-				) {
-					throw new Error(
-						`[codegen] Target "${targetId}" outDir conflict: ` +
-							`plugin "${plugin.name}" declares outDir "${contribution.outDir}" ` +
-							`but a previous plugin set outDir "${target.outDir}".`,
-					);
-				}
-				if (contribution.outputFile !== target.outputFile) {
-					throw new Error(
-						`[codegen] Target "${targetId}" outputFile conflict: ` +
-							`plugin "${plugin.name}" declares outputFile "${contribution.outputFile}" ` +
-							`but a previous plugin set outputFile "${target.outputFile}".`,
-					);
-				}
-			}
-
-			// Validate/store moduleRoot
-			if (contribution.moduleRoot !== undefined) {
-				if (
-					target.moduleRoot !== undefined &&
-					contribution.moduleRoot !== target.moduleRoot
-				) {
-					throw new Error(
-						`[codegen] Target "${targetId}" moduleRoot conflict: ` +
-							`plugin "${plugin.name}" declares moduleRoot "${contribution.moduleRoot}" ` +
-							`but a previous plugin set moduleRoot "${target.moduleRoot}".`,
-					);
-				}
-				target.moduleRoot = contribution.moduleRoot;
 			}
 
 			// Merge categories (deep per category key — arrays are concatenated)
@@ -416,21 +426,118 @@ export function resolveTargetGraph(
 			if (contribution.transform) {
 				target.transforms.push(contribution.transform);
 			}
+		}
+	}
 
-			// Only one generator per target
-			if (contribution.generate) {
-				if (target.generate) {
-					throw new Error(
-						`[codegen] Target "${targetId}" has multiple generators. ` +
-							`Plugin "${plugin.name}" provides a generator but one already exists.`,
-					);
-				}
-				target.generate = contribution.generate;
+	assertDistinctOutputDirs(targets);
+
+	return targets;
+}
+
+interface TargetOwner {
+	pluginName: string;
+	contribution: CodegenTargetContribution;
+}
+
+/**
+ * Pick the owner of every target named by any plugin.
+ *
+ * A target claimed with `owner: true` belongs to that plugin. A target with a
+ * single contributor owns itself, which keeps one-plugin targets free of
+ * ceremony. Anything else is ambiguous and has to be spelled out.
+ */
+function resolveTargetOwners(
+	plugins: CodegenPlugin[],
+): Map<string, TargetOwner> {
+	const contributors = new Map<string, TargetOwner[]>();
+	const claimed = new Map<string, TargetOwner[]>();
+
+	for (const plugin of plugins) {
+		for (const [targetId, contribution] of Object.entries(plugin.targets)) {
+			const entry = { pluginName: plugin.name, contribution };
+			const all = contributors.get(targetId) ?? [];
+			all.push(entry);
+			contributors.set(targetId, all);
+			if (contribution.owner) {
+				const claims = claimed.get(targetId) ?? [];
+				claims.push(entry);
+				claimed.set(targetId, claims);
 			}
 		}
 	}
 
-	return targets;
+	const owners = new Map<string, TargetOwner>();
+	for (const [targetId, all] of contributors) {
+		const claims = claimed.get(targetId) ?? [];
+		if (claims.length > 1) {
+			const names = claims.map((c) => `"${c.pluginName}"`).join(", ");
+			throw new Error(
+				`[codegen] Target "${targetId}" is claimed by more than one owner: ${names}. ` +
+					`Exactly one plugin may declare owner: true.`,
+			);
+		}
+		if (claims.length === 1) {
+			owners.set(targetId, claims[0] as TargetOwner);
+			continue;
+		}
+		if (all.length > 1) {
+			const names = all.map((c) => `"${c.pluginName}"`).join(", ");
+			throw new Error(
+				`[codegen] Target "${targetId}" has no owner but several contributors: ${names}. ` +
+					`Add owner: true to the plugin that decides where this target writes.`,
+			);
+		}
+		owners.set(targetId, all[0] as TargetOwner);
+	}
+
+	return owners;
+}
+
+/**
+ * Reject a non-owner that declares an owned field with a different value.
+ *
+ * Restating the owner's value is allowed and does nothing. Declaring another
+ * one used to depend on which plugin ran first, so it is now an error.
+ */
+function assertOwnedFieldMatches(
+	target: ResolvedTarget,
+	pluginName: string,
+	field: "root" | "outDir" | "outputFile" | "moduleRoot",
+	value: string | undefined,
+): void {
+	if (value === undefined || value === target[field]) return;
+	throw new Error(
+		`[codegen] Target "${target.id}" is owned by plugin "${target.owner}", ` +
+			`which set ${field} "${target[field]}". Plugin "${pluginName}" declares ` +
+			`${field} "${value}". Drop it. Only the owner decides where a target writes.`,
+	);
+}
+
+/**
+ * Reject two targets that would write into the same directory.
+ *
+ * A run recreates its output directory before writing, so the second target
+ * would erase the first one's files. Catching it here means the config fails
+ * before anything is deleted.
+ *
+ * Package mode builds its own output directory from the module directory and
+ * `moduleRoot`, so two targets can still collide there. Detecting that belongs
+ * with the code that builds those paths, in cli/commands/codegen.ts.
+ */
+function assertDistinctOutputDirs(targets: Map<string, ResolvedTarget>): void {
+	const claimedBy = new Map<string, string>();
+	for (const [targetId, target] of targets) {
+		const dir = join(target.root, target.outDir);
+		const alreadyThere = claimedBy.get(dir);
+		if (alreadyThere !== undefined) {
+			throw new Error(
+				`[codegen] Targets "${alreadyThere}" and "${targetId}" both write to "${dir}". ` +
+					`A target recreates its output directory on every run, so one would erase the other. ` +
+					`Give them different roots or a different outDir.`,
+			);
+		}
+		claimedBy.set(dir, targetId);
+	}
 }
 
 // ============================================================================
@@ -440,9 +547,10 @@ export function resolveTargetGraph(
 /**
  * Run codegen: resolve target graph, discover files, run transforms, generate output.
  *
- * When `options.module` is set, generates a `module.ts` file (static module
- * definition for npm packages). Otherwise generates `index.ts` (root app).
- *
+ * Output comes from the target's own `generate` function when it has one, and
+ * from the built-in templates otherwise. When `options.module` is set the
+ * output is a package module (`module.ts`); otherwise it is the app itself
+ * (the target's `outputFile`, plus `factories.ts` for template targets).
  */
 export async function runCodegen(
 	options: CodegenOptions,
@@ -474,6 +582,8 @@ export async function runCodegen(
 
 	// 2b. Warn about files with named exports (not default)
 	// Skip warnings for categories with factoryFunctions — named exports are expected there.
+	// Skip them entirely for a target with its own generator: the default export
+	// convention is the built-in templates' convention, not every target's.
 	const factoryCategories = new Set<string>();
 	for (const [catName, decl] of Object.entries(target.categories)) {
 		if (decl.factoryFunctions && decl.factoryFunctions.length > 0) {
@@ -481,23 +591,25 @@ export async function runCodegen(
 		}
 	}
 
-	for (const [catName, catMap] of discovered.categories) {
-		if (factoryCategories.has(catName)) continue;
-		for (const file of catMap.values()) {
-			if (file.exportType === "named") {
-				console.warn(
-					`⚠  ${file.source}: no default export found, using named export "${file.namedExportName}". ` +
-						`Consider: export default ${file.namedExportName};`,
-				);
+	if (!target.generate) {
+		for (const [catName, catMap] of discovered.categories) {
+			if (factoryCategories.has(catName)) continue;
+			for (const file of catMap.values()) {
+				if (file.exportType === "named") {
+					console.warn(
+						`⚠  ${file.source}: no default export found, using named export "${file.namedExportName}". ` +
+							`Consider: export default ${file.namedExportName};`,
+					);
+				}
 			}
 		}
-	}
-	for (const singleFile of discovered.singles.values()) {
-		if (singleFile.exportType === "named") {
-			console.warn(
-				`⚠  ${singleFile.source}: no default export found, using named export "${singleFile.namedExportName}". ` +
-					`Consider: export default ${singleFile.namedExportName};`,
-			);
+		for (const singleFile of discovered.singles.values()) {
+			if (singleFile.exportType === "named") {
+				console.warn(
+					`⚠  ${singleFile.source}: no default export found, using named export "${singleFile.namedExportName}". ` +
+						`Consider: export default ${singleFile.namedExportName};`,
+				);
+			}
 		}
 	}
 
@@ -574,18 +686,45 @@ export async function runCodegen(
 		}
 	}
 
-	// 5. Generate template — module or root app
+	// 5. Generate output: the target's own generator, or a built-in template
 	let code: string;
 	let outputFile: string;
+
+	// Every file written below carries this in its header, so resolve it once.
+	// Files from one run sit in one directory, and two of them naming different
+	// commands is how a reader ends up running the one that fails.
+	const regenerateCommand = await resolveRegenerateCommand(configPath);
 
 	// Track additional files to write (e.g. registries.ts for module augmentations)
 	let moduleRegistriesCode: string | null = null;
 
-	// Root-app layer files (names.gen.ts/entities.gen.ts/context.gen.ts) emitted
-	// alongside index.ts by the multi-file split. Module mode leaves this empty.
-	let templateExtraFiles: Array<{ name: string; code: string }> = [];
+	// Files written next to the primary output: the root-app layer files
+	// (names.gen.ts/entities.gen.ts/context.gen.ts), or whatever a target
+	// generator returned as additionalFiles.
+	let extraOutputFiles: Array<{ name: string; code: string }> = [];
 
-	if (options.module) {
+	if (target.generate) {
+		// A target that brings its own generator uses it in both modes. In module
+		// mode the generator is told the module name, because what it has to emit
+		// there is a module definition rather than the app-level output.
+		outputFile = options.module
+			? (options.module.outputFile ?? "module.ts")
+			: target.outputFile;
+		const output = await target.generate({
+			target,
+			discovered,
+			regenerateCommand,
+			extraImports,
+			extraTypeDeclarations,
+			extraRuntimeCode,
+			extraEntities,
+			module: options.module ? { name: options.module.name } : undefined,
+		});
+		code = output.code;
+		extraOutputFiles = Object.entries(output.additionalFiles ?? {}).map(
+			([name, content]) => ({ name, code: content }),
+		);
+	} else if (options.module) {
 		// Module mode: generate module.ts (static module definition)
 		outputFile = options.module.outputFile ?? "module.ts";
 
@@ -599,6 +738,7 @@ export async function runCodegen(
 			moduleName: options.module.name,
 			discovered,
 			categoryMeta,
+			regenerateCommand,
 			discoverPatterns: target.discover,
 			extraImports: extraImports.length > 0 ? extraImports : undefined,
 			extraTypeDeclarations:
@@ -618,6 +758,7 @@ export async function runCodegen(
 		);
 		const tpl = generateTemplate({
 			configImportPath,
+			regenerateCommand,
 			appInstanceId,
 			discovered,
 			categories: target.categories,
@@ -631,20 +772,22 @@ export async function runCodegen(
 			extraEntities: extraEntities.size > 0 ? extraEntities : undefined,
 		});
 		code = tpl.code;
-		templateExtraFiles = tpl.extraFiles;
+		extraOutputFiles = tpl.extraFiles;
 	}
 
 	// 6. Always generate factories.ts for root app mode
 	// Even with zero extensions, factories.ts exports collection()/global()
 	// so users always import from #questpie/factories (stable import path).
+	// A target with its own generator owns its whole output, so it gets none.
 	let factoriesCode: string | null = null;
-	if (!options.module) {
+	if (!options.module && !target.generate) {
 		const hasModules = discovered.singles.has("modules");
 		// Check if user has a fields.ts singleton for custom field types
 		const userFieldsFile = discovered.singles.get("fields");
 		factoriesCode = generateFactoryTemplate({
 			target,
 			hasModules,
+			regenerateCommand,
 			userFieldsImportPath: userFieldsFile?.importPath,
 			discoveredCategories: discovered.categories,
 		});
@@ -667,18 +810,19 @@ export async function runCodegen(
 			code: factoriesCode,
 		});
 	}
-	// Root-app layer files (names.gen.ts/entities.gen.ts/context.gen.ts) from the
-	// multi-file split — written next to index.ts. Empty in module mode.
-	for (const f of templateExtraFiles) {
+	for (const f of extraOutputFiles) {
 		filesToWrite.push({ path: join(outDir, f.name), code: f.code });
 	}
 
 	// Client env modules — one per consumer declared in env.client.ts.
 	// Root app mode only (module-contributed env is a separate concern).
-	if (!options.module) {
+	if (!options.module && !target.generate) {
 		const envClientFile = discovered.singles.get("envClient");
 		if (envClientFile) {
-			const clientEnvModules = await generateClientEnvModules(envClientFile);
+			const clientEnvModules = await generateClientEnvModules(
+				envClientFile,
+				regenerateCommand,
+			);
 			for (const mod of clientEnvModules) {
 				filesToWrite.push({
 					path: join(outDir, mod.fileName),
@@ -688,7 +832,17 @@ export async function runCodegen(
 		}
 	}
 
+	// Every path is known before anything is written. Two files claiming one
+	// path would leave whichever came last, so say so instead.
+	const claimedPaths = new Set<string>();
 	for (const file of filesToWrite) {
+		if (claimedPaths.has(file.path)) {
+			throw new Error(
+				`[codegen] Target "${targetId}" produced "${file.path}" twice. ` +
+					`This is a codegen bug: two generated files claim the same path.`,
+			);
+		}
+		claimedPaths.add(file.path);
 		validateGeneratedSyntax(file.code, file.path);
 	}
 
@@ -703,6 +857,39 @@ export async function runCodegen(
 		outputPath,
 		discovered,
 	};
+}
+
+/**
+ * Build the command that regenerates a file, for its header comment.
+ *
+ * `-c` is resolved against the working directory, and the working directory
+ * for codegen is the package root, so the config path is printed relative to
+ * the nearest package.json. That also keeps the header identical no matter
+ * where the run was launched from, which matters because generated files are
+ * committed. A config at the CLI default location needs no flag at all.
+ */
+async function resolveRegenerateCommand(configPath: string): Promise<string> {
+	const absoluteConfigPath = resolve(configPath);
+	const configDir = dirname(absoluteConfigPath);
+	let packageRoot = configDir;
+	let directory = configDir;
+	while (true) {
+		try {
+			await stat(join(directory, "package.json"));
+			packageRoot = directory;
+			break;
+		} catch {
+			// Keep walking up; programmatic codegen may run outside a package.
+		}
+		const parent = dirname(directory);
+		if (parent === directory) break;
+		directory = parent;
+	}
+	const relativeConfigPath = normalizeIdentityPath(
+		relative(packageRoot, absoluteConfigPath),
+	);
+	if (relativeConfigPath === "questpie.config.ts") return "questpie generate";
+	return `questpie generate -c ${relativeConfigPath}`;
 }
 
 async function resolveGeneratedAppInstanceId(
@@ -818,9 +1005,9 @@ export interface RunAllTargetsOptions {
 /**
  * Run codegen for ALL resolved targets.
  *
- * Resolves the target graph from plugins, then iterates each target:
- * - For targets with a custom `generate` function, calls it.
- * - For standard targets (no custom generator), uses the default template pipeline.
+ * Every target goes through `runCodegen()`, including the ones that bring their
+ * own generator. One code path means a target cannot quietly lose a feature by
+ * running somewhere else.
  *
  * Non-server targets resolve their `root` relative to `rootDir` (the server root).
  * e.g., `root: "../admin"` → `resolve(rootDir, "../admin")`.
@@ -842,100 +1029,15 @@ export async function runAllTargets(
 		try {
 			// Resolve the target's root directory relative to the server root
 			const targetRootDir = resolve(rootDir, target.root);
-			const targetOutDir = join(targetRootDir, target.outDir);
-
-			if (target.generate) {
-				// Custom generator — run discovery, transforms, then the generator
-				const externalFactoryArguments =
-					await loadModuleFactoryArguments(targetRootDir);
-				const discovered = await discoverFiles(targetRootDir, targetOutDir, {
-					categories: target.categories,
-					discover: target.discover,
-					externalFactoryArguments,
-				});
-
-				// Build and run transforms
-				const extraImports: Array<{ name: string; path: string }> = [];
-				const extraTypeDeclarations: string[] = [];
-				const extraRuntimeCode: string[] = [];
-				const extraEntities = new Map<string, string>();
-
-				const ctx: CodegenContext = {
-					categories: discovered.categories,
-					singles: discovered.singles,
-					spreads: discovered.spreads,
-					addImport(name, path) {
-						extraImports.push({ name, path });
-					},
-					addTypeDeclaration(code) {
-						extraTypeDeclarations.push(code);
-					},
-					addRuntimeCode(code) {
-						extraRuntimeCode.push(code);
-					},
-					set(key, value) {
-						extraEntities.set(key, value);
-					},
-				};
-
-				for (const transform of target.transforms) {
-					transform(ctx);
-				}
-
-				// Run custom generator
-				const output = await target.generate({
-					target,
-					discovered,
-					extraImports,
-					extraTypeDeclarations,
-					extraRuntimeCode,
-					extraEntities,
-				});
-
-				// Validate & write output
-				const outputPath = join(targetOutDir, target.outputFile);
-				validateGeneratedSyntax(output.code, outputPath);
-				if (output.additionalFiles) {
-					for (const [relPath, content] of Object.entries(
-						output.additionalFiles,
-					)) {
-						validateGeneratedSyntax(content, join(targetOutDir, relPath));
-					}
-				}
-
-				if (!dryRun) {
-					const filesToWrite = [{ path: outputPath, code: output.code }];
-					if (output.additionalFiles) {
-						for (const [relPath, content] of Object.entries(
-							output.additionalFiles,
-						)) {
-							filesToWrite.push({
-								path: join(targetOutDir, relPath),
-								code: content,
-							});
-						}
-					}
-					await writeGeneratedFiles(targetOutDir, filesToWrite);
-				}
-
-				results.set(targetId, {
-					targetId,
-					code: output.code,
-					outputPath,
-					discovered,
-				});
-			} else {
-				// Standard target — use runCodegen() with the resolved target
-				const result = await runCodegen({
-					rootDir: targetRootDir,
-					configPath,
-					outDir: targetOutDir,
-					plugins: userPlugins,
-					dryRun,
-					targetId,
-				});
-				results.set(targetId, result);
-			}
+			const result = await runCodegen({
+				rootDir: targetRootDir,
+				configPath,
+				outDir: join(targetRootDir, target.outDir),
+				plugins: userPlugins,
+				dryRun,
+				targetId,
+			});
+			results.set(targetId, result);
 		} catch (err) {
 			errors.push({
 				targetId,

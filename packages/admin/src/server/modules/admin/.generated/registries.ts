@@ -8,20 +8,20 @@ import type _view_collectionTable from "../views/table";
 import type _view_globalForm from "../views/global-form";
 import type _view_listView from "../views/list-view";
 
-interface _RegViews {
+type _RegViews = {
 	collectionForm: typeof _view_collectionForm;
 	collectionTable: typeof _view_collectionTable;
 	globalForm: typeof _view_globalForm;
 	listView: typeof _view_listView;
-}
+};
 
 import type _comp_badge from "../components/badge";
 import type _comp_icon from "../components/icon";
 
-interface _RegComponents {
+type _RegComponents = {
 	badge: typeof _comp_badge;
 	icon: typeof _comp_icon;
-}
+};
 
 import type _fields from "../fields";
 type _FieldTypes = typeof _fields;

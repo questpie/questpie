@@ -299,6 +299,75 @@ describe("extractFactoryArgumentsFromModules", () => {
 			await rm(rootDir, { recursive: true, force: true });
 		}
 	});
+
+	// Single-file discovery accepts a .mts sibling for every .ts pattern. This
+	// used to look only for modules.ts, so an .mts project's module metadata was
+	// dropped and its collision check never ran.
+	it("reads modules.mts too", async () => {
+		const rootDir = await mkdtemp(join(tmpdir(), "questpie-module-meta-mts-"));
+		try {
+			await writeFile(
+				join(rootDir, "modules.mts"),
+				[
+					`const symbol = Symbol.for(${JSON.stringify(CODEGEN_MODULE_METADATA_SYMBOL)});`,
+					"export default [{",
+					'  name: "questpie-chat",',
+					"  [symbol]: { factoryArguments: [{",
+					'    category: "channels", key: "chatRoom",',
+					'    value: "chat-room-[roomId]", source: "channels/chat-room.ts"',
+					"  }] }",
+					"}];",
+				].join("\n"),
+				"utf-8",
+			);
+
+			expect(await loadModuleFactoryArguments(rootDir)).toEqual([
+				{
+					category: "channels",
+					key: "chatRoom",
+					value: "chat-room-[roomId]",
+					source: "questpie-chat:channels/chat-room.ts",
+				},
+			]);
+		} finally {
+			await rm(rootDir, { recursive: true, force: true });
+		}
+	});
+
+	// An unimportable modules.ts costs a uniqueness check, not the artifact, so
+	// this warns and carries on. It has to say so: the old catch returned an
+	// empty list with no output at all.
+	it("warns and returns empty when modules.ts cannot be imported", async () => {
+		const rootDir = await mkdtemp(join(tmpdir(), "questpie-module-meta-bad-"));
+		const warnings: string[] = [];
+		const originalWarn = console.warn;
+		console.warn = (...args: unknown[]) => {
+			warnings.push(args.map(String).join(" "));
+		};
+		try {
+			await writeFile(
+				join(rootDir, "modules.ts"),
+				'import { nope } from "@questpie/definitely-not-installed";\nexport default [nope];\n',
+				"utf-8",
+			);
+
+			expect(await loadModuleFactoryArguments(rootDir)).toEqual([]);
+			expect(warnings.join("\n")).toContain("modules.ts");
+			expect(warnings.join("\n")).toContain("collisions");
+		} finally {
+			console.warn = originalWarn;
+			await rm(rootDir, { recursive: true, force: true });
+		}
+	});
+
+	it("returns empty when there is no modules file", async () => {
+		const rootDir = await mkdtemp(join(tmpdir(), "questpie-module-meta-none-"));
+		try {
+			expect(await loadModuleFactoryArguments(rootDir)).toEqual([]);
+		} finally {
+			await rm(rootDir, { recursive: true, force: true });
+		}
+	});
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

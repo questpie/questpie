@@ -26,7 +26,11 @@ import {
 	resolveConfigRoot,
 	type PackageConfig,
 } from "../config.js";
-import { resolveCliPath, toFileImportSpecifier } from "../utils.js";
+import {
+	findModulesFile,
+	resolveCliPath,
+	toFileImportSpecifier,
+} from "../utils.js";
 
 // ============================================================================
 // generate command
@@ -258,6 +262,12 @@ async function generatePackageModules(
 
 		console.log(`\n  Module: ${moduleName}`);
 
+		// Package mode builds its own output paths, so the graph-level duplicate
+		// check cannot see a collision here. writeGeneratedFiles does `rm -rf` on
+		// the directory before writing, so two targets landing in one directory
+		// means the second erases the first with no message.
+		const claimedOutDirs = new Map<string, string>();
+
 		// Iterate all resolved targets for this module
 		for (const [targetId, target] of targetGraph) {
 			// Determine discovery root: use moduleRoot subdirectory if specified
@@ -279,7 +289,16 @@ async function generatePackageModules(
 				}
 			}
 
-			const moduleOutDir = join(discoveryRoot, ".generated");
+			const moduleOutDir = join(discoveryRoot, target.outDir);
+			const claimedBy = claimedOutDirs.get(moduleOutDir);
+			if (claimedBy) {
+				throw new Error(
+					`[codegen] Targets "${claimedBy}" and "${targetId}" both write module ` +
+						`output to ${moduleOutDir}. The second would erase the first. ` +
+						`Give one of them a different moduleRoot or outDir.`,
+				);
+			}
+			claimedOutDirs.set(moduleOutDir, targetId);
 
 			if (options.verbose) {
 				console.log(`    [${targetId}] Root: ${discoveryRoot}`);
@@ -912,56 +931,77 @@ function printDiscovered(
  *
  * Merge order: module-extracted plugins → runtimeConfig plugins.
  * Core plugin is always prepended by runAllTargets/runCodegen.
+ *
+ * A failure here is fatal on purpose. Those plugins declare whole categories,
+ * collection extensions and factory methods. Degrading to the config plugins
+ * does not produce less output, it produces wrong output: writeGeneratedFiles
+ * does `rm -rf outDir` first, so codegen replaces a correct `.generated` with a
+ * core-only one and exits 0. One unbuilt dependency used to erase the lot in
+ * silence. Stopping is the cheaper failure.
  */
 export async function extractModulePlugins(
 	rootDir: string,
 	configPlugins: CodegenPlugin[],
 	options: GenerateOptions,
 ): Promise<CodegenPlugin[]> {
-	const modulesPath = join(rootDir, "modules.ts");
+	const modulesPath = await findModulesFile(rootDir);
+	// A missing modules.ts is not this function's error to report. The root
+	// template raises it with a better message, and other modes never have one.
+	if (!modulesPath) return configPlugins;
+
+	let modulesExport: Record<string, unknown>;
 	try {
-		await stat(modulesPath);
-	} catch {
-		return configPlugins;
+		// Import by file URL, the same way loadConfigForCodegen does. A bare
+		// Windows path like C:\app\modules.ts parses as a URL with scheme "c:"
+		// and throws ERR_UNSUPPORTED_ESM_URL_SCHEME.
+		modulesExport = await import(
+			/* @vite-ignore */ toFileImportSpecifier(modulesPath)
+		);
+	} catch (error) {
+		const reason = error instanceof Error ? error.message : String(error);
+		throw new Error(
+			`Could not import ${modulesPath}.\n` +
+				`  Reason: ${reason}\n` +
+				"  The modules listed there contribute codegen plugins, so generating\n" +
+				"  without them would overwrite .generated with a core-only build.\n" +
+				"  A workspace dependency that has not been built yet is the usual cause.",
+			{ cause: error },
+		);
 	}
 
-	try {
-		const modulesExport = await import(/* @vite-ignore */ modulesPath);
-		const modules = modulesExport.default ?? [];
-		if (!Array.isArray(modules)) return configPlugins;
+	const modules = modulesExport.default;
+	if (!Array.isArray(modules)) {
+		throw new Error(
+			`${modulesPath} must have a default export that is an array of modules.\n` +
+				`  Got: ${modules === undefined ? "no default export" : typeof modules}.`,
+		);
+	}
 
-		const modulePlugins = extractPluginsFromModules(modules);
-		if (modulePlugins.length === 0) return configPlugins;
+	const modulePlugins = extractPluginsFromModules(modules);
+	if (modulePlugins.length === 0) return configPlugins;
 
-		if (options.verbose) {
-			console.log(
-				`  Extracted ${modulePlugins.length} plugin(s) from modules.ts: ${modulePlugins.map((p) => p.name).join(", ")}`,
-			);
-		}
+	if (options.verbose) {
+		console.log(
+			`  Extracted ${modulePlugins.length} plugin(s) from modules.ts: ${modulePlugins.map((p) => p.name).join(", ")}`,
+		);
+	}
 
-		// Dedupe: module-extracted first, then config plugins (config wins on name collision)
-		const seen = new Set<string>();
-		const merged: CodegenPlugin[] = [];
-		// Config plugins take priority — add them first to the seen set
-		for (const p of configPlugins) {
+	// Dedupe: module-extracted first, then config plugins (config wins on name collision)
+	const seen = new Set<string>();
+	const merged: CodegenPlugin[] = [];
+	// Config plugins take priority — add them first to the seen set
+	for (const p of configPlugins) {
+		seen.add(p.name);
+		merged.push(p);
+	}
+	// Then add module-extracted plugins that weren't already in config
+	for (const p of modulePlugins) {
+		if (!seen.has(p.name)) {
 			seen.add(p.name);
 			merged.push(p);
 		}
-		// Then add module-extracted plugins that weren't already in config
-		for (const p of modulePlugins) {
-			if (!seen.has(p.name)) {
-				seen.add(p.name);
-				merged.push(p);
-			}
-		}
-		return merged;
-	} catch (error) {
-		if (options.verbose) {
-			const reason = error instanceof Error ? error.message : String(error);
-			console.warn(`  Could not extract plugins from modules.ts: ${reason}`);
-		}
-		return configPlugins;
 	}
+	return merged;
 }
 
 /**

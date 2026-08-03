@@ -64,13 +64,14 @@ function resolveRealtimeConfig(
  * });
  * ```
  */
-export function module<T extends ModuleDefinition>(definition: T): T {
+// `const` is load-bearing. Without it the `modules: [dep]` literal widens to an
+// array, and the folds in codegen-type-utils.ts only walk tuples, so every
+// dependency's collections, routes and jobs vanish from the consuming app's
+// types with no error. Codegen dodges this by writing `as const` in modules.ts.
+// Hand-written modules had nothing. See test/types/module-dependency-inference.test-d.ts.
+export function module<const T extends ModuleDefinition>(definition: T): T {
 	return definition;
 }
-
-// ============================================================================
-// config() — identity function for type inference (legacy)
-// ============================================================================
 
 // ============================================================================
 // runtimeConfig() — cloud-aware runtime config with env auto-detection
@@ -133,30 +134,66 @@ export function runtimeConfig<const TInput extends RuntimeConfigInput>(
 // Module resolution — depth-first, left-to-right
 // ============================================================================
 
-/**
- * Flatten modules depth-first per RFC §13.7.
- * Dependencies are resolved before the module that depends on them.
- * Duplicate modules (by name) are deduplicated — last occurrence wins.
- */
-function resolveModules(
+/** Walk the module tree depth-first, children before their parent. */
+function flattenModules(
 	modules: readonly AppModuleInput[],
 ): ModuleDefinition[] {
 	const flat: ModuleDefinition[] = [];
 	for (const mod of modules) {
 		if (mod.modules && mod.modules.length > 0) {
-			flat.push(...resolveModules(mod.modules));
+			flat.push(...flattenModules(mod.modules));
 		}
 		flat.push(mod as ModuleDefinition);
 	}
-	// Deduplicate by name — keep last occurrence (later wins)
-	const seen = new Map<string, number>();
+	return flat;
+}
+
+/**
+ * Flatten the module tree into merge order: depth-first, left to right,
+ * every dependency ahead of the module that depends on it.
+ *
+ * A module reached more than once — the diamond, where two modules share a
+ * dependency, or an app lists a module it already gets transitively — keeps its
+ * FIRST position. That is the only position where it still precedes everything
+ * that depends on it. Keeping the last one instead put the dependency after its
+ * dependent and quietly flipped which one's collections and config won.
+ *
+ * Two DIFFERENT modules under one name is a different thing and it throws. Name
+ * is the merge key, so one of the two would vanish with nothing to notice it.
+ */
+function resolveModules(
+	modules: readonly AppModuleInput[],
+): ModuleDefinition[] {
+	const flat = flattenModules(modules);
+	const firstByName = new Map<
+		string,
+		{ index: number; mod: ModuleDefinition }
+	>();
+	const resolved: ModuleDefinition[] = [];
+
 	for (let i = 0; i < flat.length; i++) {
-		seen.set(flat[i].name, i);
-	}
-	return flat.filter((_, i) => {
 		const mod = flat[i];
-		return seen.get(mod.name) === i;
-	});
+		const first = firstByName.get(mod.name);
+
+		if (!first) {
+			firstByName.set(mod.name, { index: i, mod });
+			resolved.push(mod);
+			continue;
+		}
+
+		// Same module reached twice. Already in merge order at first.index.
+		if (first.mod === mod) continue;
+
+		throw new Error(
+			`[QUESTPIE] Two different modules are both named "${mod.name}", ` +
+				`at positions ${first.index} and ${i} of the resolved module list. ` +
+				`Module name is the merge key, so one would silently replace the other. ` +
+				`Rename one of them.\n` +
+				`Resolved order: ${flat.map((m, n) => `${n}:${m.name}`).join(", ")}`,
+		);
+	}
+
+	return resolved;
 }
 
 // ============================================================================
@@ -166,8 +203,11 @@ function resolveModules(
 /**
  * Merge function: `(existing, incoming) → merged`.
  *
- * Plugins can provide custom merge functions for their contributed keys.
- * Common helpers are exported for reuse:
+ * The strategy tables below are core-owned and module-private. A plugin cannot
+ * register one for its own key; an unlisted key falls to the duck-typed generic
+ * merge in {@link mergeGenericKey}. These helpers are exported because the core
+ * tables read better naming them, and because a plugin folding its own state
+ * can reuse them:
  * - {@link mergeRecord} — spread-merge two objects
  * - {@link mergeConcat} — concatenate two arrays
  * - {@link lastWins} — incoming replaces existing
@@ -246,38 +286,19 @@ function mergeGlobalHooks(
 	};
 }
 
-/**
- * Merge functions for known module keys.
- *
- * Each entry maps a key name to its merge function: `(existing, incoming) → merged`.
- * Keys not in this map use auto-detect merge (see {@link mergeGenericKey}):
- * - Object + Object → spread merge
- * - Array + Array → concatenate
- * - Otherwise → incoming wins
- *
- * Uses actual functions (not string strategies) so plugins can provide
- * arbitrary merge logic for their contributed keys.
- *
- * Common helpers are exported for reuse:
- * {@link mergeRecord}, {@link mergeConcat}, {@link lastWins}.
- *
- * @example
- * ```ts
- * // A plugin can register custom merge for its keys:
- * MERGE_FNS.set("auditRules", mergeConcat);
- * ```
- */
 // ============================================================================
 // Config bucket merge
 // ============================================================================
 
 /**
  * Per-config-key sub-property merge strategies.
- * Each config key (app, admin, auth, etc.) can declare how its sub-properties
- * should be merged when multiple modules contribute the same config key.
  *
- * Keys not listed here use lastWins (incoming replaces existing).
- * Config keys not in this map at all use lastWins on the whole object.
+ * A config key listed here merges below the key, one sub-property at a time.
+ * Everything else replaces the whole object, so when two modules write the
+ * same config key the later one wins outright. `auth` and `admin` are not in
+ * this map: {@link mergeConfigKey} branches on them by name.
+ *
+ * Core-owned, like {@link MERGE_FNS}. A plugin cannot add an entry.
  */
 const CONFIG_KEY_MERGE = new Map<string, Map<string, MergeFn>>([
 	[
@@ -345,6 +366,20 @@ function mergeConfigBucket(existing: any, incoming: any): any {
 // Module merge functions
 // ============================================================================
 
+/**
+ * Merge functions for known module keys.
+ *
+ * Each entry maps a key name to `(existing, incoming) → merged`. A key not in
+ * this map uses auto-detect merge (see {@link mergeGenericKey}):
+ * - Object + Object → spread merge
+ * - Array + Array → concatenate
+ * - Otherwise → incoming wins
+ *
+ * This table is core-owned and module-private. A plugin cannot register a
+ * strategy for its own key, so a plugin key is whatever the generic merge makes
+ * of it. That is the extension point, and it covers the shapes plugin keys
+ * actually take.
+ */
 const MERGE_FNS = new Map<string, MergeFn>([
 	["collections", mergeRecord],
 	["channels", mergeRecord],
@@ -516,11 +551,15 @@ function mergeGenericKey(
  * without being listed anywhere.
  *
  * @param merged - Fully merged state from all modules + user entities
- * @param configOverrides - Config-level overrides (legacy createApp only)
+ * @param runtimeExtensions - Unknown keys read off questpie.config.ts. This is
+ *   the live path, not a legacy one: the caller passes
+ *   `extractRuntimeExtensions(runtime)`, and applying it here is the last step
+ *   of the precedence chain, the one that puts runtime config above every
+ *   module contribution.
  */
 function buildExtensionState(
 	merged: Record<string, any>,
-	configOverrides?: Record<string, unknown>,
+	runtimeExtensions?: Record<string, unknown>,
 ): Record<string, unknown> {
 	const extensionState: Record<string, unknown> = {};
 
@@ -531,20 +570,21 @@ function buildExtensionState(
 		}
 	}
 
-	// Apply config-level overrides (legacy mode only)
-	if (configOverrides) {
-		for (const [key, value] of Object.entries(configOverrides)) {
+	// Runtime config outranks every module. Applied last, so this is where that
+	// happens.
+	if (runtimeExtensions) {
+		for (const [key, value] of Object.entries(runtimeExtensions)) {
 			if (CONFIG_CONSUMED_KEYS.has(key) || value === undefined) continue;
 
 			const existing = extensionState[key];
 
-			// Array: append config-level to module-level
+			// Array: append the runtime entries after the module ones
 			if (Array.isArray(existing) && value != null) {
 				extensionState[key] = Array.isArray(value)
 					? [...existing, ...value]
 					: [...existing, value];
 			}
-			// Otherwise: config-level overrides
+			// Otherwise: runtime replaces
 			else {
 				extensionState[key] = value;
 			}
@@ -696,8 +736,12 @@ async function createAppFromDefinition(
 		locale: appCfg.locale,
 		auth: authCfg,
 		storage: runtime.storage,
-		email: definition.emailTemplates
-			? { ...(runtime.email ?? {}), templates: definition.emailTemplates }
+		// Read off `merged`, not `definition`. A module that ships an emails/
+		// directory contributes its templates through the merge like everything
+		// else, and reading the root definition skipped every one of them. The
+		// app's own emails/ still arrives, because root entities ride in __user.
+		email: merged.emailTemplates
+			? { ...(runtime.email ?? {}), templates: merged.emailTemplates }
 			: runtime.email,
 		queue:
 			hasJobs && runtime.queue
