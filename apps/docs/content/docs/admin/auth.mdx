@@ -1,6 +1,8 @@
 ---
 title: Authentication
 description: Use Better Auth with the admin role contract, setup flow, admin session helpers, and invitations.
+kind: guide
+package: "@questpie/admin"
 ---
 
 The admin panel uses the app's Better Auth instance. Access is granted only to sessions where `session.user.role === "admin"`. A signed-in user without that role is still not an admin user.
