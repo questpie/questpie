@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, setDefaultTimeout } from "bun:test";
 
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
@@ -8,6 +8,10 @@ import { migration } from "questpie/migration";
 import type { AppDefinition, RuntimeConfig } from "questpie/types";
 
 import { createTestApp, TestAppSetupError } from "../src/index.js";
+
+// The harness itself allows 15s for readiness/migrations. Keep the runner above
+// that product timeout when PGlite files execute concurrently on loaded CI.
+setDefaultTimeout(30_000);
 
 const schemaMigration = migration({
 	id: "testing_001_schema",
