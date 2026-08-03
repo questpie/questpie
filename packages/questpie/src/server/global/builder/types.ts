@@ -21,9 +21,17 @@ import type { CrdtOwnerCapability } from "#questpie/server/modules/core/integrat
 /**
  * Scope resolver function type for globals.
  * Returns a scope ID based on the request context.
+ *
+ * The parameter intersects `AppContext`, which is what a project augments via
+ * `declare global { namespace Questpie { interface AppContext { ... } } }`.
+ * Without it the resolver saw only `BaseRequestContext`, an interface with no
+ * augmentation seam and no index signature, so reading the very key your own
+ * middleware put on the context needed a cast. The whole point of `scoped` is
+ * reading that key. `AppContext` is empty until a project augments it, so this
+ * widens nothing on its own.
  */
 export type GlobalScopeResolver = (
-	ctx: BaseRequestContext,
+	ctx: BaseRequestContext & AppContext,
 ) => string | null | undefined;
 
 /**
