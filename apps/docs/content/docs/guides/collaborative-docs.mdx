@@ -68,16 +68,29 @@ export default runtimeConfig({
 ```
 
 ```ts title="src/lib/client.ts"
-import { yjsClientEngine } from "@questpie/crdt-yjs/client";
 import { createClient } from "questpie/client";
 import type { AppConfig } from "#questpie";
 
 export const client = createClient<AppConfig>({
 	baseURL: window.location.origin,
 	basePath: "/api",
-	crdt: { engines: { text: yjsClientEngine() } },
 });
 ```
+
+```ts title="src/lib/crdt.ts"
+import { yjsClientEngine } from "@questpie/crdt-yjs/client";
+import { createCrdtClient } from "questpie/crdt";
+
+import { client } from "./client";
+
+export const crdt = createCrdtClient(client, {
+	runtime: { engines: { text: yjsClientEngine() } },
+});
+```
+
+The engine goes in this file, not in `client.ts`. `client.ts` is imported by
+every page, and naming `yjsClientEngine` there pulls about 164 KB of CRDT code
+into all of them.
 
 Pick `namespace` once, because changing it later is a hard error. The fetch
 handler you already mount serves the two collaborative routes. You add no

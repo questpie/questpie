@@ -102,7 +102,6 @@ export default runtimeConfig({
 ```
 
 ```ts title="src/lib/client.ts"
-import { yjsClientEngine } from "@questpie/crdt-yjs/client";
 import { createClient } from "questpie/client";
 import type { AppConfig } from "#questpie";
 
@@ -112,9 +111,25 @@ export const client = createClient<AppConfig>({
 			? process.env.APP_URL!
 			: window.location.origin,
 	basePath: "/api",
-	crdt: { engines: { text: yjsClientEngine() } },
 });
 ```
+
+```ts title="src/lib/crdt.ts"
+import { yjsClientEngine } from "@questpie/crdt-yjs/client";
+import { createCrdtClient } from "questpie/crdt";
+
+import { client } from "./client";
+
+export const crdt = createCrdtClient(client, {
+	runtime: { engines: { text: yjsClientEngine() } },
+});
+```
+
+The engine sits here, not on `createClient()`. Both are accepted, and the
+second argument wins. But `src/lib/client.ts` is imported by every page, and
+naming `yjsClientEngine` there pulls the client CRDT implementation, about
+164 KB, into all of them. Keeping it in this file leaves it out of any bundle
+that never imports `questpie/crdt`.
 
 `namespace` is at most 64 printable ASCII characters and can never change once
 generated. The engine and the transport are covered in

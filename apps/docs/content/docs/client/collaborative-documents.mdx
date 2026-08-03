@@ -44,10 +44,10 @@ when edit access is refused. Without it, a refused edit rejects the whole
 connection. `fallback` is legal only alongside `mode: "edit"`.
 
 <Callout type="warn" title="No engine means no connection">
-	`connect()` needs `crdt: { engines: { text: yjsClientEngine() } }` on
-	`createClient()`. Leave it out and the call rejects with `CRDT_UNAVAILABLE`
-	and the state goes to `denied`. The engine also has to match the one the
-	server registered.
+	`connect()` needs an engine. Pass it to `createCrdtClient()` as
+	`runtime: { engines: { text: yjsClientEngine() } }`. Leave it out and the
+	call rejects with `CRDT_UNAVAILABLE` and the state goes to `denied`. It also
+	has to match the engine the server registered.
 </Callout>
 
 ## Read and edit a field
