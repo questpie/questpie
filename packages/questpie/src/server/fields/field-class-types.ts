@@ -310,6 +310,10 @@ export interface FieldRuntimeState {
 	sourceField?: string;
 	/** Target field on junction */
 	targetField?: string;
+	/** Upload: MIME types the admin file picker offers */
+	mimeTypes?: string[];
+	/** Upload: largest file in bytes the admin file picker offers */
+	maxSize?: number;
 	/** Morph name (polymorphic) */
 	morphName?: string;
 	/** On delete action */

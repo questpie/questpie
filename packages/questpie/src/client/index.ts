@@ -51,10 +51,7 @@ import type {
 	With,
 } from "../server/collection/crud/types.js";
 import type { GlobalUpdateParams } from "../server/global/crud/types.js";
-import type {
-	CrdtClientAPI,
-	CrdtRegistryShape,
-} from "../server/modules/core/integrated/crdt/types.js";
+import type { CrdtRegistryShape } from "../server/modules/core/integrated/crdt/types.js";
 import type { GetAuthHeaders } from "./auth.js";
 import { createChannelsAPI, type ChannelsClient } from "./channels/index.js";
 // NOTE: deliberately a type-only import. A value import of ./crdt/index.js
@@ -303,12 +300,6 @@ export type QuestpieClientConfig = {
 	 * @default true
 	 */
 	useSuperJSON?: boolean;
-
-	/**
-	 * Optional collaborative-document runtime. Merely creating the client or a
-	 * document handle is inert; browser storage and transport start at connect().
-	 */
-	crdt?: CrdtClientRuntimeConfig;
 };
 
 /**
@@ -1060,30 +1051,6 @@ type RouteCallOptions = Omit<RequestInit, "method"> & {
 export type QuestpieClient<in out TApp extends QuestpieApp> = {
 	collections: CollectionsAPI<TApp>;
 	channels: ChannelsClient<AppChannelDefinitions<TApp>>;
-	/**
-	 * @deprecated Removed as a client member. Build it explicitly instead:
-	 *
-	 * ```ts
-	 * import { createCrdtClient } from "questpie/crdt";
-	 * const crdt = createCrdtClient(client);
-	 * ```
-	 *
-	 * `createClient()` used to construct the CRDT API eagerly, which put the
-	 * whole 164 KB client-side CRDT implementation into every browser bundle —
-	 * including the majority of apps that never open a collaborative document.
-	 * It is not tree-shakeable away, because the coupling was a real call
-	 * inside `createClient()` rather than a dangling re-export.
-	 *
-	 * `createCrdtClient` takes the client you already have and reuses its
-	 * realtime session, so there is still exactly one connection.
-	 *
-	 * Accessing this property throws with the same guidance.
-	 */
-	crdt: CrdtClientAPI<
-		NonNullable<TApp["crdt"]> extends CrdtRegistryShape
-			? NonNullable<TApp["crdt"]>
-			: { collections: {}; globals: {} }
-	>;
 	globals: GlobalsAPI<TApp>;
 	routes: RoutesClient<TApp["routes"]>;
 	search: SearchAPI;
@@ -1338,7 +1305,6 @@ export function createClient<TApp extends QuestpieApp>(
 		defaultHeaders,
 		getAuthHeaders: config.getAuthHeaders,
 		realtimeSession,
-		runtime: config.crdt,
 	} as const;
 
 	/**
@@ -2044,23 +2010,6 @@ export function createClient<TApp extends QuestpieApp>(
 		collections,
 		channels: channelsApi,
 		[CRDT_CLIENT_HOST]: crdtHost,
-		// A throwing getter rather than a removed property: reading a missing
-		// `.crdt` would surface later as "Cannot read properties of undefined",
-		// pointing at the wrong place. This fails at the access site with the
-		// migration. It holds no reference to CRDT code, so nothing is bundled.
-		get crdt(): never {
-			throw new Error(
-				"client.crdt was removed. Build it explicitly:\n\n" +
-					'  import { createCrdtClient } from "questpie/crdt";\n' +
-					"  const crdt = createCrdtClient(client);\n" +
-					"  const doc = crdt.collections.articles.document({ id });\n\n" +
-					"createClient() constructed the CRDT API eagerly, which put the whole " +
-					"client-side CRDT implementation (~164 KB) into every browser bundle, " +
-					"including apps that never open a collaborative document. " +
-					"createCrdtClient() reuses this client's realtime session, so there is " +
-					"still exactly one connection.",
-			);
-		},
 		globals,
 		routes: routesProxy,
 		search,

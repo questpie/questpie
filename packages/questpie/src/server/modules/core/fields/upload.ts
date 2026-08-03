@@ -157,7 +157,7 @@ export function upload<TTo extends string = "assets">(
 					meta: {
 						...(state.mimeTypes ? { accept: state.mimeTypes } : {}),
 						...(state.maxSize ? { maxSize: state.maxSize } : {}),
-						...state.extensions?.admin,
+						...(state.extensions?.admin as Record<string, unknown> | undefined),
 					},
 				}) as RelationFieldMetadata,
 		}),
@@ -247,7 +247,7 @@ export const uploadFieldType = fieldType("upload", {
 					meta: {
 						...(state.mimeTypes ? { accept: state.mimeTypes } : {}),
 						...(state.maxSize ? { maxSize: state.maxSize } : {}),
-						...state.extensions?.admin,
+						...(state.extensions?.admin as Record<string, unknown> | undefined),
 					},
 				}) as RelationFieldMetadata,
 		};

@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { createCrdtClient } from "../../src/client/crdt/create-crdt-client.js";
 import { createClient } from "../../src/client/index.js";
 import { collection, global } from "../../src/exports/index.js";
 import type {
@@ -147,38 +148,16 @@ const generatedClient = createClient<{
 	crdt: Registry;
 }>({
 	baseURL: "https://example.com",
-	crdt: {},
 });
-generatedClient.crdt.collections.articles
+const generatedCrdt = createCrdtClient(generatedClient);
+generatedCrdt.collections.articles
 	.document({ id: "article-1" })
 	.fields.tags.set.add("tag-3");
-const generatedArticle = generatedClient.crdt.collections.articles.document({
+const generatedArticle = generatedCrdt.collections.articles.document({
 	id: "article-1",
 });
 // @ts-expect-error createClient<AppConfig>() must not expose non-CRDT fields
 void generatedArticle.fields.status;
-
-createClient({
-	baseURL: "https://example.com",
-	crdt: {
-		// @ts-expect-error the server-issued open response owns the authorized manifest
-		manifest: {},
-	},
-});
-createClient({
-	baseURL: "https://example.com",
-	crdt: {
-		// @ts-expect-error the server-issued open response owns the offline subject key
-		getSubject: () => "user-1",
-	},
-});
-createClient({
-	baseURL: "https://example.com",
-	crdt: {
-		// @ts-expect-error namespace is server-issued, never client-configured
-		namespace: "app",
-	},
-});
 
 declare const server: CrdtServerAPI<Registry>;
 const serverArticle = server.collections.articles.document({ id: "article-1" });
