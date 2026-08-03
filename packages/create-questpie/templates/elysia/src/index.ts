@@ -6,14 +6,15 @@
  * soon as `.listen()` is called — `bun run src/index.ts` boots the server.
  */
 import { Elysia } from "elysia";
+import { createGracefulServerShutdown } from "questpie/app";
 import { createFetchHandler } from "questpie/http";
 
-import { app as questpie } from "#questpie";
+import { app as questpie, destroyApp } from "#questpie";
 import { env } from "@/lib/env";
 
 const handler = createFetchHandler(questpie, { basePath: "/api" });
 
-new Elysia()
+const elysia = new Elysia()
 	.all(
 		"/api/*",
 		async ({ request }) =>
@@ -25,5 +26,21 @@ new Elysia()
 			new Response(null, { status: 302, headers: { Location: "/api/docs" } }),
 	)
 	.listen(env.PORT ?? 3000);
+
+/* Stop accepting, drain, then release what the app opened.
+ *
+ * Elysia owns the server, so it can drain. `stop()` closes it, and the
+ * lifecycle only calls destroyApp() afterwards. destroyApp() disposes services
+ * in reverse dependency order: the queue first, then realtime and search, an
+ * observability flush after them so buffered spans survive, and the database
+ * connection last. Without this, a deploy drops every buffered span and leaks
+ * whatever your services opened. */
+const lifecycle = createGracefulServerShutdown(destroyApp);
+lifecycle.attach({ close: () => elysia.stop() });
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+	process.once(signal, () => {
+		void lifecycle.shutdown().catch(() => {});
+	});
+}
 
 console.log(`🚀 QUESTPIE headless API on http://localhost:${env.PORT ?? 3000}`);

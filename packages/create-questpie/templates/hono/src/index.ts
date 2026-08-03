@@ -11,9 +11,10 @@
  *   serve({ fetch: server.fetch, port: env.PORT ?? 3000 });
  */
 import { Hono } from "hono";
+import { createGracefulServerShutdown } from "questpie/app";
 import { createFetchHandler } from "questpie/http";
 
-import { app as questpie } from "#questpie";
+import { app as questpie, destroyApp } from "#questpie";
 import { env } from "@/lib/env";
 
 const handler = createFetchHandler(questpie, { basePath: "/api" });
@@ -23,6 +24,24 @@ const server = new Hono();
 server.all("/api/*", async (c) => (await handler(c.req.raw)) ?? c.notFound());
 
 server.get("/", (c) => c.redirect("/api/docs"));
+
+/* Release what the app opened when the platform stops the process.
+ *
+ * destroyApp() disposes services in reverse dependency order: the queue first,
+ * then realtime and search, an observability flush after them so buffered spans
+ * survive, and the database connection last. Without this, a deploy drops every
+ * buffered span and leaks whatever your services opened.
+ *
+ * No server is attached. Bun owns it, because the default export below hands it
+ * a fetch function rather than a handle. So this releases resources but does not
+ * drain in-flight requests. Give the platform a termination grace period longer
+ * than your slowest request. */
+const lifecycle = createGracefulServerShutdown(destroyApp);
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+	process.once(signal, () => {
+		void lifecycle.shutdown().catch(() => {});
+	});
+}
 
 export default {
 	port: env.PORT ?? 3000,
