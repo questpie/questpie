@@ -31,5 +31,11 @@ export default defineConfig({
 			return exportsWithTypes;
 		},
 	},
-	external: ["questpie", "questpie/types", "@electric-sql/pglite", "pg"],
+	external: [
+		"questpie",
+		"questpie/types",
+		"@electric-sql/pglite",
+		"@electric-sql/pglite/contrib/pg_trgm",
+		"pg",
+	],
 });

@@ -375,9 +375,8 @@ export type DbCloseFn = () => void | Promise<void>;
 export type DbSchemaInput = Record<string, unknown>;
 
 export type PGliteClient = {
-	query: (...args: unknown[]) => unknown;
-	close?: (...args: unknown[]) => unknown;
-	[key: string]: unknown;
+	query: (...args: never[]) => unknown;
+	close?: (...args: never[]) => unknown;
 };
 
 export interface DbCreateContext<
