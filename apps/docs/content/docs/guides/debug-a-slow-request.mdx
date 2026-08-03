@@ -113,9 +113,17 @@ you never declared. See [Indexes](/docs/schema/collections#indexes).
 ## Time what QUESTPIE cannot see
 
 Seven seams open spans: HTTP requests, collection CRUD, database queries,
-transactions, job runs, KV calls and search queries. Everything else is yours.
-A route handler gets no span of its own. So a payment call inside one is
-invisible until you wrap it. An image pipeline is too.
+transactions, job runs, KV calls and search queries.
+
+Your route is already one of them. The request span is named after the matched
+pattern, `GET /orders`, and carries it as `http.route`. Your handler runs inside
+it, so its total time is on the waterfall already. A second span around the same
+handler would start and end within a millisecond of the request span, which is
+why there is not one.
+
+What the waterfall cannot show is the shape inside that handler. A payment call
+and an image pipeline both sit in the request span with no line of their own.
+Only you know where the boundaries worth naming are.
 
 ```ts title="src/questpie/server/routes/orders.get.ts"
 import { route } from "questpie/services";
