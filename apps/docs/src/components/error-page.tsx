@@ -1,14 +1,18 @@
 /* The shell both error pages share.
  *
  * Not `HomeLayout`. That layout puts the site nav in normal document flow, so
- * the `justify-center` the old 404 needed to centre its text dragged the nav
- * into the middle of the viewport with it. An error page has no sidebar and no
- * page tree to render, so it does not need a docs layout at all.
+ * the `justify-center` an error page needs dragged the nav into the middle of
+ * the viewport with it. There is no sidebar and no page tree to render here.
  *
- * Canon tokens throughout, no `fd-` prefixes, because this renders under both
- * themes. Marketing forces dark and the docs carry both, and an error can land
- * on either. Flipping a reader from light to dark because they mistyped a URL
- * would be worse than the layout bug this replaces.
+ * `.qp-mesh` is the canon's own host class. It paints the brand's background
+ * through its own `::before`, and mesh.css carries a light and a dark
+ * composition, so this works under both. Marketing gets the same atmosphere
+ * from `.qp-mesh-page` in __root, which only covers marketing paths, and an
+ * error can land anywhere.
+ *
+ * Canon tokens throughout, no `fd-` prefixes. Flipping a reader from light to
+ * dark because they mistyped a URL would be worse than the layout bug this
+ * replaces.
  */
 import { Link } from "@tanstack/react-router";
 
@@ -19,7 +23,7 @@ const WAYS_OUT = [
 	{
 		label: "Documentation",
 		href: "/docs",
-		note: "Every group, from Learn on.",
+		note: "Nine groups, starting at Learn.",
 	},
 	{
 		label: "Framework",
@@ -41,39 +45,44 @@ export function ErrorPage({
 	action?: React.ReactNode;
 }) {
 	return (
-		<div className="flex min-h-screen flex-col bg-[var(--background)] px-6 py-8 text-[var(--foreground)]">
-			<Link aria-label="QUESTPIE home" className="w-fit" to="/">
-				<Logo className="h-7 w-auto" />
-			</Link>
+		<div className="qp-mesh flex min-h-screen items-center justify-center px-6 py-16 text-[var(--foreground)]">
+			<main className="w-full max-w-2xl text-center">
+				<Link
+					aria-label="QUESTPIE home"
+					className="inline-block opacity-90 transition-opacity hover:opacity-100"
+					to="/"
+				>
+					<Logo className="mx-auto h-7 w-auto" />
+				</Link>
 
-			<main className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center py-16">
-				<p className="font-mono text-sm tracking-widest text-[var(--primary-text)]">
+				<p className="mt-14 font-mono text-sm tracking-[0.2em] text-[var(--primary-text)]">
 					{status}
 				</p>
-				<h1 className="mt-3 text-3xl font-semibold tracking-tight">{title}</h1>
+				<h1 className="mt-4 text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
+					{title}
+				</h1>
 				{children ? (
-					<div className="mt-4 text-[var(--foreground-muted)]">{children}</div>
+					<div className="mx-auto mt-5 max-w-md text-[var(--foreground-muted)]">
+						{children}
+					</div>
 				) : null}
 				{action ? <div className="mt-8">{action}</div> : null}
 
-				<nav className="mt-12 border-t border-[var(--border-subtle)] pt-6">
-					<ul className="flex flex-col gap-4">
-						{WAYS_OUT.map((way) => (
-							<li key={way.href}>
-								<Link
-									className="group flex items-baseline gap-3 no-underline"
-									to={way.href}
-								>
-									<span className="font-medium text-[var(--primary-text)] group-hover:underline">
-										{way.label}
-									</span>
-									<span className="text-sm text-[var(--foreground-muted)]">
-										{way.note}
-									</span>
-								</Link>
-							</li>
-						))}
-					</ul>
+				<nav className="mt-14 grid gap-3 text-start sm:grid-cols-3">
+					{WAYS_OUT.map((way) => (
+						<Link
+							className="group rounded-[var(--surface-radius,0.75rem)] border border-[var(--border-subtle)] bg-[var(--card)] p-4 no-underline transition-colors hover:border-[var(--primary)]"
+							key={way.href}
+							to={way.href}
+						>
+							<span className="block font-medium text-[var(--foreground)] group-hover:text-[var(--primary-text)]">
+								{way.label}
+							</span>
+							<span className="mt-1 block text-sm text-[var(--foreground-muted)]">
+								{way.note}
+							</span>
+						</Link>
+					))}
 				</nav>
 			</main>
 		</div>

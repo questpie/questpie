@@ -26,7 +26,9 @@ function LLMActions() {
 	const url = useContext(PageUrlContext);
 	return (
 		<div className="border-fd-border mb-6 flex items-center gap-2 border-b pb-4">
-			<LLMCopyButton markdownUrl={`${url}.mdx`} />
+			{/* The markdown is served from /llms.mdx/docs/$, so the path is that
+			    prefix plus this page's own. `${url}.mdx` answered 404. */}
+			<LLMCopyButton markdownPath={`/llms.mdx${url}`} />
 		</div>
 	);
 }

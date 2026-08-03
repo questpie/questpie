@@ -1,4 +1,7 @@
 import "virtual:iconify-preload";
+import bricolageLatinUrl from "@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2?url";
+import hankenLatinUrl from "@fontsource-variable/hanken-grotesk/files/hanken-grotesk-latin-wght-normal.woff2?url";
+import jetbrainsMonoLatinUrl from "@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2?url";
 import {
 	createRootRoute,
 	HeadContent,
@@ -8,6 +11,7 @@ import {
 } from "@tanstack/react-router";
 import { RootProvider } from "fumadocs-ui/provider/tanstack";
 import type * as React from "react";
+import { preload } from "react-dom";
 
 import { isMarketingPath } from "@/components/marketing/chrome";
 import { generateLinks } from "@/lib/seo";
@@ -71,6 +75,22 @@ function RootComponent() {
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+	preload(hankenLatinUrl, {
+		as: "font",
+		type: "font/woff2",
+		crossOrigin: "anonymous",
+	});
+	preload(bricolageLatinUrl, {
+		as: "font",
+		type: "font/woff2",
+		crossOrigin: "anonymous",
+	});
+	preload(jetbrainsMonoLatinUrl, {
+		as: "font",
+		type: "font/woff2",
+		crossOrigin: "anonymous",
+	});
+
 	const isMarketing = useRouterState({
 		select: (state) => isMarketingPath(state.location.pathname),
 	});
