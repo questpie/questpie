@@ -1,0 +1,237 @@
+---
+title: The list
+description: One .list() call chooses the renderer and everything on it. Columns, sorting, filter presets, grouping, drag-to-reorder and the buttons around the rows.
+kind: reference
+package: "@questpie/admin"
+---
+
+## Every key
+
+`.list()` runs once at load and stores what it returns. A second call replaces
+the first, so put everything in one call.
+
+| Key              | What it does                                       | Renderer |
+| ---------------- | -------------------------------------------------- | -------- |
+| `columns`        | Field names shown after the title column           | Both     |
+| `defaultSort`    | The starting sort                                  | Both     |
+| `defaultFilters` | Filters applied before the reader touches anything | Both     |
+| `quickFilters`   | Named filter presets in the header                 | Both     |
+| `grouping`       | Which fields a reader may group by                 | Both     |
+| `actions`        | Header, row and bulk buttons                       | Both     |
+| `orderable`      | Drag rows to write an `order` value                | Table    |
+| `layout`         | Which field is the title, subtitle, badge, meta    | List     |
+| `outline`        | Nested tree rows                                   | List     |
+
+## Two renderers
+
+```ts
+.list(({ v, f }) => v.collectionTable({ columns: [f.status] }))
+.list(({ v, f }) => v.listView({ layout: { subtitleField: f.slug } }))
+```
+
+`collectionTable` is the default. It is a real table with a column picker,
+column widths and a card layout on narrow screens. `listView` is a dense flex
+renderer built for hierarchies, where each row is a title with a few markers
+around it.
+
+You can skip `v` and return a plain object. The default `view` is
+`collection-table`, so `.list(({ f }) => ({ columns: [f.status] }))` is the same
+call as the first line above.
+
+## Columns
+
+`columns` adds to the title column. It does not replace it. The title is always
+first, and a name you repeat there is not drawn twice.
+
+```ts
+.list(({ v, f }) => v.collectionTable({ columns: [f.status, "updatedAt"] }))
+```
+
+Every other field stays available in the column picker, including the ones the
+default set leaves out.
+
+With no `columns` at all the panel picks: the title, then up to six short
+fields, then `createdAt` when the collection has timestamps. Relations, uploads,
+rich text, blocks, JSON, objects, arrays and textareas are skipped in that
+default. They are wide, or they cost an extra query.
+
+A reader who has picked their own columns keeps them. Their choice is stored
+per user, in `admin_preferences`, and it wins from then on. So adding a name to
+`columns` later reaches people who never touched the picker, and nobody else.
+Everyone can still switch it on themselves.
+
+## Sorting
+
+```ts
+defaultSort: { field: "updatedAt", direction: "desc" }
+```
+
+The sort resolves in this order. The reader's saved sort, then `defaultSort`,
+then the `order` field when the list is orderable, then `createdAt` descending.
+The `field` must be a declared field, `_title`, `createdAt` or `updatedAt`.
+Anything else is ignored rather than sent.
+
+## Filters
+
+`defaultFilters` is the filter set a reader starts with. It applies until they
+change the filters themselves, and then the panel remembers theirs. Each rule
+needs its own `id`.
+
+```ts
+defaultFilters: [
+	{ id: "live", field: "status", operator: "equals", value: "published" },
+];
+```
+
+`quickFilters` are named presets, shown as buttons above the rows. Each one
+carries a whole rule set.
+
+```ts
+quickFilters: [
+	{
+		id: "drafts",
+		label: { en: "Drafts", sk: "Koncepty" },
+		filters: [{ id: "d", field: "status", operator: "equals", value: "draft" }],
+	},
+];
+```
+
+An operator is one of `equals`, `not_equals`, `contains`, `not_contains`,
+`starts_with`, `ends_with`, `greater_than`, `less_than`,
+`greater_than_or_equal`, `less_than_or_equal`, `in`, `not_in`, `some`, `every`,
+`none`, `is_empty` and `is_not_empty`.
+
+The filter builder a reader opens is not limited by config. It offers every
+field except `_title`, reverse relations and computed fields.
+
+## Grouping
+
+Grouping runs in the query, not on the rows already fetched.
+
+```ts
+grouping: {
+	fields: [f.status, f.author],
+	defaultField: f.status,
+	showCounts: true,
+}
+```
+
+`fields` is the list a reader may choose from. Leave it out and nobody can group
+at all. `defaultField` is where they start. `showCounts` is on unless you set it
+to `false`, and each count is a database count for that group.
+
+While grouping is on, a page is a page of groups. Every row in the groups on the
+page comes back, so a large group is a large response. A search turns the query
+grouping off, and the panel groups the rows it already has instead.
+
+## Reordering rows
+
+```ts
+orderable: true
+orderable: { direction: "asc", step: 10 }
+```
+
+This adds a reorder button to the list header. The collection needs a numeric
+field named exactly `order`. The name is not configurable. The button only works
+when the list has no search, no filters and no grouping, and fits on one page.
+Turning it on sorts by `order` and gives every row a drag handle.
+
+Dropping a row rewrites `order` on every row on the page as `(index + 1) * step`.
+`step` defaults to `10`, so there is room to insert without renumbering the lot.
+`direction` decides how the ordered list reads and defaults to `asc`.
+
+## Keys that do nothing
+
+`ListViewConfig` also declares `realtime`, `searchable` and `filterable`. None of
+them has any effect. Introspection drops `realtime` on the way out, and neither
+renderer reads the other two.
+
+Live invalidation is on by default, from the `AdminProvider`. A reader turns it
+off per collection under View options, and that choice is saved with their view.
+What a search matches is decided by `.searchable()` on the collection itself. See
+[Search](/docs/infrastructure/search).
+
+## Actions on the list
+
+```ts
+.list(({ v, f, a }) =>
+	v.collectionTable({
+		columns: [f.status],
+		actions: {
+			header: { primary: [a.create] },
+			row: [a.delete],
+			bulk: [a.deleteMany, a.duplicate],
+		},
+	}),
+)
+```
+
+Each section you name replaces the default for that section. Leave a section out
+and the default stands. That is a Create button in the header, and Delete
+selected, Restore selected and Duplicate in the selection toolbar. The row menu
+is empty unless you fill it.
+
+Declaring a custom action changes that. Any `.actions({ custom })` rebuilds the
+header section, so the Create button goes unless you name it here. A bulk-scope
+custom action does the same to the selection toolbar.
+
+Only four built-ins resolve here: `a.create`, `a.delete`, `a.deleteMany` and
+`a.duplicate`. Anything else in these arrays is dropped without a warning.
+Custom actions do not go here at all. They are declared in `.actions()` and
+placed by their scope. See [Actions](/docs/admin/collections/actions).
+
+## The dense renderer
+
+`layout` and `outline` are read by `v.listView()` only. On a table they are
+carried and ignored.
+
+`layout` says which field plays which part in a row.
+
+| Key             | Holds                                            |
+| --------------- | ------------------------------------------------ |
+| `density`       | `compact` or `comfortable`                       |
+| `titleField`    | The row title. Defaults to the collection title. |
+| `subtitleField` | One line under the title                         |
+| `leadingFields` | Markers before the title                         |
+| `badgeFields`   | Compact badges beside the title                  |
+| `metaFields`    | Muted metadata on the right                      |
+
+`outline` turns the flat list into a tree. Each entry in `levels` is one tier of
+nesting, and the four kinds differ in where the tier comes from.
+
+| `kind`           | Groups rows by                                                  |
+| ---------------- | --------------------------------------------------------------- |
+| `field`          | A value on the row itself                                       |
+| `relation-field` | A value on a related record                                     |
+| `edge`           | A parent and child column on another collection, so a real tree |
+| `path`           | Segments of one string field, split on `separator`              |
+
+`defaultExpanded`, `maxDepth`, `showCounts` and `preserveMatchingBranches` sit
+beside `levels` and apply to the whole tree. `edge` and `path` levels take
+`repeat` to recurse into themselves.
+
+```ts
+.list(({ v, f }) =>
+	v.listView({
+		layout: { titleField: f.name, metaFields: ["updatedAt"] },
+		outline: {
+			levels: [{ kind: "path", field: f.route, separator: "/" }],
+			defaultExpanded: "roots",
+		},
+	}),
+)
+```
+
+## Where each topic lives
+
+| Topic                                      | Page                                               |
+| ------------------------------------------ | -------------------------------------------------- |
+| The other four methods                     | [Collections and globals](/docs/admin/collections) |
+| Buttons of your own, and their handlers    | [Actions](/docs/admin/collections/actions)         |
+| Writing a renderer of your own             | [Custom views](/docs/admin/custom-views)           |
+| Rows that leave the list but not the table | [Soft delete](/docs/schema/soft-delete)            |
+
+## Next
+
+**[The form](/docs/admin/collections/form)** is the other half of a collection's
+screens, and the one where fields can react to each other.

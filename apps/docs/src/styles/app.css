@@ -1028,3 +1028,20 @@ figure.shiki [role="tab"][data-state="active"] {
 	backdrop-filter: none !important;
 	-webkit-backdrop-filter: none !important;
 }
+
+/* Content links carry the accent. Chrome links do not.
+ *
+ * `@questpie/tokens` used to colour every `a` in the document, from an
+ * unlayered file, so it beat the utility classes fumadocs puts on its own
+ * links. Every sidebar item came out coral and the active one had nothing left
+ * to distinguish it. The token package now leaves the decision here, which is
+ * where the difference between a paragraph link and a nav item is known. */
+.prose a:not([data-card]),
+.prose a:not([data-card]) code {
+	color: var(--primary-text);
+}
+
+.prose a:not([data-card]):hover {
+	text-decoration: underline;
+	text-underline-offset: 0.2em;
+}

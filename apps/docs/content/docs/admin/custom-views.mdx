@@ -1,43 +1,46 @@
 ---
 title: Custom Views and Components
-description: Register server-side admin references and pair them with client-side React renderers.
+description: Every admin screen is resolved by name. Declare a name on the server, put a React file under that name beside the admin, and your screen mounts where the generated one was.
 kind: guide
 package: "@questpie/admin"
 ---
 
-Admin extensions are registry-driven. Server files declare serializable references and config types. Client files declare the React renderers that resolve those references. Codegen connects both sides.
+The generated list and form fit most tables. Some do not. A board of cards, a
+wizard, a screen that is not a collection at all. You write those, and the
+admin mounts them like its own.
 
-## File conventions
+## Two files, one name
 
-| Server file                           | Client file                           | Purpose                                                                                           |
-| ------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `src/questpie/server/views/*.ts`      | `src/questpie/admin/views/*.tsx`      | Collection list, collection form, global form, or document views.                                 |
-| `src/questpie/server/components/*.ts` | `src/questpie/admin/components/*.tsx` | Reusable component references for icons, badges, cells, actions, dashboard config, and custom UI. |
-| `src/questpie/server/blocks/*.ts`     | `src/questpie/admin/blocks/*.tsx`     | Visual block definitions and block editor renderers.                                              |
-| `src/questpie/admin/widgets/*.tsx`    | Same client target                    | Custom dashboard widget renderers.                                                                |
-| `src/questpie/admin/pages/*.tsx`      | Same client target                    | Custom admin pages addressable from sidebar `page` items.                                         |
+An extension is a pair, or client only. The server file declares the name. The
+client file supplies the React. Codegen matches the two.
 
-Use the same stable name on the server and client. For example, a server `view("kanban", ...)` pairs with a client `view("kanban", ...)`.
-
-## Custom list view
-
-Declare the server-side view and its config type:
-
-```ts title="src/questpie/server/views/kanban.ts"
-import { view } from "@questpie/admin/factories";
-
-type KanbanConfig = {
-	groupBy: string;
-	titleField: string;
-	descriptionField?: string;
-};
-
-export default view<KanbanConfig>("kanban", {
-	kind: "list",
-});
+```bash
+questpie add view board
+# src/questpie/server/views/board.ts   the name and the kind
+# src/questpie/admin/views/board.tsx   the component
 ```
 
-Use it from a collection through the generated `v` proxy:
+| Server file              | Client file              | What it is                       |
+| ------------------------ | ------------------------ | -------------------------------- |
+| `server/views/*.ts`      | `admin/views/*.tsx`      | A list or form screen            |
+| `server/components/*.ts` | `admin/components/*.tsx` | A component you name from config |
+| `server/blocks/*.ts`     | `admin/blocks/*.tsx`     | A block for the block editor     |
+| none                     | `admin/pages/*.tsx`      | A screen at its own URL          |
+| none                     | `admin/widgets/*.tsx`    | A tile on the dashboard          |
+
+Both roots sit under `src/questpie/`. A fresh app has none of these directories.
+
+## A board instead of a table
+
+Declare the view. `kind` decides which route serves it.
+
+```ts title="src/questpie/server/views/board.ts"
+import { view } from "@questpie/admin/factories";
+
+export const boardView = view("board", { kind: "list" });
+```
+
+Point a collection at it. `v` carries one method per registered list view.
 
 ```ts title="src/questpie/server/collections/tasks.ts"
 import { collection } from "#questpie/factories";
@@ -53,155 +56,145 @@ export const tasks = collection("tasks")
 			])
 			.label("Status")
 			.default("todo"),
-		summary: f.textarea().label("Summary"),
 	}))
+	.title(({ f }) => f.title)
 	.list(({ v, f }) =>
-		v.kanban({
-			groupBy: f.status,
-			titleField: f.title,
-			descriptionField: f.summary,
+		v.board({
+			columns: [f.title, f.status],
+			grouping: { fields: [f.status], defaultField: f.status },
 		}),
 	);
 ```
 
-Add the client renderer:
+Now the renderer. It reads the same config back off `viewConfig`.
 
-```tsx title="src/questpie/admin/views/kanban.tsx"
-import { type CollectionListViewProps, view } from "@questpie/admin/client";
+```tsx title="src/questpie/admin/views/board.tsx"
+import {
+	AdminViewHeader,
+	AdminViewLayout,
+	type CollectionListViewProps,
+	useCollectionList,
+	view,
+} from "@questpie/admin/client";
 
-function KanbanView({ collection, config }: CollectionListViewProps) {
+function BoardView({ collection, viewConfig }: CollectionListViewProps) {
+	const groupBy = viewConfig?.grouping?.defaultField ?? "status";
+	const { data } = useCollectionList(collection, { limit: 100 });
+	const docs: any[] = data?.docs ?? [];
+	const lanes = [...new Set(docs.map((doc) => String(doc[groupBy])))];
+
 	return (
-		<div className="grid gap-3">
-			<h1 className="text-lg font-semibold">{collection}</h1>
-			<pre className="rounded-md border p-3 text-xs">
-				{JSON.stringify(config, null, 2)}
-			</pre>
-		</div>
+		<AdminViewLayout header={<AdminViewHeader title="Board" />}>
+			<div className="flex gap-4 overflow-x-auto">
+				{lanes.map((lane) => (
+					<section key={lane} className="w-64 shrink-0">
+						<h2 className="mb-2 text-sm font-medium">{lane}</h2>
+						{docs
+							.filter((doc) => String(doc[groupBy]) === lane)
+							.map((doc) => (
+								<article key={doc.id} className="mb-2 rounded-md border p-2">
+									{doc._title}
+								</article>
+							))}
+					</section>
+				))}
+			</div>
+		</AdminViewLayout>
 	);
 }
 
-export default view("kanban", {
-	kind: "list",
-	component: KanbanView,
-});
+export default view("board", { kind: "list", component: BoardView });
 ```
 
-The example renderer is intentionally small. In a real view, use the list props and the same admin client APIs that built-in views use.
+Run `questpie generate`. `/admin/collections/tasks` is a board.
 
-## Custom form view
+## What the view receives
 
-Form views work the same way, but the server view uses `kind: "form"` and collections or globals reference it from `.form()`.
+| Prop             | What it holds                                                 |
+| ---------------- | ------------------------------------------------------------- |
+| `collection`     | The registered name. A global form view gets `global` instead |
+| `viewConfig`     | Your `.list()` or `.form()` config, after introspection       |
+| `config`         | The collection's admin meta. No list or form config is on it  |
+| `navigate(path)` | Moves the admin router                                        |
+| `basePath`       | `/admin` in the starters                                      |
+| `id`             | Collection form views only. Undefined on the create route     |
 
-```ts title="src/questpie/server/views/wizard.ts"
-import { view } from "@questpie/admin/factories";
+<Callout type="warn" title="Introspection ships a fixed set of keys">
+	`.list()` reaches the view through a whitelist: `columns`, `defaultSort`,
+	`defaultFilters`, `quickFilters`, `orderable`, `searchable`, `filterable`,
+	`grouping`, `layout`, `outline`, `actions`. Keys of your own are dropped in
+	transit. `.form()` keeps `fields` and `sidebar`.
+</Callout>
 
-type WizardConfig = {
-	steps: Array<{
-		title: string;
-		fields: string[];
-	}>;
-};
+## The three kinds
 
-export default view<WizardConfig>("wizard", {
-	kind: "form",
-});
-```
+| Kind       | Route                                                          | Named from             |
+| ---------- | -------------------------------------------------------------- | ---------------------- |
+| `list`     | `/admin/collections/:name`                                     | `.list()`, through `v` |
+| `form`     | That path plus `/create` or `/:id`, and `/admin/globals/:name` | `.form()`, through `v` |
+| `document` | The collection create and edit routes                          | Nothing. See below     |
 
-```ts title="src/questpie/server/collections/products.ts"
-import { collection } from "#questpie/factories";
+`document` is the Notion-style screen shipped as `collection-document`. No
+server file registers it, and `.form()` offers only `form` views, so no typed
+call selects it. Mount `DocumentView` from `@questpie/admin/client` yourself.
 
-export const products = collection("products")
-	.fields(({ f }) => ({
-		name: f.text(120).label("Name").required(),
-		summary: f.textarea().label("Summary"),
-		price: f.number().label("Price"),
-	}))
-	.form(({ v, f }) =>
-		v.wizard({
-			steps: [
-				{ title: "Basics", fields: [f.name, f.summary] },
-				{ title: "Pricing", fields: [f.price] },
-			],
-		}),
-	);
-```
+## Naming a component from config
 
-## Component references
+A component reference is a name plus props. The server puts one in config. The
+client renders the React component registered under that name.
 
-Server component definitions give the `c` proxy typed props. The admin client renders the matching React component by registry key.
-
-```ts title="src/questpie/server/components/statusPill.ts"
+```ts title="src/questpie/server/components/status-pill.ts"
 import { component } from "@questpie/admin/factories";
 
-type StatusPillProps = {
-	text: string;
-	tone?: "default" | "success" | "warning";
-};
-
-export default component<StatusPillProps>("statusPill");
+export default component<{ text: string; tone?: "ok" | "warn" }>("status-pill");
 ```
 
-```tsx title="src/questpie/admin/components/statusPill.tsx"
-type StatusPillProps = {
-	text: string;
-	tone?: "default" | "success" | "warning";
-};
+```tsx title="src/questpie/admin/components/status-pill.tsx"
+type Props = { text: string; tone?: "ok" | "warn" };
 
-export default function StatusPill({
-	text,
-	tone = "default",
-}: StatusPillProps) {
-	const className =
-		tone === "success"
-			? "bg-green-50 text-green-700"
-			: tone === "warning"
-				? "bg-amber-50 text-amber-700"
-				: "bg-muted text-muted-foreground";
-
+export default function StatusPill({ text, tone }: Props) {
 	return (
-		<span className={`inline-flex rounded px-2 py-1 text-xs ${className}`}>
+		<span className={tone === "warn" ? "text-warning" : "text-success"}>
 			{text}
 		</span>
 	);
 }
 ```
 
-Then use the component reference from admin config:
+`c.statusPill({ text: "Priority", tone: "warn" })` now returns a reference to it.
+`c` reaches you in `.admin()`, `.list()` and `.actions()`. Everywhere else write
+the shape by hand: `{ type: "statusPill", props: { text: "Priority" } }`.
 
-```ts title="src/questpie/server/collections/orders.ts"
-export const orders = collection("orders")
-	.fields(({ f }) => ({
-		number: f.text(80).label("Order number").required(),
-		status: f
-			.select([
-				{ value: "new", label: "New" },
-				{ value: "paid", label: "Paid" },
-				{ value: "shipped", label: "Shipped" },
-			])
-			.label("Status"),
-	}))
-	.admin(({ c }) => ({
-		label: "Orders",
-		icon: c.icon("ph:shopping-cart"),
-	}))
-	.actions(({ a, c }) => ({
-		custom: [
-			a.action({
-				id: "mark-priority",
-				label: "Mark priority",
-				icon: c.statusPill({ text: "Priority", tone: "warning" }),
-				handler: () => ({
-					type: "success",
-					toast: { message: "Priority marker applied" },
-				}),
-			}),
-		],
-	}));
-```
+The two halves are keyed differently. The server key is the factory string, with
+kebab-case turned to camelCase. The client key is the camelCased file name. Name
+both files after the string and the two always line up.
 
-## Registry rules
+## Rules
 
-- Server config must stay serializable. Return component references, view names, fields, strings, numbers, booleans, arrays, objects, or server callbacks where the API explicitly accepts them.
-- Do not return React elements from server files. Put React in `src/questpie/admin/**`.
-- The factory string is the identity. Renaming a file does not rename `view("kanban")` or `component("statusPill")`.
-- Rerun codegen after adding or renaming any server or admin-client registry file.
+Server files stay serializable. Return references, names, strings, numbers,
+arrays and objects. React lives under `src/questpie/admin/`.
+
+On the server the factory string is the identity, not the file name. So
+`views/board.ts` may hold `view("board-view")`, and it reads as `v.boardView()`
+in config. The client is stricter. Name that file `board-view.tsx` and pass the
+same string, because codegen pairs the halves by file name and the router
+resolves the view by string.
+
+A server view, component or block with no client file fails `questpie generate`.
+The error names the file to create. The check runs one way only, so a
+client-only component is fine. `questpie dev` reruns codegen as you edit.
+
+## Where each topic lives
+
+| Topic                                     | Page                                                  |
+| ----------------------------------------- | ----------------------------------------------------- |
+| A screen at its own URL                   | [Custom pages](/docs/admin/custom-views/pages)        |
+| A tile on the dashboard                   | [Dashboard widgets](/docs/admin/custom-views/widgets) |
+| Stacked content an editor arranges        | [Blocks](/docs/schema/blocks)                         |
+| Sidebar, dashboard layout, branding       | [Configuration](/docs/admin/configuration)            |
+| `.admin()`, `.list()`, `.form()`, actions | [Collections and globals](/docs/admin/collections)    |
+
+## Next
+
+**[Custom pages](/docs/admin/custom-views/pages)** is the extension with no
+server half. One file, one URL, no collection involved.

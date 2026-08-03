@@ -1,21 +1,32 @@
 ---
-title: Collections and Globals
-description: Configure how collections and globals appear in the generated admin panel.
+title: Collections and globals
+description: The admin module adds five methods to a collection and two to a global. They decide what the panel calls a resource, which columns its list shows, how its form is laid out, and what a person can do to a row.
 kind: guide
 package: "@questpie/admin"
 ---
 
-The admin module extends the generated `collection()` and `global()` factories with UI-specific methods. These methods never replace access control or business logic. They describe labels, navigation, views, forms, preview, and actions for the admin surface that sits on top of your server schema.
+Your collection already has a list and a form. You never asked for them. So
+every method on this page is a correction, not a requirement. Reach for one when
+the sidebar reads `blogPosts`, or when the form is one long stack of inputs.
 
-## Enable the admin methods
+## The five methods
 
-Register `adminModule` in the server module list and rerun codegen. Codegen discovers the module's plugin and adds the admin methods to `#questpie/factories`.
+`@questpie/admin` adds them to the generated `collection()` and `global()`
+factories. They exist only while the module is registered. Each one stores a
+single key on the builder, so a second call replaces the first.
 
-```ts title="src/questpie/server/modules.ts"
-import { adminModule } from "@questpie/admin/modules/admin";
+| Method                         | What it decides                              | On a global |
+| ------------------------------ | -------------------------------------------- | ----------- |
+| `.admin(config)`               | The name, icon, sidebar group and sort order | Yes         |
+| `.list(({ v, f, a, c }) => …)` | The list renderer and everything on it       | No          |
+| `.form(({ v, f }) => …)`       | The create and the edit form                 | Yes         |
+| `.preview(config)`             | A live preview pane beside the form          | No          |
+| `.actions(({ a, c, f }) => …)` | Buttons of your own, run on the server       | No          |
 
-export default [adminModule] as const;
-```
+None of them is access control. Admin config arranges the UI. `.access()`
+decides who may read and write, and it still runs underneath every screen here.
+
+## One collection, configured
 
 ```ts title="src/questpie/server/collections/posts.ts"
 import { collection } from "#questpie/factories";
@@ -31,85 +42,110 @@ export const posts = collection("posts")
 			])
 			.label("Status")
 			.default("draft"),
-		excerpt: f.textarea().label("Excerpt"),
 		body: f.richText().label("Body"),
 		cover: f.upload({ to: "assets" }).label("Cover image"),
 	}))
+	.title(({ f }) => f.title)
 	.admin(({ c }) => ({
 		label: "Posts",
-		description: "Editorial content",
+		description: "Everything the blog publishes",
 		icon: c.icon("ph:article"),
 		group: "content",
 		order: 10,
 	}))
 	.list(({ v, f }) =>
 		v.collectionTable({
-			columns: [f.title, f.status, "updatedAt"],
+			columns: [f.status, "updatedAt"],
 			defaultSort: { field: "updatedAt", direction: "desc" },
-			searchable: [f.title],
-			filterable: [f.status],
-			realtime: true,
 		}),
 	)
 	.form(({ v, f }) =>
 		v.collectionForm({
-			sidebar: {
-				position: "right",
-				fields: [f.status, f.slug, f.cover],
-			},
+			sidebar: { fields: [f.status, f.slug, f.cover] },
 			fields: [
-				{
-					type: "section",
-					label: "Content",
-					fields: [f.title, f.excerpt, f.body],
-				},
+				{ type: "section", label: "Content", fields: [f.title, f.body] },
 			],
 		}),
-	)
-	.preview({
-		enabled: true,
-		position: "right",
-		url: ({ record, locale }) =>
-			`/${locale ?? "en"}/blog/${String(record.slug)}`,
-	})
-	.actions(({ a, c }) => ({
-		builtin: [a.create(), a.save(), a.delete(), a.duplicate()],
-		custom: [
-			a.action({
-				id: "open-preview",
-				label: "Open preview",
-				icon: c.icon("ph:arrow-square-out"),
-				handler: ({ itemId }) => ({
-					type: "redirect",
-					url: `/preview/posts/${itemId}`,
-					external: true,
-				}),
-			}),
-		],
-	}));
+	);
 ```
 
-## Collection methods
+```bash
+questpie generate
+```
 
-| Method                           | Purpose                                                                                              |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `.admin(config)`                 | Label, description, icon, sidebar group, sort order, visibility, and audit participation.            |
-| `.list(({ v, f, a, c }) => ...)` | List view choice, columns, sorting, filters, search, grouping, realtime, and list-level actions.     |
-| `.form(({ v, f }) => ...)`       | Create and edit form layout, sections, tabs, sidebar fields, and form view choice.                   |
-| `.preview(config)`               | Live preview URL builder, position, and default panel size. The URL function runs on the server.     |
-| `.actions(({ a, c, f }) => ...)` | Built-in actions and custom row, single-record, bulk, or header actions. Handlers run on the server. |
+`/admin/collections/posts` now sits under a Content heading, titled Posts, with
+an article icon. Its list shows the title, the status and when the row last
+changed, newest first. Its form has one Content section and a right sidebar
+holding status, slug and cover.
 
-`f` is a field-reference proxy, not a string you hand-write. Use `f.title`, `f.status`, and other registered field keys so codegen can keep the view config aligned with the collection schema.
+## The four proxies
 
-`v` is the view proxy. Built-ins include `v.collectionTable(...)`, `v.collectionForm(...)`, and `v.globalForm(...)`. Custom views become available on the same proxy after you add server and client view files.
+The callbacks hand you proxies, not strings you type by hand.
 
-`c` is the component proxy. It emits serializable component references such as `c.icon("ph:article")` or `c.badge({ text: "Live", color: "success" })`. The admin client resolves those references from its component registry.
+`f` is the field names. `f.title` evaluates to `"title"`, and TypeScript
+narrows it to the keys you declared in `.fields()`. Rename a field and the
+compiler points at every place that used it.
 
-`a` is the action proxy. It builds action definitions and built-in action names, then the admin runtime executes custom handlers on the server.
+`v` picks the renderer. `.list()` offers `v.collectionTable()` and
+`v.listView()`. `.form()` offers `v.collectionForm()`, and a global offers
+`v.globalForm()`. Your own views join the same proxy. Skip `v` and return a
+plain object, and you get the default renderer for that method.
+
+`c` builds a serializable component reference. `c.icon("ph:article")` becomes
+`{ type: "icon", props: { name: "ph:article" } }`. The client resolves that from
+its registry. `c.badge({ text, color })` is the other built-in. A name the
+registry does not have is a type error, not a runtime one.
+
+`a` is actions. A built-in reference is a function that also serializes to its
+own name, so `.list()` takes either `a.delete` or `a.delete()`. The `builtin`
+list in `.actions()` compares strings, so call it there: `a.delete()`.
+
+Every callback runs once, when the file loads. No request is in scope.
+
+## Columns add, form fields replace
+
+These two look symmetrical and are not.
+
+`.list({ columns })` is additive. The title column is always first, and your
+columns follow it. Everything else you declared stays in the column picker, so
+a person can still switch it on for themselves.
+
+`.form({ fields })` is exhaustive. A field you leave out of the layout is not on
+the form, and nobody can put it back. Sidebar fields are pulled out of the main
+column automatically, so listing one in both places renders it once.
+
+## Naming and placement
+
+`.admin()` is metadata. It never touches the database.
+
+| Key           | Effect                                                                 |
+| ------------- | ---------------------------------------------------------------------- |
+| `label`       | The sidebar name. Unset, the panel title-cases the key.                |
+| `description` | One line under the heading on the list screen.                         |
+| `icon`        | A `c.icon(…)` reference.                                               |
+| `group`       | Puts the resource in its own sidebar section.                          |
+| `order`       | Sorts within that section. Missing counts as `0`.                      |
+| `hidden`      | Drops it from the sidebar. The URL still answers.                      |
+| `audit`       | `false` keeps it out of the audit log. See [Audit](/docs/admin/audit). |
+
+`label` and `description` take a string, a `{ en, sk }` locale map, or a
+`{ key, fallback }` translation reference.
+
+### How a group becomes a section
+
+Collections with no `group` land in one Content section. Each distinct `group`
+value becomes its own section below that, titled from the value with the first
+letter capitalised. Sections sort alphabetically by group name, items inside
+sort by `order`. Globals always get their own Globals section last.
+
+That is the sidebar you get for free. Writing an explicit one in
+`config/admin.ts` replaces the whole arrangement, and `hidden` still applies.
+See [Configuration](/docs/admin/configuration).
 
 ## Globals
 
-Globals are singleton documents. Configure their admin metadata with `.admin()` and their singleton edit layout with `.form()`.
+A global holds one row, so it has one screen. It takes `.admin()` and `.form()`,
+with the same keys and the same layout vocabulary.
 
 ```ts title="src/questpie/server/globals/site-settings.ts"
 import { global } from "#questpie/factories";
@@ -117,57 +153,43 @@ import { global } from "#questpie/factories";
 export const siteSettings = global("siteSettings")
 	.fields(({ f }) => ({
 		siteName: f.text(120).label("Site name").required(),
-		homepageTitle: f.text(180).label("Homepage title"),
-		defaultSocialImage: f
-			.upload({ to: "assets" })
-			.label("Default social image"),
+		socialImage: f.upload({ to: "assets" }).label("Default social image"),
 	}))
-	.admin(({ c }) => ({
-		label: "Site settings",
-		icon: c.icon("ph:gear-six"),
-		group: "settings",
-		order: 1,
-	}))
+	.admin(({ c }) => ({ label: "Site settings", icon: c.icon("ph:gear-six") }))
 	.form(({ v, f }) =>
 		v.globalForm({
 			fields: [
 				{
 					type: "section",
 					label: "General",
-					fields: [f.siteName, f.homepageTitle, f.defaultSocialImage],
+					fields: [f.siteName, f.socialImage],
 				},
 			],
 		}),
 	);
 ```
 
-## Access and visibility
+<Callout type="warn" title="Import from the generated factory">
+	`collection()` and `global()` come from `#questpie/factories`, not from
+	`questpie`. Only the generated factory knows which modules are on. Only it
+	carries these five methods, and field types such as `f.richText()`.
+</Callout>
 
-Admin config is not security. Use collection or global `.access()` rules for permission decisions. Admin RPC routes, reactive field callbacks, preview URL generation, actions, widgets, and config reads are guarded by the admin auth contract, and the collection/global access rules still decide what data a user can read or mutate.
+## Where each topic lives
 
-`hidden: true` removes a resource from navigation, but it does not make the resource private. Use access rules for private data.
+| Topic                                           | Page                                          |
+| ----------------------------------------------- | --------------------------------------------- |
+| Columns, sorting, filters, grouping, reordering | [The list](/docs/admin/collections/list)      |
+| Sections, tabs, sidebars, fields that react     | [The form](/docs/admin/collections/form)      |
+| Your own buttons and the handlers behind them   | [Actions](/docs/admin/collections/actions)    |
+| A live page beside the form                     | [Preview](/docs/admin/collections/preview)    |
+| Writing a renderer of your own                  | [Custom views](/docs/admin/custom-views)      |
+| Sidebar, dashboard, branding, mounting          | [Configuration](/docs/admin/configuration)    |
+| Who may sign in at all                          | [Authentication](/docs/admin/auth)            |
+| Rules that allow, deny or filter                | [Access control](/docs/schema/access-control) |
+| The builder these methods extend                | [Collections](/docs/schema/collections)       |
 
-## Audit setting
+## Next
 
-When `auditModule` is installed, collections and globals participate in audit logging unless their admin config opts out.
-
-```ts
-export const imports = collection("imports")
-	.fields(({ f }) => ({
-		name: f.text(120).required(),
-		payload: f.json(),
-	}))
-	.admin({
-		label: "Imports",
-		audit: false,
-	});
-```
-
-Use this for high-volume technical records where recording every mutation would add noise.
-
-## Common mistakes
-
-- Import `collection()` and `global()` from `#questpie/factories` in app files. That generated factory knows which modules added fields and builder methods.
-- Keep admin display config in admin methods. Do not put UI-only fields into the database schema.
-- Keep `.access()` as the source of permission truth. Admin config can hide or arrange UI, but it does not grant access.
-- Rerun codegen after adding admin modules, custom views, custom components, blocks, or generated config files.
+**[The list](/docs/admin/collections/list)** is the screen most people spend
+their day on, and `.list()` is the method with the most in it.

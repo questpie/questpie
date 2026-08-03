@@ -1,15 +1,35 @@
 ---
 title: Authentication
-description: Use Better Auth with the admin role contract, setup flow, admin session helpers, and invitations.
+description: The admin admits one kind of session. A Better Auth session whose user holds the admin role. This page covers where that role comes from, what checks it, and how the first admin gets created.
 kind: guide
 package: "@questpie/admin"
 ---
 
-The admin panel uses the app's Better Auth instance. Access is granted only to sessions where `session.user.role === "admin"`. A signed-in user without that role is still not an admin user.
+Nobody has an account yet and the panel needs one. Then a second person joins
+and needs one too. Both have a built-in answer. Neither one is a row you insert
+by hand.
 
-## Required wiring
+## The rule
 
-Register the admin module and configure app auth. The starter admin model includes the Better Auth user collection shape that admin guards expect.
+The panel reads one field. `session.user.role`.
+
+| The session      | `/admin`                                 |
+| ---------------- | ---------------------------------------- |
+| `role: "admin"`  | In.                                      |
+| `role: "user"`   | Redirected to the login page.            |
+| No `role` at all | Redirected to the login page.            |
+| No session       | Redirected to the login page.            |
+| A banned user    | Better Auth refuses to open the session. |
+
+A signed-in user is not an admin user. Every check in the panel draws that line
+the same way. The client guard sends the browser back to the login page. The
+panel boots from one route, `getAdminConfig`. That route allows the admin role
+only. Your own code calls the helpers in
+[Protecting your own routes](/docs/admin/auth/protecting-routes).
+
+## Turn it on
+
+Register the module, then declare your auth config.
 
 ```ts title="src/questpie/server/modules.ts"
 import { adminModule } from "@questpie/admin/modules/admin";
@@ -30,136 +50,122 @@ export default authConfig({
 });
 ```
 
-Admin routes use the same app auth instance as your public app. Cookies flow through the generated client because the client sends requests with credentials.
-
-## Role contract
-
-The admin guard checks the active session user role.
-
-| Session role | Admin access                      |
-| ------------ | --------------------------------- |
-| `"admin"`    | Allowed.                          |
-| `"user"`     | Rejected.                         |
-| Missing role | Rejected.                         |
-| No session   | Rejected and redirected to login. |
-
-If you extend the Better Auth `user` collection, keep the admin starter fields and role propagation. The setup route expects the canonical `user` collection to include `id`, `role`, and `emailVerified`.
-
-## Session type contract
-
-`session.user.role` is not a convention to cast around. It is contributed by Better Auth's `admin()` plugin, folded through `authConfig()`, and emitted into generated `AppSessionUser`.
-
-When `adminModule` is installed, it depends on the starter module, and the starter module contributes the default `config.auth` with `admin()` and `bearer()`. Your app's `config/auth.ts` is merged on top. Admin-enabled apps should still keep the plugins explicit in app auth config so the contract is visible in the project and stable across scaffolded changes.
-
-After changing `modules.ts` or `config/auth.ts`, run:
-
 ```bash
 questpie generate
 ```
 
-Then `AppSession`, `AppSessionUser`, `AppConfig.auth`, route handler `session`, hooks, access rules, and services all see the merged auth graph.
+The generator folds the two together and rewrites `AppSession` and
+`AppSessionUser`. After that `session.user.role` is typed everywhere. In route
+handlers, hooks, access rules and services.
+
+The `admin()` plugin contributes `role`, so keep it on. It also stamps
+`role: "user"` on every user Better Auth creates, unless the caller names a
+role. `bearer()` is what lets the panel's own user actions forward your session
+as a token.
+
+<Callout type="info" title="What runs with no `config/auth.ts` at all">
+	`adminModule` pulls in `starterModule`. That module already ships `admin()`,
+	`bearer()` and `openAPI()`, with email and password on and email verification
+	required. Your own file merges on top. Plugins dedupe by id, so repeating one
+	is safe.
+</Callout>
+
+## The first admin
+
+The login page asks the server one question before anything else. Does any user
+hold the admin role? If none does, it sends you to `/admin/setup`.
+
+Setup wants a name, an email and a password of at least eight characters. It
+creates the user through Better Auth, sets `role` to `"admin"`, and marks the
+email verified. That last step is why a strict `requireEmailVerification` cannot
+lock you out of your own panel. Then it returns you to the login page. You are
+not signed in yet. Sign in.
+
+Once one admin exists, setup is shut. `createFirstAdmin` counts admin users
+first and refuses when the count is above zero. The route itself is public, and
+that count is the only thing guarding it.
+
+## The auth pages you get
+
+| Path                     | What it is                           |
+| ------------------------ | ------------------------------------ |
+| `/admin/login`           | Sign in.                             |
+| `/admin/setup`           | The first admin, while none exists.  |
+| `/admin/forgot-password` | Asks for a reset email.              |
+| `/admin/reset-password`  | Completes the reset from the link.   |
+| `/admin/oauth/consent`   | Approves scopes for an OAuth client. |
+
+The first four render on their own. No sidebar, no header, no session needed.
+The consent screen is different. It sits behind the same admin check as the rest
+of the panel. [MCP OAuth](/docs/agents/mcp-oauth) covers what it is for.
+
+All five share one layout. To replace it, put a component at
+`src/questpie/admin/components/admin-auth-layout.tsx`. The generator registers
+it under `adminAuthLayout`, and every page in the table picks it up.
+
+<Callout
+	type="warn"
+	title="Forgot password does nothing until you wire the email"
+>
+	Better Auth rejects the request with `RESET_PASSWORD_DISABLED` unless
+	`emailAndPassword.sendResetPassword` is set. QUESTPIE does not set it for you.
+	Add it in `config/auth.ts` and send through your own email adapter.
+</Callout>
+
+## Everyone after the first
+
+Setup is shut, so the next admin comes from the panel itself. Open
+`/admin/collections/user`. The list header has a **Create user** button. It asks
+for a name, an email, a password and a role. Pick the admin role and that person
+is an admin.
+
+The button is not a plain insert. It calls Better Auth's `createUser`, so the
+password is hashed the way a sign-up hashes it. It forwards your own session as
+a bearer token. That is why `bearer()` has to stay in your plugin list.
+
+Better Auth leaves `emailVerified` false on a user made this way. So keep
+`requireEmailVerification: false`, as the config above does, or send a
+verification email. Otherwise the new admin cannot sign in.
+
+A user's own form carries a **Reset password** action, calling
+`setUserPassword`. Reach for it when someone is locked out and your project has
+no reset email yet.
+
+<Callout type="warn" title="`InvitePage` and `AcceptInvitePage` do not work">
+	Both are exported from `@questpie/admin/client`, and neither is registered as
+	a page. They call `authClient.admin.createInvitation`, `getInvitation` and
+	`acceptInvitation`. Better Auth's `admin()` plugin has no such endpoints.
+	Invitations live in its `organization()` plugin.
+</Callout>
+
+## Checking the role yourself
+
+Inside a collection or a global, an access rule reads the session directly.
 
 ```ts
 .access({
-	update: ({ session }) => session?.user.role === "admin",
-	delete: ({ session }) => session?.user.role === "admin",
+	update: ({ session }) => session?.user?.role === "admin",
+	delete: ({ session }) => session?.user?.role === "admin",
 })
 ```
 
-Do not write `(session?.user as any)?.role`. If `role` is missing, the auth module/config/codegen chain is wrong and should be fixed at the source.
+Do not write `(session?.user as any)?.role`. The field is on the generated type
+already. If it is missing, your module list or your `config/auth.ts` is wrong.
+A cast hides that instead of fixing it.
 
-## Starter identity security boundary
+## Where each topic lives
 
-The starter module treats Better Auth's infrastructure collections as internal
-state. `session`, `account`, `verification`, and `apikey` deny user-mode generic
-CRUD and introspection even if your app-level default access allows CRUD to
-every signed-in user. Better Auth and trusted server code continue to use their
-system/database paths.
+| Topic                                           | Page                                                             |
+| ----------------------------------------------- | ---------------------------------------------------------------- |
+| Guarding a route or a page of your own          | [Protecting your own routes](/docs/admin/auth/protecting-routes) |
+| What the auth tables expose, and what they shut | [Identity tables](/docs/admin/auth/identity-tables)              |
+| Rules that allow, deny or filter a collection   | [Access control](/docs/schema/access-control)                    |
+| Mounting the panel, branding and navigation     | [Configuration](/docs/admin/configuration)                       |
+| The consent screen and the scopes behind it     | [MCP OAuth](/docs/agents/mcp-oauth)                              |
+| Who changed what, once they are in              | [Audit](/docs/admin/audit)                                       |
 
-The starter `user` collection is narrower:
+## Next
 
-- administrators may manage users,
-- a signed-in non-admin may read and edit only their own profile row,
-- auth-owned fields such as `email`, `emailVerified`, `role`, and ban state are
-  administrator-only through collection CRUD.
-
-Use Better Auth's dedicated identity flows for email, password, verification,
-session, and provider changes. Do not weaken these collection rules to make an
-identity screen work.
-
-QUESTPIE also hardens Better Auth's session list/revoke wire contract. The
-`list-sessions` response never returns reusable bearer session tokens. For
-compatibility with Better Auth clients, its historical `token` property contains
-the non-secret session row ID and `sessionId` contains the same value.
-`revoke-session` resolves that owned opaque ID to the bearer token only inside
-the server. Supplying a raw bearer token or another user's ID is a
-disclosure-safe no-op.
-
-## First admin setup
-
-The admin client includes a setup screen for the first admin account. When no admin user exists, the login page redirects to `/admin/setup`. The setup route creates the first user through Better Auth, marks the email as verified, and sets `role` to `"admin"`.
-
-After any admin user exists, setup refuses to create more users. Additional admin users should be created through the invitation flow or your own guarded user-management workflow.
-
-## Login and public auth pages
-
-`AdminRouter` includes the built-in pages for:
-
-| Page                     | Purpose                  |
-| ------------------------ | ------------------------ |
-| `/admin/login`           | Admin login.             |
-| `/admin/setup`           | First admin account.     |
-| `/admin/invite`          | Create an invitation.    |
-| `/admin/accept-invite`   | Accept an invitation.    |
-| `/admin/forgot-password` | Request reset email.     |
-| `/admin/reset-password`  | Complete password reset. |
-
-These pages use the admin auth layout. Override `src/questpie/admin/components/admin-auth-layout.tsx` when the shell needs brand-specific structure.
-
-## Invitations
-
-The invitation screens use the Better Auth admin plugin APIs exposed through the app auth instance. Admin users can invite another user, assign a role, and send an invitation message. The recipient accepts the invitation through `/admin/accept-invite`.
-
-For a project-specific flow, keep the same role rule: users who should access admin must end up with `role: "admin"` on the session user.
-
-## Server helpers
-
-Use helpers from `@questpie/admin/server` when protecting framework routes or server code outside the built-in admin router.
-
-```ts
-import {
-	getAdminSession,
-	isAdminUser,
-	requireAdminAuth,
-} from "@questpie/admin/server";
-import { app } from "#questpie";
-
-export async function loader(request: Request) {
-	const redirect = await requireAdminAuth({
-		request,
-		app,
-		loginPath: "/admin/login",
-	});
-
-	if (redirect) return redirect;
-
-	const session = await getAdminSession({ request, app });
-	const allowed = await isAdminUser({ request, app });
-
-	return { session, allowed };
-}
-```
-
-`requireAdminAuth()` returns a redirect `Response` when the request is not an admin request, otherwise it returns `null`.
-
-## Client auth helpers
-
-The admin client exports `createAdminAuthClient()` and `useAuthClient()` for screens that need auth actions from React. Use these for custom admin pages instead of reaching into Better Auth from every component.
-
-## Common mistakes
-
-- Do not treat any authenticated user as an admin. Check for `role: "admin"`.
-- Do not cast `session.user` to `any` for role checks. Fix the generated session type instead.
-- Do not replace the starter user collection from scratch. Extend it while preserving the fields and session role used by admin.
-- Do not expose custom admin routes without `requireAdminAuth()` or an equivalent role check.
-- Do not hide admin UI as your only protection. Server helpers and collection/global access rules still need to enforce data access.
+**[Protecting your own routes](/docs/admin/auth/protecting-routes)** covers the
+guards in `@questpie/admin/server`, and the one case where they let a request
+through instead of stopping it.

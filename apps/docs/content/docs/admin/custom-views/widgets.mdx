@@ -1,0 +1,120 @@
+---
+title: Dashboard widgets
+description: A widget is your React on one dashboard tile. The server decides where it sits and what it loads, and hands the whole item to your component.
+kind: guide
+package: "@questpie/admin"
+---
+
+The admin ships eight widget types: `stats`, `value`, `chart`, `table`,
+`timeline`, `progress`, `recentItems` and `quickActions`. When none of them says
+what you need, write the ninth.
+
+## The tile
+
+The client half is one file under `src/questpie/admin/widgets/`.
+
+```tsx title="src/questpie/admin/widgets/stale-drafts.tsx"
+import {
+	useServerWidgetData,
+	type WidgetComponentProps,
+	widget,
+} from "@questpie/admin/client";
+
+function StaleDraftsWidget({ config }: WidgetComponentProps) {
+	const { data, isLoading } = useServerWidgetData<{ titles: string[] }>(
+		config.id,
+		{ enabled: Boolean(config.hasLoader) },
+	);
+
+	return (
+		<div className="rounded-lg border p-4">
+			<h3 className="mb-2 text-sm font-medium">{config.title}</h3>
+			{isLoading && <p className="text-muted-foreground text-sm">Loading</p>}
+			<ul className="text-sm">
+				{(data?.titles ?? []).map((title) => (
+					<li key={title}>{title}</li>
+				))}
+			</ul>
+		</div>
+	);
+}
+
+export default widget("stale-drafts", { component: StaleDraftsWidget });
+```
+
+No card wraps your markup. The built-in widgets draw their own, and so must
+yours.
+
+## The item that places it
+
+The server half is a dashboard item in `config/admin.ts`.
+
+```ts title="src/questpie/server/config/admin.ts"
+import { adminConfig } from "#questpie/factories";
+import type { WidgetFetchContext } from "@questpie/admin/factories";
+
+export default adminConfig({
+	dashboard: {
+		items: [
+			{
+				id: "stale-drafts",
+				type: "custom",
+				widgetType: "staleDrafts",
+				label: "Stale drafts",
+				span: 2,
+				loader: async ({ collections }: WidgetFetchContext) => {
+					const { docs } = await collections.posts.find({
+						where: { status: "draft" },
+						limit: 5,
+					});
+					return { titles: docs.map((doc: { _title: string }) => doc._title) };
+				},
+			},
+		],
+	},
+});
+```
+
+Run `questpie generate` and the tile is on `/admin`.
+
+<Callout type="warn" title="`widgetType` is the file name, camelCased">
+	`stale-drafts.tsx` registers as `staleDrafts`. The string you pass to
+	`widget()` plays no part in the lookup. A `widgetType` that resolves to
+	nothing renders an unknown-widget card naming the type it wanted.
+</Callout>
+
+## What the component gets
+
+The dashboard item arrives whole on `config`, minus the function keys the server
+keeps to itself.
+
+| Key          | What it is                                                |
+| ------------ | --------------------------------------------------------- |
+| `id`         | Required. `useServerWidgetData` looks the loader up by it |
+| `widgetType` | The registry key, so the client can find your component   |
+| `title`      | Your `label`, copied under the name the widgets expect    |
+| `props`      | Any object you want. It arrives untouched                 |
+| `span`       | Grid columns. Clamped to 1 to 12. Also passed as a prop   |
+| `rowSpan`    | Grid rows                                                 |
+| `hasLoader`  | `true` when the item declared a `loader`                  |
+
+Keys of your own survive too. A dashboard item is spread through as it stands.
+That is the opposite of `.list()` config on a view.
+
+## The loader
+
+`loader` runs on the server and never reaches the browser. The config route
+strips it and sets `hasLoader` in its place. Your component then fetches the
+result by widget id.
+
+The context carries `collections`, `globals` and `db`, plus the rest of the app
+context. The fetch route refuses anyone whose session is not an admin.
+
+`access` is the other function key. Give it `false` or a predicate, and a tile
+the current user may not see never leaves the server. Collection-bound widgets
+are filtered by read access as well.
+
+## Next
+
+**[Configuration](/docs/admin/configuration)** covers the rest of the dashboard:
+sections, columns, header actions and the eight built-in widget types.

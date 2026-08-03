@@ -1,0 +1,104 @@
+---
+title: Custom pages
+description: A page is one React file under the admin that gets its own URL. It answers to no collection, so nothing about it is generated and nothing on the server declares it.
+kind: guide
+package: "@questpie/admin"
+---
+
+An import log. A reconciliation report. A screen that reads three collections
+and writes none. Those are pages.
+
+## One file
+
+Put it in `src/questpie/admin/pages/`. The directory does not exist in a fresh
+app, so create it.
+
+```tsx title="src/questpie/admin/pages/reports.tsx"
+import { AdminViewHeader, AdminViewLayout, page } from "@questpie/admin/client";
+
+function ReportsPage() {
+	return (
+		<AdminViewLayout header={<AdminViewHeader title="Reports" />}>
+			<p className="text-muted-foreground text-sm">Nothing here yet.</p>
+		</AdminViewLayout>
+	);
+}
+
+export default page("reports", {
+	component: ReportsPage,
+	path: "/reports",
+	label: "Reports",
+});
+```
+
+Run `questpie generate`. The page is live at `/admin/reports`.
+
+The component takes no props. Everything it needs comes from the admin hooks:
+`useCollectionList`, `useCollectionItem`, `useCurrentUser`, `useBrand`. They are
+the same hooks the built-in screens use.
+
+## The options
+
+| Option      | What it does                                               |
+| ----------- | ---------------------------------------------------------- |
+| `component` | The React component, or an async function that imports one |
+| `path`      | The URL under the admin base path. Required to route       |
+| `label`     | The sidebar label. Falls back to the formatted page name   |
+| `icon`      | A React component. An icon name string is ignored here     |
+| `group`     | Carried on the nav entry. Nothing in the sidebar reads it  |
+| `order`     | Carried the same way, default `0`. Nothing sorts by it     |
+| `showInNav` | `false` keeps the page routable but out of the sidebar     |
+
+<Callout type="warn" title="No `path`, no route">
+	The router only matches a page that declares `path`. Without one the file
+	still registers and still generates. No URL reaches it.
+</Callout>
+
+## Getting it into the sidebar
+
+The server owns the sidebar, and its default lists collections and globals. A
+page is not in it. Add an item in `config/admin.ts`.
+
+```ts title="src/questpie/server/config/admin.ts"
+import { adminConfig } from "#questpie/factories";
+
+export default adminConfig({
+	sidebar: {
+		sections: [{ id: "tools", title: "Tools" }],
+		items: [
+			{
+				sectionId: "tools",
+				type: "link",
+				label: "Reports",
+				href: "/admin/reports",
+				icon: { type: "icon", props: { name: "ph:chart-bar" } },
+			},
+		],
+	},
+});
+```
+
+A `link` item takes the URL you give it, so write the full path including
+`/admin`. There is also a `page` item keyed by `pageId`, the camelCased file
+name. Prefer `link`. The `page` item builds its href from `path` alone. It never
+adds the admin base path, so the link misses the route it names.
+
+## Lazy loading
+
+`component` also accepts a loader, so a heavy page can stay out of the first
+bundle. Write it as an `async` function. The router only calls a loader whose
+constructor is `AsyncFunction`, and renders anything else as a component.
+
+```ts
+export default page("reports", {
+	component: async () => ({
+		default: (await import("./reports-screen.js")).ReportsScreen,
+	}),
+	path: "/reports",
+});
+```
+
+## Next
+
+**[Dashboard widgets](/docs/admin/custom-views/widgets)** is the smaller
+version: your React on a tile, arranged by the server.

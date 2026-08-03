@@ -70,13 +70,39 @@ Each key takes one function or an array of them.
 | `beforePurge`, `afterPurge`           | purge                            | a frozen copy of the row |
 | `beforeTransition`, `afterTransition` | a workflow stage move            | the record               |
 
+```mermaid
+flowchart LR
+  subgraph create
+    direction LR
+    c1(beforeOperation) --> c2(beforeValidate) --> c3(beforeChange) --> cDB[[INSERT]] --> c4(afterChange) --> c5(afterRead)
+  end
+  subgraph update
+    direction LR
+    u1(beforeOperation) --> u2(beforeValidate) --> u3(beforeChange) --> uDB[[UPDATE]] --> u4(afterChange) --> u5(afterRead)
+  end
+  subgraph delete
+    direction LR
+    d1(beforeOperation) --> d2(beforeDelete) --> dDB[[DELETE]] --> d3(afterDelete) --> d4(afterRead)
+  end
+  subgraph purge
+    direction LR
+    p1(beforeOperation) --> p2(beforePurge) --> pDB[[PURGE]] --> p3(afterPurge)
+  end
+  subgraph read
+    direction LR
+    r1(beforeOperation) --> r2(beforeRead) --> rDB[[SELECT]] --> r3(afterRead)
+  end
+
+  classDef always fill:var(--primary),stroke:var(--primary),color:var(--primary-foreground)
+  classDef db fill:var(--surface-high),stroke:var(--border-strong),color:var(--foreground)
+  class c1,u1,d1,p1,r1,c5,u5,d4,r3 always
+  class cDB,uDB,dDB,pDB,rDB db
 ```
-create   beforeOperation → beforeValidate → beforeChange → INSERT → afterChange → afterRead
-update   beforeOperation → beforeValidate → beforeChange → UPDATE → afterChange → afterRead
-delete   beforeOperation → beforeDelete   → DELETE → afterDelete → afterRead
-purge    beforeOperation → beforePurge    → PURGE  → afterPurge
-read     beforeOperation → beforeRead     → SELECT → afterRead
-```
+
+Coral marks the two that run on every operation they can. `beforeOperation`
+opens all five. `afterRead` closes every chain that returns a row, which is all
+of them but `purge`, because a purged row is not there to return. The boxed step
+is the database. Everything to its left can still change what lands.
 
 ### Before the write
 

@@ -38,7 +38,10 @@ export default collection("product")
 			.text(20)
 			.required()
 			.zod((schema) => schema.refine(isSku, "Use SKU-000000")),
-		// Replace it. The value type narrows to the schema's output.
+		// Replace it. The value type narrows to the schema's output. Shown on
+		// f.json() because it is the shortest way to demonstrate a replacement.
+		// For keys this fixed, f.object() is the better field: it gives each one
+		// its own schema, label and admin control, in the same jsonb column.
 		settings: f.json().zod(() =>
 			z.object({
 				theme: z.enum(["light", "dark"]),

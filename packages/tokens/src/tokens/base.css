@@ -56,14 +56,19 @@ p:not(.truncate) {
 	text-wrap: pretty;
 }
 
+/* No colour here, on purpose.
+ *
+ * This file is unlayered, so a declaration in it outranks anything in
+ * `@layer utilities` no matter the specificity. A blanket `a { color: … }`
+ * therefore painted every link in the coral, including the ones whose colour
+ * a utility class had already chosen: every item in the docs sidebar, not just
+ * the active one, which is the opposite of a scarce accent.
+ *
+ * Which links carry the accent is an application decision, not a token one.
+ * The token is `--primary-text`. The app says where it lands. */
 a {
-	color: var(--primary-text);
 	text-decoration: none;
 	transition: color var(--duration-base) var(--ease-standard);
-}
-
-a:hover {
-	color: var(--foreground);
 }
 
 button,

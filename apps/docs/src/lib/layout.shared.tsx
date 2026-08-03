@@ -6,7 +6,10 @@ export function baseOptions(): BaseLayoutProps {
 	return {
 		nav: {
 			url: "/",
-			title: <Logo />,
+			/* Sized down. The asset's intrinsic 196x34 filled roughly seventy
+			   percent of the sidebar, which made the wordmark the loudest thing
+			   on a screen whose job is the page tree. */
+			title: <Logo className="h-6 w-auto" />,
 			transparentMode: "always",
 		},
 		searchToggle: {

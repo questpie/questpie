@@ -1,0 +1,101 @@
+---
+title: Identity tables
+description: Better Auth's own tables arrive as ordinary collections. Four of them refuse generic CRUD outright, the user table is narrower than it looks, and the session endpoints never hand back a reusable token.
+kind: reference
+package: questpie
+---
+
+`starterModule` contributes these, and `adminModule` pulls `starterModule` in.
+So every admin app has them whether or not it asked.
+
+| Collection     | Generic CRUD                                 |
+| -------------- | -------------------------------------------- |
+| `user`         | Admins manage all. Others see their own row. |
+| `session`      | Closed.                                      |
+| `account`      | Closed.                                      |
+| `verification` | Closed.                                      |
+| `apikey`       | Closed.                                      |
+
+## The four closed tables
+
+`session`, `account`, `verification` and `apikey` set `read`, `create`, `update`
+and `delete` to `false`. That holds even when your app's `defaultAccess` opens
+everything to any signed-in user. A rule written on the collection wins over the
+app default.
+
+Their secret columns are shut a second time, at field level.
+
+| Collection     | Fields closed again                                  |
+| -------------- | ---------------------------------------------------- |
+| `session`      | `token`                                              |
+| `account`      | `password`, `accessToken`, `refreshToken`, `idToken` |
+| `verification` | `value`                                              |
+| `apikey`       | `key`                                                |
+
+Better Auth still writes `session`, `account` and `verification`. It goes
+through its own database adapter, not through collection CRUD. These rules never
+see it, so closing the collection does not break sign-in.
+
+`apikey` is the odd one out. QUESTPIE ships the table, but no module turns on an
+API-key plugin. Nothing writes it until you add one.
+
+## The user table
+
+| Operation | Who                                                 |
+| --------- | --------------------------------------------------- |
+| `read`    | Admins read every row. Anyone else reads their own. |
+| `create`  | Admins.                                             |
+| `update`  | Admins, and the signed-in user on their own row.    |
+| `delete`  | Admins.                                             |
+
+Read for a non-admin is not a yes or a no. The rule returns the filter
+`{ id: userId }`, so a list narrows to one row instead of failing. With no
+session it returns `false`.
+
+Seven fields are admin-only on create and update, whoever owns the row.
+
+| Field                               | Why                               |
+| ----------------------------------- | --------------------------------- |
+| `email`, `emailVerified`            | Better Auth owns the identity.    |
+| `role`                              | Otherwise anyone promotes anyone. |
+| `banned`, `banReason`, `banExpires` | Moderation is not self-service.   |
+| `image`                             | A hook writes it from `avatar`.   |
+
+So a signed-in person can edit their own name and their own avatar. Nothing else
+on the row. Changing an email or a password is not a collection write at all.
+Use Better Auth's own flows.
+
+`avatar` is an upload to the `assets` collection, and it stays open. A
+`beforeChange` hook resolves it and writes the asset URL into `image`, after the
+field rules have run. So the two never drift.
+
+## Sessions on the wire
+
+Two Better Auth endpoints do not reach Better Auth unchanged. Both sit under
+`/auth`, below your handler's base path. That is `/api` in the starters.
+
+QUESTPIE projects `GET /auth/list-sessions` before it goes out. The response
+never carries a reusable bearer token. Each row's historical `token` property
+holds the session row id instead, and `sessionId` holds the same value. The list
+puts the current session first, sorts the rest by newest, and cuts to 100 rows.
+Each row also carries `isCurrent`.
+
+`POST /auth/revoke-session` takes that opaque id. The server lists your own
+sessions, finds the matching row, and only then calls Better Auth with the real
+token. Pass a raw bearer token, or another user's id, and you get
+`{ status: true }` and nothing happens.
+
+<Callout type="warn" title="Do not loosen these to make a screen work">
+	An account screen that needs more than this wants a route of its own, running
+	the check in server code. Opening `session` or `account` to read exposes
+	tokens and password hashes to every signed-in caller.
+</Callout>
+
+## Where each topic lives
+
+| Topic                                   | Page                                          |
+| --------------------------------------- | --------------------------------------------- |
+| Who may sign in to the panel            | [Authentication](/docs/admin/auth)            |
+| How field rules and filters resolve     | [Access control](/docs/schema/access-control) |
+| Extending a collection a module ships   | [Modules](/docs/code/modules)                 |
+| The `assets` collection behind `avatar` | [Uploads](/docs/schema/collections/uploads)   |
