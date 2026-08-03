@@ -68,8 +68,8 @@ export async function pinComment(
 
 Skip that check and `create` throws `CrdtAnchorError` with
 `UNACKNOWLEDGED_STATE`. So does calling it inside `transaction()`. A bad offset
-or a backwards range throws `INVALID_INPUT` instead. Those error classes have no
-public export, so match on `error.name` if you would rather catch than check.
+or a backwards range throws `INVALID_INPUT` instead. `CrdtAnchorError` is
+exported from `questpie/client`, not from `questpie/crdt`.
 
 A range must be ordered and non-empty when you make it. Later edits may collapse
 it onto a single offset, and that still resolves.
@@ -119,7 +119,7 @@ for a sentence that is gone. It is not a failure you forgot to handle.
 
 ## The working result
 
-A comment thread survives a morning of other people's typing. It follows its
-sentence up and down the document, with no offsets stored anywhere. When the
-sentence is replaced wholesale, the thread says so and still shows the words it
-was written about.
+You have a comment table and a highlight that stays on its sentence. Other
+people type above it all morning and the highlight does not drift, because no
+offset is stored anywhere. When the sentence is replaced wholesale, the thread
+says so and still shows the words it was written about.

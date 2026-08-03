@@ -156,9 +156,9 @@ The admin needs a React component under the same name. Put it in the admin
 target's `fields/` directory.
 
 ```tsx title="src/questpie/admin/fields/color.tsx"
-import { field } from "@questpie/admin/client";
+import { field, type FieldComponentProps } from "@questpie/admin/client";
 
-function ColorField({ value, onChange }) {
+function ColorField({ value, onChange }: FieldComponentProps<string>) {
 	return (
 		<input
 			type="color"

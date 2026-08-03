@@ -5,9 +5,9 @@ kind: guide
 package: questpie
 ---
 
-Your document opened read-only and you did not ask it to. Or a field is missing
-from the handle. Both answers are in the collection file, not in the CRDT
-config.
+Your document opened read-only and you did not ask it to. Or a field you marked
+throws the moment you touch it. Both answers are in the collection file, not in
+the CRDT config.
 
 ## The document grant
 
@@ -23,9 +23,9 @@ empty `input`, because there is no patch yet. So it has to decide on the row
 alone. A rule that returns a row filter is matched against that one row. A rule
 that throws is read as a refusal.
 
-Fail the `read` rule and the open is refused outright. Pass `read` but fail
-`update` and you asked for more than you have. Add `fallback: "view"` to take
-the read-only session instead of failing.
+Fail the `read` rule and the open is refused outright. Pass `read`, fail
+`update`, and a `mode: "edit"` open is refused too. Add `fallback: "view"` to
+take the read-only session instead.
 
 <Callout type="warn" title="Anonymous is never an option">
 	Opening a session needs a user session, an OAuth principal or an agent
@@ -37,11 +37,11 @@ the read-only session instead of failing.
 
 Each marked field is graded separately, and the document grant caps it.
 
-| What you declared                        | What the browser gets                |
-| ---------------------------------------- | ------------------------------------ |
-| nothing                                  | `edit`, when the document has `edit` |
-| `fields: { content: { read: false } }`   | the field is absent entirely         |
-| `fields: { content: { update: false } }` | `view` on that field                 |
+| What you declared                        | What the browser gets                 |
+| ---------------------------------------- | ------------------------------------- |
+| nothing                                  | `edit`, when the document has `edit`  |
+| `fields: { content: { read: false } }`   | no grant, and every call on it throws |
+| `fields: { content: { update: false } }` | `view` on that field                  |
 
 ```ts title="src/questpie/server/collections/articles.ts"
 .access({
@@ -79,7 +79,7 @@ that in one line, setting `readOnly` on the textarea.
 
 <Callout type="info" title="A refused open says nothing about why">
 	Every failure on the open route answers the same way, HTTP 404 with
-	`CRDT_UNAVAILABLE`. A failed rule, a missing engine and an anonymous caller
+	`CRDT_UNAVAILABLE`. A failed rule, a short `secret` and an anonymous caller
 	all look identical in the browser. Work out which one it was on the server.
 </Callout>
 
