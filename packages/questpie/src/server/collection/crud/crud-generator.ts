@@ -662,6 +662,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			skipFieldFiltering?: boolean;
 			skipOutputHooks?: boolean;
 			skipReadLifecycle?: boolean;
+			onAccessEvaluated?: (access: boolean | AccessWhere) => void;
 		},
 	): Promise<PaginatedResult<T> | GroupedPaginatedResult<T> | T | null> {
 		// Normalize context FIRST to ensure locale defaults are applied.
@@ -728,6 +729,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							null,
 							options,
 						)));
+				findOptions?.onAccessEvaluated?.(accessWhere);
 
 				// Access explicitly denied
 				if (accessWhere === false) {
@@ -3775,12 +3777,18 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const db = this.getDb(context);
 			if (!this.versionsTable) return [];
 			const normalized = this.normalizeContext(context);
-
+			const requestedWhere = { id: options.id } as Where;
+			let accessWhere: boolean | AccessWhere | undefined;
 			const owner = await this._executeFind(
-				{ where: { id: options.id }, includeDeleted: true },
+				{ where: requestedWhere, includeDeleted: true },
 				normalized,
 				"one",
-				{ skipOutputHooks: true },
+				{
+					skipOutputHooks: true,
+					onAccessEvaluated: (result) => {
+						accessWhere = result;
+					},
+				},
 			);
 			if (!owner) {
 				throw ApiError.forbidden({
@@ -3789,6 +3797,14 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					reason: "User does not have permission to read version history",
 				});
 			}
+			if (accessWhere === undefined || accessWhere === false) {
+				throw ApiError.forbidden({
+					operation: "read",
+					resource: `${this.state.name} versions`,
+					reason: "User does not have permission to read version history",
+				});
+			}
+			this.assertVersionAccessWhereCompilable(accessWhere);
 
 			let query: any;
 
@@ -3804,6 +3820,20 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const i18nVersionsFallbackTable = needsFallback
 				? alias(this.i18nVersionsTable!, "i18n_v_fallback")
 				: null;
+			const versionWhere = this.buildWhereClause(
+				this.mergeWhere(requestedWhere, accessWhere)!,
+				useI18n,
+				this.versionsTable,
+				normalized,
+				undefined,
+				i18nVersionsCurrentTable,
+				i18nVersionsFallbackTable,
+			);
+			if (!versionWhere) {
+				throw new Error(
+					`Cannot compile version-history access predicate for '${this.state.name}'`,
+				);
+			}
 
 			if (useI18n && i18nVersionsCurrentTable) {
 				// When we have i18n, use select-from-join pattern
@@ -3856,7 +3886,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 
 				query = query
-					.where(eq(getColumn(this.versionsTable!, "id")!, options.id))
+					.where(versionWhere)
 					.orderBy(
 						sql`${getColumn(this.versionsTable!, "versionNumber")!} ASC`,
 					);
@@ -3865,7 +3895,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				query = db
 					.select(this.buildVersionsSelectObject(normalized))
 					.from(this.versionsTable)
-					.where(eq(getColumn(this.versionsTable!, "id")!, options.id))
+					.where(versionWhere)
 					.orderBy(
 						sql`${getColumn(this.versionsTable!, "versionNumber")!} ASC`,
 					);
@@ -3895,6 +3925,44 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 			return rows;
 		};
+	}
+
+	private assertVersionAccessWhereCompilable(
+		accessWhere: true | AccessWhere,
+	): void {
+		if (accessWhere === true) return;
+
+		const visit = (where: AccessWhere): void => {
+			for (const [key, value] of Object.entries(where)) {
+				if (key === "AND" || key === "OR") {
+					if (Array.isArray(value)) {
+						for (const condition of value) visit(condition as AccessWhere);
+					}
+					continue;
+				}
+				if (key === "NOT") {
+					if (value && typeof value === "object") {
+						visit(value as AccessWhere);
+					}
+					continue;
+				}
+
+				const field = this.state.fieldDefinitions?.[key];
+				const isVersionField = !!field || !!getColumn(this.versionsTable!, key);
+				if (
+					key === "RAW" ||
+					!!this.state.relations?.[key] ||
+					field?.getLocation() === "virtual" ||
+					!isVersionField
+				) {
+					throw new Error(
+						`Cannot compile version-history access predicate '${this.state.name}.${key}'`,
+					);
+				}
+			}
+		};
+
+		visit(accessWhere);
 	}
 
 	/**

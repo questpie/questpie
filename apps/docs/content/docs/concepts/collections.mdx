@@ -163,6 +163,8 @@ collection("pages").options({
 });
 ```
 
+`findVersions()` enforces the collection's `read` rule against both the current owner row and every returned snapshot. An `AccessWhere` predicate is compiled against the version and localized-version tables before `limit` and `offset`, so historical tenant boundaries cannot be bypassed through pagination. Snapshot scalar and localized-field predicates are supported; relation, raw SQL, virtual-field, and unknown-field predicates fail closed because they cannot be evaluated faithfully against historical state.
+
 #### Draft / publish workflow
 
 Nest a `workflow` under `versioning` to add staged content. `workflow: true` gives the stages `["draft", "published"]`; the object form lets you name stages and constrain transitions:
