@@ -405,6 +405,16 @@ export function extractAppServices(
 		t: app.t,
 	};
 
+	/* `tables` was declared on this shape and on the emitted context type, but
+	   nothing ever assigned it, so `ctx.tables` typechecked and came back
+	   undefined. A getter rather than a value because `app.tables` rebuilds the
+	   record on every read, and most handlers never touch it. */
+	Object.defineProperty(result, "tables", {
+		configurable: true,
+		enumerable: true,
+		get: () => app.tables,
+	});
+
 	const serviceDefs = app._serviceDefs ?? app.config?.services;
 	if (serviceDefs) {
 		const services: Record<string, unknown> = {};

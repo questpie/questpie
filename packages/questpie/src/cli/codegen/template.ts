@@ -957,6 +957,10 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		lines.push('\tlogger: _AppQuestpie["logger"];');
 		lines.push('\tsearch: _AppQuestpie["search"];');
 		lines.push('\trealtime: _AppQuestpie["realtime"];');
+		// Set by extractAppServices but never emitted, so ctx.executor and
+		// ctx.observability were on the object and rejected by the compiler.
+		lines.push('\texecutor: _AppQuestpie["executor"];');
+		lines.push('\tobservability: _AppQuestpie["observability"];');
 		lines.push("\tchannels: ChannelsService<AppChannels>;");
 		lines.push("\tcrdt: AppCrdtServer;");
 		lines.push("");
