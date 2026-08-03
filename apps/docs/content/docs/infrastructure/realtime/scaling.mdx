@@ -1,0 +1,199 @@
+---
+title: Scaling
+description: A live query that re-runs per subscriber is correct at every size and affordable only at some sizes. This page is the modeling that decides which one you have.
+kind: guide
+package: questpie
+---
+
+Every snapshot QUESTPIE pushes was recomputed from the database under that
+subscriber's own access. That is what makes it correct, and it is also the bill:
+one authoritative query per subscription group woken by a write it cannot be
+proven unrelated to. Writes landing while a group already recomputes collapse
+into one further query, so the count that matters is groups woken, not writes.
+
+## Three concerns that are not the same thing
+
+### Scope
+
+An own scalar column the topic filters on by equality, which narrows which
+groups a write can wake. The narrowing happens in memory against the outbox
+projection, so an index on it pays for the surviving queries, not for routing.
+It partitions work. It does not authorize anything.
+
+### Access
+
+Your `.access()` rules, re-evaluated from current database state on every
+recompute. A routing guard or a client-side filter never grants a row.
+
+### Client composition
+
+Joining, ordering, limiting and deriving views from rows that are already
+authorized. That belongs in the client, over `@questpie/tanstack-db`.
+[Reactive apps](/docs/client/reactive-apps) sizes subscriptions in React.
+
+## Put the scope on a column
+
+```ts title="src/questpie/server/collections/activity.ts"
+import { index } from "questpie/drizzle-pg-core";
+import { collection } from "#questpie/factories";
+
+export const activity = collection("activity")
+	.fields(({ f }) => ({
+		scopeId: f.text(128).required(),
+		actorId: f.text(128).required(),
+		message: f.textarea().required(),
+	}))
+	.indexes(({ table }) => [
+		index("activity_scope_created_idx").on(table.scopeId, table.createdAt),
+	]);
+```
+
+The outbox stores a shallow scalar projection of the changed row, so only a real
+own column can route. Membership expressed through a relation cannot, however
+well that relation is indexed.
+
+When one scope grows too large, split it on a stable parent key or an immutable
+bucket key. Moving time windows, `LIMIT`/`OFFSET` pages and rankings are not
+partitions, because ordinary writes move rows across those boundaries.
+
+## What a subscription group is keyed by
+
+Two subscribers share one group, and therefore one query per wake, only when
+the topic shape matches and all five of these agree.
+
+| Part        | Value                                                                     |
+| ----------- | ------------------------------------------------------------------------- |
+| Identity    | `shared:<key>`, `principal:<userId>`, `oauth:<tokenId>`, or `edge:<uuid>` |
+| Scope       | Whatever `subscriptionScope` returned, or `null`                          |
+| Locale      | The topic's content locale                                                |
+| Stage       | The resolved publish stage                                                |
+| Access mode | `user` or `system`                                                        |
+
+### `subscriptionScope`
+
+One resolver on the app config, run once per realtime connection and frozen for
+its lifetime. Reconnecting resolves it again.
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { runtimeConfig } from "questpie/app";
+
+import env from "./env";
+
+export default runtimeConfig({
+	db: { url: env.DATABASE_URL },
+	realtime: {
+		subscriptionScope: ({ request, session }) => {
+			if (!session) return null;
+			return request?.headers.get("x-workspace-id") ?? null;
+		},
+	},
+});
+```
+
+`null` or `undefined` means explicitly unscoped. Any other value must be a
+non-empty string of at most 256 UTF-8 bytes, or QUESTPIE throws for you. The
+value only ever appears inside the server group key, never in an observer label
+or an error payload.
+
+<Callout type="info" title="A scope partitions work, it does not authorize">
+	Nothing is trusted because it arrived in a scope. Every row in every snapshot
+	is still checked against the subscriber's own access rules on every recompute.
+</Callout>
+
+### `accessCacheKey`
+
+The identity part of the key isolates each principal by default, and
+`edge:<uuid>` is minted fresh per connection, so anonymous subscribers never
+share with each other. A collection or global can override that with
+`realtime.accessCacheKey`, the only way many principals collapse into one group
+and one query, and the only source of the `shared:` form.
+
+```ts
+export const posts = collection("posts")
+	.access({ read: true })
+	.options({ realtime: { accessCacheKey: () => "public" } });
+```
+
+Return the same deterministic key only where you can prove the output is
+identical for every principal that gets it. The key is bounded to 256 UTF-8
+bytes as well. A resolver that throws, or returns a non-string or an over-long
+key, isolates that subscriber to its own edge group instead of a shared one.
+
+## Conservative candidate routing
+
+Each write is first tested against a payload-local guard, and only a proven
+`miss` skips work. Everything else continues to the normal database query, which
+stays authoritative. The guard compiles `AND: [access rule, your where]`, so an
+equality predicate returned by an access rule narrows exactly as well as one you
+asked for.
+
+| Predicate in your `where`                            | Guard result       |
+| ---------------------------------------------------- | ------------------ |
+| Own scalar column, `field: value` or `{ eq: value }` | `match` or `miss`  |
+| `{ in: [...] }`, up to 128 scalars                   | `match` or `miss`  |
+| `AND`, `OR`, `NOT` over the above                    | Three-valued logic |
+| A relation name, or `RAW`                            | `unknown`          |
+| Any other operator, an empty or oversized `in`       | `unknown`          |
+| A field absent from the outbox projection            | `unknown`          |
+
+Updates evaluate the before and the after projection, so moving a row from one
+scope to another correctly wakes both. Bulk writes carry only ids and a count,
+so they are always `unknown`.
+
+Positive equality anchors under `AND` also feed an indexed candidate router, so
+groups whose anchor value misses are never visited. Anchors under `OR` or `NOT`
+do not narrow the candidate set, they only evaluate. A topic that watches a
+second collection as a relation or access dependency is registered against that
+collection by name with no guard, so every write there wakes every such topic.
+
+## The 100,000-subscriber failure mode
+
+One activity row belongs to a shared scope, but 100,000 users each subscribe
+through a personalized recipient relation. That relation is correctly classified
+`unknown`, so one insert makes all 100,000 groups candidates and every one of
+them re-runs its query. The scheduler runs at most ten of those recomputes at a
+time per instance, and that bound is not configurable, so the symptom is not a
+database storm. It is a backlog every subscriber waits behind.
+
+| Requirement                     | Model                                             |
+| ------------------------------- | ------------------------------------------------- |
+| Bounded shared collection state | One scoped live query on the collection           |
+| Per-user durable feed           | Materialized inbox rows with a real `recipientId` |
+| Shared audience notification    | A typed channel keyed by audience                 |
+| A ranking or page went stale    | A typed channel event, then a normal refetch      |
+| No push requirement             | A normal query                                    |
+
+In a QUESTPIE checkout, `bun --cwd packages/questpie run bench:realtime:routing`
+runs both cases deterministically. It builds 100,000 subscriptions over 1,000
+scopes and asserts one scoped event considers exactly 100 groups, then builds
+the adversarial one-scope relation case and asserts it considers all 100,000 and
+classifies as a snapshot for `relation_where`.
+
+A collection that exists only as an access dependency should not be subscribable
+at all. `.options({ realtime: false })` rejects its topics at admission but
+leaves change capture on, so topics that watch it as a dependency still refresh.
+
+## Diagnostics
+
+`app.realtime.getMetrics()` returns counters and gauges. Pass
+`realtime.observer` to receive the same events live.
+
+| Event                      | What it tells you                                   |
+| -------------------------- | --------------------------------------------------- |
+| `routing.candidates`       | Groups considered for one write, the fan-out number |
+| `routing.guard`            | `match`, `miss` or `unknown` per candidate          |
+| `routing.plan`             | Anchor `required` or `missing`, and what blocked it |
+| `routing.authoritative_db` | One per real query, the number you are paying       |
+| `delivery.classified`      | `snapshot` or `delta`, and the reason               |
+| `refresh.completed`        | Subscribers served and frame bytes                  |
+
+Metric keys are assembled from a fixed label set, so no principal, scope, topic,
+record or query value ever reaches one. Observer failures are swallowed and
+cannot break delivery.
+
+## Related
+
+- [Realtime](/docs/infrastructure/realtime), the two seams and their adapters.
+- [Tuning](/docs/infrastructure/realtime/tuning), admission limits and the outbox.
+- [Client realtime](/docs/client/realtime), delta mode and its shape rules.
+- [Reactive apps](/docs/client/reactive-apps), subscription sizing in React.

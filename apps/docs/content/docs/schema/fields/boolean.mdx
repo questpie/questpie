@@ -1,122 +1,151 @@
 ---
 title: Boolean field
-description: f.boolean() is a true/false field backed by a Postgres boolean column, with a z.boolean() schema and equality / null filtering built in.
+description: "The two-state flag. One `boolean` column, a `z.boolean()` schema, five filter operators, and no arguments to get wrong."
+kind: reference
+package: questpie
 ---
 
-`f.boolean()` stores a `true` / `false` value. It produces a Postgres `boolean` column, derives a `z.boolean()` schema, and exposes equality and null filter operators on the typed `where` clause. It takes no arguments and has no type-specific methods, you shape it entirely with the [shared modifiers](/docs/schema/fields#shared-methods) every field has.
-
-> **Prerequisites:** read [Fields](/docs/schema/fields) first, this page covers only the `boolean` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.default()` / `.localized()` are taught there.
-
-## What it does
-
-- **Stores a true/false value**, a Postgres `boolean` column, no precision or length to configure.
-- **Validates as a boolean**, the derived schema is `z.boolean()`, so a non-boolean insert is a validation error.
-- **Filters with boolean operators**, `eq`, `ne`, `isNull`, `isNotNull`, all typed against `boolean`.
-- **Renders a toggle / checkbox** in the admin form.
-
-## Quick start
-
-Use `f.boolean()` inside a `.fields()` callback, then chain shared modifiers to refine it.
+| Surface               | Detail                                             |
+| --------------------- | -------------------------------------------------- |
+| Signature             | `f.boolean()`                                      |
+| Arguments             | none, there is no second form of the call          |
+| Column                | `boolean`                                          |
+| Schema                | `z.boolean()`                                      |
+| Filter operators      | the boolean set, five entries, [below](#filtering) |
+| Admin form            | a checkbox, or a switch when you ask for one       |
+| Admin cell            | a badge reading Yes or No                          |
+| Type-specific methods | none, the shared chain is the whole surface        |
 
 ```ts title="src/questpie/server/collections/posts.ts"
 import { collection } from "#questpie/factories";
 
 export const posts = collection("posts").fields(({ f }) => ({
-	published: f.boolean().label("Published").default(false).required(), // NOT NULL, defaults to false
-	featured: f.boolean(), // nullable boolean
+	published: f.boolean().default(false).required(),
+	featured: f.boolean(),
 }));
 ```
 
-That gives `posts` a `published` column typed `boolean` on read, required on insert with a `false` default, and a nullable `featured` column, filterable with the operators below, with no schema or migration written by hand.
+`published` is `NOT NULL` with a Postgres default of `false`, and the key is
+optional on insert because the default fills it. `featured` is nullable, so it
+reads back as `boolean | null` and models three states rather than two.
 
-## Constructor argument
+## Methods
 
-`f.boolean()` takes **no arguments**. It always produces a `boolean` column with a `z.boolean()` schema.
+The type declares no methods of its own. Three from the base chain carry the
+weight here.
 
-| Call          | Column    | Schema        |
-| ------------- | --------- | ------------- |
-| `f.boolean()` | `boolean` | `z.boolean()` |
+| Method         | Effect                                                          |
+| -------------- | --------------------------------------------------------------- |
+| `.required()`  | `NOT NULL`, and the key is required on insert                   |
+| `.default(v)`  | Writes a column default, and makes the key optional on insert   |
+| `.localized()` | Moves the column into `<collection>_i18n`, one value per locale |
 
-## Chained methods
+`.label()`, `.description()`, `.access()`, `.hooks()` and the rest of the base
+chain behave here exactly as on any other type.
 
-`f.boolean()` uses the common `Field` builder. Shape it with shared modifiers such as `.required()`, `.default()`, `.label()`, `.description()`, `.localized()`, `.array()`, `.access()`, and `.hooks()`.
-
-```ts
-collection("settings").fields(({ f }) => ({
-	// Common pattern: a non-null flag with an explicit default.
-	emailNotifications: f
-		.boolean()
-		.label("Email notifications")
-		.default(true)
-		.required(),
-}));
-```
-
-<Callout type="info" title="`.default(value)` is type-checked against `boolean`">
-`.default()` is type-constrained to the field's data type, exactly like Drizzle, `f.boolean().default("yes")` won't compile. Passing a `.default(...)` also makes the field optional on insert. For a column-level SQL default instead of a JS value, use ``.drizzle((c) => c.default(sql`true`))``.
+<Callout type="info" title="`.default()` is checked against `boolean`">
+	The argument is constrained to the field's own data type, so
+	`f.boolean().default("yes")` does not compile. It accepts a literal, a
+	factory, or a raw SQL expression. The value lands on the Postgres column, not
+	on the insert payload.
 </Callout>
 
-## Filtering, operators
+## Filtering
 
-`boolean` uses the **boolean operator set** (`booleanOps`), so every boolean field is filterable with these in a `where` clause. The operand is typed `boolean`.
+Boolean carries `booleanOps`, five operators.
 
-| Operator               | Operand   | Matches                                                                          |
-| ---------------------- | --------- | -------------------------------------------------------------------------------- |
-| `eq` / `ne`            | `boolean` | Exact equal / not equal.                                                         |
-| `isNull` / `isNotNull` | `boolean` | Column is (not) null. Pass `true` to assert the condition, `false` to invert it. |
+| Operator               | Operand              | Matches                                     |
+| ---------------------- | -------------------- | ------------------------------------------- |
+| `eq` / `ne`            | `boolean`            | Equal, not equal                            |
+| `not`                  | `boolean`, or `null` | Not equal, or `IS NOT NULL` when given null |
+| `isNull` / `isNotNull` | `boolean`            | Pass `false` and each inverts               |
+
+A bare value is the shorthand for `eq`, and on a nullable boolean a bare `null`
+compiles to `IS NULL`. Both short forms live in the generated where type rather
+than beside it, and `.required()` drops `null` from it.
 
 ```ts
-// Only published rows
 const { docs } = await app.collections.posts.find({
-	where: { published: { eq: true } },
-});
-
-// Rows where `featured` was never set
-const { docs: unset } = await app.collections.posts.find({
-	where: { featured: { isNull: true } },
+	where: { published: true, featured: { isNull: true } },
 });
 ```
 
-Boolean filters use `eq`, `ne`, `isNull`, and `isNotNull`. Keep the column nullable to model a tri-state value of true, false, or unknown.
+There is nothing else. No `in`, no `gt`, because a column with two values has
+nothing to order or enumerate.
 
-For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/schema/relations).
+## In the admin
 
-## When to use it
+The form control is `BooleanField`, a checkbox. The list cell is `BooleanCell`,
+a badge reading Yes for a truthy value and No for everything else.
 
-- **`f.boolean()`**, any two-state flag: `published`, `featured`, `isActive`, `acceptedTerms`, feature toggles, opt-ins.
-- Pair it with **`.default(false)` / `.default(true)` + `.required()`** for a non-null flag that never reads back as `null`, usually what you want for a toggle.
-- Leave it **nullable** (no `.required()`) when "not yet decided" is a meaningful third state, then filter with `isNull` / `isNotNull`.
-- For a fixed set of more than two states (e.g. `draft` / `review` / `live`), reach for [`f.select()`](/docs/schema/fields/select) instead of stacking booleans.
+`.admin()` is the field extension `@questpie/admin` registers, and one key on it
+is boolean-specific.
 
-## Multiple values
-
-Chain `.array()` to store a list of booleans in a single `jsonb` column, and bound the list length with `.minItems(n)` / `.maxItems(n)`. This is a [shared modifier](/docs/schema/fields#shared-methods), not boolean-specific:
+| Key         | Type                     | Default      | Effect                                 |
+| ----------- | ------------------------ | ------------ | -------------------------------------- |
+| `displayAs` | `"checkbox" \| "switch"` | `"checkbox"` | Swaps the checkbox for a toggle switch |
 
 ```ts
-answers: f.boolean().array().maxItems(20), // boolean[] stored as jsonb
+emailNotifications: f.boolean().default(true).admin({ displayAs: "switch" }),
 ```
 
-## TypeScript
+The rest of the keys on `.admin()` are the shared ones every field takes.
 
-A boolean field contributes a `boolean` to the generated row, insert, and `where` types, no annotation needed. After `questpie generate`, pull the shapes off the collection or the app types:
+<Callout type="warn" title="`null` and `false` are indistinguishable">
+	Both controls render `!!value`, so an unset boolean shows unchecked and its
+	cell reads No. The change handler always writes `true` or `false`, which means
+	the admin can never put `null` back once a person touches the control.
+</Callout>
+
+<Callout type="warn" title="The list filter sheet cannot filter a boolean">
+	It switches on the field registry name, `boolean`, while its two-state branch
+	tests for `checkbox` and `switch`. Neither matches, so the field falls through
+	to the presence-only list, is empty and is not empty. Filter through the API
+	instead.
+</Callout>
+
+A localized boolean gets the locale indicator beside its label, the same as any
+other localized field.
+
+## Lists
+
+`.array()` replaces the column with `jsonb` holding a list of booleans and swaps
+the five operators for the multi-value set.
+
+```ts
+answers: f.boolean().array().maxItems(20),
+```
+
+<Callout type="warn" title="The admin has no control for a list of booleans">
+	`ArrayField` picks its item control from an allowlist of five type names, and
+	`boolean` is not among them, so each item falls back to a text input. What
+	that input produces is a string, which `z.array(z.boolean())` rejects on save.
+</Callout>
+
+## Types
+
+A boolean contributes `boolean` to the row, insert and update shapes, and
+nothing needs annotating.
 
 ```ts
 type Post = typeof posts.$infer.select;
-//   ^? { id: string; published: boolean; featured: boolean | null; ... }
+//   ^? { published: boolean; featured: boolean | null; ... }
 ```
 
-```ts
-import type { CollectionDoc, CollectionWhere } from "#questpie/types";
-
-type Post = CollectionDoc<"posts">; // { published: boolean; ... }
-type PostFilter = CollectionWhere<"posts">; // { published?: { eq?: boolean; ... } }
-```
-
-`.required()` makes the field non-null and required on insert; without it the column is nullable and the insert field optional. `.default(false)` makes the input optional and is type-checked against `boolean`. See [Fields → inferred types](/docs/schema/fields#example--inferred-types) for how modifiers flow into the generated types.
+`.required()` makes it non-null on read and required on insert. `.default()`
+makes it optional on insert. Without either, the key is optional and the value
+is `boolean | null`.
 
 ## Related
 
-- [Fields](/docs/schema/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.array()`, `.localized()`, …).
-- [`f.select()`](/docs/schema/fields/select), when a flag grows into a fixed set of more than two states.
-- [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch.
-- [Relations](/docs/schema/relations), the full query language for combining the operators above.
+[Select](/docs/schema/fields/select) is where a flag belongs once it grows past
+two states, and it narrows the read type to the literal union of its values.
+
+[Arrays](/docs/schema/fields/array) covers what `.array()` does to reads, writes
+and filters, and why the item control falls back to text.
+
+[Reading and writing](/docs/schema/collections/crud) has the rest of the query
+language, `AND`, `OR`, `NOT`, `orderBy` and pagination.
+
+[Validation](/docs/schema/validation) covers the derived schema and `.zod()`,
+the way to add a check the type does not carry.

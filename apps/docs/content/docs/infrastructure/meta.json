@@ -1,4 +1,14 @@
 {
 	"title": "Infrastructure",
-	"pages": ["storage", "search", "realtime", "kv", "sandbox"]
+	"pages": [
+		"index",
+		"storage",
+		"queue",
+		"search",
+		"realtime",
+		"kv",
+		"email",
+		"sandbox",
+		"observability"
+	]
 }

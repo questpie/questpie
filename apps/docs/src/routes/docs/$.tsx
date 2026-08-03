@@ -89,6 +89,24 @@ const docsCompatRedirects = new Map<string, string>([
 	["extend", "/docs/guides"],
 	["extend/build-a-plugin", "/docs/guides/build-a-plugin"],
 	["extend/multi-tenancy", "/docs/guides/multi-tenancy"],
+	// concepts/ and adapters/ merged into Infrastructure, interface plus adapters
+	// on one page each, so both old paths land on the same new one
+	["adapters", "/docs/infrastructure"],
+	["concepts", "/docs/infrastructure"],
+	["concepts/storage", "/docs/infrastructure/storage"],
+	["adapters/storage", "/docs/infrastructure/storage"],
+	["concepts/search", "/docs/infrastructure/search"],
+	["adapters/search", "/docs/infrastructure/search"],
+	["concepts/realtime", "/docs/infrastructure/realtime"],
+	["adapters/realtime", "/docs/infrastructure/realtime"],
+	["concepts/scalable-realtime", "/docs/infrastructure/realtime/scaling"],
+	["concepts/kv", "/docs/infrastructure/kv"],
+	["adapters/kv", "/docs/infrastructure/kv"],
+	["concepts/sandboxed-code", "/docs/infrastructure/sandbox"],
+	["adapters/sandbox", "/docs/infrastructure/sandbox"],
+	["adapters/queue", "/docs/infrastructure/queue"],
+	["adapters/email", "/docs/infrastructure/email"],
+	["adapters/observability", "/docs/infrastructure/observability"],
 ]);
 
 export const Route = createFileRoute("/docs/$")({

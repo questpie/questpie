@@ -3,7 +3,7 @@ title: OpenAPI and Scalar
 description: Add one module and your whole API documents itself, an OpenAPI 3.1 spec generated from your collections, globals, routes, auth, and search, served as interactive docs through Scalar UI at /api/docs.
 ---
 
-The **`@questpie/openapi`** module turns your running app into self-documenting API. Register one module and QUESTPIE introspects everything it already knows, your [collections](/docs/schema/collections), [globals](/docs/schema/globals), [routes](/docs/code/routes), auth endpoints, and [search](/docs/adapters/search), and emits a complete **OpenAPI 3.1** spec at `GET /api/openapi.json`, plus an interactive [Scalar](https://scalar.com) API reference at `GET /api/docs`. No decorators, no hand-written spec, no separate build step: the spec is generated from the same runtime metadata that powers your typed client and admin panel.
+The **`@questpie/openapi`** module turns your running app into self-documenting API. Register one module and QUESTPIE introspects everything it already knows, your [collections](/docs/schema/collections), [globals](/docs/schema/globals), [routes](/docs/code/routes), auth endpoints, and [search](/docs/infrastructure/search), and emits a complete **OpenAPI 3.1** spec at `GET /api/openapi.json`, plus an interactive [Scalar](https://scalar.com) API reference at `GET /api/docs`. No decorators, no hand-written spec, no separate build step: the spec is generated from the same runtime metadata that powers your typed client and admin panel.
 
 <Callout type="info" title="Prerequisites">
 	Read [Routes](/docs/code/routes) and [Collections](/docs/schema/collections)

@@ -1,151 +1,201 @@
 ---
 title: Time field
-description: f.time() stores a time of day (HH:MM:SS) in a Postgres time column, validates the format with a regex, and exposes comparison operators on the typed where clause.
+description: "`f.time()` is a clock reading with no date and no time zone. Its two config keys look like a pair and move entirely separate things."
+kind: reference
+package: questpie
 ---
 
-`f.time()` stores a **time of day**, no date, no timezone. It maps to a Postgres `time` column, reads back as a `string` like `"09:30:00"`, derives a regex-validated Zod schema, and exposes comparison operators (`eq`, `gt`, `lte`, `in`, …) on the typed `where` clause. Pass `{ precision }` for fractional seconds or `{ withSeconds: false }` for an `HH:MM` field.
+## Signature
 
-> **Prerequisites:** read [Fields](/docs/schema/fields) first, this page covers only the `time` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.default()` / `.localized()` are taught there.
+| Call                             | Column                   | Accepted input             |
+| -------------------------------- | ------------------------ | -------------------------- |
+| `f.time()`                       | `time(0)`                | `HH:MM` or `HH:MM:SS(.s…)` |
+| `f.time({ precision: n })`       | `time(n)`, `n` is 0 to 6 | unchanged                  |
+| `f.time({ withSeconds: false })` | `time(0)`                | `HH:MM` only               |
 
-## What it does
+The column is always `time without time zone`. QUESTPIE never hands Drizzle a
+`withTimezone` option, so the zoned variant is out of reach.
 
-- **Stores a time of day, not a timestamp.** Maps to Postgres `time` (no date component, no timezone). For a full date + time use [`f.datetime()`](/docs/schema/fields/datetime); for a calendar date only use [`f.date()`](/docs/schema/fields/date).
-- **Reads back as a `string`.** The value is an `"HH:MM:SS"` string (e.g. `"14:00:00"`), never a `Date`.
-- **Validates the format with a regex.** By default the schema requires `HH:MM:SS` (with optional fractional seconds); set `withSeconds: false` to require `HH:MM`.
-- **Filters with comparison operators**, `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `notIn`, `isNull`, `isNotNull`, so you can query for rows before/after a time of day.
-- **Renders a time picker** in the admin form.
-
-## Quick start
-
-Use `f.time()` inside a `.fields()` callback. Call it with no argument for a second-precision `HH:MM:SS` field; chain shared modifiers like `.required()` to bound it.
+A time value is a `string` in TypeScript, in JSON and through the typed client.
+Nothing converts it to a `Date` at any boundary, so none of the instant handling
+around `f.datetime()` reaches it.
 
 ```ts title="src/questpie/server/collections/businesses.ts"
 import { collection } from "#questpie/factories";
 
 export const businesses = collection("businesses").fields(({ f }) => ({
 	name: f.text().required(),
-	opensAt: f.time().required(), // time column, NOT NULL, "HH:MM:SS"
+	opensAt: f.time().required(), // time(0), NOT NULL
 	closesAt: f.time().required(),
+	lastCall: f.time({ withSeconds: false }), // nullable, HH:MM only
 }));
 ```
 
-That gives `businesses` two `time` columns, required on insert, validated against the `HH:MM:SS` format, and filterable with the comparison operators below, no schema or migration written by hand.
+## What the schema accepts
 
-```ts
-await app.collections.businesses.create({
-	name: "Cafe",
-	opensAt: "08:00:00",
-	closesAt: "17:30:00",
-});
-```
+The derived schema is `z.string().regex(…)`, and the config picks which regex.
 
-## Constructor argument
+| `withSeconds`       | Accepts                           | Rejects                     |
+| ------------------- | --------------------------------- | --------------------------- |
+| `true`, the default | `09:30`, `09:30:00`, `09:30:00.5` | `9:30`, `24:00`, `09:60`    |
+| `false`             | `09:30`                           | `09:30:00`, `9:30`, `24:00` |
 
-`f.time(config?)` takes one optional config object.
+Both patterns want two digits for the hour, so `09:30` passes and `9:30` fails.
+Hours run `00` to `23`, minutes and seconds `00` to `59`. Rejection reads
+`Invalid time format.` plus the shape it wanted, `Expected HH:MM or HH:MM:SS` by
+default and `Expected HH:MM` under the strict pattern.
 
-| Option        | Type                              | Default | Effect                                                                                                |
-| ------------- | --------------------------------- | ------- | ----------------------------------------------------------------------------------------------------- |
-| `precision`   | `0 \| 1 \| 2 \| 3 \| 4 \| 5 \| 6` | `0`     | Fractional-second precision of the `time` column. `0` = whole seconds; `3` = milliseconds.            |
-| `withSeconds` | `boolean`                         | `true`  | When `true`, the schema requires `HH:MM:SS` (with optional `.ms`). When `false`, it requires `HH:MM`. |
-
-```ts
-startTime: f.time(),                         // time(0), validates "HH:MM:SS"
-preciseAt: f.time({ precision: 3 }),         // time(3), millisecond precision
-clockIn:   f.time({ withSeconds: false }),   // validates "HH:MM"
-```
-
-The resulting field data is always a `string`. The derived Zod schema is a `z.string().regex(...)` whose pattern depends on `withSeconds`.
-
-<Callout type="info" title="`precision` is the column; `withSeconds` is the schema">
-`precision` controls the Postgres column's fractional-second storage. `withSeconds` controls only which **input regex** the value is validated against (`HH:MM:SS` vs `HH:MM`), it does not change the column. They are independent: `f.time({ precision: 3, withSeconds: true })` stores milliseconds and accepts `"14:00:00.500"`.
+<Callout type="warn" title="`withSeconds: true` is the loose setting">
+	The name reads like a demand for seconds. It makes them optional. `false` is
+	the strict one, `HH:MM` and nothing longer. The admin's time input emits
+	minute precision, so a seconds-required default once made time fields
+	unsavable.
 </Callout>
 
-<Callout type="warn" title="The value is a STRING, not a Date">
-	A time field stores an `"HH:MM:SS"` string representing time of day. Pass a
-	formatted string such as `"09:30:00"`. Use
-	[`f.datetime()`](/docs/schema/fields/datetime) when the value needs a calendar
-	date or instant.
+<Callout type="info" title="`precision` and `withSeconds` never meet">
+	`precision` reaches the Postgres column and stops there. `withSeconds`
+	reaches the regex and stops there. So `{ precision: 3 }` stores milliseconds
+	while the schema still takes `09:30`, and `{ withSeconds: false }` leaves the
+	column at `time(0)`.
 </Callout>
 
-## Chained methods
+## Methods
 
-`f.time()` has **no type-specific chain methods**, it returns a plain field, so only the [shared modifiers](/docs/schema/fields#shared-methods) apply (`.required()`, `.default("09:00:00")`, `.label()`, `.localized()`, `.array()`, `.virtual()`, …).
+The type adds none of its own. Its `fieldType()` declaration carries no methods
+bag, so you get the shared chain and nothing more: `.required()`, `.default()`,
+`.label()`, `.localized()`, `.array()`, `.zod()` and the rest on
+[Fields](/docs/schema/fields).
 
-```ts
-collection("schedules").fields(({ f }) => ({
-	startTime: f.time().required().label("Start"),
-	endTime: f.time().required().label("End"),
-	reminders: f.time().array(), // string[] stored as jsonb
-}));
-```
+`.default("09:00")` type-checks against `string` and lands on the Postgres
+column as its default too. Nothing runs that literal past the regex first.
 
-<Callout type="info" title="No `autoNow()` on time fields">
-	`.autoNow()` and `.autoNowUpdate()` are
-	[`f.datetime()`](/docs/schema/fields/datetime) methods (they set the column to
-	the current `Date`). They do **not** exist on `f.time()`. For a literal
-	default time use the shared `.default("09:00:00")` modifier.
+<Callout type="warn" title="No `.autoNow()` here">
+	`.autoNow()` and `.autoNowUpdate()` belong to the date and datetime factories.
+	A bare clock reading has no framework notion of now. Write the literal you
+	want with `.default()`, or compute one in a `beforeChange` field hook.
 </Callout>
 
-## Filtering, operators
+## Filtering
 
-`time` uses the **date operator set** (`dateOps`), the same set as [`f.datetime()`](/docs/schema/fields/datetime). Every time field is filterable with these in a `where` clause. The operand is typed `DateInput` (`Date | string`), pass the time string, e.g. `"12:00:00"`.
+A time field carries `dateOps`, the set `f.date()` and `f.datetime()` also use,
+so its `where` entry types to exactly these eleven keys.
 
-| Operator               | Operand              | Matches                               |
-| ---------------------- | -------------------- | ------------------------------------- |
-| `eq` / `ne`            | `Date \| string`     | Exact equal / not equal.              |
-| `gt` / `gte`           | `Date \| string`     | After / at-or-after the given time.   |
-| `lt` / `lte`           | `Date \| string`     | Before / at-or-before the given time. |
-| `in` / `notIn`         | `(Date \| string)[]` | Value is (not) in the list.           |
-| `isNull` / `isNotNull` | `boolean`            | Column is (not) null.                 |
+| Operator              | Operand                  | Matches                                          |
+| --------------------- | ------------------------ | ------------------------------------------------ |
+| `eq`, `ne`            | `Date \| string`         | Equal, not equal                                 |
+| `not`                 | `Date \| string \| null` | Not equal, or `IS NOT NULL` when you pass `null` |
+| `gt`, `gte`           | `Date \| string`         | Later, at or later                               |
+| `lt`, `lte`           | `Date \| string`         | Earlier, at or earlier                           |
+| `in`, `notIn`         | `(Date \| string)[]`     | In the list, not in the list                     |
+| `isNull`, `isNotNull` | `boolean`                | Null check, inverted when you pass `false`       |
+
+A bare value types alongside that object. `{ opensAt: "09:00" }` compiles to
+`eq`, and `{ opensAt: null }` to `IS NULL`.
 
 ```ts
-// Businesses open at or before noon:
 const { docs } = await app.collections.businesses.find({
-	where: {
-		opensAt: { lte: "12:00:00" },
-	},
+	where: { opensAt: { lte: "12:00" }, closesAt: { gt: "18:00" } },
 });
 ```
 
-For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/schema/relations).
+<Callout type="warn" title="Pass the string, not a `Date`">
+	The operand types as `Date | string` only because the set is shared. The where
+	builder normalizes `datetime` and `date` operands and names no other type, so
+	a time operand reaches Postgres exactly as you wrote it. Give it the string
+	you store.
+</Callout>
 
-## When to use it
+## In the admin
 
-- **`f.time()`**, a time of day with no date: opening/closing hours, a daily reminder time, a class start time, a shift slot. Use it whenever the calendar date is irrelevant and only the clock matters.
-- **`f.time({ precision: 3 })`**, when you need sub-second precision (e.g. a lap or split time).
-- **`f.time({ withSeconds: false })`**, when minutes are enough and you want to reject seconds in the input (`HH:MM`).
-- Need a date **and** a time together? Use [`f.datetime()`](/docs/schema/fields/datetime). Need only a calendar date? Use [`f.date()`](/docs/schema/fields/date).
+The form control is `TimeField`, a native `<input type="time">` with a clock
+icon and a clear button that writes `null`. The list cell is `TimeCell`, which
+prints the stored string in tabular figures and a `-` for null, in a column 180
+pixels wide by default. The filter builder gives the field its own
+`<input type="time">` and the date operator list.
 
-## Multiple values
+Neither config key crosses to that control.
 
-Chain `.array()` to store a list of times in a single `jsonb` column, and bound the list length with `.minItems(n)` / `.maxItems(n)`. This is a [shared modifier](/docs/schema/fields#shared-methods), not time-specific:
+- **`precision` does not.** The control carries its own `precision`, `"minute"`
+  or `"second"`, and nothing derives it from the field, so the step stays at 60
+  seconds. `f.time({ precision: 3 })` widens the column only. What moves the
+  step is `.admin({ precision: "second" })`, an undeclared key the untyped
+  signature below lets through.
+- **The pattern does not.** `f.time()` records no `maxLength`, `pattern`, `min`
+  or `max`, so nothing carries the configured regex across.
+
+<Callout type="warn" title="The browser checks a different pattern">
+	The admin prefers the server's JSON Schema. Without one it falls back to a Zod
+	schema whose `time` case hardcodes its own regex, which takes a one-digit
+	hour, rejects fractional seconds and ignores `withSeconds`. Trust the server
+	message over the form's.
+</Callout>
+
+`.admin(config)` sets the rest of the control. It appears on the field once
+`@questpie/admin` is enabled, and its generated signature takes `unknown`, so
+nothing type-checks the keys you pass.
+
+| Key           | Type     | Effect                        |
+| ------------- | -------- | ----------------------------- |
+| `placeholder` | `string` | Placeholder text on the input |
+
+That one key is the whole declared list. `showInList`, `listWidth`, `sortable`,
+`filterable`, `hidden`, `readOnly`, `colspan` and the rest come from the base
+admin config every field type shares.
+
+## Lists
+
+`.array()` replaces the column with `jsonb` and swaps `dateOps` for the
+multi-value set, so every comparison above goes. `.minItems(n)` and
+`.maxItems(n)` bound the list.
 
 ```ts
-slots: f.time().array().maxItems(24), // string[] stored as jsonb
+slots: f.time().array().maxItems(24),
 ```
 
-## TypeScript
+<Callout type="warn" title="Array items get a text box, not a picker">
+	The admin allowlists `text`, `number`, `email`, `textarea` and `select` as
+	array item types. `time` is missing from it, so each row falls back to a plain
+	text input. The server still checks every item against the regex.
+</Callout>
 
-A time field contributes a `string` to the generated row, insert, and `where` types, no annotation needed. After `questpie generate`, pull the shapes off the collection or the app types:
+[Arrays](/docs/schema/fields/array) has the operator table that replaces this
+one.
+
+## Types
+
+A time field contributes `string` to the row and the insert. Its `where` operand
+widens to `Date | string`, inherited from the shared date operator set.
+`.required()` makes it non-null and mandatory on insert. Without it the column
+is nullable and the value selects as `string | null`. `.default(…)` makes the
+input optional.
 
 ```ts
 type Business = typeof businesses.$infer.select;
-//   ^? { id: string; name: string; opensAt: string; closesAt: string; ... }
+//   ^? { id: string; opensAt: string; lastCall: string | null; ... }
 ```
 
 ```ts
-import type { CollectionDoc, CollectionWhere } from "#questpie/types";
+import type { CollectionDoc, CollectionWhere } from "#questpie";
 
-type Business = CollectionDoc<"businesses">; // { opensAt: string; ... }
-type BusinessFilter = CollectionWhere<"businesses">; // { opensAt?: { gt?: Date | string; ... } }
+type Business = CollectionDoc<"businesses">;
+type BusinessFilter = CollectionWhere<"businesses">;
 ```
-
-`.required()` makes the field non-null and required on insert; without it the column is nullable and the insert field optional. `.default("09:00:00")` makes the input optional and is type-checked against `string`. See [Fields → inferred types](/docs/schema/fields#example--inferred-types) for how modifiers flow into the generated types.
 
 ## Related
 
-- [Fields](/docs/schema/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.array()`, `.localized()`, …).
-- [`f.datetime()`](/docs/schema/fields/datetime), a full timestamp (date + time) stored as a `Date`, with `.autoNow()` / `.autoNowUpdate()`. Shares the `dateOps` operator set.
-- [`f.date()`](/docs/schema/fields/date), a calendar date only (ISO date string).
-- [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch for custom rules.
-- [Relations](/docs/schema/relations), the full query language for combining the operators above.
+[Temporal values](/docs/schema/fields/temporal-values) is the wire contract for
+instants and calendar days. It leaves clock readings out, since a time is a
+plain string end to end.
+
+[`f.datetime()`](/docs/schema/fields/datetime) is the instant, a `Date` in a
+`timestamptz` column, and the type that owns `.autoNow()`.
+
+[`f.date()`](/docs/schema/fields/date) is the calendar day, an exact
+`YYYY-MM-DD` string.
+
+[Arrays](/docs/schema/fields/array) covers what `.array()` does to reads, writes
+and filters.
+
+[Validation](/docs/schema/validation) covers the derived schema and `.zod()`.
+
+[Reading and writing](/docs/schema/collections/crud) covers the rest of `where`.

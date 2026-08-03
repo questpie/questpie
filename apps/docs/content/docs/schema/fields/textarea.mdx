@@ -1,144 +1,168 @@
 ---
 title: Textarea field
-description: f.textarea() is an unbounded multi-line string field, a Postgres text column that renders as a multiline editor in the admin, with the same string filters as text.
+description: "`f.textarea()` is the multi-line string. There is no argument to pass, the `text` column is unbounded whatever you write, and the field filters with the full string operator set."
+kind: reference
+package: questpie
 ---
 
-`f.textarea()` declares a multi-line string. It stores an unbounded Postgres `text` column, reads back as a `string`, validates as a string (no length cap by default), and filters with the standard string operators, the same surface as [`f.text()`](/docs/schema/fields/text), but it renders as a multiline textarea in the admin instead of a single-line input.
+| Surface      | What `f.textarea()` produces                        |
+| ------------ | --------------------------------------------------- |
+| Column       | `text`, no length cap                               |
+| Value        | `string`, or `string \| null` without `.required()` |
+| Schema       | `z.string()`, no cap                                |
+| Operators    | `stringOps`, fourteen of them                       |
+| Form control | `TextareaField`, a plain textarea                   |
+| List cell    | `TextCell`, truncated, off the default columns      |
 
-Reach for it when you have free-form prose that has no real length limit: a bio, an excerpt, an internal note, a description. For short, capped strings use `f.text(maxLength)`; for formatted/structured content use [`f.richText()`](/docs/schema/fields/rich-text).
-
-> **Prerequisites:** [Fields](/docs/schema/fields), the `f` proxy, how a field becomes a column + schema + filters + admin input, and the chain modifiers shared by every field type.
-
-## What it does
-
-- **Stores unbounded text**, produces a Postgres `text` column (no `varchar(n)` length cap), so long content is never truncated.
-- **Reads back as a string**, the value type on read, insert, and update is `string`.
-- **Renders a multiline editor**, the `textarea` type tells the admin to use a multi-row text area, not a one-line input.
-- **Validates as a string**, derives `z.string()` (plus optional length bounds you add with `.min()` / `.max()`).
-- **Filters with string operators**, ships the `stringOps` set (`eq`, `contains`, `ilike`, `startsWith`, …) so `where` is typed for this field.
-
-## Quick start
-
-`f` is the field builder destructured from the `.fields()` callback, you never import it. `textarea` takes **no constructor argument**; chain the shared modifiers to refine it.
+Every call produces that same column. No method on the type reopens it, and only
+`.array()` and the `.drizzle()` escape hatch replace it.
 
 ```ts title="src/questpie/server/collections/posts.ts"
 import { collection } from "#questpie/factories";
 
 export const posts = collection("posts").fields(({ f }) => ({
 	title: f.text(255).required(),
-	excerpt: f.textarea(), // unbounded text, multiline editor
-	notes: f.textarea().label({ en: "Internal notes" }),
-	// Shared modifiers (.required, .default, .localized, .admin, …) are documented
-	// on the Fields page; the textarea-specific methods are below.
+	excerpt: f.textarea(), // text, selects as string | null
+	body: f.textarea().required().max(20_000), // text NOT NULL, capped in the schema
 }));
 ```
 
-After `questpie generate`, `excerpt` and `notes` are `string` on the row type, accept any-length text on write, and expose string filters on `where`. No migration to hand-write.
+## Methods
 
-## Example → inferred type
+`.required()`, `.default()`, `.label()`, `.localized()` and the rest of the base
+chain work here as on any field. On top of those the type adds two.
 
-```ts
-const posts = collection("posts").fields(({ f }) => ({
-	title: f.text(255).required(),
-	excerpt: f.textarea(), // optional string column
-	summary: f.textarea().required(), // NOT NULL, required on insert
-}));
+| Method    | Effect                                      |
+| --------- | ------------------------------------------- |
+| `.min(n)` | Adds `z.string().min(n)`, a character count |
+| `.max(n)` | Adds `z.string().max(n)`, a character count |
 
-// After `questpie generate`, rows read back as:
-// {
-//   id: string;
-//   title: string;
-//   excerpt: string | null;   // nullable until you .required() it
-//   summary: string;
-//   createdAt: Date; updatedAt: Date;  // from the base collection
-// }
-```
+Both write a validation bound and nothing else. The column stays unbounded
+`text` either way, so a `.max(n)` you later raise needs no migration.
 
-Like every field, `textarea` is optional and nullable by default; `.required()` makes the column `NOT NULL` and the value required on insert. The public `ExtractSelectType`, `ExtractInputType`, and `ExtractWhereType` helpers expose its derived read, insert, and filter shapes.
-
-## Constructor & methods
-
-`f.textarea()` takes no arguments. It has two type-specific chain methods, both of which constrain **string length**:
-
-| Method    | Effect                                                                       | Maps to     |
-| --------- | ---------------------------------------------------------------------------- | ----------- |
-| `.min(n)` | Minimum character length, adds `z.string().min(n)` to the validation schema. | `minLength` |
-| `.max(n)` | Maximum character length, adds `z.string().max(n)` to the validation schema. | `maxLength` |
-
-```ts
-bio: f.textarea().min(10).max(2000),   // 10-2000 characters, validated on write
-```
-
-`.min(n)` / `.max(n)` set length bounds only, they do **not** change the column type, which stays unbounded Postgres `text` regardless. The bounds are applied to the derived Zod schema during create and update validation.
-
-Everything else comes from the [shared field modifiers](/docs/schema/fields#shared-methods), `.required()`, `.default()`, `.localized()`, `.label()`, `.description()`, `.hooks()`, `.access()`, `.admin()`, `.zod()`, and the rest. They behave identically on `textarea` as on any field.
-
-<Callout type="info" title="textarea vs text">
-`f.textarea()` and `f.text({ mode: "text" })` both produce an unbounded Postgres `text` column with the same `string` type and the same string operators. The **only** difference is the type discriminator: `textarea` reports `type: "textarea"`, which drives the admin to a multiline editor; `text` reports `type: "text"` (a single-line input). Pick `textarea` when you want the multiline UI.
+<Callout
+	type="info"
+	title="`.pattern()`, `.trim()`, `.lowercase()` and `.uppercase()` are not here"
+>
+	Only `min` and `max` come with the type. The other four belong to `f.text()`,
+	and calling one here fails to compile. Normalize with `.zod()` or a
+	`beforeValidate` hook instead.
 </Callout>
 
-## Querying
+## Filtering
 
-`textarea` ships the `stringOps` operator set, identical to `f.text()`, so its `where` clause supports:
+Textarea carries `stringOps`, the same fourteen operators as
+[`f.text()`](/docs/schema/fields/text).
 
-| Operator                  | Meaning                                                   |
-| ------------------------- | --------------------------------------------------------- |
-| `eq` / `ne`               | Exact equality / inequality.                              |
-| `in` / `notIn`            | Membership in a list of strings.                          |
-| `like` / `notLike`        | Case-**sensitive** SQL `LIKE` (you supply `%` wildcards). |
-| `ilike` / `notIlike`      | Case-**insensitive** `LIKE`.                              |
-| `contains`                | Substring match (`LIKE '%value%'`).                       |
-| `startsWith` / `endsWith` | Prefix / suffix match.                                    |
-| `isNull` / `isNotNull`    | Boolean null checks.                                      |
+| Operator               | Operand             | Matches                                     |
+| ---------------------- | ------------------- | ------------------------------------------- |
+| `eq` / `ne`            | `string`            | Equal, not equal                            |
+| `not`                  | `string`, or `null` | Not equal, or `IS NOT NULL` when given null |
+| `in` / `notIn`         | `string[]`          | In the list, not in the list                |
+| `like` / `notLike`     | `string`            | `LIKE`, case-sensitive, you write the `%`   |
+| `ilike` / `notIlike`   | `string`            | The same, case-insensitive                  |
+| `contains`             | `string`            | Substring, the `%` are added for you        |
+| `startsWith`           | `string`            | Prefix                                      |
+| `endsWith`             | `string`            | Suffix                                      |
+| `isNull` / `isNotNull` | `boolean`           | Pass `false` and each inverts               |
 
 ```ts
-// Posts whose excerpt mentions "release" (case-insensitive substring):
-await app.collections.posts.find({
+const { docs } = await app.collections.posts.find({
 	where: { excerpt: { contains: "release" } },
 });
-
-// Posts with a non-empty internal note:
-await app.collections.posts.find({
-	where: { notes: { isNotNull: true } },
-});
 ```
 
-These same string operators type the `where` clause on the server (`app.collections.*`) and on the typed client.
-
-<Callout type="warn" title="No full-text search">
-	`contains` / `ilike` are SQL `LIKE` scans, not full-text search, fine for
-	filtering, but not built for ranked search over large prose. For
-	relevance-ranked search across long text, mark the collection `.searchable()`
-	and use the search adapter (pg_trgm / pgvector) rather than a `contains`
-	filter.
+<Callout type="warn" title="`contains` is a `LIKE` scan">
+	It builds `%value%` around a bound parameter and scans. Fine for filtering a
+	list, wrong for ranked search over prose. Use `.searchable()` and the search
+	adapter for that.
 </Callout>
 
-## Localization
+## In the admin
 
-To store a per-locale value (one row of text per locale, in the i18n side-table), add `.localized()`:
+The form control is `TextareaField`, a textarea at three rows. It sets
+`resize-none`, so a reader cannot drag it taller, and it carries a minimum
+height that a smaller `rows` will not go under. Raising `rows` is the one lever.
+
+What crosses to the browser:
+
+- `.max(n)` becomes the textarea's `maxLength` attribute, so typing stops there.
+  Without it there is no attribute and no stop.
+- The admin rebuilds `z.string()` from `minLength` and `maxLength`, so the form
+  checks before it posts.
+- Nothing else. The type has no pattern or format to send.
+
+`.admin()` comes from `@questpie/admin` and takes five keys on this type, on top
+of the shared ones every field has.
+
+| Key           | Effect                                        |
+| ------------- | --------------------------------------------- |
+| `placeholder` | Placeholder text, resolved through the locale |
+| `rows`        | The `rows` attribute, default 3               |
+| `autoResize`  | Nothing reads it                              |
+| `richText`    | Nothing reads it                              |
+| `showCounter` | Nothing reads it                              |
+
+The last three are declared on `TextareaFieldAdminMeta` and nothing under
+`packages/` reads them. `autoResize` even reaches the control, which drops it.
+Treat all three as absent.
+
+### The list column
+
+Textarea sits on the admin's heavy-field list, beside `json`, `object`,
+`blocks` and `richText`, so it is never one of the default visible columns. The
+column picker still offers it, and naming it in `.list()` pins it. When it does
+render, `TextCell` truncates at 300 pixels and puts the whole value in the
+cell's `title`.
 
 ```ts
-description: f.textarea().localized(),   // per-locale prose
+.list(({ v, f }) => v.collectionTable({ columns: [f.excerpt] }))
 ```
 
-`.localized()` is a shared modifier with one home, see [Fields → shared methods](/docs/schema/fields#shared-methods) for how localized fields move to the i18n table and how labels accept `I18nText`.
+<Callout type="warn" title="`showInList` will not bring it back">
+	The key type-checks on every field's `.admin()`, and nothing under `packages/`
+	reads it. Name the field in the `.list()` callback's `columns` instead.
+</Callout>
 
-## TypeScript
+## Lists
 
-You rarely touch the field type directly, `textarea` flows into the generated collection types. After `questpie generate`:
+`.array()` replaces the column with `jsonb` and swaps the string operators for
+the multi-value set. The admin renders one textarea per item.
 
 ```ts
-import type { CollectionDoc, CollectionWhere } from "#questpie/types";
-
-type Post = CollectionDoc<"posts">; // { excerpt: string | null; ... }
-type PostFilter = CollectionWhere<"posts">; // { excerpt?: { contains?: string; ... } }
+notes: f.textarea().array().maxItems(20),
 ```
 
-The field primitives (`TextareaFieldState`, `TextareaFieldMethods`) are exported from `questpie` for plugin/library authors; app code reaches the value through the generated collection types above.
+Per-item `.min()` and `.max()` still apply. `.minItems(n)` and `.maxItems(n)`
+bound the list.
+
+## Collaborative editing
+
+`f.textarea()` is one of the two shapes `.crdt({ format: "text" })` accepts.
+
+```ts
+body: f.textarea().default("").required().crdt({ format: "text" }),
+```
+
+`.required()` and `.default("")` are both mandatory. `.min()`, `.max()` and
+`.localized()` each disqualify the field, and QUESTPIE refuses to build the app
+rather than merging into a value it cannot check.
 
 ## Related
 
-- [Fields](/docs/schema/fields), the field model, the `f` proxy, and the chain modifiers shared by every type.
-- [`f.text()`](/docs/schema/fields/text), single-line / length-capped strings; same operators, different admin UI.
-- [`f.richText()`](/docs/schema/fields/rich-text), formatted content (TipTap JSON or markdown) when prose needs structure.
-- [`f.email()`](/docs/schema/fields/email) / [`f.url()`](/docs/schema/fields/url), string fields with built-in format validation.
+[Text](/docs/schema/fields/text) is the single-line sibling.
+`f.text({ mode: "text" })` produces the identical `text` column, schema and
+operators. It differs in the type string, which routes the admin to a one-line
+input instead of this control, and in carrying four more methods.
+
+[Rich text](/docs/schema/fields/rich-text) is the step up when the prose needs
+structure rather than a bigger box.
+
+[Arrays](/docs/schema/fields/array) covers what `.array()` does to reads, writes
+and filters.
+
+[Eligible fields](/docs/schema/collaborative-documents/eligible-fields) lists
+every reason a `.crdt()` field is rejected.
+
+[Validation](/docs/schema/validation) covers the derived schema and `.zod()`,
+the place to normalize a value.

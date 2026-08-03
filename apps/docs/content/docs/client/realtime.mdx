@@ -251,7 +251,7 @@ The TanStack realtime topic is derived purely from your read `options` via `buil
 
 Everything above is the **client** API. None of it works until you turn realtime on in the **server** config, that's the one server requirement, and you've already seen it in [Quick start](#quick-start). Each mutation appends its outbox row inside the business transaction. With a normal Postgres URL, `realtime: true` auto-wires pg_notify; otherwise the service polls. Every configured broker also keeps a slower reconciliation poll, so a dropped wake cannot stall delivery forever.
 
-The full server surface, `RealtimeConfig` options, durable topology/outbox reconciliation, v2 brokers (`pgNotifyChangeBroker`, `redisStreamsChangeBroker`, Pusher/Soketi), and building your own lives on one page: see [Realtime adapter](/docs/adapters/realtime).
+The full server surface, `RealtimeConfig` options, durable topology/outbox reconciliation, v2 brokers (`pgNotifyChangeBroker`, `redisStreamsChangeBroker`, Pusher/Soketi), and building your own lives on one page: see [Realtime adapter](/docs/infrastructure/realtime).
 
 <Callout type="info" title="One client transport, by design">
 	On the default path, `live()` / `liveIter()` calls (and the TanStack flag)
@@ -360,7 +360,7 @@ import { RealtimeTopicRejectedError } from "questpie/client";
 ## Related
 
 - [Reactive Apps & Performance](/docs/client/reactive-apps), choose live queries versus channels, isolate React updates, and bound client state.
-- [Realtime adapter](/docs/adapters/realtime), the server-side transport this client API rides: `RealtimeConfig`, the outbox/poll model, and the `pg_notify` / Redis / Cloudflare adapters.
+- [Realtime adapter](/docs/infrastructure/realtime), the server-side transport this client API rides: `RealtimeConfig`, the outbox/poll model, and the `pg_notify` / Redis / Cloudflare adapters.
 - [Channels](/docs/client/channels), typed ordered application events over the same runtime.
 - [Collections](/docs/schema/collections), `find()`, the paginated envelope, and access rules that every snapshot is re-run through.
 - [Globals](/docs/schema/globals), the singleton `get()` whose shape `globals.<name>.live()` mirrors.

@@ -1,149 +1,167 @@
 ---
 title: Email field
-description: f.email() is a string field backed by a Postgres varchar that validates the value as an email address and adds domain-aware filter operators on top of the string set.
+description: "`f.email()` is a varchar with a format check on it. One argument sizes the column, and the type extends the string operator set with two domain matchers."
+kind: reference
+package: questpie
 ---
 
-`f.email()` stores an email address. It produces a `varchar(255)` column, derives a Zod schema that enforces a valid email format and the column length, and exposes the full string operator set **plus** email-specific `domain` / `domainIn` filters on the typed `where` clause. Reach for it instead of `f.text()` whenever a field must hold a valid email, you get the format check and the domain filters for free.
+| Call         | Column         | Base schema                   |
+| ------------ | -------------- | ----------------------------- |
+| `f.email()`  | `varchar(255)` | `z.string().email().max(255)` |
+| `f.email(n)` | `varchar(n)`   | `z.string().email().max(n)`   |
 
-> **Prerequisites:** read [Fields](/docs/schema/fields) first, this page covers only the `email` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.localized()` / `.default()` are taught there.
-
-## What it does
-
-- **Stores an email string**, a `varchar(255)` column by default; pass a number to resize the column.
-- **Validates the format**, the derived Zod schema is `z.string().email().max(maxLength)`, so invalid addresses are rejected on create and update without writing a validator.
-- **Filters by domain**, on top of the string operators, `email` adds `domain` and `domainIn` to match the part after `@` (case-insensitive).
-- **Filters with string operators**, `eq`, `ne`, `in`, `contains`, `ilike`, `startsWith`, `isNull`, and the rest, all typed against `string`.
-- **Renders a text input** in the admin form, typed as an email field.
-
-## Quick start
-
-Use `f.email()` inside a `.fields()` callback. The positional argument is the max character length; chain modifiers to refine it.
+One optional argument, a character count. There is no object form and no mode.
+That argument is the only thing that moves the column, and no method on the type
+reopens it. Only `.array()` and the `.drizzle()` escape hatch replace the column.
 
 ```ts title="src/questpie/server/collections/users.ts"
 import { collection } from "#questpie/factories";
 
 export const users = collection("users").fields(({ f }) => ({
-	email: f.email().required(), // varchar(255), NOT NULL, validated
-	backupEmail: f.email(320), // sized varchar(320), optional
+	email: f.email().required(), // varchar(255), NOT NULL
+	backupEmail: f.email(320), // varchar(320), nullable
 }));
 ```
 
-That gives `users` an `email` column typed `string` on read, required on insert, validated as a well-formed address at `≤ 255` chars, and filterable by domain, no schema or migration written by hand.
+Refinements and nullability layer onto that base schema. Without `.required()`
+the field selects as `string | null` and the schema accepts null on write. With
+it, `string`. Nothing here makes the address unique. That is a `uniqueIndex` on
+the column, through [`.indexes()`](/docs/schema/collections).
 
-## Constructor argument
+## Methods
 
-`f.email()` takes a single optional `maxLength`.
+Two methods come with the type. `.required()`, `.default()`, `.label()`,
+`.localized()` and the rest of the base chain work here as on any field.
 
-| Call         | Column         | Notes                                                  |
-| ------------ | -------------- | ------------------------------------------------------ |
-| `f.email()`  | `varchar(255)` | Default. `maxLength` defaults to **255**.              |
-| `f.email(n)` | `varchar(n)`   | Sized varchar; `n` is also applied as a Zod `.max(n)`. |
-
-The field data is always `string`. The derived Zod schema is `z.string().email().max(maxLength)`, the `.email()` refinement is always present, and the `.max()` uses the `255` default or your `n`.
-
-<Callout
-	type="info"
-	title="Need a longer column? 320 is the practical email max"
->
-	The default `varchar(255)` holds nearly every real address, but the RFC upper
-	bound is 320 characters. If you must accept the longest legal addresses, pass
-	`f.email(320)`.
-</Callout>
-
-## Chained methods
-
-These methods are specific to `email` (on top of the [shared modifiers](/docs/schema/fields) every field has). Each returns a new immutable field, so they chain in any order.
-
-| Method    | Effect                                           |
-| --------- | ------------------------------------------------ |
-| `.min(n)` | Minimum **string length** (maps to `minLength`). |
-| `.max(n)` | Maximum **string length** (maps to `maxLength`). |
+| Method    | Effect                                      |
+| --------- | ------------------------------------------- |
+| `.min(n)` | Adds `z.string().min(n)`, a character count |
+| `.max(n)` | Adds `z.string().max(n)`, a character count |
 
 ```ts
-collection("contacts").fields(({ f }) => ({
-	email: f.email().required().max(254), // valid email, capped at 254 chars
-}));
+email: f.email(320).required().min(6),
 ```
 
-<Callout
-	type="warn"
-	title="`.min()` / `.max()` here are STRING LENGTH, not value bounds"
->
-	On an email field, `.min(n)` / `.max(n)` constrain the **number of
-	characters** (they map to `minLength` / `maxLength`, the same as
-	[`f.text()`](/docs/schema/fields/text)). On `f.number()` the same method names
-	constrain the numeric **value**. Same names, different meaning, sized by the
-	field's type.
+<Callout type="warn" title="`.max()` tightens, it never widens">
+	The constructor bakes its width into the schema and `.max(n)` adds a second
+	check beside it. `f.email().max(500)` still rejects 300 characters, and the
+	column stays `varchar(255)`. Widen by changing the constructor argument.
 </Callout>
 
-## Filtering, operators
+<Callout type="warn" title="A well-formed address is not a reachable one">
+	The check is syntax. Nothing resolves the domain or asks whether the mailbox
+	accepts mail. There is no normalization either, so `Ada@Example.com` stores
+	with its capitals. Lowercase it in a `beforeValidate` hook, which runs before
+	the schema.
+</Callout>
 
-`email` uses the **email operator set** (`emailOps`), which extends the string set with two domain matchers. So every email field is filterable with all the string operators _and_ `domain` / `domainIn`. The operand is typed `string` (or `string[]` for the list operators).
+## Filtering
 
-| Operator               | Operand    | Matches                                                      |
-| ---------------------- | ---------- | ------------------------------------------------------------ |
-| `eq` / `ne`            | `string`   | Exact equal / not equal.                                     |
-| `in` / `notIn`         | `string[]` | Value is (not) in the list.                                  |
-| `like` / `notLike`     | `string`   | SQL `LIKE` (case-sensitive, your own `%`).                   |
-| `ilike` / `notIlike`   | `string`   | Case-insensitive `LIKE`.                                     |
-| `contains`             | `string`   | Substring (`LIKE '%value%'`).                                |
-| `startsWith`           | `string`   | Prefix (`LIKE 'value%'`).                                    |
-| `endsWith`             | `string`   | Suffix (`LIKE '%value'`).                                    |
-| `isNull` / `isNotNull` | `boolean`  | Column is (not) null.                                        |
-| `domain`               | `string`   | Email's domain matches (case-insensitive `ILIKE '%@value'`). |
-| `domainIn`             | `string[]` | Email's domain is one of the listed domains.                 |
+Email carries `emailOps`, the fourteen string operators plus two of its own.
+
+| Operator               | Operand             | Matches                                     |
+| ---------------------- | ------------------- | ------------------------------------------- |
+| `eq` / `ne`            | `string`            | Equal, not equal                            |
+| `not`                  | `string`, or `null` | Not equal, or `IS NOT NULL` when given null |
+| `in` / `notIn`         | `string[]`          | In the list, not in the list                |
+| `like` / `notLike`     | `string`            | `LIKE`, case-sensitive, you write the `%`   |
+| `ilike` / `notIlike`   | `string`            | The same, case-insensitive                  |
+| `contains`             | `string`            | Substring, the `%` are added for you        |
+| `startsWith`           | `string`            | Prefix                                      |
+| `endsWith`             | `string`            | Suffix                                      |
+| `isNull` / `isNotNull` | `boolean`           | Pass `false` and each inverts               |
+| `domain`               | `string`            | The part after `@`, case-insensitive        |
+| `domainIn`             | `string[]`          | That part is any one of these               |
 
 ```ts
-// Everyone on the acme.com domain
 const { docs } = await app.collections.users.find({
 	where: { email: { domain: "acme.com" } },
 });
-
-// Internal staff: any of two domains
-const staff = await app.collections.users.find({
-	where: { email: { domainIn: ["acme.com", "acme.io"] } },
-});
 ```
 
-<Callout type="info" title="`domain` matches the suffix after `@`, not a substring">
-`domain` compiles to `ILIKE '%@value'`, so `{ domain: "acme.com" }` matches `a@acme.com` but **not** `a@mail.acme.com` (the stored domain is `mail.acme.com`, not `acme.com`). For broader matching use a string operator, e.g. `{ ilike: "%@%acme.com" }`.
+A bare value is the shorthand and types alongside the operator object.
+`{ email: "ada@acme.com" }` compiles to equality.
+
+`eq`, `in`, `contains` and the `like` pair compare case-sensitively, because
+Postgres does on a `varchar`. The `ilike` pair and both domain operators do not.
+So a stored `Ada@Acme.com` misses `{ eq: "ada@acme.com" }` and still answers
+`{ domain: "acme.com" }`.
+
+<Callout type="info" title="`domain` matches the whole suffix">
+	It compiles to `ILIKE '%@value'`, so `{ domain: "acme.com" }` finds
+	`a@acme.com` and misses `a@mail.acme.com`. An empty `domainIn` list compiles
+	to `FALSE`, which matches no row rather than every row.
 </Callout>
 
-For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see [Fields → filtering](/docs/schema/fields). Relation filters and hydration are covered in [Relations](/docs/schema/relations).
+## In the admin
 
-## When to use it
+The form control is `EmailField`, an `<input type="email">` carrying
+`autocomplete="email"` and `inputmode="email"`, so touch keyboards surface the
+`@` key. The list cell prints the address as stored, and a null or empty value
+shows as `-`.
 
-- **`f.email()`**, any field that must hold a valid email address: a user's login email, a contact address, a notification recipient. You get format validation and domain filters that a plain string field lacks.
-- For a free-form short string with no format constraint, use [`f.text()`](/docs/schema/fields/text) instead.
-- For a website or link, use [`f.url()`](/docs/schema/fields/url), the same idea (a validated string), but with `z.string().url()` and host/protocol filter operators.
+What crosses to the browser:
 
-<Callout type="warn" title="Format-valid is not the same as deliverable">
-	`z.string().email()` checks syntax only. It does not verify the mailbox exists
-	or the domain accepts mail. Treat a passing value as well-formed, not
-	reachable.
-</Callout>
+- The admin rebuilds a Zod check from the metadata, a valid address capped at
+  `maxLength`, so the form checks before it posts.
+- No `maxLength` attribute reaches the input. `f.text()` sends one and typing
+  stops at the width, email does not.
+- The filter builder hands email the text operator list, eight entries:
+  `contains`, `not_contains`, `equals`, `not_equals`, `starts_with`,
+  `ends_with`, `is_empty`, `is_not_empty`. Prefix and suffix have no negated
+  form there, and `domain` and `domainIn` are API only.
 
-## Multiple values
+`.admin(config)` sets the rest of the control. It appears on the field once
+`@questpie/admin` is enabled, and its generated signature takes `unknown`, so
+nothing type-checks the keys you pass.
 
-Chain `.array()` to store a list of email strings in a single `jsonb` column, and bound it with `.minItems(n)` / `.maxItems(n)`. This is a [shared modifier](/docs/schema/fields), not email-specific:
+| Key           | Type     | Effect                       |
+| ------------- | -------- | ---------------------------- |
+| `placeholder` | `string` | Placeholder text             |
+| `domainHint`  | `string` | Nothing. Declared and unread |
+
+Keys such as `showInList`, `listWidth`, `sortable` and `filterable` come from
+the base admin config that every field type shares.
+
+## Lists of addresses
+
+`.array()` replaces the column with `jsonb` and swaps the operator set for the
+multi-value one. `domain`, `domainIn` and every string operator go. Three
+survive the swap: `isNull`, `isNotNull`, and `eq`, which now takes a `string[]`
+and compares the whole list at once. The per-item format check and length cap
+survive too, and `.minItems(n)` / `.maxItems(n)` bound the list. The admin drops
+the email control for a numbered list of email inputs.
 
 ```ts
-ccList: f.email().array().maxItems(20), // string[] of validated emails, stored as jsonb
+recipients: f.email().array().maxItems(20),
 ```
 
-## TypeScript
+[Arrays](/docs/schema/fields/array) has the operator table that replaces this
+one.
 
-An email field contributes a `string` to the generated row, insert, and `where` types, no annotation needed. After `questpie generate`, pull the shapes off the collection or the app types:
+## Types
+
+An email field contributes `string` to the row, the insert and the `where`.
+`.required()` makes it non-null and mandatory on insert.
 
 ```ts
 type User = typeof users.$infer.select;
 //   ^? { id: string; email: string; backupEmail: string | null; ... }
 ```
 
-`.required()` makes the field non-null and required on insert; without it the column is nullable and the insert field optional. See [Fields → inferred types](/docs/schema/fields) for how modifiers flow into the generated types.
-
 ## Related
 
-- [Fields](/docs/schema/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.default()`, `.array()`, …).
-- [Text field](/docs/schema/fields/text), the unvalidated single-line string sibling.
-- [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch for custom rules.
+[Fields](/docs/schema/fields) is the table of every type and the modifiers they
+all share.
+
+[`f.text()`](/docs/schema/fields/text) is the same varchar without the format
+check, and it adds `.pattern()` for a rule of your own.
+
+[`f.url()`](/docs/schema/fields/url) is the other validated string, extending
+the same string set with host and protocol operators.
+
+[Validation](/docs/schema/validation) covers the derived schema and `.zod()`,
+the way to normalize a value.
+
+[Reading and writing](/docs/schema/collections/crud) covers the rest of the
+query surface around `where`.

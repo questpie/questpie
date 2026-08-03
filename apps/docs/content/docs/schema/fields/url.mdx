@@ -1,154 +1,175 @@
 ---
 title: URL field
-description: f.url() is a string field for web addresses, a varchar(2048) with automatic URL-format validation and host/protocol-aware filter operators.
+description: "`f.url()` is a varchar whose value has to parse as a URL. The call picks the width, the width becomes the Zod cap, and the field filters with the string set plus host and protocol."
+kind: reference
+package: questpie
 ---
 
-`f.url()` stores a web address. It produces a `varchar(2048)` column, derives a Zod schema that enforces a valid URL (`z.string().url()`), and exposes the string filter operators plus URL-aware ones (`host`, `protocol`) on the typed `where` clause. Reach for it whenever a field holds a link, a website, a webhook target, a canonical URL, and you want the format checked for free.
+| Call       | Column          | Derived schema               |
+| ---------- | --------------- | ---------------------------- |
+| `f.url()`  | `varchar(2048)` | `z.string().url().max(2048)` |
+| `f.url(n)` | `varchar(n)`    | `z.string().url().max(n)`    |
 
-> **Prerequisites:** read [Fields](/docs/schema/fields) first, this page covers only the `url` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.localized()` / `.default()` are taught there.
-
-## What it does
-
-- **Stores a URL string**, a `varchar(2048)` column by default (the larger default size accommodates long query strings), resizable via the constructor argument.
-- **Validates the format automatically**, the derived schema is `z.string().url()`, so a malformed value is rejected at validation time. No `.url()` call needed.
-- **Filters with URL-aware operators**, every string operator (`eq`, `contains`, `ilike`, …) plus `host`, `hostIn`, and `protocol` for matching the host or scheme of a URL.
-- **Renders a URL input** in the admin form.
-
-## Quick start
-
-Use `f.url()` inside a `.fields()` callback. The positional argument is the max character length; chain modifiers to refine it.
+The argument is a number and nothing else. There is no options object and no
+unbounded mode, so 2048 is the only default to move, and only from the
+constructor. `.array()` and the `.drizzle()` escape hatch are the only things
+that replace the column.
 
 ```ts title="src/questpie/server/collections/links.ts"
 import { collection } from "#questpie/factories";
 
 export const links = collection("links").fields(({ f }) => ({
-	website: f.url().required(), // varchar(2048), NOT NULL, validated as a URL
-	webhook: f.url(500), // varchar(500), still URL-validated
+	website: f.url().required(), // varchar(2048), NOT NULL
+	webhook: f.url(500), // varchar(500)
 }));
 ```
 
-That gives `links` a `website` column typed `string` on read, required on insert, rejected unless it parses as a URL, and filterable with the operators below, no schema or migration written by hand.
+Without `.required()` the field selects as `string | null`. With it, `string`.
 
-## Constructor argument
+## What passes
 
-`f.url()` takes one optional argument: the column's max character length.
+The check hands the value to `new URL()` and accepts whatever parses. QUESTPIE
+passes no scheme or hostname constraint, so the field is not limited to http
+and https.
 
-| Call       | Column          | Notes                                                                                        |
-| ---------- | --------------- | -------------------------------------------------------------------------------------------- |
-| `f.url()`  | `varchar(2048)` | Default. `maxLength` defaults to **2048**, wider than `f.text()`'s 255, since URLs run long. |
-| `f.url(n)` | `varchar(n)`    | Sized varchar; `n` is also applied as a Zod `.max(n)`.                                       |
+| Value                     | Result                    |
+| ------------------------- | ------------------------- |
+| `https://example.com/a?b` | Passes                    |
+| `mailto:hi@example.com`   | Passes, any scheme parses |
+| `ftp://host/file`         | Passes                    |
+| `example.com`             | Rejected, no scheme       |
+| `//example.com`           | Rejected, no scheme       |
+| `" https://x.dev "`       | Passes, stored trimmed    |
 
-The resulting field data is always `string`. The derived Zod schema is `z.string().url().max(maxLength)`, the `.url()` refinement is added unconditionally, so every value is validated as a URL regardless of the length you pass.
+That last row is a write, not just a check. The parser trims and hands the
+trimmed string back, and `create()` and `update()` replace the input with what
+the schema returned. Nothing else is normalized, so case, port and trailing
+slash are stored as typed.
 
-## Chained methods
-
-These methods are specific to `url` (on top of the [shared modifiers](/docs/schema/fields) every field has). Each returns a new immutable field, so they chain in any order.
-
-| Method    | Effect                                     |
-| --------- | ------------------------------------------ |
-| `.min(n)` | Minimum **string length** (Zod `.min(n)`). |
-| `.max(n)` | Maximum **string length** (Zod `.max(n)`). |
+To narrow the scheme, refine with `.zod()`. The type carries no protocol option.
 
 ```ts
-collection("integrations").fields(({ f }) => ({
-	endpoint: f.url().required().min(12), // reject trivially short strings, in addition to URL-format validation
-}));
+endpoint: f.url().zod((s) => s.refine((v) => String(v).startsWith("https://"))),
+```
+
+`.zod()` receives the schema typed as `ZodType`, so the refinement's argument
+arrives as `unknown` and you narrow it yourself. It runs after the format and
+length checks, never instead of them.
+
+## Methods
+
+Two methods come with the type. `.required()`, `.default()`, `.label()`,
+`.localized()` and the rest of the base chain work here as on any field.
+
+| Method    | Effect                                      |
+| --------- | ------------------------------------------- |
+| `.min(n)` | Adds `z.string().min(n)`, a character count |
+| `.max(n)` | Adds `z.string().max(n)`, a character count |
+
+```ts
+endpoint: f.url(500).required().min(12),
+```
+
+<Callout type="warn" title="`.max()` tightens, it never widens">
+	The constructor bakes its width into the schema and `.max(n)` adds a second
+	check beside it. `f.url(500).max(2000)` still rejects 600 characters, and the
+	column stays `varchar(500)`. Widen by changing the constructor argument.
+</Callout>
+
+## Filtering
+
+URL carries `urlOps`, the fourteen string operators plus three of its own.
+
+| Operator               | Operand             | Matches                                     |
+| ---------------------- | ------------------- | ------------------------------------------- |
+| `eq` / `ne`            | `string`            | Equal, not equal                            |
+| `not`                  | `string`, or `null` | Not equal, or `IS NOT NULL` when given null |
+| `in` / `notIn`         | `string[]`          | In the list, not in the list                |
+| `like` / `notLike`     | `string`            | `LIKE`, case-sensitive, you write the `%`   |
+| `ilike` / `notIlike`   | `string`            | The same, case-insensitive                  |
+| `contains`             | `string`            | Substring, the `%` are added for you        |
+| `startsWith`           | `string`            | Prefix                                      |
+| `endsWith`             | `string`            | Suffix                                      |
+| `isNull` / `isNotNull` | `boolean`           | Pass `false` and each inverts               |
+
+The three additions:
+
+| Operator   | Operand    | Compiles to                                      |
+| ---------- | ---------- | ------------------------------------------------ |
+| `host`     | `string`   | `col ILIKE '%://value%'`                         |
+| `hostIn`   | `string[]` | The same, one arm per value, joined with `OR`    |
+| `protocol` | `string`   | `col LIKE 'value://%'`, case-sensitive, anchored |
+
+```ts
+const { docs } = await app.collections.links.find({
+	where: { website: { host: "questpie.com" } },
+});
 ```
 
 <Callout
 	type="warn"
-	title="`.min()` / `.max()` here are STRING LENGTH, not value bounds"
+	title="`host` and `protocol` are patterns, not a parsed URL"
 >
-	On a `url` field, `.min(n)` / `.max(n)` constrain the **number of characters**
-	(they map to `minLength` / `maxLength`), exactly as on
-	[`f.text()`](/docs/schema/fields/text). On `f.number()` the same method names
-	constrain the numeric **value**. Same names, different meaning, sized by the
-	field's type.
+	`host` looks for `://` followed by your value anywhere in the string, so
+	`example.com` also matches `https://example.com.evil.net` and a URL carrying
+	that text in its query. `protocol` needs the `//`, so `mailto` never matches.
+	An empty `hostIn` compiles to `FALSE`.
 </Callout>
 
-<Callout type="info" title="URL validation is always on; tighten it with `.zod()`">
-The `.url()` refinement is appended automatically, you don't add it and you can't turn it off through a field method. To go further (e.g. allow only `https`, or restrict hosts), use the `.zod()` escape hatch: `f.url().zod((s) => s.refine((v) => v.startsWith("https://")))`.
-</Callout>
+## In the admin
 
-## Filtering, operators
+The form control is `TextField`. The list cell is `TextCell`, which truncates
+and puts the full value in a `title` attribute. Neither renders a link.
 
-`url` uses the **URL operator set** (`urlOps`), which is the [string operator set](/docs/schema/fields/text) extended with three URL-specific operators. Every `url` field is filterable with these in a `where` clause.
+What crosses to the browser:
 
-The inherited string operators (operand `string`, or `string[]` for `in` / `notIn`):
+- The input is `type="text"`. The primitive does support `type="url"` and the
+  URL touch keyboard that goes with it. The registration asks for neither.
+- `maxLength` becomes the input's `maxLength` attribute, so typing stops at the
+  width. A `.max(n)` above the constructor width is the number that crosses.
+- The admin rebuilds its own schema for the form from `z.url()` and `maxLength`.
+  It never reads `minLength`, so `.min(n)` is a server-side check only. That is
+  the one place URL differs from [text](/docs/schema/fields/text), which applies
+  both.
 
-| Operator                  | Operand    | Matches                                    |
-| ------------------------- | ---------- | ------------------------------------------ |
-| `eq` / `ne`               | `string`   | Exact equal / not equal.                   |
-| `in` / `notIn`            | `string[]` | Value is (not) in the list.                |
-| `like` / `notLike`        | `string`   | SQL `LIKE` (case-sensitive, your own `%`). |
-| `ilike` / `notIlike`      | `string`   | Case-insensitive `LIKE`.                   |
-| `contains`                | `string`   | Substring (`LIKE '%value%'`).              |
-| `startsWith` / `endsWith` | `string`   | Prefix / suffix match.                     |
-| `isNull` / `isNotNull`    | `boolean`  | Column is (not) null.                      |
+Configure the rest with `.admin()`, the field extension `@questpie/admin`
+registers.
 
-The URL-specific additions:
+| Key                    | Type                | Effect                  |
+| ---------------------- | ------------------- | ----------------------- |
+| `placeholder`          | `string`            | The input's placeholder |
+| `showProtocolDropdown` | `boolean`           | Nothing. Declared only  |
+| `defaultProtocol`      | `"http" \| "https"` | Nothing. Declared only  |
 
-| Operator   | Operand    | Matches                                                                                           |
-| ---------- | ---------- | ------------------------------------------------------------------------------------------------- |
-| `host`     | `string`   | Rows whose URL contains `://value` (case-insensitive), i.e. the given host. e.g. `"example.com"`. |
-| `hostIn`   | `string[]` | Rows matching any host in the list.                                                               |
-| `protocol` | `string`   | Rows whose URL begins `value://` (case-**sensitive**), i.e. the given scheme. e.g. `"https"`.     |
+The last two type-check and reach the component as props, and no component under
+`packages/` reads either one. The shared `.admin()` keys, `hidden`, `readOnly`,
+`group`, `colspan` and the rest, behave as they do on any field.
 
-```ts
-// All links pointing at a given host
-const { docs } = await app.collections.links.find({
-	where: { website: { host: "questpie.com" } },
-});
+## Lists
 
-// Only secure (https) endpoints
-const secure = await app.collections.links.find({
-	where: { webhook: { protocol: "https" } },
-});
-```
-
-<Callout
-	type="info"
-	title="`host`/`protocol` are pattern matches, not a parsed URL"
->
-	These operators match against the raw stored string with `LIKE`/`ILIKE`, they
-	don't parse the URL. `host` looks for `://value` anywhere in the string (so it
-	also matches a host that appears inside a path), and `protocol` is a
-	case-sensitive prefix match on `value://`. They're convenient filters, not a
-	strict URL parser.
-</Callout>
-
-For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see [Fields → filtering](/docs/schema/fields). Relation filters and hydration are covered in [Relations](/docs/schema/relations).
-
-## When to use it
-
-- **`f.url()`**, any field that holds a web address you want format-checked: a site URL, a webhook endpoint, a canonical link, an avatar URL, an external profile.
-- For a **plain string** with no URL validation (a path, a slug, an arbitrary identifier), use [`f.text()`](/docs/schema/fields/text).
-- For an **email address**, use `f.email()`, the same string shape with `z.string().email()` validation and `domain` operators instead (see [Email field](/docs/schema/fields/email)).
-- To **upload a file** and store a link to it, reach for the [Upload field](/docs/schema/fields/upload) (`f.upload()`), or the collection-level [`.upload()`](/docs/schema/collections#uploads) builder, not a `url` field.
-
-## Multiple values
-
-Chain `.array()` to store a list of URLs in a single `jsonb` column, and bound it with `.minItems(n)` / `.maxItems(n)`. This is a [shared modifier](/docs/schema/fields), not url-specific:
+`.array()` replaces the column with `jsonb` and swaps `urlOps` for the
+multi-value set, so `host` and `protocol` are gone from the filter. Each element
+is still parsed as a URL on write.
 
 ```ts
-links: f.url().array().maxItems(5), // string[] of URLs stored as jsonb
+mirrors: f.url().array().maxItems(5),
 ```
 
-Each element is still validated as a URL.
-
-## TypeScript
-
-A `url` field contributes a `string` to the generated row, insert, and `where` types, no annotation needed. After `questpie generate`, pull the shapes off the collection or the app types:
-
-```ts
-type Link = typeof links.$infer.select;
-//   ^? { id: string; website: string; webhook: string | null; ... }
-```
-
-`.required()` makes the field non-null and required on insert; without it the column is nullable and the insert field optional. See [Fields → inferred types](/docs/schema/fields) for how modifiers flow into the generated types.
+The admin's item-type allowlist has no `url` in it, so items get a plain text
+input and the form runs no per-item check. A bad element is caught by the write.
 
 ## Related
 
-- [Fields](/docs/schema/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.default()`, `.array()`, …).
-- [Text field](/docs/schema/fields/text), the plain-string sibling and the `stringOps` operator set `url` extends.
-- [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch for stricter URL rules.
+[Text](/docs/schema/fields/text) is the plain string and the owner of the
+`stringOps` set URL extends.
+
+[Email](/docs/schema/fields/email) is the other format-checked varchar, with
+`domain` and `domainIn` in place of `host` and `protocol`.
+
+[Arrays](/docs/schema/fields/array) covers what `.array()` does to reads, writes
+and filters.
+
+[Uploads](/docs/schema/fields/upload) is for a file you store rather than a link
+you point at.
+
+[Validation](/docs/schema/validation) covers the derived schema and `.zod()`.

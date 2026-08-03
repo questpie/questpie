@@ -158,7 +158,7 @@ admission with `REALTIME_TOPIC_REJECTED` rather than degrading quietly.
 
 `nativeDeltas` is `false` by default. Until you turn it on, a topic that
 qualifies for keyed deltas is served as a snapshot instead, so correctness never
-waits on a rollout. [Scalable realtime](/docs/concepts/scalable-realtime) is the
+waits on a rollout. [Scalable realtime](/docs/infrastructure/realtime/scaling) is the
 page for high-fanout modeling.
 
 ## Writing your own broker
@@ -185,12 +185,12 @@ outbox event types are exported from `questpie/realtime`.
 
 ## Where each topic lives
 
-| Topic                                           | Page                                                      |
-| ----------------------------------------------- | --------------------------------------------------------- |
-| Every option, admission limit and outbox column | [Tuning](/docs/infrastructure/realtime/tuning)            |
-| Pusher auth, revocation, client events          | [Pusher and Soketi](/docs/infrastructure/realtime/pusher) |
-| `live()`, `liveIter()`, TanStack Query          | [Client realtime](/docs/client/realtime)                  |
-| `channel()`, presence, replay                   | [Channels](/docs/client/channels)                         |
-| Scope, routing, high fanout                     | [Scalable realtime](/docs/concepts/scalable-realtime)     |
-| Subscription sizing and React performance       | [Reactive apps](/docs/client/reactive-apps)               |
-| Where `realtime` sits in the config             | [Configuration](/docs/ship/configuration)                 |
+| Topic                                           | Page                                                       |
+| ----------------------------------------------- | ---------------------------------------------------------- |
+| Every option, admission limit and outbox column | [Tuning](/docs/infrastructure/realtime/tuning)             |
+| Pusher auth, revocation, client events          | [Pusher and Soketi](/docs/infrastructure/realtime/pusher)  |
+| `live()`, `liveIter()`, TanStack Query          | [Client realtime](/docs/client/realtime)                   |
+| `channel()`, presence, replay                   | [Channels](/docs/client/channels)                          |
+| Scope, routing, high fanout                     | [Scalable realtime](/docs/infrastructure/realtime/scaling) |
+| Subscription sizing and React performance       | [Reactive apps](/docs/client/reactive-apps)                |
+| Where `realtime` sits in the config             | [Configuration](/docs/ship/configuration)                  |

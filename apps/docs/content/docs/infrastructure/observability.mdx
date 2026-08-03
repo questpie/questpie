@@ -1,0 +1,200 @@
+---
+title: Observability
+description: Traces, metrics and correlated logs over OTLP from one config entry. Unconfigured a span call costs a function call and nothing else, and the seam names no vendor, so the OpenTelemetry adapter is what ships rather than what you are locked into.
+kind: guide
+package: "@questpie/observability"
+---
+
+Every framework seam already calls `observability.span(...)`. Whether that
+produces a trace is decided by one key in `runtimeConfig`, and by nothing else.
+The interface under it is five methods that never mention OpenTelemetry, so the
+adapter QUESTPIE ships is a translation layer, not a dependency you inherit.
+
+## The default
+
+There is no adapter, and that is a real default rather than an unfinished one.
+`ObservabilityService.enabled` is false, `span()` hands the callback a shared
+no-op span and calls straight through, and the CRUD, database, KV, search and
+job seams check `enabled` and return before building any attributes. Nothing is
+exported. The `questpie` package has no `@opentelemetry/*` dependency, so an app
+that never turns tracing on never installs the SDK.
+
+The HTTP root is the one seam without that check. It opens a span on every
+request and stamps method, path and status onto whatever comes back, because the
+status is only known once the handler has returned. Disabled, that is one object
+handed to a no-op span.
+
+## The adapters
+
+| Adapter             | Package                   | Needs                      | Pick it when                                   |
+| ------------------- | ------------------------- | -------------------------- | ---------------------------------------------- |
+| none                | built in                  | nothing                    | You are not reading traces yet.                |
+| `otelObservability` | `@questpie/observability` | An OTLP/HTTP collector URL | Anything OTLP reaches, which is most backends. |
+| your own            | yours                     | The interface below        | Your backend has no OTLP intake.               |
+
+One shipped adapter is not a short menu by accident. `otelObservability` speaks
+OTLP/HTTP, which every OTel Collector accepts and every backend behind one
+therefore accepts too, so a second built-in would re-encode the same bytes.
+
+## Configuring
+
+```bash
+bun add @questpie/observability
+```
+
+Observability is a runtime adapter, not a module. It contributes no collections,
+routes or jobs, so there is nothing to add to `modules.ts`. It sits beside `kv`
+and `search` in `runtimeConfig`, where `adapter` is the only key it takes.
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { otelObservability } from "@questpie/observability";
+import { runtimeConfig } from "questpie/app";
+
+export default runtimeConfig({
+	observability: {
+		adapter: otelObservability({
+			serviceName: "my-app",
+			environment: process.env.NODE_ENV,
+			otlpEndpoint: process.env.OTLP_ENDPOINT,
+			samplingRatio: 0.1,
+		}),
+	},
+});
+```
+
+| Option                | Type                     | Default   | Notes                                                                                    |
+| --------------------- | ------------------------ | --------- | ---------------------------------------------------------------------------------------- |
+| `serviceName`         | `string`                 | required  | Becomes `service.name`. An unnamed service is unusable in any backend.                   |
+| `serviceVersion`      | `string`                 | unset     | Becomes `service.version`. Wire your build's version to pin a regression to a deploy.    |
+| `environment`         | `string`                 | unset     | Becomes `deployment.environment.name`.                                                   |
+| `otlpEndpoint`        | `string`                 | unset     | OTLP/HTTP base URL. Traces post to `/v1/traces`, metrics `/v1/metrics`, logs `/v1/logs`. |
+| `otlpHeaders`         | `Record<string, string>` | unset     | Sent with every export. This is where a vendor API key goes.                             |
+| `samplingRatio`       | `number`                 | always on | `0` to `1`, wrapped parent-based. See below.                                             |
+| `console`             | `boolean`                | `false`   | Also print spans to stdout, unbatched. Development only, it is very noisy.               |
+| `metricIntervalMs`    | `number`                 | `60000`   | Metric export interval.                                                                  |
+| `resourceAttributes`  | `Attributes`             | `{}`      | Merged last, so it overrides anything above.                                             |
+| `spanProcessors`      | `SpanProcessor[]`        | `[]`      | Appended after the OTLP and console ones. A second exporter, or capture in a test.       |
+| `logRecordProcessors` | `LogRecordProcessor[]`   | `[]`      | The same, for log records.                                                               |
+
+<Callout type="info" title="The providers are built eagerly, and globally">
+	`otelObservability()` runs when `runtimeConfig` is evaluated, and it installs
+	the OTel global tracer, meter, logger, context manager and propagator right
+	then. Early enough that the first request is traced. Call it once.
+</Callout>
+
+### Without an endpoint, nothing leaves the process
+
+Omit `otlpEndpoint` and the providers are built with no exporters at all: no
+span processor, no metric reader, no log processor. Spans still open and nest,
+so log lines still carry `trace_id`. That is what makes the adapter safe to
+leave wired in development, and it is what `console: true` pairs with.
+
+### Sampling
+
+`samplingRatio` is wrapped in a parent-based sampler, so a request already
+sampled upstream stays sampled here whatever the ratio says. A bare ratio
+sampler drops spans whose parent was sampled, leaving holes that read as bugs in
+the caller. At `0.1` you get a tenth of traces whole, not a tenth of every span.
+
+### Pointing it at a backend
+
+Every one of these takes standard OTLP/HTTP, so the difference is a URL.
+
+| Backend                         | `otlpEndpoint`               | `otlpHeaders`                          |
+| ------------------------------- | ---------------------------- | -------------------------------------- |
+| OTel Collector, Jaeger, Tempo   | `http://otel-collector:4318` | none                                   |
+| Datadog, via the Agent's intake | `http://datadog-agent:4318`  | none                                   |
+| Honeycomb, direct               | `https://api.honeycomb.io`   | `{ "x-honeycomb-team": YOUR_API_KEY }` |
+
+## Flushing on shutdown
+
+Spans, metrics and logs are batched, and a process that exits without flushing
+loses the last batch, which is the interesting one more often than not.
+
+`app.destroy()` covers it. The observability service registers a `dispose` that
+calls `shutdown()`, and teardown walks the infrastructure services in reverse,
+so queue, realtime, search and the database have all closed before it flushes.
+
+```ts
+process.on("SIGTERM", async () => {
+	await app.destroy();
+	process.exit(0);
+});
+```
+
+`await app.observability.shutdown()` flushes only this one, for when you are
+tearing the rest down yourself.
+
+## What gets a span
+
+HTTP requests, collection CRUD calls, database queries and transactions, job
+executions, KV calls and search queries. An inbound `traceparent` is continued
+rather than replaced, so a request from another service joins that trace.
+[Instrumented seams](/docs/infrastructure/observability/seams) carries the names,
+kinds and attributes, the one metric, and what is deliberately never attached.
+
+## Your own spans
+
+QUESTPIE instruments its own seams. Anything you call yourself, a payment
+provider or an image pipeline, stays invisible until you say otherwise.
+
+```ts title="src/questpie/server/routes/import.post.ts"
+import { route } from "questpie/services";
+
+export default route()
+	.post()
+	.handler(async ({ observability }) =>
+		observability.span(
+			"import.csv",
+			async (span) => {
+				const rows = await loadRows();
+				span.setAttributes({ "import.row_count": rows.length });
+				return importRows(rows);
+			},
+			{ kind: "internal" },
+		),
+	);
+```
+
+`span(name, fn, options)` nests under whatever span is active, so this lands
+under the HTTP span with no wiring, and it works with no adapter too. The span
+stays open until the promise settles, records the error, ends, and rethrows.
+Nothing is swallowed.
+
+## The interface
+
+`questpie/observability` exports the shapes an adapter implements. Nothing
+there names OpenTelemetry, so a homegrown adapter is the same amount of work.
+
+```ts
+interface ObservabilityAdapter {
+	tracer(name: string): Tracer;
+	meter(name: string): Meter;
+	activeSpanContext?(): { traceId: string; spanId: string } | undefined;
+	emitLog?(record: ObservabilityLogRecord): void;
+	shutdown(): Promise<void>;
+}
+```
+
+`tracer()` and `meter()` are required. A `Tracer` has one method,
+`startActiveSpan(name, options, fn)`, and the callback form is the only one
+exposed because it cannot leak an unended span. A `Meter` creates counters and
+histograms. `shutdown()` must flush.
+
+The two optional methods are what a fuller adapter adds. `activeSpanContext()`
+is how the logger reads the open span's ids, and it must return `undefined`
+outside a span rather than an all-zero trace id, which would look like
+correlation and join to nothing. `emitLog()` tees records onto your backend
+without touching Pino's output.
+
+`StartSpanOptions.carrier` is the propagation seam. QUESTPIE passes the raw
+inbound headers and lets the adapter decide the format, because W3C is not the
+only propagator there is. An adapter that ignores it starts a fresh trace per
+hop. Wire your instance under `observability.adapter`, same as the built-in.
+
+## Related
+
+- [Instrumented seams](/docs/infrastructure/observability/seams), every span QUESTPIE opens and every attribute it attaches.
+- [Trace a slow request](/docs/guides/debug-a-slow-request), install to waterfall to the slow SQL statement.
+- [Monitoring](/docs/ship/monitoring), health probes and what to alert on.
+- [Configuration](/docs/ship/configuration), where `runtimeConfig` puts `observability`.

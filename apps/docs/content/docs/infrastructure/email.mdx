@@ -1,0 +1,208 @@
+---
+title: Email
+description: Outgoing mail leaves through one adapter you name in config. Console prints it, SMTP, Resend and Plunk deliver it, and neither your templates nor your send calls move when you swap.
+kind: guide
+package: questpie
+---
+
+[Emails](/docs/code/emails) owns the templates and the `ctx.email.send` and
+`ctx.email.sendTemplate` calls that render them. This page owns the slot
+underneath, the provider that carries a message off your server, and how you
+point it somewhere else without touching a template.
+
+## The default
+
+There is not one. `email.adapter` is required, and the core email service throws
+while the app boots when it is missing.
+
+```
+QUESTPIE: 'email.adapter' is required. Provide adapter in .build({ email: { adapter: ... } })
+```
+
+Email is an infrastructure service resolved eagerly inside `createApp()`, so a
+missing adapter fails at startup rather than on your first send. The closest
+thing to a default is what the starters write for you:
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { runtimeConfig } from "questpie/app";
+import { ConsoleAdapter } from "questpie/adapters/console";
+
+export default runtimeConfig({
+	email: { adapter: new ConsoleAdapter({ logHtml: false }) },
+});
+```
+
+`ConsoleAdapter` logs From, To, CC, BCC, Reply-To, Subject, the plain-text body
+and attachment filenames, then returns. No server, no key, no network. It is
+what `create-questpie` picks unless you ask for a different provider.
+
+<Callout type="info" title="`MailerService` has a fallback you never reach">
+	Built directly with no adapter it makes a `ConsoleAdapter` outside production
+	and throws inside it. The core service asserts your adapter before it ever
+	constructs the mailer, so that branch only surfaces in tests. Set `adapter`.
+</Callout>
+
+## The adapters
+
+Four ship with QUESTPIE, each behind its own entry point so you pull in only the
+client you actually use. None of them is re-exported from the root `questpie`
+barrel.
+
+| Adapter          | Import                      | Needs                                      | Pick it when                                              |
+| ---------------- | --------------------------- | ------------------------------------------ | --------------------------------------------------------- |
+| `ConsoleAdapter` | `questpie/adapters/console` | nothing                                    | Local development and tests. Nothing leaves the process.  |
+| `SmtpAdapter`    | `questpie/adapters/smtp`    | `nodemailer`, an optional peer             | Any SMTP server. Your options reach `sendMail` untouched. |
+| `ResendAdapter`  | `questpie/adapters/resend`  | A [Resend](https://resend.com) API key     | You want an HTTP API with idempotency keys.               |
+| `PlunkAdapter`   | `questpie/adapters/plunk`   | A [Plunk](https://useplunk.com) secret key | You already run Plunk, hosted or your own.                |
+
+The starters depend on `nodemailer` directly, so SMTP works out of the box
+there. Elsewhere `questpie/adapters/smtp` imports it at load and fails without
+it. Resend and Plunk also export `resendAdapter()` and `plunkAdapter()` factories.
+
+### What actually changes when you swap
+
+Your send calls are identical across all four. These are not.
+
+| Behavior    | Console           | SMTP          | Resend        | Plunk                       |
+| ----------- | ----------------- | ------------- | ------------- | --------------------------- |
+| Delivers    | no                | yes           | yes           | yes                         |
+| Transport   | your logger       | nodemailer    | HTTPS         | HTTPS                       |
+| CC and BCC  | logged            | yes           | yes           | throws                      |
+| Attachments | filenames only    | yes           | base64        | base64                      |
+| Body        | text, HTML opt-in | text and HTML | text and HTML | HTML, else text             |
+| Failure     | never             | nodemailer's  | non-2xx       | non-2xx or `success: false` |
+
+Plunk posts one body, `html || text`, so a message carrying both loses its plain
+text alternative.
+
+<Callout type="warn" title="Plunk rejects CC and BCC">
+	`PlunkAdapter` throws before the request when a message sets either, because
+	Plunk's transactional API does not document those fields. It also treats a
+	`success: false` body as a failure on an HTTP 2xx. Need CC, use SMTP or
+	Resend.
+</Callout>
+
+## Configuring
+
+The `email` key of `questpie.config.ts` is a `MailerConfig`. It has three fields.
+
+| Option          | Type                                  | Default                 | Notes                                                                        |
+| --------------- | ------------------------------------- | ----------------------- | ---------------------------------------------------------------------------- |
+| `adapter`       | `MailAdapter \| Promise<MailAdapter>` | none, required          | A promise is awaited on send, which is how the Ethereal helper plugs in.     |
+| `defaults.from` | `string`                              | `"noreply@example.com"` | Used when a send call omits `from`. Set it, or your mail claims example.com. |
+| `templates`     | `Record<string, …>`                   | written by codegen      | Codegen fills this from `emails/*.ts`. You do not list templates by hand.    |
+
+### Swapping to Resend
+
+One entry changes. Nothing in a template or a send call does.
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { runtimeConfig } from "questpie/app";
+import { ConsoleAdapter } from "questpie/adapters/console";
+import { ResendAdapter } from "questpie/adapters/resend";
+
+import { env } from "@/lib/env.js";
+
+export default runtimeConfig({
+	email: {
+		adapter:
+			env.MAIL_ADAPTER === "resend"
+				? new ResendAdapter({
+						apiKey: requiredEnv(env.RESEND_API_KEY, "RESEND_API_KEY"),
+					})
+				: new ConsoleAdapter({ logHtml: false }),
+		defaults: { from: "QUESTPIE <no-reply@example.com>" },
+	},
+});
+```
+
+That branch is what `create-questpie` scaffolds, `requiredEnv` included. It
+writes that guard into the same file because the env it generates declares
+`RESEND_API_KEY` optional while `apiKey` is not. It also writes `MAIL_ADAPTER`,
+defaulting to `console`, plus `SMTP_HOST` and `SMTP_PORT` or `PLUNK_SECRET_KEY`.
+QUESTPIE reads none of them, your [env](/docs/ship/environment) module does.
+
+Each adapter takes more than a key. Base URLs for compatible providers,
+idempotency keys, a `fetch` override, an after-send callback. Those live on
+[Adapter options](/docs/infrastructure/email/adapters), with the Ethereal inbox.
+
+## The interface
+
+An adapter is one method. Extend `MailAdapter` from `questpie/mailer`, implement
+`send`, and wire the instance into the same slot a built-in uses.
+
+```ts
+abstract class MailAdapter {
+	abstract send(options: SerializableMailOptions): Promise<void>;
+}
+```
+
+By the time `send` runs the mailer has serialized the message. It filled `from`
+from the call, then `defaults.from`, then `"noreply@example.com"`, derived `text`
+from `html` when `text` was missing, and threw if the message carried neither.
+
+```ts
+type SerializableMailOptions = {
+	from: string; // always present, defaulted at serialize time
+	to: string | string[];
+	cc?: string | string[];
+	bcc?: string | string[];
+	subject: string;
+	text: string; // derived from html when the call omitted it
+	html: string; // present, may be "" on a text-only send
+	replyTo?: string;
+	headers?: Record<string, string>;
+	attachments?: Array<{
+		filename: string;
+		content: Buffer | string;
+		contentType?: string;
+	}>;
+};
+```
+
+So `from`, `text` and `html` always arrive as strings and you never re-derive
+them. `html` is `""` on a text-only send, and that is the one thing to guard.
+
+### Writing your own
+
+```ts title="src/questpie/server/lib/my-mail-adapter.ts"
+import { MailAdapter } from "questpie/mailer";
+import type { SerializableMailOptions } from "questpie/mailer";
+
+export class MyMailAdapter extends MailAdapter {
+	constructor(private apiKey: string) {
+		super();
+	}
+
+	async send(options: SerializableMailOptions): Promise<void> {
+		const res = await fetch("https://mail.example.com/send", {
+			method: "POST",
+			headers: { Authorization: `Bearer ${this.apiKey}` },
+			body: JSON.stringify({
+				...options,
+				html: options.html || undefined, // "" on a text-only send
+				text: options.text || undefined,
+			}),
+		});
+		if (!res.ok) throw new Error(`Mail error ${res.status}`);
+	}
+}
+```
+
+Then `email: { adapter: new MyMailAdapter(env.MAIL_API_KEY) }`, and that is the
+whole contract. `questpie/mailer` exports `MailAdapter`, `MailerConfig`,
+`MailOptions` and `SerializableMailOptions`. Each adapter's own options type
+comes from its own entry point.
+
+<Callout type="warn" title="A throw from `send` is a lost message">
+	Nothing retries for you. The HTTP adapters raise on a provider error and SMTP
+	raises on a transport error, both straight out of your handler. Dispatch sends
+	you cannot lose from a [job](/docs/code/jobs) so the queue retries them.
+</Callout>
+
+## Related
+
+- [Emails](/docs/code/emails), templates, `EmailResult`, and the send service this adapter delivers for.
+- [Adapter options](/docs/infrastructure/email/adapters), every knob on all four, and the Ethereal test inbox.
+- [Configuration](/docs/ship/configuration), where `runtimeConfig` puts `email`.
+- [Building a plugin](/docs/guides/build-a-plugin), the pattern every adapter contract follows.

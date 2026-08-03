@@ -1,0 +1,143 @@
+---
+title: Writing an adapter
+description: The obligations behind each optional method on QueueAdapter, what the framework guarantees you in return, and why declaring a capability you cannot actually honor is the one mistake that costs data.
+kind: guide
+package: questpie
+---
+
+Implement `QueueAdapter`, declare what your broker can do, and pass an instance
+to `runtimeConfig`. The three built-ins go through exactly this contract, so
+there is no private path yours is missing.
+
+```ts title="src/lib/my-queue-adapter.ts"
+import type { QueueAdapter } from "questpie/queue";
+
+class MyAdapter implements QueueAdapter {
+	capabilities = {
+		longRunningConsumer: true,
+		runOnceConsumer: false,
+		pushConsumer: false,
+		scheduling: false,
+		singleton: false,
+		executionTerminalState: false,
+	};
+
+	async start() {}
+	async stop() {}
+	async publish(jobName, payload, options, dispatchId) {
+		return "broker-job-id";
+	}
+	async schedule(jobName, cron, payload, options) {}
+	async unschedule(jobName) {}
+	on(event, handler) {}
+
+	async listen(handlers, options) {}
+}
+```
+
+## What the framework hands you
+
+### `dispatchId` is stable logical identity
+
+It arrives as the fourth `publish` argument and it is a UUID that survives
+retries, broker retention and an adapter change. Use it as your broker's
+physical dedupe id, and carry it back on the handler record so recovery can
+match a delivery to the ledger row that created it.
+
+### Handlers are keyed by the durable job name
+
+`listen` and `runOnce` receive a `QueueHandlerMap`, which is
+`Record<jobName, handler>`. `createPushConsumer` gets one as `args.handlers`.
+Each handler takes a `QueueJobRecord` of
+`{ id, data, dispatchId?, idempotencyKey?, secretPayload?, finalAttempt? }`.
+
+### `data` is raw and you never validate it
+
+Store and replay the payload exactly as given. QUESTPIE re-parses it against the
+job's Zod schema before the user handler runs, so a validation pass in your
+adapter is duplicated work at best.
+
+### The envelope namespace is reserved
+
+A payload whose top-level `__questpieQueue` metadata matches the framework
+protocol version and the physical job id is decoded as a QUESTPIE envelope.
+Anything else is passed through untouched, so a user payload that happens to
+carry a similar-looking key is not hijacked.
+
+## What you owe back
+
+### `publishInTransaction`
+
+Implement it only when your adapter can genuinely insert through the application
+Drizzle transaction it is handed. If your storage is separate, leave it off, or
+set `transactionalPublishing: false` when the adapter is only sometimes
+transactional. The runtime then routes through the durable dispatch ledger
+described in
+[Transactional dispatch](/docs/infrastructure/queue/transactional-dispatch).
+
+### `ensureQueue`
+
+`queue.listen()` calls it once per job before your consumers start, carrying the
+job's declared `queuePolicy`. It exists so the worker and every publisher create
+a queue with the same policy, since whoever creates it first wins and the policy
+is fixed from then on. Omit it if your broker has no pre-declared queues.
+
+### `executionTerminalState`
+
+This is the flag that gates encrypted payloads, and the only one where an
+optimistic answer loses data rather than throwing.
+
+Set it true only when both hold. Your adapter preserves
+`options.secretPayload` on every physical attempt, and your
+`inspectExecutionState()` reads durable broker truth for every terminal path,
+including timeouts, heartbeat expiry, stalls, cancellation and retry exhaustion
+that happen outside the handler. It returns one of `pending`, `active`,
+`completed`, `failed` or `missing`.
+
+<Callout type="warn" title="`finalAttempt` is not the capability">
+	It is useful delivery metadata and nothing more. Reporting it correctly does
+	not qualify an adapter for `secretPayload`, because the broker can terminalize
+	work on paths where no delivery, and therefore no `finalAttempt`, ever
+	happened.
+</Callout>
+
+BullMQ is the worked example of getting this right by declining. It reports
+`finalAttempt` accurately, and still sets `executionTerminalState: false`,
+because stalled-job limits and custom backoff can end work outside the
+processor. The framework then rejects a secret publish before it happens rather
+than encrypting something it cannot later prove it erased.
+
+## Capability inference
+
+Leave `capabilities` off entirely and the runtime derives it from your methods.
+
+| Flag                     | Inferred from                                  |
+| ------------------------ | ---------------------------------------------- |
+| `longRunningConsumer`    | `listen` is present                            |
+| `runOnceConsumer`        | `runOnce` is present                           |
+| `pushConsumer`           | `createPushConsumer` is present                |
+| `scheduling`             | `schedule` and `unschedule` are both functions |
+| `singleton`              | `false`                                        |
+| `executionTerminalState` | `false`                                        |
+
+Declaring a flag always wins over inference, with the one exception above.
+`executionTerminalState` needs the declaration and a real
+`inspectExecutionState` method, and having only one of the two resolves to
+`false`.
+
+## Targeting Cloudflare Workers
+
+The handler from `questpie/adapters/cloudflare` asserts compatibility before it
+serves anything, and for the queue slot it looks for a `runtime: "cloudflare"`
+property on the adapter and a `createPushConsumer()` method. An adapter meant
+for Workers needs both, or that assertion throws with `queue.adapter` listed
+among the issues.
+
+## Where each topic lives
+
+| Topic                                   | Page                                                                         |
+| --------------------------------------- | ---------------------------------------------------------------------------- |
+| The interface and the built-in adapters | [Queue](/docs/infrastructure/queue)                                          |
+| The ledger, the relay and its bounds    | [Transactional dispatch](/docs/infrastructure/queue/transactional-dispatch)  |
+| What a secret payload costs the caller  | [Secret payloads](/docs/code/jobs#secret-bearing-payloads-and-safe-receipts) |
+| Writing adapters for the other slots    | [Building a plugin](/docs/guides/build-a-plugin)                             |

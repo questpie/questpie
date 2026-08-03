@@ -1,0 +1,167 @@
+---
+title: Infrastructure
+description: Storage, search, realtime, KV and the rest. Each one is a service your handlers call and an adapter you pick behind it, so moving from local disk to S3 or from a Map to Redis is one line in one file.
+kind: guide
+package: questpie
+---
+
+Every page in this group covers one concern the same way. What the service does,
+what runs behind it when you configure nothing, which adapters ship, and the
+interface to implement when none of them fit.
+
+## The default
+
+`db` is the one thing QUESTPIE cannot invent for you. Every slot below has a
+fallback, which is why a fresh app runs with no infrastructure to provision.
+
+| Slot            | With no configuration                                       | Outgrow it when                                  |
+| --------------- | ----------------------------------------------------------- | ------------------------------------------------ |
+| `storage`       | Files SDK `fs()` rooted at `./uploads`                      | A second instance, or a disk a deploy wipes      |
+| `search`        | `PostgresSearchAdapter`, full-text plus trigram             | You want ranking by meaning rather than by words |
+| `realtime`      | `PgNotifyChangeBroker` on your `db.url`, delivered over SSE | You want the wake-ups off Postgres               |
+| `kv`            | `MemoryKVAdapter`, a `Map` in this process                  | Two processes have to agree on a key             |
+| `logger`        | `PinoLoggerAdapter` at level `info`                         | Your platform wants a different sink             |
+| `observability` | Frozen no-op tracer and meter                               | You want traces and metrics                      |
+| `email`         | `ConsoleAdapter`, and only off production                   | Mail has to leave the process                    |
+| `queue`         | Nothing                                                     | You write your first job                         |
+| `executor`      | Disabled                                                    | You run code that was not in the deploy          |
+
+Three of those rows are refusals rather than backends. Outside
+`NODE_ENV=production` the mailer builds a `ConsoleAdapter` on first send and
+prints the message instead of delivering it, and in production that same send
+throws. With no `queue` block the queue service hands back an empty client, so
+codegen still types `app.queue.<job>` while the property is missing and
+dispatching throws on it. `ctx.executor.run()` throws while `executor` is unset,
+and again for `isolation: "sandboxed"` with no `executor.sandboxed`.
+
+Realtime has one soft edge. The default broker needs a direct Postgres
+connection string, which `db: { url }` supplies and a prebuilt `db: { drizzle }`
+client may not. Without one there is no broker, and delivery falls back to
+reconciliation polling every two seconds.
+
+## Where each concern lives
+
+One page per concern, carrying its interface and its adapters together.
+
+| Concern         | Adapters that ship                                          | Page                                                |
+| --------------- | ----------------------------------------------------------- | --------------------------------------------------- |
+| Storage         | Any Files SDK adapter, over forty of them                   | [Storage](/docs/infrastructure/storage)             |
+| Search          | `postgres`, `pgvector`                                      | [Search](/docs/infrastructure/search)               |
+| Realtime        | `pg-notify`, `redis-streams`, SSE or Pusher delivery        | [Realtime](/docs/infrastructure/realtime)           |
+| Key-value       | `memory-kv`, `redis-kv`, `cloudflare-kv`                    | [Key-value store](/docs/infrastructure/kv)          |
+| Dynamic code    | In-process trusted, HTTP sandboxed from `@questpie/sandbox` | [Sandbox](/docs/infrastructure/sandbox)             |
+| Background work | `pg-boss`, `bullmq`, `cloudflare-queues`                    | [Queue](/docs/infrastructure/queue)                 |
+| Email           | `console`, `smtp`, `resend`, `plunk`                        | [Email](/docs/infrastructure/email)                 |
+| Traces and logs | OTLP from `@questpie/observability`                         | [Observability](/docs/infrastructure/observability) |
+
+## Configuring and swapping
+
+Every slot lives in one `runtimeConfig` call, and swapping one moves nothing
+else. The route that reads `kv`, the collection that indexes into `search` and
+the hook that publishes a job are all written against the service, never against
+the adapter, so this file is the only thing that changes.
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { s3 } from "files-sdk/s3";
+import { runtimeConfig } from "questpie/app";
+import { pgBossAdapter } from "questpie/adapters/pg-boss";
+import { redisKVAdapter } from "questpie/adapters/redis-kv";
+import { resendAdapter } from "questpie/adapters/resend";
+
+import { getRedisClient } from "@/lib/redis";
+
+const db = process.env.DATABASE_URL!;
+
+export default runtimeConfig({
+	app: { url: process.env.APP_URL! },
+	db: { url: db },
+	storage: { adapter: s3({ bucket: "uploads", region: "eu-central-1" }) },
+	// a connected client, or a function returning one, resolved on first use
+	kv: { adapter: redisKVAdapter({ client: getRedisClient }) },
+	email: { adapter: resendAdapter({ apiKey: process.env.RESEND_API_KEY! }) },
+	queue: { adapter: pgBossAdapter({ connectionString: db }) },
+});
+```
+
+Each adapter sits behind its own entry point, so you pull in only the client you
+use. Every provider SDK QUESTPIE imports itself is an optional peer dependency,
+and the Redis-backed adapters import no SDK at all, taking a connected client or
+a function returning one. `search` is the odd slot, taking the adapter instance
+directly rather than an object around it, because it has nothing else to
+configure.
+
+<Callout type="info" title="`runtimeConfig` falls back to the environment">
+	`app.url` reads `QUESTPIE_APP_URL`, then `APP_URL`, then
+	`http://localhost:3000`. `db.url` reads `QUESTPIE_DB`, then `DATABASE_URL`,
+	then throws. An explicit value always wins. See
+	[Configuration](/docs/ship/configuration).
+</Callout>
+
+### Storage from the environment
+
+Storage is the one slot that can configure itself. Set all four of
+`QUESTPIE_STORAGE_ENDPOINT`, `QUESTPIE_STORAGE_BUCKET`,
+`QUESTPIE_STORAGE_ACCESS_KEY` and `QUESTPIE_STORAGE_SECRET_KEY` with no
+`storage` key in your config, and QUESTPIE builds an S3-compatible Files SDK
+adapter for you, defaulting `QUESTPIE_STORAGE_REGION` to `auto`. Set the
+endpoint but miss one of the other three and it warns and stays on local disk.
+
+## The contracts
+
+Every slot below takes a published type, and the built-ins have no privileged
+access. Import the contract, implement it, hand your instance to the same slot a
+built-in would take.
+
+| Slot                       | Contract               | Import                   |
+| -------------------------- | ---------------------- | ------------------------ |
+| `storage.adapter`          | `Adapter`              | `questpie/storage`       |
+| `search`                   | `SearchAdapter`        | `questpie/search`        |
+| `realtime.changeBroker`    | `ChangeBroker`         | `questpie/realtime`      |
+| `realtime.clientTransport` | `ClientTransport`      | `questpie/realtime`      |
+| `kv.adapter`               | `KVAdapter`            | `questpie/kv`            |
+| `email.adapter`            | `MailAdapter`          | `questpie/mailer`        |
+| `queue.adapter`            | `QueueAdapter`         | `questpie/queue`         |
+| `executor.sandboxed`       | `ExecutorAdapter`      | `questpie/executor`      |
+| `observability.adapter`    | `ObservabilityAdapter` | `questpie/observability` |
+
+`MailAdapter` is an abstract class you extend and `ClientTransport` is a union
+of two transport shapes, one local-session and one shared-provider. The rest are
+plain interfaces. `Adapter` is the Files SDK type, re-exported so storage has
+one import path with the others. Realtime is two independent seams rather than
+one adapter, and a driver must not implement both in one object.
+
+`logger.adapter` is the slot the table cannot list. It takes a `LoggerAdapter`
+and the built-in Pino one satisfies it, but that type is not re-exported from
+any entry point today, so there is no contract for you to import.
+
+### Capability flags
+
+Three contracts carry a capability object, because those three have backends
+that genuinely cannot do the same things.
+
+`QueueAdapter.capabilities` is optional and partial, covering
+`longRunningConsumer`, `runOnceConsumer`, `pushConsumer`, `scheduling`,
+`singleton` and `executionTerminalState`. Omit one of the first four and it is
+inferred from whether the matching method is present, `singleton` falls back to
+false and `executionTerminalState` needs both an explicit `true` and the method.
+The queue service resolves that set once and reads it before dispatching, so
+`queue.<job>.schedule()` throws on an adapter reporting `scheduling: false`,
+which is how Cloudflare Queues says it has no cron.
+
+`SearchAdapter.capabilities` is required and carries `lexical`, `trigram`,
+`semantic`, `hybrid` and `facets`. It is there for introspection rather than
+enforcement. `PostgresSearchAdapter` reports `semantic: false` and also throws
+on a `mode` it does not implement, so an unsupported query fails loudly instead
+of quietly turning into keyword matching.
+
+Storage inherits the Files SDK's flags rather than declaring its own. An adapter
+sets `supportsRange`, `supportsMetadata` and their siblings, `app.storage.capabilities`
+derives a resolved object from them on every read, and a `download({ range })`
+against an adapter without `supportsRange` throws before any provider call. KV
+and mail carry no flags, being the same handful of calls on every backend.
+
+## Related
+
+- [Configuration](/docs/ship/configuration), every key `runtimeConfig` accepts and how it resolves.
+- [Building a plugin](/docs/guides/build-a-plugin), the loop for shipping an adapter of your own.
+- [Deploying](/docs/ship), which of these defaults survive contact with a second replica.

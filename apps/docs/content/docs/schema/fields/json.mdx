@@ -1,152 +1,183 @@
 ---
 title: JSON field
-description: f.json() is a schema-less field backed by a Postgres jsonb (or json) column, for free-form data you can narrow with a type argument and validate with .zod().
+description: One jsonb column with no declared keys, for data whose shape you do not control. Three ways to type the value, and only one of them also narrows the filter.
+kind: reference
+package: questpie
 ---
 
-`f.json()` stores arbitrary JSON. By default it produces a Postgres `jsonb` column and derives a recursive JSON schema (`jsonValueSchema`), so any valid JSON value round-trips. It is the escape hatch for free-form data, settings blobs, third-party payloads, metadata, where the shape isn't fixed enough for [`f.object()`](/docs/schema/fields#structured). Pass a type argument to narrow the stored value, and `.zod()` to validate it at runtime.
-
-> **Prerequisites:** read [Fields](/docs/schema/fields) first, this page covers only the `json` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.default()` / `.localized()` are taught there.
-
-## What it does
-
-- **Stores arbitrary JSON**, a Postgres `jsonb` column by default, or a `json` column when you pass `{ mode: "json" }`.
-- **Validates as JSON**, the derived schema is a recursive `JsonValue` union (string / number / boolean / null / array / object), not `z.any()`, so a non-JSON value (a `Date`, a function) is a validation error.
-- **Narrows to your shape**, pass a type argument (`f.json<{ theme: "light" | "dark" }>()`) to type the value, and `.zod()` to enforce it at runtime.
-- **Filters with equality operators**, `eq`, `ne`, `in`, `notIn`, `isNull`, `isNotNull`, typed against the JSON value (or your narrowed shape).
-
-## Quick start
-
-Use `f.json()` inside a `.fields()` callback. It takes an optional config object; chain the shared modifiers to refine it.
+| Surface               | Detail                                                      |
+| --------------------- | ----------------------------------------------------------- |
+| Signature             | `f.json<T>(config?)`                                        |
+| Config                | `{ mode?: "jsonb" \| "json" }`, optional                    |
+| Column                | `jsonb`, or `json` under `{ mode: "json" }`                 |
+| Schema                | a recursive JSON union, not `z.any()`                       |
+| Filter operators      | six, every one against the whole value, [below](#filtering) |
+| Admin form            | a monospace textarea with a Format button                   |
+| Admin cell            | fifty characters, the whole value in a `title` attribute    |
+| Type-specific methods | none, the shared chain is the whole surface                 |
 
 ```ts title="src/questpie/server/collections/posts.ts"
 import { collection } from "#questpie/factories";
 
 export const posts = collection("posts").fields(({ f }) => ({
-	metadata: f.json(), // jsonb, any JSON value
-	settings: f.json<{ theme: "light" | "dark" }>(), // typed, schema-less
+	metadata: f.json(), // any JSON value
+	settings: f.json<{ theme: "light" | "dark" }>(), // narrowed
 }));
 ```
 
-That gives `posts` a `metadata` column that accepts any JSON value, and a `settings` column whose value reads back as `{ theme: "light" | "dark" } | null` in TypeScript, both stored as `jsonb`, with no schema or migration written by hand.
+`metadata` reads back as `JsonValue | null`, `settings` as
+`{ theme: "light" | "dark" } | null`. Both are one `jsonb` column, no second
+table and no join. `JsonValue` is exported from `questpie`.
 
-## Constructor argument
+Reach for it when the shape is genuinely open. When the keys are fixed,
+[`f.object()`](/docs/schema/fields/object) takes the same column and gives every
+key its own schema, label, locale and access rule, plus eleven structural filter
+operators this type does not have.
 
-`f.json()` takes a single optional config object.
+## The mode
 
-| Call                        | Column  | Schema                      |
-| --------------------------- | ------- | --------------------------- |
-| `f.json()`                  | `jsonb` | recursive `jsonValueSchema` |
-| `f.json({ mode: "jsonb" })` | `jsonb` | recursive `jsonValueSchema` |
-| `f.json({ mode: "json" })`  | `json`  | recursive `jsonValueSchema` |
+| Call                        | Column  |
+| --------------------------- | ------- |
+| `f.json()`                  | `jsonb` |
+| `f.json({ mode: "jsonb" })` | `jsonb` |
+| `f.json({ mode: "json" })`  | `json`  |
 
-The `mode` selects the underlying Postgres column type. **`jsonb` (the default) is what you want**, it is stored in a decomposed binary format, supports indexing, and is faster to query; the `json` mode stores the exact input text (preserving key order and whitespace) and is rarely needed. The derived schema is the same in both modes.
+The derived schema and the operator set are identical in both. The argument
+moves the Postgres column type and nothing else.
 
-<Callout type="info" title="The schema is `JsonValue`, not `z.any()`">
-`f.json()` derives a recursive `jsonValueSchema`, a union of `string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }`. This deliberately replaces `z.any()`, so a value that isn't valid JSON (a `Date`, a `Map`, a function, `undefined`) fails validation rather than silently passing through.
-</Callout>
+## Typing the value
 
-## Chained methods
+The type argument, `.$type()` and `.zod()` all move the value type. Where they
+part company is the filter and the runtime check.
 
-`f.json()` uses the common `Field` builder. Shape it with the [shared modifiers](/docs/schema/fields#shared-methods); the following two are especially useful for JSON values.
+| Form          | Read type           | Filter operand | Runtime check  |
+| ------------- | ------------------- | -------------- | -------------- |
+| `f.json()`    | `JsonValue \| null` | `JsonValue`    | the JSON union |
+| `f.json<T>()` | `T \| null`         | `T`            | the JSON union |
+| `.$type<T>()` | `T \| null`         | unchanged      | the JSON union |
+| `.zod(fn)`    | the schema output   | unchanged      | the schema     |
 
-| Modifier      | Effect on a JSON field                                                                                              |
-| ------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `.$type<T>()` | **Type-level only**, no runtime effect, pin the read/write value type to `T`. The primary way to type a JSON field. |
-| `.zod(fn)`    | Replace or refine the auto-derived schema to **actually validate** that shape at runtime.                           |
+The field fixes its filter operand when the factory runs, so unchanged means
+whatever the type argument said, `JsonValue` when you passed none. A later
+`.$type()` or `.zod()` cannot reopen it.
 
-The type argument on `f.json<T>()` is shorthand for `.$type<T>()`, both are type-only. For runtime safety, pair the type with `.zod()`:
+`.zod()` narrows the read type only when the schema it returns has a real output
+type. Return a bare `ZodType` and the field keeps the type it had, with the new
+validation on top.
 
 ```ts
 import { z } from "zod";
 
-collection("users").fields(({ f }) => ({
-	// Typed AND validated: TS knows the shape; Zod enforces it on write.
-	preferences: f
-		.json<{ theme: "light" | "dark"; density: number }>()
-		.zod(() =>
-			z.object({
-				theme: z.enum(["light", "dark"]),
-				density: z.number().int().min(1).max(5),
-			}),
-		)
-		.required(),
-}));
+preferences: f
+	.json<{ theme: "light" | "dark"; density: number }>()
+	.zod(() =>
+		z.object({
+			theme: z.enum(["light", "dark"]),
+			density: z.number().int().min(1).max(5),
+		}),
+	)
+	.required(),
 ```
 
-<Callout type="warn" title="A type argument alone does NOT validate at runtime">
-`f.json<{ theme: "light" | "dark" }>()` narrows the *TypeScript* type but does **not** validate, the runtime schema stays the loose `jsonValueSchema`, so a write of `{ theme: "blue" }` (or any other JSON) is accepted by the database. To enforce the shape on write, add `.zod()` as shown above.
+<Callout type="warn" title="A type argument alone accepts anything">
+	`f.json<{ theme: "light" | "dark" }>()` moves the TypeScript type and leaves the
+	schema as the loose JSON union, so a write of `{ theme: "blue" }` is stored. Add
+	`.zod()` to make the shape a rule.
 </Callout>
 
-## Filtering, operators
+Without `.required()` the column is nullable and the input optional. The derived
+schema is the recursive union of `string`, `number`, `boolean`, `null`, arrays
+and objects, so a `Date`, a `Map` or a function fails validation instead of
+passing through.
 
-`json` uses `basicOps`: equality, membership, and null checks over the whole JSON value. The operand is typed against the JSON value or your narrowed `JsonWhereInput<T>` shape. Use `f.object()` or a custom operator set for path-oriented queries.
+## Filtering
 
-| Operator               | Operand              | Matches                                                         |
-| ---------------------- | -------------------- | --------------------------------------------------------------- |
-| `eq` / `ne`            | the JSON value       | Whole-value equal / not equal.                                  |
-| `in` / `notIn`         | array of JSON values | Whole value is (not) in the list.                               |
-| `isNull` / `isNotNull` | `boolean`            | Column is (not) null. Pass `true` to assert, `false` to invert. |
+The JSON field carries the basic operator set. Every entry compares the stored
+value as a whole.
+
+| Operator               | Operand               | Matches                       |
+| ---------------------- | --------------------- | ----------------------------- |
+| `eq` / `ne`            | the whole value       | Equal, not equal              |
+| `in` / `notIn`         | array of whole values | In the list, not in the list  |
+| `isNull` / `isNotNull` | `boolean`             | Pass `false` and each inverts |
 
 ```ts
-// Rows whose settings exactly match this value
 const { docs } = await app.collections.posts.find({
 	where: { settings: { eq: { theme: "dark" } } },
 });
 
-// Rows where metadata was never set
-const { docs: unset } = await app.collections.posts.find({
+await app.collections.posts.find({
 	where: { metadata: { isNull: true } },
 });
 ```
 
-The built-in operators compare the JSON value as a whole. For nested-key queries, model known keys with `f.object()` or top-level columns, or add a custom operator set with `.operators()` (see [Fields → custom operator sets](/docs/schema/fields#custom-operator-sets)).
+The set carries a seventh operator, `not`, which the field's declared filter
+input leaves out. It runs, and it does not type-check.
 
-For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see [Fields → filtering](/docs/schema/fields). Relation filters and hydration are covered in [Relations](/docs/schema/relations).
+<Callout type="warn" title="A key filter is dropped, not rejected">
+	`where: { settings: { theme: "dark" } }` type-checks, because any JSON object is
+	also a valid whole-value shorthand. QUESTPIE finds no operator in it, compiles
+	nothing, and returns every row. Use `eq`, or model the key with `f.object()`.
+</Callout>
 
-## When to use it
+An operator object is recognized by its keys, so a stored object whose own top
+level key is called `eq`, `in` or `not` is ambiguous to the same check.
 
-- **`f.json()`**, free-form or open-ended data with no fixed shape: a settings/preferences blob, a captured third-party webhook payload, feature-flag bags, denormalized snapshots.
-- **`f.json<T>()` + `.zod()`**, data that _does_ have a shape but is more naturally one value than separate columns (and you still want type safety + validation).
-- **Reach for [`f.object()`](/docs/schema/fields#structured) instead** when the nested shape is fixed and you want per-key validation and admin form fields generated automatically, `f.object()` also stores `jsonb`, but each key is its own typed, validated field. Use `f.json()` only when the data is genuinely schema-less.
-- **Need to filter by a nested key?** That's a sign the data should be structured (`f.object()` or separate fields), since the JSON operators match the value as a whole.
+## Lists
 
-## Multiple values
-
-You don't need `.array()` to store a JSON array, a single `f.json()` already accepts arrays (and any nested structure). Use the type argument to express it:
+A JSON value is already allowed to be an array, so a list needs no `.array()`.
+Say so in the type argument.
 
 ```ts
-tags: f.json<string[]>(),                  // a JSON array, one jsonb column
+tags: f.json<string[]>(),
 events: f.json<Array<{ at: string; type: string }>>(),
 ```
 
-`.array()` is a [shared modifier](/docs/schema/fields#shared-methods) for making _any field type_ repeat, it isn't needed here, since the JSON value can already be an array.
+<Callout type="warn" title="`.array()` splits the filters in two">
+	It swaps the runtime operator set for the array one, `containsAll`,
+	`containsAny`, `length` and the rest, while the field keeps the JSON filter
+	input it declared. What you can type and what runs stop agreeing.
+</Callout>
 
-## TypeScript
+## Localization
 
-An untyped `f.json()` contributes the loose `JsonValue` union to the generated row, insert, and `where` types. Narrow it with a type argument so the generated types are precise:
+`.localized()` moves the whole value into the i18n table, one JSON document per
+locale. There is no per-key split here, because there are no declared keys. A
+write replaces that locale's document outright.
 
-```ts
-export const posts = collection("posts").fields(({ f }) => ({
-	settings: f.json<{ theme: "light" | "dark" }>(),
-	metadata: f.json(),
-}));
+The control renders no locale indicator. `JsonField` builds its own label row
+and never reads the `localized` prop. Storage is unaffected.
 
-type Post = typeof posts.$infer.select;
-//   ^? { id: string; settings: { theme: "light" | "dark" } | null; metadata: JsonValue | null; ... }
-```
+## In the admin
 
-```ts
-import type { CollectionDoc, CollectionWhere } from "#questpie/types";
+The form control is `JsonField`. It prints the stored value with a two space
+indent into a monospace textarea and parses on every keystroke. A draft that
+does not parse is written to the form as the raw string and validation refuses
+it. Emptying the box writes `null`. The Format button reprints the value.
 
-type Post = CollectionDoc<"posts">; // { settings: { theme: "light" | "dark" } | null; ... }
-type PostFilter = CollectionWhere<"posts">; // { settings?: { eq?: { theme: "light" | "dark" }; ... } }
-```
+The list cell is `JsonCell`. Compact JSON, cut at fifty characters, the whole
+value in a `title` attribute, a dash when null.
 
-`.required()` makes the column non-null and the input required; without it the column is nullable and the insert field optional. The `JsonValue` type is exported from `questpie` if you need it directly. See [Fields → inferred types](/docs/schema/fields#example--inferred-types) for how modifiers flow into the generated types.
+`.admin()` reaches the control:
+
+| Option            | Values                   | Default  |
+| ----------------- | ------------------------ | -------- |
+| `minHeight`       | pixels                   | `200`    |
+| `maxHeight`       | pixels, `0` for no limit | `400`    |
+| `defaultMode`     | `"code"`, `"form"`       | `"code"` |
+| `allowModeSwitch` | boolean                  | `true`   |
+
+The last two are inert on a declared field. Both feed a second editing mode that
+renders only when the control is also handed a `renderForm` render prop, and
+field metadata crosses to the browser as JSON, so a collection file has no way
+to send a function. `JsonFieldAdminMeta` also declares a `codeEditor` flag that
+nothing reads.
 
 ## Related
 
-- [Fields](/docs/schema/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.$type()`, `.zod()`, `.required()`, `.localized()`, …).
-- [`f.object()`](/docs/schema/fields#structured), the typed, per-key sibling for fixed nested shapes.
-- [Validation](/docs/schema/validation), the auto-derived Zod schema and the `.zod()` escape hatch (the way to actually validate a JSON shape).
-- [Relations](/docs/schema/relations), filtering by a relation and hydrating related rows with `with`.
+- [Fields](/docs/schema/fields), the type table and the shared chain.
+- [`f.object()`](/docs/schema/fields/object), the same column with declared keys
+  and structural filters.
+- [Validation](/docs/schema/validation), the derived schema and the `.zod()`
+  hatch.
+- [Arrays](/docs/schema/fields/array), what `.array()` does to reads and filters.
