@@ -107,7 +107,8 @@ describe("RealtimeMultiplexer connect payload", () => {
 		await tick(20);
 
 		expect(bodies.length).toBeGreaterThan(0);
-		const topics = (bodies[0] as { topics: Array<{ resource: string }> }).topics;
+		const topics = (bodies[0] as { topics: Array<{ resource: string }> })
+			.topics;
 		expect(topics.map((topic) => topic.resource)).toContain("tasks");
 
 		mux.destroy?.();
@@ -139,6 +140,9 @@ describe("RealtimeMultiplexer connect payload", () => {
 		g.release();
 		await tick(20);
 
+		// A refill leaves the map non-empty, so the connect must go out. Without
+		// this the loop below runs zero times and the test passes on silence.
+		expect(bodies.length).toBeGreaterThan(0);
 		for (const body of bodies) {
 			const topics = (body as { topics?: unknown[] } | null)?.topics;
 			expect(Array.isArray(topics) ? topics.length : 1).toBeGreaterThan(0);
