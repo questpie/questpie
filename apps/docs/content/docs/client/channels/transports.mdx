@@ -75,6 +75,24 @@ event id, and the server resumes the stream from there.
 If replay cannot reach that far back, the server answers with a gap instead of
 inventing state. See [Delivery](/docs/client/channels/delivery).
 
+## The epoch fence
+
+The moment the shared Pusher connection leaves `connected`, that epoch is over.
+Every channel riding it stops accepting provider frames, drops what it had
+buffered, and cancels a replay still in flight. Your `onError` gets
+`Channel connection epoch ended`.
+
+The subscription itself survives. So this error is a banner, not a teardown.
+Resubscribing on it only doubles the work the client is already doing.
+
+A frame that arrives while no epoch is open is dropped, not folded into the next
+one. That is what keeps the sequence honest across the gap. Readiness starts
+over with the epoch, so `onReady` fires again once the fresh replay drains.
+
+SSE ends an epoch too, and it does it quietly. A retryable drop resets readiness
+and reconnects without touching `onError`. So `onReady` is the signal that
+works on both transports.
+
 ## After a login or a logout
 
 Pusher signs the browser in with an opaque user id, using the current dynamic

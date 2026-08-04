@@ -1,0 +1,130 @@
+---
+title: Production server
+description: Spawn the built server you deploy on a free loopback port, wait for it to answer, keep its logs redacted, and know it is gone when the test ends.
+kind: guide
+package: "@questpie/testing"
+---
+
+How do you test the server you deploy, not the app your test file assembled?
+The in-process harness never touches your build, your entrypoint or your start
+command. `startProductionServer` runs all three and hands you a base URL.
+
+```ts
+import { startProductionServer } from "@questpie/testing/scenario";
+
+const server = await startProductionServer({
+	command: [process.execPath, "dist/server.js"],
+	cwd: process.cwd(),
+	databaseUrl: database.url,
+	env: { BETTER_AUTH_SECRET: secret },
+	secrets: [secret],
+	readiness: { path: "/api/health" },
+});
+
+const response = await fetch(`${server.baseUrl}/api/posts`);
+await server.stop();
+```
+
+`databaseUrl` is usually the `url` from
+[Disposable PostgreSQL](/docs/code/testing/disposable-postgres). Build first.
+The harness starts a command, it does not compile one.
+
+<Callout type="info" title="This harness needs Bun">
+	It spawns the child and probes ports through Bun APIs, so run these tests
+	under `bun test`. The in-process harness has no such requirement.
+</Callout>
+
+## The child environment is built from scratch
+
+Your `env` is the whole environment the child gets. The parent's variables do
+not leak into it. So a value your machine happens to export cannot make a test
+pass on your laptop and fail in CI.
+
+`PATH` is one of the variables that does not carry over. Name an absolute
+executable, as the example does with `process.execPath`, or put `PATH` in `env`
+yourself.
+
+Four keys are the harness's own, and passing any of them throws a `TypeError`.
+
+| Key            | What the harness sets        |
+| -------------- | ---------------------------- |
+| `NODE_ENV`     | `production`                 |
+| `PORT`         | The port it allocated        |
+| `APP_URL`      | `http://127.0.0.1:<port>`    |
+| `DATABASE_URL` | The `databaseUrl` you passed |
+
+Ports come from binding port 0 on loopback, so parallel files do not collide.
+3000 and 6007 are never handed out. Add your own with `reservedPorts`.
+
+## Readiness
+
+Boot is not ready. The harness polls a loopback path until it answers with the
+status you expect.
+
+| Field              | Default  | What it does                            |
+| ------------------ | -------- | --------------------------------------- |
+| `path`             | required | A loopback-relative path, `/api/health` |
+| `status`           | 200      | The status that counts as ready         |
+| `timeoutMs`        | 30000    | How long to keep polling                |
+| `pollIntervalMs`   | 100      | Gap between probes                      |
+| `requestTimeoutMs` | 2000     | Timeout on one probe                    |
+
+If the child exits before it answers, polling stops there rather than waiting
+out the timeout. A boot that dies with `EADDRINUSE` on a harness-allocated port
+is retried on a new port, up to three attempts.
+
+## Logs, redacted
+
+Both streams are captured into a ring buffer, tagged `[stdout]` or `[stderr]`.
+`logTail()` returns the last 20 lines, or pass a count.
+
+```ts
+if (response.status !== 200) console.log(server.logTail(50).join("\n"));
+```
+
+The buffer holds 500 lines of at most 4096 characters each. Both are options,
+`maxLogLines` and `maxLogLineChars`.
+
+Every string in `secrets` is replaced with `[REDACTED]`, in captured logs and
+in the error messages the harness renders. `databaseUrl` and its password are
+redacted for you, so a printed connection string cannot reach CI output.
+
+## Stopping and restarting
+
+| Method      | What happens                                                      |
+| ----------- | ----------------------------------------------------------------- |
+| `stop()`    | SIGTERM, then SIGKILL after `stopGraceMs`, then wait for the port |
+| `restart()` | Stop, then boot a fresh process on the same port and database     |
+| `pid()`     | The child's pid, or `undefined` once stopped                      |
+
+`stop()` is memoized, so an `afterEach` and an `afterAll` calling it do one
+teardown. It waits for the process to exit, for both log streams to drain, and
+for the port to accept a new bind. That last wait is what stops the next test
+from hitting `EADDRINUSE`. Failures collect into `ProductionServerStopError`.
+`stopGraceMs` and `portReleaseTimeoutMs` both default to 5 seconds.
+
+The harness also installs a `process.on("exit")` hook that kills any live
+child. A run that ends without stopping the server leaves nothing behind.
+
+## When boot fails
+
+`ProductionServerStartError` carries the phase, the port, the exit code and the
+redacted log tail. The tail is printed in the message too, so a CI log shows
+why without extra plumbing.
+
+| `.phase`       | What it means                                        |
+| -------------- | ---------------------------------------------------- |
+| `"spawn"`      | The command could not start                          |
+| `"early-exit"` | The process exited before readiness, see `.exitCode` |
+| `"readiness"`  | It stayed up but never answered                      |
+
+An `early-exit` usually means the command, the working directory or the
+environment is wrong. A `readiness` failure usually means the path is wrong, or
+the server is listening on an interface other than `127.0.0.1`.
+
+## Related
+
+- [Disposable PostgreSQL](/docs/code/testing/disposable-postgres) for the
+  database this server connects to.
+- [Testing](/docs/code/testing) for the in-process harness.
+- [Environment](/docs/ship/environment) for what your built server reads at boot.

@@ -1,0 +1,130 @@
+---
+title: Auth writes that queue a job
+description: withAuthTransactionalQueue commits one Better Auth mutation and one encrypted job dispatch together. The callback gets a transaction-scoped adapter and a publisher that takes only the jobs your app registered.
+kind: guide
+package: questpie
+---
+
+A plugin writes a verification row, then sends the link. That is two steps, and
+the process can die between them. Then you have sent a link for a row that
+rolled back, or written a row nobody is ever told about.
+
+`withAuthTransactionalQueue` makes it one step.
+
+## The call
+
+It comes from `questpie/auth`. It takes a Better Auth context and a callback.
+
+```ts title="src/questpie/server/send-auth-verification.ts"
+import { withAuthTransactionalQueue } from "questpie/auth";
+
+import { app } from "#questpie";
+import sendVerification from "./jobs/send-verification";
+
+export async function sendAuthVerification(input: {
+	identifier: string;
+	hashedToken: string;
+	rawToken: string;
+	expiresAt: Date;
+}) {
+	const context = await app.auth.$context;
+
+	return withAuthTransactionalQueue({ context }, async ({ auth, publish }) => {
+		await auth.create({
+			model: "verification",
+			data: {
+				identifier: input.identifier,
+				value: input.hashedToken,
+				expiresAt: input.expiresAt,
+			},
+		});
+		return publish(
+			sendVerification,
+			{ identifier: input.identifier, token: input.rawToken },
+			{ idempotencyKey: `auth-verification:${input.identifier}:v1` },
+		);
+	});
+}
+```
+
+Inside a Better Auth plugin, pass the endpoint's own `ctx` instead. It already
+carries the `context` this needs, so you skip the `$context` read.
+
+The callback receives two things and nothing else.
+
+| Name      | What it is                                                |
+| --------- | --------------------------------------------------------- |
+| `auth`    | Better Auth's adapter, scoped to the open transaction     |
+| `publish` | Sends one registered job as an encrypted durable dispatch |
+
+Both halves commit together. A throw anywhere in the callback rolls back the row
+and the dispatch. `publish` resolves to the dispatch id, and the outer call
+resolves to whatever your callback returned.
+
+<Callout type="warn" title="Call the provider from the job handler, not here">
+	The callback runs inside an open transaction. An email or an SMS sent there
+	has already happened when the transaction rolls back. Put the raw token in the
+	payload and let the handler send it after the commit.
+</Callout>
+
+## What it refuses
+
+Three things throw, and none of them leaves a row or a dispatch behind.
+
+| Situation                                    | What it means                                  |
+| -------------------------------------------- | ---------------------------------------------- |
+| The context's adapter is not the framework's | The bridge is unavailable on this Auth context |
+| `idempotencyKey` is empty or only whitespace | The dispatch has no durable logical identity   |
+| The job is not one this app registered       | The publisher will not reach an unknown job    |
+
+The first one is a fence, not a bug in your code. QUESTPIE binds the bridge to
+its own Better Auth adapter, and it registers that plugin first. A plugin of
+yours that replaces the adapter loses the bridge rather than running the write
+outside the transaction.
+
+## The job has to be the one you registered
+
+`publish` matches the definition you pass against the values in your queue
+config, by identity. It does not match on `name`. So import the object your
+`jobs/` file exported and pass that.
+
+A second job object carrying the same `name` is still a different object, and it
+is rejected. That is what stops a plugin naming its way into a job nobody gave
+it.
+
+## The payload is always encrypted
+
+Every publish through this bridge sets `secretPayload`. That is the point of it,
+because a verification token is the value you cannot afford to leave sitting in
+a broker. It also means the requirements on
+[Secret payloads](/docs/code/jobs/secret-payloads) apply here every time.
+
+| Requirement                                | Why                                        |
+| ------------------------------------------ | ------------------------------------------ |
+| `secret` in `runtimeConfig`, 32 bytes plus | It derives the key that wraps the data key |
+| An adapter proving terminal broker state   | Erasure needs proof the handler finished   |
+
+Only pg-boss qualifies today. On BullMQ or Cloudflare Queues the publish throws
+rather than leave a wrapped key behind.
+
+## After the commit
+
+The dispatch lands in the same ledger every transactional publish uses. So a
+crash between the commit and the broker accepting the job is recoverable, and a
+worker or a `queue.drain()` pass relays it later. Read the outcome with
+`queue.getReceipt(dispatchId)`.
+
+Two callers racing under one `idempotencyKey` resolve to one dispatch. The
+second reservation finds the first one and returns its id. No second job is
+queued.
+
+## Where each topic lives
+
+| Topic                                          | Page                                                                        |
+| ---------------------------------------------- | --------------------------------------------------------------------------- |
+| Encryption, receipts, what the boundary misses | [Secret payloads](/docs/code/jobs/secret-payloads)                          |
+| The ledger, recovery and `queue.drain()`       | [Transactional dispatch](/docs/infrastructure/queue/transactional-dispatch) |
+| Declaring a job and its Zod schema             | [Jobs](/docs/code/jobs)                                                     |
+| Which adapters can publish in a transaction    | [Queue](/docs/infrastructure/queue)                                         |
+| The auth tables this writes into               | [Identity tables](/docs/admin/auth/identity-tables)                         |
+| Who may sign in to the panel                   | [Authentication](/docs/admin/auth)                                          |

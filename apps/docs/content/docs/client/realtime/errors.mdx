@@ -76,17 +76,29 @@ with the same options produces the same refusal.
 
 ## A dropped connection does not
 
-Transport failures reach `onError` too, and they are ordinary. The client
-reconnects with backoff, and resends every live topic with the sequence number
-it last saw. You get a fresh snapshot when it comes back.
+Most transport failures never reach `onError` at all. The client reconnects with
+backoff and resends every live topic with the sequence number it last saw. You
+get a fresh snapshot when it comes back and nothing in between.
 
-The useful reaction is a banner, not a teardown. Do not unsubscribe on the first
-transport error.
+The client sorts a failure into one of two piles.
+
+| Retried, and silent                        | Terminal, and one `onError`                |
+| ------------------------------------------ | ------------------------------------------ |
+| The socket or the stream dropping          | Any other 4xx that names no topic          |
+| Nothing on the stream for 25 seconds       | A server too old for the topology protocol |
+| 408, 425, 429 or any 5xx                   | A stream response with no body             |
+| A control session the server no longer has |                                            |
+
+Backoff doubles from one second and caps at 30 seconds. Each wait is jittered
+between half and one and a half of that. A keep-alive ping resets the counter.
+
+So a connection failure that does reach `onError` is not a hiccup. It is the
+client saying it has stopped trying. That is the one worth putting on screen.
 
 <Callout type="info" title="Not every failure is a rejection payload">
 	Some server errors reach `onError` as a plain `Error` carrying the server's
 	message. So test for `RealtimeTopicRejectedError` first, and treat everything
-	else as transport trouble.
+	else as a failure nobody is retrying for you.
 </Callout>
 
 ## The generator forms throw

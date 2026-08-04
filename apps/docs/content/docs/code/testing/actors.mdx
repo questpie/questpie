@@ -1,0 +1,139 @@
+---
+title: Actors
+description: Four factories on the harness, the user seed each one wants, and what the callback gets. An actor is how a test says who is calling.
+kind: reference
+package: "@questpie/testing"
+---
+
+Which factory do you reach for, and what does it hand your callback? Every
+actor comes off the `createTestApp` result and shares one method, `run()`.
+
+## The factories
+
+| Factory                                         | `kind`        | `context.session` | `context.accessMode` |
+| ----------------------------------------------- | ------------- | ----------------- | -------------------- |
+| `anonymous()`                                   | `"anonymous"` | `null`            | `"user"`             |
+| `actor({ user })`                               | `"user"`      | A built session   | `"user"`             |
+| `actor({ session })`                            | `"user"`      | Your session      | `"user"`             |
+| `oauth({ session, clientId, scopes, tokenId })` | `"oauth"`     | Your session      | `"user"`             |
+| `system()`                                      | `"system"`    | `undefined`       | `"system"`           |
+
+An actor is cheap and stateless. Build one per identity at the top of the file
+and reuse it. Each `run()` call builds a fresh context.
+
+```ts
+const editor = testApp.actor({ user: editorSeed });
+const viewer = testApp.actor({ user: viewerSeed });
+
+const post = await editor.run(({ app, context }) =>
+	app.collections.posts.create({ title: "Draft", slug: "draft" }, context),
+);
+```
+
+`run()` returns whatever the callback returns, awaited. It also opens the
+AsyncLocalStorage scope, so `getContext()` resolves inside the callback and a
+nested call with no context of its own inherits this one.
+
+## The user seed
+
+`actor({ user })` takes your app's user row, not a partial. Every field your
+user table requires is required here too, including the ones your auth config
+added. Three keys are optional, and the harness fills them in.
+
+| Key             | Default                    |
+| --------------- | -------------------------- |
+| `emailVerified` | `true`                     |
+| `createdAt`     | `2020-01-01T00:00:00.000Z` |
+| `updatedAt`     | The same timestamp         |
+
+It then wraps that user in a session. The id is `<userId>-session`, the token
+is `<userId>-token`, and it expires on 2100-01-01. Nothing is written to the
+database. The session exists to carry identity into your access rules.
+
+```ts
+const editor = testApp.actor({
+	user: {
+		id: "editor-1",
+		email: "editor@example.test",
+		name: "Editor",
+		role: "editor",
+		tenantId: "tenant-1",
+	},
+});
+```
+
+<Callout type="warn" title="Some apps must pass the whole session">
+	A Better Auth plugin can add a required field to the session record, such as
+	`activeOrganizationId`. The harness only knows the standard keys, so `{user}`
+	stops compiling for that app. Pass `{session}` and set the field yourself.
+</Callout>
+
+`{ session }` is always allowed. Reach for it when the seed will not do, or
+when you want one session shared by a user actor and an OAuth actor.
+
+## OAuth actors
+
+`oauth()` needs a full session plus the three values a token carries.
+
+```ts
+const session = await editor.run(({ context }) => context.session);
+
+const agent = testApp.oauth({
+	session,
+	clientId: "test-client",
+	scopes: ["collections:posts:read"],
+	tokenId: "token-1",
+});
+```
+
+That builds a principal of `{ kind: "oauth", user, clientId, scopes, tokenId }`
+and puts it on the context. The access mode stays `"user"`, so your own rules
+still run as that user. The scopes are the extra gate on top. A rule that reads
+`principal.scopes` sees this list, and so does the MCP scope gate. See
+[Scopes](/docs/agents/mcp-oauth/scopes).
+
+## System actors bypass the rules
+
+`system()` sets `accessMode: "system"` and a `{ kind: "system" }` principal.
+Use it to arrange state, then switch to a user actor for the assertion.
+
+```ts
+await testApp
+	.system()
+	.run(({ app, context }) =>
+		app.collections.posts.create({ title: "Seeded", slug: "seeded" }, context),
+	);
+
+const visible = await viewer.run(({ app, context }) =>
+	app.collections.posts.findOne({ where: { slug: "seeded" } }, context),
+);
+```
+
+Field-level access shows the split. Give a field `access: { read: false }`. The
+system actor reads its value. The user actor gets a row where that key is
+absent, not null.
+
+## Typing a hand-built app
+
+Codegen writes the session type onto `createAppForRuntime`, so the actors on a
+generated app type themselves. An app you assemble yourself, such as one inside
+a module's own test suite, has no such marker. Annotate the factory and the
+same inference follows.
+
+```ts
+import { createApp } from "questpie/app";
+import type { GeneratedAppFactory } from "@questpie/testing";
+
+const createAppForRuntime: GeneratedAppFactory<MyApp, MySession> = async (
+	runtime,
+) => (await createApp(definition, runtime)) as unknown as MyApp;
+```
+
+`MySession` is the `{ user, session }` pair your auth config produces. It drives
+the seed shape, the `{ session }` input and `context.session` in every callback.
+
+## Related
+
+- [Testing](/docs/code/testing) for the harness that hands out these actors.
+- [Context](/docs/code/context) for every other key on `context`.
+- [Access control](/docs/schema/access-control) for the rules an actor exercises.

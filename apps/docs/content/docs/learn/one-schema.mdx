@@ -88,6 +88,7 @@ The core writes into `src/questpie/server/.generated/`:
 | File                                                  | What it holds                                                                                                         |
 | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `index.ts`                                            | The `app` object and `createContext()`. Add an `env.ts` next to the config and it re-exports the validated `env` too. |
+| `app-factory.ts`                                      | `createAppForRuntime()`. Builds a fresh app instead of the shared one in `index.ts`. Tests use it.                    |
 | `factories.ts`                                        | `collection()` and `global()`, typed with the field types in scope.                                                   |
 | `names.gen.ts` · `entities.gen.ts` · `context.gen.ts` | The type layers `index.ts` builds on.                                                                                 |
 

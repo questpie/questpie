@@ -89,8 +89,8 @@ controller.abort(); // same as calling the returned function
 
 The third argument is `LiveSubscribeOptions`. `signal` unsubscribes on abort, so
 you can hand it a component's lifetime. `onError` fires when the server refuses
-this topic, or when the connection fails. Wire it. Without it a broken
-subscription looks exactly like one with no news.
+this topic, and when the connection fails in a way the client will not retry.
+Wire it. Without it a dead subscription looks exactly like one with no news.
 
 A refused topic reaches only that topic's `onError`, as a
 `RealtimeTopicRejectedError`. Sibling subscriptions stay up.
@@ -98,7 +98,8 @@ A refused topic reaches only that topic's `onError`, as a
 
 <Callout type="info" title="A dropped connection heals itself">
 	The client reconnects with backoff, then resends each topic with the sequence
-	number it last saw. You do not write that loop.
+	number it last saw. You do not write that loop, and you do not hear about it.
+	A retryable drop never reaches `onError`.
 </Callout>
 
 ## liveIter(), the loop form

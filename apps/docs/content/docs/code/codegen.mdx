@@ -74,11 +74,16 @@ and `config/admin.ts`.
 
 | File                         | What it holds                                                    |
 | ---------------------------- | ---------------------------------------------------------------- |
-| `.generated/index.ts`        | The `createApp()` call, `app`, `env` and the public types        |
+| `.generated/index.ts`        | The shared `app` instance, `env` and the public types            |
+| `.generated/app-factory.ts`  | `createAppForRuntime()`, one fresh app per call                  |
 | `.generated/factories.ts`    | `collection()` and `global()`, wired to your enabled field types |
 | `.generated/entities.gen.ts` | The flat category maps, `AppCollections` and friends             |
 | `.generated/context.gen.ts`  | The `AppContext` shape and the session types                     |
 | `.generated/names.gen.ts`    | The key registries that make relation targets autocomplete       |
+
+`app-factory.ts` is for tests. `createAppForRuntime(runtime)` builds a new app
+from the runtime config you pass it. `index.ts` shares one app, so every
+import of `#questpie` gets the same one. Import from `#questpie/app-factory`.
 
 Import `collection` and `global` from `#questpie/factories`. Import everything
 else from `#questpie`. Run codegen after a schema change and commit the result.

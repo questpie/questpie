@@ -8,6 +8,7 @@
 		"jobs",
 		"emails",
 		"modules",
-		"codegen"
+		"codegen",
+		"testing"
 	]
 }

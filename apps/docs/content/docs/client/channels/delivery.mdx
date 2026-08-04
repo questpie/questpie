@@ -59,6 +59,29 @@ subscribing again from now and accepting the hole.
 	decide what your screen should show, and resubscribe on purpose.
 </Callout>
 
+## Knowing when you are caught up
+
+`subscribe()` takes a third argument, `{ signal, onError, onReady }`. `onReady`
+fires once the server has authorized that subscription and replay has run dry.
+
+```ts
+client.channels.chatRoom.subscribe({ roomId }, render, {
+	onReady: () => setCaughtUp(true),
+});
+```
+
+Replayed events reach your callback before `onReady` does. So it marks the line
+between catch-up and live, not the first frame.
+
+It fires once per admission, and a reconnect starts a new one. So expect it
+again after every recovered drop. A subscriber that joins a channel already
+caught up gets it on the next microtask, and its own events wait behind that
+call.
+
+`subscribePresence()` takes `onReady` too, and it holds every roster until that
+callback has run. The one-shot `presence()` does not take it. That call resolves
+with a roster and ends.
+
 ## Size limits
 
 The canonical `{ eventId, event, data }` envelope must fit 10,000 UTF-8 bytes.

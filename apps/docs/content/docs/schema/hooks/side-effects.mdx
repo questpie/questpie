@@ -6,9 +6,9 @@ package: questpie
 ---
 
 An email sent from a hook that later rolls back is an email about a row that
-does not exist. QUESTPIE gives you one tool for each half of the problem: work
-that belongs to the transaction, and work that must not start until the commit
-lands.
+does not exist. QUESTPIE gives you one tool for each half of the problem. One is
+for work that belongs to the transaction. The other is for work that must not
+start until the commit lands.
 
 ## Which hooks are inside
 
@@ -63,9 +63,8 @@ runs until that transaction commits.
 ```
 
 Inside a transaction the callbacks run in order once it commits, and the
-operation waits for them. Their errors are logged and never reach the caller,
-because the commit is already final. Called outside any transaction,
-`onAfterCommit` runs the callback immediately without awaiting it.
+operation waits for them. Called outside any transaction, `onAfterCommit` runs
+the callback immediately without awaiting it.
 
 <Callout type="warn" title="Do not use it as a second chance to fail">
 	A callback cannot roll anything back and cannot fail the request. Work that
@@ -75,6 +74,22 @@ because the commit is already final. Called outside any transaction,
 The framework indexes search this way. Its own `afterChange` handler schedules
 the index write inside `onAfterCommit`, so a document is only ever indexed from
 data that survived.
+
+## At most once
+
+`onAfterCommit` is at-most-once. Your callback runs once, or it never runs.
+
+The callback lives only in the memory of the process that ran the write. Nothing
+records that it is owed. Two things lose it. It throws, and the error goes to
+the console with nothing to retry it. Or the process dies between the COMMIT and
+the callback finishing. That window is small, but it is not zero.
+
+Neither case leaves a trace. A lost callback looks exactly like one that never
+fired. So the search indexing above is best effort too. Lose that callback and
+the row stays out of the index until the next write to it.
+
+Use `onAfterCommit` for work you can afford to lose, or work a later pass can
+reconcile.
 
 ## Related
 

@@ -32,9 +32,9 @@ export function openApiPlugin(): CodegenPlugin {
 | `targets`    | `Record<string, CodegenTargetContribution>` | What this plugin adds, per target.  |
 | `validators` | `CrossTargetValidator[]`                    | Checks that run after every target. |
 
-A target is one output directory. `server` writes `index.ts`, `factories.ts` and
-the type layers beside them. `admin-client` writes `client.ts`. A plugin can
-invent its own target id.
+A target is one output directory. `server` writes `index.ts`, `app-factory.ts`,
+`factories.ts` and the type layers beside them. `admin-client` writes
+`client.ts`. A plugin can invent its own target id.
 
 The core plugin is prepended on every run. It declares the built-in categories
 and scaffolds. You never register it.

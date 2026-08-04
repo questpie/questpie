@@ -1,0 +1,121 @@
+---
+title: Disposable PostgreSQL
+description: A leased database per run, named so it can be swept, locked so a live run is never dropped, and force-dropped when you are done.
+kind: guide
+package: "@questpie/testing"
+---
+
+How does a test get a real PostgreSQL database, and how do you know it is gone
+afterwards? PGlite covers most tests. This covers the rest, the ones that need
+a server your built app reaches over a URL.
+
+```ts
+import { createDisposablePostgres } from "@questpie/testing/scenario";
+import { createAppForRuntime } from "#questpie/app-factory";
+
+const database = await createDisposablePostgres({
+	adminUrl: "postgres://postgres:postgres@127.0.0.1:5432/postgres",
+	migrate: async (databaseUrl) => {
+		const app = await createAppForRuntime({
+			app: { url: "http://questpie.test" },
+			db: { url: databaseUrl },
+		});
+		await app.migrations.up();
+		await app.destroy();
+	},
+});
+
+// hand database.url to the server or app under test
+await database.dispose();
+```
+
+Running the CLI works too. Spawn `questpie migrate:up` with `DATABASE_URL` set
+to the url you were handed.
+
+## What you get back
+
+| Field       | What it is                                                 |
+| ----------- | ---------------------------------------------------------- |
+| `name`      | `qp_harness_<YYYYMMDDhhmmss>_<six hex>`, the stamp in UTC  |
+| `url`       | Your `adminUrl` with the path swapped for that name        |
+| `runId`     | The name without the `qp_harness_` prefix                  |
+| `dispose()` | Drop the database, release the lease, close the connection |
+
+`runId` is stable for the life of the run. Use it to tag artifacts, log lines
+or a bucket prefix so a failure points back at one database.
+
+## The lease
+
+Setup opens one admin connection and takes a session advisory lock keyed on the
+database name. That lock is the lease, and it is held on that same connection
+until you dispose. It is what makes the sweep below safe to run concurrently.
+
+`dispose()` is memoized, so two calls, or two concurrent calls, do one
+teardown. It drops the database `WITH (FORCE)`, so a connection your app forgot
+to close does not block it. Teardown failures collect into
+`DisposablePostgresCleanupError`, and `.errors` holds each one.
+
+## Sweeping what crashed
+
+A killed test run leaves its database behind. Every `createDisposablePostgres`
+call therefore sweeps first, and you can also sweep on its own:
+
+```ts
+import { sweepStalePostgresDatabases } from "@questpie/testing/scenario";
+
+const dropped = await sweepStalePostgresDatabases({
+	adminUrl: "postgres://postgres:postgres@127.0.0.1:5432/postgres",
+});
+```
+
+It returns the names it dropped. A database has to clear three gates first.
+
+1. The name matches the `qp_harness_` pattern exactly.
+2. Its timestamp is older than `staleAfterMs`, 30 minutes by default.
+3. `pg_try_advisory_lock` on its name succeeds.
+
+Gate 3 is why a live run survives a sweep from another run. It holds the lease,
+the try fails, and the sweep moves on. Gate 1 is why nothing else on the server
+is ever a candidate. A name it cannot parse, or a timestamp that does not round
+trip, is skipped rather than guessed at.
+
+## Options
+
+| Option         | Default  | What it does                                       |
+| -------------- | -------- | -------------------------------------------------- |
+| `adminUrl`     | required | The privileged connection used to create and drop  |
+| `migrate`      | none     | Called with the new url after creation             |
+| `staleAfterMs` | 1800000  | How old a leftover must be before a sweep drops it |
+| `timeoutMs`    | 10000    | Connection, query and admin-statement timeout      |
+
+`adminUrl` is checked before anything connects. It must parse, use the
+`postgres:` or `postgresql:` protocol, and name a database. Naming a
+`qp_harness_` database is rejected, because PostgreSQL cannot drop the database
+its own connection is using. A bad value throws a `TypeError`.
+
+<Callout type="warn" title="Point it at a server you own">
+	The admin connection has rights to `CREATE DATABASE` and `DROP DATABASE`. Give
+	it a local server or a throwaway CI service, never a shared or production
+	instance.
+</Callout>
+
+## When setup fails
+
+Every failure path cleans up before it throws. You get a
+`DisposablePostgresSetupError` carrying three things.
+
+| Property         | What it tells you                                         |
+| ---------------- | --------------------------------------------------------- |
+| `.phase`         | `"sweep"`, `"connection"`, `"database"` or `"migrations"` |
+| `.cause`         | The original error, unwrapped                             |
+| `.cleanupErrors` | Anything that also failed while rolling back              |
+
+A `migrations` phase failure means the database was created and then dropped
+again. Your migration error is on `.cause`.
+
+## Related
+
+- [Testing](/docs/code/testing) for the in-process PGlite harness.
+- [Production server](/docs/code/testing/production-server) for the built server
+  that connects to this database.
+- [Migrations](/docs/ship/migrations) for what `migrations.up()` applies.

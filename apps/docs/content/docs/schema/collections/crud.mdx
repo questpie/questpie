@@ -21,16 +21,16 @@ const { docs } = await app.collections.posts.find(
 );
 ```
 
-Pass `{ accessMode: "user", session }` to turn the rules on, `{ locale }` to
-read or write a localized variant, `{ stage }` to target a workflow stage, and
-`{ db: tx }` to join an open transaction.
+Pass `{ accessMode: "user", session }` to turn the rules on. `{ locale }` reads
+or writes a localized variant. `{ stage }` targets a workflow stage, and
+`{ db: tx }` joins an open transaction.
 
 ### What an omitted context means
 
 Every key resolves in the same order: what you passed, then the ambient
 request context, then the default. So a call inside a hook or a route handler
-already runs as the caller ran, session and all, and you override only the key
-you mean to change. Outside any request, with nothing ambient to inherit, the
+already runs as the caller ran, session and all. You override only the key you
+mean to change. Outside any request, with nothing ambient to inherit, the
 default is `accessMode: "system"`, which skips your rules. That is the right
 default for a job or a script.
 
@@ -74,13 +74,31 @@ carries `groups` and `totalGroups`. The query language itself, operators,
 relation filters and aggregations, lives in
 [Relations](/docs/schema/relations).
 
+## Version history obeys the read rule
+
+`findVersions({ id })` takes `limit` and `offset` and nothing else. It returns
+snapshots oldest first, or an empty array when versioning is off.
+
+The read rule runs against two things. First the current row. A row you may not
+read gives you `403` instead of a history. Then every snapshot. The rule
+compiles into the query that reads `<name>_versions`. A row that changed tenant
+shows the new tenant only the snapshots carrying its own id.
+
+That second check is SQL, and it runs before `limit` and `offset`. Paging the
+history cannot hand you a snapshot the rule would have rejected.
+
+Scalar fields on the collection compile. Localized fields compile too, against
+`<name>_i18n_versions`. Everything else throws: relation filters, `RAW`,
+virtual fields, and any key the versions table does not have. The query cannot
+ask a relation what it held a year ago, so `findVersions()` refuses rather than
+answer from the present.
+
 ## Bulk writes claim their rows
 
 `updateMany` and `deleteMany` lock the matched rows and re-evaluate `where`
-inside the transaction, so a row is written only if it still matches at write
-time. `updateMany` returns the rows that won, and an empty array means nothing
-matched at write time, whether it never existed or somebody else got there
-first.
+inside the transaction. A row is written only if it still matches at write time.
+`updateMany` returns the rows that won. An empty array means nothing matched at
+write time, whether it never existed or somebody else got there first.
 
 ```ts
 const claimed = await collections.seats.updateMany(
@@ -94,9 +112,9 @@ if (claimed.length === 0) {
 
 ## Locks across collections
 
-When an invariant spans several collections, take the lock on the aggregate
-root with `lockMany` inside `withTransaction`, instead of leaking raw
-`SELECT … FOR UPDATE` into your services.
+An invariant can span several collections. Take the lock on the aggregate root
+with `lockMany` inside `withTransaction`. Do not leak raw `SELECT … FOR UPDATE`
+into your services.
 
 ```ts
 await withTransaction(db, async (tx) => {
@@ -110,10 +128,10 @@ await withTransaction(db, async (tx) => {
 });
 ```
 
-It takes at most 100 ids, deduplicates them, locks in id order, applies read
-access in the locking query, and returns only the ids you may see. A missing id
-and one you may not read look the same on purpose. The context must carry the
-active transaction, and it rejects the call otherwise.
+It takes at most 100 ids, deduplicates them, and locks in id order. It applies
+read access in the locking query, and returns only the ids you may see. A
+missing id and one you may not read look the same on purpose. The context must
+carry the active transaction, and it rejects the call otherwise.
 
 `lockMany` runs no hooks, returns no rows, writes nothing, and emits no
 realtime event. It is not reachable over REST, the client SDK, MCP or OpenAPI.

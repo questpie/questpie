@@ -114,6 +114,23 @@ receipt for something that was never accepted.
 	so the worker and every publisher agree.
 </Callout>
 
+### Why the ledger and not the broker
+
+Call `publish()` twice with the same key and the second call never reaches the
+adapter. The ledger row is the gate, not the broker. `questpie_queue_dispatch`
+holds a unique index on the job name and the key. The insert does nothing on
+conflict. The second call reads back the stored `dispatchId` and returns.
+
+A broker only dedupes while it still holds the job. pg-boss deletes a completed
+job after seven days by default. Once that row is gone the id is free again.
+The ledger row stays, so a key keeps its `dispatchId` for good.
+
+The broker id is the second line. It catches a publish QUESTPIE could not
+confirm and had to retry. That retry carries the same `dispatchId`. pg-boss and
+BullMQ publish under it as their own job id. So each rejects the replay itself.
+Cloudflare Queues takes no caller-supplied id. A replay there is a second
+physical delivery under one `dispatchId`.
+
 ## `queuePolicy`
 
 These five are what the option type accepts. The behaviour is pg-boss's, and it
