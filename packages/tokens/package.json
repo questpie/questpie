@@ -1,6 +1,7 @@
 {
 	"name": "@questpie/tokens",
 	"version": "3.19.0",
+	"private": true,
 	"description": "QUESTPIE design tokens — one palette, type scale, geometry, elevation and motion canon for marketing, docs, the admin UI and the product",
 	"repository": {
 		"type": "git",
