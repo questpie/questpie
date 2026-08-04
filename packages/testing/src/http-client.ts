@@ -1,4 +1,5 @@
 import { createRedactor } from "./redact.js";
+import { positive } from "./validate.js";
 
 const DEFAULT_MAX_BODY_CHARS = 2_048;
 
@@ -184,13 +185,6 @@ function validateBaseUrl(value: string): string {
 	} catch {
 		throw new TypeError(`baseUrl must be an absolute URL, received "${value}"`);
 	}
-}
-
-function positive(value: number, name: string): number {
-	if (!Number.isFinite(value) || value <= 0) {
-		throw new TypeError(`${name} must be a positive number`);
-	}
-	return value;
 }
 
 function toBlob(file: HttpUploadFile): Blob {

@@ -10,6 +10,23 @@ export {
 } from "./disposable-postgres.js";
 
 export {
+	CleanupError,
+	createCleanup,
+	type Cleanup,
+	type CleanupFailure,
+} from "./cleanup.js";
+
+export {
+	createEvidence,
+	DEFAULT_MAX_EVIDENCE_LINE_CHARS,
+	DEFAULT_MAX_EVIDENCE_LINES,
+	type Evidence,
+	type EvidenceOptions,
+	type EvidenceOutcome,
+	type EvidenceStream,
+} from "./evidence.js";
+
+export {
 	createHttpClient,
 	HttpJsonError,
 	type HttpClient,

@@ -1,4 +1,9 @@
-import { createRedactor } from "./redact.js";
+import {
+	createEvidence,
+	DEFAULT_MAX_EVIDENCE_LINE_CHARS,
+	DEFAULT_MAX_EVIDENCE_LINES,
+	type Evidence,
+} from "./evidence.js";
 import { withTimeout } from "./with-timeout.js";
 
 const DEFAULT_READY_TIMEOUT_MS = 30_000;
@@ -6,11 +11,8 @@ const DEFAULT_POLL_INTERVAL_MS = 100;
 const DEFAULT_REQUEST_TIMEOUT_MS = 2_000;
 const DEFAULT_STOP_GRACE_MS = 5_000;
 const DEFAULT_PORT_RELEASE_TIMEOUT_MS = 5_000;
-const DEFAULT_MAX_LOG_LINES = 500;
-const DEFAULT_MAX_LOG_LINE_CHARS = 4_096;
 const DEFAULT_RESERVED_PORTS = [3_000, 6_007] as const;
 const MAX_BOOT_ATTEMPTS = 3;
-const ERROR_TAIL_LINES = 20;
 const RESERVED_ENV_KEYS = new Set([
 	"PORT",
 	"APP_URL",
@@ -89,12 +91,6 @@ export class ProductionServerStopError extends Error {
 	}
 }
 
-interface LogSink {
-	readonly maxLineChars: number;
-	push(tag: "stdout" | "stderr", line: string): void;
-	tail(count?: number): readonly string[];
-}
-
 interface BootedChild {
 	child: ServerChild;
 	drains: readonly Promise<void>[];
@@ -127,14 +123,18 @@ export async function startProductionServer(
 		options.portReleaseTimeoutMs ?? DEFAULT_PORT_RELEASE_TIMEOUT_MS,
 		"portReleaseTimeoutMs",
 	);
-	const sink = createLogSink(
-		collectSecrets(options),
-		positive(options.maxLogLines ?? DEFAULT_MAX_LOG_LINES, "maxLogLines"),
-		positive(
-			options.maxLogLineChars ?? DEFAULT_MAX_LOG_LINE_CHARS,
-			"maxLogLineChars",
-		),
+	const maxLogLineChars = positive(
+		options.maxLogLineChars ?? DEFAULT_MAX_EVIDENCE_LINE_CHARS,
+		"maxLogLineChars",
 	);
+	const sink = createEvidence({
+		secrets: collectSecrets(options),
+		maxLines: positive(
+			options.maxLogLines ?? DEFAULT_MAX_EVIDENCE_LINES,
+			"maxLogLines",
+		),
+		maxLineChars: maxLogLineChars,
+	});
 	const reservedPorts = new Set([
 		...DEFAULT_RESERVED_PORTS,
 		...(options.reservedPorts ?? []),
@@ -147,7 +147,7 @@ export async function startProductionServer(
 			const port = fixedPort ?? allocatePort(reservedPorts);
 			let booted: BootedChild;
 			try {
-				booted = bootChild(options, port, sink);
+				booted = bootChild(options, port, sink, maxLogLineChars);
 			} catch (cause) {
 				throw new ProductionServerStartError(
 					"spawn",
@@ -288,26 +288,6 @@ function collectSecrets(options: ProductionServerOptions): string[] {
 	return [...values].sort((left, right) => right.length - left.length);
 }
 
-function createLogSink(
-	secrets: readonly string[],
-	maxLines: number,
-	maxLineChars: number,
-): LogSink {
-	const ring: string[] = [];
-	const redact = createRedactor(secrets);
-	return {
-		maxLineChars,
-		push(tag, line) {
-			const bounded = line.slice(-maxLineChars);
-			ring.push(`[${tag}] ${redact(bounded)}`);
-			if (ring.length > maxLines) ring.splice(0, ring.length - maxLines);
-		},
-		tail(count = ERROR_TAIL_LINES) {
-			return ring.slice(-Math.max(0, count));
-		},
-	};
-}
-
 function allocatePort(reserved: ReadonlySet<number>): number {
 	for (let attempt = 0; attempt < 25; attempt += 1) {
 		const probe = Bun.listen({
@@ -325,14 +305,15 @@ function allocatePort(reserved: ReadonlySet<number>): number {
 function bootChild(
 	options: ProductionServerOptions,
 	port: number,
-	sink: LogSink,
+	sink: Evidence,
+	maxLineChars: number,
 ): BootedChild {
 	installExitHook();
 	const child = spawnChild(options, port);
 	liveChildren.add(child);
 	const drains = [
-		teeStream(child.stdout, "stdout", sink),
-		teeStream(child.stderr, "stderr", sink),
+		teeStream(child.stdout, "stdout", sink, maxLineChars),
+		teeStream(child.stderr, "stderr", sink, maxLineChars),
 	];
 	void child.exited.finally(() => liveChildren.delete(child));
 	return { child, drains };
@@ -371,7 +352,8 @@ function installExitHook(): void {
 async function teeStream(
 	stream: ReadableStream<Uint8Array>,
 	tag: "stdout" | "stderr",
-	sink: LogSink,
+	sink: Evidence,
+	maxLineChars: number,
 ): Promise<void> {
 	const decoder = new TextDecoder();
 	let pending = "";
@@ -380,8 +362,8 @@ async function teeStream(
 		const lines = pending.split("\n");
 		pending = lines.pop() ?? "";
 		for (const line of lines) sink.push(tag, line);
-		if (pending.length > sink.maxLineChars * 2) {
-			pending = pending.slice(-sink.maxLineChars);
+		if (pending.length > maxLineChars * 2) {
+			pending = pending.slice(-maxLineChars);
 		}
 	}
 	pending += decoder.decode();
