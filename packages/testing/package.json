@@ -63,6 +63,6 @@
 		"tsdown": "^0.18.3"
 	},
 	"peerDependencies": {
-		"questpie": "3.21.1"
+		"questpie": "workspace:^"
 	}
 }

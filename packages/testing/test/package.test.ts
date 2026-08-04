@@ -58,6 +58,11 @@ describe("@questpie/testing package", () => {
 		expect(coreManifest.dependencies["@questpie/testing"]).toBeUndefined();
 		expect(manifest.dependencies["@electric-sql/pglite"]).toBeDefined();
 		expect(manifest.dependencies.pg).toBeDefined();
-		expect(manifest.peerDependencies.questpie).toBe("3.21.1");
+		/* A range, not a pin. questpie and this package share a changesets fixed
+		   group, so every release moves questpie's version. An exact pin puts it
+		   out of range on each one, and changesets bumps a peer dependent whose
+		   range broke as a MAJOR. A single minor changeset here turned the whole
+		   group into 4.0.0. Every other package in the group uses workspace:^. */
+		expect(manifest.peerDependencies.questpie).toBe("workspace:^");
 	});
 });
