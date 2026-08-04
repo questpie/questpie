@@ -13,8 +13,10 @@
  * advanced public API, generated/type-only, and internal instead of presenting
  * a misleading raw coverage percentage.
  *
+ * Packages are DISCOVERED from `packages/*` and their entry files come from each
+ * package's own `exports` map. There is no hand-maintained list to forget.
+ *
  * Config: `skills/questpie/coverage.json` (reviewed together with the skill):
- *   - surfaces:        package → entry files/dirs to scan
  *   - skippedPackages: packages owned by another skill (audit hook)
  *   - advanced:        public symbol → reason it belongs in advanced reference material
  *   - internal:        symbol → reason; never paged on
@@ -42,9 +44,13 @@ const ROOT_DIR = resolve(import.meta.dir, "..");
 const CONFIG_PATH = join(ROOT_DIR, "skills/questpie/coverage.json");
 const DOCS_ROOT = join(ROOT_DIR, "apps/docs/content/docs");
 
+interface Surface {
+	package: string;
+	entries: string[];
+}
+
 interface CoverageConfig {
 	skillRoot: string;
-	surfaces: Array<{ package: string; entries: string[] }>;
 	skippedPackages: Record<string, string>;
 	advanced: Record<string, string>;
 	internal: Record<string, string>;
@@ -197,10 +203,67 @@ function collectEntryFiles(entry: string): string[] {
 	return files;
 }
 
+/**
+ * Surfaces are DISCOVERED from `packages/*`, never hand-listed. The list used to
+ * live in coverage.json, and `@questpie/testing` was added to the repo without
+ * anyone remembering to add it there: five public exports shipped in 3.23.0 with
+ * this gate green and zero mentions in the skill. A package that nobody
+ * registers has to fail loudly, not silently leave the gate.
+ *
+ * Entries come from the package's own `exports` map, because that map is the
+ * definition of what a consumer can import. Private packages are out of scope,
+ * and `skippedPackages` means another skill owns the package, not that its API
+ * is exempt.
+ */
+function discoverSurfaces(config: CoverageConfig): Surface[] {
+	const packagesDir = join(ROOT_DIR, "packages");
+	const surfaces: Surface[] = [];
+
+	for (const dirent of readdirSync(packagesDir, { withFileTypes: true })) {
+		if (!dirent.isDirectory()) continue;
+		const manifestPath = join(packagesDir, dirent.name, "package.json");
+		if (!existsSync(manifestPath)) continue;
+
+		const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as {
+			name?: string;
+			private?: boolean;
+			exports?: Record<string, unknown>;
+		};
+		if (!manifest.name || manifest.private) continue;
+		if (config.skippedPackages[manifest.name]) continue;
+
+		const entries = new Set<string>();
+		const collect = (target: unknown) => {
+			if (typeof target === "string") {
+				if (/\.tsx?$/.test(target)) {
+					entries.add(
+						join("packages", dirent.name, target.replace(/^\.\//, "")),
+					);
+				}
+				return;
+			}
+			if (target && typeof target === "object") {
+				for (const value of Object.values(target)) collect(value);
+			}
+		};
+		collect(manifest.exports ?? {});
+
+		if (entries.size === 0) {
+			console.error(
+				`${manifest.name}: no TypeScript entry in its exports map. Point exports at src, or add it to skippedPackages with the skill that owns it.`,
+			);
+			continue;
+		}
+		surfaces.push({ package: manifest.name, entries: [...entries].sort() });
+	}
+
+	return surfaces.sort((a, b) => a.package.localeCompare(b.package));
+}
+
 function extractSurface(config: CoverageConfig): SymbolEntry[] {
 	const symbols = new Map<string, SymbolEntry>();
 
-	for (const surface of config.surfaces) {
+	for (const surface of discoverSurfaces(config)) {
 		const queue = surface.entries.flatMap(collectEntryFiles);
 		const visited = new Set<string>();
 
