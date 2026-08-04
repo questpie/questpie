@@ -1,5 +1,29 @@
 # @questpie/admin
 
+## 3.23.0
+
+### Minor Changes
+
+- [`bec0c23`](https://github.com/questpie/questpie/commit/bec0c23a78f1318a86c09e8d02f1584c89605c50) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Remove the deprecated `discoverPatterns` option from `ModuleTemplateOptions` in
+  `questpie/codegen`.
+
+  Registry augmentation moved to the root template some time ago and
+  `generateModuleTemplate` stopped reading the option then, so passing it has been
+  a no-op. It is gone from the type and from both call sites.
+
+  If you pass it to `generateModuleTemplate` in your own codegen plugin, delete the
+  line. Nothing else changes: the generated output is byte for byte the same,
+  because the option never reached it.
+
+  Note that `generateTemplate` has its own `discoverPatterns`, which is live and
+  untouched. Only the module-template one is removed.
+
+### Patch Changes
+
+- Updated dependencies [[`bec0c23`](https://github.com/questpie/questpie/commit/bec0c23a78f1318a86c09e8d02f1584c89605c50), [`76bf85c`](https://github.com/questpie/questpie/commit/76bf85c681bf3187338574d8a9b4e21e47ac9051)]:
+  - questpie@3.23.0
+  - @questpie/tanstack-query@3.23.0
+
 ## 3.22.0
 
 ### Minor Changes
