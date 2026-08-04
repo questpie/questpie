@@ -2,6 +2,8 @@ import { randomBytes } from "node:crypto";
 
 import { Client } from "pg";
 
+import { withTimeout } from "./with-timeout.js";
+
 const DATABASE_PREFIX = "qp_harness_";
 const DATABASE_PATTERN = /^qp_harness_(\d{14})_([a-z0-9]{6})$/;
 const DEFAULT_STALE_AFTER_MS = 30 * 60 * 1000;
@@ -450,26 +452,4 @@ async function disposeDatabase(
 		errors.push(error);
 	}
 	if (errors.length > 0) throw new DisposablePostgresCleanupError(errors);
-}
-
-async function withTimeout<T>(
-	promise: Promise<T>,
-	timeoutMs: number,
-	operation: string,
-): Promise<T> {
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	try {
-		return await Promise.race([
-			promise,
-			new Promise<never>((_, reject) => {
-				timer = setTimeout(
-					() =>
-						reject(new Error(`${operation} timed out after ${timeoutMs}ms`)),
-					timeoutMs,
-				);
-			}),
-		]);
-	} finally {
-		if (timer) clearTimeout(timer);
-	}
 }

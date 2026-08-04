@@ -1,3 +1,5 @@
+import { withTimeout } from "./with-timeout.js";
+
 const DEFAULT_READY_TIMEOUT_MS = 30_000;
 const DEFAULT_POLL_INTERVAL_MS = 100;
 const DEFAULT_REQUEST_TIMEOUT_MS = 2_000;
@@ -542,27 +544,5 @@ async function isTcpRefused(port: number): Promise<boolean> {
 		return false;
 	} catch {
 		return true;
-	}
-}
-
-async function withTimeout<T>(
-	promise: Promise<T>,
-	timeoutMs: number,
-	operation: string,
-): Promise<T> {
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	try {
-		return await Promise.race([
-			promise,
-			new Promise<never>((_, reject) => {
-				timer = setTimeout(
-					() =>
-						reject(new Error(`${operation} timed out after ${timeoutMs}ms`)),
-					timeoutMs,
-				);
-			}),
-		]);
-	} finally {
-		if (timer) clearTimeout(timer);
 	}
 }
