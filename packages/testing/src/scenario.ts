@@ -10,6 +10,18 @@ export {
 } from "./disposable-postgres.js";
 
 export {
+	createHttpClient,
+	HttpJsonError,
+	type HttpClient,
+	type HttpClientOptions,
+	type HttpCookieJar,
+	type HttpRequestInit,
+	type HttpResponse,
+	type HttpUploadFile,
+	type HttpUploadInit,
+} from "./http-client.js";
+
+export {
 	ProductionServerStartError,
 	ProductionServerStopError,
 	startProductionServer,

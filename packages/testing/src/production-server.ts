@@ -1,3 +1,4 @@
+import { createRedactor } from "./redact.js";
 import { withTimeout } from "./with-timeout.js";
 
 const DEFAULT_READY_TIMEOUT_MS = 30_000;
@@ -293,13 +294,7 @@ function createLogSink(
 	maxLineChars: number,
 ): LogSink {
 	const ring: string[] = [];
-	const redact = (value: string): string => {
-		let output = value;
-		for (const secret of secrets) {
-			if (secret) output = output.split(secret).join("[REDACTED]");
-		}
-		return output;
-	};
+	const redact = createRedactor(secrets);
 	return {
 		maxLineChars,
 		push(tag, line) {
