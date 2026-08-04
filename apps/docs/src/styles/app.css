@@ -1045,3 +1045,91 @@ figure.shiki [role="tab"][data-state="active"] {
 	text-decoration: underline;
 	text-underline-offset: 0.2em;
 }
+
+/* ---------------------------------------------------------------------------
+ * The docs index grid
+ *
+ * The page says two groups teach and seven are for looking things up, and the
+ * grid should say the same thing rather than showing nine identical boxes.
+ * The two lead groups get a wide row of their own; the seven pack three to a
+ * row and read as a table of contents.
+ *
+ * These are unlayered rules, so they outrank the `grid-cols-2` utility
+ * fumadocs puts on the wrapper without needing !important.
+ * ------------------------------------------------------------------------ */
+
+.qp-doc-lead,
+.qp-doc-groups {
+	gap: var(--space-3);
+	/* The sentence above each grid introduces it, so it sits close; the next
+	   one needs room or it reads as a caption for the cards it follows. */
+	margin-block: var(--space-3) var(--space-10);
+}
+
+.qp-doc-groups {
+	margin-bottom: var(--space-4);
+}
+
+.qp-doc-lead {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.qp-doc-groups {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 900px) {
+	.qp-doc-groups {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 560px) {
+	.qp-doc-lead,
+	.qp-doc-groups {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+/* A lead card carries the weight: a coral rule down its edge, and room to
+   breathe. The rule is the only accent on the page, so it reads as "start
+   here" without a badge saying so. */
+.qp-doc-lead [data-card] {
+	position: relative;
+	padding: var(--space-4);
+	padding-left: calc(var(--space-4) + 3px);
+	overflow: hidden;
+}
+
+.qp-doc-lead [data-card]::before {
+	content: "";
+	position: absolute;
+	inset: 0 auto 0 0;
+	width: 3px;
+	background: var(--coral);
+	opacity: 0.85;
+}
+
+.qp-doc-lead [data-card] p {
+	font-size: 0.875rem;
+	line-height: 1.5;
+	color: var(--muted-foreground);
+}
+
+/* A lookup card is a row in a list that happens to be clickable. Small title,
+   one quiet line under it, nothing else competing. */
+.qp-doc-groups [data-card] {
+	padding: var(--space-3);
+}
+
+.qp-doc-groups [data-card] p {
+	font-size: 0.8125rem;
+	line-height: 1.45;
+	color: var(--muted-foreground);
+	margin-top: 0.25rem;
+}
+
+.qp-doc-lead [data-card] > *,
+.qp-doc-groups [data-card] > * {
+	margin-block: 0;
+}
