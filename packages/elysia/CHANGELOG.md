@@ -1,5 +1,65 @@
 # @questpie/elysia
 
+## 3.22.0
+
+### Minor Changes
+
+- [`17b6cab`](https://github.com/questpie/questpie/commit/17b6cabffb8f340270c4caf4f8da36be42310fb7) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Close a set of holes where the framework promised something and quietly did not
+  do it.
+
+  **Codegen no longer fails silently.** A `modules.ts` that could not be imported
+  was caught, reported only under `--verbose`, and then codegen removed the output
+  directory and wrote a core-only artifact over the correct one, with exit code 0.
+  One unbuilt dependency erased every category, collection extension and factory
+  method with no message. It now throws. The same bug pair in `module-metadata.ts`
+  is fixed too, along with a Windows drive-letter path that parsed as a URL scheme
+  and `modules.mts`, which discovery already accepted.
+
+  **A module's `emails/` directory reaches the app.** The module template emitted
+  the key `emails` while `create-app` read `emailTemplates`.
+
+  **Deep imports into module internals are closed.** `"./*": "./*"` shipped
+  `dist/server/modules/*/.generated/module.mjs` to consumers of `questpie` and
+  `@questpie/admin`. It is replaced by explicit `./internal/*` subpaths carrying
+  types only.
+
+  **`module()` keeps dependency types.** It lacked `const`, so a module's own
+  `modules` array was widened away.
+
+  **Targets have one owner.** `root`, `outDir`, `outputFile` and `generate` come
+  from the owner instead of merging, a duplicate output path throws instead of one
+  target deleting another's work, and `target.generate` now runs in package mode.
+
+  Field and context fixes:
+
+  - `f.upload().multiple()` owns a `jsonb` column. It set `virtual: true,
+columnFactory: null`, which is the shape of `hasMany`, so the array had
+    nowhere to go and `.localized()` was a silent no-op.
+  - `f.upload({ mimeTypes, maxSize })` reaches the admin control. Both were
+    destructured and discarded.
+  - The email service boots without an adapter. It threw at startup, so an app
+    that never sends mail could not start, and `MailerService`'s own development
+    fallback was unreachable.
+  - `global().options({ scoped })` sees context keys you added. It was typed
+    against an interface with no augmentation seam, so its own documented example
+    did not compile.
+  - `ctx.tables` resolves instead of being `undefined`, and `ctx.executor` and
+    `ctx.observability` are typed as well as set.
+
+  Removed, with no deprecation because there are no users on it:
+
+  - `createClient({ crdt })`. Configure the engine on `createCrdtClient(client,
+{ runtime })`. The old slot put the client CRDT implementation into every
+    bundle, which is what splitting it out was meant to prevent. This also fixes
+    `createElysiaClient`, which read the removed `client.crdt` getter and threw
+    before it could return a client.
+  - `generateModule()`. Use `packageConfig()` and `questpie generate`.
+
+### Patch Changes
+
+- Updated dependencies [[`b5b4a81`](https://github.com/questpie/questpie/commit/b5b4a81f2864d0e17f960b3e1e52c727d45b7124), [`195648d`](https://github.com/questpie/questpie/commit/195648dba74395dfa1d37c6ba9382c40ef63c8e3), [`17b6cab`](https://github.com/questpie/questpie/commit/17b6cabffb8f340270c4caf4f8da36be42310fb7), [`cd62bb8`](https://github.com/questpie/questpie/commit/cd62bb8bf4df98b3f75c4a894ba8148677a3b9ae)]:
+  - questpie@3.22.0
+
 ## 3.21.1
 
 ### Patch Changes
@@ -383,6 +443,7 @@
   Full v3 architecture redesign — module system, core module extraction, service definitions, route conventions, and type-safe field methods.
 
   ## Breaking Changes
+
   - **`QuestpieBuilder` removed** — `q()`, `.use()`, `.build()` chain replaced by file convention + `questpie generate`
   - **RPC module removed** — replaced by `routes/*.ts` directory with `route()` builder
   - **`app.api.*` removed** — use `app.collections` / `app.globals` direct getters
@@ -394,6 +455,7 @@
   - **Audit module opt-in** — `auditModule` must be explicitly added via `.use(auditModule)`
 
   ## New Features
+
   - **Module system** — core infrastructure (search, realtime, auth, queue) wired as formal service definitions
   - **`fieldType()` + `FieldWithMethods`** — type-safe field chain methods (`.manyToMany()`, `.trim()`, `.autoNow()`, etc.)
   - **Hook type safety** — fully typed `ctx.data` in collection hooks, no more `{ [x: string]: any }` fallback
@@ -423,15 +485,15 @@
   ```ts
   // Before
   collection("posts").fields({
-  	title: varchar("title", { length: 255 }),
-  	content: text("content"),
+    title: varchar("title", { length: 255 }),
+    content: text("content"),
   });
 
   // After
   q.collection("posts").fields((f) => ({
-  	title: f.text({ required: true }),
-  	content: f.textarea({ localized: true }),
-  	publishedAt: f.datetime(),
+    title: f.text({ required: true }),
+    content: f.textarea({ localized: true }),
+    publishedAt: f.datetime(),
   }));
   ```
 
@@ -441,22 +503,22 @@
 
   ```ts
   const slugField = field<SlugFieldConfig, string>()({
-  	type: "slug",
-  	_value: undefined as unknown as string,
-  	toColumn: (name, config) => varchar(name, { length: 255 }),
-  	toZodSchema: (config) => z.string().regex(/^[a-z0-9-]+$/),
-  	getOperators: (config) => ({
-  		column: stringColumnOperators,
-  		jsonb: stringJsonbOperators,
-  	}),
-  	getMetadata: (config) => ({
-  		type: "slug",
-  		label: config.label,
-  		required: config.required ?? false,
-  		localized: false,
-  		readOnly: false,
-  		writeOnly: false,
-  	}),
+    type: "slug",
+    _value: undefined as unknown as string,
+    toColumn: (name, config) => varchar(name, { length: 255 }),
+    toZodSchema: (config) => z.string().regex(/^[a-z0-9-]+$/),
+    getOperators: (config) => ({
+      column: stringColumnOperators,
+      jsonb: stringJsonbOperators,
+    }),
+    getMetadata: (config) => ({
+      type: "slug",
+      label: config.label,
+      required: config.required ?? false,
+      localized: false,
+      readOnly: false,
+      writeOnly: false,
+    }),
   });
 
   // Register:
@@ -470,6 +532,7 @@
   #### Reactive Field System (NEW)
 
   Server-evaluated reactive behaviors on fields via `meta.admin`:
+
   - **`hidden`** / **`readOnly`** / **`disabled`** — conditionally toggle field state based on form data
   - **`compute`** — auto-compute values from other fields
   - **Dynamic `options`** — load select/relation options on the server with dependency tracking and debounce
@@ -483,11 +546,11 @@
   ```ts
   const r = q.rpc<typeof app>();
   export const dashboardRouter = r.router({
-  	stats: r.fn({
-  		handler: async ({ app }) => {
-  			/* ... */
-  		},
-  	}),
+    stats: r.fn({
+      handler: async ({ app }) => {
+        /* ... */
+      },
+    }),
   });
   ```
 
@@ -502,21 +565,25 @@
   Full server-side introspection of collection and global schemas for admin consumption: field metadata, access permissions, relation info, reactive config, validation schemas — all serialized from builder state. Admin UI consumes this directly instead of relying on client-side config.
 
   #### Queue Runtime Redesign (BREAKING)
+
   - Redesigned `QueueService` with proper lifecycle (`start`/`stop`/`drain`), graceful shutdown, and health checks
   - New Cloudflare Queues adapter alongside pg-boss
   - Worker handlers now receive `{ payload, app }` instead of `(payload, ctx)`
   - Workflow builder API refined with better type inference
 
   #### Realtime Pipeline Hardening (BREAKING)
+
   - `PgNotifyAdapter`: proper connection lifecycle, idempotent `start`/`stop`, owned vs shared client tracking, handler cleanup
   - `RedisStreamsAdapter`: graceful error handling in read loop, no longer auto-disconnects client on `stop()`
   - `streamedQuery` from `@tanstack/react-query` integrated as first-class citizen in collection query options
 
   #### Access Control (BREAKING)
+
   - **Removed** `access.fields` from collection/global builder — field-level access is now defined per-field via `access: { read, update }` in the field definition itself
   - CRUD generator evaluates field-level access at runtime, filtering output and validating input per field
 
   #### CRUD API Alignment (BREAKING)
+
   - Client SDK `update`/`delete`/`restore` now accept object params `{ id, data }` instead of positional args
   - Relation field names are automatically transformed to FK columns in create/update operations
   - `updateMany` and `deleteMany` added to HTTP adapter, client SDK, and tanstack-query
@@ -545,15 +612,18 @@
   Admin UI now consumes field schemas, sidebar config, dashboard config, and branding from server introspection instead of client-side builder config. `defineAdminConfig` is replaced by server-defined metadata.
 
   #### Builder API Cleanup (BREAKING)
+
   - **Removed** from `qa` namespace: `qa.collection()`, `qa.global()`, `qa.block()`, `qa.sidebar()`, `qa.dashboard()`, `qa.branding()` — these are now server-side concerns
   - Kept: `qa.field()`, `qa.listView()`, `qa.editView()`, `qa.widget()`, `qa.page()` for client-only UI registrations
   - Admin `CollectionBuilder` and `GlobalBuilder` completely rewritten — all schema methods (`.fields()`, `.list()`, `.form()`) removed; only UI-specific methods remain (`.meta()`, `.preview()`, `.autoSave()`, `.use()`)
 
   #### Reactive Fields UI (NEW)
+
   - `useReactiveFields` hook evaluates server-defined reactive config (hidden/readOnly/disabled/compute) client-side with automatic dependency tracking
   - `useFieldOptions` hook for dynamic options loading with search debounce and SSE streaming
 
   #### Block Editor Rework
+
   - Full drag-and-drop block editor with canvas layout, block library sidebar, tree navigation
   - Block field metadata unified between collections and blocks
   - Block prefetch values inferred from field definitions
@@ -561,6 +631,7 @@
   #### Actions System (NEW)
 
   Collection-level actions system with both client and server handler modes:
+
   - **Handler types**: `navigate` (routing), `api` (HTTP call), `form` (dialog with field inputs), `dialog` (custom component), `custom` (arbitrary code), `server` (server-side execution with full app context)
   - **Scopes**: `header` (list view toolbar — primary buttons + secondary dropdown), `bulk` (selected items toolbar), `single`/`row` (per-item)
   - **Server actions** run handler on the server with access to `app`, `db`, `session`; return typed results (`success`, `error`, `redirect`, `download`) with side-effects (`invalidate`, `toast`, `navigate`)
@@ -585,10 +656,12 @@
   Full type-safe query/mutation option builders for RPC procedures with nested router support. The `createQuestpieQueryOptions` factory now accepts a `TRPC` generic for RPC router types, producing `.rpc.*` namespaced option builders.
 
   #### Realtime Streaming (NEW)
+
   - Re-exports `buildCollectionTopic`, `buildGlobalTopic`, `TopicConfig`, `RealtimeAPI` from core client
   - Collection `.find`, `.findOne`, `.count` option builders produce `streamedQuery`-based options for SSE real-time updates
 
   #### Batch Operations (NEW)
+
   - `updateMany` and `deleteMany` mutation option builders for collections
   - `key` builders for all collection/global operations
 
@@ -601,6 +674,7 @@
   ***
 
   ### `@questpie/elysia` / `@questpie/hono` / `@questpie/next`
+
   - All adapters accept `rpc` config to mount standalone RPC router trees alongside CRUD routes
   - Formatting standardized (tabs → spaces alignment)
   - `@questpie/hono`: `questpieHono` now correctly forwards RPC router to fetch handler
@@ -656,6 +730,7 @@
 ### Patch Changes
 
 - [`eb98bb9`](https://github.com/questpie/questpie/commit/eb98bb9d86c3971e439d9d3081ed0efb3bcb1f77) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Fix npm publish by converting workspace:\* to actual versions
+
   - Remove internal @questpie/typescript-config package (inline tsconfig)
   - Add publish script that converts workspace:\* references before changeset publish
   - Fixes installation errors when installing packages from npm
