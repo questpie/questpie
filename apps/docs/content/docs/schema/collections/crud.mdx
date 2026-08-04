@@ -60,9 +60,10 @@ default for a job or a script.
 | `lockMany({ ids }, ctx)`              | Lock rows inside an open transaction. Server only.                            |
 | `upload(file, ctx)`                   | Store a file. Only on [upload collections](/docs/schema/collections/uploads). |
 
-`update` and `delete` still exist as aliases of `updateMany` and `deleteMany`.
-They are deprecated because they mean by-id on the client and bulk on the
-server, and they go away in v4.
+`update` and `delete` are aliases of `updateMany` and `deleteMany`. Do not reach
+for them. The same two names mean by-id on the client and bulk here, so one
+letter of difference decides whether you touch one row or every matching row.
+Write `updateMany` and `deleteMany` and the reader of your code can tell.
 
 ## What find takes
 

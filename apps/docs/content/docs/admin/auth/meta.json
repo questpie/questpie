@@ -1,1 +1,3 @@
-{ "pages": ["identity-tables", "protecting-routes"] }
+{
+	"pages": ["identity-tables", "protecting-routes", "transactional-queue"]
+}

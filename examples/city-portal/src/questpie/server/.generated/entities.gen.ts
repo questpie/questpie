@@ -28,6 +28,7 @@ import _mig_20260726T163039_queueTransactionalDispatch from "../migrations/20260
 import _mig_20260730T182023_optimisticConcurrencyRevisions from "../migrations/20260730T182023_optimistic-concurrency-revisions";
 import _mig_20260731T000040_realtimeIdempotency1 from "../migrations/20260731T000040_realtime-idempotency-1";
 import _mig_20260731T084648_realtimeIdempotency1 from "../migrations/20260731T084648_realtime-idempotency-1";
+import _mig_20260804T091856_uploadMultipleColumn from "../migrations/20260804T091856_upload-multiple-column";
 
 // ── Blocks ─────────────────────────────────────────────────
 import { accordionBlock as _bloc_accordion } from "../blocks/accordion";
