@@ -406,3 +406,39 @@ interface CodegenOptions {
 	};
 }
 ```
+
+## generateModuleTemplate
+
+The primitive the built-in generator calls to write a module file. Import it from
+`questpie/codegen` inside a target's `generate()` when you want the standard
+emit rules and only need to add to them. `@questpie/admin` uses it to write
+`src/questpie/admin/.generated/client.ts`.
+
+```ts
+function generateModuleTemplate(
+	options: ModuleTemplateOptions,
+): ModuleTemplateResult;
+
+interface ModuleTemplateOptions {
+	moduleName: string;
+	discovered: DiscoveryResult;
+	categoryMeta: Map<string, CategoryDeclaration>;
+	extraImports?: Array<{ name: string; path: string }>;
+	extraTypeDeclarations?: string[];
+	/** Lines added to the module object, e.g. `listViews: { … },`. */
+	extraModuleProperties?: string[];
+	/** Command printed in the file header. Defaults to the bare command. */
+	regenerateCommand?: string;
+}
+
+interface ModuleTemplateResult {
+	code: string;
+	/** `null` unless a category augments a factory registry. */
+	registriesCode: string | null;
+}
+```
+
+Registry augmentations go in a second file on purpose. `module.ts` holds builder
+instances whose augmented interface points back at the registry, so augmenting
+in the same file makes it circular. Return it under `additionalFiles`, keyed by
+filename: `{ "registries.ts": registriesCode }`.

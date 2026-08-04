@@ -222,7 +222,6 @@
 		"CLOUD_ENV": "QUESTPIE Cloud env detection constant",
 		"isQuestpieCloud": "QUESTPIE Cloud env detection helper",
 		"createAdapterContext": "HTTP adapter wiring internal",
-		"createAdapterRoutes": "HTTP adapter wiring internal",
 		"evaluateRouteAccess": "route dispatcher internal",
 		"executeJsonRoute": "route dispatcher internal",
 		"executeRawRoute": "route dispatcher internal",

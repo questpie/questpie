@@ -202,6 +202,42 @@ additionalFiles? }`. Transforms have already run, so the extras are populated.
 Every returned file is syntax-checked before it is written. Only one plugin per
 target may supply it.
 
+### Reuse the standard template
+
+Writing a whole file by hand loses the emit rules the categories already
+describe. `generateModuleTemplate` from `questpie/codegen` is the primitive the
+built-in generator itself calls, so `generate()` can reuse it and change only
+what it needs:
+
+```ts
+import { generateModuleTemplate } from "questpie/codegen";
+
+generate(ctx) {
+	const result = generateModuleTemplate({
+		moduleName: "questpie-admin",
+		discovered: ctx.discovered,
+		categoryMeta: new Map(Object.entries(ctx.target.categories ?? {})),
+		regenerateCommand: ctx.regenerateCommand,
+		extraImports: ctx.extraImports,
+	});
+	return {
+		code: result.code,
+		additionalFiles: result.registriesCode
+			? { "registries.ts": result.registriesCode }
+			: undefined,
+	};
+}
+```
+
+It returns `{ code, registriesCode }`. `registriesCode` is `null` unless a
+category augments a factory registry. Those augmentations go in a second file on
+purpose. `module.ts` holds builder instances whose augmented interface points
+back at the registry, so augmenting in the same file makes it circular.
+
+`@questpie/admin` is the worked example. It calls this to write
+`src/questpie/admin/.generated/client.ts` and adds only its own view and block
+imports on top.
+
 ## Scaffolds
 
 ```ts

@@ -295,6 +295,12 @@ function checkDocsNav(): string[] {
 				page.startsWith("---")
 			)
 				continue;
+			/* fumadocs lets an entry be a markdown link, `[Label](/path)`, which
+			   relabels it in the sidebar without renaming the page. Every group
+			   index uses one, so the group does not repeat its own name as its
+			   first child. The target is a site path, not a file beside this
+			   meta.json, so the existence check below cannot resolve it. */
+			if (/^\[[^\]]*]\([^)]*\)$/.test(page)) continue;
 			listed.add(page);
 			const exists =
 				existsSync(join(dir, `${page}.mdx`)) ||
