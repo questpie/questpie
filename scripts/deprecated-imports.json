@@ -11,10 +11,12 @@
 		"observability": 0,
 		"openapi": 0,
 		"elysia": 0,
+		"testing": 0,
 		"hono": 0,
 		"create-questpie": 0,
 		"sandbox": 0,
 		"crdt-yjs": 0,
-		"vite-plugin-iconify": 0
+		"vite-plugin-iconify": 0,
+		"tokens": 0
 	}
 }
