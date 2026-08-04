@@ -39,6 +39,20 @@ export {
 } from "./http-client.js";
 
 export {
+	drainQueue,
+	QueueDrainError,
+	type DrainQueueOptions,
+	type QueueDrainResult,
+} from "./queue-control.js";
+
+export {
+	cycleRealtimeTransport,
+	type CycleRealtimeTransportOptions,
+	type RealtimeTransportControl,
+	type RealtimeTransportCycle,
+} from "./realtime-control.js";
+
+export {
 	ProductionServerStartError,
 	ProductionServerStopError,
 	startProductionServer,
