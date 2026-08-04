@@ -28,20 +28,20 @@ export function Logo({ className }: { className?: string }) {
 			{/* the tiled mark — the container the brand reserves for chrome */}
 			<rect width="34" height="34" rx="9.2" fill="var(--coral, #f26a45)" />
 			<rect
-				x="9.9"
-				y="9.9"
-				width="14.2"
-				height="14.2"
+				x="7.79"
+				y="7.79"
+				width="13.46"
+				height="13.46"
 				rx="3.4"
 				fill="#ffffff"
-				opacity="0.32"
+				opacity="0.42"
 			/>
 			<rect
-				x="15.9"
-				y="15.9"
-				width="8.2"
-				height="8.2"
-				rx="2.3"
+				x="14.52"
+				y="14.52"
+				width="11.69"
+				height="11.69"
+				rx="2.98"
 				fill="#ffffff"
 			/>
 
