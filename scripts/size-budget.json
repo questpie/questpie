@@ -54,12 +54,8 @@
 			"entryCount": 4
 		},
 		"testing": {
-			"unpackedSize": 36638,
+			"unpackedSize": 56544,
 			"entryCount": 5
-		},
-		"tokens": {
-			"unpackedSize": 59654,
-			"entryCount": 11
 		},
 		"vite-plugin-iconify": {
 			"unpackedSize": 18832,
