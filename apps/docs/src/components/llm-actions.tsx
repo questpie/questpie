@@ -18,27 +18,26 @@ export function LLMCopyButton({ markdownPath }: { markdownPath: string }) {
 	const [state, setState] = useState<State>("idle");
 
 	const handleCopy = async () => {
-		const url = `${window.location.origin}${markdownPath}`;
-
 		try {
 			const response = await fetch(markdownPath);
 			if (!response.ok) throw new Error(String(response.status));
 			await navigator.clipboard.writeText(await response.text());
 			setState("copied");
 		} catch {
-			try {
-				await navigator.clipboard.writeText(url);
-				setState("copied");
-			} catch {
-				setState("failed");
-			}
+			/*
+			 * The URL used to be a silent fallback here, reported as "Copied". When
+			 * the markdown route was answering 500 in production, every click put an
+			 * address on the clipboard and claimed it was the page. A button that
+			 * says it copied something has to have copied that thing.
+			 */
+			setState("failed");
 		}
 
 		setTimeout(() => setState("idle"), 2000);
 	};
 
 	const label = {
-		idle: "Copy for AI",
+		idle: "Copy as markdown",
 		copied: "Copied",
 		failed: "Copy failed",
 	}[state];
@@ -59,5 +58,23 @@ export function LLMCopyButton({ markdownPath }: { markdownPath: string }) {
 			<Icon className="size-3.5" icon={icon} />
 			{label}
 		</button>
+	);
+}
+
+/* The same markdown, openable rather than copied. An agent given the address can
+ * fetch it, and a reader who wants to see what "as markdown" means can look
+ * before trusting the clipboard. */
+export function LLMViewLink({ markdownPath }: { markdownPath: string }) {
+	return (
+		<a
+			className="border-fd-border text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-accent-foreground inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors"
+			href={markdownPath}
+			rel="noreferrer"
+			target="_blank"
+			title="Open this page as markdown"
+		>
+			<Icon className="size-3.5" icon="ph:file-md" />
+			View markdown
+		</a>
 	);
 }

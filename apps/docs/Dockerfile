@@ -54,6 +54,13 @@ WORKDIR /app
 COPY --from=builder /app/apps/docs/.output ./.output
 COPY --from=builder /app/apps/docs/package.json ./package.json
 
+# The markdown sources, which /llms.mdx/docs/* reads at request time. fumadocs
+# resolves them by a path relative to the working directory —
+# `content/docs/<slug>.mdx` — so they have to sit beside .output, not inside it.
+# Without this the HTML renders from the bundle and only the markdown route
+# fails, which is why it stayed hidden: every page looked fine.
+COPY --from=builder /app/apps/docs/content ./content
+
 # Set environment variables
 ENV NODE_ENV=production
 ENV PORT=3000

@@ -9,7 +9,7 @@ import {
 } from "fumadocs-ui/layouts/docs/page";
 import { createContext, createElement, useContext, useMemo } from "react";
 
-import { LLMCopyButton } from "@/components/llm-actions";
+import { LLMCopyButton, LLMViewLink } from "@/components/llm-actions";
 import { getMDXComponents } from "@/components/mdx";
 import { baseOptions } from "@/lib/layout.shared";
 
@@ -29,6 +29,7 @@ function LLMActions() {
 			{/* The markdown is served from /llms.mdx/docs/$, so the path is that
 			    prefix plus this page's own. `${url}.mdx` answered 404. */}
 			<LLMCopyButton markdownPath={`/llms.mdx${url}`} />
+			<LLMViewLink markdownPath={`/llms.mdx${url}`} />
 		</div>
 	);
 }
