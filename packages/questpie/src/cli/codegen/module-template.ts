@@ -29,7 +29,6 @@ import { CODEGEN_MODULE_METADATA_SYMBOL } from "./module-metadata.js";
 import type {
 	CategoryDeclaration,
 	DiscoveredFile,
-	DiscoverPattern,
 	DiscoveryResult,
 	FactoryArgumentMetadata,
 } from "./types.js";
@@ -63,8 +62,6 @@ export interface ModuleTemplateOptions {
 	 * right whenever the package's config sits at the CLI default location.
 	 */
 	regenerateCommand?: string;
-	/** @deprecated No longer used — Registry augmentation moved to root template. */
-	discoverPatterns?: Record<string, DiscoverPattern>;
 }
 
 /**

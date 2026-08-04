@@ -739,7 +739,6 @@ export async function runCodegen(
 			discovered,
 			categoryMeta,
 			regenerateCommand,
-			discoverPatterns: target.discover,
 			extraImports: extraImports.length > 0 ? extraImports : undefined,
 			extraTypeDeclarations:
 				extraTypeDeclarations.length > 0 ? extraTypeDeclarations : undefined,

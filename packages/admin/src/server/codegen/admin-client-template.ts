@@ -230,7 +230,6 @@ function generateAdminClientModule(
 		discovered: ctx.discovered,
 		categoryMeta,
 		regenerateCommand: ctx.regenerateCommand,
-		discoverPatterns: ctx.target.discover,
 		extraImports: ctx.extraImports.length > 0 ? ctx.extraImports : undefined,
 		extraTypeDeclarations:
 			ctx.extraTypeDeclarations.length > 0
