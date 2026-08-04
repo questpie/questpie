@@ -539,8 +539,25 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		this.desiredRevision = 0;
 		this.watchdogTriggered = false;
 
-		const getTopicsPayload = () =>
-			Array.from(this.topics.entries()).map(([topicId, config]) => ({
+		/*
+		 * MATERIALISED BEFORE THE FIRST `await`, and that ordering is the whole point.
+		 *
+		 * This used to be a closure evaluated inside the request body, i.e. AFTER
+		 * `await this.getAuthHeaders?.()`. The `topics.size === 0` guard above runs on
+		 * entry; the payload was built after a suspension point. Anything that emptied
+		 * the topic map in that window — a route change, an effect cleanup, a
+		 * double-invoked mount — produced `{ topics: [] }` on the wire, which the
+		 * server rejects with `realtime.topicsRequired`. Observed as two silent
+		 * `400 POST /api/realtime` per page load in a consumer with two live arms.
+		 *
+		 * `flushDesiredTopology` next door already builds its payload before its
+		 * `await`; this is the same discipline, not a new rule. A snapshot can go
+		 * slightly stale, and that is fine: the control channel reconciles the desired
+		 * topology right after connect. An empty body cannot be reconciled — it is a
+		 * hard 400 that costs the connection.
+		 */
+		const topicsPayload = Array.from(this.topics.entries()).map(
+			([topicId, config]) => ({
 				...config,
 				...(config.resourceType === "collection" && config.operation === "get"
 					? { recordId: config.id }
@@ -549,15 +566,24 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 				...(this.lastSeq.has(topicId)
 					? { sinceSeq: this.lastSeq.get(topicId) }
 					: {}),
-			}));
+			}),
+		);
 
 		try {
 			const authHeaders = await this.getAuthHeaders?.();
+			/*
+			 * Re-read the guard after the suspension. The snapshot above makes the body
+			 * well-formed; this makes the request worth sending at all — if every
+			 * subscriber left while we were fetching headers, opening a stream for them
+			 * is pure waste. `connecting` is cleared by the `finally`, and a later
+			 * `subscribe()` starts a fresh connect.
+			 */
+			if (this.topics.size === 0) return;
 			const response = await this.fetcher(`${this.baseUrl}/realtime`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json", ...authHeaders },
 				body: JSON.stringify({
-					topics: getTopicsPayload(),
+					topics: topicsPayload,
 				}),
 				credentials: this.withCredentials ? "include" : "omit",
 				signal: this.abortController.signal,
