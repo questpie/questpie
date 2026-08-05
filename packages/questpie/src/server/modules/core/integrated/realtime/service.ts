@@ -1,4 +1,4 @@
-import { asc, desc, eq, gt, lt, sql } from "drizzle-orm";
+import { asc, desc, eq, gt, lt } from "drizzle-orm";
 
 import {
 	opaqueChannelAuthoritySubject,
@@ -265,7 +265,12 @@ export class RealtimeService {
 
 	private drainOrDeferUntilStarted(reason: "broker" | "reconnect"): void {
 		this.drainSignalGeneration += 1;
-		if (this.startPromise && !this.started) return;
+		// Only a started service has a seeded cursor. `initialize()` runs at boot
+		// on every node while `ensureStarted()` is reachable only from
+		// `subscribe()`, so a node with no subscribers used to drain from seq 0
+		// and walk the whole retained outbox — three days of it by default — into
+		// an empty listener set, on every deploy.
+		if (!this.started) return;
 		this.drainSafely(reason);
 	}
 
@@ -341,12 +346,13 @@ export class RealtimeService {
 		// makes sequence order commit order for native delta cursors.
 		let row: typeof questpieRealtimeLogTable.$inferSelect;
 		try {
+			// `last_seq` on this row is written and never read — the cursor of record
+			// is `questpie_realtime_log.seq`. Seeding it with `max(seq)` cost an
+			// InitPlan over the whole log on every capture, including the common
+			// case where the row already exists and the insert does nothing.
 			await db
 				.insert(questpieRealtimeHeadTable)
-				.values({
-					id: "global",
-					lastSeq: sql<number>`coalesce((select max(${questpieRealtimeLogTable.seq}) from ${questpieRealtimeLogTable}), 0)`,
-				})
+				.values({ id: "global" })
 				.onConflictDoNothing();
 			const [head] = await db
 				.update(questpieRealtimeHeadTable)
@@ -366,10 +372,6 @@ export class RealtimeService {
 					payload: input.payload ?? {},
 				})
 				.returning();
-			await db
-				.update(questpieRealtimeHeadTable)
-				.set({ lastSeq: Number(row.seq), updatedAt: new Date() })
-				.where(eq(questpieRealtimeHeadTable.id, "global"));
 			this.observe({ type: "outbox.capture", outcome: "accepted" });
 		} catch (error) {
 			this.observe({ type: "outbox.capture", outcome: "failed" });

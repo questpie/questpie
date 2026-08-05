@@ -103,18 +103,38 @@ function hasPostgresErrorCode(error: unknown, code: string): boolean {
 	return false;
 }
 
-function handleRealtimeCaptureError(
+/**
+ * Capture runs inside the caller's transaction, so a failure here has already
+ * aborted it (Postgres `25P02`). Swallowing the error does not save the write —
+ * the later `COMMIT` is silently degraded to `ROLLBACK`, and the caller is
+ * handed a record for a row that does not exist. So a capture failure must
+ * always become a fatal hook error, whatever the delivery mode is set to.
+ *
+ * Making capture failure survivable is a deliberate change, not a `catch`: it
+ * needs a SAVEPOINT around the append so the caller's transaction stays usable.
+ */
+function reportRealtimeCaptureError(
 	logger: GlobalCollectionHookContext["logger"],
 	error: unknown,
-): void {
-	if (hasPostgresErrorCode(error, "42P01") || !logger) return;
+): never {
+	if (logger) {
+		const now = Date.now();
+		const lastWarningAt = realtimeCaptureWarningAt.get(logger) ?? 0;
+		if (now - lastWarningAt >= REALTIME_CAPTURE_WARNING_INTERVAL_MS) {
+			realtimeCaptureWarningAt.set(logger, now);
+			// A missing outbox table is a configuration error, not noise. It used
+			// to be silenced here, which is how a whole deployment could write
+			// nothing to the log and never say so.
+			logger.error(
+				hasPostgresErrorCode(error, "42P01")
+					? "[Core] Realtime change capture failed: the realtime log table is missing. Run migrations."
+					: "[Core] Realtime change capture failed:",
+				error,
+			);
+		}
+	}
 
-	const now = Date.now();
-	const lastWarningAt = realtimeCaptureWarningAt.get(logger) ?? 0;
-	if (now - lastWarningAt < REALTIME_CAPTURE_WARNING_INTERVAL_MS) return;
-
-	realtimeCaptureWarningAt.set(logger, now);
-	logger.warn("[Core] Realtime change capture failed:", error);
+	throw new FatalGlobalHookError(error);
 }
 
 function shouldCaptureRealtimeChange(
@@ -169,10 +189,7 @@ const realtimeHook = {
 
 			publishRealtimeAfterCommit(ctx, realtime, change);
 		} catch (error) {
-			handleRealtimeCaptureError(ctx.logger, error);
-			if (realtime.nativeDeltasEnabled) {
-				throw new FatalGlobalHookError(error);
-			}
+			reportRealtimeCaptureError(ctx.logger, error);
 		}
 	},
 	afterDelete: async (ctx: GlobalCollectionHookContext) => {
@@ -196,10 +213,7 @@ const realtimeHook = {
 
 			publishRealtimeAfterCommit(ctx, realtime, change);
 		} catch (error) {
-			handleRealtimeCaptureError(ctx.logger, error);
-			if (realtime.nativeDeltasEnabled) {
-				throw new FatalGlobalHookError(error);
-			}
+			reportRealtimeCaptureError(ctx.logger, error);
 		}
 	},
 	afterPurge: async (ctx: GlobalCollectionHookContext) => {
@@ -221,10 +235,7 @@ const realtimeHook = {
 			recordTransactionTxid(change.txid);
 			publishRealtimeAfterCommit(ctx, realtime, change);
 		} catch (error) {
-			handleRealtimeCaptureError(ctx.logger, error);
-			if (realtime.nativeDeltasEnabled) {
-				throw new FatalGlobalHookError(error);
-			}
+			reportRealtimeCaptureError(ctx.logger, error);
 		}
 	},
 };
@@ -424,10 +435,7 @@ const globalRealtimeHook = {
 
 			publishRealtimeAfterCommit(ctx, realtime, change);
 		} catch (error) {
-			handleRealtimeCaptureError(ctx.logger, error);
-			if (realtime.nativeDeltasEnabled) {
-				throw new FatalGlobalHookError(error);
-			}
+			reportRealtimeCaptureError(ctx.logger, error);
 		}
 	},
 };

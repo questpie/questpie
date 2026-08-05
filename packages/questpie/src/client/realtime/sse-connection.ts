@@ -621,6 +621,18 @@ export class SseConnectionManager {
 				this.dispatch({
 					type: "error",
 					data: JSON.stringify({
+						// The server attaches the full typed rejection under
+						// `rejection`. Forwarding only the summary meant the
+						// multiplexer could never rebuild a
+						// `RealtimeTopicRejectedError`, so a rejected topic arrived as
+						// a bare `Error` and stayed mounted in the desired topology.
+						...(rejected.rejection && typeof rejected.rejection === "object"
+							? (rejected.rejection as Record<string, unknown>)
+							: {}),
+						// Routing and teardown must agree on one id. They are the same
+						// value today, but a divergence here would tear down somebody
+						// else's topic, so it is pinned rather than assumed.
+						topicId: rejected.id,
 						topologyEntryId: rejected.id,
 						kind: rejected.kind,
 						code: rejected.code,

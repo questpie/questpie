@@ -4,9 +4,11 @@ export {
 	type TopicConfig,
 	type TopicInput,
 } from "./multiplexer.js";
-export type {
-	RealtimeTopicRejectedDetails,
-	RealtimeTopicRejectedPayload,
+export {
+	isRealtimeTopicRejectedPayload,
+	type RealtimeTopicRejectedDetails,
+	type RealtimeTopicRejectedPayload,
+	type RealtimeTopicRejectionReason,
 } from "../../shared/realtime-error.js";
 export { RealtimeCrdtBindingRejectedError } from "./crdt-error.js";
 export {

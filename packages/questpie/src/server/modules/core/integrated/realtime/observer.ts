@@ -1,4 +1,5 @@
 import type { LoggerAdapter } from "#questpie/server/modules/core/integrated/logger/types.js";
+import type { RealtimeTopicRejectionReason } from "#questpie/shared/realtime-error.js";
 
 import type { RealtimeDeliveryClassificationReason } from "./delta.js";
 import type { RealtimeRoutingFeature } from "./topic-routing.js";
@@ -115,19 +116,17 @@ export type RealtimeObservation =
 	  }
 	| {
 			type: "admission.rejected";
-			reason:
-				| "connection_limit"
-				| "subscription_limit"
-				| "query_limit"
-				| "relation_depth"
-				| "snapshot_bytes"
-				| "row_live_queries_disabled"
-				| "collection_realtime_disabled"
-				| "access";
+			/**
+			 * Shared with the client payload on purpose. These two used to be
+			 * separate unions and drifted by three members, so the reasons that
+			 * actually fired were the ones no client could classify.
+			 */
+			reason: RealtimeTopicRejectionReason;
 			resource?: string;
 			operation?: "find" | "count" | "get";
 			requestedLimit?: number;
 			configuredLimit?: number;
+			observed?: number;
 	  }
 	| {
 			type: "topology.lifecycle";

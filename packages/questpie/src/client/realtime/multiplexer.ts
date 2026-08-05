@@ -736,16 +736,33 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 			this.reconnectAttempts = 0;
 		} else if (event.type === "error") {
 			try {
-				const payload = JSON.parse(event.data) as {
-					topicId: string;
-					message: string;
+				const raw = JSON.parse(event.data) as {
+					topicId?: string;
+					topologyEntryId?: string;
+					message?: string;
 				};
-				const error = toRealtimeError(payload);
+				// A topology-apply rejection is keyed by `topologyEntryId`, which for
+				// a topic resource is its topic id. Reading only `topicId` sent every
+				// such rejection to `errorCallbacks.get(undefined)` — that is, to
+				// nobody — and the control path carries every topic mounted after
+				// connect, so it is the common case and not the edge case.
+				const topicId = raw.topicId ?? raw.topologyEntryId;
+				const error = toRealtimeError(
+					raw.topicId ? raw : { ...raw, topicId },
+				);
 				if (error instanceof RealtimeTopicRejectedError) {
 					this.rejectTopic(error);
-				} else {
-					this.notifyTopicError(payload.topicId, new Error(payload.message));
+				} else if (topicId) {
+					this.notifyTopicError(
+						topicId,
+						new Error(raw.message ?? "Realtime topic failed"),
+					);
 				}
+				// An error with no routable id is a connection/protocol fault, not a
+				// topic fault. Fanning it out to every topic callback makes each
+				// consumer stream throw while this multiplexer keeps its topic maps
+				// mounted — spurious teardown and stale topology at once. It belongs
+				// on a connection-level seam, which does not exist yet.
 			} catch {
 				// Ignore parse errors
 			}
