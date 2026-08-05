@@ -66,7 +66,10 @@ const UNSHAREABLE = Symbol("unshareable");
  * Values are type-tagged, so the string `"1"` and the number `1` cannot encode
  * the same way either.
  */
-function canonicalize(value: unknown, seen: Set<object>): string | typeof UNSHAREABLE {
+function canonicalize(
+	value: unknown,
+	seen: Set<object>,
+): string | typeof UNSHAREABLE {
 	if (value === null) return "n";
 	switch (typeof value) {
 		case "string":
@@ -100,7 +103,8 @@ function canonicalize(value: unknown, seen: Set<object>): string | typeof UNSHAR
 		// Only plain objects. A class instance, a Date, a Map — anything with its
 		// own prototype or its own `toJSON` — is refused rather than guessed at.
 		const prototype = Object.getPrototypeOf(object);
-		if (prototype !== Object.prototype && prototype !== null) return UNSHAREABLE;
+		if (prototype !== Object.prototype && prototype !== null)
+			return UNSHAREABLE;
 		const parts: string[] = [];
 		for (const key of Object.keys(object).sort()) {
 			const encoded = canonicalize(

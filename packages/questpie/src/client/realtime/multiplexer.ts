@@ -747,9 +747,7 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 				// nobody — and the control path carries every topic mounted after
 				// connect, so it is the common case and not the edge case.
 				const topicId = raw.topicId ?? raw.topologyEntryId;
-				const error = toRealtimeError(
-					raw.topicId ? raw : { ...raw, topicId },
-				);
+				const error = toRealtimeError(raw.topicId ? raw : { ...raw, topicId });
 				if (error instanceof RealtimeTopicRejectedError) {
 					this.rejectTopic(error);
 				} else if (topicId) {
