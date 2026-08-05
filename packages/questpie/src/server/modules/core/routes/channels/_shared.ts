@@ -1,16 +1,17 @@
 import { z } from "zod";
 
+import { createChannelServiceContext } from "#questpie/server/channels/context.js";
 import {
 	channelCorsHeaders,
 	ChannelSecurityError,
 	ChannelTokenBucketLimiter,
 	resolveChannelRequestOrigin,
 } from "#questpie/server/channels/security.js";
-import {
-	ChannelsService,
-	type ChannelServiceContext,
-} from "#questpie/server/channels/service.js";
-import type { Principal } from "#questpie/server/config/context.js";
+import { ChannelsService } from "#questpie/server/channels/service.js";
+import type {
+	Principal,
+	RequestContext,
+} from "#questpie/server/config/context.js";
 import type { ChannelSecurityObservationReason } from "#questpie/server/modules/core/integrated/realtime/observer.js";
 import { routeApp } from "#questpie/server/routes/route-app.js";
 import { parseTypedWire } from "#questpie/shared/typed-wire.js";
@@ -110,7 +111,12 @@ export function channelRouteError(
 					? 404
 					: code === "channel_event_invalid"
 						? 422
-						: 403;
+						: // A rule that threw is a server fault, not a verdict. 403 said
+							// "you may not", which was a lie: the server never found out.
+							// The code travels; the rule's own message never does.
+							code === "channel_rule_failed"
+							? 500
+							: 403;
 		return channelRouteResponse({ error: code }, status, origin);
 	}
 	return channelRouteResponse({ error: "channel_request_denied" }, 403, origin);
@@ -296,7 +302,11 @@ export function requestChannels(ctx: ChannelRouteContext): ChannelsService {
 	return new ChannelsService(
 		app.config.channels ?? {},
 		app.realtime,
-		{ ...ctx, accessMode: "user" } as ChannelServiceContext,
+		// `ctx` here is already the folded route-handler context, so this is a
+		// no-op re-fold. It goes through the same factory anyway: one path builds
+		// the rule context, and the SSE endpoint diverging from it silently is
+		// exactly what shipped a channel that could not be subscribed to.
+		createChannelServiceContext(app, ctx as RequestContext),
 		app.config.realtime?.channelSecurity,
 	);
 }

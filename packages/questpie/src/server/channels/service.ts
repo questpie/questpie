@@ -31,7 +31,14 @@ export type ChannelRuntimeErrorCode =
 	| "channel_subscribe_denied"
 	| "channel_event_not_found"
 	| "channel_event_invalid"
-	| "channel_presence_unavailable";
+	| "channel_presence_unavailable"
+	/**
+	 * The authorization rule THREW. Not a denial — a bug in the rule, or a
+	 * context the rule was handed that is missing something it declares. Fails
+	 * closed like a denial, and is reported separately so the two stop looking
+	 * the same from outside.
+	 */
+	| "channel_rule_failed";
 
 export class ChannelRuntimeError extends Error {
 	constructor(
@@ -186,7 +193,7 @@ export class ChannelsService<
 			verb === "publish"
 				? (authorization.publish ?? authorization.subscribe)
 				: authorization.subscribe;
-		return this.evaluateRule(rule, params);
+		return this.evaluateRule(channel, verb, rule, params);
 	}
 
 	async resolvePresence<TChannel extends keyof TChannels & string>(
@@ -343,6 +350,8 @@ export class ChannelsService<
 	}
 
 	private async evaluateRule(
+		channel: string,
+		verb: "subscribe" | "publish",
 		rule: ChannelAuthorizationRule<string>,
 		params: Record<string, string>,
 	): Promise<boolean> {
@@ -357,10 +366,39 @@ export class ChannelsService<
 				}),
 			]);
 			return result === true;
-		} catch {
-			return false;
+		} catch (error) {
+			/* A rule that THREW and a rule that returned false are different
+			   facts. Both fail closed — that part is deliberate and unchanged —
+			   but a bare `return false` here made a TypeError, a typo and a
+			   genuine "you may not subscribe" indistinguishable from outside,
+			   which is how a missing `context.collections` on the SSE path spent
+			   two investigations wearing a denial's clothes.
+
+			   Logged at the source because the callers upstream of this (the
+			   ledger's reauthorize loops) fail closed silently by design, so the
+			   throw below does not always reach an operator on its own. */
+			this.logRuleFailure(channel, verb, error);
+			throw new ChannelRuntimeError(
+				"channel_rule_failed",
+				`Channel "${channel}" ${verb} rule failed`,
+				{ cause: error },
+			);
 		} finally {
 			if (timer) clearTimeout(timer);
 		}
+	}
+
+	private logRuleFailure(
+		channel: string,
+		verb: "subscribe" | "publish",
+		error: unknown,
+	): void {
+		const logger = (this.context as { logger?: unknown }).logger as
+			| { error?: (message: string, ...args: unknown[]) => void }
+			| undefined;
+		logger?.error?.(
+			`[questpie] channel "${channel}" ${verb} rule threw; failing closed`,
+			error,
+		);
 	}
 }

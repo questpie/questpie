@@ -13,6 +13,11 @@ export default service({
 		return new ChannelsService(
 			app.config.channels ?? {},
 			app.realtime,
+			// The only construction site that does NOT go through
+			// `createChannelServiceContext`: the service-create context already
+			// carries the full surface (collections, globals, db, ...), and folding
+			// it again would re-enter `resolveService("channels")` from inside its
+			// own factory.
 			ctx as ChannelServiceContext,
 			app.config.realtime?.channelSecurity,
 		);

@@ -13,10 +13,8 @@ import {
 	opaqueChannelAuthoritySubject,
 	resolveChannelAuthoritySubject,
 } from "../../channels/authority.js";
-import {
-	ChannelsService,
-	type ChannelServiceContext,
-} from "../../channels/service.js";
+import { createChannelServiceContext } from "../../channels/context.js";
+import { ChannelsService } from "../../channels/service.js";
 import { executeAccessRule } from "../../collection/crud/shared/access-control.js";
 import type { RequestContext } from "../../config/context.js";
 import type { Questpie } from "../../config/questpie.js";
@@ -718,7 +716,7 @@ async function resolveChannelSubscription(
 	const channels = new ChannelsService(
 		app.config.channels ?? {},
 		app.realtime,
-		{ ...context, accessMode: "user" } as ChannelServiceContext,
+		createChannelServiceContext(app, context),
 		app.config.realtime?.channelSecurity,
 	);
 	const definition = channels.getDefinition(input.channel);
@@ -1951,10 +1949,7 @@ export async function realtimeSubscribe(
 											const channels = new ChannelsService(
 												app.config.channels ?? {},
 												app.realtime!,
-												{
-													...fresh.appContext,
-													accessMode: "user",
-												} as ChannelServiceContext,
+												createChannelServiceContext(app, fresh.appContext),
 												app.config.realtime?.channelSecurity,
 											);
 											if (channel.presenceChannel) {
