@@ -1,16 +1,50 @@
 export type RealtimeTopicOperation = "find" | "count" | "get";
 
+/**
+ * Every reason a topic can be refused. This must stay the same set the server
+ * actually produces — a reason the server emits and this union cannot express
+ * is a rejection no client can classify, which is how a filled connection cap
+ * once went undiagnosed for weeks.
+ */
 export type RealtimeTopicRejectionReason =
 	| "query_limit"
 	| "relation_depth"
 	| "snapshot_bytes"
 	| "row_live_queries_disabled"
-	| "collection_realtime_disabled";
+	| "collection_realtime_disabled"
+	| "connection_limit"
+	| "subscription_limit"
+	| "access"
+	| "not_found"
+	| "operation_shape"
+	| "since_seq_invalid"
+	| "activation_rejected";
+
+const REALTIME_TOPIC_REJECTION_REASONS = new Set<string>([
+	"query_limit",
+	"relation_depth",
+	"snapshot_bytes",
+	"row_live_queries_disabled",
+	"collection_realtime_disabled",
+	"connection_limit",
+	"subscription_limit",
+	"access",
+	"not_found",
+	"operation_shape",
+	"since_seq_invalid",
+	"activation_rejected",
+] satisfies RealtimeTopicRejectionReason[]);
 
 export type RealtimeTopicRejectedDetails = {
 	reason: RealtimeTopicRejectionReason;
 	requestedLimit?: number;
 	configuredLimit?: number;
+	/**
+	 * What the server counted when it refused. With `configuredLimit` these two
+	 * numbers are the whole diagnosis for `connection_limit` and
+	 * `subscription_limit` — without them the client can only say "refused".
+	 */
+	observed?: number;
 };
 
 /** Public, payload-safe rejection emitted for one realtime topic. */
@@ -39,10 +73,6 @@ export function isRealtimeTopicRejectedPayload(
 			payload.operation === "get") &&
 		payload.retryable === false &&
 		Boolean(payload.details) &&
-		(payload.details?.reason === "query_limit" ||
-			payload.details?.reason === "relation_depth" ||
-			payload.details?.reason === "snapshot_bytes" ||
-			payload.details?.reason === "row_live_queries_disabled" ||
-			payload.details?.reason === "collection_realtime_disabled")
+		REALTIME_TOPIC_REJECTION_REASONS.has(payload.details?.reason as string)
 	);
 }

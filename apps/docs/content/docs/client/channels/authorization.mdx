@@ -49,9 +49,16 @@ export default channel("chat-room-[roomId]")
 	});
 ```
 
-Three things deny the operation: returning `false`, throwing, and running out of
-time. A throw is caught and read as a denial. An error in your query cannot leak
-access. The deadline is 5 seconds by default.
+Two things deny the operation: returning `false` and running out of time. The
+deadline is 5 seconds by default.
+
+Throwing is the third way to be refused, and it is reported as its own thing. A
+rule that throws fails closed exactly like a denial, so an error in your query
+cannot leak access. But QUESTPIE logs it at error level with the cause and raises
+`channel_rule_failed` instead of a verdict. Over SSE the subscription error names
+the channel whose rule failed; on the channel HTTP routes the status is `500`,
+not `403`, because the server never decided. Your rule's own message stays
+server-side. Do not use a throw to mean no: return `false`.
 
 ## Why your own handler gets denied
 

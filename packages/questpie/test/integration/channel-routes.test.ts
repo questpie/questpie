@@ -512,7 +512,13 @@ describe("channel module routes", () => {
 
 		expect((await auth("publicNews", "news")).status).toBe(200);
 		expect((await auth("missing", "missing")).status).toBe(404);
-		expect((await auth("throws", "private-throws")).status).toBe(403);
+		// A rule that THREW is a server fault, not a verdict — 403 claimed the
+		// server decided, when it never got that far. The rule's own message
+		// still never leaves the process.
+		const threw = await auth("throws", "private-throws");
+		expect(threw.status).toBe(500);
+		expect(await threw.json()).toEqual({ error: "channel_rule_failed" });
+		// A rule that ran out of time still DENIES: no answer means no.
 		expect((await auth("timesOut", "private-slow")).status).toBe(403);
 		expect(
 			(await auth("readOnly", "private-room-other", { id: "one" })).status,
@@ -1240,5 +1246,185 @@ describe("channel module routes", () => {
 					].includes(event.reason),
 			),
 		).toBe(true);
+	});
+
+	test("the SSE subscribe path hands channel rules the app service surface", async () => {
+		/* `ChannelOperationContext` is an `AppContext`, so a rule may read
+		   `collections`. The route paths fold that surface in via `executeRoute`;
+		   the SSE path used to pass the lean `RequestContext` straight through, so
+		   `context.collections` was undefined and every such rule threw — reported
+		   as a plain denial. Teeth: drop the fold in
+		   `createChannelServiceContext` and BOTH the allowed subscription and the
+		   delivered event below disappear. */
+		const memberships = collection("memberships")
+			.fields(({ f }) => ({
+				userId: f.text().required(),
+				workspaceId: f.text().required(),
+			}))
+			.access({ read: false, create: false, update: false, delete: false });
+		const setup = await buildMockApp(
+			{
+				collections: { memberships },
+				channels: {
+					workspace: channel("workspace-[workspaceId]")
+						.events({ message: z.object({ text: z.string() }) })
+						.authorize({
+							subscribe: async ({ collections, session, params }: any) => {
+								const count = await collections.memberships.count(
+									{
+										where: {
+											userId: session?.user?.id,
+											workspaceId: params.workspaceId,
+										},
+									},
+									{ accessMode: "system" },
+								);
+								return count === 1;
+							},
+							publish: false,
+						}),
+				},
+			},
+			{
+				app: { url: "https://app.example.com" },
+				realtime: { retentionDays: 0, rowLiveQueries: false },
+			},
+		);
+		cleanup = setup.cleanup;
+		await runTestDbMigrations(setup.app);
+		await setup.app.collections.memberships.create({
+			userId: "user-1",
+			workspaceId: "one",
+		});
+
+		const handler = createFetchHandler(setup.app, {
+			getSession: async () => ({
+				user: { id: "user-1" },
+				session: { id: "session-1" },
+			}),
+		});
+		const response = await handler(
+			channelRequest("realtime", {
+				channels: [
+					{
+						id: "workspace-one",
+						channel: "workspace",
+						params: { workspaceId: "one" },
+					},
+					{
+						id: "workspace-two",
+						channel: "workspace",
+						params: { workspaceId: "two" },
+					},
+				],
+			}),
+		);
+		expect(response.status).toBe(200);
+		const reader = response.body!.getReader();
+		const state = { buffer: "" };
+		try {
+			await readSseEventWithin(reader, state, "session");
+
+			// The rule RAN and said no for the workspace with no membership row.
+			// Without the service surface this would read "rule failed" instead.
+			expect(await readSseEventWithin(reader, state, "error")).toEqual({
+				channelSubscriptionId: "workspace-two",
+				message: "Channel subscription is denied",
+			});
+			expect(setup.app.mocks.logger.hasErrors()).toBe(false);
+
+			await setup.app.realtime!.appendChannelEvent({
+				channel: "private-workspace-one",
+				event: "message",
+				schemaIdentity: "workspace:message",
+				data: { text: "delivered-to-a-member" },
+			});
+			expect(
+				await readSseEventWithin(reader, state, "channel_event"),
+			).toMatchObject({
+				channel: "private-workspace-one",
+				data: { text: "delivered-to-a-member" },
+			});
+		} finally {
+			await reader.cancel().catch(() => {});
+		}
+	});
+
+	test("a channel rule that throws is reported as a fault, never as a denial", async () => {
+		const setup = await buildMockApp(
+			{
+				channels: {
+					open: channel("open-[id]")
+						.events({ message: z.object({ text: z.string() }) })
+						.authorize({ subscribe: true, publish: false }),
+					broken: channel("broken-[id]")
+						.events({ message: z.object({ text: z.string() }) })
+						.authorize({
+							subscribe: ({ missing }: any) => missing.somethingUndeclared,
+							publish: false,
+						}),
+					closed: channel("closed-[id]")
+						.events({ message: z.object({ text: z.string() }) })
+						.authorize({ subscribe: false, publish: false }),
+				},
+			},
+			{
+				app: { url: "https://app.example.com" },
+				realtime: { retentionDays: 0, rowLiveQueries: false },
+			},
+		);
+		cleanup = setup.cleanup;
+		await runTestDbMigrations(setup.app);
+		const handler = createFetchHandler(setup.app, {
+			getSession: async () => ({
+				user: { id: "user-1" },
+				session: { id: "session-1" },
+			}),
+		});
+		const response = await handler(
+			channelRequest("realtime", {
+				channels: [
+					{ id: "open-one", channel: "open", params: { id: "one" } },
+					{ id: "broken-one", channel: "broken", params: { id: "one" } },
+					{ id: "closed-one", channel: "closed", params: { id: "one" } },
+				],
+			}),
+		);
+		expect(response.status).toBe(200);
+		const reader = response.body!.getReader();
+		const state = { buffer: "" };
+		try {
+			await readSseEventWithin(reader, state, "session");
+			const first = await readSseEventWithin(reader, state, "error");
+			const second = await readSseEventWithin(reader, state, "error");
+			const byId = new Map(
+				[first, second].map((event) => [
+					event.channelSubscriptionId as string,
+					event.message as string,
+				]),
+			);
+
+			// The whole point: these two are no longer the same sentence.
+			expect(byId.get("closed-one")).toBe("Channel subscription is denied");
+			expect(byId.get("broken-one")).toBe(
+				'Channel "broken" subscribe rule failed',
+			);
+			expect(byId.get("broken-one")).not.toBe(byId.get("closed-one"));
+			// ...and the rule's own failure text stays server-side.
+			expect(byId.get("broken-one")).not.toContain("somethingUndeclared");
+
+			const logged = setup.app.mocks.logger.getLogsContaining(
+				'channel "broken" subscribe rule threw',
+			);
+			expect(logged).toHaveLength(1);
+			expect(logged[0]!.level).toBe("error");
+			// The adapter sees either the raw error or `{ err, ...bindings }`,
+			// depending on whether the request carried correlation ids.
+			const payload = logged[0]!.args[0] as Error | { err?: unknown };
+			const cause = payload instanceof Error ? payload : payload.err;
+			expect(String(cause)).toContain("somethingUndeclared");
+		} finally {
+			await reader.cancel().catch(() => {});
+		}
 	});
 });

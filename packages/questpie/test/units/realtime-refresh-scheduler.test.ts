@@ -80,6 +80,61 @@ describe("realtime scheduler", () => {
 		expect(realtime.listeners.size).toBe(0);
 	});
 
+	it("a group that outlives its creator keeps serving the survivors", async () => {
+		// Two tabs share one group. The creator's compute is bound to the creator's
+		// connection, so once that connection is fenced it can only throw. The group
+		// used to keep calling it, and the surviving tab received "Realtime owner is
+		// fenced" forever with nothing tearing the topic down.
+		const realtime = new FakeRealtimeSource();
+		const scheduler = new RealtimeRefreshScheduler(realtime);
+		let creatorFenced = false;
+		const creatorFrames: Uint8Array[] = [];
+		const survivorFrames: Uint8Array[] = [];
+		const survivorErrors: Error[] = [];
+
+		const unsubscribeCreator = scheduler.subscribe({
+			key: "posts:shared",
+			topicId: "posts",
+			topics: { resourceType: "collection", resource: "posts" },
+			compute: async () => {
+				if (creatorFenced) throw new Error("Realtime owner is fenced");
+				return { docs: [], from: "creator" };
+			},
+			onFrame: async (frame) => {
+				creatorFrames.push(frame);
+			},
+			onError: () => {},
+		});
+		scheduler.subscribe({
+			key: "posts:shared",
+			topicId: "posts",
+			topics: { resourceType: "collection", resource: "posts" },
+			compute: async () => ({ docs: [], from: "survivor" }),
+			onFrame: async (frame) => {
+				survivorFrames.push(frame);
+			},
+			onError: (error) => survivorErrors.push(error as Error),
+		});
+
+		await tick();
+		expect(creatorFrames).toHaveLength(1);
+		expect(survivorFrames).toHaveLength(1);
+
+		creatorFenced = true;
+		unsubscribeCreator();
+		realtime.emit(5);
+		// Wait on the condition, not on a fixed number of ticks: a refresh is two
+		// awaits deep and a fixed tick count fails under concurrent test load.
+		for (let attempt = 0; attempt < 100; attempt += 1) {
+			if (survivorFrames.length > 1 || survivorErrors.length > 0) break;
+			await tick();
+		}
+
+		expect(survivorErrors).toHaveLength(0);
+		expect(survivorFrames.length).toBeGreaterThan(1);
+		expect(decodeFrame(survivorFrames.at(-1)!).data.from).toBe("survivor");
+	});
+
 	it("deploy storm resumes 500 equivalent clients without a snapshot herd", async () => {
 		const realtime = new FakeRealtimeSource();
 		const observations: Array<{ type: string; subscribers?: number }> = [];

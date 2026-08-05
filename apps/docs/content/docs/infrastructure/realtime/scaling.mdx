@@ -95,9 +95,18 @@ non-empty string of at most 256 UTF-8 bytes, or QUESTPIE throws for you. The
 value only ever appears inside the server group key, never in an observer label
 or an error payload.
 
-<Callout type="info" title="A scope partitions work, it does not authorize">
-	Nothing is trusted because it arrived in a scope. Every row in every snapshot
-	is still checked against the subscriber's own access rules on every recompute.
+<Callout type="warn" title="A scope partitions work, it does not authorize">
+	A scope decides who shares a computation — it is not a second check on top of
+	one. Within a group the snapshot is computed once, by the subscriber that
+	created it, and the resulting bytes are sent to everyone in that group.
+
+    Row-level rules are safe by construction, because the access predicate is
+    merged into the topic and the topic is part of the group key, so subscribers
+    with different row scopes land in different groups. What is **not** re-run
+    per subscriber is field-level access, `columns` and `afterRead`. Widen a key
+    only where every principal that resolves to it is entitled to byte-identical
+    rows.
+
 </Callout>
 
 ### `accessCacheKey`

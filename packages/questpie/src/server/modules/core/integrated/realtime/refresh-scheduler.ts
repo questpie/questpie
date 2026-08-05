@@ -40,7 +40,98 @@ type AccessContext = {
 	locale?: string;
 	stage?: string;
 	accessMode?: string;
+	"~contextExtensions"?: Record<string, unknown> | null;
 };
+
+/**
+ * Context extensions decide what field-level access, `columns` and `afterRead`
+ * return, so two subscribers whose extensions differ are not entitled to the
+ * same bytes. They used to be absent from the access key, which is how a single
+ * user with two workspaces open received the first workspace's rows in the
+ * second workspace's tab — with no configuration involved.
+ *
+ * Key order must not depend on property insertion order, so objects are sorted
+ * at every level before hashing.
+ */
+const UNSHAREABLE = Symbol("unshareable");
+
+/**
+ * `JSON.stringify` is not usable here. It does not throw on most values it
+ * cannot represent — it drops them — so `{ t: undefined }`, `{}` and
+ * `{ t: () => 1 }` all encode identically, as do `Map`, `Set` and any class
+ * instance. That is a canonicalisation collision, and for a key that decides
+ * who may see whose rows a collision is a data leak.
+ *
+ * So this accepts a deliberately narrow domain and refuses everything else.
+ * Values are type-tagged, so the string `"1"` and the number `1` cannot encode
+ * the same way either.
+ */
+function canonicalize(
+	value: unknown,
+	seen: Set<object>,
+): string | typeof UNSHAREABLE {
+	if (value === null) return "n";
+	switch (typeof value) {
+		case "string":
+			return `s:${JSON.stringify(value)}`;
+		case "boolean":
+			return value ? "b:1" : "b:0";
+		case "number":
+			// NaN and the infinities have no faithful encoding, and NaN is not even
+			// equal to itself.
+			return Number.isFinite(value) ? `d:${value}` : UNSHAREABLE;
+		case "object":
+			break;
+		default:
+			// undefined, function, symbol, bigint.
+			return UNSHAREABLE;
+	}
+
+	const object = value as object;
+	if (seen.has(object)) return UNSHAREABLE;
+	seen.add(object);
+	try {
+		if (Array.isArray(object)) {
+			const parts: string[] = [];
+			for (const entry of object) {
+				const encoded = canonicalize(entry, seen);
+				if (encoded === UNSHAREABLE) return UNSHAREABLE;
+				parts.push(encoded);
+			}
+			return `a:[${parts.join(",")}]`;
+		}
+		// Only plain objects. A class instance, a Date, a Map — anything with its
+		// own prototype or its own `toJSON` — is refused rather than guessed at.
+		const prototype = Object.getPrototypeOf(object);
+		if (prototype !== Object.prototype && prototype !== null)
+			return UNSHAREABLE;
+		const parts: string[] = [];
+		for (const key of Object.keys(object).sort()) {
+			const encoded = canonicalize(
+				(object as Record<string, unknown>)[key],
+				seen,
+			);
+			if (encoded === UNSHAREABLE) return UNSHAREABLE;
+			parts.push(`${JSON.stringify(key)}:${encoded}`);
+		}
+		return `o:{${parts.join(",")}}`;
+	} finally {
+		seen.delete(object);
+	}
+}
+
+async function contextExtensionsDigest(
+	extensions: Record<string, unknown> | null | undefined,
+): Promise<string | null> {
+	if (!extensions) return "";
+	if (Object.keys(extensions).length === 0) return "";
+	const canonical = canonicalize(extensions, new Set());
+	// Refusing to share is always safe; guessing that two extensions are equal is
+	// not. An application that wants sharing can keep its extensions to plain
+	// JSON data.
+	if (canonical === UNSHAREABLE) return null;
+	return sha256(canonical);
+}
 
 export type RealtimeAccessCacheKeyResolver<TContext = AccessContext> = (
 	context: TContext,
@@ -75,7 +166,13 @@ export async function resolveRealtimeAccessKey<TContext extends AccessContext>(
 ): Promise<string> {
 	let identity: string | undefined;
 	let isolateToEdge = false;
-	if (resolver) {
+	const extensionsDigest = await contextExtensionsDigest(
+		context["~contextExtensions"],
+	);
+	if (extensionsDigest === null) isolateToEdge = true;
+	// A digest we could not compute outranks any resolver: `accessCacheKey` must
+	// not be able to widen a group we already know we cannot prove safe.
+	if (resolver && !isolateToEdge) {
 		try {
 			const sharedKey = await resolver(context);
 			if (
@@ -96,8 +193,8 @@ export async function resolveRealtimeAccessKey<TContext extends AccessContext>(
 		}
 	}
 
+	const principal = context.principal;
 	if (!identity) {
-		const principal = context.principal;
 		const userId = principal?.user?.id ?? context.session?.user?.id;
 		if (isolateToEdge) {
 			identity = `edge:${edgeSessionId}`;
@@ -114,12 +211,23 @@ export async function resolveRealtimeAccessKey<TContext extends AccessContext>(
 		}
 	}
 
+	// Two OAuth tokens for the same person resolve to the same user id, and an
+	// access rule may read `principal.scopes` — so the same identity can be
+	// entitled to different bytes. The token is part of what decides them.
+	const token =
+		typeof principal?.tokenId === "string" && principal.tokenId
+			? principal.tokenId
+			: "";
+
 	return JSON.stringify([
 		identity,
 		scope,
 		context.locale ?? "",
 		context.stage ?? "",
 		context.accessMode ?? "",
+		extensionsDigest ?? "",
+		principal?.kind ?? "",
+		token,
 	]);
 }
 
@@ -131,7 +239,45 @@ type Subscriber = {
 	) => Promise<void> | void;
 	onError: RealtimeErrorListener;
 	onTransportError?: RealtimeErrorListener;
+	/**
+	 * Every subscriber arrives with its own closures, bound to its own connection
+	 * and request context. A group runs exactly one of them; see
+	 * {@link rebindGroupProvider} for what happens when that one leaves.
+	 */
+	compute: () => Promise<unknown>;
+	captureWatermark?: () => Promise<string>;
+	hydrateRows?: (recordIds: string[]) => Promise<unknown>;
 };
+
+type GroupProvider = {
+	compute: () => Promise<unknown>;
+	captureWatermark?: () => Promise<string>;
+	hydrateRows?: (recordIds: string[]) => Promise<unknown>;
+	provider?: Subscriber;
+	subscribers: Set<Subscriber>;
+};
+
+/**
+ * A group computes once and delivers to everyone, so one subscriber's closure
+ * does the work for the rest. That closure asserts its own connection's fence,
+ * which means a group outliving its creator used to keep calling a closure that
+ * could only throw `Realtime owner is fenced` — forever, for every remaining
+ * subscriber, with nothing classifying it as permanent so nothing tore the
+ * topic down. Two tabs and closing the first was enough to reach it.
+ *
+ * What this does not fix: the adopted closure still carries its own context, so
+ * field-level access, `columns` and `afterRead` run as whichever subscriber is
+ * currently providing. Sharing stays safe only while the group key covers
+ * everything that decides those bytes.
+ */
+function rebindGroupProvider(group: GroupProvider): void {
+	const next = group.subscribers.values().next();
+	if (next.done) return;
+	group.provider = next.value;
+	group.compute = next.value.compute;
+	group.captureWatermark = next.value.captureWatermark;
+	if (next.value.hydrateRows) group.hydrateRows = next.value.hydrateRows;
+}
 
 type SchedulerGroup = {
 	key: string;
@@ -140,6 +286,8 @@ type SchedulerGroup = {
 	sinceSeq?: number;
 	compute: () => Promise<unknown>;
 	captureWatermark?: () => Promise<string>;
+	/** Whose `compute` the group is currently running. */
+	provider?: Subscriber;
 	subscribers: Set<Subscriber>;
 	unsubscribe: () => void;
 	lastSeq: number;
@@ -200,6 +348,8 @@ type DeltaGroup = {
 	compute: () => Promise<unknown>;
 	captureWatermark?: () => Promise<string>;
 	hydrateRows: (recordIds: string[]) => Promise<unknown>;
+	/** Whose closures the group is currently running. */
+	provider?: DeltaSubscriber;
 	subscribers: Set<DeltaSubscriber>;
 	unsubscribe: () => void;
 	queue: RealtimeChangeEvent[];
@@ -307,8 +457,11 @@ export class RealtimeRefreshScheduler {
 			onFrame: input.onFrame,
 			onError: input.onError,
 			onTransportError: input.onTransportError,
+			compute: input.compute,
+			captureWatermark: input.captureWatermark,
 		};
 		group.subscribers.add(subscriber);
+		if (created) group.provider = subscriber;
 
 		if (group.lastFrame) {
 			void Promise.resolve(input.onFrame(group.lastFrame)).catch(input.onError);
@@ -318,7 +471,12 @@ export class RealtimeRefreshScheduler {
 
 		return () => {
 			if (!group!.subscribers.delete(subscriber)) return;
-			if (group!.subscribers.size > 0) return;
+			if (group!.subscribers.size > 0) {
+				// The group outlives its creator. Adopt a live subscriber's closures
+				// so refreshes stop running against a fenced connection.
+				if (group!.provider === subscriber) rebindGroupProvider(group!);
+				return;
+			}
 			group!.disposed = true;
 			if (group!.heartbeatTimer) clearInterval(group!.heartbeatTimer);
 			group!.unsubscribe();
@@ -387,12 +545,17 @@ export class RealtimeRefreshScheduler {
 			onFrame: input.onFrame,
 			onError: input.onError,
 			onTransportError: input.onTransportError,
+			compute: input.compute,
+			captureWatermark: input.captureWatermark,
+			hydrateRows: input.hydrateRows,
 			ready: false,
 			pending: [],
 			pendingBytes: 0,
 			rebootstrap: false,
 		};
+		const createdDeltaGroup = group.subscribers.size === 0;
 		group.subscribers.add(subscriber);
+		if (createdDeltaGroup) group.provider = subscriber;
 		void this.bootstrapDeltaSubscriber(group, subscriber);
 
 		return () => {
@@ -404,7 +567,12 @@ export class RealtimeRefreshScheduler {
 				events: 0,
 				bytes: 0,
 			});
-			if (group!.subscribers.size > 0) return;
+			if (group!.subscribers.size > 0) {
+				// Same reason as the snapshot path: the delta group outlives its
+				// creator, so it must adopt a live subscriber's closures.
+				if (group!.provider === subscriber) rebindGroupProvider(group!);
+				return;
+			}
 			group!.disposed = true;
 			this.observe({
 				type: "delta.buffer",

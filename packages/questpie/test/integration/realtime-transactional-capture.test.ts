@@ -476,7 +476,7 @@ describe("realtime matrix transactional change capture", () => {
 		});
 	});
 
-	it("H11: silently ignores only a missing realtime table", async () => {
+	it("H11: a missing realtime table fails the write instead of hiding it", async () => {
 		const missingTable = new Error("realtime insert failed", {
 			cause: Object.assign(new Error("relation does not exist"), {
 				code: "42P01",
@@ -490,19 +490,29 @@ describe("realtime matrix transactional change capture", () => {
 		});
 
 		try {
-			await setup.app.collections.posts.create({ title: "No table yet" }, ctx);
+			await expect(
+				setup.app.collections.posts.create({ title: "No table yet" }, ctx),
+			).rejects.toThrow();
 		} finally {
 			appendSpy.mockRestore();
 		}
 
+		// Capture runs inside the caller's transaction, so a real 42P01 aborts it
+		// and the commit silently degrades to a rollback. Swallowing the error did
+		// not save the row — it only stopped anyone finding out the row was gone.
+		expect(
+			(await setup.app.collections.posts.find({}, ctx)).docs.map(
+				(post: { title: string }) => post.title,
+			),
+		).not.toContain("No table yet");
 		expect(
 			setup.app.mocks.logger.getLogsContaining(
-				"Realtime change capture failed",
+				"the realtime log table is missing",
 			),
-		).toHaveLength(0);
+		).toHaveLength(1);
 	});
 
-	it("H11: rate-limits warnings for non-42P01 capture failures", async () => {
+	it("H11: rate-limits log lines for repeated capture failures", async () => {
 		const appendSpy = spyOn(
 			setup.app.realtime,
 			"appendChange",
@@ -511,12 +521,17 @@ describe("realtime matrix transactional change capture", () => {
 		});
 
 		try {
-			await setup.app.collections.posts.create({ title: "First" }, ctx);
-			await setup.app.collections.posts.create({ title: "Second" }, ctx);
+			await expect(
+				setup.app.collections.posts.create({ title: "First" }, ctx),
+			).rejects.toThrow("database unavailable");
+			await expect(
+				setup.app.collections.posts.create({ title: "Second" }, ctx),
+			).rejects.toThrow("database unavailable");
 		} finally {
 			appendSpy.mockRestore();
 		}
 
+		// Every failure reaches the caller; only the log line is throttled.
 		expect(
 			setup.app.mocks.logger.getLogsContaining(
 				"Realtime change capture failed",
@@ -524,7 +539,11 @@ describe("realtime matrix transactional change capture", () => {
 		).toHaveLength(1);
 	});
 
-	it("rolls back mutations when native delta capture fails", async () => {
+	// Deliberately runs with `nativeDeltasEnabled` at its default of false. The
+	// rollback used to be gated on that flag, which made a delivery-mode setting
+	// load-bearing for write correctness — and left the default configuration
+	// handing callers a record for a row that was never committed.
+	it("rolls back mutations when capture fails, whatever the delivery mode", async () => {
 		const first = await setup.app.collections.posts.create(
 			{ title: "First" },
 			ctx,
@@ -539,7 +558,6 @@ describe("realtime matrix transactional change capture", () => {
 		).mockImplementation(async () => {
 			throw Object.assign(new Error("database unavailable"), { code: "08006" });
 		});
-		Object.assign(setup.app.realtime, { nativeDeltasEnabled: true });
 
 		try {
 			await expect(
@@ -561,7 +579,6 @@ describe("realtime matrix transactional change capture", () => {
 				),
 			).rejects.toThrow("database unavailable");
 		} finally {
-			Object.assign(setup.app.realtime, { nativeDeltasEnabled: false });
 			appendSpy.mockRestore();
 		}
 

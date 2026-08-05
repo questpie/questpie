@@ -13,10 +13,8 @@ import {
 	opaqueChannelAuthoritySubject,
 	resolveChannelAuthoritySubject,
 } from "../../channels/authority.js";
-import {
-	ChannelsService,
-	type ChannelServiceContext,
-} from "../../channels/service.js";
+import { createChannelServiceContext } from "../../channels/context.js";
+import { ChannelsService } from "../../channels/service.js";
 import { executeAccessRule } from "../../collection/crud/shared/access-control.js";
 import type { RequestContext } from "../../config/context.js";
 import type { Questpie } from "../../config/questpie.js";
@@ -479,6 +477,11 @@ async function evaluateTopicAccess(
 		app,
 		db: context.db,
 		session: context.session,
+		// `principal` is the only carrier of `scopes`, so omitting it made an
+		// OAuth-scope rule fail open on this path and only on this path. Every
+		// peer call site passes both; this one is not special.
+		principal: context.principal,
+		actor: context.actor,
 		locale: context.locale,
 		row: null,
 		input: {
@@ -718,7 +721,7 @@ async function resolveChannelSubscription(
 	const channels = new ChannelsService(
 		app.config.channels ?? {},
 		app.realtime,
-		{ ...context, accessMode: "user" } as ChannelServiceContext,
+		createChannelServiceContext(app, context),
 		app.config.realtime?.channelSecurity,
 	);
 	const definition = channels.getDefinition(input.channel);
@@ -805,11 +808,16 @@ export async function realtimeSubscribe(
 			| "snapshot_bytes"
 			| "row_live_queries_disabled"
 			| "collection_realtime_disabled"
-			| "access",
+			| "access"
+			| "not_found"
+			| "operation_shape"
+			| "since_seq_invalid"
+			| "activation_rejected",
 		details: Partial<
 			Pick<RealtimeTopicRejectedPayload, "resource" | "operation"> & {
 				requestedLimit?: number;
 				configuredLimit?: number;
+				observed?: number;
 			}
 		> = {},
 	) =>
@@ -1951,10 +1959,7 @@ export async function realtimeSubscribe(
 											const channels = new ChannelsService(
 												app.config.channels ?? {},
 												app.realtime!,
-												{
-													...fresh.appContext,
-													accessMode: "user",
-												} as ChannelServiceContext,
+												createChannelServiceContext(app, fresh.appContext),
 												app.config.realtime?.channelSecurity,
 											);
 											if (channel.presenceChannel) {
@@ -2497,14 +2502,19 @@ export async function realtimeSubscribe(
 
 				if (closeRequested || streamCancelled) close();
 			} catch (error) {
-				closeStream?.();
-				releaseConnection();
-				void transport?.stop().catch(() => {});
+				// Error the stream BEFORE any cleanup. `closeStream()` reaches
+				// `SseClientTransport.close()`, which closes this controller, and a
+				// closed controller swallows `controller.error()` — so every failure
+				// in here used to reach the client as HTTP 200 and a cleanly closed
+				// empty stream, with no way to tell it from an idle subscription.
 				try {
 					controller.error(error);
 				} catch {
 					// The controller can already be errored by the runtime.
 				}
+				closeStream?.();
+				releaseConnection();
+				void transport?.stop().catch(() => {});
 			}
 		},
 		pull: () => {
