@@ -1,15 +1,21 @@
 import { describe, expect, it } from "bun:test";
 
 import type { Collection } from "@tanstack/db";
+import type { QueryClient } from "@tanstack/react-query";
 import { collection } from "questpie";
 import type { QuestpieClient } from "questpie/client";
 
 import { eq, useLiveQuery } from "./exports/index.js";
+import {
+	createQuestpieCollections,
+	SNAPSHOT_UNSUPPORTED_FIND_OPTIONS,
+} from "./factory.js";
 import type {
 	CollectionRowOf,
 	FindOptionsOf,
 	IdOf,
 	QuestpieDb,
+	SnapshotFindOptionsOf,
 } from "./types.js";
 
 type Equal<A, B> =
@@ -65,6 +71,39 @@ describe("tanstack-db types", () => {
 		checkFindOptions({ with: { author: true } });
 
 		expect(checkTypes).toBeInstanceOf(Function);
+	});
+
+	it("narrows snapshot find options to what the realtime topic carries", () => {
+		type SnapshotKeys = keyof SnapshotFindOptionsOf<App, "posts">;
+		type _topicFields = Expect<
+			Equal<SnapshotKeys, "where" | "orderBy" | "limit" | "offset" | "locale">
+		>;
+		// The runtime guard and the type must name the same options.
+		type _guardMatchesType = Expect<
+			Equal<
+				Exclude<keyof FindOptionsOf<App, "posts">, SnapshotKeys>,
+				(typeof SNAPSHOT_UNSUPPORTED_FIND_OPTIONS)[number]
+			>
+		>;
+
+		const checkSnapshotFindOptions = (
+			options: SnapshotFindOptionsOf<App, "posts">,
+		) => options;
+		// @ts-expect-error a live subscription cannot carry search
+		checkSnapshotFindOptions({ search: "questpie" });
+
+		const checkSnapshotRegistry = (
+			client: QuestpieClient<App>,
+			queryClient: QueryClient,
+		) =>
+			createQuestpieCollections(client, {
+				queryClient,
+				syncMode: "snapshot",
+				// @ts-expect-error a live subscription cannot carry includeDeleted
+				find: { posts: { includeDeleted: true } },
+			});
+
+		expect(checkSnapshotRegistry).toBeInstanceOf(Function);
 	});
 
 	it("keeps live-query where and join fields typed", () => {

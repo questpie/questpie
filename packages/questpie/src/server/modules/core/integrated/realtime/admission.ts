@@ -6,6 +6,13 @@ import type {
 export type RealtimeAdmissionConfig = {
 	maxTopicsPerConnection: number;
 	maxConnectionsPerPrincipal: number;
+	/**
+	 * Node-wide ceiling on connections that carry no principal at all. This is
+	 * one shared bucket, not a per-client one: an unauthenticated caller
+	 * supplies nothing the server can trust to tell it apart from the next
+	 * caller, so any per-client key would be a cap that never binds.
+	 */
+	maxAnonymousConnections: number;
 	maxFindLimit: number;
 	maxWithDepth: number;
 	initialSnapshotConcurrency: number;
@@ -21,6 +28,11 @@ export type RealtimeAdmissionConfig = {
 export const DEFAULT_REALTIME_ADMISSION: RealtimeAdmissionConfig = {
 	maxTopicsPerConnection: 20,
 	maxConnectionsPerPrincipal: 5,
+	// At the default 8s keepalive every admitted connection sustains roughly two
+	// scheduler queries per interval, so 200 anonymous streams is about 50
+	// standing queries/second — one node's worth of headroom, and 40x the
+	// authenticated per-principal cap so a public site only meets it under flood.
+	maxAnonymousConnections: 200,
 	maxFindLimit: 100,
 	maxWithDepth: 3,
 	initialSnapshotConcurrency: 4,
@@ -73,6 +85,10 @@ export function resolveRealtimeAdmissionConfig(
 		maxConnectionsPerPrincipal: positiveInteger(
 			config?.maxConnectionsPerPrincipal,
 			DEFAULT_REALTIME_ADMISSION.maxConnectionsPerPrincipal,
+		),
+		maxAnonymousConnections: positiveInteger(
+			config?.maxAnonymousConnections,
+			DEFAULT_REALTIME_ADMISSION.maxAnonymousConnections,
 		),
 		maxFindLimit: positiveInteger(
 			config?.maxFindLimit,
@@ -129,6 +145,8 @@ export type TopicAdmissionResult<TTopic extends AdmissionTopic> =
 			reason: RealtimeTopicRejectionReason;
 			requestedLimit?: number;
 			configuredLimit?: number;
+			/** What the server counted when it refused. */
+			observed?: number;
 	  };
 
 export class RealtimeTopicAdmissionError extends Error {
@@ -157,6 +175,9 @@ export function realtimeTopicRejectedPayload(
 				: {}),
 			...(rejection.configuredLimit !== undefined
 				? { configuredLimit: rejection.configuredLimit }
+				: {}),
+			...(rejection.observed !== undefined
+				? { observed: rejection.observed }
 				: {}),
 		},
 	};
@@ -210,14 +231,26 @@ export function admitRealtimeTopic<TTopic extends AdmissionTopic>(
 	return { accepted: true, topic: { ...topic, limit } };
 }
 
-/** Authoritative server policy, separate from durable change capture. */
+/** Authoritative server policy for one topic, checked strongest switch first. */
 export function admitRealtimeTopicPolicy<TTopic extends AdmissionTopic>(
 	topic: TTopic,
 	policy: {
+		changeCapture?: boolean;
 		rowLiveQueries?: boolean;
 		collectionRealtime?: boolean;
 	},
 ): TopicAdmissionResult<TTopic> {
+	// Capture off means there is no outbox to serve from, so it outranks the
+	// read-side switches — refusing here is the only alternative to a
+	// subscription that connects and then never emits.
+	if (policy.changeCapture === false) {
+		return {
+			accepted: false,
+			message:
+				"Realtime change capture is disabled by server policy; collection and global topics cannot be served",
+			reason: "change_capture_disabled",
+		};
+	}
 	if (policy.rowLiveQueries === false) {
 		return {
 			accepted: false,
@@ -238,24 +271,173 @@ export function admitRealtimeTopicPolicy<TTopic extends AdmissionTopic>(
 	return { accepted: true, topic: { ...topic } };
 }
 
+/** Keepalive default, shared with the route so the slot TTL tracks it. */
+export const DEFAULT_REALTIME_KEEP_ALIVE_INTERVAL_MS = 8000;
+
+/**
+ * How many keepalive beats a connection may fail to prove itself alive before
+ * its slot is reclaimable. The lease is renewed by evidence the peer drained
+ * the stream, so this only sets how long a peer that stopped reading — or one
+ * whose socket died without the runtime saying so — keeps holding a slot.
+ */
+export const REALTIME_SLOT_KEEPALIVE_BEATS = 4;
+
+/**
+ * Slot lease length. Derived from the keepalive rather than a constant of its
+ * own: the keepalive is the only traffic an idle-but-live stream generates, so
+ * it is what bounds "the longest legitimate idle stream". A TTL shorter than a
+ * few beats would evict live sessions.
+ */
+export function realtimeSlotTtlMs(keepAliveIntervalMs: number): number {
+	const interval =
+		Number.isFinite(keepAliveIntervalMs) && keepAliveIntervalMs >= 1
+			? keepAliveIntervalMs
+			: DEFAULT_REALTIME_KEEP_ALIVE_INTERVAL_MS;
+	return interval * REALTIME_SLOT_KEEPALIVE_BEATS;
+}
+
+type AdmissionSlot = {
+	expiresAt: number;
+	released: boolean;
+	close?: () => void;
+};
+
+export type RealtimeAdmissionLease = {
+	/** Hand the slot back. Idempotent, and safe after eviction. */
+	release: () => void;
+	/** Extend the lease. Callers must only call this on proof of life. */
+	renew: (now?: number) => void;
+	/** How the registry tears down a stream whose lease lapsed. */
+	setClose: (close: () => void) => void;
+};
+
+export type RealtimeAdmissionDecision =
+	| { admitted: true; lease: RealtimeAdmissionLease; observed: number }
+	| { admitted: false; observed: number; configuredLimit: number };
+
+export type RealtimeAdmissionOptions = {
+	maximum: number;
+	/**
+	 * Lease length in ms. `Number.POSITIVE_INFINITY` opts a transport out of TTL
+	 * reclamation — only valid when that transport owns another liveness check.
+	 */
+	ttlMs: number;
+	now?: number;
+};
+
+/**
+ * Per-process connection slots, held as leases rather than a bare count.
+ *
+ * A slot used to be released only by an explicit teardown, which made every
+ * release path a property of the runtime: if nothing propagated the client's
+ * disconnect, the count was immortal for the lifetime of the process and the
+ * principal was locked out until a restart. A lease expires on wall clock
+ * instead, so reclamation needs no cooperation from the runtime — and expiry
+ * closes the abandoned stream, so the scheduler groups, topology heartbeat and
+ * keepalive registration behind it go with it.
+ *
+ * Sweeping is lazy: it runs on admission, which is the only moment the count
+ * matters and the only moment the process is guaranteed to still be serving.
+ * A background timer here would keep the process alive and outlive the app.
+ */
 export class RealtimeAdmissionRegistry {
-	private readonly counts = new Map<string, number>();
+	private readonly buckets = new Map<string, Set<AdmissionSlot>>();
+	private nextFullSweepAt = Number.NEGATIVE_INFINITY;
 
-	constructor(private readonly maximum: number) {}
+	acquire(
+		key: string,
+		options: RealtimeAdmissionOptions,
+	): RealtimeAdmissionDecision {
+		const now = options.now ?? Date.now();
+		this.sweepAll(now, options.ttlMs);
+		const slots = this.sweepBucket(key, now);
 
-	acquire(principalKey: string | null): (() => void) | null {
-		if (principalKey === null) return () => {};
-		const count = this.counts.get(principalKey) ?? 0;
-		if (count >= this.maximum) return null;
-		this.counts.set(principalKey, count + 1);
-		let released = false;
-		return () => {
-			if (released) return;
-			released = true;
-			const next = (this.counts.get(principalKey) ?? 1) - 1;
-			if (next === 0) this.counts.delete(principalKey);
-			else this.counts.set(principalKey, next);
+		if (slots.size >= options.maximum) {
+			return {
+				admitted: false,
+				observed: slots.size,
+				configuredLimit: options.maximum,
+			};
+		}
+
+		const slot: AdmissionSlot = {
+			expiresAt: now + options.ttlMs,
+			released: false,
 		};
+		slots.add(slot);
+		return {
+			admitted: true,
+			observed: slots.size,
+			lease: {
+				release: () => {
+					if (slot.released) return;
+					slot.released = true;
+					const bucket = this.buckets.get(key);
+					if (!bucket) return;
+					bucket.delete(slot);
+					if (bucket.size === 0) this.buckets.delete(key);
+				},
+				renew: (renewedAt) => {
+					if (slot.released) return;
+					slot.expiresAt = (renewedAt ?? Date.now()) + options.ttlMs;
+				},
+				setClose: (close) => {
+					slot.close = close;
+				},
+			},
+		};
+	}
+
+	/** Live slots in one bucket. Diagnostics; expired slots are not counted. */
+	observed(key: string, now: number = Date.now()): number {
+		let live = 0;
+		for (const slot of this.buckets.get(key) ?? []) {
+			if (slot.expiresAt > now) live += 1;
+		}
+		return live;
+	}
+
+	private sweepBucket(key: string, now: number): Set<AdmissionSlot> {
+		let slots = this.buckets.get(key);
+		if (!slots) {
+			slots = new Set<AdmissionSlot>();
+			this.buckets.set(key, slots);
+			return slots;
+		}
+		evictExpired(slots, now);
+		return slots;
+	}
+
+	private sweepAll(now: number, ttlMs: number): void {
+		if (now < this.nextFullSweepAt) return;
+		// One pass per lease window is enough to keep abandoned streams from
+		// accumulating under principals that never reconnect.
+		this.nextFullSweepAt =
+			now + (Number.isFinite(ttlMs) ? Math.max(1000, ttlMs) : 60_000);
+		for (const [key, slots] of this.buckets) {
+			evictExpired(slots, now);
+			if (slots.size === 0) this.buckets.delete(key);
+		}
+	}
+}
+
+function evictExpired(slots: Set<AdmissionSlot>, now: number): void {
+	const expired: AdmissionSlot[] = [];
+	for (const slot of slots) {
+		if (slot.expiresAt <= now) expired.push(slot);
+	}
+	// Vacate first, then tear down: `close()` re-enters `release()`, and the
+	// slot must already be gone so that release cannot evict its replacement.
+	for (const slot of expired) {
+		slots.delete(slot);
+		slot.released = true;
+	}
+	for (const slot of expired) {
+		try {
+			slot.close?.();
+		} catch {
+			// One abandoned stream must not stop the sweep.
+		}
 	}
 }
 
@@ -263,11 +445,10 @@ const registries = new WeakMap<object, RealtimeAdmissionRegistry>();
 
 export function getRealtimeAdmissionRegistry(
 	owner: object,
-	maximum: number,
 ): RealtimeAdmissionRegistry {
 	let registry = registries.get(owner);
 	if (!registry) {
-		registry = new RealtimeAdmissionRegistry(maximum);
+		registry = new RealtimeAdmissionRegistry();
 		registries.set(owner, registry);
 	}
 	return registry;
@@ -289,6 +470,46 @@ export function realtimePrincipalKey(context: {
 	return typeof sessionId === "string" && sessionId
 		? `session:${sessionId}`
 		: null;
+}
+
+/**
+ * The bucket every unauthenticated connection shares.
+ *
+ * Deliberately *not* per connection. The obvious alternative — key on the
+ * server-issued edge session id, the way anonymous channel readers do — gives
+ * every connection its own bucket, which is a cap that can never bind: it is
+ * how these connections came to be unlimited in the first place. The other
+ * alternative, keying on the remote address, means trusting a forwarded-for
+ * header the framework does not own and a proxy can collapse or a client can
+ * forge. One shared bucket is the honest shape for what this registry actually
+ * is: a per-node resource guard. It bounds the node; it does not pretend to be
+ * a per-visitor quota.
+ */
+export const ANONYMOUS_ADMISSION_KEY = "anonymous";
+
+/**
+ * Pick the admission bucket and the cap that applies to it. One site, so an
+ * unauthenticated connection can never end up with no cap at all.
+ */
+export function realtimeAdmissionBucket(
+	context: Parameters<typeof realtimePrincipalKey>[0],
+	config: Pick<
+		RealtimeAdmissionConfig,
+		"maxConnectionsPerPrincipal" | "maxAnonymousConnections"
+	>,
+): { key: string; maximum: number; anonymous: boolean } {
+	const principalKey = realtimePrincipalKey(context);
+	return principalKey === null
+		? {
+				key: ANONYMOUS_ADMISSION_KEY,
+				maximum: config.maxAnonymousConnections,
+				anonymous: true,
+			}
+		: {
+				key: principalKey,
+				maximum: config.maxConnectionsPerPrincipal,
+				anonymous: false,
+			};
 }
 
 export function createConcurrencyLimiter(maximum: number) {

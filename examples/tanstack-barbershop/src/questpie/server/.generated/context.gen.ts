@@ -62,6 +62,8 @@ import _mig_20260726T163042_queueTransactionalDispatch from "../migrations/20260
 import _mig_20260730T182023_optimisticConcurrencyRevisions from "../migrations/20260730T182023_optimistic-concurrency-revisions";
 import _mig_20260731T000041_realtimeIdempotency1 from "../migrations/20260731T000041_realtime-idempotency-1";
 import _mig_20260731T084650_realtimeIdempotency1 from "../migrations/20260731T084650_realtime-idempotency-1";
+import _mig_20260805T165255_realtimeDrainCursorIndex from "../migrations/20260805T165255_realtime-drain-cursor-index";
+import _mig_20260805T180812_realtimeSettlementRetention from "../migrations/20260805T180812_realtime-settlement-retention";
 
 // ── Seeds ──────────────────────────────────────────────────
 import _seed_blogPosts from "../seeds/blog-posts";

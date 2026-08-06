@@ -13,6 +13,9 @@ export default job({
 		cron: "0 * * * *",
 	},
 	handler: async (ctx) => {
+		// With `realtime.changeCapture: false` nothing ever writes the outbox, so
+		// the hourly DELETE would only be a scan the application did not ask for.
+		if ((ctx as any).app?.config?.realtime?.changeCapture === false) return;
 		await (ctx as any).realtime.cleanupOutbox(true);
 	},
 });

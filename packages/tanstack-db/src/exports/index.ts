@@ -1,4 +1,13 @@
-export { and, eq, gt, inArray, lt, or, useLiveQuery } from "../collection.js";
+export {
+	and,
+	eq,
+	gt,
+	inArray,
+	lt,
+	or,
+	QuestpieDbConflictError,
+	useLiveQuery,
+} from "../collection.js";
 export {
 	createQuestpieCollections,
 	type CreateQuestpieCollectionsOptions,
@@ -14,4 +23,5 @@ export type {
 	IdOf,
 	QuestpieCollections,
 	QuestpieDb,
+	SnapshotFindOptionsOf,
 } from "../types.js";

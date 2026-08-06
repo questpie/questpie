@@ -118,7 +118,11 @@ describe("realtime matrix transactional change capture", () => {
 		expect(getTxid(result)).toBe(rows[0]?.txid);
 	});
 
-	it("assigns outbox cursors in commit order without dropping a late commit", async () => {
+	// PGlite is one connection, so these two transactions cannot overlap and the
+	// sequences come out in commit order for that reason alone. What real
+	// concurrency does to the cursor is in
+	// `realtime-drain-cursor-postgres.test.ts`, which needs a real server.
+	it("keeps both appends when one transaction commits late", async () => {
 		let firstAppended = () => {};
 		const appended = new Promise<void>((resolve) => {
 			firstAppended = resolve;
@@ -162,7 +166,7 @@ describe("realtime matrix transactional change capture", () => {
 		expect(rows.map((row) => row.recordId)).toEqual(["first", "second"]);
 	});
 
-	it("wraps public appendChange calls in the commit-order transaction", async () => {
+	it("wraps public appendChange calls in their own transaction", async () => {
 		const originalTransaction = setup.app.db.transaction.bind(setup.app.db);
 		const transactionSpy = spyOn(
 			setup.app.db,

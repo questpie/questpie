@@ -77,9 +77,20 @@ Missed hints reconcile from PostgreSQL.
 The server Yjs engine uses bounded in-process worker threads for untrusted CPU
 work. That is private runtime machinery, not another deployable worker service.
 
+When canonical text and application-owned projections must advance atomically,
+configure `crdt.projection.prepareAcknowledgement`. It receives the complete
+authoritative aggregate cut, changed field paths, exact Human/Agent
+contributors, the locked owner and the framework projection transaction. It
+may write exact relation rows through that transaction and return canonical
+field values plus ordinary owner-column projections. Throwing rolls back those
+writes together with canonical fields, projection cursors and the realtime
+outbox event. The callback may retry and grants no authority of its own, so
+consumer validation and derived writes must be deterministic, idempotent and
+must recheck product authorization.
+
 ## Generated client
 
-Build the CRDT API from an existing client with `createCrdtClient` — it reuses
+Build the CRDT API from an existing client with `createCrdtClient`. It reuses
 that client's realtime session (still one connection), and keeps the CRDT
 implementation out of the bundle of every app that never calls it.
 

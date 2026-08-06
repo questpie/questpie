@@ -21,6 +21,8 @@ export {
 	deriveFindDeltas,
 	envelopeMeta,
 	type RealtimeAPI,
+	type RealtimeDeltaDeleteReason,
+	type RealtimeFindWindow,
 	type RealtimeStreamEvent,
 	sseEventStream,
 	sseSnapshotStream,

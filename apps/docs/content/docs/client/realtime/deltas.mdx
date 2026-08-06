@@ -40,10 +40,10 @@ export default runtimeConfig({
 });
 ```
 
-Deploy that in a second pass, not the first. Every writer appends to the outbox
-under a head lock so sequence order matches commit order. Deltas are only safe
-once no old writer is still appending without it. Ship the code, wait for the
-fleet, then flip the flag.
+Deploy that in a second pass, not the first. Writers append to the outbox without
+a lock, and readers order it by `(txid, seq)` under PostgreSQL's visibility
+watermark. A node still running an older reader orders by sequence alone, which
+can skip a row. Ship the code, wait for the fleet, then flip the flag.
 
 Step two is the topic. Deltas are opt-in per subscription, and only through the
 raw API.

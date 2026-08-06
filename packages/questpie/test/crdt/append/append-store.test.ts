@@ -276,7 +276,7 @@ describe("CRDT atomic append store", () => {
 						targetFieldCursor: field.targetFieldCursor,
 						canonicalHash: current.canonicalHash,
 						canonicalRevision: current.canonicalRevision,
-						value: current.sourcePath === "title" ? "projected" : "",
+						value: current.sourcePath === "title" ? "projected" : "Body",
 						shouldWrite: field.shouldWrite,
 					};
 				});
@@ -330,6 +330,36 @@ describe("CRDT atomic append store", () => {
 		let realtimeChanges = 0;
 		const projectionOwner = createQuestpieProjectionOwnerPort({
 			db,
+			config: {
+				crdt: {
+					namespace: "test",
+					projection: {
+						prepareAcknowledgement: async (input) => {
+							expect(input.commitSeq).toBe(1n);
+							expect(input.basisCommitSeq).toBe(0n);
+							expect(input.owner).toMatchObject({
+								kind: "collection",
+								key: "articles",
+								recordId: "article-1",
+							});
+							expect(input.changed).toEqual(new Set(["title"]));
+							expect(input.values.get("title")).toBe("rejected");
+							expect(input.contributors).toEqual([
+								{
+									commitSeq: 1n,
+									sessionId: SESSION_ID,
+									actor: { kind: "human", subjectId: "user-1" },
+								},
+							]);
+							await input.transaction
+								.update(articlesTable)
+								.set({ status: "derived" })
+								.where(eq(articlesTable.id, "article-1"));
+							throw new Error("consumer rejected aggregate cut");
+						},
+					},
+				},
+			},
 			collections: {
 				articles: {
 					"~internalState": {
@@ -367,17 +397,7 @@ describe("CRDT atomic append store", () => {
 					};
 				});
 			},
-			owner: {
-				...projectionOwner,
-				prepareAcknowledgement: async (transaction, _owner, input) => {
-					await transaction
-						.update(articlesTable)
-						.set({ status: "derived" })
-						.where(eq(articlesTable.id, "article-1"));
-					expect(input.commitSeq).toBe(1n);
-					throw new Error("consumer rejected aggregate cut");
-				},
-			},
+			owner: projectionOwner,
 		});
 
 		await expect(projector.runOnce()).rejects.toThrow(
@@ -406,6 +426,123 @@ describe("CRDT atomic append store", () => {
 			1,
 		);
 		expect(realtimeChanges).toBe(0);
+	});
+
+	it("commits canonical values, owner projections, and derived writes under one acknowledgement", async () => {
+		await db.execute(sql`
+			CREATE TABLE article_references (
+				article_id text NOT NULL,
+				target text NOT NULL,
+				PRIMARY KEY (article_id, target)
+			)
+		`);
+		await createCrdtAppendStore(db, { lockOwnerRow }).append(
+			await appendInput(fixture),
+		);
+		await db.update(questpieCrdtProjectionTable).set({ dueAt: new Date(0) });
+		let realtimeChanges = 0;
+		const projectionOwner = createQuestpieProjectionOwnerPort({
+			db,
+			config: {
+				crdt: {
+					namespace: "test",
+					projection: {
+						prepareAcknowledgement: async (input) => {
+							await input.transaction.execute(sql`
+								INSERT INTO article_references (article_id, target)
+								VALUES ('article-1', 'task-1')
+								ON CONFLICT DO NOTHING
+							`);
+							return {
+								values: new Map(input.values).set("title", "canonical"),
+								ownerValues: { status: "canonical" },
+							};
+						},
+					},
+				},
+			},
+			collections: {
+				articles: {
+					"~internalState": {
+						name: "articles",
+						options: { optimisticConcurrency: true },
+					},
+					"~internalRelatedTable": articlesTable,
+				},
+			},
+			globals: {},
+			realtime: {
+				appendChange: async () => ({
+					seq: ++realtimeChanges,
+					resourceType: "collection",
+					resource: "articles",
+					operation: "update",
+					recordId: "article-1",
+					payload: { origin: "crdt_projection" },
+					createdAt: new Date(),
+				}),
+				notify: async () => {},
+			},
+		} as any);
+		const projector = createCrdtProjectionStore(db, {
+			materializeExactCut: async (database, _claim, scheduled) => {
+				const bindings = await database.select().from(questpieCrdtBindingTable);
+				return scheduled.map((field) => {
+					const binding = bindings.find(
+						(candidate) => candidate.id === field.bindingId,
+					)!;
+					return {
+						bindingId: binding.id,
+						stableFieldId: binding.stableFieldId,
+						fieldEpoch: binding.fieldEpoch,
+						targetFieldCursor: field.targetFieldCursor,
+						canonicalHash: binding.canonicalHash,
+						canonicalRevision: binding.canonicalRevision,
+						value: binding.sourcePath === "title" ? "  canonical  " : "Body",
+						shouldWrite: field.shouldWrite,
+					};
+				});
+			},
+			owner: projectionOwner,
+		});
+
+		await expect(projector.runOnce()).resolves.toEqual({
+			status: "applied",
+			projectedCommitSeq: 1n,
+		});
+		const [owner] = await db.select().from(articlesTable);
+		expect(owner).toMatchObject({
+			title: "canonical",
+			status: "canonical",
+			revision: 2,
+		});
+		const references = await db.execute(sql`
+			SELECT article_id, target FROM article_references
+		`);
+		expect(references.rows).toEqual([
+			{ article_id: "article-1", target: "task-1" },
+		]);
+		expect(realtimeChanges).toBe(1);
+
+		await createCrdtAppendStore(db, { lockOwnerRow }).append(
+			await appendInput(
+				fixture,
+				"00000000-0000-4000-8000-000000000399",
+				encodeDeterministicTextUpdate([
+					{ type: "insert", index: 7, value: " again" },
+				]),
+			),
+		);
+		await db.update(questpieCrdtProjectionTable).set({ dueAt: new Date(0) });
+		await expect(projector.runOnce()).resolves.toEqual({
+			status: "applied",
+			projectedCommitSeq: 2n,
+		});
+		const [activeResource] = await db
+			.select()
+			.from(questpieCrdtResourceTable)
+			.where(eq(questpieCrdtResourceTable.id, RESOURCE_ID));
+		expect(activeResource?.status).toBe(1);
 	});
 
 	it("writes the owner and realtime outbox through one managed transaction", async () => {

@@ -137,11 +137,15 @@ because they build the same app object.
 [The connection budget](/docs/ship/scaling/connections) does the arithmetic and
 covers PgBouncer.
 
-**The outbox head row.** Capture runs on every collection and global write. Each
-capture locks one shared row and holds it until the transaction commits. That is
-what makes outbox order commit order. It also serializes your writes against
-each other. Keep write transactions short. Prefer one bulk call over a loop,
-because a batch captures a single outbox row rather than one per record.
+**The outbox.** Capture runs on every collection and global write and appends one
+row. It takes no shared lock, so writers do not queue behind each other and more
+nodes mean more write capacity. Readers get their order from `(txid, seq)` under
+PostgreSQL's own visibility watermark, which means a change is delivered once
+every transaction that was already open when it committed has ended. So keep
+write transactions short: a long one delays delivery of everything committing
+alongside it. Retention starts only after the row first falls below that
+watermark, so the delay cannot turn into cleanup loss. Prefer one bulk call over
+a loop, because a batch captures a single outbox row rather than one per record.
 
 ## Shutting down
 

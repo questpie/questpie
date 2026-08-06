@@ -192,6 +192,15 @@ invalidation stay enabled. Raw topics receive the same
 `collection_realtime_disabled` or `row_live_queries_disabled` rejection as
 typed clients, before scheduler allocation or bootstrap.
 
+`realtime: { changeCapture: false }` is the write-side switch, and the stronger
+one. Mutations stop writing the outbox: no insert, no drain, no retention
+cleanup, so an application built on typed channels alone pays nothing for the
+collection lane. It costs collection and global realtime: every such topic is
+refused with `change_capture_disabled`, plus `sinceSeq` resume and the `txid`
+that `@questpie/tanstack-db` matches optimistic writes against. Typed channels,
+channel presence, and CRDT document sync are unaffected; CRDT canonical
+projection still writes its own outbox row per commit.
+
 A personalized relation query for 100,000 principals in one shared scope can
 cause 100,000 authoritative recomputations. Snapshot fallback is correct but
 expensive. Prefer materialized inbox rows with direct `recipientId`, a shared

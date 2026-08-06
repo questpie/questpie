@@ -213,13 +213,170 @@ describe("realtime stream events", () => {
 				{ id: "third", title: "Third" },
 			],
 			totalDocs: 2,
+			limit: 3,
 			totalPages: 1,
 			page: 1,
+			pagingCounter: 1,
 			hasNextPage: false,
 			hasPrevPage: false,
 			nextPage: null,
 			prevPage: null,
 		});
+	});
+
+	it("keeps the bootstrap page window across row events and totals frames", () => {
+		// Page 21 of 69, the envelope a windowed live list bootstraps with.
+		const bootstrap = {
+			docs: [
+				{ id: "a", title: "A" },
+				{ id: "b", title: "B" },
+			],
+			totalDocs: 138,
+			limit: 2,
+			totalPages: 69,
+			page: 21,
+			pagingCounter: 41,
+			hasPrevPage: true,
+			hasNextPage: true,
+			prevPage: 20,
+			nextPage: 22,
+		};
+
+		let result = applyRealtimeFindEvent(undefined, {
+			type: "snapshot",
+			topicId: "posts",
+			seq: 1,
+			data: bootstrap,
+		});
+
+		// A write elsewhere slides the window: one row leaves, one arrives.
+		result = applyRealtimeFindEvent(result, {
+			type: "delete",
+			topicId: "posts",
+			seq: 2,
+			key: "a",
+		});
+		result = applyRealtimeFindEvent(result, {
+			type: "insert",
+			topicId: "posts",
+			seq: 2,
+			key: "c",
+			row: { id: "c", title: "C" },
+			index: 1,
+		});
+
+		expect(result).toEqual({
+			docs: [
+				{ id: "b", title: "B" },
+				{ id: "c", title: "C" },
+			],
+			totalDocs: 138,
+			limit: 2,
+			totalPages: 69,
+			page: 21,
+			pagingCounter: 41,
+			hasPrevPage: true,
+			hasNextPage: true,
+			prevPage: 20,
+			nextPage: 22,
+		});
+
+		// The totals frame carries the server's own count; the window stays put
+		// and only the derived page counts move with it.
+		result = applyRealtimeFindEvent(result, {
+			type: "up-to-date",
+			topicId: "posts",
+			seq: 2,
+			meta: { totalDocs: 139 },
+		});
+
+		expect(result).toMatchObject({
+			totalDocs: 139,
+			limit: 2,
+			totalPages: 70,
+			page: 21,
+			pagingCounter: 41,
+			hasPrevPage: true,
+			hasNextPage: true,
+		});
+		expect(result.docs).toHaveLength(2);
+	});
+
+	it("keeps the total across a heartbeat that carries no meta", () => {
+		const bootstrap = {
+			docs: [{ id: "a", title: "A" }],
+			totalDocs: 5000,
+			limit: 100,
+			totalPages: 50,
+			page: 1,
+			pagingCounter: 1,
+			hasPrevPage: false,
+			hasNextPage: true,
+			prevPage: null,
+			nextPage: 2,
+		};
+
+		const result = applyRealtimeFindEvent(
+			applyRealtimeFindEvent(undefined, {
+				type: "snapshot",
+				topicId: "posts",
+				seq: 1,
+				data: bootstrap,
+			}),
+			{ type: "up-to-date", topicId: "posts", seq: 2, upToDate: "42" },
+		);
+
+		expect(result).toMatchObject({
+			totalDocs: 5000,
+			limit: 100,
+			totalPages: 50,
+			hasNextPage: true,
+		});
+	});
+
+	it("keeps an unwindowed result on one page as its rows grow", () => {
+		// Native row deltas only ever serve unwindowed topics, so the server's
+		// synthesized `limit === totalDocs` has to grow with the result.
+		let result = applyRealtimeFindEvent(undefined, {
+			type: "snapshot",
+			topicId: "posts",
+			seq: 1,
+			data: {
+				docs: [{ id: "a", title: "A" }],
+				totalDocs: 1,
+				limit: 1,
+				totalPages: 1,
+				page: 1,
+				pagingCounter: 1,
+				hasPrevPage: false,
+				hasNextPage: false,
+				prevPage: null,
+				nextPage: null,
+			},
+		});
+		result = applyRealtimeFindEvent(result, {
+			type: "insert",
+			topicId: "posts",
+			seq: 2,
+			key: "b",
+			row: { id: "b", title: "B" },
+		});
+		result = applyRealtimeFindEvent(result, {
+			type: "up-to-date",
+			topicId: "posts",
+			seq: 2,
+			meta: { totalDocs: 2 },
+		});
+
+		expect(result).toMatchObject({
+			totalDocs: 2,
+			limit: 2,
+			totalPages: 1,
+			page: 1,
+			hasNextPage: false,
+			nextPage: null,
+		});
+		expect(result.docs).toHaveLength(2);
 	});
 
 	it("treats a reset snapshot as an authoritative replacement", () => {

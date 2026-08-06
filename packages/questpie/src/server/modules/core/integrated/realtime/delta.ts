@@ -1,4 +1,7 @@
-import type { RealtimeStreamEvent } from "#questpie/client/realtime/stream.js";
+import type {
+	RealtimeDeltaDeleteReason,
+	RealtimeStreamEvent,
+} from "#questpie/client/realtime/stream.js";
 
 import type { RealtimeOperation } from "./types.js";
 
@@ -138,21 +141,50 @@ export function classifyRealtimeDelivery(
 
 export type RealtimeDeltaOp = "insert" | "update" | "delete" | "noop";
 
+/**
+ * A keyed operation plus, for a removal, why the row left.
+ *
+ * The reason needs no row image, so it is available for batch mutations too,
+ * whose payload carries only `{count, recordIds}`: the outbox already separates
+ * a predicate exit (`update`/`bulk_update`) from a removal (`delete`/
+ * `bulk_delete`, which covers hard deletes, soft deletes and purges alike).
+ */
+export type RealtimeDeltaDerivation =
+	| { op: Exclude<RealtimeDeltaOp, "delete"> }
+	| { op: "delete"; reason: RealtimeDeltaDeleteReason };
+
+function removesRow(operation: RealtimeOperation): boolean {
+	return operation === "delete" || operation === "bulk_delete";
+}
+
 /** Derive a keyed operation after the current row was authoritatively hydrated. */
 export function deriveDeltaOp(input: {
 	present: boolean;
 	operation: RealtimeOperation;
 	beforeMatch?: boolean | null;
-}): RealtimeDeltaOp {
+	/**
+	 * Another event in the same hydration batch removed this key. One batch is
+	 * hydrated once, so `present` already reflects every event in it: a row that
+	 * is updated out of the predicate and then deleted has to report `deleted`,
+	 * not the first event's `left_predicate`.
+	 */
+	deletedInBatch?: boolean;
+}): RealtimeDeltaDerivation {
 	if (input.present) {
 		if (input.operation === "create" || input.beforeMatch === false) {
-			return "insert";
+			return { op: "insert" };
 		}
-		return "update";
+		return { op: "update" };
 	}
 
 	if (input.operation === "create" || input.beforeMatch === false) {
-		return "noop";
+		return { op: "noop" };
 	}
-	return "delete";
+	return {
+		op: "delete",
+		reason:
+			input.deletedInBatch || removesRow(input.operation)
+				? "deleted"
+				: "left_predicate",
+	};
 }

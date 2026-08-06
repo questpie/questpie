@@ -19,6 +19,20 @@ class FakeRealtimeSource {
 		return this.latestSeq;
 	}
 
+	/**
+	 * Mirrors RealtimeService: only the source can decide "current", because
+	 * `latestSeq === sinceSeq` alone does not prove it once a lower sequence can
+	 * settle after a higher one. This fake has no concurrency, so the settled
+	 * head is the latest sequence.
+	 */
+	async getResumeState(sinceSeq: number) {
+		return {
+			latestSeq: this.latestSeq,
+			reset: false,
+			current: sinceSeq === this.latestSeq,
+		};
+	}
+
 	subscribe(
 		listener: (event: RealtimeChangeEvent) => void,
 		_topics: RealtimeTopics,

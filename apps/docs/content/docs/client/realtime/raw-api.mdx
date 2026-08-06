@@ -114,17 +114,21 @@ internally.
 
 | Function                   | For                                  |
 | -------------------------- | ------------------------------------ |
-| `applyRealtimeFindEvent`   | An unwindowed `find` result          |
+| `applyRealtimeFindEvent`   | A `find` result, windowed or not     |
 | `applyRealtimeScalarEvent` | A `count` topic, which is one number |
 | `applyRealtimeSingleEvent` | A collection `get` or a global       |
 
 They all take `(current, event)` and return the next value. Reach for them when
 you consume `streamEvents()` but still want a whole result at the end.
 
-`applyRealtimeFindEvent` passes a snapshot straight through. On a keyed event it
-recomputes the page metadata as a single page. So `hasNextPage` reads `false`
-after the first row event. Keep your own paging state if you subscribed with a
-`limit`.
+`applyRealtimeFindEvent` passes a snapshot straight through, and the first one
+carries the page window. Every later frame keeps that window, because `limit`
+and `offset` belong to the topic and cannot change under a subscription. A keyed
+event moves rows and shifts `totalDocs` by however many it added or removed. A
+totals frame then replaces that count with the server's. `totalPages`,
+`hasNextPage` and the rest are recomputed from the window each time, by the same
+formula the server's paginator uses, so a live `find` with a `limit` reports the
+page counts a `find()` would.
 
 ## Wait for your own write
 

@@ -56,6 +56,7 @@ import _route_realtime_crdt_exchange_POST from "../routes/realtime/crdt/exchange
 import _route_realtime_crdt_open_POST from "../routes/realtime/crdt/open.post";
 import _route_search from "../routes/search";
 import _route_search_reindex_collection from "../routes/search/reindex/[collection]";
+import _route_transaction from "../routes/transaction";
 
 // ── Services ────────────────────────────────────────────
 import _svc_auth from "../services/auth";
@@ -163,6 +164,7 @@ export type CoreRoutes = {
 	"realtime/crdt/open:POST": typeof _route_realtime_crdt_open_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime/crdt/open:POST">> : typeof _route_realtime_crdt_open_POST;
 	search: typeof _route_search extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"search">> : typeof _route_search;
 	"search/reindex/[collection]": typeof _route_search_reindex_collection extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"search/reindex/[collection]">> : typeof _route_search_reindex_collection;
+	transaction: typeof _route_transaction extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"transaction">> : typeof _route_transaction;
 };
 
 export type CoreFieldTypes = {
@@ -281,6 +283,7 @@ const _module: CoreModule = {
 		"realtime/crdt/open:POST": _route_realtime_crdt_open_POST,
 		search: _route_search,
 		"search/reindex/[collection]": _route_search_reindex_collection,
+		transaction: _route_transaction,
 	} as CoreRoutes,
 	services: {
 		auth: _svc_auth,

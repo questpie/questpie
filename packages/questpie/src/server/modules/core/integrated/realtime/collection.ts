@@ -63,11 +63,26 @@ export const questpieRealtimeLogTable = pgTable(
 		locale: text("locale"),
 		payload: jsonbSafe("payload").default({}),
 		createdAt: systemTimestamp("created_at").defaultNow().notNull(),
+		/** First cleanup observation after this transaction fell below snapshot xmin. */
+		settledAt: systemTimestamp("settled_at"),
 	},
-	(t) => [index("idx_realtime_log_created_at").on(t.createdAt)],
+	(t) => [
+		index("idx_realtime_log_created_at").on(t.createdAt),
+		index("idx_realtime_log_settled_at").on(t.settledAt),
+		// The drain cursor is `(txid, seq)`, not `seq` — see RealtimeService.
+		// Without this index every drain would sort the whole retained log.
+		index("idx_realtime_log_txid_seq").on(t.txid, t.seq),
+	],
 );
 
-/** Global outbox sequence head. Updating this row serializes commit cursors. */
+/**
+ * Global outbox sequence head.
+ *
+ * @deprecated Unused since the capture path stopped serializing on it. Kept so
+ * upgrading applications do not need a DROP TABLE migration; no code reads or
+ * writes it. `questpie_realtime_log.seq` is the sequence of record and
+ * `(txid, seq)` is the drain cursor.
+ */
 export const questpieRealtimeHeadTable = pgTable("questpie_realtime_head", {
 	id: text("id").primaryKey(),
 	lastSeq: bigint("last_seq", { mode: "number" }).default(0).notNull(),

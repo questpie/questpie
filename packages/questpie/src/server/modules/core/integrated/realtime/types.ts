@@ -109,16 +109,57 @@ export type RealtimeSubscriptionScopeResolver = (
 
 export interface RealtimeConfig {
 	/**
-	 * Enables native row-delta emission after every writer replica has been
-	 * upgraded to the commit-order outbox protocol. Keep disabled during the
-	 * first phase of a rolling deployment; snapshot realtime remains available.
+	 * Enables native row-delta emission once every replica reads the outbox in
+	 * settled `(txid, seq)` order. Keep disabled during the first phase of a
+	 * rolling deployment: a replica still ordering by sequence alone can skip a
+	 * row. Snapshot realtime remains available throughout.
 	 *
 	 * @default false
 	 */
 	nativeDeltas?: boolean;
 	/**
-	 * Authoritative server switch for collection/global row live queries.
-	 * Change capture, dependency watches, typed channels, and CRDT stay enabled.
+	 * Records collection and global mutations to the realtime outbox — the
+	 * write side of collection realtime, and the only source row live queries
+	 * can be served from.
+	 *
+	 * While enabled (the default), every collection and global mutation writes a
+	 * before/after scalar image to `questpie_realtime_log`, retained
+	 * {@link retentionDays} days. That is one insert, taking no shared lock, so
+	 * concurrent writers do not queue behind each other — but the cost is paid on
+	 * every write whether or not anything is subscribed.
+	 *
+	 * Turn it off when the application uses typed channels only, or no realtime
+	 * at all. Capture then issues no SQL at all: no outbox insert, no drain, no
+	 * retention cleanup.
+	 *
+	 * What is given up, in full:
+	 * - **Collection and global realtime.** Every `collection`/`global` topic is
+	 *   refused at admission with `change_capture_disabled`, including topics
+	 *   that only watch a resource as a relation dependency.
+	 * - **Resume.** With no outbox there is nothing for `sinceSeq` to replay, so
+	 *   a reconnecting client cannot catch up on what it missed.
+	 * - **`txid` correlation.** Mutations stop returning a transaction id, so
+	 *   `getTxid()` is `undefined` and optimistic clients (`@questpie/tanstack-db`)
+	 *   cannot match a local write against a server frame.
+	 *
+	 * What still works: typed channels and their ordered ledger, channel
+	 * presence, CRDT document sync, and every ordinary read and write. CRDT
+	 * canonical projection is the single exception that keeps writing outbox
+	 * rows — its commit protocol requires exactly one row per commit.
+	 *
+	 * @see {@link rowLiveQueries} — the narrower, read-side sibling.
+	 * @default true
+	 */
+	changeCapture?: boolean;
+	/**
+	 * Serves collection/global row live queries. Refusing them here leaves
+	 * change capture, dependency watches, typed channels, and CRDT enabled: the
+	 * outbox is still written, so `txid` correlation and resume keep working and
+	 * row topics can be re-enabled without a gap in the log.
+	 *
+	 * This is the read side of the pair; {@link changeCapture} is the write
+	 * side. Capture off already implies no live queries, so this flag only
+	 * matters while capture is on.
 	 *
 	 * @default true
 	 */

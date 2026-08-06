@@ -7,7 +7,7 @@ import {
 	test,
 } from "bun:test";
 
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import { channel } from "../../src/server/channels/channel-builder.js";
 import { ChannelsService } from "../../src/server/channels/service.js";
@@ -739,6 +739,209 @@ describe("ordered channel event ledger", () => {
 		await events.drain();
 		expect(sink.frames).toHaveLength(1);
 		expect(sink.closeReasons).toEqual([]);
+	});
+
+	test("a connected subscriber whose unread events are removed gets a gap, not the next surviving event", async () => {
+		// Retention cleanup on another node deletes rows a live subscriber has
+		// not read yet. Delivery used to jump the hole in silence: the sink saw
+		// 1, 2, 3, 6 with no gap frame, no close and nothing logged.
+		const events = ledger(undefined, { retentionMs: 0, retentionBytes: 0 });
+		// A second instance stands in for the node that owns the publish and the
+		// retention pass; it never touches this subscriber's sink.
+		const publisher = ledger(undefined, { retentionMs: 0, retentionBytes: 0 });
+		const sink = createSink("live-gap");
+		await events.subscribeLocal({
+			subscriptionId: "live-gap-room",
+			channel: "private-room-1",
+			sink,
+		});
+		for (const id of [1, 2, 3]) {
+			await publisher.append({
+				channel: "private-room-1",
+				event: "message",
+				schemaIdentity: "room:message",
+				data: { id },
+			});
+		}
+		await events.drain();
+		expect(sink.frames.map((frame) => frame.data.id)).toEqual([1, 2, 3]);
+
+		for (const id of [4, 5, 6]) {
+			await publisher.append({
+				channel: "private-room-1",
+				event: "message",
+				schemaIdentity: "room:message",
+				data: { id },
+			});
+		}
+		await setup.app.db
+			.delete(questpieChannelEventTable)
+			.where(
+				and(
+					eq(
+						questpieChannelEventTable.channelHash,
+						hashResolvedChannel("private-room-1"),
+					),
+					inArray(questpieChannelEventTable.seq, [4, 5]),
+				),
+			);
+		await events.drain();
+
+		expect(sink.frames.at(-1)).toEqual(
+			expect.objectContaining({
+				type: "channel_gap",
+				channel: "private-room-1",
+			}),
+		);
+		expect(
+			sink.frames
+				.filter((frame) => frame.type === "channel_event")
+				.map((frame) => frame.data.id),
+		).toEqual([1, 2, 3]);
+		expect(events.hasLocalSubscription("live-gap-room")).toBe(false);
+
+		// The torn-down subscription receives nothing further.
+		await publisher.append({
+			channel: "private-room-1",
+			event: "message",
+			schemaIdentity: "room:message",
+			data: { id: 7 },
+		});
+		await events.drain();
+		expect(
+			sink.frames.filter((frame) => frame.type === "channel_event"),
+		).toHaveLength(3);
+	});
+
+	test("one log read serves every subscriber on a channel", async () => {
+		// Reads were issued per subscriber: 50 subscribers on one channel cost
+		// 50 identical `seq > cursor` scans for a single event.
+		const events = ledger();
+		const reads: number[] = [];
+		const store = events as unknown as {
+			selectEvents: (channelHash: string, afterSeq: number) => Promise<unknown>;
+		};
+		const selectEvents = store.selectEvents.bind(events);
+		store.selectEvents = (channelHash: string, afterSeq: number) => {
+			reads.push(afterSeq);
+			return selectEvents(channelHash, afterSeq);
+		};
+
+		const sinks = [] as ReturnType<typeof createSink>[];
+		for (let index = 0; index < 20; index++) {
+			const sink = createSink(`shared-read-${index}`);
+			sinks.push(sink);
+			await events.subscribeLocal({
+				subscriptionId: `shared-read-${index}`,
+				channel: "private-room-1",
+				sink,
+			});
+		}
+		reads.length = 0;
+		await events.append({
+			channel: "private-room-1",
+			event: "message",
+			schemaIdentity: "room:message",
+			data: { id: 1 },
+		});
+		await events.drain();
+
+		expect(sinks.every((sink) => sink.frames.length === 1)).toBe(true);
+		// Two drain passes (the append's own, and the explicit one), one read each.
+		expect(reads.length).toBeLessThanOrEqual(2);
+	});
+
+	test("cleanup names the retention cap that actually bound", async () => {
+		// retentionBytes defaults to 64 MB and retentionMs to 24 h. The byte cap
+		// wins long before the day is up and used to do it silently.
+		const warnings: string[] = [];
+		const events = new ChannelEventLedger(
+			setup.app.db,
+			undefined,
+			undefined,
+			{ retentionMs: 24 * 60 * 60 * 1000, retentionBytes: 200 },
+			{ warn: (message: string) => warnings.push(message), error: () => {} },
+		);
+		ledgers.add(events);
+		for (const id of [1, 2, 3, 4]) {
+			await events.append({
+				channel: "private-room-1",
+				event: "message",
+				schemaIdentity: "room:message",
+				data: { id, filler: "z".repeat(120) },
+			});
+		}
+		await events.cleanup();
+
+		expect(warnings).toHaveLength(1);
+		expect(warnings[0]).toContain("retentionBytes");
+		expect(warnings[0]).toContain("retentionMs");
+		const remaining = await setup.app.db
+			.select()
+			.from(questpieChannelEventTable);
+		expect(remaining.length).toBeLessThan(4);
+	});
+
+	test("cleanup deletes in bounded statements instead of one transaction per row", async () => {
+		const events = ledger(undefined, {
+			retentionMs: 60_000,
+			retentionBytes: 0,
+		});
+		for (let id = 0; id < 40; id++) {
+			await events.append({
+				channel: "private-room-1",
+				event: "message",
+				schemaIdentity: "room:message",
+				data: { id },
+			});
+		}
+		await setup.app.db.execute(
+			sql`update questpie_channel_event set created_at = now() - interval '1 day'`,
+		);
+		// Count every write statement cleanup issues, whether it goes through the
+		// query builder or raw SQL, and whether it runs on the connection or
+		// inside a transaction.
+		let statements = 0;
+		const db = setup.app.db as Record<string, any>;
+		const original = {
+			execute: db.execute.bind(setup.app.db),
+			delete: db.delete.bind(setup.app.db),
+			transaction: db.transaction.bind(setup.app.db),
+		};
+		const count = <T>(value: T): T => {
+			statements += 1;
+			return value;
+		};
+		db.execute = (...args: any[]) => count(original.execute(...args));
+		db.delete = (...args: any[]) => count(original.delete(...args));
+		db.transaction = (callback: (tx: any) => any, ...rest: any[]) =>
+			original.transaction(
+				(tx: any) =>
+					callback(
+						new Proxy(tx, {
+							get(target, property, receiver) {
+								const value = Reflect.get(target, property, receiver);
+								if (property !== "execute" && property !== "delete") {
+									return value;
+								}
+								return (...args: any[]) => count(value.apply(target, args));
+							},
+						}),
+					),
+				...rest,
+			);
+		try {
+			await events.cleanup();
+		} finally {
+			Object.assign(db, original);
+		}
+
+		expect(await setup.app.db.select().from(questpieChannelEventTable)).toEqual(
+			[],
+		);
+		// Advisory lock, retention report and the deletes. Never proportional to
+		// the row count.
+		expect(statements).toBeLessThanOrEqual(4);
 	});
 
 	test("slow local sink closes instead of dropping and continuing", async () => {

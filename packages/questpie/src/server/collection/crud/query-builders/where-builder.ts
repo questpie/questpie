@@ -9,7 +9,12 @@ import {
 	and,
 	type Column,
 	eq,
+	gt,
+	gte,
 	inArray,
+	lt,
+	lte,
+	ne,
 	not,
 	or,
 	type SQL,
@@ -494,6 +499,41 @@ export function resolveFieldOperatorCondition(
 /**
  * Build operator condition for a field
  *
+ * Operators that compare a column against a value OF THAT COLUMN'S OWN TYPE
+ * (`eq`, `ne`, `not`, `gt`, `gte`, `lt`, `lte`, `in`, `notIn`) go through
+ * drizzle's helpers so the value is bound with the column's own
+ * `mapToDriverValue`. That encoder is the single definition of how a value of
+ * this column's type is represented on the wire — it is what INSERT and SELECT
+ * already use — so a comparison that bypasses it compares a value encoded one
+ * way against data that was written another way.
+ *
+ * Interpolating a value into a raw `sql` template instead binds it with the
+ * NOOP encoder, handing the raw JS value to the driver and leaving the wire
+ * format up to whichever driver happens to be installed. Measured consequences
+ * of the noop path:
+ *
+ *  - `node-postgres` renders a `Date` in LOCAL time with an offset
+ *    (`2026-08-05T08:00:00.000+02:00`). Postgres discards the offset for a
+ *    `timestamp` WITHOUT time zone column — which is what `createdAt` /
+ *    `updatedAt` / `deletedAt` are (`server/db/system-columns.ts`) — so the
+ *    boundary of a range filter moves by the client's UTC offset. Under
+ *    `TZ=America/Los_Angeles` a `gt` over `updatedAt` returns rows from BEFORE
+ *    the boundary; the column encoder's `toISOString()` is UTC and matches how
+ *    the value was written. Invisible on a UTC machine.
+ *  - a `numeric` column (`f.number({ mode: "decimal" })`) receives a JS number,
+ *    so Postgres compares in float8 and silently loses precision past 2^53;
+ *    the encoder sends text and the comparison stays in `numeric`.
+ *  - an array column receives a JS array, which drizzle splats into a SQL row
+ *    constructor (`col > ($1, $2)`) rather than an array literal.
+ *
+ * Pattern operators (`like`, `ilike`, `contains`, `startsWith`, ...) compare
+ * against a PATTERN rather than a value of the column's type, so they keep the
+ * raw template — encoding `%foo%` as the column's type would be wrong.
+ *
+ * When `column` is a bare SQL expression (a localized `COALESCE`, a
+ * `virtual(sql)`) there is no encoder to apply and drizzle's `bindIfParam`
+ * leaves the value untouched, exactly as before.
+ *
  * @param column - The column to apply the operator to
  * @param op - The operator name (eq, ne, gt, gte, lt, lte, in, etc.)
  * @param value - The value for the operator
@@ -508,21 +548,21 @@ export function buildOperatorCondition(
 		case "eq":
 			return eq(column, value);
 		case "ne":
-			return sql`${column} != ${value}`;
+			return ne(column, value);
 		case "not":
 			// Handle "not" operator: { field: { not: value } }
 			if (value === null) {
 				return sql`${column} IS NOT NULL`;
 			}
-			return sql`${column} != ${value}`;
+			return ne(column, value);
 		case "gt":
-			return sql`${column} > ${value}`;
+			return gt(column, value);
 		case "gte":
-			return sql`${column} >= ${value}`;
+			return gte(column, value);
 		case "lt":
-			return sql`${column} < ${value}`;
+			return lt(column, value);
 		case "lte":
-			return sql`${column} <= ${value}`;
+			return lte(column, value);
 		case "in":
 			return Array.isArray(value) ? inArray(column, value) : undefined;
 		case "notIn":

@@ -26,7 +26,7 @@ describe.skipIf(!databaseUrl)("realtime txid PostgreSQL ordering", () => {
 		}
 	});
 
-	it("serializes outbox sequence allocation across real connections", async () => {
+	it("captures from two open transactions without serializing them", async () => {
 		const broker: ChangeBroker = {
 			start: async () => {},
 			stop: async () => {},
@@ -40,6 +40,7 @@ describe.skipIf(!databaseUrl)("realtime txid PostgreSQL ordering", () => {
 			},
 		);
 		await runTestDbMigrations(setup.app);
+		const baseCursor = await (setup.app.realtime as any).readSettledHead();
 		const baseSeq = await setup.app.realtime.getLatestSeq();
 		let markFirstAppended = () => {};
 		const firstAppended = new Promise<void>((resolve) => {
@@ -76,8 +77,11 @@ describe.skipIf(!databaseUrl)("realtime txid PostgreSQL ordering", () => {
 				secondSettled = true;
 				return event;
 			});
+			// Capture used to take an exclusive lock on one head row and hold it to
+			// COMMIT, so this second capture could not finish until the first
+			// transaction ended — the whole fleet's write ceiling.
 			await new Promise((resolve) => setTimeout(resolve, 100));
-			expect(secondSettled).toBe(false);
+			expect(secondSettled).toBe(true);
 
 			releaseFirst();
 			const [firstEvent, secondEvent] = await Promise.all([first, second]);
@@ -85,7 +89,7 @@ describe.skipIf(!databaseUrl)("realtime txid PostgreSQL ordering", () => {
 				baseSeq + 1,
 				baseSeq + 2,
 			]);
-			const delivered = await setup.app.realtime.readSince(baseSeq);
+			const delivered = await (setup.app.realtime as any).readAfter(baseCursor);
 			expect(
 				delivered.map((event) => ({
 					seq: event.seq,

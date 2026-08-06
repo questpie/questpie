@@ -86,14 +86,16 @@ the runtime immediately drains from its durable sequence cursor.
 
 The runtime also schedules unconditional slow reconciliation while a broker is
 active. It drains both durable sources: the live-query outbox and the channel
-delivery ledger. Every new writer locks the singleton outbox head inside the
-business transaction before inserting, so sequence order is commit order. An
-outbox drain reads strictly after its cursor and advances only after local
-dispatch. Native deltas have a two-phase rollout gate: deploy every writer with
-`nativeDeltas` disabled first, then enable it only after no legacy writer can
-append without the head lock. A channel drain follows the ordered-ledger rules
-below. These drains are the guarantee; broker delivery is only the latency
-optimization.
+delivery ledger. Writers take no shared lock, so sequence order is NOT commit
+order; an outbox drain instead reads only rows whose `txid` is below
+`pg_snapshot_xmin(pg_current_snapshot())`, ordered by `(txid, seq)`, and
+advances that composite cursor only after local dispatch. Every transaction
+below the watermark has ended, and newly eligible rows always sort after the
+cursor, so the delivered prefix is contiguous. Native deltas have a two-phase
+rollout gate: deploy every replica with `nativeDeltas` disabled first, then
+enable it only after no replica can still order the outbox by sequence alone. A
+channel drain follows the ordered-ledger rules below. These drains are the
+guarantee; broker delivery is only the latency optimization.
 
 Mutation capture and notification have different durability requirements:
 
@@ -375,6 +377,19 @@ On resume, the runtime compares `sinceSeq` with the retained outbox horizon:
 
 No code path treats an unavailable cursor as caught up. Resume never produces a
 silent gap.
+
+`sinceSeq` is a scalar compatibility hint, not the composite drain position, and
+only the service can decide whether it is still current. Every `seq` a client is
+stamped with comes from a settled row returned by `getLatestSeq()` — not
+`max(seq)`, because a visible row can still be waiting on an older open
+transaction. Resume answers `current` only when that settled row is exactly
+`sinceSeq` AND no retained row carries a higher transaction id. The second test
+is what catches a change with a LOWER sequence that committed after the client
+stopped, which comparing sequences cannot see. Retention preserves this proof by
+starting at `settled_at`, the first cleanup observation below PostgreSQL's
+settlement frontier; it never prunes a row merely because its transaction began
+long ago. Anything unverifiable recomputes once; an unchanged result is
+suppressed by the snapshot hash, so the wire stays quiet.
 
 ## Native-delta identity and queue ownership
 
@@ -916,23 +931,23 @@ verification, load-balancer affinity is removed.
 
 ## Fifteen-invariant gate
 
-| Invariant | Concrete mechanism                                                                                                                              | Required proof                                                                         |
-| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| H1        | Both seams start/stop with app lifecycle; no subscriber-gated broker start.                                                                     | Write-only instance wakes a separate subscriber instance.                              |
-| H2        | Lossy wake contract plus unconditional poll, reconnect drain, head-locked commit order, and the two-phase native-delta rollout gate.            | Drop/reorder wakes; prove commit-order capture and snapshot fallback during rollout.   |
-| H3        | Logical-operation batch guard; one in-tx append; caught post-commit publish.                                                                    | Exact event/insert/notify counts and response-path latency assertion.                  |
-| H4        | Scheduler keyed by topic and access equivalence; immutable byte fan-out; hash suppression; pre/post match.                                      | N equivalent sinks cause one query and unchanged results emit no frame.                |
-| H5        | Admission config, pre-registration access execution, bounded concurrency, finite limits.                                                        | Cap matrix and denied-topic teardown tests.                                            |
-| H6        | `ClientSink.write()` busy/throw contract, latest-wins replacement, bounded ordered queue, shared ticker, terminal cleanup.                      | Slow and failed sink tests prove bounded memory and zero listeners/timers after close. |
-| H7        | `sinceSeq`, revisioned complete desired topology, durable ownership/fencing, jittered reconnect, ping watchdog, forced reset outside retention. | Cross-replica topology, resume, reconciliation, and incremental mount tests.           |
-| H8        | Discriminated `find`/`count`/`get` topic union.                                                                                                 | Live count runs count and transfers O(1) data.                                         |
-| H9        | Notice-only broker and per-session private WS live-query channel with authorized refetch.                                                       | Cross-session WS test proves no ACL snapshot reaches a shared channel.                 |
-| H10       | Default time retention, no local watermark deletion, bounded replay infrastructure.                                                             | Cleanup with zero subscribers and multiple instances.                                  |
-| H11       | Caught async, isolated listeners, 42P01-only silence, client error/close, coarse session refresh.                                               | Failure-injection matrix produces no unhandled rejection or hanging client.            |
-| H12       | Non-throwing observer events for broker, drain, refresh, buffers, admission, resume, and failures.                                              | Observer contract tests plus sensitive-label audit.                                    |
-| H13       | Mutation and outbox append share the transaction; wake is post-commit.                                                                          | Crash-window rollback/commit/reconcile tests.                                          |
-| H14       | Separate `ChangeBroker` and `ClientTransport`; latest-snapshot and ordered-event QoS have different queue/replay rules.                         | Interface compile test and cross-driver QoS matrix.                                    |
-| H15       | Session-scoped default access key; cross-principal sharing only by explicit deterministic resolver.                                             | Adversarial row, field, and `afterRead` isolation tests.                               |
+| Invariant | Concrete mechanism                                                                                                                                              | Required proof                                                                                          |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| H1        | Both seams start/stop with app lifecycle; no subscriber-gated broker start.                                                                                     | Write-only instance wakes a separate subscriber instance.                                               |
+| H2        | Lossy wake contract plus unconditional poll, reconnect drain, `(txid, seq)` cursor below the visibility watermark, and the two-phase native-delta rollout gate. | Drop/reorder wakes; prove no row is skipped when txid and seq invert; snapshot fallback during rollout. |
+| H3        | Logical-operation batch guard; one in-tx append; caught post-commit publish.                                                                                    | Exact event/insert/notify counts and response-path latency assertion.                                   |
+| H4        | Scheduler keyed by topic and access equivalence; immutable byte fan-out; hash suppression; pre/post match.                                                      | N equivalent sinks cause one query and unchanged results emit no frame.                                 |
+| H5        | Admission config, pre-registration access execution, bounded concurrency, finite limits.                                                                        | Cap matrix and denied-topic teardown tests.                                                             |
+| H6        | `ClientSink.write()` busy/throw contract, latest-wins replacement, bounded ordered queue, shared ticker, terminal cleanup.                                      | Slow and failed sink tests prove bounded memory and zero listeners/timers after close.                  |
+| H7        | `sinceSeq`, revisioned complete desired topology, durable ownership/fencing, jittered reconnect, ping watchdog, forced reset outside retention.                 | Cross-replica topology, resume, reconciliation, and incremental mount tests.                            |
+| H8        | Discriminated `find`/`count`/`get` topic union.                                                                                                                 | Live count runs count and transfers O(1) data.                                                          |
+| H9        | Notice-only broker and per-session private WS live-query channel with authorized refetch.                                                                       | Cross-session WS test proves no ACL snapshot reaches a shared channel.                                  |
+| H10       | Default time retention, no local watermark deletion, bounded replay infrastructure.                                                                             | Cleanup with zero subscribers and multiple instances.                                                   |
+| H11       | Caught async, isolated listeners, 42P01-only silence, client error/close, coarse session refresh.                                                               | Failure-injection matrix produces no unhandled rejection or hanging client.                             |
+| H12       | Non-throwing observer events for broker, drain, refresh, buffers, admission, resume, and failures.                                                              | Observer contract tests plus sensitive-label audit.                                                     |
+| H13       | Mutation and outbox append share the transaction; wake is post-commit.                                                                                          | Crash-window rollback/commit/reconcile tests.                                                           |
+| H14       | Separate `ChangeBroker` and `ClientTransport`; latest-snapshot and ordered-event QoS have different queue/replay rules.                                         | Interface compile test and cross-driver QoS matrix.                                                     |
+| H15       | Session-scoped default access key; cross-principal sharing only by explicit deterministic resolver.                                                             | Adversarial row, field, and `afterRead` isolation tests.                                                |
 
 Dependent implementation tasks may start only after this table is reviewed
 15/15 and any blocker found by the grill is represented on the board.

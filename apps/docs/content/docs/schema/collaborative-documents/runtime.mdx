@@ -61,6 +61,61 @@ Pick one credential per request. A request carrying both a cookie and an
 	service reports itself unavailable rather than throwing.
 </Callout>
 
+## Validate and project an acknowledged cut
+
+Use `crdt.projection.prepareAcknowledgement` when the canonical collaborative
+value and application-owned projections must advance together. The callback
+runs after QUESTPIE has materialized and locked one complete aggregate cut, but
+before it writes canonical fields, projection cursors, owner metadata or the
+realtime outbox event:
+
+```ts
+import { sql } from "drizzle-orm";
+import { runtimeConfig } from "questpie/app";
+
+export default runtimeConfig({
+	db: { url: process.env.DATABASE_URL! },
+	crdt: {
+		namespace: "my-app",
+		engines: { text: yjsServerEngine() },
+		projection: {
+			async prepareAcknowledgement(input) {
+				const markdown = String(input.values.get("content"));
+				const canonical = validateAndNormalizeMarkdown(markdown);
+				const references = extractReferences(canonical);
+
+				await input.transaction.execute(sql`
+					DELETE FROM article_references
+					WHERE article_id = ${input.owner.recordId}
+				`);
+				// Insert the exact validated relation set through the same transaction.
+
+				return {
+					values: new Map(input.values).set("content", canonical),
+					ownerValues: {
+						contentHash: hash(canonical),
+						plainText: toPlainText(canonical),
+					},
+				};
+			},
+		},
+	},
+});
+```
+
+`values` is the complete authoritative aggregate cut; `changed` identifies the
+CRDT fields whose cursors advanced. `contributors` identifies every Human or
+verified Agent commit included since the previous projected cut, so the
+consumer can recheck application authority without treating the hook as a new
+grant.
+
+Throw to reject the cut. Callback writes, canonical values, `ownerValues`,
+projection cursors and the realtime event then roll back together. The callback
+may be retried, so derived writes must be deterministic and idempotent. A
+returned `values` map must contain exactly the same field paths and value kinds
+as the input. `ownerValues` may update only ordinary owner columns; CRDT fields
+and system identity/revision/timestamp columns remain framework-owned.
+
 ## The text engine
 
 `yjsServerEngine()` merges untrusted bytes in worker threads inside the process

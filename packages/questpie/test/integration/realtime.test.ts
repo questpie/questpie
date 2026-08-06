@@ -455,6 +455,64 @@ describe("realtime matrix", () => {
 			await reader.close();
 		});
 
+		it("says whether a delete frame is a removal or a predicate exit", async () => {
+			const adapter = new MockChangeBroker();
+			const posts = collection("posts")
+				.fields(({ f }) => ({
+					title: f.textarea().required(),
+					archived: f.boolean().default(false),
+				}))
+				.access({ read: true, create: true, update: true, delete: true });
+			setup = await buildMockApp(
+				{ collections: { posts } },
+				{ realtime: { changeBroker: adapter, nativeDeltas: true } },
+			);
+			await runTestDbMigrations(setup.app);
+			const context = createTestContext();
+			const archivedLater = await setup.app.collections.posts.create(
+				{ title: "Archived later", archived: false },
+				context,
+			);
+			const deletedLater = await setup.app.collections.posts.create(
+				{ title: "Deleted later", archived: false },
+				context,
+			);
+			const subscribe = (...a: [Request, Record<string, string>, any?]) =>
+				realtimeSubscribe(setup.app, a[0], a[1], a[2], { accessMode: "user" });
+			const response = await subscribe(
+				createRealtimeRequest([
+					collectionTopic("posts", {
+						mode: "delta",
+						where: { archived: false },
+					}),
+				]),
+				{},
+				undefined,
+			);
+			const reader = createSSEReader(response.body!);
+			expect((await reader.readSnapshot()).data.data.docs).toHaveLength(2);
+
+			await setup.app.collections.posts.update(
+				{ id: archivedLater.id, data: { archived: true } },
+				context,
+			);
+			expect(await reader.readSnapshot()).toMatchObject({
+				event: "delete",
+				data: { key: archivedLater.id, reason: "left_predicate" },
+			});
+			expect((await reader.readSnapshot()).event).toBe("up-to-date");
+
+			await setup.app.collections.posts.delete(
+				{ id: deletedLater.id },
+				context,
+			);
+			expect(await reader.readSnapshot()).toMatchObject({
+				event: "delete",
+				data: { key: deletedLater.id, reason: "deleted" },
+			});
+			await reader.close();
+		});
+
 		it("rebootstraps when a relational access dependency changes", async () => {
 			const adapter = new MockChangeBroker();
 			const documents = collection("documents")
@@ -2343,6 +2401,7 @@ describe("realtime matrix", () => {
 				locale: null,
 				payload: { name: "old" },
 				createdAt: oldCreatedAt,
+				settledAt: oldCreatedAt,
 			});
 
 			const ctx = createTestContext();
@@ -2379,6 +2438,7 @@ describe("realtime matrix", () => {
 				operation: "create",
 				recordId: "expired-headless-row",
 				createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+				settledAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
 			});
 
 			await setup.app.realtime.cleanupOutbox(true);
@@ -3725,7 +3785,7 @@ describe("realtime matrix", () => {
 			expect((await reader.readSnapshot()).event).toBe("snapshot");
 			await new Promise((resolve) => setTimeout(resolve, 20));
 
-			const readSpy = spyOn(setup.app.realtime, "readSince").mockRejectedValue(
+			const readSpy = spyOn(setup.app.realtime, "readAfter").mockRejectedValue(
 				new Error("drain failed"),
 			);
 			try {
