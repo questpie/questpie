@@ -3,7 +3,7 @@
 	"packages": {
 		"admin": {
 			": any": 453,
-			"as any": 458,
+			"as any": 459,
 			"as unknown as": 27,
 			"@ts-expect-error": 0
 		},
@@ -56,8 +56,8 @@
 			"@ts-expect-error": 0
 		},
 		"questpie": {
-			": any": 542,
-			"as any": 462,
+			": any": 544,
+			"as any": 464,
 			"as unknown as": 50,
 			"@ts-expect-error": 0
 		},
