@@ -11,6 +11,9 @@ and commit order no longer require every writer in every replica to update one
 shared head row. In the checked-in PostgreSQL probe this changed 16-writer
 throughput from 35 to 267 captures/s and p99 from 2404 ms to 222 ms.
 
+Remove the obsolete `questpie_realtime_head` table entirely. The generated
+migration drops it because `(txid, seq)` is now the only realtime drain cursor.
+
 Outbox retention now starts when a row is first observed below the settlement
 frontier, not at transaction start. A long-running or prepared transaction can
 therefore delay delivery, but cleanup cannot delete the committed rows it holds

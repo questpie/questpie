@@ -260,7 +260,6 @@
 		"questpieChannelEventTable": "ordered channel infrastructure table managed by realtime migrations",
 		"questpieChannelHeadTable": "ordered channel infrastructure table managed by realtime migrations",
 		"questpieChannelPresenceTable": "channel presence infrastructure table managed by realtime migrations",
-		"questpieRealtimeHeadTable": "durable realtime commit-order cursor infrastructure table",
 		"questpieRealtimeLogTable": "realtime outbox table (managed by adapter migrations)",
 		"questpieRealtimeTopologyTable": "durable realtime infrastructure table managed by realtime migrations",
 		"questpieSearchFacetsTable": "search infrastructure table",

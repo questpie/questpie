@@ -88,6 +88,7 @@ describe.skipIf(!databaseUrl)("ordered channel ledger on PostgreSQL", () => {
 
 	afterAll(async () => {
 		for (const value of ledgers) await value.destroy();
+		await setup.app.migrations.down();
 		await setup.cleanup();
 	});
 

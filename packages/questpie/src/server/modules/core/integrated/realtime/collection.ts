@@ -75,20 +75,6 @@ export const questpieRealtimeLogTable = pgTable(
 	],
 );
 
-/**
- * Global outbox sequence head.
- *
- * @deprecated Unused since the capture path stopped serializing on it. Kept so
- * upgrading applications do not need a DROP TABLE migration; no code reads or
- * writes it. `questpie_realtime_log.seq` is the sequence of record and
- * `(txid, seq)` is the drain cursor.
- */
-export const questpieRealtimeHeadTable = pgTable("questpie_realtime_head", {
-	id: text("id").primaryKey(),
-	lastSeq: bigint("last_seq", { mode: "number" }).default(0).notNull(),
-	updatedAt: systemTimestamp("updated_at").defaultNow().notNull(),
-});
-
 /** Per-resolved-channel sequence head. Updating this row serializes publishers. */
 export const questpieChannelHeadTable = pgTable("questpie_channel_head", {
 	channelHash: text("channel_hash").primaryKey(),

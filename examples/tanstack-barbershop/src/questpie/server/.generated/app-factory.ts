@@ -65,6 +65,7 @@ import _mig_20260731T000041_realtimeIdempotency1 from "../migrations/20260731T00
 import _mig_20260731T084650_realtimeIdempotency1 from "../migrations/20260731T084650_realtime-idempotency-1";
 import _mig_20260805T165255_realtimeDrainCursorIndex from "../migrations/20260805T165255_realtime-drain-cursor-index";
 import _mig_20260805T180812_realtimeSettlementRetention from "../migrations/20260805T180812_realtime-settlement-retention";
+import _mig_20260806T151905_removeRealtimeHead from "../migrations/20260806T151905_remove-realtime-head";
 
 // ── Seeds ──────────────────────────────────────────────────
 import _seed_blogPosts from "../seeds/blog-posts";
@@ -139,7 +140,7 @@ const _appDefinition = ({
 		appointmentConfirmation: _email_appointmentConfirmation,
 		newBlogPost: _email_newBlogPost,
 	},
-	migrations: [_mig_20260206T174642_gentle_azure_eagle, _mig_20260206T180920_fancy_green_tiger, _mig_20260211T100836_calm_blue_phoenix, _mig_20260218T195452_calm_blue_dragon, _mig_20260218T223923_fancy_blue_panda, _mig_20260218T235924_kind_crimson_falcon, _mig_20260307T122102_eager_red_eagle, _mig_20260307T135142_fancy_orange_tiger, _mig_20260424T221327_bold_yellow_phoenix, _mig_20260427T093217_eager_blue_phoenix, _mig_20260429T170546_kind_yellow_eagle, _mig_20260615T084209_swift_orange_eagle, _mig_20260712T094709_bold_red_griffin, _mig_20260712T195414_eager_red_tiger, _mig_20260725T184252_realtimeV3Umbrella, _mig_20260726T163042_queueTransactionalDispatch, _mig_20260730T182023_optimisticConcurrencyRevisions, _mig_20260731T000041_realtimeIdempotency1, _mig_20260731T084650_realtimeIdempotency1, _mig_20260805T165255_realtimeDrainCursorIndex, _mig_20260805T180812_realtimeSettlementRetention],
+	migrations: [_mig_20260206T174642_gentle_azure_eagle, _mig_20260206T180920_fancy_green_tiger, _mig_20260211T100836_calm_blue_phoenix, _mig_20260218T195452_calm_blue_dragon, _mig_20260218T223923_fancy_blue_panda, _mig_20260218T235924_kind_crimson_falcon, _mig_20260307T122102_eager_red_eagle, _mig_20260307T135142_fancy_orange_tiger, _mig_20260424T221327_bold_yellow_phoenix, _mig_20260427T093217_eager_blue_phoenix, _mig_20260429T170546_kind_yellow_eagle, _mig_20260615T084209_swift_orange_eagle, _mig_20260712T094709_bold_red_griffin, _mig_20260712T195414_eager_red_tiger, _mig_20260725T184252_realtimeV3Umbrella, _mig_20260726T163042_queueTransactionalDispatch, _mig_20260730T182023_optimisticConcurrencyRevisions, _mig_20260731T000041_realtimeIdempotency1, _mig_20260731T084650_realtimeIdempotency1, _mig_20260805T165255_realtimeDrainCursorIndex, _mig_20260805T180812_realtimeSettlementRetention, _mig_20260806T151905_removeRealtimeHead],
 	seeds: [_seed_blogPosts, _seed_demoData, _seed_siteSettings],
 	fieldTypes: {
 		color: _ftype_color,

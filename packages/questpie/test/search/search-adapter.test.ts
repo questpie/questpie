@@ -164,6 +164,7 @@ describe("PostgresSearchAdapter", () => {
 
 			// Realtime table (always included)
 			expect(schema.questpie_realtime_log).toBeDefined();
+			expect(schema.questpie_realtime_head).toBeUndefined();
 		});
 	});
 

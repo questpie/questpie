@@ -56,7 +56,6 @@ import {
 	questpieChannelEventTable,
 	questpieChannelHeadTable,
 	questpieChannelPresenceTable,
-	questpieRealtimeHeadTable,
 	questpieRealtimeLogTable,
 	questpieRealtimeTopologyTable,
 } from "#questpie/server/modules/core/integrated/realtime/collection.js";
@@ -1266,7 +1265,6 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 		// 3. Always include realtime log table since realtime service is always initialized
 		schema.questpie_realtime_log = questpieRealtimeLogTable;
-		schema.questpie_realtime_head = questpieRealtimeHeadTable;
 		schema.questpie_channel_head = questpieChannelHeadTable;
 		schema.questpie_channel_event = questpieChannelEventTable;
 		schema.questpie_channel_dispatch = questpieChannelDispatchTable;

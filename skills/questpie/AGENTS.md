@@ -10420,6 +10420,25 @@ TanStack DB and TanStack React DB unchanged. They are here so a component import
 from one place; their semantics and their documentation are upstream's. Only
 `createQuestpieCollections` is QUESTPIE's own.
 
+Optimistic-concurrency failures are normalized to
+`QuestpieDbConflictError`. Catch it when a mutation should refetch stale rows
+before offering a retry; its `collection`, `operation`, and `ids` properties
+identify the failed atomic batch.
+
+```ts
+import { QuestpieDbConflictError } from "@questpie/tanstack-db";
+
+try {
+	await db.posts.update(id, (draft) => {
+		draft.title = "Canonical title";
+	});
+} catch (error) {
+	if (error instanceof QuestpieDbConflictError) {
+		await queryClient.invalidateQueries();
+	}
+}
+```
+
 ## Types
 
 `QuestpieDb` is the collection map, and the rest describe one collection:
