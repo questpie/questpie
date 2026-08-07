@@ -51,7 +51,7 @@
 		"brace-expansion": "5.0.9",
 		"fast-uri": "^3.1.5",
 		"hono": "^4.12.25",
-		"js-yaml": "^4.3.0",
+		"js-yaml": "^4.3.1",
 		"linkify-it": "^5.0.2",
 		"postcss": "^8.5.18",
 		"read-yaml-file": "^2.1.0",
