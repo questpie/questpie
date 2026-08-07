@@ -53,6 +53,7 @@ describe("barbershop generated OpenAPI route snapshot", () => {
 			"/api/realtime/config",
 			"/api/realtime/crdt/exchange",
 			"/api/realtime/crdt/open",
+			"/api/transaction",
 			"/api/{collection}/{id}/purge",
 			"/api/create-booking",
 			"/api/get-active-barbers",
@@ -70,7 +71,7 @@ describe("barbershop generated OpenAPI route snapshot", () => {
 		};
 
 		expect(routeSnapshot).toEqual({
-			pathCount: 61,
+			pathCount: 62,
 			methods: {
 				"/api/channels/auth": ["options", "post"],
 				"/api/channels/config": ["get"],
@@ -84,6 +85,7 @@ describe("barbershop generated OpenAPI route snapshot", () => {
 				"/api/realtime/config": ["get"],
 				"/api/realtime/crdt/exchange": ["post"],
 				"/api/realtime/crdt/open": ["post"],
+				"/api/transaction": ["post"],
 				"/api/{collection}/{id}/purge": ["post"],
 			},
 		});

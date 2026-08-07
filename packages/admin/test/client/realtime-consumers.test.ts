@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import { QueryClient } from "@tanstack/react-query";
-import type { QuestpieApp, QuestpieClient } from "questpie/client";
+import {
+	deriveFindDeltas,
+	type QuestpieApp,
+	type QuestpieClient,
+} from "questpie/client";
 
 import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
 
@@ -115,6 +119,84 @@ describe("admin realtime consumer regression", () => {
 			},
 			{ resourceType: "global", resource: "siteSettings", operation: "get" },
 		]);
+	});
+
+	test("a paged live list keeps the page counts the pager reads", async () => {
+		// list-view.tsx and table-view.tsx drive their pager off listData.totalPages
+		// and listData.totalDocs, and both subscribe with the page window.
+		const bootstrap = {
+			docs: [{ id: "post-41" }, { id: "post-42" }],
+			totalDocs: 138,
+			limit: 2,
+			totalPages: 69,
+			page: 21,
+			pagingCounter: 41,
+			hasPrevPage: true,
+			hasNextPage: true,
+			prevPage: 20,
+			nextPage: 22,
+		};
+		// A write on an earlier page slides this window along by one row. The
+		// server re-runs the windowed query, so the second frame is a whole
+		// snapshot and the client derives the keyed events itself.
+		const slid = {
+			...bootstrap,
+			docs: [{ id: "post-40" }, { id: "post-41" }],
+			totalDocs: 139,
+			totalPages: 70,
+		};
+		async function* snapshots() {
+			yield {
+				type: "snapshot" as const,
+				topicId: "collection:posts:find",
+				seq: 1,
+				data: bootstrap,
+			};
+			yield {
+				type: "snapshot" as const,
+				topicId: "collection:posts:find",
+				seq: 2,
+				data: slid,
+			};
+		}
+		const client = {
+			collections: new Proxy(
+				{},
+				{ get: () => ({ find: async () => ({ docs: [], totalDocs: 0 }) }) },
+			),
+			globals: {},
+			routes: {},
+			realtime: {
+				subscribe: () => () => {},
+				streamEvents: () => deriveFindDeltas(snapshots()),
+				destroy: () => {},
+				topicCount: 0,
+				subscriberCount: 0,
+			},
+		} as unknown as QuestpieClient<QuestpieApp>;
+		const queries = createQuestpieQueryOptions(client);
+
+		const listData = (await runQuery(
+			queries.collections.posts.find(
+				{ limit: 2, offset: 40 },
+				{ realtime: true },
+			),
+		)) as Record<string, unknown>;
+
+		expect(listData).toMatchObject({
+			totalDocs: 139,
+			limit: 2,
+			totalPages: 70,
+			page: 21,
+			pagingCounter: 41,
+			hasPrevPage: true,
+			hasNextPage: true,
+		});
+		expect(listData.docs).toEqual([{ id: "post-40" }, { id: "post-41" }]);
+		// The pager's next button is disabled on page >= totalPages.
+		expect((listData.page as number) >= (listData.totalPages as number)).toBe(
+			false,
+		);
 	});
 
 	test("direct invalidation treats one bulk event as one cache wake", () => {

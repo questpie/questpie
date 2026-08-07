@@ -5,6 +5,7 @@ import type {
 	CollectionSelectFromApp,
 	FindManyOptions,
 	GetCollection,
+	LiveQueryOptions,
 	QuestpieApp,
 	QuestpieClient,
 	ResolveRelationsDeep,
@@ -45,6 +46,27 @@ export type FindOptionsOf<
 	| "localeFallback"
 	| "includeDeleted"
 	| "stage"
+>;
+
+/**
+ * The find options a `syncMode: "snapshot"` collection may use: the ones the
+ * realtime topic carries. `live()` re-runs the query server-side from those
+ * topic fields alone, so anything it drops would make the live snapshot and the
+ * `find()` repair describe different rows. Derived from `LiveQueryOptions` so
+ * the two cannot drift.
+ */
+export type SnapshotFindOptionsOf<
+	TApp extends QuestpieApp,
+	K extends CollectionKeys<TApp>,
+> = Pick<
+	FindOptionsOf<TApp, K>,
+	Extract<
+		keyof FindOptionsOf<TApp, K>,
+		keyof LiveQueryOptions<
+			CollectionSelectOf<TApp, K>,
+			CollectionRelationsOf<TApp, K>
+		>
+	>
 >;
 
 export type CollectionRowOf<

@@ -385,7 +385,7 @@ import type { QuestpieApp, QuestpieClient } from "questpie/client";
  * Unparameterised client type used throughout the admin library.
  * @see AnyQuestpieClient in builder/index.ts for rationale.
  */
-export type AnyQuestpieClient = QuestpieClient<any>;
+export type AnyQuestpieClient = Omit<QuestpieClient<any>, "transaction">;
 
 /**
  * Extract collection names from a QuestpieApp config

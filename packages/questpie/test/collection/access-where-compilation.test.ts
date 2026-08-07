@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
+import { sql } from "drizzle-orm";
 import { integer, pgTable, text } from "drizzle-orm/pg-core";
 
 import { collection } from "../../src/exports/index.js";
+import { realtimeSubscribe } from "../../src/server/adapters/routes/realtime.js";
 import type { CollectionBuilderState } from "../../src/server/collection/builder/types.js";
 import { buildWhereClause } from "../../src/server/collection/crud/query-builders/where-builder.js";
 import { mergeWhereWithAccess } from "../../src/server/collection/crud/shared/access-control.js";
@@ -98,10 +100,13 @@ describe("access WHERE compilation", () => {
 		);
 	});
 
-	it("rejects an untyped RAW access escape hatch", () => {
-		expect(() => compile({ RAW: () => ({}) })).toThrow(
-			"Cannot compile access predicate 'accessCompileParents.RAW'",
-		);
+	it("allows RAW under the access marker", () => {
+		expect(
+			compile({
+				RAW: ({ table }: { table: typeof parents }) =>
+					sql`${table.tenantId} = ${"tenant-a"}`,
+			}),
+		).toBeDefined();
 	});
 
 	it("does not apply strict access compilation to an ordinary user where", () => {
@@ -169,6 +174,60 @@ const validSecuredChildren = collection("valid_secured_access_children")
 	}))
 	.access({ create: true, read: true });
 
+const rawSecuredParents = collection("raw_secured_access_parents")
+	.fields(({ f }) => ({
+		name: f.text().required(),
+		tenantId: f.text().required(),
+	}))
+	.access({
+		create: true,
+		read: ({ session }) => ({
+			RAW: ({ table }) => sql`${table.tenantId} = ${session?.user.id}`,
+		}),
+	});
+
+async function readSseSnapshot(
+	response: Response,
+): Promise<Record<string, any>> {
+	const reader = response.body!.getReader();
+	const decoder = new TextDecoder();
+	let buffer = "";
+	try {
+		for (;;) {
+			const separator = buffer.indexOf("\n\n");
+			if (separator !== -1) {
+				const frame = buffer.slice(0, separator);
+				buffer = buffer.slice(separator + 2);
+				const event = frame
+					.split("\n")
+					.find((line) => line.startsWith("event:"))
+					?.slice(6)
+					.trim();
+				if (event === "session") continue;
+				const data = frame
+					.split("\n")
+					.filter((line) => line.startsWith("data:"))
+					.map((line) => line.slice(5).trim())
+					.join("");
+				return { event, data: JSON.parse(data) };
+			}
+			const next = await Promise.race([
+				reader.read(),
+				new Promise<never>((_, reject) =>
+					setTimeout(
+						() => reject(new Error("Timed out waiting for snapshot")),
+						2_000,
+					),
+				),
+			]);
+			if (next.done) throw new Error("SSE stream closed before snapshot");
+			buffer += decoder.decode(next.value, { stream: true });
+		}
+	} finally {
+		await reader.cancel().catch(() => {});
+	}
+}
+
 describe("access WHERE CRUD integration", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
@@ -179,6 +238,7 @@ describe("access WHERE CRUD integration", () => {
 				secured_access_compile_children: securedChildren,
 				valid_secured_access_parents: validSecuredParents,
 				valid_secured_access_children: validSecuredChildren,
+				raw_secured_access_parents: rawSecuredParents,
 			},
 		});
 		await runTestDbMigrations(setup.app);
@@ -234,5 +294,49 @@ describe("access WHERE CRUD integration", () => {
 		);
 
 		expect(result.docs.map((row: { name: string }) => row.name)).toEqual(["A"]);
+	});
+
+	it("allows RAW under the access marker for a realtime find subscription", async () => {
+		const crud = setup.app.collections.raw_secured_access_parents;
+		await crud.create(
+			{ name: "Allowed", tenantId: "tenant-a" },
+			createTestContext(),
+		);
+		await crud.create(
+			{ name: "Hidden", tenantId: "tenant-b" },
+			createTestContext(),
+		);
+
+		const response = await realtimeSubscribe(
+			setup.app,
+			new Request("http://localhost/realtime", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					topics: [
+						{
+							id: "raw-access",
+							resourceType: "collection",
+							resource: "raw_secured_access_parents",
+							operation: "find",
+						},
+					],
+				}),
+			}),
+			{},
+			undefined,
+			{
+				accessMode: "user",
+				getSession: async () => createMockSession({ id: "tenant-a" }),
+			},
+		);
+
+		expect(response.status).toBe(200);
+		const snapshot = await readSseSnapshot(response);
+		expect({
+			event: snapshot.event,
+			error: snapshot.data.message,
+			names: snapshot.data.data?.docs?.map((row: { name: string }) => row.name),
+		}).toEqual({ event: "snapshot", error: undefined, names: ["Allowed"] });
 	});
 });

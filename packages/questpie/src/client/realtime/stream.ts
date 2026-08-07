@@ -20,6 +20,17 @@ import { RealtimeTxidTracker } from "./txid.js";
 // Types
 // ============================================================================
 
+/**
+ * Why a keyed row left a topic's result. A store renders the two differently:
+ * a `deleted` row is gone, a row that only `left_predicate` still exists and
+ * may come back, or may already be held by another topic.
+ *
+ * - `deleted` — the row itself is gone: a hard delete, a soft delete, or a purge.
+ * - `left_predicate` — the row survives but no longer satisfies the topic's
+ *   `where` or the subscriber's access filter.
+ */
+export type RealtimeDeltaDeleteReason = "deleted" | "left_predicate";
+
 export type RealtimeStreamEvent<TData = unknown> =
 	| {
 			type: "snapshot";
@@ -44,6 +55,12 @@ export type RealtimeStreamEvent<TData = unknown> =
 			seq: number;
 			txid?: string;
 			key: string;
+			/**
+			 * Native delta frames always carry this. It is absent only when the
+			 * frame was diffed out of two snapshots ({@link deriveFindDeltas}),
+			 * which sees a row disappear and cannot tell the two apart.
+			 */
+			reason?: RealtimeDeltaDeleteReason;
 	  }
 	| {
 			type: "up-to-date";
@@ -142,23 +159,61 @@ export async function* deriveFindDeltas<
 
 type RealtimeFindEnvelope<TRow> = RealtimeFindData<TRow>;
 
-/** Metadata for an unwindowed realtime find result. */
-export function envelopeMeta<TRow>(
-	docs: readonly TRow[],
-	totalDocs = docs.length,
-) {
+/**
+ * The page window a find topic subscribed with.
+ *
+ * `limit` and `offset` are part of the topic, so the window is fixed for the
+ * subscription's lifetime and only the bootstrap frame can report it.
+ */
+export type RealtimeFindWindow = { limit?: number; page?: number };
+
+/** Read the window a previous frame established, ignoring absent fields. */
+function findWindow(
+	envelope: RealtimeFindEnvelope<unknown>,
+): RealtimeFindWindow {
+	const { limit, page } = envelope;
 	return {
-		totalDocs,
-		totalPages: 1,
-		page: 1,
-		hasNextPage: false,
-		hasPrevPage: false,
-		nextPage: null,
-		prevPage: null,
+		limit: typeof limit === "number" ? limit : undefined,
+		page: typeof page === "number" ? page : undefined,
 	};
 }
 
-/** Apply one snapshot or keyed row event to an unwindowed find result. */
+/**
+ * Rebuild find envelope metadata for a window.
+ *
+ * This mirrors the server paginator in `crud-generator.ts` field for field, so
+ * a live envelope and a re-fetched one agree. Only `totalDocs` moves between
+ * frames; `limit` and `page` are carried from the bootstrap frame because a
+ * later frame cannot know them.
+ *
+ * `limit` is widened to the row count when it would otherwise claim a page
+ * smaller than the rows on it: an unwindowed find reports `limit === totalDocs`,
+ * and that sentinel has to grow with the result.
+ */
+export function envelopeMeta<TRow>(
+	docs: readonly TRow[],
+	totalDocs = docs.length,
+	window?: RealtimeFindWindow,
+) {
+	const limit = Math.max(window?.limit ?? docs.length, docs.length);
+	const page = window?.page ?? 1;
+	const totalPages = limit > 0 ? Math.ceil(totalDocs / limit) : 1;
+	const hasPrevPage = page > 1;
+	const hasNextPage = page < totalPages;
+	return {
+		totalDocs,
+		limit,
+		totalPages,
+		page,
+		pagingCounter: (page - 1) * limit + 1,
+		hasPrevPage,
+		hasNextPage,
+		prevPage: hasPrevPage ? page - 1 : null,
+		nextPage: hasNextPage ? page + 1 : null,
+	};
+}
+
+/** Apply one snapshot or keyed row event to a find result, windowed or not. */
 export function applyRealtimeFindEvent<
 	TRow,
 	TData extends RealtimeFindEnvelope<TRow>,
@@ -172,12 +227,17 @@ export function applyRealtimeFindEvent<
 		throw new Error("Realtime find deltas require an initial snapshot");
 	}
 
+	const window = findWindow(current);
+
 	if (event.type === "up-to-date") {
+		// A heartbeat carries no meta. Falling back to the row count would shrink
+		// a windowed list's total to one page's worth of rows.
 		return {
 			...current,
 			...envelopeMeta(
 				current.docs,
-				event.meta?.totalDocs ?? current.docs.length,
+				event.meta?.totalDocs ?? current.totalDocs ?? current.docs.length,
+				window,
 			),
 		} as TData;
 	}
@@ -210,7 +270,18 @@ export function applyRealtimeFindEvent<
 		}
 	}
 
-	return { ...current, docs, ...envelopeMeta(docs) } as TData;
+	// A keyed event moves rows, not the window. It shifts the total by however
+	// many rows it actually added or removed; the `up-to-date` frame that closes
+	// the batch then replaces that estimate with the server's own count.
+	const totalDocs =
+		(current.totalDocs ?? current.docs.length) +
+		docs.length -
+		current.docs.length;
+	return {
+		...current,
+		docs,
+		...envelopeMeta(docs, totalDocs, window),
+	} as TData;
 }
 
 /** Apply snapshot/count metadata frames to a scalar realtime result. */

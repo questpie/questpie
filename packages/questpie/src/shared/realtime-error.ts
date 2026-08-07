@@ -10,6 +10,14 @@ export type RealtimeTopicRejectionReason =
 	| "query_limit"
 	| "relation_depth"
 	| "snapshot_bytes"
+	/**
+	 * The application turned collection change capture off
+	 * (`realtime.changeCapture: false`). Distinct from
+	 * `row_live_queries_disabled` because the consequences differ: there is no
+	 * outbox at all, so `sinceSeq` resume and `txid` correlation are gone too,
+	 * and no server setting short of re-enabling capture will serve this topic.
+	 */
+	| "change_capture_disabled"
 	| "row_live_queries_disabled"
 	| "collection_realtime_disabled"
 	| "connection_limit"
@@ -24,6 +32,7 @@ const REALTIME_TOPIC_REJECTION_REASONS = new Set<string>([
 	"query_limit",
 	"relation_depth",
 	"snapshot_bytes",
+	"change_capture_disabled",
 	"row_live_queries_disabled",
 	"collection_realtime_disabled",
 	"connection_limit",

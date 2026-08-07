@@ -1,19 +1,13 @@
 ---
 title: Channels
-description: A channel is a typed event stream you declare in a file. Codegen puts it on the server context, on the typed client and on the TanStack Query proxy, all carrying the Zod schemas you wrote.
-kind: guide
-package: questpie
+description: Define schema-validated application events with channel(), authorize subscribe and publish separately, then use the generated server, client, presence, and TanStack APIs over SSE or Pusher/Soketi.
 ---
 
-Live queries push rows. Reach for a channel when the thing you want to send is
-not a row. A chat message, a progress tick, a "user is typing" flag. Nothing has
-to be stored for it to arrive.
+Channels are typed application event streams built on the same realtime runtime as live queries. Define each channel once in `channels/`; codegen adds it to request contexts as `channels`, to the generated `AppConfig`, and to `client.channels`. The application API stays the same whether delivery uses the zero-infrastructure SSE path or the managed Pusher/Soketi path.
 
-## Declare it
+Use channels for transient events such as chat notifications, progress, typing, or presence. The bounded replay ledger is delivery infrastructure, **not** queryable application history. Persist messages that users must retrieve later in a collection.
 
-Put a file under your `channels/` directory. Import `channel` from
-`questpie/channels`. That entrypoint is separate from the root export because
-the API is still experimental.
+## Define a channel
 
 ```ts title="src/questpie/server/channels/chat-room.ts"
 import { channel } from "questpie/channels";
@@ -27,72 +21,72 @@ export default channel("chat-room-[roomId]")
 	.authorize({
 		subscribe: async ({ params, session, collections }) => {
 			if (!session?.user) return false;
-			const member = await collections.roomMembers.findOne({
-				where: { room: params.roomId, user: session.user.id },
-			});
-			return member !== null;
+			return Boolean(
+				await collections.rooms.findOne({
+					where: { id: params.roomId, members: { contains: session.user.id } },
+				}),
+			);
 		},
-		publish: true,
-	});
+		publish: async ({ params, session, collections }) => {
+			if (!session?.user) return false;
+			return Boolean(
+				await collections.rooms.findOne({
+					where: { id: params.roomId, members: { contains: session.user.id } },
+				}),
+			);
+		},
+	})
+	.presence(({ params, session }) => ({
+		id: session!.user.id,
+		roomId: params.roomId,
+		name: session!.user.name,
+	}));
 ```
 
-Then build the surface:
+The registry/API key is `chatRoom`, derived from the default-export filename. The explicit builder string is the stable wire pattern. Renaming the file changes the typed API and causes compile errors at call sites; it does **not** silently rename the wire channel. `[roomId]` becomes a required `{ roomId: string }` parameter everywhere.
+
+Run codegen after adding or renaming a channel:
 
 ```bash
-questpie generate
+bunx questpie generate
 ```
 
-`questpie add channel chat-room` writes the file and runs codegen for you.
+### Visibility and authorization
 
-## What that file produced
+| Builder state                         | Visibility | Subscribe          | Publish                                    |
+| ------------------------------------- | ---------- | ------------------ | ------------------------------------------ |
+| `channel(...).events(...)`            | public     | allowed by default | client publish denied by default           |
+| `.authorize(rule)`                    | private    | `rule`             | falls back to the same `rule`              |
+| `.authorize({ subscribe, publish })`  | private    | explicit rule      | explicit rule, or `subscribe` when omitted |
+| `.presence(resolver)` after authorize | presence   | authorize first    | authorize first                            |
 
-| Surface  | Where it shows up                                        |
-| -------- | -------------------------------------------------------- |
-| Server   | `ctx.channels` in every route, hook, job and workflow    |
-| Client   | `client.channels.chatRoom`                               |
-| TanStack | `q.channels.chatRoom.subscription()`                     |
-| Wire     | `private-chat-room-<roomId>`, one name per resolved room |
+Authorization receives the generated `AppContext` plus typed `params`. Use `session`, `collections`, `db`, and services directly. A false result, thrown error, or authorization timeout denies the operation. Server/system contexts may publish without a client publish grant; browser publishes still go through the framework route, authorization, rate limits, and Zod parsing.
 
-The registry key is `chatRoom`. A default export takes it from the filename,
-kebab-case turned to camelCase. A named export uses the export name instead. The
-string you pass to `channel()` is the wire pattern, not the key. Rename the file
-and your call sites break at compile time, but the wire name stays put.
+## Publish on the server
 
-Every `[param]` becomes a required string. `[roomId]` means every call needs
-`{ roomId }`, and each value resolves to its own channel. Wire patterns must be
-unique across your app and its modules, and codegen fails when two collide.
+Framework handlers receive a generated, request-bound `channels` service:
 
-## Publish from the server
-
-Handlers get a request-bound `channels` service. The event name and the payload
-type both come from the schemas you declared.
-
-```ts title="src/questpie/server/routes/send-message.post.ts"
+```ts title="src/questpie/server/routes/send-message.ts"
 import { route } from "questpie/services";
 import { z } from "zod";
 
 export default route()
 	.post()
-	.schema(z.object({ roomId: z.string(), text: z.string() }))
-	.handler(async ({ input, channels, collections }) => {
-		const message = await collections.messages.create({
-			room: input.roomId,
-			text: input.text,
-		});
+	.schema(z.object({ roomId: z.string(), id: z.string(), text: z.string() }))
+	.handler(async ({ input, channels }) => {
 		return channels.publish("chatRoom", {
 			params: { roomId: input.roomId },
 			event: "message",
-			data: { id: message.id, text: message.text },
+			data: { id: input.id, text: input.text },
 		});
 	});
 ```
 
-Zod parses `data` before the event is stored. `publish()` resolves to
-`{ eventId }`, the id that orders the channel and lets clients drop a repeat.
+The event name and input are inferred from the channel's Zod schemas. Zod transforms run before the event enters the ledger. `publish()` resolves to `{ eventId }`, the channel-local ordered id clients use for replay and deduplication.
 
-Hooks work the same way. Take `channels` off the hook argument. Do not import
-the generated `app`, and do not reach for the service through an ambient lookup.
-Contextless writes have no ambient scope.
+### Publish from collection or global hooks
+
+Use the hook's injected `{ channels }` argument. It carries the same generated types and the mutation-bound database context:
 
 ```ts
 .hooks({
@@ -106,18 +100,71 @@ Contextless writes have no ambient scope.
 })
 ```
 
-## Subscribe from the browser
+Do not import the generated `app` into a collection/hook file, and do not resolve channels later through ambient `getContext()`. Contextless update/delete calls do not guarantee an ambient scope; the injected hook argument is the reliable and transaction-aware path.
 
-`client.channels` carries one handle per channel. `subscribe()` hands back the
-function that stops it.
+## Revoke delivery authority after a domain change
+
+When a membership or authorization write removes access, call the request-bound
+service in the same transaction:
 
 ```ts
-const stop = client.channels.chatRoom.subscribe({ roomId }, (message) => {
-	if (message.event === "message") console.log(message.data.text);
-	else console.log(message.data.active);
+await channels.revokeAuthority("chatRoom", {
+	params: { roomId },
+	subject: { kind: "user", id: removedUserId },
+	idempotencyKey: `chat-room:${roomId}:${removedUserId}:membership-v2`,
 });
+```
 
-await client.channels.chatRoom.publish({
+The command advances a durable generation for the exact resolved
+channel/subject and returns `{ generation, scope }`. With SSE,
+`scope: "exact-subscription"` closes only that logical binding with
+`access_revoked`; other channel bindings on the multiplexed stream remain
+active. Fresh request context, subscribe authorization, and the presence
+resolver are evaluated outside database locks, then a short generation check
+publishes the binding, latest freshly resolved presence payload, and optional
+presence lease atomically. A stale result and stale member payload publish
+nothing. Dropped authority notices heal through a demand-driven ledger poll
+that also stops when internal revocation closes the last local binding.
+
+Pusher/Soketi reports `scope: "principal-connections"` because its termination
+API is user-wide. QUESTPIE signs the browser into Pusher with an opaque user id,
+terminates every current connection for that user, and lets reconnect obtain
+fresh user and per-channel authorization. Channel authorization waits for
+signed-user completion and rejects stale sockets or owners. An unrelated
+still-authorized binding can reconnect; the removed binding cannot.
+Provider channel auth is explicitly side-effect-free signed-blob encoding; a
+concurrent authority cut discards the blob before it can reach the browser.
+
+<Callout type="warn" title="Managed providers have an in-flight frame window">
+	Pusher cannot guarantee that a frame already accepted by the physical
+	connection will not arrive while termination is in flight. QUESTPIE's durable
+	fence blocks new ordered provider dispatch across a pending cut, and reconnect
+	plus replay reauthorize against current application state. This is
+	intentionally not described as zero-frame atomic revocation.
+</Callout>
+
+## Subscribe and publish on the client
+
+`createClient<AppConfig>()` exposes one handle per generated channel:
+
+```ts
+const stop = client.channels.chatRoom.subscribe(
+	{ roomId },
+	(message) => {
+		if (message.event === "message") {
+			console.log(message.eventId, message.data.text);
+		} else {
+			console.log(message.data.active);
+		}
+	},
+	{
+		onReady: () => setMutationEnabled(true),
+		onNotReady: () => setMutationEnabled(false),
+		onError: console.error,
+	},
+);
+
+const receipt = await client.channels.chatRoom.publish({
 	params: { roomId },
 	event: "typing",
 	data: { active: true },
@@ -126,74 +173,131 @@ await client.channels.chatRoom.publish({
 stop();
 ```
 
-`message` is a union over your event names. Narrow on `message.event` and
-`message.data` narrows with it. Use `iter()` when an `AbortSignal` fits the
-consumer better:
+`onReady` starts one admitted subscription epoch after authorization and replay
+catch-up complete. If that epoch ends, `onNotReady` runs exactly once for the
+same logical subscriber. A successful reconnect completes fresh authorization
+and catch-up, then calls `onReady` again for the next epoch. A subscriber that
+never reached `onReady` does not receive `onNotReady`, and explicitly calling
+`stop()` or aborting the subscription removes the callbacks without reporting an
+epoch end.
+
+Ordinary reconnects report the readiness transition through `onNotReady`, not
+`onError`. A terminal failure after admission calls `onNotReady` before the
+existing `onError` callback. Exceptions thrown by any lifecycle callback are
+isolated from sibling subscribers, transport cleanup, and later reconnects.
+
+Client publish is server-mediated even on Pusher/Soketi: the request uses the same dynamic auth headers as other client calls, re-evaluates `publish` authorization, validates the event with Zod, enforces payload/origin/rate limits, and only then appends the ordered event.
+
+For async iteration:
 
 ```ts
-for await (const m of client.channels.chatRoom.iter({ roomId }, { signal })) {
-	consume(m);
+for await (const message of client.channels.chatRoom.iter(
+	{ roomId },
+	{ signal: controller.signal },
+)) {
+	consume(message);
 }
 ```
 
-A client publish never touches the transport directly. It posts to
-`/channels/publish`. The server runs the publish rule there and parses the
-payload with Zod. It spends a rate-limit token last, before the event exists.
-
-<Callout type="warn" title="A channel with no `.authorize()` refuses publishes">
-	`channel("x").events({})` is public. Anyone may subscribe, and no user context
-	may publish, including your own route handlers. Add `.authorize()`.
-</Callout>
+Call `client.channels.destroy()` only when disposing the whole client-side channel runtime. Normal components should call the subscription's `stop()` function or abort their iterator.
 
 ## Presence
 
-Chain `.presence(resolver)` after `.authorize()` and the channel gains a roster.
-Only then do the roster methods appear on the client handle.
+Only a channel with `.presence()` has a callable presence API:
 
 ```ts
-// in the channel file
-.presence(({ session }) => ({ id: session!.user.id, name: session!.user.name }));
-
-// in the browser
 const members = await client.channels.chatRoom.presence({ roomId });
-const stop = client.channels.chatRoom.subscribePresence({ roomId }, render);
+// readonly Array<{ id: string; roomId: string; name: string }>
 ```
 
-Your resolver decides the member shape. The client sees it typed.
+Use `subscribePresence()` for a live typed roster, or `presenceIter()` when an `AbortSignal` fits the consumer better:
 
-## Read it with TanStack Query
+```ts
+const stop = client.channels.chatRoom.subscribePresence({ roomId }, (members) =>
+	renderRoster(members),
+);
 
-The query-options proxy covers both streams. No extra provider, no custom hook.
+for await (const members of client.channels.chatRoom.presenceIter(
+	{ roomId },
+	{ signal },
+)) {
+	renderRoster(members);
+}
+```
+
+Pusher/Soketi uses native provider presence. SSE uses Postgres leases shared by every app instance and aggregates multiple connections into one member per authenticated principal. Graceful leave is immediate; an ungraceful disconnect converges after the lease expires (30s by default).
+
+## TanStack Query
+
+The query-options proxy exposes channel subscriptions without adding a separate React provider or bespoke hook:
 
 ```tsx
 const { data: messages = [] } = useQuery(
 	q.channels.chatRoom.subscription({ roomId }),
 );
+
 const { data: members = [] } = useQuery(
 	q.channels.chatRoom.presence({ roomId }),
 );
 ```
 
-`subscription()` starts at `[]` and appends each message. `presence()` keeps
-only the latest roster. Both abort their iterator on unmount.
+The subscription query starts with `[]` and appends each typed `{ event, eventId, data }` message. The presence query keeps only the latest roster snapshot. Both abort their underlying iterator on unmount.
 
-<Callout type="warn" title="A channel is not a message log">
-	Events are kept so a reconnect can replay them, 24 hours by default, then
-	deleted. Anything a user must be able to read later belongs in a collection.
+## Transport selection
+
+SSE is the default edge transport. Channel subscribe uses the framework SSE/control routes, publish uses HTTP POST, and presence uses the application Postgres database as a cross-instance lease register. No client configuration changes are needed.
+
+To use managed WebSockets and native presence, install the optional Pusher peers and select the preset under `realtime`:
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { pusherRealtime } from "questpie/adapters/pusher";
+import { runtimeConfig } from "questpie/app";
+
+const managed = pusherRealtime({
+	appId: env.PUSHER_APP_ID,
+	key: env.PUSHER_KEY,
+	secret: env.PUSHER_SECRET,
+	cluster: env.PUSHER_CLUSTER,
+	// For Soketi, provide host/wsHost/ports instead.
+});
+
+export default runtimeConfig({
+	realtime: { ...managed },
+});
+```
+
+The client discovers the selected transport from `/channels/config`; `client.channels.*` call sites do not change. After a managed-provider reconnect, the established subscription reauthorizes a bounded `/channels/replay` drain from its last applied event id. Live provider events arriving during that drain are buffered behind the replay cursor, then deduplicated and released in order.
+
+Pusher signed-user authentication uses the current dynamic auth headers and
+cookies. If login or logout changes identity without replacing the browser
+socket, call both `client.realtime.destroy()` and `client.channels.destroy()`
+(or recreate the client) before subscribing again so the shared provider
+connection is recreated under the new identity.
+
+<Callout type="warn" title="Direct Pusher client events are a separate unsafe capability">
+Provider client events bypass QUESTPIE's publish route, per-verb authorization, Zod schemas, ordered ledger, replay, and rate limits. They are off by default. Enabling `clientEvents` requires `acknowledgeProviderWideRisk: true`; its `allowedChannels` list is only an SDK affordance and a raw provider client can bypass it. Prefer `client.channels.<name>.publish()`.
 </Callout>
 
-## Where each topic lives
+## Delivery and security contracts
 
-| Topic                                        | Page                                                 |
-| -------------------------------------------- | ---------------------------------------------------- |
-| Who may subscribe, who may publish, revoking | [Authorization](/docs/client/channels/authorization) |
-| The roster, its limits and its lifecycle     | [Presence](/docs/client/channels/presence)           |
-| SSE by default, or managed Pusher/Soketi     | [Transports](/docs/client/channels/transports)       |
-| Ordering, replay, readiness, gaps and limits | [Delivery](/docs/client/channels/delivery)           |
-| Live rows instead of events                  | [Realtime](/docs/client/realtime)                    |
-| Picking between the reactive primitives      | [Reactive apps](/docs/client/reactive-apps)          |
+- Framework events are ordered per resolved channel and are never coalesced. Reconnect may replay an event id; clients deduplicate it.
+- Falling behind the bounded replay horizon produces an explicit channel gap rather than invented state. Recover from a persisted collection or subscribe from now.
+- Server delivery queues, managed-provider replay races, and client async iterators are bounded by event count and serialized UTF-8 bytes. A slow consumer terminates with an explicit error; ordered events are not silently dropped.
+- A managed-provider edge sends an authenticated control probe every 15 seconds. Missing three probes expires the independent client lease and releases admission, query, and CRDT bindings even when the provider cannot report an abrupt browser disappearance.
+- Payloads must be JSON-serializable. The complete canonical
+  `{ eventId, event, data }` envelope must fit 10,000 UTF-8 bytes, so the
+  application `data` budget is slightly smaller and varies with the event id
+  and event name. Typed datetime metadata is part of those measured bytes.
+- Ordered events, replay, and presence preserve nested `Date` values through
+  SSE and Pusher/Soketi without heuristic ISO-string revival. The compatible
+  versioned wire format and reserved metadata key are specified in
+  [Temporal values](/docs/schema/fields/temporal-values).
+- Cookie-authenticated authority routes require an exact trusted `Origin`. Additional origins belong in `realtime.channelSecurity.trustedOrigins`.
+- Client publishes use independent per-session and per-principal token buckets (defaults: 10/s, burst 20).
 
-## Next
+## Related
 
-**[Authorization](/docs/client/channels/authorization)** is the part that bites
-first. Subscribe and publish are separate rules, and the default is strict.
+- [Reactive Apps & Performance](/docs/client/reactive-apps), channel sizing, bounded event state, React isolation, and live presence lifecycle.
+- [Realtime](/docs/client/realtime), live collection/global snapshots.
+- [Realtime adapter](/docs/infrastructure/realtime), SSE versus Pusher/Soketi selection, reconciliation, admission, and privacy.
+- [TanStack Query](/docs/client/tanstack-query), the complete option-builder surface.

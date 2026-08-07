@@ -7,7 +7,10 @@
 
 import { Buffer } from "node:buffer";
 
-import type { RealtimeTopicRejectedPayload } from "#questpie/shared/realtime-error.js";
+import type {
+	RealtimeTopicRejectedPayload,
+	RealtimeTopicRejectionReason,
+} from "#questpie/shared/realtime-error.js";
 
 import {
 	opaqueChannelAuthoritySubject,
@@ -24,8 +27,12 @@ import {
 	admitRealtimeTopic,
 	admitRealtimeTopicPolicy,
 	createConcurrencyLimiter,
+	DEFAULT_REALTIME_KEEP_ALIVE_INTERVAL_MS,
 	getRealtimeAdmissionRegistry,
+	type RealtimeAdmissionLease,
 	RealtimeTopicAdmissionError,
+	realtimeAdmissionBucket,
+	realtimeSlotTtlMs,
 	realtimeTopicRejectedPayload,
 	realtimePrincipalKey,
 	resolveRealtimeAdmissionConfig,
@@ -157,12 +164,13 @@ function collectionAccessCacheKey(definition: RealtimeDefinition | undefined) {
 	return realtime ? realtime.accessCacheKey : undefined;
 }
 
-function enforceRowLiveQueryPolicy(
+function enforceRealtimeTopicPolicy(
 	app: Questpie<any>,
 	topic: NormalizedTopicInput,
 	definition?: RealtimeDefinition,
 ): void {
 	const result = admitRealtimeTopicPolicy(topic, {
+		changeCapture: app.config?.realtime?.changeCapture,
 		rowLiveQueries: app.config?.realtime?.rowLiveQueries,
 		collectionRealtime:
 			topic.resourceType === "collection"
@@ -653,7 +661,7 @@ async function resolveIncrementalTopic(
 			topic.resource
 		];
 		if (!crud || !definition) throw new Error("Collection not found");
-		enforceRowLiveQueryPolicy(app, topic, definition);
+		enforceRealtimeTopicPolicy(app, topic, definition);
 		return evaluateTopicAccess(
 			app,
 			{
@@ -674,7 +682,7 @@ async function resolveIncrementalTopic(
 			topic.resource
 		];
 		if (!crud || !definition) throw new Error("Global not found");
-		enforceRowLiveQueryPolicy(app, topic, definition);
+		enforceRealtimeTopicPolicy(app, topic, definition);
 		return evaluateTopicAccess(
 			app,
 			{
@@ -800,19 +808,9 @@ export async function realtimeSubscribe(
 		return errorResponse(ApiError.notImplemented("Realtime"), request);
 	}
 	const observeAdmission = (
-		reason:
-			| "connection_limit"
-			| "subscription_limit"
-			| "query_limit"
-			| "relation_depth"
-			| "snapshot_bytes"
-			| "row_live_queries_disabled"
-			| "collection_realtime_disabled"
-			| "access"
-			| "not_found"
-			| "operation_shape"
-			| "since_seq_invalid"
-			| "activation_rejected",
+		// Spelling the union out again here let it drift from the one the server
+		// actually produces; a new reason has to reach the observer too.
+		reason: RealtimeTopicRejectionReason,
 		details: Partial<
 			Pick<RealtimeTopicRejectedPayload, "resource" | "operation"> & {
 				requestedLimit?: number;
@@ -1247,7 +1245,7 @@ export async function realtimeSubscribe(
 			collectionCruds.set(topic.resource, crud);
 			const definition = collectionDefinitions[topic.resource];
 			try {
-				enforceRowLiveQueryPolicy(app, topic, definition);
+				enforceRealtimeTopicPolicy(app, topic, definition);
 			} catch (error) {
 				if (!(error instanceof RealtimeTopicAdmissionError)) throw error;
 				observeTopicRejection(error);
@@ -1273,7 +1271,7 @@ export async function realtimeSubscribe(
 				if (!crud) throw new Error("Global not found");
 				globalCruds.set(topic.resource, crud);
 				const definition = globalDefinitions[topic.resource];
-				enforceRowLiveQueryPolicy(app, topic, definition);
+				enforceRealtimeTopicPolicy(app, topic, definition);
 				validatedTopics.push({
 					...topic,
 					type: "global",
@@ -1397,18 +1395,49 @@ export async function realtimeSubscribe(
 		);
 	}
 
-	const admissionRegistry = getRealtimeAdmissionRegistry(
-		app,
-		admission.maxConnectionsPerPrincipal,
+	const sharedProvider = body.transport === "shared-provider";
+	const keepAliveIntervalMs =
+		app.config?.realtime?.keepAliveIntervalMs ??
+		DEFAULT_REALTIME_KEEP_ALIVE_INTERVAL_MS;
+	const admissionRegistry = getRealtimeAdmissionRegistry(app);
+	const admissionBucket = realtimeAdmissionBucket(
+		resolved.appContext,
+		admission,
 	);
-	const releaseConnection = admissionRegistry.acquire(
-		realtimePrincipalKey(resolved.appContext),
-	);
-	if (!releaseConnection) {
-		observeAdmission("connection_limit");
+	const admissionDecision = admissionRegistry.acquire(admissionBucket.key, {
+		maximum: admissionBucket.maximum,
+		// The shared-provider session has its own client-liveness check — the
+		// topology client lease, renewed by the client's own re-probe — and its
+		// expiry already runs `close()`. Only the SSE path, where the framework
+		// owns no disconnect detector, needs the slot to expire on its own.
+		ttlMs: sharedProvider
+			? Number.POSITIVE_INFINITY
+			: realtimeSlotTtlMs(keepAliveIntervalMs),
+	});
+	if (!admissionDecision.admitted) {
+		const { observed, configuredLimit } = admissionDecision;
+		observeAdmission("connection_limit", { observed, configuredLimit });
+		// These two numbers are the whole diagnosis, and the reason this failure
+		// once went weeks without one. Emit them per topic in the typed shape the
+		// client parses, not as an opaque error string.
+		const scope = admissionBucket.anonymous
+			? "unauthenticated connections on this node"
+			: "connections for this principal";
+		const rejections = [...validatedTopicsById.values()].map((topic) =>
+			realtimeTopicRejectedPayload(topic, {
+				accepted: false,
+				reason: "connection_limit",
+				message: `Realtime connection limit reached: ${observed} of ${configuredLimit} ${scope} in use`,
+				configuredLimit,
+				observed,
+			}),
+		);
+		if (rejections.length > 0) {
+			return Response.json({ errors: rejections }, { status: 400 });
+		}
 		return errorResponse(
 			ApiError.badRequest(
-				"Realtime connection limit exceeded",
+				`Realtime connection limit exceeded (${observed} of ${configuredLimit} in use)`,
 				undefined,
 				"realtime.connectionLimitExceeded",
 			),
@@ -1416,13 +1445,14 @@ export async function realtimeSubscribe(
 			resolved.appContext.locale,
 		);
 	}
+	const admissionSlot: RealtimeAdmissionLease = admissionDecision.lease;
 
-	if (body.transport === "shared-provider") {
+	if (sharedProvider) {
 		if (
 			validatedChannelsById.size > 0 ||
 			(validatedTopicsById.size === 0 && !crdtHold)
 		) {
-			releaseConnection();
+			admissionSlot.release();
 			return errorResponse(
 				ApiError.badRequest(
 					"Shared-provider session bootstrap accepts live-query topics or an explicit CRDT hold",
@@ -1480,13 +1510,12 @@ export async function realtimeSubscribe(
 			const limitSnapshotConcurrency = createConcurrencyLimiter(
 				admission.initialSnapshotConcurrency,
 			);
-			const heartbeatIntervalMs =
-				app.config?.realtime?.keepAliveIntervalMs ?? 8000;
+			const heartbeatIntervalMs = keepAliveIntervalMs;
 			const originalIdentity = realtimeControlIdentity(resolved.appContext);
 			const close = () => {
 				if (closed) return;
 				closed = true;
-				releaseConnection();
+				admissionSlot.release();
 				unregisterControl();
 				void edge?.close().catch(() => {});
 				void activeSink.close("normal").catch(() => {});
@@ -1783,7 +1812,7 @@ export async function realtimeSubscribe(
 			if (sink) void sink.close("transport_error").catch(() => {});
 			return errorResponse(error, request, resolved.appContext.locale);
 		} finally {
-			if (!retainAdmission) releaseConnection();
+			if (!retainAdmission) admissionSlot.release();
 		}
 	}
 
@@ -1869,8 +1898,7 @@ export async function realtimeSubscribe(
 				const limitDeltaHydration = createConcurrencyLimiter(
 					admission.deltaHydrationConcurrency,
 				);
-				const heartbeatIntervalMs =
-					app.config?.realtime?.keepAliveIntervalMs ?? 8000;
+				const heartbeatIntervalMs = keepAliveIntervalMs;
 				const originalIdentity = realtimeControlIdentity(resolved.appContext);
 				const controlToken = globalThis.crypto.randomUUID();
 				let removeKeepAlive = () => {};
@@ -1882,7 +1910,7 @@ export async function realtimeSubscribe(
 				const close = () => {
 					if (closed) return;
 					closed = true;
-					releaseConnection();
+					admissionSlot.release();
 					removeKeepAlive();
 					unregisterControl();
 					flushPending = null;
@@ -1894,6 +1922,10 @@ export async function realtimeSubscribe(
 					void transport?.stop().catch(() => {});
 				};
 				closeStream = close;
+				// Let the registry tear this stream down if its lease lapses: the
+				// slot is only half the leak — the scheduler group, the topology
+				// heartbeat and the keepalive registration are the other half.
+				admissionSlot.setClose(close);
 				if (closeRequested || streamCancelled || request.signal.aborted) {
 					close();
 					return;
@@ -2491,11 +2523,29 @@ export async function realtimeSubscribe(
 
 				// Shared ping ticker keeps the connection alive. Default 8s — strictly under
 				// Bun's default 10s idleTimeout and typical proxy timeouts of 30-60s.
+				// It is also the connection's proof of life: the ping is the only
+				// traffic an idle-but-live stream generates, so it is the only thing
+				// that can renew the admission lease without depending on data.
 				removeKeepAlive = sharedSseKeepAliveTicker.register(
 					heartbeatIntervalMs,
 					(frame) => {
 						void sessionSink
 							.write(frame, "latest-snapshot")
+							.then((result) => {
+								// Renew only when the peer drained everything sent before
+								// this ping — `bufferedBytes` is measured after the enqueue,
+								// so "only this frame is queued" means the queue was empty.
+								// A peer that stopped reading, including one whose socket
+								// died without the runtime saying so, never clears it, and
+								// its lease lapses. `null` means the write was fenced and
+								// proves nothing.
+								if (
+									result.bufferedBytes !== null &&
+									result.bufferedBytes <= frame.byteLength
+								) {
+									admissionSlot.renew();
+								}
+							})
 							.catch(requestClose);
 					},
 				);
@@ -2513,7 +2563,7 @@ export async function realtimeSubscribe(
 					// The controller can already be errored by the runtime.
 				}
 				closeStream?.();
-				releaseConnection();
+				admissionSlot.release();
 				void transport?.stop().catch(() => {});
 			}
 		},
@@ -2522,7 +2572,7 @@ export async function realtimeSubscribe(
 		},
 		cancel: () => {
 			streamCancelled = true;
-			releaseConnection();
+			admissionSlot.release();
 			closeStream?.();
 		},
 	};

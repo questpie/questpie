@@ -63,16 +63,17 @@ export const questpieRealtimeLogTable = pgTable(
 		locale: text("locale"),
 		payload: jsonbSafe("payload").default({}),
 		createdAt: systemTimestamp("created_at").defaultNow().notNull(),
+		/** First cleanup observation after this transaction fell below snapshot xmin. */
+		settledAt: systemTimestamp("settled_at"),
 	},
-	(t) => [index("idx_realtime_log_created_at").on(t.createdAt)],
+	(t) => [
+		index("idx_realtime_log_created_at").on(t.createdAt),
+		index("idx_realtime_log_settled_at").on(t.settledAt),
+		// The drain cursor is `(txid, seq)`, not `seq` — see RealtimeService.
+		// Without this index every drain would sort the whole retained log.
+		index("idx_realtime_log_txid_seq").on(t.txid, t.seq),
+	],
 );
-
-/** Global outbox sequence head. Updating this row serializes commit cursors. */
-export const questpieRealtimeHeadTable = pgTable("questpie_realtime_head", {
-	id: text("id").primaryKey(),
-	lastSeq: bigint("last_seq", { mode: "number" }).default(0).notNull(),
-	updatedAt: systemTimestamp("updated_at").defaultNow().notNull(),
-});
 
 /** Per-resolved-channel sequence head. Updating this row serializes publishers. */
 export const questpieChannelHeadTable = pgTable("questpie_channel_head", {

@@ -9,6 +9,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { CollectionBuilderState } from "#questpie/server/collection/builder/types.js";
 import type { OrderBy } from "#questpie/server/collection/crud/types.js";
+import { ApiError } from "#questpie/server/errors/base.js";
 
 /**
  * Options for building ORDER BY clauses
@@ -71,7 +72,12 @@ export function buildOrderByClauses(
 	// Object syntax
 	const clauses: SQL[] = [];
 	for (const [field, direction] of Object.entries(orderBy)) {
-		let column: SQL | any = (table as any)[field];
+		// A `virtual(sql)` field has no table column but does have an ordered SQL
+		// expression, and `buildWhereClause` already resolves it that way
+		// (`buildLocalizedFieldRef`). Resolving it here too means a field is
+		// orderable exactly when it is filterable, instead of silently sorting by
+		// nothing.
+		let column: SQL | any = state.virtuals?.[field] ?? (table as any)[field];
 
 		// For localized fields, use COALESCE with i18n tables
 		if (useI18n && i18nCurrentTable && state.localized.includes(field as any)) {
@@ -85,11 +91,22 @@ export function buildOrderByClauses(
 			}
 		}
 
-		if (column) {
-			clauses.push(
-				direction === "desc" ? sql`${column} DESC` : sql`${column} ASC`,
+		// An order term that resolves to nothing used to be dropped in silence, so
+		// the rows came back in an arbitrary order that merely LOOKED sorted. That
+		// is a typo you cannot see. It also breaks any caller that has to reproduce
+		// the sort — a keyset cursor compares against the terms it was told about,
+		// so a dropped term makes the ORDER BY and the cursor predicate disagree
+		// and pages then overlap or skip.
+		if (!column) {
+			throw ApiError.badRequest(
+				`Cannot order by '${field}': it is not a column of '${state.name}'. ` +
+					`Order by a stored field, a localized field, or a field declared with 'virtual: sql\`...\`'.`,
 			);
 		}
+
+		clauses.push(
+			direction === "desc" ? sql`${column} DESC` : sql`${column} ASC`,
+		);
 	}
 
 	return clauses;

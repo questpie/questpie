@@ -4,10 +4,23 @@ import { QueryClient } from "@tanstack/react-query";
 import { collection } from "questpie";
 import type { QuestpieClient } from "questpie/client";
 
+import { QuestpieDbConflictError } from "./collection.js";
 import { createQuestpieCollections } from "./factory.js";
 import { resolveSync } from "./sync.js";
 
-type Row = { id: string; title: string };
+/**
+ * `revision` is only present on collections that enable optimistic concurrency,
+ * so the fake seeds it per test rather than always.
+ */
+type Row = { id: string; title: string; revision?: number };
+
+/** Shaped like a `QuestpieClientError` raised by a lost revision race. */
+function conflictError(): Error {
+	return Object.assign(new Error("Optimistic concurrency conflict"), {
+		status: 409,
+		code: "CONFLICT",
+	});
+}
 
 const posts = collection("posts").fields(({ f }) => ({
 	title: f.text(255).required(),
@@ -32,6 +45,8 @@ function createFakeClient(initial: Row[]) {
 	let rows = initial;
 	let failFind = false;
 	let failUpdate = false;
+	let conflictUpdate = false;
+	let conflictDelete = false;
 	let heldCreate:
 		| {
 				started: () => void;
@@ -51,7 +66,16 @@ function createFakeClient(initial: Row[]) {
 		  }
 		| undefined;
 	let liveListener: ((value: ReturnType<typeof envelope>) => void) | undefined;
-	const calls = { find: 0, create: 0, update: 0, delete: 0 };
+	const calls = { find: 0, create: 0, updateBatch: 0, deleteMany: 0 };
+	const requests = {
+		updateBatch: [] as Array<
+			Array<{ id: string; data: Partial<Row>; expectedRevision?: number }>
+		>,
+		deleteMany: [] as Array<{
+			where: { id: { in: string[] } };
+			expectedRevisions?: Array<{ id: string; expectedRevision: number }>;
+		}>,
+	};
 
 	const api = {
 		find: async () => {
@@ -71,25 +95,45 @@ function createFakeClient(initial: Row[]) {
 			await held?.wait;
 			return row;
 		},
-		update: async ({ id, data }: { id: string; data: Partial<Row> }) => {
-			calls.update += 1;
+		updateBatch: async ({
+			updates,
+		}: {
+			updates: Array<{
+				id: string;
+				data: Partial<Row>;
+				expectedRevision?: number;
+			}>;
+		}) => {
+			calls.updateBatch += 1;
+			requests.updateBatch.push(updates);
 			if (failUpdate) throw new Error("update rejected");
-			rows = rows.map((row) => (row.id === id ? { ...row, ...data } : row));
-			const result = rows.find((row) => row.id === id)!;
+			if (conflictUpdate) throw conflictError();
+			const updated: Row[] = [];
+			for (const { id, data } of updates) {
+				rows = rows.map((row) => (row.id === id ? { ...row, ...data } : row));
+				updated.push(rows.find((row) => row.id === id)!);
+			}
 			const held = heldUpdate;
 			heldUpdate = undefined;
 			held?.started();
 			await held?.wait;
-			return result;
+			return updated;
 		},
-		delete: async ({ id }: { id: string }) => {
-			calls.delete += 1;
-			rows = rows.filter((row) => row.id !== id);
+		deleteMany: async (params: {
+			where: { id: { in: string[] } };
+			expectedRevisions?: Array<{ id: string; expectedRevision: number }>;
+		}) => {
+			calls.deleteMany += 1;
+			requests.deleteMany.push(params);
+			if (conflictDelete) throw conflictError();
+			const deleted = new Set(params.where.id.in);
+			const count = rows.filter((row) => deleted.has(row.id)).length;
+			rows = rows.filter((row) => !deleted.has(row.id));
 			const held = heldDelete;
 			heldDelete = undefined;
 			held?.started();
 			await held?.wait;
-			return { success: true };
+			return { success: true, count };
 		},
 		live: (
 			_options: unknown,
@@ -106,11 +150,18 @@ function createFakeClient(initial: Row[]) {
 	return {
 		client: { collections: { posts: api } } as unknown as QuestpieClient<App>,
 		calls,
+		requests,
 		failNextFind() {
 			failFind = true;
 		},
 		failNextUpdate() {
 			failUpdate = true;
+		},
+		conflictUpdates() {
+			conflictUpdate = true;
+		},
+		conflictDeletes() {
+			conflictDelete = true;
 		},
 		holdNextCreate() {
 			let markStarted = () => {};
@@ -270,9 +321,118 @@ describe("createQuestpieCollections", () => {
 		expect(db.collections.posts.get("one")?.title).toBe("After");
 		await transaction.isPersisted.promise;
 
-		expect(fake.calls.update).toBe(1);
+		expect(fake.calls.updateBatch).toBe(1);
 		expect(fake.calls.find).toBeGreaterThanOrEqual(2);
 		expect(db.collections.posts.get("one")?.title).toBe("After");
+		db.destroy();
+	});
+
+	it("sends one ordered batch request per mutation transaction", async () => {
+		const fake = createFakeClient([
+			{ id: "one", title: "One" },
+			{ id: "two", title: "Two" },
+		]);
+		const db = createQuestpieCollections(fake.client, {
+			queryClient: new QueryClient(),
+		});
+		await db.collections.posts.preload();
+
+		const updated = db.collections.posts.update(["one", "two"], (drafts) => {
+			drafts[0]!.title = "First";
+			drafts[1]!.title = "Second";
+		});
+		await updated.isPersisted.promise;
+
+		expect(fake.calls.updateBatch).toBe(1);
+		expect(fake.requests.updateBatch[0]).toEqual([
+			{ id: "one", data: { title: "First" } },
+			{ id: "two", data: { title: "Second" } },
+		]);
+		expect(db.collections.posts.get("two")?.title).toBe("Second");
+
+		const removed = db.collections.posts.delete(["one", "two"]);
+		await removed.isPersisted.promise;
+
+		expect(fake.calls.deleteMany).toBe(1);
+		expect(fake.requests.deleteMany[0]?.where).toEqual({
+			id: { in: ["one", "two"] },
+		});
+		expect(db.collections.posts.size).toBe(0);
+		db.destroy();
+	});
+
+	it("sends the read revision with every optimistic-concurrency mutation", async () => {
+		const fake = createFakeClient([
+			{ id: "one", title: "Before", revision: 7 },
+			{ id: "two", title: "Before", revision: 3 },
+		]);
+		const db = createQuestpieCollections(fake.client, {
+			queryClient: new QueryClient(),
+		});
+		await db.collections.posts.preload();
+
+		const updated = db.collections.posts.update("one", (draft) => {
+			draft.title = "After";
+		});
+		await updated.isPersisted.promise;
+		expect(fake.requests.updateBatch[0]?.[0]?.expectedRevision).toBe(7);
+
+		const removed = db.collections.posts.delete("two");
+		await removed.isPersisted.promise;
+		expect(fake.requests.deleteMany[0]?.expectedRevisions).toEqual([
+			{ id: "two", expectedRevision: 3 },
+		]);
+		db.destroy();
+	});
+
+	it("omits the revision when the collection has no optimistic concurrency", async () => {
+		const fake = createFakeClient([
+			{ id: "one", title: "Before" },
+			{ id: "two", title: "Before" },
+		]);
+		const db = createQuestpieCollections(fake.client, {
+			queryClient: new QueryClient(),
+		});
+		await db.collections.posts.preload();
+
+		const updated = db.collections.posts.update("one", (draft) => {
+			draft.title = "After";
+		});
+		await updated.isPersisted.promise;
+		expect(
+			Object.hasOwn(fake.requests.updateBatch[0]![0]!, "expectedRevision"),
+		).toBe(false);
+
+		const removed = db.collections.posts.delete("two");
+		await removed.isPersisted.promise;
+		expect(
+			Object.hasOwn(fake.requests.deleteMany[0]!, "expectedRevisions"),
+		).toBe(false);
+		db.destroy();
+	});
+
+	it("surfaces a lost revision race as a conflict the store can act on", async () => {
+		const fake = createFakeClient([
+			{ id: "one", title: "Before", revision: 7 },
+		]);
+		const db = createQuestpieCollections(fake.client, {
+			queryClient: new QueryClient(),
+		});
+		await db.collections.posts.preload();
+		fake.conflictUpdates();
+
+		const transaction = db.collections.posts.update("one", (draft) => {
+			draft.title = "Loser";
+		});
+		const error = await transaction.isPersisted.promise.catch(
+			(rejection: unknown) => rejection,
+		);
+
+		expect(error).toBeInstanceOf(QuestpieDbConflictError);
+		expect((error as QuestpieDbConflictError).operation).toBe("update");
+		expect((error as QuestpieDbConflictError).collection).toBe("posts");
+		expect((error as QuestpieDbConflictError).ids).toEqual(["one"]);
+		expect(db.collections.posts.get("one")?.title).toBe("Before");
 		db.destroy();
 	});
 
@@ -469,6 +629,33 @@ describe("createQuestpieCollections", () => {
 		});
 
 		expect(() => db.collections.posts).toThrow("find.columns is not supported");
+		db.destroy();
+	});
+
+	it("rejects snapshot find options that live subscriptions cannot carry", () => {
+		const fake = createFakeClient([{ id: "one", title: "Before" }]);
+		const db = createQuestpieCollections(fake.client, {
+			queryClient: new QueryClient(),
+			syncMode: "snapshot",
+			find: { posts: { search: "questpie" } } as never,
+		});
+
+		expect(() => db.collections.posts).toThrow(
+			"find.search is not supported in snapshot sync mode",
+		);
+		db.destroy();
+	});
+
+	it("keeps find-only options in refetch mode, where find drives both reads", async () => {
+		const fake = createFakeClient([{ id: "one", title: "Before" }]);
+		const db = createQuestpieCollections(fake.client, {
+			queryClient: new QueryClient(),
+			find: { posts: { includeDeleted: true, stage: "draft" } },
+		});
+
+		await db.collections.posts.preload();
+
+		expect(db.collections.posts.get("one")?.title).toBe("Before");
 		db.destroy();
 	});
 

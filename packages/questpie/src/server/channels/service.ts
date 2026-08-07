@@ -2,10 +2,11 @@ import type { z } from "zod";
 
 import type { AppContext } from "#questpie/server/config/app-context.js";
 import type { Principal } from "#questpie/server/config/context.js";
-import type {
-	AppendChannelEventInput,
-	AppendChannelEventOptions,
-	ChannelEventReceipt,
+import {
+	type AppendChannelEventInput,
+	type AppendChannelEventOptions,
+	type ChannelEventReceipt,
+	hashResolvedChannel,
 } from "#questpie/server/modules/core/integrated/realtime/channel-event-ledger.js";
 
 import type { ChannelAuthoritySubject } from "./authority.js";
@@ -337,14 +338,43 @@ export class ChannelsService<
 		});
 	}
 
+	/**
+	 * Publish to several channels with a deterministic lock order.
+	 *
+	 * Each append takes a row lock on its channel's sequence head and holds it
+	 * until the caller's transaction commits. Two concurrent batches touching
+	 * the same channels in opposite orders therefore deadlock — a real
+	 * `40P01` from Postgres, not a theoretical one. Appending in resolved-hash
+	 * order gives every caller the same order, so they queue instead.
+	 *
+	 * Validation for the whole batch runs before the first append, so an
+	 * invalid request no longer leaves the earlier ones published.
+	 */
 	async publishBatch(
 		requests: readonly ChannelPublishRequest<TChannels>[],
 	): Promise<ChannelPublishReceipt[]> {
-		const receipts: ChannelPublishReceipt[] = [];
-		for (const request of requests) {
-			const { channel, ...input } =
-				request as ChannelPublishRequest<TChannels> & Record<string, unknown>;
-			receipts.push(await this.publish(channel as any, input as any));
+		const prepared = await Promise.all(
+			requests.map(async (request, index) => {
+				const { channel, ...input } =
+					request as ChannelPublishRequest<TChannels> & Record<string, unknown>;
+				const publish = await this.preparePublish(channel as any, input as any);
+				return {
+					index,
+					publish,
+					lockKey: hashResolvedChannel(publish.channel),
+				};
+			}),
+		);
+		// A stable sort keeps same-channel events in the order the caller wrote
+		// them, which is the only ordering the ledger promises.
+		const ordered = [...prepared].sort((a, b) =>
+			a.lockKey < b.lockKey ? -1 : a.lockKey > b.lockKey ? 1 : 0,
+		);
+		const receipts: ChannelPublishReceipt[] = Array.from({
+			length: requests.length,
+		});
+		for (const entry of ordered) {
+			receipts[entry.index] = await this.publishPrepared(entry.publish);
 		}
 		return receipts;
 	}

@@ -1437,7 +1437,7 @@ export default function FormView({
 	// Create query options proxy for key building (same as use-collection hooks)
 	const queryOpts = React.useMemo(
 		() =>
-			createQuestpieQueryOptions(client, {
+			createQuestpieQueryOptions(client as any, {
 				keyPrefix: QUERY_KEY_PREFIX,
 				locale: contentLocale,
 			}),

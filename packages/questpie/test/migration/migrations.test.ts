@@ -12,7 +12,14 @@ import { pathToFileURL } from "node:url";
 
 import type { PGlite } from "@electric-sql/pglite";
 import { sql } from "drizzle-orm";
-import { bigserial, index, jsonb, pgTable, text } from "drizzle-orm/pg-core";
+import {
+	bigserial,
+	customType,
+	index,
+	jsonb,
+	pgTable,
+	text,
+} from "drizzle-orm/pg-core";
 
 import { createApp, module } from "../../src/exports/index.js";
 import { collection } from "../../src/exports/index.js";
@@ -480,10 +487,14 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 		const { DrizzleMigrationGenerator } =
 			await import("../../src/server/migration/generator.js");
 		const generator = new DrizzleMigrationGenerator();
+		const xid8 = customType<{ data: string }>({
+			dataType: () => "xid8",
+		});
 		const oldRealtimeLogTable = pgTable(
 			"questpie_realtime_log",
 			{
 				seq: bigserial("seq", { mode: "number" }).primaryKey(),
+				txid: xid8("txid").default(sql`pg_current_xact_id()`),
 				resourceType: text("resource_type").notNull(),
 				resource: text("resource").notNull(),
 				operation: text("operation").notNull(),
@@ -491,6 +502,7 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 				locale: text("locale"),
 				payload: jsonb("payload").default({}),
 				createdAt: systemTimestamp("created_at").defaultNow().notNull(),
+				settledAt: systemTimestamp("settled_at"),
 			},
 			(table) => [
 				index("idx_realtime_log_seq").on(table.seq),
@@ -499,6 +511,8 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 					table.resource,
 				),
 				index("idx_realtime_log_created_at").on(table.createdAt),
+				index("idx_realtime_log_settled_at").on(table.settledAt),
+				index("idx_realtime_log_txid_seq").on(table.txid, table.seq),
 			],
 		);
 

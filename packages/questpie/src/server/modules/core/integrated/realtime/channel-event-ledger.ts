@@ -9,6 +9,7 @@ import {
 import {
 	getCurrentTransaction,
 	onAfterCommit,
+	withTransaction,
 	withTransactionOrExisting,
 } from "#questpie/server/collection/crud/shared/transaction.js";
 import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
@@ -277,6 +278,11 @@ export class ChannelEventLedger {
 		string,
 		Set<LocalSubscription>
 	>();
+	/** In-flight log page per channel, shared by every reader of that channel. */
+	private readonly channelReads = new Map<
+		string,
+		{ afterSeq: number; page: Promise<ChannelEventRow[]> }
+	>();
 	private sharedDrainPending = false;
 	private sharedDrainPromise: Promise<void> | null = null;
 	private cleanupInProgress = false;
@@ -320,21 +326,26 @@ export class ChannelEventLedger {
 		let eventId = "";
 
 		await withTransactionOrExisting(db, async (tx) => {
-			await tx
-				.insert(questpieChannelHeadTable)
-				.values({ channelHash, channel: input.channel })
-				.onConflictDoNothing();
-
 			// The UPDATE takes a row lock. Contending publishers cannot receive a
 			// sequence until the previous publisher commits, so seq order is commit order.
-			const [head] = await tx
-				.update(questpieChannelHeadTable)
-				.set({
-					lastSeq: sql`${questpieChannelHeadTable.lastSeq} + 1`,
-					updatedAt: new Date(),
-				})
-				.where(eq(questpieChannelHeadTable.channelHash, channelHash))
-				.returning({ seq: questpieChannelHeadTable.lastSeq });
+			//
+			// It is also attempted FIRST. The head, dispatch and coordinator-fence
+			// rows are created together by whichever append is first on a channel,
+			// so after that every append can reach its sequence in one statement
+			// instead of paying three upserts that can only ever be no-ops.
+			let head = await this.lockChannelSequence(tx, channelHash);
+			if (!head) {
+				await tx
+					.insert(questpieChannelHeadTable)
+					.values({ channelHash, channel: input.channel })
+					.onConflictDoNothing();
+				await tx
+					.insert(questpieChannelDispatchTable)
+					.values({ channelHash })
+					.onConflictDoNothing();
+				await this.authorityFences.ensureChannel(channelHash, tx);
+				head = await this.lockChannelSequence(tx, channelHash);
+			}
 			if (!head) throw new Error("Failed to lock channel sequence head");
 
 			const seq = Number(head.seq);
@@ -355,11 +366,6 @@ export class ChannelEventLedger {
 				wireJson: envelope.wireJson,
 				sizeBytes: envelope.sizeBytes,
 			});
-			await tx
-				.insert(questpieChannelDispatchTable)
-				.values({ channelHash })
-				.onConflictDoNothing();
-			await this.authorityFences.ensureChannel(channelHash, tx);
 
 			onAfterCommit(async () => {
 				void this.notifyAfterCommit(channelHash, eventId).catch((error) => {
@@ -372,6 +378,21 @@ export class ChannelEventLedger {
 		});
 
 		return Object.freeze({ eventId });
+	}
+
+	private async lockChannelSequence(
+		tx: AnyDrizzleClient<any>,
+		channelHash: string,
+	): Promise<{ seq: number } | undefined> {
+		const [head] = await tx
+			.update(questpieChannelHeadTable)
+			.set({
+				lastSeq: sql`${questpieChannelHeadTable.lastSeq} + 1`,
+				updatedAt: new Date(),
+			})
+			.where(eq(questpieChannelHeadTable.channelHash, channelHash))
+			.returning({ seq: questpieChannelHeadTable.lastSeq });
+		return head;
 	}
 
 	private async notifyAfterCommit(
@@ -837,49 +858,119 @@ export class ChannelEventLedger {
 		);
 	}
 
+	/**
+	 * Enforce the retention horizon in bounded SQL, on one node at a time.
+	 *
+	 * This used to `select *` the entire event table — payloads included — into
+	 * the heap and then issue one autocommit DELETE per row, hourly, on every
+	 * node at once. At the documented 24 h / 10 events per second that is
+	 * 864 000 rows and 864 000 transactions per node per pass.
+	 *
+	 * Both horizons are now single statements, and a transaction-scoped
+	 * advisory lock keeps concurrent nodes from repeating each other's work.
+	 */
 	async cleanup(): Promise<void> {
 		if (this.cleanupInProgress) return;
 		if (this.config.retentionMs <= 0 && this.config.retentionBytes <= 0) return;
 		this.cleanupInProgress = true;
 		try {
-			const rows = await this.db
-				.select()
-				.from(questpieChannelEventTable)
-				.orderBy(asc(questpieChannelEventTable.createdAt));
-			const dispatchRows =
-				this.clientTransport?.channelDeliveryScope === "shared-provider"
-					? await this.db.select().from(questpieChannelDispatchTable)
-					: [];
-			const publishedByChannel = new Map(
-				dispatchRows.map((row) => [row.channelHash, Number(row.publishedSeq)]),
-			);
-			const cutoff = Date.now() - this.config.retentionMs;
-			let retainedBytes = rows.reduce((sum, row) => sum + row.sizeBytes, 0);
-			for (const row of rows) {
-				const providerCursor = publishedByChannel.get(row.channelHash);
-				if (providerCursor !== undefined && Number(row.seq) > providerCursor) {
-					continue;
+			await withTransaction(this.db, async (tx) => {
+				if (!(await this.admitCleanup(tx))) return;
+				// Events the shared provider has not published yet are never
+				// eligible: the dispatch cursor is the only durable record of what
+				// has actually left this node.
+				const undispatched =
+					this.clientTransport?.channelDeliveryScope === "shared-provider"
+						? sql`and not exists (
+								select 1 from questpie_channel_dispatch d
+								where d.channel_hash = e.channel_hash
+									and e.seq > d.published_seq
+							)`
+						: sql``;
+
+				await this.reportRetentionHorizon(tx);
+				if (this.config.retentionMs > 0) {
+					const cutoff = new Date(Date.now() - this.config.retentionMs);
+					await tx.execute(sql`
+						delete from questpie_channel_event e
+						where e.created_at < ${cutoff} ${undispatched}
+					`);
 				}
-				const expired =
-					this.config.retentionMs > 0 && row.createdAt.getTime() < cutoff;
-				const overSize =
-					this.config.retentionBytes > 0 &&
-					retainedBytes > this.config.retentionBytes;
-				if (!expired && !overSize) continue;
-				await this.db
-					.delete(questpieChannelEventTable)
-					.where(
-						and(
-							eq(questpieChannelEventTable.channelHash, row.channelHash),
-							eq(questpieChannelEventTable.seq, row.seq),
-						),
-					);
-				retainedBytes -= row.sizeBytes;
-			}
+				if (this.config.retentionBytes > 0) {
+					// Keep the newest events up to the byte budget; everything the
+					// running total pushes past it goes in one statement.
+					await tx.execute(sql`
+						delete from questpie_channel_event e
+						using (
+							select channel_hash, seq,
+								sum(size_bytes) over (
+									order by created_at desc, channel_hash desc, seq desc
+									rows between unbounded preceding and current row
+								) as retained
+							from questpie_channel_event
+						) r
+						where e.channel_hash = r.channel_hash
+							and e.seq = r.seq
+							and r.retained > ${this.config.retentionBytes}
+							${undispatched}
+					`);
+				}
+			});
 		} catch (error) {
 			if (!hasPostgresErrorCode(error, "42P01")) throw error;
 		} finally {
 			this.cleanupInProgress = false;
+		}
+	}
+
+	/**
+	 * Say so when the byte cap, not the age cap, is the real retention horizon.
+	 *
+	 * `retentionBytes` defaults to 64 MB and `retentionMs` to 24 hours. At
+	 * ~500 bytes an event and 10 events per second the byte cap binds after
+	 * about 3.5 hours, so an operator who configured a day of replay silently
+	 * got a few hours of it — and every subscriber resuming past that horizon
+	 * gets a gap. Whichever cap wins, it is now named.
+	 */
+	private async reportRetentionHorizon(
+		tx: AnyDrizzleClient<any>,
+	): Promise<void> {
+		if (this.config.retentionBytes <= 0 || this.config.retentionMs <= 0) return;
+		const [totals] = await tx
+			.select({
+				retainedBytes: sql<number>`coalesce(sum(${questpieChannelEventTable.sizeBytes}), 0)::bigint`,
+				oldest: sql<Date | null>`min(${questpieChannelEventTable.createdAt})`,
+			})
+			.from(questpieChannelEventTable);
+		const retainedBytes = Number(totals?.retainedBytes ?? 0);
+		if (retainedBytes <= this.config.retentionBytes) return;
+		const oldest = totals?.oldest ? new Date(totals.oldest) : null;
+		const cutoff = Date.now() - this.config.retentionMs;
+		if (oldest && oldest.getTime() < cutoff) return;
+		this.logger?.warn(
+			`[Realtime] Channel retentionBytes (${this.config.retentionBytes}) is the binding retention horizon, not retentionMs (${this.config.retentionMs}). Retained ${retainedBytes} bytes of events, none of them old enough to expire. Subscribers resuming past the byte horizon will receive a channel gap.`,
+		);
+	}
+
+	/**
+	 * One node per cluster runs a retention pass.
+	 *
+	 * Unlike shared dispatch, cleanup had no lease of any kind, so every node
+	 * did the whole thing and the cost scaled with the fleet. The lock is
+	 * transaction-scoped so it cannot outlive a crashed pass.
+	 */
+	private async admitCleanup(tx: AnyDrizzleClient<any>): Promise<boolean> {
+		try {
+			const result = await tx.execute(
+				sql`select pg_try_advisory_xact_lock(hashtext('questpie_channel_event_cleanup')) as admitted`,
+			);
+			const [row] = Array.isArray(result) ? result : (result?.rows ?? []);
+			// A driver that cannot report the result is treated as admitted: an
+			// unnecessary pass is now cheap, a skipped one is unbounded growth.
+			if (typeof row?.admitted === "boolean") return row.admitted;
+			return true;
+		} catch {
+			return true;
 		}
 	}
 
@@ -907,7 +998,58 @@ export class ChannelEventLedger {
 		);
 	}
 
-	private async readEvents(
+	/**
+	 * Refuse to deliver across a hole in an already-connected subscriber's log.
+	 *
+	 * Gap detection used to exist only at subscribe and replay. On the live
+	 * drain path a subscriber whose unread rows were removed underneath it —
+	 * exactly what retention cleanup does on another node — simply received the
+	 * next surviving row: seq 1,2,3,6 with no gap frame, no close and no log.
+	 * The subscription is torn down here and the sink is left open, which is
+	 * the same shape the subscribe-time gap branch already hands the client.
+	 */
+	private async admitContiguous(
+		subscription: LocalSubscription,
+		row: ChannelEventRow,
+	): Promise<boolean> {
+		if (Number(row.seq) === subscription.readSeq + 1) return true;
+		this.observe({ type: "resume", outcome: "gap" });
+		this.logger?.warn(
+			`[Realtime] Channel "${subscription.channel}" delivery gap: expected seq ${
+				subscription.readSeq + 1
+			}, read seq ${Number(row.seq)}. Retained events no longer cover this subscriber.`,
+		);
+		const [oldest] = await this.db
+			.select({ eventId: questpieChannelEventTable.eventId })
+			.from(questpieChannelEventTable)
+			.where(
+				eq(questpieChannelEventTable.channelHash, subscription.channelHash),
+			)
+			.orderBy(asc(questpieChannelEventTable.seq))
+			.limit(1);
+		const frame: ChannelGapFrame = {
+			type: "channel_gap",
+			channel: subscription.channel,
+			requestedEventId: channelEventId(
+				subscription.channelHash,
+				subscription.readSeq,
+			),
+			oldestEventId: oldest?.eventId ?? null,
+		};
+		try {
+			await subscription.sink.write(
+				this.encodeLocalFrame(frame, subscription.encodeFrame),
+				"ordered-channel-event",
+			);
+		} finally {
+			// A sink that cannot take the gap frame must still stop receiving a
+			// stream it can no longer trust.
+			await this.releaseLocalSubscription(subscription);
+		}
+		return false;
+	}
+
+	private async selectEvents(
 		channelHash: string,
 		afterSeq: number,
 	): Promise<ChannelEventRow[]> {
@@ -922,6 +1064,44 @@ export class ChannelEventLedger {
 			)
 			.orderBy(asc(questpieChannelEventTable.seq))
 			.limit(this.config.batchSize);
+	}
+
+	/**
+	 * Read one page of a channel's log, keyed by TOPIC rather than by
+	 * subscriber.
+	 *
+	 * Every delivery path re-drains the ledger, so a fan-out wakes every
+	 * subscriber on a channel at once and each one used to issue its own
+	 * identical `seq > cursor` scan: 50 subscribers on one channel cost 50
+	 * index scans for one event. Concurrent readers of the same channel now
+	 * share the in-flight page instead.
+	 *
+	 * A page that hit `batchSize` is deliberately not shared with a reader at a
+	 * higher cursor: its length no longer answers "is there more after you",
+	 * which is what the drain loops test to decide whether to read again.
+	 */
+	private async readEvents(
+		channelHash: string,
+		afterSeq: number,
+	): Promise<ChannelEventRow[]> {
+		const inflight = this.channelReads.get(channelHash);
+		if (inflight && inflight.afterSeq <= afterSeq) {
+			const shared = await inflight.page;
+			if (shared.length < this.config.batchSize) {
+				return inflight.afterSeq === afterSeq
+					? shared
+					: shared.filter((row) => Number(row.seq) > afterSeq);
+			}
+		}
+		const page = this.selectEvents(channelHash, afterSeq);
+		this.channelReads.set(channelHash, { afterSeq, page });
+		try {
+			return await page;
+		} finally {
+			if (this.channelReads.get(channelHash)?.page === page) {
+				this.channelReads.delete(channelHash);
+			}
+		}
 	}
 
 	private async drainLocalSubscription(
@@ -962,6 +1142,7 @@ export class ChannelEventLedger {
 					);
 					if (rows.length === 0) break;
 					for (const row of rows) {
+						if (!(await this.admitContiguous(subscription, row))) return;
 						if (!this.enqueueLocal(subscription, row)) return;
 						subscription.readSeq = Number(row.seq);
 					}
@@ -1003,6 +1184,7 @@ export class ChannelEventLedger {
 			);
 			if (rows.length === 0) return;
 			for (const row of rows) {
+				if (!(await this.admitContiguous(subscription, row))) return;
 				if (!this.enqueueLocal(subscription, row)) return;
 				subscription.readSeq = Number(row.seq);
 			}
@@ -1263,19 +1445,44 @@ export class ChannelEventLedger {
 		let requestedChannelHash = channelHash;
 		do {
 			this.sharedDrainPending = false;
-			const heads = requestedChannelHash
-				? await this.db
-						.select()
-						.from(questpieChannelHeadTable)
-						.where(
-							eq(questpieChannelHeadTable.channelHash, requestedChannelHash),
-						)
-				: await this.db.select().from(questpieChannelHeadTable);
+			const heads = await this.pendingSharedChannels(requestedChannelHash);
 			for (const head of heads) await this.drainSharedChannel(head.channelHash);
 			// A wake racing this drain may target a different channel. The retry
 			// therefore reconciles all heads instead of trusting the first hint.
 			requestedChannelHash = undefined;
 		} while (this.sharedDrainPending);
+	}
+
+	/**
+	 * Channels whose head is ahead of the published cursor.
+	 *
+	 * The drain used to enumerate every head row that had ever existed and take
+	 * — then release — a coordinator lease on each one, so a fleet with a large
+	 * channel space paid two writes per idle channel on every pass, and a
+	 * single wake that raced an in-flight drain re-scanned the whole table.
+	 * Only channels with undelivered events are visited now.
+	 */
+	private async pendingSharedChannels(
+		channelHash?: string,
+	): Promise<Array<{ channelHash: string }>> {
+		return this.db
+			.select({ channelHash: questpieChannelHeadTable.channelHash })
+			.from(questpieChannelHeadTable)
+			.leftJoin(
+				questpieChannelDispatchTable,
+				eq(
+					questpieChannelDispatchTable.channelHash,
+					questpieChannelHeadTable.channelHash,
+				),
+			)
+			.where(
+				and(
+					sql`${questpieChannelHeadTable.lastSeq} > coalesce(${questpieChannelDispatchTable.publishedSeq}, 0)`,
+					...(channelHash
+						? [eq(questpieChannelHeadTable.channelHash, channelHash)]
+						: []),
+				),
+			);
 	}
 
 	private async drainSharedChannel(channelHash: string): Promise<void> {

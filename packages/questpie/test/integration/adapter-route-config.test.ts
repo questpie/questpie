@@ -2,12 +2,13 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { z } from "zod";
 
-import { collection, route } from "../../src/exports/index.js";
+import { collection, global, route } from "../../src/exports/index.js";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
 import type { AdapterContext } from "../../src/server/adapters/types.js";
 import { tryGetContext } from "../../src/server/config/context.js";
 import type { SearchAdapter } from "../../src/server/modules/core/integrated/search/types.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
+import { runTestDbMigrations } from "../utils/test-db";
 
 function createSearchAdapterMock(): {
 	adapter: SearchAdapter;
@@ -457,6 +458,91 @@ describe("adapter route config", () => {
 			expect(
 				setup.app.mocks.logger.getLogsContaining("HTTP request completed"),
 			).toEqual([]);
+		});
+	});
+
+	describe("read projection over http", () => {
+		const posts = collection("posts").fields(({ f }) => ({
+			title: f.text().required(),
+			body: f.textarea().required(),
+		}));
+		const settings = global("settings").fields(({ f }) => ({
+			siteName: f.text().required(),
+			tagline: f.text().required(),
+		}));
+
+		let setup: Awaited<ReturnType<typeof buildMockApp>>;
+		let created: { id: string };
+
+		beforeEach(async () => {
+			setup = await buildMockApp({
+				collections: { posts },
+				globals: { settings },
+				defaultAccess: { read: true, create: true, update: true },
+			});
+			await runTestDbMigrations(setup.app);
+			const handler = createFetchHandler(setup.app);
+			created = (await (
+				await handler(
+					new Request("http://localhost/posts", {
+						method: "POST",
+						body: JSON.stringify({ title: "Narrow", body: "Wide" }),
+					}),
+				)
+			)?.json()) as { id: string };
+		});
+
+		afterEach(async () => {
+			await setup.cleanup();
+		});
+
+		it("narrows a collection read to the requested columns", async () => {
+			const handler = createFetchHandler(setup.app);
+
+			const included = await handler(
+				new Request("http://localhost/posts?columns[title]=true"),
+			);
+			expect(included?.status).toBe(200);
+			const listed = (await included?.json())?.docs?.[0];
+			expect(listed).toMatchObject({ id: created.id, title: "Narrow" });
+			expect(listed).not.toHaveProperty("body");
+
+			// Omission mode: `false` has to survive the query string as a boolean,
+			// not as the truthy string "false".
+			const omitted = await handler(
+				new Request("http://localhost/posts?columns[body]=false"),
+			);
+			const remaining = (await omitted?.json())?.docs?.[0];
+			expect(remaining).toMatchObject({ title: "Narrow" });
+			expect(remaining).not.toHaveProperty("body");
+
+			const one = await handler(
+				new Request(`http://localhost/posts/${created.id}?columns[title]=true`),
+			);
+			expect(one?.status).toBe(200);
+			const record = await one?.json();
+			expect(record).toMatchObject({ id: created.id, title: "Narrow" });
+			expect(record).not.toHaveProperty("body");
+		});
+
+		it("narrows a global read to the requested columns", async () => {
+			const handler = createFetchHandler(setup.app);
+			await handler(
+				new Request("http://localhost/globals/settings", {
+					method: "PATCH",
+					body: JSON.stringify({ siteName: "QUESTPIE", tagline: "Wide" }),
+				}),
+			);
+
+			const response = await handler(
+				new Request(
+					"http://localhost/globals/settings?columns[siteName]=true&columns[tagline]=false",
+				),
+			);
+			expect(response?.status).toBe(200);
+			const record = await response?.json();
+			expect(record).toMatchObject({ siteName: "QUESTPIE" });
+			expect(record).not.toHaveProperty("tagline");
 		});
 	});
 

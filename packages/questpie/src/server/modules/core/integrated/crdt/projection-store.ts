@@ -71,11 +71,16 @@ export type CrdtProjectionOwnerPort<TOwner> = Readonly<{
 		owner: TOwner,
 		input: {
 			values: ReadonlyMap<string, string | readonly string[]>;
+			changed: ReadonlySet<string>;
 			resourceId: string;
 			resourceEpochId: string;
+			basisCommitSeq: bigint;
 			commitSeq: bigint;
 		},
-	): Promise<void>;
+	): Promise<void | Readonly<{
+		values?: ReadonlyMap<string, string | readonly string[]>;
+		ownerChanged?: boolean;
+	}>>;
 	appendRealtimeChange(
 		transaction: CrdtDatabase,
 		owner: TOwner,
@@ -500,36 +505,75 @@ async function commitProjection<TOwner>(
 		};
 	}
 	const values = new Map<string, string | readonly string[]>();
+	const changed = new Set<string>();
 	for (const binding of bindings) {
 		const field = fields.get(binding.id)!;
+		values.set(binding.sourcePath, field.value);
 		if (
 			field.shouldWrite &&
 			field.targetFieldCursor > binding.projectedFieldCursor
 		) {
-			values.set(binding.sourcePath, field.value);
+			changed.add(binding.sourcePath);
 		}
 	}
-	if (values.size > 0 && ownerPort.prepareAcknowledgement) {
-		await ownerPort.prepareAcknowledgement(db, owner, {
-			values,
-			resourceId: claim.resourceId,
-			resourceEpochId: claim.resourceEpochId,
-			commitSeq: claim.targetCommitSeq,
-		});
+	let canonicalValues: ReadonlyMap<string, string | readonly string[]> = values;
+	let ownerChanged = false;
+	if (changed.size > 0 && ownerPort.prepareAcknowledgement) {
+		const preparedAcknowledgement = await ownerPort.prepareAcknowledgement(
+			db,
+			owner,
+			{
+				values,
+				changed,
+				resourceId: claim.resourceId,
+				resourceEpochId: claim.resourceEpochId,
+				basisCommitSeq: prepared.basisProjectedCommitSeq,
+				commitSeq: claim.targetCommitSeq,
+			},
+		);
+		if (preparedAcknowledgement?.values) {
+			canonicalValues = validateCanonicalValues(
+				preparedAcknowledgement.values,
+				bindings,
+			);
+		}
+		ownerChanged = preparedAcknowledgement?.ownerChanged === true;
 	}
-	const canonicalValues = values;
-	if (canonicalValues.size > 0) {
-		await ownerPort.writeCanonical(db, owner, canonicalValues);
+	const canonicalHashes = new Map<string, Uint8Array>();
+	const canonicalWrites = new Map<string, string | readonly string[]>();
+	for (const binding of bindings) {
+		const value = canonicalValues.get(binding.sourcePath)!;
+		const canonicalHash = await hashCrdtCanonicalValue(
+			binding.format === 1 ? "text" : "set",
+			value,
+		);
+		canonicalHashes.set(binding.id, canonicalHash);
+		const rawHash = rawHashes.get(binding.id)!;
+		if (!equalBytes(rawHash, canonicalHash)) {
+			canonicalWrites.set(binding.sourcePath, value);
+		}
+	}
+	if (canonicalWrites.size > 0 || ownerChanged) {
+		await ownerPort.writeCanonical(db, owner, canonicalWrites);
 	}
 	for (const binding of bindings) {
 		const field = fields.get(binding.id)!;
-		if (field.targetFieldCursor <= binding.projectedFieldCursor) continue;
+		const canonicalHash = canonicalHashes.get(binding.id)!;
+		const cursorAdvanced =
+			field.targetFieldCursor > binding.projectedFieldCursor;
+		const canonicalChanged = !equalBytes(
+			canonicalHash,
+			binding.projectedCanonicalHash,
+		);
+		if (!cursorAdvanced && !canonicalChanged) continue;
 		await db
 			.update(questpieCrdtBindingTable)
 			.set({
 				projectedFieldCursor: field.targetFieldCursor,
-				projectedCanonicalHash: Buffer.from(field.canonicalHash),
-				projectedCanonicalRevision: field.canonicalRevision,
+				projectedCanonicalHash: Buffer.from(canonicalHash),
+				projectedCanonicalRevision: cursorAdvanced
+					? field.canonicalRevision
+					: binding.projectedCanonicalRevision,
 				updatedAt: sql`now()`,
 			})
 			.where(eq(questpieCrdtBindingTable.id, binding.id));
@@ -541,7 +585,7 @@ async function commitProjection<TOwner>(
 			updatedAt: sql`now()`,
 		})
 		.where(eq(questpieCrdtResourceEpochTable.id, claim.resourceEpochId));
-	if (canonicalValues.size > 0) {
+	if (canonicalWrites.size > 0 || ownerChanged) {
 		const outboxChanges = await ownerPort.appendRealtimeChange(db, owner, {
 			origin: "crdt_projection",
 			resourceId: claim.resourceId,
@@ -570,6 +614,36 @@ async function commitProjection<TOwner>(
 		status: "applied" as const,
 		projectedCommitSeq: claim.targetCommitSeq,
 	});
+}
+
+function validateCanonicalValues(
+	values: ReadonlyMap<string, string | readonly string[]>,
+	bindings: readonly (typeof questpieCrdtBindingTable.$inferSelect)[],
+): ReadonlyMap<string, string | readonly string[]> {
+	if (!(values instanceof Map) || values.size !== bindings.length) {
+		throw new TypeError(
+			"CRDT projection acknowledgement must return the complete aggregate cut",
+		);
+	}
+	const result = new Map<string, string | readonly string[]>();
+	for (const binding of bindings) {
+		const value = values.get(binding.sourcePath);
+		if (
+			(binding.format === 1 && typeof value !== "string") ||
+			(binding.format === 2 &&
+				(!Array.isArray(value) ||
+					value.some((entry) => typeof entry !== "string")))
+		) {
+			throw new TypeError(
+				`CRDT projection acknowledgement returned an invalid value for '${binding.sourcePath}'`,
+			);
+		}
+		result.set(
+			binding.sourcePath,
+			Array.isArray(value) ? Object.freeze([...value]) : value,
+		);
+	}
+	return result;
 }
 
 async function suspendAggregate(

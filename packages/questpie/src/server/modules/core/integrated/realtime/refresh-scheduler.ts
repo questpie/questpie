@@ -18,6 +18,12 @@ type RealtimeSource = {
 	getResumeState?(sinceSeq: number): Promise<{
 		latestSeq: number;
 		reset: boolean;
+		/**
+		 * Whether the resuming client is provably up to date. Only the service
+		 * can decide this: `latestSeq === sinceSeq` does not imply it, because a
+		 * lower sequence can settle after a higher one.
+		 */
+		current: boolean;
 	}>;
 	subscribe(
 		listener: (event: RealtimeChangeEvent) => void,
@@ -763,6 +769,18 @@ export class RealtimeRefreshScheduler {
 					group.resetQueued = true;
 					continue;
 				}
+				// One hydration answers for the whole batch, so a key deleted by any
+				// event in it is deleted, whatever an earlier event did to it.
+				const deletedIds = new Set<string>();
+				for (const event of events) {
+					if (
+						event.operation !== "delete" &&
+						event.operation !== "bulk_delete"
+					) {
+						continue;
+					}
+					for (const key of eventRecordIds(event)!) deletedIds.add(key);
+				}
 				const upToDate = await group.captureWatermark?.();
 				this.observe({
 					type: "routing.authoritative_db",
@@ -791,20 +809,21 @@ export class RealtimeRefreshScheduler {
 					for (const key of eventRecordIds(event)!) {
 						const row = rowsById.get(key);
 						const previousHash = group.rowHashes.get(key);
-						const operation = deriveDeltaOp({
+						const derived = deriveDeltaOp({
 							present: row !== undefined,
 							operation: event.operation,
 							beforeMatch: previousHash !== undefined,
+							deletedInBatch: deletedIds.has(key),
 						});
 						if (row !== undefined) {
 							const hash = await sha256(JSON.stringify(row));
 							group.rowHashes.set(key, hash);
-							if (operation !== "noop" && hash !== previousHash) {
+							if (derived.op !== "noop" && hash !== previousHash) {
 								this.deliverDeltaEvent(
 									group,
-									operation,
+									derived.op,
 									{
-										type: operation,
+										type: derived.op,
 										seq: event.seq,
 										...(event.txid ? { txid: event.txid } : {}),
 										key,
@@ -815,10 +834,10 @@ export class RealtimeRefreshScheduler {
 							} else {
 								this.observe({
 									type: "delta.suppressed",
-									reason: operation === "noop" ? "noop" : "unchanged",
+									reason: derived.op === "noop" ? "noop" : "unchanged",
 								});
 							}
-						} else if (operation === "delete") {
+						} else if (derived.op === "delete") {
 							group.rowHashes.delete(key);
 							this.deliverDeltaEvent(
 								group,
@@ -828,6 +847,7 @@ export class RealtimeRefreshScheduler {
 									seq: event.seq,
 									...(event.txid ? { txid: event.txid } : {}),
 									key,
+									reason: derived.reason,
 								},
 								"delta",
 							);
@@ -984,21 +1004,18 @@ export class RealtimeRefreshScheduler {
 
 	private async initialize(group: SchedulerGroup): Promise<void> {
 		try {
-			let resume: { latestSeq: number; reset: boolean };
+			let resume: { latestSeq: number; reset: boolean; current: boolean };
 			if (group.sinceSeq !== undefined && this.realtime.getResumeState) {
 				resume = await this.realtime.getResumeState(group.sinceSeq);
 			} else {
 				resume = {
 					latestSeq: await this.realtime.getLatestSeq(),
 					reset: false,
+					current: false,
 				};
 			}
 			const { latestSeq } = resume;
-			if (
-				group.sinceSeq !== undefined &&
-				latestSeq === group.sinceSeq &&
-				!resume.reset
-			) {
+			if (group.sinceSeq !== undefined && resume.current && !resume.reset) {
 				group.lastSeq = latestSeq;
 				this.observe({ type: "resume", outcome: "current" });
 				return;

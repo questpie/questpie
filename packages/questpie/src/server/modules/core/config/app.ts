@@ -137,6 +137,30 @@ function reportRealtimeCaptureError(
 	throw new FatalGlobalHookError(error);
 }
 
+/**
+ * Minimal structural slice of the app instance the realtime hooks reach for
+ * ({@link GlobalCollectionHookContext.app} is `unknown` pre-codegen).
+ */
+interface AppRealtimeSurface {
+	config?: { realtime?: { changeCapture?: boolean } };
+}
+
+/**
+ * Whether this application records mutations to the realtime outbox.
+ *
+ * Checked before `ctx.realtime` is touched so that an application that turned
+ * capture off issues no realtime SQL on a mutation at all — no outbox insert,
+ * and therefore no retention cleanup to schedule either. See
+ * `RealtimeConfig.changeCapture` for what that costs: no collection realtime,
+ * no resume, and no `txid` on the mutation result.
+ */
+function isRealtimeCaptureEnabled(app: unknown): boolean {
+	return (
+		(app as AppRealtimeSurface | undefined)?.config?.realtime?.changeCapture !==
+		false
+	);
+}
+
 function shouldCaptureRealtimeChange(
 	ctx: GlobalCollectionHookContext,
 ): boolean {
@@ -169,6 +193,7 @@ function publishRealtimeAfterCommit(
  */
 const realtimeHook = {
 	afterChange: async (ctx: GlobalCollectionHookContext) => {
+		if (!isRealtimeCaptureEnabled(ctx.app)) return;
 		const realtime = ctx.realtime;
 		if (!realtime) return;
 		if (!shouldCaptureRealtimeChange(ctx)) return;
@@ -193,6 +218,7 @@ const realtimeHook = {
 		}
 	},
 	afterDelete: async (ctx: GlobalCollectionHookContext) => {
+		if (!isRealtimeCaptureEnabled(ctx.app)) return;
 		const realtime = ctx.realtime;
 		if (!realtime) return;
 		if (!shouldCaptureRealtimeChange(ctx)) return;
@@ -217,6 +243,7 @@ const realtimeHook = {
 		}
 	},
 	afterPurge: async (ctx: GlobalCollectionHookContext) => {
+		if (!isRealtimeCaptureEnabled(ctx.app)) return;
 		const realtime = ctx.realtime;
 		if (!realtime) return;
 
@@ -416,6 +443,7 @@ const scheduledTransitionHook = {
  */
 const globalRealtimeHook = {
 	afterChange: async (ctx: GlobalGlobalHookContext) => {
+		if (!isRealtimeCaptureEnabled(ctx.app)) return;
 		const realtime = ctx.realtime;
 		if (!realtime) return;
 

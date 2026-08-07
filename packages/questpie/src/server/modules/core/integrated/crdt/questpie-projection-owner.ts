@@ -1,14 +1,17 @@
-import { eq, getTableColumns } from "drizzle-orm";
+import { and, asc, eq, getTableColumns, gt, lte } from "drizzle-orm";
 
 import { mutateCanonicalRow } from "#questpie/server/collection/crud/shared/canonical-mutation.js";
 import { onAfterCommit } from "#questpie/server/collection/crud/shared/transaction.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
+import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
 import { hashCrdtCanonicalValue } from "#questpie/shared/crdt-engine.js";
 
 import type { CrdtProjectionOwnerPort } from "./projection-store.js";
 import {
+	questpieCrdtCommitTable,
 	questpieCrdtDefinitionTable,
 	questpieCrdtResourceTable,
+	questpieCrdtSubjectTable,
 } from "./schema.js";
 
 type LockedOwner = {
@@ -24,6 +27,15 @@ type LockedOwner = {
 export function createQuestpieProjectionOwnerPort(
 	app: Questpie<any>,
 ): CrdtProjectionOwnerPort<LockedOwner> {
+	const prepareAcknowledgement =
+		app.config?.crdt?.projection?.prepareAcknowledgement;
+	const preparedOwnerValues = new WeakMap<
+		LockedOwner,
+		{
+			values: Readonly<Record<string, unknown>>;
+			crdtPaths: ReadonlySet<string>;
+		}
+	>();
 	return Object.freeze({
 		async lock(transaction, { resourceId }) {
 			const [identity] = await transaction
@@ -133,7 +145,23 @@ export function createQuestpieProjectionOwnerPort(
 			return result;
 		},
 		async writeCanonical(transaction, owner, values) {
-			const update: Record<string, string | readonly string[]> = {};
+			const prepared = preparedOwnerValues.get(owner);
+			preparedOwnerValues.delete(owner);
+			const update: Record<string, unknown> = {};
+			for (const [field, value] of Object.entries(prepared?.values ?? {})) {
+				if (
+					!owner.columns[field] ||
+					prepared?.crdtPaths.has(field) ||
+					["id", "revision", "createdAt", "updatedAt", "deletedAt"].includes(
+						field,
+					)
+				) {
+					throw new TypeError(
+						`CRDT projection acknowledgement cannot write owner field '${field}'`,
+					);
+				}
+				update[field] = value;
+			}
 			for (const [sourcePath, value] of values) {
 				if (!owner.columns[sourcePath]) {
 					throw new Error("CRDT canonical column is unavailable");
@@ -151,6 +179,95 @@ export function createQuestpieProjectionOwnerPort(
 				expectedRevision: "internal",
 			});
 		},
+		...(prepareAcknowledgement
+			? {
+					async prepareAcknowledgement(
+						transaction: AnyDrizzleClient<any>,
+						owner: LockedOwner,
+						input: {
+							values: ReadonlyMap<string, string | readonly string[]>;
+							changed: ReadonlySet<string>;
+							resourceId: string;
+							resourceEpochId: string;
+							basisCommitSeq: bigint;
+							commitSeq: bigint;
+						},
+					) {
+						const contributors = await transaction
+							.select({
+								commitSeq: questpieCrdtCommitTable.commitSeq,
+								sessionId: questpieCrdtCommitTable.sessionId,
+								kind: questpieCrdtSubjectTable.kind,
+								issuer: questpieCrdtSubjectTable.issuerKey,
+								subjectId: questpieCrdtSubjectTable.subjectKey,
+							})
+							.from(questpieCrdtCommitTable)
+							.innerJoin(
+								questpieCrdtSubjectTable,
+								eq(
+									questpieCrdtSubjectTable.id,
+									questpieCrdtCommitTable.subjectId,
+								),
+							)
+							.where(
+								and(
+									eq(questpieCrdtCommitTable.resourceId, input.resourceId),
+									eq(
+										questpieCrdtCommitTable.resourceEpochId,
+										input.resourceEpochId,
+									),
+									gt(questpieCrdtCommitTable.commitSeq, input.basisCommitSeq),
+									lte(questpieCrdtCommitTable.commitSeq, input.commitSeq),
+								),
+							)
+							.orderBy(asc(questpieCrdtCommitTable.commitSeq));
+						const result = await prepareAcknowledgement({
+							transaction,
+							owner: Object.freeze({
+								kind: owner.kind,
+								key: owner.key,
+								recordId: owner.recordId,
+								current: Object.freeze({ ...owner.row }),
+							}),
+							values: new Map(input.values),
+							changed: new Set(input.changed),
+							contributors: Object.freeze(
+								contributors.map((contributor) =>
+									Object.freeze({
+										commitSeq: contributor.commitSeq,
+										sessionId: contributor.sessionId,
+										actor:
+											contributor.kind === 1
+												? Object.freeze({
+														kind: "human" as const,
+														subjectId: contributor.subjectId,
+													})
+												: Object.freeze({
+														kind: "agent" as const,
+														issuer: contributor.issuer,
+														subjectId: contributor.subjectId,
+													}),
+									}),
+								),
+							),
+							resourceId: input.resourceId,
+							resourceEpochId: input.resourceEpochId,
+							basisCommitSeq: input.basisCommitSeq,
+							commitSeq: input.commitSeq,
+						});
+						if (result?.ownerValues) {
+							preparedOwnerValues.set(owner, {
+								values: Object.freeze({ ...result.ownerValues }),
+								crdtPaths: new Set(input.values.keys()),
+							});
+						}
+						return {
+							...(result?.values ? { values: result.values } : {}),
+							...(result?.ownerValues ? { ownerChanged: true } : {}),
+						};
+					},
+				}
+			: {}),
 		async appendRealtimeChange(_transaction, owner, input) {
 			const event = await app.realtime.appendChange({
 				resourceType: owner.kind,

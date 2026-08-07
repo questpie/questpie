@@ -1,4 +1,4 @@
-import { asc, desc, eq, gt, lt } from "drizzle-orm";
+import { and, asc, desc, isNull, lt, sql } from "drizzle-orm";
 
 import {
 	opaqueChannelAuthoritySubject,
@@ -27,10 +27,7 @@ import {
 	hashResolvedChannel,
 	type LocalChannelSubscriptionInput,
 } from "./channel-event-ledger.js";
-import {
-	questpieRealtimeHeadTable,
-	questpieRealtimeLogTable,
-} from "./collection.js";
+import { questpieRealtimeLogTable } from "./collection.js";
 import {
 	RealtimeObservability,
 	type RealtimeMetricsSnapshot,
@@ -86,6 +83,36 @@ type AppendChangeInput = Omit<
 const DEFAULT_RETENTION_DAYS = 3;
 const DEFAULT_ADAPTER_RECONCILIATION_INTERVAL_MS = 15_000;
 
+/**
+ * Where one node has read to in the outbox, in the order changes settle.
+ *
+ * `seq` alone cannot express this: it is allocated when a row is inserted, not
+ * when its transaction commits, so a lower `seq` can settle after a higher one.
+ */
+type RealtimeDrainCursor = { txid: string; seq: number };
+
+/** Before any row: xid8 0 is below every assigned transaction id. */
+const EMPTY_DRAIN_CURSOR: RealtimeDrainCursor = { txid: "0", seq: 0 };
+
+/** How soon to look again when a committed change is not yet readable. */
+const SETTLEMENT_RETRY_MS = 250;
+
+/**
+ * Is this change strictly after the cursor in settled order?
+ *
+ * The read already says so in SQL; this keeps the same promise on the way out,
+ * so no driver quirk can turn "read from here" into a replay.
+ */
+function isAfterCursor(
+	event: Pick<RealtimeChangeEvent, "seq" | "txid">,
+	cursor: RealtimeDrainCursor,
+): boolean {
+	if (event.txid === undefined) return event.seq > cursor.seq;
+	const txid = BigInt(event.txid);
+	const from = BigInt(cursor.txid);
+	return txid > from || (txid === from && event.seq > cursor.seq);
+}
+
 type ListenerEntry = {
 	listener: RealtimeListener;
 	errorListener?: RealtimeErrorListener;
@@ -124,8 +151,9 @@ export class RealtimeService {
 	private startPromise: Promise<void> | null = null;
 	private publisherStartPromise: Promise<void> | null = null;
 	private publisherStarted = false;
-	private lastSeq = 0;
+	private cursor: RealtimeDrainCursor = EMPTY_DRAIN_CURSOR;
 	private pollTimer: ReturnType<typeof setInterval> | null = null;
+	private settlementRetryTimer: ReturnType<typeof setTimeout> | null = null;
 	private subscriptionContext?: RealtimeSubscriptionContext;
 	private retentionDays?: number;
 	private retentionCleanupIntervalMs: number;
@@ -342,25 +370,21 @@ export class RealtimeService {
 		input: AppendChangeInput,
 		db: DrizzleClientFromQuestpieConfig<any>,
 	): Promise<RealtimeChangeEvent> {
-		// The head-row lock must remain held until the outbox insert commits. This
-		// makes sequence order commit order for native delta cursors.
+		// Capture takes no fleet-wide lock. It used to UPDATE a single head row so
+		// that sequence order was commit order, and PostgreSQL holds that row lock
+		// until COMMIT — on the *caller's* business transaction. So exactly one
+		// capture in the whole cluster could be in flight at a time: measured
+		// throughput FELL as writers were added (57 -> 44 -> 35 captures/s at
+		// 4 -> 8 -> 16 writers, against 115 -> 145 -> 267 without it), one long
+		// transaction starved every other writer for its whole duration, and the
+		// head row was a mid-transaction lock-ordering point that turned ordinary
+		// row conflicts into deadlocks.
+		//
+		// Readers no longer need sequence order to be commit order: `readAfter`
+		// walks the log in `(txid, seq)` order below PostgreSQL's own visibility
+		// watermark. See `readAfter` for why that is gap-free.
 		let row: typeof questpieRealtimeLogTable.$inferSelect;
 		try {
-			// `last_seq` on this row is written and never read — the cursor of record
-			// is `questpie_realtime_log.seq`. Seeding it with `max(seq)` cost an
-			// InitPlan over the whole log on every capture, including the common
-			// case where the row already exists and the insert does nothing.
-			await db
-				.insert(questpieRealtimeHeadTable)
-				.values({ id: "global" })
-				.onConflictDoNothing();
-			const [head] = await db
-				.update(questpieRealtimeHeadTable)
-				.set({ updatedAt: new Date() })
-				.where(eq(questpieRealtimeHeadTable.id, "global"))
-				.returning({ id: questpieRealtimeHeadTable.id });
-			if (!head)
-				throw new Error("Realtime outbox sequence head is unavailable");
 			[row] = await db
 				.insert(questpieRealtimeLogTable)
 				.values({
@@ -1146,24 +1170,77 @@ export class RealtimeService {
 		};
 	}
 
+	/**
+	 * The highest sequence that is settled fleet-wide.
+	 *
+	 * Deliberately NOT `max(seq)`. Without the head lock a visible row can still
+	 * be un-settled — its transaction id may sit above the current watermark
+	 * while an older transaction is open — and a stamp taken from such a row is
+	 * not a value the scheduler may stamp. The returned row itself is settled;
+	 * lower sequence numbers may still belong to later transaction ids, so the
+	 * scalar remains a resume hint rather than the drain cursor.
+	 */
 	async getLatestSeq(): Promise<number> {
-		const rows = await this.db
-			.select({ seq: questpieRealtimeLogTable.seq })
-			.from(questpieRealtimeLogTable)
-			.orderBy(desc(questpieRealtimeLogTable.seq))
-			.limit(1);
-		return rows[0]?.seq ? Number(rows[0].seq) : 0;
+		const rows = await this.readSettledSeqHead();
+		return rows?.seq ?? 0;
 	}
 
-	async getResumeState(
-		sinceSeq: number,
-	): Promise<{ latestSeq: number; reset: boolean }> {
-		const latestSeq = await this.getLatestSeq();
-		if (sinceSeq === latestSeq) return { latestSeq, reset: false };
-		if (sinceSeq < 0 || sinceSeq > latestSeq) {
-			return { latestSeq, reset: true };
+	private async readSettledSeqHead(): Promise<{
+		seq: number;
+		txid: string;
+	} | null> {
+		const rows = await this.db
+			.select({
+				seq: questpieRealtimeLogTable.seq,
+				txid: questpieRealtimeLogTable.txid,
+			})
+			.from(questpieRealtimeLogTable)
+			.where(
+				sql`${questpieRealtimeLogTable.txid} < pg_snapshot_xmin(pg_current_snapshot())`,
+			)
+			.orderBy(desc(questpieRealtimeLogTable.seq))
+			.limit(1);
+		const row = rows[0];
+		if (!row?.txid) return null;
+		return { seq: Number(row.seq), txid: String(row.txid) };
+	}
+
+	/**
+	 * Decide what a resuming subscriber owes its client.
+	 *
+	 * `current` means "provably nothing happened that this client has not
+	 * already applied", which is what lets a deploy-restart storm reconnect
+	 * without every topic recomputing. It is only claimed when BOTH hold:
+	 *
+	 * - `sinceSeq` is the settled head, so the client's own data was computed
+	 *   from a snapshot at or after the moment that row settled, and
+	 * - no visible row has a transaction id above that row's, so nothing has
+	 *   committed since — including rows whose `seq` is *lower* than
+	 *   `sinceSeq`, which is exactly the case a `seq` comparison cannot see.
+	 *
+	 * Anything else falls back to one authoritative recompute, which is
+	 * suppressed on the wire when the result hashes the same.
+	 */
+	async getResumeState(sinceSeq: number): Promise<{
+		latestSeq: number;
+		reset: boolean;
+		current: boolean;
+	}> {
+		const settled = await this.readSettledSeqHead();
+		const latestSeq = settled?.seq ?? 0;
+		if (sinceSeq === latestSeq && settled) {
+			const newestTxid = await this.readNewestTxid();
+			// String compare would order "9" after "10"; xid8 is a 64-bit counter.
+			const current =
+				newestTxid !== null && BigInt(newestTxid) <= BigInt(settled.txid);
+			if (current) return { latestSeq, reset: false, current: true };
 		}
-		if (latestSeq === 0) return { latestSeq, reset: sinceSeq !== 0 };
+		if (sinceSeq < 0 || sinceSeq > latestSeq) {
+			return { latestSeq, reset: true, current: false };
+		}
+		if (latestSeq === 0) {
+			return { latestSeq, reset: sinceSeq !== 0, current: false };
+		}
 
 		const rows = await this.db
 			.select({ seq: questpieRealtimeLogTable.seq })
@@ -1171,10 +1248,55 @@ export class RealtimeService {
 			.orderBy(asc(questpieRealtimeLogTable.seq))
 			.limit(1);
 		const oldestSeq = rows[0]?.seq ? Number(rows[0].seq) : latestSeq;
-		return { latestSeq, reset: sinceSeq < oldestSeq - 1 };
+		return { latestSeq, reset: sinceSeq < oldestSeq - 1, current: false };
 	}
 
-	private async readSince(seq: number): Promise<RealtimeChangeEvent[]> {
+	/**
+	 * Newest transaction id in the visible log, settled or not.
+	 *
+	 * Rows written before `txid` existed (3.17) have none, and PostgreSQL sorts
+	 * those first under `DESC`, so a log still holding them answers `null` and
+	 * the resume fast path stays off until retention clears them.
+	 */
+	private async readNewestTxid(): Promise<string | null> {
+		const rows = await this.db
+			.select({ txid: questpieRealtimeLogTable.txid })
+			.from(questpieRealtimeLogTable)
+			.orderBy(desc(questpieRealtimeLogTable.txid))
+			.limit(1);
+		const txid = rows[0]?.txid;
+		return txid == null ? null : String(txid);
+	}
+
+	/**
+	 * Read the next batch of changes in the fleet-wide settled order.
+	 *
+	 * Two rules together make this gap-free without any lock:
+	 *
+	 * 1. Only rows whose `txid` is strictly below the reading snapshot's `xmin`
+	 *    are eligible. Every transaction with an id below `xmin` has already
+	 *    ended, so that set is stable and only ever grows.
+	 * 2. The cursor is the composite `(txid, seq)`, ordered by `txid` then `seq`.
+	 *    When `xmin` advances, every newly eligible row has `txid >=` the
+	 *    previous `xmin`, which is strictly greater than the cursor's `txid`
+	 *    (rule 1 keeps the cursor below the watermark it was read at). So new
+	 *    rows always sort after everything already read, and the visible prefix
+	 *    stays contiguous.
+	 *
+	 * The `seq` half of the cursor alone is NOT enough. Transaction ids and
+	 * `seq` are assigned independently and can invert: a transaction that took
+	 * its xid early but appended late gets a low `txid` with a high `seq`, so a
+	 * `WHERE seq > cursor` reader advances past a lower `seq` that is still
+	 * uncommitted and skips it forever once it commits. That is measured, not
+	 * theoretical — see `.private/realtime-research-2026-08-05/probes/
+	 * xid-seq-inversion.ts`, which fails against the seq-only cursor.
+	 *
+	 * Aborted transactions need no handling: their rows are never visible, and
+	 * a row is only eligible once its transaction has ended.
+	 */
+	private async readAfter(
+		cursor: RealtimeDrainCursor,
+	): Promise<RealtimeChangeEvent[]> {
 		const rows = await this.db
 			.select({
 				seq: questpieRealtimeLogTable.seq,
@@ -1188,8 +1310,16 @@ export class RealtimeService {
 				createdAt: questpieRealtimeLogTable.createdAt,
 			})
 			.from(questpieRealtimeLogTable)
-			.where(gt(questpieRealtimeLogTable.seq, seq))
-			.orderBy(asc(questpieRealtimeLogTable.seq))
+			.where(
+				and(
+					sql`${questpieRealtimeLogTable.txid} < pg_snapshot_xmin(pg_current_snapshot())`,
+					sql`(${questpieRealtimeLogTable.txid}, ${questpieRealtimeLogTable.seq}) > (${cursor.txid}::text::xid8, ${cursor.seq}::bigint)`,
+				),
+			)
+			.orderBy(
+				asc(questpieRealtimeLogTable.txid),
+				asc(questpieRealtimeLogTable.seq),
+			)
 			.limit(this.batchSize);
 
 		return rows
@@ -1204,7 +1334,33 @@ export class RealtimeService {
 				payload: (row.payload ?? {}) as RealtimeChangePayload,
 				createdAt: row.createdAt,
 			}))
-			.filter((event) => event.seq > seq);
+			.filter((event) => isAfterCursor(event, cursor));
+	}
+
+	/**
+	 * The newest settled position: the log's composite head below the visibility
+	 * watermark. A booting node adopts it so it delivers what happens next
+	 * instead of replaying the retained log, and never adopts a position that
+	 * could still be overtaken by an open transaction.
+	 */
+	private async readSettledHead(): Promise<RealtimeDrainCursor> {
+		const rows = await this.db
+			.select({
+				seq: questpieRealtimeLogTable.seq,
+				txid: questpieRealtimeLogTable.txid,
+			})
+			.from(questpieRealtimeLogTable)
+			.where(
+				sql`${questpieRealtimeLogTable.txid} < pg_snapshot_xmin(pg_current_snapshot())`,
+			)
+			.orderBy(
+				desc(questpieRealtimeLogTable.txid),
+				desc(questpieRealtimeLogTable.seq),
+			)
+			.limit(1);
+		const row = rows[0];
+		if (!row?.txid) return EMPTY_DRAIN_CURSOR;
+		return { txid: String(row.txid), seq: Number(row.seq) };
 	}
 
 	private async ensureStarted(): Promise<void> {
@@ -1216,8 +1372,7 @@ export class RealtimeService {
 
 		this.startPromise = (async () => {
 			const signalGeneration = this.drainSignalGeneration;
-			const latestSeq = await this.getLatestSeq();
-			this.lastSeq = latestSeq;
+			this.cursor = await this.readSettledHead();
 			this.started = true;
 			await this.initialize();
 
@@ -1297,6 +1452,10 @@ export class RealtimeService {
 			clearInterval(this.pollTimer);
 			this.pollTimer = null;
 		}
+		if (this.settlementRetryTimer) {
+			clearTimeout(this.settlementRetryTimer);
+			this.settlementRetryTimer = null;
+		}
 		if (this.channelPollTimer) {
 			clearInterval(this.channelPollTimer);
 			this.channelPollTimer = null;
@@ -1321,18 +1480,21 @@ export class RealtimeService {
 		}
 		this.draining = true;
 		const startedAt = performance.now();
-		const initialSeq = this.lastSeq;
+		const initialSeq = this.cursor.seq;
 		let rows = 0;
 		let newestCreatedAt: Date | undefined;
 
 		try {
 			while (true) {
-				const events = await this.readSince(this.lastSeq);
+				const events = await this.readAfter(this.cursor);
 				if (events.length === 0) break;
 				rows += events.length;
 				newestCreatedAt = events.at(-1)?.createdAt;
 
-				this.lastSeq = events[events.length - 1].seq;
+				const last = events[events.length - 1];
+				// `readAfter` filters on `txid`, so a row reaching here without one
+				// only happens behind a test double; keep the cursor's own id then.
+				this.cursor = { txid: last.txid ?? this.cursor.txid, seq: last.seq };
 				for (const event of events) {
 					this.emit(event);
 				}
@@ -1343,7 +1505,7 @@ export class RealtimeService {
 				type: "drain.completed",
 				reason,
 				rows,
-				seqDelta: Math.max(0, this.lastSeq - initialSeq),
+				seqDelta: Math.max(0, this.cursor.seq - initialSeq),
 				lagMs: newestCreatedAt
 					? Math.max(0, Date.now() - newestCreatedAt.getTime())
 					: 0,
@@ -1360,8 +1522,51 @@ export class RealtimeService {
 
 			if (shouldDrainAgain) {
 				this.drainSafely(reason);
+			} else {
+				this.scheduleSettlementRetry();
 			}
 		}
+	}
+
+	/**
+	 * Come back for changes that are committed but not yet readable.
+	 *
+	 * A change is only drained once its transaction id falls below the reading
+	 * snapshot's `xmin`, which an OLDER open write transaction holds back. The
+	 * publisher's own wake-up already fired by then, so without this the change
+	 * would wait for the next reconciliation poll — 15 seconds by default —
+	 * every time any long write transaction overlaps it.
+	 *
+	 * The probe asks for any row after the cursor, not only one currently above
+	 * `xmin`: the blocker can end between the empty drain statement and this
+	 * statement. In that race the row is already readable, but still needs the
+	 * retry because its original broker wake has passed.
+	 */
+	private scheduleSettlementRetry(): void {
+		if (!this.started || this.settlementRetryTimer) return;
+		void this.hasPendingChange()
+			.then((pending) => {
+				if (!pending || !this.started || this.settlementRetryTimer) return;
+				this.settlementRetryTimer = setTimeout(() => {
+					this.settlementRetryTimer = null;
+					this.drainSafely("poll");
+				}, SETTLEMENT_RETRY_MS);
+			})
+			.catch((error) => {
+				this.logger?.warn("[Realtime] Settlement probe failed", error);
+			});
+	}
+
+	/** Is any visible change still beyond this node's composite cursor? */
+	private async hasPendingChange(): Promise<boolean> {
+		const rows = await this.db
+			.select({ seq: questpieRealtimeLogTable.seq })
+			.from(questpieRealtimeLogTable)
+			.where(
+				sql`(${questpieRealtimeLogTable.txid}, ${questpieRealtimeLogTable.seq}) > (${this.cursor.txid}::text::xid8, ${this.cursor.seq}::bigint)`,
+			)
+			.limit(1);
+		return rows.length > 0;
 	}
 
 	private emit(event: RealtimeChangeEvent): void {
@@ -1446,9 +1651,25 @@ export class RealtimeService {
 			const cutoff = new Date(
 				now - (this.retentionDays as number) * 24 * 60 * 60 * 1000,
 			);
+			// Retention starts when a row is first OBSERVED as settled, not when its
+			// transaction inserted it. `created_at` is the transaction start time, so
+			// an old transaction can commit a row that is already beyond the retention
+			// window while an even older xid still keeps it above the drain frontier.
+			// Deleting by `created_at` would erase that row before any node was allowed
+			// to read it. Marking only rows below the same xmin gate as `readAfter`
+			// gives every newly drainable prefix a full retention window.
+			await this.db
+				.update(questpieRealtimeLogTable)
+				.set({ settledAt: new Date(now) })
+				.where(
+					and(
+						isNull(questpieRealtimeLogTable.settledAt),
+						sql`${questpieRealtimeLogTable.txid} < pg_snapshot_xmin(pg_current_snapshot())`,
+					),
+				);
 			await this.db
 				.delete(questpieRealtimeLogTable)
-				.where(lt(questpieRealtimeLogTable.createdAt, cutoff));
+				.where(lt(questpieRealtimeLogTable.settledAt, cutoff));
 		} catch (error) {
 			// Best-effort cleanup; keep realtime delivery resilient to cleanup failures.
 			this.logger?.warn("[Realtime] Outbox cleanup failed", error);

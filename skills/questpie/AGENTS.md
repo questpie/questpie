@@ -6419,6 +6419,15 @@ invalidation stay enabled. Raw topics receive the same
 `collection_realtime_disabled` or `row_live_queries_disabled` rejection as
 typed clients, before scheduler allocation or bootstrap.
 
+`realtime: { changeCapture: false }` is the write-side switch, and the stronger
+one. Mutations stop writing the outbox: no insert, no drain, no retention
+cleanup, so an application built on typed channels alone pays nothing for the
+collection lane. It costs collection and global realtime: every such topic is
+refused with `change_capture_disabled`, plus `sinceSeq` resume and the `txid`
+that `@questpie/tanstack-db` matches optimistic writes against. Typed channels,
+channel presence, and CRDT document sync are unaffected; CRDT canonical
+projection still writes its own outbox row per commit.
+
 A personalized relation query for 100,000 principals in one shared scope can
 cause 100,000 authoritative recomputations. Snapshot fallback is correct but
 expensive. Prefer materialized inbox rows with direct `recipientId`, a shared
@@ -6557,9 +6566,17 @@ cut; reconnect and replay reauthorize against current application state.
 ## Client, presence, and TanStack Query
 
 ```ts
-const stop = client.channels.chatRoom.subscribe({ roomId }, (message) => {
-	if (message.event === "message") console.log(message.data.text);
-});
+const stop = client.channels.chatRoom.subscribe(
+	{ roomId },
+	(message) => {
+		if (message.event === "message") console.log(message.data.text);
+	},
+	{
+		onReady: () => setMutationEnabled(true),
+		onNotReady: () => setMutationEnabled(false),
+		onError: console.error,
+	},
+);
 
 await client.channels.chatRoom.publish({
 	params: { roomId },
@@ -6575,6 +6592,15 @@ const stopPresence = client.channels.chatRoom.subscribePresence(
 stop();
 stopPresence();
 ```
+
+`onReady` begins an admitted logical subscription epoch after authorization and
+replay catch-up. `onNotReady` runs exactly once when that admitted epoch ends;
+successful reconnect calls `onReady` again for the next epoch. It is not called
+before the subscriber's first `onReady`, or when the subscriber explicitly
+stops or aborts. Ordinary reconnects use `onNotReady` without manufacturing an
+`onError`; a terminal failure after admission calls `onNotReady` before
+`onError`. Lifecycle callback exceptions are isolated from sibling subscribers,
+cleanup, and later reconnects.
 
 `presence()` returns one typed snapshot. `subscribePresence()` emits the initial and later rosters, and `presenceIter(params, { signal })` provides the async-generator form. Pusher/Soketi uses native membership; SSE uses Postgres leases across instances and deduplicates multiple connections by authenticated principal. Crash leave converges after the lease TTL.
 
@@ -6682,9 +6708,20 @@ Missed hints reconcile from PostgreSQL.
 The server Yjs engine uses bounded in-process worker threads for untrusted CPU
 work. That is private runtime machinery, not another deployable worker service.
 
+When canonical text and application-owned projections must advance atomically,
+configure `crdt.projection.prepareAcknowledgement`. It receives the complete
+authoritative aggregate cut, changed field paths, exact Human/Agent
+contributors, the locked owner and the framework projection transaction. It
+may write exact relation rows through that transaction and return canonical
+field values plus ordinary owner-column projections. Throwing rolls back those
+writes together with canonical fields, projection cursors and the realtime
+outbox event. The callback may retry and grants no authority of its own, so
+consumer validation and derived writes must be deterministic, idempotent and
+must recheck product authorization.
+
 ## Generated client
 
-Build the CRDT API from an existing client with `createCrdtClient` — it reuses
+Build the CRDT API from an existing client with `createCrdtClient`. It reuses
 that client's realtime session (still one connection), and keeps the CRDT
 implementation out of the bundle of every app that never calls it.
 
@@ -10399,6 +10436,25 @@ function PublishedPosts() {
 TanStack DB and TanStack React DB unchanged. They are here so a component imports
 from one place; their semantics and their documentation are upstream's. Only
 `createQuestpieCollections` is QUESTPIE's own.
+
+Optimistic-concurrency failures are normalized to
+`QuestpieDbConflictError`. Catch it when a mutation should refetch stale rows
+before offering a retry; its `collection`, `operation`, and `ids` properties
+identify the failed atomic batch.
+
+```ts
+import { QuestpieDbConflictError } from "@questpie/tanstack-db";
+
+try {
+	await db.posts.update(id, (draft) => {
+		draft.title = "Canonical title";
+	});
+} catch (error) {
+	if (error instanceof QuestpieDbConflictError) {
+		await queryClient.invalidateQueries();
+	}
+}
+```
 
 ## Types
 

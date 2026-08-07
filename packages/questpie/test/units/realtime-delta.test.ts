@@ -100,22 +100,45 @@ describe("realtime delta delivery", () => {
 	it("derives idempotent keyed operations from authoritative hydration", () => {
 		expect(
 			deriveDeltaOp({ present: true, operation: "create", beforeMatch: false }),
-		).toBe("insert");
+		).toEqual({ op: "insert" });
 		expect(
 			deriveDeltaOp({ present: true, operation: "update", beforeMatch: true }),
-		).toBe("update");
+		).toEqual({ op: "update" });
 		expect(
 			deriveDeltaOp({ present: true, operation: "update", beforeMatch: false }),
-		).toBe("insert");
+		).toEqual({ op: "insert" });
 		expect(
 			deriveDeltaOp({ present: false, operation: "update", beforeMatch: true }),
-		).toBe("delete");
+		).toMatchObject({ op: "delete" });
 		expect(
 			deriveDeltaOp({
 				present: false,
 				operation: "create",
 				beforeMatch: false,
 			}),
-		).toBe("noop");
+		).toEqual({ op: "noop" });
+	});
+
+	it("separates a removed row from one that only left the predicate", () => {
+		const removed = { present: false, beforeMatch: true } as const;
+
+		for (const operation of ["delete", "bulk_delete"] as const) {
+			expect(deriveDeltaOp({ ...removed, operation })).toEqual({
+				op: "delete",
+				reason: "deleted",
+			});
+		}
+		for (const operation of ["update", "bulk_update"] as const) {
+			expect(deriveDeltaOp({ ...removed, operation })).toEqual({
+				op: "delete",
+				reason: "left_predicate",
+			});
+		}
+
+		// One hydration answers for the whole batch, so a delete anywhere in it
+		// outranks an earlier predicate exit for the same key.
+		expect(
+			deriveDeltaOp({ ...removed, operation: "update", deletedInBatch: true }),
+		).toEqual({ op: "delete", reason: "deleted" });
 	});
 });

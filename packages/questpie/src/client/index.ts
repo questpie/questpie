@@ -755,6 +755,157 @@ type CollectionsAPI<T extends QuestpieApp> = {
 	>;
 };
 
+/**
+ * One mutation inside `client.transaction()`, for a single collection.
+ *
+ * The payload of each arm is the SAME params type the single-record client
+ * method takes — `UpdateParams` for update, `DeleteParams` for delete — so
+ * `expectedRevision` stays required at the type level exactly where
+ * `optimisticConcurrency` makes it required elsewhere, with no second
+ * definition to drift.
+ */
+type TransactionOperationFor<
+	TCollection extends AnyCollection,
+	TCollections extends Record<string, AnyCollectionOrBuilder>,
+	TName,
+	TDefinition = TCollection,
+> =
+	| {
+			collection: TName;
+			operation: "create";
+			data: CreateInputBase<
+				CollectionInsert<TCollection>,
+				ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>
+			>;
+	  }
+	| ({ collection: TName; operation: "update" } & UpdateParams<
+			CollectionUpdate<TCollection>,
+			ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>,
+			string,
+			ClientCollectionOptions<TDefinition>
+	  >)
+	| ({ collection: TName; operation: "delete" } & DeleteParams<
+			string,
+			ClientCollectionOptions<TDefinition>
+	  >);
+
+type UntypedTransactionOperation =
+	| {
+			collection: string;
+			operation: "create";
+			data: Record<string, unknown>;
+	  }
+	| {
+			collection: string;
+			operation: "update";
+			id: string;
+			data: Record<string, unknown>;
+			expectedRevision?: number;
+	  }
+	| {
+			collection: string;
+			operation: "delete";
+			id: string;
+			expectedRevision?: number;
+	  };
+
+type IsAny<T> = 0 extends 1 & T ? true : false;
+
+/**
+ * Every mutation any collection in the app accepts inside a transaction.
+ *
+ * `collection` and `operation` are both literal-typed, so a literal element
+ * narrows to one arm through TypeScript's discriminated-union fast path rather
+ * than a scan of the whole union.
+ */
+export type TransactionOperation<TApp extends QuestpieApp> =
+	IsAny<TApp> extends true
+		? UntypedTransactionOperation
+		: {
+				[K in keyof TApp["collections"]]: TransactionOperationFor<
+					GetCollection<TApp["collections"], K>,
+					TApp["collections"],
+					K,
+					TApp["collections"][K]
+				>;
+			}[keyof TApp["collections"]];
+
+/**
+ * Result of one operation, in the same shape the equivalent single-record
+ * method returns: the row for create/update, `{ success, data }` for delete.
+ */
+type TransactionOperationResult<TApp extends QuestpieApp, TOperation> =
+	IsAny<TApp> extends true
+		? unknown
+		: TOperation extends {
+					collection: infer TName extends keyof TApp["collections"];
+			  }
+			? TOperation extends { operation: "delete" }
+				? {
+						success: boolean;
+						data: ClientRow<
+							GetCollection<TApp["collections"], TName>,
+							TApp["collections"]
+						>;
+					}
+				: ClientRow<
+						GetCollection<TApp["collections"], TName>,
+						TApp["collections"]
+					>
+			: never;
+
+/**
+ * Results positionally typed against the operations that produced them.
+ *
+ * Per-position inference needs the `const` type parameter on `transaction()`
+ * and an array LITERAL at the call site; that combination infers a tuple. A
+ * pre-built `TransactionOperation<TApp>[]` variable is an array, not a tuple,
+ * so its result degrades to an array of the union of every row type the app
+ * can produce. That is the documented limit of this surface — the degraded
+ * form is still a real union, never `any`.
+ */
+export type TransactionResults<
+	TApp extends QuestpieApp,
+	TOperations extends readonly unknown[],
+> = {
+	-readonly [I in keyof TOperations]: TransactionOperationResult<
+		TApp,
+		TOperations[I]
+	>;
+};
+
+type ValidateTransactionOperation<
+	TApp extends QuestpieApp,
+	TOperation,
+> = TOperation extends {
+	collection: infer TName extends keyof TApp["collections"];
+}
+	? TOperation extends TransactionOperationFor<
+			GetCollection<TApp["collections"], TName>,
+			TApp["collections"],
+			TName,
+			TApp["collections"][TName]
+		>
+		? TOperation
+		: never
+	: never;
+
+type ValidateTransactionOperations<
+	TApp extends QuestpieApp,
+	TOperations extends readonly unknown[],
+> = {
+	[I in keyof TOperations]: ValidateTransactionOperation<TApp, TOperations[I]>;
+};
+
+type ClientTransaction<TApp extends QuestpieApp> =
+	IsAny<TApp> extends true
+		? (...args: any[]) => Promise<any>
+		: <const TOperations extends readonly UntypedTransactionOperation[]>(
+				operations: TOperations &
+					ValidateTransactionOperations<TApp, TOperations>,
+				options?: LocaleOptions,
+			) => Promise<TransactionResults<TApp, TOperations>>;
+
 type ClientGlobalOptions<TGlobal> =
 	GlobalState<TGlobal> extends {
 		options: infer TOptions extends
@@ -1050,6 +1201,35 @@ type RouteCallOptions = Omit<RequestInit, "method"> & {
  */
 export type QuestpieClient<in out TApp extends QuestpieApp> = {
 	collections: CollectionsAPI<TApp>;
+	/**
+	 * Apply an ordered list of mutations spanning any number of collections as
+	 * ONE server-side transaction. Every operation commits or none does — the
+	 * rows and the realtime change events roll back together.
+	 *
+	 * Each operation is authorized as the requesting principal against its own
+	 * collection; batching skips no access check. Operations run in the order
+	 * given and are never reordered, because order is semantic (create the post,
+	 * then its comment). Cross-table lock ordering is therefore the caller's:
+	 * two concurrent transactions touching the same rows in opposite order can
+	 * deadlock, so order operations consistently across call sites.
+	 *
+	 * Any thrown `QuestpieClientError` means NOTHING was applied. When an
+	 * operation is what failed, the error keeps that operation's own status and
+	 * code — a stale `expectedRevision` is still a 409 `CONFLICT`, a denied
+	 * write still a 403 — and `error.context.custom.transaction` says which
+	 * one: `{ index, collection, operation, applied: false }`. A malformed
+	 * request is rejected before anything runs and names the offending index in
+	 * its message instead.
+	 *
+	 * @example
+	 * ```ts
+	 * const [post, comment] = await client.transaction([
+	 *   { collection: "posts", operation: "create", data: { title: "Hello" } },
+	 *   { collection: "comments", operation: "update", id, data: { body: "Hi" } },
+	 * ]);
+	 * ```
+	 */
+	transaction: ClientTransaction<TApp>;
 	channels: ChannelsClient<AppChannelDefinitions<TApp>>;
 	globals: GlobalsAPI<TApp>;
 	routes: RoutesClient<TApp["routes"]>;
@@ -2006,8 +2186,28 @@ export function createClient<TApp extends QuestpieApp>(
 		},
 	});
 
+	/**
+	 * Cross-collection transaction — one request, one server transaction.
+	 *
+	 * The operations go over the wire as given; the server dispatches them in
+	 * that order. `mutationRequest` attaches the response's txid so realtime
+	 * echo suppression treats the whole batch as one of our own writes.
+	 */
+	const transaction = async (
+		operations: readonly unknown[],
+		options: LocaleOptions = {},
+	) => {
+		const queryString = stringifyQuery(options);
+		const path = `${apiBasePath}/transaction${queryString ? `?${queryString}` : ""}`;
+		return mutationRequest(path, {
+			method: "POST",
+			json: { operations },
+		});
+	};
+
 	return {
 		collections,
+		transaction,
 		channels: channelsApi,
 		[CRDT_CLIENT_HOST]: crdtHost,
 		globals,
@@ -2072,6 +2272,8 @@ export type { GlobalMeta } from "#questpie/shared/global-meta.js";
 // Re-export realtime types and helpers
 export type {
 	RealtimeAPI,
+	RealtimeDeltaDeleteReason,
+	RealtimeFindWindow,
 	RealtimeStreamEvent,
 	RealtimeTopicRejectedDetails,
 	RealtimeTopicRejectedPayload,

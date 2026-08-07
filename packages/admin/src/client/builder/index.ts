@@ -80,7 +80,7 @@ export type {
  * with a single, intentional definition that documents the trade-off and
  * provides a future narrowing point.
  */
-export type AnyQuestpieClient = QuestpieClient<any>;
+export type AnyQuestpieClient = Omit<QuestpieClient<any>, "transaction">;
 
 /**
  * Extract collection names from a QuestpieApp config

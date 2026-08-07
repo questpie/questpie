@@ -27,9 +27,91 @@ type MutationCollectionClient<TRow extends MutableRow> = {
 		opts?: { onError?: (error: Error) => void },
 	) => () => void;
 	create: (data: TRow) => Promise<unknown>;
-	update: (params: { id: string; data: Partial<TRow> }) => Promise<unknown>;
-	delete: (params: { id: string }) => Promise<unknown>;
+	updateBatch: (params: {
+		updates: Array<{
+			id: string;
+			data: Partial<TRow>;
+			expectedRevision?: number;
+		}>;
+	}) => Promise<unknown>;
+	deleteMany: (params: {
+		where: { id: { in: string[] } };
+		expectedRevisions?: Array<{ id: string; expectedRevision: number }>;
+	}) => Promise<unknown>;
 };
+
+/**
+ * A mutation lost an optimistic-concurrency race: QUESTPIE answered `409`
+ * (`CONFLICT`), or `412` when the request carried `If-Match`. TanStack DB has
+ * already rolled the optimistic state back, so the row on screen is the stale
+ * one that lost — refetch the collection before retrying, otherwise the retry
+ * carries the same stale revision and conflicts again.
+ *
+ * `ids` lists every row in the failed transaction. QUESTPIE validates all
+ * revisions before writing any row, so a conflict fails the whole batch without
+ * naming the individual loser.
+ */
+export class QuestpieDbConflictError extends Error {
+	readonly collection: string;
+	readonly operation: "update" | "delete";
+	readonly ids: string[];
+
+	constructor(options: {
+		collection: string;
+		operation: "update" | "delete";
+		ids: string[];
+		cause: unknown;
+	}) {
+		super(
+			`QUESTPIE rejected a ${options.operation} on "${options.collection}" as a conflict: ${options.ids.join(", ")}`,
+			{ cause: options.cause },
+		);
+		this.name = "QuestpieDbConflictError";
+		this.collection = options.collection;
+		this.operation = options.operation;
+		this.ids = options.ids;
+	}
+}
+
+function isConflict(error: unknown): boolean {
+	if (!error || typeof error !== "object") return false;
+	const { code, status } = error as { code?: unknown; status?: unknown };
+	return status === 409 || status === 412 || code === "CONFLICT";
+}
+
+async function asConflict<TResult>(
+	options: {
+		collection: string;
+		operation: "update" | "delete";
+		ids: string[];
+	},
+	run: () => Promise<TResult>,
+): Promise<TResult> {
+	try {
+		return await run();
+	} catch (error) {
+		if (!isConflict(error)) throw error;
+		throw new QuestpieDbConflictError({ ...options, cause: error });
+	}
+}
+
+/**
+ * QUESTPIE owns the `revision` column and only adds it when the collection
+ * enables `optimisticConcurrency`, so its presence on the row TanStack DB read
+ * is the feature detection. Collections without the feature must not send the
+ * key at all: the server ignores it there, which would read as a precondition
+ * that was checked when it never was.
+ */
+function revisionOf(original: unknown): number | undefined {
+	const revision = (original as { revision?: unknown } | undefined)?.revision;
+	return typeof revision === "number" ? revision : undefined;
+}
+
+/** Spreadable form of {@link revisionOf}, so the key is absent when unset. */
+function expectedRevisionOf(original: unknown): { expectedRevision?: number } {
+	const revision = revisionOf(original);
+	return revision === undefined ? {} : { expectedRevision: revision };
+}
 
 function rowId(row: MutableRow): string {
 	if (typeof row.id !== "string" || row.id.length === 0) {
@@ -45,6 +127,19 @@ function persistedRow<TRow extends MutableRow>(
 	return result && typeof result === "object" && "id" in result
 		? (result as TRow)
 		: fallback;
+}
+
+function persistedRowsById<TRow extends MutableRow>(
+	result: unknown,
+): Map<string, TRow> {
+	const rows = new Map<string, TRow>();
+	if (!Array.isArray(result)) return rows;
+	for (const row of result) {
+		if (row && typeof row === "object" && typeof row.id === "string") {
+			rows.set(row.id, row as TRow);
+		}
+	}
+	return rows;
 }
 
 export function createQuestpieCollection<TRow extends MutableRow>(options: {
@@ -75,6 +170,11 @@ export function createQuestpieCollection<TRow extends MutableRow>(options: {
 	});
 	const skipRefetch = syncMode === "snapshot" ? { refetch: false } : undefined;
 
+	// TanStack DB calls these handlers once per collection, so every mutation
+	// here targets `name` and becomes exactly one QUESTPIE request. A TanStack DB
+	// transaction that spans two collections still becomes one request per
+	// collection, and nothing here can make those two commit together — apps that
+	// need cross-collection atomicity must drive it themselves.
 	return createCollection(
 		queryCollectionOptions({
 			id: `questpie:${name}`,
@@ -84,6 +184,10 @@ export function createQuestpieCollection<TRow extends MutableRow>(options: {
 			getKey: rowId,
 			onInsert: async ({ transaction }) => {
 				const snapshotRevision = getSnapshotRevision();
+				// FRAMEWORK GAP: QUESTPIE has no batch create — `updateBatch` and
+				// `deleteMany` have no `createMany` counterpart — so inserts stay N
+				// independent requests. Order is not preserved, and a partial failure
+				// leaves rows on the server while the client rolls all of them back.
 				const persisted = await Promise.all(
 					transaction.mutations.map((mutation) =>
 						client.create(mutation.modified),
@@ -116,43 +220,48 @@ export function createQuestpieCollection<TRow extends MutableRow>(options: {
 			},
 			onUpdate: async ({ transaction }) => {
 				const snapshotRevision = getSnapshotRevision();
-				const persisted = await Promise.all(
-					transaction.mutations.map((mutation) =>
-						client.update({
-							id: String(mutation.key),
-							data: mutation.changes,
-						}),
-					),
+				const ids = transaction.mutations.map((mutation) =>
+					String(mutation.key),
 				);
+				// One request, one server transaction: QUESTPIE locks the ids in
+				// deterministic order and validates every revision before writing any
+				// row, so the batch either lands whole or leaves nothing behind.
+				const result = await asConflict(
+					{ collection: name, operation: "update", ids },
+					() =>
+						client.updateBatch({
+							updates: transaction.mutations.map((mutation) => ({
+								id: String(mutation.key),
+								data: mutation.changes,
+								...expectedRevisionOf(mutation.original),
+							})),
+						}),
+				);
+				const persisted = persistedRowsById<TRow>(result);
 				await reconcileMutation(
 					snapshotRevision,
 					(rows) => {
 						const byId = new Map(rows.map((row) => [row.id, row]));
-						for (let index = 0; index < transaction.mutations.length; index++) {
-							const mutation = transaction.mutations[index]!;
+						for (const mutation of transaction.mutations) {
 							const current = byId.get(String(mutation.key));
 							if (!current) continue;
 							byId.set(
 								String(mutation.key),
-								persistedRow(persisted[index], {
-									...current,
-									...mutation.changes,
-								} as TRow),
+								persisted.get(String(mutation.key)) ??
+									({ ...current, ...mutation.changes } as TRow),
 							);
 						}
 						return rows.map((row) => byId.get(row.id) ?? row);
 					},
 					(rows) => {
 						const byId = new Map(rows.map((row) => [row.id, row]));
-						for (let index = 0; index < transaction.mutations.length; index++) {
-							const mutation = transaction.mutations[index]!;
+						for (const mutation of transaction.mutations) {
 							const current = byId.get(String(mutation.key));
 							if (!current) continue;
 							const original = mutation.original as TRow;
-							const result = persistedRow(persisted[index], {
-								...original,
-								...mutation.changes,
-							} as TRow);
+							const result =
+								persisted.get(String(mutation.key)) ??
+								({ ...original, ...mutation.changes } as TRow);
 							const merged = { ...current };
 							for (const key of Object.keys(result) as Array<keyof TRow>) {
 								if (deepEquals(current[key], original[key])) {
@@ -168,14 +277,28 @@ export function createQuestpieCollection<TRow extends MutableRow>(options: {
 			},
 			onDelete: async ({ transaction }) => {
 				const snapshotRevision = getSnapshotRevision();
-				await Promise.all(
-					transaction.mutations.map((mutation) =>
-						client.delete({ id: String(mutation.key) }),
-					),
+				const ids = transaction.mutations.map((mutation) =>
+					String(mutation.key),
 				);
-				const deleted = new Set(
-					transaction.mutations.map((mutation) => String(mutation.key)),
+				const expectedRevisions = transaction.mutations.flatMap((mutation) => {
+					const revision = revisionOf(mutation.original);
+					return revision === undefined
+						? []
+						: [{ id: String(mutation.key), expectedRevision: revision }];
+				});
+				await asConflict({ collection: name, operation: "delete", ids }, () =>
+					client.deleteMany({
+						where: { id: { in: ids } },
+						// QUESTPIE requires one entry per matched row, so a partially
+						// revisioned batch would be rejected as a conflict rather than
+						// checked. Rows carry a revision only with optimistic
+						// concurrency on, where every row has one.
+						...(expectedRevisions.length === ids.length
+							? { expectedRevisions }
+							: {}),
+					}),
 				);
+				const deleted = new Set(ids);
 				await reconcileMutation(
 					snapshotRevision,
 					(rows) => rows.filter((row) => !deleted.has(row.id)),
