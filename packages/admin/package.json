@@ -1,6 +1,6 @@
 {
 	"name": "@questpie/admin",
-	"version": "3.24.0",
+	"version": "3.25.0",
 	"description": "Config-driven admin UI for QUESTPIE (React, Tailwind v4, shadcn)",
 	"repository": {
 		"type": "git",

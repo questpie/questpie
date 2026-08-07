@@ -1,6 +1,6 @@
 {
 	"name": "@questpie/tanstack-query",
-	"version": "3.24.0",
+	"version": "3.25.0",
 	"description": "TanStack Query integration for QUESTPIE, with a typed query-options factory",
 	"repository": {
 		"type": "git",
