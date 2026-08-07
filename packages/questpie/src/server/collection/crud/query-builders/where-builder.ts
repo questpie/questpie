@@ -269,9 +269,6 @@ export function buildWhereClause(
 				conditions.push(not(subClause));
 			}
 		} else if (key === "RAW" && typeof value === "function") {
-			if (failClosedAccess) {
-				throw accessCompilationError(state.name, key);
-			}
 			conditions.push(
 				value({
 					table,

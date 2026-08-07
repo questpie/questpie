@@ -167,7 +167,9 @@ describe("findVersions access predicates", () => {
 		).rejects.toMatchObject({ code: "FORBIDDEN" });
 		await expect(
 			documents.findVersions({ id: document.id }, userContext("raw-access")),
-		).rejects.toThrow("Cannot compile access predicate 'va_docs.RAW'");
+		).rejects.toThrow(
+			"Cannot compile version-history access predicate 'va_docs.RAW'",
+		);
 		await expect(
 			documents.findVersions({ id: document.id }, system),
 		).resolves.toHaveLength(1);

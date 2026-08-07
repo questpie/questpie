@@ -31,3 +31,8 @@ canonicalize CRDT field values, write exact application relations through the
 framework-owned transaction, and return ordinary owner projections such as a
 content hash or plain-text form. A rejection rolls every callback write back
 together with canonical fields, projection cursors and the realtime outbox.
+
+Restore compiled `RAW` predicates returned by collection read access rules.
+Strict access compilation still fails closed for missing fields, unresolved
+relations and unknown operators, while realtime snapshots can now reuse a
+prechecked SQL predicate without rejecting its `RAW` compiler callback.
