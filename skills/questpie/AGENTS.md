@@ -4407,8 +4407,8 @@ service({
 })
 ```
 
-An execution scope is one HTTP request, one queue job attempt, or one top-level
-programmatic operation. Route handlers, CRUD, access rules, hooks and service
+An execution scope is one HTTP request, one queue job attempt, one seed, or one
+top-level programmatic operation. Route handlers, CRUD, access rules, hooks and service
 dependencies share one request-service instance within it. Raw HTTP streams
 keep the scope alive until the body closes, errors or is cancelled. Request
 services dispose in reverse creation order on both success and failure.

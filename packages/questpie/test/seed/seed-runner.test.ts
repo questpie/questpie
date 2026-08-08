@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { sql } from "drizzle-orm";
 
-import { collection } from "../../src/exports/index.js";
+import { collection, service } from "../../src/exports/index.js";
 import { isInTransaction } from "../../src/server/collection/crud/shared/transaction.js";
 import { seed } from "../../src/server/seed/define-seed.js";
 import { SeedRunner } from "../../src/server/seed/runner.js";
@@ -81,6 +81,37 @@ describe("SeedRunner", () => {
 		const status = await runner.status(seeds);
 		expect(status.executed).toHaveLength(2);
 		expect(status.pending).toHaveLength(0);
+	});
+
+	it("owns and disposes one request service scope per seed", async () => {
+		await setup.cleanup();
+		let created = 0;
+		let disposed = 0;
+		const requestService = service()
+			.lifecycle("request")
+			.create(() => ({ id: ++created }))
+			.dispose(() => {
+				disposed++;
+			});
+
+		setup = await buildMockApp({ services: { requestService } });
+		runner = new SeedRunner(setup.app, { silent: true });
+		let first: unknown;
+		let second: unknown;
+
+		await runner.run([
+			makeSeed({
+				id: "request-service-scope",
+				run: async ({ services }) => {
+					first = services.requestService;
+					second = services.requestService;
+				},
+			}),
+		]);
+
+		expect(first).toBe(second);
+		expect(created).toBe(1);
+		expect(disposed).toBe(1);
 	});
 
 	it("skips already-executed seeds on second run", async () => {

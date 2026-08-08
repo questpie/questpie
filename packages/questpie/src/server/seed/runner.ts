@@ -172,8 +172,6 @@ export class SeedRunner {
 		executedIds: Set<string>,
 	): Promise<void> {
 		await withTransaction(this.app.db, async (tx: any) => {
-			const seedCtx = this.createSeedContext(reqCtx, tx);
-
 			await runWithContext(
 				{
 					app: this.app,
@@ -183,7 +181,7 @@ export class SeedRunner {
 					accessMode: "system",
 					stage: reqCtx.stage,
 				},
-				() => seed.run(seedCtx),
+				() => seed.run(this.createSeedContext(reqCtx, tx)),
 			);
 
 			await this.recordSeedExecution(seed, executedIds, tx);
@@ -201,11 +199,6 @@ export class SeedRunner {
 			executedIds.delete(seed.id);
 		}
 
-		const seedCtx: SeedStepContext = {
-			...this.createSeedContext(reqCtx, this.app.db),
-			step: (name, fn) => this.runSeedStep(seed, name, fn, reqCtx),
-		};
-
 		await runWithContext(
 			{
 				app: this.app,
@@ -215,7 +208,11 @@ export class SeedRunner {
 				accessMode: "system",
 				stage: reqCtx.stage,
 			},
-			() => seed.run(seedCtx),
+			() =>
+				seed.run({
+					...this.createSeedContext(reqCtx, this.app.db),
+					step: (name, fn) => this.runSeedStep(seed, name, fn, reqCtx),
+				}),
 		);
 
 		await this.recordSeedExecution(seed, executedIds, this.app.db);
@@ -272,7 +269,6 @@ export class SeedRunner {
 		if (completed.found) return completed.value as T;
 
 		return withTransaction(db, async (tx: any) => {
-			const stepCtx = this.createSeedContext(reqCtx, tx);
 			const value = await runWithContext(
 				{
 					app: this.app,
@@ -282,7 +278,7 @@ export class SeedRunner {
 					accessMode: "system",
 					stage: reqCtx.stage,
 				},
-				() => fn(stepCtx),
+				() => fn(this.createSeedContext(reqCtx, tx)),
 			);
 
 			await this.recordSeedStep(seed.id, name, value, tx);
@@ -391,14 +387,6 @@ export class SeedRunner {
 				for (const seed of pending) {
 					this.log(`  🔍 Validating seed: ${seed.id}`);
 
-					const seedCtx = isStepSeed(seed)
-						? ({
-								...this.createSeedContext(reqCtx, tx),
-								step: (name, fn) =>
-									this.runSeedStep(seed, name, fn, reqCtx, tx),
-							} as SeedStepContext)
-						: this.createSeedContext(reqCtx, tx);
-
 					await runWithContext(
 						{
 							app: this.app,
@@ -408,10 +396,16 @@ export class SeedRunner {
 							accessMode: "system",
 							stage: reqCtx.stage,
 						},
-						() =>
-							isStepSeed(seed)
-								? seed.run(seedCtx as SeedStepContext)
-								: seed.run(seedCtx),
+						() => {
+							const seedCtx = this.createSeedContext(reqCtx, tx);
+							return isStepSeed(seed)
+								? seed.run({
+										...seedCtx,
+										step: (name, fn) =>
+											this.runSeedStep(seed, name, fn, reqCtx, tx),
+									})
+								: seed.run(seedCtx);
+						},
 					);
 					this.log(`  ✅ Seed valid: ${seed.id}`);
 				}
@@ -480,8 +474,6 @@ export class SeedRunner {
 			this.log(`  🔄 Undoing seed: ${seed.id}`);
 			try {
 				await withTransaction(this.app.db, async (tx: any) => {
-					const seedCtx = this.createSeedContext(reqCtx, tx);
-
 					await runWithContext(
 						{
 							app: this.app,
@@ -491,7 +483,7 @@ export class SeedRunner {
 							accessMode: "system",
 							stage: reqCtx.stage,
 						},
-						() => seed.undo?.(seedCtx),
+						() => seed.undo?.(this.createSeedContext(reqCtx, tx)),
 					);
 
 					if (isStepSeed(seed)) {

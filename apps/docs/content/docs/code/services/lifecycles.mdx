@@ -46,7 +46,7 @@ caller.
 ## request
 
 A `"request"` service is built at most once inside an execution scope. One HTTP
-request, one queue job attempt, or one top-level programmatic operation is one
+request, queue job attempt, seed, or top-level programmatic operation is one
 scope. Routes, CRUD, access rules, hooks and nested service dependencies all
 reuse the same instance in that scope.
 
