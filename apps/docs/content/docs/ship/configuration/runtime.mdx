@@ -31,6 +31,11 @@ Every key is optional at the call site. `RuntimeConfigInput` marks `app` and
 `RuntimeConfig` requires the pair. `crdt` stays dormant until some collection is
 collaborative, so most apps never set it.
 
+`logger.redact` is an array of additional Pino-style paths. It extends the
+framework's recursive credential and error redaction and cannot turn those
+safe defaults off. See [Request logs](/docs/ship/monitoring/request-logs) for
+the path syntax and correlation trust rules.
+
 ## Resolution from the environment
 
 Four keys are resolved when you leave them out. Your value wins, then the

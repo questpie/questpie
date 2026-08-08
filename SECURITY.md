@@ -72,6 +72,16 @@ but a working exploit that goes beyond what is described here is.
 - **Queue payload encryption.** Job payloads are stored unencrypted by the queue
   adapter. Do not put secrets in a job payload; pass a reference and resolve it
   inside the handler.
+- **Logging boundaries.** Built-in credential/error redaction and correlation
+  header validation are defense in depth, not a data-loss-prevention system. Do
+  not log whole request, session or provider objects. Correlation ids supplied
+  by a host through `AdapterContext` are trusted internal values and must be
+  validated by that integration if they originated externally.
+- **Audit and compliance.** The audit module provides private reads, field
+  classification, delivery/retention policy, legal hold decisions and an event
+  sink contract. It does not provide immutable storage, exactly-once delivery,
+  key management, certification or a claim that an application is compliant.
+  Operators must supply and validate those controls for their deployment.
 
 ## Sandbox egress model
 

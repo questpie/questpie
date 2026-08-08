@@ -143,6 +143,11 @@ stdout. The tee reads the adapter off the ambient app context, so a line written
 outside any request, job or hook is logged normally but not exported. A
 collector being unreachable never turns a log line into a thrown error.
 
+The tee receives the same recursively redacted arguments as stdout. Built-in
+credential fields and error messages stay protected, and `logger.redact` adds
+application paths without replacing those defaults. This is a safeguard, not a
+reason to attach request bodies or session objects to logs or spans.
+
 ## What is deliberately not recorded
 
 Tracing backends are searchable, long-lived and widely readable inside a

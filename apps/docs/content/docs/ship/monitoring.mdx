@@ -103,7 +103,11 @@ Every request writes one structured line through Pino. The message is always
 `route` when routing found one.
 
 Output is JSON on stdout. Pretty printing turns itself on when `NODE_ENV` is
-`development`. The level defaults to `info`.
+`development`. The level defaults to `info`. Credential-shaped fields and
+framework-owned error messages are recursively redacted before either stdout
+or the optional OTel log tee receives them. Add application-specific paths with
+`logger.redact`; those paths extend the built-in protection rather than
+replacing it.
 
 ```ts title="src/questpie/server/questpie.config.ts"
 import { runtimeConfig } from "questpie/app";
@@ -139,12 +143,17 @@ the filters run in, which level a request lands at, and the shape of the record.
 
 ## Correlation
 
-Every response carries `x-request-id` and `x-trace-id`. The request id is read
-from an inbound `x-request-id` or `x-correlation-id` when there is one. So an id
-your proxy assigned survives. Otherwise it is a fresh UUID.
+Every response carries `x-request-id` and `x-trace-id`. A safe request id is
+read from inbound `x-request-id`, then `x-correlation-id`; otherwise QUESTPIE
+generates one. Accepted values are at most 128 ASCII characters and contain
+only letters, digits, `.`, `_`, `:` and `-`, beginning with a letter or digit.
+Malformed, oversized and control-character-bearing values are replaced rather
+than reflected.
 
-The trace id comes from `x-trace-id` first. Then from the trace id inside
-`traceparent`. Failing both, it falls back to the request id.
+The trace id comes from a safe `x-trace-id` first. When that header is absent,
+a valid lowercase W3C version-`00` `traceparent` contributes its non-zero trace
+id. Failing both, it falls back to the request id. An explicitly malformed
+trace header is replaced, not trusted or echoed.
 
 Both land on the log line and on the request's span. So you can start from
 either and find the other.

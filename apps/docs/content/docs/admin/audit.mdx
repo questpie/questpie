@@ -29,6 +29,25 @@ hooks, so they fire on every collection and every global at once.
 `adminModule` is a separate module. Add it too and the log gets a sidebar item
 under Administration, showing a read-only list of title, user and date.
 
+The module also contributes a typed `config/audit.ts` convention. Generate once
+after adding it, then choose delivery and retention explicitly when the defaults
+do not fit your risk model.
+
+```ts title="src/questpie/server/config/audit.ts"
+import { audit } from "#questpie/factories";
+
+export default audit({
+	delivery: "required",
+	retention: {
+		days: 365,
+		legalHold: async (event) => isHeld(event.id),
+	},
+	sink: {
+		append: async (event) => immutableArchive.append(event),
+	},
+});
+```
+
 ## What lands in the log
 
 | `action`     | Written when                                          |
@@ -51,29 +70,36 @@ A purge entry keeps the action, the id and the actor. Its `resourceLabel` and
 `changes` are both null. The point of a purge is that the row is gone. The
 audit trail must not end up holding the last copy of it.
 
-### A failed entry does not fail your write
+### Delivery is a policy
 
-Each hook catches its own error and calls `logger.error`. Your mutation still
-commits. Purge is the exception. It logs and rethrows, so a purge that cannot
-be recorded fails.
+`delivery` defaults to `"best-effort"`. A persistence or sink failure writes a
+structured error through `ctx.logger`, while the protected mutation still
+commits. With `"required"`, the failure is rethrown inside the mutation
+transaction, so the mutation and audit row roll back together. The same choice
+controls cleanup failures: best effort logs; required makes the job fail.
+
+Required delivery improves consistency with the database record, but an
+external sink is outside that database transaction. A sink may receive an event
+before a later transaction failure, and QUESTPIE does not retry or deduplicate
+delivery. Make `append()` idempotent on the canonical event `id`.
 
 ## The row
 
 `admin_audit_log` is an ordinary collection with `timestamps: true`, so
 `createdAt` is when it happened.
 
-| Field                | Holds                                                                        |
-| -------------------- | ---------------------------------------------------------------------------- |
-| `action`             | One of the five above, or whatever a custom entry passed.                    |
-| `resourceType`       | `collection` or `global`. A custom entry may say anything.                   |
-| `resource`           | The key the resource has on `app.collections` or `app.globals`.              |
-| `resourceId`         | The row id. Null for a global.                                               |
-| `resourceLabel`      | The row's own label, cut to 200 characters.                                  |
-| `userId`, `userName` | The actor.                                                                   |
-| `locale`             | The locale the write ran under.                                              |
-| `changes`            | `{ field: { from, to } }`, or null.                                          |
-| `metadata`           | Always `actorType` and `accessMode`, plus what the hook or the caller added. |
-| `title`              | One sentence, such as `Alice updated Posts 'Hello'`.                         |
+| Field                | Holds                                                                  |
+| -------------------- | ---------------------------------------------------------------------- |
+| `action`             | One of the five above, or whatever a custom entry passed.              |
+| `resourceType`       | `collection` or `global`. A custom entry may say anything.             |
+| `resource`           | The key the resource has on `app.collections` or `app.globals`.        |
+| `resourceId`         | The row id. Null for a global.                                         |
+| `resourceLabel`      | The row's own label, cut to 200 characters.                            |
+| `userId`, `userName` | The actor.                                                             |
+| `locale`             | The locale the write ran under.                                        |
+| `changes`            | `{ field: { from, to } }`, or null.                                    |
+| `metadata`           | Actor identity, outcome and access mode; correlation ids when present. |
+| `title`              | One sentence, such as `Alice updated Posts 'Hello'`.                   |
 
 `resourceLabel` is the first of `_title`, `title`, `name`, `label`, `slug` and
 `id` that holds a non-empty string.
@@ -89,8 +115,8 @@ values and cookies. You can classify any application field explicitly with
 `.audit("include")`, `.audit("redact")` or `.audit("omit")`; an explicit policy
 wins over the name-based default. Redacted values are stored as `[REDACTED]`.
 
-A global update carries no diff at all. `changes` is null on every one of them.
-You get who and when, not what.
+Global updates use the same field classification and diff format as collection
+updates.
 
 ### Who the actor is
 
@@ -101,7 +127,11 @@ You get who and when, not what.
 | `Anonymous`                          | null                | No session, and the call runs in user mode.   |
 
 `metadata.actorType` carries the same three cases as `user`, `system` and
-`anonymous`.
+`anonymous`. A system context can also pass
+`workload: { type, id, name? }`; its id and name replace the generic `system` /
+`System` identity so scheduled work and services remain distinguishable.
+`requestId`, `traceId`, `actorId`, `actorName` and `outcome: "succeeded"` are
+copied into metadata when available.
 
 ### The title is rebuilt on read
 
@@ -171,6 +201,45 @@ The record and global audit routes use this same collection access policy and
 its field-level read rules. A rule that hides `changes` therefore hides it from
 `GET /:collection/:id/audit` and `GET /globals/:name/audit` too.
 
+## Retention and legal hold
+
+No retention policy means no destructive cleanup. `retention.days: null` also
+disables cleanup explicitly. A positive number enables the `audit-cleanup` job,
+which runs daily at 03:00 and removes rows older than that many days.
+
+When `legalHold` is present, the job loads expired rows, converts each one to a
+`CanonicalAuditEvent`, and preserves every event for which the callback returns
+`true`. The callback runs in the application process and may be asynchronous.
+It is not a database constraint: direct deletes and a different cleanup process
+do not consult it.
+
+## Append-only export
+
+`sink.append(event)` receives the canonical event after the ordinary audit row
+is created. The event has a stable `id` and ISO timestamp, a succeeded/failed
+outcome, resource and actor identity, optional request/trace ids, changes and
+metadata. `toCanonicalAuditEvent()` is exported for consumers that need to
+adapt existing flat audit rows to the same shape.
+
+The interface is deliberately small. QUESTPIE does not ship immutable storage,
+signing, encryption, ordering guarantees, retries, deduplication, a dead-letter
+queue, or a SIEM/WORM vendor integration. Those are responsibilities of the
+sink and its deployment. The database collection remains mutable through
+system-mode APIs, so it is activity storage, not proof of immutability.
+
+The policy is currently applied by the module's automatic collection/global
+hooks and cleanup job. `logAuditEntry()` remains a direct compatibility helper:
+it does not invoke the configured sink or delivery policy, and its caller owns
+classification of custom `changes` and `metadata`.
+
+<Callout type="warn" title="Compliance primitives are not certification">
+	Private reads, field classification, required delivery, retention, legal hold
+	and append-only export support security and compliance work. Enabling them
+	does not make an application compliant or certified. Access reviews, key
+	management, infrastructure controls, retention law, incident response and
+	independent assurance remain application and operator responsibilities.
+</Callout>
+
 ## Upgrading from a public audit collection
 
 The audit collection previously shipped with `read: true`. After upgrading,
@@ -183,6 +252,19 @@ Credential-like fields are also omitted from new audit diffs by default. If an
 unfortunately named non-secret field must remain visible, classify it explicitly
 with `.audit("include")`. Existing audit rows are unchanged; migrate or purge
 historical values separately if they contain credentials.
+
+To adopt the new policy contract:
+
+1. Run `questpie generate` after adding/upgrading `auditModule`, so the typed
+   `config/audit.ts` factory and field `.audit()` extension are current.
+2. Grant the narrow read rule your admin UI or API needs before deploying the
+   private default.
+3. Review credential-like fields and add explicit `include`, `redact` or `omit`
+   classifications where names alone are insufficient.
+4. Choose `best-effort` or `required`; test database and sink failure behavior
+   before selecting required delivery in production.
+5. Set retention to `null` or a positive day count, implement legal hold where
+   required, and provide your own durable idempotent sink for immutable export.
 
 ## Where each topic lives
 

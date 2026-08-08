@@ -101,11 +101,57 @@ that pattern. Group on `path` when you need them apart.
 
 `error` carries `name` and `message`, and nothing else. It appears only when a
 handler threw. A handler that returns a 500 rather than raising still logs at
-`error` level, but with no `error` object beside it.
+`error` level, but with no `error` object beside it. The framework logger
+redacts the message before it reaches stdout or an observability log exporter;
+the emitted value is `[Redacted]`. The `ignore(meta)` callback runs before that
+serialization and receives the in-process metadata, so do not copy error
+messages into another log from that callback.
 
 Records written inside a request also pick up `trace_id` and `span_id` from the
 open span, once an observability adapter is wired. See
 [Instrumented seams](/docs/infrastructure/observability/seams).
+
+## Safe redaction
+
+Every framework logger, including a custom `LoggerAdapter`, recursively redacts
+credential-shaped keys before forwarding a record. Key matching ignores case
+and punctuation and covers keys equal to or ending in `authorization`,
+`cookie`, `password`, `token`, `secret` or `apiKey`. That includes names such as
+`refreshToken` and `database_password`. Error messages and stacks are also
+redacted because they can contain request data; safe fields such as error name,
+code and status remain.
+
+Application paths extend those defaults. They do not replace or disable them.
+Paths accept dot notation, quoted bracket notation and a `*` segment.
+
+```ts title="src/questpie/server/questpie.config.ts"
+logger: {
+	redact: ["profile.email", "payment['cardNumber']", "headers.*"],
+}
+```
+
+The same sanitized record goes to the Pino stdout sink and the optional OTel
+log tee. Treat redaction as a last-line safeguard: log explicit diagnostic
+fields rather than whole request, session or provider objects.
+
+## Which inbound ids are trusted
+
+Header values are accepted only when they are 1 to 128 ASCII characters, begin
+with a letter or digit, and contain only letters, digits, `.`, `_`, `:`, or `-`.
+Anything empty, oversized or containing whitespace/control characters is
+replaced with a generated id and is never reflected into response headers,
+logs or spans.
+
+`x-request-id` wins over `x-correlation-id`. For the framework trace id,
+`x-trace-id` wins; when it is absent, a valid lowercase W3C version-`00`
+`traceparent` contributes its non-zero 32-hex-digit trace id. An explicitly
+present but invalid `x-trace-id` or `traceparent` is replaced rather than
+falling through to a lower-trust header. With no trace header, `traceId` equals
+`requestId`.
+
+Values passed by the host adapter as `AdapterContext.requestId` or `traceId`
+are a trusted internal boundary and bypass header validation. Validate them in
+the host integration if they originated outside that trust boundary.
 
 ## Overriding per handler
 

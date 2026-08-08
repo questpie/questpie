@@ -64,6 +64,12 @@ Postgres, Redis, and Soketi with Docker and exercises the opt-in integration
 tests. `verify:pr` covers the repository-local PR contract but does not start
 those services.
 
+For security-sensitive behavior, add a contract test for the safe default and
+for every supported override. Documentation and the changeset must state the
+trust boundary, failure mode, limitations and concrete upgrade action. Describe
+logging, audit and retention features as primitives; do not claim that the
+framework certifies an application or makes it compliant.
+
 The warning census is gate-enforced: governed per-package/per-rule counts may
 only decrease. The deliberately ignored `no-underscore-dangle` house-style rule
 is documented in `scripts/lint-census.ts`.
