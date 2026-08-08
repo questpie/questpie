@@ -22,7 +22,9 @@ import {
 setDefaultTimeout(30_000);
 
 import { sql } from "drizzle-orm";
+import { check, pgTable, text } from "drizzle-orm/pg-core";
 
+import { applyPushStatementsAtomically } from "../../src/cli/commands/push.js";
 import { collection } from "../../src/exports/index.js";
 import { rowsOf, toKitDb } from "../../src/server/db/driver-result.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
@@ -80,5 +82,47 @@ describe("pushSchema through toKitDb", () => {
 
 		const second = await pushSchema(schema, toKitDb(bunShapedDb) as any);
 		expect(second.sqlStatements).toEqual([]);
+	});
+
+	it("rolls back every schema statement when a later statement fails", async () => {
+		const { pushSchema } = await import("drizzle-kit/api-postgres");
+		await setup.app.db.execute(
+			sql.raw(`
+			CREATE TABLE atomic_push_probe (
+				id text PRIMARY KEY,
+				title text NOT NULL
+			)
+		`),
+		);
+		await setup.app.db.execute(
+			sql.raw(`INSERT INTO atomic_push_probe (id, title) VALUES ('bad', '')`),
+		);
+
+		const target = pgTable(
+			"atomic_push_probe",
+			{
+				id: text("id").primaryKey(),
+				title: text("title").notNull(),
+				summary: text("summary"),
+			},
+			(table) => [
+				check("atomic_push_title_nonempty", sql`${table.title} <> ''`),
+			],
+		);
+		const result = await pushSchema(
+			{ atomicPushProbe: target },
+			toKitDb(setup.app.db) as any,
+		);
+
+		await expect(
+			applyPushStatementsAtomically(setup.app.db, result.sqlStatements),
+		).rejects.toThrow(/atomic_push_title_nonempty/);
+		const columns = await setup.app.db.execute(sql`
+			SELECT column_name
+			FROM information_schema.columns
+			WHERE table_name = 'atomic_push_probe'
+				AND column_name = 'summary'
+		`);
+		expect(rowsOf(columns)).toHaveLength(0);
 	});
 });

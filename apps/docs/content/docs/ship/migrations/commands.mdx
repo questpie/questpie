@@ -104,8 +104,9 @@ also clears seed tracking, so your seeds can run again on the rebuilt tables.
 | `-v, --verbose` | Prints the SQL it is about to run     |
 
 Push loads your app, asks drizzle-kit for the statements that would bring the
-live database in line with `app.getSchema()`, then applies them. It records
-nothing.
+live database in line with `app.getSchema()`, then applies the complete diff in
+one PostgreSQL transaction. If any statement fails, every earlier statement in
+that push is rolled back. Push records no migration history.
 
 `--force` changes the output and nothing else. Push applies either way.
 
