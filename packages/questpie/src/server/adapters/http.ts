@@ -70,6 +70,7 @@ function routeKeySegmentToPatternSegment(segment: string): string {
  */
 function compileRoutes(
 	routes: Record<string, RouteDefinition> | undefined,
+	logger?: Pick<Questpie<any>["logger"], "error">,
 ): RouteMatcher<RouteDefinition> | null {
 	if (!routes || Object.keys(routes).length === 0) return null;
 
@@ -100,7 +101,7 @@ function compileRoutes(
 	try {
 		return compileMatcher(entries);
 	} catch (err) {
-		console.error("[HTTP] Route compilation failed:", err);
+		logger?.error("[HTTP] Route compilation failed:", err);
 		return null;
 	}
 }
@@ -239,6 +240,7 @@ export const createFetchHandler = (
 	// Compile ALL routes (core module + custom module routes) into one matcher
 	const matcher = compileRoutes(
 		appInstance.config.routes as Record<string, RouteDefinition> | undefined,
+		appInstance.logger,
 	);
 	const requestLogging = resolveRequestLoggingOptions(
 		config.requestLogging ?? appInstance.config.logger?.requests,

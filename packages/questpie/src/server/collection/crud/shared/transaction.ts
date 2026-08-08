@@ -133,6 +133,8 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { resolveRuntimeLogger } from "#questpie/server/utils/runtime-logger.js";
+
 /**
  * Transaction context stored in AsyncLocalStorage
  */
@@ -262,7 +264,7 @@ export function onAfterCommit(callback: () => Promise<void>): void {
 		// We don't await here to match the "after commit" semantics
 		// where the main operation has already "completed"
 		callback().catch((error) => {
-			console.error(
+			resolveRuntimeLogger()?.error(
 				"[onAfterCommit] Callback failed outside transaction:",
 				error,
 			);
@@ -347,7 +349,10 @@ export async function withTransaction<T>(
 		} catch (error) {
 			// Log but don't throw - the main transaction already committed
 			// The caller should handle any critical failures in the callback itself
-			console.error("[withTransaction] afterCommit callback failed:", error);
+			resolveRuntimeLogger()?.error(
+				"[withTransaction] afterCommit callback failed:",
+				error,
+			);
 		}
 	}
 

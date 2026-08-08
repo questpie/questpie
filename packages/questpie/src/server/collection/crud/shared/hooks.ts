@@ -36,7 +36,9 @@ export async function executeHooks(
 			try {
 				await hook(ctx);
 			} catch (err) {
-				console.error("[QUESTPIE] after* hook error:", err);
+				(
+					ctx as { logger?: { error(message: string, error: unknown): void } }
+				).logger?.error("[QUESTPIE] after* hook error:", err);
 			}
 		} else {
 			await hook(ctx);

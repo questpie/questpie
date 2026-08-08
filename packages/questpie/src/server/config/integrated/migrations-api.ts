@@ -219,7 +219,7 @@ export class QuestpieMigrationsAPI<
 				// Ignore "does not exist" errors
 				const msg = error?.message?.toLowerCase() || "";
 				if (!msg.includes("does not exist")) {
-					console.warn(
+					this.app.logger.warn(
 						`[Search Migration] Warning rolling back ${migration.name}: ${error.message}`,
 					);
 				}

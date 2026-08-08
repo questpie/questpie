@@ -64,9 +64,9 @@ export interface QueueClientRuntimeOptions {
 }
 
 const defaultLogger: QueueLogger = {
-	info: (msg, ...args) => console.log(msg, ...args),
-	warn: (msg, ...args) => console.warn(msg, ...args),
-	error: (msg, ...args) => console.error(msg, ...args),
+	info: () => {},
+	warn: () => {},
+	error: () => {},
 };
 
 /**

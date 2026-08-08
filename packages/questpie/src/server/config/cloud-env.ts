@@ -2,6 +2,7 @@ import type { Adapter } from "files-sdk";
 
 import type { DbConfig, StorageConfig } from "#questpie/server/config/types.js";
 import { getEnv } from "#questpie/server/utils/env.js";
+import { resolveRuntimeLogger } from "#questpie/server/utils/runtime-logger.js";
 
 // ============================================================================
 // Cloud environment variable names
@@ -188,7 +189,7 @@ export function resolveStorageConfig(
 	const secretKey = getEnv(CLOUD_ENV.STORAGE_SECRET_KEY);
 
 	if (!bucket || !accessKey || !secretKey) {
-		console.warn(
+		resolveRuntimeLogger()?.warn(
 			"[questpie] QUESTPIE_STORAGE_ENDPOINT is set but missing required env vars: " +
 				"QUESTPIE_STORAGE_BUCKET, QUESTPIE_STORAGE_ACCESS_KEY, QUESTPIE_STORAGE_SECRET_KEY. " +
 				"Falling back to local storage.",

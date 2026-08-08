@@ -75,6 +75,18 @@ export interface BlocksPrefetchContext {
 	collections?: unknown;
 	/** Globals accessor */
 	globals?: unknown;
+	/** Structural runtime logger inherited from the active CRUD context. */
+	logger?: {
+		warn(message: string, ...args: unknown[]): void;
+		error(message: string, ...args: unknown[]): void;
+	};
+}
+
+function prefetchLogger(ctx: BlocksPrefetchContext) {
+	return (
+		ctx.logger ??
+		(ctx.app as { logger?: BlocksPrefetchContext["logger"] })?.logger
+	);
 }
 
 function resolvePrefetchContext(
@@ -272,7 +284,7 @@ async function expandDeclaredFields(
 					(ctx.collections as Record<string, any> | undefined)?.[collection] ??
 					(ctx.app as any)?.collections?.[collection];
 				if (!collectionApi?.find) {
-					console.warn(
+					prefetchLogger(ctx)?.warn(
 						`[prefetch] Collection "${collection}" not found on app.collections, skipping`,
 					);
 					return;
@@ -301,7 +313,7 @@ async function expandDeclaredFields(
 				}
 				fetchedByGroup.set(groupKey, recordMap);
 			} catch (error) {
-				console.error(
+				prefetchLogger(ctx)?.error(
 					`[prefetch] Failed to fetch from "${collection}":`,
 					error,
 				);
@@ -471,7 +483,7 @@ async function executePrefetchFunctions(
 							prefetchedData[node.id] = data as Record<string, unknown>;
 						}
 					} catch (error) {
-						console.error(
+						prefetchLogger(ctx)?.error(
 							`Block prefetch loader failed for ${node.type}:${node.id}:`,
 							error,
 						);
@@ -491,7 +503,7 @@ async function executePrefetchFunctions(
 						);
 						prefetchedData[node.id] = data;
 					} catch (error) {
-						console.error(
+						prefetchLogger(ctx)?.error(
 							`Block prefetch failed for ${node.type}:${node.id}:`,
 							error,
 						);

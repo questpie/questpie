@@ -5,6 +5,7 @@ import { LoggerService } from "../../src/server/modules/core/integrated/logger/s
 import type { LoggerAdapter } from "../../src/server/modules/core/integrated/logger/types.js";
 import { ObservabilityService } from "../../src/server/modules/core/integrated/observability/service.js";
 import type { ObservabilityAdapter } from "../../src/server/modules/core/integrated/observability/types.js";
+import { resolveRuntimeLogger } from "../../src/server/utils/runtime-logger.js";
 
 /** Captures what actually reaches the log adapter, bindings included. */
 function capturing() {
@@ -56,6 +57,60 @@ const TRACE = "4bf92f3577b34da6a3ce929d0e0e4736";
 const SPAN = "00f067aa0ba902b7";
 
 describe("log/trace correlation", () => {
+	it("keeps request correlation through the ambient runtime boundary", async () => {
+		const log = capturing();
+		const logger = new LoggerService({ adapter: log.adapter });
+
+		await runWithContext(
+			{
+				app: {},
+				logger,
+				requestId: "req-runtime-boundary",
+				traceId: "trace-runtime-boundary",
+			},
+			async () => {
+				resolveRuntimeLogger()?.info("request diagnostic", {
+					route: "/orders",
+				});
+			},
+		);
+
+		expect(log.records[0]).toMatchObject({
+			msg: "request diagnostic",
+			bindings: {
+				requestId: "req-runtime-boundary",
+				traceId: "trace-runtime-boundary",
+				route: "/orders",
+			},
+		});
+	});
+
+	it("keeps active-span correlation through the ambient job boundary", async () => {
+		const log = capturing();
+		const logger = new LoggerService({ adapter: log.adapter });
+		const observability = new ObservabilityService({
+			adapter: withActiveSpan({ traceId: TRACE, spanId: SPAN }),
+		});
+
+		await runWithContext(
+			{ app: { logger, observability } } as never,
+			async () => {
+				resolveRuntimeLogger()?.info("job diagnostic", {
+					jobName: "send-email",
+				});
+			},
+		);
+
+		expect(log.records[0]).toMatchObject({
+			msg: "job diagnostic",
+			bindings: {
+				jobName: "send-email",
+				trace_id: TRACE,
+				span_id: SPAN,
+			},
+		});
+	});
+
 	it("stamps trace_id and span_id from the ACTIVE span", async () => {
 		const log = capturing();
 		const logger = new LoggerService({ adapter: log.adapter });

@@ -323,7 +323,7 @@ export async function executeAction(
 			result,
 		};
 	} catch (error) {
-		console.error(`Action "${actionId}" failed:`, error);
+		app.logger.error(`Action "${actionId}" failed:`, error);
 		return {
 			success: false,
 			result: {
@@ -763,7 +763,7 @@ async function executeBuiltinAction(
 				};
 		}
 	} catch (error) {
-		console.error(`Built-in action "${actionId}" failed:`, error);
+		app.logger.error(`Built-in action "${actionId}" failed:`, error);
 		return {
 			success: false,
 			result: {

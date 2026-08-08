@@ -55,6 +55,7 @@ type IndexRecordsPayload = z.infer<typeof indexRecordsSchema>;
  * without an `as any` cast on the app itself.
  */
 interface AppIndexSurface {
+	logger?: { warn(message: string, ...args: unknown[]): void };
 	getLocales?: () => Promise<Locale[]>;
 	getCollectionConfig?: (
 		name: string,
@@ -84,9 +85,10 @@ const indexRecordsJob = job({
 			| Record<string, any>
 			| undefined;
 		const app = ((ctx as any).app ?? {}) as AppIndexSurface;
+		const logger = app.logger;
 
 		if (!search) {
-			console.warn("[index-records] Search service not configured, skipping");
+			logger?.warn("[index-records] Search service not configured, skipping");
 			return;
 		}
 
@@ -102,7 +104,7 @@ const indexRecordsJob = job({
 			// Get collection CRUD API
 			const collectionApi = collections?.[collection];
 			if (!collectionApi) {
-				console.warn(
+				logger?.warn(
 					`[index-records] Collection '${collection}' not found, skipping`,
 				);
 				continue;
@@ -137,7 +139,7 @@ const indexRecordsJob = job({
 
 					if (params) indexOperations.push(params);
 				} catch (error) {
-					console.warn(
+					logger?.warn(
 						`[index-records] Failed to fetch ${collection}:${recordId} for locale ${locale}:`,
 						error,
 					);

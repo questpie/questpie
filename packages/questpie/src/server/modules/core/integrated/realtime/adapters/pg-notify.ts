@@ -1,5 +1,7 @@
 import type { Client, ClientConfig, Notification } from "pg";
 
+import { resolveRuntimeLogger } from "#questpie/server/utils/runtime-logger.js";
+
 import type {
 	ChangeBroker,
 	ChangeBrokerState,
@@ -66,7 +68,8 @@ class PgNotifyDriver {
 		this.channel = options.channel ?? "questpie_realtime";
 		this.onError =
 			options.onError ??
-			((error) => console.error("[questpie] pg-notify error:", error));
+			((error) =>
+				resolveRuntimeLogger()?.error("[questpie] pg-notify error:", error));
 		this.errorLogIntervalMs = options.errorLogIntervalMs ?? 30_000;
 		this.reconnectInitialDelayMs = options.reconnectInitialDelayMs ?? 100;
 		this.reconnectMaxDelayMs = options.reconnectMaxDelayMs ?? 30_000;

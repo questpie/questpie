@@ -6,6 +6,8 @@ import {
 	type SendOptions,
 } from "pg-boss";
 
+import { resolveRuntimeLogger } from "#questpie/server/utils/runtime-logger.js";
+
 import type {
 	QueueAdapter,
 	QueueExecutionState,
@@ -93,7 +95,7 @@ export class PgBossAdapter implements QueueAdapter {
 			!this.warnedSingletonNoop.has(jobName)
 		) {
 			this.warnedSingletonNoop.add(jobName);
-			console.warn(
+			resolveRuntimeLogger()?.warn(
 				`⚠️  Queue "${jobName}": singletonKey "${options.singletonKey}" was passed but the queue has no dedupe policy — pg-boss will NOT dedupe it. Pass \`queuePolicy: "stately"\` (or "short"/"singleton") when publishing so the queue is created with a policy that enforces the key.`,
 			);
 		}
@@ -281,7 +283,7 @@ export class PgBossAdapter implements QueueAdapter {
 								// If reporting the failure itself fails, surface the
 								// original handler error so pg-boss's own timeout/retry
 								// path can take over.
-								console.error(
+								resolveRuntimeLogger()?.error(
 									`[questpie:pg-boss] failed to mark job ${j.id} as failed`,
 									failError,
 								);

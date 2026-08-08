@@ -195,7 +195,9 @@ export function guardHookRecursion(): number {
 		);
 	}
 	if (depth >= MAX_HOOK_RECURSION - 1) {
-		console.warn(
+		(
+			ctx?.logger ?? (ctx?.app as { logger?: RequestContextLogger })?.logger
+		)?.warn(
 			`[QUESTPIE] Hook recursion depth at ${depth} — review hooks for potential infinite loops`,
 		);
 	}

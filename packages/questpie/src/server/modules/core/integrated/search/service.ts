@@ -270,12 +270,11 @@ export function createSearchService(
 	// Use provided adapter or create default PostgresSearchAdapter
 	const resolvedAdapter = adapter ?? createPostgresSearchAdapter();
 
-	// Create default logger if not provided
 	const resolvedLogger: AdapterLogger = logger ?? {
-		debug: (...args) => console.debug("[Search]", ...args),
-		info: (...args) => console.info("[Search]", ...args),
-		warn: (...args) => console.warn("[Search]", ...args),
-		error: (...args) => console.error("[Search]", ...args),
+		debug: () => {},
+		info: () => {},
+		warn: () => {},
+		error: () => {},
 	};
 
 	return new SearchServiceWrapper(

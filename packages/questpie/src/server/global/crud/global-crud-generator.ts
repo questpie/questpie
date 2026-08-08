@@ -491,7 +491,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			if (!/pg_advisory_xact_lock|does not exist/i.test(message)) {
 				throw error;
 			}
-			console.warn(
+			this.app?.logger?.warn(
 				`[questpie] pg_advisory_xact_lock unavailable; auto-create for global "${this.state.name}" falls back to existence re-check only. Underlying error: ${message}`,
 			);
 		}
@@ -1638,7 +1638,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 						transitionCtx,
 					);
 				} catch (err) {
-					console.error(
+					normalized.logger?.error(
 						`[QUESTPIE] afterTransition hook error for global "${this.state.name}":`,
 						err,
 					);

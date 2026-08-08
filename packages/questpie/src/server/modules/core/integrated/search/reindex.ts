@@ -22,6 +22,7 @@ import type { IndexParams, SearchableConfig } from "./types.js";
 
 /** Structural slice of the Questpie app this reindex reaches for. */
 interface ReindexApp {
+	logger?: { warn(message: string, ...args: unknown[]): void };
 	search?: {
 		indexBatch(params: IndexParams[]): Promise<void>;
 	};
@@ -126,7 +127,7 @@ export async function reindexCollection(
 			offset += pageSize;
 		}
 	} catch (error) {
-		console.warn(
+		app.logger?.warn(
 			`[search] reindex of "${collectionName}" stopped after ${indexed} record(s):`,
 			error,
 		);

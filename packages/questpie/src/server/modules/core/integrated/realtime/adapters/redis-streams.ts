@@ -1,3 +1,5 @@
+import { resolveRuntimeLogger } from "#questpie/server/utils/runtime-logger.js";
+
 import {
 	type ChangeBroker,
 	type ChangeBrokerState,
@@ -301,13 +303,14 @@ class RedisStreamsDriver {
 				this.onError(error);
 				return;
 			} catch (callbackError) {
-				console.warn(
+				resolveRuntimeLogger()?.warn(
 					"[Realtime] Redis Streams error callback failed",
-					callbackError,
+					{ callbackError, sourceError: error },
 				);
+				return;
 			}
 		}
-		console.warn(message, error);
+		resolveRuntimeLogger()?.warn(message, error);
 	}
 
 	private normalizeResponse(response: any): Array<{ id: string; fields: any }> {

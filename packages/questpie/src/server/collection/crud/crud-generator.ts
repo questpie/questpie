@@ -4398,7 +4398,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						transitionCtx,
 					);
 				} catch (err) {
-					console.error(
+					normalized.logger?.error(
 						`[QUESTPIE] afterTransition hook error for "${this.state.name}":`,
 						err,
 					);

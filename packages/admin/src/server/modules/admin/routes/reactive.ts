@@ -809,7 +809,7 @@ export const fieldOptions = route()
 				total: result.total,
 			};
 		} catch (error) {
-			console.error(
+			app.logger.error(
 				`Error fetching options for ${entityName}.${field}:`,
 				error,
 			);

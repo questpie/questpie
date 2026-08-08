@@ -25,6 +25,10 @@ export const COMMANDS: Record<VerifyStage, Command[]> = {
 	lint: [
 		{ label: "Oxlint", cmd: ["bun", "run", "lint"] },
 		{
+			label: "F09 runtime console gate",
+			cmd: ["bun", "run", "scripts/runtime-console-gate.ts"],
+		},
+		{
 			label: "lint-census ratchet",
 			cmd: ["bun", "run", "scripts/lint-census.ts"],
 		},

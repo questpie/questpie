@@ -9,6 +9,8 @@
  * @module
  */
 
+import { resolveRuntimeLogger } from "#questpie/server/utils/runtime-logger.js";
+
 /**
  * Per-request scope for memoized service resolution.
  */
@@ -80,7 +82,10 @@ export class RequestScope {
 					try {
 						await dispose(instance);
 					} catch (err) {
-						console.error(`[RequestScope] Failed to dispose "${name}":`, err);
+						resolveRuntimeLogger()?.error(
+							`[RequestScope] Failed to dispose "${name}":`,
+							err,
+						);
 					}
 				}
 			}

@@ -20,23 +20,27 @@ export class LoggerService implements LoggerAdapter {
 	}
 
 	debug(msg: string, ...args: any[]) {
-		this.adapter.debug(msg, ...this.withContext(args));
-		this.tee("debug", msg, args);
+		const contextualArgs = this.withContext(args);
+		this.adapter.debug(msg, ...contextualArgs);
+		this.tee("debug", msg, contextualArgs);
 	}
 
 	info(msg: string, ...args: any[]) {
-		this.adapter.info(msg, ...this.withContext(args));
-		this.tee("info", msg, args);
+		const contextualArgs = this.withContext(args);
+		this.adapter.info(msg, ...contextualArgs);
+		this.tee("info", msg, contextualArgs);
 	}
 
 	warn(msg: string, ...args: any[]) {
-		this.adapter.warn(msg, ...this.withContext(args));
-		this.tee("warn", msg, args);
+		const contextualArgs = this.withContext(args);
+		this.adapter.warn(msg, ...contextualArgs);
+		this.tee("warn", msg, contextualArgs);
 	}
 
 	error(msg: string, ...args: any[]) {
-		this.adapter.error(msg, ...this.withContext(args));
-		this.tee("error", msg, args);
+		const contextualArgs = this.withContext(args);
+		this.adapter.error(msg, ...contextualArgs);
+		this.tee("error", msg, contextualArgs);
 	}
 
 	child(bindings: Record<string, any>): LoggerService {
