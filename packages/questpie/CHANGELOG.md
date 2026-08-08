@@ -1,5 +1,13 @@
 # questpie
 
+## 3.25.2
+
+### Patch Changes
+
+- [#238](https://github.com/questpie/questpie/pull/238) [`974e6b2`](https://github.com/questpie/questpie/commit/974e6b24eeee2d26466c142d06f79cc7ba1f65e7) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Reconnect an existing query-only realtime edge before a late collaborative
+  document acquire so SSE and shared-provider sessions gain CRDT authority without
+  hanging in the authorizing state.
+
 ## 3.25.1
 
 ### Patch Changes
