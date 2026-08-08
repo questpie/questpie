@@ -21,13 +21,12 @@ export default defineConfig({
 		tailwindcss(),
 		tanstackStart({
 			prerender: {
-				// Nitro's Bun preset resolves React's Bun stream renderer, but the
-				// prerender worker runs it through Node. Node rejects Bun's
-				// ReadableStream `type: "direct"`. Keep SSR builds reliable and make
-				// static prerendering an explicit opt-in until those runtimes agree.
-				enabled: process.env.ENABLE_PRERENDER === "true",
-				routes: ["/"],
-				crawlLinks: false,
+				// Keep TanStack's prerender route plugin enabled: disabling it makes
+				// the current client bundle initialize the router without its stores.
+				// Skip the actual render pass until Nitro's Bun stream can run inside
+				// the Node-based prerender worker.
+				enabled: true,
+				filter: () => false,
 			},
 			sitemap: {
 				host: "https://questpie.com",
