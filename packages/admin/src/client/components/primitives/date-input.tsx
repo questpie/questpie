@@ -9,11 +9,7 @@ import { useIsMobile } from "../../hooks/use-media-query";
 import { useDateFnsLocale, useResolveText } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
-import type {
-	DateInputProps,
-	DateRangeInputProps,
-	DateTimeInputProps,
-} from "./types";
+import type { DateInputProps, DateTimeInputProps } from "./types";
 
 // Native <input type="date"/"datetime-local"> serialization (always local time,
 // no timezone) — used on touch so the OS date/time picker is offered instead of
@@ -382,117 +378,6 @@ export function DateTimeInput({
 						)}
 					/>
 				</div>
-			</PopoverContent>
-		</Popover>
-	);
-}
-
-/**
- * Date Range Input Primitive
- *
- * A date range picker for selecting start and end dates.
- *
- * @example
- * ```tsx
- * <DateRangeInput
- *   value={{ start: startDate, end: endDate }}
- *   onChange={setDateRange}
- * />
- * ```
- */
-function DateRangeInput({
-	value,
-	onChange,
-	minDate,
-	maxDate,
-	placeholder = "Select date range",
-	disabled,
-	className,
-	id,
-	"aria-invalid": ariaInvalid,
-}: DateRangeInputProps) {
-	const resolveText = useResolveText();
-	const dateFnsLocale = useDateFnsLocale();
-	const isMobile = useIsMobile();
-	const [open, setOpen] = useState(false);
-
-	const handleSelect = (range: { from?: Date; to?: Date } | undefined) => {
-		onChange({
-			start: range?.from ?? null,
-			end: range?.to ?? null,
-		});
-	};
-
-	const handleClear = (e: React.MouseEvent) => {
-		e.stopPropagation();
-		onChange({ start: null, end: null });
-	};
-
-	const displayValue = () => {
-		if (!value.start && !value.end) return resolveText(placeholder);
-		if (value.start && value.end) {
-			return `${format(value.start, "PP")} - ${format(value.end, "PP")}`;
-		}
-		if (value.start) return `${format(value.start, "PP")} - ...`;
-		return resolveText(placeholder);
-	};
-
-	return (
-		<Popover open={open} onOpenChange={setOpen}>
-			<PopoverTrigger
-				id={id}
-				disabled={disabled}
-				aria-invalid={ariaInvalid}
-				className={cn(
-					"qa-date-range-input",
-					dateTriggerClassName,
-					open && openTriggerClassName,
-					!value.start && !value.end && "text-muted-foreground",
-					className,
-				)}
-			>
-				<Icon icon="ph:calendar-blank" className="size-4" />
-				<span className="flex-1 text-left">{displayValue()}</span>
-				{(value.start || value.end) && !disabled && (
-					<Icon
-						icon="ph:x"
-						className="size-4 opacity-50 hover:opacity-100"
-						onClick={handleClear}
-					/>
-				)}
-			</PopoverTrigger>
-			<PopoverContent
-				className={cn(
-					datePopoverClassName,
-					"max-w-[calc(100vw-1rem)] overflow-x-auto",
-				)}
-				align="start"
-			>
-				<DayPicker
-					mode="range"
-					selected={
-						value.start || value.end
-							? { from: value.start ?? undefined, to: value.end ?? undefined }
-							: undefined
-					}
-					onSelect={handleSelect}
-					locale={dateFnsLocale}
-					numberOfMonths={isMobile ? 1 : 2}
-					disabled={(date) => {
-						if (minDate && date < minDate) return true;
-						if (maxDate && date > maxDate) return true;
-						return false;
-					}}
-					className="qa-date-picker font-chrome p-2"
-					classNames={{
-						...datePickerClassNames,
-						months: "flex flex-col sm:flex-row gap-3",
-						day: "relative p-0 text-center text-sm focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-surface-high/55 [&:has([aria-selected].day-outside)]:bg-surface-high/35",
-						range_start: "rounded-l-md",
-						range_end: "rounded-r-md",
-						range_middle: "bg-surface-high/55 text-foreground",
-					}}
-				/>
 			</PopoverContent>
 		</Popover>
 	);

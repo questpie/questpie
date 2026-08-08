@@ -9,12 +9,8 @@ import { describe, expect, it } from "bun:test";
 import { varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
-import { Field, field } from "../../src/server/fields/field-class.js";
-import {
-	fieldType,
-	wrapFieldComplete,
-} from "../../src/server/fields/field-type.js";
-import type { FieldWithMethods } from "../../src/server/fields/field-with-methods.js";
+import { Field } from "../../src/server/fields/field-class.js";
+import { fieldType } from "../../src/server/fields/field-type.js";
 import { stringOps } from "../../src/server/fields/operators/builtin.js";
 
 // ============================================================================

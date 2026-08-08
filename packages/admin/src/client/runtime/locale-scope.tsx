@@ -123,11 +123,3 @@ export function useScopedLocale(): LocaleScopeContextValue {
 		isScoped: false,
 	};
 }
-
-/**
- * Returns true if we're currently in a scoped locale context (nested form).
- */
-function useIsLocaleScopeActive(): boolean {
-	const scopedContext = React.useContext(LocaleScopeContext);
-	return scopedContext !== null;
-}

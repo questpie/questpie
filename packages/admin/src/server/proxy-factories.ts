@@ -11,8 +11,6 @@
  */
 
 import type {
-	ActionsConfigContext,
-	BuiltinActionType,
 	DashboardActionFactory,
 	DashboardActionProxy,
 	DashboardCallbackContext,
@@ -20,7 +18,6 @@ import type {
 	DashboardItemDef,
 	DashboardProxy,
 	DashboardSectionDef,
-	ServerActionDefinition,
 	ServerDashboardAction,
 	SidebarCallbackContext,
 	SidebarContribution,

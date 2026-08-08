@@ -11,16 +11,13 @@ import { sql } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import {
 	bigint,
-	bigserial,
 	char,
 	index,
 	integer,
 	jsonb,
 	pgSchema,
 	pgTable,
-	serial,
 	smallint,
-	smallserial,
 	text,
 	uniqueIndex,
 	uuid,
@@ -37,14 +34,10 @@ import type {
 	InferSQLType,
 	InferTableWithColumns,
 	InferVersionedTableWithColumns,
-	LocalizedTableName,
-	RelationConfig,
-	RelationType,
 	TitleExpression,
 } from "#questpie/server/collection/builder/types.js";
 import { createCollectionValidationSchemas } from "#questpie/server/collection/builder/validation-helpers.js";
 import { CRUDGenerator } from "#questpie/server/collection/crud/index.js";
-import { getColumn } from "#questpie/server/collection/crud/shared/field-resolver.js";
 import type {
 	CRUD,
 	ExtractIdType,
@@ -99,14 +92,6 @@ import type {
 	ExtractMainFields,
 	ExtractVirtualFields,
 } from "#questpie/server/fields/types.js";
-
-/**
- * Extract input types from field definitions.
- * Maps each field to its input type from $types.input.
- */
-type ExtractInputTypes<TFieldDefs extends Record<string, any>> = {
-	[K in keyof TFieldDefs]: FieldInput<TFieldDefs[K]>;
-};
 
 type FieldInput<T> =
 	// V2: Field<TState> — extract input from accumulated state

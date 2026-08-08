@@ -13,7 +13,7 @@
  * ```
  */
 
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { DEFAULT_LOCALE } from "questpie/shared";
 import {
 	type ReactElement,

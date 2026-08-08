@@ -27,7 +27,6 @@ import { CSS } from "@dnd-kit/utilities";
 import { Icon } from "@iconify/react";
 import {
 	type Cell,
-	type Column,
 	type ColumnDef,
 	flexRender,
 	getCoreRowModel,
@@ -864,8 +863,9 @@ function MobileRecordCard({
 			)}
 		>
 			{/* Summary row: checkbox + title/subtitle + chevron (or reorder) */}
+			{/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- role and handlers are enabled together outside reorder mode */}
 			<div
-				role={isReorderMode ? undefined : "button"}
+				role={isReorderMode ? "group" : "button"}
 				tabIndex={isReorderMode ? undefined : 0}
 				aria-expanded={canExpand ? isExpanded : undefined}
 				onClick={isReorderMode ? undefined : handleSummaryActivate}
@@ -1055,87 +1055,6 @@ function MobileRecordCard({
 				</div>
 			)}
 		</div>
-	);
-}
-
-/**
- * MobileSortSheet - re-expresses column sorting as a bottom sheet driving the
- * SAME setSorting/sorting state. Lists sortable leaf columns; tapping a field
- * toggles its direction (asc <-> desc) via TanStack's column.toggleSorting.
- */
-function MobileSortSheet({
-	open,
-	onOpenChange,
-	entries,
-	title,
-	doneLabel,
-	ascLabel,
-	descLabel,
-}: {
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
-	entries: { column: Column<any>; label: string }[];
-	title: string;
-	doneLabel: string;
-	ascLabel: string;
-	descLabel: string;
-}): React.ReactElement {
-	return (
-		<Sheet open={open} onOpenChange={onOpenChange}>
-			<SheetContent
-				side="bottom"
-				className="qa-sort-sheet max-h-[70dvh] rounded-t-2xl"
-			>
-				<SheetHeader className="border-b px-4 py-4">
-					<SheetTitle>{title}</SheetTitle>
-				</SheetHeader>
-				<div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
-					{entries.map(({ column, label }) => {
-						const sorted = column.getIsSorted();
-						return (
-							<button
-								key={column.id}
-								type="button"
-								onClick={() => column.toggleSorting(sorted === "asc")}
-								className={cn(
-									"hover:bg-muted active:bg-muted/70 flex min-h-11 items-center justify-between gap-3 rounded-md px-3 text-left text-sm transition-colors",
-									sorted && "bg-muted/60 font-medium",
-								)}
-							>
-								<span className="min-w-0 truncate">{label}</span>
-								{sorted ? (
-									<span className="text-muted-foreground inline-flex shrink-0 items-center gap-1 text-xs">
-										{sorted === "asc" ? ascLabel : descLabel}
-										<Icon
-											icon={
-												sorted === "asc"
-													? "ph:sort-ascending"
-													: "ph:sort-descending"
-											}
-											className="size-4"
-										/>
-									</span>
-								) : (
-									<Icon
-										icon="ph:arrows-down-up"
-										className="text-muted-foreground/50 size-4 shrink-0"
-									/>
-								)}
-							</button>
-						);
-					})}
-				</div>
-				<SheetFooter className="border-t px-4 py-3">
-					<Button
-						variant="outline"
-						onClick={() => onOpenChange(false)}
-						className="w-full"
-					>
-						{doneLabel}
-					</Button>
-				</SheetFooter>
-			</SheetContent>
-		</Sheet>
 	);
 }
 

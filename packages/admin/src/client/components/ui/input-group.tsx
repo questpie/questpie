@@ -6,7 +6,6 @@ import type * as React from "react";
 import { cn } from "../../lib/utils";
 import { Button } from "./button";
 import { Input } from "./input";
-import { Textarea } from "./textarea";
 
 function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
 	return (
@@ -114,18 +113,6 @@ function InputGroupButton({
 	);
 }
 
-function InputGroupText({ className, ...props }: React.ComponentProps<"span">) {
-	return (
-		<span
-			className={cn(
-				"qa-input-group__text font-chrome text-muted-foreground flex items-center gap-2 text-xs/relaxed [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4",
-				className,
-			)}
-			{...props}
-		/>
-	);
-}
-
 function InputGroupInput({
 	className,
 	...props
@@ -135,22 +122,6 @@ function InputGroupInput({
 			data-slot="input-group-control"
 			className={cn(
 				"qa-input-group__input flex-1 rounded-none border-0 bg-transparent shadow-none ring-0 focus-visible:ring-0 aria-invalid:ring-0",
-				className,
-			)}
-			{...props}
-		/>
-	);
-}
-
-function InputGroupTextarea({
-	className,
-	...props
-}: React.ComponentProps<"textarea">) {
-	return (
-		<Textarea
-			data-slot="input-group-control"
-			className={cn(
-				"qa-input-group__textarea flex-1 resize-none rounded-none border-0 bg-transparent py-2 shadow-none ring-0 focus-visible:ring-0 aria-invalid:ring-0 dark:bg-transparent",
 				className,
 			)}
 			{...props}

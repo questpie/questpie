@@ -176,6 +176,16 @@ const PreviewPaneImpl = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 
 			return typeof window === "undefined" ? "*" : window.location.origin;
 		}, [allowedOrigins, previewUrlResolved, resolveUrlOrigin, url]);
+		// A same-origin document with both script and same-origin privileges can
+		// remove its own sandbox. Omit the ineffective attribute in that case;
+		// cross-origin previews keep the restrictions without losing their origin.
+		const iframeSandbox =
+			targetOrigin ===
+			(typeof window === "undefined"
+				? "http://localhost"
+				: window.location.origin)
+				? undefined
+				: "allow-scripts allow-same-origin allow-forms";
 
 		const expectedOrigins = React.useMemo(() => {
 			const origins = new Set<string>();
@@ -520,7 +530,7 @@ const PreviewPaneImpl = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 						className="size-full border-0"
 						title={t("common.preview")}
 						onLoad={handleLoad}
-						sandbox="allow-scripts allow-same-origin allow-forms"
+						sandbox={iframeSandbox}
 					/>
 				)}
 			</div>

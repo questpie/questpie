@@ -71,14 +71,6 @@ export type BlockEditorActions = {
 	closeLibrary: () => void;
 };
 
-/**
- * Block editor context value.
- */
-type BlockEditorContextValue = {
-	state: BlockEditorState;
-	actions: BlockEditorActions;
-};
-
 export type BlockEditorStore = BlockEditorState & {
 	actions: BlockEditorActions;
 };
@@ -102,33 +94,6 @@ function useBlockEditorStore<T>(selector: (state: BlockEditorStore) => T): T {
 	}
 
 	return useStore(store, selector);
-}
-
-/**
- * Hook to access block editor state and actions.
- * Must be used within BlockEditorProvider.
- */
-function useBlockEditor(): BlockEditorContextValue {
-	const state = useBlockEditorState();
-	const actions = useBlockEditorActions();
-
-	return { state, actions };
-}
-
-/**
- * Hook to access only block editor state.
- */
-function useBlockEditorState(): BlockEditorState {
-	return useBlockEditorStore((state) => ({
-		content: state.content,
-		selectedBlockId: state.selectedBlockId,
-		expandedBlockIds: state.expandedBlockIds,
-		isLibraryOpen: state.isLibraryOpen,
-		insertPosition: state.insertPosition,
-		blocks: state.blocks,
-		allowedBlocks: state.allowedBlocks,
-		locale: state.locale,
-	}));
 }
 
 /**
@@ -201,47 +166,4 @@ export function useIsBlockExpanded(blockId: string): boolean {
  */
 export function useBlockSchema(blockType: string): BlockSchema | undefined {
 	return useBlockEditorStore((state) => state.blocks[blockType]);
-}
-
-/**
- * Hook to get the selected block's schema.
- */
-function useSelectedBlockSchema(): BlockSchema | undefined {
-	return useBlockEditorStore((state) => {
-		if (!state.selectedBlockId) return undefined;
-
-		const blockNode = findBlockNodeById(
-			state.content._tree,
-			state.selectedBlockId,
-		);
-		if (!blockNode) return undefined;
-
-		return state.blocks[blockNode.type];
-	});
-}
-
-/**
- * Hook to get the selected block's values.
- */
-function useSelectedBlockValues(): Record<string, unknown> | undefined {
-	return useBlockEditorStore((state) => {
-		if (!state.selectedBlockId) return undefined;
-		return state.content._values[state.selectedBlockId];
-	});
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-function findBlockNodeById(
-	tree: BlockNode[],
-	id: string,
-): BlockNode | undefined {
-	for (const node of tree) {
-		if (node.id === id) return node;
-		const found = findBlockNodeById(node.children, id);
-		if (found) return found;
-	}
-	return undefined;
 }

@@ -37,12 +37,7 @@ import {
 	type OutputValue,
 	type RichTextEditorProps,
 } from "./types";
-import {
-	type OutputMode,
-	getCharacterCount,
-	getOutput,
-	isSameValue,
-} from "./utils";
+import { getCharacterCount, getOutput, isSameValue } from "./utils";
 
 // Re-export types
 export type { RichTextEditorProps } from "./types";

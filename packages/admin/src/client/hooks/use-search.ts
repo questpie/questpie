@@ -108,7 +108,7 @@ interface SearchMeta {
 /**
  * Populated search result - full record with search metadata
  */
-interface PopulatedSearchResult<T = Record<string, any>> {
+interface PopulatedSearchResult<_T = Record<string, any>> {
 	/** Full record data (spread at top level) */
 	[key: string]: any;
 	/** Collection name */
@@ -237,25 +237,6 @@ export function useSearch<T = Record<string, any>>(
 		staleTime: 30 * 1000,
 		...queryOptions,
 	});
-}
-
-/**
- * Hook for reindexing a collection
- *
- * @example
- * ```tsx
- * const { reindex } = useReindex();
- * await reindex("posts");
- * ```
- */
-function useReindex() {
-	const client = useAdminStore(selectClient);
-
-	return {
-		reindex: async (collection: string) => {
-			return (client as any).search.reindex(collection);
-		},
-	};
 }
 
 // ============================================================================

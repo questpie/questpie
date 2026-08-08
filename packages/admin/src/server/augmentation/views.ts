@@ -5,8 +5,6 @@
  * component factory types, and view factory callback context types.
  */
 
-import type { I18nText } from "questpie/shared";
-
 import type { ComponentReference } from "./common.js";
 import type { FormViewConfig, ListViewConfig } from "./form-layout.js";
 

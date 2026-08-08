@@ -23,9 +23,9 @@
  *
  * Excluding it here rather than editing .oxlintrc.json keeps the decision
  * inside this script: the warnings still appear in lint output, unchanged, and
- * whether to configure or drop the rule stays the owner's call. What remains
- * governed is 329 warnings — admin 160, questpie 158, the rest in single
- * digits — dominated by `no-unused-vars`, which is real debt.
+ * whether to configure or drop the rule stays the owner's call. The governed
+ * backlog originally contained 329 warnings, dominated by `no-unused-vars`;
+ * its baseline is now zero.
  *
  * Usage:
  *   bun run scripts/lint-census.ts            # check against baseline

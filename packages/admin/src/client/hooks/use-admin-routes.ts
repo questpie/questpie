@@ -179,49 +179,6 @@ export function useAdminRoutes<TApp extends QuestpieApp>(
 }
 
 // ============================================================================
-// Standalone Hook (no context required)
-// ============================================================================
-
-/**
- * Hook for type-safe admin routes without requiring AdminProvider context
- *
- * @example
- * ```tsx
- * import { barbershopAdmin } from './configs/admin'
- *
- * function MyComponent() {
- *   const navigate = useNavigate() // from your router
- *   const { routes, go } = useAdminRoutesStandalone({
- *     admin: barbershopAdmin,
- *     basePath: '/admin',
- *     navigate,
- *   })
- *
- *   return <button onClick={go.dashboard}>Dashboard</button>
- * }
- * ```
- */
-function useAdminRoutesStandalone<TApp extends QuestpieApp>(options: {
-	admin: import("../builder/admin").Admin;
-	basePath?: string;
-	navigate: (path: string) => void;
-}) {
-	const { admin, basePath = "/admin", navigate } = options;
-
-	const routes = React.useMemo(
-		() => createAdminRoutes<TApp>(admin, { basePath }),
-		[admin, basePath],
-	);
-
-	const go = React.useMemo(
-		() => createNavigator(routes, navigate),
-		[routes, navigate],
-	);
-
-	return { routes, go };
-}
-
-// ============================================================================
 // Link Component Helper
 // ============================================================================
 

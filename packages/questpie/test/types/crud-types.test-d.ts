@@ -40,7 +40,7 @@ const postsCollection = collection("posts").fields(({ f }) => ({
 }));
 
 type PostSelect = typeof postsCollection.$infer.select;
-type PostInsert = typeof postsCollection.$infer.insert;
+type _PostInsert = typeof postsCollection.$infer.insert;
 
 // ============================================================================
 // WhereOperators tests

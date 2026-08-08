@@ -15,27 +15,18 @@ import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
 
 import { getDefaultActionsConfig } from "../builder/types/action-registry";
 import type {
-	ActionContext,
 	ActionDefinition,
 	ActionHelpers,
-	ActionQueryClient,
 	ActionsConfig,
-	HeaderActionsConfig,
 } from "../builder/types/action-types";
 import { useTranslation } from "../i18n/hooks";
 import {
-	selectAuthClient,
 	selectBasePath,
 	selectClient,
 	selectContentLocale,
 	selectNavigate,
 	useAdminStore,
 } from "../runtime/provider";
-import {
-	optimisticActionInput,
-	optimisticIdInput,
-} from "../utils/optimistic-concurrency";
-import { useCollectionSchema } from "./use-collection-schema";
 
 // ============================================================================
 // Constants
@@ -333,213 +324,5 @@ export function useActions<TItem = any>({
 		setDialogItem,
 		openDialog,
 		closeDialog,
-	};
-}
-
-// ============================================================================
-// useActionExecution Hook
-// ============================================================================
-
-interface UseActionExecutionOptions<TItem = any> {
-	/** Collection name */
-	collection: string;
-	/** Action helpers */
-	helpers: ActionHelpers;
-}
-
-/**
- * Hook for executing individual actions
- *
- * Provides a function to execute an action with proper error handling
- * and loading state management.
- */
-function useActionExecution<TItem = any>({
-	collection,
-	helpers,
-}: UseActionExecutionOptions<TItem>) {
-	const client = useAdminStore(selectClient);
-	const authClient = useAdminStore(selectAuthClient);
-	const queryClient = useQueryClient();
-	const { data: collectionSchema } = useCollectionSchema(collection);
-	const [isExecuting, setIsExecuting] = React.useState(false);
-
-	// Wrapped query client for action context
-	const actionQueryClient: ActionQueryClient = React.useMemo(
-		() => ({
-			invalidateQueries: (filters) => queryClient.invalidateQueries(filters),
-			refetchQueries: (filters) => queryClient.refetchQueries(filters),
-			resetQueries: (filters) => queryClient.resetQueries(filters),
-		}),
-		[queryClient],
-	);
-
-	const executeAction = React.useCallback(
-		async (
-			action: ActionDefinition<TItem>,
-			item?: TItem,
-			items?: TItem[],
-		): Promise<void> => {
-			const ctx: ActionContext<TItem> = {
-				item,
-				items,
-				collection,
-				helpers,
-				queryClient: actionQueryClient,
-				authClient,
-			};
-
-			setIsExecuting(true);
-			try {
-				const { handler } = action;
-
-				switch (handler.type) {
-					case "navigate": {
-						const path =
-							typeof handler.path === "function"
-								? handler.path(item!)
-								: handler.path;
-						helpers.navigate(
-							`${helpers.basePath}/collections/${collection}/${path}`,
-						);
-						break;
-					}
-
-					case "api": {
-						// Replace {id} placeholder in endpoint
-						const endpoint = handler.endpoint.replace(
-							"{id}",
-							String((item as any)?.id || ""),
-						);
-
-						// Execute API call
-						const method = (handler.method || "POST").toLowerCase();
-
-						// Get collection-specific client
-						const collectionClient = (client as any).collections?.[collection];
-
-						if (collectionClient) {
-							if (method === "delete" && collectionClient.delete) {
-								await collectionClient.delete(
-									optimisticIdInput(
-										(item as any)?.id,
-										item as Record<string, any> | undefined,
-										collectionSchema?.options?.optimisticConcurrency,
-									),
-								);
-								helpers.toast.success(helpers.t("toast.deleteSuccess"));
-							} else {
-								// For other methods, show info (actual implementation would call the API)
-								helpers.toast.info(`${handler.method || "POST"} ${endpoint}`);
-							}
-						} else {
-							helpers.toast.info(
-								`API call: ${handler.method || "POST"} ${endpoint}`,
-							);
-						}
-
-						helpers.refresh();
-						break;
-					}
-
-					case "custom": {
-						await handler.fn(ctx);
-						break;
-					}
-
-					case "dialog":
-					case "form": {
-						// These are handled by the ActionDialog component
-						break;
-					}
-
-					case "server": {
-						// Execute server-side action via API
-						const serverHandler = handler as {
-							type: "server";
-							actionId: string;
-							collection: string;
-						};
-						try {
-							const collectionClient = (client as any).collections?.[
-								serverHandler.collection
-							];
-							if (collectionClient?.executeAction) {
-								const result = await collectionClient.executeAction(
-									serverHandler.actionId,
-									{
-										itemId: (item as any)?.id,
-										itemIds: items?.map((i: any) => i?.id).filter(Boolean),
-										...optimisticActionInput(
-											item as Record<string, any> | undefined,
-											items as Array<Record<string, any>> | undefined,
-											collectionSchema?.options?.optimisticConcurrency,
-										),
-									},
-								);
-								if (result?.toast) {
-									if (result.type === "error") {
-										helpers.toast.error(result.toast.message);
-									} else {
-										helpers.toast.success(result.toast.message);
-									}
-								}
-								if (result?.effects?.invalidate) {
-									if (result.effects.invalidate === true) {
-										await helpers.invalidateAll();
-									} else {
-										for (const col of result.effects.invalidate) {
-											await helpers.invalidateCollection(col);
-										}
-									}
-								}
-								if (result?.effects?.redirect) {
-									helpers.navigate(result.effects.redirect);
-								}
-								if (result?.type === "redirect" && result.url) {
-									if (result.external) {
-										window.open(result.url, "_blank");
-									} else {
-										helpers.navigate(result.url);
-									}
-								}
-								if (result?.effects?.closeModal) {
-									helpers.closeDialog();
-								}
-							} else {
-								helpers.toast.info(`Server action: ${serverHandler.actionId}`);
-							}
-						} catch (err) {
-							helpers.toast.error(
-								err instanceof Error
-									? err.message
-									: helpers.t("error.serverActionFailed"),
-							);
-						}
-						break;
-					}
-				}
-			} catch (error) {
-				helpers.toast.error(
-					error instanceof Error
-						? error.message
-						: helpers.t("error.actionFailed"),
-				);
-			} finally {
-				setIsExecuting(false);
-			}
-		},
-		[
-			collection,
-			collectionSchema?.options?.optimisticConcurrency,
-			helpers,
-			client,
-			authClient,
-			actionQueryClient,
-		],
-	);
-
-	return {
-		executeAction,
-		isExecuting,
 	};
 }

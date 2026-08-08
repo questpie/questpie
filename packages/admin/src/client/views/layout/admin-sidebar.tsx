@@ -587,7 +587,7 @@ function NavItem({
 	renderNavItem,
 	useActiveProps,
 	className,
-	depth = 0,
+	depth: _depth = 0,
 }: {
 	item: NavigationItem;
 	isActive: boolean;
@@ -1102,7 +1102,7 @@ function UserFooter({
 			await authClient.signOut();
 			closeSidebarOnMobile();
 			navigate(`${basePath}/login`);
-		} catch (error) {
+		} catch {
 			toast.error(t("auth.logoutFailed"));
 		}
 	}, [authClient, navigate, basePath, closeSidebarOnMobile, t]);

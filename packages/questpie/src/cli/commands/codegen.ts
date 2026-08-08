@@ -722,7 +722,7 @@ async function watchSingleTarget(
 	configPath: string,
 	plugins: CodegenPlugin[],
 	moduleOpt: { name: string; outputFile?: string },
-	options: DevOptions,
+	_options: DevOptions,
 ): Promise<void> {
 	const outDir = join(rootDir, ".generated");
 
@@ -847,8 +847,6 @@ async function watchPackageModules(
 	options: DevOptions,
 ): Promise<void> {
 	const modulesDir = resolve(configRootDir, pkgConfig.modulesDir);
-	const prefix = pkgConfig.modulePrefix ?? "questpie";
-	const plugins = Array.isArray(pkgConfig.plugins) ? pkgConfig.plugins : [];
 
 	console.log(`\nWatching ${pkgConfig.modulesDir}/ for file changes...`);
 	console.log("  (Press Ctrl+C to stop)\n");

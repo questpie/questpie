@@ -71,55 +71,6 @@ function SkeletonRow() {
 }
 
 // ============================================================================
-// Quick Actions Widget Skeleton
-// ============================================================================
-
-function QuickActionsWidgetSkeleton({
-	count = 3,
-	layout = "list",
-}: {
-	count?: number;
-	layout?: "list" | "grid";
-}) {
-	if (layout === "grid") {
-		return (
-			<div className="grid grid-cols-2 gap-2">
-				<ActionGridItem />
-				{count > 1 && <ActionGridItem />}
-				{count > 2 && <ActionGridItem />}
-				{count > 3 && <ActionGridItem />}
-			</div>
-		);
-	}
-
-	return (
-		<div className="-mx-1 space-y-1">
-			<ActionListItem />
-			{count > 1 && <ActionListItem />}
-			{count > 2 && <ActionListItem />}
-		</div>
-	);
-}
-
-function ActionGridItem() {
-	return (
-		<div className="flex flex-col items-center justify-center gap-2 p-3">
-			<Skeleton className="size-9" />
-			<Skeleton className="h-3 w-16" />
-		</div>
-	);
-}
-
-function ActionListItem() {
-	return (
-		<div className="flex items-center gap-3 p-2">
-			<Skeleton className="size-8 shrink-0" />
-			<Skeleton className="h-4 flex-1" />
-		</div>
-	);
-}
-
-// ============================================================================
 // Table Widget Skeleton
 // ============================================================================
 
@@ -239,18 +190,6 @@ export function ValueWidgetSkeleton({
 				</div>
 			</div>
 			<Skeleton className="h-3 w-32" />
-		</div>
-	);
-}
-
-// ============================================================================
-// Generic Widget Skeleton
-// ============================================================================
-
-function GenericWidgetSkeleton() {
-	return (
-		<div className="space-y-4">
-			<Skeleton className="h-20 w-full" />
 		</div>
 	);
 }

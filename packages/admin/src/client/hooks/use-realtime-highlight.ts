@@ -26,7 +26,7 @@ type UseRealtimeHighlightOptions = {
 	initializationGracePeriod?: number;
 };
 
-type UseRealtimeHighlightResult<T extends DocWithId> = {
+type UseRealtimeHighlightResult<_T extends DocWithId> = {
 	/** Set of row IDs that should be highlighted (updated/new) */
 	highlightedIds: Set<string>;
 	/** Check if a specific row should be highlighted as updated/new */

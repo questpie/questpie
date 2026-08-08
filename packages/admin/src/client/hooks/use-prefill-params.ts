@@ -15,8 +15,6 @@
  * ```
  */
 
-import * as React from "react";
-
 /**
  * Parse prefill parameters from a URLSearchParams object
  */
@@ -51,46 +49,6 @@ export function parsePrefillParams(
 			}
 		}
 	}
-
-	return prefill;
-}
-
-/**
- * Parse prefill parameters from URL string
- */
-function parsePrefillParamsFromUrl(url: string): Record<string, unknown> {
-	try {
-		const urlObj = new URL(url, "http://localhost");
-		return parsePrefillParams(urlObj.searchParams);
-	} catch {
-		return {};
-	}
-}
-
-/**
- * Hook to read prefill parameters from current URL
- *
- * @returns Object with field names as keys and prefill values
- */
-function usePrefillParams(): Record<string, unknown> {
-	const [prefill, setPrefill] = React.useState<Record<string, unknown>>({});
-
-	React.useEffect(() => {
-		if (typeof window === "undefined") return;
-
-		// Parse initial URL
-		const searchParams = new URLSearchParams(window.location.search);
-		setPrefill(parsePrefillParams(searchParams));
-
-		// Listen for URL changes (for SPA navigation)
-		const handlePopState = () => {
-			const params = new URLSearchParams(window.location.search);
-			setPrefill(parsePrefillParams(params));
-		};
-
-		window.addEventListener("popstate", handlePopState);
-		return () => window.removeEventListener("popstate", handlePopState);
-	}, []);
 
 	return prefill;
 }

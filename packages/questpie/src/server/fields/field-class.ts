@@ -39,7 +39,6 @@ import type {
 	FieldLocation,
 	FieldMetadata,
 	FieldMetadataBase,
-	ReferentialAction,
 } from "./types.js";
 
 // ============================================================================

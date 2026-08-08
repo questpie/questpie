@@ -13,16 +13,6 @@ import * as React from "react";
 import { useTranslation } from "../../i18n/hooks.js";
 import { Button } from "../ui/button.js";
 import {
-	ContextMenu,
-	ContextMenuContent,
-	ContextMenuItem,
-	ContextMenuSeparator,
-	ContextMenuSub,
-	ContextMenuSubContent,
-	ContextMenuSubTrigger,
-	ContextMenuTrigger,
-} from "../ui/context-menu.js";
-import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
@@ -284,35 +274,6 @@ function MenuItems({
 				{t("common.delete")}
 			</MenuItem>
 		</>
-	);
-}
-
-// ============================================================================
-// Context Menu Wrapper
-// ============================================================================
-
-interface BlockItemContextMenuProps extends BlockItemMenuProps {
-	children: React.ReactNode;
-}
-
-function BlockItemContextMenu({
-	children,
-	...menuProps
-}: BlockItemContextMenuProps) {
-	return (
-		<ContextMenu>
-			<ContextMenuTrigger className="block">{children}</ContextMenuTrigger>
-			<ContextMenuContent>
-				<MenuItems
-					{...menuProps}
-					MenuItem={ContextMenuItem}
-					Separator={ContextMenuSeparator}
-					SubMenu={ContextMenuSub}
-					SubMenuTrigger={ContextMenuSubTrigger}
-					SubMenuContent={ContextMenuSubContent}
-				/>
-			</ContextMenuContent>
-		</ContextMenu>
 	);
 }
 

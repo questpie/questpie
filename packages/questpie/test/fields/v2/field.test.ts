@@ -6,24 +6,12 @@
 
 import { describe, expect, it } from "bun:test";
 
-import {
-	integer,
-	boolean as pgBoolean,
-	text as pgText,
-	varchar,
-} from "drizzle-orm/pg-core";
+import { varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
-import type {
-	DefaultFieldState,
-	FieldRuntimeState,
-} from "#questpie/server/fields/field-class-types.js";
+import type { DefaultFieldState } from "#questpie/server/fields/field-class-types.js";
 import { Field, field } from "#questpie/server/fields/field-class.js";
-import {
-	booleanOps,
-	numberOps,
-	stringOps,
-} from "#questpie/server/fields/operators/builtin.js";
+import { stringOps } from "#questpie/server/fields/operators/builtin.js";
 import { resolveContextualOperators } from "#questpie/server/fields/operators/resolve.js";
 import { json } from "#questpie/server/modules/core/fields/json.js";
 
@@ -45,22 +33,6 @@ function createTestTextField(maxLength = 255) {
 		output: true,
 		isArray: false,
 		maxLength,
-	});
-}
-
-function createTestNumberField() {
-	return field<DefaultFieldState & { type: "number"; data: number }>({
-		type: "number",
-		columnFactory: (name) => integer(name),
-		schemaFactory: () => z.number(),
-		operatorSet: numberOps,
-		notNull: false,
-		hasDefault: false,
-		localized: false,
-		virtual: false,
-		input: true,
-		output: true,
-		isArray: false,
 	});
 }
 

@@ -8,11 +8,7 @@ import type * as React from "react";
 
 import type { ComponentReference } from "../../../server/augmentation/index.js";
 import type { I18nText } from "../../i18n/types";
-import type {
-	DynamicI18nText,
-	IconComponent,
-	MaybeLazyComponent,
-} from "./common";
+import type { IconComponent, MaybeLazyComponent } from "./common";
 
 // ============================================================================
 // Base Widget Config
@@ -538,24 +534,6 @@ export interface ProgressWidgetConfig extends BaseWidgetConfig {
 	showPercentage?: boolean;
 }
 
-// ============================================================================
-// Widget Configuration Union
-// ============================================================================
-
-/**
- * Known widget types (for type narrowing)
- */
-type KnownWidgetType =
-	| "stats"
-	| "chart"
-	| "recentItems"
-	| "quickActions"
-	| "custom"
-	| "value"
-	| "table"
-	| "timeline"
-	| "progress";
-
 /**
  * Widget configuration - discriminated union of all widget types
  */
@@ -693,38 +671,4 @@ export interface WidgetAction {
 	 * Variant
 	 */
 	variant?: "default" | "primary" | "secondary" | "destructive";
-}
-
-// ============================================================================
-// Dashboard Configuration
-// ============================================================================
-
-/**
- * Extended dashboard configuration with widgets
- */
-interface DashboardWidgetConfig {
-	/**
-	 * Dashboard layout
-	 */
-	layout?: "grid" | "list" | "masonry";
-
-	/**
-	 * Grid columns
-	 */
-	columns?: number;
-
-	/**
-	 * Gap between widgets
-	 */
-	gap?: number;
-
-	/**
-	 * Widget instances
-	 */
-	widgets?: WidgetConfig[];
-
-	/**
-	 * Default widgets (used when no custom config)
-	 */
-	defaultWidgets?: string[];
 }

@@ -7,67 +7,6 @@ import type { I18nText } from "../../i18n/types.js";
 import type { Admin } from "../admin";
 import type { IconComponent } from "./common";
 
-/**
- * Global metadata for navigation and display
- */
-interface GlobalMeta {
-	/** Display label - supports inline translations */
-	label?: I18nText;
-	/** Description - supports inline translations */
-	description?: I18nText;
-	icon?: IconComponent | ComponentReference | string;
-	group?: string;
-	order?: number;
-	hidden?: boolean;
-}
-
-interface GlobalConfig<TApp = any> {
-	/**
-	 * Global metadata (for navigation/display)
-	 */
-	meta?: GlobalMeta;
-
-	/**
-	 * Display label - supports inline translations
-	 */
-	label?: I18nText;
-
-	/**
-	 * Description - supports inline translations
-	 */
-	description?: I18nText;
-
-	/**
-	 * Icon
-	 */
-	icon?: IconComponent | ComponentReference | string;
-
-	/**
-	 * Field configurations
-	 */
-	fields?: Record<string, any>;
-
-	/**
-	 * Form view configuration
-	 */
-	form?: any;
-
-	/**
-	 * Navigation group
-	 */
-	group?: string;
-
-	/**
-	 * Sort order
-	 */
-	order?: number;
-
-	/**
-	 * Hide from navigation
-	 */
-	hidden?: boolean;
-}
-
 export interface GlobalBuilderState<TAdminApp extends Admin<any> = Admin<any>> {
 	readonly name: string;
 	readonly "~adminApp": TAdminApp;

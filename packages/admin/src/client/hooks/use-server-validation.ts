@@ -9,7 +9,7 @@
  */
 
 import { ajvResolver } from "@hookform/resolvers/ajv";
-import type { Options as AjvOptions, JSONSchemaType } from "ajv";
+import type { JSONSchemaType } from "ajv";
 import type { CollectionSchema } from "questpie/client";
 import type { ValidationTranslateFn } from "questpie/shared";
 import { useMemo } from "react";
@@ -290,15 +290,6 @@ interface ServerValidationResult<TFieldValues extends FieldValues> {
 /**
  * Default AJV options for form validation
  */
-const DEFAULT_AJV_OPTIONS: AjvOptions = {
-	allErrors: true,
-	// Allow additional properties by default (forms may have extra fields)
-	strict: false,
-	// Coerce types for better form compatibility
-	coerceTypes: true,
-	// Use defaults from schema
-	useDefaults: true,
-};
 
 // ============================================================================
 // Hook

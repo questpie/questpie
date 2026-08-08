@@ -28,7 +28,6 @@ import {
 } from "../../src/cli/codegen/module-metadata.js";
 import { generateTemplate as _generateTemplate } from "../../src/cli/codegen/template.js";
 import type {
-	CodegenPlugin,
 	DiscoveredFile,
 	DiscoveryResult,
 } from "../../src/cli/codegen/types.js";

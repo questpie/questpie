@@ -12,19 +12,6 @@ import type { Admin } from "../admin";
 import type { FieldDefinition } from "../field/field";
 import type { ActionsConfig } from "./action-types";
 import type { IconComponent, MaybeLazyComponent } from "./common";
-import type { FormViewConfig } from "./field-types";
-
-/**
- * Collection metadata for navigation and display
- */
-interface CollectionMeta {
-	/** Display label - supports inline translations */
-	label?: I18nText;
-	icon?: IconComponent | ComponentReference | string;
-	group?: string;
-	order?: number;
-	hidden?: boolean;
-}
 
 // ============================================================================
 // Column Configuration
@@ -94,13 +81,6 @@ export interface ColumnConfigObject<TFieldNames extends string = string> {
 	 * Text alignment
 	 */
 	align?: "left" | "center" | "right";
-}
-
-/**
- * Helper to normalize column config to field name
- */
-function getColumnFieldName<T extends string>(column: ColumnConfig<T>): T {
-	return typeof column === "string" ? column : column.field;
 }
 
 /**
@@ -278,72 +258,6 @@ export interface ListViewConfig<TFieldNames extends string = string> {
 	 * Actions configuration for list view
 	 */
 	actions?: ActionsConfig;
-}
-
-/**
- * Collection configuration - runtime config object
- */
-interface CollectionConfig<TFieldNames extends string = string> {
-	/**
-	 * Collection name
-	 */
-	name: string;
-
-	/**
-	 * Collection metadata (for navigation/display)
-	 */
-	meta?: CollectionMeta;
-
-	/**
-	 * Display label - supports inline translations
-	 */
-	label?: I18nText;
-
-	/**
-	 * Icon
-	 */
-	icon?: IconComponent | ComponentReference | string;
-
-	/**
-	 * Description - supports inline translations
-	 */
-	description?: I18nText;
-
-	/**
-	 * Field configurations (FieldDefinition objects)
-	 *
-	 * @deprecated Admin UI is schema-driven. Prefer server-side schema fields.
-	 */
-	fields?: Record<string, FieldDefinition>;
-
-	/**
-	 * List view configuration
-	 *
-	 * @deprecated Admin UI is schema-driven. Prefer server-side schema config.
-	 */
-	list?: ListViewConfig<TFieldNames>;
-
-	/**
-	 * Form view configuration
-	 *
-	 * @deprecated Admin UI is schema-driven. Prefer server-side schema config.
-	 */
-	form?: FormViewConfig;
-
-	/**
-	 * Navigation group
-	 */
-	group?: string;
-
-	/**
-	 * Sort order
-	 */
-	order?: number;
-
-	/**
-	 * Hide from navigation
-	 */
-	hidden?: boolean;
 }
 
 /**

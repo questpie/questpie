@@ -23,7 +23,6 @@ import {
 import { useAdminConfig } from "../../../hooks/use-admin-config";
 import { useResolveText, useTranslation } from "../../../i18n/hooks";
 import { cn, formatLabel } from "../../../lib/utils";
-import { selectAdmin, useAdminStore } from "../../../runtime";
 import {
 	formatPrimitiveValue,
 	getFieldLabel,

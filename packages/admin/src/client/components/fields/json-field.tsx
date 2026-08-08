@@ -296,7 +296,7 @@ function JsonCodeEditor({
 			const parsed = JSON.parse(newValue);
 			setParseError(null);
 			onChange(parsed);
-		} catch (err) {
+		} catch {
 			setParseError("Invalid JSON");
 			// Still update with raw string so validation can catch it
 			onChange(newValue);

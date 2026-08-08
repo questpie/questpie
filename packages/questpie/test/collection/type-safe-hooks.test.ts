@@ -88,7 +88,7 @@ describe("Type-Safe Hooks", () => {
 			}))
 			.hooks({
 				// beforeValidate: original is NOT available (type is never)
-				beforeValidate: async ({ data, operation, original }) => {
+				beforeValidate: async ({ data, operation, original: _original }) => {
 					// original is type 'never', cannot be used
 					if (operation === "create") {
 						expectTypeOf(data).toMatchTypeOf<{
@@ -102,7 +102,7 @@ describe("Type-Safe Hooks", () => {
 					}
 				},
 				// beforeChange: original is NOT available (type is never)
-				beforeChange: async ({ data, original }) => {
+				beforeChange: async ({ data, original: _original }) => {
 					// original is type 'never', cannot be used
 					if (!data.bio) {
 						data.bio = "No bio";
@@ -169,7 +169,7 @@ describe("Type-Safe Hooks", () => {
 					}
 				},
 				// beforeDelete: original is NOT available (type is never)
-				beforeDelete: async ({ data, original }) => {
+				beforeDelete: async ({ data, original: _original }) => {
 					// original is type 'never', cannot be used
 					expectTypeOf(data).toMatchTypeOf<{
 						id: string;
@@ -182,7 +182,7 @@ describe("Type-Safe Hooks", () => {
 					}>();
 				},
 				// afterDelete: original is NOT available (type is never)
-				afterDelete: async ({ data, original }) => {
+				afterDelete: async ({ data, original: _original }) => {
 					// original is type 'never', cannot be used
 					expectTypeOf(data).toMatchTypeOf<{
 						id: string;
@@ -205,7 +205,7 @@ describe("Type-Safe Hooks", () => {
 				title: f.textarea().required(),
 			}))
 			.hooks({
-				beforeOperation: async ({ data, operation, original }) => {
+				beforeOperation: async ({ data, operation, original: _original }) => {
 					// original is type 'never', cannot be used
 
 					// data type depends on operation

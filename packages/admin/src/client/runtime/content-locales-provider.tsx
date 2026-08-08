@@ -152,51 +152,6 @@ export function ContentLocalesProvider({
 	);
 }
 
-// ============================================================================
-// Hooks
-// ============================================================================
-
-/**
- * Get content locales from context.
- *
- * Must be used inside ContentLocalesProvider.
- * Returns locale data, helper functions, and loading state.
- *
- * @example
- * ```tsx
- * function LocaleSwitcher() {
- *   const {
- *     locales,
- *     defaultLocale,
- *     isLocalized,
- *     getLocaleLabel,
- *   } = useContentLocales();
- *
- *   if (!isLocalized) return null;
- *
- *   return (
- *     <select>
- *       {locales.map(l => (
- *         <option key={l.code} value={l.code}>
- *           {getLocaleLabel(l.code)}
- *         </option>
- *       ))}
- *     </select>
- *   );
- * }
- * ```
- */
-function useContentLocales(): ContentLocalesContextValue {
-	const context = useContext(ContentLocalesContext);
-	if (!context) {
-		throw new Error(
-			"useContentLocales must be used within ContentLocalesProvider. " +
-				"Wrap your app with <ContentLocalesProvider> inside <AdminProvider>.",
-		);
-	}
-	return context;
-}
-
 /**
  * Safely get content locales from context.
  * Returns null if not inside provider (useful for optional features).

@@ -131,25 +131,6 @@ export function removeBlockFromTree(
 }
 
 /**
- * Move a block to a new position in the tree (remove + insert).
- * Used for cross-parent moves (e.g., from context menu).
- */
-function moveBlockInTree(
-	tree: BlockNode[],
-	blockId: string,
-	toPosition: InsertPosition,
-): BlockNode[] {
-	// Find and remove block
-	const block = findBlockById(tree, blockId);
-	if (!block) return tree;
-
-	const { newTree } = removeBlockFromTree(tree, blockId);
-
-	// Insert at new position
-	return insertBlockInTree(newTree, block, toPosition);
-}
-
-/**
  * Reorder a block within the same parent using arrayMove.
  * Used for DnD reordering — avoids remove+insert index shifting issues.
  */

@@ -9,10 +9,17 @@
 		"typescript/no-explicit-any": "off",
 		"jsx-a11y/prefer-tag-over-role": "off",
 		"react/react-in-jsx-scope": "off",
+		// TanStack column definitions and error-boundary fallbacks intentionally
+		// pass memoized render callbacks as props; they are not component declarations
+		// recreated directly in the rendered JSX tree.
+		"react/no-unstable-nested-components": ["warn", { "allowAsProps": true }],
 		"eslint/no-unused-vars": "warn",
 		"eslint/no-shadow": "off",
 		"unicorn/consistent-function-scoping": "off",
 		"unicorn/no-array-sort": "off",
+		// The repository targets an ES lib without Array#toReversed. Existing
+		// reverse calls clone their arrays first, so they do not mutate inputs.
+		"unicorn/no-array-reverse": "off",
 		"unicorn/no-useless-fallback-in-spread": "off",
 		"import/no-named-as-default": "off",
 		"import/no-named-as-default-member": "off",

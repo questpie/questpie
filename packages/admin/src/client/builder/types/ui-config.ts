@@ -5,7 +5,6 @@
  */
 
 import type { ComponentReference } from "../../../server/augmentation/index.js";
-import type { I18nText } from "../../i18n/types.js";
 import type { DynamicI18nText, IconComponent } from "./common";
 import type { WidgetConfig } from "./widget-types";
 
@@ -181,121 +180,6 @@ export interface DashboardConfig {
 	realtime?: boolean;
 	/** Header actions (buttons in dashboard header) */
 	actions?: DashboardAction[];
-}
-
-// ============================================================================
-// Sidebar Configuration
-// ============================================================================
-
-/**
- * Sidebar configuration
- */
-interface SidebarConfig<TSectionIds extends string = string> {
-	sections: SidebarSection<TSectionIds>[];
-}
-
-/**
- * Sidebar section with required ID for targeting
- */
-interface SidebarSection<TId extends string = string> {
-	/** Unique ID for targeting this section (required for extend) */
-	id: TId;
-	/** Display title - supports inline translations */
-	title?: I18nText;
-	/** Section icon */
-	icon?: IconComponent | ComponentReference;
-	/** Whether this section can be collapsed/expanded by the user */
-	collapsible?: boolean;
-	/** Items in this section */
-	items?: SidebarItem[];
-	/** Nested subsections */
-	sections?: SidebarSection[];
-}
-
-/**
- * Sidebar item types
- */
-type SidebarItem =
-	| SidebarCollectionItem
-	| SidebarGlobalItem
-	| SidebarPageItem
-	| SidebarLinkItem
-	| SidebarDividerItem;
-
-interface SidebarCollectionItem {
-	type: "collection";
-	/** Collection name */
-	collection: string;
-	/** Override display label (defaults to collection label) - supports inline translations */
-	label?: I18nText;
-	/** Override icon */
-	icon?: IconComponent | ComponentReference;
-}
-
-interface SidebarGlobalItem {
-	type: "global";
-	/** Global name */
-	global: string;
-	/** Override display label (defaults to global label) - supports inline translations */
-	label?: I18nText;
-	/** Override icon */
-	icon?: IconComponent | ComponentReference;
-}
-
-interface SidebarPageItem {
-	type: "page";
-	/** Page ID */
-	pageId: string;
-	/** Override display label - supports inline translations */
-	label?: I18nText;
-	/** Override icon */
-	icon?: IconComponent | ComponentReference;
-}
-
-interface SidebarLinkItem {
-	type: "link";
-	/** Display label - supports inline translations */
-	label: I18nText;
-	/** Link URL */
-	href: string;
-	/** Icon */
-	icon?: IconComponent | ComponentReference;
-	/** Open in new tab */
-	external?: boolean;
-}
-
-interface SidebarDividerItem {
-	type: "divider";
-}
-
-/**
- * Branding metadata. React chrome and app shell details are configured outside
- * this legacy client-side type surface.
- */
-interface BrandingConfig {
-	/** Brand name - supports inline translations */
-	name?: I18nText;
-	logo?: IconComponent | ComponentReference;
-}
-
-/**
- * Generic admin shell slot configuration.
- */
-export interface ShellConfig {
-	secondaryRail?: {
-		component: ComponentReference;
-		placement?: "left" | "right";
-		width?: number | string;
-		minWidth?: number | string;
-		maxWidth?: number | string;
-		hiddenOnMobile?: boolean;
-		routes?: {
-			include?: string[];
-			exclude?: string[];
-			match?: "prefix" | "exact";
-		};
-		className?: string;
-	};
 }
 
 /**

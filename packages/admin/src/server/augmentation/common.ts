@@ -5,8 +5,6 @@
  * component type registry, locale configuration, and action references.
  */
 
-import type { I18nText } from "questpie/shared";
-
 // ============================================================================
 // Admin Locale Configuration
 // ============================================================================
@@ -54,19 +52,6 @@ export interface ComponentReference<
 	type: TType;
 	props: TProps;
 }
-
-/**
- * Icon component reference with typed props.
- */
-type IconReference = ComponentReference<"icon", { name: string }>;
-
-/**
- * Badge component reference with typed props.
- */
-type BadgeReference = ComponentReference<
-	"badge",
-	{ text: string; color?: string }
->;
 
 // ============================================================================
 // Component Type Registry — Plugin-Extensible

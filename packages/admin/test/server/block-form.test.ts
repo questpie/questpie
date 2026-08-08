@@ -9,10 +9,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import {
-	block,
-	BlockBuilder,
-} from "#questpie/admin/server/modules/admin/block/block-builder.js";
+import { block } from "#questpie/admin/server/modules/admin/block/block-builder.js";
 import {
 	introspectBlock,
 	introspectBlocks,

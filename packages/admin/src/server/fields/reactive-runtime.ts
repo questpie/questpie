@@ -13,8 +13,6 @@ import type {
 	OptionsContext,
 	ReactiveConfig,
 	ReactiveHandler,
-	ReactivePropPlaceholder,
-	ReactivePropValue,
 	SerializedOptionsConfig,
 	SerializedReactiveConfig,
 } from "questpie";

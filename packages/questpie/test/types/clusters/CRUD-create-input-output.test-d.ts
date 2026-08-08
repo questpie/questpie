@@ -70,7 +70,6 @@ type StarterModule = {
 	name: "starter";
 	collections: { user: typeof starterUser; account: typeof starterAccount };
 };
-declare const starterModule: StarterModule;
 
 /**
  * Admin re-declares `user` = collection("user").merge(starter.user).<more config>.
@@ -101,7 +100,6 @@ type AdminModule = {
 	modules: readonly [StarterModule];
 	collections: { user: typeof adminUser; admin_locks: typeof adminLocks };
 };
-declare const adminModule: AdminModule;
 
 /** Top-level module tuple (what `_modules` is). */
 type Mods = readonly [AdminModule];

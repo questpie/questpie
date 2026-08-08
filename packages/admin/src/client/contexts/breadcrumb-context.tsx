@@ -92,59 +92,11 @@ export function BreadcrumbProvider({
 	);
 }
 
-// ============================================================================
-// Hooks
-// ============================================================================
-
-/**
- * Get breadcrumb context
- * @throws if used outside BreadcrumbProvider
- */
-function useBreadcrumbContext(): BreadcrumbContextValue {
-	const context = React.useContext(BreadcrumbContext);
-	if (!context) {
-		throw new Error(
-			"useBreadcrumbContext must be used within a BreadcrumbProvider",
-		);
-	}
-	return context;
-}
-
 /**
  * Get breadcrumb context (optional - returns null if not in provider)
  */
 function useBreadcrumbContextOptional(): BreadcrumbContextValue | null {
 	return React.useContext(BreadcrumbContext);
-}
-
-/**
- * Set breadcrumbs for the current page
- * Automatically cleans up on unmount
- *
- * @example
- * ```tsx
- * function PostsListPage() {
- *   useBreadcrumbs([
- *     { label: "Dashboard", href: "/admin", icon: House },
- *     { label: "Posts", icon: Article },
- *   ]);
- *
- *   return <div>...</div>;
- * }
- * ```
- */
-function useBreadcrumbs(breadcrumbs: Breadcrumb[]): void {
-	const context = useBreadcrumbContextOptional();
-
-	React.useEffect(() => {
-		if (!context) return;
-
-		context.setBreadcrumbs(breadcrumbs);
-
-		return () => {
-			context.setBreadcrumbs([]);
-		};
-	}, [context, breadcrumbs]);
 }
 
 /**

@@ -13,10 +13,10 @@ import type * as React from "react";
 import { type Control, Controller, useFormContext } from "react-hook-form";
 
 import { useResolveText } from "../../i18n/hooks";
-import { RelationPicker, type RelationPickerProps } from "./relation-picker";
-import { RelationSelect, type RelationSelectProps } from "./relation-select";
+import { RelationPicker } from "./relation-picker";
+import { RelationSelect } from "./relation-select";
 
-type RelationFieldProps<T extends QuestpieApp> = {
+type RelationFieldProps<_T extends QuestpieApp> = {
 	/**
 	 * Field name (for react-hook-form)
 	 */

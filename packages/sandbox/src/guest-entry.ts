@@ -336,6 +336,7 @@ function installFetchShim(
 		} catch (e) {
 			throw new TypeError(
 				`Failed to construct fetch request: ${e instanceof Error ? e.message : String(e)}`,
+				{ cause: e },
 			);
 		}
 
@@ -371,7 +372,9 @@ function installFetchShim(
 		try {
 			value = (await hostCall("http.fetch", request)) as HttpFetchResponse;
 		} catch (e) {
-			throw new TypeError(e instanceof Error ? e.message : String(e));
+			throw new TypeError(e instanceof Error ? e.message : String(e), {
+				cause: e,
+			});
 		}
 
 		const status = typeof value?.status === "number" ? value.status : 0;

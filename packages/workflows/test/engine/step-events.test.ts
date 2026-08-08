@@ -91,7 +91,7 @@ describe("step.sendEvent", () => {
 	it("dispatches event and persists step as completed", async () => {
 		const { persistence: eventPersistence, store } =
 			createMockEventPersistence();
-		const { fn: resumeWaiter, calls: resumeCalls } = createMockResumeWaiter();
+		const { fn: resumeWaiter } = createMockResumeWaiter();
 
 		const { ctx, log } = createTestStepContext({
 			eventPersistence,
@@ -270,7 +270,7 @@ describe("step.run with timeout", () => {
 	});
 
 	it("step.run with opts but no timeout works normally", async () => {
-		const { ctx, log } = createTestStepContext();
+		const { ctx } = createTestStepContext();
 		const compensateCalls: any[] = [];
 
 		const result = await ctx.run(

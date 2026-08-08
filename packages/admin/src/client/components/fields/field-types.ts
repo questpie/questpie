@@ -1,17 +1,6 @@
-import type * as React from "react";
 import type { Control } from "react-hook-form";
 
-import type { I18nText } from "../../i18n/types.js";
-
-/**
- * Dynamic I18n text resolver (supports functions based on form values)
- */
-type DynamicI18nText = I18nText | ((values: Record<string, any>) => I18nText);
-
-import type {
-	SelectOption as PrimitiveSelectOption,
-	SelectOptionGroup,
-} from "../primitives/types";
+import type { SelectOption as PrimitiveSelectOption } from "../primitives/types";
 import type {
 	RelationDisplayFields as DisplayFields,
 	RelationDisplayMode as DisplayMode,
@@ -51,52 +40,6 @@ export type BaseFieldProps = {
 	control?: Control<any>;
 	/** Additional className for the field wrapper */
 	className?: string;
-};
-
-/**
- * Base props for field config (builder level).
- * These support I18nText and are resolved before passing to components.
- */
-type BaseFieldConfigProps = {
-	/** Field label - supports inline translations and dynamic resolvers */
-	label?: DynamicI18nText;
-	/** Helper text - supports inline translations and dynamic resolvers */
-	description?: DynamicI18nText;
-	/** Placeholder text - supports inline translations and dynamic resolvers */
-	placeholder?: DynamicI18nText;
-	/** Mark field as required */
-	required?: boolean;
-};
-
-/**
- * Field types supported by the FormField component
- */
-type FormFieldType =
-	| "text"
-	| "email"
-	| "password"
-	| "url"
-	| "tel"
-	| "search"
-	| "number"
-	| "textarea"
-	| "checkbox"
-	| "switch"
-	| "select"
-	| "multiselect"
-	| "date"
-	| "datetime"
-	| "daterange"
-	| "tags"
-	| "json";
-
-/**
- * Props for the generic FormField component
- */
-type FormFieldProps = BaseFieldProps & {
-	type?: FormFieldType;
-	options?: SelectOption[];
-	component?: React.ComponentType<any>;
 };
 
 /**
@@ -164,41 +107,6 @@ export type DateTimeFieldProps = DateFieldProps & {
  */
 export type TimeFieldProps = BaseFieldProps & {
 	precision?: "minute" | "second";
-};
-
-/**
- * Props for date range field
- */
-type DateRangeFieldProps = BaseFieldProps & {
-	minDate?: Date;
-	maxDate?: Date;
-};
-
-/**
- * Props for tags field
- */
-type TagsFieldProps = BaseFieldProps & {
-	suggestions?: string[];
-	maxTags?: number;
-	allowDuplicates?: boolean;
-	pattern?: RegExp;
-};
-
-// BooleanFieldProps is now in ./boolean-field.tsx
-/**
- * Props for checkbox group field
- */
-type CheckboxGroupFieldProps<TValue = string> = BaseFieldProps & {
-	options: SelectOption<TValue>[];
-	orientation?: "horizontal" | "vertical";
-};
-
-/**
- * Props for radio group field
- */
-type RadioGroupFieldProps<TValue = string> = BaseFieldProps & {
-	options: SelectOption<TValue>[];
-	orientation?: "horizontal" | "vertical";
 };
 
 // ============================================================================
@@ -580,161 +488,6 @@ export type ObjectFieldConfig = {
 export type ArrayItemType = "text" | "number" | "email" | "textarea" | "select";
 
 /**
- * Array field config - for arrays of primitives or objects
- *
- * @example Primitive array
- * ```ts
- * tags: r.array({
- *   itemType: "text",
- *   orderable: true,
- * })
- * ```
- *
- * @example Object array
- * ```ts
- * socialLinks: r.array({
- *   item: ({ r }) => ({
- *     platform: r.select({ options: [...] }),
- *     url: r.text(),
- *   }),
- *   orderable: true,
- *   mode: "inline",
- * })
- * ```
- */
-// ============================================================================
-// Reverse Relation Field Config
-// ============================================================================
-
-/**
- * Reverse relation field config - for displaying the "other side" of a relation
- *
- * Use this to show items from another collection that reference the current item.
- *
- * @example Basic chips
- * ```ts
- * offeredBy: r.reverseRelation({
- *   sourceCollection: "barbers",
- *   sourceField: "services",
- *   display: "chips",
- * })
- * ```
- *
- * @example Table with auto columns from collection list config
- * ```ts
- * appointments: r.reverseRelation({
- *   sourceCollection: "appointments",
- *   sourceField: "barberId",
- *   display: "table",
- *   // columns auto-detected from appointments list config!
- * })
- * ```
- *
- * @example Cards with custom fields
- * ```ts
- * projects: r.reverseRelation({
- *   sourceCollection: "projects",
- *   sourceField: "userId",
- *   display: "cards",
- *   fields: {
- *     title: "name",
- *     subtitle: "description",
- *     image: "thumbnail",
- *     meta: ["status", "createdAt"],
- *   },
- * })
- * ```
- */
-type ReverseRelationFieldConfig = {
-	/** Source collection (where the relation is defined) */
-	sourceCollection: string;
-	/** Field name on source collection that references this collection */
-	sourceField: string;
-	/** Display mode */
-	display?: RelationDisplayMode;
-	/**
-	 * Columns to show (for table mode).
-	 * If not specified, auto-detects from collection's list config.
-	 */
-	columns?: string[];
-	/**
-	 * Field configuration for cards/grid modes.
-	 * Allows specifying which fields to use for title, subtitle, image, etc.
-	 */
-	fields?: RelationDisplayFields;
-	/**
-	 * Number of columns for grid/cards layout.
-	 * @default 2 for cards, 3 for grid
-	 */
-	gridColumns?: 1 | 2 | 3 | 4;
-	/** Max items to show */
-	limit?: number;
-	/** Message when empty */
-	emptyMessage?: I18nText;
-	/** Link items to their detail pages */
-	linkToDetail?: boolean;
-	/** Allow creating new items with pre-filled relation */
-	allowCreate?: boolean;
-	/** Allow assigning existing items */
-	allowAssign?: boolean;
-	/** Custom label for create button */
-	createLabel?: I18nText;
-	/**
-	 * Open items in a side sheet instead of navigating to a new page.
-	 * When true, clicking an item opens it in a slide-over panel for quick editing.
-	 * @default false
-	 */
-	openInSheet?: boolean;
-};
-
-/**
- * Array field display mode - controls WHERE item fields are edited.
- *
- * @example Visual comparison:
- * ```
- * ┌─────────────────────────────────────────────────────────────┐
- * │ "inline" - Fields visible directly in the list             │
- * │                                                             │
- * │ ┌─────────────────────────────────────────────────────────┐ │
- * │ │ #1 Social Link                              [↑] [↓] [×] │ │
- * │ ├─────────────────────────────────────────────────────────┤ │
- * │ │ Platform: [Twitter ▼]  URL: [https://twitter.com/...]   │ │
- * │ └─────────────────────────────────────────────────────────┘ │
- * │ ┌─────────────────────────────────────────────────────────┐ │
- * │ │ #2 Social Link                              [↑] [↓] [×] │ │
- * │ ├─────────────────────────────────────────────────────────┤ │
- * │ │ Platform: [GitHub ▼]   URL: [https://github.com/...]    │ │
- * │ └─────────────────────────────────────────────────────────┘ │
- * │ [+ Add Social Link]                                         │
- * └─────────────────────────────────────────────────────────────┘
- *
- * ┌─────────────────────────────────────────────────────────────┐
- * │ "modal" / "drawer" - Compact list, edit in overlay         │
- * │                                                             │
- * │ ┌─────────────────────────────────────────────────────────┐ │
- * │ │ #1 Twitter                              [✏️] [↑] [↓] [×] │ │
- * │ └─────────────────────────────────────────────────────────┘ │
- * │ ┌─────────────────────────────────────────────────────────┐ │
- * │ │ #2 GitHub                               [✏️] [↑] [↓] [×] │ │
- * │ └─────────────────────────────────────────────────────────┘ │
- * │ [+ Add Social Link]                                         │
- * │                                                             │
- * │ Click ✏️ opens modal (centered) or drawer (slides from side)│
- * └─────────────────────────────────────────────────────────────┘
- * ```
- *
- * - `"inline"` - Fields are always visible inside each item card.
- *   Best for simple items with 2-4 fields.
- *
- * - `"modal"` - Click edit to open centered dialog overlay.
- *   Best for items with many fields or complex editing.
- *
- * - `"drawer"` - Click edit to open side panel (slides from right).
- *   Best for items that need context from the main form while editing.
- */
-type ArrayFieldMode = "inline" | "modal" | "drawer";
-
-/**
  * Array field config - for arrays of primitives or objects.
  *
  * @example Object array with inline layout
@@ -898,35 +651,4 @@ export type RichTextFieldConfig = {
 	imageCollection?: string;
 	/** Enable media library picker for images */
 	enableMediaLibrary?: boolean;
-};
-
-// ============================================================================
-// Embedded Collection Field Config
-// ============================================================================
-
-/**
- * Embedded collection field config - for inline nested collections
- *
- * @example
- * ```ts
- * sections: r.embedded({
- *   collection: "pageSection",
- *   mode: "drawer",
- *   orderable: true,
- * })
- * ```
- */
-type EmbeddedFieldConfig = {
-	/** Embedded collection name */
-	collection: string;
-	/** Display mode */
-	mode?: "inline" | "modal" | "drawer";
-	/** Enable drag-and-drop reordering */
-	orderable?: boolean;
-	/** Row label - field name or function */
-	rowLabel?: string | ((item: any) => string);
-	/** Minimum items */
-	minItems?: number;
-	/** Maximum items */
-	maxItems?: number;
 };

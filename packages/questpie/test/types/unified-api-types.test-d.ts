@@ -894,7 +894,7 @@ type _authorResultExactEmail = Expect<Equal<AuthorInResult["email"], string>>;
 // ============================================================================
 
 // --- Top-level: title operators are concrete ---
-type PostsWhereTitle = NonNullable<PostsWhereCheck["title"]>;
+type _PostsWhereTitle = NonNullable<PostsWhereCheck["title"]>;
 // title should accept string directly or operator object with string operators
 const _whereTitleContains: PostsWhereCheck = { title: { contains: "hello" } };
 const _whereTitleStartsWith: PostsWhereCheck = {

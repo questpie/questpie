@@ -8,7 +8,6 @@
 import type {
 	AccessContext,
 	AccessWhere,
-	CollectionAccess,
 } from "#questpie/server/collection/builder/types.js";
 import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
 import { extractAppServices } from "#questpie/server/config/app-context.js";
@@ -18,7 +17,7 @@ import type {
 	FieldAccessContext,
 } from "#questpie/server/fields/types.js";
 
-import { getDb, normalizeContext } from "./context.js";
+import { normalizeContext } from "./context.js";
 
 /** Internal, non-JSON marker for access already evaluated before CRUD hooks. */
 export const PRECHECKED_READ_ACCESS = Symbol("questpie.precheckedReadAccess");

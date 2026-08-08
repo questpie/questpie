@@ -155,53 +155,6 @@ export interface DateRangeInputProps extends BasePrimitiveProps {
 }
 
 // =============================================================================
-// Special Inputs
-// =============================================================================
-
-interface TagInputProps extends BasePrimitiveProps {
-	value: string[];
-	onChange: (value: string[]) => void;
-	/** Suggestions for autocomplete */
-	suggestions?: string[];
-	/** Max tags */
-	maxTags?: number;
-	/** Allow duplicates */
-	allowDuplicates?: boolean;
-	/** Validation pattern */
-	pattern?: RegExp;
-}
-
-interface ColorInputProps extends BasePrimitiveProps {
-	value: string; // hex color
-	onChange: (value: string) => void;
-	/** Preset colors */
-	presets?: string[];
-	/** Allow alpha */
-	alpha?: boolean;
-}
-
-interface SliderInputProps extends BasePrimitiveProps {
-	value: number | [number, number];
-	onChange: (value: number | [number, number]) => void;
-	min: number;
-	max: number;
-	step?: number;
-	/** Show value label */
-	showValue?: boolean;
-}
-
-interface JsonEditorProps extends BasePrimitiveProps {
-	value: unknown;
-	onChange: (value: unknown) => void;
-	/** Max height */
-	maxHeight?: string;
-	/** Line numbers */
-	showLineNumbers?: boolean;
-	/** Schema for validation */
-	schema?: unknown;
-}
-
-// =============================================================================
 // Utility Types
 // =============================================================================
 

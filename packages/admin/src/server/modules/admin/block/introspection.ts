@@ -17,7 +17,7 @@ import {
 	serializeFormLayoutProps,
 	serializeReactivePropsRecord,
 } from "../../../fields/reactive-runtime.js";
-import type { AnyBlockDefinition, BlockBuilderState } from "./block-builder.js";
+import type { AnyBlockDefinition } from "./block-builder.js";
 
 // ============================================================================
 // Block Schema Types

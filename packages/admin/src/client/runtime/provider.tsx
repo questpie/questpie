@@ -15,7 +15,6 @@ import {
 	useContext,
 	useEffect,
 	useMemo,
-	useRef,
 	useState,
 } from "react";
 import { createStore, useStore } from "zustand";
@@ -643,20 +642,6 @@ export function useAdminStore<T>(selector: (state: AdminState) => T): T {
 		);
 	}
 	return useStore(store, selector);
-}
-
-/**
- * Check if currently inside AdminProvider.
- * Useful for components that can work both with and without context.
- *
- * @example
- * ```tsx
- * const hasProvider = useHasAdminProvider();
- * ```
- */
-function useHasAdminProvider(): boolean {
-	const store = useContext(AdminStoreContext);
-	return store !== null;
 }
 
 /**

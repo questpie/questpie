@@ -1,6 +1,6 @@
 import type { generateDrizzleJson } from "drizzle-kit/api-postgres";
 
-import type { OperationSnapshot, SnapshotOperation } from "./types.js";
+import type { SnapshotOperation } from "./types.js";
 
 // Infer snapshot type from drizzle-kit API
 type DrizzleSnapshotJSON = Awaited<ReturnType<typeof generateDrizzleJson>>;
@@ -46,7 +46,7 @@ export class OperationSnapshotManager {
 		}
 
 		// Check for removed entities
-		for (const [key, oldEntity] of oldDdlMap) {
+		for (const [key, _oldEntity] of oldDdlMap) {
 			if (!newDdlMap.has(key)) {
 				operations.push({
 					type: "remove",

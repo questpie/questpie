@@ -191,7 +191,7 @@ describe("createWorkflowClient", () => {
 			});
 			const client = createWorkflowClient({ "timed-wf": timedWorkflow }, deps);
 
-			const result = await client.trigger("timed-wf", { taskId: "t1" });
+			const _result = await client.trigger("timed-wf", { taskId: "t1" });
 			const instance = instanceStore.values().next().value;
 
 			expect(instance).toBeDefined();

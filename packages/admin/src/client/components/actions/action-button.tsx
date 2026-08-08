@@ -188,7 +188,7 @@ export function ActionButton<TItem = any>({
 				try {
 					await handler.fn(ctx);
 					setIsLoading(false);
-				} catch (error) {
+				} catch {
 					helpers.toast.error(t("error.actionFailed"));
 					setIsLoading(false);
 				}

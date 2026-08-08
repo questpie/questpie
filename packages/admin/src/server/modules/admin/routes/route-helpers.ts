@@ -9,7 +9,7 @@
  * Route handlers use these instead of inline `(ctx as any).app` casts.
  */
 
-import type { AppContext, Questpie } from "questpie";
+import type { Questpie } from "questpie";
 
 // ============================================================================
 // Route Handler Context

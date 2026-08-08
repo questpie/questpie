@@ -108,31 +108,6 @@ export interface FieldComponentProps<TValue = any> extends BaseFieldProps {
 	config?: FieldUIConfig;
 }
 
-/**
- * Props for embedded collection fields
- */
-interface EmbeddedCollectionProps extends BaseFieldProps {
-	/**
-	 * Target collection name
-	 */
-	collection: string;
-
-	/**
-	 * Display mode
-	 */
-	mode?: "inline" | "modal" | "drawer";
-
-	/**
-	 * Whether items can be reordered
-	 */
-	orderable?: boolean;
-
-	/**
-	 * Function to generate row labels
-	 */
-	rowLabel?: (item: any) => string;
-}
-
 // ============================================================================
 // Field Hooks Context
 // ============================================================================
@@ -712,19 +687,6 @@ export function getFieldName<TData = any>(
 	if (typeof item === "string") return item;
 	if ("field" in item && typeof item.field === "string") return item.field;
 	return null;
-}
-
-/**
- * Helper to get className from field layout item
- */
-function getFieldClassName<TData = any>(
-	item: FieldLayoutItem<TData>,
-): string | undefined {
-	return typeof item === "string"
-		? undefined
-		: "className" in item
-			? item.className
-			: undefined;
 }
 
 // ============================================================================

@@ -9,7 +9,6 @@
 import { describe, expect, it } from "bun:test";
 
 import type {
-	CategoryDeclaration,
 	CodegenResult,
 	CodegenTargetGenerateContext,
 	DiscoveredFile,

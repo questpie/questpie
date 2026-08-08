@@ -333,59 +333,6 @@ export function createAdminRoutes<TApp extends QuestpieApp>(
 }
 
 // ============================================================================
-// Standalone Route Builder (without admin config)
-// ============================================================================
-
-/**
- * Create admin routes without admin config (less type-safe, but works without context)
- *
- * @example
- * ```tsx
- * const routes = createAdminRoutesSimple({ basePath: '/admin' })
- * routes.collections.list('posts')
- * ```
- */
-function createAdminRoutesSimple(
-	options: { basePath?: string; pages?: Record<string, { path: string }> } = {},
-) {
-	const basePath = options.basePath ?? "/admin";
-	const pagesConfig = options.pages ?? {};
-
-	const joinPath = (...segments: string[]): string => {
-		return segments.filter(Boolean).join("/");
-	};
-
-	return {
-		basePath,
-		dashboard: () => basePath,
-
-		collections: {
-			list: (collection: string) =>
-				joinPath(basePath, "collections", collection),
-			create: (collection: string) =>
-				joinPath(basePath, "collections", collection, "create"),
-			edit: (collection: string, id: string) =>
-				joinPath(basePath, "collections", collection, id),
-		},
-
-		globals: {
-			edit: (global: string) => joinPath(basePath, "globals", global),
-		},
-
-		pages: {
-			byId: (pageId: string) => {
-				const config = pagesConfig[pageId];
-				if (!config) return null;
-				const path = config.path.startsWith("/")
-					? config.path.slice(1)
-					: config.path;
-				return joinPath(basePath, path);
-			},
-		},
-	};
-}
-
-// ============================================================================
 // Route Helpers
 // ============================================================================
 
@@ -403,66 +350,6 @@ function buildQueryString(
 		);
 
 	return entries.length > 0 ? `?${entries.join("&")}` : "";
-}
-
-/**
- * Build a route with query params
- */
-function withQuery(
-	path: string,
-	params: Record<string, string | number | boolean | undefined | null>,
-): string {
-	return path + buildQueryString(params);
-}
-
-/**
- * Extract collection info from a route path
- */
-function parseCollectionRoute(
-	pathname: string,
-	basePath = "/admin",
-): {
-	collection: string;
-	action: "list" | "create" | "edit";
-	id?: string;
-} | null {
-	const cleanPath = pathname.replace(/\/$/, "");
-	const relativePath = cleanPath.startsWith(basePath)
-		? cleanPath.slice(basePath.length)
-		: cleanPath;
-
-	const match = relativePath.match(/^\/collections\/([^/]+)(?:\/([^/]+))?$/);
-	if (!match) return null;
-
-	const [, collection, actionOrId] = match;
-
-	if (!actionOrId) {
-		return { collection, action: "list" };
-	}
-
-	if (actionOrId === "create") {
-		return { collection, action: "create" };
-	}
-
-	return { collection, action: "edit", id: actionOrId };
-}
-
-/**
- * Extract global info from a route path
- */
-function parseGlobalRoute(
-	pathname: string,
-	basePath = "/admin",
-): { global: string } | null {
-	const cleanPath = pathname.replace(/\/$/, "");
-	const relativePath = cleanPath.startsWith(basePath)
-		? cleanPath.slice(basePath.length)
-		: cleanPath;
-
-	const match = relativePath.match(/^\/globals\/([^/]+)$/);
-	if (!match) return null;
-
-	return { global: match[1] };
 }
 
 // ============================================================================

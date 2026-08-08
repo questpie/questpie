@@ -14,10 +14,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { runWithContext, tryGetContext } from "questpie";
 
 import type { BlocksDocument } from "#questpie/admin/server/fields/blocks.js";
-import {
-	BlockBuilder,
-	block,
-} from "#questpie/admin/server/modules/admin/block/block-builder.js";
+import { block } from "#questpie/admin/server/modules/admin/block/block-builder.js";
 import { introspectBlock } from "#questpie/admin/server/modules/admin/block/introspection.js";
 import { processBlocksDocument } from "#questpie/admin/server/modules/admin/block/prefetch.js";
 import { adminConfigDTOSchema } from "#questpie/admin/server/modules/admin/dto/admin-config.dto.js";
@@ -714,7 +711,7 @@ describe("BlockBuilder - Type Inference", () => {
 		}));
 
 		// This is a compile-time check - if types are wrong, this won't compile
-		type DataType = (typeof b.state)["~prefetchData"];
+		type _DataType = (typeof b.state)["~prefetchData"];
 
 		// Runtime assertion to make test meaningful
 		expect(b.state["~prefetchData"]).toBeUndefined(); // Runtime value is undefined
@@ -726,7 +723,7 @@ describe("BlockBuilder - Type Inference", () => {
 		});
 
 		// Compile-time: DataType should be { image: ExpandedRecord | null; author: ExpandedRecord | null }
-		type DataType = (typeof b.state)["~prefetchData"];
+		type _DataType = (typeof b.state)["~prefetchData"];
 
 		expect(b.state.prefetchWith).toEqual({ image: true, author: true });
 	});

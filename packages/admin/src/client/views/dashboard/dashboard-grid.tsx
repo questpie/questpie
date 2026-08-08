@@ -416,7 +416,7 @@ interface LayoutItemRendererProps {
 
 function LayoutItemRenderer({
 	item,
-	columns,
+	columns: _columns,
 	rowHeight,
 	gap,
 	basePath,

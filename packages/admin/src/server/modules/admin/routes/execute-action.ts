@@ -113,7 +113,7 @@ export function getActionsConfig(
 
 	// Strip handlers from custom actions for client
 	const customWithoutHandlers = (actionsConfig.custom || []).map((action) => {
-		const { handler, ...rest } = action;
+		const { handler: _handler, ...rest } = action;
 		if (rest.form?.fields) {
 			rest.form = {
 				...rest.form,
@@ -666,7 +666,12 @@ async function executeBuiltinAction(
 					};
 				}
 				// Remove generated fields before duplication.
-				const { id, createdAt, updatedAt, ...copyableData } = original;
+				const {
+					id: _id,
+					createdAt: _createdAt,
+					updatedAt: _updatedAt,
+					...copyableData
+				} = original;
 				const duplicateData = optimisticConcurrency
 					? Object.fromEntries(
 							Object.entries(copyableData).filter(

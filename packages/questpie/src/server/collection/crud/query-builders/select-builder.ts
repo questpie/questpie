@@ -93,7 +93,6 @@ export function buildSelectObject(
 		i18nCurrentTable,
 		i18nFallbackTable,
 		getVirtualsWithAliases,
-		getTitle,
 	} = options;
 
 	const select: Record<string, any> = {
@@ -284,7 +283,6 @@ export function buildVersionsSelectObject(
 		i18nVersionsFallbackTable,
 		state,
 		getVirtualsForVersionsWithAliases,
-		getTitleForVersions,
 	} = options;
 
 	if (!versionsTable) return {};

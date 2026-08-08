@@ -20,7 +20,7 @@ import { formatLabel } from "../lib/utils";
 /**
  * Collection route helpers
  */
-type CollectionRoutes<TName extends string> = {
+type CollectionRoutes<_TName extends string> = {
 	list: () => string;
 	create: () => string;
 	edit: (id: string) => string;
@@ -181,7 +181,7 @@ export type NavigationGroup = {
  * Sidebar is driven by server config; this only provides
  * client-registered pages as a fallback lookup for useServerNavigation.
  */
-export function buildNavigation<TApp extends QuestpieApp>(
+export function buildNavigation<_TApp extends QuestpieApp>(
 	admin: Admin,
 	options: BuildRoutesOptions = {},
 ): NavigationGroup[] {

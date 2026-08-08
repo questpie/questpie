@@ -8,11 +8,7 @@
  * - Virtual fields
  */
 
-import {
-	type UseQueryOptions,
-	useQuery,
-	useSuspenseQuery,
-} from "@tanstack/react-query";
+import { type UseQueryOptions, useQuery } from "@tanstack/react-query";
 import type { GlobalMeta } from "questpie/client";
 
 import { selectClient, useAdminStore } from "../runtime";
@@ -87,32 +83,4 @@ export function getGlobalMetaQueryOptions(global: string, client: any) {
 		staleTime: 5 * 60 * 1000,
 		gcTime: 30 * 60 * 1000,
 	};
-}
-
-/**
- * Suspense-enabled hook to fetch global metadata
- *
- * Uses useSuspenseQuery so the component will suspend until data is loaded
- * Must be used within a Suspense boundary
- *
- * @example
- * ```tsx
- * function GlobalFormViewInner({ global }: Props) {
- *   const { data: meta } = useSuspenseGlobalMeta(global);
- *   // meta is guaranteed to be defined here
- *   console.log(meta.localizedFields);
- * }
- *
- * // Wrap with Suspense
- * <Suspense fallback={<Loading />}>
- *   <GlobalFormViewInner global="siteSettings" />
- * </Suspense>
- * ```
- */
-function useSuspenseGlobalMeta<K extends ResolvedGlobalNames>(global: K) {
-	const client = useAdminStore(selectClient);
-
-	return useSuspenseQuery<GlobalMeta>(
-		getGlobalMetaQueryOptions(global, client),
-	);
 }

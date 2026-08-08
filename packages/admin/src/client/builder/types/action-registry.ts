@@ -118,7 +118,7 @@ function createDuplicateAction<TItem>(
 				if (!item) return;
 
 				// Clone the item, removing id and timestamps
-				const { id, createdAt, updatedAt, ...data } = item as any;
+				const { createdAt: _createdAt, ...data } = item as any;
 
 				// Navigate to create page with prefilled data
 				const createPath = `${ctx.helpers.basePath}/collections/${ctx.collection}/create`;

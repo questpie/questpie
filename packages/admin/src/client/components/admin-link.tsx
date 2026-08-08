@@ -128,34 +128,6 @@ export function AdminLink<TApp extends QuestpieApp>({
 	);
 }
 
-// ============================================================================
-// Convenience Components
-// ============================================================================
-
-/**
- * Link to a collection list
- */
-function CollectionLink<TApp extends QuestpieApp>({
-	collection,
-	...rest
-}: Omit<AdminLinkProps<TApp>, "to" | "global" | "pageId" | "action" | "id"> & {
-	collection: CollectionNames<TApp>;
-}) {
-	return <AdminLink<TApp> collection={collection} action="list" {...rest} />;
-}
-
-/**
- * Link to create a new item in a collection
- */
-function CollectionCreateLink<TApp extends QuestpieApp>({
-	collection,
-	...rest
-}: Omit<AdminLinkProps<TApp>, "to" | "global" | "pageId" | "action" | "id"> & {
-	collection: CollectionNames<TApp>;
-}) {
-	return <AdminLink<TApp> collection={collection} action="create" {...rest} />;
-}
-
 /**
  * Link to edit an item in a collection
  */
@@ -170,31 +142,4 @@ export function CollectionEditLink<TApp extends QuestpieApp>({
 	return (
 		<AdminLink<TApp> collection={collection} action="edit" id={id} {...rest} />
 	);
-}
-
-/**
- * Link to a global settings page
- */
-function GlobalLink<TApp extends QuestpieApp>({
-	global,
-	...rest
-}: Omit<
-	AdminLinkProps<TApp>,
-	"to" | "collection" | "pageId" | "action" | "id"
-> & {
-	global: GlobalNames<TApp>;
-}) {
-	return <AdminLink<TApp> global={global} {...rest} />;
-}
-
-/**
- * Link to dashboard
- */
-function DashboardLink<TApp extends QuestpieApp>(
-	props: Omit<
-		AdminLinkProps<TApp>,
-		"to" | "collection" | "global" | "pageId" | "action" | "id"
-	>,
-) {
-	return <AdminLink<TApp> to="dashboard" {...props} />;
 }

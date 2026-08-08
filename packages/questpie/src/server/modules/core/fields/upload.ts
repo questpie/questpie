@@ -17,10 +17,7 @@ import {
 	multipleOps,
 	toManyOps,
 } from "../../../fields/operators/builtin.js";
-import type {
-	ReferentialAction,
-	RelationFieldMetadata,
-} from "../../../fields/types.js";
+import type { RelationFieldMetadata } from "../../../fields/types.js";
 
 declare global {
 	namespace Questpie {

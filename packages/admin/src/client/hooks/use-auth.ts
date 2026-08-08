@@ -120,49 +120,6 @@ export function createAdminAuthClient<T extends QuestpieApp>(
 	} as InternalClientOptions<T>);
 }
 
-/**
- * Type helper to extract auth client type from app instance
- *
- * @example
- * ```tsx
- * import type { AdminAuthClient } from '@questpie/admin/hooks'
- * import type { AppConfig } from "#questpie"
- *
- * type MyAuthClient = AdminAuthClient<AppConfig>
- * ```
- */
-type AdminAuthClient<T extends QuestpieApp> = ReturnType<
-	typeof createAdminAuthClient<T>
->;
-
-/**
- * Type helper to extract session type from auth client
- *
- * @example
- * ```tsx
- * import type { AdminSession } from '@questpie/admin/hooks'
- * import type { AppConfig } from "#questpie"
- *
- * type MySession = AdminSession<AppConfig>
- * // Includes: { user: { id, email, name, role, ... }, session: { ... } }
- * ```
- */
-type AdminSession<T extends QuestpieApp> =
-	AdminAuthClient<T>["$Infer"]["Session"];
-
-/**
- * Type helper to extract user type from app auth configuration
- *
- * @example
- * ```tsx
- * import type { AdminUser } from '@questpie/admin/hooks'
- * import type { AppConfig } from "#questpie"
- *
- * type MyUser = AdminUser<AppConfig>
- * ```
- */
-type AdminUser<T extends QuestpieApp> = AdminSession<T>["user"];
-
 // ============================================================================
 // Hooks
 // ============================================================================

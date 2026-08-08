@@ -37,7 +37,6 @@ function generateTemplate(
 import type {
 	CategoryDeclaration,
 	CodegenPlugin,
-	CodegenResult,
 	CrossTargetValidator,
 	DiscoveredFile,
 	DiscoveryResult,
@@ -1462,7 +1461,7 @@ describe("generateTemplate — factory re-exports", () => {
 
 describe("runAllTargets", () => {
 	it("generates the server target by default (single target)", async () => {
-		const { mkdtemp, writeFile, mkdir } = await import("node:fs/promises");
+		const { mkdtemp, writeFile } = await import("node:fs/promises");
 		const { tmpdir } = await import("node:os");
 		const { join } = await import("node:path");
 
@@ -1700,7 +1699,7 @@ describe("runAllTargets", () => {
 							extractFromModules: false,
 						},
 					},
-					generate: async ({ target, discovered }) => {
+					generate: async ({ target: _target, discovered }) => {
 						const blocks = discovered.categories.get("blocks");
 						const lines = [
 							"// Generated admin client config",
@@ -1784,41 +1783,6 @@ describe("runAllTargets", () => {
 
 describe("cross-target projection validators", () => {
 	/**
-	 * Helper: create a minimal CodegenResult with specified category files.
-	 */
-	function makeFakeResult(
-		targetId: string,
-		categories: Record<string, string[]>,
-	): CodegenResult {
-		const catMap = new Map<string, Map<string, DiscoveredFile>>();
-		for (const [catName, keys] of Object.entries(categories)) {
-			const fileMap = new Map<string, DiscoveredFile>();
-			for (const key of keys) {
-				fileMap.set(
-					key,
-					makeFile(key, {
-						varName: `_${catName}_${key}`,
-						importPath: `../${catName}/${key}`,
-						exportType: "default",
-					}),
-				);
-			}
-			catMap.set(catName, fileMap);
-		}
-
-		return {
-			targetId,
-			code: "// fake",
-			outputPath: `/fake/.generated/${targetId}.ts`,
-			discovered: {
-				categories: catMap,
-				singles: new Map(),
-				spreads: new Map(),
-			},
-		};
-	}
-
-	/**
 	 * Simple projection validator for testing — checks that server "blocks"
 	 * keys all exist in admin-client "blocks" keys.
 	 */
@@ -1835,7 +1799,7 @@ describe("cross-target projection validators", () => {
 		if (!serverBlocks) return [];
 		const clientKeys = new Set(clientBlocks?.keys() ?? []);
 
-		for (const [key, file] of serverBlocks) {
+		for (const key of serverBlocks.keys()) {
 			if (!clientKeys.has(key)) {
 				errors.push({
 					severity: "error",
@@ -2105,7 +2069,7 @@ describe("cross-target projection validators", () => {
 	});
 
 	it("skips validation when one target is missing", async () => {
-		const { mkdtemp, writeFile, mkdir } = await import("node:fs/promises");
+		const { mkdtemp, writeFile } = await import("node:fs/promises");
 		const { tmpdir } = await import("node:os");
 		const { join } = await import("node:path");
 
@@ -2151,7 +2115,7 @@ describe("cross-target projection validators", () => {
 	});
 
 	it("aggregates validators from multiple plugins", async () => {
-		const { mkdtemp, writeFile, mkdir } = await import("node:fs/promises");
+		const { mkdtemp, writeFile } = await import("node:fs/promises");
 		const { tmpdir } = await import("node:os");
 		const { join } = await import("node:path");
 

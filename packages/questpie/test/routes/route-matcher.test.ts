@@ -251,7 +251,6 @@ describe("Route Matcher — Collision Detection", () => {
 
 describe("Route Matcher — Edge Cases", () => {
 	it("handles root path", () => {
-		const m = compileMatcher(routes(["", "root-handler"]));
 		// Empty pattern = zero segments = matches empty path
 		// This is a degenerate case; root typically handled separately
 	});
