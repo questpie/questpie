@@ -71,7 +71,14 @@ export interface LoggerConfig {
 	 */
 	pretty?: boolean;
 	/**
-	 * Redact keys (e.g. ["req.headers.authorization"])
+	 * Additional Pino-style paths to redact (e.g. ["profile.email"]). These
+	 * extend QUESTPIE's recursive credential defaults; they never replace them.
+	 *
+	 * Authorization, cookie, password, token, secret and API-key fields are
+	 * always redacted. Error messages and stacks are also hidden by the
+	 * framework serializer because they can contain arbitrary request data.
+	 * Log explicit, pre-classified diagnostic fields when their contents are
+	 * known to be safe rather than attempting to disable these defaults.
 	 */
 	redact?: string[];
 	/**

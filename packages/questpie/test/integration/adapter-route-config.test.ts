@@ -301,6 +301,52 @@ describe("adapter route config", () => {
 			expect(typeof log?.args[0].durationMs).toBe("number");
 		});
 
+		it("preserves bounded proxy correlation identifiers", async () => {
+			const handler = createFetchHandler(setup.app);
+			const requestId = `proxy:${"r".repeat(122)}`;
+			const traceId = "proxy.trace_123-abc";
+
+			const response = await handler(
+				new Request("http://localhost/echo-options", {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						"x-correlation-id": requestId,
+						"x-trace-id": traceId,
+					},
+					body: JSON.stringify({}),
+				}),
+			);
+
+			expect(response?.headers.get("x-request-id")).toBe(requestId);
+			expect(response?.headers.get("x-trace-id")).toBe(traceId);
+			expect(await response?.json()).toMatchObject({ requestId, traceId });
+		});
+
+		it("does not derive a trace id from an invalid W3C traceparent", async () => {
+			const handler = createFetchHandler(setup.app);
+			const requestId = "proxy-request-id";
+
+			const response = await handler(
+				new Request("http://localhost/echo-options", {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						"x-request-id": requestId,
+						traceparent:
+							"00-00000000000000000000000000000000-bbbbbbbbbbbbbbbb-01",
+					},
+					body: JSON.stringify({}),
+				}),
+			);
+
+			expect(response?.headers.get("x-request-id")).toBe(requestId);
+			const traceId = response?.headers.get("x-trace-id");
+			expect(traceId).toMatch(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/);
+			expect(traceId).not.toBe(requestId);
+			expect(await response?.json()).toMatchObject({ requestId, traceId });
+		});
+
 		it("can disable request logging while preserving request headers", async () => {
 			setup.app.mocks.logger.clearLogs();
 			const handler = createFetchHandler(setup.app, { requestLogging: false });
@@ -343,7 +389,7 @@ describe("adapter route config", () => {
 				path: "/crash-options",
 				route: "crash-options",
 				status: 500,
-				error: { name: "Error", message: "boom" },
+				error: { name: "Error", message: "[Redacted]" },
 			});
 		});
 
