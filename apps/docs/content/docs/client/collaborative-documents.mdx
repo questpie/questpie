@@ -19,6 +19,9 @@ export const crdt = createCrdtClient(client);
 
 `createCrdtClient` takes the client you already built and reuses its realtime
 session. A collaborative app still holds exactly one connection.
+If that connection started for a live query without CRDT authority, the first
+document connection replaces the edge once and carries its query subscriptions
+onto the CRDT-capable session.
 `createClient()` does not build this API for you. There is no `client.crdt`
 either, and reading that property throws a message pointing you back here.
 
