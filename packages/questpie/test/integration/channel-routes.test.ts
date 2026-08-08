@@ -1418,11 +1418,15 @@ describe("channel module routes", () => {
 			);
 			expect(logged).toHaveLength(1);
 			expect(logged[0]!.level).toBe("error");
-			// The adapter sees either the raw error or `{ err, ...bindings }`,
-			// depending on whether the request carried correlation ids.
-			const payload = logged[0]!.args[0] as Error | { err?: unknown };
-			const cause = payload instanceof Error ? payload : payload.err;
-			expect(String(cause)).toContain("somethingUndeclared");
+			// The fault stays observable without leaking its message or stack.
+			expect(logged[0]!.args[0]).toMatchObject({
+				err: { name: "TypeError", message: "[Redacted]" },
+				requestId: expect.any(String),
+				traceId: expect.any(String),
+			});
+			expect(JSON.stringify(logged[0]!.args)).not.toContain(
+				"somethingUndeclared",
+			);
 		} finally {
 			await reader.cancel().catch(() => {});
 		}
