@@ -14,8 +14,8 @@ import type {
  * `queue`, `email`, etc. as function and job handlers. Types are auto-resolved
  * via `declare module "questpie"` in the generated `.generated/index.ts`.
  *
- * The `app` property provides the typed Questpie instance — useful for
- * locale-specific context creation (`app.createContext({ locale: "sk" })`).
+ * CRUD methods accept partial request context overrides directly. They inherit
+ * the active seed transaction, access mode, and session.
  *
  * @example
  * ```ts
@@ -24,13 +24,15 @@ import type {
  * export default seed({
  *   id: "siteSettings",
  *   category: "required",
- *   async run({ globals, createContext, log }) {
+ *   async run({ globals, log }) {
  *     log("Seeding site settings...");
  *     await globals.siteSettings.update({ shopName: "My Shop" });
  *
  *     // Locale-specific update:
- *     const ctxSk = await createContext({ locale: "sk" });
- *     await globals.siteSettings.update({ shopName: "Môj obchod" }, ctxSk);
+ *     await globals.siteSettings.update(
+ *       { shopName: "Môj obchod" },
+ *       { locale: "sk" },
+ *     );
  *   },
  * });
  * ```

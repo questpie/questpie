@@ -1,7 +1,7 @@
 ---
 name: questpie-core/seeds
 description:
-  QUESTPIE seeds seed() seed.steps() idempotent atomic transaction checkpointed step questpie_seeds questpie_seed_steps category required dev test dependsOn undo SeedContext createContext log autoSeed seed:status seed:undo seed:reset --force --validate --category --only module seeds system mode
+  QUESTPIE seeds seed() seed.steps() idempotent atomic transaction checkpointed step questpie_seeds questpie_seed_steps category required dev test dependsOn undo SeedContext partial CRUD context log autoSeed seed:status seed:undo seed:reset --force --validate --category --only module seeds system mode
   - questpie-core
 ---
 
@@ -33,12 +33,14 @@ export default seed({
 	description: "Default site settings",
 	category: "required",
 	dependsOn: ["roles"], // seed ids that must run first (topologically ordered)
-	async run({ globals, createContext, log }) {
-		const ctx = await createContext({ accessMode: "system" });
-		await globals.siteSettings.update({ siteName: "QUESTPIE" }, ctx);
+	async run({ globals, log }) {
+		await globals.siteSettings.update(
+			{ siteName: "QUESTPIE" },
+			{ locale: "en" },
+		);
 		log("site settings written");
 	},
-	async undo({ globals, createContext }) {
+	async undo({ globals }) {
 		// optional; `questpie seed:undo` calls this, then removes the tracking row
 	},
 });
@@ -74,12 +76,11 @@ Every seed has one `category`: `required` (bootstrap data for every env), `dev` 
 
 ## SeedContext
 
-`SeedContext` = full `AppContext` plus `log(message)` and `createContext(options?)`.
-The runner owns its request-service scope and disposes it after the seed. The
-injected `createContext({ locale, accessMode })` returns a lean `RequestContext`
-for CRUD calls; it is not the generated standalone context and needs no
-`await using`. Seeds run in system mode. Pass the lean context when a CRUD call
-needs a locale or must re-enable access rules.
+`SeedContext` = full `AppContext` plus `log(message)`. The runner owns its
+request-service scope and disposes it after the seed. Seeds run in system mode.
+Pass `{ locale }` or `{ accessMode: "user" }` directly as the second CRUD
+argument when one call needs an override. The partial context inherits the
+active seed or step transaction.
 
 ## autoSeed
 

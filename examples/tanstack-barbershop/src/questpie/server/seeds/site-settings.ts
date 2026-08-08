@@ -3,15 +3,9 @@ export default seed({
 	id: "siteSettings",
 	description: "Site settings with EN and SK translations",
 	category: "required",
-	async run({ globals, createContext, log }) {
-		const ctxEn = await createContext({
-			accessMode: "system",
-			locale: "en",
-		});
-		const ctxSk = await createContext({
-			accessMode: "system",
-			locale: "sk",
-		});
+	async run({ globals, log }) {
+		const ctxEn = { locale: "en" } as const;
+		const ctxSk = { locale: "sk" } as const;
 
 		log("Updating site settings (EN)...");
 		// GlobalUpdateInput currently omits localized fields — core type bug

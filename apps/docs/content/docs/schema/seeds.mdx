@@ -38,8 +38,7 @@ every module in it. `category` is required, `description` is not.
 `run` receives the whole app context. The same `collections`, `globals`, `db`,
 `services`, `queue`, `email`, `storage` and `kv` a route or a job gets, plus
 `log` for CLI output. The runner owns the request-service scope and closes it
-after the seed. Its injected `createContext()` returns a lean context for CRUD
-calls, not a standalone context, so it needs no `await using`.
+after the seed.
 
 ### It runs as the system
 
@@ -49,13 +48,14 @@ role exists. HTTP requests are untouched by this and still run in user mode.
 
 ### Writing one locale at a time
 
-`createContext({ locale })` builds a request context you pass as the second
-argument to a CRUD call. A code that is not in your configured locales falls
-back to the mapping in `locale.fallbacks`, then to your default locale.
+Pass `{ locale }` as the second argument to a CRUD call. The partial context
+inherits the seed's transaction and system access mode.
 
 ```ts
-const sk = await createContext({ locale: "sk" });
-await globals.site_settings.update({ tagline: "Ostré strihy, vždy" }, sk);
+await globals.site_settings.update(
+	{ tagline: "Ostré strihy, vždy" },
+	{ locale: "sk" },
+);
 ```
 
 ## Running it

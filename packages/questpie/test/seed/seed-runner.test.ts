@@ -161,9 +161,11 @@ describe("SeedRunner", () => {
 		const seeds: Seed[] = [
 			makeSeed({
 				id: "explicit-context",
-				run: async ({ collections, createContext }) => {
-					const ctx = await createContext();
-					await collections.seed_posts.create({ title: "Explicit" }, ctx);
+				run: async ({ collections }) => {
+					await collections.seed_posts.create(
+						{ title: "Explicit" },
+						{ locale: "en" },
+					);
 				},
 			}),
 			makeSeed({
@@ -321,28 +323,36 @@ describe("SeedRunner", () => {
 		expect(computeRuns).toBe(1);
 	});
 
-	it("passes a transaction-bound context into step callbacks", async () => {
+	it("inherits the step transaction through partial CRUD contexts", async () => {
 		let callbackDbInTransaction = false;
-		let callbackCreateContextDbInTransaction = false;
 
 		const seeds: Seed[] = [
 			seed.steps({
 				id: "step-callback-context",
 				category: "dev",
 				run: async ({ step }) => {
-					await step("check-context", async ({ db, createContext }) => {
+					await step("check-context", async ({ db, collections }) => {
 						callbackDbInTransaction = isInTransaction(db);
-						const ctx = await createContext();
-						callbackCreateContextDbInTransaction = isInTransaction(ctx.db);
+						await collections.seed_posts.create(
+							{ title: "Partial context" },
+							{ locale: "en" },
+						);
+						throw new Error("roll back partial context write");
 					});
 				},
 			}),
 		];
 
-		await runner.run(seeds);
+		await setup.cleanup();
+		setup = await buildMockApp({ collections: { seed_posts: seedPosts } });
+		await runTestDbMigrations(setup.app);
+		runner = new SeedRunner(setup.app, { silent: true });
+		await expect(runner.run(seeds)).rejects.toThrow(
+			"roll back partial context write",
+		);
 
 		expect(callbackDbInTransaction).toBe(true);
-		expect(callbackCreateContextDbInTransaction).toBe(true);
+		expect((await setup.app.collections.seed_posts.find({})).totalDocs).toBe(0);
 	});
 
 	it("force reruns checkpointed seed steps from the beginning", async () => {
@@ -911,17 +921,20 @@ describe("SeedRunner", () => {
 
 	// ── SeedContext ─────────────────────────────────────────────────────
 
-	it("provides db, createContext, and log in SeedContext", async () => {
+	it("provides app, db, and log without a seed-specific createContext", async () => {
+		let receivedApp: unknown;
 		let receivedDb: any;
-		let receivedCtx: any;
+		let hasCreateContext = true;
 		let logCalled = false;
 
 		const seeds: Seed[] = [
 			makeSeed({
 				id: "ctx-test",
-				run: async ({ db, createContext, log }) => {
-					receivedDb = db;
-					receivedCtx = await createContext({ locale: "en" });
+				run: async (ctx) => {
+					receivedApp = ctx.app;
+					receivedDb = ctx.db;
+					hasCreateContext = "createContext" in ctx;
+					const { log } = ctx;
 					log("test message");
 					logCalled = true;
 				},
@@ -930,8 +943,9 @@ describe("SeedRunner", () => {
 
 		await runner.run(seeds);
 
+		expect(receivedApp).toBe(setup.app);
 		expect(receivedDb).toBeDefined();
-		expect(receivedCtx).toBeDefined();
+		expect(hasCreateContext).toBe(false);
 		expect(logCalled).toBe(true);
 	});
 

@@ -255,6 +255,20 @@ describe("scaffold template output", () => {
 		expect(output).not.toContain("ctx");
 	});
 
+	it("core seed template uses the standard seed context", () => {
+		const graph = resolveTargetGraph([coreCodegenPlugin()]);
+		const output = graph.get("server")!.scaffolds.seed.template({
+			kebab: "demo-content",
+			camel: "demoContent",
+			pascal: "DemoContent",
+			title: "Demo Content",
+			targetId: "server",
+		});
+
+		expect(output).toContain("async run({ collections, globals, log })");
+		expect(output).not.toContain("createContext");
+	});
+
 	it("multi-target scaffold produces different content per target", () => {
 		const graph = resolveTargetGraph([coreCodegenPlugin(), testAdminPlugin()]);
 

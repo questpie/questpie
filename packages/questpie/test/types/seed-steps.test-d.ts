@@ -6,6 +6,8 @@ seed({
 	async run(ctx) {
 		// @ts-expect-error step() is only available through seed.steps().
 		await ctx.step("not-available", async () => null);
+		// @ts-expect-error SeedContext has no special createContext helper.
+		await ctx.createContext();
 	},
 });
 

@@ -1,9 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import {
-	getCurrentTransaction,
-	withTransaction,
-} from "#questpie/server/collection/crud/shared/transaction.js";
+import { withTransaction } from "#questpie/server/collection/crud/shared/transaction.js";
 import { extractAppServices } from "#questpie/server/config/app-context.js";
 import { runWithContext } from "#questpie/server/config/context.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
@@ -231,15 +228,6 @@ export class SeedRunner {
 		return {
 			...services,
 			log: (msg: string) => this.log(`    ${msg}`),
-			createContext: (opts?: {
-				locale?: string;
-				accessMode?: "system" | "user";
-			}) =>
-				this.app.createContext({
-					accessMode: opts?.accessMode ?? "system",
-					locale: opts?.locale,
-					db: getCurrentTransaction() ?? db,
-				}),
 		} as unknown as SeedContext;
 	}
 
