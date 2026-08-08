@@ -1,6 +1,6 @@
 {
 	"name": "questpie",
-	"version": "3.25.0",
+	"version": "3.25.1",
 	"description": "Server-first TypeScript backend framework: collections, globals, hooks, jobs and end-to-end type safety",
 	"repository": {
 		"type": "git",

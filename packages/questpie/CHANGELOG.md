@@ -1,5 +1,12 @@
 # questpie
 
+## 3.25.1
+
+### Patch Changes
+
+- [#233](https://github.com/questpie/questpie/pull/233) [`6542080`](https://github.com/questpie/questpie/commit/65420804940ede8b419bfeed8964d5f1ce32b82b) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Apply every `questpie push` schema statement in one PostgreSQL transaction so a
+  late DDL failure cannot leave a partially updated development database.
+
 ## 3.25.0
 
 ### Minor Changes
