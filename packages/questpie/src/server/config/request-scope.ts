@@ -130,3 +130,18 @@ export function runWithRequestScope<T>(
 ): T {
 	return requestScopeStorage.run({ app, scope }, callback);
 }
+
+/** Run one framework-owned execution in a fresh, automatically disposed scope. */
+export function runInFreshRequestScope<T>(
+	app: unknown,
+	callback: () => T | Promise<T>,
+): Promise<T> {
+	const scope = new RequestScope();
+	return runWithRequestScope(app, scope, async () => {
+		try {
+			return await callback();
+		} finally {
+			await scope.dispose();
+		}
+	});
+}

@@ -3,7 +3,12 @@
  */
 import { describe, expect, it } from "bun:test";
 
-import { RequestScope } from "../../../src/server/config/request-scope.js";
+import {
+	getActiveRequestScope,
+	RequestScope,
+	runInFreshRequestScope,
+	runWithRequestScope,
+} from "../../../src/server/config/request-scope.js";
 
 describe("RequestScope (QUE-255)", () => {
 	it("memoizes service within scope", () => {
@@ -77,6 +82,26 @@ describe("RequestScope (QUE-255)", () => {
 		expect(() => {
 			scope.getOrCreate("svc", () => "world");
 		}).toThrow("disposed");
+	});
+
+	it("owns a fresh scope for framework background work", async () => {
+		const app = {};
+		const outer = new RequestScope();
+		let background: RequestScope | undefined;
+
+		await runWithRequestScope(app, outer, async () => {
+			await runInFreshRequestScope(app, () => {
+				background = getActiveRequestScope(app);
+				expect(background).not.toBe(outer);
+				background?.getOrCreate("svc", () => "background");
+			});
+
+			expect(getActiveRequestScope(app)).toBe(outer);
+		});
+
+		expect(() => background?.getOrCreate("svc", () => "late")).toThrow(
+			"disposed",
+		);
 	});
 
 	it("calls disposers in reverse order", async () => {
