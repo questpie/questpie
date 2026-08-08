@@ -40,56 +40,9 @@ jobs:
           bun install
           git diff --exit-code bun.lock
 
-      # Gates ERRORS only. ~25s over 1994 files. Warnings are held by the
-      # lint-census ratchet in the next step rather than failed on here —
-      # failing on 1443 at once would just mean disabling this job again, which
-      # is exactly how the 85 errors accumulated while it sat commented out
-      # behind "TODO: Enable when lint errors are fixed".
-      - name: Run Oxlint
-        run: bun run lint
-
-      # Per-package, per-rule WARNING counts; any increase fails. This is the
-      # follow-up the comment above used to promise.
-      #
-      # no-underscore-dangle is counted but NOT ratcheted: 1114 of the 1443
-      # warnings are that rule, and a leading underscore is this codebase's
-      # convention for internal members (_state, _pendingRelations). Gating it
-      # would fail CI for following the house style. 329 warnings remain
-      # governed. See the script header before adding to IGNORED_RULES.
-      - name: lint-census ratchet
-        run: bun run scripts/lint-census.ts
-
-      # Imports of @deprecated symbols from the framework's own source. A rising
-      # number means the tag is undeliverable — the deprecated code can never be
-      # removed, and a user following its advice lands on a path the framework
-      # does not itself use. 166 today (admin 125, questpie 41), dominated by
-      # admin importing its own compat barrel and modules/core/routes using
-      # createCollectionRoutes. Tests are excluded; exercising a deprecated path
-      # is what a compatibility test is for.
-      - name: deprecated-imports ratchet
-        run: bun run scripts/deprecated-imports.ts
-
-      # Functions copy-pasted rather than shared: same name AND byte-identical
-      # body in 2+ files, counted as redundant copies (N files contribute N-1).
-      # Name alone would be noise — handleClick appears in six admin components.
-      # This is the copy-then-drift defect that produced interpolate x6 in two
-      # behaviours and toPascalCase x4 in three algorithms. It also finds
-      # equalBytes existing as three different implementations in the CRDT
-      # layer, only one of which is constant-time.
-      - name: clone-census ratchet
-        run: bun run scripts/clone-census.ts
-
-      # `--list-different` rather than `--check`: identical pass/fail signal,
-      # measured at 1m04s vs 6m11s on this tree (`--check` additionally computes
-      # and prints per-file statistics). Cost is dominated by large markdown,
-      # not code — skills/questpie/references/type-inference.md alone was 17.2s
-      # under `--check`.
-      #
-      # Full-repo on purpose, not scoped to changed files: a changed-file scope
-      # silently misses drift introduced by a merge, and 65s does not justify
-      # the extra machinery.
-      - name: Check formatting
-        run: bunx oxfmt --list-different
+      # The same stage is available locally through `bun run verify:pr`.
+      - name: Run lint and formatting contract
+        run: bun run verify:pr -- --stage lint
 
   typecheck:
     name: Type Check
@@ -133,7 +86,7 @@ jobs:
       # already green when the filter was removed; the extra packages cost
       # ~3 min on top of the graph this job already pays for.
       - name: Run type check (all packages)
-        run: bunx turbo run check-types
+        run: bun run verify:pr -- --stage typecheck
 
   audit:
     name: Audit
@@ -154,7 +107,7 @@ jobs:
           git diff --exit-code bun.lock
 
       - name: Block new high/critical advisories
-        run: bun run scripts/audit-gate.ts
+        run: bun run verify:pr -- --stage audit
 
   test:
     name: Test
@@ -176,9 +129,7 @@ jobs:
           git diff --exit-code bun.lock
 
       - name: Run tests
-        run: bunx turbo run test --filter='./packages/*' --concurrency=1 --ui=stream --log-order=stream
-        env:
-          QUESTPIE_MIGRATIONS_SILENT: "1"
+        run: bun run verify:pr -- --stage test
 
   realtime-matrix:
     name: Realtime driver matrix
@@ -258,83 +209,8 @@ jobs:
           bun install
           git diff --exit-code bun.lock
 
-      - name: Build packages
-        run: bunx turbo run build --filter='./packages/*'
-
-      - name: Dist syntax gate
-        run: find packages/*/dist -name '*.mjs' -print0 | xargs -0 -n1 node --check
-
-      - name: Dist types gate
-        run: bun run scripts/check-dist-types.ts
-
-      # What npm would actually publish (`npm pack --dry-run`, so `files` and
-      # .npmignore are honoured) vs the committed budget. Fails on >5% AND
-      # >1 KB growth in any package's unpacked size — both conditions, because a
-      # bare percentage is unusable on the 6 KB and 9 KB packages where one
-      # JSDoc block clears 5%. Build output is near-deterministic for a fixed
-      # toolchain, so a jump clearing both is a real change in what ships.
-      # Re-baseline with --update. Must run after the build above.
-      - name: Package size budget
-        run: bun run scripts/size-budget.ts
-
-      # What a BROWSER downloads, which is a different number from the one
-      # above and catches the wins that one misses: moving CRDT off the default
-      # client path cut 189 KB from every bundle while the published package got
-      # slightly bigger. Measured with esbuild --splitting (what Vite/Rollup/
-      # webpack do) and scored on the ENTRY chunk only — without splitting,
-      # esbuild inlines dynamic imports and a correctly lazy dependency looks
-      # like part of the entry. Fails on >3% growth.
-      - name: Consumer bundle budget
-        run: bun run scripts/bundle-budget.ts
-
-      # Deterministic tsc metrics (Types/Instantiations) vs committed budget —
-      # fails on >3% instantiation regression. Re-baseline with --update.
-      - name: Type budget gate
-        run: bun run scripts/type-budget.ts
-
-      # Per-package type-escape counts (": any", "as any", ...) must never
-      # increase. Re-baseline with --update when counts go down.
-      - name: any-census ratchet
-        run: bun run scripts/any-census.ts
-
-      # Source files nothing can reach from a package's declared exports, its
-      # .generated output or its bin. Reachability, not "who imports me" — and
-      # it refuses to answer at all if too many specifiers fail to resolve,
-      # since an unresolved import can only make files look deader than they
-      # are. Run with --list to see them.
-      - name: dead-modules ratchet
-        run: bun run scripts/dead-modules.ts
-
-      # Cold full-app tsc error counts per example must never increase. The
-      # package gate is structurally blind to the codegen AppContext⇄config
-      # cycle; the examples are the truth. Re-baseline with --update on a drop.
-      - name: example-errors ratchet
-        run: bun run scripts/example-errors.ts
-
-      # Committed `.generated/**` must equal what codegen emits TODAY. This was
-      # blind until 2026-07-29: toy-factory-backend's output was last committed
-      # before #167 and no longer typechecked when regenerated, so the
-      # example-errors ratchet above was certifying a frozen artifact codegen had
-      # stopped producing.
-      #
-      # The second run needs `--force`. Without it turbo sees unchanged inputs,
-      # restores `**/.generated/**` from cache and reports FULL TURBO — which
-      # proves the cache works and says nothing about the generator. `--force`
-      # makes it a real second generation, so a no-op diff means deterministic.
-      - name: Codegen freshness (committed output matches a fresh generation)
-        run: |
-          bunx turbo run questpie:generate
-          git diff --exit-code
-          bunx turbo run questpie:generate --force
-          git diff --exit-code
-
-      # ENFORCE the one-way codegen layer DAG (index → context.gen →
-      # entities.gen → names.gen): every generated `.generated/` must import
-      # DOWNWARD only, with no cycle. This locks in (BY CONSTRUCTION) the
-      # impossibility of the AppContext⇄config / ctx→user-code cycles — a
-      # regression in the codegen's emitted import directions fails here.
-      - name: codegen layer DAG (no upward import / no cycle)
-        run: bun run scripts/check-codegen-layers.ts
+      - name: Run build, dist, budget, ratchet, and codegen contract
+        run: bun run verify:pr -- --stage build
 
   docs:
     name: Docs
@@ -354,20 +230,5 @@ jobs:
           bun install
           git diff --exit-code bun.lock
 
-      - name: Validate docs
-        run: bun run validate:docs -- --docs-app
-
-      - name: Verify canonical skill install parity
-        run: bun run verify:skills-install
-
-      # AGENTS.md is generated from SKILL.md + references/. Editing a reference
-      # without regenerating leaves the file agents actually read out of date,
-      # and nothing else in CI notices.
-      - name: Verify generated skill docs are current
-        run: bun run scripts/build-skill-docs.ts --check
-
-      # Every public value export must be mentioned in the skill or classified
-      # in skills/questpie/coverage.json. Catches shipping API that the
-      # AI-facing docs never learned about.
-      - name: Verify skill coverage of the public API
-        run: bun run scripts/skill-coverage.ts --strict
+      - name: Run docs and skill contract
+        run: bun run verify:pr -- --stage docs

@@ -43,18 +43,38 @@ realtime matrix.
 
 ## Before you open a PR
 
-Run what CI runs. It is fast except the last one:
+After `bun install`, run the complete local PR contract:
 
 ```bash
-bun run lint                      # 0 errors required; warnings are not gated yet
-bunx oxfmt --list-different       # must be empty
-bunx turbo run check-types        # all packages
-bunx turbo run test --filter='./packages/*'
+bun run verify:pr
 ```
 
-If you touched anything that ships, also:
+This is the same fail-fast orchestrator used by CI for lint and its warning/debt
+ratchets, formatting, types, dependency audit, package tests, package builds,
+dist checks, size/type/bundle budgets, codegen freshness and layering, and docs.
+CI runs its named stages in parallel; the local command runs those stages in
+sequence and stops at the first failure while preserving each gate's output.
+
+For focused iteration, run one stage (for example `bun run verify:pr -- --stage
+lint`). A stage run intentionally omits every other stage and is not sufficient
+before opening a PR.
+
+The external-service realtime matrix remains a separate CI-only gate: it starts
+Postgres, Redis, and Soketi with Docker and exercises the opt-in integration
+tests. `verify:pr` covers the repository-local PR contract but does not start
+those services.
+
+The warning census is gate-enforced: governed per-package/per-rule counts may
+only decrease. The deliberately ignored `no-underscore-dangle` house-style rule
+is documented in `scripts/lint-census.ts`.
+
+The individual commands below remain useful while investigating a failure:
 
 ```bash
+bun run lint
+bunx oxfmt --list-different
+bunx turbo run check-types
+bunx turbo run test --filter='./packages/*'
 bunx turbo run build --filter='./packages/*'
 bun run scripts/size-budget.ts    # published size must not grow >5%
 bun run scripts/type-budget.ts    # tsc instantiations must not grow >3%
