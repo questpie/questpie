@@ -152,7 +152,7 @@ describe("integration: full app workflow", () => {
 	});
 
 	it("complete blog workflow: create author, create article, publish, track metrics", async () => {
-		const ctx = createTestContext();
+		const ctx = createTestContext({ logger: setup.app.logger });
 
 		// 1. Create an author
 		const authorsCrud = setup.app.collections.authors;
