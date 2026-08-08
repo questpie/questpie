@@ -21,7 +21,11 @@ export default defineConfig({
 		tailwindcss(),
 		tanstackStart({
 			prerender: {
-				enabled: process.env.DISABLE_PRERENDER !== "true",
+				// Nitro's Bun preset resolves React's Bun stream renderer, but the
+				// prerender worker runs it through Node. Node rejects Bun's
+				// ReadableStream `type: "direct"`. Keep SSR builds reliable and make
+				// static prerendering an explicit opt-in until those runtimes agree.
+				enabled: process.env.ENABLE_PRERENDER === "true",
 				routes: ["/"],
 				crawlLinks: false,
 			},

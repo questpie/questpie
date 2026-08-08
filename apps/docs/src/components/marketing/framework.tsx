@@ -63,6 +63,25 @@ const ADMIN_TICKS = [
 	"Versions, drafts and publish state",
 ];
 
+const APP_PARTS = [
+	{
+		body: "Typed handlers receive the same collections, database and services.",
+		title: "Routes",
+	},
+	{
+		body: "Run work now, later or on a schedule. Keep retries in one place.",
+		title: "Jobs",
+	},
+	{
+		body: "Give hooks, routes and jobs one typed dependency.",
+		title: "Services",
+	},
+	{
+		body: "Add realtime, search, storage, mail and queues when you need them.",
+		title: "Infrastructure",
+	},
+];
+
 export function FrameworkPage() {
 	return (
 		<>
@@ -162,13 +181,91 @@ export function FrameworkPage() {
 				</div>
 			</section>
 
+			<section className="band">
+				<div className="wrap split lean">
+					<div className="head">
+						<p className="qp-aside">one source of truth</p>
+						<h2 className="qp-display-m">Change the model once</h2>
+						<p>
+							The same model types your database, API, admin and client. You do
+							not copy a field or its rules into four files.
+						</p>
+					</div>
+					<div className="derivation-flow">
+						<div className="derivation-source">
+							<span className="qp-eyebrow">Your model</span>
+							<strong>Fields, access, hooks</strong>
+						</div>
+						<span aria-hidden="true" className="flow-arrow">
+							→
+						</span>
+						<div className="derivation-outputs" role="list">
+							{["Database", "Typed API", "Admin", "Client"].map((part) => (
+								<span key={part} role="listitem">
+									{part}
+								</span>
+							))}
+						</div>
+					</div>
+				</div>
+			</section>
+
 			<hr className="rule" />
+
+			<section className="band raised">
+				<div className="wrap">
+					<div className="head">
+						<p className="qp-aside">the model is only the start</p>
+						<h2 className="qp-display-m">
+							Write the parts that make the app yours
+						</h2>
+						<p>
+							QUESTPIE handles the repeated work. Your code holds the decisions.
+						</p>
+					</div>
+					<div className="feature-list" role="list">
+						{APP_PARTS.map((part) => (
+							<div className="feature-item" key={part.title} role="listitem">
+								<h3>{part.title}</h3>
+								<p>{part.body}</p>
+							</div>
+						))}
+					</div>
+				</div>
+			</section>
+
+			<section className="band">
+				<div className="wrap split">
+					<div className="head">
+						<p className="qp-aside">your application stays yours</p>
+						<h2 className="qp-display-m">Run it where you choose</h2>
+						<p>
+							QUESTPIE ships as open-source packages. Your code runs on your
+							server. Your data stays in PostgreSQL.
+						</p>
+					</div>
+					<div className="ownership-list" role="list">
+						<div role="listitem">
+							<span className="qp-eyebrow">Code</span>
+							<strong>Your repository</strong>
+						</div>
+						<div role="listitem">
+							<span className="qp-eyebrow">Data</span>
+							<strong>Your PostgreSQL database</strong>
+						</div>
+						<div role="listitem">
+							<span className="qp-eyebrow">Runtime</span>
+							<strong>TanStack, Next, Hono or Elysia</strong>
+						</div>
+					</div>
+				</div>
+			</section>
 
 			<section className="band" style={{ paddingBottom: "var(--space-16)" }}>
 				<div className="wrap split">
 					<div className="head">
 						<p className="qp-aside">two commands</p>
-						<h2 className="qp-display-m">Start in a minute</h2>
+						<h2 className="qp-display-m">Build the first app</h2>
 						{/* "Adapter" is this product's word for a pluggable backend — email,
 						    kv, queue, storage. The thing you pick here is the runtime, and
 						    all four templates ship in create-questpie. */}
@@ -176,6 +273,14 @@ export function FrameworkPage() {
 							Pick your runtime: TanStack Start, Next, Hono or Elysia. The
 							generator writes your typed app.
 						</p>
+						<div className="actions">
+							<a className="btn p lg" href="/docs/learn/first-app">
+								Create your first app
+							</a>
+							<a className="btn g lg" href="/docs/learn">
+								See how QUESTPIE works
+							</a>
+						</div>
 					</div>
 					<CodeSample code={START} lang="bash" />
 				</div>

@@ -43,7 +43,6 @@ RUN bun run --filter @questpie/vite-plugin-iconify build
 
 # Build docs app
 WORKDIR /app/apps/docs
-ENV DISABLE_PRERENDER=true
 RUN bun run build
 
 # Production stage

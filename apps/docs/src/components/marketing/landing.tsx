@@ -186,6 +186,33 @@ export function Landing() {
 				</div>
 			</section>
 
+			<section className="band">
+				<div className="wrap split lean">
+					<div className="head">
+						<p className="qp-aside">one system, two ways to use it</p>
+						<h2 className="qp-display-m">Build the rules. Run the work.</h2>
+						<p>
+							The framework defines the data, permissions and workflows.
+							Autopilot gives people and agents one place to use them.
+						</p>
+					</div>
+					<div className="system-flow" role="list">
+						<div className="system-step" role="listitem">
+							<span className="qp-eyebrow">Define</span>
+							<strong>Data, permissions, workflows</strong>
+						</div>
+						<div className="system-step" role="listitem">
+							<span className="qp-eyebrow">Build</span>
+							<strong>API, admin, jobs, client</strong>
+						</div>
+						<div className="system-step" role="listitem">
+							<span className="qp-eyebrow">Run</span>
+							<strong>People and agents at work</strong>
+						</div>
+					</div>
+				</div>
+			</section>
+
 			<hr className="rule" />
 
 			<section className="band" id="doors">
