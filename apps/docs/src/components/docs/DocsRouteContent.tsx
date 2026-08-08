@@ -1,4 +1,7 @@
-import { useFumadocsLoader } from "fumadocs-core/source/client";
+import {
+	type SerializedPageTree,
+	useFumadocsLoader,
+} from "fumadocs-core/source/client";
 import browserCollections from "fumadocs-mdx:collections/browser";
 import { DocsLayout } from "fumadocs-ui/layouts/docs";
 import {
@@ -16,7 +19,7 @@ import { baseOptions } from "@/lib/layout.shared";
 type DocsLoaderData = {
 	path: string;
 	url: string;
-	pageTree: object;
+	pageTree: SerializedPageTree;
 };
 
 const PageUrlContext = createContext<string>("");

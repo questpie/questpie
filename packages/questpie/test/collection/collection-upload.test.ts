@@ -1026,6 +1026,85 @@ describe("collection storage route streaming", () => {
 		expect(storage.calls.head).toBe(2);
 	});
 
+	it("falls back to the filename MIME type when storage metadata is generic", async () => {
+		const fileBody = textEncoder.encode("movie-bytes");
+		const storage = createInstrumentedStorageAdapter({
+			"clip.MOV": fileBody,
+		});
+		const head = storage.adapter.head.bind(storage.adapter);
+		storage.adapter.head = async (...args) => ({
+			...(await head(...args)),
+			type: undefined,
+		});
+		setup = await buildMockApp(
+			{ collections: { assets } },
+			{ storage: { adapter: storage.adapter } },
+		);
+		app = setup.app;
+		await runTestDbMigrations(app);
+
+		await app.collections.assets.create(
+			{
+				id: crypto.randomUUID(),
+				key: "clip.MOV",
+				filename: "clip.MOV",
+				mimeType: "",
+				size: fileBody.byteLength,
+				visibility: "public",
+			},
+			createTestContext(),
+		);
+
+		const handler = createFetchHandler(app, {
+			basePath: "/api",
+			requestLogging: false,
+		});
+		const response = await handler(
+			new Request("http://localhost/api/assets/files/clip.MOV"),
+		);
+
+		expect(response?.status).toBe(200);
+		expect(response?.headers.get("content-type")).toBe("video/quicktime");
+	});
+
+	it("serves non-ASCII filenames with an ASCII Content-Disposition fallback", async () => {
+		const fileBody = textEncoder.encode("movie-bytes");
+		const storage = createInstrumentedStorageAdapter({
+			"unicode-name.mov": fileBody,
+		});
+		setup = await buildMockApp(
+			{ collections: { assets } },
+			{ storage: { adapter: storage.adapter } },
+		);
+		app = setup.app;
+		await runTestDbMigrations(app);
+
+		await app.collections.assets.create(
+			{
+				id: crypto.randomUUID(),
+				key: "unicode-name.mov",
+				filename: "čau-😀.mov",
+				mimeType: "video/quicktime",
+				size: fileBody.byteLength,
+				visibility: "public",
+			},
+			createTestContext(),
+		);
+
+		const handler = createFetchHandler(app, {
+			basePath: "/api",
+			requestLogging: false,
+		});
+		const response = await handler(
+			new Request("http://localhost/api/assets/files/unicode-name.mov"),
+		);
+
+		expect(response?.status).toBe(200);
+		expect(response?.headers.get("content-disposition")).toBe(
+			'inline; filename="_au-_.mov"',
+		);
+	});
+
 	it("serves files through storage from the resolved handler context", async () => {
 		const fileBody = textEncoder.encode("context file");
 		const appStorage = createInstrumentedStorageAdapter({
