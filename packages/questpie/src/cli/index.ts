@@ -223,6 +223,38 @@ program
 		}
 	});
 
+// Baseline migrations represented by an existing schema
+program
+	.command("migrate:baseline")
+	.description(
+		"Record existing migrations without running them (schema-push reconciliation)",
+	)
+	.option(
+		"-c, --config <path>",
+		"Path to app config file",
+		"questpie.config.ts",
+	)
+	.requiredOption(
+		"-t, --target <migration>",
+		"Last migration already represented by the database schema",
+	)
+	.option("--force", "Confirm that the target schema was verified")
+	.option("--dry-run", "Show what would be recorded without executing")
+	.action(async (options) => {
+		try {
+			await runMigrationCommand({
+				action: "baseline",
+				configPath: options.config,
+				targetMigration: options.target,
+				force: options.force,
+				dryRun: options.dryRun,
+			});
+		} catch (error) {
+			console.error("❌ Failed to baseline migrations:", error);
+			process.exit(1);
+		}
+	});
+
 // Reset migrations
 program
 	.command("migrate:reset")

@@ -5,6 +5,7 @@ import { assertSupportedPostgresVersion } from "#questpie/server/db/postgres-ver
 import { getEnv, getNodeEnv } from "#questpie/server/utils/env.js";
 
 import type {
+	BaselineMigrationsOptions,
 	Migration,
 	MigrationDb,
 	MigrationRecord,
@@ -346,6 +347,45 @@ export class MigrationRunner {
 	}
 
 	/**
+	 * Record existing schema migrations without executing their `up` functions.
+	 *
+	 * This is an explicit reconciliation operation for a database previously
+	 * created with development-only schema push. The target is inclusive so the
+	 * caller must identify the last migration already represented by the schema.
+	 */
+	async baseline(
+		migrations: Migration[],
+		options: BaselineMigrationsOptions,
+	): Promise<void> {
+		await assertSupportedPostgresVersion(this.db);
+		await this.ensureMigrationsTable();
+
+		const targetIndex = migrations.findIndex(
+			(migration) => migration.id === options.targetMigration,
+		);
+		if (targetIndex < 0) {
+			throw new Error(`Migration not found: ${options.targetMigration}`);
+		}
+
+		const candidates = migrations.slice(0, targetIndex + 1);
+		await this.db.transaction(async (tx) => {
+			await tx.execute(
+				sql`SELECT pg_advisory_xact_lock(hashtext(${this.tableName}))`,
+			);
+			const currentBatch = await this.getCurrentBatch(tx);
+			const batch = currentBatch + 1;
+
+			for (const migration of candidates) {
+				await tx.execute(sql`
+					INSERT INTO ${sql.identifier(this.tableName)} (id, name, batch)
+					VALUES (${migration.id}, ${migration.id}, ${batch})
+					ON CONFLICT (id) DO NOTHING
+				`);
+			}
+		});
+	}
+
+	/**
 	 * Get migration status
 	 */
 	async status(migrations: Migration[]): Promise<MigrationStatus> {
@@ -427,8 +467,8 @@ export class MigrationRunner {
 	/**
 	 * Get current batch number
 	 */
-	private async getCurrentBatch(): Promise<number> {
-		const result: any = await this.db.execute(
+	private async getCurrentBatch(db: MigrationDb = this.db): Promise<number> {
+		const result: any = await db.execute(
 			sql`SELECT MAX(batch) as max_batch FROM ${sql.identifier(this.tableName)}`,
 		);
 

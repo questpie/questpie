@@ -24,6 +24,7 @@ import {
 import { createApp, module } from "../../src/exports/index.js";
 import { collection } from "../../src/exports/index.js";
 import { systemTimestamp } from "../../src/server/db/system-columns.js";
+import { frameworkMigrations } from "../../src/server/migration/framework-migrations.js";
 import { MigrationRunner } from "../../src/server/migration/runner.js";
 import type {
 	Migration,
@@ -321,6 +322,66 @@ AND table_name IN ('posts', 'comments')
 				"third",
 			]);
 		} finally {
+			await targetDb.close();
+		}
+	});
+
+	test("baselines a pushed schema before applying framework compatibility migrations", async () => {
+		const targetDb = await createTestDb();
+		const targetApp = await createApp(module({ name: "baseline-test" }), {
+			app: { url: "http://localhost:3000" },
+			db: { pglite: targetDb },
+			email: { adapter: new MockMailAdapter() },
+			queue: { adapter: new MockQueueAdapter() },
+			kv: { adapter: new MockKVAdapter() },
+			logger: { adapter: new MockLogger() },
+		});
+		const runner = new MigrationRunner(targetApp.db, { silent: true });
+		const historicalMigration: Migration = {
+			id: "historicalRealtimeTable",
+			async up() {
+				throw new Error("the baselined migration must not run");
+			},
+			async down() {},
+		};
+		const migrations = [historicalMigration, ...frameworkMigrations];
+
+		try {
+			await targetDb.exec(`
+				CREATE TABLE questpie_realtime_log (
+					seq BIGSERIAL PRIMARY KEY,
+					created_at timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+				)
+			`);
+
+			await runner.baseline(migrations, {
+				targetMigration: historicalMigration.id,
+			});
+			await runner.runMigrationsUp(migrations);
+
+			const columns = await targetDb.query(`
+				SELECT column_name
+				FROM information_schema.columns
+				WHERE table_name = 'questpie_realtime_log'
+					AND column_name = 'settled_at'
+			`);
+			const indexes = await targetDb.query(`
+				SELECT indexname
+				FROM pg_indexes
+				WHERE tablename = 'questpie_realtime_log'
+					AND indexname = 'idx_realtime_log_settled_at'
+			`);
+			const status = await runner.status(migrations);
+
+			expect(columns.rows).toHaveLength(1);
+			expect(indexes.rows).toHaveLength(1);
+			expect(status.pending).toHaveLength(0);
+			expect(status.executed.map((migration) => migration.id)).toEqual([
+				historicalMigration.id,
+				frameworkMigrations[0]!.id,
+			]);
+		} finally {
+			await targetApp.destroy();
 			await targetDb.close();
 		}
 	});

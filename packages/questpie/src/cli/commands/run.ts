@@ -6,7 +6,13 @@ import { SeedRunner } from "../../server/seed/runner.js";
 import { loadQuestpieConfig } from "../config.js";
 import { resolveCliPath } from "../utils.js";
 
-export type RunMigrationAction = "up" | "down" | "status" | "reset" | "fresh";
+export type RunMigrationAction =
+	| "up"
+	| "down"
+	| "status"
+	| "reset"
+	| "fresh"
+	| "baseline";
 
 export type RunMigrationOptions = {
 	action: RunMigrationAction;
@@ -14,6 +20,7 @@ export type RunMigrationOptions = {
 	targetMigration?: string;
 	batch?: number;
 	dryRun?: boolean;
+	force?: boolean;
 };
 
 /**
@@ -39,6 +46,14 @@ export async function runMigrationCommand(
 		(!Number.isSafeInteger(options.batch) || options.batch < 1)
 	) {
 		throw new Error("--batch must be a positive integer");
+	}
+	if (options.action === "baseline" && !options.targetMigration) {
+		throw new Error("migrate:baseline requires --target <migration>");
+	}
+	if (options.action === "baseline" && !options.force && !options.dryRun) {
+		throw new Error(
+			"migrate:baseline records migrations without running them; pass --force after verifying the target schema",
+		);
 	}
 
 	// Load config
@@ -110,6 +125,12 @@ export async function runMigrationCommand(
 
 			case "status":
 				await runner.status(migrations);
+				break;
+
+			case "baseline":
+				await app.migrations.baseline({
+					targetMigration: options.targetMigration!,
+				});
 				break;
 
 			default:

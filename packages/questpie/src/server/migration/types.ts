@@ -141,6 +141,11 @@ export type RunMigrationsOptions = {
 	targetMigration?: string;
 };
 
+export type BaselineMigrationsOptions = {
+	/** Mark pending migrations through this migration ID as already applied. */
+	targetMigration: string;
+};
+
 /**
  * Migration status information
  */

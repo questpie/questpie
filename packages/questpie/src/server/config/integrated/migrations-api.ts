@@ -9,6 +9,7 @@ import {
 } from "#questpie/server/migration/generator.js";
 import { MigrationRunner } from "#questpie/server/migration/runner.js";
 import type {
+	BaselineMigrationsOptions,
 	GenerateMigrationResult,
 	Migration,
 	MigrationStatus,
@@ -126,6 +127,15 @@ export class QuestpieMigrationsAPI<
 	async fresh(): Promise<void> {
 		await this.reset();
 		await this.up();
+	}
+
+	/**
+	 * Mark migrations through an inclusive target as applied without executing
+	 * them. Use this only to reconcile a database whose schema was previously
+	 * created with development-only `questpie push`.
+	 */
+	async baseline(options: BaselineMigrationsOptions): Promise<void> {
+		await this.runner.baseline(this.getMigrations(), options);
 	}
 
 	/**

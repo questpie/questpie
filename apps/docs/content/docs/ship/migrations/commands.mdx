@@ -5,7 +5,7 @@ kind: reference
 package: questpie
 ---
 
-Seven commands deal with the database schema. Each one takes
+Eight commands deal with the database schema. Each one takes
 `-c, --config <path>`, which defaults to `questpie.config.ts`.
 
 | Command                   | Also accepts       | What it does                                                |
@@ -14,6 +14,7 @@ Seven commands deal with the database schema. Each one takes
 | `questpie migrate`        | `migrate:up`       | Runs pending migrations, then the search index migrations   |
 | `questpie migrate:down`   |                    | Rolls back the last batch                                   |
 | `questpie migrate:status` |                    | Prints executed and pending migrations                      |
+| `questpie migrate:baseline` |                  | Records an existing pushed schema in the migration ledger   |
 | `questpie migrate:reset`  |                    | Rolls back every executed migration                         |
 | `questpie migrate:fresh`  |                    | Reset, then up, then reset seed tracking                    |
 | `questpie push`           |                    | Applies the schema straight to a development database       |
@@ -89,6 +90,29 @@ column rolls back to that column, empty.
 
 Creates the ledger table if it is missing. Then prints the current batch, the
 executed migrations with their batch and time, and the pending ones.
+
+## `migrate:baseline`
+
+Use this only when a development database was previously created with
+`questpie push` and therefore has schema objects but no matching migration
+ledger rows. It records every migration through an inclusive target without
+running their `up()` functions:
+
+```bash
+questpie migrate:baseline --target <last-existing-migration-id> --force
+questpie migrate
+```
+
+Inspect the live schema and `questpie migrate:status` before choosing the
+target. `--target` is required and must name a registered migration. `--force`
+is also required because choosing a migration not represented by the live
+schema can make later deploys fail or silently miss required DDL. `--dry-run`
+prints the intended target without writing the ledger and does not require
+`--force`.
+
+The same operation is available to controlled deployment tooling as
+`app.migrations.baseline({ targetMigration })`. It has no confirmation prompt;
+the caller owns the same schema verification required by the CLI.
 
 ## `migrate:reset` and `migrate:fresh`
 

@@ -24,6 +24,7 @@ import {
 	mergeMessagesIntoConfig,
 	mergeTranslationsConfig,
 } from "#questpie/server/i18n/translator.js";
+import { frameworkMigrations } from "#questpie/server/migration/framework-migrations.js";
 import coreModule from "#questpie/server/modules/core/.generated/module.js";
 import { mergeAuthOptions } from "#questpie/server/modules/core/integrated/auth/merge.js";
 import { createCrdtRuntimeManifests } from "#questpie/server/modules/core/integrated/crdt/manifest-runtime.js";
@@ -763,7 +764,10 @@ async function createAppFromDefinition(
 		observability: runtime.observability,
 		executor: runtime.executor,
 		migrations: {
-			migrations: [...merged.migrations],
+			// Application migrations must run first. This lets a historical app
+			// migration create an older framework table before a forward-only
+			// framework compatibility migration repairs it.
+			migrations: [...merged.migrations, ...frameworkMigrations],
 		},
 		seeds: {
 			seeds: [...merged.seeds],

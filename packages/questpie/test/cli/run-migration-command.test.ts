@@ -53,16 +53,16 @@ describe("runMigrationCommand", () => {
 
 		await runMigrationCommand({ action: "up", configPath });
 		expect(destroy).toHaveBeenCalledTimes(1);
-		expect(up).not.toHaveBeenCalled();
+		expect(up).toHaveBeenCalledTimes(1);
 
 		setup.app.config.migrations = [migration];
 		await runMigrationCommand({ action: "up", configPath, dryRun: true });
 		expect(destroy).toHaveBeenCalledTimes(2);
-		expect(up).not.toHaveBeenCalled();
+		expect(up).toHaveBeenCalledTimes(1);
 
 		await runMigrationCommand({ action: "up", configPath });
 		expect(destroy).toHaveBeenCalledTimes(3);
-		expect(up).toHaveBeenCalledTimes(1);
+		expect(up).toHaveBeenCalledTimes(2);
 
 		log.mockRestore();
 		up.mockRestore();
@@ -85,5 +85,39 @@ describe("runMigrationCommand", () => {
 		log.mockRestore();
 		up.mockRestore();
 		destroy.mockRestore();
+	});
+
+	it("requires explicit force before baselining a pushed schema", async () => {
+		setup.app.config.migrations = [migration];
+		const baseline = spyOn(setup.app.migrations, "baseline").mockResolvedValue(
+			undefined,
+		);
+		const destroy = spyOn(setup.app, "destroy").mockResolvedValue(undefined);
+		const log = spyOn(console, "log").mockImplementation(() => {});
+
+		await expect(
+			runMigrationCommand({
+				action: "baseline",
+				configPath,
+				targetMigration: migration.id,
+			}),
+		).rejects.toThrow("pass --force");
+		expect(baseline).not.toHaveBeenCalled();
+		expect(destroy).not.toHaveBeenCalled();
+
+		await runMigrationCommand({
+			action: "baseline",
+			configPath,
+			targetMigration: migration.id,
+			force: true,
+		});
+		expect(baseline).toHaveBeenCalledWith({
+			targetMigration: migration.id,
+		});
+		expect(destroy).toHaveBeenCalledTimes(1);
+
+		log.mockRestore();
+		destroy.mockRestore();
+		baseline.mockRestore();
 	});
 });
