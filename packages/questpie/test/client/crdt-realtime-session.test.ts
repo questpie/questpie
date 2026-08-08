@@ -622,6 +622,82 @@ describe("internal CRDT realtime session", () => {
 		session.destroy();
 	});
 
+	test("reopens a query-only SSE edge before a late CRDT acquire", async () => {
+		const opens: Record<string, unknown>[] = [];
+		const streamControllers: ReadableStreamDefaultController<Uint8Array>[] = [];
+		const fetcher: typeof fetch = async (input, init) => {
+			const url = String(input);
+			if (url.endsWith("/realtime/config")) {
+				return Response.json({ transport: "sse" });
+			}
+			if (!url.endsWith("/realtime")) {
+				throw new Error(`Unexpected request: ${url}`);
+			}
+			const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+			if (body.sessionId) {
+				return Response.json({ status: "accepted" }, { status: 202 });
+			}
+			opens.push(body);
+			const index = opens.length - 1;
+			const stream = new ReadableStream<Uint8Array>({
+				start(controller) {
+					streamControllers[index] = controller;
+					controller.enqueue(
+						encoder.encode(
+							`event: session\ndata: ${JSON.stringify({
+								sessionId: `edge-${index + 1}`,
+								token: `control-${index + 1}`,
+								control: {
+									protocol: "questpie-realtime-topology",
+									versions: [2],
+								},
+							})}\n\n`,
+						),
+					);
+				},
+			});
+			init?.signal?.addEventListener("abort", () => {
+				try {
+					streamControllers[index]?.close();
+				} catch {
+					// The replacement may already have closed the old stream.
+				}
+			});
+			return new Response(stream, {
+				headers: { "content-type": "text/event-stream" },
+			});
+		};
+		const session = createRealtimeClientSession({
+			baseUrl: "http://localhost:3000",
+			withCredentials: true,
+			debounceMs: 0,
+			fetcher,
+		});
+		const stopQuery = session.subscribe(
+			{
+				resourceType: "collection",
+				resource: "articles",
+				operation: "find",
+			},
+			() => {},
+		);
+		await waitFor(() => opens.length === 1);
+
+		const capability = await session.acquireEdgeCapability();
+
+		expect(capability.sessionId).toBe("edge-2");
+		expect(opens).toHaveLength(2);
+		expect(opens[0]).not.toHaveProperty("crdtHold");
+		expect(opens[1]).toMatchObject({ crdtHold: true });
+		expect(opens[1]?.topics).toEqual([
+			expect.objectContaining({ resource: "articles" }),
+		]);
+
+		capability.release();
+		stopQuery();
+		session.destroy();
+	});
+
 	test("replays exact CRDT topology after an SSE edge reconnect", async () => {
 		const opens: Record<string, unknown>[] = [];
 		const controls: Record<string, unknown>[] = [];
@@ -992,6 +1068,71 @@ describe("internal CRDT realtime session", () => {
 		session.destroy();
 	});
 
+	test("reopens a query-only Pusher edge before a late CRDT acquire", async () => {
+		FakePusher.instances = [];
+		const opens: Record<string, unknown>[] = [];
+		const fetcher: typeof fetch = async (input, init) => {
+			const url = String(input);
+			if (url.endsWith("/realtime/auth")) {
+				return Response.json({ auth: "signed" });
+			}
+			if (url.endsWith("/realtime") && init?.method === "POST") {
+				const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+				if (body.transport !== "shared-provider") {
+					return Response.json({ status: "accepted" }, { status: 202 });
+				}
+				opens.push(body);
+				const index = opens.length;
+				return Response.json({
+					transport: "shared-provider",
+					sessionId: `pusher-edge-${index}`,
+					token: `pusher-control-${index}`,
+					channel: `private-questpie-rt-pusher-edge-${index}`,
+					control: {
+						protocol: "questpie-realtime-topology",
+						versions: [2],
+					},
+				});
+			}
+			throw new Error(`Unexpected request: ${url}`);
+		};
+		const transport = new PusherRealtimeTransport({
+			baseUrl: "http://localhost:3000",
+			fetcher,
+			config: { provider: "pusher", key: "public-key" },
+			refetchTopic: async () => ({}),
+			connection: new PusherConnectionManager({
+				loadPusher: async () =>
+					({ default: FakePusher }) as unknown as PusherModule,
+			}),
+		});
+		const stopQuery = transport.subscribe(
+			{
+				resourceType: "collection",
+				resource: "articles",
+				operation: "find",
+			},
+			() => {},
+			undefined,
+			"query:articles",
+		);
+		await waitFor(() => opens.length === 1);
+
+		const capability = await transport.acquire();
+
+		expect(capability.sessionId).toBe("pusher-edge-2");
+		expect(opens).toHaveLength(2);
+		expect(opens[0]).not.toHaveProperty("crdtHold");
+		expect(opens[1]).toMatchObject({ crdtHold: true });
+		expect(opens[1]?.topics).toEqual([
+			expect.objectContaining({ id: "query:articles", resource: "articles" }),
+		]);
+
+		capability.release();
+		stopQuery();
+		transport.destroy();
+	});
+
 	test("refetches only the opaque Pusher query targets in an invalidation", async () => {
 		FakePusher.instances = [];
 		const refetches = new Map<string, number>();
@@ -1168,12 +1309,12 @@ describe("internal CRDT realtime session", () => {
 
 		await waitFor(() => errors.length > 0);
 		await replacementPromise;
-		await waitFor(() => opens.length === 2);
+		await waitFor(() => opens.length === 3);
 		await waitFor(() => liveQueryRefetches >= 2);
 		await waitFor(() =>
 			controls.some(
 				(control) =>
-					control.sessionId === "pusher-edge-2" &&
+					control.sessionId === "pusher-edge-3" &&
 					control.topology.subscriptions.some(
 						(subscription: any) => subscription.id === "crdt:new",
 					),
@@ -1183,7 +1324,7 @@ describe("internal CRDT realtime session", () => {
 		expect(errors[0]?.message).toBe("Realtime control session is unavailable");
 		const replacementTopology = controls.find(
 			(control) =>
-				control.sessionId === "pusher-edge-2" &&
+				control.sessionId === "pusher-edge-3" &&
 				control.topology.subscriptions.some(
 					(subscription: any) => subscription.id === "crdt:new",
 				),

@@ -51,10 +51,12 @@ export class SseConnectionManager {
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	private watchdogTimer: ReturnType<typeof setTimeout> | null = null;
 	private connecting = false;
+	private connectingCrdtHold = false;
 	private reconnectPending = false;
 	private watchdogTriggered = false;
 	private retryAttempt = 0;
 	private controlSession: ControlSession | null = null;
+	private controlSessionCrdtHold = false;
 	private controlOperation: Promise<void> = Promise.resolve();
 	private topologyGeneration = 0;
 	private flushedGeneration = 0;
@@ -113,8 +115,7 @@ export class SseConnectionManager {
 			this.applyTopologyChange();
 		};
 		try {
-			const controlSession =
-				this.controlSession ?? (await this.waitForSession(signal));
+			const controlSession = await this.acquireCrdtSession(signal);
 			return {
 				sessionId: controlSession.sessionId,
 				token: controlSession.token,
@@ -137,6 +138,31 @@ export class SseConnectionManager {
 		} catch (error) {
 			release();
 			throw error;
+		}
+	}
+
+	private async acquireCrdtSession(
+		signal?: AbortSignal,
+	): Promise<ControlSession> {
+		while (true) {
+			if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+			if (this.controlSession && this.controlSessionCrdtHold) {
+				return this.controlSession;
+			}
+			if (
+				this.controlSession ||
+				(this.connecting && !this.connectingCrdtHold)
+			) {
+				this.reconnectPending = true;
+				this.controlSession = null;
+				this.controlSessionCrdtHold = false;
+				this.abortController?.abort();
+			}
+			this.applyTopologyChange();
+			const candidate = await this.waitForSession(signal);
+			if (candidate === this.controlSession && this.controlSessionCrdtHold) {
+				return candidate;
+			}
 		}
 	}
 
@@ -282,12 +308,14 @@ export class SseConnectionManager {
 		this.abortController = new AbortController();
 		try {
 			const authHeaders = await this.options.getAuthHeaders?.();
+			const topology = this.openTopology();
+			this.connectingCrdtHold = topology.crdtHold === true;
 			const response = await this.options.fetcher(
 				`${this.options.baseUrl}/realtime`,
 				{
 					method: "POST",
 					headers: { "Content-Type": "application/json", ...authHeaders },
-					body: JSON.stringify(this.openTopology()),
+					body: JSON.stringify(topology),
 					credentials: this.options.withCredentials ? "include" : "omit",
 					signal: this.abortController.signal,
 				},
@@ -346,7 +374,9 @@ export class SseConnectionManager {
 		} finally {
 			this.clearWatchdog();
 			this.connecting = false;
+			this.connectingCrdtHold = false;
 			this.controlSession = null;
+			this.controlSessionCrdtHold = false;
 			if (this.reconnectPending) {
 				this.reconnectPending = false;
 				this.scheduleConnect(0);
@@ -521,6 +551,7 @@ export class SseConnectionManager {
 					sessionId: session.sessionId,
 					token: session.token,
 				};
+				this.controlSessionCrdtHold = this.connectingCrdtHold;
 				for (const waiter of this.sessionWaiters) {
 					waiter.resolve(this.controlSession);
 				}

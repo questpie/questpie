@@ -103,6 +103,7 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 	private readonly topics = new Map<string, TopicEntry>();
 	private readonly crdt = new Map<string, CrdtEntry>();
 	private session: SessionResponse | null = null;
+	private sessionCrdtHold = false;
 	private readonly connection: PusherConnectionManager;
 	private subscription: ManagedPusherSubscription | null = null;
 	private sessionPromise: Promise<void> | null = null;
@@ -199,7 +200,7 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 			this.closeIfIdle();
 		};
 		try {
-			await this.ensureSession();
+			await this.ensureCrdtSession();
 			if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 			const session = this.session;
 			if (!session) throw new Error("Realtime edge session is unavailable");
@@ -225,6 +226,14 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 		} catch (error) {
 			release();
 			throw error;
+		}
+	}
+
+	private async ensureCrdtSession(): Promise<void> {
+		while (!this.destroyed) {
+			await this.ensureSession();
+			if (!this.session || this.sessionCrdtHold) return;
+			this.disconnect();
 		}
 	}
 
@@ -293,6 +302,7 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 	private async openSession(): Promise<void> {
 		const initial = [...this.topics.entries()];
 		if (!this.hasDemand() || this.destroyed) return;
+		const crdtHold = this.holdCount > 0 || this.crdt.size > 0;
 		const authHeaders = await this.options.getAuthHeaders?.();
 		const response = await this.options.fetcher(
 			`${this.options.baseUrl}/realtime`,
@@ -304,9 +314,7 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 					topics: initial.map(([topicId, entry]) =>
 						topicPayload(topicId, entry.topic),
 					),
-					...(this.holdCount > 0 || this.crdt.size > 0
-						? { crdtHold: true }
-						: {}),
+					...(crdtHold ? { crdtHold: true } : {}),
 				}),
 				credentials: "include",
 			},
@@ -326,6 +334,7 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 			throw new Error("Invalid shared-provider realtime session");
 		}
 		this.session = session;
+		this.sessionCrdtHold = crdtHold;
 		if (this.destroyed) {
 			await this.sendDesiredTopology().catch(() => {});
 			this.disconnect();
@@ -783,6 +792,7 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 		this.subscription?.release();
 		this.subscription = null;
 		this.session = null;
+		this.sessionCrdtHold = false;
 		this.controlOperation = Promise.resolve();
 		this.desiredRevision = 0;
 		this.desiredTopologyGeneration = 0;
