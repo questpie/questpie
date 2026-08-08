@@ -5,6 +5,11 @@ import type { Session, User } from "better-auth/types";
 
 import type { AuthorityActor } from "../modules/core/integrated/crdt/authority.js";
 import type { InternalContextStore } from "./internal-context.js";
+import {
+	getActiveRequestScope,
+	RequestScope,
+	runWithRequestScope,
+} from "./request-scope.js";
 import type { AccessMode } from "./types.js";
 
 // ============================================================================
@@ -251,11 +256,24 @@ export function runWithContext<T>(
 			ctx._hookDepth = parent._hookDepth;
 		}
 	}
-	// Cast needed because some @types/node versions type AsyncLocalStorage.run() as returning void
-	return appContextStorage.run(
-		ctx as StoredContext & InternalContextStore,
-		fn,
-	) as unknown as Promise<T>;
+	const run = () =>
+		appContextStorage.run(
+			ctx as StoredContext & InternalContextStore,
+			fn,
+		) as unknown as T | Promise<T>;
+
+	if (getActiveRequestScope(ctx.app)) {
+		return Promise.resolve(run());
+	}
+
+	const scope = new RequestScope();
+	return runWithRequestScope(ctx.app, scope, async () => {
+		try {
+			return await run();
+		} finally {
+			await scope.dispose();
+		}
+	});
 }
 
 /**

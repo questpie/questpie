@@ -54,6 +54,21 @@ describe("RequestScope (QUE-255)", () => {
 		expect(result).toEqual({ preResolved: true });
 	});
 
+	it("memoizes undefined service values", () => {
+		const scope = new RequestScope();
+		let calls = 0;
+		expect(
+			scope.getOrCreate("undefined-svc", () => {
+				calls++;
+				return undefined;
+			}),
+		).toBeUndefined();
+		expect(
+			scope.getOrCreate("undefined-svc", () => "unexpected"),
+		).toBeUndefined();
+		expect(calls).toBe(1);
+	});
+
 	it("throws after dispose", async () => {
 		const scope = new RequestScope();
 		scope.getOrCreate("svc", () => "hello");
@@ -86,6 +101,31 @@ describe("RequestScope (QUE-255)", () => {
 		await scope.dispose(disposers);
 
 		expect(order).toEqual(["c", "b", "a"]);
+	});
+
+	it("continues reverse disposal and aggregates failures", async () => {
+		const scope = new RequestScope();
+		const order: string[] = [];
+		scope.getOrCreate(
+			"a",
+			() => ({}),
+			() => {
+				order.push("a");
+			},
+		);
+		scope.getOrCreate(
+			"b",
+			() => ({}),
+			() => {
+				order.push("b");
+				throw new Error("b failed");
+			},
+		);
+
+		await expect(scope.dispose()).rejects.toThrow(
+			"Failed to dispose one or more request-scoped services",
+		);
+		expect(order).toEqual(["b", "a"]);
 	});
 
 	it("has() and get() work correctly", () => {

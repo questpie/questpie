@@ -10,6 +10,7 @@
  */
 
 import type { Questpie } from "../config/questpie.js";
+import { RequestScope, runWithRequestScope } from "../config/request-scope.js";
 import { ApiError } from "../errors/index.js";
 import type {
 	RequestLoggingConfig,
@@ -214,6 +215,68 @@ function logRequest(
 	}
 }
 
+async function bindScopeToResponse(
+	app: Questpie<any>,
+	request: Request,
+	response: Response,
+	scope: RequestScope,
+): Promise<Response> {
+	if (!response.body) {
+		await scope.dispose();
+		return response;
+	}
+
+	const reader = response.body.getReader();
+	let finalized: Promise<void> | undefined;
+	const finalize = () => {
+		finalized ??= scope.dispose().finally(() => {
+			request.signal.removeEventListener("abort", onAbort);
+		});
+		return finalized;
+	};
+	const onAbort = () => {
+		void reader
+			.cancel(request.signal.reason)
+			.catch(() => {})
+			.then(finalize)
+			.catch(() => {});
+	};
+	request.signal.addEventListener("abort", onAbort, { once: true });
+	if (request.signal.aborted) onAbort();
+
+	const body = new ReadableStream<Uint8Array>({
+		async pull(controller) {
+			try {
+				const chunk = await runWithRequestScope(app, scope, () =>
+					reader.read(),
+				);
+				if (chunk.done) {
+					await finalize();
+					controller.close();
+					return;
+				}
+				controller.enqueue(chunk.value);
+			} catch (error) {
+				await finalize().catch(() => {});
+				controller.error(error);
+			}
+		},
+		async cancel(reason) {
+			try {
+				await reader.cancel(reason);
+			} finally {
+				await finalize();
+			}
+		},
+	});
+
+	return new Response(body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers: response.headers,
+	});
+}
+
 // ============================================================================
 // Main fetch handler
 // ============================================================================
@@ -324,156 +387,179 @@ export const createFetchHandler = (
 				: pathname === basePath || pathname.startsWith(`${basePath}/`);
 		if (!matchesBase) return null;
 
-		return appInstance.observability.span(
-			`${request.method} ${routePattern ?? pathname}`,
-			async (span) => {
-				rootSpan = span;
-				try {
-					const relativePath =
-						basePath === "/" ? pathname : pathname.slice(basePath.length);
-					let segments = relativePath.split("/").filter(Boolean);
-
-					// Legacy /questpie/ prefix stripping
-					if (segments[0] === "questpie") {
-						segments = segments.slice(1);
-					}
-
-					if (segments.length === 0) {
-						return complete(
-							handleError(ApiError.notFound("Route"), {
-								request,
-								app: appInstance,
-							}),
-						);
-					}
-
-					// Match against compiled trie
-					if (matcher) {
-						const path = segments.join("/");
-						const match = matcher.match(path);
-						routePattern = match?.pattern;
-
-						if (match) {
-							const def = match.methods.get(request.method);
-
-							if (!def) {
-								// Path matches but method doesn't → 405
-								const resolved = await resolveContext(
-									appInstance,
-									request,
-									config,
-									context,
-									{ requestId, traceId },
-								);
-								return complete(
-									new Response(
-										appInstance.t(
-											"error.methodNotAllowed",
-											undefined,
-											resolved.appContext.locale,
-										),
-										{
-											status: 405,
-											headers: {
-												Allow: Array.from(match.methods.keys()).join(", "),
-											},
-										},
-									),
-								);
-							}
-
-							// Resolve session, locale, and create app context
-							const resolved = await resolveContext(
-								appInstance,
-								request,
-								config,
-								context,
-								{ requestId, traceId },
-							);
-
+		const requestScope = new RequestScope();
+		try {
+			const response = await runWithRequestScope(
+				appInstance,
+				requestScope,
+				() =>
+					appInstance.observability.span(
+						`${request.method} ${routePattern ?? pathname}`,
+						async (span) => {
+							rootSpan = span;
 							try {
-								if (isJsonRoute(def)) {
-									const body = await parseRouteBody(request);
-									if (body === null) {
-										return complete(
-											handleError(
-												ApiError.badRequest(
-													"Invalid JSON body",
-													undefined,
-													"error.invalidJsonBody",
+								const relativePath =
+									basePath === "/" ? pathname : pathname.slice(basePath.length);
+								let segments = relativePath.split("/").filter(Boolean);
+
+								// Legacy /questpie/ prefix stripping
+								if (segments[0] === "questpie") {
+									segments = segments.slice(1);
+								}
+
+								if (segments.length === 0) {
+									return complete(
+										handleError(ApiError.notFound("Route"), {
+											request,
+											app: appInstance,
+										}),
+									);
+								}
+
+								// Match against compiled trie
+								if (matcher) {
+									const path = segments.join("/");
+									const match = matcher.match(path);
+									routePattern = match?.pattern;
+
+									if (match) {
+										const def = match.methods.get(request.method);
+
+										if (!def) {
+											// Path matches but method doesn't → 405
+											const resolved = await resolveContext(
+												appInstance,
+												request,
+												config,
+												context,
+												{ requestId, traceId },
+											);
+											return complete(
+												new Response(
+													appInstance.t(
+														"error.methodNotAllowed",
+														undefined,
+														resolved.appContext.locale,
+													),
+													{
+														status: 405,
+														headers: {
+															Allow: Array.from(match.methods.keys()).join(
+																", ",
+															),
+														},
+													},
 												),
-												{
+											);
+										}
+
+										// Resolve session, locale, and create app context
+										const resolved = await resolveContext(
+											appInstance,
+											request,
+											config,
+											context,
+											{ requestId, traceId },
+										);
+
+										try {
+											if (isJsonRoute(def)) {
+												const body = await parseRouteBody(request);
+												if (body === null) {
+													return complete(
+														handleError(
+															ApiError.badRequest(
+																"Invalid JSON body",
+																undefined,
+																"error.invalidJsonBody",
+															),
+															{
+																request,
+																app: appInstance,
+																locale: resolved.appContext.locale,
+															},
+														),
+													);
+												}
+												const result = await executeJsonRouteInternal(
+													appInstance,
+													def,
+													body,
+													resolved,
+													request,
+													match.params,
+												);
+												return complete(smartResponse(result, request));
+											}
+
+											// Raw route — pass matched params through
+											return complete(
+												await executeRawRouteInternal(
+													appInstance,
+													def,
+													request,
+													resolved,
+													match.params,
+												),
+											);
+										} catch (error) {
+											return complete(
+												handleError(error, {
 													request,
 													app: appInstance,
 													locale: resolved.appContext.locale,
-												},
-											),
-										);
+												}),
+												error,
+											);
+										}
 									}
-									const result = await executeJsonRouteInternal(
-										appInstance,
-										def,
-										body,
-										resolved,
-										request,
-										match.params,
-									);
-									return complete(smartResponse(result, request));
 								}
 
-								// Raw route — pass matched params through
+								// No route matched → 404
 								return complete(
-									await executeRawRouteInternal(
-										appInstance,
-										def,
+									handleError(ApiError.notFound("Route"), {
 										request,
-										resolved,
-										match.params,
-									),
+										app: appInstance,
+									}),
 								);
 							} catch (error) {
 								return complete(
 									handleError(error, {
 										request,
 										app: appInstance,
-										locale: resolved.appContext.locale,
 									}),
 									error,
 								);
 							}
-						}
-					}
-
-					// No route matched → 404
-					return complete(
-						handleError(ApiError.notFound("Route"), {
-							request,
-							app: appInstance,
-						}),
-					);
-				} catch (error) {
-					return complete(
-						handleError(error, {
-							request,
-							app: appInstance,
-						}),
-						error,
-					);
-				}
-			},
-			{
-				kind: "server",
-				// Continue the caller's trace instead of starting a fresh one.
-				// Only the root span gets a carrier — everything below nests
-				// through the active context. Passing the headers raw lets the
-				// adapter decide the format; the framework has no OpenTelemetry
-				// dependency and W3C is not the only propagator that exists.
-				carrier: {
-					traceparent: request.headers.get("traceparent") ?? undefined,
-					tracestate: request.headers.get("tracestate") ?? undefined,
-					baggage: request.headers.get("baggage") ?? undefined,
-				},
-			},
-		);
+						},
+						{
+							kind: "server",
+							// Continue the caller's trace instead of starting a fresh one.
+							// Only the root span gets a carrier — everything below nests
+							// through the active context. Passing the headers raw lets the
+							// adapter decide the format; the framework has no OpenTelemetry
+							// dependency and W3C is not the only propagator that exists.
+							carrier: {
+								traceparent: request.headers.get("traceparent") ?? undefined,
+								tracestate: request.headers.get("tracestate") ?? undefined,
+								baggage: request.headers.get("baggage") ?? undefined,
+							},
+						},
+					),
+			);
+			if (!(response instanceof Response)) {
+				await requestScope.dispose();
+				return response;
+			}
+			return await bindScopeToResponse(
+				appInstance,
+				request,
+				response,
+				requestScope,
+			);
+		} catch (error) {
+			await requestScope.dispose();
+			throw error;
+		}
 	};
 };

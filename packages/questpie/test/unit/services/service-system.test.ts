@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test";
 import {
 	ServiceBuilder,
 	createApp,
+	createContextFactory,
 	extractAppServices,
 	module,
 	service,
@@ -298,6 +299,100 @@ describe("service system", () => {
 		} finally {
 			await cleanup();
 		}
+	});
+
+	it("disposes singleton services sequentially in reverse initialization order", async () => {
+		const events: string[] = [];
+		const first = service()
+			.create(() => {
+				events.push("first:create");
+				return {};
+			})
+			.dispose(async () => {
+				events.push("first:dispose:start");
+				await Promise.resolve();
+				events.push("first:dispose:end");
+			});
+		const second = service()
+			.create(() => {
+				events.push("second:create");
+				return {};
+			})
+			.dispose(async () => {
+				events.push("second:dispose:start");
+				await Promise.resolve();
+				events.push("second:dispose:end");
+			});
+		const { app, cleanup } = await createServiceApp({ first, second });
+		await cleanup();
+
+		expect(events).toEqual([
+			"first:create",
+			"second:create",
+			"second:dispose:start",
+			"second:dispose:end",
+			"first:dispose:start",
+			"first:dispose:end",
+		]);
+	});
+
+	it("rolls back initialized singleton services when startup fails", async () => {
+		const events: string[] = [];
+		const ready = service()
+			.create(() => {
+				events.push("ready:create");
+				return {};
+			})
+			.dispose(() => {
+				events.push("ready:dispose");
+			});
+		const failing = service().create(() => {
+			events.push("failing:create");
+			throw new Error("startup failed");
+		});
+
+		await expect(createServiceApp({ ready, failing })).rejects.toThrow(
+			"startup failed",
+		);
+		expect(events).toEqual(["ready:create", "failing:create", "ready:dispose"]);
+	});
+
+	it("rejects singleton dependencies on request-scoped services", async () => {
+		const requestOnly = service()
+			.lifecycle("request")
+			.create(() => ({}));
+		const singleton = service().create(({ services }) => ({
+			requestOnly: services.requestOnly,
+		}));
+
+		await expect(createServiceApp({ requestOnly, singleton })).rejects.toThrow(
+			"Singleton service cannot depend on request-scoped service",
+		);
+	});
+
+	it("reuses and disposes request services in a standalone context", async () => {
+		let created = 0;
+		let disposed = 0;
+		const child = service()
+			.lifecycle("request")
+			.create(() => ({ id: ++created }))
+			.dispose(() => {
+				disposed++;
+			});
+		const parent = service()
+			.lifecycle("request")
+			.create(({ services }) => ({ child: services.child }));
+		const { app, cleanup } = await createServiceApp({ child, parent });
+		try {
+			await using context = await createContextFactory(app)();
+			expect((context.services as any).child).toBe(
+				(context.services as any).parent.child,
+			);
+			expect(created).toBe(1);
+		} finally {
+			await cleanup();
+		}
+		expect(disposed).toBe(1);
 	});
 
 	it("awaits CRDT shutdown before disposing realtime infrastructure", async () => {

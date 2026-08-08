@@ -807,7 +807,19 @@ async function createAppFromDefinition(
 			process.env.QUESTPIE_CRDT_MANIFEST_GENERATION === "1",
 	});
 
-	await instance._initServices();
+	try {
+		await instance._initServices();
+	} catch (error) {
+		try {
+			await instance.destroy();
+		} catch (cleanupError) {
+			throw new AggregateError(
+				[error, cleanupError],
+				"QUESTPIE app initialization and rollback both failed",
+			);
+		}
+		throw error;
+	}
 
 	return instance;
 }

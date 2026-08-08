@@ -237,69 +237,78 @@ export function createQueueClient<
 					const appInstance = getAppOrThrow() as any;
 					const { extractAppServices } =
 						await import("#questpie/server/config/app-context.js");
-					const services = extractAppServices(appInstance, {
-						db: context.db,
-						session: context.session,
-						accessMode: "system",
-					});
 					const { runWithContext } =
 						await import("#questpie/server/config/context.js");
-					const observability = appInstance.observability as
-						| ObservabilityService
-						| undefined;
-					const runHandler = () =>
-						runWithContext(
-							{
-								app: appInstance,
+					const { RequestScope, runWithRequestScope } =
+						await import("#questpie/server/config/request-scope.js");
+					const requestScope = new RequestScope();
+					try {
+						await runWithRequestScope(appInstance, requestScope, async () => {
+							const services = extractAppServices(appInstance, {
 								db: context.db,
 								session: context.session,
-								locale: context.locale,
 								accessMode: "system",
-							},
-							async () => {
-								try {
-									return await jobDef.handler({
-										...services,
-										payload: validated,
+							});
+							const observability = appInstance.observability as
+								| ObservabilityService
+								| undefined;
+							const runHandler = () =>
+								runWithContext(
+									{
+										app: appInstance,
+										db: context.db,
+										session: context.session,
 										locale: context.locale,
-										dispatchId: job.dispatchId,
-										idempotencyKey: job.idempotencyKey,
-									} as any);
-								} catch (error) {
-									if (secretPayload) {
-										throw redactedSecretQueueError(
-											"QUESTPIE Queue secret job handling failed",
-										);
-									}
-									throw error;
-								}
-							},
-						);
-					if (!observability?.enabled) {
-						await runHandler();
-					} else {
-						await observability.span(
-							`job ${jobDef.name}`,
-							(span) => {
-								span.setAttributes({
-									"messaging.operation.name": "process",
-									"messaging.destination.name": jobDef.name,
-									// dispatchId is the stable logical id across retries and
-									// across adapters, so it is what correlates a failed
-									// attempt with the one that eventually succeeded.
-									...(job.dispatchId
-										? { "questpie.job.dispatch_id": job.dispatchId }
-										: {}),
-									...(job.idempotencyKey
-										? {
-												"questpie.job.idempotency_key": job.idempotencyKey,
+										accessMode: "system",
+									},
+									async () => {
+										try {
+											return await jobDef.handler({
+												...services,
+												payload: validated,
+												locale: context.locale,
+												dispatchId: job.dispatchId,
+												idempotencyKey: job.idempotencyKey,
+											} as any);
+										} catch (error) {
+											if (secretPayload) {
+												throw redactedSecretQueueError(
+													"QUESTPIE Queue secret job handling failed",
+												);
 											}
-										: {}),
-								});
-								return runHandler();
-							},
-							{ kind: "consumer" },
-						);
+											throw error;
+										}
+									},
+								);
+							if (!observability?.enabled) {
+								await runHandler();
+								return;
+							}
+							await observability.span(
+								`job ${jobDef.name}`,
+								(span) => {
+									span.setAttributes({
+										"messaging.operation.name": "process",
+										"messaging.destination.name": jobDef.name,
+										// dispatchId is the stable logical id across retries and
+										// across adapters, so it is what correlates a failed
+										// attempt with the one that eventually succeeded.
+										...(job.dispatchId
+											? { "questpie.job.dispatch_id": job.dispatchId }
+											: {}),
+										...(job.idempotencyKey
+											? {
+													"questpie.job.idempotency_key": job.idempotencyKey,
+												}
+											: {}),
+									});
+									return runHandler();
+								},
+								{ kind: "consumer" },
+							);
+						});
+					} finally {
+						await requestScope.dispose();
 					}
 					if (secretPayload && job.dispatchId && context.db) {
 						await completeQueueDispatch(context.db, job.dispatchId);

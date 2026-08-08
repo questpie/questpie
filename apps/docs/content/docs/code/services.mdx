@@ -124,10 +124,10 @@ service()
 `lifecycle` decides how often `create` runs. Leave it out and you get
 `"singleton"`.
 
-| Value                   | When `create` runs                    | Use it for                                  |
-| ----------------------- | ------------------------------------- | ------------------------------------------- |
-| `"singleton"` (default) | Once, at app start                    | API clients, pools, caches, stateless logic |
-| `"request"`             | Every time a handler context is built | Anything that reads the caller's session    |
+| Value                   | When `create` runs       | Use it for                                  |
+| ----------------------- | ------------------------ | ------------------------------------------- |
+| `"singleton"` (default) | Once, at app start       | API clients, pools, caches, stateless logic |
+| `"request"`             | Once per execution scope | Anything that reads the caller's session    |
 
 <Callout type="warn" title="A singleton never sees the caller">
 	Its `create` runs at startup, before any request exists. `ctx.session` is
@@ -137,8 +137,10 @@ service()
 
 ## dispose
 
-`dispose(instance)` runs on `app.destroy()`. Use it to close what you opened.
-The tanstack-start starter wires that call to `SIGINT` and `SIGTERM`. On the
+For singleton services, `dispose(instance)` runs on `app.destroy()`. Request
+service disposers run when their HTTP request, job attempt or top-level
+programmatic operation ends. Use it to close what you opened. The
+tanstack-start starter wires app shutdown to `SIGINT` and `SIGTERM`. On the
 other starters, call `destroyApp()` from `#questpie` yourself.
 
 ```ts title="src/questpie/server/services/redis.ts"

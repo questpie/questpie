@@ -10,6 +10,15 @@
 
 import type { AppContext } from "#questpie/server/config/app-context.js";
 import { extractAppServices } from "#questpie/server/config/app-context.js";
+import type { RequestContext } from "#questpie/server/config/context.js";
+import {
+	RequestScope,
+	runWithRequestScope,
+} from "#questpie/server/config/request-scope.js";
+
+export type DisposableAppContext = AppContext &
+	Partial<RequestContext> &
+	AsyncDisposable;
 
 /**
  * Create a `createContext()` function bound to the given app instance.
@@ -31,18 +40,35 @@ import { extractAppServices } from "#questpie/server/config/app-context.js";
  */
 export function createContextFactory(
 	app: any,
-): (options?: { accessMode?: "system" | "user" }) => Promise<AppContext> {
+): (options?: {
+	accessMode?: "system" | "user";
+}) => Promise<DisposableAppContext> {
 	return async (options) => {
-		const reqCtx = await app.createContext({
-			accessMode: options?.accessMode ?? "system",
-		});
-		const services = extractAppServices(app, {
-			db: app.db,
-			session: reqCtx.session,
-			principal: reqCtx.principal,
-			actor: reqCtx.actor,
-			accessMode: options?.accessMode ?? "system",
-		});
-		return { ...services, ...reqCtx } as AppContext;
+		const scope = new RequestScope();
+		try {
+			return await runWithRequestScope(app, scope, async () => {
+				const reqCtx = await app.createContext({
+					accessMode: options?.accessMode ?? "system",
+				});
+				const services = extractAppServices(app, {
+					db: app.db,
+					session: reqCtx.session,
+					principal: reqCtx.principal,
+					actor: reqCtx.actor,
+					accessMode: options?.accessMode ?? "system",
+					scope,
+				});
+				const context = { ...services, ...reqCtx } as DisposableAppContext;
+				Object.defineProperty(context, Symbol.asyncDispose, {
+					configurable: false,
+					enumerable: false,
+					value: () => scope.dispose(),
+				});
+				return context;
+			});
+		} catch (error) {
+			await scope.dispose();
+			throw error;
+		}
 	};
 }

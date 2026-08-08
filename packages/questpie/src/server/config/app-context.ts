@@ -21,6 +21,8 @@
  *   ({ analytics }) => analytics.tracker.track(...)          // namespace: "analytics"
  *
  */
+import { getActiveRequestScope } from "#questpie/server/config/request-scope.js";
+
 /**
  * Global augmentation namespace.
  * Uses `declare global` so augmentations work correctly with workspace symlinks
@@ -417,6 +419,7 @@ export function extractAppServices(
 	const serviceDefs = app._serviceDefs ?? app.config?.services;
 	if (serviceDefs) {
 		const services: Record<string, unknown> = {};
+		const scope = overrides?.scope ?? getActiveRequestScope(app);
 
 		for (const [name, input] of Object.entries(
 			serviceDefs as Record<string, any>,
@@ -431,7 +434,7 @@ export function extractAppServices(
 					principal: overrides?.principal,
 					actor: overrides?.actor,
 				},
-				overrides?.scope,
+				scope,
 			);
 
 			const state =

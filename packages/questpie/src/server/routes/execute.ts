@@ -175,34 +175,33 @@ export async function executeJsonRouteInternal<
 		? context
 		: toRouteAdapterContext(resolvedContext);
 
-	const services = extractAppServices(app, {
-		db: resolvedContext.db ?? app.db,
-		session: resolvedContext.session,
-		locale: resolvedContext.locale,
-		accessMode: resolvedContext.accessMode,
-		principal: resolvedContext.principal,
-	});
-
-	// Access control — reject before handler runs
-	const allowed = await evaluateRouteAccess(definition.access, {
-		...services,
-		...(resolvedContext["~contextExtensions"] ?? {}),
-		locale: resolvedContext.locale,
-		request,
-		params,
-	});
-	if (!allowed) {
-		throw ApiError.forbidden({
-			operation: "read",
-			resource: "route",
-			reason: "Access denied",
-		});
-	}
-
-	const result = await runWithContext(
+	return runWithContext(
 		createRouteStoreContext(app, resolvedContext, adapterContext),
-		() =>
-			definition.handler({
+		async () => {
+			const services = extractAppServices(app, {
+				db: resolvedContext.db ?? app.db,
+				session: resolvedContext.session,
+				locale: resolvedContext.locale,
+				accessMode: resolvedContext.accessMode,
+				principal: resolvedContext.principal,
+			});
+
+			const allowed = await evaluateRouteAccess(definition.access, {
+				...services,
+				...(resolvedContext["~contextExtensions"] ?? {}),
+				locale: resolvedContext.locale,
+				request,
+				params,
+			});
+			if (!allowed) {
+				throw ApiError.forbidden({
+					operation: "read",
+					resource: "route",
+					reason: "Access denied",
+				});
+			}
+
+			const result = await definition.handler({
 				...services,
 				...resolvedContext,
 				app,
@@ -210,13 +209,13 @@ export async function executeJsonRouteInternal<
 				...(request ? { request } : {}),
 				locale: resolvedContext.locale,
 				params: (params ?? {}) as TParams,
-			} as any),
+			} as any);
+			if (definition.outputSchema) {
+				return definition.outputSchema.parse(result) as TOutput;
+			}
+			return result as TOutput;
+		},
 	);
-
-	if (definition.outputSchema) {
-		return definition.outputSchema.parse(result) as TOutput;
-	}
-	return result as TOutput;
 }
 
 // ============================================================================
@@ -257,40 +256,40 @@ export async function executeRawRouteInternal(
 		? context
 		: toRouteAdapterContext(resolvedContext);
 
-	const services = extractAppServices(app, {
-		db: resolvedContext.db ?? app.db,
-		session: resolvedContext.session,
-		locale: resolvedContext.locale,
-		accessMode: resolvedContext.accessMode,
-		principal: resolvedContext.principal,
-	});
-
-	// Access control — reject before handler runs
-	const allowed = await evaluateRouteAccess(definition.access, {
-		...services,
-		...(resolvedContext["~contextExtensions"] ?? {}),
-		locale: resolvedContext.locale,
-		request,
-		params,
-	});
-	if (!allowed) {
-		throw ApiError.forbidden({
-			operation: "read",
-			resource: "route",
-			reason: "Access denied",
-		});
-	}
-
 	return runWithContext(
 		createRouteStoreContext(app, resolvedContext, adapterContext),
-		() =>
-			definition.handler({
+		async () => {
+			const services = extractAppServices(app, {
+				db: resolvedContext.db ?? app.db,
+				session: resolvedContext.session,
+				locale: resolvedContext.locale,
+				accessMode: resolvedContext.accessMode,
+				principal: resolvedContext.principal,
+			});
+
+			const allowed = await evaluateRouteAccess(definition.access, {
+				...services,
+				...(resolvedContext["~contextExtensions"] ?? {}),
+				locale: resolvedContext.locale,
+				request,
+				params,
+			});
+			if (!allowed) {
+				throw ApiError.forbidden({
+					operation: "read",
+					resource: "route",
+					reason: "Access denied",
+				});
+			}
+
+			return definition.handler({
 				...services,
 				...resolvedContext,
 				app,
 				request,
 				locale: resolvedContext.locale,
 				params: params ?? {},
-			} as any),
+			} as any);
+		},
 	);
 }
