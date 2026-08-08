@@ -46,6 +46,8 @@ export type {
 	AuditDeliveryMode,
 	AuditFieldPolicy,
 	AuditPolicy,
+	AuditRetentionPolicy,
+	AuditSink,
 	CanonicalAuditEvent,
 	PersistedAuditEvent,
 } from "./policy.js";

@@ -13,6 +13,9 @@ import {
 	REDACTED_AUDIT_VALUE,
 	type AuditDeliveryMode,
 	type AuditFieldPolicy,
+	type AuditSink,
+	type PersistedAuditEvent,
+	toCanonicalAuditEvent,
 } from "../policy.js";
 
 interface AuditApp {
@@ -106,6 +109,30 @@ function getAuditDelivery(ctx: { app?: unknown }): AuditDeliveryMode {
 	return nestedValue(app?.state, "config", "audit", "delivery") === "required"
 		? "required"
 		: "best-effort";
+}
+
+function getAuditSink(ctx: { app?: unknown }): AuditSink | undefined {
+	const app = resolveAuditApp(ctx.app);
+	const sink = nestedValue(app?.state, "config", "audit", "sink");
+	return isAuditSink(sink) ? sink : undefined;
+}
+
+function isAuditSink(value: unknown): value is AuditSink {
+	return isRecord(value) && typeof value.append === "function";
+}
+
+async function persistAuditEvent(
+	ctx: { app?: unknown; db?: unknown },
+	auditCollection: AuditCollectionWriter,
+	data: Record<string, unknown>,
+): Promise<void> {
+	const stored = await auditCollection.create(data, {
+		accessMode: "system",
+		db: ctx.db,
+	});
+	const sink = getAuditSink(ctx);
+	if (!sink) return;
+	await sink.append(toCanonicalAuditEvent(stored as PersistedAuditEvent));
 }
 
 const CREDENTIAL_FIELD_PATTERN =
@@ -416,33 +443,27 @@ async function collectionAfterChange(ctx: GlobalCollectionHookContext) {
 			ctx.collection,
 		);
 
-		await auditCollection.create(
-			{
+		await persistAuditEvent(ctx, auditCollection, {
+			action,
+			resourceType: "collection",
+			resource: ctx.collection,
+			resourceId: ctx.data?.id ? String(ctx.data.id) : null,
+			resourceLabel,
+			userId: actor.userId,
+			userName: actor.userName,
+			locale: ctx.locale || null,
+			changes,
+			metadata: buildAuditMetadata(ctx, actor, {
+				operation: ctx.operation,
+			}),
+			title: generateTitle(
 				action,
-				resourceType: "collection",
-				resource: ctx.collection,
-				resourceId: ctx.data?.id ? String(ctx.data.id) : null,
+				"collection",
+				resourceTypeLabel,
 				resourceLabel,
-				userId: actor.userId,
-				userName: actor.userName,
-				locale: ctx.locale || null,
-				changes,
-				metadata: buildAuditMetadata(ctx, actor, {
-					operation: ctx.operation,
-				}),
-				title: generateTitle(
-					action,
-					"collection",
-					resourceTypeLabel,
-					resourceLabel,
-					actor.userName,
-				),
-			},
-			{
-				accessMode: "system",
-				db: ctx.db,
-			},
-		);
+				actor.userName,
+			),
+		});
 	} catch (err) {
 		handleAuditFailure(
 			ctx,
@@ -466,39 +487,33 @@ async function collectionAfterDelete(ctx: GlobalCollectionHookContext) {
 			ctx.collection,
 		);
 
-		await auditCollection.create(
-			{
-				action: "delete",
-				resourceType: "collection",
-				resource: ctx.collection,
-				resourceId: ctx.data?.id ? String(ctx.data.id) : null,
+		await persistAuditEvent(ctx, auditCollection, {
+			action: "delete",
+			resourceType: "collection",
+			resource: ctx.collection,
+			resourceId: ctx.data?.id ? String(ctx.data.id) : null,
+			resourceLabel,
+			userId: actor.userId,
+			userName: actor.userName,
+			locale: ctx.locale || null,
+			changes: makeFieldChangeMap(
+				ctx.data,
+				"delete",
+				"collection",
+				ctx.collection,
+				ctx.app,
+			),
+			metadata: buildAuditMetadata(ctx, actor, {
+				operation: "delete",
+			}),
+			title: generateTitle(
+				"delete",
+				"collection",
+				resourceTypeLabel,
 				resourceLabel,
-				userId: actor.userId,
-				userName: actor.userName,
-				locale: ctx.locale || null,
-				changes: makeFieldChangeMap(
-					ctx.data,
-					"delete",
-					"collection",
-					ctx.collection,
-					ctx.app,
-				),
-				metadata: buildAuditMetadata(ctx, actor, {
-					operation: "delete",
-				}),
-				title: generateTitle(
-					"delete",
-					"collection",
-					resourceTypeLabel,
-					resourceLabel,
-					actor.userName,
-				),
-			},
-			{
-				accessMode: "system",
-				db: ctx.db,
-			},
-		);
+				actor.userName,
+			),
+		});
 	} catch (err) {
 		handleAuditFailure(
 			ctx,
@@ -522,35 +537,29 @@ async function collectionAfterPurge(ctx: GlobalCollectionHookContext) {
 		);
 		const resourceId = ctx.data?.id ? String(ctx.data.id) : null;
 
-		await auditCollection.create(
-			{
-				action: "purge",
-				resourceType: "collection",
-				resource: ctx.collection,
+		await persistAuditEvent(ctx, auditCollection, {
+			action: "purge",
+			resourceType: "collection",
+			resource: ctx.collection,
+			resourceId,
+			// The irreversible fact must not retain the purged row's label
+			// or field-level preimage.
+			resourceLabel: null,
+			userId: actor.userId,
+			userName: actor.userName,
+			locale: ctx.locale || null,
+			changes: null,
+			metadata: buildAuditMetadata(ctx, actor, {
+				operation: "purge",
+			}),
+			title: generateTitle(
+				"purge",
+				"collection",
+				resourceTypeLabel,
 				resourceId,
-				// The irreversible fact must not retain the purged row's label
-				// or field-level preimage.
-				resourceLabel: null,
-				userId: actor.userId,
-				userName: actor.userName,
-				locale: ctx.locale || null,
-				changes: null,
-				metadata: buildAuditMetadata(ctx, actor, {
-					operation: "purge",
-				}),
-				title: generateTitle(
-					"purge",
-					"collection",
-					resourceTypeLabel,
-					resourceId,
-					actor.userName,
-				),
-			},
-			{
-				accessMode: "system",
-				db: ctx.db,
-			},
-		);
+				actor.userName,
+			),
+		});
 	} catch (err) {
 		handleAuditFailure(
 			ctx,
@@ -576,36 +585,30 @@ async function collectionAfterTransition(
 			ctx.collection,
 		);
 
-		await auditCollection.create(
-			{
-				action: "transition",
-				resourceType: "collection",
-				resource: ctx.collection,
-				resourceId: ctx.data?.id ? String(ctx.data.id) : null,
+		await persistAuditEvent(ctx, auditCollection, {
+			action: "transition",
+			resourceType: "collection",
+			resource: ctx.collection,
+			resourceId: ctx.data?.id ? String(ctx.data.id) : null,
+			resourceLabel,
+			userId: actor.userId,
+			userName: actor.userName,
+			locale: ctx.locale || null,
+			changes: {
+				stage: { from: ctx.fromStage, to: ctx.toStage },
+			},
+			metadata: buildAuditMetadata(ctx, actor, {
+				fromStage: ctx.fromStage,
+				toStage: ctx.toStage,
+			}),
+			title: generateTitle(
+				"transition",
+				"collection",
+				resourceTypeLabel,
 				resourceLabel,
-				userId: actor.userId,
-				userName: actor.userName,
-				locale: ctx.locale || null,
-				changes: {
-					stage: { from: ctx.fromStage, to: ctx.toStage },
-				},
-				metadata: buildAuditMetadata(ctx, actor, {
-					fromStage: ctx.fromStage,
-					toStage: ctx.toStage,
-				}),
-				title: generateTitle(
-					"transition",
-					"collection",
-					resourceTypeLabel,
-					resourceLabel,
-					actor.userName,
-				),
-			},
-			{
-				accessMode: "system",
-				db: ctx.db,
-			},
-		);
+				actor.userName,
+			),
+		});
 	} catch (err) {
 		handleAuditFailure(
 			ctx,
@@ -628,39 +631,33 @@ async function globalAfterChange(ctx: GlobalGlobalHookContext) {
 			? { ...ctx.original, ...ctx.input }
 			: ctx.data;
 
-		await auditCollection.create(
-			{
-				action: "update",
-				resourceType: "global",
-				resource: ctx.global,
-				resourceId: null,
-				resourceLabel: ctx.global,
-				userId: actor.userId,
-				userName: actor.userName,
-				locale: ctx.locale || null,
-				changes: computeChanges(
-					ctx.original,
-					current,
-					"global",
-					ctx.global,
-					ctx.app,
-				),
-				metadata: buildAuditMetadata(ctx, actor, {
-					operation: "update",
-				}),
-				title: generateTitle(
-					"update",
-					"global",
-					resourceTypeLabel,
-					ctx.global,
-					actor.userName,
-				),
-			},
-			{
-				accessMode: "system",
-				db: ctx.db,
-			},
-		);
+		await persistAuditEvent(ctx, auditCollection, {
+			action: "update",
+			resourceType: "global",
+			resource: ctx.global,
+			resourceId: null,
+			resourceLabel: ctx.global,
+			userId: actor.userId,
+			userName: actor.userName,
+			locale: ctx.locale || null,
+			changes: computeChanges(
+				ctx.original,
+				current,
+				"global",
+				ctx.global,
+				ctx.app,
+			),
+			metadata: buildAuditMetadata(ctx, actor, {
+				operation: "update",
+			}),
+			title: generateTitle(
+				"update",
+				"global",
+				resourceTypeLabel,
+				ctx.global,
+				actor.userName,
+			),
+		});
 	} catch (err) {
 		handleAuditFailure(
 			ctx,
@@ -680,36 +677,30 @@ async function globalAfterTransition(ctx: GlobalGlobalTransitionHookContext) {
 		const actor = resolveAuditActor(ctx);
 		const resourceTypeLabel = getResourceTypeLabel("global", ctx.global);
 
-		await auditCollection.create(
-			{
-				action: "transition",
-				resourceType: "global",
-				resource: ctx.global,
-				resourceId: null,
-				resourceLabel: ctx.global,
-				userId: actor.userId,
-				userName: actor.userName,
-				locale: ctx.locale || null,
-				changes: {
-					stage: { from: ctx.fromStage, to: ctx.toStage },
-				},
-				metadata: buildAuditMetadata(ctx, actor, {
-					fromStage: ctx.fromStage,
-					toStage: ctx.toStage,
-				}),
-				title: generateTitle(
-					"transition",
-					"global",
-					resourceTypeLabel,
-					ctx.global,
-					actor.userName,
-				),
+		await persistAuditEvent(ctx, auditCollection, {
+			action: "transition",
+			resourceType: "global",
+			resource: ctx.global,
+			resourceId: null,
+			resourceLabel: ctx.global,
+			userId: actor.userId,
+			userName: actor.userName,
+			locale: ctx.locale || null,
+			changes: {
+				stage: { from: ctx.fromStage, to: ctx.toStage },
 			},
-			{
-				accessMode: "system",
-				db: ctx.db,
-			},
-		);
+			metadata: buildAuditMetadata(ctx, actor, {
+				fromStage: ctx.fromStage,
+				toStage: ctx.toStage,
+			}),
+			title: generateTitle(
+				"transition",
+				"global",
+				resourceTypeLabel,
+				ctx.global,
+				actor.userName,
+			),
+		});
 	} catch (err) {
 		handleAuditFailure(
 			ctx,

@@ -27,8 +27,22 @@ export interface CanonicalAuditEvent {
 	metadata: Record<string, unknown> | null;
 }
 
+export interface AuditSink {
+	/** Append one canonical event. Existing events are never updated through this contract. */
+	append(event: CanonicalAuditEvent): void | Promise<void>;
+}
+
+export interface AuditRetentionPolicy {
+	/** Number of days to retain events. `null` disables destructive cleanup. */
+	days: number | null;
+	/** Return true when an expired event must be preserved. */
+	legalHold?: (event: CanonicalAuditEvent) => boolean | Promise<boolean>;
+}
+
 export interface AuditPolicy {
 	delivery?: AuditDeliveryMode;
+	retention?: AuditRetentionPolicy;
+	sink?: AuditSink;
 }
 
 /** Flat shape persisted by the backwards-compatible audit collection. */

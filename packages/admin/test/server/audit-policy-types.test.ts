@@ -29,12 +29,17 @@ describe("audit policy types", () => {
 			"redact",
 			"omit",
 		] as const satisfies readonly AuditFieldPolicy[];
-		const policy = { delivery: "required" } as const satisfies AuditPolicy;
+		const policy = {
+			delivery: "required",
+			retention: { days: null },
+			sink: { append: async (_event: CanonicalAuditEvent) => {} },
+		} as const satisfies AuditPolicy;
 		const extension =
 			auditPlugin.targets?.server?.registries?.fieldExtensions?.audit;
 
 		expect(values).toEqual(["include", "redact", "omit"]);
 		expect(policy.delivery).toBe("required");
+		expect(policy.retention.days).toBeNull();
 		expect(extension?.stateKey).toBe("audit");
 		expect(extension?.configType).toContain("AuditFieldPolicy");
 

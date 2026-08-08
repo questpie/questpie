@@ -449,4 +449,102 @@ describe("audit policy contract", () => {
 			actor: { type: "system", id: expect.any(String) },
 		});
 	});
+
+	it("fails the mutation when the required append-only sink fails", async () => {
+		await setup.cleanup();
+		setup = await buildMockApp({
+			collections: { policyRecords },
+			modules: [
+				auditModuleWith({
+					delivery: "required",
+					sink: {
+						append: () => {
+							throw new Error("audit sink unavailable");
+						},
+					},
+				}) as any,
+			],
+			defaultAccess: { read: true, create: true, update: true, delete: true },
+		});
+		await runTestDbMigrations(setup.app);
+		const ctx = createTestContext({ accessMode: "system" });
+
+		await expect(
+			setup.app.collections.policyRecords.create(
+				{ id: "required-sink-failure", title: "Must roll back" },
+				ctx,
+			),
+		).rejects.toThrow("audit sink unavailable");
+		expect(
+			await setup.app.collections.policyRecords.findOne(
+				{ where: { id: "required-sink-failure" } },
+				ctx,
+			),
+		).toBeNull();
+	});
+
+	it("keeps the mutation observable when the best-effort sink fails", async () => {
+		await setup.cleanup();
+		setup = await buildMockApp({
+			collections: { policyRecords },
+			modules: [
+				auditModuleWith({
+					sink: {
+						append: () => {
+							throw new Error("audit sink unavailable");
+						},
+					},
+				}) as any,
+			],
+			defaultAccess: { read: true, create: true, update: true, delete: true },
+		});
+		await runTestDbMigrations(setup.app);
+		const ctx = createTestContext({ accessMode: "system" });
+
+		const record = await setup.app.collections.policyRecords.create(
+			{ id: "best-effort-sink-failure", title: "Still commits" },
+			ctx,
+		);
+
+		expect(record.id).toBe("best-effort-sink-failure");
+		expect((ctx.logger as any).getLogsByLevel("error")[0]).toMatchObject({
+			args: [
+				expect.objectContaining({
+					error: expect.objectContaining({
+						message: "audit sink unavailable",
+					}),
+				}),
+			],
+		});
+	});
+
+	it("applies delivery policy to cleanup failures", async () => {
+		const cleanupError = new Error("audit cleanup unavailable");
+		const failingDb = { execute: async () => Promise.reject(cleanupError) };
+		const errors: unknown[] = [];
+
+		await auditCleanupJob.handler({
+			payload: {},
+			db: failingDb,
+			logger: { error: (...args: unknown[]) => errors.push(args) },
+			app: {
+				state: {
+					audit: { retention: { days: 90 }, delivery: "best-effort" },
+				},
+			},
+		} as any);
+		expect(errors).toHaveLength(1);
+
+		await expect(
+			auditCleanupJob.handler({
+				payload: {},
+				db: failingDb,
+				app: {
+					state: {
+						audit: { retention: { days: 90 }, delivery: "required" },
+					},
+				},
+			} as any),
+		).rejects.toThrow("audit cleanup unavailable");
+	});
 });
