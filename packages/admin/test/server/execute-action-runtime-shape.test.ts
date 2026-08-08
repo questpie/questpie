@@ -1,4 +1,4 @@
-import { describe, expect, it, spyOn } from "bun:test";
+import { describe, expect, it } from "bun:test";
 
 import { tryGetContext } from "questpie";
 import { z } from "zod";
@@ -117,9 +117,14 @@ describe("admin execute action runtime shape", () => {
 
 	it("lets a custom action preserve the expected revision at its generated CRUD mutation", async () => {
 		let mutated = false;
-		const errorLog = spyOn(console, "error").mockImplementation(() => {});
+		const errorLogs: Array<{ message: string; error: unknown }> = [];
 		const app = {
 			state: {},
+			logger: {
+				error: (message: string, error: unknown) => {
+					errorLogs.push({ message, error });
+				},
+			},
 			collections: {
 				posts: {
 					updateById: async (params: Record<string, unknown>) => {
@@ -168,6 +173,12 @@ describe("admin execute action runtime shape", () => {
 		});
 		expect(stale.success).toBe(false);
 		expect(mutated).toBe(false);
+		expect(errorLogs).toHaveLength(1);
+		expect(errorLogs[0]?.message).toBe('Action "publish" failed:');
+		expect(errorLogs[0]?.error).toMatchObject({
+			message: "Optimistic lock conflict",
+			code: "CONFLICT",
+		});
 
 		const current = await executeAction(app as any, {
 			collection: "posts",
@@ -177,7 +188,7 @@ describe("admin execute action runtime shape", () => {
 		});
 		expect(current.success).toBe(true);
 		expect(mutated).toBe(true);
-		errorLog.mockRestore();
+		expect(errorLogs).toHaveLength(1);
 	});
 
 	it("forwards optimistic-concurrency inputs through every built-in mutation", async () => {
