@@ -813,10 +813,12 @@ async function createAppFromDefinition(
 		try {
 			await instance.destroy();
 		} catch (cleanupError) {
-			throw new AggregateError(
+			const rollbackError = new AggregateError(
 				[error, cleanupError],
 				"QUESTPIE app initialization and rollback both failed",
+				{ cause: cleanupError },
 			);
+			throw rollbackError;
 		}
 		throw error;
 	}

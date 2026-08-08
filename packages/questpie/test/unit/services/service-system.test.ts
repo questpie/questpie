@@ -323,7 +323,7 @@ describe("service system", () => {
 				await Promise.resolve();
 				events.push("second:dispose:end");
 			});
-		const { app, cleanup } = await createServiceApp({ first, second });
+		const { cleanup } = await createServiceApp({ first, second });
 		await cleanup();
 
 		expect(events).toEqual([

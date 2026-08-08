@@ -15,7 +15,6 @@ import type {
 	SeedCategory,
 	SeedContext,
 	SeedRecord,
-	SeedStepContext,
 	SeedStatus,
 	SimpleSeed,
 	StepSeed,
