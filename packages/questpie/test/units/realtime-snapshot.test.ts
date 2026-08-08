@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
+import { collection } from "../../src/exports/index.js";
 import { PRECHECKED_READ_ACCESS } from "../../src/server/collection/crud/shared/access-control.js";
 import {
 	captureRealtimeWatermark,
@@ -7,6 +8,9 @@ import {
 	hydrateRealtimeRow,
 	hydrateRealtimeRows,
 } from "../../src/server/modules/core/integrated/realtime/snapshot.js";
+import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
+import { createTestContext } from "../utils/test-context.js";
+import { runTestDbMigrations } from "../utils/test-db.js";
 
 describe("computeRealtimeSnapshot", () => {
 	it("captures the xid8 visibility watermark before snapshot computation", async () => {
@@ -113,6 +117,51 @@ describe("computeRealtimeSnapshot", () => {
 		expect(small).toBe(1);
 		expect(large).toBe(10_000);
 		expect(JSON.stringify(large).length).toBeLessThan(16);
+	});
+
+	it("reuses the authorized topic predicate for collection count snapshots", async () => {
+		let readAccessCalls = 0;
+		const documents = collection("realtime_count_documents")
+			.fields(({ f }) => ({
+				tenantId: f.text().required(),
+			}))
+			.access({
+				read: () => {
+					readAccessCalls += 1;
+					return { tenantId: "tenant-1" };
+				},
+			});
+		const setup = await buildMockApp({
+			collections: { realtime_count_documents: documents },
+		});
+
+		try {
+			await runTestDbMigrations(setup.app);
+			const systemContext = createTestContext({ accessMode: "system" });
+			await setup.app.collections.realtime_count_documents.create(
+				{ id: crypto.randomUUID(), tenantId: "tenant-1" },
+				systemContext,
+			);
+			await setup.app.collections.realtime_count_documents.create(
+				{ id: crypto.randomUUID(), tenantId: "tenant-2" },
+				systemContext,
+			);
+
+			await expect(
+				computeRealtimeSnapshot(
+					{
+						type: "collection",
+						operation: "count",
+						crud: setup.app.collections.realtime_count_documents,
+						accessWhere: { tenantId: "tenant-1" },
+					},
+					createTestContext({ role: "user" }),
+				),
+			).resolves.toBe(1);
+			expect(readAccessCalls).toBe(0);
+		} finally {
+			await setup.cleanup();
+		}
 	});
 
 	it("runs collection gets through findOne", async () => {

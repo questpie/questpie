@@ -1468,13 +1468,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const db = this.getDb(context);
 			const normalized = this.normalizeContext(context);
 
-			// Enforce access control
-			const accessWhere = await this.enforceAccessControl(
-				"read",
-				normalized,
-				null,
-				options,
-			);
+			// Enforce access control unless the caller already resolved it.
+			const precheckedAccess = (options as Record<PropertyKey, unknown>)[
+				PRECHECKED_READ_ACCESS
+			] as AccessWhere | true | undefined;
+			const accessWhere =
+				precheckedAccess ??
+				(await this.enforceAccessControl("read", normalized, null, options));
 
 			// Access explicitly denied
 			if (accessWhere === false) {
