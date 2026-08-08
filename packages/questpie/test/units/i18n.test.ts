@@ -12,7 +12,7 @@ import type { TranslationsConfig } from "../../src/server/i18n/types.js";
 import {
 	createZodErrorMap,
 	type ZodIssue,
-} from "../../src/server/i18n/zod-error-map.js";
+} from "../../src/shared/i18n/index.js";
 
 describe("i18n", () => {
 	describe("createTranslator", () => {
