@@ -1,0 +1,306 @@
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+
+import { collection } from "questpie";
+import { createFetchHandler } from "questpie/http";
+
+import { buildMockApp } from "../../../questpie/test/utils/mocks/mock-app-builder";
+import { createTestContext } from "../../../questpie/test/utils/test-context";
+import { runTestDbMigrations } from "../../../questpie/test/utils/test-db";
+import {
+	AUDIT_LOG_COLLECTION,
+	auditModule,
+} from "../../src/server/modules/audit/index.js";
+import { auditCleanupJob } from "../../src/server/modules/audit/jobs/audit-cleanup.js";
+
+const REDACTED_VALUE = "[REDACTED]";
+
+const policyRecords = collection("policy_records").fields(({ f }) => ({
+	title: f.text().required().set("audit", "include"),
+	privateNote: f.text().set("audit", "redact"),
+	internalMemo: f.text().set("audit", "omit"),
+	password: f.text(),
+	accessToken: f.text(),
+}));
+
+type AuditPolicy = {
+	delivery?: "best-effort" | "required";
+	retention?: { days: number | null; legalHold?: (event: unknown) => boolean };
+	sink?: { append: (event: unknown) => Promise<void> | void };
+};
+
+function auditModuleWith(policy: AuditPolicy) {
+	return {
+		...auditModule,
+		config: {
+			...auditModule.config,
+			audit: policy,
+		},
+	};
+}
+
+describe("audit policy contract", () => {
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
+
+	beforeEach(async () => {
+		setup = await buildMockApp({
+			collections: { policyRecords },
+			modules: [auditModule],
+			defaultAccess: { read: true, create: true, update: true, delete: true },
+		});
+		await runTestDbMigrations(setup.app);
+	});
+
+	afterEach(async () => {
+		await setup.cleanup();
+	});
+
+	it("UC-AUD-001 F04 denies anonymous reads of the audit collection by default", async () => {
+		const handler = createFetchHandler(setup.app, { basePath: "/api" });
+		const response = await handler(
+			new Request(`http://localhost/api/${AUDIT_LOG_COLLECTION}`),
+		);
+
+		expect(response.status).toBe(403);
+	});
+
+	it("UC-AUD-002 F05 includes, redacts, and omits classified field values and credential defaults", async () => {
+		const systemCtx = createTestContext({ accessMode: "system" });
+		const record = await setup.app.collections.policyRecords.create(
+			{
+				title: "Before",
+				privateNote: "old-private",
+				internalMemo: "old-internal",
+				password: "old-password",
+				accessToken: "old-token",
+			},
+			systemCtx,
+		);
+		const authenticated = createTestContext({
+			accessMode: "user",
+			session: {
+				user: { id: "auditor-1", name: "Audit Tester" },
+				session: { id: "audit-session-1" },
+			} as any,
+		});
+		await setup.app.collections.policyRecords.updateById(
+			{
+				id: record.id,
+				data: {
+					title: "After",
+					privateNote: "new-private",
+					internalMemo: "new-internal",
+					password: "new-password",
+					accessToken: "new-token",
+				},
+			},
+			authenticated,
+		);
+
+		const logs = await setup.app.collections[AUDIT_LOG_COLLECTION].find(
+			{
+				where: {
+					resource: "policyRecords",
+					resourceId: record.id,
+					action: "update",
+				},
+			},
+			systemCtx,
+		);
+		const changes = logs.docs[0]?.changes;
+
+		expect(changes).toMatchObject({
+			title: { from: "Before", to: "After" },
+			privateNote: { from: REDACTED_VALUE, to: REDACTED_VALUE },
+		});
+		expect(changes).not.toHaveProperty("internalMemo");
+		expect(changes).not.toHaveProperty("password");
+		expect(changes).not.toHaveProperty("accessToken");
+	});
+
+	it("UC-AUD-003 F06 rolls back a protected mutation when required audit delivery fails", async () => {
+		await setup.cleanup();
+		setup = await buildMockApp({
+			collections: { policyRecords },
+			modules: [auditModuleWith({ delivery: "required" }) as any],
+			defaultAccess: { read: true, create: true, update: true, delete: true },
+		});
+		await runTestDbMigrations(setup.app);
+
+		const auditCollection = setup.app.collections[AUDIT_LOG_COLLECTION];
+		const originalCreate = auditCollection.create.bind(auditCollection);
+		auditCollection.create = async () => {
+			throw new Error("audit store unavailable");
+		};
+		const ctx = createTestContext({ accessMode: "system" });
+
+		let mutationError: unknown;
+		try {
+			await setup.app.collections.policyRecords.create(
+				{ id: "required-failure", title: "Must roll back" },
+				ctx,
+			);
+		} catch (error) {
+			mutationError = error;
+		} finally {
+			auditCollection.create = originalCreate;
+		}
+
+		expect(mutationError).toBeInstanceOf(Error);
+		expect(String(mutationError)).toContain("audit store unavailable");
+		expect(
+			await setup.app.collections.policyRecords.findById(
+				{ id: "required-failure" },
+				ctx,
+			),
+		).toBeNull();
+	});
+
+	it("UC-AUD-003 F07 commits and emits a structured error when best-effort audit delivery fails", async () => {
+		const auditCollection = setup.app.collections[AUDIT_LOG_COLLECTION];
+		auditCollection.create = async () => {
+			throw new Error("audit store unavailable");
+		};
+		const ctx = createTestContext({ accessMode: "system" });
+
+		const record = await setup.app.collections.policyRecords.create(
+			{ id: "best-effort-failure", title: "Still commits" },
+			ctx,
+		);
+
+		expect(record.id).toBe("best-effort-failure");
+		const failure = (ctx.logger as any).getLogsByLevel("error")[0];
+		expect(failure).toMatchObject({
+			level: "error",
+			message: expect.stringContaining("Failed to log create"),
+		});
+		expect(failure.args[0]).toMatchObject({
+			error: expect.objectContaining({
+				message: "audit store unavailable",
+			}),
+			operation: "create",
+			resource: "policyRecords",
+		});
+	});
+
+	it("UC-AUD-004 emits stable event, actor, outcome, and correlation metadata", async () => {
+		const ctx = createTestContext({
+			accessMode: "system",
+			requestId: "req-audit-1",
+			traceId: "trace-audit-1",
+			workload: { type: "job", id: "retention-worker" },
+		} as any);
+		const record = await setup.app.collections.policyRecords.create(
+			{ title: "Correlated" },
+			ctx,
+		);
+
+		const logs = await setup.app.collections[AUDIT_LOG_COLLECTION].find(
+			{ where: { resource: "policyRecords", resourceId: record.id } },
+			ctx,
+		);
+		const event = logs.docs[0];
+
+		expect(event.id).toEqual(expect.any(String));
+		expect(event.createdAt).toBeInstanceOf(Date);
+		expect(event.metadata).toMatchObject({
+			outcome: "succeeded",
+			actorType: "system",
+			actorId: "retention-worker",
+			actorName: "retention-worker",
+			requestId: "req-audit-1",
+			traceId: "trace-audit-1",
+		});
+	});
+
+	it("UC-AUD-005 F08 skips destructive cleanup when retention is disabled", async () => {
+		let deleteCalls = 0;
+		await auditCleanupJob.handler({
+			payload: { retentionDays: 90 },
+			db: { execute: async () => (deleteCalls++, { rowCount: 1 }) },
+			app: { state: { audit: { retention: { days: null } } } },
+		} as any);
+
+		expect(deleteCalls).toBe(0);
+	});
+
+	it("UC-AUD-005 F08 preserves audit events selected by legal hold", async () => {
+		const expiredEvents = [
+			{ id: "held-event", metadata: { caseId: "legal-case-1" } },
+			{ id: "expired-event", metadata: null },
+		];
+		const evaluatedIds: string[] = [];
+		const executedStatements: unknown[] = [];
+		await auditCleanupJob.handler({
+			payload: { retentionDays: 90 },
+			db: {
+				execute: async (statement: unknown) => {
+					executedStatements.push(statement);
+					return executedStatements.length === 1
+						? { rows: expiredEvents }
+						: { rowCount: 1 };
+				},
+			},
+			app: {
+				state: {
+					audit: {
+						retention: {
+							days: 90,
+							legalHold: (event: { id: string }) => {
+								evaluatedIds.push(event.id);
+								return event.id === "held-event";
+							},
+						},
+					},
+				},
+			},
+		} as any);
+
+		expect(evaluatedIds).toEqual(["held-event", "expired-event"]);
+		expect(executedStatements).toHaveLength(2);
+		const deleteStatement = JSON.stringify(executedStatements[1]);
+		expect(deleteStatement).toContain("expired-event");
+		expect(deleteStatement).not.toContain("held-event");
+	});
+
+	it("UC-AUD-005 F08 delivers one canonical append-only event to the configured sink", async () => {
+		const delivered: unknown[] = [];
+		await setup.cleanup();
+		setup = await buildMockApp({
+			collections: { policyRecords },
+			modules: [
+				auditModuleWith({
+					sink: { append: (event) => delivered.push(event) },
+				}) as any,
+			],
+			defaultAccess: { read: true, create: true, update: true, delete: true },
+		});
+		await runTestDbMigrations(setup.app);
+
+		const ctx = createTestContext({ accessMode: "system" });
+		await setup.app.collections.policyRecords.create(
+			{ id: "sink-event", title: "Export me" },
+			ctx,
+		);
+		const stored = (
+			await setup.app.collections[AUDIT_LOG_COLLECTION].find(
+				{ where: { resource: "policyRecords", resourceId: "sink-event" } },
+				ctx,
+			)
+		).docs[0];
+
+		expect(delivered).toHaveLength(1);
+		expect(stored).toBeDefined();
+		expect(delivered[0]).toMatchObject({
+			id: stored.id,
+			timestamp: stored.createdAt.toISOString(),
+			outcome: "succeeded",
+			action: "create",
+			resource: {
+				type: "collection",
+				name: "policyRecords",
+				id: "sink-event",
+			},
+			actor: { type: "system", id: expect.any(String) },
+		});
+	});
+});
