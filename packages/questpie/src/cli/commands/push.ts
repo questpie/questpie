@@ -1,6 +1,9 @@
 import { existsSync } from "node:fs";
 
+import { sql } from "drizzle-orm";
+
 import { toKitDb } from "../../server/db/driver-result.js";
+import type { MigrationDb } from "../../server/migration/types.js";
 import { loadQuestpieConfig } from "../config.js";
 import { resolveCliPath } from "../utils.js";
 import { assertPushStatementsSafe, computePushEntities } from "./push-scope.js";
@@ -10,6 +13,18 @@ export type PushOptions = {
 	force?: boolean;
 	verbose?: boolean;
 };
+
+/** Apply one analyzed schema diff as a single PostgreSQL transaction. */
+export async function applyPushStatementsAtomically(
+	db: MigrationDb,
+	statements: readonly string[],
+): Promise<void> {
+	await db.transaction(async (tx) => {
+		for (const statement of statements) {
+			await tx.execute(sql.raw(statement));
+		}
+	});
+}
 
 /**
  * Push schema directly to database (dev only)
@@ -126,7 +141,10 @@ export async function pushCommand(options: PushOptions): Promise<void> {
 
 		// Execute statements
 		console.log("⏳ Applying changes...");
-		await result.apply();
+		// drizzle-kit's result.apply() executes statements one by one. A late DDL
+		// failure would therefore leave an unknown prefix committed. PostgreSQL DDL
+		// is transactional, so keep the analyzed diff all-or-nothing instead.
+		await applyPushStatementsAtomically(app.db, result.sqlStatements);
 		console.log("\n✅ Schema pushed successfully!");
 	} finally {
 		// Release adapter handles (db pool, search, queue, realtime, …) so the
