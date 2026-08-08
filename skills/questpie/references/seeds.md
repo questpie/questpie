@@ -9,6 +9,10 @@ This skill builds on questpie-core.
 
 # Seeds
 
+Human docs: [Seeds](https://questpie.com/docs/schema/seeds),
+[checkpointed seeds](https://questpie.com/docs/schema/seeds/steps), and
+[running seeds](https://questpie.com/docs/schema/seeds/running).
+
 Seeds write app **data** through the same typed context as routes/hooks/jobs (`collections`, `globals`, `db`, `services`, `email`, `queue`, `storage`, `kv`). Migrations change schema; seeds create rows (first admin, default roles, baseline settings, demo/test fixtures). Drop a file in `seeds/` with a default `export default seed({...})` (from `"questpie"`), run `questpie generate`, then `questpie seed`.
 
 Seeds run in **system mode** by default (bypass access rules, so bootstrap data can be created before any user exists). Completed seeds are recorded in `questpie_seeds` and skipped on later runs unless `--force`.
@@ -70,7 +74,12 @@ Every seed has one `category`: `required` (bootstrap data for every env), `dev` 
 
 ## SeedContext
 
-`SeedContext` = full `AppContext` plus `log(message)` and `createContext(options?)`. Seeds run in system mode; use `createContext({ locale, accessMode })` when a CRUD call needs a specific locale (localized globals/collections) or to re-enable access rules.
+`SeedContext` = full `AppContext` plus `log(message)` and `createContext(options?)`.
+The runner owns its request-service scope and disposes it after the seed. The
+injected `createContext({ locale, accessMode })` returns a lean `RequestContext`
+for CRUD calls; it is not the generated standalone context and needs no
+`await using`. Seeds run in system mode. Pass the lean context when a CRUD call
+needs a locale or must re-enable access rules.
 
 ## autoSeed
 

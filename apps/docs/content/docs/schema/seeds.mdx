@@ -37,10 +37,9 @@ every module in it. `category` is required, `description` is not.
 
 `run` receives the whole app context. The same `collections`, `globals`, `db`,
 `services`, `queue`, `email`, `storage` and `kv` a route or a job gets, plus
-`log` for a line of CLI output and `createContext` for a request context of your
-own.
-
-`questpie add seed site-settings` scaffolds the file and runs codegen for you.
+`log` for CLI output. The runner owns the request-service scope and closes it
+after the seed. Its injected `createContext()` returns a lean context for CRUD
+calls, not a standalone context, so it needs no `await using`.
 
 ### It runs as the system
 
@@ -197,3 +196,4 @@ operations from code.
 - **[Modules](/docs/code/modules)** for shipping seeds in a package. Seed arrays
   concatenate, which is why ids have to be unique.
 - **[Codegen](/docs/code/codegen)** for how `seeds/` is discovered.
+- [Agent seed reference](https://github.com/questpie/questpie/blob/main/skills/questpie/references/seeds.md) for the shipped skill contract.

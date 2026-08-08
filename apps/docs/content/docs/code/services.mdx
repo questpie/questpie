@@ -108,17 +108,6 @@ export default service({
 `kv`, `logger`, `search`, `realtime`, `t` and `app`. Your own services sit
 where their `namespace` puts them. The default bucket is `ctx.services`.
 
-## Two ways to write it
-
-Both forms build the same state, and each chained method returns a new builder.
-
-```ts
-service({ lifecycle: "singleton", create: (ctx) => new Cache(ctx) });
-service()
-	.lifecycle("singleton")
-	.create((ctx) => new Cache(ctx));
-```
-
 ## Lifecycle
 
 `lifecycle` decides how often `create` runs. Leave it out and you get
@@ -137,11 +126,11 @@ service()
 
 ## dispose
 
-For singleton services, `dispose(instance)` runs on `app.destroy()`. Request
-service disposers run when their HTTP request, job attempt or top-level
-programmatic operation ends. Use it to close what you opened. The
-tanstack-start starter wires app shutdown to `SIGINT` and `SIGTERM`. On the
-other starters, call `destroyApp()` from `#questpie` yourself.
+For singleton services, `dispose(instance)` runs on `app.destroy()`. The
+framework closes request services after their HTTP request, queue attempt, seed
+or top-level operation. Standalone generated contexts own their scope; the
+[lifecycle reference](/docs/code/services/lifecycles) shows the required
+`await using` form. Use `dispose` to close what `create` opened.
 
 ```ts title="src/questpie/server/services/redis.ts"
 import { service } from "questpie/services";

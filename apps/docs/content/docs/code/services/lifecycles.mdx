@@ -97,14 +97,28 @@ returning a promise throws.
 
 ### Disposal
 
-`dispose` runs in reverse creation order when the request or job attempt ends,
-including error paths. For a raw response it runs after the body closes, errors
+`dispose` runs in reverse creation order when the framework-owned scope ends,
+including error paths. That boundary is an HTTP request, queue attempt, seed or
+top-level operation. A raw response keeps it open until the body closes, errors
 or is cancelled.
 
-Standalone generated contexts are async-disposable. Use `await using` when the
-context resolves request services:
+### Who owns the scope
+
+Three APIs create objects called context. They do not own the same resources.
+
+| API                                                   | Result                       | Cleanup       |
+| ----------------------------------------------------- | ---------------------------- | ------------- |
+| Handler, hook, job or seed argument                   | Framework context            | Automatic     |
+| `app.createContext()`                                 | Lean CRUD `RequestContext`   | None          |
+| Seed handler's injected `createContext()`             | Lean CRUD `RequestContext`   | None          |
+| Generated `createContext()` imported from `#questpie` | Rich standalone `AppContext` | `await using` |
+
+The generated standalone context owns a request-service scope. Declare it with
+`await using`, even when the script currently reads only collections:
 
 ```ts
+import { createContext } from "#questpie";
+
 await using ctx = await createContext();
 await ctx.services.audit.record("import-started");
 ```
@@ -211,3 +225,5 @@ factory body and into a method.
   instead of writing.
 - [Hooks](/docs/schema/hooks), one of the places a fresh handler context gets
   built.
+- [Agent service reference](https://github.com/questpie/questpie/blob/main/skills/questpie/references/business-logic.md),
+  the same contract in the shipped skill.

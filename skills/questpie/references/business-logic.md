@@ -7,6 +7,9 @@ description:
 
 # QUESTPIE Business Logic - Routes, Jobs, Services, Emails
 
+Human docs: [Services](https://questpie.com/docs/code/services) and
+[service lifecycles](https://questpie.com/docs/code/services/lifecycles).
+
 This skill builds on questpie-core. It covers four business-logic primitives: routes (JSON and raw HTTP), jobs (background tasks), services (reusable logic), and emails (templates).
 
 ## Contents

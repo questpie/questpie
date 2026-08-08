@@ -3855,6 +3855,9 @@ Do not use `accessMode: "system"` to serve preview data. Preview requests should
 
 # QUESTPIE Business Logic - Routes, Jobs, Services, Emails
 
+Human docs: [Services](https://questpie.com/docs/code/services) and
+[service lifecycles](https://questpie.com/docs/code/services/lifecycles).
+
 This skill builds on questpie-core. It covers four business-logic primitives: routes (JSON and raw HTTP), jobs (background tasks), services (reusable logic), and emails (templates).
 
 ## Contents
@@ -4533,6 +4536,9 @@ export default email({
 
 # AppContext, What's Available Everywhere
 
+Human docs: [Context](https://questpie.com/docs/code/context) and
+[service lifecycles](https://questpie.com/docs/code/services/lifecycles).
+
 Every hook, route handler, job handler, and service receives `AppContext`, the core runtime interface.
 
 ```ts
@@ -4564,24 +4570,28 @@ interface AppContext {
 | Email templates                                                                         | Destructure: `async ({ input, collections }) => { ... }`                                                                                      |
 | Access rules                                                                            | Destructure: `({ session, data }) => boolean`                                                                                                 |
 | Seeds                                                                                   | `async ({ collections, log }) => { ... }`                                                                                                     |
-| Services                                                                                | `create: ({ app }) => ...` (app instance only, not full context)                                                                              |
+| Services                                                                                | `create: (ctx) => ...`; request services see the caller, singletons start without one                                                         |
 | Better Auth callbacks (`onLinkAccount`, `databaseHooks`, `sendMagicLink`, plugin hooks) | `getContext<App>()`, `/auth/*` is a raw route executed inside `runWithContext`, so the request scope is live there (see `references/auth.md`) |
 
 ## Getting Context Programmatically
 
 ```ts
+import { app, createContext } from "#questpie";
+import type { App } from "#questpie";
 import { getContext, tryGetContext } from "questpie/types";
-import type { App } from "#questpie"; // type-only, no runtime cycle
 
-const ctx = getContext<App>(); // typed app/session/extensions; throws outside a request scope
-const maybe = tryGetContext(); // returns null if outside scope
+const ambient = getContext<App>(); // typed app/session/extensions; throws outside a request scope
+const maybe = tryGetContext(); // returns undefined outside a request scope
 
-// Create a fresh context manually:
-const fresh = await app.createContext({
+// Create a lean RequestContext for CRUD overrides:
+const requestContext = await app.createContext({
 	session: null,
 	locale: "en",
 	accessMode: "system",
 });
+
+// Create a rich standalone AppContext with services:
+await using standalone = await createContext({ accessMode: "system" });
 ```
 
 **Partial context overrides:** the second argument of every CRUD call merges with the ambient request scope (priority: explicit param → ALS scope → defaults). A bare `{ accessMode: "system" }` elevates **only** the mode, `session`, `db`, and `locale` inherit from the request automatically. The inverse works too: `{ accessMode: "user" }` inside system-scoped code re-enables access rules against the inherited session. Never re-thread session/locale by hand:
@@ -5894,6 +5904,10 @@ Note: `updateById()`/`updateMany()` DO use `{ id/where, data }` -- only `create(
 
 # Seeds
 
+Human docs: [Seeds](https://questpie.com/docs/schema/seeds),
+[checkpointed seeds](https://questpie.com/docs/schema/seeds/steps), and
+[running seeds](https://questpie.com/docs/schema/seeds/running).
+
 Seeds write app **data** through the same typed context as routes/hooks/jobs (`collections`, `globals`, `db`, `services`, `email`, `queue`, `storage`, `kv`). Migrations change schema; seeds create rows (first admin, default roles, baseline settings, demo/test fixtures). Drop a file in `seeds/` with a default `export default seed({...})` (from `"questpie"`), run `questpie generate`, then `questpie seed`.
 
 Seeds run in **system mode** by default (bypass access rules, so bootstrap data can be created before any user exists). Completed seeds are recorded in `questpie_seeds` and skipped on later runs unless `--force`.
@@ -5955,7 +5969,12 @@ Every seed has one `category`: `required` (bootstrap data for every env), `dev` 
 
 ## SeedContext
 
-`SeedContext` = full `AppContext` plus `log(message)` and `createContext(options?)`. Seeds run in system mode; use `createContext({ locale, accessMode })` when a CRUD call needs a specific locale (localized globals/collections) or to re-enable access rules.
+`SeedContext` = full `AppContext` plus `log(message)` and `createContext(options?)`.
+The runner owns its request-service scope and disposes it after the seed. The
+injected `createContext({ locale, accessMode })` returns a lean `RequestContext`
+for CRUD calls; it is not the generated standalone context and needs no
+`await using`. Seeds run in system mode. Pass the lean context when a CRUD call
+needs a locale or must re-enable access rules.
 
 ## autoSeed
 
