@@ -4,39 +4,19 @@
 
 FROM oven/bun:1.3.14-alpine AS base
 
-# Prune stage - create minimal workspace for docs app
-FROM base AS pruner
-WORKDIR /app
-
-# Install turbo globally
-RUN bun add -g turbo@2.7.3
-
-# Copy repo structure
-COPY . .
-
-# Prune the workspace to only include docs app and its dependencies
-RUN turbo prune @questpie/docs --docker
-
 # Build stage
 FROM base AS builder
 WORKDIR /app
 
-# Copy pruned workspace (only what's needed for docs)
-COPY --from=pruner /app/out/json/ .
-COPY --from=pruner /app/out/bun.lock ./bun.lock
+# Keep the complete workspace so Bun can honor the committed lockfile. A
+# pruned workspace makes Bun discard that lock and re-resolve TanStack's
+# tightly-coupled packages, which can produce a build that passes CI but
+# crashes during browser hydration.
+COPY . .
 
-# Copy source code BEFORE install (needed for postinstall fumadocs-mdx)
-COPY --from=pruner /app/out/full/ .
-
-# Install dependencies
-# Note: `bun install` (not --frozen-lockfile) is intentional. `turbo prune`
-# leaves bun.lock referencing workspaces that are no longer in the pruned
-# tree, which makes bun log `warn: Ignoring lockfile` and then re-resolve
-# from scratch. Under --frozen-lockfile the re-resolution check then fails
-# the build. Reproducibility is still protected upstream: developers commit
-# a fully-resolved lockfile from the un-pruned monorepo, and bunfig.toml's
-# `minimumReleaseAge = 259200` blocks freshly-published packages here too.
-RUN bun install
+RUN bun install --frozen-lockfile \
+	--filter @questpie/docs \
+	--filter @questpie/vite-plugin-iconify
 
 # Build workspace dependencies first (vite-plugin-iconify dist/ is gitignored)
 RUN bun run --filter @questpie/vite-plugin-iconify build
