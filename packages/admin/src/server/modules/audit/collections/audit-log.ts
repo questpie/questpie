@@ -29,7 +29,7 @@ export const AUDIT_LOG_COLLECTION = "admin_audit_log" as const;
  * Access:
  * - create/delete: system mode only
  * - update: disallowed
- * - read: allowed (for admin UI display)
+ * - read: private by default; applications must grant access explicitly
  */
 export const auditLogCollection = collection("admin_audit_log")
 	.fields(({ f }) => ({
@@ -86,7 +86,7 @@ export const auditLogCollection = collection("admin_audit_log")
 		create: false,
 		update: false,
 		delete: false,
-		read: true,
+		read: false,
 	})
 	.hooks({
 		afterRead: ({ data, locale }) => {

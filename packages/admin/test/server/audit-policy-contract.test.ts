@@ -8,6 +8,7 @@ import { createTestContext } from "../../../questpie/test/utils/test-context";
 import { runTestDbMigrations } from "../../../questpie/test/utils/test-db";
 import {
 	AUDIT_LOG_COLLECTION,
+	auditLogCollection,
 	auditModule,
 	toCanonicalAuditEvent,
 } from "../../src/server/modules/audit/index.js";
@@ -28,6 +29,15 @@ const policySettings = global("policy_settings").fields(({ f }) => ({
 	privateNote: f.text().set("audit", "redact"),
 	internalMemo: f.text().set("audit", "omit"),
 }));
+
+const authorizedAuditLog = collection("admin_audit_log")
+	.merge(auditLogCollection)
+	.access({
+		read: ({ session }) => session?.user?.id === "auditor-1",
+		create: false,
+		update: false,
+		delete: false,
+	});
 
 type AuditPolicy = {
 	delivery?: "best-effort" | "required";
@@ -96,6 +106,31 @@ describe("audit policy contract", () => {
 		);
 
 		expect(response.status).toBe(403);
+	});
+
+	it("UC-AUD-001 permits an application to grant audit reads explicitly", async () => {
+		await setup.cleanup();
+		setup = await buildMockApp({
+			collections: {
+				policyRecords,
+				admin_audit_log: authorizedAuditLog,
+			},
+			modules: [auditModule],
+			defaultAccess: { read: true, create: true, update: true, delete: true },
+		});
+		await runTestDbMigrations(setup.app);
+
+		const authenticated = createTestContext({
+			accessMode: "user",
+			session: {
+				user: { id: "auditor-1", name: "Audit Tester" },
+				session: { id: "audit-session-1" },
+			} as any,
+		});
+
+		await expect(
+			setup.app.collections[AUDIT_LOG_COLLECTION].find({}, authenticated),
+		).resolves.toMatchObject({ docs: [] });
 	});
 
 	it("UC-AUD-002 F05 includes, redacts, and omits classified field values and credential defaults", async () => {

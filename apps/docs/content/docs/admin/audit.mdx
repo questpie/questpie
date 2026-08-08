@@ -83,6 +83,12 @@ are stored, so a `Date` arrives as an ISO string and a `bigint` as a string.
 The diff leaves out `id`, `createdAt`, `updatedAt` and every key starting with
 an underscore.
 
+Fields whose names identify framework credentials are omitted by default. This
+includes passwords, passphrases, secrets, tokens, API keys, authorization
+values and cookies. You can classify any application field explicitly with
+`.audit("include")`, `.audit("redact")` or `.audit("omit")`; an explicit policy
+wins over the name-based default. Redacted values are stored as `[REDACTED]`.
+
 A global update carries no diff at all. `changes` is null on every one of them.
 You get who and when, not what.
 
@@ -123,7 +129,9 @@ entries a person needs to find.
 
 ## Reading it back
 
-The log is a collection, so query it the way you query your own.
+The log is a private collection by default. System-mode framework work can
+query it directly, but user-mode and anonymous reads are denied until your
+application grants them explicitly.
 
 ```ts
 const { docs } = await app.collections.admin_audit_log.find({
@@ -139,16 +147,10 @@ handler's base path. Each takes `limit`, which defaults to 50, and `offset`.
 Each checks the record exists first, and runs under the caller's own access
 rules.
 
-<Callout type="warn" title="The log answers an anonymous caller">
-	The collection ships `access: { read: true }`, so `GET /api/admin_audit_log`
-	needs no session. Every title, user name and diff is in there. Narrow it
-	before you ship.
-</Callout>
-
-To narrow it, redeclare the collection in your own `collections/` directory and
-merge the module's builder in. Your file wins, and the merge keeps the fields,
-indexes, hooks and admin config. `.access()` replaces the whole object, so pass
-every rule, not just `read`.
+To grant read access, redeclare the collection in your own `collections/`
+directory and merge the module's builder in. Your file wins, and the merge
+keeps the fields, indexes, hooks and admin config. `.access()` replaces the
+whole object, so pass every rule, not just `read`.
 
 ```ts title="src/questpie/server/collections/audit-log.ts"
 import { auditLogCollection } from "@questpie/admin/modules/audit";
@@ -164,6 +166,23 @@ export const auditLog = collection("admin_audit_log")
 		delete: false,
 	});
 ```
+
+The record and global audit routes use this same collection access policy and
+its field-level read rules. A rule that hides `changes` therefore hides it from
+`GET /:collection/:id/audit` and `GET /globals/:name/audit` too.
+
+## Upgrading from a public audit collection
+
+The audit collection previously shipped with `read: true`. After upgrading,
+ordinary user and anonymous reads return `403` unless you add an explicit
+override like the one above. Applications that show audit history in the admin
+UI should grant access to the appropriate role before deployment. Do not use
+`read: true` unless the complete audit trail is intentionally public.
+
+Credential-like fields are also omitted from new audit diffs by default. If an
+unfortunately named non-secret field must remain visible, classify it explicitly
+with `.audit("include")`. Existing audit rows are unchanged; migrate or purge
+historical values separately if they contain credentials.
 
 ## Where each topic lives
 
