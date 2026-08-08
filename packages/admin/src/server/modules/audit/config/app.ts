@@ -5,26 +5,87 @@ import type {
 	GlobalGlobalTransitionHookContext,
 } from "questpie";
 import { appConfig, tryGetContext } from "questpie";
+import type { RequestContextLogger } from "questpie/types";
 
 import { AUDIT_LOG_COLLECTION } from "../collections/audit-log.js";
 import { toAuditJsonSafe } from "../json-safe.js";
+import {
+	REDACTED_AUDIT_VALUE,
+	type AuditDeliveryMode,
+	type AuditFieldPolicy,
+} from "../policy.js";
+
+interface AuditApp {
+	state?: unknown;
+	collections?: unknown;
+	getCollectionConfig?: (name: string) => unknown;
+	getGlobals?: () => unknown;
+}
+
+interface AuditCollectionWriter {
+	create(
+		data: Record<string, unknown>,
+		context: { accessMode: "system"; db?: unknown },
+	): Promise<unknown>;
+}
+
+function isAuditApp(value: unknown): value is AuditApp {
+	return isRecord(value);
+}
+
+function nestedValue(value: unknown, ...keys: string[]): unknown {
+	let current = value;
+	for (const key of keys) {
+		if (!isRecord(current)) return undefined;
+		current = current[key];
+	}
+	return current;
+}
+
+function resolveAuditApp(override?: unknown): AuditApp | undefined {
+	const candidate = override ?? tryGetContext()?.app;
+	return isAuditApp(candidate) ? candidate : undefined;
+}
+
+function isAuditCollectionWriter(
+	value: unknown,
+): value is AuditCollectionWriter {
+	return isRecord(value) && typeof value.create === "function";
+}
+
+function getAuditCollection(ctx: {
+	collections?: unknown;
+	app?: unknown;
+}): AuditCollectionWriter {
+	const appCollections = isAuditApp(ctx.app) ? ctx.app.collections : undefined;
+	const collections = isRecord(ctx.collections)
+		? ctx.collections
+		: isRecord(appCollections)
+			? appCollections
+			: undefined;
+	const auditCollection = collections?.[AUDIT_LOG_COLLECTION];
+	if (!isAuditCollectionWriter(auditCollection)) {
+		throw new Error("Audit log collection is not available");
+	}
+	return auditCollection;
+}
 
 /**
  * Check if a collection/global has `audit: false` in its `.admin()` config.
  */
 function isAuditDisabled(type: "collection" | "global", name: string): boolean {
 	try {
-		const stored = tryGetContext();
-		const app = stored?.app as any;
+		const app = resolveAuditApp();
 		if (!app) return false;
 
 		if (type === "collection") {
 			const config = app.getCollectionConfig?.(name);
-			return config?.state?.admin?.audit === false;
+			return nestedValue(config, "state", "admin", "audit") === false;
 		}
 		const globals = app.getGlobals?.();
+		if (!isRecord(globals)) return false;
 		const config = globals?.[name];
-		return config?.state?.admin?.audit === false;
+		return nestedValue(config, "state", "admin", "audit") === false;
 	} catch {
 		return false;
 	}
@@ -40,9 +101,63 @@ function shouldSkipChangeField(key: string): boolean {
 	return SKIP_CHANGE_FIELDS.has(key) || key.startsWith("_");
 }
 
+function getAuditDelivery(ctx: { app?: unknown }): AuditDeliveryMode {
+	const app = resolveAuditApp(ctx.app);
+	return nestedValue(app?.state, "config", "audit", "delivery") === "required"
+		? "required"
+		: "best-effort";
+}
+
+const CREDENTIAL_FIELD_PATTERN =
+	/(?:password|passphrase|secret|token|api[_-]?key|authorization|cookie)/i;
+
+function getFieldPolicy(
+	type: "collection" | "global",
+	name: string,
+	key: string,
+	appOverride?: unknown,
+): AuditFieldPolicy {
+	const app = resolveAuditApp(appOverride);
+	const globalsCandidate = type === "global" ? app?.getGlobals?.() : undefined;
+	const globals = isRecord(globalsCandidate) ? globalsCandidate : undefined;
+	const owner =
+		type === "collection"
+			? app?.getCollectionConfig?.(name)
+			: (globals?.[name] ??
+				Object.values(globals ?? {}).find(
+					(global) => nestedValue(global, "state", "name") === name,
+				));
+	// Field extensions intentionally live in the builder's runtime state.
+	// oxlint-disable-next-line eslint(no-underscore-dangle)
+	const configured = nestedValue(
+		owner,
+		"state",
+		"fieldDefinitions",
+		key,
+		"_state",
+		"extensions",
+		"audit",
+	);
+	if (
+		configured === "include" ||
+		configured === "redact" ||
+		configured === "omit"
+	) {
+		return configured;
+	}
+	return CREDENTIAL_FIELD_PATTERN.test(key) ? "omit" : "include";
+}
+
+function classifyAuditValue(policy: AuditFieldPolicy, value: unknown): unknown {
+	return policy === "redact" ? REDACTED_AUDIT_VALUE : toAuditJsonSafe(value);
+}
+
 function makeFieldChangeMap(
 	data: Record<string, any> | null | undefined,
 	direction: "create" | "delete",
+	type: "collection" | "global",
+	name: string,
+	app?: unknown,
 ): Record<string, { from: any; to: any }> | null {
 	if (!data) return null;
 
@@ -50,11 +165,13 @@ function makeFieldChangeMap(
 
 	for (const key of Object.keys(data)) {
 		if (shouldSkipChangeField(key)) continue;
+		const policy = getFieldPolicy(type, name, key, app);
+		if (policy === "omit") continue;
 
 		const value = data[key];
 		if (value == null) continue;
 
-		const safeValue = toAuditJsonSafe(value);
+		const safeValue = classifyAuditValue(policy, value);
 		changes[key] =
 			direction === "create"
 				? { from: null, to: safeValue }
@@ -67,6 +184,9 @@ function makeFieldChangeMap(
 function computeChanges(
 	original: Record<string, any> | undefined,
 	current: Record<string, any>,
+	type: "collection" | "global",
+	name: string,
+	app?: unknown,
 ): Record<string, { from: any; to: any }> | null {
 	if (!original) return null;
 
@@ -74,6 +194,8 @@ function computeChanges(
 
 	for (const key of Object.keys(current)) {
 		if (shouldSkipChangeField(key)) continue;
+		const policy = getFieldPolicy(type, name, key, app);
+		if (policy === "omit") continue;
 
 		const fromVal = original[key];
 		const toVal = current[key];
@@ -84,8 +206,8 @@ function computeChanges(
 		// Use JSON.stringify for deep comparison
 		if (JSON.stringify(fromVal) !== JSON.stringify(toVal)) {
 			changes[key] = {
-				from: toAuditJsonSafe(fromVal ?? null),
-				to: toAuditJsonSafe(toVal ?? null),
+				from: classifyAuditValue(policy, fromVal ?? null),
+				to: classifyAuditValue(policy, toVal ?? null),
 			};
 		}
 	}
@@ -189,6 +311,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function resolveAuditActor(ctx: {
 	session?: unknown;
 	accessMode?: string;
+	workload?: unknown;
 }): AuditActor {
 	const session = isRecord(ctx.session) ? ctx.session : null;
 	const user = isRecord(session?.user) ? session.user : null;
@@ -199,6 +322,15 @@ function resolveAuditActor(ctx: {
 	}
 
 	if (ctx.accessMode === "system") {
+		const workload = isRecord(ctx.workload) ? ctx.workload : null;
+		const workloadId = firstNonEmptyString(workload?.id, workload?.name);
+		if (workloadId) {
+			return {
+				actorType: "system",
+				userId: workloadId,
+				userName: firstNonEmptyString(workload?.name, workloadId)!,
+			};
+		}
 		return { actorType: "system", userId: "system", userName: "System" };
 	}
 
@@ -206,23 +338,45 @@ function resolveAuditActor(ctx: {
 }
 
 function buildAuditMetadata(
-	ctx: { accessMode?: string },
+	ctx: { accessMode?: string; requestId?: string; traceId?: string },
 	actor: AuditActor,
 	extra?: Record<string, unknown>,
 ): Record<string, unknown> {
 	return {
 		actorType: actor.actorType,
+		actorId: actor.userId,
+		actorName: actor.userName,
 		accessMode: ctx.accessMode ?? null,
+		outcome: "succeeded",
+		...(ctx.requestId ? { requestId: ctx.requestId } : {}),
+		...(ctx.traceId ? { traceId: ctx.traceId } : {}),
 		...extra,
 	};
 }
 
 function logAuditFailure(
-	ctx: { logger?: { error?: (...args: any[]) => void } },
+	ctx: { logger?: RequestContextLogger },
 	message: string,
 	err: unknown,
+	details: { operation: string; resource: string },
 ) {
-	ctx.logger?.error?.(message, err);
+	ctx.logger?.error?.(message, {
+		error:
+			err instanceof Error
+				? { name: err.name, message: err.message }
+				: { message: String(err) },
+		...details,
+	});
+}
+
+function handleAuditFailure(
+	ctx: { app?: unknown; logger?: RequestContextLogger },
+	message: string,
+	err: unknown,
+	details: { operation: string; resource: string },
+): void {
+	if (getAuditDelivery(ctx) === "required") throw err;
+	logAuditFailure(ctx, message, err, details);
 }
 
 // ============================================================================
@@ -231,16 +385,27 @@ function logAuditFailure(
 
 async function collectionAfterChange(ctx: GlobalCollectionHookContext) {
 	try {
-		const collections =
-			(ctx as any).collections ?? (ctx as any).app?.collections;
+		const auditCollection = getAuditCollection(ctx);
 
 		if (isAuditDisabled("collection", ctx.collection)) return;
 
 		const action = ctx.operation === "create" ? "create" : "update";
 		const changes =
 			ctx.operation === "update"
-				? computeChanges(ctx.original, ctx.data)
-				: makeFieldChangeMap(ctx.data, "create");
+				? computeChanges(
+						ctx.original,
+						ctx.data,
+						"collection",
+						ctx.collection,
+						ctx.app,
+					)
+				: makeFieldChangeMap(
+						ctx.data,
+						"create",
+						"collection",
+						ctx.collection,
+						ctx.app,
+					);
 
 		if (ctx.operation === "update" && !changes) return;
 
@@ -251,7 +416,7 @@ async function collectionAfterChange(ctx: GlobalCollectionHookContext) {
 			ctx.collection,
 		);
 
-		await collections[AUDIT_LOG_COLLECTION].create(
+		await auditCollection.create(
 			{
 				action,
 				resourceType: "collection",
@@ -279,18 +444,18 @@ async function collectionAfterChange(ctx: GlobalCollectionHookContext) {
 			},
 		);
 	} catch (err) {
-		logAuditFailure(
+		handleAuditFailure(
 			ctx,
 			`[Audit] Failed to log ${ctx.operation} for collection "${ctx.collection}":`,
 			err,
+			{ operation: ctx.operation, resource: ctx.collection },
 		);
 	}
 }
 
 async function collectionAfterDelete(ctx: GlobalCollectionHookContext) {
 	try {
-		const collections =
-			(ctx as any).collections ?? (ctx as any).app?.collections;
+		const auditCollection = getAuditCollection(ctx);
 
 		if (isAuditDisabled("collection", ctx.collection)) return;
 
@@ -301,7 +466,7 @@ async function collectionAfterDelete(ctx: GlobalCollectionHookContext) {
 			ctx.collection,
 		);
 
-		await collections[AUDIT_LOG_COLLECTION].create(
+		await auditCollection.create(
 			{
 				action: "delete",
 				resourceType: "collection",
@@ -311,7 +476,13 @@ async function collectionAfterDelete(ctx: GlobalCollectionHookContext) {
 				userId: actor.userId,
 				userName: actor.userName,
 				locale: ctx.locale || null,
-				changes: makeFieldChangeMap(ctx.data, "delete"),
+				changes: makeFieldChangeMap(
+					ctx.data,
+					"delete",
+					"collection",
+					ctx.collection,
+					ctx.app,
+				),
 				metadata: buildAuditMetadata(ctx, actor, {
 					operation: "delete",
 				}),
@@ -329,18 +500,18 @@ async function collectionAfterDelete(ctx: GlobalCollectionHookContext) {
 			},
 		);
 	} catch (err) {
-		logAuditFailure(
+		handleAuditFailure(
 			ctx,
 			`[Audit] Failed to log delete for collection "${ctx.collection}":`,
 			err,
+			{ operation: "delete", resource: ctx.collection },
 		);
 	}
 }
 
 async function collectionAfterPurge(ctx: GlobalCollectionHookContext) {
 	try {
-		const collections =
-			(ctx as any).collections ?? (ctx as any).app?.collections;
+		const auditCollection = getAuditCollection(ctx);
 
 		if (isAuditDisabled("collection", ctx.collection)) return;
 
@@ -351,7 +522,7 @@ async function collectionAfterPurge(ctx: GlobalCollectionHookContext) {
 		);
 		const resourceId = ctx.data?.id ? String(ctx.data.id) : null;
 
-		await collections[AUDIT_LOG_COLLECTION].create(
+		await auditCollection.create(
 			{
 				action: "purge",
 				resourceType: "collection",
@@ -381,12 +552,12 @@ async function collectionAfterPurge(ctx: GlobalCollectionHookContext) {
 			},
 		);
 	} catch (err) {
-		logAuditFailure(
+		handleAuditFailure(
 			ctx,
 			`[Audit] Failed to log purge for collection "${ctx.collection}":`,
 			err,
+			{ operation: "purge", resource: ctx.collection },
 		);
-		throw err;
 	}
 }
 
@@ -394,8 +565,7 @@ async function collectionAfterTransition(
 	ctx: GlobalCollectionTransitionHookContext,
 ) {
 	try {
-		const collections =
-			(ctx as any).collections ?? (ctx as any).app?.collections;
+		const auditCollection = getAuditCollection(ctx);
 
 		if (isAuditDisabled("collection", ctx.collection)) return;
 
@@ -406,7 +576,7 @@ async function collectionAfterTransition(
 			ctx.collection,
 		);
 
-		await collections[AUDIT_LOG_COLLECTION].create(
+		await auditCollection.create(
 			{
 				action: "transition",
 				resourceType: "collection",
@@ -437,25 +607,28 @@ async function collectionAfterTransition(
 			},
 		);
 	} catch (err) {
-		logAuditFailure(
+		handleAuditFailure(
 			ctx,
 			`[Audit] Failed to log transition for collection "${ctx.collection}":`,
 			err,
+			{ operation: "transition", resource: ctx.collection },
 		);
 	}
 }
 
 async function globalAfterChange(ctx: GlobalGlobalHookContext) {
 	try {
-		const collections =
-			(ctx as any).collections ?? (ctx as any).app?.collections;
+		const auditCollection = getAuditCollection(ctx);
 
 		if (isAuditDisabled("global", ctx.global)) return;
 
 		const actor = resolveAuditActor(ctx);
 		const resourceTypeLabel = getResourceTypeLabel("global", ctx.global);
+		const current = isRecord(ctx.input)
+			? { ...ctx.original, ...ctx.input }
+			: ctx.data;
 
-		await collections[AUDIT_LOG_COLLECTION].create(
+		await auditCollection.create(
 			{
 				action: "update",
 				resourceType: "global",
@@ -465,7 +638,13 @@ async function globalAfterChange(ctx: GlobalGlobalHookContext) {
 				userId: actor.userId,
 				userName: actor.userName,
 				locale: ctx.locale || null,
-				changes: null,
+				changes: computeChanges(
+					ctx.original,
+					current,
+					"global",
+					ctx.global,
+					ctx.app,
+				),
 				metadata: buildAuditMetadata(ctx, actor, {
 					operation: "update",
 				}),
@@ -483,25 +662,25 @@ async function globalAfterChange(ctx: GlobalGlobalHookContext) {
 			},
 		);
 	} catch (err) {
-		logAuditFailure(
+		handleAuditFailure(
 			ctx,
 			`[Audit] Failed to log update for global "${ctx.global}":`,
 			err,
+			{ operation: "update", resource: ctx.global },
 		);
 	}
 }
 
 async function globalAfterTransition(ctx: GlobalGlobalTransitionHookContext) {
 	try {
-		const collections =
-			(ctx as any).collections ?? (ctx as any).app?.collections;
+		const auditCollection = getAuditCollection(ctx);
 
 		if (isAuditDisabled("global", ctx.global)) return;
 
 		const actor = resolveAuditActor(ctx);
 		const resourceTypeLabel = getResourceTypeLabel("global", ctx.global);
 
-		await collections[AUDIT_LOG_COLLECTION].create(
+		await auditCollection.create(
 			{
 				action: "transition",
 				resourceType: "global",
@@ -532,10 +711,11 @@ async function globalAfterTransition(ctx: GlobalGlobalTransitionHookContext) {
 			},
 		);
 	} catch (err) {
-		logAuditFailure(
+		handleAuditFailure(
 			ctx,
 			`[Audit] Failed to log transition for global "${ctx.global}":`,
 			err,
+			{ operation: "transition", resource: ctx.global },
 		);
 	}
 }

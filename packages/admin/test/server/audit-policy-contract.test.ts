@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
-import { collection } from "questpie";
+import { collection, global, runWithContext } from "questpie";
 import { createFetchHandler } from "questpie/http";
 
 import { buildMockApp } from "../../../questpie/test/utils/mocks/mock-app-builder";
@@ -9,6 +9,7 @@ import { runTestDbMigrations } from "../../../questpie/test/utils/test-db";
 import {
 	AUDIT_LOG_COLLECTION,
 	auditModule,
+	toCanonicalAuditEvent,
 } from "../../src/server/modules/audit/index.js";
 import { auditCleanupJob } from "../../src/server/modules/audit/jobs/audit-cleanup.js";
 
@@ -20,6 +21,12 @@ const policyRecords = collection("policy_records").fields(({ f }) => ({
 	internalMemo: f.text().set("audit", "omit"),
 	password: f.text(),
 	accessToken: f.text(),
+}));
+
+const policySettings = global("policy_settings").fields(({ f }) => ({
+	title: f.text().set("audit", "include"),
+	privateNote: f.text().set("audit", "redact"),
+	internalMemo: f.text().set("audit", "omit"),
 }));
 
 type AuditPolicy = {
@@ -38,12 +45,40 @@ function auditModuleWith(policy: AuditPolicy) {
 	};
 }
 
+interface AuditCrud {
+	create(...args: unknown[]): Promise<unknown>;
+}
+
+interface AuditCollectionDefinition {
+	generateCRUD(...args: unknown[]): AuditCrud;
+}
+
+interface AuditTestApp {
+	getCollections(): Record<string, AuditCollectionDefinition>;
+}
+
+function failAuditWrites(app: AuditTestApp): () => void {
+	const definition = app.getCollections()[AUDIT_LOG_COLLECTION];
+	const originalGenerateCRUD = definition.generateCRUD.bind(definition);
+	definition.generateCRUD = (...args: unknown[]) => {
+		const crud = originalGenerateCRUD(...args);
+		crud.create = async () => {
+			throw new Error("audit store unavailable");
+		};
+		return crud;
+	};
+	return () => {
+		definition.generateCRUD = originalGenerateCRUD;
+	};
+}
+
 describe("audit policy contract", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
 		setup = await buildMockApp({
 			collections: { policyRecords },
+			globals: { policySettings },
 			modules: [auditModule],
 			defaultAccess: { read: true, create: true, update: true, delete: true },
 		});
@@ -126,11 +161,7 @@ describe("audit policy contract", () => {
 		});
 		await runTestDbMigrations(setup.app);
 
-		const auditCollection = setup.app.collections[AUDIT_LOG_COLLECTION];
-		const originalCreate = auditCollection.create.bind(auditCollection);
-		auditCollection.create = async () => {
-			throw new Error("audit store unavailable");
-		};
+		const restoreAuditWrites = failAuditWrites(setup.app);
 		const ctx = createTestContext({ accessMode: "system" });
 
 		let mutationError: unknown;
@@ -142,30 +173,28 @@ describe("audit policy contract", () => {
 		} catch (error) {
 			mutationError = error;
 		} finally {
-			auditCollection.create = originalCreate;
+			restoreAuditWrites();
 		}
 
 		expect(mutationError).toBeInstanceOf(Error);
 		expect(String(mutationError)).toContain("audit store unavailable");
 		expect(
-			await setup.app.collections.policyRecords.findById(
-				{ id: "required-failure" },
+			await setup.app.collections.policyRecords.findOne(
+				{ where: { id: "required-failure" } },
 				ctx,
 			),
 		).toBeNull();
 	});
 
 	it("UC-AUD-003 F07 commits and emits a structured error when best-effort audit delivery fails", async () => {
-		const auditCollection = setup.app.collections[AUDIT_LOG_COLLECTION];
-		auditCollection.create = async () => {
-			throw new Error("audit store unavailable");
-		};
+		const restoreAuditWrites = failAuditWrites(setup.app);
 		const ctx = createTestContext({ accessMode: "system" });
 
 		const record = await setup.app.collections.policyRecords.create(
 			{ id: "best-effort-failure", title: "Still commits" },
 			ctx,
 		);
+		restoreAuditWrites();
 
 		expect(record.id).toBe("best-effort-failure");
 		const failure = (ctx.logger as any).getLogsByLevel("error")[0];
@@ -210,6 +239,88 @@ describe("audit policy contract", () => {
 			requestId: "req-audit-1",
 			traceId: "trace-audit-1",
 		});
+
+		const canonical = toCanonicalAuditEvent(event);
+		expect(canonical).toEqual({
+			id: event.id,
+			timestamp: event.createdAt.toISOString(),
+			outcome: "succeeded",
+			action: "create",
+			resource: {
+				type: "collection",
+				name: "policyRecords",
+				id: record.id,
+			},
+			actor: {
+				type: "system",
+				id: "retention-worker",
+				name: "retention-worker",
+			},
+			requestId: "req-audit-1",
+			traceId: "trace-audit-1",
+			changes: { title: { from: null, to: "Correlated" } },
+			metadata: event.metadata,
+		});
+	});
+
+	it("inherits workload identity from ambient context", async () => {
+		const ctx = createTestContext({ accessMode: "system" });
+		const record = await runWithContext(
+			{
+				app: setup.app,
+				accessMode: "system",
+				workload: {
+					type: "job",
+					id: "retention-worker",
+					name: "Retention worker",
+				},
+			},
+			() =>
+				setup.app.collections.policyRecords.create(
+					{ title: "Ambient workload" },
+					{ accessMode: "system" },
+				),
+		);
+
+		const logs = await setup.app.collections[AUDIT_LOG_COLLECTION].find(
+			{ where: { resource: "policyRecords", resourceId: record.id } },
+			ctx,
+		);
+		expect(logs.docs[0]?.metadata).toMatchObject({
+			actorId: "retention-worker",
+			actorName: "Retention worker",
+		});
+	});
+
+	it("classifies global field changes", async () => {
+		const ctx = createTestContext({ accessMode: "system" });
+		await setup.app.globals.policySettings.update(
+			{
+				title: "Before",
+				privateNote: "old-private",
+				internalMemo: "old-internal",
+			},
+			ctx,
+		);
+		await setup.app.globals.policySettings.update(
+			{
+				title: "After",
+				privateNote: "new-private",
+				internalMemo: "new-internal",
+			},
+			ctx,
+		);
+
+		const logs = await setup.app.collections[AUDIT_LOG_COLLECTION].find(
+			{ where: { resource: "policy_settings", action: "update" } },
+			ctx,
+		);
+		const changes = logs.docs.find((event) => event.changes)?.changes;
+		expect(changes).toMatchObject({
+			title: { from: "Before", to: "After" },
+			privateNote: { from: REDACTED_VALUE, to: REDACTED_VALUE },
+		});
+		expect(changes).not.toHaveProperty("internalMemo");
 	});
 
 	it("UC-AUD-005 F08 skips destructive cleanup when retention is disabled", async () => {

@@ -1037,6 +1037,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					this.state.hooks?.afterChange,
 					this.createHookContext({
 						data: updatedRecord,
+						original: currentExisting,
 						input: data,
 						context: normalized,
 						db: tx,
@@ -1468,6 +1469,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					this.state.hooks?.afterChange,
 					this.createHookContext({
 						data: updatedRecord,
+						original: lockedExisting,
 						input: restoreWithFieldHooks,
 						context: normalized,
 						db: tx,
@@ -1863,12 +1865,13 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 	/**
 	 * Create hook context with full app access
 	 */
-	private createHookContext(params: {
-		data: any;
-		input?: any;
+	private createHookContext<TData>(params: {
+		data: TData;
+		original?: TData;
+		input?: unknown;
 		context: CRUDContext;
 		db: any;
-	}): GlobalHookContext {
+	}): GlobalHookContext<TData> {
 		const normalized = this.normalizeContext(params.context);
 		const services = extractAppServices(this.app, {
 			db: params.db,
@@ -1880,10 +1883,11 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			...services,
 			...(normalized["~contextExtensions"] ?? {}),
 			data: params.data,
+			original: params.original,
 			input: params.input,
 			locale: normalized.locale,
 			accessMode: normalized.accessMode,
-		} as GlobalHookContext;
+		} as GlobalHookContext<TData>;
 	}
 
 	private async executeHooks(

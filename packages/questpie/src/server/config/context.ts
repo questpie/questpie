@@ -4,8 +4,11 @@ import type { Auth, BetterAuthOptions } from "better-auth";
 import type { Session, User } from "better-auth/types";
 
 import type { AuthorityActor } from "../modules/core/integrated/crdt/authority.js";
+import type { LoggerService } from "../modules/core/integrated/logger/service.js";
 import type { InternalContextStore } from "./internal-context.js";
 import type { AccessMode } from "./types.js";
+
+export type RequestContextLogger = LoggerService;
 
 // ============================================================================
 // Type Inference Utilities
@@ -138,6 +141,8 @@ const appContextStorage = new AsyncLocalStorage<
 		stage?: string;
 		requestId?: string;
 		traceId?: string;
+		workload?: { type: string; id: string; name?: string };
+		logger?: RequestContextLogger;
 		_hookDepth?: number;
 		"~contextExtensions"?: Record<string, unknown>;
 	} & InternalContextStore
@@ -160,6 +165,12 @@ export interface StoredContext {
 	stage?: string;
 	requestId?: string;
 	traceId?: string;
+
+	/** Identity of the service or workload performing a system-scoped operation. */
+	workload?: { type: string; id: string; name?: string };
+
+	/** Request-scoped logger override, primarily for explicit adapters and tests. */
+	logger?: RequestContextLogger;
 	_hookDepth?: number;
 	/**
 	 * Request-context extensions resolved by `appConfig({ context })`.
@@ -239,6 +250,8 @@ export function runWithContext<T>(
 		stage?: string;
 		requestId?: string;
 		traceId?: string;
+		workload?: { type: string; id: string; name?: string };
+		logger?: RequestContextLogger;
 		_hookDepth?: number;
 		"~contextExtensions"?: Record<string, unknown>;
 	},
@@ -449,6 +462,12 @@ export interface BaseRequestContext {
 	 * `traceparent` when present, otherwise aligned with `requestId`.
 	 */
 	traceId?: string;
+
+	/** Identity of the service or workload performing a system-scoped operation. */
+	workload?: { type: string; id: string; name?: string };
+
+	/** Request-scoped logger override, primarily for explicit adapters and tests. */
+	logger?: RequestContextLogger;
 
 	/**
 	 * Database client - may be transaction within hook/handler scope.
