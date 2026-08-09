@@ -10,6 +10,7 @@
  * @see ModuleDefinition.plugin
  */
 
+import { resolveNamedGraph } from "../../shared/named-graph.js";
 import type { CodegenPlugin } from "./types.js";
 
 interface ModuleLike {
@@ -19,11 +20,41 @@ interface ModuleLike {
 	[key: string]: unknown;
 }
 
+export type CodegenPluginOccurrence = {
+	plugin: CodegenPlugin;
+	source: string;
+};
+
+/** Deduplicate repeated identities and reject ambiguous plugin names. */
+export function resolveCodegenPluginOccurrences(
+	occurrences: readonly CodegenPluginOccurrence[],
+): CodegenPlugin[] {
+	const firstByName = new Map<string, CodegenPluginOccurrence>();
+	const plugins: CodegenPlugin[] = [];
+
+	for (const occurrence of occurrences) {
+		const first = firstByName.get(occurrence.plugin.name);
+		if (first?.plugin === occurrence.plugin) continue;
+		if (first) {
+			throw new Error(
+				`[QUESTPIE] Two different plugins are both named "${occurrence.plugin.name}". ` +
+					`First source: ${first.source}. ` +
+					`Conflicting source: ${occurrence.source}.`,
+			);
+		}
+		firstByName.set(occurrence.plugin.name, occurrence);
+		plugins.push(occurrence.plugin);
+	}
+
+	return plugins;
+}
+
 /**
  * Extract codegen plugins from a module tree.
  *
  * Traverses modules depth-first (same order as `resolveModules` in create-app.ts)
- * and collects all `plugin` entries. Deduplicates by plugin name — first occurrence wins.
+ * and collects all `plugin` entries. Repeated object identities deduplicate;
+ * different modules or plugins sharing one name are rejected.
  *
  * @param modules - Top-level modules array (from modules.ts default export)
  * @returns Deduplicated array of codegen plugins in depth-first order
@@ -31,32 +62,26 @@ interface ModuleLike {
 export function extractPluginsFromModules(
 	modules: ModuleLike[],
 ): CodegenPlugin[] {
-	const seen = new Set<string>();
-	const plugins: CodegenPlugin[] = [];
+	const resolvedModules = resolveNamedGraph(modules, {
+		kind: "module",
+		name: (module) => module.name,
+		children: (module) => module.modules ?? [],
+	});
+	const occurrences: CodegenPluginOccurrence[] = [];
 
-	function walk(mod: ModuleLike): void {
-		// Depth-first: process sub-modules before self
-		if (mod.modules) {
-			for (const sub of mod.modules) {
-				walk(sub);
-			}
-		}
+	for (const mod of resolvedModules) {
 		const modPlugins = Array.isArray(mod.plugin)
 			? mod.plugin
 			: mod.plugin
 				? [mod.plugin]
 				: [];
-		for (const p of modPlugins) {
-			if (!seen.has(p.name)) {
-				seen.add(p.name);
-				plugins.push(p);
-			}
+		for (const plugin of modPlugins) {
+			occurrences.push({
+				plugin,
+				source: `module ${mod.name ?? "<anonymous>"}`,
+			});
 		}
 	}
 
-	for (const m of modules) {
-		walk(m);
-	}
-
-	return plugins;
+	return resolveCodegenPluginOccurrences(occurrences);
 }

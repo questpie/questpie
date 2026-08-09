@@ -27,6 +27,7 @@ import {
 import coreModule from "#questpie/server/modules/core/.generated/module.js";
 import { mergeAuthOptions } from "#questpie/server/modules/core/integrated/auth/merge.js";
 import { createCrdtRuntimeManifests } from "#questpie/server/modules/core/integrated/crdt/manifest-runtime.js";
+import { resolveNamedGraph } from "#questpie/shared/named-graph.js";
 
 type RuntimeConfigStorageInputGuard<TInput> = TInput extends {
 	storage?: infer TStorage;
@@ -134,20 +135,6 @@ export function runtimeConfig<const TInput extends RuntimeConfigInput>(
 // Module resolution — depth-first, left-to-right
 // ============================================================================
 
-/** Walk the module tree depth-first, children before their parent. */
-function flattenModules(
-	modules: readonly AppModuleInput[],
-): ModuleDefinition[] {
-	const flat: ModuleDefinition[] = [];
-	for (const mod of modules) {
-		if (mod.modules && mod.modules.length > 0) {
-			flat.push(...flattenModules(mod.modules));
-		}
-		flat.push(mod as ModuleDefinition);
-	}
-	return flat;
-}
-
 /**
  * Flatten the module tree into merge order: depth-first, left to right,
  * every dependency ahead of the module that depends on it.
@@ -164,36 +151,11 @@ function flattenModules(
 function resolveModules(
 	modules: readonly AppModuleInput[],
 ): ModuleDefinition[] {
-	const flat = flattenModules(modules);
-	const firstByName = new Map<
-		string,
-		{ index: number; mod: ModuleDefinition }
-	>();
-	const resolved: ModuleDefinition[] = [];
-
-	for (let i = 0; i < flat.length; i++) {
-		const mod = flat[i];
-		const first = firstByName.get(mod.name);
-
-		if (!first) {
-			firstByName.set(mod.name, { index: i, mod });
-			resolved.push(mod);
-			continue;
-		}
-
-		// Same module reached twice. Already in merge order at first.index.
-		if (first.mod === mod) continue;
-
-		throw new Error(
-			`[QUESTPIE] Two different modules are both named "${mod.name}", ` +
-				`at positions ${first.index} and ${i} of the resolved module list. ` +
-				`Module name is the merge key, so one would silently replace the other. ` +
-				`Rename one of them.\n` +
-				`Resolved order: ${flat.map((m, n) => `${n}:${m.name}`).join(", ")}`,
-		);
-	}
-
-	return resolved;
+	return resolveNamedGraph(modules, {
+		kind: "module",
+		name: (module) => module.name,
+		children: (module) => module.modules ?? [],
+	}) as ModuleDefinition[];
 }
 
 // ============================================================================
@@ -687,12 +649,12 @@ async function createAppFromDefinition(
 	const hasRootEntities = Object.keys(rootEntities).some(
 		(k) => rootEntities[k] !== undefined,
 	);
-	// Auto-prepend coreModule so its hooks/jobs are always available.
-	// Dedup: if user already listed coreModule, keep theirs (last-write-wins).
+	// Auto-prepend the canonical core module so its hooks/jobs are always
+	// available. The graph resolver deduplicates the same object identity and
+	// rejects a different module trying to reuse the core name.
 	const userModules = defModules ?? [];
-	const hasCoreAlready = userModules.some((m) => m.name === coreModule.name);
 	const allModules = [
-		...(hasCoreAlready ? [] : [coreModule as unknown as ModuleDefinition]),
+		coreModule as unknown as ModuleDefinition,
 		...userModules,
 		...(hasRootEntities
 			? [{ name: "__user", ...rootEntities } as ModuleDefinition]

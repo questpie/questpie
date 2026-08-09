@@ -20,6 +20,7 @@ import {
 import { validateChannelWirePattern } from "./channel-pattern.js";
 import { discoverFiles } from "./discover.js";
 import { generateClientEnvModules } from "./env-client-template.js";
+import { resolveCodegenPluginOccurrences } from "./extract-plugins.js";
 import { generateFactoryTemplate } from "./factory-template.js";
 import { loadModuleFactoryArguments } from "./module-metadata.js";
 import { generateModuleTemplate } from "./module-template.js";
@@ -277,6 +278,12 @@ export function coreCodegenPlugin(): CodegenPlugin {
 export function resolveTargetGraph(
 	plugins: CodegenPlugin[],
 ): Map<string, ResolvedTarget> {
+	plugins = resolveCodegenPluginOccurrences(
+		plugins.map((plugin, index) => ({
+			plugin,
+			source: `target graph input ${index}`,
+		})),
+	);
 	const targets = new Map<string, ResolvedTarget>();
 	const owners = resolveTargetOwners(plugins);
 
