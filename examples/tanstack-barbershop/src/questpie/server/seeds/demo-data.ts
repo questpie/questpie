@@ -8,15 +8,9 @@ export default seed({
 		"Demo barbershop data: services, barbers, reviews, and pages (EN + SK)",
 	category: "dev",
 	dependsOn: ["siteSettings"],
-	async run({ collections, createContext, log }) {
-		const ctxEn = await createContext({
-			accessMode: "system",
-			locale: "en",
-		});
-		const ctxSk = await createContext({
-			accessMode: "system",
-			locale: "sk",
-		});
+	async run({ collections, log }) {
+		const ctxEn = { locale: "en" } as const;
+		const ctxSk = { locale: "sk" } as const;
 
 		// Idempotency check
 		const existing = await collections.pages.find(
@@ -1706,11 +1700,8 @@ export default seed({
 		log("All demo data seeded successfully");
 	},
 
-	async undo({ collections, createContext, log }) {
-		const ctxEn = await createContext({
-			accessMode: "system",
-			locale: "en",
-		});
+	async undo({ collections, log }) {
+		const ctxEn = { locale: "en" } as const;
 
 		log("Cleaning demo data...");
 		const cleanupSteps: [string, () => Promise<unknown>][] = [

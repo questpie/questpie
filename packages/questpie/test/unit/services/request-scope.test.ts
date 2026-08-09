@@ -3,7 +3,12 @@
  */
 import { describe, expect, it } from "bun:test";
 
-import { RequestScope } from "../../../src/server/config/request-scope.js";
+import {
+	getActiveRequestScope,
+	RequestScope,
+	runInFreshRequestScope,
+	runWithRequestScope,
+} from "../../../src/server/config/request-scope.js";
 
 describe("RequestScope (QUE-255)", () => {
 	it("memoizes service within scope", () => {
@@ -54,6 +59,21 @@ describe("RequestScope (QUE-255)", () => {
 		expect(result).toEqual({ preResolved: true });
 	});
 
+	it("memoizes undefined service values", () => {
+		const scope = new RequestScope();
+		let calls = 0;
+		expect(
+			scope.getOrCreate("undefined-svc", () => {
+				calls++;
+				return undefined;
+			}),
+		).toBeUndefined();
+		expect(
+			scope.getOrCreate("undefined-svc", () => "unexpected"),
+		).toBeUndefined();
+		expect(calls).toBe(1);
+	});
+
 	it("throws after dispose", async () => {
 		const scope = new RequestScope();
 		scope.getOrCreate("svc", () => "hello");
@@ -62,6 +82,26 @@ describe("RequestScope (QUE-255)", () => {
 		expect(() => {
 			scope.getOrCreate("svc", () => "world");
 		}).toThrow("disposed");
+	});
+
+	it("owns a fresh scope for framework background work", async () => {
+		const app = {};
+		const outer = new RequestScope();
+		let background: RequestScope | undefined;
+
+		await runWithRequestScope(app, outer, async () => {
+			await runInFreshRequestScope(app, () => {
+				background = getActiveRequestScope(app);
+				expect(background).not.toBe(outer);
+				background?.getOrCreate("svc", () => "background");
+			});
+
+			expect(getActiveRequestScope(app)).toBe(outer);
+		});
+
+		expect(() => background?.getOrCreate("svc", () => "late")).toThrow(
+			"disposed",
+		);
 	});
 
 	it("calls disposers in reverse order", async () => {
@@ -86,6 +126,55 @@ describe("RequestScope (QUE-255)", () => {
 		await scope.dispose(disposers);
 
 		expect(order).toEqual(["c", "b", "a"]);
+	});
+
+	it("continues reverse disposal and aggregates failures", async () => {
+		const scope = new RequestScope();
+		const order: string[] = [];
+		scope.getOrCreate(
+			"a",
+			() => ({}),
+			() => {
+				order.push("a");
+			},
+		);
+		scope.getOrCreate(
+			"b",
+			() => ({}),
+			() => {
+				order.push("b");
+				throw new Error("b failed");
+			},
+		);
+
+		await expect(scope.dispose()).rejects.toThrow(
+			"Failed to dispose one or more request-scoped services",
+		);
+		expect(order).toEqual(["b", "a"]);
+	});
+
+	it("preserves execution and disposal failures", async () => {
+		const app = {};
+		let thrown: unknown;
+		try {
+			await runInFreshRequestScope(app, () => {
+				const scope = getActiveRequestScope(app)!;
+				scope.set("broken", {}, () => {
+					throw new Error("cleanup failed");
+				});
+				throw new Error("execution failed");
+			});
+		} catch (error) {
+			thrown = error;
+		}
+
+		expect(thrown).toBeInstanceOf(AggregateError);
+		expect((thrown as AggregateError).errors).toEqual([
+			expect.objectContaining({ message: "execution failed" }),
+			expect.objectContaining({
+				message: "Failed to dispose one or more request-scoped services",
+			}),
+		]);
 	});
 
 	it("has() and get() work correctly", () => {

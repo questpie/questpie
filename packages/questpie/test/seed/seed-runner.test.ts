@@ -2,8 +2,10 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { sql } from "drizzle-orm";
 
-import { collection } from "../../src/exports/index.js";
+import { collection, service } from "../../src/exports/index.js";
 import { isInTransaction } from "../../src/server/collection/crud/shared/transaction.js";
+import { extractAppServices } from "../../src/server/config/app-context.js";
+import { runWithContext } from "../../src/server/config/context.js";
 import { seed } from "../../src/server/seed/define-seed.js";
 import { SeedRunner } from "../../src/server/seed/runner.js";
 import type { Seed } from "../../src/server/seed/types.js";
@@ -83,6 +85,88 @@ describe("SeedRunner", () => {
 		expect(status.pending).toHaveLength(0);
 	});
 
+	it("owns and disposes one request service scope per seed", async () => {
+		await setup.cleanup();
+		let created = 0;
+		let disposed = 0;
+		const requestService = service()
+			.lifecycle("request")
+			.create(() => ({ id: ++created }))
+			.dispose(() => {
+				disposed++;
+			});
+
+		setup = await buildMockApp({ services: { requestService } });
+		runner = new SeedRunner(setup.app, { silent: true });
+		let first: unknown;
+		let second: unknown;
+
+		await runner.run([
+			makeSeed({
+				id: "request-service-scope",
+				run: async ({ services }) => {
+					first = services.requestService;
+					second = services.requestService;
+				},
+			}),
+		]);
+
+		expect(first).toBe(second);
+		expect(created).toBe(1);
+		expect(disposed).toBe(1);
+	});
+
+	it("isolates each seed from an ambient request scope", async () => {
+		await setup.cleanup();
+		let created = 0;
+		let disposed = 0;
+		const requestService = service()
+			.lifecycle("request")
+			.create(() => ({ id: ++created }))
+			.dispose(() => {
+				disposed++;
+			});
+
+		setup = await buildMockApp({ services: { requestService } });
+		runner = new SeedRunner(setup.app, { silent: true });
+		const seedIds: number[] = [];
+		let outerId = 0;
+
+		await runWithContext(
+			{
+				app: setup.app,
+				db: setup.app.db,
+				accessMode: "user",
+			},
+			async () => {
+				outerId = (extractAppServices(setup.app).services as any).requestService
+					.id;
+				await runner.run([
+					makeSeed({
+						id: "nested-first",
+						run: async ({ services }) => {
+							seedIds.push((services.requestService as any).id);
+						},
+					}),
+					makeSeed({
+						id: "nested-second",
+						run: async ({ services }) => {
+							seedIds.push((services.requestService as any).id);
+						},
+					}),
+				]);
+				expect(
+					(extractAppServices(setup.app).services as any).requestService.id,
+				).toBe(outerId);
+				expect(disposed).toBe(2);
+			},
+		);
+
+		expect(seedIds).toEqual([2, 3]);
+		expect(created).toBe(3);
+		expect(disposed).toBe(3);
+	});
+
 	it("skips already-executed seeds on second run", async () => {
 		let runCount = 0;
 
@@ -130,9 +214,11 @@ describe("SeedRunner", () => {
 		const seeds: Seed[] = [
 			makeSeed({
 				id: "explicit-context",
-				run: async ({ collections, createContext }) => {
-					const ctx = await createContext();
-					await collections.seed_posts.create({ title: "Explicit" }, ctx);
+				run: async ({ collections }) => {
+					await collections.seed_posts.create(
+						{ title: "Explicit" },
+						{ locale: "en" },
+					);
 				},
 			}),
 			makeSeed({
@@ -290,28 +376,36 @@ describe("SeedRunner", () => {
 		expect(computeRuns).toBe(1);
 	});
 
-	it("passes a transaction-bound context into step callbacks", async () => {
+	it("inherits the step transaction through partial CRUD contexts", async () => {
 		let callbackDbInTransaction = false;
-		let callbackCreateContextDbInTransaction = false;
 
 		const seeds: Seed[] = [
 			seed.steps({
 				id: "step-callback-context",
 				category: "dev",
 				run: async ({ step }) => {
-					await step("check-context", async ({ db, createContext }) => {
+					await step("check-context", async ({ db, collections }) => {
 						callbackDbInTransaction = isInTransaction(db);
-						const ctx = await createContext();
-						callbackCreateContextDbInTransaction = isInTransaction(ctx.db);
+						await collections.seed_posts.create(
+							{ title: "Partial context" },
+							{ locale: "en" },
+						);
+						throw new Error("roll back partial context write");
 					});
 				},
 			}),
 		];
 
-		await runner.run(seeds);
+		await setup.cleanup();
+		setup = await buildMockApp({ collections: { seed_posts: seedPosts } });
+		await runTestDbMigrations(setup.app);
+		runner = new SeedRunner(setup.app, { silent: true });
+		await expect(runner.run(seeds)).rejects.toThrow(
+			"roll back partial context write",
+		);
 
 		expect(callbackDbInTransaction).toBe(true);
-		expect(callbackCreateContextDbInTransaction).toBe(true);
+		expect((await setup.app.collections.seed_posts.find({})).totalDocs).toBe(0);
 	});
 
 	it("force reruns checkpointed seed steps from the beginning", async () => {
@@ -880,17 +974,20 @@ describe("SeedRunner", () => {
 
 	// ── SeedContext ─────────────────────────────────────────────────────
 
-	it("provides db, createContext, and log in SeedContext", async () => {
+	it("provides app, db, and log without a seed-specific createContext", async () => {
+		let receivedApp: unknown;
 		let receivedDb: any;
-		let receivedCtx: any;
+		let hasCreateContext = true;
 		let logCalled = false;
 
 		const seeds: Seed[] = [
 			makeSeed({
 				id: "ctx-test",
-				run: async ({ db, createContext, log }) => {
-					receivedDb = db;
-					receivedCtx = await createContext({ locale: "en" });
+				run: async (ctx) => {
+					receivedApp = ctx.app;
+					receivedDb = ctx.db;
+					hasCreateContext = "createContext" in ctx;
+					const { log } = ctx;
 					log("test message");
 					logCalled = true;
 				},
@@ -899,8 +996,9 @@ describe("SeedRunner", () => {
 
 		await runner.run(seeds);
 
+		expect(receivedApp).toBe(setup.app);
 		expect(receivedDb).toBeDefined();
-		expect(receivedCtx).toBeDefined();
+		expect(hasCreateContext).toBe(false);
 		expect(logCalled).toBe(true);
 	});
 

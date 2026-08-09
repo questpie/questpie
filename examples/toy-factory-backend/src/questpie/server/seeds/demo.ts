@@ -3,8 +3,8 @@ export default seed({
 	id: "toyFactoryDemo",
 	description: "Demo materials, toys, machines, and one production order",
 	category: "dev",
-	async run({ collections, createContext, log }) {
-		const ctx = await createContext({ accessMode: "system", locale: "en" });
+	async run({ collections, log }) {
+		const ctx = { locale: "en" } as const;
 		const existing = await collections.toys.find(
 			{ where: { sku: "DUCK-001" }, limit: 1 },
 			ctx,

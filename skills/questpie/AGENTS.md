@@ -3855,6 +3855,9 @@ Do not use `accessMode: "system"` to serve preview data. Preview requests should
 
 # QUESTPIE Business Logic - Routes, Jobs, Services, Emails
 
+Human docs: [Services](https://questpie.com/docs/code/services) and
+[service lifecycles](https://questpie.com/docs/code/services/lifecycles).
+
 This skill builds on questpie-core. It covers four business-logic primitives: routes (JSON and raw HTTP), jobs (background tasks), services (reusable logic), and emails (templates).
 
 ## Contents
@@ -4334,10 +4337,10 @@ Services are available via `services` destructuring in any handler:
 
 ### Lifecycle
 
-| Lifecycle     | Created             | Destroyed      | Use for                                  |
-| ------------- | ------------------- | -------------- | ---------------------------------------- |
-| `"singleton"` | Once at app startup | App shutdown   | External clients, SDKs, connection pools |
-| `"request"`   | Per request         | End of request | Tenant-scoped DB, user-specific config   |
+| Lifecycle     | Created             | Destroyed    | Use for                                  |
+| ------------- | ------------------- | ------------ | ---------------------------------------- |
+| `"singleton"` | Once at app startup | App shutdown | External clients, SDKs, connection pools |
+| `"request"`   | Per execution scope | Scope end    | Tenant-scoped DB, user-specific config   |
 
 ### Singleton Service
 
@@ -4406,6 +4409,20 @@ service({
   dispose?: (instance) => void | Promise<void>, // cleanup
 })
 ```
+
+An execution scope is one HTTP request, one queue job attempt, one seed, or one
+top-level programmatic operation. Route handlers, CRUD, access rules, hooks and service
+dependencies share one request-service instance within it. Raw HTTP streams
+keep the scope alive until the body closes, errors or is cancelled. Request
+services dispose in reverse creation order on both success and failure.
+
+`ctx.db` is captured from the context that first resolves the service. A nested
+transaction does not rebuild it; pass a transactional database explicitly to a
+service method when needed. Singleton services cannot depend on request-scoped
+services.
+
+For a standalone generated context, use `await using ctx = await
+createContext()` so request service disposers run at the end of the block.
 
 ## Emails
 
@@ -4519,6 +4536,9 @@ export default email({
 
 # AppContext, What's Available Everywhere
 
+Human docs: [Context](https://questpie.com/docs/code/context) and
+[service lifecycles](https://questpie.com/docs/code/services/lifecycles).
+
 Every hook, route handler, job handler, and service receives `AppContext`, the core runtime interface.
 
 ```ts
@@ -4550,25 +4570,34 @@ interface AppContext {
 | Email templates                                                                         | Destructure: `async ({ input, collections }) => { ... }`                                                                                      |
 | Access rules                                                                            | Destructure: `({ session, data }) => boolean`                                                                                                 |
 | Seeds                                                                                   | `async ({ collections, log }) => { ... }`                                                                                                     |
-| Services                                                                                | `create: ({ app }) => ...` (app instance only, not full context)                                                                              |
+| Services                                                                                | `create: (ctx) => ...`; request services see the caller, singletons start without one                                                         |
 | Better Auth callbacks (`onLinkAccount`, `databaseHooks`, `sendMagicLink`, plugin hooks) | `getContext<App>()`, `/auth/*` is a raw route executed inside `runWithContext`, so the request scope is live there (see `references/auth.md`) |
 
 ## Getting Context Programmatically
 
 ```ts
+import { app, createContext } from "#questpie";
+import type { App } from "#questpie";
 import { getContext, tryGetContext } from "questpie/types";
-import type { App } from "#questpie"; // type-only, no runtime cycle
 
-const ctx = getContext<App>(); // typed app/session/extensions; throws outside a request scope
-const maybe = tryGetContext(); // returns null if outside scope
+const ambient = getContext<App>(); // typed app/session/extensions; throws outside a request scope
+const maybe = tryGetContext(); // returns undefined outside a request scope
 
-// Create a fresh context manually:
-const fresh = await app.createContext({
+// Create a lean RequestContext for CRUD overrides:
+const requestContext = await app.createContext({
 	session: null,
 	locale: "en",
 	accessMode: "system",
 });
+
+// Create a rich standalone AppContext with services:
+await using standalone = await createContext({ accessMode: "system" });
+await standalone.collections.posts.find({});
 ```
+
+The standalone `services`, service namespaces, `collections` and `globals` stay
+bound to that context's session, access mode and request-service scope until it
+is disposed.
 
 **Partial context overrides:** the second argument of every CRUD call merges with the ambient request scope (priority: explicit param → ALS scope → defaults). A bare `{ accessMode: "system" }` elevates **only** the mode, `session`, `db`, and `locale` inherit from the request automatically. The inverse works too: `{ accessMode: "user" }` inside system-scoped code re-enables access rules against the inherited session. Never re-thread session/locale by hand:
 
@@ -5880,6 +5909,10 @@ Note: `updateById()`/`updateMany()` DO use `{ id/where, data }` -- only `create(
 
 # Seeds
 
+Human docs: [Seeds](https://questpie.com/docs/schema/seeds),
+[checkpointed seeds](https://questpie.com/docs/schema/seeds/steps), and
+[running seeds](https://questpie.com/docs/schema/seeds/running).
+
 Seeds write app **data** through the same typed context as routes/hooks/jobs (`collections`, `globals`, `db`, `services`, `email`, `queue`, `storage`, `kv`). Migrations change schema; seeds create rows (first admin, default roles, baseline settings, demo/test fixtures). Drop a file in `seeds/` with a default `export default seed({...})` (from `"questpie"`), run `questpie generate`, then `questpie seed`.
 
 Seeds run in **system mode** by default (bypass access rules, so bootstrap data can be created before any user exists). Completed seeds are recorded in `questpie_seeds` and skipped on later runs unless `--force`.
@@ -5900,12 +5933,14 @@ export default seed({
 	description: "Default site settings",
 	category: "required",
 	dependsOn: ["roles"], // seed ids that must run first (topologically ordered)
-	async run({ globals, createContext, log }) {
-		const ctx = await createContext({ accessMode: "system" });
-		await globals.siteSettings.update({ siteName: "QUESTPIE" }, ctx);
+	async run({ globals, log }) {
+		await globals.siteSettings.update(
+			{ siteName: "QUESTPIE" },
+			{ locale: "en" },
+		);
 		log("site settings written");
 	},
-	async undo({ globals, createContext }) {
+	async undo({ globals }) {
 		// optional; `questpie seed:undo` calls this, then removes the tracking row
 	},
 });
@@ -5941,7 +5976,11 @@ Every seed has one `category`: `required` (bootstrap data for every env), `dev` 
 
 ## SeedContext
 
-`SeedContext` = full `AppContext` plus `log(message)` and `createContext(options?)`. Seeds run in system mode; use `createContext({ locale, accessMode })` when a CRUD call needs a specific locale (localized globals/collections) or to re-enable access rules.
+`SeedContext` = full `AppContext` plus `log(message)`. The runner owns its
+request-service scope and disposes it after the seed. Seeds run in system mode.
+Pass `{ locale }` or `{ accessMode: "user" }` directly as the second CRUD
+argument when one call needs an override. The partial context inherits the
+active seed or step transaction.
 
 ## autoSeed
 

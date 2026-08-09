@@ -102,7 +102,10 @@ export {
 	shouldAutoAppendUnlistedSidebar,
 	type AdminSidebarMode,
 } from "#questpie/server/config/admin-sidebar-merge.js";
-export { createContextFactory } from "#questpie/server/config/create-context-factory.js";
+export {
+	createContextFactory,
+	type DisposableAppContext,
+} from "#questpie/server/config/create-context-factory.js";
 export * from "#questpie/server/config/global-hooks-types.js";
 export * from "#questpie/server/config/module-types.js";
 export { appConfig, authConfig } from "#questpie/server/config/factories.js";

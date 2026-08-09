@@ -1,13 +1,17 @@
 ---
 name: questpie-core/seeds
 description:
-  QUESTPIE seeds seed() seed.steps() idempotent atomic transaction checkpointed step questpie_seeds questpie_seed_steps category required dev test dependsOn undo SeedContext createContext log autoSeed seed:status seed:undo seed:reset --force --validate --category --only module seeds system mode
+  QUESTPIE seeds seed() seed.steps() idempotent atomic transaction checkpointed step questpie_seeds questpie_seed_steps category required dev test dependsOn undo SeedContext partial CRUD context log autoSeed seed:status seed:undo seed:reset --force --validate --category --only module seeds system mode
   - questpie-core
 ---
 
 This skill builds on questpie-core.
 
 # Seeds
+
+Human docs: [Seeds](https://questpie.com/docs/schema/seeds),
+[checkpointed seeds](https://questpie.com/docs/schema/seeds/steps), and
+[running seeds](https://questpie.com/docs/schema/seeds/running).
 
 Seeds write app **data** through the same typed context as routes/hooks/jobs (`collections`, `globals`, `db`, `services`, `email`, `queue`, `storage`, `kv`). Migrations change schema; seeds create rows (first admin, default roles, baseline settings, demo/test fixtures). Drop a file in `seeds/` with a default `export default seed({...})` (from `"questpie"`), run `questpie generate`, then `questpie seed`.
 
@@ -29,12 +33,14 @@ export default seed({
 	description: "Default site settings",
 	category: "required",
 	dependsOn: ["roles"], // seed ids that must run first (topologically ordered)
-	async run({ globals, createContext, log }) {
-		const ctx = await createContext({ accessMode: "system" });
-		await globals.siteSettings.update({ siteName: "QUESTPIE" }, ctx);
+	async run({ globals, log }) {
+		await globals.siteSettings.update(
+			{ siteName: "QUESTPIE" },
+			{ locale: "en" },
+		);
 		log("site settings written");
 	},
-	async undo({ globals, createContext }) {
+	async undo({ globals }) {
 		// optional; `questpie seed:undo` calls this, then removes the tracking row
 	},
 });
@@ -70,7 +76,11 @@ Every seed has one `category`: `required` (bootstrap data for every env), `dev` 
 
 ## SeedContext
 
-`SeedContext` = full `AppContext` plus `log(message)` and `createContext(options?)`. Seeds run in system mode; use `createContext({ locale, accessMode })` when a CRUD call needs a specific locale (localized globals/collections) or to re-enable access rules.
+`SeedContext` = full `AppContext` plus `log(message)`. The runner owns its
+request-service scope and disposes it after the seed. Seeds run in system mode.
+Pass `{ locale }` or `{ accessMode: "user" }` directly as the second CRUD
+argument when one call needs an override. The partial context inherits the
+active seed or step transaction.
 
 ## autoSeed
 

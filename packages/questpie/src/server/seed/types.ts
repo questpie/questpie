@@ -1,5 +1,4 @@
 import type { AppContext } from "#questpie/server/config/app-context.js";
-import type { RequestContext } from "#questpie/server/config/context.js";
 
 /**
  * Seed categories control when seeds run:
@@ -25,21 +24,21 @@ export type SeedJsonValue =
  * function and job handlers. Auto-typed via `declare module "questpie"` in
  * the generated `.generated/index.ts`.
  *
- * Adds two seed-specific helpers:
- * - `log` — seed output logger
- * - `createContext` — create a locale-specific request context for
- *   multi-locale data operations (e.g. updating translated globals)
+ * Adds the seed output `log` helper. CRUD methods accept partial request
+ * context overrides directly and inherit the active seed transaction.
  *
  * @example
  * ```ts
  * export default seed({
- *   async run({ collections, globals, createContext, log }) {
+ *   async run({ collections, globals, log }) {
  *     log("Seeding...");
  *     await globals.siteSettings.update({ shopName: "My Shop" });
  *
  *     // For locale-specific operations:
- *     const ctxSk = await createContext({ locale: "sk" });
- *     await globals.siteSettings.update({ tagline: "Môj obchod" }, ctxSk);
+ *     await globals.siteSettings.update(
+ *       { tagline: "Môj obchod" },
+ *       { locale: "sk" },
+ *     );
  *   },
  * });
  * ```
@@ -47,20 +46,6 @@ export type SeedJsonValue =
 export type SeedContext = AppContext & {
 	/** Logger for seed output */
 	log: (message: string) => void;
-	/**
-	 * Create a locale-specific request context for multi-locale data operations.
-	 * Pass the result as the second argument to collection/global CRUD methods.
-	 *
-	 * @example
-	 * ```ts
-	 * const ctxSk = await createContext({ locale: "sk" });
-	 * await globals.siteSettings.update({ tagline: "Môj obchod" }, ctxSk);
-	 * ```
-	 */
-	createContext(options?: {
-		locale?: string;
-		accessMode?: "system" | "user";
-	}): Promise<RequestContext>;
 };
 
 export type SeedStepContext = SeedContext & {

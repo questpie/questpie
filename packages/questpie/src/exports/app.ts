@@ -8,7 +8,10 @@ export {
 	mergeDeepConcat,
 	lastWins,
 } from "#questpie/server/config/create-app.js";
-export { createContextFactory } from "#questpie/server/config/create-context-factory.js";
+export {
+	createContextFactory,
+	type DisposableAppContext,
+} from "#questpie/server/config/create-context-factory.js";
 export {
 	acquireGeneratedApp,
 	type GeneratedAppLease,

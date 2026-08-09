@@ -108,26 +108,15 @@ export default service({
 `kv`, `logger`, `search`, `realtime`, `t` and `app`. Your own services sit
 where their `namespace` puts them. The default bucket is `ctx.services`.
 
-## Two ways to write it
-
-Both forms build the same state, and each chained method returns a new builder.
-
-```ts
-service({ lifecycle: "singleton", create: (ctx) => new Cache(ctx) });
-service()
-	.lifecycle("singleton")
-	.create((ctx) => new Cache(ctx));
-```
-
 ## Lifecycle
 
 `lifecycle` decides how often `create` runs. Leave it out and you get
 `"singleton"`.
 
-| Value                   | When `create` runs                    | Use it for                                  |
-| ----------------------- | ------------------------------------- | ------------------------------------------- |
-| `"singleton"` (default) | Once, at app start                    | API clients, pools, caches, stateless logic |
-| `"request"`             | Every time a handler context is built | Anything that reads the caller's session    |
+| Value                   | When `create` runs       | Use it for                                  |
+| ----------------------- | ------------------------ | ------------------------------------------- |
+| `"singleton"` (default) | Once, at app start       | API clients, pools, caches, stateless logic |
+| `"request"`             | Once per execution scope | Anything that reads the caller's session    |
 
 <Callout type="warn" title="A singleton never sees the caller">
 	Its `create` runs at startup, before any request exists. `ctx.session` is
@@ -137,9 +126,11 @@ service()
 
 ## dispose
 
-`dispose(instance)` runs on `app.destroy()`. Use it to close what you opened.
-The tanstack-start starter wires that call to `SIGINT` and `SIGTERM`. On the
-other starters, call `destroyApp()` from `#questpie` yourself.
+For singleton services, `dispose(instance)` runs on `app.destroy()`. The
+framework closes request services after their HTTP request, queue attempt, seed
+or top-level operation. Standalone generated contexts own their scope; the
+[lifecycle reference](/docs/code/services/lifecycles) shows the required
+`await using` form. Use `dispose` to close what `create` opened.
 
 ```ts title="src/questpie/server/services/redis.ts"
 import { service } from "questpie/services";

@@ -1,10 +1,15 @@
-import { AsyncLocalStorage } from "node:async_hooks";
-
 import type { Auth, BetterAuthOptions } from "better-auth";
 import type { Session, User } from "better-auth/types";
 
 import type { AuthorityActor } from "../modules/core/integrated/crdt/authority.js";
-import type { InternalContextStore } from "./internal-context.js";
+import {
+	getInternalAppContextStore,
+	runWithInternalAppContextStore,
+} from "./internal-context.js";
+import {
+	getActiveRequestScope,
+	runInFreshRequestScope,
+} from "./request-scope.js";
 import type { AccessMode } from "./types.js";
 
 // ============================================================================
@@ -122,27 +127,6 @@ export type InferAppFromApp<TApp> = TApp;
 // Pattern: get* prefix indicates actual runtime retrieval
 // ============================================================================
 
-/**
- * Internal AsyncLocalStorage for request-scoped context.
- * Used when getContext() is called to retrieve implicit context.
- */
-const appContextStorage = new AsyncLocalStorage<
-	{
-		app: unknown;
-		session?: unknown | null;
-		principal?: Principal;
-		actor?: AuthorityActor;
-		db?: unknown;
-		locale?: string;
-		accessMode?: string;
-		stage?: string;
-		requestId?: string;
-		traceId?: string;
-		_hookDepth?: number;
-		"~contextExtensions"?: Record<string, unknown>;
-	} & InternalContextStore
->();
-
 /** Maximum recursion depth for hook-triggered CRUD operations */
 const MAX_HOOK_RECURSION = 5;
 
@@ -175,7 +159,7 @@ export interface StoredContext {
  * caused by hooks triggering more CRUD operations.
  */
 export function guardHookRecursion(): number {
-	const ctx = appContextStorage.getStore();
+	const ctx = getInternalAppContextStore<StoredContext>();
 	const depth = (ctx?._hookDepth ?? 0) + 1;
 	if (depth > MAX_HOOK_RECURSION) {
 		throw new Error(
@@ -211,7 +195,7 @@ export function guardHookRecursion(): number {
  * ```
  */
 export function tryGetContext(): StoredContext | undefined {
-	return appContextStorage.getStore();
+	return getInternalAppContextStore<StoredContext>();
 }
 
 /**
@@ -227,35 +211,43 @@ export function tryGetContext(): StoredContext | undefined {
  * });
  * ```
  */
-export function runWithContext<T>(
-	ctx: {
-		app: unknown;
-		session?: unknown | null;
-		principal?: Principal;
-		actor?: AuthorityActor;
-		db?: unknown;
-		locale?: string;
-		accessMode?: string;
-		stage?: string;
-		requestId?: string;
-		traceId?: string;
-		_hookDepth?: number;
-		"~contextExtensions"?: Record<string, unknown>;
-	},
-	fn: () => T | Promise<T>,
-): Promise<T> {
-	// Inherit hook depth from parent context if not explicitly set
+type ContextStoreInput = {
+	app: unknown;
+	session?: unknown | null;
+	principal?: Principal;
+	actor?: AuthorityActor;
+	db?: unknown;
+	locale?: string;
+	accessMode?: string;
+	stage?: string;
+	requestId?: string;
+	traceId?: string;
+	_hookDepth?: number;
+	"~contextExtensions"?: Record<string, unknown>;
+};
+
+/** Bind context storage without taking ownership of a request scope. */
+function runWithContextStore<T>(ctx: ContextStoreInput, fn: () => T): T {
 	if (ctx._hookDepth === undefined) {
-		const parent = appContextStorage.getStore();
+		const parent = getInternalAppContextStore<StoredContext>();
 		if (parent?._hookDepth !== undefined) {
 			ctx._hookDepth = parent._hookDepth;
 		}
 	}
-	// Cast needed because some @types/node versions type AsyncLocalStorage.run() as returning void
-	return appContextStorage.run(
-		ctx as StoredContext & InternalContextStore,
-		fn,
-	) as unknown as Promise<T>;
+	return runWithInternalAppContextStore(ctx, fn);
+}
+
+export function runWithContext<T>(
+	ctx: ContextStoreInput,
+	fn: () => T | Promise<T>,
+): Promise<T> {
+	const run = () => runWithContextStore(ctx, fn);
+
+	if (getActiveRequestScope(ctx.app)) {
+		return Promise.resolve(run());
+	}
+
+	return runInFreshRequestScope(ctx.app, run);
 }
 
 /**
@@ -304,7 +296,7 @@ export function getContext<TApp>(): InferContextExtensionsFromApp<TApp> & {
 	accessMode: string | undefined;
 	stage: string | undefined;
 } {
-	const stored = appContextStorage.getStore();
+	const stored = getInternalAppContextStore<StoredContext>();
 	if (!stored) {
 		throw new Error(
 			"getContext() called outside request scope. " +

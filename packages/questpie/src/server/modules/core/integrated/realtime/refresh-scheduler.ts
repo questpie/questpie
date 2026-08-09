@@ -1,3 +1,5 @@
+import { runInFreshRequestScope } from "#questpie/server/config/request-scope.js";
+
 import { deriveDeltaOp, type RealtimeDeliveryMode } from "./delta.js";
 import {
 	realtimeOperation,
@@ -31,6 +33,8 @@ type RealtimeSource = {
 		errorListener?: RealtimeErrorListener,
 	): () => void;
 };
+
+type SchedulerTaskRunner = (task: () => Promise<void>) => Promise<void>;
 
 type AccessContext = {
 	session?: {
@@ -412,7 +416,21 @@ export class RealtimeRefreshScheduler {
 		private readonly realtime: RealtimeSource,
 		private readonly maxConcurrency = 10,
 		private readonly observer?: RealtimeObserver,
+		private readonly runTask: SchedulerTaskRunner = (task) => task(),
 	) {}
+
+	private startTask(
+		task: () => Promise<void>,
+		onError: (error: unknown) => void,
+	): void {
+		void this.runTask(task).catch((error) => {
+			try {
+				onError(error);
+			} catch {
+				// Subscriber error handlers cannot become detached rejections.
+			}
+		});
+	}
 
 	private observe(event: RealtimeObservation): void {
 		try {
@@ -453,7 +471,10 @@ export class RealtimeRefreshScheduler {
 			);
 			if (input.captureWatermark && input.heartbeatIntervalMs !== undefined) {
 				group.heartbeatTimer = setInterval(() => {
-					void this.sendSnapshotHeartbeat(group!);
+					this.startTask(
+						() => this.sendSnapshotHeartbeat(group!),
+						(error) => this.reportError(group!, error),
+					);
 				}, input.heartbeatIntervalMs);
 			}
 		}
@@ -472,7 +493,10 @@ export class RealtimeRefreshScheduler {
 		if (group.lastFrame) {
 			void Promise.resolve(input.onFrame(group.lastFrame)).catch(input.onError);
 		} else if (created) {
-			void this.initialize(group);
+			this.startTask(
+				() => this.initialize(group!),
+				(error) => this.reportError(group!, error),
+			);
 		}
 
 		return () => {
@@ -533,14 +557,24 @@ export class RealtimeRefreshScheduler {
 						reason: "periodic",
 					});
 					group!.resetQueued = true;
-					if (group!.ready) void this.processDeltaQueue(group!);
+					if (group!.ready) {
+						this.startTask(
+							() => this.processDeltaQueue(group!),
+							(error) => this.reportDeltaError(group!, error),
+						);
+					}
 				}, input.deltaRebootstrapIntervalMs);
 			}
 			if (input.captureWatermark && input.heartbeatIntervalMs !== undefined) {
 				group.heartbeatTimer = setInterval(() => {
 					if (group!.disposed) return;
 					group!.heartbeatQueued = true;
-					if (group!.ready) void this.processDeltaQueue(group!);
+					if (group!.ready) {
+						this.startTask(
+							() => this.processDeltaQueue(group!),
+							(error) => this.reportDeltaError(group!, error),
+						);
+					}
 				}, input.heartbeatIntervalMs);
 			}
 		}
@@ -562,7 +596,10 @@ export class RealtimeRefreshScheduler {
 		const createdDeltaGroup = group.subscribers.size === 0;
 		group.subscribers.add(subscriber);
 		if (createdDeltaGroup) group.provider = subscriber;
-		void this.bootstrapDeltaSubscriber(group, subscriber);
+		this.startTask(
+			() => this.bootstrapDeltaSubscriber(group!, subscriber),
+			subscriber.onError,
+		);
 
 		return () => {
 			if (!group!.subscribers.delete(subscriber)) return;
@@ -625,7 +662,10 @@ export class RealtimeRefreshScheduler {
 						group.latestSeq = Math.max(group.latestSeq, postComputeSeq);
 						group.resetQueued = true;
 					}
-					void this.processDeltaQueue(group);
+					this.startTask(
+						() => this.processDeltaQueue(group),
+						(error) => this.reportDeltaError(group, error),
+					);
 				}
 				const bootstrapFrame = encodeSseEvent("snapshot", {
 					topicId: subscriber.topicId,
@@ -686,7 +726,12 @@ export class RealtimeRefreshScheduler {
 			events: group.queue.length,
 			bytes: group.queueBytes,
 		});
-		if (group.ready) void this.processDeltaQueue(group);
+		if (group.ready) {
+			this.startTask(
+				() => this.processDeltaQueue(group),
+				(error) => this.reportDeltaError(group, error),
+			);
+		}
 	}
 
 	private async processDeltaQueue(group: DeltaGroup): Promise<void> {
@@ -887,7 +932,10 @@ export class RealtimeRefreshScheduler {
 				group.queue.length > 0 ||
 				group.heartbeatQueued
 			) {
-				void this.processDeltaQueue(group);
+				this.startTask(
+					() => this.processDeltaQueue(group),
+					(error) => this.reportDeltaError(group, error),
+				);
 			}
 		}
 	}
@@ -1073,7 +1121,10 @@ export class RealtimeRefreshScheduler {
 			return;
 		}
 		group.refreshInFlight = true;
-		void this.refresh(group);
+		this.startTask(
+			() => this.refresh(group),
+			(error) => this.reportError(group, error),
+		);
 	}
 
 	private async refresh(group: SchedulerGroup): Promise<void> {
@@ -1193,6 +1244,7 @@ export function getRealtimeRefreshScheduler(
 			realtime.record
 				? { record: (event) => realtime.record?.(event) }
 				: undefined,
+			(task) => runInFreshRequestScope(owner, task),
 		);
 		schedulers.set(owner, scheduler);
 	}

@@ -66,6 +66,39 @@ function decodeFrame(frame: Uint8Array): Record<string, any> {
 }
 
 describe("realtime scheduler", () => {
+	it("reports background task cleanup failures to subscribers", async () => {
+		const realtime = new FakeRealtimeSource();
+		const errors: unknown[] = [];
+		const scheduler = new RealtimeRefreshScheduler(
+			realtime,
+			10,
+			undefined,
+			async (task) => {
+				await task();
+				throw new Error("scope cleanup failed");
+			},
+		);
+		const unsubscribe = scheduler.subscribe({
+			key: "posts:cleanup-error",
+			topicId: "posts",
+			topics: { resourceType: "collection", resource: "posts" },
+			compute: async () => ({ docs: [] }),
+			onFrame: async () => {},
+			onError: (error) => errors.push(error),
+		});
+
+		await tick();
+		await tick();
+		expect(errors.length).toBeGreaterThan(0);
+		expect(
+			errors.every(
+				(error) =>
+					error instanceof Error && error.message === "scope cleanup failed",
+			),
+		).toBe(true);
+		unsubscribe();
+	});
+
 	it("computes once for 100 equivalent subscribers and fans out one frame", async () => {
 		const realtime = new FakeRealtimeSource();
 		const scheduler = new RealtimeRefreshScheduler(realtime);

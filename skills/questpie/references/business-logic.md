@@ -7,6 +7,9 @@ description:
 
 # QUESTPIE Business Logic - Routes, Jobs, Services, Emails
 
+Human docs: [Services](https://questpie.com/docs/code/services) and
+[service lifecycles](https://questpie.com/docs/code/services/lifecycles).
+
 This skill builds on questpie-core. It covers four business-logic primitives: routes (JSON and raw HTTP), jobs (background tasks), services (reusable logic), and emails (templates).
 
 ## Contents
@@ -486,10 +489,10 @@ Services are available via `services` destructuring in any handler:
 
 ### Lifecycle
 
-| Lifecycle     | Created             | Destroyed      | Use for                                  |
-| ------------- | ------------------- | -------------- | ---------------------------------------- |
-| `"singleton"` | Once at app startup | App shutdown   | External clients, SDKs, connection pools |
-| `"request"`   | Per request         | End of request | Tenant-scoped DB, user-specific config   |
+| Lifecycle     | Created             | Destroyed    | Use for                                  |
+| ------------- | ------------------- | ------------ | ---------------------------------------- |
+| `"singleton"` | Once at app startup | App shutdown | External clients, SDKs, connection pools |
+| `"request"`   | Per execution scope | Scope end    | Tenant-scoped DB, user-specific config   |
 
 ### Singleton Service
 
@@ -558,6 +561,20 @@ service({
   dispose?: (instance) => void | Promise<void>, // cleanup
 })
 ```
+
+An execution scope is one HTTP request, one queue job attempt, one seed, or one
+top-level programmatic operation. Route handlers, CRUD, access rules, hooks and service
+dependencies share one request-service instance within it. Raw HTTP streams
+keep the scope alive until the body closes, errors or is cancelled. Request
+services dispose in reverse creation order on both success and failure.
+
+`ctx.db` is captured from the context that first resolves the service. A nested
+transaction does not rebuild it; pass a transactional database explicitly to a
+service method when needed. Singleton services cannot depend on request-scoped
+services.
+
+For a standalone generated context, use `await using ctx = await
+createContext()` so request service disposers run at the end of the block.
 
 ## Emails
 

@@ -10,9 +10,9 @@ object is, what is on it, and why the shape shifts between call sites.
 
 ## One object, every handler
 
-A hook, a route, a job, an access rule and a service factory each take a single
-argument. That argument is the context. QUESTPIE builds a fresh one per
-operation, so nothing on it is shared global state.
+A hook, route, job, access rule and service factory each take one context
+argument. QUESTPIE may build several context objects inside one execution
+scope. Request services belong to that scope, not to one context object.
 
 ```ts
 afterChange: async ({ data, db, queue, services }) => {
@@ -194,3 +194,5 @@ declare global {
 - [Hooks](/docs/schema/hooks) for the lifecycle behind `data` and `operation`.
 - [Access control](/docs/schema/access-control) for what `accessMode: "user"`
   turns on.
+- [Agent context reference](https://github.com/questpie/questpie/blob/main/skills/questpie/references/app-context.md)
+  for the shipped skill contract.

@@ -7,15 +7,9 @@ export default seed({
 	description: "Demo blog posts (EN + SK)",
 	category: "dev",
 	dependsOn: ["demoData"],
-	async run({ collections, createContext, log }) {
-		const ctxEn = await createContext({
-			accessMode: "system",
-			locale: "en",
-		});
-		const ctxSk = await createContext({
-			accessMode: "system",
-			locale: "sk",
-		});
+	async run({ collections, log }) {
+		const ctxEn = { locale: "en" } as const;
+		const ctxSk = { locale: "sk" } as const;
 
 		// Idempotency check
 		const existing = await collections.blog_posts.find(

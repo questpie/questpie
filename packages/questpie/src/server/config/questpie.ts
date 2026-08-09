@@ -26,6 +26,10 @@ import {
 	type QuestpieApi,
 } from "#questpie/server/config/integrated/questpie-api.js";
 import { QuestpieSeedsAPI } from "#questpie/server/config/integrated/seeds-api.js";
+import {
+	RequestScope,
+	runInFreshRequestScope,
+} from "#questpie/server/config/request-scope.js";
 import type {
 	AccessMode,
 	DbCloseFn,
@@ -149,6 +153,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	private _collections: Record<string, Collection<AnyCollectionState>> = {};
 	private _globals: Record<string, AnyGlobal> = {};
 	private _singletonServices: Record<string, any> = {};
+	private _singletonServiceOrder: string[] = [];
 	private _serviceDefs: Record<string, ResolvedServiceDefinition> = {};
 	private _customServiceNamespaces = new Set<string>();
 	private _warnedContextExtensionKeys = new Set<string>();
@@ -340,44 +345,39 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	 * Generated app entrypoints install the corresponding HMR teardown.
 	 */
 	async destroy(): Promise<void> {
-		// Dispose user services first (non-infrastructure)
-		const infraNames = new Set(
-			Questpie._INFRA_SERVICES.map(([svcName]) => svcName),
-		);
-		const userDisposals: Promise<void>[] = [];
-		for (const [name, def] of Object.entries(this._serviceDefs)) {
-			if (def.lifecycle !== "singleton") continue;
-			if (!def.dispose) continue;
-			if (infraNames.has(name)) continue;
-			if (this._singletonServices[name] === undefined) continue;
-
-			const result = def.dispose(this._singletonServices[name]);
-			if (result instanceof Promise) {
-				userDisposals.push(result);
-			}
-		}
-		if (userDisposals.length > 0) {
-			await Promise.allSettled(userDisposals);
-		}
-
-		// Dispose infrastructure services in reverse-DAG order
-		for (let i = Questpie._INFRA_SERVICES.length - 1; i >= 0; i--) {
-			const [svcName] = Questpie._INFRA_SERVICES[i]!;
-			const def = this._serviceDefs[svcName];
+		const errors: unknown[] = [];
+		for (
+			let index = this._singletonServiceOrder.length - 1;
+			index >= 0;
+			index--
+		) {
+			const name = this._singletonServiceOrder[index]!;
+			const def = this._serviceDefs[name];
 			if (!def?.dispose) continue;
-			if (this._singletonServices[svcName] === undefined) continue;
-
-			const result = def.dispose(this._singletonServices[svcName]);
-			if (result instanceof Promise) {
-				await result.catch(() => {});
+			try {
+				await def.dispose(this._singletonServices[name]);
+			} catch (error) {
+				errors.push(error);
 			}
 		}
 
 		this._singletonServices = {};
+		this._singletonServiceOrder = [];
 
 		// Close raw DB connection/client if one was created by the db service.
-		await this._dbCleanup?.();
+		try {
+			await this._dbCleanup?.();
+		} catch (error) {
+			errors.push(error);
+		}
 		this._dbCleanup = undefined;
+
+		if (errors.length > 0) {
+			throw new AggregateError(
+				errors,
+				"Failed to dispose one or more singleton services",
+			);
+		}
 	}
 
 	private async _autoInit(): Promise<void> {
@@ -557,6 +557,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	private _createServiceContext(options: {
 		requestDeps?: Record<string, any>;
 		stack: string[];
+		scope?: RequestScope;
 	}): ServiceCreateContext {
 		const namespaceProxyCache = new Map<string, Record<string, unknown>>();
 		const { requestDeps, stack } = options;
@@ -565,6 +566,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			return this._resolveServiceFromProxy(serviceName, {
 				requestDeps,
 				stack,
+				scope: options.scope,
 			});
 		};
 
@@ -650,7 +652,11 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 	private _resolveServiceFromProxy(
 		name: string,
-		options: { requestDeps?: Record<string, any>; stack: string[] },
+		options: {
+			requestDeps?: Record<string, any>;
+			stack: string[];
+			scope?: RequestScope;
+		},
 	): unknown {
 		const def = this._serviceDefs[name];
 		if (!def) return undefined;
@@ -664,13 +670,31 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			});
 		}
 
-		return this._createServiceInstance(name, def, {
-			requestDeps: options.requestDeps,
-			stack: options.stack,
-			cacheSingleton: false,
-			lazyTriggered: true,
-			allowAsync: false,
-		});
+		if (
+			!options.scope &&
+			options.stack.some(
+				(dependency) =>
+					this._serviceDefs[dependency]?.lifecycle === "singleton",
+			)
+		) {
+			throw new Error(
+				`[QUESTPIE] Singleton service cannot depend on request-scoped service "${name}". Move the dependency to a request-scoped service or pass it to the singleton method explicitly.`,
+			);
+		}
+
+		const create = () =>
+			this._createServiceInstance(name, def, {
+				requestDeps: options.requestDeps,
+				stack: options.stack,
+				scope: options.scope,
+				cacheSingleton: false,
+				lazyTriggered: true,
+				allowAsync: false,
+			});
+
+		return options.scope
+			? options.scope.getOrCreate(name, create, def.dispose)
+			: create();
 	}
 
 	private _resolveSingletonService(
@@ -682,7 +706,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			allowAsync: boolean;
 		},
 	): unknown | Promise<unknown> {
-		if (this._singletonServices[name] !== undefined) {
+		if (Object.hasOwn(this._singletonServices, name)) {
 			return this._singletonServices[name];
 		}
 
@@ -704,63 +728,49 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		options: {
 			requestDeps?: Record<string, any>;
 			stack: string[];
+			scope?: RequestScope;
 			cacheSingleton: boolean;
 			lazyTriggered: boolean;
 			allowAsync: boolean;
 		},
 	): unknown | Promise<unknown> {
 		this._assertNoCircularServiceDependency(name, options.stack);
-		options.stack.push(name);
+		const stack = [...options.stack, name];
+		const context = this._createServiceContext({
+			requestDeps: options.requestDeps,
+			stack,
+			scope: options.scope,
+		});
+		const created = def.create(context);
 
-		const popIfCurrent = () => {
-			if (options.stack[options.stack.length - 1] === name) {
-				options.stack.pop();
-			}
-		};
-
-		try {
-			const context = this._createServiceContext({
-				requestDeps: options.requestDeps,
-				stack: options.stack,
-			});
-			const created = def.create(context);
-
-			if (created instanceof Promise) {
-				if (!options.allowAsync) {
-					popIfCurrent();
-					if (options.lazyTriggered) {
-						throw new Error(
-							`[QUESTPIE] Service "${name}" has async create() but was lazily triggered. Reorder services so "${name}" initializes first.`,
-						);
-					}
-
+		if (created instanceof Promise) {
+			if (!options.allowAsync) {
+				if (options.lazyTriggered) {
 					throw new Error(
-						`[QUESTPIE] Service "${name}" has async create() but this resolution path is synchronous.`,
+						`[QUESTPIE] Service "${name}" has async create() but was lazily triggered. Reorder services so "${name}" initializes first.`,
 					);
 				}
 
-				return created
-					.then((instance) => {
-						if (options.cacheSingleton) {
-							this._singletonServices[name] = instance;
-						}
-						return instance;
-					})
-					.finally(() => {
-						popIfCurrent();
-					});
+				throw new Error(
+					`[QUESTPIE] Service "${name}" has async create() but this resolution path is synchronous.`,
+				);
 			}
 
-			if (options.cacheSingleton) {
-				this._singletonServices[name] = created;
-			}
-
-			popIfCurrent();
-			return created;
-		} catch (error) {
-			popIfCurrent();
-			throw error;
+			return created.then((instance) => {
+				if (options.cacheSingleton) {
+					this._singletonServices[name] = instance;
+					this._singletonServiceOrder.push(name);
+				}
+				return instance;
+			});
 		}
+
+		if (options.cacheSingleton) {
+			this._singletonServices[name] = created;
+			this._singletonServiceOrder.push(name);
+		}
+
+		return created;
 	}
 
 	private _assertNoCircularServiceDependency(
@@ -783,13 +793,13 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	resolveService(
 		name: string,
 		requestDeps?: Record<string, any>,
-		scope?: import("#questpie/server/config/request-scope.js").RequestScope,
+		scope?: RequestScope,
 	): any {
 		const def = this._serviceDefs[name];
 		if (!def) return undefined;
 
 		if (def.lifecycle === "singleton") {
-			if (this._singletonServices[name] === undefined) {
+			if (!Object.hasOwn(this._singletonServices, name)) {
 				throw new Error(
 					`[QUESTPIE] Singleton service "${name}" is not initialized. Await createApp() before accessing services.`,
 				);
@@ -799,14 +809,18 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 		// Scope-aware: memoize request-scoped services within the scope
 		if (scope) {
-			return scope.getOrCreate(name, () =>
-				this._createServiceInstance(name, def, {
-					requestDeps,
-					stack: [],
-					cacheSingleton: false,
-					lazyTriggered: false,
-					allowAsync: false,
-				}),
+			return scope.getOrCreate(
+				name,
+				() =>
+					this._createServiceInstance(name, def, {
+						requestDeps,
+						stack: [],
+						scope,
+						cacheSingleton: false,
+						lazyTriggered: false,
+						allowAsync: false,
+					}),
+				def.dispose,
 			);
 		}
 
@@ -1125,36 +1139,38 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			| undefined;
 		if (typeof resolver !== "function") return undefined;
 
-		const result = await runWithContext(
-			{
-				app: this,
-				db: params.db,
-				session: params.session,
-				principal: { kind: "system" },
-				actor: params.actor,
-				locale: params.locale,
-				accessMode: "system",
-				stage: params.stage,
-				requestId: params.requestId,
-				traceId: params.traceId,
-			},
-			async () => {
-				const services = extractAppServices(this, {
+		const result = await runInFreshRequestScope(this, () =>
+			runWithContext(
+				{
+					app: this,
 					db: params.db,
 					session: params.session,
-					locale: params.locale,
-					accessMode: "system",
 					principal: { kind: "system" },
 					actor: params.actor,
-				});
+					locale: params.locale,
+					accessMode: "system",
+					stage: params.stage,
+					requestId: params.requestId,
+					traceId: params.traceId,
+				},
+				async () => {
+					const services = extractAppServices(this, {
+						db: params.db,
+						session: params.session,
+						locale: params.locale,
+						accessMode: "system",
+						principal: { kind: "system" },
+						actor: params.actor,
+					});
 
-				return resolver({
-					...services,
-					request: params.request,
-					session: params.session,
-					db: params.db,
-				});
-			},
+					return resolver({
+						...services,
+						request: params.request,
+						session: params.session,
+						db: params.db,
+					});
+				},
+			),
 		);
 		const extensions = (result ?? {}) as Record<string, unknown>;
 

@@ -9,6 +9,9 @@ This skill builds on questpie-core.
 
 # AppContext, What's Available Everywhere
 
+Human docs: [Context](https://questpie.com/docs/code/context) and
+[service lifecycles](https://questpie.com/docs/code/services/lifecycles).
+
 Every hook, route handler, job handler, and service receives `AppContext`, the core runtime interface.
 
 ```ts
@@ -40,25 +43,34 @@ interface AppContext {
 | Email templates                                                                         | Destructure: `async ({ input, collections }) => { ... }`                                                                                      |
 | Access rules                                                                            | Destructure: `({ session, data }) => boolean`                                                                                                 |
 | Seeds                                                                                   | `async ({ collections, log }) => { ... }`                                                                                                     |
-| Services                                                                                | `create: ({ app }) => ...` (app instance only, not full context)                                                                              |
+| Services                                                                                | `create: (ctx) => ...`; request services see the caller, singletons start without one                                                         |
 | Better Auth callbacks (`onLinkAccount`, `databaseHooks`, `sendMagicLink`, plugin hooks) | `getContext<App>()`, `/auth/*` is a raw route executed inside `runWithContext`, so the request scope is live there (see `references/auth.md`) |
 
 ## Getting Context Programmatically
 
 ```ts
+import { app, createContext } from "#questpie";
+import type { App } from "#questpie";
 import { getContext, tryGetContext } from "questpie/types";
-import type { App } from "#questpie"; // type-only, no runtime cycle
 
-const ctx = getContext<App>(); // typed app/session/extensions; throws outside a request scope
-const maybe = tryGetContext(); // returns null if outside scope
+const ambient = getContext<App>(); // typed app/session/extensions; throws outside a request scope
+const maybe = tryGetContext(); // returns undefined outside a request scope
 
-// Create a fresh context manually:
-const fresh = await app.createContext({
+// Create a lean RequestContext for CRUD overrides:
+const requestContext = await app.createContext({
 	session: null,
 	locale: "en",
 	accessMode: "system",
 });
+
+// Create a rich standalone AppContext with services:
+await using standalone = await createContext({ accessMode: "system" });
+await standalone.collections.posts.find({});
 ```
+
+The standalone `services`, service namespaces, `collections` and `globals` stay
+bound to that context's session, access mode and request-service scope until it
+is disposed.
 
 **Partial context overrides:** the second argument of every CRUD call merges with the ambient request scope (priority: explicit param → ALS scope → defaults). A bare `{ accessMode: "system" }` elevates **only** the mode, `session`, `db`, and `locale` inherit from the request automatically. The inverse works too: `{ accessMode: "user" }` inside system-scoped code re-enables access rules against the inherited session. Never re-thread session/locale by hand:
 

@@ -237,7 +237,7 @@ export function coreCodegenPlugin(): CodegenPlugin {
 						dir: "seeds",
 						description: "Database seed",
 						template: ({ camel }) =>
-							`import { seed } from "questpie/services";\n\nexport default seed({\n\tid: "${camel}",\n\tdescription: "TODO: describe what this seed does",\n\tcategory: "dev",\n\tasync run({ collections, globals, createContext, log }) {\n\t\tlog("Running ${camel} seed...");\n\t},\n});\n`,
+							`import { seed } from "questpie/services";\n\nexport default seed({\n\tid: "${camel}",\n\tdescription: "TODO: describe what this seed does",\n\tcategory: "dev",\n\tasync run({ collections, globals, log }) {\n\t\tlog("Running ${camel} seed...");\n\t},\n});\n`,
 					},
 					migration: {
 						dir: "migrations",

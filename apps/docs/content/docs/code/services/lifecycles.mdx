@@ -8,10 +8,10 @@ package: questpie
 `lifecycle` is the option that decides when your `create` runs. `namespace`
 only decides where the instance lands.
 
-| Value                   | Instances               | Sees the caller | `dispose` runs     |
-| ----------------------- | ----------------------- | --------------- | ------------------ |
-| `"singleton"` (default) | One per process         | No              | On `app.destroy()` |
-| `"request"`             | One per handler context | Yes             | Never              |
+| Value                   | Instances               | Sees the caller | `dispose` runs                |
+| ----------------------- | ----------------------- | --------------- | ----------------------------- |
+| `"singleton"` (default) | One per app             | No              | On `app.destroy()`            |
+| `"request"`             | One per execution scope | Yes             | When the execution scope ends |
 
 ## singleton
 
@@ -45,10 +45,16 @@ caller.
 
 ## request
 
-A `"request"` service is rebuilt every time QUESTPIE assembles a handler
-context. Its `create` receives that context. So `ctx.session` is the caller's
-session, and `ctx.db` is the connection the current operation runs on, open
-transaction included.
+A `"request"` service is built at most once inside an execution scope. One HTTP
+request, queue job attempt, seed, or top-level programmatic operation is one
+scope. Routes, CRUD, access rules, hooks and nested service dependencies all
+reuse the same instance in that scope.
+
+Its `create` receives the caller context. `ctx.session` is therefore the
+caller's session. `ctx.db` is the database from the context that first resolves
+the service; entering a nested transaction does not rebuild the instance. Pass
+a transactional database explicitly to a service method when that distinction
+matters.
 
 ```ts title="src/questpie/server/services/audit.ts"
 import { service } from "questpie/services";
@@ -69,10 +75,10 @@ export default service({
 The core module ships two of these. `ctx.channels` and `ctx.crdt` are both
 `"request"` services that bind themselves to the calling context.
 
-<Callout type="warn" title="One request is not one instance">
-	QUESTPIE builds a fresh handler context for route execution, for each access
-	check and for each hook. A `"request"` service is rebuilt at every one of
-	them. Use it to read the caller, not to cache work across a request.
+<Callout type="info" title="One execution scope is one instance">
+	Rebuilding handler context objects does not rebuild request services. A raw
+	HTTP stream keeps its scope alive until the body closes, errors or is
+	cancelled. Every queue retry is a separate scope.
 </Callout>
 
 ### Two restrictions
@@ -89,11 +95,44 @@ request-scoped services.
 Its `create` must also be synchronous. The path that builds it cannot await, so
 returning a promise throws.
 
-### dispose does not run
+### Disposal
 
-`dispose` fires for singletons when `app.destroy()` runs. Nothing calls it for
-a `"request"` instance. Release anything you open inside the method that opened
-it, or keep the resource on a singleton.
+`dispose` runs in reverse creation order when the framework-owned scope ends,
+including error paths. That boundary is an HTTP request, queue attempt, seed or
+top-level operation. A raw response keeps it open until the body closes, errors
+or is cancelled.
+
+### Who owns the scope
+
+Two APIs create objects called context. They do not own the same resources.
+
+| API                                                   | Result                       | Cleanup       |
+| ----------------------------------------------------- | ---------------------------- | ------------- |
+| Handler, hook, job or seed argument                   | Framework context            | Automatic     |
+| `app.createContext()`                                 | Lean CRUD `RequestContext`   | None          |
+| Generated `createContext()` imported from `#questpie` | Rich standalone `AppContext` | `await using` |
+
+The generated standalone context owns a request-service scope. Declare it with
+`await using`, even when the script currently reads only collections:
+
+```ts
+import { createContext } from "#questpie";
+
+await using ctx = await createContext();
+await ctx.services.audit.record("import-started");
+await ctx.collections.posts.find({});
+```
+
+Its `services`, service namespaces, `collections` and `globals` are bound to the
+same identity and request-service scope. Calls therefore keep the context
+session, access mode and service instances until the `await using` block ends.
+
+Singleton services are disposed sequentially in reverse initialization order.
+If app startup fails partway through, QUESTPIE disposes the singleton instances
+that were already created before rethrowing the startup error.
+
+A singleton cannot depend on a request-scoped service: it has no request scope
+to own that dependency, so app startup throws with an actionable error.
 
 ## Async create
 
@@ -190,3 +229,5 @@ factory body and into a method.
   instead of writing.
 - [Hooks](/docs/schema/hooks), one of the places a fresh handler context gets
   built.
+- [Agent service reference](https://github.com/questpie/questpie/blob/main/skills/questpie/references/business-logic.md),
+  the same contract in the shipped skill.
