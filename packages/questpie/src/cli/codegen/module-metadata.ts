@@ -1,3 +1,5 @@
+import { resolveNamedGraph } from "#questpie/shared/named-graph.js";
+
 import { findModulesFile, toFileImportSpecifier } from "../utils.js";
 import type { FactoryArgumentMetadata } from "./types.js";
 
@@ -23,15 +25,14 @@ export function extractFactoryArgumentsFromModules(
 	modules: ModuleLike[],
 ): FactoryArgumentMetadata[] {
 	const symbol = Symbol.for(CODEGEN_MODULE_METADATA_SYMBOL);
-	const seen = new Set<ModuleLike>();
 	const result: FactoryArgumentMetadata[] = [];
+	const resolvedModules = resolveNamedGraph(modules, {
+		kind: "module",
+		name: (module) => module.name,
+		children: (module) => module.modules ?? [],
+	});
 
-	function walk(module: ModuleLike): void {
-		if (seen.has(module)) return;
-		seen.add(module);
-
-		for (const child of module.modules ?? []) walk(child);
-
+	for (const module of resolvedModules) {
 		const metadata = module[symbol] as StoredModuleMetadata | undefined;
 		for (const entry of metadata?.factoryArguments ?? []) {
 			result.push({
@@ -40,8 +41,6 @@ export function extractFactoryArgumentsFromModules(
 			});
 		}
 	}
-
-	for (const module of modules) walk(module);
 	return result;
 }
 

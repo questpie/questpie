@@ -15,7 +15,7 @@ import starterModule from "#questpie/server/modules/starter/.generated/module.js
  * the additive `ExtractModulePropArr` collections fold into `never` (the create()
  * never/{} bug): `_ModuleCollections["user"] = Collection<Starter> & Collection<Admin>`
  * ⇒ `never` ⇒ `CollectionInsert` `never` / CRUD select `{}`. The fold now uses
- * `ExtractModulePropArrOverride` (override, not intersect) so the most-derived
+ * `CodegenResolvedModulePropArr` (override, not intersect) so the most-derived
  * admin re-declaration shadows the nested starter one. The remaining starter
  * collections are passed through by reference (mirrors admin re-declaring the full
  * starter set directly) so the names-only `Questpie.CollectionKeys` registry — which

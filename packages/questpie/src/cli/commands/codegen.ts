@@ -10,7 +10,10 @@ import { watch } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
-import { extractPluginsFromModules } from "../codegen/extract-plugins.js";
+import {
+	extractPluginsFromModules,
+	resolveCodegenPluginOccurrences,
+} from "../codegen/extract-plugins.js";
 import {
 	coreCodegenPlugin,
 	resolveTargetGraph,
@@ -929,7 +932,8 @@ function printDiscovered(
  * traverses the module tree, and extracts all plugins — so they participate
  * in codegen without manual registration in questpie.config.ts.
  *
- * Merge order: module-extracted plugins → runtimeConfig plugins.
+ * Merge order: runtimeConfig plugins → module-extracted plugins. Repeated
+ * object identities deduplicate; distinct plugins sharing one name reject.
  * Core plugin is always prepended by runAllTargets/runCodegen.
  *
  * A failure here is fatal on purpose. Those plugins declare whole categories,
@@ -944,10 +948,16 @@ export async function extractModulePlugins(
 	configPlugins: CodegenPlugin[],
 	options: GenerateOptions,
 ): Promise<CodegenPlugin[]> {
+	const configOccurrences = configPlugins.map((plugin) => ({
+		plugin,
+		source: "runtimeConfig({ plugins })",
+	}));
 	const modulesPath = await findModulesFile(rootDir);
 	// A missing modules.ts is not this function's error to report. The root
 	// template raises it with a better message, and other modes never have one.
-	if (!modulesPath) return configPlugins;
+	if (!modulesPath) {
+		return resolveCodegenPluginOccurrences(configOccurrences);
+	}
 
 	let modulesExport: Record<string, unknown>;
 	try {
@@ -978,7 +988,9 @@ export async function extractModulePlugins(
 	}
 
 	const modulePlugins = extractPluginsFromModules(modules);
-	if (modulePlugins.length === 0) return configPlugins;
+	if (modulePlugins.length === 0) {
+		return resolveCodegenPluginOccurrences(configOccurrences);
+	}
 
 	if (options.verbose) {
 		console.log(
@@ -986,22 +998,13 @@ export async function extractModulePlugins(
 		);
 	}
 
-	// Dedupe: module-extracted first, then config plugins (config wins on name collision)
-	const seen = new Set<string>();
-	const merged: CodegenPlugin[] = [];
-	// Config plugins take priority — add them first to the seen set
-	for (const p of configPlugins) {
-		seen.add(p.name);
-		merged.push(p);
-	}
-	// Then add module-extracted plugins that weren't already in config
-	for (const p of modulePlugins) {
-		if (!seen.has(p.name)) {
-			seen.add(p.name);
-			merged.push(p);
-		}
-	}
-	return merged;
+	return resolveCodegenPluginOccurrences([
+		...configOccurrences,
+		...modulePlugins.map((plugin) => ({
+			plugin,
+			source: "modules.ts",
+		})),
+	]);
 }
 
 /**

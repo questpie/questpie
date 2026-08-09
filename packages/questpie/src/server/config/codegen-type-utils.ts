@@ -81,24 +81,11 @@ export type MergeModuleProp<
 > = ExtractModulePropArr<TModules, K>;
 
 /**
- * Override-merging companion of {@link ExtractModuleProp} for whole-definition
- * categories (collections/globals) where a same-key contribution must REPLACE,
- * not intersect.
+ * Legacy override fold retained for source compatibility.
  *
- * The additive fold above intersects every contribution with `&`. That is correct
- * for additive registry categories (fieldTypes/views/components) whose members are
- * distinct-keyed records. It is WRONG for collections: a module may both NEST a
- * sub-module that ships `collections.user` AND re-declare `collections.user` via
- * `collection("user").merge(sub.collections.user)`. Intersecting the two full
- * `Collection<A> & Collection<B>` instantiations collapses the value to `never`
- * (a shared member like `i18nTable`/`versionsTable` is `null` on one side and a
- * typed table on the other, and `null & {…}` reduces the whole object to `never`),
- * which then poisons `CollectionInsert`/`CollectionSelect` into `never`/`{}`.
- *
- * This variant uses `Override<nested, direct>` so the OUTER (most-derived) module's
- * direct `M[K]` shadows the nested sub-modules' contribution for the same key,
- * while distinct keys from both sides survive — i.e. a re-declared collection
- * replaces its base instead of detonating into `never`.
+ * @deprecated Prefer app-generated category types instead of folding module
+ * graphs directly. This helper preserves its original recursive semantics and
+ * does not provide the validated graph ordering used by QUESTPIE codegen.
  */
 export type ExtractModulePropOverride<M, K extends string> = Override<
 	M extends { modules: infer Sub extends readonly any[] }
@@ -108,9 +95,10 @@ export type ExtractModulePropOverride<M, K extends string> = Override<
 >;
 
 /**
- * Array companion for {@link ExtractModulePropOverride} — folds a readonly tuple
- * of modules with last-wins override semantics (a later sibling re-declaring a
- * key shadows an earlier one), mirroring the runtime spread-merge order.
+ * Legacy tuple companion for {@link ExtractModulePropOverride}.
+ *
+ * @deprecated Prefer app-generated category types. Retained unchanged for
+ * consumers importing it from `questpie/types`.
  */
 export type ExtractModulePropArrOverride<
 	A extends readonly any[],
@@ -121,6 +109,92 @@ export type ExtractModulePropArrOverride<
 			ExtractModulePropArrOverride<T, K>
 		>
 	: {};
+
+/**
+ * Ordered merge support for generated category records, where a same-key
+ * contribution must replace rather than intersect the previous definition.
+ *
+ * The additive fold above intersects every contribution with `&`. It remains for
+ * genuinely additive values, but it is wrong for runtime record merges. For
+ * example, a module may both nest a
+ * sub-module that ships `collections.user` AND re-declare `collections.user` via
+ * `collection("user").merge(sub.collections.user)`. Intersecting the two full
+ * `Collection<A> & Collection<B>` instantiations collapses the value to `never`
+ * (a shared member like `i18nTable`/`versionsTable` is `null` on one side and a
+ * typed table on the other, and `null & {…}` reduces the whole object to `never`),
+ * which then poisons `CollectionInsert`/`CollectionSelect` into `never`/`{}`.
+ *
+ * This variant follows the runtime's identity-deduplicated, children-first DFS.
+ * A module's direct `M[K]` shadows its dependencies, while a shared dependency
+ * reached through a later diamond branch is not replayed after an earlier
+ * dependent. Distinct keys from every resolved module still survive.
+ */
+type ValidatedModuleName<M> = M extends { name: infer Name extends string }
+	? string extends Name
+		? never
+		: Name
+	: never;
+
+type ModulePropFoldState<Result, Seen> = {
+	result: Result;
+	seen: Seen;
+};
+
+type ExtractDirectModuleProp<M, K extends string> = K extends keyof M
+	? M[K] extends Record<string, any>
+		? M[K]
+		: {}
+	: {};
+
+type FoldModulePropOverride<
+	M,
+	K extends string,
+	State extends ModulePropFoldState<any, any>,
+> = [ValidatedModuleName<M>] extends [State["seen"]]
+	? [ValidatedModuleName<M>] extends [never]
+		? never
+		: State
+	: FoldModulePropArrOverride<
+				M extends { modules: infer Sub extends readonly any[] } ? Sub : [],
+				K,
+				ModulePropFoldState<
+					State["result"],
+					State["seen"] | ValidatedModuleName<M>
+				>
+		  > extends infer NestedState extends ModulePropFoldState<any, any>
+		? ModulePropFoldState<
+				Override<NestedState["result"], ExtractDirectModuleProp<M, K>>,
+				NestedState["seen"]
+			>
+		: never;
+
+type FoldModulePropArrOverride<
+	A extends readonly any[],
+	K extends string,
+	State extends ModulePropFoldState<any, any>,
+> = A extends readonly [infer Head, ...infer Tail extends readonly any[]]
+	? FoldModulePropArrOverride<Tail, K, FoldModulePropOverride<Head, K, State>>
+	: State;
+
+/**
+ * Codegen-only fold for a module graph that has already passed runtime graph
+ * validation. Generated/module-factory definitions preserve narrow literal
+ * names; runtime validation guarantees each such name identifies exactly one
+ * object and rejects cycles and distinct objects sharing a name before code is
+ * emitted. Under those preconditions, names are a sound type-level stand-in for
+ * object identity and reproduce children-first, first-position dedupe. A module
+ * whose name has widened to `string` produces `never` instead of silently using
+ * structural equality as fake object identity.
+ *
+ * TypeScript cannot observe JavaScript object identity or diagnose arbitrary
+ * recursive object graphs. Do not use this helper on an unvalidated module tree.
+ *
+ * @internal Generated QUESTPIE code only.
+ */
+export type CodegenResolvedModulePropArr<
+	A extends readonly any[],
+	K extends string,
+> = FoldModulePropArrOverride<A, K, ModulePropFoldState<{}, never>>["result"];
 
 /**
  * Normalize a service namespace to its runtime placement namespace.

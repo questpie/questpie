@@ -65,30 +65,30 @@ import type { RouteParamsFromKey, RouteWithParams } from "questpie/types";
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
-import type { ExtractModulePropArr, ExtractModulePropArrOverride, Override, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";
+import type { CodegenResolvedModulePropArr, ExtractModulePropArr, Override, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";
 type _RouteDefinitionWithoutHandler<T> = T extends { mode: "raw" } ? Omit<T, "handler"> & { handler: (args: unknown) => Response | Promise<Response> } : Omit<T, "handler"> & { handler: (args: unknown) => unknown | Promise<unknown> };
-export type _ModuleCollections = ExtractModulePropArrOverride<typeof _modules, "collections">;
-export type _ModuleChannels = ExtractModulePropArr<typeof _modules, "channels">;
-export type _ModuleGlobals = ExtractModulePropArr<typeof _modules, "globals">;
-export type _ModuleJobs = ExtractModulePropArr<typeof _modules, "jobs">;
-export type _ModuleRoutes = ExtractModulePropArr<typeof _modules, "routes">;
+export type _ModuleCollections = CodegenResolvedModulePropArr<typeof _modules, "collections">;
+export type _ModuleChannels = CodegenResolvedModulePropArr<typeof _modules, "channels">;
+export type _ModuleGlobals = CodegenResolvedModulePropArr<typeof _modules, "globals">;
+export type _ModuleJobs = CodegenResolvedModulePropArr<typeof _modules, "jobs">;
+export type _ModuleRoutes = CodegenResolvedModulePropArr<typeof _modules, "routes">;
 export type _ModuleServices = {};
-export type _ModuleFieldTypes = ExtractModulePropArr<typeof _modules, "fieldTypes">;
-export type _ModuleViews = ExtractModulePropArr<typeof _modules, "views">;
-export type _ModuleComponents = ExtractModulePropArr<typeof _modules, "components">;
-export type _ModuleBlocks = ExtractModulePropArr<typeof _modules, "blocks">;
+export type _ModuleFieldTypes = CodegenResolvedModulePropArr<typeof _modules, "fieldTypes">;
+export type _ModuleViews = CodegenResolvedModulePropArr<typeof _modules, "views">;
+export type _ModuleComponents = CodegenResolvedModulePropArr<typeof _modules, "components">;
+export type _ModuleBlocks = CodegenResolvedModulePropArr<typeof _modules, "blocks">;
 // Registry category extraction from modules
-export type _Registry_Collections = ExtractModulePropArrOverride<typeof _modules, "collections">;
-export type _Registry_Channels = ExtractModulePropArr<typeof _modules, "channels">;
-export type _Registry_Globals = ExtractModulePropArr<typeof _modules, "globals">;
-export type _Registry_Jobs = ExtractModulePropArr<typeof _modules, "jobs">;
-export type _Registry_Routes = ExtractModulePropArr<typeof _modules, "routes">;
+export type _Registry_Collections = CodegenResolvedModulePropArr<typeof _modules, "collections">;
+export type _Registry_Channels = CodegenResolvedModulePropArr<typeof _modules, "channels">;
+export type _Registry_Globals = CodegenResolvedModulePropArr<typeof _modules, "globals">;
+export type _Registry_Jobs = CodegenResolvedModulePropArr<typeof _modules, "jobs">;
+export type _Registry_Routes = CodegenResolvedModulePropArr<typeof _modules, "routes">;
 export type _Registry_Services = {};
-export type _Registry_Emails = ExtractModulePropArr<typeof _modules, "emails">;
-export type _Registry_FieldTypes = ExtractModulePropArr<typeof _modules, "fieldTypes">;
-export type _Registry_Views = ExtractModulePropArr<typeof _modules, "views">;
-export type _Registry_Components = ExtractModulePropArr<typeof _modules, "components">;
-export type _Registry_Blocks = ExtractModulePropArr<typeof _modules, "blocks">;
+export type _Registry_Emails = CodegenResolvedModulePropArr<typeof _modules, "emails">;
+export type _Registry_FieldTypes = CodegenResolvedModulePropArr<typeof _modules, "fieldTypes">;
+export type _Registry_Views = CodegenResolvedModulePropArr<typeof _modules, "views">;
+export type _Registry_Components = CodegenResolvedModulePropArr<typeof _modules, "components">;
+export type _Registry_Blocks = CodegenResolvedModulePropArr<typeof _modules, "blocks">;
 
 // Recursive module property extraction (for fields contributed at each level)
 import type { ExtractModuleProp } from "questpie/types";
@@ -111,9 +111,9 @@ export type AppCollections = Override<_ModuleCollections, {
 export type AppChannels = _ModuleChannels;
 
 /** All globals in the app (modules + user, user overrides) */
-export type AppGlobals = _ModuleGlobals & {
+export type AppGlobals = Override<_ModuleGlobals, {
 	site_settings: typeof _glob_site_settings;
-};
+}>;
 
 /** All jobs in the app (modules + user, user overrides) */
 export type AppJobs = _ModuleJobs;
@@ -146,20 +146,4 @@ export type AppViews = _ModuleViews;
 export type AppComponents = _ModuleComponents;
 
 /** All blocks in the app (modules + user, user overrides) */
-export type AppBlocks = _ModuleBlocks
-	& { [K in typeof _bloc_accordion.state.name]: typeof _bloc_accordion }
-	& { [K in typeof _bloc_announcementBanner.state.name]: typeof _bloc_announcementBanner }
-	& { [K in typeof _bloc_columns.state.name]: typeof _bloc_columns }
-	& { [K in typeof _bloc_contactsList.state.name]: typeof _bloc_contactsList }
-	& { [K in typeof _bloc_cta.state.name]: typeof _bloc_cta }
-	& { [K in typeof _bloc_divider.state.name]: typeof _bloc_divider }
-	& { [K in typeof _bloc_documentsList.state.name]: typeof _bloc_documentsList }
-	& { [K in typeof _bloc_gallery.state.name]: typeof _bloc_gallery }
-	& { [K in typeof _bloc_heading.state.name]: typeof _bloc_heading }
-	& { [K in typeof _bloc_hero.state.name]: typeof _bloc_hero }
-	& { [K in typeof _bloc_image.state.name]: typeof _bloc_image }
-	& { [K in typeof _bloc_imageText.state.name]: typeof _bloc_imageText }
-	& { [K in typeof _bloc_latestNews.state.name]: typeof _bloc_latestNews }
-	& { [K in typeof _bloc_spacer.state.name]: typeof _bloc_spacer }
-	& { [K in typeof _bloc_text.state.name]: typeof _bloc_text }
-	& { [K in typeof _bloc_video.state.name]: typeof _bloc_video };
+export type AppBlocks = Override<Override<Override<Override<Override<Override<Override<Override<Override<Override<Override<Override<Override<Override<Override<Override<_ModuleBlocks, { [K in typeof _bloc_accordion.state.name]: typeof _bloc_accordion }>, { [K in typeof _bloc_announcementBanner.state.name]: typeof _bloc_announcementBanner }>, { [K in typeof _bloc_columns.state.name]: typeof _bloc_columns }>, { [K in typeof _bloc_contactsList.state.name]: typeof _bloc_contactsList }>, { [K in typeof _bloc_cta.state.name]: typeof _bloc_cta }>, { [K in typeof _bloc_divider.state.name]: typeof _bloc_divider }>, { [K in typeof _bloc_documentsList.state.name]: typeof _bloc_documentsList }>, { [K in typeof _bloc_gallery.state.name]: typeof _bloc_gallery }>, { [K in typeof _bloc_heading.state.name]: typeof _bloc_heading }>, { [K in typeof _bloc_hero.state.name]: typeof _bloc_hero }>, { [K in typeof _bloc_image.state.name]: typeof _bloc_image }>, { [K in typeof _bloc_imageText.state.name]: typeof _bloc_imageText }>, { [K in typeof _bloc_latestNews.state.name]: typeof _bloc_latestNews }>, { [K in typeof _bloc_spacer.state.name]: typeof _bloc_spacer }>, { [K in typeof _bloc_text.state.name]: typeof _bloc_text }>, { [K in typeof _bloc_video.state.name]: typeof _bloc_video }>;

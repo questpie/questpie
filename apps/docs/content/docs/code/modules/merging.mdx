@@ -34,7 +34,8 @@ above them.
 
 The list is built before anything merges.
 
-1. `questpie-core` goes first, unless you listed it yourself.
+1. The canonical `questpie-core` object goes first. Listing that same object
+   yourself is harmless and deduplicates later.
 2. Then your `modules.ts` array, in the order you wrote it.
 3. Then one implicit module holding everything codegen found in your own
    directories.
@@ -56,15 +57,20 @@ Those first three are not in your array. `adminModule` depends on
 The list is then folded left to right. Your files are last. On every key that
 overrides by key, yours is the version that survives.
 
-## Duplicates collapse by name
+Codegen derives category types from this same validated order. It does not
+intersect a definition that runtime has replaced, and a shared dependency in a
+diamond contributes once at its first resolved position.
 
-A module that appears twice in the resolved list is kept once, at its **last**
-position. Two modules that both depend on the starter do not merge the starter
-twice.
+## Repeated identities deduplicate; name collisions fail
 
-The key is the `name` string, not the object identity. Two different objects
-that both call themselves `blog` collapse into one, and the later one survives.
-Give every module a unique, stable name.
+A module object reached twice is kept once, at its **first** resolved position.
+Two modules that both depend on the same starter object therefore merge the
+starter once, before both dependents.
+
+The `name` string is still the public identity, so two **different** objects
+that both call themselves `blog` are ambiguous and fail with both graph paths.
+Give every distinct module a unique, stable name; reuse the exact object for an
+intentional diamond.
 
 ## The config bucket
 
@@ -92,11 +98,18 @@ own `config/auth.ts` merges on top without dropping it.
 ## Codegen plugins are collected separately
 
 `plugin` never reaches the merge above. Codegen walks the same module tree in a
-pre-pass, depth-first. It collects every `plugin` and de-dups by the plugin's
-`name`. The **first** occurrence wins there, not the last.
+pre-pass, depth-first with dependencies before their dependents. Reaching the
+same module or plugin object through a diamond is safe and contributes it once.
 
-Plugins you passed to `runtimeConfig({ plugins })` are seen first. So a
-config-level plugin beats a module plugin with the same name.
+Names are identities, not override slots. Two different module objects with one
+`name`, or two different plugin objects with one `name`, stop generation with
+both sources in the error. This also applies across
+`runtimeConfig({ plugins })` and module-contributed plugins. Reuse the same
+object when a dependency diamond intentionally reaches one contribution more
+than once; rename genuinely different modules or plugins.
+
+A circular `modules` dependency also stops immediately and prints the cycle,
+for example `billing -> shared -> billing`.
 
 <Callout type="warn" title="Two phases, one package">
 	A module's entities merge at runtime. Its plugin runs at codegen. If the

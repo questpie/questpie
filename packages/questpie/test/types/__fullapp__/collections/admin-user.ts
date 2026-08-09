@@ -7,7 +7,7 @@
  * This is the exact same-key, cross-module-nesting re-declaration that detonated
  * the additive `ExtractModulePropArr` fold into `never` (the create() never/{} bug).
  * Pulling it through the fold here makes the package gate SEE the bug the module-only
- * gate was blind to — the override fold (`ExtractModulePropArrOverride`) is what
+ * gate was blind to — the ordered fold (`CodegenResolvedModulePropArr`) is what
  * keeps `AppCollections["user"]` a real `Collection` instead of `never`.
  */
 import { collection } from "#questpie/server/collection/builder/collection-builder.js";

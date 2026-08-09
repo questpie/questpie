@@ -28,7 +28,6 @@ import {
 } from "../../src/cli/codegen/module-metadata.js";
 import { generateTemplate as _generateTemplate } from "../../src/cli/codegen/template.js";
 import type {
-	CodegenPlugin,
 	DiscoveredFile,
 	DiscoveryResult,
 } from "../../src/cli/codegen/types.js";
@@ -199,23 +198,18 @@ describe("extractPluginsFromModules", () => {
 		expect(result[1].name).toBe("parent-plugin");
 	});
 
-	it("deduplicates plugins by name (first wins)", () => {
-		const plugin1 = {
+	it("deduplicates the same plugin object reached more than once", () => {
+		const sharedPlugin = {
 			name: "shared-plugin",
 			targets: { server: { root: ".", outputFile: "a.ts" } },
 		};
-		const plugin2 = {
-			name: "shared-plugin",
-			targets: { server: { root: ".", outputFile: "b.ts" } },
-		};
 		const modules = [
-			{ name: "mod-a", plugin: plugin1 },
-			{ name: "mod-b", plugin: plugin2 },
+			{ name: "mod-a", plugin: sharedPlugin },
+			{ name: "mod-b", plugin: sharedPlugin },
 		];
 		const result = extractPluginsFromModules(modules);
 		expect(result).toHaveLength(1);
-		// First occurrence wins
-		expect(result[0]).toBe(plugin1);
+		expect(result[0]).toBe(sharedPlugin);
 	});
 
 	it("handles array of plugins on a module", () => {

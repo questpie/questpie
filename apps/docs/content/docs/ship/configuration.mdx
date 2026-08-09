@@ -168,8 +168,9 @@ export default [adminModule, openApiModule] as const;
 
 Codegen reads this file first, in its own pass, so each module's file
 conventions are registered before discovery runs. The tree is walked
-dependencies first, and two modules with the same name collapse to the last one.
-See [Modules](/docs/code/modules).
+dependencies first. Repeated references to the same module object contribute it
+once; different module objects with one name fail with both graph paths. See
+[Modules](/docs/code/modules).
 
 ## Plugins bring their own file
 
