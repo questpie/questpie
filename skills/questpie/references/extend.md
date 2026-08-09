@@ -413,6 +413,11 @@ const server = new Hono().route("/", questpieHono(app, { basePath: "/api" }));
 export default server;
 ```
 
+`questpieMiddleware(app)` remains a QUESTPIE 3.x compatibility helper for
+existing native Hono routes that consume `appContext`. New integrations should
+mount `questpieHono` directly; the compatibility helper is scheduled for
+removal in QUESTPIE 4.0.
+
 **Next.js (App Router):**
 
 ```ts title="app/api/[...slug]/route.ts"

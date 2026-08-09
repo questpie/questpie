@@ -4,6 +4,7 @@ import {
 	type NativeAdapterConfig,
 	type Questpie,
 } from "questpie";
+import { normalizeBasePath } from "questpie/internal/http-adapter";
 
 /**
  * Context stored in Elysia decorator
@@ -63,14 +64,7 @@ export function questpieElysia(
 	app: Questpie<any>,
 	config: ElysiaAdapterConfig = {},
 ) {
-	const configuredBasePath = config.basePath ?? "/";
-	const prefixedBasePath = configuredBasePath.startsWith("/")
-		? configuredBasePath
-		: `/${configuredBasePath}`;
-	const basePath =
-		prefixedBasePath.length > 1 && prefixedBasePath.endsWith("/")
-			? prefixedBasePath.slice(0, -1)
-			: prefixedBasePath;
+	const basePath = normalizeBasePath(config.basePath ?? "/");
 	const handler = createFetchHandler(app, {
 		...config,
 		basePath,

@@ -24,6 +24,26 @@ export default { port: 3000, fetch: server.fetch };
 export type AppType = typeof server;
 ```
 
+Mount the returned Hono app at `"/"` and set QUESTPIE ownership with
+`basePath`. Core owns the exact base path and every descendant, including its
+404 and 405 responses; sibling paths continue through native Hono routing.
+
+`HonoAdapterConfig` is the core `NativeAdapterConfig` contract. It intentionally
+omits `accessMode`: native HTTP mounts always run with user authority and cannot
+opt into the privileged system bypass.
+
+### QUESTPIE 3.x compatibility middleware
+
+Existing native routes may still compose `questpieMiddleware(app)` to receive
+the complete `appContext`, including database handles and custom functions,
+promises, services, or class instances. QUESTPIE snapshots request authority
+before native middleware runs and derives a separate private mount context.
+Native mutations therefore cannot forge the mount session, request extensions,
+or fresh channel/live-query reauthorization. Session and OAuth resolve once;
+the application context resolver runs again only when the QUESTPIE mount is
+reached. This compatibility helper is scheduled for removal in QUESTPIE 4.0;
+new mounts should use `questpieHono` and its `getSession` option directly.
+
 ## Client Setup
 
 ### Hono RPC Client (Unified)

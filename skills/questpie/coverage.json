@@ -71,6 +71,7 @@
 		"noopMeter": "no-op default for ObservabilityAdapter authors; apps configure an adapter instead",
 		"noopSpan": "no-op default for ObservabilityAdapter authors; apps configure an adapter instead",
 		"noopTracer": "no-op default for ObservabilityAdapter authors; apps configure an adapter instead",
+		"normalizeBasePath": "internal canonical HTTP mount normalization shared by core and adapter packages",
 		"validateChannelWirePattern": "advanced channel adapter/helper surface",
 		"verifyCrdtCandidateToken": "custom CRDT engine staged-candidate verifier",
 		"verifyCrdtStagedAggregateBundle": "custom CRDT engine staged-bundle verifier"

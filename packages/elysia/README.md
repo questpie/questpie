@@ -13,14 +13,23 @@ bun add @questpie/elysia questpie elysia
 ```ts
 import { Elysia } from "elysia";
 import { questpieElysia } from "@questpie/elysia/server";
-import { app } from "./questpie";
+import { app as questpieApp } from "./questpie";
 
-const app = new Elysia()
-	.use(questpieElysia(app, { basePath: "/api" }))
+const server = new Elysia()
+	.use(questpieElysia(questpieApp, { basePath: "/api" }))
 	.listen(3000);
 
-export type App = typeof app;
+export type App = typeof server;
 ```
+
+Compose the adapter with `.use(...)` and set QUESTPIE ownership with
+`basePath`. Core normalizes that path and owns its exact path and descendants,
+including 404 and 405 responses. Sibling native Elysia routes remain outside the
+mount.
+
+`ElysiaAdapterConfig` is the core `NativeAdapterConfig` contract. It
+intentionally omits `accessMode`: native HTTP mounts always run with user
+authority and cannot opt into the privileged system bypass.
 
 ## Client Setup
 
