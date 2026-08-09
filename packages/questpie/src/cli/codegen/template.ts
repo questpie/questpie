@@ -404,7 +404,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 
 	// L1 type-utils — feed `_Module*` / `_Registry_*` / `_AllModule*` / AppServices.
 	lines.push(
-		'import type { ExtractModulePropArr, ExtractModulePropArrOverride, Override, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";',
+		'import type { CodegenResolvedModulePropArr, ExtractModulePropArr, Override, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";',
 	);
 	// The WorkflowClient<…> wrapper is consumed only by the L2 AppContext/
 	// JobHandler/Workflow contexts (`hasWorkflows` declared up-front above).
@@ -416,9 +416,9 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	lines.push(
 		'type _RouteDefinitionWithoutHandler<T> = T extends { mode: "raw" } ? Omit<T, "handler"> & { handler: (args: unknown) => Response | Promise<Response> } : Omit<T, "handler"> & { handler: (args: unknown) => unknown | Promise<unknown> };',
 	);
-	// Module category extraction is done via `ExtractModulePropArr` — a recursive,
-	// member-only fold over the module tuple (recurses sub-modules, projects only
-	// the requested member). It replaces the old `_MP`/`UnionToIntersection` fuse:
+	// Module category extraction uses a member-only fold over the module tuple
+	// (recurses sub-modules, projects only the requested member). It replaces the
+	// old `_MP`/`UnionToIntersection` fuse:
 	// `UnionToIntersection` forced eager whole-union materialization, which dragged
 	// the cyclic config/services carrier members through AppContext (TS2456). The
 	// recursive fold walks modules one at a time and never materializes a sibling
@@ -496,7 +496,8 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	// ── L1 flat category maps resume — `_Module*` / `_Registry_*` ──────────
 	lines = l1;
 	// ── _Module* type extraction for categories ──────────────────
-	// SAFE categories use the recursive member-only `ExtractModulePropArr` fold
+	// SAFE category records use `CodegenResolvedModulePropArr`, which mirrors the
+	// runtime's validated, children-first, identity-deduplicated last-wins merge.
 	// (acyclic — the members carry no AppContext back-reference). The `services`
 	// category is the ONE carrier whose member VALUES reach AppContext (a service's
 	// `create(ctx: ServiceCreateContext)` → AppContext); ANY fold over the module
@@ -506,24 +507,17 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	// CoreServices are framework infrastructure surfaced via _AppInfraContext, not
 	// the user module array). `moduleCategoryType()` centralises this rule.
 	//
-	// The `collections` category uses the OVERRIDE fold instead of the additive `&`
-	// one: a module may both NEST a sub-module shipping `collections.user` AND
-	// re-declare `collections.user` via `collection("user").merge(sub.collections.user)`
-	// (the admin module re-declaring starter's user). Intersecting the two full
-	// `Collection<A> & Collection<B>` instantiations collapses the value to `never`
-	// (nullable-table member drift detonates the object), poisoning
-	// `CollectionInsert`/`CollectionSelect` → `never`/`{}`. `ExtractModulePropArrOverride`
-	// makes the most-derived (outer) re-declaration shadow the nested base instead.
+	// Every category record uses the same ordered fold. Runtime spread-merges all
+	// category maps, so globals/jobs/routes/plugin categories must not intersect a
+	// shadowed definition or replay a shared dependency through a diamond either.
 	const moduleCategoryType = (catName: string): string =>
 		catName === "services"
 			? "{}"
-			: catName === "collections"
-				? `ExtractModulePropArrOverride<typeof ${modulesFile.varName}, "${catName}">`
-				: `ExtractModulePropArr<typeof ${modulesFile.varName}, "${catName}">`;
+			: `CodegenResolvedModulePropArr<typeof ${modulesFile.varName}, "${catName}">`;
 	// Exported — `_ModuleCollections` feeds the L2 `_JobHandlerCollections`
 	// literal (imported DOWN from entities.gen.ts). The rest are exported
 	// uniformly (harmless) so any future L2 reference resolves.
-	for (const [catName, fileMap] of discovered.categories) {
+	for (const [catName] of discovered.categories) {
 		const decl = allDecls.get(catName);
 		const shouldExtract = decl ? decl.extractFromModules !== false : true;
 		if (!shouldExtract) continue;
@@ -537,7 +531,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	for (const [stateKey] of discovered.spreads) {
 		const moduleTypeName = deriveModuleTypeName(stateKey);
 		lines.push(
-			`export type ${moduleTypeName} = ${moduleCategoryType(stateKey)};`,
+			`export type ${moduleTypeName} = ExtractModulePropArr<typeof ${modulesFile.varName}, "${stateKey}">;`,
 		);
 	}
 
@@ -700,11 +694,13 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 					"/** All service definitions in the app (modules + user, user overrides). */",
 				);
 				if (hasUser) {
-					lines.push(`type _AppServiceDefinitions = ${moduleTypeName} & {`);
+					lines.push(
+						`type _AppServiceDefinitions = Override<${moduleTypeName}, {`,
+					);
 					for (const file of sortedValues(fileMap)) {
 						lines.push(`\t${safeKey(file.key)}: typeof ${file.varName};`);
 					}
-					lines.push("};");
+					lines.push("}>;");
 				} else {
 					lines.push(`type _AppServiceDefinitions = ${moduleTypeName};`);
 				}
@@ -1798,32 +1794,20 @@ function emitTypeInterface(
 	lines.push(`/** All ${label} in the app (modules + user, user overrides) */`);
 	if (hasUser) {
 		if (decl?.keyFromProperty) {
-			lines.push(`export type ${typeName} = ${moduleTypeName}`);
-			const files = sortedValues(fileMap);
-			for (const [index, file] of files.entries()) {
-				const suffix = index === files.length - 1 ? ";" : "";
-				lines.push(
-					`	& { ${categoryTypeEntry(file, decl, catName)} }${suffix}`,
-				);
-			}
-		} else {
-			// `collections` must OVERRIDE (not intersect) on shared keys: a user app may
-			// re-declare a module-contributed collection (e.g. a standalone
-			// `collection("assets")`). Intersecting `_ModuleCollections & { assets }`
-			// detonates the shared collection to `never` (nullable-table member drift),
-			// poisoning CollectionInsert/Select — the same reason the module-level fold
-			// uses `ExtractModulePropArrOverride`. `Override<module, user>` lets the
-			// most-derived user definition shadow the module one; distinct keys survive.
-			const overrideFold = catName === "collections";
-			lines.push(
-				overrideFold
-					? `export type ${typeName} = Override<${moduleTypeName}, {`
-					: `export type ${typeName} = ${moduleTypeName} & {`,
+			const resolvedType = sortedValues(fileMap).reduce(
+				(current, file) =>
+					`Override<${current}, { ${categoryTypeEntry(file, decl, catName)} }>`,
+				moduleTypeName,
 			);
+			lines.push(`export type ${typeName} = ${resolvedType};`);
+		} else {
+			// Root entities become the last `__user` runtime module, so every category
+			// record uses the same last-wins override semantics here.
+			lines.push(`export type ${typeName} = Override<${moduleTypeName}, {`);
 			for (const file of sortedValues(fileMap)) {
 				lines.push(`\t${categoryTypeEntry(file, decl, catName)};`);
 			}
-			lines.push(overrideFold ? "}>;" : "};");
+			lines.push("}>;");
 		}
 	} else {
 		lines.push(`export type ${typeName} = ${moduleTypeName};`);
@@ -1843,13 +1827,13 @@ function emitRouteTypeInterface(
 	const hasUser = fileMap.size > 0;
 	lines.push("/** All routes in the app (modules + user, user overrides) */");
 	if (hasUser) {
-		lines.push(`export type ${typeName} = ${moduleTypeName} & {`);
+		lines.push(`export type ${typeName} = Override<${moduleTypeName}, {`);
 		for (const file of sortedValues(fileMap)) {
 			lines.push(
 				`\t${safeKey(file.key)}: RouteWithParams<_RouteDefinitionWithoutHandler<typeof ${file.varName}>, RouteParamsFromKey<${JSON.stringify(file.key)}>>;`,
 			);
 		}
-		lines.push("};");
+		lines.push("}>;");
 	} else {
 		lines.push(`export type ${typeName} = ${moduleTypeName};`);
 	}

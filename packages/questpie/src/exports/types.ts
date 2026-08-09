@@ -59,8 +59,7 @@ export {
 export type {
 	ExtractModuleProp,
 	ExtractModulePropArr,
-	ExtractModulePropArrOverride,
-	ExtractModulePropOverride,
+	CodegenResolvedModulePropArr,
 	MergeModuleProp,
 	RegistryProp,
 	ServiceCustomNamespaceInstances,

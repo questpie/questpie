@@ -81,13 +81,12 @@ export type MergeModuleProp<
 > = ExtractModulePropArr<TModules, K>;
 
 /**
- * Override-merging companion of {@link ExtractModuleProp} for whole-definition
- * categories (collections/globals) where a same-key contribution must REPLACE,
- * not intersect.
+ * Ordered merge support for generated category records, where a same-key
+ * contribution must replace rather than intersect the previous definition.
  *
- * The additive fold above intersects every contribution with `&`. That is correct
- * for additive registry categories (fieldTypes/views/components) whose members are
- * distinct-keyed records. It is WRONG for collections: a module may both NEST a
+ * The additive fold above intersects every contribution with `&`. It remains for
+ * genuinely additive values, but it is wrong for runtime record merges. For
+ * example, a module may both nest a
  * sub-module that ships `collections.user` AND re-declare `collections.user` via
  * `collection("user").merge(sub.collections.user)`. Intersecting the two full
  * `Collection<A> & Collection<B>` instantiations collapses the value to `never`
@@ -100,11 +99,11 @@ export type MergeModuleProp<
  * reached through a later diamond branch is not replayed after an earlier
  * dependent. Distinct keys from every resolved module still survive.
  */
-type ModuleIdentity<M> = M extends { name: infer Name extends string }
+type ValidatedModuleName<M> = M extends { name: infer Name extends string }
 	? string extends Name
-		? M
+		? never
 		: Name
-	: M;
+	: never;
 
 type ModulePropFoldState<Result, Seen> = {
 	result: Result;
@@ -121,12 +120,17 @@ type FoldModulePropOverride<
 	M,
 	K extends string,
 	State extends ModulePropFoldState<any, any>,
-> = [ModuleIdentity<M>] extends [State["seen"]]
-	? State
+> = [ValidatedModuleName<M>] extends [State["seen"]]
+	? [ValidatedModuleName<M>] extends [never]
+		? never
+		: State
 	: FoldModulePropArrOverride<
 				M extends { modules: infer Sub extends readonly any[] } ? Sub : [],
 				K,
-				ModulePropFoldState<State["result"], State["seen"] | ModuleIdentity<M>>
+				ModulePropFoldState<
+					State["result"],
+					State["seen"] | ValidatedModuleName<M>
+				>
 		  > extends infer NestedState extends ModulePropFoldState<any, any>
 		? ModulePropFoldState<
 				Override<NestedState["result"], ExtractDirectModuleProp<M, K>>,
@@ -142,17 +146,22 @@ type FoldModulePropArrOverride<
 	? FoldModulePropArrOverride<Tail, K, FoldModulePropOverride<Head, K, State>>
 	: State;
 
-export type ExtractModulePropOverride<
-	M,
-	K extends string,
-> = FoldModulePropOverride<M, K, ModulePropFoldState<{}, never>>["result"];
-
 /**
- * Array companion for {@link ExtractModulePropOverride} — folds a readonly tuple
- * in the runtime's identity-deduplicated merge order. A later resolved module
- * re-declaring a key shadows an earlier one.
+ * Codegen-only fold for a module graph that has already passed runtime graph
+ * validation. Generated/module-factory definitions preserve narrow literal
+ * names; runtime validation guarantees each such name identifies exactly one
+ * object and rejects cycles and distinct objects sharing a name before code is
+ * emitted. Under those preconditions, names are a sound type-level stand-in for
+ * object identity and reproduce children-first, first-position dedupe. A module
+ * whose name has widened to `string` produces `never` instead of silently using
+ * structural equality as fake object identity.
+ *
+ * TypeScript cannot observe JavaScript object identity or diagnose arbitrary
+ * recursive object graphs. Do not use this helper on an unvalidated module tree.
+ *
+ * @internal Generated QUESTPIE code only.
  */
-export type ExtractModulePropArrOverride<
+export type CodegenResolvedModulePropArr<
 	A extends readonly any[],
 	K extends string,
 > = FoldModulePropArrOverride<A, K, ModulePropFoldState<{}, never>>["result"];

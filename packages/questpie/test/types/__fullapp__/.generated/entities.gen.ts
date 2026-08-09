@@ -31,24 +31,24 @@ import type { RouteParamsFromKey, RouteWithParams } from "questpie/types";
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
-import type { ExtractModulePropArr, ExtractModulePropArrOverride, Override, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";
+import type { CodegenResolvedModulePropArr, ExtractModulePropArr, Override, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";
 type _RouteDefinitionWithoutHandler<T> = T extends { mode: "raw" } ? Omit<T, "handler"> & { handler: (args: unknown) => Response | Promise<Response> } : Omit<T, "handler"> & { handler: (args: unknown) => unknown | Promise<unknown> };
-export type _ModuleCollections = ExtractModulePropArrOverride<typeof _modules, "collections">;
-export type _ModuleChannels = ExtractModulePropArr<typeof _modules, "channels">;
-export type _ModuleGlobals = ExtractModulePropArr<typeof _modules, "globals">;
-export type _ModuleJobs = ExtractModulePropArr<typeof _modules, "jobs">;
-export type _ModuleRoutes = ExtractModulePropArr<typeof _modules, "routes">;
+export type _ModuleCollections = CodegenResolvedModulePropArr<typeof _modules, "collections">;
+export type _ModuleChannels = CodegenResolvedModulePropArr<typeof _modules, "channels">;
+export type _ModuleGlobals = CodegenResolvedModulePropArr<typeof _modules, "globals">;
+export type _ModuleJobs = CodegenResolvedModulePropArr<typeof _modules, "jobs">;
+export type _ModuleRoutes = CodegenResolvedModulePropArr<typeof _modules, "routes">;
 export type _ModuleServices = {};
-export type _ModuleFieldTypes = ExtractModulePropArr<typeof _modules, "fieldTypes">;
+export type _ModuleFieldTypes = CodegenResolvedModulePropArr<typeof _modules, "fieldTypes">;
 // Registry category extraction from modules
-export type _Registry_Collections = ExtractModulePropArrOverride<typeof _modules, "collections">;
-export type _Registry_Channels = ExtractModulePropArr<typeof _modules, "channels">;
-export type _Registry_Globals = ExtractModulePropArr<typeof _modules, "globals">;
-export type _Registry_Jobs = ExtractModulePropArr<typeof _modules, "jobs">;
-export type _Registry_Routes = ExtractModulePropArr<typeof _modules, "routes">;
+export type _Registry_Collections = CodegenResolvedModulePropArr<typeof _modules, "collections">;
+export type _Registry_Channels = CodegenResolvedModulePropArr<typeof _modules, "channels">;
+export type _Registry_Globals = CodegenResolvedModulePropArr<typeof _modules, "globals">;
+export type _Registry_Jobs = CodegenResolvedModulePropArr<typeof _modules, "jobs">;
+export type _Registry_Routes = CodegenResolvedModulePropArr<typeof _modules, "routes">;
 export type _Registry_Services = {};
-export type _Registry_Emails = ExtractModulePropArr<typeof _modules, "emails">;
-export type _Registry_FieldTypes = ExtractModulePropArr<typeof _modules, "fieldTypes">;
+export type _Registry_Emails = CodegenResolvedModulePropArr<typeof _modules, "emails">;
+export type _Registry_FieldTypes = CodegenResolvedModulePropArr<typeof _modules, "fieldTypes">;
 
 // Recursive module property extraction (for fields contributed at each level)
 import type { ExtractModuleProp } from "questpie/types";
@@ -66,9 +66,9 @@ export type AppCollections = Override<_ModuleCollections, {
 export type AppChannels = _ModuleChannels;
 
 /** All globals in the app (modules + user, user overrides) */
-export type AppGlobals = _ModuleGlobals & {
+export type AppGlobals = Override<_ModuleGlobals, {
 	siteSettings: typeof _glob_siteSettings;
-};
+}>;
 
 /** All jobs in the app (modules + user, user overrides) */
 export type AppJobs = _ModuleJobs;
@@ -77,10 +77,10 @@ export type AppJobs = _ModuleJobs;
 export type AppRoutes = _ModuleRoutes;
 
 /** All service definitions in the app (modules + user, user overrides). */
-type _AppServiceDefinitions = _ModuleServices & {
+type _AppServiceDefinitions = Override<_ModuleServices, {
 	analytics: typeof _svc_analytics;
 	reporting: typeof _svc_reporting;
-};
+}>;
 
 /** All services in the app as resolved service instances. */
 export type AppServices = {

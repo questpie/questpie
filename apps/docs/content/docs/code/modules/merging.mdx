@@ -57,6 +57,10 @@ Those first three are not in your array. `adminModule` depends on
 The list is then folded left to right. Your files are last. On every key that
 overrides by key, yours is the version that survives.
 
+Codegen derives category types from this same validated order. It does not
+intersect a definition that runtime has replaced, and a shared dependency in a
+diamond contributes once at its first resolved position.
+
 ## Repeated identities deduplicate; name collisions fail
 
 A module object reached twice is kept once, at its **first** resolved position.
