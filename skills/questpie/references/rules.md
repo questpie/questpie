@@ -302,13 +302,11 @@ transaction. Their `db` and injected services share that scope. A thrown error
 propagates and rolls back the mutation plus transaction-joined work:
 
 ```ts
-.hooks({
+	.hooks({
 	afterChange: async ({ data, channels }) => {
-		await channels.publish("postActivity", {
-			params: { postId: data.id },
-			event: "changed",
-			data: { id: data.id },
-		});
+		await channels
+			.postActivity({ postId: data.id })
+			.publish("changed", { id: data.id });
 	},
 })
 ```

@@ -1,4 +1,5 @@
 import type { ChannelDefinitions } from "#questpie/server/channels/channel-builder.js";
+import { isClientChannelFacadeReservedKey } from "#questpie/shared/channel-facade.js";
 import { stringifyTypedWire } from "#questpie/shared/typed-wire.js";
 
 import type { GetAuthHeaders } from "../auth.js";
@@ -193,7 +194,7 @@ export function createChannelsAPI<
 	const getHandle = (registryKey: string) => {
 		let handle = handles.get(registryKey);
 		if (handle) return handle;
-		handle = {
+		const legacyHandle = {
 			subscribe: (...args: unknown[]) => {
 				const hasParams = typeof args[0] !== "function";
 				const params = (hasParams ? args[0] : {}) as Record<string, string>;
@@ -233,7 +234,11 @@ export function createChannelsAPI<
 					stopInner?.();
 				};
 			},
-			publish: async (input: Record<string, unknown>) => {
+			publish: async (...args: unknown[]) => {
+				const input =
+					typeof args[0] === "string"
+						? { event: args[0], data: args[1] }
+						: (args[0] as Record<string, unknown>);
 				await getTransport();
 				descriptorFor(registryKey);
 				const authHeaders = await options.getAuthHeaders?.();
@@ -375,6 +380,28 @@ export function createChannelsAPI<
 				);
 			},
 		};
+		const bind = (params: Record<string, string>) => {
+			const boundParams = Object.freeze({ ...params });
+			return {
+				subscribe: (
+					callback: (message: ChannelTransportMessage) => void,
+					options?: ChannelSubscribeOptions,
+				) => legacyHandle.subscribe(boundParams, callback, options),
+				publish: (event: string, data: unknown) =>
+					legacyHandle.publish({ params: boundParams, event, data }),
+				iter: (options?: ChannelSubscribeOptions) =>
+					legacyHandle.iter(boundParams, options),
+				presence: (options?: ChannelPresenceOptions) =>
+					legacyHandle.presence(boundParams, options),
+				subscribePresence: (
+					callback: (members: readonly unknown[]) => void,
+					options?: ChannelSubscribeOptions,
+				) => legacyHandle.subscribePresence(boundParams, callback, options),
+				presenceIter: (options?: ChannelSubscribeOptions) =>
+					legacyHandle.presenceIter(boundParams, options),
+			};
+		};
+		handle = Object.assign(bind, legacyHandle);
 		handles.set(registryKey, handle);
 		return handle;
 	};
@@ -398,8 +425,12 @@ export function createChannelsAPI<
 
 	return new Proxy(control, {
 		get(target, property, receiver) {
-			if (property in target) return Reflect.get(target, property, receiver);
-			if (typeof property !== "string") return undefined;
+			if (
+				typeof property !== "string" ||
+				isClientChannelFacadeReservedKey(property)
+			) {
+				return Reflect.get(target, property, receiver);
+			}
 			return getHandle(property);
 		},
 	}) as ChannelsClient<TChannels>;

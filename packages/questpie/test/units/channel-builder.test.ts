@@ -6,7 +6,10 @@ import {
 	channel,
 	resolveChannelName,
 } from "../../src/server/channels/channel-builder.js";
-import { ChannelsService } from "../../src/server/channels/service.js";
+import {
+	createChannels,
+	ChannelsService,
+} from "../../src/server/channels/service.js";
 import { extractAppServices } from "../../src/server/config/app-context.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 
@@ -67,6 +70,11 @@ describe("channel ChannelsService", () => {
 				{ roomId: "one" },
 				"subscribe",
 			),
+		).toBe(true);
+		expect(
+			await (ctx.channels as any)
+				.room({ roomId: "one" })
+				.authorize("subscribe"),
 		).toBe(true);
 		await setup.cleanup();
 	});
@@ -245,6 +253,129 @@ describe("channel ChannelsService", () => {
 			scope: "principal-connections",
 			generation: 1,
 		});
+	});
+
+	test("binds params once for publish and authority invalidation", async () => {
+		const definitions = {
+			room: channel("room-[roomId]")
+				.events({ message: z.object({ text: z.string() }) })
+				.authorize(() => true),
+		};
+		const publishes: unknown[] = [];
+		const revocations: unknown[] = [];
+		const channels = createChannels(
+			definitions,
+			{
+				appendChannelEvent: async (input) => {
+					publishes.push(input);
+					return { eventId: "event-1" };
+				},
+				revokeChannelAuthority: async (input) => {
+					revocations.push(input);
+					return { scope: "exact-subscription", generation: 3 };
+				},
+			},
+			userContext,
+		);
+
+		const params = { roomId: "one" };
+		const room = channels.room(params);
+		params.roomId = "two";
+		await expect(room.publish("message", { text: "hello" })).resolves.toEqual({
+			eventId: "event-1",
+		});
+		await expect(
+			room.invalidateAuthority({
+				subject: { kind: "user", id: "user-2" },
+				idempotencyKey: "room-one:user-2:v3",
+			}),
+		).resolves.toEqual({
+			generation: 3,
+			transportEffect: "exact-binding",
+		});
+
+		expect(publishes).toEqual([
+			expect.objectContaining({
+				channel: "private-room-one",
+				event: "message",
+				data: { text: "hello" },
+			}),
+		]);
+		expect(revocations).toEqual([
+			{
+				channel: "private-room-one",
+				subject: { kind: "user", id: "user-2" },
+				idempotencyKey: "room-one:user-2:v3",
+			},
+		]);
+	});
+
+	test("keeps legacy root methods when registry keys collide with the facade", async () => {
+		const frames: unknown[] = [];
+		const channels = createChannels(
+			{
+				publish: channel("wire-publish")
+					.events({ message: z.object({ text: z.string() }) })
+					.authorize(() => true),
+			},
+			{
+				appendChannelEvent: async (input) => {
+					frames.push(input);
+					return { eventId: "event-1" };
+				},
+			},
+			userContext,
+		);
+
+		await channels.publish("publish", {
+			params: {},
+			event: "message",
+			data: { text: "legacy" },
+		});
+		expect(frames).toEqual([
+			expect.objectContaining({
+				channel: "private-wire-publish",
+				event: "message",
+			}),
+		]);
+	});
+
+	test("projects channel handles over private service member names", async () => {
+		const frames: unknown[] = [];
+		const channels = createChannels(
+			{
+				context: channel("wire-context")
+					.events({ message: z.object({ text: z.string() }) })
+					.authorize(() => true),
+			},
+			{
+				appendChannelEvent: async (input) => {
+					frames.push(input);
+					return { eventId: "event-1" };
+				},
+			},
+			userContext,
+		);
+
+		await channels.context.publish("message", { text: "registry first" });
+		expect(frames).toEqual([
+			expect.objectContaining({
+				channel: "private-wire-context",
+				event: "message",
+			}),
+		]);
+	});
+
+	test("does not turn the server facade into a thenable", async () => {
+		const channels = createChannels(
+			// oxlint-disable-next-line unicorn/no-thenable -- exercises a hostile registry key
+			Object.fromEntries([["then", channel("wire-then")]]),
+			{ appendChannelEvent: async () => ({ eventId: "unused" }) },
+			userContext,
+		);
+
+		expect(Reflect.get(channels, "then")).toBeUndefined();
+		await expect(Promise.resolve(channels)).resolves.toBe(channels);
 	});
 
 	test("publishes a batch in input order", async () => {

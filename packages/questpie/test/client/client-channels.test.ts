@@ -304,9 +304,9 @@ describe("channels client", () => {
 		transport.destroy();
 	});
 
-	test("keeps explicit plain JSON channel publishing interoperable", async () => {
+	test("supports bound publishing while keeping plain JSON interoperable", async () => {
 		const instant = new Date("2026-03-29T00:30:00.000Z");
-		let publishRequest: RequestInit | undefined;
+		const publishRequests: RequestInit[] = [];
 		const client = createClient<any>({
 			baseURL: "http://localhost:3000",
 			useSuperJSON: false,
@@ -317,11 +317,12 @@ describe("channels client", () => {
 						transport: "sse",
 						channels: {
 							news: { pattern: "news", visibility: "public" },
+							room: { pattern: "room-[roomId]", visibility: "private" },
 						},
 					});
 				}
 				if (url.endsWith("/channels/publish")) {
-					publishRequest = init;
+					publishRequests.push(init ?? {});
 					return Response.json({ eventId: "event-1" });
 				}
 				throw new Error(`Unexpected request: ${url}`);
@@ -332,16 +333,86 @@ describe("channels client", () => {
 			event: "updated",
 			data: { startsAt: instant },
 		});
+		await client.channels.news.publish("updated", { startsAt: instant });
+		const roomParams = { roomId: "one" };
+		const room = client.channels.room(roomParams);
+		roomParams.roomId = "two";
+		await room.publish("message", {
+			text: "hello",
+		});
 
-		expect(new Headers(publishRequest?.headers).get("Content-Type")).toBe(
+		expect(new Headers(publishRequests[0]?.headers).get("Content-Type")).toBe(
 			"application/json",
 		);
-		expect(JSON.parse(String(publishRequest?.body))).toEqual({
-			channel: "news",
-			params: {},
-			event: "updated",
-			data: { startsAt: instant.toISOString() },
+		expect(
+			publishRequests.map((request) => JSON.parse(String(request.body))),
+		).toEqual([
+			{
+				channel: "news",
+				params: {},
+				event: "updated",
+				data: { startsAt: instant.toISOString() },
+			},
+			{
+				channel: "news",
+				params: {},
+				event: "updated",
+				data: { startsAt: instant.toISOString() },
+			},
+			{
+				channel: "room",
+				params: { roomId: "one" },
+				event: "message",
+				data: { text: "hello" },
+			},
+		]);
+		client.channels.destroy();
+	});
+
+	test("keeps non-control client channel names and actual control methods", async () => {
+		const publishRequests: RequestInit[] = [];
+		const client = createClient<any>({
+			baseURL: "http://localhost:3000",
+			fetch: async (input, init) => {
+				if (String(input).endsWith("/channels/config")) {
+					return Response.json({
+						transport: "sse",
+						channels: {
+							destroy: { pattern: "destroy", visibility: "public" },
+							news: { pattern: "news", visibility: "public" },
+							publish: { pattern: "wire-publish", visibility: "public" },
+						},
+					});
+				}
+				if (String(input).endsWith("/channels/publish")) {
+					publishRequests.push(init ?? {});
+					return Response.json({ eventId: "event-1" });
+				}
+				throw new Error(`Unexpected request: ${String(input)}`);
+			},
 		});
+
+		await client.channels.news.publish("updated", { id: "one" });
+		await client.channels.publish.publish({
+			event: "message",
+			data: { text: "legacy client channel name" },
+		});
+		expect(publishRequests).toHaveLength(2);
+		client.channels.destroy();
+	});
+
+	test("does not turn the client facade into a thenable", async () => {
+		const client = createClient<any>({
+			baseURL: "http://localhost:3000",
+			fetch: async () => {
+				throw new Error("thenable checks must not initialize the transport");
+			},
+		});
+
+		expect(Reflect.get(client.channels, "then")).toBeUndefined();
+		await expect(Promise.resolve(client.channels)).resolves.toBe(
+			client.channels,
+		);
 		client.channels.destroy();
 	});
 

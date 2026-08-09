@@ -37,26 +37,22 @@ principal is refused, so gate the channel behind a session.
 Three methods appear on the client handle, and only on channels that declared
 `.presence()`. Calling them on a plain channel is a compile error.
 
-| Method                           | Shape                           |
-| -------------------------------- | ------------------------------- |
-| `presence(params)`               | `Promise<readonly Member[]>`    |
-| `subscribePresence(params, cb)`  | Returns the stop function       |
-| `presenceIter(params, options?)` | Async generator of full rosters |
+| Bound method             | Shape                           |
+| ------------------------ | ------------------------------- |
+| `presence()`             | `Promise<readonly Member[]>`    |
+| `subscribePresence(cb)`  | Returns the stop function       |
+| `presenceIter(options?)` | Async generator of full rosters |
 
-`params` is required on a channel with a `[param]`. A channel without one drops
-that argument.
+Bind the required `[param]` values once. A channel without params is already a
+resolved handle.
 
 ```ts
-const members = await client.channels.chatRoom.presence({ roomId });
+const chatRoom = client.channels.chatRoom({ roomId });
+const members = await chatRoom.presence();
 
-const stop = client.channels.chatRoom.subscribePresence({ roomId }, (members) =>
-	renderRoster(members),
-);
+const stop = chatRoom.subscribePresence((members) => renderRoster(members));
 
-for await (const members of client.channels.chatRoom.presenceIter(
-	{ roomId },
-	{ signal },
-)) {
+for await (const members of chatRoom.presenceIter({ signal })) {
 	renderRoster(members);
 }
 ```

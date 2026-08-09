@@ -128,8 +128,8 @@ Files starting with `_`, `index.ts`, declaration files, tests, and specs are int
 | CRUD API          | `references/crud-api.md`                | `find`, `create`, `updateById`/`updateMany`, `deleteById`/`deleteMany`, atomic conditional updates, globals API                                                    |
 | Seeds             | `references/seeds.md`                   | `seed()` vs `seed.steps()`, idempotency, checkpointed steps, categories, `dependsOn`, `undo`, `autoSeed`, seed CLI                                                 |
 | Query Operators   | `references/query-operators.md`         | `where` clause operators by field type                                                                                                                             |
-| Realtime          | `references/realtime.md`                | Transactional outbox, reconciliation, live queries, broker/client transport seams, admission                                                                       |
-| Channels          | `references/channels.md`                | Typed application events, authorization, publish contexts, client, presence, TanStack Query                                                                        |
+| Realtime          | `references/realtime.md`                | Transactional outbox, live queries, session-isolated sharing, `accessCacheKey` compute-once fan-out, admission                                                     |
+| Channels          | `references/channels.md`                | Typed resolved handles, exact authority invalidation, events, authorization, client, presence, TanStack Query                                                      |
 | Collaboration     | `references/collaborative-documents.md` | Collection/global CRDT aggregates, Yjs engines, generated client, authority, lifecycle, Fetch + shared realtime transport                                          |
 
 ### Infrastructure

@@ -6,7 +6,7 @@ import {
 	type ChannelParamsOf,
 	type ExtractChannelParams,
 } from "#questpie/server/channels/channel-builder.js";
-import type { ChannelsService } from "#questpie/server/channels/service.js";
+import type { Channels } from "#questpie/server/channels/service.js";
 
 import type { Equal, Expect } from "./type-test-utils.js";
 
@@ -21,6 +21,10 @@ type _noParams = Expect<Equal<ExtractChannelParams<"news">, {}>>;
 const publicNews = channel("news").events({
 	updated: z.object({ id: z.string(), count: z.number() }),
 });
+const contextChannel = channel("wire-context").events({
+	message: z.object({ text: z.string() }),
+});
+const thenChannel = channel("wire-then");
 const privateRoom = channel("room-[roomId]")
 	.events({
 		message: z.object({ text: z.string() }),
@@ -54,10 +58,36 @@ type _events = Expect<
 channel("public-presence").presence(() => ({ id: "x" }));
 
 type AppChannels = {
+	context: typeof contextChannel;
 	news: typeof publicNews;
 	room: typeof privateRoom;
+	then: typeof thenChannel;
 };
-declare const channels: ChannelsService<AppChannels>;
+declare const channels: Channels<AppChannels>;
+
+channels.news.publish("updated", { id: "1", count: 1 });
+channels.context.publish("message", { text: "registry first" });
+// @ts-expect-error the facade must never become a Promise-like thenable
+channels.then;
+const room = channels.room({ roomId: "one" });
+room.publish("message", { text: "hello" });
+const boundPresence = room.resolvePresence();
+type _boundPresence = Expect<
+	Equal<Awaited<typeof boundPresence>, { id: string; roomId: string }>
+>;
+room.invalidateAuthority({
+	subject: { kind: "user", id: "user-1" },
+	idempotencyKey: "room-one:user-1:v1",
+});
+
+// @ts-expect-error parametric channel requires its complete params
+channels.room();
+// @ts-expect-error unknown param
+channels.room({ room: "one" });
+// @ts-expect-error wrong bound event payload
+room.publish("message", { text: 123 });
+// @ts-expect-error unknown bound event
+room.publish("typing", { text: "hello" });
 
 channels.publish("news", {
 	event: "updated",

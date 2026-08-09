@@ -64,12 +64,10 @@ Throttle noisy producers such as cursor/typing updates, keep payloads small, and
 `.authorize(...).presence(resolver)` creates a typed presence channel. The client can read once, subscribe, iterate, or use a latest-snapshot TanStack query:
 
 ```ts
-const members = await client.channels.chatRoom.presence({ roomId });
-const stop = client.channels.chatRoom.subscribePresence({ roomId }, onMembers);
-for await (const members of client.channels.chatRoom.presenceIter(
-	{ roomId },
-	{ signal },
-)) {
+const chatRoom = client.channels.chatRoom({ roomId });
+const members = await chatRoom.presence();
+const stop = chatRoom.subscribePresence(onMembers);
+for await (const members of chatRoom.presenceIter({ signal })) {
 	onMembers(members);
 }
 ```
@@ -97,7 +95,13 @@ client.channels.channelCount;
 client.channels.subscriberCount;
 ```
 
-Equivalent server refresh work is shared per principal by default. Never share across principals without proving deterministic row/field access and `afterRead` equivalence.
+Equivalent server refresh work is isolated by authenticated session, OAuth token,
+or anonymous edge by default. A collection/global `accessCacheKey` can collapse
+100,000 equivalent subscribers into one computation per refresh per server
+instance, but only as an explicit proof that field access, relations, output
+hooks, and `afterRead` produce byte-identical output. Tenant authority belongs
+in `appConfig.context` plus collection/global access; `subscriptionScope` is
+deprecated.
 
 ## Checklist
 

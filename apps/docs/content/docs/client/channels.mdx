@@ -45,6 +45,13 @@ export default channel("chat-room-[roomId]")
 
 The registry/API key is `chatRoom`, derived from the default-export filename. The explicit builder string is the stable wire pattern. Renaming the file changes the typed API and causes compile errors at call sites; it does **not** silently rename the wire channel. `[roomId]` becomes a required `{ roomId: string }` parameter everywhere.
 
+Server service names such as `publish`, `authorize`, and `revokeAuthority` are
+reserved for canonical handle projection. Existing server collisions remain
+available through the deprecated root API in 3.x. Client channels with those
+names keep their handle; only actual client controls such as `destroy`,
+`channelCount`, and `subscriberCount` collide. Rename a colliding file/export
+to adopt the canonical handle; its explicit wire pattern may stay unchanged.
+
 Run codegen after adding or renaming a channel:
 
 ```bash
@@ -74,10 +81,10 @@ export default route()
 	.post()
 	.schema(z.object({ roomId: z.string(), id: z.string(), text: z.string() }))
 	.handler(async ({ input, channels }) => {
-		return channels.publish("chatRoom", {
-			params: { roomId: input.roomId },
-			event: "message",
-			data: { id: input.id, text: input.text },
+		const chatRoom = channels.chatRoom({ roomId: input.roomId });
+		return chatRoom.publish("message", {
+			id: input.id,
+			text: input.text,
 		});
 	});
 ```
@@ -91,49 +98,55 @@ Use the hook's injected `{ channels }` argument. It carries the same generated t
 ```ts
 .hooks({
   afterChange: [async ({ data, channels }) => {
-    await channels.publish("chatRoom", {
-      params: { roomId: data.room },
-      event: "message",
-      data: { id: data.id, text: data.text },
-    });
+		const chatRoom = channels.chatRoom({ roomId: data.room });
+		await chatRoom.publish("message", { id: data.id, text: data.text });
   }],
 })
 ```
 
 Do not import the generated `app` into a collection/hook file, and do not resolve channels later through ambient `getContext()`. Contextless update/delete calls do not guarantee an ambient scope; the injected hook argument is the reliable and transaction-aware path.
 
-## Revoke delivery authority after a domain change
+## Invalidate delivery authority after a domain change
 
 When a membership or authorization write removes access, call the request-bound
-service in the same transaction:
+resolved Channel handle in the same transaction:
 
 ```ts
-await channels.revokeAuthority("chatRoom", {
-	params: { roomId },
+const chatRoom = channels.chatRoom({ roomId });
+
+await chatRoom.invalidateAuthority({
 	subject: { kind: "user", id: removedUserId },
 	idempotencyKey: `chat-room:${roomId}:${removedUserId}:membership-v2`,
 });
 ```
 
-The command advances a durable generation for the exact resolved
-channel/subject and returns `{ generation, scope }`. With SSE,
-`scope: "exact-subscription"` closes only that logical binding with
-`access_revoked`; other channel bindings on the multiplexed stream remain
-active. Fresh request context, subscribe authorization, and the presence
-resolver are evaluated outside database locks, then a short generation check
-publishes the binding, latest freshly resolved presence payload, and optional
-presence lease atomically. A stale result and stale member payload publish
-nothing. Dropped authority notices heal through a demand-driven ledger poll
-that also stops when internal revocation closes the last local binding.
+The resolved handle is the complete target: channel definition plus validated
+params. The subject says whose binding must be checked. There is no second
+company/workspace scope and no scope-wide live-query invalidation.
 
-Pusher/Soketi reports `scope: "principal-connections"` because its termination
-API is user-wide. QUESTPIE signs the browser into Pusher with an opaque user id,
-terminates every current connection for that user, and lets reconnect obtain
-fresh user and per-channel authorization. Channel authorization waits for
-signed-user completion and rejects stale sockets or owners. An unrelated
-still-authorized binding can reconnect; the removed binding cannot.
-Provider channel auth is explicitly side-effect-free signed-blob encoding; a
-concurrent authority cut discards the blob before it can reach the browser.
+The command advances the existing durable generation for that exact
+channel/subject, obtains a fresh `AppContext`, and reruns subscribe
+authorization. A binding that is still allowed continues; a denied binding
+ends with `access_revoked`. The receipt is
+`{ generation, transportEffect }`.
+
+| Transport     | `transportEffect`         | Physical effect                                 |
+| ------------- | ------------------------- | ----------------------------------------------- |
+| SSE           | `"exact-binding"`         | Only the matching logical binding is cut        |
+| Pusher/Soketi | `"principal-connections"` | Current physical connections for that principal |
+
+Pusher/Soketi reconnects and reauthorizes every desired binding. An unrelated
+still-authorized binding returns; the invalid one does not. Provider effects
+run inline under a bounded call in a managed caller transaction. Provider
+failure throws and rolls back the database transaction; a conservative
+disconnect may survive a later caller rollback. Standalone provider failure
+leaves the durable cut pending for an idempotent retry.
+
+<Callout type="info" title="The old root method remains during 3.x">
+	`channels.revokeAuthority("chatRoom", { params, subject, idempotencyKey })`
+	is a deprecated compatibility entry point backed by the same authority ledger. New code
+	should resolve once and call `chatRoom.invalidateAuthority()`.
+</Callout>
 
 <Callout type="warn" title="Managed providers have an in-flight frame window">
 	Pusher cannot guarantee that a frame already accepted by the physical
@@ -148,8 +161,9 @@ concurrent authority cut discards the blob before it can reach the browser.
 `createClient<AppConfig>()` exposes one handle per generated channel:
 
 ```ts
-const stop = client.channels.chatRoom.subscribe(
-	{ roomId },
+const chatRoom = client.channels.chatRoom({ roomId });
+
+const stop = chatRoom.subscribe(
 	(message) => {
 		if (message.event === "message") {
 			console.log(message.eventId, message.data.text);
@@ -164,11 +178,7 @@ const stop = client.channels.chatRoom.subscribe(
 	},
 );
 
-const receipt = await client.channels.chatRoom.publish({
-	params: { roomId },
-	event: "typing",
-	data: { active: true },
-});
+const receipt = await chatRoom.publish("typing", { active: true });
 
 stop();
 ```
@@ -191,10 +201,7 @@ Client publish is server-mediated even on Pusher/Soketi: the request uses the sa
 For async iteration:
 
 ```ts
-for await (const message of client.channels.chatRoom.iter(
-	{ roomId },
-	{ signal: controller.signal },
-)) {
+for await (const message of chatRoom.iter({ signal: controller.signal })) {
 	consume(message);
 }
 ```
@@ -206,21 +213,17 @@ Call `client.channels.destroy()` only when disposing the whole client-side chann
 Only a channel with `.presence()` has a callable presence API:
 
 ```ts
-const members = await client.channels.chatRoom.presence({ roomId });
+const chatRoom = client.channels.chatRoom({ roomId });
+const members = await chatRoom.presence();
 // readonly Array<{ id: string; roomId: string; name: string }>
 ```
 
 Use `subscribePresence()` for a live typed roster, or `presenceIter()` when an `AbortSignal` fits the consumer better:
 
 ```ts
-const stop = client.channels.chatRoom.subscribePresence({ roomId }, (members) =>
-	renderRoster(members),
-);
+const stop = chatRoom.subscribePresence((members) => renderRoster(members));
 
-for await (const members of client.channels.chatRoom.presenceIter(
-	{ roomId },
-	{ signal },
-)) {
+for await (const members of chatRoom.presenceIter({ signal })) {
 	renderRoster(members);
 }
 ```

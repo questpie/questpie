@@ -31,16 +31,14 @@ function ReactionBursts({ reviewId }: { reviewId: string }) {
 	>([]);
 
 	useEffect(() => {
-		return client.channels.reviewReactions.subscribe(
-			{ reviewId },
-			(message) => {
-				if (message.event !== "burst") return;
-				setBursts((current) => [
-					...current.slice(-(MAX_BURSTS - 1)),
-					{ eventId: message.eventId, emoji: message.data.emoji },
-				]);
-			},
-		);
+		const reviewReactions = client.channels.reviewReactions({ reviewId });
+		return reviewReactions.subscribe((message) => {
+			if (message.event !== "burst") return;
+			setBursts((current) => [
+				...current.slice(-(MAX_BURSTS - 1)),
+				{ eventId: message.eventId, emoji: message.data.emoji },
+			]);
+		});
 	}, [reviewId]);
 
 	return <ReactionOverlay bursts={bursts} />;

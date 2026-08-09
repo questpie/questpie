@@ -26,7 +26,7 @@ callbacks, which is the whole point of them.
 | Writes through `ctx.db`                                         | yes   |
 | Nested CRUD through `ctx.collections` and `ctx.globals`         | yes   |
 | `ctx.queue.<job>.publish()`                                     | yes   |
-| `ctx.channels.publish()`                                        | yes   |
+| `ctx.channels.<name>(params).publish()`                         | yes   |
 | Email, `fetch`, `ctx.realtime.notify()`, a second db connection | no    |
 
 A job published inside a transaction either goes to the broker in that
