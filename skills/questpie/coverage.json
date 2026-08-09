@@ -165,6 +165,7 @@
 		"createCollectionValidationSchemas": "validation engine internal",
 		"createCompletedStepsMap": "workflow engine internal",
 		"createComponentCallbackProxy": "server-driven admin UI internal",
+		"createChannels": "service wiring behind generated ctx.channels; applications use the resolved registry handles",
 		"createContextFactory": "only consumed by generated code (.generated/index.ts)",
 		"createCrdtClientAPI": "client factory wiring behind createClient()",
 		"createFieldBuilder": "builder engine internal",
