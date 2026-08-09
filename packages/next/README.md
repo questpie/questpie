@@ -17,15 +17,18 @@ bun add @questpie/next questpie
 import { questpieNextRouteHandlers } from "@questpie/next";
 import { app } from "#questpie";
 
-export const { GET, POST, PUT, PATCH, DELETE } = questpieNextRouteHandlers(
-	app,
-	{
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD } =
+	questpieNextRouteHandlers(app, {
 		basePath: "/api",
-	},
-);
+	});
 
 export const dynamic = "force-dynamic";
 ```
+
+`accessMode: "system"` remains available in QUESTPIE 3.x only for a trusted
+host boundary that cannot receive untrusted HTTP traffic. Canonical Next route
+handlers should use the default user mode. This compatibility option is
+scheduled for removal from the Next adapter in QUESTPIE 4.0.
 
 ### 2. Client
 

@@ -85,6 +85,12 @@ single-handler form if you want to wrap it yourself. Both turn an out-of-base
 request into a `404` with a JSON body. The package has one export path, so
 there is no `/server` subpath here.
 
+The returned object is typed with exactly those seven method names. Next keeps
+the older `accessMode: "system"` option during QUESTPIE 3.x only for trusted
+host boundaries that cannot receive untrusted traffic; normal App Router
+handlers use user mode. The compatibility option is scheduled for removal in
+QUESTPIE 4.0.
+
 ### Hono
 
 ```ts title="src/server.ts"
@@ -127,7 +133,7 @@ export default server;
 nested requests inside the base path receive the canonical QUESTPIE response;
 out-of-base requests fall through to later native Elysia routes.
 
-Both native adapters accept `basePath`, request logging, search policy,
+Hono and Elysia accept `basePath`, request logging, search policy,
 `getSession`, `getLocale` and `extendContext`. They intentionally do not expose
 `accessMode`: public HTTP requests always run in user mode.
 
