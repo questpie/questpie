@@ -64,12 +64,14 @@ username: f.text(32).required().min(3).pattern(/^[a-z0-9_]+$/),
 
 ## Filtering
 
-Text carries the `stringOps` set, fourteen operators.
+Text carries the `stringOps` set, eighteen operators.
 
 | Operator               | Operand             | Matches                                     |
 | ---------------------- | ------------------- | ------------------------------------------- |
 | `eq` / `ne`            | `string`            | Equal, not equal                            |
 | `not`                  | `string`, or `null` | Not equal, or `IS NOT NULL` when given null |
+| `gt` / `gte`           | `string`            | After, or at/after, in database collation   |
+| `lt` / `lte`           | `string`            | Before, or at/before, in database collation |
 | `in` / `notIn`         | `string[]`          | In the list, not in the list                |
 | `like` / `notLike`     | `string`            | `LIKE`, case-sensitive, you write the `%`   |
 | `ilike` / `notIlike`   | `string`            | The same, case-insensitive                  |
@@ -87,6 +89,14 @@ const { docs } = await app.collections.posts.find({
 `contains`, `startsWith` and `endsWith` build the pattern around a bound
 parameter. The value is parameterized, but a `%` or `_` inside it still reads as
 a wildcard.
+
+Ordered comparisons use the database column's configured collation. A keyset
+cursor must use the same column and direction in `orderBy` and its `gt`/`lt`
+predicate; QUESTPIE does not apply JavaScript string ordering.
+
+The framework-owned system `id` exposes the same ordered string operators, so
+it can act as a typed keyset tie-breaker: pair `id: { lt: cursor.id }` with
+`orderBy: { id: "desc" }`.
 
 ## In the admin
 

@@ -134,6 +134,10 @@ export const stringOps = operatorSet({
 		not: operator<string | null, unknown>((col, value) =>
 			value === null ? isNotNull(col) : ne(col, value),
 		),
+		gt: operator<string, unknown>((col, value) => gt(col, value)),
+		gte: operator<string, unknown>((col, value) => gte(col, value)),
+		lt: operator<string, unknown>((col, value) => lt(col, value)),
+		lte: operator<string, unknown>((col, value) => lte(col, value)),
 		in: operator<string[], unknown>((col, values) => inArray(col, values)),
 		notIn: operator<string[], unknown>((col, values) =>
 			notInArray(col, values),

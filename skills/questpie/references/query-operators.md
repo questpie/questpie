@@ -17,7 +17,9 @@ Full reference for all `where` clause operators in QUESTPIE CRUD queries.
 
 ## Text Fields
 
-Applies to: `text`, `textarea`, `email`, `url`. (`slug` is just a `text` field; rich-text content is stored as blocks/JSON, not queried with these operators.)
+Applies to: `text`, `textarea`, `email`, `url`, and the framework-owned system
+`id`. (`slug` is just a `text` field; rich-text content is stored as blocks/JSON,
+not queried with these operators.)
 
 | Operator     | Example                            | Description                                 |
 | ------------ | ---------------------------------- | ------------------------------------------- |
@@ -25,6 +27,10 @@ Applies to: `text`, `textarea`, `email`, `url`. (`slug` is just a `text` field; 
 | `eq`         | `{ title: { eq: "Hello" } }`       | Exact match                                 |
 | `ne`         | `{ title: { ne: "Hello" } }`       | Not equal                                   |
 | `not`        | `{ title: { not: "Hello" } }`      | Alias for `ne`; `not: null` → `IS NOT NULL` |
+| `gt`         | `{ title: { gt: "Hello" } }`       | Greater than in database collation order    |
+| `gte`        | `{ title: { gte: "Hello" } }`      | Greater than or equal in collation order    |
+| `lt`         | `{ title: { lt: "World" } }`       | Less than in database collation order       |
+| `lte`        | `{ title: { lte: "World" } }`      | Less than or equal in collation order       |
 | `in`         | `{ title: { in: ["A", "B"] } }`    | One of values                               |
 | `notIn`      | `{ title: { notIn: ["A", "B"] } }` | None of values                              |
 | `contains`   | `{ title: { contains: "ell" } }`   | Substring match                             |
@@ -36,6 +42,13 @@ Applies to: `text`, `textarea`, `email`, `url`. (`slug` is just a `text` field; 
 | `notIlike`   | `{ title: { notIlike: "he%o" } }`  | Negated case-insensitive LIKE               |
 | `isNull`     | `{ title: { isNull: true } }`      | Is NULL                                     |
 | `isNotNull`  | `{ title: { isNotNull: true } }`   | Is NOT NULL                                 |
+
+Text ordering uses the database column's configured collation. Use the same
+column and direction for `orderBy` and the ordered cursor predicate; QUESTPIE
+does not replace that collation with JavaScript string ordering.
+
+This makes system `id` suitable as a typed keyset tie-breaker, for example
+`where: { id: { lt: cursor.id } }` with `orderBy: { id: "desc" }`.
 
 `email` fields add domain matching on top of the text operators:
 

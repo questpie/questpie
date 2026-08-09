@@ -901,6 +901,10 @@ const _whereTitleStartsWith: PostsWhereCheck = {
 	title: { startsWith: "A" },
 };
 const _whereTitleLike: PostsWhereCheck = { title: { like: "%foo%" } };
+const _whereTitleGt: PostsWhereCheck = { title: { gt: "alpha" } };
+const _whereTitleGte: PostsWhereCheck = { title: { gte: "alpha" } };
+const _whereTitleLt: PostsWhereCheck = { title: { lt: "omega" } };
+const _whereTitleLte: PostsWhereCheck = { title: { lte: "omega" } };
 
 // --- Top-level: views operators are concrete numeric ---
 const _whereViewsGt: PostsWhereCheck = { views: { gt: 100 } };
@@ -913,6 +917,7 @@ const _whereCreatedAtGt: PostsWhereCheck = {
 };
 const _whereIdEq: PostsWhereCheck = { id: "some-uuid" };
 const _whereIdIn: PostsWhereCheck = { id: { in: ["a", "b"] } };
+const _whereIdLt: PostsWhereCheck = { id: { lt: "cursor-id" } };
 const _whereDeletedAtIsNull: PostsWhereCheck = {
 	deletedAt: { isNull: true },
 };
@@ -1150,8 +1155,8 @@ type _myDatetimeWhereGt = Expect<
 
 // These prove that the where clause REJECTS invalid operators.
 // (fixed by sealing operator maps — Omit<DefaultFieldState, "operators">)
-// title is a text field — should NOT accept gt (numeric operator)
-// @ts-expect-error — gt is not a string operator
+// title is a text field — gt requires a string operand
+// @ts-expect-error — gt on a string field requires a string operand
 const _badTitleGt: PostsWhereCheck = { title: { gt: 100 } };
 
 // views is a number field — should NOT accept contains (string operator)

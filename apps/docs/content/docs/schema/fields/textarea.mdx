@@ -10,7 +10,7 @@ package: questpie
 | Column       | `text`, no length cap                               |
 | Value        | `string`, or `string \| null` without `.required()` |
 | Schema       | `z.string()`, no cap                                |
-| Operators    | `stringOps`, fourteen of them                       |
+| Operators    | `stringOps`, eighteen of them                       |
 | Form control | `TextareaField`, a plain textarea                   |
 | List cell    | `TextCell`, truncated, off the default columns      |
 
@@ -51,13 +51,15 @@ Both write a validation bound and nothing else. The column stays unbounded
 
 ## Filtering
 
-Textarea carries `stringOps`, the same fourteen operators as
+Textarea carries `stringOps`, the same eighteen operators as
 [`f.text()`](/docs/schema/fields/text).
 
 | Operator               | Operand             | Matches                                     |
 | ---------------------- | ------------------- | ------------------------------------------- |
 | `eq` / `ne`            | `string`            | Equal, not equal                            |
 | `not`                  | `string`, or `null` | Not equal, or `IS NOT NULL` when given null |
+| `gt` / `gte`           | `string`            | After, or at/after, in database collation   |
+| `lt` / `lte`           | `string`            | Before, or at/before, in database collation |
 | `in` / `notIn`         | `string[]`          | In the list, not in the list                |
 | `like` / `notLike`     | `string`            | `LIKE`, case-sensitive, you write the `%`   |
 | `ilike` / `notIlike`   | `string`            | The same, case-insensitive                  |
