@@ -10,7 +10,11 @@
  * @see ModuleDefinition.plugin
  */
 
-import { resolveNamedGraph } from "../../shared/named-graph.js";
+import {
+	resolveNamedGraph,
+	resolveNamedOccurrences,
+} from "#questpie/shared/named-graph.js";
+
 import type { CodegenPlugin } from "./types.js";
 
 interface ModuleLike {
@@ -29,24 +33,12 @@ export type CodegenPluginOccurrence = {
 export function resolveCodegenPluginOccurrences(
 	occurrences: readonly CodegenPluginOccurrence[],
 ): CodegenPlugin[] {
-	const firstByName = new Map<string, CodegenPluginOccurrence>();
-	const plugins: CodegenPlugin[] = [];
-
-	for (const occurrence of occurrences) {
-		const first = firstByName.get(occurrence.plugin.name);
-		if (first?.plugin === occurrence.plugin) continue;
-		if (first) {
-			throw new Error(
-				`[QUESTPIE] Two different plugins are both named "${occurrence.plugin.name}". ` +
-					`First source: ${first.source}. ` +
-					`Conflicting source: ${occurrence.source}.`,
-			);
-		}
-		firstByName.set(occurrence.plugin.name, occurrence);
-		plugins.push(occurrence.plugin);
-	}
-
-	return plugins;
+	return resolveNamedOccurrences(occurrences, {
+		kind: "plugin",
+		node: (occurrence) => occurrence.plugin,
+		name: (plugin) => plugin.name,
+		source: (occurrence) => occurrence.source,
+	});
 }
 
 /**

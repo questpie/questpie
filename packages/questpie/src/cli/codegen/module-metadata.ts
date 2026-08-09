@@ -1,4 +1,5 @@
-import { resolveNamedGraph } from "../../shared/named-graph.js";
+import { resolveNamedGraph } from "#questpie/shared/named-graph.js";
+
 import { findModulesFile, toFileImportSpecifier } from "../utils.js";
 import type { FactoryArgumentMetadata } from "./types.js";
 

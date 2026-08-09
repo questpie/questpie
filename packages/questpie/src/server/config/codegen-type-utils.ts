@@ -95,32 +95,67 @@ export type MergeModuleProp<
  * typed table on the other, and `null & {…}` reduces the whole object to `never`),
  * which then poisons `CollectionInsert`/`CollectionSelect` into `never`/`{}`.
  *
- * This variant uses `Override<nested, direct>` so the OUTER (most-derived) module's
- * direct `M[K]` shadows the nested sub-modules' contribution for the same key,
- * while distinct keys from both sides survive — i.e. a re-declared collection
- * replaces its base instead of detonating into `never`.
+ * This variant follows the runtime's identity-deduplicated, children-first DFS.
+ * A module's direct `M[K]` shadows its dependencies, while a shared dependency
+ * reached through a later diamond branch is not replayed after an earlier
+ * dependent. Distinct keys from every resolved module still survive.
  */
-export type ExtractModulePropOverride<M, K extends string> = Override<
-	M extends { modules: infer Sub extends readonly any[] }
-		? ExtractModulePropArrOverride<Sub, K>
-		: {},
-	K extends keyof M ? (M[K] extends Record<string, any> ? M[K] : {}) : {}
->;
+type ModuleIdentity<M> = M extends { name: infer Name extends string }
+	? string extends Name
+		? M
+		: Name
+	: M;
+
+type ModulePropFoldState<Result, Seen> = {
+	result: Result;
+	seen: Seen;
+};
+
+type ExtractDirectModuleProp<M, K extends string> = K extends keyof M
+	? M[K] extends Record<string, any>
+		? M[K]
+		: {}
+	: {};
+
+type FoldModulePropOverride<
+	M,
+	K extends string,
+	State extends ModulePropFoldState<any, any>,
+> = [ModuleIdentity<M>] extends [State["seen"]]
+	? State
+	: FoldModulePropArrOverride<
+				M extends { modules: infer Sub extends readonly any[] } ? Sub : [],
+				K,
+				ModulePropFoldState<State["result"], State["seen"] | ModuleIdentity<M>>
+		  > extends infer NestedState extends ModulePropFoldState<any, any>
+		? ModulePropFoldState<
+				Override<NestedState["result"], ExtractDirectModuleProp<M, K>>,
+				NestedState["seen"]
+			>
+		: never;
+
+type FoldModulePropArrOverride<
+	A extends readonly any[],
+	K extends string,
+	State extends ModulePropFoldState<any, any>,
+> = A extends readonly [infer Head, ...infer Tail extends readonly any[]]
+	? FoldModulePropArrOverride<Tail, K, FoldModulePropOverride<Head, K, State>>
+	: State;
+
+export type ExtractModulePropOverride<
+	M,
+	K extends string,
+> = FoldModulePropOverride<M, K, ModulePropFoldState<{}, never>>["result"];
 
 /**
  * Array companion for {@link ExtractModulePropOverride} — folds a readonly tuple
- * of modules with last-wins override semantics (a later sibling re-declaring a
- * key shadows an earlier one), mirroring the runtime spread-merge order.
+ * in the runtime's identity-deduplicated merge order. A later resolved module
+ * re-declaring a key shadows an earlier one.
  */
 export type ExtractModulePropArrOverride<
 	A extends readonly any[],
 	K extends string,
-> = A extends readonly [infer H, ...infer T extends readonly any[]]
-	? Override<
-			ExtractModulePropOverride<H, K>,
-			ExtractModulePropArrOverride<T, K>
-		>
-	: {};
+> = FoldModulePropArrOverride<A, K, ModulePropFoldState<{}, never>>["result"];
 
 /**
  * Normalize a service namespace to its runtime placement namespace.

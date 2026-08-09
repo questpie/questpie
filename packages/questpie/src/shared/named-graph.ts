@@ -9,6 +9,69 @@ type GraphOccurrence<TNode> = {
 	path: string[];
 };
 
+type NamedOccurrenceOptions<TNode extends object, TOccurrence> = {
+	kind: string;
+	node(occurrence: TOccurrence): TNode;
+	name(node: TNode): string | undefined;
+	source(occurrence: TOccurrence): string;
+};
+
+type NamedIdentity<TNode extends object> = {
+	node: TNode;
+	source: string;
+};
+
+function registerNamedIdentity<TNode extends object>(
+	node: TNode,
+	name: string | undefined,
+	source: string,
+	kind: string,
+	sourceLabel: "path" | "source",
+	firstByName: Map<string, NamedIdentity<TNode>>,
+): "first" | "repeated" {
+	if (name === undefined) return "first";
+
+	const first = firstByName.get(name);
+	if (first?.node === node) return "repeated";
+	if (first) {
+		throw new Error(
+			`[QUESTPIE] Two different ${kind}s are both named "${name}". ` +
+				`First ${sourceLabel}: ${first.source}. ` +
+				`Conflicting ${sourceLabel}: ${source}.`,
+		);
+	}
+
+	firstByName.set(name, { node, source });
+	return "first";
+}
+
+/** Deduplicate named occurrences by identity and reject ambiguous names. */
+export function resolveNamedOccurrences<TNode extends object, TOccurrence>(
+	occurrences: readonly TOccurrence[],
+	options: NamedOccurrenceOptions<TNode, TOccurrence>,
+): TNode[] {
+	const resolved: TNode[] = [];
+	const firstByName = new Map<string, NamedIdentity<TNode>>();
+
+	for (const occurrence of occurrences) {
+		const node = options.node(occurrence);
+		if (
+			registerNamedIdentity(
+				node,
+				options.name(node),
+				options.source(occurrence),
+				options.kind,
+				"source",
+				firstByName,
+			) === "first"
+		) {
+			resolved.push(node);
+		}
+	}
+
+	return resolved;
+}
+
 /** Resolve a named dependency graph children-first with one collision policy. */
 export function resolveNamedGraph<TNode extends object>(
 	roots: readonly TNode[],
@@ -16,7 +79,7 @@ export function resolveNamedGraph<TNode extends object>(
 ): TNode[] {
 	const resolved: TNode[] = [];
 	const states = new WeakMap<TNode, "visiting" | "visited">();
-	const firstByName = new Map<string, GraphOccurrence<TNode>>();
+	const firstByName = new Map<string, NamedIdentity<TNode>>();
 	const stack: GraphOccurrence<TNode>[] = [];
 
 	const label = (node: TNode) =>
@@ -25,17 +88,14 @@ export function resolveNamedGraph<TNode extends object>(
 	function visit(node: TNode, parentPath: readonly string[]): void {
 		const nodeName = options.name(node);
 		const path = [...parentPath, label(node)];
-		if (nodeName !== undefined) {
-			const first = firstByName.get(nodeName);
-			if (first && first.node !== node) {
-				throw new Error(
-					`[QUESTPIE] Two different ${options.kind}s are both named "${nodeName}". ` +
-						`First path: ${first.path.join(" -> ")}. ` +
-						`Conflicting path: ${path.join(" -> ")}.`,
-				);
-			}
-			if (!first) firstByName.set(nodeName, { node, path });
-		}
+		registerNamedIdentity(
+			node,
+			nodeName,
+			path.join(" -> "),
+			options.kind,
+			"path",
+			firstByName,
+		);
 
 		const state = states.get(node);
 		if (state === "visited") return;
