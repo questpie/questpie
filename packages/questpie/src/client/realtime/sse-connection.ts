@@ -48,6 +48,7 @@ function normalizedError(error: unknown): Error {
 export class SseConnectionManager {
 	private readonly resources = new Map<string, TopologyResource>();
 	private abortController: AbortController | null = null;
+	private idleDisconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	private watchdogTimer: ReturnType<typeof setTimeout> | null = null;
 	private connecting = false;
@@ -268,9 +269,15 @@ export class SseConnectionManager {
 		if (!this.hasDemand()) {
 			if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
 			this.reconnectTimer = null;
-			this.abortController?.abort();
+			if (this.idleDisconnectTimer) clearTimeout(this.idleDisconnectTimer);
+			this.idleDisconnectTimer = setTimeout(() => {
+				this.idleDisconnectTimer = null;
+				if (!this.hasDemand()) this.abortController?.abort();
+			}, this.options.debounceMs ?? 50);
 			return;
 		}
+		if (this.idleDisconnectTimer) clearTimeout(this.idleDisconnectTimer);
+		this.idleDisconnectTimer = null;
 		if (this.controlSession) {
 			void this.flushDesiredTopology();
 			return;

@@ -67,6 +67,38 @@ function registerChannel(
 }
 
 describe("SSE connection manager failure classification", () => {
+	test("keeps the physical stream across a short route-transition demand gap", async () => {
+		let opens = 0;
+		let controls = 0;
+		const streamControllers: ReadableStreamDefaultController<Uint8Array>[] = [];
+		const manager = new SseConnectionManager({
+			baseUrl: "http://localhost:3000",
+			withCredentials: true,
+			fetcher: async (_input, init) => {
+				const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+				if (body.sessionId) {
+					controls += 1;
+					return Response.json({ ok: true });
+				}
+				opens += 1;
+				return openStream(opens, init?.signal, streamControllers);
+			},
+			debounceMs: 50,
+		});
+		const releaseFirst = registerChannel(manager, "channel:first", [], []);
+		await waitFor(() => streamControllers.length === 1);
+
+		releaseFirst();
+		await Bun.sleep(10);
+		const releaseSecond = registerChannel(manager, "channel:second", [], []);
+
+		await waitFor(() => controls === 1);
+		await Bun.sleep(75);
+		expect(opens).toBe(1);
+
+		releaseSecond();
+	});
+
 	test("backs off and retries an initial transport failure without a terminal resource error", async () => {
 		let requests = 0;
 		const controllers: ReadableStreamDefaultController<Uint8Array>[] = [];
