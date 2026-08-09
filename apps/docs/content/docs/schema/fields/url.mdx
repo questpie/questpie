@@ -79,12 +79,14 @@ endpoint: f.url(500).required().min(12),
 
 ## Filtering
 
-URL carries `urlOps`, the fourteen string operators plus three of its own.
+URL carries `urlOps`, the eighteen string operators plus three of its own.
 
 | Operator               | Operand             | Matches                                     |
 | ---------------------- | ------------------- | ------------------------------------------- |
 | `eq` / `ne`            | `string`            | Equal, not equal                            |
 | `not`                  | `string`, or `null` | Not equal, or `IS NOT NULL` when given null |
+| `gt` / `gte`           | `string`            | After, or at/after, in database collation   |
+| `lt` / `lte`           | `string`            | Before, or at/before, in database collation |
 | `in` / `notIn`         | `string[]`          | In the list, not in the list                |
 | `like` / `notLike`     | `string`            | `LIKE`, case-sensitive, you write the `%`   |
 | `ilike` / `notIlike`   | `string`            | The same, case-insensitive                  |

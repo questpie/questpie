@@ -57,12 +57,14 @@ email: f.email(320).required().min(6),
 
 ## Filtering
 
-Email carries `emailOps`, the fourteen string operators plus two of its own.
+Email carries `emailOps`, the eighteen string operators plus two of its own.
 
 | Operator               | Operand             | Matches                                     |
 | ---------------------- | ------------------- | ------------------------------------------- |
 | `eq` / `ne`            | `string`            | Equal, not equal                            |
 | `not`                  | `string`, or `null` | Not equal, or `IS NOT NULL` when given null |
+| `gt` / `gte`           | `string`            | After, or at/after, in database collation   |
+| `lt` / `lte`           | `string`            | Before, or at/before, in database collation |
 | `in` / `notIn`         | `string[]`          | In the list, not in the list                |
 | `like` / `notLike`     | `string`            | `LIKE`, case-sensitive, you write the `%`   |
 | `ilike` / `notIlike`   | `string`            | The same, case-insensitive                  |

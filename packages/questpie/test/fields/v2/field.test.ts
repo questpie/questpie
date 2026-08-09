@@ -305,6 +305,15 @@ describe("Field V2 — getOperators()", () => {
 		expect(typeof ops.jsonb.eq).toBe("function");
 	});
 
+	it("exposes ordered text comparisons in column and JSONB contexts", () => {
+		const ops = createTestTextField().getOperators();
+
+		for (const name of ["gt", "gte", "lt", "lte"] as const) {
+			expect(typeof ops.column[name]).toBe("function");
+			expect(typeof ops.jsonb[name]).toBe("function");
+		}
+	});
+
 	it("tolerates field types without column operators", () => {
 		const ops = resolveContextualOperators({
 			column: undefined as any,

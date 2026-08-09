@@ -201,7 +201,7 @@ const _wRelBad: OwnersWhere = {
 const _wRelNestedBad: OwnersWhere = {
 	toys: {
 		some: {
-			// @ts-expect-error — gt is not a string operator
+			// @ts-expect-error — gt on a string field requires a string operand
 			name: { gt: 100 },
 		},
 	},
