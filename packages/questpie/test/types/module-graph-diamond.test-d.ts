@@ -1,3 +1,8 @@
+import type {
+	ExtractModulePropArrOverride,
+	ExtractModulePropOverride,
+} from "questpie/types";
+
 import type { CodegenResolvedModulePropArr } from "#questpie/server/config/codegen-type-utils.js";
 
 import type { Equal, Expect } from "./type-test-utils.js";
@@ -75,4 +80,28 @@ type _widenedNameDoesNotClaimIdentitySemantics = Expect<
 		CodegenResolvedModulePropArr<readonly [WidenedNameModule], "globals">,
 		never
 	>
+>;
+
+type LegacyNested = {
+	name: "legacy-nested";
+	globals: { nested: { owner: "nested" } };
+};
+type LegacyOuter = {
+	name: "legacy-outer";
+	modules: readonly [LegacyNested];
+	globals: { outer: { owner: "outer" } };
+};
+
+// Patch compatibility: both v3.26.1 public imports remain available with their
+// original recursive result shape. New codegen does not call these helpers.
+type LegacySingle = ExtractModulePropOverride<LegacyOuter, "globals">;
+type LegacyTuple = ExtractModulePropArrOverride<
+	readonly [LegacyOuter],
+	"globals"
+>;
+type _legacySingleImportCompiles = Expect<
+	Equal<keyof LegacySingle, "nested" | "outer">
+>;
+type _legacyTupleImportCompiles = Expect<
+	Equal<keyof LegacyTuple, "nested" | "outer">
 >;

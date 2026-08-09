@@ -81,6 +81,36 @@ export type MergeModuleProp<
 > = ExtractModulePropArr<TModules, K>;
 
 /**
+ * Legacy override fold retained for source compatibility.
+ *
+ * @deprecated Prefer app-generated category types instead of folding module
+ * graphs directly. This helper preserves its original recursive semantics and
+ * does not provide the validated graph ordering used by QUESTPIE codegen.
+ */
+export type ExtractModulePropOverride<M, K extends string> = Override<
+	M extends { modules: infer Sub extends readonly any[] }
+		? ExtractModulePropArrOverride<Sub, K>
+		: {},
+	K extends keyof M ? (M[K] extends Record<string, any> ? M[K] : {}) : {}
+>;
+
+/**
+ * Legacy tuple companion for {@link ExtractModulePropOverride}.
+ *
+ * @deprecated Prefer app-generated category types. Retained unchanged for
+ * consumers importing it from `questpie/types`.
+ */
+export type ExtractModulePropArrOverride<
+	A extends readonly any[],
+	K extends string,
+> = A extends readonly [infer H, ...infer T extends readonly any[]]
+	? Override<
+			ExtractModulePropOverride<H, K>,
+			ExtractModulePropArrOverride<T, K>
+		>
+	: {};
+
+/**
  * Ordered merge support for generated category records, where a same-key
  * contribution must replace rather than intersect the previous definition.
  *
