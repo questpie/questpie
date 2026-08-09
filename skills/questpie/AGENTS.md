@@ -6040,7 +6040,9 @@ Full reference for all `where` clause operators in QUESTPIE CRUD queries.
 
 ## Text Fields
 
-Applies to: `text`, `textarea`, `email`, `url`. (`slug` is just a `text` field; rich-text content is stored as blocks/JSON, not queried with these operators.)
+Applies to: `text`, `textarea`, `email`, `url`, and the framework-owned system
+`id`. (`slug` is just a `text` field; rich-text content is stored as blocks/JSON,
+not queried with these operators.)
 
 | Operator     | Example                            | Description                                 |
 | ------------ | ---------------------------------- | ------------------------------------------- |
@@ -6067,6 +6069,9 @@ Applies to: `text`, `textarea`, `email`, `url`. (`slug` is just a `text` field; 
 Text ordering uses the database column's configured collation. Use the same
 column and direction for `orderBy` and the ordered cursor predicate; QUESTPIE
 does not replace that collation with JavaScript string ordering.
+
+This makes system `id` suitable as a typed keyset tie-breaker, for example
+`where: { id: { lt: cursor.id } }` with `orderBy: { id: "desc" }`.
 
 `email` fields add domain matching on top of the text operators:
 

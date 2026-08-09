@@ -94,6 +94,10 @@ Ordered comparisons use the database column's configured collation. A keyset
 cursor must use the same column and direction in `orderBy` and its `gt`/`lt`
 predicate; QUESTPIE does not apply JavaScript string ordering.
 
+The framework-owned system `id` exposes the same ordered string operators, so
+it can act as a typed keyset tie-breaker: pair `id: { lt: cursor.id }` with
+`orderBy: { id: "desc" }`.
+
 ## In the admin
 
 The form control is `TextField`. The list cell is `TextCell`, which truncates

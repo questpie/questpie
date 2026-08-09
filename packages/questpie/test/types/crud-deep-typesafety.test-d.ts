@@ -648,9 +648,9 @@ type _commentsAggHasContent = Expect<
 
 type AWhere = WhereType<typeof articles, TAppManual>;
 
-// Text field should NOT accept numeric operator gt
+// Text field gt requires a string operand
 // (fixed by sealing operator maps — Omit<DefaultFieldState, "operators">)
-// @ts-expect-error — gt is not a string operator
+// @ts-expect-error — gt on a string field requires a string operand
 const _badTitleGt: AWhere = { title: { gt: 100 } };
 
 // Datetime field should NOT accept contains

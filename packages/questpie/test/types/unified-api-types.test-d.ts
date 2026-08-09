@@ -1155,8 +1155,8 @@ type _myDatetimeWhereGt = Expect<
 
 // These prove that the where clause REJECTS invalid operators.
 // (fixed by sealing operator maps — Omit<DefaultFieldState, "operators">)
-// title is a text field — should NOT accept gt (numeric operator)
-// @ts-expect-error — gt is not a string operator
+// title is a text field — gt requires a string operand
+// @ts-expect-error — gt on a string field requires a string operand
 const _badTitleGt: PostsWhereCheck = { title: { gt: 100 } };
 
 // views is a number field — should NOT accept contains (string operator)
