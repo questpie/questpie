@@ -3,12 +3,56 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { Hono } from "hono";
 
 import { route } from "../../questpie/src/exports/index.js";
+import { channel } from "../../questpie/src/server/channels/channel-builder.js";
 import { buildMockApp } from "../../questpie/test/utils/mocks/mock-app-builder.js";
+import { runTestDbMigrations } from "../../questpie/test/utils/test-db.js";
 import {
 	questpieHono,
 	questpieMiddleware,
 	type QuestpieVariables,
 } from "../src/server.js";
+
+async function readSseEvent(
+	reader: ReadableStreamDefaultReader<Uint8Array>,
+	eventType: string,
+	timeoutMs = 2_000,
+): Promise<Record<string, unknown>> {
+	const decoder = new TextDecoder();
+	let buffer = "";
+	let timeout: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			(async () => {
+				for (;;) {
+					const blocks = buffer.split("\n\n");
+					buffer = blocks.pop() ?? "";
+					for (const block of blocks) {
+						const type = block
+							.split("\n")
+							.find((line) => line.startsWith("event: "))
+							?.slice(7);
+						const data = block
+							.split("\n")
+							.find((line) => line.startsWith("data: "))
+							?.slice(6);
+						if (type === eventType && data) return JSON.parse(data);
+					}
+					const next = await reader.read();
+					if (next.done) throw new Error(`SSE ended before ${eventType}`);
+					buffer += decoder.decode(next.value, { stream: true });
+				}
+			})(),
+			new Promise<never>((_, reject) => {
+				timeout = setTimeout(
+					() => reject(new Error(`Timed out waiting for SSE ${eventType}`)),
+					timeoutMs,
+				);
+			}),
+		]);
+	} finally {
+		if (timeout) clearTimeout(timeout);
+	}
+}
 
 describe("hono adapter composition", () => {
 	let cleanup: (() => Promise<void>) | undefined;
@@ -127,6 +171,106 @@ describe("hono adapter composition", () => {
 			service: "service-2",
 		});
 		expect(contextCreations).toBe(2);
+	});
+
+	it("keeps fresh channel reauthorization bound to the private request", async () => {
+		const authorizationUsers: string[] = [];
+		const authorizationHeaders: string[] = [];
+		const sessionHeaders: string[] = [];
+		const setup = await buildMockApp(
+			{
+				channels: {
+					room: channel("room-[roomId]").authorize(
+						({ session, authorityHeader }: any) => {
+							authorizationUsers.push(session?.user.id ?? "missing");
+							authorizationHeaders.push(authorityHeader ?? "missing");
+							return (
+								session?.user.id === "original-user" &&
+								authorityHeader === "original-authority"
+							);
+						},
+					),
+				},
+				config: {
+					app: {
+						context: ({ request }) => ({
+							authorityHeader: request.headers.get("x-authority"),
+						}),
+					},
+				},
+			},
+			{
+				app: { url: "http://localhost" },
+				realtime: { retentionDays: 0, rowLiveQueries: false },
+			},
+		);
+		cleanup = setup.cleanup;
+		await runTestDbMigrations(setup.app);
+		setup.app.auth = {
+			api: {
+				getSession: async ({ headers }: { headers: Headers }) => {
+					const userId = headers.get("x-user-id") ?? "missing";
+					sessionHeaders.push(userId);
+					return { user: { id: userId }, session: { id: `session-${userId}` } };
+				},
+			},
+		} as typeof setup.app.auth;
+
+		const native = new Hono<{
+			Variables: QuestpieVariables<typeof setup.app>;
+		}>()
+			.use("*", questpieMiddleware(setup.app))
+			.use("*", async (context, next) => {
+				context.req.raw.headers.set("x-user-id", "forged-user");
+				context.req.raw.headers.set("x-authority", "forged-authority");
+				await next();
+			})
+			.route("/", questpieHono(setup.app, { basePath: "/api" }));
+
+		const response = await native.request("http://localhost/api/realtime", {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+				"x-user-id": "original-user",
+				"x-authority": "original-authority",
+			},
+			body: JSON.stringify({
+				channels: [
+					{
+						id: "room-one",
+						channel: "room",
+						params: { roomId: "one" },
+					},
+				],
+			}),
+		});
+		expect(response.status).toBe(200);
+		const reader = response.body!.getReader();
+		try {
+			await readSseEvent(reader, "session");
+			for (let attempt = 0; attempt < 100; attempt++) {
+				if (authorizationUsers.length > 0) break;
+				await new Promise((resolve) => setTimeout(resolve, 5));
+			}
+
+			await setup.app.realtime!.revokeChannelAuthority({
+				channel: "private-room-one",
+				subject: { kind: "user", id: "original-user" },
+				idempotencyKey: "room-one:original-user:refresh",
+			});
+			for (let attempt = 0; attempt < 100; attempt++) {
+				if (authorizationUsers.length >= 2) break;
+				await new Promise((resolve) => setTimeout(resolve, 5));
+			}
+			expect(authorizationUsers.length).toBeGreaterThanOrEqual(2);
+			expect(new Set(authorizationUsers)).toEqual(new Set(["original-user"]));
+			expect(new Set(authorizationHeaders)).toEqual(
+				new Set(["original-authority"]),
+			);
+			expect(new Set(sessionHeaders)).toEqual(new Set(["original-user"]));
+		} finally {
+			await reader.cancel().catch(() => {});
+		}
 	});
 
 	it("runs native middleware registered before and after the mount", async () => {

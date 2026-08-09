@@ -117,7 +117,8 @@ context, including `db` and custom functions, promises, services or class
 instances. Before native middleware runs, QUESTPIE snapshots its serializable
 session/principal authority. At the mount it derives a separate private app
 context from that snapshot, so native mutation cannot forge the mount's session
-or request-local extensions. Session and OAuth resolution still happen once,
+or request-local extensions. Fresh channel and live-query authorization remains
+bound to the same private request snapshot. Session and OAuth resolution still happen once,
 but `appConfig({ context })` runs a second time for the private authority
 context. Return request-local mutable values from that resolver; an explicitly
 shared singleton remains shared by definition. Later Hono middleware may add

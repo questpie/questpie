@@ -14,7 +14,8 @@ QUESTPIE authority from a mutable `c.user`; use `getSession` for custom mount
 identity. Existing `questpieMiddleware` composition reuses one immutable
 authority snapshot instead of resolving a second identity. Its native context
 stays fully backwards-compatible while the mount derives a private app context
-that native middleware cannot forge. Hono and Elysia share the core-owned
+that native middleware cannot forge. Fresh channel and live-query authorization
+also stays bound to the private request snapshot. Hono and Elysia share the core-owned
 `NativeAdapterConfig` option contract. Next route handlers now return an exact
 seven-method type while preserving their 3.x configuration surface. Code that
 indexed the handler object with an arbitrary string must use one of the seven

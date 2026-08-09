@@ -30,6 +30,7 @@ export default defineConfig({
 	entry: [
 		"src/exports/*.ts",
 		"src/exports/adapters/*.ts",
+		"src/exports/internal/*.ts",
 		"src/exports/modules/*.ts",
 	],
 	outDir: "dist",

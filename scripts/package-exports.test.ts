@@ -108,13 +108,13 @@ describe("package export maps", () => {
 		}
 	});
 
-	// questpie/internal/* exists so that a declaration file in a downstream
+	// questpie/internal/server/* exists so that a declaration file in a downstream
 	// package can name a module the public entry points do not re-export.
 	// Declaring only the `types` condition keeps runtime imports out: Node has
 	// no condition to match and refuses the specifier.
 	describe("questpie internal type subpaths", () => {
 		const internalKeys = Object.keys(questpiePackageJson.exports).filter(
-			(key) => key.startsWith("./internal/"),
+			(key) => key.startsWith("./internal/server/"),
 		);
 
 		test("are declared", () => {

@@ -409,7 +409,7 @@ import { Hono } from "hono";
 import { questpieHono } from "@questpie/hono/server";
 import { app } from "#questpie";
 
-const server = new Hono().route("/api", questpieHono(app));
+const server = new Hono().route("/", questpieHono(app, { basePath: "/api" }));
 export default server;
 ```
 
@@ -419,9 +419,10 @@ export default server;
 import { questpieNextRouteHandlers } from "@questpie/next";
 import { app } from "#questpie";
 
-export const { GET, POST, PATCH, DELETE } = questpieNextRouteHandlers(app, {
-	basePath: "/api",
-});
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD } =
+	questpieNextRouteHandlers(app, {
+		basePath: "/api",
+	});
 ```
 
 **TanStack Start (no adapter needed):**

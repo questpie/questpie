@@ -8,6 +8,7 @@ import {
 	type Questpie,
 	type RequestContext,
 } from "questpie";
+import { createIsolatedAdapterContextResolver } from "questpie/internal/http-adapter";
 
 /**
  * Variables stored in Hono context
@@ -22,50 +23,6 @@ const adapterContexts = new WeakMap<
 	Request,
 	{ app: unknown; resolveAuthorityContext: () => Promise<AdapterContext> }
 >();
-
-function createAuthorityContextResolver(
-	app: Questpie<any>,
-	request: Request,
-	nativeContext: AdapterContext,
-): () => Promise<AdapterContext> {
-	const session = structuredClone(nativeContext.session);
-	const principal = structuredClone(nativeContext.appContext.principal);
-	const actor = structuredClone(nativeContext.appContext.actor);
-	const authorityRequest = request.clone();
-	let resolved: Promise<AdapterContext> | undefined;
-
-	return () =>
-		(resolved ??= app
-			.createContext({
-				session,
-				principal,
-				actor,
-				locale: nativeContext.locale,
-				accessMode: nativeContext.appContext.accessMode,
-				stage: nativeContext.stage,
-				requestId: nativeContext.requestId,
-				traceId: nativeContext.traceId,
-				request: authorityRequest,
-			})
-			.then((appContext) => {
-				appContext.localeFallback = nativeContext.localeFallback;
-				const authorityContext: AdapterContext = {
-					...nativeContext,
-					session,
-					appContext,
-				};
-				for (const key of Reflect.ownKeys(nativeContext)) {
-					const descriptor = Object.getOwnPropertyDescriptor(
-						nativeContext,
-						key,
-					);
-					if (descriptor && !descriptor.enumerable) {
-						Object.defineProperty(authorityContext, key, descriptor);
-					}
-				}
-				return authorityContext;
-			}));
-}
 
 /**
  * Hono adapter configuration
@@ -90,7 +47,7 @@ export function questpieMiddleware<TQuestpie = Questpie<any>>(app: TQuestpie) {
 
 		adapterContexts.set(request, {
 			app,
-			resolveAuthorityContext: createAuthorityContextResolver(
+			resolveAuthorityContext: createIsolatedAdapterContextResolver(
 				app as Questpie<any>,
 				request,
 				adapterContext,

@@ -521,9 +521,9 @@ export const Route = createAPIFileRoute("/api/$")({
 });
 ```
 
-**Next.js**: `import { questpieNextRouteHandlers } from "@questpie/next"` -- export `GET`, `POST`, `PATCH`, `DELETE` from `app/api/[...slug]/route.ts`. The lower-level `questpieNext(app, config)` returns a single fetch-style handler.
+**Next.js**: `import { questpieNextRouteHandlers } from "@questpie/next"` -- export `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`, and `HEAD` from `app/api/[...slug]/route.ts`. The lower-level `questpieNext(app, config)` returns a single fetch-style handler.
 
-**Hono**: `import { questpieHono } from "@questpie/hono/server"` -- `server.route("/api", questpieHono(app))`.
+**Hono**: `import { questpieHono } from "@questpie/hono/server"` -- `server.route("/", questpieHono(app, { basePath: "/api" }))`.
 
 **Elysia**: `import { questpieElysia } from "@questpie/elysia/server"` -- `.use(questpieElysia(app, { basePath: "/api" }))`.
 
