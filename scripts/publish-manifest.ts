@@ -1,9 +1,18 @@
 type DependencyMap = Record<string, string>;
 
-type PublishManifest = {
+export type PublishManifest = Record<string, unknown> & {
 	dependencies?: DependencyMap;
 	optionalDependencies?: DependencyMap;
 	peerDependencies?: DependencyMap;
+	publishConfig?: Record<string, unknown>;
+};
+
+const PUBLISH_CONFIG_METADATA_KEYS = new Set(["access", "registry", "tag"]);
+
+export type PreparedPublishManifest<TManifest extends PublishManifest> = {
+	manifest: TManifest;
+	appliedPublishConfigKeys: string[];
+	resolvedWorkspaceSections: ("dependencies" | "peerDependencies")[];
 };
 
 export function replaceWorkspaceVersions(
@@ -44,4 +53,41 @@ export function assertNoWorkspaceProtocols(manifest: PublishManifest): void {
 			`Refusing to publish unresolved workspace protocols: ${unresolved.join(", ")}`,
 		);
 	}
+}
+
+/** Build the exact manifest shape passed to npm by the release workflow. */
+export function preparePublishManifest<TManifest extends PublishManifest>(
+	source: TManifest,
+	versions: ReadonlyMap<string, string>,
+): PreparedPublishManifest<TManifest> {
+	const manifest = structuredClone(source);
+	const appliedPublishConfigKeys: string[] = [];
+	const resolvedWorkspaceSections: PreparedPublishManifest<TManifest>["resolvedWorkspaceSections"] =
+		[];
+
+	for (const [key, value] of Object.entries(manifest.publishConfig ?? {})) {
+		if (PUBLISH_CONFIG_METADATA_KEYS.has(key)) continue;
+		manifest[key] = value;
+		appliedPublishConfigKeys.push(key);
+	}
+
+	for (const key of ["dependencies", "peerDependencies"] as const) {
+		const dependencies = manifest[key];
+		if (!dependencies) continue;
+		if (
+			Object.values(dependencies).some((value) =>
+				value.startsWith("workspace:"),
+			)
+		) {
+			manifest[key] = replaceWorkspaceVersions(dependencies, versions);
+			resolvedWorkspaceSections.push(key);
+		}
+	}
+
+	assertNoWorkspaceProtocols(manifest);
+	return {
+		manifest,
+		appliedPublishConfigKeys,
+		resolvedWorkspaceSections,
+	};
 }

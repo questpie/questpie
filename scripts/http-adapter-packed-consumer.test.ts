@@ -6,8 +6,8 @@ import { join, resolve } from "node:path";
 import process from "node:process";
 
 import {
-	assertNoWorkspaceProtocols,
-	replaceWorkspaceVersions,
+	preparePublishManifest,
+	type PublishManifest,
 } from "./publish-manifest";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..");
@@ -15,15 +15,6 @@ const PACKAGE_NAMES = ["questpie", "hono", "elysia", "next"] as const;
 const PROCESS_TIMEOUT_MS = 120_000;
 
 let workspace: string | undefined;
-
-type PublishManifest = Record<string, unknown> & {
-	name?: string;
-	version?: string;
-	dependencies?: Record<string, string>;
-	optionalDependencies?: Record<string, string>;
-	peerDependencies?: Record<string, string>;
-	publishConfig?: Record<string, unknown>;
-};
 
 type CommandResult = {
 	exitCode: number;
@@ -120,28 +111,6 @@ async function readManifest(packageDir: string): Promise<PublishManifest> {
 	) as PublishManifest;
 }
 
-function stagePublishManifest(
-	source: PublishManifest,
-	versions: ReadonlyMap<string, string>,
-): PublishManifest {
-	const manifest = structuredClone(source);
-	for (const [key, value] of Object.entries(manifest.publishConfig ?? {})) {
-		if (key !== "access" && key !== "registry" && key !== "tag") {
-			manifest[key] = value;
-		}
-	}
-	manifest.dependencies = replaceWorkspaceVersions(
-		manifest.dependencies,
-		versions,
-	);
-	manifest.peerDependencies = replaceWorkspaceVersions(
-		manifest.peerDependencies,
-		versions,
-	);
-	assertNoWorkspaceProtocols(manifest);
-	return manifest;
-}
-
 async function stageAndPack(
 	packageName: (typeof PACKAGE_NAMES)[number],
 	versions: ReadonlyMap<string, string>,
@@ -149,7 +118,7 @@ async function stageAndPack(
 ): Promise<string> {
 	const packageDir = join(REPO_ROOT, "packages", packageName);
 	const stageDir = join(workspace!, "stage", packageName);
-	const manifest = stagePublishManifest(
+	const { manifest } = preparePublishManifest(
 		await readManifest(packageDir),
 		versions,
 	);
@@ -261,17 +230,20 @@ describe("packed HTTP adapter consumer", () => {
 					'import { questpieElysia, type ElysiaAdapterConfig } from "@questpie/elysia/server";',
 					'import { createClientFromEden } from "@questpie/elysia/client";',
 					'import { questpieNextRouteHandlers, type NextAdapterConfig } from "@questpie/next";',
+					'import type { NativeAdapterConfig } from "questpie/http";',
 					"void [questpieHono, createClientFromHono, questpieElysia, createClientFromEden, questpieNextRouteHandlers];",
 					"const honoConfig: HonoAdapterConfig = {};",
 					"const elysiaConfig: ElysiaAdapterConfig = {};",
+					"const nativeConfig: NativeAdapterConfig = {};",
 					'const nextConfig: NextAdapterConfig = { accessMode: "system" };',
-					"void [honoConfig, elysiaConfig, nextConfig];",
+					"void [honoConfig, elysiaConfig, nativeConfig, nextConfig];",
 					"",
 				].join("\n"),
 			);
 			await writeFile(
 				join(consumerDir, "runtime.mjs"),
 				[
+					'await import("questpie/http");',
 					'await import("@questpie/hono/server");',
 					'await import("@questpie/hono/client");',
 					'await import("@questpie/elysia/server");',

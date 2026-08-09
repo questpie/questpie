@@ -22,10 +22,7 @@ import {
 	assertPackagesRegistered,
 	isNpmPackageVersionPublished,
 } from "./npm-package-preflight";
-import {
-	assertNoWorkspaceProtocols,
-	replaceWorkspaceVersions,
-} from "./publish-manifest";
+import { preparePublishManifest } from "./publish-manifest";
 
 const execAsync = promisify(exec);
 
@@ -168,55 +165,33 @@ async function main() {
 			const original = fs.readFileSync(packageJsonPath, "utf-8");
 			originals.set(packageJsonPath, original);
 
-			const packageJson: PackageJson = JSON.parse(original);
+			const sourcePackageJson: PackageJson = JSON.parse(original);
+			const {
+				manifest: packageJson,
+				appliedPublishConfigKeys,
+				resolvedWorkspaceSections,
+			} = preparePublishManifest(sourcePackageJson, versions);
 			console.log(`📦 ${packageJson.name}`);
 
-			let modified = false;
-
-			// 1. Apply publishConfig overrides
-			if (packageJson.publishConfig) {
+			if (appliedPublishConfigKeys.length > 0) {
 				console.log("  Applying publishConfig overrides:");
-				for (const [key, value] of Object.entries(packageJson.publishConfig)) {
-					if (key === "access" || key === "registry" || key === "tag") continue;
+				for (const key of appliedPublishConfigKeys) {
 					console.log(`    ${key}`);
-					packageJson[key] = value;
-					modified = true;
 				}
 			}
 
-			// 2. Convert workspace:* in dependencies
-			if (packageJson.dependencies) {
-				const hasWorkspace = Object.values(packageJson.dependencies).some((v) =>
-					v.startsWith("workspace:"),
-				);
-				if (hasWorkspace) {
-					console.log("  Converting workspace dependencies:");
-					packageJson.dependencies = replaceWorkspaceVersions(
-						packageJson.dependencies,
-						versions,
-					);
-					modified = true;
-				}
+			if (resolvedWorkspaceSections.includes("dependencies")) {
+				console.log("  Converting workspace dependencies:");
 			}
 
-			// 3. Convert workspace:* in peerDependencies
-			if (packageJson.peerDependencies) {
-				const hasWorkspace = Object.values(packageJson.peerDependencies).some(
-					(v) => v.startsWith("workspace:"),
-				);
-				if (hasWorkspace) {
-					console.log("  Converting workspace peerDependencies:");
-					packageJson.peerDependencies = replaceWorkspaceVersions(
-						packageJson.peerDependencies,
-						versions,
-					);
-					modified = true;
-				}
+			if (resolvedWorkspaceSections.includes("peerDependencies")) {
+				console.log("  Converting workspace peerDependencies:");
 			}
 
-			assertNoWorkspaceProtocols(packageJson);
-
-			if (modified) {
+			if (
+				appliedPublishConfigKeys.length > 0 ||
+				resolvedWorkspaceSections.length > 0
+			) {
 				fs.writeFileSync(
 					packageJsonPath,
 					JSON.stringify(packageJson, null, "\t") + "\n",

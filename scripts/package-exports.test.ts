@@ -45,6 +45,37 @@ const bothMaps = (manifest: Manifest) => [
 	["publishConfig.exports", manifest.publishConfig?.exports ?? {}] as const,
 ];
 
+function expectedPublishTarget(source: string, condition = "default"): string {
+	if (source === "./package.json" || source.startsWith("./dist/"))
+		return source;
+	let relative = source.replace(/^\.\/src\//, "").replace(/^exports\//, "");
+	if (relative.endsWith(".css")) return `./dist/${relative}`;
+	relative = relative.replace(
+		/\.ts$/,
+		condition === "types" ? ".d.mts" : ".mjs",
+	);
+	return `./dist/${relative}`;
+}
+
+function expectCorrespondingTargets(
+	development: unknown,
+	published: unknown,
+	condition = "default",
+): void {
+	if (typeof development === "string") {
+		expect(published).toBe(expectedPublishTarget(development, condition));
+		return;
+	}
+	const developmentConditions = development as Record<string, unknown>;
+	const publishedConditions = published as Record<string, unknown>;
+	expect(Object.keys(publishedConditions).sort()).toEqual(
+		Object.keys(developmentConditions).sort(),
+	);
+	for (const [key, value] of Object.entries(developmentConditions)) {
+		expectCorrespondingTargets(value, publishedConditions[key], key);
+	}
+}
+
 describe("package export maps", () => {
 	test.each(manifests)(
 		"$name keeps development and publish keys aligned",
@@ -52,6 +83,18 @@ describe("package export maps", () => {
 			expect(Object.keys(manifest.exports ?? {}).sort()).toEqual(
 				Object.keys(manifest.publishConfig?.exports ?? {}).sort(),
 			);
+		},
+	);
+
+	test.each(manifests)(
+		"$name maps every development export to its built artifact",
+		(manifest) => {
+			for (const [key, development] of Object.entries(manifest.exports ?? {})) {
+				expectCorrespondingTargets(
+					development,
+					manifest.publishConfig?.exports?.[key],
+				);
+			}
 		},
 	);
 

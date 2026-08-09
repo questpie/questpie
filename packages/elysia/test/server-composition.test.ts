@@ -79,7 +79,9 @@ describe("elysia adapter composition", () => {
 		const ping = route()
 			.get()
 			.raw()
-			.handler(() => new Response("pong"));
+			.handler(
+				() => new Response("pong", { headers: { "x-owner": "questpie" } }),
+			);
 		const setup = await buildMockApp({ routes: { ping } });
 		cleanup = setup.cleanup;
 		const beforePaths: string[] = [];
@@ -89,13 +91,46 @@ describe("elysia adapter composition", () => {
 				beforePaths.push(new URL(request.url).pathname);
 			})
 			.use(questpieElysia(setup.app, { basePath: "/api" }))
-			.onRequest(({ request }) => {
+			.onRequest(({ request, set }) => {
 				afterPaths.push(new URL(request.url).pathname);
+				set.headers["x-native-after"] = "yes";
 			})
-			.get("/apiary", () => "native sibling");
+			.get(
+				"/apiary",
+				() =>
+					new Response("native sibling", {
+						headers: { "x-owner": "native" },
+					}),
+			);
 
-		for (const path of ["/api", "/api/ping", "/api/x", "/apiary"]) {
-			await native.handle(new Request(`http://localhost${path}`));
+		const cases = [
+			{ path: "/api", status: 404, owner: "questpie", code: "NOT_FOUND" },
+			{ path: "/api/ping", status: 200, owner: "questpie", body: "pong" },
+			{ path: "/api/x", status: 404, owner: "questpie", code: "NOT_FOUND" },
+			{ path: "/apiary", status: 200, owner: "native", body: "native sibling" },
+		] as const;
+		for (const expected of cases) {
+			const response = await native.handle(
+				new Request(`http://localhost${expected.path}`),
+			);
+			expect(response.status).toBe(expected.status);
+			expect(response.headers.get("x-native-after")).toBe("yes");
+			const actualOwner =
+				response.headers.get("x-owner") ??
+				(response.headers.has("x-request-id") ? "questpie" : null);
+			expect(actualOwner).toBe(expected.owner);
+			if (expected.owner === "questpie") {
+				expect(response.headers.get("x-request-id")).toBeTruthy();
+			} else {
+				expect(response.headers.get("x-owner")).toBe("native");
+			}
+			if ("code" in expected) {
+				expect(await response.json()).toMatchObject({
+					error: { code: expected.code },
+				});
+			} else {
+				expect(await response.text()).toBe(expected.body);
+			}
 		}
 
 		expect(beforePaths).toEqual(["/api", "/api/ping", "/api/x", "/apiary"]);

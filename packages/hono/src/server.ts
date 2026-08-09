@@ -4,7 +4,6 @@ import {
 	type AdapterContext,
 	createAdapterContext,
 	createFetchHandler,
-	createNativeAdapterContextView,
 	type NativeAdapterConfig,
 	type Questpie,
 	type RequestContext,
@@ -21,14 +20,62 @@ export type QuestpieVariables<TQuestpie = Questpie<any>> = {
 
 const adapterContexts = new WeakMap<
 	Request,
-	{ app: unknown; context: AdapterContext }
+	{ app: unknown; resolveAuthorityContext: () => Promise<AdapterContext> }
 >();
+
+function createAuthorityContextResolver(
+	app: Questpie<any>,
+	request: Request,
+	nativeContext: AdapterContext,
+): () => Promise<AdapterContext> {
+	const session = structuredClone(nativeContext.session);
+	const principal = structuredClone(nativeContext.appContext.principal);
+	const actor = structuredClone(nativeContext.appContext.actor);
+	const authorityRequest = request.clone();
+	let resolved: Promise<AdapterContext> | undefined;
+
+	return () =>
+		(resolved ??= app
+			.createContext({
+				session,
+				principal,
+				actor,
+				locale: nativeContext.locale,
+				accessMode: nativeContext.appContext.accessMode,
+				stage: nativeContext.stage,
+				requestId: nativeContext.requestId,
+				traceId: nativeContext.traceId,
+				request: authorityRequest,
+			})
+			.then((appContext) => {
+				appContext.localeFallback = nativeContext.localeFallback;
+				const authorityContext: AdapterContext = {
+					...nativeContext,
+					session,
+					appContext,
+				};
+				for (const key of Reflect.ownKeys(nativeContext)) {
+					const descriptor = Object.getOwnPropertyDescriptor(
+						nativeContext,
+						key,
+					);
+					if (descriptor && !descriptor.enumerable) {
+						Object.defineProperty(authorityContext, key, descriptor);
+					}
+				}
+				return authorityContext;
+			}));
+}
 
 /**
  * Hono adapter configuration
  */
 export type HonoAdapterConfig = NativeAdapterConfig;
 
+/**
+ * @deprecated Prefer `questpieHono(app, config)`. When both APIs are composed,
+ * QUESTPIE rebuilds app context once for the private mount authority boundary.
+ */
 export function questpieMiddleware<TQuestpie = Questpie<any>>(app: TQuestpie) {
 	return createMiddleware<{
 		Variables: QuestpieVariables<TQuestpie>;
@@ -41,10 +88,16 @@ export function questpieMiddleware<TQuestpie = Questpie<any>>(app: TQuestpie) {
 			{ accessMode: "user" },
 		);
 
-		adapterContexts.set(request, { app, context: adapterContext });
-		const nativeContext = createNativeAdapterContextView(adapterContext);
-		c.set("user", nativeContext.session?.user ?? null);
-		c.set("appContext", nativeContext);
+		adapterContexts.set(request, {
+			app,
+			resolveAuthorityContext: createAuthorityContextResolver(
+				app as Questpie<any>,
+				request,
+				adapterContext,
+			),
+		});
+		c.set("user", adapterContext.session?.user ?? null);
+		c.set("appContext", adapterContext.appContext);
 
 		try {
 			await next();
@@ -94,22 +147,25 @@ export function questpieHono<TQuestpie = Questpie<any>>(
 		.notFound((context) => context.res)
 		.use("*", async (c, next) => {
 			const storedContext = adapterContexts.get(c.req.raw);
-			const adapterContext =
-				storedContext?.app === app ? storedContext.context : undefined;
+			const hasCompatibilityContext = storedContext?.app === app;
 			if (
-				adapterContext &&
+				hasCompatibilityContext &&
 				(config.getSession || config.getLocale || config.extendContext)
 			) {
 				throw new Error(
 					"questpieMiddleware cannot be combined with questpieHono context resolvers",
 				);
 			}
+			const adapterContext = hasCompatibilityContext
+				? await storedContext.resolveAuthorityContext()
+				: undefined;
 
 			const response = await handler(c.req.raw, adapterContext);
 			if (response) {
 				c.res = response;
 				await next();
-				return c.res;
+				c.res = response;
+				return response;
 			}
 			await next();
 			return c.res;

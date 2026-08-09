@@ -107,17 +107,24 @@ export default server;
 `questpieHono` returns a Hono middleware app, so mount it at `"/"`. The core
 handler owns base-path matching; requests outside it continue through native
 Hono routing. Session, locale and extended context options are resolved by the
-core handler exactly once. The optional `questpieMiddleware(app)` remains
-available when your own native Hono routes need `app`, `appContext` or `user`;
-it is not an authority input to the QUESTPIE mount.
+core handler exactly once. The QUESTPIE 3.x `questpieMiddleware(app)`
+compatibility helper remains available for existing native Hono routes that need
+the complete `app`, `appContext` or `user`; it is not an authority input to the
+QUESTPIE mount.
 
-When both helpers are composed, the mount reuses the middleware's immutable
-adapter context so the request has one identity and one request scope. Native
-routes receive a detached `appContext` view; mutating it or `c.user` no longer
-changes QUESTPIE authorization. Framework resources and non-cloneable extension
-values such as functions, promises and class instances are omitted from that
-native view. Use `getSession` on `questpieHono` instead, without
-`questpieMiddleware`, when the mount needs a custom session resolver.
+When both helpers are composed, native routes retain the complete compatibility
+context, including `db` and custom functions, promises, services or class
+instances. Before native middleware runs, QUESTPIE snapshots its serializable
+session/principal authority. At the mount it derives a separate private app
+context from that snapshot, so native mutation cannot forge the mount's session
+or request-local extensions. Session and OAuth resolution still happen once,
+but `appConfig({ context })` runs a second time for the private authority
+context. Return request-local mutable values from that resolver; an explicitly
+shared singleton remains shared by definition. Later Hono middleware may add
+headers, but cannot replace the status or body of a response claimed by the
+QUESTPIE base path. Use `getSession` on `questpieHono` instead, without
+`questpieMiddleware`, for new integrations and when the mount needs a custom
+session resolver.
 
 ### Elysia
 
