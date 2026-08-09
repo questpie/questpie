@@ -19,8 +19,16 @@ import { preparePublishManifest } from "../../../scripts/publish-manifest";
 const REPO_ROOT = resolve(import.meta.dirname, "../../..");
 const QUESTPIE_PACKAGE = join(REPO_ROOT, "packages/questpie");
 const PROCESS_TIMEOUT_MS = 120_000;
+const WORKFLOW_TIMEOUT_MS = PROCESS_TIMEOUT_MS * 5 + 15_000;
 
 let workspace: string | undefined;
+
+type ActiveProcess = {
+	child: ReturnType<typeof spawn>;
+	exited: Promise<number>;
+};
+
+const activeProcesses = new Set<ActiveProcess>();
 
 type CommandResult = {
 	exitCode: number;
@@ -46,6 +54,19 @@ function killProcessGroup(
 	child.kill(signal);
 }
 
+async function terminateProcess({
+	child,
+	exited,
+}: ActiveProcess): Promise<void> {
+	killProcessGroup(child, "SIGTERM");
+	const terminated = await Promise.race([
+		exited.then(() => true),
+		wait(1_000).then(() => false),
+	]);
+	if (!terminated) killProcessGroup(child, "SIGKILL");
+	await Promise.race([exited, wait(1_000)]);
+}
+
 async function run(
 	command: string[],
 	options: { cwd: string; timeoutMs?: number },
@@ -66,6 +87,9 @@ async function run(
 		child.once("error", rejectExit);
 		child.once("close", (code) => resolveExit(code ?? 1));
 	});
+	const activeProcess = { child, exited };
+	activeProcesses.add(activeProcess);
+	child.once("close", () => activeProcesses.delete(activeProcess));
 	const timeoutMs = options.timeoutMs ?? PROCESS_TIMEOUT_MS;
 	let timeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -82,13 +106,7 @@ async function run(
 		if (timeout) clearTimeout(timeout);
 
 		if (outcome.kind === "timeout") {
-			killProcessGroup(child, "SIGTERM");
-			const terminated = await Promise.race([
-				exited.then(() => true),
-				wait(1_000).then(() => false),
-			]);
-			if (!terminated) killProcessGroup(child, "SIGKILL");
-			await Promise.race([exited, wait(1_000)]);
+			await terminateProcess(activeProcess);
 			throw new Error(
 				`Command timed out after ${timeoutMs}ms: ${command.join(" ")}\n\nstdout:\n${stdout}\n\nstderr:\n${stderr}`,
 			);
@@ -218,10 +236,34 @@ async function writeConsumer(
 }
 
 afterAll(async () => {
+	await Promise.allSettled([...activeProcesses].map(terminateProcess));
 	if (workspace) await rm(workspace, { recursive: true, force: true });
 });
 
 describe("packed public consumer", () => {
+	test("cleans the process group when a command times out", async () => {
+		if (process.platform === "win32") return;
+
+		const cleanupWorkspace = await mkdtemp(
+			join(tmpdir(), "questpie-process-cleanup-"),
+		);
+		const marker = join(cleanupWorkspace, "descendant-survived");
+
+		try {
+			await expect(
+				run(["sh", "-c", '(sleep 0.3; touch "$1") & wait', "sh", marker], {
+					cwd: cleanupWorkspace,
+					timeoutMs: 50,
+				}),
+			).rejects.toThrow("Command timed out after 50ms");
+			await wait(500);
+			expect(existsSync(marker)).toBe(false);
+			expect(activeProcesses.size).toBe(0);
+		} finally {
+			await rm(cleanupWorkspace, { recursive: true, force: true });
+		}
+	});
+
 	test(
 		"generates and typechecks through the installed public CLI",
 		async () => {
@@ -269,6 +311,6 @@ describe("packed public consumer", () => {
 			);
 			expectSuccess(typecheck, "node_modules/.bin/tsc --noEmit");
 		},
-		PROCESS_TIMEOUT_MS * 4,
+		WORKFLOW_TIMEOUT_MS,
 	);
 });
