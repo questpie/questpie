@@ -5,13 +5,6 @@ import { Command as CommandPrimitive } from "cmdk";
 import type * as React from "react";
 
 import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogHeader,
-	DialogTitle,
-} from "#questpie/admin/client/components/ui/dialog";
-import {
 	InputGroup,
 	InputGroupAddon,
 } from "#questpie/admin/client/components/ui/input-group";
@@ -34,36 +27,6 @@ function Command({
 			)}
 			{...props}
 		/>
-	);
-}
-
-function CommandDialog({
-	title = "Command Palette",
-	description = "Search for a command to run...",
-	children,
-	className,
-	showCloseButton = false,
-	...props
-}: Omit<React.ComponentProps<typeof Dialog>, "children"> & {
-	title?: string;
-	description?: string;
-	className?: string;
-	showCloseButton?: boolean;
-	children: React.ReactNode;
-}) {
-	return (
-		<Dialog {...props}>
-			<DialogHeader className="sr-only">
-				<DialogTitle>{title}</DialogTitle>
-				<DialogDescription>{description}</DialogDescription>
-			</DialogHeader>
-			<DialogContent
-				className={cn("overflow-hidden p-0", className)}
-				showCloseButton={showCloseButton}
-			>
-				{children}
-			</DialogContent>
-		</Dialog>
 	);
 }
 
@@ -141,22 +104,6 @@ function CommandGroup({
 	);
 }
 
-function CommandSeparator({
-	className,
-	...props
-}: React.ComponentProps<typeof CommandPrimitive.Separator>) {
-	return (
-		<CommandPrimitive.Separator
-			data-slot="command-separator"
-			className={cn(
-				"qa-command__separator bg-border -mx-1 my-1 h-px",
-				className,
-			)}
-			{...props}
-		/>
-	);
-}
-
 function CommandItem({
 	className,
 	children,
@@ -177,22 +124,6 @@ function CommandItem({
 				className="ml-auto opacity-0 group-has-[[data-slot=command-shortcut]]/command-item:hidden group-data-[checked=true]/command-item:opacity-100"
 			/>
 		</CommandPrimitive.Item>
-	);
-}
-
-function CommandShortcut({
-	className,
-	...props
-}: React.ComponentProps<"span">) {
-	return (
-		<span
-			data-slot="command-shortcut"
-			className={cn(
-				"qa-command__shortcut text-muted-foreground group-data-selected/command-item:text-accent-foreground font-chrome chrome-meta ml-auto text-[0.625rem]",
-				className,
-			)}
-			{...props}
-		/>
 	);
 }
 

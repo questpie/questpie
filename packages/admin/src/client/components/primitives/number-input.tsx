@@ -3,7 +3,7 @@ import { Icon } from "@iconify/react";
 import { useResolveText } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
-import { useFieldIds } from "../ui/field";
+import { useFieldAriaDescribedBy } from "../ui/field";
 import { Input } from "../ui/input";
 import type { NumberInputProps } from "./types";
 
@@ -40,16 +40,7 @@ export function NumberInput({
 	"aria-describedby": ariaDescribedByProp,
 }: NumberInputProps) {
 	const resolveText = useResolveText();
-	const fieldIds = useFieldIds();
-	const ariaDescribedBy =
-		ariaDescribedByProp ??
-		([
-			fieldIds?.hasError ? fieldIds.errorId : null,
-			fieldIds?.hasDescription ? fieldIds.descriptionId : null,
-		]
-			.filter(Boolean)
-			.join(" ") ||
-			undefined);
+	const ariaDescribedBy = useFieldAriaDescribedBy(ariaDescribedByProp);
 
 	const handleChange = (newValue: number | null) => {
 		if (newValue === null) {

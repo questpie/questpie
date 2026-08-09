@@ -24,6 +24,7 @@ import {
 	DrawerTitle,
 	DrawerTrigger,
 } from "../ui/drawer";
+import { useFieldAriaDescribedBy } from "../ui/field";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { resolveOptionLabel } from "./option-label";
 import { SelectCreateRow } from "./select-create-row";
@@ -160,6 +161,7 @@ export function SelectMulti<TValue extends string = string>({
 	className,
 	id,
 	"aria-invalid": ariaInvalid,
+	"aria-describedby": ariaDescribedByProp,
 	drawerTitle = "Select options",
 	maxVisibleChips = 3,
 	selectedLabels,
@@ -169,6 +171,7 @@ export function SelectMulti<TValue extends string = string>({
 }: SelectMultiProps<TValue>) {
 	const resolvedValue = value ?? (EMPTY_VALUE as TValue[]);
 	const resolvedStaticOptions = staticOptions ?? EMPTY_OPTIONS;
+	const ariaDescribedBy = useFieldAriaDescribedBy(ariaDescribedByProp);
 	const resolveText = useResolveText();
 	const i18n = useSafeI18n();
 	const translate = useCallback((key: string) => i18n?.t(key) ?? key, [i18n]);
@@ -346,6 +349,7 @@ export function SelectMulti<TValue extends string = string>({
 			aria-controls="select-multi-list"
 			aria-expanded={open}
 			aria-invalid={ariaInvalid}
+			aria-describedby={ariaDescribedBy}
 			tabIndex={0}
 			className={cn(
 				"qa-select-multi control-surface font-chrome flex h-auto min-h-[var(--control-height)] w-full flex-wrap items-center gap-1 px-3 py-1.5 text-sm",

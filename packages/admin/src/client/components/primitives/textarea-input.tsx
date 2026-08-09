@@ -1,6 +1,6 @@
 import { useResolveText } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
-import { useFieldIds } from "../ui/field";
+import { useFieldAriaDescribedBy } from "../ui/field";
 import { Textarea } from "../ui/textarea";
 import type { TextareaInputProps } from "./types";
 
@@ -33,16 +33,7 @@ export function TextareaInput({
 	"aria-describedby": ariaDescribedByProp,
 }: TextareaInputProps) {
 	const resolveText = useResolveText();
-	const fieldIds = useFieldIds();
-	const ariaDescribedBy =
-		ariaDescribedByProp ??
-		([
-			fieldIds?.hasError ? fieldIds.errorId : null,
-			fieldIds?.hasDescription ? fieldIds.descriptionId : null,
-		]
-			.filter(Boolean)
-			.join(" ") ||
-			undefined);
+	const ariaDescribedBy = useFieldAriaDescribedBy(ariaDescribedByProp);
 
 	return (
 		<Textarea

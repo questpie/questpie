@@ -9,13 +9,11 @@ import { cn } from "#questpie/admin/client/lib/utils";
 import { DialogContent, DialogFooter, DialogHeader } from "./dialog";
 import {
 	Drawer,
-	DrawerClose,
 	DrawerContent,
 	DrawerDescription,
 	DrawerFooter,
 	DrawerHeader,
 	DrawerTitle,
-	DrawerTrigger,
 } from "./drawer";
 
 /**
@@ -92,38 +90,6 @@ function ResponsiveDialog({
 				{children}
 			</DialogPrimitive.Root>
 		</ResponsiveDialogContext.Provider>
-	);
-}
-
-function ResponsiveDialogTrigger({
-	children,
-	asChild = false,
-	className,
-	...props
-}: {
-	children: React.ReactNode;
-	asChild?: boolean;
-	className?: string;
-} & Omit<React.ComponentProps<"button">, "className">) {
-	const { isMobile } = useResponsiveDialog();
-
-	if (isMobile) {
-		return (
-			<DrawerTrigger asChild={asChild} className={className} {...props}>
-				{children}
-			</DrawerTrigger>
-		);
-	}
-
-	return (
-		<DialogPrimitive.Trigger
-			className={className}
-			nativeButton={!asChild}
-			render={asChild ? (children as React.ReactElement) : undefined}
-			{...props}
-		>
-			{!asChild ? children : undefined}
-		</DialogPrimitive.Trigger>
 	);
 }
 
@@ -237,38 +203,6 @@ function ResponsiveDialogFooter({
 	}
 
 	return <DialogFooter className={className} {...props} />;
-}
-
-function ResponsiveDialogClose({
-	children,
-	asChild = false,
-	className,
-	...props
-}: {
-	children: React.ReactNode;
-	asChild?: boolean;
-	className?: string;
-} & Omit<React.ComponentProps<"button">, "className">) {
-	const { isMobile } = useResponsiveDialog();
-
-	if (isMobile) {
-		return (
-			<DrawerClose asChild={asChild} className={className} {...props}>
-				{children}
-			</DrawerClose>
-		);
-	}
-
-	return (
-		<DialogPrimitive.Close
-			className={className}
-			nativeButton={!asChild}
-			render={asChild ? (children as React.ReactElement) : undefined}
-			{...props}
-		>
-			{!asChild ? children : undefined}
-		</DialogPrimitive.Close>
-	);
 }
 
 export {

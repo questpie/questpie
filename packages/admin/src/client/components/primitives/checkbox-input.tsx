@@ -3,6 +3,7 @@
 import { useResolveText, useSafeI18n } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { Checkbox } from "../ui/checkbox";
+import { useFieldAriaDescribedBy } from "../ui/field";
 import { resolveOptionLabel } from "./option-label";
 import type {
 	CheckboxGroupProps,
@@ -31,7 +32,10 @@ export function CheckboxInput({
 	className,
 	id,
 	"aria-invalid": ariaInvalid,
+	"aria-describedby": ariaDescribedByProp,
 }: CheckboxInputProps) {
+	const ariaDescribedBy = useFieldAriaDescribedBy(ariaDescribedByProp);
+
 	return (
 		<Checkbox
 			id={id}
@@ -39,6 +43,7 @@ export function CheckboxInput({
 			onCheckedChange={(checked) => onChange(checked === true)}
 			disabled={disabled}
 			aria-invalid={ariaInvalid}
+			aria-describedby={ariaDescribedBy}
 			className={cn("qa-checkbox-input", className)}
 		/>
 	);
@@ -89,8 +94,10 @@ export function CheckboxGroup<TValue extends string = string>({
 	className,
 	id,
 	"aria-invalid": ariaInvalid,
+	"aria-describedby": ariaDescribedByProp,
 }: CheckboxGroupProps<TValue>) {
 	const getOptionLabel = useOptionLabel<TValue>();
+	const ariaDescribedBy = useFieldAriaDescribedBy(ariaDescribedByProp);
 	const handleChange = (optionValue: TValue, checked: boolean) => {
 		if (checked) {
 			onChange([...value, optionValue]);
@@ -104,6 +111,7 @@ export function CheckboxGroup<TValue extends string = string>({
 			id={id}
 			role="group"
 			data-invalid={ariaInvalid || undefined}
+			aria-describedby={ariaDescribedBy}
 			className={cn(
 				"qa-checkbox-group flex gap-3",
 				orientation === "vertical" ? "flex-col" : "flex-row flex-wrap",
@@ -166,13 +174,16 @@ export function RadioGroup<TValue extends string = string>({
 	className,
 	id,
 	"aria-invalid": ariaInvalid,
+	"aria-describedby": ariaDescribedByProp,
 }: RadioGroupProps<TValue>) {
 	const getOptionLabel = useOptionLabel<TValue>();
+	const ariaDescribedBy = useFieldAriaDescribedBy(ariaDescribedByProp);
 	return (
 		<div
 			id={id}
 			role="radiogroup"
 			aria-invalid={ariaInvalid}
+			aria-describedby={ariaDescribedBy}
 			className={cn(
 				"qa-radio-group flex gap-3",
 				orientation === "vertical" ? "flex-col" : "flex-row flex-wrap",

@@ -7,9 +7,11 @@
 import { createClient } from "questpie/client";
 
 import type { AppConfig } from "#questpie";
-import { env } from "#questpie/env.client.vite";
 
 export const client = createClient<AppConfig>({
-	baseURL: typeof window !== "undefined" ? window.location.origin : env.APP_URL,
+	baseURL:
+		typeof window !== "undefined"
+			? window.location.origin
+			: process.env.APP_URL || "http://localhost:3000",
 	basePath: "/api",
 });

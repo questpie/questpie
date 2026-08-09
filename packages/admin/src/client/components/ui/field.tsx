@@ -6,7 +6,6 @@ import { useMemo } from "react";
 
 import { cn } from "../../lib/utils";
 import { Label } from "./label";
-import { Separator } from "./separator";
 
 // ============================================================================
 // Field ID Context — links labels, descriptions, and errors to inputs
@@ -40,35 +39,30 @@ export function useFieldIds() {
 	return React.useContext(FieldIdsContext);
 }
 
-function FieldSet({ className, ...props }: React.ComponentProps<"fieldset">) {
-	return (
-		<fieldset
-			data-slot="field-set"
-			className={cn(
-				"qa-field-set flex flex-col gap-4 has-[>[data-slot=checkbox-group]]:gap-3 has-[>[data-slot=radio-group]]:gap-3",
-				className,
-			)}
-			{...props}
-		/>
-	);
+type FieldAriaState = Pick<
+	FieldIdsContextValue,
+	"descriptionId" | "errorId" | "hasDescription" | "hasError"
+>;
+
+export function composeFieldAriaDescribedBy(
+	explicitValue: string | undefined,
+	field: FieldAriaState | null,
+): string | undefined {
+	if (explicitValue !== undefined) return explicitValue;
+	if (!field) return undefined;
+
+	const ids = [
+		field.hasError ? field.errorId : null,
+		field.hasDescription ? field.descriptionId : null,
+	].filter((id): id is string => id !== null);
+
+	return ids.length > 0 ? ids.join(" ") : undefined;
 }
 
-function FieldLegend({
-	className,
-	variant = "legend",
-	...props
-}: React.ComponentProps<"legend"> & { variant?: "legend" | "label" }) {
-	return (
-		<legend
-			data-slot="field-legend"
-			data-variant={variant}
-			className={cn(
-				"mb-2 font-medium data-[variant=label]:text-xs/relaxed data-[variant=legend]:text-sm",
-				className,
-			)}
-			{...props}
-		/>
-	);
+export function useFieldAriaDescribedBy(
+	explicitValue: string | undefined,
+): string | undefined {
+	return composeFieldAriaDescribedBy(explicitValue, useFieldIds());
 }
 
 function FieldGroup({ className, ...props }: React.ComponentProps<"div">) {
@@ -167,26 +161,14 @@ function FieldLabel({
 	);
 }
 
-function FieldTitle({ className, ...props }: React.ComponentProps<"div">) {
-	return (
-		<div
-			data-slot="field-label"
-			className={cn(
-				"qa-field__title font-chrome flex w-fit items-center gap-2 text-xs leading-snug font-medium group-data-[disabled=true]/field:opacity-50",
-				className,
-			)}
-			{...props}
-		/>
-	);
-}
-
 function FieldDescription({ className, ...props }: React.ComponentProps<"p">) {
 	const fieldIds = React.useContext(FieldIdsContext);
+	const setHasDescription = fieldIds?.setHasDescription;
 
 	React.useEffect(() => {
-		fieldIds?.setHasDescription(true);
-		return () => fieldIds?.setHasDescription(false);
-	}, [fieldIds]);
+		setHasDescription?.(true);
+		return () => setHasDescription?.(false);
+	}, [setHasDescription]);
 
 	return (
 		<p
@@ -203,36 +185,6 @@ function FieldDescription({ className, ...props }: React.ComponentProps<"p">) {
 	);
 }
 
-function FieldSeparator({
-	children,
-	className,
-	...props
-}: React.ComponentProps<"div"> & {
-	children?: React.ReactNode;
-}) {
-	return (
-		<div
-			data-slot="field-separator"
-			data-content={!!children}
-			className={cn(
-				"qa-field__separator relative -my-2 h-5 text-xs/relaxed group-data-[variant=outline]/field-group:-mb-2",
-				className,
-			)}
-			{...props}
-		>
-			<Separator className="absolute inset-0 top-1/2" />
-			{children && (
-				<span
-					className="text-muted-foreground bg-background relative mx-auto block w-fit px-2"
-					data-slot="field-separator-content"
-				>
-					{children}
-				</span>
-			)}
-		</div>
-	);
-}
-
 function FieldError({
 	className,
 	children,
@@ -242,6 +194,7 @@ function FieldError({
 	errors?: Array<{ message?: string } | undefined>;
 }) {
 	const fieldIds = React.useContext(FieldIdsContext);
+	const setHasError = fieldIds?.setHasError;
 
 	const content = useMemo(() => {
 		if (children) {
@@ -271,9 +224,9 @@ function FieldError({
 	}, [children, errors]);
 
 	React.useEffect(() => {
-		fieldIds?.setHasError(!!content);
-		return () => fieldIds?.setHasError(false);
-	}, [fieldIds, content]);
+		setHasError?.(!!content);
+		return () => setHasError?.(false);
+	}, [setHasError, content]);
 
 	if (!content) {
 		return null;

@@ -4,6 +4,7 @@ import { Icon } from "@iconify/react";
 
 import { useResolveText } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
+import { useFieldAriaDescribedBy } from "../ui/field";
 import type { TimeInputProps } from "./types";
 
 /**
@@ -30,8 +31,10 @@ export function TimeInput({
 	className,
 	id,
 	"aria-invalid": ariaInvalid,
+	"aria-describedby": ariaDescribedByProp,
 }: TimeInputProps) {
 	const resolveText = useResolveText();
+	const ariaDescribedBy = useFieldAriaDescribedBy(ariaDescribedByProp);
 
 	const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const timeValue = e.target.value;
@@ -64,6 +67,7 @@ export function TimeInput({
 					step={precision === "second" ? 1 : 60}
 					disabled={disabled}
 					aria-invalid={ariaInvalid}
+					aria-describedby={ariaDescribedBy}
 					placeholder={resolveText(placeholder)}
 					className={cn(
 						"flex-1 bg-transparent outline-none",

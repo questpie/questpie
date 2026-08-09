@@ -23,6 +23,7 @@ import {
 	DrawerTitle,
 	DrawerTrigger,
 } from "../ui/drawer";
+import { useFieldAriaDescribedBy } from "../ui/field";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { FieldSelectTrigger } from "./field-select-control";
 import { resolveOptionLabel } from "./option-label";
@@ -124,6 +125,7 @@ export function SelectSingle<TValue extends string = string>({
 	className,
 	id,
 	"aria-invalid": ariaInvalid,
+	"aria-describedby": ariaDescribedByProp,
 	drawerTitle = "Select option",
 	selectedLabel,
 	isLoadingValue = false,
@@ -133,6 +135,7 @@ export function SelectSingle<TValue extends string = string>({
 }: SelectSingleProps<TValue>) {
 	const resolvedStaticOptions = staticOptions ?? EMPTY_OPTIONS;
 	const resolveText = useResolveText();
+	const ariaDescribedBy = useFieldAriaDescribedBy(ariaDescribedByProp);
 	const i18n = useSafeI18n();
 	const translate = useCallback((key: string) => i18n?.t(key) ?? key, [i18n]);
 	const locale = i18n?.locale ?? "en";
@@ -289,6 +292,7 @@ export function SelectSingle<TValue extends string = string>({
 			aria-expanded={open}
 			aria-controls={listboxId}
 			aria-invalid={ariaInvalid}
+			aria-describedby={ariaDescribedBy}
 			disabled={disabled}
 			hasValue={!!value}
 			onKeyDown={handleTriggerKeyDown}
