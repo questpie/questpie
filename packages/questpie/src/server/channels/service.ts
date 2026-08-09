@@ -204,6 +204,28 @@ function isSystemContext(context: StoredChannelServiceContext): boolean {
 	return !context.session && !context.principal;
 }
 
+function revokeResolvedChannelAuthority(
+	publisher: ChannelPublisher,
+	db: AppendChannelEventOptions["db"] | undefined,
+	resolvedName: string,
+	input: ChannelAuthorityInvalidationInput,
+): Promise<ChannelAuthorityRevocationReceipt> {
+	if (!input.subject.id || input.subject.id.length > 256) {
+		throw new Error("Channel authority subject is invalid");
+	}
+	if (!publisher.revokeChannelAuthority) {
+		throw new Error("Channel authority revocation is unavailable");
+	}
+	return publisher.revokeChannelAuthority(
+		{
+			channel: resolvedName,
+			subject: input.subject,
+			idempotencyKey: input.idempotencyKey,
+		},
+		{ db },
+	);
+}
+
 /** Request-bound typed facade over the shared realtime client transport. */
 export class ChannelsService<
 	TChannels extends ChannelDefinitions = ChannelDefinitions,
@@ -322,21 +344,13 @@ export class ChannelsService<
 		channel: TChannel,
 		input: ChannelAuthorityRevocationInput<TChannels[TChannel]>,
 	): Promise<ChannelAuthorityRevocationReceipt> {
-		if (!input.subject.id || input.subject.id.length > 256) {
-			throw new Error("Channel authority subject is invalid");
-		}
 		const params = (input.params ?? {}) as ChannelParamsOf<TChannels[TChannel]>;
 		const resolvedName = this.resolveName(channel, params);
-		if (!this.publisher.revokeChannelAuthority) {
-			throw new Error("Channel authority revocation is unavailable");
-		}
-		return this.publisher.revokeChannelAuthority(
-			{
-				channel: resolvedName,
-				subject: input.subject,
-				idempotencyKey: input.idempotencyKey,
-			},
-			{ db: this.context.db },
+		return revokeResolvedChannelAuthority(
+			this.publisher,
+			this.context.db,
+			resolvedName,
+			input,
 		);
 	}
 
@@ -533,7 +547,7 @@ export function createChannels<
 		const boundParams = Object.freeze({ ...params }) as ChannelParamsOf<
 			TChannels[TChannel]
 		>;
-		service.resolveName(channel, boundParams);
+		const resolvedName = service.resolveName(channel, boundParams);
 		return Object.freeze({
 			publish: <
 				TEvent extends keyof ChannelEventsOf<TChannels[TChannel]> & string,
@@ -541,19 +555,23 @@ export function createChannels<
 				event: TEvent,
 				data: z.input<ChannelEventsOf<TChannels[TChannel]>[TEvent]>,
 			) =>
-				service.publish(channel, {
-					params: boundParams,
-					event,
-					data,
-				} as unknown as ChannelPublishInput<TChannels[TChannel]>),
+				service
+					.preparePublishRequest(channel, {
+						params: boundParams,
+						event,
+						data,
+					})
+					.then((prepared) => service.publishPrepared(prepared)),
 			authorize: (verb: "subscribe" | "publish") =>
 				service.authorize(channel, boundParams, verb),
 			resolvePresence: () => service.resolvePresence(channel, boundParams),
 			invalidateAuthority: async (input: ChannelAuthorityInvalidationInput) => {
-				const receipt = await service.revokeAuthority(channel, {
-					params: boundParams,
-					...input,
-				} as unknown as ChannelAuthorityRevocationInput<TChannels[TChannel]>);
+				const receipt = await revokeResolvedChannelAuthority(
+					publisher,
+					context.db,
+					resolvedName,
+					input,
+				);
 				return {
 					generation: receipt.generation,
 					transportEffect:
