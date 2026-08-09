@@ -146,4 +146,38 @@ describe("system timestamp precision (timestamp(3) contract)", () => {
 		// Later ms first, then the tied-.123 group by id desc — no skips, no dups
 		expect(seen).toEqual(["d", "c", "b", "a"]);
 	});
+
+	it("uses the database collation consistently for id ordering and cursors", async () => {
+		const ctx = createTestContext();
+
+		for (const id of ["A", "a", "aa", "z", "ä"]) {
+			await setup.app.collections.events.create({ id, title: id }, ctx);
+		}
+
+		const ordered = await setup.app.collections.events.find(
+			{ orderBy: { id: "desc" } },
+			ctx,
+		);
+		const expected = ordered.docs.map((doc) => doc.id);
+		const seen: string[] = [];
+		let cursor: string | undefined;
+
+		for (;;) {
+			const page = await setup.app.collections.events.find(
+				{
+					where: cursor === undefined ? undefined : { id: { lt: cursor } },
+					orderBy: { id: "desc" },
+					limit: 1,
+				},
+				ctx,
+			);
+
+			const doc = page.docs[0];
+			if (!doc) break;
+			seen.push(doc.id);
+			cursor = doc.id;
+		}
+
+		expect(seen).toEqual(expected);
+	});
 });
