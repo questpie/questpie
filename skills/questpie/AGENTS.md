@@ -6549,6 +6549,12 @@ Authorization rules:
 
 Framework handlers and hooks receive a generated `channels` service:
 
+Server facade member names are reserved for canonical handle projection;
+existing server collisions keep working through the root API during
+3.x. Client channels only collide with actual controls such as `destroy`,
+`channelCount`, and `subscriberCount`. Rename a colliding file/export to adopt
+handles; keep the wire pattern unchanged.
+
 ```ts
 .handler(async ({ input, channels }) => {
 	const chatRoom = channels.chatRoom({ roomId: input.roomId });
@@ -6605,14 +6611,16 @@ post-cut blob is discarded before reaching the client. Thus removing Space A
 may disconnect Space B briefly, but Space B can reconnect while Space A remains
 denied.
 
-Provider termination runs after the caller's database commit. Rollback does not
-disconnect the principal. Once committed, a pending provider effect is durable;
-retrying the same idempotency key finishes it without advancing the generation
-twice. Reusing that key for a different target or subject is a conflict.
+In a managed caller transaction, Pusher termination and authority
+acknowledgement run inline under a bounded call. Provider failure throws and
+rolls back the database transaction; a conservative disconnect may survive a
+later caller rollback. Standalone provider failure leaves the durable cut
+pending for an idempotent retry. Reusing the same key for another target or
+subject is a conflict.
 
 The released root method
 `channels.revokeAuthority("chatRoom", { params, subject, idempotencyKey })`
-remains a 3.x compatibility forward to the same ledger. New code
+remains a 3.x compatibility entry point backed by the same ledger. New code
 uses the resolved handle.
 
 Pusher does not provide zero-frame atomicity: a frame already accepted by the
