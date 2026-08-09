@@ -1,0 +1,46 @@
+{
+	"$schema": "https://ui.shadcn.com/schema/registry.json",
+	"name": "questpie-test-recipes",
+	"items": [
+		{
+			"$schema": "https://ui.shadcn.com/schema/registry-item.json",
+			"name": "public-announcements-route",
+			"type": "registry:item",
+			"title": "Public announcements route",
+			"description": "Offline conformance fixture for a dependency-free server route.",
+			"dependencies": [],
+			"devDependencies": [],
+			"registryDependencies": [],
+			"files": [
+				{
+					"path": "recipes/public-announcements-route/routes/public-announcements.ts",
+					"type": "registry:file",
+					"target": "src/questpie/server/routes/public-announcements.ts",
+					"content": "import { route } from \"questpie/services\";\n\nexport default route()\n\t.get()\n\t.handler(async () => ({ announcements: [] }));\n"
+				}
+			],
+			"docs": "Conformance fixture only. It is not an official product recipe.",
+			"categories": ["fixture", "server"],
+			"meta": {
+				"questpie": {
+					"schemaVersion": 1,
+					"recipeVersion": "0.1.0",
+					"compatibility": {
+						"questpie": ">=3.26.1 <4",
+						"runtimes": [{ "name": "any" }],
+						"modules": {}
+					},
+					"aliases": ["announcements endpoint"],
+					"useCases": ["Expose a dependency-free read-only route"],
+					"requires": [],
+					"provides": ["content.public-announcements"],
+					"conflicts": [],
+					"surfaces": ["server"],
+					"quality": "experimental",
+					"risk": "standard",
+					"verificationProfile": "app-check"
+				}
+			}
+		}
+	]
+}
