@@ -336,4 +336,29 @@ describe("hono adapter composition", () => {
 		expect(beforePaths).toEqual(["/api", "/api/ping", "/api/x", "/apiary"]);
 		expect(afterPaths).toEqual(["/api", "/api/ping", "/api/x", "/apiary"]);
 	});
+
+	it("supports explicit base-path and root mounts without host-prefix inference", async () => {
+		const ping = route()
+			.get()
+			.raw()
+			.handler(() => new Response("pong"));
+		const setup = await buildMockApp({ routes: { ping } });
+		cleanup = setup.cleanup;
+
+		const explicitBasePath = new Hono().route(
+			"/",
+			questpieHono(setup.app, { basePath: "/api" }),
+		);
+		const rootMount = new Hono().route("/", questpieHono(setup.app));
+
+		const explicitResponse = await explicitBasePath.request(
+			"http://localhost/api/ping",
+		);
+		expect(explicitResponse.status).toBe(200);
+		expect(await explicitResponse.text()).toBe("pong");
+
+		const rootResponse = await rootMount.request("http://localhost/ping");
+		expect(rootResponse.status).toBe(200);
+		expect(await rootResponse.text()).toBe("pong");
+	});
 });
