@@ -101,7 +101,7 @@ or anonymous edge by default. A collection/global `accessCacheKey` can collapse
 instance, but only as an explicit proof that field access, relations, output
 hooks, and `afterRead` produce byte-identical output. Tenant authority belongs
 in `appConfig.context` plus collection/global access; `subscriptionScope` is
-deprecated.
+compatibility-only during 3.x.
 
 ## Checklist
 

@@ -14,23 +14,23 @@ untuned server, and most apps ship without touching any of them.
 import type { RealtimeConfig } from "questpie/realtime";
 ```
 
-| Option                     | Default                                                   | What it controls                                                                                                                              |
-| -------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `nativeDeltas`             | `false`                                                   | Keyed row deltas. While off, qualifying topics are served as snapshots                                                                        |
-| `rowLiveQueries`           | `true`                                                    | App-wide switch for collection and global row topics                                                                                          |
-| `subscriptionScope`        | none                                                      | **Deprecated in 3.x; removed in 4.** Compatibility-only scheduler partition. Put tenant state in `appConfig.context` and enforce it in access |
-| `observer`                 | none                                                      | Lifecycle, admission and transport events. Observer failures never break delivery                                                             |
-| `admission`                | see below                                                 | Per-session topic, connection and query-shape caps                                                                                            |
-| `connectionAcceptPacingMs` | none                                                      | Random delay before accepting a new edge session, itself clamped to 30000 ms                                                                  |
-| `changeBroker`             | `PgNotifyChangeBroker` when a pg connection string exists | The cross-instance notice seam                                                                                                                |
-| `clientTransport`          | SSE                                                       | The edge delivery seam                                                                                                                        |
-| `channelEvents`            | see below                                                 | Ordered-channel retention, lease and buffer tuning                                                                                            |
-| `channelPresence`          | see below                                                 | SSE presence leases and convergence                                                                                                           |
-| `channelSecurity`          | see below                                                 | Trusted origins, publish rate, authorization deadline                                                                                         |
-| `pollIntervalMs`           | `15000` with push, `2000` without                         | Reconciliation interval. `0` gives up that recovery path                                                                                      |
-| `batchSize`                | `500`                                                     | Maximum outbox rows read per drain                                                                                                            |
-| `retentionDays`            | `3`                                                       | Minimum time a row remains after it first becomes drainable. `0` disables cleanup                                                             |
-| `keepAliveIntervalMs`      | `8000`                                                    | Ping interval on each SSE stream                                                                                                              |
+| Option                     | Default                                                   | What it controls                                                                                                                   |
+| -------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `nativeDeltas`             | `false`                                                   | Keyed row deltas. While off, qualifying topics are served as snapshots                                                             |
+| `rowLiveQueries`           | `true`                                                    | App-wide switch for collection and global row topics                                                                               |
+| `subscriptionScope`        | none                                                      | **Compatibility-only in 3.x; removed in 4.** Scheduler partition. Put tenant state in `appConfig.context` and enforce it in access |
+| `observer`                 | none                                                      | Lifecycle, admission and transport events. Observer failures never break delivery                                                  |
+| `admission`                | see below                                                 | Per-session topic, connection and query-shape caps                                                                                 |
+| `connectionAcceptPacingMs` | none                                                      | Random delay before accepting a new edge session, itself clamped to 30000 ms                                                       |
+| `changeBroker`             | `PgNotifyChangeBroker` when a pg connection string exists | The cross-instance notice seam                                                                                                     |
+| `clientTransport`          | SSE                                                       | The edge delivery seam                                                                                                             |
+| `channelEvents`            | see below                                                 | Ordered-channel retention, lease and buffer tuning                                                                                 |
+| `channelPresence`          | see below                                                 | SSE presence leases and convergence                                                                                                |
+| `channelSecurity`          | see below                                                 | Trusted origins, publish rate, authorization deadline                                                                              |
+| `pollIntervalMs`           | `15000` with push, `2000` without                         | Reconciliation interval. `0` gives up that recovery path                                                                           |
+| `batchSize`                | `500`                                                     | Maximum outbox rows read per drain                                                                                                 |
+| `retentionDays`            | `3`                                                       | Minimum time a row remains after it first becomes drainable. `0` disables cleanup                                                  |
+| `keepAliveIntervalMs`      | `8000`                                                    | Ping interval on each SSE stream                                                                                                   |
 
 The poll runs alongside a broker rather than instead of it, and a provider
 failure temporarily tightens it to at most 2000 ms. Cleanup never uses a

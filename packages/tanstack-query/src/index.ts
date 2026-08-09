@@ -162,7 +162,7 @@ type GlobalKeys<TApp extends QuestpieApp> = Extract<
 /** Extract generated channel registry keys without client control properties. */
 type ChannelKeys<TApp extends QuestpieApp> = Extract<
 	keyof NonNullable<TApp["channels"]>,
-	string
+	keyof QuestpieClient<TApp>["channels"]
 >;
 
 type ChannelIter<

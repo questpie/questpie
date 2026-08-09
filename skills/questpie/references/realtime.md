@@ -130,7 +130,7 @@ The resolved Channel plus subject is the complete target; no second authority
 scope is attached. SSE reports `exact-binding`. Pusher's honest transport effect
 is `principal-connections`: it terminates current connections for that user,
 then fresh user/channel authentication allows still-authorized bindings to
-return. The old root `revokeAuthority()` remains a deprecated 3.x forward to the
+return. The old root `revokeAuthority()` remains a 3.x forward to the
 same ledger. See `references/channels.md` for commit, retry, and in-flight-frame
 contracts.
 
@@ -171,7 +171,7 @@ row.
 - Derive request-selected tenant/workspace state in `appConfig.context`, validate
   it there, and enforce it in collection/global read access. Realtime runs the
   same authorized CRUD pipeline; it adds no tenant filter.
-- `realtime.subscriptionScope` is deprecated in 3.x and removed in 4.0. It was
+- `realtime.subscriptionScope` is compatibility-only in 3.x and removed in 4.0. It was
   only a global scheduler partition, never authority. Remove it after migrating
   tenant state into context and access.
 - Collection/global `realtime.accessCacheKey` is an explicit proof that output

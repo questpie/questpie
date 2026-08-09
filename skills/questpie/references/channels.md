@@ -51,7 +51,7 @@ Authorization rules:
 Framework handlers and hooks receive a generated `channels` service:
 
 Server facade member names are reserved for canonical handle projection;
-existing server collisions keep working through the deprecated root API in
+existing server collisions keep working through the root API during
 3.x. Client channels only collide with actual controls such as `destroy`,
 `channelCount`, and `subscriberCount`. Rename a colliding file/export to adopt
 handles; keep the wire pattern unchanged.
@@ -121,7 +121,7 @@ subject is a conflict.
 
 The released root method
 `channels.revokeAuthority("chatRoom", { params, subject, idempotencyKey })`
-remains a deprecated 3.x compatibility entry point backed by the same ledger. New code
+remains a 3.x compatibility entry point backed by the same ledger. New code
 uses the resolved handle.
 
 Pusher does not provide zero-frame atomicity: a frame already accepted by the

@@ -93,7 +93,7 @@ selected tenant through `appConfig.context` and enforce it in collection/global
 `.access()`. If the tenant filter is missing there, normal CRUD and realtime are
 both misconfigured; no scheduler key can fix it.
 
-<Callout type="warn" title="subscriptionScope is deprecated">
+<Callout type="warn" title="subscriptionScope compatibility notice">
 	`realtime.subscriptionScope` remains only for 3.x compatibility and is removed
 	in QUESTPIE 4. Move tenant selection to `appConfig.context`, keep tenant row
 	filtering in `.access()`, and use `accessCacheKey` only when intentionally

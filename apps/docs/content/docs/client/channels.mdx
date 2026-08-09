@@ -47,7 +47,7 @@ The registry/API key is `chatRoom`, derived from the default-export filename. Th
 
 Server service names such as `publish`, `authorize`, and `revokeAuthority` are
 reserved for canonical handle projection. Existing server collisions remain
-available through the deprecated root API in 3.x. Client channels with those
+available through the root API during 3.x. Client channels with those
 names keep their handle; only actual client controls such as `destroy`,
 `channelCount`, and `subscriberCount` collide. Rename a colliding file/export
 to adopt the canonical handle; its explicit wire pattern may stay unchanged.
@@ -144,7 +144,7 @@ leaves the durable cut pending for an idempotent retry.
 
 <Callout type="info" title="The old root method remains during 3.x">
 	`channels.revokeAuthority("chatRoom", { params, subject, idempotencyKey })`
-	is a deprecated compatibility entry point backed by the same authority ledger. New code
+	is a 3.x compatibility entry point backed by the same authority ledger. New code
 	should resolve once and call `chatRoom.invalidateAuthority()`.
 </Callout>
 
