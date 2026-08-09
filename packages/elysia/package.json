@@ -26,10 +26,10 @@
 	},
 	"scripts": {
 		"build": "tsdown",
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit && tsc -p tsconfig.types.json",
+		"test": "bun test"
 	},
 	"dependencies": {
-		"@elysiajs/cors": "^1.2.1",
 		"@elysiajs/eden": "^1.2.6",
 		"elysia": "^1.2.14",
 		"questpie": "workspace:*"

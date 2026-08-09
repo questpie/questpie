@@ -33,6 +33,14 @@ export const PUT = handle;
 export const DELETE = handle;
 ```
 
+Handler construction validates the route graph immediately. Ambiguous route
+patterns throw during boot instead of turning the mounted API into a stream of
+404 responses.
+
+Each handler owns its options. You may mount one app more than once with
+different session, locale, logging or search policies; creating a later handler
+does not rewrite an earlier binding.
+
 <Callout type="warn" title="The handler answers `null` outside its base path">
 	It does not throw and it does not 404 for you. A `null` means the request was
 	not yours, so your framework can carry on routing. Turn it into a response
@@ -77,6 +85,12 @@ single-handler form if you want to wrap it yourself. Both turn an out-of-base
 request into a `404` with a JSON body. The package has one export path, so
 there is no `/server` subpath here.
 
+The returned object is typed with exactly those seven method names. Next keeps
+the older `accessMode: "system"` option during QUESTPIE 3.x only for trusted
+host boundaries that cannot receive untrusted traffic; normal App Router
+handlers use user mode. The compatibility option is scheduled for removal in
+QUESTPIE 4.0.
+
 ### Hono
 
 ```ts title="src/server.ts"
@@ -90,10 +104,28 @@ server.route("/", questpieHono(app, { basePath: "/api" }));
 export default server;
 ```
 
-`questpieHono` returns a Hono app that answers `${basePath}/*`, so mount it at
-`"/"` and let the base path do the narrowing. It reads `appContext` and `user`
-off the Hono context when they are set. Add `questpieMiddleware(app)` to set
-them, and to get `app`, `appContext` and `user` on your own routes too.
+`questpieHono` returns a Hono middleware app, so mount it at `"/"`. The core
+handler owns base-path matching; requests outside it continue through native
+Hono routing. Session, locale and extended context options are resolved by the
+core handler exactly once. The QUESTPIE 3.x `questpieMiddleware(app)`
+compatibility helper remains available for existing native Hono routes that need
+the complete `app`, `appContext` or `user`; it is not an authority input to the
+QUESTPIE mount.
+
+When both helpers are composed, native routes retain the complete compatibility
+context, including `db` and custom functions, promises, services or class
+instances. Before native middleware runs, QUESTPIE snapshots its serializable
+session/principal authority. At the mount it derives a separate private app
+context from that snapshot, so native mutation cannot forge the mount's session
+or request-local extensions. Fresh channel and live-query authorization remains
+bound to the same private request snapshot. Session and OAuth resolution still happen once,
+but `appConfig({ context })` runs a second time for the private authority
+context. Return request-local mutable values from that resolver; an explicitly
+shared singleton remains shared by definition. Later Hono middleware may add
+headers, but cannot replace the status or body of a response claimed by the
+QUESTPIE base path. Use `getSession` on `questpieHono` instead, without
+`questpieMiddleware`, for new integrations and when the mount needs a custom
+session resolver.
 
 ### Elysia
 
@@ -107,8 +139,20 @@ const server = new Elysia().use(questpieElysia(app, { basePath: "/api" }));
 export default server;
 ```
 
-`questpieElysia` returns a plugin with a `/*` route under `prefix: basePath`.
-Out-of-base requests come back as a `404` with a JSON body.
+`questpieElysia` delegates base-path matching to the core handler. Exact and
+nested requests inside the base path receive the canonical QUESTPIE response;
+out-of-base requests fall through to later native Elysia routes.
+
+The adapter does not own CORS policy. If the browser and API use different
+origins, install `@elysiajs/cors` in the application and compose Elysia's native
+`cors(...)` plugin before `questpieElysia(...)`. Keep the allowed origins in
+application configuration; `@questpie/elysia` does not install the plugin for
+consumers.
+
+Hono's `HonoAdapterConfig` and Elysia's `ElysiaAdapterConfig` are aliases of the
+core `NativeAdapterConfig` exported by `questpie/http`. It contains every
+`AdapterConfig` option except `accessMode`, so both native adapters gain future
+safe HTTP options together while public requests remain in user mode.
 
 ## Typing custom routes through Hono RPC
 

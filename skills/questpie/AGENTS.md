@@ -699,6 +699,19 @@ const server = new Elysia()
 	.listen(3000);
 ```
 
+`@questpie/elysia` does not own CORS policy. For a cross-origin browser client,
+install `@elysiajs/cors` in the application and compose the native plugin before
+the QUESTPIE adapter:
+
+```ts
+import { cors } from "@elysiajs/cors";
+
+const server = new Elysia()
+	.use(cors({ origin: "https://app.example.com" }))
+	.use(questpieElysia(app, { basePath: "/api" }))
+	.listen(3000);
+```
+
 **Hono:**
 
 ```ts
@@ -706,9 +719,13 @@ import { Hono } from "hono";
 import { questpieHono } from "@questpie/hono/server";
 import { app } from "#questpie";
 
-const server = new Hono().route("/api", questpieHono(app));
+const server = new Hono().route("/", questpieHono(app, { basePath: "/api" }));
 export default server;
 ```
+
+`questpieMiddleware(app)` remains a QUESTPIE 3.x compatibility helper for
+existing native Hono routes that consume `appContext`. New integrations should
+mount `questpieHono` directly.
 
 **Next.js (App Router):**
 
@@ -716,9 +733,10 @@ export default server;
 import { questpieNextRouteHandlers } from "@questpie/next";
 import { app } from "#questpie";
 
-export const { GET, POST, PATCH, DELETE } = questpieNextRouteHandlers(app, {
-	basePath: "/api",
-});
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD } =
+	questpieNextRouteHandlers(app, {
+		basePath: "/api",
+	});
 ```
 
 **TanStack Start (no adapter needed):**
@@ -1266,7 +1284,7 @@ export const APIRoute = createAPIFileRoute("/api/$")({
 // Bun.serve({ fetch: createFetchHandler(app) });
 ```
 
-This single handler serves all collection CRUD, auth, search, realtime, storage, and custom routes via a **trie-based dispatcher**. The exact wiring depends on your framework: TanStack Start uses `createAPIFileRoute`, Hono mounts `questpieMiddleware(app)` (from `@questpie/hono/server`), Next.js uses route handlers.
+This single handler serves all collection CRUD, auth, search, realtime, storage, and custom routes via a **trie-based dispatcher**. The exact wiring depends on your framework: TanStack Start uses `createAPIFileRoute`, Hono mounts `server.route("/", questpieHono(app, { basePath: "/api" }))` (from `@questpie/hono/server`), and Next.js uses route handlers.
 
 ## Data Flow
 
@@ -10364,9 +10382,9 @@ export const Route = createAPIFileRoute("/api/$")({
 });
 ```
 
-**Next.js**: `import { questpieNextRouteHandlers } from "@questpie/next"` -- export `GET`, `POST`, `PATCH`, `DELETE` from `app/api/[...slug]/route.ts`. The lower-level `questpieNext(app, config)` returns a single fetch-style handler.
+**Next.js**: `import { questpieNextRouteHandlers } from "@questpie/next"` -- export `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`, and `HEAD` from `app/api/[...slug]/route.ts`. The lower-level `questpieNext(app, config)` returns a single fetch-style handler.
 
-**Hono**: `import { questpieHono } from "@questpie/hono/server"` -- `server.route("/api", questpieHono(app))`.
+**Hono**: `import { questpieHono } from "@questpie/hono/server"` -- `server.route("/", questpieHono(app, { basePath: "/api" }))`.
 
 **Elysia**: `import { questpieElysia } from "@questpie/elysia/server"` -- `.use(questpieElysia(app, { basePath: "/api" }))`.
 

@@ -116,7 +116,7 @@ import { questpieHono } from "@questpie/hono/server";
 import { app } from "#questpie";
 
 const server = new Hono();
-server.route("/api", questpieHono(app));
+server.route("/", questpieHono(app, { basePath: "/api" }));
 
 export default { port: 3000, fetch: server.fetch };
 ```
@@ -140,12 +140,10 @@ export type AppServer = typeof server;
 import { questpieNextRouteHandlers } from "@questpie/next";
 import { app } from "#questpie";
 
-export const { GET, POST, PUT, PATCH, DELETE } = questpieNextRouteHandlers(
-	app,
-	{
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD } =
+	questpieNextRouteHandlers(app, {
 		basePath: "/api",
-	},
-);
+	});
 
 export const dynamic = "force-dynamic";
 ```

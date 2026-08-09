@@ -402,6 +402,19 @@ const server = new Elysia()
 	.listen(3000);
 ```
 
+`@questpie/elysia` does not own CORS policy. For a cross-origin browser client,
+install `@elysiajs/cors` in the application and compose the native plugin before
+the QUESTPIE adapter:
+
+```ts
+import { cors } from "@elysiajs/cors";
+
+const server = new Elysia()
+	.use(cors({ origin: "https://app.example.com" }))
+	.use(questpieElysia(app, { basePath: "/api" }))
+	.listen(3000);
+```
+
 **Hono:**
 
 ```ts
@@ -409,9 +422,13 @@ import { Hono } from "hono";
 import { questpieHono } from "@questpie/hono/server";
 import { app } from "#questpie";
 
-const server = new Hono().route("/api", questpieHono(app));
+const server = new Hono().route("/", questpieHono(app, { basePath: "/api" }));
 export default server;
 ```
+
+`questpieMiddleware(app)` remains a QUESTPIE 3.x compatibility helper for
+existing native Hono routes that consume `appContext`. New integrations should
+mount `questpieHono` directly.
 
 **Next.js (App Router):**
 
@@ -419,9 +436,10 @@ export default server;
 import { questpieNextRouteHandlers } from "@questpie/next";
 import { app } from "#questpie";
 
-export const { GET, POST, PATCH, DELETE } = questpieNextRouteHandlers(app, {
-	basePath: "/api",
-});
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD } =
+	questpieNextRouteHandlers(app, {
+		basePath: "/api",
+	});
 ```
 
 **TanStack Start (no adapter needed):**

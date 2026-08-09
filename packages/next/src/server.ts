@@ -37,7 +37,7 @@ export const questpieNext = (
 export const questpieNextRouteHandlers = (
 	app: Questpie<any>,
 	config: NextAdapterConfig = {},
-): Record<string, NextHandler> => {
+) => {
 	const handler = questpieNext(app, config);
 
 	return {

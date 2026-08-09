@@ -25,9 +25,13 @@ export function runWithInternalAppContextStore<T>(
 export const INTERNAL_ADAPTER_CONTEXT = Symbol.for(
 	"questpie.internal.adapterContext",
 );
+export const INTERNAL_HTTP_BINDING_CONFIG = Symbol.for(
+	"questpie.internal.httpBindingConfig",
+);
 
 export type InternalContextStore = {
 	[INTERNAL_ADAPTER_CONTEXT]?: unknown;
+	[INTERNAL_HTTP_BINDING_CONFIG]?: unknown;
 };
 
 export function attachInternalAdapterContext<T extends object>(
@@ -52,4 +56,26 @@ export function attachInternalAdapterContext<T extends object>(
 export function getInternalAdapterContext(store: unknown): unknown {
 	if (!store || typeof store !== "object") return undefined;
 	return (store as InternalContextStore)[INTERNAL_ADAPTER_CONTEXT];
+}
+
+export function attachInternalHttpBindingConfig<T extends object>(
+	context: T,
+	config: unknown,
+): T {
+	Object.defineProperty(context, INTERNAL_HTTP_BINDING_CONFIG, {
+		value: config,
+		enumerable: false,
+		configurable: false,
+		writable: false,
+	});
+	return context;
+}
+
+export function getInternalHttpBindingConfig<T>(
+	context: unknown,
+): T | undefined {
+	if (!context || typeof context !== "object") return undefined;
+	return (context as InternalContextStore)[INTERNAL_HTTP_BINDING_CONFIG] as
+		| T
+		| undefined;
 }

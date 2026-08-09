@@ -13,14 +13,47 @@ bun add @questpie/elysia questpie elysia
 ```ts
 import { Elysia } from "elysia";
 import { questpieElysia } from "@questpie/elysia/server";
-import { app } from "./questpie";
+import { app as questpieApp } from "./questpie";
 
-const app = new Elysia()
-	.use(questpieElysia(app, { basePath: "/api" }))
+const server = new Elysia()
+	.use(questpieElysia(questpieApp, { basePath: "/api" }))
 	.listen(3000);
 
-export type App = typeof app;
+export type App = typeof server;
 ```
+
+Compose the adapter with `.use(...)` and set QUESTPIE ownership with
+`basePath`. Core normalizes that path and owns its exact path and descendants,
+including 404 and 405 responses. Sibling native Elysia routes remain outside the
+mount.
+
+`ElysiaAdapterConfig` is the core `NativeAdapterConfig` contract. It
+intentionally omits `accessMode`: native HTTP mounts always run with user
+authority and cannot opt into the privileged system bypass.
+
+### CORS
+
+The adapter does not own CORS policy. When the browser and API use different
+origins, install and compose Elysia's native plugin in the host application:
+
+```bash
+bun add @elysiajs/cors
+```
+
+```ts
+import { cors } from "@elysiajs/cors";
+import { Elysia } from "elysia";
+import { questpieElysia } from "@questpie/elysia/server";
+import { app as questpieApp } from "./questpie";
+
+const server = new Elysia()
+	.use(cors({ origin: "https://app.example.com" }))
+	.use(questpieElysia(questpieApp, { basePath: "/api" }))
+	.listen(3000);
+```
+
+Keep the allowed origins in application configuration; `@questpie/elysia`
+does not install or configure `@elysiajs/cors` for consumers.
 
 ## Client Setup
 

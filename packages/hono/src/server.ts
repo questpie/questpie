@@ -2,12 +2,13 @@ import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import {
 	type AdapterContext,
-	type AdapterConfig,
 	createAdapterContext,
 	createFetchHandler,
+	type NativeAdapterConfig,
 	type Questpie,
 	type RequestContext,
 } from "questpie";
+import { createIsolatedAdapterContextResolver } from "questpie/internal/http-adapter";
 
 /**
  * Variables stored in Hono context
@@ -18,33 +19,48 @@ export type QuestpieVariables<TQuestpie = Questpie<any>> = {
 	user: any;
 };
 
+const adapterContexts = new WeakMap<
+	Request,
+	{ app: unknown; resolveAuthorityContext: () => Promise<AdapterContext> }
+>();
+
 /**
  * Hono adapter configuration
  */
-export type HonoAdapterConfig = Pick<AdapterConfig, "requestLogging"> & {
-	/**
-	 * Base path for QUESTPIE routes
-	 * Use '/' for server-only apps or '/api' for fullstack apps.
-	 * @default '/'
-	 */
-	basePath?: string;
-};
+export type HonoAdapterConfig = NativeAdapterConfig;
 
+/**
+ * @deprecated Prefer `questpieHono(app, config)`. When both APIs are composed,
+ * QUESTPIE rebuilds app context once for the private mount authority boundary.
+ */
 export function questpieMiddleware<TQuestpie = Questpie<any>>(app: TQuestpie) {
 	return createMiddleware<{
 		Variables: QuestpieVariables<TQuestpie>;
 	}>(async (c, next) => {
 		c.set("app", app);
+		const request = c.req.raw;
 		const adapterContext = await createAdapterContext(
 			app as Questpie<any>,
-			c.req.raw,
+			request,
 			{ accessMode: "user" },
 		);
 
+		adapterContexts.set(request, {
+			app,
+			resolveAuthorityContext: createIsolatedAdapterContextResolver(
+				app as Questpie<any>,
+				request,
+				adapterContext,
+			),
+		});
 		c.set("user", adapterContext.session?.user ?? null);
 		c.set("appContext", adapterContext.appContext);
 
-		await next();
+		try {
+			await next();
+		} finally {
+			adapterContexts.delete(request);
+		}
 	});
 }
 
@@ -75,44 +91,42 @@ export function questpieHono<TQuestpie = Questpie<any>>(
 	app: TQuestpie,
 	config: HonoAdapterConfig = {},
 ) {
-	const basePath = config.basePath || "/";
+	const { basePath = "/", ...handlerConfig } = config;
 	const handler = createFetchHandler(app as Questpie<any>, {
+		...handlerConfig,
 		basePath,
 		accessMode: "user",
-		requestLogging: config.requestLogging,
 	});
 
-	const resolveContext = (
-		context?: QuestpieVariables<TQuestpie>["appContext"],
-		user?: any,
-	) => {
-		if (!context) {
-			return undefined;
-		}
+	const honoApp = new Hono<{
+		Variables: QuestpieVariables<TQuestpie>;
+	}>()
+		.notFound((context) => context.res)
+		.use("*", async (c, next) => {
+			const storedContext = adapterContexts.get(c.req.raw);
+			const hasCompatibilityContext = storedContext?.app === app;
+			if (
+				hasCompatibilityContext &&
+				(config.getSession || config.getLocale || config.extendContext)
+			) {
+				throw new Error(
+					"questpieMiddleware cannot be combined with questpieHono context resolvers",
+				);
+			}
+			const adapterContext = hasCompatibilityContext
+				? await storedContext.resolveAuthorityContext()
+				: undefined;
 
-		// Build session object - prefer user override, fallback to context's session user
-		const sessionUser = user ?? context.session?.user ?? null;
-		const session = sessionUser
-			? { user: sessionUser, session: context.session?.session ?? null }
-			: (context.session ?? null);
-
-		return {
-			session,
-			locale: context.locale,
-			appContext: context,
-		} satisfies AdapterContext;
-	};
-
-	const honoApp = new Hono<{ Variables: QuestpieVariables<TQuestpie> }>().all(
-		`${basePath}/*`,
-		async (c) => {
-			const response = await handler(
-				c.req.raw,
-				resolveContext(c.get("appContext"), c.get("user")),
-			);
-			return response ?? c.notFound();
-		},
-	);
+			const response = await handler(c.req.raw, adapterContext);
+			if (response) {
+				c.res = response;
+				await next();
+				c.res = response;
+				return response;
+			}
+			await next();
+			return c.res;
+		});
 
 	return honoApp;
 }

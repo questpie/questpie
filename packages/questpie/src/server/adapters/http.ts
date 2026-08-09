@@ -9,6 +9,7 @@
  * @see QUE-158 (Unified route() builder + URL flattening)
  */
 
+import { attachInternalHttpBindingConfig } from "../config/internal-context.js";
 import type { Questpie } from "../config/questpie.js";
 import {
 	disposeRequestScopeAfterError,
@@ -36,6 +37,7 @@ export type {
 	AdapterContext,
 	AdapterRoutes,
 	FetchHandler,
+	NativeAdapterConfig,
 	UploadFile,
 } from "./types.js";
 export { createAdapterContext } from "./utils/context.js";
@@ -102,12 +104,7 @@ function compileRoutes(
 		}
 	}
 
-	try {
-		return compileMatcher(entries);
-	} catch (err) {
-		console.error("[HTTP] Route compilation failed:", err);
-		return null;
-	}
+	return compileMatcher(entries);
 }
 
 // ============================================================================
@@ -298,11 +295,6 @@ export const createFetchHandler = (
 	const appInstance = app as Questpie<any>;
 	const basePath = normalizeBasePath(config.basePath ?? "/");
 
-	// Store adapter config on app so route handlers can access it
-	// (e.g., search.reindexAccess)
-	const adapterConfigKey = "_adapterConfig";
-	(appInstance as any)[adapterConfigKey] = config;
-
 	// Compile ALL routes (core module + custom module routes) into one matcher
 	const matcher = compileRoutes(
 		appInstance.config.routes as Record<string, RouteDefinition> | undefined,
@@ -465,6 +457,10 @@ export const createFetchHandler = (
 											context,
 											{ requestId, traceId },
 										);
+										const routeContext = attachInternalHttpBindingConfig(
+											resolved,
+											config,
+										);
 
 										try {
 											if (isJsonRoute(def)) {
@@ -489,7 +485,7 @@ export const createFetchHandler = (
 													appInstance,
 													def,
 													body,
-													resolved,
+													routeContext,
 													request,
 													match.params,
 												);
@@ -502,7 +498,7 @@ export const createFetchHandler = (
 													appInstance,
 													def,
 													request,
-													resolved,
+													routeContext,
 													match.params,
 												),
 											);

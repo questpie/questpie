@@ -205,7 +205,7 @@ export const APIRoute = createAPIFileRoute("/api/$")({
 // Bun.serve({ fetch: createFetchHandler(app) });
 ```
 
-This single handler serves all collection CRUD, auth, search, realtime, storage, and custom routes via a **trie-based dispatcher**. The exact wiring depends on your framework: TanStack Start uses `createAPIFileRoute`, Hono mounts `questpieMiddleware(app)` (from `@questpie/hono/server`), Next.js uses route handlers.
+This single handler serves all collection CRUD, auth, search, realtime, storage, and custom routes via a **trie-based dispatcher**. The exact wiring depends on your framework: TanStack Start uses `createAPIFileRoute`, Hono mounts `server.route("/", questpieHono(app, { basePath: "/api" }))` (from `@questpie/hono/server`), and Next.js uses route handlers.
 
 ## Data Flow
 

@@ -43,6 +43,62 @@ function attachFreshAdapterContext(
 	return context;
 }
 
+/**
+ * @internal Create a private authority context for native compatibility mounts.
+ *
+ * The request and authority inputs are captured before native middleware runs.
+ * Both the initial app-context derivation and every fresh reauthorization stay
+ * bound to that private request rather than the host framework's mutable view.
+ */
+export function createIsolatedAdapterContextResolver<
+	TConfig extends QuestpieConfig = QuestpieConfig,
+>(
+	app: Questpie<TConfig>,
+	request: Request,
+	nativeContext: AdapterContext,
+): () => Promise<AdapterContext> {
+	const authorityRequest = request.clone();
+	const session = structuredClone(nativeContext.session);
+	const principal = structuredClone(nativeContext.appContext.principal);
+	const actor = structuredClone(nativeContext.appContext.actor);
+	const accessMode = nativeContext.appContext.accessMode;
+	const observability = {
+		requestId: nativeContext.requestId,
+		traceId: nativeContext.traceId,
+	};
+	let resolved: Promise<AdapterContext> | undefined;
+
+	return () =>
+		(resolved ??= app
+			.createContext({
+				session,
+				principal,
+				actor,
+				locale: nativeContext.locale,
+				accessMode,
+				stage: nativeContext.stage,
+				...observability,
+				request: authorityRequest,
+			})
+			.then((appContext) => {
+				appContext.localeFallback = nativeContext.localeFallback;
+				return attachFreshAdapterContext(
+					{
+						...nativeContext,
+						session,
+						appContext,
+					},
+					() =>
+						createAdapterContextInternal(
+							app,
+							authorityRequest,
+							{ accessMode },
+							observability,
+						),
+				);
+			}));
+}
+
 /** @internal Re-run session resolution and app context derivation for a route. */
 export function refreshAdapterContext(
 	context: AdapterContext,

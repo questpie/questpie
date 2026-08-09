@@ -71,6 +71,7 @@
 		"noopMeter": "no-op default for ObservabilityAdapter authors; apps configure an adapter instead",
 		"noopSpan": "no-op default for ObservabilityAdapter authors; apps configure an adapter instead",
 		"noopTracer": "no-op default for ObservabilityAdapter authors; apps configure an adapter instead",
+		"normalizeBasePath": "internal canonical HTTP mount normalization shared by core and adapter packages",
 		"validateChannelWirePattern": "advanced channel adapter/helper surface",
 		"verifyCrdtCandidateToken": "custom CRDT engine staged-candidate verifier",
 		"verifyCrdtStagedAggregateBundle": "custom CRDT engine staged-bundle verifier"
@@ -159,6 +160,7 @@
 		"computeRealtimeSnapshot": "live-query snapshot engine internal",
 		"coreBackendMessages": "override path covered by generic messages merge",
 		"createAdapterContext": "HTTP adapter wiring internal",
+		"createIsolatedAdapterContextResolver": "private authority seam shared by core and native adapter packages",
 		"createCloudflareFetchHandler": "granular handler; createCloudflareWorkerHandlers umbrella is taught",
 		"createCloudflareQueueHandler": "granular handler; createCloudflareWorkerHandlers umbrella is taught",
 		"createCloudflareScheduledHandler": "granular handler; createCloudflareWorkerHandlers umbrella is taught",

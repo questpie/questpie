@@ -26,7 +26,8 @@
 	},
 	"scripts": {
 		"build": "tsdown",
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit && tsc -p tsconfig.types.json",
+		"test": "bun test"
 	},
 	"dependencies": {
 		"hono": "^4.12.25",

@@ -66,6 +66,10 @@ your HTTP handler config, which may be a boolean or a function receiving the
 request, app, session, db, locale and collection name. Leave it unset and access
 is derived from the target collection's `update` rule.
 
+The policy belongs to that handler binding, not to the app singleton. Two
+mounts over one app can intentionally expose different reindex policies without
+the last-created handler changing the first.
+
 <Callout type="warn" title="`app.search.reindex()` is not the same call">
 	That one delegates to the adapter, and the Postgres and pgvector adapters
 	throw `"reindex() not yet implemented - requires app context"`. Rebuilding
