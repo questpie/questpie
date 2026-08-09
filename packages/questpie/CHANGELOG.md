@@ -1,5 +1,28 @@
 # questpie
 
+## 3.26.0
+
+### Minor Changes
+
+- [#242](https://github.com/questpie/questpie/pull/242) [`c6fbf42`](https://github.com/questpie/questpie/commit/c6fbf42e0b8a199753a92dbe91eb9b5d034d61f6) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Fix request-scoped services to share one instance across each HTTP request,
+  queue job attempt, seed, or top-level operation and dispose them when that scope
+  ends.
+
+  **Breaking:** Remove the seed-specific `createContext()` helper. Pass partial context options
+  directly to CRUD calls instead; they inherit the active seed or step transaction:
+
+  ```ts
+  await globals.siteSettings.update(data, { locale: "sk" });
+  ```
+
+  Generated standalone `createContext()` remains a rich async-disposable
+  `AppContext`. `app.createContext()` remains the explicit lean `RequestContext`
+  factory.
+
+  Singleton shutdown now runs disposers sequentially in reverse initialization
+  order and reports cleanup failures with `AggregateError` instead of swallowing
+  them.
+
 ## 3.25.3
 
 ### Patch Changes
