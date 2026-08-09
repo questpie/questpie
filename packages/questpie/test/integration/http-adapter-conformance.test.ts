@@ -162,6 +162,23 @@ describe("shared HTTP adapter conformance", () => {
 	}
 
 	describe("base-path ownership", () => {
+		it("fails handler construction when route patterns are ambiguous", async () => {
+			const app = await setupApp({
+				routes: {
+					"ambiguous/[id]": route()
+						.get()
+						.raw()
+						.handler(() => new Response("id")),
+					"ambiguous/[slug]": route()
+						.get()
+						.raw()
+						.handler(() => new Response("slug")),
+				},
+			});
+
+			expect(() => createFetchHandler(app)).toThrow("Route collision");
+		});
+
 		it("core distinguishes exact, nested, sibling, and in-mount unknown paths", async () => {
 			const app = await setupApp({ routes: methodRoutes });
 			const dispatch = createFetchHandler(app, { basePath: "/api" });

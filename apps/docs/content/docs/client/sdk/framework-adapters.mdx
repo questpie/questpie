@@ -33,6 +33,14 @@ export const PUT = handle;
 export const DELETE = handle;
 ```
 
+Handler construction validates the route graph immediately. Ambiguous route
+patterns throw during boot instead of turning the mounted API into a stream of
+404 responses.
+
+Each handler owns its options. You may mount one app more than once with
+different session, locale, logging or search policies; creating a later handler
+does not rewrite an earlier binding.
+
 <Callout type="warn" title="The handler answers `null` outside its base path">
 	It does not throw and it does not 404 for you. A `null` means the request was
 	not yours, so your framework can carry on routing. Turn it into a response

@@ -9,9 +9,20 @@
  * @internal
  */
 
+import { tryGetContext } from "#questpie/server/config/context.js";
+import {
+	getInternalAdapterContext,
+	getInternalHttpBindingConfig,
+} from "#questpie/server/config/internal-context.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
 import type { QuestpieConfig } from "#questpie/server/config/types.js";
 
 export function routeApp(ctx: object): Questpie<QuestpieConfig> {
 	return (ctx as { app: Questpie<QuestpieConfig> }).app;
+}
+
+export function routeHttpBindingConfig<T>(): T | undefined {
+	return getInternalHttpBindingConfig<T>(
+		getInternalAdapterContext(tryGetContext()),
+	);
 }
