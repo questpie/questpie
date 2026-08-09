@@ -210,6 +210,7 @@ export function createContextFactory(
 			try {
 				await scope.dispose();
 			} catch (cleanupError) {
+				// oxlint-disable-next-line preserve-caught-error -- AggregateError.errors retains cleanupError; cause keeps the primary failure.
 				throw new AggregateError(
 					[error, cleanupError],
 					"Standalone context creation and scope disposal both failed",
