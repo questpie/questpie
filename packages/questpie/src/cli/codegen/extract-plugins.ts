@@ -24,7 +24,7 @@ interface ModuleLike {
 	[key: string]: unknown;
 }
 
-export type CodegenPluginOccurrence = {
+type CodegenPluginOccurrence = {
 	plugin: CodegenPlugin;
 	source: string;
 };

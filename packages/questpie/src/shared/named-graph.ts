@@ -4,11 +4,6 @@ type NamedGraphOptions<TNode extends object> = {
 	name(node: TNode): string | undefined;
 };
 
-type GraphOccurrence<TNode> = {
-	node: TNode;
-	path: string[];
-};
-
 type NamedOccurrenceOptions<TNode extends object, TOccurrence> = {
 	kind: string;
 	node(occurrence: TOccurrence): TNode;
@@ -80,7 +75,7 @@ export function resolveNamedGraph<TNode extends object>(
 	const resolved: TNode[] = [];
 	const states = new WeakMap<TNode, "visiting" | "visited">();
 	const firstByName = new Map<string, NamedIdentity<TNode>>();
-	const stack: GraphOccurrence<TNode>[] = [];
+	const stack: TNode[] = [];
 
 	const label = (node: TNode) =>
 		options.name(node) ?? `<anonymous-${options.kind}>`;
@@ -100,18 +95,15 @@ export function resolveNamedGraph<TNode extends object>(
 		const state = states.get(node);
 		if (state === "visited") return;
 		if (state === "visiting") {
-			const cycleStart = stack.findIndex((entry) => entry.node === node);
-			const cycle = [
-				...stack.slice(cycleStart).map((entry) => label(entry.node)),
-				label(node),
-			];
+			const cycleStart = stack.findIndex((entry) => entry === node);
+			const cycle = [...stack.slice(cycleStart).map(label), label(node)];
 			throw new Error(
 				`[QUESTPIE] Circular ${options.kind} dependency: ${cycle.join(" -> ")}`,
 			);
 		}
 
 		states.set(node, "visiting");
-		stack.push({ node, path });
+		stack.push(node);
 		for (const child of options.children(node)) visit(child, path);
 		stack.pop();
 		states.set(node, "visited");
