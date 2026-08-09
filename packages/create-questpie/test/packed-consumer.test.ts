@@ -63,13 +63,16 @@ async function stagePublishedQuestpie(stageDir: string): Promise<void> {
 	await cp(join(QUESTPIE_PACKAGE, "dist"), join(stageDir, "dist"), {
 		recursive: true,
 	});
+	await cp(join(QUESTPIE_PACKAGE, "bin"), join(stageDir, "bin"), {
+		recursive: true,
+	});
 	if (existsSync(join(QUESTPIE_PACKAGE, "skills"))) {
 		await cp(join(QUESTPIE_PACKAGE, "skills"), join(stageDir, "skills"), {
 			recursive: true,
 		});
 	}
 	await writeFile(join(stageDir, "package.json"), `${serialized}\n`);
-	await chmod(join(stageDir, "dist/cli.mjs"), 0o755);
+	await chmod(join(stageDir, "bin/questpie.mjs"), 0o755);
 }
 
 async function writeConsumer(

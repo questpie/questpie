@@ -1,5 +1,6 @@
 ---
 "create-questpie": patch
+"questpie": patch
 ---
 
 Harden and align every generated runtime before release.
@@ -10,7 +11,8 @@ Harden and align every generated runtime before release.
   and headless production builds retain their external runtime dependencies.
 - **Examples:** repository examples invoke the public `questpie` binary instead
   of package source paths while retaining their explicit config compatibility
-  flags.
+  flags. The workspace and published CLI now use a stable packaged bin shim, so
+  Bun can link the command before `dist` is built on a clean checkout.
 - **Docs and Skills:** runtime ownership, migration guidance, typed-client
   boundaries, and module/plugin graph rules now match executable behavior.
 - **Release proof:** a publish-shaped four-runtime matrix scaffolds through the
