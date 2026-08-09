@@ -112,32 +112,32 @@ import type { RouteParamsFromKey, RouteWithParams } from "questpie/types";
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
-import type { ExtractModulePropArr, ExtractModulePropArrOverride, Override, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";
+import type { CodegenResolvedModulePropArr, ExtractModulePropArr, Override, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";
 type _RouteDefinitionWithoutHandler<T> = T extends { mode: "raw" } ? Omit<T, "handler"> & { handler: (args: unknown) => Response | Promise<Response> } : Omit<T, "handler"> & { handler: (args: unknown) => unknown | Promise<unknown> };
-export type _ModuleCollections = ExtractModulePropArrOverride<typeof _modules, "collections">;
-export type _ModuleChannels = ExtractModulePropArr<typeof _modules, "channels">;
-export type _ModuleGlobals = ExtractModulePropArr<typeof _modules, "globals">;
-export type _ModuleJobs = ExtractModulePropArr<typeof _modules, "jobs">;
-export type _ModuleRoutes = ExtractModulePropArr<typeof _modules, "routes">;
+export type _ModuleCollections = CodegenResolvedModulePropArr<typeof _modules, "collections">;
+export type _ModuleChannels = CodegenResolvedModulePropArr<typeof _modules, "channels">;
+export type _ModuleGlobals = CodegenResolvedModulePropArr<typeof _modules, "globals">;
+export type _ModuleJobs = CodegenResolvedModulePropArr<typeof _modules, "jobs">;
+export type _ModuleRoutes = CodegenResolvedModulePropArr<typeof _modules, "routes">;
 export type _ModuleServices = {};
-export type _ModuleFieldTypes = ExtractModulePropArr<typeof _modules, "fieldTypes">;
-export type _ModuleViews = ExtractModulePropArr<typeof _modules, "views">;
-export type _ModuleComponents = ExtractModulePropArr<typeof _modules, "components">;
-export type _ModuleBlocks = ExtractModulePropArr<typeof _modules, "blocks">;
-export type _ModuleMcpTools = ExtractModulePropArr<typeof _modules, "mcpTools">;
+export type _ModuleFieldTypes = CodegenResolvedModulePropArr<typeof _modules, "fieldTypes">;
+export type _ModuleViews = CodegenResolvedModulePropArr<typeof _modules, "views">;
+export type _ModuleComponents = CodegenResolvedModulePropArr<typeof _modules, "components">;
+export type _ModuleBlocks = CodegenResolvedModulePropArr<typeof _modules, "blocks">;
+export type _ModuleMcpTools = CodegenResolvedModulePropArr<typeof _modules, "mcpTools">;
 // Registry category extraction from modules
-export type _Registry_Collections = ExtractModulePropArrOverride<typeof _modules, "collections">;
-export type _Registry_Channels = ExtractModulePropArr<typeof _modules, "channels">;
-export type _Registry_Globals = ExtractModulePropArr<typeof _modules, "globals">;
-export type _Registry_Jobs = ExtractModulePropArr<typeof _modules, "jobs">;
-export type _Registry_Routes = ExtractModulePropArr<typeof _modules, "routes">;
+export type _Registry_Collections = CodegenResolvedModulePropArr<typeof _modules, "collections">;
+export type _Registry_Channels = CodegenResolvedModulePropArr<typeof _modules, "channels">;
+export type _Registry_Globals = CodegenResolvedModulePropArr<typeof _modules, "globals">;
+export type _Registry_Jobs = CodegenResolvedModulePropArr<typeof _modules, "jobs">;
+export type _Registry_Routes = CodegenResolvedModulePropArr<typeof _modules, "routes">;
 export type _Registry_Services = {};
-export type _Registry_Emails = ExtractModulePropArr<typeof _modules, "emails">;
-export type _Registry_FieldTypes = ExtractModulePropArr<typeof _modules, "fieldTypes">;
-export type _Registry_Views = ExtractModulePropArr<typeof _modules, "views">;
-export type _Registry_Components = ExtractModulePropArr<typeof _modules, "components">;
-export type _Registry_Blocks = ExtractModulePropArr<typeof _modules, "blocks">;
-export type _Registry_McpTools = ExtractModulePropArr<typeof _modules, "mcpTools">;
+export type _Registry_Emails = CodegenResolvedModulePropArr<typeof _modules, "emails">;
+export type _Registry_FieldTypes = CodegenResolvedModulePropArr<typeof _modules, "fieldTypes">;
+export type _Registry_Views = CodegenResolvedModulePropArr<typeof _modules, "views">;
+export type _Registry_Components = CodegenResolvedModulePropArr<typeof _modules, "components">;
+export type _Registry_Blocks = CodegenResolvedModulePropArr<typeof _modules, "blocks">;
+export type _Registry_McpTools = CodegenResolvedModulePropArr<typeof _modules, "mcpTools">;
 
 // Recursive module property extraction (for fields contributed at each level)
 import type { ExtractModuleProp } from "questpie/types";
@@ -159,30 +159,30 @@ export type AppCollections = Override<_ModuleCollections, {
 export type AppChannels = _ModuleChannels;
 
 /** All globals in the app (modules + user, user overrides) */
-export type AppGlobals = _ModuleGlobals & {
+export type AppGlobals = Override<_ModuleGlobals, {
 	site_settings: typeof _glob_site_settings;
-};
+}>;
 
 /** All jobs in the app (modules + user, user overrides) */
-export type AppJobs = _ModuleJobs & {
+export type AppJobs = Override<_ModuleJobs, {
 	notifyBlogSubscribers: Omit<typeof _job_notifyBlogSubscribers, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	sendAppointmentCancellation: Omit<typeof _job_sendAppointmentCancellation, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	sendAppointmentConfirmation: Omit<typeof _job_sendAppointmentConfirmation, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	sendAppointmentReminder: Omit<typeof _job_sendAppointmentReminder, "handler"> & { handler: (args: unknown) => Promise<unknown> };
-};
+}>;
 
 /** All routes in the app (modules + user, user overrides) */
-export type AppRoutes = _ModuleRoutes & {
+export type AppRoutes = Override<_ModuleRoutes, {
 	createBooking: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_createBooking>, RouteParamsFromKey<"createBooking">>;
 	getActiveBarbers: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_getActiveBarbers>, RouteParamsFromKey<"getActiveBarbers">>;
 	getAvailableTimeSlots: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_getAvailableTimeSlots>, RouteParamsFromKey<"getAvailableTimeSlots">>;
 	getRevenueStats: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_getRevenueStats>, RouteParamsFromKey<"getRevenueStats">>;
-};
+}>;
 
 /** All service definitions in the app (modules + user, user overrides). */
-type _AppServiceDefinitions = _ModuleServices & {
+type _AppServiceDefinitions = Override<_ModuleServices, {
 	blog: typeof _svc_blog;
-};
+}>;
 
 /** All services in the app as resolved service instances. */
 export type AppServices = {
@@ -200,10 +200,10 @@ export type AppEmailTemplates = {
 };
 
 /** All fieldtypes in the app (modules + user, user overrides) */
-export type AppFieldTypes = _ModuleFieldTypes & {
+export type AppFieldTypes = Override<_ModuleFieldTypes, {
 	color: typeof _ftype_color;
 	rating: typeof _ftype_rating;
-};
+}>;
 
 /** All views in the app (modules + user, user overrides) */
 export type AppViews = _ModuleViews;
@@ -212,25 +212,9 @@ export type AppViews = _ModuleViews;
 export type AppComponents = _ModuleComponents;
 
 /** All blocks in the app (modules + user, user overrides) */
-export type AppBlocks = _ModuleBlocks
-	& { [K in typeof _bloc_bookingCta.state.name]: typeof _bloc_bookingCta }
-	& { [K in typeof _bloc_columns.state.name]: typeof _bloc_columns }
-	& { [K in typeof _bloc_contactInfo.state.name]: typeof _bloc_contactInfo }
-	& { [K in typeof _bloc_cta.state.name]: typeof _bloc_cta }
-	& { [K in typeof _bloc_divider.state.name]: typeof _bloc_divider }
-	& { [K in typeof _bloc_gallery.state.name]: typeof _bloc_gallery }
-	& { [K in typeof _bloc_heading.state.name]: typeof _bloc_heading }
-	& { [K in typeof _bloc_hero.state.name]: typeof _bloc_hero }
-	& { [K in typeof _bloc_hours.state.name]: typeof _bloc_hours }
-	& { [K in typeof _bloc_imageText.state.name]: typeof _bloc_imageText }
-	& { [K in typeof _bloc_reviews.state.name]: typeof _bloc_reviews }
-	& { [K in typeof _bloc_services.state.name]: typeof _bloc_services }
-	& { [K in typeof _bloc_spacer.state.name]: typeof _bloc_spacer }
-	& { [K in typeof _bloc_stats.state.name]: typeof _bloc_stats }
-	& { [K in typeof _bloc_team.state.name]: typeof _bloc_team }
-	& { [K in typeof _bloc_text.state.name]: typeof _bloc_text };
+export type AppBlocks = Override<Override<Override<Override<Override<Override<Override<Override<Override<Override<Override<Override<Override<Override<Override<Override<_ModuleBlocks, { [K in typeof _bloc_bookingCta.state.name]: typeof _bloc_bookingCta }>, { [K in typeof _bloc_columns.state.name]: typeof _bloc_columns }>, { [K in typeof _bloc_contactInfo.state.name]: typeof _bloc_contactInfo }>, { [K in typeof _bloc_cta.state.name]: typeof _bloc_cta }>, { [K in typeof _bloc_divider.state.name]: typeof _bloc_divider }>, { [K in typeof _bloc_gallery.state.name]: typeof _bloc_gallery }>, { [K in typeof _bloc_heading.state.name]: typeof _bloc_heading }>, { [K in typeof _bloc_hero.state.name]: typeof _bloc_hero }>, { [K in typeof _bloc_hours.state.name]: typeof _bloc_hours }>, { [K in typeof _bloc_imageText.state.name]: typeof _bloc_imageText }>, { [K in typeof _bloc_reviews.state.name]: typeof _bloc_reviews }>, { [K in typeof _bloc_services.state.name]: typeof _bloc_services }>, { [K in typeof _bloc_spacer.state.name]: typeof _bloc_spacer }>, { [K in typeof _bloc_stats.state.name]: typeof _bloc_stats }>, { [K in typeof _bloc_team.state.name]: typeof _bloc_team }>, { [K in typeof _bloc_text.state.name]: typeof _bloc_text }>;
 
 /** All mcptools in the app (modules + user, user overrides) */
-export type AppMcpTools = _ModuleMcpTools & {
+export type AppMcpTools = Override<_ModuleMcpTools, {
 	"barbershop.checkAvailability": typeof _mcpTool_barbershop_checkAvailability;
-};
+}>;

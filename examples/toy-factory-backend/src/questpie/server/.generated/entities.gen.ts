@@ -56,32 +56,32 @@ import type { RouteParamsFromKey, RouteWithParams } from "questpie/types";
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
-import type { ExtractModulePropArr, ExtractModulePropArrOverride, Override, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";
+import type { CodegenResolvedModulePropArr, ExtractModulePropArr, Override, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";
 type _RouteDefinitionWithoutHandler<T> = T extends { mode: "raw" } ? Omit<T, "handler"> & { handler: (args: unknown) => Response | Promise<Response> } : Omit<T, "handler"> & { handler: (args: unknown) => unknown | Promise<unknown> };
-export type _ModuleCollections = ExtractModulePropArrOverride<typeof _modules, "collections">;
-export type _ModuleChannels = ExtractModulePropArr<typeof _modules, "channels">;
-export type _ModuleGlobals = ExtractModulePropArr<typeof _modules, "globals">;
-export type _ModuleJobs = ExtractModulePropArr<typeof _modules, "jobs">;
-export type _ModuleRoutes = ExtractModulePropArr<typeof _modules, "routes">;
+export type _ModuleCollections = CodegenResolvedModulePropArr<typeof _modules, "collections">;
+export type _ModuleChannels = CodegenResolvedModulePropArr<typeof _modules, "channels">;
+export type _ModuleGlobals = CodegenResolvedModulePropArr<typeof _modules, "globals">;
+export type _ModuleJobs = CodegenResolvedModulePropArr<typeof _modules, "jobs">;
+export type _ModuleRoutes = CodegenResolvedModulePropArr<typeof _modules, "routes">;
 export type _ModuleServices = {};
-export type _ModuleFieldTypes = ExtractModulePropArr<typeof _modules, "fieldTypes">;
-export type _ModuleViews = ExtractModulePropArr<typeof _modules, "views">;
-export type _ModuleComponents = ExtractModulePropArr<typeof _modules, "components">;
-export type _ModuleBlocks = ExtractModulePropArr<typeof _modules, "blocks">;
-export type _ModuleWorkflows = ExtractModulePropArr<typeof _modules, "workflows">;
+export type _ModuleFieldTypes = CodegenResolvedModulePropArr<typeof _modules, "fieldTypes">;
+export type _ModuleViews = CodegenResolvedModulePropArr<typeof _modules, "views">;
+export type _ModuleComponents = CodegenResolvedModulePropArr<typeof _modules, "components">;
+export type _ModuleBlocks = CodegenResolvedModulePropArr<typeof _modules, "blocks">;
+export type _ModuleWorkflows = CodegenResolvedModulePropArr<typeof _modules, "workflows">;
 // Registry category extraction from modules
-export type _Registry_Collections = ExtractModulePropArrOverride<typeof _modules, "collections">;
-export type _Registry_Channels = ExtractModulePropArr<typeof _modules, "channels">;
-export type _Registry_Globals = ExtractModulePropArr<typeof _modules, "globals">;
-export type _Registry_Jobs = ExtractModulePropArr<typeof _modules, "jobs">;
-export type _Registry_Routes = ExtractModulePropArr<typeof _modules, "routes">;
+export type _Registry_Collections = CodegenResolvedModulePropArr<typeof _modules, "collections">;
+export type _Registry_Channels = CodegenResolvedModulePropArr<typeof _modules, "channels">;
+export type _Registry_Globals = CodegenResolvedModulePropArr<typeof _modules, "globals">;
+export type _Registry_Jobs = CodegenResolvedModulePropArr<typeof _modules, "jobs">;
+export type _Registry_Routes = CodegenResolvedModulePropArr<typeof _modules, "routes">;
 export type _Registry_Services = {};
-export type _Registry_Emails = ExtractModulePropArr<typeof _modules, "emails">;
-export type _Registry_FieldTypes = ExtractModulePropArr<typeof _modules, "fieldTypes">;
-export type _Registry_Views = ExtractModulePropArr<typeof _modules, "views">;
-export type _Registry_Components = ExtractModulePropArr<typeof _modules, "components">;
-export type _Registry_Blocks = ExtractModulePropArr<typeof _modules, "blocks">;
-export type _Registry_Workflows = ExtractModulePropArr<typeof _modules, "workflows">;
+export type _Registry_Emails = CodegenResolvedModulePropArr<typeof _modules, "emails">;
+export type _Registry_FieldTypes = CodegenResolvedModulePropArr<typeof _modules, "fieldTypes">;
+export type _Registry_Views = CodegenResolvedModulePropArr<typeof _modules, "views">;
+export type _Registry_Components = CodegenResolvedModulePropArr<typeof _modules, "components">;
+export type _Registry_Blocks = CodegenResolvedModulePropArr<typeof _modules, "blocks">;
+export type _Registry_Workflows = CodegenResolvedModulePropArr<typeof _modules, "workflows">;
 
 // Recursive module property extraction (for fields contributed at each level)
 import type { ExtractModuleProp } from "questpie/types";
@@ -103,26 +103,26 @@ export type AppCollections = Override<_ModuleCollections, {
 export type AppChannels = _ModuleChannels;
 
 /** All globals in the app (modules + user, user overrides) */
-export type AppGlobals = _ModuleGlobals & {
+export type AppGlobals = Override<_ModuleGlobals, {
 	siteSettings: typeof _glob_siteSettings;
-};
+}>;
 
 /** All jobs in the app (modules + user, user overrides) */
-export type AppJobs = _ModuleJobs & {
+export type AppJobs = Override<_ModuleJobs, {
 	recalculateMaterialPlan: Omit<typeof _job_recalculateMaterialPlan, "handler"> & { handler: (args: unknown) => Promise<unknown> };
-};
+}>;
 
 /** All routes in the app (modules + user, user overrides) */
-export type AppRoutes = _ModuleRoutes & {
+export type AppRoutes = Override<_ModuleRoutes, {
 	"rpc/planning/capacitySummary": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_rpc_planning_capacitySummary>, RouteParamsFromKey<"rpc/planning/capacitySummary">>;
 	"rpc/planning/receiveMaterials": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_rpc_planning_receiveMaterials>, RouteParamsFromKey<"rpc/planning/receiveMaterials">>;
 	"rpc/planning/startProduction": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_rpc_planning_startProduction>, RouteParamsFromKey<"rpc/planning/startProduction">>;
-};
+}>;
 
 /** All service definitions in the app (modules + user, user overrides). */
-type _AppServiceDefinitions = _ModuleServices & {
+type _AppServiceDefinitions = Override<_ModuleServices, {
 	capacityPlanner: typeof _svc_capacityPlanner;
-};
+}>;
 
 /** All services in the app as resolved service instances. */
 export type AppServices = {
@@ -151,6 +151,4 @@ export type AppComponents = _ModuleComponents;
 export type AppBlocks = _ModuleBlocks;
 
 /** All workflows in the app (modules + user, user overrides) */
-export type AppWorkflows = _ModuleWorkflows
-	& { [K in typeof _wf_nightlyCapacityReview.name]: Omit<typeof _wf_nightlyCapacityReview, "handler" | "onFailure"> & { handler: (args: unknown) => Promise<unknown>; onFailure?: (args: unknown) => Promise<void> } }
-	& { [K in typeof _wf_productionOrderPlan.name]: Omit<typeof _wf_productionOrderPlan, "handler" | "onFailure"> & { handler: (args: unknown) => Promise<unknown>; onFailure?: (args: unknown) => Promise<void> } };
+export type AppWorkflows = Override<Override<_ModuleWorkflows, { [K in typeof _wf_nightlyCapacityReview.name]: Omit<typeof _wf_nightlyCapacityReview, "handler" | "onFailure"> & { handler: (args: unknown) => Promise<unknown>; onFailure?: (args: unknown) => Promise<void> } }>, { [K in typeof _wf_productionOrderPlan.name]: Omit<typeof _wf_productionOrderPlan, "handler" | "onFailure"> & { handler: (args: unknown) => Promise<unknown>; onFailure?: (args: unknown) => Promise<void> } }>;
