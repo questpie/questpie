@@ -19,4 +19,6 @@ also stays bound to the private request snapshot. Hono and Elysia share the core
 `NativeAdapterConfig` option contract. Next route handlers now return an exact
 seven-method type while preserving their 3.x configuration surface. Code that
 indexed the handler object with an arbitrary string must use one of the seven
-exported method names.
+exported method names. The Elysia adapter no longer carries the unused
+`@elysiajs/cors` dependency or claims a built-in CORS option; applications that
+need cross-origin access must install and compose Elysia's native CORS plugin.

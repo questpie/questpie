@@ -402,6 +402,19 @@ const server = new Elysia()
 	.listen(3000);
 ```
 
+`@questpie/elysia` does not own CORS policy. For a cross-origin browser client,
+install `@elysiajs/cors` in the application and compose the native plugin before
+the QUESTPIE adapter:
+
+```ts
+import { cors } from "@elysiajs/cors";
+
+const server = new Elysia()
+	.use(cors({ origin: "https://app.example.com" }))
+	.use(questpieElysia(app, { basePath: "/api" }))
+	.listen(3000);
+```
+
 **Hono:**
 
 ```ts
