@@ -10,7 +10,11 @@
  */
 
 import type { Questpie } from "../config/questpie.js";
-import { RequestScope, runWithRequestScope } from "../config/request-scope.js";
+import {
+	disposeRequestScopeAfterError,
+	RequestScope,
+	runWithRequestScope,
+} from "../config/request-scope.js";
 import { ApiError } from "../errors/index.js";
 import type {
 	RequestLoggingConfig,
@@ -558,8 +562,7 @@ export const createFetchHandler = (
 				requestScope,
 			);
 		} catch (error) {
-			await requestScope.dispose();
-			throw error;
+			return disposeRequestScopeAfterError(requestScope, error);
 		}
 	};
 };

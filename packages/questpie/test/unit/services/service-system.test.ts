@@ -370,6 +370,26 @@ describe("service system", () => {
 		);
 	});
 
+	it("rejects delayed singleton access to request-scoped services", async () => {
+		const requestOnly = service()
+			.lifecycle("request")
+			.create(() => ({}));
+		const singleton = service().create(({ services }) => ({
+			getRequestOnly: () => services.requestOnly,
+		}));
+		const { app, cleanup } = await createServiceApp({ requestOnly, singleton });
+		try {
+			const instance = app.resolveService("singleton") as {
+				getRequestOnly(): unknown;
+			};
+			expect(() => instance.getRequestOnly()).toThrow(
+				"Singleton service cannot depend on request-scoped service",
+			);
+		} finally {
+			await cleanup();
+		}
+	});
+
 	it("reuses and disposes request services in a standalone context", async () => {
 		let created = 0;
 		let disposed = 0;
@@ -393,6 +413,58 @@ describe("service system", () => {
 			await cleanup();
 		}
 		expect(disposed).toBe(1);
+	});
+
+	it("preserves receivers for standalone services with shared methods", async () => {
+		class IdentifiedService {
+			constructor(private readonly id: string) {}
+
+			getId(): string {
+				return this.id;
+			}
+		}
+
+		const first = service()
+			.lifecycle("request")
+			.create(() => new IdentifiedService("first"));
+		const second = service()
+			.lifecycle("request")
+			.create(() => new IdentifiedService("second"));
+		const { app, cleanup } = await createServiceApp({ first, second });
+		try {
+			await using context = await createContextFactory(app)();
+			expect((context.services as any).first.getId()).toBe("first");
+			expect((context.services as any).second.getId()).toBe("second");
+		} finally {
+			await cleanup();
+		}
+	});
+
+	it("binds frozen and callable standalone services", async () => {
+		const frozen = service().create(() =>
+			Object.freeze({
+				read: () => "frozen",
+			}),
+		);
+		const callable = service().create(() =>
+			Object.assign(
+				function (this: { prefix?: string }, value: string) {
+					return `${this?.prefix ?? ""}${value}`;
+				},
+				{ label: "callable" },
+			),
+		);
+		const { app, cleanup } = await createServiceApp({ callable, frozen });
+		try {
+			await using context = await createContextFactory(app)();
+			expect((context.services as any).frozen.read()).toBe("frozen");
+			expect((context.services as any).callable.label).toBe("callable");
+			expect(
+				(context.services as any).callable.call({ prefix: "bound:" }, "ok"),
+			).toBe("bound:ok");
+		} finally {
+			await cleanup();
+		}
 	});
 
 	it("awaits CRDT shutdown before disposing realtime infrastructure", async () => {

@@ -120,7 +120,12 @@ import { createContext } from "#questpie";
 
 await using ctx = await createContext();
 await ctx.services.audit.record("import-started");
+await ctx.collections.posts.find({});
 ```
+
+Its `services`, service namespaces, `collections` and `globals` are bound to the
+same identity and request-service scope. Calls therefore keep the context
+session, access mode and service instances until the `await using` block ends.
 
 Singleton services are disposed sequentially in reverse initialization order.
 If app startup fails partway through, QUESTPIE disposes the singleton instances

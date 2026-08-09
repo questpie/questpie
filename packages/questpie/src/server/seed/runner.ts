@@ -4,6 +4,7 @@ import { withTransaction } from "#questpie/server/collection/crud/shared/transac
 import { extractAppServices } from "#questpie/server/config/app-context.js";
 import { runWithContext } from "#questpie/server/config/context.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
+import { runInFreshRequestScope } from "#questpie/server/config/request-scope.js";
 import { rowsOf } from "#questpie/server/db/driver-result.js";
 import { getEnv, getNodeEnv } from "#questpie/server/utils/env.js";
 
@@ -168,16 +169,18 @@ export class SeedRunner {
 		executedIds: Set<string>,
 	): Promise<void> {
 		await withTransaction(this.app.db, async (tx: any) => {
-			await runWithContext(
-				{
-					app: this.app,
-					session: (reqCtx as any).session,
-					db: tx,
-					locale: reqCtx.locale,
-					accessMode: "system",
-					stage: reqCtx.stage,
-				},
-				() => seed.run(this.createSeedContext(reqCtx, tx)),
+			await runInFreshRequestScope(this.app, () =>
+				runWithContext(
+					{
+						app: this.app,
+						session: (reqCtx as any).session,
+						db: tx,
+						locale: reqCtx.locale,
+						accessMode: "system",
+						stage: reqCtx.stage,
+					},
+					() => seed.run(this.createSeedContext(reqCtx, tx)),
+				),
 			);
 
 			await this.recordSeedExecution(seed, executedIds, tx);
@@ -195,20 +198,22 @@ export class SeedRunner {
 			executedIds.delete(seed.id);
 		}
 
-		await runWithContext(
-			{
-				app: this.app,
-				session: (reqCtx as any).session,
-				db: this.app.db,
-				locale: reqCtx.locale,
-				accessMode: "system",
-				stage: reqCtx.stage,
-			},
-			() =>
-				seed.run({
-					...this.createSeedContext(reqCtx, this.app.db),
-					step: (name, fn) => this.runSeedStep(seed, name, fn, reqCtx),
-				}),
+		await runInFreshRequestScope(this.app, () =>
+			runWithContext(
+				{
+					app: this.app,
+					session: (reqCtx as any).session,
+					db: this.app.db,
+					locale: reqCtx.locale,
+					accessMode: "system",
+					stage: reqCtx.stage,
+				},
+				() =>
+					seed.run({
+						...this.createSeedContext(reqCtx, this.app.db),
+						step: (name, fn) => this.runSeedStep(seed, name, fn, reqCtx),
+					}),
+			),
 		);
 
 		await this.recordSeedExecution(seed, executedIds, this.app.db);
@@ -374,25 +379,27 @@ export class SeedRunner {
 				for (const seed of pending) {
 					this.log(`  🔍 Validating seed: ${seed.id}`);
 
-					await runWithContext(
-						{
-							app: this.app,
-							session: (reqCtx as any).session,
-							db: tx,
-							locale: reqCtx.locale,
-							accessMode: "system",
-							stage: reqCtx.stage,
-						},
-						() => {
-							const seedCtx = this.createSeedContext(reqCtx, tx);
-							return isStepSeed(seed)
-								? seed.run({
-										...seedCtx,
-										step: (name, fn) =>
-											this.runSeedStep(seed, name, fn, reqCtx, tx),
-									})
-								: seed.run(seedCtx);
-						},
+					await runInFreshRequestScope(this.app, () =>
+						runWithContext(
+							{
+								app: this.app,
+								session: (reqCtx as any).session,
+								db: tx,
+								locale: reqCtx.locale,
+								accessMode: "system",
+								stage: reqCtx.stage,
+							},
+							() => {
+								const seedCtx = this.createSeedContext(reqCtx, tx);
+								return isStepSeed(seed)
+									? seed.run({
+											...seedCtx,
+											step: (name, fn) =>
+												this.runSeedStep(seed, name, fn, reqCtx, tx),
+										})
+									: seed.run(seedCtx);
+							},
+						),
 					);
 					this.log(`  ✅ Seed valid: ${seed.id}`);
 				}
@@ -461,16 +468,18 @@ export class SeedRunner {
 			this.log(`  🔄 Undoing seed: ${seed.id}`);
 			try {
 				await withTransaction(this.app.db, async (tx: any) => {
-					await runWithContext(
-						{
-							app: this.app,
-							session: (reqCtx as any).session,
-							db: tx,
-							locale: reqCtx.locale,
-							accessMode: "system",
-							stage: reqCtx.stage,
-						},
-						() => seed.undo?.(this.createSeedContext(reqCtx, tx)),
+					await runInFreshRequestScope(this.app, () =>
+						runWithContext(
+							{
+								app: this.app,
+								session: (reqCtx as any).session,
+								db: tx,
+								locale: reqCtx.locale,
+								accessMode: "system",
+								stage: reqCtx.stage,
+							},
+							() => seed.undo?.(this.createSeedContext(reqCtx, tx)),
+						),
 					);
 
 					if (isStepSeed(seed)) {

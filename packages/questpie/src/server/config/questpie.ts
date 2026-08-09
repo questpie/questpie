@@ -28,7 +28,7 @@ import {
 import { QuestpieSeedsAPI } from "#questpie/server/config/integrated/seeds-api.js";
 import {
 	RequestScope,
-	runWithRequestScope,
+	runInFreshRequestScope,
 } from "#questpie/server/config/request-scope.js";
 import type {
 	AccessMode,
@@ -735,60 +735,42 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		},
 	): unknown | Promise<unknown> {
 		this._assertNoCircularServiceDependency(name, options.stack);
-		options.stack.push(name);
+		const stack = [...options.stack, name];
+		const context = this._createServiceContext({
+			requestDeps: options.requestDeps,
+			stack,
+			scope: options.scope,
+		});
+		const created = def.create(context);
 
-		const popIfCurrent = () => {
-			if (options.stack[options.stack.length - 1] === name) {
-				options.stack.pop();
-			}
-		};
-
-		try {
-			const context = this._createServiceContext({
-				requestDeps: options.requestDeps,
-				stack: options.stack,
-				scope: options.scope,
-			});
-			const created = def.create(context);
-
-			if (created instanceof Promise) {
-				if (!options.allowAsync) {
-					popIfCurrent();
-					if (options.lazyTriggered) {
-						throw new Error(
-							`[QUESTPIE] Service "${name}" has async create() but was lazily triggered. Reorder services so "${name}" initializes first.`,
-						);
-					}
-
+		if (created instanceof Promise) {
+			if (!options.allowAsync) {
+				if (options.lazyTriggered) {
 					throw new Error(
-						`[QUESTPIE] Service "${name}" has async create() but this resolution path is synchronous.`,
+						`[QUESTPIE] Service "${name}" has async create() but was lazily triggered. Reorder services so "${name}" initializes first.`,
 					);
 				}
 
-				return created
-					.then((instance) => {
-						if (options.cacheSingleton) {
-							this._singletonServices[name] = instance;
-							this._singletonServiceOrder.push(name);
-						}
-						return instance;
-					})
-					.finally(() => {
-						popIfCurrent();
-					});
+				throw new Error(
+					`[QUESTPIE] Service "${name}" has async create() but this resolution path is synchronous.`,
+				);
 			}
 
-			if (options.cacheSingleton) {
-				this._singletonServices[name] = created;
-				this._singletonServiceOrder.push(name);
-			}
-
-			popIfCurrent();
-			return created;
-		} catch (error) {
-			popIfCurrent();
-			throw error;
+			return created.then((instance) => {
+				if (options.cacheSingleton) {
+					this._singletonServices[name] = instance;
+					this._singletonServiceOrder.push(name);
+				}
+				return instance;
+			});
 		}
+
+		if (options.cacheSingleton) {
+			this._singletonServices[name] = created;
+			this._singletonServiceOrder.push(name);
+		}
+
+		return created;
 	}
 
 	private _assertNoCircularServiceDependency(
@@ -1157,45 +1139,39 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			| undefined;
 		if (typeof resolver !== "function") return undefined;
 
-		const resolverScope = new RequestScope();
-		let result: unknown;
-		try {
-			result = await runWithRequestScope(this, resolverScope, () =>
-				runWithContext(
-					{
-						app: this,
+		const result = await runInFreshRequestScope(this, () =>
+			runWithContext(
+				{
+					app: this,
+					db: params.db,
+					session: params.session,
+					principal: { kind: "system" },
+					actor: params.actor,
+					locale: params.locale,
+					accessMode: "system",
+					stage: params.stage,
+					requestId: params.requestId,
+					traceId: params.traceId,
+				},
+				async () => {
+					const services = extractAppServices(this, {
 						db: params.db,
 						session: params.session,
-						principal: { kind: "system" },
-						actor: params.actor,
 						locale: params.locale,
 						accessMode: "system",
-						stage: params.stage,
-						requestId: params.requestId,
-						traceId: params.traceId,
-					},
-					async () => {
-						const services = extractAppServices(this, {
-							db: params.db,
-							session: params.session,
-							locale: params.locale,
-							accessMode: "system",
-							principal: { kind: "system" },
-							actor: params.actor,
-						});
+						principal: { kind: "system" },
+						actor: params.actor,
+					});
 
-						return resolver({
-							...services,
-							request: params.request,
-							session: params.session,
-							db: params.db,
-						});
-					},
-				),
-			);
-		} finally {
-			await resolverScope.dispose();
-		}
+					return resolver({
+						...services,
+						request: params.request,
+						session: params.session,
+						db: params.db,
+					});
+				},
+			),
+		);
 		const extensions = (result ?? {}) as Record<string, unknown>;
 
 		if (getNodeEnv() !== "production") {

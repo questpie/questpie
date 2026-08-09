@@ -4,6 +4,8 @@ import { sql } from "drizzle-orm";
 
 import { collection, service } from "../../src/exports/index.js";
 import { isInTransaction } from "../../src/server/collection/crud/shared/transaction.js";
+import { extractAppServices } from "../../src/server/config/app-context.js";
+import { runWithContext } from "../../src/server/config/context.js";
 import { seed } from "../../src/server/seed/define-seed.js";
 import { SeedRunner } from "../../src/server/seed/runner.js";
 import type { Seed } from "../../src/server/seed/types.js";
@@ -112,6 +114,57 @@ describe("SeedRunner", () => {
 		expect(first).toBe(second);
 		expect(created).toBe(1);
 		expect(disposed).toBe(1);
+	});
+
+	it("isolates each seed from an ambient request scope", async () => {
+		await setup.cleanup();
+		let created = 0;
+		let disposed = 0;
+		const requestService = service()
+			.lifecycle("request")
+			.create(() => ({ id: ++created }))
+			.dispose(() => {
+				disposed++;
+			});
+
+		setup = await buildMockApp({ services: { requestService } });
+		runner = new SeedRunner(setup.app, { silent: true });
+		const seedIds: number[] = [];
+		let outerId = 0;
+
+		await runWithContext(
+			{
+				app: setup.app,
+				db: setup.app.db,
+				accessMode: "user",
+			},
+			async () => {
+				outerId = (extractAppServices(setup.app).services as any).requestService
+					.id;
+				await runner.run([
+					makeSeed({
+						id: "nested-first",
+						run: async ({ services }) => {
+							seedIds.push((services.requestService as any).id);
+						},
+					}),
+					makeSeed({
+						id: "nested-second",
+						run: async ({ services }) => {
+							seedIds.push((services.requestService as any).id);
+						},
+					}),
+				]);
+				expect(
+					(extractAppServices(setup.app).services as any).requestService.id,
+				).toBe(outerId);
+				expect(disposed).toBe(2);
+			},
+		);
+
+		expect(seedIds).toEqual([2, 3]);
+		expect(created).toBe(3);
+		expect(disposed).toBe(3);
 	});
 
 	it("skips already-executed seeds on second run", async () => {

@@ -153,6 +153,30 @@ describe("RequestScope (QUE-255)", () => {
 		expect(order).toEqual(["b", "a"]);
 	});
 
+	it("preserves execution and disposal failures", async () => {
+		const app = {};
+		let thrown: unknown;
+		try {
+			await runInFreshRequestScope(app, () => {
+				const scope = getActiveRequestScope(app)!;
+				scope.set("broken", {}, () => {
+					throw new Error("cleanup failed");
+				});
+				throw new Error("execution failed");
+			});
+		} catch (error) {
+			thrown = error;
+		}
+
+		expect(thrown).toBeInstanceOf(AggregateError);
+		expect((thrown as AggregateError).errors).toEqual([
+			expect.objectContaining({ message: "execution failed" }),
+			expect.objectContaining({
+				message: "Failed to dispose one or more request-scoped services",
+			}),
+		]);
+	});
+
 	it("has() and get() work correctly", () => {
 		const scope = new RequestScope();
 

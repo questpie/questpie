@@ -131,6 +131,23 @@ export function runWithRequestScope<T>(
 	return requestScopeStorage.run({ app, scope }, callback);
 }
 
+/** Dispose a scope without losing an execution error when cleanup also fails. */
+export async function disposeRequestScopeAfterError(
+	scope: RequestScope,
+	error: unknown,
+): Promise<never> {
+	try {
+		await scope.dispose();
+	} catch (cleanupError) {
+		throw new AggregateError(
+			[error, cleanupError],
+			"Request execution and scope disposal both failed",
+			{ cause: error },
+		);
+	}
+	throw error;
+}
+
 /** Run one framework-owned execution in a fresh, automatically disposed scope. */
 export function runInFreshRequestScope<T>(
 	app: unknown,
@@ -138,10 +155,18 @@ export function runInFreshRequestScope<T>(
 ): Promise<T> {
 	const scope = new RequestScope();
 	return runWithRequestScope(app, scope, async () => {
+		let failed = false;
+		let failure: unknown;
+		let result: T | undefined;
 		try {
-			return await callback();
-		} finally {
-			await scope.dispose();
+			result = await callback();
+		} catch (error) {
+			failed = true;
+			failure = error;
 		}
+
+		if (failed) return disposeRequestScopeAfterError(scope, failure);
+		await scope.dispose();
+		return result as T;
 	});
 }

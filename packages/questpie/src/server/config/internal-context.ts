@@ -1,11 +1,26 @@
 /**
- * Internal AsyncLocalStorage keys.
+ * Internal context storage and plumbing keys.
  *
  * These symbols let framework internals carry request plumbing through existing
  * context propagation without adding new public handler arguments.
  *
  * @internal
  */
+
+import { AsyncLocalStorage } from "node:async_hooks";
+
+const appContextStorage = new AsyncLocalStorage<object>();
+
+export function getInternalAppContextStore<T extends object>(): T | undefined {
+	return appContextStorage.getStore() as T | undefined;
+}
+
+export function runWithInternalAppContextStore<T>(
+	store: object,
+	callback: () => T,
+): T {
+	return appContextStorage.run(store, callback);
+}
 
 export const INTERNAL_ADAPTER_CONTEXT = Symbol.for(
 	"questpie.internal.adapterContext",

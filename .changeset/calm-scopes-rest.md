@@ -16,3 +16,7 @@ await globals.siteSettings.update(data, { locale: "sk" });
 Generated standalone `createContext()` remains a rich async-disposable
 `AppContext`. `app.createContext()` remains the explicit lean `RequestContext`
 factory.
+
+Singleton shutdown now runs disposers sequentially in reverse initialization
+order and reports cleanup failures with `AggregateError` instead of swallowing
+them.

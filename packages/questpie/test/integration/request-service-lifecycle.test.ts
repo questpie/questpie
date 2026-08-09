@@ -4,6 +4,8 @@ import { z } from "zod";
 
 import { collection, job, route, service } from "../../src/exports/index.js";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
+import { getContext } from "../../src/server/config/context.js";
+import { createContextFactory } from "../../src/server/config/create-context-factory.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { runTestDbMigrations } from "../utils/test-db";
 
@@ -144,6 +146,80 @@ describe("request service lifecycle", () => {
 		expect(disposed).toBe(1);
 	});
 
+	it("disposes streamed request services when the request is aborted", async () => {
+		let resolveDisposed!: () => void;
+		const disposed = new Promise<void>((resolve) => {
+			resolveDisposed = resolve;
+		});
+		const streamService = service()
+			.lifecycle("request")
+			.create(() => ({}))
+			.dispose(resolveDisposed);
+		const stream = route()
+			.get()
+			.raw()
+			.handler(({ services }) => {
+				void services.streamService;
+				return new Response(new ReadableStream({}));
+			});
+
+		setup = await buildMockApp({
+			routes: { stream },
+			services: { streamService },
+		});
+		const abort = new AbortController();
+		const response = await createFetchHandler(setup.app)(
+			new Request("http://localhost/stream", { signal: abort.signal }),
+		);
+		abort.abort();
+		await Promise.race([
+			disposed,
+			Bun.sleep(1_000).then(() => {
+				throw new Error("Timed out waiting for request scope disposal");
+			}),
+		]);
+		await response!.body?.cancel();
+	});
+
+	it("disposes after an abort that occurs while the handler is pending", async () => {
+		let disposed = 0;
+		let releaseHandler!: () => void;
+		const handlerReleased = new Promise<void>((resolve) => {
+			releaseHandler = resolve;
+		});
+		const streamService = service()
+			.lifecycle("request")
+			.create(() => ({}))
+			.dispose(() => {
+				disposed++;
+			});
+		const stream = route()
+			.get()
+			.raw()
+			.handler(async ({ services }) => {
+				void services.streamService;
+				await handlerReleased;
+				return new Response(new ReadableStream({}));
+			});
+
+		setup = await buildMockApp({
+			routes: { stream },
+			services: { streamService },
+		});
+		const abort = new AbortController();
+		const responsePromise = createFetchHandler(setup.app)(
+			new Request("http://localhost/stream", { signal: abort.signal }),
+		);
+		abort.abort();
+		expect(disposed).toBe(0);
+
+		releaseHandler();
+		const response = await responsePromise;
+		await Bun.sleep(0);
+		expect(disposed).toBe(1);
+		await response!.body?.cancel();
+	});
+
 	it("disposes request services when a handler fails", async () => {
 		let disposed = 0;
 		const requestService = service()
@@ -168,6 +244,89 @@ describe("request service lifecycle", () => {
 		);
 		expect(response).toBeInstanceOf(Response);
 		await response!.arrayBuffer();
+		expect(disposed).toBe(1);
+	});
+
+	it("disposes initialized dependencies when a request service factory fails", async () => {
+		let disposed = 0;
+		const child = service()
+			.lifecycle("request")
+			.create(() => ({}))
+			.dispose(() => {
+				disposed++;
+			});
+		const failing = service()
+			.lifecycle("request")
+			.create(({ services }) => {
+				void services.child;
+				throw new Error("request service initialization failed");
+			});
+		const inspect = route()
+			.get()
+			.handler(({ services }) => services.failing);
+
+		setup = await buildMockApp({
+			routes: { inspect },
+			services: { child, failing },
+		});
+		const response = await createFetchHandler(setup.app)(
+			new Request("http://localhost/inspect"),
+		);
+		await response!.arrayBuffer();
+		expect(disposed).toBe(1);
+	});
+
+	it("binds standalone CRUD to the context identity and owned scope", async () => {
+		let created = 0;
+		let disposed = 0;
+		const accessIds: number[] = [];
+		const requestService = service()
+			.lifecycle("request")
+			.create(() => ({ id: ++created }))
+			.dispose(() => {
+				disposed++;
+			});
+		const audit = service()
+			.lifecycle("request")
+			.create(({ collections }) => ({
+				findItems: () => (collections as any).items.find({}),
+			}));
+		const topLevel = service()
+			.lifecycle("request")
+			.namespace(null)
+			.create(() => ({
+				accessMode: () => getContext().accessMode,
+			}));
+		const items = collection("items")
+			.fields(({ f }) => ({ name: f.text(100).required() }))
+			.access({
+				read: ({ services }) => {
+					accessIds.push((services.requestService as { id: number }).id);
+					return false;
+				},
+			});
+
+		setup = await buildMockApp({
+			collections: { items },
+			services: { audit, requestService, topLevel },
+		});
+		await runTestDbMigrations(setup.app);
+		{
+			await using context = await createContextFactory(setup.app)({
+				accessMode: "user",
+			});
+			const directId = (context.services as any).requestService.id;
+			await expect(
+				(context.collections as any).items.find({}),
+			).rejects.toThrow();
+			await expect(
+				(context.services as any).audit.findItems(),
+			).rejects.toThrow();
+			expect((context as any).topLevel.accessMode()).toBe("user");
+			expect(accessIds).toEqual([directId, directId]);
+			expect(created).toBe(1);
+			expect(disposed).toBe(0);
+		}
 		expect(disposed).toBe(1);
 	});
 
