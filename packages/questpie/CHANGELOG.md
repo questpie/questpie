@@ -1,5 +1,14 @@
 # questpie
 
+## 3.26.1
+
+### Patch Changes
+
+- [#245](https://github.com/questpie/questpie/pull/245) [`e1620ea`](https://github.com/questpie/questpie/commit/e1620ea526bf4ab9e3e0d90b0b4df9fc1b8c30e2) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add resolved typed Channel handles and exact authority invalidation, isolate
+  live-query scheduler work by session unless an explicit `accessCacheKey` opts
+  equivalent output into sharing, and deprecate `subscriptionScope` authority
+  partitioning ahead of its 4.0 removal.
+
 ## 3.26.0
 
 ### Minor Changes

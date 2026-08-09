@@ -1,6 +1,6 @@
 {
 	"name": "@questpie/elysia",
-	"version": "3.26.0",
+	"version": "3.26.1",
 	"description": "Elysia adapter for QUESTPIE, with Eden Treaty support",
 	"repository": {
 		"type": "git",
