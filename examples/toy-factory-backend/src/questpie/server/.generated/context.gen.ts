@@ -51,7 +51,7 @@ import _openapi from "../config/openapi";
 
 import type { AppCollections, AppChannels, AppGlobals, AppJobs, _ModuleCollections, _AppDefaultServices, _AppServicesSeam, _AppTopLevelServices, _AppCustomServiceNamespaces, AppEmailTemplates, AppWorkflows, _Registry_Collections, _Registry_Channels, _Registry_Globals, _Registry_Jobs, _Registry_Routes, _Registry_Services, _Registry_Emails, _Registry_FieldTypes, _Registry_Views, _Registry_Components, _Registry_Blocks, _Registry_Workflows, _AllModuleFields } from "./entities.gen";
 import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AuthorityActor, CollectionAPI, CrdtClientAPI, CrdtRegistryFromApp, CrdtServerAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Principal, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";
-import type { ChannelsService } from "questpie/channels";
+import type { Channels } from "questpie/channels";
 
 import type { WorkflowClient } from "@questpie/workflows/server";
 type _MPSubModules<M> = M extends { modules: infer S extends readonly any[] } ? S : readonly [];
@@ -132,7 +132,7 @@ type _AppInfraRecord = {
 	realtime: _AppQuestpie["realtime"];
 	executor: _AppQuestpie["executor"];
 	observability: _AppQuestpie["observability"];
-	channels: ChannelsService<AppChannels>;
+	channels: Channels<AppChannels>;
 	crdt: AppCrdtServer;
 
 	// Entity APIs
@@ -169,7 +169,7 @@ declare global {
 			logger: _AppQuestpie["logger"];
 			search: _AppQuestpie["search"];
 			realtime: _AppQuestpie["realtime"];
-			channels: ChannelsService<AppChannels>;
+			channels: Channels<AppChannels>;
 
 			// Entity APIs
 			collections: _JobHandlerCollectionsAPI;
@@ -197,7 +197,7 @@ declare global {
 			logger: _AppQuestpie["logger"];
 			search: _AppQuestpie["search"];
 			realtime: _AppQuestpie["realtime"];
-			channels: ChannelsService<AppChannels>;
+			channels: Channels<AppChannels>;
 
 			// Entity APIs
 			collections: _JobHandlerCollectionsAPI;
