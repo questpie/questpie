@@ -8,17 +8,6 @@
  */
 
 const KNOWN = new Map<string, string>([
-	// image-size 2.0.2 is transitive through Fumadocs and is the newest release
-	// available as of 2026-08-08. Track a patched upstream release narrowly in
-	// #234; remove both entries as soon as Fumadocs can resolve it.
-	[
-		"GHSA-w3rx-r6r6-pgpr",
-		"TODO: questpie/questpie#234 — update image-size after a patched release",
-	],
-	[
-		"GHSA-5p2g-fcmc-qvqq",
-		"TODO: questpie/questpie#234 — update image-size after a patched release",
-	],
 	// esbuild RCE via missing binary integrity check on the *Deno* module's
 	// NPM_CONFIG_REGISTRY download path — unused here (Bun/Node monorepo, no Deno
 	// install). Fixed in esbuild 0.28.1, but a global override is blocked by

@@ -21,9 +21,12 @@ export default defineConfig({
 		tailwindcss(),
 		tanstackStart({
 			prerender: {
-				enabled: process.env.DISABLE_PRERENDER !== "true",
-				routes: ["/"],
-				crawlLinks: false,
+				// Keep TanStack's prerender route plugin enabled: disabling it makes
+				// the current client bundle initialize the router without its stores.
+				// Skip the actual render pass until Nitro's Bun stream can run inside
+				// the Node-based prerender worker.
+				enabled: true,
+				filter: () => false,
 			},
 			sitemap: {
 				host: "https://questpie.com",

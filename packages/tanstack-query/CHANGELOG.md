@@ -1,5 +1,7 @@
 # @questpie/tanstack-query
 
+## 3.25.3
+
 ## 3.25.2
 
 ## 3.25.1

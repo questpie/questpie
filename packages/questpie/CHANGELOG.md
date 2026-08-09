@@ -1,5 +1,11 @@
 # questpie
 
+## 3.25.3
+
+### Patch Changes
+
+- [#240](https://github.com/questpie/questpie/pull/240) [`f72cdfa`](https://github.com/questpie/questpie/commit/f72cdfa26b94ff1f4bcfffeec398e7a79a66b548) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Infer common media MIME types from filenames when storage metadata is generic, emit safe ASCII Content-Disposition fallbacks, and reuse prechecked read access for realtime count snapshots.
+
 ## 3.25.2
 
 ### Patch Changes

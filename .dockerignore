@@ -1,0 +1,15 @@
+.git
+.github
+.claude
+.agent-board
+.turbo
+**/.turbo
+**/node_modules
+**/.output
+**/dist
+**/coverage
+**/.env
+**/.env.*
+tmp
+*.log
+.DS_Store

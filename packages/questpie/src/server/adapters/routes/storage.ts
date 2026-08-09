@@ -35,6 +35,39 @@ type StorageRouteContext = {
 	storage: Files;
 };
 
+const FILE_EXTENSION_MIME_TYPES: Readonly<Record<string, string>> = {
+	"3gp": "video/3gpp",
+	aac: "audio/aac",
+	avif: "image/avif",
+	bmp: "image/bmp",
+	gif: "image/gif",
+	heic: "image/heic",
+	heif: "image/heif",
+	jpeg: "image/jpeg",
+	jpg: "image/jpeg",
+	m4a: "audio/mp4",
+	m4v: "video/mp4",
+	mov: "video/quicktime",
+	mp3: "audio/mpeg",
+	mp4: "video/mp4",
+	mpeg: "video/mpeg",
+	mpg: "video/mpeg",
+	ogg: "audio/ogg",
+	ogv: "video/ogg",
+	png: "image/png",
+	wav: "audio/wav",
+	webm: "video/webm",
+	webp: "image/webp",
+};
+
+const mimeTypeFromFilename = (filename: unknown): string | undefined => {
+	if (typeof filename !== "string") return undefined;
+	const dotIndex = filename.lastIndexOf(".");
+	if (dotIndex < 0 || dotIndex === filename.length - 1) return undefined;
+	const extension = filename.slice(dotIndex + 1).toLowerCase();
+	return FILE_EXTENSION_MIME_TYPES[extension];
+};
+
 const getStorageFromContext = (
 	context: AdapterContext["appContext"],
 	app: Questpie<any>,
@@ -523,15 +556,18 @@ export async function storageCollectionServe(
 
 		const metadata = await storage.head(key);
 
+		const rawFilename = (record as any)?.filename;
 		const contentType =
-			metadata.type || (record as any)?.mimeType || "application/octet-stream";
+			metadata.type ||
+			(record as any)?.mimeType ||
+			mimeTypeFromFilename(rawFilename) ||
+			"application/octet-stream";
 
 		// Sanitize filename to prevent header injection
-		const rawFilename = (record as any)?.filename;
 		const sanitizedFilename = rawFilename
 			? Array.from(String(rawFilename), (char) => {
 					const code = char.charCodeAt(0);
-					return code < 32 || code === 127 || char === '"' || char === "\\"
+					return code < 32 || code >= 127 || char === '"' || char === "\\"
 						? "_"
 						: char;
 				}).join("")
