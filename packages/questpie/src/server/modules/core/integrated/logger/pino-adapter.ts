@@ -1,4 +1,5 @@
 import pino from "pino";
+import pinoPretty from "pino-pretty";
 
 import { getNodeEnv } from "#questpie/server/utils/env.js";
 
@@ -9,22 +10,22 @@ export class PinoLoggerAdapter implements LoggerAdapter {
 
 	constructor(config: LoggerConfig = {}) {
 		const isDev = getNodeEnv() === "development";
-
-		this.logger = pino({
+		const options: pino.LoggerOptions = {
 			level: config.level || "info",
 			redact: config.redact,
-			transport:
-				(config.pretty ?? isDev)
-					? {
-							target: "pino-pretty",
-							options: {
-								colorize: true,
-								ignore: "pid,hostname",
-								translateTime: "HH:MM:ss Z",
-							},
-						}
-					: undefined,
-		});
+		};
+
+		this.logger =
+			(config.pretty ?? isDev)
+				? pino(
+						options,
+						pinoPretty({
+							colorize: true,
+							ignore: "pid,hostname",
+							translateTime: "HH:MM:ss Z",
+						}),
+					)
+				: pino(options);
 	}
 
 	debug(msg: string, ...args: any[]) {
