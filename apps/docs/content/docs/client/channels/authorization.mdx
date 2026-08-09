@@ -72,40 +72,59 @@ Nothing else does.
 | A hook fired during an HTTP request       | no               | yes               |
 | `POST /channels/publish` from the browser | no               | yes               |
 
-HTTP contexts are created with `accessMode: "user"`. So `channels.publish()`
-inside a route handler is judged by the same rule the browser is. On a public
+HTTP contexts are created with `accessMode: "user"`. So a resolved Channel's
+`publish()` inside a route handler is judged by the same rule the browser is. On a public
 channel there is no rule to fall back on, and the answer is no. Add
 `publish: true` if the check belongs in your handler rather than the channel.
 
-## Revoking access mid-session
+## Invalidating access mid-session
 
 The subscribe rule runs when the subscription opens, and then not again.
 Removing someone from a room later does not close the stream they already hold.
-Call `revokeAuthority()` in the same transaction as the write that removed them.
+Resolve the Channel once and call `invalidateAuthority()` in the same
+transaction as the write that removed them.
 
 ```ts
-await channels.revokeAuthority("chatRoom", {
-	params: { roomId },
+const chatRoom = channels.chatRoom({ roomId });
+
+await chatRoom.invalidateAuthority({
 	subject: { kind: "user", id: removedUserId },
 	idempotencyKey: `chat-room:${roomId}:${removedUserId}:v2`,
 });
 ```
 
 The subject `kind` is `"user"`, `"oauth"` or `"session"`, and its `id` must be
-non-empty and at most 256 characters. The call advances a durable generation for
-that exact channel and subject, then returns `{ generation, scope }`.
+non-empty and at most 256 characters. Channel definition plus validated params
+is the exact authority target; there is no extra application scope. The call
+advances its durable generation for that subject, then returns
+`{ generation, transportEffect }`.
 
-`scope` tells you how wide the cut was. It is set by the transport, not by you.
+`transportEffect` reports the transport's honest physical capability. It is not
+an OAuth, tenant, Global, or live-query scope.
 
-| Transport     | `scope`                   | What closed                                    |
+| Transport     | `transportEffect`         | What closed                                    |
 | ------------- | ------------------------- | ---------------------------------------------- |
-| SSE           | `"exact-subscription"`    | That one binding, with reason `access_revoked` |
+| SSE           | `"exact-binding"`         | That one binding, with reason `access_revoked` |
 | Pusher/Soketi | `"principal-connections"` | Every current connection for that principal    |
 
 SSE closes the single logical binding. Other channels on the same multiplexed
 stream keep running. Pusher's termination API is user-wide, so QUESTPIE
 terminates the principal's connections and lets the reconnect reauthorize.
 Bindings that are still allowed come straight back. The revoked one does not.
+
+In a managed caller transaction, Pusher termination and authority
+acknowledgement run inline under a bounded call. Provider failure throws and
+rolls back the database transaction; a conservative disconnect may survive a
+later caller rollback. Standalone provider failure leaves the durable cut
+pending. Retry the same domain transition with the same `idempotencyKey`;
+QUESTPIE returns the original generation instead of advancing it twice. Reusing
+that key for another target or subject is a conflict.
+
+<Callout type="info" title="3.x compatibility">
+	The old `channels.revokeAuthority("chatRoom", { params, ... })` method remains
+	as a 3.x compatibility entry point backed by the same ledger. It does not create a second
+	invalidation mechanism.
+</Callout>
 
 <Callout type="warn" title="Managed providers have an in-flight window">
 	Pusher cannot promise that a frame already accepted by the socket will not

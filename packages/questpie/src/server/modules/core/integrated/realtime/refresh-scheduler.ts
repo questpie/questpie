@@ -176,6 +176,7 @@ export async function resolveRealtimeAccessKey<TContext extends AccessContext>(
 ): Promise<string> {
 	let identity: string | undefined;
 	let isolateToEdge = false;
+	let explicitlyShared = false;
 	const extensionsDigest = await contextExtensionsDigest(
 		context["~contextExtensions"],
 	);
@@ -191,6 +192,7 @@ export async function resolveRealtimeAccessKey<TContext extends AccessContext>(
 				new TextEncoder().encode(sharedKey).byteLength <= 256
 			) {
 				identity = `shared:${sharedKey}`;
+				explicitlyShared = true;
 			} else if (
 				sharedKey !== null &&
 				sharedKey !== undefined &&
@@ -205,17 +207,17 @@ export async function resolveRealtimeAccessKey<TContext extends AccessContext>(
 
 	const principal = context.principal;
 	if (!identity) {
-		const userId = principal?.user?.id ?? context.session?.user?.id;
+		const sessionId = principal?.session?.id ?? context.session?.session?.id;
 		if (isolateToEdge) {
 			identity = `edge:${edgeSessionId}`;
-		} else if (typeof userId === "string" && userId) {
-			identity = `principal:${userId}`;
 		} else if (
 			principal?.kind === "oauth" &&
 			typeof principal.tokenId === "string" &&
 			principal.tokenId
 		) {
 			identity = `oauth:${principal.tokenId}`;
+		} else if (typeof sessionId === "string" && sessionId) {
+			identity = `session:${sessionId}`;
 		} else {
 			identity = `edge:${edgeSessionId}`;
 		}
@@ -225,7 +227,9 @@ export async function resolveRealtimeAccessKey<TContext extends AccessContext>(
 	// access rule may read `principal.scopes` — so the same identity can be
 	// entitled to different bytes. The token is part of what decides them.
 	const token =
-		typeof principal?.tokenId === "string" && principal.tokenId
+		!explicitlyShared &&
+		typeof principal?.tokenId === "string" &&
+		principal.tokenId
 			? principal.tokenId
 			: "";
 
@@ -236,7 +240,7 @@ export async function resolveRealtimeAccessKey<TContext extends AccessContext>(
 		context.stage ?? "",
 		context.accessMode ?? "",
 		extensionsDigest ?? "",
-		principal?.kind ?? "",
+		explicitlyShared ? "" : (principal?.kind ?? ""),
 		token,
 	]);
 }

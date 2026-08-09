@@ -50,22 +50,22 @@ Authorization rules:
 
 Framework handlers and hooks receive a generated `channels` service:
 
+Server facade member names are reserved for canonical handle projection;
+existing server collisions keep working through the root API during
+3.x. Client channels only collide with actual controls such as `destroy`,
+`channelCount`, and `subscriberCount`. Rename a colliding file/export to adopt
+handles; keep the wire pattern unchanged.
+
 ```ts
 .handler(async ({ input, channels }) => {
-	return channels.publish("chatRoom", {
-		params: { roomId: input.roomId },
-		event: "message",
-		data: { id: input.id, text: input.text },
-	});
+	const chatRoom = channels.chatRoom({ roomId: input.roomId });
+	return chatRoom.publish("message", { id: input.id, text: input.text });
 });
 
 .hooks({
 	afterChange: [async ({ data, channels }) => {
-		await channels.publish("chatRoom", {
-			params: { roomId: data.roomId },
-			event: "message",
-			data: { id: data.id, text: data.text },
-		});
+		const chatRoom = channels.chatRoom({ roomId: data.roomId });
+		await chatRoom.publish("message", { id: data.id, text: data.text });
 	}],
 });
 ```
@@ -76,26 +76,28 @@ mutation and ordered channel-ledger append. Never import the generated `app` or
 defer lookup through ambient `getContext()`; the injected service is
 generated-type-safe and mutation-context aware.
 
-## Revoke current delivery authority
+## Invalidate current delivery authority
 
 When a membership or authorization mutation removes access, cut the affected
 resolved channel in the same transaction:
 
 ```ts
-await channels.revokeAuthority("chatRoom", {
-	params: { roomId },
+const chatRoom = channels.chatRoom({ roomId });
+
+await chatRoom.invalidateAuthority({
 	subject: { kind: "user", id: removedUserId },
 	idempotencyKey: `chat-room:${roomId}:${removedUserId}:membership-v2`,
 });
 ```
 
-The idempotency key identifies the domain authorization transition. QUESTPIE
-advances a durable per-channel/subject generation and returns
-`{ generation, scope }`. `scope: "exact-subscription"` means the local SSE
-binding is cut without closing unrelated channel bindings.
-`scope: "principal-connections"` means the provider can only conservatively
-terminate every current connection for the signed-in user. Pusher supports the
-`user` subject for that capability.
+The resolved handle is the complete authority target: registry definition plus
+validated params. There is no second tenant/workspace scope. The idempotency key
+identifies one domain authorization transition. QUESTPIE advances the existing
+durable per-channel/subject generation and returns
+`{ generation, transportEffect }`. `transportEffect: "exact-binding"` means
+SSE cut only that logical binding. `"principal-connections"` means the provider
+can only terminate every current connection for the signed-in user. Pusher
+supports the `user` subject for that capability.
 
 Fresh request context, subscribe authorization, and the presence resolver (for
 presence channels) run outside database locks. A short expected-generation
@@ -114,7 +116,13 @@ In a managed caller transaction, Pusher termination and authority
 acknowledgement run inline under a bounded call. Provider failure throws and
 rolls back the database transaction; a conservative disconnect may survive a
 later caller rollback. Standalone provider failure leaves the durable cut
-pending for an idempotent retry.
+pending for an idempotent retry. Reusing the same key for another target or
+subject is a conflict.
+
+The released root method
+`channels.revokeAuthority("chatRoom", { params, subject, idempotencyKey })`
+remains a 3.x compatibility entry point backed by the same ledger. New code
+uses the resolved handle.
 
 Pusher does not provide zero-frame atomicity: a frame already accepted by the
 physical provider connection may arrive while termination is in flight. The
@@ -124,8 +132,9 @@ cut; reconnect and replay reauthorize against current application state.
 ## Client, presence, and TanStack Query
 
 ```ts
-const stop = client.channels.chatRoom.subscribe(
-	{ roomId },
+const chatRoom = client.channels.chatRoom({ roomId });
+
+const stop = chatRoom.subscribe(
 	(message) => {
 		if (message.event === "message") console.log(message.data.text);
 	},
@@ -136,17 +145,10 @@ const stop = client.channels.chatRoom.subscribe(
 	},
 );
 
-await client.channels.chatRoom.publish({
-	params: { roomId },
-	event: "typing",
-	data: { active: true },
-});
+await chatRoom.publish("typing", { active: true });
 
-const members = await client.channels.chatRoom.presence({ roomId });
-const stopPresence = client.channels.chatRoom.subscribePresence(
-	{ roomId },
-	onMembers,
-);
+const members = await chatRoom.presence();
+const stopPresence = chatRoom.subscribePresence(onMembers);
 stop();
 stopPresence();
 ```
@@ -162,7 +164,7 @@ cleanup, and later reconnects.
 
 `presence()` returns one typed snapshot. `subscribePresence()` emits the initial and later rosters, and `presenceIter(params, { signal })` provides the async-generator form. Pusher/Soketi uses native membership; SSE uses Postgres leases across instances and deduplicates multiple connections by authenticated principal. Crash leave converges after the lease TTL.
 
-Async consumers use `client.channels.chatRoom.iter(params, { signal })`. TanStack Query exposes an accumulating event query:
+Async consumers use `chatRoom.iter({ signal })`. TanStack Query exposes an accumulating event query:
 
 ```tsx
 const { data: messages = [] } = useQuery(

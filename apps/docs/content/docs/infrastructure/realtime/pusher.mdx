@@ -65,26 +65,26 @@ handing the blob over. A concurrent revocation discards it before it reaches the
 browser. A shared transport that does not declare this capability is rejected
 before policy runs at all.
 
-## Revocation, honestly
+## Authority invalidation, honestly
 
-`channels.revokeAuthority(channel, { subject })` persists the authorization
-generation in the caller's database transaction. Pusher declares
-`authorityRevocationScope: "principal-connections"`, which is the honest claim:
+`channels.<name>(params).invalidateAuthority({ subject, idempotencyKey })`
+persists the authorization generation in the caller's database transaction.
+Pusher reports `transportEffect: "principal-connections"`, which is the honest claim:
 it can terminate every current connection for one user, but it cannot terminate
 one logical channel subscription. After termination, fresh per-channel
 authorization readmits the still-valid bindings and denies the revoked one. The
 subject must be a `user`.
 
-| Caller                       | Failure behavior                                                                             |
-| ---------------------------- | -------------------------------------------------------------------------------------------- |
-| Inside a managed transaction | Termination and acknowledgement run inline. A failure throws and rolls back                  |
-| Standalone command           | The durable cut stands, provider dispatch stays fail-closed, an idempotent retry finishes it |
+In a managed caller transaction, provider termination and authority
+acknowledgement run inline under a bounded call. Provider failure throws and
+rolls back the database transaction; a conservative disconnect may survive a
+later caller rollback. Standalone provider failure leaves the durable cut
+pending for an idempotent retry while provider dispatch stays fail-closed.
 
 <Callout type="warn" title="Revocation is not frame-atomic">
 	A frame Pusher already accepted can still arrive during termination, and a
-	conservative disconnect can outlive a later database rollback. A custom shared
-	transport must declare its own revocation scope. QUESTPIE never assumes an
-	unknown provider revokes exactly.
+	custom shared transport must declare its own transport effect. QUESTPIE never
+	assumes an unknown provider revokes exactly.
 </Callout>
 
 ## Direct client events

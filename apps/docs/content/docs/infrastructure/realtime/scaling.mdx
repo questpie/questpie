@@ -59,74 +59,97 @@ partitions, because ordinary writes move rows across those boundaries.
 ## What a subscription group is keyed by
 
 Two subscribers share one group, and therefore one query per wake, only when
-the topic shape matches and all five of these agree.
+the authorized topic shape and all framework-owned dimensions agree.
 
-| Part        | Value                                                                     |
-| ----------- | ------------------------------------------------------------------------- |
-| Identity    | `shared:<key>`, `principal:<userId>`, `oauth:<tokenId>`, or `edge:<uuid>` |
-| Scope       | Whatever `subscriptionScope` returned, or `null`                          |
-| Locale      | The topic's content locale                                                |
-| Stage       | The resolved publish stage                                                |
-| Access mode | `user` or `system`                                                        |
+| Part        | Value                                                                      |
+| ----------- | -------------------------------------------------------------------------- |
+| Identity    | `shared:<key>`, `session:<sessionId>`, `oauth:<tokenId>`, or `edge:<uuid>` |
+| Context     | The deterministic digest of `appConfig.context` extensions                 |
+| Locale      | The topic's content locale                                                 |
+| Stage       | The resolved publish stage                                                 |
+| Access mode | `user` or `system`                                                         |
 
-### `subscriptionScope`
+The safe default is session-isolated: two sessions belonging to the same user
+do not share a computation. OAuth tokens are isolated by token id and anonymous
+connections by edge id. This matters because field access and `afterRead` may
+produce different bytes even when row access produced the same `where`.
 
-One resolver on the app config, run once per realtime connection and frozen for
-its lifetime. Reconnecting resolves it again.
+### Tenant authority belongs in context and access
 
-```ts title="src/questpie/server/questpie.config.ts"
-import { runtimeConfig } from "questpie/app";
+Derive the selected tenant once in `appConfig.context`, validate that selection
+there, and apply it in collection/global read access. Realtime then runs the
+same authorized CRUD read as a normal `find()`.
 
-import env from "./env";
+```ts title="src/questpie/server/config/app.ts"
+import { appConfig } from "questpie/app";
 
-export default runtimeConfig({
-	db: { url: env.DATABASE_URL },
-	realtime: {
-		subscriptionScope: ({ request, session }) => {
-			if (!session) return null;
-			return request?.headers.get("x-workspace-id") ?? null;
-		},
+export default appConfig({
+	context: async ({ request, session, collections }) => {
+		const workspaceId = request.headers.get("x-workspace-id");
+		if (!workspaceId || !session?.user) return { workspaceId: null };
+
+		const member = await collections.workspaceMembers.findOne({
+			where: { workspace: workspaceId, user: session.user.id },
+		});
+		if (!member) throw new Error("No access to this workspace");
+
+		return { workspaceId };
 	},
 });
 ```
 
-`null` or `undefined` means explicitly unscoped. Any other value must be a
-non-empty string of at most 256 UTF-8 bytes, or QUESTPIE throws for you. The
-value only ever appears inside the server group key, never in an observer label
-or an error payload.
-
-<Callout type="warn" title="A scope partitions work, it does not authorize">
-	A scope decides who shares a computation — it is not a second check on top of
-	one. Within a group the snapshot is computed once, by the subscriber that
-	created it, and the resulting bytes are sent to everyone in that group.
-
-    Row-level rules are safe by construction, because the access predicate is
-    merged into the topic and the topic is part of the group key, so subscribers
-    with different row scopes land in different groups. What is **not** re-run
-    per subscriber is field-level access, `columns` and `afterRead`. Widen a key
-    only where every principal that resolves to it is entitled to byte-identical
-    rows.
-
-</Callout>
-
-### `accessCacheKey`
-
-The identity part of the key isolates each principal by default, and
-`edge:<uuid>` is minted fresh per connection, so anonymous subscribers never
-share with each other. A collection or global can override that with
-`realtime.accessCacheKey`, the only way many principals collapse into one group
-and one query, and the only source of the `shared:` form.
-
-```ts
-export const posts = collection("posts")
-	.access({ read: true })
-	.options({ realtime: { accessCacheKey: () => "public" } });
+```ts title="src/questpie/server/collections/projects.ts"
+export default collection("projects").access({
+	read: ({ workspaceId }) => (workspaceId ? { workspace: workspaceId } : false),
+});
 ```
 
-Return the same deterministic key only where you can prove the output is
-identical for every principal that gets it. The key is bounded to 256 UTF-8
-bytes as well. A resolver that throws, or returns a non-string or an over-long
-key, isolates that subscriber to its own edge group instead of a shared one.
+If this filter is missing, both normal CRUD and realtime can return cross-tenant
+rows. A realtime cache setting cannot repair an incorrect access rule.
+
+<Callout type="warn" title="subscriptionScope is deprecated">
+	`realtime.subscriptionScope` was a second, global scheduler partition. It did
+	not authorize rows and could mask where tenant selection actually belonged. It
+	remains as a 3.x compatibility dimension and is removed in QUESTPIE 4. Move
+	request-derived tenant state to `appConfig.context`, enforce it in
+	collection/global access, then remove `subscriptionScope` from runtime config.
+</Callout>
+
+### `accessCacheKey`: compute once, fan out
+
+The identity part of the key isolates each session, OAuth token, or anonymous
+edge by default. A collection or global can replace that identity with
+`realtime.accessCacheKey`, the explicit way many subscribers collapse into one
+group and one computation.
+
+```ts
+export const publicAnnouncements = collection("public-announcements")
+	.access({ read: true })
+	.options({
+		realtime: {
+			accessCacheKey: () => "public-announcements:v1",
+		},
+	});
+```
+
+If 100,000 clients subscribe to the same authorized query, one server instance
+now runs one database computation per refresh and fans the resulting bytes out
+to those 100,000 subscribers. With ten application replicas, each replica owns
+its local group, so the fleet may run up to ten computations rather than one
+global computation.
+
+Return the same deterministic key only where you can prove this byte-identical
+contract:
+
+> For the same effective authorized topic and framework-owned dimensions,
+> every context returning this key produces identical output, including field
+> access, relations, output hooks, and `afterRead`.
+
+QUESTPIE still includes the effective query plus read-access predicate, context
+extension digest, locale, stage, access mode, and delivery mode in the group
+key. `accessCacheKey` widens compute sharing; it never grants access or removes
+those dimensions. The key is bounded to 256 UTF-8 bytes. A resolver that throws
+or returns an invalid or over-long key fails closed to an isolated edge group.
 
 ## Conservative candidate routing
 

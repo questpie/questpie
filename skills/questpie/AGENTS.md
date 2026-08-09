@@ -125,8 +125,8 @@ Files starting with `_`, `index.ts`, declaration files, tests, and specs are int
 | CRUD API          | `references/crud-api.md`                | `find`, `create`, `updateById`/`updateMany`, `deleteById`/`deleteMany`, atomic conditional updates, globals API                                                    |
 | Seeds             | `references/seeds.md`                   | `seed()` vs `seed.steps()`, idempotency, checkpointed steps, categories, `dependsOn`, `undo`, `autoSeed`, seed CLI                                                 |
 | Query Operators   | `references/query-operators.md`         | `where` clause operators by field type                                                                                                                             |
-| Realtime          | `references/realtime.md`                | Transactional outbox, reconciliation, live queries, broker/client transport seams, admission                                                                       |
-| Channels          | `references/channels.md`                | Typed application events, authorization, publish contexts, client, presence, TanStack Query                                                                        |
+| Realtime          | `references/realtime.md`                | Transactional outbox, live queries, session-isolated sharing, `accessCacheKey` compute-once fan-out, admission                                                     |
+| Channels          | `references/channels.md`                | Typed resolved handles, exact authority invalidation, events, authorization, client, presence, TanStack Query                                                      |
 | Collaboration     | `references/collaborative-documents.md` | Collection/global CRDT aggregates, Yjs engines, generated client, authority, lifecycle, Fetch + shared realtime transport                                          |
 
 ### Infrastructure
@@ -3660,13 +3660,11 @@ transaction. Their `db` and injected services share that scope. A thrown error
 propagates and rolls back the mutation plus transaction-joined work:
 
 ```ts
-.hooks({
+	.hooks({
 	afterChange: async ({ data, channels }) => {
-		await channels.publish("postActivity", {
-			params: { postId: data.id },
-			event: "changed",
-			data: { id: data.id },
-		});
+		await channels
+			.postActivity({ postId: data.id })
+			.publish("changed", { id: data.id });
 	},
 })
 ```
@@ -6289,7 +6287,10 @@ Enable it with `realtime: true`. Do not write CRUD hooks to emit live-query chan
 3. An unconditional reconciliation poll drains missed outbox rows. Default: 15s with push, 2s without; provider failure tightens to at most 2s.
 4. The server re-runs matching queries under the subscriber's session, including row/field access and `afterRead`, then a `ClientTransport` delivers authorized frames.
 
-The broker is a latency hint; the transactional outbox plus reconciliation is the guarantee. Brokers must never carry rows or snapshots. Equivalent snapshot work is shared per principal by default, never across users unless the application proves deterministic access equivalence.
+The broker is a latency hint; the transactional outbox plus reconciliation is
+the guarantee. Brokers must never carry rows or snapshots. Equivalent snapshot
+work is session-, OAuth-token-, or anonymous-edge-isolated by default. Widen it
+only with an explicit `accessCacheKey` proof of byte-identical output.
 
 ## Client usage
 
@@ -6380,12 +6381,22 @@ both `client.realtime` and
 `client.channels` (or recreate the client) so the shared physical connection is
 also recreated under the new identity.
 
-Channel-scoped authority cuts use the generic `channels.revokeAuthority()` seam.
-SSE closes only the denied logical binding. Pusher's honest capability is
-`principal-connections`: it terminates all current connections for that user,
+Exact Channel authority invalidation uses the resolved handle:
+
+```ts
+await channels.chatRoom({ roomId }).invalidateAuthority({
+	subject: { kind: "user", id: removedUserId },
+	idempotencyKey,
+});
+```
+
+The resolved Channel plus subject is the complete target; no second authority
+scope is attached. SSE reports `exact-binding`. Pusher's honest transport effect
+is `principal-connections`: it terminates current connections for that user,
 then fresh user/channel authentication allows still-authorized bindings to
-return. See `references/channels.md` for the transaction and in-flight-frame
-contract.
+return. The old root `revokeAuthority()` remains a 3.x forward to the
+same ledger. See `references/channels.md` for commit, retry, and in-flight-frame
+contracts.
 
 ## Admission and lifecycle
 
@@ -6421,16 +6432,15 @@ row.
   `principalId`, `recipientId`, or `audienceId` on ordinary realtime rows.
 - Let TanStack DB compose joins, ordering, limits, and derived live views from
   authorized normalized rows.
-- At admission, freeze only stable principal, server-derived scope, topic
-  locale, stage, and access mode. Never store expanded membership or permission
-  id sets in subscription context.
-- Resolve scope with
-  `realtime.subscriptionScope(({ request }) => request?.headers.get("x-scope-id") ?? null)`.
-  `null` means unscoped; a value is capped at 256 UTF-8 bytes. A scope switch
-  opens a new subscription and bootstraps a fresh client store.
+- Derive request-selected tenant/workspace state in `appConfig.context`, validate
+  it there, and enforce it in collection/global read access. Realtime runs the
+  same authorized CRUD pipeline; it adds no tenant filter.
+- `realtime.subscriptionScope` is compatibility-only in 3.x and removed in 4.0. It was
+  only a global scheduler partition, never authority. Remove it after migrating
+  tenant state into context and access.
 - Collection/global `realtime.accessCacheKey` is an explicit proof that output
-  may be shared across principals within the frozen scope tuple. Its key is
-  capped at 256 UTF-8 bytes; invalid or throwing resolvers stay edge-isolated.
+  may be shared more widely. Its key is capped at 256 UTF-8 bytes; invalid or
+  throwing resolvers stay edge-isolated.
 - Mutable membership/access stays in the database. Watched-resource changes
   trigger targeted reset; periodic delta re-bootstrap is only the safety net.
 
@@ -6467,8 +6477,16 @@ that `@questpie/tanstack-db` matches optimistic writes against. Typed channels,
 channel presence, and CRDT document sync are unaffected; CRDT canonical
 projection still writes its own outbox row per commit.
 
-A personalized relation query for 100,000 principals in one shared scope can
-cause 100,000 authoritative recomputations. Snapshot fallback is correct but
+A public collection with `accessCacheKey: () => "public:v1"` can compute one
+authorized query per refresh per server instance and fan the bytes out to
+100,000 equivalent subscribers. The key is a proof that field access, relations,
+output hooks, and `afterRead` are byte-identical for every matching context. The
+effective authorized topic, context extension digest, locale, stage, access
+mode, and delivery mode still partition groups. This is a local scheduler
+optimization: ten server replicas may run up to ten computations.
+
+A personalized relation query for 100,000 isolated contexts can still cause
+100,000 authoritative recomputations. Snapshot fallback is correct but
 expensive. Prefer materialized inbox rows with direct `recipientId`, a shared
 typed audience channel, an invalidation/refetch event, or a normal query.
 `bun --cwd packages/questpie run bench:realtime:routing` runs the deterministic
@@ -6531,22 +6549,22 @@ Authorization rules:
 
 Framework handlers and hooks receive a generated `channels` service:
 
+Server facade member names are reserved for canonical handle projection;
+existing server collisions keep working through the root API during
+3.x. Client channels only collide with actual controls such as `destroy`,
+`channelCount`, and `subscriberCount`. Rename a colliding file/export to adopt
+handles; keep the wire pattern unchanged.
+
 ```ts
 .handler(async ({ input, channels }) => {
-	return channels.publish("chatRoom", {
-		params: { roomId: input.roomId },
-		event: "message",
-		data: { id: input.id, text: input.text },
-	});
+	const chatRoom = channels.chatRoom({ roomId: input.roomId });
+	return chatRoom.publish("message", { id: input.id, text: input.text });
 });
 
 .hooks({
 	afterChange: [async ({ data, channels }) => {
-		await channels.publish("chatRoom", {
-			params: { roomId: data.roomId },
-			event: "message",
-			data: { id: data.id, text: data.text },
-		});
+		const chatRoom = channels.chatRoom({ roomId: data.roomId });
+		await chatRoom.publish("message", { id: data.id, text: data.text });
 	}],
 });
 ```
@@ -6557,26 +6575,28 @@ mutation and ordered channel-ledger append. Never import the generated `app` or
 defer lookup through ambient `getContext()`; the injected service is
 generated-type-safe and mutation-context aware.
 
-## Revoke current delivery authority
+## Invalidate current delivery authority
 
 When a membership or authorization mutation removes access, cut the affected
 resolved channel in the same transaction:
 
 ```ts
-await channels.revokeAuthority("chatRoom", {
-	params: { roomId },
+const chatRoom = channels.chatRoom({ roomId });
+
+await chatRoom.invalidateAuthority({
 	subject: { kind: "user", id: removedUserId },
 	idempotencyKey: `chat-room:${roomId}:${removedUserId}:membership-v2`,
 });
 ```
 
-The idempotency key identifies the domain authorization transition. QUESTPIE
-advances a durable per-channel/subject generation and returns
-`{ generation, scope }`. `scope: "exact-subscription"` means the local SSE
-binding is cut without closing unrelated channel bindings.
-`scope: "principal-connections"` means the provider can only conservatively
-terminate every current connection for the signed-in user. Pusher supports the
-`user` subject for that capability.
+The resolved handle is the complete authority target: registry definition plus
+validated params. There is no second tenant/workspace scope. The idempotency key
+identifies one domain authorization transition. QUESTPIE advances the existing
+durable per-channel/subject generation and returns
+`{ generation, transportEffect }`. `transportEffect: "exact-binding"` means
+SSE cut only that logical binding. `"principal-connections"` means the provider
+can only terminate every current connection for the signed-in user. Pusher
+supports the `user` subject for that capability.
 
 Fresh request context, subscribe authorization, and the presence resolver (for
 presence channels) run outside database locks. A short expected-generation
@@ -6595,7 +6615,13 @@ In a managed caller transaction, Pusher termination and authority
 acknowledgement run inline under a bounded call. Provider failure throws and
 rolls back the database transaction; a conservative disconnect may survive a
 later caller rollback. Standalone provider failure leaves the durable cut
-pending for an idempotent retry.
+pending for an idempotent retry. Reusing the same key for another target or
+subject is a conflict.
+
+The released root method
+`channels.revokeAuthority("chatRoom", { params, subject, idempotencyKey })`
+remains a 3.x compatibility entry point backed by the same ledger. New code
+uses the resolved handle.
 
 Pusher does not provide zero-frame atomicity: a frame already accepted by the
 physical provider connection may arrive while termination is in flight. The
@@ -6605,8 +6631,9 @@ cut; reconnect and replay reauthorize against current application state.
 ## Client, presence, and TanStack Query
 
 ```ts
-const stop = client.channels.chatRoom.subscribe(
-	{ roomId },
+const chatRoom = client.channels.chatRoom({ roomId });
+
+const stop = chatRoom.subscribe(
 	(message) => {
 		if (message.event === "message") console.log(message.data.text);
 	},
@@ -6617,17 +6644,10 @@ const stop = client.channels.chatRoom.subscribe(
 	},
 );
 
-await client.channels.chatRoom.publish({
-	params: { roomId },
-	event: "typing",
-	data: { active: true },
-});
+await chatRoom.publish("typing", { active: true });
 
-const members = await client.channels.chatRoom.presence({ roomId });
-const stopPresence = client.channels.chatRoom.subscribePresence(
-	{ roomId },
-	onMembers,
-);
+const members = await chatRoom.presence();
+const stopPresence = chatRoom.subscribePresence(onMembers);
 stop();
 stopPresence();
 ```
@@ -6643,7 +6663,7 @@ cleanup, and later reconnects.
 
 `presence()` returns one typed snapshot. `subscribePresence()` emits the initial and later rosters, and `presenceIter(params, { signal })` provides the async-generator form. Pusher/Soketi uses native membership; SSE uses Postgres leases across instances and deduplicates multiple connections by authenticated principal. Crash leave converges after the lease TTL.
 
-Async consumers use `client.channels.chatRoom.iter(params, { signal })`. TanStack Query exposes an accumulating event query:
+Async consumers use `chatRoom.iter({ signal })`. TanStack Query exposes an accumulating event query:
 
 ```tsx
 const { data: messages = [] } = useQuery(
@@ -10564,12 +10584,10 @@ Throttle noisy producers such as cursor/typing updates, keep payloads small, and
 `.authorize(...).presence(resolver)` creates a typed presence channel. The client can read once, subscribe, iterate, or use a latest-snapshot TanStack query:
 
 ```ts
-const members = await client.channels.chatRoom.presence({ roomId });
-const stop = client.channels.chatRoom.subscribePresence({ roomId }, onMembers);
-for await (const members of client.channels.chatRoom.presenceIter(
-	{ roomId },
-	{ signal },
-)) {
+const chatRoom = client.channels.chatRoom({ roomId });
+const members = await chatRoom.presence();
+const stop = chatRoom.subscribePresence(onMembers);
+for await (const members of chatRoom.presenceIter({ signal })) {
 	onMembers(members);
 }
 ```
@@ -10597,7 +10615,13 @@ client.channels.channelCount;
 client.channels.subscriberCount;
 ```
 
-Equivalent server refresh work is shared per principal by default. Never share across principals without proving deterministic row/field access and `afterRead` equivalence.
+Equivalent server refresh work is isolated by authenticated session, OAuth token,
+or anonymous edge by default. A collection/global `accessCacheKey` can collapse
+100,000 equivalent subscribers into one computation per refresh per server
+instance, but only as an explicit proof that field access, relations, output
+hooks, and `afterRead` produce byte-identical output. Tenant authority belongs
+in `appConfig.context` plus collection/global access; `subscriptionScope` is
+compatibility-only during 3.x.
 
 ## Checklist
 

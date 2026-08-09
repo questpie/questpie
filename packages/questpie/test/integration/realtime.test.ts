@@ -3577,6 +3577,47 @@ describe("realtime matrix", () => {
 			);
 		});
 
+		it("isolates separate sessions for the same user by default", async () => {
+			const adapter = new MockChangeBroker();
+			let pipelineRuns = 0;
+			const items = collection("items")
+				.fields(({ f }) => ({ name: f.textarea().required() }))
+				.hooks({ beforeRead: () => void (pipelineRuns += 1) })
+				.access({ read: true });
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { changeBroker: adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+
+			const sessions = [
+				createMockSession({ id: "alice" }),
+				createMockSession({ id: "alice" }),
+			];
+			const readers = await Promise.all(
+				sessions.map(async (session) => {
+					const response = await realtimeSubscribe(
+						setup.app,
+						createRealtimeRequest([collectionTopic("items")]),
+						{},
+						{
+							appContext: createTestContext({
+								session: session as any,
+								accessMode: "user",
+							}),
+						},
+						{ accessMode: "user" },
+					);
+					const reader = createSSEReader(response.body!);
+					await reader.readSnapshot();
+					return reader;
+				}),
+			);
+
+			expect(pipelineRuns).toBe(2);
+			await Promise.all(readers.map((reader) => reader.close()));
+		});
+
 		it("isolates row, field, and afterRead output between principals", async () => {
 			const adapter = new MockChangeBroker();
 			const documents = collection("documents")

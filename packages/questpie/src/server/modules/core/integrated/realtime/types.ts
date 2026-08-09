@@ -167,6 +167,10 @@ export interface RealtimeConfig {
 	/**
 	 * Resolve one stable server-owned scope at admission. `null`/`undefined`
 	 * means explicitly unscoped; switching scope requires a new subscription.
+	 *
+	 * @deprecated Tenant selection belongs in `appConfig.context` and read
+	 * access. Use collection/global `realtime.accessCacheKey` only when widening
+	 * compute sharing for byte-identical output. Removed in QUESTPIE 4.
 	 */
 	subscriptionScope?: RealtimeSubscriptionScopeResolver;
 	/** Diagnostic event sink. Observer failures are isolated from delivery. */

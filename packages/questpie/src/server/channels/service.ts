@@ -8,6 +8,10 @@ import {
 	type ChannelEventReceipt,
 	hashResolvedChannel,
 } from "#questpie/server/modules/core/integrated/realtime/channel-event-ledger.js";
+import {
+	isServerChannelFacadeReservedKey,
+	type ServerChannelFacadeReservedKey,
+} from "#questpie/shared/channel-facade.js";
 
 import type { ChannelAuthoritySubject } from "./authority.js";
 import {
@@ -74,6 +78,11 @@ export type ChannelAuthorityRevocationReceipt = Readonly<{
 	generation: number;
 }>;
 
+export type ChannelAuthorityInvalidationReceipt = Readonly<{
+	transportEffect: "exact-binding" | "principal-connections";
+	generation: number;
+}>;
+
 export type ChannelServiceContext = AppContext & {
 	accessMode?: string;
 	db?: AppendChannelEventOptions["db"];
@@ -110,6 +119,66 @@ export type ChannelAuthorityRevocationInput<
 }> &
 	ParamsInput<TDefinition>;
 
+export type ChannelAuthorityInvalidationInput = Readonly<{
+	subject: ChannelAuthoritySubject;
+	idempotencyKey: string;
+}>;
+
+type BoundPublishMethod<TDefinition extends AnyChannelDefinition> = <
+	TEvent extends keyof ChannelEventsOf<TDefinition> & string,
+>(
+	event: TEvent,
+	data: z.input<ChannelEventsOf<TDefinition>[TEvent]>,
+) => Promise<ChannelPublishReceipt>;
+
+type PresenceHandle<TDefinition extends AnyChannelDefinition> = [
+	ChannelPresenceOf<TDefinition>,
+] extends [never]
+	? {}
+	: {
+			resolvePresence(): Promise<ChannelPresenceOf<TDefinition>>;
+		};
+
+export type ResolvedChannelHandle<TDefinition extends AnyChannelDefinition> =
+	Readonly<
+		{
+			publish: BoundPublishMethod<TDefinition>;
+			authorize(verb: "subscribe" | "publish"): Promise<boolean>;
+			invalidateAuthority(
+				input: ChannelAuthorityInvalidationInput,
+			): Promise<ChannelAuthorityInvalidationReceipt>;
+		} & PresenceHandle<TDefinition>
+	>;
+
+type ChannelHandle<TDefinition extends AnyChannelDefinition> =
+	keyof ChannelParamsOf<TDefinition> extends never
+		? ResolvedChannelHandle<TDefinition>
+		: (
+				params: ChannelParamsOf<TDefinition>,
+			) => ResolvedChannelHandle<TDefinition>;
+
+type LegacyChannelsFacade<TChannels extends ChannelDefinitions> = Pick<
+	ChannelsService<TChannels>,
+	| "authorize"
+	| "getDefinition"
+	| "preparePublish"
+	| "preparePublishRequest"
+	| "publish"
+	| "publishBatch"
+	| "publishPrepared"
+	| "resolveName"
+	| "resolvePresence"
+	| "revokeAuthority"
+>;
+
+export type Channels<TChannels extends ChannelDefinitions> =
+	LegacyChannelsFacade<TChannels> & {
+		readonly [TChannel in Exclude<
+			keyof TChannels,
+			ServerChannelFacadeReservedKey
+		>]: ChannelHandle<TChannels[TChannel]>;
+	};
+
 export type ChannelPublishRequest<TChannels extends ChannelDefinitions> = {
 	[TChannel in keyof TChannels & string]: {
 		channel: TChannel;
@@ -133,6 +202,28 @@ function isSystemContext(context: StoredChannelServiceContext): boolean {
 	if (context.accessMode === "user") return false;
 	if (context.principal?.kind === "system") return true;
 	return !context.session && !context.principal;
+}
+
+function revokeResolvedChannelAuthority(
+	publisher: ChannelPublisher,
+	db: AppendChannelEventOptions["db"] | undefined,
+	resolvedName: string,
+	input: ChannelAuthorityInvalidationInput,
+): Promise<ChannelAuthorityRevocationReceipt> {
+	if (!input.subject.id || input.subject.id.length > 256) {
+		throw new Error("Channel authority subject is invalid");
+	}
+	if (!publisher.revokeChannelAuthority) {
+		throw new Error("Channel authority revocation is unavailable");
+	}
+	return publisher.revokeChannelAuthority(
+		{
+			channel: resolvedName,
+			subject: input.subject,
+			idempotencyKey: input.idempotencyKey,
+		},
+		{ db },
+	);
 }
 
 /** Request-bound typed facade over the shared realtime client transport. */
@@ -226,6 +317,9 @@ export class ChannelsService<
 	 * In collection/global hooks, use the injected `{ channels }` argument.
 	 * Contextless update/delete calls do not establish an ALS scope, so resolving
 	 * the service later through ambient `getContext()` is not reliable there.
+	 *
+	 * @deprecated Use `channels.<name>(params).publish(event, data)`. This
+	 * compatibility method remains available throughout QUESTPIE 3.x.
 	 */
 	async publish<TChannel extends keyof TChannels & string>(
 		channel: TChannel,
@@ -241,26 +335,22 @@ export class ChannelsService<
 	 * The provider-neutral receipt documents whether the configured transport
 	 * closed the exact logical subscription or conservatively terminated all
 	 * physical connections for that principal.
+	 *
+	 * @deprecated Use
+	 * `channels.<name>(params).invalidateAuthority({ subject, idempotencyKey })`.
+	 * This compatibility method remains available throughout QUESTPIE 3.x.
 	 */
 	revokeAuthority<TChannel extends keyof TChannels & string>(
 		channel: TChannel,
 		input: ChannelAuthorityRevocationInput<TChannels[TChannel]>,
 	): Promise<ChannelAuthorityRevocationReceipt> {
-		if (!input.subject.id || input.subject.id.length > 256) {
-			throw new Error("Channel authority subject is invalid");
-		}
 		const params = (input.params ?? {}) as ChannelParamsOf<TChannels[TChannel]>;
 		const resolvedName = this.resolveName(channel, params);
-		if (!this.publisher.revokeChannelAuthority) {
-			throw new Error("Channel authority revocation is unavailable");
-		}
-		return this.publisher.revokeChannelAuthority(
-			{
-				channel: resolvedName,
-				subject: input.subject,
-				idempotencyKey: input.idempotencyKey,
-			},
-			{ db: this.context.db },
+		return revokeResolvedChannelAuthority(
+			this.publisher,
+			this.context.db,
+			resolvedName,
+			input,
 		);
 	}
 
@@ -431,4 +521,92 @@ export class ChannelsService<
 			error,
 		);
 	}
+}
+
+/** Create the canonical registry-first Channel facade used by AppContext. */
+export function createChannels<
+	TChannels extends ChannelDefinitions = ChannelDefinitions,
+>(
+	definitions: TChannels,
+	publisher: ChannelPublisher,
+	context: ChannelServiceContext,
+	security: ChannelSecurityConfig = {},
+): Channels<TChannels> {
+	const service = new ChannelsService(
+		definitions,
+		publisher,
+		context,
+		security,
+	);
+	const handles = new Map<string, unknown>();
+
+	const resolveHandle = <TChannel extends keyof TChannels & string>(
+		channel: TChannel,
+		params: ChannelParamsOf<TChannels[TChannel]>,
+	): ResolvedChannelHandle<TChannels[TChannel]> => {
+		const boundParams = Object.freeze({ ...params }) as ChannelParamsOf<
+			TChannels[TChannel]
+		>;
+		const resolvedName = service.resolveName(channel, boundParams);
+		return Object.freeze({
+			publish: <
+				TEvent extends keyof ChannelEventsOf<TChannels[TChannel]> & string,
+			>(
+				event: TEvent,
+				data: z.input<ChannelEventsOf<TChannels[TChannel]>[TEvent]>,
+			) =>
+				service
+					.preparePublishRequest(channel, {
+						params: boundParams,
+						event,
+						data,
+					})
+					.then((prepared) => service.publishPrepared(prepared)),
+			authorize: (verb: "subscribe" | "publish") =>
+				service.authorize(channel, boundParams, verb),
+			resolvePresence: () => service.resolvePresence(channel, boundParams),
+			invalidateAuthority: async (input: ChannelAuthorityInvalidationInput) => {
+				const receipt = await revokeResolvedChannelAuthority(
+					publisher,
+					context.db,
+					resolvedName,
+					input,
+				);
+				return {
+					generation: receipt.generation,
+					transportEffect:
+						receipt.scope === "exact-subscription"
+							? "exact-binding"
+							: "principal-connections",
+				};
+			},
+		}) as ResolvedChannelHandle<TChannels[TChannel]>;
+	};
+
+	return new Proxy(service, {
+		get(target, property, receiver) {
+			if (
+				typeof property !== "string" ||
+				isServerChannelFacadeReservedKey(property)
+			) {
+				const value = Reflect.get(target, property, receiver);
+				return typeof value === "function" ? value.bind(target) : value;
+			}
+			const definition = Object.hasOwn(definitions, property)
+				? definitions[property]
+				: undefined;
+			if (!definition) {
+				const value = Reflect.get(target, property, receiver);
+				return typeof value === "function" ? value.bind(target) : value;
+			}
+			const cached = handles.get(property);
+			if (cached) return cached;
+			const handle = definition.pattern.includes("[")
+				? (params: Record<string, string>) =>
+						resolveHandle(property, params as never)
+				: resolveHandle(property, {} as never);
+			handles.set(property, handle);
+			return handle;
+		},
+	}) as Channels<TChannels>;
 }

@@ -259,7 +259,7 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 	it("emits channels in the app and client config types", () => {
 		expect(code).toContain("export type AppChannels = _ModuleChannels;");
 		expect(code).toContain("\tchannels: AppChannels;");
-		expect(code).toContain("\tchannels: ChannelsService<AppChannels>;");
+		expect(code).toContain("\tchannels: Channels<AppChannels>;");
 		expect(code).toContain(
 			'Omit<QuestpieConfig, "app" | "db" | "collections" | "channels"',
 		);

@@ -65,7 +65,7 @@ subscribing again from now and accepting the hole.
 fires once the server has authorized that subscription and replay has run dry.
 
 ```ts
-client.channels.chatRoom.subscribe({ roomId }, render, {
+client.channels.chatRoom({ roomId }).subscribe(render, {
 	onReady: () => setCaughtUp(true),
 });
 ```

@@ -6,6 +6,7 @@ import { collection } from "../../src/exports/index.js";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
 import { channel } from "../../src/server/channels/channel-builder.js";
 import { ChannelTokenBucketLimiter } from "../../src/server/channels/security.js";
+import { createChannels } from "../../src/server/channels/service.js";
 import { questpieChannelAuthorityRevocationTable } from "../../src/server/modules/core/integrated/realtime/collection.js";
 import type { RealtimeObservation } from "../../src/server/modules/core/integrated/realtime/observer.js";
 import type { PusherProvider } from "../../src/server/modules/core/integrated/realtime/pusher-transport.js";
@@ -653,15 +654,14 @@ describe("channel module routes", () => {
 			identityKey: "provider-secret",
 		});
 		const allowedSpaces = new Set(["a", "b"]);
+		const definitions = {
+			space: channel("space-[spaceId]").authorize(
+				({ params, allowedSpaces: current }: any) =>
+					current.has(params.spaceId),
+			),
+		};
 		const setup = await buildMockApp(
-			{
-				channels: {
-					space: channel("space-[spaceId]").authorize(
-						({ params, allowedSpaces: current }: any) =>
-							current.has(params.spaceId),
-					),
-				},
-			},
+			{ channels: definitions },
 			{
 				app: { url: "https://app.example.com" },
 				realtime: {
@@ -683,10 +683,18 @@ describe("channel module routes", () => {
 		});
 
 		allowedSpaces.delete("a");
-		await setup.app.realtime!.revokeChannelAuthority({
-			channel: "private-space-a",
-			subject: { kind: "user", id: "user-1" },
-			idempotencyKey: "space-a:user-1:membership-v3",
+		const channels = createChannels(definitions, setup.app.realtime!, {
+			accessMode: "system",
+			db: setup.app.db,
+		} as any);
+		await expect(
+			channels.space({ spaceId: "a" }).invalidateAuthority({
+				subject: { kind: "user", id: "user-1" },
+				idempotencyKey: "space-a:user-1:membership-v3",
+			}),
+		).resolves.toEqual({
+			generation: 1,
+			transportEffect: "principal-connections",
 		});
 		expect(terminated).toHaveLength(1);
 

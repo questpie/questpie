@@ -23,7 +23,10 @@ Enable it with `realtime: true`. Do not write CRUD hooks to emit live-query chan
 3. An unconditional reconciliation poll drains missed outbox rows. Default: 15s with push, 2s without; provider failure tightens to at most 2s.
 4. The server re-runs matching queries under the subscriber's session, including row/field access and `afterRead`, then a `ClientTransport` delivers authorized frames.
 
-The broker is a latency hint; the transactional outbox plus reconciliation is the guarantee. Brokers must never carry rows or snapshots. Equivalent snapshot work is shared per principal by default, never across users unless the application proves deterministic access equivalence.
+The broker is a latency hint; the transactional outbox plus reconciliation is
+the guarantee. Brokers must never carry rows or snapshots. Equivalent snapshot
+work is session-, OAuth-token-, or anonymous-edge-isolated by default. Widen it
+only with an explicit `accessCacheKey` proof of byte-identical output.
 
 ## Client usage
 
@@ -114,12 +117,22 @@ both `client.realtime` and
 `client.channels` (or recreate the client) so the shared physical connection is
 also recreated under the new identity.
 
-Channel-scoped authority cuts use the generic `channels.revokeAuthority()` seam.
-SSE closes only the denied logical binding. Pusher's honest capability is
-`principal-connections`: it terminates all current connections for that user,
+Exact Channel authority invalidation uses the resolved handle:
+
+```ts
+await channels.chatRoom({ roomId }).invalidateAuthority({
+	subject: { kind: "user", id: removedUserId },
+	idempotencyKey,
+});
+```
+
+The resolved Channel plus subject is the complete target; no second authority
+scope is attached. SSE reports `exact-binding`. Pusher's honest transport effect
+is `principal-connections`: it terminates current connections for that user,
 then fresh user/channel authentication allows still-authorized bindings to
-return. See `references/channels.md` for the transaction and in-flight-frame
-contract.
+return. The old root `revokeAuthority()` remains a 3.x forward to the
+same ledger. See `references/channels.md` for commit, retry, and in-flight-frame
+contracts.
 
 ## Admission and lifecycle
 
@@ -155,16 +168,15 @@ row.
   `principalId`, `recipientId`, or `audienceId` on ordinary realtime rows.
 - Let TanStack DB compose joins, ordering, limits, and derived live views from
   authorized normalized rows.
-- At admission, freeze only stable principal, server-derived scope, topic
-  locale, stage, and access mode. Never store expanded membership or permission
-  id sets in subscription context.
-- Resolve scope with
-  `realtime.subscriptionScope(({ request }) => request?.headers.get("x-scope-id") ?? null)`.
-  `null` means unscoped; a value is capped at 256 UTF-8 bytes. A scope switch
-  opens a new subscription and bootstraps a fresh client store.
+- Derive request-selected tenant/workspace state in `appConfig.context`, validate
+  it there, and enforce it in collection/global read access. Realtime runs the
+  same authorized CRUD pipeline; it adds no tenant filter.
+- `realtime.subscriptionScope` is compatibility-only in 3.x and removed in 4.0. It was
+  only a global scheduler partition, never authority. Remove it after migrating
+  tenant state into context and access.
 - Collection/global `realtime.accessCacheKey` is an explicit proof that output
-  may be shared across principals within the frozen scope tuple. Its key is
-  capped at 256 UTF-8 bytes; invalid or throwing resolvers stay edge-isolated.
+  may be shared more widely. Its key is capped at 256 UTF-8 bytes; invalid or
+  throwing resolvers stay edge-isolated.
 - Mutable membership/access stays in the database. Watched-resource changes
   trigger targeted reset; periodic delta re-bootstrap is only the safety net.
 
@@ -201,8 +213,16 @@ that `@questpie/tanstack-db` matches optimistic writes against. Typed channels,
 channel presence, and CRDT document sync are unaffected; CRDT canonical
 projection still writes its own outbox row per commit.
 
-A personalized relation query for 100,000 principals in one shared scope can
-cause 100,000 authoritative recomputations. Snapshot fallback is correct but
+A public collection with `accessCacheKey: () => "public:v1"` can compute one
+authorized query per refresh per server instance and fan the bytes out to
+100,000 equivalent subscribers. The key is a proof that field access, relations,
+output hooks, and `afterRead` are byte-identical for every matching context. The
+effective authorized topic, context extension digest, locale, stage, access
+mode, and delivery mode still partition groups. This is a local scheduler
+optimization: ten server replicas may run up to ten computations.
+
+A personalized relation query for 100,000 isolated contexts can still cause
+100,000 authoritative recomputations. Snapshot fallback is correct but
 expensive. Prefer materialized inbox rows with direct `recipientId`, a shared
 typed audience channel, an invalidation/refetch event, or a normal query.
 `bun --cwd packages/questpie run bench:realtime:routing` runs the deterministic

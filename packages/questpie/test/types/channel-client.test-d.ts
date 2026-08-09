@@ -8,6 +8,10 @@ import type { Equal, Expect } from "./type-test-utils.js";
 const news = channel("news").events({
 	metric: z.object({ value: z.string().transform(Number) }),
 });
+const publish = channel("wire-publish").events({
+	message: z.object({ text: z.string() }),
+});
+const thenChannel = channel("wire-then");
 const room = channel("room-[roomId]")
 	.events({
 		message: z.object({ text: z.string() }),
@@ -18,7 +22,12 @@ const room = channel("room-[roomId]")
 
 type App = {
 	collections: {};
-	channels: { news: typeof news; room: typeof room };
+	channels: {
+		news: typeof news;
+		publish: typeof publish;
+		room: typeof room;
+		then: typeof thenChannel;
+	};
 	globals: {};
 	routes: {};
 };
@@ -54,6 +63,29 @@ client.channels.room.publish({
 	event: "message",
 	data: { text: "hello" },
 });
+
+client.channels.news.publish("metric", { value: "42" });
+client.channels.publish.publish({
+	event: "message",
+	data: { text: "legacy client channel name" },
+});
+// @ts-expect-error the facade must never become a Promise-like thenable
+client.channels.then;
+const boundRoom = client.channels.room({ roomId: "one" });
+boundRoom.publish("message", { text: "hello" });
+boundRoom.subscribe((message) => {
+	type _boundMessage = Expect<
+		Equal<typeof message, ChannelMessage<typeof room>>
+	>;
+});
+boundRoom.presence();
+
+// @ts-expect-error bound params are required
+client.channels.room();
+// @ts-expect-error wrong bound param key
+client.channels.room({ id: "one" });
+// @ts-expect-error bound payload remains schema-typed
+boundRoom.publish("typing", { active: "yes" });
 
 const roomMessages = client.channels.room.iter({ roomId: "one" });
 type _iterMessage = Expect<

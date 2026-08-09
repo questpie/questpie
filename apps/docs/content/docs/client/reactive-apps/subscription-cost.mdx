@@ -46,33 +46,59 @@ A channel does the opposite. Ordered events are never coalesced, and a consumer
 that falls behind gets an explicit error. Live queries are for state. Channels
 are for events you must not lose.
 
-## Equivalent work is shared per principal
+## Equivalent work is session-isolated by default
 
 The refresh scheduler groups by the topic plus an access key. The key is built
-from the identity, the server scope, the locale, the stage and the access mode.
-Identity is the signed-in user's id when there is one. Failing that it is an
-OAuth token id, and failing that the connection itself.
+from the identity, the effective authorized query, context extensions, locale,
+stage, access mode, and delivery mode. Identity is the authenticated session id
+when there is one. Failing that it is an OAuth token id, and failing that the
+connection itself.
 
-So two tabs of the same user watching the same list run the query once per
-server instance. Two different users watching the same list run it twice.
+Two separate sessions belonging to the same user therefore do not share work by
+default. Neither do two OAuth tokens or two anonymous connections.
 
-That default is deliberate. Row access, field access and `afterRead` can all
-read the session, so two principals may get different bytes from the same query.
+That default is deliberate. Field access, relations, output hooks and
+`afterRead` can all read the request context, so matching row predicates alone
+do not prove byte-identical output.
 
-### Widening the sharing
+### Compute once, fan out to 100,000 subscribers
 
-Return the same key from `accessCacheKey` and those principals share one
-refresh.
+Return the same key from `accessCacheKey` and equivalent subscribers share one
+refresh computation.
 
-```ts title="src/questpie/server/collections/public-posts.ts"
-collection("public-posts").options({
-	realtime: { accessCacheKey: () => "public" },
-});
+```ts title="src/questpie/server/collections/public-announcements.ts"
+collection("public-announcements")
+	.access({ read: true })
+	.options({
+		realtime: {
+			accessCacheKey: () => "public-announcements:v1",
+		},
+	});
 ```
 
-Only do this where the result is identical for every principal that resolves to
-the key. There is no check. A key that is too broad serves one user's rows to
-another.
+With 100,000 clients watching the same authorized query, one application
+instance runs one database computation per refresh and fans out the result to
+all 100,000. Ten replicas can run up to ten computations because scheduler
+groups are local to each server instance; they are not a distributed cache.
+
+The resolver is an explicit proof that every context returning the key produces
+byte-identical output for the same effective authorized topic, including field
+access and `afterRead`. The effective query plus read-access predicate, context
+extension digest, locale, stage, access mode, and delivery mode still partition
+groups automatically. An invalid, over-long, or throwing resolver fails closed
+to an isolated edge group.
+
+`accessCacheKey` is a compute-sharing optimization, not authorization. Derive a
+selected tenant through `appConfig.context` and enforce it in collection/global
+`.access()`. If the tenant filter is missing there, normal CRUD and realtime are
+both misconfigured; no scheduler key can fix it.
+
+<Callout type="warn" title="subscriptionScope compatibility notice">
+	`realtime.subscriptionScope` remains only for 3.x compatibility and is removed
+	in QUESTPIE 4. Move tenant selection to `appConfig.context`, keep tenant row
+	filtering in `.access()`, and use `accessCacheKey` only when intentionally
+	widening byte-identical compute sharing.
+</Callout>
 
 ## Turning it off
 

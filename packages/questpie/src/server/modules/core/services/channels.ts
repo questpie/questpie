@@ -1,6 +1,6 @@
 import {
+	createChannels,
 	type ChannelServiceContext,
-	ChannelsService,
 } from "#questpie/server/channels/service.js";
 import { service } from "#questpie/server/services/define-service.js";
 
@@ -10,7 +10,7 @@ export default service({
 	lifecycle: "request",
 	create: (ctx) => {
 		const { app } = ctx;
-		return new ChannelsService(
+		return createChannels(
 			app.config.channels ?? {},
 			app.realtime,
 			// The only construction site that does NOT go through

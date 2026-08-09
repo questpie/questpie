@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import { opaqueChannelAuthoritySubject } from "../../src/server/channels/authority.js";
+import { channel } from "../../src/server/channels/channel-builder.js";
+import { createChannels } from "../../src/server/channels/service.js";
 import type {
 	ClientCloseReason,
 	ClientSink,
@@ -20,8 +22,11 @@ async function waitFor(assertion: () => boolean): Promise<void> {
 describe("default SSE channel reconciliation", () => {
 	test("a demand-driven ledger poll heals a dropped authority wake and stops with the last binding", async () => {
 		const database = await createTestDb();
+		const definitions = {
+			space: channel("space-[spaceId]").authorize(true),
+		};
 		const revoker = await buildMockApp(
-			{},
+			{ channels: definitions },
 			{
 				db: { pglite: database },
 				realtime: {
@@ -107,10 +112,18 @@ describe("default SSE channel reconciliation", () => {
 			expect(topologyStarts).toBe(0);
 
 			authorized = false;
-			await revoker.app.realtime.revokeChannelAuthority({
-				channel: "private-space-a",
-				subject: { kind: "user", id: "user-1" },
-				idempotencyKey: "space-a:user-1:dropped-wake",
+			const channels = createChannels(definitions, revoker.app.realtime, {
+				accessMode: "system",
+				db: revoker.app.db,
+			} as any);
+			await expect(
+				channels.space({ spaceId: "a" }).invalidateAuthority({
+					subject: { kind: "user", id: "user-1" },
+					idempotencyKey: "space-a:user-1:dropped-wake",
+				}),
+			).resolves.toEqual({
+				generation: 1,
+				transportEffect: "exact-binding",
 			});
 			expect(closeReasons).toEqual([]);
 			await waitFor(() => closeReasons.length === 1);

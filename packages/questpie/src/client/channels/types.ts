@@ -8,6 +8,7 @@ import type {
 	ChannelPresenceOf,
 	ChannelVisibility,
 } from "#questpie/server/channels/channel-builder.js";
+import type { ClientChannelFacadeReservedKey } from "#questpie/shared/channel-facade.js";
 
 type EventOutput<TDefinition extends AnyChannelDefinition> = {
 	[TEvent in keyof ChannelEventsOf<TDefinition> & string]: {
@@ -36,6 +37,13 @@ export type ChannelPublishInput<TDefinition extends AnyChannelDefinition> =
 	EventInput<TDefinition> & ParamsInput<TDefinition>;
 
 export type ChannelPublishReceipt = Readonly<{ eventId: string }>;
+
+type BoundPublishMethod<TDefinition extends AnyChannelDefinition> = <
+	TEvent extends keyof ChannelEventsOf<TDefinition> & string,
+>(
+	event: TEvent,
+	data: z.input<ChannelEventsOf<TDefinition>[TEvent]>,
+) => Promise<ChannelPublishReceipt>;
 
 export type ChannelSubscribeOptions = {
 	signal?: AbortSignal;
@@ -122,8 +130,9 @@ type PresenceIterMethod<TDefinition extends AnyChannelDefinition> = [
 				unknown
 			>;
 
-export type ChannelClient<TDefinition extends AnyChannelDefinition> = {
+type LegacyChannelClient<TDefinition extends AnyChannelDefinition> = {
 	subscribe: SubscribeMethod<TDefinition>;
+	/** @deprecated Bind params once, then call `publish(event, data)`. */
 	publish: (
 		input: ChannelPublishInput<TDefinition>,
 	) => Promise<ChannelPublishReceipt>;
@@ -133,8 +142,60 @@ export type ChannelClient<TDefinition extends AnyChannelDefinition> = {
 	presenceIter: PresenceIterMethod<TDefinition>;
 };
 
+type BoundPresenceClient<TDefinition extends AnyChannelDefinition> = [
+	ChannelPresenceOf<TDefinition>,
+] extends [never]
+	? {}
+	: {
+			presence(
+				options?: ChannelPresenceOptions,
+			): Promise<readonly ChannelPresenceOf<TDefinition>[]>;
+			subscribePresence(
+				callback: (members: readonly ChannelPresenceOf<TDefinition>[]) => void,
+				options?: ChannelSubscribeOptions,
+			): () => void;
+			presenceIter(
+				options?: ChannelSubscribeOptions,
+			): AsyncGenerator<
+				readonly ChannelPresenceOf<TDefinition>[],
+				void,
+				unknown
+			>;
+		};
+
+export type BoundChannelClient<TDefinition extends AnyChannelDefinition> = {
+	subscribe(
+		callback: (message: ChannelMessage<TDefinition>) => void,
+		options?: ChannelSubscribeOptions,
+	): () => void;
+	publish: BoundPublishMethod<TDefinition>;
+	iter(
+		options?: ChannelSubscribeOptions,
+	): AsyncGenerator<ChannelMessage<TDefinition>, void, unknown>;
+} & BoundPresenceClient<TDefinition>;
+
+type NoParamChannelClient<TDefinition extends AnyChannelDefinition> = Omit<
+	LegacyChannelClient<TDefinition>,
+	"publish"
+> & {
+	/** The object form remains a deprecated QUESTPIE 3.x compatibility overload. */
+	publish: LegacyChannelClient<TDefinition>["publish"] &
+		BoundPublishMethod<TDefinition>;
+};
+
+export type ChannelClient<TDefinition extends AnyChannelDefinition> =
+	keyof ChannelParamsOf<TDefinition> extends never
+		? NoParamChannelClient<TDefinition>
+		: LegacyChannelClient<TDefinition> &
+				((
+					params: ChannelParamsOf<TDefinition>,
+				) => BoundChannelClient<TDefinition>);
+
 export type ChannelsClient<TChannels extends ChannelDefinitions> = {
-	[TChannel in keyof TChannels]: ChannelClient<TChannels[TChannel]>;
+	[TChannel in Exclude<
+		keyof TChannels,
+		ClientChannelFacadeReservedKey
+	>]: ChannelClient<TChannels[TChannel]>;
 } & {
 	destroy(): void;
 	readonly channelCount: number;

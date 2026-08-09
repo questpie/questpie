@@ -877,7 +877,7 @@ describe("realtime scheduler", () => {
 });
 
 describe("realtime scheduler access keys", () => {
-	it("isolates stable principal, scope, and locale identity", async () => {
+	it("isolates sessions by default and shares only through an explicit key", async () => {
 		const base = {
 			locale: "en",
 			stage: "published",
@@ -903,13 +903,34 @@ describe("realtime scheduler access keys", () => {
 		const aliceDefault = await resolveRealtimeAccessKey("edge-a", alice);
 		const bobDefault = await resolveRealtimeAccessKey("edge-b", bob);
 		expect(aliceDefault).not.toBe(bobDefault);
+		const oauth = {
+			...base,
+			principal: {
+				kind: "oauth" as const,
+				user: { id: "carol" },
+				clientId: "client",
+				scopes: ["read"],
+				tokenId: "token-carol",
+			},
+		};
+		expect(await resolveRealtimeAccessKey("edge-oauth", oauth as any)).not.toBe(
+			await resolveRealtimeAccessKey("edge-oauth", {
+				...oauth,
+				principal: { ...oauth.principal, tokenId: "token-other" },
+			} as any),
+		);
+		const aliceOtherSession = await resolveRealtimeAccessKey("edge-c", {
+			...alice,
+			principal: {
+				...alice.principal,
+				session: { id: "session-c" },
+			},
+		});
+		expect(aliceOtherSession).not.toBe(aliceDefault);
 		expect(
 			await resolveRealtimeAccessKey("edge-c", {
 				...alice,
-				principal: {
-					...alice.principal,
-					session: { id: "session-c" },
-				},
+				principal: { ...alice.principal },
 			}),
 		).toBe(aliceDefault);
 		expect(
@@ -932,8 +953,15 @@ describe("realtime scheduler access keys", () => {
 		);
 
 		const resolver = async () => "public-read";
-		expect(await resolveRealtimeAccessKey("edge-a", alice, resolver)).toBe(
+		const shared = await resolveRealtimeAccessKey("edge-a", alice, resolver);
+		expect(shared).toBe(
 			await resolveRealtimeAccessKey("edge-b", bob, resolver),
+		);
+		expect(shared).toBe(
+			await resolveRealtimeAccessKey("edge-oauth", oauth as any, resolver),
+		);
+		expect(shared).toBe(
+			await resolveRealtimeAccessKey("edge-anonymous", base, resolver),
 		);
 
 		const failingResolver = async () => {
