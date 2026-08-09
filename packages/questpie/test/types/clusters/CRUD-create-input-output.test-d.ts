@@ -19,12 +19,12 @@
  *     returned row has NO keys (`customer.id` ⇒ TS2339 "Property 'id' does not exist").
  *
  * THE FIX. The `collections` fold uses OVERRIDE semantics
- * (`ExtractModulePropArrOverride`) so the most-derived (outer) re-declaration
+ * (`CodegenResolvedModulePropArr`) so the most-derived (outer) re-declaration
  * shadows the nested base instead of intersecting it. Distinct keys from both sides
  * still survive — only the same-key collision overrides.
  *
  * This test exercises the REAL fold (`ExtractModulePropArr` /
- * `ExtractModulePropArrOverride` from codegen-type-utils) over a fixture module
+ * `CodegenResolvedModulePropArr` from codegen-type-utils) over a fixture module
  * that mirrors the admin↔starter nesting, then drives the result through the REAL
  * `CollectionAPI` create surface — asserting IDENTITY (NoNever / NotEmptyObject /
  * key presence), never "it compiles".
@@ -37,7 +37,7 @@
 import { collection } from "#questpie/server/collection/builder/collection-builder.js";
 import type {
 	ExtractModulePropArr,
-	ExtractModulePropArrOverride,
+	CodegenResolvedModulePropArr,
 } from "#questpie/server/config/codegen-type-utils.js";
 import type { CollectionAPI } from "#questpie/server/config/integrated/questpie-api.js";
 import type { CollectionInsert } from "#questpie/shared/type-utils.js";
@@ -110,7 +110,7 @@ type Mods = readonly [AdminModule];
 // §1  The fold the generated `_ModuleCollections` now uses (OVERRIDE).
 // ============================================================================
 
-type ModuleCollections = ExtractModulePropArrOverride<Mods, "collections">;
+type ModuleCollections = CodegenResolvedModulePropArr<Mods, "collections">;
 
 /** A user collection declared once (not merged across nesting) — control. */
 const appointments = collection("appointments")

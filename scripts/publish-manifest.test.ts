@@ -120,4 +120,39 @@ describe("publish manifest workspace dependencies", () => {
 			"dependencies.questpie=workspace:*",
 		);
 	});
+
+	test("prepares the exact publish-shaped manifest without mutating source", () => {
+		const source = {
+			name: "@questpie/example",
+			version: "1.0.0",
+			exports: { ".": "./src/index.ts" },
+			dependencies: { questpie: "workspace:*" },
+			peerDependencies: { "@questpie/admin": "workspace:~" },
+			publishConfig: {
+				access: "public",
+				exports: { ".": "./dist/index.mjs" },
+			},
+		};
+
+		const prepared = preparePublishManifest(
+			source,
+			new Map([
+				["questpie", "3.26.1"],
+				["@questpie/admin", "3.26.1"],
+			]),
+		);
+
+		expect(prepared.manifest).toMatchObject({
+			exports: { ".": "./dist/index.mjs" },
+			dependencies: { questpie: "^3.26.1" },
+			peerDependencies: { "@questpie/admin": "~3.26.1" },
+		});
+		expect(prepared.appliedPublishConfigKeys).toEqual(["exports"]);
+		expect(prepared.resolvedWorkspaceSections).toEqual([
+			"dependencies",
+			"peerDependencies",
+		]);
+		expect(source.exports).toEqual({ ".": "./src/index.ts" });
+		expect(source.dependencies.questpie).toBe("workspace:*");
+	});
 });

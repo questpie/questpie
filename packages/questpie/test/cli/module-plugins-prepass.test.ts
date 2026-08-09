@@ -100,6 +100,29 @@ describe("modules.ts pre-pass", () => {
 		expect(merged).toEqual([CONFIG_PLUGIN]);
 	});
 
+	it("rejects distinct config plugins sharing one name", async () => {
+		tempDir = await mkdtemp(join(tmpdir(), "questpie-prepass-"));
+		const collision = {
+			name: CONFIG_PLUGIN.name,
+			targets: {},
+		} as CodegenPlugin;
+
+		await expect(
+			extractModulePlugins(tempDir, [CONFIG_PLUGIN, collision], OPTIONS),
+		).rejects.toThrow(/different plugins.*from-config/i);
+	});
+
+	it("rejects a module plugin colliding with a config plugin", async () => {
+		const rootDir = await makeRoot(
+			"modules.mts",
+			'export default [{ name: "m", plugin: { name: "from-config", targets: {} } }];\n',
+		);
+
+		await expect(
+			extractModulePlugins(rootDir, [CONFIG_PLUGIN], OPTIONS),
+		).rejects.toThrow(/runtimeConfig.*modules\.ts/s);
+	});
+
 	/**
 	 * A bare `C:\app\modules.ts` parses as a URL whose scheme is "c:", so the
 	 * import throws ERR_UNSUPPORTED_ESM_URL_SCHEME and every Windows build lands

@@ -166,31 +166,24 @@ async function main() {
 			originals.set(packageJsonPath, original);
 
 			const sourcePackageJson: PackageJson = JSON.parse(original);
-			const {
-				manifest: packageJson,
-				appliedPublishConfigKeys,
-				resolvedWorkspaceSections,
-			} = preparePublishManifest(sourcePackageJson, versions);
+			const prepared = preparePublishManifest(sourcePackageJson, versions);
+			const packageJson = prepared.manifest;
 			console.log(`📦 ${packageJson.name}`);
 
-			if (appliedPublishConfigKeys.length > 0) {
+			if (prepared.appliedPublishConfigKeys.length > 0) {
 				console.log("  Applying publishConfig overrides:");
-				for (const key of appliedPublishConfigKeys) {
+				for (const key of prepared.appliedPublishConfigKeys) {
 					console.log(`    ${key}`);
 				}
 			}
 
-			if (resolvedWorkspaceSections.includes("dependencies")) {
-				console.log("  Converting workspace dependencies:");
-			}
-
-			if (resolvedWorkspaceSections.includes("peerDependencies")) {
-				console.log("  Converting workspace peerDependencies:");
+			for (const key of prepared.resolvedWorkspaceSections) {
+				console.log(`  Converting workspace ${key}:`);
 			}
 
 			if (
-				appliedPublishConfigKeys.length > 0 ||
-				resolvedWorkspaceSections.length > 0
+				prepared.appliedPublishConfigKeys.length > 0 ||
+				prepared.resolvedWorkspaceSections.length > 0
 			) {
 				fs.writeFileSync(
 					packageJsonPath,

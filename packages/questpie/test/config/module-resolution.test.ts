@@ -62,7 +62,7 @@ describe("createApp — module resolution order", () => {
 		}
 	});
 
-	it("rejects two different modules sharing one name, naming both positions", async () => {
+	it("rejects two different modules sharing one name, naming both paths", async () => {
 		// The live instance of this is the admin server module and the admin
 		// client module, both called "questpie-admin". Separate arrays today, so
 		// nothing breaks yet. In one array, one of them used to just disappear.
@@ -76,7 +76,7 @@ describe("createApp — module resolution order", () => {
 		);
 
 		await expect(boot).rejects.toThrow(
-			/both named "questpie-admin", at positions 1 and 2/,
+			/both named "questpie-admin".*questpie-admin.*questpie-admin/s,
 		);
 	});
 

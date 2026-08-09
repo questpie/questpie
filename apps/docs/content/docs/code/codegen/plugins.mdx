@@ -58,9 +58,10 @@ export const myModule = module({
 
 The module route is the one to prefer. Codegen walks `modules.ts` before
 discovery, collects every `plugin` it finds, and the user adds nothing. The walk
-is depth first, submodules before the module itself. Duplicate names are dropped
-and the first one wins. A plugin registered on the config beats a module one of
-the same name.
+is depth first, submodules before the module itself. Reaching the same plugin
+object twice contributes it once. Two different plugin objects with one name
+are ambiguous and fail, including collisions between
+`runtimeConfig({ plugins })` and a module plugin.
 
 ## What a target contribution holds
 

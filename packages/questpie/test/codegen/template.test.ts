@@ -220,18 +220,21 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 	});
 
 	it("collapses empty module prop categories to empty objects", () => {
-		// _MP<K>/_MPRaw<K> were replaced by the recursive member-only folds
-		// ExtractModulePropArr / ExtractModulePropArrOverride. For a minimal app
+		// _MP<K>/_MPRaw<K> were replaced by the validated ordered category fold.
+		// For a minimal app
 		// with NO module contributions these resolve to {} per category. The
 		// `services` carrier is emitted as a literal {} (it cannot be folded —
 		// its member values reach AppContext and re-introduce the cycle).
 		expect(code).not.toContain("type _MP<");
 		expect(code).not.toContain("_MPRaw<");
 		expect(code).toContain(
-			'export type _ModuleCollections = ExtractModulePropArrOverride<typeof _modules, "collections">;',
+			'export type _ModuleCollections = CodegenResolvedModulePropArr<typeof _modules, "collections">;',
 		);
 		expect(code).toContain(
-			'export type _ModuleGlobals = ExtractModulePropArr<typeof _modules, "globals">;',
+			'export type _ModuleGlobals = CodegenResolvedModulePropArr<typeof _modules, "globals">;',
+		);
+		expect(code).toContain(
+			'export type _ModuleJobs = CodegenResolvedModulePropArr<typeof _modules, "jobs">;',
 		);
 		expect(code).toContain("export type _ModuleServices = {};");
 	});
@@ -755,6 +758,9 @@ describe("generateTemplate — globals", () => {
 
 		expect(code).toContain("globals: {");
 		expect(code).toContain("siteSettings: _glob_siteSettings,");
+		expect(code).toContain(
+			"export type AppGlobals = Override<_ModuleGlobals, {",
+		);
 	});
 });
 
@@ -888,7 +894,9 @@ describe("generateTemplate — services", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		expect(code).toContain("type _AppServiceDefinitions = _ModuleServices & {");
+		expect(code).toContain(
+			"type _AppServiceDefinitions = Override<_ModuleServices, {",
+		);
 		expect(code).toContain("stripe: typeof _svc_stripe;");
 		expect(code).toContain(
 			"[K in keyof _AppServiceDefinitions]: ServiceInstanceOf<_AppServiceDefinitions[K]>;",
@@ -1059,7 +1067,7 @@ describe("generateTemplate — routes (flat record)", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		expect(code).toContain("type AppRoutes = _ModuleRoutes & {");
+		expect(code).toContain("type AppRoutes = Override<_ModuleRoutes, {");
 		expect(code).toContain(
 			'"apps/[appId]/install": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_apps_appId_install>, RouteParamsFromKey<"apps/[appId]/install">>;',
 		);
@@ -1335,9 +1343,8 @@ describe("generateTemplate — spreads", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		// _MP<Key> was replaced by the recursive member-only ExtractModulePropArr
-		// fold — spread categories (sidebar/dashboard/...) are extracted from the
-		// module array the same way safe (non-services) categories are.
+		// Spread values concatenate at runtime, so they retain the additive fold
+		// rather than the record-category last-wins fold.
 		expect(code).toContain(
 			'export type _ModuleSidebar = ExtractModulePropArr<typeof _modules, "sidebar">;',
 		);
