@@ -98,10 +98,18 @@ server.route("/", questpieHono(app, { basePath: "/api" }));
 export default server;
 ```
 
-`questpieHono` returns a Hono app that answers `${basePath}/*`, so mount it at
-`"/"` and let the base path do the narrowing. It reads `appContext` and `user`
-off the Hono context when they are set. Add `questpieMiddleware(app)` to set
-them, and to get `app`, `appContext` and `user` on your own routes too.
+`questpieHono` returns a Hono middleware app, so mount it at `"/"`. The core
+handler owns base-path matching; requests outside it continue through native
+Hono routing. Session, locale and extended context options are resolved by the
+core handler exactly once. The optional `questpieMiddleware(app)` remains
+available when your own native Hono routes need `app`, `appContext` or `user`;
+it is not an authority input to the QUESTPIE mount.
+
+When both helpers are composed, the mount reuses the middleware's immutable
+adapter context so the request has one identity and one request scope. Native
+routes receive a detached `appContext` view; mutating it or `c.user` no longer
+changes QUESTPIE authorization. Use `getSession` on `questpieHono` instead,
+without `questpieMiddleware`, when the mount needs a custom session resolver.
 
 ### Elysia
 
@@ -115,8 +123,13 @@ const server = new Elysia().use(questpieElysia(app, { basePath: "/api" }));
 export default server;
 ```
 
-`questpieElysia` returns a plugin with a `/*` route under `prefix: basePath`.
-Out-of-base requests come back as a `404` with a JSON body.
+`questpieElysia` delegates base-path matching to the core handler. Exact and
+nested requests inside the base path receive the canonical QUESTPIE response;
+out-of-base requests fall through to later native Elysia routes.
+
+Both native adapters accept `basePath`, request logging, search policy,
+`getSession`, `getLocale` and `extendContext`. They intentionally do not expose
+`accessMode`: public HTTP requests always run in user mode.
 
 ## Typing custom routes through Hono RPC
 

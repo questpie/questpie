@@ -18,33 +18,75 @@ export type QuestpieVariables<TQuestpie = Questpie<any>> = {
 	user: any;
 };
 
+const adapterContexts = new WeakMap<
+	Request,
+	{ app: unknown; context: AdapterContext }
+>();
+
+function cloneAuthorityValue(value: unknown): unknown {
+	try {
+		return structuredClone(value);
+	} catch (cause) {
+		throw new TypeError(
+			"questpieMiddleware cannot expose a non-cloneable authority context value",
+			{ cause },
+		);
+	}
+}
+
+function createNativeContextView(context: RequestContext): RequestContext {
+	const extensions = cloneAuthorityValue(context["~contextExtensions"]) as
+		| Record<string, unknown>
+		| undefined;
+	const view: RequestContext = {
+		...context,
+		session: cloneAuthorityValue(context.session) as RequestContext["session"],
+		principal: cloneAuthorityValue(
+			context.principal,
+		) as RequestContext["principal"],
+		actor: cloneAuthorityValue(context.actor) as RequestContext["actor"],
+		"~contextExtensions": extensions,
+	};
+	if (extensions) {
+		for (const [key, value] of Object.entries(extensions)) view[key] = value;
+	}
+	return view;
+}
+
 /**
  * Hono adapter configuration
  */
-export type HonoAdapterConfig = Pick<AdapterConfig, "requestLogging"> & {
-	/**
-	 * Base path for QUESTPIE routes
-	 * Use '/' for server-only apps or '/api' for fullstack apps.
-	 * @default '/'
-	 */
-	basePath?: string;
-};
+export type HonoAdapterConfig = Pick<
+	AdapterConfig,
+	| "basePath"
+	| "requestLogging"
+	| "search"
+	| "extendContext"
+	| "getLocale"
+	| "getSession"
+>;
 
 export function questpieMiddleware<TQuestpie = Questpie<any>>(app: TQuestpie) {
 	return createMiddleware<{
 		Variables: QuestpieVariables<TQuestpie>;
 	}>(async (c, next) => {
 		c.set("app", app);
+		const request = c.req.raw;
 		const adapterContext = await createAdapterContext(
 			app as Questpie<any>,
-			c.req.raw,
+			request,
 			{ accessMode: "user" },
 		);
 
-		c.set("user", adapterContext.session?.user ?? null);
-		c.set("appContext", adapterContext.appContext);
+		adapterContexts.set(request, { app, context: adapterContext });
+		c.set("user", cloneAuthorityValue(adapterContext.session?.user) ?? null);
+		c.set("appContext", createNativeContextView(adapterContext.appContext));
 
-		await next();
+		try {
+			await next();
+		} finally {
+			adapterContexts.delete(request);
+		}
 	});
 }
 
@@ -75,44 +117,32 @@ export function questpieHono<TQuestpie = Questpie<any>>(
 	app: TQuestpie,
 	config: HonoAdapterConfig = {},
 ) {
-	const basePath = config.basePath || "/";
+	const { basePath = "/", ...handlerConfig } = config;
 	const handler = createFetchHandler(app as Questpie<any>, {
+		...handlerConfig,
 		basePath,
 		accessMode: "user",
-		requestLogging: config.requestLogging,
 	});
 
-	const resolveContext = (
-		context?: QuestpieVariables<TQuestpie>["appContext"],
-		user?: any,
-	) => {
-		if (!context) {
-			return undefined;
+	const honoApp = new Hono<{
+		Variables: QuestpieVariables<TQuestpie>;
+	}>().use("*", async (c, next) => {
+		const storedContext = adapterContexts.get(c.req.raw);
+		const adapterContext =
+			storedContext?.app === app ? storedContext.context : undefined;
+		if (
+			adapterContext &&
+			(config.getSession || config.getLocale || config.extendContext)
+		) {
+			throw new Error(
+				"questpieMiddleware cannot be combined with questpieHono context resolvers",
+			);
 		}
 
-		// Build session object - prefer user override, fallback to context's session user
-		const sessionUser = user ?? context.session?.user ?? null;
-		const session = sessionUser
-			? { user: sessionUser, session: context.session?.session ?? null }
-			: (context.session ?? null);
-
-		return {
-			session,
-			locale: context.locale,
-			appContext: context,
-		} satisfies AdapterContext;
-	};
-
-	const honoApp = new Hono<{ Variables: QuestpieVariables<TQuestpie> }>().all(
-		`${basePath}/*`,
-		async (c) => {
-			const response = await handler(
-				c.req.raw,
-				resolveContext(c.get("appContext"), c.get("user")),
-			);
-			return response ?? c.notFound();
-		},
-	);
+		const response = await handler(c.req.raw, adapterContext);
+		if (response) return response;
+		await next();
+	});
 
 	return honoApp;
 }

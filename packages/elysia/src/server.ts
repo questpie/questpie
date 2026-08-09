@@ -17,14 +17,15 @@ export type QuestpieContext = {
 /**
  * Elysia adapter configuration
  */
-export type ElysiaAdapterConfig = Pick<AdapterConfig, "requestLogging"> & {
-	/**
-	 * Base path for QUESTPIE routes
-	 * Use '/' for server-only apps or '/api' for fullstack apps.
-	 * @default '/'
-	 */
-	basePath?: string;
-};
+export type ElysiaAdapterConfig = Pick<
+	AdapterConfig,
+	| "basePath"
+	| "requestLogging"
+	| "search"
+	| "extendContext"
+	| "getLocale"
+	| "getSession"
+>;
 
 /**
  * Create Elysia app with QUESTPIE integration
@@ -48,10 +49,7 @@ export type ElysiaAdapterConfig = Pick<AdapterConfig, "requestLogging"> & {
  * const server = new Elysia()
  *   .use(questpieElysia(app, {
  *     basePath: '/api',
- *     cors: {
- *       origin: 'https://example.com',
- *       credentials: true
- *     }
+ *     getLocale: (request) => request.headers.get('x-locale') ?? 'en'
  *   }))
  * ```
  *
@@ -73,24 +71,28 @@ export function questpieElysia(
 	app: Questpie<any>,
 	config: ElysiaAdapterConfig = {},
 ) {
-	const basePath = config.basePath || "/";
+	const configuredBasePath = config.basePath ?? "/";
+	const prefixedBasePath = configuredBasePath.startsWith("/")
+		? configuredBasePath
+		: `/${configuredBasePath}`;
+	const basePath =
+		prefixedBasePath.length > 1 && prefixedBasePath.endsWith("/")
+			? prefixedBasePath.slice(0, -1)
+			: prefixedBasePath;
 	const handler = createFetchHandler(app, {
+		...config,
 		basePath,
 		accessMode: "user",
-		requestLogging: config.requestLogging,
 	});
 
-	const server = new Elysia({ prefix: basePath, name: "questpie" });
-	server.all("/*", async ({ request }) => {
+	const handle = async ({ request }: { request: Request }) => {
 		const response = await handler(request);
-		return (
-			response ??
-			new Response(JSON.stringify({ error: "Not found" }), {
-				status: 404,
-				headers: { "Content-Type": "application/json" },
-			})
-		);
-	});
+		return response ?? new Response("Not found", { status: 404 });
+	};
+	const server = new Elysia({ name: "questpie" });
+	server.all(basePath, handle);
+	if (basePath !== "/") server.all(`${basePath}/*`, handle);
+	else server.all("/*", handle);
 
 	return server;
 }

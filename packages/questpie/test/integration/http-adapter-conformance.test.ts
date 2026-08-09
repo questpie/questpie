@@ -278,18 +278,26 @@ describe("shared HTTP adapter conformance", () => {
 		for (const host of HOSTS) {
 			it(`${host.name} resolves authority and extension context exactly once`, async () => {
 				let sessionResolutions = 0;
+				let localeResolutions = 0;
 				let contextExtensions = 0;
 				const inspect = route()
 					.get()
 					.raw()
-					.handler(({ session, organizationId }) =>
+					.handler(({ locale, session, organizationId }) =>
 						Response.json({
 							userId:
 								(session?.user as { id?: string } | undefined)?.id ?? null,
+							locale,
 							organizationId,
 						}),
 					);
-				const app = await setupApp({ routes: { inspect } });
+				const app = await setupApp({
+					routes: { inspect },
+					locale: {
+						locales: [{ code: "en" }, { code: "sk" }],
+						defaultLocale: "en",
+					},
+				});
 				const dispatch = host.create(app, {
 					basePath: "/api",
 					getSession: async () => {
@@ -298,6 +306,10 @@ describe("shared HTTP adapter conformance", () => {
 							user: { id: "user-conformance" },
 							session: { id: "session-conformance" },
 						};
+					},
+					getLocale: () => {
+						localeResolutions++;
+						return "sk";
 					},
 					extendContext: () => {
 						contextExtensions++;
@@ -310,45 +322,47 @@ describe("shared HTTP adapter conformance", () => {
 				expect(response?.status).toBe(200);
 				expect(await response?.json()).toEqual({
 					userId: "user-conformance",
+					locale: "sk",
 					organizationId: "org-conformance",
 				});
 				expect(sessionResolutions).toBe(1);
+				expect(localeResolutions).toBe(1);
 				expect(contextExtensions).toBe(1);
 			});
 		}
 	});
 
-	it("keeps search reindex policy local to concurrent handlers over one app", async () => {
-		const posts = collection("posts")
-			.fields(({ f }) => ({ title: f.text().required() }))
-			.access({ read: true, update: false });
-		const app = await setupApp(
-			{ collections: { posts } },
-			{ search: createSearchAdapter() },
-		);
-		const allow = createFetchHandler(app, {
-			getSession: async () => ({
+	for (const host of HOSTS) {
+		it(`${host.name} keeps search reindex policy local to concurrent handlers`, async () => {
+			const posts = collection("posts")
+				.fields(({ f }) => ({ title: f.text().required() }))
+				.access({ read: true, update: false });
+			const app = await setupApp(
+				{ collections: { posts } },
+				{ search: createSearchAdapter() },
+			);
+			const session = async () => ({
 				user: { id: "editor", role: "editor" },
 				session: { id: "editor-session" },
-			}),
-			search: { reindexAccess: true },
-		});
-		const deny = createFetchHandler(app, {
-			getSession: async () => ({
-				user: { id: "editor", role: "editor" },
-				session: { id: "editor-session" },
-			}),
-			search: { reindexAccess: false },
-		});
+			});
+			const allow = host.create(app, {
+				getSession: session,
+				search: { reindexAccess: true },
+			});
+			const deny = host.create(app, {
+				getSession: session,
+				search: { reindexAccess: false },
+			});
 
-		const [allowed, denied] = await Promise.all([
-			allow(requestFor("POST", "/search/reindex/posts")),
-			deny(requestFor("POST", "/search/reindex/posts")),
-		]);
+			const [allowed, denied] = await Promise.all([
+				allow(requestFor("POST", "/search/reindex/posts")),
+				deny(requestFor("POST", "/search/reindex/posts")),
+			]);
 
-		expect(allowed?.status).toBe(200);
-		expect(denied?.status).toBe(403);
-	});
+			expect(allowed?.status).toBe(200);
+			expect(denied?.status).toBe(403);
+		});
+	}
 
 	describe("stream request-scope lifetime", () => {
 		for (const host of HOSTS) {
