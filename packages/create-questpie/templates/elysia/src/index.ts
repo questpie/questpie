@@ -1,25 +1,19 @@
 /**
  * Elysia entrypoint (headless QUESTPIE API).
  *
- * Mounts the framework-agnostic fetch handler under `/api` and redirects the
+ * Mounts the QUESTPIE Elysia adapter under `/api` and redirects the
  * root to the Scalar API reference. Elysia runs on Bun and begins serving as
  * soon as `.listen()` is called — `bun run src/index.ts` boots the server.
  */
 import { Elysia } from "elysia";
 import { createGracefulServerShutdown } from "questpie/app";
-import { createFetchHandler } from "questpie/http";
 
 import { app as questpie, destroyApp } from "#questpie";
 import { env } from "@/lib/env";
-
-const handler = createFetchHandler(questpie, { basePath: "/api" });
+import { questpieElysia } from "@questpie/elysia/server";
 
 const elysia = new Elysia()
-	.all(
-		"/api/*",
-		async ({ request }) =>
-			(await handler(request)) ?? new Response("Not Found", { status: 404 }),
-	)
+	.use(questpieElysia(questpie, { basePath: "/api" }))
 	.get(
 		"/",
 		() =>
@@ -36,7 +30,11 @@ const elysia = new Elysia()
  * connection last. Without this, a deploy drops every buffered span and leaks
  * whatever your services opened. */
 const lifecycle = createGracefulServerShutdown(destroyApp);
-lifecycle.attach({ close: () => elysia.stop() });
+lifecycle.attach({
+	close: async () => {
+		await elysia.stop();
+	},
+});
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
 	process.once(signal, () => {
 		void lifecycle.shutdown().catch(() => {});

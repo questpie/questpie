@@ -17,9 +17,11 @@ where the values come from, who applies the schema, and how many copies run.
 | A migration step | `questpie migrate`, before the app rolls | Once you commit a migration |
 | A worker process | A file that calls `app.queue.listen()`   | Only if you wrote jobs      |
 
-QUESTPIE ships no server. It gives you `createFetchHandler` from `questpie/http`.
-Every template mounts that behind a server QUESTPIE does not provide. So the
-start command is whatever your template's `package.json` says.
+QUESTPIE ships no server. Its common HTTP engine is `createFetchHandler` from
+`questpie/http`: TanStack Start mounts it directly, while the Next, Hono and
+Elysia templates use native adapters around it. The host still owns the server
+and process lifecycle, so the start command is whatever your template's
+`package.json` says.
 
 That version floor is checked, not just documented. The database service reads
 `server_version_num` on connect. Below 15 it throws and names the version it

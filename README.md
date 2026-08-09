@@ -128,7 +128,9 @@ import { Elysia } from "elysia";
 import { questpieElysia } from "@questpie/elysia/server";
 import { app } from "#questpie";
 
-const server = new Elysia().use(questpieElysia(app)).listen(3000);
+const server = new Elysia()
+	.use(questpieElysia(app, { basePath: "/api" }))
+	.listen(3000);
 
 export type AppServer = typeof server;
 ```

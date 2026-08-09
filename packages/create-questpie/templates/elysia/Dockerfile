@@ -7,7 +7,7 @@ FROM base AS deps
 COPY package.json bun.lock* ./
 RUN bun install --frozen-lockfile
 
-# Build application (bundles the entry to dist/ with the Bun target)
+# Build application (keeps runtime packages external)
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -20,5 +20,6 @@ ENV NODE_ENV=production
 ENV PORT=3000
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package.json ./package.json
+COPY --from=deps /app/node_modules ./node_modules
 EXPOSE 3000
 CMD ["bun", "run", "dist/index.js"]

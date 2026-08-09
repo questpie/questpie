@@ -51,29 +51,30 @@ directly.
 ```ts
 import { createClientFromHono } from "@questpie/hono/client";
 import type { AppType } from "./server";
-import type { App } from "./questpie";
+import type { AppConfig } from "./questpie";
 
-const client = createClientFromHono<AppType, App>({
+const client = createClientFromHono<AppType, AppConfig>({
 	baseURL: "http://localhost:3000",
 });
 
 // CRUD — fully typed
 const { docs } = await client.collections.posts.find({ limit: 10 });
 
-// App routes — fully typed
-const stats = await client.routes.getStats.post({ period: "week" });
-
 // Custom Hono routes — via Hono RPC
 const result = await client.api.custom.route.$get();
 ```
+
+The merged client copies QUESTPIE `collections` and `globals` onto Hono's RPC
+client. Keep a normal `createClient<AppConfig>()` for QUESTPIE app routes,
+search, realtime, channels, or per-request auth headers.
 
 ### Generic HTTP Client
 
 ```ts
 import { createClient } from "questpie/client";
-import type { App } from "./questpie";
+import type { AppConfig } from "./questpie";
 
-const client = createClient<App>({
+const client = createClient<AppConfig>({
 	baseURL: "http://localhost:3000",
 	basePath: "/api",
 });

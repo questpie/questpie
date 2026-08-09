@@ -114,11 +114,10 @@ The admin is `@questpie/admin`, a module you enable. It needs a runtime that
 renders, so the scaffolder allows it on TanStack Start and Next and rejects it on
 Hono and Elysia. Those two are headless. You get the API and the typed client.
 OpenAPI is `@questpie/openapi`, and the scaffolder pre-selects it on all four.
-Every template mounts `createFetchHandler` from `questpie/http` itself, so none
-of them installs a runtime adapter. The `@questpie/next`, `@questpie/hono` and
-`@questpie/elysia` packages exist for wiring QUESTPIE into an app you already
-have. All four templates ship a Dockerfile, and all four build on
-`oven/bun:1.3-alpine`.
+TanStack Start mounts `createFetchHandler` from `questpie/http` directly. Next,
+Hono and Elysia install their matching `@questpie/*` runtime package, which
+wraps that same handler in the host framework's native shape. All four
+templates ship a Dockerfile, and all four build on `oven/bun:1.3-alpine`.
 
 | Requirement | Version | How it is enforced                                                                                                    |
 | ----------- | ------- | --------------------------------------------------------------------------------------------------------------------- |

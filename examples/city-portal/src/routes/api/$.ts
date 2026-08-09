@@ -8,7 +8,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createFetchHandler } from "questpie/http";
 
-import { app } from "@/questpie/server/.generated";
+import { app } from "#questpie";
 
 const handler = createFetchHandler(app, {
 	basePath: "/api",

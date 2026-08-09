@@ -26,6 +26,8 @@ export const Route = createFileRoute("/api/$")({
 			PUT: ({ request }) => handleCmsRequest(request),
 			DELETE: ({ request }) => handleCmsRequest(request),
 			PATCH: ({ request }) => handleCmsRequest(request),
+			OPTIONS: ({ request }) => handleCmsRequest(request),
+			HEAD: ({ request }) => handleCmsRequest(request),
 		},
 	},
 });

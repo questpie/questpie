@@ -2,7 +2,7 @@
  * Shared server-side helpers for data fetching
  */
 
-import { app } from "@/questpie/server/.generated";
+import { app } from "#questpie";
 
 /**
  * Create app context for server-side data fetching

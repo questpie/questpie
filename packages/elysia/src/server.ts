@@ -26,7 +26,7 @@ export type ElysiaAdapterConfig = NativeAdapterConfig;
  * @example
  * ```ts
  * import { Elysia } from 'elysia'
- * import { questpieElysia } from '@questpie/elysia'
+ * import { questpieElysia } from '@questpie/elysia/server'
  * import { app } from './app'
  *
  * const server = new Elysia()
@@ -60,10 +60,7 @@ export type ElysiaAdapterConfig = NativeAdapterConfig;
  * const newPost = await client.api.posts.post({ title: 'Hello' })
  * ```
  */
-export function questpieElysia(
-	app: Questpie<any>,
-	config: ElysiaAdapterConfig = {},
-) {
+export function questpieElysia(app: unknown, config: ElysiaAdapterConfig = {}) {
 	const basePath = normalizeBasePath(config.basePath ?? "/");
 	const handler = createFetchHandler(app, {
 		...config,

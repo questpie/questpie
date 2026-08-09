@@ -10,7 +10,7 @@
 	"scripts": {
 		"dev": "bun --watch src/index.ts",
 		"start": "bun run src/index.ts",
-		"build": "bun build src/index.ts --target=bun --outdir=dist",
+		"build": "bun build src/index.ts --target=bun --outdir=dist --packages external",
 		"check-types": "tsc --noEmit",
 		"questpie:generate": "questpie generate -c src/questpie/server/questpie.config.ts",
 		"scaffold:generate": "bun run questpie:generate",
@@ -25,6 +25,7 @@
 	},
 	"dependencies": {
 		"@electric-sql/pglite": "^0.3.14",
+		"@questpie/hono": "latest",
 		"@questpie/openapi": "latest",
 		"@questpie/tanstack-query": "latest",
 		"@t3-oss/env-core": "^0.12.0",

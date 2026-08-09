@@ -9,7 +9,7 @@
 	},
 	"scripts": {
 		"dev": "bun --bun vite dev --port 3001",
-		"questpie:generate": "bun run node_modules/questpie/src/exports/cli.ts generate -c src/questpie/server/questpie.config.ts",
+		"questpie:generate": "questpie generate -c src/questpie/server/questpie.config.ts",
 		"seed": "bun run seed.ts",
 		"build": "vite build",
 		"preview": "vite preview",

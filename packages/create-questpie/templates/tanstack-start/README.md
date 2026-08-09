@@ -33,6 +33,10 @@ run migrate:create`, then apply it with `bun run migrate`.
 - Admin panel: `http://localhost:3000/admin`
 - API docs (Scalar): `http://localhost:3000/api/docs`
 
+The API route intentionally uses QUESTPIE's low-level Fetch handler. There is
+no published TanStack Start adapter package; TanStack owns the server-route
+boundary and forwards all seven supported HTTP methods.
+
 ### Database extensions
 
 QUESTPIE is drizzle-native and does **not** auto-create Postgres extensions. The
@@ -68,7 +72,7 @@ src/
       modules.ts                     # Admin client module defaults
       .generated/                    # Admin client codegen output
   routes/
-    api/$.ts                         # QUESTPIE fetch handler mount
+    api/$.ts                         # Low-level QUESTPIE Fetch mount (seven methods)
     admin.tsx
     admin/
   lib/

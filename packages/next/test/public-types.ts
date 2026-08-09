@@ -1,5 +1,3 @@
-import type { Questpie } from "questpie";
-
 import {
 	questpieNextRouteHandlers,
 	type NextAdapterConfig,
@@ -17,7 +15,10 @@ const safeConfig = {
 const trustedHostCompatibility: NextAdapterConfig = { accessMode: "system" };
 void trustedHostCompatibility;
 
-const handlers = questpieNextRouteHandlers({} as Questpie<any>, safeConfig);
+// Generated apps can come from a separately installed copy of `questpie`.
+// The adapter follows the core Fetch seam and accepts that runtime value
+// without imposing the nominal Questpie class identity on consumers.
+const handlers = questpieNextRouteHandlers({}, safeConfig);
 void handlers.GET;
 void handlers.POST;
 void handlers.PUT;

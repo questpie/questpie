@@ -8,8 +8,35 @@ on:
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
+  scaffold-runtime-matrix:
+    name: Scaffold runtime (${{ matrix.runtime }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [next, tanstack-start, hono, elysia]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.13"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Each shard proves one publish-shaped generated project through build,
+      # production boot, HTTP ownership probes, and bounded SIGTERM cleanup.
+      - name: Verify ${{ matrix.runtime }} scaffold
+        run: bun run release:scaffold-runtime-matrix
+        env:
+          QUESTPIE_SCAFFOLD_RUNTIME: ${{ matrix.runtime }}
+
   release:
     name: Release
+    needs: scaffold-runtime-matrix
     runs-on: ubuntu-latest
     permissions:
       contents: write

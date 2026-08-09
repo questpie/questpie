@@ -575,6 +575,13 @@ When several modules (and the app) contribute the same key, `createApp()` merges
 | `config.*` (app, auth, admin, plugin config keys)                | per-key strategies; `auth`/`admin` deep-merge; unknown keys: incoming replaces existing |
 | anything else                                                    | auto-detect: object+object → spread, array+array → concat, otherwise incoming wins      |
 
+Module dependencies resolve children first. Reusing the exact module object in
+a diamond is intentional deduplication: it contributes once at its first
+resolved position. Two different objects with the same `name` are ambiguous
+and fail with both paths, and a dependency cycle fails with its cycle path.
+Codegen category extraction follows this same validated order, so runtime and
+generated types agree on which later entry wins.
+
 The merge helpers behind these strategies are exported from `questpie/app` for module authors combining config fragments of their own:
 
 ```ts
@@ -1256,11 +1263,19 @@ export default [adminModule, openApiModule] as const;
 **Step 4**, Inside `createApp()`:
 
 1. Auto-prepends `coreModule` (built-in routes, services, field types)
-2. Flattens all modules **depth-first** (sub-modules first, parent last)
+2. Flattens all modules **depth-first** (sub-modules first, parent last). The
+   same object reached twice contributes once at its first resolved position;
+   distinct objects with the same public `name` fail with both graph paths.
+   Dependency cycles fail with the cycle path.
 3. **Merges** contributions per key, later modules override earlier ones
 4. Wraps user-level entities as `__user` module (appended **last** = user always wins)
 5. Creates the `Questpie` instance with merged config
 6. Initializes all services (`db`, `auth`, `storage`, `queue`, `email`, `kv`, `logger`, `search`, `realtime`)
+
+Codegen traverses the same validated module order. A dependency diamond
+therefore contributes one runtime module and one set of generated category
+types, while ambiguous module or plugin names fail instead of silently
+overriding one phase only.
 
 **Step 5**, The HTTP handler connects it all:
 
@@ -1709,9 +1724,19 @@ export const Route = createFileRoute("/api/$")({
 });
 ```
 
-### Hono / Elysia
+### Next, Hono and Elysia
 
-The headless templates mount the same `createFetchHandler(app, { basePath: "/api" })` in `src/index.ts` and redirect `/` to `/api/docs`. They do not include the admin UI or `src/routes/admin`.
+The other templates install the adapter matching their host. Next exports all
+seven handlers from `questpieNextRouteHandlers(app, { basePath: "/api" })`.
+Hono mounts `questpieHono(app, { basePath: "/api" })` at `"/"`. Elysia
+composes `questpieElysia(app, { basePath: "/api" })` with `.use()`. Import Hono
+and Elysia adapters from their `/server` subpaths; `@questpie/next` has one root
+entrypoint.
+
+The Hono and Elysia templates redirect `/` to `/api/docs`. They are headless
+and do not include the admin UI or `src/routes/admin`. Existing direct
+`createFetchHandler` mounts remain supported, but new generated projects use
+the native adapters.
 
 ### Runtime templates
 
@@ -9043,7 +9068,10 @@ A faithful mirror of the source types. **Which do you actually need?** Most plug
 
 ## CodegenPlugin
 
-Top-level plugin interface. Registered in `questpie.config.ts` via the `plugins` array.
+Top-level plugin interface. Reusable packages attach a plugin to a static module
+so codegen extracts it from `modules.ts`. Direct
+`runtimeConfig({ plugins: [...] })` registration is for standalone plugins and
+custom setups without a module.
 
 ```ts
 interface CodegenPlugin {
@@ -9063,6 +9091,13 @@ interface CodegenPlugin {
 	validators?: CrossTargetValidator[];
 }
 ```
+
+Codegen walks module dependencies children-first. Reaching the exact same
+plugin object more than once in a dependency diamond contributes it once at its
+first resolved position. Two distinct plugin objects with the same `name` are
+ambiguous and fail with both sources, including collisions between a module
+plugin and `runtimeConfig({ plugins })`. Reuse one exported object for an
+intentional diamond; give genuinely different plugins unique, stable names.
 
 ## CodegenTargetContribution
 

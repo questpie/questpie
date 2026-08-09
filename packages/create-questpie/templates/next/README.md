@@ -36,7 +36,8 @@ run migrate:create`, then apply it with `bun run migrate`.
 ## What you get
 
 - A typed **admin panel** at `/admin` (views, dashboard, auth, media).
-- A REST API with interactive **Scalar docs** at `/api/docs`.
+- A REST API mounted through `@questpie/next`, with interactive **Scalar docs**
+  at `/api/docs`.
 - A fully **typed client** (`src/lib/client.ts`) plus TanStack Query option
   builders (`src/lib/query.ts`) — full inference from your server schema.
 
@@ -70,7 +71,7 @@ src/
     page.tsx                         # Landing page
     not-found.tsx                    # 404 page
     api/
-      [...all]/route.ts              # QUESTPIE fetch handler mount
+      [[...all]]/route.ts            # QUESTPIE Next adapter mount (exact + nested)
     admin/
       layout.tsx                     # AdminLayoutProvider (Next adapter)
       admin.css                      # Admin Tailwind entry

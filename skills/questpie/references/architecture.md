@@ -177,11 +177,19 @@ export default [adminModule, openApiModule] as const;
 **Step 4**, Inside `createApp()`:
 
 1. Auto-prepends `coreModule` (built-in routes, services, field types)
-2. Flattens all modules **depth-first** (sub-modules first, parent last)
+2. Flattens all modules **depth-first** (sub-modules first, parent last). The
+   same object reached twice contributes once at its first resolved position;
+   distinct objects with the same public `name` fail with both graph paths.
+   Dependency cycles fail with the cycle path.
 3. **Merges** contributions per key, later modules override earlier ones
 4. Wraps user-level entities as `__user` module (appended **last** = user always wins)
 5. Creates the `Questpie` instance with merged config
 6. Initializes all services (`db`, `auth`, `storage`, `queue`, `email`, `kv`, `logger`, `search`, `realtime`)
+
+Codegen traverses the same validated module order. A dependency diamond
+therefore contributes one runtime module and one set of generated category
+types, while ambiguous module or plugin names fail instead of silently
+overriding one phase only.
 
 **Step 5**, The HTTP handler connects it all:
 

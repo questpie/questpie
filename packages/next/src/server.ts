@@ -1,8 +1,4 @@
-import {
-	type AdapterConfig,
-	createFetchHandler,
-	type Questpie,
-} from "questpie";
+import { type AdapterConfig, createFetchHandler } from "questpie";
 
 export type NextAdapterConfig = AdapterConfig;
 
@@ -20,7 +16,7 @@ const notFoundResponse = () =>
  * Create a Next.js-compatible handler for QUESTPIE routes.
  */
 export const questpieNext = (
-	app: Questpie<any>,
+	app: unknown,
 	config: NextAdapterConfig = {},
 ): NextHandler => {
 	const handler = createFetchHandler(app, config);
@@ -35,7 +31,7 @@ export const questpieNext = (
  * Convenience helpers for Next.js route handlers.
  */
 export const questpieNextRouteHandlers = (
-	app: Questpie<any>,
+	app: unknown,
 	config: NextAdapterConfig = {},
 ) => {
 	const handler = questpieNext(app, config);

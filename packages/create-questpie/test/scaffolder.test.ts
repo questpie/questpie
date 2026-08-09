@@ -94,6 +94,7 @@ describe("scaffold", () => {
 		expect(packageJson.dependencies["better-auth"]).toBe("^1.6.11");
 		expect(packageJson.dependencies["pg-boss"]).toBeDefined();
 		expect(packageJson.dependencies.nodemailer).toBeDefined();
+		expect(packageJson.dependencies["pusher-js"]).toBe("^8.5.0");
 		expect(packageJson.devDependencies["@tanstack/router-cli"]).toBeDefined();
 		expect(existsSync(join(projectDir, "src", "routeTree.gen.ts"))).toBe(true);
 		expect(existsSync(join(projectDir, "src", "vite-env.d.ts"))).toBe(true);
@@ -108,6 +109,170 @@ describe("scaffold", () => {
 
 		// Skills are installed by the official CLI only when explicitly enabled.
 		expect(existsSync(join(projectDir, ".agents", "skills"))).toBe(false);
+	});
+
+	test("browser templates install the client realtime peer", async () => {
+		tempDir = await mkdtemp(join(tmpdir(), "create-questpie-"));
+		process.chdir(tempDir);
+
+		for (const templateId of ["tanstack-start", "next"] as const) {
+			await scaffold({
+				projectName: `${templateId}-app`,
+				templateId,
+				databaseName: `${templateId.replace("-", "_")}_app`,
+				modules: defaultModuleIds(templateId),
+				installDeps: false,
+				initGit: false,
+				installSkills: false,
+				runCodegen: false,
+			});
+			const packageJson = JSON.parse(
+				await readFile(
+					join(tempDir, `${templateId}-app`, "package.json"),
+					"utf8",
+				),
+			) as { dependencies: Record<string, string> };
+			expect(packageJson.dependencies["pusher-js"]).toBe("^8.5.0");
+		}
+	});
+
+	test("templates mount the canonical runtime HTTP surface", async () => {
+		tempDir = await mkdtemp(join(tmpdir(), "create-questpie-"));
+		process.chdir(tempDir);
+
+		const expectations = {
+			next: {
+				adapter: "@questpie/next",
+				entry: "src/app/api/[[...all]]/route.ts",
+				import: 'from "@questpie/next"',
+				mount: "questpieNextRouteHandlers(app, {",
+				readme: "QUESTPIE Next adapter mount",
+			},
+			hono: {
+				adapter: "@questpie/hono",
+				entry: "src/index.ts",
+				import: 'from "@questpie/hono/server"',
+				mount: 'questpieHono(questpie, { basePath: "/api" })',
+				readme: "mounts the QUESTPIE Hono adapter",
+			},
+			elysia: {
+				adapter: "@questpie/elysia",
+				entry: "src/index.ts",
+				import: 'from "@questpie/elysia/server"',
+				mount: 'questpieElysia(questpie, { basePath: "/api" })',
+				readme: "mounts the QUESTPIE Elysia adapter",
+			},
+		} as const;
+
+		for (const templateId of ["next", "hono", "elysia"] as const) {
+			const expected = expectations[templateId];
+			await scaffold({
+				projectName: `${templateId}-adapter-app`,
+				templateId,
+				databaseName: `${templateId}_adapter_app`,
+				modules: defaultModuleIds(templateId),
+				installDeps: false,
+				initGit: false,
+				installSkills: false,
+				runCodegen: false,
+			});
+			const projectDir = join(tempDir, `${templateId}-adapter-app`);
+			const packageJson = JSON.parse(
+				await readFile(join(projectDir, "package.json"), "utf8"),
+			) as { dependencies: Record<string, string> };
+			const entry = await readFile(join(projectDir, expected.entry), "utf8");
+			const readme = await readFile(join(projectDir, "README.md"), "utf8");
+
+			expect(packageJson.dependencies[expected.adapter]).toBe("latest");
+			expect(entry).toContain(expected.import);
+			expect(entry).toContain(expected.mount);
+			expect(entry).not.toContain("createFetchHandler");
+			expect(readme).toContain(expected.readme);
+		}
+
+		await scaffold({
+			projectName: "tanstack-fetch-app",
+			templateId: "tanstack-start",
+			databaseName: "tanstack_fetch_app",
+			modules: defaultModuleIds("tanstack-start"),
+			installDeps: false,
+			initGit: false,
+			installSkills: false,
+			runCodegen: false,
+		});
+		const tanstackDir = join(tempDir, "tanstack-fetch-app");
+		const tanstackEntry = await readFile(
+			join(tanstackDir, "src/routes/api/$.ts"),
+			"utf8",
+		);
+		const tanstackReadme = await readFile(
+			join(tanstackDir, "README.md"),
+			"utf8",
+		);
+		const tanstackPackage = JSON.parse(
+			await readFile(join(tanstackDir, "package.json"), "utf8"),
+		) as { scripts: Record<string, string> };
+		expect(tanstackEntry).toContain("createFetchHandler");
+		expect(tanstackEntry).toContain("OPTIONS: ({ request })");
+		expect(tanstackEntry).toContain("HEAD: ({ request })");
+		expect(tanstackPackage.scripts.build).toBe(
+			"NODE_ENV=production vite build",
+		);
+		expect(tanstackReadme).toContain(
+			"Low-level QUESTPIE Fetch mount (seven methods)",
+		);
+	});
+
+	test("headless templates keep runtime dependencies available in production", async () => {
+		tempDir = await mkdtemp(join(tmpdir(), "create-questpie-"));
+		process.chdir(tempDir);
+
+		for (const templateId of ["hono", "elysia"] as const) {
+			await scaffold({
+				projectName: `${templateId}-app`,
+				templateId,
+				databaseName: `${templateId}_app`,
+				modules: defaultModuleIds(templateId),
+				installDeps: false,
+				initGit: false,
+				installSkills: false,
+				runCodegen: false,
+			});
+			const projectDir = join(tempDir, `${templateId}-app`);
+			const packageJson = JSON.parse(
+				await readFile(join(projectDir, "package.json"), "utf8"),
+			) as { scripts: Record<string, string> };
+			const dockerfile = await readFile(join(projectDir, "Dockerfile"), "utf8");
+
+			expect(packageJson.scripts.build).toContain("--packages external");
+			expect(dockerfile).toContain(
+				"COPY --from=deps /app/node_modules ./node_modules",
+			);
+		}
+	});
+
+	test("Hono exits according to its graceful shutdown result", async () => {
+		tempDir = await mkdtemp(join(tmpdir(), "create-questpie-"));
+		process.chdir(tempDir);
+
+		await scaffold({
+			projectName: "hono-app",
+			templateId: "hono",
+			databaseName: "hono_app",
+			modules: defaultModuleIds("hono"),
+			installDeps: false,
+			initGit: false,
+			installSkills: false,
+			runCodegen: false,
+		});
+		const entry = await readFile(
+			join(tempDir, "hono-app", "src", "index.ts"),
+			"utf8",
+		);
+
+		expect(entry).toContain("() => process.exit(0)");
+		expect(entry).toContain("Failed to shut down after ${signal}");
+		expect(entry).toContain("process.exit(1)");
 	});
 
 	test("uses the pinned canonical project-local skills install", () => {
@@ -248,7 +413,7 @@ describe("scaffold", () => {
 				`import { ConsoleAdapter } from "questpie/adapters/console";`,
 				`import { pgBossAdapter } from "questpie/adapters/pg-boss";`,
 				``,
-				`import { env } from "@/lib/env.js";`,
+				`import { env } from "@/lib/env";`,
 				``,
 				`export default runtimeConfig({`,
 				`\tapp: { url: env.APP_URL },`,

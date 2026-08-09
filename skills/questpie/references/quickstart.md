@@ -326,9 +326,19 @@ export const Route = createFileRoute("/api/$")({
 });
 ```
 
-### Hono / Elysia
+### Next, Hono and Elysia
 
-The headless templates mount the same `createFetchHandler(app, { basePath: "/api" })` in `src/index.ts` and redirect `/` to `/api/docs`. They do not include the admin UI or `src/routes/admin`.
+The other templates install the adapter matching their host. Next exports all
+seven handlers from `questpieNextRouteHandlers(app, { basePath: "/api" })`.
+Hono mounts `questpieHono(app, { basePath: "/api" })` at `"/"`. Elysia
+composes `questpieElysia(app, { basePath: "/api" })` with `.use()`. Import Hono
+and Elysia adapters from their `/server` subpaths; `@questpie/next` has one root
+entrypoint.
+
+The Hono and Elysia templates redirect `/` to `/api/docs`. They are headless
+and do not include the admin UI or `src/routes/admin`. Existing direct
+`createFetchHandler` mounts remain supported, but new generated projects use
+the native adapters.
 
 ### Runtime templates
 
