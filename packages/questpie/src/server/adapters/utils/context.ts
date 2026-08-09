@@ -30,6 +30,102 @@ type RefreshableAdapterContext = AdapterContext & {
 	[FRESH_ADAPTER_CONTEXT]?: () => Promise<AdapterContext>;
 };
 
+const OMIT_NATIVE_CONTEXT_VALUE = Symbol("omit-native-context-value");
+
+function detachNativeContextValue(
+	value: unknown,
+	seen: WeakMap<object, unknown>,
+): unknown | typeof OMIT_NATIVE_CONTEXT_VALUE {
+	if (typeof value === "function" || typeof value === "symbol") {
+		return OMIT_NATIVE_CONTEXT_VALUE;
+	}
+	if (value === null || typeof value !== "object") return value;
+	if (value instanceof Promise) return OMIT_NATIVE_CONTEXT_VALUE;
+
+	const cached = seen.get(value);
+	if (cached !== undefined) return cached;
+
+	if (Array.isArray(value)) {
+		const copy: unknown[] = [];
+		seen.set(value, copy);
+		for (const entry of value) {
+			const detached = detachNativeContextValue(entry, seen);
+			copy.push(detached === OMIT_NATIVE_CONTEXT_VALUE ? undefined : detached);
+		}
+		return copy;
+	}
+
+	const prototype = Object.getPrototypeOf(value);
+	if (prototype === Object.prototype || prototype === null) {
+		const copy: Record<string, unknown> = {};
+		seen.set(value, copy);
+		for (const [key, entry] of Object.entries(value)) {
+			const detached = detachNativeContextValue(entry, seen);
+			if (detached !== OMIT_NATIVE_CONTEXT_VALUE) copy[key] = detached;
+		}
+		return copy;
+	}
+
+	const cloneableBuiltin =
+		value instanceof Date ||
+		value instanceof RegExp ||
+		value instanceof Map ||
+		value instanceof Set ||
+		value instanceof ArrayBuffer ||
+		ArrayBuffer.isView(value);
+	if (!cloneableBuiltin) return OMIT_NATIVE_CONTEXT_VALUE;
+
+	try {
+		return structuredClone(value);
+	} catch {
+		return OMIT_NATIVE_CONTEXT_VALUE;
+	}
+}
+
+function detachNativeContextRecord(
+	value: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+	if (!value) return undefined;
+	return detachNativeContextValue(value, new WeakMap()) as Record<
+		string,
+		unknown
+	>;
+}
+
+/**
+ * Create a detached, non-authoritative context view for native middleware.
+ *
+ * Framework resources such as `db` are intentionally excluded. Custom class
+ * instances, promises, functions, and other non-cloneable extension values are
+ * omitted instead of exposing their live references.
+ */
+export function createNativeAdapterContextView(
+	context: AdapterContext,
+): import("../../config/context.js").RequestContext {
+	const source = context.appContext;
+	const extensions = detachNativeContextRecord(source["~contextExtensions"]);
+	const view: import("../../config/context.js").RequestContext = {
+		accessMode: source.accessMode,
+		locale: source.locale,
+		localeFallback: source.localeFallback,
+		stage: source.stage,
+		requestId: source.requestId,
+		traceId: source.traceId,
+	};
+	const seen = new WeakMap<object, unknown>();
+	for (const key of ["session", "principal", "actor"] as const) {
+		const detached = detachNativeContextValue(source[key], seen);
+		if (detached !== OMIT_NATIVE_CONTEXT_VALUE) {
+			(view as Record<string, unknown>)[key] = detached;
+		}
+	}
+	if (extensions) {
+		view["~contextExtensions"] = extensions;
+		Object.assign(view, extensions);
+	}
+	return view;
+}
+
 function attachFreshAdapterContext(
 	context: AdapterContext,
 	resolveFresh: () => Promise<AdapterContext>,

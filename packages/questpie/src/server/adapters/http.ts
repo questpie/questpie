@@ -37,9 +37,13 @@ export type {
 	AdapterContext,
 	AdapterRoutes,
 	FetchHandler,
+	NativeAdapterConfig,
 	UploadFile,
 } from "./types.js";
-export { createAdapterContext } from "./utils/context.js";
+export {
+	createAdapterContext,
+	createNativeAdapterContextView,
+} from "./utils/context.js";
 export { handleError } from "./utils/response.js";
 
 import type { AdapterConfig, AdapterContext } from "./types.js";

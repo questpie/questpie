@@ -46,6 +46,15 @@ const bothMaps = (manifest: Manifest) => [
 ];
 
 describe("package export maps", () => {
+	test.each(manifests)(
+		"$name keeps development and publish keys aligned",
+		(manifest) => {
+			expect(Object.keys(manifest.exports ?? {}).sort()).toEqual(
+				Object.keys(manifest.publishConfig?.exports ?? {}).sort(),
+			);
+		},
+	);
+
 	// A "./*" entry makes every file in the tarball a public entry point,
 	// including generated module internals. Once someone imports one it is
 	// public forever, and a wildcard resolve cannot be deprecated with a warning.

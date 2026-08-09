@@ -66,6 +66,11 @@ export type AdapterConfig<TConfig extends QuestpieConfig = QuestpieConfig> = {
 	) => Promise<{ user: any; session: any } | null>;
 };
 
+/** Safe options accepted by native HTTP framework mounts. */
+export type NativeAdapterConfig<
+	TConfig extends QuestpieConfig = QuestpieConfig,
+> = Omit<AdapterConfig<TConfig>, "accessMode">;
+
 export type AdapterContext = {
 	/** Auth session (user + session) from Better Auth */
 	session?: { user: any; session: any } | null;

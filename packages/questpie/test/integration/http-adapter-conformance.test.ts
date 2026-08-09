@@ -5,7 +5,7 @@ import { questpieHono } from "../../../hono/src/server.js";
 import { questpieNextRouteHandlers } from "../../../next/src/server.js";
 import { collection, route, service } from "../../src/exports/index.js";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
-import type { AdapterConfig } from "../../src/server/adapters/types.js";
+import type { NativeAdapterConfig } from "../../src/server/adapters/types.js";
 import type { SearchAdapter } from "../../src/server/modules/core/integrated/search/types.js";
 import type { MockApp } from "../utils/mocks/mock-app-builder";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
@@ -14,7 +14,7 @@ type Dispatch = (request: Request) => Promise<Response | null>;
 
 type HostHarness = Readonly<{
 	name: "core Fetch" | "Next" | "Hono" | "Elysia";
-	create(app: MockApp, options?: AdapterConfig): Dispatch;
+	create(app: MockApp, options?: NativeAdapterConfig): Dispatch;
 }>;
 
 const HOSTS: readonly HostHarness[] = [
@@ -32,17 +32,14 @@ const HOSTS: readonly HostHarness[] = [
 	{
 		name: "Hono",
 		create(app, options) {
-			// The conformance contract intentionally exercises the future safe native
-			// option surface before its production type is introduced.
-			const adapter = questpieHono(app, options as any);
+			const adapter = questpieHono(app, options);
 			return (request) => adapter.request(request);
 		},
 	},
 	{
 		name: "Elysia",
 		create(app, options) {
-			// See the Hono note above. These are behavior tests, not a type fixture.
-			const adapter = questpieElysia(app, options as any);
+			const adapter = questpieElysia(app, options);
 			return (request) => adapter.handle(request);
 		},
 	},

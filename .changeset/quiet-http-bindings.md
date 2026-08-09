@@ -12,7 +12,9 @@ adapters, keep public HTTP authority in user mode, and preserve native route
 fallthrough outside the configured base path. Hono mounts no longer derive
 QUESTPIE authority from a mutable `c.user`; use `getSession` for custom mount
 identity. Existing `questpieMiddleware` composition reuses one immutable
-adapter context instead of resolving a second identity. Next route handlers now
-return an exact seven-method type while preserving their 3.x configuration
-surface. Code that indexed the handler object with an arbitrary string must use
-one of the seven exported method names.
+adapter context instead of resolving a second identity; its native context view
+now safely omits non-cloneable extension values. Hono and Elysia share the
+core-owned `NativeAdapterConfig` option contract. Next route handlers now return
+an exact seven-method type while preserving their 3.x configuration surface.
+Code that indexed the handler object with an arbitrary string must use one of
+the seven exported method names.

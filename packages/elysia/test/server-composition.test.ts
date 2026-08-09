@@ -74,4 +74,31 @@ describe("elysia adapter composition", () => {
 			await (await root.handle(new Request("http://localhost/ping"))).text(),
 		).toBe("pong");
 	});
+
+	it("runs native middleware registered before and after the mount", async () => {
+		const ping = route()
+			.get()
+			.raw()
+			.handler(() => new Response("pong"));
+		const setup = await buildMockApp({ routes: { ping } });
+		cleanup = setup.cleanup;
+		const beforePaths: string[] = [];
+		const afterPaths: string[] = [];
+		const native = new Elysia()
+			.onRequest(({ request }) => {
+				beforePaths.push(new URL(request.url).pathname);
+			})
+			.use(questpieElysia(setup.app, { basePath: "/api" }))
+			.onRequest(({ request }) => {
+				afterPaths.push(new URL(request.url).pathname);
+			})
+			.get("/apiary", () => "native sibling");
+
+		for (const path of ["/api", "/api/ping", "/api/x", "/apiary"]) {
+			await native.handle(new Request(`http://localhost${path}`));
+		}
+
+		expect(beforePaths).toEqual(["/api", "/api/ping", "/api/x", "/apiary"]);
+		expect(afterPaths).toEqual(["/api", "/api/ping", "/api/x", "/apiary"]);
+	});
 });

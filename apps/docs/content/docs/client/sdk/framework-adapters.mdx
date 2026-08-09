@@ -114,8 +114,10 @@ it is not an authority input to the QUESTPIE mount.
 When both helpers are composed, the mount reuses the middleware's immutable
 adapter context so the request has one identity and one request scope. Native
 routes receive a detached `appContext` view; mutating it or `c.user` no longer
-changes QUESTPIE authorization. Use `getSession` on `questpieHono` instead,
-without `questpieMiddleware`, when the mount needs a custom session resolver.
+changes QUESTPIE authorization. Framework resources and non-cloneable extension
+values such as functions, promises and class instances are omitted from that
+native view. Use `getSession` on `questpieHono` instead, without
+`questpieMiddleware`, when the mount needs a custom session resolver.
 
 ### Elysia
 
@@ -133,9 +135,10 @@ export default server;
 nested requests inside the base path receive the canonical QUESTPIE response;
 out-of-base requests fall through to later native Elysia routes.
 
-Hono and Elysia accept `basePath`, request logging, search policy,
-`getSession`, `getLocale` and `extendContext`. They intentionally do not expose
-`accessMode`: public HTTP requests always run in user mode.
+Hono's `HonoAdapterConfig` and Elysia's `ElysiaAdapterConfig` are aliases of the
+core `NativeAdapterConfig` exported by `questpie/http`. It contains every
+`AdapterConfig` option except `accessMode`, so both native adapters gain future
+safe HTTP options together while public requests remain in user mode.
 
 ## Typing custom routes through Hono RPC
 

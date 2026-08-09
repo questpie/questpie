@@ -1,7 +1,7 @@
 import { Elysia } from "elysia";
 import {
 	createFetchHandler,
-	type AdapterConfig,
+	type NativeAdapterConfig,
 	type Questpie,
 } from "questpie";
 
@@ -17,15 +17,7 @@ export type QuestpieContext = {
 /**
  * Elysia adapter configuration
  */
-export type ElysiaAdapterConfig = Pick<
-	AdapterConfig,
-	| "basePath"
-	| "requestLogging"
-	| "search"
-	| "extendContext"
-	| "getLocale"
-	| "getSession"
->;
+export type ElysiaAdapterConfig = NativeAdapterConfig;
 
 /**
  * Create Elysia app with QUESTPIE integration

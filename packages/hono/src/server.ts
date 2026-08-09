@@ -2,9 +2,10 @@ import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import {
 	type AdapterContext,
-	type AdapterConfig,
 	createAdapterContext,
 	createFetchHandler,
+	createNativeAdapterContextView,
+	type NativeAdapterConfig,
 	type Questpie,
 	type RequestContext,
 } from "questpie";
@@ -23,48 +24,10 @@ const adapterContexts = new WeakMap<
 	{ app: unknown; context: AdapterContext }
 >();
 
-function cloneAuthorityValue(value: unknown): unknown {
-	try {
-		return structuredClone(value);
-	} catch (cause) {
-		throw new TypeError(
-			"questpieMiddleware cannot expose a non-cloneable authority context value",
-			{ cause },
-		);
-	}
-}
-
-function createNativeContextView(context: RequestContext): RequestContext {
-	const extensions = cloneAuthorityValue(context["~contextExtensions"]) as
-		| Record<string, unknown>
-		| undefined;
-	const view: RequestContext = {
-		...context,
-		session: cloneAuthorityValue(context.session) as RequestContext["session"],
-		principal: cloneAuthorityValue(
-			context.principal,
-		) as RequestContext["principal"],
-		actor: cloneAuthorityValue(context.actor) as RequestContext["actor"],
-		"~contextExtensions": extensions,
-	};
-	if (extensions) {
-		for (const [key, value] of Object.entries(extensions)) view[key] = value;
-	}
-	return view;
-}
-
 /**
  * Hono adapter configuration
  */
-export type HonoAdapterConfig = Pick<
-	AdapterConfig,
-	| "basePath"
-	| "requestLogging"
-	| "search"
-	| "extendContext"
-	| "getLocale"
-	| "getSession"
->;
+export type HonoAdapterConfig = NativeAdapterConfig;
 
 export function questpieMiddleware<TQuestpie = Questpie<any>>(app: TQuestpie) {
 	return createMiddleware<{
@@ -79,8 +42,9 @@ export function questpieMiddleware<TQuestpie = Questpie<any>>(app: TQuestpie) {
 		);
 
 		adapterContexts.set(request, { app, context: adapterContext });
-		c.set("user", cloneAuthorityValue(adapterContext.session?.user) ?? null);
-		c.set("appContext", createNativeContextView(adapterContext.appContext));
+		const nativeContext = createNativeAdapterContextView(adapterContext);
+		c.set("user", nativeContext.session?.user ?? null);
+		c.set("appContext", nativeContext);
 
 		try {
 			await next();
@@ -126,23 +90,30 @@ export function questpieHono<TQuestpie = Questpie<any>>(
 
 	const honoApp = new Hono<{
 		Variables: QuestpieVariables<TQuestpie>;
-	}>().use("*", async (c, next) => {
-		const storedContext = adapterContexts.get(c.req.raw);
-		const adapterContext =
-			storedContext?.app === app ? storedContext.context : undefined;
-		if (
-			adapterContext &&
-			(config.getSession || config.getLocale || config.extendContext)
-		) {
-			throw new Error(
-				"questpieMiddleware cannot be combined with questpieHono context resolvers",
-			);
-		}
+	}>()
+		.notFound((context) => context.res)
+		.use("*", async (c, next) => {
+			const storedContext = adapterContexts.get(c.req.raw);
+			const adapterContext =
+				storedContext?.app === app ? storedContext.context : undefined;
+			if (
+				adapterContext &&
+				(config.getSession || config.getLocale || config.extendContext)
+			) {
+				throw new Error(
+					"questpieMiddleware cannot be combined with questpieHono context resolvers",
+				);
+			}
 
-		const response = await handler(c.req.raw, adapterContext);
-		if (response) return response;
-		await next();
-	});
+			const response = await handler(c.req.raw, adapterContext);
+			if (response) {
+				c.res = response;
+				await next();
+				return c.res;
+			}
+			await next();
+			return c.res;
+		});
 
 	return honoApp;
 }
