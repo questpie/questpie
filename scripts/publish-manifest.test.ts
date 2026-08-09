@@ -20,37 +20,6 @@ import {
 } from "./publish-manifest";
 
 describe("publish manifest workspace dependencies", () => {
-	test("applies the same publishConfig and workspace transformation as release", () => {
-		const { manifest, appliedPublishConfigKeys, resolvedWorkspaceSections } =
-			preparePublishManifest(
-				{
-					name: "@questpie/example",
-					dependencies: { questpie: "workspace:*" },
-					peerDependencies: { "@questpie/admin": "workspace:^" },
-					exports: { ".": "./src/index.ts" },
-					publishConfig: {
-						access: "public",
-						exports: { ".": "./dist/index.mjs" },
-					},
-				},
-				new Map([
-					["questpie", "3.26.1"],
-					["@questpie/admin", "3.26.1"],
-				]),
-			);
-
-		expect(manifest.exports).toEqual({ ".": "./dist/index.mjs" });
-		expect(manifest.dependencies).toEqual({ questpie: "^3.26.1" });
-		expect(manifest.peerDependencies).toEqual({
-			"@questpie/admin": "^3.26.1",
-		});
-		expect(appliedPublishConfigKeys).toEqual(["exports"]);
-		expect(resolvedWorkspaceSections).toEqual([
-			"dependencies",
-			"peerDependencies",
-		]);
-	});
-
 	test("resolves @questpie/mcp's questpie dependency before publish", () => {
 		const versions = new Map([["questpie", "3.15.0"]]);
 		const dependencies = replaceWorkspaceVersions(

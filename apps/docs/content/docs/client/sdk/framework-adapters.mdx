@@ -143,6 +143,12 @@ export default server;
 nested requests inside the base path receive the canonical QUESTPIE response;
 out-of-base requests fall through to later native Elysia routes.
 
+The adapter does not own CORS policy. If the browser and API use different
+origins, install `@elysiajs/cors` in the application and compose Elysia's native
+`cors(...)` plugin before `questpieElysia(...)`. Keep the allowed origins in
+application configuration; `@questpie/elysia` does not install the plugin for
+consumers.
+
 Hono's `HonoAdapterConfig` and Elysia's `ElysiaAdapterConfig` are aliases of the
 core `NativeAdapterConfig` exported by `questpie/http`. It contains every
 `AdapterConfig` option except `accessMode`, so both native adapters gain future

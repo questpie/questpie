@@ -41,8 +41,8 @@ before native middleware runs and derives a separate private mount context.
 Native mutations therefore cannot forge the mount session, request extensions,
 or fresh channel/live-query reauthorization. Session and OAuth resolve once;
 the application context resolver runs again only when the QUESTPIE mount is
-reached. This compatibility helper is scheduled for removal in QUESTPIE 4.0;
-new mounts should use `questpieHono` and its `getSession` option directly.
+reached. New mounts should use `questpieHono` and its `getSession` option
+directly.
 
 ## Client Setup
 

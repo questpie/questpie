@@ -415,8 +415,7 @@ export default server;
 
 `questpieMiddleware(app)` remains a QUESTPIE 3.x compatibility helper for
 existing native Hono routes that consume `appContext`. New integrations should
-mount `questpieHono` directly; the compatibility helper is scheduled for
-removal in QUESTPIE 4.0.
+mount `questpieHono` directly.
 
 **Next.js (App Router):**
 
