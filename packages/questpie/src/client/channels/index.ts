@@ -1,5 +1,4 @@
 import type { ChannelDefinitions } from "#questpie/server/channels/channel-builder.js";
-import { isClientChannelFacadeReservedKey } from "#questpie/shared/channel-facade.js";
 import { stringifyTypedWire } from "#questpie/shared/typed-wire.js";
 
 import type { GetAuthHeaders } from "../auth.js";
@@ -427,7 +426,8 @@ export function createChannelsAPI<
 		get(target, property, receiver) {
 			if (
 				typeof property !== "string" ||
-				isClientChannelFacadeReservedKey(property)
+				property === "then" ||
+				property in target
 			) {
 				return Reflect.get(target, property, receiver);
 			}

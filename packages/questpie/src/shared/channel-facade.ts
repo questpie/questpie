@@ -48,11 +48,3 @@ export const CLIENT_CHANNEL_FACADE_RESERVED_KEYS = [
 
 export type ClientChannelFacadeReservedKey =
 	(typeof CLIENT_CHANNEL_FACADE_RESERVED_KEYS)[number];
-
-const clientReservedKeys = new Set<string>(CLIENT_CHANNEL_FACADE_RESERVED_KEYS);
-
-export function isClientChannelFacadeReservedKey(
-	key: string,
-): key is ClientChannelFacadeReservedKey {
-	return clientReservedKeys.has(key);
-}
