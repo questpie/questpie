@@ -60,4 +60,28 @@ describe("loadQuestpieConfig", () => {
 		expect((config.app as any).config.source).toBe("generated");
 		expect(config.cli?.migrations?.directory).toBe("./custom-migrations");
 	});
+
+	it("preserves the generated module load error as the cause", async () => {
+		const rootDir = await createTempProject();
+		const configPath = join(rootDir, "questpie.config.ts");
+
+		await writeFile(
+			configPath,
+			`export default { app: { url: "http://localhost:3000" } };\n`,
+			"utf-8",
+		);
+
+		try {
+			await loadQuestpieConfig(configPath);
+			expect.unreachable("config loading should fail without generated output");
+		} catch (error) {
+			expect(error).toBeInstanceOf(Error);
+			if (!(error instanceof Error)) return;
+			expect(error.message).toContain("Could not load generated app");
+			const cause = error.cause;
+			expect(cause).toMatchObject({
+				message: expect.stringContaining(".generated/index.ts"),
+			});
+		}
+	});
 });

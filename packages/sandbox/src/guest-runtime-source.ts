@@ -1,5 +1,5 @@
 const GUEST_BINDINGS_IMPORT =
-	'import { buildGuestBindings } from "./guest-bindings.ts";';
+	'import { buildGuestBindings, callBrokeredFetch } from "./guest-bindings.ts";';
 const HTTP_BODY_CAP_MARKER = "__QP_HTTP_FETCH_BODY_CAP_BYTES__";
 
 /** Inline the trusted dependency so the guest entry needs no host path/socket. */

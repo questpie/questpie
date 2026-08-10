@@ -40,7 +40,7 @@
 
 import nodeProcess from "node:process";
 
-import { buildGuestBindings } from "./guest-bindings.ts";
+import { buildGuestBindings, callBrokeredFetch } from "./guest-bindings.ts";
 
 /** Marker so the supervisor can pick the result line out of guest stdout noise. */
 const RESULT_MARKER = "__QP_SANDBOX_RESULT__";
@@ -336,6 +336,7 @@ function installFetchShim(
 		} catch (e) {
 			throw new TypeError(
 				`Failed to construct fetch request: ${e instanceof Error ? e.message : String(e)}`,
+				{ cause: e },
 			);
 		}
 
@@ -367,12 +368,7 @@ function installFetchShim(
 		// Relay over the existing stdio RPC channel. A structured broker error
 		// (network failure / blocked target / oversize) arrives as a rejected
 		// hostCall — surface it as a fetch-like TypeError, NOT a fake 5xx Response.
-		let value: HttpFetchResponse;
-		try {
-			value = (await hostCall("http.fetch", request)) as HttpFetchResponse;
-		} catch (e) {
-			throw new TypeError(e instanceof Error ? e.message : String(e));
-		}
+		const value = await callBrokeredFetch<HttpFetchResponse>(hostCall, request);
 
 		const status = typeof value?.status === "number" ? value.status : 0;
 		const body = value?.bodyBase64

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
 
-import { buildGuestBindings } from "../src/guest-bindings.js";
+import {
+	buildGuestBindings,
+	callBrokeredFetch,
+} from "../src/guest-bindings.js";
 
 // ──────────────────────────────────────────────────────────────────────────
 // The guest bindings proxy is pure wire-shaping over an injected `hostCall`.
@@ -245,5 +248,20 @@ describe("error propagation: a rejecting hostCall rejects the proxied call", () 
 		await expect(
 			q.store.posts.create({ key: "k1", data: { v: 1 } }),
 		).rejects.toBe(denied);
+	});
+
+	it("brokered fetch wraps a rejected hostCall and preserves its cause", async () => {
+		const denied = new Error("sandbox binding operation failed");
+		const { hostCall } = rejector(denied);
+
+		try {
+			await callBrokeredFetch(hostCall, { url: "https://example.com" });
+			expect.unreachable("brokered fetch should reject");
+		} catch (error) {
+			expect(error).toBeInstanceOf(TypeError);
+			if (!(error instanceof TypeError)) return;
+			expect(error.message).toBe(denied.message);
+			expect(error.cause).toBe(denied);
+		}
 	});
 });

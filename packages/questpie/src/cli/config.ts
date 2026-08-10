@@ -188,6 +188,7 @@ export async function loadQuestpieConfig(
 					`Could not load generated app at ${generatedPath}: ${reason}\n` +
 					`Run \`questpie generate\` first to create .generated/index.ts,\n` +
 					`or point --config to a file that exports { app: QuestpieInstance }.`,
+				{ cause: error },
 			);
 		}
 	}
