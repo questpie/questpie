@@ -15,6 +15,15 @@ const loggerModule = pathToFileURL(
 		"../../src/server/modules/core/integrated/logger/service.ts",
 	),
 ).href;
+const observabilityServiceModule = pathToFileURL(
+	resolve(
+		import.meta.dir,
+		"../../src/server/modules/core/integrated/observability/service.ts",
+	),
+).href;
+const otelAdapterModule = pathToFileURL(
+	resolve(import.meta.dir, "../../../observability/src/otel-adapter.ts"),
+).href;
 
 describe("logging safety contract", () => {
 	it("tees the same correlated structured record sent to the logger adapter", async () => {
@@ -96,7 +105,7 @@ describe("logging safety contract", () => {
 			new Response(child.stderr).text(),
 			child.exited,
 		]);
-		expect(exitCode).toBe(0);
+		if (exitCode !== 0) throw new Error(stderr);
 		expect(stderr).toBe("");
 		expect(stdout).not.toContain("private-request");
 		expect(stdout).not.toContain("private-auth");
@@ -107,6 +116,91 @@ describe("logging safety contract", () => {
 			authorization: "[Redacted]",
 			requestId: "[Redacted]",
 			err: { type: "TypeError", message: "[Redacted]", code: "[Redacted]" },
+		});
+	});
+
+	it("keeps real Pino and the actual OTel exporter on one canonical record", async () => {
+		const child = Bun.spawn(
+			[
+				process.execPath,
+				"--eval",
+				`import { InMemoryLogRecordExporter, SimpleLogRecordProcessor } from "@opentelemetry/sdk-logs";
+				 import { runWithContext } from ${JSON.stringify(contextModule)};
+				 import { LoggerService } from ${JSON.stringify(loggerModule)};
+				 import { ObservabilityService } from ${JSON.stringify(observabilityServiceModule)};
+				 import { otelObservability } from ${JSON.stringify(otelAdapterModule)};
+				 const exporter = new InMemoryLogRecordExporter();
+				 const otel = otelObservability({
+				   serviceName: "logger-parity",
+				   logRecordProcessors: [new SimpleLogRecordProcessor({ exporter })],
+				 });
+				 const observability = new ObservabilityService({ adapter: otel });
+				 const logger = new LoggerService({
+				   pretty: false,
+				   redact: ["diagnostic.type", "err.code"],
+				 });
+				 await runWithContext({ app: { observability } }, async () => {
+				   logger.child({ component: "binding" }).error("collision", {
+				     component: "caller",
+				     diagnostic: new Map([["status", "safe"]]),
+				   });
+				   logger.error("root", Object.assign(new TypeError("private-error"), {
+				     code: "private-code",
+				   }));
+				 });
+				 const records = exporter.getFinishedLogRecords().map((record) => ({
+				   message: record.body,
+				   attributes: record.attributes,
+				 }));
+				 process.stderr.write(JSON.stringify(records));
+				 await otel.shutdown();`,
+			],
+			{
+				cwd: resolve(import.meta.dir, "../../../observability"),
+				env: { ...process.env, NODE_ENV: "production" },
+				stdout: "pipe",
+				stderr: "pipe",
+			},
+		);
+		const [stdout, stderr, exitCode] = await Promise.all([
+			new Response(child.stdout).text(),
+			new Response(child.stderr).text(),
+			child.exited,
+		]);
+		if (exitCode !== 0) throw new Error(stderr);
+		const pino = stdout
+			.trim()
+			.split("\n")
+			.filter(Boolean)
+			.map((line) => JSON.parse(line));
+		const otel = JSON.parse(stderr);
+		expect(pino).toHaveLength(2);
+		expect(otel).toHaveLength(2);
+
+		const pinoCollision = {
+			component: pino[0].component,
+			diagnostic: pino[0].diagnostic,
+		};
+		expect(pinoCollision).toEqual({
+			component: "caller",
+			diagnostic: {
+				type: "[Redacted]",
+				entries: [["status", "safe"]],
+			},
+		});
+		expect(otel[0]).toEqual({
+			message: "collision",
+			attributes: pinoCollision,
+		});
+
+		expect(pino[1].err).toEqual({
+			type: "TypeError",
+			message: "[Redacted]",
+			code: "[Redacted]",
+		});
+		expect(otel[1]).toEqual({
+			message: "root",
+			attributes: { err: pino[1].err },
 		});
 	});
 });

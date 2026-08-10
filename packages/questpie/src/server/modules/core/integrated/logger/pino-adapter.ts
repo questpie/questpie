@@ -12,7 +12,11 @@ export class PinoLoggerAdapter implements LoggerAdapter {
 
 		this.logger = pino({
 			level: config.level || "info",
-			redact: config.redact,
+			serializers: {
+				// LoggerService has already converted `err` into an inert canonical
+				// record. Pino's Error serializer must not reinterpret it or add a stack.
+				err: (value) => value,
+			},
 			transport:
 				(config.pretty ?? isDev)
 					? {

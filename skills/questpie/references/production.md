@@ -304,6 +304,8 @@ for both Pino and OTLP. Unsupported values, cycles, and non-finite numbers use
 explicit markers. Date, URL, Map, Set, and TypedArray values use tagged inert
 records; URL userinfo and fragments are removed. OTLP logs use recursive
 AnyValue attributes, independently from scalar span/metric attributes.
+Configured paths may target tagged fields such as `diagnostic.type`; the
+framework applies them before both sinks rather than running a second Pino pass.
 
 **Propagation:** an inbound `traceparent` is continued with the remote span as
 parent, so a distributed waterfall stays connected. Only the root reads headers.

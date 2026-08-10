@@ -119,7 +119,9 @@ Dates, URLs, Maps, Sets, and typed arrays become tagged records with `type` plus
 `value`, `entries`, or `values`. URL userinfo and fragments are removed, and
 sensitive query values are redacted. OTLP log attributes retain this recursive
 structure through the Logs AnyValue contract; span and metric attributes remain
-scalar or homogeneous primitive arrays.
+scalar or homogeneous primitive arrays. Configured paths may also target tagged
+fields such as `diagnostic.type`; QUESTPIE applies them before both sinks, not
+again inside Pino.
 
 Records written inside a request also pick up `trace_id` and `span_id` from the
 open span, once an observability adapter is wired. See

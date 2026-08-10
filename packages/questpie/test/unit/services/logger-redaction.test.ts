@@ -436,6 +436,31 @@ describe("logger structured-field redaction", () => {
 		expect(emitted[1].attributes).toEqual(log.records[1]?.args?.[0]);
 	});
 
+	it("always consumes the first structured argument after a guarded merge", () => {
+		const log = createCapturingLogger({ captureMessages: false });
+		const logger = new LoggerService({ adapter: log.adapter }).child({
+			component: "binding",
+		});
+		const unreadable = new Proxy(
+			{},
+			{
+				ownKeys() {
+					throw new Error("must stay unread");
+				},
+			},
+		);
+
+		logger.info("collision", { component: "caller" });
+		logger.info("empty", {}, "tail");
+		logger.info("unreadable", unreadable, "tail");
+
+		expect(log.records.map(({ args }) => args)).toEqual([
+			[{ component: "caller" }],
+			[{ component: "binding" }, "tail"],
+			[{ component: "binding" }, "tail"],
+		]);
+	});
+
 	it("does not claim to inspect caller-owned message strings", () => {
 		const messages: string[] = [];
 		const adapter: LoggerAdapter = {

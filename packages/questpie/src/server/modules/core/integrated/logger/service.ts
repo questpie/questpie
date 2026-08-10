@@ -75,9 +75,8 @@ export class LoggerService implements LoggerAdapter {
 			record.err = first;
 			remaining = rest;
 		} else if (first && typeof first === "object" && !Array.isArray(first)) {
-			const before = Object.keys(record).length;
 			this.mergeOwnDataInto(record, first);
-			if (Object.keys(record).length > before) remaining = rest;
+			remaining = rest;
 		}
 		this.mergeOwnDataInto(record, this.contextBindings());
 		const effective =

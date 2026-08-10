@@ -248,10 +248,15 @@ function serializeSupportedValue(
 	try {
 		const timestamp = Date.prototype.getTime.call(value);
 		if (!Number.isNaN(timestamp))
-			return inertRecord({
-				type: "Date",
-				value: new Date(timestamp).toISOString(),
-			});
+			return redactCanonicalRecord(
+				inertRecord({
+					type: "Date",
+					value: new Date(timestamp).toISOString(),
+				}),
+				path,
+				policy,
+				seen,
+			);
 	} catch {}
 	try {
 		const url = new URL(URL.prototype.toString.call(value));
@@ -263,7 +268,12 @@ function serializeSupportedValue(
 				url.searchParams.set(key, REDACTED);
 			}
 		}
-		return inertRecord({ type: "URL", value: url.toString() });
+		return redactCanonicalRecord(
+			inertRecord({ type: "URL", value: url.toString() }),
+			path,
+			policy,
+			seen,
+		);
 	} catch {}
 	try {
 		const result = inertRecord({
@@ -285,7 +295,7 @@ function serializeSupportedValue(
 					: redactValue(nested, [...path, policySegment], policy, seen),
 			]);
 		}
-		return result;
+		return redactCanonicalRecord(result, path, policy, seen);
 	} catch {}
 	try {
 		const result = inertRecord({
@@ -297,7 +307,7 @@ function serializeSupportedValue(
 		) as IterableIterator<unknown>;
 		for (const nested of iterator)
 			result.values.push(redactValue(nested, [...path, "value"], policy, seen));
-		return result;
+		return redactCanonicalRecord(result, path, policy, seen);
 	} catch {}
 	if (ArrayBuffer.isView(value)) {
 		const values = Object.entries(getDescriptors(value) ?? {})
@@ -306,13 +316,27 @@ function serializeSupportedValue(
 			.map(([key, descriptor]) =>
 				redactValue(descriptor.value, [...path, key], policy, seen),
 			);
-		return inertRecord({ type: "TypedArray", values });
+		return redactCanonicalRecord(
+			inertRecord({ type: "TypedArray", values }),
+			path,
+			policy,
+			seen,
+		);
 	}
 	return undefined;
 }
 
 function inertRecord<T extends Record<string, unknown>>(values: T): T {
 	return Object.assign(Object.create(null), values) as T;
+}
+
+function redactCanonicalRecord(
+	value: Record<string, unknown>,
+	path: string[],
+	policy: RedactionPolicy,
+	seen: WeakSet<object>,
+): unknown {
+	return redactValue(value, path, policy, seen);
 }
 
 function isErrorKey(key: string): boolean {
