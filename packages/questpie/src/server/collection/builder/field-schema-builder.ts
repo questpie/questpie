@@ -16,7 +16,6 @@ import { z } from "zod";
 
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { Field } from "#questpie/server/fields/field-class.js";
-import type { RelationFieldMetadata } from "#questpie/server/fields/types.js";
 
 // ============================================================================
 // Schema Building
@@ -88,7 +87,6 @@ export function extendSchemaWithNestedMutations(
 	for (const [fieldName, fieldDef] of Object.entries(fieldDefinitions)) {
 		const rawMetadata = fieldDef.getMetadata();
 		if (rawMetadata.type !== "relation") continue;
-		const metadata = rawMetadata as RelationFieldMetadata;
 
 		// Create a flexible schema that accepts nested mutations
 		const nestedMutationSchema = z

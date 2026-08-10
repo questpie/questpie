@@ -167,7 +167,7 @@ export function cronFiredInWindow(
 	const fields = parseCron(expression);
 
 	// Iterate each minute in the window
-	const current = new Date(windowStart);
+	let current = new Date(windowStart);
 	// Floor to the start of the minute
 	current.setSeconds(0, 0);
 
@@ -181,7 +181,9 @@ export function cronFiredInWindow(
 		) {
 			return true;
 		}
-		current.setMinutes(current.getMinutes() + 1);
+		const next = new Date(current);
+		next.setMinutes(next.getMinutes() + 1);
+		current = next;
 	}
 
 	return false;

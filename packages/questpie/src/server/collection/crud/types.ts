@@ -8,10 +8,7 @@ import type {
 	RelationConfig,
 	UploadOptions,
 } from "#questpie/server/collection/builder/types.js";
-import type {
-	BaseRequestContext,
-	RequestContext,
-} from "#questpie/server/config/context.js";
+import type { BaseRequestContext } from "#questpie/server/config/context.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type {
 	FieldDefinitionsWithSystem,
@@ -25,7 +22,6 @@ import type {
 	CollectionRelations,
 	CollectionSelect as CollectionSelectFromInfer,
 	CollectionState,
-	CollectionUpdate as CollectionUpdateFromInfer,
 	ExtractRelationApp,
 	ExtractRelationCollection,
 	ExtractRelationInsert,
@@ -290,89 +286,6 @@ export type WhereOperators<T> = T extends { getOperators: () => any }
  */
 type RelationValue<T> = T extends (infer U)[] ? U : T;
 
-type RelationTargetNameFromConfig<TConfig> = TConfig extends {
-	to: infer TTo;
-}
-	? TTo extends string
-		? TTo
-		: TTo extends () => { name: infer TName extends string }
-			? TName
-			: TTo extends Record<string, infer TValue>
-				?
-						| (TValue extends string
-								? TValue
-								: TValue extends () => {
-											name: infer TObjectName extends string;
-									  }
-									? TObjectName
-									: never)
-						| (keyof TTo & string)
-				: never
-	: never;
-
-type InferRelationKindFromConfig<TConfig> = TConfig extends {
-	morphName: string;
-}
-	? "many"
-	: TConfig extends { hasMany: true }
-		? TConfig extends { through: any }
-			? "manyToMany"
-			: "many"
-		: "one";
-
-type RelationSelectFromConfig<TConfig, TApp> =
-	RelationTargetNameFromConfig<TConfig> extends infer TTarget
-		? TTarget extends string
-			? CollectionSelect<GetCollection<AppCollections<TApp>, TTarget>, TApp>
-			: never
-		: never;
-
-type RelationSelectFromConfigWithKind<TConfig, TApp> =
-	InferRelationKindFromConfig<TConfig> extends "many" | "manyToMany"
-		? RelationSelectFromConfig<TConfig, TApp>[]
-		: RelationSelectFromConfig<TConfig, TApp>;
-
-type BlockNodeFromRegistry<TBlocks> = {
-	id: string;
-	type: Extract<keyof TBlocks, string>;
-	children?: BlockNodeFromRegistry<TBlocks>[];
-};
-
-type BlockValuesFromDefinition<TBlock, TApp> = TBlock extends {
-	state: { fields: infer TFields };
-}
-	? TFields extends Record<string, AnyFieldDefinition>
-		? {
-				[K in keyof TFields]: FieldSelect<TFields[K], TApp>;
-			}
-		: Record<string, {}>
-	: Record<string, {}>;
-
-type BlockValuesUnion<TBlocks, TApp> =
-	TBlocks extends Record<string, any>
-		? BlockValuesFromDefinition<TBlocks[keyof TBlocks], TApp>
-		: Record<string, {}>;
-
-type BlocksDocumentBase = {
-	_tree: Array<{ id: string; type: string; children?: any[] }>;
-	_values: Record<string, Record<string, {}>>;
-	_data?: Record<string, Record<string, {}>>;
-};
-
-type BlocksSelectFromRegistry<TBlocks, TApp> =
-	TBlocks extends Record<string, any>
-		? {
-				_tree: BlockNodeFromRegistry<TBlocks>[];
-				_values: Record<string, BlockValuesUnion<TBlocks, TApp>>;
-				_data?: Record<string, Record<string, {}>>;
-			}
-		: BlocksDocumentBase;
-
-type BlocksSelectFromApp<TApp> = BlocksSelectFromRegistry<
-	TApp extends { blocks?: infer TBlocks } ? TBlocks : undefined,
-	TApp
->;
-
 /**
  * Build CollectionSelect purely from field definitions (v2).
  *
@@ -455,42 +368,6 @@ type ResolveRelationsDeepFromApp<
 
 export type CollectionRelationsFromApp<TCollection, TApp> =
 	ResolveRelationsDeepFromApp<CollectionRelationsFor<TCollection>, TApp>;
-
-type RelationTargetCollectionFromConfig<TConfig, TApp> =
-	RelationTargetNameFromConfig<TConfig> extends infer TTarget
-		? TTarget extends string
-			? GetCollection<AppCollections<TApp>, TTarget>
-			: never
-		: never;
-
-/**
- * Resolve CollectionWherePlaceholder brands in a where operator map.
- *
- * FieldWhere produces `{ some?: CollectionWherePlaceholder; eq?: string; ... }`.
- * This type walks each property: if the value extends CollectionWherePlaceholder,
- * replace it with `Where<TargetCollection, TApp>`. Otherwise pass through.
- *
- * The field's operators are the source of truth for WHAT operators exist.
- * This type resolves the cross-collection types they couldn't express.
- */
-type ResolveWherePlaceholders<
-	TWhereShape,
-	TConfig,
-	TApp,
-	Depth extends unknown[] = DefaultWhereDepth,
-> = {
-	[K in keyof TWhereShape]?: NonNullable<
-		TWhereShape[K]
-	> extends CollectionWherePlaceholder
-		? Depth extends []
-			? never
-			: WhereFromCollection<
-					RelationTargetCollectionFromConfig<TConfig, TApp>,
-					TApp,
-					DecrementDepth<Depth>
-				>
-		: TWhereShape[K];
-};
 
 type RelationWhereFromTarget<
 	TTo extends string,

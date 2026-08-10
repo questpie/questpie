@@ -42,7 +42,7 @@ if (!stdout.trim()) {
 let advisories: Record<string, Advisory[]>;
 try {
 	advisories = JSON.parse(stdout);
-} catch (err) {
+} catch {
 	console.error("Could not parse `bun audit --json` output:");
 	console.error(stdout);
 	console.error(proc.stderr.toString());

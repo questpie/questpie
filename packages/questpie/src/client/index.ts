@@ -58,7 +58,6 @@ import { createChannelsAPI, type ChannelsClient } from "./channels/index.js";
 // pulls the whole 164 KB client CRDT implementation into every bundle — see
 // ./crdt-host.ts for the measurement.
 import { CRDT_CLIENT_HOST, type CrdtClientHostHandle } from "./crdt-host.js";
-import type { CrdtClientRuntimeConfig } from "./crdt/types.js";
 import {
 	buildCollectionTopic,
 	buildGlobalTopic,

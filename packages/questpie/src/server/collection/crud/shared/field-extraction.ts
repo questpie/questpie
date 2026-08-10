@@ -4,10 +4,7 @@
  * Runtime helpers to extract field information from Field state.
  */
 
-import type {
-	FieldRuntimeState,
-	FieldState,
-} from "#questpie/server/fields/field-class-types.js";
+import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { Field } from "#questpie/server/fields/field-class.js";
 
 /**
