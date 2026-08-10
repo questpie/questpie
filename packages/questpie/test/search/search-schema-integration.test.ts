@@ -1,10 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { collection } from "../../src/exports/index.js";
-import {
-	createPgVectorSearchAdapter,
-	type PgVectorSearchAdapter,
-} from "../../src/server/modules/core/integrated/search/adapters/pgvector.js";
+import { createPgVectorSearchAdapter } from "../../src/server/modules/core/integrated/search/adapters/pgvector.js";
 import { createPostgresSearchAdapter } from "../../src/server/modules/core/integrated/search/adapters/postgres.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 

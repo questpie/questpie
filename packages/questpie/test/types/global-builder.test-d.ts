@@ -8,7 +8,6 @@
  * Run with: tsc --noEmit
  */
 
-import { sql } from "drizzle-orm";
 import { boolean, integer, jsonb, text, varchar } from "drizzle-orm/pg-core";
 
 import type { GlobalBuilder } from "#questpie/server/global/builder/global-builder.js";
@@ -108,14 +107,13 @@ type _maintenanceOptional = Expect<
 // ============================================================================
 
 // Hooks should type data correctly
-const hooksSettings = global("settings")
+const _hooksSettings = global("settings")
 	.fields({
 		siteName: text("site_name").notNull(),
 		maintenanceMode: boolean("maintenance_mode"),
 	})
 	.hooks({
 		afterChange: async ({ data }) => {
-			// data should be select type
 			const _id: string = data.id;
 			const _siteName: string = data.siteName;
 		},
@@ -126,20 +124,14 @@ const hooksSettings = global("settings")
 // ============================================================================
 
 // Access should type context with session
-const accessSettings = global("settings")
+const _accessSettings = global("settings")
 	.fields({
 		siteName: text("site_name"),
 		adminOnly: boolean("admin_only"),
 	})
 	.access({
-		read: ({ session }) => {
-			// Anyone can read
-			return true;
-		},
-		update: ({ session }) => {
-			// Only authenticated users can update
-			return !!session?.user;
-		},
+		read: ({ session: _session }) => true,
+		update: ({ session }) => !!session?.user,
 	});
 
 // ============================================================================
@@ -158,7 +150,7 @@ const complexSettings = global("site_settings")
 		}>(),
 	})
 	.hooks({
-		beforeChange: async ({ data }) => {
+		beforeChange: async ({ data: _data }) => {
 			// Can access data fields
 		},
 	})

@@ -34,7 +34,6 @@ import type { NoAny } from "../_assert.js";
 import type { Equal, Expect, HasKey } from "../type-test-utils.js";
 import type { AppServices } from "./.generated/index.js";
 import { analyticsService } from "./services/analytics.js";
-import { reportingService } from "./services/reporting.js";
 
 // ── (a) The composed services fold resolves (no TS2456 degradation) ─────────
 // AppServices must carry BOTH the inferred-return cycle-trigger (`analytics`)

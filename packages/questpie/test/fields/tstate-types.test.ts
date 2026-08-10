@@ -42,20 +42,20 @@ describe("TState Type Inference (compile-time only)", () => {
 		const _countVirtual: CountState["virtual"] = true;
 
 		// Input type extraction
-		type TitleInput = ExtractInputType<TitleState>; // string (required, no default)
-		type ContentInput = ExtractInputType<ContentState>; // string | null | undefined (nullable)
-		type ExcerptInput = ExtractInputType<ExcerptState>; // never (virtual, no input)
-		type CountInput = ExtractInputType<CountState>; // never (virtual, no input)
+		type _TitleInput = ExtractInputType<TitleState>; // string (required, no default)
+		type _ContentInput = ExtractInputType<ContentState>; // string | null | undefined (nullable)
+		type _ExcerptInput = ExtractInputType<ExcerptState>; // never (virtual, no input)
+		type _CountInput = ExtractInputType<CountState>; // never (virtual, no input)
 
 		// Output type extraction
-		type TitleOutput = ExtractSelectType<TitleState>; // string (notNull)
-		type ContentOutput = ExtractSelectType<ContentState>; // string | null
-		type ExcerptOutput = ExtractSelectType<ExcerptState>; // string | null
-		type CountOutput = ExtractSelectType<CountState>; // number | null
+		type _TitleOutput = ExtractSelectType<TitleState>; // string (notNull)
+		type _ContentOutput = ExtractSelectType<ContentState>; // string | null
+		type _ExcerptOutput = ExtractSelectType<ExcerptState>; // string | null
+		type _CountOutput = ExtractSelectType<CountState>; // number | null
 
 		// Column types
-		type TitleColumn = TitleState["column"]; // PgVarchar (not null)
-		type ExcerptColumn = ExcerptState["column"]; // null (virtual)
+		type _TitleColumn = TitleState["column"]; // PgVarchar (not null)
+		type _ExcerptColumn = ExcerptState["column"]; // null (virtual)
 
 		// Runtime assertions (just to have something to execute)
 		expect(titleField.getLocation()).toBe("main");
@@ -67,27 +67,27 @@ describe("TState Type Inference (compile-time only)", () => {
 	test("input variations are correctly inferred", () => {
 		// required: true
 		const requiredField = f.text().required();
-		type RequiredInput = (typeof requiredField._)["input"];
+		type _RequiredInput = (typeof requiredField._)["input"];
 		// RequiredInput narrows to true (notNull means input is required)
 
 		// default value
 		const defaultField = f.text().default("untitled");
-		type DefaultHasDefault = (typeof defaultField._)["hasDefault"];
+		type _DefaultHasDefault = (typeof defaultField._)["hasDefault"];
 		// DefaultHasDefault narrows to true
 
 		// input: false
 		const noInputField = f.text().inputFalse();
-		type NoInputFlag = (typeof noInputField._)["input"];
+		type _NoInputFlag = (typeof noInputField._)["input"];
 		// NoInputFlag narrows to false
 
 		// input: "optional"
 		const optionalField = f.text().inputOptional();
-		type OptionalInputFlag = (typeof optionalField._)["input"];
+		type _OptionalInputFlag = (typeof optionalField._)["input"];
 		// OptionalInputFlag narrows to "optional"
 
 		// virtual + input: true
 		const virtualWithInput = f.text().virtual().inputTrue();
-		type VirtualWithInputFlag = (typeof virtualWithInput._)["input"];
+		type _VirtualWithInputFlag = (typeof virtualWithInput._)["input"];
 		// VirtualWithInputFlag narrows to true
 
 		expect(requiredField._state.notNull).toBe(true);
@@ -100,19 +100,19 @@ describe("TState Type Inference (compile-time only)", () => {
 	test("output variations are correctly inferred", () => {
 		// default
 		const normalField = f.text();
-		type NormalOutput = (typeof normalField._)["output"];
+		type _NormalOutput = (typeof normalField._)["output"];
 		// NormalOutput is true (default)
 
 		// output: false
 		const hiddenField = f.text().outputFalse();
-		type HiddenOutput = (typeof hiddenField._)["output"];
+		type _HiddenOutput = (typeof hiddenField._)["output"];
 		// HiddenOutput is false
 
 		// access.read function
 		const restrictedField = f
 			.text()
 			.access({ read: (ctx: any) => (ctx.user as any)?.role === "admin" });
-		type RestrictedOutput = (typeof restrictedField._)["output"];
+		type _RestrictedOutput = (typeof restrictedField._)["output"];
 		// RestrictedOutput is still true (access doesn't change type-level output)
 
 		expect(normalField._state.output).toBe(true);

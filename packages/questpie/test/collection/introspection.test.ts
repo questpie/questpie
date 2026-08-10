@@ -21,9 +21,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { collection } from "../../src/exports/index.js";
 import {
-	type CollectionSchema,
 	extractFormReactiveConfigs,
-	type FieldSchema,
 	introspectCollection,
 	introspectCollections,
 } from "../../src/server/collection/introspection.js";

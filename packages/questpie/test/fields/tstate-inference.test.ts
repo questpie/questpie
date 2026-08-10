@@ -163,8 +163,8 @@ describe("Collection Type Inference", () => {
 
 		// Test that we can use the types
 		type PostState = typeof posts.state;
-		type PostSelect = CollectionSelect<PostState>;
-		type PostInsert = CollectionInsert<PostState>;
+		type _PostSelect = CollectionSelect<PostState>;
+		type _PostInsert = CollectionInsert<PostState>;
 
 		// Type checking only - runtime test
 		expect(posts.state.fieldDefinitions).toBeDefined();

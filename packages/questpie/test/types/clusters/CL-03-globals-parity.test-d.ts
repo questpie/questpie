@@ -53,7 +53,6 @@ import type {
 	HasKey,
 	IsArrayType,
 	IsNever,
-	IsUnknown,
 	NoNever,
 	NoStringIndex,
 	NoUnknown,

@@ -4,11 +4,9 @@ import { z } from "zod";
 
 import {
 	email,
-	type EmailTemplateDefinition,
 	type InferEmailTemplateInput,
 	type InferEmailTemplateContext,
 	type EmailResult,
-	type EmailHandlerArgs,
 } from "../../../src/server/modules/core/integrated/mailer/template.js";
 
 describe("email() factory", () => {
