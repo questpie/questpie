@@ -1,6 +1,6 @@
 {
 	"name": "@questpie/workflows",
-	"version": "3.26.2",
+	"version": "3.27.0",
 	"description": "Durable, replay-based workflow engine for QUESTPIE",
 	"repository": {
 		"type": "git",

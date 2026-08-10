@@ -1,5 +1,12 @@
 # @questpie/next
 
+## 3.27.0
+
+### Patch Changes
+
+- Updated dependencies [[`74b9a6d`](https://github.com/questpie/questpie/commit/74b9a6d35f47d627177966beb81c395f45216790), [`3214843`](https://github.com/questpie/questpie/commit/3214843c46238a66097a5d3bc35e65dc1a7732e2), [`5fff464`](https://github.com/questpie/questpie/commit/5fff46425ee306fd89dddb663b0e60ba33c528a9), [`8a9eef7`](https://github.com/questpie/questpie/commit/8a9eef739bbecc8ba8e9a3444eb8905ef4307585), [`5fff464`](https://github.com/questpie/questpie/commit/5fff46425ee306fd89dddb663b0e60ba33c528a9), [`bd75a6b`](https://github.com/questpie/questpie/commit/bd75a6b01f661fe5277d0905ed35acd7db271953)]:
+  - questpie@3.27.0
+
 ## 3.26.2
 
 ### Patch Changes

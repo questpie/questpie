@@ -1,6 +1,6 @@
 {
 	"name": "@questpie/crdt-yjs",
-	"version": "3.26.2",
+	"version": "3.27.0",
 	"description": "Yjs text engines for QUESTPIE collaborative aggregates",
 	"repository": {
 		"type": "git",

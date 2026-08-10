@@ -1,5 +1,21 @@
 # @questpie/admin
 
+## 3.27.0
+
+### Minor Changes
+
+- [#255](https://github.com/questpie/questpie/pull/255) [`74b9a6d`](https://github.com/questpie/questpie/commit/74b9a6d35f47d627177966beb81c395f45216790) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add typed audit persistence, retention, field-classification, workload identity, and canonical after-commit sink policies. Required persistence shares the protected mutation transaction; best-effort persistence uses a fresh post-commit transaction; external sink delivery is explicitly non-durable and post-commit only.
+
+  Credential-like fields are omitted from new diffs unless explicitly classified. The 3.x audit collection keeps its public-read default for compatibility; applications should opt into a restricted merged access policy before a future major release changes that default. Regenerate factories and migrate `config/audit.ts` to the new `persistence` and `export` shape.
+
+### Patch Changes
+
+- [#253](https://github.com/questpie/questpie/pull/253) [`8a9eef7`](https://github.com/questpie/questpie/commit/8a9eef739bbecc8ba8e9a3444eb8905ef4307585) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Remove unreachable private framework modules and obsolete prototype-only tests. No consumer migration is required because public exports and runtime behavior are unchanged.
+
+- Updated dependencies [[`74b9a6d`](https://github.com/questpie/questpie/commit/74b9a6d35f47d627177966beb81c395f45216790), [`3214843`](https://github.com/questpie/questpie/commit/3214843c46238a66097a5d3bc35e65dc1a7732e2), [`5fff464`](https://github.com/questpie/questpie/commit/5fff46425ee306fd89dddb663b0e60ba33c528a9), [`8a9eef7`](https://github.com/questpie/questpie/commit/8a9eef739bbecc8ba8e9a3444eb8905ef4307585), [`5fff464`](https://github.com/questpie/questpie/commit/5fff46425ee306fd89dddb663b0e60ba33c528a9), [`bd75a6b`](https://github.com/questpie/questpie/commit/bd75a6b01f661fe5277d0905ed35acd7db271953)]:
+  - questpie@3.27.0
+  - @questpie/tanstack-query@3.27.0
+
 ## 3.26.2
 
 ### Patch Changes

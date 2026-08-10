@@ -1,5 +1,11 @@
 # @questpie/observability
 
+## 3.18.1
+
+### Patch Changes
+
+- [#254](https://github.com/questpie/questpie/pull/254) [`bd75a6b`](https://github.com/questpie/questpie/commit/bd75a6b01f661fe5277d0905ed35acd7db271953) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Validate inbound correlation identifiers and apply one redaction policy to the final effective Pino and OTLP log record, including configured paths that target canonical tagged fields. Structured values now use a canonical inert schema: unsupported values, cycles, and non-finite numbers become explicit markers; Date, URL, Map, Set, and TypedArray values use tagged records; URL credentials and fragments are removed. OpenTelemetry log attributes support the recursive AnyValue contract independently from scalar span and metric attributes.
+
 ## 3.18.0
 
 ### Minor Changes
@@ -65,6 +71,7 @@
   falls back to the by-type component rather than rendering nothing.
 
   ## Removed
+
   - `createAdapterRoutes` and the legacy route closure factories — routes are
     defined with `route()`; the framework no longer ships two ways to mount a
     handler.
@@ -78,6 +85,7 @@
     imports of the framework's own deprecated API are now **zero**, down from 166.
 
   ## Fixed
+
   - **Builders lost the app field map on every derivation.** `_fieldDefs` was
     assigned once in `create()` and carried by none of the nineteen derivation
     sites, so `collection("posts").admin({…}).fields(({ f }) => f.richText())`
@@ -111,6 +119,7 @@
   - OpenAPI schema component names match the rest of the framework.
 
   ## Performance
+
   - Field builder chains typecheck **about twice as fast** — field methods moved
     onto the class instead of a 27-key mapped type.
   - The client no longer bundles `qs`: **−90 KB** from the browser bundle.
