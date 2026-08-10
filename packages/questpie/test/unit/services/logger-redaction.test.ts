@@ -94,6 +94,24 @@ describe("logger structured-field redaction", () => {
 		});
 	});
 
+	it("produces inert JSON that cannot execute caller toJSON hooks", () => {
+		let invoked = false;
+		const value = {
+			token: "private-token",
+			toJSON: () => {
+				invoked = true;
+				return { token: "reintroduced-secret" };
+			},
+		};
+		const log = createCapturingLogger({ captureMessages: false });
+		new LoggerService({ adapter: log.adapter }).info("json", value);
+		const json = JSON.stringify(log.records[0]?.args?.[0]);
+		expect(invoked).toBe(false);
+		expect(json).not.toContain("private-token");
+		expect(json).not.toContain("reintroduced-secret");
+		expect(json).toContain("[Unsupported]");
+	});
+
 	it("fails closed for error-like getters, Error subclasses, and proxies", async () => {
 		class UnsafeError extends Error {
 			get name(): never {
@@ -133,7 +151,7 @@ describe("logger structured-field redaction", () => {
 		const emitted: any[] = [];
 		const logger = new LoggerService({
 			adapter: log.adapter,
-			redact: ["map.customerEmail", "url.customerEmail"],
+			redact: ["map.customerEmail", "url.customerEmail", "bytes.1"],
 		});
 		await runWithContext(
 			{
@@ -171,7 +189,7 @@ describe("logger structured-field redaction", () => {
 				],
 			},
 			set: { type: "Set", values: ["value"] },
-			bytes: { type: "TypedArray", values: [1, 2, 3] },
+			bytes: { type: "TypedArray", values: [1, "[Redacted]", 3] },
 		});
 		expect(emitted[0].attributes).toEqual(diagnostics);
 	});
@@ -200,7 +218,26 @@ describe("logger structured-field redaction", () => {
 			["TypeError", new TypeError("private")],
 			["URIError", new URIError("private")],
 			["AggregateError", new AggregateError([], "private")],
+			["DOMException", new DOMException("private")],
+			["WebAssembly.CompileError", new WebAssembly.CompileError("private")],
+			["WebAssembly.LinkError", new WebAssembly.LinkError("private")],
+			["WebAssembly.RuntimeError", new WebAssembly.RuntimeError("private")],
 		];
+		const SuppressedErrorConstructor = (
+			globalThis as unknown as {
+				SuppressedError?: new (
+					error: unknown,
+					suppressed: unknown,
+					message?: string,
+				) => Error;
+			}
+		).SuppressedError;
+		if (SuppressedErrorConstructor) {
+			errorCases.push([
+				"SuppressedError",
+				new SuppressedErrorConstructor(null, null, "private"),
+			]);
+		}
 		const log = createCapturingLogger({ captureMessages: false });
 		new LoggerService({ adapter: log.adapter }).info("matrix", {
 			map: new Map([
@@ -211,7 +248,7 @@ describe("logger structured-field redaction", () => {
 		});
 		const record = log.records[0]?.args?.[0] as Record<string, any>;
 		expect(record.map.entries).toEqual([
-			[{ token: "[Redacted]", toString: hostileKey.toString }, "safe"],
+			[{ token: "[Redacted]", toString: "[Unsupported]" }, "safe"],
 			["[Unserializable]", "safe"],
 		]);
 		expect(record.errors).toEqual(

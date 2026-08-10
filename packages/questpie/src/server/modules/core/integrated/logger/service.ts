@@ -73,7 +73,10 @@ export class LoggerService implements LoggerAdapter {
 		if (Object.keys(this.teeBindings).length === 0) return args;
 		const [first, ...rest] = args;
 		if (first && typeof first === "object" && !Array.isArray(first)) {
-			return [{ ...this.teeBindings, ...first }, ...rest];
+			return [
+				Object.assign(Object.create(null), this.teeBindings, first),
+				...rest,
+			];
 		}
 		return [this.teeBindings, ...args];
 	}
@@ -151,7 +154,7 @@ export class LoggerService implements LoggerAdapter {
 			return [{ err: first, ...bindings }, ...rest];
 		}
 		if (first && typeof first === "object" && !Array.isArray(first)) {
-			return [{ ...first, ...bindings }, ...rest];
+			return [Object.assign(Object.create(null), first, bindings), ...rest];
 		}
 		return [bindings, ...args];
 	}

@@ -1,11 +1,19 @@
 const REDACTED = "[Redacted]";
 const SENSITIVE_KEY_SUFFIXES = [
 	"authorization",
+	"authorizations",
 	"cookie",
+	"cookies",
 	"password",
+	"passwords",
+	"passwordhash",
+	"passwordhashes",
 	"token",
+	"tokens",
 	"secret",
+	"secrets",
 	"apikey",
+	"apikeys",
 ] as const;
 
 interface RedactionPolicy {
@@ -27,7 +35,7 @@ export function redactLogArgs(
 			value !== null &&
 			typeof value === "object" &&
 			isError(value)
-			? { err: redacted }
+			? inertRecord({ err: redacted })
 			: redacted;
 	});
 }
@@ -49,7 +57,9 @@ function redactValue(
 	seen: WeakMap<object, unknown>,
 ): unknown {
 	if (matchesPath(path, policy.paths)) return REDACTED;
-	if (!value || typeof value !== "object") return value;
+	if (value === null || ["string", "number", "boolean"].includes(typeof value))
+		return value;
+	if (typeof value !== "object") return "[Unsupported]";
 	const existing = seen.get(value);
 	if (existing) return existing;
 	const descriptors = getDescriptors(value);
@@ -59,7 +69,7 @@ function redactValue(
 	if (supported !== undefined) return supported;
 	const clone: Record<string, unknown> | unknown[] = Array.isArray(value)
 		? []
-		: {};
+		: Object.create(null);
 	seen.set(value, clone);
 	for (const [key, descriptor] of Object.entries(descriptors)) {
 		if (!descriptor.enumerable || !("value" in descriptor)) continue;
@@ -106,14 +116,14 @@ function serializeErrorDescriptors(
 	descriptors: Record<string, PropertyDescriptor>,
 ): Record<string, unknown> {
 	const ownName = dataProperty(descriptors, "name");
-	const result: Record<string, unknown> = {
+	const result: Record<string, unknown> = Object.assign(Object.create(null), {
 		type:
 			typeof ownName === "string" &&
 			/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(ownName)
 				? ownName
 				: trustedErrorType(error),
 		message: REDACTED,
-	};
+	});
 	const code = dataProperty(descriptors, "code");
 	if (["string", "number"].includes(typeof code)) result.code = code;
 	return result;
@@ -128,7 +138,7 @@ function serializeErrorLike(
 	const error = isError(value);
 	if (!error && !descriptors.message && !descriptors.stack) return undefined;
 	if (error) return serializeErrorDescriptors(value, descriptors);
-	const result: Record<string, unknown> = {};
+	const result: Record<string, unknown> = Object.create(null);
 	for (const key of ["type", "name", "code", "status", "statusCode"] as const) {
 		const candidate = dataProperty(descriptors, key);
 		if (["string", "number"].includes(typeof candidate))
@@ -156,7 +166,14 @@ function trustedErrorType(value: object): string {
 		[TypeError.prototype, "TypeError"],
 		[URIError.prototype, "URIError"],
 		[Error.prototype, "Error"],
+		[DOMException.prototype, "DOMException"],
+		[WebAssembly.CompileError.prototype, "WebAssembly.CompileError"],
+		[WebAssembly.LinkError.prototype, "WebAssembly.LinkError"],
+		[WebAssembly.RuntimeError.prototype, "WebAssembly.RuntimeError"],
 	]);
+	const suppressed = (globalThis as { SuppressedError?: { prototype: object } })
+		.SuppressedError;
+	if (suppressed) trusted.set(suppressed.prototype, "SuppressedError");
 	try {
 		let prototype = Object.getPrototypeOf(value);
 		while (prototype) {
@@ -195,24 +212,28 @@ function serializeSupportedValue(
 	try {
 		const timestamp = Date.prototype.getTime.call(value);
 		if (!Number.isNaN(timestamp))
-			return { type: "Date", value: new Date(timestamp).toISOString() };
+			return inertRecord({
+				type: "Date",
+				value: new Date(timestamp).toISOString(),
+			});
 	} catch {}
 	try {
 		const url = new URL(URL.prototype.toString.call(value));
 		url.username = "";
 		url.password = "";
+		url.hash = "";
 		for (const key of url.searchParams.keys()) {
 			if (isSensitiveKey(key) || matchesPath([...path, key], policy.paths)) {
 				url.searchParams.set(key, REDACTED);
 			}
 		}
-		return { type: "URL", value: url.toString() };
+		return inertRecord({ type: "URL", value: url.toString() });
 	} catch {}
 	try {
-		const result: { type: "Map"; entries: unknown[] } = {
+		const result = inertRecord({
 			type: "Map",
-			entries: [],
-		};
+			entries: [] as unknown[],
+		});
 		const iterator = Map.prototype.entries.call(value) as IterableIterator<
 			[unknown, unknown]
 		>;
@@ -232,10 +253,10 @@ function serializeSupportedValue(
 		return result;
 	} catch {}
 	try {
-		const result: { type: "Set"; values: unknown[] } = {
+		const result = inertRecord({
 			type: "Set",
-			values: [],
-		};
+			values: [] as unknown[],
+		});
 		const iterator = Set.prototype.values.call(
 			value,
 		) as IterableIterator<unknown>;
@@ -245,12 +266,19 @@ function serializeSupportedValue(
 		return result;
 	} catch {}
 	if (ArrayBuffer.isView(value)) {
-		const values = Object.values(getDescriptors(value) ?? {})
-			.filter((descriptor) => descriptor.enumerable && "value" in descriptor)
-			.map((descriptor) => descriptor.value);
-		return { type: "TypedArray", values };
+		const values = Object.entries(getDescriptors(value) ?? {})
+			.filter(([key, descriptor]) => /^\d+$/.test(key) && "value" in descriptor)
+			.sort(([left], [right]) => Number(left) - Number(right))
+			.map(([key, descriptor]) =>
+				redactValue(descriptor.value, [...path, key], policy, seen),
+			);
+		return inertRecord({ type: "TypedArray", values });
 	}
 	return undefined;
+}
+
+function inertRecord<T extends Record<string, unknown>>(values: T): T {
+	return Object.assign(Object.create(null), values) as T;
 }
 
 function isErrorKey(key: string): boolean {
@@ -259,9 +287,21 @@ function isErrorKey(key: string): boolean {
 }
 
 function isSensitiveKey(key: string): boolean {
-	const normalized = normalizeKey(key);
-	return SENSITIVE_KEY_SUFFIXES.some(
-		(suffix) => normalized === suffix || normalized.endsWith(suffix),
+	const words = key
+		.replaceAll(/([a-z0-9])([A-Z])/g, "$1 $2")
+		.toLowerCase()
+		.split(/[^a-z0-9]+/)
+		.filter(Boolean);
+	const last = words.at(-1) ?? "";
+	const compound = words.slice(-2).join("");
+	return (
+		SENSITIVE_KEY_SUFFIXES.includes(
+			last as (typeof SENSITIVE_KEY_SUFFIXES)[number],
+		) ||
+		compound === "apikey" ||
+		compound === "apikeys" ||
+		compound === "passwordhash" ||
+		compound === "passwordhashes"
 	);
 }
 
