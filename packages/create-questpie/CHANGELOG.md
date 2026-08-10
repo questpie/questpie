@@ -1,5 +1,25 @@
 # create-questpie
 
+## 2.4.1
+
+### Patch Changes
+
+- [#252](https://github.com/questpie/questpie/pull/252) [`1a81417`](https://github.com/questpie/questpie/commit/1a8141742292e9e17149ec4e6bc88c1c42bdfc3e) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Harden and align every generated runtime before release.
+
+  - **Scaffolds:** Next, Hono, and Elysia now install and mount their canonical
+    QUESTPIE adapters; TanStack Start keeps the supported low-level Fetch seam and
+    forwards all seven HTTP methods. Browser scaffolds install the realtime peer,
+    and headless production builds retain their external runtime dependencies.
+  - **Examples:** repository examples invoke the public `questpie` binary instead
+    of package source paths while retaining their explicit config compatibility
+    flags. The workspace and published CLI now use a stable packaged bin shim, so
+    Bun can link the command before `dist` is built on a clean checkout.
+  - **Docs and Skills:** runtime ownership, migration guidance, typed-client
+    boundaries, and module/plugin graph rules now match executable behavior.
+  - **Release proof:** a publish-shaped four-runtime matrix scaffolds through the
+    installed public CLI, generates, typechecks, builds, boots, probes ownership
+    boundaries, and verifies bounded SIGTERM cleanup before publish.
+
 ## 2.4.0
 
 ### Minor Changes

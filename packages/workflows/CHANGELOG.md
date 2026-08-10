@@ -1,5 +1,13 @@
 # @questpie/workflows
 
+## 3.26.2
+
+### Patch Changes
+
+- Updated dependencies [[`be5dcd5`](https://github.com/questpie/questpie/commit/be5dcd5b6c0cd6034a15a8ab73d6d767d358a3f7), [`1a81417`](https://github.com/questpie/questpie/commit/1a8141742292e9e17149ec4e6bc88c1c42bdfc3e), [`9f8b921`](https://github.com/questpie/questpie/commit/9f8b921685178d9b4af51bfd7febba02c9a0fee2), [`8d4fbad`](https://github.com/questpie/questpie/commit/8d4fbad5da94ddbd32237ac10c7cf601750afe6a)]:
+  - questpie@3.26.2
+  - @questpie/admin@3.26.2
+
 ## 3.26.1
 
 ### Patch Changes
