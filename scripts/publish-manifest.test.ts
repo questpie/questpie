@@ -7,6 +7,7 @@ import elysiaPackageJson from "../packages/elysia/package.json";
 import honoPackageJson from "../packages/hono/package.json";
 import mcpPackageJson from "../packages/mcp/package.json";
 import nextPackageJson from "../packages/next/package.json";
+import observabilityPackageJson from "../packages/observability/package.json";
 import openApiPackageJson from "../packages/openapi/package.json";
 import questpiePackageJson from "../packages/questpie/package.json";
 import sandboxPackageJson from "../packages/sandbox/package.json";
@@ -78,6 +79,8 @@ describe("publish manifest workspace dependencies", () => {
 			questpie: "^3.17.0",
 		});
 		expect(adminPackageJson.version).toBe(questpiePackageJson.version);
+		expect(observabilityPackageJson.version).toBe(questpiePackageJson.version);
+		expect(changesetConfig.fixed[0]).toContain(observabilityPackageJson.name);
 		expect(
 			changesetConfig.___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH
 				.onlyUpdatePeerDependentsWhenOutOfRange,
