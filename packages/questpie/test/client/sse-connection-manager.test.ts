@@ -91,10 +91,11 @@ describe("SSE connection manager failure classification", () => {
 
 		await waitFor(() => controllers.length === 1);
 		expect(requests).toBe(2);
-		// The configured retry delay is 20 ms. A positive lower bound remains
-		// valid when a loaded event loop resumes the test after that deadline.
+		// The configured retry delay is 20 ms. Allow 2 ms for monotonic-clock
+		// precision while keeping the assertion safe when a loaded event loop
+		// resumes the test after that deadline.
 		expect(requestStartedAt[1]! - requestStartedAt[0]!).toBeGreaterThanOrEqual(
-			10,
+			18,
 		);
 		expect(errors).toEqual([]);
 		expect(epochEnds.map((error) => error.message)).toEqual([
