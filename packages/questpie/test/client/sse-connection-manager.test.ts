@@ -69,6 +69,7 @@ function registerChannel(
 describe("SSE connection manager failure classification", () => {
 	test("backs off and retries an initial transport failure without a terminal resource error", async () => {
 		let requests = 0;
+		const requestStartedAt: number[] = [];
 		const controllers: ReadableStreamDefaultController<Uint8Array>[] = [];
 		const errors: Error[] = [];
 		const epochEnds: Error[] = [];
@@ -77,6 +78,7 @@ describe("SSE connection manager failure classification", () => {
 			withCredentials: true,
 			fetcher: async (_input, init) => {
 				requests += 1;
+				requestStartedAt.push(performance.now());
 				if (requests === 1) throw new Error("socket unavailable");
 				return openStream(requests, init?.signal, controllers);
 			},
@@ -87,12 +89,14 @@ describe("SSE connection manager failure classification", () => {
 		});
 		const release = registerChannel(manager, "channel:news", errors, epochEnds);
 
-		await waitFor(() => requests === 1);
-		await Bun.sleep(10);
-		expect(requests).toBe(1);
-		expect(errors).toEqual([]);
 		await waitFor(() => controllers.length === 1);
 		expect(requests).toBe(2);
+		// The configured retry delay is 20 ms. A positive lower bound remains
+		// valid when a loaded event loop resumes the test after that deadline.
+		expect(requestStartedAt[1]! - requestStartedAt[0]!).toBeGreaterThanOrEqual(
+			10,
+		);
+		expect(errors).toEqual([]);
 		expect(epochEnds.map((error) => error.message)).toEqual([
 			"socket unavailable",
 		]);
