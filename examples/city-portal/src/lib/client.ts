@@ -6,7 +6,7 @@
 
 import { createClient } from "questpie/client";
 
-import type { AppConfig } from "@/questpie/server/.generated";
+import type { AppConfig } from "#questpie";
 
 export const client = createClient<AppConfig>({
 	baseURL:

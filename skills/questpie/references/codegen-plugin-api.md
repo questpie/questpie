@@ -17,7 +17,10 @@ A faithful mirror of the source types. **Which do you actually need?** Most plug
 
 ## CodegenPlugin
 
-Top-level plugin interface. Registered in `questpie.config.ts` via the `plugins` array.
+Top-level plugin interface. Reusable packages attach a plugin to a static module
+so codegen extracts it from `modules.ts`. Direct
+`runtimeConfig({ plugins: [...] })` registration is for standalone plugins and
+custom setups without a module.
 
 ```ts
 interface CodegenPlugin {
@@ -37,6 +40,13 @@ interface CodegenPlugin {
 	validators?: CrossTargetValidator[];
 }
 ```
+
+Codegen walks module dependencies children-first. Reaching the exact same
+plugin object more than once in a dependency diamond contributes it once at its
+first resolved position. Two distinct plugin objects with the same `name` are
+ambiguous and fail with both sources, including collisions between a module
+plugin and `runtimeConfig({ plugins })`. Reuse one exported object for an
+intentional diamond; give genuinely different plugins unique, stable names.
 
 ## CodegenTargetContribution
 

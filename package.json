@@ -23,6 +23,7 @@
 		"changeset": "changeset",
 		"version": "changeset version && bun install",
 		"release": "turbo run build --filter='./packages/*' && bun run scripts/publish.ts",
+		"release:scaffold-runtime-matrix": "bun run --cwd packages/create-questpie test:runtime-matrix",
 		"validate": "bun run scripts/validate.ts",
 		"validate:docs": "bun run scripts/validate-docs.ts",
 		"validate:docs:report": "bun run scripts/validate-docs.ts --report",

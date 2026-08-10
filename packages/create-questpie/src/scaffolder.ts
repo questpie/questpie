@@ -445,7 +445,7 @@ function buildRuntimeConfig(options: ProjectOptions): string {
 			...kvImports,
 		]),
 	];
-	imports.push(``, `import { env } from "@/lib/env.js";`, ``);
+	imports.push(``, `import { env } from "@/lib/env";`, ``);
 
 	// Helper order: email, realtime, then KV.
 	const realtimeHelper =

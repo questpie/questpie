@@ -38,8 +38,8 @@ When the skill isn't enough, consult:
 
 ## This project
 
-- **Runtime**: Elysia on **Bun** (no bundler — the QUESTPIE `.js` ESM import
-  convention resolves natively). Package manager **Bun**.
+- **Runtime**: Elysia on **Bun**. Production builds keep package dependencies
+  external, so the runtime image includes `node_modules`. Package manager **Bun**.
 - **Shape**: headless API only — no admin UI, no React. The fetch handler is
   mounted at `src/index.ts` under `/api`.
 - **Database**: PostgreSQL via Drizzle ORM (Postgres extensions are not

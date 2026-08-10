@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { resolve } from "node:path";
 
-const CLI_PATH = resolve(import.meta.dirname, "../../dist/cli.mjs");
+const CLI_PATH = resolve(import.meta.dirname, "../../bin/questpie.mjs");
 
 describe("CLI binary", () => {
-	it("dist/cli.mjs prints help and exits 0", async () => {
+	it("the packaged bin shim prints help and exits 0", async () => {
 		const proc = Bun.spawn(["bun", CLI_PATH, "--help"], {
 			stdout: "pipe",
 			stderr: "pipe",
@@ -17,7 +17,7 @@ describe("CLI binary", () => {
 		expect(stdout).toContain("Commands:");
 	});
 
-	it("dist/cli.mjs prints version and exits 0", async () => {
+	it("the packaged bin shim prints version and exits 0", async () => {
 		const proc = Bun.spawn(["bun", CLI_PATH, "--version"], {
 			stdout: "pipe",
 			stderr: "pipe",

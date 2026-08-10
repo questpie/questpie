@@ -25,7 +25,8 @@ bunx skills add questpie/questpie
 
 ## This project
 
-- **Runtime**: Hono on **Bun** (no bundler — `.js` ESM imports resolve natively)
+- **Runtime**: Hono on **Bun**; production builds keep package dependencies
+  external and deploy them with `node_modules`
 - **Shape**: headless API — no admin UI, no React; fetch handler at `src/index.ts`
 - **Database**: PostgreSQL (Drizzle ORM)
 - **Auth**: Better Auth (email/password); typed `better-auth/client` in `src/lib/`

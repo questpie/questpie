@@ -1,5 +1,4 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import {
 	chmod,
@@ -15,6 +14,11 @@ import { dirname, join, resolve } from "node:path";
 import process from "node:process";
 
 import { preparePublishManifest } from "../../../scripts/publish-manifest";
+import {
+	createSubprocessHarness,
+	type ProcessResult,
+	wait,
+} from "./helpers/subprocess";
 
 const REPO_ROOT = resolve(import.meta.dirname, "../../..");
 const QUESTPIE_PACKAGE = join(REPO_ROOT, "packages/questpie");
@@ -22,115 +26,20 @@ const PROCESS_TIMEOUT_MS = 120_000;
 const WORKFLOW_TIMEOUT_MS = PROCESS_TIMEOUT_MS * 5 + 15_000;
 
 let workspace: string | undefined;
+const subprocess = createSubprocessHarness({
+	commandTimeoutMs: PROCESS_TIMEOUT_MS,
+	shutdownTimeoutMs: 1_000,
+});
+const { cleanup: cleanupProcesses, run } = subprocess;
 
-type ActiveProcess = {
-	child: ReturnType<typeof spawn>;
-	exited: Promise<number>;
-};
-
-const activeProcesses = new Set<ActiveProcess>();
-
-type CommandResult = {
-	exitCode: number;
-	stdout: string;
-	stderr: string;
-};
-
-const wait = (milliseconds: number) =>
-	new Promise<void>((resolveWait) => setTimeout(resolveWait, milliseconds));
-
-function killProcessGroup(
-	child: ReturnType<typeof spawn>,
-	signal: NodeJS.Signals,
-): void {
-	if (process.platform !== "win32" && child.pid) {
-		try {
-			process.kill(-child.pid, signal);
-			return;
-		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code === "ESRCH") return;
-		}
-	}
-	child.kill(signal);
-}
-
-async function terminateProcess({
-	child,
-	exited,
-}: ActiveProcess): Promise<void> {
-	killProcessGroup(child, "SIGTERM");
-	const terminated = await Promise.race([
-		exited.then(() => true),
-		wait(1_000).then(() => false),
-	]);
-	if (!terminated) killProcessGroup(child, "SIGKILL");
-	await Promise.race([exited, wait(1_000)]);
-}
-
-async function run(
-	command: string[],
-	options: { cwd: string; timeoutMs?: number },
-): Promise<CommandResult> {
-	const child = spawn(command[0]!, command.slice(1), {
-		cwd: options.cwd,
-		detached: process.platform !== "win32",
-		env: { ...process.env, CI: "1", NO_COLOR: "1" },
-		stdio: ["ignore", "pipe", "pipe"],
-	});
-	let stdout = "";
-	let stderr = "";
-	child.stdout.setEncoding("utf8");
-	child.stderr.setEncoding("utf8");
-	child.stdout.on("data", (chunk: string) => (stdout += chunk));
-	child.stderr.on("data", (chunk: string) => (stderr += chunk));
-	const exited = new Promise<number>((resolveExit, rejectExit) => {
-		child.once("error", rejectExit);
-		child.once("close", (code) => resolveExit(code ?? 1));
-	});
-	const activeProcess = { child, exited };
-	activeProcesses.add(activeProcess);
-	child.once("close", () => activeProcesses.delete(activeProcess));
-	const timeoutMs = options.timeoutMs ?? PROCESS_TIMEOUT_MS;
-	let timeout: ReturnType<typeof setTimeout> | undefined;
-
-	try {
-		const outcome = await Promise.race([
-			exited.then((exitCode) => ({ kind: "exit" as const, exitCode })),
-			new Promise<{ kind: "timeout" }>((resolveTimeout) => {
-				timeout = setTimeout(
-					() => resolveTimeout({ kind: "timeout" }),
-					timeoutMs,
-				);
-			}),
-		]);
-		if (timeout) clearTimeout(timeout);
-
-		if (outcome.kind === "timeout") {
-			await terminateProcess(activeProcess);
-			throw new Error(
-				`Command timed out after ${timeoutMs}ms: ${command.join(" ")}\n\nstdout:\n${stdout}\n\nstderr:\n${stderr}`,
-			);
-		}
-
-		const exitCode = outcome.exitCode;
-		return {
-			exitCode,
-			stdout,
-			stderr,
-		};
-	} finally {
-		if (timeout) clearTimeout(timeout);
-	}
-}
-
-function expectSuccess(result: CommandResult, command: string): void {
+function expectSuccess(result: ProcessResult, command: string): void {
 	expect(
-		result.exitCode,
+		result.code,
 		`${command}\n\nstdout:\n${result.stdout}\n\nstderr:\n${result.stderr}`,
 	).toBe(0);
 }
 
-function packedTarballFilename(result: CommandResult): string {
+function packedTarballFilename(result: ProcessResult): string {
 	try {
 		const packed = JSON.parse(result.stdout) as { filename?: unknown }[];
 		if (typeof packed[0]?.filename === "string") return packed[0].filename;
@@ -154,13 +63,16 @@ async function stagePublishedQuestpie(stageDir: string): Promise<void> {
 	await cp(join(QUESTPIE_PACKAGE, "dist"), join(stageDir, "dist"), {
 		recursive: true,
 	});
+	await cp(join(QUESTPIE_PACKAGE, "bin"), join(stageDir, "bin"), {
+		recursive: true,
+	});
 	if (existsSync(join(QUESTPIE_PACKAGE, "skills"))) {
 		await cp(join(QUESTPIE_PACKAGE, "skills"), join(stageDir, "skills"), {
 			recursive: true,
 		});
 	}
 	await writeFile(join(stageDir, "package.json"), `${serialized}\n`);
-	await chmod(join(stageDir, "dist/cli.mjs"), 0o755);
+	await chmod(join(stageDir, "bin/questpie.mjs"), 0o755);
 }
 
 async function writeConsumer(
@@ -236,7 +148,7 @@ async function writeConsumer(
 }
 
 afterAll(async () => {
-	await Promise.allSettled([...activeProcesses].map(terminateProcess));
+	await cleanupProcesses();
 	if (workspace) await rm(workspace, { recursive: true, force: true });
 });
 
@@ -258,7 +170,7 @@ describe("packed public consumer", () => {
 			).rejects.toThrow("Command timed out after 50ms");
 			await wait(500);
 			expect(existsSync(marker)).toBe(false);
-			expect(activeProcesses.size).toBe(0);
+			expect(subprocess.activeCount()).toBe(0);
 		} finally {
 			await rm(cleanupWorkspace, { recursive: true, force: true });
 		}

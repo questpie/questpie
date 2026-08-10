@@ -1,7 +1,7 @@
 /**
  * Hono entrypoint (headless QUESTPIE API).
  *
- * Mounts the framework-agnostic fetch handler under `/api` and redirects the
+ * Mounts the QUESTPIE Hono adapter under `/api` and redirects the
  * root to the Scalar API reference. Bun serves a default export that exposes a
  * `fetch` function — `bun run src/index.ts` boots the server directly.
  *
@@ -12,16 +12,15 @@
  */
 import { Hono } from "hono";
 import { createGracefulServerShutdown } from "questpie/app";
-import { createFetchHandler } from "questpie/http";
 
 import { app as questpie, destroyApp } from "#questpie";
 import { env } from "@/lib/env";
+import { questpieHono } from "@questpie/hono/server";
 
-const handler = createFetchHandler(questpie, { basePath: "/api" });
-
-const server = new Hono();
-
-server.all("/api/*", async (c) => (await handler(c.req.raw)) ?? c.notFound());
+const server = new Hono().route(
+	"/",
+	questpieHono(questpie, { basePath: "/api" }),
+);
 
 server.get("/", (c) => c.redirect("/api/docs"));
 
@@ -35,11 +34,18 @@ server.get("/", (c) => c.redirect("/api/docs"));
  * No server is attached. Bun owns it, because the default export below hands it
  * a fetch function rather than a handle. So this releases resources but does not
  * drain in-flight requests. Give the platform a termination grace period longer
- * than your slowest request. */
+ * than your slowest request. This executable owns process termination after its
+ * resources have closed. */
 const lifecycle = createGracefulServerShutdown(destroyApp);
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
 	process.once(signal, () => {
-		void lifecycle.shutdown().catch(() => {});
+		void lifecycle.shutdown().then(
+			() => process.exit(0),
+			(error) => {
+				console.error(`Failed to shut down after ${signal}`, error);
+				process.exit(1);
+			},
+		);
 	});
 }
 

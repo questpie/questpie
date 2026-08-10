@@ -46,7 +46,7 @@ When a skill isn't enough, consult:
   admin — extend it, never replace it
 - **Validation**: Zod **v4** (not v3)
 - **Source layout**: server contracts in `src/questpie/server/`, admin UI in
-  `src/questpie/admin/`, HTTP mount in `src/app/api/[...all]/route.ts`, admin
+  `src/questpie/admin/`, HTTP mount in `src/app/api/[[...all]]/route.ts`, admin
   mount in `src/app/admin/`, typed client in `src/lib/`
 
 ## Key scripts

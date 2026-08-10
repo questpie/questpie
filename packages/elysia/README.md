@@ -71,12 +71,13 @@ const client = createClientFromEden<App, AppConfig>({
 // CRUD — fully typed
 const { docs } = await client.collections.posts.find({ limit: 10 });
 
-// App routes — fully typed
-const stats = await client.routes.getStats.post({ period: "week" });
-
 // Custom Elysia routes — fully typed via Eden Treaty
 const result = await client.api.custom.route.get();
 ```
+
+The merged client copies QUESTPIE `collections` and `globals` onto Eden
+Treaty. Keep a normal `createClient<AppConfig>()` for QUESTPIE app routes,
+search, realtime, channels, or other client features.
 
 ### Generic HTTP Client
 

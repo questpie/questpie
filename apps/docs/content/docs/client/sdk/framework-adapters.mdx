@@ -11,10 +11,11 @@ handler, and every runtime mounts the same one.
 ## The handler
 
 `createFetchHandler` takes your app and gives you a function from a `Request`
-to a `Response` or `null`. All four starter templates use it directly, so this
-is the shape you already have if you scaffolded with `create-questpie`.
+to a `Response` or `null`. It is the common HTTP engine beneath every runtime.
+The TanStack Start starter mounts it directly; the Next, Hono and Elysia
+starters use their matching packages below.
 
-```ts title="src/app/api/[...all]/route.ts"
+```ts title="src/app/api/[[...all]]/route.ts"
 import { createFetchHandler } from "questpie/http";
 
 import { app } from "#questpie";
@@ -31,6 +32,8 @@ export const POST = handle;
 export const PATCH = handle;
 export const PUT = handle;
 export const DELETE = handle;
+export const OPTIONS = handle;
+export const HEAD = handle;
 ```
 
 Handler construction validates the route graph immediately. Ambiguous route
@@ -61,8 +64,10 @@ createClient<AppConfig>({ baseURL, basePath: "/api" });
 
 ## The runtime packages
 
-Three packages wrap the same handler for a framework you already have. None of
-the starters install one, because each template mounts the handler itself.
+Three packages wrap the same handler in the native shape of their framework.
+`create-questpie` installs the matching package for Next, Hono and Elysia;
+TanStack Start keeps the low-level Fetch handler because its file route already
+speaks standard `Request` and `Response`.
 
 | Package            | Import                          | Gives you                         |
 | ------------------ | ------------------------------- | --------------------------------- |
@@ -153,6 +158,21 @@ Hono's `HonoAdapterConfig` and Elysia's `ElysiaAdapterConfig` are aliases of the
 core `NativeAdapterConfig` exported by `questpie/http`. It contains every
 `AdapterConfig` option except `accessMode`, so both native adapters gain future
 safe HTTP options together while public requests remain in user mode.
+
+## Existing generated projects
+
+Projects generated before the runtime adapters became the scaffold defaults do
+not need an urgent migration: their direct `createFetchHandler` mounts remain a
+supported low-level API. To follow the current scaffold, install the package
+matching your host and replace only the HTTP entrypoint with the example above.
+Keep the same `basePath`; client URLs and application routes do not change.
+
+- Next: install `@questpie/next` and export all seven handlers returned by
+  `questpieNextRouteHandlers`.
+- Hono: install `@questpie/hono`, mount `questpieHono` at `"/"`, and let its
+  `basePath` own the QUESTPIE prefix.
+- Elysia: install `@questpie/elysia` and compose `questpieElysia` with `.use()`.
+- TanStack Start: keep `createFetchHandler` in the catch-all file route.
 
 ## Typing custom routes through Hono RPC
 

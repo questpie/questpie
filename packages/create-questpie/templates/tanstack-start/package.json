@@ -9,7 +9,7 @@
 	},
 	"scripts": {
 		"dev": "bun --bun vite dev --port 3000",
-		"build": "vite build",
+		"build": "NODE_ENV=production vite build",
 		"start": "bun run .output/server/index.mjs",
 		"check-types": "tsc --noEmit",
 		"routes:generate": "tsr generate",
@@ -38,6 +38,7 @@
 		"nodemailer": "^7.0.12",
 		"pg": "^8.13.1",
 		"pg-boss": "^12.5.4",
+		"pusher-js": "^8.5.0",
 		"questpie": "latest",
 		"react": "^19.0.0",
 		"react-dom": "^19.0.0",

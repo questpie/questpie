@@ -37,7 +37,8 @@ run migrate:create`, then apply it with `bun run migrate`.
 
 ## What you get
 
-- **Headless REST API** — every collection and global is exposed under `/api`.
+- **Headless REST API** — `@questpie/elysia` exposes every collection and global
+  under `/api` while Elysia retains sibling host routes.
 - **Scalar API reference** at `/api/docs` (the `openapi` module).
 - **Auth** — Better Auth (email/password) mounted at `/api/auth`.
 - **Typed client + TanStack Query** in `src/lib/` — `client.ts`
@@ -72,7 +73,7 @@ starter's full-text search relies on `pg_trgm` (trigram matching).
 
 ```text
 src/
-  index.ts                           # Elysia entry — mounts the fetch handler at /api
+  index.ts                           # Elysia entry — mounts the QUESTPIE Elysia adapter
   questpie/
     server/
       questpie.config.ts             # Runtime config
@@ -97,19 +98,19 @@ migrations/
 
 ## Scripts
 
-| Command                          | Description                                   |
-| -------------------------------- | --------------------------------------------- |
-| `bun dev`                        | Start development server (watch)              |
-| `bun run build`                  | Bundle the entry to `dist/`                   |
-| `bun run start`                  | Run the server (no watch)                     |
-| `bun run check-types`            | Type check                                    |
-| `bun run scaffold:generate`      | Regenerate QUESTPIE codegen                   |
-| `bun run scaffold:verify`        | Regenerate codegen and type-check             |
-| `bun run questpie:generate`      | Regenerate `src/questpie/server/.generated/*` |
-| `bun questpie add <type> <name>` | Scaffold entity files (auto-runs codegen)     |
-| `bun run db:push`                | Push schema directly to local dev database    |
-| `bun run migrate`                | Run migrations                                |
-| `bun run migrate:create`         | Create migration                              |
+| Command                          | Description                                      |
+| -------------------------------- | ------------------------------------------------ |
+| `bun dev`                        | Start development server (watch)                 |
+| `bun run build`                  | Build `dist/` with package dependencies external |
+| `bun run start`                  | Run the server (no watch)                        |
+| `bun run check-types`            | Type check                                       |
+| `bun run scaffold:generate`      | Regenerate QUESTPIE codegen                      |
+| `bun run scaffold:verify`        | Regenerate codegen and type-check                |
+| `bun run questpie:generate`      | Regenerate `src/questpie/server/.generated/*`    |
+| `bun questpie add <type> <name>` | Scaffold entity files (auto-runs codegen)        |
+| `bun run db:push`                | Push schema directly to local dev database       |
+| `bun run migrate`                | Run migrations                                   |
+| `bun run migrate:create`         | Create migration                                 |
 
 ## Learn more
 

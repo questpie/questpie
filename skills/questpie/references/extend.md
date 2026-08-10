@@ -278,6 +278,13 @@ When several modules (and the app) contribute the same key, `createApp()` merges
 | `config.*` (app, auth, admin, plugin config keys)                | per-key strategies; `auth`/`admin` deep-merge; unknown keys: incoming replaces existing |
 | anything else                                                    | auto-detect: object+object → spread, array+array → concat, otherwise incoming wins      |
 
+Module dependencies resolve children first. Reusing the exact module object in
+a diamond is intentional deduplication: it contributes once at its first
+resolved position. Two different objects with the same `name` are ambiguous
+and fail with both paths, and a dependency cycle fails with its cycle path.
+Codegen category extraction follows this same validated order, so runtime and
+generated types agree on which later entry wins.
+
 The merge helpers behind these strategies are exported from `questpie/app` for module authors combining config fragments of their own:
 
 ```ts

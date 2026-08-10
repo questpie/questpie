@@ -8,9 +8,10 @@
 		"directory": "packages/questpie"
 	},
 	"bin": {
-		"questpie": "./dist/cli.mjs"
+		"questpie": "./bin/questpie.mjs"
 	},
 	"files": [
+		"bin",
 		"dist",
 		"skills"
 	],
