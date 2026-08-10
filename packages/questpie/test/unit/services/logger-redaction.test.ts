@@ -64,7 +64,7 @@ describe("logger structured-field redaction", () => {
 			type: "Error",
 			message: "[Redacted]",
 		});
-		expect(observed.self).toBe(observed);
+		expect(observed.self).toBe("[Circular]");
 		expect("unsafeGetter" in observed).toBe(false);
 		expect(envelope.token).toBe("private-token");
 		expect(envelope.nested.error.message).toBe("private-error");
@@ -110,6 +110,53 @@ describe("logger structured-field redaction", () => {
 		expect(json).not.toContain("private-token");
 		expect(json).not.toContain("reintroduced-secret");
 		expect(json).toContain("[Unsupported]");
+	});
+
+	it("applies path policy per alias and normalizes cycles, nonfinite values, errors, and bindings", async () => {
+		const shared = { email: "private@example.com" };
+		const cycle: Record<string, unknown> = {};
+		cycle.self = cycle;
+		const log = createCapturingLogger({ captureMessages: false });
+		const emitted: any[] = [];
+		const logger = new LoggerService({
+			adapter: log.adapter,
+			redact: ["private.email", "error.code", "floats.1"],
+		});
+		await runWithContext(
+			{
+				app: {
+					observability: { emitLog: (record: unknown) => emitted.push(record) },
+				},
+			},
+			async () =>
+				logger.info("invariants", {
+					public: shared,
+					private: shared,
+					cycle,
+					scalar: Number.NaN,
+					floats: new Float64Array([Infinity, -Infinity]),
+					error: Object.assign(new Error("private"), { code: "PRIVATE_CODE" }),
+				}),
+		);
+		const record = log.records[0]?.args?.[0] as Record<string, any>;
+		expect(record.public.email).toBe("private@example.com");
+		expect(record.private.email).toBe("[Redacted]");
+		expect(record.cycle.self).toBe("[Circular]");
+		expect(record.scalar).toBe("[NonFinite]");
+		expect(record.floats.values).toEqual(["[NonFinite]", "[Redacted]"]);
+		expect(record.error.code).toBe("[Redacted]");
+		expect(emitted[0].attributes).toEqual(record);
+
+		const unreadable = new Proxy(
+			{},
+			{
+				ownKeys: () => {
+					throw new Error("trap");
+				},
+			},
+		);
+		expect(() => logger.child(unreadable)).not.toThrow();
+		expect(log.childBindings.at(-1)).toEqual({});
 	});
 
 	it("fails closed for error-like getters, Error subclasses, and proxies", async () => {

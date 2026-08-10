@@ -28,7 +28,7 @@ export function redactLogArgs(
 	args: unknown[],
 	policy: RedactionPolicy,
 ): unknown[] {
-	const seen = new WeakMap<object, unknown>();
+	const seen = new WeakSet<object>();
 	return args.map((value, index) => {
 		const redacted = redactValue(value, [], policy, seen);
 		return index === 0 &&
@@ -44,33 +44,50 @@ export function redactLogBindings(
 	bindings: Record<string, unknown>,
 	policy: RedactionPolicy,
 ): Record<string, unknown> {
-	return redactValue(bindings, [], policy, new WeakMap()) as Record<
-		string,
-		unknown
-	>;
+	const redacted = redactValue(bindings, [], policy, new WeakSet());
+	return redacted && typeof redacted === "object" && !Array.isArray(redacted)
+		? (redacted as Record<string, unknown>)
+		: Object.create(null);
 }
 
 function redactValue(
 	value: unknown,
 	path: string[],
 	policy: RedactionPolicy,
-	seen: WeakMap<object, unknown>,
+	seen: WeakSet<object>,
 ): unknown {
 	if (matchesPath(path, policy.paths)) return REDACTED;
-	if (value === null || ["string", "number", "boolean"].includes(typeof value))
+	if (typeof value === "number")
+		return Number.isFinite(value) ? value : "[NonFinite]";
+	if (value === null || ["string", "boolean"].includes(typeof value))
 		return value;
 	if (typeof value !== "object") return "[Unsupported]";
-	const existing = seen.get(value);
-	if (existing) return existing;
+	if (seen.has(value)) return "[Circular]";
+	seen.add(value);
 	const descriptors = getDescriptors(value);
-	if (!descriptors) return "[Unserializable]";
-	if (isError(value)) return serializeErrorDescriptors(value, descriptors);
+	if (!descriptors) {
+		seen.delete(value);
+		return "[Unserializable]";
+	}
+	if (isError(value)) {
+		const result = serializeErrorDescriptors(
+			value,
+			descriptors,
+			path,
+			policy,
+			seen,
+		);
+		seen.delete(value);
+		return result;
+	}
 	const supported = serializeSupportedValue(value, path, policy, seen);
-	if (supported !== undefined) return supported;
+	if (supported !== undefined) {
+		seen.delete(value);
+		return supported;
+	}
 	const clone: Record<string, unknown> | unknown[] = Array.isArray(value)
 		? []
 		: Object.create(null);
-	seen.set(value, clone);
 	for (const [key, descriptor] of Object.entries(descriptors)) {
 		if (!descriptor.enumerable || !("value" in descriptor)) continue;
 		const nested = descriptor.value;
@@ -83,7 +100,12 @@ function redactValue(
 				assignCloneValue(clone, key, REDACTED);
 				continue;
 			}
-			const errorLike = serializeErrorLike(nested);
+			const errorLike = serializeErrorLike(
+				nested,
+				[...path, key],
+				policy,
+				seen,
+			);
 			if (errorLike !== undefined) {
 				assignCloneValue(clone, key, errorLike);
 				continue;
@@ -95,6 +117,7 @@ function redactValue(
 			redactValue(nested, [...path, key], policy, seen),
 		);
 	}
+	seen.delete(value);
 	return clone;
 }
 
@@ -114,6 +137,9 @@ function assignCloneValue(
 function serializeErrorDescriptors(
 	error: object,
 	descriptors: Record<string, PropertyDescriptor>,
+	path: string[],
+	policy: RedactionPolicy,
+	seen: WeakSet<object>,
 ): Record<string, unknown> {
 	const ownName = dataProperty(descriptors, "name");
 	const result: Record<string, unknown> = Object.assign(Object.create(null), {
@@ -125,24 +151,30 @@ function serializeErrorDescriptors(
 		message: REDACTED,
 	});
 	const code = dataProperty(descriptors, "code");
-	if (["string", "number"].includes(typeof code)) result.code = code;
+	if (["string", "number"].includes(typeof code))
+		result.code = redactValue(code, [...path, "code"], policy, seen);
+	result.type = redactValue(result.type, [...path, "type"], policy, seen);
 	return result;
 }
 
 function serializeErrorLike(
 	value: unknown,
+	path: string[],
+	policy: RedactionPolicy,
+	seen: WeakSet<object>,
 ): Record<string, unknown> | string | undefined {
 	if (!value || typeof value !== "object") return undefined;
 	const descriptors = getDescriptors(value);
 	if (!descriptors) return "[Unserializable]";
 	const error = isError(value);
 	if (!error && !descriptors.message && !descriptors.stack) return undefined;
-	if (error) return serializeErrorDescriptors(value, descriptors);
+	if (error)
+		return serializeErrorDescriptors(value, descriptors, path, policy, seen);
 	const result: Record<string, unknown> = Object.create(null);
 	for (const key of ["type", "name", "code", "status", "statusCode"] as const) {
 		const candidate = dataProperty(descriptors, key);
 		if (["string", "number"].includes(typeof candidate))
-			result[key] = candidate;
+			result[key] = redactValue(candidate, [...path, key], policy, seen);
 	}
 	result.message = REDACTED;
 	return result;
@@ -207,7 +239,7 @@ function serializeSupportedValue(
 	value: object,
 	path: string[],
 	policy: RedactionPolicy,
-	seen: WeakMap<object, unknown>,
+	seen: WeakSet<object>,
 ): unknown {
 	try {
 		const timestamp = Date.prototype.getTime.call(value);
@@ -237,7 +269,6 @@ function serializeSupportedValue(
 		const iterator = Map.prototype.entries.call(value) as IterableIterator<
 			[unknown, unknown]
 		>;
-		seen.set(value, result);
 		for (const [key, nested] of iterator) {
 			const policySegment = typeof key === "string" ? key : "<non-string-key>";
 			const redactEntry =
@@ -260,7 +291,6 @@ function serializeSupportedValue(
 		const iterator = Set.prototype.values.call(
 			value,
 		) as IterableIterator<unknown>;
-		seen.set(value, result);
 		for (const nested of iterator)
 			result.values.push(redactValue(nested, [...path, "value"], policy, seen));
 		return result;
