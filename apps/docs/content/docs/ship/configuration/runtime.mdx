@@ -31,6 +31,11 @@ Every key is optional at the call site. `RuntimeConfigInput` marks `app` and
 `RuntimeConfig` requires the pair. `crdt` stays dormant until some collection is
 collaborative, so most apps never set it.
 
+`logger.redact` adds application-specific paths to QUESTPIE's default
+structured-field redaction. Common credential keys and `Error` messages/stacks
+are redacted before Pino and the observability tee. It does not inspect the
+caller-owned message string.
+
 ## Resolution from the environment
 
 Four keys are resolved when you leave them out. Your value wins, then the

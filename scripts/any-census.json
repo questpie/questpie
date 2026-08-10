@@ -56,7 +56,7 @@
 			"@ts-expect-error": 0
 		},
 		"questpie": {
-			": any": 542,
+			": any": 540,
 			"as any": 462,
 			"as unknown as": 49,
 			"@ts-expect-error": 0

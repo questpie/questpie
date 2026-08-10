@@ -171,7 +171,11 @@ describe("log records tee onto the observability signal", () => {
 		expect(emitted).toHaveLength(1);
 		expect(emitted[0]!.level).toBe("info");
 		expect(emitted[0]!.message).toBe("hello");
-		expect(emitted[0]!.attributes).toMatchObject({ orderId: "o-1" });
+		expect(emitted[0]!.attributes).toMatchObject({
+			orderId: "o-1",
+			trace_id: TRACE,
+			span_id: SPAN,
+		});
 	});
 
 	it("does not let a failing telemetry backend break the caller", async () => {

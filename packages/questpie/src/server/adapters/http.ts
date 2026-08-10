@@ -119,6 +119,34 @@ type RequestLoggingOptions = {
 	ignore?: (meta: RequestLogMeta) => boolean;
 };
 
+const CORRELATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const W3C_TRACEPARENT_PATTERN =
+	/^00-([0-9a-f]{32})-([0-9a-f]{16})-[0-9a-f]{2}$/;
+
+function isSafeCorrelationId(value: string | null): value is string {
+	return value !== null && CORRELATION_ID_PATTERN.test(value);
+}
+
+function generateCorrelationId(): string {
+	return (
+		globalThis.crypto?.randomUUID?.() ??
+		`${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+	);
+}
+
+function getValidTraceparent(request: Request): string | undefined {
+	const traceparent = request.headers.get("traceparent");
+	if (!traceparent) return undefined;
+	const match = traceparent.match(W3C_TRACEPARENT_PATTERN);
+	if (!match) return undefined;
+
+	const [, traceId, parentId] = match;
+	if (!traceId || !parentId || /^0+$/.test(traceId) || /^0+$/.test(parentId)) {
+		return undefined;
+	}
+	return traceparent;
+}
+
 function resolveRequestLoggingOptions(
 	config: RequestLoggingConfig | undefined,
 ): RequestLoggingOptions {
@@ -149,20 +177,23 @@ function resolveRequestLoggingOptions(
 
 function getTraceId(request: Request): string | undefined {
 	const explicit = request.headers.get("x-trace-id");
-	if (explicit) return explicit;
+	if (explicit !== null) {
+		return isSafeCorrelationId(explicit) ? explicit : generateCorrelationId();
+	}
 
-	const traceparent = request.headers.get("traceparent");
-	const traceId = traceparent?.split("-")[1];
-	return traceId && /^[\da-f]{32}$/i.test(traceId) ? traceId : undefined;
+	if (request.headers.has("traceparent")) {
+		return (
+			getValidTraceparent(request)?.split("-")[1] ?? generateCorrelationId()
+		);
+	}
+	return undefined;
 }
 
 function getRequestId(request: Request): string {
-	return (
+	const explicit =
 		request.headers.get("x-request-id") ??
-		request.headers.get("x-correlation-id") ??
-		globalThis.crypto?.randomUUID?.() ??
-		`${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
-	);
+		request.headers.get("x-correlation-id");
+	return isSafeCorrelationId(explicit) ? explicit : generateCorrelationId();
 }
 
 function getErrorDetails(error: unknown): RequestLogMeta["error"] {
@@ -540,7 +571,7 @@ export const createFetchHandler = (
 							// adapter decide the format; the framework has no OpenTelemetry
 							// dependency and W3C is not the only propagator that exists.
 							carrier: {
-								traceparent: request.headers.get("traceparent") ?? undefined,
+								traceparent: getValidTraceparent(request),
 								tracestate: request.headers.get("tracestate") ?? undefined,
 								baggage: request.headers.get("baggage") ?? undefined,
 							},
