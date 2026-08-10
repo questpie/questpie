@@ -652,6 +652,12 @@ logger.info("Appointment created", {
 });
 ```
 
+QUESTPIE recursively redacts common credential keys and `Error` messages/stacks
+from structured log arguments before both Pino output and the observability tee.
+Add application-specific structured paths with `logger.redact`. Message strings
+are caller-owned and are not inspected, so never interpolate credentials or
+untrusted request data into the message.
+
 ## OpenAPI
 
 Auto-generates OpenAPI 3.1 spec from your schema.

@@ -26,7 +26,11 @@ import {
 	type SpanKind as OtelSpanKind,
 	type Tracer as OtelTracer,
 } from "@opentelemetry/api";
-import { SeverityNumber, logs } from "@opentelemetry/api-logs";
+import {
+	SeverityNumber,
+	logs,
+	type LogAttributes,
+} from "@opentelemetry/api-logs";
 import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
 import { W3CTraceContextPropagator } from "@opentelemetry/core";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
@@ -64,6 +68,7 @@ import type {
 	Meter,
 	ObservabilityAdapter,
 	ObservabilityAttributes,
+	ObservabilityLogAttributes,
 	ObservabilitySpan,
 	SpanKind,
 	StartSpanOptions,
@@ -137,6 +142,12 @@ function toOtelAttributes(attributes?: ObservabilityAttributes): Attributes {
 		if (value !== undefined) out[key] = value;
 	}
 	return out;
+}
+
+function toOtelLogAttributes(
+	attributes?: ObservabilityLogAttributes,
+): LogAttributes {
+	return attributes ?? {};
 }
 
 function wrapSpan(span: OtelSpan): ObservabilitySpan {
@@ -348,7 +359,7 @@ export function otelObservability(
 				severityNumber: SEVERITY[record.level] ?? SeverityNumber.INFO,
 				severityText: record.level.toUpperCase(),
 				body: record.message,
-				attributes: toOtelAttributes(record.attributes),
+				attributes: toOtelLogAttributes(record.attributes),
 			});
 		},
 		async shutdown() {

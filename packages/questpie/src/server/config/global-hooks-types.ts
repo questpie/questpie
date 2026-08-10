@@ -115,6 +115,7 @@ export type GlobalGlobalHookContextFields<TData = any> = {
 	/** The name/slug of the global being operated on */
 	global: string;
 	data: TData;
+	original?: TData;
 	input?: unknown;
 	locale?: string;
 	accessMode?: AccessMode;

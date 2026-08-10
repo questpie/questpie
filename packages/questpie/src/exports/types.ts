@@ -40,6 +40,7 @@ export { extractAppServices } from "#questpie/server/config/app-context.js";
 export type {
 	RequestContext,
 	BaseRequestContext,
+	RequestContextLogger,
 	Principal,
 	StoredContext,
 } from "#questpie/server/config/context.js";

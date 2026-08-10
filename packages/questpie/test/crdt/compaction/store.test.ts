@@ -14,6 +14,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import {
 	collectCrdtExpiredRecoveryRoots,
+	collectCrdtGarbage,
 	createCrdtCompactionStore,
 } from "../../../src/server/modules/core/integrated/crdt/compaction-store.js";
 import { createDeterministicTextEngine } from "../../../src/server/modules/core/integrated/crdt/deterministic-engine.js";
@@ -78,6 +79,27 @@ describe("CRDT durable compaction store", () => {
 
 	afterAll(async () => {
 		await client?.close();
+	});
+
+	it("rejects an unbounded garbage collection request before querying", async () => {
+		await expect(
+			collectCrdtGarbage({} as never, {
+				resourceId: "resource",
+				resourceEpochId: "epoch",
+				limit: 257,
+			}),
+		).rejects.toThrow("between 1 and 256");
+	});
+
+	it("rejects an invalid compaction lease configuration", () => {
+		expect(() =>
+			createCrdtCompactionStore({} as never, {
+				ownerId: "",
+				resolveEngine: () => {
+					throw new Error("must not resolve");
+				},
+			}),
+		).toThrow("lease configuration");
 	});
 
 	it("captures, persists, verifies, and publishes one exact aggregate cut", async () => {

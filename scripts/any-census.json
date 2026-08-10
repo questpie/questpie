@@ -2,8 +2,8 @@
 	"$comment": "any-census baseline (per-package type-escape counts, non-test src). Packages are DISCOVERED from packages/*/src — a new package appears here automatically and fails the gate until baselined, so never hand-edit the package list. Regenerate with `bun run scripts/any-census.ts --update` — only commit decreases unless the increase was explicitly approved. CI fails on any increase.",
 	"packages": {
 		"admin": {
-			": any": 453,
-			"as any": 459,
+			": any": 452,
+			"as any": 442,
 			"as unknown as": 27,
 			"@ts-expect-error": 0
 		},
@@ -26,7 +26,7 @@
 			"@ts-expect-error": 0
 		},
 		"hono": {
-			": any": 2,
+			": any": 1,
 			"as any": 0,
 			"as unknown as": 0,
 			"@ts-expect-error": 0
@@ -56,8 +56,8 @@
 			"@ts-expect-error": 0
 		},
 		"questpie": {
-			": any": 544,
-			"as any": 464,
+			": any": 540,
+			"as any": 462,
 			"as unknown as": 49,
 			"@ts-expect-error": 0
 		},

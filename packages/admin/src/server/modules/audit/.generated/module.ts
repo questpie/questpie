@@ -11,6 +11,7 @@ import { auditCleanupJob as _job_auditCleanup } from "../jobs/audit-cleanup";
 // ── Singles ────────────────────────────────────────────────
 import _adminConfig from "../config/admin";
 import _appConfig from "../config/app";
+import _plugin from "../plugin";
 
 // ════════════════════════════════════════════════════════════
 // TYPES — composed from typeof references (zero inference cost)
@@ -62,6 +63,7 @@ export type AuditModule = {
 		admin: typeof _adminConfig;
 		app: typeof _appConfig;
 	};
+	plugin: typeof _plugin;
 };
 
 const _module: AuditModule = {
@@ -88,6 +90,7 @@ const _module: AuditModule = {
 		admin: _adminConfig,
 		app: _appConfig,
 	},
+	plugin: _plugin,
 };
 
 export default _module;

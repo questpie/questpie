@@ -3722,6 +3722,26 @@ Use these hooks for transaction-aware database, Queue/outbox, or typed-channel
 work. Direct email/HTTP work cannot join the transaction and belongs in a
 durable job or `onAfterCommit`.
 
+Global `afterTransition` hooks normally log failures without aborting the
+completed transition. A module that provides a required, transaction-bound
+guarantee can throw `FatalGlobalHookError` from that hook to abort and roll back
+the surrounding transition transaction. Required audit persistence uses this
+escape hatch so the protected mutation cannot commit without its audit row:
+
+```ts
+import { FatalGlobalHookError } from "questpie";
+
+try {
+	await writeRequiredAuditRow();
+} catch (error) {
+	throw new FatalGlobalHookError(error);
+}
+```
+
+Keep the original error as the constructor argument. Do not use this for
+ordinary collection hooks: errors from transaction-bound `afterChange`,
+`afterDelete`, and `afterPurge` already propagate and roll back their mutation.
+
 ### Hook Context Properties
 
 | Property        | Available in                                                         | Description                                                                  |
@@ -7215,11 +7235,27 @@ semconv attributes). Rate is its count, errors are that count sliced by
 `http.response.status_code`. Do not add parallel counters; they duplicate the
 same series and drift.
 
-**Logs:** Pino output is untouched; records gain `trace_id`/`span_id` from the
-active span (snake_case — those are the keys backends join on) and, with an
-`otlpEndpoint`, are exported on the OTel logs signal too. The existing camelCase
+**Logs:** Pino remains the primary output; records gain `trace_id`/`span_id`
+from the active span (snake_case — those are the keys backends join on) and,
+with an `otlpEndpoint`, are exported on the OTel logs signal too. The existing camelCase
 `traceId` is a different value: the framework's correlation id from the inbound
 `traceparent`/`x-request-id`, not the span's.
+
+Inbound request/trace ids are accepted only as bounded safe identifiers; W3C
+`traceparent` must be structurally valid and use non-zero trace and parent ids.
+Invalid supplied values are replaced rather than reflected. Structured log
+arguments redact common credential keys and framework-serialized `Error`
+messages/stacks before both sinks. Message strings are not inspected; keep them
+stable and place request data in structured fields.
+
+The logger first constructs one effective record from child bindings, caller
+fields, and request/trace/span context, then redacts and canonicalizes it once
+for both Pino and OTLP. Unsupported values, cycles, and non-finite numbers use
+explicit markers. Date, URL, Map, Set, and TypedArray values use tagged inert
+records; URL userinfo and fragments are removed. OTLP logs use recursive
+AnyValue attributes, independently from scalar span/metric attributes.
+Configured paths may target tagged fields such as `diagnostic.type`; the
+framework applies them before both sinks rather than running a second Pino pass.
 
 **Propagation:** an inbound `traceparent` is continued with the remote span as
 parent, so a distributed waterfall stays connected. Only the root reads headers.
@@ -8451,6 +8487,12 @@ logger.info("Appointment created", {
 	barberId: "def",
 });
 ```
+
+QUESTPIE recursively redacts common credential keys and `Error` messages/stacks
+from structured log arguments before both Pino output and the observability tee.
+Add application-specific structured paths with `logger.redact`. Message strings
+are caller-owned and are not inspected, so never interpolate credentials or
+untrusted request data into the message.
 
 ## OpenAPI
 

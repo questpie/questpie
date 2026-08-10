@@ -253,7 +253,11 @@ describe("OTLP log records", () => {
 			service.emitLog({
 				level: "error",
 				message: "boom",
-				attributes: { orderId: "o-1" },
+				attributes: {
+					orderId: "o-1",
+					diagnostic: { error: { type: "TypeError", message: "[Redacted]" } },
+					items: ["one", { status: "safe" }],
+				},
 			});
 		});
 
@@ -264,6 +268,10 @@ describe("OTLP log records", () => {
 		expect(records[0]!.body).toBe("boom");
 		expect(records[0]!.severityText).toBe("ERROR");
 		expect(records[0]!.attributes.orderId).toBe("o-1");
+		expect(records[0]!.attributes.diagnostic).toEqual({
+			error: { type: "TypeError", message: "[Redacted]" },
+		});
+		expect(records[0]!.attributes.items).toEqual(["one", { status: "safe" }]);
 		expect(records[0]!.spanContext?.traceId).toBeDefined();
 	});
 

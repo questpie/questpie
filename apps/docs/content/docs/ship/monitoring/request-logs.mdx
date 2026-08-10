@@ -99,9 +99,29 @@ parameterized route, so a request to `/api/posts/42` logs `path` as
 `/api/posts/42` and `route` as `:collection/:id`. All your collections share
 that pattern. Group on `path` when you need them apart.
 
-`error` carries `name` and `message`, and nothing else. It appears only when a
-handler threw. A handler that returns a 500 rather than raising still logs at
-`error` level, but with no `error` object beside it.
+`error` carries the error `name`, while its `message` is written as
+`[Redacted]`. It appears only when a handler threw. A handler that returns a 500
+rather than raising still logs at `error` level, but with no `error` object
+beside it.
+
+QUESTPIE recursively redacts common credential keys in structured log arguments,
+including authorization, cookies, passwords, tokens, secrets, and API keys.
+`logger.redact` adds application-specific structured paths. `Error` values are
+serialized without their message or stack. This protection does not inspect the
+caller-owned message string: keep messages stable and put request data in the
+structured object.
+
+The structured object is canonicalized before either sink receives it. The
+effective record includes child bindings, caller fields, and request/trace/span
+context, then applies redaction once. Unsupported values become
+`[Unsupported]`, cycles `[Circular]`, and `NaN`/infinities `[NonFinite]`.
+Dates, URLs, Maps, Sets, and typed arrays become tagged records with `type` plus
+`value`, `entries`, or `values`. URL userinfo and fragments are removed, and
+sensitive query values are redacted. OTLP log attributes retain this recursive
+structure through the Logs AnyValue contract; span and metric attributes remain
+scalar or homogeneous primitive arrays. Configured paths may also target tagged
+fields such as `diagnostic.type`; QUESTPIE applies them before both sinks, not
+again inside Pino.
 
 Records written inside a request also pick up `trace_id` and `span_id` from the
 open span, once an observability adapter is wired. See

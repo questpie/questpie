@@ -19,6 +19,7 @@ const _fieldExt: Record<string, { stateKey: string; resolve: (value: unknown) =>
 			return configOrFn;
 		},
 	},
+	audit: { stateKey: "audit", resolve: (v: unknown) => v },
 };
 
 // App field types (fields/ directory) — unwrap fieldType() definitions to factories
@@ -95,6 +96,7 @@ declare module "questpie/builders" {
 	interface Field<TState extends FieldState = FieldState, TMethods = {}> {
 		admin(config: unknown): FieldWithMethods<TState, TMethods>;
 		form(configFn: (ctx: { f: Record<string, string> }) => { fields: import('@questpie/admin/factories').FieldLayoutItem[] }): FieldWithMethods<TState, TMethods>;
+		audit(config: import("@questpie/admin/modules/audit").AuditFieldPolicy): FieldWithMethods<TState, TMethods>;
 	}
 }
 
@@ -216,6 +218,9 @@ export function authConfig<T extends AuthConfig>(config: T): T { return config; 
 export function adminConfig<T extends AdminConfigInput>(config: T): T;
 export function adminConfig<T extends (...args: never[]) => AdminConfigInput>(cb: T): T;
 export function adminConfig<T>(v: T): T { return v; }
+
+/** Typed factory for audit config. */
+export function audit<T extends import("@questpie/admin/modules/audit").AuditPolicy>(config: T): T { return config; }
 
 /** Typed factory for mcpConfig config. Accepts plain config or callback. */
 export function mcpConfig<T extends McpConfig>(config: T): T;

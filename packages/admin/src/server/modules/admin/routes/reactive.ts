@@ -809,10 +809,11 @@ export const fieldOptions = route()
 				total: result.total,
 			};
 		} catch (error) {
-			console.error(
-				`Error fetching options for ${entityName}.${field}:`,
+			app.logger.error("Admin field options failed", {
+				entityName,
+				field,
 				error,
-			);
+			});
 			return {
 				options: [],
 				hasMore: false,

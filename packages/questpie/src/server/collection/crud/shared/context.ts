@@ -116,6 +116,10 @@ export function normalizeContext(context: CRUDContext = {}): NormalizedContext {
 			DEFAULT_LOCALE,
 		defaultLocale: context.defaultLocale ?? DEFAULT_LOCALE,
 		stage: context.stage ?? stored?.stage,
+		requestId: context.requestId ?? stored?.requestId,
+		traceId: context.traceId ?? stored?.traceId,
+		workload: context.workload ?? stored?.workload,
+		logger: context.logger ?? stored?.logger,
 		// Request-context extensions travel as one bundle, inherited exactly
 		// like session/db: explicit param → ALS → undefined.
 		"~contextExtensions":
