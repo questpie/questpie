@@ -7248,6 +7248,13 @@ arguments redact common credential keys and framework-serialized `Error`
 messages/stacks before both sinks. Message strings are not inspected; keep them
 stable and place request data in structured fields.
 
+The logger first constructs one effective record from child bindings, caller
+fields, and request/trace/span context, then redacts and canonicalizes it once
+for both Pino and OTLP. Unsupported values, cycles, and non-finite numbers use
+explicit markers. Date, URL, Map, Set, and TypedArray values use tagged inert
+records; URL userinfo and fragments are removed. OTLP logs use recursive
+AnyValue attributes, independently from scalar span/metric attributes.
+
 **Propagation:** an inbound `traceparent` is continued with the remote span as
 parent, so a distributed waterfall stays connected. Only the root reads headers.
 
