@@ -148,6 +148,7 @@ function isError(value: object): boolean {
 
 function trustedErrorType(value: object): string {
 	const trusted = new Map<object, string>([
+		[AggregateError.prototype, "AggregateError"],
 		[EvalError.prototype, "EvalError"],
 		[RangeError.prototype, "RangeError"],
 		[ReferenceError.prototype, "ReferenceError"],
@@ -201,7 +202,9 @@ function serializeSupportedValue(
 		url.username = "";
 		url.password = "";
 		for (const key of url.searchParams.keys()) {
-			if (isSensitiveKey(key)) url.searchParams.set(key, REDACTED);
+			if (isSensitiveKey(key) || matchesPath([...path, key], policy.paths)) {
+				url.searchParams.set(key, REDACTED);
+			}
 		}
 		return { type: "URL", value: url.toString() };
 	} catch {}
@@ -215,6 +218,7 @@ function serializeSupportedValue(
 		>;
 		seen.set(value, result);
 		for (const [key, nested] of iterator) {
+			const policySegment = typeof key === "string" ? key : "<non-string-key>";
 			const redactEntry =
 				typeof key === "string" &&
 				(isSensitiveKey(key) || matchesPath([...path, key], policy.paths));
@@ -222,7 +226,7 @@ function serializeSupportedValue(
 				redactValue(key, [...path, "key"], policy, seen),
 				redactEntry
 					? REDACTED
-					: redactValue(nested, [...path, String(key)], policy, seen),
+					: redactValue(nested, [...path, policySegment], policy, seen),
 			]);
 		}
 		return result;

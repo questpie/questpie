@@ -133,7 +133,7 @@ describe("logger structured-field redaction", () => {
 		const emitted: any[] = [];
 		const logger = new LoggerService({
 			adapter: log.adapter,
-			redact: ["map.customerEmail"],
+			redact: ["map.customerEmail", "url.customerEmail"],
 		});
 		await runWithContext(
 			{
@@ -145,7 +145,7 @@ describe("logger structured-field redaction", () => {
 				logger.info("diagnostics", {
 					date: new Date("2026-01-02T03:04:05.000Z"),
 					url: new URL(
-						"https://user:password@example.com/path?token=private&safe=ok",
+						"https://user:password@example.com/path?token=private&customerEmail=private%40example.com&safe=ok",
 					),
 					map: new Map([
 						["authorization", "private"],
@@ -160,7 +160,8 @@ describe("logger structured-field redaction", () => {
 			date: { type: "Date", value: "2026-01-02T03:04:05.000Z" },
 			url: {
 				type: "URL",
-				value: "https://example.com/path?token=%5BRedacted%5D&safe=ok",
+				value:
+					"https://example.com/path?token=%5BRedacted%5D&customerEmail=%5BRedacted%5D&safe=ok",
 			},
 			map: {
 				type: "Map",
@@ -173,6 +174,49 @@ describe("logger structured-field redaction", () => {
 			bytes: { type: "TypedArray", values: [1, 2, 3] },
 		});
 		expect(emitted[0].attributes).toEqual(diagnostics);
+	});
+
+	it("covers adversarial Map keys and every built-in Error subtype", () => {
+		const hostileKey = {
+			token: "private-key",
+			toString: () => {
+				throw new Error("must not coerce Map keys");
+			},
+		};
+		const proxyKey = new Proxy(
+			{},
+			{
+				ownKeys: () => {
+					throw new Error("proxy key trap");
+				},
+			},
+		);
+		const errorCases: Array<[string, Error]> = [
+			["Error", new Error("private")],
+			["EvalError", new EvalError("private")],
+			["RangeError", new RangeError("private")],
+			["ReferenceError", new ReferenceError("private")],
+			["SyntaxError", new SyntaxError("private")],
+			["TypeError", new TypeError("private")],
+			["URIError", new URIError("private")],
+			["AggregateError", new AggregateError([], "private")],
+		];
+		const log = createCapturingLogger({ captureMessages: false });
+		new LoggerService({ adapter: log.adapter }).info("matrix", {
+			map: new Map([
+				[hostileKey, "safe"],
+				[proxyKey, "safe"],
+			]),
+			errors: errorCases.map(([, error]) => error),
+		});
+		const record = log.records[0]?.args?.[0] as Record<string, any>;
+		expect(record.map.entries).toEqual([
+			[{ token: "[Redacted]", toString: hostileKey.toString }, "safe"],
+			["[Unserializable]", "safe"],
+		]);
+		expect(record.errors).toEqual(
+			errorCases.map(([type]) => ({ type, message: "[Redacted]" })),
+		);
 	});
 
 	it("extends defaults with configured structured paths for adapter and tee", async () => {
