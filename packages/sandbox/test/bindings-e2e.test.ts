@@ -676,7 +676,11 @@ function guestFetchSource(url: string, init?: string): string {
 				text,
 			};
 		} catch (e) {
-			return { fetched: false, message: String(e && e.message || e) };
+			return {
+				fetched: false,
+				message: String(e && e.message || e),
+				causeMessage: String(e && e.cause && e.cause.message || e && e.cause || ""),
+			};
 		}
 	}`;
 }
@@ -690,6 +694,7 @@ interface GuestFetchOut {
 	fromBroker?: string | null;
 	text?: string;
 	message?: string;
+	causeMessage?: string;
 }
 
 async function runGuestFetch(
@@ -743,6 +748,13 @@ describe.if(!!denoPath)(
 			expect(originSeen[0]?.host).toBe(`${ALLOWED_HOST}:${originPort}`);
 			expect(originSeen[0]?.method).toBe("POST");
 			expect(originSeen[0]?.body).toBe("ping");
+		}, 20_000);
+
+		it("preserves request construction failures as the fetch error cause", async () => {
+			const out = await runGuestFetch({ net: [] }, "http://[");
+			expect(out.fetched).toBe(false);
+			expect(out.message).toStartWith("Failed to construct fetch request:");
+			expect(out.causeMessage).not.toBe("");
 		}, 20_000);
 
 		// ── ★ THE REBIND ACCEPTANCE — the headline regression. ──

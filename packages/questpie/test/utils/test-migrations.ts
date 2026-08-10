@@ -111,7 +111,7 @@ export async function setupTestMigrations(
 	// Generate migrations for each collection
 	const collectionMigrations: Migration[] = [];
 
-	for (const collection of collections) {
+	for (const _collection of collections) {
 		// For testing, we still need to use manual DDL
 		// But in the future, we can use Drizzle Kit to generate SQL
 		// For now, this is a placeholder that documents the approach

@@ -31,7 +31,6 @@ import type {
 } from "#questpie/server/fields/types.js";
 import type { Global } from "#questpie/server/global/builder/global.js";
 import type {
-	GlobalAccess,
 	GlobalAccessContext,
 	GlobalAccessRule,
 	GlobalBuilderState,

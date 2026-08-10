@@ -310,16 +310,16 @@ export const emailOps = extendOperatorSet(stringOps, {
 	},
 	jsonbOverrides: {
 		domain: operator<string, unknown>((col, value, ctx) => {
-			return sql`${jsonbPathRef(col, ctx.jsonbPath, false)} ILIKE ${"%" + "@" + value}`;
+			return sql`${jsonbPathRef(col, ctx.jsonbPath, false)} ILIKE ${`%@${value}`}`;
 		}),
 		domainIn: operator<string[], unknown>((col, values, ctx) => {
 			if (values.length === 0) return sql`FALSE`;
 			if (values.length === 1)
-				return sql`${jsonbPathRef(col, ctx.jsonbPath, false)} ILIKE ${"%" + "@" + values[0]}`;
+				return sql`${jsonbPathRef(col, ctx.jsonbPath, false)} ILIKE ${`%@${values[0]}`}`;
 			return sql`(${sql.join(
 				values.map(
 					(d) =>
-						sql`${jsonbPathRef(col, ctx.jsonbPath, false)} ILIKE ${"%" + "@" + d}`,
+						sql`${jsonbPathRef(col, ctx.jsonbPath, false)} ILIKE ${`%@${d}`}`,
 				),
 				sql` OR `,
 			)})`;

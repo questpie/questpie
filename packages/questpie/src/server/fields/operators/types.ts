@@ -6,15 +6,9 @@
  * enabling auto-derivation of JSONB operators from column operators.
  */
 
-import type { SQL } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
-import type {
-	ContextualOperators,
-	OperatorFn,
-	OperatorMap,
-	QueryContext,
-} from "../types.js";
+import type { ContextualOperators, OperatorMap } from "../types.js";
 
 // ============================================================================
 // JSONB Cast Strategies

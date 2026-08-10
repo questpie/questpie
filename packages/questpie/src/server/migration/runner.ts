@@ -256,6 +256,7 @@ export class MigrationRunner {
 		}
 
 		// Get all migrations after target (reverse order)
+		// oxlint-disable-next-line unicorn/no-array-reverse -- slice() already isolates the input and ES2023 toReversed is outside the supported target.
 		const toRollback = executed.slice(targetIndex).reverse();
 
 		this.log(

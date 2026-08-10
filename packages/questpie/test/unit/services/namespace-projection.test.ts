@@ -7,12 +7,11 @@
  * 3. extractAppServices includes scoped null-namespace services at top level
  * 4. Singleton null-namespace services work as before
  */
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { describe, expect, it } from "bun:test";
 
 import { collection, service } from "../../../src/exports/index.js";
 import { extractAppServices } from "../../../src/server/config/app-context.js";
 import { buildMockApp } from "../../utils/mocks/mock-app-builder";
-import { createTestContext } from "../../utils/test-context";
 import { runTestDbMigrations } from "../../utils/test-db";
 
 describe("Namespace + Lifecycle Projection (QUE-260)", () => {

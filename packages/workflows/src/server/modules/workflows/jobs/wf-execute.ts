@@ -204,7 +204,7 @@ export const wfExecuteJob = job({
 						}
 						return null;
 					},
-					async findWaitingSteps(eventName, matchData) {
+					async findWaitingSteps(eventName, _matchData) {
 						const result = await stepsCrud.find(
 							{
 								where: {

@@ -17,7 +17,6 @@ import type {
 	JsonRouteDefinition,
 	RouteParamsFromKey,
 	RawRouteDefinition,
-	RouteDefinition,
 	RouteWithParams,
 } from "#questpie/server/routes/types.js";
 import { isJsonRoute, isRawRoute } from "#questpie/server/routes/types.js";
@@ -30,13 +29,7 @@ declare module "#questpie/server/config/app-context.js" {
 	}
 }
 
-import type {
-	Equal,
-	Expect,
-	Extends,
-	HasKey,
-	IsNever,
-} from "./type-test-utils.js";
+import type { Equal, Expect, Extends, HasKey } from "./type-test-utils.js";
 
 // ============================================================================
 // route() - JSON route type tests
@@ -88,7 +81,7 @@ const validateRoute = route()
 			errors: z.array(z.string()),
 		}),
 	)
-	.handler(async ({ input }) => {
+	.handler(async ({ input: _input }) => {
 		return { valid: true, errors: [] };
 	});
 
@@ -98,17 +91,16 @@ type _validateHasOutputSchema = Expect<
 >;
 
 // Route with session context
-const protectedRoute = route()
+const _protectedRoute = route()
 	.post()
 	.schema(z.object({ action: z.string() }))
-	.handler(async ({ input, session }) => {
-		// session should be available
-		const userId = session?.user?.id;
-		return { success: true, userId };
+	.handler(async ({ input: _input, session }) => {
+		const _userId = session?.user?.id;
+		return { success: true, userId: _userId };
 	});
 
 // Complex input schema should preserve nested types
-const complexRoute = route()
+const _complexRoute = route()
 	.post()
 	.schema(
 		z.object({
@@ -125,9 +117,8 @@ const complexRoute = route()
 		}),
 	)
 	.handler(async ({ input }) => {
-		// All nested types should be inferred
-		const theme = input.user.preferences.theme; // "light" | "dark"
-		const tags = input.tags; // string[]
+		const _theme = input.user.preferences.theme;
+		const _tags = input.tags;
 		return { processed: true };
 	});
 
@@ -147,7 +138,7 @@ type _getRouteHasMethod = Expect<Equal<HasKey<GetRouteType, "method">, true>>;
 const rawRoute = route()
 	.post()
 	.raw()
-	.handler(async ({ request }) => {
+	.handler(async ({ request: _request }) => {
 		return new Response("ok");
 	});
 
@@ -211,10 +202,10 @@ const sendEmailJob = job({
 		subject: z.string(),
 		body: z.string(),
 	}),
-	handler: async ({ payload }) => {
+	handler: async ({ payload: _payload }) => {
 		// payload should have correct types
-		const to: string = payload.to;
-		const subject: string = payload.subject;
+		const _to: string = _payload.to;
+		const _subject: string = _payload.subject;
 	},
 });
 
@@ -235,7 +226,7 @@ const processImageJob = job({
 		),
 	}),
 	handler: async ({ payload }) => {
-		const imageId: string = payload.imageId;
+		const _imageId: string = payload.imageId;
 		const ops = payload.operations;
 		return { processed: true, operationCount: ops.length };
 	},
@@ -250,7 +241,7 @@ type _processImageIsJobDef = Expect<
 const calculateJob = job({
 	name: "calculate-stats",
 	schema: z.object({ datasetId: z.string() }),
-	handler: async ({ payload }) => {
+	handler: async ({ payload: _payload }) => {
 		return {
 			mean: 0,
 			median: 0,
@@ -271,35 +262,26 @@ type _calculateHasHandler = Expect<
 >;
 
 // Job with app in handler context
-const notifyJob = job({
+const _notifyJob = job({
 	name: "notify-users",
-	schema: z.object({
-		userIds: z.array(z.string()),
-		message: z.string(),
-	}),
-	handler: async ({ payload, db }) => {
-		// db should be available for accessing database
+	schema: z.object({ userIds: z.array(z.string()), message: z.string() }),
+	handler: async ({ payload, db: _db }) => {
 		const users = payload.userIds;
 		return { notified: users.length };
 	},
 });
 
 // Job with optional fields in schema
-const syncJob = job({
+const _syncJob = job({
 	name: "sync-data",
 	schema: z.object({
 		source: z.string(),
 		destination: z.string(),
-		options: z
-			.object({
-				force: z.boolean(),
-				dryRun: z.boolean(),
-			})
-			.optional(),
+		options: z.object({ force: z.boolean(), dryRun: z.boolean() }).optional(),
 	}),
 	handler: async ({ payload }) => {
-		const force = payload.options?.force;
-		const dryRun = payload.options?.dryRun;
+		const _force = payload.options?.force;
+		const _dryRun = payload.options?.dryRun;
 		return { synced: true };
 	},
 });
@@ -309,17 +291,16 @@ const syncJob = job({
 // ============================================================================
 
 // Void return in job handler
-const logJob = job({
+const _logJob = job({
 	name: "log-event",
 	schema: z.object({ event: z.string() }),
 	handler: async ({ payload }) => {
-		// No return - void
 		console.log(payload.event);
 	},
 });
 
 // Union types in schema
-const actionRoute = route()
+const _actionRoute = route()
 	.post()
 	.schema(
 		z.object({
@@ -337,7 +318,7 @@ const actionRoute = route()
 	});
 
 // Discriminated unions
-const webhookJob = job({
+const _webhookJob = job({
 	name: "process-webhook",
 	schema: z.discriminatedUnion("type", [
 		z.object({
@@ -360,7 +341,7 @@ const webhookJob = job({
 });
 
 // Nullable schema fields
-const updateRoute = route()
+const _updateRoute = route()
 	.post()
 	.schema(
 		z.object({
@@ -370,8 +351,8 @@ const updateRoute = route()
 		}),
 	)
 	.handler(async ({ input }) => {
-		const name: string | null = input.name;
-		const desc: string | null | undefined = input.description;
+		const _name: string | null = input.name;
+		const _desc: string | null | undefined = input.description;
 		return { updated: true };
 	});
 
@@ -397,7 +378,7 @@ type _testRouteHasBrand = Expect<Equal<HasKey<TestRouteType, "__brand">, true>>;
 const testJob = job({
 	name: "test-job",
 	schema: z.object({ data: z.string() }),
-	handler: async ({ payload }) => {},
+	handler: async ({ payload: _payload }) => {},
 });
 
 type TestJobType = typeof testJob;

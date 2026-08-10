@@ -189,7 +189,7 @@ export function compileMatcher<T>(
 	// Per-method collision: same pattern + same method = collision
 	const patternMethodMap = new Map<string, Map<string, string>>();
 
-	for (const [pattern, method] of entries) {
+	for (const [pattern, _method] of entries) {
 		const key = specificityKey(pattern);
 		let methodMap = patternMethodMap.get(key);
 		if (!methodMap) {

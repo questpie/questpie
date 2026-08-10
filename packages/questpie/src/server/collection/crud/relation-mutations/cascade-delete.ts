@@ -7,10 +7,7 @@
 
 import type { RelationConfig } from "#questpie/server/collection/builder/types.js";
 import type { resolveFieldKey as ResolveFieldKeyFn } from "#questpie/server/collection/crud/shared/field-resolver.js";
-import type {
-	CRUD,
-	CRUDContext,
-} from "#questpie/server/collection/crud/types.js";
+import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
 import { ApiError } from "#questpie/server/errors/base.js";
 

@@ -369,7 +369,11 @@ export function createQueueClient<
 				);
 			}
 
-			const { cron, startAfter, ...scheduleOptions } = jobDef.options ?? {};
+			const {
+				cron: _cron,
+				startAfter: _startAfter,
+				...scheduleOptions
+			} = jobDef.options ?? {};
 			await adapter.schedule(
 				jobDef.name,
 				jobDef.options.cron,

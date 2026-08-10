@@ -664,7 +664,7 @@ export class Global<TState extends GlobalBuilderState> {
 	getMeta(): GlobalMeta {
 		const fieldDefinitions = this.state.fieldDefinitions || {};
 		const fields = Object.entries(fieldDefinitions).map(
-			([name, def]: [string, any]) => ({
+			([name, _def]: [string, any]) => ({
 				name,
 				localized: this.state.localized.includes(name as any),
 				virtual: name in this.state.virtuals,

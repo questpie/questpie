@@ -9,6 +9,9 @@
 		"typescript/no-explicit-any": "off",
 		"jsx-a11y/prefer-tag-over-role": "off",
 		"react/react-in-jsx-scope": "off",
+		// Leading underscores are the repository convention for internal members
+		// such as `_state` and `_pendingRelations`.
+		"eslint/no-underscore-dangle": "off",
 		"eslint/no-unused-vars": "warn",
 		"eslint/no-shadow": "off",
 		"unicorn/consistent-function-scoping": "off",

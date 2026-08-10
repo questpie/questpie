@@ -3,7 +3,7 @@
  */
 
 import type { OpenApiConfig, PathOperation } from "../types.js";
-import { jsonRequestBody, jsonResponse, ref } from "./schemas.js";
+import { jsonRequestBody, jsonResponse } from "./schemas.js";
 
 /**
  * Generate OpenAPI paths for search endpoints.

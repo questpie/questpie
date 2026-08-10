@@ -96,6 +96,7 @@ export async function runCompensations(
 	};
 
 	// Run in reverse order (LIFO — last completed step compensates first)
+	// oxlint-disable-next-line unicorn/no-array-reverse -- the spread already isolates the input and ES2023 toReversed is outside the supported target.
 	const reversed = [...compensations].reverse();
 
 	for (const entry of reversed) {

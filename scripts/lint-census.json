@@ -1,5 +1,5 @@
 {
-	"$comment": "oxlint WARNING counts per package per rule. Errors are gated separately by the Lint & Format job. Regenerate with `bun run scripts/lint-census.ts --update` and review the diff. Ratchet: any per-rule increase fails CI. NOTE: no-underscore-dangle dominates this baseline and is largely a house convention (_state, _pendingRelations) rather than debt — configuring or dropping that rule is a better fix than burning it down. See the script header.",
+	"$comment": "oxlint WARNING counts per package per rule. Errors are gated separately by the Lint & Format job. Regenerate with `bun run scripts/lint-census.ts --update` and review the diff. Ratchet: any per-rule increase fails CI.",
 	"packages": {
 		"admin": {
 			"eslint(no-unused-vars)": 150,
@@ -14,31 +14,15 @@
 		"mcp": {},
 		"next": {},
 		"observability": {},
-		"openapi": {
-			"eslint(no-unused-vars)": 1
-		},
-		"questpie": {
-			"eslint(no-unused-vars)": 148,
-			"eslint(no-useless-concat)": 3,
-			"eslint(preserve-caught-error)": 1,
-			"typescript(no-confusing-non-null-assertion)": 1,
-			"unicorn(no-array-reverse)": 2
-		},
-		"sandbox": {
-			"eslint(preserve-caught-error)": 2
-		},
-		"scripts": {
-			"eslint(no-unused-vars)": 1
-		},
+		"openapi": {},
+		"questpie": {},
+		"sandbox": {},
+		"scripts": {},
 		"tanstack-db": {},
 		"tanstack-query": {},
 		"testing": {},
 		"tokens": {},
 		"vite-plugin-iconify": {},
-		"workflows": {
-			"eslint(no-unmodified-loop-condition)": 2,
-			"eslint(no-unused-vars)": 4,
-			"unicorn(no-array-reverse)": 1
-		}
+		"workflows": {}
 	}
 }

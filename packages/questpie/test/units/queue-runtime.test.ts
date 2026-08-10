@@ -342,6 +342,42 @@ describe("queue runtime api", () => {
 		expect(adapter.getScheduledJob("internal-b")?.cron).toBe("0 * * * *");
 	});
 
+	test("registerSchedules passes cron once and omits publish-only timing options", async () => {
+		const adapter = new MockQueueAdapter();
+		const queue = createQueueClient(
+			{
+				notify: {
+					name: "notify",
+					schema: z.object({}).passthrough(),
+					handler: async () => {},
+					options: {
+						cron: "0 * * * *",
+						startAfter: 30,
+						retryLimit: 4,
+					},
+				},
+			},
+			adapter,
+			{
+				createContext: async () => ({ db: {} }),
+				getApp: () => ({ name: "app" }),
+			},
+		);
+
+		await queue.registerSchedules();
+
+		expect(adapter.getScheduledJob("notify")).toMatchObject({
+			cron: "0 * * * *",
+			options: { retryLimit: 4 },
+		});
+		expect(adapter.getScheduledJob("notify")?.options).not.toHaveProperty(
+			"cron",
+		);
+		expect(adapter.getScheduledJob("notify")?.options).not.toHaveProperty(
+			"startAfter",
+		);
+	});
+
 	test("queue exposes literal job name aliases", async () => {
 		const adapter = new MockQueueAdapter();
 		const queue = createQueueClient(

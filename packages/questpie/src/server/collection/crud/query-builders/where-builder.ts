@@ -624,7 +624,7 @@ export function buildRelationWhereClause(
 	relationValue: any,
 	options: BuildRelationWhereOptions,
 ): SQL | undefined {
-	const { app, parentTable, context } = options;
+	const { app, context: _context } = options;
 
 	if (!app) return undefined;
 
@@ -739,7 +739,7 @@ export function buildBelongsToExistsClause(
 	relationWhere: Where | undefined,
 	options: BuildRelationWhereOptions,
 ): SQL | undefined {
-	const { app, parentTable, parentState, context } = options;
+	const { app, parentTable, context } = options;
 
 	// Support both `field: string` (singular) and `fields: PgColumn[]` (array) formats
 	const hasFieldConfig =

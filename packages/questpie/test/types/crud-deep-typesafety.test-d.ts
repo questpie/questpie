@@ -25,7 +25,6 @@ import type {
 	CollectionRelationsFromApp,
 	CollectionSelect as CollectionSelectFromApp,
 	CreateInput,
-	CreateInputBase,
 	FindOptions,
 	UpdateInput,
 	Where as WhereType,
@@ -459,7 +458,7 @@ type ArticleFindOpts_Infer = FindOptions<typeof articles, TAppManual>;
 type ArticleFindOpts_Manual = FindOptions<typeof articles, TAppManual>;
 
 type ArticleWith_Infer = NonNullable<ArticleFindOpts_Infer["with"]>;
-type ArticleWith_Manual = NonNullable<ArticleFindOpts_Manual["with"]>;
+type _ArticleWith_Manual = NonNullable<ArticleFindOpts_Manual["with"]>;
 
 // --- Available relation keys ---
 type _inferWithHasAuthor = Expect<

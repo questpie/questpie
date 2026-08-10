@@ -12,10 +12,7 @@ import type { DefaultFieldState } from "../../../fields/field-class-types.js";
 import { field, Field } from "../../../fields/field-class.js";
 import { fieldType, wrapFieldComplete } from "../../../fields/field-type.js";
 import type { FieldWithMethods } from "../../../fields/field-with-methods.js";
-import {
-	selectMultiOps,
-	selectSingleOps,
-} from "../../../fields/operators/builtin.js";
+import { selectSingleOps } from "../../../fields/operators/builtin.js";
 import type { ScalarWhereInput } from "../../../fields/operators/builtin.js";
 import type { OptionsConfig } from "../../../fields/reactive.js";
 import type { SelectFieldMetadata } from "../../../fields/types.js";

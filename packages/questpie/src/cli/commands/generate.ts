@@ -19,7 +19,6 @@ function mockStdinForNonInteractive(): () => void {
 	const originalIsTTY = process.stdin.isTTY;
 	const originalSetRawMode = (process.stdin as any).setRawMode;
 
-	const buffer = "";
 	let promptCount = 0;
 
 	// Create a readable stream that provides Enter keypresses on demand
@@ -36,7 +35,7 @@ function mockStdinForNonInteractive(): () => void {
 	}) as any;
 
 	mockStream.isTTY = true;
-	mockStream.setRawMode = (mode: boolean) => {
+	mockStream.setRawMode = (_mode: boolean) => {
 		return mockStream;
 	};
 

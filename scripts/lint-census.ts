@@ -7,25 +7,9 @@
  * scripts/any-census.ts: freeze the counts, fail on an increase, burn down over
  * time.
  *
- * ONE RULE IS DELIBERATELY NOT GOVERNED — see IGNORED_RULES below. At the time
- * this was written 1114 of 1443 warnings, 77%, were
- * `eslint(no-underscore-dangle)`, 980 of them in `questpie` alone. This
- * codebase uses a leading underscore as a deliberate convention for internal
- * members — `_state`, `_pendingRelations`, `_internalRelatedTable`,
- * `_getVirtuals` — so those are not debt, they are a preset rule disagreeing
- * with a house style.
- *
- * Ratcheting them would make adding one more `_internal` field, i.e. following
- * the project's own convention, fail CI. The developer's options would then be
- * to pad the baseline or to rename against the style, and the third option —
- * disabling the gate — is exactly how the 85 lint errors accumulated while that
- * job sat commented out. A gate that fights the codebase loses.
- *
- * Excluding it here rather than editing .oxlintrc.json keeps the decision
- * inside this script: the warnings still appear in lint output, unchanged, and
- * whether to configure or drop the rule stays the owner's call. What remains
- * governed is 329 warnings — admin 160, questpie 158, the rest in single
- * digits — dominated by `no-unused-vars`, which is real debt.
+ * `eslint/no-underscore-dangle` is disabled in the root Oxlint config because
+ * leading underscores are the repository's documented house convention for
+ * internal members. Every warning emitted here is therefore governed debt.
  *
  * Usage:
  *   bun run scripts/lint-census.ts            # check against baseline
@@ -50,16 +34,6 @@ type Diagnostic = {
 	code?: string;
 	severity?: string;
 	filename?: string;
-};
-
-/**
- * Rules whose warnings are counted but never ratcheted. Entries need a reason
- * that says why the rule is wrong for THIS codebase, not why the warnings are
- * inconvenient.
- */
-const IGNORED_RULES: Record<string, string> = {
-	"eslint(no-underscore-dangle)":
-		"leading underscore is the house convention for internal members (_state, _pendingRelations, _internalRelatedTable); ratcheting it would fail CI for following the project's own style",
 };
 
 /** Discovered, never hand-listed — a new package shows up and must be baselined. */
@@ -105,16 +79,11 @@ const current: Record<string, Record<string, number>> = {};
 for (const name of [...packageDirs(), "scripts"]) current[name] = {};
 
 let unattributed = 0;
-let ignored = 0;
 for (const d of diagnostics) {
 	// Errors are already gated by the Lint & Format job; this census is the
 	// warning backlog it deliberately leaves ungated.
 	if (d.severity !== "warning") continue;
 	const code = d.code ?? "unknown";
-	if (code in IGNORED_RULES) {
-		ignored += 1;
-		continue;
-	}
 	const owner = d.filename ? ownerOf(d.filename) : null;
 	if (!owner || !(owner in current)) {
 		unattributed += 1;
@@ -158,11 +127,6 @@ const grand = owners.reduce(
 	0,
 );
 console.log(`\n  total ${grand}`);
-if (ignored > 0) {
-	console.log(
-		`  (${ignored} not governed: ${Object.keys(IGNORED_RULES).join(", ")})`,
-	);
-}
 if (unattributed > 0) {
 	console.log(`  (${unattributed} warnings outside packages/ and scripts/)`);
 }
@@ -184,7 +148,7 @@ if (wantUpdate) {
 
 	const next: Baseline = {
 		$comment:
-			"oxlint WARNING counts per package per rule. Errors are gated separately by the Lint & Format job. Regenerate with `bun run scripts/lint-census.ts --update` and review the diff. Ratchet: any per-rule increase fails CI. NOTE: no-underscore-dangle dominates this baseline and is largely a house convention (_state, _pendingRelations) rather than debt — configuring or dropping that rule is a better fix than burning it down. See the script header.",
+			"oxlint WARNING counts per package per rule. Errors are gated separately by the Lint & Format job. Regenerate with `bun run scripts/lint-census.ts --update` and review the diff. Ratchet: any per-rule increase fails CI.",
 		packages: sorted,
 	};
 	writeFileSync(BASELINE_PATH, `${JSON.stringify(next, null, "\t")}\n`);

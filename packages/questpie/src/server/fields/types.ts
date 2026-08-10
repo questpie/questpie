@@ -11,7 +11,6 @@
 
 import type { SQL } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
-import type { ZodType } from "zod";
 
 import type { Principal } from "#questpie/server/config/context.js";
 import type { AuthorityActor } from "#questpie/server/modules/core/integrated/crdt/authority.js";

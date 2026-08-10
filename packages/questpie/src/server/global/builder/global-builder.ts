@@ -419,7 +419,7 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 		metadata: RelationFieldMetadata,
 		columns: Record<string, any>,
 	): RelationConfig | null {
-		const { relationType, foreignKey, _toConfig, _throughConfig } = metadata;
+		const { relationType, _toConfig, _throughConfig } = metadata;
 		let { targetCollection, through } = metadata;
 
 		// Resolve deferred callbacks now (all collections should be defined by build time)

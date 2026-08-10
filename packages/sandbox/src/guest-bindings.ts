@@ -23,6 +23,23 @@
 /** Transport: send one binding RPC, resolve with its brokered value or reject. */
 export type HostCall = (method: string, args: unknown) => Promise<unknown>;
 
+/** Relay brokered fetch and retain a rejected host call as the fetch error cause. */
+export async function callBrokeredFetch<T>(
+	hostCall: HostCall,
+	request: unknown,
+): Promise<T> {
+	try {
+		return (await hostCall("http.fetch", request)) as T;
+	} catch (error) {
+		throw new TypeError(
+			error instanceof Error ? error.message : String(error),
+			{
+				cause: error,
+			},
+		);
+	}
+}
+
 /**
  * Per-collection access surface. Reads (`find`/`findOne`) are always available;
  * writes (`create`/`update`/`delete`) are dispatched ONLY where the host wires a

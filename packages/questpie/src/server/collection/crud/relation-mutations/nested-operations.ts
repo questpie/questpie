@@ -264,7 +264,7 @@ export function extractBelongsToConnectValues(
 		}
 
 		// Remove connect from operations, keep create/connectOrCreate for later processing
-		const { connect, ...restOperations } = operations;
+		const { connect: _connect, ...restOperations } = operations;
 		if (Object.keys(restOperations).length === 0) {
 			delete remainingRelations[relationName];
 		} else {

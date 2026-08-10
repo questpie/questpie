@@ -107,7 +107,6 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		appInstanceId = "questpie-app",
 		discovered,
 		categories,
-		singletonFactories,
 		extraImports,
 		extraTypeDeclarations,
 		extraRuntimeCode,
@@ -577,7 +576,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 			lines.push('import type { ExtractModuleProp } from "questpie/types";');
 			lines.push("");
 
-			for (const { singleName, registryKey } of tildeKeys) {
+			for (const { singleName, registryKey: _registryKey } of tildeKeys) {
 				const userFile = discovered.singles.get(singleName);
 				const typeName = `_AllModule${capitalize(singleName)}`;
 				// Exported — consumed by the L2 `Registry` interface (`~fieldTypes`).
@@ -1726,7 +1725,7 @@ function sectionComment(label: string): string {
  * Used to separate "Core Singles" from "Plugin Singles" in generated comments.
  */
 function getCoreSingleKeys(
-	allDecls: Map<string, CategoryDeclaration>,
+	_allDecls: Map<string, CategoryDeclaration>,
 ): Set<string> {
 	// Core singles are those discovered by any plugin that also declares categories.
 	// In practice, this is the core plugin which declares modules, locale, hooks, etc.
@@ -1851,7 +1850,7 @@ function emitRouteTypeInterface(
  */
 function collectTildeRegistryKeys(
 	discoverPatterns: Record<string, DiscoverPattern> | undefined,
-	singles: Map<string, DiscoveredFile>,
+	_singles: Map<string, DiscoveredFile>,
 ): Array<{ singleName: string; registryKey: string }> {
 	if (!discoverPatterns) return [];
 	const result: Array<{ singleName: string; registryKey: string }> = [];

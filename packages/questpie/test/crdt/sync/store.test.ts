@@ -35,7 +35,6 @@ import {
 	questpieCrdtSessionGrantTable,
 	questpieCrdtSessionTable,
 	questpieCrdtSnapshotManifestTable,
-	questpieCrdtSnapshotTable,
 	questpieCrdtSubjectAdmissionTable,
 	questpieCrdtSubjectTable,
 	questpieCrdtTables,

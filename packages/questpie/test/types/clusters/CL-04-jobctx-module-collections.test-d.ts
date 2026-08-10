@@ -76,10 +76,8 @@ import type {
 	Equal,
 	Expect,
 	HasKey,
-	IsAny,
 	IsNever,
 	IsEmptyObject,
-	Not,
 	NoAny,
 } from "../_assert.js";
 import type { App, Collections, QuestpieApp } from "../_fixtures.js";

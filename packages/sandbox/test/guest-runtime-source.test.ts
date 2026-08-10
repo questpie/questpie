@@ -8,7 +8,7 @@ import {
 describe("guest runtime source transport", () => {
 	it("inlines trusted bindings without a host path or network import", () => {
 		const bundled = bundleGuestRuntimeSource(
-			'import { buildGuestBindings } from "./guest-bindings.ts";\nconst cap = __QP_HTTP_FETCH_BODY_CAP_BYTES__;\nexport default buildGuestBindings;',
+			'import { buildGuestBindings, callBrokeredFetch } from "./guest-bindings.ts";\nconst cap = __QP_HTTP_FETCH_BODY_CAP_BYTES__;\nexport default buildGuestBindings;',
 			"export function buildGuestBindings() { return 'ready'; }",
 			123,
 		);
