@@ -66,7 +66,7 @@ export class LoggerService implements LoggerAdapter {
 	}
 
 	private safeArgs(args: unknown[]): unknown[] {
-		return redactLogArgs(this.withContext(args), this.redaction);
+		return this.withContext(redactLogArgs(args, this.redaction));
 	}
 
 	private withTeeBindings(args: unknown[]): unknown[] {

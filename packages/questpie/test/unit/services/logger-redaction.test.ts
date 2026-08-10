@@ -3,26 +3,11 @@ import { describe, expect, it } from "bun:test";
 import { runWithContext } from "../../../src/server/config/context.js";
 import { LoggerService } from "../../../src/server/modules/core/integrated/logger/service.js";
 import type { LoggerAdapter } from "../../../src/server/modules/core/integrated/logger/types.js";
-
-function capturing() {
-	const records: unknown[][] = [];
-	const childBindings: Array<Record<string, unknown>> = [];
-	const adapter: LoggerAdapter = {
-		debug: (_message, ...args) => records.push(args),
-		info: (_message, ...args) => records.push(args),
-		warn: (_message, ...args) => records.push(args),
-		error: (_message, ...args) => records.push(args),
-		child: (bindings) => {
-			childBindings.push(bindings);
-			return adapter;
-		},
-	};
-	return { adapter, childBindings, records };
-}
+import { createCapturingLogger } from "../../utils/capturing-logger.js";
 
 describe("logger structured-field redaction", () => {
 	it("redacts nested credential keys without discarding diagnostics", () => {
-		const log = capturing();
+		const log = createCapturingLogger({ captureMessages: false });
 		const logger = new LoggerService({ adapter: log.adapter });
 		logger.info("request failed", {
 			event: "request.failed",
@@ -38,7 +23,7 @@ describe("logger structured-field redaction", () => {
 			},
 		});
 
-		expect(log.records[0]?.[0]).toEqual({
+		expect(log.records[0]?.args?.[0]).toEqual({
 			event: "request.failed",
 			requestId: "req-1",
 			request: {
@@ -64,12 +49,12 @@ describe("logger structured-field redaction", () => {
 			}
 		}
 		const envelope = new CredentialEnvelope();
-		const log = capturing();
+		const log = createCapturingLogger({ captureMessages: false });
 		const logger = new LoggerService({ adapter: log.adapter });
 
 		logger.info("custom object", { envelope });
 
-		const record = log.records[0]?.[0] as
+		const record = log.records[0]?.args?.[0] as
 			| { envelope: Record<string, any> }
 			| undefined;
 		expect(record).toBeDefined();
@@ -85,8 +70,32 @@ describe("logger structured-field redaction", () => {
 		expect(envelope.nested.error.message).toBe("private-error");
 	});
 
+	it("does not invoke caller getters while adding request context", async () => {
+		const log = createCapturingLogger({ captureMessages: false });
+		const logger = new LoggerService({ adapter: log.adapter });
+		const structured = Object.defineProperty(
+			{ token: "private-token" },
+			"unsafeGetter",
+			{
+				enumerable: true,
+				get: () => {
+					throw new Error("getter must not run");
+				},
+			},
+		);
+
+		await runWithContext({ requestId: "req-safe" }, async () => {
+			logger.info("contextual object", structured);
+		});
+
+		expect(log.records[0]?.args?.[0]).toEqual({
+			token: "[Redacted]",
+			requestId: "req-safe",
+		});
+	});
+
 	it("extends defaults with configured structured paths for adapter and tee", async () => {
-		const log = capturing();
+		const log = createCapturingLogger({ captureMessages: false });
 		const emitted: unknown[] = [];
 		const logger = new LoggerService({
 			adapter: log.adapter,
@@ -108,12 +117,12 @@ describe("logger structured-field redaction", () => {
 			profile: { email: "[Redacted]", displayName: "Safe" },
 			token: "[Redacted]",
 		};
-		expect(log.records[0]?.[0]).toEqual(expected);
+		expect(log.records[0]?.args?.[0]).toEqual(expected);
 		expect(emitted[0]).toMatchObject({ attributes: expected });
 	});
 
 	it("serializes Error values without messages or stacks", () => {
-		const log = capturing();
+		const log = createCapturingLogger({ captureMessages: false });
 		const logger = new LoggerService({ adapter: log.adapter });
 		const error = Object.assign(new TypeError("private body"), {
 			code: "INVALID_INPUT",
@@ -127,16 +136,16 @@ describe("logger structured-field redaction", () => {
 				status: 400,
 			},
 		});
-		expect(log.records[0]?.[0]).toEqual({
+		expect(log.records[0]?.args?.[0]).toEqual({
 			err: { type: "TypeError", message: "[Redacted]", code: "INVALID_INPUT" },
 		});
-		expect(log.records[1]?.[0]).toEqual({
+		expect(log.records[1]?.args?.[0]).toEqual({
 			error: { name: "ValidationError", message: "[Redacted]", status: 400 },
 		});
 	});
 
 	it("retains configured policy on child loggers", () => {
-		const log = capturing();
+		const log = createCapturingLogger({ captureMessages: false });
 		const logger = new LoggerService({
 			adapter: log.adapter,
 			redact: ["customer.email"],
@@ -147,7 +156,7 @@ describe("logger structured-field redaction", () => {
 				customer: { email: "private@example.com" },
 				apiKey: "private-key",
 			});
-		expect(log.records[0]?.[0]).toEqual({
+		expect(log.records[0]?.args?.[0]).toEqual({
 			customer: { email: "[Redacted]" },
 			apiKey: "[Redacted]",
 		});
@@ -158,7 +167,7 @@ describe("logger structured-field redaction", () => {
 	});
 
 	it("tees effective child bindings with the same redaction policy", async () => {
-		const log = capturing();
+		const log = createCapturingLogger({ captureMessages: false });
 		const emitted: any[] = [];
 		const logger = new LoggerService({ adapter: log.adapter });
 		await runWithContext(

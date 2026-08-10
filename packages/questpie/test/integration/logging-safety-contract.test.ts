@@ -2,23 +2,11 @@ import { describe, expect, it } from "bun:test";
 
 import { runWithContext } from "../../src/server/config/context.js";
 import { LoggerService } from "../../src/server/modules/core/integrated/logger/service.js";
-import type { LoggerAdapter } from "../../src/server/modules/core/integrated/logger/types.js";
-
-function capture() {
-	const records: Array<{ message: string; args: unknown[] }> = [];
-	const adapter: LoggerAdapter = {
-		debug: (message, ...args) => records.push({ message, args }),
-		info: (message, ...args) => records.push({ message, args }),
-		warn: (message, ...args) => records.push({ message, args }),
-		error: (message, ...args) => records.push({ message, args }),
-		child: () => adapter,
-	};
-	return { adapter, records };
-}
+import { createCapturingLogger } from "../utils/capturing-logger.js";
 
 describe("logging safety contract", () => {
 	it("tees the same correlated structured record sent to the logger adapter", async () => {
-		const captured = capture();
+		const captured = createCapturingLogger();
 		const emitted: unknown[] = [];
 		const logger = new LoggerService({ adapter: captured.adapter });
 		await runWithContext(
@@ -38,7 +26,7 @@ describe("logging safety contract", () => {
 			async () => logger.info("contract event", { event: "contract.event" }),
 		);
 
-		const attributes = captured.records[0]?.args[0];
+		const attributes = captured.records[0]?.args?.[0];
 		expect(attributes).toMatchObject({
 			event: "contract.event",
 			requestId: "req-contract",
@@ -50,7 +38,7 @@ describe("logging safety contract", () => {
 	});
 
 	it("redacts structured credentials and errors but preserves the caller message", () => {
-		const captured = capture();
+		const captured = createCapturingLogger();
 		const logger = new LoggerService({ adapter: captured.adapter });
 		logger.error("stable caller message", {
 			authorization: "private",
@@ -59,6 +47,7 @@ describe("logging safety contract", () => {
 		});
 
 		expect(captured.records[0]).toEqual({
+			level: "error",
 			message: "stable caller message",
 			args: [
 				{
