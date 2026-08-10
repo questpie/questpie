@@ -164,6 +164,54 @@ export async function oauthIssuerForAuth(auth: {
 }
 
 /**
+ * The JWKS endpoint used by the running Better Auth instance.
+ *
+ * The resource client treats an absent `auth.options.basePath` as an empty
+ * string. Better Auth itself treats it as `/api/auth`, so its default JWKS
+ * route is `/api/auth/jwks`. Derive the URL with Better Auth's real default and
+ * preserve explicit JWT remote URLs and paths.
+ */
+async function oauthJwksUrlForAuth(auth: {
+	options?: { baseURL?: unknown; basePath?: unknown };
+	$context?: Promise<unknown>;
+}): Promise<string | undefined> {
+	let jwksOptions: { remoteUrl?: unknown; jwksPath?: unknown } | undefined;
+	try {
+		const ctx = (await auth.$context) as
+			| { getPlugin?: (name: string) => { options?: unknown } | undefined }
+			| undefined;
+		jwksOptions = (
+			ctx?.getPlugin?.("jwt")?.options as
+				| { jwks?: { remoteUrl?: unknown; jwksPath?: unknown } }
+				| undefined
+		)?.jwks;
+	} catch {
+		// Fall through to the Better Auth route defaults.
+	}
+
+	if (
+		typeof jwksOptions?.remoteUrl === "string" &&
+		jwksOptions.remoteUrl.length > 0
+	) {
+		return jwksOptions.remoteUrl;
+	}
+
+	const baseURL = auth.options?.baseURL;
+	if (typeof baseURL !== "string" || baseURL.length === 0) return undefined;
+	const basePath =
+		typeof auth.options?.basePath === "string"
+			? auth.options.basePath
+			: "/api/auth";
+	const jwksPath =
+		typeof jwksOptions?.jwksPath === "string" ? jwksOptions.jwksPath : "/jwks";
+	const path = [basePath, jwksPath]
+		.map((part) => part.replace(/^\/+|\/+$/g, ""))
+		.filter(Boolean)
+		.join("/");
+	return `${baseURL.replace(/\/+$/, "")}/${path}`;
+}
+
+/**
  * The JWS algorithm(s) an OAuth access token may be signed with. Better Auth's
  * `jwt()` plugin — which backs the OAuth provider — signs with EdDSA (Ed25519)
  * by default, and that is what the QUESTPIE starter issues. Pinning verification
@@ -231,7 +279,9 @@ export async function resolveOAuthPrincipal<
 		// MCP endpoint (RFC 8707). Verification enforces signature + aud + iss +
 		// exp and throws on any failure.
 		const issuer = await oauthIssuerForAuth(app.auth);
+		const jwksUrl = await oauthJwksUrlForAuth(app.auth);
 		payload = (await resourceClient.getActions().verifyAccessToken(token, {
+			...(jwksUrl ? { jwksUrl } : {}),
 			verifyOptions: {
 				audience,
 				algorithms: EXPECTED_TOKEN_ALGORITHMS,
