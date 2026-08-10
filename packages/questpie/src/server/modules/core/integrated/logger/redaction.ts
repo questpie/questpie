@@ -54,7 +54,7 @@ function redactValue(
 	if (existing) return existing;
 	const descriptors = getDescriptors(value);
 	if (!descriptors) return "[Unserializable]";
-	if (isError(value)) return serializeErrorDescriptors(descriptors);
+	if (isError(value)) return serializeErrorDescriptors(value, descriptors);
 	const supported = serializeSupportedValue(value, path, policy, seen);
 	if (supported !== undefined) return supported;
 	const clone: Record<string, unknown> | unknown[] = Array.isArray(value)
@@ -102,10 +102,16 @@ function assignCloneValue(
 }
 
 function serializeErrorDescriptors(
+	error: object,
 	descriptors: Record<string, PropertyDescriptor>,
 ): Record<string, unknown> {
+	const ownName = dataProperty(descriptors, "name");
 	const result: Record<string, unknown> = {
-		type: dataProperty(descriptors, "name") ?? "Error",
+		type:
+			typeof ownName === "string" &&
+			/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(ownName)
+				? ownName
+				: trustedErrorType(error),
 		message: REDACTED,
 	};
 	const code = dataProperty(descriptors, "code");
@@ -121,7 +127,7 @@ function serializeErrorLike(
 	if (!descriptors) return "[Unserializable]";
 	const error = isError(value);
 	if (!error && !descriptors.message && !descriptors.stack) return undefined;
-	if (error) return serializeErrorDescriptors(descriptors);
+	if (error) return serializeErrorDescriptors(value, descriptors);
 	const result: Record<string, unknown> = {};
 	for (const key of ["type", "name", "code", "status", "statusCode"] as const) {
 		const candidate = dataProperty(descriptors, key);
@@ -138,6 +144,27 @@ function isError(value: object): boolean {
 	} catch {
 		return false;
 	}
+}
+
+function trustedErrorType(value: object): string {
+	const trusted = new Map<object, string>([
+		[EvalError.prototype, "EvalError"],
+		[RangeError.prototype, "RangeError"],
+		[ReferenceError.prototype, "ReferenceError"],
+		[SyntaxError.prototype, "SyntaxError"],
+		[TypeError.prototype, "TypeError"],
+		[URIError.prototype, "URIError"],
+		[Error.prototype, "Error"],
+	]);
+	try {
+		let prototype = Object.getPrototypeOf(value);
+		while (prototype) {
+			const type = trusted.get(prototype);
+			if (type) return type;
+			prototype = Object.getPrototypeOf(prototype);
+		}
+	} catch {}
+	return "Error";
 }
 
 function getDescriptors(
@@ -170,7 +197,13 @@ function serializeSupportedValue(
 			return { type: "Date", value: new Date(timestamp).toISOString() };
 	} catch {}
 	try {
-		return { type: "URL", value: URL.prototype.toString.call(value) };
+		const url = new URL(URL.prototype.toString.call(value));
+		url.username = "";
+		url.password = "";
+		for (const key of url.searchParams.keys()) {
+			if (isSensitiveKey(key)) url.searchParams.set(key, REDACTED);
+		}
+		return { type: "URL", value: url.toString() };
 	} catch {}
 	try {
 		const result: { type: "Map"; entries: unknown[] } = {
@@ -182,9 +215,14 @@ function serializeSupportedValue(
 		>;
 		seen.set(value, result);
 		for (const [key, nested] of iterator) {
+			const redactEntry =
+				typeof key === "string" &&
+				(isSensitiveKey(key) || matchesPath([...path, key], policy.paths));
 			result.entries.push([
 				redactValue(key, [...path, "key"], policy, seen),
-				redactValue(nested, [...path, "value"], policy, seen),
+				redactEntry
+					? REDACTED
+					: redactValue(nested, [...path, String(key)], policy, seen),
 			]);
 		}
 		return result;

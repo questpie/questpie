@@ -131,7 +131,10 @@ describe("logger structured-field redaction", () => {
 	it("preserves supported non-plain diagnostics for both sinks", async () => {
 		const log = createCapturingLogger({ captureMessages: false });
 		const emitted: any[] = [];
-		const logger = new LoggerService({ adapter: log.adapter });
+		const logger = new LoggerService({
+			adapter: log.adapter,
+			redact: ["map.customerEmail"],
+		});
 		await runWithContext(
 			{
 				app: {
@@ -141,8 +144,13 @@ describe("logger structured-field redaction", () => {
 			async () =>
 				logger.info("diagnostics", {
 					date: new Date("2026-01-02T03:04:05.000Z"),
-					url: new URL("https://example.com/path"),
-					map: new Map([["token", { password: "private" }]]),
+					url: new URL(
+						"https://user:password@example.com/path?token=private&safe=ok",
+					),
+					map: new Map([
+						["authorization", "private"],
+						["customerEmail", "private@example.com"],
+					]),
 					set: new Set(["value"]),
 					bytes: new Uint8Array([1, 2, 3]),
 				}),
@@ -150,8 +158,17 @@ describe("logger structured-field redaction", () => {
 		const diagnostics = log.records[0]?.args?.[0];
 		expect(diagnostics).toMatchObject({
 			date: { type: "Date", value: "2026-01-02T03:04:05.000Z" },
-			url: { type: "URL", value: "https://example.com/path" },
-			map: { type: "Map", entries: [["token", { password: "[Redacted]" }]] },
+			url: {
+				type: "URL",
+				value: "https://example.com/path?token=%5BRedacted%5D&safe=ok",
+			},
+			map: {
+				type: "Map",
+				entries: [
+					["authorization", "[Redacted]"],
+					["customerEmail", "[Redacted]"],
+				],
+			},
 			set: { type: "Set", values: ["value"] },
 			bytes: { type: "TypedArray", values: [1, 2, 3] },
 		});
@@ -191,6 +208,10 @@ describe("logger structured-field redaction", () => {
 		const error = Object.assign(new TypeError("private body"), {
 			code: "INVALID_INPUT",
 		});
+		Object.defineProperty(error, "name", {
+			enumerable: true,
+			value: { token: "private-name" },
+		});
 		logger.error("operation failed", error);
 		logger.error("request failed", {
 			error: {
@@ -201,7 +222,7 @@ describe("logger structured-field redaction", () => {
 			},
 		});
 		expect(log.records[0]?.args?.[0]).toEqual({
-			err: { type: "Error", message: "[Redacted]", code: "INVALID_INPUT" },
+			err: { type: "TypeError", message: "[Redacted]", code: "INVALID_INPUT" },
 		});
 		expect(log.records[1]?.args?.[0]).toEqual({
 			error: { name: "ValidationError", message: "[Redacted]", status: 400 },
