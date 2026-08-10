@@ -87,6 +87,11 @@ export const appointments = collection("appointments")
 		}),
 	)
 	.hooks({
+		beforeChange: ({ data }) => {
+			if (data.status === "cancelled" && !data.cancelledAt) {
+				data.cancelledAt = new Date();
+			}
+		},
 		afterChange: async ({ data, operation, original, queue }) => {
 			if (operation === "create") {
 				await queue.sendAppointmentConfirmation.publish({
@@ -94,7 +99,10 @@ export const appointments = collection("appointments")
 					customerId: data.customer,
 				});
 			} else if (operation === "update" && original) {
-				if (data.status === "cancelled" && data.cancelledAt) {
+				if (
+					data.status === "cancelled" &&
+					original.status !== "cancelled"
+				) {
 					await queue.sendAppointmentCancellation.publish({
 						appointmentId: data.id,
 						customerId: data.customer,

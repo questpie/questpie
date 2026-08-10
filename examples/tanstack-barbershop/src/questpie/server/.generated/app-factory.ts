@@ -29,6 +29,7 @@ import _job_notifyBlogSubscribers from "../jobs/notify-blog-subscribers";
 import _job_sendAppointmentCancellation from "../jobs/send-appointment-cancellation";
 import _job_sendAppointmentConfirmation from "../jobs/send-appointment-confirmation";
 import _job_sendAppointmentReminder from "../jobs/send-appointment-reminder";
+import _job_scheduleAppointmentReminders from "../jobs/schedule-appointment-reminders";
 
 // ── Routes ─────────────────────────────────────────────────
 import _route_createBooking from "../routes/create-booking";
@@ -40,7 +41,9 @@ import _route_getRevenueStats from "../routes/get-revenue-stats";
 import _svc_blog from "../services/blog";
 
 // ── Emails ─────────────────────────────────────────────────
+import _email_appointmentCancellation from "../emails/appointment-cancellation";
 import _email_appointmentConfirmation from "../emails/appointment-confirmation";
+import _email_appointmentReminder from "../emails/appointment-reminder";
 import _email_newBlogPost from "../emails/new-blog-post";
 
 // ── Migrations ─────────────────────────────────────────────
@@ -126,6 +129,7 @@ const _appDefinition = ({
 		sendAppointmentCancellation: _job_sendAppointmentCancellation,
 		sendAppointmentConfirmation: _job_sendAppointmentConfirmation,
 		sendAppointmentReminder: _job_sendAppointmentReminder,
+		scheduleAppointmentReminders: _job_scheduleAppointmentReminders,
 	},
 	routes: {
 		createBooking: _route_createBooking,
@@ -137,7 +141,9 @@ const _appDefinition = ({
 		blog: _svc_blog,
 	},
 	emailTemplates: {
+		appointmentCancellation: _email_appointmentCancellation,
 		appointmentConfirmation: _email_appointmentConfirmation,
+		appointmentReminder: _email_appointmentReminder,
 		newBlogPost: _email_newBlogPost,
 	},
 	migrations: [_mig_20260206T174642_gentle_azure_eagle, _mig_20260206T180920_fancy_green_tiger, _mig_20260211T100836_calm_blue_phoenix, _mig_20260218T195452_calm_blue_dragon, _mig_20260218T223923_fancy_blue_panda, _mig_20260218T235924_kind_crimson_falcon, _mig_20260307T122102_eager_red_eagle, _mig_20260307T135142_fancy_orange_tiger, _mig_20260424T221327_bold_yellow_phoenix, _mig_20260427T093217_eager_blue_phoenix, _mig_20260429T170546_kind_yellow_eagle, _mig_20260615T084209_swift_orange_eagle, _mig_20260712T094709_bold_red_griffin, _mig_20260712T195414_eager_red_tiger, _mig_20260725T184252_realtimeV3Umbrella, _mig_20260726T163042_queueTransactionalDispatch, _mig_20260730T182023_optimisticConcurrencyRevisions, _mig_20260731T000041_realtimeIdempotency1, _mig_20260731T084650_realtimeIdempotency1, _mig_20260805T165255_realtimeDrainCursorIndex, _mig_20260805T180812_realtimeSettlementRetention, _mig_20260806T151905_removeRealtimeHead],

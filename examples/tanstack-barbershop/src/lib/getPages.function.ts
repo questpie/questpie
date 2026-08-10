@@ -9,7 +9,7 @@ import { isDraftMode } from "@questpie/admin/shared";
 export type PageLoaderData = Awaited<ReturnType<typeof getPage>>;
 
 export const getPage = createServerFn({ method: "GET" })
-	.inputValidator((data: { slug: string }) => data)
+	.validator((data: { slug: string }) => data)
 	.handler(async ({ data }) => {
 		const headers = getRequestHeaders();
 		const cookie = headers.get("cookie");

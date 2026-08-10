@@ -9,15 +9,22 @@ import { defineConfig, type PluginOption } from "vite";
 import { iconifyPreload } from "@questpie/vite-plugin-iconify";
 
 const config = defineConfig(({ mode }) => ({
+	server: {
+		port: Number(process.env.PORT) || 3000,
+	},
 	plugins: [
 		iconifyPreload({
 			scan: ["src/**/*.{ts,tsx}", "../../packages/admin/src/**/*.{ts,tsx}"],
 		}),
 		devtools(),
-		nitro({
-			preset: "bun",
-			plugins: ["./src/questpie-nitro-plugin.ts"],
-		}) as unknown as PluginOption,
+		...(mode === "development"
+			? []
+			: [
+					nitro({
+						preset: "bun",
+						plugins: ["./src/questpie-nitro-plugin.ts"],
+					}) as unknown as PluginOption,
+				]),
 		tailwindcss(),
 		tanstackStart(),
 		viteReact(),

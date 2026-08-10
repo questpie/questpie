@@ -28,6 +28,7 @@ import _job_notifyBlogSubscribers from "../jobs/notify-blog-subscribers";
 import _job_sendAppointmentCancellation from "../jobs/send-appointment-cancellation";
 import _job_sendAppointmentConfirmation from "../jobs/send-appointment-confirmation";
 import _job_sendAppointmentReminder from "../jobs/send-appointment-reminder";
+import _job_scheduleAppointmentReminders from "../jobs/schedule-appointment-reminders";
 
 // ── Routes ─────────────────────────────────────────────────
 import _route_createBooking from "../routes/create-booking";
@@ -39,7 +40,9 @@ import _route_getRevenueStats from "../routes/get-revenue-stats";
 import _svc_blog from "../services/blog";
 
 // ── Emails ─────────────────────────────────────────────────
+import _email_appointmentCancellation from "../emails/appointment-cancellation";
 import _email_appointmentConfirmation from "../emails/appointment-confirmation";
+import _email_appointmentReminder from "../emails/appointment-reminder";
 import _email_newBlogPost from "../emails/new-blog-post";
 
 // ── Migrations ─────────────────────────────────────────────
@@ -145,6 +148,7 @@ type _ExecutionContextJobs = {
 	sendAppointmentCancellation: _ExecutionContextJob<typeof _job_sendAppointmentCancellation>;
 	sendAppointmentConfirmation: _ExecutionContextJob<typeof _job_sendAppointmentConfirmation>;
 	sendAppointmentReminder: _ExecutionContextJob<typeof _job_sendAppointmentReminder>;
+	scheduleAppointmentReminders: _ExecutionContextJob<typeof _job_scheduleAppointmentReminders>;
 };
 type _ExecutionContextServiceDefinitions = {
 	blog: typeof _svc_blog;

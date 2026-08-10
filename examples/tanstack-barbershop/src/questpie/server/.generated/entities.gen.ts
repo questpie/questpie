@@ -29,6 +29,7 @@ import _job_notifyBlogSubscribers from "../jobs/notify-blog-subscribers";
 import _job_sendAppointmentCancellation from "../jobs/send-appointment-cancellation";
 import _job_sendAppointmentConfirmation from "../jobs/send-appointment-confirmation";
 import _job_sendAppointmentReminder from "../jobs/send-appointment-reminder";
+import _job_scheduleAppointmentReminders from "../jobs/schedule-appointment-reminders";
 
 // ── Routes ─────────────────────────────────────────────────
 import _route_createBooking from "../routes/create-booking";
@@ -40,7 +41,9 @@ import _route_getRevenueStats from "../routes/get-revenue-stats";
 import _svc_blog from "../services/blog";
 
 // ── Emails ─────────────────────────────────────────────────
+import _email_appointmentCancellation from "../emails/appointment-cancellation";
 import _email_appointmentConfirmation from "../emails/appointment-confirmation";
+import _email_appointmentReminder from "../emails/appointment-reminder";
 import _email_newBlogPost from "../emails/new-blog-post";
 
 // ── Migrations ─────────────────────────────────────────────
@@ -169,6 +172,7 @@ export type AppJobs = _ModuleJobs & {
 	sendAppointmentCancellation: Omit<typeof _job_sendAppointmentCancellation, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	sendAppointmentConfirmation: Omit<typeof _job_sendAppointmentConfirmation, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	sendAppointmentReminder: Omit<typeof _job_sendAppointmentReminder, "handler"> & { handler: (args: unknown) => Promise<unknown> };
+	scheduleAppointmentReminders: Omit<typeof _job_scheduleAppointmentReminders, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 };
 
 /** All routes in the app (modules + user, user overrides) */
@@ -195,7 +199,9 @@ export type _AppCustomServiceNamespaces = ServiceCustomNamespaceInstances<_AppSe
 
 /** All email templates in the app — use with email.sendTemplate() */
 export type AppEmailTemplates = {
+	appointmentCancellation: typeof _email_appointmentCancellation;
 	appointmentConfirmation: typeof _email_appointmentConfirmation;
+	appointmentReminder: typeof _email_appointmentReminder;
 	newBlogPost: typeof _email_newBlogPost;
 };
 

@@ -189,6 +189,13 @@ interface AdminLayoutProviderProps extends AdminLayoutSharedProps {
 	initialUiLocale?: string;
 
 	/**
+	 * Realtime settings for auto-refreshing collection/global queries via SSE.
+	 * Forwarded to the internal AdminProvider. Default: enabled.
+	 * Set `false` when the server has `realtime: { rowLiveQueries: false }`.
+	 */
+	realtime?: boolean | { enabled?: boolean };
+
+	/**
 	 * Children to render inside the layout
 	 * - Next.js: {children} from layout props
 	 * - TanStack Router: <Outlet />
@@ -393,6 +400,8 @@ export function AdminLayoutProvider({
 	useServerTranslations,
 	translationsFallback,
 	initialUiLocale,
+	// Realtime
+	realtime,
 	// Children
 	children,
 }: AdminLayoutProviderProps): React.ReactElement {
@@ -487,6 +496,7 @@ export function AdminLayoutProvider({
 				useServerTranslations={useServerTranslations}
 				translationsFallback={translationsFallback}
 				initialUiLocale={initialUiLocale}
+				realtime={realtime}
 			>
 				{innerContent}
 			</AdminProvider>

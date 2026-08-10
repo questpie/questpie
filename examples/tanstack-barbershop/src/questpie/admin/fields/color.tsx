@@ -8,6 +8,7 @@
  */
 
 import { Icon } from "@iconify/react";
+import { useEffect, useRef, useState } from "react";
 import { Controller } from "react-hook-form";
 
 import {
@@ -99,27 +100,16 @@ function ColorSwatchField({
 								);
 							})}
 
-							{/* Native picker for any custom color, styled as a swatch. */}
-							<label
-								className="control-surface relative inline-flex size-7 cursor-pointer items-center justify-center rounded-full"
-								style={value ? { backgroundColor: value } : undefined}
-								title={value || "Custom"}
-							>
-								{!value && (
-									<Icon
-										icon="ph:eyedropper"
-										className="text-muted-foreground size-3.5"
-									/>
-								)}
-								<input
-									type="color"
-									value={value || "#000000"}
-									disabled={!interactive}
-									onChange={(e) => rhfField.onChange(e.target.value)}
-									className="absolute inset-0 cursor-pointer opacity-0"
-									aria-label={label ?? name}
-								/>
-							</label>
+							{/* Native picker for any custom color, styled as a swatch.
+							    Live preview via draft state + rAF-throttled commit so the
+							    swatch, hex text and preset checks update instantly without
+							    thrashing the form on every mouse move. */}
+							<CustomColorPicker
+								value={value}
+								interactive={interactive}
+								onCommit={rhfField.onChange}
+								label={label ?? name}
+							/>
 
 							{value && (
 								<span className="text-muted-foreground font-chrome ml-1 text-xs uppercase tabular-nums">
@@ -131,6 +121,73 @@ function ColorSwatchField({
 				);
 			}}
 		/>
+	);
+}
+
+function CustomColorPicker({
+	value,
+	interactive,
+	onCommit,
+	label,
+}: {
+	value: string;
+	interactive: boolean;
+	onCommit: (value: string) => void;
+	label: string;
+}) {
+	const [draft, setDraft] = useState(value || "#000000");
+	const lastCommitted = useRef(value);
+	const rafRef = useRef<number | null>(null);
+
+	useEffect(() => {
+		if (value !== lastCommitted.current) {
+			setDraft(value || "#000000");
+			lastCommitted.current = value;
+		}
+	}, [value]);
+
+	// Cleanup any pending frame on unmount.
+	useEffect(() => {
+		return () => {
+			if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+		};
+	}, []);
+
+	const handleChange = (next: string) => {
+		setDraft(next);
+		if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+		rafRef.current = requestAnimationFrame(() => {
+			rafRef.current = null;
+			if (next !== lastCommitted.current) {
+				lastCommitted.current = next;
+				onCommit(next);
+			}
+		});
+	};
+
+	// Preview follows the draft → instant visual feedback while dragging.
+	const hasValue = Boolean(value || draft);
+
+	return (
+		<label
+			className="border-border relative inline-flex size-7 cursor-pointer items-center justify-center rounded-full border border-dashed"
+			style={
+				hasValue ? { backgroundColor: draft, borderStyle: "solid" } : undefined
+			}
+			title={value || "Custom"}
+		>
+			{!hasValue && (
+				<Icon icon="ph:eyedropper" className="text-muted-foreground size-3.5" />
+			)}
+			<input
+				type="color"
+				value={draft}
+				disabled={!interactive}
+				onChange={(e) => handleChange(e.target.value)}
+				className="absolute inset-0 cursor-pointer opacity-0"
+				aria-label={label}
+			/>
+		</label>
 	);
 }
 

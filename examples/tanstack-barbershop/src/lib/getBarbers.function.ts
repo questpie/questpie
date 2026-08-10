@@ -16,7 +16,7 @@ const slugInputSchema = z.object({
 });
 
 export const getBarber = createServerFn({ method: "GET" })
-	.inputValidator((data) => slugInputSchema.parse(data))
+	.validator((data) => slugInputSchema.parse(data))
 	.handler(async ({ data }) => {
 		const headers = getRequestHeaders();
 		const cookie = headers.get("cookie");
@@ -62,7 +62,7 @@ export const getBarber = createServerFn({ method: "GET" })
 	});
 
 export const getAllBarbers = createServerFn({ method: "GET" })
-	.inputValidator((data) => localeInputSchema.parse(data))
+	.validator((data) => localeInputSchema.parse(data))
 	.handler(async ({ data }) => {
 		const ctx = await createRequestContext(data?.locale);
 

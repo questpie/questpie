@@ -9,63 +9,33 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AppRouteImport } from './routes/_app'
-import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
-import { Route as ApiPreviewRouteImport } from './routes/api/preview'
-import { Route as ApiSplatRouteImport } from './routes/api/$'
-import { Route as AdminSplatRouteImport } from './routes/admin/$'
-import { Route as AppContactRouteImport } from './routes/_app/contact'
-import { Route as AppBookingRouteImport } from './routes/_app/booking'
 import { Route as AppSlugRouteImport } from './routes/_app/$slug'
-import { Route as AppBlogIndexRouteImport } from './routes/_app/blog.index'
+import { Route as AppBookingRouteImport } from './routes/_app/booking'
+import { Route as AppContactRouteImport } from './routes/_app/contact'
+import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminSplatRouteImport } from './routes/admin/$'
+import { Route as ApiSplatRouteImport } from './routes/api/$'
+import { Route as ApiPreviewRouteImport } from './routes/api/preview'
 import { Route as AppBarbersIndexRouteImport } from './routes/_app/barbers.index'
-import { Route as AppBlogSlugRouteImport } from './routes/_app/blog.$slug'
 import { Route as AppBarbersSlugRouteImport } from './routes/_app/barbers.$slug'
+import { Route as AppBlogIndexRouteImport } from './routes/_app/blog.index'
+import { Route as AppBlogSlugRouteImport } from './routes/_app/blog.$slug'
 
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AppRoute = AppRouteImport.update({
-  id: '/_app',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminIndexRoute = AdminIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AdminRoute,
-} as any)
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AppRoute,
-} as any)
-const ApiPreviewRoute = ApiPreviewRouteImport.update({
-  id: '/api/preview',
-  path: '/api/preview',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiSplatRoute = ApiSplatRouteImport.update({
-  id: '/api/$',
-  path: '/api/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminSplatRoute = AdminSplatRouteImport.update({
-  id: '/$',
-  path: '/$',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AppContactRoute = AppContactRouteImport.update({
-  id: '/contact',
-  path: '/contact',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppBookingRoute = AppBookingRouteImport.update({
-  id: '/booking',
-  path: '/booking',
   getParentRoute: () => AppRoute,
 } as any)
 const AppSlugRoute = AppSlugRouteImport.update({
@@ -73,19 +43,39 @@ const AppSlugRoute = AppSlugRouteImport.update({
   path: '/$slug',
   getParentRoute: () => AppRoute,
 } as any)
-const AppBlogIndexRoute = AppBlogIndexRouteImport.update({
-  id: '/blog/',
-  path: '/blog/',
+const AppBookingRoute = AppBookingRouteImport.update({
+  id: '/booking',
+  path: '/booking',
   getParentRoute: () => AppRoute,
+} as any)
+const AppContactRoute = AppContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
+  getParentRoute: () => AppRoute,
+} as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSplatRoute = AdminSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => AdminRoute,
+} as any)
+const ApiSplatRoute = ApiSplatRouteImport.update({
+  id: '/api/$',
+  path: '/api/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPreviewRoute = ApiPreviewRouteImport.update({
+  id: '/api/preview',
+  path: '/api/preview',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AppBarbersIndexRoute = AppBarbersIndexRouteImport.update({
   id: '/barbers/',
   path: '/barbers/',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppBlogSlugRoute = AppBlogSlugRouteImport.update({
-  id: '/blog/$slug',
-  path: '/blog/$slug',
   getParentRoute: () => AppRoute,
 } as any)
 const AppBarbersSlugRoute = AppBarbersSlugRouteImport.update({
@@ -93,8 +83,19 @@ const AppBarbersSlugRoute = AppBarbersSlugRouteImport.update({
   path: '/barbers/$slug',
   getParentRoute: () => AppRoute,
 } as any)
+const AppBlogIndexRoute = AppBlogIndexRouteImport.update({
+  id: '/blog/',
+  path: '/blog/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppBlogSlugRoute = AppBlogSlugRouteImport.update({
+  id: '/blog/$slug',
+  path: '/blog/$slug',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
+  '/': typeof AppIndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/$slug': typeof AppSlugRoute
   '/booking': typeof AppBookingRoute
@@ -102,12 +103,11 @@ export interface FileRoutesByFullPath {
   '/admin/$': typeof AdminSplatRoute
   '/api/$': typeof ApiSplatRoute
   '/api/preview': typeof ApiPreviewRoute
-  '/': typeof AppIndexRoute
   '/admin/': typeof AdminIndexRoute
   '/barbers/$slug': typeof AppBarbersSlugRoute
   '/blog/$slug': typeof AppBlogSlugRoute
-  '/barbers': typeof AppBarbersIndexRoute
-  '/blog': typeof AppBlogIndexRoute
+  '/barbers/': typeof AppBarbersIndexRoute
+  '/blog/': typeof AppBlogIndexRoute
 }
 export interface FileRoutesByTo {
   '/$slug': typeof AppSlugRoute
@@ -143,6 +143,7 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
+    | '/'
     | '/admin'
     | '/$slug'
     | '/booking'
@@ -150,12 +151,11 @@ export interface FileRouteTypes {
     | '/admin/$'
     | '/api/$'
     | '/api/preview'
-    | '/'
     | '/admin/'
     | '/barbers/$slug'
     | '/blog/$slug'
-    | '/barbers'
-    | '/blog'
+    | '/barbers/'
+    | '/blog/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/$slug'
@@ -197,6 +197,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/_app': {
+      id: '/_app'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin': {
       id: '/admin'
       path: '/admin'
@@ -204,60 +211,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_app': {
-      id: '/_app'
-      path: ''
-      fullPath: ''
-      preLoaderRoute: typeof AppRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/': {
-      id: '/admin/'
-      path: '/'
-      fullPath: '/admin/'
-      preLoaderRoute: typeof AdminIndexRouteImport
-      parentRoute: typeof AdminRoute
-    }
     '/_app/': {
       id: '/_app/'
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/api/preview': {
-      id: '/api/preview'
-      path: '/api/preview'
-      fullPath: '/api/preview'
-      preLoaderRoute: typeof ApiPreviewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/$': {
-      id: '/api/$'
-      path: '/api/$'
-      fullPath: '/api/$'
-      preLoaderRoute: typeof ApiSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/$': {
-      id: '/admin/$'
-      path: '/$'
-      fullPath: '/admin/$'
-      preLoaderRoute: typeof AdminSplatRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/_app/contact': {
-      id: '/_app/contact'
-      path: '/contact'
-      fullPath: '/contact'
-      preLoaderRoute: typeof AppContactRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/booking': {
-      id: '/_app/booking'
-      path: '/booking'
-      fullPath: '/booking'
-      preLoaderRoute: typeof AppBookingRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/$slug': {
@@ -267,25 +225,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSlugRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/blog/': {
-      id: '/_app/blog/'
-      path: '/blog'
-      fullPath: '/blog'
-      preLoaderRoute: typeof AppBlogIndexRouteImport
+    '/_app/booking': {
+      id: '/_app/booking'
+      path: '/booking'
+      fullPath: '/booking'
+      preLoaderRoute: typeof AppBookingRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/_app/contact': {
+      id: '/_app/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof AppContactRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/$': {
+      id: '/admin/$'
+      path: '/$'
+      fullPath: '/admin/$'
+      preLoaderRoute: typeof AdminSplatRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/api/$': {
+      id: '/api/$'
+      path: '/api/$'
+      fullPath: '/api/$'
+      preLoaderRoute: typeof ApiSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/preview': {
+      id: '/api/preview'
+      path: '/api/preview'
+      fullPath: '/api/preview'
+      preLoaderRoute: typeof ApiPreviewRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_app/barbers/': {
       id: '/_app/barbers/'
       path: '/barbers'
-      fullPath: '/barbers'
+      fullPath: '/barbers/'
       preLoaderRoute: typeof AppBarbersIndexRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/blog/$slug': {
-      id: '/_app/blog/$slug'
-      path: '/blog/$slug'
-      fullPath: '/blog/$slug'
-      preLoaderRoute: typeof AppBlogSlugRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/barbers/$slug': {
@@ -293,6 +279,20 @@ declare module '@tanstack/react-router' {
       path: '/barbers/$slug'
       fullPath: '/barbers/$slug'
       preLoaderRoute: typeof AppBarbersSlugRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/blog/': {
+      id: '/_app/blog/'
+      path: '/blog'
+      fullPath: '/blog/'
+      preLoaderRoute: typeof AppBlogIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/blog/$slug': {
+      id: '/_app/blog/$slug'
+      path: '/blog/$slug'
+      fullPath: '/blog/$slug'
+      preLoaderRoute: typeof AppBlogSlugRouteImport
       parentRoute: typeof AppRoute
     }
   }

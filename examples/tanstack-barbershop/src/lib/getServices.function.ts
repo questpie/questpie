@@ -9,7 +9,7 @@ const localeInputSchema = z
 	.optional();
 
 export const getAllServices = createServerFn({ method: "GET" })
-	.inputValidator((data) => localeInputSchema.parse(data))
+	.validator((data) => localeInputSchema.parse(data))
 	.handler(async ({ data }) => {
 		const ctx = await createRequestContext(data?.locale);
 
