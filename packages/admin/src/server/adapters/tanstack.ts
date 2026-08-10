@@ -102,7 +102,7 @@ export function createTanStackAuthGuard({
 		const request = context.request;
 
 		if (!request) {
-			console.warn(
+			app.logger.warn(
 				"createTanStackAuthGuard: No request in context. " +
 					"Make sure you're using TanStack Start with SSR enabled.",
 			);

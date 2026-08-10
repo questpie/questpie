@@ -285,11 +285,18 @@ semconv attributes). Rate is its count, errors are that count sliced by
 `http.response.status_code`. Do not add parallel counters; they duplicate the
 same series and drift.
 
-**Logs:** Pino output is untouched; records gain `trace_id`/`span_id` from the
-active span (snake_case — those are the keys backends join on) and, with an
-`otlpEndpoint`, are exported on the OTel logs signal too. The existing camelCase
+**Logs:** Pino remains the primary output; records gain `trace_id`/`span_id`
+from the active span (snake_case — those are the keys backends join on) and,
+with an `otlpEndpoint`, are exported on the OTel logs signal too. The existing camelCase
 `traceId` is a different value: the framework's correlation id from the inbound
 `traceparent`/`x-request-id`, not the span's.
+
+Inbound request/trace ids are accepted only as bounded safe identifiers; W3C
+`traceparent` must be structurally valid and use non-zero trace and parent ids.
+Invalid supplied values are replaced rather than reflected. Structured log
+arguments redact common credential keys and framework-serialized `Error`
+messages/stacks before both sinks. Message strings are not inspected; keep them
+stable and place request data in structured fields.
 
 **Propagation:** an inbound `traceparent` is continued with the remote span as
 parent, so a distributed waterfall stays connected. Only the root reads headers.

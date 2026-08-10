@@ -148,7 +148,7 @@ export async function requireAdminAuth({
 }: RequireAdminAuthOptions): Promise<Response | null> {
 	// Check if auth is configured
 	if (!app.auth) {
-		console.warn("requireAdminAuth: Auth not configured on app instance");
+		app.logger.warn("requireAdminAuth: Auth not configured on app instance");
 		return null;
 	}
 
@@ -177,7 +177,7 @@ export async function requireAdminAuth({
 		// Authenticated with correct role
 		return null;
 	} catch (error) {
-		console.error("requireAdminAuth: Error checking session", error);
+		app.logger.error("requireAdminAuth: Error checking session", error);
 		// On error, redirect to login for safety
 		const currentUrl = new URL(request.url);
 		const redirectUrl = new URL(loginPath, currentUrl.origin);
@@ -220,7 +220,7 @@ export async function getAdminSession({
 
 		return session as AuthSession;
 	} catch (error) {
-		console.error("getAdminSession: Error getting session", error);
+		app.logger.error("getAdminSession: Error getting session", error);
 		return null;
 	}
 }

@@ -1426,11 +1426,11 @@ describe("channel module routes", () => {
 			);
 			expect(logged).toHaveLength(1);
 			expect(logged[0]!.level).toBe("error");
-			// The adapter sees either the raw error or `{ err, ...bindings }`,
-			// depending on whether the request carried correlation ids.
-			const payload = logged[0]!.args[0] as Error | { err?: unknown };
-			const cause = payload instanceof Error ? payload : payload.err;
-			expect(String(cause)).toContain("somethingUndeclared");
+			// The structured diagnostic keeps the error type, while the logger's
+			// safety boundary removes the message and stack from both log sinks.
+			expect(logged[0]!.args[0]).toMatchObject({
+				err: { type: "TypeError", message: "[Redacted]" },
+			});
 		} finally {
 			await reader.cancel().catch(() => {});
 		}

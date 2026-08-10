@@ -99,9 +99,17 @@ parameterized route, so a request to `/api/posts/42` logs `path` as
 `/api/posts/42` and `route` as `:collection/:id`. All your collections share
 that pattern. Group on `path` when you need them apart.
 
-`error` carries `name` and `message`, and nothing else. It appears only when a
-handler threw. A handler that returns a 500 rather than raising still logs at
-`error` level, but with no `error` object beside it.
+`error` carries the error `name`, while its `message` is written as
+`[Redacted]`. It appears only when a handler threw. A handler that returns a 500
+rather than raising still logs at `error` level, but with no `error` object
+beside it.
+
+QUESTPIE recursively redacts common credential keys in structured log arguments,
+including authorization, cookies, passwords, tokens, secrets, and API keys.
+`logger.redact` adds application-specific structured paths. `Error` values are
+serialized without their message or stack. This protection does not inspect the
+caller-owned message string: keep messages stable and put request data in the
+structured object.
 
 Records written inside a request also pick up `trace_id` and `span_id` from the
 open span, once an observability adapter is wired. See

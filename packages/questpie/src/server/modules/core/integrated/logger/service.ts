@@ -1,6 +1,12 @@
 import { tryGetContext } from "#questpie/server/config/context.js";
 
 import { PinoLoggerAdapter } from "./pino-adapter.js";
+import {
+	createRedactionPolicy,
+	redactLogArgs,
+	redactLogBindings,
+	type RedactionPolicy,
+} from "./redaction.js";
 import type { LoggerAdapter, LoggerConfig } from "./types.js";
 
 interface SpanIds {
@@ -10,8 +16,13 @@ interface SpanIds {
 
 export class LoggerService implements LoggerAdapter {
 	private adapter: LoggerAdapter;
+	private redaction: RedactionPolicy;
+	private teeBindings: Record<string, unknown> = {};
 
 	constructor(config: LoggerConfig | { adapter: LoggerAdapter } = {}) {
+		this.redaction = createRedactionPolicy(
+			"redact" in config ? config.redact : undefined,
+		);
 		if ("adapter" in config && config.adapter) {
 			this.adapter = config.adapter;
 		} else {
@@ -20,28 +31,51 @@ export class LoggerService implements LoggerAdapter {
 	}
 
 	debug(msg: string, ...args: any[]) {
-		this.adapter.debug(msg, ...this.withContext(args));
-		this.tee("debug", msg, args);
+		this.log("debug", msg, args);
 	}
 
 	info(msg: string, ...args: any[]) {
-		this.adapter.info(msg, ...this.withContext(args));
-		this.tee("info", msg, args);
+		this.log("info", msg, args);
 	}
 
 	warn(msg: string, ...args: any[]) {
-		this.adapter.warn(msg, ...this.withContext(args));
-		this.tee("warn", msg, args);
+		this.log("warn", msg, args);
 	}
 
 	error(msg: string, ...args: any[]) {
-		this.adapter.error(msg, ...this.withContext(args));
-		this.tee("error", msg, args);
+		this.log("error", msg, args);
 	}
 
 	child(bindings: Record<string, any>): LoggerService {
-		const childAdapter = this.adapter.child(bindings);
-		return new LoggerService({ adapter: childAdapter });
+		const safeBindings = redactLogBindings(bindings, this.redaction);
+		const childAdapter = this.adapter.child(safeBindings);
+		const childLogger = new LoggerService({ adapter: childAdapter });
+		childLogger.redaction = this.redaction;
+		childLogger.teeBindings = { ...this.teeBindings, ...safeBindings };
+		return childLogger;
+	}
+
+	private log(
+		level: "debug" | "info" | "warn" | "error",
+		msg: string,
+		args: unknown[],
+	): void {
+		const contextualArgs = this.safeArgs(args);
+		this.adapter[level](msg, ...contextualArgs);
+		this.tee(level, msg, this.withTeeBindings(contextualArgs));
+	}
+
+	private safeArgs(args: unknown[]): unknown[] {
+		return redactLogArgs(this.withContext(args), this.redaction);
+	}
+
+	private withTeeBindings(args: unknown[]): unknown[] {
+		if (Object.keys(this.teeBindings).length === 0) return args;
+		const [first, ...rest] = args;
+		if (first && typeof first === "object" && !Array.isArray(first)) {
+			return [{ ...this.teeBindings, ...first }, ...rest];
+		}
+		return [this.teeBindings, ...args];
 	}
 
 	/**
@@ -84,7 +118,7 @@ export class LoggerService implements LoggerAdapter {
 		}
 	}
 
-	private withContext(args: any[]): any[] {
+	private withContext(args: unknown[]): unknown[] {
 		const ctx = tryGetContext();
 		// `trace_id`/`span_id` in snake_case on purpose: those are the OTel
 		// semantic-convention keys that log backends join to traces on. The

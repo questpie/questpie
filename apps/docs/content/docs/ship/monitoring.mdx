@@ -140,11 +140,16 @@ the filters run in, which level a request lands at, and the shape of the record.
 ## Correlation
 
 Every response carries `x-request-id` and `x-trace-id`. The request id is read
-from an inbound `x-request-id` or `x-correlation-id` when there is one. So an id
-your proxy assigned survives. Otherwise it is a fresh UUID.
+from an inbound `x-request-id` or `x-correlation-id` when it is a bounded safe
+identifier (at most 128 characters, using letters, numbers, `.`, `_`, `:`, or
+`-`). So a valid id your proxy assigned survives. Invalid or oversized values
+are replaced with a fresh UUID and are never reflected into response headers or
+structured request logs.
 
 The trace id comes from `x-trace-id` first. Then from the trace id inside
-`traceparent`. Failing both, it falls back to the request id.
+an exact W3C version `00` `traceparent`; zero trace or parent ids are rejected.
+Invalid supplied values are replaced. With no trace input, it falls back to the
+request id.
 
 Both land on the log line and on the request's span. So you can start from
 either and find the other.

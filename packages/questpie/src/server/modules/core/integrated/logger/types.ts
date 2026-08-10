@@ -71,7 +71,11 @@ export interface LoggerConfig {
 	 */
 	pretty?: boolean;
 	/**
-	 * Redact keys (e.g. ["req.headers.authorization"])
+	 * Additional paths to redact from structured log arguments. QUESTPIE also
+	 * redacts common credential keys and serializes Error values without their
+	 * message or stack. Caller-owned log message strings are not inspected.
+	 *
+	 * @example ["profile.email", "customers[*].phone"]
 	 */
 	redact?: string[];
 	/**

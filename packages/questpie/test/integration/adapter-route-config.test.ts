@@ -301,6 +301,57 @@ describe("adapter route config", () => {
 			expect(typeof log?.args[0].durationMs).toBe("number");
 		});
 
+		it("replaces malformed and oversized inbound correlation identifiers", async () => {
+			const hostileRequestId = `../../logs?token=${"r".repeat(512)}`;
+			const hostileTraceId = `not-a-trace/${"t".repeat(512)}`;
+			const handler = createFetchHandler(setup.app);
+
+			const response = await handler(
+				new Request("http://localhost/echo-options", {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						"x-correlation-id": hostileRequestId,
+						"x-trace-id": hostileTraceId,
+					},
+					body: JSON.stringify({}),
+				}),
+			);
+
+			const body = await response?.json();
+			const observed = JSON.stringify({
+				body,
+				requestId: response?.headers.get("x-request-id"),
+				traceId: response?.headers.get("x-trace-id"),
+				log: setup.app.mocks.logger
+					.getLogsContaining("HTTP request completed")
+					.at(-1),
+			});
+			expect(body.requestId).toMatch(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/);
+			expect(body.traceId).toMatch(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/);
+			expect(observed).not.toContain(hostileRequestId);
+			expect(observed).not.toContain(hostileTraceId);
+		});
+
+		it("rejects structurally invalid W3C traceparent values", async () => {
+			const handler = createFetchHandler(setup.app);
+			const response = await handler(
+				new Request("http://localhost/echo-options", {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						traceparent:
+							"00-00000000000000000000000000000000-0000000000000000-01",
+					},
+					body: JSON.stringify({}),
+				}),
+			);
+
+			const body = await response?.json();
+			expect(body.traceId).not.toBe("00000000000000000000000000000000");
+			expect(body.traceId).toMatch(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/);
+		});
+
 		it("can disable request logging while preserving request headers", async () => {
 			setup.app.mocks.logger.clearLogs();
 			const handler = createFetchHandler(setup.app, { requestLogging: false });
@@ -343,7 +394,7 @@ describe("adapter route config", () => {
 				path: "/crash-options",
 				route: "crash-options",
 				status: 500,
-				error: { name: "Error", message: "boom" },
+				error: { name: "Error", message: "[Redacted]" },
 			});
 		});
 
