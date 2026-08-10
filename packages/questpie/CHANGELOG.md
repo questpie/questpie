@@ -1,5 +1,27 @@
 # questpie
 
+## 3.27.0
+
+### Patch Changes
+
+- [#255](https://github.com/questpie/questpie/pull/255) [`74b9a6d`](https://github.com/questpie/questpie/commit/74b9a6d35f47d627177966beb81c395f45216790) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add typed audit persistence, retention, field-classification, workload identity, and canonical after-commit sink policies. Required persistence shares the protected mutation transaction; best-effort persistence uses a fresh post-commit transaction; external sink delivery is explicitly non-durable and post-commit only.
+
+  Credential-like fields are omitted from new diffs unless explicitly classified. The 3.x audit collection keeps its public-read default for compatibility; applications should opt into a restricted merged access policy before a future major release changes that default. Regenerate factories and migrate `config/audit.ts` to the new `persistence` and `export` shape.
+
+- [#257](https://github.com/questpie/questpie/pull/257) [`3214843`](https://github.com/questpie/questpie/commit/3214843c46238a66097a5d3bc35e65dc1a7732e2) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Resolve valid OAuth access tokens against Better Auth's default mounted JWKS endpoint.
+
+- [#259](https://github.com/questpie/questpie/pull/259) [`5fff464`](https://github.com/questpie/questpie/commit/5fff46425ee306fd89dddb663b0e60ba33c528a9) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Remove unused private implementation and test scaffolding without changing public signatures.
+
+  No migration is required.
+
+- [#253](https://github.com/questpie/questpie/pull/253) [`8a9eef7`](https://github.com/questpie/questpie/commit/8a9eef739bbecc8ba8e9a3444eb8905ef4307585) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Remove unreachable private framework modules and obsolete prototype-only tests. No consumer migration is required because public exports and runtime behavior are unchanged.
+
+- [#259](https://github.com/questpie/questpie/pull/259) [`5fff464`](https://github.com/questpie/questpie/commit/5fff46425ee306fd89dddb663b0e60ba33c528a9) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Preserve caught errors as `cause` when the CLI or sandbox fetch bridge wraps them.
+
+  No migration is required.
+
+- [#254](https://github.com/questpie/questpie/pull/254) [`bd75a6b`](https://github.com/questpie/questpie/commit/bd75a6b01f661fe5277d0905ed35acd7db271953) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Validate inbound correlation identifiers and apply one redaction policy to the final effective Pino and OTLP log record, including configured paths that target canonical tagged fields. Structured values now use a canonical inert schema: unsupported values, cycles, and non-finite numbers become explicit markers; Date, URL, Map, Set, and TypedArray values use tagged records; URL credentials and fragments are removed. OpenTelemetry log attributes support the recursive AnyValue contract independently from scalar span and metric attributes.
+
 ## 3.26.2
 
 ### Patch Changes
