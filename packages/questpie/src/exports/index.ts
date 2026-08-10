@@ -36,6 +36,7 @@ export {
 	type TransactionContext,
 	withTransaction,
 } from "#questpie/server/collection/crud/shared/transaction.js";
+export { FatalGlobalHookError } from "#questpie/server/collection/crud/shared/global-hooks.js";
 export type {
 	JsonRouteHandlerArgs,
 	RawRouteHandlerArgs,

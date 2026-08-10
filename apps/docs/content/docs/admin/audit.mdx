@@ -29,6 +29,28 @@ hooks, so they fire on every collection and every global at once.
 `adminModule` is a separate module. Add it too and the log gets a sidebar item
 under Administration, showing a read-only list of title, user and date.
 
+The audit module also contributes a typed `config/audit.ts` convention. Run
+codegen after adding the module, then configure only the guarantees the
+application needs:
+
+```ts title="src/questpie/server/config/audit.ts"
+import { audit } from "#questpie/factories";
+
+export default audit({
+	persistence: "required",
+	retention: {
+		days: 365,
+		legalHold: async (event) => isHeld(event.id),
+	},
+	export: {
+		delivery: "after-commit",
+		sink: {
+			append: async (event) => immutableArchive.append(event),
+		},
+	},
+});
+```
+
 ## What lands in the log
 
 | `action`     | Written when                                          |
@@ -51,11 +73,17 @@ A purge entry keeps the action, the id and the actor. Its `resourceLabel` and
 `changes` are both null. The point of a purge is that the row is gone. The
 audit trail must not end up holding the last copy of it.
 
-### A failed entry does not fail your write
+### Persistence is a policy
 
-Each hook catches its own error and calls `logger.error`. Your mutation still
-commits. Purge is the exception. It logs and rethrows, so a purge that cannot
-be recorded fails.
+`persistence` defaults to `"best-effort"`. The protected mutation commits
+first, then QUESTPIE attempts the audit insert in a fresh database transaction.
+An audit failure writes a structured error through `ctx.logger`; it cannot
+invalidate the already committed mutation.
+
+`"required"` writes the mutation and audit row in the same database
+transaction. An audit-row failure aborts both, including workflow transitions.
+This guarantee covers the QUESTPIE audit row only. External export is a
+separate post-commit contract.
 
 ## The row
 
@@ -83,19 +111,30 @@ are stored, so a `Date` arrives as an ISO string and a `bigint` as a string.
 The diff leaves out `id`, `createdAt`, `updatedAt` and every key starting with
 an underscore.
 
-A global update carries no diff at all. `changes` is null on every one of them.
-You get who and when, not what.
+Fields whose names identify framework credentials are omitted by default. This
+includes passwords, passphrases, secrets, tokens, API keys, authorization
+values and cookies. You can classify any application field explicitly with
+`.audit("include")`, `.audit("redact")` or `.audit("omit")`; an explicit policy
+wins over the name-based default. Redacted values are stored as `[REDACTED]`.
+
+Global updates use the same field classification and diff shape as collection
+updates.
 
 ### Who the actor is
 
 | `userName`                           | `userId`            | When                                          |
 | ------------------------------------ | ------------------- | --------------------------------------------- |
 | The user's name, else email, else id | The session user id | A session is present.                         |
+| The authority subject id             | The subject id      | A human or agent authority actor is present.  |
 | `System`                             | `system`            | No session, and the call runs in system mode. |
 | `Anonymous`                          | null                | No session, and the call runs in user mode.   |
 
-`metadata.actorType` carries the same three cases as `user`, `system` and
-`anonymous`.
+`metadata.actorType` distinguishes `user`, `agent`, `system` and `anonymous`.
+A system context can provide `workload: { type, id, name? }`; its identity is
+stored as workload metadata and becomes the display actor when no session or
+authority actor is present. Request and trace ids are copied into metadata
+when present. Collection and global changes and transitions preserve the same
+identity and correlation fields.
 
 ### The title is rebuilt on read
 
@@ -123,7 +162,10 @@ entries a person needs to find.
 
 ## Reading it back
 
-The log is a collection, so query it the way you query your own.
+QUESTPIE 3.x keeps `read: true`, so user-mode and anonymous callers can read
+the complete audit collection. Opt into a restricted application policy now
+so a future major release can make restricted reads the framework default
+safely.
 
 ```ts
 const { docs } = await app.collections.admin_audit_log.find({
@@ -139,16 +181,10 @@ handler's base path. Each takes `limit`, which defaults to 50, and `offset`.
 Each checks the record exists first, and runs under the caller's own access
 rules.
 
-<Callout type="warn" title="The log answers an anonymous caller">
-	The collection ships `access: { read: true }`, so `GET /api/admin_audit_log`
-	needs no session. Every title, user name and diff is in there. Narrow it
-	before you ship.
-</Callout>
-
-To narrow it, redeclare the collection in your own `collections/` directory and
-merge the module's builder in. Your file wins, and the merge keeps the fields,
-indexes, hooks and admin config. `.access()` replaces the whole object, so pass
-every rule, not just `read`.
+To restrict read access, redeclare the collection in your own `collections/`
+directory and merge the module's builder in. Your file wins, and the merge
+keeps the fields, indexes, hooks and admin config. `.access()` replaces the
+whole object, so pass every rule, not just `read`.
 
 ```ts title="src/questpie/server/collections/audit-log.ts"
 import { auditLogCollection } from "@questpie/admin/modules/audit";
@@ -164,6 +200,58 @@ export const auditLog = collection("admin_audit_log")
 		delete: false,
 	});
 ```
+
+The record and global audit routes use this same collection access policy and
+its field-level read rules. A rule that hides `changes` therefore hides it from
+`GET /:collection/:id/audit` and `GET /globals/:name/audit` too.
+
+## Retention and legal hold
+
+Cleanup is disabled when `retention` is absent or `retention.days` is `null`.
+A positive day count enables the daily `audit-cleanup` job.
+
+When `legalHold` is configured, cleanup claims expired rows with row locks,
+evaluates the canonical events and deletes only unheld rows in that same
+transaction. Concurrent cleanup workers skip rows already claimed by another
+worker. The callback protects this cleanup path; direct system-mode deletes do
+not consult it. Cleanup failures reject the job so the configured QUESTPIE
+queue can apply its normal retry policy.
+
+## After-commit export
+
+`export.sink.append(event)` receives the canonical event only after the
+protected mutation commits. The event has a stable id and timestamp, resource
+and actor identity, optional request/trace ids, changes and metadata. Sink
+failure is logged and leaves the committed mutation and audit row unchanged.
+
+This `"after-commit"` delivery is intentionally non-durable: it has a process
+crash window and provides no retries, deduplication or atomic acceptance by an
+external vendor. Make `append()` idempotent on `event.id`. Applications that
+need durable queued export should keep using QUESTPIE's queue/outbox primitives;
+queued audit export is not part of this policy version.
+
+`toCanonicalAuditEvent()` is exported for adapting stored audit rows to the
+same sink shape. `logAuditEntry()` remains a direct compatibility helper: its
+caller owns transaction placement and field classification, and it does not
+invoke the configured export policy.
+
+## Preparing for restricted audit reads
+
+This 3.x release does not change the audit collection's access result from
+`200` to `403`. Applications should nevertheless merge the collection and add
+the narrow role policy above before deployment. A future major release can
+then change the framework default without changing your application's access.
+
+Credential-like fields are also omitted from new audit diffs by default. If an
+unfortunately named non-secret field must remain visible, classify it explicitly
+with `.audit("include")`. Existing audit rows are unchanged; migrate or purge
+historical values separately if they contain credentials.
+
+After upgrading, run `questpie generate`, opt into the narrow audit read policy
+your UI needs, review field classifications and choose `best-effort` or
+`required` persistence explicitly when the default does not match the risk
+model. Configure retention and after-commit export independently; neither
+changes the other one's guarantee.
 
 ## Where each topic lives
 

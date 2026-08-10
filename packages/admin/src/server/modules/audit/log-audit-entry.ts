@@ -2,12 +2,11 @@ import { tryGetContext } from "questpie";
 
 import { AUDIT_LOG_COLLECTION } from "./collections/audit-log.js";
 import { toAuditJsonSafe } from "./json-safe.js";
+import type { AuditActorType } from "./policy.js";
 
 /**
  * Options for a custom audit log entry.
  */
-export type AuditActorType = "anonymous" | "system" | "user" | (string & {});
-
 export interface LogAuditEntryOptions {
 	/** Action performed (e.g., "create", "bulk-email", "archive", "migrate"). */
 	action: string;

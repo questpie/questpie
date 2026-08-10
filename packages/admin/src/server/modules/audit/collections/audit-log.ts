@@ -29,7 +29,7 @@ export const AUDIT_LOG_COLLECTION = "admin_audit_log" as const;
  * Access:
  * - create/delete: system mode only
  * - update: disallowed
- * - read: allowed (for admin UI display)
+ * - read: allowed by default for 3.x compatibility; applications should narrow it
  */
 export const auditLogCollection = collection("admin_audit_log")
 	.fields(({ f }) => ({

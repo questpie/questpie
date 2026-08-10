@@ -36,7 +36,19 @@ export {
 // Public API for custom audit entries
 export {
 	logAuditEntry,
-	type AuditActorType,
 	type AuditContext,
 	type LogAuditEntryOptions,
 } from "./log-audit-entry.js";
+
+export type {
+	AuditActorIdentity,
+	AuditActorType,
+	AuditFieldPolicy,
+	AuditPersistenceMode,
+	AuditPolicy,
+	AuditRetentionPolicy,
+	AuditSink,
+	CanonicalAuditEvent,
+	PersistedAuditEvent,
+} from "./policy.js";
+export { toCanonicalAuditEvent } from "./policy.js";

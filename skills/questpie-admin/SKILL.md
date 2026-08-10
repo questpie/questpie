@@ -404,6 +404,27 @@ export const pages = collection("pages")
   .options({ versioning: true });
 ```
 
+Audit guarantees are configured independently in generated `config/audit.ts`:
+
+```ts
+export default audit({
+	persistence: "required", // audit row and protected mutation share one DB transaction
+	retention: { days: 365 },
+	export: {
+		delivery: "after-commit",
+		sink: { append: async (event) => archive.append(event) },
+	},
+});
+```
+
+- `best-effort` persistence (default) writes the audit row in a fresh transaction after the mutation commits; failures are structured logs.
+- `required` persistence rolls the protected mutation back when its audit row fails, including transitions.
+- `after-commit` export never runs for rolled-back mutations. It is non-durable and has no retry/atomic-vendor guarantee; make sinks idempotent on `event.id`.
+- Audit events preserve request/trace ids, workload identity, and human/agent authority actors across collection and global changes and transitions.
+- Retention is disabled when absent or `{ days: null }`. Legal-hold cleanup claims rows transactionally; cleanup failures propagate for queue retry.
+- QUESTPIE 3.x preserves the existing public audit-read default for compatibility. Merge `admin_audit_log` in the application and replace its access policy to opt into restricted reads; a future major release can make that safer policy the default.
+- Field `.audit("include" | "redact" | "omit")` overrides classification; credential-like names default to `omit`.
+
 ## Scope (Multi-Tenancy)
 
 The admin provides scope primitives for multi-tenant applications. Import from `@questpie/admin/client`.

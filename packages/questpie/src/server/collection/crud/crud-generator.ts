@@ -84,6 +84,7 @@ import { getColumn } from "#questpie/server/collection/crud/shared/field-resolve
 import {
 	executeGlobalCollectionHooks,
 	executeGlobalCollectionTransitionHooks,
+	rethrowFatalGlobalHookError,
 } from "#questpie/server/collection/crud/shared/global-hooks.js";
 import {
 	createHookContext,
@@ -693,6 +694,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				locale: normalized.locale,
 				accessMode: normalized.accessMode,
 				stage: normalized.stage,
+				requestId: normalized.requestId,
+				traceId: normalized.traceId,
+				workload: normalized.workload,
+				logger: normalized.logger,
 				"~contextExtensions": normalized["~contextExtensions"],
 				_hookDepth,
 			},
@@ -1705,6 +1710,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					locale: normalized.locale,
 					accessMode: normalized.accessMode,
 					stage: normalized.stage,
+					requestId: normalized.requestId,
+					traceId: normalized.traceId,
+					workload: normalized.workload,
+					logger: normalized.logger,
 					"~contextExtensions": normalized["~contextExtensions"],
 					_hookDepth,
 				},
@@ -4336,6 +4345,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					expectedRevision: params.expectedRevision,
 					locale: normalized.locale,
 					accessMode: normalized.accessMode,
+					requestId: normalized.requestId,
+					traceId: normalized.traceId,
+					...(normalized.workload ? { workload: normalized.workload } : {}),
+					...(normalized.logger ? { logger: normalized.logger } : {}),
 				} as TransitionHookContext;
 
 				// Execute beforeTransition hooks (throw to abort).
@@ -4390,6 +4403,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						transitionCtx,
 					);
 				} catch (err) {
+					rethrowFatalGlobalHookError(err);
 					console.error(
 						`[QUESTPIE] afterTransition hook error for "${this.state.name}":`,
 						err,
