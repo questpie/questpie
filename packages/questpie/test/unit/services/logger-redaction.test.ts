@@ -69,7 +69,11 @@ describe("logger structured-field redaction", () => {
 
 		logger.info("custom object", { envelope });
 
-		const observed = (log.records[0]?.[0] as any).envelope;
+		const record = log.records[0]?.[0] as
+			| { envelope: Record<string, any> }
+			| undefined;
+		expect(record).toBeDefined();
+		const observed = record!.envelope;
 		expect(observed.token).toBe("[Redacted]");
 		expect(observed.nested.error).toEqual({
 			type: "Error",
