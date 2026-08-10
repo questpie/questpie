@@ -1,5 +1,11 @@
 # @questpie/observability
 
+## 3.27.0
+
+### Minor Changes
+
+- Align `@questpie/observability` with the QUESTPIE `3.27.0` fixed release train. This is a version-alignment release only; its runtime code is identical to `3.18.1`.
+
 ## 3.18.1
 
 ### Patch Changes

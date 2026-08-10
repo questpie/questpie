@@ -389,7 +389,7 @@
     },
     "packages/observability": {
       "name": "@questpie/observability",
-      "version": "3.18.1",
+      "version": "3.27.0",
       "dependencies": {
         "@opentelemetry/api": "^1.9.0",
         "@opentelemetry/api-logs": "^0.221.0",
