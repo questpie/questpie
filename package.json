@@ -13,6 +13,7 @@
 		"clean:lock": "bunx rimraf --glob ./**/bun.lock",
 		"clean:nm": "bunx rimraf --glob ./**/node_modules",
 		"dev": "turbo run dev",
+		"dead-modules": "bun run scripts/dead-modules.ts --list",
 		"lint": "oxlint",
 		"lint:fix": "oxlint --fix",
 		"format": "oxfmt",
