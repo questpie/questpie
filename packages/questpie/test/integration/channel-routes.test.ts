@@ -1429,7 +1429,7 @@ describe("channel module routes", () => {
 			// The structured diagnostic keeps the error type, while the logger's
 			// safety boundary removes the message and stack from both log sinks.
 			expect(logged[0]!.args[0]).toMatchObject({
-				err: { type: "TypeError", message: "[Redacted]" },
+				err: { type: "Error", message: "[Redacted]" },
 			});
 		} finally {
 			await reader.cancel().catch(() => {});

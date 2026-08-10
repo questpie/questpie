@@ -94,6 +94,70 @@ describe("logger structured-field redaction", () => {
 		});
 	});
 
+	it("fails closed for error-like getters, Error subclasses, and proxies", async () => {
+		class UnsafeError extends Error {
+			get name(): never {
+				throw new Error("name getter must not run");
+			}
+		}
+		const proxy = new Proxy(
+			{},
+			{
+				ownKeys: () => {
+					throw new Error("proxy trap");
+				},
+			},
+		);
+		const log = createCapturingLogger({ captureMessages: false });
+		const logger = new LoggerService({ adapter: log.adapter });
+		await runWithContext({ requestId: "req-safe" }, async () => {
+			logger.error("safe", {
+				error: Object.defineProperty({ message: "secret" }, "name", {
+					enumerable: true,
+					get: () => {
+						throw new Error("name getter must not run");
+					},
+				}),
+				cause: new UnsafeError("secret"),
+				proxy,
+			});
+		});
+		const record = log.records[0]?.args?.[0] as Record<string, any>;
+		expect(record.error).toEqual({ message: "[Redacted]" });
+		expect(record.cause).toEqual({ type: "Error", message: "[Redacted]" });
+		expect(record.proxy).toBe("[Unserializable]");
+	});
+
+	it("preserves supported non-plain diagnostics for both sinks", async () => {
+		const log = createCapturingLogger({ captureMessages: false });
+		const emitted: any[] = [];
+		const logger = new LoggerService({ adapter: log.adapter });
+		await runWithContext(
+			{
+				app: {
+					observability: { emitLog: (record: unknown) => emitted.push(record) },
+				},
+			},
+			async () =>
+				logger.info("diagnostics", {
+					date: new Date("2026-01-02T03:04:05.000Z"),
+					url: new URL("https://example.com/path"),
+					map: new Map([["token", { password: "private" }]]),
+					set: new Set(["value"]),
+					bytes: new Uint8Array([1, 2, 3]),
+				}),
+		);
+		const diagnostics = log.records[0]?.args?.[0];
+		expect(diagnostics).toMatchObject({
+			date: { type: "Date", value: "2026-01-02T03:04:05.000Z" },
+			url: { type: "URL", value: "https://example.com/path" },
+			map: { type: "Map", entries: [["token", { password: "[Redacted]" }]] },
+			set: { type: "Set", values: ["value"] },
+			bytes: { type: "TypedArray", values: [1, 2, 3] },
+		});
+		expect(emitted[0].attributes).toEqual(diagnostics);
+	});
+
 	it("extends defaults with configured structured paths for adapter and tee", async () => {
 		const log = createCapturingLogger({ captureMessages: false });
 		const emitted: unknown[] = [];
@@ -137,7 +201,7 @@ describe("logger structured-field redaction", () => {
 			},
 		});
 		expect(log.records[0]?.args?.[0]).toEqual({
-			err: { type: "TypeError", message: "[Redacted]", code: "INVALID_INPUT" },
+			err: { type: "Error", message: "[Redacted]", code: "INVALID_INPUT" },
 		});
 		expect(log.records[1]?.args?.[0]).toEqual({
 			error: { name: "ValidationError", message: "[Redacted]", status: 400 },

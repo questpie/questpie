@@ -23,7 +23,12 @@ export function redactLogArgs(
 	const seen = new WeakMap<object, unknown>();
 	return args.map((value, index) => {
 		const redacted = redactValue(value, [], policy, seen);
-		return index === 0 && value instanceof Error ? { err: redacted } : redacted;
+		return index === 0 &&
+			value !== null &&
+			typeof value === "object" &&
+			isError(value)
+			? { err: redacted }
+			: redacted;
 	});
 }
 
@@ -44,20 +49,18 @@ function redactValue(
 	seen: WeakMap<object, unknown>,
 ): unknown {
 	if (matchesPath(path, policy.paths)) return REDACTED;
-	if (value instanceof Error) return serializeError(value);
 	if (!value || typeof value !== "object") return value;
 	const existing = seen.get(value);
 	if (existing) return existing;
+	const descriptors = getDescriptors(value);
+	if (!descriptors) return "[Unserializable]";
+	if (isError(value)) return serializeErrorDescriptors(descriptors);
+	const supported = serializeSupportedValue(value, path, policy, seen);
+	if (supported !== undefined) return supported;
 	const clone: Record<string, unknown> | unknown[] = Array.isArray(value)
 		? []
 		: {};
 	seen.set(value, clone);
-	let descriptors: Record<string, PropertyDescriptor>;
-	try {
-		descriptors = Object.getOwnPropertyDescriptors(value);
-	} catch {
-		return "[Unserializable]";
-	}
 	for (const [key, descriptor] of Object.entries(descriptors)) {
 		if (!descriptor.enumerable || !("value" in descriptor)) continue;
 		const nested = descriptor.value;
@@ -70,12 +73,9 @@ function redactValue(
 				assignCloneValue(clone, key, REDACTED);
 				continue;
 			}
-			if (nested instanceof Error) {
-				assignCloneValue(clone, key, serializeError(nested));
-				continue;
-			}
-			if (isErrorLike(nested)) {
-				assignCloneValue(clone, key, serializeErrorLike(nested));
+			const errorLike = serializeErrorLike(nested);
+			if (errorLike !== undefined) {
+				assignCloneValue(clone, key, errorLike);
 				continue;
 			}
 		}
@@ -101,36 +101,114 @@ function assignCloneValue(
 	});
 }
 
-function serializeError(error: Error): Record<string, unknown> {
+function serializeErrorDescriptors(
+	descriptors: Record<string, PropertyDescriptor>,
+): Record<string, unknown> {
 	const result: Record<string, unknown> = {
-		type: error.name,
+		type: dataProperty(descriptors, "name") ?? "Error",
 		message: REDACTED,
 	};
-	const code = (error as Error & { code?: unknown }).code;
+	const code = dataProperty(descriptors, "code");
 	if (["string", "number"].includes(typeof code)) result.code = code;
 	return result;
 }
 
 function serializeErrorLike(
-	value: Record<string, unknown>,
-): Record<string, unknown> {
+	value: unknown,
+): Record<string, unknown> | string | undefined {
+	if (!value || typeof value !== "object") return undefined;
+	const descriptors = getDescriptors(value);
+	if (!descriptors) return "[Unserializable]";
+	const error = isError(value);
+	if (!error && !descriptors.message && !descriptors.stack) return undefined;
+	if (error) return serializeErrorDescriptors(descriptors);
 	const result: Record<string, unknown> = {};
 	for (const key of ["type", "name", "code", "status", "statusCode"] as const) {
-		const candidate = value[key];
+		const candidate = dataProperty(descriptors, key);
 		if (["string", "number"].includes(typeof candidate))
 			result[key] = candidate;
 	}
-	if ("message" in value || "stack" in value) result.message = REDACTED;
+	result.message = REDACTED;
 	return result;
 }
 
-function isErrorLike(value: unknown): value is Record<string, unknown> {
-	return (
-		value instanceof Error ||
-		(value !== null &&
-			typeof value === "object" &&
-			("message" in value || "stack" in value))
-	);
+function isError(value: object): boolean {
+	try {
+		return value instanceof Error;
+	} catch {
+		return false;
+	}
+}
+
+function getDescriptors(
+	value: object,
+): Record<string, PropertyDescriptor> | undefined {
+	try {
+		return Object.getOwnPropertyDescriptors(value);
+	} catch {
+		return undefined;
+	}
+}
+
+function dataProperty(
+	descriptors: Record<string, PropertyDescriptor>,
+	key: string,
+): unknown {
+	const descriptor = descriptors[key];
+	return descriptor && "value" in descriptor ? descriptor.value : undefined;
+}
+
+function serializeSupportedValue(
+	value: object,
+	path: string[],
+	policy: RedactionPolicy,
+	seen: WeakMap<object, unknown>,
+): unknown {
+	try {
+		const timestamp = Date.prototype.getTime.call(value);
+		if (!Number.isNaN(timestamp))
+			return { type: "Date", value: new Date(timestamp).toISOString() };
+	} catch {}
+	try {
+		return { type: "URL", value: URL.prototype.toString.call(value) };
+	} catch {}
+	try {
+		const result: { type: "Map"; entries: unknown[] } = {
+			type: "Map",
+			entries: [],
+		};
+		const iterator = Map.prototype.entries.call(value) as IterableIterator<
+			[unknown, unknown]
+		>;
+		seen.set(value, result);
+		for (const [key, nested] of iterator) {
+			result.entries.push([
+				redactValue(key, [...path, "key"], policy, seen),
+				redactValue(nested, [...path, "value"], policy, seen),
+			]);
+		}
+		return result;
+	} catch {}
+	try {
+		const result: { type: "Set"; values: unknown[] } = {
+			type: "Set",
+			values: [],
+		};
+		const iterator = Set.prototype.values.call(
+			value,
+		) as IterableIterator<unknown>;
+		seen.set(value, result);
+		for (const nested of iterator)
+			result.values.push(redactValue(nested, [...path, "value"], policy, seen));
+		return result;
+	} catch {}
+	if (ArrayBuffer.isView(value)) {
+		const values = Object.values(getDescriptors(value) ?? {})
+			.filter((descriptor) => descriptor.enumerable && "value" in descriptor)
+			.map((descriptor) => descriptor.value);
+		return { type: "TypedArray", values };
+	}
+	return undefined;
 }
 
 function isErrorKey(key: string): boolean {

@@ -571,7 +571,7 @@ export const createFetchHandler = (
 							// adapter decide the format; the framework has no OpenTelemetry
 							// dependency and W3C is not the only propagator that exists.
 							carrier: {
-								traceparent: request.headers.get("traceparent") ?? undefined,
+								traceparent: getValidTraceparent(request),
 								tracestate: request.headers.get("tracestate") ?? undefined,
 								baggage: request.headers.get("baggage") ?? undefined,
 							},

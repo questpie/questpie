@@ -334,6 +334,12 @@ describe("adapter route config", () => {
 		});
 
 		it("rejects structurally invalid W3C traceparent values", async () => {
+			let carrier: Record<string, string | undefined> | undefined;
+			const span = setup.app.observability.span.bind(setup.app.observability);
+			setup.app.observability.span = ((name: string, fn: any, options: any) => {
+				carrier = options?.carrier;
+				return span(name, fn, options);
+			}) as typeof setup.app.observability.span;
 			const handler = createFetchHandler(setup.app);
 			const response = await handler(
 				new Request("http://localhost/echo-options", {
@@ -350,6 +356,7 @@ describe("adapter route config", () => {
 			const body = await response?.json();
 			expect(body.traceId).not.toBe("00000000000000000000000000000000");
 			expect(body.traceId).toMatch(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/);
+			expect(carrier?.traceparent).toBeUndefined();
 		});
 
 		it("can disable request logging while preserving request headers", async () => {
