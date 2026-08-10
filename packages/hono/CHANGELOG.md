@@ -1,5 +1,29 @@
 # @questpie/hono
 
+## 3.26.2
+
+### Patch Changes
+
+- [#249](https://github.com/questpie/questpie/pull/249) [`9f8b921`](https://github.com/questpie/questpie/commit/9f8b921685178d9b4af51bfd7febba02c9a0fee2) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Keep Fetch handler configuration local to each binding and surface ambiguous
+  route patterns during handler construction instead of silently falling back to
+  404 responses. Forward safe request-context options through the Hono and Elysia
+  adapters, keep public HTTP authority in user mode, and preserve native route
+  fallthrough outside the configured base path. Hono mounts no longer derive
+  QUESTPIE authority from a mutable `c.user`; use `getSession` for custom mount
+  identity. Existing `questpieMiddleware` composition reuses one immutable
+  authority snapshot instead of resolving a second identity. Its native context
+  stays fully backwards-compatible while the mount derives a private app context
+  that native middleware cannot forge. Fresh channel and live-query authorization
+  also stays bound to the private request snapshot. Hono and Elysia share the core-owned
+  `NativeAdapterConfig` option contract. Next route handlers now return an exact
+  seven-method type while preserving their 3.x configuration surface. Code that
+  indexed the handler object with an arbitrary string must use one of the seven
+  exported method names. The Elysia adapter no longer carries the unused
+  `@elysiajs/cors` dependency or claims a built-in CORS option; applications that
+  need cross-origin access must install and compose Elysia's native CORS plugin.
+- Updated dependencies [[`be5dcd5`](https://github.com/questpie/questpie/commit/be5dcd5b6c0cd6034a15a8ab73d6d767d358a3f7), [`1a81417`](https://github.com/questpie/questpie/commit/1a8141742292e9e17149ec4e6bc88c1c42bdfc3e), [`9f8b921`](https://github.com/questpie/questpie/commit/9f8b921685178d9b4af51bfd7febba02c9a0fee2), [`8d4fbad`](https://github.com/questpie/questpie/commit/8d4fbad5da94ddbd32237ac10c7cf601750afe6a)]:
+  - questpie@3.26.2
+
 ## 3.26.1
 
 ### Patch Changes
