@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { z } from "zod";
 
 import { collection, job } from "../../src/exports/index.js";
+import { MockLogger } from "../utils/mocks/logger.adapter";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -152,7 +153,7 @@ describe("integration: full app workflow", () => {
 	});
 
 	it("complete blog workflow: create author, create article, publish, track metrics", async () => {
-		const ctx = createTestContext();
+		const ctx = createTestContext({ logger: undefined });
 
 		// 1. Create an author
 		const authorsCrud = setup.app.collections.authors;
@@ -284,6 +285,48 @@ describe("integration: full app workflow", () => {
 			ctx,
 		);
 		expect(deletedArticle).toBeNull();
+	});
+
+	it("uses the app logger by default and propagates an explicit request logger", async () => {
+		const defaultContext = createTestContext({ logger: undefined });
+		const author = await setup.app.collections.authors.create(
+			{
+				id: crypto.randomUUID(),
+				name: "Default Logger Author",
+				email: "default-logger@example.com",
+			},
+			defaultContext,
+		);
+
+		await setup.app.collections.articles.create(
+			{
+				id: crypto.randomUUID(),
+				author: author.id,
+				title: "App logger",
+				slug: "app-logger",
+			},
+			defaultContext,
+		);
+		expect(setup.app.mocks.logger.wasLogged("info", "Article created")).toBe(
+			true,
+		);
+
+		setup.app.mocks.logger.clearLogs();
+		const requestLogger = new MockLogger();
+		await setup.app.collections.articles.create(
+			{
+				id: crypto.randomUUID(),
+				author: author.id,
+				title: "Request logger",
+				slug: "request-logger",
+			},
+			createTestContext({ logger: requestLogger as any }),
+		);
+
+		expect(requestLogger.wasLogged("info", "Article created")).toBe(true);
+		expect(setup.app.mocks.logger.wasLogged("info", "Article created")).toBe(
+			false,
+		);
 	});
 
 	it("handles many-to-many relationships with tags", async () => {

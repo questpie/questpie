@@ -3722,6 +3722,26 @@ Use these hooks for transaction-aware database, Queue/outbox, or typed-channel
 work. Direct email/HTTP work cannot join the transaction and belongs in a
 durable job or `onAfterCommit`.
 
+Global `afterTransition` hooks normally log failures without aborting the
+completed transition. A module that provides a required, transaction-bound
+guarantee can throw `FatalGlobalHookError` from that hook to abort and roll back
+the surrounding transition transaction. Required audit persistence uses this
+escape hatch so the protected mutation cannot commit without its audit row:
+
+```ts
+import { FatalGlobalHookError } from "questpie";
+
+try {
+	await writeRequiredAuditRow();
+} catch (error) {
+	throw new FatalGlobalHookError(error);
+}
+```
+
+Keep the original error as the constructor argument. Do not use this for
+ordinary collection hooks: errors from transaction-bound `afterChange`,
+`afterDelete`, and `afterPurge` already propagate and roll back their mutation.
+
 ### Hook Context Properties
 
 | Property        | Available in                                                         | Description                                                                  |

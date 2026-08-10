@@ -139,6 +139,8 @@ export interface GlobalOptions {
 export type GlobalHookContext<TData = any> = AppContext & {
 	/** The global data */
 	data: TData;
+	/** Previous global data for update operations. */
+	original?: TData;
 	/** Input data for update operations */
 	input?: unknown;
 	/** Current locale */

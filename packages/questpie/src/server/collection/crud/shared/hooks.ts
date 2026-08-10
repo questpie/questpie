@@ -94,6 +94,10 @@ export function createHookContext(
 		original: params.original,
 		locale: normalized.locale,
 		accessMode: normalized.accessMode,
+		requestId: normalized.requestId,
+		traceId: normalized.traceId,
+		...(normalized.workload ? { workload: normalized.workload } : {}),
+		...(normalized.logger ? { logger: normalized.logger } : {}),
 		operation: params.operation,
 		onAfterCommit,
 	} as HookContext<any, any, any>;
