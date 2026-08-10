@@ -111,6 +111,16 @@ serialized without their message or stack. This protection does not inspect the
 caller-owned message string: keep messages stable and put request data in the
 structured object.
 
+The structured object is canonicalized before either sink receives it. The
+effective record includes child bindings, caller fields, and request/trace/span
+context, then applies redaction once. Unsupported values become
+`[Unsupported]`, cycles `[Circular]`, and `NaN`/infinities `[NonFinite]`.
+Dates, URLs, Maps, Sets, and typed arrays become tagged records with `type` plus
+`value`, `entries`, or `values`. URL userinfo and fragments are removed, and
+sensitive query values are redacted. OTLP log attributes retain this recursive
+structure through the Logs AnyValue contract; span and metric attributes remain
+scalar or homogeneous primitive arrays.
+
 Records written inside a request also pick up `trace_id` and `span_id` from the
 open span, once an observability adapter is wired. See
 [Instrumented seams](/docs/infrastructure/observability/seams).

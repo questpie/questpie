@@ -1,10 +1,13 @@
 import { tryGetContext } from "#questpie/server/config/context.js";
 
+import type {
+	ObservabilityLogAttributes,
+	ObservabilityLogRecord,
+} from "../observability/types.js";
 import { PinoLoggerAdapter } from "./pino-adapter.js";
 import {
 	createRedactionPolicy,
 	redactLogArgs,
-	redactLogBindings,
 	type RedactionPolicy,
 } from "./redaction.js";
 import type { LoggerAdapter, LoggerConfig } from "./types.js";
@@ -17,7 +20,7 @@ interface SpanIds {
 export class LoggerService implements LoggerAdapter {
 	private adapter: LoggerAdapter;
 	private redaction: RedactionPolicy;
-	private teeBindings: Record<string, unknown> = {};
+	private bindings: Record<string, unknown> = Object.create(null);
 
 	constructor(config: LoggerConfig | { adapter: LoggerAdapter } = {}) {
 		this.redaction = createRedactionPolicy(
@@ -47,11 +50,10 @@ export class LoggerService implements LoggerAdapter {
 	}
 
 	child(bindings: Record<string, any>): LoggerService {
-		const safeBindings = redactLogBindings(bindings, this.redaction);
-		const childAdapter = this.adapter.child(safeBindings);
+		const childAdapter = this.adapter.child(Object.create(null));
 		const childLogger = new LoggerService({ adapter: childAdapter });
 		childLogger.redaction = this.redaction;
-		childLogger.teeBindings = { ...this.teeBindings, ...safeBindings };
+		childLogger.bindings = this.mergeOwnData(this.bindings, bindings);
 		return childLogger;
 	}
 
@@ -60,25 +62,27 @@ export class LoggerService implements LoggerAdapter {
 		msg: string,
 		args: unknown[],
 	): void {
-		const contextualArgs = this.safeArgs(args);
+		const contextualArgs = this.finalizeArgs(args);
 		this.adapter[level](msg, ...contextualArgs);
-		this.tee(level, msg, this.withTeeBindings(contextualArgs));
+		this.tee(level, msg, contextualArgs);
 	}
 
-	private safeArgs(args: unknown[]): unknown[] {
-		return this.withContext(redactLogArgs(args, this.redaction));
-	}
-
-	private withTeeBindings(args: unknown[]): unknown[] {
-		if (Object.keys(this.teeBindings).length === 0) return args;
+	private finalizeArgs(args: unknown[]): unknown[] {
+		const record = this.mergeOwnData(this.bindings);
 		const [first, ...rest] = args;
-		if (first && typeof first === "object" && !Array.isArray(first)) {
-			return [
-				Object.assign(Object.create(null), this.teeBindings, first),
-				...rest,
-			];
+		let remaining = args;
+		if (this.isError(first)) {
+			record.err = first;
+			remaining = rest;
+		} else if (first && typeof first === "object" && !Array.isArray(first)) {
+			const before = Object.keys(record).length;
+			this.mergeOwnDataInto(record, first);
+			if (Object.keys(record).length > before) remaining = rest;
 		}
-		return [this.teeBindings, ...args];
+		this.mergeOwnDataInto(record, this.contextBindings());
+		const effective =
+			Object.keys(record).length > 0 ? [record, ...remaining] : remaining;
+		return redactLogArgs(effective, this.redaction);
 	}
 
 	/**
@@ -101,17 +105,15 @@ export class LoggerService implements LoggerAdapter {
 	): void {
 		const observability = (
 			tryGetContext()?.app as
-				| { observability?: { emitLog?(record: unknown): void } }
+				| { observability?: { emitLog?(record: ObservabilityLogRecord): void } }
 				| undefined
 		)?.observability;
 		if (!observability?.emitLog) return;
 
 		const first = args[0];
-		const attributes =
+		const attributes: ObservabilityLogAttributes | undefined =
 			first && typeof first === "object" && !Array.isArray(first)
-				? first instanceof Error
-					? { "exception.message": first.message }
-					: (first as Record<string, unknown>)
+				? (first as ObservabilityLogAttributes)
 				: undefined;
 
 		try {
@@ -121,7 +123,7 @@ export class LoggerService implements LoggerAdapter {
 		}
 	}
 
-	private withContext(args: unknown[]): unknown[] {
+	private contextBindings(): Record<string, unknown> {
 		const ctx = tryGetContext();
 		// `trace_id`/`span_id` in snake_case on purpose: those are the OTel
 		// semantic-convention keys that log backends join to traces on. The
@@ -145,17 +147,34 @@ export class LoggerService implements LoggerAdapter {
 			...(ctx?.traceId ? { traceId: ctx.traceId } : {}),
 			...(span ? { trace_id: span.traceId, span_id: span.spanId } : {}),
 		};
-		if (Object.keys(bindings).length === 0) {
-			return args;
-		}
+		return bindings;
+	}
 
-		const [first, ...rest] = args;
-		if (first instanceof Error) {
-			return [{ err: first, ...bindings }, ...rest];
+	private mergeOwnData(...sources: object[]): Record<string, unknown> {
+		const target: Record<string, unknown> = Object.create(null);
+		for (const source of sources) this.mergeOwnDataInto(target, source);
+		return target;
+	}
+
+	private mergeOwnDataInto(
+		target: Record<string, unknown>,
+		source: object,
+	): void {
+		try {
+			for (const [key, descriptor] of Object.entries(
+				Object.getOwnPropertyDescriptors(source),
+			)) {
+				if (descriptor.enumerable && "value" in descriptor)
+					target[key] = descriptor.value;
+			}
+		} catch {}
+	}
+
+	private isError(value: unknown): value is Error {
+		try {
+			return value instanceof Error;
+		} catch {
+			return false;
 		}
-		if (first && typeof first === "object" && !Array.isArray(first)) {
-			return [Object.assign(Object.create(null), first, bindings), ...rest];
-		}
-		return [bindings, ...args];
 	}
 }

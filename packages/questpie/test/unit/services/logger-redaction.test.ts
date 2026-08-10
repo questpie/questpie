@@ -370,13 +370,12 @@ describe("logger structured-field redaction", () => {
 				apiKey: "private-key",
 			});
 		expect(log.records[0]?.args?.[0]).toEqual({
+			component: "billing",
+			authorization: "[Redacted]",
 			customer: { email: "[Redacted]" },
 			apiKey: "[Redacted]",
 		});
-		expect(log.childBindings[0]).toEqual({
-			component: "billing",
-			authorization: "[Redacted]",
-		});
+		expect(log.childBindings[0]).toEqual({});
 	});
 
 	it("tees effective child bindings with the same redaction policy", async () => {
@@ -396,15 +395,45 @@ describe("logger structured-field redaction", () => {
 			},
 		);
 
-		expect(log.childBindings[0]).toEqual({
-			component: "billing",
-			authorization: "[Redacted]",
-		});
+		expect(log.childBindings[0]).toEqual({});
 		expect(emitted[0].attributes).toMatchObject({
 			component: "billing",
 			authorization: "[Redacted]",
 			event: "invoice.created",
 		});
+	});
+
+	it("applies policy once to the final adapter and OTLP record", async () => {
+		const log = createCapturingLogger({ captureMessages: false });
+		const emitted: any[] = [];
+		const logger = new LoggerService({
+			adapter: log.adapter,
+			redact: ["requestId", "err.code", "error"],
+		});
+		await runWithContext(
+			{
+				requestId: "private-request",
+				app: {
+					observability: { emitLog: (record: unknown) => emitted.push(record) },
+				},
+			},
+			async () => {
+				const error = Object.assign(new TypeError("private"), {
+					code: "PRIVATE",
+				});
+				logger.child({ component: "billing" }).error("failed", error);
+				logger.error("caller error", { error: new Error("private") });
+			},
+		);
+		const effective = log.records[0]?.args?.[0];
+		expect(effective).toEqual({
+			component: "billing",
+			err: { type: "TypeError", message: "[Redacted]", code: "[Redacted]" },
+			requestId: "[Redacted]",
+		});
+		expect(emitted[0].attributes).toEqual(effective);
+		expect(log.records[1]?.args?.[0]).toMatchObject({ error: "[Redacted]" });
+		expect(emitted[1].attributes).toEqual(log.records[1]?.args?.[0]);
 	});
 
 	it("does not claim to inspect caller-owned message strings", () => {

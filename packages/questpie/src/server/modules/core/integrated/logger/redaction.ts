@@ -91,6 +91,10 @@ function redactValue(
 	for (const [key, descriptor] of Object.entries(descriptors)) {
 		if (!descriptor.enumerable || !("value" in descriptor)) continue;
 		const nested = descriptor.value;
+		if (matchesPath([...path, key], policy.paths)) {
+			assignCloneValue(clone, key, REDACTED);
+			continue;
+		}
 		if (isSensitiveKey(key)) {
 			assignCloneValue(clone, key, REDACTED);
 			continue;

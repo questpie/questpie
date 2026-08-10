@@ -30,6 +30,19 @@ export type ObservabilityAttributes = Record<
 	ObservabilityAttributeValue | undefined
 >;
 
+/** Recursive canonical values accepted by the OpenTelemetry Logs AnyValueMap. */
+export type ObservabilityLogValue =
+	| string
+	| number
+	| boolean
+	| null
+	| ObservabilityLogValue[]
+	| ObservabilityLogAttributes;
+
+export interface ObservabilityLogAttributes {
+	[key: string]: ObservabilityLogValue;
+}
+
 /** What a span looks like from the framework's side. */
 export interface ObservabilitySpan {
 	setAttribute(key: string, value: ObservabilityAttributeValue): void;
@@ -139,7 +152,7 @@ export interface ObservabilityAdapter {
 export interface ObservabilityLogRecord {
 	level: "debug" | "info" | "warn" | "error";
 	message: string;
-	attributes?: ObservabilityAttributes;
+	attributes?: ObservabilityLogAttributes;
 }
 
 export interface ObservabilityConfig {
