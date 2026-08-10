@@ -46,7 +46,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { admin, bearer, jwt } from "better-auth/plugins";
 import { collection, starterModule } from "questpie";
 
-import { createFetchHandler } from "../../questpie/src/server/adapters/http.js";
+import { questpieHono } from "../../hono/src/server.js";
 import { buildMockApp } from "../../questpie/test/utils/mocks/mock-app-builder.js";
 import { createTestContext } from "../../questpie/test/utils/test-context.js";
 import { runTestDbMigrations } from "../../questpie/test/utils/test-db.js";
@@ -113,7 +113,7 @@ async function mcpRpc(
 	params: unknown,
 	token: string,
 ): Promise<{ status: number; body: any }> {
-	const res = await fetch(`${ORIGIN}/mcp`, {
+	const res = await fetch(`${ORIGIN}/api/mcp`, {
 		method: "POST",
 		headers: {
 			"content-type": "application/json",
@@ -381,13 +381,10 @@ describe("MO13 end-to-end OAuth MCP flow + system mode", () => {
 			},
 		);
 
-		const handler = createFetchHandler(setup.app);
+		const handler = questpieHono(setup.app, { basePath: "/api" });
 		const server = Bun.serve({
 			port: PORT,
-			fetch: (req) =>
-				handler(req).then(
-					(r) => r ?? new Response("not found", { status: 404 }),
-				),
+			fetch: handler.fetch,
 		});
 		await runTestDbMigrations(setup.app);
 		await setup.app.collections.posts.create(
@@ -446,6 +443,11 @@ describe("MO13 end-to-end OAuth MCP flow + system mode", () => {
 			expect(aud).toContain(MCP_AUD);
 			expect(payload.iss).toBe(`${ORIGIN}/api/auth`);
 			expect(String(payload.scope)).toContain("collections:posts:read");
+
+			const userinfo = await fetch(`${AUTH_BASE}/oauth2/userinfo`, {
+				headers: { authorization: `Bearer ${token}` },
+			});
+			expect(userinfo.status).toBe(200);
 
 			// The live /mcp route resolves it to an `oauth` principal and dispatches:
 			// a custom tool that echoes the principal proves kind + user identity.
