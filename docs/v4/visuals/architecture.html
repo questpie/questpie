@@ -1,0 +1,974 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>QUESTPIE v4 architecture map</title>
+		<style>
+			:root {
+				color-scheme: dark;
+				--bg: #151310;
+				--panel: #201d19;
+				--panel-2: #29251f;
+				--text: #f7f1e7;
+				--muted: #bdb2a4;
+				--line: #403a32;
+				--coral: #f07053;
+				--green: #65b694;
+				--blue: #69a9c5;
+				--yellow: #e8bd59;
+				--red: #ff8577;
+				font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+			}
+			* {
+				box-sizing: border-box;
+			}
+			html {
+				scroll-behavior: smooth;
+			}
+			html,
+			body {
+				max-width: 100%;
+				overflow-x: hidden;
+			}
+			body {
+				margin: 0;
+				background: var(--bg);
+				color: var(--text);
+				line-height: 1.55;
+			}
+			a {
+				color: inherit;
+			}
+			.wrap {
+				width: min(1180px, calc(100% - 40px));
+				margin: 0 auto;
+			}
+			header {
+				padding: 76px 0 48px;
+				border-bottom: 1px solid var(--line);
+				background: radial-gradient(
+					circle at 80% 20%,
+					#3b241d 0,
+					transparent 34%
+				);
+			}
+			.eyebrow {
+				color: var(--coral);
+				font:
+					700 12px/1.2 ui-monospace,
+					monospace;
+				letter-spacing: 0.14em;
+				text-transform: uppercase;
+			}
+			h1 {
+				max-width: 900px;
+				margin: 16px 0;
+				font-size: clamp(42px, 7vw, 86px);
+				line-height: 0.98;
+				letter-spacing: -0.055em;
+			}
+			.lead {
+				max-width: 820px;
+				color: var(--muted);
+				font-size: clamp(18px, 2vw, 25px);
+			}
+			.status {
+				display: inline-flex;
+				gap: 10px;
+				margin-top: 22px;
+				padding: 10px 14px;
+				border: 1px solid #664437;
+				border-radius: 999px;
+				background: #2e211c;
+				color: #f5c8bb;
+				font-size: 13px;
+			}
+			nav {
+				position: sticky;
+				top: 0;
+				z-index: 5;
+				border-bottom: 1px solid var(--line);
+				background: color-mix(in srgb, var(--bg) 92%, transparent);
+				backdrop-filter: blur(16px);
+			}
+			nav .wrap {
+				display: flex;
+				gap: 20px;
+				overflow-x: auto;
+				padding-block: 14px;
+			}
+			nav a {
+				white-space: nowrap;
+				color: var(--muted);
+				text-decoration: none;
+				font-size: 13px;
+			}
+			nav a:hover {
+				color: var(--text);
+			}
+			section {
+				padding: 74px 0;
+				border-bottom: 1px solid var(--line);
+			}
+			h2 {
+				margin: 0 0 12px;
+				font-size: clamp(30px, 4vw, 50px);
+				line-height: 1.05;
+				letter-spacing: -0.035em;
+			}
+			h3 {
+				margin: 0 0 9px;
+				font-size: 19px;
+			}
+			.section-intro {
+				max-width: 760px;
+				margin: 0 0 32px;
+				color: var(--muted);
+				font-size: 17px;
+			}
+			.grid {
+				display: grid;
+				gap: 18px;
+			}
+			.grid > *,
+			.pipeline > * {
+				min-width: 0;
+			}
+			.grid.two {
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+			}
+			.grid.three {
+				grid-template-columns: repeat(3, minmax(0, 1fr));
+			}
+			.card {
+				padding: 24px;
+				border: 1px solid var(--line);
+				border-radius: 16px;
+				background: var(--panel);
+			}
+			.card p,
+			.card li {
+				color: var(--muted);
+			}
+			.card ul {
+				margin: 12px 0 0;
+				padding-left: 19px;
+			}
+			.good {
+				border-top: 3px solid var(--green);
+			}
+			.bad {
+				border-top: 3px solid var(--red);
+			}
+			.info {
+				border-top: 3px solid var(--blue);
+			}
+			.warn {
+				border-top: 3px solid var(--yellow);
+			}
+			.pipeline {
+				display: grid;
+				grid-template-columns: repeat(4, 1fr);
+				gap: 12px;
+			}
+			.step {
+				position: relative;
+				min-height: 190px;
+				padding: 22px;
+				border: 1px solid var(--line);
+				border-radius: 14px;
+				background: var(--panel);
+			}
+			.step:not(:last-child)::after {
+				content: "→";
+				position: absolute;
+				right: -17px;
+				top: 78px;
+				z-index: 2;
+				color: var(--coral);
+				font-size: 24px;
+			}
+			.step b {
+				display: block;
+				margin-bottom: 10px;
+				color: var(--coral);
+				font:
+					700 11px ui-monospace,
+					monospace;
+				letter-spacing: 0.12em;
+			}
+			.step p {
+				color: var(--muted);
+				font-size: 14px;
+			}
+			table {
+				width: 100%;
+				border-collapse: collapse;
+				overflow: hidden;
+				border: 1px solid var(--line);
+				border-radius: 14px;
+				background: var(--panel);
+			}
+			th,
+			td {
+				padding: 15px 16px;
+				border-bottom: 1px solid var(--line);
+				text-align: left;
+				vertical-align: top;
+			}
+			th {
+				color: var(--coral);
+				font:
+					700 11px ui-monospace,
+					monospace;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+			}
+			td {
+				color: var(--muted);
+				font-size: 14px;
+			}
+			td:first-child {
+				color: var(--text);
+				font-weight: 700;
+			}
+			code,
+			pre {
+				font-family: "SFMono-Regular", Consolas, monospace;
+			}
+			pre {
+				margin: 0;
+				padding: 20px;
+				overflow: auto;
+				border: 1px solid var(--line);
+				border-radius: 12px;
+				background: #0e0d0b;
+				color: #e8dfd4;
+				font-size: 13px;
+				line-height: 1.65;
+			}
+			.comment {
+				color: #81786e;
+			}
+			.keyword {
+				color: #ff9279;
+			}
+			.type {
+				color: #7fc7aa;
+			}
+			.string {
+				color: #e6c877;
+			}
+			.note {
+				margin-top: 16px;
+				padding: 14px 16px;
+				border-left: 3px solid var(--yellow);
+				background: #292318;
+				color: #d8c8a0;
+				font-size: 14px;
+			}
+			.flow {
+				display: grid;
+				gap: 10px;
+			}
+			.flow-row {
+				display: grid;
+				grid-template-columns: 160px 1fr 180px;
+				gap: 12px;
+				align-items: center;
+				padding: 14px;
+				border: 1px solid var(--line);
+				border-radius: 12px;
+				background: var(--panel);
+			}
+			.flow-row strong {
+				color: var(--coral);
+				font:
+					700 12px ui-monospace,
+					monospace;
+			}
+			.flow-row span {
+				color: var(--muted);
+				font-size: 14px;
+			}
+			.tag {
+				display: inline-block;
+				padding: 4px 8px;
+				border-radius: 999px;
+				background: #302923;
+				color: #d9cabe;
+				font-size: 11px;
+			}
+			.tree {
+				white-space: pre;
+				color: var(--muted);
+			}
+			footer {
+				padding: 42px 0 70px;
+				color: var(--muted);
+			}
+			@media (max-width: 820px) {
+				.wrap {
+					width: auto;
+					margin: 0;
+					padding-inline: 20px;
+				}
+				nav .wrap {
+					padding-block: 14px;
+				}
+				.grid.two,
+				.grid.three,
+				.pipeline {
+					grid-template-columns: 1fr;
+				}
+				.step:not(:last-child)::after {
+					content: "↓";
+					right: 50%;
+					top: auto;
+					bottom: -23px;
+				}
+				.flow-row {
+					grid-template-columns: 1fr;
+				}
+				table {
+					display: block;
+					max-width: 100%;
+					overflow-x: auto;
+				}
+				h1,
+				h2,
+				h3,
+				p,
+				li {
+					overflow-wrap: anywhere;
+				}
+			}
+			@media print {
+				nav {
+					display: none;
+				}
+				section {
+					break-inside: avoid;
+				}
+				body {
+					background: #fff;
+					color: #111;
+				}
+				.card,
+				.step,
+				table,
+				pre,
+				.flow-row {
+					background: #fff;
+					color: #111;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<header>
+			<div class="wrap">
+				<div class="eyebrow">Contributor architecture map</div>
+				<h1>QUESTPIE v4</h1>
+				<p class="lead">
+					An open, self-hostable application compiler and PostgreSQL-native
+					Runtime. It turns one application model into transactions, durable
+					work, observed Live Queries, exact client types, and operational
+					evidence.
+				</p>
+				<div class="status">
+					Architecture contract, not final TypeScript syntax
+				</div>
+			</div>
+		</header>
+		<nav>
+			<div class="wrap">
+				<a href="#reset">V3 → V4</a><a href="#pipeline">Pipeline</a
+				><a href="#naming">Naming</a><a href="#barbershop">Barbershop</a
+				><a href="#types">TypeScript</a><a href="#runtime">Runtime</a
+				><a href="#studio">Studio</a><a href="#position">Position</a
+				><a href="#roadmap">Roadmap</a>
+			</div>
+		</nav>
+
+		<section id="reset">
+			<div class="wrap">
+				<div class="eyebrow">01 / The reset</div>
+				<h2>V3 evidence. V4 architecture.</h2>
+				<p class="section-intro">
+					V3 proved valuable behavior. It also made composition, ownership, and
+					TypeScript harder to see. V4 keeps the guarantees and removes the
+					hidden machinery.
+				</p>
+				<div class="two grid">
+					<article class="card bad">
+						<h3>V3: runtime composition</h3>
+						<ul>
+							<li>Modules merge at runtime.</li>
+							<li>Import order can select behavior.</li>
+							<li>Equal names have unclear ownership.</li>
+							<li>User grows through hidden expand or merge steps.</li>
+							<li>Admin extends backend builders.</li>
+							<li>ORM types leak into public contracts.</li>
+							<li>Host adapters multiply lifecycle tests.</li>
+						</ul>
+					</article>
+					<article class="card good">
+						<h3>V4: compiled application</h3>
+						<ul>
+							<li>
+								Compiler resolves the complete application before startup.
+							</li>
+							<li>Every resource has identity, Owner, and Origin.</li>
+							<li>Only an authorized Augmentation can change a resource.</li>
+							<li>Collisions fail with both source locations.</li>
+							<li>Studio uses the public App Contract.</li>
+							<li>Generated declarations contain no ORM identity.</li>
+							<li>The Runtime owns one lifecycle and one Fetch seam.</li>
+						</ul>
+					</article>
+				</div>
+			</div>
+		</section>
+
+		<section id="pipeline">
+			<div class="wrap">
+				<div class="eyebrow">02 / Static composition</div>
+				<h2>One downward pipeline</h2>
+				<p class="section-intro">
+					The Runtime does not discover structural plugins. It loads compiler
+					output.
+				</p>
+				<div class="pipeline">
+					<div class="step">
+						<b>SOURCE</b>
+						<h3>Definitions</h3>
+						<p>
+							Collections, Fields, Policy, Query, Mutation, Action, Route,
+							Services, and durable handlers.
+						</p>
+					</div>
+					<div class="step">
+						<b>COMPOSE</b>
+						<h3>Identity graph</h3>
+						<p>
+							Owner, Origin, authorized Augmentation, references, collisions,
+							and deterministic order.
+						</p>
+					</div>
+					<div class="step">
+						<b>GENERATE</b>
+						<h3>Concrete artifacts</h3>
+						<p>
+							Compiled Manifest, Origin Map, Migration Plan, App Contract, and
+							client contract.
+						</p>
+					</div>
+					<div class="step">
+						<b>EXECUTE</b>
+						<h3>PostgreSQL Runtime</h3>
+						<p>
+							Operations, transactions, dispatch, Change Ledger, Live Query,
+							events, and Studio.
+						</p>
+					</div>
+				</div>
+				<div class="note">
+					Same-Primitives Law: first-party code, a package, and application code
+					enter the same normalized identity and ownership model.
+				</div>
+			</div>
+		</section>
+
+		<section id="naming">
+			<div class="wrap">
+				<div class="eyebrow">03 / Ubiquitous language</div>
+				<h2>One name for one concept</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Name</th>
+							<th>Meaning</th>
+							<th>Do not use as a synonym</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Definition</td>
+							<td>
+								A declarative source value that the compiler can identify and
+								normalize.
+							</td>
+							<td>Module, plugin root, registry entry</td>
+						</tr>
+						<tr>
+							<td>Feature</td>
+							<td>
+								A userland folder that groups related source. It has no runtime
+								semantics.
+							</td>
+							<td>Module, Slice, Feature Kit</td>
+						</tr>
+						<tr>
+							<td>Package</td>
+							<td>
+								A distribution unit. Installation does not activate its
+								Definitions.
+							</td>
+							<td>Auto-loaded plugin</td>
+						</tr>
+						<tr>
+							<td>Owner</td>
+							<td>The one Definition that creates a resource.</td>
+							<td>Last writer</td>
+						</tr>
+						<tr>
+							<td>Origin</td>
+							<td>
+								The exact package, file, and export that supplied an input.
+							</td>
+							<td>Filename-derived identity</td>
+						</tr>
+						<tr>
+							<td>Augmentation</td>
+							<td>
+								A contribution accepted through the Owner's explicit contract.
+							</td>
+							<td>Merge, expand, patch</td>
+						</tr>
+						<tr>
+							<td>Capability</td>
+							<td>A product inventory label only.</td>
+							<td>Public composition root</td>
+						</tr>
+						<tr>
+							<td>Studio</td>
+							<td>The operational inspector for a compiled application.</td>
+							<td>CMS Admin, Operator App framework</td>
+						</tr>
+					</tbody>
+				</table>
+				<div class="two grid" style="margin-top: 18px">
+					<div class="card bad">
+						<h3>Collision in v3</h3>
+						<p>
+							<code>starter/users.ts</code> and
+							<code>booking/users.ts</code> can depend on merge order. A reader
+							must inspect both modules and the merge implementation.
+						</p>
+					</div>
+					<div class="card good">
+						<h3>Collision in v4</h3>
+						<p>
+							The compiler reports one identity, two Origins, both Owners, and
+							the missing Augmentation authority. Startup never chooses a
+							winner.
+						</p>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<section id="barbershop">
+			<div class="wrap">
+				<div class="eyebrow">04 / TanStack Barbershop tracer</div>
+				<h2>One domain. Five proof slices.</h2>
+				<p class="section-intro">
+					The source tree is illustrative. Exact factories and filenames are the
+					next API grilling task.
+				</p>
+				<div class="two grid">
+					<div class="card info">
+						<h3>Conceptual source tree</h3>
+						<pre class="tree">
+barbershop/
+  data/
+    appointments
+    members
+  policy/
+    appointment-access
+  operations/
+    list-appointments
+    reschedule-appointment
+  durable/
+    appointment-rescheduled
+  app/
+    composition
+  generated/
+    manifest
+    app-contract
+    client</pre
+						>
+					</div>
+					<div class="card warn">
+						<h3>Compiler proof</h3>
+						<ul>
+							<li><code>appointments</code> has one stable identity.</li>
+							<li>The booking Package owns it.</li>
+							<li>A reminder Package adds one legal Augmentation.</li>
+							<li>A second Owner produces a hard collision.</li>
+							<li>The Origin Map shows each input.</li>
+						</ul>
+					</div>
+					<div class="card good">
+						<h3>Transaction proof</h3>
+						<ul>
+							<li>Mutation updates an appointment.</li>
+							<li>The same commit writes Change Ledger and Reaction intent.</li>
+							<li>
+								Lost response and duplicate delivery do not duplicate the
+								change.
+							</li>
+							<li>
+								An unsafe external Service cannot run in a retryable
+								transaction.
+							</li>
+						</ul>
+					</div>
+					<div class="card info">
+						<h3>Realtime proof</h3>
+						<ul>
+							<li>
+								The Runtime records reads that the Query actually executes.
+							</li>
+							<li>
+								Policy, Tenant, Relation, order, and page boundary reads
+								participate.
+							</li>
+							<li>Recompute replaces the dependency set.</li>
+							<li>Raw SQL requires a dependency token.</li>
+							<li>Each Live Query converges independently.</li>
+						</ul>
+					</div>
+					<div class="card warn">
+						<h3>PostgreSQL proof</h3>
+						<ul>
+							<li>A committed migration produces the expected fingerprint.</li>
+							<li>
+								Raw SQL, cascades, and an external writer enter reconciliation.
+							</li>
+							<li>A crash before wake loses no refresh or Reaction.</li>
+							<li>
+								Local and managed provider profiles run the same conformance
+								suite.
+							</li>
+						</ul>
+					</div>
+					<div class="card good">
+						<h3>Operational proof</h3>
+						<ul>
+							<li>
+								Direct call, network client, and Studio return the same
+								authorized result.
+							</li>
+							<li>Append-only runtime events share one correlation schema.</li>
+							<li>Execution and subscription limits fail explicitly.</li>
+						</ul>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<section id="types">
+			<div class="wrap">
+				<div class="eyebrow">05 / TypeScript boundary</div>
+				<h2>Generate the application type. Do not infer the universe.</h2>
+				<div class="two grid">
+					<div class="card bad">
+						<h3>V3 pressure</h3>
+						<pre><span class="comment">// Conceptual failure mode</span>
+Questpie&lt;
+  MergeModules&lt;
+    ExpandCollections&lt;
+      DrizzleTableGenerics&lt;...&gt;
+    &gt;
+  &gt;
+&gt;</pre>
+						<p>
+							Recursive whole-app inference repeats work. ORM identity crosses
+							package boundaries. Duplicate dependencies can cause deep
+							incompatibility or <code>any</code>.
+						</p>
+					</div>
+					<div class="card good">
+						<h3>V4 generated contract</h3>
+						<pre><span class="comment">// Shape only. Names are not locked.</span>
+<span class="keyword">type</span> <span class="type">AppContract</span> = {
+  queries: {
+    appointments: {
+      input: AppointmentQueryInput
+      output: AppointmentPage
+      errors: AppointmentQueryError
+    }
+  }
+}</pre>
+						<p>
+							The compiler writes concrete keys and leaf types. The normal
+							declaration file contains no Drizzle or Kysely symbols.
+						</p>
+					</div>
+				</div>
+				<div class="note">
+					Exact TypeScript output does not validate runtime values by itself.
+					The operation grill must define when the compiler emits a runtime
+					schema and when the author supplies one.
+				</div>
+			</div>
+		</section>
+
+		<section id="runtime">
+			<div class="wrap">
+				<div class="eyebrow">06 / Data and execution</div>
+				<h2>PostgreSQL is part of the guarantee</h2>
+				<div class="flow">
+					<div class="flow-row">
+						<strong>COMPILE</strong
+						><span
+							>Definitions become the Compiled Manifest and Migration
+							Plan.</span
+						><span class="tag">desired state</span>
+					</div>
+					<div class="flow-row">
+						<strong>REVIEW</strong
+						><span
+							>A human or agent reviews destructive changes, ownership, SQL, and
+							checksums.</span
+						><span class="tag">history</span>
+					</div>
+					<div class="flow-row">
+						<strong>APPLY</strong
+						><span
+							>The Runtime applies the same plan. A fast local path cannot hide
+							another planner.</span
+						><span class="tag">database</span>
+					</div>
+					<div class="flow-row">
+						<strong>VERIFY</strong
+						><span
+							>Named drift checks compare Manifest, migration history, and
+							Schema Fingerprint.</span
+						><span class="tag">evidence</span>
+					</div>
+				</div>
+				<div class="three grid" style="margin-top: 18px">
+					<div class="card">
+						<h3>Mutation</h3>
+						<p>
+							Owns one PostgreSQL transaction and the atomic durable-dispatch
+							boundary.
+						</p>
+					</div>
+					<div class="card">
+						<h3>Change Ledger</h3>
+						<p>
+							Stores committed reactive changes. A lossy wake only announces
+							possible progress.
+						</p>
+					</div>
+					<div class="card">
+						<h3>Reaction</h3>
+						<p>
+							Runs at least once after commit with stable causation and
+							idempotency identity.
+						</p>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<section id="studio">
+			<div class="wrap">
+				<div class="eyebrow">07 / Operational surface</div>
+				<h2>Studio explains the application</h2>
+				<p class="section-intro">
+					A database console can show rows. Studio shows why an application
+					changed and what the Runtime did next.
+				</p>
+				<div class="three grid">
+					<div class="card">
+						<h3>Composition</h3>
+						<p>
+							Manifest, identity, Owner, Origin, Augmentation, package, and
+							collision diagnostics.
+						</p>
+					</div>
+					<div class="card">
+						<h3>Schema</h3>
+						<p>
+							Migration Plan, checksums, apply history, Schema Fingerprint,
+							drift, and Seeds.
+						</p>
+					</div>
+					<div class="card">
+						<h3>Execution</h3>
+						<p>
+							Operation, Principal, Tenant, Policy decision, transaction, error,
+							duration, and limits.
+						</p>
+					</div>
+					<div class="card">
+						<h3>Durability</h3>
+						<p>
+							Dispatch, Reaction, Job attempt, lease, retry, dead letter, and
+							causation.
+						</p>
+					</div>
+					<div class="card">
+						<h3>Realtime</h3>
+						<p>
+							Observed reads, ledger cursor, wake reason, lag, recompute,
+							reconnect, and recovery.
+						</p>
+					</div>
+					<div class="card">
+						<h3>Telemetry</h3>
+						<p>
+							Append-only events with one versioned Execution Envelope
+							correlation schema.
+						</p>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<section id="position">
+			<div class="wrap">
+				<div class="eyebrow">08 / Product position</div>
+				<h2>Do not compete on a feature checklist</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>System</th>
+							<th>Strongest model</th>
+							<th>QUESTPIE lesson</th>
+							<th>QUESTPIE difference</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Convex</td>
+							<td>
+								Query, Mutation, optimistic concurrency, dependency tracking,
+								WebSocket, and client loop.
+							</td>
+							<td>
+								Keep the public model small. Realtime names alone are not a
+								moat.
+							</td>
+							<td>
+								Visible PostgreSQL, compiled Policy, explicit ownership,
+								migration and data exit.
+							</td>
+						</tr>
+						<tr>
+							<td>Supabase</td>
+							<td>
+								PostgreSQL platform, reflected CRUD, Auth, Storage, row events,
+								Queues, Studio, and Cloud.
+							</td>
+							<td>Do not copy the service list or the database console.</td>
+							<td>
+								Semantic Operations, atomic dispatch, observed-result
+								recomputation, Origin Map, and App Contract.
+							</td>
+						</tr>
+						<tr>
+							<td>QUESTPIE v3</td>
+							<td>
+								Transactional CRUD, generated client, outbox, realtime recovery,
+								jobs, and workflows.
+							</td>
+							<td>
+								Preserve behavior evidence. Delete hidden composition and public
+								ORM identity.
+							</td>
+							<td>
+								Static application compiler and one PostgreSQL-native Runtime.
+							</td>
+						</tr>
+					</tbody>
+				</table>
+				<div class="three grid" style="margin-top: 18px">
+					<div class="card good">
+						<h3>Open Runtime</h3>
+						<p>
+							Self-hostable compiler, Runtime, PostgreSQL data plane, client,
+							and core Studio create trust and adoption.
+						</p>
+					</div>
+					<div class="card info">
+						<h3>Managed control plane</h3>
+						<p>
+							Semantic deploy, migration gates, recovery, observability, teams,
+							compliance, and support create revenue.
+						</p>
+					</div>
+					<div class="card warn">
+						<h3>Content</h3>
+						<p>
+							Executable lessons teach transactions, realtime, durability,
+							schema safety, and AI-native development.
+						</p>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<section id="roadmap">
+			<div class="wrap">
+				<div class="eyebrow">09 / Proof order</div>
+				<h2>Roadmap by dependency</h2>
+				<div class="flow">
+					<div class="flow-row">
+						<strong>0 / SPEC</strong
+						><span
+							>Lock schema, migration, seed, drift, idempotency, and exact
+							public API.</span
+						><span class="tag">next</span>
+					</div>
+					<div class="flow-row">
+						<strong>1 / TRACER</strong
+						><span
+							>Prove compiler, PostgreSQL, Policy, Mutation, dispatch, Live
+							Query, client, crash recovery, and minimal Studio.</span
+						><span class="tag">falsify</span>
+					</div>
+					<div class="flow-row">
+						<strong>2 / DURABLE</strong
+						><span
+							>Extend the proven spine to Jobs, Queue controls, scheduling, and
+							then Workflow.</span
+						><span class="tag">reuse</span>
+					</div>
+					<div class="flow-row">
+						<strong>3 / INTEGRATE</strong
+						><span
+							>Add Auth, files, search, KV, channels, OpenAPI, and MCP one
+							proven slice at a time.</span
+						><span class="tag">later</span>
+					</div>
+					<div class="flow-row">
+						<strong>4 / CLOUD</strong
+						><span
+							>Test a managed control plane only after external applications
+							prove standalone value.</span
+						><span class="tag">business</span>
+					</div>
+				</div>
+				<div class="note">
+					Stop when an abstraction has no tracer guarantee, Runtime state
+					changes composition, public types need ORM identity, or Studio reads a
+					private truth.
+				</div>
+			</div>
+		</section>
+
+		<footer>
+			<div class="wrap">
+				Canonical sources: SPEC.md, CONTEXT.md, docs/adr/,
+				docs/v4/implementation-gates.md, and docs/v4/v3-evidence-map.md.
+			</div>
+		</footer>
+	</body>
+</html>

@@ -25,10 +25,7 @@ function generateLLMSTxt(baseUrl: string, pages: LLMSPage[]) {
 	// Mirrors the top-level sections in content/docs/meta.json (root `index`
 	// page lands in the "root" bucket and is intentionally omitted here).
 	const sectionOrder: Array<{ key: string; title: string }> = [
-		{ key: "getting-started", title: "Getting Started" },
-		{ key: "concepts", title: "Concepts" },
-		{ key: "adapters", title: "Adapters" },
-		{ key: "integrations", title: "Integrations" },
+		{ key: "v4", title: "QUESTPIE v4" },
 	];
 
 	for (const section of sectionOrder) {
@@ -60,9 +57,9 @@ function generateLLMSTxt(baseUrl: string, pages: LLMSPage[]) {
 
 	return `# QUESTPIE Documentation
 
-> Server-first TypeScript backend platform
+> PostgreSQL-native TypeScript application compiler and runtime
 
-QUESTPIE helps you model schema, access, and workflows once, then uses introspection to project APIs, realtime streams, typed clients, and interfaces from the same server model.
+QUESTPIE compiles TypeScript application definitions into one deterministic Compiled Manifest, one executable Runtime, and one concrete App Contract.
 
 ## Documentation Surfaces
 
@@ -72,10 +69,11 @@ QUESTPIE helps you model schema, access, and workflows once, then uses introspec
 ${sections.join("\n")}
 ## Architecture Notes
 
-- Schema is the source of truth for data and behavior.
-- Introspection is the contract between server model and interfaces.
-- Runtime projections expose REST, routes, realtime, and typed clients.
-- Interfaces (admin and custom apps) resolve these projections via registries.
+- The Compiled Manifest is desired application state.
+- Each resource has stable identity, one Owner, and a recorded Origin.
+- PostgreSQL is part of the v4.0 product contract.
+- Runtime merge order cannot change the application shape.
+- Studio is an operational inspector, not a CMS Admin or Operator App framework.
 `;
 }
 

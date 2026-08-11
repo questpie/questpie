@@ -1,0 +1,74 @@
+---
+title: QUESTPIE v4
+description: The PostgreSQL-native Static Application Compiler and Runtime for TypeScript.
+kind: guide
+---
+
+QUESTPIE v4 combines an open, self-hostable Static Application Compiler with a
+PostgreSQL-native QUESTPIE Runtime. It compiles Definitions into one
+deterministic Compiled Manifest, one executable application, and one concrete
+App Contract.
+
+## The product
+
+QUESTPIE owns the application semantics between TypeScript source and
+PostgreSQL. It owns Operation execution, transactions, Policy, durable change
+capture, Live Query recomputation, generated clients, Migrations, and Runtime
+observability.
+
+## Static application composition
+
+Every Resource has a stable Resource Identity, one Owner, and a recorded Origin.
+A Package can add an authorized Augmentation. Import order cannot change the
+application shape. The compiler rejects a duplicate Resource Identity and an
+unauthorized change. Installing a Package does not activate its composition.
+
+The compiler produces a readable Compiled Manifest and a concrete App Contract.
+Application types do not expose Drizzle, Kysely, or a recursive generic
+builder state.
+
+[Compose Definitions and Packages](./definition-composition)
+
+## PostgreSQL is part of the contract
+
+QUESTPIE uses PostgreSQL transactions, Constraints, Indexes, change capture,
+and durable coordination directly. QUESTPIE v4.0 runs only on PostgreSQL.
+Applications can run on local PostgreSQL or a managed service that passes the
+QUESTPIE provider profile.
+
+The schema workflow has three explicit facts:
+
+- The Compiled Manifest is the desired state.
+- Committed migrations are the reviewed history.
+- The Schema Fingerprint is the actual database state.
+
+The workflow is compile, plan, review, commit, apply, and verify Drift.
+QUESTPIE does not push an unrecorded schema.
+
+[Define data and use the schema lifecycle](./schema-lifecycle)
+
+## Operations and realtime
+
+QUESTPIE distinguishes Query, Mutation, Action, and Route.
+
+A Mutation owns its PostgreSQL transaction and can add durable work to the same
+commit. For one Live Query, the Runtime records the supported reads that the
+handler actually executes. These reads include Policy, tenancy, Relations,
+ordering, and pagination. After a relevant committed change, the Runtime
+recomputes the authorized result and updates that query on the generated client.
+
+## Studio
+
+Studio is the optional operational interface for a compiled application. It
+shows the Compiled Manifest, Origins, migration Drift, Operations, Policy decisions,
+transactions, durable dispatch, jobs, workflows, realtime state, logs, traces,
+and audit history.
+
+Studio is not a CMS, page builder, SQL console, or framework for custom Operator
+Apps. An Operator App remains an application in userland and uses the same
+generated client.
+
+## Auth boundary
+
+QUESTPIE owns Principal, Tenant, Authority, and Policy. Credential authentication is
+an integration that resolves a trusted request or token into a Principal.

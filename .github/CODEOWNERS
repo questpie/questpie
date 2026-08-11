@@ -1,24 +1,5 @@
-# Every PR needs a maintainer review. More specific rules below win.
-*                               @drepkovsky
-
-# Gates and release machinery — a change here changes what CI is allowed to let
-# through, so it should never be an incidental part of a feature PR.
-/.github/workflows/             @drepkovsky
-/scripts/                       @drepkovsky
-/.changeset/config.json         @drepkovsky
-/.oxlintrc.json                 @drepkovsky
-/.oxfmtrc.json                  @drepkovsky
-
-# Ratchet baselines. Moving one of these is a deliberate act that belongs in the
-# PR description, not a silent re-baseline.
-/scripts/any-census.json        @drepkovsky
-/scripts/type-budget.json       @drepkovsky
-/scripts/size-budget.json       @drepkovsky
-/scripts/example-errors.json    @drepkovsky
-
-# Security-sensitive surfaces.
-/SECURITY.md                    @drepkovsky
-/packages/sandbox/              @drepkovsky
-/packages/mcp/                  @drepkovsky
-/packages/questpie/src/server/modules/core/integrated/auth/     @drepkovsky
-/packages/questpie/src/server/modules/oauth/                    @drepkovsky
+*                  @drepkovsky
+/.github/workflows/ @drepkovsky
+/SECURITY.md        @drepkovsky
+/SPEC.md            @drepkovsky
+/docs/adr/          @drepkovsky

@@ -1,0 +1,169 @@
+/* ============================================================================
+   QUESTPIE — shadcn.css
+   The Tailwind v4 bridge. Import AFTER `@import "tailwindcss"` and after
+   colors/typography/geometry, then every shadcn/ui component in the consuming
+   app inherits this system with no component edits.
+
+       @import "tailwindcss";
+       @import "./tokens/styles.css";   — that entry includes this file
+
+WHY EVERY ENTRY IS `var(--x)` AND NOT A LITERAL
+   `@theme inline` resolves at the USE SITE, so a consumer override in any later
+   rule wins with no rebuild. This is the public theming API: change
+   `--primary` once and every `bg-primary`, `ring-primary`, `text-primary`
+   follows, in both themes.
+
+   WHY RADII ARE BRIDGED ONTO ROLE NAMES
+   Tailwind owns `--radius-sm|md|lg|xl`. Declaring those in an unlayered :root
+   silently reshapes `rounded-*` for every consumer (including fumadocs-ui
+   chrome in the docs app). So the canon radii live under product-neutral names
+   (`--radius-inner|control|object|panel|sheet`) and the Tailwind keys are bridged
+   onto the WHITELABEL knobs (`--control-radius`, `--surface-radius`,
+   `--floating-radius`) — override the knob and every utility follows.
+   ============================================================================ */
+
+@theme inline {
+	/* ── fonts ─────────────────────────────────────────────────────────────── */
+	--font-sans: var(--font-sans);
+	--font-display: var(--font-display);
+	--font-mono: var(--font-mono);
+	--font-serif: var(--font-accent);
+
+	/* ── shadcn standard colour keys ───────────────────────────────────────── */
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--color-card: var(--card);
+	--color-card-foreground: var(--card-foreground);
+	--color-popover: var(--popover);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-secondary: var(--secondary);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-muted: var(--muted);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-accent: var(--accent);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-destructive: var(--destructive);
+	--color-destructive-foreground: var(--destructive-foreground);
+	--color-border: var(--border);
+	--color-input: var(--input);
+	--color-ring: var(--ring);
+	--color-chart-1: var(--chart-1);
+	--color-chart-2: var(--chart-2);
+	--color-chart-3: var(--chart-3);
+	--color-chart-4: var(--chart-4);
+	--color-chart-5: var(--chart-5);
+	--color-sidebar: var(--sidebar);
+	--color-sidebar-foreground: var(--sidebar-foreground);
+	--color-sidebar-primary: var(--sidebar-primary);
+	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+	--color-sidebar-accent: var(--sidebar-accent);
+	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+	--color-sidebar-border: var(--sidebar-border);
+	--color-sidebar-ring: var(--sidebar-ring);
+
+	/* ── extensions: real distinctions shadcn has no slot for ──────────────── */
+	--color-primary-text: var(--primary-text);
+	--color-primary-tint: var(--primary-tint);
+	--color-foreground-muted: var(--foreground-muted);
+	--color-foreground-subtle: var(--foreground-subtle);
+	--color-foreground-faint: var(--foreground-faint);
+	--color-surface: var(--surface);
+	--color-surface-low: var(--surface-low);
+	--color-surface-mid: var(--surface-mid);
+	--color-surface-high: var(--surface-high);
+	--color-surface-highest: var(--surface-highest);
+	--color-border-subtle: var(--border-subtle);
+	--color-border-strong: var(--border-strong);
+	--color-success: var(--success);
+	--color-success-surface: var(--success-surface);
+	--color-warning: var(--warning);
+	--color-warning-surface: var(--warning-surface);
+	--color-mark-ink: var(--mark-ink);
+
+	/* NOT bridged on purpose: --coral and --identity-*. It is reachable from hand-written CSS but
+	   has no utility, so the raw brand hue cannot be sprayed onto a surface with a
+	   class. Coral is action, never decoration. */
+
+	/* ── radii — bridged onto the whitelabel knobs, never the canon roles ──── */
+	--radius-xs: var(--control-radius-inner);
+	--radius-sm: var(--control-radius-inner);
+	--radius-md: var(--control-radius);
+	--radius-lg: var(--surface-radius);
+	--radius-xl: var(--surface-radius);
+	--radius-2xl: var(--radius-panel);
+	--radius-3xl: var(--radius-sheet);
+	--radius-full: var(--radius-round);
+
+	/* ── shadows ───────────────────────────────────────────────────────────── */
+	--shadow-xs: var(--elevation-flat);
+	--shadow-sm: var(--elevation-soft);
+	--shadow: var(--elevation-soft);
+	--shadow-md: var(--elevation-raised);
+	--shadow-lg: var(--elevation-floating);
+	--shadow-xl: var(--elevation-floating);
+	--shadow-2xl: var(--elevation-sheet);
+
+	/* ── type scale (product) ──────────────────────────────────────────────── */
+	--text-2xs: var(--type-2xs);
+	--text-xs: var(--type-xs);
+	--text-sm: var(--type-sm);
+	--text-base: var(--type-base);
+	--text-md: var(--type-md);
+	--text-lg: var(--type-lg);
+	--text-xl: var(--type-xl);
+	--text-2xl: var(--type-2xl);
+	--text-3xl: var(--type-3xl);
+
+	/* ── display roles (marketing only) ────────────────────────────────────── */
+	--text-display-xl: var(--display-xl);
+	--text-display-xl--line-height: 0.94;
+	--text-display-xl--font-weight: 700;
+	--text-display-xl--letter-spacing: -0.035em;
+	--text-display-l: var(--display-l);
+	--text-display-l--line-height: 0.98;
+	--text-display-l--font-weight: 700;
+	--text-display-l--letter-spacing: -0.035em;
+	--text-display-m: var(--display-m);
+	--text-display-m--line-height: 1.02;
+	--text-display-m--font-weight: 700;
+	--text-display-m--letter-spacing: -0.03em;
+	--text-lead: var(--lead-size);
+	--text-lead--line-height: 1.62;
+	--text-lead--font-weight: 450;
+	--text-eyebrow: var(--eyebrow-size);
+	--text-eyebrow--line-height: 1.27;
+	--text-eyebrow--font-weight: 600;
+	--text-eyebrow--letter-spacing: 0.12em;
+
+	/* ── spacing, sizes, motion ────────────────────────────────────────────── */
+	--spacing-input: var(--spacing-input);
+	--spacing-card: var(--spacing-card);
+	--spacing-panel: var(--spacing-panel);
+	--height-control: var(--control-default);
+	--height-control-sm: var(--control-compact);
+	--height-control-lg: var(--control-large);
+	--container-content: var(--content-max);
+	--container-app: var(--app-max);
+	--animate-duration-fast: var(--duration-fast);
+	--animate-duration-base: var(--duration-base);
+	--ease-standard: var(--ease-standard);
+	--ease-enter: var(--ease-enter);
+}
+
+/* ── fumadocs bridge ────────────────────────────────────────────────────────
+   Only the DELTAS: fumadocs already maps its --color-fd-* names onto the shadcn
+   names above. One :root is enough because every value is a var() indirection,
+   so it re-resolves per theme on whatever element carries the theme class. */
+:root {
+	--color-fd-border: var(--border-subtle);
+	--color-fd-overlay: var(--scrim);
+	--color-fd-info: var(--foreground-muted);
+	--color-fd-warning: var(--warning);
+	--color-fd-error: var(--destructive);
+	--color-fd-success: var(--success);
+	/* "idea" must stay separable from "info", and coral is action or agent
+	   provenance — never editorial decoration. */
+	--color-fd-idea: var(--foreground);
+}

@@ -21,16 +21,10 @@ import { Logo } from "@/components/Logo";
 /** Where someone who landed here actually wants to go. */
 const WAYS_OUT = [
 	{
-		label: "Documentation",
-		href: "/docs",
-		note: "Nine groups, starting at Learn.",
+		label: "QUESTPIE v4",
+		href: "/docs/v4",
+		note: "Read the current product specification.",
 	},
-	{
-		label: "Framework",
-		href: "/framework",
-		note: "One schema, the rest derived.",
-	},
-	{ label: "Autopilot", href: "/autopilot", note: "Agents on the team." },
 ];
 
 export function ErrorPage({
@@ -68,7 +62,7 @@ export function ErrorPage({
 				) : null}
 				{action ? <div className="mt-8">{action}</div> : null}
 
-				<nav className="mt-14 grid gap-3 text-start sm:grid-cols-3">
+				<nav className="mx-auto mt-14 max-w-sm text-start">
 					{WAYS_OUT.map((way) => (
 						<Link
 							className="group rounded-[var(--surface-radius,0.75rem)] border border-[var(--border-subtle)] bg-[var(--card)] p-4 no-underline transition-colors hover:border-[var(--primary)]"

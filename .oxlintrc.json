@@ -10,6 +10,7 @@
 		"jsx-a11y/prefer-tag-over-role": "off",
 		"react/react-in-jsx-scope": "off",
 		"eslint/no-unused-vars": "warn",
+		"eslint/no-underscore-dangle": ["warn", { "allow": ["_splat"] }],
 		"eslint/no-shadow": "off",
 		"unicorn/consistent-function-scoping": "off",
 		"unicorn/no-array-sort": "off",
@@ -24,26 +25,5 @@
 		"jsx-a11y/label-has-associated-control": "warn",
 		"jsx-a11y/iframe-has-title": "warn"
 	},
-	"ignorePatterns": ["dist", ".next", ".generated", "node_modules", "*.min.js"],
-	"overrides": [
-		{
-			// Zero-any packages stay zero-any (see scripts/any-census.ts).
-			// hono/elysia/next still carry generic `<any>` wildcard
-			// instantiations — add them here once those are typed.
-			"files": ["packages/workflows/src/**"],
-			"rules": {
-				"typescript/no-explicit-any": "error"
-			}
-		},
-		{
-			// Type-level tests (`.test-d.ts`) assert types, not values. A bare
-			// expression statement under `// @ts-expect-error` IS the assertion —
-			// it exists to make tsc raise an error, and has no runtime purpose.
-			// `no-unused-expressions` cannot see that and flags every one.
-			"files": ["**/*.test-d.ts"],
-			"rules": {
-				"eslint/no-unused-expressions": "off"
-			}
-		}
-	]
+	"ignorePatterns": [".output", "node_modules", "*.min.js"]
 }

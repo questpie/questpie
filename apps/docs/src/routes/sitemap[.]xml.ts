@@ -100,27 +100,6 @@ async function generateSitemap(
     <priority>1.0</priority>
   </url>`);
 
-	urlEntries.push(`  <url>
-    <loc>${baseUrl}/docs</loc>
-    <lastmod>${now.split("T")[0]}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>`);
-
-	const staticPages = [
-		{ path: "/autopilot", priority: 0.9, changefreq: "weekly" },
-		{ path: "/framework", priority: 0.9, changefreq: "weekly" },
-	];
-
-	for (const sp of staticPages) {
-		urlEntries.push(`  <url>
-    <loc>${baseUrl}${sp.path}</loc>
-    <lastmod>${now.split("T")[0]}</lastmod>
-    <changefreq>${sp.changefreq}</changefreq>
-    <priority>${sp.priority.toFixed(1)}</priority>
-  </url>`);
-	}
-
 	for (const page of pages) {
 		const { priority, changefreq } = getPagePriority(page.slugs);
 		const lastmod = await getGitLastModified(page.slugs.join("/"));

@@ -1,46 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
-
-import { MarketingChrome } from "@/components/marketing/chrome";
-import { Landing } from "@/components/marketing/landing";
-import {
-	generateJsonLd,
-	generateLinks,
-	generateMeta,
-	siteConfig,
-} from "@/lib/seo";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/")({
-	component: LandingPage,
-	head: () => ({
-		links: generateLinks({
-			url: siteConfig.url,
-			includeIcons: false,
-			includePreconnect: false,
-		}),
-		meta: generateMeta({
-			title: siteConfig.title,
-			description: siteConfig.description,
-			url: siteConfig.url,
-		}),
-		scripts: [
-			{
-				type: "application/ld+json",
-				children: JSON.stringify(generateJsonLd()),
-			},
-		],
-	}),
-	headers: () => ({
-		"Cache-Control":
-			"public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800",
-	}),
-	staleTime: 60 * 60_000,
-	gcTime: 2 * 60 * 60_000,
+	beforeLoad: () => {
+		throw redirect({ to: "/docs/$", params: { _splat: "v4" } });
+	},
 });
-
-function LandingPage() {
-	return (
-		<MarketingChrome page="home">
-			<Landing />
-		</MarketingChrome>
-	);
-}

@@ -27,6 +27,7 @@ out/
 build
 dist
 .output
+output/
 uploads
 
 # Build artifacts in test dirs (tsdown incremental)

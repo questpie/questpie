@@ -3,25 +3,14 @@
 	"ui": "tui",
 	"tasks": {
 		"build": {
-			"dependsOn": ["^build"],
 			"inputs": ["$TURBO_DEFAULT$", ".env*"],
-			"outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+			"outputs": [".output/**"]
 		},
 		"lint": {
 			"dependsOn": ["^lint"]
 		},
-		"check-types": {
+		"types:check": {
 			"dependsOn": ["^build"]
-		},
-		"test": {
-			"dependsOn": ["^build", "build"],
-			"cache": false,
-			"env": ["QUESTPIE_MIGRATIONS_SILENT"]
-		},
-		"questpie:generate": {
-			"dependsOn": ["^questpie:generate"],
-			"inputs": ["$TURBO_DEFAULT$"],
-			"outputs": ["**/.generated/**"]
 		},
 		"dev": {
 			"cache": false,

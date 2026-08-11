@@ -10,9 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AutopilotRouteImport } from './routes/autopilot'
 import { Route as FaviconDoticoRouteImport } from './routes/favicon[.]ico'
-import { Route as FrameworkRouteImport } from './routes/framework'
 import { Route as LlmsFullDottxtRouteImport } from './routes/llms-full[.]txt'
 import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
 import { Route as RssDotxmlRouteImport } from './routes/rss[.]xml'
@@ -26,19 +24,9 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AutopilotRoute = AutopilotRouteImport.update({
-  id: '/autopilot',
-  path: '/autopilot',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const FaviconDoticoRoute = FaviconDoticoRouteImport.update({
   id: '/favicon.ico',
   path: '/favicon.ico',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FrameworkRoute = FrameworkRouteImport.update({
-  id: '/framework',
-  path: '/framework',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LlmsFullDottxtRoute = LlmsFullDottxtRouteImport.update({
@@ -79,9 +67,7 @@ const LlmsDotmdxDocsSplatRoute = LlmsDotmdxDocsSplatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/autopilot': typeof AutopilotRoute
   '/favicon.ico': typeof FaviconDoticoRoute
-  '/framework': typeof FrameworkRoute
   '/llms-full.txt': typeof LlmsFullDottxtRoute
   '/llms.txt': typeof LlmsDottxtRoute
   '/rss.xml': typeof RssDotxmlRoute
@@ -92,9 +78,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/autopilot': typeof AutopilotRoute
   '/favicon.ico': typeof FaviconDoticoRoute
-  '/framework': typeof FrameworkRoute
   '/llms-full.txt': typeof LlmsFullDottxtRoute
   '/llms.txt': typeof LlmsDottxtRoute
   '/rss.xml': typeof RssDotxmlRoute
@@ -106,9 +90,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/autopilot': typeof AutopilotRoute
   '/favicon.ico': typeof FaviconDoticoRoute
-  '/framework': typeof FrameworkRoute
   '/llms-full.txt': typeof LlmsFullDottxtRoute
   '/llms.txt': typeof LlmsDottxtRoute
   '/rss.xml': typeof RssDotxmlRoute
@@ -121,9 +103,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/autopilot'
     | '/favicon.ico'
-    | '/framework'
     | '/llms-full.txt'
     | '/llms.txt'
     | '/rss.xml'
@@ -134,9 +114,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/autopilot'
     | '/favicon.ico'
-    | '/framework'
     | '/llms-full.txt'
     | '/llms.txt'
     | '/rss.xml'
@@ -147,9 +125,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/autopilot'
     | '/favicon.ico'
-    | '/framework'
     | '/llms-full.txt'
     | '/llms.txt'
     | '/rss.xml'
@@ -161,9 +137,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AutopilotRoute: typeof AutopilotRoute
   FaviconDoticoRoute: typeof FaviconDoticoRoute
-  FrameworkRoute: typeof FrameworkRoute
   LlmsFullDottxtRoute: typeof LlmsFullDottxtRoute
   LlmsDottxtRoute: typeof LlmsDottxtRoute
   RssDotxmlRoute: typeof RssDotxmlRoute
@@ -182,25 +156,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/autopilot': {
-      id: '/autopilot'
-      path: '/autopilot'
-      fullPath: '/autopilot'
-      preLoaderRoute: typeof AutopilotRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/favicon.ico': {
       id: '/favicon.ico'
       path: '/favicon.ico'
       fullPath: '/favicon.ico'
       preLoaderRoute: typeof FaviconDoticoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/framework': {
-      id: '/framework'
-      path: '/framework'
-      fullPath: '/framework'
-      preLoaderRoute: typeof FrameworkRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/llms-full.txt': {
@@ -257,9 +217,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AutopilotRoute: AutopilotRoute,
   FaviconDoticoRoute: FaviconDoticoRoute,
-  FrameworkRoute: FrameworkRoute,
   LlmsFullDottxtRoute: LlmsFullDottxtRoute,
   LlmsDottxtRoute: LlmsDottxtRoute,
   RssDotxmlRoute: RssDotxmlRoute,

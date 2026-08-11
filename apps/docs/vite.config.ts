@@ -6,16 +6,11 @@ import mdx from "fumadocs-mdx/vite";
 import { nitro } from "nitro/vite";
 import { defineConfig, type PluginOption } from "vite";
 
-import { iconifyPreload } from "@questpie/vite-plugin-iconify";
-
 export default defineConfig({
 	server: {
 		port: 3000,
 	},
 	plugins: [
-		iconifyPreload({
-			scan: ["src/**/*.{ts,tsx}", "../../packages/admin/src/**/*.{ts,tsx}"],
-		}),
 		mdx(await import("./source.config")),
 		nitro({ preset: "bun" }) as unknown as PluginOption,
 		tailwindcss(),

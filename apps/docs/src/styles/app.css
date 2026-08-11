@@ -2,12 +2,8 @@
 @import "fumadocs-ui/css/shadcn.css";
 @import "fumadocs-ui/css/preset.css";
 
-/* Import order is load-bearing. Tailwind first, then fumadocs, then the canon —
-   the canon has to win over what fumadocs presets, and both have to lose to a
-   page-level override. marketing.css reads token variables, so it comes last. */
-@import "@questpie/tokens/styles.css";
-@import "@questpie/tokens/tokens/mesh.css";
-@import "./marketing.css";
+@import "./tokens/styles.css";
+@import "./tokens/tokens/mesh.css";
 
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -1031,7 +1027,7 @@ figure.shiki [role="tab"][data-state="active"] {
 
 /* Content links carry the accent. Chrome links do not.
  *
- * `@questpie/tokens` used to colour every `a` in the document, from an
+ * The former shared token package coloured every `a` in the document, from an
  * unlayered file, so it beat the utility classes fumadocs puts on its own
  * links. Every sidebar item came out coral and the active one had nothing left
  * to distinguish it. The token package now leaves the decision here, which is

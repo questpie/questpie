@@ -14,12 +14,7 @@ WORKDIR /app
 # crashes during browser hydration.
 COPY . .
 
-RUN bun install --frozen-lockfile \
-	--filter @questpie/docs \
-	--filter @questpie/vite-plugin-iconify
-
-# Build workspace dependencies first (vite-plugin-iconify dist/ is gitignored)
-RUN bun run --filter @questpie/vite-plugin-iconify build
+RUN bun install --frozen-lockfile --filter @questpie/docs
 
 # Build docs app
 WORKDIR /app/apps/docs

@@ -11,9 +11,9 @@ export const Route = createFileRoute("/llms-full.txt")({
 				const scanned = await Promise.all(scan);
 				const intro = `# QUESTPIE Documentation (Full Corpus)
 
-> Server-first TypeScript backend platform
+> PostgreSQL-native TypeScript application compiler and runtime
 
-QUESTPIE models schema, access, and workflows on the server, emits introspection, and projects APIs plus interfaces from one source of truth.`;
+QUESTPIE compiles TypeScript application definitions into one deterministic Compiled Manifest, one executable Runtime, and one concrete App Contract.`;
 
 				return new Response(`${intro}\n\n${scanned.join("\n\n")}`, {
 					headers: {

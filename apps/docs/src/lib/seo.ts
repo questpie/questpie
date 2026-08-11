@@ -1,41 +1,23 @@
-/**
- * SEO configuration and helpers for QUESTPIE docs + landing
- */
+/** SEO configuration and helpers for QUESTPIE v4 documentation. */
 
 export const siteConfig = {
 	name: "QUESTPIE",
-	/* The title the landing itself carries, and the one the accepted kit specifies.
-	   What it replaces — "Open-source TypeScript application framework" — is a
-	   category any competitor could paste unchanged, and it sold only the
-	   framework while the page's first screen is about staffing agents. */
-	title: "QUESTPIE: software you can staff",
+	title: "QUESTPIE v4 Documentation",
 	description:
-		"An AI agent joins the way a person does: a role, permissions, its own name on the work. On an open-source TypeScript framework you run yourself.",
+		"An open, self-hostable, PostgreSQL-native application compiler and runtime for TypeScript.",
 	url: "https://questpie.com",
 	ogImage: "/og-questpie.png",
 	twitterHandle: "@questpie",
 	githubUrl: "https://github.com/questpie/questpie",
 	keywords: [
 		"questpie",
-		"typescript backend platform",
-		"server-first typescript",
-		"schema introspection",
-		"introspection contract",
-		"runtime projections",
-		"typed rest api",
-		"field builder",
-		"registry-first",
-		"typed routes",
-		"realtime sse",
-		"typed client sdk",
-		"admin framework",
-		"typescript backend framework",
-		"headless backend",
-		"hono",
-		"elysia",
-		"nextjs adapter",
-		"drizzle orm",
-		"application framework",
+		"postgresql application runtime",
+		"typescript application compiler",
+		"transactional backend",
+		"live query",
+		"durable execution",
+		"generated typescript client",
+		"self-hosted backend",
 	],
 } as const;
 
@@ -364,29 +346,14 @@ export function generateBreadcrumbJsonLd(items: BreadcrumbItem[]) {
 }
 
 export const sectionLabels: Record<string, string> = {
-	"start-here": "Start Here",
-	backend: "Build Your Backend",
-	workspace: "Admin Workspace",
-	frontend: "Client Integration",
-	production: "Production",
-	extend: "Extend",
-	examples: "Examples",
-	reference: "API Reference",
-	"getting-started": "Getting Started",
-	server: "Server",
-	client: "Client",
-	admin: "Admin",
-	infrastructure: "Infrastructure",
-	guides: "Guides",
-	migration: "Migration",
-	mentality: "Architecture",
+	v4: "QUESTPIE v4",
 };
 
 export function buildBreadcrumbs(
 	slugs: string[],
 	pageTitle: string,
 ): BreadcrumbItem[] {
-	const items: BreadcrumbItem[] = [{ name: "Docs", url: "/docs" }];
+	const items: BreadcrumbItem[] = [{ name: "Docs", url: "/docs/v4" }];
 
 	if (slugs.length === 0) return items;
 

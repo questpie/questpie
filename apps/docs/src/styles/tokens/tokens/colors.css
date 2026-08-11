@@ -1,0 +1,263 @@
+/* ============================================================================
+   QUESTPIE — colors.css
+   Warm Acid palette. Dark-first; `.light` is an equal pair, not an afterthought.
+
+   COLOUR SPACE: every value is oklch. Lightness is perceptual, so the surface and
+   ink ladders step evenly by eye (not by hex arithmetic), chroma stays constant
+   across a hue family, and a whitelabel can rotate the hue by changing ONE number.
+   The sRGB hex the value came from is kept in a trailing comment for handoff to
+   tools that still need it.
+
+   NAMING: shadcn variable system, so documentation components and any
+   shadcn/ui consumer re-skin by swapping this one file. Extensions below the
+   shadcn block are genuine distinctions shadcn has no slot for.
+
+   SEMANTICS (non-negotiable):
+     --primary  #f26a45 = ACTION. ONE value, both themes. A coral fill carries
+                         WHITE semibold type at 16px or larger (3.1:1 = AA large).
+                         Smaller actions do NOT get a coral fill — they get
+                         --primary-tint with --primary-text on top, which is AA at
+                         any size. Two recipes, one colour, no second coral.
+     --primary-text     = coral as type: links, coral labels, tinted buttons.
+
+   HOW FEW COLOURS: per theme there are ~16 real values — five warm surface steps,
+   four inks, two hairlines, one coral (plus its type and tint step), two status
+   hues and one destructive gold. Every other name in this file, including the whole
+   shadcn slot list and all five chart slots, is a var() ALIAS onto one of those.
+   If you need a colour that is not here, you are almost certainly reaching for a
+   surface step or a label.
+
+   THERE IS NO AGENT COLOUR. It was tried twice — first as acid lime, then as a
+   coral tint — and both times it gave coral a second meaning. Who did the work is
+   told by the AVATAR (a coral tile with white initials for an agent, exactly like
+   the fourth seat in the mark; neutral for a person) and by the sentence next to
+   it ("agent Ada · role Accounting"). The chip carries the STATE, in words, in
+   neutral. Colour never carries provenance on its own.
+     --mark-ink         = the ink inside the brand tile. WHITE, in both themes —
+                         the same white a coral button carries, so the mark and the
+                         action are cut from one material. Three seats sit at 40%
+                         of it, the fourth is solid.
+     --agent           = AGENT / AUTOMATION provenance — the SAME coral hue as a
+                         tint plus a mono label, never a second brand hue.
+   ONE accent. A second brand colour was tried (acid lime) and rejected: it read
+   as a status light and fought the warm palette. Human vs agent is told by
+   NEUTRAL vs CORAL, and always with a written label — never by hue alone.
+
+   THEME CONTRACT: put the class on <html>:
+     document.documentElement.classList.toggle("dark", isDark);
+     document.documentElement.classList.toggle("light", !isDark);
+   No class resolves to dark (the product default).
+   ============================================================================ */
+
+:root,
+.dark {
+	color-scheme: dark;
+
+	/* ── shadcn standard ───────────────────────────────────────────────────── */
+	--background: oklch(17.43% 0.0069 78.1); /* #12100d */
+	--foreground: oklch(95.96% 0.0131 82.4); /* #f6f1e8 */
+	--card: oklch(21.14% 0.0075 67.4); /* #1b1815 */
+	--card-foreground: var(--foreground);
+	--popover: var(--surface-mid);
+	--popover-foreground: var(--foreground);
+	--primary: oklch(68.55% 0.1759 36.1); /* #f26a45 */
+	--primary-foreground: oklch(100% 0 0); /* #ffffff */
+	--secondary: var(--surface-mid);
+	--secondary-foreground: var(--foreground);
+	--muted: var(--surface-mid);
+	--muted-foreground: oklch(74.83% 0.0252 79.7); /* #b6ac9c */
+	--accent: var(--surface-high);
+	--accent-foreground: var(--foreground);
+	--destructive: oklch(83.97% 0.1147 81.7); /* #f0c36f */
+	--destructive-foreground: oklch(22.96% 0.0098 67.3); /* #201c18 */
+	--border: oklch(26.79% 0.0131 72.3); /* #2a251f */
+	--input: var(--border-subtle);
+	--ring: oklch(68.55% 0.1759 36.1); /* #f26a45 */
+
+	--chart-1: var(--primary);
+	--chart-2: var(--primary-text);
+	--chart-3: var(--warning);
+	--chart-4: var(--success);
+	--chart-5: var(--foreground-subtle);
+
+	--sidebar: oklch(19.01% 0.0102 67.1); /* #17130f */
+	--sidebar-foreground: var(--foreground);
+	--sidebar-primary: var(--primary);
+	--sidebar-primary-foreground: var(--primary-foreground);
+	--sidebar-accent: var(--surface-mid);
+	--sidebar-accent-foreground: var(--foreground);
+	--sidebar-border: var(--border-subtle);
+	--sidebar-ring: var(--ring);
+
+	/* ── ink ladder ────────────────────────────────────────────────────────── */
+	--foreground-muted: var(--muted-foreground);
+	--foreground-subtle: oklch(59.37% 0.0234 79); /* #867d6f */
+	--foreground-faint: oklch(46.11% 0.0202 75.9); /* #5f574c */
+	--foreground-disabled: var(--foreground-faint);
+
+	/* ── surface ladder — canvas → card → mid → high → highest ─────────────── */
+	--surface: oklch(19.01% 0.0102 67.1); /* #17130f */
+	--surface-low: oklch(21.14% 0.0075 67.4); /* #1b1815 */
+	--surface-mid: oklch(22.96% 0.0098 67.3); /* #201c18 */
+	--surface-high: oklch(26.79% 0.0131 72.3); /* #2a251f */
+	--surface-highest: oklch(29.73% 0.0151 71.5); /* #322c25 */
+
+	/* ── hairlines ─────────────────────────────────────────────────────────── */
+	--border-subtle: oklch(24.32% 0.012 67.2); /* #241f1a */
+	--border-strong: oklch(38.01% 0.0151 67.3); /* #48413a */
+
+	/* ── action (coral) ────────────────────────────────────────────────────── */
+	--coral: oklch(68.55% 0.1759 36.1); /* #f26a45 */
+	--mark-ink: oklch(100% 0 0); /* #ffffff */
+	--primary-hover: oklch(73.55% 0.149 39); /* #f7855f */
+	--primary-active: oklch(61.63% 0.1749 36.1); /* #d9542f */
+	/* coral as TEXT. The fill above is AA with ink on top, but coral type on a
+	   dark or paper background is not — links, coral labels and coral icons use
+	   this step instead. */
+	--primary-text: oklch(77.53% 0.126 42.9); /* #f99a73 */
+	--primary-tint: color-mix(in srgb, var(--coral) 16%, transparent);
+
+	/* ── agent provenance — coral, quieter than an action ──────────────────── */
+	--agent-ink: oklch(77.53% 0.126 42.9); /* #f99a73 */
+	--agent-tint: color-mix(in srgb, var(--coral) 14%, transparent);
+	--agent-border: color-mix(in srgb, var(--coral) 30%, transparent);
+	/* work done by a PERSON is neutral. This is the other half of the rule. */
+	--human-tint: var(--surface-high);
+	--human-ink: var(--foreground-muted);
+
+	/* ── status — colour never carries meaning alone, always with a label ──── */
+	--success: oklch(78.76% 0.1269 147.5); /* #7fd08a */
+	--success-foreground: oklch(17.43% 0.0069 78.1); /* #12100d */
+	--success-surface: color-mix(in srgb, var(--success) 14%, var(--card));
+	--success-border: color-mix(in srgb, var(--success) 34%, var(--card));
+	--warning: oklch(80% 0.1231 79.2); /* #e8b45a */
+	--warning-foreground: oklch(17.43% 0.0069 78.1); /* #12100d */
+	--warning-surface: color-mix(in srgb, var(--warning) 14%, var(--card));
+	--warning-border: color-mix(in srgb, var(--warning) 36%, var(--card));
+
+	/* ── identity tints — AVATARS ONLY ─────────────────────────────────────────
+	   The single exception to "one accent". An avatar needs to be
+	   recognisable at a glance in a list of twenty rows, and a name-hash into
+	   three warm gradients does that without adding a hue to the UI. Agents do
+	   NOT get one: an agent avatar is the coral tile, like the fourth seat in the
+	   mark. Never use an identity tint on a surface, a chip, a border or a chart. */
+	--identity-1: linear-gradient(135deg, oklch(58% 0.09 62), oklch(74% 0.09 72));
+	--identity-2: linear-gradient(135deg, oklch(52% 0.08 18), oklch(68% 0.08 28));
+	--identity-3: linear-gradient(
+		135deg,
+		oklch(54% 0.06 128),
+		oklch(72% 0.07 122)
+	);
+	--identity-ink: oklch(100% 0 0);
+
+	/* ── misc ──────────────────────────────────────────────────────────────── */
+	--focus-ring: var(--primary);
+	--sidebar-submenu: color-mix(in oklab, var(--surface-mid) 55%, transparent);
+	--selection: color-mix(in srgb, var(--coral) 26%, transparent);
+	--scrim: oklch(11.61% 0.0044 70.6 / 0.72);
+}
+
+.light {
+	color-scheme: light;
+
+	/* ── shadcn standard ───────────────────────────────────────────────────── */
+	--background: oklch(98.25% 0.0057 84.6); /* #fbf9f5 */
+	--foreground: oklch(21.89% 0.0065 78.2); /* #1c1a17 */
+	--card: oklch(100% 0 0); /* #ffffff */
+	--card-foreground: var(--foreground);
+	--popover: var(--surface-mid);
+	--popover-foreground: var(--foreground);
+	/* coral #f26a45 is the HUE; #c9481f is the AA-safe solid that carries white
+	   text. Light mode advances with the solid, never the hue. */
+	--primary: oklch(68.55% 0.1759 36.1); /* #f26a45 */
+	--primary-foreground: oklch(100% 0 0); /* #ffffff */
+	--secondary: var(--surface-mid);
+	--secondary-foreground: var(--foreground);
+	--muted: var(--surface-mid);
+	--muted-foreground: oklch(45.05% 0.019 73.4); /* #5c544a */
+	--accent: var(--surface-high);
+	--accent-foreground: var(--foreground);
+	--destructive: oklch(47.61% 0.0891 74.2); /* #7a5418 */
+	--destructive-foreground: oklch(100% 0 0); /* #ffffff */
+	--border: oklch(89.7% 0.0208 81.8); /* #e4dcce */
+	--input: var(--border-subtle);
+	--ring: oklch(68.55% 0.1759 36.1); /* #f26a45 */
+
+	--chart-1: var(--primary);
+	--chart-2: var(--primary-text);
+	--chart-3: var(--warning);
+	--chart-4: var(--success);
+	--chart-5: var(--foreground-subtle);
+
+	--sidebar: oklch(96.53% 0.0102 81.8); /* #f7f3ec */
+	--sidebar-foreground: var(--foreground);
+	--sidebar-primary: var(--primary);
+	--sidebar-primary-foreground: var(--primary-foreground);
+	--sidebar-accent: var(--surface-mid);
+	--sidebar-accent-foreground: var(--foreground);
+	--sidebar-border: var(--border-subtle);
+	--sidebar-ring: var(--ring);
+
+	/* ── ink ladder ────────────────────────────────────────────────────────── */
+	--foreground-muted: var(--muted-foreground);
+	--foreground-subtle: oklch(63.75% 0.0218 77.2); /* #938a7d */
+	--foreground-faint: oklch(79.27% 0.0207 77.3); /* #c3baad */
+	--foreground-disabled: var(--foreground-faint);
+
+	/* ── surface ladder ────────────────────────────────────────────────────── */
+	--surface: oklch(100% 0 0); /* #ffffff */
+	--surface-low: oklch(96.53% 0.0102 81.8); /* #f7f3ec */
+	--surface-mid: oklch(95.03% 0.0103 81.8); /* #f2eee7 */
+	--surface-high: oklch(92.69% 0.0149 80.7); /* #ece6dc */
+	--surface-highest: oklch(89.7% 0.0208 81.8); /* #e4dcce */
+
+	/* ── hairlines ─────────────────────────────────────────────────────────── */
+	--border-subtle: oklch(93.27% 0.0161 82.8); /* #eee8dd */
+	--border-strong: oklch(83.71% 0.0262 78.9); /* #d3c8b7 */
+
+	/* ── action (coral) ────────────────────────────────────────────────────── */
+	--coral: oklch(68.55% 0.1759 36.1); /* #f26a45 */
+	--mark-ink: oklch(100% 0 0); /* #ffffff */
+	--primary-hover: oklch(73.55% 0.149 39); /* #f7855f */
+	--primary-active: oklch(61.63% 0.1749 36.1); /* #d9542f */
+	--primary-tint: oklch(95.69% 0.0198 45.3); /* #fdede6 */
+	/* the AA-safe step for coral TYPE on paper (7.0:1 on --card) */
+	--primary-text: oklch(53.62% 0.1626 36.9); /* #b8401a */
+
+	/* ── agent provenance — coral tint, never a second hue ─────────────────── */
+	--agent-ink: oklch(53.62% 0.1626 36.9); /* #b8401a */
+	--agent-tint: oklch(95.69% 0.0198 45.3); /* #fdede6 */
+	--agent-border: oklch(87.63% 0.049 45.5); /* #f3cdbc */
+	--human-tint: var(--surface-high);
+	--human-ink: var(--foreground-muted);
+
+	/* ── status ────────────────────────────────────────────────────────────── */
+	--success: oklch(52.17% 0.0957 159.1); /* #2e7a55 */
+	--success-foreground: oklch(100% 0 0); /* #ffffff */
+	--success-surface: oklch(95.32% 0.0157 160.6); /* #e7f3ec */
+	--success-border: oklch(87.53% 0.0418 160.8); /* #bfdfcd */
+	--warning: oklch(60.33% 0.1179 76.1); /* #a9761b */
+	--warning-foreground: oklch(100% 0 0); /* #ffffff */
+	--warning-surface: oklch(96.14% 0.0249 81.1); /* #fbf1e0 */
+	--warning-border: oklch(88.3% 0.0648 85.4); /* #ecd6a8 */
+
+	/* ── identity tints — AVATARS ONLY ─────────────────────────────────────────
+	   The single exception to "one accent". An avatar needs to be
+	   recognisable at a glance in a list of twenty rows, and a name-hash into
+	   three warm gradients does that without adding a hue to the UI. Agents do
+	   NOT get one: an agent avatar is the coral tile, like the fourth seat in the
+	   mark. Never use an identity tint on a surface, a chip, a border or a chart. */
+	--identity-1: linear-gradient(135deg, oklch(58% 0.09 62), oklch(74% 0.09 72));
+	--identity-2: linear-gradient(135deg, oklch(52% 0.08 18), oklch(68% 0.08 28));
+	--identity-3: linear-gradient(
+		135deg,
+		oklch(54% 0.06 128),
+		oklch(72% 0.07 122)
+	);
+	--identity-ink: oklch(100% 0 0);
+
+	/* ── misc ──────────────────────────────────────────────────────────────── */
+	--focus-ring: var(--primary);
+	--selection: oklch(92.69% 0.0149 80.7); /* #ece6dc */
+	--scrim: oklch(21.89% 0.0065 78.2 / 0.5);
+}

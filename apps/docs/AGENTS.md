@@ -1,30 +1,26 @@
-# Documentation Authoring
+# Documentation authoring
 
 These rules apply to public documentation under `content/docs/`.
 
-## Reader contract
+## Source contract
 
-- Write for a developer learning or operating QUESTPIE, never for an agent inspecting the repository.
-- Explain what to use, how it works, and the contract readers can rely on.
-- Do not inventory missing helpers, rejected guesses, internal investigation paths, or symbols readers should not search for.
-- State API shapes positively. Prefer “Global queries expose `get` and `update`” over “Globals have no `find`”.
-- Keep real security, compatibility, and production constraints. Pair each constraint with its effect and the supported path.
+- Read the root `SPEC.md`, `CONTEXT.md`, and current ADRs before editing.
+- Public docs project accepted behavior. They do not create architecture.
+- Do not restore v3 modules, registries, adapters, Admin builders, or ORM types.
+- Do not introduce syntax for a product area that has not completed grilling.
 
-## Information architecture
+## Product voice
 
-Use this order for every capability:
+- Describe the product in the present tense.
+- State one behavior or instruction in one sentence.
+- Use one canonical name for one concept.
+- Use active voice and name the actor that changes the result.
+- State guarantees, limits, errors, and the supported recovery path.
+- Keep decision history, work status, and rejected alternatives in internal docs.
 
-1. A tutorial or quick start shows a working outcome.
-2. A concept page explains the lifecycle, data flow, guarantees, and public API.
-3. An adapter page documents backend selection, configuration, capabilities, and operations.
-4. Reference pages enumerate exact types and signatures when needed.
+## Examples
 
-Every adapter page must link to the concept it implements. If a capability has no concept page, create that page before expanding its adapter reference.
-
-## Prose
-
-- Lead with the supported path.
-- Keep paragraphs focused and short.
-- Use examples to teach behavior; use tables for exact contracts.
-- Keep internal implementation details only when they define an observable guarantee or an extension contract.
-- Avoid commentary about how documentation or code was researched.
+- Use the Barbershop domain.
+- Show the path, imports, complete declaration, call, inferred type, and result.
+- Show exact diagnostics for invalid composition or unsafe operations.
+- Do not invent an unrelated framework feature inside an example.

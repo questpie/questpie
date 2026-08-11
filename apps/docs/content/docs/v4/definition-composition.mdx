@@ -1,0 +1,424 @@
+---
+title: Definition composition
+description: Compile local Definitions and explicitly activated Packages into one deterministic application.
+kind: guide
+---
+
+QUESTPIE compiles the complete application before the Runtime starts. The
+The QUESTPIE Runtime loads generated artifacts. It does not discover files, activate
+Packages, merge Definitions, or choose a collision winner.
+
+## Configure one Application Root
+
+Commit one non-executable `questpie.json` at the Application Root:
+
+```json title="questpie.json"
+{
+	"$schema": "https://questpie.dev/schema/application-v1.json",
+	"version": 1,
+	"application": {
+		"name": "barbershop"
+	},
+	"postgres": {
+		"schema": "barbershop",
+		"minimumMajor": 16,
+		"databaseCollation": "C.UTF-8",
+		"databaseCType": "C.UTF-8",
+		"extensions": [],
+		"physicalNames": {}
+	},
+	"source": {
+		"root": "src",
+		"exclude": []
+	},
+	"packages": {}
+}
+```
+
+The file cannot contain a `definitions` array. The v1 schema rejects unknown
+keys. QUESTPIE discovers Definitions below `source.root` and stores the root in
+canonical form.
+
+`questpie init` adds stable generated imports to the application
+`package.json`:
+
+```json title="package.json (excerpt)"
+{
+	"imports": {
+		"#questpie/app": "./.questpie/generated/app.ts",
+		"#questpie/source/*": "./src/*"
+	}
+}
+```
+
+## Discover local Definitions
+
+QUESTPIE builds one discovery TypeScript Program from the application
+`tsconfig`. It inspects `.ts`, `.tsx`, and `.mts` files below `source.root`.
+Folders have no framework meaning.
+
+The compiler excludes these paths by default:
+
+```text
+**/*.d.ts
+**/*.test.*
+**/*.spec.*
+**/__tests__/**
+**/__fixtures__/**
+**/fixtures/**
+```
+
+An application can add `source.exclude` patterns. Patterns are relative to the
+source root and use `/` as the separator. `*` matches within one path segment,
+`?` matches one non-separator character, and `**` matches across separators.
+V1 cannot use character classes, brace expansion, negation, or platform-native
+separators. Dotfiles participate in matching.
+
+QUESTPIE does not traverse directory symlinks. A file symlink must resolve
+inside the source root. The compiler reports `QP-COMPOSE-016
+pathNormalizationCollision` when two paths collide after realpath, Unicode
+normalization, or portable case folding.
+
+Each local Definition must be one direct value export. A top-level Definition
+factory call that does not reach a direct export reports `QP-COMPOSE-001
+unreachableDefinition`. Exporting Definitions only inside an array, object,
+map, or user-authored factory does not create discovery roots. Re-exporting one
+declaration through one or more barrels remains one Definition at its
+declaration Origin.
+
+QUESTPIE reports `QP-COMPOSE-022 definitionOutsideSourceRoot` when a top-level
+Definition factory call belongs to application source but sits outside the
+configured root. When discovery or evaluation fails, QUESTPIE stops
+compilation. It does not remove a Resource.
+
+## Name Resources explicitly
+
+A Resource Identity is its Resource Kind plus its Qualified Resource Name. The
+name uses one or more dot-separated lower-camel ASCII segments:
+
+```abnf
+qualified-resource-name = segment *("." segment)
+segment                 = lower *(lower / upper / digit)
+lower                   = %x61-7A
+upper                   = %x41-5A
+digit                   = %x30-39
+```
+
+Each segment has 1–63 characters. The complete name has at most 255 characters.
+`appointments`, `booking.availability`, and `oauth2Clients` are valid.
+`Appointments`, `booking_availability`, and `booking..availability` are
+invalid. QUESTPIE reports `QP-COMPOSE-003 invalidResourceName` for an invalid
+kind or name.
+
+Resource Kind is a closed compiler protocol. Composition v1 allocates
+`collection` and `seed`. A Package cannot add another Resource Kind.
+
+Each Definition supplies its name explicitly:
+
+```ts title="src/data/appointments.ts"
+import { constraint, defineCollection, field } from "questpie";
+
+export const appointments = defineCollection({
+	name: "appointments",
+	fields: {
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+	},
+	constraints: {
+		primary: constraint.primaryKey({ fields: ["id"] }),
+	},
+});
+```
+
+This Definition owns `collection:appointments`. A file move, export rename,
+Package rename, installation source, or PostgreSQL name does not change the
+Resource Identity. QUESTPIE reports `QP-COMPOSE-002
+duplicateResourceIdentity` when another establishing Definition uses the same
+kind and name, even when both Definitions have identical content.
+
+Two Resources of different kinds can use the same Qualified Resource Name. A
+name can also be a strict dotted prefix of another name. Canonical exact-key
+maps preserve both identities:
+
+```text
+collection:booking
+collection:booking.availability
+```
+
+## Activate Packages explicitly
+
+`bun add` installs a dependency. It does not activate Package composition.
+Run:
+
+```bash
+bunx questpie add @acme/barbershop-audit
+```
+
+`questpie add` installs the dependency with Bun. It validates the static
+QUESTPIE Package contract. It then records the activation and accepted Package Inventory
+digest in `questpie.json`.
+
+A Package publishes the fixed `./questpie` ESM export:
+
+```json title="package.json (excerpt)"
+{
+	"name": "@acme/barbershop-audit",
+	"version": "1.0.0",
+	"type": "module",
+	"exports": {
+		".": "./dist/index.js",
+		"./questpie": {
+			"types": "./dist/questpie.d.ts",
+			"import": "./dist/questpie.js"
+		}
+	},
+	"questpie": {
+		"manifestVersion": 1,
+		"framework": "^4.0.0"
+	}
+}
+```
+
+The activation export contains only Definitions, Resource-kind Augmentations,
+and TypeScript types. Another runtime value reports `QP-COMPOSE-006
+invalidPackageManifest`. The export cannot provide an install hook, discovery
+callback, compiler plugin, lowering hook, generator, composition factory, or
+Runtime merge function.
+
+The activation export supports only `types`, `import`, and `default` conditions.
+When `import` and `default` both exist, they must resolve to the same file. A
+workspace Package can point `./questpie` directly to TypeScript source. When it
+points to built output, QUESTPIE treats that output as the Package contract.
+
+Only direct entries in `questpie.json` are active. A transitive dependency
+cannot activate itself. The activation key must equal the resolved Package
+name, and v1 cannot use a dependency alias as an activation root. More than one
+physical instance for one active Package name reports `QP-COMPOSE-009
+ambiguousPackageInstance`.
+
+The accepted Package map has this shape:
+
+```json title="questpie.json → packages"
+{
+	"@acme/barbershop-audit": {
+		"inventoryDigest": "0000000000000000000000000000000000000000000000000000000000000000"
+	}
+}
+```
+
+The all-zero digest shows the required 64-character shape only. You must use
+the current Package Inventory digest that QUESTPIE prints for the installed Package.
+
+You can edit this map manually when automation is unavailable. Manual changes
+use the same validation and semantics as `questpie add`.
+
+Every Package Definition or Augmentation must enter through one direct active
+export in the accepted Package Inventory. Otherwise QUESTPIE reports `QP-COMPOSE-005
+packageCompositionNotActivated`.
+
+When a Package update changes an exported identity or structural contract,
+QUESTPIE reports `QP-COMPOSE-008 packageInventoryChanged`, exits 4, and blocks
+deploy. Review the exact entry and member changes before accepting the new
+Package Inventory:
+
+```bash
+bunx questpie package accept @acme/barbershop-audit
+```
+
+`questpie package accept` accepts composition input only. `questpie sync` does
+not accept a Package Inventory change. A schema change requires the
+Migration Plan and Plan Digest review.
+
+## Accept an Augmentation at its Owner
+
+A Package can export a reusable, target-free Collection Augmentation:
+
+```ts title="@acme/barbershop-audit/questpie"
+import { defineCollectionAugmentation, field, index } from "questpie";
+
+export const auditFields = defineCollectionAugmentation({
+	name: "acme.auditFieldsV1",
+	fields: {
+		auditId: field.uuid({ nullable: true }),
+		createdAt: field.timestamp({ nullable: true, withTimezone: true }),
+	},
+	indexes: {
+		byAuditId: index({ fields: ["auditId"] }),
+	},
+});
+```
+
+The establishing Definition accepts that exact value:
+
+```ts title="src/data/appointments.ts"
+import { auditFields } from "@acme/barbershop-audit/questpie";
+import { constraint, defineCollection, field } from "questpie";
+
+export const appointments = defineCollection({
+	name: "appointments",
+	fields: {
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+	},
+	constraints: {
+		primary: constraint.primaryKey({ fields: ["id"] }),
+	},
+	augmentations: [auditFields],
+});
+```
+
+The accepted Augmentation identity is
+`collection:appointments/augmentation:acme.auditFieldsV1`. The Compiled
+Manifest records that identity and its structural contract digest. The Schema
+Projection records the resulting Fields and Index but excludes the Augmentation
+identity.
+
+The authored `augmentations` value must be a literal tuple of direct values or
+direct `defineCollectionAugmentation` calls. QUESTPIE reports `QP-COMPOSE-021
+nonLiteralAugmentationList` for a spread, conditional list, loop result, or
+widened `CollectionAugmentation[]`. The literal tuple keeps the Resource-local
+inferred type equal to the compiled member set.
+
+Collection Augmentation v1 can add Fields, Constraints, and Indexes. It cannot:
+
+- add a Relation, Policy, or runtime behavior;
+- replace, remove, or modify an existing member;
+- change Resource Identity, physical table, or Collection options;
+- augment another Augmentation;
+- use a Constraint or Index that references a Field outside that Augmentation.
+
+An Owner Constraint or Index can reference Owner Fields and Fields from its
+accepted Augmentations.
+
+QUESTPIE reports `QP-COMPOSE-014 augmentationMemberCollision` when an Owner and
+an Augmentation, or two Augmentations, add the same member identity. Byte-equal
+members collide. Accepting the same Augmentation value twice in one Owner
+list reports `QP-COMPOSE-020 duplicateContributionIdentity`. Two different
+Owners can accept the same reusable Augmentation value.
+
+An active Augmentation that no Owner accepts is inert. Import order cannot
+authorize an Augmentation or change its position.
+
+## Customize a sealed Package Definition
+
+A fixed Definition exported by a Package is sealed. Application source cannot
+patch it by target identity.
+
+To customize it, vendor the Package composition into application source under
+the same Resource Identities. Then deactivate the Package:
+
+```bash
+bunx questpie deactivate @acme/barbershop-audit
+```
+
+Package activation covers the complete Package composition. You must vendor
+every Definition and Augmentation that the application needs. QUESTPIE refuses
+deactivation while application source references the Package. It
+prints every reference and acceptance site that you must remove.
+
+Deactivation does not remove the Bun dependency, apply a Migration, or delete
+data. The command previews every removed Resource, Augmentation, generated
+member, and schema classification. The next compile and Migration Plan show the
+semantic effect. The Plan Digest remains the only database-change gate.
+
+An external generator is another explicit escape hatch. It can write ordinary
+source Definitions before compile. QUESTPIE runs no generator hook and trusts
+only the resulting Definitions.
+
+For a PostgreSQL name that you cannot annotate inline, use the
+[`postgres.physicalNames` override](./schema-lifecycle#identity-and-postgresql-names).
+The override changes only the physical projection and uses a reviewed rename
+Migration.
+
+## Use generated output
+
+`questpie sync`, `questpie build`, and `questpie dev` write the generated
+application below `.questpie/generated/`:
+
+```text
+.questpie/generated/
+├── manifest.json
+├── schema-projection.json
+├── origin-map.json
+├── build-input.json
+├── app.ts
+└── internal/
+```
+
+- `manifest.json` contains exact Resource and accepted Augmentation identities.
+- `schema-projection.json` contains the database structure used by Migrations.
+- `origin-map.json` maps Resources, Augmentations, and members to current source
+  locations without changing semantic digests.
+- `build-input.json` records the configuration, source, framework, Package,
+  library, lockfile, TypeScript, Bun, and compiler inputs.
+- `app.ts` exposes the application-wide App Contract.
+- `internal/` is compiler-private and has no source-compatibility guarantee.
+
+Application structural modules can import only types from `#questpie/app`. A
+value import reports `QP-COMPOSE-012 structuralImportOfGeneratedOutput`.
+Run `bunx questpie sync` before the first external TypeScript check so the
+on-disk import exists.
+
+Do not commit `.questpie/generated/`. Ignore the complete `.questpie/`
+directory. Do not ignore `questpie/`; that separate directory contains
+Committed Migrations and Seed artifacts.
+
+CI and deploy recompute the Build Input Digest. Stale output reports
+`QP-COMPOSE-018 generatedOutputStale`. A bad checksum, version, or internal
+digest reports `QP-COMPOSE-019 generatedOutputCorrupt`.
+
+## Keep structural compilation deterministic
+
+QUESTPIE runs structural source in the Controlled Structural Evaluator.
+Structural values cannot depend on environment variables, time, random values,
+network access, filesystem reads, subprocesses, machine identity,
+locale-sensitive formatting, or mutable global state. QUESTPIE reports
+`QP-COMPOSE-010 impureStructuralGraph` when structural source reaches a
+forbidden capability.
+
+Application and Package structural modules cannot use WebAssembly, `eval`,
+`Function`, CommonJS `require`, top-level `await`, a native addon, or a dynamic
+import with a non-literal specifier. Pure local helpers and deterministic
+third-party libraries are allowed. QUESTPIE does not reject a third-party
+library only because its published implementation is CommonJS.
+
+`questpie build`, `questpie check`, and every command that writes a Committed
+Migration or Seed artifact perform two complete compilations. Both results must
+have equal structural drafts, semantic artifacts, Origin Map bytes, and
+generated bytes. QUESTPIE reports `QP-COMPOSE-011
+nondeterministicEvaluation` for a difference. The non-writing `questpie dev`
+watch loop evaluates once for lower latency.
+
+The evaluator enforces deterministic compilation. It is not a security sandbox
+for hostile Package code. You remain responsible for dependency trust.
+
+## Handle composition diagnostics
+
+Composition diagnostics use the shared versioned JSON envelope. All composition
+codes have severity `error`. Codes 008, 018, and 019 block deploy and exit 4.
+All other registered composition codes are fatal source or configuration errors
+and exit 2. An internal compiler failure exits 1 and cannot use a registered
+user diagnostic.
+
+| Code             | Class                               | Meaning                                                              |
+| ---------------- | ----------------------------------- | -------------------------------------------------------------------- |
+| `QP-COMPOSE-001` | `unreachableDefinition`             | A Definition factory call has no direct value export.                |
+| `QP-COMPOSE-002` | `duplicateResourceIdentity`         | Two Definitions establish one Resource Identity.                     |
+| `QP-COMPOSE-003` | `invalidResourceName`               | A kind or Qualified Resource Name is invalid.                        |
+| `QP-COMPOSE-004` | `unknownReference`                  | A typed semantic reference has no target.                            |
+| `QP-COMPOSE-005` | `packageCompositionNotActivated`    | Package composition did not enter through an accepted active export. |
+| `QP-COMPOSE-006` | `invalidPackageManifest`            | The static Package contract is invalid.                              |
+| `QP-COMPOSE-007` | `incompatiblePackage`               | The Package does not support the compiler protocol.                  |
+| `QP-COMPOSE-008` | `packageInventoryChanged`           | The current Package Inventory differs from the accepted digest.      |
+| `QP-COMPOSE-009` | `ambiguousPackageInstance`          | One active Package name resolves to more than one instance.          |
+| `QP-COMPOSE-010` | `impureStructuralGraph`             | Structural source reaches a forbidden capability.                    |
+| `QP-COMPOSE-011` | `nondeterministicEvaluation`        | Two required compilations produce different bytes.                   |
+| `QP-COMPOSE-012` | `structuralImportOfGeneratedOutput` | Structural source value-imports generated output.                    |
+| `QP-COMPOSE-013` | `structuralTypeError`               | A structural module or dependency has a TypeScript error.            |
+| `QP-COMPOSE-014` | `augmentationMemberCollision`       | More than one source adds one member identity.                       |
+| `QP-COMPOSE-015` | `invalidAugmentation`               | An Owner accepts the wrong Augmentation kind or value.               |
+| `QP-COMPOSE-016` | `pathNormalizationCollision`        | Two source paths collide after portable normalization.               |
+| `QP-COMPOSE-017` | `invalidApplicationRoot`            | The Application Root is missing, duplicated, or invalid.             |
+| `QP-COMPOSE-018` | `generatedOutputStale`              | Generated output does not match current build inputs.                |
+| `QP-COMPOSE-019` | `generatedOutputCorrupt`            | A generated checksum, version, or digest is invalid.                 |
+| `QP-COMPOSE-020` | `duplicateContributionIdentity`     | One Owner accepts the same Augmentation identity twice.              |
+| `QP-COMPOSE-021` | `nonLiteralAugmentationList`        | An authored Augmentation list is not a closed literal tuple.         |
+| `QP-COMPOSE-022` | `definitionOutsideSourceRoot`       | An application Definition sits outside the configured source root.   |

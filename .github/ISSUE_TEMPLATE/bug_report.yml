@@ -1,67 +1,22 @@
-name: Bug report
-description: Something in QUESTPIE does not behave as documented
-labels: ["bug"]
+name: Documentation problem
+description: The v4 specification or documentation is incorrect or inconsistent
+labels: ["bug", "documentation"]
 body:
-  - type: markdown
-    attributes:
-      value: |
-        **Do not report security problems here.** See
-        [SECURITY.md](https://github.com/questpie/questpie/blob/main/SECURITY.md)
-        for the private disclosure path.
-
   - type: textarea
-    id: what
+    id: problem
     attributes:
-      label: What happens
-      description: What you observed, and what you expected instead.
+      label: Problem
+      description: State the conflicting or incorrect claim and its location.
     validations:
       required: true
 
   - type: textarea
-    id: repro
+    id: evidence
     attributes:
-      label: Reproduction
-      description: |
-        The single most useful thing you can provide. In order of usefulness:
-        a failing test against this repo, a link to a minimal repo, or the exact
-        steps and code to reproduce.
-      placeholder: |
-        1. Define a collection with …
-        2. Call …
-        3. Observe …
+      label: Evidence
+      description: Link the relevant specification, ADR, research, or primary source.
     validations:
       required: true
-
-  - type: input
-    id: version
-    attributes:
-      label: QUESTPIE version
-      description: "`questpie` version from your package.json or lockfile."
-      placeholder: "3.17.0"
-    validations:
-      required: true
-
-  - type: textarea
-    id: env
-    attributes:
-      label: Environment
-      description: |
-        Runtime and version (bun/node), OS, PostgreSQL version, and any adapters
-        involved — these change behaviour more than anything else.
-      placeholder: |
-        Runtime: bun 1.3.13
-        OS: macOS 15.1
-        PostgreSQL: 16.4
-        Adapters: pg-boss queue, SSE realtime, S3 storage
-    validations:
-      required: true
-
-  - type: textarea
-    id: logs
-    attributes:
-      label: Errors and logs
-      description: Full stack traces beat summaries. Redact secrets.
-      render: shell
 
   - type: checkboxes
     id: checks
@@ -69,6 +24,4 @@ body:
       label: Before submitting
       options:
         - label: I searched existing issues
-          required: true
-        - label: I am on a supported version (3.x)
           required: true

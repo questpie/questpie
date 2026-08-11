@@ -1,4 +1,3 @@
-import "virtual:iconify-preload";
 import bricolageLatinUrl from "@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2?url";
 import hankenLatinUrl from "@fontsource-variable/hanken-grotesk/files/hanken-grotesk-latin-wght-normal.woff2?url";
 import jetbrainsMonoLatinUrl from "@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2?url";
@@ -7,13 +6,11 @@ import {
 	HeadContent,
 	Outlet,
 	Scripts,
-	useRouterState,
 } from "@tanstack/react-router";
 import { RootProvider } from "fumadocs-ui/provider/tanstack";
 import type * as React from "react";
 import { preload } from "react-dom";
 
-import { isMarketingPath } from "@/components/marketing/chrome";
 import { generateLinks } from "@/lib/seo";
 
 import appCss from "@/styles/app.css?url";
@@ -91,29 +88,13 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 		crossOrigin: "anonymous",
 	});
 
-	const isMarketing = useRouterState({
-		select: (state) => isMarketingPath(state.location.pathname),
-	});
-
 	return (
 		<html suppressHydrationWarning lang="en">
 			<head>
 				<HeadContent />
 			</head>
-			<body
-				className={`flex min-h-screen flex-col${isMarketing ? " qp-grain-page" : ""}`}
-			>
-				{/* The mesh has to be a direct child of <body>. It is fixed at
-				    z-index -1, and tokens/mesh.css clears the body fill through
-				    `body:has(> .qp-mesh-page)` — nested any deeper, the selector
-				    misses, body keeps painting --background over it, and the whole
-				    atmosphere is simply invisible. */}
-				{isMarketing ? <div className="qp-mesh-page" /> : null}
-				{/* Marketing is dark-only by design, so a light theme stored while
-				    reading the docs must not follow the reader onto the landing. */}
-				<RootProvider theme={isMarketing ? { forcedTheme: "dark" } : undefined}>
-					{children}
-				</RootProvider>
+			<body className="flex min-h-screen flex-col">
+				<RootProvider>{children}</RootProvider>
 				<Scripts />
 			</body>
 		</html>
