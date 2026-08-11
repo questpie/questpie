@@ -572,10 +572,20 @@
 						filter.kind === "relationNotExists"
 					) {
 						const relation = relations[filter.relation];
-						if (!allowRelations || !relation || relation.source !== collection)
+						if (!relation)
+							throw diagnostic(
+								"QP-COMPOSE-004",
+								"Relation predicate identity does not resolve.",
+							);
+						if (relation.source !== collection)
+							throw diagnostic(
+								"QP-DATA-003",
+								"Resolved Relation does not belong to the current Collection.",
+							);
+						if (!allowRelations)
 							throw diagnostic(
 								"QP-DATA-004",
-								"Relation predicate is outside the current Collection scope.",
+								"Relation predicate exceeds the one-hop scope.",
 							);
 						validateFilterScope(filter.filter, relation.target, false);
 						return;
