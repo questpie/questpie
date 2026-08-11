@@ -1143,6 +1143,57 @@ describe("configureAuthEntryMethods", () => {
 		expect(diagnostics.join("\n")).toContain("private-provider-detail");
 	});
 
+	it("uses the configured API error URL when social errorCallbackURL is omitted", async () => {
+		const configured = configureAuthEntryMethods({
+			authOptions: {
+				onAPIError: {
+					errorURL: "https://auth.example.test/custom-error",
+				},
+			},
+			credentials: { enabled: false },
+			socialProviders: {
+				google: {
+					clientId: "google-client",
+					clientSecret: "google-secret",
+				},
+			},
+			requireVerifiedProviderEmail: true,
+		});
+		const auth = createTestAuth(configured);
+		const startResponse = await auth.handler(
+			new Request("https://auth.example.test/api/auth/sign-in/social", {
+				method: "POST",
+				headers: jsonHeaders,
+				body: JSON.stringify({
+					provider: "google",
+					callbackURL: "https://auth.example.test/complete",
+					disableRedirect: true,
+				}),
+			}),
+		);
+		const startBody = (await startResponse.json()) as { url: string };
+		const state = new URL(startBody.url).searchParams.get("state") ?? "";
+		const cookie = startResponse.headers
+			.getSetCookie()
+			.map((value) => value.split(";", 1)[0])
+			.join("; ");
+		const response = await auth.handler(
+			new Request(
+				`https://auth.example.test/api/auth/callback/google?error=access_denied&error_description=private-provider-detail&state=${state}`,
+				{ headers: { cookie } },
+			),
+		);
+		const location = new URL(
+			response.headers.get("location") ?? "",
+			"https://auth.example.test",
+		);
+
+		expect(response.status).toBe(302);
+		expect(location.pathname).toBe("/custom-error");
+		expect(location.searchParams.get("error")).toBe("social_provider_error");
+		expect(location.searchParams.has("error_description")).toBe(false);
+	});
+
 	it("enables the browser-only last-method cookie only with multiple methods", async () => {
 		const multiple = configureAuthEntryMethods({
 			credentials: { enabled: true },

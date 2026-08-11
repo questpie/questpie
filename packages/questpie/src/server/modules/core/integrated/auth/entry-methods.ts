@@ -88,12 +88,15 @@ function sanitizeProviderError(params: URLSearchParams): void {
 
 function markProviderErrorCallbackURL(
 	callbackURL: unknown,
+	configuredErrorURL: unknown,
 	baseURL: string,
 ): string {
 	const raw =
 		typeof callbackURL === "string" && callbackURL.length > 0
 			? callbackURL
-			: `${baseURL}/error`;
+			: typeof configuredErrorURL === "string" && configuredErrorURL.length > 0
+				? configuredErrorURL
+				: `${baseURL}/error`;
 	const absolute = /^[a-z][a-z\d+.-]*:/i.test(raw);
 	const url = new URL(raw, baseURL);
 	url.searchParams.set(SOCIAL_PROVIDER_ERROR_MARKER, "1");
@@ -208,6 +211,7 @@ function createSocialProviderErrorBoundary(
 						}
 						body.errorCallbackURL = markProviderErrorCallbackURL(
 							body.errorCallbackURL,
+							context.context.options.onAPIError?.errorURL,
 							context.context.baseURL,
 						);
 					}),
