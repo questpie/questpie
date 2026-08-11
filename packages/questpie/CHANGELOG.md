@@ -1,5 +1,11 @@
 # questpie
 
+## 3.27.1
+
+### Patch Changes
+
+- [#273](https://github.com/questpie/questpie/pull/273) [`d425ca9`](https://github.com/questpie/questpie/commit/d425ca9355f11d5b514c2ae7a4dee03f543ca6e6) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Advertise the exact mounted OAuth issuer in MCP protected-resource metadata, and return a real 404 from unmatched Hono mounts so standards-based discovery can continue to its supported fallback endpoint.
+
 ## 3.27.0
 
 ### Patch Changes
