@@ -1,0 +1,12 @@
+{
+	"compilerOptions": {
+		"exactOptionalPropertyTypes": true,
+		"lib": ["ES2023"],
+		"noEmit": true,
+		"noImplicitAny": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"types": []
+	},
+	"files": ["fixture.ts"]
+}
