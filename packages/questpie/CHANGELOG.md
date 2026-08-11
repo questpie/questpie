@@ -1,5 +1,17 @@
 # questpie
 
+## 3.28.0
+
+### Minor Changes
+
+- [#286](https://github.com/questpie/questpie/pull/286) [`fa440e5`](https://github.com/questpie/questpie/commit/fa440e5f499a4090c73601aff87f8a6071455e34) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add a server-owned Auth entry method configuration seam with verified social-email enforcement, a secret-free effective method catalog, implicit-link protection, disclosure-safe provider errors, and browser-only last-login-method support.
+
+### Patch Changes
+
+- [#275](https://github.com/questpie/questpie/pull/275) [`c92a0c2`](https://github.com/questpie/questpie/commit/c92a0c28cf2a74d909eae35565b3f5d084cbe23d) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Preserve exact generated custom route types when an app includes modules exposed through the public module definition type.
+
+- [#285](https://github.com/questpie/questpie/pull/285) [`fe8f86f`](https://github.com/questpie/questpie/commit/fe8f86f7839c23a5ae32592e5c6ef21a6bb8b03f) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Pass request options through registered typed raw route callers and return the untouched response. The typed method leaf now owns the HTTP method.
+
 ## 3.27.1
 
 ### Patch Changes
