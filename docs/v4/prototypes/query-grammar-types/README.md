@@ -1,14 +1,20 @@
 # Structural Query type proof
 
 This throwaway fixture answers one question from the v4 data-model grill: can
-Resource-local Field types and one generated concrete Relation selection infer
-the exact row, insert, update, parameter, and paginated result shapes without an
-ORM type, ambient registry, or whole-application recursive generic?
+Resource-local Field types and generated concrete Relation descriptors infer
+exact row, insert, update, parameter, selection, inverse-existence, and
+paginated result shapes without an ORM type, ambient registry, or
+whole-application recursive generic?
+
+It also holds negative assertions for field scope, runtime list parameters,
+empty membership lists, hidden cursor-order fields, text range comparison, and
+nullable total-order keys. A literal two-entry Collection Augmentation tuple and
+distinct timestamp codecs are part of the same inference budget.
 
 Run from the repository root:
 
 ```bash
-bunx tsc \
+bun node_modules/typescript/bin/tsc \
 	-p docs/v4/prototypes/query-grammar-types/tsconfig.json \
 	--extendedDiagnostics
 ```

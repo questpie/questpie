@@ -405,6 +405,8 @@
 		<script>
 			// Pure logic module. It knows nothing about this page or the DOM.
 			const QueryProof = (() => {
+				const DATA_CONTRACT_PROJECTION_DIGEST =
+					"525e95c0758ec854764c6dfd9c5e4d86a53cebedab1c54c3eb439d04410b1bbd";
 				const IDS = {
 					appointments: "collection:appointments",
 					tenants: "collection:tenants",
@@ -433,22 +435,19 @@
 					format: "questpie.data-query-template",
 					version: 1,
 					from: IDS.appointments,
+					dataContractProjectionDigest: DATA_CONTRACT_PROJECTION_DIGEST,
 					parameters: [
 						{
 							name: "tenantId",
 							kind: "scalar",
-							scalar: "uuid",
+							codec: { kind: "uuid" },
 							nullable: false,
-							minimum: null,
-							maximum: null,
 						},
 						{
 							name: "first",
 							kind: "scalar",
-							scalar: "integer",
+							codec: { kind: "integer", minimum: 1, maximum: 4 },
 							nullable: false,
-							minimum: 1,
-							maximum: 4,
 						},
 						{ name: "after", kind: "cursor", nullable: true },
 					],
@@ -456,6 +455,7 @@
 						{ kind: "field", key: "startsAt", field: IDS.startsAt },
 						{ kind: "field", key: "id", field: IDS.id },
 						{ kind: "field", key: "customerName", field: IDS.customerName },
+						{ kind: "field", key: "status", field: IDS.status },
 						{
 							kind: "toOne",
 							key: "tenant",
@@ -523,23 +523,112 @@
 						.sort((left, right) => compareAscii(left.key, right.key));
 				}
 
-				function normalizeTemplate(candidate) {
+				function diagnostic(code, message) {
+					return new Error(`${code}: ${message}`);
+				}
+
+				function belongsTo(field, collection) {
+					return field.startsWith(`${collection}/field:`);
+				}
+
+				function validateFilterScope(filter, collection, allowRelations) {
+					if (!filter) return;
+					if (filter.kind === "and" || filter.kind === "or") {
+						for (const child of filter.expressions)
+							validateFilterScope(child, collection, allowRelations);
+						return;
+					}
+					if (filter.kind === "not") {
+						validateFilterScope(filter.expression, collection, allowRelations);
+						return;
+					}
+					if (
+						filter.kind === "relationExists" ||
+						filter.kind === "relationNotExists"
+					) {
+						const relation = relations[filter.relation];
+						if (!allowRelations || !relation || relation.source !== collection)
+							throw diagnostic(
+								"QP-DATA-004",
+								"Relation predicate is outside the current Collection scope.",
+							);
+						validateFilterScope(filter.filter, relation.target, false);
+						return;
+					}
+					if (filter.kind !== "true" && !belongsTo(filter.field, collection))
+						throw diagnostic(
+							"QP-DATA-004",
+							"Filter Field is outside the current Collection scope.",
+						);
+				}
+
+				function normalizeTemplate(
+					candidate,
+					dataContractProjectionDigest = DATA_CONTRACT_PROJECTION_DIGEST,
+				) {
 					const template = structuredClone(candidate);
+					template.dataContractProjectionDigest = dataContractProjectionDigest;
 					template.parameters.sort((left, right) =>
 						compareAscii(left.name, right.name),
 					);
 					template.select = normalizeSelection(template.select);
 					if (!template.order.length)
-						throw new Error("Order is required; v1 has no implicit order.");
+						throw diagnostic(
+							"QP-DATA-007",
+							"Order is required; v1 has no implicit order.",
+						);
 					if (!template.page)
-						throw new Error(
+						throw diagnostic(
+							"QP-DATA-009",
 							"Forward pagination is required for a v1 list query.",
 						);
+					for (const selection of template.select) {
+						if (
+							selection.kind === "field" &&
+							!belongsTo(selection.field, template.from)
+						)
+							throw diagnostic(
+								"QP-DATA-004",
+								"Selected Field is outside the root Collection scope.",
+							);
+						if (selection.kind === "toOne") {
+							const relation = relations[selection.relation];
+							if (!relation || relation.source !== template.from)
+								throw diagnostic(
+									"QP-DATA-003",
+									"Selected Relation does not resolve from the root Collection.",
+								);
+							if (
+								selection.select.some(
+									(entry) => !belongsTo(entry.field, relation.target),
+								)
+							)
+								throw diagnostic(
+									"QP-DATA-004",
+									"Nested Field is outside the Relation target scope.",
+								);
+						}
+					}
+					validateFilterScope(template.filter, template.from, true);
 					const orderFields = template.order.map((term) => term.field);
 					if (new Set(orderFields).size !== orderFields.length)
-						throw new Error("An order Field cannot appear twice.");
+						throw diagnostic(
+							"QP-DATA-007",
+							"An order Field cannot appear twice.",
+						);
+					const directSelections = new Set(
+						template.select
+							.filter((entry) => entry.kind === "field")
+							.map((entry) => entry.field),
+					);
+					if (orderFields.some((field) => !directSelections.has(field)))
+						throw diagnostic(
+							"QP-DATA-008",
+							"Every order Field must be selected directly.",
+						);
 					if (orderFields.at(-1) !== IDS.id) {
-						throw new Error(
+						throw diagnostic(
+							"QP-DATA-007",
 							"Order is not total: append the non-null primary key Field appointments.id explicitly.",
 						);
 					}
@@ -547,34 +636,52 @@
 				}
 
 				function dependencyTemplate(template, templateDigest) {
-					const baseFields = new Set(
-						template.select
-							.filter((entry) => entry.kind === "field")
-							.map((entry) => entry.field),
-					);
-					baseFields.add(template.filter.field);
-					for (const term of template.order) baseFields.add(term.field);
+					const baseFields = new Map();
+					const addRole = (map, field, role) => {
+						if (!map.has(field)) map.set(field, new Set());
+						map.get(field).add(role);
+					};
+					for (const entry of template.select.filter(
+						(entry) => entry.kind === "field",
+					))
+						addRole(baseFields, entry.field, "output");
+					addRole(baseFields, template.filter.field, "filter");
+					for (const term of template.order) {
+						addRole(baseFields, term.field, "order");
+						addRole(baseFields, term.field, "cursor");
+					}
 					const relationEntries = template.select.filter(
 						(entry) => entry.kind === "toOne",
 					);
 					for (const entry of relationEntries) {
 						for (const field of relations[entry.relation].fields)
-							baseFields.add(field);
+							addRole(baseFields, field, "joinLocal");
 					}
 
 					const reads = [
 						{
 							kind: "collection",
 							collection: IDS.appointments,
-							fields: [...baseFields].sort(compareAscii),
+							fields: [...baseFields.entries()]
+								.map(([field, roles]) => ({
+									field,
+									roles: [...roles].sort(compareAscii),
+								}))
+								.sort((left, right) => compareAscii(left.field, right.field)),
 						},
 						...relationEntries.map((entry) => ({
 							kind: "collection",
 							collection: relations[entry.relation].target,
 							fields: [
-								...entry.select.map((selection) => selection.field),
-								...relations[entry.relation].references,
-							].sort(compareAscii),
+								...entry.select.map((selection) => ({
+									field: selection.field,
+									roles: ["output"],
+								})),
+								...relations[entry.relation].references.map((field) => ({
+									field,
+									roles: ["joinReferenced"],
+								})),
+							].sort((left, right) => compareAscii(left.field, right.field)),
 						})),
 						...relationEntries.map((entry) => ({
 							kind: "relation",
@@ -604,19 +711,23 @@
 							binding.tenantId,
 						)
 					) {
-						throw new Error("tenantId is not a lowercase canonical UUID.");
+						throw diagnostic(
+							"QP-DATA-001",
+							"tenantId is not a lowercase canonical UUID.",
+						);
 					}
 					if (
 						!Number.isSafeInteger(binding.first) ||
 						binding.first < 1 ||
 						binding.first > 4
 					) {
-						throw new Error(
+						throw diagnostic(
+							"QP-DATA-012",
 							"first must be an integer from 1 through 4 in this proof.",
 						);
 					}
 					if (binding.after !== null && typeof binding.after !== "string")
-						throw new Error("after must be a cursor or null.");
+						throw diagnostic("QP-DATA-010", "after must be a cursor or null.");
 				}
 
 				function scopeValue(templateDigest, binding) {
@@ -684,18 +795,23 @@
 						customerName: row.customerName,
 						id: row.id,
 						startsAt: row.startsAt,
+						status: row.status,
 						tenant: tenant ? { name: tenant.name, slug: tenant.slug } : null,
 					};
 				}
 
 				async function execute({
 					candidate = baseTemplate,
+					dataContractProjectionDigest = DATA_CONTRACT_PROJECTION_DIGEST,
 					binding,
 					appointments,
 					tenants,
 				}) {
 					validateBinding(binding);
-					const template = normalizeTemplate(candidate);
+					const template = normalizeTemplate(
+						candidate,
+						dataContractProjectionDigest,
+					);
 					const templateDigest = await digest(
 						"questpie-data-query-template-v1\0",
 						template,
@@ -713,17 +829,24 @@
 							decodedCursor.format !== "questpie.data-cursor" ||
 							decodedCursor.version !== 1
 						)
-							throw new Error("Cursor protocol is not v1.");
+							throw diagnostic("QP-DATA-010", "Cursor protocol is not v1.");
 						if (decodedCursor.templateDigest !== templateDigest)
-							throw new Error("Cursor belongs to another Query Template.");
+							throw diagnostic(
+								"QP-DATA-011",
+								"Cursor belongs to another Query Template.",
+							);
 						if (decodedCursor.scopeDigest !== scopeDigest)
-							throw new Error("Cursor belongs to another filter scope.");
+							throw diagnostic(
+								"QP-DATA-013",
+								"Cursor belongs to another filter scope.",
+							);
 						if (
 							decodedCursor.order.length !== 2 ||
 							decodedCursor.order[0].field !== IDS.startsAt ||
 							decodedCursor.order[1].field !== IDS.id
 						) {
-							throw new Error(
+							throw diagnostic(
+								"QP-DATA-010",
 								"Cursor order identities or arity do not match the Query.",
 							);
 						}
@@ -788,6 +911,7 @@
 				}
 
 				return {
+					DATA_CONTRACT_PROJECTION_DIGEST,
 					IDS,
 					baseTemplate,
 					canonicalBytes,
@@ -805,30 +929,35 @@
 					tenantId: TENANT_A,
 					customerName: "Ada",
 					startsAt: "2026-08-12T09:00:00.000Z",
+					status: "scheduled",
 				},
 				{
 					id: "00000000-0000-4000-8000-000000000002",
 					tenantId: TENANT_A,
 					customerName: "Ben",
 					startsAt: "2026-08-12T09:00:00.000Z",
+					status: "confirmed",
 				},
 				{
 					id: "00000000-0000-4000-8000-000000000003",
 					tenantId: TENANT_A,
 					customerName: "Cleo",
 					startsAt: "2026-08-12T10:00:00.000Z",
+					status: "scheduled",
 				},
 				{
 					id: "00000000-0000-4000-8000-000000000004",
 					tenantId: TENANT_A,
 					customerName: "Dara",
 					startsAt: "2026-08-12T11:00:00.000Z",
+					status: "scheduled",
 				},
 				{
 					id: "00000000-0000-4000-8000-000000000005",
 					tenantId: TENANT_B,
 					customerName: "Eli",
 					startsAt: "2026-08-12T09:30:00.000Z",
+					status: "scheduled",
 				},
 			];
 			const tenants = [
@@ -1018,6 +1147,40 @@
 					],
 				},
 				{
+					name: "Hidden order",
+					description:
+						"A plaintext cursor cannot carry an order Field omitted from the selected output.",
+					steps: [
+						[
+							"Remove startsAt from selection",
+							async () => {
+								resetControls();
+								const candidate = structuredClone(QueryProof.baseTemplate);
+								candidate.select = candidate.select.filter(
+									(entry) => entry.key !== "startsAt",
+								);
+								await run(candidate);
+							},
+						],
+					],
+				},
+				{
+					name: "Field scope",
+					description:
+						"A target Tenant Field cannot be smuggled into the root Appointment predicate.",
+					steps: [
+						[
+							"Use tenant.slug as a root Field",
+							async () => {
+								resetControls();
+								const candidate = structuredClone(QueryProof.baseTemplate);
+								candidate.filter.field = QueryProof.IDS.tenantSlug;
+								await run(candidate);
+							},
+						],
+					],
+				},
+				{
 					name: "Wrong scope",
 					description:
 						"A cursor from Old Town must not silently apply to the River tenant filter.",
@@ -1035,6 +1198,54 @@
 							"Change tenant and reuse it",
 							async () => {
 								elements.tenant.value = TENANT_B;
+								await run();
+							},
+						],
+					],
+				},
+				{
+					name: "Contract drift",
+					description:
+						"A Data Contract digest change changes the Query digest, so an older cursor must be rejected before comparison.",
+					steps: [
+						[
+							"Create a cursor under the current contract",
+							async () => {
+								resetControls();
+								elements.first.value = "1";
+								await run();
+								elements.after.value = lastExecution.result.pageInfo.endCursor;
+							},
+						],
+						[
+							"Bind it after a contract change",
+							async () => {
+								try {
+									render(
+										await QueryProof.execute({
+											dataContractProjectionDigest: "f".repeat(64),
+											binding: bindingFromControls(),
+											appointments,
+											tenants,
+										}),
+									);
+								} catch (error) {
+									showError(error);
+								}
+							},
+						],
+					],
+				},
+				{
+					name: "Runtime limit",
+					description:
+						"The bound first value is checked before a database read and cannot exceed this proof runtime's lower limit.",
+					steps: [
+						[
+							"Bind first above the runtime limit",
+							async () => {
+								resetControls();
+								elements.first.value = "5";
 								await run();
 							},
 						],
@@ -1093,6 +1304,7 @@
 						tenantId: TENANT_A,
 						customerName: "Ari",
 						startsAt: "2026-08-12T08:30:00.000Z",
+						status: "scheduled",
 					});
 					showDataset();
 				}

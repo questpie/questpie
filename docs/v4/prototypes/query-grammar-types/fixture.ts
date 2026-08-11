@@ -6,27 +6,37 @@ type Equal<Left, Right> =
 	>() => Value extends Right ? 1 : 2
 		? true
 		: false;
-
 type Expect<Value extends true> = Value;
-
 type Simplify<Value> = { [Key in keyof Value]: Value[Key] };
 
-interface Field<Value, Nullable extends boolean, HasDefault extends boolean> {
+declare const timestampBrand: unique symbol;
+declare const timestamptzBrand: unique symbol;
+type Timestamp = string & { readonly [timestampBrand]: "timestamp" };
+type Timestamptz = string & { readonly [timestamptzBrand]: "timestamptz" };
+
+type ScalarKind = "uuid" | "text" | "timestamp" | "timestamptz";
+interface Field<
+	Value,
+	Kind extends ScalarKind,
+	Nullable extends boolean,
+	HasDefault extends boolean,
+> {
 	readonly __value: Value;
+	readonly __kind: Kind;
 	readonly __nullable: Nullable;
 	readonly __hasDefault: HasDefault;
 }
 
 type FieldValue<Definition> =
-	Definition extends Field<infer Value, infer Nullable, boolean>
+	Definition extends Field<infer Value, ScalarKind, infer Nullable, boolean>
 		? Nullable extends true
 			? Value | null
 			: Value
 		: never;
-
 type RequiredInsertKey<Fields> = {
 	[Key in keyof Fields]: Fields[Key] extends Field<
 		unknown,
+		ScalarKind,
 		infer Nullable,
 		infer HasDefault
 	>
@@ -37,104 +47,205 @@ type RequiredInsertKey<Fields> = {
 			: never
 		: never;
 }[keyof Fields];
-
 type OptionalInsertKey<Fields> = Exclude<
 	keyof Fields,
 	RequiredInsertKey<Fields>
 >;
-
 type ReadRow<Fields> = {
 	-readonly [Key in keyof Fields]: FieldValue<Fields[Key]>;
 };
-
 type InsertRow<Fields> = {
 	-readonly [Key in RequiredInsertKey<Fields>]: FieldValue<Fields[Key]>;
 } & {
 	-readonly [Key in OptionalInsertKey<Fields>]?: FieldValue<Fields[Key]>;
 };
-
 type UpdateRow<Fields> = {
 	-readonly [Key in keyof Fields]?: FieldValue<Fields[Key]>;
 };
 
-interface AppointmentFields {
-	readonly id: Field<string, false, true>;
-	readonly tenantId: Field<string, false, false>;
-	readonly customerName: Field<string, false, false>;
-	readonly notes: Field<string, true, false>;
-	readonly startsAt: Field<string, false, false>;
-	readonly endsAt: Field<string, false, false>;
-	readonly status: Field<string, false, true>;
+interface AppointmentOwnerFields {
+	readonly id: Field<string, "uuid", false, true>;
+	readonly tenantId: Field<string, "uuid", false, false>;
+	readonly customerName: Field<string, "text", false, false>;
+	readonly startsAt: Field<Timestamptz, "timestamptz", false, false>;
+	readonly endsAt: Field<Timestamptz, "timestamptz", false, false>;
+	readonly status: Field<string, "text", false, true>;
 }
+interface AuditAugmentation {
+	readonly auditNote: Field<string, "text", true, false>;
+}
+interface ExternalAugmentation {
+	readonly externalRef: Field<string, "text", false, false>;
+}
+type FoldAugmentations<
+	Fields,
+	Augmentations extends readonly object[],
+> = Augmentations extends readonly [
+	infer Head extends object,
+	...infer Tail extends readonly object[],
+]
+	? FoldAugmentations<Simplify<Fields & Head>, Tail>
+	: Fields;
+type AppointmentFields = FoldAugmentations<
+	AppointmentOwnerFields,
+	readonly [AuditAugmentation, ExternalAugmentation]
+>;
 
 interface TenantFields {
-	readonly id: Field<string, false, true>;
-	readonly slug: Field<string, false, false>;
-	readonly name: Field<string, false, false>;
+	readonly id: Field<string, "uuid", false, true>;
+	readonly slug: Field<string, "text", false, false>;
+	readonly name: Field<string, "text", false, false>;
+	readonly localOpening: Field<Timestamp, "timestamp", false, false>;
 }
 
 type AppointmentRow = ReadRow<AppointmentFields>;
 type AppointmentInsert = InsertRow<AppointmentFields>;
 type AppointmentUpdate = UpdateRow<AppointmentFields>;
+type _row = Expect<
+	Equal<
+		AppointmentRow,
+		{
+			id: string;
+			tenantId: string;
+			customerName: string;
+			startsAt: Timestamptz;
+			endsAt: Timestamptz;
+			status: string;
+			auditNote: string | null;
+			externalRef: string;
+		}
+	>
+>;
+type _insert = Expect<
+	Equal<
+		AppointmentInsert,
+		{
+			tenantId: string;
+			customerName: string;
+			startsAt: Timestamptz;
+			endsAt: Timestamptz;
+			externalRef: string;
+		} & {
+			id?: string;
+			status?: string;
+			auditNote?: string | null;
+		}
+	>
+>;
+type _update = Expect<
+	Equal<
+		AppointmentUpdate,
+		{
+			id?: string;
+			tenantId?: string;
+			customerName?: string;
+			startsAt?: Timestamptz;
+			endsAt?: Timestamptz;
+			status?: string;
+			auditNote?: string | null;
+			externalRef?: string;
+		}
+	>
+>;
+type _timestampCodecsStayDistinct = Expect<
+	Equal<
+		FieldValue<TenantFields["localOpening"]> extends Timestamptz ? true : false,
+		false
+	>
+>;
 
-type ExpectedAppointmentRow = {
-	id: string;
-	tenantId: string;
-	customerName: string;
-	notes: string | null;
-	startsAt: string;
-	endsAt: string;
-	status: string;
+interface Literal<Value> {
+	readonly kind: "literal";
+	readonly value: Value;
+}
+interface Parameter<Value, Nullable extends boolean> {
+	readonly kind: "parameter";
+	readonly __value: Value;
+	readonly __nullable: Nullable;
+}
+type Operand<Value> = Value | Literal<Value> | Parameter<Value, false>;
+interface ScalarExpression<Value, Nullable extends boolean> {
+	equal(value: Operand<Value>): Filter;
+	notEqual(value: Operand<Value>): Filter;
+	in(values: readonly [Value, ...Value[]]): Filter;
+	notIn(values: readonly [Value, ...Value[]]): Filter;
+	isNull: Nullable extends true ? () => Filter : never;
+}
+interface Filter {
+	readonly __filter: true;
+}
+type FieldExpressions<Fields> = {
+	readonly [Key in keyof Fields]: Fields[Key] extends Field<
+		infer Value,
+		ScalarKind,
+		infer Nullable,
+		boolean
+	>
+		? ScalarExpression<Value, Nullable>
+		: never;
 };
+interface RelationExpression<TargetFields> {
+	exists(
+		predicate: (scope: { fields: FieldExpressions<TargetFields> }) => Filter,
+	): Filter;
+	notExists(
+		predicate: (scope: { fields: FieldExpressions<TargetFields> }) => Filter,
+	): Filter;
+}
+interface AppointmentRelations {
+	readonly tenant: RelationExpression<TenantFields>;
+}
+interface TenantRelations {
+	readonly appointments: RelationExpression<AppointmentFields>;
+}
 
-type ExpectedAppointmentInsert = {
-	tenantId: string;
-	customerName: string;
-	startsAt: string;
-	endsAt: string;
-} & {
-	id?: string;
-	notes?: string | null;
-	status?: string;
+declare const appointmentScope: {
+	fields: FieldExpressions<AppointmentFields>;
+	relations: AppointmentRelations;
 };
-
-type ExpectedAppointmentUpdate = {
-	id?: string;
-	tenantId?: string;
-	customerName?: string;
-	notes?: string | null;
-	startsAt?: string;
-	endsAt?: string;
-	status?: string;
+declare const tenantScope: {
+	fields: FieldExpressions<TenantFields>;
+	relations: TenantRelations;
 };
+declare const runtimeListParameter: Parameter<readonly string[], false>;
 
-type _readRow = Expect<Equal<AppointmentRow, ExpectedAppointmentRow>>;
-type _insertRow = Expect<Equal<AppointmentInsert, ExpectedAppointmentInsert>>;
-type _updateRow = Expect<Equal<AppointmentUpdate, ExpectedAppointmentUpdate>>;
+appointmentScope.relations.tenant.exists(({ fields }) =>
+	fields.slug.equal("old-town"),
+);
+appointmentScope.relations.tenant.notExists(({ fields }) =>
+	fields.name.equal("Closed"),
+);
+tenantScope.relations.appointments.exists(({ fields }) =>
+	fields.status.in(["scheduled", "confirmed"]),
+);
+tenantScope.relations.appointments.notExists(({ fields }) =>
+	fields.customerName.equal("Blocked"),
+);
+appointmentScope.fields.status.in(["scheduled"]);
+appointmentScope.fields.status.notIn(["cancelled", "completed"]);
+// @ts-expect-error in/notIn v1 accepts a non-empty literal tuple, not a list parameter.
+appointmentScope.fields.status.in(runtimeListParameter);
+// @ts-expect-error an empty membership tuple is invalid.
+appointmentScope.fields.status.in([]);
+appointmentScope.relations.tenant.exists(({ fields }) =>
+	// @ts-expect-error a Tenant predicate cannot read an Appointment Field.
+	fields.status.equal("scheduled"),
+);
 
-type FieldSelection<Fields> = {
-	readonly [Key in keyof Fields]?: true;
-};
-
+type FieldSelection<Fields> = { readonly [Key in keyof Fields]?: true };
 interface TenantSelection extends FieldSelection<TenantFields> {}
-
 interface AppointmentSelection extends FieldSelection<AppointmentFields> {
 	readonly tenant?: { readonly select: TenantSelection };
 }
-
 type SelectedFields<Fields, Selection> = {
-	-readonly [Key in keyof Selection as Key extends keyof Fields
-		? Selection[Key] extends true
-			? Key
+	-readonly [
+		Key in keyof Selection as Key extends keyof Fields
+			? Selection[Key] extends true
+				? Key
+				: never
 			: never
-		: never]: Key extends keyof Fields ? FieldValue<Fields[Key]> : never;
+	]: Key extends keyof Fields ? FieldValue<Fields[Key]> : never;
 };
-
-type SelectedTenant<Selection extends TenantSelection> = SelectedFields<
-	TenantFields,
-	Selection
->;
-
 type SelectedAppointment<Selection extends AppointmentSelection> = Simplify<
 	SelectedFields<AppointmentFields, Selection> &
 		(Selection extends {
@@ -142,49 +253,38 @@ type SelectedAppointment<Selection extends AppointmentSelection> = Simplify<
 				readonly select: infer Tenant extends TenantSelection;
 			};
 		}
-			? { tenant: SelectedTenant<Tenant> | null }
+			? { tenant: SelectedFields<TenantFields, Tenant> | null }
 			: object)
 >;
-
-interface Parameter<Value, Nullable extends boolean> {
-	readonly __value: Value;
-	readonly __nullable: Nullable;
-}
-
 type ParameterValue<Definition> =
 	Definition extends Parameter<infer Value, infer Nullable>
 		? Nullable extends true
 			? Value | null
 			: Value
 		: never;
-
 type ParameterValues<Definitions> = {
 	-readonly [Key in keyof Definitions]: ParameterValue<Definitions[Key]>;
 };
-
 interface PageInfo {
 	endCursor: string | null;
 	hasNextPage: boolean;
 }
-
 interface DataQueryContract<Parameters, Node> {
 	readonly parameters: Parameters;
 	readonly result: { nodes: Node[]; pageInfo: PageInfo };
 	bind(parameters: Parameters): void;
 }
-
 interface OrderTerm<FieldKey extends keyof AppointmentFields> {
 	readonly field: FieldKey;
 	readonly direction: "ascending" | "descending";
 	readonly nulls: "first" | "last";
 }
-
 declare function defineAppointmentQuery<
 	const Parameters extends Record<string, Parameter<unknown, boolean>>,
 	const Selection extends AppointmentSelection,
 >(definition: {
 	readonly parameters: Parameters;
-	readonly select: Selection;
+	readonly select: Selection & { readonly id: true; readonly startsAt: true };
 	readonly order: readonly [OrderTerm<"startsAt">, OrderTerm<"id">];
 }): DataQueryContract<
 	ParameterValues<Parameters>,
@@ -193,14 +293,15 @@ declare function defineAppointmentQuery<
 
 const appointmentPage = defineAppointmentQuery({
 	parameters: {
-		tenantId: {} as Parameter<string, false>,
-		first: {} as Parameter<number, false>,
-		after: {} as Parameter<string, true>,
+		tenantId: { kind: "parameter" } as Parameter<string, false>,
+		first: { kind: "parameter" } as Parameter<number, false>,
+		after: { kind: "parameter" } as Parameter<string, true>,
 	},
 	select: {
 		id: true,
 		customerName: true,
 		startsAt: true,
+		status: true,
 		tenant: { select: { slug: true, name: true } },
 	},
 	order: [
@@ -208,45 +309,64 @@ const appointmentPage = defineAppointmentQuery({
 		{ field: "id", direction: "ascending", nulls: "last" },
 	],
 });
-
-type ExpectedParameters = {
-	tenantId: string;
-	first: number;
-	after: string | null;
-};
-
-type ExpectedNode = {
-	id: string;
-	customerName: string;
-	startsAt: string;
-	tenant: { slug: string; name: string } | null;
-};
-
-type ExpectedResult = {
-	nodes: ExpectedNode[];
-	pageInfo: PageInfo;
-};
-
 type _parameters = Expect<
-	Equal<typeof appointmentPage.parameters, ExpectedParameters>
+	Equal<
+		typeof appointmentPage.parameters,
+		{ tenantId: string; first: number; after: string | null }
+	>
 >;
-type _result = Expect<Equal<typeof appointmentPage.result, ExpectedResult>>;
-
+type _result = Expect<
+	Equal<
+		typeof appointmentPage.result,
+		{
+			nodes: Array<{
+				id: string;
+				customerName: string;
+				startsAt: Timestamptz;
+				status: string;
+				tenant: { slug: string; name: string } | null;
+			}>;
+			pageInfo: PageInfo;
+		}
+	>
+>;
 appointmentPage.bind({
 	tenantId: "11111111-1111-4111-8111-111111111111",
 	first: 20,
 	after: null,
 });
-
 // @ts-expect-error UUID parameters do not accept numbers.
 appointmentPage.bind({ tenantId: 42, first: 20, after: null });
+defineAppointmentQuery({
+	parameters: {},
+	// @ts-expect-error every order Field must be selected directly.
+	select: { id: true },
+	order: [
+		{ field: "startsAt", direction: "ascending", nulls: "last" },
+		{ field: "id", direction: "ascending", nulls: "last" },
+	],
+});
 
-interface TextExpression {
-	equal(value: string): void;
-	in(values: readonly string[]): void;
+interface OrderField<Key extends string, Nullable extends boolean> {
+	readonly key: Key;
+	readonly nullable: Nullable;
 }
+type NonNullableKey<Key extends readonly OrderField<string, boolean>[]> =
+	Key[number]["nullable"] extends false ? Key : never;
+declare function acceptCompositeSuffix<
+	const Key extends readonly OrderField<string, boolean>[],
+>(key: NonNullableKey<Key>): void;
+acceptCompositeSuffix([
+	{ key: "tenantId", nullable: false },
+	{ key: "externalRef", nullable: false },
+]);
+// @ts-expect-error a nullable unique key cannot prove a total cursor order.
+acceptCompositeSuffix([
+	{ key: "tenantId", nullable: false },
+	{ key: "auditNote", nullable: true },
+]);
 
+interface TextExpression extends ScalarExpression<string, false> {}
 declare const customerName: TextExpression;
-
 // @ts-expect-error Text range comparison is outside the v1 operator matrix.
 customerName.lessThan("M");
