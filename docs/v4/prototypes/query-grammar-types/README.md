@@ -8,9 +8,14 @@ whole-application recursive generic?
 
 It uses the documented two-stage `dataQuery<Collection>()({...})` shape so the
 generated Collection descriptor is explicit while inner literal generics remain
-inferred. It also holds negative assertions for exact `from`, field scope,
+inferred. Selection proves aliases, selecting the same Field twice, and a
+nullable one-hop Relation result. Field operator, Relation target, and unique
+suffix types derive from that descriptor rather than an appointments-specific
+builder. The full call uses the documented `where`, fluent `orderBy`, and
+`query.forwardCursor` page shape. It also holds negative assertions for exact `from`, field scope,
 runtime list parameters, empty membership lists, derived selected-order Fields,
-text range comparison, and nullable total-order keys. A literal two-entry
+extra nullable scalar parameters, omitted structural clauses, text range
+comparison, and nullable total-order keys. A literal two-entry
 Collection Augmentation tuple and distinct timestamp codec tags with plain
 `string` public values are part of the same inference budget.
 

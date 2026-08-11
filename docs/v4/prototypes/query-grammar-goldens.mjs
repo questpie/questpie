@@ -108,11 +108,73 @@ const schemaProjection = {
 				{
 					kind: "primaryKey",
 					identity: IDS.appointmentPrimary,
-					postgresName: "appointments_pkey",
+					postgresName: "qp_pk_appointments_primary",
 					fields: [IDS.appointmentId],
 				},
+				{
+					kind: "check",
+					identity: "collection:appointments/constraint:validWindow",
+					postgresName: "qp_ck_appointments_valid_window",
+					expression: {
+						kind: "compare",
+						operator: "greaterThan",
+						left: { kind: "field", field: IDS.endsAt },
+						right: { kind: "field", field: IDS.startsAt },
+					},
+				},
+				{
+					kind: "check",
+					identity:
+						"collection:appointments/field:customerName/invariant:maxLength",
+					postgresName: "qp_ck_appointments_customer_name_max_length",
+					expression: {
+						kind: "compare",
+						operator: "lessThanOrEqual",
+						left: {
+							kind: "textLength",
+							expression: { kind: "field", field: IDS.customerName },
+						},
+						right: { kind: "literal", value: 160 },
+					},
+				},
+				{
+					kind: "check",
+					identity: "collection:appointments/field:status/invariant:maxLength",
+					postgresName: "qp_ck_appointments_status_max_length",
+					expression: {
+						kind: "compare",
+						operator: "lessThanOrEqual",
+						left: {
+							kind: "textLength",
+							expression: { kind: "field", field: IDS.status },
+						},
+						right: { kind: "literal", value: 24 },
+					},
+				},
 			],
-			indexes: [],
+			indexes: [
+				{
+					kind: "btree",
+					identity: "collection:appointments/index:byTenantAndStart",
+					postgresName: "qp_ix_appointments_by_tenant_and_start",
+					fields: [
+						{
+							field: IDS.tenantId,
+							order: "asc",
+							nulls: "last",
+							operatorClass: "typeDefault",
+							collation: null,
+						},
+						{
+							field: IDS.startsAt,
+							order: "asc",
+							nulls: "last",
+							operatorClass: "typeDefault",
+							collation: null,
+						},
+					],
+				},
+			],
 			relations: [
 				{
 					kind: "toOne",
@@ -120,7 +182,7 @@ const schemaProjection = {
 					target: IDS.tenants,
 					fields: [IDS.tenantId],
 					references: [IDS.tenantPk],
-					constraintPostgresName: "appointments_tenant_fkey",
+					constraintPostgresName: "qp_fk_appointments_tenant",
 					onDelete: "cascade",
 					onUpdate: "restrict",
 				},
@@ -154,8 +216,42 @@ const schemaProjection = {
 				{
 					kind: "primaryKey",
 					identity: IDS.tenantPrimary,
-					postgresName: "tenants_pkey",
+					postgresName: "qp_pk_tenants_primary",
 					fields: [IDS.tenantPk],
+				},
+				{
+					kind: "unique",
+					identity: "collection:tenants/constraint:slugUnique",
+					postgresName: "qp_uq_tenants_slug_unique",
+					fields: [IDS.tenantSlug],
+				},
+				{
+					kind: "check",
+					identity: "collection:tenants/field:name/invariant:maxLength",
+					postgresName: "qp_ck_tenants_name_max_length",
+					expression: {
+						kind: "compare",
+						operator: "lessThanOrEqual",
+						left: {
+							kind: "textLength",
+							expression: { kind: "field", field: IDS.tenantName },
+						},
+						right: { kind: "literal", value: 160 },
+					},
+				},
+				{
+					kind: "check",
+					identity: "collection:tenants/field:slug/invariant:maxLength",
+					postgresName: "qp_ck_tenants_slug_max_length",
+					expression: {
+						kind: "compare",
+						operator: "lessThanOrEqual",
+						left: {
+							kind: "textLength",
+							expression: { kind: "field", field: IDS.tenantSlug },
+						},
+						right: { kind: "literal", value: 80 },
+					},
 				},
 			],
 			indexes: [],
@@ -172,7 +268,7 @@ const schemaProjectionDigest = digest(
 const dataContractProjection = {
 	format: "questpie.data-contract-projection",
 	version: 1,
-	application: "application:barbershop",
+	applicationIdentity: "application:barbershop",
 	collections: [
 		{
 			identity: IDS.appointments,
@@ -251,7 +347,7 @@ const dataContractProjection = {
 					kind: "toMany",
 					identity: IDS.tenantAppointments,
 					inverseOf: IDS.tenant,
-					relatedCollection: IDS.appointments,
+					target: IDS.appointments,
 				},
 			],
 		},
@@ -261,6 +357,20 @@ const dataContractProjection = {
 const dataContractProjectionDigest = digest(
 	"questpie-data-contract-projection-v1\0",
 	dataContractProjection,
+);
+const dataContractProjectionWithoutInverse = structuredClone(
+	dataContractProjection,
+);
+dataContractProjectionWithoutInverse.collections.find(
+	(collection) => collection.identity === IDS.tenants,
+).relations = [];
+const dataContractProjectionDigestWithoutInverse = digest(
+	"questpie-data-contract-projection-v1\0",
+	dataContractProjectionWithoutInverse,
+);
+assert.notEqual(
+	dataContractProjectionDigestWithoutInverse,
+	dataContractProjectionDigest,
 );
 
 const queryTemplate = {
@@ -572,6 +682,14 @@ const tenantContractWithoutInverse = {
 				postgresName: null,
 			},
 		},
+		{
+			key: "slugUnique",
+			contract: {
+				kind: "unique",
+				fields: ["slug"],
+				postgresName: null,
+			},
+		},
 	],
 	indexes: [],
 	relations: [],
@@ -595,41 +713,39 @@ assert.notEqual(
 	packageContractDigestWithInverse,
 );
 
-// This is a real accepted SchemaProjectionV1 value. A Data-only inverse cannot
-// enter it, while the exact Collection Definition Contract digest does change.
-const schemaProjectionBeforeInverse = structuredClone(schemaProjection);
-const schemaProjectionAfterInverse = structuredClone(schemaProjection);
-assert.equal(
-	digest("questpie-schema-projection-v1\0", schemaProjectionBeforeInverse),
-	digest("questpie-schema-projection-v1\0", schemaProjectionAfterInverse),
-);
+// This is a real accepted SchemaProjectionV1 value. Its closed Relation union
+// has only toOne, so an inverse cannot be represented here; invariance is by
+// construction rather than a differential runtime assertion.
 
 const encodedCursor = Buffer.from(bytes(cursor)).toString("base64url");
 
 const expected = {
 	schemaProjectionDigest:
-		"982d619b7271113c8ef587ec0ea98d5b3be8119d31678eedd48847412bbd8267",
+		"f480aa0a422b0413f77d42d23775bdff61673a531207d5f1a73d66c3ce77eb51",
 	dataContractProjectionDigest:
-		"064dff8993af88bd04aa8fe9bf419687e4b918d7bedc8a48857bb2efb8e0e7f4",
+		"f67e5385caa5d12238a8002ff7a74f0c72d29dbcbcfa387c4b8c84917e70846e",
+	dataContractProjectionDigestWithoutInverse:
+		"5428aed4288392396e3aaccce381bd172af358d4ccb32e19e082e31e07efa096",
 	queryTemplateDigest:
-		"62c7f7329c10594cc38f6732066d80857f33f3d1303fa641438f5035e2ce8a34",
+		"5c95f7128eb114795238ec0f4a1915565158f76868e66c4649ab6300b5f764c0",
 	scopeDigest:
-		"6c3581dba2abd8c4c4a56c7289e20df5cd84dc60b167bf15dfdd9c1bd1590763",
+		"9f7bdeacaa6501682175742feedd00e6f23f74983f56af1306a43d91348eb2e8",
 	encodedCursor:
-		"eyJmb3JtYXQiOiJxdWVzdHBpZS5kYXRhLWN1cnNvciIsIm9yZGVyIjpbeyJmaWVsZCI6ImNvbGxlY3Rpb246YXBwb2ludG1lbnRzL2ZpZWxkOnN0YXJ0c0F0IiwidmFsdWUiOiIyMDI2LTA4LTEyVDA5OjAwOjAwLjAwMFoifSx7ImZpZWxkIjoiY29sbGVjdGlvbjphcHBvaW50bWVudHMvZmllbGQ6aWQiLCJ2YWx1ZSI6IjAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMiJ9XSwic2NvcGVEaWdlc3QiOiI2YzM1ODFkYmEyYWJkOGM0YzRhNTZjNzI4OWUyMGRmNWNkODRkYzYwYjE2N2JmMTVkZmRkOWMxYmQxNTkwNzYzIiwidGVtcGxhdGVEaWdlc3QiOiI2MmM3ZjczMjljMTA1OTRjYzM4ZjY3MzIwNjZkODA4NTdmMzNmM2QxMzAzZmE2NDE0MzhmNTAzNWUyY2U4YTM0IiwidmVyc2lvbiI6MX0K",
+		"eyJmb3JtYXQiOiJxdWVzdHBpZS5kYXRhLWN1cnNvciIsIm9yZGVyIjpbeyJmaWVsZCI6ImNvbGxlY3Rpb246YXBwb2ludG1lbnRzL2ZpZWxkOnN0YXJ0c0F0IiwidmFsdWUiOiIyMDI2LTA4LTEyVDA5OjAwOjAwLjAwMFoifSx7ImZpZWxkIjoiY29sbGVjdGlvbjphcHBvaW50bWVudHMvZmllbGQ6aWQiLCJ2YWx1ZSI6IjAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMiJ9XSwic2NvcGVEaWdlc3QiOiI5ZjdiZGVhY2FhNjUwMTY4MjE3NTc0MmZlZWRkMDBlNmYyM2Y3NDk4M2Y1NmFmMTMwNmE0M2Q5MTM0OGViMmU4IiwidGVtcGxhdGVEaWdlc3QiOiI1Yzk1ZjcxMjhlYjExNDc5NTIzOGVjMGY0YTE5MTU1NjUxNThmNzY4NjhlNjZjNDY0OWFiNjMwMGI1Zjc2NGMwIiwidmVyc2lvbiI6MX0K",
 	dependencyDigest:
-		"01da685ab49b021d0513c00a000b6cffa8f4e8bf78edc2db56975aacc9851fe8",
+		"8af767ea2590d2bc268f501ee9f1118024d1c9331d3421ee16f1d697f92a6f70",
 	inverseDependencyDigest:
 		"4c976afe07288ba433d9ae9c1a51758af8e157285dc39b42d565af6dd4f068ae",
 	packageContractDigestWithoutInverse:
-		"dc4f61167f6ef63c27ca79d2519f166f356273a261e64de4eab75aef4275e61a",
+		"8485be44dab1547a7d42eda65c0a2098a5d64e0bdeee466d671598fd6c2afb88",
 	packageContractDigestWithInverse:
-		"eb94448e54da9e32b728e265e69f3fb828bb343e841f8d5a1e322682bae2d30d",
+		"6bc7c94182da534eefd44dcdf5e79388f5f0e54bf0f48e577220be8e0116bb34",
 };
 
 const actual = {
 	schemaProjectionDigest,
 	dataContractProjectionDigest,
+	dataContractProjectionDigestWithoutInverse,
 	queryTemplateDigest,
 	scopeDigest,
 	encodedCursor,
@@ -667,6 +783,9 @@ if (process.argv.includes("--print")) {
 				bytes: {
 					schemaProjection: bytes(schemaProjection),
 					dataContractProjection: bytes(dataContractProjection),
+					dataContractProjectionWithoutInverse: bytes(
+						dataContractProjectionWithoutInverse,
+					),
 					queryTemplate: bytes(queryTemplate),
 					scope: bytes(scope),
 					cursor: bytes(cursor),

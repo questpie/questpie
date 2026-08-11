@@ -299,11 +299,16 @@
 	</head>
 	<body>
 		<main>
-			<div class="notice">Throwaway logic proof · not production API</div>
+			<div class="notice">
+				Throwaway semantic simulator · not a protocol golden or production API
+			</div>
 			<h1>Can one closed query shape survive the awkward cases?</h1>
 			<p class="lede">
 				Drive a small Barbershop page query, inspect every normalized byte-level
 				fact, and try the cases that tend to break cursor and dependency models.
+				This simulator uses a page limit of four and computes its own Query
+				digest; it does not claim the exact digest pinned by the separate
+				executable golden.
 			</p>
 			<div class="question">
 				<strong>Question:</strong> Can exact selection, filtering, stable
@@ -406,9 +411,9 @@
 			// Pure logic module. It knows nothing about this page or the DOM.
 			const QueryProof = (() => {
 				const SCHEMA_PROJECTION_DIGEST =
-					"982d619b7271113c8ef587ec0ea98d5b3be8119d31678eedd48847412bbd8267";
+					"f480aa0a422b0413f77d42d23775bdff61673a531207d5f1a73d66c3ce77eb51";
 				const DATA_CONTRACT_PROJECTION_DIGEST =
-					"064dff8993af88bd04aa8fe9bf419687e4b918d7bedc8a48857bb2efb8e0e7f4";
+					"f67e5385caa5d12238a8002ff7a74f0c72d29dbcbcfa387c4b8c84917e70846e";
 				const IDS = {
 					appointments: "collection:appointments",
 					tenants: "collection:tenants",
@@ -481,8 +486,16 @@
 								kind: "in",
 								field: IDS.status,
 								operands: [
-									{ kind: "literal", value: "scheduled" },
-									{ kind: "literal", value: "confirmed" },
+									{
+										kind: "literal",
+										codec: { kind: "text", minLength: null, maxLength: 24 },
+										value: "scheduled",
+									},
+									{
+										kind: "literal",
+										codec: { kind: "text", minLength: null, maxLength: 24 },
+										value: "confirmed",
+									},
 								],
 							},
 							{
@@ -491,7 +504,11 @@
 								filter: {
 									kind: "equal",
 									field: IDS.tenantSlug,
-									operand: { kind: "literal", value: "old-town" },
+									operand: {
+										kind: "literal",
+										codec: { kind: "text", minLength: null, maxLength: 80 },
+										value: "old-town",
+									},
 								},
 							},
 						],
