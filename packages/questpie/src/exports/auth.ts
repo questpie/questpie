@@ -3,6 +3,12 @@ export {
 	mergeAuthOptions,
 	type MergeAuthOptions,
 } from "#questpie/server/modules/core/integrated/auth/merge.js";
+export {
+	configureAuthEntryMethods,
+	type AuthEntryMethodsConfig,
+	type AuthEntryMethodsInput,
+	type PublicAuthEntryMethod,
+} from "#questpie/server/modules/core/integrated/auth/entry-methods.js";
 export * from "#questpie/server/modules/core/integrated/auth/types.js";
 export {
 	type AuthTransactionalQueueContext,
