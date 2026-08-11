@@ -19,6 +19,11 @@ type ScalarCodec =
 			readonly minLength: number | null;
 			readonly maxLength: number | null;
 	  }
+	| {
+			readonly kind: "integer";
+			readonly minimum: number | null;
+			readonly maximum: number | null;
+	  }
 	| { readonly kind: "timestamp"; readonly withTimezone: boolean };
 interface DataFieldDescriptor<
 	Identity extends string,
@@ -268,6 +273,101 @@ type _timestampCodecsStayDistinct = Expect<
 	>
 >;
 
+// Nested-model proof. Inline shapes contain complete column capabilities and
+// reconstruct a logical object; JSONB objects contain only embedded values.
+interface ColumnValue<Value> {
+	readonly __columnValue: Value;
+}
+interface EmbeddedValue<Value> {
+	readonly __embeddedValue: Value;
+}
+type ColumnValueOf<Definition> =
+	Definition extends ColumnValue<infer Value> ? Value : never;
+type EmbeddedValueOf<Definition> =
+	Definition extends EmbeddedValue<infer Value> ? Value : never;
+type InlineMembers = Readonly<Record<string, ColumnValue<unknown>>>;
+type EmbeddedProperties = Readonly<Record<string, EmbeddedValue<unknown>>>;
+interface InlineShape<Members extends InlineMembers>
+	extends ColumnValue<{
+		-readonly [Key in keyof Members]: ColumnValueOf<Members[Key]>;
+	}> {
+	readonly kind: "inline";
+	readonly fields: Members;
+}
+interface EmbeddedObject<Properties extends EmbeddedProperties>
+	extends EmbeddedValue<{
+		-readonly [Key in keyof Properties]: EmbeddedValueOf<Properties[Key]>;
+	}> {
+	readonly kind: "object";
+	readonly properties: Properties;
+}
+interface EmbeddedArray<Item extends EmbeddedValue<unknown>>
+	extends EmbeddedValue<ReadonlyArray<EmbeddedValueOf<Item>>> {
+	readonly kind: "array";
+	readonly items: Item;
+	readonly maximumItems: number;
+}
+declare function inlineShape<const Members extends InlineMembers>(input: {
+	fields: Members;
+}): InlineShape<Members>;
+declare function embeddedObject<const Properties extends EmbeddedProperties>(
+	input: { properties: Properties },
+): EmbeddedObject<Properties>;
+declare function embeddedArray<const Item extends EmbeddedValue<unknown>>(input: {
+	items: Item;
+	maximumItems: number;
+}): EmbeddedArray<Item>;
+declare const columnText: ColumnValue<string>;
+declare const postgisPoint: ColumnValue<{ longitude: number; latitude: number }>;
+declare const valueText: EmbeddedValue<string>;
+declare const valueBoolean: EmbeddedValue<boolean>;
+
+const inlineAddress = inlineShape({
+	fields: { city: columnText, location: postgisPoint },
+});
+const preferencesObject = embeddedObject({
+	properties: { locale: valueText, marketingEmail: valueBoolean },
+});
+const contactsArray = embeddedArray({
+	items: embeddedObject({
+		properties: { label: valueText, primary: valueBoolean },
+	}),
+	maximumItems: 20,
+});
+type _inlineShape = Expect<
+	Equal<
+		ColumnValueOf<typeof inlineAddress>,
+		{
+			city: string;
+			location: { longitude: number; latitude: number };
+		}
+	>
+>;
+type _embeddedObject = Expect<
+	Equal<
+		EmbeddedValueOf<typeof preferencesObject>,
+		{ locale: string; marketingEmail: boolean }
+	>
+>;
+type _embeddedArray = Expect<
+	Equal<
+		EmbeddedValueOf<typeof contactsArray>,
+		ReadonlyArray<{ label: string; primary: boolean }>
+	>
+>;
+embeddedObject({
+	properties: {
+		// @ts-expect-error native column capabilities are not JSONB value codecs.
+		location: postgisPoint,
+	},
+});
+inlineShape({
+	fields: {
+		// @ts-expect-error an embedded value is not an independently stored column.
+		locale: valueText,
+	},
+});
+
 interface Literal<Value> {
 	readonly kind: "literal";
 	readonly value: Value;
@@ -276,6 +376,13 @@ interface Parameter<Value, Nullable extends boolean> {
 	readonly kind: "parameter";
 	readonly __value: Value;
 	readonly __nullable: Nullable;
+}
+interface ListParameter<Value, MaximumItems extends number> {
+	readonly kind: "listParameter";
+	readonly __value: readonly Value[];
+	readonly __item: Value;
+	readonly __maximumItems: MaximumItems;
+	readonly __nullable: false;
 }
 interface Filter {
 	readonly __filter: true;
@@ -286,8 +393,15 @@ interface OrderTerm<FieldKey extends PropertyKey> {
 	readonly nulls: "first" | "last";
 }
 type Operand<Value> = Value | Literal<Value> | Parameter<Value, false>;
+type SetOperand<Value> =
+	| readonly [Value, ...Value[]]
+	| ListParameter<Value, number>;
 type RangeCodec = { kind: "timestamp"; withTimezone: boolean };
-type CursorOrderCodec = { kind: "uuid" } | RangeCodec;
+type CursorOrderCodec =
+	| { kind: "uuid" }
+	| { kind: "text"; minLength: number | null; maxLength: number | null }
+	| { kind: "integer"; minimum: number | null; maximum: number | null }
+	| RangeCodec;
 interface QueryField<
 	FieldKey extends PropertyKey,
 	Value,
@@ -299,8 +413,8 @@ interface QueryField<
 	readonly __value: Value | (Nullable extends true ? null : never);
 	equal(value: Operand<Value>): Filter;
 	notEqual(value: Operand<Value>): Filter;
-	in(values: readonly [Value, ...Value[]]): Filter;
-	notIn(values: readonly [Value, ...Value[]]): Filter;
+	in(values: SetOperand<Value>): Filter;
+	notIn(values: SetOperand<Value>): Filter;
 	isNull: Nullable extends true ? () => Filter : never;
 	isNotNull: Nullable extends true ? () => Filter : never;
 	lessThan: Codec extends RangeCodec
@@ -446,7 +560,8 @@ interface TenantDescriptor {
 
 declare const appointmentScope: QueryScope<AppointmentDescriptor>;
 declare const tenantScope: QueryScope<TenantDescriptor>;
-declare const runtimeListParameter: Parameter<readonly string[], false>;
+declare const runtimeStatusList: ListParameter<string, 50>;
+declare const wrongScalarListParameter: Parameter<readonly string[], false>;
 
 appointmentScope.relations.tenant.exists(({ fields }) =>
 	fields.slug.equal("old-town"),
@@ -463,23 +578,28 @@ tenantScope.relations.appointments.notExists(({ fields }) =>
 appointmentScope.fields.startsAt.lessThan("2026-08-12T09:00:00.000Z");
 appointmentScope.fields.status.in(["scheduled"]);
 appointmentScope.fields.status.notIn(["cancelled", "completed"]);
+appointmentScope.fields.status.in(runtimeStatusList);
+appointmentScope.fields.status.notIn(runtimeStatusList);
 appointmentScope.fields.auditNote.isNull();
 appointmentScope.fields.auditNote.isNotNull();
-// @ts-expect-error in/notIn v1 accepts a non-empty literal tuple, not a list parameter.
-appointmentScope.fields.status.in(runtimeListParameter);
+// @ts-expect-error a scalar parameter containing an array is not a bounded list parameter.
+appointmentScope.fields.status.in(wrongScalarListParameter);
 // @ts-expect-error an empty membership tuple is invalid.
 appointmentScope.fields.status.in([]);
 // @ts-expect-error UUID range comparison is outside the public v1 operator matrix.
 appointmentScope.fields.id.lessThan("11111111-1111-4111-8111-111111111111");
-// @ts-expect-error Text range comparison is outside the public v1 operator matrix.
+// @ts-expect-error Text filtering remains equality/set based; ordering is separate.
 appointmentScope.fields.status.lessThan("scheduled");
+appointmentScope.fields.status.ascending({ nulls: "last" });
 appointmentScope.relations.tenant.exists(({ fields }) =>
 	// @ts-expect-error a Tenant predicate cannot read an Appointment Field.
 	fields.status.equal("scheduled"),
 );
 
 type ParameterValue<Definition> =
-	Definition extends Parameter<infer Value, infer Nullable>
+	Definition extends ListParameter<infer Value, number>
+		? readonly Value[]
+		: Definition extends Parameter<infer Value, infer Nullable>
 		? Nullable extends true
 			? Value | null
 			: Value
@@ -621,7 +741,10 @@ declare function dataQuery<
 		readonly relations: Readonly<Record<string, unknown>>;
 	},
 >(): <
-	const Parameters extends Record<string, Parameter<unknown, boolean>>,
+	const Parameters extends Record<
+		string,
+		Parameter<unknown, boolean> | ListParameter<unknown, number>
+	>,
 	const Selection extends OutputSelection,
 	const Order extends readonly [
 		OrderTerm<DescriptorFieldKeys<Descriptor>>,
@@ -654,6 +777,7 @@ const appointmentPage = dataQuery<AppointmentDescriptor>()({
 	from: "appointments",
 	parameters: {
 		tenantId: { kind: "parameter" } as Parameter<string, false>,
+		statuses: { kind: "listParameter" } as ListParameter<string, 50>,
 		first: { kind: "parameter" } as Parameter<number, false>,
 		after: { kind: "parameter" } as Parameter<string, true>,
 	},
@@ -671,7 +795,7 @@ const appointmentPage = dataQuery<AppointmentDescriptor>()({
 	where: ({ fields, parameters }) =>
 		query.and(
 			fields.tenantId.equal(parameters.tenantId),
-			fields.status.in(["scheduled", "confirmed"]),
+			fields.status.in(parameters.statuses),
 		),
 	orderBy: ({ fields }) => [
 		fields.startsAt.ascending({ nulls: "last" }),
@@ -686,7 +810,12 @@ const appointmentPage = dataQuery<AppointmentDescriptor>()({
 type _parameters = Expect<
 	Equal<
 		typeof appointmentPage.parameters,
-		{ tenantId: string; first: number; after: string | null }
+		{
+			tenantId: string;
+			statuses: readonly string[];
+			first: number;
+			after: string | null;
+		}
 	>
 >;
 type _result = Expect<
@@ -707,11 +836,17 @@ type _result = Expect<
 >;
 appointmentPage.bind({
 	tenantId: "11111111-1111-4111-8111-111111111111",
+	statuses: ["confirmed", "scheduled", "confirmed"],
 	first: 20,
 	after: null,
 });
-// @ts-expect-error UUID parameters do not accept numbers.
-appointmentPage.bind({ tenantId: 42, first: 20, after: null });
+appointmentPage.bind({
+	// @ts-expect-error UUID parameters do not accept numbers.
+	tenantId: 42,
+	statuses: [],
+	first: 20,
+	after: null,
+});
 
 const allAppointments = dataQuery<AppointmentDescriptor>()({
 	from: "appointments",

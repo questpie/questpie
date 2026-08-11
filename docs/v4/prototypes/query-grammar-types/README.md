@@ -13,13 +13,18 @@ nullable one-hop Relation result. Field operator, Relation target, and unique
 suffix types derive from that descriptor rather than an appointments-specific
 builder. Each Field descriptor also carries its exact semantic identity. The
 full call uses the documented `where`, fluent `orderBy`, and
-`query.forwardCursor` page shape. It also holds negative assertions for exact `from`, field scope,
-runtime list parameters, empty membership lists, derived selected-order Fields,
+`query.forwardCursor` page shape. It also holds negative assertions for exact
+`from`, field scope, unbounded array-shaped scalar parameters, empty literal
+membership lists, derived selected-order Fields,
 extra nullable scalar parameters, independently omitted structural clauses,
 text and UUID range comparison, and nullable total-order keys. A second valid
 call proves that page parameter keys are not reserved names. A literal two-entry
 Collection Augmentation tuple and distinct timestamp codec tags with plain
-`string` public values are part of the same inference budget.
+`string` public values are part of the same inference budget. The final fixture
+also proves bounded scalar-list parameters, text order eligibility, logical
+inline-column shapes, typed JSONB embedded objects/arrays, and the type-level
+separation that prevents a native column capability from masquerading as an
+embedded JSON value.
 
 Run from the repository root:
 

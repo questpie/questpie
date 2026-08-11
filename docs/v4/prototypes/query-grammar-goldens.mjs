@@ -15,6 +15,7 @@ const IDS = {
 	status: "collection:appointments/field:status",
 	tenant: "collection:appointments/relation:tenant",
 	tenantPrimary: "collection:tenants/constraint:primary",
+	tenantSlugUnique: "collection:tenants/constraint:slugUnique",
 	appointmentPrimary: "collection:appointments/constraint:primary",
 	tenantPk: "collection:tenants/field:id",
 	tenantSlug: "collection:tenants/field:slug",
@@ -75,6 +76,28 @@ function bytes(value) {
 function digest(prefix, value) {
 	return createHash("sha256").update(prefix).update(bytes(value)).digest("hex");
 }
+
+function normalizeSetBinding(values, maximumItems) {
+	assert.ok(Array.isArray(values));
+	assert.ok(values.length <= maximumItems);
+	assert.ok(values.every((value) => value !== null));
+	return [...new Set(values)].sort(compareAscii);
+}
+
+assert.deepEqual(
+	normalizeSetBinding(["scheduled", "confirmed", "scheduled"], 50),
+	["confirmed", "scheduled"],
+);
+assert.deepEqual(normalizeSetBinding([], 50), []);
+assert.throws(() => normalizeSetBinding(["scheduled", null], 50));
+assert.throws(() => normalizeSetBinding(Array.from({ length: 51 }, () => "x"), 50));
+
+const nestedPath = {
+	field: "collection:customers/field:preferences",
+	segments: ["address", "city"],
+};
+assert.notDeepEqual(nestedPath.segments, ["address.city"]);
+assert.notEqual(bytes(nestedPath), bytes({ ...nestedPath, segments: ["address.city"] }));
 
 const uuid = { kind: "uuid" };
 const text80 = { kind: "text", minLength: null, maxLength: 80 };
@@ -417,6 +440,14 @@ const queryTemplate = {
 			codec: { kind: "integer", minimum: 1, maximum: 100 },
 			nullable: false,
 		},
+		{
+			kind: "list",
+			name: "statuses",
+			codec: text24,
+			maximumItems: 50,
+			nullable: false,
+			semantics: "set",
+		},
 		{ kind: "scalar", name: "tenantId", codec: uuid, nullable: false },
 		{ kind: "scalar", name: "tenantSlug", codec: text80, nullable: false },
 	],
@@ -446,11 +477,7 @@ const queryTemplate = {
 			{
 				kind: "in",
 				field: IDS.status,
-				operands: ["scheduled", "confirmed"].map((value) => ({
-					kind: "literal",
-					codec: text24,
-					value,
-				})),
+				set: { kind: "parameter", parameter: "statuses" },
 			},
 			{
 				kind: "relationExists",
@@ -486,6 +513,13 @@ const scope = {
 	templateDigest: queryTemplateDigest,
 	values: [
 		{
+			parameter: "statuses",
+			value: normalizeSetBinding(
+				["scheduled", "confirmed", "scheduled"],
+				50,
+			),
+		},
+		{
 			parameter: "tenantId",
 			value: "11111111-1111-4111-8111-111111111111",
 		},
@@ -500,6 +534,7 @@ const cursor = {
 	version: 1,
 	templateDigest: queryTemplateDigest,
 	scopeDigest,
+	orderContextDigest: null,
 	order: [
 		{ field: IDS.startsAt, value: "2026-08-12T09:00:00.000Z" },
 		{
@@ -508,6 +543,89 @@ const cursor = {
 		},
 	],
 };
+
+// Text cursor ordering delegates comparisons to the Field's deterministic
+// PostgreSQL collation. The environment-derived order context prevents a
+// cursor from surviving a provider/locale/version change.
+const tenantNameQueryTemplate = {
+	format: "questpie.data-query-template",
+	version: 1,
+	from: IDS.tenants,
+	schemaProjectionDigest,
+	dataContractProjectionDigest,
+	parameters: [
+		{ kind: "cursor", name: "after", nullable: true },
+		{
+			kind: "scalar",
+			name: "first",
+			codec: { kind: "integer", minimum: 1, maximum: 100 },
+			nullable: false,
+		},
+	],
+	select: [
+		{ kind: "field", key: "id", field: IDS.tenantPk },
+		{ kind: "field", key: "slug", field: IDS.tenantSlug },
+	],
+	filter: null,
+	order: [
+		{ field: IDS.tenantSlug, direction: "asc", nulls: "last" },
+		{ field: IDS.tenantPk, direction: "asc", nulls: "last" },
+	],
+	page: {
+		kind: "forwardCursor",
+		first: { kind: "parameter", parameter: "first" },
+		after: { kind: "parameter", parameter: "after" },
+		uniqueConstraint: IDS.tenantPrimary,
+	},
+};
+const tenantNameQueryTemplateDigest = digest(
+	"questpie-data-query-template-v1\0",
+	tenantNameQueryTemplate,
+);
+const tenantNameOrderContext = {
+	format: "questpie.data-query-order-context",
+	version: 1,
+	templateDigest: tenantNameQueryTemplateDigest,
+	terms: [
+		{
+			field: IDS.tenantSlug,
+			provider: "libc",
+			locale: "C.UTF-8",
+			deterministic: true,
+			version: null,
+		},
+	],
+};
+const tenantNameOrderContextDigest = digest(
+	"questpie-data-query-order-context-v1\0",
+	tenantNameOrderContext,
+);
+const changedTenantNameOrderContext = structuredClone(tenantNameOrderContext);
+changedTenantNameOrderContext.terms[0].version = "changed-provider-version";
+assert.notEqual(
+	digest(
+		"questpie-data-query-order-context-v1\0",
+		changedTenantNameOrderContext,
+	),
+	tenantNameOrderContextDigest,
+);
+const tenantNameCursor = {
+	format: "questpie.data-cursor",
+	version: 1,
+	templateDigest: tenantNameQueryTemplateDigest,
+	scopeDigest: digest("questpie-data-query-scope-v1\0", {
+		format: "questpie.data-query-scope",
+		version: 1,
+		templateDigest: tenantNameQueryTemplateDigest,
+		values: [],
+	}),
+	orderContextDigest: tenantNameOrderContextDigest,
+	order: [
+		{ field: IDS.tenantSlug, value: "old-town" },
+		{ field: IDS.tenantPk, value: "00000000-0000-4000-8000-000000000001" },
+	],
+};
+assert.equal(tenantNameCursor.orderContextDigest, tenantNameOrderContextDigest);
 
 function fieldRead(field, roles) {
 	return { field, roles: [...new Set(roles)].sort(compareAscii) };
@@ -766,13 +884,17 @@ const expected = {
 	dataContractProjectionDigestWithoutInverse:
 		"5428aed4288392396e3aaccce381bd172af358d4ccb32e19e082e31e07efa096",
 	queryTemplateDigest:
-		"5c95f7128eb114795238ec0f4a1915565158f76868e66c4649ab6300b5f764c0",
+		"e8a283a2df528989d9b6109a2ea6ae0720b90acba5b3b86b718514c739191b04",
 	scopeDigest:
-		"9f7bdeacaa6501682175742feedd00e6f23f74983f56af1306a43d91348eb2e8",
+		"d68de5a97b8230363811c0814d0094e75f68f63499a6901f25f8aecdffad82dd",
 	encodedCursor:
-		"eyJmb3JtYXQiOiJxdWVzdHBpZS5kYXRhLWN1cnNvciIsIm9yZGVyIjpbeyJmaWVsZCI6ImNvbGxlY3Rpb246YXBwb2ludG1lbnRzL2ZpZWxkOnN0YXJ0c0F0IiwidmFsdWUiOiIyMDI2LTA4LTEyVDA5OjAwOjAwLjAwMFoifSx7ImZpZWxkIjoiY29sbGVjdGlvbjphcHBvaW50bWVudHMvZmllbGQ6aWQiLCJ2YWx1ZSI6IjAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMiJ9XSwic2NvcGVEaWdlc3QiOiI5ZjdiZGVhY2FhNjUwMTY4MjE3NTc0MmZlZWRkMDBlNmYyM2Y3NDk4M2Y1NmFmMTMwNmE0M2Q5MTM0OGViMmU4IiwidGVtcGxhdGVEaWdlc3QiOiI1Yzk1ZjcxMjhlYjExNDc5NTIzOGVjMGY0YTE5MTU1NjUxNThmNzY4NjhlNjZjNDY0OWFiNjMwMGI1Zjc2NGMwIiwidmVyc2lvbiI6MX0K",
+		"eyJmb3JtYXQiOiJxdWVzdHBpZS5kYXRhLWN1cnNvciIsIm9yZGVyIjpbeyJmaWVsZCI6ImNvbGxlY3Rpb246YXBwb2ludG1lbnRzL2ZpZWxkOnN0YXJ0c0F0IiwidmFsdWUiOiIyMDI2LTA4LTEyVDA5OjAwOjAwLjAwMFoifSx7ImZpZWxkIjoiY29sbGVjdGlvbjphcHBvaW50bWVudHMvZmllbGQ6aWQiLCJ2YWx1ZSI6IjAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMiJ9XSwib3JkZXJDb250ZXh0RGlnZXN0IjpudWxsLCJzY29wZURpZ2VzdCI6ImQ2OGRlNWE5N2I4MjMwMzYzODExYzA4MTRkMDA5NGU3NWY2OGY2MzQ5OWE2OTAxZjI1ZjhhZWNkZmZhZDgyZGQiLCJ0ZW1wbGF0ZURpZ2VzdCI6ImU4YTI4M2EyZGY1Mjg5ODlkOWI2MTA5YTJlYTZhZTA3MjBiOTBhY2JhNWIzYjg2YjcxODUxNGM3MzkxOTFiMDQiLCJ2ZXJzaW9uIjoxfQo",
+	tenantNameQueryTemplateDigest:
+		"5b378f2fd0823cb6550f5fc003064fc245afe0bccef90a7652bfde6d60b6461c",
+	tenantNameOrderContextDigest:
+		"cfb984a4be147bd47699db816e0ca4d255ebf607e4f095cd16ad4c15284aa92a",
 	dependencyDigest:
-		"8af767ea2590d2bc268f501ee9f1118024d1c9331d3421ee16f1d697f92a6f70",
+		"862346693b0f77630e467c30356b52cd60277fa0ac24537c8944350254231088",
 	inverseDependencyDigest:
 		"36b3d95acafe74a371cd19d781b9b39ff67c8fa15c2d239740ff9dcfb48d1ac4",
 	packageContractDigestWithoutInverse:
@@ -788,6 +910,8 @@ const actual = {
 	queryTemplateDigest,
 	scopeDigest,
 	encodedCursor,
+	tenantNameQueryTemplateDigest,
+	tenantNameOrderContextDigest,
 	dependencyDigest: digest(
 		"questpie-data-query-dependency-template-v1\0",
 		dependencyTemplate,
