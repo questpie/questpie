@@ -20,12 +20,14 @@ type ScalarCodec =
 			readonly maxLength: number | null;
 	  }
 	| { readonly kind: "timestamp"; readonly withTimezone: boolean };
-interface Field<
-	Value,
+interface DataFieldDescriptor<
+	Identity extends string,
 	Codec extends ScalarCodec,
+	Value,
 	Nullable extends boolean,
 	HasDefault extends boolean,
 > {
+	readonly identity: Identity;
 	readonly __value: Value;
 	readonly codec: Codec;
 	readonly __nullable: Nullable;
@@ -33,15 +35,22 @@ interface Field<
 }
 
 type FieldValue<Definition> =
-	Definition extends Field<infer Value, ScalarCodec, infer Nullable, boolean>
+	Definition extends DataFieldDescriptor<
+		string,
+		ScalarCodec,
+		infer Value,
+		infer Nullable,
+		boolean
+	>
 		? Nullable extends true
 			? Value | null
 			: Value
 		: never;
 type RequiredInsertKey<Fields> = {
-	[Key in keyof Fields]: Fields[Key] extends Field<
-		unknown,
+	[Key in keyof Fields]: Fields[Key] extends DataFieldDescriptor<
+		string,
 		ScalarCodec,
+		unknown,
 		infer Nullable,
 		infer HasDefault
 	>
@@ -69,45 +78,63 @@ type UpdateRow<Fields> = {
 };
 
 interface AppointmentOwnerFields {
-	readonly id: Field<string, { kind: "uuid" }, false, true>;
-	readonly tenantId: Field<string, { kind: "uuid" }, false, false>;
-	readonly customerName: Field<
+	readonly id: DataFieldDescriptor<
+		"collection:appointments/field:id",
+		{ kind: "uuid" },
 		string,
+		false,
+		true
+	>;
+	readonly tenantId: DataFieldDescriptor<
+		"collection:appointments/field:tenantId",
+		{ kind: "uuid" },
+		string,
+		false,
+		false
+	>;
+	readonly customerName: DataFieldDescriptor<
+		"collection:appointments/field:customerName",
 		{ kind: "text"; minLength: null; maxLength: 160 },
-		false,
-		false
-	>;
-	readonly startsAt: Field<
-		Timestamptz,
-		{ kind: "timestamp"; withTimezone: true },
-		false,
-		false
-	>;
-	readonly endsAt: Field<
-		Timestamptz,
-		{ kind: "timestamp"; withTimezone: true },
-		false,
-		false
-	>;
-	readonly status: Field<
 		string,
+		false,
+		false
+	>;
+	readonly startsAt: DataFieldDescriptor<
+		"collection:appointments/field:startsAt",
+		{ kind: "timestamp"; withTimezone: true },
+		Timestamptz,
+		false,
+		false
+	>;
+	readonly endsAt: DataFieldDescriptor<
+		"collection:appointments/field:endsAt",
+		{ kind: "timestamp"; withTimezone: true },
+		Timestamptz,
+		false,
+		false
+	>;
+	readonly status: DataFieldDescriptor<
+		"collection:appointments/field:status",
 		{ kind: "text"; minLength: null; maxLength: 24 },
+		string,
 		false,
 		true
 	>;
 }
 interface AuditAugmentation {
-	readonly auditNote: Field<
-		string,
+	readonly auditNote: DataFieldDescriptor<
+		"collection:appointments/field:auditNote",
 		{ kind: "text"; minLength: null; maxLength: 500 },
+		string,
 		true,
 		false
 	>;
 }
 interface ExternalAugmentation {
-	readonly externalRef: Field<
-		string,
+	readonly externalRef: DataFieldDescriptor<
+		"collection:appointments/field:externalRef",
 		{ kind: "text"; minLength: null; maxLength: 120 },
+		string,
 		false,
 		false
 	>;
@@ -127,24 +154,33 @@ type AppointmentFields = FoldAugmentations<
 >;
 
 interface TenantFields {
-	readonly id: Field<string, { kind: "uuid" }, false, true>;
-	readonly slug: Field<
+	readonly id: DataFieldDescriptor<
+		"collection:tenants/field:id",
+		{ kind: "uuid" },
 		string,
+		false,
+		true
+	>;
+	readonly slug: DataFieldDescriptor<
+		"collection:tenants/field:slug",
 		{ kind: "text"; minLength: null; maxLength: 80 },
+		string,
 		false,
 		false
 	>;
-	readonly name: Field<
-		string,
+	readonly name: DataFieldDescriptor<
+		"collection:tenants/field:name",
 		{ kind: "text"; minLength: null; maxLength: 160 },
+		string,
 		false,
 		false
 	>;
 }
 interface CodecWitnessFields {
-	readonly localOpening: Field<
-		Timestamp,
+	readonly localOpening: DataFieldDescriptor<
+		"collection:codecWitness/field:localOpening",
 		{ kind: "timestamp"; withTimezone: false },
+		Timestamp,
 		false,
 		false
 	>;
@@ -200,7 +236,13 @@ type _update = Expect<
 	>
 >;
 type FieldCodec<Definition> =
-	Definition extends Field<unknown, infer Codec, boolean, boolean>
+	Definition extends DataFieldDescriptor<
+		string,
+		infer Codec,
+		unknown,
+		boolean,
+		boolean
+	>
 		? Codec
 		: never;
 type _timestampWithoutZoneCodec = Expect<
@@ -272,16 +314,20 @@ interface QueryField<
 		: never;
 }
 type FieldMap = Readonly<
-	Record<string, Field<unknown, ScalarCodec, boolean, boolean>>
+	Record<
+		string,
+		DataFieldDescriptor<string, ScalarCodec, unknown, boolean, boolean>
+	>
 >;
 type QueryFields<Fields> = {
-	readonly [Key in keyof Fields]: Fields[Key] extends Field<
-		infer Value,
+	readonly [Key in keyof Fields]: Fields[Key] extends DataFieldDescriptor<
+		infer Identity,
 		infer Codec,
+		infer Value,
 		infer Nullable,
 		boolean
 	>
-		? QueryField<Key, Value, Codec, Nullable>
+		? QueryField<Key, Value, Codec, Nullable> & { readonly identity: Identity }
 		: never;
 };
 interface ToOneOutput<Selection extends OutputSelection> {
@@ -381,6 +427,10 @@ interface TenantDescriptor {
 			readonly kind: "primaryKey";
 			readonly fields: readonly ["id"];
 		};
+		readonly slugUnique: {
+			readonly kind: "unique";
+			readonly fields: readonly ["slug"];
+		};
 	};
 	readonly relations: {
 		readonly appointments: {
@@ -421,6 +471,8 @@ appointmentScope.fields.status.in(runtimeListParameter);
 appointmentScope.fields.status.in([]);
 // @ts-expect-error UUID range comparison is outside the public v1 operator matrix.
 appointmentScope.fields.id.lessThan("11111111-1111-4111-8111-111111111111");
+// @ts-expect-error Text range comparison is outside the public v1 operator matrix.
+appointmentScope.fields.status.lessThan("scheduled");
 appointmentScope.relations.tenant.exists(({ fields }) =>
 	// @ts-expect-error a Tenant predicate cannot read an Appointment Field.
 	fields.status.equal("scheduled"),
@@ -445,6 +497,18 @@ type NullableParameterKey<Definitions> = {
 			: never
 		: never;
 }[keyof Definitions];
+type IsUnion<Value, Whole = Value> = Value extends Whole
+	? [Whole] extends [Value]
+		? false
+		: true
+	: never;
+type ValidCursorParameterSet<Definitions> = [
+	NullableParameterKey<Definitions>,
+] extends [never]
+	? never
+	: true extends IsUnion<NullableParameterKey<Definitions>>
+		? never
+		: unknown;
 interface PageInfo {
 	endCursor: string | null;
 	hasNextPage: boolean;
@@ -498,13 +562,39 @@ type EndsWith<
 				: false
 			: true
 		: false;
+type AllFieldsNonNullable<
+	Fields,
+	Keys extends readonly PropertyKey[],
+> = Keys extends readonly [
+	infer Head extends keyof Fields,
+	...infer Tail extends readonly PropertyKey[],
+]
+	? Fields[Head] extends DataFieldDescriptor<
+			string,
+			ScalarCodec,
+			unknown,
+			false,
+			boolean
+		>
+		? AllFieldsNonNullable<Fields, Tail>
+		: false
+	: true;
+type ConstraintQualifies<
+	Descriptor,
+	Order extends readonly OrderTerm<PropertyKey>[],
+	Suffix extends readonly PropertyKey[],
+> = Descriptor extends { readonly fields: infer Fields }
+	? EndsWith<OrderFieldKeys<Order>, Suffix> extends true
+		? AllFieldsNonNullable<Fields, Suffix>
+		: false
+	: false;
 type ValidTotalOrder<
 	Descriptor,
 	Order extends readonly OrderTerm<PropertyKey>[],
 > = true extends (
 	ConstraintFieldUnion<Descriptor> extends infer Suffix
 		? Suffix extends readonly PropertyKey[]
-			? EndsWith<OrderFieldKeys<Order>, Suffix>
+			? ConstraintQualifies<Descriptor, Order, Suffix>
 			: never
 		: never
 )
@@ -531,10 +621,7 @@ declare function dataQuery<
 		readonly relations: Readonly<Record<string, unknown>>;
 	},
 >(): <
-	const Parameters extends Record<string, Parameter<unknown, boolean>> & {
-		readonly first: Parameter<number, false>;
-		readonly after: Parameter<string, true>;
-	},
+	const Parameters extends Record<string, Parameter<unknown, boolean>>,
 	const Selection extends OutputSelection,
 	const Order extends readonly [
 		OrderTerm<DescriptorFieldKeys<Descriptor>>,
@@ -542,10 +629,7 @@ declare function dataQuery<
 	],
 >(definition: {
 	readonly from: Descriptor["name"];
-	readonly parameters: Parameters &
-		(Equal<NullableParameterKey<Parameters>, "after"> extends true
-			? unknown
-			: never);
+	readonly parameters: Parameters & ValidCursorParameterSet<Parameters>;
 	readonly select: (scope: QueryScope<Descriptor>) => Selection;
 	readonly where:
 		| null
@@ -563,7 +647,7 @@ declare function dataQuery<
 			: never);
 	readonly page: (scope: {
 		readonly parameters: Parameters;
-	}) => ForwardPage<Parameters["first"], Parameters["after"]>;
+	}) => ForwardPage<Parameter<number, false>, Parameter<string, true>>;
 }) => DataQueryContract<ParameterValues<Parameters>, SelectedOutput<Selection>>;
 
 const appointmentPage = dataQuery<AppointmentDescriptor>()({
@@ -632,8 +716,8 @@ appointmentPage.bind({ tenantId: 42, first: 20, after: null });
 const allAppointments = dataQuery<AppointmentDescriptor>()({
 	from: "appointments",
 	parameters: {
-		first: { kind: "parameter" } as Parameter<number, false>,
-		after: { kind: "parameter" } as Parameter<string, true>,
+		limit: { kind: "parameter" } as Parameter<number, false>,
+		cursor: { kind: "parameter" } as Parameter<string, true>,
 	},
 	select: ({ fields }) => ({ id: fields.id, startsAt: fields.startsAt }),
 	where: null,
@@ -642,7 +726,10 @@ const allAppointments = dataQuery<AppointmentDescriptor>()({
 		fields.id.descending({ nulls: "first" }),
 	],
 	page: ({ parameters }) =>
-		query.forwardCursor({ first: parameters.first, after: parameters.after }),
+		query.forwardCursor({
+			first: parameters.limit,
+			after: parameters.cursor,
+		}),
 });
 type _nullWhereResult = Expect<
 	Equal<
@@ -708,7 +795,7 @@ dataQuery<AppointmentDescriptor>()({
 		query.forwardCursor({ first: parameters.first, after: parameters.after }),
 });
 
-// @ts-expect-error a data Query definition cannot omit `where` or `page`.
+// @ts-expect-error a data Query definition cannot omit `where`.
 dataQuery<AppointmentDescriptor>()({
 	from: "appointments",
 	parameters: {
@@ -717,23 +804,51 @@ dataQuery<AppointmentDescriptor>()({
 	},
 	select: selectIdAndStart,
 	orderBy: ascendingAppointmentOrder,
+	page: ({ parameters }) =>
+		query.forwardCursor({ first: parameters.first, after: parameters.after }),
 });
 
-interface OrderField<Key extends string, Nullable extends boolean> {
-	readonly key: Key;
-	readonly nullable: Nullable;
+// @ts-expect-error a data Query definition cannot omit `page`.
+dataQuery<AppointmentDescriptor>()({
+	from: "appointments",
+	parameters: {
+		first: { kind: "parameter" } as Parameter<number, false>,
+		after: { kind: "parameter" } as Parameter<string, true>,
+	},
+	select: selectIdAndStart,
+	where: null,
+	orderBy: ascendingAppointmentOrder,
+});
+
+interface CompositeKeyDescriptor {
+	readonly fields: Pick<
+		AppointmentFields,
+		"tenantId" | "externalRef" | "auditNote"
+	>;
+	readonly uniqueConstraints: {
+		readonly externalIdentity: {
+			readonly fields: readonly ["tenantId", "externalRef"];
+		};
+		readonly nullableIdentity: {
+			readonly fields: readonly ["tenantId", "auditNote"];
+		};
+	};
 }
-type NonNullableKey<Key extends readonly OrderField<string, boolean>[]> =
-	Key[number]["nullable"] extends false ? Key : never;
-declare function acceptCompositeSuffix<
-	const Key extends readonly OrderField<string, boolean>[],
->(key: NonNullableKey<Key>): void;
-acceptCompositeSuffix([
-	{ key: "tenantId", nullable: false },
-	{ key: "externalRef", nullable: false },
-]);
-// @ts-expect-error a nullable unique key cannot prove a total cursor order.
-acceptCompositeSuffix([
-	{ key: "tenantId", nullable: false },
-	{ key: "auditNote", nullable: true },
-]);
+type _compositeNonNullableSuffixIsTotal = Expect<
+	Equal<
+		ValidTotalOrder<
+			CompositeKeyDescriptor,
+			readonly [OrderTerm<"tenantId">, OrderTerm<"externalRef">]
+		>,
+		readonly [OrderTerm<"tenantId">, OrderTerm<"externalRef">]
+	>
+>;
+type _nullableUniqueSuffixIsRejected = Expect<
+	Equal<
+		ValidTotalOrder<
+			CompositeKeyDescriptor,
+			readonly [OrderTerm<"tenantId">, OrderTerm<"auditNote">]
+		>,
+		never
+	>
+>;

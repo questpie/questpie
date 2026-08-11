@@ -38,6 +38,36 @@ function compareAscii(left, right) {
 	return left < right ? -1 : left > right ? 1 : 0;
 }
 
+function chooseUniqueConstraint(orderFields, candidates, nonNullableFields) {
+	return candidates
+		.filter(
+			(candidate) =>
+				candidate.fields.every((field) => nonNullableFields.has(field)) &&
+				candidate.fields.every(
+					(field, index) =>
+						orderFields[
+							orderFields.length - candidate.fields.length + index
+						] === field,
+				),
+		)
+		.sort((left, right) => compareAscii(left.identity, right.identity))[0];
+}
+
+assert.equal(
+	chooseUniqueConstraint(
+		[IDS.startsAt, IDS.appointmentId],
+		[
+			{
+				identity: "collection:appointments/constraint:zAlternateId",
+				fields: [IDS.appointmentId],
+			},
+			{ identity: IDS.appointmentPrimary, fields: [IDS.appointmentId] },
+		],
+		new Set([IDS.startsAt, IDS.appointmentId]),
+	).identity,
+	IDS.appointmentPrimary,
+);
+
 function bytes(value) {
 	return JSON.stringify(canonicalValue(value)) + "\n";
 }
@@ -566,7 +596,16 @@ const inverseDependencyTemplate = {
 		{
 			kind: "collection",
 			collection: IDS.tenants,
-			fields: [fieldRead(IDS.tenantPk, ["joinLocal", "output"])],
+			fields: [
+				fieldRead(IDS.tenantPk, ["cursor", "joinLocal", "order", "output"]),
+			],
+		},
+		{
+			kind: "page",
+			collection: IDS.tenants,
+			orderFields: [IDS.tenantPk],
+			uniqueConstraint: IDS.tenantPrimary,
+			direction: "forward",
 		},
 		relationRead(IDS.tenantAppointments),
 	].sort((left, right) => {
@@ -735,7 +774,7 @@ const expected = {
 	dependencyDigest:
 		"8af767ea2590d2bc268f501ee9f1118024d1c9331d3421ee16f1d697f92a6f70",
 	inverseDependencyDigest:
-		"4c976afe07288ba433d9ae9c1a51758af8e157285dc39b42d565af6dd4f068ae",
+		"36b3d95acafe74a371cd19d781b9b39ff67c8fa15c2d239740ff9dcfb48d1ac4",
 	packageContractDigestWithoutInverse:
 		"8485be44dab1547a7d42eda65c0a2098a5d64e0bdeee466d671598fd6c2afb88",
 	packageContractDigestWithInverse:
