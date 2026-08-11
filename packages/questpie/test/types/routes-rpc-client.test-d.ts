@@ -262,6 +262,7 @@ createClient<ClientApp>({
 	baseURL: "https://example.test",
 	rawRoutes: { "download:GET": true },
 });
+// @ts-expect-error known raw routes must register their runtime keys
 createClient<ClientApp>({ baseURL: "https://example.test" });
 createClient<ClientApp>({
 	baseURL: "https://example.test",
@@ -281,6 +282,10 @@ type WideRawRouteApp = {
 
 // Erased framework route definitions do not demand every possible method key.
 createClient<WideRawRouteApp>({ baseURL: "https://example.test" });
+declare const wideRawClient: QuestpieClient<WideRawRouteApp>;
+type _wideRawDoesNotPromiseResponse = Expect<
+	IsAny<Awaited<ReturnType<typeof wideRawClient.routes.openapi.get>>>
+>;
 createClient<WideRawRouteApp>({
 	baseURL: "https://example.test",
 	// @ts-expect-error a wide method definition cannot be safely registered as raw

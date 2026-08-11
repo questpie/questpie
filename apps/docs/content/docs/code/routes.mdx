@@ -96,9 +96,11 @@ nothing asked for JSON. `.schema()` and `.outputSchema()` turn JSON mode on.
 
 ### Call a raw route
 
-Raw route definitions are types, so a browser client must register the runtime
-keys it wants to call as raw. A typed app rejects JSON routes or the wrong
-method:
+Raw route definitions are types, so a browser client must register every known
+raw runtime key. A typed app rejects missing keys, JSON routes, and wrong
+methods. Erased framework definitions with no safe method literal stay on their
+legacy unregistered surface; they do not create false registrations or promise
+raw response semantics:
 
 ```ts
 export const client = createClient<AppConfig>({

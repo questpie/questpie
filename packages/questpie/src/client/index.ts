@@ -281,10 +281,10 @@ type RawRouteRegistration<TApp extends QuestpieApp> =
 		: [RawRouteRegistrationKeys<NonNullable<TApp["routes"]>>] extends [never]
 			? { rawRoutes?: undefined }
 			: {
-					rawRoutes?: {
+					rawRoutes: {
 						readonly [K in RawRouteRegistrationKeys<
 							NonNullable<TApp["routes"]>
-						>]?: true;
+						>]: true;
 					};
 				};
 
@@ -408,8 +408,10 @@ type RouteMethodCallers<TDef> = TDef extends { method: infer TMethod }
 type RouteCallerFromDef<TDef> =
 	TDef extends JsonRouteDefinition<any, any>
 		? JsonRouteCaller<TDef>
-		: TDef extends RawRouteDefinition
-			? RawRouteCaller
+		: TDef extends RawRouteDefinition<any, infer TMethod>
+			? HttpMethod extends TMethod
+				? (input?: any) => Promise<any>
+				: RawRouteCaller
 			: (input?: any) => Promise<any>;
 
 /**
@@ -1414,28 +1416,6 @@ export function createClient<TApp extends QuestpieApp>(
 		return (await requestWithMeta(path, options)).data;
 	}
 
-	const rawRoutePaths = new Set(Object.keys(config.rawRoutes ?? {}));
-
-	async function rawRouteRequest(
-		path: string,
-		method: string,
-		options: RouteCallOptions,
-	): Promise<Response> {
-		const authHeaders = await config.getAuthHeaders?.();
-		const headers = new Headers(defaultHeaders);
-		new Headers(options.headers).forEach((value, key) =>
-			headers.set(key, value),
-		);
-		new Headers(authHeaders).forEach((value, key) => headers.set(key, value));
-
-		return fetcher(`${config.baseURL}${path}`, {
-			...options,
-			method,
-			headers,
-			credentials: options.credentials ?? "include",
-		});
-	}
-
 	async function mutationRequest(
 		path: string,
 		options: QuestpieRequestInit,
@@ -2182,8 +2162,8 @@ export function createClient<TApp extends QuestpieApp>(
 	 * Segment names are converted from camelCase to kebab-case for URLs.
 	 */
 	const createRouteProxy = (segments: string[]): any => {
+		const path = segments.map(camelToKebab).join("/");
 		const callable = async (input?: any) => {
-			const path = segments.map(camelToKebab).join("/");
 			return request(`${apiBasePath}/${path}`, {
 				method: "POST",
 				json: input,
@@ -2193,28 +2173,28 @@ export function createClient<TApp extends QuestpieApp>(
 		return new Proxy(callable, {
 			get(_, prop) {
 				if (prop === "then") return undefined;
-				if (prop === "url")
-					return `${config.baseURL}${apiBasePath}/${segments.map(camelToKebab).join("/")}`;
+				if (prop === "url") return `${config.baseURL}${apiBasePath}/${path}`;
 				if (typeof prop !== "string") return undefined;
 
 				// HTTP method names at leaf → method-specific caller
-				const methodUpper = prop.toUpperCase();
-				if (
-					["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"].includes(
-						methodUpper,
-					)
-				) {
+				const method = prop.toUpperCase();
+				if (/^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)$/.test(method)) {
 					return async (input?: any) => {
-						const path = segments.map(camelToKebab).join("/");
-						const routeKey = `${segments.join("/")}:${methodUpper}`;
-						if (rawRoutePaths.has(routeKey)) {
-							return rawRouteRequest(
-								`${apiBasePath}/${path}`,
-								methodUpper,
+						if (
+							(
+								config.rawRoutes as Readonly<Record<string, true>> | undefined
+							)?.[`${segments.join("/")}:${method}`]
+						) {
+							return (await import("./raw-route.js")).callRawRoute(
+								fetcher,
+								`${config.baseURL}${apiBasePath}/${path}`,
+								method,
 								input ?? {},
+								defaultHeaders,
+								config.getAuthHeaders,
 							);
 						}
-						if (methodUpper === "GET" && input) {
+						if (method === "GET" && input) {
 							const queryString = stringifyQuery(input);
 							return request(
 								`${apiBasePath}/${path}${queryString ? `?${queryString}` : ""}`,
@@ -2222,7 +2202,7 @@ export function createClient<TApp extends QuestpieApp>(
 							);
 						}
 						return request(`${apiBasePath}/${path}`, {
-							method: methodUpper,
+							method,
 							json: input,
 						});
 					};
@@ -2230,14 +2210,6 @@ export function createClient<TApp extends QuestpieApp>(
 
 				// Otherwise, deeper nesting
 				return createRouteProxy([...segments, prop]);
-			},
-			apply(_, __, args: unknown[]) {
-				const input = args[0];
-				const path = segments.map(camelToKebab).join("/");
-				return request(`${apiBasePath}/${path}`, {
-					method: "POST",
-					json: input,
-				});
 			},
 		});
 	};
