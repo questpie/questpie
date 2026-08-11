@@ -36,6 +36,8 @@ import type {
 
 type NoMethod = { __method: false };
 type HasMethod<M extends HttpMethod = HttpMethod> = { __method: M };
+type MethodOf<TMethod> =
+	TMethod extends HasMethod<infer TMethodValue> ? TMethodValue : "POST";
 
 type NoMode = { __mode: false };
 type JsonMode = { __mode: "json" };
@@ -293,7 +295,7 @@ export class RouteBuilder<
 							args: RawRouteHandlerArgs<TParams>,
 						) => Response | Promise<Response>,
 	): TMode extends RawMode
-		? RawRouteDefinition<TParams>
+		? RawRouteDefinition<TParams, MethodOf<_TMethod>>
 		: TSchema extends HasSchema<infer TInput>
 			? JsonRouteDefinition<
 					TInput,
@@ -307,8 +309,8 @@ export class RouteBuilder<
 						TOutput extends HasOutput<infer O> ? O : unknown,
 						TParams
 					>
-				: RawRouteDefinition<TParams> {
-		const method = this._config.method ?? "POST";
+				: RawRouteDefinition<TParams, MethodOf<_TMethod>> {
+		const method = (this._config.method ?? "POST") as MethodOf<_TMethod>;
 
 		if (this._config.mode === "json" || this._config.schema) {
 			// JSON route
@@ -326,7 +328,7 @@ export class RouteBuilder<
 		}
 
 		// Raw route (default)
-		const def: RawRouteDefinition<TParams> = {
+		const def: RawRouteDefinition<TParams, MethodOf<_TMethod>> = {
 			__brand: "route",
 			mode: "raw",
 			method,

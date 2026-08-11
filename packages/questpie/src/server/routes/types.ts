@@ -167,10 +167,11 @@ export type JsonRouteDefinition<
  */
 export type RawRouteDefinition<
 	TParams extends JsonRouteParams = JsonRouteParams,
+	TMethod extends HttpMethod = HttpMethod,
 > = {
 	readonly __brand: "route";
 	readonly mode: "raw";
-	readonly method: HttpMethod;
+	readonly method: TMethod;
 	readonly access?: RouteAccess;
 	readonly meta?: RouteMeta;
 	readonly handler: (
@@ -240,8 +241,8 @@ export type RouteWithParams<
 		// wholesale: codegen-erased handlers (`(args: unknown) => unknown`)
 		// would otherwise poison the inferred `TOutput` with `unknown`.
 		JsonRouteDefinition<InferRouteInput<TDef>, InferRouteOutput<TDef>, TParams>
-	: TDef extends { mode: "raw" }
-		? RawRouteDefinition<TParams>
+	: TDef extends { mode: "raw"; method: infer TMethod }
+		? RawRouteDefinition<TParams, Extract<TMethod, HttpMethod>>
 		: TDef;
 
 // ============================================================================
