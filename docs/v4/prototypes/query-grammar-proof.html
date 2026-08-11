@@ -405,8 +405,10 @@
 		<script>
 			// Pure logic module. It knows nothing about this page or the DOM.
 			const QueryProof = (() => {
+				const SCHEMA_PROJECTION_DIGEST =
+					"982d619b7271113c8ef587ec0ea98d5b3be8119d31678eedd48847412bbd8267";
 				const DATA_CONTRACT_PROJECTION_DIGEST =
-					"525e95c0758ec854764c6dfd9c5e4d86a53cebedab1c54c3eb439d04410b1bbd";
+					"064dff8993af88bd04aa8fe9bf419687e4b918d7bedc8a48857bb2efb8e0e7f4";
 				const IDS = {
 					appointments: "collection:appointments",
 					tenants: "collection:tenants",
@@ -435,6 +437,7 @@
 					format: "questpie.data-query-template",
 					version: 1,
 					from: IDS.appointments,
+					schemaProjectionDigest: SCHEMA_PROJECTION_DIGEST,
 					dataContractProjectionDigest: DATA_CONTRACT_PROJECTION_DIGEST,
 					parameters: [
 						{
@@ -467,13 +470,35 @@
 						},
 					],
 					filter: {
-						kind: "equal",
-						field: IDS.tenantId,
-						operand: { kind: "parameter", parameter: "tenantId" },
+						kind: "and",
+						expressions: [
+							{
+								kind: "equal",
+								field: IDS.tenantId,
+								operand: { kind: "parameter", parameter: "tenantId" },
+							},
+							{
+								kind: "in",
+								field: IDS.status,
+								operands: [
+									{ kind: "literal", value: "scheduled" },
+									{ kind: "literal", value: "confirmed" },
+								],
+							},
+							{
+								kind: "relationExists",
+								relation: IDS.tenant,
+								filter: {
+									kind: "equal",
+									field: IDS.tenantSlug,
+									operand: { kind: "literal", value: "old-town" },
+								},
+							},
+						],
 					},
 					order: [
-						{ field: IDS.startsAt, direction: "ascending", nulls: "last" },
-						{ field: IDS.id, direction: "ascending", nulls: "last" },
+						{ field: IDS.startsAt, direction: "asc", nulls: "last" },
+						{ field: IDS.id, direction: "asc", nulls: "last" },
 					],
 					page: {
 						kind: "forwardCursor",
@@ -564,9 +589,11 @@
 
 				function normalizeTemplate(
 					candidate,
+					schemaProjectionDigest = SCHEMA_PROJECTION_DIGEST,
 					dataContractProjectionDigest = DATA_CONTRACT_PROJECTION_DIGEST,
 				) {
 					const template = structuredClone(candidate);
+					template.schemaProjectionDigest = schemaProjectionDigest;
 					template.dataContractProjectionDigest = dataContractProjectionDigest;
 					template.parameters.sort((left, right) =>
 						compareAscii(left.name, right.name),
@@ -636,58 +663,85 @@
 				}
 
 				function dependencyTemplate(template, templateDigest) {
-					const baseFields = new Map();
-					const addRole = (map, field, role) => {
+					const collectionFields = new Map();
+					const relationReads = new Map();
+					const fieldMap = (collection) => {
+						if (!collectionFields.has(collection))
+							collectionFields.set(collection, new Map());
+						return collectionFields.get(collection);
+					};
+					const addRole = (collection, field, role) => {
+						const map = fieldMap(collection);
 						if (!map.has(field)) map.set(field, new Set());
 						map.get(field).add(role);
 					};
-					for (const entry of template.select.filter(
-						(entry) => entry.kind === "field",
-					))
-						addRole(baseFields, entry.field, "output");
-					addRole(baseFields, template.filter.field, "filter");
-					for (const term of template.order) {
-						addRole(baseFields, term.field, "order");
-						addRole(baseFields, term.field, "cursor");
+					const addRelation = (relationIdentity) => {
+						const relation = relations[relationIdentity];
+						relationReads.set(relationIdentity, {
+							kind: "relation",
+							relation: relationIdentity,
+							...relation,
+						});
+						for (const field of relation.fields)
+							addRole(relation.source, field, "joinLocal");
+						for (const field of relation.references)
+							addRole(relation.target, field, "joinReferenced");
+						return relation;
+					};
+					const walkFilter = (filter, collection, allowRelations) => {
+						if (!filter || filter.kind === "true") return;
+						if (filter.kind === "and" || filter.kind === "or") {
+							for (const expression of filter.expressions)
+								walkFilter(expression, collection, allowRelations);
+							return;
+						}
+						if (filter.kind === "not") {
+							walkFilter(filter.expression, collection, allowRelations);
+							return;
+						}
+						if (
+							filter.kind === "relationExists" ||
+							filter.kind === "relationNotExists"
+						) {
+							if (!allowRelations)
+								throw diagnostic(
+									"QP-DATA-004",
+									"Nested Relation traversal exceeds one hop.",
+								);
+							const relation = addRelation(filter.relation);
+							walkFilter(filter.filter, relation.target, false);
+							return;
+						}
+						addRole(collection, filter.field, "filter");
+					};
+
+					for (const entry of template.select) {
+						if (entry.kind === "field") {
+							addRole(template.from, entry.field, "output");
+							continue;
+						}
+						const relation = addRelation(entry.relation);
+						for (const nested of entry.select)
+							addRole(relation.target, nested.field, "output");
 					}
-					const relationEntries = template.select.filter(
-						(entry) => entry.kind === "toOne",
-					);
-					for (const entry of relationEntries) {
-						for (const field of relations[entry.relation].fields)
-							addRole(baseFields, field, "joinLocal");
+					walkFilter(template.filter, template.from, true);
+					for (const term of template.order) {
+						addRole(template.from, term.field, "order");
+						addRole(template.from, term.field, "cursor");
 					}
 
 					const reads = [
-						{
+						...[...collectionFields.entries()].map(([collection, fields]) => ({
 							kind: "collection",
-							collection: IDS.appointments,
-							fields: [...baseFields.entries()]
+							collection,
+							fields: [...fields.entries()]
 								.map(([field, roles]) => ({
 									field,
 									roles: [...roles].sort(compareAscii),
 								}))
 								.sort((left, right) => compareAscii(left.field, right.field)),
-						},
-						...relationEntries.map((entry) => ({
-							kind: "collection",
-							collection: relations[entry.relation].target,
-							fields: [
-								...entry.select.map((selection) => ({
-									field: selection.field,
-									roles: ["output"],
-								})),
-								...relations[entry.relation].references.map((field) => ({
-									field,
-									roles: ["joinReferenced"],
-								})),
-							].sort((left, right) => compareAscii(left.field, right.field)),
 						})),
-						...relationEntries.map((entry) => ({
-							kind: "relation",
-							relation: entry.relation,
-							...relations[entry.relation],
-						})),
+						...[...relationReads.values()],
 						{
 							kind: "page",
 							collection: IDS.appointments,
@@ -695,7 +749,14 @@
 							uniqueConstraint: template.page.uniqueConstraint,
 							direction: "forward",
 						},
-					];
+					].sort((left, right) => {
+						const kind = compareAscii(left.kind, right.kind);
+						if (kind) return kind;
+						return compareAscii(
+							left.collection ?? left.relation,
+							right.collection ?? right.relation,
+						);
+					});
 
 					return {
 						format: "questpie.data-query-dependency-template",
@@ -707,7 +768,7 @@
 
 				function validateBinding(binding) {
 					if (
-						!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+						!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
 							binding.tenantId,
 						)
 					) {
@@ -773,19 +834,38 @@
 					};
 				}
 
-				function compareRows(left, right) {
-					return (
-						compareAscii(left.startsAt, right.startsAt) ||
-						compareAscii(left.id, right.id)
-					);
+				function orderValue(row, field) {
+					if (field === IDS.startsAt) return row.startsAt;
+					if (field === IDS.id) return row.id;
+					throw diagnostic("QP-DATA-010", `No order codec for ${field}.`);
 				}
 
-				function compareRowToCursor(row, cursor) {
+				function compareOrderValue(left, right, term) {
+					if (left === null && right === null) return 0;
+					if (left === null) return term.nulls === "first" ? -1 : 1;
+					if (right === null) return term.nulls === "first" ? 1 : -1;
+					const compared = compareAscii(left, right);
+					return term.direction === "desc" ? -compared : compared;
+				}
+
+				function compareRows(left, right, order = baseTemplate.order) {
+					for (const term of order) {
+						const compared = compareOrderValue(
+							orderValue(left, term.field),
+							orderValue(right, term.field),
+							term,
+						);
+						if (compared) return compared;
+					}
+					return 0;
+				}
+
+				function compareRowToCursor(row, cursor, order) {
 					const boundary = {
 						startsAt: cursor.order[0].value,
 						id: cursor.order[1].value,
 					};
-					return compareRows(row, boundary);
+					return compareRows(row, boundary, order);
 				}
 
 				function project(row, tenants) {
@@ -800,8 +880,78 @@
 					};
 				}
 
+				function scalarValue(row, field) {
+					const key = field.slice(field.lastIndexOf(":") + 1);
+					return row[key];
+				}
+
+				function operandValue(operand, binding) {
+					return operand.kind === "parameter"
+						? binding[operand.parameter]
+						: operand.value;
+				}
+
+				function matchesFilter(filter, row, collection, binding, tenants) {
+					if (!filter || filter.kind === "true") return true;
+					if (filter.kind === "and")
+						return filter.expressions.every((expression) =>
+							matchesFilter(expression, row, collection, binding, tenants),
+						);
+					if (filter.kind === "or")
+						return filter.expressions.some((expression) =>
+							matchesFilter(expression, row, collection, binding, tenants),
+						);
+					if (filter.kind === "not")
+						return !matchesFilter(
+							filter.expression,
+							row,
+							collection,
+							binding,
+							tenants,
+						);
+					if (
+						filter.kind === "relationExists" ||
+						filter.kind === "relationNotExists"
+					) {
+						const relation = relations[filter.relation];
+						const target =
+							relation.source === IDS.appointments
+								? tenants.find((tenant) => tenant.id === row.tenantId)
+								: null;
+						const exists = Boolean(
+							target &&
+							matchesFilter(
+								filter.filter,
+								target,
+								relation.target,
+								binding,
+								tenants,
+							),
+						);
+						return filter.kind === "relationExists" ? exists : !exists;
+					}
+					const value = scalarValue(row, filter.field);
+					if (filter.kind === "equal")
+						return value === operandValue(filter.operand, binding);
+					if (filter.kind === "notEqual")
+						return value !== operandValue(filter.operand, binding);
+					if (filter.kind === "in")
+						return filter.operands.some(
+							(operand) => value === operandValue(operand, binding),
+						);
+					if (filter.kind === "notIn")
+						return filter.operands.every(
+							(operand) => value !== operandValue(operand, binding),
+						);
+					throw diagnostic(
+						"QP-DATA-005",
+						`Proof evaluator does not implement ${filter.kind}.`,
+					);
+				}
+
 				async function execute({
 					candidate = baseTemplate,
+					schemaProjectionDigest = SCHEMA_PROJECTION_DIGEST,
 					dataContractProjectionDigest = DATA_CONTRACT_PROJECTION_DIGEST,
 					binding,
 					appointments,
@@ -810,6 +960,7 @@
 					validateBinding(binding);
 					const template = normalizeTemplate(
 						candidate,
+						schemaProjectionDigest,
 						dataContractProjectionDigest,
 					);
 					const templateDigest = await digest(
@@ -853,11 +1004,20 @@
 					}
 
 					const matching = appointments
-						.filter((row) => row.tenantId === binding.tenantId)
-						.sort(compareRows)
+						.filter((row) =>
+							matchesFilter(
+								template.filter,
+								row,
+								template.from,
+								binding,
+								tenants,
+							),
+						)
+						.sort((left, right) => compareRows(left, right, template.order))
 						.filter(
 							(row) =>
-								!decodedCursor || compareRowToCursor(row, decodedCursor) > 0,
+								!decodedCursor ||
+								compareRowToCursor(row, decodedCursor, template.order) > 0,
 						);
 					const fetched = matching.slice(0, binding.first + 1);
 					const pageRows = fetched.slice(0, binding.first);
@@ -875,8 +1035,6 @@
 						templateDigest,
 						templateBytes: canonicalBytes(template),
 						binding: {
-							format: "questpie.data-query-binding",
-							version: 1,
 							templateDigest,
 							values: Object.entries(binding)
 								.sort(([left], [right]) => compareAscii(left, right))
@@ -911,6 +1069,7 @@
 				}
 
 				return {
+					SCHEMA_PROJECTION_DIGEST,
 					DATA_CONTRACT_PROJECTION_DIGEST,
 					IDS,
 					baseTemplate,
@@ -1174,7 +1333,8 @@
 							async () => {
 								resetControls();
 								const candidate = structuredClone(QueryProof.baseTemplate);
-								candidate.filter.field = QueryProof.IDS.tenantSlug;
+								candidate.filter.expressions[0].field =
+									QueryProof.IDS.tenantSlug;
 								await run(candidate);
 							},
 						],

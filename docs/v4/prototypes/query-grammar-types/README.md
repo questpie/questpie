@@ -6,10 +6,13 @@ exact row, insert, update, parameter, selection, inverse-existence, and
 paginated result shapes without an ORM type, ambient registry, or
 whole-application recursive generic?
 
-It also holds negative assertions for field scope, runtime list parameters,
-empty membership lists, hidden cursor-order fields, text range comparison, and
-nullable total-order keys. A literal two-entry Collection Augmentation tuple and
-distinct timestamp codecs are part of the same inference budget.
+It uses the documented two-stage `dataQuery<Collection>()({...})` shape so the
+generated Collection descriptor is explicit while inner literal generics remain
+inferred. It also holds negative assertions for exact `from`, field scope,
+runtime list parameters, empty membership lists, derived selected-order Fields,
+text range comparison, and nullable total-order keys. A literal two-entry
+Collection Augmentation tuple and distinct timestamp codec tags with plain
+`string` public values are part of the same inference budget.
 
 Run from the repository root:
 

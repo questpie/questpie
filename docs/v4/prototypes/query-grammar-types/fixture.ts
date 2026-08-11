@@ -9,10 +9,8 @@ type Equal<Left, Right> =
 type Expect<Value extends true> = Value;
 type Simplify<Value> = { [Key in keyof Value]: Value[Key] };
 
-declare const timestampBrand: unique symbol;
-declare const timestamptzBrand: unique symbol;
-type Timestamp = string & { readonly [timestampBrand]: "timestamp" };
-type Timestamptz = string & { readonly [timestamptzBrand]: "timestamptz" };
+type Timestamp = string;
+type Timestamptz = string;
 
 type ScalarKind = "uuid" | "text" | "timestamp" | "timestamptz";
 interface Field<
@@ -147,9 +145,17 @@ type _update = Expect<
 		}
 	>
 >;
+type FieldKind<Definition> =
+	Definition extends Field<unknown, infer Kind, boolean, boolean>
+		? Kind
+		: never;
 type _timestampCodecsStayDistinct = Expect<
 	Equal<
-		FieldValue<TenantFields["localOpening"]> extends Timestamptz ? true : false,
+		FieldKind<TenantFields["localOpening"]> extends FieldKind<
+			AppointmentFields["startsAt"]
+		>
+			? true
+			: false,
 		false
 	>
 >;
@@ -170,6 +176,7 @@ interface ScalarExpression<Value, Nullable extends boolean> {
 	in(values: readonly [Value, ...Value[]]): Filter;
 	notIn(values: readonly [Value, ...Value[]]): Filter;
 	isNull: Nullable extends true ? () => Filter : never;
+	isNotNull: Nullable extends true ? () => Filter : never;
 }
 interface Filter {
 	readonly __filter: true;
@@ -223,6 +230,8 @@ tenantScope.relations.appointments.notExists(({ fields }) =>
 );
 appointmentScope.fields.status.in(["scheduled"]);
 appointmentScope.fields.status.notIn(["cancelled", "completed"]);
+appointmentScope.fields.auditNote.isNull();
+appointmentScope.fields.auditNote.isNotNull();
 // @ts-expect-error in/notIn v1 accepts a non-empty literal tuple, not a list parameter.
 appointmentScope.fields.status.in(runtimeListParameter);
 // @ts-expect-error an empty membership tuple is invalid.
@@ -276,22 +285,48 @@ interface DataQueryContract<Parameters, Node> {
 }
 interface OrderTerm<FieldKey extends keyof AppointmentFields> {
 	readonly field: FieldKey;
-	readonly direction: "ascending" | "descending";
+	readonly direction: "asc" | "desc";
 	readonly nulls: "first" | "last";
 }
-declare function defineAppointmentQuery<
+interface AppointmentDescriptor {
+	readonly name: "appointments";
+	readonly fields: AppointmentFields;
+	readonly relations: {
+		readonly tenant: {
+			readonly kind: "toOne";
+			readonly target: "tenants";
+		};
+	};
+}
+type EndsInPrimaryKey<
+	Order extends readonly OrderTerm<keyof AppointmentFields>[],
+> = Order extends readonly [
+	...OrderTerm<keyof AppointmentFields>[],
+	OrderTerm<"id">,
+]
+	? Order
+	: never;
+declare function dataQuery<Descriptor extends AppointmentDescriptor>(): <
 	const Parameters extends Record<string, Parameter<unknown, boolean>>,
 	const Selection extends AppointmentSelection,
+	const Order extends readonly [
+		OrderTerm<keyof AppointmentFields>,
+		...OrderTerm<keyof AppointmentFields>[],
+	],
 >(definition: {
+	readonly from: Descriptor["name"];
 	readonly parameters: Parameters;
-	readonly select: Selection & { readonly id: true; readonly startsAt: true };
-	readonly order: readonly [OrderTerm<"startsAt">, OrderTerm<"id">];
-}): DataQueryContract<
+	readonly select: Selection & {
+		readonly [Key in Order[number]["field"]]: true;
+	};
+	readonly order: EndsInPrimaryKey<Order>;
+}) => DataQueryContract<
 	ParameterValues<Parameters>,
 	SelectedAppointment<Selection>
 >;
 
-const appointmentPage = defineAppointmentQuery({
+const appointmentPage = dataQuery<AppointmentDescriptor>()({
+	from: "appointments",
 	parameters: {
 		tenantId: { kind: "parameter" } as Parameter<string, false>,
 		first: { kind: "parameter" } as Parameter<number, false>,
@@ -305,8 +340,8 @@ const appointmentPage = defineAppointmentQuery({
 		tenant: { select: { slug: true, name: true } },
 	},
 	order: [
-		{ field: "startsAt", direction: "ascending", nulls: "last" },
-		{ field: "id", direction: "ascending", nulls: "last" },
+		{ field: "startsAt", direction: "asc", nulls: "last" },
+		{ field: "id", direction: "asc", nulls: "last" },
 	],
 });
 type _parameters = Expect<
@@ -337,14 +372,23 @@ appointmentPage.bind({
 });
 // @ts-expect-error UUID parameters do not accept numbers.
 appointmentPage.bind({ tenantId: 42, first: 20, after: null });
-defineAppointmentQuery({
+dataQuery<AppointmentDescriptor>()({
+	from: "appointments",
 	parameters: {},
 	// @ts-expect-error every order Field must be selected directly.
 	select: { id: true },
 	order: [
-		{ field: "startsAt", direction: "ascending", nulls: "last" },
-		{ field: "id", direction: "ascending", nulls: "last" },
+		{ field: "startsAt", direction: "asc", nulls: "last" },
+		{ field: "id", direction: "asc", nulls: "last" },
 	],
+});
+
+dataQuery<AppointmentDescriptor>()({
+	// @ts-expect-error from is the exact generated Collection name.
+	from: "tenants",
+	parameters: {},
+	select: { id: true },
+	order: [{ field: "id", direction: "asc", nulls: "last" }],
 });
 
 interface OrderField<Key extends string, Nullable extends boolean> {
