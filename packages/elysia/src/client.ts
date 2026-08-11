@@ -6,12 +6,13 @@ import {
 	type GetAuthHeaders,
 	type QuestpieApp,
 	type QuestpieClient,
+	type QuestpieRouteClientConfig,
 } from "questpie/client";
 
 /**
  * Elysia client configuration
  */
-export type ElysiaClientConfig = {
+export type ElysiaClientConfig<TApp extends QuestpieApp = QuestpieApp> = {
 	/**
 	 * Server URL (domain with optional port, no protocol needed for Eden)
 	 * @example 'localhost:3000'
@@ -44,7 +45,7 @@ export type ElysiaClientConfig = {
 	/**
 	 * Optional collaborative-document client runtime.
 	 */
-};
+} & QuestpieRouteClientConfig<TApp>;
 
 /**
  * Create a unified client that combines QUESTPIE CRUD operations
@@ -69,20 +70,14 @@ export type ElysiaClientConfig = {
 export function createClientFromEden<
 	TApp extends Elysia<any, any, any, any, any, any, any> = any,
 	TQP extends QuestpieApp = any,
->(config: ElysiaClientConfig): QuestpieClient<TQP> & Treaty.Create<TApp> {
+>(config: ElysiaClientConfig<TQP>): QuestpieClient<TQP> & Treaty.Create<TApp> {
 	// Determine baseURL with protocol for app client
 	const baseURL = config.server.startsWith("http")
 		? config.server
 		: `http://${config.server}`;
 
 	// Create QUESTPIE client for CRUD operations
-	const qpClient = createClient<TQP>({
-		baseURL,
-		fetch: config.fetch,
-		basePath: config.basePath,
-		headers: config.headers,
-		getAuthHeaders: config.getAuthHeaders,
-	});
+	const qpClient = createClient<TQP>({ ...config, baseURL });
 
 	// Create Eden Treaty client for custom routes
 	const edenClient = treaty<TApp>(config.server, {
@@ -95,5 +90,6 @@ export function createClientFromEden<
 		...edenClient,
 		collections: qpClient.collections,
 		globals: qpClient.globals,
+		routes: qpClient.routes,
 	} as QuestpieClient<TQP> & Treaty.Create<TApp>;
 }

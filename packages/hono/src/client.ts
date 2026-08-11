@@ -1,40 +1,22 @@
 import type { Hono } from "hono";
 import type { ClientRequestOptions } from "hono/client";
 import { hc } from "hono/client";
-import { createClient, type QuestpieApp } from "questpie/client";
+import {
+	createClient,
+	type QuestpieApp,
+	type QuestpieClientConfig,
+} from "questpie/client";
 
 /**
  * Hono client configuration
  */
-export type HonoClientConfig = {
-	/**
-	 * Base URL of the API
-	 * @example 'http://localhost:3000'
-	 */
-	baseURL: string;
-
-	/**
-	 * Custom fetch implementation
-	 * @default globalThis.fetch
-	 */
-	fetch?: typeof fetch;
-
-	/**
-	 * Base path for routes
-	 * @default '/'
-	 */
-	basePath?: string;
-
-	/**
-	 * Default headers to include in all requests
-	 */
-	headers?: Record<string, string>;
-
-	/**
-	 * Hono client options
-	 */
-	honoOptions?: ClientRequestOptions;
-};
+export type HonoClientConfig<TApp extends QuestpieApp = QuestpieApp> =
+	QuestpieClientConfig<TApp> & {
+		/**
+		 * Hono client options
+		 */
+		honoOptions?: ClientRequestOptions;
+	};
 
 /**
  * Create a unified client that combines QUESTPIE CRUD operations
@@ -61,15 +43,10 @@ export function createClientFromHono<
 	THono extends Hono<any, any, any>,
 	TApp extends QuestpieApp,
 >(
-	config: HonoClientConfig,
+	config: HonoClientConfig<TApp>,
 ): ReturnType<typeof hc<THono>> & ReturnType<typeof createClient<TApp>> {
 	// Create QUESTPIE client for CRUD operations
-	const qpClient = createClient<TApp>({
-		baseURL: config.baseURL,
-		fetch: config.fetch,
-		basePath: config.basePath,
-		headers: config.headers,
-	});
+	const qpClient = createClient<TApp>(config);
 
 	// Create Hono RPC client for custom routes
 	const honoClient = hc<THono>(config.baseURL, {
@@ -78,11 +55,14 @@ export function createClientFromHono<
 		...config.honoOptions,
 	});
 
-	// Merge both clients
-	(honoClient as typeof honoClient & typeof qpClient).collections =
-		qpClient.collections;
-	(honoClient as typeof honoClient & typeof qpClient).globals =
-		qpClient.globals;
-
-	return honoClient as typeof honoClient & typeof qpClient;
+	// Hono's client is itself a Proxy and ignores properties assigned to it.
+	// Resolve QUESTPIE surfaces before forwarding all other reads to Hono.
+	return new Proxy(honoClient as object, {
+		get(target, property, receiver) {
+			if (property === "collections") return qpClient.collections;
+			if (property === "globals") return qpClient.globals;
+			if (property === "routes") return qpClient.routes;
+			return Reflect.get(target, property, receiver);
+		},
+	}) as typeof honoClient & typeof qpClient;
 }

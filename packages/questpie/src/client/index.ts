@@ -258,7 +258,40 @@ export class QuestpieClientError extends Error {
 /**
  * Client configuration
  */
-export type QuestpieClientConfig = {
+type RawRouteRegistrationKeys<TRoutes> = string extends keyof TRoutes
+	? string
+	: {
+			[K in keyof TRoutes & string]: K extends `${string}[${string}`
+				? never
+				: TRoutes[K] extends {
+							mode: "raw";
+							method: infer TMethod;
+					  }
+					? HttpMethod extends TMethod
+						? never
+						: K extends `${string}:${string}`
+							? K
+							: `${K}:${Extract<TMethod, HttpMethod>}`
+					: never;
+		}[keyof TRoutes & string];
+
+type RawRouteRegistration<TApp extends QuestpieApp> =
+	string extends RawRouteRegistrationKeys<NonNullable<TApp["routes"]>>
+		? { rawRoutes?: Readonly<Record<string, true>> }
+		: [RawRouteRegistrationKeys<NonNullable<TApp["routes"]>>] extends [never]
+			? { rawRoutes?: undefined }
+			: {
+					rawRoutes?: {
+						readonly [K in RawRouteRegistrationKeys<
+							NonNullable<TApp["routes"]>
+						>]?: true;
+					};
+				};
+
+export type QuestpieRouteClientConfig<TApp extends QuestpieApp = QuestpieApp> =
+	RawRouteRegistration<TApp>;
+
+export type QuestpieClientConfig<TApp extends QuestpieApp = QuestpieApp> = {
 	/**
 	 * Base URL of the app API
 	 * @example 'http://localhost:3000'
@@ -299,7 +332,7 @@ export type QuestpieClientConfig = {
 	 * @default true
 	 */
 	useSuperJSON?: boolean;
-};
+} & QuestpieRouteClientConfig<TApp>;
 
 /**
  * Caller for a JSON route — sends input, returns typed output.
@@ -1186,10 +1219,7 @@ type SearchAPI = {
 /**
  * Options for calling a custom route.
  */
-type RouteCallOptions = Omit<RequestInit, "method"> & {
-	/** HTTP method override. If omitted, uses the route's declared method or GET. */
-	method?: string;
-};
+type RouteCallOptions = Omit<RequestInit, "method">;
 
 /**
  * Questpie Client
@@ -1261,7 +1291,7 @@ export type QuestpieClient<in out TApp extends QuestpieApp> = {
  * ```
  */
 export function createClient<TApp extends QuestpieApp>(
-	config: QuestpieClientConfig,
+	config: QuestpieClientConfig<TApp>,
 ): QuestpieClient<TApp> {
 	// Bind the default fetch: realtime/channels store this and invoke it as a
 	// method (`this.fetcher(...)`), and browsers throw "Illegal invocation"
@@ -1382,6 +1412,28 @@ export function createClient<TApp extends QuestpieApp>(
 		options: QuestpieRequestInit = {},
 	): Promise<any> {
 		return (await requestWithMeta(path, options)).data;
+	}
+
+	const rawRoutePaths = new Set(Object.keys(config.rawRoutes ?? {}));
+
+	async function rawRouteRequest(
+		path: string,
+		method: string,
+		options: RouteCallOptions,
+	): Promise<Response> {
+		const authHeaders = await config.getAuthHeaders?.();
+		const headers = new Headers(defaultHeaders);
+		new Headers(options.headers).forEach((value, key) =>
+			headers.set(key, value),
+		);
+		new Headers(authHeaders).forEach((value, key) => headers.set(key, value));
+
+		return fetcher(`${config.baseURL}${path}`, {
+			...options,
+			method,
+			headers,
+			credentials: options.credentials ?? "include",
+		});
 	}
 
 	async function mutationRequest(
@@ -2147,9 +2199,21 @@ export function createClient<TApp extends QuestpieApp>(
 
 				// HTTP method names at leaf → method-specific caller
 				const methodUpper = prop.toUpperCase();
-				if (["GET", "POST", "PUT", "DELETE", "PATCH"].includes(methodUpper)) {
+				if (
+					["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"].includes(
+						methodUpper,
+					)
+				) {
 					return async (input?: any) => {
 						const path = segments.map(camelToKebab).join("/");
+						const routeKey = `${segments.join("/")}:${methodUpper}`;
+						if (rawRoutePaths.has(routeKey)) {
+							return rawRouteRequest(
+								`${apiBasePath}/${path}`,
+								methodUpper,
+								input ?? {},
+							);
+						}
 						if (methodUpper === "GET" && input) {
 							const queryString = stringifyQuery(input);
 							return request(

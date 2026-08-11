@@ -30,7 +30,7 @@ declare module "#questpie/server/config/app-context.js" {
 
 import { z } from "zod";
 
-import type { QuestpieClient } from "#questpie/client/index.js";
+import { createClient, type QuestpieClient } from "#questpie/client/index.js";
 import { collection } from "#questpie/server/collection/builder/collection-builder.js";
 import { route } from "#questpie/server/routes/define-route.js";
 import type {
@@ -213,7 +213,7 @@ type MockRoutes = {
 	getSlots: typeof echoRoute;
 	"admin/stats": typeof statsRoute;
 	"admin/users:GET": typeof adminUsersGetRoute;
-	download: RawRouteDefinition;
+	download: typeof rawRoute;
 };
 
 type ClientApp = {
@@ -253,6 +253,39 @@ type _usersGetOutput = Expect<
 type _downloadOutput = Expect<
 	Equal<Awaited<ReturnType<typeof client.routes.download.get>>, Response>
 >;
+client.routes.download.get({ redirect: "manual" });
+// @ts-expect-error the typed method leaf owns the HTTP method
+client.routes.download.get({ method: "POST" });
+// @ts-expect-error raw route exposes only its declared GET leaf
+void client.routes.download.post;
+createClient<ClientApp>({
+	baseURL: "https://example.test",
+	rawRoutes: { "download:GET": true },
+});
+createClient<ClientApp>({ baseURL: "https://example.test" });
+createClient<ClientApp>({
+	baseURL: "https://example.test",
+	// @ts-expect-error JSON route keys cannot be registered as raw
+	rawRoutes: { "admin/stats": true },
+});
+createClient<ClientApp>({
+	baseURL: "https://example.test",
+	// @ts-expect-error raw registration method must match the route definition
+	rawRoutes: { "download:POST": true },
+});
+
+type WideRawRouteApp = {
+	collections: {};
+	routes: { openapi: RawRouteDefinition };
+};
+
+// Erased framework route definitions do not demand every possible method key.
+createClient<WideRawRouteApp>({ baseURL: "https://example.test" });
+createClient<WideRawRouteApp>({
+	baseURL: "https://example.test",
+	// @ts-expect-error a wide method definition cannot be safely registered as raw
+	rawRoutes: { "openapi:GET": true },
+});
 
 // Phantom route names are compile errors (no index-signature poisoning)
 // @ts-expect-error unknown route name must not typecheck
