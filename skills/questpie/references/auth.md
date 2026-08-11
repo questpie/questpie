@@ -13,7 +13,7 @@ Detailed authentication configuration for QUESTPIE using Better Auth.
 
 - [File Convention](#file-convention), `config/auth.ts`, `authConfig()` factory
 - [Configuration Options](#configuration-options), options table + effective defaults
-- [Social Providers (OAuth)](#social-providers-oauth), `socialProviders`, client `signIn.social`
+- [Social Providers (OAuth)](#social-providers-oauth), `socialProviders`, verified Google/GitHub entry catalog, client `signIn.social`
 - [Session Access](#session-access), routes, hooks, access rules
 - [User Collection](#user-collection), starter user model, merge + extend recipe
 - [Reaching the App from Better Auth Callbacks](#reaching-the-app-from-better-auth-callbacks), `getContext<App>()`, partial overrides
@@ -76,6 +76,66 @@ Trigger the OAuth flow from the client with `signIn.social`:
 ```tsx
 await authClient.signIn.social({ provider: "google", callbackURL: "/" });
 ```
+
+### Verified Google/GitHub Entry Catalog
+
+Use `configureAuthEntryMethods()` when the product must expose a public sign-in
+method catalog and must reject an unverified Google or GitHub identity before
+QUESTPIE persists a user, account, token, or session. Declare and validate these
+environment variables in `env.ts`; do not send provider secrets to the client.
+
+```ts
+// config/auth.ts
+import { authConfig } from "questpie/app";
+import { configureAuthEntryMethods } from "questpie/auth";
+
+import env from "../env";
+
+const entryMethods = configureAuthEntryMethods({
+	authOptions: {
+		baseURL: env.APP_URL,
+		secret: env.BETTER_AUTH_SECRET,
+	},
+	credentials: { enabled: true },
+	socialProviders: {
+		google: {
+			clientId: env.GOOGLE_CLIENT_ID,
+			clientSecret: env.GOOGLE_CLIENT_SECRET,
+		},
+		github: {
+			clientId: env.GITHUB_CLIENT_ID,
+			clientSecret: env.GITHUB_CLIENT_SECRET,
+		},
+	},
+	requireVerifiedProviderEmail: true,
+	lastLoginMethod: {
+		enabledWhenMultiple: true,
+		storeInDatabase: false,
+	},
+});
+
+export const publicAuthEntryMethods = entryMethods.publicMethods;
+export default authConfig(entryMethods.authOptions);
+```
+
+Omit a provider property to disable that provider. If a provider is present,
+both `clientId` and `clientSecret` must be non-empty. The helper accepts only
+Google and GitHub, requires `emailVerified === true` plus non-empty provider ID
+and email, disables implicit account linking, and returns `publicMethods` in the
+stable `email`, `google`, `github` order without secrets. It also rejects social
+providers passed through `authOptions`, provider `getUserInfo` overrides, and a
+Google `verifyIdToken` override. Only the reviewed non-entry `admin`, `bearer`,
+`open-api`, `jwt`, and OAuth authorization-server `oauth-provider` plugins may
+pass through `authOptions`; every other plugin is rejected so it cannot add an
+undeclared human entry method outside the catalog. The OAuth provider authorizes
+an existing session and redirects an unauthenticated person to its configured
+login page; it does not authenticate a new human identity itself.
+
+The optional last-login method hint is enabled only when at least two methods
+are configured and remains browser-only (`storeInDatabase: false`). Provider
+callback failures are sanitized for the client; their raw diagnostics stay in
+server logs. Explicit account linking remains a separate authenticated
+operation.
 
 ## Session Access
 
