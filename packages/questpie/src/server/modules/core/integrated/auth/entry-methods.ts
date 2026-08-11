@@ -23,14 +23,25 @@ type ProviderCredentialPair = {
 	clientSecret: string;
 };
 
-type GoogleAuthEntryOptions = Omit<GoogleOptions, "clientId" | "clientSecret"> &
+type GoogleAuthEntryOptions = Omit<
+	GoogleOptions,
+	"clientId" | "clientSecret" | "getUserInfo" | "verifyIdToken"
+> &
 	ProviderCredentialPair;
 
-type GithubAuthEntryOptions = Omit<GithubOptions, "clientId" | "clientSecret"> &
+type GithubAuthEntryOptions = Omit<
+	GithubOptions,
+	"clientId" | "clientSecret" | "getUserInfo"
+> &
 	ProviderCredentialPair;
+
+type ReviewedNonEntryPlugin = BetterAuthPlugin & {
+	id: "admin" | "bearer" | "jwt" | "oauth-provider" | "open-api";
+};
 
 export type AuthEntryMethodsInput = {
-	authOptions?: Omit<BetterAuthOptions, "socialProviders"> & {
+	authOptions?: Omit<BetterAuthOptions, "plugins" | "socialProviders"> & {
+		plugins?: ReviewedNonEntryPlugin[];
 		socialProviders?: never;
 	};
 	credentials: { enabled: boolean };
@@ -53,11 +64,18 @@ export type AuthEntryMethodsConfig = {
 
 const SOCIAL_PROVIDER_ERROR_CODE = "social_provider_error";
 const SOCIAL_PROVIDER_ERROR_MESSAGE = "Social provider authentication failed";
-const UNSUPPORTED_SOCIAL_PLUGIN_IDS = new Set([
-	"generic-oauth",
-	"oauth-proxy",
-	"one-tap",
+const SOCIAL_PROVIDER_ERROR_MARKER = "questpie_social_provider_error";
+const REVIEWED_NON_ENTRY_PLUGIN_IDS = new Set([
+	"admin",
+	"bearer",
+	"jwt",
+	"oauth-provider",
+	"open-api",
 ]);
+const SECURITY_SENSITIVE_PROVIDER_OPTIONS = {
+	google: ["getUserInfo", "verifyIdToken"],
+	github: ["getUserInfo"],
+} as const;
 
 function hasProviderError(params: URLSearchParams): boolean {
 	return params.has("error") || params.has("error_description");
@@ -66,6 +84,20 @@ function hasProviderError(params: URLSearchParams): boolean {
 function sanitizeProviderError(params: URLSearchParams): void {
 	params.set("error", SOCIAL_PROVIDER_ERROR_CODE);
 	params.delete("error_description");
+}
+
+function markProviderErrorCallbackURL(
+	callbackURL: unknown,
+	baseURL: string,
+): string {
+	const raw =
+		typeof callbackURL === "string" && callbackURL.length > 0
+			? callbackURL
+			: `${baseURL}/error`;
+	const absolute = /^[a-z][a-z\d+.-]*:/i.test(raw);
+	const url = new URL(raw, baseURL);
+	url.searchParams.set(SOCIAL_PROVIDER_ERROR_MARKER, "1");
+	return absolute ? url.toString() : `${url.pathname}${url.search}${url.hash}`;
 }
 
 function createSocialProviderErrorBoundary(
@@ -159,6 +191,28 @@ function createSocialProviderErrorBoundary(
 			};
 		},
 		hooks: {
+			before: [
+				{
+					matcher: (context) =>
+						context.path === "/sign-in/social" ||
+						context.path === "/link-social",
+					handler: createAuthMiddleware(async (context) => {
+						const body = context.body as Record<string, unknown> | undefined;
+						if (!body) return;
+						const providerId = body.provider;
+						if (
+							(providerId !== "google" && providerId !== "github") ||
+							!enabledProviders.has(providerId)
+						) {
+							return;
+						}
+						body.errorCallbackURL = markProviderErrorCallbackURL(
+							body.errorCallbackURL,
+							context.context.baseURL,
+						);
+					}),
+				},
+			],
 			after: [
 				{
 					matcher: (context) => context.path === "/sign-in/social",
@@ -173,12 +227,16 @@ function createSocialProviderErrorBoundary(
 				{
 					matcher: (context) => context.path === "/callback/:id",
 					handler: createAuthMiddleware(async (context) => {
-						if (context.context.newSession) return;
 						const location = context.context.responseHeaders?.get("location");
 						if (!location) return;
 						const absolute = /^[a-z][a-z\d+.-]*:/i.test(location);
 						const redirect = new URL(location, context.context.baseURL);
-						if (!hasProviderError(redirect.searchParams)) return;
+						if (
+							redirect.searchParams.get(SOCIAL_PROVIDER_ERROR_MARKER) !== "1"
+						) {
+							return;
+						}
+						redirect.searchParams.delete(SOCIAL_PROVIDER_ERROR_MARKER);
 						sanitizeProviderError(redirect.searchParams);
 						context.setHeader(
 							"location",
@@ -209,6 +267,19 @@ function assertProviderCredentials(
 	}
 }
 
+function assertNoProviderSecurityOverrides(
+	providerId: "google" | "github",
+	options: object,
+): void {
+	for (const option of SECURITY_SENSITIVE_PROVIDER_OPTIONS[providerId]) {
+		if (option in options) {
+			throw new TypeError(
+				`Auth entry provider "${providerId}" does not allow the "${option}" override`,
+			);
+		}
+	}
+}
+
 function assertNoBypassEntryMethods(
 	authOptions: AuthEntryMethodsInput["authOptions"],
 ): void {
@@ -218,12 +289,12 @@ function assertNoBypassEntryMethods(
 			"Auth entry social providers must be configured through socialProviders",
 		);
 	}
-	const unsupportedPlugin = runtimeOptions?.plugins?.find((plugin) =>
-		UNSUPPORTED_SOCIAL_PLUGIN_IDS.has(plugin.id),
+	const unsupportedPlugin = runtimeOptions?.plugins?.find(
+		(plugin) => !REVIEWED_NON_ENTRY_PLUGIN_IDS.has(plugin.id),
 	);
 	if (unsupportedPlugin) {
 		throw new TypeError(
-			`Auth entry plugin "${unsupportedPlugin.id}" is not supported by the verified provider catalog`,
+			`Auth entry plugin "${unsupportedPlugin.id}" is not in the reviewed non-entry allowlist`,
 		);
 	}
 }
@@ -237,11 +308,13 @@ function withVerifiedGoogleEmail(
 		...options,
 		getUserInfo: async (tokens) => {
 			const result = await provider.getUserInfo(tokens);
+			const providerId: unknown = result?.user.id;
 			if (
 				!result ||
 				result.user.emailVerified !== true ||
-				typeof result.user.id !== "string" ||
-				result.user.id.trim().length === 0 ||
+				(typeof providerId !== "string" && typeof providerId !== "number") ||
+				(typeof providerId === "number" && !Number.isFinite(providerId)) ||
+				String(providerId).trim().length === 0 ||
 				typeof result.user.email !== "string" ||
 				result.user.email.trim().length === 0
 			) {
@@ -253,7 +326,7 @@ function withVerifiedGoogleEmail(
 				user: {
 					...result.user,
 					...mapped,
-					id: result.user.id.trim(),
+					id: String(providerId).trim(),
 					email: result.user.email.trim(),
 					emailVerified: true,
 				},
@@ -271,11 +344,13 @@ function withVerifiedGithubEmail(
 		...options,
 		getUserInfo: async (tokens) => {
 			const result = await provider.getUserInfo(tokens);
+			const providerId: unknown = result?.user.id;
 			if (
 				!result ||
 				result.user.emailVerified !== true ||
-				typeof result.user.id !== "string" ||
-				result.user.id.trim().length === 0 ||
+				(typeof providerId !== "string" && typeof providerId !== "number") ||
+				(typeof providerId === "number" && !Number.isFinite(providerId)) ||
+				String(providerId).trim().length === 0 ||
 				typeof result.user.email !== "string" ||
 				result.user.email.trim().length === 0
 			) {
@@ -287,7 +362,7 @@ function withVerifiedGithubEmail(
 				user: {
 					...result.user,
 					...mapped,
-					id: result.user.id.trim(),
+					id: String(providerId).trim(),
 					email: result.user.email.trim(),
 					emailVerified: true,
 				},
@@ -302,9 +377,11 @@ export function configureAuthEntryMethods(
 	assertNoBypassEntryMethods(input.authOptions);
 	if (input.socialProviders?.google) {
 		assertProviderCredentials("google", input.socialProviders.google);
+		assertNoProviderSecurityOverrides("google", input.socialProviders.google);
 	}
 	if (input.socialProviders?.github) {
 		assertProviderCredentials("github", input.socialProviders.github);
+		assertNoProviderSecurityOverrides("github", input.socialProviders.github);
 	}
 
 	const publicMethods: PublicAuthEntryMethod[] = [];

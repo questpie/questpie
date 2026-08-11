@@ -123,8 +123,13 @@ both `clientId` and `clientSecret` must be non-empty. The helper accepts only
 Google and GitHub, requires `emailVerified === true` plus non-empty provider ID
 and email, disables implicit account linking, and returns `publicMethods` in the
 stable `email`, `google`, `github` order without secrets. It also rejects social
-providers passed through `authOptions` and the `generic-oauth`, `one-tap`, and
-`oauth-proxy` plugins so they cannot bypass the verified-provider catalog.
+providers passed through `authOptions`, provider `getUserInfo` overrides, and a
+Google `verifyIdToken` override. Only the reviewed non-entry `admin`, `bearer`,
+`open-api`, `jwt`, and OAuth authorization-server `oauth-provider` plugins may
+pass through `authOptions`; every other plugin is rejected so it cannot add an
+undeclared human entry method outside the catalog. The OAuth provider authorizes
+an existing session and redirects an unauthenticated person to its configured
+login page; it does not authenticate a new human identity itself.
 
 The optional last-login method hint is enabled only when at least two methods
 are configured and remains browser-only (`storeInDatabase: false`). Provider

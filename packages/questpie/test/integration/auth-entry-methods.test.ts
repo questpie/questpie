@@ -1,7 +1,9 @@
 import { describe, expect, it } from "bun:test";
 
+import { oauthProvider } from "@better-auth/oauth-provider";
 import { APIError, betterAuth } from "better-auth";
 import { memoryAdapter, type MemoryDB } from "better-auth/adapters/memory";
+import { jwt } from "better-auth/plugins";
 
 import {
 	configureAuthEntryMethods,
@@ -33,38 +35,28 @@ const jsonHeaders = {
 	origin: "https://auth.example.test",
 };
 
-const socialInput = (user: {
-	id: string;
+type TestProviderUser = {
+	id: string | number;
 	name: string;
 	email?: string | null;
 	emailVerified: boolean;
-}): AuthEntryMethodsInput => ({
-	credentials: { enabled: false },
-	socialProviders: {
-		google: {
-			clientId: "google-client",
-			clientSecret: "google-secret",
-			verifyIdToken: async () => true,
-			getUserInfo: async () => ({ user, data: { privateProfile: true } }),
-		},
-	},
-	requireVerifiedProviderEmail: true,
-});
+};
 
-const signInWithGoogleIdToken = (auth: ReturnType<typeof betterAuth>) =>
-	auth.handler(
-		new Request("https://auth.example.test/api/auth/sign-in/social", {
-			method: "POST",
-			headers: jsonHeaders,
-			body: JSON.stringify({
-				provider: "google",
-				idToken: {
-					token: "provider-id-token",
-					accessToken: "new-provider-access-token",
-				},
-			}),
-		}),
-	);
+let activeGoogleFixture: TestProviderUser | undefined;
+
+const socialInput = (user: TestProviderUser): AuthEntryMethodsInput => {
+	activeGoogleFixture = user;
+	return {
+		credentials: { enabled: false },
+		socialProviders: {
+			google: {
+				clientId: "google-client",
+				clientSecret: "google-secret",
+			},
+		},
+		requireVerifiedProviderEmail: true,
+	};
+};
 
 async function beginSocialCallback(
 	auth: ReturnType<typeof betterAuth>,
@@ -93,20 +85,203 @@ async function beginSocialCallback(
 	};
 }
 
-async function withFakeTokenExchange<T>(run: () => Promise<T>): Promise<T> {
+async function beginLinkCallback(
+	auth: ReturnType<typeof betterAuth>,
+	sessionCookie: string,
+	callbackURL: string,
+) {
+	const response = await auth.handler(
+		new Request("https://auth.example.test/api/auth/link-social", {
+			method: "POST",
+			headers: { ...jsonHeaders, cookie: sessionCookie },
+			body: JSON.stringify({
+				provider: "google",
+				callbackURL,
+				errorCallbackURL: "https://auth.example.test/link-error",
+				disableRedirect: true,
+			}),
+		}),
+	);
+	const body = (await response.json()) as { url: string };
+	return {
+		state: new URL(body.url).searchParams.get("state") ?? "",
+		cookie: [
+			sessionCookie,
+			...response.headers.getSetCookie().map((value) => value.split(";", 1)[0]),
+		].join("; "),
+	};
+}
+
+function fakeGoogleIdToken(user: TestProviderUser): string {
+	const encode = (value: object) =>
+		btoa(JSON.stringify(value))
+			.replaceAll("+", "-")
+			.replaceAll("/", "_")
+			.replaceAll("=", "");
+	return `${encode({ alg: "none", typ: "JWT" })}.${encode({
+		sub: user.id,
+		name: user.name,
+		email: user.email,
+		email_verified: user.emailVerified,
+		picture: "https://example.test/avatar.png",
+	})}.signature`;
+}
+
+function bytesToBase64Url(bytes: Uint8Array): string {
+	let binary = "";
+	for (const byte of bytes) binary += String.fromCharCode(byte);
+	return btoa(binary)
+		.replaceAll("+", "-")
+		.replaceAll("/", "_")
+		.replaceAll("=", "");
+}
+
+async function createSignedGoogleIdToken(user: TestProviderUser) {
+	const keys = await crypto.subtle.generateKey(
+		{
+			name: "RSASSA-PKCS1-v1_5",
+			modulusLength: 2048,
+			publicExponent: new Uint8Array([1, 0, 1]),
+			hash: "SHA-256",
+		},
+		true,
+		["sign", "verify"],
+	);
+	const now = Math.floor(Date.now() / 1000);
+	const header = bytesToBase64Url(
+		new TextEncoder().encode(
+			JSON.stringify({ alg: "RS256", kid: "questpie-test-key", typ: "JWT" }),
+		),
+	);
+	const payload = bytesToBase64Url(
+		new TextEncoder().encode(
+			JSON.stringify({
+				sub: String(user.id),
+				name: user.name,
+				email: user.email,
+				email_verified: user.emailVerified,
+				picture: "https://example.test/avatar.png",
+				iss: "https://accounts.google.com",
+				aud: "google-client",
+				iat: now,
+				exp: now + 300,
+			}),
+		),
+	);
+	const signingInput = `${header}.${payload}`;
+	const signature = await crypto.subtle.sign(
+		"RSASSA-PKCS1-v1_5",
+		keys.privateKey,
+		new TextEncoder().encode(signingInput),
+	);
+	const publicJwk = await crypto.subtle.exportKey("jwk", keys.publicKey);
+	return {
+		token: `${signingInput}.${bytesToBase64Url(new Uint8Array(signature))}`,
+		publicJwk: {
+			...publicJwk,
+			alg: "RS256",
+			kid: "questpie-test-key",
+			use: "sig",
+		},
+	};
+}
+
+async function signInWithSignedGoogleIdToken(
+	auth: ReturnType<typeof betterAuth>,
+	user: TestProviderUser,
+) {
+	const { token, publicJwk } = await createSignedGoogleIdToken(user);
 	const originalFetch = globalThis.fetch;
-	globalThis.fetch = async () =>
-		Response.json({
-			access_token: "provider-access-token",
-			expires_in: 3600,
-			id_token: "provider-id-token",
-			token_type: "Bearer",
-		});
+	globalThis.fetch = async (input) => {
+		const url = String(input);
+		if (url === "https://www.googleapis.com/oauth2/v3/certs") {
+			return Response.json({ keys: [publicJwk] });
+		}
+		throw new Error(`Unexpected Google verification request: ${url}`);
+	};
+	try {
+		return await auth.handler(
+			new Request("https://auth.example.test/api/auth/sign-in/social", {
+				method: "POST",
+				headers: jsonHeaders,
+				body: JSON.stringify({
+					provider: "google",
+					idToken: {
+						token,
+						accessToken: "provider-access-token",
+					},
+				}),
+			}),
+		);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+}
+
+async function withFakeProviderNetwork<T>(
+	provider: "google" | "github",
+	user: TestProviderUser,
+	run: () => Promise<T>,
+): Promise<T> {
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = async (input) => {
+		const url = String(input);
+		if (url.includes("access_token") || url.includes("/token")) {
+			return Response.json({
+				access_token: "provider-access-token",
+				expires_in: 3600,
+				id_token: fakeGoogleIdToken(user),
+				token_type: "Bearer",
+			});
+		}
+		if (provider === "github" && url.endsWith("/user/emails")) {
+			return Response.json(
+				user.email
+					? [
+							{
+								email: user.email,
+								primary: true,
+								verified: user.emailVerified,
+								visibility: "private",
+							},
+						]
+					: [],
+			);
+		}
+		if (provider === "github" && url.endsWith("/user")) {
+			return Response.json({
+				id: user.id,
+				login: "github-user",
+				name: user.name,
+				email: user.email,
+				avatar_url: "https://example.test/avatar.png",
+			});
+		}
+		throw new Error(`Unexpected provider request: ${url}`);
+	};
 	try {
 		return await run();
 	} finally {
 		globalThis.fetch = originalFetch;
 	}
+}
+
+async function withFakeTokenExchange<T>(run: () => Promise<T>): Promise<T> {
+	if (!activeGoogleFixture) throw new Error("missing Google fixture");
+	return withFakeProviderNetwork("google", activeGoogleFixture, run);
+}
+
+async function signInWithGoogleCallback(auth: ReturnType<typeof betterAuth>) {
+	if (!activeGoogleFixture) throw new Error("missing Google fixture");
+	const { state, cookie } = await beginSocialCallback(auth, "google");
+	return withFakeProviderNetwork("google", activeGoogleFixture, () =>
+		auth.handler(
+			new Request(
+				`https://auth.example.test/api/auth/callback/google?code=provider-code&state=${state}`,
+				{ headers: { cookie } },
+			),
+		),
+	);
 }
 
 describe("configureAuthEntryMethods", () => {
@@ -127,6 +302,239 @@ describe("configureAuthEntryMethods", () => {
 				).toThrow(`Auth entry provider "${provider}"`);
 			}
 		}
+	});
+
+	it("rejects provider identity and token verification overrides", () => {
+		for (const socialProviders of [
+			{
+				google: {
+					clientId: "google-client",
+					clientSecret: "google-secret",
+					getUserInfo: async () => null,
+				},
+			},
+			{
+				google: {
+					clientId: "google-client",
+					clientSecret: "google-secret",
+					verifyIdToken: async () => true,
+				},
+			},
+			{
+				github: {
+					clientId: "github-client",
+					clientSecret: "github-secret",
+					getUserInfo: async () => null,
+				},
+			},
+		]) {
+			expect(() =>
+				configureAuthEntryMethods({
+					credentials: { enabled: false },
+					socialProviders,
+					requireVerifiedProviderEmail: true,
+				} as AuthEntryMethodsInput),
+			).toThrow("does not allow");
+		}
+	});
+
+	it("rejects plugins outside the reviewed non-entry allowlist", () => {
+		for (const id of ["anonymous", "magic-link", "username", "custom-entry"]) {
+			expect(() =>
+				configureAuthEntryMethods({
+					authOptions: { plugins: [{ id }] },
+					credentials: { enabled: true },
+					requireVerifiedProviderEmail: true,
+				} as AuthEntryMethodsInput),
+			).toThrow(`plugin "${id}"`);
+		}
+	});
+
+	it("composes the OAuth authorization server without adding a human entry method", async () => {
+		const database = emptyDatabase();
+		(database as MemoryDB & { oauthClient: unknown[] }).oauthClient = [];
+		const configured = configureAuthEntryMethods({
+			authOptions: {
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/sign-in",
+						consentPage: "/oauth/consent",
+						scopes: ["openid", "profile", "email", "mcp:tools"],
+						allowDynamicClientRegistration: true,
+						allowUnauthenticatedClientRegistration: true,
+					}),
+				],
+			},
+			credentials: { enabled: true },
+			requireVerifiedProviderEmail: true,
+		});
+
+		expect(configured.publicMethods).toEqual([
+			{ id: "email", kind: "credentials" },
+		]);
+		expect(configured.authOptions.plugins?.map(({ id }) => id)).toEqual([
+			"jwt",
+			"oauth-provider",
+		]);
+
+		const auth = createTestAuth(configured, database);
+		const registrationResponse = await auth.handler(
+			new Request("https://auth.example.test/api/auth/oauth2/register", {
+				method: "POST",
+				headers: jsonHeaders,
+				body: JSON.stringify({
+					client_name: "Test MCP client",
+					redirect_uris: ["https://client.example.test/callback"],
+					token_endpoint_auth_method: "none",
+					grant_types: ["authorization_code"],
+					response_types: ["code"],
+				}),
+			}),
+		);
+		expect(registrationResponse.ok).toBe(true);
+		const registration = (await registrationResponse.json()) as {
+			client_id: string;
+		};
+		const authorizeURL = new URL(
+			"https://auth.example.test/api/auth/oauth2/authorize",
+		);
+		authorizeURL.searchParams.set("response_type", "code");
+		authorizeURL.searchParams.set("client_id", registration.client_id);
+		authorizeURL.searchParams.set(
+			"redirect_uri",
+			"https://client.example.test/callback",
+		);
+		authorizeURL.searchParams.set("scope", "openid");
+		authorizeURL.searchParams.set(
+			"code_challenge",
+			"a-valid-pkce-code-challenge-with-at-least-43-characters",
+		);
+		authorizeURL.searchParams.set("code_challenge_method", "S256");
+		const authorizeResponse = await auth.handler(new Request(authorizeURL));
+		expect(authorizeResponse.status).toBe(302);
+		expect(authorizeResponse.headers.get("location")).toStartWith("/sign-in?");
+		expect(database.user).toHaveLength(0);
+		expect(database.account).toHaveLength(0);
+		expect(database.session).toHaveLength(0);
+
+		const response = await auth.handler(
+			new Request("https://auth.example.test/api/auth/sign-up/email", {
+				method: "POST",
+				headers: jsonHeaders,
+				body: JSON.stringify({
+					email: "oauth-composition@example.test",
+					name: "OAuth Composition",
+					password: "a-secure-test-password",
+				}),
+			}),
+		);
+		expect(response.ok).toBe(true);
+		expect(database.user).toHaveLength(1);
+		expect(database.account).toHaveLength(1);
+	});
+
+	it("normalizes the built-in GitHub numeric profile id", async () => {
+		const configured = configureAuthEntryMethods({
+			credentials: { enabled: false },
+			socialProviders: {
+				github: {
+					clientId: "github-client",
+					clientSecret: "github-secret",
+				},
+			},
+			requireVerifiedProviderEmail: true,
+		});
+		const provider = configured.authOptions.socialProviders?.github;
+		if (!provider?.getUserInfo) throw new Error("missing GitHub provider");
+		const originalFetch = globalThis.fetch;
+		globalThis.fetch = async (input) => {
+			const url = String(input);
+			if (url.endsWith("/user/emails")) {
+				return Response.json([
+					{
+						email: "github@example.test",
+						primary: true,
+						verified: true,
+						visibility: "private",
+					},
+				]);
+			}
+			return Response.json({
+				id: 123456789,
+				login: "github-user",
+				name: "GitHub User",
+				email: "github@example.test",
+				avatar_url: "https://example.test/avatar.png",
+			});
+		};
+		try {
+			const result = await provider.getUserInfo({ accessToken: "token" });
+			expect(result?.user.id).toBe("123456789");
+			expect(result?.user.emailVerified).toBe(true);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+
+	it("rejects an unverified signed Google ID token before persistence", async () => {
+		const database = emptyDatabase();
+		const configured = configureAuthEntryMethods({
+			credentials: { enabled: false },
+			socialProviders: {
+				google: {
+					clientId: "google-client",
+					clientSecret: "google-secret",
+				},
+			},
+			requireVerifiedProviderEmail: true,
+		});
+		const response = await signInWithSignedGoogleIdToken(
+			createTestAuth(configured, database),
+			{
+				id: "google-id-token-unverified",
+				name: "Unverified ID Token",
+				email: "unverified-id-token@example.test",
+				emailVerified: false,
+			},
+		);
+
+		expect(response.status).toBe(401);
+		expect(await response.json()).toEqual({
+			code: "social_provider_error",
+			message: "Social provider authentication failed",
+		});
+		expect(database.user).toHaveLength(0);
+		expect(database.account).toHaveLength(0);
+		expect(database.session).toHaveLength(0);
+	});
+
+	it("persists a verified signed Google ID token identity", async () => {
+		const database = emptyDatabase();
+		const configured = configureAuthEntryMethods({
+			credentials: { enabled: false },
+			socialProviders: {
+				google: {
+					clientId: "google-client",
+					clientSecret: "google-secret",
+				},
+			},
+			requireVerifiedProviderEmail: true,
+		});
+		const response = await signInWithSignedGoogleIdToken(
+			createTestAuth(configured, database),
+			{
+				id: "google-id-token-verified",
+				name: "Verified ID Token",
+				email: "verified-id-token@example.test",
+				emailVerified: true,
+			},
+		);
+
+		expect(response.ok).toBe(true);
+		expect(database.user).toHaveLength(1);
+		expect(database.account).toHaveLength(1);
+		expect(database.session).toHaveLength(1);
 	});
 
 	it("derives a deterministic secret-free catalog from the effective config", () => {
@@ -175,7 +583,7 @@ describe("configureAuthEntryMethods", () => {
 	});
 
 	it("merges an existing auth config while applying the protected provider last", async () => {
-		const basePlugin = { id: "base-auth-plugin" };
+		const basePlugin = { id: "bearer" as const };
 		const configured = configureAuthEntryMethods({
 			authOptions: {
 				emailAndPassword: { minPasswordLength: 14 },
@@ -197,7 +605,7 @@ describe("configureAuthEntryMethods", () => {
 			basePlugin.id,
 		);
 		expect(
-			(await signInWithGoogleIdToken(createTestAuth(configured, database))).ok,
+			(await signInWithGoogleCallback(createTestAuth(configured, database))).ok,
 		).toBe(false);
 		expect(database.user).toHaveLength(0);
 	});
@@ -244,13 +652,12 @@ describe("configureAuthEntryMethods", () => {
 				database,
 			);
 
-			const response = await signInWithGoogleIdToken(auth);
+			const response = await signInWithGoogleCallback(auth);
 
 			expect(response.ok).toBe(false);
-			expect(await response.json()).toEqual({
-				code: "social_provider_error",
-				message: "Social provider authentication failed",
-			});
+			expect(response.headers.get("location")).toContain(
+				"error=social_provider_error",
+			);
 			expect(database.user).toHaveLength(0);
 			expect(database.account).toHaveLength(0);
 			expect(database.session).toHaveLength(0);
@@ -259,7 +666,7 @@ describe("configureAuthEntryMethods", () => {
 
 	it("rejects a verified profile without a stable provider identity", async () => {
 		const database = emptyDatabase();
-		const response = await signInWithGoogleIdToken(
+		const response = await signInWithGoogleCallback(
 			createTestAuth(
 				configureAuthEntryMethods(
 					socialInput({
@@ -305,7 +712,7 @@ describe("configureAuthEntryMethods", () => {
 			database,
 		);
 
-		expect((await signInWithGoogleIdToken(auth)).ok).toBe(false);
+		expect((await signInWithGoogleCallback(auth)).ok).toBe(false);
 		expect(database.user).toEqual([existingUser]);
 		expect(database.account).toHaveLength(0);
 		expect(database.session).toHaveLength(0);
@@ -347,7 +754,7 @@ describe("configureAuthEntryMethods", () => {
 			database,
 		);
 
-		expect((await signInWithGoogleIdToken(auth)).ok).toBe(false);
+		expect((await signInWithGoogleCallback(auth)).ok).toBe(false);
 		expect(database.user).toEqual([existingUser]);
 		expect(database.account).toEqual([existingAccount]);
 		expect(database.session).toHaveLength(0);
@@ -367,7 +774,9 @@ describe("configureAuthEntryMethods", () => {
 			database,
 		);
 
-		expect((await signInWithGoogleIdToken(auth)).ok).toBe(true);
+		expect((await signInWithGoogleCallback(auth)).headers.get("location")).toBe(
+			"https://auth.example.test/complete",
+		);
 		expect(database.user).toHaveLength(1);
 		expect(database.account).toHaveLength(1);
 		expect(database.session).toHaveLength(1);
@@ -399,7 +808,7 @@ describe("configureAuthEntryMethods", () => {
 			database,
 		);
 
-		expect((await signInWithGoogleIdToken(auth)).ok).toBe(false);
+		expect((await signInWithGoogleCallback(auth)).ok).toBe(false);
 		expect(database.user).toEqual([existingUser]);
 		expect(database.account).toHaveLength(0);
 		expect(database.session).toHaveLength(0);
@@ -409,21 +818,18 @@ describe("configureAuthEntryMethods", () => {
 		"applies the verified-email gate to the %s authorization-code callback",
 		async (provider) => {
 			const database = emptyDatabase();
+			const providerUser = {
+				id: provider === "github" ? 987654321 : "google-callback-user",
+				name: "Callback Person",
+				email: "callback@example.test",
+				emailVerified: false,
+			};
 			const configured = configureAuthEntryMethods({
 				credentials: { enabled: false },
 				socialProviders: {
 					[provider]: {
 						clientId: `${provider}-client`,
 						clientSecret: `${provider}-secret`,
-						getUserInfo: async () => ({
-							user: {
-								id: `${provider}-callback-user`,
-								name: "Callback Person",
-								email: "callback@example.test",
-								emailVerified: false,
-							},
-							data: { privateProfile: true },
-						}),
 					},
 				},
 				requireVerifiedProviderEmail: true,
@@ -431,20 +837,22 @@ describe("configureAuthEntryMethods", () => {
 			const auth = createTestAuth(configured, database);
 			const { state, cookie } = await beginSocialCallback(auth, provider);
 
-			const response = await withFakeTokenExchange(() =>
-				auth.handler(
-					new Request(
-						`https://auth.example.test/api/auth/callback/${provider}?code=provider-code&state=${state}`,
-						{ headers: { cookie } },
+			const response = await withFakeProviderNetwork(
+				provider,
+				providerUser,
+				() =>
+					auth.handler(
+						new Request(
+							`https://auth.example.test/api/auth/callback/${provider}?code=provider-code&state=${state}`,
+							{ headers: { cookie } },
+						),
 					),
-				),
 			);
 
 			expect(response.status).toBe(302);
 			const location = response.headers.get("location") ?? "";
 			expect(location).toContain("error=social_provider_error");
 			expect(location).not.toContain("unable_to_get_user_info");
-			expect(location).not.toContain("privateProfile");
 			expect(database.user).toHaveLength(0);
 			expect(database.account).toHaveLength(0);
 			expect(database.session).toHaveLength(0);
@@ -477,6 +885,12 @@ describe("configureAuthEntryMethods", () => {
 				user: [existingUser],
 				account: scenario === "already-linked account" ? [existingAccount] : [],
 			};
+			const providerUser = {
+				id: existingAccount.accountId,
+				name: "Unverified Callback",
+				email: existingUser.email.toUpperCase(),
+				emailVerified: false,
+			};
 			const auth = createTestAuth(
 				configureAuthEntryMethods({
 					credentials: { enabled: false },
@@ -484,15 +898,6 @@ describe("configureAuthEntryMethods", () => {
 						google: {
 							clientId: "google-client",
 							clientSecret: "google-secret",
-							getUserInfo: async () => ({
-								user: {
-									id: existingAccount.accountId,
-									name: "Unverified Callback",
-									email: existingUser.email.toUpperCase(),
-									emailVerified: false,
-								},
-								data: {},
-							}),
 						},
 					},
 					requireVerifiedProviderEmail: true,
@@ -501,13 +906,16 @@ describe("configureAuthEntryMethods", () => {
 			);
 			const { state, cookie } = await beginSocialCallback(auth, "google");
 
-			const response = await withFakeTokenExchange(() =>
-				auth.handler(
-					new Request(
-						`https://auth.example.test/api/auth/callback/google?code=provider-code&state=${state}`,
-						{ headers: { cookie } },
+			const response = await withFakeProviderNetwork(
+				"google",
+				providerUser,
+				() =>
+					auth.handler(
+						new Request(
+							`https://auth.example.test/api/auth/callback/google?code=provider-code&state=${state}`,
+							{ headers: { cookie } },
+						),
 					),
-				),
 			);
 
 			expect(response.headers.get("location")).toContain(
@@ -596,6 +1004,63 @@ describe("configureAuthEntryMethods", () => {
 		expect(database.session).toHaveLength(1);
 	});
 
+	it("preserves a successful explicit-link callback containing an error key", async () => {
+		const database = emptyDatabase();
+		const configured = configureAuthEntryMethods({
+			credentials: { enabled: true },
+			socialProviders: {
+				google: {
+					clientId: "google-client",
+					clientSecret: "google-secret",
+				},
+			},
+			requireVerifiedProviderEmail: true,
+		});
+		const auth = createTestAuth(configured, database);
+		const signUp = await auth.handler(
+			new Request("https://auth.example.test/api/auth/sign-up/email", {
+				method: "POST",
+				headers: jsonHeaders,
+				body: JSON.stringify({
+					email: "link@example.test",
+					name: "Link Person",
+					password: "a-secure-test-password",
+				}),
+			}),
+		);
+		const sessionCookie = signUp.headers
+			.getSetCookie()
+			.map((value) => value.split(";", 1)[0])
+			.join("; ");
+		const { state, cookie } = await beginLinkCallback(
+			auth,
+			sessionCookie,
+			"/settings?error=none&tab=accounts",
+		);
+		const response = await withFakeProviderNetwork(
+			"google",
+			{
+				id: "linked-google-user",
+				name: "Link Person",
+				email: "link@example.test",
+				emailVerified: true,
+			},
+			() =>
+				auth.handler(
+					new Request(
+						`https://auth.example.test/api/auth/callback/google?code=provider-code&state=${state}`,
+						{ headers: { cookie } },
+					),
+				),
+		);
+
+		expect(response.headers.get("location")).toBe(
+			"/settings?error=none&tab=accounts",
+		);
+		expect(database.user).toHaveLength(1);
+		expect(database.account).toHaveLength(2);
+	});
+
 	it("keeps non-social credential error codes unchanged", async () => {
 		const auth = createTestAuth(
 			configureAuthEntryMethods({
@@ -632,7 +1097,7 @@ describe("configureAuthEntryMethods", () => {
 			emailVerified: true,
 		});
 
-		const response = await signInWithGoogleIdToken(
+		const response = await signInWithGoogleCallback(
 			createTestAuth(configureAuthEntryMethods(input), database),
 		);
 
