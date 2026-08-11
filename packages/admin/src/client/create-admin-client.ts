@@ -21,7 +21,7 @@ import {
 import { withAdminRequestHeader } from "../shared/preview-utils.js";
 
 export function createAdminClient<TApp extends QuestpieApp>(
-	config: QuestpieClientConfig,
+	config: QuestpieClientConfig<TApp>,
 ): QuestpieClient<TApp> {
 	return createClient<TApp>({
 		...config,

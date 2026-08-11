@@ -94,6 +94,34 @@ fine.
 nothing asked for JSON. `.schema()` and `.outputSchema()` turn JSON mode on.
 `.raw()` turns it off and drops any schema you set. The last of the two wins.
 
+### Call a raw route
+
+Raw route definitions are types, so a browser client must register every known
+raw runtime key. A typed app rejects missing keys, JSON routes, and wrong
+methods. Erased framework definitions with no safe method literal stay on their
+legacy unregistered surface; they do not create false registrations or promise
+raw response semantics:
+
+```ts
+export const client = createClient<AppConfig>({
+	baseURL: window.location.origin,
+	basePath: "/api",
+	rawRoutes: {
+		"workMachines/enrollmentExchange:POST": true,
+	},
+});
+
+const response = await client.routes.workMachines.enrollmentExchange.post({
+	body: new URLSearchParams({ code }),
+	credentials: "include",
+	redirect: "manual",
+});
+```
+
+The caller accepts `RequestInit` except `method`. The typed method leaf owns the
+method. It returns the original `Response`, including redirects and error
+responses, without JSON parsing.
+
 ## The file name is the URL
 
 | File                            | Client method                      | HTTP                       |
