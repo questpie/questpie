@@ -1,6 +1,7 @@
 import type {
 	ExtractModulePropArrOverride,
 	ExtractModulePropOverride,
+	ModuleDefinition,
 } from "questpie/types";
 
 import type { CodegenResolvedModulePropArr } from "#questpie/server/config/codegen-type-utils.js";
@@ -67,18 +68,30 @@ type _otherCategoryUsesTheSameOrderedFold = Expect<
 	Equal<DiamondJobs["digest"]["owner"], "left">
 >;
 
+type PublicModuleDefinition = (readonly ModuleDefinition[])[number];
+
+// A package can expose only the stable public module contract. Codegen has
+// already validated the runtime graph, so the widened definition must not
+// poison the generated aggregate with `never`.
+type _publicModuleDefinitionKeepsSafeAggregate = Expect<
+	Equal<
+		CodegenResolvedModulePropArr<readonly [PublicModuleDefinition], "globals">,
+		{}
+	>
+>;
+
 type WidenedNameModule = {
 	name: string;
 	globals: { settings: { owner: "widened" } };
 };
 
-// The internal fold is deliberately defined only for generated/const module
-// graphs. A widened name must not fall back to structural equality and pretend
-// that TypeScript can observe JavaScript object identity.
-type _widenedNameDoesNotClaimIdentitySemantics = Expect<
+// Codegen has already validated the runtime graph. A widened public module name
+// cannot participate in type-level identity dedupe, but its known contribution
+// must remain usable and must not poison later root definitions with `never`.
+type _widenedNameKeepsKnownContribution = Expect<
 	Equal<
 		CodegenResolvedModulePropArr<readonly [WidenedNameModule], "globals">,
-		never
+		{ settings: { owner: "widened" } }
 	>
 >;
 
