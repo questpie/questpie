@@ -353,6 +353,9 @@ assert.equal(bytes(permuted), bytes(queryTemplate));
 const reorderedBoolean = structuredClone(queryTemplate);
 reorderedBoolean.filter.expressions.reverse();
 assert.notEqual(bytes(reorderedBoolean), bytes(queryTemplate));
+const reorderedTerms = structuredClone(queryTemplate);
+reorderedTerms.order.reverse();
+assert.notEqual(bytes(reorderedTerms), bytes(queryTemplate));
 
 if (process.argv.includes("--print")) {
 	console.log(
