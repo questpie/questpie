@@ -1,0 +1,1162 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>QUESTPIE query grammar proof</title>
+		<style>
+			:root {
+				color-scheme: light;
+				font-family:
+					Inter,
+					ui-sans-serif,
+					system-ui,
+					-apple-system,
+					BlinkMacSystemFont,
+					"Segoe UI",
+					sans-serif;
+				background: #f4f6f1;
+				color: #1d251f;
+				--ink: #1d251f;
+				--muted: #667169;
+				--line: #ced6cd;
+				--panel: #ffffff;
+				--accent: #176b4d;
+				--accent-soft: #ddf1e8;
+				--danger: #a23a32;
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			body {
+				margin: 0;
+			}
+
+			main {
+				width: min(1480px, calc(100% - 32px));
+				margin: 0 auto;
+				padding: 40px 0 80px;
+			}
+
+			h1,
+			h2,
+			h3,
+			p {
+				margin-top: 0;
+			}
+
+			h1 {
+				font-size: clamp(2rem, 5vw, 4.25rem);
+				letter-spacing: -0.055em;
+				line-height: 0.98;
+				max-width: 950px;
+			}
+
+			h2 {
+				font-size: 1.1rem;
+				letter-spacing: -0.015em;
+			}
+
+			.lede {
+				max-width: 860px;
+				font-size: 1.1rem;
+				line-height: 1.65;
+				color: var(--muted);
+			}
+
+			.notice {
+				display: inline-flex;
+				align-items: center;
+				gap: 8px;
+				margin-bottom: 18px;
+				padding: 7px 10px;
+				border: 1px solid #e4c57c;
+				border-radius: 999px;
+				background: #fff5d7;
+				font:
+					700 0.72rem/1 ui-monospace,
+					SFMono-Regular,
+					Menlo,
+					monospace;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+			}
+
+			.question {
+				margin: 28px 0 36px;
+				padding: 20px 22px;
+				border-left: 4px solid var(--accent);
+				background: var(--accent-soft);
+				font-size: 1.03rem;
+				line-height: 1.55;
+			}
+
+			.grid {
+				display: grid;
+				grid-template-columns: minmax(280px, 0.75fr) minmax(0, 1.5fr);
+				gap: 18px;
+				align-items: start;
+			}
+
+			.panel {
+				border: 1px solid var(--line);
+				border-radius: 14px;
+				background: var(--panel);
+				padding: 20px;
+				box-shadow: 0 1px 0 rgb(23 40 29 / 5%);
+			}
+
+			.stack {
+				display: grid;
+				gap: 18px;
+			}
+
+			.controls {
+				display: grid;
+				gap: 14px;
+			}
+
+			label {
+				display: grid;
+				gap: 6px;
+				font-size: 0.78rem;
+				font-weight: 700;
+				color: var(--muted);
+			}
+
+			input,
+			textarea,
+			button {
+				font: inherit;
+			}
+
+			input,
+			textarea {
+				width: 100%;
+				border: 1px solid var(--line);
+				border-radius: 9px;
+				padding: 10px 12px;
+				background: #fbfcfa;
+				color: var(--ink);
+			}
+
+			textarea {
+				min-height: 160px;
+				resize: vertical;
+				font:
+					0.78rem/1.5 ui-monospace,
+					SFMono-Regular,
+					Menlo,
+					monospace;
+			}
+
+			.actions {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 8px;
+			}
+
+			button {
+				border: 1px solid var(--line);
+				border-radius: 9px;
+				padding: 9px 12px;
+				background: #fff;
+				color: var(--ink);
+				font-weight: 700;
+				cursor: pointer;
+			}
+
+			button:hover {
+				border-color: var(--accent);
+			}
+
+			button.primary {
+				border-color: var(--accent);
+				background: var(--accent);
+				color: #fff;
+			}
+
+			button[aria-selected="true"] {
+				border-color: var(--accent);
+				background: var(--accent-soft);
+				color: var(--accent);
+			}
+
+			.summary {
+				display: grid;
+				grid-template-columns: repeat(4, minmax(0, 1fr));
+				gap: 10px;
+			}
+
+			.metric {
+				padding: 14px;
+				border: 1px solid var(--line);
+				border-radius: 10px;
+				background: #fbfcfa;
+			}
+
+			.metric strong {
+				display: block;
+				font-size: 1.35rem;
+				margin-top: 5px;
+			}
+
+			.metric span {
+				font-size: 0.72rem;
+				font-weight: 700;
+				color: var(--muted);
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+			}
+
+			pre {
+				margin: 0;
+				max-height: 440px;
+				overflow: auto;
+				border-radius: 10px;
+				background: #132019;
+				color: #dff4e7;
+				padding: 15px;
+				font:
+					0.76rem/1.55 ui-monospace,
+					SFMono-Regular,
+					Menlo,
+					monospace;
+				white-space: pre-wrap;
+				word-break: break-word;
+			}
+
+			.result-list {
+				display: grid;
+				gap: 8px;
+				margin: 0;
+				padding: 0;
+				list-style: none;
+			}
+
+			.result-list li {
+				display: grid;
+				grid-template-columns: 1fr auto;
+				gap: 12px;
+				padding: 12px 14px;
+				border: 1px solid var(--line);
+				border-radius: 9px;
+				background: #fbfcfa;
+			}
+
+			.result-list small {
+				color: var(--muted);
+			}
+
+			.error {
+				border-color: #e9b4af;
+				background: #fff1ef;
+				color: var(--danger);
+			}
+
+			.tabs {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 8px;
+				margin-bottom: 16px;
+			}
+
+			.walkthrough {
+				min-height: 190px;
+			}
+
+			.walkthrough p {
+				color: var(--muted);
+				line-height: 1.55;
+			}
+
+			.step-list {
+				display: grid;
+				gap: 9px;
+			}
+
+			.step-list button {
+				text-align: left;
+			}
+
+			.step-list button.done {
+				border-color: #a6ceb9;
+				background: var(--accent-soft);
+			}
+
+			@media (max-width: 900px) {
+				.grid {
+					grid-template-columns: 1fr;
+				}
+
+				.summary {
+					grid-template-columns: repeat(2, minmax(0, 1fr));
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<main>
+			<div class="notice">Throwaway logic proof · not production API</div>
+			<h1>Can one closed query shape survive the awkward cases?</h1>
+			<p class="lede">
+				Drive a small Barbershop page query, inspect every normalized byte-level
+				fact, and try the cases that tend to break cursor and dependency models.
+			</p>
+			<div class="question">
+				<strong>Question:</strong> Can exact selection, filtering, stable
+				ordering, forward pagination, and one-hop Relation traversal share one
+				closed Query model with deterministic canonical bytes and a complete
+				declared dependency template?
+			</div>
+
+			<section class="grid">
+				<div class="stack">
+					<div class="panel">
+						<h2>Free play</h2>
+						<div class="controls">
+							<label>
+								Tenant UUID
+								<input
+									id="tenant"
+									value="11111111-1111-4111-8111-111111111111"
+								/>
+							</label>
+							<label>
+								Rows on page (1–4)
+								<input id="first" type="number" min="1" max="4" value="2" />
+							</label>
+							<label>
+								After cursor (opaque; blank means first page)
+								<textarea id="after" spellcheck="false"></textarea>
+							</label>
+							<div class="actions">
+								<button class="primary" id="run">Run page</button>
+								<button id="use-end">Use end cursor</button>
+								<button id="reset">Reset</button>
+							</div>
+						</div>
+					</div>
+
+					<div class="panel">
+						<h2>In-memory appointments</h2>
+						<p class="lede" style="font-size: 0.85rem">
+							Edit values, then run again. The model never persists them.
+						</p>
+						<textarea id="dataset" spellcheck="false"></textarea>
+						<div class="actions" style="margin-top: 10px">
+							<button id="apply-data">Apply edited data</button>
+							<button id="insert-inside">Insert before current window</button>
+						</div>
+					</div>
+				</div>
+
+				<div class="stack">
+					<div class="panel">
+						<h2>Current state</h2>
+						<div class="summary">
+							<div class="metric">
+								<span>Rows</span><strong id="row-count">0</strong>
+							</div>
+							<div class="metric">
+								<span>Has next</span><strong id="has-next">—</strong>
+							</div>
+							<div class="metric">
+								<span>Reads</span><strong id="read-count">0</strong>
+							</div>
+							<div class="metric">
+								<span>Status</span><strong id="status">Ready</strong>
+							</div>
+						</div>
+					</div>
+
+					<div class="panel" id="result-panel">
+						<h2>Returned page</h2>
+						<ul class="result-list" id="results"></ul>
+					</div>
+
+					<div class="grid" style="grid-template-columns: 1fr 1fr">
+						<div class="panel">
+							<h2>Normalized Query</h2>
+							<pre id="query-state"></pre>
+						</div>
+						<div class="panel">
+							<h2>Declared + observed dependencies</h2>
+							<pre id="dependency-state"></pre>
+						</div>
+					</div>
+
+					<div class="panel">
+						<h2>Binding, scope, cursor, and result state</h2>
+						<pre id="execution-state"></pre>
+					</div>
+				</div>
+			</section>
+
+			<section class="panel" style="margin-top: 18px">
+				<h2>Guided hostile cases</h2>
+				<div class="tabs" id="tabs"></div>
+				<div class="walkthrough" id="walkthrough"></div>
+			</section>
+		</main>
+
+		<script>
+			// Pure logic module. It knows nothing about this page or the DOM.
+			const QueryProof = (() => {
+				const IDS = {
+					appointments: "collection:appointments",
+					tenants: "collection:tenants",
+					id: "collection:appointments/field:id",
+					tenantId: "collection:appointments/field:tenantId",
+					customerName: "collection:appointments/field:customerName",
+					startsAt: "collection:appointments/field:startsAt",
+					status: "collection:appointments/field:status",
+					tenant: "collection:appointments/relation:tenant",
+					tenantPk: "collection:tenants/field:id",
+					tenantSlug: "collection:tenants/field:slug",
+					tenantName: "collection:tenants/field:name",
+					primary: "collection:appointments/constraint:primary",
+				};
+
+				const relations = {
+					[IDS.tenant]: {
+						source: IDS.appointments,
+						target: IDS.tenants,
+						fields: [IDS.tenantId],
+						references: [IDS.tenantPk],
+					},
+				};
+
+				const baseTemplate = {
+					format: "questpie.data-query-template",
+					version: 1,
+					from: IDS.appointments,
+					parameters: [
+						{
+							name: "tenantId",
+							kind: "scalar",
+							scalar: "uuid",
+							nullable: false,
+							minimum: null,
+							maximum: null,
+						},
+						{
+							name: "first",
+							kind: "scalar",
+							scalar: "integer",
+							nullable: false,
+							minimum: 1,
+							maximum: 4,
+						},
+						{ name: "after", kind: "cursor", nullable: true },
+					],
+					select: [
+						{ kind: "field", key: "startsAt", field: IDS.startsAt },
+						{ kind: "field", key: "id", field: IDS.id },
+						{ kind: "field", key: "customerName", field: IDS.customerName },
+						{
+							kind: "toOne",
+							key: "tenant",
+							relation: IDS.tenant,
+							select: [
+								{ kind: "field", key: "name", field: IDS.tenantName },
+								{ kind: "field", key: "slug", field: IDS.tenantSlug },
+							],
+						},
+					],
+					filter: {
+						kind: "equal",
+						field: IDS.tenantId,
+						operand: { kind: "parameter", parameter: "tenantId" },
+					},
+					order: [
+						{ field: IDS.startsAt, direction: "ascending", nulls: "last" },
+						{ field: IDS.id, direction: "ascending", nulls: "last" },
+					],
+					page: {
+						kind: "forwardCursor",
+						first: { kind: "parameter", parameter: "first" },
+						after: { kind: "parameter", parameter: "after" },
+						uniqueConstraint: IDS.primary,
+					},
+				};
+
+				function canonicalValue(value) {
+					if (Array.isArray(value)) return value.map(canonicalValue);
+					if (value && typeof value === "object") {
+						return Object.fromEntries(
+							Object.keys(value)
+								.sort()
+								.map((key) => [key, canonicalValue(value[key])]),
+						);
+					}
+					return value;
+				}
+
+				function canonicalBytes(value) {
+					return JSON.stringify(canonicalValue(value)) + "\n";
+				}
+
+				function compareAscii(left, right) {
+					return left < right ? -1 : left > right ? 1 : 0;
+				}
+
+				async function digest(prefix, value) {
+					const bytes = new TextEncoder().encode(
+						prefix + canonicalBytes(value),
+					);
+					const hash = await crypto.subtle.digest("SHA-256", bytes);
+					return [...new Uint8Array(hash)]
+						.map((byte) => byte.toString(16).padStart(2, "0"))
+						.join("");
+				}
+
+				function normalizeSelection(entries) {
+					return entries
+						.map((entry) =>
+							entry.kind === "toOne"
+								? { ...entry, select: normalizeSelection(entry.select) }
+								: structuredClone(entry),
+						)
+						.sort((left, right) => compareAscii(left.key, right.key));
+				}
+
+				function normalizeTemplate(candidate) {
+					const template = structuredClone(candidate);
+					template.parameters.sort((left, right) =>
+						compareAscii(left.name, right.name),
+					);
+					template.select = normalizeSelection(template.select);
+					if (!template.order.length)
+						throw new Error("Order is required; v1 has no implicit order.");
+					if (!template.page)
+						throw new Error(
+							"Forward pagination is required for a v1 list query.",
+						);
+					const orderFields = template.order.map((term) => term.field);
+					if (new Set(orderFields).size !== orderFields.length)
+						throw new Error("An order Field cannot appear twice.");
+					if (orderFields.at(-1) !== IDS.id) {
+						throw new Error(
+							"Order is not total: append the non-null primary key Field appointments.id explicitly.",
+						);
+					}
+					return template;
+				}
+
+				function dependencyTemplate(template, templateDigest) {
+					const baseFields = new Set(
+						template.select
+							.filter((entry) => entry.kind === "field")
+							.map((entry) => entry.field),
+					);
+					baseFields.add(template.filter.field);
+					for (const term of template.order) baseFields.add(term.field);
+					const relationEntries = template.select.filter(
+						(entry) => entry.kind === "toOne",
+					);
+					for (const entry of relationEntries) {
+						for (const field of relations[entry.relation].fields)
+							baseFields.add(field);
+					}
+
+					const reads = [
+						{
+							kind: "collection",
+							collection: IDS.appointments,
+							fields: [...baseFields].sort(compareAscii),
+						},
+						...relationEntries.map((entry) => ({
+							kind: "collection",
+							collection: relations[entry.relation].target,
+							fields: [
+								...entry.select.map((selection) => selection.field),
+								...relations[entry.relation].references,
+							].sort(compareAscii),
+						})),
+						...relationEntries.map((entry) => ({
+							kind: "relation",
+							relation: entry.relation,
+							...relations[entry.relation],
+						})),
+						{
+							kind: "page",
+							collection: IDS.appointments,
+							orderFields: template.order.map((term) => term.field),
+							uniqueConstraint: template.page.uniqueConstraint,
+							direction: "forward",
+						},
+					];
+
+					return {
+						format: "questpie.data-query-dependency-template",
+						version: 1,
+						queryTemplateDigest: templateDigest,
+						reads,
+					};
+				}
+
+				function validateBinding(binding) {
+					if (
+						!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+							binding.tenantId,
+						)
+					) {
+						throw new Error("tenantId is not a lowercase canonical UUID.");
+					}
+					if (
+						!Number.isSafeInteger(binding.first) ||
+						binding.first < 1 ||
+						binding.first > 4
+					) {
+						throw new Error(
+							"first must be an integer from 1 through 4 in this proof.",
+						);
+					}
+					if (binding.after !== null && typeof binding.after !== "string")
+						throw new Error("after must be a cursor or null.");
+				}
+
+				function scopeValue(templateDigest, binding) {
+					return {
+						format: "questpie.data-query-scope",
+						version: 1,
+						templateDigest,
+						values: [{ parameter: "tenantId", value: binding.tenantId }],
+					};
+				}
+
+				function base64UrlEncode(text) {
+					const bytes = new TextEncoder().encode(text);
+					let binary = "";
+					for (const byte of bytes) binary += String.fromCharCode(byte);
+					return btoa(binary)
+						.replaceAll("+", "-")
+						.replaceAll("/", "_")
+						.replace(/=+$/, "");
+				}
+
+				function base64UrlDecode(value) {
+					const padded = value
+						.replaceAll("-", "+")
+						.replaceAll("_", "/")
+						.padEnd(Math.ceil(value.length / 4) * 4, "=");
+					const binary = atob(padded);
+					return new TextDecoder().decode(
+						Uint8Array.from(binary, (character) => character.charCodeAt(0)),
+					);
+				}
+
+				function cursorValue(templateDigest, scopeDigest, row) {
+					return {
+						format: "questpie.data-cursor",
+						version: 1,
+						templateDigest,
+						scopeDigest,
+						order: [
+							{ field: IDS.startsAt, value: row.startsAt },
+							{ field: IDS.id, value: row.id },
+						],
+					};
+				}
+
+				function compareRows(left, right) {
+					return (
+						compareAscii(left.startsAt, right.startsAt) ||
+						compareAscii(left.id, right.id)
+					);
+				}
+
+				function compareRowToCursor(row, cursor) {
+					const boundary = {
+						startsAt: cursor.order[0].value,
+						id: cursor.order[1].value,
+					};
+					return compareRows(row, boundary);
+				}
+
+				function project(row, tenants) {
+					const tenant =
+						tenants.find((candidate) => candidate.id === row.tenantId) ?? null;
+					return {
+						customerName: row.customerName,
+						id: row.id,
+						startsAt: row.startsAt,
+						tenant: tenant ? { name: tenant.name, slug: tenant.slug } : null,
+					};
+				}
+
+				async function execute({
+					candidate = baseTemplate,
+					binding,
+					appointments,
+					tenants,
+				}) {
+					validateBinding(binding);
+					const template = normalizeTemplate(candidate);
+					const templateDigest = await digest(
+						"questpie-data-query-template-v1\0",
+						template,
+					);
+					const scope = scopeValue(templateDigest, binding);
+					const scopeDigest = await digest(
+						"questpie-data-query-scope-v1\0",
+						scope,
+					);
+					let decodedCursor = null;
+
+					if (binding.after) {
+						decodedCursor = JSON.parse(base64UrlDecode(binding.after));
+						if (
+							decodedCursor.format !== "questpie.data-cursor" ||
+							decodedCursor.version !== 1
+						)
+							throw new Error("Cursor protocol is not v1.");
+						if (decodedCursor.templateDigest !== templateDigest)
+							throw new Error("Cursor belongs to another Query Template.");
+						if (decodedCursor.scopeDigest !== scopeDigest)
+							throw new Error("Cursor belongs to another filter scope.");
+						if (
+							decodedCursor.order.length !== 2 ||
+							decodedCursor.order[0].field !== IDS.startsAt ||
+							decodedCursor.order[1].field !== IDS.id
+						) {
+							throw new Error(
+								"Cursor order identities or arity do not match the Query.",
+							);
+						}
+					}
+
+					const matching = appointments
+						.filter((row) => row.tenantId === binding.tenantId)
+						.sort(compareRows)
+						.filter(
+							(row) =>
+								!decodedCursor || compareRowToCursor(row, decodedCursor) > 0,
+						);
+					const fetched = matching.slice(0, binding.first + 1);
+					const pageRows = fetched.slice(0, binding.first);
+					const end = pageRows.at(-1) ?? null;
+					const endCursorValue = end
+						? cursorValue(templateDigest, scopeDigest, end)
+						: null;
+					const endCursor = endCursorValue
+						? base64UrlEncode(canonicalBytes(endCursorValue))
+						: null;
+					const dependencies = dependencyTemplate(template, templateDigest);
+
+					return {
+						template,
+						templateDigest,
+						templateBytes: canonicalBytes(template),
+						binding: {
+							format: "questpie.data-query-binding",
+							version: 1,
+							templateDigest,
+							values: Object.entries(binding)
+								.sort(([left], [right]) => compareAscii(left, right))
+								.map(([parameter, value]) => ({ parameter, value })),
+						},
+						scope,
+						scopeDigest,
+						decodedCursor,
+						result: {
+							nodes: pageRows.map((row) => project(row, tenants)),
+							pageInfo: {
+								endCursor,
+								hasNextPage: fetched.length > binding.first,
+							},
+						},
+						dependencies: {
+							declared: dependencies,
+							observed: {
+								boundScopeDigest: scopeDigest,
+								returnedRowKeys: pageRows.map((row) => row.id),
+								firstOrderTuple: pageRows[0]
+									? [pageRows[0].startsAt, pageRows[0].id]
+									: null,
+								lastOrderTuple: end ? [end.startsAt, end.id] : null,
+								sentinelPresent: fetched.length > binding.first,
+								traversedTenantKeys: [
+									...new Set(pageRows.map((row) => row.tenantId)),
+								].sort(),
+							},
+						},
+					};
+				}
+
+				return {
+					IDS,
+					baseTemplate,
+					canonicalBytes,
+					normalizeTemplate,
+					execute,
+				};
+			})();
+
+			// Thin throwaway page shell.
+			const TENANT_A = "11111111-1111-4111-8111-111111111111";
+			const TENANT_B = "22222222-2222-4222-8222-222222222222";
+			const initialAppointments = [
+				{
+					id: "00000000-0000-4000-8000-000000000001",
+					tenantId: TENANT_A,
+					customerName: "Ada",
+					startsAt: "2026-08-12T09:00:00.000Z",
+				},
+				{
+					id: "00000000-0000-4000-8000-000000000002",
+					tenantId: TENANT_A,
+					customerName: "Ben",
+					startsAt: "2026-08-12T09:00:00.000Z",
+				},
+				{
+					id: "00000000-0000-4000-8000-000000000003",
+					tenantId: TENANT_A,
+					customerName: "Cleo",
+					startsAt: "2026-08-12T10:00:00.000Z",
+				},
+				{
+					id: "00000000-0000-4000-8000-000000000004",
+					tenantId: TENANT_A,
+					customerName: "Dara",
+					startsAt: "2026-08-12T11:00:00.000Z",
+				},
+				{
+					id: "00000000-0000-4000-8000-000000000005",
+					tenantId: TENANT_B,
+					customerName: "Eli",
+					startsAt: "2026-08-12T09:30:00.000Z",
+				},
+			];
+			const tenants = [
+				{ id: TENANT_A, slug: "old-town", name: "Old Town" },
+				{ id: TENANT_B, slug: "river", name: "River" },
+			];
+
+			let appointments = structuredClone(initialAppointments);
+			let lastExecution = null;
+			let activeScenario = 0;
+			let completedSteps = new Set();
+
+			const elements = Object.fromEntries(
+				[
+					"tenant",
+					"first",
+					"after",
+					"dataset",
+					"row-count",
+					"has-next",
+					"read-count",
+					"status",
+					"results",
+					"query-state",
+					"dependency-state",
+					"execution-state",
+					"result-panel",
+					"tabs",
+					"walkthrough",
+				].map((id) => [id, document.getElementById(id)]),
+			);
+
+			function bindingFromControls() {
+				return {
+					tenantId: elements.tenant.value.trim(),
+					first: Number(elements.first.value),
+					after: elements.after.value.trim() || null,
+				};
+			}
+
+			function showDataset() {
+				elements.dataset.value = JSON.stringify(appointments, null, 2);
+			}
+
+			function showError(error) {
+				elements.status.textContent = "Rejected";
+				elements["result-panel"].classList.add("error");
+				elements.results.innerHTML = `<li><strong>${error.message}</strong><small>No database read</small></li>`;
+			}
+
+			function render(execution) {
+				lastExecution = execution;
+				elements["result-panel"].classList.remove("error");
+				elements.status.textContent = "Valid";
+				elements["row-count"].textContent = execution.result.nodes.length;
+				elements["has-next"].textContent = execution.result.pageInfo.hasNextPage
+					? "Yes"
+					: "No";
+				elements["read-count"].textContent =
+					execution.dependencies.declared.reads.length;
+				elements.results.innerHTML = execution.result.nodes.length
+					? execution.result.nodes
+							.map(
+								(node) =>
+									`<li><strong>${node.customerName}</strong><small>${node.startsAt}<br />${node.id.slice(-4)} · ${node.tenant?.name ?? "no tenant"}</small></li>`,
+							)
+							.join("")
+					: "<li><strong>No matching rows</strong><small>Dependencies still remain declared</small></li>";
+				elements["query-state"].textContent = JSON.stringify(
+					{
+						digest: execution.templateDigest,
+						canonicalBytes: execution.templateBytes,
+						normalized: execution.template,
+					},
+					null,
+					2,
+				);
+				elements["dependency-state"].textContent = JSON.stringify(
+					execution.dependencies,
+					null,
+					2,
+				);
+				elements["execution-state"].textContent = JSON.stringify(
+					{
+						binding: execution.binding,
+						scope: execution.scope,
+						scopeDigest: execution.scopeDigest,
+						decodedAfter: execution.decodedCursor,
+						result: execution.result,
+					},
+					null,
+					2,
+				);
+			}
+
+			async function run(candidate = QueryProof.baseTemplate) {
+				try {
+					render(
+						await QueryProof.execute({
+							candidate,
+							binding: bindingFromControls(),
+							appointments,
+							tenants,
+						}),
+					);
+				} catch (error) {
+					showError(error);
+				}
+			}
+
+			const scenarios = [
+				{
+					name: "Canonical keys",
+					description:
+						"Reverse parameter and selection object order. Their semantic set order must normalize to the same exact Query digest.",
+					steps: [
+						[
+							"Compare the two authored orders",
+							async () => {
+								resetControls();
+								const binding = bindingFromControls();
+								const original = await QueryProof.execute({
+									binding,
+									appointments,
+									tenants,
+								});
+								const permuted = structuredClone(QueryProof.baseTemplate);
+								permuted.parameters.reverse();
+								permuted.select.reverse();
+								const normalized = await QueryProof.execute({
+									candidate: permuted,
+									binding,
+									appointments,
+									tenants,
+								});
+								render(normalized);
+								elements["execution-state"].textContent = JSON.stringify(
+									{
+										originalDigest: original.templateDigest,
+										permutedDigest: normalized.templateDigest,
+										sameCanonicalBytes:
+											original.templateBytes === normalized.templateBytes,
+									},
+									null,
+									2,
+								);
+							},
+						],
+					],
+				},
+				{
+					name: "Tie boundary",
+					description:
+						"Ada and Ben have the same start time. The explicit primary-key suffix must put Ben on the next page exactly once.",
+					steps: [
+						[
+							"Run one-row first page",
+							async () => {
+								resetControls();
+								elements.first.value = "1";
+								await run();
+							},
+						],
+						[
+							"Carry the end cursor forward",
+							async () => {
+								elements.after.value = lastExecution.result.pageInfo.endCursor;
+								await run();
+							},
+						],
+					],
+				},
+				{
+					name: "Missing key",
+					description:
+						"Remove the explicit primary-key suffix. Current data may look ordered, but the template must fail before a read.",
+					steps: [
+						[
+							"Try an incomplete order",
+							async () => {
+								resetControls();
+								const candidate = structuredClone(QueryProof.baseTemplate);
+								candidate.order.pop();
+								await run(candidate);
+							},
+						],
+					],
+				},
+				{
+					name: "Wrong scope",
+					description:
+						"A cursor from Old Town must not silently apply to the River tenant filter.",
+					steps: [
+						[
+							"Create an Old Town cursor",
+							async () => {
+								resetControls();
+								elements.first.value = "1";
+								await run();
+								elements.after.value = lastExecution.result.pageInfo.endCursor;
+							},
+						],
+						[
+							"Change tenant and reuse it",
+							async () => {
+								elements.tenant.value = TENANT_B;
+								await run();
+							},
+						],
+					],
+				},
+				{
+					name: "Empty result",
+					description:
+						"No matching row must not erase Collection, Relation, join-key, order, or page dependencies.",
+					steps: [
+						[
+							"Run a tenant with no rows",
+							async () => {
+								resetControls();
+								elements.tenant.value = "33333333-3333-4333-8333-333333333333";
+								await run();
+							},
+						],
+					],
+				},
+				{
+					name: "Window shift",
+					description:
+						"Insert a row before the visible order window. Re-running replaces the page and exposes the new boundary state.",
+					steps: [
+						[
+							"Run the original page",
+							async () => {
+								resetControls();
+								await run();
+							},
+						],
+						[
+							"Insert before and recompute",
+							async () => {
+								insertInside();
+								await run();
+							},
+						],
+					],
+				},
+			];
+
+			function resetControls() {
+				appointments = structuredClone(initialAppointments);
+				elements.tenant.value = TENANT_A;
+				elements.first.value = "2";
+				elements.after.value = "";
+				showDataset();
+			}
+
+			function insertInside() {
+				if (!appointments.some((row) => row.id.endsWith("0006"))) {
+					appointments.push({
+						id: "00000000-0000-4000-8000-000000000006",
+						tenantId: TENANT_A,
+						customerName: "Ari",
+						startsAt: "2026-08-12T08:30:00.000Z",
+					});
+					showDataset();
+				}
+			}
+
+			function renderScenario() {
+				elements.tabs.innerHTML = scenarios
+					.map(
+						(scenario, index) =>
+							`<button role="tab" aria-selected="${index === activeScenario}" data-tab="${index}">${scenario.name}</button>`,
+					)
+					.join("");
+				const scenario = scenarios[activeScenario];
+				elements.walkthrough.innerHTML = `<h3>${scenario.name}</h3><p>${scenario.description}</p><div class="step-list">${scenario.steps.map(([label], index) => `<button data-step="${index}" class="${completedSteps.has(index) ? "done" : ""}">${index + 1}. ${label}</button>`).join("")}</div>`;
+			}
+
+			elements.tabs.addEventListener("click", (event) => {
+				const button = event.target.closest("[data-tab]");
+				if (!button) return;
+				activeScenario = Number(button.dataset.tab);
+				completedSteps = new Set();
+				resetControls();
+				renderScenario();
+			});
+
+			elements.walkthrough.addEventListener("click", async (event) => {
+				const button = event.target.closest("[data-step]");
+				if (!button) return;
+				const index = Number(button.dataset.step);
+				await scenarios[activeScenario].steps[index][1]();
+				completedSteps.add(index);
+				renderScenario();
+			});
+
+			document.getElementById("run").addEventListener("click", () => run());
+			document.getElementById("use-end").addEventListener("click", async () => {
+				if (!lastExecution?.result.pageInfo.endCursor) return;
+				elements.after.value = lastExecution.result.pageInfo.endCursor;
+				await run();
+			});
+			document.getElementById("reset").addEventListener("click", async () => {
+				resetControls();
+				await run();
+			});
+			document
+				.getElementById("apply-data")
+				.addEventListener("click", async () => {
+					try {
+						appointments = JSON.parse(elements.dataset.value);
+						await run();
+					} catch (error) {
+						showError(error);
+					}
+				});
+			document
+				.getElementById("insert-inside")
+				.addEventListener("click", async () => {
+					insertInside();
+					await run();
+				});
+
+			resetControls();
+			renderScenario();
+			run();
+		</script>
+	</body>
+</html>
