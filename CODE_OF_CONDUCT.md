@@ -35,7 +35,7 @@ discussions — and when someone is representing the project publicly.
 
 ## Enforcement
 
-Report unacceptable behaviour to **dominik.repkovsky@gmail.com**. Reports are
+Report unacceptable behaviour to **dominik@questpie.com**. Reports are
 handled confidentially. You will get a response within a week.
 
 Maintainers may remove comments, commits, code, issues, and other contributions

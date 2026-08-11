@@ -8,7 +8,6 @@ can falsify the architecture.
 
 ## Workspace
 
-- Worktree: `/Users/drepkovsky/questpie/repos/questpie-v4`
 - Branch: `feat/v4`
 - State: documentation-only clean slate
 - Package manager: Bun 1.3.13
