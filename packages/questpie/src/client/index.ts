@@ -410,7 +410,7 @@ type RouteCallerFromDef<TDef> =
 		? JsonRouteCaller<TDef>
 		: TDef extends RawRouteDefinition<any, infer TMethod>
 			? HttpMethod extends TMethod
-				? (input?: any) => Promise<any>
+				? (input?: unknown) => Promise<unknown>
 				: RawRouteCaller
 			: (input?: any) => Promise<any>;
 

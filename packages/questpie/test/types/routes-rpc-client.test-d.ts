@@ -284,7 +284,7 @@ type WideRawRouteApp = {
 createClient<WideRawRouteApp>({ baseURL: "https://example.test" });
 declare const wideRawClient: QuestpieClient<WideRawRouteApp>;
 type _wideRawDoesNotPromiseResponse = Expect<
-	IsAny<Awaited<ReturnType<typeof wideRawClient.routes.openapi.get>>>
+	IsUnknown<Awaited<ReturnType<typeof wideRawClient.routes.openapi.get>>>
 >;
 createClient<WideRawRouteApp>({
 	baseURL: "https://example.test",
