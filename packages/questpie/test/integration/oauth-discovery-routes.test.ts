@@ -46,7 +46,7 @@ const STUB_JWKS = {
 
 /** AS metadata `api.getOAuthServerConfig` returns (asResponse: false → data). */
 const STUB_AS_METADATA = {
-	issuer: BASE_URL,
+	issuer: `${BASE_URL}/api/auth`,
 	authorization_endpoint: `${BASE_URL}/api/auth/oauth2/authorize`,
 	token_endpoint: `${BASE_URL}/api/auth/oauth2/token`,
 	jwks_uri: `${BASE_URL}/api/auth/jwks`,
@@ -82,7 +82,7 @@ function makeStubAuth() {
 				if (name === "jwt")
 					return {
 						options: {
-							jwt: { issuer: BASE_URL },
+							jwt: { issuer: STUB_AS_METADATA.issuer },
 							jwks: { jwksPath: "/jwks" },
 						},
 					};
@@ -114,7 +114,7 @@ describe("root OAuth / MCP discovery routes", () => {
 		// path round-trip works.
 		expect(response!.status).toBe(200);
 		const body = await response!.json();
-		expect(body.issuer).toBe(BASE_URL);
+		expect(body.issuer).toBe(STUB_AS_METADATA.issuer);
 		expect(body.authorization_endpoint).toBe(
 			STUB_AS_METADATA.authorization_endpoint,
 		);
@@ -130,11 +130,9 @@ describe("root OAuth / MCP discovery routes", () => {
 		const body = await response!.json();
 		// resource = the RFC 8707 aud MO2 binds tokens to / MO6 verifies.
 		expect(body.resource).toBe(MCP_AUDIENCE);
-		// authorization_servers is auto-derived by the provider to point at this
-		// app's AS (issuer). MCP clients follow it to run the flow (MO9).
-		expect(Array.isArray(body.authorization_servers)).toBe(true);
-		expect(body.authorization_servers.length).toBeGreaterThanOrEqual(1);
-		expect(body.authorization_servers[0]).toContain(BASE_URL);
+		// The resource client loses mounted auth paths when it derives this value.
+		// The proxy must publish the exact provider issuer instead.
+		expect(body.authorization_servers).toEqual([STUB_AS_METADATA.issuer]);
 	});
 
 	test("GET /jwks returns the key set (proxied from the auth basePath)", async () => {

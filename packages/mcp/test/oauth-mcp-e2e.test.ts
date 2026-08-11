@@ -40,6 +40,7 @@ import { describe, expect, it } from "bun:test";
 import { createHash, randomBytes } from "node:crypto";
 
 import { oauthProvider } from "@better-auth/oauth-provider";
+import { discoverOAuthServerInfo } from "@modelcontextprotocol/sdk/client/auth.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -418,6 +419,90 @@ describe("MO13 end-to-end OAuth MCP flow + system mode", () => {
 	}
 
 	// ── (a) external client: a REAL token is issued and threads through /mcp ──
+
+	it("discovers the mounted authorization server from the MCP challenge", async () => {
+		const { cleanup } = await setupApp();
+		try {
+			const unauthorized = await fetch(`${ORIGIN}/api/mcp`, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					jsonrpc: "2.0",
+					id: 1,
+					method: "initialize",
+					params: {
+						protocolVersion: "2025-06-18",
+						capabilities: {},
+						clientInfo: { name: "MO13 discovery", version: "1.0.0" },
+					},
+				}),
+			});
+			expect(unauthorized.status).toBe(401);
+			const challenge = unauthorized.headers.get("www-authenticate") ?? "";
+			const resourceMetadataUrl = challenge.match(
+				/resource_metadata="([^"]+)"/,
+			)?.[1];
+			expect(resourceMetadataUrl).toBe(
+				`${ORIGIN}/api/.well-known/oauth-protected-resource`,
+			);
+			const resourceMetadataResponse = await fetch(resourceMetadataUrl!);
+			expect(resourceMetadataResponse.status).toBe(200);
+			const resourceMetadata = await resourceMetadataResponse.json();
+			expect(resourceMetadata.authorization_servers).toEqual([
+				`${ORIGIN}/api/auth`,
+			]);
+			const poisonedMetadataResponse = await fetch(resourceMetadataUrl!, {
+				headers: {
+					host: "attacker.invalid",
+					"x-forwarded-host": "attacker.invalid",
+					"x-forwarded-proto": "https",
+				},
+			});
+			expect(poisonedMetadataResponse.status).toBe(200);
+			expect(
+				(await poisonedMetadataResponse.json()).authorization_servers,
+			).toEqual([`${ORIGIN}/api/auth`]);
+			const poisonedAuthorizationServerResponse = await fetch(
+				`${ORIGIN}/api/.well-known/oauth-authorization-server`,
+				{
+					headers: {
+						host: "attacker.invalid",
+						"x-forwarded-host": "attacker.invalid",
+						"x-forwarded-proto": "https",
+					},
+				},
+			);
+			expect(poisonedAuthorizationServerResponse.status).toBe(200);
+			const poisonedAuthorizationServer =
+				await poisonedAuthorizationServerResponse.json();
+			expect(poisonedAuthorizationServer).toMatchObject({
+				issuer: `${ORIGIN}/api/auth`,
+				authorization_endpoint: `${ORIGIN}/api/auth/oauth2/authorize`,
+				token_endpoint: `${ORIGIN}/api/auth/oauth2/token`,
+				jwks_uri: `${ORIGIN}/api/auth/jwks`,
+			});
+			expect(JSON.stringify(poisonedAuthorizationServer)).not.toContain(
+				"attacker.invalid",
+			);
+			const oidcMetadataResponse = await fetch(
+				`${ORIGIN}/api/auth/.well-known/openid-configuration`,
+			);
+			expect(oidcMetadataResponse.status).toBe(200);
+			expect((await oidcMetadataResponse.json()).issuer).toBe(
+				`${ORIGIN}/api/auth`,
+			);
+
+			const discovered = await discoverOAuthServerInfo(MCP_AUD, {
+				resourceMetadataUrl,
+			});
+			expect(discovered.authorizationServerUrl).toBe(`${ORIGIN}/api/auth`);
+			expect(discovered.authorizationServerMetadata?.issuer).toBe(
+				`${ORIGIN}/api/auth`,
+			);
+		} finally {
+			await cleanup();
+		}
+	});
 
 	it("issues a real app-issued JWT via DCR + authorize + consent + token and resolves it to an oauth principal on POST /mcp", async () => {
 		const { auth, cookie, cleanup } = await setupApp();

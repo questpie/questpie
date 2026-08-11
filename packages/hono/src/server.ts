@@ -101,7 +101,7 @@ export function questpieHono<TQuestpie = Questpie<any>>(
 	const honoApp = new Hono<{
 		Variables: QuestpieVariables<TQuestpie>;
 	}>()
-		.notFound((context) => context.res)
+		.notFound((context) => context.body(null, 404))
 		.use("*", async (c, next) => {
 			const storedContext = adapterContexts.get(c.req.raw);
 			const hasCompatibilityContext = storedContext?.app === app;
