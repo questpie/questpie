@@ -7,7 +7,6 @@ import type { ModuleDefinition } from "questpie/types";
 import { z } from "zod";
 
 import type { CodegenResolvedModulePropArr } from "#questpie/server/config/codegen-type-utils.js";
-import starterModule from "#questpie/server/modules/starter/.generated/module.js";
 import { route } from "#questpie/server/routes/define-route.js";
 import type {
 	InferRouteOutput,
@@ -16,11 +15,16 @@ import type {
 } from "#questpie/server/routes/types.js";
 import type { Override } from "#questpie/shared/type-utils.js";
 
-import { mcpModule } from "../../../mcp/src/server/modules/mcp/index.js";
-import { openApiModule } from "../../../openapi/src/server.js";
-import { workflowsModule } from "../../../workflows/src/server/modules/workflows/index.js";
 import type { Equal, Expect, IsUnknown, Not } from "./type-test-utils.js";
 
+// Keep this fixture small. Importing each package's full generated module type
+// here measures those large package graphs as test cost instead of exercising
+// the generic regression. The literal names preserve the production ordering
+// while the final value preserves the public ModuleDefinition[] boundary.
+const starterModule = { name: "questpie-starter" } as const;
+const openApiModule = { name: "questpie-openapi" } as const;
+const workflowsModule = { name: "questpie-workflows" } as const;
+const mcpModule = { name: "questpie-mcp" } as const;
 const publicModules: readonly ModuleDefinition[] = [{ name: "public-module" }];
 const publicModule = publicModules[0]!;
 const modules = [
