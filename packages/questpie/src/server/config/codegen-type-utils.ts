@@ -150,23 +150,32 @@ type FoldModulePropOverride<
 	M,
 	K extends string,
 	State extends ModulePropFoldState<any, any>,
-> = [ValidatedModuleName<M>] extends [State["seen"]]
-	? [ValidatedModuleName<M>] extends [never]
-		? never
-		: State
-	: FoldModulePropArrOverride<
-				M extends { modules: infer Sub extends readonly any[] } ? Sub : [],
-				K,
-				ModulePropFoldState<
-					State["result"],
-					State["seen"] | ValidatedModuleName<M>
-				>
-		  > extends infer NestedState extends ModulePropFoldState<any, any>
+> = [ValidatedModuleName<M>] extends [never]
+	? FoldModulePropArrOverride<
+			M extends { modules: infer Sub extends readonly any[] } ? Sub : [],
+			K,
+			State
+		> extends infer NestedState extends ModulePropFoldState<any, any>
 		? ModulePropFoldState<
 				Override<NestedState["result"], ExtractDirectModuleProp<M, K>>,
 				NestedState["seen"]
 			>
-		: never;
+		: never
+	: [ValidatedModuleName<M>] extends [State["seen"]]
+		? State
+		: FoldModulePropArrOverride<
+					M extends { modules: infer Sub extends readonly any[] } ? Sub : [],
+					K,
+					ModulePropFoldState<
+						State["result"],
+						State["seen"] | ValidatedModuleName<M>
+					>
+			  > extends infer NestedState extends ModulePropFoldState<any, any>
+			? ModulePropFoldState<
+					Override<NestedState["result"], ExtractDirectModuleProp<M, K>>,
+					NestedState["seen"]
+				>
+			: never;
 
 type FoldModulePropArrOverride<
 	A extends readonly any[],
@@ -182,9 +191,11 @@ type FoldModulePropArrOverride<
  * names; runtime validation guarantees each such name identifies exactly one
  * object and rejects cycles and distinct objects sharing a name before code is
  * emitted. Under those preconditions, names are a sound type-level stand-in for
- * object identity and reproduce children-first, first-position dedupe. A module
- * whose name has widened to `string` produces `never` instead of silently using
- * structural equality as fake object identity.
+ * object identity and reproduce children-first, first-position dedupe. If a
+ * consumer exposes only the public `ModuleDefinition` type and widens the name
+ * to `string`, the fold keeps its available contributions but skips name-based
+ * dedupe for that module. This preserves exact root definitions without
+ * pretending that TypeScript can recover the lost object identity.
  *
  * TypeScript cannot observe JavaScript object identity or diagnose arbitrary
  * recursive object graphs. Do not use this helper on an unvalidated module tree.
