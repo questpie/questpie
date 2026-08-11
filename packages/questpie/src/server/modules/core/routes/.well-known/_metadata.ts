@@ -20,7 +20,10 @@
 
 import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client";
 
-import { mcpAudienceForApp } from "#questpie/server/adapters/utils/oauth-principal.js";
+import {
+	mcpAudienceForApp,
+	oauthIssuerForAuth,
+} from "#questpie/server/adapters/utils/oauth-principal.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
 import type { QuestpieConfig } from "#questpie/server/config/types.js";
 import { ApiError } from "#questpie/server/errors/index.js";
@@ -94,9 +97,11 @@ export async function oauthAuthorizationServerMetadata(
  * `GET /.well-known/oauth-protected-resource` — Protected Resource metadata
  * (RFC 9728). The authorization server does not publish this itself, so we build
  * it via the resource client. `resource` is the MCP endpoint URL (the RFC 8707
- * `aud` MO2 binds tokens to and MO6 verifies against), and `authorization_servers`
- * is auto-derived by the provider to point at this app's AS metadata document —
- * so a client that hits this endpoint discovers where to run the OAuth flow.
+ * `aud` MO2 binds tokens to and MO6 verifies against). The provider resource
+ * client derives `authorization_servers` from JWT configuration, which can lose
+ * the mounted auth path. Replace it with the exact statically configured token
+ * issuer so an untrusted request host cannot influence discovery and an MCP
+ * client discovers the same server that issues and verifies the token.
  */
 export async function oauthProtectedResourceMetadata(
 	app: Questpie<QuestpieConfig>,
@@ -104,11 +109,21 @@ export async function oauthProtectedResourceMetadata(
 ): Promise<Response> {
 	const auth = requireAuth(app, request);
 	if (auth instanceof Response) return auth;
+	const issuer = await oauthIssuerForAuth(app.auth);
+	if (!issuer) {
+		return handleError(ApiError.internal("OAuth issuer is unavailable"), {
+			request,
+			app,
+		});
+	}
 	const resourceClient = oauthProviderResourceClient(app.auth);
 	const metadata = await resourceClient
 		.getActions()
 		.getProtectedResourceMetadata({ resource: mcpAudienceForApp(app) });
-	return Response.json(metadata);
+	return Response.json({
+		...metadata,
+		authorization_servers: [issuer],
+	});
 }
 
 /**

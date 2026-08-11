@@ -356,6 +356,10 @@ describe("hono adapter composition", () => {
 		);
 		expect(explicitResponse.status).toBe(200);
 		expect(await explicitResponse.text()).toBe("pong");
+		const outsideResponse = await explicitBasePath.request(
+			"http://localhost/.well-known/oauth-authorization-server/api/auth",
+		);
+		expect(outsideResponse.status).toBe(404);
 
 		const rootResponse = await rootMount.request("http://localhost/ping");
 		expect(rootResponse.status).toBe(200);
