@@ -487,6 +487,10 @@ const dataContractProjection = {
 	collections: [
 		{
 			identity: IDS.appointments,
+			primaryKey: {
+				identity: IDS.appointmentPrimary,
+				fields: [IDS.appointmentId],
+			},
 			fields: [
 				{
 					identity: IDS.customerName,
@@ -543,6 +547,10 @@ const dataContractProjection = {
 		},
 		{
 			identity: IDS.tenants,
+			primaryKey: {
+				identity: IDS.tenantPrimary,
+				fields: [IDS.tenantPk],
+			},
 			fields: [
 				{
 					identity: IDS.tenantPk,
@@ -1023,19 +1031,19 @@ const expected = {
 	schemaProjectionDigest:
 		"9d757239d4033d042b741b410df593420e14216ae1147173e0f75b2afd5a7033",
 	dataContractProjectionDigest:
-		"254fe1c94618065fc21f70a1760a384239ed712c22e8899b252eec8d5504e0f7",
+		"0d5af01332f05f1c4a02cf543c0d242f450adfd378ac455f218df876038c9b4f",
 	dataContractProjectionDigestWithoutInverse:
-		"2c2373881dfa026c1027aca5c33ab2daec4f6c7d13d8a4924e19cc4705f92e28",
+		"61b4c2cd703ae57dc86fd785e6060dedfaec84d7d2cb466f8267edb883ec3a55",
 	queryTemplateDigest:
-		"5defd4f5a81006a24ae28bc343e334fe3988959dbb4b4945e218914c6a88424f",
+		"a8512fb577f3c4dd653d714f5191f1311788237e9f5d81813bd24c7452f57ac1",
 	scopeDigest:
-		"ad7be166df4c4de4d62d37184638e43037fb26a5c3ae22c8ae31110eee7e8f70",
+		"89eddbbbe23f6791c5b43acb25aed79c46dbbdc9f8307bf3bf79da8628762215",
 	encodedCursor:
-		"eyJmb3JtYXQiOiJxdWVzdHBpZS5kYXRhLWN1cnNvciIsIm9yZGVyIjpbeyJmaWVsZCI6ImNvbGxlY3Rpb246YXBwb2ludG1lbnRzL2ZpZWxkOnN0YXJ0c0F0IiwidmFsdWUiOiIyMDI2LTA4LTEyVDA5OjAwOjAwLjAwMFoifSx7ImZpZWxkIjoiY29sbGVjdGlvbjphcHBvaW50bWVudHMvZmllbGQ6aWQiLCJ2YWx1ZSI6IjAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMiJ9XSwic2NvcGVEaWdlc3QiOiJhZDdiZTE2NmRmNGM0ZGU0ZDYyZDM3MTg0NjM4ZTQzMDM3ZmIyNmE1YzNhZTIyYzhhZTMxMTEwZWVlN2U4ZjcwIiwidGVtcGxhdGVEaWdlc3QiOiI1ZGVmZDRmNWE4MTAwNmEyNGFlMjhiYzM0M2UzMzRmZTM5ODg5NTlkYmI0YjQ5NDVlMjE4OTE0YzZhODg0MjRmIiwidmVyc2lvbiI6MX0K",
+		"eyJmb3JtYXQiOiJxdWVzdHBpZS5kYXRhLWN1cnNvciIsIm9yZGVyIjpbeyJmaWVsZCI6ImNvbGxlY3Rpb246YXBwb2ludG1lbnRzL2ZpZWxkOnN0YXJ0c0F0IiwidmFsdWUiOiIyMDI2LTA4LTEyVDA5OjAwOjAwLjAwMFoifSx7ImZpZWxkIjoiY29sbGVjdGlvbjphcHBvaW50bWVudHMvZmllbGQ6aWQiLCJ2YWx1ZSI6IjAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMiJ9XSwic2NvcGVEaWdlc3QiOiI4OWVkZGJiYmUyM2Y2NzkxYzViNDNhY2IyNWFlZDc5YzQ2ZGJiZGM5ZjgzMDdiZjNiZjc5ZGE4NjI4NzYyMjE1IiwidGVtcGxhdGVEaWdlc3QiOiJhODUxMmZiNTc3ZjNjNGRkNjUzZDcxNGY1MTkxZjEzMTE3ODgyMzdlOWY1ZDgxODEzYmQyNGM3NDUyZjU3YWMxIiwidmVyc2lvbiI6MX0K",
 	tenantNameQueryTemplateDigest:
-		"e5ef171ddd4544d79fe85659630cac785e03f4e097864da45ea3b8af2902e3f0",
+		"26760166c633b97035223b7c2128e143ee5c4e28eb56fb5c06fb55290210bffb",
 	dependencyDigest:
-		"8309e07a1d34599e758ed8a9de4fb7691d99050e540b196d52dcb54187b8e0c5",
+		"210dbd260d5e9597b93e3c5d3168e685267574e3bf4aae37758ea41ba73aeb89",
 	inverseDependencyDigest:
 		"36b3d95acafe74a371cd19d781b9b39ff67c8fa15c2d239740ff9dcfb48d1ac4",
 	packageContractDigestWithoutInverse:
