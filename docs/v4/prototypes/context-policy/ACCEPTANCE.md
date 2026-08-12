@@ -5,7 +5,9 @@
   `713485a64bcc4795d960d576fea51da56bc4dcdd`
 - Proof commits:
   `52c482c61b10e28b22192672c083e318ea448b06` and
-  `e517fe5eb8360e76f7a021a7b04263d887721931`
+  `e517fe5eb8360e76f7a021a7b04263d887721931`;
+- Evidence-packet commit: `b78ffa73`;
+- Review-repair commit: `75bfd5a8`;
 - Scope: P2 trusted Context Resolution and relational Collection Policy only
 - Toolchain: Bun 1.3.14, TypeScript 5.9.2, PostgreSQL 17.10
 - Host: Linux x64, AMD Ryzen 5 5600G, 12 logical CPUs
@@ -46,10 +48,14 @@ and P1 head `713485a6` remain fixed inputs.
 7. Evidence reads are compiler-authored boolean-only correlated `EXISTS`
    predicates. They do not recursively apply the target disclosure Policy and
    cannot return target rows. Ordinary disclosure still applies target row and
-   Field Policy.
+   Field Policy. Membership has its own deny-ordinary disclosure Policy; the
+   evidence expression has only a boolean type and ordinary disclosure runs the
+   target Policy.
 8. Framework-owned SQL intersects Policy scope before caller filters, counts,
    cursor boundaries, `first + 1` sentinels, ordering, locking, and output.
-   There is no JavaScript post-filter fallback.
+   There is no JavaScript post-filter fallback. One lowering function consumes
+   the canonical Policy AST for artifacts, reads, update lock/recheck, and
+   candidate checks; a differential fixture compares interpreter and SQL.
 9. Missing and Policy-invisible keyed rows have the same result. Missing and
    invisible references share one normalized result. Database constraint detail
    is not disclosed. Cursor scope mismatch fails before SQL or disclosure.
@@ -73,27 +79,28 @@ and P1 head `713485a6` remain fixed inputs.
 
 ## Required P2 evidence
 
-| P2 gate                  | Executable evidence                                                                                                                   | Result |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| Once-per-root resolution | Three concurrent consumers share one promise, one resolver call, and one bootstrap read                                               | PASS   |
-| Failure order            | Unknown and anonymous Context roots fail without incrementing Policy or handler counters                                              | PASS   |
-| Bootstrap bounds         | Exact key/selection typing and runtime capability/limit/cancellation/deadline assertions                                              | PASS   |
-| Immutable propagation    | Frozen root facts, nested object identity, independent generated-client scopes                                                        | PASS   |
-| Service lifetime         | One instance per name; reverse-order cleanup after success and handler failure                                                        | PASS   |
-| Four-hop inference       | Exact Message, Channel, Space, Company, and Membership operands plus negative cross-row/codec/target tests                            | PASS   |
-| Admission and phases     | Canonical fail-closed phase order for Context, read, create, update, delete, Field, candidate, validation, and normalized Constraints | PASS   |
-| SQL pushdown             | PostgreSQL four-hop correlated Policy predicate is in count, page, keyed, sentinel, and lock/recheck statements                       | PASS   |
-| Selected output          | One SQL statement returns a permission bit and guarded value; encoder omits a denied property, never null-masks it                    | PASS   |
-| Sparse input/candidate   | Only supplied segment-array paths are checked; denied path and unauthorized candidate move have distinct fail-closed results          | PASS   |
-| Evidence/disclosure      | Boolean membership evidence authorizes 1,002 Messages while Membership disclosure returns zero rows                                   | PASS   |
-| Nondisclosure            | Missing and inaccessible keyed rows each return zero rows; normalized artifact fixes safe error equivalence                           | PASS   |
-| Cursor/sentinel          | Cursor binds Policy digest plus used Principal/Tenant/Authority; mismatch fails before SQL; `first + 1` uses identical scope          | PASS   |
-| Lock recheck             | Real concurrent PostgreSQL wait followed by explicit in-transaction evidence recheck affects zero rows after revocation               | PASS   |
-| Dependencies             | Canonical evidence graph and dependency projection include membership create/delete/role/status/scope changes                         | PASS   |
-| Surface parity           | Direct/network/nested/recompute/Route transition/worker/Studio all return the same decision                                           | PASS   |
-| System boundary          | Ordinary roots reject Authority input; trusted capability is required; current Policy evidence still applies                          | PASS   |
-| Second domain            | Archive record composite key and permit evidence succeed with no `id` or Tenant-equality assumption                                   | PASS   |
-| RLS boundary             | Zero PostgreSQL RLS objects and an explicit no-claim canonical projection                                                             | PASS   |
+| P2 gate                  | Executable evidence                                                                                                                     | Result |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| Once-per-root resolution | Three concurrent consumers share one promise, one resolver call, and one bootstrap read                                                 | PASS   |
+| Failure order            | Unknown and anonymous Context roots fail without incrementing Policy or handler counters                                                | PASS   |
+| Bootstrap bounds         | Exact key/selection typing and runtime capability/limit/cancellation/deadline assertions                                                | PASS   |
+| Immutable propagation    | Frozen root facts, nested object identity, independent generated-client scopes                                                          | PASS   |
+| Service lifetime         | One instance per name; reverse-order cleanup after success and handler failure                                                          | PASS   |
+| Four-hop inference       | Exact Message, Channel, Space, Company, and Membership operands plus negative cross-row/codec/target tests                              | PASS   |
+| Generated projection     | Type-level equality links inferred Context input/resolved types and Policy target to exact emitted declarations                         | PASS   |
+| Admission and phases     | Canonical fail-closed phase order for Context, read, create, update, delete, Field, candidate, validation, and normalized Constraints   | PASS   |
+| SQL pushdown             | One AST lowering feeds canonical artifacts and PostgreSQL count/page/key/sentinel/lock/candidate statements; JS/SQL differential agrees | PASS   |
+| Selected output          | One SQL statement returns a permission bit and guarded value; encoder omits a denied property, never null-masks it                      | PASS   |
+| Sparse input/candidate   | Only supplied segment-array paths are checked; denied path and unauthorized candidate move have distinct fail-closed results            | PASS   |
+| Evidence/disclosure      | Boolean-only evidence authorizes 1,002 Messages; ordinary Membership disclosure applies its own Policy and returns zero rows            | PASS   |
+| Nondisclosure            | Missing and inaccessible keyed rows each return zero rows; normalized artifact fixes safe error equivalence                             | PASS   |
+| Cursor/sentinel          | Cursor binds Policy digest plus used Principal/Tenant/Authority; populated and one-row boundary pages use identical scope               | PASS   |
+| Lock recheck             | Real concurrent PostgreSQL wait followed by explicit in-transaction evidence recheck affects zero rows after revocation                 | PASS   |
+| Dependencies             | Canonical evidence graph and dependency projection include membership create/delete/role/status/scope changes                           | PASS   |
+| Surface parity           | Direct/network/nested/recompute/Route transition/worker/Studio all return the same decision                                             | PASS   |
+| System boundary          | Ordinary roots reject Authority input; trusted capability is required; current Policy evidence still applies                            | PASS   |
+| Second domain            | Archive record composite key and permit evidence succeed with no `id` or Tenant-equality assumption                                     | PASS   |
+| RLS boundary             | Zero PostgreSQL RLS objects and an explicit no-claim canonical projection                                                               | PASS   |
 
 ## Canonical proof digests
 
@@ -102,13 +109,14 @@ and P1 head `713485a6` remain fixed inputs.
 | Context projection                   | `fa8142f732af3c4c45ba6bcc008b63496cd75588d9cde417c1106dd774d4f1a5` |
 | Context bootstrap plan               | `1f5bf9b40d4b3c797a0fc07f8473dc497ae21cdb0fdbeea87e979795150b963a` |
 | Message Policy program               | `972c05336c129b4f4aaabe5f20aee46019497008920d6e02f3193d6353d63bcb` |
+| Membership Policy program            | `1e6013e7f682862d5c6a91a6666c4512a267353e37c58db419fa1399c8b92b1c` |
 | Archive Policy program               | `9e331e56f4db891bf77201b2da46a13e2786bb02d69ec3c18982526daacf9f74` |
 | Policy evidence graph                | `3ab4bf1b4da85ae2102038e75f2e254baa2e8cc856e45edf1370ca57ce495e9e` |
 | Policy dependency projection         | `a582e4c1c8abaf43babec1e95ad722bcd55db8c72dcf4b3c2a38d0abd3635099` |
-| SQL lowering                         | `796fb7a427c5e6ca75e04b046878051321b2792024b50600890cf82643f1296e` |
+| SQL lowering                         | `a62df02bbf789b7eca994b1afd64a9cc6754fcd14b56541b199ad07181834dc7` |
 | Nondisclosure and error precedence   | `c2423f0ea51bad046c7ccfa07d69519b03ef197d72a4067ebb1c3ca22de94e7e` |
 | Execution-surface parity             | `6a0a1499103819123298b3a68143ee2f0c48a7665fe2c60cf7ae077f74e54ea6` |
-| `questpie explain policy` projection | `078c66d4b95d4005225fca0bd8a241490214fa0b97a42a6a23c6ca336024b9a3` |
+| `questpie explain policy` projection | `9fb23aea897a3722ea801d784ed46d05b13aa202acf6b7ecdba2586696d0b20e` |
 
 The fixed input digests remain:
 
@@ -127,25 +135,25 @@ The fixed input digests remain:
 
 ## TypeScript and editor measurements
 
-TypeScript reports 865 lines in the connected 7-file fixture. The full
+TypeScript reports 948 lines in the connected 8-file fixture. The full
 generated app and client declaration surface is 2,562 bytes.
 
 | Measurement                       |      Result |          Ceiling |
 | --------------------------------- | ----------: | ---------------: |
-| Types                             |       1,545 |         reported |
-| TypeScript instantiations         |       1,881 |          125,000 |
-| TypeScript memory                 |  24,058 KiB |       98,304 KiB |
-| cold total check                  |      0.45 s |            1.5 s |
+| Types                             |       1,883 |         reported |
+| TypeScript instantiations         |       2,730 |          125,000 |
+| TypeScript memory                 |  24,048 KiB |       98,304 KiB |
+| cold total check                  |      0.47 s |            1.5 s |
 | warm total check                  |      0.46 s |            1.5 s |
-| completion p95, 100 warm requests |     0.38 ms |           100 ms |
-| hover p95, 100 warm requests      |     0.31 ms |           100 ms |
+| completion p95, 100 warm requests |     0.32 ms |           100 ms |
+| hover p95, 100 warm requests      |     0.40 ms |           100 ms |
 | generated app declaration         | 2,146 bytes | combined ceiling |
 | generated client declaration      |   416 bytes | combined ceiling |
 | combined public declarations      | 2,562 bytes |    262,144 bytes |
 
-Depth scaling from one to four `exists` hops increases instantiations from 575
-to 692 (`1.203x`). Widening every one of five four-hop Collection contracts
-from 10 to 50 Fields leaves the 692 instantiations unchanged (`1.000x`).
+Depth scaling from one to four `exists` hops increases instantiations from 1,022
+to 1,139 (`1.114x`). Widening every one of five four-hop Collection contracts
+from 10 to 50 Fields leaves the 1,139 instantiations unchanged (`1.000x`).
 
 ## PostgreSQL measurements
 
@@ -154,10 +162,10 @@ All 12 primary-key and explicit indexes use B-tree. No expression or partial
 index exists. The source and artifact expose no GIN, GiST, SP-GiST, BRIN, hash,
 operator-class, raw-SQL, or generic `using` authoring authority.
 
-The four-hop page statement over 20,004 Message rows planned in 0.833 ms and
-executed in 0.659 ms on the recorded host. Its plan used the ordinary B-tree
+The four-hop page statement over 20,004 Message rows planned in 0.791 ms and
+executed in 0.670 ms on the recorded host. Its plan used the ordinary B-tree
 `messages_channel_created_idx` through a bitmap index scan. The hostile lock
-test waited 1,020 ms, rechecked current membership, affected zero rows, and left
+test waited 1,021 ms, rechecked current membership, affected zero rows, and left
 the message unchanged.
 
 These are proof-host observations, not production performance promises. If a
