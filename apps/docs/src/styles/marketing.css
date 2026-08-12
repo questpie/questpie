@@ -153,6 +153,21 @@ body.qp-grain-page {
 	.nav-menu {
 		display: none;
 	}
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+	:where(a, button, input, pre):focus-visible {
+		outline: 2px solid var(--ring);
+		outline-offset: 3px;
+	}
 
 	@media (max-width: 52rem) {
 		.nav-links,
@@ -212,7 +227,7 @@ body.qp-grain-page {
 	}
 	.btn.p {
 		background: var(--primary);
-		color: var(--primary-foreground);
+		color: var(--background);
 		box-shadow: var(--elevation-action);
 	}
 	.btn.p:hover {
@@ -330,6 +345,78 @@ body.qp-grain-page {
 		flex-wrap: wrap;
 		gap: var(--space-2);
 		padding: var(--space-2) var(--space-2) 0;
+	}
+	.model-preview {
+		gap: var(--space-5);
+	}
+	.model-preview .hero-card-head .qp-eyebrow {
+		color: var(--foreground-muted);
+	}
+	.product-media {
+		min-width: 0;
+		margin: 0;
+	}
+	.product-media > img,
+	.product-media > video,
+	.product-media-placeholder {
+		display: flex;
+		width: 100%;
+		aspect-ratio: 16 / 10;
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-sheet);
+		background: var(--card);
+		box-shadow: var(--elevation-raised);
+		overflow: hidden;
+	}
+	.product-media-hero > img,
+	.product-media-hero > video,
+	.product-media-hero .product-media-placeholder {
+		aspect-ratio: 4 / 3;
+	}
+	.product-media > img,
+	.product-media > video {
+		object-fit: cover;
+	}
+	.product-media-placeholder {
+		position: relative;
+		flex-direction: column;
+		justify-content: flex-end;
+		gap: var(--space-3);
+		padding: var(--space-7);
+		background:
+			linear-gradient(to bottom, transparent 0 72%, var(--surface-mid)),
+			var(--card);
+	}
+	.product-media-placeholder::before {
+		content: "Product capture coming before launch";
+		position: absolute;
+		top: var(--space-6);
+		left: var(--space-7);
+		font-family: var(--font-mono);
+		font-size: var(--type-sm);
+		color: var(--foreground-subtle);
+	}
+	.product-media-placeholder strong {
+		max-width: 24rem;
+		font-size: var(--type-xl);
+		line-height: var(--line-snug);
+	}
+	.product-media-placeholder p {
+		max-width: 32rem;
+		color: var(--foreground-muted);
+		line-height: var(--line-relaxed);
+	}
+	.product-media figcaption {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		gap: var(--space-2) var(--space-5);
+		padding: var(--space-4) var(--space-1) 0;
+		font-size: var(--type-sm);
+		color: var(--foreground-muted);
+	}
+	.product-media figcaption strong {
+		color: var(--foreground);
 	}
 	/* the one hairline left, and only between the doors and the CTA */
 	.rule {
@@ -505,6 +592,160 @@ body.qp-grain-page {
 		color: var(--foreground-muted);
 		line-height: var(--line-relaxed);
 	}
+	.editorial-band {
+		padding-top: var(--space-16);
+	}
+	.editorial-split,
+	.launch-split {
+		display: grid;
+		grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+		align-items: center;
+		gap: var(--space-16);
+	}
+	.editorial-split .head > p + p {
+		margin-top: calc(var(--space-2) * -1);
+	}
+	.editorial-split code {
+		font-family: var(--font-mono);
+		font-size: 0.92em;
+		color: var(--foreground);
+	}
+	.generated-list {
+		border-top: 1px solid var(--border-subtle);
+	}
+	.generated-row {
+		display: grid;
+		grid-template-columns: 3rem minmax(0, 1fr);
+		gap: var(--space-4);
+		padding: var(--space-5) 0;
+		border-bottom: 1px solid var(--border-subtle);
+	}
+	.generated-row strong {
+		display: block;
+		font-size: var(--type-lg);
+		line-height: var(--line-snug);
+	}
+	.generated-row p {
+		max-width: 34rem;
+		margin-top: var(--space-2);
+		color: var(--foreground-muted);
+		line-height: var(--line-relaxed);
+	}
+	.code-contract {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		margin-top: var(--space-10);
+		border-top: 1px solid var(--border-subtle);
+		border-bottom: 1px solid var(--border-subtle);
+	}
+	.code-contract > section {
+		min-width: 0;
+		padding: var(--space-8) var(--space-10) var(--space-8) 0;
+	}
+	.code-contract > section + section {
+		padding-right: 0;
+		padding-left: var(--space-10);
+		border-left: 1px solid var(--border-subtle);
+	}
+	.code-contract .qp-code {
+		margin-top: var(--space-5);
+	}
+	.contract-columns,
+	.product-paths {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		margin-top: var(--space-10);
+		border-top: 1px solid var(--border-subtle);
+		border-bottom: 1px solid var(--border-subtle);
+	}
+	.contract-columns > section,
+	.product-paths > section {
+		padding: var(--space-8) var(--space-10) var(--space-8) 0;
+	}
+	.contract-columns > section + section,
+	.product-paths > section + section {
+		padding-right: 0;
+		padding-left: var(--space-10);
+		border-left: 1px solid var(--border-subtle);
+	}
+	.contract-columns h3,
+	.product-paths h3,
+	.depth-list h3 {
+		margin-top: var(--space-3);
+		font-size: var(--type-xl);
+		font-weight: var(--weight-strong);
+		letter-spacing: -0.016em;
+	}
+	.contract-columns h3 + p,
+	.product-paths h3 + p,
+	.depth-list h3 + p {
+		max-width: 34rem;
+		margin-top: var(--space-3);
+		color: var(--foreground-muted);
+		line-height: var(--line-relaxed);
+	}
+	.contract-note {
+		max-width: 48rem;
+		margin-top: var(--space-5);
+		font-size: var(--type-sm);
+		color: var(--foreground-muted);
+	}
+	.depth-list {
+		margin-top: var(--space-10);
+		border-top: 1px solid var(--border-subtle);
+	}
+	.depth-list > section {
+		display: grid;
+		grid-template-columns: 4rem minmax(0, 1fr);
+		gap: var(--space-8);
+		padding: var(--space-7) 0;
+		border-bottom: 1px solid var(--border-subtle);
+	}
+	.depth-list h3 {
+		margin-top: 0;
+	}
+	.product-paths a {
+		display: inline-block;
+		margin-top: var(--space-5);
+		color: var(--primary-text);
+		font-weight: var(--weight-semibold);
+	}
+	.product-paths a:hover {
+		text-decoration: underline;
+		text-underline-offset: 0.2em;
+	}
+	.launch-band {
+		padding-bottom: var(--space-16);
+	}
+	.product-story {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-10);
+	}
+	.product-story .product-media {
+		width: 100%;
+	}
+	.early-access-form {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: var(--space-3);
+		margin-top: var(--space-8);
+	}
+	.early-access-form input {
+		width: min(100%, 19rem);
+		height: var(--control-large);
+		padding: 0 var(--spacing-input);
+		border: 1px solid var(--input);
+		border-radius: var(--radius-control);
+		background: var(--surface-mid);
+		color: var(--foreground);
+		font-family: var(--font-sans);
+		font-size: var(--type-md);
+	}
+	.early-access-form input::placeholder {
+		color: var(--foreground-subtle);
+	}
 	.ownership-list {
 		display: flex;
 		flex-direction: column;
@@ -537,6 +778,11 @@ body.qp-grain-page {
 			min-height: 0;
 			padding-top: var(--space-16);
 		}
+		.editorial-split,
+		.launch-split {
+			grid-template-columns: minmax(0, 1fr);
+			gap: var(--space-10);
+		}
 	}
 	@media (max-width: 45rem) {
 		.system-flow,
@@ -567,6 +813,45 @@ body.qp-grain-page {
 		.ownership-list > div {
 			grid-template-columns: minmax(0, 1fr);
 			gap: var(--space-2);
+		}
+		.contract-columns,
+		.product-paths,
+		.code-contract {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.contract-columns > section,
+		.product-paths > section {
+			padding: var(--space-6) 0;
+		}
+		.contract-columns > section + section,
+		.product-paths > section + section {
+			padding: var(--space-6) 0;
+			border-top: 1px solid var(--border-subtle);
+			border-left: 0;
+		}
+		.code-contract > section {
+			padding: var(--space-6) 0;
+		}
+		.code-contract > section + section {
+			padding: var(--space-6) 0;
+			border-top: 1px solid var(--border-subtle);
+			border-left: 0;
+		}
+		.depth-list > section {
+			grid-template-columns: minmax(0, 1fr);
+			gap: var(--space-3);
+		}
+		.product-media-placeholder {
+			padding: var(--space-5);
+		}
+		.product-media-placeholder::before {
+			top: var(--space-5);
+			left: var(--space-5);
+		}
+		.early-access-form,
+		.early-access-form input,
+		.early-access-form .btn {
+			width: 100%;
 		}
 	}
 	.frame {

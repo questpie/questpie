@@ -4,13 +4,9 @@
 
 export const siteConfig = {
 	name: "QUESTPIE",
-	/* The title the landing itself carries, and the one the accepted kit specifies.
-	   What it replaces — "Open-source TypeScript application framework" — is a
-	   category any competitor could paste unchanged, and it sold only the
-	   framework while the page's first screen is about staffing agents. */
-	title: "QUESTPIE: software you can staff",
+	title: "QUESTPIE: define the model once, keep the app in sync",
 	description:
-		"An AI agent joins the way a person does: a role, permissions, its own name on the work. On an open-source TypeScript framework you run yourself.",
+		"Define fields, access rules and hooks once. QUESTPIE derives the PostgreSQL schema, typed REST API and typed client from the same model.",
 	url: "https://questpie.com",
 	ogImage: "/og-questpie.png",
 	twitterHandle: "@questpie",

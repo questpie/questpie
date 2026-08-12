@@ -1,128 +1,61 @@
-/* The landing, band for band from the accepted kit (ui_kits/marketing/index.html).
- *
- * Four bands and no more. The page it replaces ran eleven sections deep, which is
- * why nobody reached the end of it: hero, the work itself, the two doors, one ask.
- *
- * Two devices on the page are built from live DOM rather than screenshots — the
- * hero card and the Autopilot door. A capture would go stale the first time the
- * product moved, and at these sizes text in an image is unreadable anyway.
- */
 import questpiePackage from "../../../../../packages/questpie/package.json";
 import { CodeSample } from "./code";
 
-const SCHEMA_SAMPLE = `collection("news")
+const GITHUB_URL = "https://github.com/questpie/questpie";
+
+const MODEL_SAMPLE = `import { collection } from "#questpie/factories";
+
+export const posts = collection("posts")
   .fields(({ f }) => ({
     title: f.text(255).required(),
-    content: f.richText(),
+    published: f.boolean().default(false),
+    author: f.relation("user").required(),
   }))
-  .title(({ f }) => f.title);`;
+  .access({ read: true });`;
 
-const STEPS = [
+const CORE_OUTPUTS = [
 	{
-		body: "Goals, tasks and messages in one place, in your own words.",
-		num: "01",
-		title: "You write down the work",
+		detail: "Tables, relations and constraints are generated from the model.",
+		title: "Database schema",
 	},
 	{
-		body: "It joins with a role, like any hire, and sees only what that role sees.",
-		num: "02",
-		title: "An agent gets a seat",
+		detail:
+			"CRUD endpoints and validation share the same field and access rules.",
+		title: "Typed API",
 	},
 	{
-		body: "We log every step, and anything that matters waits for your yes.",
-		num: "03",
-		title: "You keep the last word",
+		detail: "Queries and mutations know the exact shape of every collection.",
+		title: "Typed client",
 	},
 ];
 
-function HeroCard() {
-	return (
-		<div className="hero-card">
-			<div className="hero-card-head">
-				<span className="qp-eyebrow">Today's work</span>
-				{/* The kit dated this Friday, 30 July. 30 July 2026 is a Thursday, and
-				    the brief below is due Friday — so the day before is both the true
-				    weekday and the one that makes the deadline mean something. */}
-				<span className="count">Thursday, 30 July</span>
-			</div>
-			<div className="rows">
-				<div className="row pin">
-					<div className="rb">
-						<span className="qp-eyebrow">From you</span>
-						<span
-							className="rt"
-							style={{ fontWeight: "var(--weight-semibold)" }}
-						>
-							Send the November invoices by Friday, check the amounts in Stripe.
-						</span>
-					</div>
-				</div>
-				<div className="row" style={{ alignItems: "flex-start" }}>
-					<span className="av agent">AI</span>
-					<div className="rb">
-						<span className="rt">Preparing 14 invoices</span>
-						<span className="rm">agent Ada · role Accounting</span>
-						<span className="progress">
-							<span className="meter">
-								{/* 8 of 14 is 57%, so the bar stops 43% short */}
-								<span style={{ right: "43%" }} />
-							</span>
-							<span className="count">8/14</span>
-						</span>
-					</div>
-				</div>
-				<div className="row">
-					<span className="av i2">AB</span>
-					<div className="rb">
-						<span className="rt">Reply to the supplier e-mail</span>
-						<span className="rm">Anna B. · 2 h</span>
-					</div>
-					<span className="chip">Waiting on Anna</span>
-				</div>
-				<div className="row">
-					<span className="av agent">AI</span>
-					<div className="rb">
-						<span className="rt">Close order #4412</span>
-						<span className="rm">agent proposed · waits for your yes</span>
-					</div>
-					<span className="chip ok">Needs you</span>
-				</div>
-			</div>
-		</div>
-	);
-}
+const DEPTH = [
+	{
+		body: "Collection, field and operation rules live beside the data they protect. The same rules apply whether a request comes from REST, a hook or a job.",
+		title: "One access model",
+	},
+	{
+		body: "Routes, hooks, jobs and services receive typed collections, database and infrastructure services through the same application context.",
+		title: "One application context",
+	},
+	{
+		body: "Start with PostgreSQL. Add queues, storage, search, email or realtime through adapters when the application actually needs them.",
+		title: "Infrastructure on purpose",
+	},
+];
 
-/* The Autopilot door. The kit left a grey "product shot" box here because it had
- * no capture to put in it; neither do we, and a placeholder on a landing page is
- * just an unfinished page. Three rows say what the door claims — an agent, a
- * person, something waiting on you — in the same grammar as the hero. */
-function DoorPreview() {
+function CoreOutputList() {
 	return (
-		<div className="frame preview">
-			<div className="rows" style={{ width: "100%" }}>
-				<div className="row">
-					<span className="av agent">AI</span>
-					<div className="rb">
-						<span className="rt">Drafted the October report</span>
-						<span className="rm">agent Ada · done 09:12</span>
+		<div className="generated-list">
+			{CORE_OUTPUTS.map((output, index) => (
+				<div className="generated-row" key={output.title}>
+					<span className="qp-eyebrow">0{index + 1}</span>
+					<div>
+						<strong>{output.title}</strong>
+						<p>{output.detail}</p>
 					</div>
 				</div>
-				<div className="row">
-					<span className="av i2">MK</span>
-					<div className="rb">
-						<span className="rt">Called the supplier back</span>
-						<span className="rm">Martin K. · done 11:40</span>
-					</div>
-				</div>
-				<div className="row">
-					<span className="av agent">AI</span>
-					<div className="rb">
-						<span className="rt">Raise the price list by 4%</span>
-						<span className="rm">agent proposed · waits for your yes</span>
-					</div>
-					<span className="chip ok">Needs you</span>
-				</div>
-			</div>
+			))}
 		</div>
 	);
 }
@@ -130,165 +63,179 @@ function DoorPreview() {
 export function Landing() {
 	return (
 		<>
-			<section className="band hero">
+			<section className="band hero home-hero">
 				<div className="wrap split">
 					<div className="head">
-						<p className="qp-aside">
-							with everything the company actually does
-						</p>
+						<p className="qp-aside">server-first TypeScript framework</p>
 						<h1 className="qp-display-xl">
-							Software you <em className="qp-hl">can staff</em>
+							Define the model once.{" "}
+							<em className="qp-hl">Keep the app in sync.</em>
 						</h1>
 						<p className="qp-lead">
-							An AI agent joins the way a person does: a role, permissions, and
-							its own name on the work it finishes. Nobody installs anything.
-							Nothing happens behind your back.
+							A collection holds fields, access rules and hooks in one file.
+							QUESTPIE derives the PostgreSQL schema, typed REST API and typed
+							client from it.
 						</p>
 						<div className="actions">
-							<a className="btn p lg" href="/autopilot#cta">
-								Get early access
+							<a className="btn p lg" href="/docs/learn/first-app">
+								Create your first app
 							</a>
-							<a className="btn s lg" href="#how">
-								See how it works
+							<a className="btn s lg" href="#model">
+								Read how it works
 							</a>
 						</div>
 						<p className="qp-eyebrow">
-							MIT · TypeScript · Postgres · self-hosted · v
+							MIT · TypeScript · PostgreSQL · self-hosted · v
 							{questpiePackage.version}
 						</p>
 					</div>
 
-					<HeroCard />
+					<div className="hero-card model-preview">
+						<div className="hero-card-head">
+							<span className="qp-eyebrow">collections/posts.ts</span>
+							<span className="count">one source of truth</span>
+						</div>
+						<CodeSample bare code={MODEL_SAMPLE} mark="4,5,6" />
+					</div>
 				</div>
 			</section>
 
-			<section className="band raised" id="how">
+			<section className="band editorial-band" id="model">
+				<div className="wrap editorial-split">
+					<div className="head">
+						<p className="qp-aside">one definition, fewer contracts</p>
+						<h2 className="qp-display-m">Change the field, not five places</h2>
+						<p>
+							Rename <code>title</code> and the server API and client types move
+							with it. A stale property becomes an editor error instead of a
+							production surprise.
+						</p>
+						<p>
+							There is less to maintain because the contract is not copied into
+							validators, endpoints and SDK types.
+						</p>
+					</div>
+					<CoreOutputList />
+				</div>
+			</section>
+
+			<section className="band raised">
 				<div className="wrap">
 					<div className="head">
-						<p className="qp-aside">three steps, nothing more</p>
-						<h2 className="qp-display-m">How it actually works</h2>
+						<p className="qp-aside">a focused core, modules when needed</p>
+						<h2 className="qp-display-m">
+							Use only the backend your app needs
+						</h2>
+						<p>
+							The framework starts with the application model. Product surfaces
+							and infrastructure stay explicit.
+						</p>
 					</div>
-					<div
-						className="grid3"
-						style={{
-							gridAutoRows: "1fr",
-							marginTop: "var(--space-10)",
-						}}
-					>
-						{STEPS.map((step) => (
-							<div className="card" key={step.num}>
-								<span className="step-num">{step.num}</span>
-								<h3 style={{ marginTop: "var(--space-5)" }}>{step.title}</h3>
-								<p>{step.body}</p>
-							</div>
-						))}
+
+					<div className="contract-columns">
+						<section>
+							<p className="qp-eyebrow">Framework core</p>
+							<h3>The backend contract</h3>
+							<p>
+								Collections, globals, REST, the typed client, access control,
+								hooks, routes, jobs and services.
+							</p>
+						</section>
+						<section>
+							<p className="qp-eyebrow">Optional modules and adapters</p>
+							<h3>Add the surfaces you need</h3>
+							<p>
+								Admin, OpenAPI, MCP, workflows, realtime, search, storage, email
+								and queues.
+							</p>
+						</section>
 					</div>
+					<p className="contract-note">
+						Run headless with Hono or Elysia, or add the admin UI with TanStack
+						Start or Next.js.
+					</p>
 				</div>
 			</section>
 
 			<section className="band">
-				<div className="wrap split lean">
+				<div className="wrap">
 					<div className="head">
-						<p className="qp-aside">one system, two ways to use it</p>
-						<h2 className="qp-display-m">Build the rules. Run the work.</h2>
-						<p>
-							The framework defines the data, permissions and workflows.
-							Autopilot gives people and agents one place to use them.
-						</p>
+						<p className="qp-aside">beyond generated CRUD</p>
+						<h2 className="qp-display-m">
+							The rest of the backend speaks the same language
+						</h2>
 					</div>
-					<div className="system-flow" role="list">
-						<div className="system-step" role="listitem">
-							<span className="qp-eyebrow">Define</span>
-							<strong>Data, permissions, workflows</strong>
-						</div>
-						<div className="system-step" role="listitem">
-							<span className="qp-eyebrow">Build</span>
-							<strong>API, admin, jobs, client</strong>
-						</div>
-						<div className="system-step" role="listitem">
-							<span className="qp-eyebrow">Run</span>
-							<strong>People and agents at work</strong>
-						</div>
+					<div className="depth-list">
+						{DEPTH.map((item, index) => (
+							<section key={item.title}>
+								<span className="qp-eyebrow">0{index + 1}</span>
+								<div>
+									<h3>{item.title}</h3>
+									<p>{item.body}</p>
+								</div>
+							</section>
+						))}
 					</div>
 				</div>
 			</section>
 
 			<hr className="rule" />
 
-			<section className="band" id="doors">
+			<section className="band" id="products">
 				<div className="wrap">
 					<div className="head">
-						<p className="qp-aside">two doors</p>
-						<h2 className="qp-display-m">
-							One for running the company, one for building it
-						</h2>
+						<p className="qp-aside">
+							open source foundation, practical product
+						</p>
+						<h2 className="qp-display-m">Build on QUESTPIE today</h2>
 					</div>
-					<div
-						className="grid2"
-						style={{
-							gridAutoRows: "1fr",
-							marginTop: "var(--space-10)",
-						}}
-					>
-						<a className="door" href="/autopilot">
-							<span className="chip" style={{ alignSelf: "flex-start" }}>
-								Autopilot
-							</span>
-							<DoorPreview />
-							<div>
-								<h3>For the people running the company</h3>
-								<p className="door-line">
-									Work arrives, someone picks it up, someone closes it. You see
-									who did what.
-								</p>
-								<span
-									className="door-cta"
-									style={{ color: "var(--primary-text)" }}
-								>
-									Get early access →
-								</span>
-							</div>
-						</a>
-						<a className="door" href="/framework">
-							<span className="chip" style={{ alignSelf: "flex-start" }}>
-								Framework
-							</span>
-							<div className="frame code">
-								<CodeSample bare code={SCHEMA_SAMPLE} />
-							</div>
-							<div>
-								<h3>For the people building it</h3>
-								<p className="door-line">
-									Describe the data once. The typed API, the admin, the jobs and
-									the client follow from it.
-								</p>
-								<span className="door-cta">Read the docs →</span>
-							</div>
-						</a>
+					<div className="product-paths">
+						<section>
+							<p className="qp-eyebrow">Framework · available now</p>
+							<h3>Own the application</h3>
+							<p>
+								Keep the code, database and deployment. QUESTPIE gives you the
+								typed foundation without taking over your runtime.
+							</p>
+							<a href="/framework">Explore the framework →</a>
+						</section>
+						<section>
+							<p className="qp-eyebrow">Autopilot · early access</p>
+							<h3>See the foundation at work</h3>
+							<p>
+								Autopilot is a product built on QUESTPIE for shared work between
+								people and agents. It is not required to use the framework.
+							</p>
+							<a href="/autopilot">Meet Autopilot →</a>
+						</section>
 					</div>
 				</div>
 			</section>
 
-			<section className="band" style={{ paddingBottom: "var(--space-16)" }}>
-				<div className="wrap">
-					<div className="cta-block">
-						<div className="head head-center">
-							<p className="qp-aside">we are our own first customer</p>
-							<h2 className="qp-display-l">QUESTPIE runs on QUESTPIE</h2>
-							<p>
-								Every goal, task and message behind this page lives in
-								Autopilot.
-							</p>
-						</div>
-						<div className="actions" style={{ justifyContent: "center" }}>
-							<a className="btn p lg" href="/autopilot#cta">
-								Get early access
+			<section className="band launch-band">
+				<div className="wrap launch-split">
+					<div className="head">
+						<p className="qp-aside">your code, your data, your runtime</p>
+						<h2 className="qp-display-l">Start with a working application</h2>
+						<p>
+							Choose TanStack Start, Next.js, Hono or Elysia. The generator
+							installs the project, runs codegen and shows the next steps.
+						</p>
+						<div className="actions">
+							<a className="btn p lg" href="/docs/learn/first-app">
+								Create your first app
 							</a>
-							<a className="btn g lg" href="/docs">
-								Read the docs
+							<a
+								className="btn g lg"
+								href={GITHUB_URL}
+								rel="noreferrer"
+								target="_blank"
+							>
+								View on GitHub
 							</a>
 						</div>
 					</div>
+					<CodeSample code="bunx create-questpie my-app" lang="bash" />
 				</div>
 			</section>
 		</>

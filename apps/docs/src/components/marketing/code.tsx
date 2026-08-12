@@ -1,3 +1,4 @@
+/* oxlint-disable jsx-a11y/no-noninteractive-tabindex -- Code blocks scroll horizontally and need keyboard access. */
 /* The grammars from the kit's questpie-highlight.js, ported to return React nodes
  * instead of an HTML string.
  *
@@ -130,9 +131,12 @@ export function CodeSample({
 
 	return (
 		<pre
+			aria-label="Code sample"
 			className={bare ? "qp-code bare" : "qp-code"}
 			data-lang={lang}
 			data-numbers={numbers ? "" : undefined}
+			role="region"
+			tabIndex={0}
 		>
 			<code>
 				{code.split("\n").map((line, index) => (

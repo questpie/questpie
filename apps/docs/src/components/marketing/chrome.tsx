@@ -19,13 +19,13 @@ import { useEffect, useState } from "react";
 import questpiePackage from "../../../../../packages/questpie/package.json";
 
 const GITHUB_URL = "https://github.com/questpie/questpie";
-const EARLY_ACCESS = "/autopilot#cta";
+const CREATE_APP = "/docs/learn/first-app";
 
 export type MarketingPage = "home" | "autopilot" | "framework" | "docs";
 
 const LINKS: { id: MarketingPage; label: string; href: string }[] = [
-	{ id: "autopilot", label: "Autopilot", href: "/autopilot" },
 	{ id: "framework", label: "Framework", href: "/framework" },
+	{ id: "autopilot", label: "Autopilot", href: "/autopilot" },
 	{ id: "docs", label: "Docs", href: "/docs" },
 ];
 
@@ -38,7 +38,7 @@ export function isMarketingPath(pathname: string): boolean {
 
 function Lockup({ fontSize, size }: { fontSize: number; size: number }) {
 	return (
-		<Link className="lockup" to="/">
+		<Link aria-label="QUESTPIE home" className="lockup" to="/">
 			{/* The bare mark carries no <text>, so an <img> is safe: nothing in it
 			    depends on a font the page stylesheet cannot reach. alt is empty
 			    because the wordmark beside it already names the link. */}
@@ -138,8 +138,8 @@ function MarketingNav({ page }: { page: MarketingPage }) {
 					>
 						GitHub
 					</a>
-					<a className="btn p" href={EARLY_ACCESS}>
-						Get early access
+					<a className="btn p" href={CREATE_APP}>
+						Create an app
 					</a>
 					<button
 						aria-controls="marketing-nav-menu"
