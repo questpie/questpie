@@ -4,7 +4,7 @@ import { defineQuery } from "#questpie/package";
 
 export const auditEvent = defineQuery({
 	name: "acme.audit.event",
-	input: operation.object({ sequence: operation.text() }),
+	input: operation.object({ sequence: operation.integer() }),
 	handler: async ({ ctx }) => {
 		const event = await ctx.data.auditEvents.get({
 			key: { sequence: 1 },

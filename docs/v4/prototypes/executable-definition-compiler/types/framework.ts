@@ -204,12 +204,18 @@ export const operation = {
 	uuid(): Codec<string> {
 		return {};
 	},
+	integer(): Codec<number> {
+		return {};
+	},
 	text(_options?: { readonly maximumLength?: number }): Codec<string> {
 		return {};
 	},
 	object<
 		const Shape extends {
-			readonly [Key in keyof Shape]: Codec<object> | Codec<string>;
+			readonly [Key in keyof Shape]:
+				| Codec<object>
+				| Codec<string>
+				| Codec<number>;
 		},
 	>(
 		_shape: Shape,
