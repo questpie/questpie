@@ -1,8 +1,11 @@
 # P1 executable Definition compiler acceptance packet
 
-- Status: proof complete; awaiting the one fresh focused Opus-medium review
+- Status: accepted by one fresh focused Opus-medium review
 - Proof parent: `d03358b749c4c8efb769d1c0fed50e8fbf983fb0`
-- Proof commit: `3d2b6e3899ff4d554926d80be2858b9ce7fa9fd4`
+- Proof commits:
+  `3d2b6e3899ff4d554926d80be2858b9ce7fa9fd4`,
+  `8dc920ae03092644b5d0c0ea2a66f7ea38e0c838`, and
+  `2d14b4d520b07034cf66a6711e3598412cd6f30c`
 - Scope: P1 compiler mechanics only
 - Toolchain: Bun 1.3.14 and TypeScript 5.9.2
 - Host: Linux x64, AMD Ryzen 5 5600G, 12 logical CPUs
@@ -89,10 +92,10 @@ Measured on the host above with the complete connected fixture:
 
 | Measurement                       |      Result |          Ceiling |
 | --------------------------------- | ----------: | ---------------: |
-| Types                             |       1,852 |         reported |
+| Types                             |       1,855 |         reported |
 | TypeScript instantiations         |       3,901 |          125,000 |
-| TypeScript memory                 |  24,222 KiB |       98,304 KiB |
-| TypeScript total time             |      0.43 s |            1.5 s |
+| TypeScript memory                 |  24,136 KiB |       98,304 KiB |
+| TypeScript total time             |      0.41 s |            1.5 s |
 | completion p95, 100 warm requests |     0.30 ms |           100 ms |
 | hover p95, 100 warm requests      |     0.43 ms |           100 ms |
 | generated public `app.d.ts`       | 4,932 bytes | combined ceiling |
@@ -139,6 +142,20 @@ path identity, or warning-only Runtime mismatch.
 
 The source-owned type-only binder remains the documented fallback. P1 does not
 need it because the current-virtual six-factory isolation passes.
+
+## Acceptance review
+
+The one fresh focused Claude Opus review at medium effort ran after the final
+fixture repair. It independently ran the complete Bun proof, the stock
+TypeScript diagnostic command, and `git diff --check`, then returned `PASS`.
+
+Its non-blocking implementation notes are preserved. The proof's synthetic
+handler-initializer and absolute-checkout observations hold by construction;
+the production compiler must replace them with real graph and relocated-build
+tests. The collision golden constructs the accepted diagnostic shape after it
+derives child identity uniqueness; the production collision pass must emit
+that shape. The factory stub's `as never` stays confined to the throwaway value
+fixture and does not reach a handler context or emitted public declaration.
 
 ## Deferred seams
 
