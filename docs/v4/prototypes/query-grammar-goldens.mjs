@@ -952,7 +952,7 @@ const tenantContractWithoutInverse = {
 	postgresName: null,
 	fields: [
 		{
-			key: "id",
+			path: ["id"],
 			contract: {
 				type: uuid,
 				nullable: false,
@@ -961,7 +961,7 @@ const tenantContractWithoutInverse = {
 			},
 		},
 		{
-			key: "name",
+			path: ["name"],
 			contract: {
 				type: text160,
 				nullable: false,
@@ -970,7 +970,7 @@ const tenantContractWithoutInverse = {
 			},
 		},
 		{
-			key: "slug",
+			path: ["slug"],
 			contract: {
 				type: text80,
 				nullable: false,
@@ -1047,9 +1047,9 @@ const expected = {
 	inverseDependencyDigest:
 		"36b3d95acafe74a371cd19d781b9b39ff67c8fa15c2d239740ff9dcfb48d1ac4",
 	packageContractDigestWithoutInverse:
-		"adcceb71994c78bd3851de137f4e44affaa3d96c7a02b64982dde19749074aeb",
+		"a1058368accd86e26bd49d8cef3352a1b1684d9f79276cfaf9567374aa59bbc3",
 	packageContractDigestWithInverse:
-		"97c8d66ddb5be6fe3d0a46c3d07fbfc0cfeb77c884ec6608245a4f5de8c47ec2",
+		"9edfb1e99500008fb321c238f2d993eecf567d737dc4fb28213d7195b2fded25",
 };
 
 const actual = {
