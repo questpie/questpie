@@ -413,6 +413,7 @@ interface OrderTerm<FieldKey extends PropertyKey> {
 }
 type Operand<Value> = Value | Literal<Value> | Parameter<Value, false>;
 type SetOperand<Value> =
+	| readonly []
 	| readonly [Value, ...Value[]]
 	| ListParameter<Value, number>;
 type RangeCodec = { kind: "timestamp"; withTimezone: boolean };
@@ -608,7 +609,6 @@ appointmentScope.fields.auditNote.isNull();
 appointmentScope.fields.auditNote.isNotNull();
 // @ts-expect-error a scalar parameter containing an array is not a bounded list parameter.
 appointmentScope.fields.status.in(wrongScalarListParameter);
-// @ts-expect-error an empty membership tuple is invalid.
 appointmentScope.fields.status.in([]);
 // @ts-expect-error UUID range comparison is outside the public v1 operator matrix.
 appointmentScope.fields.id.lessThan("11111111-1111-4111-8111-111111111111");

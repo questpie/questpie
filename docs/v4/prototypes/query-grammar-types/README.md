@@ -14,8 +14,8 @@ suffix types derive from that descriptor rather than an appointments-specific
 builder. Each Field descriptor also carries its exact semantic identity. The
 full call uses the documented `where`, fluent `orderBy`, and
 `query.forwardCursor` page shape. It also holds negative assertions for exact
-`from`, field scope, unbounded array-shaped scalar parameters, empty literal
-membership lists, derived selected-order Fields,
+`from`, field scope, unbounded array-shaped scalar parameters, derived
+selected-order Fields,
 extra nullable scalar parameters, independently omitted structural clauses,
 text and UUID range comparison, and nullable total-order keys. A second valid
 call proves that page parameter keys are not reserved names. A literal two-entry
@@ -27,7 +27,8 @@ separation that prevents a native column capability from masquerading as an
 embedded JSON value. Open JSON uses a tagged public value so SQL `NULL` remains
 distinct from top-level JSON `null`; the semantic golden also rejects regular
 Collections with zero or multiple primary-key Constraints and pins canonical
-segment-array Field paths.
+segment-array Field paths. Both empty literal membership tuples and empty
+bounded runtime list bindings are valid.
 
 Run from the repository root:
 
