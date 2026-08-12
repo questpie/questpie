@@ -179,42 +179,18 @@ export const messagePolicy = definePolicy(messages, {
 	},
 });
 
-// The second application has a separate Context root and natural identifiers.
-export const archiveContext = defineContext({
-	name: "archive.context",
-	input: { programmeCode: context.text({ maximumLength: 40 }) },
-	resolve: async ({ input, principal, bootstrap }) => {
-		if (principal.kind === "anonymous") {
-			throw context.error.unauthenticated();
-		}
-		const permit = await bootstrap.get(researchPermits, {
-			key: {
-				programmeCode: input.programmeCode,
-				archiveCode: "national",
-				principalId: principal.id,
-			},
-			select: { status: true, programmeCode: true },
-		});
-		if (permit === null || permit.status !== "active") {
-			throw context.error.notFound("programme");
-		}
-		return {
-			tenant: context.tenant({ id: permit.programmeCode }),
-			values: { selectedProgramme: permit.programmeCode },
-		};
-	},
-});
-
+// A materially different domain in the same application: natural composite
+// keys and permit evidence, with no `id` or Tenant-equality shortcut.
 export const archiveRecordPolicy = definePolicy(archiveRecords, {
 	name: "archiveRecords.default",
 	read: {
 		admit: policy.authenticated(),
-		rows: ({ row: record, principal, tenant }) =>
+		rows: ({ row: record, principal }) =>
 			query.or(
 				record.visibility.equal("public"),
 				policy.exists(researchPermits, ({ row: permit }) =>
 					query.and(
-						permit.programmeCode.equal(tenant.id),
+						permit.programmeCode.equal("programme-linguistics"),
 						permit.archiveCode.equal(record.archiveCode),
 						permit.principalId.equal(principal.id),
 						permit.status.equal("active"),
@@ -223,10 +199,10 @@ export const archiveRecordPolicy = definePolicy(archiveRecords, {
 			),
 	},
 	fields: {
-		output: ({ row: record, principal, tenant }) => ({
+		output: ({ row: record, principal }) => ({
 			sealedNote: policy.exists(researchPermits, ({ row: permit }) =>
 				query.and(
-					permit.programmeCode.equal(tenant.id),
+					permit.programmeCode.equal("programme-linguistics"),
 					permit.archiveCode.equal(record.archiveCode),
 					permit.principalId.equal(principal.id),
 					permit.status.equal("active"),

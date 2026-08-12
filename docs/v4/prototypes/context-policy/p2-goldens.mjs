@@ -465,6 +465,7 @@ export const archivePolicyProgram = Object.freeze({
 	target: "collection:archiveRecords",
 	primaryKeyPaths: [["archiveCode"], ["catalogueNumber"]],
 	idFieldRequired: false,
+	tenantEqualityShortcut: false,
 	rowRule: {
 		kind: "or",
 		items: [
@@ -484,7 +485,7 @@ export const archivePolicyProgram = Object.freeze({
 							["programmeCode"],
 							"text",
 						),
-						tenantId,
+						literal("text", "programme-linguistics"),
 					),
 					equal(
 						field(
