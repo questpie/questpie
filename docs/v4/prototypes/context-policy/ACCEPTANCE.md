@@ -1,6 +1,6 @@
 # P2 trusted Context and relational Policy acceptance packet
 
-- Status: proof evidence passes; awaiting one fresh focused Opus-medium review
+- Status: accepted by one fresh focused Opus-medium review
 - Proof parent:
   `713485a64bcc4795d960d576fea51da56bc4dcdd`
 - Proof commits:
@@ -216,5 +216,31 @@ focused Opus-medium review returns `PASS`.
 
 ## Acceptance review
 
-Pending. Run exactly one fresh focused Claude Opus review at medium effort after
-the committed proof and this evidence packet pass independently.
+The one fresh focused Claude Opus review at medium effort ran after every
+blocking repair was committed. It independently read the authority workspace,
+inspected every P2 proof file, and ran the complete Bun proof, stock TypeScript
+diagnostic command, lint, format check, `git diff --check`, and clean-status
+check. It returned `PASS`.
+
+The review independently confirmed the real Membership disclosure Policy,
+boolean-only evidence type, one AST-to-SQL lowering used by canonical and
+PostgreSQL paths, interpreter/SQL differential, populated and final-page cursor
+sentinels, positive/negative candidate SQL controls, exact nested parity,
+compile-time authored/generated projection equality, real lock-wait revocation,
+B-tree-only indexes, and absence of RLS and P3 claims.
+
+Its non-blocking implementation notes remain explicit:
+
+- production lowering must reject or fully support multi-segment operands; P2
+  uses only accepted single-Field paths and typed JSON interior Policy remains
+  deferred;
+- the separate Archive SQL fixture should later route through the same lowering
+  even though P2 does not claim that second domain as a lowering proof;
+- create-candidate SQL remains P3 work; P2 proves its Policy phase and executes
+  the update current/candidate boundary;
+- production bootstrap must enforce concurrent-read, result-row, and elapsed
+  duration limits in addition to the proof's read-count, selected-path,
+  cancellation, and deadline checks;
+- production owns the trusted System capability and must include candidate
+  authority in the transaction-owned lock/recheck sequence;
+- the post-acceptance handoff records the final self-referential review commit.
