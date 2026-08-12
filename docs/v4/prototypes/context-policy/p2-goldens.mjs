@@ -105,7 +105,7 @@ function authorityIs(kind) {
 const principalId = fact("principal", path("id"), "text");
 const tenantId = fact("tenant", path("id"), "text");
 
-const messageReadRows = exists(
+export const messageReadRows = exists(
 	"collection:channels",
 	"channel",
 	and(
@@ -230,7 +230,7 @@ const messageReadRows = exists(
 	),
 );
 
-const updateRows = and(
+export const updateRows = and(
 	equal(
 		field("current", "collection:messages", path("companyId"), "text"),
 		tenantId,
@@ -294,7 +294,7 @@ const updateRows = and(
 	),
 );
 
-const candidateInvariant = and(
+export const candidateInvariant = and(
 	equal(
 		field("candidate", "collection:messages", path("companyId"), "text"),
 		field("current", "collection:messages", path("companyId"), "text"),
@@ -458,6 +458,28 @@ export const messagePolicyProgram = Object.freeze({
 	},
 });
 
+export const membershipPolicyProgram = Object.freeze({
+	format: "questpie.policy-program",
+	version: 1,
+	identity: "policy:memberships.default",
+	target: "collection:memberships",
+	attachment: { kind: "default", requiredForNormalDataAccess: true },
+	operations: {
+		read: {
+			admission: { kind: "authenticated" },
+			rows: authorityIs("system"),
+		},
+	},
+	evidenceUse: {
+		allowedAsBooleanOnly: true,
+		targetDisclosurePolicyApplied: false,
+	},
+	disclosureUse: {
+		targetDisclosurePolicyApplied: true,
+		ordinaryAuthorityRows: "none",
+	},
+});
+
 export const archivePolicyProgram = Object.freeze({
 	format: "questpie.policy-program",
 	version: 1,
@@ -600,41 +622,105 @@ export const evidenceGraph = Object.freeze(
 	deriveEvidenceGraph(messagePolicyProgram),
 );
 
+const PHYSICAL_TABLE = Object.freeze({
+	"collection:archiveRecords": "archive_records",
+	"collection:channels": "channels",
+	"collection:companies": "companies",
+	"collection:memberships": "memberships",
+	"collection:messages": "messages",
+	"collection:researchPermits": "research_permits",
+	"collection:spaces": "spaces",
+});
+
+const DEFAULT_SCOPE_ALIAS = Object.freeze({
+	row: "m",
+	current: "current_row",
+	candidate: "candidate_row",
+	channel: "channel_evidence",
+	space: "space_evidence",
+	company: "company_evidence",
+	companyMembership: "company_membership_evidence",
+	channelMembership: "channel_membership_evidence",
+	writeMembership: "write_membership_evidence",
+	permit: "permit_evidence",
+});
+
+function physicalField(name) {
+	return name.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+}
+
+function sqlLiteral(value) {
+	if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
+	if (typeof value === "number") return String(value);
+	if (value === null) return "NULL";
+	return `'${String(value).replaceAll("'", "''")}' COLLATE "C"`;
+}
+
+function symbolicFact(source, key) {
+	if (source === "principal" && key === "id") return ":principal_id";
+	if (source === "principal" && key === "kind") return ":principal_kind";
+	if (source === "tenant" && key === "id") return ":tenant_id";
+	if (source === "authority" && key === "kind") return ":authority_kind";
+	throw new Error(`Unsupported symbolic execution fact: ${source}.${key}`);
+}
+
+function lowerOperand(operand, state) {
+	if (operand.kind === "field") {
+		const alias = state.aliases[operand.scope];
+		assert.ok(alias, `Missing SQL alias for Policy scope ${operand.scope}`);
+		return `${alias}.${physicalField(operand.path[0])}`;
+	}
+	if (operand.kind === "literal") return sqlLiteral(operand.value);
+	if (operand.kind === "executionFact") {
+		const key = operand.path[0];
+		const value = state.facts?.[operand.source]?.[key];
+		return value === undefined
+			? symbolicFact(operand.source, key)
+			: sqlLiteral(value);
+	}
+	throw new Error(`Unsupported SQL operand: ${operand.kind}`);
+}
+
+export function lowerPolicyExpression(expression, options = {}) {
+	const state = {
+		aliases: { ...DEFAULT_SCOPE_ALIAS, ...options.aliases },
+		facts: options.facts,
+		schema: options.schema ? `${options.schema}.` : "",
+	};
+	function lower(node) {
+		if (node.kind === "constant") return node.value ? "TRUE" : "FALSE";
+		if (node.kind === "equal") {
+			return `(${lowerOperand(node.left, state)} = ${lowerOperand(node.right, state)})`;
+		}
+		if (node.kind === "in") {
+			return `(${lowerOperand(node.operand, state)} IN (${node.values
+				.map((item) => lowerOperand(item, state))
+				.join(", ")}))`;
+		}
+		if (node.kind === "and" || node.kind === "or") {
+			const separator = node.kind === "and" ? " AND " : " OR ";
+			return `(${node.items.map(lower).join(separator)})`;
+		}
+		if (node.kind === "exists") {
+			const table = PHYSICAL_TABLE[node.collection];
+			assert.ok(table, `Missing physical table for ${node.collection}`);
+			const alias = state.aliases[node.scope];
+			assert.ok(alias, `Missing SQL alias for ${node.scope}`);
+			return `EXISTS (SELECT 1 FROM ${state.schema}${table} AS ${alias} WHERE ${lower(node.predicate)})`;
+		}
+		throw new Error(`Unsupported Policy SQL node: ${node.kind}`);
+	}
+	return lower(expression);
+}
+
 export const sqlLowering = Object.freeze({
 	format: "questpie.policy-sql-lowering",
 	version: 1,
 	policy: "policy:messages.default",
 	complete: true,
-	rowPredicate: `EXISTS (
-  SELECT 1 FROM channels AS c
-  WHERE c.id = m.channel_id
-    AND EXISTS (
-      SELECT 1 FROM spaces AS s
-      WHERE s.id = c.space_id
-        AND EXISTS (
-          SELECT 1 FROM companies AS co
-          WHERE co.id = s.company_id
-            AND co.id = :tenant_id
-            AND EXISTS (
-              SELECT 1 FROM memberships AS cm
-              WHERE cm.company_id = co.id
-                AND cm.principal_id = :principal_id
-                AND cm.scope_key = 'company'
-                AND cm.status = 'active'
-            )
-        )
-    )
-    AND (
-      c.visibility = 'company'
-      OR EXISTS (
-        SELECT 1 FROM memberships AS chm
-        WHERE chm.company_id = m.company_id
-          AND chm.principal_id = :principal_id
-          AND chm.scope_key = c.id
-          AND chm.status = 'active'
-      )
-    )
-)`,
+	rowPredicate: lowerPolicyExpression(messageReadRows),
+	currentPredicate: lowerPolicyExpression(updateRows),
+	candidatePredicate: lowerPolicyExpression(candidateInvariant),
 	compositionOrder: [
 		"policyRows",
 		"operationRows",
@@ -815,6 +901,19 @@ function admission(facts) {
 		: { allowed: true, error: null };
 }
 
+export function discloseMemberships({ facts, rows }) {
+	const admitted = admission(facts);
+	if (!admitted.allowed) return { outcome: admitted.error };
+	const disclosed = rows.filter((row) =>
+		evaluateExpression(membershipPolicyProgram.operations.read.rows, {
+			execution: facts,
+			store: {},
+			scopes: { row },
+		}),
+	);
+	return { outcome: "allowed", rows: disclosed };
+}
+
 export function decideMessageRead({ facts, row, selectedPaths, store }) {
 	const admitted = admission(facts);
 	if (!admitted.allowed) return { outcome: admitted.error };
@@ -953,6 +1052,7 @@ export function runP2Goldens() {
 		contextProjection,
 		bootstrapProjection,
 		messagePolicyProgram,
+		membershipPolicyProgram,
 		archivePolicyProgram,
 		evidenceGraph,
 		dependencyProjection,
@@ -1059,6 +1159,18 @@ export function runP2Goldens() {
 		outcome: "allowed",
 		result: { id: "message-1", body: "hello", moderationNote: null },
 	});
+	const evidenceResult = evaluateExpression(messageReadRows, {
+		execution: alice,
+		store,
+		scopes: { row: authorRow },
+	});
+	assert.equal(typeof evidenceResult, "boolean");
+	assert.equal(evidenceResult, true);
+	const membershipDisclosure = discloseMemberships({
+		facts: alice,
+		rows: store["collection:memberships"],
+	});
+	assert.deepEqual(membershipDisclosure, { outcome: "allowed", rows: [] });
 	const otherRead = decideMessageRead({
 		facts: alice,
 		row: otherRow,
@@ -1164,6 +1276,10 @@ export function runP2Goldens() {
 			"questpie-policy-program-v1\0",
 			messagePolicyProgram,
 		),
+		membershipPolicy: canonicalDigest(
+			"questpie-policy-program-v1\0",
+			membershipPolicyProgram,
+		),
 		archivePolicy: canonicalDigest(
 			"questpie-policy-program-v1\0",
 			archivePolicyProgram,
@@ -1196,6 +1312,7 @@ export function runP2Goldens() {
 		sqlLowering,
 		evidenceGraph,
 		archivePolicyProgram,
+		membershipPolicyProgram,
 		messagePolicyProgram,
 		bootstrapProjection,
 		contextProjection,
@@ -1204,6 +1321,7 @@ export function runP2Goldens() {
 		contextProjection,
 		bootstrapProjection,
 		messagePolicyProgram,
+		membershipPolicyProgram,
 		archivePolicyProgram,
 		evidenceGraph,
 		sqlLowering,
@@ -1219,6 +1337,7 @@ export function runP2Goldens() {
 			contextProjection,
 			bootstrapProjection,
 			messagePolicyProgram,
+			membershipPolicyProgram,
 			archivePolicyProgram,
 			evidenceGraph,
 			sqlLowering,
@@ -1235,6 +1354,11 @@ export function runP2Goldens() {
 			deniedField,
 			deniedCandidate,
 			cursorAccepted: verifyCursorScope(cursor, alice),
+			evidenceVsDisclosure: {
+				evidenceType: typeof evidenceResult,
+				evidenceResult,
+				disclosedRows: membershipDisclosure.rows.length,
+			},
 		},
 	};
 }

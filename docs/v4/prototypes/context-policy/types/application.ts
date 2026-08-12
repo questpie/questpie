@@ -179,6 +179,14 @@ export const messagePolicy = definePolicy(messages, {
 	},
 });
 
+export const membershipPolicy = definePolicy(memberships, {
+	name: "memberships.default",
+	read: {
+		admit: policy.authenticated(),
+		rows: ({ authority }) => authority.isSystem(),
+	},
+});
+
 // A materially different domain in the same application: natural composite
 // keys and permit evidence, with no `id` or Tenant-equality shortcut.
 export const archiveRecordPolicy = definePolicy(archiveRecords, {
@@ -246,6 +254,12 @@ policy.exists(channels, ({ row }) => {
 	void row.principalId;
 	return row.id.equal("channel-1");
 });
+
+const booleanEvidence = policy.exists(memberships, ({ row }) =>
+	row.status.equal("active"),
+);
+// @ts-expect-error Evidence expressions cannot disclose a matching row.
+void booleanEvidence.row;
 
 // @ts-expect-error A broad string is not a Collection target.
 policy.exists("memberships", ({ row }) => row);

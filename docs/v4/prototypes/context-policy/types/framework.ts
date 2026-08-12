@@ -19,6 +19,12 @@ export type Decoded<Shape extends CodecMap> = {
 	readonly [Key in keyof Shape]: CodecValue<Shape[Key]>;
 };
 
+type DeepReadonly<Value> = Value extends (...args: never[]) => object
+	? Value
+	: Value extends object
+		? { readonly [Key in keyof Value]: DeepReadonly<Value[Key]> }
+		: Value;
+
 export interface CollectionSource<
 	Identity extends `collection:${string}`,
 	Row extends object,
@@ -105,6 +111,20 @@ export interface ContextDefinition<
 	readonly __resolved?: Resolved;
 }
 
+export type ContextInputOf<Definition> =
+	Definition extends ContextDefinition<string, infer Input, ContextResolution>
+		? Input
+		: never;
+
+export type ContextResolvedOf<Definition> =
+	Definition extends ContextDefinition<
+		string,
+		Readonly<Record<string, unknown>>,
+		infer Resolved
+	>
+		? Resolved
+		: never;
+
 export function defineContext<
 	const Name extends string,
 	const InputShape extends CodecMap,
@@ -117,7 +137,11 @@ export function defineContext<
 		readonly principal: Principal;
 		readonly bootstrap: Bootstrap;
 	}) => Resolved | Promise<Resolved>;
-}): ContextDefinition<Name, Decoded<InputShape>, Awaited<Resolved>> {
+}): ContextDefinition<
+	Name,
+	Decoded<InputShape>,
+	DeepReadonly<Awaited<Resolved>>
+> {
 	return definition as never;
 }
 
@@ -244,6 +268,11 @@ export interface PolicyDefinition<
 	readonly identity: Identity;
 	readonly [policyTarget]: Target;
 }
+
+export type PolicyTargetOf<Definition> =
+	Definition extends PolicyDefinition<`policy:${string}`, infer Target>
+		? Target
+		: never;
 
 export function definePolicy<
 	const Collection extends AnyCollectionSource,

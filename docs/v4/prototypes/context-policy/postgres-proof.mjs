@@ -1,5 +1,14 @@
 import assert from "node:assert/strict";
 
+import {
+	candidateInvariant,
+	evaluateExpression,
+	lowerPolicyExpression,
+	membershipPolicyProgram,
+	messageReadRows,
+	updateRows,
+} from "./p2-goldens.mjs";
+
 const PROOF_SCHEMA = "questpie_p2_context_policy_proof";
 
 function command(args, options = {}) {
@@ -71,44 +80,6 @@ function psql(postgres, sql, tuplesOnly = true) {
 	const args = psqlArgs(postgres);
 	if (tuplesOnly) args.push("-A", "-t", "-q");
 	return command(args, { stdin: new Blob([sql]) }).trim();
-}
-
-function policyPredicate({ messageAlias = "m", principal, tenant }) {
-	return `EXISTS (
-  SELECT 1
-  FROM ${PROOF_SCHEMA}.channels AS c
-  WHERE c.id = ${messageAlias}.channel_id
-    AND EXISTS (
-      SELECT 1
-      FROM ${PROOF_SCHEMA}.spaces AS s
-      WHERE s.id = c.space_id
-        AND EXISTS (
-          SELECT 1
-          FROM ${PROOF_SCHEMA}.companies AS co
-          WHERE co.id = s.company_id
-            AND co.id = '${tenant}' COLLATE "C"
-            AND EXISTS (
-              SELECT 1
-              FROM ${PROOF_SCHEMA}.memberships AS cm
-              WHERE cm.company_id = co.id
-                AND cm.principal_id = '${principal}' COLLATE "C"
-                AND cm.scope_key = 'company' COLLATE "C"
-                AND cm.status = 'active' COLLATE "C"
-            )
-        )
-    )
-    AND (
-      c.visibility = 'company' COLLATE "C"
-      OR EXISTS (
-        SELECT 1
-        FROM ${PROOF_SCHEMA}.memberships AS chm
-        WHERE chm.company_id = ${messageAlias}.company_id
-          AND chm.principal_id = '${principal}' COLLATE "C"
-          AND chm.scope_key = c.id
-          AND chm.status = 'active' COLLATE "C"
-      )
-    )
-)`;
 }
 
 const setupSql = `
@@ -282,19 +253,15 @@ function parseJson(output) {
 async function lockRecheck(postgres) {
 	const principal = "principal-moderator";
 	const tenant = "company-northwind";
-	const currentScope = `
-    m.company_id = '${tenant}' COLLATE "C"
-    AND (
-      m.author_id = '${principal}' COLLATE "C"
-      OR EXISTS (
-        SELECT 1 FROM ${PROOF_SCHEMA}.memberships AS wm
-        WHERE wm.company_id = m.company_id
-          AND wm.principal_id = '${principal}' COLLATE "C"
-          AND wm.scope_key = 'company' COLLATE "C"
-          AND wm.status = 'active' COLLATE "C"
-          AND wm.role IN ('admin', 'moderator', 'owner')
-      )
-    )`;
+	const currentScope = lowerPolicyExpression(updateRows, {
+		schema: PROOF_SCHEMA,
+		aliases: { current: "m" },
+		facts: {
+			principal: { id: principal, kind: "user" },
+			tenant: { id: tenant },
+			authority: { kind: "ordinary" },
+		},
+	});
 	const lockerSql = `
 SET search_path TO ${PROOF_SCHEMA}, public;
 BEGIN;
@@ -413,9 +380,15 @@ export async function runPostgresProof() {
 			true,
 		);
 
-		const predicate = policyPredicate({
-			principal: "principal-alice",
-			tenant: "company-northwind",
+		const facts = {
+			principal: { kind: "user", id: "principal-alice" },
+			tenant: { id: "company-northwind" },
+			authority: { kind: "ordinary" },
+		};
+		const predicate = lowerPolicyExpression(messageReadRows, {
+			schema: PROOF_SCHEMA,
+			aliases: { row: "m" },
+			facts,
 		});
 		const pageRows = parseJson(
 			psql(
@@ -467,6 +440,34 @@ export async function runPostgresProof() {
 			3,
 			"first + 1 sentinel used the same Policy scope",
 		);
+		const boundaryPage = parseJson(
+			psql(
+				postgres,
+				`SELECT coalesce(json_agg(id ORDER BY created_at DESC, id ASC), '[]'::json)
+	         FROM (
+	           SELECT m.id, m.created_at
+	           FROM ${PROOF_SCHEMA}.messages AS m
+	           WHERE ${predicate}
+	             AND m.channel_id = 'channel-private' COLLATE "C"
+	             AND (
+	               m.created_at < (
+	                 SELECT created_at FROM ${PROOF_SCHEMA}.messages
+	                 WHERE id = 'bulk-private-999' COLLATE "C"
+	               )
+	               OR (
+	                 m.created_at = (
+	                   SELECT created_at FROM ${PROOF_SCHEMA}.messages
+	                   WHERE id = 'bulk-private-999' COLLATE "C"
+	                 )
+	                 AND m.id > 'bulk-private-999' COLLATE "C"
+	               )
+	             )
+	           ORDER BY m.created_at DESC NULLS LAST, m.id ASC
+	           LIMIT 3
+	         ) AS boundary_page;`,
+			),
+		);
+		assert.deepEqual(boundaryPage, ["bulk-private-1000"]);
 
 		const keyed = (id) =>
 			Number(
@@ -478,12 +479,85 @@ export async function runPostgresProof() {
 			);
 		assert.equal(keyed("message-missing"), 0);
 		assert.equal(keyed("message-foreign"), 0);
+		const differentialStore = {
+			"collection:companies": [
+				{ id: "company-northwind" },
+				{ id: "company-contoso" },
+			],
+			"collection:spaces": [
+				{ id: "space-northwind", companyId: "company-northwind" },
+				{ id: "space-contoso", companyId: "company-contoso" },
+			],
+			"collection:channels": [
+				{
+					id: "channel-private",
+					spaceId: "space-northwind",
+					visibility: "private",
+				},
+				{
+					id: "channel-foreign",
+					spaceId: "space-contoso",
+					visibility: "company",
+				},
+			],
+			"collection:memberships": [
+				{
+					companyId: "company-northwind",
+					principalId: "principal-alice",
+					scopeKey: "company",
+					status: "active",
+				},
+				{
+					companyId: "company-northwind",
+					principalId: "principal-alice",
+					scopeKey: "channel-private",
+					status: "active",
+				},
+			],
+		};
+		const differentialRows = [
+			{
+				id: "message-author",
+				companyId: "company-northwind",
+				channelId: "channel-private",
+			},
+			{
+				id: "message-other",
+				companyId: "company-northwind",
+				channelId: "channel-private",
+			},
+			{
+				id: "message-foreign",
+				companyId: "company-contoso",
+				channelId: "channel-foreign",
+			},
+		];
+		const differential = Object.fromEntries(
+			differentialRows.map((row) => {
+				const interpreted = evaluateExpression(messageReadRows, {
+					execution: facts,
+					store: differentialStore,
+					scopes: { row },
+				});
+				const sql = keyed(row.id) === 1;
+				assert.equal(sql, interpreted, `Policy SQL mismatch for ${row.id}`);
+				return [row.id, { interpreted, sql }];
+			}),
+		);
 
+		const membershipDisclosurePredicate = lowerPolicyExpression(
+			membershipPolicyProgram.operations.read.rows,
+			{
+				schema: PROOF_SCHEMA,
+				aliases: { row: "membership_row" },
+				facts,
+			},
+		);
 		const membershipDisclosure = Number(
 			psql(
 				postgres,
-				`SELECT count(*) FROM ${PROOF_SCHEMA}.memberships
-         WHERE false; -- target Collection disclosure Policy denies this surface`,
+				`SELECT count(*) FROM ${PROOF_SCHEMA}.memberships AS membership_row
+	         WHERE ${membershipDisclosurePredicate};`,
 			),
 		);
 		assert.equal(membershipDisclosure, 0);
@@ -492,18 +566,28 @@ export async function runPostgresProof() {
 			"boolean evidence remained usable without disclosure",
 		);
 
-		const candidateRows = Number(
+		const candidatePredicate = lowerPolicyExpression(candidateInvariant, {
+			schema: PROOF_SCHEMA,
+			aliases: { current: "current_row", candidate: "candidate_row" },
+			facts,
+		});
+		const candidateRows = parseJson(
 			psql(
 				postgres,
-				`SELECT count(*)
-         FROM ${PROOF_SCHEMA}.messages AS current
-         WHERE current.id = 'message-author' COLLATE "C"
-           AND 'company-contoso' COLLATE "C" = current.company_id
-           AND 'channel-foreign' COLLATE "C" = current.channel_id
-           AND 'principal-alice' COLLATE "C" = current.author_id;`,
+				`SELECT json_build_object(
+	           'allowed', count(*) FILTER (WHERE candidate_row.label = 'allowed'),
+	           'denied', count(*) FILTER (WHERE candidate_row.label = 'denied')
+	         )
+	         FROM ${PROOF_SCHEMA}.messages AS current_row
+	         CROSS JOIN (VALUES
+	           ('allowed', 'company-northwind', 'channel-private', 'principal-alice'),
+	           ('denied', 'company-contoso', 'channel-foreign', 'principal-alice')
+	         ) AS candidate_row(label, company_id, channel_id, author_id)
+	         WHERE current_row.id = 'message-author' COLLATE "C"
+	           AND ${candidatePredicate};`,
 			),
 		);
-		assert.equal(candidateRows, 0);
+		assert.deepEqual(candidateRows, { allowed: 1, denied: 0 });
 
 		const plan = parseJson(
 			psql(
@@ -592,6 +676,8 @@ export async function runPostgresProof() {
 				pageRows: pageRows.length,
 				first: 2,
 				sentinel: pageRows[2].id,
+				boundaryPage,
+				boundaryHasSentinel: boundaryPage.length > 2,
 				missingKeyRows: keyed("message-missing"),
 				invisibleKeyRows: keyed("message-foreign"),
 			},
@@ -600,7 +686,11 @@ export async function runPostgresProof() {
 				evidenceAuthorizedMessageCount: visibleCount,
 				disclosedMembershipCount: membershipDisclosure,
 			},
-			candidate: { unauthorizedMoveRows: candidateRows },
+			differential,
+			candidate: {
+				allowedSameScopeRows: candidateRows.allowed,
+				unauthorizedMoveRows: candidateRows.denied,
+			},
 			lock,
 			secondDomain: {
 				fixture: "archive-record-permit",

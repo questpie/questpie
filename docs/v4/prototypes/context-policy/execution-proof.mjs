@@ -319,11 +319,7 @@ export async function runExecutionProof() {
 		return execution.nested(async (nested) => {
 			assert.equal(nested, execution);
 			assert.equal(await nested.service("beta"), beta);
-			return nested.readMessage(fixture.message, [
-				["id"],
-				["body"],
-				["moderationNote"],
-			]);
+			return nested.readMessage(fixture.message, [["id"], ["body"]]);
 		});
 	});
 	assert.equal(nestedResult.outcome, "allowed");
@@ -368,6 +364,7 @@ export async function runExecutionProof() {
 			);
 		parity[surface] = result;
 	}
+	parity.nested = nestedResult;
 	for (const result of Object.values(parity)) {
 		assert.deepEqual(result, parity.direct);
 	}
