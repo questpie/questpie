@@ -761,6 +761,7 @@ body.qp-grain-page {
 	}
 	.logic-panel {
 		grid-area: 1 / 1;
+		align-self: center;
 		min-width: 0;
 	}
 	.logic-panel .qp-code {
@@ -964,6 +965,9 @@ body.qp-grain-page {
 		.logic-stage {
 			min-height: 25rem;
 			border-top: 1px solid var(--border-subtle);
+		}
+		.logic-panel {
+			align-self: start;
 		}
 		.depth-list > section {
 			grid-template-columns: minmax(0, 1fr);
@@ -1263,6 +1267,13 @@ body.qp-grain-page {
 		padding: 0;
 		margin: 0;
 		background: transparent;
+	}
+	/* A framed code block has enough inset for syntax.css's full-bleed line
+	   margins. A bare block does not: the negative margin lands under its scroll
+	   clip and trims the first glyph (most visibly the G in GET). */
+	.qp-code.bare:not([data-numbers]) .qp-line {
+		padding-inline: 0;
+		margin-inline: 0;
 	}
 
 	/* Marketing is dark-only — the site is one continuous atmosphere. The product
