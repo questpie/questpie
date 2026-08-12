@@ -21,6 +21,25 @@ const IDS = {
 	tenantSlug: "collection:tenants/field:slug",
 	tenantName: "collection:tenants/field:name",
 	tenantAppointments: "collection:tenants/relation:appointments",
+	customers: "collection:customers",
+	customerPrimary: "collection:customers/constraint:primary",
+	customerId: "collection:customers/field:id",
+	customerCity: "collection:customers/field:address/field:city",
+	customerPreferences: "collection:customers/field:preferences",
+	customerTags: "collection:customers/field:tags",
+	customerMetadata: "collection:customers/field:metadata",
+};
+
+const FIELD_PATHS = {
+	[IDS.appointmentId]: ["id"],
+	[IDS.tenantId]: ["tenantId"],
+	[IDS.customerName]: ["customerName"],
+	[IDS.startsAt]: ["startsAt"],
+	[IDS.endsAt]: ["endsAt"],
+	[IDS.status]: ["status"],
+	[IDS.tenantPk]: ["id"],
+	[IDS.tenantSlug]: ["slug"],
+	[IDS.tenantName]: ["name"],
 };
 
 function canonicalValue(value) {
@@ -84,6 +103,14 @@ function normalizeSetBinding(values, maximumItems) {
 	return [...new Set(values)].sort(compareAscii);
 }
 
+function requireExactlyOnePrimaryKey(collection) {
+	const primaryKeys = collection.constraints.filter(
+		(constraint) => constraint.kind === "primaryKey",
+	);
+	assert.equal(primaryKeys.length, 1);
+	return primaryKeys[0];
+}
+
 assert.deepEqual(
 	normalizeSetBinding(["scheduled", "confirmed", "scheduled"], 50),
 	["confirmed", "scheduled"],
@@ -93,16 +120,31 @@ assert.throws(() => normalizeSetBinding(["scheduled", null], 50));
 assert.throws(() => normalizeSetBinding(Array.from({ length: 51 }, () => "x"), 50));
 
 const nestedPath = {
-	field: "collection:customers/field:preferences",
-	segments: ["address", "city"],
+	identity: IDS.customerCity,
+	path: ["address", "city"],
 };
-assert.notDeepEqual(nestedPath.segments, ["address.city"]);
-assert.notEqual(bytes(nestedPath), bytes({ ...nestedPath, segments: ["address.city"] }));
+assert.notDeepEqual(nestedPath.path, ["address.city"]);
+assert.notEqual(bytes(nestedPath), bytes({ ...nestedPath, path: ["address.city"] }));
 
 const uuid = { kind: "uuid" };
-const text80 = { kind: "text", minLength: null, maxLength: 80 };
-const text160 = { kind: "text", minLength: null, maxLength: 160 };
-const text24 = { kind: "text", minLength: null, maxLength: 24 };
+const text80 = {
+	kind: "text",
+	minLength: null,
+	maxLength: 80,
+	collation: "questpie.binary",
+};
+const text160 = {
+	kind: "text",
+	minLength: null,
+	maxLength: 160,
+	collation: "questpie.binary",
+};
+const text24 = {
+	kind: "text",
+	minLength: null,
+	maxLength: 24,
+	collation: "questpie.binary",
+};
 const timestamptz = { kind: "timestamp", withTimezone: true };
 
 const schemaProjection = {
@@ -126,7 +168,7 @@ const schemaProjection = {
 					text160,
 					false,
 					null,
-					"databaseDefault",
+					"questpie.binary",
 				],
 				[IDS.endsAt, "ends_at", timestamptz, false, null, null],
 				[IDS.appointmentId, "id", uuid, false, { kind: "randomUuid" }, null],
@@ -137,7 +179,7 @@ const schemaProjection = {
 					text24,
 					false,
 					{ kind: "literal", value: "scheduled" },
-					"databaseDefault",
+					"questpie.binary",
 				],
 				[IDS.tenantId, "tenant_id", uuid, false, null, null],
 			].map(
@@ -150,6 +192,7 @@ const schemaProjection = {
 					collation,
 				]) => ({
 					identity,
+					path: FIELD_PATHS[identity],
 					postgresName,
 					type,
 					nullable,
@@ -246,8 +289,8 @@ const schemaProjection = {
 			postgresName: "tenants",
 			fields: [
 				[IDS.tenantPk, "id", uuid, false, { kind: "randomUuid" }, null],
-				[IDS.tenantName, "name", text160, false, null, "databaseDefault"],
-				[IDS.tenantSlug, "slug", text80, false, null, "databaseDefault"],
+				[IDS.tenantName, "name", text160, false, null, "questpie.binary"],
+				[IDS.tenantSlug, "slug", text80, false, null, "questpie.binary"],
 			].map(
 				([
 					identity,
@@ -258,6 +301,7 @@ const schemaProjection = {
 					collation,
 				]) => ({
 					identity,
+					path: FIELD_PATHS[identity],
 					postgresName,
 					type,
 					nullable,
@@ -313,6 +357,124 @@ const schemaProjection = {
 	],
 };
 
+for (const collection of schemaProjection.collections) {
+	requireExactlyOnePrimaryKey(collection);
+}
+assert.throws(() =>
+	requireExactlyOnePrimaryKey({ identity: "collection:keyless", constraints: [] }),
+);
+assert.throws(() =>
+	requireExactlyOnePrimaryKey({
+		identity: "collection:ambiguous",
+		constraints: [{ kind: "primaryKey" }, { kind: "primaryKey" }],
+	}),
+);
+
+const nestedSchemaProjection = {
+	format: "questpie.schema-projection",
+	version: 1,
+	application: { name: "nested-proof", postgresSchema: "nested_proof" },
+	requiredPostgres: {
+		minimumMajor: 16,
+		databaseCollation: "C.UTF-8",
+		databaseCType: "C.UTF-8",
+		extensions: [],
+	},
+	collections: [
+		{
+			identity: IDS.customers,
+			postgresName: "customers",
+			fields: [
+				{
+					identity: IDS.customerCity,
+					path: ["address", "city"],
+					postgresName: "address_city",
+					type: text160,
+					nullable: false,
+					default: null,
+					collation: "questpie.binary",
+				},
+				{
+					identity: IDS.customerId,
+					path: ["id"],
+					postgresName: "id",
+					type: uuid,
+					nullable: false,
+					default: { kind: "randomUuid" },
+					collation: null,
+				},
+				{
+					identity: IDS.customerMetadata,
+					path: ["metadata"],
+					postgresName: "metadata",
+					type: { kind: "json" },
+					nullable: true,
+					default: null,
+					collation: null,
+				},
+				{
+					identity: IDS.customerPreferences,
+					path: ["preferences"],
+					postgresName: "preferences",
+					type: {
+						kind: "object",
+						properties: [
+							{
+								key: "locale",
+								codec: { ...text24, nullable: false },
+							},
+							{
+								key: "marketingEmail",
+								codec: { kind: "boolean", nullable: false },
+							},
+						],
+					},
+					nullable: false,
+					default: null,
+					collation: null,
+				},
+				{
+					identity: IDS.customerTags,
+					path: ["tags"],
+					postgresName: "tags",
+					type: {
+						kind: "array",
+						maximumItems: 100,
+						items: { ...text24, nullable: false },
+					},
+					nullable: false,
+					default: null,
+					collation: null,
+				},
+			].sort((left, right) => compareAscii(left.identity, right.identity)),
+			constraints: [
+				{
+					kind: "primaryKey",
+					identity: IDS.customerPrimary,
+					postgresName: "qp_pk_customers_primary",
+					fields: [IDS.customerId],
+				},
+			],
+			indexes: [],
+			relations: [],
+		},
+	],
+};
+requireExactlyOnePrimaryKey(nestedSchemaProjection.collections[0]);
+assert.equal(nestedSchemaProjection.collections.length, 1);
+assert.ok(
+	nestedSchemaProjection.collections[0].fields.every(({ path }) =>
+		path.every((segment) => !segment.includes(".")),
+	),
+);
+const sqlNull = null;
+const topLevelJsonNull = { kind: "json", value: null };
+assert.notDeepEqual(sqlNull, topLevelJsonNull);
+const nestedSchemaProjectionDigest = digest(
+	"questpie-schema-projection-v1\0",
+	nestedSchemaProjection,
+);
+
 const schemaProjectionDigest = digest(
 	"questpie-schema-projection-v1\0",
 	schemaProjection,
@@ -328,36 +490,42 @@ const dataContractProjection = {
 			fields: [
 				{
 					identity: IDS.customerName,
+					path: FIELD_PATHS[IDS.customerName],
 					codec: text160,
 					nullable: false,
 					hasDefault: false,
 				},
 				{
 					identity: IDS.endsAt,
+					path: FIELD_PATHS[IDS.endsAt],
 					codec: timestamptz,
 					nullable: false,
 					hasDefault: false,
 				},
 				{
 					identity: IDS.appointmentId,
+					path: FIELD_PATHS[IDS.appointmentId],
 					codec: uuid,
 					nullable: false,
 					hasDefault: true,
 				},
 				{
 					identity: IDS.startsAt,
+					path: FIELD_PATHS[IDS.startsAt],
 					codec: timestamptz,
 					nullable: false,
 					hasDefault: false,
 				},
 				{
 					identity: IDS.status,
+					path: FIELD_PATHS[IDS.status],
 					codec: text24,
 					nullable: false,
 					hasDefault: true,
 				},
 				{
 					identity: IDS.tenantId,
+					path: FIELD_PATHS[IDS.tenantId],
 					codec: uuid,
 					nullable: false,
 					hasDefault: false,
@@ -378,18 +546,21 @@ const dataContractProjection = {
 			fields: [
 				{
 					identity: IDS.tenantPk,
+					path: FIELD_PATHS[IDS.tenantPk],
 					codec: uuid,
 					nullable: false,
 					hasDefault: true,
 				},
 				{
 					identity: IDS.tenantName,
+					path: FIELD_PATHS[IDS.tenantName],
 					codec: text160,
 					nullable: false,
 					hasDefault: false,
 				},
 				{
 					identity: IDS.tenantSlug,
+					path: FIELD_PATHS[IDS.tenantSlug],
 					codec: text80,
 					nullable: false,
 					hasDefault: false,
@@ -534,7 +705,6 @@ const cursor = {
 	version: 1,
 	templateDigest: queryTemplateDigest,
 	scopeDigest,
-	orderContextDigest: null,
 	order: [
 		{ field: IDS.startsAt, value: "2026-08-12T09:00:00.000Z" },
 		{
@@ -544,9 +714,8 @@ const cursor = {
 	],
 };
 
-// Text cursor ordering delegates comparisons to the Field's deterministic
-// PostgreSQL collation. The environment-derived order context prevents a
-// cursor from surviving a provider/locale/version change.
+// Text cursor ordering delegates every comparison to the fixed
+// questpie.binary capability, lowered as explicit PostgreSQL COLLATE "C".
 const tenantNameQueryTemplate = {
 	format: "questpie.data-query-template",
 	version: 1,
@@ -582,33 +751,6 @@ const tenantNameQueryTemplateDigest = digest(
 	"questpie-data-query-template-v1\0",
 	tenantNameQueryTemplate,
 );
-const tenantNameOrderContext = {
-	format: "questpie.data-query-order-context",
-	version: 1,
-	templateDigest: tenantNameQueryTemplateDigest,
-	terms: [
-		{
-			field: IDS.tenantSlug,
-			provider: "libc",
-			locale: "C.UTF-8",
-			deterministic: true,
-			version: null,
-		},
-	],
-};
-const tenantNameOrderContextDigest = digest(
-	"questpie-data-query-order-context-v1\0",
-	tenantNameOrderContext,
-);
-const changedTenantNameOrderContext = structuredClone(tenantNameOrderContext);
-changedTenantNameOrderContext.terms[0].version = "changed-provider-version";
-assert.notEqual(
-	digest(
-		"questpie-data-query-order-context-v1\0",
-		changedTenantNameOrderContext,
-	),
-	tenantNameOrderContextDigest,
-);
 const tenantNameCursor = {
 	format: "questpie.data-cursor",
 	version: 1,
@@ -619,13 +761,12 @@ const tenantNameCursor = {
 		templateDigest: tenantNameQueryTemplateDigest,
 		values: [],
 	}),
-	orderContextDigest: tenantNameOrderContextDigest,
 	order: [
 		{ field: IDS.tenantSlug, value: "old-town" },
 		{ field: IDS.tenantPk, value: "00000000-0000-4000-8000-000000000001" },
 	],
 };
-assert.equal(tenantNameCursor.orderContextDigest, tenantNameOrderContextDigest);
+assert.equal(tenantNameCursor.order[0].field, IDS.tenantSlug);
 
 function fieldRead(field, roles) {
 	return { field, roles: [...new Set(roles)].sort(compareAscii) };
@@ -877,33 +1018,34 @@ assert.notEqual(
 const encodedCursor = Buffer.from(bytes(cursor)).toString("base64url");
 
 const expected = {
+	nestedSchemaProjectionDigest:
+		"8b5d0008a746caa3ae3f3a21a2b7452af9374b2d1cb86b72841aef7062f38182",
 	schemaProjectionDigest:
-		"f480aa0a422b0413f77d42d23775bdff61673a531207d5f1a73d66c3ce77eb51",
+		"9d757239d4033d042b741b410df593420e14216ae1147173e0f75b2afd5a7033",
 	dataContractProjectionDigest:
-		"f67e5385caa5d12238a8002ff7a74f0c72d29dbcbcfa387c4b8c84917e70846e",
+		"254fe1c94618065fc21f70a1760a384239ed712c22e8899b252eec8d5504e0f7",
 	dataContractProjectionDigestWithoutInverse:
-		"5428aed4288392396e3aaccce381bd172af358d4ccb32e19e082e31e07efa096",
+		"2c2373881dfa026c1027aca5c33ab2daec4f6c7d13d8a4924e19cc4705f92e28",
 	queryTemplateDigest:
-		"e8a283a2df528989d9b6109a2ea6ae0720b90acba5b3b86b718514c739191b04",
+		"5defd4f5a81006a24ae28bc343e334fe3988959dbb4b4945e218914c6a88424f",
 	scopeDigest:
-		"d68de5a97b8230363811c0814d0094e75f68f63499a6901f25f8aecdffad82dd",
+		"ad7be166df4c4de4d62d37184638e43037fb26a5c3ae22c8ae31110eee7e8f70",
 	encodedCursor:
-		"eyJmb3JtYXQiOiJxdWVzdHBpZS5kYXRhLWN1cnNvciIsIm9yZGVyIjpbeyJmaWVsZCI6ImNvbGxlY3Rpb246YXBwb2ludG1lbnRzL2ZpZWxkOnN0YXJ0c0F0IiwidmFsdWUiOiIyMDI2LTA4LTEyVDA5OjAwOjAwLjAwMFoifSx7ImZpZWxkIjoiY29sbGVjdGlvbjphcHBvaW50bWVudHMvZmllbGQ6aWQiLCJ2YWx1ZSI6IjAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMiJ9XSwib3JkZXJDb250ZXh0RGlnZXN0IjpudWxsLCJzY29wZURpZ2VzdCI6ImQ2OGRlNWE5N2I4MjMwMzYzODExYzA4MTRkMDA5NGU3NWY2OGY2MzQ5OWE2OTAxZjI1ZjhhZWNkZmZhZDgyZGQiLCJ0ZW1wbGF0ZURpZ2VzdCI6ImU4YTI4M2EyZGY1Mjg5ODlkOWI2MTA5YTJlYTZhZTA3MjBiOTBhY2JhNWIzYjg2YjcxODUxNGM3MzkxOTFiMDQiLCJ2ZXJzaW9uIjoxfQo",
+		"eyJmb3JtYXQiOiJxdWVzdHBpZS5kYXRhLWN1cnNvciIsIm9yZGVyIjpbeyJmaWVsZCI6ImNvbGxlY3Rpb246YXBwb2ludG1lbnRzL2ZpZWxkOnN0YXJ0c0F0IiwidmFsdWUiOiIyMDI2LTA4LTEyVDA5OjAwOjAwLjAwMFoifSx7ImZpZWxkIjoiY29sbGVjdGlvbjphcHBvaW50bWVudHMvZmllbGQ6aWQiLCJ2YWx1ZSI6IjAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMiJ9XSwic2NvcGVEaWdlc3QiOiJhZDdiZTE2NmRmNGM0ZGU0ZDYyZDM3MTg0NjM4ZTQzMDM3ZmIyNmE1YzNhZTIyYzhhZTMxMTEwZWVlN2U4ZjcwIiwidGVtcGxhdGVEaWdlc3QiOiI1ZGVmZDRmNWE4MTAwNmEyNGFlMjhiYzM0M2UzMzRmZTM5ODg5NTlkYmI0YjQ5NDVlMjE4OTE0YzZhODg0MjRmIiwidmVyc2lvbiI6MX0K",
 	tenantNameQueryTemplateDigest:
-		"5b378f2fd0823cb6550f5fc003064fc245afe0bccef90a7652bfde6d60b6461c",
-	tenantNameOrderContextDigest:
-		"cfb984a4be147bd47699db816e0ca4d255ebf607e4f095cd16ad4c15284aa92a",
+		"e5ef171ddd4544d79fe85659630cac785e03f4e097864da45ea3b8af2902e3f0",
 	dependencyDigest:
-		"862346693b0f77630e467c30356b52cd60277fa0ac24537c8944350254231088",
+		"8309e07a1d34599e758ed8a9de4fb7691d99050e540b196d52dcb54187b8e0c5",
 	inverseDependencyDigest:
 		"36b3d95acafe74a371cd19d781b9b39ff67c8fa15c2d239740ff9dcfb48d1ac4",
 	packageContractDigestWithoutInverse:
-		"8485be44dab1547a7d42eda65c0a2098a5d64e0bdeee466d671598fd6c2afb88",
+		"adcceb71994c78bd3851de137f4e44affaa3d96c7a02b64982dde19749074aeb",
 	packageContractDigestWithInverse:
-		"6bc7c94182da534eefd44dcdf5e79388f5f0e54bf0f48e577220be8e0116bb34",
+		"97c8d66ddb5be6fe3d0a46c3d07fbfc0cfeb77c884ec6608245a4f5de8c47ec2",
 };
 
 const actual = {
+	nestedSchemaProjectionDigest,
 	schemaProjectionDigest,
 	dataContractProjectionDigest,
 	dataContractProjectionDigestWithoutInverse,
@@ -911,7 +1053,6 @@ const actual = {
 	scopeDigest,
 	encodedCursor,
 	tenantNameQueryTemplateDigest,
-	tenantNameOrderContextDigest,
 	dependencyDigest: digest(
 		"questpie-data-query-dependency-template-v1\0",
 		dependencyTemplate,
@@ -945,6 +1086,7 @@ if (process.argv.includes("--print")) {
 				actual,
 				bytes: {
 					schemaProjection: bytes(schemaProjection),
+					nestedSchemaProjection: bytes(nestedSchemaProjection),
 					dataContractProjection: bytes(dataContractProjection),
 					dataContractProjectionWithoutInverse: bytes(
 						dataContractProjectionWithoutInverse,

@@ -18,6 +18,7 @@ type ScalarCodec =
 			readonly kind: "text";
 			readonly minLength: number | null;
 			readonly maxLength: number | null;
+			readonly collation: "questpie.binary";
 	  }
 	| {
 			readonly kind: "integer";
@@ -99,7 +100,7 @@ interface AppointmentOwnerFields {
 	>;
 	readonly customerName: DataFieldDescriptor<
 		"collection:appointments/field:customerName",
-		{ kind: "text"; minLength: null; maxLength: 160 },
+		{ kind: "text"; minLength: null; maxLength: 160; collation: "questpie.binary" },
 		string,
 		false,
 		false
@@ -120,7 +121,7 @@ interface AppointmentOwnerFields {
 	>;
 	readonly status: DataFieldDescriptor<
 		"collection:appointments/field:status",
-		{ kind: "text"; minLength: null; maxLength: 24 },
+		{ kind: "text"; minLength: null; maxLength: 24; collation: "questpie.binary" },
 		string,
 		false,
 		true
@@ -129,7 +130,7 @@ interface AppointmentOwnerFields {
 interface AuditAugmentation {
 	readonly auditNote: DataFieldDescriptor<
 		"collection:appointments/field:auditNote",
-		{ kind: "text"; minLength: null; maxLength: 500 },
+		{ kind: "text"; minLength: null; maxLength: 500; collation: "questpie.binary" },
 		string,
 		true,
 		false
@@ -138,7 +139,7 @@ interface AuditAugmentation {
 interface ExternalAugmentation {
 	readonly externalRef: DataFieldDescriptor<
 		"collection:appointments/field:externalRef",
-		{ kind: "text"; minLength: null; maxLength: 120 },
+		{ kind: "text"; minLength: null; maxLength: 120; collation: "questpie.binary" },
 		string,
 		false,
 		false
@@ -168,14 +169,14 @@ interface TenantFields {
 	>;
 	readonly slug: DataFieldDescriptor<
 		"collection:tenants/field:slug",
-		{ kind: "text"; minLength: null; maxLength: 80 },
+		{ kind: "text"; minLength: null; maxLength: 80; collation: "questpie.binary" },
 		string,
 		false,
 		false
 	>;
 	readonly name: DataFieldDescriptor<
 		"collection:tenants/field:name",
-		{ kind: "text"; minLength: null; maxLength: 160 },
+		{ kind: "text"; minLength: null; maxLength: 160; collation: "questpie.binary" },
 		string,
 		false,
 		false
@@ -281,6 +282,17 @@ interface ColumnValue<Value> {
 interface EmbeddedValue<Value> {
 	readonly __embeddedValue: Value;
 }
+type JsonValue =
+	| null
+	| boolean
+	| number
+	| string
+	| readonly JsonValue[]
+	| { readonly [key: string]: JsonValue };
+interface OpenJsonValue {
+	readonly kind: "json";
+	readonly value: JsonValue;
+}
 type ColumnValueOf<Definition> =
 	Definition extends ColumnValue<infer Value> ? Value : never;
 type EmbeddedValueOf<Definition> =
@@ -355,6 +367,13 @@ type _embeddedArray = Expect<
 		ReadonlyArray<{ label: string; primary: boolean }>
 	>
 >;
+type _openJsonDistinguishesSqlNull = Expect<
+	Equal<OpenJsonValue | null, { readonly kind: "json"; readonly value: JsonValue } | null>
+>;
+const sqlNullJsonField: OpenJsonValue | null = null;
+const jsonNullJsonField: OpenJsonValue | null = { kind: "json", value: null };
+void sqlNullJsonField;
+void jsonNullJsonField;
 embeddedObject({
 	properties: {
 		// @ts-expect-error native column capabilities are not JSONB value codecs.
@@ -399,7 +418,12 @@ type SetOperand<Value> =
 type RangeCodec = { kind: "timestamp"; withTimezone: boolean };
 type CursorOrderCodec =
 	| { kind: "uuid" }
-	| { kind: "text"; minLength: number | null; maxLength: number | null }
+	| {
+			kind: "text";
+			minLength: number | null;
+			maxLength: number | null;
+			collation: "questpie.binary";
+	  }
 	| { kind: "integer"; minimum: number | null; maximum: number | null }
 	| RangeCodec;
 interface QueryField<

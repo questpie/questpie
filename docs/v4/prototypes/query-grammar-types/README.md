@@ -24,7 +24,10 @@ Collection Augmentation tuple and distinct timestamp codec tags with plain
 also proves bounded scalar-list parameters, text order eligibility, logical
 inline-column shapes, typed JSONB embedded objects/arrays, and the type-level
 separation that prevents a native column capability from masquerading as an
-embedded JSON value.
+embedded JSON value. Open JSON uses a tagged public value so SQL `NULL` remains
+distinct from top-level JSON `null`; the semantic golden also rejects regular
+Collections with zero or multiple primary-key Constraints and pins canonical
+segment-array Field paths.
 
 Run from the repository root:
 
