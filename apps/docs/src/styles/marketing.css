@@ -236,9 +236,13 @@ body.qp-grain-page {
 	.btn:active {
 		transform: translateY(var(--motion-press-y));
 	}
+	/* colors.css, non-negotiable: "A coral fill carries WHITE semibold type at
+	   16px or larger". This painted --background (near-black ink) on coral,
+	   which is the one recipe the canon forbids. */
 	.btn.p {
 		background: var(--primary);
-		color: var(--background);
+		color: var(--primary-foreground);
+		font-weight: 600;
 		box-shadow: var(--elevation-action);
 	}
 	.btn.p:hover {
@@ -475,6 +479,11 @@ body.qp-grain-page {
 
 	/* ── surfaces ─────────────────────────────────────────────────────────────── */
 	.card {
+		display: flex;
+		flex-direction: column;
+		/* Only `.card h3 + p` used to carry a margin, so a card built from an
+		 * eyebrow + strong + p rendered three rows flush against each other. */
+		gap: var(--space-3);
 		background: var(--card);
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-panel);
@@ -540,6 +549,7 @@ body.qp-grain-page {
 		font-family: var(--font-mono);
 		text-align: center;
 	}
+	.card strong,
 	.system-step strong,
 	.derivation-source strong,
 	.ownership-list strong {
@@ -804,6 +814,10 @@ body.qp-grain-page {
 		color: var(--foreground-muted);
 		line-height: var(--line-relaxed);
 	}
+	.contract-columns p + p,
+	.product-paths p + p {
+		margin-top: var(--space-4);
+	}
 	.contract-note {
 		max-width: 48rem;
 		margin-top: var(--space-5);
@@ -865,6 +879,148 @@ body.qp-grain-page {
 	}
 	.early-access-form input::placeholder {
 		color: var(--foreground-subtle);
+	}
+
+	/* /works asks five questions, and .early-access-form is a centred flex row
+	 * built for one email and a button: five controls wrap into a ragged 3-then-2
+	 * with the submit stranded, and 19rem clips the longer placeholders. This is
+	 * the same control skin on a real form grid — labelled, left-aligned inside
+	 * the centred CTA block, with the long answer given a textarea. */
+	/* Work: the page's portfolio. Screenshots carry it, so the image is the
+	   largest element in each row and the copy sits beside it. Rows alternate so
+	   the eye zig-zags down the section instead of scanning one rail. */
+	.work-list {
+		display: grid;
+		gap: clamp(3rem, 6vw, 5.5rem);
+	}
+
+	.work-shot {
+		border: 1px solid var(--qp-line);
+		border-radius: var(--qp-radius-object);
+		display: block;
+		overflow: hidden;
+		transition:
+			border-color 0.2s ease,
+			transform 0.2s ease;
+	}
+
+	.work-shot:hover {
+		border-color: var(--qp-line-strong);
+		transform: translateY(-2px);
+	}
+
+	.work-shot img {
+		display: block;
+		height: auto;
+		width: 100%;
+	}
+
+	.work-body h3 {
+		margin: 0 0 0.5rem;
+	}
+
+	.work-body p {
+		margin: 0;
+	}
+
+	.work-tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		list-style: none;
+		margin: 1.25rem 0 0;
+		padding: 0;
+	}
+
+	.work-tags li {
+		border: 1px solid var(--qp-line);
+		border-radius: 999px;
+		color: var(--qp-ink-dim);
+		font-family: var(--qp-font-mono);
+		font-size: 0.6875rem;
+		letter-spacing: 0.04em;
+		padding: 0.25rem 0.6rem;
+		text-transform: uppercase;
+	}
+
+	.work-link {
+		display: inline-block;
+		font-family: var(--qp-font-mono);
+		font-size: 0.8125rem;
+		margin-top: 1.25rem;
+	}
+
+	.work-note {
+		border-top: 1px solid var(--qp-line);
+		color: var(--qp-ink-dim);
+		margin-top: clamp(3rem, 6vw, 5.5rem);
+		max-width: 58ch;
+		padding-top: 1.5rem;
+	}
+
+	.works-form {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--space-5);
+		max-width: 44rem;
+		margin: var(--space-10) auto 0;
+		text-align: left;
+	}
+	.works-form .field {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+	.works-form .field.wide,
+	.works-form .actions {
+		grid-column: 1 / -1;
+	}
+	.works-form label {
+		font-family: var(--font-mono);
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--foreground-muted);
+	}
+	.works-form input,
+	.works-form select,
+	.works-form textarea {
+		width: 100%;
+		height: var(--control-large);
+		padding: 0 var(--spacing-input);
+		border: 1px solid var(--input);
+		border-radius: var(--radius-control);
+		background: var(--surface-mid);
+		color: var(--foreground);
+		font-family: var(--font-sans);
+		font-size: var(--type-md);
+	}
+	.works-form textarea {
+		height: auto;
+		min-height: 7.5rem;
+		padding: var(--spacing-input);
+		line-height: var(--line-relaxed);
+		resize: vertical;
+	}
+	.works-form ::placeholder {
+		color: var(--foreground-subtle);
+	}
+	/* The options list is drawn by the OS and does not inherit --surface-mid, so
+	 * it is given the ink it needs rather than left to a light-on-light default. */
+	.works-form select option {
+		background: var(--surface-mid);
+		color: var(--foreground);
+	}
+	.works-form .actions {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-5);
+		margin-top: var(--space-2);
+	}
+	.works-form .actions p {
+		margin: 0;
 	}
 	.ownership-list {
 		display: flex;
@@ -983,6 +1139,17 @@ body.qp-grain-page {
 		.early-access-form,
 		.early-access-form input,
 		.early-access-form .btn {
+			width: 100%;
+		}
+		.works-form {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.works-form .actions {
+			flex-direction: column;
+			align-items: stretch;
+			text-align: center;
+		}
+		.works-form .actions .btn {
 			width: 100%;
 		}
 	}
@@ -1279,3 +1446,7 @@ body.qp-grain-page {
 	/* Marketing is dark-only — the site is one continuous atmosphere. The product
 	   (admin, Autopilot) keeps both themes; that is where people work all day. */
 }
+
+/* ============================================================ PROTOTYPE ONLY
+   Throwaway styles for /works?variant=. Delete together with
+   components/marketing/works-prototype.tsx once a variant wins. */

@@ -21,7 +21,12 @@ import questpiePackage from "../../../../../packages/questpie/package.json";
 const GITHUB_URL = "https://github.com/questpie/questpie";
 const CREATE_APP = "/docs/learn/first-app";
 
-export type MarketingPage = "home" | "autopilot" | "framework" | "docs";
+export type MarketingPage =
+	| "home"
+	| "autopilot"
+	| "framework"
+	| "docs"
+	| "works";
 
 const LINKS: { id: MarketingPage; label: string; href: string }[] = [
 	{ id: "framework", label: "Framework", href: "/framework" },
@@ -29,8 +34,16 @@ const LINKS: { id: MarketingPage; label: string; href: string }[] = [
 	{ id: "docs", label: "Docs", href: "/docs" },
 ];
 
+/* Works is footer-only by decision: the root is a thesis plus two doors at
+ * ~60/40 (specs/questpie-com-v2/00-DECISIONS.md §1, §3), and a services page in
+ * the nav would make it a third. */
+const FOOTER_LINKS: typeof LINKS = [
+	...LINKS,
+	{ id: "works", label: "Works", href: "/works" },
+];
+
 /** The routes that carry the mesh, the grain and the forced dark theme. */
-const MARKETING_PATHS = new Set(["/", "/framework", "/autopilot"]);
+const MARKETING_PATHS = new Set(["/", "/framework", "/autopilot", "/works"]);
 
 export function isMarketingPath(pathname: string): boolean {
 	return MARKETING_PATHS.has(pathname.replace(/(.)\/$/, "$1"));
@@ -189,7 +202,7 @@ function MarketingFooter() {
 				<Lockup fontSize={17} size={22} />
 				<span>Open source. Self-hosted. MIT.</span>
 				<nav>
-					{LINKS.map((link) => (
+					{FOOTER_LINKS.map((link) => (
 						<a href={link.href} key={link.id}>
 							{link.label}
 						</a>
