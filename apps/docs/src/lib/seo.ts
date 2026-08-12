@@ -4,9 +4,9 @@
 
 export const siteConfig = {
 	name: "QUESTPIE",
-	title: "QUESTPIE: define the model once, keep the app in sync",
+	title: "QUESTPIE: build the system, put it to work",
 	description:
-		"Define fields, access rules and hooks once. QUESTPIE derives the PostgreSQL schema, typed REST API and typed client from the same model.",
+		"QUESTPIE is an open-source TypeScript application framework and Autopilot, a product for shared work between people and agents.",
 	url: "https://questpie.com",
 	ogImage: "/og-questpie.png",
 	twitterHandle: "@questpie",

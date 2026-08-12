@@ -13,7 +13,7 @@
  */
 import type { ReactNode } from "react";
 
-type Lang = "bash" | "ts";
+type Lang = "bash" | "http" | "ts";
 
 const KEYWORDS_TS =
 	"import|from|export|default|const|let|var|function|return|await|async|new|class|extends|implements|interface|type|enum|namespace|declare|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|typeof|instanceof|keyof|in|of|as|satisfies|public|private|protected|readonly|static|abstract|get|set|yield|delete|void|null|undefined|true|false|this|super";
@@ -31,6 +31,10 @@ const GRAMMARS: Record<Lang, [role: string, pattern: string][]> = {
 		["number", "\\b\\d+\\b"],
 		["prop", "--?[A-Za-z][\\w-]*"],
 		["punct", "[|&;<>(){}$=]+"],
+	],
+	http: [
+		["keyword", "\\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\\b"],
+		["string", "\\/[A-Za-z0-9_/:.\\-]+"],
 	],
 	ts: [
 		["comment", "\\/\\/[^\\n]*|\\/\\*[\\s\\S]*?\\*\\/"],

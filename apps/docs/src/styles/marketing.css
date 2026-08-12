@@ -16,6 +16,17 @@ body.qp-grain-page {
 	background: transparent;
 }
 
+@keyframes qp-logic-panel-in {
+	from {
+		opacity: 0;
+		transform: translateX(8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(0);
+	}
+}
+
 .qp-marketing {
 	/* ============================================================================
 	   QUESTPIE — marketing.css
@@ -631,24 +642,132 @@ body.qp-grain-page {
 		color: var(--foreground-muted);
 		line-height: var(--line-relaxed);
 	}
+	.ecosystem-index {
+		align-self: center;
+		border-top: 1px solid var(--border-subtle);
+	}
+	.ecosystem-index > div {
+		padding: var(--space-7) 0;
+		border-bottom: 1px solid var(--border-subtle);
+	}
+	.ecosystem-index strong {
+		display: block;
+		margin-top: var(--space-3);
+		font-size: var(--type-2xl);
+		font-weight: var(--weight-strong);
+		letter-spacing: -0.02em;
+	}
+	.ecosystem-index div p {
+		max-width: 30rem;
+		margin-top: var(--space-2);
+		color: var(--foreground-muted);
+		line-height: var(--line-relaxed);
+	}
+	.ecosystem-common {
+		margin-top: var(--space-5);
+		font-family: var(--font-mono);
+		font-size: var(--type-xs);
+		color: var(--foreground-subtle);
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+	.ecosystem-paths {
+		margin-top: var(--space-12);
+	}
 	.code-contract {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--space-12);
 		margin-top: var(--space-10);
 		border-top: 1px solid var(--border-subtle);
 		border-bottom: 1px solid var(--border-subtle);
 	}
 	.code-contract > section {
 		min-width: 0;
-		padding: var(--space-8) var(--space-10) var(--space-8) 0;
+		padding: var(--space-8) 0;
 	}
 	.code-contract > section + section {
-		padding-right: 0;
-		padding-left: var(--space-10);
-		border-left: 1px solid var(--border-subtle);
+		padding: var(--space-8) 0;
 	}
 	.code-contract .qp-code {
 		margin-top: var(--space-5);
+	}
+	.logic-tabs {
+		display: grid;
+		grid-template-columns: minmax(15rem, 0.72fr) minmax(0, 1.28fr);
+		gap: var(--space-12);
+		align-items: stretch;
+		margin-top: var(--space-10);
+		border-top: 1px solid var(--border-subtle);
+		border-bottom: 1px solid var(--border-subtle);
+	}
+	.logic-tabs-list {
+		display: flex;
+		flex-direction: column;
+	}
+	.logic-tab {
+		display: grid;
+		grid-template-columns: 2.5rem minmax(0, 1fr);
+		gap: var(--space-4);
+		width: 100%;
+		padding: var(--space-5) 0;
+		border: 0;
+		border-bottom: 1px solid var(--border-subtle);
+		background: transparent;
+		color: var(--foreground-muted);
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+		transition:
+			color 150ms ease-out,
+			padding-left 150ms ease-out;
+	}
+	.logic-tab:last-child {
+		border-bottom: 0;
+	}
+	.logic-tab:hover,
+	.logic-tab[data-active] {
+		color: var(--foreground);
+	}
+	.logic-tab[data-active] {
+		padding-left: var(--space-3);
+	}
+	.logic-tab:focus-visible {
+		outline: 2px solid var(--ring);
+		outline-offset: 3px;
+	}
+	.logic-tab strong,
+	.logic-tab small {
+		display: block;
+	}
+	.logic-tab strong {
+		font-size: var(--type-lg);
+		font-weight: var(--weight-strong);
+	}
+	.logic-tab small {
+		max-width: 29rem;
+		margin-top: var(--space-2);
+		font-size: var(--type-sm);
+		line-height: var(--line-relaxed);
+	}
+	.logic-stage {
+		display: grid;
+		min-width: 0;
+		min-height: 29rem;
+		padding: var(--space-8) 0;
+	}
+	.logic-tabs.compact .logic-stage {
+		min-height: 18rem;
+	}
+	.logic-panel {
+		grid-area: 1 / 1;
+		min-width: 0;
+	}
+	.logic-panel .qp-code {
+		margin-top: var(--space-5);
+	}
+	.logic-tabs[data-animate="true"] .logic-panel:not([hidden]) {
+		animation: qp-logic-panel-in 190ms cubic-bezier(0.22, 1, 0.36, 1);
 	}
 	.contract-columns,
 	.product-paths {
@@ -818,6 +937,7 @@ body.qp-grain-page {
 		.product-paths,
 		.code-contract {
 			grid-template-columns: minmax(0, 1fr);
+			gap: 0;
 		}
 		.contract-columns > section,
 		.product-paths > section {
@@ -837,6 +957,14 @@ body.qp-grain-page {
 			border-top: 1px solid var(--border-subtle);
 			border-left: 0;
 		}
+		.logic-tabs {
+			grid-template-columns: minmax(0, 1fr);
+			gap: 0;
+		}
+		.logic-stage {
+			min-height: 25rem;
+			border-top: 1px solid var(--border-subtle);
+		}
 		.depth-list > section {
 			grid-template-columns: minmax(0, 1fr);
 			gap: var(--space-3);
@@ -852,6 +980,14 @@ body.qp-grain-page {
 		.early-access-form input,
 		.early-access-form .btn {
 			width: 100%;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.logic-tab {
+			transition: none;
+		}
+		.logic-tabs[data-animate="true"] .logic-panel:not([hidden]) {
+			animation: none;
 		}
 	}
 	.frame {

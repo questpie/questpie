@@ -1,5 +1,6 @@
 import questpiePackage from "../../../../../packages/questpie/package.json";
 import { CodeSample } from "./code";
+import { SnippetExplorer } from "./snippet-explorer";
 
 const GITHUB_URL = "https://github.com/questpie/questpie";
 
@@ -27,21 +28,98 @@ const CLIENT = `const { docs } = await client.collections.posts.find({
 const APPLICATION_PARTS = [
 	{
 		body: "Write type-safe endpoints beside the model. Handlers receive the application context and validated input.",
-		title: "Routes for product logic",
+		code: `export default route()
+  .post()
+  .schema(z.object({ period: z.enum(["day", "week"]) }))
+  .handler(async ({ input, collections }) => {
+    const total = await collections.posts.count({});
+    return { period: input.period, total };
+  });`,
+		file: "routes/post-stats.ts",
+		key: "routes",
+		title: "Routes",
 	},
 	{
 		body: "React to collection changes without importing the generated app back into the files it discovers.",
-		title: "Hooks for side effects",
+		code: `.hooks({
+  afterChange: async ({ data, operation, queue }) => {
+    if (operation !== "create") return;
+    await queue.notifyPost.publish({ postId: data.id });
+  },
+});`,
+		file: "collections/posts.ts",
+		key: "hooks",
+		title: "Hooks",
 	},
 	{
 		body: "Run work now, later or on a schedule with typed payloads and the same collections and services.",
-		title: "Jobs for background work",
+		code: `export default job({
+  name: "daily-digest",
+  schema: z.object({}),
+  handler: async ({ email }) => {
+    await email.send({
+      to: "team@example.com",
+      subject: "Daily digest",
+      html: "<p>The latest posts are ready.</p>",
+    });
+  },
+  options: { cron: "0 8 * * *" },
+});`,
+		file: "jobs/daily-digest.ts",
+		key: "jobs",
+		title: "Jobs",
 	},
 	{
 		body: "Give routes, hooks and jobs one typed dependency instead of rebuilding integrations in every handler.",
-		title: "Services for shared capabilities",
+		code: `export default service({
+  create: () => ({
+    readingTime(content: string) {
+      const words = content.trim().split(/\\s+/).length;
+      return Math.max(1, Math.ceil(words / 200));
+    },
+  }),
+});`,
+		file: "services/editorial.ts",
+		key: "services",
+		title: "Services",
 	},
-];
+] as const;
+
+const PRODUCT_SURFACES = [
+	{
+		body: "Generate collection forms, list views and authentication-aware navigation from field metadata.",
+		code: `import { adminModule } from "@questpie/admin/modules/admin";
+
+export default [adminModule] as const;`,
+		file: "server/modules.ts",
+		key: "admin",
+		title: "Admin",
+	},
+	{
+		body: "Publish the machine-readable schema and a Scalar reference UI from the same application contract.",
+		code: `import { openApiModule } from "@questpie/openapi";
+
+export default [openApiModule] as const;
+
+// /api/openapi.json
+// /api/docs`,
+		file: "server/modules.ts",
+		key: "openapi",
+		title: "OpenAPI",
+	},
+	{
+		body: "Expose approved collection operations and routes as agent tools under the access rules already in the app.",
+		code: `import { adminModule } from "@questpie/admin/modules/admin";
+import { mcpModule } from "@questpie/mcp/modules/mcp";
+
+export default [adminModule, mcpModule] as const;
+
+// OAuth-gated endpoint: /api/mcp`,
+		file: "server/modules.ts",
+		key: "mcp",
+		title: "MCP",
+	},
+] as const;
 
 const START = `bunx create-questpie my-app
 bun run dev`;
@@ -104,7 +182,7 @@ export function FrameworkPage() {
 					<div className="code-contract">
 						<section>
 							<p className="qp-eyebrow">Five REST endpoints per collection</p>
-							<CodeSample bare code={REST} lang="bash" />
+							<CodeSample bare code={REST} lang="http" />
 						</section>
 						<section>
 							<p className="qp-eyebrow">A client shaped by your model</p>
@@ -124,22 +202,12 @@ export function FrameworkPage() {
 							connected without making them depend on one another.
 						</p>
 					</div>
-					<div className="depth-list">
-						{APPLICATION_PARTS.map((part, index) => (
-							<section key={part.title}>
-								<span className="qp-eyebrow">0{index + 1}</span>
-								<div>
-									<h3>{part.title}</h3>
-									<p>{part.body}</p>
-								</div>
-							</section>
-						))}
-					</div>
+					<SnippetExplorer items={APPLICATION_PARTS} />
 				</div>
 			</section>
 
 			<section className="band">
-				<div className="wrap editorial-split">
+				<div className="wrap">
 					<div className="head">
 						<p className="qp-aside">interfaces are modules, not assumptions</p>
 						<h2 className="qp-display-m">Add the surface your users need</h2>
@@ -152,31 +220,7 @@ export function FrameworkPage() {
 							Next.js when the application needs the generated admin.
 						</p>
 					</div>
-					<div className="generated-list">
-						<div className="generated-row">
-							<span className="qp-eyebrow">01</span>
-							<div>
-								<strong>Admin</strong>
-								<p>Forms and collection views from field metadata.</p>
-							</div>
-						</div>
-						<div className="generated-row">
-							<span className="qp-eyebrow">02</span>
-							<div>
-								<strong>OpenAPI</strong>
-								<p>A machine-readable API description and Scalar UI.</p>
-							</div>
-						</div>
-						<div className="generated-row">
-							<span className="qp-eyebrow">03</span>
-							<div>
-								<strong>MCP</strong>
-								<p>
-									Explicit tools for agents, backed by the same access model.
-								</p>
-							</div>
-						</div>
-					</div>
+					<SnippetExplorer compact items={PRODUCT_SURFACES} />
 				</div>
 			</section>
 
