@@ -1,0 +1,132 @@
+{
+	"release": "4.0.0-beta.1",
+	"promise": "Compile, migrate, run, call, watch, recover, inspect, and restart one Policy-protected PostgreSQL application through direct, Fetch/client, worker, and minimal Studio paths.",
+	"compatibility": {
+		"data": "Migration Plan/receipt and PostgreSQL state are explicit; no silent destructive change.",
+		"behavior": "Accepted beta.1 guarantees may only change through a documented release decision and conformance update.",
+		"source": "No v3 source compatibility promise; generated artifacts and public package exports are beta-versioned.",
+		"wire": "Operation/result/error and realtime resume contracts carry explicit versions and fail on incompatible Runtime Builds.",
+		"durable": "Reaction executable identity and retained work block incompatible retirement."
+	},
+	"beta1": [
+		{
+			"id": "foundation",
+			"requires": [],
+			"owns": "Bun workspaces, package/export boundaries, compiler Build Input, Definition discovery/composition, Owner/Origin, Manifest/App Contract and generated files",
+			"evidence": "definitions and scalar-and-exports conformance cells"
+		},
+		{
+			"id": "schema",
+			"requires": ["foundation"],
+			"owns": "Field/Collection/Constraint/Relation, B-tree-only Index, Schema/Data projections, Migration Plan/apply/receipt/drift and Seeds",
+			"evidence": "migrations conformance cell on local PostgreSQL"
+		},
+		{
+			"id": "context-policy",
+			"requires": ["schema"],
+			"owns": "Principal/Authority, trusted Context Resolution, relational Policy, nondisclosure and framework SQL scope with no RLS claim",
+			"evidence": "context and policy cells in collaboration and archive fixtures"
+		},
+		{
+			"id": "operations",
+			"requires": ["context-policy"],
+			"owns": "codec kernel, structural Query, defineQuery/defineMutation, Collection Operation Set, declared errors, Query snapshot, Mutation transaction, lifecycle order and stable call identity",
+			"evidence": "query, mutation and lifecycle cells plus exact generated client declarations"
+		},
+		{
+			"id": "runtime-client",
+			"requires": ["operations"],
+			"owns": "immutable Runtime Build, app.fetch Operation Wire, direct/generated-client parity, readiness, bounded drain/shutdown, drainRuntime with maintenance Authority and version fencing, Runtime Build compatibility retirement and Execution Envelope",
+			"evidence": "service-route-auth lifecycle subset, envelope and Runtime compatibility rows"
+		},
+		{
+			"id": "realtime",
+			"requires": ["runtime-client"],
+			"owns": "observed Query dependencies, Change Ledger, Query.watch, SSE downstream, resume/reset and PostgreSQL reconciliation",
+			"evidence": "live-query cell including crash-after-commit-before-wake"
+		},
+		{
+			"id": "reaction",
+			"requires": ["realtime"],
+			"owns": "transactional dispatch intent, committed-fact Reaction, shared Durable Run attempt/lease/retry/fencing subset, acknowledgeAmbiguity/cancelRun/retryRun maintenance Authority, typed concurrent winner and append-only audit",
+			"evidence": "durable cell with one Reaction; no generic Job/Workflow client"
+		},
+		{
+			"id": "studio",
+			"requires": ["reaction"],
+			"owns": "minimal same-origin Policy-protected readiness, Resource/Origin, Operation, transaction, ledger, Reaction and event inspection",
+			"evidence": "direct/network/worker/Studio parity and independent projection joins"
+		},
+		{
+			"id": "connected-conformance",
+			"requires": ["studio"],
+			"owns": "collaboration tracer, archive portability fixture, ten-instance correctness subset, local plus one selected managed PostgreSQL target, release and performance evidence",
+			"evidence": "accepted P14 matrix and slice-owned budgets"
+		}
+	],
+	"deferred": [
+		{
+			"capability": "Action",
+			"seam": "defineAction is reserved in #questpie/app/package over the Execution Envelope and Effect Identity",
+			"absence": "beta.1 has no external-effect authoring or generated Action client; external calls are outside transactions and the release promise"
+		},
+		{
+			"capability": "raw Route and credential Auth integration",
+			"seam": "accepted Service graph, defineRoute, app.fetch mounting, credential resolver and explicit ctx.execution transition",
+			"absence": "beta.1 Operation Wire has no arbitrary raw protocol surface and no bundled auth schema/client; tests use explicit ingress Principal/context"
+		},
+		{
+			"capability": "Job and Workflow breadth",
+			"seam": "defineJob/defineWorkflow remain restricted projections of the same accepted Durable Run kernel",
+			"absence": "beta.1 exposes only committed-fact Reaction needed by the tracer; no schedules, generic Job client, signals, timers, compensation or child work"
+		},
+		{
+			"capability": "Channel",
+			"seam": "defineChannel, Policy/PostgreSQL event semantics and runtime.channelCarrier stay distinct from Live Query",
+			"absence": "beta.1 ships Query.watch only; no authored collaboration Channel or carrier/provider integration"
+		},
+		{
+			"capability": "File bytes",
+			"seam": "ordinary File metadata projection plus runtime.byteStore Service capability",
+			"absence": "beta.1 has no upload/download SDK, object-store adapter or cleanup jobs"
+		},
+		{
+			"capability": "Search",
+			"seam": "compiler Search Resource and authorized source-rejoin planner",
+			"absence": "beta.1 has no Search authoring/client or full-text physical Index; B-tree-only Index remains fixed"
+		},
+		{
+			"capability": "OpenAPI, MCP and skills",
+			"seam": "compiler-owned projections selected in questpie.json and explained from canonical Origins",
+			"absence": "beta.1 emits no external contract bundles"
+		},
+		{
+			"capability": "optional cache, broker and carrier",
+			"seam": "runtime.cache, runtime.wakeBroker and runtime.channelCarrier exact Service bindings",
+			"absence": "beta.1 correctness uses PostgreSQL only; no Redis, Pusher, provider matrix or sticky-session requirement"
+		},
+		{
+			"capability": "split Runtime roles and remote Studio",
+			"seam": "one immutable Runtime Build, role-compatible lifecycle protocol and versioned Studio event/projection contract",
+			"absence": "beta.1 runs combined role and same-origin minimal Studio; no fleet/control-plane API"
+		}
+	],
+	"laterBetas": [
+		"raw Route and reference Auth composition",
+		"Job and checkpointed Workflow vertical",
+		"Channel and optional carrier",
+		"File metadata/bytes and Search verticals",
+		"OpenAPI/MCP/skill projections and optional acceleration",
+		"split roles and broader Studio only after their focused conformance passes"
+	],
+	"releaseGates": [
+		"all beta1 dependency slices green in order",
+		"P14 collaboration and archive required cells",
+		"direct/network/worker/Studio parity for the connected tracer",
+		"local PostgreSQL 17 and one selected managed PostgreSQL target",
+		"crash-after-commit, response loss, retry/fencing, rolling compatibility and optional-infrastructure absence",
+		"exact declarations, negative imports, no ORM types and TypeScript budgets",
+		"quality:release on stable runner with slice-owned performance budgets",
+		"public finished-product beta.1 docs and explicit absence documentation"
+	]
+}

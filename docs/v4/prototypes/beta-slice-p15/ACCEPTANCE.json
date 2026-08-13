@@ -1,0 +1,41 @@
+{
+	"ticket": "#15 beta slicing",
+	"proof": "docs/v4/prototypes/beta-slice-p15",
+	"authorityHeads": {
+		"P14": "3a89c565cb1eba59815d106df1c06406ac20ac98",
+		"P17": "79d3667019e0a4cda6f7652d24f2d9c6b68d4fca",
+		"P18": "71463e99a70481b0950ae18d1ff409c034c1b158",
+		"P19": "96829bd7b08ea54e60fdc7d5b077366235d2dfea",
+		"P20": "6e056bc44c15740b2797a9489fe3823c3100bdad",
+		"P21": "d50d4334b116a5bdc46e95cdabf566d8db938d37",
+		"P22": "17008b0547f24b53d456530b798e8d96ae2e2b1e",
+		"projectionSnapshot": "c740c1d20fc1b2a3a7c8b780fa4e9a7f8aba6c5d"
+	},
+	"verification": [
+		{
+			"command": "bun run docs/v4/prototypes/beta-slice-p15/check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run docs/v4/prototypes/beta-slice-p15/negative-control.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxlint --deny-warnings docs/v4/prototypes/beta-slice-p15/*.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxfmt --check docs/v4/prototypes/beta-slice-p15",
+			"result": "PASS"
+		},
+		{ "command": "git diff --check", "result": "PASS" }
+	],
+	"acceptanceCriteria": [
+		"Beta.1 is the smallest connected P1-P6 vertical and includes watch, Reaction and minimal Studio rather than a temporary CRUD-only architecture.",
+		"Every deferred accepted capability retains a named compatible seam and exact absence story.",
+		"Dependency order, compatibility promises and release evidence are explicit.",
+		"Runtime lifecycle and durable maintenance commands have explicit Authority, version fencing, typed concurrent winners and append-only audit ownership.",
+		"PostgreSQL is the only durable dependency, Index remains B-tree-only and no RLS claim is introduced.",
+		"No production Runtime is implemented."
+	]
+}
