@@ -96,7 +96,7 @@ compilation. It does not remove a Resource.
 A Resource Identity is its Resource Kind plus its Qualified Resource Name. The
 name uses one or more dot-separated lower-camel ASCII segments:
 
-```abnf
+```text
 qualified-resource-name = segment *("." segment)
 segment                 = lower *(lower / upper / digit)
 lower                   = %x61-7A
