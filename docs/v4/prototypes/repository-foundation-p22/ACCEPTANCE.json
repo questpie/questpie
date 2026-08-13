@@ -1,0 +1,72 @@
+{
+	"ticket": "#22 repository foundation",
+	"proof": "docs/v4/prototypes/repository-foundation-p22",
+	"reviewHistory": [
+		{
+			"reviewedHead": "bf45e2036fb1796f7f97899b9ef5672bdce4d27d",
+			"model": "opus",
+			"effort": "medium",
+			"verdict": "BLOCKED",
+			"finding": "Knip unlisted and binaries were filtered but still warning-only."
+		}
+	],
+	"authorityHeads": {
+		"foundation": "d03358b749c4c8efb769d1c0fed50e8fbf983fb0",
+		"P1": "713485a64bcc4795d960d576fea51da56bc4dcdd",
+		"P2": "5fbd9058e1cfb3bfef56f11a1d0ec7b6e14e88fa",
+		"P3": "a09bf55f0e22f65e059cda9f3eda914520dd4f9d",
+		"P4": "05fc96f3d07c70beaf7f654d79d6cfb46f427f92",
+		"P5": "3f8618613bde1bdd7e13863970eb1c140e201c6f",
+		"P6": "94c237c9aa910a60a332b1ef97473f34fe89d65b",
+		"postP6": "a164e33e752ab54d48fcf903371938ecff3dc082",
+		"postP6Reviewed": "79d7816dbf0b9b6e052706daf71fe173e1cbfc42",
+		"P17": "79d3667019e0a4cda6f7652d24f2d9c6b68d4fca",
+		"P18": "71463e99a70481b0950ae18d1ff409c034c1b158",
+		"P19": "96829bd7b08ea54e60fdc7d5b077366235d2dfea",
+		"P20": "6e056bc44c15740b2797a9489fe3823c3100bdad",
+		"P21": "d50d4334b116a5bdc46e95cdabf566d8db938d37",
+		"P21ProjectionSnapshot": "9fd5d41e6ce8627959d9e72ba017fd0d0cd441bf"
+	},
+	"verification": [
+		{
+			"command": "bun run check:changed -- --test tests/integration/postgres/connectivity.test.ts --typecheck @questpie/docs",
+			"result": "PASS"
+		},
+		{ "command": "bun run quality:full", "result": "PASS" },
+		{ "command": "bun run quality:typescript-forward", "result": "PASS" },
+		{ "command": "PostgreSQL 17.10 connectivity fixture", "result": "PASS" },
+		{ "command": "bun run knip:strict", "result": "PASS" },
+		{ "command": "bun run knip:negative-control", "result": "PASS" },
+		{ "command": "bun run package:check", "result": "PASS" },
+		{ "command": "bun run scripts/performance.ts check", "result": "PASS" },
+		{ "command": "bun run quality:release", "result": "PASS" },
+		{
+			"command": "bun run skill:check",
+			"result": "PASS"
+		},
+		{ "command": "bun run scripts/agent-context-check.ts", "result": "PASS" },
+		{
+			"command": "fresh stateless Opus-medium design routing context",
+			"result": "PASS"
+		},
+		{
+			"command": "fresh stateless Opus-medium proof routing context",
+			"result": "PASS"
+		},
+		{
+			"command": "fresh stateless Opus-medium implementation routing context correctly refused work before an agent-ready slice",
+			"result": "PASS"
+		},
+		{ "command": "git diff --check", "result": "PASS" }
+	],
+	"acceptanceCriteria": [
+		"A portable repo-owned router skill correctly routes five branches without personal paths.",
+		"The acceptance wrapper enforces one fresh stateless Opus-medium review over validated complete inputs and records only explicit PASS or BLOCKED.",
+		"Changed, full, release, PostgreSQL, TypeScript-forward, micro, load, and soak lanes have distinct ownership and schedules.",
+		"TypeScript 6.0.2 is canonical and native 7.0.2 is one non-blocking conformance lane.",
+		"Knip begins report-only with narrow classifications and only zero-noise issue classes block.",
+		"Correctness, microbenchmarks, load, and soak/chaos remain separate; repository owns harness and slices own budgets.",
+		"CI/release, CONTRIBUTING, SECURITY, root AGENTS, and HANDOFF point to executable portable authority.",
+		"No production QUESTPIE Runtime is implemented."
+	]
+}

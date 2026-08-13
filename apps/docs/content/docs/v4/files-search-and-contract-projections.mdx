@@ -1,0 +1,86 @@
+---
+title: Store files, search authorized rows, and project contracts
+description: Keep metadata, bytes, search indexes, and generated integrations behind one application authority model.
+kind: guide
+---
+
+QUESTPIE keeps File metadata in ordinary Collections, stores bytes through one
+narrow capability, and treats Search as a derived projection. OpenAPI, MCP, and
+skill bundles are generated from the same compiled contracts. None creates a
+second schema, Policy, handler registry, or telemetry system.
+
+## Authorize metadata before bytes
+
+A File row owns application identity, relations, Policy, lifecycle, and
+generated types. A closed File projection maps its exact Fields to byte roles
+and generates reserve, finalize, abort, delete, upload/download, and cleanup
+surfaces.
+
+Upload is an explicit recoverable lifecycle:
+
+```text
+reserve pending metadata
+  -> transfer bounded checksummed bytes
+  -> verify and finalize ready metadata
+
+cancel or failure -> abort -> durable orphan cleanup
+```
+
+QUESTPIE serves bytes only for a ready row after current metadata Policy passes.
+Missing metadata, denied metadata, and missing bytes share a nondisclosing
+external result. Delete makes metadata nondisclosable before idempotent byte
+removal.
+
+The byte capability receives an opaque storage key, stream, size/checksum
+conditions, cancellation, and operation identity. It receives no Principal,
+Context, Policy, Collection, transaction, raw database, or System Authority.
+Filesystem and S3-compatible adapters prove the small `put`, `open`, `head`,
+and `delete` seam. QUESTPIE does not expose a generic storage-provider matrix.
+
+## Search the authorized universe
+
+A Search Resource projects deterministic documents from one source Collection.
+Committed source changes enter the shared durable projection worker with exact
+source keys and checkpoints. The worker rereads current rows and idempotently
+updates or removes documents; index lag never grants authority.
+
+The engine returns ranked candidate keys. QUESTPIE rejoins those keys to current
+source rows, then applies Tenant, Collection Policy, deletion, requested facets,
+and Field output authority before it bounds a page. Hits, `total`, facets,
+statistics, cursor, and the `first + 1` sentinel all describe that same
+authorized universe.
+
+A forged, stale, deleted, foreign-tenant, or newly denied candidate discloses
+nothing. QUESTPIE never fetches a provider page, filters it in JavaScript, and
+returns the provider's original count.
+
+PostgreSQL is the first Search engine seam. The accepted public Index contract
+remains B-tree-only; full-text physical indexing requires its own focused
+contract. External engines must prove lag, revocation, paging, totals, facets,
+cursors, rebuild, and failure before QUESTPIE publishes a provider interface.
+
+## Generate integrations from one contract
+
+OpenAPI projects supported network Operations and eligible Routes from exact
+runtime codecs, declared errors, ingress, limits, identity, and wire version.
+An unsupported raw protocol Route is omitted with an Origin diagnostic instead
+of a guessed schema.
+
+MCP exposes only an explicit generated subset and invokes the same Operation
+adapter, Execution, Context, Policy, limits, errors, and telemetry as ordinary
+callers. A generated skill bundle carries concise routing metadata, public
+documentation, examples, and provenance. It grants no Runtime authority.
+
+All three are compiler outputs with exact source digests. They cannot define
+business handlers, authorize calls, expose secrets, or create another
+observability path. Their invocation telemetry stays in the Execution Envelope.
+
+## What remains later
+
+Multipart and presigned uploads, ranges, scanning, transforms, CDN, retention
+erasure, public buckets, full-text Index syntax, external and vector Search,
+highlighting, and analyzer breadth remain focused later verticals. Their named
+seams are preserved without optional methods or provider-specific behavior in
+the beta contract.
+
+The accepted proof uses only B-tree Indexes and emits no RLS claim.

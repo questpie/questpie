@@ -63,6 +63,16 @@ export const appointments = defineCollection({
 			maxLength: 24,
 			default: "scheduled",
 		}),
+		createdAt: field.timestamp({
+			nullable: false,
+			withTimezone: true,
+			default: "now",
+		}),
+		updatedAt: field.timestamp({
+			nullable: false,
+			withTimezone: true,
+			default: "now",
+		}),
 	},
 	constraints: {
 		primary: constraint.primaryKey({ fields: ["id"] }),
@@ -107,22 +117,39 @@ when the configured identity or schema disagrees with the stored binding.
 Schema Projection v1 requires PostgreSQL 16 or later. It supports these Field
 constructors:
 
-| Constructor       | PostgreSQL storage           | Contract                            | Canonical committed value |
-| ----------------- | ---------------------------- | ----------------------------------- | ------------------------- |
-| `field.uuid`      | `uuid`                       | optional random UUID default        | lowercase UUID text       |
-| `field.text`      | `text`                       | optional minimum and maximum length | string                    |
-| `field.boolean`   | `boolean`                    | optional literal default            | boolean                   |
-| `field.integer`   | `integer`                    | optional bounds and default         | safe JSON integer         |
-| `field.bigint`    | `bigint`                     | client value is a string            | signed decimal text       |
-| `field.numeric`   | `numeric(precision, scale)`  | explicit precision and scale        | fixed-scale decimal text  |
-| `field.timestamp` | `timestamp` or `timestamptz` | explicit time-zone behavior         | millisecond ISO timestamp |
-| `field.date`      | `date`                       | ISO date client value               | `YYYY-MM-DD`              |
+| Constructor       | PostgreSQL storage           | Contract                                      | Canonical committed value |
+| ----------------- | ---------------------------- | --------------------------------------------- | ------------------------- |
+| `field.uuid`      | `uuid`                       | optional random UUID default                  | lowercase UUID text       |
+| `field.text`      | `text COLLATE "C"`           | optional minimum and maximum length           | NFC string                |
+| `field.boolean`   | `boolean`                    | optional literal default                      | boolean                   |
+| `field.integer`   | `integer`                    | optional bounds and default                   | safe JSON integer         |
+| `field.bigint`    | `bigint`                     | client value is a string                      | signed decimal text       |
+| `field.numeric`   | `numeric(precision, scale)`  | explicit precision and scale                  | fixed-scale decimal text  |
+| `field.timestamp` | `timestamp` or `timestamptz` | explicit time-zone behavior                   | millisecond ISO timestamp |
+| `field.date`      | `date`                       | ISO date client value                         | `YYYY-MM-DD`              |
+| `field.object`    | `jsonb`                      | closed typed `value.*` properties             | canonical JSON            |
+| `field.array`     | `jsonb`                      | bounded typed `value.*` items                 | canonical JSON            |
+| `field.json`      | `jsonb`                      | open tagged JSON without typed interior paths | canonical JSON            |
 
 Every Field must state `nullable`. Literal defaults exist only for text,
 boolean, and integer Fields. `field.uuid` supports `"randomUuid"`.
 `field.timestamp` supports `"now"`.
 Bigint, numeric, date, and arbitrary SQL literal defaults are not valid in v1.
-Schema Projection v1 does not support JSON Fields.
+JSON-backed Fields have no schema default in v1. `field.object` and
+`field.array` use a separate closed `value.*` grammar; embedded values cannot
+own defaults, physical names, Constraints, Indexes, Relations, or independent
+lifecycle. Every embedded array declares `maximumItems` from 1 through 1,000.
+Embedded containers have a maximum depth of eight, and each JSONB-backed Field
+has at most 1,048,576 canonical UTF-8 JSON bytes. Open JSON distinguishes SQL
+`NULL` from top-level JSON `null` with `{ kind: "json", value: null }`.
+
+Use `shape.inline` to group ordinary column Fields without creating a stored
+container. Each leaf keeps its own identity and segment-array path, such as
+`["address", "city"]`; QUESTPIE never parses a dotted string as a path. Use an
+explicit Collection and Relation for a nested concept with identity,
+independent Policy or lifecycle, unbounded growth, querying, or pagination.
+QUESTPIE never synthesizes a hidden Collection. See
+[Data and structural Queries](./data-and-queries#choose-a-nested-data-model).
 
 Bigint text cannot have leading zeroes. Numeric text cannot use an exponent.
 A timestamp without time zone uses local ISO form. A timestamp with time zone
@@ -139,6 +166,18 @@ unique key, and the local and referenced lists must have equal length. Index
 entries default to ascending order with nulls last. Descending entries default
 to nulls first. The allowed referential actions are `restrict`, `cascade`,
 `setNull`, and `noAction`. `setNull` requires nullable local Fields.
+
+After Augmentations resolve, every regular Collection must have exactly one
+named `constraint.primaryKey({ fields: [...] })`. `id` is an ordinary Field;
+there is no `field.id()` or `primaryKey: true` modifier. `createdAt` and
+`updatedAt` are likewise ordinary timestamp Fields. A `"now"` default
+initializes them on insert. A Mutation must assign every `updatedAt` change
+explicitly; the schema does not attach a callback.
+
+Every text Field uses semantic collation `questpie.binary`, lowered to explicit
+PostgreSQL `COLLATE "C"` for checks, keys, uniqueness, Indexes, filters,
+ordering, and cursor seeks. QUESTPIE fails if deterministic libc collation `C`
+is unavailable; it does not substitute a database default, `C.UTF-8`, or ICU.
 
 The compiler accepts only the callback's closed serializable expression tree.
 The authoring module and callback run inside QUESTPIE's controlled structural
@@ -247,12 +286,14 @@ Plans use four classifications:
 | Change                                                                                                        | Class         |
 | ------------------------------------------------------------------------------------------------------------- | ------------- |
 | create schema/Collection; add nullable Field without default; relax a bound                                   | `safe`        |
+| add nullable `field.object`, `field.array`, or `field.json` without a default                                 | `safe`        |
 | add literal default, nullable defaulted Field, check, unique, Relation, Index; widen integer to bigint        | `guarded`     |
 | explicit Collection, Field, or physical-name rename; drop an object; required-to-nullable                     | `destructive` |
 | add required Field with literal default; nullable-to-required with literal backfill                           | `destructive` |
 | drop/change default; strengthen bound; reduce precision; change scale                                         | `destructive` |
 | change Constraint Fields/expression, Index shape, or Relation endpoints/actions                               | `destructive` |
 | required Field without literal backfill; unsupported Field-kind or timestamp-zone change                      | `blocked`     |
+| add or change the embedded codec of an existing JSONB Field                                                   | `blocked`     |
 | generated/identity column, RLS, expression/unique Index, custom collation/opclass, or unlisted semantic delta | `blocked`     |
 | non-transactional or handwritten DDL                                                                          | `blocked`     |
 
@@ -571,7 +612,7 @@ A Seed run takes the same application lock as migration apply, so both commands
 cannot race. A preflight failure records a `blocked` attempt with its diagnostic
 code. Before a pending Seed writes data, QUESTPIE validates its data steps
 against the current Migration Receipt head and requires the live Schema
-Schema Fingerprint to match that head. A historical matching migration is not
+Fingerprint to match that head. A historical matching migration is not
 sufficient. The Seed Receipt records the Schema Projection Digest used for the
 successful run, but that observation does not enter the Seed checksum.
 
@@ -620,3 +661,5 @@ For a destructive Migration Plan, replace `--accept-plan` with
 
 Use `--format json` with every schema, migration, and Seed command to read the
 same diagnostic codes and recovery steps in an agent or CI process.
+
+Next, [define data and structural Queries](./data-and-queries).

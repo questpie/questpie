@@ -1,0 +1,28 @@
+{
+	"$schema": "https://unpkg.com/knip@6/schema.json",
+	"entry": ["scripts/*.ts"],
+	"project": ["scripts/**/*.ts"],
+	"ignoreFiles": [
+		"apps/docs/src/routeTree.gen.ts",
+		"apps/docs/.source/**",
+		"docs/v4/prototypes/**"
+	],
+	"ignoreUnresolved": ["/^fumadocs-mdx:collections\\//"],
+	"rules": {
+		"files": "warn",
+		"dependencies": "warn",
+		"devDependencies": "warn",
+		"unlisted": "error",
+		"binaries": "error",
+		"unresolved": "error",
+		"exports": "warn",
+		"types": "warn",
+		"duplicates": "warn"
+	},
+	"workspaces": {
+		"apps/docs": {
+			"entry": ["src/start.ts!", "vite.config.ts!", "source.config.ts!"],
+			"project": ["src/**/*.{ts,tsx}!", "*.ts!"]
+		}
+	}
+}

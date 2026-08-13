@@ -1,4 +1,20 @@
 {
 	"title": "QUESTPIE v4",
-	"pages": ["index", "definition-composition", "schema-lifecycle"]
+	"pages": [
+		"index",
+		"definition-composition",
+		"schema-lifecycle",
+		"data-and-queries",
+		"context-and-policy",
+		"executable-definitions",
+		"queries-and-mutations",
+		"realtime",
+		"durable-reactions",
+		"durable-jobs-and-workflows",
+		"multi-instance-and-acceleration",
+		"files-search-and-contract-projections",
+		"semantic-kernels-and-public-surface",
+		"services-routes-and-auth",
+		"runtime-and-studio"
+	]
 }

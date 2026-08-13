@@ -1,0 +1,38 @@
+name: Scheduled quality
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+    inputs:
+      lane:
+        type: choice
+        options: [load, soak]
+        default: load
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.lane || 'load' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  scenario:
+    name: ${{ inputs.lane || 'load' }} scenarios
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+      - run: bun ci
+      - run: bun run test:${{ inputs.lane || 'load' }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ inputs.lane || 'load' }}-${{ github.run_id }}
+          path: quality/results/
+          if-no-files-found: ignore
+          retention-days: 30

@@ -1,0 +1,575 @@
+---
+title: Resolve Context and authorize with Policy
+description: Construct trusted execution facts once and enforce relational authorization on every data path.
+kind: guide
+---
+
+QUESTPIE resolves one immutable application Context for each root Execution and
+enforces one compiled Policy model for application authorization. Context
+resolves trusted identity and application scope once. Policy checks current
+relational evidence where the data operation runs.
+
+## Define the collaboration fixture
+
+The schema and structural Query guides use a Barbershop to introduce data
+primitives. From this page onward, the examples use one collaboration fixture
+because its Company, Space, Channel, Membership, and Message graph makes
+relational authorization visible:
+
+```ts title="src/data/collaboration.ts"
+import { constraint, defineCollection, field } from "questpie";
+
+export const companies = defineCollection({
+	name: "companies",
+	fields: {
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		name: field.text({ nullable: false, maxLength: 160 }),
+	},
+	constraints: {
+		primary: constraint.primaryKey({ fields: ["id"] }),
+	},
+});
+
+export const spaces = defineCollection({
+	name: "spaces",
+	fields: {
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		companyId: field.uuid({ nullable: false }),
+		name: field.text({ nullable: false, maxLength: 160 }),
+	},
+	constraints: {
+		primary: constraint.primaryKey({ fields: ["id"] }),
+	},
+});
+
+export const channels = defineCollection({
+	name: "channels",
+	fields: {
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		companyId: field.uuid({ nullable: false }),
+		spaceId: field.uuid({ nullable: false }),
+		name: field.text({ nullable: false, maxLength: 160 }),
+		lastMessageAt: field.timestamp({ nullable: true, withTimezone: true }),
+		updatedAt: field.timestamp({
+			nullable: false,
+			withTimezone: true,
+			default: "now",
+		}),
+	},
+	constraints: {
+		primary: constraint.primaryKey({ fields: ["id"] }),
+	},
+});
+
+export const memberships = defineCollection({
+	name: "memberships",
+	fields: {
+		companyId: field.uuid({ nullable: false }),
+		principalId: field.uuid({ nullable: false }),
+		scopeKey: field.text({ nullable: false, maxLength: 80 }),
+		status: field.text({ nullable: false, maxLength: 16 }),
+		role: field.text({ nullable: false, maxLength: 16 }),
+		canPost: field.boolean({ nullable: false, default: false }),
+	},
+	constraints: {
+		primary: constraint.primaryKey({
+			fields: ["companyId", "principalId", "scopeKey"],
+		}),
+	},
+});
+
+export const messages = defineCollection({
+	name: "messages",
+	fields: {
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		companyId: field.uuid({ nullable: false }),
+		channelId: field.uuid({ nullable: false }),
+		authorId: field.uuid({ nullable: false }),
+		title: field.text({ nullable: false, maxLength: 200 }),
+		body: field.text({ nullable: false, maxLength: 20_000 }),
+		moderationNote: field.text({ nullable: true, maxLength: 2_000 }),
+		createdAt: field.timestamp({
+			nullable: false,
+			withTimezone: true,
+			default: "now",
+		}),
+		updatedAt: field.timestamp({
+			nullable: false,
+			withTimezone: true,
+			default: "now",
+		}),
+	},
+	constraints: {
+		primary: constraint.primaryKey({ fields: ["id"] }),
+	},
+});
+
+export const messageEvents = defineCollection({
+	name: "messageEvents",
+	fields: {
+		id: field.text({ nullable: false, maxLength: 160 }),
+		messageId: field.uuid({ nullable: false }),
+		kind: field.text({ nullable: false, maxLength: 32 }),
+		occurredAt: field.timestamp({ nullable: false, withTimezone: true }),
+	},
+	constraints: {
+		primary: constraint.primaryKey({ fields: ["id"] }),
+	},
+});
+```
+
+## Resolve one application Context
+
+An application declares at most one Context Definition. Every root Execution
+resolves that Definition before Policy or a handler runs:
+
+```ts title="src/app-context.ts"
+import { codec, context, defineContext } from "questpie";
+import { memberships } from "./data/collaboration";
+
+export const appContext = defineContext({
+	name: "app.context",
+	input: codec.object({ companyId: codec.uuid() }),
+	resolve: async ({ input, principal, bootstrap }) => {
+		if (principal.kind === "anonymous") {
+			throw context.error.unauthenticated();
+		}
+
+		const membership = await bootstrap.get(memberships, {
+			key: {
+				companyId: input.companyId,
+				principalId: principal.id,
+				scopeKey: "company",
+			},
+			select: {
+				companyId: true,
+				principalId: true,
+				scopeKey: true,
+				status: true,
+				role: true,
+			},
+		});
+
+		if (membership === null || membership.status !== "active") {
+			throw context.error.notFound("tenant");
+		}
+
+		return {
+			tenant: context.tenant({ id: membership.companyId }),
+			values: {
+				selectedMembershipPrincipalId: membership.principalId,
+				selectedMembershipScope: membership.scopeKey,
+				selectedRole: membership.role,
+			},
+		};
+	},
+});
+```
+
+The Context Definition does not name a Request, header, URL, connection, or
+worker payload. The generated protocol carries the same input over each
+framework transport.
+
+`bootstrap.get` is a bounded read-only lookup by exact Collection key and
+selection. It cannot enumerate Collections, run raw SQL, write data, dispatch
+work, access application Services, or obtain System Authority.
+
+Bootstrap bounds the read count, selected paths, result rows, concurrency, and
+elapsed time. It also observes the Execution deadline and cancellation signal.
+
+QUESTPIE resolves Context once for one root Execution. Concurrent consumers
+share the same resolution. Success freezes Principal, Tenant, Authority, and
+the returned values. Nested work inherits them. Failure stops the Execution
+before Policy or a handler runs. Execution-scoped Services remain separate.
+QUESTPIE disposes them in reverse creation order after the root finishes, on
+success and on failure.
+
+## Create immutable client and direct scopes
+
+The generated client accepts the exact Context input:
+
+```ts title="web/read-messages.ts"
+import type { GeneratedClient } from "#questpie/client";
+
+export async function readMessages(client: GeneratedClient) {
+	const company = client.withContext({
+		companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+	});
+
+	return company.queries["channels.overview"]({
+		channelId: "018f6094-cf3c-70e9-8d68-80d523f14c19",
+		first: 20,
+		after: null,
+	});
+}
+```
+
+The `channels.overview` Query is defined in
+[Build Queries and Mutations](./queries-and-mutations#define-a-read-only-query).
+
+`withContext` returns a new immutable scope. Two concurrent scopes cannot
+change each other's Context.
+
+A script or test creates an ordinary direct root with the same Context input:
+
+```ts title="scripts/read-messages-as-user.ts"
+import type { GeneratedApp } from "#questpie/app";
+
+export async function readMessagesAsUser(app: GeneratedApp) {
+	return app.execution(
+		{
+			principal: {
+				kind: "user",
+				id: "018f5f80-38f2-75de-a648-e8d3cae0e7ce",
+			},
+			context: { companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
+		},
+		({ queries }) =>
+			queries["channels.overview"]({
+				channelId: "018f6094-cf3c-70e9-8d68-80d523f14c19",
+				first: 20,
+				after: null,
+			}),
+	);
+}
+```
+
+The direct root calls the same
+[`channels.overview` Query](./queries-and-mutations#define-a-read-only-query).
+
+The ordinary entry point has no `authority` option. Missing transport state,
+direct execution, Studio, or worker location never implies System Authority.
+Only a trusted Runtime capability constructs System Authority. System Authority
+does not disable Policy.
+
+Network requests, Route transitions,
+[realtime recomputations](./realtime), durable attempts, and Studio actions
+construct a fresh root. Nested operations inherit their root instead of
+replacing its Context.
+
+## Bind Policy to a Collection
+
+Bind a closed Policy expression to its target Collection:
+
+```ts title="src/features/messages-policy.ts"
+import { definePolicy, policy, query } from "questpie";
+import {
+	channels,
+	companies,
+	memberships,
+	messages,
+	spaces,
+} from "../data/collaboration";
+
+const readableMessageRows = policy.rows(
+	messages,
+	({ row: message, principal, tenant }) =>
+		policy.exists(channels, ({ row: channel }) =>
+			query.and(
+				channel.id.equal(message.channelId),
+				policy.exists(spaces, ({ row: space }) =>
+					query.and(
+						space.id.equal(channel.spaceId),
+						policy.exists(companies, ({ row: company }) =>
+							query.and(
+								company.id.equal(space.companyId),
+								company.id.equal(tenant.id),
+								policy.exists(memberships, ({ row: membership }) =>
+									query.and(
+										membership.companyId.equal(company.id),
+										membership.principalId.equal(principal.id),
+										membership.scopeKey.equal("company"),
+										membership.status.equal("active"),
+									),
+								),
+							),
+						),
+					),
+				),
+			),
+		),
+);
+
+export const messagePolicy = definePolicy(messages, {
+	name: "messages.default",
+	read: {
+		admit: policy.authenticated(),
+		rows: readableMessageRows,
+	},
+	create: {
+		admit: policy.authenticated(),
+		candidate: ({ candidate, principal, tenant }) =>
+			policy.exists(channels, ({ row: channel }) =>
+				query.and(
+					channel.id.equal(candidate.channelId),
+					policy.exists(spaces, ({ row: space }) =>
+						query.and(
+							space.id.equal(channel.spaceId),
+							space.companyId.equal(candidate.companyId),
+							space.companyId.equal(tenant.id),
+							policy.exists(memberships, ({ row: membership }) =>
+								query.and(
+									membership.companyId.equal(space.companyId),
+									membership.principalId.equal(principal.id),
+									membership.scopeKey.equal("company"),
+									membership.status.equal("active"),
+								),
+							),
+						),
+					),
+				),
+			),
+	},
+	update: {
+		admit: policy.authenticated(),
+		rows: ({ current, principal, tenant }) =>
+			query.and(
+				current.companyId.equal(tenant.id),
+				query.or(
+					current.authorId.equal(principal.id),
+					policy.exists(memberships, ({ row: membership }) =>
+						query.and(
+							membership.companyId.equal(current.companyId),
+							membership.principalId.equal(principal.id),
+							membership.scopeKey.equal("company"),
+							membership.status.equal("active"),
+							membership.role.in(["owner", "admin", "moderator"]),
+						),
+					),
+				),
+			),
+		candidate: ({ current, candidate }) =>
+			query.and(
+				candidate.companyId.equal(current.companyId),
+				candidate.channelId.equal(current.channelId),
+				candidate.authorId.equal(current.authorId),
+			),
+	},
+	delete: {
+		admit: policy.authenticated(),
+		rows: ({ current, principal, tenant }) =>
+			query.and(
+				current.companyId.equal(tenant.id),
+				query.or(
+					current.authorId.equal(principal.id),
+					policy.exists(memberships, ({ row: membership }) =>
+						query.and(
+							membership.companyId.equal(current.companyId),
+							membership.principalId.equal(principal.id),
+							membership.scopeKey.equal("company"),
+							membership.status.equal("active"),
+							membership.role.in(["owner", "admin"]),
+						),
+					),
+				),
+			),
+	},
+	fields: {
+		output: ({ row, principal }) => ({
+			moderationNote: row.authorId.equal(principal.id),
+		}),
+		create: ({ authority }) => ({
+			moderationNote: authority.isSystem(),
+		}),
+		update: ({ current, principal, authority }) => ({
+			body: current.authorId.equal(principal.id),
+			moderationNote: authority.isSystem(),
+		}),
+	},
+});
+```
+
+The Collection argument supplies the exact `message`, `current`, `candidate`,
+and Field types. Each `policy.exists` Collection supplies its own exact nested
+row type. An unknown Field, incompatible comparison, or Policy attached to the
+wrong Collection fails TypeScript and the compiler.
+
+`policy.rows(messages, callback)` names a reusable row predicate and proves its
+Collection binding. The `update.rows` and `delete.rows` callbacks above are
+inline predicates for their owning Message Policy.
+
+The other Collection reads and writes in this guide use narrow default
+Policies:
+
+```ts title="src/features/collaboration-policies.ts"
+import { definePolicy, policy, query } from "questpie";
+import {
+	channels,
+	companies,
+	memberships,
+	messageEvents,
+	messages,
+	spaces,
+} from "../data/collaboration";
+
+export const companyPolicy = definePolicy(companies, {
+	name: "companies.default",
+	read: {
+		admit: policy.authenticated(),
+		rows: ({ row, tenant }) => row.id.equal(tenant.id),
+	},
+});
+
+export const spacePolicy = definePolicy(spaces, {
+	name: "spaces.default",
+	read: {
+		admit: policy.authenticated(),
+		rows: ({ row, tenant }) => row.companyId.equal(tenant.id),
+	},
+});
+
+export const channelPolicy = definePolicy(channels, {
+	name: "channels.default",
+	read: {
+		admit: policy.authenticated(),
+		rows: ({ row, tenant }) => row.companyId.equal(tenant.id),
+	},
+	update: {
+		admit: policy.authenticated(),
+		rows: ({ current, tenant }) => current.companyId.equal(tenant.id),
+		candidate: ({ current, candidate }) =>
+			query.and(
+				candidate.companyId.equal(current.companyId),
+				candidate.spaceId.equal(current.spaceId),
+			),
+	},
+});
+
+export const membershipPolicy = definePolicy(memberships, {
+	name: "memberships.default",
+	read: {
+		admit: policy.authenticated(),
+		rows: ({ row, principal, tenant }) =>
+			query.and(
+				row.companyId.equal(tenant.id),
+				row.principalId.equal(principal.id),
+			),
+	},
+});
+
+export const messageEventPolicy = definePolicy(messageEvents, {
+	name: "messageEvents.default",
+	create: {
+		admit: policy.authenticated(),
+		candidate: ({ candidate, principal, tenant }) =>
+			policy.exists(messages, ({ row: message }) =>
+				query.and(
+					message.id.equal(candidate.messageId),
+					message.companyId.equal(tenant.id),
+					message.authorId.equal(principal.id),
+				),
+			),
+	},
+});
+```
+
+A Collection has at most one default Policy. QUESTPIE fails the build when
+generated access needs a default Policy and the Collection has none or more
+than one. Import order cannot select which Policy applies.
+
+Policy callbacks build structural expressions. They cannot call a database,
+raw SQL, network, arbitrary Service, or per-row JavaScript. QUESTPIE stops the
+build when it cannot lower an expression without changing its meaning.
+
+## Apply every Policy phase
+
+Policy runs these checks in a fixed order and fails closed at the first denial:
+
+1. `admit` decides whether the Principal may invoke the operation.
+2. `rows` limits stored rows in SQL.
+3. `fields.create` and `fields.update` check only the Field paths the caller
+   supplied.
+4. `candidate` checks the complete resulting create or update row.
+5. `fields.output` omits denied selected Fields.
+
+Policy decides; it does not supply, rewrite, null-mask, or discard a value. A
+denied output Field is absent, so its generated result member is optional:
+
+```ts
+interface MessageResult {
+	readonly id: string;
+	readonly companyId: string;
+	readonly channelId: string;
+	readonly authorId: string;
+	readonly title: string;
+	readonly body: string;
+	readonly moderationNote?: string | null;
+	readonly createdAt: Date;
+	readonly updatedAt: Date;
+}
+```
+
+A denied supplied Field path rejects the call. An untouched Field in a partial
+update needs no supplied-Field check.
+
+Create Policy receives the complete `candidate`. Update receives `current` and
+`candidate`. Delete receives `current`. The Mutation contract defines how
+normalization, defaults, server values, validation, Constraints, and writes
+construct and persist that candidate.
+
+## Separate evidence from disclosure
+
+`policy.exists` performs a boolean-only evidence read. It can correlate an
+evidence row with outer rows and Execution facts, but it cannot return the row.
+It does not apply the evidence Collection's disclosure Policy recursively.
+This keeps permission to read a Message separate from permission to list its
+membership table and avoids Policy cycles.
+
+Normal disclosure still applies every relevant Policy. If an operation returns
+a Membership directly or through a Relation, the Membership row and Field
+Policy runs. QUESTPIE records each evidence Collection, Field, correlation, and
+mutable dependency. Membership role, status, scope, creation, and deletion can
+therefore affect recomputation.
+
+QUESTPIE bounds evidence depth and rejects a Policy that exceeds it. A Context
+value such as `selectedRole` never replaces current relational evidence. Policy
+reads mutable evidence where the operation runs, including again after a
+row-lock wait.
+
+## Push row scope into SQL
+
+QUESTPIE lowers one normalized Policy program into every framework-owned SQL
+statement. Effective scope is the Policy predicate combined with the operation
+predicate and caller filter.
+
+The scope runs before key lookup, counts, ordering, cursor boundaries,
+`first + 1` page sentinels, row locking, Relation disclosure, and output.
+QUESTPIE never fetches forbidden rows and filters them in JavaScript.
+
+The visible page and its cursor sentinel use the same Policy scope. A cursor
+binds the Policy digest and the Principal, Tenant, and Authority facts that the
+plan uses. A scope mismatch fails before SQL or disclosure.
+
+After a lock wait, the Mutation transaction rechecks the current row, mutable
+relational evidence, and candidate authority before it writes. A role or
+membership read before the transaction is not permission to commit.
+
+Policy SQL uses the B-tree Index contract. Policy does not add another
+Index access method, expression or partial Index, operator class, native SQL,
+or generic `using` option.
+
+## Preserve nondisclosure
+
+QUESTPIE gives a missing keyed row and a Policy-invisible keyed row the same
+not-found result. A missing Relation reference and an invisible Relation
+reference also share one result. Counts include only visible rows. Constraint,
+validation, cursor, and error order cannot reveal protected existence.
+
+The same Execution facts produce the same Policy decision through direct,
+Fetch, generated-client, nested, recompute, worker, and Studio paths. Studio
+runs the same authorized operations as any other caller. No surface has a
+second access model or an Admin bypass.
+
+## Understand the row-level security boundary
+
+Policy is the one authored authorization model. QUESTPIE enforces its
+representable row predicates in framework-owned SQL. PostgreSQL does not
+independently enforce Policy, and QUESTPIE emits no row-level security
+projection.
+
+Row-level security cannot replace operation admission, Field input or output
+authority, response shape, nondisclosing errors, realtime dependencies, or
+durable run-as semantics.
+
+Next, [define executable application behavior](./executable-definitions) with
+the generated Policy-aware Context.

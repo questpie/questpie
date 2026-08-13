@@ -31,6 +31,13 @@
 		"**/migrations/**",
 		"**/CHANGELOG.md",
 		"**/templates/**/*.yml",
-		"**/templates/**/*.yaml"
+		"**/templates/**/*.yaml",
+		"docs/v4/prototypes/ctx-type-source-explicit/**",
+		"docs/v4/prototypes/ctx-type-source-generated/**",
+		"docs/v4/research/beta1-cut/compiler-readiness.md",
+		"docs/v4/research/beta1-cut/executable-operation-binding-designs.md",
+		"docs/v4/research/beta1-cut/policy-contract-design.md",
+		"docs/v4/research/beta1-cut/v3-access-jobs.md",
+		"docs/v4/research/beta1-cut/v3-lifecycle-and-server-jobs.md"
 	]
 }

@@ -1,0 +1,215 @@
+---
+title: Data and structural Queries
+description: Define Collection values, Relations, deterministic filters, and cursor pages.
+kind: guide
+---
+
+QUESTPIE compiles each regular Collection into one schema contract and one
+generated Data contract. A regular Collection must have exactly one named
+primary-key Constraint. `id` is an ordinary Field; the Constraint gives it key
+semantics.
+
+Continue with the complete `appointments` Collection from
+[Schema lifecycle](./schema-lifecycle#define-collections). It includes the
+tenant, customer, schedule, status, and timestamp Fields used below.
+
+`default: "now"` initializes both timestamp Fields. It does not change
+`updatedAt` after an update. A Mutation must assign every `updatedAt` change
+explicitly.
+QUESTPIE does not provide `field.id()`, `primaryKey: true`, or an implicit
+timestamp callback.
+
+## Choose a nested-data model
+
+QUESTPIE gives nested data three distinct models.
+
+```ts title="src/data/customers.ts"
+import { constraint, defineCollection, field, shape, value } from "questpie";
+
+export const customers = defineCollection({
+	name: "customers",
+	fields: {
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		address: shape.inline({
+			fields: {
+				city: field.text({ nullable: false, maxLength: 160 }),
+				postalCode: field.text({ nullable: true, maxLength: 24 }),
+			},
+		}),
+		preferences: field.object({
+			nullable: false,
+			properties: {
+				locale: value.text({ nullable: false, maxLength: 16 }),
+				marketingEmail: value.boolean({ nullable: false }),
+			},
+		}),
+		tags: field.array({
+			nullable: false,
+			maximumItems: 100,
+			items: value.text({ nullable: false, maxLength: 40 }),
+		}),
+		metadata: field.json({ nullable: true }),
+	},
+	constraints: {
+		primary: constraint.primaryKey({ fields: ["id"] }),
+	},
+});
+```
+
+| Model                            | Storage                                        | Use it when                                                                                                   |
+| -------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `shape.inline`                   | one ordinary column per leaf Field             | each leaf needs Field capabilities such as Constraints, Indexes, Relations, or independent nullability        |
+| `field.object` or `field.array`  | one JSONB column with a closed `value.*` codec | the bounded value has no independent identity or lifecycle                                                    |
+| `field.json`                     | one JSONB column with an open JSON boundary    | the application accepts a lower-guarantee JSON value without typed interior paths                             |
+| explicit Collection and Relation | normalized PostgreSQL rows                     | the data has identity, Relations, independent Policy, unbounded cardinality, pagination, or its own lifecycle |
+
+QUESTPIE never turns a nested declaration into a hidden Collection.
+
+An Inline Shape has no value or database object. Each leaf is an ordinary Field
+with one complete semantic identity and one segment-array path. The `city` leaf
+above has identity
+`collection:customers/field:address/field:city` and path
+`["address", "city"]`. QUESTPIE never splits `"address.city"` into path
+segments.
+
+Embedded object properties and array items use `value.*`, not `field.*`. They
+cannot own defaults, physical names, Constraints, Indexes, Relations, or
+extension-backed column behavior. Every embedded array declares
+`maximumItems` from 1 through 1,000. Embedded containers and Inline Shapes have
+a maximum depth of eight. A JSONB-backed Field has at most 1,048,576 canonical
+UTF-8 JSON bytes. A deployment can lower these limits but cannot raise them.
+
+Open JSON uses a tag so SQL `NULL` and top-level JSON `null` stay distinct:
+
+```ts
+const sqlNull = null;
+const jsonNull = { kind: "json", value: null };
+```
+
+Typed JSONB Fields are selected as whole typed values. Their interior properties
+are not filter, order, cursor, Index, Constraint, Relation, or dependency
+targets in v1. Whole-JSON equality is also outside v1.
+
+## Use one deterministic text order
+
+Every text Field uses `questpie.binary`. QUESTPIE lowers it to explicit
+PostgreSQL `COLLATE "C"` for equality, range filters, uniqueness, Indexes,
+ordering, and cursor seeks. Database-default or locale-sensitive order cannot
+change foundational Query results.
+
+The provider must expose deterministic libc collation `C` and use UTF-8
+encoding. QUESTPIE stops rather than substituting `C.UTF-8`, ICU, or the
+database default.
+
+## Define a structural Query
+
+A structural Query is a closed template. It has explicit parameters, selection,
+filter, order, and forward page clauses.
+
+```ts title="src/queries/appointment-page.ts"
+import type { AppData } from "#questpie/app";
+import { dataQuery, query } from "questpie";
+
+export const appointmentPage = dataQuery<
+	AppData["collections"]["appointments"]
+>()({
+	from: "appointments",
+	parameters: {
+		tenantId: query.parameter.uuid({ nullable: false }),
+		statuses: query.parameter.list(query.parameter.text(), {
+			maximumItems: 20,
+		}),
+		first: query.parameter.integer({
+			nullable: false,
+			minimum: 1,
+			maximum: 100,
+		}),
+		after: query.parameter.cursor({ nullable: true }),
+	},
+	select: ({ fields }) => ({
+		id: fields.id,
+		customerName: fields.customerName,
+		startsAt: fields.startsAt,
+		status: fields.status,
+	}),
+	where: ({ fields, parameters }) =>
+		query.and(
+			fields.tenantId.equal(parameters.tenantId),
+			fields.status.in(parameters.statuses),
+		),
+	orderBy: ({ fields }) => [
+		fields.startsAt.ascending({ nulls: "last" }),
+		fields.id.ascending({ nulls: "last" }),
+	],
+	page: ({ parameters }) =>
+		query.forwardCursor({
+			first: parameters.first,
+			after: parameters.after,
+		}),
+});
+```
+
+All clauses are required. Write `where: null` when the Query has no filter.
+Every order term states direction and null placement. The order must end with
+all Fields of one non-null primary or unique key in declared order. QUESTPIE
+never adds a key silently. Every order Field must also appear directly in the
+selected output.
+
+A page returns:
+
+```ts
+interface AppointmentPageResult {
+	nodes: Array<{
+		id: string;
+		customerName: string;
+		startsAt: string;
+		status: string;
+	}>;
+	pageInfo: {
+		endCursor: string | null;
+		hasNextPage: boolean;
+	};
+}
+```
+
+The hard v1 page maximum is 100 rows. A deployment can set a lower limit. The
+Runtime reads at most `first + 1` matching rows and uses the extra row only to
+calculate `hasNextPage`.
+
+## Bind list parameters as sets
+
+A list parameter is required, non-null, and scalar. Its declared
+`maximumItems` is from 1 through 1,000; a bound value can contain from zero
+through that maximum number of authored items. QUESTPIE checks the bound before
+it removes duplicates.
+It then validates each item, rejects null or sparse members, deduplicates
+canonical values, and sorts them by canonical scalar bytes.
+
+Membership therefore has set semantics. Input order and duplicates do not
+change cursor scope. An empty set is valid: `in([])` is false and `notIn([])`
+is true, including for a null Field.
+
+## Traverse declared Relations
+
+Structural Query v1 can select one `toOne` hop and filter with `exists` or
+`notExists` over one owning or inverse Relation. A `toOne` result is nullable at
+the public boundary. V1 does not project `toMany` arrays or traverse a second
+Relation hop.
+
+The compiler derives a dependency template from every selected, filtered,
+joined, ordered, cursor, and page Field. Authors cannot edit that template.
+[Policy](./context-and-policy) and [Live Query](./realtime) add their own
+execution facts; they cannot remove a structural read.
+
+## Treat cursors as scoped data
+
+A cursor binds the exact Query Template Digest, the canonical filter-parameter
+scope, and the complete order tuple. Changing the template, Field codec,
+Constraint, Relation, selected alias, order, null placement, or filter scope
+invalidates it. Changing only `first` does not.
+
+A cursor is opaque but is not Authority. A client restarts with `after: null`
+after a cursor mismatch. Policy adds an equivalent authorization scope before a
+cursor can cross Principals.
+
+Next, [resolve Context and authorize with Policy](./context-and-policy).

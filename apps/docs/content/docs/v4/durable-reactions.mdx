@@ -1,0 +1,238 @@
+---
+title: Run a durable Reaction after commit
+description: Commit typed follow-up with a Mutation, retry safely, and recover work after a crash.
+kind: guide
+---
+
+A Reaction runs durable follow-up after an application Mutation commits. The
+Mutation accepts typed dispatch intent in its PostgreSQL transaction. A worker
+later runs the Reaction with a fresh authorized Context.
+
+You do not define an outbox Collection, Queue module, broker topic, or
+post-commit hook. QUESTPIE owns the durable dispatch, attempt, lease, retry,
+cancellation, and retention state.
+
+## Define the Reaction beside its event
+
+```ts title="src/features/message-submitted.ts"
+import { defineReaction } from "#questpie/app";
+import { codec, durable } from "questpie";
+
+export const messageSubmitted = defineReaction({
+	name: "messageSubmitted",
+	input: codec.object({
+		messageId: codec.uuid(),
+		companyId: codec.uuid(),
+	}),
+	runAs: durable.caller({ whenDenied: "fail" }),
+	retry: durable.retry({
+		maximumAttempts: 8,
+		initialDelay: "1s",
+		backoff: "exponential",
+		maximumDelay: "15m",
+		jitter: "full",
+	}),
+	errors: {
+		messageUnavailable: operation.error({
+			code: "MESSAGE_UNAVAILABLE",
+			status: 404,
+		}),
+	},
+	handler: async ({ input, ctx, run, attempt, errors }) => {
+		ctx.signal.throwIfAborted();
+
+		const message = await ctx.data.messages.get({
+			key: { id: input.messageId },
+			select: {
+				id: true,
+				channelId: true,
+				authorId: true,
+				body: true,
+			},
+		});
+
+		if (message === null) throw errors.messageUnavailable();
+
+		const delivery = await ctx.actions["delivery.sendMessage"](
+			{ message },
+			{ idempotencyKey: run.effect("deliver-message") },
+		);
+
+		await ctx.mutations["messages.recordDelivery"]({
+			messageId: message.id,
+			providerMessageId: delivery.providerMessageId,
+		});
+
+		await attempt.heartbeat({ completed: "delivery" });
+
+		return {
+			kind: "delivered" as const,
+			providerMessageId: delivery.providerMessageId,
+			attempt: attempt.number,
+		};
+	},
+});
+```
+
+`defineReaction` comes from the generated Current App Contract. The local input
+codec types `input`. The generated application types `ctx.data`,
+`ctx.mutations`, and `ctx.actions`. The handler return and declared error map
+produce the exact durable result and error codecs. Reaction errors use the same
+`operation.error({ code, status, payload? })` grammar as Query and Mutation.
+
+The `delivery.sendMessage` member is already part of that Current App Contract.
+Its generated call accepts the selected Message plus an effect-derived
+idempotency key and returns a provider message identity. The bracket-dot syntax
+is an exact generated Action lookup, not a string registry. The application
+must provide that generated member with this input, option, and result contract.
+The application must also provide the generated `messages.recordDelivery`
+Mutation member with the shown input and a
+`Promise<{ messageId: string; recorded: true }>` result.
+
+The Reaction Context contains immutable Principal, Tenant, Context values,
+signal, and deadline. It reads through current Collection Policy, changes
+application state through a generated Mutation, and calls external systems
+through a generated Action. It cannot write a Collection directly, dispatch
+more durable work implicitly, open a database handle, or select System
+Authority.
+
+## Dispatch in the Mutation transaction
+
+The `messages.submit` Mutation in
+[Build Queries and Mutations](./queries-and-mutations) dispatches the Reaction:
+
+```ts title="src/features/submit-message.ts"
+await ctx.dispatch.messageSubmitted({
+	messageId: message.id,
+	companyId: ctx.tenant.id,
+});
+```
+
+The Message, Channel update, Message Event, Change Ledger fact, durable dispatch,
+transactional audit, and Mutation result receipt commit together. Rollback
+leaves none. The Reaction does not run inside that transaction.
+
+A notification only wakes the worker. If the Runtime crashes after commit and
+before that notification, the durable-run scanner still finds the ready run.
+The Change Ledger reconciler also observes the same commit for Live Query.
+
+For this Mutation dispatch surface, QUESTPIE derives the scoped idempotency
+identity from the application, environment, Reaction, originating Mutation
+call, and static dispatch slot. The author does not pass another dispatch key.
+The generated dispatch member returns `Promise<void>`. Repeating its derived
+identity with the same canonical input maps to the same internal Durable Run.
+Reusing it with different input fails with `IDEMPOTENCY_CONFLICT`.
+
+The payload repeats `companyId` so the stored caller Context is independently
+decodable and can be checked against the intended company. It is not Policy
+evidence. Current Membership still decides access on every Physical Attempt.
+
+## Know which identity stays stable
+
+| Identity              | Meaning                                       |
+| --------------------- | --------------------------------------------- |
+| dispatch identity     | one accepted intent                           |
+| Durable Run identity  | one logical Reaction across every attempt     |
+| Physical Attempt      | one physical handler invocation               |
+| Lease Token           | the current worker fence                      |
+| Effect Identity       | one logical provider effect across attempts   |
+| cancellation identity | one durable request to stop the run           |
+| causation identity    | the Operation or dispatch that caused the run |
+| correlation identity  | a trace grouping that grants no authority     |
+
+QUESTPIE provides at-most-one Durable Run for one retained scoped idempotency
+identity. Physical Attempt execution is at least once. It does not promise
+that arbitrary code runs exactly once.
+
+## Reauthorize every attempt
+
+`durable.caller({ whenDenied: "fail" })` records Principal, Tenant, original
+actor, ordinary Authority class, and transport-neutral Context input
+references. It does not store a request, credential, resolved Context, Service,
+or database handle. `"fail"` records terminal `RUN_AS_DENIED`; `"cancel"`
+records a cancellation when loss of caller authority has that application
+meaning.
+
+Every attempt creates a fresh root Execution. QUESTPIE resolves Context once
+and checks current Policy. If the caller's Membership is revoked before an
+attempt, the run ends with `RUN_AS_DENIED`. A worker process, Queue, region, or
+missing credential cannot become System Authority.
+
+## Make external effects safe to retry
+
+`run.effect("deliver-message")` derives one stable Effect Identity from the
+application, Reaction Resource, Durable Run, and literal name. Every retry uses
+the same key. A broad runtime string is a TypeScript error.
+
+If the provider accepts a request but its response is lost, an idempotent
+Action retrieves the existing provider receipt. Reusing the same effect key
+with different input conflicts. If a provider has no idempotency or reliable
+lookup contract, response loss ends as `ambiguous`. QUESTPIE cannot turn an
+unknown external outcome into an exactly-once guarantee.
+
+Do not use an attempt identity or random value for the provider key. Do not call
+the provider from a Mutation or lease-claim transaction.
+
+## Understand leases, retry, and cancellation
+
+A worker claims ready work in a short PostgreSQL transaction, creates a new
+attempt and 30-second lease, then commits before it invokes the handler. A long
+handler heartbeats every 10 seconds. Each attempt has a five-minute deadline.
+The optional heartbeat object stores one bounded progress label; it grants no
+authority and does not change the handler result.
+
+Heartbeat, timeout, retry, cancellation, success, and terminal failure compare
+both Physical Attempt identity and Lease Token. When a lease expires, another
+worker can create a new Physical Attempt. The old worker cannot publish success
+or schedule retry.
+
+The declared retry policy makes at most eight attempts. It starts with
+1-second exponential backoff, applies full jitter, caps the delay at 15 minutes,
+and stops after a 24-hour retry horizon. Validation, a declared Reaction error,
+and run-as denial are permanent. Permanent failure or exhaustion creates a safe
+inspectable dead letter.
+
+Cancellation is cooperative. Before claim, it prevents the handler from
+starting. During an attempt, heartbeat and `ctx.signal` observe it. Success and
+cancellation have one fenced winner. Cancellation cannot recall provider work
+that already happened.
+
+## Stay within durable limits
+
+| Limit                                      | Default |
+| ------------------------------------------ | ------: |
+| active attempts per Principal              |      16 |
+| claim batch                                |      64 |
+| pending runs per Reaction                  | 100,000 |
+| dead letters per Reaction                  |  10,000 |
+| history events per run                     |   1,024 |
+| input payload                              | 256 KiB |
+| terminal result                            | 256 KiB |
+| retry horizon                              |    24 h |
+| attempt history retention                  | 30 days |
+| idempotency and terminal payload retention |  7 days |
+
+QUESTPIE fails a limit with `RESOURCE_LIMIT`; it does not truncate a durable
+value or grow state without a bound. Retention can erase payload, result,
+idempotency body, and old attempts. It preserves the minimal dispatch, run,
+causation, correlation, terminal, and audit identities.
+
+## Deploy without stranding a run
+
+Each accepted run pins its Runtime Build and the digest of the executable bytes
+it needs. Readiness fails when those bytes are missing or incompatible. Drain
+stops new claims, then lets current claims finish or their leases expire. A
+deployment cannot silently replace code that a pending run still references.
+
+Durable events are append-only. They contain safe correlation identities and
+error codes, not credentials, raw payloads, secrets, or stack traces.
+
+Reaction is the committed-fact projection of the shared durable kernel. Use a
+[Job or Workflow seam](./durable-jobs-and-workflows) for explicitly requested
+or checkpointed durable work; generic browser worker controls remain absent.
+
+QUESTPIE authors only ordinary B-tree Indexes for durable state. It emits no
+row-level security. Policy remains the authorization model.
+
+Review [Context and Policy](./context-and-policy) for current Membership
+authorization, then [run and inspect the application](./runtime-and-studio).

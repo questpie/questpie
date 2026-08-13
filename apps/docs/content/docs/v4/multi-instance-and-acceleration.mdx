@@ -1,0 +1,105 @@
+---
+title: Run multiple instances without optional authority
+description: Scale requests, realtime, and durable workers while PostgreSQL remains the only durable source of truth.
+kind: guide
+---
+
+QUESTPIE is correct with ten compatible Runtime instances by default. Any
+instance can accept a request, client POST, realtime reconnect, scheduler tick,
+or durable claim. No application leader, queue leader, process registry, or
+sticky-session correctness is required.
+
+PostgreSQL owns every fact that must survive a crash. Memory, Redis/KV,
+notifications, and realtime carriers are optional accelerators. Losing all of
+them may cause a cache miss, scan, reconnect, or reset; it cannot change
+Context, Policy, Query results, durable work, or Channel authority.
+
+## Route any request to a compatible instance
+
+Application Services live once per Runtime instance. Execution Services live
+once per root. Neither is a cluster singleton.
+
+Mutation call receipts, Change Ledger frontiers, durable runs and leases,
+schedule ticks, and Channel events live in PostgreSQL. A crashed Runtime loses
+only its local roots, connections, buffers, Services, cache bytes, and wake
+hints. Another instance can reclaim expired work or resume the client.
+
+During a rolling deployment, an instance claims only work whose pinned
+executable bytes it carries. Old and new compatible builds may overlap.
+Nonterminal runs and retained Resume Tokens can block retirement when they
+still require the old bytes.
+
+## Use one multiplexed realtime transport
+
+V1 uses one bounded SSE downstream per client scope and Fetch/POST upstream.
+The SSE connection may carry several Live Query and Channel bindings:
+
+```text
+browser -- SSE --------------------------> Runtime A
+browser -- Mutation or Channel POST ----> Runtime B
+browser -- reconnect + opaque token ----> Runtime C
+                                               |
+                                               v
+                                          PostgreSQL
+```
+
+Runtime A can disappear after the POST commits. Runtime C reconciles
+PostgreSQL and either resumes retained compatible state or sends a complete
+freshly authorized reset. Sticky routing can reduce reconnects, but it grants
+no stronger guarantee.
+
+WebSocket is a possible later carrier of the same frame, resume, Policy, limit,
+and reset contract. It does not create a second semantic runtime. A
+Pusher-compatible service may accelerate delivery only after the same contract
+and measured workload pass; provider client events are not a safe bypass.
+
+## Cache Query bytes, not authority
+
+Query cache is compiler-controlled. Handlers do not receive a raw `ctx.kv`.
+Every entry binds the application/build, Query, canonical input, output codec,
+authority partition, observed dependency generations, and finite expiry.
+
+QUESTPIE creates a fresh root Execution and checks current Policy before it can
+disclose cached bytes. Missing, stale, corrupt, timed-out, or unavailable cache
+state is a miss or reset. Application code cannot observe the backend or branch
+on a hit.
+
+Process Memory and Redis/KV can implement this narrow byte-store capability.
+Neither owns invalidation, Policy, or durable application state.
+
+## Treat notifications as hints
+
+PostgreSQL `NOTIFY`, Redis pub/sub, or another notification broker can announce
+that a Change Ledger shard, schedule, durable class, or Channel may have
+advanced. The hint is not the change, run receipt, authorized result, or event.
+
+Duplicate, coalesced, reordered, delayed, and absent hints are harmless because
+the Runtime reconciles PostgreSQL. A broker outage can increase latency; it
+cannot lose a committed refresh or accepted run.
+
+## Publish typed Channels
+
+A Channel owns an exact event codec, resolved subject, subscribe and publish
+Policy, per-Channel ordering, bounded replay, authority invalidation, and
+limits. Accepted events and their stable identities append to PostgreSQL.
+
+Each subscribe and reconnect creates fresh authorization work. If membership
+is revoked, the next delivery resets or closes instead of reusing the old
+socket's allow decision. Duplicate replay is allowed and the generated client
+deduplicates by event identity. Falling behind retention produces an explicit
+gap/reset.
+
+Channels are delivery infrastructure, not queryable business history. Persist
+business facts in normal Collections. Direct provider client events bypass
+QUESTPIE codecs, Policy, order, replay, and rate limits and are outside this
+contract.
+
+## Inspect the same operational truth
+
+Health, CLI, Studio, and telemetry consume the accepted Execution Envelope and
+canonical Runtime state. They can show cache outcome, wake lag, connection
+reset, scheduler contention, claims, executable compatibility, and Channel
+replay without exposing credentials, raw Context, Policy evidence, payloads,
+or database URLs.
+
+The accepted proof uses only B-tree Indexes and emits no RLS claim.

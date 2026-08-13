@@ -1,0 +1,157 @@
+---
+title: Define executable application behavior
+description: Bind inline handlers to the exact generated application contract without registries or paired files.
+kind: guide
+---
+
+Export one Definition with its handler. QUESTPIE supplies the exact generated
+application types at the handler site and binds the handler statically. Your
+source needs no handler registry, paired file, or repeated application generic.
+
+## Import factories from the application
+
+Import executable Definition factories from `#questpie/app`:
+
+```ts title="src/features/messages/summary.ts"
+import { defineQuery } from "#questpie/app";
+import { codec, policy } from "questpie";
+
+export const messageSummary = defineQuery({
+	name: "messages.summary",
+	input: codec.object({ id: codec.uuid() }),
+	policy: policy.authenticated(),
+	errors: {},
+	handler: ({ input, ctx }) =>
+		ctx.data.messages.get({
+			key: { id: input.id },
+			select: { id: true, body: true },
+		}),
+});
+```
+
+The generated factory supplies the exact current application type to `ctx`.
+A member absent from that handler's generated context is a TypeScript error.
+The source does not declare a global application registry or repeat an
+application generic.
+
+These seven factories use the same generated type source:
+
+```ts
+import {
+	defineAction,
+	defineJob,
+	defineMutation,
+	defineQuery,
+	defineReaction,
+	defineRoute,
+} from "#questpie/app";
+```
+
+Executable Definition factories come from `#questpie/app`. Structural
+Definitions, codecs, and expressions come from `questpie`.
+
+All seven factories bind the same generated types. Importing a factory does not
+make its Runtime execution surface available; each executable guide states
+which calls the Runtime supports.
+
+## Generate the application types
+
+Run a first sync after you add application Definitions:
+
+```bash
+bunx questpie sync
+```
+
+QUESTPIE does not create an empty or loosely typed App Contract. Before the
+first successful sync, an external TypeScript check cannot resolve
+`#questpie/app`. QUESTPIE then tells you to run `bunx questpie sync`.
+
+After sync, stock TypeScript and editors read the last complete generated
+contract. `questpie dev` keeps it current during development.
+
+Raw `tsc` proves types against the generated files that are currently on disk.
+It does not prove that source, Packages, configuration, or the lockfile are
+fresh. Use `questpie check` or `questpie build` in CI. Those commands construct
+the Current App Contract and reject stale generated output.
+
+## Keep one handler with its Definition
+
+An inline handler is the normal form. The `messageSummary` Definition above
+owns one Executable Slot: the one handler position the compiler records for
+that Definition. Query, Mutation, Action, Route, Reaction, and Job Definitions
+each carry exactly one handler.
+
+The compiler keeps the handler and its runtime-only imports outside controlled
+structural evaluation. It records a stable slot in the structural contract and
+bundles the handler with its lexical dependencies in the Runtime Build.
+
+You can move a large handler into an ordinary module and check it with the
+handler type supplied by the generated App Contract before the Definition
+imports it.
+
+The imported function is source organization only. QUESTPIE does not discover
+it as a second Definition, require a file-name convention, or ask you to list
+it in a binding registry.
+
+## Infer outputs or pin a recursive contract
+
+QUESTPIE infers a supported handler output and emits its runtime codec and
+generated type. A Definition can call another Operation in the same build when
+their output types do not form a recursive component.
+
+A recursive output component cannot infer itself. Add one explicit output codec
+at the cycle boundary. QUESTPIE reports every Definition Origin in an unpinned
+cycle. It does not use an older generated result or a loose placeholder.
+
+An explicit output is a validation and encoding contract. It cannot cast an
+unsupported JavaScript value into a wire value.
+
+Changing only handler logic changes the Runtime Build. It does not change the
+Schema Projection, Data Contract Projection, structural Query bytes, operation
+codec, or public generated types. Changing the return contract also changes the
+operation codec and generated declarations.
+
+## Expand common Collection operations
+
+A Collection Operation Set declares any chosen `list`, `get`, `create`,
+`update`, and `delete` members once. The compiler expands each present member
+into an ordinary Query or Mutation before final identity collision resolution
+and Manifest emission.
+
+Each child has its own Resource Identity, Owner, member Origin, Package
+Inventory entry, exact generated server member, and client alias. A custom
+Resource with the same identity is a normal duplicate-identity error.
+
+The set does not exist at runtime. There is no separate CRUD dispatcher or
+Admin-only data engine.
+
+## Keep Package handlers isolated
+
+A reusable Package imports its executable factories from its generated
+`#questpie/package` contract. That contract contains only Package-owned
+Resources and accepted typed dependencies.
+
+The application can activate the Package into a wider App Contract. Extra host
+Collections and Operations remain invisible to Package source. A Package
+cannot gain host access through ambient type merging or a string lookup.
+
+[Learn how Packages are activated](./definition-composition#activate-packages-explicitly).
+
+## Load only a matched Runtime Build
+
+The Runtime Build contains every Executable Slot and the exact digests that
+pair it with the Build Input, executable Manifest projection, App Contract,
+runtime graph, toolchain, and server bundle.
+
+The generated loader binds slots statically. It refuses startup when a binding
+is missing, duplicated, stale, the wrong Resource kind, or belongs to another
+build. Runtime does not scan source, merge Definitions, or repair a mismatch.
+
+Use `questpie explain --json` to join Resource identity, Owner, Origin,
+generated members, output source, slot digest, and Runtime Build identity. The
+command reads compiled artifacts. It does not execute application source.
+
+[Inspect the generated App Contract and artifacts](./definition-composition#use-generated-output).
+
+Next, [build Queries and Mutations](./queries-and-mutations) with these generated
+factories.

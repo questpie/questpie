@@ -1,0 +1,240 @@
+---
+title: Run and inspect the application
+description: Build one immutable application, start the Runtime, call it directly or through a generated client, and inspect the same truth in Studio.
+kind: guide
+---
+
+QUESTPIE builds one immutable application bundle and runs it in one standalone
+Runtime. The Runtime owns HTTP requests, direct execution, Live Query
+reconciliation, Reaction workers, readiness, drain, and cleanup.
+
+## Build, migrate, and start
+
+Set the Runtime database connection, then build, migrate, and start the same
+application bundle:
+
+```bash
+export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/questpie"
+bunx questpie build
+bunx questpie migration apply
+bunx questpie start
+```
+
+Build writes a checksum-verified bundle that joins the
+[compiled application and generated contract](./definition-composition#use-generated-output),
+the [reviewed migration and verified schema](./schema-lifecycle#apply-and-verify),
+and the [matched executable bindings](./executable-definitions#load-only-a-matched-runtime-build).
+It also binds the generated Operation Wire. QUESTPIE publishes the complete
+bundle atomically.
+
+Migration apply is explicit. Runtime startup does not create or apply a
+migration. Startup verifies the bundle, Runtime ABI, Application Identity,
+migration head, Schema Fingerprint, executable bindings, and internal protocol
+before readiness becomes true.
+
+The Runtime does not discover source files, merge Packages, load plugins, or
+inspect handler source at startup. Structural verification evaluates no
+handler. Runtime load evaluates the statically bound executable module once. A
+mismatch fails before it accepts an Operation or worker claim.
+
+## Use an immutable generated client
+
+The `channels.overview` Query from
+[Build Queries and Mutations](./queries-and-mutations) returns authorized
+Company, Membership, Channel, and Message data. Create one client and bind its
+transport-neutral Context input:
+
+```ts title="web/messages.ts"
+import { createClient } from "#questpie/client";
+
+const client = createClient({
+	baseUrl: "https://app.example.com",
+	credentials: "include",
+});
+
+export async function loadChannel(companyId: string, channelId: string) {
+	const company = client.withContext({ companyId });
+
+	return company.queries["channels.overview"]({
+		channelId,
+		first: 20,
+		after: null,
+	});
+}
+```
+
+`withContext` returns a new immutable scope. It does not mutate the client,
+cookies, global state, or another concurrent scope. Credentials resolve on the
+server outside the request body. The Runtime constructs ordinary Authority, so
+the body cannot request System Authority. Reaction slots are not network
+Operations. See [immutable Context scopes](./context-and-policy#create-immutable-client-and-direct-scopes)
+for concurrent client and direct-root examples.
+
+The generated Operation Wire binds the Application Identity, client contract, wire
+digest, Operation, Call Identity, Context input, Operation input, and timeout.
+It has closed frames for a result, a declared application error, a framework
+failure, and a protocol rejection. The generated client restores compiled
+values such as `Date` and preserves the exact declared error code, status, and
+payload.
+
+A deployment can keep an older client-contract digest and Operation Wire digest
+together as one retained compatibility entry. A request runs only when its pair
+is current or retained; every other old pair fails with `CLIENT_OUTDATED`.
+
+QUESTPIE does not retry a Mutation automatically. If a response is lost after
+commit, the caller reuses the stable Call Identity to recover the stored result
+without applying the business change twice. Reusing its `callId` with different
+input fails with the operation-specialized `IDEMPOTENCY_CONFLICT` error. See
+[cancellation and response-loss behavior](./queries-and-mutations#handle-cancellation-and-response-loss).
+
+## Run a direct root
+
+The generated App runs the same Query without a network transport:
+
+```ts title="scripts/read-channel.ts"
+import { createApp } from "#questpie/app";
+
+export async function readChannel(
+	postgresUrl: string,
+	userId: string,
+	companyId: string,
+	channelId: string,
+) {
+	const app = await createApp({ postgres: { url: postgresUrl } });
+
+	try {
+		return await app.execution(
+			{
+				principal: { kind: "user", id: userId },
+				context: { companyId },
+				signal: AbortSignal.timeout(5_000),
+			},
+			({ queries }) =>
+				queries["channels.overview"]({
+					channelId,
+					first: 20,
+					after: null,
+				}),
+		);
+	} finally {
+		await app.close();
+	}
+}
+```
+
+The generated App exposes `fetch`, `execution`, `close`, and the compiler-owned
+`routes` direct-invocation projection. Raw Routes remain outside the generated
+JSON Operation client. Direct, Fetch, generated-client, nested, recompute,
+worker, and Studio calls use the same Context, Policy, Operation, error,
+transaction, and observation engine. `close` is idempotent.
+
+## Understand readiness and drain
+
+Liveness answers whether the process is running. Readiness answers whether the
+exact application can accept new work. Readiness stays false during startup,
+artifact or schema incompatibility, reconciliation, and drain.
+
+The Runtime exposes `/_questpie/health/live` and
+`/_questpie/health/ready`. Public health output contains only coarse state and
+reason. `STARTING`, `DRAINING`, and `DATABASE_UNAVAILABLE` are retryable
+readiness reasons. A drain that cannot complete inside its deadline records a
+drain timeout, fences owned durable attempts, and exits with a forced-drain
+failure instead of claiming a clean stop.
+
+Drain follows one bounded order:
+
+1. stop accepting new root Executions;
+2. stop new reconciliation and durable claims;
+3. finish owned work within the drain deadline;
+4. close watches with a retryable reset;
+5. abort remaining Executions and wait for their cleanup;
+6. fence timed-out attempts;
+7. dispose owned resources in reverse order;
+8. emit the terminal event and stop.
+
+QUESTPIE runs API, realtime, and workers together. It has no separate API or
+worker role.
+
+## Deploy compatible artifacts
+
+QUESTPIE checks compatibility by dimension. An Operation Wire compatibility
+entry is the exact pair of one generated client-contract digest and its wire
+digest.
+
+| Dimension          | Behavior                                                                 |
+| ------------------ | ------------------------------------------------------------------------ |
+| schema             | The migration head and Schema Fingerprint must agree.                    |
+| wire               | Only the current or an explicitly retained digest pair runs.             |
+| Policy and Context | A changed artifact applies to new roots and resets existing watches.     |
+| realtime           | An accepted Resume Token continues; every other client receives a reset. |
+| executable         | Pending durable work keeps compatible executable bytes available.        |
+| internal protocol  | Only a registered transactional upgrade can advance it.                  |
+
+Compatibility is not inferred from one bundle digest. A retained
+[Resume Token](./realtime#recover-committed-changes) or a nonterminal
+[Durable Run](./durable-reactions#deploy-without-stranding-a-run) can prevent
+retirement of an older build.
+
+## Inspect the Execution Envelope
+
+Every Runtime event carries one closed Execution Envelope. It correlates safe
+application, deployment artifact, Origin, Operation, Operation Call, Policy,
+transaction, change, dispatch, run, attempt, effect, subscription, migration,
+Seed, error, and audit identities. It does not contain a credential, database
+URL, raw payload, relational Policy evidence, serialized Context, Service
+state, secret, or stack trace.
+
+## Use Studio
+
+Studio is the optional inspector and operational control surface for one
+compiled QUESTPIE application. It derives explanations from canonical
+artifacts, Runtime state, receipts, and append-only events. Application data
+uses ordinary generated Operations and Policy. A row hidden from the
+application is also hidden from Studio.
+
+Studio is not a SQL console, private-table editor, Policy bypass, second
+backend, page builder, or Operator App framework.
+
+Studio pages contain at most 100 rows, and retained Studio data is bounded to
+64 MiB. Application code does not define a separate Studio route or backend.
+
+## Run maintenance commands
+
+The minimal maintenance surface has four commands: `acknowledgeAmbiguity`,
+`cancelRun`, `retryRun`, and `drainRuntime`. Each command requires explicit
+maintenance Authority, exact identity, a bounded reason, an idempotency
+identity, an expected-version fence, a typed winner, and an append-only audit
+event.
+
+## Stay within Runtime limits
+
+| Limit                                |      Default |
+| ------------------------------------ | -----------: |
+| active root Executions per Principal |           64 |
+| request body                         |        1 MiB |
+| response body                        |        1 MiB |
+| Runtime event                        |       64 KiB |
+| events per Execution                 |        2,048 |
+| telemetry exporter queue             | 4,096 events |
+| startup deadline                     |   30 seconds |
+| drain deadline                       |   30 seconds |
+
+A limit fails with `RESOURCE_LIMIT`. Runtime unavailability fails with
+`RUNTIME_UNAVAILABLE`. Both are explicit and retryable when no ambiguous
+Mutation result exists.
+
+## Understand retention and backpressure
+
+Audit events are retained for 365 days. Telemetry is retained for 30 days.
+Durable events follow the retention of their owning durable state. Telemetry
+loss is explicit. When the 4,096-event exporter queue is full, backpressure can
+drop telemetry; it cannot drop or roll back a business commit.
+
+## Keep one PostgreSQL and Policy boundary
+
+QUESTPIE runs against PostgreSQL through one provider-neutral application API.
+Policy remains the only product authorization model. QUESTPIE does not enable
+or generate PostgreSQL row-level security.
+
+Review [durable deployment and retention](./durable-reactions#deploy-without-stranding-a-run),
+or return to the [QUESTPIE v4 overview](./index).

@@ -7,7 +7,7 @@
 		"dev": "vite dev",
 		"build": "NODE_OPTIONS='--max-old-space-size=8192' vite build",
 		"start": "bun .output/server/index.mjs",
-		"types:check": "fumadocs-mdx && tsc --noEmit",
+		"types:check": "fumadocs-mdx && bun ../../node_modules/typescript/bin/tsc --noEmit",
 		"postinstall": "fumadocs-mdx"
 	},
 	"dependencies": {
@@ -52,6 +52,6 @@
 		"nitro": "3.0.260429-beta",
 		"shadcn": "^3.6.3",
 		"tailwindcss": "^4.1.18",
-		"typescript": "5.9.2"
+		"typescript": "6.0.2"
 	}
 }

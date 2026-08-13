@@ -10,5 +10,11 @@ released v3 product must name the affected v3 version and include a minimal
 reproduction. Reports about v4 documents must identify the unsafe guarantee,
 threat model, and affected specification section.
 
+Include affected versions or commit IDs, the authority or trust seam involved,
+reproduction conditions, impact, and any safe workaround. Never include live
+credentials or production data.
+
 We acknowledge reports within three working days and provide an initial
-assessment within ten working days.
+assessment within ten working days. Release automation uses GitHub OIDC/npm
+provenance and repository environments; maintainers do not place publish tokens
+in source, review packets, logs, or issue comments.

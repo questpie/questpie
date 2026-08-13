@@ -1,0 +1,174 @@
+---
+title: Compose Services, raw Routes, and Auth
+description: Own integration lifetimes, mount exact Fetch handlers, and resolve credentials into Principal without creating a second authorization system.
+kind: guide
+---
+
+QUESTPIE compiles integrations into the same application graph as Collections
+and Operations. Services own runtime dependencies. Routes own raw HTTP and
+streaming. Credential resolution produces Principal; Policy remains the only
+authorization model.
+
+## Own a dependency for the right lifetime
+
+A Service declares an application or execution lifetime and whether it is safe
+inside transactions:
+
+```ts title="src/services/audit.ts"
+import { defineService } from "questpie";
+
+export const auditService = defineService({
+	name: "audit",
+	lifetime: "execution",
+	effect: "read",
+	create: ({ signal }) => createAuditReader({ signal }),
+	dispose: (audit) => audit.close(),
+});
+```
+
+Application Services are created lazily once for each running Runtime.
+Execution Services are created lazily once for each root Execution. Concurrent
+consumers share the same creation. Cleanup runs once in reverse dependency
+order after success, error, cancellation, or a returned stream finishes.
+
+The compiler rejects dependency cycles and unsafe directions. An application
+Service cannot depend on an execution Service. A transaction-safe Service
+cannot depend on an external-effect Service. Query and Mutation contexts
+therefore cannot hide a provider call behind a Service.
+
+Service instances are runtime state. They are not serialized in Context,
+artifacts, durable rows, or the Execution Envelope.
+
+## Mount an exact Fetch Route
+
+A Route is the raw protocol escape hatch for provider callbacks, streaming,
+file transfer, and custom HTTP behavior:
+
+```ts title="src/routes/delivery-webhook.ts"
+import { policy, principal } from "questpie";
+import { defineRoute } from "#questpie/app";
+
+export const deliveryWebhook = defineRoute({
+	name: "delivery.webhook",
+	method: "POST",
+	path: "/webhooks/delivery",
+	policy: policy.public(),
+	credentials: "none",
+	limits: { bodyBytes: 256_000, durationMs: 10_000 },
+	async handler({ request, ctx }) {
+		const body = await request.text();
+		await verifyDeliverySignature(request.headers, body);
+
+		return ctx.execution(
+			{
+				principal: principal.service({ name: "delivery.webhook" }),
+				context: { companyId: request.headers.get("x-company-id")! },
+			},
+			async ({ mutations }) => {
+				await mutations["delivery.record"]({ body });
+				return new Response(null, { status: 204 });
+			},
+		);
+	},
+});
+```
+
+The Runtime mounts accepted Routes into its one generated `app.fetch`.
+Compilation rejects duplicate identities and conflicting literal mounts. Raw
+Route context contains the exact `Request`, typed parameters, Principal,
+deadline, cancellation signal, and only Route-safe Services. It has no data
+facade, mutations, raw database, or System Authority.
+
+`ctx.execution` is the deliberate transition into normal application work. It
+creates a fresh ordinary root and uses the same Context, Policy, Query,
+Mutation, transaction, observation, and error engines as every other entry.
+
+## Invoke the same compiled Route directly
+
+The generated App includes a direct Route projection for server callers:
+
+```ts
+await app.routes["delivery.webhook"].direct({
+	request,
+	execution: { principal: principal.anonymous() },
+});
+```
+
+Direct calls require an explicit ingress Principal and never replay cookies or
+bearer tokens. After ingress, Fetch and direct calls run the same compiled
+handler and Service lifetime kernel. Raw Routes do not appear in the generated
+JSON Operation client. Use a Query, Mutation, or Action when callers need that
+contract.
+
+## Keep Auth native and application-owned
+
+The application can configure Better Auth or another library directly. Its
+Collections, reviewed migrations, server object, plugins, and native client
+remain ordinary application or Package code:
+
+```ts title="src/auth.ts"
+import { betterAuth } from "better-auth";
+import {
+	defineCredentialResolver,
+	defineService,
+	policy,
+	principal,
+} from "questpie";
+import { defineRoute } from "#questpie/app";
+
+export const auth = betterAuth({
+	emailAndPassword: { enabled: true },
+});
+
+export const authService = defineService({
+	name: "auth",
+	lifetime: "application",
+	effect: "external",
+	create: () => auth,
+});
+
+export const credentials = defineCredentialResolver({
+	name: "app.credentials",
+	service: authService,
+	async resolve({ headers, service }) {
+		const session = await service.api.getSession({ headers });
+		return session
+			? { kind: "resolved", principal: principal.user({ id: session.user.id }) }
+			: { kind: "anonymous" };
+	},
+});
+
+export const authHttp = defineRoute({
+	name: "auth.http",
+	method: "POST",
+	path: "/auth/*",
+	policy: policy.public(),
+	credentials: "none",
+	limits: { bodyBytes: 256_000, durationMs: 10_000 },
+	handler: ({ request, ctx }) => ctx.services.auth.handler(request),
+});
+```
+
+An application has zero or one credential resolver. With none, ingress uses
+the anonymous Principal. A resolver returns a resolved Principal, anonymous,
+or a typed failure. Provider failure never silently becomes anonymous.
+
+Auth answers which Principal presented credentials. Context Resolution answers
+which immutable application scope the root uses. Policy answers what that
+Principal may read or change. An Auth library cannot replace either Context or
+Policy, grant System Authority, or own the generated QUESTPIE client.
+
+A later Better Auth reference Package may reduce repetition by exporting
+ordinary Collections, Service, credential-resolver, and Route Definitions. It
+cannot require a second migration command or privileged compiler hook.
+
+## Know the boundary
+
+- Application lifetime is per Runtime instance, not a process or cluster
+  singleton.
+- Execution lifetime includes a returned stream until EOF, error, or
+  cancellation.
+- Service creation and Route execution do not silently retry external effects.
+- Auth state and Service instances never enter safe telemetry.
+- Final factory spelling remains subject to the accepted naming/export proof;
+  the lifetime, authority, and capability boundaries do not.

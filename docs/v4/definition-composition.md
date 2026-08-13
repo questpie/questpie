@@ -371,15 +371,19 @@ differential evaluation. Native addons remain forbidden because the compiler
 cannot inspect or constrain their effects. Pure local helpers and deterministic
 third-party libraries are permitted under those rules.
 
-A structural module cannot value-import `.questpie/generated/**` or
-`#questpie/app`. A type-only import from `#questpie/app` is permitted and is
-erased before controlled evaluation. QUESTPIE resolves that type edge against a
-virtual App Contract generated from the current normalized structural draft,
-not compile N−1 on disk. It then writes the generated surface and typechecks the
-separate runtime graph in a second phase. A later executable-Resource vertical
-must keep handler modules outside the structural evaluation graph before it can
-ship. QUESTPIE does not emit a `never`-typed placeholder. A direct external
-typecheck before the first sync fails with the exact `questpie sync` recovery.
+A structural module cannot value-import `.questpie/generated/**` or an
+arbitrary `#questpie/app` value. A type-only import is permitted and is erased
+before controlled evaluation. ADR-0009 plus ADR-0019 permit exactly seven pure
+current-virtual factory values: `defineQuery`, `defineMutation`, `defineAction`,
+`defineRoute`, `defineReaction`, and `defineJob`. The evaluator substitutes
+those values from the compiler's current draft and never loads emitted Runtime
+output. Another generated value remains `QP-COMPOSE-012`.
+
+QUESTPIE resolves the Current App Contract from the current normalized draft,
+not compile N−1 on disk. It then writes the generated surface and typechecks
+the separate Runtime graph. QUESTPIE does not emit a broad placeholder. A
+direct external typecheck before the first sync fails with the exact
+`questpie sync` recovery.
 
 Source order, filesystem traversal order, export order, and Package activation
 manifest order cannot select a winner. After normalization, QUESTPIE sorts
@@ -470,6 +474,7 @@ interface CompiledManifestV1 {
 		}>;
 	};
 	schema: SchemaProjectionV1;
+	data: DataContractProjectionV1;
 }
 ```
 
@@ -479,6 +484,15 @@ Paths, spans, Package versions, and export names remain only in the Origin Map.
 The Schema Projection contains the resolved database structure but no
 contribution identity, so a contribution rename with identical structure does
 not create a migration.
+
+`data` contains the resolved runtime Data Contract accepted by the later data
+model and structural Query vertical. Adding this required semantic member is an
+explicit amendment to the original closed manifest shape; it does not change
+`format` or `version` because no Compiled Manifest Digest or deployed v1 reader
+exists. Data-only changes such as an inverse Relation still do not create a
+migration. Field structure accepted by the reopened unreleased Schema
+Projection—including inline leaves and JSONB-backed Fields—changes schema bytes
+through the normal reviewed migration lifecycle.
 
 The generated application contains at least:
 
@@ -567,8 +581,10 @@ closed.
 }
 ```
 
-Application and Package structural modules can import only types from
-`#questpie/app`; a value import is `QP-COMPOSE-012`.
+Application structural modules can import types and the seven ADR-0009/0019
+current-virtual Definition factories from `#questpie/app`. Another value import
+is `QP-COMPOSE-012`. Packages use their own generated `#questpie/package`
+factory contract and cannot bind to host-only Resources.
 Generated private code uses `#questpie/source/*`, not an absolute or `../../src`
 path. A configured source root updates that mapping. `questpie check` builds in
 a sibling directory below `.questpie/` and compares bytes that use the same
@@ -891,8 +907,8 @@ collection:appointments/augmentation:acme.auditFieldsV1
 The Compiled Manifest records every accepted contribution identity and its
 normalized structural contract digest under the target Resource. The Schema
 Projection records only the resulting database structure and excludes
-contribution identity. Renaming an Augmentation therefore changes the Compiled
-Compiled Manifest digest and Package Inventory, but it does not change Schema Projection
+contribution identity. Renaming an Augmentation therefore changes Compiled
+Manifest bytes and the Package Inventory, but it does not change Schema Projection
 bytes when the projected structure is identical.
 
 The same reusable value can be accepted by more than one Collection.
@@ -1108,7 +1124,7 @@ Augmentations sort by Contribution Identity. Members sort by member identity.
 The Origin Map Digest is SHA-256 over those bytes with the prefix
 `questpie-origin-map-v1\0`. `build-input.json` records it outside the hashed
 `inputs` object. It verifies the diagnostic artifact only; the Compiled
-Compiled Manifest, Schema Projection, Migration Plan, and Committed Migration
+Manifest, Schema Projection, Migration Plan, and Committed Migration
 cannot contain it.
 
 CLI joins current Origins to semantic diagnostics by Resource, contribution,
@@ -1250,6 +1266,11 @@ interface CompositionDiagnosticV1 extends QuestpieDiagnosticBaseV1 {
 }
 ```
 
+`blocking` describes progression of build and deployment, not whether the
+current request succeeds. A Runtime diagnostic can terminate its current bind
+or execution and still use `blocking: "none"` because compiled artifacts and a
+later deployment remain valid.
+
 The registry table closes the actual `code` and `class` values; implementations
 cannot emit another `QP-COMPOSE-*` value without revising v1. Recovery entries
 are in executable order. A diagnostic cannot contain a database URL, registry
@@ -1280,9 +1301,9 @@ credential, environment value, or source text.
 
 - The controlled evaluator is not a security sandbox for hostile dependencies;
   dependency trust remains an application responsibility.
-- Executable handler bundling, source maps, and deployment bindings remain
-  blocked on the Operations/Auth verticals. This composition vertical emits no
-  speculative handler bundle.
+- Executable handler slicing, output materialization, and Runtime Build pairing
+  are accepted in ADR-0009. Production implementation remains blocked on the
+  connected tracer and later runtime-semantic gates.
 - Multiple configured instances of one Package remain deferred because the
   first tracer has no consumer. A future design cannot weaken explicit
   activation, provenance, identity, or Package Inventory review.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "QUESTPIE v4"
+  short_description: "Route QUESTPIE v4 repository work"
+  default_prompt: "Use $questpie-v4 to route and complete this repository task."

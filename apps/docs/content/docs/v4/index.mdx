@@ -47,28 +47,107 @@ QUESTPIE does not push an unrecorded schema.
 
 [Define data and use the schema lifecycle](/docs/v4/schema-lifecycle)
 
-## Operations and realtime
+QUESTPIE compiles exact values, structural filters, Relations, and cursor pages.
 
-QUESTPIE distinguishes Query, Mutation, Action, and Route.
+[Data and structural Queries](/docs/v4/data-and-queries)
+
+## Context and Policy
+
+Credential authentication resolves a trusted request or token into a
+Principal. QUESTPIE then owns the Principal, Tenant, Authority, and Policy
+boundary.
+
+Each root Execution resolves one immutable Context before application work
+runs. Collection-bound Policy checks current relational evidence and applies
+the same authorization decision to every execution surface.
+
+[Resolve Context and authorize with Policy](/docs/v4/context-and-policy)
+
+## Operations
+
+QUESTPIE has seven executable Definition kinds: Query, Mutation, Action, Route,
+Reaction, Job, and Workflow. They import application-specialized factories from
+`#questpie/app`; the compiler binds every handler statically in a matched
+Runtime Build. Complete Workflow product breadth remains a later release
+vertical, but its factory and shared checkpoint kernel are fixed.
 
 A Mutation owns its PostgreSQL transaction and can add durable work to the same
-commit. For one Live Query, the Runtime records the supported reads that the
-handler actually executes. These reads include Policy, tenancy, Relations,
-ordering, and pagination. After a relevant committed change, the Runtime
-recomputes the authorized result and updates that query on the generated client.
+commit. Query reads and Mutation writes use exact generated contracts and the
+same Policy, error, consistency, and observation engine through direct and
+network calls.
 
-## Studio
+[Define executable application behavior](/docs/v4/executable-definitions)
 
-Studio is the optional operational interface for a compiled application. It
-shows the Compiled Manifest, Origins, migration Drift, Operations, Policy decisions,
-transactions, durable dispatch, jobs, workflows, realtime state, logs, traces,
-and audit history.
+[Build Queries and Mutations](/docs/v4/queries-and-mutations)
 
-Studio is not a CMS, page builder, SQL console, or framework for custom Operator
-Apps. An Operator App remains an application in userland and uses the same
-generated client.
+## Realtime
 
-## Auth boundary
+A supported Query becomes a Live Query through `.watch` on the same generated
+method. QUESTPIE observes the reads that each Execution actually reaches,
+reauthorizes every recomputation, and recovers committed invalidations from a
+transactional PostgreSQL Change Ledger. Generated clients receive complete
+results. A client resumes with an opaque Resume Token or starts again with a
+fresh result.
 
-QUESTPIE owns Principal, Tenant, Authority, and Policy. Credential authentication is
-an integration that resolves a trusted request or token into a Principal.
+[Watch Queries in realtime](/docs/v4/realtime)
+
+## Durable work
+
+A Mutation accepts typed Reaction intent in its PostgreSQL transaction. A
+worker claims the committed Durable Run with a fenced Lease Token, creates a
+fresh authorized Execution, and retries under a bounded policy. Stable Effect
+Identity makes a provider idempotency contract survive Physical Attempts; an
+unknowable provider outcome remains explicitly ambiguous.
+
+[Run a durable Reaction after commit](/docs/v4/durable-reactions)
+
+[Dispatch Jobs and design durable Workflows](/docs/v4/durable-jobs-and-workflows)
+
+[Run multiple instances without optional authority](/docs/v4/multi-instance-and-acceleration)
+explains arbitrary routing, cache and wake loss, SSE reconnect, rolling
+compatibility, and typed Channels with PostgreSQL as the sole durable truth.
+
+## Services, Routes, and Auth
+
+Services own application or Execution lifetime with compiler-checked dependency
+and effect boundaries. Routes preserve exact Fetch requests, responses, and
+streams while entering normal application work only through an explicit
+Execution. Credential Auth produces Principal; Policy remains the only
+authorization model, and applications retain their Auth Collections and native
+client.
+
+[Compose Services, raw Routes, and Auth](/docs/v4/services-routes-and-auth)
+
+## Files, Search, and generated integrations
+
+File metadata remains an ordinary Policy-protected Collection. A narrow byte
+capability handles storage only after metadata authorization. Search rejoins
+ranked candidates to current source Policy before paging, totals, or facets.
+OpenAPI, MCP, and skills are compiler projections, not alternate handlers.
+
+[Store files, search authorized rows, and project contracts](/docs/v4/files-search-and-contract-projections)
+
+## Public API ownership
+
+Structural builders and restricted grammars come from `questpie`. Executable
+factories come from the current `#questpie/app` or isolated
+`#questpie/package` contract. Clients come from `#questpie/client`. One codec,
+relational planner, durable kernel, and Fetch kernel expose only valid
+capability-specific views.
+
+[Use the QUESTPIE v4 API surface](/docs/v4/semantic-kernels-and-public-surface)
+
+## Runtime and Studio
+
+`questpie build` publishes one immutable application bundle. Reviewed
+migrations apply explicitly before `questpie start`. The standalone Runtime
+verifies the bundle, schema, executable bindings, and compatibility before it
+accepts Operations, watches, or Reaction claims.
+
+Generated clients use immutable Context scopes. Direct, Fetch,
+generated-client, nested, recompute, worker, and Studio calls use the same
+Execution, Policy, Operation, transaction, and error engine. One safe Execution Envelope correlates
+append-only operational events. Studio reads application data through ordinary
+generated Operations and Policy.
+
+[Run and inspect the application](/docs/v4/runtime-and-studio)

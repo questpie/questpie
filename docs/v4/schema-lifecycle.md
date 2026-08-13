@@ -1,13 +1,16 @@
 # QUESTPIE v4 schema lifecycle
 
-- Status: Accepted for the first Barbershop tracer
+- Status: Accepted for the foundational v1 data model
 - Date: 2026-08-10
 - Projection: verified against public documentation
 - Authority: exact contract for schema, migrations, drift, and Seeds
 
-This document closes the first grilling slice in `SPEC.md`. It defines the
-smallest schema lifecycle that can prove the Barbershop tracer. Later slices
-may add operations, online migration phases, or existing-database adoption.
+This document defines the foundational v1 schema lifecycle. The Barbershop
+application is an end-to-end acceptance example, not the capability boundary
+of the framework. This revision reopens the unreleased schema artifact v1 to
+include inline column groups, typed JSONB values, and open JSON before its
+public contract is frozen. Later slices may add operations, online migration
+phases, or existing-database adoption.
 They cannot change the identity, checksum, or receipt rules below without a
 new accepted decision and an explicit artifact-version migration.
 
@@ -47,6 +50,18 @@ new accepted decision and an explicit artifact-version migration.
 12. V1 does not provide down migrations, concurrent index creation, arbitrary
     handwritten migration SQL, repeatable mutable Seeds, or automatic adoption
     of an existing schema.
+13. Nested authoring has three explicit meanings. `shape.inline` groups ordinary
+    columns, `field.object` and `field.array` store closed embedded values in one
+    JSONB column, and independent entities use an explicit Collection and
+    Relation. Compilation never invents a hidden Collection.
+14. Canonical Field paths are non-empty arrays of key segments. Dotted strings
+    are never parsed as paths.
+15. Every regular Collection has exactly one named primary-key Constraint.
+    `id` is an ordinary Field; key semantics come only from
+    `constraint.primaryKey`.
+16. Every text Field uses semantic collation `questpie.binary`, lowered to
+    explicit PostgreSQL collation `C`. Database-default collation never defines
+    Data equality, uniqueness, ordering, indexes, or cursors.
 
 ## 2. Exact authoring API
 
@@ -64,6 +79,13 @@ different application and cannot adopt the old receipts or schema implicitly.
 `databaseCType`, and an identity-sorted extension-name list. Provider
 validation compares those exact locale values and extension presence before
 planning or applying.
+
+Independently of the database defaults above, foundational Data text semantics
+require `pg_catalog.C`. Before planning, applying, drift comparison, or Query
+execution, QUESTPIE resolves that collation, requires `collprovider = 'c'` and
+`collisdeterministic = true`, and requires UTF-8 database encoding. It fails
+closed rather than substituting `C.UTF-8`, ICU, libc locale, or the database
+default.
 
 ```ts
 // src/data/tenants.ts
@@ -126,6 +148,68 @@ export const appointments = defineCollection({
 });
 ```
 
+Nested authoring distinguishes a logical column group from an embedded value:
+
+```ts
+// src/data/customers.ts
+import { constraint, defineCollection, field, shape, value } from "questpie";
+
+export const customers = defineCollection({
+	name: "customers",
+	fields: {
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+
+		// A logical group. Each leaf is an ordinary independently managed column.
+		address: shape.inline({
+			fields: {
+				city: field.text({ nullable: false, maxLength: 160 }),
+				postalCode: field.text({ nullable: true, maxLength: 24 }),
+			},
+		}),
+
+		// One JSONB column whose complete runtime value follows a closed codec.
+		preferences: field.object({
+			nullable: false,
+			properties: {
+				locale: value.text({ nullable: false, maxLength: 16 }),
+				marketingEmail: value.boolean({ nullable: false }),
+					tags: value.array({
+						nullable: false,
+						items: value.text({ nullable: false, maxLength: 40 }),
+						maximumItems: 100,
+					}),
+			},
+		}),
+
+		// One JSONB column with only the recursive JsonValue boundary.
+		metadata: field.json({ nullable: true }),
+	},
+	constraints: {
+		primary: constraint.primaryKey({ fields: ["id"] }),
+	},
+});
+```
+
+`shape.inline` is not a Field and creates no PostgreSQL object. Its leaves use
+the complete registered column Field grammar. A future extension-backed Field,
+including a spatial or vector Field, can appear inside an inline shape only
+after that Field capability defines its authoring codec, projection variant,
+SQL lowering, dependencies, migration matrix, and catalog fingerprint. The
+inline shape does not itself make PostGIS, pgvector, or another extension
+supported.
+
+`field.object` and `field.array` are Fields backed by one `jsonb` column. Their
+nested members use the separate `value.*` codec grammar, not `field.*`.
+Relations, defaults, indexes, PostgreSQL names, extension-backed column types,
+and other schema-owning Field capabilities therefore cannot be placed inside an
+embedded value. Autocomplete and generated types must expose that boundary.
+
+An embedded value has no Resource Identity, independent Policy, Relation,
+migration lifecycle, or pagination. When a value needs any of those, has
+unbounded cardinality, or is updated as an entity in its own right, the author
+defines a Collection and Relation explicitly. QUESTPIE never extracts a nested
+definition into a hidden mini-Collection.
+
 ```json
 {
 	"$schema": "https://questpie.dev/schema/application-v1.json",
@@ -149,7 +233,7 @@ export const appointments = defineCollection({
 }
 ```
 
-The v1 Field constructors are:
+The v1 column Field constructors are:
 
 | Constructor       | PostgreSQL storage            | Required options                                         |
 | ----------------- | ----------------------------- | -------------------------------------------------------- |
@@ -161,16 +245,55 @@ The v1 Field constructors are:
 | `field.numeric`   | `numeric(precision, scale)`   | `nullable`, `precision`, `scale`                         |
 | `field.timestamp` | `timestamp` or `timestamptz`  | `nullable`, `withTimezone`; optional `default: "now"`    |
 | `field.date`      | `date`                        | `nullable`                                               |
+| `field.object`    | `jsonb`                       | `nullable`, closed `properties` of `value.*` codecs      |
+| `field.array`     | `jsonb`                       | `nullable`, `maximumItems`, one closed `items: value.*`  |
+| `field.json`      | `jsonb`                       | `nullable`                                               |
+
+`shape.inline({ fields })` is a structural authoring constructor rather than a
+Field constructor. It accepts Fields and nested inline shapes. It rejects an
+empty shape and duplicate paths. Every leaf receives a canonical non-empty
+segment-array path such as `["address", "city"]`, its own semantic Field
+identity, and its own PostgreSQL column. The default physical name joins the
+path segments before applying the ordinary Field naming algorithm, producing
+`address_city` in this example. Authors refer to nested Fields with segment
+arrays; strings such as `"address.city"` are ordinary keys and are never split.
+
+The closed embedded `value.*` constructors mirror the scalar runtime codecs
+for UUID, text, boolean, integer, bigint, numeric, timestamp, and date, and add
+`value.object` and `value.array`. Every embedded property is present; its
+`nullable` option controls whether its value may be JSON `null`. Object codecs
+reject undeclared properties. Array codecs validate every item and preserve
+item order and duplicates. Every `value.array` and top-level `field.array`
+declares `maximumItems` from 1 through 1,000. Shape and embedded container depth
+is at most eight, and every JSONB-backed Field has at most 1,048,576 canonical
+UTF-8 JSON bytes; deployments may lower but not raise these limits. Embedded
+codecs have no defaults or PostgreSQL options. Recursion is finite in the
+authored Definition; a cycle or depth over the compiler limit is an invalid
+Definition.
+
+`field.json` accepts the tagged public value `{ kind: "json", value:
+JsonValue }`, where `JsonValue` is JSON null, boolean, finite JSON-safe number,
+string, array of `JsonValue`, or object with string keys and `JsonValue` values.
+It promises no property schema, typed path, or internal validation beyond that
+boundary. SQL `NULL` and top-level JSON `null` are distinct protocol values:
+outer `null` uses the ordinary nullable Field marker; `{ kind: "json", value:
+null }` is top-level JSON null. A transport or Seed cannot collapse the two
+into an untagged `null`.
+
+`id`, `createdAt`, and `updatedAt` are ordinary authored Fields. A timestamp
+`default: "now"` initializes a value on insert only. Automatically advancing
+`updatedAt` belongs to the later transaction-owned Mutation design and is not
+a schema callback, implicit Field, or generated-column behavior.
 
 V1 literal defaults exist only for text, boolean, and integer Fields.
 `"randomUuid"` is the only UUID default and lowers to PostgreSQL
 `gen_random_uuid()`. `"now"` is the only timestamp default. Bigint, numeric,
 and date literal defaults are deferred so schema artifact v1 never serializes an
 ambiguous precision or time-zone value. V1 does not accept an arbitrary SQL
-default. JSON Fields require a separate runtime-value schema decision and are
-not part of schema artifact v1.
+default. JSON-backed Fields have no schema default in v1.
 
-Canonical scalar codecs are closed. UUID text is lowercase RFC 4122 form
+Canonical scalar codecs are closed. UUID text is lowercase 8-4-4-4-12
+hexadecimal form with unrestricted version and variant nibbles:
 `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`. Integer values are JSON safe integers.
 Bigint text matches `0|-?[1-9][0-9]*` and must be within PostgreSQL `int8`.
 Numeric text has no sign `+` or exponent and uses exactly the declared scale:
@@ -184,17 +307,26 @@ Seed codecs produce exactly these forms.
 
 Text length and integer bound options lower to generated check Constraints.
 Their identities are
-`collection:<name>/field:<key>/invariant:<minLength|maxLength|minimum|maximum>`.
+`<field-identity>/invariant:<minLength|maxLength|minimum|maximum>`.
 Their physical names use `qp_ck_<table>_<field>_<invariant>`, with the same
 length algorithm as authored Constraints. They appear in the Schema Projection,
 Migration Plan, SQL, and Schema Fingerprint. They are not anonymous checks.
 
 `constraint.primaryKey`, `constraint.unique`, and `constraint.check` are the
 only v1 Constraint constructors. A Relation owns its foreign-key Constraint;
-authors do not declare a duplicate foreign key. V1 Relations are `toOne` and
+authors do not declare a duplicate foreign key. Schema-owning v1 Relations are
+`toOne` and
 require equal-length local and referenced Field lists. The referenced list must
 be a primary or unique key. Referential actions are `restrict`, `cascade`,
 `setNull`, or `noAction`; `setNull` requires nullable local Fields.
+
+After Owner and accepted Augmentations resolve, a regular Collection must have
+exactly one `constraint.primaryKey`. Zero or multiple primary-key Constraints
+report `QP-SCHEMA-001 invalidDefinition` and emit no Schema Projection. The
+Constraint's authored map key creates its stable identity and can contain one
+or more Fields in declared order. There is no `field.id()` constructor or
+`primaryKey: true` Field modifier. A future keyless or externally managed read
+model needs a separate explicit contract.
 
 The check callback receives only typed Field-expression objects and the
 compiler accepts only the returned closed expression tree. The authoring module
@@ -205,10 +337,19 @@ determinism boundary, not a security sandbox for hostile Package code. No
 callback or executable code enters the Schema Projection, Committed Migration,
 or deploy runner.
 
-An Index has one or more Field entries. Each entry has `order: "asc" | "desc"`
+An Index has one or more scalar column Field entries. It cannot name an inline
+shape, a JSON-backed Field, an embedded member, or an open-JSON path. Each entry has
+`order: "asc" | "desc"`
 and `nulls: "first" | "last"`; omitted values normalize to `asc` and PostgreSQL's
 corresponding default null order. V1 supports B-tree indexes only. Unique
 semantics use `constraint.unique`, not `index({ unique: true })`.
+
+Useful JSON indexes normally require GIN or expression indexes. Neither is
+silently approximated by the v1 B-tree grammar. A later managed artifact can
+add their complete identity, dependency, migration, and drift contracts; a
+named native PostgreSQL escape hatch can instead declare externally managed
+DDL and the guarantees it forfeits. Until one of those contracts is accepted,
+an extra JSON index in the application schema is unexpected drift.
 
 Every Collection, Field, Constraint, Index, and Relation can set
 `postgres: { name: "lower_snake_case" }`. The application schema and all
@@ -225,6 +366,7 @@ The semantic identities are:
 ```text
 collection:appointments
 collection:appointments/field:startsAt
+collection:customers/field:address/field:city
 collection:appointments/constraint:validWindow
 collection:appointments/index:byTenantAndStart
 collection:appointments/relation:tenant
@@ -232,8 +374,12 @@ seed:barbershop.demo.v1
 ```
 
 Collection and Seed names use the Qualified Resource Name grammar in
-`CONTEXT.md`. Member keys are lower-camel identifiers. Identity is case
-sensitive in source and canonical JSON. PostgreSQL names are lower case.
+`CONTEXT.md`. Member keys are lower-camel identifiers. A top-level Field
+identity appends `/field:<segment>` to its Collection identity. Each additional
+inline path segment appends another `/field:<segment>`; the identity never
+joins or parses segments with a dot. Inline shapes themselves have no semantic
+identity because they own no schema object. Identity is case sensitive in
+source and canonical JSON. PostgreSQL names are lower case.
 
 Default physical names use this algorithm:
 
@@ -267,6 +413,7 @@ Examples:
 | `collection:appointments`                        | `appointments`                           |
 | `collection:booking.availability`                | `booking__availability`                  |
 | `collection:appointments/field:startsAt`         | `starts_at`                              |
+| `collection:customers/field:address/field:city`  | `address_city`                           |
 | `collection:appointments/constraint:validWindow` | `qp_ck_appointments_valid_window`        |
 | `collection:appointments/index:byTenantAndStart` | `qp_ix_appointments_by_tenant_and_start` |
 
@@ -308,7 +455,8 @@ interface CollectionManifestV1 {
 	identity: `collection:${string}`;
 	postgresName: string;
 	fields: Array<{
-		identity: `collection:${string}/field:${string}`;
+		identity: FieldIdentityV1;
+		path: FieldPathV1;
 		postgresName: string;
 		type: FieldTypeV1;
 		nullable: boolean;
@@ -316,25 +464,96 @@ interface CollectionManifestV1 {
 			| null
 			| { kind: "literal"; value: null | boolean | number | string }
 			| { kind: "randomUuid" | "now" };
-		collation: "databaseDefault" | null;
+		collation: "questpie.binary" | null;
 	}>;
 	constraints: ConstraintManifestV1[];
 	indexes: IndexManifestV1[];
 	relations: RelationManifestV1[];
 }
 
+type FieldPathV1 = [string, ...string[]];
+type FieldIdentityV1 = `collection:${string}/field:${string}`;
+
 type FieldTypeV1 =
 	| { kind: "uuid" }
-	| { kind: "text"; minLength: number | null; maxLength: number | null }
+	| {
+			kind: "text";
+			minLength: number | null;
+			maxLength: number | null;
+			collation: "questpie.binary";
+	  }
 	| { kind: "boolean" }
 	| { kind: "integer"; minimum: number | null; maximum: number | null }
 	| { kind: "bigint"; minimum: string | null; maximum: string | null }
 	| { kind: "numeric"; precision: number; scale: number }
 	| { kind: "timestamp"; withTimezone: boolean }
-	| { kind: "date" };
+	| { kind: "date" }
+	| { kind: "object"; properties: EmbeddedPropertyV1[] }
+	| {
+			kind: "array";
+			maximumItems: number;
+			items: EmbeddedValueCodecV1;
+	  }
+	| { kind: "json" };
+
+interface EmbeddedPropertyV1 {
+	key: string;
+	codec: EmbeddedValueCodecV1;
+}
+
+type EmbeddedValueCodecV1 =
+	| { kind: "uuid"; nullable: boolean }
+	| {
+			kind: "text";
+			nullable: boolean;
+			minLength: number | null;
+			maxLength: number | null;
+			collation: "questpie.binary";
+	  }
+	| { kind: "boolean"; nullable: boolean }
+	| {
+			kind: "integer";
+			nullable: boolean;
+			minimum: number | null;
+			maximum: number | null;
+	  }
+	| {
+			kind: "bigint";
+			nullable: boolean;
+			minimum: string | null;
+			maximum: string | null;
+	  }
+	| {
+			kind: "numeric";
+			nullable: boolean;
+			precision: number;
+			scale: number;
+	  }
+	| { kind: "timestamp"; nullable: boolean; withTimezone: boolean }
+	| { kind: "date"; nullable: boolean }
+	| {
+			kind: "object";
+			nullable: boolean;
+			properties: EmbeddedPropertyV1[];
+	  }
+	| {
+			kind: "array";
+			nullable: boolean;
+			maximumItems: number;
+			items: EmbeddedValueCodecV1;
+	  };
 
 type PostgreSqlFieldTypeV1 =
-	| { kind: "uuid" | "text" | "boolean" | "integer" | "bigint" | "date" }
+	| {
+			kind:
+				| "uuid"
+				| "text"
+				| "boolean"
+				| "integer"
+				| "bigint"
+				| "date"
+				| "jsonb";
+	  }
 	| { kind: "numeric"; precision: number; scale: number }
 	| { kind: "timestamp"; withTimezone: boolean };
 
@@ -343,7 +562,7 @@ type ConstraintManifestV1 =
 			kind: "primaryKey" | "unique";
 			identity: `collection:${string}/constraint:${string}`;
 			postgresName: string;
-			fields: Array<`collection:${string}/field:${string}`>;
+			fields: FieldIdentityV1[];
 	  }
 	| {
 			kind: "check";
@@ -359,7 +578,7 @@ interface IndexManifestV1 {
 	identity: `collection:${string}/index:${string}`;
 	postgresName: string;
 	fields: Array<{
-		field: `collection:${string}/field:${string}`;
+		field: FieldIdentityV1;
 		order: "asc" | "desc";
 		nulls: "first" | "last";
 		operatorClass: "typeDefault";
@@ -371,15 +590,15 @@ interface RelationManifestV1 {
 	kind: "toOne";
 	identity: `collection:${string}/relation:${string}`;
 	target: `collection:${string}`;
-	fields: Array<`collection:${string}/field:${string}`>;
-	references: Array<`collection:${string}/field:${string}`>;
+	fields: FieldIdentityV1[];
+	references: FieldIdentityV1[];
 	constraintPostgresName: string;
 	onDelete: "restrict" | "cascade" | "setNull" | "noAction";
 	onUpdate: "restrict" | "cascade" | "setNull" | "noAction";
 }
 
 type CheckExpressionV1 =
-	| { kind: "field"; field: `collection:${string}/field:${string}` }
+	| { kind: "field"; field: FieldIdentityV1 }
 	| { kind: "literal"; value: null | boolean | number | string }
 	| { kind: "textLength"; expression: CheckExpressionV1 }
 	| {
@@ -404,8 +623,29 @@ use semantic identity. They never use array positions, object addresses, file
 paths, or ORM values. An omitted Index null order normalizes to `last` for
 ascending order and `first` for descending order before encoding.
 
+`FieldPathV1` is the canonical path representation in generated declarations,
+query/schema artifacts, Origin entries, and diagnostics. The corresponding
+Field identity repeats `/field:<segment>` for every path segment even though
+the TypeScript template literal above can express only the common prefix.
+Fields sort by identity. Embedded properties sort by `key`; array item order is
+data and never part of the codec definition. Neither an inline shape nor an
+embedded property appears as a Collection, Field, or PostgreSQL object in the
+Schema Projection.
+
+The Schema Projection records the full embedded codec because it is part of the
+application contract. The physical fingerprint records only its `jsonb`
+column. Runtime writes and reads validate typed embedded values; direct SQL can
+write an invalid JSONB value, which is reported as a data decode failure rather
+than schema drift. V1 does not install hidden validation functions or triggers.
+Adding or changing an embedded codec on an existing Field is blocked in v1
+because the lifecycle cannot prove all stored rows. A developer models a new
+Field and performs an explicit later data migration once that artifact exists.
+This limitation does not apply to creating a new Collection or adding a new
+nullable JSON-backed Field.
+
 All artifact JSON uses RFC 8785 JSON Canonicalization Scheme bytes plus one
-final LF. Source strings normalize to Unicode NFC before validation. Semantic
+final LF. The compiler validates that source strings are already Unicode NFC
+and rejects non-NFC input; the artifact encoder never rewrites source text. Semantic
 set arrays sort by their normalized identity before encoding. The encoder
 rejects `undefined`, non-finite numbers, negative zero, functions, symbols,
 cycles, duplicate normalized keys, and lone Unicode surrogates. The Schema
@@ -667,6 +907,11 @@ artifact field for authored SQL. Golden vectors freeze every branch's SQL
 bytes, quoting, statement order, and step separator.
 
 Within `createCollection`, Fields use Schema Projection identity order.
+Every text column renders `COLLATE pg_catalog."C"`; text checks, primary/unique
+Constraints, and B-tree Indexes therefore inherit the same fixed
+`questpie.binary` semantics. Query predicates, order terms, and cursor seeks
+emit the same explicit collation rather than relying on `search_path` or the
+database default.
 `alterField` renders supported physical deltas in this order: drop a changed
 default, change storage type with the one registered cast, set a new
 literal/default expression, perform a compiler-generated literal NULL
@@ -704,6 +949,7 @@ V1 classifies every supported change by this closed matrix:
 | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | create application schema or Collection                                                                        | `safe`                                               |
 | add nullable Field without a default                                                                           | `safe`                                               |
+| add nullable `field.object`, `field.array`, or `field.json` without a default                                  | `safe`                                               |
 | relax text/integer/bigint bound; increase numeric precision without changing scale                             | `safe`                                               |
 | add a literal default to an existing nullable Field                                                            | `guarded`                                            |
 | add nullable Field with literal default                                                                        | `guarded`                                            |
@@ -720,7 +966,8 @@ V1 classifies every supported change by this closed matrix:
 | change primary/unique Field list, check expression, Index Fields/order/nulls, or Relation endpoints/actions    | `destructive`; lower to drop plus add                |
 | nullable to required without a literal backfill; add required Field without a literal default                  | `blocked`                                            |
 | change Field kind except `integer` to `bigint`; change timestamp time-zone mode                                | `blocked`                                            |
-| request generated/identity column, RLS, expression/unique Index, another collation/opclass, or unsupported DDL | `blocked`                                            |
+| add or change an embedded value codec on an existing JSONB Field                                               | `blocked`; stored rows require a later data-migration artifact |
+| request generated/identity column, RLS, JSON-path/GIN/expression/unique Index, another collation/opclass, or unsupported DDL | `blocked`                                 |
 | request non-transactional DDL or any delta not listed above                                                    | `blocked`                                            |
 
 `randomUuid` and `now` are not literal backfill defaults. Adding a required
@@ -858,7 +1105,8 @@ run uses this lock order, so two applications cannot race shared bootstrap.
 The advisory-lock key is the signed 64-bit two's-complement big-endian
 interpretation of the first eight bytes of SHA-256 over the UTF-8 bytes of
 `questpie-application-lock-v1\0<current_database>\0<application-name>`. The
-database and application names are NFC before hashing. The
+lock-input codec requires and validates NFC database and application names
+before hashing; it does not normalize or rewrite them. The
 runner uses a session advisory lock so it spans application binding and all
 pending migration transactions.
 
@@ -1014,7 +1262,7 @@ type FingerprintedObjectV1 =
 				| { kind: "randomUuid" | "now" };
 			identity: "none";
 			generated: "none";
-			collation: "databaseDefault" | null;
+			collation: "pg_catalog.C" | null;
 	  }
 	| {
 			kind: "primaryKey" | "unique";
@@ -1098,11 +1346,13 @@ does not enter the Schema Fingerprint Digest.
 
 The compiler-lowered dependency set is exact and deduplicated. Every Field adds
 one `type` dependency in `pg_catalog`: `uuid`, `text`, `bool`, `int4`, `int8`,
-`numeric`, `timestamp`, `timestamptz`, or `date`. Every text Field adds
-`collation:pg_catalog.default`. Every B-tree Index, including a primary/unique
+`numeric`, `timestamp`, `timestamptz`, `date`, or `jsonb`. Every text Field adds
+`collation:pg_catalog.C`. Every B-tree Index, including a primary/unique
 backing Index, adds its Field's `operatorClass` dependency: `uuid_ops`,
 `text_ops`, `bool_ops`, `int4_ops`, `int8_ops`, `numeric_ops`,
-`timestamp_ops`, `timestamptz_ops`, or `date_ops`. A `randomUuid` or `now`
+`timestamp_ops`, `timestamptz_ops`, or `date_ops`. JSON-backed Fields cannot
+enter a v1 B-tree Index and therefore add no Index operator-class dependency.
+A `randomUuid` or `now`
 default adds `defaultFunction:pg_catalog.gen_random_uuid` or
 `defaultFunction:pg_catalog.now`. Built-ins use `extension: null`; a dependency
 owned by a configured extension records that extension name. For Genesis,
@@ -1115,16 +1365,20 @@ The v1 PostgreSQL introspector maps catalog fields back into the same closed
 types used by the Schema Projection. A fingerprint column uses
 `PostgreSqlFieldTypeV1`, which contains only physical type attributes. Bounds
 exist only as separately named check objects and are never duplicated in a
-column type. The compiler maps semantic Field references in expected checks to
+column type. All three JSON-backed Field variants lower to the physical
+`{ kind: "jsonb" }` fingerprint type. Their embedded codec is intentionally not
+recoverable from `pg_catalog`; local desired-versus-committed comparison guards
+that semantic contract, while fingerprint comparison guards the column.
+The compiler maps semantic Field references in expected checks to
 physical Field names before comparison. The catalog parser maps supported
 physical check expressions into `FingerprintCheckExpressionV1`; it never needs
 the Schema Projection to invent semantic identities. It maps supported defaults
 to their tagged forms and reads
 foreign-key actions from catalogs, and reads Index Field order and null order
 as separate values. It maps the default operator class for the Field type to
-`typeDefault`, the Field's collation to `field`, and the database-default Field
-collation to `databaseDefault`. A non-default operator class or another
-collation enters `unsupportedObjects`. It does not hash PostgreSQL deparser
+`typeDefault` and the Field's explicit `pg_catalog.C` collation to `field`.
+A database-default or another collation enters `unsupportedObjects`. It does
+not hash PostgreSQL deparser
 text. With `search_path = pg_catalog`, it may parse `pg_get_expr` output as an
 input, removes redundant parentheses and type-compatible implicit casts, maps
 operators and `char_length` to the closed AST, and then hashes only that AST.
@@ -1149,8 +1403,9 @@ external dependency is allowed only when PostgreSQL identifies it as a
 Schema artifact v1 exposes no author syntax for another external dependency.
 
 The compiler lowers any Schema Projection into `FingerprintComparableV1` using
-the exact same PostgreSQL names, Field types, defaults, Constraints, Relations,
-and Index values. The Genesis projection lowers to
+the exact same PostgreSQL names, physical Field types, defaults, Constraints,
+Relations, and Index values. Inline shape nodes disappear while their leaf
+columns remain; `object`, `array`, and `json` all lower to `jsonb`. The Genesis projection lowers to
 `applicationSchemaExists: false` with empty object arrays. A non-Genesis
 projection lowers to `applicationSchemaExists: true`. Comparison is exact
 canonical JSON equality between this expected comparable value and the live
@@ -1208,8 +1463,8 @@ export const demoBarbershop = defineSeed({
 			id: "018f5f70-0a0c-7f11-89f9-2aa4f8df3945",
 			tenantId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
 			customerName: "Nina Horvath",
-			startsAt: new Date("2026-08-11T09:00:00.000Z"),
-			endsAt: new Date("2026-08-11T09:30:00.000Z"),
+			startsAt: "2026-08-11T09:00:00.000Z",
+			endsAt: "2026-08-11T09:30:00.000Z",
 			status: "scheduled",
 		}),
 	],
@@ -1261,12 +1516,12 @@ type SeedStepV1 =
 	  };
 
 type SeedRecordV1 = Array<{
-	field: `collection:${string}/field:${string}`;
+	field: FieldIdentityV1;
 	value: SeedValueV1;
 }>;
 
 type SeedPrimaryKeyV1 = Array<{
-	field: `collection:${string}/field:${string}`;
+	field: FieldIdentityV1;
 	value: Exclude<SeedValueV1, null>;
 }>;
 
@@ -1278,13 +1533,19 @@ type SeedValueV1 =
 	| {
 			kind: "uuid" | "bigint" | "numeric" | "date" | "timestamp";
 			value: string;
-	  };
+	  }
+	| { kind: "json"; value: CanonicalJsonValue };
 ```
 
 Dependencies sort by identity. `seed.insert`, `seed.update`, `seed.upsert`, and
 `seed.delete` construct data-only steps; they do not receive a callback. The
 compiler resolves Collection and Field identities, applies the closed scalar
-codecs, and writes the authored step order to `steps.json`. A key contains
+or JSON-backed Field codec, and writes the authored step order to `steps.json`.
+An inline leaf is addressed by its complete Field identity. A typed object or
+array is one tagged `json` value for its owning Field, never a set of synthetic
+embedded Field entries. The tag preserves the distinction between SQL `NULL`
+and JSON `null`; typed embedded values are also validated against their closed
+codec before artifact emission. A key contains
 every Field of the Collection's primary key exactly once, contains no other
 Field, and contains no null. Unique Constraints are not Seed keys in v1.
 Within each step, `values`, `key`, `create`, and `update` entries sort by Field
@@ -1424,6 +1685,9 @@ Deploy tooling must ship an immutable artifact before it calls apply.
 | Case                                              | Required behavior                                    | Diagnostic or proof                                |
 | ------------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------- |
 | File or export rename only                        | Schema Projection Digest unchanged                   | byte-stability fixture                             |
+| Regular Collection has zero or two primary keys  | compile fails; no Schema Projection                  | `QP-SCHEMA-001 invalidDefinition`                  |
+| Dotted nested path is supplied                    | treated as one key, never split                       | segment-array identity fixture                     |
+| SQL `NULL` and top-level JSON `null`              | distinct outer-null and tagged-JSON values            | codec/Seed golden                                  |
 | Definition order changes                          | Schema Projection and Migration Plan bytes unchanged | permutation test                                   |
 | Two semantic members map to one physical name     | compile fails                                        | `QP-SCHEMA-006 physicalNameCollision`              |
 | Name exceeds PostgreSQL limit                     | deterministic hash suffix                            | 63-byte fixture                                    |

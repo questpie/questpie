@@ -5,13 +5,30 @@
 		"apps/*"
 	],
 	"scripts": {
+		"bench:micro": "bun run scripts/quality.ts micro",
 		"build": "turbo run build",
+		"check:changed": "bun run scripts/quality.ts changed",
 		"dev": "turbo run dev",
 		"lint": "oxlint",
 		"lint:fix": "oxlint --fix",
 		"format": "oxfmt",
 		"format:check": "oxfmt --check",
-		"check-types": "turbo run types:check"
+		"format:ratchet": "bun run scripts/format-ratchet.ts",
+		"check-types": "turbo run types:check",
+		"knip:report": "knip --no-exit-code --reporter compact",
+		"knip:negative-control": "bun run scripts/knip-negative-control.ts",
+		"knip:strict": "knip --strict --include unlisted,binaries,unresolved",
+		"package:check": "bun run scripts/package-contract.ts",
+		"quality:full": "bun run scripts/quality.ts full",
+		"quality:release": "bun run scripts/quality.ts release",
+		"quality:typescript-forward": "bun run scripts/quality.ts typescript-forward",
+		"release": "bun run scripts/release.ts",
+		"review:accept": "bun run .agents/skills/questpie-v4/scripts/claude-acceptance-review.ts",
+		"skill:check": "skills-ref validate .agents/skills/questpie-v4",
+		"test": "bun test",
+		"test:postgres": "bun run scripts/quality.ts postgres",
+		"test:load": "bun run scripts/quality.ts load",
+		"test:soak": "bun run scripts/quality.ts soak"
 	},
 	"dependencies": {
 		"@iconify/react": "^6.0.2",
@@ -19,12 +36,16 @@
 	},
 	"devDependencies": {
 		"@iconify/json": "^2.2.452",
+		"@types/bun": "1.3.14",
+		"@typescript/native": "npm:typescript@7.0.2",
 		"fumadocs-typescript": "^5.0.0",
 		"jsdom": "^27.4.0",
+		"knip": "6.32.1",
 		"oxfmt": "^0.41.0",
 		"oxlint": "^1.56.0",
+		"skills-ref": "0.1.5",
 		"turbo": "^2.6.3",
-		"typescript": "5.9.2"
+		"typescript": "6.0.2"
 	},
 	"overrides": {
 		"brace-expansion": "5.0.9",
@@ -43,7 +64,7 @@
 		"ws": "8.21.0"
 	},
 	"engines": {
-		"node": ">=18"
+		"node": ">=20.19"
 	},
-	"packageManager": "bun@1.3.13"
+	"packageManager": "bun@1.3.14"
 }

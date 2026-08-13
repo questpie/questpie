@@ -5,7 +5,7 @@ kind: guide
 ---
 
 QUESTPIE compiles the complete application before the Runtime starts. The
-The QUESTPIE Runtime loads generated artifacts. It does not discover files, activate
+QUESTPIE Runtime loads generated artifacts. It does not discover files, activate
 Packages, merge Definitions, or choose a collision winner.
 
 ## Configure one Application Root
@@ -37,7 +37,9 @@ Commit one non-executable `questpie.json` at the Application Root:
 
 The file cannot contain a `definitions` array. The v1 schema rejects unknown
 keys. QUESTPIE discovers Definitions below `source.root` and stores the root in
-canonical form.
+canonical form. `databaseCollation` and `databaseCType` describe the database's
+required locale. They do not replace the explicit per-column
+`questpie.binary` lowering to PostgreSQL `COLLATE "C"`.
 
 `questpie init` adds stable generated imports to the application
 `package.json`:
@@ -46,6 +48,7 @@ canonical form.
 {
 	"imports": {
 		"#questpie/app": "./.questpie/generated/app.ts",
+		"#questpie/client": "./.questpie/generated/client.ts",
 		"#questpie/source/*": "./src/*"
 	}
 }
@@ -110,8 +113,10 @@ Each segment has 1–63 characters. The complete name has at most 255 characters
 invalid. QUESTPIE reports `QP-COMPOSE-003 invalidResourceName` for an invalid
 kind or name.
 
-Resource Kind is a closed compiler protocol. Composition v1 allocates
-`collection` and `seed`. A Package cannot add another Resource Kind.
+Resource Kind is a closed compiler protocol. The composition foundation
+allocates `collection` and `seed`; accepted executable Definitions also
+allocate `query`, `mutation`, `action`, `route`, `reaction`, and `job`. A
+Package cannot add another Resource Kind.
 
 Each Definition supplies its name explicitly:
 
@@ -164,6 +169,9 @@ A Package publishes the fixed `./questpie` ESM export:
 	"name": "@acme/barbershop-audit",
 	"version": "1.0.0",
 	"type": "module",
+	"imports": {
+		"#questpie/package": "./.questpie/generated/package.ts"
+	},
 	"exports": {
 		".": "./dist/index.js",
 		"./questpie": {
@@ -340,22 +348,28 @@ application below `.questpie/generated/`:
 ├── origin-map.json
 ├── build-input.json
 ├── app.ts
+├── client.ts
 └── internal/
 ```
 
-- `manifest.json` contains exact Resource and accepted Augmentation identities.
+- `manifest.json` contains exact Resource and accepted Augmentation identities,
+  the Schema Projection, and the generated Data Contract Projection.
 - `schema-projection.json` contains the database structure used by Migrations.
 - `origin-map.json` maps Resources, Augmentations, and members to current source
   locations without changing semantic digests.
 - `build-input.json` records the configuration, source, framework, Package,
   library, lockfile, TypeScript, Bun, and compiler inputs.
 - `app.ts` exposes the application-wide App Contract.
+- `client.ts` exposes the immutable generated client and its exact Context input.
 - `internal/` is compiler-private and has no source-compatibility guarantee.
 
-Application structural modules can import only types from `#questpie/app`. A
-value import reports `QP-COMPOSE-012 structuralImportOfGeneratedOutput`.
-Run `bunx questpie sync` before the first external TypeScript check so the
-on-disk import exists.
+Application structural modules can import types and the seven allowlisted
+executable Definition factories from `#questpie/app`. The compiler substitutes
+only those pure values from the Current App Contract. It does not load emitted
+Runtime code. Another generated value import reports `QP-COMPOSE-012
+structuralImportOfGeneratedOutput`.
+
+[Define executable behavior and generate its application types](./executable-definitions).
 
 Do not commit `.questpie/generated/`. Ignore the complete `.questpie/`
 directory. Do not ignore `questpie/`; that separate directory contains
@@ -422,3 +436,5 @@ user diagnostic.
 | `QP-COMPOSE-020` | `duplicateContributionIdentity`     | One Owner accepts the same Augmentation identity twice.              |
 | `QP-COMPOSE-021` | `nonLiteralAugmentationList`        | An authored Augmentation list is not a closed literal tuple.         |
 | `QP-COMPOSE-022` | `definitionOutsideSourceRoot`       | An application Definition sits outside the configured source root.   |
+
+Next, [define data and use the schema lifecycle](./schema-lifecycle).

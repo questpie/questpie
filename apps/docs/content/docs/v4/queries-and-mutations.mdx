@@ -1,0 +1,451 @@
+---
+title: Build Queries and Mutations
+description: Define exact semantic reads, transactional writes, and ordinary Collection operations.
+kind: guide
+---
+
+QUESTPIE compiles each Query and Mutation into one statically bound Operation.
+A Query reads from one consistent snapshot. A Mutation owns one PostgreSQL
+transaction. Both use the same generated types, Policy, errors, limits, and
+observation path for direct and network calls.
+
+The examples continue with the complete collaboration fixture from
+[Resolve Context and authorize with Policy](./context-and-policy). Its Message
+Collection supplies the Fields selected and written below.
+
+Define the reusable structural plan for the paged part of the view:
+
+```ts title="src/features/message-data.ts"
+import type { AppData } from "#questpie/app";
+import { dataQuery, query } from "questpie";
+
+export const channelMessagePage = dataQuery<
+	AppData["collections"]["messages"]
+>()({
+	from: "messages",
+	parameters: {
+		channelId: query.parameter.uuid({ nullable: false }),
+		first: query.parameter.integer({
+			nullable: false,
+			minimum: 1,
+			maximum: 100,
+		}),
+		after: query.parameter.cursor({ nullable: true }),
+	},
+	select: ({ fields }) => ({
+		id: fields.id,
+		authorId: fields.authorId,
+		title: fields.title,
+		body: fields.body,
+		createdAt: fields.createdAt,
+	}),
+	where: ({ fields, parameters }) =>
+		fields.channelId.equal(parameters.channelId),
+	orderBy: ({ fields }) => [
+		fields.createdAt.ascending({ nulls: "last" }),
+		fields.id.ascending({ nulls: "last" }),
+	],
+	page: ({ parameters }) =>
+		query.forwardCursor({
+			first: parameters.first,
+			after: parameters.after,
+		}),
+});
+```
+
+## Define a read-only Query
+
+Import the application-specialized factory from the generated App Contract:
+
+```ts title="src/features/channel-overview.ts"
+import { defineQuery } from "#questpie/app";
+import { operation, policy } from "questpie";
+import { channelMessagePage } from "./message-data";
+
+export const channelOverview = defineQuery({
+	name: "channels.overview",
+	input: operation.input(channelMessagePage),
+	policy: policy.authenticated(),
+	errors: {
+		unavailable: operation.error({
+			code: "CHANNEL_UNAVAILABLE",
+			status: 404,
+		}),
+	},
+	handler: async ({ input, ctx, errors }) => {
+		const company = await ctx.data.companies.get({
+			key: { id: ctx.tenant.id },
+			select: { id: true, name: true },
+		});
+		const membership = await ctx.data.memberships.get({
+			key: {
+				companyId: ctx.tenant.id,
+				principalId: ctx.principal.id,
+				scopeKey: "company",
+			},
+			select: { role: true },
+		});
+		const channel = await ctx.data.channels.get({
+			key: { id: input.channelId },
+			select: { id: true, companyId: true, name: true },
+		});
+
+		if (
+			company === null ||
+			membership === null ||
+			channel === null ||
+			channel.companyId !== company.id
+		) {
+			throw errors.unavailable();
+		}
+
+		const messages = await ctx.data.run(channelMessagePage, input);
+		return {
+			company,
+			membership,
+			channel: { id: channel.id, name: channel.name },
+			messages,
+		};
+	},
+	network: true,
+});
+```
+
+The input reuses the exact parameters of the structural data plan. The handler
+return determines the output codec when the value uses supported scalars,
+exact objects, nullable values, and arrays.
+
+The Query Context contains Policy-aware reads and
+`ctx.data.run(plan, input)`, alongside immutable execution facts such as the
+Principal, Tenant, signal, and deadline. It cannot write, dispatch, open a raw
+transaction, run raw SQL, bypass Policy, or select System Authority. All
+handler reads share one bounded `REPEATABLE READ READ ONLY` snapshot.
+
+For a named Query or Mutation, `policy: policy.authenticated()` is its
+Operation-level admission rule. It runs before the handler. A Collection
+Operation Set instead receives the Collection-bound relational Policy, such as
+`messagePolicy`, so every generated member uses the Collection's admission,
+row, candidate, and Field rules.
+
+`network: true` exposes the Operation through the generated network client. If
+it is absent, the Operation remains available only from the generated server
+contract.
+
+Use an explicit output pin when the public result must remain stable or is
+recursive:
+
+```ts title="src/features/thread-preview.ts"
+import { defineQuery } from "#questpie/app";
+import { codec, policy } from "questpie";
+import type { Codec } from "questpie";
+
+interface ThreadNode {
+	readonly id: string;
+	readonly replies: ReadonlyArray<ThreadNode>;
+}
+
+const threadNode: Codec<ThreadNode> = codec.lazy(() =>
+	codec.object({
+		id: codec.uuid(),
+		replies: codec.array(threadNode),
+	}),
+);
+
+export const threadPreview = defineQuery({
+	name: "messages.threadPreview",
+	input: codec.object({ id: codec.uuid() }),
+	output: threadNode,
+	policy: policy.authenticated(),
+	errors: {},
+	handler: ({ input }) => ({ id: input.id, replies: [] }),
+	network: true,
+});
+```
+
+The pin applies the same validation and encoding contract described in
+[Define executable application behavior](./executable-definitions). Recursive
+output requires this explicit contract.
+
+A supported Query also exposes `.watch` on the same generated method. See
+[Watch Queries in realtime](./realtime) for complete results, observed reads,
+fresh Policy, resume/reset, and Change Ledger recovery.
+
+## Add ordinary Collection operations
+
+Define the common Collection surface once:
+
+```ts title="src/features/message-operations.ts"
+import { defineCollectionOperations, mutation, operation } from "questpie";
+import { messages } from "../data/collaboration";
+import { channelMessagePage } from "./message-data";
+import { messagePolicy } from "./messages-policy";
+
+export const messageOperations = defineCollectionOperations(messages, {
+	name: "messages",
+	policy: messagePolicy,
+	network: true,
+
+	list: { data: channelMessagePage },
+	get: {
+		select: {
+			id: true,
+			title: true,
+			body: true,
+			createdAt: true,
+			updatedAt: true,
+		},
+	},
+	create: {
+		input: ["channelId", "title", "body"],
+		normalize: ({ input }) => ({
+			title: operation.text.trim(input.title),
+		}),
+		values: ({ principal, tenant, operationTime }) => ({
+			companyId: mutation.overwrite(tenant.id),
+			authorId: mutation.overwrite(principal.id),
+			createdAt: mutation.overwrite(operationTime),
+			updatedAt: mutation.overwrite(operationTime),
+		}),
+		select: {
+			id: true,
+			channelId: true,
+			authorId: true,
+			title: true,
+			body: true,
+			createdAt: true,
+			updatedAt: true,
+		},
+	},
+	update: {
+		input: ["title", "body"],
+		normalize: ({ input }) => ({
+			title: operation.text.trimIfPresent(input.title),
+		}),
+		values: ({ operationTime }) => ({
+			updatedAt: mutation.overwrite(operationTime),
+		}),
+		select: { id: true, title: true, body: true, updatedAt: true },
+	},
+	delete: { select: { id: true } },
+});
+```
+
+The compiler lowers each selected member to an ordinary Resource:
+
+| Member   | Resource                   | Consistency boundary  |
+| -------- | -------------------------- | --------------------- |
+| `list`   | Query `messages.list`      | read snapshot         |
+| `get`    | Query `messages.get`       | read snapshot         |
+| `create` | Mutation `messages.create` | one write transaction |
+| `update` | Mutation `messages.update` | one write transaction |
+| `delete` | Mutation `messages.delete` | one write transaction |
+
+The generated names in the table use the ordinary Resource contract described
+in [Define executable application behavior](./executable-definitions).
+
+The generated client accepts only the declared caller Fields:
+
+```ts title="web/edit-message.ts"
+import type { GeneratedClient } from "#questpie/client";
+
+export async function editMessage(
+	client: GeneratedClient,
+	companyId: string,
+	channelId: string,
+) {
+	const company = client.withContext({ companyId });
+	const callId = crypto.randomUUID();
+
+	const created = await company.collections.messages.create(
+		{
+			input: {
+				channelId,
+				title: "Ready for review",
+				body: "Please check this message.",
+			},
+		},
+		{ callId },
+	);
+
+	const updated = await company.collections.messages.update({
+		key: { id: created.id },
+		patch: { title: "Approved" },
+	});
+
+	if (updated !== null) {
+		await company.collections.messages.delete({
+			key: { id: updated.id },
+		});
+	}
+}
+```
+
+The network call option accepts a stable UUID-formatted `callId`. The Runtime
+mints the same format when a caller omits it. The Mutation can therefore use
+that value for its UUID Message key.
+
+The caller cannot supply `companyId`, `authorId`, `createdAt`, or `updatedAt`.
+The closed server values own them. Field normalization and server values cannot
+read data, call a Service, perform I/O, dispatch work, obtain a clock, or target
+an undeclared Field.
+
+## Write several Collections in one Mutation
+
+Use a named Mutation for a cross-Collection invariant or application error:
+
+```ts title="src/features/submit-message.ts"
+import { defineMutation } from "#questpie/app";
+import { codec, operation, policy } from "questpie";
+
+export const submitMessage = defineMutation({
+	name: "messages.submit",
+	input: codec.object({
+		channelId: codec.uuid(),
+		title: codec.text({ minimumLength: 1, maximumLength: 200 }),
+		body: codec.text({ minimumLength: 1, maximumLength: 20_000 }),
+	}),
+	policy: policy.authenticated(),
+	errors: {
+		channelUnavailable: operation.error({
+			code: "CHANNEL_UNAVAILABLE",
+			status: 404,
+		}),
+	},
+	handler: async ({ input, ctx, errors }) => {
+		ctx.signal.throwIfAborted();
+
+		const channel = await ctx.data.channels.get({
+			key: { id: input.channelId },
+			select: { id: true, companyId: true },
+		});
+		if (channel === null || channel.companyId !== ctx.tenant.id) {
+			throw errors.channelUnavailable();
+		}
+
+		const message = await ctx.data.messages.create({
+			input: {
+				id: ctx.callId,
+				companyId: ctx.tenant.id,
+				channelId: channel.id,
+				authorId: ctx.principal.id,
+				title: input.title.trim(),
+				body: input.body,
+				createdAt: ctx.operationTime,
+				updatedAt: ctx.operationTime,
+			},
+			select: {
+				id: true,
+				channelId: true,
+				authorId: true,
+				title: true,
+				body: true,
+				createdAt: true,
+				updatedAt: true,
+			},
+		});
+
+		await ctx.data.channels.update({
+			key: { id: channel.id },
+			patch: {
+				lastMessageAt: ctx.operationTime,
+				updatedAt: ctx.operationTime,
+			},
+			select: { id: true },
+		});
+
+		await ctx.data.messageEvents.create({
+			input: {
+				id: `event:${ctx.callId}`,
+				messageId: message.id,
+				kind: "submitted",
+				occurredAt: ctx.operationTime,
+			},
+			select: { id: true },
+		});
+
+		await ctx.dispatch.messageSubmitted({
+			messageId: message.id,
+			companyId: ctx.tenant.id,
+		});
+
+		return message;
+	},
+	network: true,
+});
+```
+
+The Mutation owns one transaction. The Message, Channel update, Message Event,
+Change Ledger fact, result receipt, and durable dispatch intent commit together.
+`operationTime` is stable for that transaction. `createdAt` and `updatedAt`
+remain ordinary Fields and change only through explicit assignments.
+
+The generated Mutation Context also contains the stable `callId`, the
+`transactionId`, `ctx.signal`, and the immutable deadline. It exposes no raw
+transaction handle, Policy bypass, external Action bag, or ordinary-call System
+elevation.
+
+`ctx.dispatch` contains one typed member for each dispatchable Reaction in the
+Current App Contract. The call above targets the app's `messageSubmitted`
+Reaction Definition. This Mutation only accepts its typed intent; it does not
+run the Reaction or any external work in the transaction. See
+[Run a durable Reaction after commit](./durable-reactions) for attempts, leases,
+retry, current-Policy run-as, external effects, and retention.
+
+## Follow the fixed lifecycle
+
+QUESTPIE processes a Mutation in this order:
+
+1. Decode exact input and reject unknown keys.
+2. Enforce Operation admission.
+3. Open the transaction and freeze `operationTime`.
+4. Apply row scope and acquire the required lock.
+5. Authorize only the Field paths the caller supplied.
+6. Run closed Field normalization.
+7. Apply schema defaults.
+8. Apply closed server values.
+9. Validate the complete candidate.
+10. Enforce candidate Policy.
+11. Enforce PostgreSQL Constraints.
+12. Select and authorize the output.
+13. Validate the output codec.
+14. Commit once.
+15. Encode the result.
+
+The Policy phases use the rules in
+[Resolve Context and authorize with Policy](./context-and-policy). PostgreSQL
+Constraint details never enter the public error.
+
+Each declared error keeps its exact literal code and payload type. An unknown
+thrown value becomes one sanitized `INTERNAL` error without a stack trace or
+database detail.
+
+There is no general `before*` or `after*` hook catalogue. Use closed Field
+normalization for local canonicalization, closed server values for server-owned
+Fields, a named Mutation for cross-Collection work and transactional audit,
+typed dispatch for durable follow-up, and an Action for an external effect.
+
+## Handle cancellation and response loss
+
+Every Operation receives `ctx.signal` and an immutable deadline. Collection
+reads, writes, locks, and dispatch observe both.
+
+Cancellation before commit rolls back all writes. Cancellation or response
+loss after commit cannot undo PostgreSQL state. QUESTPIE reports
+`COMMITTED_RESULT_UNAVAILABLE` with the stable call and transaction identity.
+
+A Mutation call identity includes the application, Tenant, Operation,
+Principal, and `callId`. It also binds the canonical input digest. The result
+receipt commits with the business change. Retrying the same call returns the
+stored result without another write. Reusing the ID with different input
+fails with the declared `IDEMPOTENCY_CONFLICT` error.
+
+The Runtime mints a `callId` when a direct caller does not provide one. A caller
+that may retry supplies and preserves the same `callId`, as in the Collection
+create example.
+
+Direct and network calls enter the same Operation engine. Direct calls preserve
+typed runtime values such as `Date`. Network calls use the compiled codec to
+encode and restore them. Both paths return the same typed result, declared
+error, nondisclosing not-found result, and transaction outcome.
+
+Next, [watch Queries in realtime](./realtime).
