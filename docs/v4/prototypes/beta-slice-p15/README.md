@@ -8,5 +8,6 @@ ownership, dependency closure, and named absence stories.
 bun run docs/v4/prototypes/beta-slice-p15/check.ts
 bun run docs/v4/prototypes/beta-slice-p15/negative-control.ts
 bunx oxfmt --check docs/v4/prototypes/beta-slice-p15
+bunx oxlint --deny-warnings docs/v4/prototypes/beta-slice-p15/*.ts
 git diff --check
 ```

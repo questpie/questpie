@@ -37,6 +37,7 @@ export function validate(slice: Slice): void {
 	for (const required of [
 		"foundation",
 		"schema",
+		"services",
 		"context-policy",
 		"operations",
 		"runtime-client",
@@ -47,6 +48,23 @@ export function validate(slice: Slice): void {
 	])
 		if (!ids.includes(required))
 			throw new Error(`missing beta slice ${required}`);
+	const services = slice.beta1.find(({ id }) => id === "services");
+	if (
+		!services ||
+		![
+			"Service Definition",
+			"application versus execution lifetime",
+			"external-effect classification",
+			"reverse-dependency cleanup",
+			"Package isolation",
+		].every((invariant) =>
+			`${services.owns} ${services.evidence}`.includes(invariant),
+		)
+	)
+		throw new Error("Service ownership incomplete");
+	const contextPolicy = slice.beta1.find(({ id }) => id === "context-policy");
+	if (!contextPolicy?.requires.includes("services"))
+		throw new Error("Context/Policy must depend on Service lifetime");
 	for (const capability of [
 		"Action",
 		"raw Route and credential Auth integration",
@@ -79,10 +97,11 @@ export function validate(slice: Slice): void {
 }
 
 if (import.meta.main) {
-	validate(
-		JSON.parse(
-			readFileSync(new URL("./SLICE.json", import.meta.url), "utf8"),
-		) as Slice,
+	const slice = JSON.parse(
+		readFileSync(new URL("./SLICE.json", import.meta.url), "utf8"),
+	) as Slice;
+	validate(slice);
+	console.log(
+		`P15 beta slice: dependency closure and ${slice.deferred.length} absence stories valid`,
 	);
-	console.log("P15 beta slice: dependency closure and 9 absence stories valid");
 }

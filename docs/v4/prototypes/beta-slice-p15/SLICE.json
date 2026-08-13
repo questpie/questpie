@@ -22,8 +22,14 @@
 			"evidence": "migrations conformance cell on local PostgreSQL"
 		},
 		{
+			"id": "services",
+			"requires": ["foundation"],
+			"owns": "Service Definition identity/Owner/Origin, application versus execution lifetime, transaction-safe versus external-effect classification, app/package-scoped defineService binding, invalid-edge refusal and reverse-dependency cleanup at response EOF, failure or cancellation",
+			"evidence": "service-route-auth conformance subset for Package isolation, resolver failure, cancellation and stream EOF cleanup; no raw Route or credential Auth integration"
+		},
+		{
 			"id": "context-policy",
-			"requires": ["schema"],
+			"requires": ["schema", "services"],
 			"owns": "Principal/Authority, trusted Context Resolution, relational Policy, nondisclosure and framework SQL scope with no RLS claim",
 			"evidence": "context and policy cells in collaboration and archive fixtures"
 		},
@@ -72,7 +78,7 @@
 		},
 		{
 			"capability": "raw Route and credential Auth integration",
-			"seam": "accepted Service graph, defineRoute, app.fetch mounting, credential resolver and explicit ctx.execution transition",
+			"seam": "defineRoute, raw-Route app.fetch mounting, credential resolver and explicit ctx.execution transition over the shipped Service graph",
 			"absence": "beta.1 Operation Wire has no arbitrary raw protocol surface and no bundled auth schema/client; tests use explicit ingress Principal/context"
 		},
 		{

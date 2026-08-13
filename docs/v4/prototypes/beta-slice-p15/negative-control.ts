@@ -36,6 +36,19 @@ const invalid = [
 		value.releaseGates = [];
 		return value;
 	},
+	() => {
+		const value = clone();
+		value.beta1.find((item: { id: string }) => item.id === "services").owns =
+			"generic capability bag";
+		return value;
+	},
+	() => {
+		const value = clone();
+		value.beta1.find(
+			(item: { id: string }) => item.id === "context-policy",
+		).requires = ["schema"];
+		return value;
+	},
 ];
 
 for (const mutate of invalid) {

@@ -31,7 +31,7 @@
 		{ "command": "git diff --check", "result": "PASS" }
 	],
 	"acceptanceCriteria": [
-		"Beta.1 is the smallest connected P1-P6 vertical and includes watch, Reaction and minimal Studio rather than a temporary CRUD-only architecture.",
+		"Beta.1 is the smallest connected P1-P6 vertical and includes Service lifetime, watch, Reaction and minimal Studio rather than a temporary CRUD-only architecture.",
 		"Every deferred accepted capability retains a named compatible seam and exact absence story.",
 		"Dependency order, compatibility promises and release evidence are explicit.",
 		"Runtime lifecycle and durable maintenance commands have explicit Authority, version fencing, typed concurrent winners and append-only audit ownership.",
