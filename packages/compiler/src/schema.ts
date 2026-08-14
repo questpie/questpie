@@ -4,6 +4,7 @@ import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { CompilerDiagnosticError } from "./diagnostic";
 import {
 	classifyAddedField,
+	classifyChangedField,
 	classifyProviderDelta,
 	maximumClassification,
 } from "./schema/migration-classification";
@@ -528,20 +529,22 @@ function destructiveDeltaSteps(
 					semanticChanged ||
 					(!derivedRename && key !== "fields" && physicalChanged)
 				) {
-					if (key === "fields")
-						steps.push(
-							step({
-								kind: "alterField",
-								targetIdentity: targetChildIdentity,
-								containerIdentity: targetIdentity,
-								lock: "accessExclusive",
-								scansData: true,
-								rewritesTable: true,
-								reversibleWithoutData: false,
-								classification: "destructive",
-							}),
-						);
-					else
+					if (key === "fields") {
+						const classification = classifyChangedField(baseValue, targetValue);
+						if (classification)
+							steps.push(
+								step({
+									kind: "alterField",
+									targetIdentity: targetChildIdentity,
+									containerIdentity: targetIdentity,
+									lock: "accessExclusive",
+									scansData: true,
+									rewritesTable: true,
+									reversibleWithoutData: false,
+									classification,
+								}),
+							);
+					} else
 						steps.push(
 							step({
 								kind: deltaKind(key, "drop"),

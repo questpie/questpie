@@ -1,3 +1,5 @@
+import { canonicalBytes } from "../canonical";
+
 export type MigrationClassification =
 	| "safe"
 	| "guarded"
@@ -23,6 +25,69 @@ export function classifyAddedField(
 		field.default.kind === "literal";
 	if (!literal) return "blocked";
 	return field.nullable === true ? "guarded" : "destructive";
+}
+
+type FieldShape = Readonly<Record<string, unknown>>;
+
+function literalDefault(value: unknown): boolean {
+	return (
+		value !== null &&
+		typeof value === "object" &&
+		"kind" in value &&
+		value.kind === "literal"
+	);
+}
+
+function fieldRemainder(field: FieldShape): Readonly<Record<string, unknown>> {
+	const {
+		default: _default,
+		identity: _identity,
+		nullable: _nullable,
+		path: _path,
+		postgresName: _postgresName,
+		type: _type,
+		...remainder
+	} = field;
+	return remainder;
+}
+
+export function classifyChangedField(
+	base: FieldShape,
+	target: FieldShape,
+): MigrationClassification | null {
+	const classifications: MigrationClassification[] = [];
+	const baseType = base.type as FieldShape;
+	const targetType = target.type as FieldShape;
+	if (canonicalBytes(baseType) !== canonicalBytes(targetType))
+		classifications.push(
+			baseType.kind === "integer" && targetType.kind === "bigint"
+				? "guarded"
+				: "blocked",
+		);
+	if (base.nullable !== target.nullable)
+		classifications.push(
+			base.nullable === false && target.nullable === true
+				? "destructive"
+				: literalDefault(target.default)
+					? "destructive"
+					: "blocked",
+		);
+	if (canonicalBytes(base.default) !== canonicalBytes(target.default)) {
+		if (base.default === null)
+			classifications.push(
+				literalDefault(target.default) ? "guarded" : "blocked",
+			);
+		else classifications.push("destructive");
+	}
+	if (
+		canonicalBytes(fieldRemainder(base)) !==
+		canonicalBytes(fieldRemainder(target))
+	)
+		classifications.push("blocked");
+	if (classifications.length === 0) return null;
+	return maximumClassification(
+		classifications.map((classification) => ({ classification })),
+	);
 }
 
 export function classifyProviderDelta(
