@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { CompilerDiagnosticError } from "./diagnostic";
 import { flattenFieldContracts } from "./schema/field-contract";
+import { fieldPath, indexField } from "./schema/field-reference";
 import type {
 	ApplicationConfiguration,
 	EvaluatedExport,
@@ -53,11 +54,7 @@ function constraintContract(value: RecordValue): RecordValue {
 function indexContract(value: RecordValue): RecordValue {
 	return {
 		kind: "btree",
-		fields: (value.fields as readonly unknown[]).map((field) => ({
-			field: fieldPath(field),
-			order: "asc",
-			nulls: "last",
-		})),
+		fields: (value.fields as readonly unknown[]).map(indexField),
 		postgresName:
 			typeof value.postgresName === "string" ? value.postgresName : null,
 	};
@@ -74,21 +71,6 @@ function relationContract(value: RecordValue): RecordValue {
 		postgresName:
 			typeof value.postgresName === "string" ? value.postgresName : null,
 	};
-}
-
-function fieldPath(value: unknown): readonly string[] {
-	if (typeof value === "string") return [value];
-	if (
-		!Array.isArray(value) ||
-		value.length === 0 ||
-		value.some((segment) => typeof segment !== "string")
-	)
-		throw new CompilerDiagnosticError(
-			"QP-SCHEMA-003",
-			"invalidReference",
-			"a Field reference must be a string or non-empty segment array",
-		);
-	return value as readonly string[];
 }
 
 function augmentationContract(value: RecordValue): RecordValue {
@@ -700,20 +682,23 @@ export function projectManifest(
 						value.postgresName,
 						`qp_ix_${tableName}_${snake(key)}`,
 					),
-					fields: (value.fields as readonly unknown[]).map((field) => ({
-						field: fieldSemanticIdentity(resource.identity, fieldPath(field)),
-						order: "asc",
-						nulls: "last",
-						operatorClass: "typeDefault",
-						collation:
-							projectedFields.find(
-								(candidate) =>
-									candidate.identity ===
-									fieldSemanticIdentity(resource.identity, fieldPath(field)),
-							)?.collation === "questpie.binary"
-								? "field"
-								: null,
-					})),
+					fields: (value.fields as readonly unknown[]).map((rawField) => {
+						const field = indexField(rawField);
+						return {
+							field: fieldSemanticIdentity(resource.identity, field.field),
+							order: field.order,
+							nulls: field.nulls,
+							operatorClass: "typeDefault",
+							collation:
+								projectedFields.find(
+									(candidate) =>
+										candidate.identity ===
+										fieldSemanticIdentity(resource.identity, field.field),
+								)?.collation === "questpie.binary"
+									? "field"
+									: null,
+						};
+					}),
 				};
 			},
 		);

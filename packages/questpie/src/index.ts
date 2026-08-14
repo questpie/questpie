@@ -258,7 +258,7 @@ export interface ConstraintDefinition<
 	readonly postgresName: string | null;
 }
 
-function frozenTuple<const Values extends readonly FieldReference[]>(
+function frozenTuple<const Values extends readonly unknown[]>(
 	values: Values,
 ): Values {
 	return Object.freeze(
@@ -287,15 +287,23 @@ export const constraint = Object.freeze({
 		}),
 });
 
+export type IndexField =
+	| FieldReference
+	| Readonly<{
+			field: FieldReference;
+			order?: "asc" | "desc";
+			nulls?: "first" | "last";
+	  }>;
+
 export interface IndexDefinition<
-	Fields extends readonly FieldReference[] = readonly never[],
+	Fields extends readonly IndexField[] = readonly never[],
 > {
 	readonly kind: "btree";
 	readonly fields: Fields;
 	readonly postgresName: string | null;
 }
 
-export function index<const Fields extends readonly FieldReference[]>(
+export function index<const Fields extends readonly IndexField[]>(
 	input: Readonly<{ fields: Fields; postgres?: { name: string } }>,
 ): IndexDefinition<Fields> {
 	return Object.freeze({
@@ -370,7 +378,7 @@ export interface CollectionAugmentation<
 		Record<string, { readonly fields: readonly FieldReference[] }>
 	> = Readonly<Record<never, never>>,
 	Indexes extends Readonly<
-		Record<string, { readonly fields: readonly FieldReference[] }>
+		Record<string, { readonly fields: readonly IndexField[] }>
 	> = Readonly<Record<never, never>>,
 > {
 	readonly __questpie: AugmentationBrand;
@@ -389,7 +397,7 @@ export interface CollectionDefinition<
 		Record<string, { readonly fields: readonly FieldReference[] }>
 	> = Readonly<Record<never, never>>,
 	Indexes extends Readonly<
-		Record<string, { readonly fields: readonly FieldReference[] }>
+		Record<string, { readonly fields: readonly IndexField[] }>
 	> = Readonly<Record<never, never>>,
 	Relations extends Readonly<
 		Record<string, { readonly fields: readonly FieldReference[] }>
@@ -408,16 +416,23 @@ export interface CollectionDefinition<
 type ValidateFieldReferences<
 	Fields extends Readonly<Record<string, FieldNode>>,
 	Members extends Readonly<
-		Record<string, { readonly fields: readonly FieldReference[] }>
+		Record<string, { readonly fields: readonly unknown[] }>
 	>,
 > = {
 	readonly [Key in keyof Members]: Exclude<
-		Members[Key]["fields"][number],
+		MemberFieldReference<Members[Key]["fields"][number]>,
 		FieldReferences<Fields>
 	> extends never
 		? Members[Key]
 		: never;
 };
+
+type MemberFieldReference<Value> =
+	Value extends Readonly<{
+		field: infer Reference;
+	}>
+		? Reference
+		: Value;
 
 type NestedFieldSegments<Fields extends Readonly<Record<string, FieldNode>>> = {
 	[Key in Extract<keyof Fields, string>]: Fields[Key] extends FieldDefinition
@@ -442,7 +457,7 @@ export function defineCollectionAugmentation<
 		Record<string, { readonly fields: readonly FieldReference[] }>
 	>,
 	const Indexes extends Readonly<
-		Record<string, { readonly fields: readonly FieldReference[] }>
+		Record<string, { readonly fields: readonly IndexField[] }>
 	>,
 >(
 	input: Readonly<{
@@ -471,7 +486,7 @@ export function defineCollection<
 		Record<string, { readonly fields: readonly FieldReference[] }>
 	>,
 	const Indexes extends Readonly<
-		Record<string, { readonly fields: readonly FieldReference[] }>
+		Record<string, { readonly fields: readonly IndexField[] }>
 	>,
 	const Relations extends Readonly<
 		Record<string, { readonly fields: readonly FieldReference[] }>

@@ -33,7 +33,7 @@ export const customers = defineCollection({
 		city: constraint.unique({ fields: [["address", "city"]] }),
 	},
 	indexes: { location: index({ fields: [
-		["address", "geo", "latitude"],
+		{ field: ["address", "geo", "latitude"], order: "desc", nulls: "first" },
 		["address", "geo", "longitude"],
 	] }) },
 });
@@ -91,13 +91,21 @@ export const customers = defineCollection({
 						value.identity === "collection:customers/constraint:city",
 				)?.fields,
 			).toEqual(["collection:customers/field:address/field:city"]);
-			expect(
-				customers.indexes[0].fields.map(
-					(field: { field: string }) => field.field,
-				),
-			).toEqual([
-				"collection:customers/field:address/field:geo/field:latitude",
-				"collection:customers/field:address/field:geo/field:longitude",
+			expect(customers.indexes[0].fields).toEqual([
+				{
+					field: "collection:customers/field:address/field:geo/field:latitude",
+					order: "desc",
+					nulls: "first",
+					operatorClass: "typeDefault",
+					collation: null,
+				},
+				{
+					field: "collection:customers/field:address/field:geo/field:longitude",
+					order: "asc",
+					nulls: "last",
+					operatorClass: "typeDefault",
+					collation: null,
+				},
 			]);
 			expect(compilation.generatedFiles["app.ts"]).toContain(
 				'readonly "address": Readonly<{ readonly "city": string; readonly "geo": Readonly<{ readonly "latitude": string; readonly "longitude": string; }>; }>;',

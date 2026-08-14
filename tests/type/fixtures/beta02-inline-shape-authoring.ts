@@ -31,7 +31,11 @@ const customers = defineCollection({
 	indexes: {
 		location: index({
 			fields: [
-				["address", "geo", "latitude"],
+				{
+					field: ["address", "geo", "latitude"],
+					order: "desc",
+					nulls: "first",
+				},
 				["address", "geo", "longitude"],
 			],
 		}),
@@ -55,6 +59,13 @@ seed.insert(customers, {
 
 // @ts-expect-error an inline shape cannot be empty
 shape.inline({ fields: {} });
+
+index({
+	fields: [
+		// @ts-expect-error B-tree order is a closed asc/desc choice
+		{ field: "id", order: "sideways" },
+	],
+});
 
 defineCollection({
 	name: "invalid",
