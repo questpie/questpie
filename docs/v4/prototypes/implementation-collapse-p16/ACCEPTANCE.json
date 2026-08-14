@@ -1,0 +1,66 @@
+{
+	"ticket": "#16 implementation collapse",
+	"proof": "docs/v4/prototypes/implementation-collapse-p16",
+	"authorityHeads": {
+		"foundation": "d03358b749c4c8efb769d1c0fed50e8fbf983fb0",
+		"P1": "713485a64bcc4795d960d576fea51da56bc4dcdd",
+		"P2": "5fbd9058e1cfb3bfef56f11a1d0ec7b6e14e88fa",
+		"P3": "a09bf55f0e22f65e059cda9f3eda914520dd4f9d",
+		"P4": "05fc96f3d07c70beaf7f654d79d6cfb46f427f92",
+		"P5": "3f8618613bde1bdd7e13863970eb1c140e201c6f",
+		"P6": "94c237c9aa910a60a332b1ef97473f34fe89d65b",
+		"postP6": "a164e33e752ab54d48fcf903371938ecff3dc082",
+		"P14": "3a89c565cb1eba59815d106df1c06406ac20ac98",
+		"P15": "0d8e2543ff7e9d50bdab7d2b66b62ec4c35d8a6f",
+		"P17": "79d3667019e0a4cda6f7652d24f2d9c6b68d4fca",
+		"P18": "71463e99a70481b0950ae18d1ff409c034c1b158",
+		"P19": "96829bd7b08ea54e60fdc7d5b077366235d2dfea",
+		"P20": "6e056bc44c15740b2797a9489fe3823c3100bdad",
+		"P21": "d50d4334b116a5bdc46e95cdabf566d8db938d37",
+		"P22": "17008b0547f24b53d456530b798e8d96ae2e2b1e"
+	},
+	"reviewedHeads": {
+		"postP6": "79d7816dbf0b9b6e052706daf71fe173e1cbfc42",
+		"P17": "7211bd3c8a9cdbe131b026874d4441f3ccb39c9d",
+		"P18": "fa2960083c94f824d7c0f4d005a9aec01babb978",
+		"P19Repair": "039a720d12956ddc8e1a310e287945de35a52065",
+		"P20Repair": "eaa21e0ca2c4a3b941a04e98b1a0278d0fe0aba9",
+		"P21Repair": "0f44e985cf897a499cae6801966a2467c1e09b68",
+		"P22Repair": "fe8b5158d4d4eefb5920f07b3c7198fa3a4d8553",
+		"P14Repair": "56a39c27704afef00c6b25fdbd13ade88278b668",
+		"P15Initial": "49e142607e9c0275ee07a2fa4b90ff516eaf6995",
+		"P15Repair": "5c4bdfa67ea97fa48793d01fbee188b7dbf19e3b"
+	},
+	"verification": [
+		{
+			"command": "bun run docs/v4/prototypes/implementation-collapse-p16/check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run docs/v4/prototypes/implementation-collapse-p16/negative-control.ts",
+			"result": "PASS"
+		},
+		{ "command": "render all twelve GitHub issue bodies", "result": "PASS" },
+		{
+			"command": "canonical TypeScript 6 strict no-emit check of P16 scripts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxlint --deny-warnings docs/v4/prototypes/implementation-collapse-p16/*.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxfmt --check docs/v4/beta1-build-spec.md docs/v4/prototypes/implementation-collapse-p16",
+			"result": "PASS"
+		},
+		{ "command": "git diff --check", "result": "PASS" }
+	],
+	"acceptanceCriteria": [
+		"One buildable specification collapses accepted product authority without adding production Runtime code.",
+		"Twelve small tracer bullets form a complete acyclic beta.1 path with exact authority, artifacts, fixture, red test, non-goals, hostile cases, budgets and commands.",
+		"Only the genuinely unblocked first issue is agent-ready.",
+		"Correctness, micro, load and soak remain separate and every behavior-owning slice owns its performance budgets.",
+		"PostgreSQL is the only durable dependency, public Index remains B-tree-only, optional infrastructure is absent, and no RLS claim is introduced.",
+		"Legacy component tickets remain historical backlog; the new connected queue is the execution authority."
+	]
+}

@@ -1,0 +1,545 @@
+{
+	"release": "4.0.0-beta.1",
+	"parent": 261,
+	"authorityHeads": {
+		"foundation": "d03358b749c4c8efb769d1c0fed50e8fbf983fb0",
+		"P1": "713485a64bcc4795d960d576fea51da56bc4dcdd",
+		"P2": "5fbd9058e1cfb3bfef56f11a1d0ec7b6e14e88fa",
+		"P3": "a09bf55f0e22f65e059cda9f3eda914520dd4f9d",
+		"P4": "05fc96f3d07c70beaf7f654d79d6cfb46f427f92",
+		"P5": "3f8618613bde1bdd7e13863970eb1c140e201c6f",
+		"P6": "94c237c9aa910a60a332b1ef97473f34fe89d65b",
+		"postP6": "a164e33e752ab54d48fcf903371938ecff3dc082",
+		"P17": "79d3667019e0a4cda6f7652d24f2d9c6b68d4fca",
+		"P18": "71463e99a70481b0950ae18d1ff409c034c1b158",
+		"P19": "96829bd7b08ea54e60fdc7d5b077366235d2dfea",
+		"P20": "6e056bc44c15740b2797a9489fe3823c3100bdad",
+		"P21": "d50d4334b116a5bdc46e95cdabf566d8db938d37",
+		"P22": "17008b0547f24b53d456530b798e8d96ae2e2b1e",
+		"P14": "3a89c565cb1eba59815d106df1c06406ac20ac98",
+		"P15": "0d8e2543ff7e9d50bdab7d2b66b62ec4c35d8a6f"
+	},
+	"issues": [
+		{
+			"id": "BETA-01",
+			"title": "BETA-01 Compile a relocated collaboration app into exact generated contracts",
+			"blockedBy": [],
+			"agentReady": true,
+			"authority": [
+				"ADR-0007",
+				"ADR-0008",
+				"ADR-0009",
+				"ADR-0019",
+				"ADR-0020",
+				"ADR-0021"
+			],
+			"artifacts": [
+				"workspace package graph",
+				"Build Input and Package Inventory",
+				"Compiled Manifest and Origin Map",
+				"#questpie/app, #questpie/package and #questpie/client declarations",
+				"compiler goldens and package tarball inspection"
+			],
+			"fixture": "Collaboration fixture with Company/Space/Channel/Membership/Message plus one Owner-accepted Package Augmentation; compile only.",
+			"redTest": "A relocated consumer cannot import defineQuery from #questpie/app and a Package can see a host-only Resource.",
+			"hostile": [
+				"duplicate Resource identity",
+				"unauthorized Augmentation",
+				"import-order change",
+				"structural import of generated output",
+				"Package host leak",
+				"ambient registry",
+				"partial output after failure"
+			],
+			"nonGoals": [
+				"PostgreSQL execution",
+				"Runtime",
+				"Policy behavior",
+				"production code outside this issue"
+			],
+			"budgets": [
+				"changed loop <= 5 s on reference machine",
+				"canonical TS declaration and instantiation baseline recorded",
+				"zero public ORM types",
+				"byte-identical relocated goldens"
+			],
+			"verify": [
+				"bun run check:changed -- --test tests/type/beta01-generated-contract.test.ts --typecheck @questpie/compiler",
+				"bun run quality:full",
+				"bun run package:check",
+				"git diff --check"
+			]
+		},
+		{
+			"id": "BETA-02",
+			"title": "BETA-02 Migrate and restart the collaboration schema through reviewed artifacts",
+			"blockedBy": ["BETA-01"],
+			"agentReady": false,
+			"authority": ["ADR-0002", "ADR-0006", "ADR-0008", "ADR-0021"],
+			"artifacts": [
+				"Schema/Data projections",
+				"Migration Plan and six-file Committed Migration",
+				"transactional receipt and Schema Fingerprint",
+				"Seed graph and receipt",
+				"CLI explain goldens"
+			],
+			"fixture": "Company/Space/Channel/Membership/Message schema using only named primary keys, Relations, Constraints and B-tree Indexes.",
+			"redTest": "A fresh PostgreSQL 17 database cannot complete plan-review-apply-restart without Drift.",
+			"hostile": [
+				"stale plan",
+				"checksum tamper",
+				"lost apply response",
+				"concurrent apply",
+				"wrong application identity",
+				"unsupported object",
+				"implicit rename"
+			],
+			"nonGoals": [
+				"online DDL",
+				"down migrations",
+				"handwritten SQL",
+				"RLS",
+				"non-B-tree Index"
+			],
+			"budgets": [
+				"changed loop <= 5 s excluding PostgreSQL",
+				"migration golden bytes stable",
+				"local apply/restart baseline recorded"
+			],
+			"verify": [
+				"bun run check:changed -- --test tests/unit/beta02-migration-plan.test.ts --typecheck @questpie/compiler",
+				"bun run test:postgres -- --scenario beta02",
+				"bun run quality:full",
+				"git diff --check"
+			]
+		},
+		{
+			"id": "BETA-03",
+			"title": "BETA-03 Resolve one execution with scoped Services and trusted Context",
+			"blockedBy": ["BETA-02"],
+			"agentReady": false,
+			"authority": ["ADR-0010", "ADR-0015", "ADR-0019", "ADR-0021"],
+			"artifacts": [
+				"Service and Context projections",
+				"generated execution context declarations",
+				"lifecycle trace",
+				"Origin/explain joins"
+			],
+			"fixture": "Direct and Operation-Wire roots derive an explicit Principal/context input; one application Service and one execution Service are Package-isolated.",
+			"redTest": "Two concurrent consumers create duplicate execution Services and cancellation skips reverse-order cleanup.",
+			"hostile": [
+				"two Runtime instances",
+				"coalesced creation",
+				"Service resolution failure",
+				"response and SSE EOF",
+				"failure",
+				"cancellation",
+				"invalid lifetime edge",
+				"external-effect edge from transaction-safe Service"
+			],
+			"nonGoals": [
+				"credential Auth resolver",
+				"raw Route",
+				"Better Auth Package",
+				"Service provider registry"
+			],
+			"budgets": [
+				"changed loop <= 5 s",
+				"no application-wide recursive type",
+				"lifecycle micro baseline recorded"
+			],
+			"verify": [
+				"bun run check:changed -- --test tests/integration/beta03-execution-services.test.ts --typecheck @questpie/runtime",
+				"bun run quality:full",
+				"git diff --check"
+			]
+		},
+		{
+			"id": "BETA-04",
+			"title": "BETA-04 Read one relationally authorized Message page through Query",
+			"blockedBy": ["BETA-03"],
+			"agentReady": false,
+			"authority": ["ADR-0008", "ADR-0010", "ADR-0011", "ADR-0019", "ADR-0021"],
+			"artifacts": [
+				"normalized Policy and Query programs",
+				"PostgreSQL lowering golden",
+				"exact Query declarations",
+				"nondisclosure and explain transcripts"
+			],
+			"fixture": "Message list authorized through Company/Space Membership with selected Field disclosure, stable order and forward cursor page.",
+			"redTest": "A foreign member can infer a hidden Message through key lookup, count, cursor boundary or first+1 sentinel.",
+			"hostile": [
+				"revoked membership",
+				"role change",
+				"forged tenant",
+				"Policy evidence versus disclosure read",
+				"relation target denial",
+				"cursor tamper",
+				"unknown operator"
+			],
+			"nonGoals": [
+				"RLS",
+				"raw SQL",
+				"aggregate API",
+				"backward pagination",
+				"JSON-interior operators"
+			],
+			"budgets": [
+				"changed loop <= 5 s",
+				"Query type/declaration baseline within accepted P21 class",
+				"bounded rows and first+1"
+			],
+			"verify": [
+				"bun run check:changed -- --test tests/integration/beta04-policy-query.test.ts --typecheck @questpie/runtime",
+				"bun run test:postgres -- --scenario beta04",
+				"bun run quality:full",
+				"git diff --check"
+			]
+		},
+		{
+			"id": "BETA-05",
+			"title": "BETA-05 Call the Message Query through direct, Fetch and generated client paths",
+			"blockedBy": ["BETA-04"],
+			"agentReady": false,
+			"authority": ["ADR-0011", "ADR-0014", "ADR-0017", "ADR-0019", "ADR-0021"],
+			"artifacts": [
+				"immutable Runtime Build inventory",
+				"versioned Operation Wire",
+				"generated client",
+				"readiness/drain trace",
+				"Execution Envelope events"
+			],
+			"fixture": "The exact Message Query runs through app.execution, app.fetch and #questpie/client with equivalent explicit Context input.",
+			"redTest": "A mismatched generated client or Runtime Build reaches the handler instead of failing before disclosure.",
+			"hostile": [
+				"malformed frame",
+				"unknown operation",
+				"deadline",
+				"disconnect",
+				"response loss",
+				"mismatched build",
+				"readiness refusal",
+				"bounded drain"
+			],
+			"nonGoals": [
+				"raw Route",
+				"WebSocket",
+				"host adapter",
+				"split Runtime roles"
+			],
+			"budgets": [
+				"changed loop <= 5 s",
+				"wire and cold-start baseline recorded",
+				"64 active roots per Principal default enforced"
+			],
+			"verify": [
+				"bun run check:changed -- --test tests/integration/beta05-runtime-client.test.ts --typecheck @questpie/runtime",
+				"bun run test:postgres -- --scenario beta05",
+				"bun run quality:full",
+				"git diff --check"
+			]
+		},
+		{
+			"id": "BETA-06",
+			"title": "BETA-06 Publish one Message in an idempotent transaction",
+			"blockedBy": ["BETA-05"],
+			"agentReady": false,
+			"authority": ["ADR-0010", "ADR-0011", "ADR-0013", "ADR-0016", "ADR-0021"],
+			"artifacts": [
+				"Mutation/value/transaction programs",
+				"call/result receipts",
+				"committed change fact",
+				"pending Reaction intent",
+				"generated Mutation client declarations"
+			],
+			"fixture": "message.publish normalizes pure input, assigns server values, rechecks mutable Membership, writes Message/audit/change/Reaction intent in one transaction.",
+			"redTest": "Duplicate delivery or lost response applies message.publish twice or emits intent outside the business transaction.",
+			"hostile": [
+				"forbidden sparse Field",
+				"candidate Policy failure",
+				"lock waiter role revocation",
+				"constraint conflict",
+				"pre-commit cancellation",
+				"post-commit ambiguity",
+				"same key different digest",
+				"unsafe Service in retryable transaction"
+			],
+			"nonGoals": [
+				"generic lifecycle hooks",
+				"automatic transaction retry around effects",
+				"Action",
+				"generic Job"
+			],
+			"budgets": [
+				"changed loop <= 5 s",
+				"Mutation type/declaration baseline recorded",
+				"bounded transaction and payload limits explicit"
+			],
+			"verify": [
+				"bun run check:changed -- --test tests/integration/beta06-publish-mutation.test.ts --typecheck @questpie/runtime",
+				"bun run test:postgres -- --scenario beta06",
+				"bun run quality:full",
+				"git diff --check"
+			]
+		},
+		{
+			"id": "BETA-07",
+			"title": "BETA-07 Watch the Message Query through the Change Ledger",
+			"blockedBy": ["BETA-06"],
+			"agentReady": false,
+			"authority": ["ADR-0012", "ADR-0014", "ADR-0017", "ADR-0021"],
+			"artifacts": [
+				"Change Ledger DDL/triggers",
+				"observed dependency plan",
+				"SSE resume frames",
+				"reconciliation and retention evidence"
+			],
+			"fixture": "The beta Message Query .watch captures data, Policy, Relation, tenant and pagination dependencies and sends complete results.",
+			"redTest": "Crash after Message commit and before wake loses the refresh or reuses stale Context authority.",
+			"hostile": [
+				"opposite xid allocation/commit order",
+				"wake loss",
+				"recompute failure",
+				"revocation",
+				"raw DML",
+				"cascade",
+				"COPY/MERGE/TRUNCATE",
+				"resume tamper",
+				"retention wrap",
+				"fanout limit"
+			],
+			"nonGoals": [
+				"Channel",
+				"WebSocket",
+				"Redis broker",
+				"cross-Query atomic convergence"
+			],
+			"budgets": [
+				"changed loop <= 5 s",
+				"accepted default dependency/subscription/result/fanout limits enforced",
+				"quick stable invalidation micro manifest"
+			],
+			"verify": [
+				"bun run check:changed -- --test tests/integration/beta07-live-query.test.ts --typecheck @questpie/runtime",
+				"bun run test:postgres -- --scenario beta07",
+				"bun run bench:micro -- --scenario beta07",
+				"bun run quality:full",
+				"git diff --check"
+			]
+		},
+		{
+			"id": "BETA-08",
+			"title": "BETA-08 Recover one committed Message Reaction through the durable kernel",
+			"blockedBy": ["BETA-07"],
+			"agentReady": false,
+			"authority": ["ADR-0013", "ADR-0016", "ADR-0017", "ADR-0021"],
+			"artifacts": [
+				"Durable Run/attempt/lease/history schema",
+				"Reaction projection",
+				"worker claim and fencing trace",
+				"maintenance command audit"
+			],
+			"fixture": "One exact committed message-published fact creates one causally deduplicated Reaction and a worker records a Policy-current result.",
+			"redTest": "A worker crash after claim allows a stale lease holder to publish a terminal transition or creates two Reactions for one fact.",
+			"hostile": [
+				"concurrent SKIP LOCKED claims",
+				"lease expiry",
+				"stale fence",
+				"retry exhaustion",
+				"cancellation race",
+				"effect ambiguity",
+				"executable retirement",
+				"acknowledgeAmbiguity/cancelRun/retryRun concurrent winner"
+			],
+			"nonGoals": [
+				"generic Job client",
+				"Workflow steps",
+				"schedules",
+				"external Action authoring"
+			],
+			"budgets": [
+				"changed loop <= 5 s",
+				"claim batch <= 64 and heartbeat contract enforced",
+				"worker micro and nightly load manifests owned by this slice"
+			],
+			"verify": [
+				"bun run check:changed -- --test tests/integration/beta08-reaction.test.ts --typecheck @questpie/runtime",
+				"bun run test:postgres -- --scenario beta08",
+				"bun run bench:micro -- --scenario beta08",
+				"bun run quality:full",
+				"git diff --check"
+			]
+		},
+		{
+			"id": "BETA-09",
+			"title": "BETA-09 Inspect the connected tracer through minimal Studio",
+			"blockedBy": ["BETA-08"],
+			"agentReady": false,
+			"authority": ["ADR-0003", "ADR-0014", "ADR-0021"],
+			"artifacts": [
+				"independent Studio projection producer",
+				"same-origin Studio bundle",
+				"Policy-protected inspection Operations",
+				"safe event/explain views"
+			],
+			"fixture": "Minimal Studio joins Resource/Origin, migration, Policy, Operation, transaction, ledger and Reaction facts for the collaboration tracer.",
+			"redTest": "Studio can disclose a hidden Message or internal payload not available through the equivalent generated Operation.",
+			"hostile": [
+				"foreign Principal",
+				"redacted envelope",
+				"CLI/Studio canonical byte parity from independent producers",
+				"stale build",
+				"maintenance Authority denial",
+				"typed concurrent command winner"
+			],
+			"nonGoals": [
+				"second backend",
+				"raw SQL",
+				"internal-table CRUD",
+				"remote/fleet Studio",
+				"Operator App framework"
+			],
+			"budgets": [
+				"changed loop <= 5 s",
+				"Studio build-size and query-latency baselines recorded",
+				"no secret/raw payload snapshots"
+			],
+			"verify": [
+				"bun run check:changed -- --test tests/integration/beta09-studio.test.ts --typecheck @questpie/studio",
+				"bun run test:postgres -- --scenario beta09",
+				"bun run quality:full",
+				"git diff --check"
+			]
+		},
+		{
+			"id": "BETA-10",
+			"title": "BETA-10 Preserve correctness across ten instances and a rolling build",
+			"blockedBy": ["BETA-09"],
+			"agentReady": false,
+			"authority": ["ADR-0014", "ADR-0017", "ADR-0020", "ADR-0021"],
+			"artifacts": [
+				"ten-instance load scenario",
+				"rolling compatibility matrix",
+				"fanout/worker/reconnect report",
+				"optional-infrastructure absence report"
+			],
+			"fixture": "Ten all-role collaboration Runtime instances accept arbitrary requests, POSTs, reconnects, reconciliation scans and durable claims.",
+			"redTest": "Correctness depends on sticky routing, a leader, process registry, cache, broker or one instance retaining connection state.",
+			"hostile": [
+				"arbitrary routing",
+				"concurrent schedulers/workers",
+				"instance crash",
+				"old/new compatible build",
+				"incompatible claim refusal",
+				"drainRuntime fencing",
+				"cache/broker/carrier absent or lost"
+			],
+			"nonGoals": [
+				"Redis implementation",
+				"Pusher/WebSocket",
+				"split roles",
+				"provider matrix"
+			],
+			"budgets": [
+				"ordinary changed loop unchanged",
+				"GitHub load reports noisy deltas without percentage blocking",
+				"strict ten-instance budgets owned on tagged stable runner"
+			],
+			"verify": [
+				"bun run check:changed -- --test tests/hostile/beta10-compatibility.test.ts --typecheck @questpie/runtime",
+				"bun run test:load -- --scenario beta10",
+				"bun run quality:full",
+				"git diff --check"
+			]
+		},
+		{
+			"id": "BETA-11",
+			"title": "BETA-11 Prove archive portability through the same kernels",
+			"blockedBy": ["BETA-10"],
+			"agentReady": false,
+			"authority": [
+				"ADR-0008",
+				"ADR-0010",
+				"ADR-0011",
+				"ADR-0012",
+				"ADR-0013",
+				"ADR-0021"
+			],
+			"artifacts": [
+				"archive fixture manifest/migration",
+				"permit/embargo Policy evidence",
+				"append-only Record Query/Mutation/watch/Reaction trace",
+				"cross-fixture conformance report"
+			],
+			"fixture": "Institution/Record/ResearchPermit/Embargo/Provenance uses append-oriented records and immutable provenance rather than tenant-equality mutable CRUD.",
+			"redTest": "The compiler or Runtime assumes workspaceId=tenantId, membership-only Policy, mutable update/delete, or collaboration names.",
+			"hostile": [
+				"embargo expiry/revocation",
+				"permit relation evidence",
+				"immutable provenance",
+				"append-only lifecycle",
+				"foreign institution nondisclosure",
+				"restart and Reaction recovery"
+			],
+			"nonGoals": [
+				"a second runtime",
+				"archive-specific public API",
+				"Search",
+				"File bytes"
+			],
+			"budgets": [
+				"changed loop <= 5 s",
+				"no duplicated semantic kernel",
+				"archive adds only slice-owned measured budgets"
+			],
+			"verify": [
+				"bun run check:changed -- --test tests/integration/beta11-archive.test.ts --typecheck @questpie/runtime",
+				"bun run test:postgres -- --scenario beta11",
+				"bun run quality:full",
+				"git diff --check"
+			]
+		},
+		{
+			"id": "BETA-12",
+			"title": "BETA-12 Cut the beta.1 release candidate with managed PostgreSQL evidence",
+			"blockedBy": ["BETA-11"],
+			"agentReady": false,
+			"authority": ["ADR-0014", "ADR-0020", "ADR-0021", "P14 conformance map"],
+			"artifacts": [
+				"local and selected-managed conformance manifest",
+				"package tarballs/declarations",
+				"public beta.1 docs",
+				"release provenance and performance reports"
+			],
+			"fixture": "Both collaboration and archive connected tracers run from published-shape packages on local PostgreSQL 17 and one selected managed PostgreSQL target.",
+			"redTest": "A packed consumer, managed target or clean restart diverges from workspace/local evidence.",
+			"hostile": [
+				"missing managed credential reports withheld not pass",
+				"package negative imports",
+				"artifact checksum mismatch",
+				"migration drift",
+				"clean install",
+				"release retry",
+				"clear stable-runner regression"
+			],
+			"nonGoals": [
+				"deferred beta capabilities",
+				"multiple managed provider matrix",
+				"no RLS claim",
+				"automatic release without tag/environment approval"
+			],
+			"budgets": [
+				"quality:release strict budgets pass on tagged stable runner",
+				"all slice performance manifests present",
+				"GitHub timing remains informational except clear repeated regression"
+			],
+			"verify": [
+				"bun run quality:full",
+				"bun run test:postgres -- --scenario beta12",
+				"bun run quality:release",
+				"bun run release -- --dry-run",
+				"git diff --check"
+			]
+		}
+	]
+}
