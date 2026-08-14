@@ -1,0 +1,58 @@
+{
+	"format": "questpie.api-ergonomics-evidence",
+	"version": 1,
+	"factorySelection": {
+		"selected": "defineKind",
+		"mixedDefineNamespaceDiagnostic": "TS2300",
+		"mixedImportRequiresAlias": true,
+		"unifiedNamespaceCreatesGeneratedStructuralDependency": true
+	},
+	"operationProjection": {
+		"canonicalIdentity": "exact-qualified-name",
+		"handlerCalls": "nested-only",
+		"flatAlias": false,
+		"nullPrototypeTrees": true,
+		"externalIdentity": "kind-qualified"
+	},
+	"editor": {
+		"actionRootCompletions": [
+			"a",
+			"constructor",
+			"delivery",
+			"prototype",
+			"then"
+		],
+		"deliveryCompletions": ["sendMessage"],
+		"mutationRootCompletions": ["messages"],
+		"messagesCompletions": ["recordDelivery"],
+		"sendMessageHover": "(property) sendMessage: (input: Readonly<{ message: Readonly<{ id: string; body: string; }>; }>, options: Readonly<{ idempotencyKey: string; }>) => Promise<Readonly<{ providerMessageId: string; }>>"
+	},
+	"diagnostics": [
+		{
+			"code": "QP-COMPOSE-023",
+			"class": "operationProjectionCollision",
+			"kind": "action",
+			"origins": ["app/actions/delivery.ts:2", "packages/mail/actions.ts:8"],
+			"stableAcrossDiscoveryOrder": true
+		},
+		{
+			"code": "QP-COMPOSE-024",
+			"class": "operationProjectionUnsafeName",
+			"identity": "action:then",
+			"origin": "src/then-root.ts:2"
+		},
+		{
+			"code": "QP-COMPOSE-003",
+			"class": "invalidResourceName",
+			"fixtures": ["Delivery.send", "delivery..send", "delivery/send"]
+		}
+	],
+	"hostileCases": {
+		"crossKindSameName": "PASS",
+		"packageHostIsolation": "PASS",
+		"relocation": "PASS",
+		"ambientRegistryAbsent": "PASS",
+		"invalidCapabilityCombinations": "PASS",
+		"thenableAssimilation": "PASS"
+	}
+}

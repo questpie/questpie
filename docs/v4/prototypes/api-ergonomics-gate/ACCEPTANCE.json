@@ -1,0 +1,43 @@
+{
+	"ticket": "#301 API ergonomics gate",
+	"proof": "docs/v4/prototypes/api-ergonomics-gate",
+	"authorityHeads": {
+		"BETA01": "b80a70a2e6069a64d6f8586e6702dc596172df0a",
+		"P1": "713485a64bcc4795d960d576fea51da56bc4dcdd",
+		"P3": "a09bf55f0e22f65e059cda9f3eda914520dd4f9d",
+		"P5": "3f8618613bde1bdd7e13863970eb1c140e201c6f",
+		"P18": "71463e99a70481b0950ae18d1ff409c034c1b158",
+		"P21": "d50d4334b116a5bdc46e95cdabf566d8db938d37",
+		"repositoryFoundation": "17008b0547f24b53d456530b798e8d96ae2e2b1e",
+		"diffBase": "20ad8529ee18aba6830a7646acb3a9c9292f2fc6"
+	},
+	"verification": [
+		{
+			"command": "bun docs/v4/prototypes/api-ergonomics-gate/run.mjs",
+			"result": "PASS"
+		},
+		{
+			"command": "bun node_modules/typescript/bin/tsc -p docs/v4/prototypes/api-ergonomics-gate/types/tsconfig.json --pretty false --extendedDiagnostics",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxlint --deny-warnings docs/v4/prototypes/api-ergonomics-gate",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxfmt --check docs/v4/prototypes/api-ergonomics-gate",
+			"result": "PASS"
+		},
+		{ "command": "bun run quality:full", "result": "PASS" },
+		{ "command": "git diff --check", "result": "PASS" }
+	],
+	"acceptanceCriteria": [
+		"Named kind-specific factories remain because define.* cannot cross stable structural and generated executable modules without aliases or a bootstrap dependency.",
+		"Canonical Operation identity remains exact while generated server capability calls are nested-only with no flat alias.",
+		"The compiler proof deterministically rejects same-kind leaf-prefix and thenable-root hazards before declaration generation and preserves cross-kind identities.",
+		"Package isolation, relocation, invalid Resource names, prototype-sensitive paths, and invalid capability combinations pass their hostile cases.",
+		"One durable kernel retains distinct Job, Reaction, and Workflow authoring meanings, and the permanent v4 ownership map includes Policy, Route, Live Query, and Channel.",
+		"The 50 and 500 Operation fixtures remain inside runner, declaration, TypeScript instantiation, completion, and hover budgets.",
+		"The candidate decision is ready for post-PASS authority projection without changing canonical identities, adding a universal builder, or restoring lifecycle hooks."
+	]
+}

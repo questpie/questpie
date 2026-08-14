@@ -1,0 +1,44 @@
+{
+	"format": "questpie.api-ergonomics-measurements",
+	"version": 1,
+	"environment": {
+		"typescript": "6.0.2",
+		"fixture": "literal generated server capability declarations"
+	},
+	"focusedRunner": {
+		"wallMilliseconds": 2670,
+		"budgetMilliseconds": 5000,
+		"status": "PASS"
+	},
+	"typescript": {
+		"instantiations": 1535,
+		"budget": 125000,
+		"status": "PASS"
+	},
+	"declarations": {
+		"maximumMeasuredBytes": 84473,
+		"budgetBytes": 262144,
+		"status": "PASS"
+	},
+	"editor": {
+		"operations50": {
+			"depth": 3,
+			"completionP95Milliseconds": 0.448399,
+			"hoverP95Milliseconds": 0.208139
+		},
+		"operations500": {
+			"depth": 3,
+			"completionP95Milliseconds": 1.657138,
+			"hoverP95Milliseconds": 0.278541
+		},
+		"budgetP95Milliseconds": 100,
+		"status": "PASS"
+	},
+	"digests": {
+		"capabilityMapSha256": "00c810bee679da248ad8bbcb7aea9736d6b404beadac4885e197816d1516b66e",
+		"projectionSha256": "bf6ab815f90061e7938c8e7cdce32f15e3673c275b2359fe49f49624624f371b",
+		"generatedDeclarationsSha256": "485ae5c19df448f93f3d8391e2b7e166c1b5f7e30f8f87cae7df281c5fc4ae64",
+		"operations50Sha256": "253f0cb2a3f0dfa438cde5fa49df75ffd35b215f070d3818cbd1cdff7c5c4656",
+		"operations500Sha256": "347a5094e69c87f7c4aad60acfbbfa7393988036b2586a4aa3032c9f41e30c41"
+	}
+}

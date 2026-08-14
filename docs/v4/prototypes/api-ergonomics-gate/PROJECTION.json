@@ -1,0 +1,12 @@
+{
+	"action": [
+		{ "name": "a.toString.b", "origin": "src/to-string.ts:4" },
+		{ "name": "constructor.inspect", "origin": "src/inspection.ts:4" },
+		{ "name": "delivery.sendMessage", "origin": "src/delivery.ts:8" },
+		{ "name": "prototype.measure", "origin": "src/measurement.ts:4" },
+		{ "name": "then.fire", "origin": "src/then.ts:4" }
+	],
+	"mutation": [
+		{ "name": "messages.recordDelivery", "origin": "src/messages.ts:20" }
+	]
+}

@@ -1,0 +1,4 @@
+import { define } from "./core";
+import { define } from "./generated-app";
+
+void define;
