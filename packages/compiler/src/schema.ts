@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { CompilerDiagnosticError } from "./diagnostic";
 import {
+	classifyAddedField,
 	classifyProviderDelta,
 	maximumClassification,
 } from "./schema/migration-classification";
@@ -484,19 +485,9 @@ function destructiveDeltaSteps(
 				const baseValue = before.get(baseChildIdentity);
 				if (!baseValue) {
 					const isField = key === "fields";
-					const literalDefault =
-						isField &&
-						(targetValue.default as JsonRecord | null)?.kind === "literal";
-					const classification: MigrationClassification =
-						isField &&
-						targetValue.nullable === true &&
-						targetValue.default === null
-							? "safe"
-							: isField && targetValue.nullable !== true
-								? literalDefault
-									? "destructive"
-									: "blocked"
-								: "guarded";
+					const classification: MigrationClassification = isField
+						? classifyAddedField(targetValue)
+						: "guarded";
 					steps.push(
 						step({
 							kind: deltaKind(key, "add"),

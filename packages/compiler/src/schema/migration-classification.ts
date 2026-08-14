@@ -11,6 +11,20 @@ export interface PostgresRequirementProfile {
 	readonly extensions: readonly Readonly<{ name: string }>[];
 }
 
+export function classifyAddedField(
+	field: Readonly<{ nullable?: unknown; default?: unknown }>,
+): MigrationClassification {
+	if (field.default === null)
+		return field.nullable === true ? "safe" : "blocked";
+	const literal =
+		field.default !== null &&
+		typeof field.default === "object" &&
+		"kind" in field.default &&
+		field.default.kind === "literal";
+	if (!literal) return "blocked";
+	return field.nullable === true ? "guarded" : "destructive";
+}
+
 export function classifyProviderDelta(
 	base: PostgresRequirementProfile,
 	target: PostgresRequirementProfile,
