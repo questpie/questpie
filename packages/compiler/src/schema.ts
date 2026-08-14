@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 
 import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { CompilerDiagnosticError } from "./diagnostic";
+import { maximumClassification } from "./schema/migration-classification";
+import type { MigrationClassification } from "./schema/migration-classification";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 
@@ -17,12 +19,6 @@ export interface SchemaProjectionV1 extends JsonRecord {
 	}>;
 	readonly collections: readonly JsonRecord[];
 }
-
-export type MigrationClassification =
-	| "safe"
-	| "guarded"
-	| "destructive"
-	| "blocked";
 
 export type RenameIdentityV1 =
 	| `collection:${string}`
@@ -82,10 +78,17 @@ export interface MigrationPlanV1 extends JsonRecord {
 }
 
 export interface PlannedMigration {
+	readonly status: "planned";
 	readonly plan: MigrationPlanV1;
 	readonly digest: string;
 	readonly baseSchema: SchemaProjectionV1;
 }
+
+export interface NoChangesMigration {
+	readonly status: "noChanges";
+}
+
+export type MigrationPlanningResult = PlannedMigration | NoChangesMigration;
 
 export interface CommittedMigration {
 	readonly identity: string;
@@ -173,23 +176,6 @@ function genesis(target: SchemaProjectionV1): SchemaProjectionV1 {
 		requiredPostgres: target.requiredPostgres,
 		collections: [],
 	};
-}
-
-const severity: Readonly<Record<MigrationClassification, number>> = {
-	safe: 0,
-	guarded: 1,
-	destructive: 2,
-	blocked: 3,
-};
-
-function maximumClassification(
-	steps: readonly MigrationStepV1[],
-): MigrationClassification {
-	let result: MigrationClassification = "safe";
-	for (const step of steps)
-		if (severity[step.classification] > severity[result])
-			result = step.classification;
-	return result;
 }
 
 function step(
@@ -631,18 +617,26 @@ function destructiveDeltaSteps(
 	return sortSteps(steps);
 }
 
+interface MigrationPlanInput {
+	readonly targetSchema: SchemaProjectionV1;
+	readonly baseSchema?: SchemaProjectionV1;
+	readonly baseMigration?: string | null;
+	readonly slug: string;
+	readonly renames?: readonly Readonly<{
+		from: RenameIdentityV1;
+		to: RenameIdentityV1;
+	}>[];
+}
+
 export function createMigrationPlan(
-	input: Readonly<{
-		targetSchema: SchemaProjectionV1;
-		baseSchema?: SchemaProjectionV1;
-		baseMigration?: string | null;
-		slug: string;
-		renames?: readonly Readonly<{
-			from: RenameIdentityV1;
-			to: RenameIdentityV1;
-		}>[];
-	}>,
-): PlannedMigration {
+	input: MigrationPlanInput & Readonly<{ baseSchema?: undefined }>,
+): PlannedMigration;
+export function createMigrationPlan(
+	input: MigrationPlanInput,
+): MigrationPlanningResult;
+export function createMigrationPlan(
+	input: MigrationPlanInput,
+): MigrationPlanningResult {
 	const target = assertProjection(input.targetSchema, "target schema");
 	const base = input.baseSchema
 		? assertProjection(input.baseSchema, "base schema")
@@ -666,6 +660,8 @@ export function createMigrationPlan(
 		compareAscii(`${left.from}\0${left.to}`, `${right.from}\0${right.to}`),
 	);
 	validateRenames(base, target, renames);
+	if (renames.length === 0 && canonicalBytes(base) === canonicalBytes(target))
+		return { status: "noChanges" };
 	const steps =
 		base.collections.length === 0
 			? createSteps(target)
@@ -684,6 +680,7 @@ export function createMigrationPlan(
 		steps,
 	};
 	return {
+		status: "planned",
 		plan,
 		digest: digest("questpie-migration-plan-v1", plan),
 		baseSchema: base,
@@ -1206,6 +1203,7 @@ export function createCommittedMigration(
 		renames: input.plan.renames,
 	});
 	if (
+		replanned.status === "noChanges" ||
 		canonicalBytes(replanned.plan) !== canonicalBytes(input.plan) ||
 		schemaDigest(target) !== input.plan.targetSchemaDigest
 	)

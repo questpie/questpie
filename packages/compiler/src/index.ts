@@ -53,6 +53,7 @@ export {
 	verifyCommittedMigration,
 	verifyCommittedMigrationChain,
 } from "./schema";
+export type { MigrationClassification } from "./schema/migration-classification";
 export {
 	explainCommittedMigration,
 	explainCommittedSeed,
@@ -75,10 +76,12 @@ export type {
 	CommittedMigration,
 	CommittedMigrationFilesV1,
 	MigrationPlanV1,
-	RenameIdentityV1,
+	MigrationPlanningResult,
 	MigrationStepKindV1,
 	MigrationStepV1,
+	NoChangesMigration,
 	PlannedMigration,
+	RenameIdentityV1,
 	SchemaProjectionV1,
 } from "./schema";
 
