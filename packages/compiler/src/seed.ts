@@ -73,61 +73,112 @@ function collectionFor(
 }
 
 function normalizeValue(field: JsonRecord, value: unknown): SeedValueV1 {
+	const invalid = (requirement: string): never =>
+		seedError(
+			"QP-SEED-003",
+			"stepSchemaIncompatible",
+			`${field.identity} ${requirement}`,
+		);
 	if (value === null) {
-		if (field.nullable !== true)
-			return seedError(
-				"QP-SEED-003",
-				"stepSchemaIncompatible",
-				`${field.identity} does not accept SQL NULL`,
-			);
+		if (field.nullable !== true) return invalid("does not accept SQL NULL");
 		return null;
 	}
 	const type = field.type as JsonRecord;
 	if (type.kind === "uuid") {
-		if (typeof value !== "string")
-			return seedError(
-				"QP-SEED-003",
-				"stepSchemaIncompatible",
-				`${field.identity} requires UUID text`,
-			);
+		if (
+			typeof value !== "string" ||
+			!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+				value,
+			)
+		)
+			return invalid("requires canonical UUID text");
 		return { kind: "uuid", value };
 	}
 	if (type.kind === "timestamp") {
-		const normalized = value instanceof Date ? value.toISOString() : value;
-		if (typeof normalized !== "string" || Number.isNaN(Date.parse(normalized)))
-			return seedError(
-				"QP-SEED-003",
-				"stepSchemaIncompatible",
-				`${field.identity} requires timestamp text`,
-			);
-		return { kind: "timestamp", value: new Date(normalized).toISOString() };
+		if (value instanceof Date && Number.isNaN(value.valueOf()))
+			return invalid("requires a valid timestamp");
+		const withTimezone = type.withTimezone === true;
+		const normalized =
+			value instanceof Date
+				? withTimezone
+					? value.toISOString()
+					: value.toISOString().slice(0, -1)
+				: value;
+		const pattern = withTimezone
+			? /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
+			: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}$/;
+		if (
+			typeof normalized !== "string" ||
+			!pattern.test(normalized) ||
+			new Date(withTimezone ? normalized : `${normalized}Z`).toISOString() !==
+				(withTimezone ? normalized : `${normalized}Z`)
+		)
+			return invalid("requires canonical timestamp text");
+		return { kind: "timestamp", value: normalized };
 	}
-	if (
-		type.kind === "date" ||
-		type.kind === "bigint" ||
-		type.kind === "numeric"
-	) {
-		if (typeof value !== "string")
-			return seedError(
-				"QP-SEED-003",
-				"stepSchemaIncompatible",
-				`${field.identity} requires canonical text`,
-			);
-		return { kind: type.kind as "date" | "bigint" | "numeric", value };
+	if (type.kind === "date") {
+		if (
+			typeof value !== "string" ||
+			!/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+			new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) !== value
+		)
+			return invalid("requires canonical date text");
+		return { kind: "date", value };
+	}
+	if (type.kind === "bigint") {
+		if (
+			typeof value !== "string" ||
+			!/^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/.test(value)
+		)
+			return invalid("requires canonical bigint text");
+		const number = BigInt(value);
+		if (
+			number < -9_223_372_036_854_775_808n ||
+			number > 9_223_372_036_854_775_807n
+		)
+			return invalid("is outside PostgreSQL bigint");
+		return { kind: "bigint", value };
+	}
+	if (type.kind === "numeric") {
+		const precision = Number(type.precision);
+		const scale = Number(type.scale);
+		const pattern =
+			scale === 0
+				? /^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/
+				: new RegExp(`^(?:0|-[1-9][0-9]*|[1-9][0-9]*)\\.[0-9]{${scale}}$`);
+		if (typeof value !== "string" || !pattern.test(value))
+			return invalid("requires canonical numeric text");
+		if (value.replace(/[-.]/g, "").length > precision)
+			return invalid("exceeds numeric precision");
+		return { kind: "numeric", value };
 	}
 	if (type.kind === "object" || type.kind === "array" || type.kind === "json")
 		return { kind: "json", value };
+	if (type.kind === "text") {
+		if (typeof value !== "string" || value.normalize("NFC") !== value)
+			return invalid("requires NFC text");
+		const length = [...value].length;
+		if (
+			(typeof type.minLength === "number" && length < type.minLength) ||
+			(typeof type.maxLength === "number" && length > type.maxLength)
+		)
+			return invalid("violates its text length bounds");
+		return value;
+	}
+	if (type.kind === "boolean" && typeof value === "boolean") return value;
 	if (
-		(type.kind === "text" && typeof value === "string") ||
-		(type.kind === "boolean" && typeof value === "boolean") ||
-		(type.kind === "integer" && Number.isSafeInteger(value))
-	)
-		return value as string | boolean | number;
-	return seedError(
-		"QP-SEED-003",
-		"stepSchemaIncompatible",
-		`${field.identity} has an invalid Seed value`,
-	);
+		type.kind === "integer" &&
+		typeof value === "number" &&
+		Number.isSafeInteger(value)
+	) {
+		if (
+			(typeof type.minimum === "number" && value < type.minimum) ||
+			(typeof type.maximum === "number" && value > type.maximum)
+		)
+			return invalid("violates its integer bounds");
+		return value as number;
+	}
+	return invalid("has an invalid Seed value");
 }
 
 function record(

@@ -58,4 +58,46 @@ describe("BETA-02 committed Seeds", () => {
 			orderCommittedSeeds([{ ...committed, dependencies: ["seed:missing"] }]),
 		).toThrow(/QP-SEED-001/);
 	});
+
+	test("applies the accepted scalar codecs before emitting Seed bytes", async () => {
+		const compiled = await compilation;
+		const schema = JSON.parse(
+			compiled.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		const definition = (id: unknown, name: unknown) => ({
+			name: "collaboration.codec.v1",
+			steps: [
+				{
+					kind: "insert",
+					collection: "collection:companies",
+					values: { id, name },
+				},
+			],
+		});
+
+		expect(() =>
+			createCommittedSeed({
+				definition: definition(
+					"018F5F6E-5F2C-7B41-A854-3D9A6B6B61A0",
+					"Questpie",
+				),
+				schema,
+			}),
+		).toThrow(/QP-SEED-003/);
+		expect(() =>
+			createCommittedSeed({
+				definition: definition("018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0", ""),
+				schema,
+			}),
+		).toThrow(/QP-SEED-003/);
+		expect(() =>
+			createCommittedSeed({
+				definition: definition(
+					"018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+					"e\u0301",
+				),
+				schema,
+			}),
+		).toThrow(/QP-SEED-003/);
+	});
 });
