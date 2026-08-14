@@ -476,7 +476,9 @@ export const seed = Object.freeze({
 	update: <
 		const Name extends string,
 		const Fields extends Readonly<Record<string, FieldDefinition>>,
-		const Constraints extends Readonly<Record<string, ConstraintDefinition>>,
+		const Constraints extends Readonly<
+			Record<string, ConstraintDefinition<readonly string[]>>
+		>,
 	>(
 		collection: CollectionDefinition<Name, Fields, Constraints>,
 		input: Readonly<{
@@ -493,7 +495,9 @@ export const seed = Object.freeze({
 	upsert: <
 		const Name extends string,
 		const Fields extends Readonly<Record<string, FieldDefinition>>,
-		const Constraints extends Readonly<Record<string, ConstraintDefinition>>,
+		const Constraints extends Readonly<
+			Record<string, ConstraintDefinition<readonly string[]>>
+		>,
 	>(
 		collection: CollectionDefinition<Name, Fields, Constraints>,
 		input: Readonly<{
@@ -512,7 +516,9 @@ export const seed = Object.freeze({
 	delete: <
 		const Name extends string,
 		const Fields extends Readonly<Record<string, FieldDefinition>>,
-		const Constraints extends Readonly<Record<string, ConstraintDefinition>>,
+		const Constraints extends Readonly<
+			Record<string, ConstraintDefinition<readonly string[]>>
+		>,
 	>(
 		collection: CollectionDefinition<Name, Fields, Constraints>,
 		key: SeedPrimaryKey<Fields, Constraints>,
