@@ -21,7 +21,7 @@ const database = process.env.PGHOST ? new SQL() : undefined;
 beforeAll(async () => {
 	if (!database) return;
 	await database.unsafe(
-		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "deploy_role_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
+		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "deploy_role_probe" CASCADE; DROP SCHEMA IF EXISTS "numeric_drift_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
 	);
 });
 
@@ -284,6 +284,62 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 				`DROP OWNED BY ${role}; DROP ROLE IF EXISTS ${role}`,
 			);
 		}
+	}, 10_000);
+
+	test("detects numeric typmod drift from the live catalog", async () => {
+		const compilation = await compileApplication({
+			applicationRoot: fixtureRoot,
+		});
+		const fixtureSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		const targetSchema = {
+			...fixtureSchema,
+			application: {
+				...fixtureSchema.application,
+				name: "numeric-drift-probe",
+				postgresSchema: "numeric_drift_probe",
+			},
+		};
+		const messages = targetSchema.collections.find(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:messages",
+		);
+		messages.fields.push({
+			collation: null,
+			default: null,
+			identity: "collection:messages/field:amount",
+			nullable: true,
+			path: ["amount"],
+			postgresName: "amount",
+			type: { kind: "numeric", precision: 10, scale: 2 },
+		});
+		messages.fields.sort(
+			(left: { identity: string }, right: { identity: string }) =>
+				left.identity.localeCompare(right.identity),
+		);
+		const planned = createMigrationPlan({
+			targetSchema,
+			slug: "create-numeric-drift-probe",
+		});
+		const migration = createCommittedMigration({
+			plan: planned.plan,
+			baseSchema: planned.baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: planned.digest,
+			localMigrations: [],
+		});
+		await applyCommittedMigrations({ migrations: [migration] });
+		await expect(
+			inspectSchemaFingerprint({ schema: targetSchema }),
+		).resolves.toBeDefined();
+		await database!.unsafe(
+			"ALTER TABLE numeric_drift_probe.messages ALTER COLUMN amount TYPE numeric(12,3)",
+		);
+		await expect(
+			inspectSchemaFingerprint({ schema: targetSchema }),
+		).rejects.toMatchObject({ code: "QP-SCHEMA-028" });
 	}, 10_000);
 
 	test("rolls back Seed writes and receipt when a later step fails", async () => {

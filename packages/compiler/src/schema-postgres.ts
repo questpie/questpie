@@ -20,6 +20,13 @@ import type {
 } from "./postgres-session";
 import type { CommittedMigration, SchemaProjectionV1 } from "./schema";
 import { verifyCommittedMigrationChain } from "./schema";
+import {
+	dependencyName,
+	expectedDefault,
+	fingerprintType,
+	operatorClass,
+	physicalType,
+} from "./schema/postgres-catalog";
 import type {
 	ApplyMigrationsResult,
 	SchemaFingerprintV1,
@@ -116,66 +123,6 @@ export function childRecords(
 	return Array.isArray(value) ? (value as readonly JsonRecord[]) : [];
 }
 
-function physicalType(field: JsonRecord): string {
-	const type = field.type as JsonRecord;
-	switch (type.kind) {
-		case "uuid":
-			return "uuid";
-		case "text":
-			return "text";
-		case "boolean":
-			return "bool";
-		case "integer":
-			return "int4";
-		case "bigint":
-			return "int8";
-		case "numeric":
-			return "numeric";
-		case "timestamp":
-			return type.withTimezone === true ? "timestamptz" : "timestamp";
-		case "date":
-			return "date";
-		case "object":
-		case "array":
-		case "json":
-			return "jsonb";
-		default:
-			return fail(
-				"QP-SCHEMA-028",
-				"invalidObject",
-				`unsupported expected Field type ${String(type.kind)}`,
-			);
-	}
-}
-
-function expectedDefault(field: JsonRecord): string | null {
-	if (field.default === null) return null;
-	const value = field.default as JsonRecord;
-	if (value.kind === "randomUuid") return "gen_random_uuid()";
-	if (value.kind === "now") return "now()";
-	if (value.kind === "literal") return String(value.value);
-	return fail(
-		"QP-SCHEMA-028",
-		"invalidObject",
-		`unsupported expected default ${String(value.kind)}`,
-	);
-}
-
-function fingerprintType(field: JsonRecord): JsonRecord {
-	const type = field.type as JsonRecord;
-	if (type.kind === "numeric")
-		return {
-			kind: "numeric",
-			precision: type.precision,
-			scale: type.scale,
-		};
-	if (type.kind === "timestamp")
-		return { kind: "timestamp", withTimezone: type.withTimezone === true };
-	if (type.kind === "object" || type.kind === "array" || type.kind === "json")
-		return { kind: "jsonb" };
-	return { kind: type.kind };
-}
-
 function physicalFieldName(collection: JsonRecord, identity: string): string {
 	const field = childRecords(collection, "fields").find(
 		(candidate) => candidate.identity === identity,
@@ -245,21 +192,6 @@ function fingerprintCheckExpression(
 		"invalidObject",
 		`unsupported fingerprint check ${String(expression.kind)}`,
 	);
-}
-
-function dependencyName(type: JsonRecord): string {
-	if (type.kind === "object" || type.kind === "array" || type.kind === "json")
-		return "jsonb";
-	if (type.kind === "boolean") return "bool";
-	if (type.kind === "integer") return "int4";
-	if (type.kind === "bigint") return "int8";
-	if (type.kind === "timestamp")
-		return type.withTimezone === true ? "timestamptz" : "timestamp";
-	return String(type.kind);
-}
-
-function operatorClass(type: JsonRecord): string {
-	return `${dependencyName(type)}_ops`;
 }
 
 function expectedComparable(schema: SchemaProjectionV1): JsonRecord {
@@ -574,40 +506,58 @@ export async function assertSchemaMatches(
 			{
 				name: string;
 				type: string;
+				typeNamespace: string;
+				typeModifier: string | null;
 				nullable: boolean;
 				defaultExpression: string | null;
 				collation: string | null;
+				collationNamespace: string | null;
 				identity: string;
 				generated: string;
 			}[]
 		>`
 			select a.attname as name,
 			       t.typname as type,
+			       tn.nspname as "typeNamespace",
+			       case when t.typname = 'numeric' then pg_catalog.format_type(a.atttypid, a.atttypmod) else null end as "typeModifier",
 			       not a.attnotnull as nullable,
 			       pg_catalog.pg_get_expr(d.adbin, d.adrelid) as "defaultExpression",
 			       coll.collname as collation,
+			       colln.nspname as "collationNamespace",
 			       a.attidentity as identity,
 			       a.attgenerated as generated
 			from pg_catalog.pg_attribute a
 			join pg_catalog.pg_class c on c.oid = a.attrelid
 			join pg_catalog.pg_namespace n on n.oid = c.relnamespace
 			join pg_catalog.pg_type t on t.oid = a.atttypid
+			join pg_catalog.pg_namespace tn on tn.oid = t.typnamespace
 			left join pg_catalog.pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum
 			left join pg_catalog.pg_collation coll on coll.oid = a.attcollation and a.attcollation <> 0
+			left join pg_catalog.pg_namespace colln on colln.oid = coll.collnamespace
 			where n.nspname = ${schemaName} and c.relname = ${tableName}
 			  and a.attnum > 0 and not a.attisdropped
 			order by a.attname
 		`;
 		const expectedColumns = childRecords(collection, "fields")
-			.map((field) => ({
-				name: String(field.postgresName),
-				type: physicalType(field),
-				nullable: field.nullable === true,
-				defaultExpression: expectedDefault(field),
-				collation: field.collation === "questpie.binary" ? "C" : null,
-				identity: "",
-				generated: "",
-			}))
+			.map((field) => {
+				const type = field.type as JsonRecord;
+				return {
+					name: String(field.postgresName),
+					type: physicalType(field),
+					typeNamespace: "pg_catalog",
+					typeModifier:
+						type.kind === "numeric"
+							? `numeric(${type.precision},${type.scale})`
+							: null,
+					nullable: field.nullable === true,
+					defaultExpression: expectedDefault(field),
+					collation: field.collation === "questpie.binary" ? "C" : null,
+					collationNamespace:
+						field.collation === "questpie.binary" ? "pg_catalog" : null,
+					identity: "",
+					generated: "",
+				};
+			})
 			.sort((left, right) => compareAscii(left.name, right.name));
 		if (canonicalBytes(columns) !== canonicalBytes(expectedColumns))
 			return fail(
