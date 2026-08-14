@@ -14,13 +14,25 @@ type FieldBaseOptions = Readonly<{
 	postgres?: Readonly<{ name: string }>;
 }>;
 
+type FieldDefault = "now" | "randomUuid" | boolean | number | string;
+
+type ExactOptions<Options, Shape> = Options &
+	Readonly<Record<Exclude<keyof Options, keyof Shape>, never>>;
+
+type BigintFieldOptions = FieldBaseOptions &
+	Readonly<{ minimum?: string; maximum?: string }>;
+type NumericFieldOptions = FieldBaseOptions &
+	Readonly<{ precision: number; scale: number }>;
+
 type FieldRuntimeOptions = FieldBaseOptions &
 	Readonly<{
-		default?: "now" | "randomUuid";
+		default?: FieldDefault;
 		minLength?: number;
 		maxLength?: number;
-		minimum?: number;
-		maximum?: number;
+		minimum?: number | string;
+		maximum?: number | string;
+		precision?: number;
+		scale?: number;
 		withTimezone?: boolean;
 	}>;
 
@@ -29,10 +41,18 @@ type FieldValue = object | string | number | boolean | Date | null;
 export interface FieldDefinition<
 	Value = FieldValue,
 	Nullable extends boolean = boolean,
-	Default extends "now" | "randomUuid" | null = "now" | "randomUuid" | null,
+	Default extends FieldDefault | null = FieldDefault | null,
 > {
 	readonly kind: "field";
-	readonly scalar: "boolean" | "integer" | "text" | "timestamp" | "uuid";
+	readonly scalar:
+		| "bigint"
+		| "boolean"
+		| "date"
+		| "integer"
+		| "numeric"
+		| "text"
+		| "timestamp"
+		| "uuid";
 	readonly nullable: Nullable;
 	readonly default: Default;
 	readonly postgresName: string | null;
@@ -46,7 +66,7 @@ function fieldDefinition<Value, const Options extends FieldRuntimeOptions>(
 ): FieldDefinition<
 	Value,
 	Options extends { nullable: true } ? true : false,
-	Options extends { default: infer Default extends "now" | "randomUuid" }
+	Options extends { default: infer Default extends FieldDefault }
 		? Default
 		: null
 > {
@@ -57,6 +77,8 @@ function fieldDefinition<Value, const Options extends FieldRuntimeOptions>(
 		"maxLength",
 		"minimum",
 		"maximum",
+		"precision",
+		"scale",
 		"withTimezone",
 	] as const) {
 		const value = options[key];
@@ -72,7 +94,7 @@ function fieldDefinition<Value, const Options extends FieldRuntimeOptions>(
 	}) as FieldDefinition<
 		Value,
 		Options extends { nullable: true } ? true : false,
-		Options extends { default: infer Default extends "now" | "randomUuid" }
+		Options extends { default: infer Default extends FieldDefault }
 			? Default
 			: null
 	>;
@@ -87,25 +109,50 @@ export const field = Object.freeze({
 	) => fieldDefinition<string, Options>("uuid", options),
 	text: <
 		const Options extends FieldBaseOptions &
-			Readonly<{ minLength?: number; maxLength?: number }>,
+			Readonly<{
+				minLength?: number;
+				maxLength?: number;
+				default?: string;
+			}>,
 	>(
 		options: Options = {} as Options,
 	) => fieldDefinition<string, Options>("text", options),
-	boolean: <const Options extends FieldBaseOptions>(
+	boolean: <
+		const Options extends FieldBaseOptions & Readonly<{ default?: boolean }>,
+	>(
 		options: Options = {} as Options,
 	) => fieldDefinition<boolean, Options>("boolean", options),
 	integer: <
 		const Options extends FieldBaseOptions &
-			Readonly<{ minimum?: number; maximum?: number }>,
+			Readonly<{
+				minimum?: number;
+				maximum?: number;
+				default?: number;
+			}>,
 	>(
 		options: Options = {} as Options,
 	) => fieldDefinition<number, Options>("integer", options),
+	bigint: <const Options extends BigintFieldOptions>(
+		options: ExactOptions<Options, BigintFieldOptions> = {} as ExactOptions<
+			Options,
+			BigintFieldOptions
+		>,
+	) => fieldDefinition<string, Options>("bigint", options),
+	numeric: <const Options extends NumericFieldOptions>(
+		options: ExactOptions<Options, NumericFieldOptions>,
+	) => fieldDefinition<string, Options>("numeric", options),
 	timestamp: <
 		const Options extends FieldBaseOptions &
 			Readonly<{ default?: "now"; withTimezone?: boolean }>,
 	>(
 		options: Options = {} as Options,
 	) => fieldDefinition<Date, Options>("timestamp", options),
+	date: <const Options extends FieldBaseOptions>(
+		options: ExactOptions<Options, FieldBaseOptions> = {} as ExactOptions<
+			Options,
+			FieldBaseOptions
+		>,
+	) => fieldDefinition<string, Options>("date", options),
 });
 
 function scalarCodec<Value, Kind extends Exclude<CodecKind, "object">>(

@@ -59,12 +59,29 @@ function fieldContract(key: string, value: RecordValue): RecordValue {
 			minimum: options.minimum ?? null,
 			maximum: options.maximum ?? null,
 		};
+	else if (scalar === "bigint")
+		type = {
+			kind: "bigint",
+			minimum: options.minimum ?? null,
+			maximum: options.maximum ?? null,
+		};
+	else if (scalar === "numeric")
+		type = {
+			kind: "numeric",
+			precision: options.precision,
+			scale: options.scale,
+		};
 	else type = { kind: scalar };
 	const rawDefault = value.default;
 	const normalizedDefault =
-		rawDefault === "now" || rawDefault === "randomUuid"
+		(scalar === "timestamp" && rawDefault === "now") ||
+		(scalar === "uuid" && rawDefault === "randomUuid")
 			? { kind: rawDefault }
-			: null;
+			: typeof rawDefault === "string" ||
+				  typeof rawDefault === "boolean" ||
+				  typeof rawDefault === "number"
+				? { kind: "literal", value: rawDefault }
+				: null;
 	return {
 		path: [key],
 		type,
@@ -514,12 +531,12 @@ function boundConstraints(
 	const bounds =
 		type.kind === "text"
 			? (["minLength", "maxLength"] as const)
-			: type.kind === "integer"
+			: type.kind === "integer" || type.kind === "bigint"
 				? (["minimum", "maximum"] as const)
 				: [];
 	return bounds.flatMap((bound) => {
 		const value = type[bound];
-		if (typeof value !== "number") return [];
+		if (typeof value !== "number" && typeof value !== "string") return [];
 		const identity = `${fieldIdentity}/invariant:${bound}`;
 		const left =
 			bound === "minLength" || bound === "maxLength"
