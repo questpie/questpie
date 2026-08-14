@@ -34,10 +34,11 @@
 	"acceptanceCriteria": [
 		"Named kind-specific factories remain because define.* cannot cross stable structural and generated executable modules without aliases or a bootstrap dependency.",
 		"Canonical Operation identity remains exact while generated server capability calls are nested-only with no flat alias.",
-		"The compiler proof deterministically rejects same-kind leaf-prefix and thenable-root hazards before declaration generation and preserves cross-kind identities.",
+		"The compiler proof deterministically rejects same-kind leaf-prefix and final-segment thenable-namespace hazards before declaration generation and preserves cross-kind identities.",
 		"Package isolation, relocation, invalid Resource names, prototype-sensitive paths, and invalid capability combinations pass their hostile cases.",
 		"One durable kernel retains distinct Job, Reaction, and Workflow authoring meanings, and the permanent v4 ownership map includes Policy, Route, Live Query, and Channel.",
 		"The 50 and 500 Operation fixtures remain inside runner, declaration, TypeScript instantiation, completion, and hover budgets.",
-		"The candidate decision is ready for post-PASS authority projection without changing canonical identities, adding a universal builder, or restoring lifecycle hooks."
+		"The candidate decision is ready for post-PASS authority projection without changing canonical identities, adding a universal builder, or restoring lifecycle hooks.",
+		"Every contradiction with Accepted exact-key projection, prefix allowance, diagnostic registry, final-then allowance, and public examples has an explicit exact post-PASS amendment in AMENDMENT.md."
 	]
 }

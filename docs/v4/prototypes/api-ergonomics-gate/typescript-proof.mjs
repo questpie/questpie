@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import ts from "typescript";
 
-const proofRoot = path.dirname(new URL(import.meta.url).pathname);
+const proofRoot = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(proofRoot, "types");
 const names = [
 	"application.ts",

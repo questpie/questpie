@@ -38,8 +38,7 @@
 		{
 			"code": "QP-COMPOSE-024",
 			"class": "operationProjectionUnsafeName",
-			"identity": "action:then",
-			"origin": "src/then-root.ts:2"
+			"identities": ["action:then", "action:delivery.then"]
 		},
 		{
 			"code": "QP-COMPOSE-003",

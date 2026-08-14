@@ -12,6 +12,9 @@ projection. `MEASUREMENTS.json` keeps the separate measured budget sample;
 `PROJECTION.json` is the single exact Operation input used by the runtime trie;
 the TypeScript proof parses the generated declaration golden and requires its
 leaf paths to equal that same input.
+`HOSTILE-PROJECTION.json` owns the collision, unsafe-name, invalid-name, and
+cross-kind Origins rather than embedding them in assertions. `AMENDMENT.md`
+lists the exact Accepted authority changes that remain forbidden until PASS.
 
 Run:
 

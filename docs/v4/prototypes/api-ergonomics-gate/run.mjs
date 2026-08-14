@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { runTypeScriptProof } from "./typescript-proof.mjs";
 
-const proofRoot = path.dirname(new URL(import.meta.url).pathname);
+const proofRoot = path.dirname(fileURLToPath(import.meta.url));
 const proofStartedAt = performance.now();
 
 const canonical = (value) => {
@@ -23,6 +24,7 @@ const bytes = (value) => JSON.stringify(canonical(value));
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const compareAscii = (left, right) =>
 	left < right ? -1 : left > right ? 1 : 0;
+const callableInvocations = [];
 
 class ProjectionCollision extends Error {
 	constructor(kind, left, right) {
@@ -41,7 +43,7 @@ class ProjectionCollision extends Error {
 class ProjectionUnsafeName extends Error {
 	constructor(kind, definition) {
 		super(
-			`QP-COMPOSE-024 operationProjectionUnsafeName: ${kind}:${definition.name} would make the public capability root thenable`,
+			`QP-COMPOSE-024 operationProjectionUnsafeName: ${kind}:${definition.name} would make a public capability namespace thenable`,
 		);
 		this.code = "QP-COMPOSE-024";
 		this.diagnosticClass = "operationProjectionUnsafeName";
@@ -74,7 +76,7 @@ function buildOperationProjection(kind, definitions) {
 			)
 		)
 			throw new InvalidResourceName(kind, definition);
-		if (segments.length === 1 && segments[0] === "then")
+		if (segments.at(-1) === "then")
 			throw new ProjectionUnsafeName(kind, definition);
 		let current = root;
 		for (const segment of segments) {
@@ -104,15 +106,26 @@ function buildOperationProjection(kind, definitions) {
 		const result = Object.create(null);
 		for (const [segment, child] of [...current.children].sort(
 			([left], [right]) => compareAscii(left, right),
-		))
+		)) {
+			const value = child.terminal
+				? Object.freeze(
+						Object.assign(
+							async () => {
+								const identity = `${kind}:${child.terminal.name}`;
+								callableInvocations.push(identity);
+								return Object.freeze({ identity });
+							},
+							{ identity: `${kind}:${child.terminal.name}` },
+						),
+					)
+				: materialize(child);
 			Object.defineProperty(result, segment, {
-				value: child.terminal
-					? Object.freeze({ identity: `${kind}:${child.terminal.name}` })
-					: materialize(child),
+				value,
 				enumerable: true,
 				writable: false,
 				configurable: false,
 			});
+		}
 		return Object.freeze(result);
 	};
 
@@ -121,6 +134,9 @@ function buildOperationProjection(kind, definitions) {
 
 const projection = JSON.parse(
 	await readFile(path.join(proofRoot, "PROJECTION.json"), "utf8"),
+);
+const hostileProjection = JSON.parse(
+	await readFile(path.join(proofRoot, "HOSTILE-PROJECTION.json"), "utf8"),
 );
 const actionDefinitions = projection.action;
 const mutationDefinitions = projection.mutation;
@@ -140,17 +156,19 @@ assert.equal(
 	"mutation:messages.recordDelivery",
 );
 assert.equal(actions["delivery.sendMessage"], undefined);
+assert.equal(typeof actions.delivery.sendMessage, "function");
+const callsBeforeAssimilation = callableInvocations.length;
 assert.equal(await Promise.resolve(actions), actions);
+assert.equal(await Promise.resolve(actions.delivery), actions.delivery);
+assert.equal(
+	await Promise.resolve(actions.delivery.sendMessage),
+	actions.delivery.sendMessage,
+);
+assert.equal(callableInvocations.length, callsBeforeAssimilation);
 
 let collision;
 try {
-	buildOperationProjection("action", [
-		{ name: "delivery", origin: "app/actions/delivery.ts:2" },
-		{
-			name: "delivery.sendMessage",
-			origin: "packages/mail/actions.ts:8",
-		},
-	]);
+	buildOperationProjection("action", hostileProjection.prefixCollision);
 } catch (error) {
 	collision = error;
 }
@@ -162,35 +180,34 @@ assert.deepEqual(
 
 let reverseCollision;
 try {
-	buildOperationProjection("action", [
-		{
-			name: "delivery.sendMessage",
-			origin: "packages/mail/actions.ts:8",
-		},
-		{ name: "delivery", origin: "app/actions/delivery.ts:2" },
-	]);
+	buildOperationProjection(
+		"action",
+		hostileProjection.prefixCollision.toReversed(),
+	);
 } catch (error) {
 	reverseCollision = error;
 }
 assert.equal(reverseCollision?.message, collision?.message);
 assert.deepEqual(reverseCollision?.details, collision?.details);
 
-let unsafeThen;
-try {
-	buildOperationProjection("action", [
-		{ name: "then", origin: "src/then-root.ts:2" },
-	]);
-} catch (error) {
-	unsafeThen = error;
+const unsafeThenDiagnostics = [];
+for (const definition of hostileProjection.unsafeThenLeaves) {
+	try {
+		buildOperationProjection("action", [definition]);
+	} catch (error) {
+		unsafeThenDiagnostics.push(error);
+	}
 }
-assert.equal(unsafeThen?.code, "QP-COMPOSE-024");
-assert.equal(unsafeThen?.details.definition.origin, "src/then-root.ts:2");
+assert.equal(unsafeThenDiagnostics.length, 2);
+assert.ok(
+	unsafeThenDiagnostics.every((item) => item.code === "QP-COMPOSE-024"),
+);
 
-const invalidNames = ["Delivery.send", "delivery..send", "delivery/send"];
-for (const name of invalidNames) {
+const invalidNames = hostileProjection.invalidNames.map((item) => item.name);
+for (const definition of hostileProjection.invalidNames) {
 	let invalid;
 	try {
-		buildOperationProjection("action", [{ name, origin: "src/invalid.ts:1" }]);
+		buildOperationProjection("action", [definition]);
 	} catch (error) {
 		invalid = error;
 	}
@@ -199,10 +216,10 @@ for (const name of invalidNames) {
 
 assert.doesNotThrow(() => {
 	buildOperationProjection("action", [
-		{ name: "delivery.send", origin: "src/action.ts:1" },
+		hostileProjection.crossKindSameName.action,
 	]);
 	buildOperationProjection("mutation", [
-		{ name: "delivery.send", origin: "src/mutation.ts:1" },
+		hostileProjection.crossKindSameName.mutation,
 	]);
 });
 
@@ -245,6 +262,10 @@ const evidence = JSON.parse(
 const measurements = JSON.parse(
 	await readFile(path.join(proofRoot, "MEASUREMENTS.json"), "utf8"),
 );
+assert.equal(typeScript.typeScript, measurements.environment.typescript);
+assert.equal(Bun.version, measurements.environment.bun);
+assert.equal(process.platform, measurements.environment.platform);
+assert.equal(process.arch, measurements.environment.architecture);
 assert.deepEqual(
 	evidence.editor.actionRootCompletions,
 	typeScript.completions["/*ACTION_ROOT*/"],
@@ -271,7 +292,15 @@ assert.equal(
 	collision.details.candidates.map((item) => item.origin).join("\n"),
 );
 assert.equal(evidence.diagnostics[0].code, collision.code);
-assert.equal(evidence.diagnostics[1].code, unsafeThen.code);
+assert.ok(
+	unsafeThenDiagnostics.every(
+		(item) => item.code === evidence.diagnostics[1].code,
+	),
+);
+assert.deepEqual(
+	evidence.diagnostics[1].identities,
+	hostileProjection.unsafeThenLeaves.map((item) => `action:${item.name}`),
+);
 assert.equal(evidence.diagnostics[2].code, "QP-COMPOSE-003");
 assert.deepEqual(evidence.diagnostics[2].fixtures, invalidNames);
 assert.equal(
@@ -282,19 +311,7 @@ assert.ok(
 	Object.values(evidence.hostileCases).every((status) => status === "PASS"),
 );
 assert.equal(measurements.digests.capabilityMapSha256, sha256(capabilityMap));
-assert.equal(
-	measurements.digests.projectionSha256,
-	sha256(
-		bytes({
-			actions,
-			mutations,
-			canonical: {
-				actions: actionDefinitions.map((item) => item.name).sort(),
-				mutations: mutationDefinitions.map((item) => item.name).sort(),
-			},
-		}),
-	),
-);
+assert.equal(measurements.digests.projectionSha256, sha256(bytes(projection)));
 assert.equal(
 	measurements.digests.generatedDeclarationsSha256,
 	typeScript.declarationDigest,
@@ -368,23 +385,14 @@ const result = {
 	canonicalOperationIdentity: "exact-qualified-name",
 	publicOperationProjection: "nested-only",
 	prefixCollisionDiagnostic: "QP-COMPOSE-023",
-	thenableRootDiagnostic: "QP-COMPOSE-024",
+	thenableNamespaceDiagnostic: "QP-COMPOSE-024",
 	prototypeSafeNullObjects: true,
 	crossKindSameNameAllowed: true,
 	externalIdentityProjection: "kind-qualified",
 	durableKernel: "one-run-attempt-lease-history-kernel",
 	durableAuthoring: ["Job", "Reaction", "Workflow"],
 	capabilityMapDigest: sha256(capabilityMap),
-	projectionDigest: sha256(
-		bytes({
-			actions,
-			mutations,
-			canonical: {
-				actions: actionDefinitions.map((item) => item.name).sort(),
-				mutations: mutationDefinitions.map((item) => item.name).sort(),
-			},
-		}),
-	),
+	projectionDigest: sha256(bytes(projection)),
 	typeScript,
 	measuredInstantiations,
 };
