@@ -13,6 +13,7 @@ import {
 } from "./schema-postgres";
 import type { CommittedSeedV1, SeedFieldValueV1, SeedStepV1 } from "./seed";
 import { orderCommittedSeeds } from "./seed";
+import { validateCommittedSeedSchema } from "./seed/index";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 export interface ApplySeedsResult {
@@ -158,6 +159,7 @@ export async function applyCommittedSeeds(
 	}>,
 ): Promise<ApplySeedsResult> {
 	const seeds = orderCommittedSeeds(input.seeds);
+	for (const seed of seeds) validateCommittedSeedSchema(seed, input.schema);
 	const pool = input.connectionString
 		? new SQL(input.connectionString)
 		: new SQL();

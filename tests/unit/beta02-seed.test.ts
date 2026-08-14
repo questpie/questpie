@@ -8,6 +8,7 @@ import {
 	createCommittedSeed,
 	loadCommittedSeed,
 	orderCommittedSeeds,
+	validateCommittedSeedSchema,
 	verifyCommittedSeed,
 } from "@questpie/compiler";
 
@@ -54,6 +55,20 @@ describe("BETA-02 committed Seeds", () => {
 			files: { ...committed.files, "callback.ts": "export default () => 1" },
 		};
 		expect(() => verifyCommittedSeed(extraFile)).toThrow(/QP-SEED-004/);
+		const incompatibleSchema = structuredClone(
+			JSON.parse(compiled.generatedFiles["schema-projection.json"] ?? "null"),
+		);
+		const companies = incompatibleSchema.collections.find(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:companies",
+		);
+		companies.fields = companies.fields.filter(
+			(field: { identity: string }) =>
+				field.identity !== "collection:companies/field:name",
+		);
+		expect(() =>
+			validateCommittedSeedSchema(committed, incompatibleSchema),
+		).toThrow(/QP-SEED-003/);
 		expect(() =>
 			orderCommittedSeeds([{ ...committed, dependencies: ["seed:missing"] }]),
 		).toThrow(/QP-SEED-001/);
