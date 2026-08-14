@@ -1,13 +1,17 @@
 import { SQL } from "bun";
 
 import { digest } from "./canonical";
+import {
+	assertBackendPid,
+	lockKey,
+	probeCommittedSession,
+} from "./postgres-session";
 import type { SchemaProjectionV1 } from "./schema";
 import {
 	assertSchemaMatches,
 	bootstrap,
 	childRecords,
 	fail,
-	lockKey,
 	providerObservations,
 } from "./schema-postgres";
 import type { CommittedSeedV1, SeedFieldValueV1, SeedStepV1 } from "./seed";
@@ -166,6 +170,7 @@ export async function applyCommittedSeeds(
 	const applied: string[] = [];
 	const alreadyApplied: string[] = [];
 	try {
+		const expectedPid = await probeCommittedSession(session);
 		const [database] = await session<
 			{ name: string }[]
 		>`select current_database() as name`;
@@ -176,7 +181,8 @@ export async function applyCommittedSeeds(
 				"current database is unavailable",
 			);
 		await providerObservations(session, input.schema);
-		await bootstrap(session, database.name);
+		await bootstrap(session, database.name, expectedPid);
+		await assertBackendPid(session, expectedPid, "Seed bootstrap");
 		const application = input.schema.application.name;
 		const applicationKey = lockKey(
 			"questpie-application-lock-v1",
@@ -185,6 +191,7 @@ export async function applyCommittedSeeds(
 		);
 		await session`select pg_catalog.pg_advisory_lock(${applicationKey})`;
 		try {
+			await assertBackendPid(session, expectedPid, "Seed application lock");
 			const [binding] = await session<{ schemaName: string }[]>`
 				select postgres_schema as "schemaName"
 				from questpie_internal.application_bindings
@@ -288,7 +295,17 @@ export async function applyCommittedSeeds(
 					values (${application}, ${attemptId}, 0, ${seed.identity}, ${seed.checksum}, 'started', ${new Date()}, null)
 				`;
 				try {
+					await assertBackendPid(
+						session,
+						expectedPid,
+						`before ${seed.identity} transaction`,
+					);
 					await session.begin(async (transaction) => {
+						await assertBackendPid(
+							transaction,
+							expectedPid,
+							`${seed.identity} transaction start`,
+						);
 						await assertSchemaMatches(transaction, input.schema);
 						for (const step of seed.steps)
 							await executeSeedStep(transaction, input.schema, step);
@@ -302,7 +319,17 @@ export async function applyCommittedSeeds(
 							(application_name, attempt_id, sequence, seed_identity, checksum, event, occurred_at, error_code)
 							values (${application}, ${attemptId}, 1, ${seed.identity}, ${seed.checksum}, 'succeeded', ${new Date()}, null)
 						`;
+						await assertBackendPid(
+							transaction,
+							expectedPid,
+							`${seed.identity} transaction end`,
+						);
 					});
+					await assertBackendPid(
+						session,
+						expectedPid,
+						`after ${seed.identity} transaction`,
+					);
 					applied.push(seed.identity);
 				} catch (error) {
 					const errorCode =
@@ -333,6 +360,7 @@ export async function applyCommittedSeeds(
 					`${blockedIdentity} live Schema Fingerprint differs from the migration head`,
 				);
 		} finally {
+			await assertBackendPid(session, expectedPid, "Seed application unlock");
 			await session`select pg_catalog.pg_advisory_unlock(${applicationKey})`;
 		}
 		return { applied, alreadyApplied };

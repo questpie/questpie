@@ -4,6 +4,11 @@ import { SQL } from "bun";
 
 import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { CompilerDiagnosticError } from "./diagnostic";
+import {
+	assertBackendPid,
+	lockKey,
+	probeCommittedSession,
+} from "./postgres-session";
 import type { CommittedMigration, SchemaProjectionV1 } from "./schema";
 import { verifyCommittedMigrationChain } from "./schema";
 const bootstrapSql = `CREATE SCHEMA IF NOT EXISTS questpie_internal AUTHORIZATION CURRENT_USER;
@@ -103,11 +108,6 @@ export function fail(
 	details: Readonly<Record<string, unknown>> = {},
 ): never {
 	throw new CompilerDiagnosticError(code, diagnosticClass, message, details);
-}
-
-export function lockKey(domain: string, ...values: string[]): bigint {
-	const input = `${domain}\0${values.join("\0")}`;
-	return createHash("sha256").update(input).digest().readBigInt64BE(0);
 }
 
 export function childRecords(
@@ -978,28 +978,6 @@ async function fingerprint(
 	};
 }
 
-async function backendPid(sql: SQL): Promise<number> {
-	const [row] = await sql<{ pid: number }[]>`
-		select pg_catalog.pg_backend_pid() as pid
-	`;
-	return row?.pid ?? -1;
-}
-
-async function assertBackendPid(
-	sql: SQL,
-	expected: number,
-	phase: string,
-): Promise<void> {
-	const actual = await backendPid(sql);
-	if (expected < 0 || actual !== expected)
-		return fail(
-			"QP-SCHEMA-007",
-			"providerMismatch",
-			`PostgreSQL endpoint lost session affinity during ${phase}`,
-			{ expected, actual },
-		);
-}
-
 const bootstrapColumns = [
 	["application_bindings", "application_name", "text", true],
 	["application_bindings", "postgres_schema", "text", true],
@@ -1334,15 +1312,27 @@ async function verifyBootstrapCatalog(sql: SQL): Promise<void> {
 		);
 }
 
-export async function bootstrap(sql: SQL, databaseName: string): Promise<void> {
+export async function bootstrap(
+	sql: SQL,
+	databaseName: string,
+	expectedPid: number,
+): Promise<void> {
 	const key = lockKey("questpie-bootstrap-lock-v1", databaseName);
+	await assertBackendPid(sql, expectedPid, "before bootstrap lock");
 	await sql`select pg_catalog.pg_advisory_lock(${key})`;
 	try {
+		await assertBackendPid(sql, expectedPid, "after bootstrap lock");
 		const [state] = await sql<{ exists: boolean }[]>`
 			select exists(select 1 from pg_catalog.pg_namespace where nspname = 'questpie_internal') as exists
 		`;
 		if (!state?.exists) {
+			await assertBackendPid(sql, expectedPid, "before bootstrap transaction");
 			await sql.begin(async (transaction) => {
+				await assertBackendPid(
+					transaction,
+					expectedPid,
+					"bootstrap transaction start",
+				);
 				await transaction.unsafe(bootstrapSql);
 				await transaction`
 					insert into questpie_internal.protocol
@@ -1350,9 +1340,16 @@ export async function bootstrap(sql: SQL, databaseName: string): Promise<void> {
 					values (true, 1, ${bootstrapChecksum})
 				`;
 				await verifyBootstrapCatalog(transaction);
+				await assertBackendPid(
+					transaction,
+					expectedPid,
+					"bootstrap transaction end",
+				);
 			});
+			await assertBackendPid(sql, expectedPid, "after bootstrap transaction");
 		} else await verifyBootstrapCatalog(sql);
 	} finally {
+		await assertBackendPid(sql, expectedPid, "bootstrap unlock");
 		await sql`select pg_catalog.pg_advisory_unlock(${key})`;
 	}
 }
@@ -1387,14 +1384,7 @@ export async function applyCommittedMigrations(
 		: new SQL();
 	const session = await pool.reserve();
 	try {
-		const firstPid = await backendPid(session);
-		const secondPid = await backendPid(session);
-		if (firstPid < 0 || firstPid !== secondPid)
-			return fail(
-				"QP-SCHEMA-007",
-				"providerMismatch",
-				"PostgreSQL endpoint is not session-affine",
-			);
+		const firstPid = await probeCommittedSession(session);
 		const [database] = await session<{ name: string }[]>`
 			select current_database() as name
 		`;
@@ -1405,7 +1395,7 @@ export async function applyCommittedMigrations(
 				"current database is unavailable",
 			);
 		await providerObservations(session, target);
-		await bootstrap(session, database.name);
+		await bootstrap(session, database.name, firstPid);
 		await assertBackendPid(session, firstPid, "bootstrap");
 		const applicationKey = lockKey(
 			"questpie-application-lock-v1",
@@ -1503,6 +1493,11 @@ export async function applyCommittedMigrations(
 			}
 			const applied: string[] = [];
 			for (const migration of pending) {
+				await assertBackendPid(
+					session,
+					firstPid,
+					`before ${migration.identity} transaction`,
+				);
 				await session.begin(async (transaction) => {
 					await assertBackendPid(
 						transaction,
@@ -1522,6 +1517,11 @@ export async function applyCommittedMigrations(
 						(application_name, migration_identity, sequence, parent_identity, checksum, base_schema_digest, target_schema_digest, applied_at)
 						values (${application}, ${migration.identity}, ${Number(migration.identity.slice(0, 6))}, ${migration.plan.baseMigration}, ${migration.checksum}, ${migration.plan.baseSchemaDigest}, ${migration.plan.targetSchemaDigest}, ${new Date()})
 					`;
+					await assertBackendPid(
+						transaction,
+						firstPid,
+						`${migration.identity} transaction end`,
+					);
 				});
 				await assertBackendPid(session, firstPid, migration.identity);
 				await assertSchemaMatches(session, migration.targetSchema);
