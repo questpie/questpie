@@ -21,7 +21,7 @@ const database = process.env.PGHOST ? new SQL() : undefined;
 beforeAll(async () => {
 	if (!database) return;
 	await database.unsafe(
-		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
+		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
 	);
 });
 
@@ -470,6 +470,117 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			started: 1,
 			succeeded: 1,
 		});
+	}, 10_000);
+
+	test("cancels a blocked Seed statement and rolls back prior steps", async () => {
+		const compilation = await compileApplication({
+			applicationRoot: fixtureRoot,
+		});
+		const fixtureSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		const targetSchema = {
+			...fixtureSchema,
+			application: {
+				...fixtureSchema.application,
+				name: "seed-cancel-probe",
+				postgresSchema: "seed_cancel_probe",
+			},
+		};
+		const planned = createMigrationPlan({
+			targetSchema,
+			slug: "create-seed-cancel-probe",
+		});
+		const migration = createCommittedMigration({
+			plan: planned.plan,
+			baseSchema: planned.baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: planned.digest,
+			localMigrations: [],
+		});
+		await applyCommittedMigrations({ migrations: [migration] });
+		const lockedId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6170";
+		const insertedId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6171";
+		await database!`
+			insert into seed_cancel_probe.companies (id, name)
+			values (${lockedId}, 'locked')
+		`;
+		const holder = await database!.reserve();
+		await holder.unsafe("BEGIN");
+		await holder`
+			select 1 from seed_cancel_probe.companies
+			where id = ${lockedId} for update
+		`;
+		const seed = createCommittedSeed({
+			definition: {
+				name: "seed-cancel-probe.demo.v1",
+				steps: [
+					{
+						kind: "insert",
+						collection: "collection:companies",
+						values: { id: insertedId, name: "must roll back" },
+					},
+					{
+						kind: "update",
+						collection: "collection:companies",
+						key: { id: lockedId },
+						values: { name: "updated" },
+					},
+				],
+			},
+			schema: targetSchema,
+		});
+		const controller = new AbortController();
+		const outcome = applyCommittedSeeds({
+			schema: targetSchema,
+			seeds: [seed],
+			signal: controller.signal,
+		}).catch((error: unknown) => error);
+		const deadline = performance.now() + 3_000;
+		let waiting = false;
+		while (!waiting && performance.now() < deadline) {
+			const [activity] = await database!<{ waiting: boolean }[]>`
+				select exists(
+				  select 1 from pg_catalog.pg_stat_activity
+				  where query like 'UPDATE "seed_cancel_probe"."companies"%'
+				    and wait_event_type = 'Lock'
+				) as waiting
+			`;
+			waiting = activity?.waiting ?? false;
+			if (!waiting) await Bun.sleep(10);
+		}
+		expect(waiting).toBe(true);
+		controller.abort(new Error("cancel Seed probe"));
+		const error = await outcome;
+		expect(error).toBeInstanceOf(Error);
+		await holder.unsafe("ROLLBACK");
+		holder.release();
+		const [rolledBack] = await database!<
+			{ failed: number; inserted: number; receipts: number; started: number }[]
+		>`
+			select
+			  (select count(*)::integer from seed_cancel_probe.companies where id = ${insertedId}) as inserted,
+			  (select count(*)::integer from questpie_internal.seed_receipts where application_name = 'seed-cancel-probe') as receipts,
+			  (select count(*)::integer from questpie_internal.seed_attempt_events where application_name = 'seed-cancel-probe' and event = 'started') as started,
+			  (select count(*)::integer from questpie_internal.seed_attempt_events where application_name = 'seed-cancel-probe' and event = 'failed') as failed
+		`;
+		expect(rolledBack).toEqual({
+			failed: 1,
+			inserted: 0,
+			receipts: 0,
+			started: 1,
+		});
+		await applyCommittedSeeds({ schema: targetSchema, seeds: [seed] });
+		const [retried] = await database!<
+			{ inserted: number; receipts: number; succeeded: number }[]
+		>`
+			select
+			  (select count(*)::integer from seed_cancel_probe.companies where id = ${insertedId}) as inserted,
+			  (select count(*)::integer from questpie_internal.seed_receipts where application_name = 'seed-cancel-probe') as receipts,
+			  (select count(*)::integer from questpie_internal.seed_attempt_events where application_name = 'seed-cancel-probe' and event = 'succeeded') as succeeded
+		`;
+		expect(retried).toEqual({ inserted: 1, receipts: 1, succeeded: 1 });
 	}, 10_000);
 
 	test("applies, loses the response, restarts, and reports no Drift", async () => {

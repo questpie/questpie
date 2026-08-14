@@ -323,13 +323,17 @@ export async function applyCommittedSeeds(
 						input.signal,
 						async (transaction) => {
 							await assertSchemaMatches(transaction, input.schema);
-							for (const step of seed.steps)
+							for (const step of seed.steps) {
+								input.signal?.throwIfAborted();
 								await executeSeedStep(transaction, input.schema, step);
+							}
+							input.signal?.throwIfAborted();
 							await transaction`
 							insert into questpie_internal.seed_receipts
 							(application_name, seed_identity, checksum, applied_schema_digest, committed_at, attempt_id)
 							values (${application}, ${seed.identity}, ${seed.checksum}, ${head.digest}, ${new Date()}, ${attemptId})
 						`;
+							input.signal?.throwIfAborted();
 							await transaction`
 							insert into questpie_internal.seed_attempt_events
 							(application_name, attempt_id, sequence, seed_identity, checksum, event, occurred_at, error_code)

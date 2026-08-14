@@ -175,7 +175,9 @@ export async function withPinnedTransaction<T>(
 	try {
 		await assertBackendPid(sql, expectedPid, `${phase} start`);
 		const result = await operation(sql);
+		signal?.throwIfAborted();
 		await assertBackendPid(sql, expectedPid, `${phase} end`);
+		signal?.throwIfAborted();
 		await sql.unsafe("COMMIT");
 		await assertBackendPid(sql, expectedPid, `after ${phase}`);
 		return result;
