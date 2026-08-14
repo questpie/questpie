@@ -26,6 +26,27 @@ transaction. Job and Reaction receive run/attempt/retry state but no Request.
 Workflow adds only the accepted checkpoint commands. File byte storage is a
 Route capability, never a Mutation or Policy capability.
 
+## Choose the owner of application work
+
+| Work                                           | Owner       | Boundary                                                                |
+| ---------------------------------------------- | ----------- | ----------------------------------------------------------------------- |
+| Canonicalize caller input without I/O          | `normalize` | Closed pure program inside the owning Operation lifecycle               |
+| Supply a trusted server value                  | `values`    | Closed assignment from input or immutable Execution facts               |
+| Read or derive an authorized result            | Query       | One Policy-aware read snapshot                                          |
+| Decide whether a principal may perform work    | Policy      | Pure authorization decision over explicit subject, resource, and facts  |
+| Validate application state or write atomically | Mutation    | One PostgreSQL transaction, including audit and durable acceptance      |
+| Call an external or nondeterministic provider  | Action      | Explicit effect outside transaction retry                               |
+| Adapt an HTTP request and response             | Route       | Transport boundary that delegates state and effects to Operations       |
+| React to one exact committed fact              | Reaction    | Durable committed-fact causation with no independent producer           |
+| Accept explicitly requested background work    | Job         | Durable dispatch with scoped idempotency and optional delay or schedule |
+| Coordinate checkpointed multi-step work        | Workflow    | Durable named Mutation/Action steps, timers, and typed signals          |
+| Observe a changing authorized read             | Live Query  | Re-evaluated Query result driven by committed invalidation              |
+| Deliver ephemeral connected-client messages    | Channel     | Non-durable transport fan-out; durable truth remains in Operations      |
+
+This map is the permanent v4 guide for work ownership. The v3 hook crosswalk is
+historical evidence, not a public lifecycle API. Reaction, Job, and Workflow
+remain distinct authoring meanings over one internal durable kernel.
+
 ## Imports
 
 Use `"questpie"` for stable structural builders and grammars, including
@@ -45,6 +66,17 @@ Use `"#questpie/client"` for `createClient` and exact generated client types.
 It exports no server factory. Search is an ordinary generated Query member;
 File lifecycle calls are ordinary Mutation members plus a bounded generated
 upload helper.
+
+Generated server Operation capability maps use nested-only calls such as
+`ctx.actions.delivery.sendMessage`. Canonical Resource Identity, manifests,
+receipts, references, CLI, Studio, external projections, and direct client/App
+maps retain exact `<kind>:<qualified-name>` keys. A compiler diagnostic rejects
+same-kind leaf/prefix collisions and a final Operation segment named `then`
+before emitting the nested map.
+
+These server Operation maps are frozen null-prototype objects. Names such as
+`constructor` and `prototype` are ordinary own members, not inherited Object
+helpers.
 
 ## Realtime and generated projections
 

@@ -62,8 +62,9 @@ the connected tracer; their assertions remain mandatory regressions below.
 
 - Leaf Definitions infer local input and output without application-wide
   recursive types.
-- The generated App Contract uses exact keys, context, input, output, exposure,
-  and declared errors.
+- The generated App Contract preserves exact Resource identity keys and emits
+  nested-only kind-specific server capability members with exact context,
+  input, output, exposure, and declared errors.
 - Public declarations contain no ORM type identity, broad `string`, `any`, or
   ambient fallback registry.
 - Generated Collection contracts expose exact Field identities, segment-array

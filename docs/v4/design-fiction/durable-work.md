@@ -96,12 +96,12 @@ export const messageSubmitted = defineReaction({
 
 		if (message === null) throw errors.messageUnavailable();
 
-		const delivery = await ctx.actions["delivery.sendMessage"](
+		const delivery = await ctx.actions.delivery.sendMessage(
 			{ message },
 			{ idempotencyKey: run.effect("deliver-message") },
 		);
 
-		await ctx.mutations["messages.recordDelivery"]({
+		await ctx.mutations.messages.recordDelivery({
 			messageId: message.id,
 			providerMessageId: delivery.providerMessageId,
 		});
@@ -194,18 +194,18 @@ visible.
 
 No durable callback or generated member depends on an ambient registry:
 
-| Code                                  | Exact contextual type source                                                                             |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `messageSubmitted` handler `input`    | the local `operation.object(...)` in that Reaction Definition                                            |
-| `runAs: durable.caller(...)`          | the closed caller run-as recipe checked against the application Context contract                         |
-| Reaction handler `ctx`                | the concrete generated App Contract, narrowed to Reaction read, nested Mutation, and Action capabilities |
-| `ctx.data.messages`                   | the generated application's exact Collection map; ordinary Collection Policy still applies               |
-| `ctx.actions["delivery.sendMessage"]` | the concrete generated Action map and that Action's exact input, output, errors, and call options        |
-| `run.effect("deliver-message")`       | the Reaction Resource identity, stable `runId`, and local literal effect name                            |
-| `attempt.number`                      | the Runtime's physical-attempt contract; it is not part of logical effect identity                       |
-| `ctx.dispatch.messageSubmitted`       | the compiled dispatch projection of the `messageSubmitted` Definition                                    |
-| Mutation dispatch input               | the Reaction input codec; the accepted Mutation call returns `Promise<void>`                             |
-| Reaction result                       | the handler's locally inferred closed output codec, persisted as the terminal result                     |
+| Code                               | Exact contextual type source                                                                             |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `messageSubmitted` handler `input` | the local `operation.object(...)` in that Reaction Definition                                            |
+| `runAs: durable.caller(...)`       | the closed caller run-as recipe checked against the application Context contract                         |
+| Reaction handler `ctx`             | the concrete generated App Contract, narrowed to Reaction read, nested Mutation, and Action capabilities |
+| `ctx.data.messages`                | the generated application's exact Collection map; ordinary Collection Policy still applies               |
+| `ctx.actions.delivery.sendMessage` | the nested generated Action capability with that Action's exact input, output, errors, and call options  |
+| `run.effect("deliver-message")`    | the Reaction Resource identity, stable `runId`, and local literal effect name                            |
+| `attempt.number`                   | the Runtime's physical-attempt contract; it is not part of logical effect identity                       |
+| `ctx.dispatch.messageSubmitted`    | the compiled dispatch projection of the `messageSubmitted` Definition                                    |
+| Mutation dispatch input            | the Reaction input codec; the accepted Mutation call returns `Promise<void>`                             |
+| Reaction result                    | the handler's locally inferred closed output codec, persisted as the terminal result                     |
 
 An unknown durable target, missing payload member, unavailable Collection,
 write call on Reaction `ctx`, Action name, or unsupported output value fails in
@@ -342,7 +342,7 @@ export const companyDigest = defineJob({
 		await attempt.heartbeat({ completed: "query" });
 		ctx.signal.throwIfAborted();
 
-		const sent = await ctx.actions["delivery.sendCompanyDigest"](
+		const sent = await ctx.actions.delivery.sendCompanyDigest(
 			{ companyId: input.companyId, digest },
 			{ idempotencyKey: run.effect("send-digest") },
 		);
@@ -707,7 +707,7 @@ export const publishArticle = defineWorkflow({
 	handler: async ({ input, ctx, step }) => {
 		await step.mutation(
 			"request-review",
-			ctx.mutations["articles.requestReview"],
+			ctx.mutations.articles.requestReview,
 			{ articleId: input.articleId },
 		);
 
@@ -718,7 +718,7 @@ export const publishArticle = defineWorkflow({
 
 		const publication = await step.action(
 			"publish",
-			ctx.actions["publishing.publishExternally"],
+			ctx.actions.publishing.publishExternally,
 			{
 				articleId: input.articleId,
 				approvedBy: approval.approvedBy,
@@ -727,7 +727,7 @@ export const publishArticle = defineWorkflow({
 
 		await step.mutation(
 			"mark-published",
-			ctx.mutations["articles.markPublished"],
+			ctx.mutations.articles.markPublished,
 			{
 				articleId: input.articleId,
 				providerId: publication.providerId,

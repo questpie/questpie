@@ -110,7 +110,7 @@ export async function readChannel(
 				signal: AbortSignal.timeout(5_000),
 			},
 			({ queries }) =>
-				queries["channels.overview"]({
+				queries.channels.overview({
 					channelId,
 					first: 20,
 					after: null,

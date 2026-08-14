@@ -98,7 +98,7 @@ await app.execution(
 		context: { companyId: "company-northwind" },
 	},
 	({ queries }) =>
-		queries["messages.page"]({
+		queries.messages.page({
 			channelId: "channel-general",
 			first: 20,
 			after: null,

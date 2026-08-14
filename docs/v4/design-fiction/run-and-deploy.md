@@ -257,7 +257,7 @@ try {
 			signal: AbortSignal.timeout(5_000),
 		},
 		({ queries }) =>
-			queries["messages.page"]({
+			queries.messages.page({
 				channelId,
 				first: 20,
 				after: null,

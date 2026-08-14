@@ -65,7 +65,7 @@ export const deliveryWebhook = defineRoute({
 				context: { companyId: request.headers.get("x-company-id")! },
 			},
 			async ({ mutations }) => {
-				await mutations["delivery.record"]({ body });
+				await mutations.delivery.record({ body });
 				return new Response(null, { status: 204 });
 			},
 		);
@@ -170,5 +170,5 @@ cannot require a second migration command or privileged compiler hook.
   cancellation.
 - Service creation and Route execution do not silently retry external effects.
 - Auth state and Service instances never enter safe telemetry.
-- Final factory spelling remains subject to the accepted naming/export proof;
-  the lifetime, authority, and capability boundaries do not.
+- Structural factories come from `questpie`. Application-specialized
+  executable factories come from `#questpie/app`.

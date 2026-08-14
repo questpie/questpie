@@ -375,9 +375,9 @@ A structural module cannot value-import `.questpie/generated/**` or an
 arbitrary `#questpie/app` value. A type-only import is permitted and is erased
 before controlled evaluation. ADR-0009 plus ADR-0019 permit exactly seven pure
 current-virtual factory values: `defineQuery`, `defineMutation`, `defineAction`,
-`defineRoute`, `defineReaction`, and `defineJob`. The evaluator substitutes
-those values from the compiler's current draft and never loads emitted Runtime
-output. Another generated value remains `QP-COMPOSE-012`.
+`defineRoute`, `defineReaction`, `defineJob`, and `defineWorkflow`. The evaluator
+substitutes those values from the compiler's current draft and never loads
+emitted Runtime output. Another generated value remains `QP-COMPOSE-012`.
 
 QUESTPIE resolves the Current App Contract from the current normalized draft,
 not compile N−1 on disk. It then writes the generated surface and typechecks
@@ -692,6 +692,12 @@ Each segment contains 1 to 63 characters. The complete name, including dots,
 contains at most 255 characters. Names are case-sensitive and are not
 case-folded or Unicode-normalized because Unicode is not permitted.
 
+`then` remains a valid segment and a valid non-Operation Resource name. An
+Operation projected into a generated server capability map cannot use `then`
+as its final segment because the callable leaf would make that namespace
+Promise-like. Compilation reports `QP-COMPOSE-024`. A non-final `then` segment,
+such as `then.fire`, remains valid.
+
 These names are valid:
 
 ```text
@@ -774,11 +780,15 @@ Two separately authored Definitions of the same kind and name collide even
 when their contents are byte-identical.
 
 A name can be a strict dotted prefix of another name, such as `booking` and
-`booking.availability`. The Compiled Manifest and App Contract preserve exact
-full-name keys and can represent both. The canonical generated contract and
-protocol surface use exact full-name key maps, never a nested-object projection.
-A later generated-client grill can add collision-free ergonomic aliases, but an
-alias cannot replace or reinterpret the exact-key surface.
+`booking.availability`. The Compiled Manifest, App Contract identity index,
+receipts, references, CLI, Studio, and external projections preserve exact
+`<kind>:<qualified-name>` keys and can represent both.
+
+Generated server Operation capability maps are a separate, nested-only call
+projection. Within one Operation kind, a leaf cannot also be a namespace
+prefix: `action:booking` plus `action:booking.availability` fails with
+`QP-COMPOSE-023`. Equal names in different kinds remain valid. The nested call
+spelling never replaces or reinterprets canonical Resource Identity.
 
 Changing `kind` or `name` creates a different Resource. V1 has no Resource
 Identity alias. Schema recovery uses the explicit migration rename mapping.
@@ -1175,6 +1185,8 @@ this closed code registry:
 | `QP-COMPOSE-020` | `duplicateContributionIdentity`     | One Resource accepts the same Augmentation contribution identity more than once                                                  | 2    |
 | `QP-COMPOSE-021` | `nonLiteralAugmentationList`        | An `augmentations` list is not a closed syntactic array literal of direct references or direct `define*Augmentation` calls       | 2    |
 | `QP-COMPOSE-022` | `definitionOutsideSourceRoot`       | An application-owned top-level Definition factory call belongs to the Program but is outside the configured source root          | 2    |
+| `QP-COMPOSE-023` | `operationProjectionCollision`      | One Operation name is both a leaf and namespace prefix within one generated kind map                                             | 2    |
+| `QP-COMPOSE-024` | `operationProjectionUnsafeName`     | An Operation's final name segment is `then` and would make a capability namespace thenable                                       | 2    |
 
 Exit `2` means invalid source, configuration, or composition. Exit `4` means a
 reviewed artifact, accepted Package Inventory, or digest must be refreshed. An internal
@@ -1209,7 +1221,9 @@ type CompositionDiagnosticCodeV1 =
 	| "QP-COMPOSE-019"
 	| "QP-COMPOSE-020"
 	| "QP-COMPOSE-021"
-	| "QP-COMPOSE-022";
+	| "QP-COMPOSE-022"
+	| "QP-COMPOSE-023"
+	| "QP-COMPOSE-024";
 
 type CompositionDiagnosticClassV1 =
 	| "unreachableDefinition"
@@ -1233,7 +1247,9 @@ type CompositionDiagnosticClassV1 =
 	| "generatedOutputCorrupt"
 	| "duplicateContributionIdentity"
 	| "nonLiteralAugmentationList"
-	| "definitionOutsideSourceRoot";
+	| "definitionOutsideSourceRoot"
+	| "operationProjectionCollision"
+	| "operationProjectionUnsafeName";
 
 type CanonicalJsonValue =
 	| null
@@ -1276,26 +1292,34 @@ cannot emit another `QP-COMPOSE-*` value without revising v1. Recovery entries
 are in executable order. A diagnostic cannot contain a database URL, registry
 credential, environment value, or source text.
 
+`QP-COMPOSE-023` recovers by renaming either Operation so no same-kind leaf is
+also a namespace prefix. `QP-COMPOSE-024` recovers by renaming the Operation's
+final `then` segment. Both diagnostics have severity `error`, blocking effect
+`fatal`, exit `2`, and carry every conflicting or rejected Origin without
+secret source.
+
 ### Hostile collision matrix
 
-| Case                                                         | Result                                                                                      | Recovery                                                                             |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| One local declaration re-exported through two barrels        | one Definition at its declaration Origin                                                    | none                                                                                 |
-| Two factory calls produce one Resource Identity              | `QP-COMPOSE-002`                                                                            | remove or rename one Definition                                                      |
-| Two active Packages establish one Resource Identity          | `QP-COMPOSE-002`                                                                            | choose compatible versions, deactivate one root, or vendor and rename one Definition |
-| Two different Resource Kinds use one Qualified Resource Name | allowed                                                                                     | none                                                                                 |
-| One dotted name is a prefix of another                       | allowed; exact-key generated maps preserve both                                             | none                                                                                 |
-| Owner and Augmentation add one member identity               | `QP-COMPOSE-014`                                                                            | remove or rename the contributed member                                              |
-| Two Augmentations add one member identity                    | `QP-COMPOSE-014`                                                                            | remove or rename one contribution                                                    |
-| The same Augmentation value appears twice in one Owner list  | `QP-COMPOSE-020`                                                                            | keep one acceptance                                                                  |
-| The same Augmentation value is accepted by two Owners        | allowed; two target-qualified contribution identities                                       | none                                                                                 |
-| Active Package update changes its public Package Inventory   | `QP-COMPOSE-008`                                                                            | inspect and run `questpie package accept <package>`                                  |
-| Active Package cannot resolve or evaluate                    | fatal compile; never a Resource removal                                                     | repair installation or activate a compatible version                                 |
-| Inactive Package composition value is imported               | `QP-COMPOSE-005`                                                                            | run the printed `questpie add` command                                               |
-| Active Package re-exports a transitive Definition            | part of the direct Package Inventory with activated export and terminal declaration Origins | none                                                                                 |
-| One Package name resolves to two physical instances          | `QP-COMPOSE-009`                                                                            | deduplicate or align dependency versions                                             |
-| Two paths collide only after filesystem normalization        | `QP-COMPOSE-016`                                                                            | rename one path                                                                      |
-| Semantic names derive one PostgreSQL physical name           | schema physical-name collision                                                              | set an inline or `questpie.json` physical-name override                              |
+| Case                                                                  | Result                                                                                      | Recovery                                                                             |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| One local declaration re-exported through two barrels                 | one Definition at its declaration Origin                                                    | none                                                                                 |
+| Two factory calls produce one Resource Identity                       | `QP-COMPOSE-002`                                                                            | remove or rename one Definition                                                      |
+| Two active Packages establish one Resource Identity                   | `QP-COMPOSE-002`                                                                            | choose compatible versions, deactivate one root, or vendor and rename one Definition |
+| Two different Resource Kinds use one Qualified Resource Name          | allowed                                                                                     | none                                                                                 |
+| One dotted name is a prefix of another outside one Operation kind map | allowed; exact identity maps preserve both                                                  | none                                                                                 |
+| One same-kind Operation leaf is a prefix of another                   | `QP-COMPOSE-023`; no capability declaration is emitted                                      | rename either leaf or namespace                                                      |
+| An Operation's final segment is `then`                                | `QP-COMPOSE-024`; no capability declaration is emitted                                      | rename the final segment; non-final `then` remains valid                             |
+| Owner and Augmentation add one member identity                        | `QP-COMPOSE-014`                                                                            | remove or rename the contributed member                                              |
+| Two Augmentations add one member identity                             | `QP-COMPOSE-014`                                                                            | remove or rename one contribution                                                    |
+| The same Augmentation value appears twice in one Owner list           | `QP-COMPOSE-020`                                                                            | keep one acceptance                                                                  |
+| The same Augmentation value is accepted by two Owners                 | allowed; two target-qualified contribution identities                                       | none                                                                                 |
+| Active Package update changes its public Package Inventory            | `QP-COMPOSE-008`                                                                            | inspect and run `questpie package accept <package>`                                  |
+| Active Package cannot resolve or evaluate                             | fatal compile; never a Resource removal                                                     | repair installation or activate a compatible version                                 |
+| Inactive Package composition value is imported                        | `QP-COMPOSE-005`                                                                            | run the printed `questpie add` command                                               |
+| Active Package re-exports a transitive Definition                     | part of the direct Package Inventory with activated export and terminal declaration Origins | none                                                                                 |
+| One Package name resolves to two physical instances                   | `QP-COMPOSE-009`                                                                            | deduplicate or align dependency versions                                             |
+| Two paths collide only after filesystem normalization                 | `QP-COMPOSE-016`                                                                            | rename one path                                                                      |
+| Semantic names derive one PostgreSQL physical name                    | schema physical-name collision                                                              | set an inline or `questpie.json` physical-name override                              |
 
 ## Accepted risks and deferred breadth
 
@@ -1307,5 +1331,6 @@ credential, environment value, or source text.
 - Multiple configured instances of one Package remain deferred because the
   first tracer has no consumer. A future design cannot weaken explicit
   activation, provenance, identity, or Package Inventory review.
-- Ergonomic generated-client aliases remain deferred. Exact full-name key maps
-  are the canonical, collision-free surface.
+- Ergonomic generated-client aliases remain deferred. Exact full-name identity
+  maps remain canonical and collision-free. Generated server call maps are
+  nested-only and compile only after 023/024 projection safety checks.

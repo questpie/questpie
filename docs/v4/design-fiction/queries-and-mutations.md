@@ -662,7 +662,7 @@ const message = await app.execution(
 		context: { companyId },
 	},
 	({ mutations }) =>
-		mutations["messages.submit"]({
+		mutations.messages.submit({
 			channelId,
 			body: "Ready for review",
 		}),

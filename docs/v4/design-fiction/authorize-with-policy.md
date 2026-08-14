@@ -134,7 +134,7 @@ const page = await app.execution(
 		},
 	},
 	({ queries }) =>
-		queries["messages.page"]({
+		queries.messages.page({
 			channelId: "018f6094-cf3c-70e9-8d68-80d523f14c19",
 			first: 20,
 			after: null,

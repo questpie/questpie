@@ -53,12 +53,12 @@ export const messageSubmitted = defineReaction({
 
 		if (message === null) throw errors.messageUnavailable();
 
-		const delivery = await ctx.actions["delivery.sendMessage"](
+		const delivery = await ctx.actions.delivery.sendMessage(
 			{ message },
 			{ idempotencyKey: run.effect("deliver-message") },
 		);
 
-		await ctx.mutations["messages.recordDelivery"]({
+		await ctx.mutations.messages.recordDelivery({
 			messageId: message.id,
 			providerMessageId: delivery.providerMessageId,
 		});
@@ -82,9 +82,11 @@ produce the exact durable result and error codecs. Reaction errors use the same
 
 The `delivery.sendMessage` member is already part of that Current App Contract.
 Its generated call accepts the selected Message plus an effect-derived
-idempotency key and returns a provider message identity. The bracket-dot syntax
-is an exact generated Action lookup, not a string registry. The application
-must provide that generated member with this input, option, and result contract.
+idempotency key and returns a provider message identity. The nested path is the
+generated server Action capability projection, not a string registry or a
+second Resource identity. Canonical identity remains
+`action:delivery.sendMessage`. The application must provide that generated
+member with this input, option, and result contract.
 The application must also provide the generated `messages.recordDelivery`
 Mutation member with the shown input and a
 `Promise<{ messageId: string; recorded: true }>` result.
