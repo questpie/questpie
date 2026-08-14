@@ -24,9 +24,28 @@ export type MigrationClassification =
 	| "destructive"
 	| "blocked";
 
+export type MigrationStepKindV1 =
+	| "createApplicationSchema"
+	| "renameCollection"
+	| "createCollection"
+	| "renameField"
+	| "renameConstraint"
+	| "renameRelationConstraint"
+	| "renameIndex"
+	| "addField"
+	| "alterField"
+	| "addConstraint"
+	| "addRelation"
+	| "addIndex"
+	| "dropIndex"
+	| "dropRelation"
+	| "dropConstraint"
+	| "dropField"
+	| "dropCollection";
+
 export interface MigrationStepV1 extends JsonRecord {
 	readonly stepId: string;
-	readonly kind: string;
+	readonly kind: MigrationStepKindV1;
 	readonly targetIdentity: string;
 	readonly containerIdentity: string;
 	readonly lock:
@@ -67,7 +86,16 @@ export interface CommittedMigration {
 	readonly plan: MigrationPlanV1;
 	readonly baseSchema: SchemaProjectionV1;
 	readonly targetSchema: SchemaProjectionV1;
-	readonly files: Readonly<Record<string, string>>;
+	readonly files: CommittedMigrationFilesV1;
+}
+
+export interface CommittedMigrationFilesV1 {
+	readonly "migration.json": string;
+	readonly "plan.json": string;
+	readonly "base-schema.json": string;
+	readonly "target-schema.json": string;
+	readonly "up.sql": string;
+	readonly "checksum.sha256": string;
 }
 
 function schemaError(
@@ -159,7 +187,7 @@ function maximumClassification(
 
 function step(
 	input: Readonly<{
-		kind: string;
+		kind: MigrationStepKindV1;
 		targetIdentity: string;
 		containerIdentity: string;
 		lock: MigrationStepV1["lock"];
@@ -175,7 +203,7 @@ function step(
 	};
 }
 
-const kindRank = [
+const kindRank: readonly MigrationStepKindV1[] = [
 	"createApplicationSchema",
 	"renameCollection",
 	"createCollection",
@@ -198,8 +226,7 @@ const kindRank = [
 function sortSteps(steps: MigrationStepV1[]): MigrationStepV1[] {
 	return steps.sort((left, right) => {
 		const kindOrder =
-			kindRank.indexOf(left.kind as (typeof kindRank)[number]) -
-			kindRank.indexOf(right.kind as (typeof kindRank)[number]);
+			kindRank.indexOf(left.kind) - kindRank.indexOf(right.kind);
 		return kindOrder || compareAscii(left.targetIdentity, right.targetIdentity);
 	});
 }
@@ -700,18 +727,42 @@ function renderStep(
 	);
 }
 
-function migrationChecksum(files: Readonly<Record<string, string>>): string {
+type MigrationPayloadFiles = Omit<CommittedMigrationFilesV1, "checksum.sha256">;
+
+const committedMigrationFileNames = [
+	"base-schema.json",
+	"checksum.sha256",
+	"migration.json",
+	"plan.json",
+	"target-schema.json",
+	"up.sql",
+] as const;
+
+function renderMigrationSql(
+	plan: MigrationPlanV1,
+	target: SchemaProjectionV1,
+	base: SchemaProjectionV1,
+): string {
+	return plan.steps
+		.map(
+			(item) =>
+				`-- questpie-step: ${item.stepId}\n${renderStep(item, target, base)}\n`,
+		)
+		.join("\n");
+}
+
+function migrationChecksum(files: MigrationPayloadFiles): string {
 	return createHash("sha256")
 		.update("questpie-migration-v1\0")
-		.update(files["migration.json"] ?? "")
+		.update(files["migration.json"])
 		.update("\0")
-		.update(files["plan.json"] ?? "")
+		.update(files["plan.json"])
 		.update("\0")
-		.update(files["base-schema.json"] ?? "")
+		.update(files["base-schema.json"])
 		.update("\0")
-		.update(files["target-schema.json"] ?? "")
+		.update(files["target-schema.json"])
 		.update("\0")
-		.update(files["up.sql"] ?? "")
+		.update(files["up.sql"])
 		.digest("hex");
 }
 
@@ -723,7 +774,7 @@ export function createCommittedMigration(
 		planDigest: string;
 		sequence?: number;
 		parent?: string | null;
-		currentSchema?: SchemaProjectionV1;
+		currentSchema: SchemaProjectionV1;
 		acceptDestructive?: string;
 	}>,
 ): CommittedMigration {
@@ -751,7 +802,7 @@ export function createCommittedMigration(
 			"destructiveAcknowledgementRequired",
 			"destructive Migration Plan requires its exact digest",
 		);
-	const current = input.currentSchema ?? target;
+	const current = assertProjection(input.currentSchema, "current schema");
 	const replanned = createMigrationPlan({
 		targetSchema: current,
 		baseSchema: base,
@@ -776,13 +827,24 @@ export function createCommittedMigration(
 			"migration sequence is outside six-digit v1 range",
 		);
 	const identity = `${sequence.toString().padStart(6, "0")}_${input.plan.slug}`;
+	const parent = input.parent ?? input.plan.baseMigration;
+	if (
+		(sequence === 1 &&
+			(parent !== null || input.plan.baseMigration !== null)) ||
+		(sequence > 1 && (parent === null || parent !== input.plan.baseMigration))
+	)
+		return schemaError(
+			"QP-SCHEMA-025",
+			"orderMismatch",
+			"migration sequence, parent, and plan base do not form one linear chain",
+		);
 	const metadata = {
 		format: "questpie.committed-migration",
 		version: 1,
 		identity,
 		sequence,
 		slug: input.plan.slug,
-		parent: input.parent ?? input.plan.baseMigration,
+		parent,
 		planDigest: actualPlanDigest,
 		baseSchemaDigest: schemaDigest(base),
 		targetSchemaDigest: schemaDigest(target),
@@ -790,21 +852,19 @@ export function createCommittedMigration(
 		transaction: "required",
 		sqlRenderer: "questpie-postgres-ddl-v1",
 	};
-	const upSql = input.plan.steps
-		.map(
-			(item) =>
-				`-- questpie-step: ${item.stepId}\n${renderStep(item, target, base)}\n`,
-		)
-		.join("\n");
-	const files: Record<string, string> = {
+	const upSql = renderMigrationSql(input.plan, target, base);
+	const payloadFiles: MigrationPayloadFiles = {
 		"migration.json": canonicalBytes(metadata),
 		"plan.json": canonicalBytes(input.plan),
 		"base-schema.json": canonicalBytes(base),
 		"target-schema.json": canonicalBytes(target),
 		"up.sql": upSql,
 	};
-	const checksum = migrationChecksum(files);
-	files["checksum.sha256"] = `${checksum}\n`;
+	const checksum = migrationChecksum(payloadFiles);
+	const files: CommittedMigrationFilesV1 = {
+		...payloadFiles,
+		"checksum.sha256": `${checksum}\n`,
+	};
 	return {
 		identity,
 		checksum,
@@ -816,12 +876,120 @@ export function createCommittedMigration(
 }
 
 export function verifyCommittedMigration(migration: CommittedMigration): void {
-	const expected = migration.files["checksum.sha256"];
-	const actual = `${migrationChecksum(migration.files)}\n`;
-	if (expected !== actual || migration.checksum !== actual.trim())
-		schemaError(
+	const names = Object.keys(migration.files).sort(compareAscii);
+	if (canonicalBytes(names) !== canonicalBytes(committedMigrationFileNames))
+		return schemaError(
+			"QP-SCHEMA-023",
+			"checksumMismatch",
+			`${migration.identity} does not contain the exact six-file contract`,
+		);
+	const payloadFiles: MigrationPayloadFiles = {
+		"migration.json": migration.files["migration.json"],
+		"plan.json": migration.files["plan.json"],
+		"base-schema.json": migration.files["base-schema.json"],
+		"target-schema.json": migration.files["target-schema.json"],
+		"up.sql": migration.files["up.sql"],
+	};
+	const actualChecksum = migrationChecksum(payloadFiles);
+	if (
+		migration.files["checksum.sha256"] !== `${actualChecksum}\n` ||
+		migration.checksum !== actualChecksum
+	)
+		return schemaError(
 			"QP-SCHEMA-023",
 			"checksumMismatch",
 			`${migration.identity} checksum is invalid`,
 		);
+	let metadata: JsonRecord;
+	let plan: MigrationPlanV1;
+	let base: SchemaProjectionV1;
+	let target: SchemaProjectionV1;
+	try {
+		metadata = JSON.parse(payloadFiles["migration.json"]) as JsonRecord;
+		plan = JSON.parse(payloadFiles["plan.json"]) as MigrationPlanV1;
+		base = assertProjection(
+			JSON.parse(payloadFiles["base-schema.json"]),
+			"committed base schema",
+		);
+		target = assertProjection(
+			JSON.parse(payloadFiles["target-schema.json"]),
+			"committed target schema",
+		);
+	} catch {
+		return schemaError(
+			"QP-SCHEMA-023",
+			"checksumMismatch",
+			`${migration.identity} contains invalid artifact JSON`,
+		);
+	}
+	const sequence = Number(metadata.sequence);
+	const parent = metadata.parent === null ? null : String(metadata.parent);
+	const expectedIdentity = `${sequence.toString().padStart(6, "0")}_${String(metadata.slug)}`;
+	const expectedPlanDigest = digest("questpie-migration-plan-v1", plan);
+	if (
+		canonicalBytes(metadata) !== payloadFiles["migration.json"] ||
+		canonicalBytes(plan) !== payloadFiles["plan.json"] ||
+		canonicalBytes(base) !== payloadFiles["base-schema.json"] ||
+		canonicalBytes(target) !== payloadFiles["target-schema.json"] ||
+		metadata.format !== "questpie.committed-migration" ||
+		metadata.version !== 1 ||
+		!Number.isSafeInteger(sequence) ||
+		sequence < 1 ||
+		expectedIdentity !== migration.identity ||
+		metadata.identity !== migration.identity ||
+		metadata.planDigest !== expectedPlanDigest ||
+		metadata.baseSchemaDigest !== schemaDigest(base) ||
+		metadata.targetSchemaDigest !== schemaDigest(target) ||
+		plan.baseSchemaDigest !== schemaDigest(base) ||
+		plan.targetSchemaDigest !== schemaDigest(target) ||
+		plan.application !== target.application.name ||
+		base.application.name !== target.application.name ||
+		base.application.postgresSchema !== target.application.postgresSchema ||
+		parent !== plan.baseMigration ||
+		(sequence === 1 ? parent !== null : parent === null) ||
+		canonicalBytes(plan) !== canonicalBytes(migration.plan) ||
+		canonicalBytes(base) !== canonicalBytes(migration.baseSchema) ||
+		canonicalBytes(target) !== canonicalBytes(migration.targetSchema) ||
+		renderMigrationSql(plan, target, base) !== payloadFiles["up.sql"]
+	)
+		return schemaError(
+			"QP-SCHEMA-023",
+			"checksumMismatch",
+			`${migration.identity} artifacts disagree with one another`,
+		);
+}
+
+export function verifyCommittedMigrationChain(
+	migrations: readonly CommittedMigration[],
+): void {
+	if (migrations.length === 0)
+		return schemaError(
+			"QP-SCHEMA-024",
+			"missingLocalMigration",
+			"no committed migration exists",
+		);
+	for (const [index, migration] of migrations.entries()) {
+		verifyCommittedMigration(migration);
+		const metadata = JSON.parse(
+			migration.files["migration.json"],
+		) as JsonRecord;
+		const sequence = index + 1;
+		const previous = migrations[index - 1];
+		const expectedParent = previous?.identity ?? null;
+		if (
+			metadata.sequence !== sequence ||
+			migration.identity.slice(0, 6) !== sequence.toString().padStart(6, "0") ||
+			migration.plan.baseMigration !== expectedParent ||
+			metadata.parent !== expectedParent ||
+			(previous !== undefined &&
+				canonicalBytes(migration.baseSchema) !==
+					canonicalBytes(previous.targetSchema)) ||
+			(previous === undefined && migration.baseSchema.collections.length !== 0)
+		)
+			return schemaError(
+				"QP-SCHEMA-025",
+				"orderMismatch",
+				`${migration.identity} does not extend the exact local migration prefix`,
+			);
+	}
 }

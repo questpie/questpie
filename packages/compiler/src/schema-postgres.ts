@@ -5,56 +5,71 @@ import { SQL } from "bun";
 import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { CompilerDiagnosticError } from "./diagnostic";
 import type { CommittedMigration, SchemaProjectionV1 } from "./schema";
-import { verifyCommittedMigration } from "./schema";
+import { verifyCommittedMigrationChain } from "./schema";
 
-const bootstrapSql = `CREATE SCHEMA questpie_internal;
+const bootstrapSql = `CREATE SCHEMA IF NOT EXISTS questpie_internal AUTHORIZATION CURRENT_USER;
+REVOKE ALL ON SCHEMA questpie_internal FROM PUBLIC;
 
-CREATE TABLE questpie_internal.schema_protocol (
+CREATE TABLE IF NOT EXISTS questpie_internal.protocol (
   singleton boolean PRIMARY KEY,
   version integer NOT NULL,
   checksum text NOT NULL,
-  installed_at timestamptz NOT NULL,
-  CONSTRAINT qp_schema_protocol_singleton CHECK (singleton)
+  CONSTRAINT protocol_singleton_true CHECK (singleton),
+  CONSTRAINT protocol_checksum_sha256 CHECK (checksum ~ '^[0-9a-f]{64}$')
 );
 
-CREATE TABLE questpie_internal.application_bindings (
+CREATE TABLE IF NOT EXISTS questpie_internal.application_bindings (
   application_name text PRIMARY KEY,
-  schema_name text NOT NULL UNIQUE,
+  postgres_schema text NOT NULL UNIQUE,
   created_at timestamptz NOT NULL
 );
 
-CREATE TABLE questpie_internal.schema_migration_receipts (
-  application_name text NOT NULL REFERENCES questpie_internal.application_bindings(application_name),
-  identity text NOT NULL,
+CREATE TABLE IF NOT EXISTS questpie_internal.schema_migration_receipts (
+  application_name text NOT NULL,
+  migration_identity text NOT NULL,
   sequence integer NOT NULL,
+  parent_identity text,
   checksum text NOT NULL,
+  base_schema_digest text NOT NULL,
   target_schema_digest text NOT NULL,
   applied_at timestamptz NOT NULL,
-  PRIMARY KEY (application_name, identity),
-  UNIQUE (application_name, sequence)
+  PRIMARY KEY (application_name, migration_identity),
+  UNIQUE (application_name, sequence),
+  CONSTRAINT migration_sequence_positive CHECK (sequence > 0),
+  CONSTRAINT migration_checksum_sha256 CHECK (checksum ~ '^[0-9a-f]{64}$'),
+  CONSTRAINT migration_base_digest_sha256 CHECK (base_schema_digest ~ '^[0-9a-f]{64}$'),
+  CONSTRAINT migration_target_digest_sha256 CHECK (target_schema_digest ~ '^[0-9a-f]{64}$')
 );
 
-CREATE TABLE questpie_internal.seed_receipts (
-  application_name text NOT NULL REFERENCES questpie_internal.application_bindings(application_name),
-  identity text NOT NULL,
-  checksum text NOT NULL,
-  schema_digest text NOT NULL,
-  applied_at timestamptz NOT NULL,
-  PRIMARY KEY (application_name, identity)
-);
-
-CREATE TABLE questpie_internal.seed_attempts (
-  attempt_id uuid NOT NULL,
+CREATE TABLE IF NOT EXISTS questpie_internal.seed_receipts (
   application_name text NOT NULL,
   seed_identity text NOT NULL,
-  sequence integer NOT NULL,
-  status text NOT NULL,
-  diagnostic_code text,
-  recorded_at timestamptz NOT NULL,
-  PRIMARY KEY (attempt_id, sequence)
+  checksum text NOT NULL,
+  applied_schema_digest text NOT NULL,
+  committed_at timestamptz NOT NULL,
+  attempt_id uuid NOT NULL,
+  PRIMARY KEY (application_name, seed_identity),
+  CONSTRAINT seed_checksum_sha256 CHECK (checksum ~ '^[0-9a-f]{64}$'),
+  CONSTRAINT seed_applied_digest_sha256 CHECK (applied_schema_digest ~ '^[0-9a-f]{64}$')
 );
 
-REVOKE ALL ON SCHEMA questpie_internal FROM PUBLIC;
+CREATE TABLE IF NOT EXISTS questpie_internal.seed_attempt_events (
+  application_name text NOT NULL,
+  attempt_id uuid NOT NULL,
+  sequence smallint NOT NULL,
+  seed_identity text NOT NULL,
+  checksum text NOT NULL,
+  event text NOT NULL,
+  occurred_at timestamptz NOT NULL,
+  error_code text,
+  PRIMARY KEY (application_name, attempt_id, sequence),
+  CONSTRAINT seed_attempt_sequence_nonnegative CHECK (sequence >= 0),
+  CONSTRAINT seed_attempt_checksum_sha256 CHECK (checksum ~ '^[0-9a-f]{64}$'),
+  CONSTRAINT seed_attempt_event_known CHECK (
+    event IN ('started', 'succeeded', 'failed', 'interrupted', 'alreadyApplied', 'blocked')
+  )
+);
+
 REVOKE ALL ON ALL TABLES IN SCHEMA questpie_internal FROM PUBLIC;
 `;
 
@@ -149,10 +164,115 @@ function expectedDefault(field: JsonRecord): string | null {
 	);
 }
 
+function fingerprintType(field: JsonRecord): JsonRecord {
+	const type = field.type as JsonRecord;
+	if (type.kind === "numeric")
+		return {
+			kind: "numeric",
+			precision: type.precision,
+			scale: type.scale,
+		};
+	if (type.kind === "timestamp")
+		return { kind: "timestamp", withTimezone: type.withTimezone === true };
+	if (type.kind === "object" || type.kind === "array" || type.kind === "json")
+		return { kind: "jsonb" };
+	return { kind: type.kind };
+}
+
+function physicalFieldName(collection: JsonRecord, identity: string): string {
+	const field = childRecords(collection, "fields").find(
+		(candidate) => candidate.identity === identity,
+	);
+	if (!field)
+		return fail(
+			"QP-SCHEMA-028",
+			"invalidObject",
+			`unknown fingerprint Field ${identity}`,
+		);
+	return String(field.postgresName);
+}
+
+function fingerprintCheckExpression(
+	expression: JsonRecord,
+	collection: JsonRecord,
+): JsonRecord {
+	if (expression.kind === "field")
+		return {
+			kind: "field",
+			field: physicalFieldName(collection, String(expression.field)),
+		};
+	if (expression.kind === "literal")
+		return { kind: "literal", value: expression.value };
+	if (expression.kind === "textLength")
+		return {
+			kind: "textLength",
+			expression: fingerprintCheckExpression(
+				expression.expression as JsonRecord,
+				collection,
+			),
+		};
+	if (expression.kind === "compare")
+		return {
+			kind: "compare",
+			operator: expression.operator,
+			left: fingerprintCheckExpression(
+				expression.left as JsonRecord,
+				collection,
+			),
+			right: fingerprintCheckExpression(
+				expression.right as JsonRecord,
+				collection,
+			),
+		};
+	if (expression.kind === "and" || expression.kind === "or")
+		return {
+			kind: expression.kind,
+			expressions: (expression.expressions as readonly JsonRecord[]).map(
+				(item) => fingerprintCheckExpression(item, collection),
+			),
+		};
+	if (
+		expression.kind === "not" ||
+		expression.kind === "isNull" ||
+		expression.kind === "isNotNull"
+	)
+		return {
+			kind: expression.kind,
+			expression: fingerprintCheckExpression(
+				expression.expression as JsonRecord,
+				collection,
+			),
+		};
+	return fail(
+		"QP-SCHEMA-028",
+		"invalidObject",
+		`unsupported fingerprint check ${String(expression.kind)}`,
+	);
+}
+
+function dependencyName(type: JsonRecord): string {
+	if (type.kind === "object" || type.kind === "array" || type.kind === "json")
+		return "jsonb";
+	if (type.kind === "boolean") return "bool";
+	if (type.kind === "integer") return "int4";
+	if (type.kind === "bigint") return "int8";
+	if (type.kind === "timestamp")
+		return type.withTimezone === true ? "timestamptz" : "timestamp";
+	return String(type.kind);
+}
+
+function operatorClass(type: JsonRecord): string {
+	return `${dependencyName(type)}_ops`;
+}
+
 function expectedComparable(schema: SchemaProjectionV1): JsonRecord {
-	const objects: JsonRecord[] = [
-		{ kind: "schema", name: schema.application.postgresSchema },
-	];
+	const applicationSchemaExists = schema.collections.length > 0;
+	const objects: JsonRecord[] = applicationSchemaExists
+		? [{ kind: "schema", name: schema.application.postgresSchema }]
+		: [];
+	const dependencies = new Map<string, JsonRecord>();
+	const addDependency = (value: JsonRecord) =>
+		dependencies.set(canonicalBytes(value), value);
 	for (const collection of schema.collections) {
 		objects.push({
 			kind: "table",
@@ -161,12 +281,13 @@ function expectedComparable(schema: SchemaProjectionV1): JsonRecord {
 			rowSecurityEnabled: false,
 			rowSecurityForced: false,
 		});
-		for (const field of childRecords(collection, "fields"))
+		for (const field of childRecords(collection, "fields")) {
+			const type = field.type as JsonRecord;
 			objects.push({
 				kind: "column",
 				table: collection.postgresName,
 				name: field.postgresName,
-				type: field.type,
+				type: fingerprintType(field),
 				nullable: field.nullable,
 				default: field.default,
 				identity: "none",
@@ -174,69 +295,232 @@ function expectedComparable(schema: SchemaProjectionV1): JsonRecord {
 				collation:
 					field.collation === "questpie.binary" ? "pg_catalog.C" : null,
 			});
+			addDependency({
+				kind: "type",
+				schema: "pg_catalog",
+				name: dependencyName(type),
+				extension: null,
+			});
+			if (field.collation === "questpie.binary")
+				addDependency({
+					kind: "collation",
+					schema: "pg_catalog",
+					name: "C",
+					extension: null,
+				});
+			const defaultValue = field.default as JsonRecord | null;
+			if (defaultValue?.kind === "randomUuid" || defaultValue?.kind === "now")
+				addDependency({
+					kind: "defaultFunction",
+					schema: "pg_catalog",
+					name: defaultValue.kind === "randomUuid" ? "gen_random_uuid" : "now",
+					extension: null,
+				});
+		}
 		for (const constraint of childRecords(collection, "constraints"))
 			objects.push(
 				constraint.kind === "check"
 					? {
-							...constraint,
+							kind: "check",
 							table: collection.postgresName,
+							name: constraint.postgresName,
+							expression: fingerprintCheckExpression(
+								constraint.expression as JsonRecord,
+								collection,
+							),
 							validated: true,
 						}
 					: {
-							...constraint,
+							kind: constraint.kind,
 							table: collection.postgresName,
+							name: constraint.postgresName,
+							fields: (constraint.fields as readonly string[]).map((identity) =>
+								physicalFieldName(collection, identity),
+							),
 							validated: true,
 							deferrable: false,
 							initiallyDeferred: false,
 						},
 			);
-		for (const relation of childRecords(collection, "relations"))
+		for (const relation of childRecords(collection, "relations")) {
+			const target = schema.collections.find(
+				(item) => item.identity === relation.target,
+			);
+			if (!target)
+				return fail(
+					"QP-SCHEMA-028",
+					"invalidObject",
+					`unknown fingerprint Relation target ${String(relation.target)}`,
+				);
 			objects.push({
 				kind: "foreignKey",
 				table: collection.postgresName,
 				name: relation.constraintPostgresName,
-				fields: relation.fields,
-				referencedTable: relation.target,
-				referencedFields: relation.references,
+				fields: (relation.fields as readonly string[]).map((identity) =>
+					physicalFieldName(collection, identity),
+				),
+				referencedTable: target.postgresName,
+				referencedFields: (relation.references as readonly string[]).map(
+					(identity) => physicalFieldName(target, identity),
+				),
 				onDelete: relation.onDelete,
 				onUpdate: relation.onUpdate,
 				validated: true,
 				deferrable: false,
 				initiallyDeferred: false,
 			});
-		for (const index of childRecords(collection, "indexes"))
+		}
+		for (const index of childRecords(collection, "indexes")) {
 			objects.push({
-				...index,
+				kind: "index",
 				table: collection.postgresName,
+				name: index.postgresName,
+				method: "btree",
 				unique: false,
+				fields: (index.fields as readonly JsonRecord[]).map((entry) => ({
+					field: physicalFieldName(collection, String(entry.field)),
+					order: entry.order,
+					nulls: entry.nulls,
+					operatorClass: "typeDefault",
+					collation: entry.collation,
+				})),
 				predicate: null,
 				valid: true,
 				ready: true,
 			});
+			for (const entry of index.fields as readonly JsonRecord[]) {
+				const field = childRecords(collection, "fields").find(
+					(item) => item.identity === entry.field,
+				);
+				if (field)
+					addDependency({
+						kind: "operatorClass",
+						schema: "pg_catalog",
+						name: operatorClass(field.type as JsonRecord),
+						extension: null,
+					});
+			}
+		}
+		for (const constraint of childRecords(collection, "constraints"))
+			if (constraint.kind === "primaryKey" || constraint.kind === "unique")
+				for (const identity of constraint.fields as readonly string[]) {
+					const field = childRecords(collection, "fields").find(
+						(item) => item.identity === identity,
+					);
+					if (field)
+						addDependency({
+							kind: "operatorClass",
+							schema: "pg_catalog",
+							name: operatorClass(field.type as JsonRecord),
+							extension: null,
+						});
+				}
 	}
 	return {
 		application: schema.application.name,
 		applicationSchema: schema.application.postgresSchema,
-		applicationSchemaExists: true,
+		applicationSchemaExists,
 		objects: objects.sort((left, right) =>
 			compareAscii(canonicalBytes(left), canonicalBytes(right)),
 		),
 		unsupportedObjects: [],
-		externalDependencies: [],
+		externalDependencies: [...dependencies.values()].sort((left, right) =>
+			compareAscii(canonicalBytes(left), canonicalBytes(right)),
+		),
 		installedRequiredExtensions: schema.requiredPostgres.extensions.map(
 			(extension) => extension.name,
 		),
 	};
 }
 
+function renderFingerprintExpression(expression: JsonRecord): string {
+	if (expression.kind === "field") return String(expression.field);
+	if (expression.kind === "literal") {
+		if (expression.value === null) return "NULL";
+		if (typeof expression.value === "boolean")
+			return expression.value ? "true" : "false";
+		if (typeof expression.value === "number") return String(expression.value);
+		return `'${String(expression.value).replaceAll("'", "''")}'::text`;
+	}
+	if (expression.kind === "textLength")
+		return `char_length(${renderFingerprintExpression(expression.expression as JsonRecord)})`;
+	if (expression.kind === "compare") {
+		const operators: Readonly<Record<string, string>> = {
+			equal: "=",
+			notEqual: "<>",
+			lessThan: "<",
+			lessThanOrEqual: "<=",
+			greaterThan: ">",
+			greaterThanOrEqual: ">=",
+		};
+		return `${renderFingerprintExpression(expression.left as JsonRecord)} ${operators[String(expression.operator)]} ${renderFingerprintExpression(expression.right as JsonRecord)}`;
+	}
+	if (expression.kind === "and" || expression.kind === "or")
+		return (expression.expressions as readonly JsonRecord[])
+			.map((item) => `(${renderFingerprintExpression(item)})`)
+			.join(expression.kind === "and" ? " AND " : " OR ");
+	if (expression.kind === "not")
+		return `NOT (${renderFingerprintExpression(expression.expression as JsonRecord)})`;
+	if (expression.kind === "isNull" || expression.kind === "isNotNull")
+		return `${renderFingerprintExpression(expression.expression as JsonRecord)} IS ${expression.kind === "isNull" ? "NULL" : "NOT NULL"}`;
+	return fail(
+		"QP-SCHEMA-028",
+		"invalidObject",
+		`unsupported fingerprint expression ${String(expression.kind)}`,
+	);
+}
+
+function expectedConstraintDefinition(
+	object: JsonRecord,
+	schemaName: string,
+): string {
+	if (object.kind === "primaryKey")
+		return `PRIMARY KEY (${(object.fields as readonly string[]).join(", ")})`;
+	if (object.kind === "unique")
+		return `UNIQUE (${(object.fields as readonly string[]).join(", ")})`;
+	if (object.kind === "check")
+		return `CHECK (${renderFingerprintExpression(object.expression as JsonRecord)})`;
+	if (object.kind === "foreignKey") {
+		const action = (value: unknown) =>
+			String(value)
+				.replace(/([a-z])([A-Z])/g, "$1 $2")
+				.toUpperCase();
+		return `FOREIGN KEY (${(object.fields as readonly string[]).join(", ")}) REFERENCES ${schemaName}.${String(object.referencedTable)}(${(object.referencedFields as readonly string[]).join(", ")}) ON UPDATE ${action(object.onUpdate)} ON DELETE ${action(object.onDelete)}`;
+	}
+	return fail(
+		"QP-SCHEMA-028",
+		"invalidObject",
+		`unsupported expected Constraint ${String(object.kind)}`,
+	);
+}
+
+function expectedIndexDefinition(
+	object: JsonRecord,
+	schemaName: string,
+): string {
+	const fields = (object.fields as readonly JsonRecord[])
+		.map((field) => {
+			const order = field.order === "desc" ? " DESC" : "";
+			const nonDefaultNulls =
+				(field.order === "asc" && field.nulls === "first") ||
+				(field.order === "desc" && field.nulls === "last")
+					? ` NULLS ${String(field.nulls).toUpperCase()}`
+					: "";
+			return `${String(field.field)}${order}${nonDefaultNulls}`;
+		})
+		.join(", ");
+	return `CREATE INDEX ${String(object.name)} ON ${schemaName}.${String(object.table)} USING btree (${fields})`;
+}
+
 async function assertSchemaMatches(
 	sql: SQL,
 	schema: SchemaProjectionV1,
-): Promise<void> {
+): Promise<JsonRecord> {
 	const schemaName = schema.application.postgresSchema;
 	const [namespace] = await sql<{ exists: boolean }[]>`
 		select exists(select 1 from pg_catalog.pg_namespace where nspname = ${schemaName}) as exists
 	`;
+	const expected = expectedComparable(schema);
 	if (!namespace?.exists)
 		return fail(
 			"QP-SCHEMA-028",
@@ -246,11 +530,13 @@ async function assertSchemaMatches(
 	const tables = await sql<
 		{
 			name: string;
+			persistence: string;
 			rowSecurityEnabled: boolean;
 			rowSecurityForced: boolean;
 		}[]
 	>`
 		select c.relname as name,
+		       c.relpersistence::text as persistence,
 		       c.relrowsecurity as "rowSecurityEnabled",
 		       c.relforcerowsecurity as "rowSecurityForced"
 		from pg_catalog.pg_class c
@@ -264,7 +550,12 @@ async function assertSchemaMatches(
 	if (
 		canonicalBytes(tables.map((table) => table.name)) !==
 			canonicalBytes(expectedTables) ||
-		tables.some((table) => table.rowSecurityEnabled || table.rowSecurityForced)
+		tables.some(
+			(table) =>
+				table.persistence !== "p" ||
+				table.rowSecurityEnabled ||
+				table.rowSecurityForced,
+		)
 	)
 		return fail(
 			"QP-SCHEMA-028",
@@ -319,54 +610,109 @@ async function assertSchemaMatches(
 				`${collection.identity} columns do not match the committed projection`,
 				{ expected: expectedColumns, actual: columns },
 			);
-		const constraints = await sql<{ name: string; type: string }[]>`
-			select con.conname as name, con.contype as type
+		const constraints = await sql<
+			{
+				name: string;
+				type: string;
+				definition: string;
+				validated: boolean;
+				deferrable: boolean;
+				initiallyDeferred: boolean;
+			}[]
+		>`
+			select con.conname as name,
+			       con.contype::text as type,
+			       pg_catalog.pg_get_constraintdef(con.oid, true) as definition,
+			       con.convalidated as validated,
+			       con.condeferrable as deferrable,
+			       con.condeferred as "initiallyDeferred"
 			from pg_catalog.pg_constraint con
 			join pg_catalog.pg_class c on c.oid = con.conrelid
 			join pg_catalog.pg_namespace n on n.oid = c.relnamespace
 			where n.nspname = ${schemaName} and c.relname = ${tableName}
 			order by con.conname
 		`;
-		const expectedConstraints = [
-			...childRecords(collection, "constraints").map((constraint) => ({
-				name: String(constraint.postgresName),
+		const expectedConstraints = (expected.objects as readonly JsonRecord[])
+			.filter(
+				(object) =>
+					object.table === collection.postgresName &&
+					["primaryKey", "unique", "check", "foreignKey"].includes(
+						String(object.kind),
+					),
+			)
+			.map((object) => ({
+				name: String(object.name),
 				type:
-					constraint.kind === "primaryKey"
+					object.kind === "primaryKey"
 						? "p"
-						: constraint.kind === "unique"
+						: object.kind === "unique"
 							? "u"
-							: "c",
-			})),
-			...childRecords(collection, "relations").map((relation) => ({
-				name: String(relation.constraintPostgresName),
-				type: "f",
-			})),
-		].sort((left, right) => compareAscii(left.name, right.name));
+							: object.kind === "foreignKey"
+								? "f"
+								: "c",
+				definition: expectedConstraintDefinition(object, schemaName),
+				validated: true,
+				deferrable: object.kind === "check" ? false : object.deferrable,
+				initiallyDeferred:
+					object.kind === "check" ? false : object.initiallyDeferred,
+			}))
+			.sort((left, right) => compareAscii(left.name, right.name));
 		if (canonicalBytes(constraints) !== canonicalBytes(expectedConstraints))
 			return fail(
 				"QP-SCHEMA-028",
 				"changedObject",
 				`${collection.identity} constraints do not match the committed projection`,
+				{ expected: expectedConstraints, actual: constraints },
 			);
-		const indexes = await sql<{ name: string }[]>`
-			select i.relname as name
+		const indexes = await sql<
+			{
+				name: string;
+				method: string;
+				unique: boolean;
+				valid: boolean;
+				ready: boolean;
+				predicate: string | null;
+				definition: string;
+			}[]
+		>`
+			select i.relname as name,
+			       am.amname as method,
+			       x.indisunique as unique,
+			       x.indisvalid as valid,
+			       x.indisready as ready,
+			       pg_catalog.pg_get_expr(x.indpred, x.indrelid) as predicate,
+			       pg_catalog.pg_get_indexdef(x.indexrelid) as definition
 			from pg_catalog.pg_index x
 			join pg_catalog.pg_class i on i.oid = x.indexrelid
 			join pg_catalog.pg_class t on t.oid = x.indrelid
 			join pg_catalog.pg_namespace n on n.oid = t.relnamespace
+			join pg_catalog.pg_am am on am.oid = i.relam
 			left join pg_catalog.pg_constraint con on con.conindid = x.indexrelid
 			where n.nspname = ${schemaName} and t.relname = ${tableName}
 			  and con.oid is null
 			order by i.relname
 		`;
-		const expectedIndexes = childRecords(collection, "indexes")
-			.map((index) => ({ name: String(index.postgresName) }))
+		const expectedIndexes = (expected.objects as readonly JsonRecord[])
+			.filter(
+				(object) =>
+					object.kind === "index" && object.table === collection.postgresName,
+			)
+			.map((index) => ({
+				name: String(index.name),
+				method: "btree",
+				unique: false,
+				valid: true,
+				ready: true,
+				predicate: null,
+				definition: expectedIndexDefinition(index, schemaName),
+			}))
 			.sort((left, right) => compareAscii(left.name, right.name));
 		if (canonicalBytes(indexes) !== canonicalBytes(expectedIndexes))
 			return fail(
 				"QP-SCHEMA-028",
 				"changedObject",
 				`${collection.identity} indexes do not match the committed projection`,
+				{ expected: expectedIndexes, actual: indexes },
 			);
 	}
 	const unsupported = await sql<{ kind: string; name: string }[]>`
@@ -394,6 +740,16 @@ async function assertSchemaMatches(
 			`application schema ${schemaName} contains unsupported objects`,
 			{ objects: unsupported },
 		);
+	return expected;
+}
+
+async function schemaExists(sql: SQL, schemaName: string): Promise<boolean> {
+	const [row] = await sql<{ exists: boolean }[]>`
+		select exists(
+			select 1 from pg_catalog.pg_namespace where nspname = ${schemaName}
+		) as exists
+	`;
+	return row?.exists === true;
 }
 
 async function providerObservations(
@@ -456,11 +812,11 @@ async function fingerprint(
 	schema: SchemaProjectionV1,
 ): Promise<SchemaFingerprintV1> {
 	const observations = await providerObservations(sql, schema);
-	await assertSchemaMatches(sql, schema);
+	const comparable = await assertSchemaMatches(sql, schema);
 	return {
 		format: "questpie.schema-fingerprint",
 		version: 1,
-		comparable: expectedComparable(schema),
+		comparable,
 		observations,
 	};
 }
@@ -487,6 +843,246 @@ async function assertBackendPid(
 		);
 }
 
+const bootstrapColumns = [
+	["application_bindings", "application_name", "text", true],
+	["application_bindings", "postgres_schema", "text", true],
+	["application_bindings", "created_at", "timestamp with time zone", true],
+	["protocol", "singleton", "boolean", true],
+	["protocol", "version", "integer", true],
+	["protocol", "checksum", "text", true],
+	["schema_migration_receipts", "application_name", "text", true],
+	["schema_migration_receipts", "migration_identity", "text", true],
+	["schema_migration_receipts", "sequence", "integer", true],
+	["schema_migration_receipts", "parent_identity", "text", false],
+	["schema_migration_receipts", "checksum", "text", true],
+	["schema_migration_receipts", "base_schema_digest", "text", true],
+	["schema_migration_receipts", "target_schema_digest", "text", true],
+	["schema_migration_receipts", "applied_at", "timestamp with time zone", true],
+	["seed_attempt_events", "application_name", "text", true],
+	["seed_attempt_events", "attempt_id", "uuid", true],
+	["seed_attempt_events", "sequence", "smallint", true],
+	["seed_attempt_events", "seed_identity", "text", true],
+	["seed_attempt_events", "checksum", "text", true],
+	["seed_attempt_events", "event", "text", true],
+	["seed_attempt_events", "occurred_at", "timestamp with time zone", true],
+	["seed_attempt_events", "error_code", "text", false],
+	["seed_receipts", "application_name", "text", true],
+	["seed_receipts", "seed_identity", "text", true],
+	["seed_receipts", "checksum", "text", true],
+	["seed_receipts", "applied_schema_digest", "text", true],
+	["seed_receipts", "committed_at", "timestamp with time zone", true],
+	["seed_receipts", "attempt_id", "uuid", true],
+] as const;
+
+const bootstrapConstraints = [
+	[
+		"application_bindings",
+		"application_bindings_pkey",
+		"p",
+		"PRIMARY KEY (application_name)",
+	],
+	[
+		"application_bindings",
+		"application_bindings_postgres_schema_key",
+		"u",
+		"UNIQUE (postgres_schema)",
+	],
+	[
+		"protocol",
+		"protocol_checksum_sha256",
+		"c",
+		"CHECK (checksum ~ '^[0-9a-f]{64}$'::text)",
+	],
+	["protocol", "protocol_pkey", "p", "PRIMARY KEY (singleton)"],
+	["protocol", "protocol_singleton_true", "c", "CHECK (singleton)"],
+	[
+		"schema_migration_receipts",
+		"migration_base_digest_sha256",
+		"c",
+		"CHECK (base_schema_digest ~ '^[0-9a-f]{64}$'::text)",
+	],
+	[
+		"schema_migration_receipts",
+		"migration_checksum_sha256",
+		"c",
+		"CHECK (checksum ~ '^[0-9a-f]{64}$'::text)",
+	],
+	[
+		"schema_migration_receipts",
+		"migration_sequence_positive",
+		"c",
+		"CHECK (sequence > 0)",
+	],
+	[
+		"schema_migration_receipts",
+		"migration_target_digest_sha256",
+		"c",
+		"CHECK (target_schema_digest ~ '^[0-9a-f]{64}$'::text)",
+	],
+	[
+		"schema_migration_receipts",
+		"schema_migration_receipts_application_name_sequence_key",
+		"u",
+		"UNIQUE (application_name, sequence)",
+	],
+	[
+		"schema_migration_receipts",
+		"schema_migration_receipts_pkey",
+		"p",
+		"PRIMARY KEY (application_name, migration_identity)",
+	],
+	[
+		"seed_attempt_events",
+		"seed_attempt_checksum_sha256",
+		"c",
+		"CHECK (checksum ~ '^[0-9a-f]{64}$'::text)",
+	],
+	[
+		"seed_attempt_events",
+		"seed_attempt_event_known",
+		"c",
+		"CHECK (event = ANY (ARRAY['started'::text, 'succeeded'::text, 'failed'::text, 'interrupted'::text, 'alreadyApplied'::text, 'blocked'::text]))",
+	],
+	[
+		"seed_attempt_events",
+		"seed_attempt_events_pkey",
+		"p",
+		"PRIMARY KEY (application_name, attempt_id, sequence)",
+	],
+	[
+		"seed_attempt_events",
+		"seed_attempt_sequence_nonnegative",
+		"c",
+		"CHECK (sequence >= 0)",
+	],
+	[
+		"seed_receipts",
+		"seed_applied_digest_sha256",
+		"c",
+		"CHECK (applied_schema_digest ~ '^[0-9a-f]{64}$'::text)",
+	],
+	[
+		"seed_receipts",
+		"seed_checksum_sha256",
+		"c",
+		"CHECK (checksum ~ '^[0-9a-f]{64}$'::text)",
+	],
+	[
+		"seed_receipts",
+		"seed_receipts_pkey",
+		"p",
+		"PRIMARY KEY (application_name, seed_identity)",
+	],
+] as const;
+
+async function verifyBootstrapCatalog(sql: SQL): Promise<void> {
+	const [namespace] = await sql<
+		{
+			ownerMatches: boolean;
+			publicPrivileges: boolean;
+		}[]
+	>`
+		select n.nspowner = (select usesysid from pg_catalog.pg_user where usename = current_user) as "ownerMatches",
+		       pg_catalog.has_schema_privilege('public', n.oid, 'USAGE')
+		       or pg_catalog.has_schema_privilege('public', n.oid, 'CREATE') as "publicPrivileges"
+		from pg_catalog.pg_namespace n
+		where n.nspname = 'questpie_internal'
+	`;
+	const tables = await sql<
+		{
+			name: string;
+			ownerMatches: boolean;
+			publicPrivileges: boolean;
+		}[]
+	>`
+		select c.relname as name,
+		       c.relowner = n.nspowner as "ownerMatches",
+		       pg_catalog.has_table_privilege('public', c.oid, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') as "publicPrivileges"
+		from pg_catalog.pg_class c
+		join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+		where n.nspname = 'questpie_internal' and c.relkind = 'r'
+		order by c.relname
+	`;
+	const columns = await sql<
+		{
+			table: string;
+			name: string;
+			type: string;
+			notNull: boolean;
+		}[]
+	>`
+		select c.relname as table,
+		       a.attname as name,
+		       pg_catalog.format_type(a.atttypid, a.atttypmod) as type,
+		       a.attnotnull as "notNull"
+		from pg_catalog.pg_attribute a
+		join pg_catalog.pg_class c on c.oid = a.attrelid
+		join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+		where n.nspname = 'questpie_internal' and c.relkind = 'r'
+		  and a.attnum > 0 and not a.attisdropped
+		order by c.relname, a.attnum
+	`;
+	const constraints = await sql<
+		{ table: string; name: string; type: string; definition: string }[]
+	>`
+		select c.relname as table,
+		       con.conname as name,
+		       con.contype::text as type,
+		       pg_catalog.pg_get_constraintdef(con.oid, true) as definition
+		from pg_catalog.pg_constraint con
+		join pg_catalog.pg_class c on c.oid = con.conrelid
+		join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+		where n.nspname = 'questpie_internal'
+		order by c.relname, con.conname
+	`;
+	const expectedTables = [
+		"application_bindings",
+		"protocol",
+		"schema_migration_receipts",
+		"seed_attempt_events",
+		"seed_receipts",
+	];
+	if (
+		!namespace?.ownerMatches ||
+		namespace.publicPrivileges ||
+		canonicalBytes(tables.map((table) => table.name)) !==
+			canonicalBytes(expectedTables) ||
+		tables.some((table) => !table.ownerMatches || table.publicPrivileges) ||
+		canonicalBytes(
+			columns.map((column) => [
+				column.table,
+				column.name,
+				column.type,
+				column.notNull,
+			]),
+		) !== canonicalBytes(bootstrapColumns) ||
+		canonicalBytes(
+			constraints.map((constraint) => [
+				constraint.table,
+				constraint.name,
+				constraint.type,
+				constraint.definition,
+			]),
+		) !== canonicalBytes(bootstrapConstraints)
+	)
+		return fail(
+			"QP-SCHEMA-023",
+			"checksumMismatch",
+			"questpie.internal.v1 catalog shape, ownership, or privileges changed",
+		);
+	const [protocol] = await sql<{ version: number; checksum: string }[]>`
+		select version, checksum
+		from questpie_internal.protocol
+		where singleton = true
+	`;
+	if (protocol?.version !== 1 || protocol.checksum !== bootstrapChecksum)
+		return fail(
+			"QP-SCHEMA-023",
+			"checksumMismatch",
+			"questpie.internal.v1 protocol is missing or changed",
+		);
+}
+
 async function bootstrap(sql: SQL, databaseName: string): Promise<void> {
 	const key = lockKey("questpie-bootstrap-lock-v1", databaseName);
 	await sql`select pg_catalog.pg_advisory_lock(${key})`;
@@ -498,22 +1094,13 @@ async function bootstrap(sql: SQL, databaseName: string): Promise<void> {
 			await sql.begin(async (transaction) => {
 				await transaction.unsafe(bootstrapSql);
 				await transaction`
-					insert into questpie_internal.schema_protocol
-					(singleton, version, checksum, installed_at)
-					values (true, 1, ${bootstrapChecksum}, ${new Date()})
+					insert into questpie_internal.protocol
+					(singleton, version, checksum)
+					values (true, 1, ${bootstrapChecksum})
 				`;
 			});
-		} else {
-			const [protocol] = await sql<{ version: number; checksum: string }[]>`
-				select version, checksum from questpie_internal.schema_protocol where singleton = true
-			`;
-			if (protocol?.version !== 1 || protocol.checksum !== bootstrapChecksum)
-				return fail(
-					"QP-SCHEMA-023",
-					"checksumMismatch",
-					"questpie.internal.v1 protocol is missing or changed",
-				);
 		}
+		await verifyBootstrapCatalog(sql);
 	} finally {
 		await sql`select pg_catalog.pg_advisory_unlock(${key})`;
 	}
@@ -532,31 +1119,14 @@ export async function applyCommittedMigrations(
 		migrations: readonly CommittedMigration[];
 	}>,
 ): Promise<ApplyMigrationsResult> {
-	if (input.migrations.length === 0)
-		return fail(
-			"QP-SCHEMA-024",
-			"missingLocalMigration",
-			"no committed migration exists",
-		);
-	const migrations = [...input.migrations].sort((left, right) =>
-		compareAscii(left.identity, right.identity),
-	);
-	for (const [index, migration] of migrations.entries()) {
-		verifyCommittedMigration(migration);
+	verifyCommittedMigrationChain(input.migrations);
+	const migrations = [...input.migrations];
+	for (const migration of migrations) {
 		if (migration.plan.steps.some((item) => item.kind.includes("Concurrent")))
 			return fail(
 				"QP-SCHEMA-031",
 				"nonTransactionalDdl",
 				`${migration.identity} contains non-transactional DDL`,
-			);
-		if (
-			index > 0 &&
-			migration.plan.baseMigration !== migrations[index - 1]?.identity
-		)
-			return fail(
-				"QP-SCHEMA-025",
-				"orderMismatch",
-				"local migration chain is not linear",
 			);
 	}
 	const target = migrations.at(-1)!.targetSchema;
@@ -600,10 +1170,10 @@ export async function applyCommittedMigrations(
 					schemaName: string;
 				}[]
 			>`
-				select application_name as "applicationName", schema_name as "schemaName"
+				select application_name as "applicationName", postgres_schema as "schemaName"
 				from questpie_internal.application_bindings
 				where application_name = ${application}
-				   or schema_name = ${target.application.postgresSchema}
+				   or postgres_schema = ${target.application.postgresSchema}
 			`;
 			if (
 				conflictingBindings.some(
@@ -622,22 +1192,45 @@ export async function applyCommittedMigrations(
 					identity: string;
 					sequence: number;
 					checksum: string;
+					parent: string | null;
+					baseSchemaDigest: string;
+					targetSchemaDigest: string;
 				}[]
 			>`
-				select identity, sequence, checksum
+				select migration_identity as identity,
+				       sequence,
+				       checksum,
+				       parent_identity as parent,
+				       base_schema_digest as "baseSchemaDigest",
+				       target_schema_digest as "targetSchemaDigest"
 				from questpie_internal.schema_migration_receipts
 				where application_name = ${application}
 				order by sequence
 			`;
-			for (const receipt of receipts) {
-				const local = migrations.find(
-					(migration) => migration.identity === receipt.identity,
+			if (receipts.length > migrations.length)
+				return fail(
+					"QP-SCHEMA-024",
+					"unknownAppliedMigration",
+					"database migration history is longer than the local chain",
 				);
-				if (!local)
+			for (const [index, receipt] of receipts.entries()) {
+				const local = migrations[index];
+				if (!local || local.identity !== receipt.identity)
 					return fail(
 						"QP-SCHEMA-024",
 						"unknownAppliedMigration",
-						`database receipt ${receipt.identity} is absent locally`,
+						`database receipt ${receipt.identity} is not the exact local prefix at sequence ${index + 1}`,
+					);
+				if (
+					receipt.sequence !== index + 1 ||
+					receipt.parent !== local.plan.baseMigration ||
+					receipt.baseSchemaDigest !== local.plan.baseSchemaDigest ||
+					receipt.targetSchemaDigest !== local.plan.targetSchemaDigest
+				)
+					return fail(
+						"QP-SCHEMA-025",
+						"orderMismatch",
+						`${receipt.identity} receipt does not match its local chain position`,
 					);
 				if (local.checksum !== receipt.checksum)
 					return fail(
@@ -647,6 +1240,16 @@ export async function applyCommittedMigrations(
 					);
 			}
 			const pending = migrations.slice(receipts.length);
+			if (receipts.length === 0) {
+				if (await schemaExists(session, target.application.postgresSchema))
+					return fail(
+						"QP-SCHEMA-028",
+						"baseDrift",
+						"Genesis requires the application schema to be absent before DDL",
+					);
+			} else if (pending[0]) {
+				await assertSchemaMatches(session, pending[0].baseSchema);
+			}
 			const applied: string[] = [];
 			for (const migration of pending) {
 				await session.begin(async (transaction) => {
@@ -658,15 +1261,15 @@ export async function applyCommittedMigrations(
 					if (migration.plan.baseMigration === null)
 						await transaction`
 							insert into questpie_internal.application_bindings
-							(application_name, schema_name, created_at)
+							(application_name, postgres_schema, created_at)
 							values (${application}, ${target.application.postgresSchema}, ${new Date()})
 						`;
 					await transaction.unsafe(migration.files["up.sql"] ?? "");
 					await assertSchemaMatches(transaction, migration.targetSchema);
 					await transaction`
 						insert into questpie_internal.schema_migration_receipts
-						(application_name, identity, sequence, checksum, target_schema_digest, applied_at)
-						values (${application}, ${migration.identity}, ${Number(migration.identity.slice(0, 6))}, ${migration.checksum}, ${migration.plan.targetSchemaDigest}, ${new Date()})
+						(application_name, migration_identity, sequence, parent_identity, checksum, base_schema_digest, target_schema_digest, applied_at)
+						values (${application}, ${migration.identity}, ${Number(migration.identity.slice(0, 6))}, ${migration.plan.baseMigration}, ${migration.checksum}, ${migration.plan.baseSchemaDigest}, ${migration.plan.targetSchemaDigest}, ${new Date()})
 					`;
 				});
 				await assertBackendPid(session, firstPid, migration.identity);

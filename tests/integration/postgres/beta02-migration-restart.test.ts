@@ -48,6 +48,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			plan: mismatchedPlan.plan,
 			baseSchema: mismatchedPlan.baseSchema,
 			targetSchema: mismatchedSchema,
+			currentSchema: mismatchedSchema,
 			planDigest: mismatchedPlan.digest,
 		});
 		await expect(
@@ -75,6 +76,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			plan: planned.plan,
 			baseSchema: planned.baseSchema,
 			targetSchema,
+			currentSchema: targetSchema,
 			planDigest: planned.digest,
 		});
 

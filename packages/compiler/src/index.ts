@@ -37,6 +37,7 @@ export {
 	createCommittedMigration,
 	createMigrationPlan,
 	verifyCommittedMigration,
+	verifyCommittedMigrationChain,
 } from "./schema";
 export {
 	applyCommittedMigrations,
@@ -48,7 +49,9 @@ export type {
 } from "./schema-postgres";
 export type {
 	CommittedMigration,
+	CommittedMigrationFilesV1,
 	MigrationPlanV1,
+	MigrationStepKindV1,
 	MigrationStepV1,
 	PlannedMigration,
 	SchemaProjectionV1,

@@ -62,6 +62,7 @@ describe("BETA-02 migration artifacts", () => {
 			plan: planned.plan,
 			baseSchema: planned.baseSchema,
 			targetSchema,
+			currentSchema: targetSchema,
 			planDigest: planned.digest,
 		});
 		expect(committed.identity).toBe("000001_create-collaboration");
