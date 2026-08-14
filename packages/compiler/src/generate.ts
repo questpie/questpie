@@ -37,9 +37,45 @@ function fieldType(field: RecordValue): string {
 				? "number"
 				: scalar === "timestamp"
 					? "Date"
-					: "string";
+					: scalar === "object"
+						? embeddedFieldType(field)
+						: scalar === "array"
+							? `readonly ${embeddedValueType(record(record(field.options).items))}[]`
+							: scalar === "json"
+								? "TaggedJsonValue"
+								: "string";
 	if (field.nullable === true) type = `${type} | null`;
 	return type;
+}
+
+function embeddedValueType(value: RecordValue): string {
+	const options = record(value.options ?? {});
+	let type =
+		value.kind === "boolean"
+			? "boolean"
+			: value.kind === "integer"
+				? "number"
+				: value.kind === "object"
+					? embeddedObjectType(record(options.properties))
+					: value.kind === "array"
+						? `readonly ${embeddedValueType(record(options.items))}[]`
+						: "string";
+	if (value.nullable === true) type = `${type} | null`;
+	return type;
+}
+
+function embeddedObjectType(properties: RecordValue): string {
+	return `Readonly<{ ${Object.entries(properties)
+		.sort(([left], [right]) => compareAscii(left, right))
+		.map(
+			([key, child]) =>
+				`readonly ${JSON.stringify(key)}: ${embeddedValueType(record(child))};`,
+		)
+		.join(" ")} }>`;
+}
+
+function embeddedFieldType(field: RecordValue): string {
+	return embeddedObjectType(record(record(field.options).properties));
 }
 
 function collectionFields(
@@ -112,7 +148,7 @@ export function renderAppContract(
 	const otherFactories = factoryNames
 		.map((name) => `export declare const ${name}: EmptyDefinitionFactory;`)
 		.join("\n");
-	return `import type { Codec } from "questpie";
+	return `import type { Codec, TaggedJsonValue } from "questpie";
 
 export interface ReadCollection<Row, Key> {
 	get(input: Readonly<{ key: Key }>): Promise<Row | null>;

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { CompilerDiagnosticError } from "./diagnostic";
+import { fieldContract } from "./schema/field-contract";
 import type {
 	ApplicationConfiguration,
 	EvaluatedExport,
@@ -38,58 +39,6 @@ function entries(value: unknown): [string, RecordValue][] {
 	return Object.entries(record(value, "member map"))
 		.map(([key, item]) => [key, record(item, key)] as [string, RecordValue])
 		.sort(([left], [right]) => compareAscii(left, right));
-}
-
-function fieldContract(key: string, value: RecordValue): RecordValue {
-	const scalar = string(value.scalar, `${key}.scalar`);
-	const options = record(value.options ?? {}, `${key}.options`);
-	let type: RecordValue;
-	if (scalar === "text")
-		type = {
-			kind: "text",
-			minLength: options.minLength ?? null,
-			maxLength: options.maxLength ?? null,
-			collation: "questpie.binary",
-		};
-	else if (scalar === "timestamp")
-		type = { kind: "timestamp", withTimezone: options.withTimezone ?? false };
-	else if (scalar === "integer")
-		type = {
-			kind: "integer",
-			minimum: options.minimum ?? null,
-			maximum: options.maximum ?? null,
-		};
-	else if (scalar === "bigint")
-		type = {
-			kind: "bigint",
-			minimum: options.minimum ?? null,
-			maximum: options.maximum ?? null,
-		};
-	else if (scalar === "numeric")
-		type = {
-			kind: "numeric",
-			precision: options.precision,
-			scale: options.scale,
-		};
-	else type = { kind: scalar };
-	const rawDefault = value.default;
-	const normalizedDefault =
-		(scalar === "timestamp" && rawDefault === "now") ||
-		(scalar === "uuid" && rawDefault === "randomUuid")
-			? { kind: rawDefault }
-			: typeof rawDefault === "string" ||
-				  typeof rawDefault === "boolean" ||
-				  typeof rawDefault === "number"
-				? { kind: "literal", value: rawDefault }
-				: null;
-	return {
-		path: [key],
-		type,
-		nullable: value.nullable === true,
-		default: normalizedDefault,
-		postgresName:
-			typeof value.postgresName === "string" ? value.postgresName : null,
-	};
 }
 
 function constraintContract(value: RecordValue): RecordValue {

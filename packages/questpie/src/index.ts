@@ -1,3 +1,12 @@
+import {
+	type TaggedJsonValue,
+	type ValueDefinition,
+	type ValueOf,
+} from "./value";
+
+export { value } from "./value";
+export type { JsonValue, TaggedJsonValue, ValueDefinition } from "./value";
+
 export type CodecKind = "boolean" | "integer" | "object" | "text" | "uuid";
 
 export interface Codec<Value, Kind extends CodecKind = CodecKind> {
@@ -32,6 +41,9 @@ type FieldRuntimeOptions = FieldBaseOptions &
 		minimum?: number | string;
 		maximum?: number | string;
 		precision?: number;
+		properties?: Readonly<Record<string, ValueDefinition>>;
+		items?: ValueDefinition;
+		maximumItems?: number;
 		scale?: number;
 		withTimezone?: boolean;
 	}>;
@@ -45,18 +57,21 @@ export interface FieldDefinition<
 > {
 	readonly kind: "field";
 	readonly scalar:
+		| "array"
 		| "bigint"
 		| "boolean"
 		| "date"
 		| "integer"
+		| "json"
 		| "numeric"
+		| "object"
 		| "text"
 		| "timestamp"
 		| "uuid";
 	readonly nullable: Nullable;
 	readonly default: Default;
 	readonly postgresName: string | null;
-	readonly options: Readonly<Record<string, boolean | number | string | null>>;
+	readonly options: Readonly<Record<string, unknown>>;
 	readonly value?: Value;
 }
 
@@ -70,14 +85,16 @@ function fieldDefinition<Value, const Options extends FieldRuntimeOptions>(
 		? Default
 		: null
 > {
-	const normalizedOptions: Record<string, boolean | number | string | null> =
-		{};
+	const normalizedOptions: Record<string, unknown> = {};
 	for (const key of [
 		"minLength",
 		"maxLength",
 		"minimum",
 		"maximum",
 		"precision",
+		"properties",
+		"items",
+		"maximumItems",
 		"scale",
 		"withTimezone",
 	] as const) {
@@ -153,6 +170,48 @@ export const field = Object.freeze({
 			FieldBaseOptions
 		>,
 	) => fieldDefinition<string, Options>("date", options),
+	object: <
+		const Options extends FieldBaseOptions &
+			Readonly<{
+				properties: Readonly<Record<string, ValueDefinition>>;
+			}>,
+	>(
+		options: ExactOptions<
+			Options,
+			FieldBaseOptions &
+				Readonly<{
+					properties: Readonly<Record<string, ValueDefinition>>;
+				}>
+		>,
+	) =>
+		fieldDefinition<
+			Readonly<{
+				[Key in keyof Options["properties"]]: ValueOf<
+					Options["properties"][Key]
+				>;
+			}>,
+			Options
+		>("object", options),
+	array: <
+		const Options extends FieldBaseOptions &
+			Readonly<{ items: ValueDefinition; maximumItems: number }>,
+	>(
+		options: ExactOptions<
+			Options,
+			FieldBaseOptions &
+				Readonly<{ items: ValueDefinition; maximumItems: number }>
+		>,
+	) =>
+		fieldDefinition<readonly ValueOf<Options["items"]>[], Options>(
+			"array",
+			options,
+		),
+	json: <const Options extends FieldBaseOptions>(
+		options: ExactOptions<Options, FieldBaseOptions> = {} as ExactOptions<
+			Options,
+			FieldBaseOptions
+		>,
+	) => fieldDefinition<TaggedJsonValue, Options>("json", options),
 });
 
 function scalarCodec<Value, Kind extends Exclude<CodecKind, "object">>(

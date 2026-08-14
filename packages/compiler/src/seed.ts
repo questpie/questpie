@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { CompilerDiagnosticError } from "./diagnostic";
 import type { SchemaProjectionV1 } from "./schema";
+import { normalizeJsonBackedValue } from "./seed/json-codec";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 
@@ -153,7 +154,21 @@ function normalizeValue(field: JsonRecord, value: unknown): SeedValueV1 {
 		return { kind: "numeric", value };
 	}
 	if (type.kind === "object" || type.kind === "array" || type.kind === "json")
-		return { kind: "json", value };
+		return normalizeJsonBackedValue(type, value, invalid, (codec, item) => {
+			const normalized = normalizeValue(
+				{
+					identity: field.identity,
+					nullable: codec.nullable,
+					type: codec,
+				},
+				item,
+			);
+			return normalized &&
+				typeof normalized === "object" &&
+				"value" in normalized
+				? normalized.value
+				: normalized;
+		});
 	if (type.kind === "text") {
 		if (typeof value !== "string" || value.normalize("NFC") !== value)
 			return invalid("requires NFC text");

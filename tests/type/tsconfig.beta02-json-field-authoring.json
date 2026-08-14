@@ -1,0 +1,11 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"paths": {
+			"questpie": ["../../packages/questpie/src/index.ts"]
+		},
+		"types": []
+	},
+	"files": ["fixtures/beta02-json-field-authoring.ts"]
+}
