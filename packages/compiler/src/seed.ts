@@ -380,6 +380,16 @@ export function createCommittedSeed(
 }
 
 export function verifyCommittedSeed(seed: CommittedSeedV1): void {
+	const names = Object.keys(seed.files).sort(compareAscii);
+	if (
+		canonicalBytes(names) !==
+		canonicalBytes(["checksum.sha256", "seed.json", "steps.json"])
+	)
+		return seedError(
+			"QP-SEED-004",
+			"checksumMismatch",
+			`${seed.identity} does not contain the exact three-file contract`,
+		);
 	const recreated = createHash("sha256")
 		.update("questpie-seed-v1\0")
 		.update(seed.files["seed.json"])

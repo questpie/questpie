@@ -46,6 +46,7 @@ export type {
 	SeedStepV1,
 	SeedValueV1,
 } from "./seed";
+export { loadCommittedSeed } from "./seed/index";
 export {
 	createCommittedMigration,
 	createMigrationPlan,

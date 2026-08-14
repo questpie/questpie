@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 import {
 	compileApplication,
 	createCommittedSeed,
+	loadCommittedSeed,
 	orderCommittedSeeds,
 	verifyCommittedSeed,
 } from "@questpie/compiler";
@@ -35,8 +37,7 @@ describe("BETA-02 committed Seeds", () => {
 			fixtureRoot,
 			"questpie/seeds/collaboration.demo.v1",
 		);
-		for (const [name, bytes] of Object.entries(committed.files))
-			expect(await readFile(resolve(artifactRoot, name), "utf8")).toBe(bytes);
+		expect(await loadCommittedSeed(artifactRoot)).toEqual(committed);
 		expect(() => verifyCommittedSeed(committed)).not.toThrow();
 		expect(orderCommittedSeeds([committed])).toEqual([committed]);
 
@@ -48,9 +49,30 @@ describe("BETA-02 committed Seeds", () => {
 			},
 		};
 		expect(() => verifyCommittedSeed(tampered)).toThrow(/QP-SEED-004/);
+		const extraFile = {
+			...committed,
+			files: { ...committed.files, "callback.ts": "export default () => 1" },
+		};
+		expect(() => verifyCommittedSeed(extraFile)).toThrow(/QP-SEED-004/);
 		expect(() =>
 			orderCommittedSeeds([{ ...committed, dependencies: ["seed:missing"] }]),
 		).toThrow(/QP-SEED-001/);
+	});
+
+	test("refuses files outside the exact three-file Seed contract", async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "questpie-seed-"));
+		try {
+			const directory = join(temporary, "collaboration.demo.v1");
+			await cp(
+				resolve(fixtureRoot, "questpie/seeds/collaboration.demo.v1"),
+				directory,
+				{ recursive: true },
+			);
+			await writeFile(join(directory, "callback.ts"), "throw new Error();\n");
+			await expect(loadCommittedSeed(directory)).rejects.toThrow(/QP-SEED-004/);
+		} finally {
+			await rm(temporary, { recursive: true });
+		}
 	});
 
 	test("applies the accepted scalar codecs before emitting Seed bytes", async () => {
