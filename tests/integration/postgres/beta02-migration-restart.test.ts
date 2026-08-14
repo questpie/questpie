@@ -82,10 +82,12 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			planDigest: planned.digest,
 		});
 
+		const firstApplyStarted = performance.now();
 		const concurrent = await Promise.all([
 			applyCommittedMigrations({ migrations: [migration] }),
 			applyCommittedMigrations({ migrations: [migration] }),
 		]);
+		const firstApplyMs = performance.now() - firstApplyStarted;
 		const applied = concurrent.find((result) => result.status === "applied");
 		expect(concurrent.map((result) => result.status).sort()).toEqual([
 			"alreadyApplied",
@@ -97,9 +99,11 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		});
 
 		// Treat the successful result as lost and create a fresh pool in the retry.
+		const restartStarted = performance.now();
 		const restarted = await applyCommittedMigrations({
 			migrations: [migration],
 		});
+		const restartMs = performance.now() - restartStarted;
 		expect(restarted).toMatchObject({
 			status: "alreadyApplied",
 			applied: [],
@@ -307,5 +311,13 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		await expect(
 			applyCommittedMigrations({ migrations: [otherMigration] }),
 		).rejects.toMatchObject({ code: "QP-SCHEMA-029" });
+		console.log(
+			JSON.stringify({
+				scenario: "beta02-postgres-local",
+				postgres: "17",
+				measurements: { firstApplyMs, restartMs },
+				status: "PASS",
+			}),
+		);
 	});
 });

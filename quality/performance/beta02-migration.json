@@ -1,0 +1,19 @@
+{
+	"id": "beta02-migration",
+	"kind": "micro",
+	"schedule": "selected-pr",
+	"command": ["bun", "test", "tests/performance/beta02-migration.test.ts"],
+	"budgetOwner": "BETA-02",
+	"metrics": {
+		"planCreateMs": {
+			"direction": "max",
+			"budget": 1000,
+			"unit": "ms"
+		},
+		"migrationGoldenBytes": {
+			"direction": "max",
+			"budget": 25528,
+			"unit": "bytes"
+		}
+	}
+}
