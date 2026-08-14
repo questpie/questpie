@@ -1332,12 +1332,19 @@ export function verifyCommittedMigration(migration: CommittedMigration): void {
 		sequence < 1 ||
 		expectedIdentity !== migration.identity ||
 		metadata.identity !== migration.identity ||
+		metadata.slug !== plan.slug ||
 		metadata.planDigest !== expectedPlanDigest ||
 		metadata.baseSchemaDigest !== schemaDigest(base) ||
 		metadata.targetSchemaDigest !== schemaDigest(target) ||
 		plan.baseSchemaDigest !== schemaDigest(base) ||
 		plan.targetSchemaDigest !== schemaDigest(target) ||
 		plan.application !== target.application.name ||
+		canonicalBytes(metadata.requiredPostgres) !==
+			canonicalBytes(target.requiredPostgres) ||
+		canonicalBytes(plan.requiredPostgres) !==
+			canonicalBytes(target.requiredPostgres) ||
+		metadata.transaction !== "required" ||
+		metadata.sqlRenderer !== "questpie-postgres-ddl-v1" ||
 		base.application.name !== target.application.name ||
 		base.application.postgresSchema !== target.application.postgresSchema ||
 		parent !== plan.baseMigration ||

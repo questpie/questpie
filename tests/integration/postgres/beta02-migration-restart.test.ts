@@ -80,7 +80,15 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			planDigest: planned.digest,
 		});
 
-		const applied = await applyCommittedMigrations({ migrations: [migration] });
+		const concurrent = await Promise.all([
+			applyCommittedMigrations({ migrations: [migration] }),
+			applyCommittedMigrations({ migrations: [migration] }),
+		]);
+		const applied = concurrent.find((result) => result.status === "applied");
+		expect(concurrent.map((result) => result.status).sort()).toEqual([
+			"alreadyApplied",
+			"applied",
+		]);
 		expect(applied).toMatchObject({
 			status: "applied",
 			applied: ["000001_create-collaboration"],
@@ -95,7 +103,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			applied: [],
 			head: "000001_create-collaboration",
 		});
-		expect(restarted.fingerprintDigest).toBe(applied.fingerprintDigest);
+		expect(restarted.fingerprintDigest).toBe(applied?.fingerprintDigest);
 
 		const drift = await inspectSchemaFingerprint({ schema: targetSchema });
 		expect(drift.digest).toBe(applied.fingerprintDigest);
@@ -106,5 +114,68 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		`;
 		expect(receipt?.count).toBe(1);
 		expect(drift.fingerprint.observations.serverVersion).toMatch(/^17\./);
+
+		await database!.unsafe(
+			"CREATE INDEX unexpected_protocol_index ON questpie_internal.protocol (version)",
+		);
+		await expect(
+			applyCommittedMigrations({ migrations: [migration] }),
+		).rejects.toMatchObject({ code: "QP-SCHEMA-023" });
+		await database!.unsafe(
+			"DROP INDEX questpie_internal.unexpected_protocol_index",
+		);
+
+		await database!.unsafe(
+			"CREATE FUNCTION collaboration.unexpected() RETURNS integer LANGUAGE sql AS 'SELECT 1'",
+		);
+		await expect(
+			inspectSchemaFingerprint({ schema: targetSchema }),
+		).rejects.toMatchObject({ code: "QP-SCHEMA-028" });
+		await database!.unsafe("DROP FUNCTION collaboration.unexpected()");
+
+		await database!.unsafe(
+			"ALTER TABLE collaboration.channels DROP CONSTRAINT qp_fk_channels_space; ALTER TABLE collaboration.channels ADD CONSTRAINT qp_fk_channels_space FOREIGN KEY (space_id) REFERENCES collaboration.spaces(id) ON UPDATE RESTRICT ON DELETE CASCADE",
+		);
+		await expect(
+			inspectSchemaFingerprint({ schema: targetSchema }),
+		).rejects.toMatchObject({ code: "QP-SCHEMA-028" });
+		await database!.unsafe(
+			"ALTER TABLE collaboration.channels DROP CONSTRAINT qp_fk_channels_space; ALTER TABLE collaboration.channels ADD CONSTRAINT qp_fk_channels_space FOREIGN KEY (space_id) REFERENCES collaboration.spaces(id) ON UPDATE RESTRICT ON DELETE RESTRICT",
+		);
+
+		await database!.unsafe(
+			"DROP INDEX collaboration.qp_ix_messages_by_audit_id; CREATE INDEX qp_ix_messages_by_audit_id ON collaboration.messages USING btree (audit_id DESC)",
+		);
+		await expect(
+			inspectSchemaFingerprint({ schema: targetSchema }),
+		).rejects.toMatchObject({ code: "QP-SCHEMA-028" });
+		await database!.unsafe(
+			"DROP INDEX collaboration.qp_ix_messages_by_audit_id; CREATE INDEX qp_ix_messages_by_audit_id ON collaboration.messages USING btree (audit_id)",
+		);
+
+		await database!.unsafe("ALTER TABLE collaboration.messages SET UNLOGGED");
+		await expect(
+			inspectSchemaFingerprint({ schema: targetSchema }),
+		).rejects.toMatchObject({ code: "QP-SCHEMA-028" });
+		await database!.unsafe("ALTER TABLE collaboration.messages SET LOGGED");
+
+		const otherTarget = {
+			...targetSchema,
+			application: { ...targetSchema.application, name: "other" },
+		};
+		const otherPlan = createMigrationPlan({
+			targetSchema: otherTarget,
+			slug: "claim-collaboration",
+		});
+		const otherMigration = createCommittedMigration({
+			plan: otherPlan.plan,
+			baseSchema: otherPlan.baseSchema,
+			targetSchema: otherTarget,
+			currentSchema: otherTarget,
+			planDigest: otherPlan.digest,
+		});
+		await expect(
+			applyCommittedMigrations({ migrations: [otherMigration] }),
+		).rejects.toMatchObject({ code: "QP-SCHEMA-029" });
 	});
 });

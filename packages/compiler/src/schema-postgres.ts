@@ -521,6 +521,7 @@ async function assertSchemaMatches(
 		select exists(select 1 from pg_catalog.pg_namespace where nspname = ${schemaName}) as exists
 	`;
 	const expected = expectedComparable(schema);
+	const observedObjects: JsonRecord[] = [{ kind: "schema", name: schemaName }];
 	if (!namespace?.exists)
 		return fail(
 			"QP-SCHEMA-028",
@@ -562,6 +563,14 @@ async function assertSchemaMatches(
 			"unexpectedObject",
 			`application schema ${schemaName} has an unexpected table or RLS state`,
 		);
+	for (const table of tables)
+		observedObjects.push({
+			kind: "table",
+			name: table.name,
+			persistence: "permanent",
+			rowSecurityEnabled: table.rowSecurityEnabled,
+			rowSecurityForced: table.rowSecurityForced,
+		});
 	for (const collection of schema.collections) {
 		const tableName = String(collection.postgresName);
 		const columns = await sql<
@@ -610,6 +619,27 @@ async function assertSchemaMatches(
 				`${collection.identity} columns do not match the committed projection`,
 				{ expected: expectedColumns, actual: columns },
 			);
+		for (const column of columns) {
+			const expectedObject = (expected.objects as readonly JsonRecord[]).find(
+				(object) =>
+					object.kind === "column" &&
+					object.table === collection.postgresName &&
+					object.name === column.name,
+			);
+			if (!expectedObject)
+				return fail(
+					"QP-SCHEMA-028",
+					"unexpectedObject",
+					`${collection.identity}/${column.name} has no semantic catalog parser`,
+				);
+			observedObjects.push({
+				...expectedObject,
+				nullable: column.nullable,
+				identity: column.identity === "" ? "none" : column.identity,
+				generated: column.generated === "" ? "none" : column.generated,
+				collation: column.collation === "C" ? "pg_catalog.C" : column.collation,
+			});
+		}
 		const constraints = await sql<
 			{
 				name: string;
@@ -664,6 +694,29 @@ async function assertSchemaMatches(
 				`${collection.identity} constraints do not match the committed projection`,
 				{ expected: expectedConstraints, actual: constraints },
 			);
+		for (const constraint of constraints) {
+			const expectedObject = (expected.objects as readonly JsonRecord[]).find(
+				(object) =>
+					object.table === collection.postgresName &&
+					object.name === constraint.name,
+			);
+			if (!expectedObject)
+				return fail(
+					"QP-SCHEMA-028",
+					"unexpectedObject",
+					`${collection.identity}/${constraint.name} has no semantic catalog parser`,
+				);
+			observedObjects.push({
+				...expectedObject,
+				validated: constraint.validated,
+				...(expectedObject.kind === "check"
+					? {}
+					: {
+							deferrable: constraint.deferrable,
+							initiallyDeferred: constraint.initiallyDeferred,
+						}),
+			});
+		}
 		const indexes = await sql<
 			{
 				name: string;
@@ -714,6 +767,28 @@ async function assertSchemaMatches(
 				`${collection.identity} indexes do not match the committed projection`,
 				{ expected: expectedIndexes, actual: indexes },
 			);
+		for (const index of indexes) {
+			const expectedObject = (expected.objects as readonly JsonRecord[]).find(
+				(object) =>
+					object.kind === "index" &&
+					object.table === collection.postgresName &&
+					object.name === index.name,
+			);
+			if (!expectedObject)
+				return fail(
+					"QP-SCHEMA-028",
+					"unexpectedObject",
+					`${collection.identity}/${index.name} has no semantic catalog parser`,
+				);
+			observedObjects.push({
+				...expectedObject,
+				method: index.method,
+				unique: index.unique,
+				predicate: index.predicate,
+				valid: index.valid,
+				ready: index.ready,
+			});
+		}
 	}
 	const unsupported = await sql<{ kind: string; name: string }[]>`
 		select c.relkind::text as kind, c.relname as name
@@ -732,6 +807,24 @@ async function assertSchemaMatches(
 		join pg_catalog.pg_class c on c.oid = pol.polrelid
 		join pg_catalog.pg_namespace n on n.oid = c.relnamespace
 		where n.nspname = ${schemaName}
+		union all
+		select 'routine', p.proname
+		from pg_catalog.pg_proc p
+		join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+		where n.nspname = ${schemaName}
+		union all
+		select case t.typtype when 'd' then 'domain' when 'e' then 'enum' else 'type' end,
+		       t.typname
+		from pg_catalog.pg_type t
+		join pg_catalog.pg_namespace n on n.oid = t.typnamespace
+		where n.nspname = ${schemaName}
+		  and (t.typtype in ('d', 'e') or (t.typtype = 'c' and t.typrelid = 0))
+		union all
+		select 'rule', r.rulename
+		from pg_catalog.pg_rewrite r
+		join pg_catalog.pg_class c on c.oid = r.ev_class
+		join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+		where n.nspname = ${schemaName} and r.rulename <> '_RETURN'
 	`;
 	if (unsupported.length > 0)
 		return fail(
@@ -740,7 +833,72 @@ async function assertSchemaMatches(
 			`application schema ${schemaName} contains unsupported objects`,
 			{ objects: unsupported },
 		);
-	return expected;
+	const observedDependencies: JsonRecord[] = [];
+	for (const dependency of expected.externalDependencies as readonly JsonRecord[]) {
+		const kind = String(dependency.kind);
+		const name = String(dependency.name);
+		let exists = false;
+		if (kind === "type") {
+			const [row] = await sql<{ exists: boolean }[]>`
+				select exists(
+					select 1 from pg_catalog.pg_type t
+					join pg_catalog.pg_namespace n on n.oid = t.typnamespace
+					where n.nspname = 'pg_catalog' and t.typname = ${name}
+				) as exists
+			`;
+			exists = row?.exists === true;
+		} else if (kind === "collation") {
+			const [row] = await sql<{ exists: boolean }[]>`
+				select exists(
+					select 1 from pg_catalog.pg_collation c
+					join pg_catalog.pg_namespace n on n.oid = c.collnamespace
+					where n.nspname = 'pg_catalog' and c.collname = ${name}
+				) as exists
+			`;
+			exists = row?.exists === true;
+		} else if (kind === "defaultFunction") {
+			const [row] = await sql<{ exists: boolean }[]>`
+				select exists(
+					select 1 from pg_catalog.pg_proc p
+					join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+					where n.nspname = 'pg_catalog' and p.proname = ${name}
+					  and p.pronargs = 0
+				) as exists
+			`;
+			exists = row?.exists === true;
+		} else if (kind === "operatorClass") {
+			const [row] = await sql<{ exists: boolean }[]>`
+				select exists(
+					select 1 from pg_catalog.pg_opclass o
+					join pg_catalog.pg_namespace n on n.oid = o.opcnamespace
+					where n.nspname = 'pg_catalog' and o.opcname = ${name}
+				) as exists
+			`;
+			exists = row?.exists === true;
+		}
+		if (!exists)
+			return fail(
+				"QP-SCHEMA-028",
+				"missingObject",
+				`external dependency pg_catalog.${name} is missing`,
+			);
+		observedDependencies.push(dependency);
+	}
+	return {
+		application: schema.application.name,
+		applicationSchema: schemaName,
+		applicationSchemaExists: true,
+		objects: observedObjects.sort((left, right) =>
+			compareAscii(canonicalBytes(left), canonicalBytes(right)),
+		),
+		unsupportedObjects: [],
+		externalDependencies: observedDependencies.sort((left, right) =>
+			compareAscii(canonicalBytes(left), canonicalBytes(right)),
+		),
+		installedRequiredExtensions: schema.requiredPostgres.extensions.map(
+			(extension) => extension.name,
+		),
+	};
 }
 
 async function schemaExists(sql: SQL, schemaName: string): Promise<boolean> {
@@ -975,15 +1133,72 @@ const bootstrapConstraints = [
 	],
 ] as const;
 
+const bootstrapIndexes = [
+	[
+		"application_bindings",
+		"application_bindings_pkey",
+		"btree",
+		true,
+		true,
+		"CREATE UNIQUE INDEX application_bindings_pkey ON questpie_internal.application_bindings USING btree (application_name)",
+	],
+	[
+		"application_bindings",
+		"application_bindings_postgres_schema_key",
+		"btree",
+		true,
+		false,
+		"CREATE UNIQUE INDEX application_bindings_postgres_schema_key ON questpie_internal.application_bindings USING btree (postgres_schema)",
+	],
+	[
+		"protocol",
+		"protocol_pkey",
+		"btree",
+		true,
+		true,
+		"CREATE UNIQUE INDEX protocol_pkey ON questpie_internal.protocol USING btree (singleton)",
+	],
+	[
+		"schema_migration_receipts",
+		"schema_migration_receipts_application_name_sequence_key",
+		"btree",
+		true,
+		false,
+		"CREATE UNIQUE INDEX schema_migration_receipts_application_name_sequence_key ON questpie_internal.schema_migration_receipts USING btree (application_name, sequence)",
+	],
+	[
+		"schema_migration_receipts",
+		"schema_migration_receipts_pkey",
+		"btree",
+		true,
+		true,
+		"CREATE UNIQUE INDEX schema_migration_receipts_pkey ON questpie_internal.schema_migration_receipts USING btree (application_name, migration_identity)",
+	],
+	[
+		"seed_attempt_events",
+		"seed_attempt_events_pkey",
+		"btree",
+		true,
+		true,
+		"CREATE UNIQUE INDEX seed_attempt_events_pkey ON questpie_internal.seed_attempt_events USING btree (application_name, attempt_id, sequence)",
+	],
+	[
+		"seed_receipts",
+		"seed_receipts_pkey",
+		"btree",
+		true,
+		true,
+		"CREATE UNIQUE INDEX seed_receipts_pkey ON questpie_internal.seed_receipts USING btree (application_name, seed_identity)",
+	],
+] as const;
+
 async function verifyBootstrapCatalog(sql: SQL): Promise<void> {
 	const [namespace] = await sql<
 		{
-			ownerMatches: boolean;
 			publicPrivileges: boolean;
 		}[]
 	>`
-		select n.nspowner = (select usesysid from pg_catalog.pg_user where usename = current_user) as "ownerMatches",
-		       pg_catalog.has_schema_privilege('public', n.oid, 'USAGE')
+		select pg_catalog.has_schema_privilege('public', n.oid, 'USAGE')
 		       or pg_catalog.has_schema_privilege('public', n.oid, 'CREATE') as "publicPrivileges"
 		from pg_catalog.pg_namespace n
 		where n.nspname = 'questpie_internal'
@@ -1035,6 +1250,32 @@ async function verifyBootstrapCatalog(sql: SQL): Promise<void> {
 		where n.nspname = 'questpie_internal'
 		order by c.relname, con.conname
 	`;
+	const indexes = await sql<
+		{
+			table: string;
+			name: string;
+			method: string;
+			unique: boolean;
+			primary: boolean;
+			definition: string;
+			ownerMatches: boolean;
+		}[]
+	>`
+		select t.relname as table,
+		       i.relname as name,
+		       am.amname as method,
+		       x.indisunique as unique,
+		       x.indisprimary as primary,
+		       pg_catalog.pg_get_indexdef(i.oid) as definition,
+		       i.relowner = n.nspowner as "ownerMatches"
+		from pg_catalog.pg_index x
+		join pg_catalog.pg_class i on i.oid = x.indexrelid
+		join pg_catalog.pg_class t on t.oid = x.indrelid
+		join pg_catalog.pg_namespace n on n.oid = t.relnamespace
+		join pg_catalog.pg_am am on am.oid = i.relam
+		where n.nspname = 'questpie_internal'
+		order by t.relname, i.relname
+	`;
 	const expectedTables = [
 		"application_bindings",
 		"protocol",
@@ -1043,7 +1284,7 @@ async function verifyBootstrapCatalog(sql: SQL): Promise<void> {
 		"seed_receipts",
 	];
 	if (
-		!namespace?.ownerMatches ||
+		!namespace ||
 		namespace.publicPrivileges ||
 		canonicalBytes(tables.map((table) => table.name)) !==
 			canonicalBytes(expectedTables) ||
@@ -1063,7 +1304,18 @@ async function verifyBootstrapCatalog(sql: SQL): Promise<void> {
 				constraint.type,
 				constraint.definition,
 			]),
-		) !== canonicalBytes(bootstrapConstraints)
+		) !== canonicalBytes(bootstrapConstraints) ||
+		indexes.some((index) => !index.ownerMatches) ||
+		canonicalBytes(
+			indexes.map((index) => [
+				index.table,
+				index.name,
+				index.method,
+				index.unique,
+				index.primary,
+				index.definition,
+			]),
+		) !== canonicalBytes(bootstrapIndexes)
 	)
 		return fail(
 			"QP-SCHEMA-023",
@@ -1098,9 +1350,9 @@ async function bootstrap(sql: SQL, databaseName: string): Promise<void> {
 					(singleton, version, checksum)
 					values (true, 1, ${bootstrapChecksum})
 				`;
+				await verifyBootstrapCatalog(transaction);
 			});
-		}
-		await verifyBootstrapCatalog(sql);
+		} else await verifyBootstrapCatalog(sql);
 	} finally {
 		await sql`select pg_catalog.pg_advisory_unlock(${key})`;
 	}
