@@ -236,12 +236,18 @@ export async function applyCommittedSeeds(
 					where application_name = ${application} and seed_identity = ${seed.identity}
 				`;
 				if (receipt) {
-					if (receipt.checksum !== seed.checksum)
+					if (receipt.checksum !== seed.checksum) {
+						await session`
+							insert into questpie_internal.seed_attempt_events
+							(application_name, attempt_id, sequence, seed_identity, checksum, event, occurred_at, error_code)
+							values (${application}, ${attemptId}, 0, ${seed.identity}, ${seed.checksum}, 'blocked', ${new Date()}, 'QP-SEED-004')
+						`;
 						return fail(
 							"QP-SEED-004",
 							"checksumMismatch",
 							`${seed.identity} differs from its receipt`,
 						);
+					}
 					await session`
 						insert into questpie_internal.seed_attempt_events
 						(application_name, attempt_id, sequence, seed_identity, checksum, event, occurred_at, error_code)

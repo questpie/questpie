@@ -21,7 +21,7 @@ const database = process.env.PGHOST ? new SQL() : undefined;
 beforeAll(async () => {
 	if (!database) return;
 	await database.unsafe(
-		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
+		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
 	);
 });
 
@@ -320,6 +320,78 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		}
 	}, 10_000);
 
+	test("records a blocked attempt for an applied Seed checksum mismatch", async () => {
+		const compilation = await compileApplication({
+			applicationRoot: fixtureRoot,
+		});
+		const fixtureSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		const targetSchema = {
+			...fixtureSchema,
+			application: {
+				...fixtureSchema.application,
+				name: "seed-checksum-probe",
+				postgresSchema: "seed_checksum_probe",
+			},
+		};
+		const planned = createMigrationPlan({
+			targetSchema,
+			slug: "create-seed-checksum-probe",
+		});
+		const migration = createCommittedMigration({
+			plan: planned.plan,
+			baseSchema: planned.baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: planned.digest,
+			localMigrations: [],
+		});
+		await applyCommittedMigrations({ migrations: [migration] });
+		const definition = (name: string) => ({
+			name: "seed-checksum-probe.demo.v1",
+			steps: [
+				{
+					kind: "insert" as const,
+					collection: "collection:companies",
+					values: {
+						id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6170",
+						name,
+					},
+				},
+			],
+		});
+		const accepted = createCommittedSeed({
+			definition: definition("accepted"),
+			schema: targetSchema,
+		});
+		const changed = createCommittedSeed({
+			definition: definition("changed"),
+			schema: targetSchema,
+		});
+		await applyCommittedSeeds({ schema: targetSchema, seeds: [accepted] });
+		await expect(
+			applyCommittedSeeds({ schema: targetSchema, seeds: [changed] }),
+		).rejects.toMatchObject({ code: "QP-SEED-004" });
+		const [state] = await database!<
+			{
+				blocked: number;
+				companies: number;
+				receiptChecksum: string;
+			}[]
+		>`
+			select
+			  (select count(*)::integer from seed_checksum_probe.companies where name = 'accepted') as companies,
+			  (select checksum from questpie_internal.seed_receipts where application_name = 'seed-checksum-probe' and seed_identity = ${accepted.identity}) as "receiptChecksum",
+			  (select count(*)::integer from questpie_internal.seed_attempt_events where application_name = 'seed-checksum-probe' and seed_identity = ${changed.identity} and checksum = ${changed.checksum} and event = 'blocked' and sequence = 0 and error_code = 'QP-SEED-004') as blocked
+		`;
+		expect(state).toEqual({
+			blocked: 1,
+			companies: 1,
+			receiptChecksum: accepted.checksum,
+		});
+	}, 10_000);
+
 	test("applies, loses the response, restarts, and reports no Drift", async () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
@@ -445,8 +517,8 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		>`
 			select
 			  (select count(*)::integer from collaboration.messages) as messages,
-			  (select count(*)::integer from questpie_internal.seed_receipts) as receipts,
-			  (select count(*)::integer from questpie_internal.seed_attempt_events where event = 'succeeded') as succeeded
+			  (select count(*)::integer from questpie_internal.seed_receipts where application_name = 'collaboration') as receipts,
+			  (select count(*)::integer from questpie_internal.seed_attempt_events where application_name = 'collaboration' and event = 'succeeded') as succeeded
 		`;
 		expect(seedState).toEqual({ messages: 1, receipts: 1, succeeded: 1 });
 
