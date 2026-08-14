@@ -139,7 +139,8 @@ Each present member establishes one ordinary Query or Mutation Resource. It has:
 - one normal Resource Identity and Owner;
 - the set export and literal member as Origin;
 - one structural-contract digest and Package Inventory entry;
-- one canonical exact-key generated server member;
+- one canonical exact-key App Contract identity entry and one nested-only
+  generated server capability member in its Query or Mutation kind map;
 - one generated Collection client alias;
 - the normal collision behavior of its Resource kind.
 

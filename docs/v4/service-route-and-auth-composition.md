@@ -51,7 +51,7 @@ export const deliveryWebhook = defineRoute({
 				context: { companyId: request.headers.get("x-company-id")! },
 			},
 			async ({ mutations }) => {
-				await mutations["delivery.record"]({ body });
+				await mutations.delivery.record({ body });
 				return new Response(null, { status: 204 });
 			},
 		);

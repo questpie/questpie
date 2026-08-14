@@ -404,7 +404,7 @@ const app = await createApp({
 const page = await app.execution(
 	{ principal: principal.anonymous(), context: {} },
 	({ queries }) =>
-		queries["messages.page"]({
+		queries.messages.page({
 			channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
 			first: 20,
 			after: null,

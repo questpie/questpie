@@ -60,7 +60,7 @@ query:messages.page
   Origin      src/features/messages.ts:44
   Manifest    input, output, errors, Policy, limits, network exposure
   Executable  statically bound handler slot and Runtime-build digest
-  Generated   server queries["messages.page"] and client member
+  Generated   server queries.messages.page and exact-key client member
   Data        observed Collection and Policy reads at Runtime
   Wire        exact operation contract and compatible client digests
 ```

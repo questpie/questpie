@@ -32,6 +32,26 @@ adds database-only behavior such as nullability, defaults, and column mapping.
 `value.*` retains the compatible embedded-JSONB vocabulary. Operation does not
 define a second `operation.uuid()` grammar.
 
+## Choose the owner of application work
+
+| Work                                           | Owner       | Boundary                                                                |
+| ---------------------------------------------- | ----------- | ----------------------------------------------------------------------- |
+| Canonicalize caller input without I/O          | `normalize` | Closed pure program inside the owning Operation lifecycle               |
+| Supply a trusted server value                  | `values`    | Closed assignment from input or immutable Execution facts               |
+| Read or derive an authorized result            | Query       | One Policy-aware read snapshot                                          |
+| Decide whether a principal may perform work    | Policy      | Pure authorization decision over explicit subject, resource, and facts  |
+| Validate application state or write atomically | Mutation    | One PostgreSQL transaction, including audit and durable acceptance      |
+| Call an external or nondeterministic provider  | Action      | Explicit effect outside transaction retry                               |
+| Adapt an HTTP request and response             | Route       | Transport boundary that delegates state and effects to Operations       |
+| React to one exact committed fact              | Reaction    | Durable committed-fact causation with no independent producer           |
+| Accept explicitly requested background work    | Job         | Durable dispatch with scoped idempotency and optional delay or schedule |
+| Coordinate checkpointed multi-step work        | Workflow    | Durable named Mutation/Action steps, timers, and typed signals          |
+| Observe a changing authorized read             | Live Query  | Re-evaluated Query result driven by committed invalidation              |
+| Deliver ephemeral connected-client messages    | Channel     | Non-durable transport fan-out; durable truth remains in Operations      |
+
+Reaction, Job, and Workflow keep distinct authoring meanings over one internal
+durable kernel. QUESTPIE does not expose a general lifecycle hook catalogue.
+
 ## Import executable factories from the current contract
 
 ```ts
@@ -59,6 +79,17 @@ export const renameMessage = defineMutation({
 `defineJob`, and `defineWorkflow`. Each factory has its own exact context; there
 is no universal Definition builder. Packages import the same names from their
 generated `#questpie/package` contract and cannot see host-only Resources.
+
+Generated server Operation maps use nested calls such as
+`ctx.actions.delivery.sendMessage`. Canonical Resource Identity and direct
+client/App maps retain exact `<kind>:<qualified-name>` keys. QUESTPIE reports
+`QP-COMPOSE-023` when one same-kind Operation would be both a callable leaf and
+a namespace. It reports `QP-COMPOSE-024` when a final `then` segment would make
+the generated namespace Promise-like.
+
+Server capability maps are frozen objects with no inherited Object helpers.
+Names such as `constructor` and `prototype` are ordinary generated members.
+Treat the map as a typed capability surface, not as a general JavaScript object.
 
 ## Keep Route and Fetch distinct
 

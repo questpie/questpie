@@ -1,0 +1,31 @@
+{
+	"prefixCollision": [
+		{ "name": "delivery", "origin": "app/actions/delivery.ts:2" },
+		{
+			"name": "delivery.sendMessage",
+			"origin": "packages/mail/actions.ts:8"
+		}
+	],
+	"unsafeThenLeaves": [
+		{ "name": "then", "origin": "src/then-root.ts:2" },
+		{ "name": "delivery.then", "origin": "src/delivery-then.ts:3" }
+	],
+	"invalidNames": [
+		{ "name": "Delivery.send", "origin": "src/invalid.ts:1" },
+		{ "name": "delivery..send", "origin": "src/invalid.ts:2" },
+		{ "name": "delivery/send", "origin": "src/invalid.ts:3" }
+	],
+	"invalidLengths": [
+		{ "kind": "segment", "length": 64, "origin": "src/long-segment.ts:1" },
+		{
+			"kind": "name",
+			"segmentLength": 63,
+			"segments": 5,
+			"origin": "src/long-name.ts:1"
+		}
+	],
+	"crossKindSameName": {
+		"action": { "name": "delivery.send", "origin": "src/action.ts:1" },
+		"mutation": { "name": "delivery.send", "origin": "src/mutation.ts:1" }
+	}
+}

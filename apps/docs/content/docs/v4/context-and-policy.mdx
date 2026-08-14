@@ -225,7 +225,7 @@ export async function readMessagesAsUser(app: GeneratedApp) {
 			context: { companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
 		},
 		({ queries }) =>
-			queries["channels.overview"]({
+			queries.channels.overview({
 				channelId: "018f6094-cf3c-70e9-8d68-80d523f14c19",
 				first: 20,
 				after: null,

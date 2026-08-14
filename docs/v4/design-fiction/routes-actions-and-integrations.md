@@ -187,7 +187,7 @@ export const deliveryWebhook = defineRoute({
 				context: { companyId: event.companyId },
 			},
 			({ mutations }) =>
-				mutations["delivery.recordEvent"]({
+				mutations.delivery.recordEvent({
 					id: event.id,
 					type: event.type,
 					companyId: event.companyId,
@@ -376,13 +376,13 @@ export const messageDelivery = defineReaction({
 	runAs: durable.caller({ whenDenied: "fail" }),
 	retry: durable.retry({ maximumAttempts: 8 }),
 	handler: async ({ input, ctx, run }) => {
-		const delivery = await ctx.queries["messages.deliveryView"]({
+		const delivery = await ctx.queries.messages.deliveryView({
 			messageId: input.messageId,
 		});
 
 		if (delivery === null) return { kind: "unavailable" as const };
 
-		const result = await ctx.actions["delivery.send"]({
+		const result = await ctx.actions.delivery.send({
 			to: delivery.to,
 			subject: delivery.subject,
 			text: delivery.text,
@@ -607,7 +607,7 @@ export const downloadFile = defineRoute({
 				context: { companyId: params.companyId },
 			},
 			async ({ queries, files, signal }) => {
-				const file = await queries["files.downloadMetadata"]({
+				const file = await queries.files.downloadMetadata({
 					id: params.id,
 				});
 
@@ -765,7 +765,7 @@ No callback depends on illustrative implicit `any` or an ambient registry:
 | Mutation `ctx.data.providerEvents`           | concrete generated Collection map in Mutation transaction mode        |
 | Action `errors`                              | local literal declared-error map                                      |
 | Action `ctx`                                 | generated Action mode with signal and Operation callers but no `data` |
-| `ctx.actions["delivery.send"]`               | generated exact Action input, output, errors, and exposure contract   |
+| `ctx.actions.delivery.send`                  | nested generated Action input, output, errors, and exposure contract  |
 | credential resolver `service`                | explicit application/external Auth Service reference                  |
 | File Policy row and Field keys               | exact `files` Collection passed to `definePolicy`                     |
 | nested `queries`, `files`, and `signal`      | generated App Contract for the explicit application Execution         |

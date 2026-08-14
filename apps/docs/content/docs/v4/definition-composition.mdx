@@ -140,9 +140,13 @@ Resource Identity. QUESTPIE reports `QP-COMPOSE-002
 duplicateResourceIdentity` when another establishing Definition uses the same
 kind and name, even when both Definitions have identical content.
 
-Two Resources of different kinds can use the same Qualified Resource Name. A
-name can also be a strict dotted prefix of another name. Canonical exact-key
-maps preserve both identities:
+Two Resources of different kinds can use the same Qualified Resource Name.
+Exact-key identity maps also preserve strict dotted prefixes. Generated server
+Operation callers are different: they are nested-only, so one same-kind
+Operation cannot be both a callable leaf and a namespace prefix. QUESTPIE
+reports `QP-COMPOSE-023`. An Operation cannot use `then` as its final segment
+because a callable leaf would make that namespace Promise-like; QUESTPIE
+reports `QP-COMPOSE-024`. Non-final `then` remains valid.
 
 ```text
 collection:booking
@@ -436,5 +440,7 @@ user diagnostic.
 | `QP-COMPOSE-020` | `duplicateContributionIdentity`     | One Owner accepts the same Augmentation identity twice.              |
 | `QP-COMPOSE-021` | `nonLiteralAugmentationList`        | An authored Augmentation list is not a closed literal tuple.         |
 | `QP-COMPOSE-022` | `definitionOutsideSourceRoot`       | An application Definition sits outside the configured source root.   |
+| `QP-COMPOSE-023` | `operationProjectionCollision`      | One same-kind Operation is both a call leaf and namespace prefix.    |
+| `QP-COMPOSE-024` | `operationProjectionUnsafeName`     | A final `then` Operation segment would make a namespace thenable.    |
 
 Next, [define data and use the schema lifecycle](./schema-lifecycle).

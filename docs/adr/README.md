@@ -27,6 +27,7 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 19. [Semantic Kernels and the Public Surface](./0019-freeze-semantic-kernels-and-public-surface.md)
 20. [Repository Foundation](./0020-establish-the-repository-foundation.md)
 21. [Beta.1 Release Slice](./0021-slice-the-beta-one-release.md)
+22. [API Ergonomics and Operation Projection](./0022-freeze-api-ergonomics-and-operation-projection.md)
 
 ## Open decisions
 
@@ -50,6 +51,9 @@ harness, and guarded release path.
 ADR-0021 accepts the connected beta.1 slice: compiler through minimal Studio,
 including Service lifetime, watched Query, one committed-fact Reaction, and
 explicit absence stories for later breadth.
+ADR-0022 keeps named factories, preserves exact Resource Identity, accepts
+nested-only generated server Operation calls, closes their leaf/prefix and
+final-`then` diagnostics, and publishes the permanent capability ownership map.
 Complete Workflow, Action, split
 Runtime roles, host/provider SPIs, and remote/fleet Studio remain later
 verticals.
