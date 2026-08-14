@@ -46,6 +46,4 @@ export default runtimeConfig({
 	},
 
 	queue: { adapter: pgBossAdapter({ connectionString: env.DATABASE_URL }) },
-
-	realtime: { rowLiveQueries: false },
 });

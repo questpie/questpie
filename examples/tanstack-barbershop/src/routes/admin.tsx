@@ -75,7 +75,6 @@ function AdminLayout() {
 				// Translations are configured on server via .adminLocale() and .messages()
 				useServerTranslations
 				theme="dark"
-				realtime={false}
 			>
 				<Outlet />
 			</AdminLayoutProvider>
