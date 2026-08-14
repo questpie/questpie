@@ -13,13 +13,15 @@ import {
 	inspectSchemaFingerprint,
 } from "@questpie/compiler";
 
+import { lockKey } from "../../../packages/compiler/src/postgres-session";
+
 const fixtureRoot = resolve(import.meta.dir, "../../../fixtures/collaboration");
 const database = process.env.PGHOST ? new SQL() : undefined;
 
 beforeAll(async () => {
 	if (!database) return;
 	await database.unsafe(
-		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
+		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
 	);
 });
 
@@ -28,6 +30,81 @@ afterAll(async () => {
 });
 
 describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
+	test("bounds application advisory-lock waits before schema SQL", async () => {
+		const compilation = await compileApplication({
+			applicationRoot: fixtureRoot,
+		});
+		const fixtureSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		const targetSchema = {
+			...fixtureSchema,
+			application: {
+				...fixtureSchema.application,
+				name: "lock-probe",
+				postgresSchema: "lock_probe",
+			},
+		};
+		const planned = createMigrationPlan({
+			targetSchema,
+			slug: "create-lock-probe",
+		});
+		const migration = createCommittedMigration({
+			plan: planned.plan,
+			baseSchema: planned.baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: planned.digest,
+		});
+		const holder = await database!.reserve();
+		const [current] = await holder<{ name: string }[]>`
+			select current_database() as name
+		`;
+		const applicationKey = lockKey(
+			"questpie-application-lock-v1",
+			current!.name,
+			"lock-probe",
+		);
+		await holder`select pg_catalog.pg_advisory_lock(${applicationKey})`;
+		const started = performance.now();
+		try {
+			let lockError: unknown;
+			try {
+				await applyCommittedMigrations({
+					migrations: [migration],
+					lockTimeoutMs: 50,
+					statementTimeoutMs: 500,
+				});
+			} catch (error) {
+				lockError = error;
+			}
+			expect(lockError).toBeInstanceOf(SQL.PostgresError);
+			expect((lockError as SQL.PostgresError).code).toBe(
+				"ERR_POSTGRES_SERVER_ERROR",
+			);
+			expect((lockError as SQL.PostgresError).errno).toBe("55P03");
+			expect(performance.now() - started).toBeLessThan(3_000);
+			const [state] = await database!<
+				{ schemaExists: boolean; receipts: number }[]
+			>`
+				select
+				  exists(select 1 from pg_catalog.pg_namespace where nspname = 'lock_probe') as "schemaExists",
+				  (select count(*)::integer from questpie_internal.schema_migration_receipts where application_name = 'lock-probe') as receipts
+			`;
+			expect(state).toEqual({ schemaExists: false, receipts: 0 });
+		} finally {
+			await holder`select pg_catalog.pg_advisory_unlock(${applicationKey})`;
+			holder.release();
+		}
+
+		const retry = await applyCommittedMigrations({
+			migrations: [migration],
+			lockTimeoutMs: 500,
+			statementTimeoutMs: 5_000,
+		});
+		expect(retry.status).toBe("applied");
+	});
+
 	test("applies, loses the response, restarts, and reports no Drift", async () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
@@ -53,6 +130,13 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			currentSchema: mismatchedSchema,
 			planDigest: mismatchedPlan.digest,
 		});
+		const [preflightBefore] = await database!<
+			{ protocolSchemaExists: boolean }[]
+		>`
+			select exists(
+				select 1 from pg_catalog.pg_namespace where nspname = 'questpie_internal'
+			) as "protocolSchemaExists"
+		`;
 		await expect(
 			applyCommittedMigrations({ migrations: [mismatchedMigration] }),
 		).rejects.toMatchObject({ code: "QP-SCHEMA-007" });
@@ -68,7 +152,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		`;
 		expect(preflightState).toEqual({
 			applicationSchemaExists: false,
-			protocolSchemaExists: false,
+			protocolSchemaExists: preflightBefore!.protocolSchemaExists,
 		});
 		const planned = createMigrationPlan({
 			targetSchema,

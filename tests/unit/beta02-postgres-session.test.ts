@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { probeSessionAffinity } from "../../packages/compiler/src/postgres-session";
+import {
+	probeSessionAffinity,
+	resolvePostgresControl,
+} from "../../packages/compiler/src/postgres-session";
 
 describe("BETA-02 PostgreSQL session protocol", () => {
 	test("commits two probes and accepts only one pinned backend", async () => {
@@ -23,5 +26,18 @@ describe("BETA-02 PostgreSQL session protocol", () => {
 			code: "QP-SCHEMA-007",
 			diagnosticClass: "providerMismatch",
 		});
+	});
+
+	test("requires bounded lock and statement timeout budgets", () => {
+		expect(resolvePostgresControl({})).toEqual({
+			lockTimeoutMs: 5_000,
+			statementTimeoutMs: 30_000,
+		});
+		expect(
+			resolvePostgresControl({ lockTimeoutMs: 50, statementTimeoutMs: 500 }),
+		).toEqual({ lockTimeoutMs: 50, statementTimeoutMs: 500 });
+		expect(() =>
+			resolvePostgresControl({ lockTimeoutMs: 500, statementTimeoutMs: 50 }),
+		).toThrow(RangeError);
 	});
 });

@@ -3,9 +3,12 @@ import { SQL } from "bun";
 import { digest } from "./canonical";
 import {
 	assertBackendPid,
+	configurePostgresTimeouts,
 	lockKey,
 	probeCommittedSession,
+	resolvePostgresControl,
 } from "./postgres-session";
+import type { PostgresCommandControl } from "./postgres-session";
 import type { SchemaProjectionV1 } from "./schema";
 import {
 	assertSchemaMatches,
@@ -159,7 +162,8 @@ export async function applyCommittedSeeds(
 		connectionString?: string;
 		schema: SchemaProjectionV1;
 		seeds: readonly CommittedSeedV1[];
-	}>,
+	}> &
+		PostgresCommandControl,
 ): Promise<ApplySeedsResult> {
 	const seeds = orderCommittedSeeds(input.seeds);
 	for (const seed of seeds) validateCommittedSeedSchema(seed, input.schema);
@@ -171,6 +175,8 @@ export async function applyCommittedSeeds(
 	const alreadyApplied: string[] = [];
 	try {
 		const expectedPid = await probeCommittedSession(session);
+		const control = resolvePostgresControl(input);
+		await configurePostgresTimeouts(session, control);
 		const [database] = await session<
 			{ name: string }[]
 		>`select current_database() as name`;

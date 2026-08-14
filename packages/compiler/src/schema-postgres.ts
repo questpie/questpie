@@ -6,9 +6,12 @@ import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { CompilerDiagnosticError } from "./diagnostic";
 import {
 	assertBackendPid,
+	configurePostgresTimeouts,
 	lockKey,
 	probeCommittedSession,
+	resolvePostgresControl,
 } from "./postgres-session";
+import type { PostgresCommandControl } from "./postgres-session";
 import type { CommittedMigration, SchemaProjectionV1 } from "./schema";
 import { verifyCommittedMigrationChain } from "./schema";
 const bootstrapSql = `CREATE SCHEMA IF NOT EXISTS questpie_internal AUTHORIZATION CURRENT_USER;
@@ -1328,11 +1331,7 @@ export async function bootstrap(
 		if (!state?.exists) {
 			await assertBackendPid(sql, expectedPid, "before bootstrap transaction");
 			await sql.begin(async (transaction) => {
-				await assertBackendPid(
-					transaction,
-					expectedPid,
-					"bootstrap transaction start",
-				);
+				await assertBackendPid(transaction, expectedPid, "bootstrap tx start");
 				await transaction.unsafe(bootstrapSql);
 				await transaction`
 					insert into questpie_internal.protocol
@@ -1340,11 +1339,7 @@ export async function bootstrap(
 					values (true, 1, ${bootstrapChecksum})
 				`;
 				await verifyBootstrapCatalog(transaction);
-				await assertBackendPid(
-					transaction,
-					expectedPid,
-					"bootstrap transaction end",
-				);
+				await assertBackendPid(transaction, expectedPid, "bootstrap tx end");
 			});
 			await assertBackendPid(sql, expectedPid, "after bootstrap transaction");
 		} else await verifyBootstrapCatalog(sql);
@@ -1365,7 +1360,8 @@ export async function applyCommittedMigrations(
 	input: Readonly<{
 		connectionString?: string;
 		migrations: readonly CommittedMigration[];
-	}>,
+	}> &
+		PostgresCommandControl,
 ): Promise<ApplyMigrationsResult> {
 	verifyCommittedMigrationChain(input.migrations);
 	const migrations = [...input.migrations];
@@ -1385,6 +1381,8 @@ export async function applyCommittedMigrations(
 	const session = await pool.reserve();
 	try {
 		const firstPid = await probeCommittedSession(session);
+		const control = resolvePostgresControl(input);
+		await configurePostgresTimeouts(session, control);
 		const [database] = await session<{ name: string }[]>`
 			select current_database() as name
 		`;
