@@ -1,0 +1,6 @@
+{
+	"name": "@questpie/fixture-archive",
+	"version": "4.0.0-beta.1",
+	"private": true,
+	"type": "module"
+}

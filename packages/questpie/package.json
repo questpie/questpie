@@ -1,0 +1,18 @@
+{
+	"name": "questpie",
+	"version": "4.0.0-beta.1",
+	"files": [
+		"dist"
+	],
+	"type": "module",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"build": "bun ../../node_modules/typescript/bin/tsc -p tsconfig.json",
+		"types:check": "bun ../../node_modules/typescript/bin/tsc -p tsconfig.json --noEmit"
+	}
+}

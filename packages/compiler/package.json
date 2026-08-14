@@ -1,0 +1,16 @@
+{
+	"name": "@questpie/compiler",
+	"version": "4.0.0-beta.1",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"build": "bun ../../node_modules/typescript/bin/tsc -p tsconfig.json",
+		"types:check": "bun ../../node_modules/typescript/bin/tsc -p tsconfig.json --noEmit"
+	},
+	"dependencies": {
+		"typescript": "6.0.2"
+	}
+}

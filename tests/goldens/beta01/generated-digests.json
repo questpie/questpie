@@ -1,0 +1,19 @@
+{
+	"files": {
+		"app.ts": "c526f827a77dab97e0f3291dc5ded402faa6ae3900bcc7c35913bd74725f2850",
+		"build-input.json": "51de4b499640cd5945162654677219e7c249c63cca7ad5698ebbec9484a56a92",
+		"client.ts": "557043240ed91541f704da25adcec68b7f2541e58f2b66f9a749c4af6b152f85",
+		"internal/checksums.json": "743ea09916782e571a3f5e93410f0c394fef7619c57f58c0f220cb5bbeaefca8",
+		"internal/package-contracts/collaboration-audit.ts": "d994df50591b204ba12bff306ed40cdb0bba1b6aaa79f6b7ec01c4b629940b70",
+		"internal/package-inventories.json": "86eb8852c045cdee446bb7f72b42b8c4822c5b61d3c6a27585388959e0311b50",
+		"manifest.json": "9e58951ba30769acba62c2140dc077a5359eb652820b1f9f1fb2fce4a2423c96",
+		"origin-map.json": "ad686c9877fada8218a39e384948f1631d40b2bad82534aa806f3419cd2e783d",
+		"schema-projection.json": "72a537fabf1129ae9e4666905271fc3e8c69e7e546e7eb41bd5c105a57f0dc4f"
+	},
+	"inventories": [
+		{
+			"name": "@questpie/collaboration-audit",
+			"digest": "eb0fd0e75cb854bd195c509f8d29af0ee582262d2dbef6ded975f97f5dba8a9a"
+		}
+	]
+}

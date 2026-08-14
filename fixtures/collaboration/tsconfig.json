@@ -1,0 +1,13 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"allowImportingTsExtensions": true,
+		"noEmit": true,
+		"paths": {
+			"#questpie/app": ["./.questpie/generated/app.ts"],
+			"#questpie/client": ["./.questpie/generated/client.ts"],
+			"questpie": ["../../packages/questpie/src/index.ts"]
+		}
+	},
+	"include": ["src/**/*.ts"]
+}

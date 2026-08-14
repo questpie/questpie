@@ -10,6 +10,7 @@
       },
       "devDependencies": {
         "@iconify/json": "^2.2.452",
+        "@questpie/compiler": "workspace:*",
         "@types/bun": "1.3.14",
         "@typescript/native": "npm:typescript@7.0.2",
         "fumadocs-typescript": "^5.0.0",
@@ -68,6 +69,48 @@
         "tailwindcss": "^4.1.18",
         "typescript": "6.0.2",
       },
+    },
+    "apps/studio": {
+      "name": "@questpie/studio",
+      "version": "4.0.0-beta.1",
+    },
+    "fixtures/archive": {
+      "name": "@questpie/fixture-archive",
+      "version": "4.0.0-beta.1",
+    },
+    "fixtures/collaboration": {
+      "name": "@questpie/fixture-collaboration",
+      "version": "4.0.0-beta.1",
+      "dependencies": {
+        "@questpie/collaboration-audit": "workspace:*",
+        "questpie": "workspace:*",
+      },
+    },
+    "fixtures/collaboration/packages/audit": {
+      "name": "@questpie/collaboration-audit",
+      "version": "1.0.0",
+      "dependencies": {
+        "questpie": "workspace:*",
+      },
+    },
+    "packages/compiler": {
+      "name": "@questpie/compiler",
+      "version": "4.0.0-beta.1",
+      "dependencies": {
+        "typescript": "6.0.2",
+      },
+    },
+    "packages/questpie": {
+      "name": "questpie",
+      "version": "4.0.0-beta.1",
+    },
+    "packages/runtime": {
+      "name": "@questpie/runtime",
+      "version": "4.0.0-beta.1",
+    },
+    "packages/testkit": {
+      "name": "@questpie/testkit",
+      "version": "4.0.0-beta.1",
     },
   },
   "overrides": {
@@ -519,7 +562,21 @@
 
     "@oxlint/binding-win32-x64-msvc": ["@oxlint/binding-win32-x64-msvc@1.75.0", "", { "os": "win32", "cpu": "x64" }, "sha512-DSxnNkBUAYARPwJtR12Ig3deWr8w0H997xP6jy33i+e0SyYJw8FKuz4+cZtpmPEhQmvlPJE3X/2vNxDmLkd/rA=="],
 
+    "@questpie/collaboration-audit": ["@questpie/collaboration-audit@workspace:fixtures/collaboration/packages/audit"],
+
+    "@questpie/compiler": ["@questpie/compiler@workspace:packages/compiler"],
+
     "@questpie/docs": ["@questpie/docs@workspace:apps/docs"],
+
+    "@questpie/fixture-archive": ["@questpie/fixture-archive@workspace:fixtures/archive"],
+
+    "@questpie/fixture-collaboration": ["@questpie/fixture-collaboration@workspace:fixtures/collaboration"],
+
+    "@questpie/runtime": ["@questpie/runtime@workspace:packages/runtime"],
+
+    "@questpie/studio": ["@questpie/studio@workspace:apps/studio"],
+
+    "@questpie/testkit": ["@questpie/testkit@workspace:packages/testkit"],
 
     "@radix-ui/number": ["@radix-ui/number@1.1.3", "", {}, "sha512-Road2bidD0uu/1BGDOWNdPI06g0lIRy6IF9GZcIrDK2KGItfor8IQwQa+yM2ERgHM1MmHxaxpTzk0/Jp42lNfA=="],
 
@@ -1860,6 +1917,8 @@
     "punycode": ["punycode@2.3.1", "", {}, "sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg=="],
 
     "qs": ["qs@6.15.3", "", { "dependencies": { "es-define-property": "^1.0.1", "side-channel": "^1.1.1" } }, "sha512-O9gl3zCl5h5blw1KGUzQKhA5oUXSl8rwUIM5o0S3nCXMliSvy5Dzx7/DJcI+SwgICv+IneSZwhBh1oSyEHA71A=="],
+
+    "questpie": ["questpie@workspace:packages/questpie"],
 
     "queue-microtask": ["queue-microtask@1.2.3", "", {}, "sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A=="],
 
