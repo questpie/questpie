@@ -21,7 +21,7 @@ const database = process.env.PGHOST ? new SQL() : undefined;
 beforeAll(async () => {
 	if (!database) return;
 	await database.unsafe(
-		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
+		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
 	);
 });
 
@@ -234,6 +234,89 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			status: "applied",
 			applied: ["000002_add-cancellation-probe"],
 		});
+	}, 10_000);
+
+	test("rolls back Seed writes and receipt when a later step fails", async () => {
+		const compilation = await compileApplication({
+			applicationRoot: fixtureRoot,
+		});
+		const fixtureSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		const targetSchema = {
+			...fixtureSchema,
+			application: {
+				...fixtureSchema.application,
+				name: "seed-probe",
+				postgresSchema: "seed_probe",
+			},
+		};
+		const planned = createMigrationPlan({
+			targetSchema,
+			slug: "create-seed-probe",
+		});
+		const migration = createCommittedMigration({
+			plan: planned.plan,
+			baseSchema: planned.baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: planned.digest,
+		});
+		await applyCommittedMigrations({ migrations: [migration] });
+		const failingSeed = createCommittedSeed({
+			definition: {
+				name: "seed-probe.rollback.v1",
+				steps: [
+					{
+						kind: "insert",
+						collection: "collection:companies",
+						values: {
+							id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6170",
+							name: "must roll back",
+						},
+					},
+					{
+						kind: "update",
+						collection: "collection:companies",
+						key: { id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6171" },
+						values: { name: "missing" },
+					},
+				],
+			},
+			schema: targetSchema,
+		});
+
+		for (let attempt = 1; attempt <= 2; attempt += 1) {
+			await expect(
+				applyCommittedSeeds({
+					schema: targetSchema,
+					seeds: [failingSeed],
+				}),
+			).rejects.toMatchObject({ code: "QP-SEED-012" });
+			const [state] = await database!<
+				{
+					companies: number;
+					failed: number;
+					receipts: number;
+					started: number;
+					succeeded: number;
+				}[]
+			>`
+				select
+				  (select count(*)::integer from seed_probe.companies) as companies,
+				  (select count(*)::integer from questpie_internal.seed_receipts where application_name = 'seed-probe') as receipts,
+				  (select count(*)::integer from questpie_internal.seed_attempt_events where application_name = 'seed-probe' and event = 'started') as started,
+				  (select count(*)::integer from questpie_internal.seed_attempt_events where application_name = 'seed-probe' and event = 'failed') as failed,
+				  (select count(*)::integer from questpie_internal.seed_attempt_events where application_name = 'seed-probe' and event = 'succeeded') as succeeded
+			`;
+			expect(state).toEqual({
+				companies: 0,
+				failed: attempt,
+				receipts: 0,
+				started: attempt,
+				succeeded: 0,
+			});
+		}
 	}, 10_000);
 
 	test("applies, loses the response, restarts, and reports no Drift", async () => {
