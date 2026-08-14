@@ -1,0 +1,22 @@
+{
+	"name": "@questpie/collaboration-audit",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"imports": {
+		"#questpie/package": "./.questpie/generated/package.ts"
+	},
+	"exports": {
+		"./questpie": {
+			"types": "./src/questpie.ts",
+			"import": "./src/questpie.ts"
+		}
+	},
+	"dependencies": {
+		"questpie": "workspace:*"
+	},
+	"questpie": {
+		"manifestVersion": 1,
+		"framework": "^4.0.0"
+	}
+}

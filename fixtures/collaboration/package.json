@@ -1,0 +1,15 @@
+{
+	"name": "@questpie/fixture-collaboration",
+	"version": "4.0.0-beta.1",
+	"private": true,
+	"type": "module",
+	"imports": {
+		"#questpie/app": "./.questpie/generated/app.ts",
+		"#questpie/client": "./.questpie/generated/client.ts",
+		"#questpie/source/*": "./src/*"
+	},
+	"dependencies": {
+		"@questpie/collaboration-audit": "workspace:*",
+		"questpie": "workspace:*"
+	}
+}

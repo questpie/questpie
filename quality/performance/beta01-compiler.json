@@ -1,0 +1,24 @@
+{
+	"id": "beta01-compiler",
+	"kind": "micro",
+	"schedule": "selected-pr",
+	"command": ["bun", "test", "tests/performance/beta01-compiler.test.ts"],
+	"budgetOwner": "BETA-01",
+	"metrics": {
+		"compileMs": {
+			"direction": "max",
+			"budget": 5000,
+			"unit": "ms"
+		},
+		"typescriptInstantiations": {
+			"direction": "max",
+			"budget": 125000,
+			"unit": "count"
+		},
+		"publicDeclarationBytes": {
+			"direction": "max",
+			"budget": 262144,
+			"unit": "bytes"
+		}
+	}
+}

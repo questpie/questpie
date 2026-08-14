@@ -62,6 +62,22 @@ for (const { path, json } of publicPackages) {
 		if (!existsSync(artifact) || !statSync(artifact).isFile())
 			fail(`${label}: missing built export ${target}`);
 	}
+
+	const packageRoot = dirname(path);
+	const packed = Bun.spawnSync(
+		["bun", "pm", "pack", "--dry-run", "--ignore-scripts"],
+		{ cwd: packageRoot, stdout: "pipe", stderr: "pipe" },
+	);
+	const inspection = `${packed.stdout.toString()}${packed.stderr.toString()}`;
+	if (packed.exitCode !== 0)
+		fail(`${label}: tarball inspection failed: ${inspection.trim()}`);
+	if (
+		!inspection.includes("dist/index.d.ts") ||
+		!inspection.includes("dist/index.js")
+	)
+		fail(`${label}: tarball omits built declarations or ESM entry`);
+	if (/packed .*\bsrc\//.test(inspection))
+		fail(`${label}: tarball unexpectedly contains source files`);
 }
 
 console.log(
