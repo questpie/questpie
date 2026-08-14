@@ -21,7 +21,7 @@ const database = process.env.PGHOST ? new SQL() : undefined;
 beforeAll(async () => {
 	if (!database) return;
 	await database.unsafe(
-		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
+		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
 	);
 });
 
@@ -389,6 +389,86 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			blocked: 1,
 			companies: 1,
 			receiptChecksum: accepted.checksum,
+		});
+	}, 10_000);
+
+	test("serializes concurrent application of one Seed", async () => {
+		const compilation = await compileApplication({
+			applicationRoot: fixtureRoot,
+		});
+		const fixtureSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		const targetSchema = {
+			...fixtureSchema,
+			application: {
+				...fixtureSchema.application,
+				name: "seed-concurrency-probe",
+				postgresSchema: "seed_concurrency_probe",
+			},
+		};
+		const planned = createMigrationPlan({
+			targetSchema,
+			slug: "create-seed-concurrency-probe",
+		});
+		const migration = createCommittedMigration({
+			plan: planned.plan,
+			baseSchema: planned.baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: planned.digest,
+			localMigrations: [],
+		});
+		await applyCommittedMigrations({ migrations: [migration] });
+		const seed = createCommittedSeed({
+			definition: {
+				name: "seed-concurrency-probe.demo.v1",
+				steps: [
+					{
+						kind: "insert",
+						collection: "collection:companies",
+						values: {
+							id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6170",
+							name: "once",
+						},
+					},
+				],
+			},
+			schema: targetSchema,
+		});
+		const results = await Promise.all([
+			applyCommittedSeeds({ schema: targetSchema, seeds: [seed] }),
+			applyCommittedSeeds({ schema: targetSchema, seeds: [seed] }),
+		]);
+		expect(
+			results
+				.map((result) =>
+					result.applied.length === 1 ? "applied" : "alreadyApplied",
+				)
+				.sort(),
+		).toEqual(["alreadyApplied", "applied"]);
+		const [state] = await database!<
+			{
+				alreadyApplied: number;
+				companies: number;
+				receipts: number;
+				started: number;
+				succeeded: number;
+			}[]
+		>`
+			select
+			  (select count(*)::integer from seed_concurrency_probe.companies) as companies,
+			  (select count(*)::integer from questpie_internal.seed_receipts where application_name = 'seed-concurrency-probe') as receipts,
+			  (select count(*)::integer from questpie_internal.seed_attempt_events where application_name = 'seed-concurrency-probe' and event = 'started') as started,
+			  (select count(*)::integer from questpie_internal.seed_attempt_events where application_name = 'seed-concurrency-probe' and event = 'succeeded') as succeeded,
+			  (select count(*)::integer from questpie_internal.seed_attempt_events where application_name = 'seed-concurrency-probe' and event = 'alreadyApplied') as "alreadyApplied"
+		`;
+		expect(state).toEqual({
+			alreadyApplied: 1,
+			companies: 1,
+			receipts: 1,
+			started: 1,
+			succeeded: 1,
 		});
 	}, 10_000);
 
