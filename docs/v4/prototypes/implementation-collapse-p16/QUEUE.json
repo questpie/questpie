@@ -63,6 +63,13 @@
 				"zero public ORM types",
 				"byte-identical relocated goldens"
 			],
+			"performance": {
+				"owner": "BETA-01",
+				"evidence": [
+					"BETA-01 baseline measurement manifest",
+					"BETA-01 structural compiler stable-runner budget report"
+				]
+			},
 			"verify": [
 				"bun run check:changed -- --test tests/type/beta01-generated-contract.test.ts --typecheck @questpie/compiler",
 				"bun run quality:full",
@@ -106,6 +113,13 @@
 				"migration golden bytes stable",
 				"local apply/restart baseline recorded"
 			],
+			"performance": {
+				"owner": "BETA-02",
+				"evidence": [
+					"BETA-02 migration baseline measurement manifest",
+					"BETA-02 stable-runner budget report"
+				]
+			},
 			"verify": [
 				"bun run check:changed -- --test tests/unit/beta02-migration-plan.test.ts --typecheck @questpie/compiler",
 				"bun run test:postgres -- --scenario beta02",
@@ -148,6 +162,13 @@
 				"no application-wide recursive type",
 				"lifecycle micro baseline recorded"
 			],
+			"performance": {
+				"owner": "BETA-03",
+				"evidence": [
+					"BETA-03 Service lifecycle baseline measurement manifest",
+					"BETA-03 stable-runner budget report"
+				]
+			},
 			"verify": [
 				"bun run check:changed -- --test tests/integration/beta03-execution-services.test.ts --typecheck @questpie/runtime",
 				"bun run quality:full",
@@ -189,9 +210,17 @@
 				"Query type/declaration baseline within accepted P21 class",
 				"bounded rows and first+1"
 			],
+			"performance": {
+				"owner": "BETA-04",
+				"evidence": [
+					"Policy/Query PostgreSQL microbenchmark manifest",
+					"selected-PR stable Query measurement and stable-runner budget"
+				]
+			},
 			"verify": [
 				"bun run check:changed -- --test tests/integration/beta04-policy-query.test.ts --typecheck @questpie/runtime",
 				"bun run test:postgres -- --scenario beta04",
+				"bun run bench:micro -- --scenario beta04",
 				"bun run quality:full",
 				"git diff --check"
 			]
@@ -232,6 +261,13 @@
 				"wire and cold-start baseline recorded",
 				"64 active roots per Principal default enforced"
 			],
+			"performance": {
+				"owner": "BETA-05",
+				"evidence": [
+					"BETA-05 wire and cold-start baseline measurement manifest",
+					"BETA-05 stable-runner budget report"
+				]
+			},
 			"verify": [
 				"bun run check:changed -- --test tests/integration/beta05-runtime-client.test.ts --typecheck @questpie/runtime",
 				"bun run test:postgres -- --scenario beta05",
@@ -275,9 +311,17 @@
 				"Mutation type/declaration baseline recorded",
 				"bounded transaction and payload limits explicit"
 			],
+			"performance": {
+				"owner": "BETA-06",
+				"evidence": [
+					"Mutation transaction microbenchmark manifest",
+					"selected-PR stable Mutation measurement and stable-runner budget"
+				]
+			},
 			"verify": [
 				"bun run check:changed -- --test tests/integration/beta06-publish-mutation.test.ts --typecheck @questpie/runtime",
 				"bun run test:postgres -- --scenario beta06",
+				"bun run bench:micro -- --scenario beta06",
 				"bun run quality:full",
 				"git diff --check"
 			]
@@ -319,6 +363,13 @@
 				"accepted default dependency/subscription/result/fanout limits enforced",
 				"quick stable invalidation micro manifest"
 			],
+			"performance": {
+				"owner": "BETA-07",
+				"evidence": [
+					"Live Query invalidation microbenchmark manifest",
+					"fanout load budget report"
+				]
+			},
 			"verify": [
 				"bun run check:changed -- --test tests/integration/beta07-live-query.test.ts --typecheck @questpie/runtime",
 				"bun run test:postgres -- --scenario beta07",
@@ -362,6 +413,13 @@
 				"claim batch <= 64 and heartbeat contract enforced",
 				"worker micro and nightly load manifests owned by this slice"
 			],
+			"performance": {
+				"owner": "BETA-08",
+				"evidence": [
+					"durable worker microbenchmark manifest",
+					"worker contention load budget report"
+				]
+			},
 			"verify": [
 				"bun run check:changed -- --test tests/integration/beta08-reaction.test.ts --typecheck @questpie/runtime",
 				"bun run test:postgres -- --scenario beta08",
@@ -404,6 +462,13 @@
 				"Studio build-size and query-latency baselines recorded",
 				"no secret/raw payload snapshots"
 			],
+			"performance": {
+				"owner": "BETA-09",
+				"evidence": [
+					"Studio build-size and query baseline measurement manifest",
+					"BETA-09 stable-runner budget report"
+				]
+			},
 			"verify": [
 				"bun run check:changed -- --test tests/integration/beta09-studio.test.ts --typecheck @questpie/studio",
 				"bun run test:postgres -- --scenario beta09",
@@ -446,6 +511,13 @@
 				"GitHub load reports noisy deltas without percentage blocking",
 				"strict ten-instance budgets owned on tagged stable runner"
 			],
+			"performance": {
+				"owner": "BETA-10",
+				"evidence": [
+					"ten-instance load budget report",
+					"manual soak/chaos report"
+				]
+			},
 			"verify": [
 				"bun run check:changed -- --test tests/hostile/beta10-compatibility.test.ts --typecheck @questpie/runtime",
 				"bun run test:load -- --scenario beta10",
@@ -494,6 +566,13 @@
 				"no duplicated semantic kernel",
 				"archive adds only slice-owned measured budgets"
 			],
+			"performance": {
+				"owner": "BETA-11",
+				"evidence": [
+					"archive portability baseline measurement manifest",
+					"BETA-11 stable-runner budget report"
+				]
+			},
 			"verify": [
 				"bun run check:changed -- --test tests/integration/beta11-archive.test.ts --typecheck @questpie/runtime",
 				"bun run test:postgres -- --scenario beta11",
@@ -535,6 +614,13 @@
 				"all slice performance manifests present",
 				"GitHub timing remains informational except clear repeated regression"
 			],
+			"performance": {
+				"owner": "BETA-12",
+				"evidence": [
+					"aggregate release performance manifest report",
+					"tagged stable-runner strict budget report"
+				]
+			},
 			"verify": [
 				"bun run quality:full",
 				"bun run test:postgres -- --scenario beta12",

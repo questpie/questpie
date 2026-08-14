@@ -40,7 +40,10 @@
 			"command": "bun run docs/v4/prototypes/implementation-collapse-p16/negative-control.ts",
 			"result": "PASS"
 		},
-		{ "command": "render all twelve GitHub issue bodies", "result": "PASS" },
+		{
+			"command": "for id in BETA-{01..12}; do bun run docs/v4/prototypes/implementation-collapse-p16/render-issue.ts \"$id\" > \"/tmp/$id.md\"; done",
+			"result": "PASS"
+		},
 		{
 			"command": "canonical TypeScript 6 strict no-emit check of P16 scripts",
 			"result": "PASS"

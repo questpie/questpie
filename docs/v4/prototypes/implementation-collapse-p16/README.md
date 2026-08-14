@@ -8,7 +8,7 @@ and forbidden beta scope. `render-issue.ts` renders the accepted GitHub body.
 ```sh
 bun run docs/v4/prototypes/implementation-collapse-p16/check.ts
 bun run docs/v4/prototypes/implementation-collapse-p16/negative-control.ts
-bun run docs/v4/prototypes/implementation-collapse-p16/render-issue.ts BETA-01
+for id in BETA-{01..12}; do bun run docs/v4/prototypes/implementation-collapse-p16/render-issue.ts "$id" > "/tmp/$id.md"; done
 bun node_modules/typescript/bin/tsc -p docs/v4/prototypes/implementation-collapse-p16/tsconfig.json
 bunx oxfmt --check docs/v4/prototypes/implementation-collapse-p16
 bunx oxlint --deny-warnings docs/v4/prototypes/implementation-collapse-p16/*.ts

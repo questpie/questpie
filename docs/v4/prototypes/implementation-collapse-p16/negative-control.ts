@@ -48,6 +48,23 @@ const invalid = [
 		at(value, 11).verify = ["bun test"];
 		return value;
 	},
+	() => {
+		const value = clone();
+		at(value, 3).performance.evidence = [];
+		return value;
+	},
+	() => {
+		const value = clone();
+		at(value, 4).artifacts.push("raw Route implementation");
+		return value;
+	},
+	() => {
+		const value = clone();
+		at(value, 5).verify = at(value, 5).verify.filter(
+			(command) => !command.includes("bench:micro"),
+		);
+		return value;
+	},
 ];
 
 for (const mutate of invalid) {

@@ -12,6 +12,7 @@ export type Issue = {
 	hostile: string[];
 	nonGoals: string[];
 	budgets: string[];
+	performance: { owner: string; evidence: string[] };
 	verify: string[];
 };
 
@@ -78,7 +79,49 @@ export function validate(queue: Queue): void {
 			throw new Error(`${issue.id} lacks full verification`);
 		if (!issue.budgets.some((budget) => /budget|baseline|<=/.test(budget)))
 			throw new Error(`${issue.id} lacks owned performance budget`);
+		if (
+			issue.performance.owner !== issue.id ||
+			issue.performance.evidence.length === 0 ||
+			!issue.performance.evidence.every((item) =>
+				/manifest|measurement|baseline|budget|report/.test(item),
+			)
+		)
+			throw new Error(`${issue.id} lacks slice-owned performance evidence`);
+		if (
+			["BETA-04", "BETA-06", "BETA-07", "BETA-08"].includes(issue.id) &&
+			!issue.verify.some((command) => command.includes("bench:micro"))
+		)
+			throw new Error(`${issue.id} lacks its hot-path microbenchmark command`);
+		for (const authority of issue.authority)
+			if (!/^(ADR-\d{4}|P14 conformance map)$/.test(authority))
+				throw new Error(`${issue.id} has invalid authority ${authority}`);
 	}
+	const ownedScope = queue.issues
+		.map(({ artifacts, fixture, redTest }) =>
+			[artifacts.join(" "), fixture, redTest].join(" "),
+		)
+		.join(" ");
+	for (const forbidden of [
+		"Action authoring",
+		"raw Route implementation",
+		"credential Auth implementation",
+		"generic Job client",
+		"Workflow implementation",
+		"Channel implementation",
+		"File byte API",
+		"Search implementation",
+		"OpenAPI projection",
+		"MCP projection",
+		"skill bundle",
+		"Redis implementation",
+		"Pusher implementation",
+		"split Runtime roles implementation",
+		"remote Studio implementation",
+		"non-B-tree public Index",
+		"RLS implementation",
+	])
+		if (ownedScope.includes(forbidden))
+			throw new Error(`forbidden beta-owned scope: ${forbidden}`);
 	const encoded = JSON.stringify(queue);
 	for (const required of [
 		"Company/Space/Channel/Membership/Message",
