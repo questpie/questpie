@@ -175,6 +175,76 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		`;
 		expect(company?.name).toBe("updated value");
 
+		const interruptedSeed = createCommittedSeed({
+			definition: {
+				name: "collaboration.interrupted.v1",
+				dependsOn: ["collaboration.demo.v1"],
+				steps: [
+					{
+						kind: "update",
+						collection: "collection:companies",
+						key: { id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
+						values: { name: "recovered value" },
+					},
+				],
+			},
+			schema: targetSchema,
+		});
+		const abandonedAttempt = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61ff";
+		await database!`
+			insert into questpie_internal.seed_attempt_events
+			(application_name, attempt_id, sequence, seed_identity, checksum, event, occurred_at, error_code)
+			values ('collaboration', ${abandonedAttempt}, 0, ${interruptedSeed.identity}, ${interruptedSeed.checksum}, 'started', ${new Date("2026-08-14T12:00:00.000Z")}, null)
+		`;
+		await applyCommittedSeeds({
+			schema: targetSchema,
+			seeds: [committedSeed, interruptedSeed],
+		});
+		const [interruption] = await database!<{ count: number }[]>`
+			select count(*)::integer as count
+			from questpie_internal.seed_attempt_events
+			where attempt_id = ${abandonedAttempt} and event = 'interrupted'
+		`;
+		expect(interruption?.count).toBe(1);
+
+		const blockedSeed = createCommittedSeed({
+			definition: {
+				name: "collaboration.blocked.v1",
+				dependsOn: ["collaboration.demo.v1"],
+				steps: [
+					{
+						kind: "update",
+						collection: "collection:companies",
+						key: { id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
+						values: { name: "must not write" },
+					},
+				],
+			},
+			schema: targetSchema,
+		});
+		await database!.unsafe(
+			"CREATE FUNCTION collaboration.seed_drift() RETURNS integer LANGUAGE sql AS 'SELECT 1'",
+		);
+		await expect(
+			applyCommittedSeeds({
+				schema: targetSchema,
+				seeds: [committedSeed, blockedSeed],
+			}),
+		).rejects.toMatchObject({ code: "QP-SEED-014" });
+		const [blockedAttempt] = await database!<
+			{ event: string; errorCode: string }[]
+		>`
+			select event, error_code as "errorCode"
+			from questpie_internal.seed_attempt_events
+			where seed_identity = ${blockedSeed.identity}
+			order by occurred_at desc limit 1
+		`;
+		expect(blockedAttempt).toEqual({
+			event: "blocked",
+			errorCode: "QP-SEED-014",
+		});
+		await database!.unsafe("DROP FUNCTION collaboration.seed_drift()");
+
 		await database!.unsafe(
 			"CREATE INDEX unexpected_protocol_index ON questpie_internal.protocol (version)",
 		);
