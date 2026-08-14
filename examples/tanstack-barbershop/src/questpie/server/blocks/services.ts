@@ -69,7 +69,7 @@ export const servicesBlock = block("services")
 			const ids = (values.services as unknown as string[]) || [];
 			if (ids.length === 0) return { services: [] };
 			const res = await ctx.collections.services.find({
-				where: { id: { in: ids } },
+				where: { id: { in: ids }, isActive: true },
 				limit: ids.length,
 				with: { image: true },
 			});
@@ -77,6 +77,7 @@ export const servicesBlock = block("services")
 		}
 		// Auto mode
 		const res = await ctx.collections.services.find({
+			where: { isActive: true },
 			limit: (values.limit as number) || 6,
 			orderBy: [{ order: "asc" }, { price: "asc" }],
 			with: { image: true },

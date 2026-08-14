@@ -65,7 +65,7 @@ export const teamBlock = block("team")
 			const ids = (values.barbers as unknown as string[]) || [];
 			if (ids.length === 0) return { barbers: [] };
 			const res = await ctx.collections.barbers.find({
-				where: { id: { in: ids } },
+				where: { id: { in: ids }, isActive: true },
 				limit: ids.length,
 				with: { avatar: true },
 			});

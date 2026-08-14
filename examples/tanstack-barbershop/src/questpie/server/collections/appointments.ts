@@ -87,18 +87,123 @@ export const appointments = collection("appointments")
 		}),
 	)
 	.hooks({
-		beforeChange: ({ data }) => {
+		beforeChange: async ({ data, operation, collections }) => {
+			// `beforeChange` does not receive `original`, so load it ourselves
+			// on update when the surrounding logic needs to compare states.
+			const prev =
+				operation === "update" && data.id
+					? await collections.appointments.findOne({
+							where: { id: data.id as string },
+						})
+					: null;
+
+			// Cancellation timestamp: stamp on transition into "cancelled",
+			// wipe on transition out so the record doesn't lie about being
+			// cancelled after a revive.
 			if (data.status === "cancelled" && !data.cancelledAt) {
 				data.cancelledAt = new Date();
+			}
+			if (data.status !== "cancelled" && prev?.status === "cancelled") {
+				data.cancelledAt = null;
+				data.cancellationReason = null;
+			}
+
+			// Defense-in-depth overlap check. `create-booking` also checks,
+			// but any other write path (admin panel, direct API, tests) would
+			// otherwise bypass it. Race window still exists without a DB
+			// transaction — this just narrows it and centralizes the rule.
+			const scheduleChanged =
+				operation === "update" &&
+				prev &&
+				(String(data.scheduledAt) !== String(prev.scheduledAt) ||
+					data.barber !== prev.barber ||
+					data.service !== prev.service);
+
+			if (
+				data.status !== "cancelled" &&
+				(operation === "create" || scheduleChanged)
+			) {
+				const service = await collections.services.findOne({
+					where: { id: data.service as string },
+				});
+				if (!service) throw new Error("Service not found");
+
+				const scheduledDate = new Date(data.scheduledAt as Date | string);
+				const requestedEnd = new Date(
+					scheduledDate.getTime() + service.duration * 60000,
+				);
+
+				const startOfDay = new Date(scheduledDate);
+				startOfDay.setHours(0, 0, 0, 0);
+				const endOfDay = new Date(scheduledDate);
+				endOfDay.setHours(23, 59, 59, 999);
+
+				const { docs } = await collections.appointments.find({
+					where: {
+						barber: data.barber as string,
+						scheduledAt: { gte: startOfDay, lte: endOfDay },
+					},
+				});
+
+				const others = docs.filter(
+					(apt) =>
+						apt.status !== "cancelled" &&
+						(operation === "create" || apt.id !== data.id),
+				);
+
+				const serviceIds = [
+					...new Set(others.map((apt) => apt.service as string)),
+				];
+				const durationMap = new Map<string, number>();
+				if (serviceIds.length > 0) {
+					const rel = await collections.services.find({
+						where: { id: { in: serviceIds } },
+					});
+					for (const s of rel.docs) durationMap.set(s.id, s.duration);
+				}
+
+				const hasConflict = others.some((apt) => {
+					const aStart = new Date(apt.scheduledAt);
+					const aDur =
+						durationMap.get(apt.service as string) ?? service.duration;
+					const aEnd = new Date(aStart.getTime() + aDur * 60000);
+					return scheduledDate < aEnd && requestedEnd > aStart;
+				});
+
+				if (hasConflict) {
+					throw new Error("This time slot is no longer available.");
+				}
 			}
 		},
 		afterChange: async ({ data, operation, original, queue }) => {
 			if (operation === "create") {
-				await queue.sendAppointmentConfirmation.publish({
+				await queue.sendAppointmentReceived.publish({
 					appointmentId: data.id,
 					customerId: data.customer,
 				});
+
+				// Same-day bookings fall outside the 02:00 cron's next-24h
+				// window (it already ran this morning). Fire the reminder
+				// immediately so late-in-the-day bookings still get one.
+				const scheduledAt = new Date(data.scheduledAt);
+				const hoursUntil =
+					(scheduledAt.getTime() - Date.now()) / (60 * 60 * 1000);
+				if (hoursUntil > 0 && hoursUntil < 24) {
+					await queue.sendAppointmentReminder.publish({
+						appointmentId: data.id,
+						customerId: data.customer,
+					});
+				}
 			} else if (operation === "update" && original) {
+				if (
+					data.status === "confirmed" &&
+					original.status === "pending"
+				) {
+					await queue.sendAppointmentConfirmation.publish({
+						appointmentId: data.id,
+						customerId: data.customer,
+					});
+				}
 				if (
 					data.status === "cancelled" &&
 					original.status !== "cancelled"
@@ -108,6 +213,51 @@ export const appointments = collection("appointments")
 						customerId: data.customer,
 					});
 				}
+
+				// Reschedule notice: fire when the time, barber, or service
+				// changes on an active (non-cancelled) booking. Skip if the
+				// change itself is a cancellation — the cancellation email
+				// already covers it.
+				const rescheduled =
+					data.status !== "cancelled" &&
+					(String(data.scheduledAt) !== String(original.scheduledAt) ||
+						data.barber !== original.barber ||
+						data.service !== original.service);
+				if (rescheduled) {
+					await queue.sendAppointmentRescheduled.publish({
+						appointmentId: data.id,
+						customerId: data.customer,
+						previousScheduledAt: original.scheduledAt
+							? new Date(original.scheduledAt).toISOString()
+							: undefined,
+					});
+				}
 			}
+		},
+		afterDelete: async ({ original, queue, collections }) => {
+			// The row is gone — the cancellation job can't look it up, so we
+			// pre-load barber/service/customer here and pass a full snapshot.
+			const [customer, barber, service] = await Promise.all([
+				collections.user.findOne({ where: { id: original.customer } }),
+				collections.barbers.findOne({ where: { id: original.barber } }),
+				collections.services.findOne({ where: { id: original.service } }),
+			]);
+
+			if (!customer?.email) return;
+
+			await queue.sendAppointmentCancellation.publish({
+				appointmentId: original.id,
+				customerId: original.customer,
+				snapshot: {
+					customerName: (customer.name as string) ?? "Customer",
+					customerEmail: customer.email as string,
+					barberName: barber?.name ?? "Your Barber",
+					serviceName: service?.name ?? "Your Service",
+					scheduledAt: original.scheduledAt
+						? new Date(original.scheduledAt).toLocaleString()
+						: "TBD",
+					cancellationReason: original.cancellationReason ?? undefined,
+				},
+			});
 		},
 	});

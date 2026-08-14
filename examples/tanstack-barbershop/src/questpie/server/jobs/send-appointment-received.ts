@@ -1,16 +1,18 @@
 /**
- * Send Appointment Reminder Job
+ * Send Appointment Received Job
  *
- * Sends a reminder email ahead of an upcoming appointment.
- * Uses context-first pattern — `collections` and `email` from AppContext.
+ * Sends a "booking received, awaiting confirmation" email right after a
+ * pending appointment is created. The follow-up confirmation email fires
+ * separately on the pending → confirmed transition.
  *
- * @see emails/appointment-reminder.ts — the email template
+ * @see collections/appointments.ts — dispatches this job on create
+ * @see emails/appointment-received.ts — the email template
  */
 import { job } from "questpie/services";
 import { z } from "zod";
 
 export default job({
-	name: "send-appointment-reminder",
+	name: "send-appointment-received",
 	schema: z.object({
 		appointmentId: z.string(),
 		customerId: z.string(),
@@ -25,13 +27,8 @@ export default job({
 			with: { service: true, barber: true },
 		});
 
-		// Re-check status: the appointment could have been cancelled between
-		// the cron/publish and this worker actually running. No email for a
-		// cancelled or deleted appointment.
-		if (!appointment || appointment.status === "cancelled") return;
-
 		await email.sendTemplate({
-			template: "appointmentReminder",
+			template: "appointmentReceived",
 			input: {
 				customerName: (customer?.name as string) ?? "Customer",
 				appointmentId: payload.appointmentId,

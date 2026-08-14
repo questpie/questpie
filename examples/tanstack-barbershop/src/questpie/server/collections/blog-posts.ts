@@ -83,7 +83,7 @@ export const blogPosts = collection("blog_posts")
 		 *
 		 * Context-first: `services.blog` is injected from services/blog.ts.
 		 */
-		beforeChange: async ({ data, operation, services }) => {
+		beforeChange: async ({ data, operation, services, collections }) => {
 			const { blog } = services;
 
 			// Auto-generate slug from title on create (if not set)
@@ -109,8 +109,22 @@ export const blogPosts = collection("blog_posts")
 				data.excerpt = blog.extractExcerpt(contentStr);
 			}
 
-			// Auto-set publishedAt when publishing and not already set
-			if (data.status === "published" && !data.publishedAt) {
+			// Auto-set publishedAt when transitioning into "published".
+			// Refreshes on re-publish (draft/archived → published) so the
+			// public feed reflects the actual publish date, not a stale one.
+			// `beforeChange` doesn't get `original`, so load prev status on update.
+			const prevStatus =
+				operation === "update" && data.id
+					? (
+							await collections.blog_posts.findOne({
+								where: { id: data.id as string },
+							})
+						)?.status
+					: null;
+			const justPublished =
+				data.status === "published" &&
+				(operation === "create" || prevStatus !== "published");
+			if (justPublished) {
 				data.publishedAt = new Date();
 			}
 		},

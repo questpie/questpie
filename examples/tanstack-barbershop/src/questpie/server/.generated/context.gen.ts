@@ -27,7 +27,9 @@ import { siteSettings as _glob_site_settings } from "../globals/site-settings";
 import _job_notifyBlogSubscribers from "../jobs/notify-blog-subscribers";
 import _job_sendAppointmentCancellation from "../jobs/send-appointment-cancellation";
 import _job_sendAppointmentConfirmation from "../jobs/send-appointment-confirmation";
+import _job_sendAppointmentReceived from "../jobs/send-appointment-received";
 import _job_sendAppointmentReminder from "../jobs/send-appointment-reminder";
+import _job_sendAppointmentRescheduled from "../jobs/send-appointment-rescheduled";
 import _job_scheduleAppointmentReminders from "../jobs/schedule-appointment-reminders";
 
 // ── Routes ─────────────────────────────────────────────────
@@ -42,7 +44,9 @@ import _svc_blog from "../services/blog";
 // ── Emails ─────────────────────────────────────────────────
 import _email_appointmentCancellation from "../emails/appointment-cancellation";
 import _email_appointmentConfirmation from "../emails/appointment-confirmation";
+import _email_appointmentReceived from "../emails/appointment-received";
 import _email_appointmentReminder from "../emails/appointment-reminder";
+import _email_appointmentRescheduled from "../emails/appointment-rescheduled";
 import _email_newBlogPost from "../emails/new-blog-post";
 
 // ── Migrations ─────────────────────────────────────────────
@@ -147,7 +151,9 @@ type _ExecutionContextJobs = {
 	notifyBlogSubscribers: _ExecutionContextJob<typeof _job_notifyBlogSubscribers>;
 	sendAppointmentCancellation: _ExecutionContextJob<typeof _job_sendAppointmentCancellation>;
 	sendAppointmentConfirmation: _ExecutionContextJob<typeof _job_sendAppointmentConfirmation>;
+	sendAppointmentReceived: _ExecutionContextJob<typeof _job_sendAppointmentReceived>;
 	sendAppointmentReminder: _ExecutionContextJob<typeof _job_sendAppointmentReminder>;
+	sendAppointmentRescheduled: _ExecutionContextJob<typeof _job_sendAppointmentRescheduled>;
 	scheduleAppointmentReminders: _ExecutionContextJob<typeof _job_scheduleAppointmentReminders>;
 };
 type _ExecutionContextServiceDefinitions = {

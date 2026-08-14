@@ -38,9 +38,10 @@ export const reviewsBlock = block("reviews")
 			.default("3"),
 	}))
 	.prefetch(async ({ values, ctx }) => {
-		const where: CollectionWhere<"reviews"> = {};
+		// Only approved reviews are ever public — moderation gate.
+		const where: CollectionWhere<"reviews"> = { isApproved: true };
 		if (values.filter === "featured") {
-			where.rating = { in: ["4", "5"] };
+			where.isFeatured = true;
 		}
 		const res = await ctx.collections.reviews.find({
 			limit: (values.limit as number) || 3,

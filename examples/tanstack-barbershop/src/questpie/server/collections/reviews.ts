@@ -83,4 +83,9 @@ export const reviews = collection("reviews")
 				},
 			],
 		}),
-	);
+	)
+	.hooks({
+		beforeChange: ({ data }) => {
+			if (!data.isApproved) data.isFeatured = false;
+		},
+	});

@@ -21,29 +21,38 @@ export default job({
 		slug: z.string(),
 	}),
 	handler: async ({ payload, email, collections }) => {
-		const result = await collections.user.find({
-			where: { banned: { ne: true } },
-			limit: 500,
-		});
-
-		const users = result.docs ?? [];
-		if (users.length === 0) return;
-
 		const postUrl = `${env.APP_URL}/blog/${payload.slug || payload.postId}`;
+		const pageSize = 200;
+		let offset = 0;
 
-		await Promise.allSettled(
-			users.map((user) =>
-				email.sendTemplate({
-					template: "newBlogPost",
-					input: {
-						recipientName: (user.name as string) ?? "there",
-						postTitle: payload.title,
-						postExcerpt: payload.excerpt,
-						postUrl,
-					},
-					to: user.email as string,
-				}),
-			),
-		);
+		// Paginate through all non-banned users. Previous version had a
+		// silent 500-user cap that dropped everyone past it with no signal.
+		while (true) {
+			const { docs } = await collections.user.find({
+				where: { banned: { ne: true } },
+				limit: pageSize,
+				offset,
+			});
+
+			if (docs.length === 0) break;
+
+			await Promise.allSettled(
+				docs.map((user) =>
+					email.sendTemplate({
+						template: "newBlogPost",
+						input: {
+							recipientName: (user.name as string) ?? "there",
+							postTitle: payload.title,
+							postExcerpt: payload.excerpt,
+							postUrl,
+						},
+						to: user.email as string,
+					}),
+				),
+			);
+
+			if (docs.length < pageSize) break;
+			offset += pageSize;
+		}
 	},
 });
