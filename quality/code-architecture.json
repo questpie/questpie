@@ -1,0 +1,11 @@
+{
+	"format": "questpie.code-architecture-ratchet",
+	"version": 1,
+	"warningLines": 500,
+	"maximumLines": 800,
+	"legacy": {
+		"packages/compiler/src/model.ts": 961,
+		"packages/compiler/src/schema-postgres.ts": 1570,
+		"packages/compiler/src/schema.ts": 1397
+	}
+}

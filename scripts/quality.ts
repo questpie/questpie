@@ -131,6 +131,7 @@ function changed(args: string[]): void {
 
 function full(): void {
 	compiler(["bun", "node_modules/typescript/bin/tsc", "--version"], "6.0.2");
+	run(["bun", "run", "architecture:check"]);
 	run(["bun", "run", "format:ratchet"]);
 	run(["bun", "run", "lint", "--deny-warnings"]);
 	run(["bun", "run", "check-types"]);

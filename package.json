@@ -8,6 +8,7 @@
 		"packages/*"
 	],
 	"scripts": {
+		"architecture:check": "bun run scripts/code-architecture.ts",
 		"bench:micro": "bun run scripts/quality.ts micro",
 		"build": "turbo run build",
 		"check:changed": "bun run scripts/quality.ts changed",

@@ -17,6 +17,8 @@
 
 3. Implement the smallest tracer bullet through the accepted public seam. Keep
    generated output compiler-owned and update goldens deliberately.
+   When module topology changes, read `codebase.md`, keep one domain seam, and
+   run `bun run architecture:check`.
 4. Run the issue's verification commands and affected hostile cases. Before
    review, run `bun run quality:full`; release-sensitive changes also run
    `bun run quality:release`. Always run `git diff --check`.
