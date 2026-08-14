@@ -52,6 +52,7 @@ yarn-error.log*
 
 **/*.tsbuildinfo
 tmp/
+.questpie/
 
 # Private strategy / agent state
 .private/

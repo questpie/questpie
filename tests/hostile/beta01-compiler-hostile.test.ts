@@ -34,6 +34,18 @@ async function expectDiagnostic(
 	throw new Error(`expected ${code}`);
 }
 
+async function acceptCurrentPackageInventory(root: string): Promise<void> {
+	const diagnostic = await expectDiagnostic(
+		() => compileApplication({ applicationRoot: root }),
+		"QP-COMPOSE-008",
+	);
+	const configPath = join(root, "questpie.json");
+	const config = JSON.parse(await readFile(configPath, "utf8"));
+	config.packages["@questpie/collaboration-audit"].inventoryDigest =
+		diagnostic.details.actual;
+	await writeFile(configPath, JSON.stringify(config, null, 2));
+}
+
 afterAll(async () => {
 	await Promise.all(
 		temporaryRoots.map((root) => rm(root, { force: true, recursive: true })),
@@ -131,69 +143,152 @@ export const duplicate = defineCollection({
 		);
 	});
 
-	test("keeps the generated Package contract blind to host Resources", async () => {
+	test("specializes the generated Package contract without leaking host Resources", async () => {
 		const root = await fixtureCopy("package-host-leak");
-		const result = await compileApplication({ applicationRoot: root });
-		const probeRoot = await mkdtemp(
-			join(tmpdir(), "questpie-beta01-package-probe-"),
-		);
-		temporaryRoots.push(probeRoot);
-		const packageContract = join(probeRoot, "package.ts");
+		const packageSource = join(root, "packages/audit/src/questpie.ts");
+		const source = await readFile(packageSource, "utf8");
 		await writeFile(
-			packageContract,
-			result.generatedFiles[
-				"internal/package-contracts/collaboration-audit.ts"
-			] ?? "",
-		);
-		await writeFile(
-			join(probeRoot, "probe.ts"),
-			`import { defineQuery } from "./package.ts";
-import { codec } from "questpie";
-export const leak = defineQuery({
-  name: "audit.leak",
-  input: codec.object({ id: codec.uuid() }),
-  handler: ({ ctx }) => ctx.data.messages,
+			packageSource,
+			source.replace(
+				"defineCollectionAugmentation, field, index",
+				"codec, constraint, defineCollection, defineCollectionAugmentation, field, index",
+			).concat(`
+
+import { defineQuery } from "#questpie/package";
+
+export const auditEntries = defineCollection({
+  name: "auditEntries",
+  fields: { id: field.uuid() },
+  constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
 });
-`,
+
+export const auditById = defineQuery({
+  name: "audit.byId",
+  input: codec.object({ id: codec.uuid() }),
+  output: codec.object({ id: codec.uuid() }),
+  handler: async ({ input, ctx }) => {
+    const row = await ctx.data.auditEntries.get({ key: { id: input.id } });
+    return { id: row?.id ?? input.id };
+  },
+});
+`),
+		);
+		await acceptCurrentPackageInventory(root);
+		const result = await compileApplication({ applicationRoot: root });
+		const packageContract =
+			result.generatedFiles[
+				"internal/package-contracts/questpie-collaboration-audit-846963f083917e90c9a1fa4c25d7ac12de3ef0dc1fb82b1c2badd14616c61c0c.ts"
+			] ?? "";
+		expect(packageContract).toContain('readonly "auditEntries"');
+		expect(packageContract).toContain('"audit.byId"');
+		expect(packageContract).not.toContain('readonly "messages"');
+
+		await writeFile(
+			packageSource,
+			(await readFile(packageSource, "utf8")).replace(
+				"ctx.data.auditEntries.get",
+				"ctx.data.messages.get",
+			),
+		);
+		await expectDiagnostic(
+			() => compileApplication({ applicationRoot: root }),
+			"QP-COMPOSE-013",
+		);
+	});
+
+	test("uses declaration Origins through barrels and ignores traversal order", async () => {
+		const root = await fixtureCopy("barrel-origin");
+		await writeFile(
+			join(root, "src/messages-barrel.ts"),
+			'export { messages } from "./messages";\n',
+		);
+		const result = await compileApplication({ applicationRoot: root });
+		const origins = JSON.parse(
+			result.generatedFiles["origin-map.json"] ?? "null",
+		);
+		expect(
+			origins.resources.find(
+				(resource: { identity: string }) =>
+					resource.identity === "collection:messages",
+			).establishedAt.path,
+		).toBe("src/messages.ts");
+	});
+
+	test("validates the transitive Package graph and rejects impure structure", async () => {
+		const transitiveRoot = await fixtureCopy("transitive-package");
+		const packageSource = join(
+			transitiveRoot,
+			"packages/audit/src/questpie.ts",
 		);
 		await writeFile(
-			join(probeRoot, "tsconfig.json"),
+			packageSource,
+			`${await readFile(packageSource, "utf8")}\nexport * from "./nested";\n`,
+		);
+		await writeFile(
+			join(transitiveRoot, "packages/audit/src/nested.ts"),
+			'import { createApp } from "#questpie/app";\nexport const invalid = createApp;\n',
+		);
+		await expectDiagnostic(
+			() => compileApplication({ applicationRoot: transitiveRoot }),
+			"QP-COMPOSE-012",
+		);
+
+		const impureRoot = await fixtureCopy("impure-structure");
+		await writeFile(
+			join(impureRoot, "src/impure.ts"),
+			"export const machineDependent = process.env.QUESTPIE_TEST;\n",
+		);
+		await expectDiagnostic(
+			() => compileApplication({ applicationRoot: impureRoot }),
+			"QP-COMPOSE-010",
+		);
+	});
+
+	test("hashes inherited TypeScript configuration", async () => {
+		const root = await fixtureCopy("tsconfig-graph");
+		const configPath = join(root, "tsconfig.json");
+		const config = JSON.parse(await readFile(configPath, "utf8"));
+		config.extends = "./tsconfig.shared.json";
+		await writeFile(configPath, JSON.stringify(config, null, 2));
+		const sharedPath = join(root, "tsconfig.shared.json");
+		await writeFile(
+			sharedPath,
+			JSON.stringify({ compilerOptions: {} }, null, 2),
+		);
+		const first = await compileApplication({ applicationRoot: root });
+		await writeFile(
+			sharedPath,
 			JSON.stringify(
-				{
-					compilerOptions: {
-						allowImportingTsExtensions: true,
-						module: "ESNext",
-						moduleResolution: "Bundler",
-						noEmit: true,
-						paths: {
-							questpie: [
-								resolve(repositoryRoot, "packages/questpie/src/index.ts"),
-							],
-						},
-						skipLibCheck: true,
-						strict: true,
-						target: "ES2024",
-					},
-					files: [packageContract, join(probeRoot, "probe.ts")],
-				},
+				{ compilerOptions: { exactOptionalPropertyTypes: true } },
 				null,
 				2,
 			),
 		);
-		const typecheck = Bun.spawnSync(
-			[
-				"bun",
-				resolve(repositoryRoot, "node_modules/typescript/bin/tsc"),
-				"-p",
-				join(probeRoot, "tsconfig.json"),
-				"--pretty",
-				"false",
-			],
-			{ stdout: "pipe", stderr: "pipe" },
+		const second = await compileApplication({ applicationRoot: root });
+		const firstInput = JSON.parse(
+			first.generatedFiles["build-input.json"] ?? "null",
 		);
-		expect(typecheck.exitCode).not.toBe(0);
-		expect(
-			`${typecheck.stdout.toString()}${typecheck.stderr.toString()}`,
-		).toContain("not assignable to parameter of type 'never'");
+		const secondInput = JSON.parse(
+			second.generatedFiles["build-input.json"] ?? "null",
+		);
+		expect(firstInput.inputs.typescriptConfigGraphDigest).not.toBe(
+			secondInput.inputs.typescriptConfigGraphDigest,
+		);
+	});
+
+	test("rejects broad structural references outside exact local Fields", async () => {
+		const root = await fixtureCopy("invalid-field-reference");
+		const sourcePath = join(root, "src/companies.ts");
+		await writeFile(
+			sourcePath,
+			(await readFile(sourcePath, "utf8")).replace(
+				'constraint.primaryKey({ fields: ["id"] })',
+				'constraint.primaryKey({ fields: ["missing"] })',
+			),
+		);
+		await expectDiagnostic(
+			() => compileApplication({ applicationRoot: root }),
+			"QP-COMPOSE-013",
+		);
 	});
 });

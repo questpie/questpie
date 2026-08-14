@@ -7,6 +7,7 @@ import type {
 	PackageInventory,
 	PackageInventoryEntry,
 	PackageResolution,
+	SourceSpan,
 } from "./types";
 
 type RecordValue = Readonly<Record<string, unknown>>;
@@ -144,6 +145,8 @@ function packageContract(value: RecordValue): RecordValue {
 	if (valueBrand.category === "augmentation")
 		return augmentationContract(value);
 	if (valueBrand.resourceKind === "query") return queryContract(value);
+	if (valueBrand.resourceKind === "collection")
+		return ownerCollectionContract(value, []);
 	throw new CompilerDiagnosticError(
 		"QP-COMPOSE-006",
 		"invalidPackageManifest",
@@ -252,6 +255,8 @@ export function normalizeResources(
 			packageId: string;
 			logicalPath: string;
 			exportName: string;
+			definedSpan: SourceSpan | null;
+			memberSpans: Readonly<Record<string, SourceSpan>>;
 		}>
 	>();
 	for (const inventory of inventories)
@@ -265,6 +270,14 @@ export function normalizeResources(
 						.replaceAll("\\", "/")
 						.normalize("NFC"),
 					exportName: entry.exportName,
+					definedSpan:
+						exports.find(
+							(candidate) => candidate.exportName === entry.exportName,
+						)?.span ?? null,
+					memberSpans:
+						exports.find(
+							(candidate) => candidate.exportName === entry.exportName,
+						)?.memberSpans ?? {},
 				});
 
 	const resources: NormalizedResource[] = [];
@@ -281,10 +294,14 @@ export function normalizeResources(
 				packageId: string;
 				logicalPath: string;
 				exportName: string;
+				definedSpan: SourceSpan | null;
+				acceptedSpan: SourceSpan | null;
+				memberSpans: Readonly<Record<string, SourceSpan>>;
 			}> = [];
 			const seen = new Set<string>();
-			for (const rawAugmentation of (item.value.augmentations ??
-				[]) as readonly unknown[]) {
+			for (const [augmentationIndex, rawAugmentation] of (
+				(item.value.augmentations ?? []) as readonly unknown[]
+			).entries()) {
 				const augmentation = record(rawAugmentation, "augmentation");
 				const augmentationName = string(augmentation.name, "augmentation.name");
 				const inventoryKey = `collection-augmentation:${augmentationName}`;
@@ -320,6 +337,9 @@ export function normalizeResources(
 					packageId: accepted.packageId,
 					logicalPath: accepted.logicalPath,
 					exportName: accepted.exportName,
+					definedSpan: accepted.definedSpan,
+					acceptedSpan: item.acceptanceSpans[augmentationIndex] ?? null,
+					memberSpans: accepted.memberSpans,
 				});
 			}
 			contributions.sort((left, right) =>
@@ -337,7 +357,9 @@ export function normalizeResources(
 				origin: {
 					logicalPath: item.logicalPath,
 					exportName: item.exportName,
-					packageId: null,
+					packageId: item.packageId,
+					span: item.span,
+					memberSpans: item.memberSpans,
 				},
 				value: item.value,
 			});
@@ -351,7 +373,9 @@ export function normalizeResources(
 				origin: {
 					logicalPath: item.logicalPath,
 					exportName: item.exportName,
-					packageId: null,
+					packageId: item.packageId,
+					span: item.span,
+					memberSpans: item.memberSpans,
 				},
 				value: item.value,
 			});

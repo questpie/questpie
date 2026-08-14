@@ -12,13 +12,13 @@
 		"processor": "AMD Ryzen 5 5600G with Radeon Graphics"
 	},
 	"observed": {
-		"compileMs": 598.23,
-		"typecheckMs": 559.16,
-		"generatedBytes": 31749,
-		"publicDeclarationBytes": 3447,
-		"typescriptTypes": 1264,
-		"typescriptInstantiations": 1786,
-		"typescriptMemoryKiB": 25591
+		"compileMs": 1075.09,
+		"typecheckMs": 896.08,
+		"generatedBytes": 34600,
+		"publicDeclarationBytes": 4103,
+		"typescriptTypes": 1824,
+		"typescriptInstantiations": 3684,
+		"typescriptMemoryKiB": 106206
 	},
 	"budgets": {
 		"compileMs": 5000,

@@ -112,52 +112,66 @@ export const codec = Object.freeze({
 	> => Object.freeze({ kind: "object", properties }),
 });
 
-export interface ConstraintDefinition {
+export interface ConstraintDefinition<
+	Fields extends readonly string[] = readonly never[],
+> {
 	readonly kind: "primaryKey" | "unique";
-	readonly fields: readonly string[];
+	readonly fields: Fields;
 	readonly postgresName: string | null;
 }
 
+function frozenTuple<const Values extends readonly string[]>(
+	values: Values,
+): Values {
+	return Object.freeze([...values]) as unknown as Values;
+}
+
 export const constraint = Object.freeze({
-	primaryKey: (
-		input: Readonly<{ fields: readonly string[]; postgres?: { name: string } }>,
-	): ConstraintDefinition =>
+	primaryKey: <const Fields extends readonly string[]>(
+		input: Readonly<{ fields: Fields; postgres?: { name: string } }>,
+	): ConstraintDefinition<Fields> =>
 		Object.freeze({
 			kind: "primaryKey",
-			fields: Object.freeze([...input.fields]),
+			fields: frozenTuple(input.fields),
 			postgresName: input.postgres?.name ?? null,
 		}),
-	unique: (
-		input: Readonly<{ fields: readonly string[]; postgres?: { name: string } }>,
-	): ConstraintDefinition =>
+	unique: <const Fields extends readonly string[]>(
+		input: Readonly<{ fields: Fields; postgres?: { name: string } }>,
+	): ConstraintDefinition<Fields> =>
 		Object.freeze({
 			kind: "unique",
-			fields: Object.freeze([...input.fields]),
+			fields: frozenTuple(input.fields),
 			postgresName: input.postgres?.name ?? null,
 		}),
 });
 
-export interface IndexDefinition {
+export interface IndexDefinition<
+	Fields extends readonly string[] = readonly never[],
+> {
 	readonly kind: "btree";
-	readonly fields: readonly string[];
+	readonly fields: Fields;
 	readonly postgresName: string | null;
 }
 
-export function index(
-	input: Readonly<{ fields: readonly string[]; postgres?: { name: string } }>,
-): IndexDefinition {
+export function index<const Fields extends readonly string[]>(
+	input: Readonly<{ fields: Fields; postgres?: { name: string } }>,
+): IndexDefinition<Fields> {
 	return Object.freeze({
 		kind: "btree",
-		fields: Object.freeze([...input.fields]),
+		fields: frozenTuple(input.fields),
 		postgresName: input.postgres?.name ?? null,
 	});
 }
 
-export interface RelationDefinition {
+export interface RelationDefinition<
+	Target extends `collection:${string}` = `collection:${string}`,
+	Fields extends readonly string[] = readonly never[],
+	References extends readonly string[] = readonly never[],
+> {
 	readonly kind: "toOne";
-	readonly target: `collection:${string}`;
-	readonly fields: readonly string[];
-	readonly references: readonly string[];
+	readonly target: Target;
+	readonly fields: Fields;
+	readonly references: References;
 	readonly onDelete: "restrict" | "cascade" | "setNull" | "noAction";
 	readonly onUpdate: "restrict" | "cascade" | "setNull" | "noAction";
 	readonly postgresName: string | null;
@@ -170,21 +184,25 @@ export function relationRef<const Name extends string>(
 }
 
 export const relation = Object.freeze({
-	toOne: (
+	toOne: <
+		const Target extends `collection:${string}`,
+		const Fields extends readonly string[],
+		const References extends readonly string[],
+	>(
 		input: Readonly<{
-			target: `collection:${string}`;
-			fields: readonly string[];
-			references: readonly string[];
+			target: Target;
+			fields: Fields;
+			references: References;
 			onDelete?: RelationDefinition["onDelete"];
 			onUpdate?: RelationDefinition["onUpdate"];
 			postgres?: { name: string };
 		}>,
-	): RelationDefinition =>
+	): RelationDefinition<Target, Fields, References> =>
 		Object.freeze({
 			kind: "toOne",
 			target: input.target,
-			fields: Object.freeze([...input.fields]),
-			references: Object.freeze([...input.references]),
+			fields: frozenTuple(input.fields),
+			references: frozenTuple(input.references),
 			onDelete: input.onDelete ?? "restrict",
 			onUpdate: input.onUpdate ?? "restrict",
 			postgresName: input.postgres?.name ?? null,
@@ -204,43 +222,78 @@ interface AugmentationBrand {
 export interface CollectionAugmentation<
 	Name extends string = string,
 	Fields extends Readonly<Record<string, FieldDefinition>> = Readonly<
-		Record<string, FieldDefinition>
+		Record<never, never>
 	>,
+	Constraints extends Readonly<
+		Record<string, { readonly fields: readonly string[] }>
+	> = Readonly<Record<never, never>>,
+	Indexes extends Readonly<
+		Record<string, { readonly fields: readonly string[] }>
+	> = Readonly<Record<never, never>>,
 > {
 	readonly __questpie: AugmentationBrand;
 	readonly name: Name;
 	readonly fields: Fields;
-	readonly constraints: Readonly<Record<string, ConstraintDefinition>>;
-	readonly indexes: Readonly<Record<string, IndexDefinition>>;
+	readonly constraints: Constraints;
+	readonly indexes: Indexes;
 }
 
 export interface CollectionDefinition<
 	Name extends string = string,
 	Fields extends Readonly<Record<string, FieldDefinition>> = Readonly<
-		Record<string, FieldDefinition>
+		Record<never, never>
 	>,
+	Constraints extends Readonly<
+		Record<string, { readonly fields: readonly string[] }>
+	> = Readonly<Record<never, never>>,
+	Indexes extends Readonly<
+		Record<string, { readonly fields: readonly string[] }>
+	> = Readonly<Record<never, never>>,
+	Relations extends Readonly<
+		Record<string, { readonly fields: readonly string[] }>
+	> = Readonly<Record<never, never>>,
 > {
 	readonly __questpie: DefinitionBrand;
 	readonly name: Name;
 	readonly fields: Fields;
-	readonly constraints: Readonly<Record<string, ConstraintDefinition>>;
-	readonly indexes: Readonly<Record<string, IndexDefinition>>;
-	readonly relations: Readonly<Record<string, RelationDefinition>>;
+	readonly constraints: Constraints;
+	readonly indexes: Indexes;
+	readonly relations: Relations;
 	readonly augmentations: readonly CollectionAugmentation[];
 	readonly postgresName: string | null;
 }
 
+type ValidateFieldReferences<
+	Fields extends Readonly<Record<string, FieldDefinition>>,
+	Members extends Readonly<
+		Record<string, { readonly fields: readonly string[] }>
+	>,
+> = {
+	readonly [Key in keyof Members]: Exclude<
+		Members[Key]["fields"][number],
+		Extract<keyof Fields, string>
+	> extends never
+		? Members[Key]
+		: never;
+};
+
 export function defineCollectionAugmentation<
 	const Name extends string,
 	const Fields extends Readonly<Record<string, FieldDefinition>>,
+	const Constraints extends Readonly<
+		Record<string, { readonly fields: readonly string[] }>
+	>,
+	const Indexes extends Readonly<
+		Record<string, { readonly fields: readonly string[] }>
+	>,
 >(
 	input: Readonly<{
 		name: Name;
 		fields?: Fields;
-		constraints?: Readonly<Record<string, ConstraintDefinition>>;
-		indexes?: Readonly<Record<string, IndexDefinition>>;
+		constraints?: Constraints & ValidateFieldReferences<Fields, Constraints>;
+		indexes?: Indexes & ValidateFieldReferences<Fields, Indexes>;
 	}>,
-): CollectionAugmentation<Name, Fields> {
+): CollectionAugmentation<Name, Fields, Constraints, Indexes> {
 	return Object.freeze({
 		__questpie: Object.freeze({
 			category: "augmentation",
@@ -248,25 +301,34 @@ export function defineCollectionAugmentation<
 		}),
 		name: input.name,
 		fields: input.fields ?? ({} as Fields),
-		constraints: input.constraints ?? {},
-		indexes: input.indexes ?? {},
+		constraints: input.constraints ?? ({} as Constraints),
+		indexes: input.indexes ?? ({} as Indexes),
 	});
 }
 
 export function defineCollection<
 	const Name extends string,
 	const Fields extends Readonly<Record<string, FieldDefinition>>,
+	const Constraints extends Readonly<
+		Record<string, { readonly fields: readonly string[] }>
+	>,
+	const Indexes extends Readonly<
+		Record<string, { readonly fields: readonly string[] }>
+	>,
+	const Relations extends Readonly<
+		Record<string, { readonly fields: readonly string[] }>
+	>,
 >(
 	input: Readonly<{
 		name: Name;
 		fields: Fields;
-		constraints: Readonly<Record<string, ConstraintDefinition>>;
-		indexes?: Readonly<Record<string, IndexDefinition>>;
-		relations?: Readonly<Record<string, RelationDefinition>>;
+		constraints: Constraints & ValidateFieldReferences<Fields, Constraints>;
+		indexes?: Indexes & ValidateFieldReferences<Fields, Indexes>;
+		relations?: Relations & ValidateFieldReferences<Fields, Relations>;
 		augmentations?: readonly CollectionAugmentation[];
 		postgres?: Readonly<{ name: string }>;
 	}>,
-): CollectionDefinition<Name, Fields> {
+): CollectionDefinition<Name, Fields, Constraints, Indexes, Relations> {
 	return Object.freeze({
 		__questpie: Object.freeze({
 			category: "definition",
@@ -275,8 +337,8 @@ export function defineCollection<
 		name: input.name,
 		fields: input.fields,
 		constraints: input.constraints,
-		indexes: input.indexes ?? {},
-		relations: input.relations ?? {},
+		indexes: input.indexes ?? ({} as Indexes),
+		relations: input.relations ?? ({} as Relations),
 		augmentations: input.augmentations ?? [],
 		postgresName: input.postgres?.name ?? null,
 	});

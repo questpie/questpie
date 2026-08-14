@@ -12,6 +12,8 @@ const goldenPath = resolve(
 	repositoryRoot,
 	"tests/goldens/beta01/generated-digests.json",
 );
+const collaborationAuditContractPath =
+	"internal/package-contracts/questpie-collaboration-audit-846963f083917e90c9a1fa4c25d7ac12de3ef0dc1fb82b1c2badd14616c61c0c.ts";
 const temporaryRoots: string[] = [];
 
 async function temporaryRoot(label: string): Promise<string> {
@@ -76,7 +78,7 @@ describe("BETA-01 generated contract", () => {
 			"build-input.json",
 			"client.ts",
 			"internal/checksums.json",
-			"internal/package-contracts/collaboration-audit.ts",
+			collaborationAuditContractPath,
 			"internal/package-inventories.json",
 			"manifest.json",
 			"origin-map.json",
@@ -116,7 +118,10 @@ describe("BETA-01 generated contract", () => {
 			declaredAt: {
 				packageId: originMap.packages[0].id,
 				path: "src/questpie.ts",
-				span: null,
+				span: {
+					start: { line: 6, column: 3 },
+					end: { line: 6, column: 42 },
+				},
 			},
 		});
 		expect(messageOrigin.members).toContainEqual({
@@ -125,7 +130,10 @@ describe("BETA-01 generated contract", () => {
 			declaredAt: {
 				packageId: null,
 				path: "src/messages.ts",
-				span: null,
+				span: {
+					start: { line: 24, column: 3 },
+					end: { line: 28, column: 5 },
+				},
 			},
 		});
 		expect(packageInventories).toMatchObject({
@@ -153,14 +161,14 @@ describe("BETA-01 generated contract", () => {
 		]);
 		expect(manifest.composition.resources[3].contributions).toHaveLength(1);
 		expect(first.generatedFiles["app.ts"]).toContain("defineQuery");
-		expect(
-			first.generatedFiles["internal/package-contracts/collaboration-audit.ts"],
-		).not.toContain("messages:");
+		expect(first.generatedFiles[collaborationAuditContractPath]).not.toContain(
+			"messages:",
+		);
 		expect(first.generatedFiles["client.ts"]).not.toContain("defineQuery");
 		expect(first.generatedFiles["app.ts"]).not.toContain("Name extends string");
-		expect(
-			first.generatedFiles["internal/package-contracts/collaboration-audit.ts"],
-		).not.toContain("Name extends string");
+		expect(first.generatedFiles[collaborationAuditContractPath]).not.toContain(
+			"Name extends string",
+		);
 		expect(JSON.stringify(first.generatedFiles)).not.toMatch(
 			/Drizzle|Kysely|drizzle-orm|\bany\b/,
 		);

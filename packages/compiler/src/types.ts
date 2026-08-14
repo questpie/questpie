@@ -32,6 +32,15 @@ export interface EvaluatedExport {
 	readonly logicalPath: string;
 	readonly exportName: string;
 	readonly value: Readonly<Record<string, unknown>>;
+	readonly span: SourceSpan | null;
+	readonly memberSpans: Readonly<Record<string, SourceSpan>>;
+	readonly acceptanceSpans: readonly (SourceSpan | null)[];
+	readonly packageId: string | null;
+}
+
+export interface SourceSpan {
+	readonly start: Readonly<{ line: number; column: number }>;
+	readonly end: Readonly<{ line: number; column: number }>;
 }
 
 export interface PackageInventoryEntry {
@@ -59,11 +68,16 @@ export interface NormalizedResource {
 		packageId: string;
 		logicalPath: string;
 		exportName: string;
+		definedSpan: SourceSpan | null;
+		acceptedSpan: SourceSpan | null;
+		memberSpans: Readonly<Record<string, SourceSpan>>;
 	}>[];
 	readonly origin: Readonly<{
 		logicalPath: string;
 		exportName: string;
 		packageId: string | null;
+		span: SourceSpan | null;
+		memberSpans: Readonly<Record<string, SourceSpan>>;
 	}>;
 	readonly value: Readonly<Record<string, unknown>>;
 }

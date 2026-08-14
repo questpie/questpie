@@ -82,7 +82,7 @@ function renderData(resources: readonly NormalizedResource[]): string {
 					return `readonly ${JSON.stringify(key)}: ${field ? fieldType(field) : "never"};`;
 				})
 				.join(" ");
-			return `${JSON.stringify(resource.name)}: ReadCollection<Readonly<{ ${row} }>, Readonly<{ ${keys} }>>;`;
+			return `readonly ${JSON.stringify(resource.name)}: ReadCollection<Readonly<{ ${row} }>, Readonly<{ ${keys} }>>;`;
 		})
 		.join("\n\t\t");
 }
@@ -119,7 +119,7 @@ export interface ReadCollection<Row, Key> {
 }
 
 export interface GeneratedData {
-	readonly ${renderData(resources)}
+	${renderData(resources)}
 }
 
 export interface GeneratedQueries {
@@ -184,7 +184,9 @@ export declare function createClient(input: Readonly<{
 `;
 }
 
-export function renderPackageContract(): string {
+export function renderPackageContract(
+	resources: readonly NormalizedResource[],
+): string {
 	const factories = [
 		"defineQuery",
 		"defineMutation",
@@ -194,12 +196,38 @@ export function renderPackageContract(): string {
 		"defineJob",
 		"defineWorkflow",
 	]
+		.filter((name) => name !== "defineQuery")
 		.map((name) => `export declare const ${name}: EmptyDefinitionFactory;`)
 		.join("\n");
-	return `export interface PackageData extends Readonly<Record<never, never>> {}
+	return `import type { Codec } from "questpie";
+
+export interface ReadCollection<Row, Key> {
+	get(input: Readonly<{ key: Key }>): Promise<Row | null>;
+}
+
+export interface PackageData {
+	${renderData(resources)}
+}
+
+export interface PackageQueries {
+	${renderQueries(resources)}
+}
+
+export type PackageQueryFactory = <const Name extends keyof PackageQueries>(
+	definition: Readonly<{
+		name: Name;
+		input: Codec<PackageQueries[Name]["input"]>;
+		output: Codec<PackageQueries[Name]["output"]>;
+		handler(input: Readonly<{
+			input: PackageQueries[Name]["input"];
+			ctx: Readonly<{ data: PackageData; signal: AbortSignal }>;
+		}>): PackageQueries[Name]["output"] | Promise<PackageQueries[Name]["output"]>;
+	}>,
+) => Readonly<{ kind: "query"; name: Name }>;
 
 type EmptyDefinitionFactory = (definition: never) => never;
 
+export declare const defineQuery: PackageQueryFactory;
 ${factories}
 `;
 }

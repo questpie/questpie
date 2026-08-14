@@ -1,7 +1,9 @@
 import { readdir, readFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 
-import { createArtifacts } from "./artifacts";
+import ts from "typescript";
+
+import { createArtifacts, packageContractPath } from "./artifacts";
 import {
 	canonicalBytes,
 	compareAscii,
@@ -12,6 +14,7 @@ import { CompilerDiagnosticError } from "./diagnostic";
 import {
 	discoverSourceFiles,
 	evaluateModules,
+	collectReachableSourceFiles,
 	packageSourceFiles,
 	resolveWorkspacePackages,
 	validateStructuralSources,
@@ -64,6 +67,70 @@ async function packageFiles(root: string): Promise<string[]> {
 	}
 	await visit(root);
 	return files.sort();
+}
+
+async function typescriptConfigurationGraph(
+	applicationRoot: string,
+	rootPath: string,
+): Promise<Array<{ path: string; text: string }>> {
+	const pending = [rootPath];
+	const visited = new Set<string>();
+	const graph: Array<{ path: string; text: string }> = [];
+	while (pending.length > 0) {
+		const path = resolve(pending.pop()!);
+		if (visited.has(path)) continue;
+		visited.add(path);
+		const text = await readFile(path, "utf8");
+		const parsed = ts.parseConfigFileTextToJson(path, text);
+		if (parsed.error)
+			throw new CompilerDiagnosticError(
+				"QP-COMPOSE-013",
+				"structuralTypeError",
+				ts.flattenDiagnosticMessageText(parsed.error.messageText, "\n"),
+			);
+		const raw = parsed.config as Readonly<{
+			extends?: string | readonly string[];
+			references?: readonly Readonly<{ path?: string }>[];
+		}>;
+		const resolveConfig = (specifier: string): string => {
+			if (specifier.startsWith(".")) {
+				const candidate = resolve(dirname(path), specifier);
+				return candidate.endsWith(".json") ? candidate : `${candidate}.json`;
+			}
+			try {
+				return Bun.resolveSync(specifier, dirname(path));
+			} catch {
+				throw new CompilerDiagnosticError(
+					"QP-COMPOSE-013",
+					"structuralTypeError",
+					`cannot resolve TypeScript configuration ${specifier}`,
+				);
+			}
+		};
+		const extended = Array.isArray(raw.extends)
+			? raw.extends
+			: raw.extends
+				? [raw.extends]
+				: [];
+		for (const specifier of extended) pending.push(resolveConfig(specifier));
+		for (const reference of raw.references ?? [])
+			if (reference.path) {
+				const candidate = resolve(dirname(path), reference.path);
+				pending.push(
+					candidate.endsWith(".json")
+						? candidate
+						: join(candidate, "tsconfig.json"),
+				);
+			}
+		graph.push({
+			path: relative(applicationRoot, path)
+				.split(sep)
+				.join("/")
+				.normalize("NFC"),
+			text,
+		});
+	}
+	return graph.sort((left, right) => compareAscii(left.path, right.path));
 }
 
 async function resolvePackages(
@@ -253,9 +320,10 @@ export async function compileApplication(
 		join(applicationRoot, "package.json"),
 		"utf8",
 	);
-	const typescriptConfigText = await readFile(
-		join(applicationRoot, "tsconfig.json"),
-		"utf8",
+	const applicationTsconfig = join(applicationRoot, "tsconfig.json");
+	const typescriptConfigFiles = await typescriptConfigurationGraph(
+		applicationRoot,
+		applicationTsconfig,
 	);
 	const lockfileText = await readFile(
 		join(applicationRoot, "bun.lock"),
@@ -269,23 +337,55 @@ export async function compileApplication(
 		applicationRoot,
 		applicationConfiguration,
 	);
-	await validateStructuralSources(
+	const applicationGraph = await collectReachableSourceFiles(
 		sourceFiles,
+		packages,
+	);
+	await validateStructuralSources(
+		applicationGraph,
 		"application",
 		new Set(packages.keys()),
 	);
 
 	const inventories: PackageInventory[] = [];
+	const packageCompilations: Array<{
+		name: string;
+		files: readonly string[];
+		resources: ReturnType<typeof normalizeResources>;
+		reversedResources: ReturnType<typeof normalizeResources>;
+	}> = [];
+	const packageExports: Awaited<ReturnType<typeof evaluateModules>> = [];
 	for (const packageResolution of packages.values()) {
 		const files = await packageSourceFiles(packageResolution.entry);
 		await validateStructuralSources(files, "package", new Set(packages.keys()));
 		const evaluated = await evaluateModules({
 			applicationRoot: packageResolution.root,
-			files,
+			files: [packageResolution.entry],
+			metadataFiles: files,
 			frameworkEntry,
 			packages,
+			packageId: packageResolution.id,
+		});
+		const reversed = await evaluateModules({
+			applicationRoot: packageResolution.root,
+			files: [packageResolution.entry],
+			metadataFiles: files,
+			frameworkEntry,
+			packages,
+			packageId: packageResolution.id,
+			reverse: true,
 		});
 		const inventory = createPackageInventory(packageResolution, evaluated);
+		const reversedInventory = createPackageInventory(
+			packageResolution,
+			reversed,
+		);
+		if (canonicalBytes(inventory) !== canonicalBytes(reversedInventory))
+			throw new CompilerDiagnosticError(
+				"QP-COMPOSE-011",
+				"nondeterministicEvaluation",
+				`${packageResolution.name} Package Inventory changed under reversed evaluation`,
+			);
 		const accepted =
 			applicationConfiguration.packages[packageResolution.name]
 				?.inventoryDigest;
@@ -297,6 +397,21 @@ export async function compileApplication(
 				{ accepted, actual: inventory.digest },
 			);
 		inventories.push(inventory);
+		const resources = normalizeResources(evaluated, [inventory]);
+		const reversedResources = normalizeResources(reversed, [reversedInventory]);
+		if (semanticDraft(resources) !== semanticDraft(reversedResources))
+			throw new CompilerDiagnosticError(
+				"QP-COMPOSE-011",
+				"nondeterministicEvaluation",
+				`${packageResolution.name} normalized Package draft changed under reversed evaluation`,
+			);
+		packageCompilations.push({
+			name: packageResolution.name,
+			files,
+			resources,
+			reversedResources,
+		});
+		packageExports.push(...evaluated);
 	}
 
 	const firstExports = await evaluateModules({
@@ -312,8 +427,14 @@ export async function compileApplication(
 		packages,
 		reverse: true,
 	});
-	const firstResources = normalizeResources(firstExports, inventories);
-	const secondResources = normalizeResources(secondExports, inventories);
+	const firstResources = normalizeResources(
+		[...firstExports, ...packageExports],
+		inventories,
+	);
+	const secondResources = normalizeResources(
+		[...secondExports, ...packageExports],
+		inventories,
+	);
 	if (semanticDraft(firstResources) !== semanticDraft(secondResources))
 		throw new CompilerDiagnosticError(
 			"QP-COMPOSE-011",
@@ -324,20 +445,54 @@ export async function compileApplication(
 		applicationRoot,
 		configuration: applicationConfiguration,
 		packageManifestText,
-		typescriptConfigText,
+		typescriptConfigFiles,
 		lockfileText,
-		sourceFiles,
+		sourceFiles: applicationGraph,
 		frameworkRoot: resolve(repositoryRoot, "packages/questpie"),
-		frameworkFiles: [frameworkEntry],
+		frameworkFiles: await collectReachableSourceFiles(
+			[frameworkEntry],
+			packages,
+		),
 		inventories,
 		resources: firstResources,
+		packageCompilations,
 	});
+	const reversedGeneratedFiles = await createArtifacts({
+		applicationRoot,
+		configuration: applicationConfiguration,
+		packageManifestText,
+		typescriptConfigFiles,
+		lockfileText,
+		sourceFiles: applicationGraph,
+		frameworkRoot: resolve(repositoryRoot, "packages/questpie"),
+		frameworkFiles: await collectReachableSourceFiles(
+			[frameworkEntry],
+			packages,
+		),
+		inventories,
+		resources: secondResources,
+		packageCompilations: packageCompilations.map((compilation) => ({
+			...compilation,
+			resources: compilation.reversedResources,
+		})),
+	});
+	if (canonicalBytes(generatedFiles) !== canonicalBytes(reversedGeneratedFiles))
+		throw new CompilerDiagnosticError(
+			"QP-COMPOSE-011",
+			"nondeterministicEvaluation",
+			"reverse discovery order changed generated artifact bytes",
+		);
 	const typecheck = await typecheckCurrentContract({
-		applicationFiles: sourceFiles,
+		applicationFiles: applicationGraph,
 		generatedFiles,
 		frameworkEntry,
 		packages,
 		compilerRoot,
+		applicationTsconfig,
+		packageCompilations: packageCompilations.map((compilation) => ({
+			...compilation,
+			contractPath: packageContractPath(compilation.name),
+		})),
 	});
 	const outputDirectory =
 		options.outputDirectory ?? resolve(applicationRoot, ".questpie/generated");
@@ -355,14 +510,14 @@ export async function compileApplication(
 				(total, value) => total + Buffer.byteLength(value),
 				0,
 			),
-			publicDeclarationBytes: [
-				"app.ts",
-				"client.ts",
-				"internal/package-contracts/collaboration-audit.ts",
-			].reduce(
-				(total, path) => total + Buffer.byteLength(generatedFiles[path] ?? ""),
-				0,
-			),
+			publicDeclarationBytes: Object.entries(generatedFiles)
+				.filter(
+					([path]) =>
+						path === "app.ts" ||
+						path === "client.ts" ||
+						path.startsWith("internal/package-contracts/"),
+				)
+				.reduce((total, [, value]) => total + Buffer.byteLength(value), 0),
 			typescriptTypes: typecheck.types,
 			typescriptInstantiations: typecheck.instantiations,
 			typescriptMemoryKiB: typecheck.memoryKiB,

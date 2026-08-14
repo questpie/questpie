@@ -1,13 +1,20 @@
 {
-	"extends": "../../tsconfig.base.json",
 	"compilerOptions": {
 		"allowImportingTsExtensions": true,
+		"forceConsistentCasingInFileNames": true,
+		"module": "ESNext",
+		"moduleResolution": "Bundler",
 		"noEmit": true,
+		"noUncheckedIndexedAccess": true,
 		"paths": {
 			"#questpie/app": ["./.questpie/generated/app.ts"],
 			"#questpie/client": ["./.questpie/generated/client.ts"],
 			"questpie": ["../../packages/questpie/src/index.ts"]
-		}
+		},
+		"skipLibCheck": true,
+		"strict": true,
+		"target": "ES2024",
+		"types": ["bun"]
 	},
 	"include": ["src/**/*.ts"]
 }

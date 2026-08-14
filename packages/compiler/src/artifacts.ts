@@ -23,6 +23,11 @@ function logical(root: string, path: string): string {
 	return relative(root, path).split(sep).join("/").normalize("NFC");
 }
 
+export function packageContractPath(packageName: string): string {
+	const readableName = packageName.replace(/^@/, "").replaceAll("/", "-");
+	return `internal/package-contracts/${readableName}-${contentDigest(packageName)}.ts`;
+}
+
 async function graph(
 	root: string,
 	files: readonly string[],
@@ -44,13 +49,18 @@ export async function createArtifacts(
 		applicationRoot: string;
 		configuration: ApplicationConfiguration;
 		packageManifestText: string;
-		typescriptConfigText: string;
+		typescriptConfigFiles: readonly Readonly<{ path: string; text: string }>[];
 		lockfileText: string;
 		sourceFiles: readonly string[];
 		frameworkRoot: string;
 		frameworkFiles: readonly string[];
 		inventories: readonly PackageInventory[];
 		resources: readonly NormalizedResource[];
+		packageCompilations: readonly Readonly<{
+			name: string;
+			files: readonly string[];
+			resources: readonly NormalizedResource[];
+		}>[];
 	}>,
 ): Promise<Readonly<Record<string, string>>> {
 	const manifest = projectManifest(input.configuration, input.resources);
@@ -60,7 +70,12 @@ export async function createArtifacts(
 	const packageGraphs = await Promise.all(
 		input.inventories.map(async (inventory) => ({
 			inventory,
-			graph: await graph(inventory.package.root, [inventory.package.entry]),
+			graph: await graph(
+				inventory.package.root,
+				input.packageCompilations.find(
+					(compilation) => compilation.name === inventory.package.name,
+				)?.files ?? [inventory.package.entry],
+			),
 		})),
 	);
 	const inputs = {
@@ -76,12 +91,10 @@ export async function createArtifacts(
 		),
 		typescriptConfigGraphDigest: digest(
 			"questpie-build-input-component-v1:typescriptConfigGraphDigest",
-			[
-				{
-					path: "tsconfig.json",
-					contentDigest: contentDigest(input.typescriptConfigText),
-				},
-			],
+			input.typescriptConfigFiles.map((file) => ({
+				path: file.path,
+				contentDigest: contentDigest(file.text),
+			})),
 		),
 		lockfileDigest: digest(
 			"questpie-build-input-component-v1:lockfileDigest",
@@ -149,7 +162,7 @@ export async function createArtifacts(
 				packageId: resource.origin.packageId,
 				path: resource.origin.logicalPath,
 				exportName: resource.origin.exportName,
-				span: null,
+				span: resource.origin.span,
 				declaredAt: null,
 			},
 			augmentations: resource.contributions.map((contribution) => ({
@@ -159,31 +172,32 @@ export async function createArtifacts(
 					packageId: contribution.packageId,
 					path: contribution.logicalPath,
 					exportName: contribution.exportName,
-					span: null,
+					span: contribution.definedSpan,
 					declaredAt: null,
 				},
 				acceptedAt: {
 					packageId: null,
 					path: resource.origin.logicalPath,
-					span: null,
+					span: contribution.acceptedSpan,
 				},
 			})),
 			members: projectMemberContributions(resource).map((member) => {
 				const contribution = resource.contributions.find(
 					(candidate) => candidate.identity === member.contributionIdentity,
 				);
+				const memberKey = member.identity.slice(resource.identity.length + 1);
 				return {
 					...member,
 					declaredAt: contribution
 						? {
 								packageId: contribution.packageId,
 								path: contribution.logicalPath,
-								span: null,
+								span: contribution.memberSpans[memberKey] ?? null,
 							}
 						: {
 								packageId: null,
 								path: resource.origin.logicalPath,
-								span: null,
+								span: resource.origin.memberSpans[memberKey] ?? null,
 							},
 				};
 			}),
@@ -210,13 +224,15 @@ export async function createArtifacts(
 		"app.ts": renderAppContract(input.resources),
 		"build-input.json": canonicalBytes(buildInput),
 		"client.ts": renderClientContract(input.resources),
-		"internal/package-contracts/collaboration-audit.ts":
-			renderPackageContract(),
 		"internal/package-inventories.json": canonicalBytes(inventoryArtifact),
 		"manifest.json": canonicalBytes(manifest),
 		"origin-map.json": originMapBytes,
 		"schema-projection.json": canonicalBytes(schema),
 	};
+	for (const compilation of input.packageCompilations)
+		generated[packageContractPath(compilation.name)] = renderPackageContract(
+			compilation.resources,
+		);
 	generated["internal/checksums.json"] = canonicalBytes({
 		format: "questpie.generated-checksums",
 		version: 1,
