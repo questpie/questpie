@@ -4,10 +4,12 @@ import { digest } from "./canonical";
 import {
 	acquireSessionLock,
 	assertBackendPid,
+	cancelBackendOnAbort,
 	configurePostgresTimeouts,
 	lockKey,
 	probeCommittedSession,
 	resolvePostgresControl,
+	withPinnedTransaction,
 } from "./postgres-session";
 import type { PostgresCommandControl } from "./postgres-session";
 import type { SchemaProjectionV1 } from "./schema";
@@ -174,8 +176,14 @@ export async function applyCommittedSeeds(
 	const session = await pool.reserve();
 	const applied: string[] = [];
 	const alreadyApplied: string[] = [];
+	let stopBackendCancellation = () => {};
 	try {
 		const expectedPid = await probeCommittedSession(session);
+		stopBackendCancellation = cancelBackendOnAbort(
+			pool,
+			expectedPid,
+			input.signal,
+		);
 		const control = resolvePostgresControl(input);
 		await configurePostgresTimeouts(session, control);
 		const [database] = await session<
@@ -302,40 +310,26 @@ export async function applyCommittedSeeds(
 					values (${application}, ${attemptId}, 0, ${seed.identity}, ${seed.checksum}, 'started', ${new Date()}, null)
 				`;
 				try {
-					await assertBackendPid(
+					await withPinnedTransaction(
 						session,
 						expectedPid,
-						`before ${seed.identity} transaction`,
-					);
-					await session.begin(async (transaction) => {
-						await assertBackendPid(
-							transaction,
-							expectedPid,
-							`${seed.identity} transaction start`,
-						);
-						await assertSchemaMatches(transaction, input.schema);
-						for (const step of seed.steps)
-							await executeSeedStep(transaction, input.schema, step);
-						await transaction`
+						`${seed.identity} transaction`,
+						input.signal,
+						async (transaction) => {
+							await assertSchemaMatches(transaction, input.schema);
+							for (const step of seed.steps)
+								await executeSeedStep(transaction, input.schema, step);
+							await transaction`
 							insert into questpie_internal.seed_receipts
 							(application_name, seed_identity, checksum, applied_schema_digest, committed_at, attempt_id)
 							values (${application}, ${seed.identity}, ${seed.checksum}, ${head.digest}, ${new Date()}, ${attemptId})
 						`;
-						await transaction`
+							await transaction`
 							insert into questpie_internal.seed_attempt_events
 							(application_name, attempt_id, sequence, seed_identity, checksum, event, occurred_at, error_code)
 							values (${application}, ${attemptId}, 1, ${seed.identity}, ${seed.checksum}, 'succeeded', ${new Date()}, null)
 						`;
-						await assertBackendPid(
-							transaction,
-							expectedPid,
-							`${seed.identity} transaction end`,
-						);
-					});
-					await assertBackendPid(
-						session,
-						expectedPid,
-						`after ${seed.identity} transaction`,
+						},
 					);
 					applied.push(seed.identity);
 				} catch (error) {
@@ -372,6 +366,7 @@ export async function applyCommittedSeeds(
 		}
 		return { applied, alreadyApplied };
 	} finally {
+		stopBackendCancellation();
 		session.release();
 		await pool.close();
 	}

@@ -7,10 +7,12 @@ import { CompilerDiagnosticError } from "./diagnostic";
 import {
 	acquireSessionLock,
 	assertBackendPid,
+	cancelBackendOnAbort,
 	configurePostgresTimeouts,
 	lockKey,
 	probeCommittedSession,
 	resolvePostgresControl,
+	withPinnedTransaction,
 } from "./postgres-session";
 import type {
 	PostgresCommandControl,
@@ -1324,19 +1326,21 @@ export async function bootstrap(
 			select exists(select 1 from pg_catalog.pg_namespace where nspname = 'questpie_internal') as exists
 		`;
 		if (!state?.exists) {
-			await assertBackendPid(sql, expectedPid, "before bootstrap transaction");
-			await sql.begin(async (transaction) => {
-				await assertBackendPid(transaction, expectedPid, "bootstrap tx start");
-				await transaction.unsafe(bootstrapSql);
-				await transaction`
+			await withPinnedTransaction(
+				sql,
+				expectedPid,
+				"bootstrap transaction",
+				signal,
+				async (transaction) => {
+					await transaction.unsafe(bootstrapSql);
+					await transaction`
 					insert into questpie_internal.protocol
 					(singleton, version, checksum)
 					values (true, 1, ${bootstrapChecksum})
 				`;
-				await verifyBootstrapCatalog(transaction);
-				await assertBackendPid(transaction, expectedPid, "bootstrap tx end");
-			});
-			await assertBackendPid(sql, expectedPid, "after bootstrap transaction");
+					await verifyBootstrapCatalog(transaction);
+				},
+			);
 		} else await verifyBootstrapCatalog(sql);
 	} finally {
 		await assertBackendPid(sql, expectedPid, "bootstrap unlock");
@@ -1367,8 +1371,14 @@ export async function applyCommittedMigrations(
 		? new SQL(input.connectionString)
 		: new SQL();
 	const session = await pool.reserve();
+	let stopBackendCancellation = () => {};
 	try {
 		const firstPid = await probeCommittedSession(session);
+		stopBackendCancellation = cancelBackendOnAbort(
+			pool,
+			firstPid,
+			input.signal,
+		);
 		const control = resolvePostgresControl(input);
 		await configurePostgresTimeouts(session, control);
 		const [database] = await session<{ name: string }[]>`
@@ -1478,37 +1488,27 @@ export async function applyCommittedMigrations(
 			}
 			const applied: string[] = [];
 			for (const migration of pending) {
-				await assertBackendPid(
+				await withPinnedTransaction(
 					session,
 					firstPid,
-					`before ${migration.identity} transaction`,
-				);
-				await session.begin(async (transaction) => {
-					await assertBackendPid(
-						transaction,
-						firstPid,
-						`${migration.identity} transaction`,
-					);
-					if (migration.plan.baseMigration === null)
-						await transaction`
+					`${migration.identity} transaction`,
+					input.signal,
+					async (transaction) => {
+						if (migration.plan.baseMigration === null)
+							await transaction`
 							insert into questpie_internal.application_bindings
 							(application_name, postgres_schema, created_at)
 							values (${application}, ${target.application.postgresSchema}, ${new Date()})
 						`;
-					await transaction.unsafe(migration.files["up.sql"] ?? "");
-					await assertSchemaMatches(transaction, migration.targetSchema);
-					await transaction`
+						await transaction.unsafe(migration.files["up.sql"] ?? "");
+						await assertSchemaMatches(transaction, migration.targetSchema);
+						await transaction`
 						insert into questpie_internal.schema_migration_receipts
 						(application_name, migration_identity, sequence, parent_identity, checksum, base_schema_digest, target_schema_digest, applied_at)
 						values (${application}, ${migration.identity}, ${Number(migration.identity.slice(0, 6))}, ${migration.plan.baseMigration}, ${migration.checksum}, ${migration.plan.baseSchemaDigest}, ${migration.plan.targetSchemaDigest}, ${new Date()})
 					`;
-					await assertBackendPid(
-						transaction,
-						firstPid,
-						`${migration.identity} transaction end`,
-					);
-				});
-				await assertBackendPid(session, firstPid, migration.identity);
+					},
+				);
 				await assertSchemaMatches(session, migration.targetSchema);
 				applied.push(migration.identity);
 			}
@@ -1527,6 +1527,7 @@ export async function applyCommittedMigrations(
 			await session`select pg_catalog.pg_advisory_unlock(${applicationKey})`;
 		}
 	} finally {
+		stopBackendCancellation();
 		session.release();
 		await pool.close();
 	}

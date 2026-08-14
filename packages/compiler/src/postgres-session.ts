@@ -68,6 +68,27 @@ export async function executeAbortable<T>(
 	}
 }
 
+export function cancelBackendOnAbort(
+	sql: SQL,
+	pid: number,
+	signal?: AbortSignal,
+): () => void {
+	if (!signal) return () => {};
+	let listening = true;
+	const cancel = () => {
+		if (!listening) return;
+		void sql`select pg_catalog.pg_cancel_backend(${pid})`
+			.execute()
+			.catch(() => {});
+	};
+	signal.addEventListener("abort", cancel, { once: true });
+	if (signal.aborted) cancel();
+	return () => {
+		listening = false;
+		signal.removeEventListener("abort", cancel);
+	};
+}
+
 export async function acquireSessionLock(
 	sql: SQL,
 	key: bigint,
@@ -139,6 +160,29 @@ export async function assertBackendPid(
 			`PostgreSQL endpoint lost session affinity during ${phase}`,
 			{ expected, actual },
 		);
+}
+
+export async function withPinnedTransaction<T>(
+	sql: SQL,
+	expectedPid: number,
+	phase: string,
+	signal: AbortSignal | undefined,
+	operation: (transaction: SQL) => Promise<T>,
+): Promise<T> {
+	signal?.throwIfAborted();
+	await assertBackendPid(sql, expectedPid, `before ${phase}`);
+	await sql.unsafe("BEGIN");
+	try {
+		await assertBackendPid(sql, expectedPid, `${phase} start`);
+		const result = await operation(sql);
+		await assertBackendPid(sql, expectedPid, `${phase} end`);
+		await sql.unsafe("COMMIT");
+		await assertBackendPid(sql, expectedPid, `after ${phase}`);
+		return result;
+	} catch (error) {
+		await sql.unsafe("ROLLBACK");
+		throw error;
+	}
 }
 
 export async function probeSessionAffinity(

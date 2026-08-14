@@ -129,7 +129,112 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			statementTimeoutMs: 5_000,
 		});
 		expect(retry.status).toBe("applied");
-	});
+
+		const evolvedSchema = structuredClone(targetSchema);
+		const messages = evolvedSchema.collections.find(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:messages",
+		);
+		if (!messages) throw new Error("lock probe Messages schema is missing");
+		messages.fields.push({
+			collation: "questpie.binary",
+			default: null,
+			identity: "collection:messages/field:cancellationProbe",
+			nullable: true,
+			path: ["cancellationProbe"],
+			postgresName: "cancellation_probe",
+			type: {
+				collation: "questpie.binary",
+				kind: "text",
+				maxLength: null,
+				minLength: null,
+			},
+		});
+		messages.fields.sort(
+			(left: { identity: string }, right: { identity: string }) =>
+				left.identity.localeCompare(right.identity),
+		);
+		const evolvedPlan = createMigrationPlan({
+			baseMigration: migration.identity,
+			baseSchema: targetSchema,
+			slug: "add-cancellation-probe",
+			targetSchema: evolvedSchema,
+		});
+		const evolvedMigration = createCommittedMigration({
+			currentSchema: evolvedSchema,
+			parent: migration.identity,
+			plan: evolvedPlan.plan,
+			baseSchema: evolvedPlan.baseSchema,
+			planDigest: evolvedPlan.digest,
+			sequence: 2,
+			targetSchema: evolvedSchema,
+		});
+		const tableHolder = await database!.reserve();
+		const [tableHolderBackend] = await tableHolder<{ pid: number }[]>`
+			select pg_catalog.pg_backend_pid() as pid
+		`;
+		await tableHolder.unsafe("BEGIN");
+		await tableHolder.unsafe(
+			'LOCK TABLE "lock_probe"."messages" IN ACCESS SHARE MODE',
+		);
+		const ddlController = new AbortController();
+		try {
+			const applying = applyCommittedMigrations({
+				migrations: [migration, evolvedMigration],
+				lockTimeoutMs: 5_000,
+				statementTimeoutMs: 30_000,
+				signal: ddlController.signal,
+			}).then(
+				(value) => ({ value, error: undefined }),
+				(error: unknown) => ({ value: undefined, error }),
+			);
+			let blockedQuery: string | undefined;
+			for (let attempt = 0; attempt < 300; attempt += 1) {
+				const [waiting] = await database!<{ query: string }[]>`
+					select query
+					from pg_catalog.pg_stat_activity
+					where wait_event_type = 'Lock'
+					  and pid <> pg_catalog.pg_backend_pid()
+					  and pid <> ${tableHolderBackend!.pid}
+					order by pid
+					limit 1
+				`;
+				if (waiting) {
+					blockedQuery = waiting.query;
+					break;
+				}
+				await Bun.sleep(10);
+			}
+			expect(blockedQuery).toContain("cancellation_probe");
+			ddlController.abort();
+			const { error: ddlError } = await applying;
+			expect(ddlError).toBeInstanceOf(SQL.PostgresError);
+			expect((ddlError as SQL.PostgresError).errno).toBe("57014");
+			expect((ddlError as Error).message).toContain("user request");
+			const [rolledBack] = await database!<
+				{ fieldExists: boolean; receipts: number }[]
+			>`
+				select
+				  exists(
+				    select 1 from pg_catalog.pg_attribute
+				    where attrelid = 'lock_probe.messages'::regclass
+				      and attname = 'cancellation_probe' and not attisdropped
+				  ) as "fieldExists",
+				  (select count(*)::integer from questpie_internal.schema_migration_receipts where application_name = 'lock-probe') as receipts
+			`;
+			expect(rolledBack).toEqual({ fieldExists: false, receipts: 1 });
+		} finally {
+			await tableHolder.unsafe("ROLLBACK");
+			tableHolder.release();
+		}
+		const ddlRetry = await applyCommittedMigrations({
+			migrations: [migration, evolvedMigration],
+		});
+		expect(ddlRetry).toMatchObject({
+			status: "applied",
+			applied: ["000002_add-cancellation-probe"],
+		});
+	}, 10_000);
 
 	test("applies, loses the response, restarts, and reports no Drift", async () => {
 		const compilation = await compileApplication({
