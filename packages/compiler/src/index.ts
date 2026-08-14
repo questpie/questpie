@@ -531,14 +531,6 @@ export async function compileApplication(
 			"nondeterministicEvaluation",
 			"reverse discovery order changed generated artifact bytes",
 		);
-	const schema = JSON.parse(
-		generatedFiles["schema-projection.json"] ?? "null",
-	) as SchemaProjectionV1;
-	const committedSeeds = firstResources
-		.filter((resource) => resource.kind === "seed")
-		.map((resource) =>
-			createCommittedSeed({ definition: resource.contract, schema }),
-		);
 	const typecheck = await typecheckCurrentContract({
 		applicationFiles: applicationGraph,
 		generatedFiles,
@@ -551,6 +543,14 @@ export async function compileApplication(
 			contractPath: packageContractPath(compilation.name),
 		})),
 	});
+	const schema = JSON.parse(
+		generatedFiles["schema-projection.json"] ?? "null",
+	) as SchemaProjectionV1;
+	const committedSeeds = firstResources
+		.filter((resource) => resource.kind === "seed")
+		.map((resource) =>
+			createCommittedSeed({ definition: resource.contract, schema }),
+		);
 	const outputDirectory =
 		options.outputDirectory ?? resolve(applicationRoot, ".questpie/generated");
 	await replaceGeneratedDirectory(outputDirectory, generatedFiles);

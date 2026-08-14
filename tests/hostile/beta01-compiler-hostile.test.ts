@@ -288,7 +288,7 @@ export const auditById = defineQuery({
 		);
 		await expectDiagnostic(
 			() => compileApplication({ applicationRoot: root }),
-			"QP-COMPOSE-013",
+			"QP-SCHEMA-003",
 		);
 	});
 });
