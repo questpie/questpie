@@ -880,6 +880,28 @@ performance budgets are explicit. It retains B-tree-only Index and makes no RLS
 claim. Runtime lifecycle compatibility and maintenance-command fencing remain
 named edges for #15/#16 slicing.
 
+## P15 — beta.1 release slice
+
+Status: accepted by ADR-0021. Initial clean reviewed head
+`49e142607e9c0275ee07a2fa4b90ff516eaf6995` received `BLOCKED` because the
+accepted Service graph had neither a beta.1 owner nor an absence story, while
+Context disposal depended on it. Repaired reviewed head
+`5c4bdfa67ea97fa48793d01fbee188b7dbf19e3b` adds a first-class Services slice,
+the dependency from Context/Policy, precise lifecycle/effect ownership, and two
+matching negative controls. One replacement fresh stateless Claude Opus review
+at medium effort returned `PASS`; acceptance evidence head is
+`0d8e2543ff7e9d50bdab7d2b66b62ec4c35d8a6f`.
+
+The checked release contains ten dependency-ordered slices from foundation
+through connected conformance and nine explicit absence stories. It preserves
+the P1–P6 spine, includes Service lifetime, Query watch, one committed-fact
+Reaction, and minimal Studio, and defers capability breadth without inventing a
+temporary public API. Seven negative mutations prove required slice,
+dependency, seam, release-gate, Service ownership, and Context/Service ordering
+failures. The primary tracer is collaboration/publishing and the portability
+fixture is archive/permit/embargo. PostgreSQL remains the only durable
+dependency, Index remains B-tree-only, and no RLS claim is introduced.
+
 ## Acceptance and projection protocol
 
 For each chapter:
@@ -903,15 +925,10 @@ not permission to build a disconnected compiler preview.
 
 ## Release interpretation
 
-The target `4.0.0-beta.1` is an end-to-end application-server vertical, not
-only code generation. Its required core is compiler + migrations + Collections
-
-- structural and semantic Query + safe transactional Mutation + Context/Policy
-- direct/Fetch/generated-client parity. The exact beta cut is decided after
-  the proofs, but it must also preserve the accepted seams for Live Query,
-  transactional dispatch, Runtime lifecycle, and later Jobs/Workflow.
-
-P4 passed within the beta window. If P5 also passes, beta.1 should include the
-watched Query and minimal Reaction tracer required by `SPEC.md`. If P5 does not
-pass, the release label or `SPEC.md` tracer must be changed explicitly; the
-framework must not ship a substitute public API that later needs replacement.
+ADR-0021 fixes `4.0.0-beta.1` as an end-to-end application-server vertical, not
+only code generation. It includes the connected compiler, migration, Service,
+Context/Policy, Query/Mutation, Runtime/client, Live Query, Reaction, and
+minimal Studio spine. The checked slice artifact owns the exact dependency
+order, compatibility promises, absence stories, and release gates. Ticket #16
+must collapse that accepted slice into one build specification and native
+blocking issue graph before implementation begins.

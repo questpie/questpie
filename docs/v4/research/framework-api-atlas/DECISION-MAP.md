@@ -624,9 +624,22 @@ compatibility expectations and evidence gates.
 
 ### Answer
 
-Fog. The existing
-[`beta1-cut/DECISION-MAP.md`](../beta1-cut/DECISION-MAP.md) is subordinate
-evidence and must be reconciled after the atlas clears.
+Accepted by ADR-0021. `4.0.0-beta.1` is the smallest connected P1–P6 vertical:
+foundation, schema, Service lifetime, Context/Policy, Query/Mutation and
+Collection Operations, immutable Runtime/generated client, watched Query and
+Change Ledger, one committed-fact Reaction over the shared durable kernel,
+minimal Studio, and connected conformance.
+
+The primary fixture is collaboration/publishing; archive/permit/embargo proves
+portability. PostgreSQL is the only durable dependency, public Index remains
+B-tree-only, and no RLS claim is made. Action, raw Route/credential Auth,
+generic Job/Workflow breadth, Channel, File bytes, Search, OpenAPI/MCP/skills,
+optional accelerators, split Runtime roles, and remote Studio each retain an
+exact named seam and absence story in the checked slice artifact. Initial
+review head `49e14260` was BLOCKED because Service lifetime had no owner and
+Context disposal preceded it. Repair `5c4bdfa6` adds a first-class Services
+slice and executable negative gates; replacement fresh stateless Opus-medium
+review returned PASS. Evidence head `0d8e2543ff7e9d50bdab7d2b66b62ec4c35d8a6f`.
 
 ## #16: How is the accepted atlas turned into implementation work?
 

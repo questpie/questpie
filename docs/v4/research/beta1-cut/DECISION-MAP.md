@@ -1,6 +1,16 @@
 # QUESTPIE 4.0.0-beta.1 decision map
 
-- Status: research frontier; no acceptance authority
+> **Reconciled historical map.** ADR-0021 and atlas ticket #15 supersede the
+> candidate scope and open answers below. The accepted beta.1 includes Service
+> lifetime, Live Query, one committed-fact Reaction, and minimal Studio; it uses
+> the collaboration and archive conformance fixtures. The exact checked scope,
+> dependency order, compatibility promises, later seams, and release gates live
+> in [`../../prototypes/beta-slice-p15/SLICE.json`](../../prototypes/beta-slice-p15/SLICE.json).
+> This file remains v3-job and design-history evidence; none of its Partial,
+> Fog, tentative spelling, old fixture, or old exclusion text is current
+> implementation authority.
+
+- Status: reconciled historical evidence; superseded by ADR-0021
 - Scope: the thinnest usable docs-first server vertical after the accepted
   Collection foundation
 - Parent map: [`../framework-api-atlas/DECISION-MAP.md`](../framework-api-atlas/DECISION-MAP.md).

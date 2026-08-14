@@ -27,8 +27,9 @@ Fixed accepted proof authority:
 | #21 kernels/naming/exports        | `d50d4334b116a5bdc46e95cdabf566d8db938d37` |
 | #22 repository foundation         | `17008b0547f24b53d456530b798e8d96ae2e2b1e` |
 | #14 conformance map               | `3a89c565cb1eba59815d106df1c06406ac20ac98` |
+| #15 beta.1 slice                  | `0d8e2543ff7e9d50bdab7d2b66b62ec4c35d8a6f` |
 
-ADR-0008 through ADR-0020 and their accepted workbench/public projections are
+ADR-0008 through ADR-0021 and their accepted workbench/public projections are
 product authority. The exact review heads, BLOCKED/repair history, digests,
 commands, measurements, and remaining implementation edges live in
 `docs/v4/research/framework-api-atlas/PROOF-MAP.md` and each proof acceptance
@@ -64,8 +65,8 @@ are executable command authority; personal skill paths are not dependencies.
 
 ## Active frontier and blockers
 
-Atlas tickets #14 and #17–#22 are accepted. The active frontier is #15 beta
-slicing and then #16 implementation collapse. The accepted foundation
+Atlas tickets #14, #15, and #17–#22 are accepted. The active frontier is #16
+implementation collapse. The accepted foundation
 includes:
 
 - Bun 1.3.14; TypeScript 6.0.2 as canonical bridge; native TypeScript 7.0.2 as
@@ -79,9 +80,8 @@ includes:
 - a portable five-branch router skill and deterministic stateless Claude
   Opus-medium acceptance wrapper.
 
-Resolve atlas #14 conformance, #15 beta slicing, and #16 implementation
-collapse; reconcile the subordinate beta1 decision map; produce
-one buildable specification; derive small dependency-ordered tracer issues with
+Resolve atlas #16 implementation collapse; produce one buildable
+specification; derive small dependency-ordered tracer issues with
 exact authority/artifacts/fixture/non-goals/hostile cases/budgets/commands; mark
 only genuinely unblocked children agent-ready; then update issue #261 and this
 handoff. No production Runtime implementation belongs in this design session.
@@ -108,6 +108,11 @@ handoff. No production Runtime implementation belongs in this design session.
   `56a39c27704afef00c6b25fdbd13ade88278b668` received replacement fresh
   stateless Opus-medium PASS. Evidence head is
   `3a89c565cb1eba59815d106df1c06406ac20ac98`.
+- #15 initial reviewed head `49e142607e9c0275ee07a2fa4b90ff516eaf6995`
+  was validly BLOCKED because Service lifetime had no beta owner. Repaired head
+  `5c4bdfa67ea97fa48793d01fbee188b7dbf19e3b` received replacement fresh
+  stateless Opus-medium PASS. Evidence head is
+  `0d8e2543ff7e9d50bdab7d2b66b62ec4c35d8a6f`.
 - Measured #22 candidate loops: focused changed lane 2.09 s; cold docs-only full
   lane 9.40 s; the warm focused lane is 0.50 s. The format ratchet records one
   historical file and permits no new drift. Knip report baseline is 17 unused files, two dependency groups,
@@ -116,8 +121,8 @@ handoff. No production Runtime implementation belongs in this design session.
 ## Next invocation
 
 ```text
-Use the repo-owned QUESTPIE v4 skill. Resolve atlas #14–#16 in order, reconcile
-beta1, produce the buildable spec and
-dependency-ordered agent-ready issues. Preserve the dirty main projection and
-accepted proof worktrees; do not implement production Runtime.
+Use the repo-owned QUESTPIE v4 skill. Resolve atlas #16: produce the accepted
+beta.1 build specification and dependency-ordered agent-ready GitHub issues,
+then update #261. Preserve the dirty main projection and accepted proof
+worktrees; do not implement production Runtime.
 ```

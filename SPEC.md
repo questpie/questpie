@@ -421,20 +421,22 @@ public generic data-provider SPI.
 
 ## 13. First implementation tracer
 
-The first implementation is one Barbershop slice. The accepted proof fixture
-uses the equivalent Company, Space, Channel, Membership, and Message path plus
-an Archive, Record, and Research Permit portability domain; implementation
-maps those proven jobs to Barbershop names without changing their contracts.
+The first implementation is the accepted `4.0.0-beta.1` connected tracer. Its
+primary application is Company → Space → Channel → Membership → Message; the
+archive Institution → Record → ResearchPermit → Embargo → Provenance fixture
+proves the same kernels do not assume tenant equality, mutable CRUD, or a
+collaboration ontology. Barbershop and City Portal remain v3 behavioral
+evidence, not v4 implementation nouns.
 
 It is complete only when:
 
-1. `appointments` has explicit identity, Owner, and Origin.
+1. `messages` has explicit identity, Owner, and Origin.
 2. A second Package applies one authorized Augmentation.
 3. A typed Policy uses Principal, Tenant, and a membership Relation.
-4. A Query returns a selected, sorted, paginated appointment view.
+4. A Query returns a selected, sorted, paginated message view.
 5. The generated client infers exact input, output, and errors.
 6. A client watches the Query.
-7. A Mutation changes an appointment and writes durable Reaction intent in the
+7. A Mutation publishes a message and writes durable Reaction intent in the
    same transaction.
 8. The Change Ledger captures the commit before any wake.
 9. The dependency plan includes data, Policy, Relation, tenant, and pagination
@@ -462,9 +464,12 @@ OpenAPI schema. The operation API grill must decide when the compiler can
 materialize a runtime schema and when the author must supply an explicit output
 contract.
 
-Only the minimum Reaction/dispatch inspection needed to prove the transaction spine
-belongs in this tracer. Complete Workflow, Auth, Files, Search, KV, OpenAPI, MCP,
-Channels, and managed Cloud remain later slices.
+Only the minimum Reaction/dispatch inspection needed to prove the transaction
+spine belongs in this tracer. Service lifetime is included because Context owns
+scoped disposal. Action, raw Route/credential Auth, complete Job/Workflow,
+Channel, File bytes, Search, optional cache/broker/carrier, OpenAPI/MCP/skills,
+split Runtime roles, remote Studio, and managed Cloud retain the named seams and
+exact absence stories in ADR-0021.
 
 ## 14. V3 port policy
 

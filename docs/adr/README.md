@@ -26,6 +26,7 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 18. [File, Search, and Contract Projections](./0018-freeze-file-search-and-contract-projections.md)
 19. [Semantic Kernels and the Public Surface](./0019-freeze-semantic-kernels-and-public-surface.md)
 20. [Repository Foundation](./0020-establish-the-repository-foundation.md)
+21. [Beta.1 Release Slice](./0021-slice-the-beta-one-release.md)
 
 ## Open decisions
 
@@ -46,6 +47,9 @@ client exports, Channel/Live Query spelling, and optional capability bindings.
 ADR-0020 accepts the portable agent router and review protocol, Bun/TypeScript
 baseline, measured quality lanes, PostgreSQL CI, Knip ratchet, performance
 harness, and guarded release path.
+ADR-0021 accepts the connected beta.1 slice: compiler through minimal Studio,
+including Service lifetime, watched Query, one committed-fact Reaction, and
+explicit absence stories for later breadth.
 Complete Workflow, Action, split
 Runtime roles, host/provider SPIs, and remote/fleet Studio remain later
 verticals.
