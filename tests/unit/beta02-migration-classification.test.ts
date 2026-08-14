@@ -370,3 +370,170 @@ test("classifies text bound constraints with their owning Field", async () => {
 		expect(result.plan.classification, scenario.name).toBe(scenario.expected);
 	}
 });
+
+test("classifies integer and bigint bound constraints", async () => {
+	const schema = await collaborationSchema();
+	const cases = [
+		{ kind: "integer", before: 10, after: 9, expected: "safe" },
+		{ kind: "integer", before: 10, after: 11, expected: "destructive" },
+		{ kind: "bigint", before: "10", after: "9", expected: "safe" },
+		{ kind: "bigint", before: "10", after: "11", expected: "destructive" },
+	] as const;
+
+	for (const [index, scenario] of cases.entries()) {
+		const base = structuredClone(schema);
+		const target = structuredClone(schema);
+		for (const projection of [base, target]) {
+			const messages = projection.collections.find(
+				(collection: { identity: string }) =>
+					collection.identity === "collection:messages",
+			);
+			const body = messages.fields.find(
+				(field: { identity: string }) =>
+					field.identity === "collection:messages/field:body",
+			);
+			const minimum = messages.constraints.find(
+				(constraint: { identity: string }) =>
+					constraint.identity ===
+					"collection:messages/field:body/invariant:minLength",
+			);
+			const identity = `collection:messages/field:${scenario.kind}Bound`;
+			messages.fields.push({
+				...structuredClone(body),
+				collation: null,
+				identity,
+				path: [`${scenario.kind}Bound`],
+				postgresName: `${scenario.kind}_bound`,
+				type: {
+					kind: scenario.kind,
+					maximum: null,
+					minimum: scenario.before,
+				},
+			});
+			messages.constraints.push({
+				...structuredClone(minimum),
+				identity: `${identity}/invariant:minimum`,
+				postgresName: `qp_ck_messages_${scenario.kind}_bound_minimum`,
+				expression: {
+					kind: "compare",
+					left: { kind: "field", field: identity },
+					operator: "greaterThanOrEqual",
+					right: { kind: "literal", value: scenario.before },
+				},
+			});
+			messages.fields.sort(
+				(left: { identity: string }, right: { identity: string }) =>
+					left.identity.localeCompare(right.identity),
+			);
+			messages.constraints.sort(
+				(left: { identity: string }, right: { identity: string }) =>
+					left.identity.localeCompare(right.identity),
+			);
+		}
+		const targetMessages = target.collections.find(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:messages",
+		);
+		const targetField = targetMessages.fields.find(
+			(field: { identity: string }) =>
+				field.identity === `collection:messages/field:${scenario.kind}Bound`,
+		);
+		const targetConstraint = targetMessages.constraints.find(
+			(constraint: { identity: string }) =>
+				constraint.identity ===
+				`collection:messages/field:${scenario.kind}Bound/invariant:minimum`,
+		);
+		targetField.type.minimum = scenario.after;
+		targetConstraint.expression.right.value = scenario.after;
+
+		const result = createMigrationPlan({
+			baseSchema: base,
+			targetSchema: target,
+			baseMigration: "000001_create-collaboration",
+			slug: `bound-${index}`,
+		});
+		expect(result.status).toBe("planned");
+		if (result.status !== "planned") throw new Error(`bound-${index}`);
+		expect(result.plan.steps.some((step) => step.kind === "alterField")).toBe(
+			false,
+		);
+		expect(result.plan.steps.map((step) => step.classification)).toEqual([
+			scenario.expected,
+			scenario.expected,
+		]);
+		expect(result.plan.classification).toBe(scenario.expected);
+	}
+});
+
+test("classifies numeric precision and scale migrations", async () => {
+	const schema = await collaborationSchema();
+	const cases = [
+		{ name: "increase-precision", precision: 12, scale: 2, expected: "safe" },
+		{
+			name: "decrease-precision",
+			precision: 8,
+			scale: 2,
+			expected: "destructive",
+		},
+		{
+			name: "change-scale",
+			precision: 10,
+			scale: 3,
+			expected: "destructive",
+		},
+	] as const;
+
+	for (const scenario of cases) {
+		const base = structuredClone(schema);
+		const target = structuredClone(schema);
+		for (const projection of [base, target]) {
+			const messages = projection.collections.find(
+				(collection: { identity: string }) =>
+					collection.identity === "collection:messages",
+			);
+			messages.fields.push({
+				collation: null,
+				default: null,
+				identity: "collection:messages/field:amount",
+				nullable: true,
+				path: ["amount"],
+				postgresName: "amount",
+				type: { kind: "numeric", precision: 10, scale: 2 },
+			});
+			messages.fields.sort(
+				(left: { identity: string }, right: { identity: string }) =>
+					left.identity.localeCompare(right.identity),
+			);
+		}
+		const targetAmount = target.collections
+			.find(
+				(collection: { identity: string }) =>
+					collection.identity === "collection:messages",
+			)
+			.fields.find(
+				(field: { identity: string }) =>
+					field.identity === "collection:messages/field:amount",
+			);
+		targetAmount.type = {
+			kind: "numeric",
+			precision: scenario.precision,
+			scale: scenario.scale,
+		};
+
+		const result = createMigrationPlan({
+			baseSchema: base,
+			targetSchema: target,
+			baseMigration: "000001_create-collaboration",
+			slug: scenario.name,
+		});
+		expect(result.status, scenario.name).toBe("planned");
+		if (result.status !== "planned") throw new Error(scenario.name);
+		expect(result.plan.steps).toContainEqual(
+			expect.objectContaining({
+				kind: "alterField",
+				classification: scenario.expected,
+			}),
+		);
+		expect(result.plan.classification, scenario.name).toBe(scenario.expected);
+	}
+});

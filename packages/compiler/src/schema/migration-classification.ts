@@ -89,9 +89,11 @@ export function classifyChangedField(
 	const baseType = base.type as FieldShape;
 	const targetType = target.type as FieldShape;
 	if (canonicalBytes(baseType) !== canonicalBytes(targetType)) {
-		const textBounds = classifyTextBounds(baseType, targetType);
+		const supportedTypeDelta =
+			classifyValidatorBounds(baseType, targetType) ??
+			classifyNumericStorage(baseType, targetType);
 		changes.push(
-			textBounds ?? {
+			supportedTypeDelta ?? {
 				classification:
 					baseType.kind === "integer" && targetType.kind === "bigint"
 						? "guarded"
@@ -132,22 +134,41 @@ export function classifyChangedField(
 	};
 }
 
-function classifyTextBounds(
+function classifyValidatorBounds(
 	base: FieldShape,
 	target: FieldShape,
 ): ChangedFieldClassification | null {
-	if (base.kind !== "text" || target.kind !== "text") return null;
-	if (base.collation !== target.collation)
+	if (base.kind !== target.kind) return null;
+	const bounds =
+		base.kind === "text"
+			? (["minLength", "maxLength"] as const)
+			: base.kind === "integer" || base.kind === "bigint"
+				? (["minimum", "maximum"] as const)
+				: null;
+	if (!bounds) return null;
+	const stableBase = { ...base };
+	const stableTarget = { ...target };
+	for (const bound of bounds) {
+		delete stableBase[bound];
+		delete stableTarget[bound];
+	}
+	if (canonicalBytes(stableBase) !== canonicalBytes(stableTarget))
 		return { classification: "blocked", effect: "alterField" };
 	const classifications: MigrationClassification[] = [];
-	for (const bound of ["minLength", "maxLength"] as const) {
+	for (const bound of bounds) {
 		if (base[bound] === target[bound]) continue;
-		const before = base[bound] as number | null;
-		const after = target[bound] as number | null;
+		const before = base[bound] as number | string | null;
+		const after = target[bound] as number | string | null;
+		const comparison =
+			before === null || after === null
+				? null
+				: compareBound(base.kind, before, after);
+		const isMinimum = bound === "minLength" || bound === "minimum";
 		const relaxes =
 			after === null ||
 			(before !== null &&
-				(bound === "minLength" ? after < before : after > before));
+				comparison !== null &&
+				(isMinimum ? comparison < 0 : comparison > 0));
 		classifications.push(relaxes ? "safe" : "destructive");
 	}
 	if (classifications.length === 0) return null;
@@ -156,6 +177,30 @@ function classifyTextBounds(
 			classifications.map((classification) => ({ classification })),
 		),
 		effect: "none",
+	};
+}
+
+function compareBound(
+	kind: unknown,
+	before: number | string,
+	after: number | string,
+): number {
+	const left = kind === "bigint" ? BigInt(before) : Number(before);
+	const right = kind === "bigint" ? BigInt(after) : Number(after);
+	return right < left ? -1 : right > left ? 1 : 0;
+}
+
+function classifyNumericStorage(
+	base: FieldShape,
+	target: FieldShape,
+): ChangedFieldClassification | null {
+	if (base.kind !== "numeric" || target.kind !== "numeric") return null;
+	const destructive =
+		base.scale !== target.scale ||
+		Number(target.precision) < Number(base.precision);
+	return {
+		classification: destructive ? "destructive" : "safe",
+		effect: "alterField",
 	};
 }
 
