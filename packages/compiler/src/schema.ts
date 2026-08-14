@@ -4,8 +4,8 @@ import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { CompilerDiagnosticError } from "./diagnostic";
 import {
 	classifyAddedField,
-	classifyChangedField,
 	classifyProviderDelta,
+	GeneratedInvariantClassifications,
 	maximumClassification,
 } from "./schema/migration-classification";
 import type { MigrationClassification } from "./schema/migration-classification";
@@ -466,6 +466,7 @@ function destructiveDeltaSteps(
 					classification: "destructive",
 				}),
 			);
+		const generatedInvariants = new GeneratedInvariantClassifications();
 		for (const key of [
 			"fields",
 			"constraints",
@@ -488,7 +489,7 @@ function destructiveDeltaSteps(
 					const isField = key === "fields";
 					const classification: MigrationClassification = isField
 						? classifyAddedField(targetValue)
-						: "guarded";
+						: generatedInvariants.forConstraint(targetChildIdentity, "guarded");
 					steps.push(
 						step({
 							kind: deltaKind(key, "add"),
@@ -530,8 +531,8 @@ function destructiveDeltaSteps(
 					(!derivedRename && key !== "fields" && physicalChanged)
 				) {
 					if (key === "fields") {
-						const classification = classifyChangedField(baseValue, targetValue);
-						if (classification)
+						const change = generatedInvariants.classify(baseValue, targetValue);
+						if (change?.effect === "alterField")
 							steps.push(
 								step({
 									kind: "alterField",
@@ -541,10 +542,14 @@ function destructiveDeltaSteps(
 									scansData: true,
 									rewritesTable: true,
 									reversibleWithoutData: false,
-									classification,
+									classification: change.classification,
 								}),
 							);
-					} else
+					} else {
+						const classification = generatedInvariants.forConstraint(
+							targetChildIdentity,
+							"destructive",
+						);
 						steps.push(
 							step({
 								kind: deltaKind(key, "drop"),
@@ -554,7 +559,7 @@ function destructiveDeltaSteps(
 								scansData: true,
 								rewritesTable: false,
 								reversibleWithoutData: false,
-								classification: "destructive",
+								classification,
 							}),
 							step({
 								kind: deltaKind(key, "add"),
@@ -564,14 +569,19 @@ function destructiveDeltaSteps(
 								scansData: true,
 								rewritesTable: false,
 								reversibleWithoutData: false,
-								classification: "destructive",
+								classification,
 							}),
 						);
+					}
 				}
 			}
 			for (const baseValue of childRecords(baseCollection, key)) {
 				const baseChildIdentity = String(baseValue.identity);
-				if (!matchedBase.has(baseChildIdentity))
+				if (!matchedBase.has(baseChildIdentity)) {
+					const classification = generatedInvariants.forConstraint(
+						baseChildIdentity,
+						"destructive",
+					);
 					steps.push(
 						step({
 							kind: deltaKind(key, "drop"),
@@ -581,9 +591,10 @@ function destructiveDeltaSteps(
 							scansData: true,
 							rewritesTable: false,
 							reversibleWithoutData: false,
-							classification: "destructive",
+							classification,
 						}),
 					);
+				}
 			}
 		}
 	}
@@ -605,7 +616,6 @@ function destructiveDeltaSteps(
 	}
 	return sortSteps(steps);
 }
-
 export function createMigrationPlan(
 	input: MigrationPlanInput & Readonly<{ baseSchema?: undefined }>,
 ): PlannedMigration;

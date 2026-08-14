@@ -302,3 +302,71 @@ test("classifies changed Field storage, default, and nullability", async () => {
 		}),
 	);
 });
+
+test("classifies text bound constraints with their owning Field", async () => {
+	const schema = await collaborationSchema();
+	const cases = [
+		{ name: "relax-minimum", bound: "minLength", value: 0, expected: "safe" },
+		{
+			name: "strengthen-minimum",
+			bound: "minLength",
+			value: 2,
+			expected: "destructive",
+		},
+		{
+			name: "relax-maximum",
+			bound: "maxLength",
+			value: 9_000,
+			expected: "safe",
+		},
+		{
+			name: "strengthen-maximum",
+			bound: "maxLength",
+			value: 8_000,
+			expected: "destructive",
+		},
+	] as const;
+
+	for (const scenario of cases) {
+		const target = structuredClone(schema);
+		const messages = target.collections.find(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:messages",
+		);
+		const body = messages?.fields.find(
+			(field: { identity: string }) =>
+				field.identity === "collection:messages/field:body",
+		);
+		const constraint = messages?.constraints.find(
+			(candidate: { identity: string }) =>
+				candidate.identity ===
+				`collection:messages/field:body/invariant:${scenario.bound}`,
+		);
+		if (!body || !constraint)
+			throw new Error(`${scenario.name} projection member is missing`);
+		body.type[scenario.bound] = scenario.value;
+		constraint.expression.right.value = scenario.value;
+
+		const result = createMigrationPlan({
+			baseSchema: schema,
+			targetSchema: target,
+			baseMigration: "000001_create-collaboration",
+			slug: scenario.name,
+		});
+		expect(result.status, scenario.name).toBe("planned");
+		if (result.status !== "planned") throw new Error(scenario.name);
+		expect(
+			result.plan.steps.some((step) => step.kind === "alterField"),
+			scenario.name,
+		).toBe(false);
+		const constraintSteps = result.plan.steps.filter((step) =>
+			step.targetIdentity.endsWith(`/invariant:${scenario.bound}`),
+		);
+		expect(constraintSteps, scenario.name).toHaveLength(2);
+		expect(
+			constraintSteps.map((step) => step.classification),
+			scenario.name,
+		).toEqual([scenario.expected, scenario.expected]);
+		expect(result.plan.classification, scenario.name).toBe(scenario.expected);
+	}
+});
