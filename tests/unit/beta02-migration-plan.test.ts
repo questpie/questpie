@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { resolve } from "node:path";
+import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 import {
 	compileApplication,
 	createCommittedMigration,
 	createMigrationPlan,
+	loadCommittedMigration,
 	verifyCommittedMigration,
 } from "@questpie/compiler";
 
@@ -96,6 +99,55 @@ describe("BETA-02 migration artifacts", () => {
 		expect(committed.files["up.sql"]).not.toMatch(
 			/CONCURRENTLY|ROW LEVEL SECURITY|CREATE POLICY/,
 		);
+	});
+
+	test("loads the committed six-file collaboration migration byte for byte", async () => {
+		const compilation = await compiledFixture;
+		const targetSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		const planned = createMigrationPlan({
+			targetSchema,
+			slug: "create-collaboration",
+		});
+		const expected = createCommittedMigration({
+			plan: planned.plan,
+			baseSchema: planned.baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: planned.digest,
+		});
+		const committed = await loadCommittedMigration(
+			resolve(fixtureRoot, "questpie/migrations/000001_create-collaboration"),
+		);
+
+		expect(committed).toEqual(expected);
+		expect(
+			Object.fromEntries(
+				Object.entries(committed.files).map(([name, bytes]) => [
+					name,
+					Buffer.byteLength(bytes),
+				]),
+			),
+		).toMatchSnapshot();
+	});
+
+	test("refuses an extra file in the committed migration directory", async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "questpie-migration-"));
+		try {
+			const directory = join(temporary, "000001_create-collaboration");
+			await cp(
+				resolve(fixtureRoot, "questpie/migrations/000001_create-collaboration"),
+				directory,
+				{ recursive: true },
+			);
+			await writeFile(join(directory, "notes.txt"), "not reviewed\n");
+			await expect(loadCommittedMigration(directory)).rejects.toThrow(
+				/QP-SCHEMA-023/,
+			);
+		} finally {
+			await rm(temporary, { recursive: true });
+		}
 	});
 
 	test("never infers a Field rename and consumes an explicit one-to-one mapping", async () => {

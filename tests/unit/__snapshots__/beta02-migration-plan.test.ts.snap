@@ -1,0 +1,12 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`BETA-02 migration artifacts loads the committed six-file collaboration migration byte for byte 1`] = `
+{
+  "base-schema.json": 252,
+  "checksum.sha256": 65,
+  "migration.json": 583,
+  "plan.json": 8857,
+  "target-schema.json": 9564,
+  "up.sql": 6207,
+}
+`;

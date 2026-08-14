@@ -50,6 +50,7 @@ export {
 	verifyCommittedMigration,
 	verifyCommittedMigrationChain,
 } from "./schema";
+export { loadCommittedMigration } from "./schema/index";
 export {
 	applyCommittedMigrations,
 	inspectSchemaFingerprint,
