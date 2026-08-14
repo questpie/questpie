@@ -48,6 +48,30 @@ function fieldType(field: RecordValue): string {
 	return type;
 }
 
+function fieldNodeType(field: RecordValue): string {
+	if (field.kind !== "inlineShape") return fieldType(field);
+	return `Readonly<{ ${Object.entries(record(field.fields))
+		.sort(([left], [right]) => compareAscii(left, right))
+		.map(
+			([key, child]) =>
+				`readonly ${JSON.stringify(key)}: ${fieldNodeType(record(child))};`,
+		)
+		.join(" ")} }>`;
+}
+
+function fieldAtPath(
+	fields: readonly [string, RecordValue][],
+	reference: unknown,
+): RecordValue | undefined {
+	const path = Array.isArray(reference) ? reference : [reference];
+	let node = fields.find(([name]) => name === path[0])?.[1];
+	for (const segment of path.slice(1)) {
+		if (!node || node.kind !== "inlineShape") return undefined;
+		node = record(node.fields)[String(segment)] as RecordValue | undefined;
+	}
+	return node?.kind === "inlineShape" ? undefined : node;
+}
+
 function embeddedValueType(value: RecordValue): string {
 	const options = record(value.options ?? {});
 	let type =
@@ -105,17 +129,17 @@ function renderData(resources: readonly NormalizedResource[]): string {
 			const row = fields
 				.map(
 					([key, field]) =>
-						`readonly ${JSON.stringify(key)}: ${fieldType(field)};`,
+						`readonly ${JSON.stringify(key)}: ${fieldNodeType(field)};`,
 				)
 				.join(" ");
 			const constraints = record(resource.value.constraints);
 			const primary = Object.values(constraints)
 				.map(record)
 				.find((constraint) => constraint.kind === "primaryKey");
-			const keys = ((primary?.fields ?? []) as readonly string[])
+			const keys = ((primary?.fields ?? []) as readonly unknown[])
 				.map((key) => {
-					const field = fields.find(([name]) => name === key)?.[1];
-					return `readonly ${JSON.stringify(key)}: ${field ? fieldType(field) : "never"};`;
+					const field = fieldAtPath(fields, key);
+					return `readonly ${JSON.stringify(Array.isArray(key) ? key.join("/") : key)}: ${field ? fieldType(field) : "never"};`;
 				})
 				.join(" ");
 			return `readonly ${JSON.stringify(resource.name)}: ReadCollection<Readonly<{ ${row} }>, Readonly<{ ${keys} }>>;`;

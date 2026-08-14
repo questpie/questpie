@@ -1,9 +1,12 @@
+import type { FieldNode, InlineShapeDefinition } from "./shape";
 import {
 	type TaggedJsonValue,
 	type ValueDefinition,
 	type ValueOf,
 } from "./value";
 
+export { shape } from "./shape";
+export type { FieldNode, InlineShapeDefinition } from "./shape";
 export { value } from "./value";
 export type { JsonValue, TaggedJsonValue, ValueDefinition } from "./value";
 
@@ -244,8 +247,10 @@ export const codec = Object.freeze({
 	> => Object.freeze({ kind: "object", properties }),
 });
 
+export type FieldReference = string | readonly [string, ...string[]];
+
 export interface ConstraintDefinition<
-	Fields extends readonly string[] = readonly never[],
+	Fields extends readonly FieldReference[] = readonly never[],
 	Kind extends "primaryKey" | "unique" = "primaryKey" | "unique",
 > {
 	readonly kind: Kind;
@@ -253,14 +258,18 @@ export interface ConstraintDefinition<
 	readonly postgresName: string | null;
 }
 
-function frozenTuple<const Values extends readonly string[]>(
+function frozenTuple<const Values extends readonly FieldReference[]>(
 	values: Values,
 ): Values {
-	return Object.freeze([...values]) as unknown as Values;
+	return Object.freeze(
+		values.map((value) =>
+			Array.isArray(value) ? Object.freeze([...value]) : value,
+		),
+	) as unknown as Values;
 }
 
 export const constraint = Object.freeze({
-	primaryKey: <const Fields extends readonly string[]>(
+	primaryKey: <const Fields extends readonly FieldReference[]>(
 		input: Readonly<{ fields: Fields; postgres?: { name: string } }>,
 	): ConstraintDefinition<Fields, "primaryKey"> =>
 		Object.freeze({
@@ -268,7 +277,7 @@ export const constraint = Object.freeze({
 			fields: frozenTuple(input.fields),
 			postgresName: input.postgres?.name ?? null,
 		}),
-	unique: <const Fields extends readonly string[]>(
+	unique: <const Fields extends readonly FieldReference[]>(
 		input: Readonly<{ fields: Fields; postgres?: { name: string } }>,
 	): ConstraintDefinition<Fields, "unique"> =>
 		Object.freeze({
@@ -279,14 +288,14 @@ export const constraint = Object.freeze({
 });
 
 export interface IndexDefinition<
-	Fields extends readonly string[] = readonly never[],
+	Fields extends readonly FieldReference[] = readonly never[],
 > {
 	readonly kind: "btree";
 	readonly fields: Fields;
 	readonly postgresName: string | null;
 }
 
-export function index<const Fields extends readonly string[]>(
+export function index<const Fields extends readonly FieldReference[]>(
 	input: Readonly<{ fields: Fields; postgres?: { name: string } }>,
 ): IndexDefinition<Fields> {
 	return Object.freeze({
@@ -298,8 +307,8 @@ export function index<const Fields extends readonly string[]>(
 
 export interface RelationDefinition<
 	Target extends `collection:${string}` = `collection:${string}`,
-	Fields extends readonly string[] = readonly never[],
-	References extends readonly string[] = readonly never[],
+	Fields extends readonly FieldReference[] = readonly never[],
+	References extends readonly FieldReference[] = readonly never[],
 > {
 	readonly kind: "toOne";
 	readonly target: Target;
@@ -319,8 +328,8 @@ export function relationRef<const Name extends string>(
 export const relation = Object.freeze({
 	toOne: <
 		const Target extends `collection:${string}`,
-		const Fields extends readonly string[],
-		const References extends readonly string[],
+		const Fields extends readonly FieldReference[],
+		const References extends readonly FieldReference[],
 	>(
 		input: Readonly<{
 			target: Target;
@@ -354,14 +363,14 @@ interface AugmentationBrand {
 
 export interface CollectionAugmentation<
 	Name extends string = string,
-	Fields extends Readonly<Record<string, FieldDefinition>> = Readonly<
+	Fields extends Readonly<Record<string, FieldNode>> = Readonly<
 		Record<never, never>
 	>,
 	Constraints extends Readonly<
-		Record<string, { readonly fields: readonly string[] }>
+		Record<string, { readonly fields: readonly FieldReference[] }>
 	> = Readonly<Record<never, never>>,
 	Indexes extends Readonly<
-		Record<string, { readonly fields: readonly string[] }>
+		Record<string, { readonly fields: readonly FieldReference[] }>
 	> = Readonly<Record<never, never>>,
 > {
 	readonly __questpie: AugmentationBrand;
@@ -373,17 +382,17 @@ export interface CollectionAugmentation<
 
 export interface CollectionDefinition<
 	Name extends string = string,
-	Fields extends Readonly<Record<string, FieldDefinition>> = Readonly<
+	Fields extends Readonly<Record<string, FieldNode>> = Readonly<
 		Record<never, never>
 	>,
 	Constraints extends Readonly<
-		Record<string, { readonly fields: readonly string[] }>
+		Record<string, { readonly fields: readonly FieldReference[] }>
 	> = Readonly<Record<never, never>>,
 	Indexes extends Readonly<
-		Record<string, { readonly fields: readonly string[] }>
+		Record<string, { readonly fields: readonly FieldReference[] }>
 	> = Readonly<Record<never, never>>,
 	Relations extends Readonly<
-		Record<string, { readonly fields: readonly string[] }>
+		Record<string, { readonly fields: readonly FieldReference[] }>
 	> = Readonly<Record<never, never>>,
 > {
 	readonly __questpie: DefinitionBrand;
@@ -397,27 +406,43 @@ export interface CollectionDefinition<
 }
 
 type ValidateFieldReferences<
-	Fields extends Readonly<Record<string, FieldDefinition>>,
+	Fields extends Readonly<Record<string, FieldNode>>,
 	Members extends Readonly<
-		Record<string, { readonly fields: readonly string[] }>
+		Record<string, { readonly fields: readonly FieldReference[] }>
 	>,
 > = {
 	readonly [Key in keyof Members]: Exclude<
 		Members[Key]["fields"][number],
-		Extract<keyof Fields, string>
+		FieldReferences<Fields>
 	> extends never
 		? Members[Key]
 		: never;
 };
 
+type NestedFieldSegments<Fields extends Readonly<Record<string, FieldNode>>> = {
+	[Key in Extract<keyof Fields, string>]: Fields[Key] extends FieldDefinition
+		? readonly [Key]
+		: Fields[Key] extends InlineShapeDefinition<infer Children>
+			? readonly [Key, ...NestedFieldSegments<Children>]
+			: never;
+}[Extract<keyof Fields, string>];
+
+type FieldReferences<Fields extends Readonly<Record<string, FieldNode>>> = {
+	[Key in Extract<keyof Fields, string>]: Fields[Key] extends FieldDefinition
+		? Key
+		: Fields[Key] extends InlineShapeDefinition<infer Children>
+			? readonly [Key, ...NestedFieldSegments<Children>]
+			: never;
+}[Extract<keyof Fields, string>];
+
 export function defineCollectionAugmentation<
 	const Name extends string,
-	const Fields extends Readonly<Record<string, FieldDefinition>>,
+	const Fields extends Readonly<Record<string, FieldNode>>,
 	const Constraints extends Readonly<
-		Record<string, { readonly fields: readonly string[] }>
+		Record<string, { readonly fields: readonly FieldReference[] }>
 	>,
 	const Indexes extends Readonly<
-		Record<string, { readonly fields: readonly string[] }>
+		Record<string, { readonly fields: readonly FieldReference[] }>
 	>,
 >(
 	input: Readonly<{
@@ -441,15 +466,15 @@ export function defineCollectionAugmentation<
 
 export function defineCollection<
 	const Name extends string,
-	const Fields extends Readonly<Record<string, FieldDefinition>>,
+	const Fields extends Readonly<Record<string, FieldNode>>,
 	const Constraints extends Readonly<
-		Record<string, { readonly fields: readonly string[] }>
+		Record<string, { readonly fields: readonly FieldReference[] }>
 	>,
 	const Indexes extends Readonly<
-		Record<string, { readonly fields: readonly string[] }>
+		Record<string, { readonly fields: readonly FieldReference[] }>
 	>,
 	const Relations extends Readonly<
-		Record<string, { readonly fields: readonly string[] }>
+		Record<string, { readonly fields: readonly FieldReference[] }>
 	>,
 >(
 	input: Readonly<{
@@ -484,48 +509,66 @@ type SeedValueForField<Field> =
 			: Value | (Nullable extends true ? null : never)
 		: never;
 
-type RequiredSeedKeys<
-	Fields extends Readonly<Record<string, FieldDefinition>>,
-> = {
+type SeedValueForNode<
+	Node,
+	Mode extends "insert" | "partial",
+> = Node extends FieldDefinition
+	? SeedValueForField<Node>
+	: Node extends InlineShapeDefinition<infer Children>
+		? Mode extends "insert"
+			? SeedInsertValues<Children>
+			: SeedPartialValues<Children>
+		: never;
+
+type RequiredSeedKeys<Fields extends Readonly<Record<string, FieldNode>>> = {
 	[Key in keyof Fields]: Fields[Key] extends FieldDefinition<
 		unknown,
 		false,
 		null
 	>
 		? Key
-		: never;
+		: Fields[Key] extends InlineShapeDefinition<infer Children>
+			? RequiredSeedKeys<Children> extends never
+				? never
+				: Key
+			: never;
 }[keyof Fields];
 
-type SeedInsertValues<
-	Fields extends Readonly<Record<string, FieldDefinition>>,
-> = Readonly<
-	{ [Key in RequiredSeedKeys<Fields>]: SeedValueForField<Fields[Key]> } & {
-		[Key in Exclude<
-			keyof Fields,
-			RequiredSeedKeys<Fields>
-		>]?: SeedValueForField<Fields[Key]>;
-	}
->;
+type SeedInsertValues<Fields extends Readonly<Record<string, FieldNode>>> =
+	Readonly<
+		{
+			[Key in RequiredSeedKeys<Fields>]: SeedValueForNode<
+				Fields[Key],
+				"insert"
+			>;
+		} & {
+			[Key in Exclude<
+				keyof Fields,
+				RequiredSeedKeys<Fields>
+			>]?: SeedValueForNode<Fields[Key], "insert">;
+		}
+	>;
 
-type SeedPartialValues<
-	Fields extends Readonly<Record<string, FieldDefinition>>,
-> = Readonly<{ [Key in keyof Fields]?: SeedValueForField<Fields[Key]> }>;
+type SeedPartialValues<Fields extends Readonly<Record<string, FieldNode>>> =
+	Readonly<{
+		[Key in keyof Fields]?: SeedValueForNode<Fields[Key], "partial">;
+	}>;
 
 type PrimaryKeyNames<Constraints> = {
 	[Key in keyof Constraints]: Constraints[Key] extends ConstraintDefinition<
 		infer Fields,
 		"primaryKey"
 	>
-		? Fields[number]
+		? Extract<Fields[number], string>
 		: never;
 }[keyof Constraints];
 
 type SeedPrimaryKey<
-	Fields extends Readonly<Record<string, FieldDefinition>>,
+	Fields extends Readonly<Record<string, FieldNode>>,
 	Constraints,
 > = Readonly<{
 	[Key in Extract<PrimaryKeyNames<Constraints>, keyof Fields>]-?: Exclude<
-		SeedValueForField<Fields[Key]>,
+		SeedValueForField<Extract<Fields[Key], FieldDefinition>>,
 		null
 	>;
 }>;
@@ -569,7 +612,7 @@ function collectionIdentity<const Name extends string>(
 export const seed = Object.freeze({
 	insert: <
 		const Name extends string,
-		const Fields extends Readonly<Record<string, FieldDefinition>>,
+		const Fields extends Readonly<Record<string, FieldNode>>,
 	>(
 		collection: CollectionDefinition<Name, Fields>,
 		values: SeedInsertValues<Fields>,
@@ -581,7 +624,7 @@ export const seed = Object.freeze({
 		}),
 	update: <
 		const Name extends string,
-		const Fields extends Readonly<Record<string, FieldDefinition>>,
+		const Fields extends Readonly<Record<string, FieldNode>>,
 		const Constraints extends Readonly<
 			Record<string, ConstraintDefinition<readonly string[]>>
 		>,
@@ -600,7 +643,7 @@ export const seed = Object.freeze({
 		}),
 	upsert: <
 		const Name extends string,
-		const Fields extends Readonly<Record<string, FieldDefinition>>,
+		const Fields extends Readonly<Record<string, FieldNode>>,
 		const Constraints extends Readonly<
 			Record<string, ConstraintDefinition<readonly string[]>>
 		>,
@@ -621,7 +664,7 @@ export const seed = Object.freeze({
 		}),
 	delete: <
 		const Name extends string,
-		const Fields extends Readonly<Record<string, FieldDefinition>>,
+		const Fields extends Readonly<Record<string, FieldNode>>,
 		const Constraints extends Readonly<
 			Record<string, ConstraintDefinition<readonly string[]>>
 		>,

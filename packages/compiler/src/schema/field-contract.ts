@@ -71,7 +71,17 @@ function embeddedValueContract(value: RecordValue): RecordValue {
 	return base;
 }
 
-export function fieldContract(key: string, value: RecordValue): RecordValue {
+export function fieldContract(
+	path: readonly string[],
+	value: RecordValue,
+): RecordValue {
+	const key = path.at(-1);
+	if (!key)
+		throw new CompilerDiagnosticError(
+			"QP-SCHEMA-001",
+			"invalidDefinition",
+			"a Field path cannot be empty",
+		);
 	const scalar = string(value.scalar, `${key}.scalar`);
 	const options = record(value.options ?? {}, `${key}.options`);
 	let type: RecordValue;
@@ -122,11 +132,36 @@ export function fieldContract(key: string, value: RecordValue): RecordValue {
 				? { kind: "literal", value: rawDefault }
 				: null;
 	return {
-		path: [key],
+		path,
 		type,
 		nullable: value.nullable === true,
 		default: normalizedDefault,
 		postgresName:
 			typeof value.postgresName === "string" ? value.postgresName : null,
 	};
+}
+
+export function flattenFieldContracts(
+	fields: unknown,
+	prefix: readonly string[] = [],
+): ReadonlyArray<Readonly<{ path: readonly string[]; contract: RecordValue }>> {
+	return entries(fields).flatMap(([key, value]) => {
+		const path = [...prefix, key];
+		if (value.kind !== "inlineShape")
+			return [{ path, contract: fieldContract(path, value) }];
+		if (path.length > 8)
+			throw new CompilerDiagnosticError(
+				"QP-SCHEMA-001",
+				"invalidDefinition",
+				`${path.join("/")} exceeds the inline shape depth limit`,
+			);
+		const children = record(value.fields, `${path.join("/")}.fields`);
+		if (Object.keys(children).length === 0)
+			throw new CompilerDiagnosticError(
+				"QP-SCHEMA-001",
+				"invalidDefinition",
+				`${path.join("/")} inline shape cannot be empty`,
+			);
+		return flattenFieldContracts(children, path);
+	});
 }

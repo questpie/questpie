@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { CompilerDiagnosticError } from "./diagnostic";
-import { fieldContract } from "./schema/field-contract";
+import { flattenFieldContracts } from "./schema/field-contract";
 import type {
 	ApplicationConfiguration,
 	EvaluatedExport,
@@ -44,7 +44,7 @@ function entries(value: unknown): [string, RecordValue][] {
 function constraintContract(value: RecordValue): RecordValue {
 	return {
 		kind: string(value.kind, "constraint.kind"),
-		fields: (value.fields as readonly string[]).map((field) => [field]),
+		fields: (value.fields as readonly unknown[]).map(fieldPath),
 		postgresName:
 			typeof value.postgresName === "string" ? value.postgresName : null,
 	};
@@ -53,8 +53,8 @@ function constraintContract(value: RecordValue): RecordValue {
 function indexContract(value: RecordValue): RecordValue {
 	return {
 		kind: "btree",
-		fields: (value.fields as readonly string[]).map((field) => ({
-			field: [field],
+		fields: (value.fields as readonly unknown[]).map((field) => ({
+			field: fieldPath(field),
 			order: "asc",
 			nulls: "last",
 		})),
@@ -67,8 +67,8 @@ function relationContract(value: RecordValue): RecordValue {
 	return {
 		kind: "toOne",
 		target: value.target,
-		fields: (value.fields as readonly string[]).map((field) => [field]),
-		references: (value.references as readonly string[]).map((field) => [field]),
+		fields: (value.fields as readonly unknown[]).map(fieldPath),
+		references: (value.references as readonly unknown[]).map(fieldPath),
 		onDelete: value.onDelete,
 		onUpdate: value.onUpdate,
 		postgresName:
@@ -76,14 +76,27 @@ function relationContract(value: RecordValue): RecordValue {
 	};
 }
 
+function fieldPath(value: unknown): readonly string[] {
+	if (typeof value === "string") return [value];
+	if (
+		!Array.isArray(value) ||
+		value.length === 0 ||
+		value.some((segment) => typeof segment !== "string")
+	)
+		throw new CompilerDiagnosticError(
+			"QP-SCHEMA-003",
+			"invalidReference",
+			"a Field reference must be a string or non-empty segment array",
+		);
+	return value as readonly string[];
+}
+
 function augmentationContract(value: RecordValue): RecordValue {
 	return {
 		format: "questpie.collection-augmentation-contract",
 		version: 1,
 		name: string(value.name, "augmentation.name"),
-		fields: entries(value.fields).map(([key, field]) =>
-			fieldContract(key, field),
-		),
+		fields: flattenFieldContracts(value.fields).map(({ contract }) => contract),
 		constraints: entries(value.constraints).map(([key, constraint]) => ({
 			key,
 			contract: constraintContract(constraint),
@@ -223,9 +236,7 @@ function ownerCollectionContract(
 		name: string(value.name, "collection.name"),
 		postgresName:
 			typeof value.postgresName === "string" ? value.postgresName : null,
-		fields: entries(value.fields).map(([key, field]) =>
-			fieldContract(key, field),
-		),
+		fields: flattenFieldContracts(value.fields).map(({ contract }) => contract),
 		constraints: entries(value.constraints).map(([key, constraint]) => ({
 			key,
 			contract: constraintContract(constraint),
@@ -473,10 +484,10 @@ function boundConstraints(
 	configuration: ApplicationConfiguration,
 	collectionIdentity: string,
 	tableName: string,
-	field: Readonly<{ key: string; contract: RecordValue }>,
+	field: Readonly<{ path: readonly string[]; contract: RecordValue }>,
 ): RecordValue[] {
 	const type = record(field.contract.type, "Field type");
-	const fieldIdentity = `${collectionIdentity}/field:${field.key}`;
+	const fieldIdentity = fieldSemanticIdentity(collectionIdentity, field.path);
 	const bounds =
 		type.kind === "text"
 			? (["minLength", "maxLength"] as const)
@@ -502,7 +513,7 @@ function boundConstraints(
 					configuration,
 					identity,
 					null,
-					`qp_ck_${tableName}_${snake(field.key)}_${snake(bound)}`,
+					`qp_ck_${tableName}_${field.path.map(snake).join("_")}_${snake(bound)}`,
 				),
 				expression: {
 					kind: "compare",
@@ -516,6 +527,13 @@ function boundConstraints(
 			},
 		];
 	});
+}
+
+function fieldSemanticIdentity(
+	collectionIdentity: string,
+	path: readonly string[],
+): string {
+	return `${collectionIdentity}/${path.map((segment) => `field:${segment}`).join("/")}`;
 }
 
 function resolvedCollectionEntries(
@@ -557,14 +575,16 @@ function resolvedCollectionEntries(
 }
 
 function resolvedFields(resource: NormalizedResource): Array<{
-	key: string;
+	path: readonly string[];
 	contract: RecordValue;
 	contributionIdentity: string | null;
 }> {
-	return resolvedCollectionEntries(resource, "fields").map((entry) => ({
-		...entry,
-		contract: fieldContract(entry.key, entry.contract),
-	}));
+	return resolvedCollectionEntries(resource, "fields").flatMap((entry) =>
+		flattenFieldContracts({ [entry.key]: entry.contract }).map((field) => ({
+			...field,
+			contributionIdentity: entry.contributionIdentity,
+		})),
+	);
 }
 
 export function projectMemberContributions(
@@ -574,8 +594,8 @@ export function projectMemberContributions(
 > {
 	if (resource.kind !== "collection") return [];
 	return [
-		...resolvedCollectionEntries(resource, "fields").map((entry) => ({
-			identity: `${resource.identity}/field:${entry.key}`,
+		...resolvedFields(resource).map((entry) => ({
+			identity: fieldSemanticIdentity(resource.identity, entry.path),
 			contributionIdentity: entry.contributionIdentity,
 		})),
 		...resolvedCollectionEntries(resource, "constraints").map((entry) => ({
@@ -608,16 +628,16 @@ export function projectManifest(
 			resource.value.postgresName,
 			defaultCollectionName(resource.name),
 		);
-		const projectedFields = fields.map(({ key, contract }) => {
-			const identity = `${resource.identity}/field:${key}`;
+		const projectedFields = fields.map(({ path, contract }) => {
+			const identity = fieldSemanticIdentity(resource.identity, path);
 			return {
 				identity,
-				path: [key],
+				path,
 				postgresName: physicalName(
 					configuration,
 					identity,
 					contract.postgresName,
-					snake(key),
+					path.map(snake).join("_"),
 				),
 				type: contract.type,
 				nullable: contract.nullable,
@@ -647,8 +667,8 @@ export function projectManifest(
 							value.postgresName,
 							`${prefix}_${tableName}_${snake(key)}`,
 						),
-						fields: (value.fields as readonly string[]).map(
-							(field) => `${resource.identity}/field:${field}`,
+						fields: (value.fields as readonly unknown[]).map((field) =>
+							fieldSemanticIdentity(resource.identity, fieldPath(field)),
 						),
 					};
 				},
@@ -680,15 +700,16 @@ export function projectManifest(
 						value.postgresName,
 						`qp_ix_${tableName}_${snake(key)}`,
 					),
-					fields: (value.fields as readonly string[]).map((field) => ({
-						field: `${resource.identity}/field:${field}`,
+					fields: (value.fields as readonly unknown[]).map((field) => ({
+						field: fieldSemanticIdentity(resource.identity, fieldPath(field)),
 						order: "asc",
 						nulls: "last",
 						operatorClass: "typeDefault",
 						collation:
 							projectedFields.find(
 								(candidate) =>
-									candidate.identity === `${resource.identity}/field:${field}`,
+									candidate.identity ===
+									fieldSemanticIdentity(resource.identity, fieldPath(field)),
 							)?.collation === "questpie.binary"
 								? "field"
 								: null,
@@ -702,11 +723,11 @@ export function projectManifest(
 				kind: "toOne",
 				identity,
 				target: value.target,
-				fields: (value.fields as readonly string[]).map(
-					(field) => `${resource.identity}/field:${field}`,
+				fields: (value.fields as readonly unknown[]).map((field) =>
+					fieldSemanticIdentity(resource.identity, fieldPath(field)),
 				),
-				references: (value.references as readonly string[]).map(
-					(field) => `${value.target}/field:${field}`,
+				references: (value.references as readonly unknown[]).map((field) =>
+					fieldSemanticIdentity(String(value.target), fieldPath(field)),
 				),
 				constraintPostgresName: physicalName(
 					configuration,

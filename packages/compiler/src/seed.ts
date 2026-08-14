@@ -209,12 +209,6 @@ function record(
 		);
 	const input = value as Record<string, unknown>;
 	const fields = children(collection, "fields");
-	const byKey = new Map(
-		fields.map((field) => [
-			String((field.path as readonly string[]).at(-1)),
-			field,
-		]),
-	);
 	const primary = children(collection, "constraints").find(
 		(item) => item.kind === "primaryKey",
 	);
@@ -229,19 +223,45 @@ function record(
 						.map((field) => String(field.identity)),
 				);
 	const result: SeedFieldValueV1[] = [];
-	for (const [key, raw] of Object.entries(input)) {
-		const field = byKey.get(key);
-		if (!field || (mode === "key" && !requiredKeys.has(String(field.identity))))
-			return seedError(
-				"QP-SEED-003",
-				"stepSchemaIncompatible",
-				`Seed record contains invalid Field ${key}`,
+	const visit = (
+		current: Readonly<Record<string, unknown>>,
+		prefix: readonly string[],
+	): void => {
+		for (const [key, raw] of Object.entries(current)) {
+			const path = [...prefix, key];
+			const field = fields.find(
+				(candidate) => canonicalBytes(candidate.path) === canonicalBytes(path),
 			);
-		result.push({
-			field: String(field.identity),
-			value: normalizeValue(field, raw),
-		});
-	}
+			if (field) {
+				if (mode === "key" && !requiredKeys.has(String(field.identity)))
+					return seedError(
+						"QP-SEED-003",
+						"stepSchemaIncompatible",
+						`Seed record contains invalid Field ${path.join("/")}`,
+					);
+				result.push({
+					field: String(field.identity),
+					value: normalizeValue(field, raw),
+				});
+				continue;
+			}
+			const hasChildren = fields.some((candidate) => {
+				const candidatePath = candidate.path as readonly string[];
+				return (
+					candidatePath.length > path.length &&
+					path.every((segment, index) => candidatePath[index] === segment)
+				);
+			});
+			if (!hasChildren || !raw || typeof raw !== "object" || Array.isArray(raw))
+				return seedError(
+					"QP-SEED-003",
+					"stepSchemaIncompatible",
+					`Seed record contains invalid Field ${path.join("/")}`,
+				);
+			visit(raw as Readonly<Record<string, unknown>>, path);
+		}
+	};
+	visit(input, []);
 	const present = new Set(result.map((item) => item.field));
 	if (mode !== "partial")
 		for (const identity of requiredKeys)
