@@ -2,8 +2,16 @@ import { createHash } from "node:crypto";
 
 import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { CompilerDiagnosticError } from "./diagnostic";
-import { maximumClassification } from "./schema/migration-classification";
+import {
+	classifyProviderDelta,
+	maximumClassification,
+} from "./schema/migration-classification";
 import type { MigrationClassification } from "./schema/migration-classification";
+import type {
+	MigrationPlanInput,
+	MigrationPlanningResult,
+	PlannedMigration,
+} from "./schema/migration-planning";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 
@@ -12,7 +20,7 @@ export interface SchemaProjectionV1 extends JsonRecord {
 	readonly version: 1;
 	readonly application: Readonly<{ name: string; postgresSchema: string }>;
 	readonly requiredPostgres: Readonly<{
-		minimumMajor: 16;
+		minimumMajor: number;
 		databaseCollation: string;
 		databaseCType: string;
 		extensions: readonly Readonly<{ name: string }>[];
@@ -76,19 +84,6 @@ export interface MigrationPlanV1 extends JsonRecord {
 	readonly classification: MigrationClassification;
 	readonly steps: readonly MigrationStepV1[];
 }
-
-export interface PlannedMigration {
-	readonly status: "planned";
-	readonly plan: MigrationPlanV1;
-	readonly digest: string;
-	readonly baseSchema: SchemaProjectionV1;
-}
-
-export interface NoChangesMigration {
-	readonly status: "noChanges";
-}
-
-export type MigrationPlanningResult = PlannedMigration | NoChangesMigration;
 
 export interface CommittedMigration {
 	readonly identity: string;
@@ -617,17 +612,6 @@ function destructiveDeltaSteps(
 	return sortSteps(steps);
 }
 
-interface MigrationPlanInput {
-	readonly targetSchema: SchemaProjectionV1;
-	readonly baseSchema?: SchemaProjectionV1;
-	readonly baseMigration?: string | null;
-	readonly slug: string;
-	readonly renames?: readonly Readonly<{
-		from: RenameIdentityV1;
-		to: RenameIdentityV1;
-	}>[];
-}
-
 export function createMigrationPlan(
 	input: MigrationPlanInput & Readonly<{ baseSchema?: undefined }>,
 ): PlannedMigration;
@@ -660,12 +644,25 @@ export function createMigrationPlan(
 		compareAscii(`${left.from}\0${left.to}`, `${right.from}\0${right.to}`),
 	);
 	validateRenames(base, target, renames);
-	if (renames.length === 0 && canonicalBytes(base) === canonicalBytes(target))
-		return { status: "noChanges" };
 	const steps =
 		base.collections.length === 0
 			? createSteps(target)
 			: destructiveDeltaSteps(base, target, renames);
+	const providerDelta = classifyProviderDelta(
+		base.requiredPostgres,
+		target.requiredPostgres,
+	);
+	if (
+		steps.length === 0 &&
+		providerDelta === null &&
+		canonicalBytes(base) === canonicalBytes(target)
+	)
+		return { status: "noChanges" };
+	const classifiedSteps = providerDelta
+		? [...steps, { classification: providerDelta }]
+		: steps.length > 0
+			? steps
+			: [{ classification: "blocked" as const }];
 	const plan: MigrationPlanV1 = {
 		format: "questpie.migration-plan",
 		version: 1,
@@ -676,7 +673,7 @@ export function createMigrationPlan(
 		targetSchemaDigest: schemaDigest(target),
 		renames,
 		requiredPostgres: target.requiredPostgres,
-		classification: maximumClassification(steps),
+		classification: maximumClassification(classifiedSteps),
 		steps,
 	};
 	return {

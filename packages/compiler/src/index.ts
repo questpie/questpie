@@ -76,14 +76,16 @@ export type {
 	CommittedMigration,
 	CommittedMigrationFilesV1,
 	MigrationPlanV1,
-	MigrationPlanningResult,
 	MigrationStepKindV1,
 	MigrationStepV1,
-	NoChangesMigration,
-	PlannedMigration,
 	RenameIdentityV1,
 	SchemaProjectionV1,
 } from "./schema";
+export type {
+	MigrationPlanningResult,
+	NoChangesMigration,
+	PlannedMigration,
+} from "./schema/migration-planning";
 
 export interface CompileApplicationOptions {
 	readonly applicationRoot: string;
