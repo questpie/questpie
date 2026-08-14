@@ -51,6 +51,7 @@ export type {
 	CommittedMigration,
 	CommittedMigrationFilesV1,
 	MigrationPlanV1,
+	RenameIdentityV1,
 	MigrationStepKindV1,
 	MigrationStepV1,
 	PlannedMigration,

@@ -24,6 +24,10 @@ export type MigrationClassification =
 	| "destructive"
 	| "blocked";
 
+export type RenameIdentityV1 =
+	| `collection:${string}`
+	| `collection:${string}/field:${string}`;
+
 export type MigrationStepKindV1 =
 	| "createApplicationSchema"
 	| "renameCollection"
@@ -68,7 +72,10 @@ export interface MigrationPlanV1 extends JsonRecord {
 	readonly baseMigration: string | null;
 	readonly baseSchemaDigest: string;
 	readonly targetSchemaDigest: string;
-	readonly renames: readonly Readonly<{ from: string; to: string }>[];
+	readonly renames: readonly Readonly<{
+		from: RenameIdentityV1;
+		to: RenameIdentityV1;
+	}>[];
 	readonly requiredPostgres: SchemaProjectionV1["requiredPostgres"];
 	readonly classification: MigrationClassification;
 	readonly steps: readonly MigrationStepV1[];
@@ -309,40 +316,173 @@ function createSteps(target: SchemaProjectionV1): MigrationStepV1[] {
 	return sortSteps(steps);
 }
 
+function allRenameable(schema: SchemaProjectionV1): Map<string, JsonRecord> {
+	const result = mapByIdentity(schema.collections, "Collection");
+	for (const collection of schema.collections)
+		for (const field of childRecords(collection, "fields"))
+			result.set(String(field.identity), field);
+	return result;
+}
+
+function validateRenames(
+	base: SchemaProjectionV1,
+	target: SchemaProjectionV1,
+	renames: MigrationPlanV1["renames"],
+): void {
+	const baseObjects = allRenameable(base);
+	const targetObjects = allRenameable(target);
+	const from = new Set<string>();
+	const to = new Set<string>();
+	for (const mapping of renames) {
+		const fromField = mapping.from.includes("/field:");
+		const toField = mapping.to.includes("/field:");
+		if (
+			mapping.from === mapping.to ||
+			fromField !== toField ||
+			from.has(mapping.from) ||
+			to.has(mapping.to) ||
+			!baseObjects.has(mapping.from) ||
+			!targetObjects.has(mapping.to)
+		)
+			return schemaError(
+				"QP-SCHEMA-001",
+				"invalidDefinition",
+				`rename mapping ${mapping.from}=${mapping.to} is not one-to-one over the base and target`,
+			);
+		if (
+			fromField &&
+			canonicalBytes(baseObjects.get(mapping.from)?.type) !==
+				canonicalBytes(targetObjects.get(mapping.to)?.type)
+		)
+			return schemaError(
+				"QP-SCHEMA-031",
+				"nonTransactionalDdl",
+				`rename mapping ${mapping.from}=${mapping.to} is not type-compatible`,
+			);
+		from.add(mapping.from);
+		to.add(mapping.to);
+	}
+}
+
+function mapIdentityForward(
+	identity: string,
+	renames: MigrationPlanV1["renames"],
+): string {
+	const mapping = [...renames]
+		.sort((left, right) => right.from.length - left.from.length)
+		.find(
+			(candidate) =>
+				identity === candidate.from ||
+				identity.startsWith(`${candidate.from}/`),
+		);
+	return mapping
+		? `${mapping.to}${identity.slice(mapping.from.length)}`
+		: identity;
+}
+
+function mapIdentityBackward(
+	identity: string,
+	renames: MigrationPlanV1["renames"],
+): string {
+	const mapping = [...renames]
+		.sort((left, right) => right.to.length - left.to.length)
+		.find(
+			(candidate) =>
+				identity === candidate.to || identity.startsWith(`${candidate.to}/`),
+		);
+	return mapping
+		? `${mapping.from}${identity.slice(mapping.to.length)}`
+		: identity;
+}
+
+function semanticComparable(
+	value: unknown,
+	renames: MigrationPlanV1["renames"],
+): unknown {
+	if (typeof value === "string") return mapIdentityForward(value, renames);
+	if (Array.isArray(value))
+		return value.map((item) => semanticComparable(item, renames));
+	if (!value || typeof value !== "object") return value;
+	const result: Record<string, unknown> = {};
+	for (const [key, item] of Object.entries(value)) {
+		if (
+			key === "postgresName" ||
+			key === "constraintPostgresName" ||
+			key === "path"
+		)
+			continue;
+		result[key] = semanticComparable(item, renames);
+	}
+	return result;
+}
+
+function deltaKind(
+	key: "fields" | "constraints" | "relations" | "indexes",
+	operation: "add" | "drop" | "rename",
+): MigrationStepKindV1 {
+	if (key === "fields")
+		return operation === "add"
+			? "addField"
+			: operation === "drop"
+				? "dropField"
+				: "renameField";
+	if (key === "constraints")
+		return operation === "add"
+			? "addConstraint"
+			: operation === "drop"
+				? "dropConstraint"
+				: "renameConstraint";
+	if (key === "relations")
+		return operation === "add"
+			? "addRelation"
+			: operation === "drop"
+				? "dropRelation"
+				: "renameRelationConstraint";
+	return operation === "add"
+		? "addIndex"
+		: operation === "drop"
+			? "dropIndex"
+			: "renameIndex";
+}
+
 function destructiveDeltaSteps(
 	base: SchemaProjectionV1,
 	target: SchemaProjectionV1,
+	renames: MigrationPlanV1["renames"],
 ): MigrationStepV1[] {
+	validateRenames(base, target, renames);
 	const baseCollections = mapByIdentity(base.collections, "base Collection");
 	const targetCollections = mapByIdentity(
 		target.collections,
 		"target Collection",
 	);
 	const steps: MigrationStepV1[] = [];
-	for (const collection of target.collections)
-		if (!baseCollections.has(String(collection.identity)))
+	for (const targetCollection of target.collections) {
+		const targetIdentity = String(targetCollection.identity);
+		const baseIdentity = mapIdentityBackward(targetIdentity, renames);
+		const baseCollection = baseCollections.get(baseIdentity);
+		if (!baseCollection) {
 			steps.push(
-				...createSteps({ ...target, collections: [collection] }).slice(1),
+				...createSteps({ ...target, collections: [targetCollection] }).slice(1),
 			);
-	for (const collection of base.collections) {
-		const identity = String(collection.identity);
-		if (!targetCollections.has(identity))
+			continue;
+		}
+		if (
+			baseIdentity !== targetIdentity ||
+			baseCollection.postgresName !== targetCollection.postgresName
+		)
 			steps.push(
 				step({
-					kind: "dropCollection",
-					targetIdentity: identity,
+					kind: "renameCollection",
+					targetIdentity,
 					containerIdentity: `application:${target.application.name}`,
 					lock: "accessExclusive",
-					scansData: true,
+					scansData: false,
 					rewritesTable: false,
-					reversibleWithoutData: false,
+					reversibleWithoutData: true,
 					classification: "destructive",
 				}),
 			);
-	}
-	for (const [identity, targetCollection] of targetCollections) {
-		const baseCollection = baseCollections.get(identity);
-		if (!baseCollection) continue;
 		for (const key of [
 			"fields",
 			"constraints",
@@ -353,77 +493,115 @@ function destructiveDeltaSteps(
 				childRecords(baseCollection, key),
 				`base ${key}`,
 			);
-			const after = mapByIdentity(
-				childRecords(targetCollection, key),
-				`target ${key}`,
-			);
-			for (const value of childRecords(targetCollection, key)) {
-				const childIdentity = String(value.identity);
-				if (!before.has(childIdentity)) {
-					const kind =
-						key === "fields"
-							? "addField"
-							: key === "constraints"
-								? "addConstraint"
-								: key === "relations"
-									? "addRelation"
-									: "addIndex";
+			const matchedBase = new Set<string>();
+			for (const targetValue of childRecords(targetCollection, key)) {
+				const targetChildIdentity = String(targetValue.identity);
+				const baseChildIdentity = mapIdentityBackward(
+					targetChildIdentity,
+					renames,
+				);
+				const baseValue = before.get(baseChildIdentity);
+				if (!baseValue) {
+					const isField = key === "fields";
+					const literalDefault =
+						isField &&
+						(targetValue.default as JsonRecord | null)?.kind === "literal";
+					const classification: MigrationClassification =
+						isField &&
+						targetValue.nullable === true &&
+						targetValue.default === null
+							? "safe"
+							: isField && targetValue.nullable !== true
+								? literalDefault
+									? "destructive"
+									: "blocked"
+								: "guarded";
 					steps.push(
 						step({
-							kind,
-							targetIdentity: childIdentity,
-							containerIdentity: identity,
+							kind: deltaKind(key, "add"),
+							targetIdentity: targetChildIdentity,
+							containerIdentity: targetIdentity,
 							lock: "accessExclusive",
-							scansData: true,
+							scansData: classification !== "safe",
 							rewritesTable: false,
-							reversibleWithoutData: true,
-							classification:
-								key === "fields" &&
-								value.nullable === true &&
-								value.default === null
-									? "safe"
-									: "guarded",
+							reversibleWithoutData: classification !== "blocked",
+							classification,
 						}),
 					);
-				} else if (
-					canonicalBytes(before.get(childIdentity)) !== canonicalBytes(value)
-				) {
+					continue;
+				}
+				matchedBase.add(baseChildIdentity);
+				const derivedRename = baseChildIdentity !== targetChildIdentity;
+				const physicalName =
+					key === "relations" ? "constraintPostgresName" : "postgresName";
+				const physicalChanged =
+					baseValue[physicalName] !== targetValue[physicalName];
+				if (derivedRename || (key === "fields" && physicalChanged))
 					steps.push(
 						step({
-							kind:
-								key === "fields"
-									? "alterField"
-									: key === "constraints"
-										? "addConstraint"
-										: key === "relations"
-											? "addRelation"
-											: "addIndex",
-							targetIdentity: childIdentity,
-							containerIdentity: identity,
+							kind: deltaKind(key, "rename"),
+							targetIdentity: targetChildIdentity,
+							containerIdentity: targetIdentity,
 							lock: "accessExclusive",
-							scansData: true,
-							rewritesTable: key === "fields",
-							reversibleWithoutData: false,
+							scansData: false,
+							rewritesTable: false,
+							reversibleWithoutData: true,
 							classification: "destructive",
 						}),
 					);
+				const semanticChanged =
+					canonicalBytes(semanticComparable(baseValue, renames)) !==
+					canonicalBytes(semanticComparable(targetValue, []));
+				if (
+					semanticChanged ||
+					(!derivedRename && key !== "fields" && physicalChanged)
+				) {
+					if (key === "fields")
+						steps.push(
+							step({
+								kind: "alterField",
+								targetIdentity: targetChildIdentity,
+								containerIdentity: targetIdentity,
+								lock: "accessExclusive",
+								scansData: true,
+								rewritesTable: true,
+								reversibleWithoutData: false,
+								classification: "destructive",
+							}),
+						);
+					else
+						steps.push(
+							step({
+								kind: deltaKind(key, "drop"),
+								targetIdentity: baseChildIdentity,
+								containerIdentity: baseIdentity,
+								lock: "accessExclusive",
+								scansData: true,
+								rewritesTable: false,
+								reversibleWithoutData: false,
+								classification: "destructive",
+							}),
+							step({
+								kind: deltaKind(key, "add"),
+								targetIdentity: targetChildIdentity,
+								containerIdentity: targetIdentity,
+								lock: "accessExclusive",
+								scansData: true,
+								rewritesTable: false,
+								reversibleWithoutData: false,
+								classification: "destructive",
+							}),
+						);
 				}
 			}
-			for (const value of childRecords(baseCollection, key)) {
-				const childIdentity = String(value.identity);
-				if (!after.has(childIdentity))
+			for (const baseValue of childRecords(baseCollection, key)) {
+				const baseChildIdentity = String(baseValue.identity);
+				if (!matchedBase.has(baseChildIdentity))
 					steps.push(
 						step({
-							kind:
-								key === "fields"
-									? "dropField"
-									: key === "constraints"
-										? "dropConstraint"
-										: key === "relations"
-											? "dropRelation"
-											: "dropIndex",
-							targetIdentity: childIdentity,
-							containerIdentity: identity,
+							kind: deltaKind(key, "drop"),
+							targetIdentity: baseChildIdentity,
+							containerIdentity: baseIdentity,
 							lock: "accessExclusive",
 							scansData: true,
 							rewritesTable: false,
@@ -434,6 +612,22 @@ function destructiveDeltaSteps(
 			}
 		}
 	}
+	for (const baseCollection of base.collections) {
+		const baseIdentity = String(baseCollection.identity);
+		if (!targetCollections.has(mapIdentityForward(baseIdentity, renames)))
+			steps.push(
+				step({
+					kind: "dropCollection",
+					targetIdentity: baseIdentity,
+					containerIdentity: `application:${target.application.name}`,
+					lock: "accessExclusive",
+					scansData: true,
+					rewritesTable: false,
+					reversibleWithoutData: false,
+					classification: "destructive",
+				}),
+			);
+	}
 	return sortSteps(steps);
 }
 
@@ -443,7 +637,10 @@ export function createMigrationPlan(
 		baseSchema?: SchemaProjectionV1;
 		baseMigration?: string | null;
 		slug: string;
-		renames?: readonly Readonly<{ from: string; to: string }>[];
+		renames?: readonly Readonly<{
+			from: RenameIdentityV1;
+			to: RenameIdentityV1;
+		}>[];
 	}>,
 ): PlannedMigration {
 	const target = assertProjection(input.targetSchema, "target schema");
@@ -468,10 +665,11 @@ export function createMigrationPlan(
 	const renames = [...(input.renames ?? [])].sort((left, right) =>
 		compareAscii(`${left.from}\0${left.to}`, `${right.from}\0${right.to}`),
 	);
+	validateRenames(base, target, renames);
 	const steps =
 		base.collections.length === 0
 			? createSteps(target)
-			: destructiveDeltaSteps(base, target);
+			: destructiveDeltaSteps(base, target, renames);
 	const plan: MigrationPlanV1 = {
 		format: "questpie.migration-plan",
 		version: 1,
@@ -640,6 +838,7 @@ function renderStep(
 	stepValue: MigrationStepV1,
 	target: SchemaProjectionV1,
 	base: SchemaProjectionV1,
+	renames: MigrationPlanV1["renames"],
 ): string {
 	const schemaName = target.application.postgresSchema;
 	if (stepValue.kind === "createApplicationSchema")
@@ -652,11 +851,150 @@ function renderStep(
 		);
 		return `CREATE TABLE ${quote(schemaName)}.${quote(String(collection.postgresName))} (\n${columns.join(",\n")}\n);`;
 	}
-	const collection = collectionFor(
-		stepValue.kind.startsWith("drop") ? base : target,
+	if (stepValue.kind === "renameCollection") {
+		const targetCollection = collectionFor(target, stepValue.targetIdentity);
+		const baseCollection = collectionFor(
+			base,
+			mapIdentityBackward(stepValue.targetIdentity, renames),
+		);
+		return `ALTER TABLE ${quote(schemaName)}.${quote(String(baseCollection.postgresName))} RENAME TO ${quote(String(targetCollection.postgresName))};`;
+	}
+	const targetContainerIdentity = mapIdentityForward(
 		stepValue.containerIdentity,
+		renames,
 	);
+	const targetCollection = target.collections.find(
+		(candidate) => candidate.identity === targetContainerIdentity,
+	);
+	const baseContainerIdentity = mapIdentityBackward(
+		stepValue.containerIdentity,
+		renames,
+	);
+	const baseCollection = base.collections.find(
+		(candidate) => candidate.identity === baseContainerIdentity,
+	);
+	const collection = targetCollection ?? baseCollection;
+	if (!collection)
+		return schemaError(
+			"QP-SCHEMA-003",
+			"invalidReference",
+			`unknown step container ${stepValue.containerIdentity}`,
+		);
 	const table = `${quote(schemaName)}.${quote(String(collection.postgresName))}`;
+	if (
+		stepValue.kind === "renameField" ||
+		stepValue.kind === "renameConstraint" ||
+		stepValue.kind === "renameRelationConstraint" ||
+		stepValue.kind === "renameIndex"
+	) {
+		if (!targetCollection || !baseCollection)
+			return schemaError(
+				"QP-SCHEMA-003",
+				"invalidReference",
+				`rename target ${stepValue.targetIdentity} has no paired base object`,
+			);
+		const key =
+			stepValue.kind === "renameField"
+				? "fields"
+				: stepValue.kind === "renameConstraint"
+					? "constraints"
+					: stepValue.kind === "renameRelationConstraint"
+						? "relations"
+						: "indexes";
+		const targetValue = childRecords(targetCollection, key).find(
+			(value) => value.identity === stepValue.targetIdentity,
+		);
+		const baseValue = childRecords(baseCollection, key).find(
+			(value) =>
+				value.identity ===
+				mapIdentityBackward(stepValue.targetIdentity, renames),
+		);
+		if (!targetValue || !baseValue)
+			return schemaError(
+				"QP-SCHEMA-003",
+				"invalidReference",
+				`rename target ${stepValue.targetIdentity} is missing`,
+			);
+		const nameKey =
+			key === "relations" ? "constraintPostgresName" : "postgresName";
+		if (stepValue.kind === "renameField")
+			return `ALTER TABLE ${table} RENAME COLUMN ${quote(String(baseValue[nameKey]))} TO ${quote(String(targetValue[nameKey]))};`;
+		if (stepValue.kind === "renameIndex")
+			return `ALTER INDEX ${quote(schemaName)}.${quote(String(baseValue[nameKey]))} RENAME TO ${quote(String(targetValue[nameKey]))};`;
+		return `ALTER TABLE ${table} RENAME CONSTRAINT ${quote(String(baseValue[nameKey]))} TO ${quote(String(targetValue[nameKey]))};`;
+	}
+	if (stepValue.kind === "addField") {
+		if (!targetCollection)
+			return schemaError(
+				"QP-SCHEMA-003",
+				"invalidReference",
+				"addField target Collection is missing",
+			);
+		const field = childFor(
+			targetCollection,
+			stepValue.kind,
+			stepValue.targetIdentity,
+		);
+		return `ALTER TABLE ${table} ADD COLUMN ${quote(String(field.postgresName))} ${sqlType(field)}${field.nullable === true ? "" : " NOT NULL"}${defaultSql(field.default)};`;
+	}
+	if (stepValue.kind === "alterField") {
+		if (!targetCollection || !baseCollection)
+			return schemaError(
+				"QP-SCHEMA-003",
+				"invalidReference",
+				"alterField Collection is missing",
+			);
+		const field = childFor(
+			targetCollection,
+			"addField",
+			stepValue.targetIdentity,
+		);
+		const baseField = childFor(
+			baseCollection,
+			"addField",
+			mapIdentityBackward(stepValue.targetIdentity, renames),
+		);
+		const column = quote(String(field.postgresName));
+		const statements: string[] = [];
+		if (
+			canonicalBytes(baseField.default) !== canonicalBytes(field.default) &&
+			baseField.default !== null
+		)
+			statements.push(
+				`ALTER TABLE ${table} ALTER COLUMN ${column} DROP DEFAULT;`,
+			);
+		if (canonicalBytes(baseField.type) !== canonicalBytes(field.type))
+			statements.push(
+				`ALTER TABLE ${table} ALTER COLUMN ${column} TYPE ${sqlType(field)} USING ${column}::${sqlType(field).split(" COLLATE ")[0]};`,
+			);
+		if (
+			canonicalBytes(baseField.default) !== canonicalBytes(field.default) &&
+			field.default !== null
+		)
+			statements.push(
+				`ALTER TABLE ${table} ALTER COLUMN ${column} SET${defaultSql(field.default)};`,
+			);
+		if (baseField.nullable === true && field.nullable !== true) {
+			const literal = field.default as JsonRecord | null;
+			if (literal?.kind === "literal")
+				statements.push(
+					`UPDATE ${table} SET ${column} =${defaultSql(literal).slice(8)} WHERE ${column} IS NULL;`,
+				);
+			statements.push(
+				`ALTER TABLE ${table} ALTER COLUMN ${column} SET NOT NULL;`,
+			);
+		} else if (baseField.nullable !== true && field.nullable === true)
+			statements.push(
+				`ALTER TABLE ${table} ALTER COLUMN ${column} DROP NOT NULL;`,
+			);
+		if (statements.length === 0)
+			return schemaError(
+				"QP-SCHEMA-031",
+				"nonTransactionalDdl",
+				`unsupported Field delta ${stepValue.targetIdentity}`,
+			);
+		return statements.join("\n");
+	}
 	if (stepValue.kind === "addConstraint") {
 		const constraint = childFor(
 			collection,
@@ -719,6 +1057,63 @@ function renderStep(
 			.join(", ");
 		return `CREATE INDEX ${quote(String(index.postgresName))} ON ${table} USING btree (${fields});`;
 	}
+	if (stepValue.kind === "dropField") {
+		if (!baseCollection)
+			return schemaError(
+				"QP-SCHEMA-003",
+				"invalidReference",
+				"dropField base Collection is missing",
+			);
+		const field = childFor(
+			baseCollection,
+			"addField",
+			stepValue.targetIdentity,
+		);
+		return `ALTER TABLE ${table} DROP COLUMN ${quote(String(field.postgresName))};`;
+	}
+	if (
+		stepValue.kind === "dropConstraint" ||
+		stepValue.kind === "dropRelation"
+	) {
+		if (!baseCollection)
+			return schemaError(
+				"QP-SCHEMA-003",
+				"invalidReference",
+				"drop constraint base Collection is missing",
+			);
+		const key =
+			stepValue.kind === "dropConstraint" ? "constraints" : "relations";
+		const value = childRecords(baseCollection, key).find(
+			(item) => item.identity === stepValue.targetIdentity,
+		);
+		if (!value)
+			return schemaError(
+				"QP-SCHEMA-003",
+				"invalidReference",
+				`unknown drop target ${stepValue.targetIdentity}`,
+			);
+		const name =
+			key === "relations" ? value.constraintPostgresName : value.postgresName;
+		return `ALTER TABLE ${table} DROP CONSTRAINT ${quote(String(name))};`;
+	}
+	if (stepValue.kind === "dropIndex") {
+		if (!baseCollection)
+			return schemaError(
+				"QP-SCHEMA-003",
+				"invalidReference",
+				"dropIndex base Collection is missing",
+			);
+		const index = childRecords(baseCollection, "indexes").find(
+			(item) => item.identity === stepValue.targetIdentity,
+		);
+		if (!index)
+			return schemaError(
+				"QP-SCHEMA-003",
+				"invalidReference",
+				`unknown drop target ${stepValue.targetIdentity}`,
+			);
+		return `DROP INDEX ${quote(schemaName)}.${quote(String(index.postgresName))};`;
+	}
 	if (stepValue.kind === "dropCollection") return `DROP TABLE ${table};`;
 	return schemaError(
 		"QP-SCHEMA-031",
@@ -746,7 +1141,7 @@ function renderMigrationSql(
 	return plan.steps
 		.map(
 			(item) =>
-				`-- questpie-step: ${item.stepId}\n${renderStep(item, target, base)}\n`,
+				`-- questpie-step: ${item.stepId}\n${renderStep(item, target, base, plan.renames)}\n`,
 		)
 		.join("\n");
 }
