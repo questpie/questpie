@@ -39,7 +39,12 @@ export function expectedDefault(field: JsonRecord): string | null {
 	const value = field.default as JsonRecord;
 	if (value.kind === "randomUuid") return "gen_random_uuid()";
 	if (value.kind === "now") return "now()";
-	if (value.kind === "literal") return String(value.value);
+	if (value.kind === "literal") {
+		const type = field.type as JsonRecord;
+		if (type.kind === "text")
+			return `'${String(value.value).replaceAll("'", "''")}'::text`;
+		return String(value.value);
+	}
 	return fail(`unsupported expected default ${String(value.kind)}`);
 }
 

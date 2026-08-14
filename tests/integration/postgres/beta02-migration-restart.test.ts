@@ -21,7 +21,7 @@ const database = process.env.PGHOST ? new SQL() : undefined;
 beforeAll(async () => {
 	if (!database) return;
 	await database.unsafe(
-		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "deploy_role_probe" CASCADE; DROP SCHEMA IF EXISTS "numeric_drift_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
+		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "deploy_role_probe" CASCADE; DROP SCHEMA IF EXISTS "foundational_fields_probe" CASCADE; DROP SCHEMA IF EXISTS "numeric_drift_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
 	);
 });
 
@@ -284,6 +284,155 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 				`DROP OWNED BY ${role}; DROP ROLE IF EXISTS ${role}`,
 			);
 		}
+	}, 10_000);
+
+	test("stores and fingerprints every foundational Field family", async () => {
+		const compilation = await compileApplication({
+			applicationRoot: fixtureRoot,
+		});
+		const fixtureSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		const targetSchema = {
+			...fixtureSchema,
+			application: {
+				...fixtureSchema.application,
+				name: "foundational-fields-probe",
+				postgresSchema: "foundational_fields_probe",
+			},
+			collections: [
+				{
+					identity: "collection:measurements",
+					postgresName: "measurements",
+					fields: [
+						{
+							identity: "collection:measurements/field:active",
+							path: ["active"],
+							postgresName: "active",
+							type: { kind: "boolean" },
+							nullable: false,
+							default: { kind: "literal", value: true },
+							collation: null,
+						},
+						{
+							identity: "collection:measurements/field:amount",
+							path: ["amount"],
+							postgresName: "amount",
+							type: { kind: "numeric", precision: 12, scale: 4 },
+							nullable: false,
+							default: null,
+							collation: null,
+						},
+						{
+							identity: "collection:measurements/field:day",
+							path: ["day"],
+							postgresName: "day",
+							type: { kind: "date" },
+							nullable: true,
+							default: null,
+							collation: null,
+						},
+						{
+							identity: "collection:measurements/field:id",
+							path: ["id"],
+							postgresName: "id",
+							type: { kind: "bigint", minimum: null, maximum: null },
+							nullable: false,
+							default: null,
+							collation: null,
+						},
+						{
+							identity: "collection:measurements/field:label",
+							path: ["label"],
+							postgresName: "label",
+							type: {
+								kind: "text",
+								minLength: null,
+								maxLength: null,
+								collation: "questpie.binary",
+							},
+							nullable: false,
+							default: { kind: "literal", value: "now" },
+							collation: "questpie.binary",
+						},
+						...(["metadata", "preferences", "tags"] as const).map((name) => ({
+							identity: `collection:measurements/field:${name}`,
+							path: [name],
+							postgresName: name,
+							type: {
+								kind:
+									name === "tags"
+										? "array"
+										: name === "preferences"
+											? "object"
+											: "json",
+							},
+							nullable: true,
+							default: null,
+							collation: null,
+						})),
+					],
+					constraints: [
+						{
+							kind: "primaryKey",
+							identity: "collection:measurements/constraint:primary",
+							postgresName: "qp_pk_measurements_primary",
+							fields: ["collection:measurements/field:id"],
+						},
+					],
+					indexes: [],
+					relations: [],
+				},
+			],
+		};
+		const planned = createMigrationPlan({
+			targetSchema,
+			slug: "create-foundational-fields-probe",
+		});
+		const migration = createCommittedMigration({
+			plan: planned.plan,
+			baseSchema: planned.baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: planned.digest,
+			localMigrations: [],
+		});
+		expect(
+			await applyCommittedMigrations({ migrations: [migration] }),
+		).toMatchObject({
+			status: "applied",
+		});
+		await expect(
+			inspectSchemaFingerprint({ schema: targetSchema }),
+		).resolves.toBeDefined();
+		await database!.unsafe(`
+			INSERT INTO foundational_fields_probe.measurements
+			  (id, amount, day, metadata, preferences, tags)
+			VALUES
+			  (9223372036854775807, 12345678.9000, DATE '2026-08-15', 'null'::jsonb, '{"locale":"sk"}'::jsonb, '["owner"]'::jsonb)
+		`);
+		const [row] = await database!<
+			{
+				active: boolean;
+				amount: string;
+				day: string;
+				id: string;
+				label: string;
+				metadata: unknown;
+				preferences: unknown;
+				tags: unknown;
+			}[]
+		>`select id::text as id, amount::text as amount, day::text as day, active, label, metadata, preferences, tags from foundational_fields_probe.measurements`;
+		expect(row).toEqual({
+			active: true,
+			amount: "12345678.9000",
+			day: "2026-08-15",
+			id: "9223372036854775807",
+			label: "now",
+			metadata: null,
+			preferences: { locale: "sk" },
+			tags: ["owner"],
+		});
 	}, 10_000);
 
 	test("detects numeric typmod drift from the live catalog", async () => {
