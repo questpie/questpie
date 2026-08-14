@@ -10,25 +10,27 @@ contracts; no production v4 Runtime exists yet.
 
 Fixed accepted proof authority:
 
-| Contract                          | Accepted head                              |
-| --------------------------------- | ------------------------------------------ |
-| Foundation data/query             | `d03358b749c4c8efb769d1c0fed50e8fbf983fb0` |
-| P1 executable Definition compiler | `713485a64bcc4795d960d576fea51da56bc4dcdd` |
-| P2 Context and Policy             | `5fbd9058e1cfb3bfef56f11a1d0ec7b6e14e88fa` |
-| P3 Query/Mutation/lifecycle       | `a09bf55f0e22f65e059cda9f3eda914520dd4f9d` |
-| P4 Live Query/ledger              | `05fc96f3d07c70beaf7f654d79d6cfb46f427f92` |
-| P5 dispatch/Reaction              | `3f8618613bde1bdd7e13863970eb1c140e201c6f` |
-| P6 Runtime/client/Studio          | `94c237c9aa910a60a332b1ef97473f34fe89d65b` |
-| Post-P6 gates                     | `a164e33e752ab54d48fcf903371938ecff3dc082` |
-| Reviewed post-P6 repair           | `79d7816dbf0b9b6e052706daf71fe173e1cbfc42` |
-| #17 Service/Route/Auth            | `79d3667019e0a4cda6f7652d24f2d9c6b68d4fca` |
-| #18 lifecycle/durable kernel      | `71463e99a70481b0950ae18d1ff409c034c1b158` |
-| #19 HA/optional acceleration      | `96829bd7b08ea54e60fdc7d5b077366235d2dfea` |
-| #20 File/Search/projections       | `6e056bc44c15740b2797a9489fe3823c3100bdad` |
-| #21 kernels/naming/exports        | `d50d4334b116a5bdc46e95cdabf566d8db938d37` |
-| #22 repository foundation         | `17008b0547f24b53d456530b798e8d96ae2e2b1e` |
-| #14 conformance map               | `3a89c565cb1eba59815d106df1c06406ac20ac98` |
-| #15 beta.1 slice                  | `0d8e2543ff7e9d50bdab7d2b66b62ec4c35d8a6f` |
+| Contract                           | Accepted head                              |
+| ---------------------------------- | ------------------------------------------ |
+| Foundation data/query              | `d03358b749c4c8efb769d1c0fed50e8fbf983fb0` |
+| P1 executable Definition compiler  | `713485a64bcc4795d960d576fea51da56bc4dcdd` |
+| P2 Context and Policy              | `5fbd9058e1cfb3bfef56f11a1d0ec7b6e14e88fa` |
+| P3 Query/Mutation/lifecycle        | `a09bf55f0e22f65e059cda9f3eda914520dd4f9d` |
+| P4 Live Query/ledger               | `05fc96f3d07c70beaf7f654d79d6cfb46f427f92` |
+| P5 dispatch/Reaction               | `3f8618613bde1bdd7e13863970eb1c140e201c6f` |
+| P6 Runtime/client/Studio           | `94c237c9aa910a60a332b1ef97473f34fe89d65b` |
+| Post-P6 gates                      | `a164e33e752ab54d48fcf903371938ecff3dc082` |
+| Reviewed post-P6 repair            | `79d7816dbf0b9b6e052706daf71fe173e1cbfc42` |
+| #17 Service/Route/Auth             | `79d3667019e0a4cda6f7652d24f2d9c6b68d4fca` |
+| #18 lifecycle/durable kernel       | `71463e99a70481b0950ae18d1ff409c034c1b158` |
+| #19 HA/optional acceleration       | `96829bd7b08ea54e60fdc7d5b077366235d2dfea` |
+| #20 File/Search/projections        | `6e056bc44c15740b2797a9489fe3823c3100bdad` |
+| #21 kernels/naming/exports         | `d50d4334b116a5bdc46e95cdabf566d8db938d37` |
+| #22 repository foundation          | `17008b0547f24b53d456530b798e8d96ae2e2b1e` |
+| #14 conformance map                | `3a89c565cb1eba59815d106df1c06406ac20ac98` |
+| #15 beta.1 slice                   | `0d8e2543ff7e9d50bdab7d2b66b62ec4c35d8a6f` |
+| #301 API ergonomics reviewed proof | `ff2dfa762c953f2511c5f65e6f930bac3da77868` |
+| #301 API ergonomics evidence       | `fbbf05d457f97927dc2b847b0ad049f26d887151` |
 
 ADR-0008 through ADR-0021 and their accepted workbench/public projections are
 product authority. The exact review heads, BLOCKED/repair history, digests,
@@ -47,17 +49,18 @@ capabilities, never durable authority or a provider matrix.
 ## Workspace and preservation
 
 - Main authority worktree: `/home/drepkovsky/code/questpie-v4`, branch
-  `feat/v4`, head `21f80fc06feec50a156937e83178233caa295324`.
-- Main contains the accepted uncommitted documentation projection plus the
-  user's baseline `e2b8ed36`; preserve it and any concurrent unrelated change.
-- Accepted proof worktrees and their heads are fixed and clean. Inspect all
-  worktrees before editing and never modify an accepted proof worktree.
-- Accepted #22 proof worktree:
-  `/tmp/questpie-v4-repository-foundation-proof`, branch
-  `feat/v4-repository-foundation-proof`.
-- Its synthetic parent `9fd5d41e6ce8627959d9e72ba017fd0d0cd441bf` is an exact snapshot of
-  the accepted uncommitted P21 projection. It changed neither main HEAD nor its
-  index.
+  `feat/v4`, clean head `20ad8529ee18aba6830a7646acb3a9c9292f2fc6`.
+- The active #301 worktree is
+  `/home/drepkovsky/code/questpie-v4-api-ergonomics`, branch
+  `feat/v4-api-ergonomics-proof`. Its reviewed proof head and authority evidence
+  head are fixed above; do not rewrite either commit.
+- The green BETA-02 checkpoint remains branch `feat/v4-beta-02` at
+  `3a760b1010be434b93c20db5767ef68d7778adf3`. Do not resume or squash it until
+  #301 closes and GitHub marks #289 ready.
+- The pre-consolidation projection is recoverable at archive commit
+  `90288796` on branch `archive/v4-pre-consolidation-20260814`.
+- The unrelated marketing worktree `/home/drepkovsky/code/questpie`, branch
+  `agent/marketing-pages`, remains outside v4 implementation scope.
 
 Use the repo-owned `.agents/skills/questpie-v4/SKILL.md` after this file. It
 routes design, proof, implementation, public documentation, and repository
@@ -66,10 +69,12 @@ are executable command authority; personal skill paths are not dependencies.
 
 ## Active frontier and blockers
 
-Atlas tickets #14–#22 and the #16 implementation-collapse proof are accepted.
-BETA-01 issue #288 has a clean implementation review PASS and is the active
-tracker acceptance frontier until its protected PR and required CI merge. The
-immediate successor remains blocked issue #289. The accepted foundation
+Atlas tickets #14–#22, the #16 implementation-collapse proof, and BETA-01 issue
+#288 are accepted. Interstitial API gate #301 has deterministic and fresh
+stateless Opus-medium acceptance PASS and is the active protected tracker
+frontier until its PR, CI, merge, and issue close complete. It does not count
+toward the native N=5 implementation queue. Issue #289 is the immediate
+successor and remains blocked until #301 closes. The accepted foundation
 includes:
 
 - Bun 1.3.14; TypeScript 6.0.2 as canonical bridge; native TypeScript 7.0.2 as
@@ -88,6 +93,22 @@ review, CI, merge, and tracker state before enabling its immediate successor.
 Do not skip a blocked issue or parallelize dependent implementation.
 
 ## Latest verification
+
+- #301 reviewed proof head `ff2dfa762c953f2511c5f65e6f930bac3da77868`
+  received a fresh stateless Claude Opus-medium `PASS` after two preserved
+  `BLOCKED` rounds and repairs. Raw reviews are in
+  `docs/v4/prototypes/api-ergonomics-gate/REVIEW*.json`; authority evidence is
+  `fbbf05d457f97927dc2b847b0ad049f26d887151`.
+- #301 fixes named `defineKind`, nested-only Query/Mutation/Action server
+  capability maps, exact canonical Resource Identity, diagnostics
+  `QP-COMPOSE-023`/`024`, one durable kernel with distinct Job/Reaction/Workflow
+  meanings, and the permanent v4 capability map. ADR-0022 and public mirrors
+  project the result.
+- #301 proof runner, canonical TypeScript diagnostics, scoped Oxlint, Oxfmt,
+  docs typecheck/build, `quality:full`, and `git diff --check` PASS. Latest live
+  sample: 1,594 TypeScript instantiations; 84,473 maximum measured declaration
+  bytes; root completion/hover p95 0.253/0.346 ms; 50-operation p95
+  0.367/0.179 ms; 500-operation p95 1.572/0.233 ms. All budgets PASS.
 
 - #288 initial reviewed head
   `78a08b1eec8bd0c9459a76157171ac0425e4e23a` received a valid fresh stateless
@@ -136,6 +157,8 @@ Do not skip a blocked issue or parallelize dependent implementation.
 
 ```text
 Use the repo-owned QUESTPIE v4 skill. Finish protected PR/CI/tracker acceptance
-for #288, then re-read native blockers and start #289 only when GitHub marks it
-ready. Preserve the dirty main projection and accepted proof worktrees.
+for #301. Then re-read GitHub and repository state, mark #289 ready only when
+all native blockers are closed, restore its green checkpoint from
+`feat/v4-beta-02` at `3a760b1010be434b93c20db5767ef68d7778adf3`, and continue the
+original N=5 queue. Preserve the marketing worktree and archive branch.
 ```
