@@ -21,7 +21,7 @@ const database = process.env.PGHOST ? new SQL() : undefined;
 beforeAll(async () => {
 	if (!database) return;
 	await database.unsafe(
-		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
+		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "deploy_role_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
 	);
 });
 
@@ -234,6 +234,56 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			status: "applied",
 			applied: ["000002_add-cancellation-probe"],
 		});
+	}, 10_000);
+
+	test("allows an authorized non-owner deploy role to verify an applied migration", async () => {
+		const compilation = await compileApplication({
+			applicationRoot: fixtureRoot,
+		});
+		const fixtureSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		const targetSchema = {
+			...fixtureSchema,
+			application: {
+				...fixtureSchema.application,
+				name: "deploy-role-probe",
+				postgresSchema: "deploy_role_probe",
+			},
+		};
+		const planned = createMigrationPlan({
+			targetSchema,
+			slug: "create-deploy-role-probe",
+		});
+		const migration = createCommittedMigration({
+			plan: planned.plan,
+			baseSchema: planned.baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: planned.digest,
+			localMigrations: [],
+		});
+		await applyCommittedMigrations({ migrations: [migration] });
+		const role = "questpie_beta02_deployer";
+		try {
+			await database!.unsafe(`CREATE ROLE ${role} LOGIN`);
+			await database!.unsafe(
+				`GRANT USAGE ON SCHEMA questpie_internal, deploy_role_probe TO ${role}; GRANT SELECT ON ALL TABLES IN SCHEMA questpie_internal TO ${role}`,
+			);
+			const connectionString = `postgres://${role}@${process.env.PGHOST}:${process.env.PGPORT ?? "5432"}/${process.env.PGDATABASE}`;
+			const result = await applyCommittedMigrations({
+				connectionString,
+				migrations: [migration],
+			});
+			expect(result).toMatchObject({
+				status: "alreadyApplied",
+				applied: [],
+			});
+		} finally {
+			await database!.unsafe(
+				`DROP OWNED BY ${role}; DROP ROLE IF EXISTS ${role}`,
+			);
+		}
 	}, 10_000);
 
 	test("rolls back Seed writes and receipt when a later step fails", async () => {
