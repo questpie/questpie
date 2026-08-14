@@ -11,6 +11,8 @@
 		"generated-app.ts",
 		"generated-package.ts",
 		"negative.ts",
-		"package-application.ts"
+		"package-application.ts",
+		"unified-generated.ts",
+		"unified-structural.ts"
 	]
 }

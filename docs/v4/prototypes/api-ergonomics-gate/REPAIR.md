@@ -15,6 +15,24 @@ verbatim in `REVIEW.json`.
   root and nested hostile fixtures plus Origins from
   `HOSTILE-PROJECTION.json`.
 
-The repair also records and asserts Bun, TypeScript, platform, and architecture;
-uses portable URL-to-path conversion; and binds hostile Origins to committed
-fixture data.
+The repair also records the environment, asserts the pinned Bun and TypeScript
+toolchain, uses portable URL-to-path conversion, and binds hostile Origins to
+committed fixture data.
+
+Replacement reviewed head `d377482bf6dca255844988054da8a9df2333a7c3`
+also received a valid fresh stateless Opus-medium `BLOCKED`, recorded verbatim
+in `REVIEW-REPLACEMENT.json`.
+
+- Its B1 is repaired by anchoring the identity amendment to the exact paragraph
+  opening “A name can be a strict dotted prefix”, explicitly retaining the
+  rename/alias and canonical-sort paragraphs unchanged, and forbidding any
+  positional deletion.
+- Its B2 is repaired by adding exact amendments for the Collection Operation
+  Set server-member bullet in `executable-definition-compiler.md` and the
+  exact-key TypeScript contract bullet in `implementation-gates.md`, while
+  retaining the client alias.
+
+The follow-up also stops failing on a different OS/architecture, compiles the
+unified-factory candidate fixtures, removes the unreachable post-sort trie
+branch, checks `beforeValidate` hook absence, and adds overlong segment/name
+hostile cases.

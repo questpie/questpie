@@ -89,16 +89,6 @@ function buildOperationProjection(kind, definitions) {
 			}
 			current = child;
 		}
-		if (current.children.size > 0) {
-			const descendant = [...current.children.values()]
-				.flatMap(function visit(child) {
-					return child.terminal
-						? [child.terminal]
-						: [...child.children.values()].flatMap(visit);
-				})
-				.sort((left, right) => compareAscii(left.name, right.name))[0];
-			throw new ProjectionCollision(kind, definition, descendant);
-		}
 		current.terminal = definition;
 	}
 
@@ -213,6 +203,21 @@ for (const definition of hostileProjection.invalidNames) {
 	}
 	assert.equal(invalid?.code, "QP-COMPOSE-003");
 }
+for (const fixture of hostileProjection.invalidLengths) {
+	const name =
+		fixture.kind === "segment"
+			? "a".repeat(fixture.length)
+			: Array.from({ length: fixture.segments }, () =>
+					"a".repeat(fixture.segmentLength),
+				).join(".");
+	let invalid;
+	try {
+		buildOperationProjection("action", [{ name, origin: fixture.origin }]);
+	} catch (error) {
+		invalid = error;
+	}
+	assert.equal(invalid?.code, "QP-COMPOSE-003");
+}
 
 assert.doesNotThrow(() => {
 	buildOperationProjection("action", [
@@ -253,7 +258,10 @@ for (const owner of [
 	"Channel",
 ])
 	assert.match(capabilityMap, new RegExp(`\\b${owner}\\b`));
-assert.doesNotMatch(capabilityMap, /beforeChange|afterChange|afterRead/);
+assert.doesNotMatch(
+	capabilityMap,
+	/beforeValidate|beforeChange|afterChange|afterRead/,
+);
 
 const typeScript = await runTypeScriptProof();
 const evidence = JSON.parse(
@@ -264,8 +272,6 @@ const measurements = JSON.parse(
 );
 assert.equal(typeScript.typeScript, measurements.environment.typescript);
 assert.equal(Bun.version, measurements.environment.bun);
-assert.equal(process.platform, measurements.environment.platform);
-assert.equal(process.arch, measurements.environment.architecture);
 assert.deepEqual(
 	evidence.editor.actionRootCompletions,
 	typeScript.completions["/*ACTION_ROOT*/"],

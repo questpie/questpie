@@ -7,7 +7,8 @@ before PASS, none of them is projected.
 
 ## `docs/v4/definition-composition.md`
 
-Replace the final two paragraphs under **Identity invariants** with:
+Replace only the paragraph under **Identity invariants** that opens “A name can
+be a strict dotted prefix of another name” with:
 
 > A name can be a strict dotted prefix of another name, such as `booking` and
 > `booking.availability`. The Compiled Manifest, App Contract identity index,
@@ -19,6 +20,12 @@ Replace the final two paragraphs under **Identity invariants** with:
 > prefix: `action:booking` plus `action:booking.availability` fails with
 > `QP-COMPOSE-023`. Equal names in different kinds remain valid. The nested
 > call spelling never replaces or reinterprets canonical Resource Identity.
+
+Retain unchanged the following paragraphs opening “Changing `kind` or `name`
+creates a different Resource” and “The canonical Compiled Manifest sorts
+Resources”. This gate changes neither alias/rename rules nor canonical sort
+order. The earlier different-kind and duplicate-identity paragraph also remains
+unchanged.
 
 After the Qualified Resource Name ABNF, add this semantic restriction without
 changing the general grammar:
@@ -58,6 +65,31 @@ canonical, collision-free surface” with:
 > Exact full-name identity maps remain canonical and collision-free. Generated
 > server call maps are nested-only and compile only after 023/024 projection
 > safety checks.
+
+Every reference above is anchored by its quoted current text. No other
+paragraph in `docs/v4/definition-composition.md` is deleted or positionally
+selected.
+
+## `docs/v4/executable-definition-compiler.md`
+
+Under **Collection Operation Set**, replace only the bullet “one canonical
+exact-key generated server member” with:
+
+> one canonical exact-key App Contract identity entry and one nested-only
+> generated server capability member in its Query or Mutation kind map;
+
+Retain the next bullet, “one generated Collection client alias”, unchanged.
+This gate does not alter client aliases.
+
+## `docs/v4/implementation-gates.md`
+
+Gate 3's phrase “The generated App Contract uses exact keys” currently covers
+both identity and the old server call spelling, so it must not be left
+ambiguous. Replace that complete bullet with:
+
+> The generated App Contract preserves exact Resource identity keys and emits
+> nested-only kind-specific server capability members with exact context,
+> input, output, exposure, and declared errors.
 
 ## Public definition-composition page
 

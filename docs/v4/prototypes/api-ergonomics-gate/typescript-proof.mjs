@@ -16,6 +16,8 @@ const names = [
 	"generated-package.ts",
 	"negative.ts",
 	"package-application.ts",
+	"unified-generated.ts",
+	"unified-structural.ts",
 ];
 const files = names.map((name) => path.join(root, name));
 const options = {

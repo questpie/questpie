@@ -15,6 +15,15 @@
 		{ "name": "delivery..send", "origin": "src/invalid.ts:2" },
 		{ "name": "delivery/send", "origin": "src/invalid.ts:3" }
 	],
+	"invalidLengths": [
+		{ "kind": "segment", "length": 64, "origin": "src/long-segment.ts:1" },
+		{
+			"kind": "name",
+			"segmentLength": 63,
+			"segments": 5,
+			"origin": "src/long-name.ts:1"
+		}
+	],
 	"crossKindSameName": {
 		"action": { "name": "delivery.send", "origin": "src/action.ts:1" },
 		"mutation": { "name": "delivery.send", "origin": "src/mutation.ts:1" }
