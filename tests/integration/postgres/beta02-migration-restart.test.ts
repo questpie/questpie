@@ -8,12 +8,9 @@ import {
 	applyCommittedSeeds,
 	compileApplication,
 	createCommittedMigration,
-	createCommittedSeed,
 	createMigrationPlan,
 	inspectSchemaFingerprint,
 } from "@questpie/compiler";
-
-import { collaborationSeedDefinition } from "../../helpers/beta02-seed";
 
 const fixtureRoot = resolve(import.meta.dir, "../../../fixtures/collaboration");
 const database = process.env.PGHOST ? new SQL() : undefined;
@@ -118,10 +115,9 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		`;
 		expect(receipt?.count).toBe(1);
 		expect(drift.fingerprint.observations.serverVersion).toMatch(/^17\./);
-		const committedSeed = createCommittedSeed({
-			definition: collaborationSeedDefinition,
-			schema: targetSchema,
-		});
+		const [committedSeed] = compilation.committedSeeds;
+		if (!committedSeed)
+			throw new Error("compiled collaboration Seed is missing");
 		const seeded = await applyCommittedSeeds({
 			schema: targetSchema,
 			seeds: [committedSeed],

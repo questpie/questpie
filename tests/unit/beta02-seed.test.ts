@@ -9,21 +9,15 @@ import {
 	verifyCommittedSeed,
 } from "@questpie/compiler";
 
-import { collaborationSeedDefinition } from "../helpers/beta02-seed";
-
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 const compilation = compileApplication({ applicationRoot: fixtureRoot });
 
 describe("BETA-02 committed Seeds", () => {
 	test("commits the collaboration graph as one immutable Seed", async () => {
 		const compiled = await compilation;
-		const schema = JSON.parse(
-			compiled.generatedFiles["schema-projection.json"] ?? "null",
-		);
-		const committed = createCommittedSeed({
-			definition: collaborationSeedDefinition,
-			schema,
-		});
+		const [committed] = compiled.committedSeeds;
+		expect(committed).toBeDefined();
+		if (!committed) throw new Error("compiled collaboration Seed is missing");
 		expect(committed.identity).toBe("seed:collaboration.demo.v1");
 		expect(committed.steps.map((step) => step.collection)).toEqual([
 			"collection:companies",

@@ -24,6 +24,8 @@ import {
 	normalizeResources,
 	semanticDraft,
 } from "./model";
+import type { SchemaProjectionV1 } from "./schema";
+import { createCommittedSeed, type CommittedSeedV1 } from "./seed";
 import { typecheckCurrentContract } from "./typecheck";
 import type {
 	ApplicationConfiguration,
@@ -79,6 +81,7 @@ export interface CompileApplicationOptions {
 
 export interface CompileApplicationResult {
 	readonly generatedFiles: Readonly<Record<string, string>>;
+	readonly committedSeeds: readonly CommittedSeedV1[];
 	readonly packageInventories: readonly Readonly<{
 		name: string;
 		digest: string;
@@ -520,6 +523,14 @@ export async function compileApplication(
 			"nondeterministicEvaluation",
 			"reverse discovery order changed generated artifact bytes",
 		);
+	const schema = JSON.parse(
+		generatedFiles["schema-projection.json"] ?? "null",
+	) as SchemaProjectionV1;
+	const committedSeeds = firstResources
+		.filter((resource) => resource.kind === "seed")
+		.map((resource) =>
+			createCommittedSeed({ definition: resource.contract, schema }),
+		);
 	const typecheck = await typecheckCurrentContract({
 		applicationFiles: applicationGraph,
 		generatedFiles,
@@ -537,6 +548,7 @@ export async function compileApplication(
 	await replaceGeneratedDirectory(outputDirectory, generatedFiles);
 	return {
 		generatedFiles,
+		committedSeeds,
 		packageInventories: inventories.map((inventory) => ({
 			name: inventory.package.name,
 			digest: inventory.digest,
