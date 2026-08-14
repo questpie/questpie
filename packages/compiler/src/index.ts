@@ -69,7 +69,7 @@ export { applyCommittedSeeds } from "./seed-postgres";
 export type {
 	ApplyMigrationsResult,
 	SchemaFingerprintV1,
-} from "./schema-postgres";
+} from "./schema/postgres-types";
 export type { ApplySeedsResult } from "./seed-postgres";
 export type {
 	CommittedMigration,

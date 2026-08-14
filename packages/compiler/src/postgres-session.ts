@@ -6,10 +6,11 @@ import { CompilerDiagnosticError } from "./diagnostic";
 
 export interface PostgresCommandControl {
 	readonly lockTimeoutMs?: number;
+	readonly signal?: AbortSignal;
 	readonly statementTimeoutMs?: number;
 }
 
-export interface ResolvedPostgresControl {
+export interface PostgresControl {
 	readonly lockTimeoutMs: number;
 	readonly statementTimeoutMs: number;
 }
@@ -18,7 +19,7 @@ const MAX_POSTGRES_TIMEOUT_MS = 2_147_483_647;
 
 export function resolvePostgresControl(
 	input: PostgresCommandControl,
-): ResolvedPostgresControl {
+): PostgresControl {
 	const lockTimeoutMs = input.lockTimeoutMs ?? 5_000;
 	const statementTimeoutMs = input.statementTimeoutMs ?? 30_000;
 	if (
@@ -37,12 +38,78 @@ export function resolvePostgresControl(
 
 export async function configurePostgresTimeouts(
 	sql: SQL,
-	control: ResolvedPostgresControl,
+	control: PostgresControl,
 ): Promise<void> {
 	await sql`
 		select pg_catalog.set_config('lock_timeout', ${`${control.lockTimeoutMs}ms`}, false),
 		       pg_catalog.set_config('statement_timeout', ${`${control.statementTimeoutMs}ms`}, false)
 	`;
+}
+
+export interface AbortableQuery<T> extends PromiseLike<T> {
+	cancel(): AbortableQuery<T>;
+	execute(): AbortableQuery<T>;
+}
+
+export async function executeAbortable<T>(
+	query: AbortableQuery<T>,
+	signal?: AbortSignal,
+): Promise<T> {
+	signal?.throwIfAborted();
+	const executing = query.execute();
+	const cancel = () => {
+		executing.cancel();
+	};
+	signal?.addEventListener("abort", cancel, { once: true });
+	try {
+		return await executing;
+	} finally {
+		signal?.removeEventListener("abort", cancel);
+	}
+}
+
+export async function acquireSessionLock(
+	sql: SQL,
+	key: bigint,
+	control: PostgresControl,
+	signal?: AbortSignal,
+): Promise<void> {
+	if (!signal) {
+		await sql`select pg_catalog.pg_advisory_lock(${key})`;
+		return;
+	}
+	const deadline = performance.now() + control.lockTimeoutMs;
+	while (performance.now() < deadline) {
+		signal.throwIfAborted();
+		const [result] = await executeAbortable<{ acquired: boolean }[]>(
+			sql`select pg_catalog.pg_try_advisory_lock(${key}) as acquired`,
+			signal,
+		);
+		if (result?.acquired) return;
+		await abortableDelay(10, signal);
+	}
+	await sql`select pg_catalog.set_config('lock_timeout', '1ms', false)`;
+	await sql`select pg_catalog.pg_advisory_lock(${key})`;
+}
+
+function abortableDelay(
+	milliseconds: number,
+	signal: AbortSignal,
+): Promise<void> {
+	signal.throwIfAborted();
+	return new Promise((resolve, reject) => {
+		const finish = () => {
+			signal.removeEventListener("abort", abort);
+			resolve();
+		};
+		const timer = setTimeout(finish, milliseconds);
+		const abort = () => {
+			clearTimeout(timer);
+			signal.removeEventListener("abort", abort);
+			reject(signal.reason);
+		};
+		signal.addEventListener("abort", abort, { once: true });
+	});
 }
 
 export function lockKey(domain: string, ...values: string[]): bigint {

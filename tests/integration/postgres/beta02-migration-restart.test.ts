@@ -92,6 +92,32 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 				  (select count(*)::integer from questpie_internal.schema_migration_receipts where application_name = 'lock-probe') as receipts
 			`;
 			expect(state).toEqual({ schemaExists: false, receipts: 0 });
+
+			const controller = new AbortController();
+			setTimeout(() => controller.abort(), 50);
+			const abortStarted = performance.now();
+			let abortError: unknown;
+			try {
+				await applyCommittedMigrations({
+					migrations: [migration],
+					lockTimeoutMs: 5_000,
+					statementTimeoutMs: 30_000,
+					signal: controller.signal,
+				});
+			} catch (error) {
+				abortError = error;
+			}
+			expect(abortError).toBeInstanceOf(DOMException);
+			expect((abortError as DOMException).name).toBe("AbortError");
+			expect(performance.now() - abortStarted).toBeLessThan(3_000);
+			const [afterAbort] = await database!<
+				{ schemaExists: boolean; receipts: number }[]
+			>`
+				select
+				  exists(select 1 from pg_catalog.pg_namespace where nspname = 'lock_probe') as "schemaExists",
+				  (select count(*)::integer from questpie_internal.schema_migration_receipts where application_name = 'lock-probe') as receipts
+			`;
+			expect(afterAbort).toEqual({ schemaExists: false, receipts: 0 });
 		} finally {
 			await holder`select pg_catalog.pg_advisory_unlock(${applicationKey})`;
 			holder.release();

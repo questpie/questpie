@@ -2,6 +2,7 @@ import { SQL } from "bun";
 
 import { digest } from "./canonical";
 import {
+	acquireSessionLock,
 	assertBackendPid,
 	configurePostgresTimeouts,
 	lockKey,
@@ -187,7 +188,7 @@ export async function applyCommittedSeeds(
 				"current database is unavailable",
 			);
 		await providerObservations(session, input.schema);
-		await bootstrap(session, database.name, expectedPid);
+		await bootstrap(session, database.name, expectedPid, control, input.signal);
 		await assertBackendPid(session, expectedPid, "Seed bootstrap");
 		const application = input.schema.application.name;
 		const applicationKey = lockKey(
@@ -195,7 +196,7 @@ export async function applyCommittedSeeds(
 			database.name,
 			application,
 		);
-		await session`select pg_catalog.pg_advisory_lock(${applicationKey})`;
+		await acquireSessionLock(session, applicationKey, control, input.signal);
 		try {
 			await assertBackendPid(session, expectedPid, "Seed application lock");
 			const [binding] = await session<{ schemaName: string }[]>`

@@ -5,15 +5,23 @@ import { SQL } from "bun";
 import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { CompilerDiagnosticError } from "./diagnostic";
 import {
+	acquireSessionLock,
 	assertBackendPid,
 	configurePostgresTimeouts,
 	lockKey,
 	probeCommittedSession,
 	resolvePostgresControl,
 } from "./postgres-session";
-import type { PostgresCommandControl } from "./postgres-session";
+import type {
+	PostgresCommandControl,
+	PostgresControl,
+} from "./postgres-session";
 import type { CommittedMigration, SchemaProjectionV1 } from "./schema";
 import { verifyCommittedMigrationChain } from "./schema";
+import type {
+	ApplyMigrationsResult,
+	SchemaFingerprintV1,
+} from "./schema/postgres-types";
 const bootstrapSql = `CREATE SCHEMA IF NOT EXISTS questpie_internal AUTHORIZATION CURRENT_USER;
 REVOKE ALL ON SCHEMA questpie_internal FROM PUBLIC;
 
@@ -86,21 +94,6 @@ const bootstrapChecksum = createHash("sha256")
 	.digest("hex");
 
 type JsonRecord = Readonly<Record<string, unknown>>;
-
-export interface SchemaFingerprintV1 extends JsonRecord {
-	readonly format: "questpie.schema-fingerprint";
-	readonly version: 1;
-	readonly comparable: JsonRecord;
-	readonly observations: Readonly<{
-		serverVersion: string;
-		databaseCollation: string;
-		databaseCType: string;
-		extensions: readonly Readonly<{
-			name: string;
-			installedVersion: string;
-		}>[];
-	}>;
-}
 
 type ProviderObservations = SchemaFingerprintV1["observations"];
 
@@ -1319,10 +1312,12 @@ export async function bootstrap(
 	sql: SQL,
 	databaseName: string,
 	expectedPid: number,
+	control: PostgresControl,
+	signal?: AbortSignal,
 ): Promise<void> {
 	const key = lockKey("questpie-bootstrap-lock-v1", databaseName);
 	await assertBackendPid(sql, expectedPid, "before bootstrap lock");
-	await sql`select pg_catalog.pg_advisory_lock(${key})`;
+	await acquireSessionLock(sql, key, control, signal);
 	try {
 		await assertBackendPid(sql, expectedPid, "after bootstrap lock");
 		const [state] = await sql<{ exists: boolean }[]>`
@@ -1347,13 +1342,6 @@ export async function bootstrap(
 		await assertBackendPid(sql, expectedPid, "bootstrap unlock");
 		await sql`select pg_catalog.pg_advisory_unlock(${key})`;
 	}
-}
-
-export interface ApplyMigrationsResult {
-	readonly status: "applied" | "alreadyApplied";
-	readonly applied: readonly string[];
-	readonly head: string;
-	readonly fingerprintDigest: string;
 }
 
 export async function applyCommittedMigrations(
@@ -1393,14 +1381,13 @@ export async function applyCommittedMigrations(
 				"current database is unavailable",
 			);
 		await providerObservations(session, target);
-		await bootstrap(session, database.name, firstPid);
-		await assertBackendPid(session, firstPid, "bootstrap");
+		await bootstrap(session, database.name, firstPid, control, input.signal);
 		const applicationKey = lockKey(
 			"questpie-application-lock-v1",
 			database.name,
 			application,
 		);
-		await session`select pg_catalog.pg_advisory_lock(${applicationKey})`;
+		await acquireSessionLock(session, applicationKey, control, input.signal);
 		try {
 			await assertBackendPid(session, firstPid, "application lock");
 			const conflictingBindings = await session<

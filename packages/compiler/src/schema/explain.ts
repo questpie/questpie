@@ -1,9 +1,9 @@
 import { canonicalBytes } from "../canonical";
 import type { CommittedMigration } from "../schema";
 import { verifyCommittedMigration } from "../schema";
-import type { ApplyMigrationsResult } from "../schema-postgres";
 import type { CommittedSeedV1 } from "../seed";
 import { verifyCommittedSeed } from "../seed";
+import type { ApplyMigrationsResult } from "./postgres-types";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 
