@@ -8,6 +8,7 @@ import {
 	applyCommittedSeeds,
 	compileApplication,
 	createCommittedMigration,
+	createCommittedSeed,
 	createMigrationPlan,
 	inspectSchemaFingerprint,
 } from "@questpie/compiler";
@@ -143,6 +144,36 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			  (select count(*)::integer from questpie_internal.seed_attempt_events where event = 'succeeded') as succeeded
 		`;
 		expect(seedState).toEqual({ messages: 1, receipts: 1, succeeded: 1 });
+
+		const upsertSeed = createCommittedSeed({
+			definition: {
+				name: "collaboration.upsert.v1",
+				dependsOn: ["collaboration.demo.v1"],
+				steps: [
+					{
+						kind: "upsert",
+						collection: "collection:companies",
+						key: { id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
+						create: { name: "created value" },
+						update: { name: "updated value" },
+					},
+				],
+			},
+			schema: targetSchema,
+		});
+		const upserted = await applyCommittedSeeds({
+			schema: targetSchema,
+			seeds: [committedSeed, upsertSeed],
+		});
+		expect(upserted).toEqual({
+			applied: ["seed:collaboration.upsert.v1"],
+			alreadyApplied: ["seed:collaboration.demo.v1"],
+		});
+		const [company] = await database!<{ name: string }[]>`
+			select name from collaboration.companies
+			where id = '018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0'
+		`;
+		expect(company?.name).toBe("updated value");
 
 		await database!.unsafe(
 			"CREATE INDEX unexpected_protocol_index ON questpie_internal.protocol (version)",

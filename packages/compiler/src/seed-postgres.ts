@@ -128,11 +128,19 @@ async function executeSeedStep(
 	const insertNames = [...key.names, ...create.names];
 	const insertValues = [...key.values, ...create.values];
 	const updates = values.names
-		.map((name) => `${quoted(name)} = EXCLUDED.${quoted(name)}`)
+		.map(
+			(name, index) => `${quoted(name)} = $${insertValues.length + index + 1}`,
+		)
 		.join(", ");
+	if (updates.length === 0)
+		return fail(
+			"QP-SEED-003",
+			"stepSchemaIncompatible",
+			`${step.stepId} upsert update is empty`,
+		);
 	const result = await sql.unsafe(
 		`INSERT INTO ${table} (${insertNames.map(quoted).join(", ")}) VALUES (${placeholders(insertValues.length)}) ON CONFLICT (${key.names.map(quoted).join(", ")}) DO UPDATE SET ${updates} RETURNING 1`,
-		insertValues,
+		[...insertValues, ...values.values],
 	);
 	if (result.length !== 1)
 		return fail(
