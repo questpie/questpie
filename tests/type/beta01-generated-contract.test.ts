@@ -158,6 +158,7 @@ describe("BETA-01 generated contract", () => {
 			"collection:messages",
 			"collection:spaces",
 			"query:messages.byId",
+			"seed:collaboration.demo.v1",
 		]);
 		expect(manifest.composition.resources[3].contributions).toHaveLength(1);
 		expect(first.generatedFiles["app.ts"]).toContain("defineQuery");

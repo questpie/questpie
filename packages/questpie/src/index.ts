@@ -26,20 +26,30 @@ type FieldRuntimeOptions = FieldBaseOptions &
 
 type FieldValue = object | string | number | boolean | Date | null;
 
-export interface FieldDefinition<Value = FieldValue> {
+export interface FieldDefinition<
+	Value = FieldValue,
+	Nullable extends boolean = boolean,
+	Default extends "now" | "randomUuid" | null = "now" | "randomUuid" | null,
+> {
 	readonly kind: "field";
 	readonly scalar: "boolean" | "integer" | "text" | "timestamp" | "uuid";
-	readonly nullable: boolean;
-	readonly default: "now" | "randomUuid" | null;
+	readonly nullable: Nullable;
+	readonly default: Default;
 	readonly postgresName: string | null;
 	readonly options: Readonly<Record<string, boolean | number | string | null>>;
 	readonly value?: Value;
 }
 
-function fieldDefinition<Value>(
+function fieldDefinition<Value, const Options extends FieldRuntimeOptions>(
 	scalar: FieldDefinition["scalar"],
-	options: FieldRuntimeOptions = {},
-): FieldDefinition<Value> {
+	options: Options,
+): FieldDefinition<
+	Value,
+	Options extends { nullable: true } ? true : false,
+	Options extends { default: infer Default extends "now" | "randomUuid" }
+		? Default
+		: null
+> {
 	const normalizedOptions: Record<string, boolean | number | string | null> =
 		{};
 	for (const key of [
@@ -59,27 +69,43 @@ function fieldDefinition<Value>(
 		default: options.default ?? null,
 		postgresName: options.postgres?.name ?? null,
 		options: Object.freeze(normalizedOptions),
-	});
+	}) as FieldDefinition<
+		Value,
+		Options extends { nullable: true } ? true : false,
+		Options extends { default: infer Default extends "now" | "randomUuid" }
+			? Default
+			: null
+	>;
 }
 
 export const field = Object.freeze({
-	uuid: (
-		options: FieldBaseOptions & Readonly<{ default?: "randomUuid" }> = {},
-	) => fieldDefinition<string>("uuid", options),
-	text: (
-		options: FieldBaseOptions &
-			Readonly<{ minLength?: number; maxLength?: number }> = {},
-	) => fieldDefinition<string>("text", options),
-	boolean: (options: FieldBaseOptions = {}) =>
-		fieldDefinition<boolean>("boolean", options),
-	integer: (
-		options: FieldBaseOptions &
-			Readonly<{ minimum?: number; maximum?: number }> = {},
-	) => fieldDefinition<number>("integer", options),
-	timestamp: (
-		options: FieldBaseOptions &
-			Readonly<{ default?: "now"; withTimezone?: boolean }> = {},
-	) => fieldDefinition<Date>("timestamp", options),
+	uuid: <
+		const Options extends FieldBaseOptions &
+			Readonly<{ default?: "randomUuid" }>,
+	>(
+		options: Options = {} as Options,
+	) => fieldDefinition<string, Options>("uuid", options),
+	text: <
+		const Options extends FieldBaseOptions &
+			Readonly<{ minLength?: number; maxLength?: number }>,
+	>(
+		options: Options = {} as Options,
+	) => fieldDefinition<string, Options>("text", options),
+	boolean: <const Options extends FieldBaseOptions>(
+		options: Options = {} as Options,
+	) => fieldDefinition<boolean, Options>("boolean", options),
+	integer: <
+		const Options extends FieldBaseOptions &
+			Readonly<{ minimum?: number; maximum?: number }>,
+	>(
+		options: Options = {} as Options,
+	) => fieldDefinition<number, Options>("integer", options),
+	timestamp: <
+		const Options extends FieldBaseOptions &
+			Readonly<{ default?: "now"; withTimezone?: boolean }>,
+	>(
+		options: Options = {} as Options,
+	) => fieldDefinition<Date, Options>("timestamp", options),
 });
 
 function scalarCodec<Value, Kind extends Exclude<CodecKind, "object">>(
@@ -114,8 +140,9 @@ export const codec = Object.freeze({
 
 export interface ConstraintDefinition<
 	Fields extends readonly string[] = readonly never[],
+	Kind extends "primaryKey" | "unique" = "primaryKey" | "unique",
 > {
-	readonly kind: "primaryKey" | "unique";
+	readonly kind: Kind;
 	readonly fields: Fields;
 	readonly postgresName: string | null;
 }
@@ -129,7 +156,7 @@ function frozenTuple<const Values extends readonly string[]>(
 export const constraint = Object.freeze({
 	primaryKey: <const Fields extends readonly string[]>(
 		input: Readonly<{ fields: Fields; postgres?: { name: string } }>,
-	): ConstraintDefinition<Fields> =>
+	): ConstraintDefinition<Fields, "primaryKey"> =>
 		Object.freeze({
 			kind: "primaryKey",
 			fields: frozenTuple(input.fields),
@@ -137,7 +164,7 @@ export const constraint = Object.freeze({
 		}),
 	unique: <const Fields extends readonly string[]>(
 		input: Readonly<{ fields: Fields; postgres?: { name: string } }>,
-	): ConstraintDefinition<Fields> =>
+	): ConstraintDefinition<Fields, "unique"> =>
 		Object.freeze({
 			kind: "unique",
 			fields: frozenTuple(input.fields),
@@ -345,70 +372,136 @@ export function defineCollection<
 }
 
 type SeedValueForField<Field> =
-	Field extends FieldDefinition<infer Value>
+	Field extends FieldDefinition<infer Value, infer Nullable>
 		? Value extends Date
-			? Value | string
-			: Value
+			? Value | string | (Nullable extends true ? null : never)
+			: Value | (Nullable extends true ? null : never)
 		: never;
 
-type SeedValues<Fields extends Readonly<Record<string, FieldDefinition>>> =
-	Readonly<{
-		[Key in keyof Fields]?: SeedValueForField<Fields[Key]> | null;
-	}>;
+type RequiredSeedKeys<
+	Fields extends Readonly<Record<string, FieldDefinition>>,
+> = {
+	[Key in keyof Fields]: Fields[Key] extends FieldDefinition<
+		unknown,
+		false,
+		null
+	>
+		? Key
+		: never;
+}[keyof Fields];
 
-export interface SeedStepDefinition {
-	readonly kind: "insert" | "update" | "upsert" | "delete";
-	readonly collection: `collection:${string}`;
+type SeedInsertValues<
+	Fields extends Readonly<Record<string, FieldDefinition>>,
+> = Readonly<
+	{ [Key in RequiredSeedKeys<Fields>]: SeedValueForField<Fields[Key]> } & {
+		[Key in Exclude<
+			keyof Fields,
+			RequiredSeedKeys<Fields>
+		>]?: SeedValueForField<Fields[Key]>;
+	}
+>;
+
+type SeedPartialValues<
+	Fields extends Readonly<Record<string, FieldDefinition>>,
+> = Readonly<{ [Key in keyof Fields]?: SeedValueForField<Fields[Key]> }>;
+
+type PrimaryKeyNames<Constraints> = {
+	[Key in keyof Constraints]: Constraints[Key] extends ConstraintDefinition<
+		infer Fields,
+		"primaryKey"
+	>
+		? Fields[number]
+		: never;
+}[keyof Constraints];
+
+type SeedPrimaryKey<
+	Fields extends Readonly<Record<string, FieldDefinition>>,
+	Constraints,
+> = Readonly<{
+	[Key in Extract<PrimaryKeyNames<Constraints>, keyof Fields>]-?: Exclude<
+		SeedValueForField<Fields[Key]>,
+		null
+	>;
+}>;
+
+export interface SeedStepDefinition<
+	Kind extends "insert" | "update" | "upsert" | "delete" =
+		| "insert"
+		| "update"
+		| "upsert"
+		| "delete",
+	Collection extends `collection:${string}` = `collection:${string}`,
+> {
+	readonly kind: Kind;
+	readonly collection: Collection;
 	readonly values?: Readonly<Record<string, unknown>>;
 	readonly key?: Readonly<Record<string, unknown>>;
 	readonly create?: Readonly<Record<string, unknown>>;
 	readonly update?: Readonly<Record<string, unknown>>;
 }
 
-export interface SeedDefinition<Name extends string = string> {
+export interface SeedDefinition<
+	Name extends string = string,
+	Dependencies extends readonly string[] = readonly string[],
+	Steps extends readonly SeedStepDefinition[] = readonly SeedStepDefinition[],
+> {
 	readonly __questpie: Readonly<{
 		category: "definition";
 		resourceKind: "seed";
 	}>;
 	readonly name: Name;
-	readonly dependsOn: readonly string[];
-	readonly steps: readonly SeedStepDefinition[];
+	readonly dependsOn: Dependencies;
+	readonly steps: Steps;
 }
 
-function collectionIdentity(
-	collection: CollectionDefinition,
-): `collection:${string}` {
+function collectionIdentity<const Name extends string>(
+	collection: CollectionDefinition<Name>,
+): `collection:${Name}` {
 	return `collection:${collection.name}`;
 }
 
 export const seed = Object.freeze({
-	insert: <const Fields extends Readonly<Record<string, FieldDefinition>>>(
-		collection: CollectionDefinition<string, Fields>,
-		values: SeedValues<Fields>,
-	): SeedStepDefinition =>
+	insert: <
+		const Name extends string,
+		const Fields extends Readonly<Record<string, FieldDefinition>>,
+	>(
+		collection: CollectionDefinition<Name, Fields>,
+		values: SeedInsertValues<Fields>,
+	): SeedStepDefinition<"insert", `collection:${Name}`> =>
 		Object.freeze({
 			kind: "insert",
 			collection: collectionIdentity(collection),
 			values: Object.freeze({ ...values }),
 		}),
-	update: <const Fields extends Readonly<Record<string, FieldDefinition>>>(
-		collection: CollectionDefinition<string, Fields>,
-		input: Readonly<{ key: SeedValues<Fields>; values: SeedValues<Fields> }>,
-	): SeedStepDefinition =>
+	update: <
+		const Name extends string,
+		const Fields extends Readonly<Record<string, FieldDefinition>>,
+		const Constraints extends Readonly<Record<string, ConstraintDefinition>>,
+	>(
+		collection: CollectionDefinition<Name, Fields, Constraints>,
+		input: Readonly<{
+			key: SeedPrimaryKey<Fields, Constraints>;
+			values: SeedPartialValues<Fields>;
+		}>,
+	): SeedStepDefinition<"update", `collection:${Name}`> =>
 		Object.freeze({
 			kind: "update",
 			collection: collectionIdentity(collection),
 			key: Object.freeze({ ...input.key }),
 			values: Object.freeze({ ...input.values }),
 		}),
-	upsert: <const Fields extends Readonly<Record<string, FieldDefinition>>>(
-		collection: CollectionDefinition<string, Fields>,
+	upsert: <
+		const Name extends string,
+		const Fields extends Readonly<Record<string, FieldDefinition>>,
+		const Constraints extends Readonly<Record<string, ConstraintDefinition>>,
+	>(
+		collection: CollectionDefinition<Name, Fields, Constraints>,
 		input: Readonly<{
-			key: SeedValues<Fields>;
-			create: SeedValues<Fields>;
-			update: SeedValues<Fields>;
+			key: SeedPrimaryKey<Fields, Constraints>;
+			create: Omit<SeedInsertValues<Fields>, PrimaryKeyNames<Constraints>>;
+			update: Omit<SeedPartialValues<Fields>, PrimaryKeyNames<Constraints>>;
 		}>,
-	): SeedStepDefinition =>
+	): SeedStepDefinition<"upsert", `collection:${Name}`> =>
 		Object.freeze({
 			kind: "upsert",
 			collection: collectionIdentity(collection),
@@ -416,10 +509,14 @@ export const seed = Object.freeze({
 			create: Object.freeze({ ...input.create }),
 			update: Object.freeze({ ...input.update }),
 		}),
-	delete: <const Fields extends Readonly<Record<string, FieldDefinition>>>(
-		collection: CollectionDefinition<string, Fields>,
-		key: SeedValues<Fields>,
-	): SeedStepDefinition =>
+	delete: <
+		const Name extends string,
+		const Fields extends Readonly<Record<string, FieldDefinition>>,
+		const Constraints extends Readonly<Record<string, ConstraintDefinition>>,
+	>(
+		collection: CollectionDefinition<Name, Fields, Constraints>,
+		key: SeedPrimaryKey<Fields, Constraints>,
+	): SeedStepDefinition<"delete", `collection:${Name}`> =>
 		Object.freeze({
 			kind: "delete",
 			collection: collectionIdentity(collection),
@@ -437,7 +534,7 @@ export function defineSeed<
 		dependsOn?: Dependencies;
 		steps: Steps;
 	}>,
-): SeedDefinition<Name> {
+): SeedDefinition<Name, Dependencies, Steps> {
 	return Object.freeze({
 		__questpie: Object.freeze({
 			category: "definition",
@@ -446,5 +543,5 @@ export function defineSeed<
 		name: input.name,
 		dependsOn: Object.freeze([...(input.dependsOn ?? [])]),
 		steps: Object.freeze([...input.steps]),
-	});
+	}) as unknown as SeedDefinition<Name, Dependencies, Steps>;
 }

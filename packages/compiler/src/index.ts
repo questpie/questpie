@@ -34,6 +34,17 @@ import { replaceGeneratedDirectory } from "./write";
 
 export { CompilerDiagnosticError } from "./diagnostic";
 export {
+	createCommittedSeed,
+	orderCommittedSeeds,
+	verifyCommittedSeed,
+} from "./seed";
+export type {
+	CommittedSeedV1,
+	SeedFieldValueV1,
+	SeedStepV1,
+	SeedValueV1,
+} from "./seed";
+export {
 	createCommittedMigration,
 	createMigrationPlan,
 	verifyCommittedMigration,
@@ -43,10 +54,12 @@ export {
 	applyCommittedMigrations,
 	inspectSchemaFingerprint,
 } from "./schema-postgres";
+export { applyCommittedSeeds } from "./seed-postgres";
 export type {
 	ApplyMigrationsResult,
 	SchemaFingerprintV1,
 } from "./schema-postgres";
+export type { ApplySeedsResult } from "./seed-postgres";
 export type {
 	CommittedMigration,
 	CommittedMigrationFilesV1,

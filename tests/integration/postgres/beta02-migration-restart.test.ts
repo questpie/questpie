@@ -5,11 +5,15 @@ import { SQL } from "bun";
 
 import {
 	applyCommittedMigrations,
+	applyCommittedSeeds,
 	compileApplication,
 	createCommittedMigration,
+	createCommittedSeed,
 	createMigrationPlan,
 	inspectSchemaFingerprint,
 } from "@questpie/compiler";
+
+import { collaborationSeedDefinition } from "../../helpers/beta02-seed";
 
 const fixtureRoot = resolve(import.meta.dir, "../../../fixtures/collaboration");
 const database = process.env.PGHOST ? new SQL() : undefined;
@@ -114,6 +118,35 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		`;
 		expect(receipt?.count).toBe(1);
 		expect(drift.fingerprint.observations.serverVersion).toMatch(/^17\./);
+		const committedSeed = createCommittedSeed({
+			definition: collaborationSeedDefinition,
+			schema: targetSchema,
+		});
+		const seeded = await applyCommittedSeeds({
+			schema: targetSchema,
+			seeds: [committedSeed],
+		});
+		expect(seeded).toEqual({
+			applied: ["seed:collaboration.demo.v1"],
+			alreadyApplied: [],
+		});
+		const reseeded = await applyCommittedSeeds({
+			schema: targetSchema,
+			seeds: [committedSeed],
+		});
+		expect(reseeded).toEqual({
+			applied: [],
+			alreadyApplied: ["seed:collaboration.demo.v1"],
+		});
+		const [seedState] = await database!<
+			{ messages: number; receipts: number; succeeded: number }[]
+		>`
+			select
+			  (select count(*)::integer from collaboration.messages) as messages,
+			  (select count(*)::integer from questpie_internal.seed_receipts) as receipts,
+			  (select count(*)::integer from questpie_internal.seed_attempt_events where event = 'succeeded') as succeeded
+		`;
+		expect(seedState).toEqual({ messages: 1, receipts: 1, succeeded: 1 });
 
 		await database!.unsafe(
 			"CREATE INDEX unexpected_protocol_index ON questpie_internal.protocol (version)",

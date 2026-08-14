@@ -6,7 +6,6 @@ import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { CompilerDiagnosticError } from "./diagnostic";
 import type { CommittedMigration, SchemaProjectionV1 } from "./schema";
 import { verifyCommittedMigrationChain } from "./schema";
-
 const bootstrapSql = `CREATE SCHEMA IF NOT EXISTS questpie_internal AUTHORIZATION CURRENT_USER;
 REVOKE ALL ON SCHEMA questpie_internal FROM PUBLIC;
 
@@ -97,7 +96,7 @@ export interface SchemaFingerprintV1 extends JsonRecord {
 
 type ProviderObservations = SchemaFingerprintV1["observations"];
 
-function fail(
+export function fail(
 	code: ConstructorParameters<typeof CompilerDiagnosticError>[0],
 	diagnosticClass: string,
 	message: string,
@@ -106,12 +105,12 @@ function fail(
 	throw new CompilerDiagnosticError(code, diagnosticClass, message, details);
 }
 
-function lockKey(domain: string, ...values: string[]): bigint {
+export function lockKey(domain: string, ...values: string[]): bigint {
 	const input = `${domain}\0${values.join("\0")}`;
 	return createHash("sha256").update(input).digest().readBigInt64BE(0);
 }
 
-function childRecords(
+export function childRecords(
 	collection: JsonRecord,
 	key: string,
 ): readonly JsonRecord[] {
@@ -512,7 +511,7 @@ function expectedIndexDefinition(
 	return `CREATE INDEX ${String(object.name)} ON ${schemaName}.${String(object.table)} USING btree (${fields})`;
 }
 
-async function assertSchemaMatches(
+export async function assertSchemaMatches(
 	sql: SQL,
 	schema: SchemaProjectionV1,
 ): Promise<JsonRecord> {
@@ -910,7 +909,7 @@ async function schemaExists(sql: SQL, schemaName: string): Promise<boolean> {
 	return row?.exists === true;
 }
 
-async function providerObservations(
+export async function providerObservations(
 	sql: SQL,
 	schema: SchemaProjectionV1,
 ): Promise<ProviderObservations> {
@@ -1335,7 +1334,7 @@ async function verifyBootstrapCatalog(sql: SQL): Promise<void> {
 		);
 }
 
-async function bootstrap(sql: SQL, databaseName: string): Promise<void> {
+export async function bootstrap(sql: SQL, databaseName: string): Promise<void> {
 	const key = lockKey("questpie-bootstrap-lock-v1", databaseName);
 	await sql`select pg_catalog.pg_advisory_lock(${key})`;
 	try {
