@@ -419,6 +419,7 @@
 			"authority": ["ADR-0014", "ADR-0017", "ADR-0020", "ADR-0021"],
 			"artifacts": [
 				"ten-instance load scenario",
+				"separate manual soak/chaos scenario and report",
 				"rolling compatibility matrix",
 				"fanout/worker/reconnect report",
 				"optional-infrastructure absence report"
@@ -448,6 +449,7 @@
 			"verify": [
 				"bun run check:changed -- --test tests/hostile/beta10-compatibility.test.ts --typecheck @questpie/runtime",
 				"bun run test:load -- --scenario beta10",
+				"bun run test:soak -- --scenario beta10",
 				"bun run quality:full",
 				"git diff --check"
 			]
