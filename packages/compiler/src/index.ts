@@ -53,7 +53,14 @@ export {
 	verifyCommittedMigration,
 	verifyCommittedMigrationChain,
 } from "./schema";
-export { loadCommittedMigration } from "./schema/index";
+export {
+	explainCommittedMigration,
+	explainCommittedSeed,
+	explainMigrationApply,
+	loadCommittedMigration,
+	renderCliExplanation,
+} from "./schema/index";
+export type { CliExplanationV1 } from "./schema/index";
 export {
 	applyCommittedMigrations,
 	inspectSchemaFingerprint,

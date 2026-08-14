@@ -1,0 +1,73 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`BETA-02 CLI explanations renders canonical migration facts as human and JSON goldens 1`] = `
+"migration 000001_create-collaboration
+status committed (guarded)
+checksum 9d07cbcf922a29c476cc63b57e5681e8438082a1672807059733ce3125a74e45
+target d7dd57b95f2bdf0e9132ea720b38cb3d761aca5fa698e94069940df08d0df6ee
+files 6 (25528 bytes)
+step 01 safe createApplicationSchema application:collaboration lock=none scan=false rewrite=false
+step 02 safe createCollection collection:channels lock=accessExclusive scan=false rewrite=false
+step 03 safe createCollection collection:companies lock=accessExclusive scan=false rewrite=false
+step 04 safe createCollection collection:memberships lock=accessExclusive scan=false rewrite=false
+step 05 safe createCollection collection:messages lock=accessExclusive scan=false rewrite=false
+step 06 safe createCollection collection:spaces lock=accessExclusive scan=false rewrite=false
+step 07 guarded addConstraint collection:channels/constraint:primary lock=shareRowExclusive scan=true rewrite=false
+step 08 guarded addConstraint collection:channels/field:name/invariant:maxLength lock=shareRowExclusive scan=true rewrite=false
+step 09 guarded addConstraint collection:channels/field:name/invariant:minLength lock=shareRowExclusive scan=true rewrite=false
+step 10 guarded addConstraint collection:companies/constraint:primary lock=shareRowExclusive scan=true rewrite=false
+step 11 guarded addConstraint collection:companies/field:name/invariant:maxLength lock=shareRowExclusive scan=true rewrite=false
+step 12 guarded addConstraint collection:companies/field:name/invariant:minLength lock=shareRowExclusive scan=true rewrite=false
+step 13 guarded addConstraint collection:memberships/constraint:onePrincipalPerCompany lock=shareRowExclusive scan=true rewrite=false
+step 14 guarded addConstraint collection:memberships/constraint:primary lock=shareRowExclusive scan=true rewrite=false
+step 15 guarded addConstraint collection:messages/constraint:primary lock=shareRowExclusive scan=true rewrite=false
+step 16 guarded addConstraint collection:messages/field:body/invariant:maxLength lock=shareRowExclusive scan=true rewrite=false
+step 17 guarded addConstraint collection:messages/field:body/invariant:minLength lock=shareRowExclusive scan=true rewrite=false
+step 18 guarded addConstraint collection:spaces/constraint:primary lock=shareRowExclusive scan=true rewrite=false
+step 19 guarded addConstraint collection:spaces/field:name/invariant:maxLength lock=shareRowExclusive scan=true rewrite=false
+step 20 guarded addConstraint collection:spaces/field:name/invariant:minLength lock=shareRowExclusive scan=true rewrite=false
+step 21 guarded addRelation collection:channels/relation:space lock=shareRowExclusive scan=true rewrite=false
+step 22 guarded addRelation collection:memberships/relation:company lock=shareRowExclusive scan=true rewrite=false
+step 23 guarded addRelation collection:messages/relation:author lock=shareRowExclusive scan=true rewrite=false
+step 24 guarded addRelation collection:messages/relation:channel lock=shareRowExclusive scan=true rewrite=false
+step 25 guarded addRelation collection:spaces/relation:company lock=shareRowExclusive scan=true rewrite=false
+step 26 safe addIndex collection:messages/index:byAuditId lock=share scan=false rewrite=false
+"
+`;
+
+exports[`BETA-02 CLI explanations renders canonical migration facts as human and JSON goldens 2`] = `
+"{"command":"migration create","facts":{"checksum":"9d07cbcf922a29c476cc63b57e5681e8438082a1672807059733ce3125a74e45","classification":"guarded","files":{"base-schema.json":252,"checksum.sha256":65,"migration.json":583,"plan.json":8857,"target-schema.json":9564,"up.sql":6207},"identity":"000001_create-collaboration","planDigest":"9ffd4bdceeed3113c08c15cc190a9b6e979d7cd1a4d3ec3be4763ae774b6a50c","steps":[{"classification":"safe","kind":"createApplicationSchema","lock":"none","rewritesTable":false,"scansData":false,"targetIdentity":"application:collaboration"},{"classification":"safe","kind":"createCollection","lock":"accessExclusive","rewritesTable":false,"scansData":false,"targetIdentity":"collection:channels"},{"classification":"safe","kind":"createCollection","lock":"accessExclusive","rewritesTable":false,"scansData":false,"targetIdentity":"collection:companies"},{"classification":"safe","kind":"createCollection","lock":"accessExclusive","rewritesTable":false,"scansData":false,"targetIdentity":"collection:memberships"},{"classification":"safe","kind":"createCollection","lock":"accessExclusive","rewritesTable":false,"scansData":false,"targetIdentity":"collection:messages"},{"classification":"safe","kind":"createCollection","lock":"accessExclusive","rewritesTable":false,"scansData":false,"targetIdentity":"collection:spaces"},{"classification":"guarded","kind":"addConstraint","lock":"shareRowExclusive","rewritesTable":false,"scansData":true,"targetIdentity":"collection:channels/constraint:primary"},{"classification":"guarded","kind":"addConstraint","lock":"shareRowExclusive","rewritesTable":false,"scansData":true,"targetIdentity":"collection:channels/field:name/invariant:maxLength"},{"classification":"guarded","kind":"addConstraint","lock":"shareRowExclusive","rewritesTable":false,"scansData":true,"targetIdentity":"collection:channels/field:name/invariant:minLength"},{"classification":"guarded","kind":"addConstraint","lock":"shareRowExclusive","rewritesTable":false,"scansData":true,"targetIdentity":"collection:companies/constraint:primary"},{"classification":"guarded","kind":"addConstraint","lock":"shareRowExclusive","rewritesTable":false,"scansData":true,"targetIdentity":"collection:companies/field:name/invariant:maxLength"},{"classification":"guarded","kind":"addConstraint","lock":"shareRowExclusive","rewritesTable":false,"scansData":true,"targetIdentity":"collection:companies/field:name/invariant:minLength"},{"classification":"guarded","kind":"addConstraint","lock":"shareRowExclusive","rewritesTable":false,"scansData":true,"targetIdentity":"collection:memberships/constraint:onePrincipalPerCompany"},{"classification":"guarded","kind":"addConstraint","lock":"shareRowExclusive","rewritesTable":false,"scansData":true,"targetIdentity":"collection:memberships/constraint:primary"},{"classification":"guarded","kind":"addConstraint","lock":"shareRowExclusive","rewritesTable":false,"scansData":true,"targetIdentity":"collection:messages/constraint:primary"},{"classification":"guarded","kind":"addConstraint","lock":"shareRowExclusive","rewritesTable":false,"scansData":true,"targetIdentity":"collection:messages/field:body/invariant:maxLength"},{"classification":"guarded","kind":"addConstraint","lock":"shareRowExclusive","rewritesTable":false,"scansData":true,"targetIdentity":"collection:messages/field:body/invariant:minLength"},{"classification":"guarded","kind":"addConstraint","lock":"shareRowExclusive","rewritesTable":false,"scansData":true,"targetIdentity":"collection:spaces/constraint:primary"},{"classification":"guarded","kind":"addConstraint","lock":"shareRowExclusive","rewritesTable":false,"scansData":true,"targetIdentity":"collection:spaces/field:name/invariant:maxLength"},{"classification":"guarded","kind":"addConstraint","lock":"shareRowExclusive","rewritesTable":false,"scansData":true,"targetIdentity":"collection:spaces/field:name/invariant:minLength"},{"classification":"guarded","kind":"addRelation","lock":"shareRowExclusive","rewritesTable":false,"scansData":true,"targetIdentity":"collection:channels/relation:space"},{"classification":"guarded","kind":"addRelation","lock":"shareRowExclusive","rewritesTable":false,"scansData":true,"targetIdentity":"collection:memberships/relation:company"},{"classification":"guarded","kind":"addRelation","lock":"shareRowExclusive","rewritesTable":false,"scansData":true,"targetIdentity":"collection:messages/relation:author"},{"classification":"guarded","kind":"addRelation","lock":"shareRowExclusive","rewritesTable":false,"scansData":true,"targetIdentity":"collection:messages/relation:channel"},{"classification":"guarded","kind":"addRelation","lock":"shareRowExclusive","rewritesTable":false,"scansData":true,"targetIdentity":"collection:spaces/relation:company"},{"classification":"safe","kind":"addIndex","lock":"share","rewritesTable":false,"scansData":false,"targetIdentity":"collection:messages/index:byAuditId"}],"targetSchemaDigest":"d7dd57b95f2bdf0e9132ea720b38cb3d761aca5fa698e94069940df08d0df6ee","totalBytes":25528},"format":"questpie.cli-explanation","status":"committed","version":1}
+"
+`;
+
+exports[`BETA-02 CLI explanations renders canonical migration facts as human and JSON goldens 3`] = `
+"migration apply alreadyApplied
+head 000001_create-collaboration
+applied none
+fingerprint aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+"
+`;
+
+exports[`BETA-02 CLI explanations renders canonical migration facts as human and JSON goldens 4`] = `
+"{"command":"migration apply","facts":{"applied":[],"fingerprintDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","head":"000001_create-collaboration","status":"alreadyApplied"},"format":"questpie.cli-explanation","status":"alreadyApplied","version":1}
+"
+`;
+
+exports[`BETA-02 CLI explanations renders the immutable Seed graph from committed bytes 1`] = `
+"seed seed:collaboration.demo.v1
+status committed
+checksum 1f54d6b02406519d85f5cd9a84548bd7108b128e717fcb0a96ee0c42df08ad41
+dependencies none
+files 3 (2592 bytes)
+step 01 insert collection:companies bc20775181efcb21a5f5a74d9bacdec55d6207352225cdfd1ccce7b1b60bb612
+step 02 insert collection:spaces ee14d88d46eefdeef70890333861d0fe3625a27cd73f95b57046a4d91c515caf
+step 03 insert collection:channels 9347789cdc57ca4664fadbe28ceeb00352032d7a4a230685659dd1b16d30103b
+step 04 insert collection:memberships 90294121cf7206f0c25ff84ec472d50c1cce7d58b3e08d53ed402542e9ced6ea
+step 05 insert collection:messages ee22115649c75aa6c04f6792a767f5ffc4f0e7cad70b136d3cd1af2fee802b6f
+"
+`;
+
+exports[`BETA-02 CLI explanations renders the immutable Seed graph from committed bytes 2`] = `
+"{"command":"seed status","facts":{"checksum":"1f54d6b02406519d85f5cd9a84548bd7108b128e717fcb0a96ee0c42df08ad41","dependencies":[],"files":{"checksum.sha256":65,"seed.json":178,"steps.json":2349},"identity":"seed:collaboration.demo.v1","steps":[{"collection":"collection:companies","kind":"insert","stepId":"bc20775181efcb21a5f5a74d9bacdec55d6207352225cdfd1ccce7b1b60bb612"},{"collection":"collection:spaces","kind":"insert","stepId":"ee14d88d46eefdeef70890333861d0fe3625a27cd73f95b57046a4d91c515caf"},{"collection":"collection:channels","kind":"insert","stepId":"9347789cdc57ca4664fadbe28ceeb00352032d7a4a230685659dd1b16d30103b"},{"collection":"collection:memberships","kind":"insert","stepId":"90294121cf7206f0c25ff84ec472d50c1cce7d58b3e08d53ed402542e9ced6ea"},{"collection":"collection:messages","kind":"insert","stepId":"ee22115649c75aa6c04f6792a767f5ffc4f0e7cad70b136d3cd1af2fee802b6f"}],"totalBytes":2592},"format":"questpie.cli-explanation","status":"committed","version":1}
+"
+`;
