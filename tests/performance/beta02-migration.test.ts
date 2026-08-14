@@ -25,6 +25,7 @@ test("BETA-02 migration artifacts stay inside stable-runner budgets", async () =
 		targetSchema,
 		currentSchema: targetSchema,
 		planDigest: planned.digest,
+		localMigrations: [],
 	});
 	const planCreateMs = performance.now() - started;
 	const migrationGoldenBytes = Object.values(committed.files).reduce(

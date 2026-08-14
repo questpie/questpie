@@ -55,6 +55,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			targetSchema,
 			currentSchema: targetSchema,
 			planDigest: planned.digest,
+			localMigrations: [],
 		});
 		const holder = await database!.reserve();
 		const [current] = await holder<{ name: string }[]>`
@@ -162,11 +163,10 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		});
 		const evolvedMigration = createCommittedMigration({
 			currentSchema: evolvedSchema,
-			parent: migration.identity,
 			plan: evolvedPlan.plan,
 			baseSchema: evolvedPlan.baseSchema,
 			planDigest: evolvedPlan.digest,
-			sequence: 2,
+			localMigrations: [migration],
 			targetSchema: evolvedSchema,
 		});
 		const tableHolder = await database!.reserve();
@@ -261,6 +261,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			targetSchema,
 			currentSchema: targetSchema,
 			planDigest: planned.digest,
+			localMigrations: [],
 		});
 		await applyCommittedMigrations({ migrations: [migration] });
 		const failingSeed = createCommittedSeed({
@@ -343,6 +344,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			targetSchema: mismatchedSchema,
 			currentSchema: mismatchedSchema,
 			planDigest: mismatchedPlan.digest,
+			localMigrations: [],
 		});
 		const [preflightBefore] = await database!<
 			{ protocolSchemaExists: boolean }[]
@@ -378,6 +380,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			targetSchema,
 			currentSchema: targetSchema,
 			planDigest: planned.digest,
+			localMigrations: [],
 		});
 
 		const firstApplyStarted = performance.now();
@@ -605,6 +608,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			targetSchema: otherTarget,
 			currentSchema: otherTarget,
 			planDigest: otherPlan.digest,
+			localMigrations: [],
 		});
 		await expect(
 			applyCommittedMigrations({ migrations: [otherMigration] }),

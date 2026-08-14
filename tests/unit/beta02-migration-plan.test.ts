@@ -83,6 +83,7 @@ describe("BETA-02 migration artifacts", () => {
 			targetSchema,
 			currentSchema: targetSchema,
 			planDigest: planned.digest,
+			localMigrations: [],
 		});
 		expect(committed.identity).toBe("000001_create-collaboration");
 		expect(Object.keys(committed.files).sort()).toEqual([
@@ -116,6 +117,7 @@ describe("BETA-02 migration artifacts", () => {
 			targetSchema,
 			currentSchema: targetSchema,
 			planDigest: planned.digest,
+			localMigrations: [],
 		});
 		const committed = await loadCommittedMigration(
 			resolve(fixtureRoot, "questpie/migrations/000001_create-collaboration"),
@@ -205,14 +207,16 @@ describe("BETA-02 migration artifacts", () => {
 			"renameConstraint",
 			"renameConstraint",
 		]);
+		const genesis = await loadCommittedMigration(
+			resolve(fixtureRoot, "questpie/migrations/000001_create-collaboration"),
+		);
 		const committed = createCommittedMigration({
 			plan: explicit.plan,
 			baseSchema,
 			targetSchema,
 			currentSchema: targetSchema,
 			planDigest: explicit.digest,
-			sequence: 2,
-			parent: "000001_create-collaboration",
+			localMigrations: [genesis],
 			acceptDestructive: explicit.digest,
 		});
 		expect(committed.files["up.sql"]).toContain(
@@ -250,6 +254,7 @@ describe("BETA-02 migration artifacts", () => {
 				targetSchema,
 				currentSchema: staleSchema,
 				planDigest: planned.digest,
+				localMigrations: [],
 			}),
 		).toThrow(/QP-SCHEMA-022/);
 
@@ -259,6 +264,7 @@ describe("BETA-02 migration artifacts", () => {
 			targetSchema,
 			currentSchema: targetSchema,
 			planDigest: planned.digest,
+			localMigrations: [],
 		});
 		const tampered = {
 			...committed,
@@ -268,5 +274,75 @@ describe("BETA-02 migration artifacts", () => {
 			},
 		};
 		expect(() => verifyCommittedMigration(tampered)).toThrow(/QP-SCHEMA-023/);
+	});
+
+	test("allocates identity from the exact local migration head", async () => {
+		const compilation = await compiledFixture;
+		const baseSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		const genesisPlan = createMigrationPlan({
+			targetSchema: baseSchema,
+			slug: "create-collaboration",
+		});
+		const genesis = createCommittedMigration({
+			plan: genesisPlan.plan,
+			baseSchema: genesisPlan.baseSchema,
+			targetSchema: baseSchema,
+			currentSchema: baseSchema,
+			planDigest: genesisPlan.digest,
+			localMigrations: [],
+		});
+		const targetSchema = structuredClone(baseSchema);
+		const messages = targetSchema.collections.find(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:messages",
+		);
+		messages.fields.push({
+			collation: "questpie.binary",
+			default: null,
+			identity: "collection:messages/field:summary",
+			nullable: true,
+			path: ["summary"],
+			postgresName: "summary",
+			type: {
+				collation: "questpie.binary",
+				kind: "text",
+				maxLength: null,
+				minLength: null,
+			},
+		});
+		messages.fields.sort(
+			(left: { identity: string }, right: { identity: string }) =>
+				left.identity.localeCompare(right.identity),
+		);
+		const nextPlan = createMigrationPlan({
+			baseSchema,
+			targetSchema,
+			baseMigration: genesis.identity,
+			slug: "add-summary",
+		});
+		expect(nextPlan.status).toBe("planned");
+		if (nextPlan.status !== "planned") throw new Error("next plan disappeared");
+		const next = createCommittedMigration({
+			plan: nextPlan.plan,
+			baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: nextPlan.digest,
+			localMigrations: [genesis],
+		});
+
+		expect(next.identity).toBe("000002_add-summary");
+		expect(() =>
+			createCommittedMigration({
+				plan: nextPlan.plan,
+				baseSchema,
+				targetSchema,
+				currentSchema: targetSchema,
+				planDigest: nextPlan.digest,
+				localMigrations: [genesis, next],
+			}),
+		).toThrow(/QP-SCHEMA-022/);
 	});
 });

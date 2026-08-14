@@ -1165,8 +1165,7 @@ export function createCommittedMigration(
 		baseSchema: SchemaProjectionV1;
 		targetSchema: SchemaProjectionV1;
 		planDigest: string;
-		sequence?: number;
-		parent?: string | null;
+		localMigrations: readonly CommittedMigration[];
 		currentSchema: SchemaProjectionV1;
 		acceptDestructive?: string;
 	}>,
@@ -1213,25 +1212,22 @@ export function createCommittedMigration(
 			"stalePlan",
 			"Definitions or migration history changed after planning",
 		);
-	const sequence = input.sequence ?? 1;
-	if (!Number.isSafeInteger(sequence) || sequence < 1 || sequence > 999_999)
-		return schemaError(
-			"QP-SCHEMA-001",
-			"invalidDefinition",
-			"migration sequence is outside six-digit v1 range",
-		);
-	const identity = `${sequence.toString().padStart(6, "0")}_${input.plan.slug}`;
-	const parent = input.parent ?? input.plan.baseMigration;
+	if (input.localMigrations.length > 0)
+		verifyCommittedMigrationChain(input.localMigrations);
+	const head = input.localMigrations.at(-1);
+	const parent = head?.identity ?? null;
+	const expectedBase = head?.targetSchema ?? genesis(target);
 	if (
-		(sequence === 1 &&
-			(parent !== null || input.plan.baseMigration !== null)) ||
-		(sequence > 1 && (parent === null || parent !== input.plan.baseMigration))
+		input.plan.baseMigration !== parent ||
+		canonicalBytes(base) !== canonicalBytes(expectedBase)
 	)
 		return schemaError(
-			"QP-SCHEMA-025",
-			"orderMismatch",
-			"migration sequence, parent, and plan base do not form one linear chain",
+			"QP-SCHEMA-022",
+			"stalePlan",
+			"Migration Plan does not extend the exact local migration head",
 		);
+	const sequence = input.localMigrations.length + 1;
+	const identity = `${sequence.toString().padStart(6, "0")}_${input.plan.slug}`;
 	const metadata = {
 		format: "questpie.committed-migration",
 		version: 1,
